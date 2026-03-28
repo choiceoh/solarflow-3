@@ -2,152 +2,239 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
+
+	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/response"
 )
 
+// POHandler — 발주/계약(purchase_orders) 관련 API를 처리하는 핸들러
+// 비유: "발주 계약 관리실" — 제조사별 계약서를 관리하는 방
 type POHandler struct {
 	DB *supa.Client
 }
 
+// NewPOHandler — POHandler 생성자
 func NewPOHandler(db *supa.Client) *POHandler {
 	return &POHandler{DB: db}
 }
 
-// List — GET /api/v1/pos — 발주 목록 (제조사, 법인 JOIN)
+// List — GET /api/v1/pos — 발주 목록 조회 (법인/제조사 정보 포함)
+// 비유: 계약 관리실에서 전체 계약서 목록을 꺼내 보여주는 것
+// TODO: Rust 계산엔진 연동 — PO 입고현황 집계 (계약량 vs LC개설 vs 선적 vs 입고)
 func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
-	var result []map[string]interface{}
-
 	query := h.DB.From("purchase_orders").
 		Select("*, companies(company_name, company_code), manufacturers(name_kr)", "exact", false)
 
+	// 비유: ?company_id=xxx — 특정 법인의 계약만 필터
 	if compID := r.URL.Query().Get("company_id"); compID != "" {
 		query = query.Eq("company_id", compID)
 	}
+
+	// 비유: ?manufacturer_id=xxx — 특정 제조사의 계약만 필터
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
 		query = query.Eq("manufacturer_id", mfgID)
 	}
+
+	// 비유: ?status=contracted — 특정 상태의 계약만 필터
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
 	}
 
 	data, _, err := query.Execute()
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		log.Printf("[발주 목록 조회 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "발주 목록 조회에 실패했습니다")
 		return
 	}
 
-	json.Unmarshal(data, &result)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	var orders []model.POWithRelations
+	if err := json.Unmarshal(data, &orders); err != nil {
+		log.Printf("[발주 목록 디코딩 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
+		return
+	}
+
+	response.RespondJSON(w, http.StatusOK, orders)
 }
 
-// GetByID — GET /api/v1/pos/{id} — PO 상세 (라인아이템, LC, TT 포함)
+// GetByID — GET /api/v1/pos/{id} — 발주 상세 조회 (라인아이템, LC, TT 포함)
+// 비유: 계약서를 펼쳐서 품목 명세, LC 서류, TT 송금 내역까지 모두 보여주는 것
+// TODO: Rust 계산엔진 연동 — PO 입고현황 집계 (계약량 vs LC개설 vs 선적 vs 입고)
 func (h *POHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	// PO 기본 정보
-	var po []map[string]interface{}
-	data, _, err := h.DB.From("purchase_orders").
+	// 비유: 계약서 본문 조회
+	poData, _, err := h.DB.From("purchase_orders").
 		Select("*, companies(company_name, company_code), manufacturers(name_kr, name_en)", "exact", false).
 		Eq("po_id", id).
 		Execute()
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
-		return
-	}
-	json.Unmarshal(data, &po)
-	if len(po) == 0 {
-		http.Error(w, `{"error":"발주를 찾을 수 없습니다"}`, http.StatusNotFound)
+		log.Printf("[발주 상세 조회 실패] id=%s, err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "발주 조회에 실패했습니다")
 		return
 	}
 
-	// 라인아이템
-	var lines []map[string]interface{}
-	lineData, _, _ := h.DB.From("po_line_items").
-		Select("*, products(product_name, spec_wp)", "exact", false).
+	var orders []model.POWithRelations
+	if err := json.Unmarshal(poData, &orders); err != nil {
+		log.Printf("[발주 상세 디코딩 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
+		return
+	}
+
+	if len(orders) == 0 {
+		response.RespondError(w, http.StatusNotFound, "발주를 찾을 수 없습니다")
+		return
+	}
+
+	// 비유: 계약서에 첨부된 품목 명세 조회
+	lineData, _, err := h.DB.From("po_line_items").
+		Select("*, products(product_name, spec_wp, module_width_mm, module_height_mm)", "exact", false).
 		Eq("po_id", id).
 		Execute()
-	json.Unmarshal(lineData, &lines)
+	if err != nil {
+		log.Printf("[발주 라인아이템 조회 실패] po_id=%s, err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "라인아이템 조회에 실패했습니다")
+		return
+	}
 
-	// LC 목록
-	var lcs []map[string]interface{}
-	lcData, _, _ := h.DB.From("lc_records").
+	var lines []model.POLineWithProduct
+	if err := json.Unmarshal(lineData, &lines); err != nil {
+		log.Printf("[발주 라인아이템 디코딩 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "라인아이템 데이터 처리에 실패했습니다")
+		return
+	}
+
+	// 비유: 계약서에 첨부된 LC 개설 내역 조회
+	lcData, _, err := h.DB.From("lc_records").
 		Select("*, banks(bank_name)", "exact", false).
 		Eq("po_id", id).
 		Execute()
-	json.Unmarshal(lcData, &lcs)
+	if err != nil {
+		log.Printf("[발주 LC 조회 실패] po_id=%s, err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "LC 조회에 실패했습니다")
+		return
+	}
 
-	// TT 목록
-	var tts []map[string]interface{}
-	ttData, _, _ := h.DB.From("tt_remittances").
+	var lcs []model.LCRecordSummary
+	if err := json.Unmarshal(lcData, &lcs); err != nil {
+		log.Printf("[발주 LC 디코딩 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "LC 데이터 처리에 실패했습니다")
+		return
+	}
+
+	// 비유: 계약서에 첨부된 TT 송금 내역 조회
+	ttData, _, err := h.DB.From("tt_remittances").
 		Select("*", "exact", false).
 		Eq("po_id", id).
 		Execute()
-	json.Unmarshal(ttData, &tts)
+	if err != nil {
+		log.Printf("[발주 TT 조회 실패] po_id=%s, err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "TT 조회에 실패했습니다")
+		return
+	}
 
-	// 합쳐서 반환
-	result := po[0]
-	result["line_items"] = lines
-	result["lc_records"] = lcs
-	result["tt_remittances"] = tts
+	var tts []model.TTSummary
+	if err := json.Unmarshal(ttData, &tts); err != nil {
+		log.Printf("[발주 TT 디코딩 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "TT 데이터 처리에 실패했습니다")
+		return
+	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	// 비유: 계약서 + 품목 + LC + TT를 한 묶음으로 포장
+	detail := model.PODetail{
+		POWithRelations: orders[0],
+		LineItems:       lines,
+		LCRecords:       lcs,
+		TTRemittances:   tts,
+	}
+
+	response.RespondJSON(w, http.StatusOK, detail)
 }
 
-// Create — POST /api/v1/pos
+// Create — POST /api/v1/pos — 발주 등록
+// 비유: 새 계약서를 작성하여 관리실에 보관하는 것
 func (h *POHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var body map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, `{"error":"잘못된 요청입니다"}`, http.StatusBadRequest)
+	var req model.CreatePurchaseOrderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[발주 등록 요청 파싱 실패] %v", err)
+		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
+		return
+	}
+
+	// 비유: 접수 창구에서 계약서 필수 항목 검증
+	if msg := req.Validate(); msg != "" {
+		response.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
 
 	data, _, err := h.DB.From("purchase_orders").
-		Insert(body, false, "", "", "").
+		Insert(req, false, "", "", "").
 		Execute()
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		log.Printf("[발주 등록 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "발주 등록에 실패했습니다")
 		return
 	}
 
-	var result []map[string]interface{}
-	json.Unmarshal(data, &result)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if len(result) > 0 {
-		json.NewEncoder(w).Encode(result[0])
+	var created []model.PurchaseOrder
+	if err := json.Unmarshal(data, &created); err != nil {
+		log.Printf("[발주 등록 결과 디코딩 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
+		return
 	}
+
+	if len(created) == 0 {
+		response.RespondError(w, http.StatusInternalServerError, "발주 등록 결과를 확인할 수 없습니다")
+		return
+	}
+
+	response.RespondJSON(w, http.StatusCreated, created[0])
 }
 
-// Update — PUT /api/v1/pos/{id}
+// Update — PUT /api/v1/pos/{id} — 발주 수정
+// 비유: 기존 계약서의 내용을 수정하는 것
 func (h *POHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var body map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, `{"error":"잘못된 요청입니다"}`, http.StatusBadRequest)
+	var req model.UpdatePurchaseOrderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[발주 수정 요청 파싱 실패] %v", err)
+		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
+		return
+	}
+
+	// 비유: 변경 신청서 검증
+	if msg := req.Validate(); msg != "" {
+		response.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
 
 	data, _, err := h.DB.From("purchase_orders").
-		Update(body, "", "").
+		Update(req, "", "").
 		Eq("po_id", id).
 		Execute()
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		log.Printf("[발주 수정 실패] id=%s, err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "발주 수정에 실패했습니다")
 		return
 	}
 
-	var result []map[string]interface{}
-	json.Unmarshal(data, &result)
-
-	w.Header().Set("Content-Type", "application/json")
-	if len(result) > 0 {
-		json.NewEncoder(w).Encode(result[0])
+	var updated []model.PurchaseOrder
+	if err := json.Unmarshal(data, &updated); err != nil {
+		log.Printf("[발주 수정 결과 디코딩 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
+		return
 	}
+
+	if len(updated) == 0 {
+		response.RespondError(w, http.StatusNotFound, "수정할 발주를 찾을 수 없습니다")
+		return
+	}
+
+	response.RespondJSON(w, http.StatusOK, updated[0])
 }
