@@ -98,6 +98,7 @@ func New(db *supa.Client) http.Handler {
 		r.Route("/tts", func(r chi.Router) {
 			r.Get("/", ttH.List)
 			r.Post("/", ttH.Create)
+			r.Get("/{id}", ttH.GetByID)
 			r.Put("/{id}", ttH.Update)
 		})
 
