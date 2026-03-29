@@ -77,6 +77,32 @@ Supabase PostgreSQL
 - 단가 추이 분석
 - 자연어 검색 엔진
 
+### Rust 계산엔진
+- Framework: Axum 0.8.8, sqlx 0.8.6
+- 배포: fly.io solarflow-engine.fly.dev (nrt 리전, shared-cpu-1x 256MB)
+- Go-Rust 통신: REST API, fly.io .internal 네트워크
+- DB 연결: Supabase Session pooler (D-017), sqlx 풀 5개
+- 인증: 불필요 (Go가 게이트웨이, Rust는 내부 전용)
+
+### Rust API 엔드포인트 (15개)
+| 엔드포인트 | 기능 |
+|-----------|------|
+| /health | 서버 생존 확인 |
+| /health/ready | DB 연결 확인 |
+| /api/calc/inventory | 재고 3단계 집계 |
+| /api/calc/landed-cost | Landed Cost 계산 |
+| /api/calc/exchange-compare | 환율 환산 비교 |
+| /api/calc/lc-fee | LC 수수료 계산 |
+| /api/calc/lc-limit-timeline | 한도 복원 타임라인 |
+| /api/calc/lc-maturity-alert | LC 만기 알림 |
+| /api/calc/margin-analysis | 마진/이익률 분석 |
+| /api/calc/customer-analysis | 거래처 분석 |
+| /api/calc/price-trend | 단가 추이 |
+| /api/calc/supply-forecast | 월별 수급 전망 |
+| /api/calc/outstanding-list | 미수금 목록 |
+| /api/calc/receipt-match-suggest | 수금 매칭 추천 |
+| /api/calc/search | 자연어 검색 |
+
 ### 1.7 Go+Rust 분리 기준
 
 **기준: "한 행 안의 사칙연산 = Go, 여러 테이블 조합 = Rust"**
@@ -455,6 +481,9 @@ PO 화면에서 바로 표시:
 - **실무 원가** = CIF + 약 3원/Wp (부대비용 추정) — 판매 의사결정, 마진 계산
 - VAT(부가세)는 매입세액공제 대상이므로 원가에 불포함
 - **Landed Cost 계산은 Rust 담당** (여러 테이블 조합)
+- Landed Cost save 옵션: save=false(미리보기), save=true(DB 저장) (D-025)
+- 부대비용 배분: capacity_kw 비율 (D-023)
+- allocated_expenses: 동적 맵 — expense_type 추가 시 코드 변경 불필요 (D-026)
 
 #### 부대비용 (B/L별 또는 월별)
 | 필드 | 타입 | 필수 | 설명 |
@@ -502,6 +531,9 @@ PO 화면에서 바로 표시:
 | spare_qty | INTEGER | | 스페어 수량 |
 | memo | TEXT | | |
 
+- management_category: sale/construction/spare/repowering/maintenance/other (D-015)
+- fulfillment_source: stock/incoming — 미착품 충당 수주 구분 (D-015)
+
 분할출고: 1 수주 → N 출고 (잔량 자동 계산)
 
 #### 수금 (입금 등록 + 매칭)
@@ -543,6 +575,7 @@ PO 화면에서 바로 표시:
 | quantity | INTEGER | ✅ | 수량(장) |
 | capacity_kw | DECIMAL(10,3) | | 용량(kW) |
 | warehouse_id | UUID(FK) | ✅ | 출고 창고 |
+| status | VARCHAR(20) | ✅ | active/cancel_pending/cancelled (D-013, 3단계 취소) |
 | usage_category | VARCHAR(20) | ✅ | sale/construction/spare/replacement/repowering/transfer/adjustment |
 | order_id | UUID(FK) | | 수주 연결 |
 | site_name | VARCHAR(100) | | 목적지/현장명 |
@@ -552,6 +585,8 @@ PO 화면에서 바로 표시:
 | target_company_id | UUID(FK) | | 그룹내 거래 시 상대법인 |
 | erp_outbound_no | VARCHAR(20) | | 아마란스 출고번호 |
 | memo | TEXT | | |
+
+- usage_category 9개 (D-014, ERP 1881건 기반): sale/sale_spare/construction/construction_damage/maintenance/disposal/transfer/adjustment/other
 
 #### 매출 등록 (판매 시)
 | 필드 | 타입 | 필수 | 설명 |
@@ -583,6 +618,16 @@ PO 화면에서 바로 표시:
 총 확보량  = 가용재고 + 미착품(PO잔량, 해상운송 중)
 ```
 
+### 재고 집계 공식 (확정)
+- 물리적 = 입고(completed/erp_done) - 출고(active)
+- 예약 = fulfillment_source=stock + sale/spare/maintenance/other 수주잔량
+- 배정 = fulfillment_source=stock + construction/repowering 수주잔량
+- 가용재고 = 물리적 - 예약 - 배정
+- 미착품 = PO(contracted/shipping) 잔량 - 해당PO 입고완료
+- 미착품예약 = fulfillment_source=incoming 수주잔량
+- 가용미착품 = 미착품 - 미착품예약
+- 총확보량 = 가용재고 + 가용미착품
+
 재고 정렬: 제조사 → 모듈크기(mm) → 출력(Wp)
 
 #### 장기재고
@@ -610,6 +655,10 @@ PO 화면에서 바로 표시:
 현재 가용: $3.43M → 5월말: $8.93M → 6월말: $12.05M
 ```
 법인별 표시, 3개 법인 통합 요약, 보고서+엑셀 다운로드
+
+- 수수료 공식: 개설수수료 = amount x rate x exchange_rate, 인수수수료 = amount x rate x days/360 x exchange_rate
+- fee_note: "요율 기반 자동 계산 예상 금액" (D-030)
+- 한도 복원: maturity_date 기준 (D-028)
 
 #### 분석 뷰
 1. 제조사별·규격별 이익률 분석 (가중평균)
@@ -698,6 +747,10 @@ LC 한도 현황 화면: 법인별→은행별 한도/개설잔액/가용한도/
 - "LC 만기 이번달" → 이번 달 만기 LC + 금액 + 은행
 - "라이젠 계약금" → 라이젠 PO + T/T 이력 + 잔여 계약금
 - "미수금 60일" → 60일 초과 미수금 거래처 목록
+
+- 키워드 패턴 매칭 7가지 의도 + fallback (D-044)
+- 별칭 매핑: 제조사 15개 + 거래처 그룹 2개 (D-043, D-047)
+- spec_wp 인식 범위: 400-900
 
 검색 결과 클릭 → 해당 상세 화면으로 이동
 
@@ -795,21 +848,11 @@ SolarFlow 엑셀 Import 기능으로 일괄 업로드.
 
 ## 8. 작업 순서 (확정)
 
-### Phase 1: Go 기초 보강 ✅ 완료
-- DB 14개 테이블 + 마스터 6개 핸들러 + 인증 미들웨어 + PO/LC/TT/BL 핸들러
-
-### Phase 2: 핵심 거래 모듈
-- Step 7: 면장/원가 (DB 신규 + 핸들러)
-- Step 8: 수주/수금 (DB 신규 + 핸들러)
-- Step 9: 출고/판매 (DB 신규 + 핸들러)
-- Step 10: 은행/LC 한도 변경이력
-
-### Phase 3: Rust 계산엔진
-- Rust 프로젝트 초기화 + Go↔Rust REST 통신
-- Landed Cost, 재고집계, 마진, LC만기/수수료, 수급전망, 수금매칭, 검색
-
-### Phase 4: 프론트엔드 + 연동
-- 대시보드 + 엑셀 Import/Export + 아마란스 내보내기 + 결재안 + 메모 + 검색
+### 작업 완료 현황
+- Phase 1: Go 기초 보강 — 완료
+- Phase 2: 핵심 거래 모듈 — 완료
+- Phase 3: Rust 계산엔진 — 완료 (153개 테스트)
+- Phase 4: 프론트엔드 + 엑셀 Import/Export — 다음
 
 ---
 

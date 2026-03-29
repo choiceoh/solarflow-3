@@ -23,9 +23,13 @@
 
 ## 작업 흐름
 ## 인수인계 조건
-새 대화창을 열 때 반드시 읽어야 할 파일:
-1. RULES.md (헌법)
-2. AGENTS.md (이 문서)
-3. SolarFlow_설계문서_통합판.md (설계 정본)
-4. PROGRESS.md (현재 진행 상황)
-5. DECISIONS.md (왜 이렇게 했는지)
+새 대화창을 열 때:
+- Claude Code: 프로젝트 루트의 CLAUDE.md가 자동으로 읽기 순서 지정
+- 웹 대화창(시공자/감리자): harness/PROGRESS.md 먼저 -> 현재 위치 파악 후 나머지 참조
+
+읽기 순서:
+1. harness/PROGRESS.md (현재 위치 확인)
+2. harness/RULES.md (헌법)
+3. harness/AGENTS.md (역할)
+4. harness/SolarFlow_설계문서_통합판.md (설계 정본)
+5. harness/DECISIONS.md (판단 기록)
