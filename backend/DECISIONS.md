@@ -84,9 +84,9 @@
 - **이유**: SolarFlow 계산엔진은 극한 성능이 아닌 정확한 계산이 목적. Tokio 팀 제작, 타입 안전, 메모리 효율 최고, 학습 곡선 완만. sqlx/serde 등 Tokio 생태계와 자연스럽게 통합.
 - **날짜**: 2026-03-29
 
-## D-017: sqlx 직접 연결 (pgBouncer 아닌 이유)
-- **결정**: Supabase PostgreSQL에 sqlx로 직접 연결 (pgBouncer 미사용)
-- **이유**: sqlx는 prepared statements 사용. pgBouncer transaction mode에서 세션 간 유지 안 됨. 직접 연결이 안전. 풀 5개로 Free 플랜 내 운영.
+## D-017: Supabase Session pooler 사용
+- **결정**: Supabase Session pooler(포트 5432)를 사용하여 sqlx로 연결
+- **이유**: Direct connection은 IPv6 전용이라 fly.io에서 연결 불가. Session pooler(포트 5432)는 IPv4 지원하며 prepared statements도 정상 동작.
 - **날짜**: 2026-03-29
 
 ## D-018: Cargo.lock 커밋
@@ -97,4 +97,9 @@
 ## D-019: /health와 /health/ready 분리
 - **결정**: 헬스체크를 /health(서버 생존)와 /health/ready(DB 연결)로 분리
 - **이유**: /health는 fly.io 헬스체크용 (항상 200, DB 무관). /health/ready는 DB 연결 확인용 (Go에서 Rust 호출 전 상태 확인). DB 장애 시 서버는 살아있지만 계산은 불가능한 상태를 구분.
+- **날짜**: 2026-03-29
+
+## D-020: Go↔Rust 통신 패턴
+- **결정**: Go에서 Rust가 다운되어도 CRUD 기능 유지 (graceful degradation)
+- **이유**: Rust 엔진은 계산 전용이므로, 다운 시 계산 기능만 비활성화. 모든 Rust 호출은 EngineClient.CallCalc()을 통해 일관되게 수행. fly.io auto_stop 시 콜드 스타트 1~3초, 타임아웃 10초로 대응.
 - **날짜**: 2026-03-29

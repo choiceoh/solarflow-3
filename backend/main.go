@@ -3,10 +3,12 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/config"
+	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/router"
 )
 
@@ -19,16 +21,22 @@ func main() {
 	}
 	log.Println("✅ Supabase 연결 성공")
 
+	// 비유: Rust 계산실과의 연락선 확인 — 없어도 Go 서버는 정상 시작
+	engineURL := os.Getenv("ENGINE_URL")
+	if engineURL != "" {
+		ec := engine.NewEngineClient(engineURL)
+		_, err := ec.CheckHealth()
+		if err != nil {
+			log.Printf("⚠️  경고: Rust 엔진 연결 실패 — 계산 기능 비활성 (%v)", err)
+		} else {
+			log.Println("✅ Rust 엔진 연결 성공")
+		}
+	} else {
+		log.Println("ℹ️  ENGINE_URL 미설정 — Rust 엔진 미사용")
+	}
+
 	r := router.New(db)
 
 	log.Printf("🚀 SolarFlow 3.0 서버 시작: :%s", cfg.Port)
-	log.Printf("📋 마스터 API (6개 모듈, 각 CRUD):")
-	log.Printf("   /api/v1/companies      — 법인")
-	log.Printf("   /api/v1/manufacturers   — 제조사")
-	log.Printf("   /api/v1/products        — 품번")
-	log.Printf("   /api/v1/partners        — 거래처")
-	log.Printf("   /api/v1/warehouses      — 창고/장소")
-	log.Printf("   /api/v1/banks           — 은행")
-
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, r))
 }

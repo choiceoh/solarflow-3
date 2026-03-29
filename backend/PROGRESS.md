@@ -1,6 +1,6 @@
 # SolarFlow 진행 상황
 
-## 현재 단계: Phase 3 진행 중 → Step 12 (Go↔Rust 통신 테스트) 대기
+## 현재 단계: Phase 3 진행 중 → Step 13 (재고 집계 계산 모듈) 대기
 
 ## 완료된 작업
 
@@ -33,15 +33,15 @@
 ### Phase 3: Rust 계산엔진 (진행 중)
 | 작업 | 감리 차수 | 점수 | 날짜 |
 |------|----------|------|------|
-| Step 11B: Rust 프로젝트 초기화 + fly.io | — | — | 2026-03-29 |
+| Step 11B: Rust 프로젝트 초기화 + fly.io | — | 10/10 | 2026-03-29 |
+| Step 12: Go↔Rust 통신 테스트 | — | — | 2026-03-29 |
 
 ### 다음 작업 (순서대로)
-1. Step 12: Go↔Rust 통신 테스트
-2. Step 13: 재고 집계 계산 모듈
-3. Phase 4: 프론트엔드 + 엑셀 Import/Export
+1. Step 13: 재고 집계 계산 모듈
+2. Phase 4: 프론트엔드 + 엑셀 Import/Export
 
 ### 자동 검증 현황
-- 테스트: 51개 PASS (company 5 + product 10 + declaration 3 + expense 5 + order 7 + receipt 3 + outbound 6 + sale 4 + limit_change 8)
+- 테스트: 63개 PASS (model 58 + engine 5)
 - 린터: 위반 0건
 - CI: .github/workflows/ci.yml 설정 완료
 - omitempty: 19개 UpdateRequest 구조체 일괄 적용 완료
