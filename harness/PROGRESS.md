@@ -5,10 +5,10 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | Phase 4 진행 중 |
-| 다음 작업 | Step 28B — 대시보드 |
+| 다음 작업 | Step 29 — 엑셀/아마란스 |
 | Go 백엔드 | 배포 완료 (solarflow-backend.fly.dev) |
 | Rust 엔진 | 배포 완료 (solarflow-engine.fly.dev) |
-| 프론트엔드 | Step 27 완료 (재고+입고+발주+출고+수주수금+면장원가) |
+| 프론트엔드 | Step 28B 완료 (재고+입고+발주+출고+수주수금+면장원가+은행LC+대시보드) |
 | DB 테이블 | 20개 생성 완료 |
 | Go 테스트 | 86개 PASS |
 | Rust 테스트 | 75개 PASS |
@@ -84,6 +84,7 @@
 | Step 26: 수주/수금+매칭 | 감리 대기 | 3탭(수주/수금/매칭), 충당소스Badge, 매칭3단계(선택→체크→확정), 자동추천, 차액표시 |
 | Step 27: 면장/원가 | 감리 대기 | 3탭(수입면장/부대비용/환율비교), 원가3단계(FOB→CIF→Landed), Badge, LandedCost 미리보기/저장, 부대비용11유형, price-histories Go라우트추가 |
 | Step 28A: 은행/LC+수요예측 | 감리 대기 | 4탭(한도현황/만기알림/한도변경/LC수요예측), 요약카드4+3개, 사용률bar, Recharts AreaChart, D-Day Badge, 수수료펼침, PO별미개설, 3개월예측+대응방안(D-062) |
+| Step 28B: 대시보드 | 감리 대기 | 역할별분기(admin=Manager/executive=Executive), 카드6개, BarChart+LineChart, 알림9가지, 미착품/수주잔량/미수금프리뷰, Promise.allSettled 섹션별 독립로딩, 장기재고경고 |
 
 #### Phase 4 남은 작업
 - Step 21: 대시보드 레이아웃 (역할별)
