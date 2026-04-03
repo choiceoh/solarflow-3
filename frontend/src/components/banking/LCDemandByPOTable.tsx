@@ -1,0 +1,59 @@
+import { Badge } from '@/components/ui/badge';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import { formatUSD, formatDate } from '@/lib/utils';
+import type { LCDemandByPO } from '@/types/banking';
+
+interface Props {
+  items: LCDemandByPO[];
+}
+
+function UrgencyBadge({ urgency, date }: { urgency: string; date?: string }) {
+  if (urgency === 'immediate') {
+    return <Badge className="bg-red-100 text-red-700 border-red-300">즉시</Badge>;
+  }
+  if (urgency === 'soon') {
+    return <Badge className="bg-orange-100 text-orange-700 border-orange-300">{date ? formatDate(date) : '30일 이내'}</Badge>;
+  }
+  return <Badge variant="outline" className="text-muted-foreground">{date ? formatDate(date) : '—'}</Badge>;
+}
+
+export default function LCDemandByPOTable({ items }: Props) {
+  if (items.length === 0) {
+    return <p className="text-sm text-muted-foreground text-center py-6">LC 개설 수요가 없습니다</p>;
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>PO번호</TableHead>
+          <TableHead>제조사</TableHead>
+          <TableHead className="text-right">PO총액 (USD)</TableHead>
+          <TableHead className="text-right">TT입금</TableHead>
+          <TableHead className="text-right">LC개설</TableHead>
+          <TableHead className="text-right">LC미개설</TableHead>
+          <TableHead>개설필요시점</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {items.map((d) => (
+          <TableRow key={d.po_id}>
+            <TableCell className="text-sm font-medium">{d.po_number || d.po_id.slice(0, 8)}</TableCell>
+            <TableCell className="text-sm">{d.manufacturer_name || '—'}</TableCell>
+            <TableCell className="text-sm text-right">{formatUSD(d.po_total_usd)}</TableCell>
+            <TableCell className="text-sm text-right">{formatUSD(d.tt_paid_usd)}</TableCell>
+            <TableCell className="text-sm text-right">{formatUSD(d.lc_opened_usd)}</TableCell>
+            <TableCell className="text-sm text-right font-medium">
+              {d.lc_needed_usd > 0 ? formatUSD(d.lc_needed_usd) : '—'}
+            </TableCell>
+            <TableCell>
+              <UrgencyBadge urgency={d.urgency} date={d.lc_due_date} />
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}

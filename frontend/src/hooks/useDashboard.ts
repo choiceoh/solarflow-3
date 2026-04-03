@@ -1,0 +1,273 @@
+import { useState, useEffect, useCallback } from 'react';
+import { fetchWithAuth } from '@/lib/api';
+import { fetchCalc, companyQueryUrl } from '@/lib/companyUtils';
+import type { InventoryResponse } from '@/types/inventory';
+import type { BLShipment } from '@/types/inbound';
+import type { Order } from '@/types/orders';
+import type {
+  DashboardSectionState, DashboardSummary, MonthlyRevenue,
+  PriceTrend, AlertItem, CompanySummaryRow,
+} from '@/types/dashboard';
+import type { LCLimitTimeline } from '@/types/banking';
+
+// 비유: 대시보드 데이터를 독립적으로 조회. 하나 실패해도 나머지는 표시.
+
+interface CustomerAnalysis {
+  customers: {
+    customer_name: string;
+    outstanding_amount: number;
+    outstanding_count: number;
+    max_days_overdue: number;
+  }[];
+  total_outstanding: number;
+}
+
+interface MarginAnalysis {
+  months: {
+    month: string;
+    revenue_krw: number;
+    margin_krw: number;
+    margin_rate: number;
+  }[];
+}
+
+interface PriceTrendResponse {
+  manufacturers: {
+    name: string;
+    data_points: { period: string; price_usd_wp: number }[];
+  }[];
+}
+
+function makeSectionState<T>(initial?: T | null): DashboardSectionState<T> {
+  return { data: initial ?? null, loading: true, error: null };
+}
+
+// D-060: 다중 법인 합산 merge 함수들
+function mergeInventory(rs: InventoryResponse[]): InventoryResponse {
+  return {
+    items: rs.flatMap((r) => r.items),
+    summary: {
+      total_physical_kw: rs.reduce((s, r) => s + r.summary.total_physical_kw, 0),
+      total_available_kw: rs.reduce((s, r) => s + r.summary.total_available_kw, 0),
+      total_incoming_kw: rs.reduce((s, r) => s + r.summary.total_incoming_kw, 0),
+      total_secured_kw: rs.reduce((s, r) => s + r.summary.total_secured_kw, 0),
+    },
+    calculated_at: rs[0]?.calculated_at ?? new Date().toISOString(),
+  };
+}
+
+function mergeMargin(rs: MarginAnalysis[]): MarginAnalysis {
+  const map = new Map<string, { revenue_krw: number; margin_krw: number }>();
+  for (const r of rs) {
+    for (const m of r.months || []) {
+      const prev = map.get(m.month) || { revenue_krw: 0, margin_krw: 0 };
+      map.set(m.month, { revenue_krw: prev.revenue_krw + m.revenue_krw, margin_krw: prev.margin_krw + m.margin_krw });
+    }
+  }
+  return {
+    months: Array.from(map.entries()).map(([month, v]) => ({
+      month, ...v, margin_rate: v.revenue_krw ? (v.margin_krw / v.revenue_krw) * 100 : 0,
+    })),
+  };
+}
+
+function mergeCustomer(rs: CustomerAnalysis[]): CustomerAnalysis {
+  return {
+    customers: rs.flatMap((r) => r.customers || []),
+    total_outstanding: rs.reduce((s, r) => s + (r.total_outstanding || 0), 0),
+  };
+}
+
+function mergePriceTrend(rs: PriceTrendResponse[]): PriceTrendResponse {
+  const seen = new Set<string>();
+  const mfgs: PriceTrendResponse['manufacturers'] = [];
+  for (const r of rs) {
+    for (const m of r.manufacturers || []) {
+      if (!seen.has(m.name)) { seen.add(m.name); mfgs.push(m); }
+    }
+  }
+  return { manufacturers: mfgs };
+}
+
+function mergeLCTimeline(rs: LCLimitTimeline[]): LCLimitTimeline {
+  const projMap = new Map<string, number>();
+  for (const r of rs) {
+    for (const p of r.monthly_projection || []) {
+      projMap.set(p.month, (projMap.get(p.month) || 0) + p.projected_available);
+    }
+  }
+  return {
+    bank_summaries: rs.flatMap((r) => r.bank_summaries || []),
+    timeline_events: rs.flatMap((r) => r.timeline_events || []),
+    monthly_projection: Array.from(projMap.entries()).map(([month, projected_available]) => ({ month, projected_available })),
+  };
+}
+
+export function useDashboard(companyId: string | null, userRole: string) {
+  const [summary, setSummary] = useState<DashboardSectionState<DashboardSummary>>(makeSectionState());
+  const [revenue, setRevenue] = useState<DashboardSectionState<MonthlyRevenue>>(makeSectionState());
+  const [priceTrend, setPriceTrend] = useState<DashboardSectionState<PriceTrend>>(makeSectionState());
+  const [alerts, setAlerts] = useState<DashboardSectionState<AlertItem[]>>(makeSectionState());
+  const [companySummary, setCompanySummary] = useState<DashboardSectionState<CompanySummaryRow[]>>(makeSectionState());
+  const [incoming, setIncoming] = useState<DashboardSectionState<BLShipment[]>>(makeSectionState());
+  const [orderBacklog, setOrderBacklog] = useState<DashboardSectionState<Order[]>>(makeSectionState());
+  const [outstanding, setOutstanding] = useState<DashboardSectionState<CustomerAnalysis>>(makeSectionState());
+  const [longTermWarning, setLongTermWarning] = useState(0);
+  const [longTermCritical, setLongTermCritical] = useState(0);
+
+  const isManager = userRole === 'admin' || userRole === 'manager';
+
+  const load = useCallback(async () => {
+    if (!companyId) return;
+
+    // 모든 섹션 loading=true
+    setSummary((s) => ({ ...s, loading: true, error: null }));
+    setRevenue((s) => ({ ...s, loading: true, error: null }));
+    setPriceTrend((s) => ({ ...s, loading: true, error: null }));
+    setAlerts((s) => ({ ...s, loading: true, error: null }));
+    setCompanySummary((s) => ({ ...s, loading: true, error: null }));
+    if (isManager) {
+      setIncoming((s) => ({ ...s, loading: true, error: null }));
+      setOrderBacklog((s) => ({ ...s, loading: true, error: null }));
+      setOutstanding((s) => ({ ...s, loading: true, error: null }));
+    }
+
+    // D-060: fetchCalc가 "all"이면 법인별 호출 후 merge 처리
+    const fetchInventory = () => fetchCalc<InventoryResponse>(companyId, '/api/v1/calc/inventory', {}, mergeInventory);
+    const fetchMargin = () => fetchCalc<MarginAnalysis>(companyId, '/api/v1/calc/margin-analysis', {}, mergeMargin);
+    const fetchCustomerAnalysis = () => fetchCalc<CustomerAnalysis>(companyId, '/api/v1/calc/customer-analysis', {}, mergeCustomer);
+    const fetchPriceTrendApi = () => fetchCalc<PriceTrendResponse>(companyId, '/api/v1/calc/price-trend', {}, mergePriceTrend);
+    const fetchLCTimeline = () => fetchCalc<LCLimitTimeline>(companyId, '/api/v1/calc/lc-limit-timeline', { months_ahead: 3 }, mergeLCTimeline);
+    // CRUD: "all"이면 company_id 파라미터 생략 → 전체 반환
+    const fetchBLs = () => fetchWithAuth<BLShipment[]>(companyQueryUrl('/api/v1/bls', companyId));
+    const fetchOrders = () => fetchWithAuth<Order[]>(companyQueryUrl('/api/v1/orders', companyId));
+
+    const results = await Promise.allSettled([
+      fetchInventory(),       // 0
+      fetchMargin(),          // 1
+      fetchCustomerAnalysis(),// 2
+      fetchPriceTrendApi(),   // 3
+      fetchLCTimeline(),      // 4
+      fetchBLs(),             // 5
+      fetchOrders(),          // 6
+    ]);
+
+    // 0: Inventory -> summary + 장기재고 알림
+    const invResult = results[0];
+    if (invResult.status === 'fulfilled') {
+      const s = invResult.value.summary;
+      setSummary((prev) => ({
+        ...prev, loading: false,
+        data: {
+          ...prev.data!,
+          physical_mw: s.total_physical_kw / 1000,
+          available_mw: s.total_available_kw / 1000,
+          incoming_mw: s.total_incoming_kw / 1000,
+          secured_mw: s.total_secured_kw / 1000,
+          outstanding_krw: prev.data?.outstanding_krw ?? 0,
+          lc_available_usd: prev.data?.lc_available_usd ?? 0,
+        },
+      }));
+      setLongTermWarning(invResult.value.items.filter((i) => i.long_term_status === 'warning').length);
+      setLongTermCritical(invResult.value.items.filter((i) => i.long_term_status === 'critical').length);
+    } else {
+      setSummary((s) => ({ ...s, loading: false, error: '재고 데이터 조회 실패' }));
+    }
+
+    // 1: Margin -> revenue
+    const marginResult = results[1];
+    if (marginResult.status === 'fulfilled') {
+      setRevenue({ data: { months: marginResult.value.months || [] }, loading: false, error: null });
+    } else {
+      setRevenue({ data: null, loading: false, error: '매출 데이터 조회 실패' });
+    }
+
+    // 2: CustomerAnalysis -> outstanding + summary.outstanding_krw
+    const custResult = results[2];
+    let custData: CustomerAnalysis | null = null;
+    if (custResult.status === 'fulfilled') {
+      custData = custResult.value;
+      setOutstanding({ data: custData, loading: false, error: null });
+      setSummary((prev) => ({
+        ...prev,
+        data: prev.data ? { ...prev.data, outstanding_krw: custData!.total_outstanding || 0 } : prev.data,
+      }));
+    } else {
+      setOutstanding({ data: null, loading: false, error: '미수금 데이터 조회 실패' });
+    }
+
+    // 3: PriceTrend
+    const ptResult = results[3];
+    if (ptResult.status === 'fulfilled') {
+      const mfgs = (ptResult.value.manufacturers || []);
+      const MFG_COLORS: Record<string, string> = {
+        '진코솔라': '#3b82f6', 'JinkoSolar': '#3b82f6',
+        '트리나솔라': '#ef4444', 'TrinaSolar': '#ef4444',
+        '라이젠에너지': '#22c55e', 'Risen': '#22c55e',
+        'LONGi': '#f97316', '롱기': '#f97316',
+      };
+      const colored = mfgs.map((m: PriceTrendResponse['manufacturers'][0], i: number) => ({
+        ...m,
+        color: MFG_COLORS[m.name] || ['#6b7280', '#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899'][i % 5],
+      }));
+      setPriceTrend({ data: { manufacturers: colored }, loading: false, error: null });
+    } else {
+      setPriceTrend({ data: null, loading: false, error: '단가 추이 조회 실패' });
+    }
+
+    // 4: LC Timeline -> summary.lc_available_usd
+    const tlResult = results[4];
+    if (tlResult.status === 'fulfilled') {
+      const avail = (tlResult.value.bank_summaries || []).reduce((s: number, b: { available: number }) => s + b.available, 0);
+      setSummary((prev) => ({
+        ...prev,
+        data: prev.data ? { ...prev.data, lc_available_usd: avail } : prev.data,
+      }));
+    }
+
+    // 5: BLs
+    const blResult = results[5];
+    let blData: BLShipment[] = [];
+    if (blResult.status === 'fulfilled') {
+      blData = blResult.value;
+      if (isManager) {
+        const incomingBLs = blData
+          .filter((bl) => bl.status === 'shipping' || bl.status === 'arrived' || bl.status === 'customs')
+          .slice(0, 10);
+        setIncoming({ data: incomingBLs, loading: false, error: null });
+      }
+    } else if (isManager) {
+      setIncoming({ data: null, loading: false, error: '미착품 조회 실패' });
+    }
+
+    // 6: Orders
+    const orderResult = results[6];
+    let orderData: Order[] = [];
+    if (orderResult.status === 'fulfilled') {
+      orderData = orderResult.value;
+      if (isManager) {
+        const backlog = orderData
+          .filter((o) => (o.status === 'received' || o.status === 'partial') && (o.remaining_qty ?? 0) > 0)
+          .slice(0, 10);
+        setOrderBacklog({ data: backlog, loading: false, error: null });
+      }
+    } else if (isManager) {
+      setOrderBacklog({ data: null, loading: false, error: '수주 잔량 조회 실패' });
+    }
+
+    // 알림은 useAlerts.ts로 분리 (Step 31 감리 지적 3 반영)
+    setAlerts({ data: [], loading: false, error: null });
+
+    // 법인별 요약은 별도 (companyId가 "전체"일 때만)
+    setCompanySummary((s) => ({ ...s, loading: false }));
+  }, [companyId, isManager]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return {
+    summary, revenue, priceTrend, alerts, companySummary,
+    incoming, orderBacklog, outstanding,
+    longTermWarning, longTermCritical,
+    reload: load,
+  };
+}
