@@ -42,13 +42,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   initialize: () => {
-    // 타임아웃 안전장치: 5초 내 초기화 실패 시 로딩 해제
     const timeout = setTimeout(() => {
-      console.warn('[authStore] 초기화 타임아웃 — 로딩 해제');
-      set({ isLoading: false });
+      console.warn('[authStore] 초기화 타임아웃 — 세션 초기화 후 로그인으로 이동');
+      supabase.auth.signOut();
+      set({ session: null, user: null, isLoading: false });
     }, INIT_TIMEOUT_MS);
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      clearTimeout(timeout);
       set({ session });
 
       if (session) {
@@ -56,20 +57,20 @@ export const useAuthStore = create<AuthState>((set) => ({
           const profile = await fetchWithAuth<UserProfile>('/api/v1/users/me');
           set({ user: profile, isLoading: false });
         } catch {
-          console.warn('[authStore] 프로필 조회 실패 — 세션은 유지');
-          set({ isLoading: false });
+          console.warn('[authStore] 프로필 조회 실패 — 세션 초기화 후 로그인으로 이동');
+          await supabase.auth.signOut();
+          set({ session: null, user: null, isLoading: false });
         }
       } else {
         set({ isLoading: false });
       }
-      clearTimeout(timeout);
     }).catch(() => {
-      console.error('[authStore] 세션 조회 실패');
-      set({ isLoading: false });
       clearTimeout(timeout);
+      console.error('[authStore] 세션 조회 실패');
+      supabase.auth.signOut();
+      set({ session: null, user: null, isLoading: false });
     });
 
-    // 인증 상태 변경 구독
     supabase.auth.onAuthStateChange(async (_event, session) => {
       set({ session });
 
@@ -78,7 +79,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           const profile = await fetchWithAuth<UserProfile>('/api/v1/users/me');
           set({ user: profile });
         } catch {
-          // 프로필 조회 실패 시 무시
+          // 상태 변경 시 프로필 조회 실패는 무시 (initialize에서 처리됨)
         }
       } else {
         set({ user: null });
