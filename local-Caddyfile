@@ -1,0 +1,6 @@
+:3001 {
+    handle /rest/v1/* {
+        uri strip_prefix /rest/v1
+        reverse_proxy localhost:3000
+    }
+}
