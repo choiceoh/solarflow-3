@@ -168,12 +168,40 @@ func AuthMiddleware(db *supa.Client) func(http.Handler) http.Handler {
 				return
 			}
 
+			var profile UserProfile
 			if len(profiles) == 0 {
-				response.RespondError(w, http.StatusUnauthorized, "등록되지 않은 사용자입니다")
-				return
-			}
+				// 비유: 사원증은 있지만 인사카드가 없는 신입 → 자동으로 인사카드 생성
+				name := email
+				if at := strings.Index(email, "@"); at > 0 {
+					name = email[:at]
+				}
+				newProfile := map[string]interface{}{
+					"user_id":   userID,
+					"email":     email,
+					"name":      name,
+					"role":      "viewer",
+					"is_active": true,
+				}
+				insertData, _, insertErr := db.From("user_profiles").
+					Insert(newProfile, false, "", "", "exact").
+					Execute()
+				if insertErr != nil {
+					log.Printf("[인증 미들웨어] auto-provision 실패: id=%s, err=%v", userID, insertErr)
+					response.RespondError(w, http.StatusInternalServerError, "사용자 프로필 자동 생성에 실패했습니다")
+					return
+				}
 
-			profile := profiles[0]
+				var created []UserProfile
+				if err := json.Unmarshal(insertData, &created); err != nil || len(created) == 0 {
+					// INSERT 성공했지만 응답 파싱 실패 시 기본값 사용
+					profile = UserProfile{ID: userID, Email: email, Role: "viewer", IsActive: true}
+				} else {
+					profile = created[0]
+				}
+				log.Printf("[인증 미들웨어] auto-provision 완료: id=%s, email=%s, role=viewer", userID, email)
+			} else {
+				profile = profiles[0]
+			}
 
 			// 비유: 인사카드에 "퇴사" 도장이 찍혀 있으면 출입 거부
 			if !profile.IsActive {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	supa "github.com/supabase-community/supabase-go"
 
@@ -38,12 +39,13 @@ func NewUserHandler(db *supa.Client) *UserHandler {
 // GetMe — 현재 로그인한 사용자의 프로필 조회
 // 비유: "사원증 스캔 후 내 인사카드 보기"
 func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
-	// 비유: AuthMiddleware가 context에 넣어둔 사번(user_id)을 꺼냄
+	// 비유: AuthMiddleware가 context에 넣어둔 사번(user_id)과 이메일을 꺼냄
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		response.RespondError(w, http.StatusUnauthorized, "인증이 필요합니다")
 		return
 	}
+	email := middleware.GetUserEmail(r.Context())
 
 	data, _, err := h.DB.From("user_profiles").
 		Select("user_id, email, name, role, department, phone, avatar_url, is_active", "exact", false).
@@ -63,7 +65,35 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(profiles) == 0 {
-		response.RespondError(w, http.StatusNotFound, "사용자 프로필을 찾을 수 없습니다")
+		// 비유: 인사카드가 없는 신입 → 자동 생성
+		name := email
+		if at := strings.Index(email, "@"); at > 0 {
+			name = email[:at]
+		}
+		newProfile := map[string]interface{}{
+			"user_id":   userID,
+			"email":     email,
+			"name":      name,
+			"role":      "viewer",
+			"is_active": true,
+		}
+		insertData, _, insertErr := h.DB.From("user_profiles").
+			Insert(newProfile, false, "", "", "exact").
+			Execute()
+		if insertErr != nil {
+			log.Printf("[users/me] auto-provision 실패: id=%s, err=%v", userID, insertErr)
+			response.RespondError(w, http.StatusInternalServerError, "사용자 프로필 자동 생성에 실패했습니다")
+			return
+		}
+
+		var created []UserProfileResponse
+		if err := json.Unmarshal(insertData, &created); err != nil || len(created) == 0 {
+			log.Printf("[users/me] auto-provision 응답 파싱 실패: %v", err)
+			response.RespondError(w, http.StatusInternalServerError, "사용자 프로필 생성 후 조회에 실패했습니다")
+			return
+		}
+		log.Printf("[users/me] auto-provision 완료: id=%s, email=%s", userID, email)
+		response.RespondJSON(w, http.StatusOK, created[0])
 		return
 	}
 
