@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { fetchWithAuth } from '@/lib/api';
 import { BL_STATUS_ORDER, BL_STATUS_LABEL, type BLStatus } from '@/types/inbound';
@@ -13,11 +13,6 @@ interface Props {
 export default function StatusChanger({ blId, currentStatus, onChanged }: Props) {
   const [target, setTarget] = useState<BLStatus | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const currentIdx = BL_STATUS_ORDER.indexOf(currentStatus);
-  const nextStatus = currentIdx < BL_STATUS_ORDER.length - 1 ? BL_STATUS_ORDER[currentIdx + 1] : null;
-
-  if (!nextStatus) return null;
 
   const handleConfirm = async () => {
     if (!target) return;
@@ -33,14 +28,19 @@ export default function StatusChanger({ blId, currentStatus, onChanged }: Props)
     setTarget(null);
   };
 
+  // 현재 상태 이외의 모든 상태를 선택 가능하게
+  const otherStatuses = BL_STATUS_ORDER.filter(s => s !== currentStatus);
+
   return (
     <>
-      <Select value="" onValueChange={(v) => setTarget(v as BLStatus)}>
+      <Select value="" onValueChange={(v) => { if (v) setTarget(v as BLStatus); }}>
         <SelectTrigger className="h-7 w-28 text-xs">
-          <SelectValue placeholder="상태 변경" />
+          <span className="flex flex-1 text-left truncate text-muted-foreground" data-slot="select-value">상태 변경</span>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={nextStatus}>{BL_STATUS_LABEL[nextStatus]}</SelectItem>
+          {otherStatuses.map(s => (
+            <SelectItem key={s} value={s}>{BL_STATUS_LABEL[s]}</SelectItem>
+          ))}
         </SelectContent>
       </Select>
       <ConfirmDialog

@@ -141,6 +141,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
         editData={editLine}
         blId={blId}
         currency={bl.currency}
+        manufacturerId={bl.manufacturer_id}
       />
 
       <ConfirmDialog

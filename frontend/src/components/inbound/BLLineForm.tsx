@@ -7,10 +7,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { fetchWithAuth } from '@/lib/api';
-import { USAGE_CATEGORIES, type BLLineItem } from '@/types/inbound';
+import type { BLLineItem } from '@/types/inbound';
 import type { Product } from '@/types/masters';
+
+function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: string }) {
+  return (
+    <span className={`flex flex-1 text-left truncate ${text ? '' : 'text-muted-foreground'}`} data-slot="select-value">
+      {text || placeholder}
+    </span>
+  );
+}
 
 const schema = z.object({
   product_id: z.string().min(1, '품번은 필수입니다'),
@@ -20,7 +28,6 @@ const schema = z.object({
   invoice_amount_usd: z.coerce.number().optional().or(z.literal('')),
   unit_price_usd_wp: z.coerce.number().optional().or(z.literal('')),
   unit_price_krw_wp: z.coerce.number().optional().or(z.literal('')),
-  usage_category: z.string().min(1, '용도는 필수입니다'),
   memo: z.string().optional(),
 });
 type FormData = z.infer<typeof schema>;
@@ -32,29 +39,39 @@ interface Props {
   editData?: BLLineItem | null;
   blId: string;
   currency: 'USD' | 'KRW';
+  manufacturerId?: string;
 }
 
-export default function BLLineForm({ open, onOpenChange, onSubmit, editData, blId, currency }: Props) {
+export default function BLLineForm({ open, onOpenChange, onSubmit, editData, blId, currency, manufacturerId }: Props) {
   const [products, setProducts] = useState<Product[]>([]);
+  const [selProductId, setSelProductId] = useState('');
+  const [selItemType, setSelItemType] = useState('');
+  const [selPaymentType, setSelPaymentType] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema) as any,
   });
 
-  const selectedProductId = watch('product_id');
   const quantity = watch('quantity');
-  const selectedProduct = products.find((p) => p.product_id === selectedProductId);
+  const selectedProduct = products.find((p) => p.product_id === selProductId);
   const capacityKw = selectedProduct && quantity ? quantity * selectedProduct.wattage_kw : 0;
 
+  // 제조사ID가 있으면 해당 제조사 품번만, 없으면 전체
   useEffect(() => {
-    fetchWithAuth<Product[]>('/api/v1/products')
+    const url = manufacturerId
+      ? `/api/v1/products?manufacturer_id=${manufacturerId}`
+      : '/api/v1/products';
+    fetchWithAuth<Product[]>(url)
       .then((list) => setProducts(list.filter((p) => p.is_active))).catch(() => {});
-  }, []);
+  }, [manufacturerId]);
 
   useEffect(() => {
     if (open) {
       if (editData) {
+        setSelProductId(editData.product_id);
+        setSelItemType(editData.item_type);
+        setSelPaymentType(editData.payment_type);
         reset({
           product_id: editData.product_id,
           quantity: editData.quantity,
@@ -63,25 +80,44 @@ export default function BLLineForm({ open, onOpenChange, onSubmit, editData, blI
           invoice_amount_usd: editData.invoice_amount_usd ?? '',
           unit_price_usd_wp: editData.unit_price_usd_wp ?? '',
           unit_price_krw_wp: editData.unit_price_krw_wp ?? '',
-          usage_category: editData.usage_category,
           memo: editData.memo ?? '',
         });
       } else {
+        setSelProductId('');
+        setSelItemType('');
+        setSelPaymentType('');
         reset({
           product_id: '', quantity: '' as unknown as number,
           item_type: '', payment_type: '',
           invoice_amount_usd: '', unit_price_usd_wp: '', unit_price_krw_wp: '',
-          usage_category: '', memo: '',
+          memo: '',
         });
       }
     }
   }, [open, editData, reset]);
+
+  const handleProductChange = (v: string | null) => {
+    const id = v ?? '';
+    setSelProductId(id);
+    setValue('product_id', id);
+  };
+  const handleItemTypeChange = (v: string | null) => {
+    const val = v ?? '';
+    setSelItemType(val);
+    setValue('item_type', val);
+  };
+  const handlePaymentTypeChange = (v: string | null) => {
+    const val = v ?? '';
+    setSelPaymentType(val);
+    setValue('payment_type', val);
+  };
 
   const handle = async (data: FormData) => {
     const payload: Record<string, unknown> = {
       ...data,
       bl_id: blId,
       capacity_kw: capacityKw,
+      usage_category: 'sale',
     };
     if (data.invoice_amount_usd === '' || data.invoice_amount_usd === undefined) delete payload.invoice_amount_usd;
     if (data.unit_price_usd_wp === '' || data.unit_price_usd_wp === undefined) delete payload.unit_price_usd_wp;
@@ -90,21 +126,25 @@ export default function BLLineForm({ open, onOpenChange, onSubmit, editData, blI
     onOpenChange(false);
   };
 
+  const productLabel = selProductId
+    ? (() => { const p = products.find(x => x.product_id === selProductId); return p ? `${p.product_code} | ${p.product_name} | ${p.spec_wp}Wp` : ''; })()
+    : '';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editData ? '라인아이템 수정' : '라인아이템 추가'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(handle)} className="space-y-3">
           <div className="space-y-1.5">
             <Label>품번 *</Label>
-            <Select value={watch('product_id') ?? ''} onValueChange={(v) => setValue('product_id', v ?? '')}>
-              <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
-              <SelectContent>
+            <Select value={selProductId} onValueChange={handleProductChange}>
+              <SelectTrigger className="w-full"><Txt text={productLabel} placeholder="품번 선택" /></SelectTrigger>
+              <SelectContent className="min-w-[min(500px,calc(100vw-3rem))]">
                 {products.map((p) => (
                   <SelectItem key={p.product_id} value={p.product_id}>
-                    {p.product_code} — {p.product_name}
+                    {p.product_code} | {p.product_name} | {p.spec_wp}Wp
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -130,8 +170,8 @@ export default function BLLineForm({ open, onOpenChange, onSubmit, editData, blI
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>구분 *</Label>
-              <Select value={watch('item_type') ?? ''} onValueChange={(v) => setValue('item_type', v ?? '')}>
-                <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+              <Select value={selItemType} onValueChange={handleItemTypeChange}>
+                <SelectTrigger className="w-full"><Txt text={selItemType === 'main' ? '본품' : selItemType === 'spare' ? '스페어' : ''} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="main">본품</SelectItem>
                   <SelectItem value="spare">스페어</SelectItem>
@@ -140,8 +180,8 @@ export default function BLLineForm({ open, onOpenChange, onSubmit, editData, blI
             </div>
             <div className="space-y-1.5">
               <Label>유/무상 *</Label>
-              <Select value={watch('payment_type') ?? ''} onValueChange={(v) => setValue('payment_type', v ?? '')}>
-                <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+              <Select value={selPaymentType} onValueChange={handlePaymentTypeChange}>
+                <SelectTrigger className="w-full"><Txt text={selPaymentType === 'paid' ? '유상' : selPaymentType === 'free' ? '무상' : ''} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="paid">유상</SelectItem>
                   <SelectItem value="free">무상</SelectItem>
@@ -159,19 +199,6 @@ export default function BLLineForm({ open, onOpenChange, onSubmit, editData, blI
           {currency === 'KRW' && (
             <div className="space-y-1.5"><Label>단가(KRW/Wp)</Label><Input type="number" step="0.01" {...register('unit_price_krw_wp')} /></div>
           )}
-
-          <div className="space-y-1.5">
-            <Label>용도 *</Label>
-            <Select value={watch('usage_category') ?? ''} onValueChange={(v) => setValue('usage_category', v ?? '')}>
-              <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(USAGE_CATEGORIES).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.usage_category && <p className="text-xs text-destructive">{errors.usage_category.message}</p>}
-          </div>
 
           <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
 

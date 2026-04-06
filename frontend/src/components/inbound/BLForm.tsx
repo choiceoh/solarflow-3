@@ -130,7 +130,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
   const [submitError, setSubmitError] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, reset, setValue, getValues, formState: { isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema) as any,
   });
 
@@ -296,9 +296,10 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
     });
   };
 
-  /* ── 제출 ── */
-  const handle = async (data: FormData) => {
+  /* ── 제출 — getValues()로 직접 읽기 (handleSubmit/zod 우회하여 데이터 누락 방지) ── */
+  const handle = async () => {
     setSubmitError('');
+    const data = getValues();
 
     // 조건부 필수 검증
     if (!selCompanyId) { setSubmitError('법인을 선택해주세요'); return; }
@@ -311,7 +312,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
     const validLines = lines.filter(l => l.product_id && Number(l.quantity) > 0);
     if (validLines.length === 0) { setSubmitError('라인아이템을 최소 1개 이상 입력해주세요 (품번+수량 필수)'); return; }
 
-    const blNumber = isImport ? data.bl_number! : autoNumber;
+    const blNumber = isImport ? (data.bl_number ?? '') : autoNumber;
     const exRate = data.exchange_rate ? parseFloat(data.exchange_rate) : undefined;
 
     const payload: Record<string, unknown> = {
@@ -324,13 +325,13 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
       exchange_rate: isImport && exRate && !isNaN(exRate) ? exRate : undefined,
       status: editData?.status ?? 'scheduled',
       payment_terms: (isImport || isDomestic) ? composePT(pt) : undefined,
-      etd: isImport ? data.etd || undefined : undefined,
-      eta: isImport ? data.eta || undefined : undefined,
+      etd: isImport && data.etd ? data.etd : undefined,
+      eta: isImport && data.eta ? data.eta : undefined,
       actual_arrival: data.actual_arrival || undefined,
-      port: isImport ? data.port || undefined : undefined,
-      forwarder: isImport ? data.forwarder || undefined : undefined,
-      invoice_number: isImport ? data.invoice_number || undefined : undefined,
-      incoterms: isImport ? data.incoterms || undefined : undefined,
+      port: isImport && data.port ? data.port : undefined,
+      forwarder: isImport && data.forwarder ? data.forwarder : undefined,
+      invoice_number: isImport && data.invoice_number ? data.invoice_number : undefined,
+      incoterms: isImport && data.incoterms ? data.incoterms : undefined,
       warehouse_id: selWhId || undefined,
       memo: data.memo || undefined,
       lines: lines
@@ -382,7 +383,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
           </div>
         )}
 
-        <form onSubmit={handleSubmit(handle)} className="space-y-5">
+        <form onSubmit={(e) => { e.preventDefault(); handle(); }} className="space-y-5">
 
           {/* ── 입고유형 (항상 첫번째) ── */}
           <div className="max-w-xs">
@@ -397,7 +398,6 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                 ))}
               </SelectContent>
             </Select>
-            {errors.inbound_type && <p className="text-xs text-destructive mt-1">{errors.inbound_type.message}</p>}
           </div>
 
           {/* ── 유형 선택 후 나머지 폼 ── */}
@@ -410,7 +410,6 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                   <div className="space-y-1.5">
                     <Req>B/L 번호</Req>
                     <Input {...register('bl_number')} placeholder="SOLARBL-2026-001" />
-                    {errors.bl_number && <p className="text-xs text-destructive">{errors.bl_number.message}</p>}
                   </div>
                 )}
                 {(isDomestic || isGroup) && (
