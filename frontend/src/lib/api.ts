@@ -29,21 +29,53 @@ async function refreshAccessToken(): Promise<string | null> {
   return refreshPromise;
 }
 
-// fetchWithAuth — Supabase 세션 토큰을 자동 첨부하는 fetch 래퍼
-// 401 응답 시 토큰 갱신 후 재시도, 갱신 실패 시 로그아웃
-export async function fetchWithAuth<T>(path: string, options?: RequestInit): Promise<T> {
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) {
-    console.warn('[SolarFlow] getSession 실패:', sessionError.message);
+// localStorage에서 토큰 직접 읽기 — getSession() 블로킹 시 fallback
+function readTokenFromStorage(): string | null {
+  try {
+    const raw = localStorage.getItem('solarflow-auth');
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    return data?.access_token ?? null;
+  } catch { return null; }
+}
+
+// getSession()에 타임아웃 적용 — 토큰 갱신 중 블로킹 방지
+const SESSION_TIMEOUT_MS = 3000;
+
+async function getSessionToken(): Promise<string | null> {
+  try {
+    const result = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), SESSION_TIMEOUT_MS)),
+    ]);
+    if (result && 'data' in result) {
+      const token = result.data.session?.access_token ?? null;
+      if (token) return token;
+    }
+  } catch (err) {
+    console.warn('[SolarFlow] getSession 실패:', err);
   }
+
+  // 타임아웃 또는 실패 시 localStorage fallback
+  const fallback = readTokenFromStorage();
+  if (fallback) {
+    console.debug('[SolarFlow] getSession 타임아웃 — localStorage 토큰 사용');
+  }
+  return fallback;
+}
+
+// fetchWithAuth — Supabase 세션 토큰을 자동 첨부하는 fetch 래퍼
+// getSession()에 3초 타임아웃, 401 시 토큰 갱신 후 재시도
+export async function fetchWithAuth<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = await getSessionToken();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options?.headers as Record<string, string> || {}),
   };
 
-  if (session?.access_token) {
-    headers['Authorization'] = `Bearer ${session.access_token}`;
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -92,7 +124,7 @@ export async function fetchWithAuth<T>(path: string, options?: RequestInit): Pro
   return res.json();
 }
 
-// 기존 호환용 — 인증 없는 공개 API 호출 (남겨두되 내부에서는 fetchWithAuth 사용)
+// 기존 호환용
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   return fetchWithAuth<T>(path, options);
 }

@@ -83,19 +83,21 @@ export const useAuthStore = create<AuthState>((set) => ({
       initialized = true;
     });
 
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    supabase.auth.onAuthStateChange((event, session) => {
       // 초기화 완료 전이면 getSession에서 처리하므로 무시
       if (!initialized) return;
 
+      console.debug('[authStore] onAuthStateChange:', event);
       set({ session });
 
+      // TOKEN_REFRESHED: 세션만 업데이트, 프로필 재로드 불필요 — 블로킹 방지
+      if (event === 'TOKEN_REFRESHED') return;
+
       if (session) {
-        try {
-          const profile = await fetchWithAuth<UserProfile>('/api/v1/users/me');
-          set({ user: profile });
-        } catch {
-          // 상태 변경 시 프로필 조회 실패는 무시 (initialize에서 처리됨)
-        }
+        // 비동기 프로필 조회 — await 하지 않음 (블로킹 방지)
+        fetchWithAuth<UserProfile>('/api/v1/users/me')
+          .then((profile) => set({ user: profile }))
+          .catch(() => { /* 상태 변경 시 프로필 조회 실패는 무시 */ });
       } else {
         set({ user: null });
       }

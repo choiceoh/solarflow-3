@@ -18,9 +18,17 @@ export const supabase = createClient(
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
-      // Safari ITP 대응: PKCE 흐름 + 명시적 스토리지 키
       flowType: 'pkce',
       storageKey: 'solarflow-auth',
     },
   }
 );
+
+// 탭 복귀 시 세션 선제 갱신 — 방치 후 첫 클릭 블로킹 방지
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    supabase.auth.getSession().catch(() => {
+      console.debug('[SolarFlow] 탭 복귀 시 세션 조회 실패 — 다음 API 호출 시 처리됨');
+    });
+  }
+});
