@@ -13,14 +13,14 @@ interface Props {
 }
 
 export default function BLListTable({ items, onSelect, onNew }: Props) {
-  if (items.length === 0) return <EmptyState message="등록된 B/L이 없습니다" actionLabel="새로 등록" onAction={onNew} />;
+  if (items.length === 0) return <EmptyState message="등록된 입고 건이 없습니다" actionLabel="새로 등록" onAction={onNew} />;
 
   return (
     <div className="rounded-md border">
       <Table className="text-xs">
         <TableHeader>
           <TableRow>
-            <TableHead>B/L No.</TableHead>
+            <TableHead>입고번호</TableHead>
             <TableHead>입고유형</TableHead>
             <TableHead>제조사</TableHead>
             <TableHead>상태</TableHead>

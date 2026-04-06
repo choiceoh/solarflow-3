@@ -63,7 +63,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h2 className="text-base font-semibold flex-1">B/L {bl.bl_number}</h2>
+        <h2 className="text-base font-semibold flex-1">입고 {bl.bl_number}</h2>
         <StatusChanger blId={blId} currentStatus={bl.status} onChanged={reloadBL} />
         <Button variant="outline" size="sm" onClick={() => setEditBLOpen(true)}>
           <Pencil className="mr-1 h-3.5 w-3.5" />수정
