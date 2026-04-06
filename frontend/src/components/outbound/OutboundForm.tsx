@@ -8,11 +8,15 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
 import { USAGE_CATEGORY_LABEL, type Outbound, type UsageCategory } from '@/types/outbound';
 import type { Product, Warehouse } from '@/types/masters';
+
+function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: string }) {
+  return <span className={`flex flex-1 text-left truncate ${text ? '' : 'text-muted-foreground'}`} data-slot="select-value">{text || placeholder}</span>;
+}
 
 const schema = z.object({
   outbound_date: z.string().min(1, '출고일은 필수입니다'),
@@ -44,6 +48,7 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [orders, setOrders] = useState<{ order_id: string; order_number: string; remaining_qty?: number }[]>([]);
+  const [submitError, setSubmitError] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
@@ -57,6 +62,9 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
   const groupTrade = watch('group_trade') ?? false;
   const selectedOrderId = watch('order_id');
   const selectedOrder = orders.find((o) => o.order_id === selectedOrderId);
+  const usageCat = watch('usage_category') ?? '';
+  const warehouseId = watch('warehouse_id') ?? '';
+  const targetCompanyId = watch('target_company_id') ?? '';
 
   useEffect(() => {
     fetchWithAuth<Product[]>('/api/v1/products')
@@ -65,7 +73,6 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
       .then((list) => setWarehouses(list.filter((w) => w.is_active))).catch(() => {});
   }, []);
 
-  // 수주 목록 로드 (법인 기준)
   useEffect(() => {
     if (!selectedCompanyId) return;
     fetchWithAuth<{ order_id: string; order_number: string; remaining_qty?: number }[]>(
@@ -75,6 +82,7 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
 
   useEffect(() => {
     if (open) {
+      setSubmitError('');
       if (editData) {
         reset({
           outbound_date: editData.outbound_date?.slice(0, 10) ?? '',
@@ -104,6 +112,7 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
   }, [open, editData, reset]);
 
   const handle = async (data: FormData) => {
+    setSubmitError('');
     const payload: Record<string, unknown> = {
       ...data,
       company_id: selectedCompanyId,
@@ -116,19 +125,34 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
       delete payload.target_company_id;
       payload.group_trade = false;
     }
-    await onSubmit(payload);
-    onOpenChange(false);
+    try {
+      await onSubmit(payload);
+      onOpenChange(false);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : '저장에 실패했습니다');
+    }
   };
 
-  // 자기 법인 제외한 법인 목록
   const otherCompanies = companies.filter((c) => c.company_id !== selectedCompanyId);
+  const productLabel = selectedProduct ? `${selectedProduct.product_code} — ${selectedProduct.product_name}` : '';
+  const warehouseLabel = warehouses.find(w => w.warehouse_id === warehouseId)?.warehouse_name ?? '';
+  const usageCatLabel = (USAGE_CATEGORY_LABEL as Record<string, string>)[usageCat] ?? '';
+  const orderLabel = selectedOrder?.order_number ?? (selectedOrderId ? '' : '');
+  const targetLabel = companies.find(c => c.company_id === targetCompanyId)?.company_name ?? '';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{editData ? '출고 수정' : '출고 등록'}</DialogTitle>
         </DialogHeader>
+
+        {submitError && (
+          <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
+            {submitError}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit(handle)} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -138,8 +162,8 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
             </div>
             <div className="space-y-1.5">
               <Label>용도 *</Label>
-              <Select value={watch('usage_category') ?? ''} onValueChange={(v) => setValue('usage_category', v ?? '')}>
-                <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+              <Select value={usageCat} onValueChange={(v) => setValue('usage_category', v ?? '')}>
+                <SelectTrigger className="w-full"><Txt text={usageCatLabel} /></SelectTrigger>
                 <SelectContent>
                   {(Object.entries(USAGE_CATEGORY_LABEL) as [UsageCategory, string][]).map(([k, v]) => (
                     <SelectItem key={k} value={k}>{v}</SelectItem>
@@ -152,8 +176,8 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
 
           <div className="space-y-1.5">
             <Label>품번 *</Label>
-            <Select value={watch('product_id') ?? ''} onValueChange={(v) => setValue('product_id', v ?? '')}>
-              <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+            <Select value={selectedProductId ?? ''} onValueChange={(v) => setValue('product_id', v ?? '')}>
+              <SelectTrigger className="w-full"><Txt text={productLabel} /></SelectTrigger>
               <SelectContent>
                 {products.map((p) => (
                   <SelectItem key={p.product_id} value={p.product_id}>
@@ -184,8 +208,8 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
 
           <div className="space-y-1.5">
             <Label>창고 *</Label>
-            <Select value={watch('warehouse_id') ?? ''} onValueChange={(v) => setValue('warehouse_id', v ?? '')}>
-              <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+            <Select value={warehouseId} onValueChange={(v) => setValue('warehouse_id', v ?? '')}>
+              <SelectTrigger className="w-full"><Txt text={warehouseLabel} /></SelectTrigger>
               <SelectContent>
                 {warehouses.map((w) => (
                   <SelectItem key={w.warehouse_id} value={w.warehouse_id}>{w.warehouse_name} ({w.location_name})</SelectItem>
@@ -197,8 +221,8 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
 
           <div className="space-y-1.5">
             <Label>수주 연결</Label>
-            <Select value={watch('order_id') ?? ''} onValueChange={(v) => setValue('order_id', v === '_none' ? '' : (v ?? ''))}>
-              <SelectTrigger><SelectValue placeholder="선택 (선택사항)" /></SelectTrigger>
+            <Select value={selectedOrderId ?? ''} onValueChange={(v) => setValue('order_id', v === '_none' ? '' : (v ?? ''))}>
+              <SelectTrigger className="w-full"><Txt text={orderLabel || '연결 안함'} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">연결 안함</SelectItem>
                 {orders.map((o) => (
@@ -229,25 +253,18 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
           {groupTrade && (
             <div className="space-y-1.5">
               <Label>상대법인 *</Label>
-              <Select value={watch('target_company_id') ?? ''} onValueChange={(v) => setValue('target_company_id', v ?? '')}>
-                <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+              <Select value={targetCompanyId} onValueChange={(v) => setValue('target_company_id', v ?? '')}>
+                <SelectTrigger className="w-full"><Txt text={targetLabel} /></SelectTrigger>
                 <SelectContent>
                   {otherCompanies.map((c) => (
                     <SelectItem key={c.company_id} value={c.company_id}>{c.company_name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-blue-600">
-                그룹내 거래: 상대법인에 자동 입고가 생성됩니다. 세금계산서는 각각 수동 등록합니다.
-              </p>
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <Label>ERP 출고번호</Label>
-            <Input {...register('erp_outbound_no')} />
-          </div>
-
+          <div className="space-y-1.5"><Label>ERP 출고번호</Label><Input {...register('erp_outbound_no')} /></div>
           <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
 
           <DialogFooter>

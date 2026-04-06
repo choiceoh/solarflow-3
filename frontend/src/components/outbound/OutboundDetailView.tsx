@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { ArrowLeft, Pencil, Plus } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { formatDate, formatNumber, formatKw } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import OutboundStatusBadge from './OutboundStatusBadge';
 import InvoiceStatusBadge from './InvoiceStatusBadge';
 import OutboundCancelFlow from './OutboundCancelFlow';
@@ -33,6 +34,8 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
   const { data: ob, loading, reload } = useOutboundDetail(outboundId);
   const [editOpen, setEditOpen] = useState(false);
   const [saleFormOpen, setSaleFormOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (loading || !ob) return <LoadingSpinner />;
 
@@ -52,6 +55,19 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
     reload();
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await fetchWithAuth(`/api/v1/outbounds/${outboundId}`, { method: 'DELETE' });
+      setDeleteOpen(false);
+      onBack();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '삭제에 실패했습니다');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -65,9 +81,11 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
             <Pencil className="mr-1 h-3.5 w-3.5" />수정
           </Button>
         )}
+        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+          <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
+        </Button>
       </div>
 
-      {/* 출고 정보 카드 */}
       <Card>
         <CardHeader className="pb-2 pt-4">
           <div className="flex items-center gap-2">
@@ -104,7 +122,6 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
 
       <Separator />
 
-      {/* 매출 정보 */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">매출 정보</h3>
         {!isCancelled && (
@@ -155,6 +172,15 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
           editData={ob.sale ?? null}
         />
       )}
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="출고 삭제"
+        description="이 출고 건과 연결된 매출 정보가 모두 삭제됩니다. 정말 삭제하시겠습니까?"
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </div>
   );
 }

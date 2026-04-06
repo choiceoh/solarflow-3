@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { fetchWithAuth } from '@/lib/api';
 import { formatNumber } from '@/lib/utils';
 import type { Outbound, Sale } from '@/types/outbound';
@@ -34,8 +34,13 @@ interface Props {
 }
 
 // 비유: Wp단가 하나만 입력하면 EA단가→공급가→부가세→합계가 자동 계산되는 계산기
+function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: string }) {
+  return <span className={`flex flex-1 text-left truncate ${text ? '' : 'text-muted-foreground'}`} data-slot="select-value">{text || placeholder}</span>;
+}
+
 export default function SaleForm({ open, onOpenChange, onSubmit, outbound, editData }: Props) {
   const [partners, setPartners] = useState<Partner[]>([]);
+  const [submitError, setSubmitError] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
@@ -61,6 +66,7 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, editD
 
   useEffect(() => {
     if (open) {
+      setSubmitError('');
       if (editData) {
         reset({
           customer_id: editData.customer_id,
@@ -82,6 +88,7 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, editD
   }, [open, editData, reset]);
 
   const handle = async (data: FormData) => {
+    setSubmitError('');
     const payload: Record<string, unknown> = {
       ...data,
       outbound_id: outbound.outbound_id,
@@ -96,8 +103,12 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, editD
       delete payload.erp_closed_date;
     }
     if (!data.erp_closed_date) delete payload.erp_closed_date;
-    await onSubmit(payload);
-    onOpenChange(false);
+    try {
+      await onSubmit(payload);
+      onOpenChange(false);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : '저장에 실패했습니다');
+    }
   };
 
   return (
@@ -106,11 +117,16 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, editD
         <DialogHeader>
           <DialogTitle>{editData ? '매출 수정' : '매출 등록'}</DialogTitle>
         </DialogHeader>
+        {submitError && (
+          <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
+            {submitError}
+          </div>
+        )}
         <form onSubmit={handleSubmit(handle)} className="space-y-3">
           <div className="space-y-1.5">
             <Label>거래처 *</Label>
             <Select value={watch('customer_id') ?? ''} onValueChange={(v) => setValue('customer_id', v ?? '')}>
-              <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+              <SelectTrigger className="w-full"><Txt text={partners.find(p => p.partner_id === watch('customer_id'))?.partner_name ?? ''} /></SelectTrigger>
               <SelectContent>
                 {partners.map((p) => (
                   <SelectItem key={p.partner_id} value={p.partner_id}>{p.partner_name}</SelectItem>

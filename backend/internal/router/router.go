@@ -173,6 +173,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Post("/", outboundH.Create)
 			r.Get("/{id}", outboundH.GetByID)
 			r.Put("/{id}", outboundH.Update)
+			r.Delete("/{id}", outboundH.Delete)
 		})
 
 		saleH := handler.NewSaleHandler(db)

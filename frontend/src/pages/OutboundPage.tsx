@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAppStore } from '@/stores/appStore';
 import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
@@ -19,22 +19,23 @@ import {
 import type { Manufacturer, Partner } from '@/types/masters';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 
+function FilterText({ text }: { text: string }) {
+  return <span className="flex flex-1 text-left truncate" data-slot="select-value">{text}</span>;
+}
+
 export default function OutboundPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
 
-  // 탭 1 필터
   const [statusFilter, setStatusFilter] = useState('');
   const [usageFilter, setUsageFilter] = useState('');
   const [mfgFilter, setMfgFilter] = useState('');
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
 
-  // 탭 2 필터
   const [customerFilter, setCustomerFilter] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
   const [invoiceFilter, setInvoiceFilter] = useState('');
 
-  // 마스터 데이터
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
 
@@ -67,7 +68,6 @@ export default function OutboundPage() {
     );
   }
 
-  // 상세 보기
   if (selectedOutbound) {
     return (
       <div className="p-6">
@@ -84,13 +84,20 @@ export default function OutboundPage() {
     reloadOutbounds();
   };
 
-  // 월 목록 (최근 12개월)
   const months: string[] = [];
   const now = new Date();
   for (let i = 0; i < 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
+
+  // 필터 라벨 계산 (한글 표시 보장)
+  const statusLabel = statusFilter ? (OUTBOUND_STATUS_LABEL[statusFilter as OutboundStatus] ?? statusFilter) : '전체 상태';
+  const usageLabel = usageFilter ? ((USAGE_CATEGORY_LABEL as Record<string, string>)[usageFilter] ?? usageFilter) : '전체 용도';
+  const mfgLabel = mfgFilter ? (manufacturers.find(m => m.manufacturer_id === mfgFilter)?.name_kr ?? mfgFilter) : '전체 제조사';
+  const customerLabel = customerFilter ? (partners.find(p => p.partner_id === customerFilter)?.partner_name ?? customerFilter) : '전체 거래처';
+  const monthLabel = monthFilter || '전체 기간';
+  const invoiceLabel = invoiceFilter === 'issued' ? '계산서 발행' : invoiceFilter === 'pending' ? '계산서 미발행' : '전체';
 
   return (
     <div className="p-6 space-y-4">
@@ -102,12 +109,11 @@ export default function OutboundPage() {
           <TabsTrigger value="sales">매출 현황</TabsTrigger>
         </TabsList>
 
-        {/* 탭 1: 출고 관리 */}
         <TabsContent value="outbound" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
             <div className="flex gap-2">
               <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? '' : (v ?? ''))}>
-                <SelectTrigger className="h-8 w-28 text-xs"><SelectValue placeholder="상태" /></SelectTrigger>
+                <SelectTrigger className="h-8 w-28 text-xs"><FilterText text={statusLabel} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">전체 상태</SelectItem>
                   {(Object.entries(OUTBOUND_STATUS_LABEL) as [OutboundStatus, string][]).map(([k, v]) => (
@@ -116,7 +122,7 @@ export default function OutboundPage() {
                 </SelectContent>
               </Select>
               <Select value={usageFilter || 'all'} onValueChange={(v) => setUsageFilter(v === 'all' ? '' : (v ?? ''))}>
-                <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="용도" /></SelectTrigger>
+                <SelectTrigger className="h-8 w-36 text-xs"><FilterText text={usageLabel} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">전체 용도</SelectItem>
                   {(Object.entries(USAGE_CATEGORY_LABEL) as [UsageCategory, string][]).map(([k, v]) => (
@@ -125,7 +131,7 @@ export default function OutboundPage() {
                 </SelectContent>
               </Select>
               <Select value={mfgFilter || 'all'} onValueChange={(v) => setMfgFilter(v === 'all' ? '' : (v ?? ''))}>
-                <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="제조사" /></SelectTrigger>
+                <SelectTrigger className="h-8 w-32 text-xs"><FilterText text={mfgLabel} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">전체 제조사</SelectItem>
                   {manufacturers.map((m) => (
@@ -151,12 +157,11 @@ export default function OutboundPage() {
           )}
         </TabsContent>
 
-        {/* 탭 2: 매출 현황 */}
         <TabsContent value="sales" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
           <div className="flex gap-2">
             <Select value={customerFilter || 'all'} onValueChange={(v) => setCustomerFilter(v === 'all' ? '' : (v ?? ''))}>
-              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="거래처" /></SelectTrigger>
+              <SelectTrigger className="h-8 w-36 text-xs"><FilterText text={customerLabel} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">전체 거래처</SelectItem>
                 {partners.map((p) => (
@@ -165,7 +170,7 @@ export default function OutboundPage() {
               </SelectContent>
             </Select>
             <Select value={monthFilter || 'all'} onValueChange={(v) => setMonthFilter(v === 'all' ? '' : (v ?? ''))}>
-              <SelectTrigger className="h-8 w-28 text-xs"><SelectValue placeholder="월" /></SelectTrigger>
+              <SelectTrigger className="h-8 w-28 text-xs"><FilterText text={monthLabel} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">전체 기간</SelectItem>
                 {months.map((m) => (
@@ -174,7 +179,7 @@ export default function OutboundPage() {
               </SelectContent>
             </Select>
             <Select value={invoiceFilter || 'all'} onValueChange={(v) => setInvoiceFilter(v === 'all' ? '' : (v ?? ''))}>
-              <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="계산서상태" /></SelectTrigger>
+              <SelectTrigger className="h-8 w-32 text-xs"><FilterText text={invoiceLabel} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">전체</SelectItem>
                 <SelectItem value="issued">계산서 발행</SelectItem>

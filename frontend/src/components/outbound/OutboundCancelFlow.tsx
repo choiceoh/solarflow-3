@@ -25,7 +25,9 @@ export default function OutboundCancelFlow({ outboundId, currentStatus, onChange
         body: JSON.stringify({ status: newStatus }),
       });
       onChanged();
-    } catch { /* 에러 무시 — 사용자에게 변경 없음으로 표시 */ }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '상태 변경에 실패했습니다');
+    }
     setLoading(false);
     setAction(null);
   };
