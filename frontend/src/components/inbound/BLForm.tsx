@@ -44,7 +44,7 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-/* ── 라인아이템 (문자열 기반 — 스피너 없이 자유 입력) ── */
+/* ── 라인아이템 ── */
 interface LineItem {
   product_id: string;
   quantity: string;
@@ -58,7 +58,7 @@ const emptyLine = (): LineItem => ({
   invoice_amount_usd: '', unit_price_usd_wp: '',
 });
 
-/* ── 트리거 표시용 헬퍼 (UUID 대신 한글 표시) ── */
+/* ── 트리거 표시 헬퍼 ── */
 function TriggerText({ text, placeholder = '선택' }: { text: string; placeholder?: string }) {
   if (text) return <span className="flex flex-1 text-left truncate" data-slot="select-value">{text}</span>;
   return <span className="flex flex-1 text-left truncate text-muted-foreground" data-slot="select-value">{placeholder}</span>;
@@ -78,15 +78,17 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [lines, setLines] = useState<LineItem[]>([emptyLine()]);
+  const [submitError, setSubmitError] = useState('');
+
+  /* 제조사 선택을 별도 state로 관리 — watch() 타이밍 이슈 방지 */
+  const [selectedMfgId, setSelectedMfgId] = useState('');
+  const [selectedWhId, setSelectedWhId] = useState('');
+  const [selectedType, setSelectedType] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema) as any,
   });
-
-  const inboundType = watch('inbound_type');
-  const manufacturerId = watch('manufacturer_id');
-  const warehouseId = watch('warehouse_id');
 
   /* 마스터 데이터 로드 */
   useEffect(() => {
@@ -98,38 +100,60 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
 
   /* 제조사 변경 → 해당 제조사 품번만 로드 */
   useEffect(() => {
-    if (!manufacturerId) { setProducts([]); return; }
-    fetchWithAuth<Product[]>(`/api/v1/products?manufacturer_id=${manufacturerId}`)
+    if (!selectedMfgId) { setProducts([]); return; }
+    fetchWithAuth<Product[]>(`/api/v1/products?manufacturer_id=${selectedMfgId}`)
       .then((list) => setProducts(list.filter((p) => p.is_active)))
       .catch(() => setProducts([]));
-  }, [manufacturerId]);
+  }, [selectedMfgId]);
 
   const handleManufacturerChange = useCallback((v: string | null) => {
-    setValue('manufacturer_id', v ?? '');
+    const id = v ?? '';
+    setSelectedMfgId(id);
+    setValue('manufacturer_id', id);
     setLines((prev) => prev.map((l) => ({ ...l, product_id: '' })));
+  }, [setValue]);
+
+  const handleTypeChange = useCallback((v: string | null) => {
+    const val = v ?? '';
+    setSelectedType(val);
+    setValue('inbound_type', val);
+  }, [setValue]);
+
+  const handleWarehouseChange = useCallback((v: string | null) => {
+    const val = v ?? '';
+    setSelectedWhId(val);
+    setValue('warehouse_id', val);
   }, [setValue]);
 
   /* 폼 초기화 */
   useEffect(() => {
     if (open) {
+      setSubmitError('');
       if (editData) {
+        const d = editData;
+        setSelectedMfgId(d.manufacturer_id);
+        setSelectedType(d.inbound_type);
+        setSelectedWhId(d.warehouse_id ?? '');
         reset({
-          bl_number: editData.bl_number,
-          inbound_type: editData.inbound_type,
-          manufacturer_id: editData.manufacturer_id,
-          exchange_rate: editData.exchange_rate != null ? String(editData.exchange_rate) : '',
-          etd: editData.etd?.slice(0, 10) ?? '',
-          eta: editData.eta?.slice(0, 10) ?? '',
-          actual_arrival: editData.actual_arrival?.slice(0, 10) ?? '',
-          port: editData.port ?? '',
-          forwarder: editData.forwarder ?? '',
-          warehouse_id: editData.warehouse_id ?? '',
-          invoice_number: editData.invoice_number ?? '',
-          incoterms: (editData as any).incoterms ?? '',
-          payment_terms: (editData as any).payment_terms ?? '',
-          memo: editData.memo ?? '',
+          bl_number: d.bl_number,
+          inbound_type: d.inbound_type,
+          manufacturer_id: d.manufacturer_id,
+          exchange_rate: d.exchange_rate != null ? String(d.exchange_rate) : '',
+          etd: d.etd?.slice(0, 10) ?? '',
+          eta: d.eta?.slice(0, 10) ?? '',
+          actual_arrival: d.actual_arrival?.slice(0, 10) ?? '',
+          port: d.port ?? '',
+          forwarder: d.forwarder ?? '',
+          warehouse_id: d.warehouse_id ?? '',
+          invoice_number: d.invoice_number ?? '',
+          incoterms: (d as any).incoterms ?? '',
+          payment_terms: (d as any).payment_terms ?? '',
+          memo: d.memo ?? '',
         });
       } else {
+        setSelectedMfgId('');
+        setSelectedType('');
+        setSelectedWhId('');
         reset({
           bl_number: '', inbound_type: '', manufacturer_id: '',
           exchange_rate: '', etd: '', eta: '', actual_arrival: '',
@@ -161,8 +185,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
     return p ? `${p.product_code} | ${p.product_name} | ${p.spec_wp}Wp` : '';
   };
 
-  /* 제출 */
+  /* 제출 — 실패 시 에러 표시, 성공 시에만 닫기 */
   const handle = async (data: FormData) => {
+    setSubmitError('');
     const exchangeRate = data.exchange_rate ? parseFloat(data.exchange_rate) : undefined;
     const payload: Record<string, unknown> = {
       ...data,
@@ -195,17 +220,30 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
     if (!data.warehouse_id) delete payload.warehouse_id;
     if (!data.incoterms) delete payload.incoterms;
     if (!data.payment_terms) delete payload.payment_terms;
-    await onSubmit(payload);
-    onOpenChange(false);
+
+    try {
+      await onSubmit(payload);
+      onOpenChange(false);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : '저장에 실패했습니다');
+    }
   };
 
   /* ── 렌더 ── */
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[80vw] sm:max-w-[80vw] h-[80vh] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editData ? 'B/L 수정' : 'B/L 등록'}</DialogTitle>
         </DialogHeader>
+
+        {/* 에러 메시지 */}
+        {submitError && (
+          <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
+            {submitError}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit(handle)} className="space-y-5">
 
           {/* ── 1행: B/L번호, 입고유형, 제조사 ── */}
@@ -217,9 +255,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
             </div>
             <div className="space-y-1.5">
               <Label>입고유형 *</Label>
-              <Select value={inboundType ?? ''} onValueChange={(v) => setValue('inbound_type', v ?? '')}>
+              <Select value={selectedType} onValueChange={handleTypeChange}>
                 <SelectTrigger className="w-full">
-                  <TriggerText text={inboundLabel(inboundType ?? '')} />
+                  <TriggerText text={inboundLabel(selectedType)} />
                 </SelectTrigger>
                 <SelectContent>
                   {INBOUND_TYPES.map((t) => (
@@ -231,9 +269,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
             </div>
             <div className="space-y-1.5">
               <Label>제조사 *</Label>
-              <Select value={manufacturerId ?? ''} onValueChange={handleManufacturerChange}>
+              <Select value={selectedMfgId} onValueChange={handleManufacturerChange}>
                 <SelectTrigger className="w-full">
-                  <TriggerText text={manufacturers.find((m) => m.manufacturer_id === manufacturerId)?.name_kr ?? ''} />
+                  <TriggerText text={manufacturers.find((m) => m.manufacturer_id === selectedMfgId)?.name_kr ?? ''} />
                 </SelectTrigger>
                 <SelectContent>
                   {manufacturers.map((m) => (
@@ -245,7 +283,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
             </div>
           </div>
 
-          {/* ── 2행: 날짜 + 환율 (항상 표시) ── */}
+          {/* ── 2행: 날짜 + 환율 ── */}
           <div className="grid grid-cols-4 gap-4">
             <div className="space-y-1.5"><Label>ETD</Label><Input type="date" {...register('etd')} /></div>
             <div className="space-y-1.5"><Label>ETA</Label><Input type="date" {...register('eta')} /></div>
@@ -274,9 +312,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <Label>입고 창고</Label>
-              <Select value={warehouseId ?? ''} onValueChange={(v) => setValue('warehouse_id', v ?? '')}>
+              <Select value={selectedWhId} onValueChange={handleWarehouseChange}>
                 <SelectTrigger className="w-full">
-                  <TriggerText text={warehouses.find((w) => w.warehouse_id === warehouseId)?.warehouse_name ?? ''} />
+                  <TriggerText text={warehouses.find((w) => w.warehouse_id === selectedWhId)?.warehouse_name ?? ''} />
                 </SelectTrigger>
                 <SelectContent>
                   {warehouses.map((w) => (
@@ -296,31 +334,31 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-semibold">라인아이템</Label>
-              <Button type="button" variant="outline" size="sm" onClick={addLine} disabled={!manufacturerId}>
+              <Button type="button" variant="outline" size="sm" onClick={addLine} disabled={!selectedMfgId}>
                 <Plus className="mr-1 h-3.5 w-3.5" />추가
               </Button>
             </div>
 
-            {!manufacturerId && (
+            {!selectedMfgId && (
               <p className="text-xs text-muted-foreground">제조사를 먼저 선택하면 품번을 추가할 수 있습니다.</p>
             )}
 
-            {manufacturerId && (
+            {selectedMfgId && (
               <>
                 {/* 헤더 */}
-                <div className="grid grid-cols-[2fr_90px_100px_100px_130px_130px_90px_36px] gap-2 text-xs font-medium text-muted-foreground px-1">
+                <div className="grid grid-cols-[minmax(280px,3fr)_100px_110px_110px_140px_140px_100px_40px] gap-2 text-xs font-medium text-muted-foreground px-1">
                   <span>품번 *</span><span>수량EA *</span><span>구분 *</span><span>유무상 *</span>
                   <span>인보이스USD</span><span>USD/Wp단가</span><span>용량kW</span><span />
                 </div>
 
                 {lines.map((line, idx) => (
-                  <div key={idx} className="grid grid-cols-[2fr_90px_100px_100px_130px_130px_90px_36px] gap-2 items-center">
+                  <div key={idx} className="grid grid-cols-[minmax(280px,3fr)_100px_110px_110px_140px_140px_100px_40px] gap-2 items-center">
                     {/* 품번 */}
                     <Select value={line.product_id} onValueChange={(v) => updateLine(idx, 'product_id', v ?? '')}>
                       <SelectTrigger className="w-full h-9 text-xs">
                         <TriggerText text={productLabel(line.product_id)} placeholder="품번 선택" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="min-w-[500px]">
                         {products.map((p) => (
                           <SelectItem key={p.product_id} value={p.product_id}>
                             {p.product_code} | {p.product_name} | {p.spec_wp}Wp
