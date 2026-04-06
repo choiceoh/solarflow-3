@@ -88,6 +88,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
       ...data,
       company_id: selectedCompanyId,
       currency: data.inbound_type === 'import' ? 'USD' : 'KRW',
+      status: editData?.status ?? 'scheduled',
     };
     if (data.exchange_rate === '' || data.exchange_rate === undefined) delete payload.exchange_rate;
     if (!data.etd) delete payload.etd;

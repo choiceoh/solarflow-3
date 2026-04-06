@@ -42,7 +42,7 @@ export default function Type2CIFExpense({ onGenerate }: Props) {
           <option value="">B/L 선택...</option>
           {bls.map((bl: any) => (
             <option key={bl.bl_id} value={bl.bl_id}>
-              {bl.bl_number} — {bl.manufacturers?.name_kr ?? ''} — {bl.status}
+              {bl.bl_number} — {bl.manufacturer_name ?? ''} — {bl.status}
             </option>
           ))}
         </select>

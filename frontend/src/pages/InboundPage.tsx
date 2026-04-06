@@ -42,8 +42,12 @@ export default function InboundPage() {
   }
 
   const handleCreate = async (formData: Record<string, unknown>) => {
-    await fetchWithAuth('/api/v1/bls', { method: 'POST', body: JSON.stringify(formData) });
-    reload();
+    try {
+      await fetchWithAuth('/api/v1/bls', { method: 'POST', body: JSON.stringify(formData) });
+      reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '입고 등록에 실패했습니다');
+    }
   };
 
   return (
