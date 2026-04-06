@@ -48,12 +48,11 @@ interface LineItem {
   quantity: string;
   item_type: 'main' | 'spare';
   payment_type: 'paid' | 'free';
-  invoice_amount: string;
   unit_price: string;
 }
 const emptyLine = (): LineItem => ({
   product_id: '', quantity: '', item_type: 'main', payment_type: 'paid',
-  invoice_amount: '', unit_price: '',
+  unit_price: '',
 });
 
 /* ── 결제조건 구조체 ── */
@@ -266,6 +265,21 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
     const p = products.find(x => x.product_id === l.product_id);
     return (!q || !p) ? '-' : ((q * p.spec_wp) / 1000).toFixed(2);
   };
+  // 인보이스 자동 계산: 수량 × 규격Wp × 단가($/Wp or ₩/Wp)
+  const calcInvoice = (l: LineItem): number | null => {
+    const q = Number(l.quantity);
+    const p = products.find(x => x.product_id === l.product_id);
+    const rawPrice = l.unit_price ? parseFloat(l.unit_price) : 0;
+    if (!q || !p || !rawPrice) return null;
+    const pricePerWp = (isImport && priceMode === 'cents') ? rawPrice / 100 : rawPrice;
+    return q * p.spec_wp * pricePerWp;
+  };
+  const fmtInvoice = (l: LineItem): string => {
+    const v = calcInvoice(l);
+    if (v == null) return '-';
+    return isImport ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` :
+      `${v.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}원`;
+  };
 
   /* ¢↔$ 토글 */
   const togglePriceMode = () => {
@@ -324,15 +338,15 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
         .map(l => {
           const prod = products.find(p => p.product_id === l.product_id);
           const qty = Number(l.quantity);
-          const inv = l.invoice_amount ? parseFloat(l.invoice_amount) : undefined;
           let price = l.unit_price ? parseFloat(l.unit_price) : undefined;
           if (isImport && priceMode === 'cents' && price) price = price / 100;
+          const inv = calcInvoice(l);
           return {
             product_id: l.product_id, quantity: qty,
             capacity_kw: prod ? (qty * prod.spec_wp) / 1000 : 0,
             item_type: l.item_type, payment_type: l.payment_type,
-            invoice_amount_usd: isImport ? (inv && !isNaN(inv) ? inv : undefined) : undefined,
-            invoice_amount_krw: !isImport ? (inv && !isNaN(inv) ? inv : undefined) : undefined,
+            invoice_amount_usd: isImport && inv ? inv : undefined,
+            invoice_amount_krw: !isImport && inv ? inv : undefined,
             unit_price_usd_wp: isImport ? (price && !isNaN(price) ? price : undefined) : undefined,
             unit_price_krw_wp: !isImport ? (price && !isNaN(price) ? price : undefined) : undefined,
           };
@@ -537,11 +551,6 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <Label className="text-sm font-semibold">라인아이템</Label>
-                  {isImport && (
-                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs px-2" onClick={togglePriceMode}>
-                      {priceMode === 'cents' ? '¢/Wp' : '$/Wp'} 모드
-                    </Button>
-                  )}
                   <div className="flex-1" />
                   <Button type="button" variant="outline" size="sm" onClick={addLine}
                     disabled={isImport || isDomestic ? !selMfgId : !selCompanyId}>
@@ -558,14 +567,16 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
 
                 {((isImport || isDomestic) ? selMfgId : selCompanyId) && (
                   <>
-                    <div className="grid grid-cols-[minmax(260px,3fr)_90px_100px_100px_130px_140px_90px_36px] gap-2 text-xs font-medium text-muted-foreground px-1">
+                    {/* 헤더: 품번 → 수량 → 구분 → 유무상 → 단가(+토글) → 인보이스(자동) → 용량 */}
+                    <div className="grid grid-cols-[minmax(240px,3fr)_90px_90px_90px_170px_150px_90px_36px] gap-2 text-xs font-medium text-muted-foreground px-1">
                       <span>품번 *</span><span>수량EA *</span><span>구분 *</span><span>유무상 *</span>
-                      <span>인보이스{currencyLabel}</span>
-                      <span>{isImport ? (priceMode === 'cents' ? '¢/Wp' : '$/Wp') : '원/Wp'}</span>
+                      <span>{isImport ? (priceMode === 'cents' ? '단가(¢/Wp)' : '단가($/Wp)') : '단가(원/Wp)'}</span>
+                      <span>인보이스{currencyLabel}(자동)</span>
                       <span>용량kW</span><span />
                     </div>
                     {lines.map((line, idx) => (
-                      <div key={idx} className="grid grid-cols-[minmax(260px,3fr)_90px_100px_100px_130px_140px_90px_36px] gap-2 items-center">
+                      <div key={idx} className="grid grid-cols-[minmax(240px,3fr)_90px_90px_90px_170px_150px_90px_36px] gap-2 items-center">
+                        {/* 품번 */}
                         <Select value={line.product_id} onValueChange={v => updateLine(idx, 'product_id', v ?? '')}>
                           <SelectTrigger className="w-full h-9 text-xs">
                             <Txt text={productLabel(line.product_id)} placeholder="품번 선택" />
@@ -578,8 +589,10 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                             ))}
                           </SelectContent>
                         </Select>
+                        {/* 수량 */}
                         <Input className="h-9 text-xs" inputMode="numeric" value={line.quantity} placeholder="0"
                           onChange={e => updateLine(idx, 'quantity', e.target.value.replace(/[^0-9]/g, ''))} />
+                        {/* 구분 */}
                         <Select value={line.item_type} onValueChange={v => updateLine(idx, 'item_type', v ?? 'main')}>
                           <SelectTrigger className="w-full h-9 text-xs">
                             <Txt text={line.item_type === 'main' ? '본품' : '스페어'} />
@@ -589,6 +602,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                             <SelectItem value="spare">스페어</SelectItem>
                           </SelectContent>
                         </Select>
+                        {/* 유무상 */}
                         <Select value={line.payment_type} onValueChange={v => updateLine(idx, 'payment_type', v ?? 'paid')}>
                           <SelectTrigger className="w-full h-9 text-xs">
                             <Txt text={line.payment_type === 'paid' ? '유상' : '무상'} />
@@ -598,14 +612,27 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                             <SelectItem value="free">무상</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Input className="h-9 text-xs" inputMode="decimal" value={line.invoice_amount} placeholder="0.00"
-                          onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d{0,6}$/.test(v)) updateLine(idx, 'invoice_amount', v); }} />
-                        <Input className="h-9 text-xs" inputMode="decimal" value={line.unit_price}
-                          placeholder={priceMode === 'cents' && isImport ? '12.30' : '0.1230'}
-                          onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d{0,6}$/.test(v)) updateLine(idx, 'unit_price', v); }} />
+                        {/* 단가 + ¢/$ 토글 (import만) */}
+                        <div className="flex gap-1 items-center">
+                          <Input className="h-9 text-xs flex-1 min-w-0" inputMode="decimal" value={line.unit_price}
+                            placeholder={priceMode === 'cents' && isImport ? '12.30' : '0.1230'}
+                            onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d{0,6}$/.test(v)) updateLine(idx, 'unit_price', v); }} />
+                          {isImport && (
+                            <Button type="button" variant="outline" size="sm"
+                              className="h-9 px-1.5 text-[10px] shrink-0 w-9" onClick={togglePriceMode}>
+                              {priceMode === 'cents' ? '¢' : '$'}
+                            </Button>
+                          )}
+                        </div>
+                        {/* 인보이스 (자동 계산, 읽기전용) */}
+                        <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2 truncate">
+                          {fmtInvoice(line)}
+                        </div>
+                        {/* 용량 kW (자동 계산) */}
                         <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2">
                           {calcKw(line)}
                         </div>
+                        {/* 삭제 */}
                         <Button type="button" variant="ghost" size="icon" className="h-9 w-9"
                           onClick={() => removeLine(idx)} disabled={lines.length <= 1}>
                           <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
