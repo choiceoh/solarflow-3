@@ -111,6 +111,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Post("/", blH.Create)
 			r.Get("/{id}", blH.GetByID)
 			r.Put("/{id}", blH.Update)
+			r.Delete("/{id}", blH.Delete)
 			r.Route("/{blId}/lines", func(r chi.Router) {
 				r.Get("/", blLineH.ListByBL)
 				r.Post("/", blLineH.Create)

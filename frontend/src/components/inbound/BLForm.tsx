@@ -287,10 +287,15 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
     setSubmitError('');
 
     // 조건부 필수 검증
-    if (isImport && !data.bl_number) { setSubmitError('B/L 번호는 필수입니다'); return; }
-    if ((isImport || isDomestic) && !selMfgId) { setSubmitError('제조사를 선택해주세요'); return; }
     if (!selCompanyId) { setSubmitError('법인을 선택해주세요'); return; }
+    if (isImport && !data.bl_number) { setSubmitError('B/L 번호는 필수입니다'); return; }
+    if ((isDomestic || isGroup) && !autoNumber) { setSubmitError('입고번호가 생성되지 않았습니다'); return; }
+    if ((isImport || isDomestic) && !selMfgId) { setSubmitError('제조사를 선택해주세요'); return; }
     if (isGroup && !counterpartId) { setSubmitError('상대법인을 선택해주세요'); return; }
+
+    // 라인아이템 최소 1개 필수
+    const validLines = lines.filter(l => l.product_id && Number(l.quantity) > 0);
+    if (validLines.length === 0) { setSubmitError('라인아이템을 최소 1개 이상 입력해주세요 (품번+수량 필수)'); return; }
 
     const blNumber = isImport ? data.bl_number! : autoNumber;
     const exRate = data.exchange_rate ? parseFloat(data.exchange_rate) : undefined;

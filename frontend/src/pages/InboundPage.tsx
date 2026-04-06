@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useAppStore } from '@/stores/appStore';
 import { useBLList } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
@@ -11,6 +11,11 @@ import BLDetailView from '@/components/inbound/BLDetailView';
 import BLForm from '@/components/inbound/BLForm';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL, type InboundType, type BLStatus } from '@/types/inbound';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
+
+/* 필터 드롭다운 표시용 헬퍼 — UUID/영문 대신 한글 표시 */
+function FilterText({ text }: { text: string }) {
+  return <span className="flex flex-1 text-left truncate" data-slot="select-value">{text}</span>;
+}
 
 export default function InboundPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
@@ -46,6 +51,14 @@ export default function InboundPage() {
     reload();
   };
 
+  const handleDelete = async (blId: string) => {
+    await fetchWithAuth(`/api/v1/bls/${blId}`, { method: 'DELETE' });
+    reload();
+  };
+
+  const typeFilterLabel = typeFilter ? (INBOUND_TYPE_LABEL[typeFilter as InboundType] ?? typeFilter) : '전체 유형';
+  const statusFilterLabel = statusFilter ? (BL_STATUS_LABEL[statusFilter as BLStatus] ?? statusFilter) : '전체 상태';
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -61,7 +74,7 @@ export default function InboundPage() {
       <div className="flex gap-2">
         <Select value={typeFilter || 'all'} onValueChange={(v) => setTypeFilter(v === 'all' ? '' : (v ?? ''))}>
           <SelectTrigger className="h-8 w-36 text-xs">
-            <SelectValue placeholder="입고유형" />
+            <FilterText text={typeFilterLabel} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체 유형</SelectItem>
@@ -72,7 +85,7 @@ export default function InboundPage() {
         </Select>
         <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? '' : (v ?? ''))}>
           <SelectTrigger className="h-8 w-28 text-xs">
-            <SelectValue placeholder="상태" />
+            <FilterText text={statusFilterLabel} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체 상태</SelectItem>
@@ -84,7 +97,7 @@ export default function InboundPage() {
       </div>
 
       {loading ? <LoadingSpinner /> : (
-        <BLListTable items={data} onSelect={(bl) => setSelectedBL(bl.bl_id)} onNew={() => setFormOpen(true)} />
+        <BLListTable items={data} onSelect={(bl) => setSelectedBL(bl.bl_id)} onNew={() => setFormOpen(true)} onDelete={handleDelete} />
       )}
 
       <BLForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleCreate} />

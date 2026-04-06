@@ -205,3 +205,39 @@ func (h *BLHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	response.RespondJSON(w, http.StatusOK, updated[0])
 }
+
+// Delete — DELETE /api/v1/bls/{id} — B/L 삭제
+// 비유: 선적 서류를 파기하는 것 — 연결된 라인아이템도 함께 삭제
+func (h *BLHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	// 라인아이템 먼저 삭제
+	_, _, err := h.DB.From("bl_line_items").
+		Delete("", "").
+		Eq("bl_id", id).
+		Execute()
+	if err != nil {
+		log.Printf("[B/L 라인아이템 삭제 실패] bl_id=%s, err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "라인아이템 삭제에 실패했습니다")
+		return
+	}
+
+	// B/L 본체 삭제
+	data, _, err := h.DB.From("bl_shipments").
+		Delete("", "").
+		Eq("bl_id", id).
+		Execute()
+	if err != nil {
+		log.Printf("[B/L 삭제 실패] id=%s, err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "B/L 삭제에 실패했습니다")
+		return
+	}
+
+	var deleted []model.BLShipment
+	if err := json.Unmarshal(data, &deleted); err != nil || len(deleted) == 0 {
+		response.RespondError(w, http.StatusNotFound, "삭제할 B/L을 찾을 수 없습니다")
+		return
+	}
+
+	response.RespondJSON(w, http.StatusOK, map[string]string{"message": "삭제 완료"})
+}

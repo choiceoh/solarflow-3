@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { ArrowLeft, Pencil, Plus } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { formatDate } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import InboundStatusBadge from './InboundStatusBadge';
 import StatusChanger from './StatusChanger';
 import BLLineTable from './BLLineTable';
@@ -35,6 +36,8 @@ export default function BLDetailView({ blId, onBack }: Props) {
   const [editBLOpen, setEditBLOpen] = useState(false);
   const [lineFormOpen, setLineFormOpen] = useState(false);
   const [editLine, setEditLine] = useState<BLLineItem | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (blLoading || !bl) return <LoadingSpinner />;
 
@@ -57,6 +60,19 @@ export default function BLDetailView({ blId, onBack }: Props) {
     reloadLines();
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await fetchWithAuth(`/api/v1/bls/${blId}`, { method: 'DELETE' });
+      setDeleteOpen(false);
+      onBack();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '삭제에 실패했습니다');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -67,6 +83,9 @@ export default function BLDetailView({ blId, onBack }: Props) {
         <StatusChanger blId={blId} currentStatus={bl.status} onChanged={reloadBL} />
         <Button variant="outline" size="sm" onClick={() => setEditBLOpen(true)}>
           <Pencil className="mr-1 h-3.5 w-3.5" />수정
+        </Button>
+        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+          <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
         </Button>
       </div>
 
@@ -81,11 +100,11 @@ export default function BLDetailView({ blId, onBack }: Props) {
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
             <Field label="입고유형" value={INBOUND_TYPE_LABEL[bl.inbound_type]} />
             <Field label="제조사" value={bl.manufacturer_name} />
-            <Field label="통화" value={bl.currency} />
+            <Field label="통화" value={bl.currency === 'USD' ? 'USD (달러)' : 'KRW (원)'} />
             {isImport && <Field label="환율" value={bl.exchange_rate?.toString()} />}
             {isImport && <Field label="ETD" value={formatDate(bl.etd ?? '')} />}
             {isImport && <Field label="ETA" value={formatDate(bl.eta ?? '')} />}
-            {isImport && <Field label="실제입항" value={formatDate(bl.actual_arrival ?? '')} />}
+            <Field label={isImport ? '실제입항' : '입고/납품일'} value={formatDate(bl.actual_arrival ?? '')} />
             {isImport && <Field label="항구" value={bl.port} />}
             {isImport && <Field label="포워더" value={bl.forwarder} />}
             {isImport && <Field label="Invoice No." value={bl.invoice_number} />}
@@ -122,6 +141,15 @@ export default function BLDetailView({ blId, onBack }: Props) {
         editData={editLine}
         blId={blId}
         currency={bl.currency}
+      />
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="입고 삭제"
+        description={`"${bl.bl_number}" 입고 건과 연결된 라인아이템이 모두 삭제됩니다. 정말 삭제하시겠습니까?`}
+        onConfirm={handleDelete}
+        loading={deleting}
       />
     </div>
   );

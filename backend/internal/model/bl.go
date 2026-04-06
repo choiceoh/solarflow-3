@@ -136,7 +136,8 @@ func (req *CreateBLRequest) Validate() string {
 	if req.CompanyID == "" {
 		return "company_id는 필수 항목입니다"
 	}
-	if req.ManufacturerID == "" {
+	// 그룹내구매는 제조사 선택 불필요 (상대법인 기준)
+	if req.InboundType != "group" && req.ManufacturerID == "" {
 		return "manufacturer_id는 필수 항목입니다"
 	}
 	if req.InboundType == "" {

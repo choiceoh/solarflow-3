@@ -12,5 +12,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(
   supabaseUrl || '',
-  supabaseAnonKey || ''
+  supabaseAnonKey || '',
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+      // Safari ITP 대응: PKCE 흐름 + 명시적 스토리지 키
+      flowType: 'pkce',
+      storageKey: 'solarflow-auth',
+    },
+  }
 );

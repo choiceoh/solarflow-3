@@ -11,10 +11,18 @@ async function refreshAccessToken(): Promise<string | null> {
 
   refreshPromise = supabase.auth.refreshSession().then(({ data, error }) => {
     refreshPromise = null;
-    if (error || !data.session) return null;
+    if (error) {
+      console.warn('[SolarFlow] 토큰 갱신 실패:', error.message);
+      return null;
+    }
+    if (!data.session) {
+      console.warn('[SolarFlow] 토큰 갱신: 세션 없음');
+      return null;
+    }
     return data.session.access_token;
-  }).catch(() => {
+  }).catch((err) => {
     refreshPromise = null;
+    console.warn('[SolarFlow] 토큰 갱신 예외:', err);
     return null;
   });
 
@@ -24,7 +32,10 @@ async function refreshAccessToken(): Promise<string | null> {
 // fetchWithAuth — Supabase 세션 토큰을 자동 첨부하는 fetch 래퍼
 // 401 응답 시 토큰 갱신 후 재시도, 갱신 실패 시 로그아웃
 export async function fetchWithAuth<T>(path: string, options?: RequestInit): Promise<T> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) {
+    console.warn('[SolarFlow] getSession 실패:', sessionError.message);
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
