@@ -161,10 +161,10 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       setPeriodStart(editData.contract_period_start?.slice(0, 10) ?? '');
       setPeriodEnd(editData.contract_period_end?.slice(0, 10) ?? '');
       setIncoterms((editData.incoterms ?? '').replace(/\s*\(BAF\/CAF 포함\)\s*/i, ''));
-      setBafCaf(/BAF\s*\/\s*CAF/i.test(editData.incoterms ?? ''));
+      setBafCaf(/BAF\s*\/\s*CAF/i.test(editData.incoterms ?? '') || /\[BAF\/CAF\]/.test(editData.memo ?? ''));
       setExchangeRate('');
       setStatus(editData.status);
-      setMemo((editData.memo ?? '').replace(/^\[독점\]\s*/, ''));
+      setMemo((editData.memo ?? '').replace(/^\[독점\]\s*/, '').replace(/^\[BAF\/CAF\]\s*/, ''));
       setPaymentTerms(parsePT(editData.payment_terms ?? ''));
       setLines([emptyLine()]);
     } else {
@@ -242,6 +242,8 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
     setSubmitError('');
     if (!companyId) { setSubmitError('구매법인을 선택해주세요'); return; }
     if (!poNumber.trim()) { setSubmitError('PO번호는 필수입니다'); return; }
+    if (poNumber.trim().length > 10) { setSubmitError('PO번호는 10자 이내 (DB 제약)'); return; }
+    if (incoterms.length > 10) { setSubmitError('선적조건은 10자 이내 (DB 제약)'); return; }
     if (!mfgId) { setSubmitError('제조사는 필수입니다'); return; }
     if (!contractType) { setSubmitError('계약유형은 필수입니다'); return; }
     if (!contractDate) { setSubmitError('계약일은 필수입니다'); return; }
@@ -257,8 +259,8 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       if (validLines.length === 0) { setSubmitError('발주품목을 최소 1행 입력해주세요'); return; }
     }
 
-    const incotermsFinal = bafCaf && !/BAF\s*\/\s*CAF/i.test(incoterms)
-      ? `${incoterms} (BAF/CAF 포함)` : incoterms;
+    // 22001 회피: incoterms는 varchar(10) — BAF/CAF 플래그는 메모로 분리
+    const incotermsFinal = incoterms;
 
     const validLines = lines.filter((l) => l.product_id && lineCalc(l).qty > 0);
     const linesPayload = validLines.map((l) => {
@@ -284,8 +286,8 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       total_qty: totals.qty || undefined,
       total_mw: totals.mw || undefined,
       status,
-      // 독점 플래그는 별도 DB 컬럼이 없어 메모 접두사로 보존
-      memo: ((isExclusive ? '[독점] ' : '') + (memo || '')).trim() || undefined,
+      // 독점/BAF·CAF 플래그는 별도 DB 컬럼이 없어 메모 접두사로 보존
+      memo: ((isExclusive ? '[독점] ' : '') + (bafCaf ? '[BAF/CAF] ' : '') + (memo || '')).trim() || undefined,
       lines: editData ? undefined : linesPayload,
     };
     Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k]; });
@@ -340,8 +342,8 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Req>PO번호</Req>
-              <Input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="PO-2026-001" />
+              <Req>PO번호 (최대 10자)</Req>
+              <Input value={poNumber} maxLength={10} onChange={(e) => setPoNumber(e.target.value.slice(0, 10))} placeholder="P26-001" />
             </div>
             <div className="space-y-1.5">
               <Req>제조사</Req>
