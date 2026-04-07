@@ -90,7 +90,31 @@ export default function ProcurementPage() {
     );
   }
 
-  const handleCreatePO = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/pos', { method: 'POST', body: JSON.stringify(d) }); reloadPO(); };
+  const handleCreatePO = async (d: Record<string, unknown>) => {
+    // 발주품목(po_lines)을 PO 본체와 분리하여 등록 (입고관리와 동일 패턴)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { lines, ...poData } = d as any;
+    try {
+      const created = await fetchWithAuth<{ po_id: string }>('/api/v1/pos', { method: 'POST', body: JSON.stringify(poData) });
+      if (Array.isArray(lines) && lines.length > 0 && created?.po_id) {
+        const failures: string[] = [];
+        for (const line of lines) {
+          try {
+            await fetchWithAuth(`/api/v1/pos/${created.po_id}/lines`, {
+              method: 'POST', body: JSON.stringify({ ...line, po_id: created.po_id }),
+            });
+          } catch (err) {
+            failures.push(err instanceof Error ? err.message : '알 수 없는 오류');
+          }
+        }
+        if (failures.length > 0) {
+          throw new Error(`발주품목 ${failures.length}건 등록 실패: ${failures.join('; ')}`);
+        }
+      }
+    } finally {
+      reloadPO();
+    }
+  };
   const handleCreateLC = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/lcs', { method: 'POST', body: JSON.stringify(d) }); reloadLC(); };
   const handleUpdateLC = async (d: Record<string, unknown>) => { if (!editLC) return; await fetchWithAuth(`/api/v1/lcs/${editLC.lc_id}`, { method: 'PUT', body: JSON.stringify(d) }); setEditLC(null); reloadLC(); };
   const handleCreateTT = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/tts', { method: 'POST', body: JSON.stringify(d) }); reloadTT(); };

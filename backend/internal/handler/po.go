@@ -27,8 +27,8 @@ func NewPOHandler(db *supa.Client) *POHandler {
 // 비유: 계약 관리실에서 전체 계약서 목록을 꺼내 보여주는 것
 // TODO: Rust 계산엔진 연동 — PO 입고현황 집계 (계약량 vs LC개설 vs 선적 vs 입고)
 func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("purchase_orders").
-		Select("*, companies(company_name, company_code), manufacturers(name_kr)", "exact", false)
+	// 평탄 응답: PostgREST FK 모호성으로 인한 unmarshal 실패 방지 (B/L과 동일 패턴)
+	query := h.DB.From("purchase_orders").Select("*", "exact", false)
 
 	// 비유: ?company_id=xxx — 특정 법인의 계약만 필터
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
@@ -52,9 +52,9 @@ func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var orders []model.POWithRelations
+	var orders []model.PurchaseOrder
 	if err := json.Unmarshal(data, &orders); err != nil {
-		log.Printf("[발주 목록 디코딩 실패] %v", err)
+		log.Printf("[발주 목록 디코딩 실패] %v / raw=%s", err, string(data))
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
 		return
 	}
@@ -68,9 +68,9 @@ func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *POHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	// 비유: 계약서 본문 조회
+	// 비유: 계약서 본문 조회 (평탄 — 임베드 없음)
 	poData, _, err := h.DB.From("purchase_orders").
-		Select("*, companies(company_name, company_code), manufacturers(name_kr, name_en)", "exact", false).
+		Select("*", "exact", false).
 		Eq("po_id", id).
 		Execute()
 	if err != nil {
@@ -79,9 +79,9 @@ func (h *POHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var orders []model.POWithRelations
+	var orders []model.PurchaseOrder
 	if err := json.Unmarshal(poData, &orders); err != nil {
-		log.Printf("[발주 상세 디코딩 실패] %v", err)
+		log.Printf("[발주 상세 디코딩 실패] %v / raw=%s", err, string(poData))
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
 		return
 	}
@@ -145,12 +145,17 @@ func (h *POHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 비유: 계약서 + 품목 + LC + TT를 한 묶음으로 포장
-	detail := model.PODetail{
-		POWithRelations: orders[0],
-		LineItems:       lines,
-		LCRecords:       lcs,
-		TTRemittances:   tts,
+	// 비유: 계약서 + 품목 + LC + TT를 한 묶음으로 포장 (평탄 본문)
+	detail := struct {
+		model.PurchaseOrder
+		LineItems     []model.POLineWithProduct `json:"line_items"`
+		LCRecords     []model.LCRecordSummary   `json:"lc_records"`
+		TTRemittances []model.TTSummary         `json:"tt_remittances"`
+	}{
+		PurchaseOrder: orders[0],
+		LineItems:     lines,
+		LCRecords:     lcs,
+		TTRemittances: tts,
 	}
 
 	response.RespondJSON(w, http.StatusOK, detail)
@@ -176,8 +181,8 @@ func (h *POHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Insert(req, false, "", "", "").
 		Execute()
 	if err != nil {
-		log.Printf("[발주 등록 실패] %v", err)
-		response.RespondError(w, http.StatusInternalServerError, "발주 등록에 실패했습니다")
+		log.Printf("[발주 등록 실패] req=%+v err=%v", req, err)
+		response.RespondError(w, http.StatusInternalServerError, "발주 등록 실패: "+err.Error())
 		return
 	}
 
@@ -219,8 +224,8 @@ func (h *POHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Eq("po_id", id).
 		Execute()
 	if err != nil {
-		log.Printf("[발주 수정 실패] id=%s, err=%v", id, err)
-		response.RespondError(w, http.StatusInternalServerError, "발주 수정에 실패했습니다")
+		log.Printf("[발주 수정 실패] id=%s req=%+v err=%v", id, req, err)
+		response.RespondError(w, http.StatusInternalServerError, "발주 수정 실패: "+err.Error())
 		return
 	}
 

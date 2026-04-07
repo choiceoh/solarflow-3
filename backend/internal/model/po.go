@@ -67,12 +67,16 @@ type TTSummary struct {
 	Status        *string  `json:"status"`
 }
 
-// 허용되는 contract_type 값
+// 허용되는 contract_type 값 (D-086: 재정의)
+// spot/annual_frame/half_year_frame — 독점은 별도 exclusive 플래그로 분리
+// general/exclusive/annual은 레거시 호환용으로 유지
 var validContractTypes = map[string]bool{
-	"general":   true,
-	"exclusive": true,
-	"annual":    true,
-	"spot":      true,
+	"spot":            true,
+	"annual_frame":    true,
+	"half_year_frame": true,
+	"general":         true, // legacy
+	"exclusive":       true, // legacy
+	"annual":          true, // legacy
 }
 
 // 허용되는 status 값
@@ -114,7 +118,10 @@ func (req *CreatePurchaseOrderRequest) Validate() string {
 		return "contract_type은 필수 항목입니다"
 	}
 	if !validContractTypes[req.ContractType] {
-		return "contract_type은 \"general\", \"exclusive\", \"annual\", \"spot\" 중 하나여야 합니다"
+		return "contract_type은 \"spot\", \"annual_frame\", \"half_year_frame\" 중 하나여야 합니다"
+	}
+	if req.CompanyID == "all" {
+		return "company_id가 'all'일 수 없습니다 — 단일 법인을 선택해주세요"
 	}
 	if req.Status == "" {
 		return "status는 필수 항목입니다"
