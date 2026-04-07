@@ -22,6 +22,15 @@
 4. 커밋은 작업 단위별.
 5. Rust 담당 로직에 // TODO: Rust 계산엔진 연동 주석 필수.
 
+## Go 백엔드 변경 시 필수 절차
+- Go 소스 수정 후 반드시: `cd ~/solarflow-3/backend && go build -o solarflow-go .`
+- 서비스 라벨은 `com.solarflow.go` (com.solarflow.go-server 아님)
+- 재시작: `sudo launchctl stop com.solarflow.go && sudo launchctl start com.solarflow.go`
+- Rust 엔진 변경 시: `cd ~/solarflow-3/engine && cargo build --release && sudo launchctl stop com.solarflow.engine && sudo launchctl start com.solarflow.engine`
+- 모든 서비스 라벨: `com.solarflow.go`, `com.solarflow.engine`, `com.solarflow.postgrest`, `com.solarflow.caddy`
+- 프론트엔드는 `npm run dev`가 자동 반영하므로 재시작 불필요
+- `go test`, `cargo test`, `npm run build`는 검증일 뿐이고, 실제 반영은 `go build` + `launchctl restart`임
+
 ## DB 연결
 - Supabase PostgreSQL (Session pooler, 포트 5432)
 - Go 풀 약5개, Rust 풀 5개

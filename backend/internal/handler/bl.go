@@ -87,13 +87,17 @@ func (h *BLHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // GetByID — GET /api/v1/bls/{id} — B/L 상세 조회 (라인아이템 포함)
 // 비유: 선적 서류를 펼쳐서 화물 명세까지 모두 보여주는 것
+// 주의: 목록과 동일하게 PostgREST 임베드(companies/manufacturers/warehouses)는
+// FK 모호성(company_id ↔ counterpart_company_id) 때문에 단일 객체 대신 배열을
+// 반환할 수 있어 unmarshal 실패의 원인이 됨. 임베드 제거하고 평탄 반환.
+// 마스터 이름이 필요하면 화면에서 별도 API로 룩업.
 // TODO: Rust 계산엔진 연동 — 재고 집계 (물리적→가용→총확보량)
 func (h *BLHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	// 비유: 선적 서류 본문 조회
+	// 비유: 선적 서류 본문 조회 (평탄 — 임베드 없음)
 	blData, _, err := h.DB.From("bl_shipments").
-		Select("*, companies(company_name, company_code), manufacturers(name_kr, name_en), warehouses(warehouse_name, location_name, warehouse_code, location_code)", "exact", false).
+		Select("*", "exact", false).
 		Eq("bl_id", id).
 		Execute()
 	if err != nil {
@@ -102,9 +106,9 @@ func (h *BLHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var shipments []model.BLDetailBase
+	var shipments []model.BLShipment
 	if err := json.Unmarshal(blData, &shipments); err != nil {
-		log.Printf("[B/L 상세 디코딩 실패] %v", err)
+		log.Printf("[B/L 상세 디코딩 실패] %v / raw=%s", err, string(blData))
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
 		return
 	}
@@ -114,7 +118,7 @@ func (h *BLHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 비유: 선적 서류에 첨부된 화물 명세 조회
+	// 비유: 선적 서류에 첨부된 화물 명세 조회 (products 임베드 — 단일 FK라 모호성 없음)
 	lineData, _, err := h.DB.From("bl_line_items").
 		Select("*, products(product_code, product_name, spec_wp, module_width_mm, module_height_mm)", "exact", false).
 		Eq("bl_id", id).
@@ -127,15 +131,18 @@ func (h *BLHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	var lines []model.BLLineWithProduct
 	if err := json.Unmarshal(lineData, &lines); err != nil {
-		log.Printf("[B/L 라인아이템 디코딩 실패] %v", err)
+		log.Printf("[B/L 라인아이템 디코딩 실패] %v / raw=%s", err, string(lineData))
 		response.RespondError(w, http.StatusInternalServerError, "라인아이템 데이터 처리에 실패했습니다")
 		return
 	}
 
-	// 비유: 선적 서류 + 화물 명세를 한 묶음으로 포장
-	detail := model.BLDetail{
-		BLDetailBase: shipments[0],
-		LineItems:    lines,
+	// 비유: 선적 서류 + 화물 명세를 한 묶음으로 포장 (평탄 본문 + 라인)
+	detail := struct {
+		model.BLShipment
+		LineItems []model.BLLineWithProduct `json:"line_items"`
+	}{
+		BLShipment: shipments[0],
+		LineItems:  lines,
 	}
 
 	response.RespondJSON(w, http.StatusOK, detail)
