@@ -1,12 +1,12 @@
 /// 재고 3단계 집계 + 장기재고 판별
 /// 비유: "재고 현황판" — 물리적→가용→총확보량을 한 번에 계산
 ///
-/// 8단계:
-/// 1. 물리적 = 입고완료 - 출고(active)
+/// 8단계 (D-083 반영 — BL 상태 기반):
+/// 1. 물리적 = BL(completed|erp_done) - 출고(active)
 /// 2. 예약 (sale/spare/maintenance/other + stock)
 /// 3. 배정 (construction/repowering + stock)
 /// 4. 가용 = 물리적 - 예약 - 배정
-/// 5. 미착품 = PO계약량(contracted/shipping) - 해당PO 입고량
+/// 5. 미착품 = BL(shipping|arrived|customs) 라인 합계 — 입고유형 무관
 /// 6. 미착품예약 (fulfillment_source=incoming)
 /// 7. 가용미착품 = 미착품 - 미착품예약
 /// 8. 총확보량 = 가용 + 가용미착품
@@ -71,8 +71,7 @@ pub async fn calculate_inventory(
     let outbound = fetch_outbound(pool, company_id, product_id, manufacturer_id).await?;
     let reserved = fetch_reserved(pool, company_id, product_id, manufacturer_id).await?;
     let allocated = fetch_allocated(pool, company_id, product_id, manufacturer_id).await?;
-    let po_total = fetch_po_total(pool, company_id, product_id, manufacturer_id).await?;
-    let po_received = fetch_po_received(pool, company_id, product_id, manufacturer_id).await?;
+    let bl_incoming = fetch_bl_incoming(pool, company_id, product_id, manufacturer_id).await?;
     let incoming_reserved =
         fetch_incoming_reserved(pool, company_id, product_id, manufacturer_id).await?;
     let earliest_arrival =
@@ -88,14 +87,13 @@ pub async fn calculate_inventory(
         let outbound_kw = *outbound.get(&pid).unwrap_or(&0.0);
         let reserved_kw = *reserved.get(&pid).unwrap_or(&0.0);
         let allocated_kw = *allocated.get(&pid).unwrap_or(&0.0);
-        let po_total_kw = *po_total.get(&pid).unwrap_or(&0.0);
-        let po_received_kw = *po_received.get(&pid).unwrap_or(&0.0);
+        let bl_incoming_kw = *bl_incoming.get(&pid).unwrap_or(&0.0);
         let incoming_reserved_kw = *incoming_reserved.get(&pid).unwrap_or(&0.0);
 
-        // 8단계 계산
+        // 8단계 계산 (D-083: BL 상태 직접 사용)
         let physical_kw = inbound_kw - outbound_kw;
         let available_kw = physical_kw - reserved_kw - allocated_kw;
-        let incoming_kw = (po_total_kw - po_received_kw).max(0.0);
+        let incoming_kw = bl_incoming_kw.max(0.0);
         let available_incoming_kw = (incoming_kw - incoming_reserved_kw).max(0.0);
         let total_secured_kw = available_kw + available_incoming_kw;
 
@@ -311,8 +309,9 @@ async fn fetch_allocated(
     Ok(kw_rows_to_map(rows))
 }
 
-/// 5. PO 계약량 (contracted/shipping)
-async fn fetch_po_total(
+/// 5. 미착품 (D-083) — BL 상태 직접 사용: shipping/arrived/customs
+/// 비유: 배가 떠났지만 아직 창고에 물리적으로 안 들어온 것 모두 미착품
+async fn fetch_bl_incoming(
     pool: &PgPool,
     company_id: Uuid,
     product_id: Option<Uuid>,
@@ -320,47 +319,12 @@ async fn fetch_po_total(
 ) -> Result<KwMap, sqlx::Error> {
     let rows = sqlx::query_as::<_, KwRow>(
         r#"
-        SELECT pol.product_id,
-          COALESCE(SUM(pol.quantity * p.wattage_kw), 0)::float8 as kw
-        FROM po_line_items pol
-        JOIN products p ON pol.product_id = p.product_id
-        JOIN purchase_orders po ON pol.po_id = po.po_id
-        WHERE po.status IN ('contracted', 'shipping')
-          AND po.company_id = $1
-          AND ($2::uuid IS NULL OR pol.product_id = $2)
-          AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
-        GROUP BY pol.product_id
-        "#,
-    )
-    .bind(company_id)
-    .bind(product_id)
-    .bind(manufacturer_id)
-    .fetch_all(pool)
-    .await?;
-
-    Ok(kw_rows_to_map(rows))
-}
-
-/// 5. 해당 PO에 연결된 B/L 입고량
-async fn fetch_po_received(
-    pool: &PgPool,
-    company_id: Uuid,
-    product_id: Option<Uuid>,
-    manufacturer_id: Option<Uuid>,
-) -> Result<KwMap, sqlx::Error> {
-    let rows = sqlx::query_as::<_, KwRow>(
-        r#"
-        SELECT bli.product_id,
-          COALESCE(SUM(bli.capacity_kw), 0)::float8 as kw
+        SELECT bli.product_id, COALESCE(SUM(bli.capacity_kw), 0)::float8 as kw
         FROM bl_line_items bli
         JOIN bl_shipments bl ON bli.bl_id = bl.bl_id
         JOIN products p ON bli.product_id = p.product_id
-        WHERE bl.status IN ('completed', 'erp_done')
-          AND bl.po_id IN (
-            SELECT po_id FROM purchase_orders
-            WHERE status IN ('contracted', 'shipping')
-              AND company_id = $1
-          )
+        WHERE bl.status IN ('shipping', 'arrived', 'customs')
+          AND bl.company_id = $1
           AND ($2::uuid IS NULL OR bli.product_id = $2)
           AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
         GROUP BY bli.product_id

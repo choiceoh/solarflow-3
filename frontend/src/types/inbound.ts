@@ -1,5 +1,22 @@
-export type InboundType = 'import' | 'domestic' | 'domestic_foreign' | 'group';
+export type InboundType = 'import' | 'domestic' | 'group';
 export type BLStatus = 'scheduled' | 'shipping' | 'arrived' | 'customs' | 'completed' | 'erp_done';
+
+/* D-083: 국내/그룹은 DB에 scheduled→completed만 사용. 화면 표시는 "입고중/입고완료"로. */
+export const STATUS_BY_TYPE: Record<InboundType, BLStatus[]> = {
+  import: ['scheduled', 'shipping', 'arrived', 'customs', 'completed', 'erp_done'],
+  domestic: ['scheduled', 'completed'],
+  group: ['scheduled', 'completed'],
+};
+
+export const STATUS_LABEL_BY_TYPE: Record<InboundType, Record<string, string>> = {
+  import: { scheduled: '예정', shipping: '선적중', arrived: '입항', customs: '통관중', completed: '완료', erp_done: 'ERP등록' },
+  domestic: { scheduled: '입고중', completed: '입고완료' },
+  group: { scheduled: '입고중', completed: '입고완료' },
+};
+
+export function statusLabel(type: InboundType, status: BLStatus): string {
+  return STATUS_LABEL_BY_TYPE[type]?.[status] ?? status;
+}
 
 export interface BLShipment {
   bl_id: string;
@@ -54,7 +71,6 @@ export interface BLLineItem {
 export const INBOUND_TYPE_LABEL: Record<InboundType, string> = {
   import: '해외직수입',
   domestic: '국내구매',
-  domestic_foreign: '국내유통사',
   group: '그룹내구매',
 };
 

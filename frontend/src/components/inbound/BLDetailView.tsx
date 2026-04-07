@@ -80,7 +80,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h2 className="text-base font-semibold flex-1">입고 {bl.bl_number}</h2>
-        <StatusChanger blId={blId} currentStatus={bl.status} onChanged={reloadBL} />
+        <StatusChanger blId={blId} currentStatus={bl.status} inboundType={bl.inbound_type} onChanged={reloadBL} />
         <Button variant="outline" size="sm" onClick={() => setEditBLOpen(true)}>
           <Pencil className="mr-1 h-3.5 w-3.5" />수정
         </Button>
@@ -98,8 +98,8 @@ export default function BLDetailView({ blId, onBack }: Props) {
         </CardHeader>
         <CardContent className="pb-4">
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-            <Field label="입고유형" value={INBOUND_TYPE_LABEL[bl.inbound_type]} />
-            <Field label="제조사" value={bl.manufacturer_name} />
+            <Field label="입고 구분" value={INBOUND_TYPE_LABEL[bl.inbound_type]} />
+            <Field label="공급사" value={bl.manufacturer_name} />
             <Field label="통화" value={bl.currency === 'USD' ? 'USD (달러)' : 'KRW (원)'} />
             {isImport && <Field label="환율" value={bl.exchange_rate?.toString()} />}
             {isImport && <Field label="ETD" value={formatDate(bl.etd ?? '')} />}
@@ -120,7 +120,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
       <Separator />
 
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">라인아이템</h3>
+        <h3 className="text-sm font-semibold">입고 품목</h3>
         <Button size="sm" onClick={() => { setEditLine(null); setLineFormOpen(true); }}>
           <Plus className="mr-1 h-3.5 w-3.5" />추가
         </Button>

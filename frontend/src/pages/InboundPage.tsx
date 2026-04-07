@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useAppStore } from '@/stores/appStore';
@@ -23,6 +23,13 @@ export default function InboundPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedBL, setSelectedBL] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const filters: { inbound_type?: string; status?: string } = {};
   if (typeFilter) filters.inbound_type = typeFilter;
@@ -62,6 +69,7 @@ export default function InboundPage() {
       }
     }
     reload();
+    setToast('입고등록이 완료되었습니다');
   };
 
   const handleDelete = async (blId: string) => {
@@ -69,8 +77,8 @@ export default function InboundPage() {
     reload();
   };
 
-  const typeFilterLabel = typeFilter ? (INBOUND_TYPE_LABEL[typeFilter as InboundType] ?? typeFilter) : '전체 유형';
-  const statusFilterLabel = statusFilter ? (BL_STATUS_LABEL[statusFilter as BLStatus] ?? statusFilter) : '전체 상태';
+  const typeFilterLabel = typeFilter ? (INBOUND_TYPE_LABEL[typeFilter as InboundType] ?? typeFilter) : '입고 구분';
+  const statusFilterLabel = statusFilter ? (BL_STATUS_LABEL[statusFilter as BLStatus] ?? statusFilter) : '입고 현황';
 
   return (
     <div className="p-6 space-y-4">
@@ -90,7 +98,7 @@ export default function InboundPage() {
             <FilterText text={typeFilterLabel} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">전체 유형</SelectItem>
+            <SelectItem value="all">입고 구분</SelectItem>
             {(Object.entries(INBOUND_TYPE_LABEL) as [InboundType, string][]).map(([k, v]) => (
               <SelectItem key={k} value={k}>{v}</SelectItem>
             ))}
@@ -101,7 +109,7 @@ export default function InboundPage() {
             <FilterText text={statusFilterLabel} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">전체 상태</SelectItem>
+            <SelectItem value="all">입고 현황</SelectItem>
             {(Object.entries(BL_STATUS_LABEL) as [BLStatus, string][]).map(([k, v]) => (
               <SelectItem key={k} value={k}>{v}</SelectItem>
             ))}
@@ -114,6 +122,13 @@ export default function InboundPage() {
       )}
 
       <BLForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleCreate} />
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-md bg-green-600 text-white px-4 py-3 text-sm shadow-lg">
+          <CheckCircle2 className="h-4 w-4" />
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

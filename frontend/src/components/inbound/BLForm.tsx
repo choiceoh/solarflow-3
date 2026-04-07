@@ -57,17 +57,17 @@ const emptyLine = (): LineItem => ({
   unit_price: '', manualInvoice: false, invoiceOverride: '',
 });
 
-/* ── 결제조건 구조체 ── */
-interface PaymentTerms {
+/* ── 해외직수입 결제조건 구조체 (T/T % + L/C days) ── */
+interface ImportPT {
   hasDeposit: boolean;
   depositMethod: 'tt' | 'lc';
   depositRate: string;
   balanceDays: string;
 }
-const defaultPT = (): PaymentTerms => ({
+const defaultImportPT = (): ImportPT => ({
   hasDeposit: false, depositMethod: 'tt', depositRate: '', balanceDays: '90',
 });
-function composePT(pt: PaymentTerms): string {
+function composeImportPT(pt: ImportPT): string {
   const bal = `L/C ${pt.balanceDays || '90'}days`;
   if (pt.hasDeposit && pt.depositRate) {
     const m = pt.depositMethod === 'tt' ? 'T/T' : 'L/C';
@@ -75,7 +75,7 @@ function composePT(pt: PaymentTerms): string {
   }
   return bal;
 }
-function parsePT(text: string): PaymentTerms {
+function parseImportPT(text: string): ImportPT {
   const dep = text.match(/계약금\s*(\d+)%?\s*(T\/T|L\/C)/i);
   const bal = text.match(/L\/C\s*(\d+)\s*days?/i);
   return {
@@ -84,6 +84,25 @@ function parsePT(text: string): PaymentTerms {
     depositRate: dep?.[1] ?? '',
     balanceDays: bal?.[1] ?? '90',
   };
+}
+
+/* ── 국내구매 결제조건 (계약금/선입금/신용거래) ── */
+type DomesticPayType = 'deposit' | 'prepay' | 'credit';
+interface DomesticPT {
+  payType: DomesticPayType;
+  creditDays: '30' | '60' | '90';
+}
+const defaultDomesticPT = (): DomesticPT => ({ payType: 'credit', creditDays: '60' });
+function composeDomesticPT(pt: DomesticPT): string {
+  if (pt.payType === 'deposit') return '계약금';
+  if (pt.payType === 'prepay') return '선입금';
+  return `신용거래 ${pt.creditDays}일 여신`;
+}
+function parseDomesticPT(text: string): DomesticPT {
+  if (text.startsWith('계약금')) return { payType: 'deposit', creditDays: '60' };
+  if (text.startsWith('선입금')) return { payType: 'prepay', creditDays: '60' };
+  const m = text.match(/신용거래\s*(30|60|90)/);
+  return { payType: 'credit', creditDays: (m?.[1] as '30' | '60' | '90') ?? '60' };
 }
 
 /* ── 헬퍼 컴포넌트 ── */
@@ -128,7 +147,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
 
   const [lines, setLines] = useState<LineItem[]>([emptyLine()]);
   const [priceMode, setPriceMode] = useState<'cents' | 'dollar'>('cents');
-  const [pt, setPt] = useState<PaymentTerms>(defaultPT());
+  const [importPT, setImportPT] = useState<ImportPT>(defaultImportPT());
+  const [domesticPT, setDomesticPT] = useState<DomesticPT>(defaultDomesticPT());
   const [submitError, setSubmitError] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -226,7 +246,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
       setSelMfgId(d.manufacturer_id);
       setSelWhId(d.warehouse_id ?? '');
       setAutoNumber(d.bl_number);
-      setPt(parsePT(d.payment_terms ?? ''));
+      if (d.inbound_type === 'import') setImportPT(parseImportPT(d.payment_terms ?? ''));
+      else if (d.inbound_type === 'domestic') setDomesticPT(parseDomesticPT(d.payment_terms ?? ''));
       reset({
         inbound_type: d.inbound_type,
         bl_number: d.bl_number,
@@ -241,7 +262,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
     } else {
       const cid = globalCompanyId && globalCompanyId !== 'all' ? globalCompanyId : '';
       setSelType(''); setSelCompanyId(cid); setSelMfgId(''); setSelWhId('');
-      setCounterpartId(''); setAutoNumber(''); setPt(defaultPT());
+      setCounterpartId(''); setAutoNumber(''); setImportPT(defaultImportPT()); setDomesticPT(defaultDomesticPT());
       reset({
         inbound_type: '', bl_number: '', manufacturer_id: '',
         exchange_rate: '', etd: '', eta: '', actual_arrival: '',
@@ -304,10 +325,12 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
     const data = getValues();
 
     // 조건부 필수 검증
-    if (!selCompanyId) { setSubmitError('법인을 선택해주세요'); return; }
+    if (!selCompanyId) { setSubmitError('구매법인을 선택해주세요'); return; }
     if (isImport && !data.bl_number) { setSubmitError('B/L 번호는 필수입니다'); return; }
     if ((isDomestic || isGroup) && !autoNumber) { setSubmitError('입고번호가 생성되지 않았습니다'); return; }
-    if ((isImport || isDomestic) && !selMfgId) { setSubmitError('제조사를 선택해주세요'); return; }
+    if (!selMfgId) { setSubmitError('공급사를 선택해주세요'); return; }
+    if (isImport && !data.actual_arrival) { setSubmitError('실제입항일은 필수입니다'); return; }
+    if (isDomestic && !data.actual_arrival) { setSubmitError('납품일은 필수입니다'); return; }
     if (isGroup && !counterpartId) { setSubmitError('상대법인을 선택해주세요'); return; }
 
     // 라인아이템 최소 1개 필수
@@ -326,7 +349,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
       currency: isImport ? 'USD' : 'KRW',
       exchange_rate: isImport && exRate && !isNaN(exRate) ? exRate : undefined,
       status: editData?.status ?? 'scheduled',
-      payment_terms: (isImport || isDomestic) ? composePT(pt) : undefined,
+      payment_terms: isImport ? composeImportPT(importPT) : isDomestic ? composeDomesticPT(domesticPT) : undefined,
       etd: isImport && data.etd ? data.etd : undefined,
       eta: isImport && data.eta ? data.eta : undefined,
       actual_arrival: data.actual_arrival || undefined,
@@ -376,8 +399,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[82vw] sm:max-w-[82vw] h-[85vh] max-h-[85vh] overflow-y-auto overflow-x-hidden">
-        <DialogHeader>
+      <DialogContent className="w-[82vw] sm:max-w-[82vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
+        <DialogHeader className="pb-1">
           <DialogTitle>{editData ? '입고수정' : '입고등록'}</DialogTitle>
         </DialogHeader>
 
@@ -387,11 +410,11 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
           </div>
         )}
 
-        <form onSubmit={(e) => { e.preventDefault(); handle(); }} className="space-y-5">
+        <form onSubmit={(e) => { e.preventDefault(); handle(); }} className="space-y-3">
 
           {/* ── 입고유형 (항상 첫번째) ── */}
           <div className="max-w-xs">
-            <Req>입고유형</Req>
+            <Req>입고 구분</Req>
             <Select value={selType} onValueChange={handleTypeChange}>
               <SelectTrigger className="w-full mt-1.5">
                 <Txt text={typeLabel(selType)} placeholder="입고유형을 선택하세요" />
@@ -423,9 +446,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                   </div>
                 )}
 
-                {/* 법인 */}
+                {/* 구매법인 */}
                 <div className="space-y-1.5">
-                  <Req>법인</Req>
+                  <Req>구매법인</Req>
                   <Select value={selCompanyId} onValueChange={handleCompanyChange}>
                     <SelectTrigger className="w-full"><Txt text={coName} /></SelectTrigger>
                     <SelectContent>
@@ -436,10 +459,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                   </Select>
                 </div>
 
-                {/* 제조사 (해외/국내만) */}
-                {(isImport || isDomestic) && (
-                  <div className="space-y-1.5">
-                    <Req>제조사</Req>
+                {/* 공급사 (전체 입고유형 공통, 그룹은 해외+국내 전체 제조사) */}
+                <div className="space-y-1.5">
+                    <Req>공급사</Req>
                     <Select value={selMfgId} onValueChange={handleMfgChange}>
                       <SelectTrigger className="w-full"><Txt text={mfgName} /></SelectTrigger>
                       <SelectContent>
@@ -449,7 +471,6 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                       </SelectContent>
                     </Select>
                   </div>
-                )}
 
                 {/* 상대법인 (그룹만) */}
                 {isGroup && (
@@ -508,41 +529,72 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                 </div>
               </div>
 
-              {/* 결제조건 (해외/국내) */}
-              {(isImport || isDomestic) && (
+              {/* 결제조건 — 해외직수입 */}
+              {isImport && (
                 <div className="space-y-2">
                   <Opt>결제조건</Opt>
                   <div className="flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
                     <span className="text-muted-foreground">계약금</span>
                     <label className="flex items-center gap-1">
-                      <input type="radio" checked={pt.hasDeposit} onChange={() => setPt(p => ({ ...p, hasDeposit: true }))} />있음
+                      <input type="radio" checked={importPT.hasDeposit} onChange={() => setImportPT(p => ({ ...p, hasDeposit: true }))} />있음
                     </label>
                     <label className="flex items-center gap-1">
-                      <input type="radio" checked={!pt.hasDeposit} onChange={() => setPt(p => ({ ...p, hasDeposit: false }))} />없음
+                      <input type="radio" checked={!importPT.hasDeposit} onChange={() => setImportPT(p => ({ ...p, hasDeposit: false }))} />없음
                     </label>
-                    {pt.hasDeposit && (
+                    {importPT.hasDeposit && (
                       <>
-                        <select className="h-8 rounded border px-2 text-sm" value={pt.depositMethod}
-                          onChange={e => setPt(p => ({ ...p, depositMethod: e.target.value as 'tt' | 'lc' }))}>
+                        <select className="h-8 rounded border px-2 text-sm" value={importPT.depositMethod}
+                          onChange={e => setImportPT(p => ({ ...p, depositMethod: e.target.value as 'tt' | 'lc' }))}>
                           <option value="tt">T/T</option><option value="lc">L/C</option>
                         </select>
                         <div className="flex items-center gap-1">
-                          <Input className="w-16 h-8 text-sm" inputMode="decimal" value={pt.depositRate}
-                            onChange={e => setPt(p => ({ ...p, depositRate: e.target.value.replace(/[^0-9.]/g, '') }))} />
+                          <Input className="w-16 h-8 text-sm" inputMode="decimal" value={importPT.depositRate}
+                            onChange={e => setImportPT(p => ({ ...p, depositRate: e.target.value.replace(/[^0-9.]/g, '') }))} />
                           <span>%</span>
                         </div>
                       </>
                     )}
                     <span className="text-muted-foreground ml-2">잔금 L/C</span>
                     <div className="flex items-center gap-1">
-                      <Input className="w-16 h-8 text-sm" inputMode="numeric" value={pt.balanceDays}
-                        onChange={e => setPt(p => ({ ...p, balanceDays: e.target.value.replace(/[^0-9]/g, '') }))} />
+                      <Input className="w-16 h-8 text-sm" inputMode="numeric" value={importPT.balanceDays}
+                        onChange={e => setImportPT(p => ({ ...p, balanceDays: e.target.value.replace(/[^0-9]/g, '') }))} />
                       <span>days</span>
                     </div>
-                    <span className="ml-auto text-xs text-muted-foreground">{composePT(pt)}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">{composeImportPT(importPT)}</span>
                   </div>
                 </div>
               )}
+
+              {/* 결제조건 — 국내구매 */}
+              {isDomestic && (
+                <div className="space-y-2">
+                  <Opt>결제조건</Opt>
+                  <div className="flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
+                    <label className="flex items-center gap-1">
+                      <input type="radio" checked={domesticPT.payType === 'deposit'}
+                        onChange={() => setDomesticPT(p => ({ ...p, payType: 'deposit' }))} />계약금
+                    </label>
+                    <label className="flex items-center gap-1">
+                      <input type="radio" checked={domesticPT.payType === 'prepay'}
+                        onChange={() => setDomesticPT(p => ({ ...p, payType: 'prepay' }))} />선입금
+                    </label>
+                    <label className="flex items-center gap-1">
+                      <input type="radio" checked={domesticPT.payType === 'credit'}
+                        onChange={() => setDomesticPT(p => ({ ...p, payType: 'credit' }))} />신용거래
+                    </label>
+                    {domesticPT.payType === 'credit' && (
+                      <select className="h-8 rounded border px-2 text-sm" value={domesticPT.creditDays}
+                        onChange={e => setDomesticPT(p => ({ ...p, creditDays: e.target.value as '30' | '60' | '90' }))}>
+                        <option value="30">30일 여신</option>
+                        <option value="60">60일 여신</option>
+                        <option value="90">90일 여신</option>
+                      </select>
+                    )}
+                    <span className="ml-auto text-xs text-muted-foreground">{composeDomesticPT(domesticPT)}</span>
+                  </div>
+                </div>
+              )}
+              {/* 그룹내구매 — 결제조건 숨김 */}
 
               {/* 메모 */}
               <div className="max-w-lg space-y-1.5">
@@ -550,35 +602,32 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                 <Textarea {...register('memo')} rows={2} />
               </div>
 
-              {/* ── 라인아이템 ── */}
+              {/* ── 입고 품목 ── */}
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <Label className="text-sm font-semibold">라인아이템</Label>
+                  <Label className="text-sm font-semibold">입고 품목</Label>
                   <div className="flex-1" />
-                  <Button type="button" variant="outline" size="sm" onClick={addLine}
-                    disabled={isImport || isDomestic ? !selMfgId : !selCompanyId}>
+                  <Button type="button" variant="outline" size="sm" onClick={addLine} disabled={!selMfgId}>
                     <Plus className="mr-1 h-3.5 w-3.5" />추가
                   </Button>
                 </div>
 
-                {((isImport || isDomestic) && !selMfgId) && (
-                  <p className="text-xs text-muted-foreground">제조사를 먼저 선택하세요</p>
-                )}
-                {(isGroup && !selCompanyId) && (
-                  <p className="text-xs text-muted-foreground">법인을 먼저 선택하세요</p>
+                {!selMfgId && (
+                  <p className="text-xs text-muted-foreground">공급사를 먼저 선택하세요</p>
                 )}
 
-                {((isImport || isDomestic) ? selMfgId : selCompanyId) && (
+                {selMfgId && (
                   <>
                     {/* 헤더: 품번 → 수량 → 구분 → 유무상 → 단가(+토글) → 인보이스(자동) → 용량 */}
-                    <div className="grid grid-cols-[minmax(240px,3fr)_90px_90px_90px_170px_150px_90px_36px] gap-2 text-xs font-medium text-muted-foreground px-1">
+                    <div className="grid grid-cols-[minmax(240px,3fr)_90px_90px_90px_170px_150px_130px_90px_36px] gap-2 text-xs font-medium text-muted-foreground px-1">
                       <span>품번 *</span><span>수량EA *</span><span>구분 *</span><span>유무상 *</span>
                       <span>{isImport ? (priceMode === 'cents' ? '단가(¢/Wp)' : '단가($/Wp)') : '단가(원/Wp)'}</span>
                       <span>인보이스{currencyLabel}(자동)</span>
+                      <span>{isImport ? '인보이스KRW(자동)' : ''}</span>
                       <span>용량kW</span><span />
                     </div>
                     {lines.map((line, idx) => (
-                      <div key={idx} className="grid grid-cols-[minmax(240px,3fr)_90px_90px_90px_170px_150px_90px_36px] gap-2 items-center">
+                      <div key={idx} className="grid grid-cols-[minmax(240px,3fr)_90px_90px_90px_170px_150px_130px_90px_36px] gap-2 items-center">
                         {/* 품번 */}
                         <Select value={line.product_id} onValueChange={v => updateLine(idx, 'product_id', v ?? '')}>
                           <SelectTrigger className="w-full h-9 text-xs">
@@ -615,11 +664,18 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                             <SelectItem value="free">무상</SelectItem>
                           </SelectContent>
                         </Select>
-                        {/* 단가 + ¢/$ 토글 (import만) */}
+                        {/* 단가 + ¢/$ 토글 (import만). 국내/그룹은 원화 정수. */}
                         <div className="flex gap-1 items-center">
-                          <Input className="h-9 text-xs flex-1 min-w-0" inputMode="decimal" value={line.unit_price}
-                            placeholder={priceMode === 'cents' && isImport ? '12.30' : '0.1230'}
-                            onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d{0,6}$/.test(v)) updateLine(idx, 'unit_price', v); }} />
+                          <Input className="h-9 text-xs flex-1 min-w-0" inputMode={isImport ? 'decimal' : 'numeric'} value={line.unit_price}
+                            placeholder={isImport ? (priceMode === 'cents' ? '12.30' : '0.1230') : '200'}
+                            onChange={e => {
+                              const v = e.target.value;
+                              if (isImport) {
+                                if (v === '' || /^\d*\.?\d{0,6}$/.test(v)) updateLine(idx, 'unit_price', v);
+                              } else {
+                                if (v === '' || /^\d+$/.test(v)) updateLine(idx, 'unit_price', v);
+                              }
+                            }} />
                           {isImport && (
                             <Button type="button" variant="outline" size="sm"
                               className="h-9 px-1.5 text-[10px] shrink-0 w-9" onClick={togglePriceMode}>
@@ -643,6 +699,17 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                             onClick={() => updateLine(idx, 'manualInvoice', !line.manualInvoice)}>
                             {line.manualInvoice ? '자동' : '수동'}
                           </Button>
+                        </div>
+                        {/* 인보이스 KRW (해외직수입: USD × 환율 자동 / 그 외: -) */}
+                        <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2 truncate">
+                          {(() => {
+                            if (!isImport) return '-';
+                            const usd = calcInvoice(line);
+                            const exRaw = getValues('exchange_rate');
+                            const ex = exRaw ? parseFloat(exRaw) : 0;
+                            if (!usd || !ex) return '-';
+                            return `${Math.round(usd * ex).toLocaleString('ko-KR')}원`;
+                          })()}
                         </div>
                         {/* 용량 kW (자동 계산) */}
                         <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2">
