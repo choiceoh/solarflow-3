@@ -73,8 +73,8 @@ func (h *POLineHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Insert(req, false, "", "", "").
 		Execute()
 	if err != nil {
-		log.Printf("[PO 라인아이템 등록 실패] %v", err)
-		response.RespondError(w, http.StatusInternalServerError, "라인아이템 등록에 실패했습니다")
+		log.Printf("[PO 라인아이템 등록 실패] req=%+v err=%v", req, err)
+		response.RespondError(w, http.StatusInternalServerError, "라인아이템 등록 실패: "+err.Error())
 		return
 	}
 

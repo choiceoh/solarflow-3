@@ -242,7 +242,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
     setSubmitError('');
     if (!companyId) { setSubmitError('구매법인을 선택해주세요'); return; }
     if (!poNumber.trim()) { setSubmitError('PO번호는 필수입니다'); return; }
-    if (poNumber.trim().length > 10) { setSubmitError('PO번호는 10자 이내 (DB 제약)'); return; }
+    if (poNumber.trim().length > 20) { setSubmitError('PO번호는 20자 이내'); return; }
     if (incoterms.length > 10) { setSubmitError('선적조건은 10자 이내 (DB 제약)'); return; }
     if (!mfgId) { setSubmitError('제조사는 필수입니다'); return; }
     if (!contractType) { setSubmitError('계약유형은 필수입니다'); return; }
@@ -265,10 +265,14 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
     const validLines = lines.filter((l) => l.product_id && lineCalc(l).qty > 0);
     const linesPayload = validLines.map((l) => {
       const c = lineCalc(l);
+      const p = products.find((x) => x.product_id === l.product_id);
+      // unit_price_usd = $/EA (모듈 1장 가격), total_amount_usd = 라인 총액
+      const unitPerEA = p && c.qty ? c.total / c.qty : undefined;
       return {
         product_id: l.product_id,
         quantity: c.qty,
-        unit_price_usd: c.total || undefined,
+        unit_price_usd: unitPerEA && !isNaN(unitPerEA) ? Number(unitPerEA.toFixed(4)) : undefined,
+        total_amount_usd: c.total || undefined,
       };
     });
 
@@ -342,8 +346,8 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Req>PO번호 (최대 10자)</Req>
-              <Input value={poNumber} maxLength={10} onChange={(e) => setPoNumber(e.target.value.slice(0, 10))} placeholder="P26-001" />
+              <Req>PO번호 (최대 20자)</Req>
+              <Input value={poNumber} maxLength={20} onChange={(e) => setPoNumber(e.target.value.slice(0, 20))} placeholder="PO-2026-001" />
             </div>
             <div className="space-y-1.5">
               <Req>제조사</Req>
