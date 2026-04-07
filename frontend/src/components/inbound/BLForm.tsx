@@ -86,23 +86,43 @@ function parseImportPT(text: string): ImportPT {
   };
 }
 
-/* ── 국내구매 결제조건 (계약금/선입금/신용거래) ── */
-type DomesticPayType = 'deposit' | 'prepay' | 'credit';
+/* ── 국내구매 결제조건 (선입금 + 신용거래 통합) ──
+ * 선입금(현금) X원 + 잔금 신용거래 N일. 선입금 0이면 전액 신용거래.
+ */
 interface DomesticPT {
-  payType: DomesticPayType;
-  creditDays: '30' | '60' | '90';
+  prepayAmount: string;       // 원 단위 정수 문자열
+  creditDays: '15' | '20' | '30' | '60' | '90';
 }
-const defaultDomesticPT = (): DomesticPT => ({ payType: 'credit', creditDays: '60' });
+const defaultDomesticPT = (): DomesticPT => ({ prepayAmount: '', creditDays: '60' });
 function composeDomesticPT(pt: DomesticPT): string {
-  if (pt.payType === 'deposit') return '계약금';
-  if (pt.payType === 'prepay') return '선입금';
-  return `신용거래 ${pt.creditDays}일 여신`;
+  const amt = parseInt(pt.prepayAmount || '0');
+  if (!amt) return `전액 신용거래 ${pt.creditDays}일`;
+  return `선입금 ${amt.toLocaleString('ko-KR')}원 + 잔금 신용거래 ${pt.creditDays}일`;
 }
 function parseDomesticPT(text: string): DomesticPT {
-  if (text.startsWith('계약금')) return { payType: 'deposit', creditDays: '60' };
-  if (text.startsWith('선입금')) return { payType: 'prepay', creditDays: '60' };
-  const m = text.match(/신용거래\s*(30|60|90)/);
-  return { payType: 'credit', creditDays: (m?.[1] as '30' | '60' | '90') ?? '60' };
+  const amtM = text.match(/선입금\s*([\d,]+)/);
+  const daysM = text.match(/신용거래\s*(15|20|30|60|90)/);
+  return {
+    prepayAmount: amtM?.[1]?.replace(/,/g, '') ?? '',
+    creditDays: (daysM?.[1] as DomesticPT['creditDays']) ?? '60',
+  };
+}
+
+/* ── 날짜 입력 정규화: 20260407 → 2026-04-07 ── */
+function normDate8(v: string): string {
+  if (!v) return v;
+  const digits = v.replace(/\D/g, '');
+  if (/^\d{8}$/.test(digits)) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+  return v;
+}
+
+/* ── 만기일 계산 (납품일 + N일) ── */
+function calcDueDate(deliveryDate: string, days: number): string {
+  if (!deliveryDate || !/^\d{4}-\d{2}-\d{2}/.test(deliveryDate)) return '';
+  const d = new Date(deliveryDate);
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 /* ── 헬퍼 컴포넌트 ── */
@@ -149,6 +169,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
   const [priceMode, setPriceMode] = useState<'cents' | 'dollar'>('cents');
   const [importPT, setImportPT] = useState<ImportPT>(defaultImportPT());
   const [domesticPT, setDomesticPT] = useState<DomesticPT>(defaultDomesticPT());
+  const [bafCaf, setBafCaf] = useState(false);
+  const [deliveryDate, setDeliveryDate] = useState(''); // 만기일 계산용 (actual_arrival 미러)
   const [submitError, setSubmitError] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -246,6 +268,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
       setSelMfgId(d.manufacturer_id);
       setSelWhId(d.warehouse_id ?? '');
       setAutoNumber(d.bl_number);
+      setBafCaf(/BAF\s*\/\s*CAF/i.test(d.incoterms ?? ''));
+      setDeliveryDate(d.actual_arrival?.slice(0, 10) ?? '');
       if (d.inbound_type === 'import') setImportPT(parseImportPT(d.payment_terms ?? ''));
       else if (d.inbound_type === 'domestic') setDomesticPT(parseDomesticPT(d.payment_terms ?? ''));
       reset({
@@ -263,6 +287,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
       const cid = globalCompanyId && globalCompanyId !== 'all' ? globalCompanyId : '';
       setSelType(''); setSelCompanyId(cid); setSelMfgId(''); setSelWhId('');
       setCounterpartId(''); setAutoNumber(''); setImportPT(defaultImportPT()); setDomesticPT(defaultDomesticPT());
+      setBafCaf(false); setDeliveryDate('');
       reset({
         inbound_type: '', bl_number: '', manufacturer_id: '',
         exchange_rate: '', etd: '', eta: '', actual_arrival: '',
@@ -365,7 +390,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
       port: isImport && data.port ? data.port : undefined,
       forwarder: isImport && data.forwarder ? data.forwarder : undefined,
       invoice_number: isImport && data.invoice_number ? data.invoice_number : undefined,
-      incoterms: isImport && data.incoterms ? data.incoterms : undefined,
+      incoterms: isImport && data.incoterms
+        ? (bafCaf && !/BAF\s*\/\s*CAF/i.test(data.incoterms) ? `${data.incoterms} (BAF/CAF 포함)` : data.incoterms)
+        : undefined,
       warehouse_id: selWhId || undefined,
       memo: data.memo || undefined,
       // 수정 모드에서는 lines 미포함 (별도 화면에서 관리)
@@ -510,26 +537,49 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {isImport && (
                   <>
-                    <div className="space-y-1.5"><Opt>ETD</Opt><Input type="date" {...register('etd')} /></div>
-                    <div className="space-y-1.5"><Opt>ETA</Opt><Input type="date" {...register('eta')} /></div>
+                    <div className="space-y-1.5">
+                      <Opt>ETD</Opt>
+                      <Input type="text" placeholder="YYYY-MM-DD 또는 20260407"
+                        {...register('etd', { onBlur: (e) => setValue('etd', normDate8(e.target.value)) })} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Opt>ETA</Opt>
+                      <Input type="text" placeholder="YYYY-MM-DD 또는 20260407"
+                        {...register('eta', { onBlur: (e) => setValue('eta', normDate8(e.target.value)) })} />
+                    </div>
                   </>
                 )}
                 <div className="space-y-1.5">
                   {isImport || isDomestic
                     ? <Req>{isImport ? '실제입항일' : '납품일'}</Req>
                     : <Opt>입고일</Opt>}
-                  <Input type="date" {...register('actual_arrival')} />
+                  <Input type="text" placeholder="YYYY-MM-DD 또는 20260407"
+                    {...register('actual_arrival', {
+                      onBlur: (e) => {
+                        const v = normDate8(e.target.value);
+                        setValue('actual_arrival', v);
+                        setDeliveryDate(v);
+                      },
+                    })} />
                 </div>
                 {isImport && (
                   <>
                     <div className="space-y-1.5">
                       <Opt>환율 (USD→KRW)</Opt>
-                      <Input {...register('exchange_rate')} inputMode="decimal" placeholder="1450.30" />
+                      <Input {...register('exchange_rate')} inputMode="decimal" placeholder="예: 1450.30"
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/[^0-9.]/g, '');
+                          setValue('exchange_rate', v);
+                        }} />
                     </div>
                     <div className="space-y-1.5">
                       <Opt>선적조건 (인코텀즈)</Opt>
                       <Input {...register('incoterms')} list="bl-incoterms" placeholder="FOB, CIF 등" />
                       <datalist id="bl-incoterms">{INCOTERMS.map(t => <option key={t} value={t} />)}</datalist>
+                      <label className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+                        <input type="checkbox" checked={bafCaf} onChange={(e) => setBafCaf(e.target.checked)} />
+                        BAF/CAF 포함
+                      </label>
                     </div>
                     <div className="space-y-1.5"><Opt>항구</Opt><Input {...register('port')} placeholder="광양항" /></div>
                     <div className="space-y-1.5"><Opt>포워더</Opt><Input {...register('forwarder')} /></div>
@@ -585,33 +635,36 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                 </div>
               )}
 
-              {/* 결제조건 — 국내구매 */}
+              {/* 결제조건 — 국내구매 (선입금 통합 + 만기일) */}
               {isDomestic && (
                 <div className="space-y-2">
                   <Opt>결제조건</Opt>
                   <div className="flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
-                    <label className="flex items-center gap-1">
-                      <input type="radio" checked={domesticPT.payType === 'deposit'}
-                        onChange={() => setDomesticPT(p => ({ ...p, payType: 'deposit' }))} />계약금
-                    </label>
-                    <label className="flex items-center gap-1">
-                      <input type="radio" checked={domesticPT.payType === 'prepay'}
-                        onChange={() => setDomesticPT(p => ({ ...p, payType: 'prepay' }))} />선입금
-                    </label>
-                    <label className="flex items-center gap-1">
-                      <input type="radio" checked={domesticPT.payType === 'credit'}
-                        onChange={() => setDomesticPT(p => ({ ...p, payType: 'credit' }))} />신용거래
-                    </label>
-                    {domesticPT.payType === 'credit' && (
-                      <select className="h-8 rounded border px-2 text-sm" value={domesticPT.creditDays}
-                        onChange={e => setDomesticPT(p => ({ ...p, creditDays: e.target.value as '30' | '60' | '90' }))}>
-                        <option value="30">30일 여신</option>
-                        <option value="60">60일 여신</option>
-                        <option value="90">90일 여신</option>
-                      </select>
-                    )}
+                    <span className="text-muted-foreground">선입금(현금)</span>
+                    <div className="flex items-center gap-1">
+                      <Input className="w-32 h-8 text-sm" inputMode="numeric"
+                        value={domesticPT.prepayAmount ? parseInt(domesticPT.prepayAmount).toLocaleString('ko-KR') : ''}
+                        placeholder="0 (전액 신용시 비움)"
+                        onChange={e => setDomesticPT(p => ({ ...p, prepayAmount: e.target.value.replace(/[^0-9]/g, '') }))} />
+                      <span>원</span>
+                    </div>
+                    <span className="text-muted-foreground ml-2">잔금 신용거래</span>
+                    <select className="h-8 rounded border px-2 text-sm" value={domesticPT.creditDays}
+                      onChange={e => setDomesticPT(p => ({ ...p, creditDays: e.target.value as DomesticPT['creditDays'] }))}>
+                      <option value="15">15일</option>
+                      <option value="20">20일</option>
+                      <option value="30">30일</option>
+                      <option value="60">60일</option>
+                      <option value="90">90일</option>
+                    </select>
                     <span className="ml-auto text-xs text-muted-foreground">{composeDomesticPT(domesticPT)}</span>
                   </div>
+                  {deliveryDate && (
+                    <p className="text-xs text-muted-foreground pl-1">
+                      만기일: <span className="font-medium text-foreground">{calcDueDate(deliveryDate, parseInt(domesticPT.creditDays))}</span>
+                      <span className="ml-1">(납품일 {deliveryDate} + {domesticPT.creditDays}일)</span>
+                    </p>
+                  )}
                 </div>
               )}
               {/* 그룹내구매 — 결제조건 숨김 */}
@@ -637,116 +690,134 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData }: Props
                 )}
 
                 {selMfgId && (
-                  <>
-                    {/* 헤더: 품번 → 수량 → 구분 → 유무상 → 단가(+토글) → 인보이스(자동) → 용량 */}
-                    <div className="grid grid-cols-[minmax(240px,3fr)_90px_90px_90px_170px_150px_130px_90px_36px] gap-2 text-xs px-1">
-                      <span className="text-blue-600 font-medium">품번 *</span>
-                      <span className="text-blue-600 font-medium">수량EA *</span>
-                      <span className="text-blue-600 font-medium">구분 *</span>
-                      <span className="text-blue-600 font-medium">유무상 *</span>
-                      <span className="text-blue-600 font-medium">{isImport ? (priceMode === 'cents' ? '단가(¢/Wp) *' : '단가($/Wp) *') : '단가(원/Wp) *'}</span>
-                      <span className="font-medium text-muted-foreground">인보이스{currencyLabel}(자동)</span>
-                      <span className="font-medium text-muted-foreground">{isImport ? '인보이스KRW(자동)' : ''}</span>
-                      <span className="font-medium text-muted-foreground">용량kW</span>
-                      <span />
-                    </div>
+                  <div className="space-y-3">
                     {lines.map((line, idx) => (
-                      <div key={idx} className="grid grid-cols-[minmax(240px,3fr)_90px_90px_90px_170px_150px_130px_90px_36px] gap-2 items-center">
-                        {/* 품번 */}
-                        <Select value={line.product_id} onValueChange={v => updateLine(idx, 'product_id', v ?? '')}>
-                          <SelectTrigger className="w-full h-9 text-xs">
-                            <Txt text={productLabel(line.product_id)} placeholder="품번 선택" />
-                          </SelectTrigger>
-                          <SelectContent className="min-w-[min(500px,calc(100vw-3rem))]">
-                            {products.map(p => (
-                              <SelectItem key={p.product_id} value={p.product_id}>
-                                {p.product_code} | {p.product_name} | {p.spec_wp}Wp
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {/* 수량 */}
-                        <Input className="h-9 text-xs" inputMode="numeric" value={line.quantity} placeholder="0"
-                          onChange={e => updateLine(idx, 'quantity', e.target.value.replace(/[^0-9]/g, ''))} />
-                        {/* 구분 */}
-                        <Select value={line.item_type} onValueChange={v => updateLine(idx, 'item_type', v ?? 'main')}>
-                          <SelectTrigger className="w-full h-9 text-xs">
-                            <Txt text={line.item_type === 'main' ? '본품' : '스페어'} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="main">본품</SelectItem>
-                            <SelectItem value="spare">스페어</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {/* 유무상 */}
-                        <Select value={line.payment_type} onValueChange={v => updateLine(idx, 'payment_type', v ?? 'paid')}>
-                          <SelectTrigger className="w-full h-9 text-xs">
-                            <Txt text={line.payment_type === 'paid' ? '유상' : '무상'} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="paid">유상</SelectItem>
-                            <SelectItem value="free">무상</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {/* 단가 + ¢/$ 토글 (import만). 국내/그룹은 원화 정수. */}
-                        <div className="flex gap-1 items-center">
-                          <Input className="h-9 text-xs flex-1 min-w-0" inputMode={isImport ? 'decimal' : 'numeric'} value={line.unit_price}
-                            placeholder={isImport ? (priceMode === 'cents' ? '12.30' : '0.1230') : '200'}
-                            onChange={e => {
-                              const v = e.target.value;
-                              if (isImport) {
-                                if (v === '' || /^\d*\.?\d{0,6}$/.test(v)) updateLine(idx, 'unit_price', v);
-                              } else {
-                                if (v === '' || /^\d+$/.test(v)) updateLine(idx, 'unit_price', v);
-                              }
-                            }} />
-                          {isImport && (
-                            <Button type="button" variant="outline" size="sm"
-                              className="h-9 px-1.5 text-[10px] shrink-0 w-9" onClick={togglePriceMode}>
-                              {priceMode === 'cents' ? '¢' : '$'}
-                            </Button>
-                          )}
-                        </div>
-                        {/* 인보이스 (자동 계산 + 수동 보정 토글) */}
-                        <div className="flex gap-1 items-center">
-                          {line.manualInvoice ? (
-                            <Input className="h-9 text-xs flex-1 min-w-0" inputMode="decimal"
-                              value={line.invoiceOverride} placeholder="직접 입력"
-                              onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) updateLine(idx, 'invoiceOverride', v); }} />
-                          ) : (
-                            <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2 truncate flex-1 min-w-0">
-                              {fmtInvoice(line)}
-                            </div>
-                          )}
-                          <Button type="button" variant="ghost" size="sm"
-                            className="h-9 px-1 text-[9px] shrink-0" title={line.manualInvoice ? '자동으로' : '수동 보정'}
-                            onClick={() => updateLine(idx, 'manualInvoice', !line.manualInvoice)}>
-                            {line.manualInvoice ? '자동' : '수동'}
+                      <div key={idx} className="rounded-md border p-2 space-y-2">
+                        {/* 1행: 품번 + 수량 + 구분 + 삭제 */}
+                        <div className="flex flex-wrap items-end gap-2">
+                          <div className="flex-1 min-w-[200px] space-y-1">
+                            <span className="text-[10px] text-blue-600 font-medium">품번 *</span>
+                            <Select value={line.product_id} onValueChange={v => updateLine(idx, 'product_id', v ?? '')}>
+                              <SelectTrigger className="w-full h-9 text-xs">
+                                <Txt text={productLabel(line.product_id)} placeholder="품번 선택" />
+                              </SelectTrigger>
+                              <SelectContent className="min-w-[min(500px,calc(100vw-3rem))]">
+                                {products.map(p => (
+                                  <SelectItem key={p.product_id} value={p.product_id}>
+                                    {p.product_code} | {p.product_name} | {p.spec_wp}Wp
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="w-24 space-y-1">
+                            <span className="text-[10px] text-blue-600 font-medium">수량EA *</span>
+                            <Input className="h-9 text-xs" inputMode="numeric" value={line.quantity} placeholder="0"
+                              onChange={e => updateLine(idx, 'quantity', e.target.value.replace(/[^0-9]/g, ''))} />
+                          </div>
+                          <div className="w-24 space-y-1">
+                            <span className="text-[10px] text-blue-600 font-medium">구분 *</span>
+                            <Select value={line.item_type} onValueChange={v => updateLine(idx, 'item_type', v ?? 'main')}>
+                              <SelectTrigger className="w-full h-9 text-xs">
+                                <Txt text={line.item_type === 'main' ? '본품' : '스페어'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="main">본품</SelectItem>
+                                <SelectItem value="spare">스페어</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button type="button" variant="ghost" size="icon" className="h-9 w-9"
+                            onClick={() => removeLine(idx)} disabled={lines.length <= 1}>
+                            <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                           </Button>
                         </div>
-                        {/* 인보이스 KRW (해외직수입: USD × 환율 자동 / 그 외: -) */}
-                        <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2 truncate">
-                          {(() => {
-                            if (!isImport) return '-';
-                            const usd = calcInvoice(line);
-                            const exRaw = getValues('exchange_rate');
-                            const ex = exRaw ? parseFloat(exRaw) : 0;
-                            if (!usd || !ex) return '-';
-                            return `${Math.round(usd * ex).toLocaleString('ko-KR')}원`;
-                          })()}
+                        {/* 2행: 유무상 + 단가 + 인보이스(자동) + [인보이스KRW(import만)] + 용량 */}
+                        <div className="flex flex-wrap items-end gap-2">
+                          <div className="w-24 space-y-1">
+                            <span className="text-[10px] text-blue-600 font-medium">유무상 *</span>
+                            <Select value={line.payment_type} onValueChange={v => updateLine(idx, 'payment_type', v ?? 'paid')}>
+                              <SelectTrigger className="w-full h-9 text-xs">
+                                <Txt text={line.payment_type === 'paid' ? '유상' : '무상'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="paid">유상</SelectItem>
+                                <SelectItem value="free">무상</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="w-40 space-y-1">
+                            <span className="text-[10px] text-blue-600 font-medium">
+                              {isImport ? (priceMode === 'cents' ? '단가(¢/Wp) *' : '단가($/Wp) *') : '단가(원/Wp) *'}
+                            </span>
+                            <div className="flex gap-1 items-center">
+                              <Input className="h-9 text-xs flex-1 min-w-0" inputMode={isImport ? 'decimal' : 'numeric'} value={line.unit_price}
+                                placeholder={isImport ? (priceMode === 'cents' ? '12.30' : '0.1230') : '200'}
+                                onChange={e => {
+                                  const v = e.target.value;
+                                  if (isImport) {
+                                    if (v === '' || /^\d*\.?\d{0,6}$/.test(v)) updateLine(idx, 'unit_price', v);
+                                  } else {
+                                    if (v === '' || /^\d+$/.test(v)) updateLine(idx, 'unit_price', v);
+                                  }
+                                }} />
+                              {isImport && (
+                                <Button type="button" variant="outline" size="sm"
+                                  className="h-9 px-1.5 text-[10px] shrink-0 w-9" onClick={togglePriceMode}>
+                                  {priceMode === 'cents' ? '¢' : '$'}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="w-40 space-y-1">
+                            <span className="text-[10px] text-muted-foreground font-medium">인보이스{currencyLabel}(자동)</span>
+                            {isImport ? (
+                              <div className="flex gap-1 items-center">
+                                {line.manualInvoice ? (
+                                  <Input className="h-9 text-xs flex-1 min-w-0" inputMode="decimal"
+                                    value={line.invoiceOverride} placeholder="직접 입력"
+                                    onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) updateLine(idx, 'invoiceOverride', v); }} />
+                                ) : (
+                                  <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2 truncate flex-1 min-w-0">
+                                    {fmtInvoice(line)}
+                                  </div>
+                                )}
+                                <Button type="button" variant="ghost" size="sm"
+                                  className="h-9 px-1 text-[9px] shrink-0" title={line.manualInvoice ? '자동으로' : '수동 보정'}
+                                  onClick={() => updateLine(idx, 'manualInvoice', !line.manualInvoice)}>
+                                  {line.manualInvoice ? '자동' : '수동'}
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2 truncate">
+                                {fmtInvoice(line)}
+                              </div>
+                            )}
+                          </div>
+                          {isImport && (
+                            <div className="w-36 space-y-1">
+                              <span className="text-[10px] text-muted-foreground font-medium">인보이스KRW(자동)</span>
+                              <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2 truncate">
+                                {(() => {
+                                  const usd = calcInvoice(line);
+                                  const exRaw = getValues('exchange_rate');
+                                  const ex = exRaw ? parseFloat(exRaw) : 0;
+                                  if (!usd || !ex) return '-';
+                                  return `${Math.round(usd * ex).toLocaleString('ko-KR')}원`;
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                          <div className="w-24 space-y-1">
+                            <span className="text-[10px] text-muted-foreground font-medium">용량kW</span>
+                            <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2">
+                              {calcKw(line)}
+                            </div>
+                          </div>
                         </div>
-                        {/* 용량 kW (자동 계산) */}
-                        <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2">
-                          {calcKw(line)}
-                        </div>
-                        {/* 삭제 */}
-                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9"
-                          onClick={() => removeLine(idx)} disabled={lines.length <= 1}>
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
                       </div>
                     ))}
-                  </>
+                  </div>
                 )}
               </div>
             </>
