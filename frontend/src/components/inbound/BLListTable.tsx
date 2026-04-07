@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -42,14 +42,14 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
         <Table className="text-xs">
           <TableHeader>
             <TableRow>
-              <TableHead>입고번호</TableHead>
-              <TableHead>입고유형</TableHead>
-              <TableHead>제조사</TableHead>
-              <TableHead>상태</TableHead>
+              <TableHead>B/L번호</TableHead>
+              <TableHead>입고구분</TableHead>
+              <TableHead>공급사</TableHead>
+              <TableHead>입고현황</TableHead>
               <TableHead>ETD</TableHead>
               <TableHead>ETA</TableHead>
               <TableHead>실제입항</TableHead>
-              {onDelete && <TableHead className="w-10" />}
+              <TableHead className="w-20 text-center">작업</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -62,14 +62,20 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
                 <TableCell>{formatDate(bl.etd ?? '')}</TableCell>
                 <TableCell>{formatDate(bl.eta ?? '')}</TableCell>
                 <TableCell>{formatDate(bl.actual_arrival ?? '')}</TableCell>
-                {onDelete && (
-                  <TableCell>
-                    <Button variant="ghost" size="icon" className="h-7 w-7"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(bl); }}>
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                <TableCell>
+                  <div className="flex items-center justify-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" title="수정"
+                      onClick={(e) => { e.stopPropagation(); onSelect(bl); }}>
+                      <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
                     </Button>
-                  </TableCell>
-                )}
+                    {onDelete && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="삭제"
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(bl); }}>
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
