@@ -11,6 +11,7 @@ const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
 const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
 const InboundPage = lazy(() => import('@/pages/InboundPage'));
 const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
+const LCPage = lazy(() => import('@/pages/LCPage'));
 const OutboundPage = lazy(() => import('@/pages/OutboundPage'));
 const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
 const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
@@ -55,6 +56,7 @@ export default function App() {
                 <Route path="/masters/banks" element={<BankPage />} />
                 <Route path="/inbound" element={<InboundPage />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
+                <Route path="/lc" element={<LCPage />} />
                 <Route path="/outbound" element={<OutboundPage />} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/customs" element={<CustomsPage />} />

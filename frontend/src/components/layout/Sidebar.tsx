@@ -25,6 +25,7 @@ interface MenuItem {
 // 업무 흐름 (D-084) — 발주→입고→면장→수주→출고 순
 const workflowItems: MenuItem[] = [
   { icon: ClipboardList, label: '발주/결제', path: '/procurement', roles: ['admin', 'manager', 'staff'] },
+  { icon: Landmark, label: 'LC 관리', path: '/lc', roles: ['admin', 'manager', 'staff'] },
   { icon: PackageCheck, label: '입고 관리', path: '/inbound', roles: ['admin', 'manager', 'staff'] },
   { icon: Calculator, label: '면장/원가', path: '/customs', roles: ['admin', 'manager', 'staff'] },
   { icon: HandCoins, label: '수주/수금', path: '/orders', roles: ['admin', 'manager', 'staff'] },
