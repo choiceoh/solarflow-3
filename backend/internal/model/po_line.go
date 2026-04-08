@@ -8,7 +8,10 @@ type POLineItem struct {
 	ProductID     string   `json:"product_id"`
 	Quantity      int      `json:"quantity"`
 	UnitPriceUSD  *float64 `json:"unit_price_usd"`
+	UnitPriceUSDWp *float64 `json:"unit_price_usd_wp,omitempty"` // D-087: PO 자동채움용 ($/Wp)
 	TotalAmountUSD *float64 `json:"total_amount_usd"`
+	ItemType      *string  `json:"item_type,omitempty"`    // D-087: 본품/스페어 (선택)
+	PaymentType   *string  `json:"payment_type,omitempty"` // D-087: 유상/무상 (선택)
 	Memo          *string  `json:"memo"`
 }
 

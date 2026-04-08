@@ -45,6 +45,7 @@ type FormData = z.infer<typeof schema>;
 /* ── 라인아이템 ── */
 interface LineItem {
   product_id: string;
+  po_line_id?: string; // D-087: PO 발주품목 연결 (자동채움 시)
   quantity: string;
   item_type: 'main' | 'spare';
   payment_type: 'paid' | 'free';
@@ -217,9 +218,14 @@ interface POSummary {
   payment_terms?: string | null;
 }
 interface POLineSummary {
+  po_line_id?: string;
   product_id: string;
-  unit_price_usd_wp?: number;
+  quantity?: number;
+  unit_price_usd?: number;     // $/EA (DB 컬럼)
+  unit_price_usd_wp?: number;  // $/Wp (있을 수도 있음)
   unit_price_krw_wp?: number;
+  item_type?: 'main' | 'spare';
+  payment_type?: 'paid' | 'free';
 }
 
 interface Props {
@@ -255,9 +261,11 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const [bafCaf, setBafCaf] = useState(false);
   const [deliveryDate, setDeliveryDate] = useState(''); // 만기일 계산용 (actual_arrival 미러)
   const [exchangeRateLive, setExchangeRateLive] = useState(''); // 환율 실시간 미러 (KRW 재계산용)
-  // D-085: PO 연결 (선택사항) — 드롭다운 + 자동 채움
+  // D-085/D-087: PO 연결 — 드롭다운 + 자동 채움 + 잔여량
   const [poList, setPoList] = useState<POSummary[]>([]);
   const [selPOId, setSelPOId] = useState<string>('');
+  const [poRemaining, setPoRemaining] = useState<{ contractedMw: number; shippedMw: number; remainMw: number } | null>(null);
+  const [autofilled, setAutofilled] = useState<boolean>(false); // 자동채움 여부 표시 (bg-muted 적용용)
   const [submitError, setSubmitError] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -307,10 +315,19 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       .catch(() => setPoList([]));
   }, [open, editData]);
 
-  /* PO 선택 → 입고 폼 자동 채움 */
+  /* PO 선택 → 입고 폼 자동 채움 (D-087)
+   * 자동 채움: manufacturer_id, company_id, currency, incoterms, payment_terms.
+   * BL 라인은 PO 발주품목에서 product_id/단가/구분 복사 + po_line_id 연결.
+   */
   const applyPOAutofill = useCallback(async (poId: string) => {
     if (!poId) return;
-    const po = poList.find(p => p.po_id === poId);
+    // GET /api/v1/pos/{id} — 전체 상세 (currency, payment_terms 포함)
+    let po: POSummary | undefined;
+    try {
+      po = await fetchWithAuth<POSummary>(`/api/v1/pos/${poId}`);
+    } catch {
+      po = poList.find(p => p.po_id === poId);
+    }
     if (!po) return;
     // 입고 유형: USD면 해외직수입, KRW면 국내구매로 기본 추정
     const inferType: InboundTypeValue = po.currency === 'KRW' ? 'domestic' : 'import';
@@ -320,17 +337,43 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     setSelMfgId(po.manufacturer_id);
     setValue('manufacturer_id', po.manufacturer_id);
     if (po.incoterms) setValue('incoterms', po.incoterms);
-    // PO 라인 조회 → 입고품목 프리셋 (수량 비움, 단가만 복사)
+    if (po.payment_terms && inferType === 'import') {
+      setImportPT(parseImportPT(po.payment_terms));
+    } else if (po.payment_terms && inferType === 'domestic') {
+      setDomesticPT(parseDomesticPT(po.payment_terms));
+    }
+    setAutofilled(true);
+    // PO 잔여량 계산 (D-061: 프론트 계산) — 동일 PO의 모든 BL 라인 수량 합산
+    try {
+      const bls = await fetchWithAuth<BLShipment[]>(`/api/v1/bls?po_id=${poId}`);
+      let shippedKw = 0;
+      for (const bl of bls ?? []) {
+        try {
+          const blLines = await fetchWithAuth<{ capacity_kw?: number }[]>(`/api/v1/bls/${bl.bl_id}/lines`);
+          for (const ln of blLines ?? []) shippedKw += ln.capacity_kw ?? 0;
+        } catch { /* skip */ }
+      }
+      const contractedMw = po.total_capacity_mw ?? 0;
+      const shippedMw = shippedKw / 1000;
+      setPoRemaining({ contractedMw, shippedMw, remainMw: Math.max(0, contractedMw - shippedMw) });
+    } catch {
+      setPoRemaining(null);
+    }
+    // PO 라인 조회 → 입고품목 프리셋 (수량 비움, 단가/po_line_id 복사)
     try {
       const lines = await fetchWithAuth<POLineSummary[]>(`/api/v1/pos/${poId}/lines`);
       if (Array.isArray(lines) && lines.length > 0) {
+        // 단가 우선순위: unit_price_usd_wp ($/Wp) → unit_price_usd ($/EA, 변환 필요는 spec_wp 알아야 하므로 일단 그대로)
         setLines(lines.map(l => ({
           product_id: l.product_id,
+          po_line_id: l.po_line_id,
           quantity: '',
-          item_type: 'main',
-          payment_type: 'paid',
+          item_type: l.item_type ?? 'main',
+          payment_type: l.payment_type ?? 'paid',
           unit_price: inferType === 'import'
-            ? (l.unit_price_usd_wp != null ? String(l.unit_price_usd_wp * 100) : '') // cents mode
+            ? (l.unit_price_usd_wp != null
+                ? String(l.unit_price_usd_wp * 100) // ¢/Wp 모드
+                : '')
             : (l.unit_price_krw_wp != null ? String(Math.round(l.unit_price_krw_wp)) : ''),
           manualInvoice: false,
           invoiceOverride: '',
@@ -444,6 +487,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       setSelType(''); setSelCompanyId(cid); setSelMfgId(''); setSelWhId('');
       setCounterpartId(''); setAutoNumber(''); setImportPT(defaultImportPT()); setDomesticPT(defaultDomesticPT());
       setBafCaf(false); setDeliveryDate(''); setExchangeRateLive(''); setSelPOId('');
+      setAutofilled(false); setPoRemaining(null);
       reset({
         inbound_type: '', bl_number: '', manufacturer_id: '',
         exchange_rate: '', etd: '', eta: '', actual_arrival: '',
@@ -565,7 +609,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
           const inv = l.manualInvoice && l.invoiceOverride
             ? parseFloat(l.invoiceOverride) : calcInvoice(l);
           return {
-            product_id: l.product_id, quantity: qty,
+            product_id: l.product_id,
+            po_line_id: l.po_line_id || undefined, // D-087: PO 발주품목 연결
+            quantity: qty,
             capacity_kw: prod ? (qty * prod.spec_wp) / 1000 : 0,
             item_type: l.item_type, payment_type: l.payment_type,
             usage_category: 'sale',
@@ -634,7 +680,12 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
               <Select value={selPOId || 'none'} onValueChange={(v) => {
                 const val = v === 'none' ? '' : (v ?? '');
                 setSelPOId(val);
-                if (val) applyPOAutofill(val);
+                if (val) {
+                  applyPOAutofill(val);
+                } else {
+                  setAutofilled(false);
+                  setPoRemaining(null);
+                }
               }}>
                 <SelectTrigger className="w-full">
                   <Txt text={(() => {
@@ -653,7 +704,14 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                 </SelectContent>
               </Select>
               {selPOId && (
-                <p className="text-[10px] text-muted-foreground">PO 정보가 자동 채움됨. 모든 필드는 수정 가능.</p>
+                <p className="text-[10px] text-muted-foreground">
+                  PO 정보가 자동 채움됨. Incoterms/결제조건은 수정 가능.
+                  {poRemaining && (
+                    <> · 계약 {poRemaining.contractedMw.toFixed(1)}MW · 선적 {poRemaining.shippedMw.toFixed(1)}MW ·{' '}
+                      <span className="text-foreground font-medium">잔여 {poRemaining.remainMw.toFixed(1)}MW</span>
+                    </>
+                  )}
+                </p>
               )}
             </div>
           )}
@@ -692,11 +750,11 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                   </div>
                 )}
 
-                {/* 구매법인 */}
+                {/* 구매법인 — D-087: PO 자동채움 시 잠금 */}
                 <div className="space-y-1.5">
                   <Req>구매법인</Req>
-                  <Select value={selCompanyId} onValueChange={handleCompanyChange}>
-                    <SelectTrigger className="w-full"><Txt text={coName} /></SelectTrigger>
+                  <Select value={selCompanyId} onValueChange={handleCompanyChange} disabled={autofilled}>
+                    <SelectTrigger className={`w-full ${autofilled ? 'bg-muted' : ''}`}><Txt text={coName} /></SelectTrigger>
                     <SelectContent>
                       {companies.map(c => (
                         <SelectItem key={c.company_id} value={c.company_id}>{c.company_name}</SelectItem>
@@ -705,11 +763,11 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                   </Select>
                 </div>
 
-                {/* 공급사 (전체 입고유형 공통, 그룹은 해외+국내 전체 제조사) */}
+                {/* 공급사 — D-087: PO 자동채움 시 잠금 */}
                 <div className="space-y-1.5">
                     <Req>공급사</Req>
-                    <Select value={selMfgId} onValueChange={handleMfgChange}>
-                      <SelectTrigger className="w-full"><Txt text={mfgName} /></SelectTrigger>
+                    <Select value={selMfgId} onValueChange={handleMfgChange} disabled={autofilled}>
+                      <SelectTrigger className={`w-full ${autofilled ? 'bg-muted' : ''}`}><Txt text={mfgName} /></SelectTrigger>
                       <SelectContent>
                         {manufacturers.map(m => (
                           <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>

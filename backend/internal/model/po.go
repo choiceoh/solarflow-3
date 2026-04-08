@@ -7,6 +7,7 @@ type PurchaseOrder struct {
 	PONumber            *string  `json:"po_number"`
 	CompanyID           string   `json:"company_id"`
 	ManufacturerID      string   `json:"manufacturer_id"`
+	Currency            *string  `json:"currency,omitempty"` // D-087: PO 자동채움용 (DB에 없으면 빈 값)
 	ContractType        string   `json:"contract_type"`
 	ContractDate        *string  `json:"contract_date"`
 	Incoterms           *string  `json:"incoterms"`

@@ -1,11 +1,17 @@
 package model
 
+import "regexp"
+
+// UUID v4/일반 UUID 형식 검증 (소문자/대문자 허용)
+var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
 // BLLineItem — B/L 라인아이템(화물 명세) 구조체
 // 비유: "화물 명세서" — 선적 서류에 붙는 개별 품목(규격, 수량, 단가, 용도) 정보
 type BLLineItem struct {
 	BLLineID        string   `json:"bl_line_id"`
 	BLID            string   `json:"bl_id"`
 	ProductID       string   `json:"product_id"`
+	POLineID        *string  `json:"po_line_id,omitempty" db:"po_line_id"` // D-087: PO 발주품목과 연결 (nullable)
 	Quantity        int      `json:"quantity"`
 	CapacityKW      float64  `json:"capacity_kw"`
 	ItemType        string   `json:"item_type"`
@@ -64,6 +70,7 @@ var validUsageCategories = map[string]bool{
 type CreateBLLineRequest struct {
 	BLID             string   `json:"bl_id"`
 	ProductID        string   `json:"product_id"`
+	POLineID         *string  `json:"po_line_id,omitempty"` // D-087: PO 발주품목 연결 (nullable)
 	Quantity         int      `json:"quantity"`
 	CapacityKW       float64  `json:"capacity_kw"`
 	ItemType         string   `json:"item_type"`
@@ -117,6 +124,9 @@ func (req *CreateBLLineRequest) Validate() string {
 	if req.UnitPriceKRWWp != nil && *req.UnitPriceKRWWp <= 0 {
 		return "unit_price_krw_wp는 양수여야 합니다"
 	}
+	if req.POLineID != nil && *req.POLineID != "" && !uuidRe.MatchString(*req.POLineID) {
+		return "po_line_id는 UUID 형식이어야 합니다"
+	}
 	return ""
 }
 
@@ -124,6 +134,7 @@ func (req *CreateBLLineRequest) Validate() string {
 // 비유: "화물 품목 변경 신청서" — 바꾸고 싶은 항목만 적어서 제출
 type UpdateBLLineRequest struct {
 	ProductID        *string  `json:"product_id,omitempty"`
+	POLineID         *string  `json:"po_line_id,omitempty"` // D-087
 	Quantity         *int     `json:"quantity,omitempty"`
 	CapacityKW       *float64 `json:"capacity_kw,omitempty"`
 	ItemType         *string  `json:"item_type,omitempty"`
@@ -164,6 +175,9 @@ func (req *UpdateBLLineRequest) Validate() string {
 	}
 	if req.UnitPriceKRWWp != nil && *req.UnitPriceKRWWp <= 0 {
 		return "unit_price_krw_wp는 양수여야 합니다"
+	}
+	if req.POLineID != nil && *req.POLineID != "" && !uuidRe.MatchString(*req.POLineID) {
+		return "po_line_id는 UUID 형식이어야 합니다"
 	}
 	return ""
 }
