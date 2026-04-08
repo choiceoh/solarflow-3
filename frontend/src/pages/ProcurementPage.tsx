@@ -103,9 +103,12 @@ export default function ProcurementPage() {
       if (Array.isArray(lines) && lines.length > 0 && created?.po_id) {
         const failures: string[] = [];
         for (const line of lines) {
+          // 신규 생성 경로에서는 po_line_id는 무시
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { po_line_id: _plid, ...body } = line;
           try {
             await fetchWithAuth(`/api/v1/pos/${created.po_id}/lines`, {
-              method: 'POST', body: JSON.stringify({ ...line, po_id: created.po_id }),
+              method: 'POST', body: JSON.stringify({ ...body, po_id: created.po_id }),
             });
           } catch (err) {
             failures.push(err instanceof Error ? err.message : '알 수 없는 오류');

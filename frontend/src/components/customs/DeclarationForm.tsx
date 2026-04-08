@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -114,16 +115,16 @@ export default function DeclarationForm({ open, onOpenChange, onSubmit, editData
           </div>
           <div>
             <Label>신고일 *</Label>
-            <Input type="date" value={declarationDate} onChange={(e) => setDeclarationDate(e.target.value)} />
+            <DateInput value={declarationDate} onChange={setDeclarationDate} />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label>입항일</Label>
-              <Input type="date" value={arrivalDate} onChange={(e) => setArrivalDate(e.target.value)} />
+              <DateInput value={arrivalDate} onChange={setArrivalDate} />
             </div>
             <div>
               <Label>반출일</Label>
-              <Input type="date" value={releaseDate} onChange={(e) => setReleaseDate(e.target.value)} />
+              <DateInput value={releaseDate} onChange={setReleaseDate} />
             </div>
           </div>
           <div>

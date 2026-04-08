@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -87,7 +88,7 @@ export default function LimitChangeForm({ open, onOpenChange, onSubmit }: Props)
           </div>
           <div>
             <Label>변경일 *</Label>
-            <Input type="date" value={changeDate} onChange={(e) => setChangeDate(e.target.value)} />
+            <DateInput value={changeDate} onChange={setChangeDate} />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>

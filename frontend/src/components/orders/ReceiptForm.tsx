@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -102,7 +103,7 @@ export default function ReceiptForm({ open, onOpenChange, onSubmit, editData }: 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>입금일 *</Label>
-              <Input type="date" {...register('receipt_date')} />
+              <DateInput value={watch('receipt_date') ?? ''} onChange={(v) => setValue('receipt_date', v, { shouldDirty: true })} />
               {errors.receipt_date && <p className="text-xs text-destructive">{errors.receipt_date.message}</p>}
             </div>
             <div className="space-y-1.5">

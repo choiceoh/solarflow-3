@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -80,7 +81,7 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData }: Props
             </Select>{errors.po_id && <p className="text-xs text-destructive">{errors.po_id.message}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>송금일</Label><Input type="date" {...register('remit_date')} /></div>
+            <div className="space-y-1.5"><Label>송금일</Label><DateInput value={watch('remit_date') ?? ''} onChange={(v) => setValue('remit_date', v, { shouldDirty: true })} /></div>
             <div className="space-y-1.5"><Label>금액(USD) *</Label><Input type="number" step="0.01" {...register('amount_usd')} />{errors.amount_usd && <p className="text-xs text-destructive">{errors.amount_usd.message}</p>}</div>
           </div>
           <div className="grid grid-cols-2 gap-3">

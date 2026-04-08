@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -101,7 +102,7 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
             </Select>{errors.bank_id && <p className="text-xs text-destructive">{errors.bank_id.message}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>개설일</Label><Input type="date" {...register('open_date')} /></div>
+            <div className="space-y-1.5"><Label>개설일</Label><DateInput value={watch('open_date') ?? ''} onChange={(v) => setValue('open_date', v, { shouldDirty: true })} /></div>
             <div className="space-y-1.5"><Label>금액(USD) *</Label><Input type="number" step="0.01" {...register('amount_usd')} />{errors.amount_usd && <p className="text-xs text-destructive">{errors.amount_usd.message}</p>}</div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -118,8 +119,8 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>만기일</Label><Input type="date" {...register('maturity_date')} /></div>
-            <div className="space-y-1.5"><Label>결제일</Label><Input type="date" {...register('settlement_date')} /></div>
+            <div className="space-y-1.5"><Label>만기일</Label><DateInput value={watch('maturity_date') ?? ''} onChange={(v) => setValue('maturity_date', v, { shouldDirty: true })} /></div>
+            <div className="space-y-1.5"><Label>결제일</Label><DateInput value={watch('settlement_date') ?? ''} onChange={(v) => setValue('settlement_date', v, { shouldDirty: true })} /></div>
           </div>
           <div className="space-y-1.5">
             <Label>상태 *</Label>

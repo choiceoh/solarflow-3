@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -153,7 +154,7 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, editD
 
           <div className="space-y-1.5">
             <Label>세금계산서 발행일</Label>
-            <Input type="date" {...register('tax_invoice_date')} />
+            <DateInput value={watch('tax_invoice_date') ?? ''} onChange={(v) => setValue('tax_invoice_date', v, { shouldDirty: true })} />
             <p className="text-[10px] text-muted-foreground">출고일과 다를 수 있습니다 (다음달 발행 가능)</p>
           </div>
 
@@ -171,7 +172,7 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, editD
           {erpClosed && (
             <div className="space-y-1.5">
               <Label>ERP 마감일</Label>
-              <Input type="date" {...register('erp_closed_date')} />
+              <DateInput value={watch('erp_closed_date') ?? ''} onChange={(v) => setValue('erp_closed_date', v, { shouldDirty: true })} />
             </div>
           )}
 

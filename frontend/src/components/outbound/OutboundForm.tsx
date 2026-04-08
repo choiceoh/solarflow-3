@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -157,7 +158,7 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData }:
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>출고일 *</Label>
-              <Input type="date" {...register('outbound_date')} />
+              <DateInput value={watch('outbound_date') ?? ''} onChange={(v) => setValue('outbound_date', v, { shouldDirty: true })} />
               {errors.outbound_date && <p className="text-xs text-destructive">{errors.outbound_date.message}</p>}
             </div>
             <div className="space-y-1.5">

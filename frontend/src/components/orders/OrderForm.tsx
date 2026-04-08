@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -161,7 +162,7 @@ export default function OrderForm({ open, onOpenChange, onSubmit, editData }: Pr
             </div>
             <div className="space-y-1.5">
               <Label>수주일 *</Label>
-              <Input type="date" {...register('order_date')} />
+              <DateInput value={watch('order_date') ?? ''} onChange={(v) => setValue('order_date', v, { shouldDirty: true })} />
               {errors.order_date && <p className="text-xs text-destructive">{errors.order_date.message}</p>}
             </div>
           </div>
@@ -270,7 +271,7 @@ export default function OrderForm({ open, onOpenChange, onSubmit, editData }: Pr
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5"><Label>결제조건</Label><Input {...register('payment_terms')} placeholder="자유기재" /></div>
             <div className="space-y-1.5"><Label>선수금율 (%)</Label><Input type="number" step="0.1" {...register('deposit_rate')} /></div>
-            <div className="space-y-1.5"><Label>납기일</Label><Input type="date" {...register('delivery_due')} /></div>
+            <div className="space-y-1.5"><Label>납기일</Label><DateInput value={watch('delivery_due') ?? ''} onChange={(v) => setValue('delivery_due', v, { shouldDirty: true })} /></div>
           </div>
 
           <div className="space-y-1.5"><Label>스페어 수량</Label><Input type="number" {...register('spare_qty')} /></div>

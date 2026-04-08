@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -35,15 +36,6 @@ const PO_STATUSES_READONLY: Record<string, string> = {
 };
 const INCOTERMS = ['FOB', 'CIF', 'CFR', 'EXW', 'FCA', 'DAP', 'DDP', 'CIP'];
 
-/** R1-3: 날짜 정규화 — "20260407" → "2026-04-07" / "2026-4-7" → "2026-04-07" / "2026-04-07" 유지 */
-function normDate(v: string): string {
-  if (!v) return v;
-  const digits = v.replace(/\D/g, '');
-  if (/^\d{8}$/.test(digits)) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
-  const m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  return v;
-}
 const BALANCE_DAYS = ['30', '45', '60', '90', '120', '180'] as const;
 type BalanceDay = typeof BALANCE_DAYS[number];
 
@@ -85,6 +77,7 @@ function parsePT(text: string): PaymentTerms {
 
 /* ── 발주품목 라인 ── */
 interface POLine {
+  po_line_id?: string;       // R1-5: 기존 라인 식별자 (수정 시 UPDATE, 없으면 INSERT)
   product_id: string;
   inputMode: 'qty' | 'mw';   // 수량/용량 입력 모드 토글
   quantity: string;          // EA
@@ -203,6 +196,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
               ? (l.unit_price_usd / specWp) * 100
               : 0;
             return {
+              po_line_id: l.po_line_id, // R1-5: 기존 ID 보존
               product_id: l.product_id,
               inputMode: 'qty' as const,
               quantity: String(l.quantity),
@@ -315,6 +309,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       // unit_price_usd = $/EA (모듈 1장 가격), total_amount_usd = 라인 총액
       const unitPerEA = p && c.qty ? c.total / c.qty : undefined;
       return {
+        po_line_id: l.po_line_id, // R1-5: 수정 시 UPDATE 식별자
         product_id: l.product_id,
         quantity: c.qty,
         unit_price_usd: unitPerEA && !isNaN(unitPerEA) ? Number(unitPerEA.toFixed(4)) : undefined,
@@ -338,7 +333,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       status,
       // 독점/BAF·CAF 플래그는 별도 DB 컬럼이 없어 메모 접두사로 보존
       memo: ((isExclusive ? '[독점] ' : '') + (bafCaf ? '[BAF/CAF] ' : '') + (memo || '')).trim() || undefined,
-      lines: editData ? undefined : linesPayload,
+      lines: linesPayload, // R1-5: 수정 모드에서도 라인 전송 (호출자가 diff CRUD 처리)
     };
     Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k]; });
 
@@ -424,23 +419,17 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
             </div>
             <div className="space-y-1.5">
               <Req>계약일</Req>
-              <Input type="text" placeholder="YYYY-MM-DD 또는 20260407" value={contractDate}
-                onChange={(e) => setContractDate(e.target.value)}
-                onBlur={(e) => setContractDate(normDate(e.target.value))} />
+              <DateInput value={contractDate} onChange={setContractDate} />
             </div>
             {contractType === 'frame' && (
               <>
                 <div className="space-y-1.5">
                   <Req>계약 시작일</Req>
-                  <Input type="text" placeholder="YYYY-MM-DD 또는 20260407" value={periodStart}
-                    onChange={(e) => setPeriodStart(e.target.value)}
-                    onBlur={(e) => setPeriodStart(normDate(e.target.value))} />
+                  <DateInput value={periodStart} onChange={setPeriodStart} />
                 </div>
                 <div className="space-y-1.5">
                   <Req>계약 종료일</Req>
-                  <Input type="text" placeholder="YYYY-MM-DD 또는 20260407" value={periodEnd}
-                    onChange={(e) => setPeriodEnd(e.target.value)}
-                    onBlur={(e) => setPeriodEnd(normDate(e.target.value))} />
+                  <DateInput value={periodEnd} onChange={setPeriodEnd} />
                 </div>
               </>
             )}

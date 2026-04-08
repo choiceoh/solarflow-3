@@ -99,9 +99,64 @@ export default function PODetailView({ po, onBack, onReload }: Props) {
   const { data: lcs, loading: lcsLoading } = useLCList({ po_id: po.po_id });
   const { data: tts, loading: ttsLoading } = useTTList({ po_id: po.po_id });
 
+  // R1-5: PO 헤더 PUT + 발주품목 diff CRUD (UPDATE 기존 / INSERT 신규 / DELETE 제거)
   const handleUpdatePO = async (data: Record<string, unknown>) => {
-    await fetchWithAuth(`/api/v1/pos/${po.po_id}`, { method: 'PUT', body: JSON.stringify(data) });
-    onReload();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { lines: submittedLines, ...poBody } = data as any;
+    try {
+      // 1) PO 헤더 업데이트
+      await fetchWithAuth(`/api/v1/pos/${po.po_id}`, { method: 'PUT', body: JSON.stringify(poBody) });
+
+      if (Array.isArray(submittedLines)) {
+        // 2) 기존 발주품목 목록 조회
+        const existing = await fetchWithAuth<{ po_line_id: string }[]>(`/api/v1/pos/${po.po_id}/lines`);
+        const existingIds = new Set((existing ?? []).map(l => l.po_line_id));
+        const submittedIds = new Set(
+          submittedLines
+            .filter((l: { po_line_id?: string }) => l.po_line_id)
+            .map((l: { po_line_id?: string }) => l.po_line_id as string),
+        );
+
+        const failures: string[] = [];
+
+        // 3) 삭제: 기존엔 있는데 제출엔 없는 것
+        for (const id of existingIds) {
+          if (!submittedIds.has(id)) {
+            try {
+              await fetchWithAuth(`/api/v1/pos/${po.po_id}/lines/${id}`, { method: 'DELETE' });
+            } catch (err) {
+              failures.push(`삭제 실패: ${err instanceof Error ? err.message : '알 수 없음'}`);
+            }
+          }
+        }
+
+        // 4) 업데이트 or 삽입
+        for (const line of submittedLines) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { po_line_id, ...body } = line as any;
+          try {
+            if (po_line_id && existingIds.has(po_line_id)) {
+              await fetchWithAuth(`/api/v1/pos/${po.po_id}/lines/${po_line_id}`, {
+                method: 'PUT', body: JSON.stringify(body),
+              });
+            } else {
+              await fetchWithAuth(`/api/v1/pos/${po.po_id}/lines`, {
+                method: 'POST', body: JSON.stringify({ ...body, po_id: po.po_id }),
+              });
+            }
+          } catch (err) {
+            failures.push(err instanceof Error ? err.message : '알 수 없는 오류');
+          }
+        }
+
+        if (failures.length > 0) {
+          throw new Error(`발주품목 ${failures.length}건 처리 실패: ${failures.join('; ')}`);
+        }
+      }
+    } finally {
+      onReload();
+      reloadLines();
+    }
   };
 
   const handleCreateLine = async (data: Record<string, unknown>) => {
