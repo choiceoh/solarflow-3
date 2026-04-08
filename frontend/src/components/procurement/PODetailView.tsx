@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -88,7 +88,12 @@ function TTSubTable({ items, poLines }: { items: TTRemittance[]; poLines: POLine
   );
 }
 
-export default function PODetailView({ po, onBack, onReload }: Props) {
+export default function PODetailView({ po: initialPo, onBack, onReload }: Props) {
+  // 로컬 PO 미러 — 저장 후 서버 fresh로 갱신 (parent prop은 stale일 수 있음)
+  const [po, setPo] = useState<PurchaseOrder>(initialPo);
+  // 부모 selectedPO 변경 시(다른 PO 선택 등) 동기화
+  useEffect(() => { setPo(initialPo); }, [initialPo]);
+
   const [editOpen, setEditOpen] = useState(false);
   const [lineFormOpen, setLineFormOpen] = useState(false);
   const [editLine, setEditLine] = useState<POLineItem | null>(null);
@@ -98,6 +103,14 @@ export default function PODetailView({ po, onBack, onReload }: Props) {
   const { data: lines, loading: linesLoading, reload: reloadLines } = usePOLines(po.po_id);
   const { data: lcs, loading: lcsLoading } = useLCList({ po_id: po.po_id });
   const { data: tts, loading: ttsLoading } = useTTList({ po_id: po.po_id });
+
+  // 저장 후 PO 헤더 새로고침
+  const refreshPO = async () => {
+    try {
+      const fresh = await fetchWithAuth<PurchaseOrder>(`/api/v1/pos/${po.po_id}`);
+      if (fresh) setPo(fresh);
+    } catch { /* ignore */ }
+  };
 
   // R1-5: PO 헤더 PUT + 발주품목 diff CRUD (UPDATE 기존 / INSERT 신규 / DELETE 제거)
   const handleUpdatePO = async (data: Record<string, unknown>) => {
@@ -156,6 +169,7 @@ export default function PODetailView({ po, onBack, onReload }: Props) {
     } finally {
       onReload();
       reloadLines();
+      await refreshPO();
     }
   };
 
