@@ -228,6 +228,19 @@ interface POLineSummary {
   payment_type?: 'paid' | 'free';
 }
 
+/** PO 발주품목 행 — 기입고/잔여/이번입고 입력 포함 (D-087) */
+interface POLineRow {
+  po_line_id?: string;
+  product_id: string;
+  contracted_qty: number;        // PO 계약 수량 (EA)
+  shipped_qty: number;           // 동일 PO의 모든 BL에서 합산한 기입고 수량
+  unit_price_usd_wp?: number;
+  unit_price_krw_wp?: number;
+  item_type: 'main' | 'spare';
+  payment_type: 'paid' | 'free';
+  thisShipmentQty: string;       // 사용자 입력 — 이번 BL에 입고할 수량
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -266,6 +279,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const [selPOId, setSelPOId] = useState<string>('');
   const [poRemaining, setPoRemaining] = useState<{ contractedMw: number; shippedMw: number; remainMw: number } | null>(null);
   const [autofilled, setAutofilled] = useState<boolean>(false); // 자동채움 여부 표시 (bg-muted 적용용)
+  const [poLineRows, setPoLineRows] = useState<POLineRow[]>([]); // D-087: PO 발주품목 + 기입고/잔여 테이블
   const [submitError, setSubmitError] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -343,43 +357,44 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       setDomesticPT(parseDomesticPT(po.payment_terms));
     }
     setAutofilled(true);
-    // PO 잔여량 계산 (D-061: 프론트 계산) — 동일 PO의 모든 BL 라인 수량 합산
+    // PO 발주품목 + 동일 PO 기입고 합산 (product_id별)
+    let poLines: POLineSummary[] = [];
+    try {
+      poLines = await fetchWithAuth<POLineSummary[]>(`/api/v1/pos/${poId}/lines`) ?? [];
+    } catch { /* 빈 PO */ }
+    // 기입고 합산: 동일 PO의 모든 BL → lines → product_id별 quantity 합산
+    const shippedByProduct: Record<string, number> = {};
+    let shippedKwTotal = 0;
     try {
       const bls = await fetchWithAuth<BLShipment[]>(`/api/v1/bls?po_id=${poId}`);
-      let shippedKw = 0;
       for (const bl of bls ?? []) {
         try {
-          const blLines = await fetchWithAuth<{ capacity_kw?: number }[]>(`/api/v1/bls/${bl.bl_id}/lines`);
-          for (const ln of blLines ?? []) shippedKw += ln.capacity_kw ?? 0;
+          const blLines = await fetchWithAuth<{ product_id?: string; quantity?: number; capacity_kw?: number }[]>(`/api/v1/bls/${bl.bl_id}/lines`);
+          for (const ln of blLines ?? []) {
+            if (ln.product_id) {
+              shippedByProduct[ln.product_id] = (shippedByProduct[ln.product_id] || 0) + (ln.quantity ?? 0);
+            }
+            shippedKwTotal += ln.capacity_kw ?? 0;
+          }
         } catch { /* skip */ }
       }
-      const contractedMw = po.total_capacity_mw ?? 0;
-      const shippedMw = shippedKw / 1000;
-      setPoRemaining({ contractedMw, shippedMw, remainMw: Math.max(0, contractedMw - shippedMw) });
-    } catch {
-      setPoRemaining(null);
-    }
-    // PO 라인 조회 → 입고품목 프리셋 (수량 비움, 단가/po_line_id 복사)
-    try {
-      const lines = await fetchWithAuth<POLineSummary[]>(`/api/v1/pos/${poId}/lines`);
-      if (Array.isArray(lines) && lines.length > 0) {
-        // 단가 우선순위: unit_price_usd_wp ($/Wp) → unit_price_usd ($/EA, 변환 필요는 spec_wp 알아야 하므로 일단 그대로)
-        setLines(lines.map(l => ({
-          product_id: l.product_id,
-          po_line_id: l.po_line_id,
-          quantity: '',
-          item_type: l.item_type ?? 'main',
-          payment_type: l.payment_type ?? 'paid',
-          unit_price: inferType === 'import'
-            ? (l.unit_price_usd_wp != null
-                ? String(l.unit_price_usd_wp * 100) // ¢/Wp 모드
-                : '')
-            : (l.unit_price_krw_wp != null ? String(Math.round(l.unit_price_krw_wp)) : ''),
-          manualInvoice: false,
-          invoiceOverride: '',
-        })));
-      }
-    } catch { /* PO 라인 조회 실패 시 빈 입고품목 유지 */ }
+    } catch { /* skip */ }
+    // PO 발주품목 행 구성
+    setPoLineRows(poLines.map(l => ({
+      po_line_id: l.po_line_id,
+      product_id: l.product_id,
+      contracted_qty: l.quantity ?? 0,
+      shipped_qty: shippedByProduct[l.product_id] ?? 0,
+      unit_price_usd_wp: l.unit_price_usd_wp,
+      unit_price_krw_wp: l.unit_price_krw_wp,
+      item_type: l.item_type ?? 'main',
+      payment_type: l.payment_type ?? 'paid',
+      thisShipmentQty: '',
+    })));
+    // 잔여량 (MW 단위 — 헤더 표시용)
+    const contractedMw = po.total_capacity_mw ?? 0;
+    const shippedMw = shippedKwTotal / 1000;
+    setPoRemaining({ contractedMw, shippedMw, remainMw: Math.max(0, contractedMw - shippedMw) });
   }, [poList, setValue]);
 
   /* presetPOId (PO 상세에서 진입) → 자동 적용 */
@@ -487,7 +502,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       setSelType(''); setSelCompanyId(cid); setSelMfgId(''); setSelWhId('');
       setCounterpartId(''); setAutoNumber(''); setImportPT(defaultImportPT()); setDomesticPT(defaultDomesticPT());
       setBafCaf(false); setDeliveryDate(''); setExchangeRateLive(''); setSelPOId('');
-      setAutofilled(false); setPoRemaining(null);
+      setAutofilled(false); setPoRemaining(null); setPoLineRows([]);
       reset({
         inbound_type: '', bl_number: '', manufacturer_id: '',
         exchange_rate: '', etd: '', eta: '', actual_arrival: '',
@@ -502,6 +517,36 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const updateLine = (i: number, f: keyof LineItem, v: string | boolean) =>
     setLines(prev => prev.map((l, j) => j === i ? { ...l, [f]: v } : l));
   const addLine = () => setLines(prev => [...prev, emptyLine()]);
+
+  /** D-087: PO 발주품목 행에서 BL 라인 추가 (이번 입고 수량 + 단가/구분 복사) */
+  const addLineFromPORow = (idx: number) => {
+    const r = poLineRows[idx];
+    if (!r) return;
+    const qty = parseInt(r.thisShipmentQty || '0');
+    if (!qty || qty <= 0) return;
+    setLines(prev => {
+      // 기본 빈 라인 제거 (product_id 없는 첫 행만)
+      const filtered = prev.filter((l, i) => !(i === 0 && !l.product_id && !l.quantity && prev.length === 1));
+      return [...filtered, {
+        product_id: r.product_id,
+        po_line_id: r.po_line_id,
+        quantity: String(qty),
+        item_type: r.item_type,
+        payment_type: r.payment_type,
+        unit_price: isImport
+          ? (r.unit_price_usd_wp != null ? String(r.unit_price_usd_wp * 100) : '') // ¢/Wp
+          : (r.unit_price_krw_wp != null ? String(Math.round(r.unit_price_krw_wp)) : ''),
+        manualInvoice: false,
+        invoiceOverride: '',
+      }];
+    });
+    // 입력칸 비우기 (반복 추가 방지)
+    setPoLineRows(prev => prev.map((row, i) => i === idx ? { ...row, thisShipmentQty: '' } : row));
+  };
+
+  const updatePORowQty = (idx: number, v: string) => {
+    setPoLineRows(prev => prev.map((row, i) => i === idx ? { ...row, thisShipmentQty: v.replace(/[^0-9]/g, '') } : row));
+  };
   const removeLine = (i: number) => setLines(prev => prev.length <= 1 ? prev : prev.filter((_, j) => j !== i));
 
   const productLabel = (pid: string) => {
@@ -685,6 +730,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                 } else {
                   setAutofilled(false);
                   setPoRemaining(null);
+                  setPoLineRows([]);
                 }
               }}>
                 <SelectTrigger className="w-full">
@@ -866,6 +912,75 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                 <Opt>메모</Opt>
                 <Textarea {...register('memo')} rows={2} />
               </div>
+
+              {/* ── D-087: PO 발주품목 — 기입고/잔여 + 이번입고 입력 ── */}
+              {selPOId && poLineRows.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">PO 발주품목 (계약 vs 기입고)</Label>
+                  <div className="rounded-md border overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted">
+                        <tr>
+                          <th className="px-2 py-1.5 text-left">품번</th>
+                          <th className="px-2 py-1.5 text-left">모델명</th>
+                          <th className="px-2 py-1.5 text-right">규격</th>
+                          <th className="px-2 py-1.5 text-right">계약(EA)</th>
+                          <th className="px-2 py-1.5 text-right">계약(MW)</th>
+                          <th className="px-2 py-1.5 text-right">기입고(EA)</th>
+                          <th className="px-2 py-1.5 text-right">기입고(MW)</th>
+                          <th className="px-2 py-1.5 text-right">잔여(EA)</th>
+                          <th className="px-2 py-1.5 text-right">잔여(MW)</th>
+                          <th className="px-2 py-1.5 text-center w-32">이번 입고(EA)</th>
+                          <th className="px-2 py-1.5 text-center w-16">추가</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {poLineRows.map((row, i) => {
+                          const p = products.find(x => x.product_id === row.product_id);
+                          const specWp = p?.spec_wp ?? 0;
+                          const remainQty = row.contracted_qty - row.shipped_qty;
+                          const contractedMw = (row.contracted_qty * specWp) / 1_000_000;
+                          const shippedMw = (row.shipped_qty * specWp) / 1_000_000;
+                          const remainMw = (remainQty * specWp) / 1_000_000;
+                          const inputQty = parseInt(row.thisShipmentQty || '0');
+                          const isOver = inputQty > remainQty;
+                          return (
+                            <tr key={i} className="border-t">
+                              <td className="px-2 py-1.5 font-mono">{p?.product_code ?? row.product_id.slice(0, 8)}</td>
+                              <td className="px-2 py-1.5">{p?.product_name ?? '—'}</td>
+                              <td className="px-2 py-1.5 text-right">{specWp ? `${specWp}Wp` : '—'}</td>
+                              <td className="px-2 py-1.5 text-right">{row.contracted_qty.toLocaleString('ko-KR')}</td>
+                              <td className="px-2 py-1.5 text-right">{contractedMw.toFixed(3)}</td>
+                              <td className="px-2 py-1.5 text-right">{row.shipped_qty.toLocaleString('ko-KR')}</td>
+                              <td className="px-2 py-1.5 text-right">{shippedMw.toFixed(3)}</td>
+                              <td className="px-2 py-1.5 text-right font-medium">{remainQty.toLocaleString('ko-KR')}</td>
+                              <td className="px-2 py-1.5 text-right font-medium">{remainMw.toFixed(3)}</td>
+                              <td className="px-2 py-1.5">
+                                <Input className="h-7 text-xs" inputMode="numeric" value={row.thisShipmentQty}
+                                  placeholder="0"
+                                  onChange={e => updatePORowQty(i, e.target.value)} />
+                                {isOver && (
+                                  <p className="text-[9px] text-orange-600 mt-0.5">잔여 초과 (저장은 가능)</p>
+                                )}
+                              </td>
+                              <td className="px-2 py-1.5 text-center">
+                                <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                                  disabled={!inputQty}
+                                  onClick={() => addLineFromPORow(i)}>
+                                  +
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    이번 BL에 입고할 수량을 입력하고 "+" 버튼을 누르면 아래 입고 품목에 추가됩니다. 단가/구분/유무상은 PO에서 자동 복사. 잔여보다 많이 입력해도 저장은 허용됩니다 (초과 입고).
+                  </p>
+                </div>
+              )}
 
               {/* ── 입고 품목 ── */}
               <div className="space-y-3">
