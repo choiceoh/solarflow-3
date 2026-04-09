@@ -273,6 +273,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const [submitError, setSubmitError] = useState('');
   // R3: LC 선택 (해외직수입만 필수) — D-095 BL>LC=차단
   const [lcList, setLcList] = useState<{ lc_id: string; lc_number?: string; po_id: string; amount_usd: number; target_qty?: number; target_mw?: number; status: string; bank_name?: string }[]>([]);
+  // F18: 신규 등록 시 예정(scheduled) vs 완료(completed) 선택
+  const [initialStatus, setInitialStatus] = useState<'scheduled' | 'completed'>('completed');
   const [selLCId, setSelLCId] = useState<string>('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -636,11 +638,23 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
           return;
         }
       } catch { /* skip */ }
-      // PO 잔여 경고만 (차단 X)
+      // F17: PO 잔여 초과는 hard block
       if (poRemaining && thisMw > poRemaining.remainMw + 1e-6) {
-        // eslint-disable-next-line no-alert
-        const ok = window.confirm(`이번 입고(${thisMw.toFixed(2)}MW)가 PO 잔여(${poRemaining.remainMw.toFixed(2)}MW)를 초과합니다. 계속하시겠습니까?`);
-        if (!ok) return;
+        setSubmitError(`PO 잔여물량(${poRemaining.remainMw.toFixed(2)}MW)을 초과합니다. 이번 입고 ${thisMw.toFixed(2)}MW — PO amend 후 재등록해주세요.`);
+        return;
+      }
+    }
+    // F17: LC 미연결(국내/그룹)도 PO 잔여 초과 시 차단
+    if (!selLCId && !editData && poRemaining) {
+      const thisMw = lines.reduce((s, l) => {
+        const prod = products.find((p) => p.product_id === l.product_id);
+        const qty = Number(l.quantity);
+        if (!prod || !qty) return s;
+        return s + (qty * prod.spec_wp) / 1_000_000;
+      }, 0);
+      if (thisMw > poRemaining.remainMw + 1e-6) {
+        setSubmitError(`PO 잔여물량(${poRemaining.remainMw.toFixed(2)}MW)을 초과합니다. 이번 입고 ${thisMw.toFixed(2)}MW.`);
+        return;
       }
     }
     // 신규 등록일 때만 라인 검증 + capacity_kw 안전체크
@@ -672,7 +686,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       counterpart_company_id: isGroup ? counterpartId : undefined,
       currency: isImport ? 'USD' : 'KRW',
       exchange_rate: isImport && exRate && !isNaN(exRate) ? exRate : undefined,
-      status: editData?.status ?? 'scheduled',
+      status: editData?.status ?? initialStatus,
       payment_terms: isImport ? composeImportPT(importPT, totalAmountForPT) : isDomestic ? composeDomesticPT(domesticPT, totalAmountForPT) : undefined,
       etd: isImport && data.etd ? data.etd : undefined,
       eta: isImport && data.eta ? data.eta : undefined,
@@ -786,6 +800,17 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                   ))}
                 </SelectContent>
               </Select>
+              {!editData && (
+                <div className="mt-2 flex items-center gap-3 text-xs">
+                  <span className="text-muted-foreground">입고구분</span>
+                  <label className="flex items-center gap-1">
+                    <input type="radio" checked={initialStatus === 'completed'} onChange={() => setInitialStatus('completed')} />완료 (재고)
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input type="radio" checked={initialStatus === 'scheduled'} onChange={() => setInitialStatus('scheduled')} />예정 (미착품)
+                  </label>
+                </div>
+              )}
               {selPOId && (
                 <p className="text-[10px] text-muted-foreground">
                   PO 정보가 자동 채움됨. Incoterms/결제조건은 수정 가능.

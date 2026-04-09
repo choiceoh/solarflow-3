@@ -50,6 +50,8 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
   const [poTts, setPoTts] = useState<TTRemittance[]>([]);
   const [poLcs, setPoLcs] = useState<LCRecord[]>([]);
   const [submitError, setSubmitError] = useState('');
+  const [poPickerOpen, setPoPickerOpen] = useState(false);
+  const [poPickerLines, setPoPickerLines] = useState<Record<string, POLineItem[]>>({});
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) as any });
 
@@ -90,18 +92,24 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
     }
   }, [open, editData, reset, selectedCompanyId]);
 
-  // 자동: target_qty + product wattage → target_mw
+  // F11: target_qty → target_mw(용량) + amount_usd 자동 계산
   const watchedQty = watch('target_qty');
   useEffect(() => {
     if (watchedQty === '' || watchedQty == null) return;
     const qty = Number(watchedQty);
     if (!qty || isNaN(qty) || poLines.length === 0) return;
-    // PO 라인의 첫 product wattage 사용 (TODO: Rust 계산엔진 연동 — 여러 품목 가중평균)
-    const productId = poLines[0]?.product_id;
-    const product = products.find((p) => p.product_id === productId);
-    if (product?.wattage_kw) {
-      const mw = (qty * product.wattage_kw) / 1000;
-      setValue('target_mw', Number(mw.toFixed(3)), { shouldDirty: true });
+    const firstLine = poLines[0];
+    const product = products.find((p) => p.product_id === firstLine?.product_id);
+    // 용량(MW) = qty × spec_wp / 1_000_000
+    const specWp = product?.spec_wp ?? firstLine?.spec_wp ?? 0;
+    if (specWp) {
+      const mw = (qty * specWp) / 1_000_000;
+      setValue('target_mw', Number(mw.toFixed(4)), { shouldDirty: true });
+    }
+    // LC 개설금액 = qty × unit_price_usd
+    const unit = firstLine?.unit_price_usd ?? 0;
+    if (unit) {
+      setValue('amount_usd', Number((qty * unit).toFixed(2)), { shouldDirty: true });
     }
   }, [watchedQty, poLines, products, setValue]);
 
@@ -145,9 +153,22 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
             <div className="space-y-1.5"><Label>LC번호</Label><Input {...register('lc_number')} /></div>
             <div className="space-y-1.5">
               <Label>PO *</Label>
-              <Select value={watch('po_id') ?? ''} onValueChange={(v) => setValue('po_id', v ?? '')}><SelectTrigger className="w-full"><Txt text={(() => { const p = pos.find((x) => x.po_id === watch('po_id')); if (!p) return ''; const mw = (p.total_mw ?? 0).toFixed(1); const m = p.contract_date ? p.contract_date.slice(0, 7) : ''; return `${p.po_number || p.po_id.slice(0, 8)} | ${p.manufacturer_name ?? '—'} | ${mw}MW${m ? ` | ${m}` : ''}`; })()} /></SelectTrigger>
-                <SelectContent>{pos.map((p) => { const mw = (p.total_mw ?? 0).toFixed(1); const m = p.contract_date ? p.contract_date.slice(0, 7) : ''; return <SelectItem key={p.po_id} value={p.po_id}>{`${p.po_number || p.po_id.slice(0, 8)} | ${p.manufacturer_name ?? '—'} | ${mw}MW${m ? ` | ${m}` : ''}`}</SelectItem>; })}</SelectContent>
-              </Select>{errors.po_id && <p className="text-xs text-destructive">{errors.po_id.message}</p>}
+              <div className="flex gap-2">
+                <Select value={watch('po_id') ?? ''} onValueChange={(v) => setValue('po_id', v ?? '')}><SelectTrigger className="w-full"><Txt text={(() => { const p = pos.find((x) => x.po_id === watch('po_id')); if (!p) return ''; const mw = (p.total_mw ?? 0).toFixed(1); const m = p.contract_date ? p.contract_date.slice(0, 7) : ''; return `${p.po_number || p.po_id.slice(0, 8)} | ${p.manufacturer_name ?? '—'} | ${mw}MW${m ? ` | ${m}` : ''}`; })()} /></SelectTrigger>
+                  <SelectContent>{pos.map((p) => { const mw = (p.total_mw ?? 0).toFixed(1); const m = p.contract_date ? p.contract_date.slice(0, 7) : ''; return <SelectItem key={p.po_id} value={p.po_id}>{`${p.po_number || p.po_id.slice(0, 8)} | ${p.manufacturer_name ?? '—'} | ${mw}MW${m ? ` | ${m}` : ''}`}</SelectItem>; })}</SelectContent>
+                </Select>
+                <Button type="button" variant="outline" size="sm" onClick={async () => {
+                  // F9: 상세 팝업 열 때 라인 정보 프리페치
+                  setPoPickerOpen(true);
+                  const missing = pos.filter((p) => !poPickerLines[p.po_id]);
+                  const results = await Promise.all(missing.map(async (p) => {
+                    try { return [p.po_id, await fetchWithAuth<POLineItem[]>(`/api/v1/pos/${p.po_id}/lines`)] as const; }
+                    catch { return [p.po_id, []] as const; }
+                  }));
+                  setPoPickerLines((prev) => ({ ...prev, ...Object.fromEntries(results) }));
+                }}>상세</Button>
+              </div>
+              {errors.po_id && <p className="text-xs text-destructive">{errors.po_id.message}</p>}
             </div>
           </div>
           {/* PO 연결 현황 — 제조사/품명/규격/잔량MW + 결제 요약 (F10) */}
@@ -215,8 +236,8 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
             <div className="space-y-1.5"><Label>금액(USD) *</Label><Input type="number" step="0.01" {...register('amount_usd')} />{errors.amount_usd && <p className="text-xs text-destructive">{errors.amount_usd.message}</p>}</div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>대상수량</Label><Input type="number" {...register('target_qty')} /></div>
-            <div className="space-y-1.5"><Label>대상MW</Label><Input type="number" step="0.01" {...register('target_mw')} /></div>
+            <div className="space-y-1.5"><Label>수량(EA)</Label><Input type="number" {...register('target_qty')} /></div>
+            <div className="space-y-1.5"><Label>용량(MW)</Label><Input type="number" step="0.0001" {...register('target_mw')} /></div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5"><Label>Usance(일)</Label><Input type="number" {...register('usance_days')} /></div>
@@ -241,6 +262,47 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
           <DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button><Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button></DialogFooter>
         </form>
       </DialogContent>
+      {/* F9: PO 상세 선택 팝업 */}
+      <Dialog open={poPickerOpen} onOpenChange={setPoPickerOpen}>
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>PO 상세 선택</DialogTitle></DialogHeader>
+          <div className="rounded-md border overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left p-2">PO번호</th>
+                  <th className="text-left p-2">제조사</th>
+                  <th className="text-left p-2">품명</th>
+                  <th className="text-left p-2">규격</th>
+                  <th className="text-right p-2">단가(¢/Wp)</th>
+                  <th className="text-right p-2">총금액(USD)</th>
+                  <th className="text-right p-2">MW</th>
+                  <th className="p-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {pos.map((p) => {
+                  const plines = poPickerLines[p.po_id] ?? [];
+                  const first = plines[0];
+                  const total = plines.reduce((s, l) => s + (l.total_amount_usd ?? 0), 0);
+                  return (
+                    <tr key={p.po_id} className="border-t hover:bg-accent/30 cursor-pointer" onClick={() => { setValue('po_id', p.po_id, { shouldDirty: true }); setPoPickerOpen(false); }}>
+                      <td className="p-2 font-mono">{p.po_number || p.po_id.slice(0, 8)}</td>
+                      <td className="p-2">{p.manufacturer_name ?? '—'}</td>
+                      <td className="p-2 truncate max-w-[200px]">{first?.products?.product_name ?? first?.product_name ?? '—'}{plines.length > 1 ? ` 외 ${plines.length - 1}건` : ''}</td>
+                      <td className="p-2 truncate max-w-[180px]">{first?.products?.product_code ?? first?.product_code ?? '—'}</td>
+                      <td className="p-2 text-right font-mono">{first?.unit_price_usd != null ? (first.unit_price_usd * 100).toFixed(2) : '—'}</td>
+                      <td className="p-2 text-right font-mono">{formatUSD(total)}</td>
+                      <td className="p-2 text-right font-mono">{(p.total_mw ?? 0).toFixed(2)}</td>
+                      <td className="p-2"><Button type="button" size="sm" variant="outline">선택</Button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

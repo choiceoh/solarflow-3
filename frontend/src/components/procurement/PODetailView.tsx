@@ -264,6 +264,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload }: Props)
         <TabsList>
           <TabsTrigger value="summary">종합정보</TabsTrigger>
           <TabsTrigger value="lines">입고품목</TabsTrigger>
+          <TabsTrigger value="deposit">계약금 현황</TabsTrigger>
           <TabsTrigger value="lc">LC현황</TabsTrigger>
           <TabsTrigger value="inbound">입고현황</TabsTrigger>
         </TabsList>
@@ -358,6 +359,45 @@ export default function PODetailView({ po: initialPo, onBack, onReload }: Props)
               );
             })()}
 
+            {/* F6: 입고품목 / LC / 입고 요약 (종합정보에 통합) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="rounded-md border p-3 space-y-1.5">
+                <div className="text-xs font-semibold flex justify-between">
+                  <span>입고품목 (총 {lines.length}건)</span>
+                </div>
+                {lines.slice(0, 3).map((l) => (
+                  <div key={l.po_line_id} className="text-[10px] flex justify-between gap-2">
+                    <span className="truncate">{l.products?.product_name ?? l.product_name ?? '—'}</span>
+                    <span className="font-mono text-muted-foreground shrink-0">{formatNumber(l.quantity)}EA</span>
+                  </div>
+                ))}
+                {lines.length > 3 && <div className="text-[10px] text-muted-foreground">… 외 {lines.length - 3}건</div>}
+              </div>
+              <div className="rounded-md border p-3 space-y-1.5">
+                <div className="text-xs font-semibold">LC 현황 (총 {lcs.length}건)</div>
+                {lcs.slice(0, 3).map((lc) => (
+                  <div key={lc.lc_id} className="text-[10px] flex justify-between gap-2">
+                    <span className="truncate font-mono">{lc.lc_number ?? lc.lc_id.slice(0, 8)}</span>
+                    <span className="font-mono text-muted-foreground shrink-0">{formatUSD(lc.amount_usd)}</span>
+                  </div>
+                ))}
+                {lcs.length === 0 && <div className="text-[10px] text-muted-foreground">—</div>}
+                {lcs.length > 3 && <div className="text-[10px] text-muted-foreground">… 외 {lcs.length - 3}건</div>}
+              </div>
+              <div className="rounded-md border p-3 space-y-1.5">
+                <div className="text-xs font-semibold">입고 현황</div>
+                <div className="text-[10px] flex justify-between">
+                  <span className="text-muted-foreground">선적 완료</span>
+                  <span className="font-mono">{blShipped.shippedMw.toFixed(2)} MW</span>
+                </div>
+                <div className="text-[10px] flex justify-between">
+                  <span className="text-muted-foreground">입고 완료</span>
+                  <span className="font-mono">{blShipped.completedMw.toFixed(2)} MW</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground">상세는 입고현황 탭에서 확인</div>
+              </div>
+            </div>
+
             {/* T/T 이력 테이블 (종합정보에 병합) */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -378,6 +418,14 @@ export default function PODetailView({ po: initialPo, onBack, onReload }: Props)
           </div>
         </TabsContent>
 
+        <TabsContent value="deposit">
+          <div className="space-y-3">
+            <div className="flex justify-end">
+              <Button size="sm" onClick={() => setTtFormOpen(true)}><Plus className="mr-1 h-3.5 w-3.5" />계약금 등록</Button>
+            </div>
+            {ttsLoading ? <LoadingSpinner /> : <TTSubTable items={tts} poLines={lines} />}
+          </div>
+        </TabsContent>
         <TabsContent value="lc">{lcsLoading ? <LoadingSpinner /> : <LCSubTable items={lcs} />}</TabsContent>
         <TabsContent value="inbound"><POInboundProgress poId={po.po_id} poLines={lines} /></TabsContent>
       </Tabs>

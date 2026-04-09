@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
-import type { TTRemittance, PurchaseOrder } from '@/types/procurement';
+import type { TTRemittance, PurchaseOrder, POLineItem } from '@/types/procurement';
 
 function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: string }) {
   return <span className={`flex flex-1 text-left truncate ${text ? '' : 'text-muted-foreground'}`} data-slot="select-value">{text || placeholder}</span>;
@@ -42,6 +42,30 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData, default
   useEffect(() => {
     if (selectedCompanyId) fetchWithAuth<PurchaseOrder[]>(`/api/v1/pos?company_id=${selectedCompanyId}`).then(setPos).catch(() => {});
   }, [selectedCompanyId]);
+
+  // F5: PO 선택 시 계약금 % 파싱 → amount_usd/purpose 자동 프리필 (신규 등록만)
+  const watchedPoId = watch('po_id');
+  useEffect(() => {
+    if (editData || !watchedPoId || !open) return;
+    (async () => {
+      try {
+        const [po, lines] = await Promise.all([
+          fetchWithAuth<PurchaseOrder & { payment_terms?: string }>(`/api/v1/pos/${watchedPoId}`),
+          fetchWithAuth<POLineItem[]>(`/api/v1/pos/${watchedPoId}/lines`).catch(() => [] as POLineItem[]),
+        ]);
+        const totalUsd = lines.reduce((s, l) => s + (l.total_amount_usd ?? 0), 0);
+        // "T/T 5%" 또는 "계약금 10%" 패턴 파싱
+        const pt = po.payment_terms ?? '';
+        const m = pt.match(/(?:T\/T|계약금)\s*(\d+(?:\.\d+)?)\s*%/);
+        if (m && totalUsd > 0) {
+          const pct = parseFloat(m[1]);
+          const amount = Number((totalUsd * pct / 100).toFixed(2));
+          setValue('amount_usd', amount, { shouldDirty: true });
+          setValue('purpose', `계약금 ${pct}%`, { shouldDirty: true });
+        }
+      } catch { /* skip */ }
+    })();
+  }, [watchedPoId, editData, open, setValue]);
 
   useEffect(() => {
     if (open) {
