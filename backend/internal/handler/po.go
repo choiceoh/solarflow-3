@@ -219,6 +219,20 @@ func (h *POHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// F8: status 전환 감지를 위해 기존 상태 조회
+	var prevStatus string
+	{
+		prev, _, perr := h.DB.From("purchase_orders").Select("status", "exact", false).Eq("po_id", id).Execute()
+		if perr == nil {
+			var rows []struct {
+				Status string `json:"status"`
+			}
+			if json.Unmarshal(prev, &rows) == nil && len(rows) > 0 {
+				prevStatus = rows[0].Status
+			}
+		}
+	}
+
 	data, _, err := h.DB.From("purchase_orders").
 		Update(req, "", "").
 		Eq("po_id", id).
@@ -241,7 +255,77 @@ func (h *POHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// F8: draft → contracted 전환 시 단가이력 자동 등록
+	if req.Status != nil && *req.Status == "contracted" && prevStatus != "contracted" {
+		h.autoInsertPriceHistory(id, updated[0])
+	}
+
 	response.RespondJSON(w, http.StatusOK, updated[0])
+}
+
+// F8: PO status가 contracted로 전환될 때 각 발주품목의 단가이력 자동 등록
+// 비유: 계약이 확정되면 단가 변동 장부에 자동으로 기록
+func (h *POHandler) autoInsertPriceHistory(poID string, po model.PurchaseOrder) {
+	// 발주품목 조회
+	linesData, _, err := h.DB.From("po_line_items").
+		Select("*", "exact", false).
+		Eq("po_id", poID).
+		Execute()
+	if err != nil {
+		log.Printf("[단가이력 자동등록: 발주품목 조회 실패] po_id=%s err=%v", poID, err)
+		return
+	}
+	var lines []struct {
+		ProductID    string   `json:"product_id"`
+		UnitPriceUSD *float64 `json:"unit_price_usd"`
+	}
+	if err := json.Unmarshal(linesData, &lines); err != nil {
+		log.Printf("[단가이력 자동등록: 발주품목 디코딩 실패] %v", err)
+		return
+	}
+
+	changeDate := po.ContractDate
+	if changeDate == nil || *changeDate == "" {
+		// fallback — 기존 row 사용 불가 시 skip
+		log.Printf("[단가이력 자동등록: contract_date 없음] po_id=%s", poID)
+		return
+	}
+	reason := "PO 계약완료 자동등록"
+
+	for _, l := range lines {
+		if l.UnitPriceUSD == nil || *l.UnitPriceUSD <= 0 {
+			continue
+		}
+		// 동일 (product_id, related_po_id) 이미 존재하면 skip (idempotency)
+		exists, _, eerr := h.DB.From("price_histories").
+			Select("price_history_id", "exact", false).
+			Eq("product_id", l.ProductID).
+			Eq("related_po_id", poID).
+			Execute()
+		if eerr == nil {
+			var existRows []struct {
+				ID string `json:"price_history_id"`
+			}
+			if json.Unmarshal(exists, &existRows) == nil && len(existRows) > 0 {
+				continue
+			}
+		}
+
+		row := model.CreatePriceHistoryRequest{
+			ProductID:      l.ProductID,
+			ManufacturerID: po.ManufacturerID,
+			CompanyID:      po.CompanyID,
+			ChangeDate:     *changeDate,
+			NewPrice:       *l.UnitPriceUSD,
+			Reason:         &reason,
+			RelatedPOID:    &poID,
+		}
+		_, _, ierr := h.DB.From("price_histories").Insert(row, false, "", "", "").Execute()
+		if ierr != nil {
+			log.Printf("[단가이력 자동등록 실패] product_id=%s err=%v", l.ProductID, ierr)
+		}
+	}
+	log.Printf("[단가이력 자동등록 완료] po_id=%s lines=%d", poID, len(lines))
 }
 
 // Delete — DELETE /api/v1/pos/{id} — 발주 삭제

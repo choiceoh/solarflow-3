@@ -54,6 +54,8 @@ export interface LCRecord {
   usance_type?: string;
   maturity_date?: string;
   settlement_date?: string;
+  repayment_date?: string;
+  repaid?: boolean;
   status: LCStatus;
   memo?: string;
 }

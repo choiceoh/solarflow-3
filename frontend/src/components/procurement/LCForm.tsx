@@ -32,6 +32,8 @@ const schema = z.object({
   usance_type: z.string().optional(),
   maturity_date: z.string().optional(),
   settlement_date: z.string().optional(),
+  repayment_date: z.string().optional(),
+  repaid: z.boolean().optional(),
   status: z.string().min(1, '상태는 필수입니다'),
   memo: z.string().optional(),
 });
@@ -85,9 +87,9 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
     if (open) {
       setSubmitError('');
       if (editData) {
-        reset({ lc_number: editData.lc_number ?? '', po_id: editData.po_id, company_id: editData.company_id, bank_id: editData.bank_id, open_date: editData.open_date?.slice(0, 10) ?? '', amount_usd: editData.amount_usd, target_qty: editData.target_qty ?? '', target_mw: editData.target_mw ?? '', usance_days: editData.usance_days ?? '', usance_type: editData.usance_type ?? '', maturity_date: editData.maturity_date?.slice(0, 10) ?? '', settlement_date: editData.settlement_date?.slice(0, 10) ?? '', status: editData.status, memo: editData.memo ?? '' });
+        reset({ lc_number: editData.lc_number ?? '', po_id: editData.po_id, company_id: editData.company_id, bank_id: editData.bank_id, open_date: editData.open_date?.slice(0, 10) ?? '', amount_usd: editData.amount_usd, target_qty: editData.target_qty ?? '', target_mw: editData.target_mw ?? '', usance_days: editData.usance_days ?? '', usance_type: editData.usance_type ?? '', maturity_date: editData.maturity_date?.slice(0, 10) ?? '', settlement_date: editData.settlement_date?.slice(0, 10) ?? '', repayment_date: editData.repayment_date?.slice(0, 10) ?? '', repaid: editData.repaid ?? false, status: editData.status, memo: editData.memo ?? '' });
       } else {
-        reset({ lc_number: '', po_id: '', company_id: selectedCompanyId ?? '', bank_id: '', open_date: '', amount_usd: '' as unknown as number, target_qty: '', target_mw: '', usance_days: 90, usance_type: 'buyers', maturity_date: '', settlement_date: '', status: 'pending', memo: '' });
+        reset({ lc_number: '', po_id: '', company_id: selectedCompanyId ?? '', bank_id: '', open_date: '', amount_usd: '' as unknown as number, target_qty: '', target_mw: '', usance_days: 90, usance_type: 'buyers', maturity_date: '', settlement_date: '', repayment_date: '', repaid: false, status: 'pending', memo: '' });
       }
     }
   }, [open, editData, reset, selectedCompanyId]);
@@ -135,6 +137,7 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
     if (!data.open_date) delete payload.open_date;
     if (!data.maturity_date) delete payload.maturity_date;
     if (!data.settlement_date) delete payload.settlement_date;
+    if (!data.repayment_date) delete payload.repayment_date;
     try {
       await onSubmit(payload);
       onOpenChange(false);
@@ -210,7 +213,7 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
               <SelectContent>{companies.map((c) => {
                 // 가용한도 = 해당 법인의 모든 은행 lc_limit 합 - 해당 법인 LC 개설(편집중 제외) 잔액 (TODO: Rust 계산엔진 연동)
                 // banks state는 현재 선택한 법인 것이라 모든 법인 한도는 모름 → 표시는 "법인명만"으로 폴백
-                const lcSum = allLcs.filter((l) => l.company_id === c.company_id && (!editData || l.lc_id !== editData.lc_id) && l.status !== 'settled').reduce((s, l) => s + (l.amount_usd ?? 0), 0);
+                const lcSum = allLcs.filter((l) => l.company_id === c.company_id && (!editData || l.lc_id !== editData.lc_id) && l.status !== 'settled' && !l.repaid).reduce((s, l) => s + (l.amount_usd ?? 0), 0);
                 return <SelectItem key={c.company_id} value={c.company_id}>{`${c.company_name} (개설잔액 ${formatUSD(lcSum)})`}</SelectItem>;
               })}</SelectContent>
             </Select>{errors.company_id && <p className="text-xs text-destructive">{errors.company_id.message}</p>}
@@ -220,12 +223,12 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
             <Select value={watch('bank_id') ?? ''} onValueChange={(v) => setValue('bank_id', v ?? '')}><SelectTrigger className="w-full"><Txt text={(() => {
               const b = banks.find((x) => x.bank_id === watch('bank_id'));
               if (!b) return '';
-              const usedSameBank = allLcs.filter((l) => l.bank_id === b.bank_id && (!editData || l.lc_id !== editData.lc_id) && l.status !== 'settled').reduce((s, l) => s + (l.amount_usd ?? 0), 0);
+              const usedSameBank = allLcs.filter((l) => l.bank_id === b.bank_id && (!editData || l.lc_id !== editData.lc_id) && l.status !== 'settled' && !l.repaid).reduce((s, l) => s + (l.amount_usd ?? 0), 0);
               const avail = Math.max(0, (b.lc_limit_usd ?? 0) - usedSameBank);
               return `${b.bank_name} (가용 ${formatUSD(avail)})`;
             })()} /></SelectTrigger>
               <SelectContent>{banks.map((b) => {
-                const usedSameBank = allLcs.filter((l) => l.bank_id === b.bank_id && (!editData || l.lc_id !== editData.lc_id) && l.status !== 'settled').reduce((s, l) => s + (l.amount_usd ?? 0), 0);
+                const usedSameBank = allLcs.filter((l) => l.bank_id === b.bank_id && (!editData || l.lc_id !== editData.lc_id) && l.status !== 'settled' && !l.repaid).reduce((s, l) => s + (l.amount_usd ?? 0), 0);
                 const avail = Math.max(0, (b.lc_limit_usd ?? 0) - usedSameBank);
                 return <SelectItem key={b.bank_id} value={b.bank_id}>{`${b.bank_name} (가용 ${formatUSD(avail)})`}</SelectItem>;
               })}</SelectContent>
@@ -251,6 +254,16 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>만기일</Label><DateInput value={watch('maturity_date') ?? ''} onChange={(v) => setValue('maturity_date', v, { shouldDirty: true })} /></div>
             <div className="space-y-1.5"><Label>결제예정일</Label><DateInput value={watch('settlement_date') ?? ''} onChange={(v) => setValue('settlement_date', v, { shouldDirty: true })} /></div>
+          </div>
+          {/* F13: 상환일 / 상환여부 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5"><Label>상환일</Label><DateInput value={watch('repayment_date') ?? ''} onChange={(v) => { setValue('repayment_date', v, { shouldDirty: true }); if (v) setValue('repaid', true, { shouldDirty: true }); }} /></div>
+            <div className="space-y-1.5 flex items-end">
+              <label className="flex items-center gap-2 text-sm pb-2">
+                <input type="checkbox" checked={!!watch('repaid')} onChange={(e) => setValue('repaid', e.target.checked, { shouldDirty: true })} />
+                상환완료 (한도 계산에서 제외)
+              </label>
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label>상태 *</Label>

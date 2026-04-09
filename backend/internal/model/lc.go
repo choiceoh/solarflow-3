@@ -18,6 +18,8 @@ type LCRecord struct {
 	UsanceType     *string  `json:"usance_type"`
 	MaturityDate   *string  `json:"maturity_date"`
 	SettlementDate *string  `json:"settlement_date"`
+	RepaymentDate  *string  `json:"repayment_date"`
+	Repaid         bool     `json:"repaid"`
 	Status         string   `json:"status"`
 	Memo           *string  `json:"memo"`
 }
@@ -88,6 +90,8 @@ type CreateLCRequest struct {
 	UsanceType     *string  `json:"usance_type"`
 	MaturityDate   *string  `json:"maturity_date"`
 	SettlementDate *string  `json:"settlement_date"`
+	RepaymentDate  *string  `json:"repayment_date"`
+	Repaid         bool     `json:"repaid"`
 	Status         string   `json:"status"`
 	Memo           *string  `json:"memo"`
 }
@@ -142,6 +146,8 @@ type UpdateLCRequest struct {
 	UsanceType     *string  `json:"usance_type,omitempty"`
 	MaturityDate   *string  `json:"maturity_date,omitempty"`
 	SettlementDate *string  `json:"settlement_date,omitempty"`
+	RepaymentDate  *string  `json:"repayment_date,omitempty"`
+	Repaid         *bool    `json:"repaid,omitempty"`
 	Status         *string  `json:"status,omitempty"`
 	Memo           *string  `json:"memo,omitempty"`
 }
