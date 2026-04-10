@@ -72,10 +72,15 @@ pub async fn calculate_inventory(
     let reserved = fetch_reserved(pool, company_id, product_id, manufacturer_id).await?;
     let allocated = fetch_allocated(pool, company_id, product_id, manufacturer_id).await?;
     let bl_incoming = fetch_bl_incoming(pool, company_id, product_id, manufacturer_id).await?;
+    let lc_incoming = fetch_lc_incoming(pool, company_id, product_id, manufacturer_id).await?;
     let incoming_reserved =
         fetch_incoming_reserved(pool, company_id, product_id, manufacturer_id).await?;
     let earliest_arrival =
         fetch_earliest_arrival(pool, company_id, product_id, manufacturer_id).await?;
+    let latest_arrival =
+        fetch_latest_arrival(pool, company_id, product_id, manufacturer_id).await?;
+    let latest_lc_open =
+        fetch_latest_lc_open(pool, company_id, product_id, manufacturer_id).await?;
 
     let today = Utc::now().date_naive();
 
@@ -88,12 +93,14 @@ pub async fn calculate_inventory(
         let reserved_kw = *reserved.get(&pid).unwrap_or(&0.0);
         let allocated_kw = *allocated.get(&pid).unwrap_or(&0.0);
         let bl_incoming_kw = *bl_incoming.get(&pid).unwrap_or(&0.0);
+        let lc_incoming_kw = *lc_incoming.get(&pid).unwrap_or(&0.0);
         let incoming_reserved_kw = *incoming_reserved.get(&pid).unwrap_or(&0.0);
 
         // 8단계 계산 (D-083: BL 상태 직접 사용)
         let physical_kw = inbound_kw - outbound_kw;
         let available_kw = physical_kw - reserved_kw - allocated_kw;
-        let incoming_kw = bl_incoming_kw.max(0.0);
+        // 미착품 = BL 운송 중 + L/C 오픈 완료(BL 미생성) 물량
+        let incoming_kw = (bl_incoming_kw + lc_incoming_kw).max(0.0);
         let available_incoming_kw = (incoming_kw - incoming_reserved_kw).max(0.0);
         let total_secured_kw = available_kw + available_incoming_kw;
 
@@ -129,6 +136,8 @@ pub async fn calculate_inventory(
             available_incoming_kw,
             total_secured_kw,
             long_term_status,
+            latest_arrival: latest_arrival.get(&pid).copied(),
+            latest_lc_open: latest_lc_open.get(&pid).copied(),
         });
     }
 
@@ -309,8 +318,10 @@ async fn fetch_allocated(
     Ok(kw_rows_to_map(rows))
 }
 
-/// 5. 미착품 (D-083) — BL 상태 직접 사용: shipping/arrived/customs
-/// 비유: 배가 떠났지만 아직 창고에 물리적으로 안 들어온 것 모두 미착품
+/// 5. 미착품 — L/C 오픈 완료 기준
+/// 가용재고 확정 기준: L/C 오픈(lc_records.status='opened')이 완료된 BL만 미착품으로 인정
+/// T/T 방식(lc_id IS NULL)은 LC 조건 없이 포함
+/// 비유: 배가 떠났고, L/C까지 오픈된 확정 물량만 가용재고에 반영
 async fn fetch_bl_incoming(
     pool: &PgPool,
     company_id: Uuid,
@@ -327,7 +338,65 @@ async fn fetch_bl_incoming(
           AND bl.company_id = $1
           AND ($2::uuid IS NULL OR bli.product_id = $2)
           AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
+          AND (
+            bl.lc_id IS NULL
+            OR EXISTS (
+              SELECT 1 FROM lc_records lc
+              WHERE lc.lc_id = bl.lc_id
+                AND lc.status = 'opened'
+            )
+          )
         GROUP BY bli.product_id
+        "#,
+    )
+    .bind(company_id)
+    .bind(product_id)
+    .bind(manufacturer_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(kw_rows_to_map(rows))
+}
+
+/// 5-b. L/C 기반 미착품 — BL 없이 L/C만 개설된 P/O의 품목
+/// BL이 생성되지 않은(또는 scheduled만 있는) opened L/C의 확정 물량을
+/// P/O 품번별 용량(spec_wp × qty) 비례로 배분
+async fn fetch_lc_incoming(
+    pool: &PgPool,
+    company_id: Uuid,
+    product_id: Option<Uuid>,
+    manufacturer_id: Option<Uuid>,
+) -> Result<KwMap, sqlx::Error> {
+    let rows = sqlx::query_as::<_, KwRow>(
+        r#"
+        SELECT pli.product_id,
+          COALESCE(SUM(
+            lc.target_mw * 1000.0
+            * (pli.quantity::float8 * p.spec_wp::float8)
+            / NULLIF(po_kw.total_kw, 0.0)
+          ), 0.0)::float8 AS kw
+        FROM lc_records lc
+        JOIN purchase_orders po ON lc.po_id = po.po_id
+        JOIN po_line_items pli ON po.po_id = pli.po_id
+        JOIN products p ON pli.product_id = p.product_id
+        JOIN (
+          SELECT pli2.po_id,
+            SUM(pli2.quantity::float8 * p2.spec_wp::float8) AS total_kw
+          FROM po_line_items pli2
+          JOIN products p2 ON pli2.product_id = p2.product_id
+          GROUP BY pli2.po_id
+        ) po_kw ON po.po_id = po_kw.po_id
+        WHERE lc.status = 'opened'
+          AND lc.company_id = $1
+          AND ($2::uuid IS NULL OR pli.product_id = $2)
+          AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
+          AND NOT EXISTS (
+            -- 이미 BL(shipping/arrived/customs)로 계산된 L/C는 제외 (이중 집계 방지)
+            SELECT 1 FROM bl_shipments bl
+            WHERE bl.lc_id = lc.lc_id
+              AND bl.status IN ('shipping', 'arrived', 'customs', 'completed', 'erp_done')
+          )
+        GROUP BY pli.product_id
         "#,
     )
     .bind(company_id)
@@ -398,5 +467,97 @@ async fn fetch_earliest_arrival(
     Ok(rows
         .into_iter()
         .filter_map(|r| r.earliest.map(|d| (r.product_id, d)))
+        .collect())
+}
+
+/// 최근 입고일: 현재고 품번별 MAX(actual_arrival) — 표시용
+async fn fetch_latest_arrival(
+    pool: &PgPool,
+    company_id: Uuid,
+    product_id: Option<Uuid>,
+    manufacturer_id: Option<Uuid>,
+) -> Result<HashMap<Uuid, NaiveDate>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, EarliestRow>(
+        r#"
+        SELECT bli.product_id, MAX(bl.actual_arrival) as earliest
+        FROM bl_line_items bli
+        JOIN bl_shipments bl ON bli.bl_id = bl.bl_id
+        JOIN products p ON bli.product_id = p.product_id
+        WHERE bl.status IN ('completed', 'erp_done')
+          AND bl.company_id = $1
+          AND ($2::uuid IS NULL OR bli.product_id = $2)
+          AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
+        GROUP BY bli.product_id
+        "#,
+    )
+    .bind(company_id)
+    .bind(product_id)
+    .bind(manufacturer_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| r.earliest.map(|d| (r.product_id, d)))
+        .collect())
+}
+
+/// 최근 L/C 개설일: 미착품 품번별 MAX(lc.open_date) — 표시용
+#[derive(sqlx::FromRow)]
+struct LcOpenRow {
+    product_id: Uuid,
+    lc_open: Option<NaiveDate>,
+}
+
+async fn fetch_latest_lc_open(
+    pool: &PgPool,
+    company_id: Uuid,
+    product_id: Option<Uuid>,
+    manufacturer_id: Option<Uuid>,
+) -> Result<HashMap<Uuid, NaiveDate>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, LcOpenRow>(
+        r#"
+        -- BL 운송 중인 경우 (기존)
+        SELECT bli.product_id, MAX(lc.open_date) as lc_open
+        FROM bl_line_items bli
+        JOIN bl_shipments bl ON bli.bl_id = bl.bl_id
+        JOIN lc_records lc ON bl.lc_id = lc.lc_id
+        JOIN products p ON bli.product_id = p.product_id
+        WHERE bl.status IN ('shipping', 'arrived', 'customs')
+          AND bl.company_id = $1
+          AND lc.status = 'opened'
+          AND ($2::uuid IS NULL OR bli.product_id = $2)
+          AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
+        GROUP BY bli.product_id
+
+        UNION ALL
+
+        -- BL 없이 L/C만 개설된 경우 (신규)
+        SELECT pli.product_id, MAX(lc.open_date) as lc_open
+        FROM lc_records lc
+        JOIN purchase_orders po ON lc.po_id = po.po_id
+        JOIN po_line_items pli ON po.po_id = pli.po_id
+        JOIN products p ON pli.product_id = p.product_id
+        WHERE lc.status = 'opened'
+          AND lc.company_id = $1
+          AND ($2::uuid IS NULL OR pli.product_id = $2)
+          AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
+          AND NOT EXISTS (
+            SELECT 1 FROM bl_shipments bl
+            WHERE bl.lc_id = lc.lc_id
+              AND bl.status IN ('shipping', 'arrived', 'customs', 'completed', 'erp_done')
+          )
+        GROUP BY pli.product_id
+        "#,
+    )
+    .bind(company_id)
+    .bind(product_id)
+    .bind(manufacturer_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| r.lc_open.map(|d| (r.product_id, d)))
         .collect())
 }
