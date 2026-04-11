@@ -1,7 +1,6 @@
 // 유형 3: 판매 세금계산서 — 거래처+기간 → 매출 조회 → 텍스트 생성
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { useType3 } from '@/hooks/useApproval';

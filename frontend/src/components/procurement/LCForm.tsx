@@ -41,6 +41,13 @@ type FormData = z.infer<typeof schema>;
 
 interface Props { open: boolean; onOpenChange: (o: boolean) => void; onSubmit: (d: Record<string, unknown>) => Promise<void>; editData?: LCRecord | null; }
 
+// 소수점 포함 천단위 포맷
+function fmtDecimal(v: string): string {
+  const parts = v.replace(/[^0-9.]/g, '').split('.');
+  const intPart = parts[0] ? parseInt(parts[0], 10).toLocaleString('ko-KR') : '';
+  return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
+}
+
 export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
@@ -54,6 +61,9 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
   const [submitError, setSubmitError] = useState('');
   const [poPickerOpen, setPoPickerOpen] = useState(false);
   const [poPickerLines, setPoPickerLines] = useState<Record<string, POLineItem[]>>({});
+  // 천단위 표시용 display state
+  const [amountUsdDisplay, setAmountUsdDisplay] = useState('');
+  const [targetQtyDisplay, setTargetQtyDisplay] = useState('');;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) as any });
 
@@ -62,7 +72,8 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
     fetchWithAuth<Company[]>('/api/v1/companies').then((list) => setCompanies(list.filter((c) => c.is_active))).catch(() => {});
     fetchWithAuth<Product[]>('/api/v1/products').then(setProducts).catch(() => {});
     fetchWithAuth<LCRecord[]>('/api/v1/lcs').then(setAllLcs).catch(() => {});
-    fetchWithAuth<PurchaseOrder[]>('/api/v1/pos').then(setPos).catch(() => {});
+    // completed PO는 LC 개설 불가 — 변경계약 등록 후 원계약 보호
+    fetchWithAuth<PurchaseOrder[]>('/api/v1/pos').then((list) => setPos(list.filter((p) => p.status !== 'completed'))).catch(() => {});
   }, []);
 
   // 선택한 개설법인의 은행 목록
@@ -88,30 +99,38 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
       setSubmitError('');
       if (editData) {
         reset({ lc_number: editData.lc_number ?? '', po_id: editData.po_id, company_id: editData.company_id, bank_id: editData.bank_id, open_date: editData.open_date?.slice(0, 10) ?? '', amount_usd: editData.amount_usd, target_qty: editData.target_qty ?? '', target_mw: editData.target_mw ?? '', usance_days: editData.usance_days ?? '', usance_type: editData.usance_type ?? '', maturity_date: editData.maturity_date?.slice(0, 10) ?? '', settlement_date: editData.settlement_date?.slice(0, 10) ?? '', repayment_date: editData.repayment_date?.slice(0, 10) ?? '', repaid: editData.repaid ?? false, status: editData.status, memo: editData.memo ?? '' });
+        setAmountUsdDisplay(fmtDecimal(editData.amount_usd?.toString() ?? ''));
+        setTargetQtyDisplay(editData.target_qty ? Math.round(editData.target_qty).toLocaleString('ko-KR') : '');
       } else {
         reset({ lc_number: '', po_id: '', company_id: selectedCompanyId ?? '', bank_id: '', open_date: '', amount_usd: '' as unknown as number, target_qty: '', target_mw: '', usance_days: 90, usance_type: 'buyers', maturity_date: '', settlement_date: '', repayment_date: '', repaid: false, status: 'pending', memo: '' });
+        setAmountUsdDisplay('');
+        setTargetQtyDisplay('');
       }
     }
   }, [open, editData, reset, selectedCompanyId]);
 
   // F11: target_qty → target_mw(용량) + amount_usd 자동 계산
+  // 다중 라인 PO 대응: 가중평균 단가(USD/module), 가중평균 spec_wp 사용
   const watchedQty = watch('target_qty');
   useEffect(() => {
     if (watchedQty === '' || watchedQty == null) return;
     const qty = Number(watchedQty);
     if (!qty || isNaN(qty) || poLines.length === 0) return;
-    const firstLine = poLines[0];
-    const product = products.find((p) => p.product_id === firstLine?.product_id);
-    // 용량(MW) = qty × spec_wp / 1_000_000
-    const specWp = product?.spec_wp ?? firstLine?.spec_wp ?? 0;
-    if (specWp) {
-      const mw = (qty * specWp) / 1_000_000;
+    const totalQty = poLines.reduce((s, l) => s + (l.quantity ?? 0), 0);
+    const totalUsd = poLines.reduce((s, l) => s + (l.total_amount_usd ?? 0), 0);
+    const totalWp = poLines.reduce((s, l) => {
+      const prod = products.find((p) => p.product_id === l.product_id);
+      const spec = prod?.spec_wp ?? l.products?.spec_wp ?? l.spec_wp ?? 0;
+      return s + (l.quantity ?? 0) * spec;
+    }, 0);
+    if (totalQty > 0 && totalWp > 0) {
+      const avgSpecWp = totalWp / totalQty;
+      const avgUnitUsd = totalUsd / totalQty;
+      const mw = (qty * avgSpecWp) / 1_000_000;
       setValue('target_mw', Number(mw.toFixed(4)), { shouldDirty: true });
-    }
-    // LC 개설금액 = qty × unit_price_usd
-    const unit = firstLine?.unit_price_usd ?? 0;
-    if (unit) {
-      setValue('amount_usd', Number((qty * unit).toFixed(2)), { shouldDirty: true });
+      const calcAmt = Number((qty * avgUnitUsd).toFixed(2));
+      setValue('amount_usd', calcAmt, { shouldDirty: true });
+      setAmountUsdDisplay(fmtDecimal(calcAmt.toString()));
     }
   }, [watchedQty, poLines, products, setValue]);
 
@@ -148,7 +167,7 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl w-[95vw] max-h-[92vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{editData ? 'LC 수정' : 'LC 등록'}</DialogTitle></DialogHeader>
         {submitError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{submitError}</div>}
         <form onSubmit={handleSubmit(handle)} className="space-y-3">
@@ -203,46 +222,95 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
               </div>
             );
           })()}
-          {/* 개설법인 — D-094: PO법인과 다를 수 있음 */}
-          <div className="space-y-1.5">
-            <Label>개설법인 *</Label>
-            <Select value={watch('company_id') ?? ''} onValueChange={(v) => { setValue('company_id', v ?? ''); setValue('bank_id', ''); }}><SelectTrigger className="w-full"><Txt text={(() => {
-              const c = companies.find((x) => x.company_id === watch('company_id'));
-              return c ? c.company_name : '';
-            })()} /></SelectTrigger>
-              <SelectContent>{companies.map((c) => {
-                // 가용한도 = 해당 법인의 모든 은행 lc_limit 합 - 해당 법인 LC 개설(편집중 제외) 잔액 (TODO: Rust 계산엔진 연동)
-                // banks state는 현재 선택한 법인 것이라 모든 법인 한도는 모름 → 표시는 "법인명만"으로 폴백
-                const lcSum = allLcs.filter((l) => l.company_id === c.company_id && (!editData || l.lc_id !== editData.lc_id) && l.status !== 'settled' && !l.repaid).reduce((s, l) => s + (l.amount_usd ?? 0), 0);
-                return <SelectItem key={c.company_id} value={c.company_id}>{`${c.company_name} (개설잔액 ${formatUSD(lcSum)})`}</SelectItem>;
-              })}</SelectContent>
-            </Select>{errors.company_id && <p className="text-xs text-destructive">{errors.company_id.message}</p>}
-          </div>
-          <div className="space-y-1.5">
-            <Label>은행 *</Label>
-            <Select value={watch('bank_id') ?? ''} onValueChange={(v) => setValue('bank_id', v ?? '')}><SelectTrigger className="w-full"><Txt text={(() => {
-              const b = banks.find((x) => x.bank_id === watch('bank_id'));
-              if (!b) return '';
-              const usedSameBank = allLcs.filter((l) => l.bank_id === b.bank_id && (!editData || l.lc_id !== editData.lc_id) && l.status !== 'settled' && !l.repaid).reduce((s, l) => s + (l.amount_usd ?? 0), 0);
-              const avail = Math.max(0, (b.lc_limit_usd ?? 0) - usedSameBank);
-              return `${b.bank_name} (가용 ${formatUSD(avail)})`;
-            })()} /></SelectTrigger>
-              <SelectContent>{banks.map((b) => {
+          {/* 개설법인 + 은행 — D-094: PO법인과 다를 수 있음 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>개설법인 *</Label>
+              <Select value={watch('company_id') ?? ''} onValueChange={(v) => { setValue('company_id', v ?? ''); setValue('bank_id', ''); }}><SelectTrigger className="w-full"><Txt text={(() => {
+                const c = companies.find((x) => x.company_id === watch('company_id'));
+                return c ? c.company_name : '';
+              })()} /></SelectTrigger>
+                <SelectContent>{companies.map((c) => {
+                  const lcSum = allLcs.filter((l) => l.company_id === c.company_id && (!editData || l.lc_id !== editData.lc_id) && l.status !== 'settled' && !l.repaid).reduce((s, l) => s + (l.amount_usd ?? 0), 0);
+                  return <SelectItem key={c.company_id} value={c.company_id}>{`${c.company_name} (개설잔액 ${formatUSD(lcSum)})`}</SelectItem>;
+                })}</SelectContent>
+              </Select>{errors.company_id && <p className="text-xs text-destructive">{errors.company_id.message}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label>은행 *</Label>
+              <Select value={watch('bank_id') ?? ''} onValueChange={(v) => setValue('bank_id', v ?? '')}><SelectTrigger className="w-full"><Txt text={(() => {
+                const b = banks.find((x) => x.bank_id === watch('bank_id'));
+                if (!b) return '';
                 const usedSameBank = allLcs.filter((l) => l.bank_id === b.bank_id && (!editData || l.lc_id !== editData.lc_id) && l.status !== 'settled' && !l.repaid).reduce((s, l) => s + (l.amount_usd ?? 0), 0);
                 const avail = Math.max(0, (b.lc_limit_usd ?? 0) - usedSameBank);
-                return <SelectItem key={b.bank_id} value={b.bank_id}>{`${b.bank_name} (가용 ${formatUSD(avail)})`}</SelectItem>;
-              })}</SelectContent>
-            </Select>{errors.bank_id && <p className="text-xs text-destructive">{errors.bank_id.message}</p>}
+                return `${b.bank_name} (가용 ${formatUSD(avail)})`;
+              })()} /></SelectTrigger>
+                <SelectContent>{banks.map((b) => {
+                  const usedSameBank = allLcs.filter((l) => l.bank_id === b.bank_id && (!editData || l.lc_id !== editData.lc_id) && l.status !== 'settled' && !l.repaid).reduce((s, l) => s + (l.amount_usd ?? 0), 0);
+                  const avail = Math.max(0, (b.lc_limit_usd ?? 0) - usedSameBank);
+                  return <SelectItem key={b.bank_id} value={b.bank_id}>{`${b.bank_name} (가용 ${formatUSD(avail)})`}</SelectItem>;
+                })}</SelectContent>
+              </Select>{errors.bank_id && <p className="text-xs text-destructive">{errors.bank_id.message}</p>}
+              {/* 은행 선택 시 수수료율/승인기한 인라인 표시 */}
+              {(() => {
+                const b = banks.find((x) => x.bank_id === watch('bank_id'));
+                if (!b) return null;
+                const expiryDays = b.limit_expiry_date ? Math.ceil((new Date(b.limit_expiry_date).getTime() - Date.now()) / 86400000) : null;
+                const expiryColor = expiryDays == null ? '' : expiryDays < 0 ? 'text-red-600 font-semibold' : expiryDays <= 30 ? 'text-orange-500' : 'text-muted-foreground';
+                return (
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] mt-1 text-muted-foreground">
+                    {b.limit_expiry_date && (
+                      <span className={expiryColor}>
+                        승인기한: {b.limit_expiry_date.slice(0, 10)}
+                        {expiryDays != null && (expiryDays < 0 ? ' (만료!)' : expiryDays <= 90 ? ` (D-${expiryDays})` : '')}
+                      </span>
+                    )}
+                    {b.opening_fee_rate != null && <span>개설: {(b.opening_fee_rate * 100).toFixed(2)}%</span>}
+                    {b.acceptance_fee_rate != null && <span>인수: {(b.acceptance_fee_rate * 100).toFixed(2)}%</span>}
+                    {b.fee_calc_method && <span className="text-[10px]">({b.fee_calc_method})</span>}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>개설일</Label><DateInput value={watch('open_date') ?? ''} onChange={(v) => setValue('open_date', v, { shouldDirty: true })} /></div>
-            <div className="space-y-1.5"><Label>금액(USD) *</Label><Input type="number" step="0.01" {...register('amount_usd')} />{errors.amount_usd && <p className="text-xs text-destructive">{errors.amount_usd.message}</p>}</div>
+            <div className="space-y-1.5">
+              <Label>금액(USD) *</Label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={amountUsdDisplay}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^0-9.]/g, '');
+                  setAmountUsdDisplay(fmtDecimal(raw));
+                  const num = parseFloat(raw);
+                  setValue('amount_usd', (isNaN(num) ? '' : num) as unknown as number, { shouldDirty: true });
+                }}
+                placeholder="0.00"
+              />
+              {errors.amount_usd && <p className="text-xs text-destructive">{errors.amount_usd.message}</p>}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>수량(EA)</Label><Input type="number" {...register('target_qty')} /></div>
+            <div className="space-y-1.5">
+              <Label>수량(EA)</Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={targetQtyDisplay}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^0-9]/g, '');
+                  const num = raw ? parseInt(raw, 10) : undefined;
+                  setTargetQtyDisplay(num !== undefined ? num.toLocaleString('ko-KR') : '');
+                  setValue('target_qty', (num ?? '') as unknown as number, { shouldDirty: true });
+                }}
+                placeholder="0"
+              />
+            </div>
             <div className="space-y-1.5"><Label>용량(MW)</Label><Input type="number" step="0.0001" {...register('target_mw')} /></div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>Usance(일)</Label><Input type="number" {...register('usance_days')} /></div>
             <div className="space-y-1.5">
               <Label>Usance유형</Label>
@@ -277,10 +345,20 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
       </DialogContent>
       {/* F9: PO 상세 선택 팝업 */}
       <Dialog open={poPickerOpen} onOpenChange={setPoPickerOpen}>
-        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[92vw] max-w-[1400px] max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>PO 상세 선택</DialogTitle></DialogHeader>
           <div className="rounded-md border overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-xs" style={{ tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: '130px' }} />
+                <col style={{ width: '110px' }} />
+                <col style={{ width: '240px' }} />
+                <col style={{ width: '200px' }} />
+                <col style={{ width: '100px' }} />
+                <col style={{ width: '130px' }} />
+                <col style={{ width: '80px' }} />
+                <col style={{ width: '70px' }} />
+              </colgroup>
               <thead className="bg-muted/50">
                 <tr>
                   <th className="text-left p-2">PO번호</th>
@@ -300,11 +378,16 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
                   const total = plines.reduce((s, l) => s + (l.total_amount_usd ?? 0), 0);
                   return (
                     <tr key={p.po_id} className="border-t hover:bg-accent/30 cursor-pointer" onClick={() => { setValue('po_id', p.po_id, { shouldDirty: true }); setPoPickerOpen(false); }}>
-                      <td className="p-2 font-mono">{p.po_number || p.po_id.slice(0, 8)}</td>
-                      <td className="p-2">{p.manufacturer_name ?? '—'}</td>
-                      <td className="p-2 truncate max-w-[200px]">{first?.products?.product_name ?? first?.product_name ?? '—'}{plines.length > 1 ? ` 외 ${plines.length - 1}건` : ''}</td>
-                      <td className="p-2 truncate max-w-[180px]">{first?.products?.product_code ?? first?.product_code ?? '—'}</td>
-                      <td className="p-2 text-right font-mono">{first?.unit_price_usd != null ? (first.unit_price_usd * 100).toFixed(2) : '—'}</td>
+                      <td className="p-2 font-mono"><div className="truncate">{p.po_number || p.po_id.slice(0, 8)}</div></td>
+                      <td className="p-2"><div className="truncate">{p.manufacturer_name ?? '—'}</div></td>
+                      <td className="p-2">
+                        <div className="truncate">{first?.products?.product_name ?? first?.product_name ?? '—'}{plines.length > 1 ? ` 외 ${plines.length - 1}건` : ''}</div>
+                      </td>
+                      <td className="p-2"><div className="truncate">{first?.products?.product_code ?? first?.product_code ?? '—'}</div></td>
+                      <td className="p-2 text-right font-mono">{(() => {
+                        const tw = plines.reduce((s, l) => s + (l.quantity ?? 0) * (l.products?.spec_wp ?? l.spec_wp ?? 0), 0);
+                        return tw > 0 ? ((total / tw) * 100).toFixed(2) : '—';
+                      })()}</td>
                       <td className="p-2 text-right font-mono">{formatUSD(total)}</td>
                       <td className="p-2 text-right font-mono">{(p.total_mw ?? 0).toFixed(2)}</td>
                       <td className="p-2"><Button type="button" size="sm" variant="outline">선택</Button></td>

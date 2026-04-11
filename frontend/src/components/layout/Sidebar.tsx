@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Package, LayoutDashboard, PackageCheck, ClipboardList, Truck,
-  HandCoins, Calculator, Landmark, Database, Search, StickyNote,
+  Calculator, Landmark, Database, Search, StickyNote,
   FileSignature, Settings, ChevronDown, ChevronRight, LogOut,
+  ScrollText, Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -22,14 +23,19 @@ interface MenuItem {
   children?: { label: string; path: string }[];
 }
 
-// v4 업무 흐름: 발주→LC→입고→재고→출고/판매→수주/수금
-const workflowItems: MenuItem[] = [
-  { icon: ClipboardList, label: '발주 관리', path: '/procurement', roles: ['admin', 'manager', 'staff'] },
-  { icon: Landmark, label: 'LC 관리', path: '/lc', roles: ['admin', 'manager', 'staff'] },
-  { icon: PackageCheck, label: '입고 관리', path: '/inbound', roles: ['admin', 'manager', 'staff'] },
+// v4 업무 흐름 — 제안 B: 구매/판매 섹션 분리
+// 구매: 발주 → LC → 입고 → 재고
+const purchaseItems: MenuItem[] = [
+  { icon: ClipboardList, label: 'P/O 발주 관리', path: '/procurement', roles: ['admin', 'manager', 'staff'] },
+  { icon: Landmark, label: 'L/C 개설 관리', path: '/lc', roles: ['admin', 'manager', 'staff'] },
+  { icon: PackageCheck, label: 'B/L 입고 관리', path: '/inbound', roles: ['admin', 'manager', 'staff'] },
   { icon: Package, label: '재고 현황', path: '/inventory' },
+];
+// 판매: 수주 → 출고/판매 → 수금
+const salesItems: MenuItem[] = [
+  { icon: ScrollText, label: '수주 관리', path: '/orders', roles: ['admin', 'manager', 'staff'] },
   { icon: Truck, label: '출고/판매', path: '/outbound', roles: ['admin', 'manager', 'staff'] },
-  { icon: HandCoins, label: '수주/수금', path: '/orders', roles: ['admin', 'manager', 'staff'] },
+  { icon: Wallet, label: '수금 관리', path: '/orders?tab=receipts', roles: ['admin', 'manager', 'staff'] },
 ];
 
 // v4 현황/분석: 대시보드→LC한도/만기→매출/이익분석
@@ -69,13 +75,25 @@ function canSee(item: MenuItem, role: string | null): boolean {
 }
 
 export default function Sidebar() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const { user, logout, role } = useAuth();
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
   const [masterOpen, setMasterOpen] = useState(pathname.startsWith('/masters'));
 
   const NavLink = ({ icon: Icon, label, path, children: subs }: MenuItem & { children?: MenuItem['children'] }) => {
-    const isActive = path ? pathname === path : pathname.startsWith('/masters');
+    const isActive = (() => {
+      if (!path) return pathname.startsWith('/masters');
+      const [basePath, queryStr] = path.split('?');
+      if (queryStr) {
+        // 쿼리 파라미터 포함 경로 (예: /orders?tab=receipts)
+        return pathname === basePath && search === `?${queryStr}`;
+      }
+      // /orders (수주 관리): receipts/matching 탭일 때는 비활성
+      if (path === '/orders') {
+        return pathname === '/orders' && !search.includes('tab=receipts') && !search.includes('tab=matching');
+      }
+      return pathname === path;
+    })();
     const isSub = !!subs;
 
     if (collapsed) {
@@ -162,10 +180,13 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* 메뉴 — D-084: 업무흐름/현황분석/도구 3그룹 */}
+      {/* 메뉴 — 구매/판매 섹션 분리 */}
       <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-        {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">업무 흐름</p>}
-        {workflowItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...m} />)}
+        {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">구매</p>}
+        {purchaseItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...m} />)}
+        <Separator className="my-2" />
+        {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">판매</p>}
+        {salesItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...m} />)}
         <Separator className="my-2" />
         {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">현황/분석</p>}
         {analysisItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...m} />)}

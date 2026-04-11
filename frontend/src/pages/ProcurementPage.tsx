@@ -15,10 +15,11 @@ import LCListTable from '@/components/procurement/LCListTable';
 import LCForm from '@/components/procurement/LCForm';
 import TTListTable from '@/components/procurement/TTListTable';
 import TTForm from '@/components/procurement/TTForm';
+import DepositStatusPanel from '@/components/procurement/DepositStatusPanel';
 import PriceHistoryTable from '@/components/procurement/PriceHistoryTable';
 import PriceHistoryForm from '@/components/procurement/PriceHistoryForm';
 import { PO_STATUS_LABEL, CONTRACT_TYPE_LABEL, CONTRACT_TYPES_ACTIVE, LC_STATUS_LABEL, TT_STATUS_LABEL } from '@/types/procurement';
-import type { PurchaseOrder, LCRecord, TTRemittance, PriceHistory, POStatus, ContractType, LCStatus, TTStatus } from '@/types/procurement';
+import type { PurchaseOrder, POLineItem, LCRecord, TTRemittance, PriceHistory, POStatus, ContractType, LCStatus, TTStatus } from '@/types/procurement';
 import type { Manufacturer, Bank } from '@/types/masters';
 
 function FT({ text }: { text: string }) {
@@ -67,6 +68,9 @@ export default function ProcurementPage() {
   const [phFormOpen, setPhFormOpen] = useState(false);
   const [editPH, setEditPH] = useState<PriceHistory | null>(null);
   const { data: phs, loading: phLoading, reload: reloadPH } = usePriceHistoryList(phMfgFilter ? { manufacturer_id: phMfgFilter } : {});
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<{ created: number; skipped: number; failed: number } | null>(null);
+  const [autoCompletedMsg, setAutoCompletedMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers')
@@ -89,7 +93,7 @@ export default function ProcurementPage() {
   if (selectedPO) {
     return (
       <div className="p-6">
-        <PODetailView po={selectedPO} onBack={() => { setSelectedPO(null); reloadPO(); }} onReload={reloadPO} />
+        <PODetailView po={selectedPO} onBack={() => { setSelectedPO(null); reloadPO(); }} onReload={reloadPO} allPos={pos} />
       </div>
     );
   }
@@ -98,6 +102,7 @@ export default function ProcurementPage() {
     // 발주품목(po_lines)을 PO 본체와 분리하여 등록 (입고관리와 동일 패턴)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { lines, ...poData } = d as any;
+    const parentPoId: string | undefined = poData.parent_po_id;
     try {
       const created = await fetchWithAuth<{ po_id: string }>('/api/v1/pos', { method: 'POST', body: JSON.stringify(poData) });
       if (Array.isArray(lines) && lines.length > 0 && created?.po_id) {
@@ -105,7 +110,7 @@ export default function ProcurementPage() {
         for (const line of lines) {
           // 신규 생성 경로에서는 po_line_id는 무시
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { po_line_id: _plid, ...body } = line;
+          const { po_line_id: _plid, _price_per_wp_usd: _pp, _spec_wp: _sw, ...body } = line;
           try {
             await fetchWithAuth(`/api/v1/pos/${created.po_id}/lines`, {
               method: 'POST', body: JSON.stringify({ ...body, po_id: created.po_id }),
@@ -117,6 +122,53 @@ export default function ProcurementPage() {
         if (failures.length > 0) {
           throw new Error(`발주품목 ${failures.length}건 등록 실패: ${failures.join('; ')}`);
         }
+
+        // ── 단가이력 자동 등록 (PO 신규 등록 시) ──
+        const changeDate = (poData.contract_date as string | undefined) ?? new Date().toISOString().slice(0, 10);
+        const incotermsStr = (poData.incoterms as string | undefined) ?? '';
+        const paymentStr = (poData.payment_terms as string | undefined) ?? '';
+        for (const line of lines) {
+          const pricePerWpUsd: number | undefined = line._price_per_wp_usd;
+          if (!pricePerWpUsd || pricePerWpUsd <= 0) continue;
+          const specWp: number | undefined = line._spec_wp;
+          const mw = specWp && line.quantity ? (line.quantity * specWp) / 1_000_000 : undefined;
+          const memoParts = [
+            incotermsStr && `선적조건: ${incotermsStr}`,
+            paymentStr && `결제조건: ${paymentStr}`,
+            mw != null && mw > 0 && `발주용량: ${mw.toFixed(3)}MW`,
+          ].filter(Boolean);
+          const phPayload = {
+            product_id: line.product_id,
+            manufacturer_id: poData.manufacturer_id,
+            company_id: poData.company_id,
+            change_date: changeDate,
+            new_price: Number(pricePerWpUsd.toFixed(6)), // USD/Wp
+            reason: '최초계약',
+            related_po_id: created.po_id,
+            memo: memoParts.length > 0 ? memoParts.join(' | ') : undefined,
+          };
+          // 실패해도 PO 등록은 성공 처리 (단가이력은 부가정보)
+          await fetchWithAuth('/api/v1/price-histories', {
+            method: 'POST', body: JSON.stringify(phPayload),
+          }).catch(() => {});
+        }
+        reloadPH();
+      }
+
+      // ── 변경계약 등록 시 원계약 자동 완료 처리 ──
+      // 원계약 PO를 completed 로 전환 → 이후 LC/BL 드롭다운에서 자동 제외
+      if (created?.po_id && parentPoId) {
+        const parentPo = pos.find((p) => p.po_id === parentPoId);
+        try {
+          await fetchWithAuth(`/api/v1/pos/${parentPoId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: 'completed' }),
+          });
+          const label = parentPo?.po_number ?? parentPoId.slice(0, 8);
+          setAutoCompletedMsg(`원계약 ${label}이 완료(completed) 처리되었습니다. 이제 해당 PO로 LC/입고 신규 등록이 차단됩니다.`);
+        } catch {
+          // 실패해도 변경계약 PO 등록 자체는 성공
+        }
       }
     } finally {
       reloadPO();
@@ -124,10 +176,95 @@ export default function ProcurementPage() {
   };
   const handleCreateLC = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/lcs', { method: 'POST', body: JSON.stringify(d) }); reloadLC(); };
   const handleUpdateLC = async (d: Record<string, unknown>) => { if (!editLC) return; await fetchWithAuth(`/api/v1/lcs/${editLC.lc_id}`, { method: 'PUT', body: JSON.stringify(d) }); setEditLC(null); reloadLC(); };
+  const handleDeleteLC = async (lcId: string) => {
+    const linkedBls = await fetchWithAuth<{ bl_id: string }[]>(`/api/v1/bls?lc_id=${lcId}`).catch(() => []);
+    if (Array.isArray(linkedBls) && linkedBls.length > 0) throw new Error(`이 LC에 연결된 입고(B/L)가 ${linkedBls.length}건 있어 삭제할 수 없습니다.`);
+    await fetchWithAuth(`/api/v1/lcs/${lcId}`, { method: 'DELETE' });
+    reloadLC();
+  };
   const handleCreateTT = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/tts', { method: 'POST', body: JSON.stringify(d) }); reloadTT(); };
   const handleUpdateTT = async (d: Record<string, unknown>) => { if (!editTT) return; await fetchWithAuth(`/api/v1/tts/${editTT.tt_id}`, { method: 'PUT', body: JSON.stringify(d) }); setEditTT(null); reloadTT(); };
   const handleCreatePH = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/price-histories', { method: 'POST', body: JSON.stringify(d) }); reloadPH(); };
   const handleUpdatePH = async (d: Record<string, unknown>) => { if (!editPH) return; await fetchWithAuth(`/api/v1/price-histories/${editPH.price_history_id}`, { method: 'PUT', body: JSON.stringify(d) }); setEditPH(null); reloadPH(); };
+
+  // 기존 PO → 단가이력 일괄 생성 (신규 등록 이전 PO 소급 처리)
+  const handleBackfillPriceHistory = async () => {
+    if (!selectedCompanyId) return;
+    setBackfilling(true);
+    setBackfillResult(null);
+    let created = 0, skipped = 0, failed = 0;
+    try {
+      // 기존 단가이력 조회 (중복 방지: product_id + related_po_id 조합)
+      const existingPH = await fetchWithAuth<PriceHistory[]>(
+        `/api/v1/price-histories?company_id=${selectedCompanyId}`
+      ).catch(() => [] as PriceHistory[]);
+      const existingKeys = new Set(
+        existingPH.map((ph) => `${ph.product_id}__${ph.related_po_id ?? ''}`)
+      );
+
+      // 전체 PO 조회
+      const allPos = await fetchWithAuth<PurchaseOrder[]>(
+        `/api/v1/pos?company_id=${selectedCompanyId}`
+      );
+
+      // 각 PO의 라인 병렬 조회
+      const poLines = await Promise.all(
+        allPos.map((po) =>
+          fetchWithAuth<POLineItem[]>(`/api/v1/pos/${po.po_id}/lines`)
+            .then((lines) => ({ po, lines }))
+            .catch(() => ({ po, lines: [] as POLineItem[] }))
+        )
+      );
+
+      for (const { po, lines } of poLines) {
+        for (const line of lines) {
+          const specWp = line.products?.spec_wp ?? line.spec_wp;
+          if (!specWp || specWp <= 0) { skipped++; continue; }
+
+          // 단가 계산: total / (qty × specWp) = USD/Wp
+          let pricePerWpUsd: number | undefined;
+          if (line.total_amount_usd && line.quantity && specWp) {
+            pricePerWpUsd = line.total_amount_usd / (line.quantity * specWp);
+          } else if (line.unit_price_usd && specWp) {
+            pricePerWpUsd = line.unit_price_usd / specWp;
+          }
+          if (!pricePerWpUsd || pricePerWpUsd <= 0) { skipped++; continue; }
+
+          // 중복 스킵
+          const key = `${line.product_id}__${po.po_id}`;
+          if (existingKeys.has(key)) { skipped++; continue; }
+
+          const mw = (line.quantity * specWp) / 1_000_000;
+          const memoParts = [
+            po.incoterms && `선적조건: ${po.incoterms}`,
+            po.payment_terms && `결제조건: ${po.payment_terms}`,
+            mw > 0 && `발주용량: ${mw.toFixed(3)}MW`,
+          ].filter(Boolean);
+
+          try {
+            await fetchWithAuth('/api/v1/price-histories', {
+              method: 'POST',
+              body: JSON.stringify({
+                product_id: line.product_id,
+                manufacturer_id: po.manufacturer_id,
+                company_id: po.company_id,
+                change_date: po.contract_date ?? new Date().toISOString().slice(0, 10),
+                new_price: Number(pricePerWpUsd.toFixed(6)),
+                reason: '최초계약',
+                related_po_id: po.po_id,
+                memo: memoParts.length > 0 ? memoParts.join(' | ') : undefined,
+              }),
+            });
+            existingKeys.add(key);
+            created++;
+          } catch { failed++; }
+        }
+      }
+    } catch { failed++; }
+    setBackfilling(false);
+    setBackfillResult({ created, skipped, failed });
+    reloadPH();
+  };
 
   // 필터 라벨 (한글 보장)
   const poStatusLabel = poStatusFilter ? (PO_STATUS_LABEL[poStatusFilter as POStatus] ?? poStatusFilter) : '전체 상태';
@@ -141,7 +278,15 @@ export default function ProcurementPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-lg font-semibold">발주 / 결제</h1>
+      <h1 className="text-lg font-semibold">P/O 발주 / 결제</h1>
+
+      {/* 변경계약 등록 후 원계약 자동 완료 알림 */}
+      {autoCompletedMsg && (
+        <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="flex-1">{autoCompletedMsg}</span>
+          <button className="text-amber-600 hover:text-amber-900 font-bold text-base leading-none" onClick={() => setAutoCompletedMsg(null)}>×</button>
+        </div>
+      )}
 
       <Tabs defaultValue="po">
         <TabsList>
@@ -170,27 +315,59 @@ export default function ProcurementPage() {
             <div className="flex-1" />
             <Button size="sm" onClick={() => { setEditLC(null); setLcFormOpen(true); }}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
           </div>
-          {lcLoading ? <LoadingSpinner /> : <LCListTable items={lcs} onEdit={(lc) => { setEditLC(lc); setLcFormOpen(true); }} onNew={() => { setEditLC(null); setLcFormOpen(true); }} />}
+          {lcLoading ? <LoadingSpinner /> : <LCListTable items={lcs} onEdit={(lc) => { setEditLC(lc); setLcFormOpen(true); }} onNew={() => { setEditLC(null); setLcFormOpen(true); }} onDelete={handleDeleteLC} />}
           <LCForm open={lcFormOpen} onOpenChange={setLcFormOpen} onSubmit={editLC ? handleUpdateLC : handleCreateLC} editData={editLC} />
         </TabsContent>
 
-        <TabsContent value="tt">
-          <div className="flex items-center gap-2 mb-3">
-            <Select value={ttStatusFilter || 'all'} onValueChange={(v) => setTtStatusFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-28 text-xs"><FT text={ttStatusLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem>{(Object.entries(TT_STATUS_LABEL) as [TTStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
-            <Select value={ttPoFilter || 'all'} onValueChange={(v) => setTtPoFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-36 text-xs"><FT text={ttPoLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 PO</SelectItem>{poList.map((p) => <SelectItem key={p.po_id} value={p.po_id}>{p.po_number || p.po_id.slice(0, 8)}</SelectItem>)}</SelectContent></Select>
-            <div className="flex-1" />
-            <Button size="sm" onClick={() => { setEditTT(null); setTtFormOpen(true); }}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
+        <TabsContent value="tt" className="space-y-5">
+          {/* 계약금 현황 — PO별 계약금 자동 집계 */}
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold text-foreground">계약금 현황</h2>
+            <DepositStatusPanel
+              pos={poList}
+              tts={tts}
+              onPaymentCreated={() => reloadTT()}
+            />
           </div>
-          {ttLoading ? <LoadingSpinner /> : <TTListTable items={tts} onEdit={(tt) => { setEditTT(tt); setTtFormOpen(true); }} onNew={() => { setEditTT(null); setTtFormOpen(true); }} />}
-          <TTForm open={ttFormOpen} onOpenChange={setTtFormOpen} onSubmit={editTT ? handleUpdateTT : handleCreateTT} editData={editTT} />
+
+          {/* 구분선 */}
+          <div className="border-t pt-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-foreground">T/T 송금 이력</h2>
+              <div className="flex-1" />
+              <Select value={ttStatusFilter || 'all'} onValueChange={(v) => setTtStatusFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-28 text-xs"><FT text={ttStatusLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem>{(Object.entries(TT_STATUS_LABEL) as [TTStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
+              <Select value={ttPoFilter || 'all'} onValueChange={(v) => setTtPoFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-36 text-xs"><FT text={ttPoLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 PO</SelectItem>{poList.map((p) => <SelectItem key={p.po_id} value={p.po_id}>{p.po_number || p.po_id.slice(0, 8)}</SelectItem>)}</SelectContent></Select>
+              <Button size="sm" onClick={() => { setEditTT(null); setTtFormOpen(true); }}><Plus className="mr-1 h-4 w-4" />수동 등록</Button>
+            </div>
+            {ttLoading ? <LoadingSpinner /> : <TTListTable items={tts} onEdit={(tt) => { setEditTT(tt); setTtFormOpen(true); }} onNew={() => { setEditTT(null); setTtFormOpen(true); }} />}
+            <TTForm open={ttFormOpen} onOpenChange={setTtFormOpen} onSubmit={editTT ? handleUpdateTT : handleCreateTT} editData={editTT} />
+          </div>
         </TabsContent>
 
-        <TabsContent value="price">
-          <div className="flex items-center gap-2 mb-3">
+        <TabsContent value="price" className="space-y-3">
+          <div className="flex items-center gap-2">
             <Select value={phMfgFilter || 'all'} onValueChange={(v) => setPhMfgFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={phMfgLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 제조사</SelectItem>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent></Select>
             <div className="flex-1" />
+            <Button size="sm" variant="outline" onClick={handleBackfillPriceHistory} disabled={backfilling}>
+              {backfilling ? '생성 중…' : '기존 PO에서 일괄 생성'}
+            </Button>
             <Button size="sm" onClick={() => { setEditPH(null); setPhFormOpen(true); }}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
           </div>
+
+          {/* 일괄 생성 결과 배너 */}
+          {backfillResult && (
+            <div className={`flex items-center justify-between rounded-md px-4 py-2.5 text-sm border ${backfillResult.created > 0 ? 'bg-green-50 border-green-200 text-green-800' : 'bg-muted border-muted-foreground/20 text-muted-foreground'}`}>
+              <span>
+                {backfillResult.created > 0
+                  ? `✓ ${backfillResult.created}건 단가이력 생성 완료`
+                  : '새로 생성할 단가이력이 없습니다'}
+                {backfillResult.skipped > 0 && <span className="ml-2 opacity-70">(이미 존재 {backfillResult.skipped}건 건너뜀)</span>}
+                {backfillResult.failed > 0 && <span className="ml-2 text-red-600">{backfillResult.failed}건 실패</span>}
+              </span>
+              <button className="text-xs opacity-50 hover:opacity-100 ml-4" onClick={() => setBackfillResult(null)}>✕</button>
+            </div>
+          )}
+
           {phLoading ? <LoadingSpinner /> : <PriceHistoryTable items={phs} onEdit={(ph) => { setEditPH(ph); setPhFormOpen(true); }} onNew={() => { setEditPH(null); setPhFormOpen(true); }} />}
           <PriceHistoryForm open={phFormOpen} onOpenChange={setPhFormOpen} onSubmit={editPH ? handleUpdatePH : handleCreatePH} editData={editPH} />
         </TabsContent>

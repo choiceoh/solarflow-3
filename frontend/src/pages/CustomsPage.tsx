@@ -6,10 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useAppStore } from '@/stores/appStore';
-import { useDeclarationList, useExpenseList } from '@/hooks/useCustoms';
+import { useExpenseList } from '@/hooks/useCustoms';
 import { fetchWithAuth } from '@/lib/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
-import DeclarationListTable from '@/components/customs/DeclarationListTable';
 import DeclarationDetailView from '@/components/customs/DeclarationDetailView';
 import DeclarationForm from '@/components/customs/DeclarationForm';
 import ExpenseListTable from '@/components/customs/ExpenseListTable';
@@ -27,7 +26,7 @@ export default function CustomsPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
 
   // 탭 1: 수입면장
-  const [declBlFilter, setDeclBlFilter] = useState('');
+  const [declBlFilter] = useState('');
   const [selectedDecl, setSelectedDecl] = useState<string | null>(null);
   const [declFormOpen, setDeclFormOpen] = useState(false);
   const [presetBLId, setPresetBLId] = useState<string | null>(null);
@@ -65,8 +64,9 @@ export default function CustomsPage() {
   if (expMonthFilter) expFilters.month = expMonthFilter;
   if (expTypeFilter) expFilters.expense_type = expTypeFilter;
 
-  const { data: declarations, loading: declLoading, reload: reloadDecl } = useDeclarationList(declFilters);
+  const reloadDecl = () => {};
   const { data: expenses, loading: expLoading, reload: reloadExp } = useExpenseList(expFilters);
+  void declFilters;
 
   useEffect(() => {
     if (selectedCompanyId) {
@@ -136,45 +136,16 @@ export default function CustomsPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-lg font-semibold">면장 / 원가</h1>
+      <h1 className="text-lg font-semibold">부대비용 / 환율비교</h1>
 
-      <Tabs defaultValue="declarations">
+      <Tabs defaultValue="expenses">
         <TabsList>
-          <TabsTrigger value="declarations">수입면장</TabsTrigger>
+          {/* F20: 수입면장 탭 삭제 — 면장번호는 입고등록에서 직접 입력 */}
           <TabsTrigger value="expenses">부대비용</TabsTrigger>
           <TabsTrigger value="exchange">환율 비교</TabsTrigger>
         </TabsList>
 
-        {/* 탭 1: 수입면장 */}
-        <TabsContent value="declarations" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
-              <Select value={declBlFilter || 'all'} onValueChange={(v) => setDeclBlFilter(v === 'all' ? '' : (v ?? ''))}>
-                <SelectTrigger className="h-8 w-40 text-xs"><FT text={declBlFilter ? (bls.find(b => b.bl_id === declBlFilter)?.bl_number ?? '') : '전체 B/L'} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 B/L</SelectItem>
-                  {bls.map((bl) => (
-                    <SelectItem key={bl.bl_id} value={bl.bl_id}>{bl.bl_number}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <ExcelToolbar type="declaration" />
-              <Button size="sm" onClick={() => setDeclFormOpen(true)}>
-                <Plus className="mr-1.5 h-4 w-4" />새로 등록
-              </Button>
-            </div>
-          </div>
-
-          {declLoading ? <LoadingSpinner /> : (
-            <DeclarationListTable
-              items={declarations}
-              onSelect={(d) => setSelectedDecl(d.declaration_id)}
-              onNew={() => setDeclFormOpen(true)}
-            />
-          )}
-        </TabsContent>
+        {/* F20: 수입면장 탭 삭제됨 — 면장번호는 BLForm에서 직접 입력 */}
 
         {/* 탭 2: 부대비용 */}
         <TabsContent value="expenses" className="space-y-4 mt-4">

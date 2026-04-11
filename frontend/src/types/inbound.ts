@@ -45,6 +45,7 @@ export interface BLShipment {
   payment_terms?: string;
   incoterms?: string;
   counterpart_company_id?: string;
+  declaration_number?: string;
 }
 
 export interface BLLineItem {

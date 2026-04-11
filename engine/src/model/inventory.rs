@@ -1,7 +1,7 @@
 /// 재고 집계 요청/응답 모델
 /// 비유: "재고 조회 신청서"와 "재고 현황 보고서"
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -49,6 +49,10 @@ pub struct InventoryItem {
     pub total_secured_kw: f64,
     /// 장기재고 판별: normal / warning / critical
     pub long_term_status: String,
+    /// 현재고: 가장 최근 입항일 (completed/erp_done BL 기준)
+    pub latest_arrival: Option<NaiveDate>,
+    /// 미착품: 가장 최근 L/C 개설일 (shipping/arrived/customs BL 기준)
+    pub latest_lc_open: Option<NaiveDate>,
 }
 
 /// 전체 합계

@@ -62,8 +62,11 @@ export interface Bank {
   bank_id: string;
   company_id: string;
   company_name?: string;
+  companies?: { company_name: string; company_code: string }; // nested from Go JOIN
   bank_name: string;
   lc_limit_usd: number;
+  limit_approve_date?: string;   // 승인일
+  limit_expiry_date?: string;    // 승인기한
   opening_fee_rate?: number;
   acceptance_fee_rate?: number;
   fee_calc_method?: string;

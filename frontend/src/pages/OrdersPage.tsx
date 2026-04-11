@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -36,8 +36,19 @@ export default function OrdersPage() {
   const [orderCategoryFilter, setOrderCategoryFilter] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const _loc = useLocation();
-  // R1-1: 사이드바 "수주/수금" 클릭 시 목록 복귀
-  useEffect(() => { setSelectedOrder(null); }, [_loc.key]);
+  const navigate = useNavigate();
+  // URL 탭 파라미터 읽기 (사이드바 수주/수금 링크 구분)
+  const urlTab = new URLSearchParams(_loc.search).get('tab') ?? 'orders';
+  const [activeTab, setActiveTab] = useState(urlTab);
+  useEffect(() => {
+    const t = new URLSearchParams(_loc.search).get('tab') ?? 'orders';
+    setActiveTab(t);
+    setSelectedOrder(null);
+  }, [_loc.key, _loc.search]);
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    navigate(tab === 'orders' ? '/orders' : `/orders?tab=${tab}`, { replace: true });
+  };
   const [orderFormOpen, setOrderFormOpen] = useState(false);
 
   // 탭 2: 수금
@@ -127,7 +138,7 @@ export default function OrdersPage() {
     <div className="p-6 space-y-4">
       <h1 className="text-lg font-semibold">수주/수금</h1>
 
-      <Tabs defaultValue="orders">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="orders">수주 관리</TabsTrigger>
           <TabsTrigger value="receipts">수금 관리</TabsTrigger>

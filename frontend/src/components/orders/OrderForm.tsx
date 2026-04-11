@@ -50,12 +50,22 @@ interface Props {
   editData?: Order | null;
 }
 
+// 정수 천단위 포맷
+function fmtInt(v: number | string | undefined): string {
+  if (v === '' || v === undefined || v === null) return '';
+  const n = typeof v === 'string' ? parseInt(v.replace(/[^0-9]/g, ''), 10) : Math.round(Number(v));
+  return isNaN(n) ? '' : n.toLocaleString('ko-KR');
+}
+
 export default function OrderForm({ open, onOpenChange, onSubmit, editData }: Props) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [products, setProducts] = useState<Product[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [inventoryInfo, setInventoryInfo] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState('');
+  // 천단위 표시용 display state
+  const [qtyDisplay, setQtyDisplay] = useState('');
+  const [spareQtyDisplay, setSpareQtyDisplay] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
@@ -115,6 +125,8 @@ export default function OrderForm({ open, onOpenChange, onSubmit, editData }: Pr
           spare_qty: editData.spare_qty ?? '',
           memo: editData.memo ?? '',
         });
+        setQtyDisplay(fmtInt(editData.quantity));
+        setSpareQtyDisplay(fmtInt(editData.spare_qty));
       } else {
         const today = new Date().toISOString().slice(0, 10);
         reset({
@@ -124,6 +136,8 @@ export default function OrderForm({ open, onOpenChange, onSubmit, editData }: Pr
           site_name: '', site_address: '', site_contact: '', site_phone: '',
           payment_terms: '', deposit_rate: '', delivery_due: '', spare_qty: '', memo: '',
         });
+        setQtyDisplay('');
+        setSpareQtyDisplay('');
       }
     }
   }, [open, editData, reset]);
@@ -149,7 +163,7 @@ export default function OrderForm({ open, onOpenChange, onSubmit, editData }: Pr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editData ? '수주 수정' : '수주 등록'}</DialogTitle>
         </DialogHeader>
@@ -235,16 +249,29 @@ export default function OrderForm({ open, onOpenChange, onSubmit, editData }: Pr
             </Select>
             {errors.product_id && <p className="text-xs text-destructive">{errors.product_id.message}</p>}
             {selectedProduct && (
-              <p className="text-[10px] text-muted-foreground">
-                {selectedProduct.product_name} / {selectedProduct.spec_wp}Wp
-              </p>
+              <div className="rounded-md border p-2 bg-muted/30 text-xs grid grid-cols-3 gap-2">
+                <div><div className="text-muted-foreground">제조사</div><div className="font-medium">{selectedProduct.manufacturer_name ?? '—'}</div></div>
+                <div><div className="text-muted-foreground">품명</div><div className="font-medium truncate">{selectedProduct.product_name}</div></div>
+                <div><div className="text-muted-foreground">규격</div><div className="font-medium">{selectedProduct.spec_wp}Wp</div></div>
+              </div>
             )}
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label>수량 *</Label>
-              <Input type="number" {...register('quantity')} />
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={qtyDisplay}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^0-9]/g, '');
+                  const num = raw ? parseInt(raw, 10) : undefined;
+                  setQtyDisplay(num !== undefined ? num.toLocaleString('ko-KR') : '');
+                  setValue('quantity', (num ?? '') as unknown as number, { shouldDirty: true });
+                }}
+                placeholder="0"
+              />
               {errors.quantity && <p className="text-xs text-destructive">{errors.quantity.message}</p>}
             </div>
             <div className="space-y-1.5">
@@ -274,7 +301,21 @@ export default function OrderForm({ open, onOpenChange, onSubmit, editData }: Pr
             <div className="space-y-1.5"><Label>납기일</Label><DateInput value={watch('delivery_due') ?? ''} onChange={(v) => setValue('delivery_due', v, { shouldDirty: true })} /></div>
           </div>
 
-          <div className="space-y-1.5"><Label>스페어 수량</Label><Input type="number" {...register('spare_qty')} /></div>
+          <div className="space-y-1.5">
+            <Label>스페어 수량</Label>
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={spareQtyDisplay}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^0-9]/g, '');
+                const num = raw ? parseInt(raw, 10) : undefined;
+                setSpareQtyDisplay(num !== undefined ? num.toLocaleString('ko-KR') : '');
+                setValue('spare_qty', (num ?? '') as unknown as number, { shouldDirty: true });
+              }}
+              placeholder="0"
+            />
+          </div>
           <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
 
           <DialogFooter>

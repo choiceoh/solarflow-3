@@ -17,6 +17,31 @@ type PriceHistory struct {
 	Memo            *string  `json:"memo"`
 }
 
+// PriceHistoryWithRelations — 제조사·제품·PO 정보를 포함한 단가이력 조회 결과
+type PriceHistoryWithRelations struct {
+	PriceHistory
+	Manufacturers  *PHManufacturerSummary `json:"manufacturers"`
+	Products       *PHProductSummary      `json:"products"`
+	PurchaseOrders *PHPOSummary           `json:"purchase_orders"`
+}
+
+// PHManufacturerSummary — 단가이력 조회 시 제조사 요약
+type PHManufacturerSummary struct {
+	NameKR string `json:"name_kr"`
+}
+
+// PHProductSummary — 단가이력 조회 시 제품 요약
+type PHProductSummary struct {
+	ProductCode string `json:"product_code"`
+	ProductName string `json:"product_name"`
+	SpecWP      *int   `json:"spec_wp"`
+}
+
+// PHPOSummary — 단가이력 조회 시 PO 요약
+type PHPOSummary struct {
+	PONumber *string `json:"po_number"`
+}
+
 // CreatePriceHistoryRequest — 단가이력 등록 시 클라이언트가 보내는 데이터
 // 비유: "단가 변동 등록 신청서" — 제품, 변경일, 신규단가를 필수 기재
 type CreatePriceHistoryRequest struct {

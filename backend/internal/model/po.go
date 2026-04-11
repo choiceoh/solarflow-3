@@ -18,6 +18,7 @@ type PurchaseOrder struct {
 	ContractPeriodEnd   *string  `json:"contract_period_end"`
 	Status              string   `json:"status"`
 	Memo                *string  `json:"memo"`
+	ParentPOID          *string  `json:"parent_po_id,omitempty"`
 }
 
 // POWithRelations — 법인/제조사 정보를 포함한 발주 조회 결과
@@ -105,6 +106,7 @@ type CreatePurchaseOrderRequest struct {
 	ContractPeriodEnd   *string  `json:"contract_period_end"`
 	Status              string   `json:"status"`
 	Memo                *string  `json:"memo"`
+	ParentPOID          *string  `json:"parent_po_id,omitempty"`
 }
 
 // Validate — 발주 등록 요청의 입력값을 검증
@@ -156,6 +158,7 @@ type UpdatePurchaseOrderRequest struct {
 	ContractPeriodEnd   *string  `json:"contract_period_end,omitempty"`
 	Status              *string  `json:"status,omitempty"`
 	Memo                *string  `json:"memo,omitempty"`
+	ParentPOID          *string  `json:"parent_po_id,omitempty"`
 }
 
 // Validate — 발주 수정 요청의 입력값을 검증

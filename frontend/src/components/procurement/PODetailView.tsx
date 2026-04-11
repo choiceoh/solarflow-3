@@ -21,7 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatUSD, formatNumber } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
 
-interface Props { po: PurchaseOrder; onBack: () => void; onReload: () => void; }
+interface Props { po: PurchaseOrder; onBack: () => void; onReload: () => void; allPos?: PurchaseOrder[]; }
 
 function Field({ label, value }: { label: string; value: string | undefined }) {
   return <div><p className="text-[10px] text-muted-foreground">{label}</p><p className="text-sm">{value || '—'}</p></div>;
@@ -90,7 +90,7 @@ function TTSubTable({ items, poLines }: { items: TTRemittance[]; poLines: POLine
   );
 }
 
-export default function PODetailView({ po: initialPo, onBack, onReload }: Props) {
+export default function PODetailView({ po: initialPo, onBack, onReload, allPos = [] }: Props) {
   // 로컬 PO 미러 — 저장 후 서버 fresh로 갱신 (parent prop은 stale일 수 있음)
   const [po, setPo] = useState<PurchaseOrder>(initialPo);
   // 부모 selectedPO 변경 시(다른 PO 선택 등) 동기화
@@ -281,6 +281,19 @@ export default function PODetailView({ po: initialPo, onBack, onReload }: Props)
               {po.total_qty != null && <Field label="총수량" value={formatNumber(po.total_qty).toString()} />}
               {po.total_mw != null && <Field label="총 MW" value={`${po.total_mw.toFixed(2)}MW`} />}
               {po.memo && <Field label="메모" value={po.memo} />}
+              {po.parent_po_id && (() => {
+                const parent = allPos.find((x) => x.po_id === po.parent_po_id);
+                const label = parent?.po_number ?? po.parent_po_id.slice(0, 8);
+                return (
+                  <div className="col-span-full rounded-md bg-amber-50 border border-amber-200 px-3 py-2 flex items-center gap-2">
+                    <span className="text-[10px] font-medium text-amber-700">원계약</span>
+                    <span className="text-xs font-mono text-amber-900">{label}</span>
+                    {parent?.total_mw != null && (
+                      <span className="text-[10px] text-amber-600">{parent.total_mw.toFixed(0)}MW · {parent.status}</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* R1-8: T/T 납부현황 + LC 개설현황 요약 */}

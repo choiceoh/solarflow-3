@@ -290,7 +290,12 @@ func (h *POHandler) autoInsertPriceHistory(poID string, po model.PurchaseOrder) 
 		log.Printf("[단가이력 자동등록: contract_date 없음] po_id=%s", poID)
 		return
 	}
-	reason := "PO 계약완료 자동등록"
+	// 원계약(parent_po_id) 있으면 "계약변경", 없으면 "최초계약"
+	reasonStr := "최초계약"
+	if po.ParentPOID != nil && *po.ParentPOID != "" {
+		reasonStr = "계약변경"
+	}
+	reason := reasonStr
 
 	for _, l := range lines {
 		if l.UnitPriceUSD == nil || *l.UnitPriceUSD <= 0 {

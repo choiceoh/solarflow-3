@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useAppStore } from '@/stores/appStore';
@@ -8,7 +8,6 @@ import { fetchWithAuth } from '@/lib/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import LCListTable from '@/components/procurement/LCListTable';
 import LCForm from '@/components/procurement/LCForm';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { LC_STATUS_LABEL, type LCRecord, type LCStatus } from '@/types/procurement';
 import type { Bank, Company } from '@/types/masters';
 
@@ -27,9 +26,6 @@ export default function LCPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editLC, setEditLC] = useState<LCRecord | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<LCRecord | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
 
   const filters: Record<string, string> = {};
   if (statusFilter) filters.status = statusFilter;
@@ -62,22 +58,13 @@ export default function LCPage() {
     await fetchWithAuth(`/api/v1/lcs/${editLC.lc_id}`, { method: 'PUT', body: JSON.stringify(d) });
     setEditLC(null); reload();
   };
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true); setDeleteError('');
-    try {
-      // BL 연결 차단
-      const linkedBls = await fetchWithAuth<{ bl_id: string }[]>(`/api/v1/bls?lc_id=${deleteTarget.lc_id}`).catch(() => []);
-      if (Array.isArray(linkedBls) && linkedBls.length > 0) {
-        setDeleteError(`이 LC에 연결된 입고(B/L)가 ${linkedBls.length}건 있어 삭제할 수 없습니다.`);
-        setDeleting(false);
-        return;
-      }
-      await fetchWithAuth(`/api/v1/lcs/${deleteTarget.lc_id}`, { method: 'DELETE' });
-      setDeleteTarget(null); reload();
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : '삭제에 실패했습니다');
-    } finally { setDeleting(false); }
+  const handleDeleteLC = async (lcId: string) => {
+    const linkedBls = await fetchWithAuth<{ bl_id: string }[]>(`/api/v1/bls?lc_id=${lcId}`).catch(() => []);
+    if (Array.isArray(linkedBls) && linkedBls.length > 0) {
+      throw new Error(`이 LC에 연결된 입고(B/L)가 ${linkedBls.length}건 있어 삭제할 수 없습니다.`);
+    }
+    await fetchWithAuth(`/api/v1/lcs/${lcId}`, { method: 'DELETE' });
+    reload();
   };
 
   const statusLabel = statusFilter ? (LC_STATUS_LABEL[statusFilter as LCStatus] ?? statusFilter) : '전체 상태';
@@ -86,7 +73,7 @@ export default function LCPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-lg font-semibold">LC 관리</h1>
+      <h1 className="text-lg font-semibold">L/C 개설 관리</h1>
       <div className="flex items-center gap-2">
         <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-28 text-xs"><FT text={statusLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem>{(Object.entries(LC_STATUS_LABEL) as [LCStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
         <Select value={bankFilter || 'all'} onValueChange={(v) => setBankFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={bankLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 은행</SelectItem>{banks.map((b) => <SelectItem key={b.bank_id} value={b.bank_id}>{b.bank_name}</SelectItem>)}</SelectContent></Select>
@@ -95,29 +82,9 @@ export default function LCPage() {
         <Button size="sm" onClick={() => { setEditLC(null); setFormOpen(true); }}><Plus className="mr-1 h-4 w-4" />+ LC 개설</Button>
       </div>
       {loading ? <LoadingSpinner /> : (
-        <div className="space-y-2">
-          <LCListTable items={filtered} onEdit={(lc) => { setEditLC(lc); setFormOpen(true); }} onNew={() => { setEditLC(null); setFormOpen(true); }} />
-          {filtered.length > 0 && (
-            <div className="flex justify-end">
-              {/* 행 선택 시 삭제: 간단한 dropdown 대신 편집 행에서만 사용 */}
-              {editLC && (
-                <Button size="sm" variant="outline" className="text-destructive" onClick={() => { setDeleteTarget(editLC); setDeleteError(''); }}>
-                  <Trash2 className="mr-1 h-3.5 w-3.5" />선택 LC 삭제
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
+        <LCListTable items={filtered} onEdit={(lc) => { setEditLC(lc); setFormOpen(true); }} onNew={() => { setEditLC(null); setFormOpen(true); }} onDelete={handleDeleteLC} />
       )}
       <LCForm open={formOpen} onOpenChange={setFormOpen} onSubmit={editLC ? handleUpdate : handleCreate} editData={editLC} />
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(v) => { if (!v) { setDeleteTarget(null); setDeleteError(''); } }}
-        title="LC 삭제"
-        description={deleteError || `LC "${deleteTarget?.lc_number ?? ''}"를 삭제하시겠습니까?`}
-        onConfirm={handleDelete}
-        loading={deleting}
-      />
     </div>
   );
 }

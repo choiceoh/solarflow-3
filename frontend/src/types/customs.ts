@@ -80,15 +80,26 @@ export interface ExchangeCompareResult {
 }
 
 export const EXPENSE_TYPE_LABEL: Record<ExpenseType, string> = {
-  dock_charge: '도크차지',
-  shuttle: '셔틀비',
+  dock_charge: '부두발생비용',
+  shuttle: '셔틀및부대비용',
   customs_fee: '통관수수료',
-  transport: '운송비',
+  transport: '현장운송료',
   storage: '보관료',
-  handling: '핸들링비',
-  surcharge: '할증료',
-  lc_fee: 'LC개설수수료',
+  handling: '핸들링비(레거시)',
+  surcharge: '할증료(레거시)',
+  lc_fee: 'LC개설수수료(레거시)',
   lc_acceptance: 'LC인수수수료',
-  telegraph: '전신료',
-  other: '기타',
+  telegraph: 'LC개설전신료',
+  other: '기타비용',
 };
+/** F20: BL 부대비용 등록에서 사용하는 8종 (신규) */
+export const EXPENSE_TYPES_ACTIVE: Array<{ value: ExpenseType; label: string }> = [
+  { value: 'lc_acceptance', label: 'LC인수수수료' },
+  { value: 'telegraph', label: 'LC개설전신료' },
+  { value: 'dock_charge', label: '부두발생비용' },
+  { value: 'shuttle', label: '셔틀및부대비용' },
+  { value: 'transport', label: '현장운송료' },
+  { value: 'customs_fee', label: '통관수수료' },
+  { value: 'storage', label: '보관료' },
+  { value: 'other', label: '기타비용' },
+];

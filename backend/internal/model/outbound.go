@@ -20,6 +20,7 @@ type Outbound struct {
 	ErpOutboundNo   *string  `json:"erp_outbound_no"`
 	Status          string   `json:"status"`
 	Memo            *string  `json:"memo"`
+	BLID            *string  `json:"bl_id"`
 }
 
 // 허용되는 출고 usage_category 값 (ERP 관리구분 기반 재설계)
@@ -28,6 +29,7 @@ var validOutboundUsageCategories = map[string]bool{
 	"sale_spare":          true,
 	"construction":        true,
 	"construction_damage": true,
+	"repowering":          true,
 	"maintenance":         true,
 	"disposal":            true,
 	"transfer":            true,
@@ -61,6 +63,7 @@ type CreateOutboundRequest struct {
 	ErpOutboundNo   *string  `json:"erp_outbound_no"`
 	Status          string   `json:"status"`
 	Memo            *string  `json:"memo"`
+	BLID            *string  `json:"bl_id"`
 }
 
 // Validate — 출고 등록 요청의 입력값을 검증
@@ -85,7 +88,7 @@ func (req *CreateOutboundRequest) Validate() string {
 		return "usage_category는 필수 항목입니다"
 	}
 	if !validOutboundUsageCategories[req.UsageCategory] {
-		return "usage_category는 허용된 값이 아닙니다 (sale/sale_spare/construction/construction_damage/maintenance/disposal/transfer/adjustment/other)"
+		return "usage_category는 허용된 값이 아닙니다 (sale/sale_spare/construction/construction_damage/repowering/maintenance/disposal/transfer/adjustment/other)"
 	}
 	// 비유: status는 기본값 "active" — 입력 시에만 검증
 	if req.Status != "" && !validOutboundStatuses[req.Status] {
@@ -120,6 +123,7 @@ type UpdateOutboundRequest struct {
 	ErpOutboundNo   *string  `json:"erp_outbound_no,omitempty"`
 	Status          *string  `json:"status,omitempty"`
 	Memo            *string  `json:"memo,omitempty"`
+	BLID            *string  `json:"bl_id,omitempty"`
 }
 
 // Validate — 출고 수정 요청의 입력값을 검증
@@ -137,7 +141,7 @@ func (req *UpdateOutboundRequest) Validate() string {
 		return "warehouse_id는 빈 값으로 변경할 수 없습니다"
 	}
 	if req.UsageCategory != nil && !validOutboundUsageCategories[*req.UsageCategory] {
-		return "usage_category는 허용된 값이 아닙니다 (sale/sale_spare/construction/construction_damage/maintenance/disposal/transfer/adjustment/other)"
+		return "usage_category는 허용된 값이 아닙니다 (sale/sale_spare/construction/construction_damage/repowering/maintenance/disposal/transfer/adjustment/other)"
 	}
 	if req.Status != nil && !validOutboundStatuses[*req.Status] {
 		return "status는 \"active\", \"cancel_pending\", \"cancelled\" 중 하나여야 합니다"

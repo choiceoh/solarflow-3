@@ -15,6 +15,8 @@ interface ConfirmDialogProps {
   description?: string;
   onConfirm: () => void;
   loading?: boolean;
+  confirmLabel?: string;
+  variant?: 'default' | 'destructive';
 }
 
 export default function ConfirmDialog({
@@ -24,6 +26,8 @@ export default function ConfirmDialog({
   description = '정말 실행하시겠습니까?',
   onConfirm,
   loading,
+  confirmLabel,
+  variant = 'default',
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -36,8 +40,8 @@ export default function ConfirmDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             취소
           </Button>
-          <Button onClick={onConfirm} disabled={loading}>
-            {loading ? '처리 중...' : '확인'}
+          <Button variant={variant} onClick={onConfirm} disabled={loading}>
+            {loading ? '처리 중...' : (confirmLabel ?? '확인')}
           </Button>
         </DialogFooter>
       </DialogContent>

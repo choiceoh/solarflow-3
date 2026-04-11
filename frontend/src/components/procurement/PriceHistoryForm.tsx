@@ -18,7 +18,7 @@ function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: str
   return <span className={`flex flex-1 text-left truncate ${text ? '' : 'text-muted-foreground'}`} data-slot="select-value">{text || placeholder}</span>;
 }
 
-const REASON_OPTIONS = ['시세변동', '재협상', '계약갱신', '최초계약'] as const;
+const REASON_OPTIONS = ['최초계약', '계약변경'] as const;
 
 const schema = z.object({
   manufacturer_id: z.string().min(1, '제조사는 필수입니다'),
@@ -45,7 +45,9 @@ export default function PriceHistoryForm({ open, onOpenChange, onSubmit, editDat
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) as any });
 
   const selectedMfgId = watch('manufacturer_id');
+  const selectedProductId = watch('product_id');
   const reasonSelect = watch('reason_select');
+  const [prevPriceHint, setPrevPriceHint] = useState<string>('');
 
   useEffect(() => {
     fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers').then((l) => setManufacturers(l.filter((m) => m.is_active))).catch(() => {});
@@ -66,6 +68,22 @@ export default function PriceHistoryForm({ open, onOpenChange, onSubmit, editDat
     if ((REASON_OPTIONS as readonly string[]).includes(reason)) return { select: reason, text: '' };
     return { select: '', text: reason };
   };
+
+  // 품목 선택 시 최근 단가 자동 조회 (신규 등록 시)
+  useEffect(() => {
+    if (!open || editData || !selectedProductId) { setPrevPriceHint(''); return; }
+    fetchWithAuth<{ price_history_id: string; new_price: number; change_date: string }[]>(
+      `/api/v1/price-histories?product_id=${selectedProductId}`
+    ).then((list) => {
+      if (list.length > 0) {
+        const latest = list[0];
+        setValue('previous_price', latest.new_price);
+        setPrevPriceHint(`최근 단가 $${latest.new_price.toFixed(4)} (${latest.change_date.slice(0, 10)}) 자동입력`);
+      } else {
+        setPrevPriceHint('');
+      }
+    }).catch(() => setPrevPriceHint(''));
+  }, [open, editData, selectedProductId, setValue]);
 
   useEffect(() => {
     if (open) {
@@ -114,14 +132,18 @@ export default function PriceHistoryForm({ open, onOpenChange, onSubmit, editDat
             </Select>{errors.manufacturer_id && <p className="text-xs text-destructive">{errors.manufacturer_id.message}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>품번 *</Label>
-            <Select value={watch('product_id') ?? ''} onValueChange={(v) => setValue('product_id', v ?? '')}><SelectTrigger className="w-full"><Txt text={(() => { const p = filteredProducts.find((p) => p.product_id === watch('product_id')); return p ? `${p.product_code} — ${p.product_name}` : ''; })()} /></SelectTrigger>
-              <SelectContent>{filteredProducts.map((p) => <SelectItem key={p.product_id} value={p.product_id}>{p.product_code} — {p.product_name}</SelectItem>)}</SelectContent>
+            <Label>품명 *</Label>
+            <Select value={selectedProductId ?? ''} onValueChange={(v) => setValue('product_id', v ?? '')}><SelectTrigger className="w-full"><Txt text={(() => { const p = filteredProducts.find((p) => p.product_id === selectedProductId); return p ? `${p.product_name}${p.spec_wp ? ` (${p.spec_wp}Wp)` : ''}` : ''; })()} /></SelectTrigger>
+              <SelectContent>{filteredProducts.map((p) => <SelectItem key={p.product_id} value={p.product_id}>{p.product_name}{p.spec_wp ? ` (${p.spec_wp}Wp)` : ''}</SelectItem>)}</SelectContent>
             </Select>{errors.product_id && <p className="text-xs text-destructive">{errors.product_id.message}</p>}
           </div>
           <div className="space-y-1.5"><Label>변경일 *</Label><DateInput value={watch('change_date') ?? ''} onChange={(v) => setValue('change_date', v, { shouldDirty: true })} />{errors.change_date && <p className="text-xs text-destructive">{errors.change_date.message}</p>}</div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>이전단가(USD/Wp)</Label><Input type="number" step="0.0001" {...register('previous_price')} /></div>
+            <div className="space-y-1.5">
+              <Label>이전단가(USD/Wp)</Label>
+              <Input type="number" step="0.0001" {...register('previous_price')} />
+              {prevPriceHint && <p className="text-xs text-blue-600">{prevPriceHint}</p>}
+            </div>
             <div className="space-y-1.5"><Label>변경단가(USD/Wp) *</Label><Input type="number" step="0.0001" {...register('new_price')} />{errors.new_price && <p className="text-xs text-destructive">{errors.new_price.message}</p>}</div>
           </div>
           <div className="grid grid-cols-2 gap-3">

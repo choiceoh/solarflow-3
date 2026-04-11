@@ -26,7 +26,7 @@ export default function InboundPage() {
   const [selectedBL, setSelectedBL] = useState<string | null>(null);
   const [presetPOId, setPresetPOId] = useState<string | null>(null);
   const location = useLocation();
-  // 사이드바 "입고 관리" 클릭 시 상세에서 목록으로 복귀
+  // 사이드바 "B/L 입고 관리" 클릭 시 상세에서 목록으로 복귀
   useEffect(() => { setSelectedBL(null); }, [location.key]);
   // D-085: ?po=xxx 쿼리 감지 → 입고 등록 폼 자동 열기
   useEffect(() => {
@@ -131,7 +131,7 @@ export default function InboundPage() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">입고 관리</h1>
+        <h1 className="text-lg font-semibold">B/L 입고 관리</h1>
         <div className="flex items-center gap-2">
           <ExcelToolbar type="inbound" />
           <Button size="sm" onClick={() => setFormOpen(true)}>

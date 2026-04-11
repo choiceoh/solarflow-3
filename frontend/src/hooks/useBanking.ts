@@ -2,7 +2,82 @@ import { useState, useEffect, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { fetchCalc, companyQueryUrl } from '@/lib/companyUtils';
-import type { LimitChange, LCLimitTimeline, LCMaturityAlert, LCFeeCalc } from '@/types/banking';
+import type { LimitChange, LCLimitTimeline, LCMaturityAlert, LCFeeCalc, BankLimitRow } from '@/types/banking';
+import type { Bank } from '@/types/masters';
+import type { LCRecord } from '@/types/procurement';
+import type { Company } from '@/types/masters';
+
+export interface BankLimitGroup {
+  company_id: string;
+  company_name: string;
+  rows: BankLimitRow[];
+}
+
+/**
+ * useAllBankLimitGroups — 모든 법인의 은행별 한도 현황을 Go API에서 직접 집계
+ * 실행금액 = 미결제(status != settled) + 미상환(repaid != true) LC 합산
+ * TODO: Rust 계산엔진 연동
+ */
+export function useAllBankLimitGroups() {
+  const [groups, setGroups] = useState<BankLimitGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [banks, lcs, companies] = await Promise.all([
+        fetchWithAuth<Bank[]>('/api/v1/banks').catch(() => [] as Bank[]),
+        fetchWithAuth<LCRecord[]>('/api/v1/lcs').catch(() => [] as LCRecord[]),
+        fetchWithAuth<Company[]>('/api/v1/companies').catch(() => [] as Company[]),
+      ]);
+
+      // 활성 LC만 집계 (결제완료·상환 제외)
+      const activeLcs = (lcs ?? []).filter((l) => l.status !== 'settled' && !l.repaid);
+      // bank_id별 실행금액
+      const usedByBank: Record<string, number> = {};
+      activeLcs.forEach((l) => {
+        usedByBank[l.bank_id] = (usedByBank[l.bank_id] ?? 0) + (l.amount_usd ?? 0);
+      });
+
+      // 법인별로 그룹핑
+      const companyMap = new Map((companies ?? []).map((c) => [c.company_id, c.company_name]));
+      const groupMap: Record<string, BankLimitGroup> = {};
+      // 법인 순서 고정
+      (companies ?? []).forEach((c) => {
+        groupMap[c.company_id] = { company_id: c.company_id, company_name: c.company_name, rows: [] };
+      });
+
+      (banks ?? []).filter((b) => b.is_active).forEach((b) => {
+        const used = usedByBank[b.bank_id] ?? 0;
+        const available = Math.max(0, b.lc_limit_usd - used);
+        const usage_rate = b.lc_limit_usd > 0 ? (used / b.lc_limit_usd) * 100 : 0;
+        const row: BankLimitRow = {
+          bank_id: b.bank_id,
+          bank_name: b.bank_name,
+          limit_approve_date: b.limit_approve_date,
+          limit_expiry_date: b.limit_expiry_date,
+          lc_limit_usd: b.lc_limit_usd,
+          used,
+          available,
+          usage_rate,
+          opening_fee_rate: b.opening_fee_rate,
+          acceptance_fee_rate: b.acceptance_fee_rate,
+          fee_calc_method: b.fee_calc_method,
+        };
+        const cid = b.company_id;
+        const companyName = companyMap.get(cid) ?? cid;
+        if (!groupMap[cid]) groupMap[cid] = { company_id: cid, company_name: companyName, rows: [] };
+        groupMap[cid].rows.push(row);
+      });
+
+      setGroups(Object.values(groupMap).filter((g) => g.rows.length > 0));
+    } catch { setGroups([]); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+  return { groups, loading, reload: load };
+}
 
 // 한도 변경 이력 조회 (CRUD — "all"이면 company_id 생략)
 export function useLimitChangeList() {

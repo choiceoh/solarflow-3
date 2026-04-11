@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +20,8 @@ const schema = z.object({
   company_id: z.string().min(1, '법인은 필수입니다'),
   bank_name: z.string().min(1, '은행명은 필수입니다'),
   lc_limit_usd: z.coerce.number().positive('양수만 가능합니다'),
+  limit_approve_date: z.string().optional(),
+  limit_expiry_date: z.string().optional(),
   opening_fee_rate: z.coerce.number().optional().or(z.literal('')),
   acceptance_fee_rate: z.coerce.number().optional().or(z.literal('')),
   fee_calc_method: z.string().optional(),
@@ -47,6 +50,8 @@ export default function BankForm({ open, onOpenChange, onSubmit, editData }: Pro
           company_id: editData.company_id,
           bank_name: editData.bank_name,
           lc_limit_usd: editData.lc_limit_usd,
+          limit_approve_date: editData.limit_approve_date?.slice(0, 10) ?? '',
+          limit_expiry_date: editData.limit_expiry_date?.slice(0, 10) ?? '',
           opening_fee_rate: editData.opening_fee_rate ?? '',
           acceptance_fee_rate: editData.acceptance_fee_rate ?? '',
           fee_calc_method: editData.fee_calc_method ?? '',
@@ -56,6 +61,7 @@ export default function BankForm({ open, onOpenChange, onSubmit, editData }: Pro
         reset({
           company_id: '', bank_name: '',
           lc_limit_usd: '' as unknown as number,
+          limit_approve_date: '', limit_expiry_date: '',
           opening_fee_rate: '', acceptance_fee_rate: '',
           fee_calc_method: '', memo: '',
         });
@@ -67,6 +73,8 @@ export default function BankForm({ open, onOpenChange, onSubmit, editData }: Pro
     const payload: Record<string, unknown> = { ...data };
     if (data.opening_fee_rate === '' || data.opening_fee_rate === undefined) delete payload.opening_fee_rate;
     if (data.acceptance_fee_rate === '' || data.acceptance_fee_rate === undefined) delete payload.acceptance_fee_rate;
+    if (!data.limit_approve_date) delete payload.limit_approve_date;
+    if (!data.limit_expiry_date) delete payload.limit_expiry_date;
     await onSubmit(payload);
     onOpenChange(false);
   };
@@ -97,6 +105,16 @@ export default function BankForm({ open, onOpenChange, onSubmit, editData }: Pro
             <Label>LC 한도(USD) *</Label>
             <Input type="number" step="0.01" {...register('lc_limit_usd')} />
             {errors.lc_limit_usd && <p className="text-xs text-destructive">{errors.lc_limit_usd.message}</p>}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>승인일</Label>
+              <DateInput value={watch('limit_approve_date') ?? ''} onChange={(v) => setValue('limit_approve_date', v, { shouldDirty: true })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>승인기한</Label>
+              <DateInput value={watch('limit_expiry_date') ?? ''} onChange={(v) => setValue('limit_expiry_date', v, { shouldDirty: true })} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

@@ -25,15 +25,14 @@ const LEGACY_CT: Record<string, string> = {
   exclusive: '독점 (레거시)',
   annual: '연간 (레거시)',
 };
-// R1-4: 사용자는 예정/계약완료만 수동 선택. 선적중/완료는 BL 등록 상태에 따라 백엔드 자동 전환.
+// 모든 상태를 수동 선택 가능 (BL 자동 전환도 동작하지만 사용자가 오버라이드 가능)
 const PO_STATUSES: Record<string, string> = {
   draft: '예정',
   contracted: '계약완료',
+  shipping: '선적중',
+  completed: '완료',
 };
-const PO_STATUSES_READONLY: Record<string, string> = {
-  shipping: '선적중 (자동)',
-  completed: '완료 (자동)',
-};
+const PO_STATUSES_READONLY: Record<string, string> = {};
 const INCOTERMS = ['FOB', 'CIF', 'CFR', 'EXW', 'FCA', 'DAP', 'DDP', 'CIP'];
 
 const BALANCE_DAYS = ['30', '45', '60', '90', '120', '180'] as const;
@@ -133,6 +132,13 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
   const [status, setStatus] = useState('draft');
   const [memo, setMemo] = useState('');
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerms>(defaultPT());
+  // 원계약 연결 (계약변경 시)
+  const [parentPoId, setParentPoId] = useState('');
+  const [parentPoOptions, setParentPoOptions] = useState<Pick<PurchaseOrder, 'po_id' | 'po_number' | 'total_mw' | 'status'>[]>([]);
+  // 신규 등록 시 계약 구분 선택
+  const [isAmendment, setIsAmendment] = useState(false);
+  // 변경계약 원계약 선택을 위한 전체 활성 PO 목록 (completed 제외)
+  const [allActivePOs, setAllActivePOs] = useState<PurchaseOrder[]>([]);
 
   // 발주품목
   const [lines, setLines] = useState<POLine[]>([emptyLine()]);
@@ -152,6 +158,17 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
     fetchWithAuth<Product[]>(`/api/v1/products?manufacturer_id=${mfgId}`)
       .then((list) => setProducts(list.filter((p) => p.is_active))).catch(() => setProducts([]));
   }, [mfgId]);
+
+  /* 제조사 → 원계약 후보 PO 목록 (신규 등록 시) */
+  useEffect(() => {
+    if (!mfgId || !companyId) { setParentPoOptions([]); return; }
+    fetchWithAuth<Pick<PurchaseOrder, 'po_id' | 'po_number' | 'total_mw' | 'status'>[]>(
+      `/api/v1/pos?manufacturer_id=${mfgId}&company_id=${companyId}`
+    ).then((list) => {
+      // 현재 편집 중인 PO 자신은 제외
+      setParentPoOptions(list.filter((p) => p.po_id !== editData?.po_id));
+    }).catch(() => setParentPoOptions([]));
+  }, [mfgId, companyId, editData?.po_id]);
 
   /* 폼 초기화 — 수정 모드는 서버에서 최신 데이터 fetch (목록 캐시가 stale일 수 있음) */
   useEffect(() => {
@@ -174,6 +191,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
         setStatus(d.status ?? 'draft');
         setMemo((d.memo ?? '').replace(/^\[독점\]\s*/, '').replace(/^\[BAF\/CAF\]\s*/, ''));
         setPaymentTerms(parsePT(d.payment_terms ?? ''));
+        setParentPoId(d.parent_po_id ?? '');
       };
       fillFromPO(editData);
       setLines([emptyLine()]);
@@ -247,9 +265,28 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       setContractDate(''); setPeriodStart(''); setPeriodEnd('');
       setIncoterms(''); setBafCaf(false); setExchangeRate('');
       setStatus('draft'); setMemo(''); setPaymentTerms(defaultPT());
+      setParentPoId('');
+      setIsAmendment(false);
       setLines([emptyLine()]);
+      // 변경계약 선택용 활성 PO 목록 로드 (completed 제외)
+      fetchWithAuth<PurchaseOrder[]>('/api/v1/pos')
+        .then((list) => setAllActivePOs((list ?? []).filter((p) => p.status !== 'completed' && p.status !== 'draft')))
+        .catch(() => setAllActivePOs([]));
     }
   }, [open, editData, globalCompanyId]);
+
+  /* 변경계약 — 원계약 선택 시 제조사·법인 자동채움 */
+  const handleParentPoSelect = (v: string | null) => {
+    const pid = !v || v === '_none' ? '' : v;
+    setParentPoId(pid);
+    if (pid) {
+      const parent = allActivePOs.find((p) => p.po_id === pid);
+      if (parent) {
+        setMfgId(parent.manufacturer_id ?? '');
+        setCompanyId(parent.company_id ?? '');
+      }
+    }
+  };
 
   /* 라인 조작 */
   const updateLine = (i: number, f: keyof POLine, v: string) =>
@@ -355,12 +392,18 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
         total = qty * p.spec_wp * pricePerWp;
       }
       const unitPerEA = qty && total ? total / qty : undefined;
+      // 단가이력 자동생성용 — USD/Wp 단가 (Go API는 무시, 프론트에서만 사용)
+      const rawPrice = parseFloat(l.unit_price_usd_wp || '0');
+      const pricePerWp = l.priceMode === 'cents' ? rawPrice / 100 : rawPrice; // USD/Wp
       return {
         po_line_id: l.po_line_id, // R1-5: 수정 시 UPDATE 식별자
         product_id: l.product_id,
         quantity: qty,
         unit_price_usd: unitPerEA && !isNaN(unitPerEA) ? Number(unitPerEA.toFixed(4)) : undefined,
         total_amount_usd: total || undefined,
+        // 이하 두 필드는 단가이력 자동생성용 (DB저장 X, Go가 무시)
+        _price_per_wp_usd: pricePerWp > 0 ? pricePerWp : undefined,
+        _spec_wp: p?.spec_wp,
       };
     });
 
@@ -380,6 +423,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       status,
       // 독점/BAF·CAF 플래그는 별도 DB 컬럼이 없어 메모 접두사로 보존
       memo: ((isExclusive ? '[독점] ' : '') + (bafCaf ? '[BAF/CAF] ' : '') + (memo || '')).trim() || undefined,
+      parent_po_id: parentPoId || undefined,
       lines: linesPayload, // R1-5: 수정 모드에서도 라인 전송 (호출자가 diff CRUD 처리)
     };
     Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k]; });
@@ -417,6 +461,76 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
         <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') e.preventDefault(); }}
           className="space-y-3">
+
+          {/* ── 신규 등록 시 계약 구분 선택 ── */}
+          {!editData && (
+            <div className="rounded-md border bg-muted/20 px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">계약 구분 *</p>
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="amendmentType"
+                    checked={!isAmendment}
+                    onChange={() => { setIsAmendment(false); setParentPoId(''); }}
+                  />
+                  <span className="text-sm font-medium">신규 계약</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="amendmentType"
+                    checked={isAmendment}
+                    onChange={() => setIsAmendment(true)}
+                  />
+                  <span className="text-sm font-medium text-amber-700">변경계약 (원계약 연결)</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* ── 변경계약 선택 시: 원계약 PO 먼저 선택 ── */}
+          {!editData && isAmendment && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-2">
+              <p className="text-sm font-semibold text-amber-800">원계약 PO 선택 *</p>
+              <Select value={parentPoId} onValueChange={handleParentPoSelect}>
+                <SelectTrigger className="w-full bg-white">
+                  <Txt
+                    text={(() => {
+                      const p = allActivePOs.find((x) => x.po_id === parentPoId);
+                      return p
+                        ? `${p.po_number ?? p.po_id.slice(0, 8)} | ${p.manufacturer_name ?? '—'} | ${(p.total_mw ?? 0).toFixed(1)}MW | ${p.status}`
+                        : '';
+                    })()}
+                    placeholder="원계약 PO를 선택하세요"
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— 선택 안함 —</SelectItem>
+                  {allActivePOs.map((p) => (
+                    <SelectItem key={p.po_id} value={p.po_id}>
+                      {`${p.po_number ?? p.po_id.slice(0, 8)} | ${p.manufacturer_name ?? '—'} | ${(p.total_mw ?? 0).toFixed(1)}MW | ${p.status}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {parentPoId && (() => {
+                const p = allActivePOs.find((x) => x.po_id === parentPoId);
+                if (!p) return null;
+                return (
+                  <div className="rounded bg-amber-100 px-3 py-2 text-xs text-amber-800 grid grid-cols-4 gap-2">
+                    <div><div className="text-amber-600 mb-0.5">제조사</div><div className="font-medium">{p.manufacturer_name ?? '—'}</div></div>
+                    <div><div className="text-amber-600 mb-0.5">계약용량</div><div className="font-mono font-medium">{(p.total_mw ?? 0).toFixed(1)}MW</div></div>
+                    <div><div className="text-amber-600 mb-0.5">계약일</div><div className="font-medium">{p.contract_date?.slice(0, 10) ?? '—'}</div></div>
+                    <div><div className="text-amber-600 mb-0.5">상태</div><div className="font-medium">{p.status}</div></div>
+                  </div>
+                );
+              })()}
+              <p className="text-[10px] text-amber-700">
+                ※ 원계약 선택 시 제조사·법인이 자동 채워집니다. contracted 확정 시 단가이력이 "계약변경" 사유로 자동 등록되며, 원계약은 완료(completed) 처리됩니다.
+              </p>
+            </div>
+          )}
 
           {/* 헤더 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -501,7 +615,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
             <div className="space-y-1.5">
               <Opt>상태</Opt>
               <Select value={status} onValueChange={(v) => setStatus(v ?? 'draft')}>
-                <SelectTrigger className="w-full" disabled={status === 'shipping' || status === 'completed'}>
+                <SelectTrigger className="w-full">
                   <Txt text={PO_STATUSES[status] ?? PO_STATUSES_READONLY[status] ?? ''} />
                 </SelectTrigger>
                 <SelectContent>
@@ -510,6 +624,33 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
               </Select>
             </div>
           </div>
+
+          {/* 원계약 연결 — 수정 모드에서 기존 연결 표시/변경 */}
+          {editData && parentPoOptions.length > 0 && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-1.5">
+              <Label className="text-amber-800 font-medium text-xs">원계약 연결</Label>
+              <Select value={parentPoId} onValueChange={(v) => setParentPoId(v === '_none' ? '' : (v ?? ''))}>
+                <SelectTrigger className="w-full bg-white">
+                  <Txt text={
+                    parentPoId
+                      ? (() => {
+                          const p = parentPoOptions.find((x) => x.po_id === parentPoId);
+                          return p ? `${p.po_number ?? p.po_id.slice(0, 8)} (${p.total_mw?.toFixed(0) ?? '?'}MW · ${p.status})` : parentPoId.slice(0, 8);
+                        })()
+                      : ''
+                  } placeholder="연결 안함" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">연결 안함</SelectItem>
+                  {parentPoOptions.map((p) => (
+                    <SelectItem key={p.po_id} value={p.po_id}>
+                      {p.po_number ?? p.po_id.slice(0, 8)} — {p.total_mw?.toFixed(0) ?? '?'}MW · {p.status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* 발주품목 */}
           <div className="space-y-3">

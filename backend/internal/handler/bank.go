@@ -164,6 +164,24 @@ func (h *BankHandler) Update(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, updated[0])
 }
 
+// Delete — DELETE /api/v1/banks/{id} — 은행 삭제
+// 비유: 은행 거래 카드를 캐비넷에서 완전히 제거하는 것
+func (h *BankHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	_, _, err := h.DB.From("banks").
+		Delete("", "").
+		Eq("bank_id", id).
+		Execute()
+	if err != nil {
+		log.Printf("[은행 삭제 실패] id=%s, err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "은행 삭제에 실패했습니다")
+		return
+	}
+
+	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "deleted"})
+}
+
 // ToggleStatus — PATCH /api/v1/banks/{id}/status — 은행 활성/비활성
 func (h *BankHandler) ToggleStatus(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")

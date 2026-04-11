@@ -114,7 +114,7 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, editD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editData ? '매출 수정' : '매출 등록'}</DialogTitle>
         </DialogHeader>
@@ -123,6 +123,13 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, editD
             {submitError}
           </div>
         )}
+        {/* 출고 품목 정보 박스 */}
+        <div className="rounded-md border p-3 bg-muted/30 text-xs grid grid-cols-4 gap-2">
+          <div><div className="text-muted-foreground">품명</div><div className="font-medium truncate">{outbound.product_name ?? '—'}</div></div>
+          <div><div className="text-muted-foreground">규격</div><div className="font-medium">{outbound.product_code ?? `${outbound.spec_wp ?? '—'}Wp`}</div></div>
+          <div><div className="text-muted-foreground">수량</div><div className="font-mono font-medium">{outbound.quantity.toLocaleString('ko-KR')}장</div></div>
+          <div><div className="text-muted-foreground">용량</div><div className="font-mono font-medium">{(outbound.capacity_kw ?? 0).toFixed(1)}kW</div></div>
+        </div>
         <form onSubmit={handleSubmit(handle)} className="space-y-3">
           <div className="space-y-1.5">
             <Label>거래처 *</Label>

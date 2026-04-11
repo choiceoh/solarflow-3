@@ -2,7 +2,7 @@
 
 export type OutboundStatus = 'active' | 'cancel_pending' | 'cancelled';
 export type UsageCategory =
-  | 'sale' | 'sale_spare' | 'construction' | 'construction_damage'
+  | 'sale' | 'sale_spare' | 'construction' | 'construction_damage' | 'repowering'
   | 'maintenance' | 'disposal' | 'transfer' | 'adjustment' | 'other';
 
 export interface Outbound {
@@ -31,6 +31,8 @@ export interface Outbound {
   erp_outbound_no?: string;
   status: OutboundStatus;
   memo?: string;
+  bl_id?: string;
+  bl_number?: string;
   sale?: Sale;
 }
 
@@ -66,8 +68,9 @@ export const OUTBOUND_STATUS_COLOR: Record<OutboundStatus, string> = {
 export const USAGE_CATEGORY_LABEL: Record<UsageCategory, string> = {
   sale: '상품판매',
   sale_spare: '상품판매(스페어)',
-  construction: '공사사용',
-  construction_damage: '공사사용(파손)',
+  construction: '공사현장 출고',
+  construction_damage: '공사현장 출고(파손)',
+  repowering: '리파워링 출고',
   maintenance: '유지관리',
   disposal: '폐기',
   transfer: '창고이동',

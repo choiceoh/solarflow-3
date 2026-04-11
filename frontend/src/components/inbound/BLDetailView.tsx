@@ -17,6 +17,7 @@ import { useBLDetail, useBLLines } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
 import { INBOUND_TYPE_LABEL, type BLLineItem } from '@/types/inbound';
 import type { Manufacturer } from '@/types/masters';
+import BLExpensesTab from './BLExpensesTab';
 
 interface Props {
   blId: string;
@@ -103,12 +104,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
         <Button variant="outline" size="sm" onClick={() => setEditBLOpen(true)}>
           <Pencil className="mr-1 h-3.5 w-3.5" />수정
         </Button>
-        {/* D-085: BL → 면장 데이터 전달 (해외직수입만) */}
-        {bl.inbound_type === 'import' && (
-          <Button size="sm" onClick={() => { window.location.href = `/customs?bl=${blId}`; }}>
-            면장 등록
-          </Button>
-        )}
+        {/* F20: 면장 등록 버튼 삭제 — 면장번호는 BLForm 수정에서 직접 입력 */}
         <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
           <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
         </Button>
@@ -118,7 +114,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
         <TabsList>
           <TabsTrigger value="basic">기본정보</TabsTrigger>
           <TabsTrigger value="lines">입고품목</TabsTrigger>
-          <TabsTrigger value="customs">면장/원가</TabsTrigger>
+          <TabsTrigger value="customs">부대비용 등록</TabsTrigger>
           <TabsTrigger value="outbound">출고추적</TabsTrigger>
         </TabsList>
 
@@ -155,6 +151,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
                 {isImport && <Field label="항구" value={bl.port} />}
                 {isImport && <Field label="포워더" value={bl.forwarder} />}
                 {isImport && <Field label="Invoice No." value={bl.invoice_number} />}
+                {bl.declaration_number && <Field label="면장번호" value={bl.declaration_number} />}
                 {isImport && <Field label="인코텀즈" value={bl.incoterms} />}
                 <Field label="입고 창고" value={bl.warehouse_name} />
                 {bl.payment_terms && <Field label="결제조건" value={bl.payment_terms} />}
@@ -183,15 +180,8 @@ export default function BLDetailView({ blId, onBack }: Props) {
         </TabsContent>
 
         <TabsContent value="customs">
-          {/* R3: 면장/원가 — 면장관리로 이동 + Landed/환율비교 패널 */}
-          <div className="space-y-3">
-            <Card><CardHeader className="pb-2 pt-3"><CardTitle className="text-sm">면장 정보</CardTitle></CardHeader>
-              <CardContent className="pb-3 text-xs space-y-2">
-                <p className="text-muted-foreground">면장정보(declarations) / 부대비용(11유형) / Landed Cost / 환율비교는 면장 관리에서 처리합니다.</p>
-                <Button size="sm" onClick={() => { window.location.href = `/customs?bl=${blId}`; }}>면장 관리로 이동</Button>
-              </CardContent>
-            </Card>
-          </div>
+          {/* F20: BL 부대비용 등록 (8유형 인라인 + Wp당 자동계산) */}
+          <BLExpensesTab blId={blId} lines={lines} />
         </TabsContent>
 
         <TabsContent value="outbound">

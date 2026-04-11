@@ -64,13 +64,14 @@ pub async fn calculate_forecast(pool: &PgPool, req: &SupplyForecastRequest) -> R
         "SELECT o.product_id, COALESCE(SUM(o.capacity_kw),0)::float8 as kw FROM outbounds o JOIN products p ON o.product_id=p.product_id WHERE o.status='active' AND o.company_id=$1 AND ($2::uuid IS NULL OR o.product_id=$2) AND ($3::uuid IS NULL OR p.manufacturer_id=$3) GROUP BY o.product_id"
     ).bind(company_id).bind(pid).bind(mid).fetch_all(pool).await?);
 
-    // 2. 입고예정 (ETA 있음/없음)
+    // 2. 입고예정 — L/C 오픈 완료 기준 (재고 현황과 동일 기준 적용)
+    // T/T 방식(lc_id IS NULL)은 LC 조건 없이 포함
     let incoming_by_month = month_kw_map(sqlx::query_as::<_, MonthKwRow>(
-        "SELECT bli.product_id, TO_CHAR(bl.eta,'YYYY-MM') as month, COALESCE(SUM(bli.capacity_kw),0)::float8 as kw FROM bl_line_items bli JOIN bl_shipments bl ON bli.bl_id=bl.bl_id JOIN products p ON bli.product_id=p.product_id WHERE bl.status IN ('scheduled','shipping','arrived','customs') AND bl.company_id=$1 AND ($2::uuid IS NULL OR bli.product_id=$2) AND ($3::uuid IS NULL OR p.manufacturer_id=$3) AND bl.eta IS NOT NULL GROUP BY bli.product_id, month"
+        "SELECT bli.product_id, TO_CHAR(bl.eta,'YYYY-MM') as month, COALESCE(SUM(bli.capacity_kw),0)::float8 as kw FROM bl_line_items bli JOIN bl_shipments bl ON bli.bl_id=bl.bl_id JOIN products p ON bli.product_id=p.product_id WHERE bl.status IN ('scheduled','shipping','arrived','customs') AND bl.company_id=$1 AND ($2::uuid IS NULL OR bli.product_id=$2) AND ($3::uuid IS NULL OR p.manufacturer_id=$3) AND bl.eta IS NOT NULL AND (bl.lc_id IS NULL OR EXISTS (SELECT 1 FROM lc_records lc WHERE lc.lc_id=bl.lc_id AND lc.status='opened')) GROUP BY bli.product_id, month"
     ).bind(company_id).bind(pid).bind(mid).fetch_all(pool).await?);
 
     let incoming_unsched = kw_map(sqlx::query_as::<_, KwRow>(
-        "SELECT bli.product_id, COALESCE(SUM(bli.capacity_kw),0)::float8 as kw FROM bl_line_items bli JOIN bl_shipments bl ON bli.bl_id=bl.bl_id JOIN products p ON bli.product_id=p.product_id WHERE bl.status IN ('scheduled','shipping','arrived','customs') AND bl.company_id=$1 AND ($2::uuid IS NULL OR bli.product_id=$2) AND ($3::uuid IS NULL OR p.manufacturer_id=$3) AND bl.eta IS NULL GROUP BY bli.product_id"
+        "SELECT bli.product_id, COALESCE(SUM(bli.capacity_kw),0)::float8 as kw FROM bl_line_items bli JOIN bl_shipments bl ON bli.bl_id=bl.bl_id JOIN products p ON bli.product_id=p.product_id WHERE bl.status IN ('scheduled','shipping','arrived','customs') AND bl.company_id=$1 AND ($2::uuid IS NULL OR bli.product_id=$2) AND ($3::uuid IS NULL OR p.manufacturer_id=$3) AND bl.eta IS NULL AND (bl.lc_id IS NULL OR EXISTS (SELECT 1 FROM lc_records lc WHERE lc.lc_id=bl.lc_id AND lc.status='opened')) GROUP BY bli.product_id"
     ).bind(company_id).bind(pid).bind(mid).fetch_all(pool).await?);
 
     // PO 잔량 (B/L 미생성분)

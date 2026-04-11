@@ -20,6 +20,7 @@ export interface PurchaseOrder {
   contract_period_end?: string;
   status: POStatus;
   memo?: string;
+  parent_po_id?: string;
 }
 
 export interface POLineItem {
@@ -79,6 +80,7 @@ export interface PriceHistory {
   price_history_id: string;
   product_id: string;
   product_name?: string;
+  spec_wp?: number;
   manufacturer_id: string;
   manufacturer_name?: string;
   change_date: string;

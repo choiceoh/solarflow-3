@@ -20,7 +20,7 @@ export default function PriceHistoryTable({ items, onEdit, onNew }: Props) {
     <div className="rounded-md border overflow-x-auto">
       <Table className="text-xs">
         <TableHeader><TableRow>
-          <TableHead>제조사</TableHead><TableHead>품번</TableHead><TableHead>변경일</TableHead>
+          <TableHead>제조사</TableHead><TableHead>품명/규격</TableHead><TableHead>변경일</TableHead>
           <TableHead className="text-right">이전단가(USD/Wp)</TableHead><TableHead className="text-right">변경단가(USD/Wp)</TableHead>
           <TableHead>변화</TableHead><TableHead>사유</TableHead><TableHead>관련PO</TableHead><TableHead className="w-10"></TableHead>
         </TableRow></TableHeader>
@@ -28,7 +28,7 @@ export default function PriceHistoryTable({ items, onEdit, onNew }: Props) {
           {items.map((ph) => (
             <TableRow key={ph.price_history_id}>
               <TableCell>{ph.manufacturer_name ?? '—'}</TableCell>
-              <TableCell className="font-mono">{ph.product_name ?? '—'}</TableCell>
+              <TableCell>{ph.product_name ? `${ph.product_name}${ph.spec_wp ? ` (${ph.spec_wp}Wp)` : ''}` : '—'}</TableCell>
               <TableCell>{formatDate(ph.change_date)}</TableCell>
               <TableCell className="text-right">{ph.previous_price != null ? `$${ph.previous_price.toFixed(4)}` : '—'}</TableCell>
               <TableCell className="text-right font-medium">${ph.new_price.toFixed(4)}</TableCell>

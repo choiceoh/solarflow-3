@@ -76,6 +76,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Get("/{id}", bankH.GetByID)
 			r.Put("/{id}", bankH.Update)
 			r.Patch("/{id}/status", bankH.ToggleStatus)
+			r.Delete("/{id}", bankH.Delete)
 		})
 
 		poH := handler.NewPOHandler(db)
@@ -187,6 +188,15 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Get("/{id}", outboundH.GetByID)
 			r.Put("/{id}", outboundH.Update)
 			r.Delete("/{id}", outboundH.Delete)
+		})
+
+		// 가용재고 배정 (판매예정/공사예정)
+		allocH := handler.NewInventoryAllocationHandler(db)
+		r.Route("/inventory/allocations", func(r chi.Router) {
+			r.Get("/", allocH.List)
+			r.Post("/", allocH.Create)
+			r.Put("/{id}", allocH.Update)
+			r.Delete("/{id}", allocH.Delete)
 		})
 
 		saleH := handler.NewSaleHandler(db)

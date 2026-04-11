@@ -22,6 +22,10 @@ export interface InventoryItem {
   available_incoming_kw: number;
   total_secured_kw: number;
   long_term_status: 'normal' | 'warning' | 'critical';
+  /** 현재고: 최근 입항일 (completed/erp_done BL 기준) YYYY-MM-DD */
+  latest_arrival?: string;
+  /** 미착품: 최근 L/C 개설일 (shipping/arrived/customs BL 기준) YYYY-MM-DD */
+  latest_lc_open?: string;
 }
 
 export interface InventorySummary {

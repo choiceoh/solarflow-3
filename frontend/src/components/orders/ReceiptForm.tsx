@@ -38,6 +38,7 @@ export default function ReceiptForm({ open, onOpenChange, onSubmit, editData }: 
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [submitError, setSubmitError] = useState('');
+  const [amountDisplay, setAmountDisplay] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
@@ -61,9 +62,11 @@ export default function ReceiptForm({ open, onOpenChange, onSubmit, editData }: 
           bank_account: editData.bank_account ?? '',
           memo: editData.memo ?? '',
         });
+        setAmountDisplay(editData.amount ? Math.round(editData.amount).toLocaleString('ko-KR') : '');
       } else {
         const today = new Date().toISOString().slice(0, 10);
         reset({ customer_id: '', receipt_date: today, amount: '' as unknown as number, bank_account: '', memo: '' });
+        setAmountDisplay('');
       }
     }
   }, [open, editData, reset]);
@@ -81,7 +84,7 @@ export default function ReceiptForm({ open, onOpenChange, onSubmit, editData }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-lg w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editData ? '수금 수정' : '수금 등록'}</DialogTitle>
         </DialogHeader>
@@ -108,7 +111,18 @@ export default function ReceiptForm({ open, onOpenChange, onSubmit, editData }: 
             </div>
             <div className="space-y-1.5">
               <Label>입금액 *</Label>
-              <Input type="number" {...register('amount')} />
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={amountDisplay}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^0-9]/g, '');
+                  const num = raw ? parseInt(raw, 10) : undefined;
+                  setAmountDisplay(num !== undefined ? num.toLocaleString('ko-KR') : '');
+                  setValue('amount', (num ?? '') as unknown as number, { shouldDirty: true });
+                }}
+                placeholder="0"
+              />
               {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
             </div>
           </div>

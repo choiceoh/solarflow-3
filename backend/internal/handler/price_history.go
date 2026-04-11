@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/model"
@@ -27,19 +28,15 @@ func NewPriceHistoryHandler(db *supa.Client) *PriceHistoryHandler {
 // 비유: 기록부에서 전체 단가 변동 이력을 꺼내 보여주는 것
 func (h *PriceHistoryHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("price_histories").
-		Select("*", "exact", false)
+		Select("*, manufacturers(name_kr), products(product_code, product_name, spec_wp), purchase_orders(po_number)", "exact", false).
+		Order("change_date", &postgrest.OrderOpts{Ascending: false})
 
-	// 비유: ?company_id=xxx — 특정 법인의 단가이력만 필터
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
 		query = query.Eq("company_id", compID)
 	}
-
-	// 비유: ?manufacturer_id=xxx — 특정 제조사의 단가이력만 필터
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
 		query = query.Eq("manufacturer_id", mfgID)
 	}
-
-	// 비유: ?product_id=xxx — 특정 제품의 단가이력만 필터
 	if prodID := r.URL.Query().Get("product_id"); prodID != "" {
 		query = query.Eq("product_id", prodID)
 	}
@@ -51,7 +48,7 @@ func (h *PriceHistoryHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var histories []model.PriceHistory
+	var histories []model.PriceHistoryWithRelations
 	if err := json.Unmarshal(data, &histories); err != nil {
 		log.Printf("[단가이력 목록 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -67,7 +64,7 @@ func (h *PriceHistoryHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	data, _, err := h.DB.From("price_histories").
-		Select("*", "exact", false).
+		Select("*, manufacturers(name_kr), products(product_code, product_name, spec_wp), purchase_orders(po_number)", "exact", false).
 		Eq("price_history_id", id).
 		Execute()
 	if err != nil {
@@ -76,7 +73,7 @@ func (h *PriceHistoryHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var histories []model.PriceHistory
+	var histories []model.PriceHistoryWithRelations
 	if err := json.Unmarshal(data, &histories); err != nil {
 		log.Printf("[단가이력 상세 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")

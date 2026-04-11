@@ -90,6 +90,12 @@ export function useTTList(filters: { status?: string; po_id?: string } = {}) {
   return { data, loading, reload: load };
 }
 
+type RawPriceHistory = PriceHistory & {
+  manufacturers?: { name_kr: string };
+  products?: { product_code: string; product_name: string; spec_wp?: number };
+  purchase_orders?: { po_number?: string };
+};
+
 export function usePriceHistoryList(filters: { manufacturer_id?: string } = {}) {
   const [data, setData] = useState<PriceHistory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +107,14 @@ export function usePriceHistoryList(filters: { manufacturer_id?: string } = {}) 
     try {
       const params = companyParams(selectedCompanyId);
       if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id);
-      setData(await fetchWithAuth<PriceHistory[]>(`/api/v1/price-histories?${params}`));
+      const raw = await fetchWithAuth<RawPriceHistory[]>(`/api/v1/price-histories?${params}`);
+      setData(raw.map((r) => ({
+        ...r,
+        manufacturer_name: r.manufacturer_name ?? r.manufacturers?.name_kr,
+        product_name: r.product_name ?? r.products?.product_name,
+        spec_wp: r.spec_wp ?? r.products?.spec_wp,
+        related_po_number: r.related_po_number ?? r.purchase_orders?.po_number ?? undefined,
+      })));
     } catch { setData([]); }
     setLoading(false);
   }, [selectedCompanyId, filters.manufacturer_id]);

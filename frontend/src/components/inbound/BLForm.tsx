@@ -38,6 +38,7 @@ const schema = z.object({
   forwarder: z.string().optional(),
   warehouse_id: z.string().optional(),
   invoice_number: z.string().optional(),
+  declaration_number: z.string().optional(),
   incoterms: z.string().optional(),
   memo: z.string().optional(),
 });
@@ -319,8 +320,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   /* D-085: PO 목록 로드 (연결 드롭다운용) */
   useEffect(() => {
     if (!open || editData) return;
+    // completed PO는 입고 신규 등록 불가 — 변경계약 등록 후 원계약 보호
     fetchWithAuth<POSummary[]>('/api/v1/pos')
-      .then(list => setPoList(list ?? []))
+      .then(list => setPoList((list ?? []).filter(p => p.status !== 'completed')))
       .catch(() => setPoList([]));
   }, [open, editData]);
 
@@ -498,7 +500,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
         etd: d.etd?.slice(0, 10) ?? '', eta: d.eta?.slice(0, 10) ?? '',
         actual_arrival: d.actual_arrival?.slice(0, 10) ?? '',
         port: d.port ?? '', forwarder: d.forwarder ?? '',
-        warehouse_id: d.warehouse_id ?? '', invoice_number: d.invoice_number ?? '',
+        warehouse_id: d.warehouse_id ?? '', invoice_number: d.invoice_number ?? '', declaration_number: d.declaration_number ?? '',
         incoterms: d.incoterms ?? '', memo: d.memo ?? '',
       });
     } else {
@@ -510,7 +512,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       reset({
         inbound_type: '', bl_number: '', manufacturer_id: '',
         exchange_rate: '', etd: '', eta: '', actual_arrival: '',
-        port: '', forwarder: '', warehouse_id: '', invoice_number: '',
+        port: '', forwarder: '', warehouse_id: '', invoice_number: '', declaration_number: '',
         incoterms: '', memo: '',
       });
       setLines([emptyLine()]);
@@ -694,6 +696,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       port: isImport && data.port ? data.port : undefined,
       forwarder: isImport && data.forwarder ? data.forwarder : undefined,
       invoice_number: isImport && data.invoice_number ? data.invoice_number : undefined,
+      declaration_number: data.declaration_number || undefined,
       incoterms: isImport && data.incoterms
         ? (bafCaf && !/BAF\s*\/\s*CAF/i.test(data.incoterms) ? `${data.incoterms} (BAF/CAF 포함)` : data.incoterms)
         : undefined,
@@ -964,6 +967,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                     <div className="space-y-1.5"><Opt>항구</Opt><Input {...register('port')} placeholder="광양항" /></div>
                     <div className="space-y-1.5"><Opt>포워더</Opt><Input {...register('forwarder')} /></div>
                     <div className="space-y-1.5"><Opt>Invoice No.</Opt><Input {...register('invoice_number')} /></div>
+                    <div className="space-y-1.5"><Opt>면장번호</Opt><Input {...register('declaration_number')} placeholder="선택사항" /></div>
                   </>
                 )}
                 <div className="space-y-1.5">

@@ -1,5 +1,20 @@
 // 은행/LC 한도/만기/수수료/수요예측 타입 (Step 28A)
 
+// BankLimitRow — Go Bank + Rust BankSummary 병합 행
+export interface BankLimitRow {
+  bank_id?: string;
+  bank_name: string;
+  limit_approve_date?: string;   // 승인일 (Go)
+  limit_expiry_date?: string;    // 승인기한 (Go)
+  lc_limit_usd: number;          // 승인한도 (Go)
+  used: number;                   // 실행금액 (Rust)
+  available: number;              // 잔여한도 (Rust 또는 계산)
+  usage_rate: number;             // 사용률 (Rust)
+  opening_fee_rate?: number;     // 개설수수료율 (Go)
+  acceptance_fee_rate?: number;  // 인수수수료율 (Go)
+  fee_calc_method?: string;       // 수수료 계산방식 (Go)
+}
+
 export interface LimitChange {
   limit_change_id: string;
   bank_id: string;
