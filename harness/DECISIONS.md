@@ -439,3 +439,23 @@
 - **결정**: 모든 입고는 PO에 연결 필수 (가상 PO라도 생성). 분할선적은 동일 PO에 BL 여러 건. 환율은 PO(발주) / 면장(통관) / TT·LC(송금) 3단계 각각 기록하여 비교 가능하게 함. 입고등록 시 PO 선택 → 제조사/품목/단가 자동 채움.
 - **이유**: BL번호가 공식 추적키, PO번호는 내부 그룹핑 도구. 기존 데이터는 가상 PO로 묶음. 환율 3단계 비교로 환율 손익 가시화.
 - **날짜**: 2026-04-08
+
+## D-087: 권한 관리 — 역할별 메뉴/기능 접근 설정 화면
+- **결정**: admin이 설정 화면에서 역할(5종)별로 메뉴·민감정보 접근을 체크박스로 직접 설정. DB에 저장하여 런타임에 적용.
+- **구조**:
+  - DB 테이블: `permission_settings (menu_key, role, allowed boolean)`
+  - 메뉴 키: procurement, lc, inbound, inventory, orders, outbound, receipts, dashboard, banking, customs, masters, search, memo, approval
+  - 민감정보 키: feature:show_price (단가), feature:show_margin (이익률/이익액), feature:show_full_dashboard
+  - Go API: GET/PUT /api/v1/settings/permissions
+  - 프론트: 설정 화면에서 역할×메뉴 매트릭스 테이블, 체크박스로 토글
+  - Sidebar의 `canSee()`를 DB 기반 동적 권한으로 교체
+  - 민감 컴포넌트에 `usePermission('feature:show_price')` 훅 적용
+- **이유**: 하드코딩된 roles 배열(현재 Sidebar.tsx)은 사람이 늘어날수록 코드 수정이 필요하여 비현실적. 운영자가 UI에서 직접 조정 가능한 구조가 지속가능.
+- **초기 기본값**: admin=전체허용, executive=민감정보 허용+입력불가, manager=입력가능+민감정보불가, staff=입력가능+민감정보불가, viewer=지정메뉴만+민감정보불가
+- **날짜**: 2026-04-13
+
+## D-088: 개발 방식 — 대화 기반 점진적 개선
+- **결정**: 설계 완료 후 대규모 일괄 개발 없이, 메뉴별·기능별로 대화를 통해 점진적으로 수정·추가.
+- **이유**: (1) 실제 운영 데이터가 있어 즉시 검증 가능 (2) 사용자가 실제로 써보면서 피드백이 발생하므로 선설계보다 유리 (3) Go+Rust+React 분리 구조가 명확해 영향 범위 예측 용이
+- **유의사항**: 여러 화면에 걸친 변경은 영향 범위를 먼저 확인 후 진행. 중요 판단은 DECISIONS.md에 기록.
+- **날짜**: 2026-04-13

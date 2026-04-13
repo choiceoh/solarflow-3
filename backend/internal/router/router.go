@@ -252,6 +252,10 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 		// 비유: "내 인사카드 보기" — 로그인한 사용자의 프로필 조회
 		userH := handler.NewUserHandler(db)
 		r.Get("/users/me", userH.GetMe)
+		// 사용자 관리 (admin 전용)
+		r.Get("/users", userH.ListUsers)
+		r.Put("/users/{id}/role", userH.UpdateRole)
+		r.Put("/users/{id}/active", userH.UpdateActive)
 	})
 
 	// 비유: Rust 계산실 프록시 — 프론트→Go→Rust 중계

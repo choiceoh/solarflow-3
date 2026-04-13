@@ -1,0 +1,142 @@
+/**
+ * SolarFlow 역할별 권한 정의 (단일 정본)
+ *
+ * 역할 변경이 필요할 때는 이 파일만 수정하면 됩니다.
+ *
+ * 역할:
+ *   admin     — 시스템관리자 (알렉스김): 전체 + 사용자관리·설정
+ *   operator  — 운영팀 (김세미): 전체 (설정 제외)
+ *   executive — 경영진: 전체 조회 (민감정보 포함), 입력 없음
+ *   manager   — 본부장: 조회 (민감정보 제외)
+ *   viewer    — 조회: 재고·가용재고만
+ */
+
+export type Role = 'admin' | 'operator' | 'executive' | 'manager' | 'viewer';
+
+export const ROLE_LABELS: Record<Role, string> = {
+  admin:     '시스템관리자',
+  operator:  '운영팀',
+  executive: '경영진',
+  manager:   '본부장',
+  viewer:    '조회',
+};
+
+/** 메뉴 키 목록 */
+export type MenuKey =
+  | 'procurement'   // P/O 발주
+  | 'lc'            // L/C 관리
+  | 'inbound'       // B/L 입고
+  | 'inventory'     // 재고 현황
+  | 'orders'        // 수주 관리
+  | 'outbound'      // 출고/판매
+  | 'receipts'      // 수금 관리
+  | 'dashboard'     // 대시보드
+  | 'banking'       // LC 한도/만기
+  | 'customs'       // 매출/이익 분석
+  | 'masters'       // 마스터 관리
+  | 'search'        // 검색
+  | 'memo'          // 메모
+  | 'approval'      // 결재안
+  | 'settings';     // 설정 (admin 전용)
+
+/** 기능 권한 키 */
+export type FeatureKey =
+  | 'canEdit'           // 데이터 입력·수정·삭제
+  | 'showPrice'         // 단가 (Wp단가, 공급가 등)
+  | 'showMargin'        // 이익·이익률
+  | 'showOutbound'      // 출고·판매 현황
+  | 'showReceivable'    // 미수금
+  | 'showLcLimit'       // L/C 가용한도
+  | 'showFullDashboard' // 대시보드 전체 (경영진용 KPI 포함)
+  | 'manageUsers';      // 사용자 관리
+
+interface RolePermission {
+  menus: MenuKey[] | 'all';
+  features: Partial<Record<FeatureKey, boolean>>;
+}
+
+export const PERMISSIONS: Record<Role, RolePermission> = {
+  admin: {
+    menus: 'all',
+    features: {
+      canEdit: true,
+      showPrice: true,
+      showMargin: true,
+      showOutbound: true,
+      showReceivable: true,
+      showLcLimit: true,
+      showFullDashboard: true,
+      manageUsers: true,
+    },
+  },
+  operator: {
+    menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
+            'dashboard','banking','customs','masters','search','memo','approval'],
+    features: {
+      canEdit: true,
+      showPrice: true,
+      showMargin: true,
+      showOutbound: true,
+      showReceivable: true,
+      showLcLimit: true,
+      showFullDashboard: true,
+      manageUsers: false,
+    },
+  },
+  executive: {
+    menus: ['inventory','orders','outbound','receipts','dashboard','banking','customs','search'],
+    features: {
+      canEdit: false,
+      showPrice: true,
+      showMargin: true,
+      showOutbound: true,
+      showReceivable: true,
+      showLcLimit: true,
+      showFullDashboard: true,
+      manageUsers: false,
+    },
+  },
+  manager: {
+    menus: ['inventory','dashboard','search'],
+    features: {
+      canEdit: false,
+      showPrice: false,
+      showMargin: false,
+      showOutbound: false,
+      showReceivable: false,
+      showLcLimit: false,
+      showFullDashboard: false,
+      manageUsers: false,
+    },
+  },
+  viewer: {
+    menus: ['inventory','dashboard'],
+    features: {
+      canEdit: false,
+      showPrice: false,
+      showMargin: false,
+      showOutbound: false,
+      showReceivable: false,
+      showLcLimit: false,
+      showFullDashboard: false,
+      manageUsers: false,
+    },
+  },
+};
+
+/** 메뉴 접근 가능 여부 */
+export function canAccessMenu(role: Role | null | undefined, menu: MenuKey): boolean {
+  if (!role) return false;
+  const p = PERMISSIONS[role];
+  if (!p) return false;
+  if (p.menus === 'all') return true;
+  return p.menus.includes(menu);
+}
+
+/** 기능 권한 여부 */
+export function hasFeature(role: Role | null | undefined, feature: FeatureKey): boolean {
+  if (!role) return false;
+  const p = PERMISSIONS[role];
+  if (!p) return false;
+  return p.features[feature] === true;
+}

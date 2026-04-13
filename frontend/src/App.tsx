@@ -19,7 +19,7 @@ const BankingPage = lazy(() => import('@/pages/BankingPage'));
 const ApprovalPage = lazy(() => import('@/pages/ApprovalPage'));
 const MemoPage = lazy(() => import('@/pages/MemoPage'));
 const SearchPage = lazy(() => import('@/pages/SearchPage'));
-const PlaceholderPage = lazy(() => import('@/pages/PlaceholderPage'));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const CompanyPage = lazy(() => import('@/pages/masters/CompanyPage'));
 const ManufacturerPage = lazy(() => import('@/pages/masters/ManufacturerPage'));
 const ProductPage = lazy(() => import('@/pages/masters/ProductPage'));
@@ -64,7 +64,7 @@ export default function App() {
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/memo" element={<MemoPage />} />
                 <Route path="/approval" element={<ApprovalPage />} />
-                <Route path="/settings" element={<PlaceholderPage title="설정" stepNumber={32} />} />
+                <Route path="/settings" element={<SettingsPage />} />
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

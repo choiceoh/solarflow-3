@@ -6,11 +6,13 @@ import (
 	"net/http"
 	"strings"
 
-	supa "github.com/supabase-community/supabase-go"
-
+	"github.com/go-chi/chi/v5"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/response"
+
+	supa "github.com/supabase-community/supabase-go"
 )
+
 
 // UserProfileResponse — /api/v1/users/me 응답 구조체
 // 비유: "내 인사카드" — 로그인한 사용자의 프로필 정보
@@ -98,4 +100,92 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.RespondJSON(w, http.StatusOK, profiles[0])
+}
+
+// validRoles — 허용된 역할 목록
+var validRoles = map[string]bool{
+	"admin": true, "operator": true, "executive": true, "manager": true, "viewer": true,
+}
+
+// ListUsers — 전체 사용자 목록 조회 (admin 전용)
+func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	requesterRole := middleware.GetUserRole(r.Context())
+	if requesterRole != "admin" {
+		response.RespondError(w, http.StatusForbidden, "관리자만 접근 가능합니다")
+		return
+	}
+
+	data, _, err := h.DB.From("user_profiles").
+		Select("user_id, email, name, role, department, phone, is_active, created_at", "exact", false).
+		Execute()
+	if err != nil {
+		log.Printf("[users] 목록 조회 실패: %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "사용자 목록 조회에 실패했습니다")
+		return
+	}
+
+	var users []map[string]interface{}
+	if err := json.Unmarshal(data, &users); err != nil {
+		response.RespondError(w, http.StatusInternalServerError, "응답 처리에 실패했습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, users)
+}
+
+// UpdateRole — 사용자 역할 변경 (admin 전용)
+func (h *UserHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
+	requesterRole := middleware.GetUserRole(r.Context())
+	if requesterRole != "admin" {
+		response.RespondError(w, http.StatusForbidden, "관리자만 접근 가능합니다")
+		return
+	}
+
+	targetID := chi.URLParam(r, "id")
+	var body struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || !validRoles[body.Role] {
+		response.RespondError(w, http.StatusBadRequest, "유효하지 않은 역할입니다")
+		return
+	}
+
+	_, _, err := h.DB.From("user_profiles").
+		Update(map[string]interface{}{"role": body.Role}, "", "exact").
+		Eq("user_id", targetID).
+		Execute()
+	if err != nil {
+		log.Printf("[users] 역할 변경 실패: id=%s, role=%s, err=%v", targetID, body.Role, err)
+		response.RespondError(w, http.StatusInternalServerError, "역할 변경에 실패했습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// UpdateActive — 사용자 활성/비활성 변경 (admin 전용)
+func (h *UserHandler) UpdateActive(w http.ResponseWriter, r *http.Request) {
+	requesterRole := middleware.GetUserRole(r.Context())
+	if requesterRole != "admin" {
+		response.RespondError(w, http.StatusForbidden, "관리자만 접근 가능합니다")
+		return
+	}
+
+	targetID := chi.URLParam(r, "id")
+	var body struct {
+		IsActive bool `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.RespondError(w, http.StatusBadRequest, "요청 형식 오류")
+		return
+	}
+
+	_, _, err := h.DB.From("user_profiles").
+		Update(map[string]interface{}{"is_active": body.IsActive}, "", "exact").
+		Eq("user_id", targetID).
+		Execute()
+	if err != nil {
+		log.Printf("[users] 활성화 변경 실패: id=%s, err=%v", targetID, err)
+		response.RespondError(w, http.StatusInternalServerError, "상태 변경에 실패했습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

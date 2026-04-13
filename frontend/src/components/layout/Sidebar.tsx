@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { usePermission } from '@/hooks/usePermission';
 import { useAppStore } from '@/stores/appStore';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,46 +24,45 @@ interface MenuItem {
   children?: { label: string; path: string }[];
 }
 
-// v4 업무 흐름 — 제안 B: 구매/판매 섹션 분리
-// 구매: 발주 → LC → 입고 → 재고
+// 구매: 발주 → LC → 입고 → 재고  (입력 가능: admin, operator)
 const purchaseItems: MenuItem[] = [
-  { icon: ClipboardList, label: 'P/O 발주 관리', path: '/procurement', roles: ['admin', 'manager', 'staff'] },
-  { icon: Landmark, label: 'L/C 개설 관리', path: '/lc', roles: ['admin', 'manager', 'staff'] },
-  { icon: PackageCheck, label: 'B/L 입고 관리', path: '/inbound', roles: ['admin', 'manager', 'staff'] },
-  { icon: Package, label: '재고 현황', path: '/inventory' },
+  { icon: ClipboardList, label: 'P/O 발주 관리', path: '/procurement', roles: ['admin', 'operator'] },
+  { icon: Landmark,      label: 'L/C 개설 관리', path: '/lc',          roles: ['admin', 'operator'] },
+  { icon: PackageCheck,  label: 'B/L 입고 관리', path: '/inbound',     roles: ['admin', 'operator'] },
+  { icon: Package,       label: '재고 현황',      path: '/inventory' },   // 전체 공개
 ];
-// 판매: 수주 → 출고/판매 → 수금
+// 판매: 수주 → 출고/판매 → 수금  (입력: admin·operator, 조회: executive)
 const salesItems: MenuItem[] = [
-  { icon: ScrollText, label: '수주 관리', path: '/orders', roles: ['admin', 'manager', 'staff'] },
-  { icon: Truck, label: '출고/판매', path: '/outbound', roles: ['admin', 'manager', 'staff'] },
-  { icon: Wallet, label: '수금 관리', path: '/orders?tab=receipts', roles: ['admin', 'manager', 'staff'] },
+  { icon: ScrollText, label: '수주 관리', path: '/orders',           roles: ['admin', 'operator', 'executive'] },
+  { icon: Truck,      label: '출고/판매', path: '/outbound',         roles: ['admin', 'operator', 'executive'] },
+  { icon: Wallet,     label: '수금 관리', path: '/orders?tab=receipts', roles: ['admin', 'operator', 'executive'] },
 ];
 
-// v4 현황/분석: 대시보드→LC한도/만기→매출/이익분석
+// 현황/분석
 const analysisItems: MenuItem[] = [
-  { icon: LayoutDashboard, label: '대시보드', path: '/' },
-  { icon: Landmark, label: 'LC 한도/만기', path: '/banking', roles: ['admin', 'manager', 'staff'] },
-  { icon: Calculator, label: '매출/이익 분석', path: '/customs', roles: ['admin', 'manager', 'staff'] },
+  { icon: LayoutDashboard, label: '대시보드',       path: '/' },                                          // 전체 공개 (내용은 권한별 분기)
+  { icon: Landmark,        label: 'LC 한도/만기',   path: '/banking', roles: ['admin', 'operator', 'executive'] },
+  { icon: Calculator,      label: '매출/이익 분석', path: '/customs', roles: ['admin', 'operator', 'executive'] },
 ];
 
 const masterItem: MenuItem = {
   icon: Database,
   label: '마스터 관리',
-  roles: ['admin', 'manager', 'staff'],
+  roles: ['admin', 'operator'],
   children: [
-    { label: '법인', path: '/masters/companies' },
+    { label: '법인',   path: '/masters/companies' },
     { label: '제조사', path: '/masters/manufacturers' },
-    { label: '품번', path: '/masters/products' },
+    { label: '품번',   path: '/masters/products' },
     { label: '거래처', path: '/masters/partners' },
-    { label: '창고', path: '/masters/warehouses' },
-    { label: '은행', path: '/masters/banks' },
+    { label: '창고',   path: '/masters/warehouses' },
+    { label: '은행',   path: '/masters/banks' },
   ],
 };
 
 const toolItems: MenuItem[] = [
-  { icon: Search, label: '검색', path: '/search' },
-  { icon: StickyNote, label: '메모', path: '/memo', roles: ['admin', 'manager', 'staff'] },
-  { icon: FileSignature, label: '결재안', path: '/approval', roles: ['admin', 'manager', 'staff'] },
+  { icon: Search,        label: '검색',  path: '/search' },
+  { icon: StickyNote,    label: '메모',  path: '/memo',     roles: ['admin', 'operator'] },
+  { icon: FileSignature, label: '결재안', path: '/approval', roles: ['admin', 'operator'] },
 ];
 
 const settingsItem: MenuItem = {
@@ -77,6 +77,7 @@ function canSee(item: MenuItem, role: string | null): boolean {
 export default function Sidebar() {
   const { pathname, search } = useLocation();
   const { user, logout, role } = useAuth();
+  const { roleLabel } = usePermission();
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
   const [masterOpen, setMasterOpen] = useState(pathname.startsWith('/masters'));
 
@@ -212,7 +213,7 @@ export default function Sidebar() {
           <div className="flex items-center gap-2 px-2 py-1">
             <div className="flex-1 min-w-0">
               <p className="truncate text-xs font-medium">{user?.name || user?.email || '—'}</p>
-              <Badge variant="secondary" className="mt-0.5 text-[10px]">{user?.role || '—'}</Badge>
+              <Badge variant="secondary" className="mt-0.5 text-[10px]">{roleLabel}</Badge>
             </div>
             <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={logout}>
               <LogOut className="h-3.5 w-3.5" />

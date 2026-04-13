@@ -1,14 +1,14 @@
 import { useAppStore } from '@/stores/appStore';
-import { useAuthStore } from '@/stores/authStore';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useAlerts } from '@/hooks/useAlerts';
+import { usePermission } from '@/hooks/usePermission';
 import ExecutiveDashboard from '@/components/dashboard/ExecutiveDashboard';
 import ManagerDashboard from '@/components/dashboard/ManagerDashboard';
 
 export default function DashboardPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
-  const user = useAuthStore((s) => s.user);
-  const userRole = user?.role || 'viewer';
+  const { role, showFullDashboard } = usePermission();
+  const userRole = role || 'viewer';
 
   const {
     summary, revenue, priceTrend,
@@ -16,18 +16,15 @@ export default function DashboardPage() {
     longTermWarning, longTermCritical,
   } = useDashboard(selectedCompanyId, userRole);
 
-  // 알림은 useAlerts에서 독립 조회 (Step 31 감리 지적 3 반영)
   const { alerts, loading: alertsLoading } = useAlerts(selectedCompanyId);
 
-  // D-060: "all"이면 전체 법인 합산 대시보드 표시
-
-  const isManager = userRole === 'admin' || userRole === 'manager';
-
+  // showFullDashboard: admin·operator·executive → ManagerDashboard(전체 KPI + 입출고 + 미수금)
+  // manager·viewer → ExecutiveDashboard(재고·가용재고 요약만)
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-lg font-semibold">대시보드</h1>
 
-      {isManager ? (
+      {showFullDashboard ? (
         <ManagerDashboard
           summary={summary}
           revenue={revenue}
