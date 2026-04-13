@@ -171,7 +171,7 @@ async fn execute_intent(pool: &PgPool, company_id: Uuid, pq: &ParsedQuery) -> Re
         SearchIntent::LcMaturity => search_lc_maturity(pool, company_id, pq).await,
         SearchIntent::PoPayment => search_po_payment(pool, company_id, pq).await,
         SearchIntent::Outstanding => search_outstanding(pool, company_id, pq).await,
-        SearchIntent::Fallback => search_fallback(pool, company_id, &pq.raw_tokens.join(" ")).await,
+        SearchIntent::Fallback => search_fallback(pool, company_id, pq).await,
     }
 }
 
@@ -346,30 +346,135 @@ async fn search_outstanding(pool: &PgPool, company_id: Uuid, pq: &ParsedQuery) -
     Ok((results, Vec::new()))
 }
 
-async fn search_fallback(pool: &PgPool, company_id: Uuid, query: &str) -> Result<(Vec<SearchResult>, Vec<String>), sqlx::Error> {
+async fn search_fallback(pool: &PgPool, company_id: Uuid, pq: &ParsedQuery) -> Result<(Vec<SearchResult>, Vec<String>), sqlx::Error> {
+    let query = pq.raw_tokens.join(" ");
     let pattern = format!("%{}%", query);
+    let mfg_id = pq.manufacturer.as_ref().map(|(id, _)| *id);
+    let spec = pq.spec_wp;
 
-    #[derive(sqlx::FromRow)]
-    struct Row { source: String, id: String, title: Option<String>, subtitle: Option<String> }
+    let mut results: Vec<SearchResult> = Vec::new();
 
-    let rows = sqlx::query_as::<_, Row>(
-        r#"SELECT 'product' as source, p.product_id::text as id, p.product_name as title, m.name_kr as subtitle
-           FROM products p JOIN manufacturers m ON p.manufacturer_id=m.manufacturer_id WHERE p.product_name ILIKE $1 OR p.product_code ILIKE $1 LIMIT 10
-           UNION ALL
-           SELECT 'partner', ptr.partner_id::text, ptr.partner_name, ptr.partner_type FROM partners ptr WHERE ptr.partner_name ILIKE $1 LIMIT 10
-           UNION ALL
-           SELECT 'site', o.outbound_id::text, o.site_name, TO_CHAR(o.outbound_date,'YYYY-MM-DD') FROM outbounds o WHERE o.site_name ILIKE $1 AND o.company_id=$2 LIMIT 10"#
-    ).bind(&pattern).bind(company_id).fetch_all(pool).await?;
-
-    let results = rows.iter().map(|r| {
-        let mut params = HashMap::new();
-        params.insert("id".to_string(), r.id.clone());
-        SearchResult {
-            result_type: r.source.clone(), title: r.title.clone().unwrap_or_default(),
-            data: json!({"subtitle": r.subtitle}),
-            link: SearchLink { module: r.source.clone(), params },
+    // 1. 제품 검색: manufacturer/spec 컨텍스트 우선, 없으면 ILIKE
+    {
+        #[derive(sqlx::FromRow)]
+        struct Row { product_id: Uuid, product_name: String, spec_wp: i32, mfg_name: String }
+        let rows = sqlx::query_as::<_, Row>(
+            r#"SELECT p.product_id, p.product_name, p.spec_wp, m.name_kr AS mfg_name
+               FROM products p JOIN manufacturers m ON p.manufacturer_id = m.manufacturer_id
+               WHERE p.is_active = true
+                 AND ($1::uuid IS NULL OR p.manufacturer_id = $1)
+                 AND ($2::int  IS NULL OR p.spec_wp = $2)
+                 AND ($1::uuid IS NOT NULL OR $2::int IS NOT NULL
+                      OR p.product_name ILIKE $3 OR p.product_code ILIKE $3 OR m.name_kr ILIKE $3)
+               ORDER BY m.name_kr, p.spec_wp LIMIT 10"#
+        ).bind(mfg_id).bind(spec).bind(&pattern).fetch_all(pool).await?;
+        for r in rows {
+            let mut p = HashMap::new();
+            p.insert("product_id".to_string(), r.product_id.to_string());
+            results.push(SearchResult {
+                result_type: "product".to_string(),
+                title: format!("{} {}W", r.mfg_name, r.spec_wp),
+                data: json!({"product_name": r.product_name}),
+                link: SearchLink { module: "inventory".to_string(), params: p },
+            });
         }
-    }).collect();
+    }
+
+    // 2. P/O 검색: manufacturer 있으면 해당 제조사 PO 전체, 없으면 po_number/제조사명 ILIKE
+    {
+        #[derive(sqlx::FromRow)]
+        struct Row { po_id: Uuid, po_number: Option<String>, status: String, mfg_name: String, contract_date: Option<chrono::NaiveDate>, total_mw: Option<f64> }
+        let rows = sqlx::query_as::<_, Row>(
+            r#"SELECT po.po_id, po.po_number, po.status, m.name_kr AS mfg_name,
+                      po.contract_date, po.total_mw::float8 AS total_mw
+               FROM purchase_orders po JOIN manufacturers m ON po.manufacturer_id = m.manufacturer_id
+               WHERE po.company_id = $1
+                 AND ($2::uuid IS NULL OR po.manufacturer_id = $2)
+                 AND ($2::uuid IS NOT NULL OR po.po_number ILIKE $3 OR m.name_kr ILIKE $3)
+               ORDER BY po.contract_date DESC LIMIT 10"#
+        ).bind(company_id).bind(mfg_id).bind(&pattern).fetch_all(pool).await?;
+        for r in rows {
+            let mut p = HashMap::new();
+            p.insert("po_id".to_string(), r.po_id.to_string());
+            results.push(SearchResult {
+                result_type: "po".to_string(),
+                title: format!("{} {}", r.mfg_name, r.po_number.as_deref().unwrap_or("N/A")),
+                data: json!({"status": r.status, "contract_date": r.contract_date.map(|d| d.to_string()), "total_mw": r.total_mw}),
+                link: SearchLink { module: "procurement".to_string(), params: p },
+            });
+        }
+    }
+
+    // 3. L/C 검색: PO→제조사 JOIN, lc_number/제조사명 ILIKE
+    {
+        #[derive(sqlx::FromRow)]
+        struct Row { lc_id: Uuid, lc_number: Option<String>, status: String, amount_usd: f64, open_date: Option<chrono::NaiveDate>, mfg_name: String }
+        let rows = sqlx::query_as::<_, Row>(
+            r#"SELECT lc.lc_id, lc.lc_number, lc.status, lc.amount_usd::float8 AS amount_usd,
+                      lc.open_date, m.name_kr AS mfg_name
+               FROM lc_records lc
+               JOIN purchase_orders po ON lc.po_id = po.po_id
+               JOIN manufacturers m   ON po.manufacturer_id = m.manufacturer_id
+               WHERE lc.company_id = $1
+                 AND ($2::uuid IS NULL OR po.manufacturer_id = $2)
+                 AND ($2::uuid IS NOT NULL OR lc.lc_number ILIKE $3 OR m.name_kr ILIKE $3)
+               ORDER BY lc.open_date DESC LIMIT 10"#
+        ).bind(company_id).bind(mfg_id).bind(&pattern).fetch_all(pool).await?;
+        for r in rows {
+            let mut p = HashMap::new();
+            p.insert("lc_id".to_string(), r.lc_id.to_string());
+            results.push(SearchResult {
+                result_type: "lc".to_string(),
+                title: format!("L/C {} ${:.0}", r.lc_number.as_deref().unwrap_or("N/A"), r.amount_usd),
+                data: json!({"status": r.status, "open_date": r.open_date.map(|d| d.to_string()), "manufacturer": r.mfg_name}),
+                link: SearchLink { module: "banking".to_string(), params: p },
+            });
+        }
+    }
+
+    // 4. B/L 검색: bl_shipments에 manufacturer_id 직접 존재
+    {
+        #[derive(sqlx::FromRow)]
+        struct Row { bl_id: Uuid, bl_number: String, status: String, etd: Option<chrono::NaiveDate>, mfg_name: String }
+        let rows = sqlx::query_as::<_, Row>(
+            r#"SELECT bl.bl_id, bl.bl_number, bl.status, bl.etd, m.name_kr AS mfg_name
+               FROM bl_shipments bl JOIN manufacturers m ON bl.manufacturer_id = m.manufacturer_id
+               WHERE bl.company_id = $1
+                 AND ($2::uuid IS NULL OR bl.manufacturer_id = $2)
+                 AND ($2::uuid IS NOT NULL OR bl.bl_number ILIKE $3 OR m.name_kr ILIKE $3)
+               ORDER BY bl.etd DESC LIMIT 10"#
+        ).bind(company_id).bind(mfg_id).bind(&pattern).fetch_all(pool).await?;
+        for r in rows {
+            let mut p = HashMap::new();
+            p.insert("bl_id".to_string(), r.bl_id.to_string());
+            results.push(SearchResult {
+                result_type: "bl".to_string(),
+                title: format!("{} B/L {}", r.mfg_name, r.bl_number),
+                data: json!({"status": r.status, "etd": r.etd.map(|d| d.to_string())}),
+                link: SearchLink { module: "inbound".to_string(), params: p },
+            });
+        }
+    }
+
+    // 5. 거래처 검색 (제조사/규격 컨텍스트 없을 때만)
+    if mfg_id.is_none() && spec.is_none() {
+        #[derive(sqlx::FromRow)]
+        struct Row { partner_id: Uuid, partner_name: String, partner_type: Option<String> }
+        let rows = sqlx::query_as::<_, Row>(
+            "SELECT partner_id, partner_name, partner_type FROM partners WHERE partner_name ILIKE $1 AND is_active = true LIMIT 10"
+        ).bind(&pattern).fetch_all(pool).await?;
+        for r in rows {
+            let mut p = HashMap::new();
+            p.insert("id".to_string(), r.partner_id.to_string());
+            results.push(SearchResult {
+                result_type: "partner".to_string(),
+                title: r.partner_name,
+                data: json!({"subtitle": r.partner_type}),
+                link: SearchLink { module: "partner".to_string(), params: p },
+            });
+        }
+    }
+
     Ok((results, Vec::new()))
 }
 
