@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatNumber } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import InboundStatusBadge from './InboundStatusBadge';
@@ -158,6 +158,29 @@ export default function BLDetailView({ blId, onBack }: Props) {
                 {bl.counterpart_company_id && <Field label="상대법인" value={bl.counterpart_company_id} />}
                 {bl.memo && <Field label="메모" value={bl.memo} />}
               </div>
+              {lines.length > 0 && (() => {
+                const totalQty = lines.reduce((s, l) => s + l.quantity, 0);
+                const totalMW = lines.reduce((s, l) => s + (l.capacity_kw ?? 0), 0) / 1000;
+                const totalInvoice = lines.reduce((s, l) => s + (l.invoice_amount_usd ?? 0), 0);
+                return (
+                  <div className="mt-4 pt-3 border-t grid grid-cols-3 gap-x-6">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">총 수량</p>
+                      <p className="text-sm font-mono font-medium">{formatNumber(totalQty)} EA</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">총 용량</p>
+                      <p className="text-sm font-mono font-medium">{totalMW.toFixed(3)} MW</p>
+                    </div>
+                    {totalInvoice > 0 && (
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">총 입고금액</p>
+                        <p className="text-sm font-mono font-medium">${formatNumber(Math.round(totalInvoice))}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </TabsContent>
@@ -174,6 +197,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
             <BLLineTable
               items={lines}
               currency={bl.currency}
+              manufacturerName={manufacturerName || bl.manufacturer_name}
               onEdit={(line) => { setEditLine(line); setLineFormOpen(true); }}
             />
           )}

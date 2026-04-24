@@ -118,6 +118,37 @@ func (h *BLHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// PO번호/LC번호 별도 조회 (company FK 모호성으로 임베드 불가 — 단일 쿼리로 대체)
+	var poNumber, lcNumber *string
+	if shipments[0].POID != nil {
+		poData, _, perr := h.DB.From("purchase_orders").
+			Select("po_number", "exact", false).
+			Eq("po_id", *shipments[0].POID).
+			Execute()
+		if perr == nil {
+			var pos []struct {
+				PONumber *string `json:"po_number"`
+			}
+			if json.Unmarshal(poData, &pos) == nil && len(pos) > 0 {
+				poNumber = pos[0].PONumber
+			}
+		}
+	}
+	if shipments[0].LCID != nil {
+		lcData, _, lerr := h.DB.From("lc_records").
+			Select("lc_number", "exact", false).
+			Eq("lc_id", *shipments[0].LCID).
+			Execute()
+		if lerr == nil {
+			var lcs []struct {
+				LCNumber *string `json:"lc_number"`
+			}
+			if json.Unmarshal(lcData, &lcs) == nil && len(lcs) > 0 {
+				lcNumber = lcs[0].LCNumber
+			}
+		}
+	}
+
 	// 비유: 선적 서류에 첨부된 화물 명세 조회 (products 임베드 — 단일 FK라 모호성 없음)
 	lineData, _, err := h.DB.From("bl_line_items").
 		Select("*, products(product_code, product_name, spec_wp, module_width_mm, module_height_mm)", "exact", false).
@@ -139,9 +170,13 @@ func (h *BLHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	// 비유: 선적 서류 + 화물 명세를 한 묶음으로 포장 (평탄 본문 + 라인)
 	detail := struct {
 		model.BLShipment
+		PONumber  *string                   `json:"po_number"`
+		LCNumber  *string                   `json:"lc_number"`
 		LineItems []model.BLLineWithProduct `json:"line_items"`
 	}{
 		BLShipment: shipments[0],
+		PONumber:   poNumber,
+		LCNumber:   lcNumber,
 		LineItems:  lines,
 	}
 

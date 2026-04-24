@@ -10,6 +10,7 @@ import { type BLLineItem } from '@/types/inbound';
 interface Props {
   items: BLLineItem[];
   currency: 'USD' | 'KRW';
+  manufacturerName?: string;
   onEdit: (line: BLLineItem) => void;
 }
 
@@ -17,9 +18,8 @@ interface Props {
 function pCode(l: BLLineItem) { return l.product_code ?? l.products?.product_code ?? '—'; }
 function pName(l: BLLineItem) { return l.product_name ?? l.products?.product_name ?? '—'; }
 function pSpec(l: BLLineItem) { return l.products?.spec_wp; }
-function pMfg(l: BLLineItem) { return (l.products as { manufacturer_name?: string } | undefined)?.manufacturer_name ?? (l as { manufacturer_name?: string }).manufacturer_name ?? '—'; }
 
-export default function BLLineTable({ items, currency, onEdit }: Props) {
+export default function BLLineTable({ items, currency, manufacturerName, onEdit }: Props) {
   if (items.length === 0) return <EmptyState message="입고품목이 없습니다" />;
 
   return (
@@ -27,10 +27,9 @@ export default function BLLineTable({ items, currency, onEdit }: Props) {
       <Table className="text-xs">
         <TableHeader>
           <TableRow>
-            <TableHead>제조사</TableHead>
+            <TableHead>제조사/규격</TableHead>
             <TableHead>품번</TableHead>
             <TableHead>품명</TableHead>
-            <TableHead>규격</TableHead>
             <TableHead className="text-right">수량</TableHead>
             <TableHead className="text-right">용량(kW)</TableHead>
             <TableHead className="text-right">용량(MW)</TableHead>
@@ -43,10 +42,13 @@ export default function BLLineTable({ items, currency, onEdit }: Props) {
         <TableBody>
           {items.map((line) => (
             <TableRow key={line.bl_line_id}>
-              <TableCell>{pMfg(line)}</TableCell>
+              <TableCell>
+                {manufacturerName && pSpec(line) != null
+                  ? `${manufacturerName} ${pSpec(line)}W`
+                  : manufacturerName ?? (pSpec(line) != null ? `${pSpec(line)}W` : '—')}
+              </TableCell>
               <TableCell className="font-mono">{pCode(line)}</TableCell>
               <TableCell>{pName(line)}</TableCell>
-              <TableCell>{pSpec(line) != null ? `${pSpec(line)}Wp` : '—'}</TableCell>
               <TableCell className="text-right">{formatNumber(line.quantity)}</TableCell>
               <TableCell className="text-right">{formatCapacity(line.capacity_kw, line.quantity)}</TableCell>
               <TableCell className="text-right">{line.capacity_kw != null ? (line.capacity_kw / 1000).toFixed(3) : '—'}</TableCell>
