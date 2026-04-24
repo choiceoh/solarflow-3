@@ -64,7 +64,10 @@ pub struct CustomerAnalysisRequest {
     pub customer_id: Option<Uuid>,
     pub date_from: Option<String>,
     pub date_to: Option<String>,
+    #[serde(default = "default_customer_cost_basis")]
+    pub cost_basis: String,
 }
+fn default_customer_cost_basis() -> String { "landed".to_string() }
 
 #[derive(Debug, Serialize)]
 pub struct CustomerAnalysisResponse {
@@ -84,6 +87,9 @@ pub struct CustomerItem {
     pub oldest_outstanding_days: i64,
     pub avg_payment_days: Option<f64>,
     pub avg_margin_rate: Option<f64>,
+    /// 이익 절대금액 (원). landed cost 데이터가 있는 매출분에 한해 계산.
+    /// 제품에 원가 이력이 없으면 None
+    pub total_margin_krw: Option<f64>,
     pub avg_deposit_rate: Option<f64>,
     pub status: String,
 }
@@ -93,6 +99,10 @@ pub struct CustomerSummary {
     pub total_sales_krw: f64,
     pub total_collected_krw: f64,
     pub total_outstanding_krw: f64,
+    /// 전체 거래처 이익 합계 (원). 원가 커버 매출분 기준
+    pub total_margin_krw: f64,
+    /// 전체 평균 이익률 (%). 원가 커버 매출분 기준
+    pub overall_margin_rate: f64,
 }
 
 // === 단가 추이 ===

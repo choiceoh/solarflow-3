@@ -12,6 +12,7 @@ import TTForm from './TTForm';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import LinkedMemoWidget from '@/components/memo/LinkedMemoWidget';
 import POInboundProgress from './POInboundProgress';
+import { parseDeposit } from './DepositStatusPanel';
 import { fetchWithAuth } from '@/lib/api';
 import { usePOLines, useLCList, useTTList } from '@/hooks/useProcurement';
 import type { BLShipment, BLLineItem } from '@/types/inbound';
@@ -132,7 +133,8 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
         const compStatuses = new Set(['completed', 'erp_done']);
         let shippedMw = 0, completedMw = 0;
         for (const bl of blList ?? []) {
-          const mw = (lineMap[bl.bl_id] ?? []).reduce((s, l) => s + (l.capacity_kw ?? 0) * (l.quantity ?? 0), 0) / 1000;
+          // capacity_kw는 해당 라인의 총 kW (EA당이 아님) → quantity 곱셈 금지
+          const mw = (lineMap[bl.bl_id] ?? []).reduce((s, l) => s + (l.capacity_kw ?? 0), 0) / 1000;
           if (shipStatuses.has(bl.status)) shippedMw += mw;
           if (compStatuses.has(bl.status)) completedMw += mw;
         }
@@ -281,6 +283,23 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
               {po.total_qty != null && <Field label="총수량" value={formatNumber(po.total_qty).toString()} />}
               {po.total_mw != null && <Field label="총 MW" value={`${po.total_mw.toFixed(2)}MW`} />}
               {po.memo && <Field label="메모" value={po.memo} />}
+              {!linesLoading && lines.length > 0 && (
+                <div className="col-span-full">
+                  <p className="text-[10px] text-muted-foreground">품목</p>
+                  <div className="mt-0.5 space-y-0.5">
+                    {lines.map((l) => {
+                      const name = l.products?.product_name ?? l.product_name ?? '';
+                      const spec = l.products?.spec_wp ?? l.spec_wp;
+                      const parts = [po.manufacturer_name, name, spec ? `${spec}Wp` : ''].filter(Boolean).join(' ');
+                      return (
+                        <p key={l.po_line_id} className="text-sm">
+                          {parts || '—'} × <span className="font-mono">{formatNumber(l.quantity)}EA</span>
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {po.parent_po_id && (() => {
                 const parent = allPos.find((x) => x.po_id === po.parent_po_id);
                 const label = parent?.po_number ?? po.parent_po_id.slice(0, 8);
@@ -427,12 +446,35 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
             <div className="flex justify-end">
               <Button size="sm" onClick={() => { setEditLine(null); setLineFormOpen(true); }}><Plus className="mr-1 h-3.5 w-3.5" />추가</Button>
             </div>
-            {linesLoading ? <LoadingSpinner /> : <POLineTable items={lines} onEdit={(l) => { setEditLine(l); setLineFormOpen(true); }} />}
+            {linesLoading ? <LoadingSpinner /> : <POLineTable items={lines} onEdit={(l) => { setEditLine(l); setLineFormOpen(true); }} manufacturerName={po.manufacturer_name} />}
           </div>
         </TabsContent>
 
         <TabsContent value="deposit">
           <div className="space-y-3">
+            {(() => {
+              const dep = parseDeposit(po.payment_terms);
+              if (!dep.hasDeposit) return null;
+              const paidUsd = tts.reduce((s, t) => s + t.amount_usd, 0);
+              const remainUsd = Math.max(0, dep.depositAmountUsd - paidUsd);
+              const paidPct = dep.depositAmountUsd > 0 ? (paidUsd / dep.depositAmountUsd) * 100 : 0;
+              const isDone = paidUsd >= dep.depositAmountUsd - 0.01;
+              return (
+                <div className="rounded-md border p-3 space-y-2">
+                  <div className="text-xs font-semibold">계약금 요약</div>
+                  <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+                    <span className="text-muted-foreground">계약금 총액 <span className="font-mono font-medium text-foreground">{formatUSD(dep.depositAmountUsd)}</span> ({dep.depositPercent}%)</span>
+                    <span className="text-muted-foreground">기지급 <span className={cn('font-mono font-medium', isDone ? 'text-green-600' : 'text-orange-600')}>{formatUSD(paidUsd)}</span></span>
+                    {!isDone && remainUsd > 0 && <span className="text-muted-foreground">잔여 <span className="font-mono font-medium text-red-600">{formatUSD(remainUsd)}</span></span>}
+                    {dep.plannedSplits > 0 && <span className="text-muted-foreground">분할 {dep.plannedSplits}회</span>}
+                  </div>
+                  <div className="h-2 rounded bg-muted overflow-hidden">
+                    <div className={cn('h-full', isDone ? 'bg-green-600' : 'bg-orange-500')} style={{ width: `${Math.min(100, paidPct)}%` }} />
+                  </div>
+                  <div className="text-[10px] text-muted-foreground text-right">{paidPct.toFixed(1)}%</div>
+                </div>
+              );
+            })()}
             <div className="flex justify-end">
               <Button size="sm" onClick={() => setTtFormOpen(true)}><Plus className="mr-1 h-3.5 w-3.5" />계약금 등록</Button>
             </div>

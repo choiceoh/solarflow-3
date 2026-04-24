@@ -16,6 +16,7 @@ function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: str
 const schema = z.object({
   name_kr: z.string().min(1, '제조사명(한)은 필수입니다'),
   name_en: z.string().optional(),
+  short_name: z.string().max(20, '약칭은 20자 이내').optional(),
   country: z.string().min(1, '국가는 필수입니다'),
   domestic_foreign: z.string().min(1, '국내/해외 구분은 필수입니다'),
 });
@@ -38,9 +39,10 @@ export default function ManufacturerForm({ open, onOpenChange, onSubmit, editDat
       reset(editData ? {
         name_kr: editData.name_kr,
         name_en: editData.name_en ?? '',
+        short_name: editData.short_name ?? '',
         country: editData.country,
         domestic_foreign: editData.domestic_foreign,
-      } : { name_kr: '', name_en: '', country: '', domestic_foreign: '' });
+      } : { name_kr: '', name_en: '', short_name: '', country: '', domestic_foreign: '' });
     }
   }, [open, editData, reset]);
 
@@ -64,6 +66,11 @@ export default function ManufacturerForm({ open, onOpenChange, onSubmit, editDat
           <div className="space-y-1.5">
             <Label>제조사명(영)</Label>
             <Input {...register('name_en')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>약칭 <span className="text-muted-foreground font-normal text-xs">(화면 표시용 · 예: 진코, 론지, 트리나)</span></Label>
+            <Input {...register('short_name')} placeholder="예: 진코" maxLength={20} />
+            {errors.short_name && <p className="text-xs text-destructive">{errors.short_name.message}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>국가 *</Label>

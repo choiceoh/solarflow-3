@@ -136,7 +136,44 @@ func (h *LCHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// LC 개설 시 연결된 PO 상태 contracted → in_progress 자동 전환
+	go h.autoSetPOInProgress(created[0].POID)
+
 	response.RespondJSON(w, http.StatusCreated, created[0])
+}
+
+// autoSetPOInProgress — LC 개설 시 PO 상태를 contracted → in_progress로 자동 전환
+// 실패해도 본 요청에 영향 없음 (로그만 남김)
+func (h *LCHandler) autoSetPOInProgress(poID string) {
+	poData, _, err := h.DB.From("purchase_orders").
+		Select("po_id, status", "exact", false).
+		Eq("po_id", poID).
+		Execute()
+	if err != nil {
+		log.Printf("[PO in_progress 전환] 조회 실패 po_id=%s err=%v", poID, err)
+		return
+	}
+	var pos []struct {
+		POID   string `json:"po_id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(poData, &pos); err != nil || len(pos) == 0 {
+		return
+	}
+	// contracted 상태일 때만 in_progress로 전환
+	if pos[0].Status != "contracted" {
+		return
+	}
+	update := map[string]string{"status": "in_progress"}
+	_, _, uerr := h.DB.From("purchase_orders").
+		Update(update, "", "").
+		Eq("po_id", poID).
+		Execute()
+	if uerr != nil {
+		log.Printf("[PO in_progress 전환] 업데이트 실패 po_id=%s err=%v", poID, uerr)
+		return
+	}
+	log.Printf("[PO in_progress 전환] po_id=%s contracted → in_progress", poID)
 }
 
 // Update — PUT /api/v1/lcs/{id} — LC 수정

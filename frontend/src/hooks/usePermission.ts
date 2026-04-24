@@ -10,6 +10,7 @@ import { useAuth } from './useAuth';
 import {
   canAccessMenu as _canAccessMenu,
   hasFeature as _hasFeature,
+  getDashboardType as _getDashboardType,
   type MenuKey,
   type FeatureKey,
   type Role,
@@ -28,11 +29,16 @@ export function usePermission() {
     canEdit:           _hasFeature(r, 'canEdit'),
     showPrice:         _hasFeature(r, 'showPrice'),
     showMargin:        _hasFeature(r, 'showMargin'),
+    showSales:         _hasFeature(r, 'showSales'),
+    showDetail:        _hasFeature(r, 'showDetail'),
     showOutbound:      _hasFeature(r, 'showOutbound'),
     showReceivable:    _hasFeature(r, 'showReceivable'),
     showLcLimit:       _hasFeature(r, 'showLcLimit'),
     showFullDashboard: _hasFeature(r, 'showFullDashboard'),
     manageUsers:       _hasFeature(r, 'manageUsers'),
+
+    // 대시보드 유형 (strategic | operational)
+    dashboardType: _getDashboardType(r),
 
     // 메뉴 접근
     canAccessMenu: (menu: MenuKey) => _canAccessMenu(r, menu),

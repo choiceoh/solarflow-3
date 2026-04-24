@@ -3,40 +3,55 @@ package model
 // InventoryAllocation — 가용재고 배정 (판매예정/공사예정)
 // B/L 입고 전 또는 현재고를 특정 용도로 미리 배정하여 가용재고를 관리
 type InventoryAllocation struct {
-	AllocID      string   `json:"alloc_id"`
-	CompanyID    string   `json:"company_id"`
-	ProductID    string   `json:"product_id"`
-	ProductName  *string  `json:"product_name,omitempty"`
-	ProductCode  *string  `json:"product_code,omitempty"`
-	SpecWp       *float64 `json:"spec_wp,omitempty"`
-	Quantity     int      `json:"quantity"`
-	CapacityKw   *float64 `json:"capacity_kw"`
-	Purpose      string   `json:"purpose"`      // sale | construction | other
-	SourceType   string   `json:"source_type"`  // stock | incoming
-	CustomerName *string  `json:"customer_name"`
-	SiteName     *string  `json:"site_name"`
-	Notes        *string  `json:"notes"`
-	Status       string   `json:"status"`       // pending | confirmed | cancelled
-	OutboundID   *string  `json:"outbound_id"`
-	CreatedAt    string   `json:"created_at"`
-	UpdatedAt    string   `json:"updated_at"`
+	AllocID              string   `json:"alloc_id"`
+	CompanyID            string   `json:"company_id"`
+	ProductID            string   `json:"product_id"`
+	ProductName          *string  `json:"product_name,omitempty"`
+	ProductCode          *string  `json:"product_code,omitempty"`
+	SpecWp               *float64 `json:"spec_wp,omitempty"`
+	Quantity             int      `json:"quantity"`
+	CapacityKw           *float64 `json:"capacity_kw"`
+	Purpose              string   `json:"purpose"`      // sale | construction | other
+	SourceType           string   `json:"source_type"`  // stock | incoming
+	CustomerName         *string  `json:"customer_name"`
+	SiteName             *string  `json:"site_name"`
+	Notes                *string  `json:"notes"`
+	ExpectedPricePerWp   *float64 `json:"expected_price_per_wp,omitempty"`
+	FreeSpareQty         int      `json:"free_spare_qty"`           // 무상스페어 수량
+	Status               string   `json:"status"`                   // pending | confirmed | cancelled | hold
+	OutboundID           *string  `json:"outbound_id"`
+	OrderID              *string  `json:"order_id"`                 // 수주 확정 시 연결
+	GroupID              *string  `json:"group_id,omitempty"`       // 동일 배정 등록의 stock+incoming 그룹 묶음
+	SiteID               *string  `json:"site_id,omitempty"`        // 공사현장 FK (construction_own|construction_epc 시)
+	CreatedAt            string   `json:"created_at"`
+	UpdatedAt            string   `json:"updated_at"`
 }
 
-var validAllocPurposes = map[string]bool{"sale": true, "construction": true, "other": true}
+var validAllocPurposes = map[string]bool{
+	"sale":              true,
+	"construction":      true, // 레거시 호환 유지
+	"construction_own":  true, // 자체 현장
+	"construction_epc":  true, // 타사 EPC 현장
+	"other":             true,
+}
 var validAllocSources = map[string]bool{"stock": true, "incoming": true}
-var validAllocStatuses = map[string]bool{"pending": true, "confirmed": true, "cancelled": true}
+var validAllocStatuses = map[string]bool{"pending": true, "confirmed": true, "cancelled": true, "hold": true}
 
 // CreateInventoryAllocationRequest — 배정 등록 요청
 type CreateInventoryAllocationRequest struct {
-	CompanyID    string   `json:"company_id"`
-	ProductID    string   `json:"product_id"`
-	Quantity     int      `json:"quantity"`
-	CapacityKw   *float64 `json:"capacity_kw,omitempty"`
-	Purpose      string   `json:"purpose"`
-	SourceType   string   `json:"source_type"`
-	CustomerName *string  `json:"customer_name,omitempty"`
-	SiteName     *string  `json:"site_name,omitempty"`
-	Notes        *string  `json:"notes,omitempty"`
+	CompanyID            string   `json:"company_id"`
+	ProductID            string   `json:"product_id"`
+	Quantity             int      `json:"quantity"`
+	CapacityKw           *float64 `json:"capacity_kw,omitempty"`
+	Purpose              string   `json:"purpose"`
+	SourceType           string   `json:"source_type"`
+	CustomerName         *string  `json:"customer_name,omitempty"`
+	SiteName             *string  `json:"site_name,omitempty"`
+	Notes                *string  `json:"notes,omitempty"`
+	ExpectedPricePerWp   *float64 `json:"expected_price_per_wp,omitempty"`
+	FreeSpareQty         int      `json:"free_spare_qty,omitempty"`
+	GroupID              *string  `json:"group_id,omitempty"`       // 동일 배정 등록의 stock+incoming 그룹 묶음
+	SiteID               *string  `json:"site_id,omitempty"`        // 공사현장 FK
 }
 
 func (req *CreateInventoryAllocationRequest) Validate() string {
@@ -50,7 +65,7 @@ func (req *CreateInventoryAllocationRequest) Validate() string {
 		return "quantity는 양수여야 합니다"
 	}
 	if !validAllocPurposes[req.Purpose] {
-		return "purpose는 sale | construction | other 중 하나여야 합니다"
+		return "purpose는 sale | construction_own | construction_epc | other 중 하나여야 합니다"
 	}
 	if req.SourceType == "" {
 		req.SourceType = "stock"
@@ -61,17 +76,20 @@ func (req *CreateInventoryAllocationRequest) Validate() string {
 	return ""
 }
 
-// UpdateInventoryAllocationRequest — 배정 수정/확정/취소 요청
+// UpdateInventoryAllocationRequest — 배정 수정/확정/취소/보류 요청
 type UpdateInventoryAllocationRequest struct {
-	Quantity     *int     `json:"quantity,omitempty"`
-	CapacityKw   *float64 `json:"capacity_kw,omitempty"`
-	Purpose      *string  `json:"purpose,omitempty"`
-	SourceType   *string  `json:"source_type,omitempty"`
-	CustomerName *string  `json:"customer_name,omitempty"`
-	SiteName     *string  `json:"site_name,omitempty"`
-	Notes        *string  `json:"notes,omitempty"`
-	Status       *string  `json:"status,omitempty"`
-	OutboundID   *string  `json:"outbound_id,omitempty"`
+	Quantity             *int     `json:"quantity,omitempty"`
+	CapacityKw           *float64 `json:"capacity_kw,omitempty"`
+	Purpose              *string  `json:"purpose,omitempty"`
+	SourceType           *string  `json:"source_type,omitempty"`
+	CustomerName         *string  `json:"customer_name,omitempty"`
+	SiteName             *string  `json:"site_name,omitempty"`
+	Notes                *string  `json:"notes,omitempty"`
+	ExpectedPricePerWp   *float64 `json:"expected_price_per_wp,omitempty"`
+	FreeSpareQty         *int     `json:"free_spare_qty,omitempty"`
+	Status               *string  `json:"status,omitempty"`
+	OutboundID           *string  `json:"outbound_id,omitempty"`
+	OrderID              *string  `json:"order_id,omitempty"`
 }
 
 func (req *UpdateInventoryAllocationRequest) Validate() string {

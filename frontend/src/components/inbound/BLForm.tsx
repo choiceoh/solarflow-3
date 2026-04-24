@@ -12,8 +12,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
+import { moduleLabel } from '@/lib/utils';
 import type { BLShipment } from '@/types/inbound';
 import type { Company, Manufacturer, Product, Warehouse } from '@/types/masters';
+
+const LC_STATUS_KR: Record<string, string> = {
+  pending: '대기', opened: '개설완료', docs_received: '서류접수', settled: '결제완료',
+};
 
 /* ── 상수 ── */
 const INBOUND_TYPES = [
@@ -239,9 +244,11 @@ interface Props {
   editData?: BLShipment | null;
   /** PO 상세에서 입고 등록 시 사전 연결 (D-085) */
   presetPOId?: string | null;
+  /** LC 탭에서 입고 등록 시 LC 자동 선택 */
+  presetLCId?: string | null;
 }
 
-export default function BLForm({ open, onOpenChange, onSubmit, editData, presetPOId }: Props) {
+export default function BLForm({ open, onOpenChange, onSubmit, editData, presetPOId, presetLCId }: Props) {
   const globalCompanyId = useAppStore((s) => s.selectedCompanyId);
   const storeCompanies = useAppStore((s) => s.companies);
 
@@ -274,6 +281,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const [submitError, setSubmitError] = useState('');
   // R3: LC 선택 (해외직수입만 필수) — D-095 BL>LC=차단
   const [lcList, setLcList] = useState<{ lc_id: string; lc_number?: string; po_id: string; amount_usd: number; target_qty?: number; target_mw?: number; status: string; bank_name?: string }[]>([]);
+  const [lcShippedQty, setLcShippedQty] = useState<number>(0); // 선택 LC의 기존 BL 합산 입고수량
   // F18: 신규 등록 시 예정(scheduled) vs 완료(completed) 선택
   const [initialStatus, setInitialStatus] = useState<'scheduled' | 'completed'>('completed');
   const [selLCId, setSelLCId] = useState<string>('');
@@ -334,6 +342,24 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       .catch(() => setLcList([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selPOId]);
+
+  /* LC 선택 시 해당 LC의 기존 BL 입고수량 합산 */
+  useEffect(() => {
+    if (!selLCId) { setLcShippedQty(0); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const bls = await fetchWithAuth<BLShipment[]>(`/api/v1/bls?lc_id=${selLCId}`).catch(() => [] as BLShipment[]);
+        let total = 0;
+        for (const bl of bls ?? []) {
+          const blLines = await fetchWithAuth<{ quantity?: number }[]>(`/api/v1/bls/${bl.bl_id}/lines`).catch(() => []);
+          for (const ln of blLines ?? []) total += ln.quantity ?? 0;
+        }
+        if (!cancelled) setLcShippedQty(total);
+      } catch { if (!cancelled) setLcShippedQty(0); }
+    })();
+    return () => { cancelled = true; };
+  }, [selLCId]);
 
   /* PO 선택 → 입고 폼 자동 채움 (D-087)
    * 자동 채움: manufacturer_id, company_id, currency, incoterms, payment_terms.
@@ -403,12 +429,19 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     setPoRemaining({ contractedMw, shippedMw, remainMw: Math.max(0, contractedMw - shippedMw) });
   }, [poList, setValue]);
 
-  /* presetPOId (PO 상세에서 진입) → 자동 적용 */
+  /* presetPOId (PO 상세 / LC 탭에서 진입) → 자동 적용 */
   useEffect(() => {
     if (!open || editData || !presetPOId || poList.length === 0) return;
     setSelPOId(presetPOId);
     applyPOAutofill(presetPOId);
   }, [open, editData, presetPOId, poList, applyPOAutofill]);
+
+  /* presetLCId (LC 탭에서 진입) → LC list 로드 후 자동 선택 */
+  useEffect(() => {
+    if (!open || !presetLCId || !lcList.length) return;
+    setSelLCId(presetLCId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, presetLCId, lcList.length]);
 
   /* ── 자동채번 ── */
   const genAutoNumber = useCallback(async (prefix: string) => {
@@ -751,6 +784,20 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const coName = companies.find(c => c.company_id === selCompanyId)?.company_name ?? '';
   const whName = warehouses.find(w => w.warehouse_id === selWhId)?.warehouse_name ?? '';
   const cpName = companies.find(c => c.company_id === counterpartId)?.company_name ?? '';
+  // PO 발주품목 첫 번째 제품 규격 (드롭다운 "진코솔라 640W" 표시용)
+  const firstSpecWp = products.find(x => x.product_id === poLineRows[0]?.product_id)?.spec_wp ?? 0;
+  const selPO = poList.find(p => p.po_id === selPOId);
+  // PO SelectTrigger 표시 텍스트: 선택 후에는 "진코솔라 640W | PO번호 | MW | 월"
+  const poTriggerText = selPO
+    ? (firstSpecWp > 0
+      ? `${moduleLabel(mfgName, firstSpecWp)} | ${selPO.po_number} | ${(selPO.total_capacity_mw ?? selPO.total_mw ?? 0).toFixed(1)}MW${selPO.contract_date ? ` | ${selPO.contract_date.slice(0, 7)}` : ''}`
+      : formatPOLabel(selPO, manufacturers))
+    : '';
+  // LC SelectTrigger 표시 텍스트: 선택 후에는 "진코솔라 640W | LC번호 | 상태"
+  const lcItemLabel = (lc: typeof lcList[number]) => {
+    const modPart = firstSpecWp > 0 ? `${moduleLabel(mfgName, firstSpecWp)} | ` : '';
+    return `${modPart}${lc.lc_number ?? lc.lc_id.slice(0, 8)} | ${lc.bank_name ?? '—'} | ${lc.amount_usd.toLocaleString()} USD | ${LC_STATUS_KR[lc.status] ?? lc.status}`;
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -792,7 +839,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                 }
               }}>
                 <SelectTrigger className="w-full">
-                  <Txt text={formatPOLabel(poList.find(p => p.po_id === selPOId), manufacturers)} placeholder="PO 선택 *" />
+                  <Txt text={poTriggerText} placeholder="PO 선택 *" />
                 </SelectTrigger>
                 <SelectContent>
                   {/* F15: PO 연결은 필수 — 미선택 옵션 제거 */}
@@ -829,11 +876,13 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                 <div className="mt-2 space-y-1.5">
                   <Label className="text-muted-foreground">LC 연결 (해외직수입 필수)</Label>
                   <Select value={selLCId || 'none'} onValueChange={(v) => setSelLCId(v === 'none' ? '' : (v ?? ''))}>
-                    <SelectTrigger className="w-full"><Txt text={(() => { const lc = lcList.find((l) => l.lc_id === selLCId); return lc ? `${lc.lc_number ?? lc.lc_id.slice(0,8)} | ${lc.bank_name ?? '—'} | ${lc.amount_usd.toLocaleString()} USD | ${lc.status}` : ''; })()} placeholder="LC 선택" /></SelectTrigger>
+                    <SelectTrigger className="w-full">
+                      <Txt text={(() => { const lc = lcList.find((l) => l.lc_id === selLCId); return lc ? lcItemLabel(lc) : ''; })()} placeholder="LC 선택" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">미선택</SelectItem>
                       {lcList.map((lc) => (
-                        <SelectItem key={lc.lc_id} value={lc.lc_id}>{`${lc.lc_number ?? lc.lc_id.slice(0,8)} | ${lc.bank_name ?? '—'} | ${lc.amount_usd.toLocaleString()} USD | ${lc.status}`}</SelectItem>
+                        <SelectItem key={lc.lc_id} value={lc.lc_id}>{lcItemLabel(lc)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -994,25 +1043,60 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
               {/* ── D-087: PO 발주품목 — 기입고/잔여 + 이번입고 입력 ── */}
               {selPOId && poLineRows.length > 0 && (
                 <div className="space-y-2">
-                  <Label className="text-sm font-semibold">PO 발주품목 (계약 vs 기입고)</Label>
+                  <div className="flex items-baseline gap-2">
+                    <Label className="text-sm font-semibold">PO · LC 발주 현황</Label>
+                    <span className="text-[10px] text-muted-foreground">이번 입고(EA) 입력 후 <span className="font-semibold text-foreground">[+]</span> 클릭 → 아래 입고품목으로 추가됩니다</span>
+                  </div>
                   <div className="rounded-md border overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead className="bg-muted">
                         <tr>
-                          <th className="px-2 py-1.5 text-left">품번</th>
-                          <th className="px-2 py-1.5 text-left">모델명</th>
-                          <th className="px-2 py-1.5 text-right">규격</th>
+                          <th className="px-2 py-1.5 text-left">품목</th>
+                          <th className="px-2 py-1.5 text-center">구분</th>
                           <th className="px-2 py-1.5 text-right">계약(EA)</th>
                           <th className="px-2 py-1.5 text-right">계약(MW)</th>
                           <th className="px-2 py-1.5 text-right">기입고(EA)</th>
                           <th className="px-2 py-1.5 text-right">기입고(MW)</th>
                           <th className="px-2 py-1.5 text-right">잔여(EA)</th>
                           <th className="px-2 py-1.5 text-right">잔여(MW)</th>
-                          <th className="px-2 py-1.5 text-center w-32">이번 입고(EA)</th>
-                          <th className="px-2 py-1.5 text-center w-16">추가</th>
+                          <th className="px-2 py-1.5 text-center w-40">이번 입고(EA) · 추가</th>
                         </tr>
                       </thead>
                       <tbody>
+                        {/* LC 현황 요약 행 */}
+                        {selLCId && (() => {
+                          const lc = lcList.find((l) => l.lc_id === selLCId);
+                          if (!lc) return null;
+                          const lcTarget = lc.target_qty ?? 0;
+                          const lcRemain = Math.max(0, lcTarget - lcShippedQty);
+                          const lcTargetMw = lc.target_mw ?? 0;
+                          return (
+                            <tr className="bg-blue-50 border-b border-blue-200">
+                              <td colSpan={9} className="px-3 py-2">
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                                  <span className="font-semibold text-blue-700 shrink-0">
+                                    LC: {lc.lc_number ?? '—'}
+                                  </span>
+                                  <span className="text-muted-foreground shrink-0">
+                                    {LC_STATUS_KR[lc.status] ?? lc.status} · ${lc.amount_usd.toLocaleString()}
+                                    {lcTargetMw > 0 && ` · ${lcTargetMw.toFixed(2)}MW`}
+                                  </span>
+                                  {lcTarget > 0 ? (
+                                    <>
+                                      <span className="text-muted-foreground shrink-0">LC물량 <span className="tabular-nums font-medium text-foreground">{lcTarget.toLocaleString('ko-KR')} EA</span></span>
+                                      <span className="text-muted-foreground shrink-0">기입고 <span className="tabular-nums font-medium">{lcShippedQty.toLocaleString('ko-KR')} EA</span></span>
+                                      <span className={`shrink-0 font-semibold ${lcRemain <= 0 ? 'text-red-600' : 'text-blue-700'}`}>
+                                        잔여 {lcRemain.toLocaleString('ko-KR')} EA
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-muted-foreground text-[10px]">LC에 목표수량 미설정 — LC 편집에서 입력 가능</span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })()}
                         {poLineRows.map((row, i) => {
                           const p = products.find(x => x.product_id === row.product_id);
                           const specWp = p?.spec_wp ?? 0;
@@ -1024,9 +1108,20 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                           const isOver = inputQty > remainQty;
                           return (
                             <tr key={i} className="border-t">
-                              <td className="px-2 py-1.5 font-mono">{p?.product_code ?? row.product_id.slice(0, 8)}</td>
-                              <td className="px-2 py-1.5">{p?.product_name ?? '—'}</td>
-                              <td className="px-2 py-1.5 text-right">{specWp ? `${specWp}Wp` : '—'}</td>
+                              <td className="px-2 py-1.5">
+                                <div className="font-medium text-[11px]">{moduleLabel(mfgName, specWp)}</div>
+                                <div className="font-mono text-[10px] text-muted-foreground">{p?.product_code ?? '—'}</div>
+                              </td>
+                              <td className="px-2 py-1.5 text-center">
+                                <div className={`inline-flex flex-col items-center gap-0.5`}>
+                                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${row.payment_type === 'free' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                    {row.payment_type === 'free' ? '무상' : '유상'}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {row.item_type === 'spare' ? '스페어' : '본품'}
+                                  </span>
+                                </div>
+                              </td>
                               <td className="px-2 py-1.5 text-right">{row.contracted_qty.toLocaleString('ko-KR')}</td>
                               <td className="px-2 py-1.5 text-right">{contractedMw.toFixed(3)}</td>
                               <td className="px-2 py-1.5 text-right">{row.shipped_qty.toLocaleString('ko-KR')}</td>
@@ -1034,19 +1129,19 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                               <td className="px-2 py-1.5 text-right font-medium">{remainQty.toLocaleString('ko-KR')}</td>
                               <td className="px-2 py-1.5 text-right font-medium">{remainMw.toFixed(3)}</td>
                               <td className="px-2 py-1.5">
-                                <Input className="h-7 text-xs" inputMode="numeric" value={row.thisShipmentQty}
-                                  placeholder="0"
-                                  onChange={e => updatePORowQty(i, e.target.value)} />
+                                <div className="flex gap-1 items-center">
+                                  <Input className="h-7 text-xs flex-1 min-w-0 bg-amber-50 border-amber-300 focus-visible:ring-amber-400" inputMode="numeric" value={row.thisShipmentQty}
+                                    placeholder="0"
+                                    onChange={e => updatePORowQty(i, e.target.value)} />
+                                  <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-[10px] shrink-0 border-amber-400 hover:bg-amber-100"
+                                    disabled={!inputQty}
+                                    onClick={() => addLineFromPORow(i)}>
+                                    +
+                                  </Button>
+                                </div>
                                 {isOver && (
                                   <p className="text-[9px] text-orange-600 mt-0.5">잔여 초과 (저장은 가능)</p>
                                 )}
-                              </td>
-                              <td className="px-2 py-1.5 text-center">
-                                <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-[10px]"
-                                  disabled={!inputQty}
-                                  onClick={() => addLineFromPORow(i)}>
-                                  +
-                                </Button>
                               </td>
                             </tr>
                           );
@@ -1055,7 +1150,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                     </table>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    이번 BL에 입고할 수량을 입력하고 "+" 버튼을 누르면 아래 입고 품목에 추가됩니다. 단가/구분/유무상은 PO에서 자동 복사. 잔여보다 많이 입력해도 저장은 허용됩니다 (초과 입고).
+                    ① 이번 입고(EA) 란에 수량 입력 → ② <span className="font-semibold">[+]</span> 클릭 → ③ 아래 "입고 품목"에 자동 추가됨. 단가·구분·유무상은 PO에서 자동 복사. 잔여 초과 입력도 저장 가능 (초과 입고).
                   </p>
                 </div>
               )}
@@ -1121,7 +1216,12 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                         <div className="flex flex-wrap items-end gap-2">
                           <div className="w-24 space-y-1">
                             <span className="text-[10px] text-blue-600 font-medium">유무상 *</span>
-                            <Select value={line.payment_type} onValueChange={v => updateLine(idx, 'payment_type', v ?? 'paid')}>
+                            <Select value={line.payment_type} onValueChange={v => {
+                              const val = v ?? 'paid';
+                              setLines(prev => prev.map((l, j) => j === idx
+                                ? { ...l, payment_type: val, unit_price: val === 'free' ? '' : l.unit_price }
+                                : l));
+                            }}>
                               <SelectTrigger className="w-full h-9 text-xs">
                                 <Txt text={line.payment_type === 'paid' ? '유상' : '무상'} />
                               </SelectTrigger>
@@ -1132,12 +1232,16 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                             </Select>
                           </div>
                           <div className="w-40 space-y-1">
-                            <span className="text-[10px] text-blue-600 font-medium">
-                              {isImport ? (priceMode === 'cents' ? '단가(¢/Wp) *' : '단가($/Wp) *') : '단가(원/Wp) *'}
+                            <span className={`text-[10px] font-medium ${line.payment_type === 'free' ? 'text-muted-foreground' : 'text-blue-600'}`}>
+                              {line.payment_type === 'free' ? '단가 (무상 해당없음)' : isImport ? (priceMode === 'cents' ? '단가(¢/Wp) *' : '단가($/Wp) *') : '단가(원/Wp) *'}
                             </span>
                             <div className="flex gap-1 items-center">
-                              <Input className="h-9 text-xs flex-1 min-w-0" inputMode={isImport ? 'decimal' : 'numeric'} value={line.unit_price}
-                                placeholder={isImport ? (priceMode === 'cents' ? '예: ¢12.30 (=$0.123/Wp)' : '예: $0.1230/Wp') : '예: 200 (원/Wp)'}
+                              <Input
+                                className="h-9 text-xs flex-1 min-w-0"
+                                inputMode={isImport ? 'decimal' : 'numeric'}
+                                value={line.unit_price}
+                                disabled={line.payment_type === 'free'}
+                                placeholder={line.payment_type === 'free' ? '—' : isImport ? (priceMode === 'cents' ? '예: ¢12.30 (=$0.123/Wp)' : '예: $0.1230/Wp') : '예: 200 (원/Wp)'}
                                 onChange={e => {
                                   const v = e.target.value;
                                   if (isImport) {
@@ -1146,7 +1250,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                                     if (v === '' || /^\d+$/.test(v)) updateLine(idx, 'unit_price', v);
                                   }
                                 }} />
-                              {isImport && (
+                              {isImport && line.payment_type !== 'free' && (
                                 <Button type="button" variant="outline" size="sm"
                                   className="h-9 px-1.5 text-[10px] shrink-0 w-9" onClick={togglePriceMode}>
                                   {priceMode === 'cents' ? '¢' : '$'}

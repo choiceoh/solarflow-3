@@ -43,5 +43,6 @@ pub fn create_router(pool: PgPool) -> Router {
         .route("/api/calc/outstanding-list", axum::routing::post(calc::outstanding_list_handler))
         .route("/api/calc/receipt-match-suggest", axum::routing::post(calc::receipt_match_suggest_handler))
         .route("/api/calc/search", axum::routing::post(calc::search_handler))
+        .route("/api/calc/inventory-turnover", axum::routing::post(calc::inventory_turnover_handler))
         .with_state(pool)
 }

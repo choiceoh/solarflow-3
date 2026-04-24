@@ -1,99 +1,311 @@
 import { Badge } from '@/components/ui/badge';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import { formatKw, formatCapacity, formatWp, formatSize } from '@/lib/utils';
-
-// kW → EA 변환: spec_wp 기반 (spec_wp=0 방어)
-const kwToEa = (kw: number, specWp: number) => specWp ? Math.round((kw * 1000) / specWp) : 0;
 import EmptyState from '@/components/common/EmptyState';
+import { moduleLabel } from '@/lib/utils';
 import type { InventoryItem } from '@/types/inventory';
 
+const kwToEa = (kw: number, specWp: number) =>
+  specWp > 0 ? Math.round((kw * 1000) / specWp) : 0;
+
+/** kW → 자동 단위 (1,000kW 미만 = kW 표시, 이상 = MW) */
+function fmw(kw: number): string {
+  if (kw <= 0) return '0 kW';
+  if (kw >= 1000) return (kw / 1000).toFixed(2) + ' MW';
+  return Math.round(kw).toLocaleString('ko-KR') + ' kW';
+}
+
 function LongTermBadge({ status }: { status: string }) {
-  if (status === 'warning') return <Badge variant="outline" className="border-yellow-500 text-yellow-600 text-[10px]">장기(6M+)</Badge>;
-  if (status === 'critical') return <Badge variant="destructive" className="text-[10px]">초장기(12M+)</Badge>;
+  if (status === 'warning')
+    return <Badge variant="outline" className="border-yellow-500 text-yellow-600 text-[10px]">장기(6M+)</Badge>;
+  if (status === 'critical')
+    return <Badge variant="destructive" className="text-[10px]">초장기(12M+)</Badge>;
   return null;
 }
 
-export default function InventoryTable({ items }: { items: InventoryItem[] }) {
+/** 재고 수치 셀: 메인값 + EA + 차감내역 */
+function MetricCell({
+  kw, specWp, deductions, mainClassName,
+}: {
+  kw: number;
+  specWp: number;
+  deductions?: { label: string; kw: number }[];
+  mainClassName?: string;
+}) {
+  const ea = kwToEa(kw, specWp);
+  const hasDeductions = deductions?.some((d) => d.kw > 0);
+  return (
+    <td className="p-3 text-right align-top min-w-[130px]">
+      <div className={`font-semibold tabular-nums ${mainClassName ?? ''}`}>{fmw(kw)}</div>
+      <div className="text-[10px] text-muted-foreground tabular-nums">
+        {ea.toLocaleString('ko-KR')} EA
+      </div>
+      {hasDeductions && (
+        <div className="mt-1 space-y-0.5">
+          {deductions!.filter((d) => d.kw > 0).map((d) => (
+            <div key={d.label} className="text-[10px] text-muted-foreground">
+              <span className="text-red-400">− {d.label}</span>{' '}
+              <span className="tabular-nums">{fmw(d.kw)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </td>
+  );
+}
+
+/** 합계 행 수치 셀 (EA 없음, breakdown만) */
+function TotalCell({
+  kw, deductions, mainClassName,
+}: {
+  kw: number;
+  deductions?: { label: string; kw: number }[];
+  mainClassName?: string;
+}) {
+  const hasDeductions = deductions?.some((d) => d.kw > 0);
+  return (
+    <td className="p-3 text-right align-top">
+      <div className={`font-bold tabular-nums ${mainClassName ?? ''}`}>{fmw(kw)}</div>
+      {hasDeductions && (
+        <div className="mt-1 space-y-0.5">
+          {deductions!.filter((d) => d.kw > 0).map((d) => (
+            <div key={d.label} className="text-[10px] text-muted-foreground font-normal">
+              <span className="text-red-400">− {d.label}</span>{' '}
+              <span className="tabular-nums">{fmw(d.kw)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </td>
+  );
+}
+
+/** compact=true: 제품정보 + 가용재고만 표시 (2열 레이아웃 좌측 패널용) */
+export default function InventoryTable({ items, compact = false }: { items: InventoryItem[]; compact?: boolean }) {
   if (items.length === 0) return <EmptyState message="등록된 재고 데이터가 없습니다" />;
 
-  // 합계 행 — 물리적/미착품/가용 등 구성 분해를 한 눈에
   const totals = items.reduce(
     (acc, it) => ({
-      physical: acc.physical + (it.physical_kw || 0),
-      reserved: acc.reserved + (it.reserved_kw || 0),
-      allocated: acc.allocated + (it.allocated_kw || 0),
-      available: acc.available + (it.available_kw || 0),
-      incoming: acc.incoming + (it.incoming_kw || 0),
-      incomingReserved: acc.incomingReserved + (it.incoming_reserved_kw || 0),
+      physical:          acc.physical          + (it.physical_kw           || 0),
+      reserved:          acc.reserved          + (it.reserved_kw           || 0),
+      allocated:         acc.allocated         + (it.allocated_kw          || 0),
+      available:         acc.available         + (it.available_kw          || 0),
+      incoming:          acc.incoming          + (it.incoming_kw           || 0),
+      incomingReserved:  acc.incomingReserved  + (it.incoming_reserved_kw  || 0),
       availableIncoming: acc.availableIncoming + (it.available_incoming_kw || 0),
-      totalSecured: acc.totalSecured + (it.total_secured_kw || 0),
+      totalSecured:      acc.totalSecured      + (it.total_secured_kw      || 0),
     }),
-    { physical: 0, reserved: 0, allocated: 0, available: 0, incoming: 0, incomingReserved: 0, availableIncoming: 0, totalSecured: 0 },
+    { physical: 0, reserved: 0, allocated: 0, available: 0,
+      incoming: 0, incomingReserved: 0, availableIncoming: 0, totalSecured: 0 },
   );
 
-  return (
-    <div className="rounded-md border overflow-x-auto">
-      <Table className="text-xs">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="whitespace-nowrap">제조사</TableHead>
-            <TableHead className="whitespace-nowrap">품번</TableHead>
-            <TableHead className="whitespace-nowrap">품명</TableHead>
-            <TableHead className="whitespace-nowrap text-right">규격</TableHead>
-            <TableHead className="whitespace-nowrap text-right">크기</TableHead>
-            <TableHead className="whitespace-nowrap text-right">물리적</TableHead>
-            <TableHead className="whitespace-nowrap text-right">예약</TableHead>
-            <TableHead className="whitespace-nowrap text-right">배정</TableHead>
-            <TableHead className="whitespace-nowrap text-right">가용</TableHead>
-            <TableHead className="whitespace-nowrap text-right">미착품</TableHead>
-            <TableHead className="whitespace-nowrap text-right">미착예약</TableHead>
-            <TableHead className="whitespace-nowrap text-right">가용미착</TableHead>
-            <TableHead className="whitespace-nowrap text-right">총확보</TableHead>
-            <TableHead className="whitespace-nowrap">장기재고</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((item) => (
-            <TableRow key={item.product_id}>
-              <TableCell className="whitespace-nowrap">{item.manufacturer_name}</TableCell>
-              <TableCell className="whitespace-nowrap font-mono">{item.product_code}</TableCell>
-              <TableCell className="whitespace-nowrap">{item.product_name}</TableCell>
-              <TableCell className="text-right">{formatWp(item.spec_wp)}</TableCell>
-              <TableCell className="text-right whitespace-nowrap">{formatSize(item.module_width_mm, item.module_height_mm)}</TableCell>
-              <TableCell className="text-right font-medium">{formatCapacity(item.physical_kw, kwToEa(item.physical_kw, item.spec_wp))}</TableCell>
-              <TableCell className="text-right">{formatCapacity(item.reserved_kw, kwToEa(item.reserved_kw, item.spec_wp))}</TableCell>
-              <TableCell className="text-right">{formatCapacity(item.allocated_kw, kwToEa(item.allocated_kw, item.spec_wp))}</TableCell>
-              <TableCell className="text-right font-medium text-green-600">{formatCapacity(item.available_kw, kwToEa(item.available_kw, item.spec_wp))}</TableCell>
-              <TableCell className="text-right">{formatCapacity(item.incoming_kw, kwToEa(item.incoming_kw, item.spec_wp))}</TableCell>
-              <TableCell className="text-right">{formatCapacity(item.incoming_reserved_kw, kwToEa(item.incoming_reserved_kw, item.spec_wp))}</TableCell>
-              <TableCell className="text-right">{formatCapacity(item.available_incoming_kw, kwToEa(item.available_incoming_kw, item.spec_wp))}</TableCell>
-              <TableCell className="text-right font-medium text-purple-600">{formatCapacity(item.total_secured_kw, kwToEa(item.total_secured_kw, item.spec_wp))}</TableCell>
-              <TableCell><LongTermBadge status={item.long_term_status} /></TableCell>
-            </TableRow>
-          ))}
-          <TableRow className="bg-muted/50 font-semibold border-t-2">
-            <TableCell colSpan={5} className="text-right">합계</TableCell>
-            <TableCell className="text-right">{formatKw(totals.physical)}</TableCell>
-            <TableCell className="text-right">{formatKw(totals.reserved)}</TableCell>
-            <TableCell className="text-right">{formatKw(totals.allocated)}</TableCell>
-            <TableCell className="text-right text-green-600">{formatKw(totals.available)}</TableCell>
-            <TableCell className="text-right">{formatKw(totals.incoming)}</TableCell>
-            <TableCell className="text-right">{formatKw(totals.incomingReserved)}</TableCell>
-            <TableCell className="text-right">{formatKw(totals.availableIncoming)}</TableCell>
-            <TableCell className="text-right text-purple-600">{formatKw(totals.totalSecured)}</TableCell>
-            <TableCell />
-          </TableRow>
-        </TableBody>
-      </Table>
-      <div className="px-3 py-2 text-[10px] text-muted-foreground border-t bg-muted/20">
-        가용재고 = <span className="text-foreground">물리적({formatKw(totals.physical)})</span> − 예약({formatKw(totals.reserved)}) − 배정({formatKw(totals.allocated)}) = <span className="text-green-600">가용({formatKw(totals.available)})</span>
-        <span className="mx-2">·</span>
-        가용미착 = <span className="text-foreground">미착품({formatKw(totals.incoming)})</span> − 미착예약({formatKw(totals.incomingReserved)}) = 가용미착({formatKw(totals.availableIncoming)})
-        <span className="mx-2">·</span>
-        총확보 = 가용 + 가용미착 = <span className="text-purple-600">{formatKw(totals.totalSecured)}</span>
+  /* ── compact 모드: 제품 + 가용재고만 ── */
+  if (compact) {
+    return (
+      <div className="rounded-md border overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-muted/50 border-b">
+              <th className="p-2 text-left font-medium text-muted-foreground">제품</th>
+              <th className="p-2 text-right font-medium">
+                <div className="flex items-center justify-end gap-1">
+                  <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
+                  가용재고
+                </div>
+                <div className="text-[10px] text-muted-foreground font-normal">현재고+미착</div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.product_id} className="border-t hover:bg-muted/20 transition-colors">
+                <td className="p-2 align-middle">
+                  <div className="font-semibold text-[11px]">{moduleLabel(item.manufacturer_name, item.spec_wp)}</div>
+                  <div className="font-mono text-[10px] text-muted-foreground">{item.product_code}</div>
+                </td>
+                <td className="p-2 text-right align-middle">
+                  <div className="font-bold tabular-nums text-green-600">{fmw(item.total_secured_kw)}</div>
+                  <div className="text-[10px] text-muted-foreground tabular-nums">
+                    {kwToEa(item.total_secured_kw, item.spec_wp).toLocaleString('ko-KR')} EA
+                  </div>
+                  {item.available_incoming_kw > 0 && (
+                    <div className="text-[10px] text-muted-foreground">
+                      미착 <span className="tabular-nums">{fmw(item.available_incoming_kw)}</span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {/* 합계 */}
+            <tr className="border-t-2 bg-muted/50">
+              <td className="p-2 text-right text-muted-foreground font-semibold text-[11px]">합계</td>
+              <td className="p-2 text-right">
+                <div className="font-bold tabular-nums text-green-600">{fmw(totals.totalSecured)}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  현재고 <span className="tabular-nums">{fmw(totals.available)}</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  미착 <span className="tabular-nums">{fmw(totals.availableIncoming)}</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+    );
+  }
+
+  /* ── 풀 모드 ── */
+  return (
+    <div className="rounded-md border overflow-hidden">
+      <table className="w-full text-xs">
+        {/* ── 헤더 ── */}
+        <thead>
+          <tr className="bg-muted/50 border-b">
+            <th className="p-3 text-left font-medium text-muted-foreground w-[220px]">제품 정보</th>
+            {/* 실재고 */}
+            <th className="p-3 text-right font-medium">
+              <div className="flex items-center justify-end gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-blue-400 inline-block" />
+                실재고
+              </div>
+              <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
+                창고 보유 현재고
+              </div>
+            </th>
+            {/* 미착품 */}
+            <th className="p-3 text-right font-medium">
+              <div className="flex items-center justify-end gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-yellow-400 inline-block" />
+                미착품
+              </div>
+              <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
+                L/C 개설 기준
+              </div>
+            </th>
+            {/* 가용재고 */}
+            <th className="p-3 text-right font-medium">
+              <div className="flex items-center justify-end gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
+                가용재고
+              </div>
+              <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
+                현재고 가용 + 미착 가용
+              </div>
+            </th>
+            <th className="p-3 text-center font-medium text-muted-foreground w-[80px]">장기</th>
+          </tr>
+        </thead>
+
+        {/* ── 데이터 행 ── */}
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.product_id} className="border-t hover:bg-muted/20 transition-colors">
+              {/* 제품 정보 */}
+              <td className="p-3 align-top">
+                <div className="font-semibold">{moduleLabel(item.manufacturer_name, item.spec_wp)}</div>
+                <div className="font-mono text-[11px] text-muted-foreground mt-0.5 leading-tight">
+                  {item.product_code}
+                </div>
+                {(item.module_width_mm && item.module_height_mm) && (
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    {item.module_width_mm}×{item.module_height_mm}mm
+                  </div>
+                )}
+              </td>
+
+              {/* 실재고 */}
+              <MetricCell
+                kw={item.physical_kw}
+                specWp={item.spec_wp}
+                deductions={[
+                  { label: '수주예약', kw: item.reserved_kw },
+                  { label: '배정',    kw: item.allocated_kw },
+                ]}
+              />
+
+              {/* 미착품 */}
+              <MetricCell
+                kw={item.incoming_kw}
+                specWp={item.spec_wp}
+                deductions={[
+                  { label: '미착예약', kw: item.incoming_reserved_kw },
+                ]}
+              />
+
+              {/* 가용재고 = available_kw + available_incoming_kw = total_secured_kw */}
+              <td className="p-3 text-right align-top min-w-[130px]">
+                <div className="font-bold tabular-nums text-green-600">
+                  {fmw(item.total_secured_kw)}
+                </div>
+                <div className="text-[10px] text-muted-foreground tabular-nums">
+                  {kwToEa(item.total_secured_kw, item.spec_wp).toLocaleString('ko-KR')} EA
+                </div>
+                <div className="mt-1 space-y-0.5">
+                  <div className="text-[10px] text-muted-foreground">
+                    현재고{' '}
+                    <span className="tabular-nums text-foreground">
+                      {fmw(item.available_kw)}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    미착{' '}
+                    <span className="tabular-nums text-foreground">
+                      {fmw(item.available_incoming_kw)}
+                    </span>
+                  </div>
+                </div>
+              </td>
+
+              {/* 장기재고 */}
+              <td className="p-3 text-center align-top">
+                <LongTermBadge status={item.long_term_status} />
+              </td>
+            </tr>
+          ))}
+
+          {/* ── 합계 행 ── */}
+          <tr className="border-t-2 bg-muted/50">
+            <td className="p-3 text-right text-muted-foreground font-semibold align-top">
+              합계
+            </td>
+
+            {/* 물리적 합계 */}
+            <TotalCell
+              kw={totals.physical}
+              deductions={[
+                { label: '수주예약', kw: totals.reserved  },
+                { label: '배정',    kw: totals.allocated },
+              ]}
+            />
+
+            {/* 미착품 합계 */}
+            <TotalCell
+              kw={totals.incoming}
+              deductions={[{ label: '미착예약', kw: totals.incomingReserved }]}
+            />
+
+            {/* 가용재고 합계 */}
+            <td className="p-3 text-right align-top">
+              <div className="font-bold tabular-nums text-green-600">
+                {fmw(totals.totalSecured)}
+              </div>
+              <div className="mt-1 space-y-0.5">
+                <div className="text-[10px] text-muted-foreground font-normal">
+                  현재고{' '}
+                  <span className="tabular-nums text-foreground">{fmw(totals.available)}</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground font-normal">
+                  미착{' '}
+                  <span className="tabular-nums text-foreground">
+                    {fmw(totals.availableIncoming)}
+                  </span>
+                </div>
+              </div>
+            </td>
+
+            <td />
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }

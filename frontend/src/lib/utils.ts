@@ -59,3 +59,39 @@ export function formatMW(n: number): string {
 export function formatSize(w: number, h: number): string {
   return `${w} x ${h} mm`;
 }
+
+// --- 모듈 레이블 ---
+
+/**
+ * 제조사 약칭 + 사양 조합 레이블. 예: "진코 640W", "트리나 730W"
+ * @param mfg   short_name 우선, 없으면 name_kr 사용
+ * @param specWp 모듈 사양(Wp). 없으면 제조사명만 반환
+ */
+export function moduleLabel(
+  mfg: { short_name?: string | null; name_kr?: string | null } | string | null | undefined,
+  specWp?: number | null,
+): string {
+  let name: string;
+  if (!mfg) {
+    name = '—';
+  } else if (typeof mfg === 'string') {
+    name = mfg || '—';
+  } else {
+    name = mfg.short_name?.trim() || mfg.name_kr?.trim() || '—';
+  }
+  if (!specWp) return name;
+  return `${name} ${specWp}W`;   // → "진코 640W"
+}
+
+/**
+ * 제조사 ID로 약칭 조회 후 모듈 레이블 반환.
+ * manufacturers 리스트가 있는 페이지 레벨에서 사용.
+ */
+export function moduleLabelById(
+  manufacturers: { manufacturer_id: string; short_name?: string | null; name_kr?: string | null }[],
+  manufacturerId: string | null | undefined,
+  specWp?: number | null,
+): string {
+  const mfg = manufacturers.find((m) => m.manufacturer_id === manufacturerId);
+  return moduleLabel(mfg ?? null, specWp);
+}

@@ -49,6 +49,7 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData, default
   const [submitError, setSubmitError] = useState('');
   const [amountUsdDisplay, setAmountUsdDisplay] = useState('');
   const [amountKrwDisplay, setAmountKrwDisplay] = useState('');
+  const [exchangeRateDisplay, setExchangeRateDisplay] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) as any });
 
@@ -93,10 +94,12 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData, default
         reset({ po_id: editData.po_id, remit_date: editData.remit_date?.slice(0, 10) ?? '', amount_usd: editData.amount_usd, amount_krw: editData.amount_krw ?? '', exchange_rate: editData.exchange_rate ?? '', purpose: editData.purpose ?? '', status: editData.status, bank_name: editData.bank_name ?? '', memo: editData.memo ?? '' });
         setAmountUsdDisplay(fmtDecimal(editData.amount_usd?.toString() ?? ''));
         setAmountKrwDisplay(editData.amount_krw ? Math.round(editData.amount_krw).toLocaleString('ko-KR') : '');
+        setExchangeRateDisplay(editData.exchange_rate ? Number(editData.exchange_rate).toFixed(2) : '');
       } else {
         reset({ po_id: defaultPoId ?? '', remit_date: '', amount_usd: '' as unknown as number, amount_krw: '', exchange_rate: '', purpose: '', status: 'planned', bank_name: '', memo: '' });
         setAmountUsdDisplay('');
         setAmountKrwDisplay('');
+        setExchangeRateDisplay('');
       }
     }
   }, [open, editData, reset, defaultPoId]);
@@ -155,15 +158,65 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData, default
                   setAmountUsdDisplay(fmtDecimal(raw));
                   const num = parseFloat(raw);
                   setValue('amount_usd', (isNaN(num) ? '' : num) as unknown as number, { shouldDirty: true });
+                  // USD 변경 시 환율 있으면 원화 자동 계산
+                  const rateVal = watch('exchange_rate');
+                  if (!isNaN(num) && rateVal && !isNaN(Number(rateVal))) {
+                    const krw = Math.round(num * Number(rateVal));
+                    setAmountKrwDisplay(krw.toLocaleString('ko-KR'));
+                    setValue('amount_krw', krw as unknown as number, { shouldDirty: true });
+                  }
                 }}
                 placeholder="0.00"
               />
               {errors.amount_usd && <p className="text-xs text-destructive">{errors.amount_usd.message}</p>}
             </div>
           </div>
+          {/* 환율 + 원화: 환율 입력 → 원화 자동 계산 */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>원화(KRW)</Label>
+              <div className="flex items-center justify-between">
+                <Label>환율 <span className="text-[10px] text-muted-foreground font-normal">(원/USD)</span></Label>
+                {/* 최근 환율 힌트 */}
+                <span className="text-[10px] text-muted-foreground">예: 1,380.50</span>
+              </div>
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="1,380.50"
+                value={exchangeRateDisplay}
+                onChange={(e) => {
+                  // 숫자와 소수점만 허용, 소수점 2자리까지
+                  const raw = e.target.value.replace(/[^0-9.]/g, '');
+                  const parts = raw.split('.');
+                  const clamped = parts.length > 1
+                    ? parts[0] + '.' + parts[1].slice(0, 2)
+                    : raw;
+                  setExchangeRateDisplay(clamped);
+                  const rateNum = clamped ? parseFloat(clamped) : undefined;
+                  setValue('exchange_rate', (rateNum ?? '') as unknown as number, { shouldDirty: true });
+                  // 환율 입력 시 원화 자동 계산
+                  const usdVal = watch('amount_usd');
+                  if (rateNum && usdVal && !isNaN(Number(usdVal))) {
+                    const krw = Math.round(Number(usdVal) * rateNum);
+                    setAmountKrwDisplay(krw.toLocaleString('ko-KR'));
+                    setValue('amount_krw', krw as unknown as number, { shouldDirty: true });
+                  }
+                }}
+                onBlur={() => {
+                  const rateNum = parseFloat(exchangeRateDisplay);
+                  if (!isNaN(rateNum) && rateNum > 0) {
+                    setExchangeRateDisplay(rateNum.toFixed(2));
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label>원화(KRW)</Label>
+                {watch('exchange_rate') && watch('amount_usd') && (
+                  <span className="text-[10px] text-blue-500">환율 자동 계산</span>
+                )}
+              </div>
               <Input
                 type="text"
                 inputMode="numeric"
@@ -174,10 +227,9 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData, default
                   setAmountKrwDisplay(num !== undefined ? num.toLocaleString('ko-KR') : '');
                   setValue('amount_krw', (num ?? '') as unknown as number, { shouldDirty: true });
                 }}
-                placeholder="0"
+                placeholder="자동 계산 또는 직접 입력"
               />
             </div>
-            <div className="space-y-1.5"><Label>환율</Label><Input inputMode="decimal" placeholder="예: 1450.30" value={(watch('exchange_rate') as unknown as string) ?? ''} onChange={(e) => setValue('exchange_rate', e.target.value.replace(/[^0-9.]/g, '') as unknown as number, { shouldDirty: true })} /></div>
           </div>
           <div className="space-y-1.5"><Label>목적</Label><Input {...register('purpose')} placeholder="계약금1차" /></div>
           <div className="grid grid-cols-2 gap-3">

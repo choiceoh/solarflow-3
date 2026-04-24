@@ -39,6 +39,8 @@ type CreatePOLineRequest struct {
 	Quantity      int      `json:"quantity"`
 	UnitPriceUSD  *float64 `json:"unit_price_usd"`
 	TotalAmountUSD *float64 `json:"total_amount_usd"`
+	ItemType      *string  `json:"item_type,omitempty"`    // "main" | "spare"
+	PaymentType   *string  `json:"payment_type,omitempty"` // "paid" | "free"
 	Memo          *string  `json:"memo"`
 }
 
@@ -64,6 +66,8 @@ type UpdatePOLineRequest struct {
 	Quantity       *int     `json:"quantity,omitempty"`
 	UnitPriceUSD   *float64 `json:"unit_price_usd,omitempty"`
 	TotalAmountUSD *float64 `json:"total_amount_usd,omitempty"`
+	ItemType       *string  `json:"item_type,omitempty"`
+	PaymentType    *string  `json:"payment_type,omitempty"`
 	Memo           *string  `json:"memo,omitempty"`
 }
 

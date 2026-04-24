@@ -25,14 +25,17 @@ const LEGACY_CT: Record<string, string> = {
   exclusive: '독점 (레거시)',
   annual: '연간 (레거시)',
 };
-// 모든 상태를 수동 선택 가능 (BL 자동 전환도 동작하지만 사용자가 오버라이드 가능)
+// 수동 선택 가능 상태 (in_progress는 LC 등록 시 자동 전환)
 const PO_STATUSES: Record<string, string> = {
-  draft: '예정',
-  contracted: '계약완료',
-  shipping: '선적중',
-  completed: '완료',
+  draft:       '예정',
+  contracted:  '계약완료',
+  in_progress: '진행중',
+  completed:   '완료',
 };
-const PO_STATUSES_READONLY: Record<string, string> = {};
+// 레거시 읽기 호환 (UI에는 표시하지 않되 데이터에 있으면 표시)
+const PO_STATUSES_READONLY: Record<string, string> = {
+  shipping: '선적중 (레거시)',
+};
 const INCOTERMS = ['FOB', 'CIF', 'CFR', 'EXW', 'FCA', 'DAP', 'DDP', 'CIP'];
 
 const BALANCE_DAYS = ['30', '45', '60', '90', '120', '180'] as const;
@@ -78,15 +81,19 @@ function parsePT(text: string): PaymentTerms {
 interface POLine {
   po_line_id?: string;       // R1-5: 기존 라인 식별자 (수정 시 UPDATE, 없으면 INSERT)
   product_id: string;
-  inputMode: 'qty' | 'mw';   // 수량/용량 입력 모드 토글
+  inputMode: 'ea' | 'kw' | 'mw'; // 3단 입력 모드 (기본: mw — 용량 먼저)
   quantity: string;          // EA
+  capacityKw: string;        // kW 직접 입력용
   capacityMw: string;        // MW (수량의 미러 또는 직접 입력)
   unit_price_usd_wp: string; // $/Wp (cents 모드일 땐 ¢/Wp 값)
-  priceMode: 'dollar' | 'cents'; // 단가 단위 토글
+  priceMode: 'dollar' | 'cents'; // 단가 단위 (¢/Wp 고정 사용)
+  isFreeSpare: boolean;      // 무상스페어 — 단가 없음
+  _specWp: number;           // products 비동기 로딩 전 spec_wp 캐시 (DB 로드 또는 품번 선택 시 저장)
+  _unitPriceUsd?: number;   // 수정 모드 원본 $/EA (spec_wp=0 시 단가 보존용 최후 fallback)
 }
 const emptyLine = (): POLine => ({
-  product_id: '', inputMode: 'qty', quantity: '', capacityMw: '',
-  unit_price_usd_wp: '', priceMode: 'cents',
+  product_id: '', inputMode: 'mw', quantity: '', capacityKw: '', capacityMw: '',
+  unit_price_usd_wp: '', priceMode: 'cents', isFreeSpare: false, _specWp: 0,
 });
 
 /* ── 헬퍼 ── */
@@ -129,6 +136,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
   const [incoterms, setIncoterms] = useState('');
   const [bafCaf, setBafCaf] = useState(false);
   const [exchangeRate, setExchangeRate] = useState('');
+  const [exchangeRateDisplay, setExchangeRateDisplay] = useState('');
   const [status, setStatus] = useState('draft');
   const [memo, setMemo] = useState('');
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerms>(defaultPT());
@@ -187,7 +195,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
         setPeriodEnd(d.contract_period_end?.slice(0, 10) ?? '');
         setIncoterms((d.incoterms ?? '').replace(/\s*\(BAF\/CAF 포함\)\s*/i, ''));
         setBafCaf(/BAF\s*\/\s*CAF/i.test(d.incoterms ?? '') || /\[BAF\/CAF\]/.test(d.memo ?? ''));
-        setExchangeRate('');
+        setExchangeRate(''); setExchangeRateDisplay('');
         setStatus(d.status ?? 'draft');
         setMemo((d.memo ?? '').replace(/^\[독점\]\s*/, '').replace(/^\[BAF\/CAF\]\s*/, ''));
         setPaymentTerms(parsePT(d.payment_terms ?? ''));
@@ -200,24 +208,30 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       // GET /api/v1/pos/{id}는 PODetail(line_items 포함)을 반환. 단일 호출로 처리.
       type POLineFetched = {
         po_line_id?: string; product_id: string; quantity: number;
-        unit_price_usd?: number;
+        unit_price_usd?: number; payment_type?: string; item_type?: string;
         products?: { spec_wp?: number; product_code?: string };
       };
       type PODetailResp = PurchaseOrder & { line_items?: POLineFetched[] };
 
-      const mapLine = (l: POLineFetched) => {
+      const mapLine = (l: POLineFetched): POLine => {
         const specWp = l.products?.spec_wp ?? 0;
-        const centsPerWp = (l.unit_price_usd != null && specWp)
+        const isFree = l.payment_type === 'free';
+        const centsPerWp = (!isFree && l.unit_price_usd != null && specWp)
           ? (l.unit_price_usd / specWp) * 100
           : 0;
+        const mwVal = specWp && l.quantity ? (l.quantity * specWp) / 1_000_000 : 0;
         return {
           po_line_id: l.po_line_id,
           product_id: l.product_id,
-          inputMode: 'qty' as const,
+          inputMode: 'mw' as const,
           quantity: String(l.quantity),
-          capacityMw: '',
+          capacityKw: mwVal ? (mwVal * 1000).toFixed(1) : '',
+          capacityMw: mwVal ? mwVal.toFixed(3) : '',
           unit_price_usd_wp: centsPerWp ? parseFloat(centsPerWp.toPrecision(8)).toString() : '',
           priceMode: 'cents' as const,
+          isFreeSpare: isFree,
+          _specWp: specWp, // products 비동기 로딩 전 단가 계산용 캐시
+          _unitPriceUsd: (!isFree && l.unit_price_usd != null) ? l.unit_price_usd : undefined, // spec_wp=0 fallback
         };
       };
 
@@ -227,16 +241,12 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
           if (!fresh) return;
           fillFromPO(fresh);
           if (Array.isArray(fresh.line_items) && fresh.line_items.length > 0) {
-            // eslint-disable-next-line no-console
-            console.log('[POForm] detail.line_items', fresh.line_items.length);
             setLines(fresh.line_items.map(mapLine));
             return;
           }
           // 폴백: 상세에 line_items가 없으면 별도 엔드포인트로 재시도
           fetchWithAuth<POLineFetched[]>(`/api/v1/pos/${editData.po_id}/lines`)
             .then((lineList) => {
-              // eslint-disable-next-line no-console
-              console.log('[POForm] fallback /lines', lineList?.length ?? 0);
               if (Array.isArray(lineList) && lineList.length > 0) {
                 setLines(lineList.map(mapLine));
               }
@@ -263,7 +273,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       const cid = globalCompanyId && globalCompanyId !== 'all' ? globalCompanyId : '';
       setPoNumber(''); setCompanyId(cid); setMfgId(''); setContractType(''); setIsExclusive(false);
       setContractDate(''); setPeriodStart(''); setPeriodEnd('');
-      setIncoterms(''); setBafCaf(false); setExchangeRate('');
+      setIncoterms(''); setBafCaf(false); setExchangeRate(''); setExchangeRateDisplay('');
       setStatus('draft'); setMemo(''); setPaymentTerms(defaultPT());
       setParentPoId('');
       setIsAmendment(false);
@@ -294,55 +304,60 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
   const addLine = () => setLines((prev) => [...prev, emptyLine()]);
   const removeLine = (i: number) => setLines((prev) => prev.length <= 1 ? prev : prev.filter((_, j) => j !== i));
 
-  /* 라인별 계산 — 입력 모드(qty/mw)에 따라 EA/MW 도출 */
+  /* 라인별 계산 — 입력 모드(ea/kw/mw)에 따라 EA/MW 도출
+   * _specWp 캐시 덕분에 products 비동기 로딩 전에도 계산 가능 */
   const lineCalc = useCallback((l: POLine) => {
     const p = products.find((x) => x.product_id === l.product_id);
-    if (!p) return { qty: 0, mw: 0, total: 0 };
+    const specWp = p?.spec_wp ?? l._specWp ?? 0;
+    if (!specWp) return { qty: 0, mw: 0, kw: 0, total: 0 };
     let qty = 0, mw = 0;
-    if (l.inputMode === 'qty') {
+    if (l.inputMode === 'ea') {
       qty = parseInt(l.quantity || '0');
-      mw = (qty * p.spec_wp) / 1_000_000;
+      mw = (qty * specWp) / 1_000_000;
+    } else if (l.inputMode === 'kw') {
+      const kw = parseFloat(l.capacityKw || '0');
+      mw = kw / 1000;
+      qty = Math.round((kw * 1_000) / specWp);
     } else {
       mw = parseFloat(l.capacityMw || '0');
-      qty = p.spec_wp ? Math.round((mw * 1_000_000) / p.spec_wp) : 0;
+      qty = Math.round((mw * 1_000_000) / specWp);
     }
+    const kw = mw * 1000;
+    if (l.isFreeSpare) return { qty, mw, kw, total: 0 };
     const rawPrice = parseFloat(l.unit_price_usd_wp || '0');
     const pricePerWp = l.priceMode === 'cents' ? rawPrice / 100 : rawPrice;
-    const total = qty && pricePerWp ? qty * p.spec_wp * pricePerWp : 0;
-    return { qty, mw, total };
+    const total = qty && pricePerWp ? qty * specWp * pricePerWp : 0;
+    return { qty, mw, kw, total };
   }, [products]);
 
-  /* 단가 단위 토글 — 값을 자동 변환하여 의미 보존 */
-  const togglePriceMode = (idx: number) =>
-    setLines((prev) => prev.map((l, j) => {
-      if (j !== idx) return l;
-      const next = l.priceMode === 'cents' ? 'dollar' : 'cents';
-      const v = parseFloat(l.unit_price_usd_wp || '0');
-      if (!v) return { ...l, priceMode: next };
-      const conv = next === 'cents' ? v * 100 : v / 100;
-      return { ...l, priceMode: next, unit_price_usd_wp: parseFloat(conv.toPrecision(8)).toString() };
-    }));
 
-  /* 입력 모드 토글 — 반대 필드를 자동 채움 */
-  const toggleInputMode = (idx: number) =>
+  /* 입력 모드 3단 순환: mw → kw → ea → mw */
+  const cycleInputMode = (idx: number) =>
     setLines((prev) => prev.map((l, j) => {
       if (j !== idx) return l;
       const c = lineCalc(l);
-      const next = l.inputMode === 'qty' ? 'mw' : 'qty';
+      const next = ({ mw: 'kw', kw: 'ea', ea: 'mw' } as const)[l.inputMode];
       return {
         ...l, inputMode: next,
-        quantity: c.qty ? String(c.qty) : l.quantity,
-        capacityMw: c.mw ? c.mw.toFixed(3) : l.capacityMw,
+        quantity:    c.qty ? String(c.qty) : l.quantity,
+        capacityKw:  c.kw  ? c.kw.toFixed(1)  : l.capacityKw,
+        capacityMw:  c.mw  ? c.mw.toFixed(3)  : l.capacityMw,
       };
     }));
 
-  /* 합계 */
+  /* 합계 — 무상스페어는 MW/수량에만 합산, 금액 제외 */
   const totals = lines.reduce(
     (acc, l) => {
       const c = lineCalc(l);
-      return { qty: acc.qty + c.qty, mw: acc.mw + c.mw, total: acc.total + c.total };
+      return {
+        qty: acc.qty + c.qty,
+        mw: acc.mw + c.mw,
+        total: acc.total + c.total,
+        freeQty: acc.freeQty + (l.isFreeSpare ? c.qty : 0),
+        freeMw: acc.freeMw + (l.isFreeSpare ? c.mw : 0),
+      };
     },
-    { qty: 0, mw: 0, total: 0 },
+    { qty: 0, mw: 0, total: 0, freeQty: 0, freeMw: 0 },
   );
   const exRateNum = parseFloat(exchangeRate || '0');
   const totalKRW = exRateNum > 0 ? Math.round(totals.total * exRateNum) : 0;
@@ -364,9 +379,12 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
     if (!editData) {
       const validLines = lines.filter((l) => {
         const c = lineCalc(l);
-        return l.product_id && c.qty > 0;
+        return l.product_id && (c.qty > 0 || parseInt(l.quantity || '0') > 0);
       });
       if (validLines.length === 0) { setSubmitError('발주품목을 최소 1행 입력해주세요'); return; }
+      // 유상 라인에 단가 미입력 경고
+      const paidWithoutPrice = validLines.filter((l) => !l.isFreeSpare && !l.unit_price_usd_wp);
+      if (paidWithoutPrice.length > 0) { setSubmitError('단가를 입력하지 않은 유상 품목이 있습니다'); return; }
     }
 
     // 22001 회피: incoterms는 varchar(10) — BAF/CAF 플래그는 메모로 분리
@@ -384,26 +402,46 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       const c = lineCalc(l);
       const p = products.find((x) => x.product_id === l.product_id);
       const qty = c.qty || parseInt(l.quantity || '0');
-      // unit_price_usd = $/EA (모듈 1장 가격), total_amount_usd = 라인 총액
-      let total = c.total;
-      if (!total && p && qty) {
-        const rawPrice = parseFloat(l.unit_price_usd_wp || '0');
-        const pricePerWp = l.priceMode === 'cents' ? rawPrice / 100 : rawPrice;
-        total = qty * p.spec_wp * pricePerWp;
+
+      if (l.isFreeSpare) {
+        // 무상스페어: 단가 0, payment_type='free'
+        return {
+          po_line_id: l.po_line_id,
+          product_id: l.product_id,
+          quantity: qty,
+          unit_price_usd: 0,
+          total_amount_usd: 0,
+          item_type: 'spare',
+          payment_type: 'free',
+        };
       }
-      const unitPerEA = qty && total ? total / qty : undefined;
-      // 단가이력 자동생성용 — USD/Wp 단가 (Go API는 무시, 프론트에서만 사용)
+
+      // unit_price_usd = $/EA (모듈 1장 가격), total_amount_usd = 라인 총액
       const rawPrice = parseFloat(l.unit_price_usd_wp || '0');
       const pricePerWp = l.priceMode === 'cents' ? rawPrice / 100 : rawPrice; // USD/Wp
+      const specWpFinal = p?.spec_wp ?? l._specWp ?? 0;
+
+      // $/EA = spec_wp * $/Wp — qty가 없어도 계산 가능 (MW 모드에서 qty=0이어도 안전)
+      const directUnitPerEA = specWpFinal > 0 && pricePerWp > 0
+        ? Number((specWpFinal * pricePerWp).toFixed(4))
+        : undefined;
+      // 최후 fallback: 수정 모드에서 저장된 원본 $/EA (spec_wp=0이거나 단가 입력 불가 시)
+      const unitPerEA = directUnitPerEA ?? l._unitPriceUsd;
+
+      let total = c.total;
+      if (!total && unitPerEA && qty) total = qty * unitPerEA;
+
       return {
         po_line_id: l.po_line_id, // R1-5: 수정 시 UPDATE 식별자
         product_id: l.product_id,
         quantity: qty,
-        unit_price_usd: unitPerEA && !isNaN(unitPerEA) ? Number(unitPerEA.toFixed(4)) : undefined,
+        unit_price_usd: unitPerEA,
         total_amount_usd: total || undefined,
+        item_type: 'main',
+        payment_type: 'paid',
         // 이하 두 필드는 단가이력 자동생성용 (DB저장 X, Go가 무시)
         _price_per_wp_usd: pricePerWp > 0 ? pricePerWp : undefined,
-        _spec_wp: p?.spec_wp,
+        _spec_wp: specWpFinal > 0 ? specWpFinal : undefined,
       };
     });
 
@@ -609,17 +647,36 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
             </div>
             <div className="space-y-1.5">
               <Opt>환율 (USD→KRW)</Opt>
-              <Input inputMode="decimal" value={exchangeRate} placeholder="예: 1450.30"
-                onChange={(e) => setExchangeRate(e.target.value.replace(/[^0-9.]/g, ''))} />
+              <Input inputMode="decimal" value={exchangeRateDisplay} placeholder="환율 소수점 2자리 입력"
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^0-9.]/g, '');
+                  const parts = raw.split('.');
+                  const clamped = parts.length > 1 ? parts[0] + '.' + parts[1].slice(0, 2) : raw;
+                  setExchangeRateDisplay(clamped);
+                  const num = clamped ? parseFloat(clamped) : 0;
+                  setExchangeRate(num > 0 ? String(num) : '');
+                }}
+                onBlur={() => {
+                  const num = parseFloat(exchangeRateDisplay);
+                  if (!isNaN(num) && num > 0) setExchangeRateDisplay(num.toFixed(2));
+                }} />
             </div>
             <div className="space-y-1.5">
               <Opt>상태</Opt>
               <Select value={status} onValueChange={(v) => setStatus(v ?? 'draft')}>
                 <SelectTrigger className="w-full">
-                  <Txt text={PO_STATUSES[status] ?? PO_STATUSES_READONLY[status] ?? ''} />
+                  <Txt text={PO_STATUSES[status] ?? PO_STATUSES_READONLY[status] ?? status} />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(PO_STATUSES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  {Object.entries(PO_STATUSES).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>
+                      {v}
+                      {k === 'in_progress' && <span className="ml-1 text-[10px] text-muted-foreground">(LC 등록 시 자동)</span>}
+                    </SelectItem>
+                  ))}
+                  {PO_STATUSES_READONLY[status] && (
+                    <SelectItem value={status}>{PO_STATUSES_READONLY[status]}</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -667,10 +724,23 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
                 {lines.map((line, idx) => {
                   const c = lineCalc(line);
                   return (
-                    <div key={idx} className="rounded-md border p-2 flex flex-wrap items-end gap-2">
+                    <div key={idx} className={`rounded-md border p-2 flex flex-wrap items-end gap-2 ${line.isFreeSpare ? 'border-green-300 bg-green-50/50' : ''}`}>
+                      {/* 무상스페어 배지 */}
+                      {line.isFreeSpare && (
+                        <div className="w-full flex items-center gap-1.5 mb-0.5">
+                          <span className="rounded-full bg-green-100 border border-green-300 px-2 py-0.5 text-[10px] font-semibold text-green-700">무상스페어</span>
+                          <span className="text-[10px] text-green-600">단가 없이 수량만 등록됩니다</span>
+                        </div>
+                      )}
+                      {/* 품번 */}
                       <div className="flex-1 min-w-[200px] space-y-1">
                         <span className="text-[10px] text-blue-600 font-medium">품번 *</span>
-                        <Select value={line.product_id} onValueChange={(v) => updateLine(idx, 'product_id', v ?? '')}>
+                        <Select value={line.product_id} onValueChange={(v) => {
+                          const prod = products.find((p) => p.product_id === v);
+                          setLines((prev) => prev.map((l, j) => j === idx
+                            ? { ...l, product_id: v ?? '', _specWp: prod?.spec_wp ?? 0 }
+                            : l));
+                        }}>
                           <SelectTrigger className="w-full h-9 text-xs">
                             <Txt text={productLabel(line.product_id)} placeholder="품번 선택" />
                           </SelectTrigger>
@@ -683,66 +753,94 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
                           </SelectContent>
                         </Select>
                       </div>
-                      {/* 수량/용량 입력 모드 토글 */}
-                      <div className="w-32 space-y-1">
-                        <div className="flex items-center justify-between">
+
+                      {/* ── 용량/수량 3단 토글 — 중간 컬러 버튼 ── */}
+                      <div className="flex items-end gap-1">
+                        {/* 입력 필드 */}
+                        <div className="w-28 space-y-1">
                           <span className="text-[10px] text-blue-600 font-medium">
-                            {line.inputMode === 'qty' ? '수량(EA) *' : '용량(MW) *'}
+                            {{ ea: '수량(EA)', kw: '용량(kW)', mw: '용량(MW)' }[line.inputMode]} *
                           </span>
-                          <button type="button" className="text-[9px] text-primary underline"
-                            onClick={() => toggleInputMode(idx)} title="입력 모드 전환">
-                            {line.inputMode === 'qty' ? '→ MW' : '→ EA'}
-                          </button>
+                          {line.inputMode === 'ea' ? (
+                            <Input className="h-9 text-xs" inputMode="numeric" value={line.quantity} placeholder="0"
+                              onChange={(e) => updateLine(idx, 'quantity', e.target.value.replace(/[^0-9]/g, ''))} />
+                          ) : line.inputMode === 'kw' ? (
+                            <Input className="h-9 text-xs" inputMode="decimal" value={line.capacityKw} placeholder="0.0"
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '' || /^\d*\.?\d{0,1}$/.test(v)) updateLine(idx, 'capacityKw', v);
+                              }} />
+                          ) : (
+                            <Input className="h-9 text-xs" inputMode="decimal" value={line.capacityMw} placeholder="0.000"
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '' || /^\d*\.?\d{0,3}$/.test(v)) updateLine(idx, 'capacityMw', v);
+                              }} />
+                          )}
                         </div>
-                        {line.inputMode === 'qty' ? (
-                          <Input className="h-9 text-xs" inputMode="numeric" value={line.quantity} placeholder="0"
-                            onChange={(e) => updateLine(idx, 'quantity', e.target.value.replace(/[^0-9]/g, ''))} />
-                        ) : (
-                          <Input className="h-9 text-xs" inputMode="decimal" value={line.capacityMw} placeholder="0.000"
+                        {/* 중간 토글 버튼 — 컬러 강조 */}
+                        <button type="button"
+                          className="h-9 px-2 rounded-md border-2 border-blue-400 bg-blue-50 text-blue-700 text-[10px] font-semibold hover:bg-blue-100 hover:border-blue-500 transition-colors shrink-0 leading-tight"
+                          onClick={() => cycleInputMode(idx)}
+                          title="단위 변환 (MW → kW → EA → MW)">
+                          {{ mw: 'MW↓kW', kw: 'kW↓EA', ea: 'EA↓MW' }[line.inputMode]}
+                        </button>
+                        {/* 변환 결과 표시 */}
+                        <div className="w-24 space-y-1">
+                          <span className="text-[10px] text-muted-foreground font-medium">
+                            {{ ea: '용량(MW)', kw: '수량(EA)', mw: '수량(EA)' }[line.inputMode]}
+                          </span>
+                          <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2 truncate">
+                            {line.inputMode === 'ea'
+                              ? (c.mw ? `${c.mw.toFixed(3)}` : '-')
+                              : (c.qty ? c.qty.toLocaleString('ko-KR') : '-')}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 단가 (무상스페어 시 숨김) */}
+                      {!line.isFreeSpare && (
+                        <div className="w-36 space-y-1">
+                          <span className="text-[10px] text-blue-600 font-medium">단가 입력 (¢/Wp) *</span>
+                          <Input className="h-9 text-xs" inputMode="decimal" value={line.unit_price_usd_wp}
+                            placeholder="단가입력"
                             onChange={(e) => {
                               const v = e.target.value;
-                              if (v === '' || /^\d*\.?\d{0,3}$/.test(v)) updateLine(idx, 'capacityMw', v);
+                              if (v === '' || /^\d*\.?\d{0,4}$/.test(v)) updateLine(idx, 'unit_price_usd_wp', v);
                             }} />
-                        )}
-                      </div>
-                      {/* 단가 + ¢/$ 토글 */}
-                      <div className="w-40 space-y-1">
-                        <span className="text-[10px] text-blue-600 font-medium">
-                          {line.priceMode === 'cents' ? '단가(¢/Wp) *' : '단가($/Wp) *'}
-                        </span>
-                        <div className="flex gap-1 items-center">
-                          <Input className="h-9 text-xs flex-1 min-w-0" inputMode="decimal" value={line.unit_price_usd_wp}
-                            placeholder={line.priceMode === 'cents' ? '¢11.9/Wp' : '$0.119/Wp'}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              if (v === '' || /^\d*\.?\d{0,6}$/.test(v)) updateLine(idx, 'unit_price_usd_wp', v);
-                            }} />
-                          <Button type="button" variant="outline" size="sm"
-                            className="h-9 px-1.5 text-[10px] shrink-0 w-9" onClick={() => togglePriceMode(idx)}>
-                            {line.priceMode === 'cents' ? '¢' : '$'}
-                          </Button>
                         </div>
-                      </div>
+                      )}
+
+                      {/* 총액 */}
                       <div className="w-32 space-y-1">
                         <span className="text-[10px] text-muted-foreground font-medium">총액(USD)</span>
                         <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2 truncate">
-                          {c.total ? `$${c.total.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '-'}
+                          {line.isFreeSpare
+                            ? <span className="text-green-600 font-medium">무상</span>
+                            : (c.total ? `$${c.total.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '-')}
                         </div>
                       </div>
-                      <div className="w-24 space-y-1">
-                        <span className="text-[10px] text-muted-foreground font-medium">
-                          {line.inputMode === 'qty' ? '용량(MW)' : '수량(EA)'}
-                        </span>
-                        <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2 truncate">
-                          {line.inputMode === 'qty'
-                            ? (c.mw ? `${c.mw.toFixed(3)}MW` : '-')
-                            : (c.qty ? c.qty.toLocaleString('ko-KR') : '-')}
-                        </div>
+
+                      {/* 무상스페어 토글 + 삭제 */}
+                      <div className="flex items-end gap-1.5 pb-0.5">
+                        <label className="flex items-center gap-1 cursor-pointer select-none" title="무상스페어로 등록 (단가 없음)">
+                          <input
+                            type="checkbox"
+                            checked={line.isFreeSpare}
+                            onChange={(e) => setLines((prev) => prev.map((l, j) => j === idx
+                              ? { ...l, isFreeSpare: e.target.checked, unit_price_usd_wp: '',
+                                  // 무상 체크 시 → 수량(EA) 모드로 전환 (보통 장수로 지급)
+                                  inputMode: e.target.checked ? 'ea' : l.inputMode }
+                              : l))}
+                            className="accent-green-600"
+                          />
+                          <span className="text-[10px] text-muted-foreground">무상</span>
+                        </label>
+                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9"
+                          onClick={() => removeLine(idx)} disabled={lines.length <= 1}>
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
                       </div>
-                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9"
-                        onClick={() => removeLine(idx)} disabled={lines.length <= 1}>
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
                     </div>
                   );
                 })}
@@ -751,12 +849,21 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
                   <span className="text-sm font-semibold">합계</span>
                   <span className="text-sm">총 수량 <span className="font-mono font-semibold">{totals.qty.toLocaleString('ko-KR')}EA</span></span>
                   <span className="text-sm">총 용량 <span className="font-mono font-semibold">{totals.mw.toFixed(2)}MW</span></span>
-                  <span className="text-sm">총 금액 <span className="font-mono font-semibold">${totals.total.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span></span>
+                  <span className="text-sm">계약금액 <span className="font-mono font-semibold">${totals.total.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span></span>
                   <span className="text-sm">
-                    KRW <span className={`font-mono font-semibold ${totalKRW ? '' : 'text-orange-600'}`}>
-                      {totalKRW ? `₩${totalKRW.toLocaleString('ko-KR')}` : '환율을 입력하세요'}
+                    KRW <span className={`font-mono font-semibold ${totalKRW ? '' : 'text-muted-foreground'}`}>
+                      {totalKRW
+                        ? `₩${totalKRW.toLocaleString('ko-KR')}`
+                        : exchangeRate
+                          ? '품목·단가를 모두 입력하면 자동계산'
+                          : '환율 미입력'}
                     </span>
                   </span>
+                  {totals.freeQty > 0 && (
+                    <span className="text-sm text-green-700 border border-green-300 bg-green-50 rounded px-2 py-0.5">
+                      무상스페어 <span className="font-mono font-semibold">{totals.freeQty.toLocaleString()}EA ({totals.freeMw.toFixed(3)}MW)</span>
+                    </span>
+                  )}
                 </div>
               </div>
             )}

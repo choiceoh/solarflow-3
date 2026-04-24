@@ -22,14 +22,33 @@ export function useSearch() {
     setLoading(true);
     setError(null);
     try {
-      const merge = (rs: SearchResponse[]): SearchResponse => ({
-        query: rs[0]?.query ?? query,
-        intent: rs[0]?.intent ?? '',
-        parsed: rs[0]?.parsed ?? { keywords: [] },
-        results: rs.flatMap((r) => r.results || []),
-        warnings: rs.flatMap((r) => r.warnings || []),
-        calculated_at: rs[0]?.calculated_at ?? new Date().toISOString(),
-      });
+      // 전체 법인 모드: 법인에 무관한 결과(제품·거래처·공사현장)는 product_id/id/site_id 기준 중복 제거
+      const DEDUP_TYPES: Record<string, string> = {
+        product:           'product_id',
+        compare:           'product_id',
+        partner:           'id',
+        construction_site: 'site_id',
+      };
+      const merge = (rs: SearchResponse[]): SearchResponse => {
+        const all = rs.flatMap((r) => r.results || []);
+        const seen = new Map<string, true>();
+        const results = all.filter((r) => {
+          const keyField = DEDUP_TYPES[r.result_type];
+          if (!keyField) return true;                          // 법인별 결과는 그대로
+          const key = `${r.result_type}:${r.link?.params?.[keyField] ?? r.title}`;
+          if (seen.has(key)) return false;
+          seen.set(key, true);
+          return true;
+        });
+        return {
+          query: rs[0]?.query ?? query,
+          intent: rs[0]?.intent ?? '',
+          parsed: rs[0]?.parsed ?? { keywords: [] },
+          results,
+          warnings: rs.flatMap((r) => r.warnings || []),
+          calculated_at: rs[0]?.calculated_at ?? new Date().toISOString(),
+        };
+      };
       const res = await fetchCalc<SearchResponse>(
         selectedCompanyId, '/api/v1/calc/search', { query }, merge,
       );

@@ -12,14 +12,31 @@ import type { LCLimitTimeline } from '@/types/banking';
 
 // 비유: 대시보드 데이터를 독립적으로 조회. 하나 실패해도 나머지는 표시.
 
-interface CustomerAnalysis {
-  customers: {
-    customer_name: string;
-    outstanding_amount: number;
-    outstanding_count: number;
-    max_days_overdue: number;
-  }[];
-  total_outstanding: number;
+// Rust engine /api/v1/calc/customer-analysis 응답 스키마 정본
+// (engine/src/model/margin.rs::CustomerAnalysisResponse 와 맞물림)
+export interface CustomerItem {
+  customer_id: string;
+  customer_name: string;
+  total_sales_krw: number;
+  total_collected_krw: number;
+  outstanding_krw: number;
+  outstanding_count: number;
+  oldest_outstanding_days: number;
+  avg_payment_days?: number | null;
+  avg_margin_rate?: number | null;
+  total_margin_krw?: number | null;
+  avg_deposit_rate?: number | null;
+  status: string; // 'normal' | 'warning' | 'overdue'
+}
+export interface CustomerAnalysis {
+  items: CustomerItem[];
+  summary: {
+    total_sales_krw: number;
+    total_collected_krw: number;
+    total_outstanding_krw: number;
+    total_margin_krw: number;
+    overall_margin_rate: number;
+  };
 }
 
 interface MarginAnalysis {
@@ -72,9 +89,45 @@ function mergeMargin(rs: MarginAnalysis[]): MarginAnalysis {
 }
 
 function mergeCustomer(rs: CustomerAnalysis[]): CustomerAnalysis {
+  // 다중 법인 합산: 같은 거래처가 여러 법인에 걸쳐있으면 customer_id로 병합.
+  const merged = new Map<string, CustomerItem>();
+  for (const r of rs) {
+    for (const it of r.items || []) {
+      const prev = merged.get(it.customer_id);
+      if (!prev) { merged.set(it.customer_id, { ...it }); continue; }
+      // 금액 합산, 비율은 가중 평균 (매출 가중), 일수는 최댓값
+      const revA = prev.total_sales_krw, revB = it.total_sales_krw;
+      const marginA = prev.total_margin_krw ?? null, marginB = it.total_margin_krw ?? null;
+      const combinedRev = revA + revB;
+      const combinedMargin = (marginA ?? 0) + (marginB ?? 0);
+      const combinedCovered = (marginA != null ? revA : 0) + (marginB != null ? revB : 0);
+      merged.set(it.customer_id, {
+        ...prev,
+        total_sales_krw: combinedRev,
+        total_collected_krw: prev.total_collected_krw + it.total_collected_krw,
+        outstanding_krw: prev.outstanding_krw + it.outstanding_krw,
+        outstanding_count: prev.outstanding_count + it.outstanding_count,
+        oldest_outstanding_days: Math.max(prev.oldest_outstanding_days, it.oldest_outstanding_days),
+        total_margin_krw: (marginA == null && marginB == null) ? null : combinedMargin,
+        avg_margin_rate: combinedCovered > 0 ? Math.round((combinedMargin / combinedCovered) * 10000) / 100 : null,
+      });
+    }
+  }
+  const items = Array.from(merged.values()).sort((a, b) => b.total_sales_krw - a.total_sales_krw);
+  const sumSales = items.reduce((s, i) => s + i.total_sales_krw, 0);
+  const sumCollected = items.reduce((s, i) => s + i.total_collected_krw, 0);
+  const sumOutstanding = items.reduce((s, i) => s + i.outstanding_krw, 0);
+  const sumMargin = items.reduce((s, i) => s + (i.total_margin_krw ?? 0), 0);
+  const covered = items.reduce((s, i) => s + (i.total_margin_krw != null ? i.total_sales_krw : 0), 0);
   return {
-    customers: rs.flatMap((r) => r.customers || []),
-    total_outstanding: rs.reduce((s, r) => s + (r.total_outstanding || 0), 0),
+    items,
+    summary: {
+      total_sales_krw: sumSales,
+      total_collected_krw: sumCollected,
+      total_outstanding_krw: sumOutstanding,
+      total_margin_krw: sumMargin,
+      overall_margin_rate: covered > 0 ? Math.round((sumMargin / covered) * 10000) / 100 : 0,
+    },
   };
 }
 
@@ -190,7 +243,7 @@ export function useDashboard(companyId: string | null, userRole: string) {
       setOutstanding({ data: custData, loading: false, error: null });
       setSummary((prev) => ({
         ...prev,
-        data: prev.data ? { ...prev.data, outstanding_krw: custData!.total_outstanding || 0 } : prev.data,
+        data: prev.data ? { ...prev.data, outstanding_krw: custData!.summary?.total_outstanding_krw || 0 } : prev.data,
       }));
     } else {
       setOutstanding({ data: null, loading: false, error: '미수금 데이터 조회 실패' });

@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { formatDate } from '@/lib/utils';
+import { formatDate, moduleLabel } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import InboundStatusBadge from './InboundStatusBadge';
@@ -79,51 +76,89 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
 
   return (
     <>
-      <div className="rounded-md border overflow-x-auto">
-        <Table className="text-xs">
-          <TableHeader>
-            <TableRow>
-              <TableHead>B/L번호</TableHead>
-              <TableHead>PO번호</TableHead>
-              <TableHead>LC번호</TableHead>
-              <TableHead>입고구분</TableHead>
-              <TableHead>공급사</TableHead>
-              <TableHead>품명/규격</TableHead>
-              <TableHead className="text-right">단가(¢/Wp)</TableHead>
-              <TableHead className="text-right">용량(MW)</TableHead>
-              <TableHead>입고현황</TableHead>
-              <TableHead>ETD</TableHead>
-              <TableHead>ETA</TableHead>
-              <TableHead>실제입항</TableHead>
-              <TableHead className="w-20 text-center">작업</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+      <div className="rounded-md border overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-muted/50 border-b">
+              <th className="p-3 text-left font-medium text-muted-foreground">B/L 정보</th>
+              <th className="p-3 text-left font-medium text-muted-foreground">품목</th>
+              <th className="p-3 text-left font-medium text-muted-foreground">구분 / 현황</th>
+              <th className="p-3 text-left font-medium text-muted-foreground">선적 일정</th>
+              <th className="p-3 text-center font-medium text-muted-foreground w-[70px]">작업</th>
+            </tr>
+          </thead>
+          <tbody>
             {items.map((bl) => {
               const a = agg[bl.bl_id];
               return (
-                <TableRow key={bl.bl_id} className="cursor-pointer hover:bg-accent/50" onClick={() => onSelect(bl)}>
-                  <TableCell className="font-mono font-medium">{bl.bl_number}</TableCell>
-                  <TableCell className="font-mono">{bl.po_number ?? (bl.po_id ? bl.po_id.slice(0, 8) : '—')}</TableCell>
-                  <TableCell className="font-mono">{bl.lc_number ?? (bl.lc_id ? bl.lc_id.slice(0, 8) : '—')}</TableCell>
-                  <TableCell>{INBOUND_TYPE_LABEL[bl.inbound_type]}</TableCell>
-                  <TableCell>{bl.manufacturer_name ?? '—'}</TableCell>
-                  <TableCell className="text-xs">
+                <tr key={bl.bl_id} className="border-t hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => onSelect(bl)}>
+                  {/* B/L 정보 */}
+                  <td className="p-3 align-top">
+                    <div className="font-mono font-semibold">{bl.bl_number}</div>
+                    <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                      PO: {bl.po_number ?? (bl.po_id ? bl.po_id.slice(0, 8) : '—')}
+                    </div>
+                    {(bl.lc_number || bl.lc_id) && (
+                      <div className="text-[10px] text-muted-foreground font-mono">
+                        LC: {bl.lc_number ?? bl.lc_id?.slice(0, 8)}
+                      </div>
+                    )}
+                  </td>
+
+                  {/* 품목 */}
+                  <td className="p-3 align-top min-w-[180px]">
+                    <div className="font-medium">{moduleLabel(bl.manufacturer_name)}</div>
                     {a?.firstLine ? (
-                      <>
-                        <div className="truncate max-w-[160px]">{a.firstLine.name}</div>
-                        <div className="text-muted-foreground truncate max-w-[160px]">{a.firstLine.spec}{a.extraCount > 0 ? ` 외 ${a.extraCount}건` : ''}</div>
-                      </>
-                    ) : '—'}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">{a && a.avgCentsPerWp > 0 ? a.avgCentsPerWp.toFixed(2) : '—'}</TableCell>
-                  <TableCell className="text-right font-mono">{a && a.totalMw > 0 ? a.totalMw.toFixed(2) : '—'}</TableCell>
-                  <TableCell><InboundStatusBadge status={bl.status} /></TableCell>
-                  <TableCell>{formatDate(bl.etd ?? '')}</TableCell>
-                  <TableCell>{formatDate(bl.eta ?? '')}</TableCell>
-                  <TableCell>{formatDate(bl.actual_arrival ?? '')}</TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-center gap-1">
+                      <div className="mt-0.5">
+                        <div className="truncate max-w-[200px] text-[11px]">{a.firstLine.name}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono">
+                          {a.firstLine.spec}{a.extraCount > 0 ? ` 외 ${a.extraCount}건` : ''}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="mt-1 flex items-center gap-2">
+                      {a && a.totalMw > 0 && (
+                        <span className="text-[10px] text-muted-foreground tabular-nums font-mono">
+                          {a.totalMw.toFixed(2)} MW
+                        </span>
+                      )}
+                      {a && a.avgCentsPerWp > 0 && (
+                        <span className="text-[10px] text-muted-foreground tabular-nums font-mono">
+                          {a.avgCentsPerWp.toFixed(2)} ¢/Wp
+                        </span>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* 구분 / 현황 */}
+                  <td className="p-3 align-top">
+                    <div className="text-[10px] text-muted-foreground mb-1.5">
+                      {INBOUND_TYPE_LABEL[bl.inbound_type]}
+                    </div>
+                    <InboundStatusBadge status={bl.status} />
+                  </td>
+
+                  {/* 선적 일정 */}
+                  <td className="p-3 align-top min-w-[130px]">
+                    <div className="space-y-0.5">
+                      <div className="text-[10px]">
+                        <span className="text-muted-foreground w-8 inline-block">ETD</span>
+                        <span className="tabular-nums">{formatDate(bl.etd ?? '')}</span>
+                      </div>
+                      <div className="text-[10px]">
+                        <span className="text-muted-foreground w-8 inline-block">ETA</span>
+                        <span className="tabular-nums">{formatDate(bl.eta ?? '')}</span>
+                      </div>
+                      <div className="text-[10px]">
+                        <span className="text-muted-foreground w-8 inline-block">입항</span>
+                        <span className="tabular-nums">{formatDate(bl.actual_arrival ?? '') || '—'}</span>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* 작업 */}
+                  <td className="p-3 text-center align-top" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-center gap-0.5">
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="수정"
                         onClick={() => onSelect(bl)}>
                         <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
@@ -135,12 +170,12 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
                         </Button>
                       )}
                     </div>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               );
             })}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
 
       <ConfirmDialog

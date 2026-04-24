@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import { Plus, PackageX, PackageCheck, Clock } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import AllocationForm, { type InventoryAllocation } from '@/components/inventory/AllocationForm';
 
 function FT({ text }: { text: string }) {
@@ -17,20 +19,16 @@ import { fetchWithAuth } from '@/lib/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import InventorySummaryCards from '@/components/inventory/InventorySummaryCards';
 import InventoryTable from '@/components/inventory/InventoryTable';
+import AvailInventoryTable from '@/components/inventory/AvailInventoryTable';
 import IncomingTable from '@/components/inventory/IncomingTable';
 import ForecastTable from '@/components/inventory/ForecastTable';
 import type { Manufacturer } from '@/types/masters';
+import type { InventorySummary } from '@/types/inventory';
 
-const PURPOSE_LABEL: Record<string, string> = { sale: '판매 예정', construction: '공사 예정', other: '기타' };
-const SOURCE_LABEL: Record<string, string> = { stock: '현재고', incoming: '미착품' };
-const STATUS_COLOR: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-800',
-  confirmed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-gray-100 text-gray-500 line-through',
-};
 
 export default function InventoryPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
+  const location = useLocation();
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [mfgFilter, setMfgFilter] = useState<string>('');
   const [wpFilter, setWpFilter] = useState<string>('');
@@ -39,6 +37,14 @@ export default function InventoryPage() {
   const [allocations, setAllocations] = useState<InventoryAllocation[]>([]);
   const [allocFormOpen, setAllocFormOpen] = useState(false);
   const [prefilledProductId, setPrefilledProductId] = useState<string | undefined>();
+  const [editingAlloc, setEditingAlloc] = useState<InventoryAllocation | undefined>();
+
+  // 미착품 처리 다이얼로그 (group_id 기반 연관 incoming alloc 처리)
+  const [incomingDialog, setIncomingDialog] = useState<{
+    open: boolean;
+    stockAlloc: InventoryAllocation | null;   // 확정하려는 현재고 배정
+    incomingAlloc: InventoryAllocation | null; // 연관된 미착품 배정
+  }>({ open: false, stockAlloc: null, incomingAlloc: null });
 
   // 단가 맵 (product_id → price/Wp) — AllocationForm에 전달
   const [priceMap, setPriceMap] = useState<Map<string, number>>(new Map());
@@ -57,29 +63,128 @@ export default function InventoryPage() {
   }, [selectedCompanyId]);
 
   const fetchAllocations = useCallback(() => {
-    if (!selectedCompanyId || selectedCompanyId === 'all') return;
-    fetchWithAuth<InventoryAllocation[]>(
-      `/api/v1/inventory/allocations?company_id=${selectedCompanyId}&status=pending`
-    ).then(setAllocations).catch(() => {});
+    if (!selectedCompanyId) return;
+    // 'all' 이면 company_id 파라미터 없이 전체 조회, 특정 법인이면 필터링
+    const companyParam = selectedCompanyId !== 'all' ? `&company_id=${selectedCompanyId}` : '';
+    // pending + hold 모두 조회 (보류 건도 목록에 표시)
+    Promise.all([
+      fetchWithAuth<InventoryAllocation[]>(`/api/v1/inventory/allocations?status=pending${companyParam}`),
+      fetchWithAuth<InventoryAllocation[]>(`/api/v1/inventory/allocations?status=hold${companyParam}`),
+    ]).then(([pending, hold]) => setAllocations([...pending, ...hold]))
+      .catch(() => {});
   }, [selectedCompanyId]);
 
-  useEffect(() => { fetchAllocations(); }, [fetchAllocations]);
+  // location.key가 바뀔 때마다 (다른 메뉴→재고로 돌아올 때) 배정 목록 갱신
+  useEffect(() => { fetchAllocations(); }, [fetchAllocations, location.key]);
 
+  // 수주 등록 페이지 이동 헬퍼
+  const navigateToOrder = (alloc: InventoryAllocation, linkedAllocId?: string) => {
+    const params = new URLSearchParams({
+      new: '1',
+      alloc_id: alloc.alloc_id,
+      product_id: alloc.product_id,
+      qty: String(alloc.quantity),
+      purpose: alloc.purpose,
+      source_type: alloc.source_type,
+    });
+    if (alloc.customer_name) params.set('customer', alloc.customer_name);
+    if (alloc.site_name)     params.set('site', alloc.site_name);
+    if (alloc.notes) {
+      const m = alloc.notes.match(/^\[발주번호:([^\]]+)\]/);
+      if (m) params.set('order_no', m[1]);
+    }
+    if (linkedAllocId) params.set('linked_alloc_id', linkedAllocId);
+    window.location.href = `/orders?${params.toString()}`;
+  };
+
+  // 확정 → 수주 등록 페이지로 pre-fill 이동
+  // group_id가 있으면 연관 미착품 배정 탐색 → 처리 선택 다이얼로그 표시
   const handleConfirmAlloc = async (alloc: InventoryAllocation) => {
-    if (!confirm(`"${PURPOSE_LABEL[alloc.purpose]}" 배정을 확정하고 출고 등록으로 이동할까요?`)) return;
-    await fetchWithAuth(`/api/v1/inventory/allocations/${alloc.alloc_id}`, {
+    // 현재고 배정 + group_id가 있는 경우: 연관 미착품 확인
+    if (alloc.source_type === 'stock' && alloc.group_id) {
+      try {
+        const related = await fetchWithAuth<InventoryAllocation[]>(
+          `/api/v1/inventory/allocations?company_id=${alloc.company_id}&group_id=${alloc.group_id}`
+        );
+        const linkedIncoming = related.find(
+          (r) => r.alloc_id !== alloc.alloc_id &&
+                 r.source_type === 'incoming' &&
+                 (r.status === 'pending' || r.status === 'hold')
+        );
+        if (linkedIncoming) {
+          setIncomingDialog({ open: true, stockAlloc: alloc, incomingAlloc: linkedIncoming });
+          return;
+        }
+      } catch {
+        // 조회 실패 시 무시하고 기존 흐름대로 진행
+      }
+    }
+    // group_id 없거나 연관 미착품 없음 → 바로 수주 등록 이동
+    if (!confirm('수주 등록 페이지로 이동합니다.\n예약 정보가 자동으로 입력됩니다.')) return;
+    navigateToOrder(alloc);
+  };
+
+  // 미착품 다이얼로그: "수주에 포함" 선택
+  const handleIncomingInclude = () => {
+    const { stockAlloc, incomingAlloc } = incomingDialog;
+    if (!stockAlloc || !incomingAlloc) return;
+    setIncomingDialog({ open: false, stockAlloc: null, incomingAlloc: null });
+    navigateToOrder(stockAlloc, incomingAlloc.alloc_id);
+  };
+
+  // 미착품 다이얼로그: "보류" 선택 → incoming을 hold로, stock만 수주 등록
+  const handleIncomingHold = async () => {
+    const { stockAlloc, incomingAlloc } = incomingDialog;
+    if (!stockAlloc || !incomingAlloc) return;
+    setIncomingDialog({ open: false, stockAlloc: null, incomingAlloc: null });
+    await fetchWithAuth(`/api/v1/inventory/allocations/${incomingAlloc.alloc_id}`, {
       method: 'PUT',
-      body: JSON.stringify({ status: 'confirmed' }),
+      body: JSON.stringify({ status: 'hold' }),
     }).catch(() => {});
     fetchAllocations();
-    // TODO: 출고 등록 페이지로 이동 (product_id 등 pre-fill)
-    window.location.href = `/outbound?prefill_product=${alloc.product_id}&qty=${alloc.quantity}&purpose=${alloc.purpose}`;
+    reloadInv();
+    navigateToOrder(stockAlloc);
+  };
+
+  // 미착품 다이얼로그: "삭제" 선택 → incoming 삭제, stock만 수주 등록
+  const handleIncomingDelete = async () => {
+    const { stockAlloc, incomingAlloc } = incomingDialog;
+    if (!stockAlloc || !incomingAlloc) return;
+    if (!confirm('미착품 배정을 삭제합니다. 계속할까요?')) return;
+    setIncomingDialog({ open: false, stockAlloc: null, incomingAlloc: null });
+    await fetchWithAuth(`/api/v1/inventory/allocations/${incomingAlloc.alloc_id}`, {
+      method: 'DELETE',
+    }).catch(() => {});
+    fetchAllocations();
+    reloadInv();
+    navigateToOrder(stockAlloc);
+  };
+
+  // 보류 — pending → hold (가용재고 차감 해제)
+  const handleHoldAlloc = async (allocId: string) => {
+    await fetchWithAuth(`/api/v1/inventory/allocations/${allocId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'hold' }),
+    }).catch(() => {});
+    fetchAllocations();
+    reloadInv();
+  };
+
+  // 보류 해제 — hold → pending (가용재고 다시 차감)
+  const handleResumeAlloc = async (allocId: string) => {
+    await fetchWithAuth(`/api/v1/inventory/allocations/${allocId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'pending' }),
+    }).catch(() => {});
+    fetchAllocations();
+    reloadInv();
   };
 
   const handleDeleteAlloc = async (allocId: string) => {
-    if (!confirm('배정을 삭제할까요? 가용재고가 복원됩니다.')) return;
+    if (!confirm('삭제하면 복원할 수 없습니다. 삭제할까요?')) return;
     await fetchWithAuth(`/api/v1/inventory/allocations/${allocId}`, { method: 'DELETE' }).catch(() => {});
     fetchAllocations();
+    reloadInv();
   };
 
   useEffect(() => {
@@ -89,7 +194,7 @@ export default function InventoryPage() {
   }, []);
 
   const invOpts = mfgFilter ? { manufacturerId: mfgFilter } : {};
-  const { data: rawInv, loading: invLoading, error: invError } = useInventory(invOpts);
+  const { data: rawInv, loading: invLoading, error: invError, reload: reloadInv } = useInventory(invOpts);
   const { data: fcData, loading: fcLoading, error: fcError } = useForecast(invOpts);
 
   // 제조사 선택 시 해당 제조사 재고의 규격(Wp) 목록 추출
@@ -103,29 +208,62 @@ export default function InventoryPage() {
   // 제조사 변경 시 규격 필터 초기화
   useEffect(() => { setWpFilter(''); }, [mfgFilter]);
 
-  // 규격 필터 적용
+  // product_id → { product_code, product_name, spec_wp, manufacturer_name } 맵 (배정 테이블 표시용)
+  // rawInv는 필터 미적용 전체 목록이므로 항상 전체 품목 포함
+  const productMap = useMemo(() => {
+    const m = new Map<string, { product_code: string; product_name: string; spec_wp: number; manufacturer_name: string }>();
+    rawInv?.items.forEach((it) => m.set(it.product_id, {
+      product_code:      it.product_code,
+      product_name:      it.product_name,
+      spec_wp:           it.spec_wp,
+      manufacturer_name: it.manufacturer_name,
+    }));
+    return m;
+  }, [rawInv]);
+
+  // 규격 필터 적용 — items 필터링 후 summary도 재계산
   const invData = useMemo(() => {
     if (!rawInv) return null;
     if (!wpFilter) return rawInv;
     const wp = parseFloat(wpFilter);
-    return { ...rawInv, items: rawInv.items.filter((it) => it.spec_wp === wp) };
+    const items = rawInv.items.filter((it) => it.spec_wp === wp);
+    const summary: InventorySummary = {
+      total_physical_kw:  items.reduce((s, it) => s + it.physical_kw,       0),
+      total_available_kw: items.reduce((s, it) => s + it.available_kw,      0),
+      total_incoming_kw:  items.reduce((s, it) => s + it.incoming_kw,       0),
+      total_secured_kw:   items.reduce((s, it) => s + it.total_secured_kw,  0),
+    };
+    return { ...rawInv, items, summary };
   }, [rawInv, wpFilter]);
+
+  // 제조사 필터 적용된 배정 목록
+  const visibleAllocs = useMemo(() =>
+    mfgFilter ? allocations.filter((a) => productMap.has(a.product_id)) : allocations,
+  [mfgFilter, allocations, productMap]);
+
 
   if (!selectedCompanyId) {
     return (
       <div className="flex items-center justify-center p-12">
-        <p className="text-muted-foreground">좌측 상단에서 법인을 선택해주세요</p>
+        <p className="text-muted-foreground">좌측 사이드바에서 법인을 선택해주세요</p>
       </div>
     );
   }
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">재고 현황</h1>
-        <div className="flex gap-2">
+      <h1 className="text-lg font-semibold">재고 현황</h1>
+
+      <Tabs defaultValue="avail">
+        <TabsList>
+          <TabsTrigger value="avail">가용재고</TabsTrigger>
+          <TabsTrigger value="physical">실재고</TabsTrigger>
+          <TabsTrigger value="incoming">미착품</TabsTrigger>
+          <TabsTrigger value="forecast">수급 전망</TabsTrigger>
+        </TabsList>
+        <div className="flex gap-2 mt-3">
           <Select value={mfgFilter || 'all'} onValueChange={(v) => setMfgFilter(v === 'all' ? '' : (v ?? ''))}>
-            <SelectTrigger className="h-8 w-40 text-xs">
+            <SelectTrigger className="h-8 w-36 text-xs">
               <FT text={mfgFilter ? (manufacturers.find(m => m.manufacturer_id === mfgFilter)?.name_kr ?? '') : '제조사'} />
             </SelectTrigger>
             <SelectContent>
@@ -136,7 +274,7 @@ export default function InventoryPage() {
             </SelectContent>
           </Select>
           <Select value={wpFilter || 'all'} onValueChange={(v) => setWpFilter(v === 'all' ? '' : (v ?? ''))}>
-            <SelectTrigger className="h-8 w-32 text-xs" disabled={!mfgFilter}>
+            <SelectTrigger className="h-8 w-28 text-xs" disabled={!mfgFilter}>
               <FT text={wpFilter ? `${wpFilter}Wp` : '규격'} />
             </SelectTrigger>
             <SelectContent>
@@ -147,17 +285,28 @@ export default function InventoryPage() {
             </SelectContent>
           </Select>
         </div>
-      </div>
 
-      <Tabs defaultValue="avail">
-        <TabsList>
-          <TabsTrigger value="avail">가용재고</TabsTrigger>
-          <TabsTrigger value="incoming">미착품</TabsTrigger>
-          <TabsTrigger value="stock">재고상세</TabsTrigger>
-          <TabsTrigger value="forecast">수급 전망</TabsTrigger>
-        </TabsList>
+        {/* 실재고 탭 — 창고 보유 물리적 재고 */}
+        <TabsContent value="physical">
+          {invError && (
+            <Alert variant="destructive" className="mb-3">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{invError}</AlertDescription>
+            </Alert>
+          )}
+          {invLoading ? <LoadingSpinner /> : invData && (
+            <div className="space-y-4">
+              <InventorySummaryCards summary={invData.summary} items={invData.items} />
+              <div className="space-y-1">
+                <h2 className="text-sm font-semibold">품목별 실재고</h2>
+                <InventoryTable items={invData.items} />
+                <p className="text-[10px] text-muted-foreground text-right">계산 시점: {invData.calculated_at}</p>
+              </div>
+            </div>
+          )}
+        </TabsContent>
 
-        {/* 가용재고 — 4 요약카드 + 모듈 크기mm + 물리/예약/배정/가용 */}
+        {/* 가용재고 — 전체 너비 단일 테이블 (품목 행 클릭 시 배정 내역 펼침) */}
         <TabsContent value="avail">
           {invError && (
             <Alert variant="destructive" className="mb-3">
@@ -165,128 +314,41 @@ export default function InventoryPage() {
               <AlertDescription>{invError}</AlertDescription>
             </Alert>
           )}
+
+          {/* KPI 카드 */}
           {invLoading ? <LoadingSpinner /> : invData && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <InventorySummaryCards summary={invData.summary} items={invData.items} />
+          )}
 
-                <div className="rounded-md border p-3"><div className="text-[10px] text-muted-foreground">물리 MW</div><div className="text-sm font-semibold">{(invData.summary.total_physical_kw / 1000).toFixed(2)}</div></div>
-                <div className="rounded-md border p-3"><div className="text-[10px] text-muted-foreground">가용 MW</div><div className="text-sm font-semibold">{(invData.summary.total_available_kw / 1000).toFixed(2)}</div></div>
-                <div className="rounded-md border p-3"><div className="text-[10px] text-muted-foreground">미착품 MW</div><div className="text-sm font-semibold">{(invData.summary.total_incoming_kw / 1000).toFixed(2)}</div></div>
-                <div className="rounded-md border p-3"><div className="text-[10px] text-muted-foreground">총 확보 MW</div><div className="text-sm font-semibold">{(invData.summary.total_secured_kw / 1000).toFixed(2)}</div></div>
-              </div>
-              <div className="rounded-md border overflow-x-auto">
-                <table className="text-xs w-full">
-                  <thead className="bg-muted/50"><tr>
-                    <th className="text-left p-2">제조사</th>
-                    <th className="text-left p-2">모델명</th>
-                    <th className="text-left p-2">규격(Wp)</th>
-                    <th className="text-left p-2">크기(mm)</th>
-                    <th className="text-right p-2">물리 EA</th>
-                    <th className="text-right p-2">물리 MW</th>
-                    <th className="text-right p-2">예약 MW</th>
-                    <th className="text-right p-2">배정 MW</th>
-                    <th className="text-right p-2">가용 EA</th>
-                    <th className="text-right p-2">가용 MW</th>
-                  </tr></thead>
-                  <tbody>
-                    {invData.items.map((it) => {
-                      const physicalEa = it.spec_wp > 0 ? Math.round((it.physical_kw * 1000) / it.spec_wp) : 0;
-                      const availEa = it.spec_wp > 0 ? Math.round((it.available_kw * 1000) / it.spec_wp) : 0;
-                      return (
-                        <tr key={it.product_id} className="border-t">
-                          <td className="p-2">{it.manufacturer_name}</td>
-                          <td className="p-2">{it.product_name}</td>
-                          <td className="p-2">{it.spec_wp}Wp</td>
-                          <td className="p-2">{it.module_width_mm}x{it.module_height_mm}</td>
-                          <td className="p-2 text-right">{physicalEa.toLocaleString()}</td>
-                          <td className="p-2 text-right">{(it.physical_kw / 1000).toFixed(2)}</td>
-                          <td className="p-2 text-right">{(it.reserved_kw / 1000).toFixed(2)}</td>
-                          <td className="p-2 text-right">{(it.allocated_kw / 1000).toFixed(2)}</td>
-                          <td className="p-2 text-right">{availEa.toLocaleString()}</td>
-                          <td className="p-2 text-right font-semibold">{(it.available_kw / 1000).toFixed(2)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* 가용재고 배정 섹션 */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold">배정 현황 <span className="text-muted-foreground font-normal text-xs ml-1">(판매예정 / 공사예정)</span></h2>
-                  <Button size="sm" onClick={() => { setPrefilledProductId(undefined); setAllocFormOpen(true); }}>
-                    <Plus className="h-3.5 w-3.5 mr-1" />배정 등록
-                  </Button>
-                </div>
-                {allocations.length === 0 ? (
-                  <div className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
-                    등록된 배정이 없습니다. 판매 또는 공사 예정 물량을 등록해 가용재고를 관리하세요.
-                  </div>
-                ) : (
-                  <div className="rounded-md border overflow-x-auto">
-                    <table className="text-xs w-full">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="text-left p-2">용도</th>
-                          <th className="text-left p-2">출처</th>
-                          <th className="text-left p-2">품번</th>
-                          <th className="text-right p-2">수량(EA)</th>
-                          <th className="text-right p-2">용량(MW)</th>
-                          <th className="text-left p-2">거래처/현장</th>
-                          <th className="text-left p-2">상태</th>
-                          <th className="text-center p-2">작업</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {allocations.map((a) => (
-                          <tr key={a.alloc_id} className="border-t hover:bg-muted/20">
-                            <td className="p-2 font-medium">{PURPOSE_LABEL[a.purpose] ?? a.purpose}</td>
-                            <td className="p-2"><span className={`px-1.5 py-0.5 rounded text-[10px] ${a.source_type === 'incoming' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{SOURCE_LABEL[a.source_type]}</span></td>
-                            <td className="p-2 text-muted-foreground">{a.product_code ?? a.product_id.slice(0, 8)}</td>
-                            <td className="p-2 text-right font-mono">{a.quantity.toLocaleString()}</td>
-                            <td className="p-2 text-right font-mono">{a.capacity_kw ? (a.capacity_kw / 1000).toFixed(2) : '—'}</td>
-                            <td className="p-2">{a.customer_name ?? a.site_name ?? '—'}</td>
-                            <td className="p-2"><span className={`px-1.5 py-0.5 rounded text-[10px] ${STATUS_COLOR[a.status]}`}>{a.status === 'pending' ? '대기중' : a.status === 'confirmed' ? '확정됨' : '취소됨'}</span></td>
-                            <td className="p-2 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <button
-                                  onClick={() => handleConfirmAlloc(a)}
-                                  title="출고 확정"
-                                  className="p-1 rounded hover:bg-green-100 text-green-600"
-                                ><CheckCircle2 className="h-3.5 w-3.5" /></button>
-                                <button
-                                  onClick={() => handleDeleteAlloc(a.alloc_id)}
-                                  title="배정 삭제"
-                                  className="p-1 rounded hover:bg-red-100 text-red-500"
-                                ><Trash2 className="h-3.5 w-3.5" /></button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+          {/* 품목별 가용재고 + 배정 현황 통합 테이블 */}
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">품목별 가용재고 / 배정 현황</h2>
+              <Button
+                size="sm"
+                onClick={() => { setPrefilledProductId(undefined); setEditingAlloc(undefined); setAllocFormOpen(true); }}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />사용 예약
+              </Button>
             </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="stock">
-          {invError && (
-            <Alert variant="destructive" className="mb-3">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>{invError}</AlertDescription>
-            </Alert>
-          )}
-          {invLoading ? <LoadingSpinner /> : invData && (
-            <div className="space-y-4">
-              <InventorySummaryCards summary={invData.summary} />
-              <InventoryTable items={invData.items} />
-              <p className="text-[10px] text-muted-foreground text-right">계산 시점: {invData.calculated_at}</p>
-            </div>
-          )}
+            {invLoading ? <LoadingSpinner /> : invData ? (
+              <AvailInventoryTable
+                items={invData.items}
+                allocations={visibleAllocs}
+                onNewAlloc={(productId) => { setPrefilledProductId(productId); setEditingAlloc(undefined); setAllocFormOpen(true); }}
+                onEdit={(alloc) => { setEditingAlloc(alloc); setPrefilledProductId(undefined); setAllocFormOpen(true); }}
+                onConfirm={handleConfirmAlloc}
+                onHold={handleHoldAlloc}
+                onResume={handleResumeAlloc}
+                onDelete={handleDeleteAlloc}
+              />
+            ) : null}
+            {invData && (
+              <p className="text-[10px] text-muted-foreground text-right">
+                기준: {invData.calculated_at}
+              </p>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="incoming">
@@ -319,12 +381,90 @@ export default function InventoryPage() {
 
       <AllocationForm
         open={allocFormOpen}
-        onOpenChange={setAllocFormOpen}
-        onSaved={fetchAllocations}
+        onOpenChange={(v) => { setAllocFormOpen(v); if (!v) setEditingAlloc(undefined); }}
+        onSaved={() => { fetchAllocations(); reloadInv(); }}
         prefilledProductId={prefilledProductId}
-        invItems={invData?.items ?? []}
+        editData={editingAlloc}
+        invItems={rawInv?.items ?? []}
         priceMapProp={priceMap}
       />
+
+      {/* 미착품 처리 다이얼로그 */}
+      <Dialog
+        open={incomingDialog.open}
+        onOpenChange={(v) => { if (!v) setIncomingDialog({ open: false, stockAlloc: null, incomingAlloc: null }); }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PackageX className="h-4 w-4 text-blue-600" />
+              연관 미착품 배정 처리
+            </DialogTitle>
+          </DialogHeader>
+
+          {incomingDialog.incomingAlloc && (() => {
+            const ia = incomingDialog.incomingAlloc!;
+            const prod = productMap.get(ia.product_id);
+            const kw = ia.capacity_kw ?? (prod ? ia.quantity * prod.spec_wp / 1000 : null);
+            return (
+              <div className="space-y-3 py-1">
+                <p className="text-sm text-muted-foreground">
+                  이 현재고 배정과 함께 등록된 <span className="font-semibold text-blue-700">미착품 배정</span>이 있습니다.
+                  수주에 함께 포함할지 선택해 주세요.
+                </p>
+                <div className="rounded-md border bg-blue-50/60 p-3 text-xs space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">품목</span>
+                    <span className="font-medium">{prod?.product_code ?? ia.product_code ?? '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">수량</span>
+                    <span className="font-mono">{ia.quantity.toLocaleString()} EA</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">용량</span>
+                    <span className="font-mono">
+                      {kw ? (kw >= 1000 ? (kw/1000).toFixed(2)+' MW' : Math.round(kw).toLocaleString()+' kW') : '—'}
+                    </span>
+                  </div>
+                  {ia.status === 'hold' && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">상태</span>
+                      <span className="px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">보류 중</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              className="w-full justify-start gap-2"
+              onClick={handleIncomingInclude}
+            >
+              <PackageCheck className="h-4 w-4" />
+              수주에 포함 — 현재고 + 미착품 함께 수주 등록
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2 text-sky-700 border-sky-200 hover:bg-sky-50"
+              onClick={handleIncomingHold}
+            >
+              <Clock className="h-4 w-4" />
+              보류 — 미착품 배정만 보류, 현재고만 수주 등록
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2 text-red-600 border-red-200 hover:bg-red-50"
+              onClick={handleIncomingDelete}
+            >
+              <PackageX className="h-4 w-4" />
+              삭제 — 미착품 배정 취소 후 현재고만 수주 등록
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

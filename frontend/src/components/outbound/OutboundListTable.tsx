@@ -50,7 +50,7 @@ export default function OutboundListTable({ items, onSelect, onNew }: Props) {
                 <TableCell>{formatDate(ob.outbound_date)}</TableCell>
                 <TableCell className="font-mono">{ob.product_code ?? '—'}</TableCell>
                 <TableCell>{ob.product_name ?? '—'}</TableCell>
-                <TableCell>{ob.spec_wp ? `${ob.spec_wp}Wp` : '—'}</TableCell>
+                <TableCell>{ob.spec_wp ? `${ob.spec_wp}` : '—'}</TableCell>
                 <TableCell className="text-right">{formatNumber(ob.quantity)}</TableCell>
                 <TableCell className="text-right">{formatKw(ob.capacity_kw)}</TableCell>
                 <TableCell>{ob.warehouse_name ?? '—'}</TableCell>

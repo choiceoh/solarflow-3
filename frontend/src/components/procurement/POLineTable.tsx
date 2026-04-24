@@ -5,20 +5,20 @@ import { formatNumber, formatUSD, formatWp } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
 import type { POLineItem } from '@/types/procurement';
 
-interface Props { items: POLineItem[]; onEdit: (line: POLineItem) => void; }
+interface Props { items: POLineItem[]; onEdit: (line: POLineItem) => void; manufacturerName?: string; }
 
 // Go API가 products를 nested로 반환 — flat/nested 둘 다 대응
 function pCode(l: POLineItem): string { return l.product_code ?? l.products?.product_code ?? '—'; }
 function pName(l: POLineItem): string { return l.product_name ?? l.products?.product_name ?? '—'; }
 function pSpec(l: POLineItem): number | undefined { return l.spec_wp ?? l.products?.spec_wp; }
 
-export default function POLineTable({ items, onEdit }: Props) {
+export default function POLineTable({ items, onEdit, manufacturerName }: Props) {
   if (items.length === 0) return <EmptyState message="발주품목이 없습니다" />;
   return (
     <div className="rounded-md border overflow-x-auto">
       <Table className="text-xs">
         <TableHeader><TableRow>
-          <TableHead>품번</TableHead><TableHead>품명</TableHead><TableHead className="text-right">규격</TableHead>
+          <TableHead>제조사</TableHead><TableHead>품번</TableHead><TableHead>품명</TableHead><TableHead className="text-right">규격</TableHead>
           <TableHead className="text-right">수량</TableHead><TableHead className="text-right">단가(¢/Wp)</TableHead>
           <TableHead className="text-right">총액(USD)</TableHead><TableHead className="w-10"></TableHead>
         </TableRow></TableHeader>
@@ -31,6 +31,7 @@ export default function POLineTable({ items, onEdit }: Props) {
               : null;
             return (
               <TableRow key={l.po_line_id}>
+                <TableCell>{manufacturerName ?? '—'}</TableCell>
                 <TableCell className="font-mono">{pCode(l)}</TableCell>
                 <TableCell>{pName(l)}</TableCell>
                 <TableCell className="text-right">{spec ? formatWp(spec) : '—'}</TableCell>

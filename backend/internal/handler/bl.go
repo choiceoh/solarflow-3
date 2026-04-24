@@ -239,49 +239,19 @@ func (h *BLHandler) syncPOStatus(poID string) {
 		return
 	}
 
-	// 입고완료된 BL의 수량 합계 계산
-	shippedQty := 0
-	allCompleted := true
-	for _, bl := range bls {
-		// 입고완료 상태가 아니면 전체 완료 아님
-		if bl.Status != "completed" && bl.Status != "erp_done" {
-			allCompleted = false
-		}
-		lineData, _, lerr := h.DB.From("bl_line_items").
-			Select("quantity", "exact", false).
-			Eq("bl_id", bl.BLID).
-			Execute()
-		if lerr != nil {
-			continue
-		}
-		var lines []struct {
-			Quantity int `json:"quantity"`
-		}
-		if err := json.Unmarshal(lineData, &lines); err != nil {
-			continue
-		}
-		if bl.Status == "completed" || bl.Status == "erp_done" {
-			for _, ln := range lines {
-				shippedQty += ln.Quantity
-			}
-		}
-	}
-
 	// 목표 상태 결정
+	// - BL 1건 이상 있으면 → in_progress (shipping 대체)
+	// - 전량 입고 완료 시에도 in_progress 유지 → 사용자 수동으로 completed 처리
 	targetStatus := current.Status
-	if allCompleted && current.TotalQty != nil && *current.TotalQty > 0 && shippedQty >= *current.TotalQty {
-		targetStatus = "completed"
-	} else {
-		// BL 1건 이상 있고 아직 완료 아니면 shipping
-		targetStatus = "shipping"
+	if current.Status != "completed" {
+		targetStatus = "in_progress"
 	}
 
 	if targetStatus == current.Status {
 		return
 	}
-	// 사용자 수동 상태(draft/contracted)를 shipping/completed로 자동 승격만 허용
-	// completed → shipping 같은 역전은 금지
-	if current.Status == "completed" && targetStatus != "completed" {
+	// completed 상태를 BL sync로 역전시키지 않음
+	if current.Status == "completed" {
 		return
 	}
 	update := map[string]string{"status": targetStatus}

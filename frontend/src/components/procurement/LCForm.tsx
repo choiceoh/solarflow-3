@@ -39,7 +39,7 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-interface Props { open: boolean; onOpenChange: (o: boolean) => void; onSubmit: (d: Record<string, unknown>) => Promise<void>; editData?: LCRecord | null; }
+interface Props { open: boolean; onOpenChange: (o: boolean) => void; onSubmit: (d: Record<string, unknown>) => Promise<void>; editData?: LCRecord | null; defaultPoId?: string; }
 
 // 소수점 포함 천단위 포맷
 function fmtDecimal(v: string): string {
@@ -48,7 +48,7 @@ function fmtDecimal(v: string): string {
   return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
 }
 
-export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props) {
+export default function LCForm({ open, onOpenChange, onSubmit, editData, defaultPoId }: Props) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
@@ -102,12 +102,12 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
         setAmountUsdDisplay(fmtDecimal(editData.amount_usd?.toString() ?? ''));
         setTargetQtyDisplay(editData.target_qty ? Math.round(editData.target_qty).toLocaleString('ko-KR') : '');
       } else {
-        reset({ lc_number: '', po_id: '', company_id: selectedCompanyId ?? '', bank_id: '', open_date: '', amount_usd: '' as unknown as number, target_qty: '', target_mw: '', usance_days: 90, usance_type: 'buyers', maturity_date: '', settlement_date: '', repayment_date: '', repaid: false, status: 'pending', memo: '' });
+        reset({ lc_number: '', po_id: defaultPoId ?? '', company_id: selectedCompanyId ?? '', bank_id: '', open_date: '', amount_usd: '' as unknown as number, target_qty: '', target_mw: '', usance_days: 90, usance_type: 'buyers', maturity_date: '', settlement_date: '', repayment_date: '', repaid: false, status: 'opened', memo: '' });
         setAmountUsdDisplay('');
         setTargetQtyDisplay('');
       }
     }
-  }, [open, editData, reset, selectedCompanyId]);
+  }, [open, editData, reset, selectedCompanyId, defaultPoId]);
 
   // F11: target_qty → target_mw(용량) + amount_usd 자동 계산
   // 다중 라인 PO 대응: 가중평균 단가(USD/module), 가중평균 spec_wp 사용
@@ -204,7 +204,9 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
             const remain = Math.max(0, poTotalUsd - lcOpened);
             const poTotalMw = po?.total_mw ?? 0;
             const lcOpenedMw = poLcs.filter((l) => !editData || l.lc_id !== editData.lc_id).reduce((s, l) => s + (l.target_mw ?? 0), 0);
-            const remainMw = Math.max(0, poTotalMw - lcOpenedMw);
+            // 편집 중일 때: 현재 입력한 target_mw도 포함해 잔량 계산 (실시간 반영)
+            const thisLcMw = parseFloat(String(watch('target_mw') ?? 0)) || 0;
+            const remainMw = Math.max(0, poTotalMw - lcOpenedMw - thisLcMw);
             return (
               <div className="rounded-md border p-3 bg-muted/30 text-xs space-y-2">
                 <div className="grid grid-cols-4 gap-2">
@@ -348,17 +350,7 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData }: Props
         <DialogContent className="w-[92vw] max-w-[1400px] max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>PO 상세 선택</DialogTitle></DialogHeader>
           <div className="rounded-md border overflow-x-auto">
-            <table className="w-full text-xs" style={{ tableLayout: 'fixed' }}>
-              <colgroup>
-                <col style={{ width: '130px' }} />
-                <col style={{ width: '110px' }} />
-                <col style={{ width: '240px' }} />
-                <col style={{ width: '200px' }} />
-                <col style={{ width: '100px' }} />
-                <col style={{ width: '130px' }} />
-                <col style={{ width: '80px' }} />
-                <col style={{ width: '70px' }} />
-              </colgroup>
+            <table className="w-full text-xs min-w-[900px]">
               <thead className="bg-muted/50">
                 <tr>
                   <th className="text-left p-2">PO번호</th>

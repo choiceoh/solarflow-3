@@ -475,6 +475,96 @@ async fn search_fallback(pool: &PgPool, company_id: Uuid, pq: &ParsedQuery) -> R
         }
     }
 
+    // 6. 공사현장 검색 (현장명 또는 위치 ILIKE)
+    if mfg_id.is_none() && spec.is_none() {
+        #[derive(sqlx::FromRow)]
+        struct SiteRow { site_id: Uuid, name: String, location: Option<String>, site_type: String, capacity_mw: Option<f64> }
+        let rows = sqlx::query_as::<_, SiteRow>(
+            r#"SELECT site_id, name, location, site_type, capacity_mw::float8 AS capacity_mw
+               FROM construction_sites
+               WHERE company_id = $1 AND is_active = true
+                 AND (name ILIKE $2 OR location ILIKE $2)
+               ORDER BY name LIMIT 10"#
+        ).bind(company_id).bind(&pattern).fetch_all(pool).await?;
+        for r in rows {
+            let mut p = HashMap::new();
+            p.insert("site_id".to_string(), r.site_id.to_string());
+            let label = match r.site_type.as_str() { "own" => "자체현장", "epc" => "타사EPC", _ => "현장" };
+            results.push(SearchResult {
+                result_type: "construction_site".to_string(),
+                title: r.name.clone(),
+                data: json!({
+                    "location": r.location,
+                    "site_type": r.site_type,
+                    "site_type_label": label,
+                    "capacity_mw": r.capacity_mw,
+                }),
+                link: SearchLink { module: "construction-sites".to_string(), params: p },
+            });
+        }
+    }
+
+    // 7. 메모 검색: 모든 엔티티의 memo 필드 전문 검색
+    // (제조사/규격 컨텍스트와 무관하게 항상 실행 — 메모는 자유 텍스트이므로)
+    {
+        // 7-1. 발주(P/O) 메모
+        #[derive(sqlx::FromRow)]
+        struct PoMemoRow { po_id: Uuid, po_number: Option<String>, mfg_name: String, memo: Option<String> }
+        let rows = sqlx::query_as::<_, PoMemoRow>(
+            r#"SELECT po.po_id, po.po_number, m.name_kr AS mfg_name, po.memo
+               FROM purchase_orders po JOIN manufacturers m ON po.manufacturer_id = m.manufacturer_id
+               WHERE po.company_id = $1 AND po.memo ILIKE $2 LIMIT 5"#
+        ).bind(company_id).bind(&pattern).fetch_all(pool).await?;
+        for r in rows {
+            let mut p = HashMap::new();
+            p.insert("po_id".to_string(), r.po_id.to_string());
+            results.push(SearchResult {
+                result_type: "memo_po".to_string(),
+                title: format!("P/O {} ({})", r.po_number.as_deref().unwrap_or("N/A"), r.mfg_name),
+                data: json!({"memo": r.memo, "source": "발주"}),
+                link: SearchLink { module: "procurement".to_string(), params: p },
+            });
+        }
+
+        // 7-2. 수주(Order) 메모
+        #[derive(sqlx::FromRow)]
+        struct OrderMemoRow { order_id: Uuid, order_number: Option<String>, customer_name: Option<String>, memo: Option<String> }
+        let rows = sqlx::query_as::<_, OrderMemoRow>(
+            r#"SELECT o.order_id, o.order_number, ptr.partner_name AS customer_name, o.memo
+               FROM orders o LEFT JOIN partners ptr ON o.customer_id = ptr.partner_id
+               WHERE o.company_id = $1 AND o.memo ILIKE $2 LIMIT 5"#
+        ).bind(company_id).bind(&pattern).fetch_all(pool).await?;
+        for r in rows {
+            let mut p = HashMap::new();
+            p.insert("order_id".to_string(), r.order_id.to_string());
+            results.push(SearchResult {
+                result_type: "memo_order".to_string(),
+                title: format!("수주 {} ({})", r.order_number.as_deref().unwrap_or("N/A"), r.customer_name.as_deref().unwrap_or("—")),
+                data: json!({"memo": r.memo, "source": "수주"}),
+                link: SearchLink { module: "orders".to_string(), params: p },
+            });
+        }
+
+        // 7-3. 출고 메모
+        #[derive(sqlx::FromRow)]
+        struct OutMemoRow { outbound_id: Uuid, product_name: String, outbound_date: Option<chrono::NaiveDate>, memo: Option<String> }
+        let rows = sqlx::query_as::<_, OutMemoRow>(
+            r#"SELECT o.outbound_id, p.product_name, o.outbound_date, o.memo
+               FROM outbounds o JOIN products p ON o.product_id = p.product_id
+               WHERE o.company_id = $1 AND o.memo ILIKE $2 LIMIT 5"#
+        ).bind(company_id).bind(&pattern).fetch_all(pool).await?;
+        for r in rows {
+            let mut p = HashMap::new();
+            p.insert("outbound_id".to_string(), r.outbound_id.to_string());
+            results.push(SearchResult {
+                result_type: "memo_outbound".to_string(),
+                title: format!("출고 {} ({})", r.product_name, r.outbound_date.map(|d| d.to_string()).as_deref().unwrap_or("—")),
+                data: json!({"memo": r.memo, "source": "출고"}),
+                link: SearchLink { module: "outbound".to_string(), params: p },
+            });
+        }
+    }
+
     Ok((results, Vec::new()))
 }
 

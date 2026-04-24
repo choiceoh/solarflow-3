@@ -36,6 +36,9 @@ func (h *InventoryAllocationHandler) List(w http.ResponseWriter, r *http.Request
 	if st := r.URL.Query().Get("status"); st != "" {
 		query = query.Eq("status", st)
 	}
+	if gid := r.URL.Query().Get("group_id"); gid != "" {
+		query = query.Eq("group_id", gid)
+	}
 
 	data, _, err := query.Execute()
 	if err != nil {
@@ -65,8 +68,9 @@ func (h *InventoryAllocationHandler) Create(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// "representation" → PostgREST가 Prefer: return=representation 헤더를 보내 삽입된 행을 응답
 	data, _, err := h.DB.From("inventory_allocations").
-		Insert(req, false, "", "", "").
+		Insert(req, false, "", "representation", "").
 		Execute()
 	if err != nil {
 		log.Printf("[배정 등록 실패] %v", err)
@@ -76,7 +80,9 @@ func (h *InventoryAllocationHandler) Create(w http.ResponseWriter, r *http.Reque
 
 	var created []model.InventoryAllocation
 	if err := json.Unmarshal(data, &created); err != nil || len(created) == 0 {
-		response.RespondError(w, http.StatusInternalServerError, "배정 등록 결과를 확인할 수 없습니다")
+		// 삽입 자체는 성공했으나 응답 파싱 불가 시 성공으로 처리
+		log.Printf("[배정 등록 응답 파싱 주의] data=%s err=%v", string(data), err)
+		response.RespondJSON(w, http.StatusCreated, struct{ Status string `json:"status"` }{Status: "created"})
 		return
 	}
 	response.RespondJSON(w, http.StatusCreated, created[0])

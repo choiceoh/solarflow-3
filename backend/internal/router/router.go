@@ -190,6 +190,16 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Delete("/{id}", outboundH.Delete)
 		})
 
+		// 공사 현장 마스터 (자체/EPC 현장 + 공급 이력)
+		siteH := handler.NewConstructionSiteHandler(db)
+		r.Route("/construction-sites", func(r chi.Router) {
+			r.Get("/", siteH.List)
+			r.Post("/", siteH.Create)
+			r.Get("/{id}", siteH.GetByID)
+			r.Put("/{id}", siteH.Update)
+			r.Patch("/{id}/status", siteH.ToggleActive)
+		})
+
 		// 가용재고 배정 (판매예정/공사예정)
 		allocH := handler.NewInventoryAllocationHandler(db)
 		r.Route("/inventory/allocations", func(r chi.Router) {
@@ -279,6 +289,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Post("/outstanding-list", calcProxy.OutstandingList)
 			r.Post("/receipt-match-suggest", calcProxy.ReceiptMatchSuggest)
 			r.Post("/search", calcProxy.Search)
+			r.Post("/inventory-turnover", calcProxy.InventoryTurnover)
 		})
 
 		r.Route("/api/v1/engine", func(r chi.Router) {

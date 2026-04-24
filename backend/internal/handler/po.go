@@ -27,8 +27,8 @@ func NewPOHandler(db *supa.Client) *POHandler {
 // 비유: 계약 관리실에서 전체 계약서 목록을 꺼내 보여주는 것
 // TODO: Rust 계산엔진 연동 — PO 입고현황 집계 (계약량 vs LC개설 vs 선적 vs 입고)
 func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
-	// 평탄 응답: PostgREST FK 모호성으로 인한 unmarshal 실패 방지 (B/L과 동일 패턴)
-	query := h.DB.From("purchase_orders").Select("*", "exact", false)
+	// purchase_orders_ext: manufacturer_name(name_kr alias) 포함 뷰
+	query := h.DB.From("purchase_orders_ext").Select("*", "exact", false)
 
 	// 비유: ?company_id=xxx — 특정 법인의 계약만 필터
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
@@ -68,8 +68,8 @@ func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *POHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	// 비유: 계약서 본문 조회 (평탄 — 임베드 없음)
-	poData, _, err := h.DB.From("purchase_orders").
+	// 비유: 계약서 본문 조회 (purchase_orders_ext 뷰 = manufacturer_name 포함)
+	poData, _, err := h.DB.From("purchase_orders_ext").
 		Select("*", "exact", false).
 		Eq("po_id", id).
 		Execute()
@@ -334,24 +334,36 @@ func (h *POHandler) autoInsertPriceHistory(poID string, po model.PurchaseOrder) 
 }
 
 // Delete — DELETE /api/v1/pos/{id} — 발주 삭제
-// 비유: 발주 서류를 파기하는 것 — 연결된 라인아이템도 함께 삭제
+// 삭제 순서: ① T/T cascade 삭제 → ② 단가이력 삭제 → ③ 라인아이템 삭제 → ④ PO 본체 삭제
 func (h *POHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	// 라인아이템 먼저 삭제 (FK 제약)
+	// ① T/T 송금이력 cascade 삭제 (PO 초안 취소 시 계약금도 함께 소멸)
+	_, _, _ = h.DB.From("tt_remittances").
+		Delete("", "").
+		Eq("po_id", id).
+		Execute()
+
+	// ② 단가이력 삭제 (PO 등록 시 자동 생성, FK: price_histories.related_po_id)
+	_, _, _ = h.DB.From("price_histories").
+		Delete("", "").
+		Eq("related_po_id", id).
+		Execute()
+
+	// ③ 라인아이템 삭제 (DB는 CASCADE이지만 명시적으로 처리)
 	_, _, _ = h.DB.From("po_line_items").
 		Delete("", "").
 		Eq("po_id", id).
 		Execute()
 
-	// PO 본체 삭제
+	// ④ PO 본체 삭제
 	_, _, err := h.DB.From("purchase_orders").
 		Delete("", "").
 		Eq("po_id", id).
 		Execute()
 	if err != nil {
 		log.Printf("[발주 삭제 실패] id=%s, err=%v", id, err)
-		response.RespondError(w, http.StatusInternalServerError, "발주 삭제에 실패했습니다")
+		response.RespondError(w, http.StatusInternalServerError, "발주 삭제에 실패했습니다: "+err.Error())
 		return
 	}
 

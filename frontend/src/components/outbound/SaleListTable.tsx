@@ -35,7 +35,7 @@ export default function SaleListTable({ items }: Props) {
               <TableCell>{formatDate(item.outbound_date)}</TableCell>
               <TableCell>{item.sale.customer_name ?? '—'}</TableCell>
               <TableCell>{item.product_name ?? '—'}</TableCell>
-              <TableCell>{item.spec_wp ? `${item.spec_wp}Wp` : '—'}</TableCell>
+              <TableCell>{item.spec_wp ? `${item.spec_wp}` : '—'}</TableCell>
               <TableCell className="text-right">{formatNumber(item.quantity)}</TableCell>
               <TableCell className="text-right">{formatNumber(item.sale.unit_price_wp)}</TableCell>
               <TableCell className="text-right">{item.sale.supply_amount ? formatNumber(item.sale.supply_amount) : '—'}</TableCell>

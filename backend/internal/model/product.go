@@ -31,9 +31,10 @@ type ProductWithManufacturer struct {
 
 // ManufacturerSummary — 품번 조회 시 함께 반환되는 제조사 요약 정보
 type ManufacturerSummary struct {
-	NameKR          string `json:"name_kr"`
-	NameEN          string `json:"name_en"`
-	DomesticForeign string `json:"domestic_foreign"`
+	NameKR          string  `json:"name_kr"`
+	NameEN          string  `json:"name_en"`
+	ShortName       *string `json:"short_name"` // 약칭 — 화면 표시용
+	DomesticForeign string  `json:"domestic_foreign"`
 }
 
 // CreateProductRequest — 품번 등록 시 클라이언트가 보내는 데이터

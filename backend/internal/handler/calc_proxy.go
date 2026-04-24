@@ -139,6 +139,11 @@ func (h *CalcProxyHandler) Search(w http.ResponseWriter, r *http.Request) {
 	h.proxyPost(w, r, "search")
 }
 
+// InventoryTurnover — 재고 회전율 프록시
+func (h *CalcProxyHandler) InventoryTurnover(w http.ResponseWriter, r *http.Request) {
+	h.proxyPost(w, r, "inventory-turnover")
+}
+
 // === GET 핸들러 2개 ===
 
 // EngineHealth — Rust 엔진 헬스체크 프록시

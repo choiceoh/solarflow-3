@@ -27,7 +27,7 @@ func NewProductHandler(db *supa.Client) *ProductHandler {
 // 비유: 카탈로그실에서 전체 모듈 규격을 꺼내 보여주는 것
 func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("products").
-		Select("*, manufacturers(name_kr, domestic_foreign)", "exact", false)
+		Select("*, manufacturers(name_kr, short_name, domestic_foreign)", "exact", false)
 
 	// 비유: ?manufacturer_id=xxx — 특정 제조사 모듈만 필터
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
@@ -62,7 +62,7 @@ func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	data, _, err := h.DB.From("products").
-		Select("*, manufacturers(name_kr, name_en, domestic_foreign)", "exact", false).
+		Select("*, manufacturers(name_kr, short_name, name_en, domestic_foreign)", "exact", false).
 		Eq("product_id", id).
 		Execute()
 	if err != nil {

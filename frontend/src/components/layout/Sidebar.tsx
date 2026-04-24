@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Package, LayoutDashboard, PackageCheck, ClipboardList, Truck,
   Calculator, Landmark, Database, Search, StickyNote,
   FileSignature, Settings, ChevronDown, ChevronRight, LogOut,
-  ScrollText, Wallet,
+  ScrollText, Wallet, Building2,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
 interface MenuItem {
   icon: LucideIcon;
@@ -56,6 +57,7 @@ const masterItem: MenuItem = {
     { label: '거래처', path: '/masters/partners' },
     { label: '창고',   path: '/masters/warehouses' },
     { label: '은행',   path: '/masters/banks' },
+    { label: '공사현장', path: '/masters/construction-sites' },
   ],
 };
 
@@ -79,7 +81,18 @@ export default function Sidebar() {
   const { user, logout, role } = useAuth();
   const { roleLabel } = usePermission();
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
+  const companies = useAppStore((s) => s.companies);
+  const loadCompanies = useAppStore((s) => s.loadCompanies);
+  const { selectedCompanyId, setCompanyId } = useAppStore();
   const [masterOpen, setMasterOpen] = useState(pathname.startsWith('/masters'));
+
+  useEffect(() => { loadCompanies(); }, [loadCompanies]);
+
+  const selectedCompany = companies.find((c) => c.company_id === selectedCompanyId);
+  // 접힌 상태용 이니셜: "탑솔라(주)" → "TS", "전체" → "전"
+  const companyInitial = selectedCompany
+    ? (selectedCompany.company_code || selectedCompany.company_name.slice(0, 2))
+    : '전';
 
   const NavLink = ({ icon: Icon, label, path, children: subs }: MenuItem & { children?: MenuItem['children'] }) => {
     const isActive = (() => {
@@ -180,6 +193,48 @@ export default function Sidebar() {
           </div>
         )}
       </div>
+
+      {/* 법인 선택 */}
+      {collapsed ? (
+        <Tooltip>
+          <TooltipTrigger>
+            <button
+              className={cn(
+                'mx-auto mt-2 flex h-8 w-8 items-center justify-center rounded-md border text-xs font-semibold transition-colors',
+                selectedCompanyId && selectedCompanyId !== 'all'
+                  ? 'bg-primary/10 border-primary/30 text-primary'
+                  : 'bg-muted border-border text-muted-foreground',
+              )}
+            >
+              {companyInitial}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {selectedCompany?.company_name ?? '전체 법인'}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <div className="px-3 py-2 border-b">
+          <p className="text-[10px] text-muted-foreground mb-1 flex items-center gap-1">
+            <Building2 className="h-2.5 w-2.5" />법인
+          </p>
+          <Select value={selectedCompanyId || 'all'} onValueChange={(v) => setCompanyId(v)}>
+            <SelectTrigger className="h-8 w-full text-xs">
+              <span className="flex-1 text-left truncate">
+                {selectedCompany?.company_name ?? '전체'}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
+              {companies.map((c) => (
+                <SelectItem key={c.company_id} value={c.company_id}>
+                  {c.company_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* 메뉴 — 구매/판매 섹션 분리 */}
       <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">

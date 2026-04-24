@@ -26,6 +26,7 @@ const ProductPage = lazy(() => import('@/pages/masters/ProductPage'));
 const PartnerPage = lazy(() => import('@/pages/masters/PartnerPage'));
 const WarehousePage = lazy(() => import('@/pages/masters/WarehousePage'));
 const BankPage = lazy(() => import('@/pages/masters/BankPage'));
+const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
 
 function Fallback() {
   return <LoadingSpinner className="h-screen" />;
@@ -54,6 +55,7 @@ export default function App() {
                 <Route path="/masters/partners" element={<PartnerPage />} />
                 <Route path="/masters/warehouses" element={<WarehousePage />} />
                 <Route path="/masters/banks" element={<BankPage />} />
+                <Route path="/masters/construction-sites" element={<ConstructionSitesPage />} />
                 <Route path="/inbound" element={<InboundPage />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
                 <Route path="/lc" element={<LCPage />} />

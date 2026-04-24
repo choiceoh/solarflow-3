@@ -7,6 +7,8 @@ type PurchaseOrder struct {
 	PONumber            *string  `json:"po_number"`
 	CompanyID           string   `json:"company_id"`
 	ManufacturerID      string   `json:"manufacturer_id"`
+	ManufacturerName    *string  `json:"manufacturer_name,omitempty"`  // purchase_orders_ext 뷰에서 제공
+	ManufacturerNameEN  *string  `json:"manufacturer_name_en,omitempty"`
 	Currency            *string  `json:"currency,omitempty"` // D-087: PO 자동채움용 (DB에 없으면 빈 값)
 	ContractType        string   `json:"contract_type"`
 	ContractDate        *string  `json:"contract_date"`
@@ -83,11 +85,14 @@ var validContractTypes = map[string]bool{
 }
 
 // 허용되는 status 값
+// in_progress: LC 1건 이상 개설 시 자동 전환 (shipping 대체)
+// shipping: 레거시 호환용 — 신규 등록 불가, 읽기만 허용
 var validPOStatuses = map[string]bool{
-	"draft":      true,
-	"contracted": true,
-	"shipping":   true,
-	"completed":  true,
+	"draft":       true,
+	"contracted":  true,
+	"in_progress": true,
+	"completed":   true,
+	"shipping":    true, // legacy — 기존 데이터 호환용
 }
 
 // CreatePurchaseOrderRequest — 발주 등록 시 클라이언트가 보내는 데이터
@@ -131,7 +136,7 @@ func (req *CreatePurchaseOrderRequest) Validate() string {
 		return "status는 필수 항목입니다"
 	}
 	if !validPOStatuses[req.Status] {
-		return "status는 \"draft\", \"contracted\", \"shipping\", \"completed\" 중 하나여야 합니다"
+		return "status는 \"draft\", \"contracted\", \"in_progress\", \"completed\" 중 하나여야 합니다"
 	}
 	if req.TotalQty != nil && *req.TotalQty <= 0 {
 		return "total_qty는 양수여야 합니다"
@@ -177,7 +182,7 @@ func (req *UpdatePurchaseOrderRequest) Validate() string {
 	}
 	if req.Status != nil {
 		if !validPOStatuses[*req.Status] {
-			return "status는 \"draft\", \"contracted\", \"shipping\", \"completed\" 중 하나여야 합니다"
+			return "status는 \"draft\", \"contracted\", \"in_progress\", \"completed\" 중 하나여야 합니다"
 		}
 	}
 	if req.TotalQty != nil && *req.TotalQty <= 0 {

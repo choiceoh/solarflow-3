@@ -47,7 +47,7 @@ export default function InboundPage() {
   }, []);
 
   const mfgNameMap = useMemo(
-    () => Object.fromEntries(manufacturers.map(m => [m.manufacturer_id, m.name_kr])),
+    () => Object.fromEntries(manufacturers.map(m => [m.manufacturer_id, m.short_name ?? m.name_kr])),
     [manufacturers]
   );
 

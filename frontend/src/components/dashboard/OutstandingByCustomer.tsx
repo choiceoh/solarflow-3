@@ -7,10 +7,11 @@ import {
 import { formatKRW, formatNumber } from '@/lib/utils';
 
 interface CustomerRow {
+  customer_id?: string;
   customer_name: string;
-  outstanding_amount: number;
+  outstanding_krw: number;
   outstanding_count: number;
-  max_days_overdue: number;
+  oldest_outstanding_days: number;
 }
 
 interface Props {
@@ -40,13 +41,13 @@ export default function OutstandingByCustomer({ customers }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {customers.map((c) => (
-                <TableRow key={c.customer_name}>
+              {customers.map((c, i) => (
+                <TableRow key={c.customer_id ?? `${c.customer_name}-${i}`}>
                   <TableCell className="text-xs font-medium">{c.customer_name}</TableCell>
-                  <TableCell className="text-xs text-right">{formatKRW(c.outstanding_amount)}</TableCell>
+                  <TableCell className="text-xs text-right">{formatKRW(c.outstanding_krw)}</TableCell>
                   <TableCell className="text-xs text-right">{formatNumber(c.outstanding_count)}</TableCell>
-                  <TableCell className={`text-xs text-right ${c.max_days_overdue >= 60 ? 'text-red-600 font-medium' : ''}`}>
-                    {c.max_days_overdue}일
+                  <TableCell className={`text-xs text-right ${c.oldest_outstanding_days >= 60 ? 'text-red-600 font-medium' : ''}`}>
+                    {c.oldest_outstanding_days}일
                   </TableCell>
                 </TableRow>
               ))}

@@ -69,6 +69,11 @@ export function useLCList(filters: { status?: string; bank_id?: string; po_id?: 
   return { data, loading, reload: load };
 }
 
+// API 응답 중첩 구조: purchase_orders.po_number, purchase_orders.manufacturers.name_kr
+type RawTT = TTRemittance & {
+  purchase_orders?: { po_number?: string; manufacturers?: { name_kr?: string } };
+};
+
 export function useTTList(filters: { status?: string; po_id?: string } = {}) {
   const [data, setData] = useState<TTRemittance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,7 +86,12 @@ export function useTTList(filters: { status?: string; po_id?: string } = {}) {
       const params = companyParams(selectedCompanyId);
       if (filters.status) params.set('status', filters.status);
       if (filters.po_id) params.set('po_id', filters.po_id);
-      setData(await fetchWithAuth<TTRemittance[]>(`/api/v1/tts?${params}`));
+      const raw = await fetchWithAuth<RawTT[]>(`/api/v1/tts?${params}`);
+      setData(raw.map((r) => ({
+        ...r,
+        po_number: r.po_number ?? r.purchase_orders?.po_number ?? undefined,
+        manufacturer_name: r.manufacturer_name ?? r.purchase_orders?.manufacturers?.name_kr ?? undefined,
+      })));
     } catch { setData([]); }
     setLoading(false);
   }, [selectedCompanyId, filters.status, filters.po_id]);

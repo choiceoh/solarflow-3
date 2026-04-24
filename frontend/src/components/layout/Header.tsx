@@ -1,8 +1,7 @@
-// 헤더 (Step 31: 글로벌 검색 바 + 알림 아이콘 추가)
+// 헤더
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/stores/appStore';
-import CompanySelector from './CompanySelector';
 import UserMenu from './UserMenu';
 import GlobalSearchBar from '@/components/search/GlobalSearchBar';
 import AlertBell from './AlertBell';
@@ -16,7 +15,6 @@ export default function Header() {
         <Menu className="h-4 w-4" />
       </Button>
       <GlobalSearchBar />
-      <CompanySelector />
       <AlertBell />
       <UserMenu />
     </header>

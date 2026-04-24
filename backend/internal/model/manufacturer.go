@@ -5,21 +5,23 @@ import "unicode/utf8"
 // Manufacturer — 제조사 정보를 담는 구조체
 // 비유: "제조사 명함" — 각 셀 제조사의 기본 정보가 적힌 카드
 type Manufacturer struct {
-	ManufacturerID  string `json:"manufacturer_id"`
-	NameKR          string `json:"name_kr"`
-	NameEN          string `json:"name_en"`
-	Country         string `json:"country"`
-	DomesticForeign string `json:"domestic_foreign"`
-	IsActive        bool   `json:"is_active"`
+	ManufacturerID  string  `json:"manufacturer_id"`
+	NameKR          string  `json:"name_kr"`
+	NameEN          string  `json:"name_en"`
+	ShortName       *string `json:"short_name"` // 약칭 (예: 진코, 론지, 트리나) — 화면 표시용
+	Country         string  `json:"country"`
+	DomesticForeign string  `json:"domestic_foreign"`
+	IsActive        bool    `json:"is_active"`
 }
 
 // CreateManufacturerRequest — 제조사 등록 시 클라이언트가 보내는 데이터
 // 비유: "제조사 등록 신청서" — 필수 항목을 빠짐없이 적어야 접수됨
 type CreateManufacturerRequest struct {
-	NameKR          string `json:"name_kr"`
-	NameEN          string `json:"name_en"`
-	Country         string `json:"country"`
-	DomesticForeign string `json:"domestic_foreign"`
+	NameKR          string  `json:"name_kr"`
+	NameEN          string  `json:"name_en"`
+	ShortName       *string `json:"short_name,omitempty"`
+	Country         string  `json:"country"`
+	DomesticForeign string  `json:"domestic_foreign"`
 }
 
 // Validate — 제조사 등록 요청의 입력값을 검증
@@ -51,6 +53,7 @@ func (req *CreateManufacturerRequest) Validate() string {
 type UpdateManufacturerRequest struct {
 	NameKR          *string `json:"name_kr,omitempty"`
 	NameEN          *string `json:"name_en,omitempty"`
+	ShortName       *string `json:"short_name,omitempty"`
 	Country         *string `json:"country,omitempty"`
 	DomesticForeign *string `json:"domestic_foreign,omitempty"`
 }

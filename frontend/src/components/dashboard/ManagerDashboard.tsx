@@ -12,15 +12,7 @@ import type {
 import type { BLShipment } from '@/types/inbound';
 import type { Order } from '@/types/orders';
 
-interface CustomerAnalysis {
-  customers: {
-    customer_name: string;
-    outstanding_amount: number;
-    outstanding_count: number;
-    max_days_overdue: number;
-  }[];
-  total_outstanding: number;
-}
+import type { CustomerAnalysis } from '@/hooks/useDashboard';
 
 interface Props {
   summary: DashboardSectionState<DashboardSummary>;
@@ -69,7 +61,7 @@ export default function ManagerDashboard({
         {outstanding.loading ? <LoadingSpinner /> : outstanding.error ? (
           <SectionError msg={outstanding.error} />
         ) : outstanding.data ? (
-          <OutstandingByCustomer customers={outstanding.data.customers || []} />
+          <OutstandingByCustomer customers={(outstanding.data.items || []).filter((c) => c.outstanding_krw > 0)} />
         ) : null}
       </div>
 

@@ -67,10 +67,12 @@ struct OutstandingRow {
     days_elapsed: Option<i32>,
 }
 
+/// 거래처별 이익 집계용: landed cost 보유 매출분의 매출·원가 합
 #[derive(sqlx::FromRow)]
-struct CustomerMarginRow {
+struct CustomerCostAggRow {
     customer_id: Uuid,
-    avg_sale_wp: Option<f64>,
+    revenue_covered: Option<f64>,
+    cost_covered: Option<f64>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -259,9 +261,50 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
     let deposit_map: HashMap<Uuid, f64> = deposit_rows.into_iter()
         .filter_map(|r| r.avg_deposit_rate.map(|d| (r.customer_id, round2(d)))).collect();
 
+    // === 거래처별 이익 계산 ===
+    // 원가 기준: req.cost_basis ("landed" 기본 | "cif")
+    // 방법: 제품별 평균 원가(avg_wp_krw)를 미리 계산한 뒤,
+    //       각 매출을 (수량 × spec_wp × avg_wp_krw) = 매출원가로 변환.
+    //       원가 이력이 있는 매출분만 커버. 없는 제품은 이익 계산 제외.
+    let cost_col = if req.cost_basis == "cif" { "cd.cif_wp_krw" } else { "cd.landed_wp_krw" };
+    let margin_sql = format!(
+        r#"
+        WITH cost_avg AS (
+            SELECT cd.product_id,
+                   SUM({cost_col} * cd.quantity)::float8 / NULLIF(SUM(cd.quantity), 0) AS avg_wp_krw
+            FROM cost_details cd
+            JOIN import_declarations id ON cd.declaration_id = id.declaration_id
+            WHERE id.company_id = $1 AND {cost_col} IS NOT NULL
+            GROUP BY cd.product_id
+        )
+        SELECT s.customer_id,
+               SUM(CASE WHEN ca.avg_wp_krw IS NOT NULL THEN s.supply_amount ELSE 0 END)::float8 AS revenue_covered,
+               SUM(CASE WHEN ca.avg_wp_krw IS NOT NULL
+                        THEN o.quantity::float8 * p.spec_wp::float8 * ca.avg_wp_krw
+                        ELSE 0 END)::float8 AS cost_covered
+        FROM sales s
+        JOIN outbounds o ON s.outbound_id = o.outbound_id
+        JOIN products p ON o.product_id = p.product_id
+        LEFT JOIN cost_avg ca ON ca.product_id = o.product_id
+        WHERE o.company_id = $1 AND o.status = 'active'
+          AND ($2::uuid IS NULL OR s.customer_id = $2)
+          AND ($3::date IS NULL OR o.outbound_date >= $3)
+          AND ($4::date IS NULL OR o.outbound_date <= $4)
+        GROUP BY s.customer_id
+        "#
+    );
+    let margin_rows = sqlx::query_as::<_, CustomerCostAggRow>(&margin_sql)
+        .bind(company_id).bind(req.customer_id).bind(date_from).bind(date_to)
+        .fetch_all(pool).await?;
+    let margin_map: HashMap<Uuid, (f64, f64)> = margin_rows.into_iter()
+        .map(|r| (r.customer_id, (r.revenue_covered.unwrap_or(0.0), r.cost_covered.unwrap_or(0.0))))
+        .collect();
+
     let mut items: Vec<CustomerItem> = Vec::new();
     let mut sum_sales = 0.0;
     let mut sum_collected = 0.0;
+    let mut sum_margin = 0.0;
+    let mut sum_revenue_covered = 0.0;
 
     for s in &sales {
         let total_sales = s.total_sales.unwrap_or(0.0);
@@ -269,6 +312,18 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
         let outstanding = total_sales - total_collected;
         let (out_count, oldest_days) = *outstanding_map.get(&s.customer_id).unwrap_or(&(0, 0));
         let status = outstanding_status(oldest_days);
+
+        // 이익: 원가 커버 매출분에서 계산. 커버 매출 0 → None
+        let (margin_rate, margin_krw) = match margin_map.get(&s.customer_id) {
+            Some(&(rev_cov, cost_cov)) if rev_cov > 0.0 => {
+                let m = rev_cov - cost_cov;
+                let rate = (m / rev_cov * 10000.0).round() / 100.0;
+                sum_margin += m;
+                sum_revenue_covered += rev_cov;
+                (Some(rate), Some(round2(m)))
+            }
+            _ => (None, None),
+        };
 
         sum_sales += total_sales;
         sum_collected += total_collected;
@@ -278,16 +333,24 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
             total_sales_krw: round2(total_sales), total_collected_krw: round2(total_collected),
             outstanding_krw: round2(outstanding.max(0.0)), outstanding_count: out_count,
             oldest_outstanding_days: oldest_days, avg_payment_days: None,
-            avg_margin_rate: None, avg_deposit_rate: deposit_map.get(&s.customer_id).copied(),
+            avg_margin_rate: margin_rate,
+            total_margin_krw: margin_krw,
+            avg_deposit_rate: deposit_map.get(&s.customer_id).copied(),
             status,
         });
     }
+
+    let overall_margin_rate = if sum_revenue_covered > 0.0 {
+        (sum_margin / sum_revenue_covered * 10000.0).round() / 100.0
+    } else { 0.0 };
 
     Ok(CustomerAnalysisResponse {
         items,
         summary: CustomerSummary {
             total_sales_krw: round2(sum_sales), total_collected_krw: round2(sum_collected),
             total_outstanding_krw: round2((sum_sales - sum_collected).max(0.0)),
+            total_margin_krw: round2(sum_margin),
+            overall_margin_rate,
         },
         calculated_at: Utc::now(),
     })

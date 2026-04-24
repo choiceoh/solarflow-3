@@ -32,10 +32,15 @@ export interface SearchLink {
 
 // module → 프론트 페이지 경로 매핑
 export const SEARCH_MODULE_ROUTE: Record<string, string> = {
-  inventory: '/inventory',
-  po: '/procurement',
-  outbound: '/outbound',
-  lc: '/banking',
+  inventory:           '/inventory',
+  po:                  '/procurement',
+  procurement:         '/procurement',
+  outbound:            '/outbound',
+  lc:                  '/banking',
+  banking:             '/banking',
   'customer-analysis': '/orders',
-  inbound: '/inbound',
+  orders:              '/orders',
+  inbound:             '/inbound',
+  partner:             '/masters/partners',
+  'construction-sites': '/masters/construction-sites',
 };

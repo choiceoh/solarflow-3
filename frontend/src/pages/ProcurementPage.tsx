@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+
 import { useAppStore } from '@/stores/appStore';
 import { usePOList, useLCList, useTTList, usePriceHistoryList } from '@/hooks/useProcurement';
 import { fetchWithAuth } from '@/lib/api';
@@ -21,6 +22,11 @@ import PriceHistoryForm from '@/components/procurement/PriceHistoryForm';
 import { PO_STATUS_LABEL, CONTRACT_TYPE_LABEL, CONTRACT_TYPES_ACTIVE, LC_STATUS_LABEL, TT_STATUS_LABEL } from '@/types/procurement';
 import type { PurchaseOrder, POLineItem, LCRecord, TTRemittance, PriceHistory, POStatus, ContractType, LCStatus, TTStatus } from '@/types/procurement';
 import type { Manufacturer, Bank } from '@/types/masters';
+import { useBLList } from '@/hooks/useInbound';
+import BLListTable from '@/components/inbound/BLListTable';
+import BLDetailView from '@/components/inbound/BLDetailView';
+import BLForm from '@/components/inbound/BLForm';
+import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL, type InboundType, type BLStatus } from '@/types/inbound';
 
 function FT({ text }: { text: string }) {
   return <span className="flex flex-1 text-left truncate" data-slot="select-value">{text}</span>;
@@ -30,14 +36,15 @@ export default function ProcurementPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
-  const [poList, setPoList] = useState<PurchaseOrder[]>([]);
+  // 계약금 탭용 전체 PO 목록 (필터 없음) — usePOList hook으로 관리하여 삭제 시 reloadPoList()로 동기화
+  const { data: poList, reload: reloadPoList } = usePOList({});
 
   const [poStatusFilter, setPoStatusFilter] = useState('');
   const [poMfgFilter, setPoMfgFilter] = useState('');
   const [poTypeFilter, setPoTypeFilter] = useState('');
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const location = useLocation();
-  // R1-1: 사이드바 "발주/결제" 클릭 시 상세에서 목록으로 복귀
+  // R1-1: 사이드바 "발주/결제" 클릭 시 슬라이드 패널 닫기
   useEffect(() => { setSelectedPO(null); }, [location.key]);
   const [poFormOpen, setPoFormOpen] = useState(false);
   const poFilters: Record<string, string> = {};
@@ -50,6 +57,7 @@ export default function ProcurementPage() {
   const [lcBankFilter, setLcBankFilter] = useState('');
   const [lcFormOpen, setLcFormOpen] = useState(false);
   const [editLC, setEditLC] = useState<LCRecord | null>(null);
+  const [newLcDefaultPoId, setNewLcDefaultPoId] = useState<string | undefined>(undefined);
   const lcFilters: Record<string, string> = {};
   if (lcStatusFilter) lcFilters.status = lcStatusFilter;
   if (lcBankFilter) lcFilters.bank_id = lcBankFilter;
@@ -64,6 +72,19 @@ export default function ProcurementPage() {
   if (ttPoFilter) ttFilters.po_id = ttPoFilter;
   const { data: tts, loading: ttLoading, reload: reloadTT } = useTTList(ttFilters);
 
+  // BL 탭
+  const [blTypeFilter, setBlTypeFilter] = useState('');
+  const [blStatusFilter, setBlStatusFilter] = useState('');
+  const [selectedBL, setSelectedBL] = useState<string | null>(null);
+  const [blFormOpen, setBlFormOpen] = useState(false);
+  const [blFormPresetPOId, setBlFormPresetPOId] = useState<string | null>(null);
+  const [blFormPresetLCId, setBlFormPresetLCId] = useState<string | null>(null);
+  const [blsVersion, setBlsVersion] = useState(0); // LCListTable BL 목록 재조회 트리거
+  const blFilters: { inbound_type?: string; status?: string } = {};
+  if (blTypeFilter) blFilters.inbound_type = blTypeFilter;
+  if (blStatusFilter) blFilters.status = blStatusFilter;
+  const { data: bls, loading: blLoading, reload: reloadBL } = useBLList(blFilters);
+
   const [phMfgFilter, setPhMfgFilter] = useState('');
   const [phFormOpen, setPhFormOpen] = useState(false);
   const [editPH, setEditPH] = useState<PriceHistory | null>(null);
@@ -71,6 +92,35 @@ export default function ProcurementPage() {
   const [backfilling, setBackfilling] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ created: number; skipped: number; failed: number } | null>(null);
   const [autoCompletedMsg, setAutoCompletedMsg] = useState<string | null>(null);
+
+  // 우측 슬라이드 패널 — 드래그 리사이즈
+  const [panelWidth, setPanelWidth] = useState(900);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  function onDragHandleMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = panelWidth;
+    function onMove(ev: MouseEvent) {
+      const delta = startX - ev.clientX;
+      setPanelWidth(Math.max(520, Math.min(window.innerWidth - 60, startW + delta)));
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
+  // ESC 키로 패널 닫기
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && selectedPO) { setSelectedPO(null); reloadPO(); reloadPoList(); }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedPO]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers')
@@ -81,21 +131,11 @@ export default function ProcurementPage() {
     if (selectedCompanyId) {
       fetchWithAuth<Bank[]>(`/api/v1/banks?company_id=${selectedCompanyId}`)
         .then((list) => setBanks(list.filter((b) => b.is_active))).catch(() => {});
-      fetchWithAuth<PurchaseOrder[]>(`/api/v1/pos?company_id=${selectedCompanyId}`)
-        .then(setPoList).catch(() => {});
     }
   }, [selectedCompanyId]);
 
   if (!selectedCompanyId) {
     return <div className="flex items-center justify-center p-12"><p className="text-muted-foreground">좌측 상단에서 법인을 선택해주세요</p></div>;
-  }
-
-  if (selectedPO) {
-    return (
-      <div className="p-6">
-        <PODetailView po={selectedPO} onBack={() => { setSelectedPO(null); reloadPO(); }} onReload={reloadPO} allPos={pos} />
-      </div>
-    );
   }
 
   const handleCreatePO = async (d: Record<string, unknown>) => {
@@ -172,10 +212,61 @@ export default function ProcurementPage() {
       }
     } finally {
       reloadPO();
+      reloadPoList(); // 계약금 현황 갱신 (결제조건 변경 반영)
     }
   };
+  const handleDeletePO = async (poId: string) => {
+    const [linkedBls, linkedLcs] = await Promise.all([
+      fetchWithAuth<{ bl_id: string }[]>(`/api/v1/bls?po_id=${poId}`).catch(() => []),
+      fetchWithAuth<{ lc_id: string }[]>(`/api/v1/lcs?po_id=${poId}`).catch(() => []),
+    ]);
+    if (Array.isArray(linkedBls) && linkedBls.length > 0)
+      throw new Error(`B/L 입고 ${linkedBls.length}건이 연결되어 있습니다. 먼저 입고 탭에서 삭제해 주세요.`);
+    if (Array.isArray(linkedLcs) && linkedLcs.length > 0)
+      throw new Error(`LC ${linkedLcs.length}건이 연결되어 있습니다. 먼저 PO를 펼쳐 LC를 삭제해 주세요.`);
+    await fetchWithAuth(`/api/v1/pos/${poId}`, { method: 'DELETE' });
+    reloadPO();
+    reloadTT(); // T/T도 cascade 삭제되므로 목록 갱신
+    reloadPoList(); // DepositStatusPanel용 전체 PO 목록 재동기화
+  };
+  const handleCreateBL = async (formData: Record<string, unknown>) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { lines, bl_id: existingId, ...blData } = formData as any;
+    let blId: string;
+    if (existingId) {
+      await fetchWithAuth(`/api/v1/bls/${existingId}`, { method: 'PUT', body: JSON.stringify(blData) });
+      blId = existingId;
+    } else {
+      const created = await fetchWithAuth<{ bl_id: string }>('/api/v1/bls', { method: 'POST', body: JSON.stringify(blData) });
+      blId = created.bl_id;
+    }
+    if (!existingId && Array.isArray(lines) && lines.length > 0) {
+      for (const line of lines) {
+        await fetchWithAuth(`/api/v1/bls/${blId}/lines`, { method: 'POST', body: JSON.stringify({ ...line, bl_id: blId }) }).catch(() => {});
+      }
+    }
+    reloadBL();
+    setBlsVersion(v => v + 1); // LC 탭의 BL 드릴다운 목록 재조회 트리거
+  };
+
+  // LC 탭 드릴다운에서 "입고 등록" 클릭 시
+  const handleNewBLFromLC = (lc: LCRecord) => {
+    setBlFormPresetPOId(lc.po_id);
+    setBlFormPresetLCId(lc.lc_id);
+    setBlFormOpen(true);
+  };
+  const handleDeleteBL = async (blId: string) => {
+    await fetchWithAuth(`/api/v1/bls/${blId}`, { method: 'DELETE' });
+    reloadBL();
+  };
+
   const handleCreateLC = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/lcs', { method: 'POST', body: JSON.stringify(d) }); reloadLC(); };
   const handleUpdateLC = async (d: Record<string, unknown>) => { if (!editLC) return; await fetchWithAuth(`/api/v1/lcs/${editLC.lc_id}`, { method: 'PUT', body: JSON.stringify(d) }); setEditLC(null); reloadLC(); };
+  const handleSettleLC = async (lc: import('@/types/procurement').LCRecord) => {
+    const today = new Date().toISOString().slice(0, 10);
+    await fetchWithAuth(`/api/v1/lcs/${lc.lc_id}`, { method: 'PUT', body: JSON.stringify({ repaid: true, repayment_date: today, status: 'settled' }) });
+    reloadLC();
+  };
   const handleDeleteLC = async (lcId: string) => {
     const linkedBls = await fetchWithAuth<{ bl_id: string }[]>(`/api/v1/bls?lc_id=${lcId}`).catch(() => []);
     if (Array.isArray(linkedBls) && linkedBls.length > 0) throw new Error(`이 LC에 연결된 입고(B/L)가 ${linkedBls.length}건 있어 삭제할 수 없습니다.`);
@@ -184,6 +275,7 @@ export default function ProcurementPage() {
   };
   const handleCreateTT = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/tts', { method: 'POST', body: JSON.stringify(d) }); reloadTT(); };
   const handleUpdateTT = async (d: Record<string, unknown>) => { if (!editTT) return; await fetchWithAuth(`/api/v1/tts/${editTT.tt_id}`, { method: 'PUT', body: JSON.stringify(d) }); setEditTT(null); reloadTT(); };
+  const handleDeleteTT = async (ttId: string) => { await fetchWithAuth(`/api/v1/tts/${ttId}`, { method: 'DELETE' }); reloadTT(); };
   const handleCreatePH = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/price-histories', { method: 'POST', body: JSON.stringify(d) }); reloadPH(); };
   const handleUpdatePH = async (d: Record<string, unknown>) => { if (!editPH) return; await fetchWithAuth(`/api/v1/price-histories/${editPH.price_history_id}`, { method: 'PUT', body: JSON.stringify(d) }); setEditPH(null); reloadPH(); };
 
@@ -288,11 +380,21 @@ export default function ProcurementPage() {
         </div>
       )}
 
+      {/* BL 상세 — 탭 바깥에서 전체 화면으로 표시 */}
+      {selectedBL && (
+        <div className="fixed inset-0 z-50 bg-background overflow-auto">
+          <div className="p-6">
+            <BLDetailView blId={selectedBL} onBack={() => { setSelectedBL(null); reloadBL(); }} />
+          </div>
+        </div>
+      )}
+
       <Tabs defaultValue="po">
         <TabsList>
           <TabsTrigger value="po">PO</TabsTrigger>
           <TabsTrigger value="tt">계약금</TabsTrigger>
           <TabsTrigger value="lc">LC</TabsTrigger>
+          <TabsTrigger value="bl">B/L</TabsTrigger>
           <TabsTrigger value="price">단가이력</TabsTrigger>
         </TabsList>
 
@@ -304,7 +406,21 @@ export default function ProcurementPage() {
             <div className="flex-1" />
             <Button size="sm" onClick={() => setPoFormOpen(true)}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
           </div>
-          {poLoading ? <LoadingSpinner /> : <POListTable items={pos.map(p => ({ ...p, manufacturer_name: p.manufacturer_name ?? manufacturers.find(m => m.manufacturer_id === p.manufacturer_id)?.name_kr ?? '—' }))} onSelect={setSelectedPO} onNew={() => setPoFormOpen(true)} />}
+          {poLoading ? <LoadingSpinner /> : (
+            <POListTable
+              items={pos.map(p => {
+                const mfg = manufacturers.find(m => m.manufacturer_id === p.manufacturer_id);
+                return { ...p, manufacturer_name: mfg?.short_name ?? mfg?.name_kr ?? p.manufacturer_name ?? '—' };
+              })}
+              onDetail={setSelectedPO}
+              onNew={() => setPoFormOpen(true)}
+              onEditLC={(lc) => { setEditLC(lc); setLcFormOpen(true); }}
+              onNewLC={(po) => { setEditLC(null); setNewLcDefaultPoId(po.po_id); setLcFormOpen(true); }}
+              onDelete={handleDeletePO}
+              onDeleteLC={handleDeleteLC}
+              onSelectBL={setSelectedBL}
+            />
+          )}
           <POForm open={poFormOpen} onOpenChange={setPoFormOpen} onSubmit={handleCreatePO} />
         </TabsContent>
 
@@ -315,8 +431,18 @@ export default function ProcurementPage() {
             <div className="flex-1" />
             <Button size="sm" onClick={() => { setEditLC(null); setLcFormOpen(true); }}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
           </div>
-          {lcLoading ? <LoadingSpinner /> : <LCListTable items={lcs} onEdit={(lc) => { setEditLC(lc); setLcFormOpen(true); }} onNew={() => { setEditLC(null); setLcFormOpen(true); }} onDelete={handleDeleteLC} />}
-          <LCForm open={lcFormOpen} onOpenChange={setLcFormOpen} onSubmit={editLC ? handleUpdateLC : handleCreateLC} editData={editLC} />
+          {lcLoading ? <LoadingSpinner /> : (
+            <LCListTable
+              items={lcs}
+              onEdit={(lc) => { setEditLC(lc); setLcFormOpen(true); }}
+              onNew={() => { setEditLC(null); setLcFormOpen(true); }}
+              onDelete={handleDeleteLC}
+              onSettle={handleSettleLC}
+              onSelectBL={setSelectedBL}
+              onNewBL={handleNewBLFromLC}
+              blsVersion={blsVersion}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="tt" className="space-y-5">
@@ -327,6 +453,7 @@ export default function ProcurementPage() {
               pos={poList}
               tts={tts}
               onPaymentCreated={() => reloadTT()}
+              onEditTT={(tt) => { setEditTT(tt); setTtFormOpen(true); }}
             />
           </div>
 
@@ -339,9 +466,43 @@ export default function ProcurementPage() {
               <Select value={ttPoFilter || 'all'} onValueChange={(v) => setTtPoFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-36 text-xs"><FT text={ttPoLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 PO</SelectItem>{poList.map((p) => <SelectItem key={p.po_id} value={p.po_id}>{p.po_number || p.po_id.slice(0, 8)}</SelectItem>)}</SelectContent></Select>
               <Button size="sm" onClick={() => { setEditTT(null); setTtFormOpen(true); }}><Plus className="mr-1 h-4 w-4" />수동 등록</Button>
             </div>
-            {ttLoading ? <LoadingSpinner /> : <TTListTable items={tts} onEdit={(tt) => { setEditTT(tt); setTtFormOpen(true); }} onNew={() => { setEditTT(null); setTtFormOpen(true); }} />}
+            {ttLoading ? <LoadingSpinner /> : <TTListTable items={tts} onEdit={(tt) => { setEditTT(tt); setTtFormOpen(true); }} onNew={() => { setEditTT(null); setTtFormOpen(true); }} onDelete={handleDeleteTT} />}
             <TTForm open={ttFormOpen} onOpenChange={setTtFormOpen} onSubmit={editTT ? handleUpdateTT : handleCreateTT} editData={editTT} />
           </div>
+        </TabsContent>
+
+        <TabsContent value="bl" className="space-y-3">
+          <div className="flex items-center gap-2 mb-3">
+            <Select value={blTypeFilter || 'all'} onValueChange={(v) => setBlTypeFilter(v === 'all' ? '' : (v ?? ''))}>
+              <SelectTrigger className="h-8 w-36 text-xs"><FT text={blTypeFilter ? (INBOUND_TYPE_LABEL[blTypeFilter as InboundType] ?? blTypeFilter) : '입고 구분'} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">입고 구분 (전체)</SelectItem>
+                {(Object.entries(INBOUND_TYPE_LABEL) as [InboundType, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={blStatusFilter || 'all'} onValueChange={(v) => setBlStatusFilter(v === 'all' ? '' : (v ?? ''))}>
+              <SelectTrigger className="h-8 w-28 text-xs"><FT text={blStatusFilter ? (BL_STATUS_LABEL[blStatusFilter as BLStatus] ?? blStatusFilter) : '전체 현황'} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 현황</SelectItem>
+                {(Object.entries(BL_STATUS_LABEL) as [BLStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <div className="flex-1" />
+            <Button size="sm" onClick={() => setBlFormOpen(true)}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
+          </div>
+          {blLoading ? <LoadingSpinner /> : (
+            <BLListTable items={bls} onSelect={(bl) => setSelectedBL(bl.bl_id)} onNew={() => setBlFormOpen(true)} onDelete={handleDeleteBL} />
+          )}
+          <BLForm
+            open={blFormOpen}
+            onOpenChange={(o) => {
+              setBlFormOpen(o);
+              if (!o) { setBlFormPresetPOId(null); setBlFormPresetLCId(null); }
+            }}
+            onSubmit={handleCreateBL}
+            presetPOId={blFormPresetPOId}
+            presetLCId={blFormPresetLCId}
+          />
         </TabsContent>
 
         <TabsContent value="price" className="space-y-3">
@@ -372,6 +533,88 @@ export default function ProcurementPage() {
           <PriceHistoryForm open={phFormOpen} onOpenChange={setPhFormOpen} onSubmit={editPH ? handleUpdatePH : handleCreatePH} editData={editPH} />
         </TabsContent>
       </Tabs>
+
+      {/* LCForm — 탭 바깥에 배치해야 PO 탭의 "L/C 추가" 버튼에서도 열림 */}
+      <LCForm open={lcFormOpen} onOpenChange={(o) => { setLcFormOpen(o); if (!o) setNewLcDefaultPoId(undefined); }} onSubmit={editLC ? handleUpdateLC : handleCreateLC} editData={editLC} defaultPoId={editLC ? undefined : newLcDefaultPoId} />
+
+      {/* 딤 오버레이 — 클릭하면 패널 닫기 */}
+      {selectedPO && (
+        <div
+          className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px] transition-opacity"
+          onClick={() => { setSelectedPO(null); reloadPO(); reloadPoList(); }}
+        />
+      )}
+
+      {/* PO 우측 슬라이드 패널 — 왼쪽 드래그 핸들로 폭 조절 */}
+      <div
+        ref={panelRef}
+        className={[
+          'fixed inset-y-0 right-0 z-50 flex flex-col bg-background border-l shadow-2xl',
+          'transition-transform duration-200 ease-out',
+          selectedPO ? 'translate-x-0' : 'translate-x-full',
+        ].join(' ')}
+        style={{ width: panelWidth }}
+      >
+        {/* 왼쪽 드래그 핸들 */}
+        <div
+          className="absolute left-0 top-0 h-full w-2 cursor-ew-resize z-10 group select-none"
+          onMouseDown={onDragHandleMouseDown}
+          title="드래그하여 패널 너비 조절"
+        >
+          <div className="h-full w-full transition-colors group-hover:bg-primary/20 group-active:bg-primary/30" />
+          {/* 가운데 그립 점 */}
+          <div className="absolute top-1/2 left-0 -translate-y-1/2 flex flex-col gap-1 items-center w-2">
+            {[0,1,2].map(i => (
+              <div key={i} className="w-0.5 h-3 rounded-full bg-border group-hover:bg-primary/40" />
+            ))}
+          </div>
+        </div>
+
+        {/* 상단 헤더 — 너비 표시 + 닫기 버튼 */}
+        <div className="flex items-center justify-between border-b px-6 py-2.5 shrink-0 bg-muted/30">
+          <span className="text-[10px] text-muted-foreground tabular-nums">
+            {Math.round(panelWidth)}px
+          </span>
+          <div className="flex items-center gap-1">
+            {/* 너비 프리셋 버튼 */}
+            {[600, 800, 1000, 1200].map(w => (
+              <button
+                key={w}
+                onClick={() => setPanelWidth(w)}
+                className={[
+                  'rounded px-1.5 py-0.5 text-[10px] transition-colors',
+                  Math.abs(panelWidth - w) < 50
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-muted text-muted-foreground',
+                ].join(' ')}
+              >
+                {w}px
+              </button>
+            ))}
+            <button
+              onClick={() => { setSelectedPO(null); reloadPO(); reloadPoList(); }}
+              className="ml-2 rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="닫기 (ESC)"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* 스크롤 가능한 콘텐츠 */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {selectedPO && (
+            <PODetailView
+              po={selectedPO}
+              onBack={() => { setSelectedPO(null); reloadPO(); reloadPoList(); }}
+              onReload={() => { reloadPO(); reloadPoList(); }}
+              allPos={pos}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

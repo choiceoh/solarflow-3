@@ -154,6 +154,12 @@ export function useAlerts(companyId: string | null) {
     }).length;
     if (deliverySoon > 0) items.push({ id: String(++id), type: 'delivery_soon', severity: 'info', icon: 'Truck', title: '출고 예정', description: `납기 7일 이내 미출고 ${deliverySoon}건`, count: deliverySoon, link: '/orders' });
 
+    // 10: 현장 미등록 수주 (진행 중인 수주에 site_id가 없는 경우)
+    const noSite = orderData.filter((o) =>
+      (o.status === 'received' || o.status === 'partial') && !o.site_id
+    ).length;
+    if (noSite > 0) items.push({ id: String(++id), type: 'no_site', severity: 'warning', icon: 'MapPin', title: '현장 미등록 수주', description: `현장 미입력 진행중 수주 ${noSite}건`, count: noSite, link: '/orders' });
+
     // severity 순 정렬
     const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
     items.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);

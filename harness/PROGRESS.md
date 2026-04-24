@@ -1,36 +1,156 @@
 # SolarFlow 진행 상황
 
-## 현재 상태 요약 (최종 업데이트: 2026-04-05)
+## 현재 상태 요약 (최종 업데이트: 2026-04-16)
 
 | 항목 | 상태 |
 |------|------|
-| 현재 Phase | **Phase 4 완료 + Mac mini 로컬 완전 이전 완료** |
-| 다음 작업 | 실데이터 이관 + 기능 검증 |
+| 현재 Phase | **실데이터 이관 + UI 기능 개선 진행 중** |
+| 다음 작업 | 라이젠에너지 T/T 데이터 검증 + PODetailView 서브테이블 개선 |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
-| DB 테이블 | 22개 생성 완료 (user_profiles, notes 포함) |
 | Go 테스트 | 116개 PASS |
 | Rust 테스트 | 75개 PASS |
-| 총 테스트 | 191개 PASS |
-| Rust API | 15개 엔드포인트 |
-| Go CalcProxy | 15개 엔드포인트 (프론트→Go→Rust) |
-| 인증 | ES256 JWKS + HMAC 폴백 (D-069) + auto-provision (D-077) |
-| RLS | 전체 비활성화 (D-070) |
-| 대시보드 로딩 | 6초 → 2초 (companies 중복제거 + API 병렬화) |
-| 감리 점수 | Phase 2: 9-10/10, Phase 3: 전부 10/10 |
 | DECISIONS | D-001~D-079 (79개) |
-| launchd | 5개 서비스 자동 시작 — 재부팅 테스트 성공 |
+| launchd | 5개 서비스 자동 시작 |
 
-### Phase 확장 미해결 사항
-1. 수금매칭 outbound 기준 → 현재 정상 동작 (D-042)
-2. LC 수수료 수동 보정 기능 (D-030)
-3. 제조사/거래처 별칭 DB 테이블 이동 (D-043)
-4. FIFO 원가 매칭 (D-022, D-031)
-5. 실시간 환율 API (D-024)
-6. PDF 자동 데이터 입력 (D-064)
-7. 아마란스 매출마감 내보내기 (D-067)
-8. 아마란스 관리구분 매핑 (D-068)
+---
+
+## 2026-04-16 세션 완료 작업 (2차 — 가용재고↔수주 연동)
+
+### 가용재고 배정 → 수주 자동 연동 (배정예정 → 수주 pre-fill + alloc 연결)
+
+#### `frontend/src/pages/InventoryPage.tsx`
+- `handleConfirmAlloc`: status 변경 제거, URL 파라미터로 수주 폼 pre-fill 데이터 전달
+  - `alloc_id`, `product_id`, `quantity`, `customer`, `mgmt_cat`, `site`, `order_no` URL 파라미터 생성
+  - notes 필드에서 `[발주번호:X]` 태그 파싱 → `order_no` 파라미터
+  - `window.location.href`로 Orders 페이지 이동 (전체 리로드)
+- `productMap`에 `manufacturer_name` 추가 → 배정 현황 테이블에 **제조사** 열 표시
+- `useLocation` import + `location.key` → fetchAllocations useEffect 의존성 추가 (탭 이동 후 자동 갱신)
+
+#### `frontend/src/components/inventory/AllocationForm.tsx`
+- **스크롤 불가 수정**: DialogContent에 `flex flex-col max-h-[90vh] p-0 gap-0` 적용
+  - DialogHeader: `shrink-0` (고정 헤더)
+  - 폼 영역: `flex-1 overflow-y-auto px-6 py-4` (중간만 스크롤)
+  - DialogFooter: `shrink-0 border-t` (고정 푸터)
+- **고객 발주번호 입력란 추가** (purpose==='sale' 시만 표시)
+  - `customerOrderNo` state
+  - 저장 시 notes 앞에 `[발주번호:X]` 태그 prefix
+  - 수정(edit) 모드: notes에서 파싱하여 자동 채우기
+
+#### `frontend/src/components/orders/OrderForm.tsx`
+- `OrderPrefillData` interface export (product_id, quantity, management_category, fulfillment_source, customer_hint, site_name, order_number)
+- `prefillData?: OrderPrefillData | null` prop 추가
+- 파란 배너: "📦 가용재고 배정에서 자동 입력" (prefill 시 표시)
+- **거래처 자동 매칭 useEffect**: customer_hint(이름) → partners 목록에서 partner_id 역조회 → setValue
+
+#### `frontend/src/pages/OrdersPage.tsx`
+- URL 파라미터 읽기 useEffect (`?new=1&alloc_id=...&...`) — 빈 deps `[]`
+- `pendingAllocId`, `orderFormPrefill` state 추가
+- `handleCreateOrder`: 수주 생성 후 alloc에 `order_id` + `status: 'confirmed'` PUT 자동 연결
+- OrderForm에 `prefillData` prop 전달
+
+#### DB 수정 (PostgreSQL)
+- `products` 테이블: `wattage_kw > 1.0` 레코드 `spec_wp / 1000`으로 일괄 수정
+  - M-RS0635-01: `wattage_kw 635.000 → 0.635` (635Wp × 1000개 = 635kW 정상)
+
+---
+
+## 2026-04-16 세션 완료 작업 (1차)
+
+### Rust 엔진
+- **무상스페어 공제 SQL 수정** (`engine/src/calc/inventory.rs`)
+  - `fetch_alloc_stock` / `fetch_alloc_incoming` — `status IN ('pending')` 조건에 `notes LIKE '[무상스페어]%'` 조건 추가
+  - JKM640N 무상스페어 3200kW 정상 공제 확인
+
+### 프론트엔드 — UI 대규모 개선
+
+#### PO 발주/결제 페이지 (`ProcurementPage.tsx`)
+- **우측 슬라이드 패널** 구현 (Sheet 컴포넌트 → 커스텀 드래그 패널로 교체)
+  - 왼쪽 드래그 핸들: 패널 폭 520px~화면전체 자유 조절
+  - 프리셋 버튼: 600px / 800px / 1000px / 1200px 원클릭
+  - 헤더에 현재 폭(px) 실시간 표시
+  - 닫기: × 버튼 / ESC 키 / 뒤 오버레이 클릭
+  - 기본 폭: 900px (세션 내 유지)
+
+#### POListTable (`components/procurement/POListTable.tsx`) — 전면 재작성
+- **메인 행**: 품목/MW / 계약조건 / 계약금액+결제 / **L/C 현황(신규)** 칼럼 분리
+  - L/C 칼럼: 개설금액 + 미니바 % + **개설MW** + **미개설MW** 표시
+- **펼침 영역** 3개 섹션 추가:
+  1. **MW 3단계 진행률 바**: 계약 → L/C 개설 → 입고완료 (가로 막대)
+  2. **L/C 현황 미니 테이블**: LC번호/은행/금액/MW/만기일/상태/수정✎/합계행 + `+ L/C 추가` 버튼
+  3. **입고 현황 미니 테이블**: B/L번호/ETD/ETA/상태 + 입고완료MW 합계행 + `+ 입고 등록` 버튼
+- **Lazy-load**: 행 펼칠 때만 BL API 호출 (초기 로드 속도 유지)
+- Props: `onEditLC`, `onNewLC` 추가 → ProcurementPage에서 LCForm 직접 오픈
+
+#### DepositStatusPanel (`components/procurement/DepositStatusPanel.tsx`) — 전면 재작성
+- PO 체인 탐색 (`buildChain()`) — parent_po_id 역추적, 사이클 감지
+- `supersededIds`: parent로 참조된 PO는 별도 행 표시 안 함
+- **행 클릭 동작 분기**:
+  - 미납부 행 클릭 → 지급 등록 폼 즉시 오픈 (파란 hover + `+` 아이콘)
+  - 납부완료 행 클릭 → T/T 이력 펼침/접힘
+- TTSection / TTRow / ProgressBar 내부 컴포넌트화
+- `onEditTT` prop으로 T/T 수정 폼 연결
+
+#### TTListTable (`components/procurement/TTListTable.tsx`)
+- **PO번호/제조사 미표시 버그 수정** → `useProcurement.ts`에서 `purchase_orders` nested 응답 flatten
+- 행 전체 클릭 → 수정 (cursor-pointer + hover 강조)
+- 연필 아이콘 hover 시 진해지는 효과
+
+#### TTForm (`components/procurement/TTForm.tsx`)
+- **환율 입력 → 원화 자동 계산**: `amount_usd × exchange_rate` = `amount_krw`
+- USD 금액 변경 시에도 환율 있으면 자동 재계산
+- 환율 필드: 예시 "예: 1,380.50", `(원/USD)` 단위 표기
+- "환율 자동 계산" 파란 텍스트 힌트
+
+#### PODetailView (`components/procurement/PODetailView.tsx`)
+- **capacity_kw × quantity 이중계산 버그 수정** — `capacity_kw`는 라인 전체 kW이므로 quantity 곱셈 제거
+
+#### 기타 테이블 5컬럼 그룹화 (이전 세션)
+- `LCListTable`: 16컬럼 → 5컬럼 그룹화
+- `BLListTable`: 13컬럼 → 5컬럼 그룹화
+- `OrderListTable`: 14컬럼 → 5컬럼 그룹화
+
+---
+
+## 미완료 / 다음 작업 후보
+
+### 즉시 처리 권장
+1. **PODetailView 서브테이블 개선** — LCSubTable, TTSubTable 구형 Table 컴포넌트 → 그룹화 스타일
+2. **LCForm defaultPoId 연결** — PO탭 `+ L/C 추가` 클릭 시 해당 PO 자동 선택 안 됨
+3. **B/L별 개별 MW 표시** — 입고 현황 미니 테이블에서 BL별 MW가 "—"로 표시됨 (전체 합계만 있음)
+
+### 중기 작업
+4. 라이젠에너지 T/T 데이터 사용자 직접 입력 후 DepositStatusPanel 검증
+5. 전체 UI 색상/아이콘 개선 (사용자 요청: 단조로운 디자인 개선, 밤/낮 배경색 등)
+6. PODetailView 종합정보 LC 개설 38.82 MW 표시 정확성 확인 (실제 데이터 2개 LC 합계)
+
+### Phase 확장 미해결 (장기)
+- LC 수수료 수동 보정 (D-030)
+- FIFO 원가 매칭 (D-022, D-031)
+- 실시간 환율 API (D-024)
+- PDF 자동 데이터 입력 (D-064)
+- 아마란스 매출마감 내보내기 (D-067)
+
+---
+
+## 서비스 재시작 명령어 (자주 쓰는 것)
+
+```bash
+# Go 백엔드 수정 후 (반드시 이 순서)
+cd ~/solarflow-3/backend && go build -o solarflow-go .
+codesign -f -s - solarflow-go
+launchctl bootout gui/501 ~/Library/LaunchAgents/com.solarflow.go.plist 2>/dev/null || true
+launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.solarflow.go.plist
+
+# Rust 엔진 수정 후
+cd ~/solarflow-3/engine && cargo build --release
+codesign -f -s - target/release/solarflow-engine
+launchctl stop com.solarflow.engine && launchctl start com.solarflow.engine
+
+# 프론트엔드 빌드 (Caddy 서빙용)
+cd ~/solarflow-3/frontend && npm run build
+```
 
 ### Rust API 엔드포인트 (15개)
 - /health, /health/ready

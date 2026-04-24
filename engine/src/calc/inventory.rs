@@ -71,6 +71,9 @@ pub async fn calculate_inventory(
     let outbound = fetch_outbound(pool, company_id, product_id, manufacturer_id).await?;
     let reserved = fetch_reserved(pool, company_id, product_id, manufacturer_id).await?;
     let allocated = fetch_allocated(pool, company_id, product_id, manufacturer_id).await?;
+    // inventory_allocations 테이블 (가용재고 사용 예약) — orders 외 별도 예약
+    let alloc_stock = fetch_alloc_stock(pool, company_id, product_id, manufacturer_id).await?;
+    let alloc_incoming = fetch_alloc_incoming(pool, company_id, product_id, manufacturer_id).await?;
     let bl_incoming = fetch_bl_incoming(pool, company_id, product_id, manufacturer_id).await?;
     let lc_incoming = fetch_lc_incoming(pool, company_id, product_id, manufacturer_id).await?;
     let incoming_reserved =
@@ -92,16 +95,21 @@ pub async fn calculate_inventory(
         let outbound_kw = *outbound.get(&pid).unwrap_or(&0.0);
         let reserved_kw = *reserved.get(&pid).unwrap_or(&0.0);
         let allocated_kw = *allocated.get(&pid).unwrap_or(&0.0);
+        // inventory_allocations: 현재고 예약 + 미착품 예약
+        let alloc_stock_kw    = *alloc_stock.get(&pid).unwrap_or(&0.0);
+        let alloc_incoming_kw = *alloc_incoming.get(&pid).unwrap_or(&0.0);
         let bl_incoming_kw = *bl_incoming.get(&pid).unwrap_or(&0.0);
         let lc_incoming_kw = *lc_incoming.get(&pid).unwrap_or(&0.0);
         let incoming_reserved_kw = *incoming_reserved.get(&pid).unwrap_or(&0.0);
 
         // 8단계 계산 (D-083: BL 상태 직접 사용)
         let physical_kw = inbound_kw - outbound_kw;
-        let available_kw = physical_kw - reserved_kw - allocated_kw;
+        // 가용 = 물리 - orders예약 - orders배정 - inventory_allocations현재고예약
+        let available_kw = (physical_kw - reserved_kw - allocated_kw - alloc_stock_kw).max(0.0);
         // 미착품 = BL 운송 중 + L/C 오픈 완료(BL 미생성) 물량
         let incoming_kw = (bl_incoming_kw + lc_incoming_kw).max(0.0);
-        let available_incoming_kw = (incoming_kw - incoming_reserved_kw).max(0.0);
+        // 가용미착품 = 미착품 - orders미착예약 - inventory_allocations미착예약
+        let available_incoming_kw = (incoming_kw - incoming_reserved_kw - alloc_incoming_kw).max(0.0);
         let total_secured_kw = available_kw + available_incoming_kw;
 
         // 장기재고 판별
@@ -129,7 +137,8 @@ pub async fn calculate_inventory(
             module_height_mm: p.module_height_mm,
             physical_kw,
             reserved_kw,
-            allocated_kw,
+            // allocated_kw = orders 배정 + inventory_allocations 현재고 예약 합산
+            allocated_kw: allocated_kw + alloc_stock_kw,
             available_kw,
             incoming_kw,
             incoming_reserved_kw,
@@ -184,11 +193,24 @@ async fn fetch_products(
         WHERE p.is_active = true
           AND ($1::uuid IS NULL OR p.product_id = $1)
           AND ($2::uuid IS NULL OR p.manufacturer_id = $2)
-          AND EXISTS (
-            SELECT 1 FROM bl_line_items bli
-            JOIN bl_shipments bl ON bli.bl_id = bl.bl_id
-            WHERE bli.product_id = p.product_id
-              AND bl.company_id = $3
+          AND (
+            -- BL 기반 품목 (물리 재고 또는 운송 중)
+            EXISTS (
+              SELECT 1 FROM bl_line_items bli
+              JOIN bl_shipments bl ON bli.bl_id = bl.bl_id
+              WHERE bli.product_id = p.product_id
+                AND bl.company_id = $3
+            )
+            OR
+            -- LC 기반 품목 (BL 없이 L/C만 개설된 미착품)
+            EXISTS (
+              SELECT 1 FROM lc_records lc
+              JOIN purchase_orders po ON lc.po_id = po.po_id
+              JOIN po_line_items pli ON po.po_id = pli.po_id
+              WHERE pli.product_id = p.product_id
+                AND lc.company_id = $3
+                AND lc.status = 'opened'
+            )
           )
         "#,
     )
@@ -307,6 +329,85 @@ async fn fetch_allocated(
           AND ($2::uuid IS NULL OR ord.product_id = $2)
           AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
         GROUP BY ord.product_id
+        "#,
+    )
+    .bind(company_id)
+    .bind(product_id)
+    .bind(manufacturer_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(kw_rows_to_map(rows))
+}
+
+/// 3-b. inventory_allocations 현재고 예약 (source_type='stock', status='pending')
+/// 비유: 가용재고 사용 예약 데스크에서 현재고에 묶어둔 물량
+async fn fetch_alloc_stock(
+    pool: &PgPool,
+    company_id: Uuid,
+    product_id: Option<Uuid>,
+    manufacturer_id: Option<Uuid>,
+) -> Result<KwMap, sqlx::Error> {
+    let rows = sqlx::query_as::<_, KwRow>(
+        r#"
+        SELECT ia.product_id,
+          COALESCE(SUM(
+            CASE
+              WHEN ia.capacity_kw IS NOT NULL THEN ia.capacity_kw
+              ELSE ia.quantity::float8 * p.spec_wp::float8 / 1000.0
+            END
+          ), 0)::float8 AS kw
+        FROM inventory_allocations ia
+        JOIN products p ON ia.product_id = p.product_id
+        WHERE (
+                ia.status IN ('pending')
+                -- 무상스페어는 hold 상태여도 항상 차감 (공급 약속이므로)
+                OR (ia.notes LIKE '[무상스페어]%' AND ia.status NOT IN ('cancelled', 'confirmed'))
+              )
+          AND ia.source_type = 'stock'
+          AND ia.company_id = $1
+          AND ($2::uuid IS NULL OR ia.product_id = $2)
+          AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
+        GROUP BY ia.product_id
+        "#,
+    )
+    .bind(company_id)
+    .bind(product_id)
+    .bind(manufacturer_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(kw_rows_to_map(rows))
+}
+
+/// 3-c. inventory_allocations 미착품 예약 (source_type='incoming', status='pending')
+/// 비유: 미착품으로 묶어둔 물량 (가용미착품 차감)
+async fn fetch_alloc_incoming(
+    pool: &PgPool,
+    company_id: Uuid,
+    product_id: Option<Uuid>,
+    manufacturer_id: Option<Uuid>,
+) -> Result<KwMap, sqlx::Error> {
+    let rows = sqlx::query_as::<_, KwRow>(
+        r#"
+        SELECT ia.product_id,
+          COALESCE(SUM(
+            CASE
+              WHEN ia.capacity_kw IS NOT NULL THEN ia.capacity_kw
+              ELSE ia.quantity::float8 * p.spec_wp::float8 / 1000.0
+            END
+          ), 0)::float8 AS kw
+        FROM inventory_allocations ia
+        JOIN products p ON ia.product_id = p.product_id
+        WHERE (
+                ia.status = 'pending'
+                OR (ia.notes LIKE '[무상스페어]%' AND ia.status NOT IN ('cancelled', 'confirmed'))
+              )
+          AND ia.source_type = 'incoming'
+          AND ia.company_id = $1
+          AND ($2::uuid IS NULL OR ia.product_id = $2)
+          AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
+        GROUP BY ia.product_id
         "#,
     )
     .bind(company_id)

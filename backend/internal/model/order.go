@@ -45,6 +45,7 @@ type Order struct {
 	Quantity      int      `json:"quantity"`
 	CapacityKw    *float64 `json:"capacity_kw"`
 	UnitPriceWp   float64  `json:"unit_price_wp"`
+	SiteID        *string  `json:"site_id"`
 	SiteName      *string  `json:"site_name"`
 	SiteAddress   *string  `json:"site_address"`
 	SiteContact   *string  `json:"site_contact"`
@@ -73,6 +74,7 @@ type CreateOrderRequest struct {
 	Quantity      int      `json:"quantity"`
 	CapacityKw    *float64 `json:"capacity_kw"`
 	UnitPriceWp   float64  `json:"unit_price_wp"`
+	SiteID        *string  `json:"site_id,omitempty"`
 	SiteName      *string  `json:"site_name"`
 	SiteAddress   *string  `json:"site_address"`
 	SiteContact   *string  `json:"site_contact"`
@@ -149,6 +151,7 @@ type UpdateOrderRequest struct {
 	Quantity      *int     `json:"quantity,omitempty"`
 	CapacityKw    *float64 `json:"capacity_kw,omitempty"`
 	UnitPriceWp   *float64 `json:"unit_price_wp,omitempty"`
+	SiteID        *string  `json:"site_id,omitempty"`
 	SiteName      *string  `json:"site_name,omitempty"`
 	SiteAddress   *string  `json:"site_address,omitempty"`
 	SiteContact   *string  `json:"site_contact,omitempty"`

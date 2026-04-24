@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
 import { Calendar } from 'lucide-react';
 import { Input } from './input';
 import { cn } from '@/lib/utils';
@@ -42,11 +42,19 @@ export const DateInput = forwardRef<HTMLInputElement, Props>(function DateInput(
   ref,
 ) {
   const [text, setText] = useState(value ?? '');
+  const nativeRef = useRef<HTMLInputElement>(null);
 
   // value 외부 변경 시 text 동기화
   useEffect(() => { setText(value ?? ''); }, [value]);
 
   const nativeDateValue = /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
+
+  const openPicker = () => {
+    if (disabled) return;
+    const el = nativeRef.current;
+    if (!el) return;
+    try { el.showPicker?.(); } catch { el.click(); }
+  };
 
   return (
     <div className={cn('relative', className)}>
@@ -67,19 +75,23 @@ export const DateInput = forwardRef<HTMLInputElement, Props>(function DateInput(
         }}
         className="pr-10"
       />
-      {/* 달력 아이콘 (시각적) */}
-      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center pointer-events-none text-muted-foreground">
+      {/* 달력 아이콘 — 클릭 시 showPicker() 호출 */}
+      <button
+        type="button"
+        tabIndex={-1}
+        disabled={disabled}
+        onClick={openPicker}
+        aria-label="달력에서 날짜 선택"
+        className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      >
         <Calendar className="h-4 w-4" />
-      </div>
-      {/*
-        네이티브 date input을 아이콘 영역 위에 투명하게 겹쳐서
-        클릭 시 브라우저 기본 달력 팝업이 뜨도록 함.
-        texd input의 자유 타이핑은 pr-10 여백 밖에서 그대로 가능.
-      */}
+      </button>
+      {/* 숨겨진 네이티브 date input — showPicker() 타깃 */}
       <input
+        ref={nativeRef}
         type="date"
         tabIndex={-1}
-        aria-label="달력에서 날짜 선택"
+        aria-hidden="true"
         disabled={disabled}
         value={nativeDateValue}
         onChange={(e) => {
@@ -87,7 +99,7 @@ export const DateInput = forwardRef<HTMLInputElement, Props>(function DateInput(
           setText(v);
           onChange(v);
         }}
-        className="absolute right-0 top-0 h-full w-9 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+        className="absolute right-0 top-0 h-full w-0 opacity-0 pointer-events-none"
       />
     </div>
   );

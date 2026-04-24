@@ -1,40 +1,16 @@
 import { Outlet } from 'react-router-dom';
-import { useAppStore } from '@/stores/appStore';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
-import Sidebar from './Sidebar';
-import Header from './Header';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import TopNav from './TopNav';
+import FloatingMwEaCalculator from '@/components/common/FloatingMwEaCalculator';
 
 export default function AppLayout() {
-  const collapsed = useAppStore((s) => s.sidebarCollapsed);
-  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
-  const isMobile = useMediaQuery('(max-width: 768px)');
-
-  if (isMobile) {
-    return (
-      <div className="flex h-screen flex-col">
-        <Header />
-        <Sheet open={!collapsed} onOpenChange={() => toggleSidebar()}>
-          <SheetContent side="left" className="w-64 p-0">
-            <Sidebar />
-          </SheetContent>
-        </Sheet>
-        <main className="flex-1 overflow-auto">
-          <Outlet />
-        </main>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-auto">
-          <Outlet />
-        </main>
-      </div>
+    <div className="flex h-screen flex-col">
+      <TopNav />
+      <main className="flex-1 overflow-auto">
+        <Outlet />
+      </main>
+      {/* 전역 MW↔장수 계산기 (모든 보호 페이지에서 우하단 플로팅) */}
+      <FloatingMwEaCalculator />
     </div>
   );
 }
