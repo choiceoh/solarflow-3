@@ -615,7 +615,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
             item_type: (l.item_type ?? 'main') as 'main' | 'spare',
             payment_type: (l.payment_type ?? 'paid') as 'paid' | 'free',
             unit_price: l.unit_price_usd_wp != null
-              ? String(l.unit_price_usd_wp)
+              ? (d.inbound_type === 'import'
+                ? formatDecimalPlain(l.unit_price_usd_wp * 100, 2, 4)
+                : String(l.unit_price_usd_wp))
               : l.unit_price_krw_wp != null
               ? String(l.unit_price_krw_wp)
               : '',
