@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
-import { moduleLabel } from '@/lib/utils';
+import { moduleLabel, shortMfgName } from '@/lib/utils';
 import type { BLShipment, BLLineItem } from '@/types/inbound';
 import type { Company, Manufacturer, Product, Warehouse } from '@/types/masters';
 
@@ -196,6 +196,7 @@ interface POSummary {
   company_id: string;
   manufacturer_id: string;
   manufacturer_name?: string;
+  first_spec_wp?: number;       // purchase_orders_ext 뷰: 드롭다운 spec 표시용
   currency?: 'USD' | 'KRW';
   total_capacity_mw?: number;
   total_mw?: number;
@@ -205,13 +206,14 @@ interface POSummary {
   payment_terms?: string | null;
 }
 
-/** R1-9: PO 드롭다운 라벨 포맷 — "PO번호 | 제조사 | X.XMW | YYYY-MM" */
+/** R1-9: PO 드롭다운 라벨 포맷 — "진코 640W | PO번호 | X.XMW | YYYY-MM" */
 function formatPOLabel(po: POSummary | undefined, mfgs: Manufacturer[]): string {
   if (!po) return '';
   const mfgName = po.manufacturer_name ?? mfgs.find(m => m.manufacturer_id === po.manufacturer_id)?.name_kr ?? '—';
+  const specLabel = po.first_spec_wp ? ` ${po.first_spec_wp}W` : '';
   const mw = po.total_capacity_mw ?? po.total_mw ?? 0;
   const month = po.contract_date ? po.contract_date.slice(0, 7) : '';
-  return `${po.po_number} | ${mfgName} | ${mw.toFixed(1)}MW${month ? ` | ${month}` : ''}`;
+  return `${shortMfgName(mfgName)}${specLabel} | ${po.po_number} | ${mw.toFixed(1)}MW${month ? ` | ${month}` : ''}`;
 }
 interface POLineSummary {
   po_line_id?: string;
@@ -273,6 +275,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const [bafCaf, setBafCaf] = useState(false);
   const [deliveryDate, setDeliveryDate] = useState(''); // 만기일 계산용 (actual_arrival 미러)
   const [exchangeRateLive, setExchangeRateLive] = useState(''); // 환율 실시간 미러 (KRW 재계산용)
+  const [exchangeRateDisplay, setExchangeRateDisplay] = useState(''); // 환율 표시용 (천단위 콤마 포함)
   // D-085/D-087: PO 연결 — 드롭다운 + 자동 채움 + 잔여량
   const [poList, setPoList] = useState<POSummary[]>([]);
   const [selPOId, setSelPOId] = useState<string>('');
@@ -283,9 +286,11 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   // R3: LC 선택 (해외직수입만 필수) — D-095 BL>LC=차단
   const [lcList, setLcList] = useState<{ lc_id: string; lc_number?: string; po_id: string; amount_usd: number; target_qty?: number; target_mw?: number; status: string; bank_name?: string }[]>([]);
   const [lcShippedQty, setLcShippedQty] = useState<number>(0); // 선택 LC의 기존 BL 합산 입고수량
-  // F18: 신규 등록 시 예정(scheduled) vs 완료(completed) 선택
-  const [initialStatus, setInitialStatus] = useState<'scheduled' | 'completed'>('completed');
+  // F18: 신규 등록 시 항상 완료(completed)로 등록 — 항구 도착 후 등록이 원칙
+  const initialStatus: 'scheduled' | 'completed' = 'completed';
   const [selLCId, setSelLCId] = useState<string>('');
+  // 면장 CIF 원화금액 (부가세·무상분 과세 제외) — 입력값 표시용 (콤마 포함 문자열)
+  const [cifAmountKrwDisplay, setCifAmountKrwDisplay] = useState<string>('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, reset, setValue, getValues, watch, formState: { isSubmitting, isDirty } } = useForm<FormData>({
@@ -334,6 +339,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       .then(list => setPoList((list ?? []).filter(p => p.status !== 'completed')))
       .catch(() => setPoList([]));
   }, [open, editData]);
+
 
   /* R3: PO 선택 시 해당 PO의 LC 목록 로드 */
   useEffect(() => {
@@ -516,6 +522,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       setBafCaf(/BAF\s*\/\s*CAF/i.test(d.incoterms ?? ''));
       setDeliveryDate(d.actual_arrival?.slice(0, 10) ?? '');
       setExchangeRateLive(d.exchange_rate != null ? String(d.exchange_rate) : '');
+      setExchangeRateDisplay(d.exchange_rate != null ? d.exchange_rate.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+      setCifAmountKrwDisplay(d.cif_amount_krw != null ? d.cif_amount_krw.toLocaleString('ko-KR') : '');
       // 초기 스냅샷 — 변경사항 비교 기준
       const initImportPT = d.inbound_type === 'import' ? parseImportPT(d.payment_terms ?? '') : defaultImportPT();
       const initDomesticPT = d.inbound_type === 'domestic' ? parseDomesticPT(d.payment_terms ?? '') : defaultDomesticPT();
@@ -565,8 +573,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       const cid = globalCompanyId && globalCompanyId !== 'all' ? globalCompanyId : '';
       setSelType(''); setSelCompanyId(cid); setSelMfgId(''); setSelWhId('');
       setCounterpartId(''); setAutoNumber(''); setImportPT(defaultImportPT()); setDomesticPT(defaultDomesticPT());
-      setBafCaf(false); setDeliveryDate(''); setExchangeRateLive(''); setSelPOId('');
-      setAutofilled(false); setPoRemaining(null); setPoLineRows([]);
+      setBafCaf(false); setDeliveryDate(''); setExchangeRateLive(''); setExchangeRateDisplay(''); setSelPOId('');
+      setAutofilled(false); setPoRemaining(null); setPoLineRows([]); setCifAmountKrwDisplay('');
       reset({
         inbound_type: '', bl_number: '', manufacturer_id: '',
         exchange_rate: '', etd: '', eta: '', actual_arrival: '',
@@ -597,19 +605,21 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
         quantity: String(qty),
         item_type: r.item_type,
         payment_type: r.payment_type,
-        unit_price: isImport
-          ? (() => {
-              if (r.unit_price_usd_wp != null) return String(r.unit_price_usd_wp * 100); // $/Wp → ¢/Wp
-              // $/EA → ¢/Wp 역산 (unit_price_usd_wp 미설정 구레코드 대응)
-              if (r.unit_price_usd != null) {
-                const prod = products.find(p => p.product_id === r.product_id);
-                if (prod?.spec_wp && prod.spec_wp > 0) {
-                  return String(parseFloat((r.unit_price_usd / prod.spec_wp * 100).toPrecision(8)));
+        unit_price: r.payment_type === 'free'
+          ? ''  // 무상 라인은 단가 없음 — PO의 플레이스홀더 단가를 그대로 쓰지 않음
+          : isImport
+            ? (() => {
+                if (r.unit_price_usd_wp != null) return String(r.unit_price_usd_wp * 100); // $/Wp → ¢/Wp
+                // $/EA → ¢/Wp 역산 (unit_price_usd_wp 미설정 구레코드 대응)
+                if (r.unit_price_usd != null) {
+                  const prod = products.find(p => p.product_id === r.product_id);
+                  if (prod?.spec_wp && prod.spec_wp > 0) {
+                    return String(parseFloat((r.unit_price_usd / prod.spec_wp * 100).toPrecision(8)));
+                  }
                 }
-              }
-              return '';
-            })()
-          : (r.unit_price_krw_wp != null ? String(Math.round(r.unit_price_krw_wp)) : ''),
+                return '';
+              })()
+            : (r.unit_price_krw_wp != null ? String(Math.round(r.unit_price_krw_wp)) : ''),
         manualInvoice: false,
         invoiceOverride: '',
       }];
@@ -634,6 +644,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   };
   // 인보이스 자동 계산: 수량 × 규격Wp × 단가($/Wp or ₩/Wp)
   const calcInvoice = (l: LineItem): number | null => {
+    if (l.payment_type === 'free') return null; // 무상 라인은 인보이스 금액 없음
     const q = Number(l.quantity);
     const p = products.find(x => x.product_id === l.product_id);
     const rawPrice = l.unit_price ? parseFloat(l.unit_price) : 0;
@@ -744,6 +755,21 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     // 결제조건 계산용 총 구매금액
     const totalAmountForPT = validLines.reduce((s, l) => s + (calcInvoice(l) || 0), 0);
 
+    // 면장 CIF 원화금액 → 유상 Wp 원화단가 계산
+    const cifAmountRaw = cifAmountKrwDisplay ? parseInt(cifAmountKrwDisplay.replace(/,/g, ''), 10) : NaN;
+    const cifAmountKrwNum = !isNaN(cifAmountRaw) && cifAmountRaw > 0 ? cifAmountRaw : undefined;
+    // 유상(paid) 라인의 총 Wp
+    const totalPaidWp = validLines
+      .filter(l => l.payment_type === 'paid')
+      .reduce((s, l) => {
+        const prod = products.find(p => p.product_id === l.product_id);
+        return s + (prod ? Number(l.quantity) * prod.spec_wp : 0);
+      }, 0);
+    // Wp 원화단가 = CIF원화금액 / 총유상Wp (소수점 4자리)
+    const krwPerWpFromCif = (cifAmountKrwNum && totalPaidWp > 0)
+      ? Math.round(cifAmountKrwNum / totalPaidWp * 10000) / 10000
+      : undefined;
+
     const payload: Record<string, unknown> = {
       bl_id: editData?.bl_id,
       bl_number: blNumber,
@@ -755,6 +781,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       counterpart_company_id: isGroup ? counterpartId : undefined,
       currency: isImport ? 'USD' : 'KRW',
       exchange_rate: isImport && exRate && !isNaN(exRate) ? exRate : undefined,
+      cif_amount_krw: isImport && cifAmountKrwNum ? cifAmountKrwNum : undefined,
       status: editData?.status ?? initialStatus,
       payment_terms: isImport ? composeImportPT(importPT, totalAmountForPT) : isDomestic ? composeDomesticPT(domesticPT, totalAmountForPT) : undefined,
       etd: isImport && data.etd ? data.etd : undefined,
@@ -787,7 +814,10 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
             invoice_amount_usd: isImport && inv ? inv : undefined,
             invoice_amount_krw: !isImport && inv ? inv : undefined,
             unit_price_usd_wp: isImport ? (price && !isNaN(price) ? price : undefined) : undefined,
-            unit_price_krw_wp: !isImport ? (price && !isNaN(price) ? price : undefined) : undefined,
+            // 해외직수입: CIF원화금액이 있으면 유상라인에만 KRW/Wp 설정 (무상은 0)
+            unit_price_krw_wp: isImport
+              ? (l.payment_type === 'paid' && krwPerWpFromCif ? krwPerWpFromCif : undefined)
+              : (price && !isNaN(price) ? price : undefined),
           };
         }),
     };
@@ -856,10 +886,10 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
           className="space-y-3"
         >
 
-          {/* ── D-085: PO 연결 (선택사항) ── */}
+          {/* ── D-085: PO 연결 (필수) ── */}
           {!editData && (
             <div className="max-w-md space-y-1.5">
-              <Label className="text-muted-foreground">P/O 연결 (선택사항)</Label>
+              <Req>P/O 연결</Req>
               <Select value={selPOId || 'none'} onValueChange={(v) => {
                 const val = v === 'none' ? '' : (v ?? '');
                 setSelPOId(val);
@@ -872,10 +902,10 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                 }
               }}>
                 <SelectTrigger className="w-full">
-                  <Txt text={poTriggerText} placeholder="PO 선택 *" />
+                  <Txt text={poTriggerText} placeholder="PO를 선택하세요" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* F15: PO 연결은 필수 — 미선택 옵션 제거 */}
+                  {/* F15: PO 연결은 필수 — 미선택 옵션 없음 */}
                   {poList.map(p => (
                     <SelectItem key={p.po_id} value={p.po_id}>
                       {formatPOLabel(p, manufacturers)}
@@ -883,25 +913,10 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                   ))}
                 </SelectContent>
               </Select>
-              {!editData && (
-                <div className="mt-2 flex items-center gap-3 text-xs">
-                  <span className="text-muted-foreground">입고구분</span>
-                  <label className="flex items-center gap-1">
-                    <input type="radio" checked={initialStatus === 'completed'} onChange={() => setInitialStatus('completed')} />완료 (재고)
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <input type="radio" checked={initialStatus === 'scheduled'} onChange={() => setInitialStatus('scheduled')} />예정 (미착품)
-                  </label>
-                </div>
-              )}
-              {selPOId && (
+              {selPOId && poRemaining && (
                 <p className="text-[10px] text-muted-foreground">
-                  PO 정보가 자동 채움됨. Incoterms/결제조건은 수정 가능.
-                  {poRemaining && (
-                    <> · 계약 {poRemaining.contractedMw.toFixed(1)}MW · 선적 {poRemaining.shippedMw.toFixed(1)}MW ·{' '}
-                      <span className="text-foreground font-medium">잔여 {poRemaining.remainMw.toFixed(1)}MW</span>
-                    </>
-                  )}
+                  계약 {poRemaining.contractedMw.toFixed(1)}MW · 선적 {poRemaining.shippedMw.toFixed(1)}MW ·{' '}
+                  <span className="text-foreground font-medium">잔여 {poRemaining.remainMw.toFixed(1)}MW</span>
                 </p>
               )}
               {/* R3: LC 선택 — 해외직수입에서 PO 선택 시 노출 */}
@@ -1029,13 +1044,73 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                 {isImport && (
                   <>
                     <div className="space-y-1.5">
-                      <Opt>환율 (USD→KRW)</Opt>
-                      <Input {...register('exchange_rate')} inputMode="decimal" placeholder="예: 1450.30"
+                      <Req>환율 (USD→KRW)</Req>
+                      <Input inputMode="decimal" value={exchangeRateDisplay} placeholder="0.00"
+                        className="text-right font-mono"
                         onChange={(e) => {
-                          const v = e.target.value.replace(/[^0-9.]/g, '');
-                          setValue('exchange_rate', v);
-                          setExchangeRateLive(v); // 입고품목 KRW 실시간 재계산
+                          const raw = e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, '');
+                          const parts = raw.split('.');
+                          const clamped = parts.length > 1 ? parts[0] + '.' + parts[1].slice(0, 2) : raw;
+                          const [intStr, decStr] = clamped.split('.');
+                          const intFormatted = intStr ? Number(intStr).toLocaleString('ko-KR') : '';
+                          const display = decStr !== undefined ? intFormatted + '.' + decStr : intFormatted;
+                          setExchangeRateDisplay(display);
+                          setValue('exchange_rate', clamped);
+                          setExchangeRateLive(clamped); // 입고품목 KRW 실시간 재계산
+                        }}
+                        onFocus={() => setExchangeRateDisplay(exchangeRateDisplay.replace(/,/g, ''))}
+                        onBlur={() => {
+                          const num = parseFloat(exchangeRateDisplay.replace(/,/g, ''));
+                          if (!isNaN(num) && num > 0) {
+                            setExchangeRateDisplay(num.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                            setValue('exchange_rate', String(num));
+                            setExchangeRateLive(String(num));
+                          }
                         }} />
+                      <p className="text-[10px] text-muted-foreground">
+                        원가 계산을 위해 면장 환율을 반드시 입력하세요
+                      </p>
+                    </div>
+                    {/* 면장 CIF 원화금액 (부가세·무상분 과세 제외) */}
+                    <div className="space-y-1.5">
+                      <Req>면장 CIF 원화금액</Req>
+                      <Input
+                        inputMode="numeric"
+                        value={cifAmountKrwDisplay}
+                        placeholder="0"
+                        className="text-right font-mono"
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^0-9]/g, '');
+                          const num = raw ? parseInt(raw, 10) : NaN;
+                          setCifAmountKrwDisplay(!isNaN(num) ? num.toLocaleString('ko-KR') : '');
+                        }}
+                        onFocus={() => setCifAmountKrwDisplay(prev => prev.replace(/,/g, ''))}
+                        onBlur={() => {
+                          const raw = cifAmountKrwDisplay.replace(/,/g, '');
+                          const num = parseInt(raw, 10);
+                          if (!isNaN(num) && num > 0) setCifAmountKrwDisplay(num.toLocaleString('ko-KR'));
+                        }}
+                      />
+                      {(() => {
+                        const cifRaw = cifAmountKrwDisplay ? parseInt(cifAmountKrwDisplay.replace(/,/g, ''), 10) : NaN;
+                        const paidWp = lines.filter(l => l.payment_type === 'paid').reduce((s, l) => {
+                          const prod = products.find(p => p.product_id === l.product_id);
+                          return s + (prod && Number(l.quantity) > 0 ? Number(l.quantity) * prod.spec_wp : 0);
+                        }, 0);
+                        if (!isNaN(cifRaw) && cifRaw > 0 && paidWp > 0) {
+                          const krwWp = Math.round(cifRaw / paidWp * 100) / 100;
+                          return (
+                            <p className="text-[10px] text-primary font-medium">
+                              Wp 원화단가 = {krwWp.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 원/Wp
+                            </p>
+                          );
+                        }
+                        return (
+                          <p className="text-[10px] text-muted-foreground">
+                            부가세 제외 · 무상분 과세 제외 · 원화단가 = CIF원화금액 ÷ 총유상Wp
+                          </p>
+                        );
+                      })()}
                     </div>
                     <div className="space-y-1.5">
                       <Opt>선적조건 (인코텀즈)</Opt>
@@ -1172,9 +1247,6 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                                     +
                                   </Button>
                                 </div>
-                                {isOver && (
-                                  <p className="text-[9px] text-orange-600 mt-0.5">잔여 초과 (저장은 가능)</p>
-                                )}
                               </td>
                             </tr>
                           );
@@ -1183,7 +1255,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                     </table>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    ① 이번 입고(EA) 란에 수량 입력 → ② <span className="font-semibold">[+]</span> 클릭 → ③ 아래 "입고 품목"에 자동 추가됨. 단가·구분·유무상은 PO에서 자동 복사. 잔여 초과 입력도 저장 가능 (초과 입고).
+                    ① 이번 입고(EA) 란에 수량 입력 → ② <span className="font-semibold">[+]</span> 클릭 → ③ 아래 "입고 품목"에 자동 추가됨. 단가·구분·유무상은 PO에서 자동 복사.
                   </p>
                 </div>
               )}
@@ -1316,20 +1388,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                               </div>
                             )}
                           </div>
-                          {isImport && (
-                            <div className="w-36 space-y-1">
-                              <span className="text-[10px] text-muted-foreground font-medium">인보이스KRW(자동)</span>
-                              <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2 truncate">
-                                {(() => {
-                                  const usd = calcInvoice(line);
-                                  const ex = exchangeRateLive ? parseFloat(exchangeRateLive) : 0;
-                                  if (!usd) return '-';
-                                  if (!ex || isNaN(ex)) return <span className="text-orange-600">환율을 입력하세요</span>;
-                                  return `${Math.round(usd * ex).toLocaleString('ko-KR')}원`;
-                                })()}
-                              </div>
-                            </div>
-                          )}
+                          {/* 라인별 인보이스 KRW(자동) 표시 제거 — 해외직수입의 원가 기준은 면장 CIF 원화금액(SSoT) */}
                           <div className="w-24 space-y-1">
                             <span className="text-[10px] text-muted-foreground font-medium">용량kW</span>
                             <div className="h-9 flex items-center text-xs text-muted-foreground bg-muted rounded-md px-2">
@@ -1342,21 +1401,14 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                   </div>
                 )}
 
-                {/* 총 구매금액 */}
+                {/* 총 구매금액 — 해외직수입은 USD만 표시 (원화는 면장 CIF 원화금액이 SSoT) */}
                 {selMfgId && lines.some(l => l.product_id && Number(l.quantity) > 0) && (
                   <div className="rounded-md border-2 border-primary/20 bg-primary/5 px-3 py-2 flex flex-wrap items-center gap-4">
                     <span className="text-sm font-semibold">총 구매금액</span>
                     {isImport ? (
-                      <>
-                        <span className="text-sm">
-                          USD <span className="font-mono font-semibold">${totalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </span>
-                        <span className="text-sm">
-                          KRW <span className={`font-mono font-semibold ${totalKRW ? '' : 'text-orange-600'}`}>
-                            {totalKRW ? `₩${totalKRW.toLocaleString('ko-KR')}` : '환율을 입력하세요'}
-                          </span>
-                        </span>
-                      </>
+                      <span className="text-sm">
+                        USD <span className="font-mono font-semibold">${totalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </span>
                     ) : (
                       <span className="text-sm">
                         KRW <span className="font-mono font-semibold">₩{totalKRW.toLocaleString('ko-KR')}</span>
