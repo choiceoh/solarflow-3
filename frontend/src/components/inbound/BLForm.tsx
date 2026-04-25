@@ -273,9 +273,10 @@ interface Props {
   presetPOId?: string | null;
   /** LC 탭에서 입고 등록 시 LC 자동 선택 */
   presetLCId?: string | null;
+  embedded?: boolean;
 }
 
-export default function BLForm({ open, onOpenChange, onSubmit, editData, presetPOId, presetLCId }: Props) {
+export default function BLForm({ open, onOpenChange, onSubmit, editData, presetPOId, presetLCId, embedded = false }: Props) {
   const globalCompanyId = useAppStore((s) => s.selectedCompanyId);
   const storeCompanies = useAppStore((s) => s.companies);
 
@@ -941,13 +942,23 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     const bankPart = lc.bank_name ? ` | ${lc.bank_name}` : '';
     return `${modPart}${lc.lc_number ?? lc.lc_id.slice(0, 8)}${bankPart} | ${formatUSD(lc.amount_usd)} | ${LC_STATUS_KR[lc.status] ?? lc.status}`;
   };
+  const title = editData ? '입고수정' : '입고등록';
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[82vw] sm:max-w-[82vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
-        <DialogHeader className="pb-1">
-          <DialogTitle>{editData ? '입고수정' : '입고등록'}</DialogTitle>
-        </DialogHeader>
+  const formBody = (
+    <>
+        {embedded ? (
+          <div className="flex items-center justify-between gap-3 border-b pb-3">
+            <div>
+              <p className="text-xs text-muted-foreground">구매 / B/L</p>
+              <h2 className="text-lg font-semibold">{title}</h2>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>목록으로</Button>
+          </div>
+        ) : (
+          <DialogHeader className="pb-1">
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
+        )}
 
         {submitError && (
           <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
@@ -1678,6 +1689,22 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
             </Button>
           </DialogFooter>
         </form>
+    </>
+  );
+
+  if (embedded) {
+    if (!open) return null;
+    return (
+      <div className="rounded-lg border bg-card p-4 shadow-sm">
+        {formBody}
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[82vw] sm:max-w-[82vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
+        {formBody}
       </DialogContent>
     </Dialog>
   );

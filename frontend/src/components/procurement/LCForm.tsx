@@ -47,7 +47,14 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-interface Props { open: boolean; onOpenChange: (o: boolean) => void; onSubmit: (d: Record<string, unknown>) => Promise<void>; editData?: LCRecord | null; defaultPoId?: string; }
+interface Props {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onSubmit: (d: Record<string, unknown>) => Promise<void>;
+  editData?: LCRecord | null;
+  defaultPoId?: string;
+  embedded?: boolean;
+}
 
 // 소수점 포함 천단위 포맷
 function fmtDecimal(v: string): string {
@@ -56,7 +63,7 @@ function fmtDecimal(v: string): string {
   return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
 }
 
-export default function LCForm({ open, onOpenChange, onSubmit, editData, defaultPoId }: Props) {
+export default function LCForm({ open, onOpenChange, onSubmit, editData, defaultPoId, embedded = false }: Props) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
@@ -218,11 +225,21 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData, default
 
   // PO 행 "LC 추가"에서 열었으면 PO 변경 불가 (실수 방지)
   const isPoLocked = !!defaultPoId && !editData;
+  const title = editData ? 'LC 수정' : 'LC 등록';
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl w-[95vw] max-h-[92vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{editData ? 'LC 수정' : 'LC 등록'}</DialogTitle></DialogHeader>
+  const formBody = (
+    <>
+        {embedded ? (
+          <div className="flex items-center justify-between gap-3 border-b pb-3">
+            <div>
+              <p className="text-xs text-muted-foreground">구매 / LC</p>
+              <h2 className="text-lg font-semibold">{title}</h2>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>목록으로</Button>
+          </div>
+        ) : (
+          <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+        )}
         {submitError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{submitError}</div>}
         <form onSubmit={handleSubmit(handle)} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -462,9 +479,11 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData, default
           <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
           <DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button><Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button></DialogFooter>
         </form>
-      </DialogContent>
-      {/* F9: PO 상세 선택 팝업 */}
-      <Dialog open={poPickerOpen} onOpenChange={setPoPickerOpen}>
+    </>
+  );
+
+  const poPickerDialog = (
+    <Dialog open={poPickerOpen} onOpenChange={setPoPickerOpen}>
         <DialogContent className="w-[92vw] max-w-[1400px] max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>PO 상세 선택</DialogTitle></DialogHeader>
           <div className="rounded-md border overflow-x-auto">
@@ -518,7 +537,25 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData, default
             </table>
           </div>
         </DialogContent>
-      </Dialog>
+    </Dialog>
+  );
+
+  if (embedded) {
+    if (!open) return null;
+    return (
+      <div className="rounded-lg border bg-card p-4 shadow-sm">
+        {formBody}
+        {poPickerDialog}
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-4xl w-[95vw] max-h-[92vh] overflow-y-auto">
+        {formBody}
+      </DialogContent>
+      {poPickerDialog}
     </Dialog>
   );
 }

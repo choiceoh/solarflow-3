@@ -35,6 +35,7 @@ function FT({ text }: { text: string }) {
 
 export default function ProcurementPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
+  const [activeTab, setActiveTab] = useState('po');
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
   // 계약금 탭용 전체 PO 목록 (필터 없음) — usePOList hook으로 관리하여 삭제 시 reloadPoList()로 동기화
@@ -242,10 +243,34 @@ export default function ProcurementPage() {
     setBlsVersion(v => v + 1); // LC 탭의 BL 드릴다운 목록 재조회 트리거
   };
 
-  const handleNewBLFromLC = (lc: { lc_id: string; po_id: string }) => {
-    setBlFormPresetPOId(lc.po_id);
-    setBlFormPresetLCId(lc.lc_id);
+  const openLCWork = (lc: LCRecord | null = null, defaultPoId?: string) => {
+    setActiveTab('lc');
+    setEditLC(lc);
+    setNewLcDefaultPoId(lc ? undefined : defaultPoId);
+    setLcFormOpen(true);
+  };
+
+  const closeLCWork = () => {
+    setLcFormOpen(false);
+    setEditLC(null);
+    setNewLcDefaultPoId(undefined);
+  };
+
+  const openBLWork = (presetPOId: string | null = null, presetLCId: string | null = null) => {
+    setActiveTab('bl');
+    setBlFormPresetPOId(presetPOId);
+    setBlFormPresetLCId(presetLCId);
     setBlFormOpen(true);
+  };
+
+  const closeBLWork = () => {
+    setBlFormOpen(false);
+    setBlFormPresetPOId(null);
+    setBlFormPresetLCId(null);
+  };
+
+  const handleNewBLFromLC = (lc: { lc_id: string; po_id: string }) => {
+    openBLWork(lc.po_id, lc.lc_id);
   };
 
   const handleDeleteBL = async (blId: string) => {
@@ -384,7 +409,7 @@ export default function ProcurementPage() {
         </div>
       )}
 
-      <Tabs defaultValue="po">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="po"><FileText className="h-3.5 w-3.5" />PO</TabsTrigger>
           <TabsTrigger value="tt"><Banknote className="h-3.5 w-3.5" />계약금</TabsTrigger>
@@ -409,8 +434,8 @@ export default function ProcurementPage() {
               })}
               onDetail={setSelectedPO}
               onNew={() => setPoFormOpen(true)}
-              onEditLC={(lc) => { setEditLC(lc); setLcFormOpen(true); }}
-              onNewLC={(po) => { setEditLC(null); setNewLcDefaultPoId(po.po_id); setLcFormOpen(true); }}
+              onEditLC={(lc) => openLCWork(lc)}
+              onNewLC={(po) => openLCWork(null, po.po_id)}
               onDelete={handleDeletePO}
               onDeleteLC={handleDeleteLC}
               onSelectBL={setSelectedBL}
@@ -421,24 +446,37 @@ export default function ProcurementPage() {
         </TabsContent>
 
         <TabsContent value="lc">
-          <div className="flex items-center gap-2 mb-3">
-            <Select value={lcStatusFilter || 'all'} onValueChange={(v) => setLcStatusFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-28 text-xs"><FT text={lcStatusLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem>{(Object.entries(LC_STATUS_LABEL) as [LCStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
-            <Select value={lcBankFilter || 'all'} onValueChange={(v) => setLcBankFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={lcBankLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 은행</SelectItem>{banks.map((b) => <SelectItem key={b.bank_id} value={b.bank_id}>{b.bank_name}</SelectItem>)}</SelectContent></Select>
-            <Select value={lcMfgFilter || 'all'} onValueChange={(v) => setLcMfgFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={lcMfgLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 제조사</SelectItem>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent></Select>
-            <div className="flex-1" />
-            <Button size="sm" onClick={() => { setEditLC(null); setLcFormOpen(true); }}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
-          </div>
-          {lcLoading ? <LoadingSpinner /> : (
-            <LCListTable
-              items={lcMfgFilter ? lcs.filter(lc => poList.find(p => p.po_id === lc.po_id)?.manufacturer_id === lcMfgFilter) : lcs}
-              onEdit={(lc) => { setEditLC(lc); setLcFormOpen(true); }}
-              onNew={() => { setEditLC(null); setLcFormOpen(true); }}
-              onDelete={handleDeleteLC}
-              onSettle={handleSettleLC}
-              onSelectBL={setSelectedBL}
-              onNewBL={handleNewBLFromLC}
-              blsVersion={blsVersion}
+          {lcFormOpen ? (
+            <LCForm
+              embedded
+              open={lcFormOpen}
+              onOpenChange={(o) => { if (!o) closeLCWork(); }}
+              onSubmit={editLC ? handleUpdateLC : handleCreateLC}
+              editData={editLC}
+              defaultPoId={editLC ? undefined : newLcDefaultPoId}
             />
+          ) : (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <Select value={lcStatusFilter || 'all'} onValueChange={(v) => setLcStatusFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-28 text-xs"><FT text={lcStatusLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem>{(Object.entries(LC_STATUS_LABEL) as [LCStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
+                <Select value={lcBankFilter || 'all'} onValueChange={(v) => setLcBankFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={lcBankLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 은행</SelectItem>{banks.map((b) => <SelectItem key={b.bank_id} value={b.bank_id}>{b.bank_name}</SelectItem>)}</SelectContent></Select>
+                <Select value={lcMfgFilter || 'all'} onValueChange={(v) => setLcMfgFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={lcMfgLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 제조사</SelectItem>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent></Select>
+                <div className="flex-1" />
+                <Button size="sm" onClick={() => openLCWork()}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
+              </div>
+              {lcLoading ? <LoadingSpinner /> : (
+                <LCListTable
+                  items={lcMfgFilter ? lcs.filter(lc => poList.find(p => p.po_id === lc.po_id)?.manufacturer_id === lcMfgFilter) : lcs}
+                  onEdit={(lc) => openLCWork(lc)}
+                  onNew={() => openLCWork()}
+                  onDelete={handleDeleteLC}
+                  onSettle={handleSettleLC}
+                  onSelectBL={setSelectedBL}
+                  onNewBL={handleNewBLFromLC}
+                  blsVersion={blsVersion}
+                />
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -473,38 +511,41 @@ export default function ProcurementPage() {
         </TabsContent>
 
         <TabsContent value="bl" className="space-y-3">
-          <div className="flex items-center gap-2 mb-3">
-            <Select value={blTypeFilter || 'all'} onValueChange={(v) => setBlTypeFilter(v === 'all' ? '' : (v ?? ''))}>
-              <SelectTrigger className="h-8 w-36 text-xs"><FT text={blTypeFilter ? (INBOUND_TYPE_LABEL[blTypeFilter as InboundType] ?? blTypeFilter) : '입고 구분'} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">입고 구분 (전체)</SelectItem>
-                {(Object.entries(INBOUND_TYPE_LABEL) as [InboundType, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={blStatusFilter || 'all'} onValueChange={(v) => setBlStatusFilter(v === 'all' ? '' : (v ?? ''))}>
-              <SelectTrigger className="h-8 w-28 text-xs"><FT text={blStatusFilter ? (BL_STATUS_LABEL[blStatusFilter as BLStatus] ?? blStatusFilter) : '전체 현황'} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">전체 현황</SelectItem>
-                {(Object.entries(BL_STATUS_LABEL) as [BLStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={blMfgFilter || 'all'} onValueChange={(v) => setBlMfgFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={blMfgLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 제조사</SelectItem>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent></Select>
-            <div className="flex-1" />
-            <Button size="sm" onClick={() => setBlFormOpen(true)}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
-          </div>
-          {blLoading ? <LoadingSpinner /> : (
-            <BLListTable items={bls} onSelect={(bl) => setSelectedBL(bl.bl_id)} onNew={() => setBlFormOpen(true)} onDelete={handleDeleteBL} />
+          {blFormOpen ? (
+            <BLForm
+              embedded
+              open={blFormOpen}
+              onOpenChange={(o) => { if (!o) closeBLWork(); }}
+              onSubmit={handleCreateBL}
+              presetPOId={blFormPresetPOId}
+              presetLCId={blFormPresetLCId}
+            />
+          ) : (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <Select value={blTypeFilter || 'all'} onValueChange={(v) => setBlTypeFilter(v === 'all' ? '' : (v ?? ''))}>
+                  <SelectTrigger className="h-8 w-36 text-xs"><FT text={blTypeFilter ? (INBOUND_TYPE_LABEL[blTypeFilter as InboundType] ?? blTypeFilter) : '입고 구분'} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">입고 구분 (전체)</SelectItem>
+                    {(Object.entries(INBOUND_TYPE_LABEL) as [InboundType, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={blStatusFilter || 'all'} onValueChange={(v) => setBlStatusFilter(v === 'all' ? '' : (v ?? ''))}>
+                  <SelectTrigger className="h-8 w-28 text-xs"><FT text={blStatusFilter ? (BL_STATUS_LABEL[blStatusFilter as BLStatus] ?? blStatusFilter) : '전체 현황'} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체 현황</SelectItem>
+                    {(Object.entries(BL_STATUS_LABEL) as [BLStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={blMfgFilter || 'all'} onValueChange={(v) => setBlMfgFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={blMfgLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 제조사</SelectItem>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent></Select>
+                <div className="flex-1" />
+                <Button size="sm" onClick={() => openBLWork()}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
+              </div>
+              {blLoading ? <LoadingSpinner /> : (
+                <BLListTable items={bls} onSelect={(bl) => setSelectedBL(bl.bl_id)} onNew={() => openBLWork()} onDelete={handleDeleteBL} />
+              )}
+            </>
           )}
-          <BLForm
-            open={blFormOpen}
-            onOpenChange={(o) => {
-              setBlFormOpen(o);
-              if (!o) { setBlFormPresetPOId(null); setBlFormPresetLCId(null); }
-            }}
-            onSubmit={handleCreateBL}
-            presetPOId={blFormPresetPOId}
-            presetLCId={blFormPresetLCId}
-          />
         </TabsContent>
 
         <TabsContent value="price" className="space-y-3">
@@ -535,9 +576,6 @@ export default function ProcurementPage() {
           <PriceHistoryForm open={phFormOpen} onOpenChange={setPhFormOpen} onSubmit={editPH ? handleUpdatePH : handleCreatePH} editData={editPH} />
         </TabsContent>
       </Tabs>
-
-      {/* LCForm — 탭 바깥에 배치해야 PO 탭의 "L/C 추가" 버튼에서도 열림 */}
-      <LCForm open={lcFormOpen} onOpenChange={(o) => { setLcFormOpen(o); if (!o) setNewLcDefaultPoId(undefined); }} onSubmit={editLC ? handleUpdateLC : handleCreateLC} editData={editLC} defaultPoId={editLC ? undefined : newLcDefaultPoId} />
 
       {/* 딤 오버레이 — 클릭하면 패널 닫기 */}
       {selectedPO && (
