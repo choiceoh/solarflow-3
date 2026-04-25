@@ -3,7 +3,23 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Plus, PackageX, PackageCheck, Clock, Shield, Package, Truck, TrendingUp } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  ClipboardList,
+  Package,
+  PackageCheck,
+  PackageX,
+  PauseCircle,
+  Plus,
+  ReceiptText,
+  Shield,
+  Truck,
+  type LucideIcon,
+  TrendingUp,
+} from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import AllocationForm, { type InventoryAllocation } from '@/components/inventory/AllocationForm';
 
@@ -11,7 +27,6 @@ function FT({ text }: { text: string }) {
   return <span className="flex flex-1 text-left truncate" data-slot="select-value">{text}</span>;
 }
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { useInventory } from '@/hooks/useInventory';
 import { useForecast } from '@/hooks/useForecast';
@@ -25,6 +40,70 @@ import ForecastTable from '@/components/inventory/ForecastTable';
 import type { Manufacturer } from '@/types/masters';
 import type { InventorySummary } from '@/types/inventory';
 
+function formatAutoKw(kw: number): string {
+  if (kw <= 0) return '0 kW';
+  if (kw >= 1000) return `${(kw / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 2 })} MW`;
+  return `${Math.round(kw).toLocaleString('ko-KR')} kW`;
+}
+
+function WorkbenchMetric({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  tone,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  sub?: string;
+  tone: 'green' | 'blue' | 'amber' | 'sky' | 'slate';
+  onClick?: () => void;
+}) {
+  const toneClass = {
+    green: 'bg-green-50 text-green-700 border-green-100',
+    blue: 'bg-blue-50 text-blue-700 border-blue-100',
+    amber: 'bg-amber-50 text-amber-700 border-amber-100',
+    sky: 'bg-sky-50 text-sky-700 border-sky-100',
+    slate: 'bg-slate-50 text-slate-700 border-slate-100',
+  }[tone];
+
+  const content = (
+    <>
+      <div className={`flex h-9 w-9 items-center justify-center rounded-md border ${toneClass}`}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1 text-left">
+        <div className="text-[11px] text-muted-foreground">{label}</div>
+        <div className="font-semibold tabular-nums leading-tight">{value}</div>
+        {sub ? <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{sub}</div> : null}
+      </div>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex min-h-[72px] items-center gap-3 rounded-md border bg-background px-3 py-2 text-left transition-colors hover:bg-muted/40"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex min-h-[72px] items-center gap-3 rounded-md border bg-background px-3 py-2">
+      {content}
+    </div>
+  );
+}
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
 
 export default function InventoryPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
@@ -47,6 +126,7 @@ export default function InventoryPage() {
   const [allocFormOpen, setAllocFormOpen] = useState(false);
   const [prefilledProductId, setPrefilledProductId] = useState<string | undefined>();
   const [editingAlloc, setEditingAlloc] = useState<InventoryAllocation | undefined>();
+  const [allocError, setAllocError] = useState('');
 
   // 미착품 처리 다이얼로그 (group_id 기반 연관 incoming alloc 처리)
   const [incomingDialog, setIncomingDialog] = useState<{
@@ -79,8 +159,12 @@ export default function InventoryPage() {
     Promise.all([
       fetchWithAuth<InventoryAllocation[]>(`/api/v1/inventory/allocations?status=pending${companyParam}`),
       fetchWithAuth<InventoryAllocation[]>(`/api/v1/inventory/allocations?status=hold${companyParam}`),
-    ]).then(([pending, hold]) => setAllocations([...pending, ...hold]))
-      .catch(() => {});
+    ]).then(([pending, hold]) => {
+      setAllocations([...pending, ...hold]);
+      setAllocError('');
+    }).catch((err) => {
+      setAllocError(getErrorMessage(err, '예약 목록을 불러오지 못했습니다'));
+    });
   }, [selectedCompanyId]);
 
   // location.key가 바뀔 때마다 (다른 메뉴→재고로 돌아올 때) 배정 목록 갱신
@@ -140,8 +224,9 @@ export default function InventoryPage() {
           setIncomingDialog({ open: true, stockAlloc: alloc, incomingAlloc: linkedIncoming });
           return;
         }
-      } catch {
-        // 조회 실패 시 무시하고 기존 흐름대로 진행
+      } catch (err) {
+        setAllocError(getErrorMessage(err, '연관 미착품 예약을 확인하지 못했습니다'));
+        return;
       }
     }
     // group_id 없거나 연관 미착품 없음 → 바로 수주 등록 이동
@@ -162,13 +247,18 @@ export default function InventoryPage() {
     const { stockAlloc, incomingAlloc } = incomingDialog;
     if (!stockAlloc || !incomingAlloc) return;
     setIncomingDialog({ open: false, stockAlloc: null, incomingAlloc: null });
-    await fetchWithAuth(`/api/v1/inventory/allocations/${incomingAlloc.alloc_id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ status: 'hold' }),
-    });
-    fetchAllocations();
-    reloadInv();
-    navigateToOrder(stockAlloc);
+    try {
+      await fetchWithAuth(`/api/v1/inventory/allocations/${incomingAlloc.alloc_id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'hold' }),
+      });
+      setAllocError('');
+      fetchAllocations();
+      reloadInv();
+      navigateToOrder(stockAlloc);
+    } catch (err) {
+      setAllocError(getErrorMessage(err, '미착품 예약 보류 처리에 실패했습니다'));
+    }
   };
 
   // 미착품 다이얼로그: "삭제" 선택 → incoming 삭제, stock만 수주 등록
@@ -177,39 +267,59 @@ export default function InventoryPage() {
     if (!stockAlloc || !incomingAlloc) return;
     if (!confirm('미착품 배정을 삭제합니다. 계속할까요?')) return;
     setIncomingDialog({ open: false, stockAlloc: null, incomingAlloc: null });
-    await fetchWithAuth(`/api/v1/inventory/allocations/${incomingAlloc.alloc_id}`, {
-      method: 'DELETE',
-    });
-    fetchAllocations();
-    reloadInv();
-    navigateToOrder(stockAlloc);
+    try {
+      await fetchWithAuth(`/api/v1/inventory/allocations/${incomingAlloc.alloc_id}`, {
+        method: 'DELETE',
+      });
+      setAllocError('');
+      fetchAllocations();
+      reloadInv();
+      navigateToOrder(stockAlloc);
+    } catch (err) {
+      setAllocError(getErrorMessage(err, '미착품 예약 삭제에 실패했습니다'));
+    }
   };
 
   // 보류 — pending → hold (가용재고 차감 해제)
   const handleHoldAlloc = async (allocId: string) => {
-    await fetchWithAuth(`/api/v1/inventory/allocations/${allocId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ status: 'hold' }),
-    });
-    fetchAllocations();
-    reloadInv();
+    try {
+      await fetchWithAuth(`/api/v1/inventory/allocations/${allocId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'hold' }),
+      });
+      setAllocError('');
+      fetchAllocations();
+      reloadInv();
+    } catch (err) {
+      setAllocError(getErrorMessage(err, '예약 보류 처리에 실패했습니다'));
+    }
   };
 
   // 보류 해제 — hold → pending (가용재고 다시 차감)
   const handleResumeAlloc = async (allocId: string) => {
-    await fetchWithAuth(`/api/v1/inventory/allocations/${allocId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ status: 'pending' }),
-    });
-    fetchAllocations();
-    reloadInv();
+    try {
+      await fetchWithAuth(`/api/v1/inventory/allocations/${allocId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'pending' }),
+      });
+      setAllocError('');
+      fetchAllocations();
+      reloadInv();
+    } catch (err) {
+      setAllocError(getErrorMessage(err, '예약 재개 처리에 실패했습니다'));
+    }
   };
 
   const handleDeleteAlloc = async (allocId: string) => {
     if (!confirm('삭제하면 복원할 수 없습니다. 삭제할까요?')) return;
-    await fetchWithAuth(`/api/v1/inventory/allocations/${allocId}`, { method: 'DELETE' });
-    fetchAllocations();
-    reloadInv();
+    try {
+      await fetchWithAuth(`/api/v1/inventory/allocations/${allocId}`, { method: 'DELETE' });
+      setAllocError('');
+      fetchAllocations();
+      reloadInv();
+    } catch (err) {
+      setAllocError(getErrorMessage(err, '예약 삭제에 실패했습니다'));
+    }
   };
 
   useEffect(() => {
@@ -266,6 +376,65 @@ export default function InventoryPage() {
     mfgFilter ? allocations.filter((a) => productMap.has(a.product_id)) : allocations,
   [mfgFilter, allocations, productMap]);
 
+  const workbenchProductIds = useMemo(() => new Set(invData?.items.map((it) => it.product_id) ?? []), [invData]);
+  const workbenchAllocs = useMemo(() => (
+    workbenchProductIds.size > 0
+      ? visibleAllocs.filter((a) => workbenchProductIds.has(a.product_id))
+      : visibleAllocs
+  ), [visibleAllocs, workbenchProductIds]);
+
+  const inventoryStats = useMemo(() => {
+    if (!invData) return null;
+    const stockAvailableKw = invData.items.reduce((sum, it) => sum + it.available_kw, 0);
+    const incomingAvailableKw = invData.items.reduce((sum, it) => sum + it.available_incoming_kw, 0);
+    return {
+      totalSecuredKw: stockAvailableKw + incomingAvailableKw,
+      stockAvailableKw,
+      incomingAvailableKw,
+      productCount: invData.items.filter((it) => it.total_secured_kw > 0).length,
+    };
+  }, [invData]);
+
+  const allocationStats = useMemo(() => {
+    const capacityOf = (alloc: InventoryAllocation) => {
+      if (alloc.capacity_kw != null) return alloc.capacity_kw;
+      const specWp = productMap.get(alloc.product_id)?.spec_wp ?? alloc.spec_wp ?? 0;
+      return specWp > 0 ? alloc.quantity * specWp / 1000 : 0;
+    };
+
+    return workbenchAllocs.reduce(
+      (stats, alloc) => {
+        const capacityKw = capacityOf(alloc);
+        if (alloc.status === 'pending') {
+          stats.pendingCount += 1;
+          stats.pendingKw += capacityKw;
+          if (alloc.purpose === 'sale' || alloc.purpose === 'other') {
+            stats.salePendingCount += 1;
+            stats.salePendingKw += capacityKw;
+          }
+        } else if (alloc.status === 'hold') {
+          stats.holdCount += 1;
+          stats.holdKw += capacityKw;
+        }
+        return stats;
+      },
+      {
+        pendingCount: 0,
+        pendingKw: 0,
+        salePendingCount: 0,
+        salePendingKw: 0,
+        holdCount: 0,
+        holdKw: 0,
+      },
+    );
+  }, [productMap, workbenchAllocs]);
+
+  const openAllocationForm = (productId?: string) => {
+    setPrefilledProductId(productId);
+    setEditingAlloc(undefined);
+    setAllocFormOpen(true);
+  };
+
 
   if (!selectedCompanyId) {
     return (
@@ -277,7 +446,81 @@ export default function InventoryPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-lg font-semibold">재고 현황</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-2">
+          <h1 className="text-lg font-semibold">가용재고 작업대</h1>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            {[
+              { icon: Shield, label: '가용 확인' },
+              { icon: ClipboardList, label: '예약' },
+              { icon: CheckCircle2, label: '수주' },
+              { icon: Truck, label: '출고' },
+              { icon: ReceiptText, label: '계산서' },
+            ].map((step, index, steps) => (
+              <div key={step.label} className="flex items-center gap-1.5">
+                <span className="inline-flex h-6 items-center gap-1 rounded-md border bg-background px-2">
+                  <step.icon className="h-3.5 w-3.5" />
+                  {step.label}
+                </span>
+                {index < steps.length - 1 ? <ArrowRight className="h-3 w-3 text-muted-foreground/60" /> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+        <Button size="sm" onClick={() => openAllocationForm()}>
+          <Plus className="h-3.5 w-3.5 mr-1" />예약 등록
+        </Button>
+      </div>
+
+      {inventoryStats && (
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+          <WorkbenchMetric
+            icon={Shield}
+            label="가용재고"
+            value={formatAutoKw(inventoryStats.totalSecuredKw)}
+            sub={`${inventoryStats.productCount.toLocaleString('ko-KR')}개 품목`}
+            tone="green"
+            onClick={() => handleCardClick('avail')}
+          />
+          <WorkbenchMetric
+            icon={Package}
+            label="실재고 가용"
+            value={formatAutoKw(inventoryStats.stockAvailableKw)}
+            sub="창고 출고 가능"
+            tone="blue"
+            onClick={() => handleCardClick('physical')}
+          />
+          <WorkbenchMetric
+            icon={Truck}
+            label="미착 가용"
+            value={formatAutoKw(inventoryStats.incomingAvailableKw)}
+            sub="LC/B/L 등록분"
+            tone="sky"
+            onClick={() => handleCardClick('incoming')}
+          />
+          <WorkbenchMetric
+            icon={ClipboardList}
+            label="예약 대기"
+            value={`${allocationStats.pendingCount.toLocaleString('ko-KR')}건`}
+            sub={`${formatAutoKw(allocationStats.pendingKw)} · 수주 ${formatAutoKw(allocationStats.salePendingKw)}`}
+            tone="amber"
+          />
+          <WorkbenchMetric
+            icon={PauseCircle}
+            label="보류"
+            value={`${allocationStats.holdCount.toLocaleString('ko-KR')}건`}
+            sub={formatAutoKw(allocationStats.holdKw)}
+            tone="slate"
+          />
+        </div>
+      )}
+
+      {allocError && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{allocError}</AlertDescription>
+        </Alert>
+      )}
 
       <Tabs defaultValue="avail">
         <TabsList>
@@ -359,16 +602,16 @@ export default function InventoryPage() {
               <h2 className="text-sm font-semibold">품목별 가용재고 / 배정 현황</h2>
               <Button
                 size="sm"
-                onClick={() => { setPrefilledProductId(undefined); setEditingAlloc(undefined); setAllocFormOpen(true); }}
+                onClick={() => openAllocationForm()}
               >
-                <Plus className="h-3.5 w-3.5 mr-1" />사용 예약
+                <Plus className="h-3.5 w-3.5 mr-1" />예약 등록
               </Button>
             </div>
             {invLoading ? <LoadingSpinner /> : invData ? (
               <AvailInventoryTable
                 items={invData.items}
                 allocations={visibleAllocs}
-                onNewAlloc={(productId) => { setPrefilledProductId(productId); setEditingAlloc(undefined); setAllocFormOpen(true); }}
+                onNewAlloc={(productId) => openAllocationForm(productId)}
                 onEdit={(alloc) => { setEditingAlloc(alloc); setPrefilledProductId(undefined); setAllocFormOpen(true); }}
                 onConfirm={handleConfirmAlloc}
                 onHold={handleHoldAlloc}
@@ -403,15 +646,15 @@ export default function InventoryPage() {
           <div className="mt-4 space-y-2">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">품목별 미착품 / 배정 현황</h2>
-              <Button size="sm" onClick={() => { setPrefilledProductId(undefined); setEditingAlloc(undefined); setAllocFormOpen(true); }}>
-                <Plus className="h-3.5 w-3.5 mr-1" />사용 예약
+              <Button size="sm" onClick={() => openAllocationForm()}>
+                <Plus className="h-3.5 w-3.5 mr-1" />예약 등록
               </Button>
             </div>
             {invLoading ? <LoadingSpinner /> : invData ? (
               <IncomingTable
                 items={invData.items}
                 allocations={visibleAllocs}
-                onNewAlloc={(productId) => { setPrefilledProductId(productId); setEditingAlloc(undefined); setAllocFormOpen(true); }}
+                onNewAlloc={(productId) => openAllocationForm(productId)}
                 onEdit={(alloc) => { setEditingAlloc(alloc); setPrefilledProductId(undefined); setAllocFormOpen(true); }}
                 onConfirm={handleConfirmAlloc}
                 onHold={handleHoldAlloc}
