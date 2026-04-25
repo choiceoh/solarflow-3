@@ -22,6 +22,21 @@ interface LCAgg {
   totalMw: number;
 }
 
+const COMPLETED_BL_STATUSES = new Set(['completed', 'erp_done']);
+
+function formatMw(mw: number, digits = 2): string {
+  if (!Number.isFinite(mw) || mw <= 0) return '0 MW';
+  return `${mw.toLocaleString('ko-KR', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })} MW`;
+}
+
+function progressPercent(done: number, total: number): number {
+  if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0) return 0;
+  return Math.min(100, Math.max(0, (done / total) * 100));
+}
+
 function MaturityBadge({ date }: { date?: string }) {
   if (!date) return null;
   const diff = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
@@ -170,6 +185,10 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
           <tbody>
             {items.map((lc) => {
               const a = agg[lc.lc_id];
+              const lcTargetMw = lc.target_mw ?? (
+                lc.target_qty != null && a?.firstSpecWp ? (lc.target_qty * a.firstSpecWp) / 1_000_000 : 0
+              );
+              const poOpenRate = a?.totalMw ? progressPercent(lcTargetMw, a.totalMw) : 0;
               const isRepaid = lc.repaid === true;
               const isExpanded = expandedLCId === lc.lc_id;
               return (
@@ -237,7 +256,17 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
                       <div className="text-[10px] text-muted-foreground mt-0.5">
                         {formatDate(lc.open_date ?? '')} 개설
                       </div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                      <div className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
+                        <span className="font-medium text-foreground">{formatMw(lcTargetMw, 2)}</span>
+                        {a?.totalMw ? <span className="ml-1">/ PO {formatMw(a.totalMw, 2)}</span> : null}
+                      </div>
+                      <div className="mt-1 flex items-center justify-end gap-2">
+                        <div className="h-1.5 w-20 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-blue-500" style={{ width: `${poOpenRate}%` }} />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">{poOpenRate.toFixed(1)}%</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
                         {lc.target_qty != null ? formatNumber(lc.target_qty) + ' EA' : '—'}
                         {lc.usance_days != null ? ` · Usance ${lc.usance_days}일` : ''}
                       </div>
@@ -301,6 +330,47 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
                     <tr>
                       <td colSpan={5} className="p-0 border-t bg-muted/5">
                         <div className="px-4 py-3 border-l-4 border-blue-300 bg-blue-50/40 space-y-2">
+                          {expandedBLs !== null && (() => {
+                            const totalRegisteredMw = Object.values(blMwMap).reduce((s, v) => s + v, 0);
+                            const completedMw = (expandedBLs ?? []).reduce((sum, bl) => (
+                              COMPLETED_BL_STATUSES.has(bl.status) ? sum + (blMwMap[bl.bl_id] ?? 0) : sum
+                            ), 0);
+                            const completedRate = progressPercent(completedMw, lcTargetMw);
+                            const registeredRate = progressPercent(totalRegisteredMw, lcTargetMw);
+                            const remainingMw = Math.max(lcTargetMw - completedMw, 0);
+                            return (
+                              <div className="rounded-md border border-blue-100 bg-background/80 px-3 py-2">
+                                <div className="grid gap-3 text-[11px] md:grid-cols-4">
+                                  <div>
+                                    <div className="text-muted-foreground">LC 개설</div>
+                                    <div className="font-semibold tabular-nums">{formatMw(lcTargetMw, 2)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">B/L 등록</div>
+                                    <div className="font-semibold tabular-nums text-blue-700">{formatMw(totalRegisteredMw, 2)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">입고완료</div>
+                                    <div className="font-semibold tabular-nums text-green-700">{formatMw(completedMw, 2)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">입고 잔량</div>
+                                    <div className="font-semibold tabular-nums text-orange-700">{formatMw(remainingMw, 2)}</div>
+                                  </div>
+                                </div>
+                                <div className="mt-2 flex items-center gap-2">
+                                  <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                                    <div className="absolute inset-y-0 left-0 rounded-full bg-blue-300" style={{ width: `${registeredRate}%` }} />
+                                    <div className="absolute inset-y-0 left-0 rounded-full bg-green-500" style={{ width: `${completedRate}%` }} />
+                                  </div>
+                                  <span className="w-16 text-right text-[10px] text-muted-foreground tabular-nums">
+                                    {completedRate.toFixed(1)}%
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                           {/* 헤더 */}
                           <div className="flex items-center justify-between">
                             <span className="text-[11px] font-semibold text-blue-700">
@@ -310,7 +380,12 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
                                   {expandedBLs.length}건
                                   {expandedBLs.length > 0 && (() => {
                                     const totalMw = Object.values(blMwMap).reduce((s, v) => s + v, 0);
-                                    return totalMw > 0 ? ` · ${totalMw.toFixed(3)} MW` : '';
+                                    const completedMw = (expandedBLs ?? []).reduce((sum, bl) => (
+                                      COMPLETED_BL_STATUSES.has(bl.status) ? sum + (blMwMap[bl.bl_id] ?? 0) : sum
+                                    ), 0);
+                                    return totalMw > 0
+                                      ? ` · 등록 ${formatMw(totalMw, 3)} · 완료 ${formatMw(completedMw, 3)}`
+                                      : '';
                                   })()}
                                 </span>
                               )}

@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronDown, LayoutDashboard, Landmark, BarChart3,
-  StickyNote, FileSignature, Settings, LogOut, User,
+  StickyNote, FileSignature, Settings, LogOut, User, FileText, History, Ship,
   Building2, Factory, Tag, Handshake, Warehouse, Banknote, HardHat,
   Package, ClipboardList, Store,
 } from 'lucide-react';
@@ -46,6 +46,14 @@ const toolSections: { label: string; path: string; icon: React.ElementType; menu
   { label: '설정',   path: '/settings', icon: Settings,      menu: 'settings' },
 ];
 
+const purchaseSections: { label: string; path: string; icon: React.ElementType; menu: MenuKey }[] = [
+  { label: 'PO 발주',  path: '/procurement',           icon: FileText,      menu: 'procurement' },
+  { label: '계약금',   path: '/procurement?tab=tt',    icon: Banknote,      menu: 'procurement' },
+  { label: 'LC 개설',  path: '/procurement?tab=lc',    icon: Landmark,      menu: 'lc' },
+  { label: 'B/L 입고', path: '/procurement?tab=bl',    icon: Ship,          menu: 'inbound' },
+  { label: '단가이력', path: '/procurement?tab=price', icon: History,       menu: 'procurement' },
+];
+
 
 export default function TopNav() {
   const { pathname } = useLocation();
@@ -69,10 +77,11 @@ export default function TopNav() {
   const isSales     = ['/orders', '/outbound'].some(p => pathname === p || pathname.startsWith(p + '/'));
   const isAnalysis  = pathname === '/' || pathname.startsWith('/banking') || pathname.startsWith('/customs');
 
-  const showPurchase  = canAccessMenu(r, 'procurement') || canAccessMenu(r, 'inbound');
+  const showPurchase  = canAccessMenu(r, 'procurement') || canAccessMenu(r, 'lc') || canAccessMenu(r, 'inbound');
   const showInventory = canAccessMenu(r, 'inventory');
   const showSales     = canAccessMenu(r, 'orders') || canAccessMenu(r, 'outbound');
   const analysisVisible = analysisSections.filter(s => canAccessMenu(r, s.menu));
+  const purchaseVisible = purchaseSections.filter(s => canAccessMenu(r, s.menu));
   const showMasters     = canAccessMenu(r, 'masters');
   const toolsVisible    = toolSections.filter(s => canAccessMenu(r, s.menu));
 
@@ -120,10 +129,24 @@ export default function TopNav() {
             <Package className="h-3.5 w-3.5" />가용재고
           </Link>
         )}
-        {showPurchase && (
-          <Link to="/procurement" className={navLinkClass(isPurchase)}>
-            <ClipboardList className="h-3.5 w-3.5" />구매
-          </Link>
+        {showPurchase && purchaseVisible.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger className={cn(
+              'flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors select-none whitespace-nowrap',
+              isPurchase ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
+            )}>
+              <ClipboardList className="h-3.5 w-3.5" />구매
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-44">
+              {purchaseVisible.map((s) => (
+                <DropdownMenuItem key={s.path} onClick={() => navigate(s.path)} className="gap-2">
+                  <s.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                  {s.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
         {showSales && (
           <Link to="/orders" className={navLinkClass(isSales)}>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, FileText, Banknote, Landmark, Ship, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -33,9 +33,14 @@ function FT({ text }: { text: string }) {
   return <span className="flex flex-1 text-left truncate" data-slot="select-value">{text}</span>;
 }
 
+const PROCUREMENT_TABS = new Set(['po', 'tt', 'lc', 'bl', 'price']);
+
 export default function ProcurementPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
-  const [activeTab, setActiveTab] = useState('po');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const initialTab = new URLSearchParams(location.search).get('tab') ?? 'po';
+  const [activeTab, setActiveTab] = useState(PROCUREMENT_TABS.has(initialTab) ? initialTab : 'po');
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
   // 계약금 탭용 전체 PO 목록 (필터 없음) — usePOList hook으로 관리하여 삭제 시 reloadPoList()로 동기화
@@ -45,9 +50,12 @@ export default function ProcurementPage() {
   const [poMfgFilter, setPoMfgFilter] = useState('');
   const [poTypeFilter, setPoTypeFilter] = useState('');
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
-  const location = useLocation();
   // R1-1: 사이드바 "발주/결제" 클릭 시 슬라이드 패널 닫기
   useEffect(() => { setSelectedPO(null); }, [location.key]);
+  useEffect(() => {
+    const nextTab = new URLSearchParams(location.search).get('tab') ?? 'po';
+    if (PROCUREMENT_TABS.has(nextTab)) setActiveTab(nextTab);
+  }, [location.search]);
   const [poFormOpen, setPoFormOpen] = useState(false);
   const poFilters: Record<string, string> = {};
   if (poStatusFilter) poFilters.status = poStatusFilter;
@@ -145,6 +153,11 @@ export default function ProcurementPage() {
   if (!selectedCompanyId) {
     return <div className="flex items-center justify-center p-12"><p className="text-muted-foreground">좌측 상단에서 법인을 선택해주세요</p></div>;
   }
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    navigate(tab === 'po' ? '/procurement' : `/procurement?tab=${tab}`, { replace: true });
+  };
 
   const handleCreatePO = async (d: Record<string, unknown>) => {
     // 발주품목(po_lines)을 PO 본체와 분리하여 등록 (입고관리와 동일 패턴)
@@ -409,7 +422,7 @@ export default function ProcurementPage() {
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="po"><FileText className="h-3.5 w-3.5" />PO</TabsTrigger>
           <TabsTrigger value="tt"><Banknote className="h-3.5 w-3.5" />계약금</TabsTrigger>
