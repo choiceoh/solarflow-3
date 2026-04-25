@@ -9,7 +9,7 @@ import { ChevronDown, Search, Check, AlertTriangle, Building2, Plus } from 'luci
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
 import { PartnerCombobox } from '@/components/common/PartnerCombobox';
-import { cn, shortMfgName } from '@/lib/utils';
+import { cn, moduleLabel } from '@/lib/utils';
 import type { InventoryItem } from '@/types/inventory';
 import type { Partner, ConstructionSite, Product } from '@/types/masters';
 import type { BLShipment, BLLineItem } from '@/types/inbound';
@@ -75,6 +75,21 @@ function formatCapacityAuto(kw: number): string {
   return Math.round(kw).toLocaleString('ko-KR') + ' kW';
 }
 
+const isFreeSpareAlloc = (a: InventoryAllocation) => a.notes?.startsWith('[무상스페어]') ?? false;
+
+function isLinkedFreeSpare(main: InventoryAllocation, candidate: InventoryAllocation): boolean {
+  if (candidate.alloc_id === main.alloc_id || !isFreeSpareAlloc(candidate)) return false;
+  if (candidate.company_id !== main.company_id || candidate.product_id !== main.product_id) return false;
+  if (candidate.purpose !== main.purpose) return false;
+  if (candidate.status !== 'pending' && candidate.status !== 'hold') return false;
+  if (main.group_id && candidate.group_id) return main.group_id === candidate.group_id;
+  return (
+    (candidate.customer_name ?? '') === (main.customer_name ?? '') &&
+    (candidate.site_name ?? '') === (main.site_name ?? '') &&
+    (candidate.bl_id ?? '') === (main.bl_id ?? '')
+  );
+}
+
 /* ─── 품목 검색 콤보박스 ─────────────────────────── */
 interface ProductComboboxProps {
   items: InventoryItem[];
@@ -128,7 +143,7 @@ function ProductCombobox({ items, value, onChange, priceMap }: ProductComboboxPr
       >
         <span className="flex-1 text-left truncate">
           {selected
-            ? `${shortMfgName(selected.manufacturer_name)} | ${selected.product_name} | ${selected.spec_wp}Wp`
+            ? `${moduleLabel(selected.manufacturer_name, selected.spec_wp)} | ${selected.product_name}`
             : '품목 검색 (제조사·규격·품명)'}
         </span>
         <ChevronDown className="size-4 text-muted-foreground shrink-0" />
@@ -171,7 +186,7 @@ function ProductCombobox({ items, value, onChange, priceMap }: ProductComboboxPr
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm truncate">
-                        {shortMfgName(it.manufacturer_name)} · {it.product_name} · {it.spec_wp}Wp
+                        {moduleLabel(it.manufacturer_name, it.spec_wp)} · {it.product_name}
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-0.5">
                         <span className="text-green-600">현재고 {stockEa.toLocaleString()}EA</span>
@@ -404,6 +419,7 @@ export default function AllocationForm({
   const companies         = useAppStore((s) => s.companies);
   const setCompanyId      = useAppStore((s) => s.setCompanyId);
   const priceMap = priceMapProp ?? new Map<string, number>();
+  const effectiveCompanyId = editData?.company_id || selectedCompanyId;
 
   /* 상태 */
   const [purpose,           setPurpose]           = useState<'sale' | 'construction_own' | 'construction_epc' | 'other'>('sale');
@@ -427,8 +443,9 @@ export default function AllocationForm({
   const [blPriceMap,    setBlPriceMap]    = useState<Map<string, number>>(new Map());
   const [blUsdPriceMap, setBlUsdPriceMap] = useState<Map<string, number>>(new Map());
   const [products,          setProducts]          = useState<Product[]>([]);
+  const [linkedFreeSpares,  setLinkedFreeSpares]  = useState<InventoryAllocation[]>([]);
 
-  const noCompany = !selectedCompanyId || selectedCompanyId === 'all';
+  const noCompany = !editData && (!selectedCompanyId || selectedCompanyId === 'all');
 
   /* 법인별 재고 보유 여부 (noCompany 모드에서 법인 선택 시 비어있는 법인 비활성화) */
   const [companyHasInv, setCompanyHasInv] = useState<Map<string, boolean>>(new Map());
@@ -513,11 +530,11 @@ export default function AllocationForm({
     }
     const typeParam = purpose === 'construction_own' ? 'own' : 'epc';
     fetchWithAuth<ConstructionSite[]>(
-      `/api/v1/construction-sites?company_id=${selectedCompanyId}&site_type=${typeParam}&is_active=true`,
+      `/api/v1/construction-sites?company_id=${effectiveCompanyId}&site_type=${typeParam}&is_active=true`,
     )
       .then((list) => setSites(list))
       .catch(() => setSites([]));
-  }, [selectedCompanyId, purpose, noCompany]);
+  }, [effectiveCompanyId, purpose, noCompany]);
 
   /* 폼 초기화 — 신규 또는 수정 */
   useEffect(() => {
@@ -536,7 +553,8 @@ export default function AllocationForm({
       setQtyMode('ea');
       setQtyRaw(String(editData.quantity ?? ''));
       setExpectedPrice(editData.expected_price_per_wp != null ? String(editData.expected_price_per_wp) : '');
-      setFreeSpareQty('');  // 수정 시 무상스페어는 별도 관리 (재생성 방지)
+      setFreeSpareQty(editData.free_spare_qty && editData.free_spare_qty > 0 ? String(editData.free_spare_qty) : '');
+      setLinkedFreeSpares([]);
       setSiteName(editData.site_name ?? '');
       setSelectedBlId(editData.bl_id ?? '');
       // notes에서 [발주번호:X] 파싱
@@ -559,6 +577,7 @@ export default function AllocationForm({
       setQtyRaw('');
       setExpectedPrice('');
       setFreeSpareQty('');
+      setLinkedFreeSpares([]);
       setCustomerPartnerId('');
       setCustomerOrderNo('');
       setSiteName('');
@@ -567,6 +586,26 @@ export default function AllocationForm({
       setNotes('');
     }
   }, [open, prefilledProductId, editData]);
+
+  /* 수정 모드: 메인 예약에 딸린 무상스페어 배정을 함께 불러오기 */
+  useEffect(() => {
+    if (!open || !editData) return;
+
+    fetchWithAuth<InventoryAllocation[]>(
+      `/api/v1/inventory/allocations?company_id=${editData.company_id}&product_id=${editData.product_id}`,
+    )
+      .then((list) => {
+        const spares = (list ?? []).filter((a) => isLinkedFreeSpare(editData, a));
+        setLinkedFreeSpares(spares);
+        if (spares.length > 0) {
+          const totalQty = spares.reduce((sum, a) => sum + a.quantity, 0);
+          setFreeSpareQty(String(totalQty));
+        }
+      })
+      .catch(() => {
+        setLinkedFreeSpares([]);
+      });
+  }, [open, editData]);
 
   /* 수정 모드: partners 로드 후 customer_name → partner_id 역조회 */
   useEffect(() => {
@@ -627,7 +666,7 @@ export default function AllocationForm({
   /* 저장 */
   const handleSave = async () => {
     setError('');
-    if (!selectedCompanyId || selectedCompanyId === 'all') {
+    if (!effectiveCompanyId || effectiveCompanyId === 'all') {
       setError('좌측 상단에서 법인을 먼저 선택해주세요'); return;
     }
     if (!productId)        { setError('품목을 선택해주세요'); return; }
@@ -642,7 +681,7 @@ export default function AllocationForm({
     const isConstruction = purpose === 'construction_own' || purpose === 'construction_epc';
     const partnerName = partners.find((p) => p.partner_id === customerPartnerId)?.partner_name;
     const parsedPrice = parseFloat(expectedPrice);
-    const parsedSpare = parseInt(freeSpareQty, 10);
+    const parsedSpare = purpose === 'sale' ? parseInt(freeSpareQty, 10) : NaN;
     // 발주번호를 notes 앞에 태그 형태로 저장
     const notesWithOrderNo = customerOrderNo.trim()
       ? `[발주번호:${customerOrderNo.trim()}]${notes ? ' ' + notes : ''}`
@@ -652,7 +691,7 @@ export default function AllocationForm({
       ? (sites.find((s) => s.site_id === selectedSiteId)?.name || siteName || undefined)
       : (purpose !== 'sale' ? (siteName || undefined) : undefined);
     const base = {
-      company_id:              selectedCompanyId,
+      company_id:              effectiveCompanyId,
       product_id:              productId,
       purpose,
       customer_name:           purpose === 'sale' ? (partnerName ?? undefined) : undefined,
@@ -668,15 +707,57 @@ export default function AllocationForm({
     try {
       if (editData) {
         /* ── 수정 모드: PUT ── */
+        const totalEa = allocationPlan.stockEa + allocationPlan.incomingEa;
         await fetchWithAuth(`/api/v1/inventory/allocations/${editData.alloc_id}`, {
           method: 'PUT',
           body: JSON.stringify({
             ...base,
-            quantity:    allocationPlan.stockEa + allocationPlan.incomingEa,
-            capacity_kw: (allocationPlan.stockEa + allocationPlan.incomingEa) * (selectedItem!.spec_wp / 1000),
+            quantity:    totalEa,
+            capacity_kw: totalEa * (selectedItem!.spec_wp / 1000),
             source_type: editData.source_type,  // 출처는 유지
           }),
         });
+
+        const spareEa = !isNaN(parsedSpare) && parsedSpare > 0 ? parsedSpare : 0;
+        const spareNotes = '[무상스페어]' + (base.notes ? ' ' + base.notes : '');
+
+        if (spareEa > 0) {
+          const [primarySpare, ...duplicateSpares] = linkedFreeSpares;
+          const sparePayload = {
+            ...base,
+            quantity:       spareEa,
+            capacity_kw:    spareEa * (selectedItem!.spec_wp / 1000),
+            source_type:    editData.source_type,
+            free_spare_qty: 0,
+            notes:          spareNotes,
+            status:         primarySpare?.status ?? editData.status,
+            ...(editData.group_id ? { group_id: editData.group_id } : {}),
+          };
+
+          if (primarySpare) {
+            await fetchWithAuth(`/api/v1/inventory/allocations/${primarySpare.alloc_id}`, {
+              method: 'PUT',
+              body: JSON.stringify(sparePayload),
+            });
+          } else {
+            await fetchWithAuth('/api/v1/inventory/allocations', {
+              method: 'POST',
+              body: JSON.stringify(sparePayload),
+            });
+          }
+
+          await Promise.all(
+            duplicateSpares.map((spare) =>
+              fetchWithAuth(`/api/v1/inventory/allocations/${spare.alloc_id}`, { method: 'DELETE' }),
+            ),
+          );
+        } else if (linkedFreeSpares.length > 0) {
+          await Promise.all(
+            linkedFreeSpares.map((spare) =>
+              fetchWithAuth(`/api/v1/inventory/allocations/${spare.alloc_id}`, { method: 'DELETE' }),
+            ),
+          );
+        }
       } else {
         /* ── 신규 모드: POST ── */
         // stock+incoming 분할 시 동일 group_id 부여 (B안: 그룹 기반 연관 탐색)
@@ -719,6 +800,7 @@ export default function AllocationForm({
               source_type:    allocationPlan.stockEa > 0 ? 'stock' : 'incoming',
               free_spare_qty: 0,
               notes:          '[무상스페어]' + (base.notes ? ' ' + base.notes : ''),
+              ...(groupId ? { group_id: groupId } : {}),
             }),
           });
         }
@@ -929,8 +1011,7 @@ export default function AllocationForm({
                   <Txt
                     text={selectedBl
                       ? (() => {
-                          const mfg  = selectedItem?.manufacturer_name ?? '—';
-                          const spec = selectedItem?.spec_wp ? ` ${selectedItem.spec_wp}W` : '';
+                          const modLabel = moduleLabel(selectedItem?.manufacturer_name, selectedItem?.spec_wp);
                           const dateLabel = selectedBl.actual_arrival
                             ? `입항일: ${selectedBl.actual_arrival.slice(0, 10)}`
                             : `ETA: ${selectedBl.eta?.slice(0, 10) ?? '—'}`;
@@ -938,7 +1019,7 @@ export default function AllocationForm({
                           const usdStr = blUsdPriceMap.has(selectedBlId)
                             ? ` | $${blUsdPriceMap.get(selectedBlId)!.toFixed(4)}/Wp`
                             : '';
-                          return `[${stKo}] ${mfg}${spec} | ${selectedBl.bl_number} | ${dateLabel}${usdStr}`;
+                          return `[${stKo}] ${modLabel} | ${selectedBl.bl_number} | ${dateLabel}${usdStr}`;
                         })()
                       : ''}
                     placeholder="B/L 선택 안함"
@@ -947,8 +1028,7 @@ export default function AllocationForm({
                 <SelectContent>
                   <SelectItem value="_none">선택 안함</SelectItem>
                   {bls.map((b) => {
-                    const mfg  = selectedItem?.manufacturer_name ?? '—';
-                    const spec = selectedItem?.spec_wp ? ` ${selectedItem.spec_wp}W` : '';
+                    const modLabel = moduleLabel(selectedItem?.manufacturer_name, selectedItem?.spec_wp);
                     const dateLabel = b.actual_arrival
                       ? `입항일: ${b.actual_arrival.slice(0, 10)}`
                       : `ETA: ${b.eta?.slice(0, 10) ?? '—'}`;
@@ -959,7 +1039,7 @@ export default function AllocationForm({
                         <span className={cn('text-xs font-medium mr-1.5', isCompleted ? 'text-green-600' : 'text-blue-600')}>
                           [{stKo}]
                         </span>
-                        {mfg}{spec} | {b.bl_number} | {dateLabel}
+                        {modLabel} | {b.bl_number} | {dateLabel}
                         {blUsdPriceMap.has(b.bl_id) && (
                           <span className="ml-1.5 text-[10px] text-muted-foreground">
                             ${blUsdPriceMap.get(b.bl_id)!.toFixed(4)}/Wp
@@ -1044,7 +1124,7 @@ export default function AllocationForm({
                 value={selectedSiteId}
                 onChange={setSelectedSiteId}
                 siteType={purpose === 'construction_own' ? 'own' : 'epc'}
-                companyId={selectedCompanyId ?? ''}
+                companyId={effectiveCompanyId ?? ''}
                 onCreated={(site) => setSites((prev) => [...prev, site])}
               />
               {!selectedSiteId && (
