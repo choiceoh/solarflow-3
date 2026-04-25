@@ -5,6 +5,7 @@ import {
   Building2, Factory, Tag, Handshake, Warehouse, Banknote, HardHat,
   Package, ClipboardList, Store,
 } from 'lucide-react';
+import QuickRegister from '@/components/layout/QuickRegister';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermission } from '@/hooks/usePermission';
@@ -177,9 +178,10 @@ export default function TopNav() {
         )}
       </nav>
 
-      {/* ④ 우측: 검색 + 알림 + 사용자 */}
+      {/* ④ 우측: 빠른 등록 + 검색 + 알림 + 사용자 */}
       <div className="flex-1" />
 
+      <QuickRegister userId={user?.user_id} role={r} />
       <GlobalSearchBar />
       <AlertBell />
 

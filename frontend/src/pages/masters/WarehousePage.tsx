@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import DataTable, { type Column } from '@/components/common/DataTable';
@@ -18,6 +18,8 @@ export default function WarehousePage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Warehouse | null>(null);
   const [toggleTarget, setToggleTarget] = useState<Warehouse | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Warehouse | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,6 +46,17 @@ export default function WarehousePage() {
       await fetchWithAuth('/api/v1/warehouses', { method: 'POST', body: JSON.stringify(formData) });
     }
     setEditTarget(null); load();
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await fetchWithAuth(`/api/v1/warehouses/${deleteTarget.warehouse_id}`, { method: 'DELETE' });
+      setDeleteTarget(null);
+      load();
+    } catch { /* empty */ }
+    setDeleting(false);
   };
 
   const handleToggle = async () => {
@@ -77,7 +90,16 @@ export default function WarehousePage() {
         <Button size="sm" onClick={() => { setEditTarget(null); setFormOpen(true); }}><Plus className="mr-1.5 h-4 w-4" />새로 등록</Button>
       </div>
       <DataTable columns={columns} data={filtered} loading={loading} searchable searchPlaceholder="창고코드, 창고명, 장소명 검색" onSearch={handleSearch}
-        actions={(row) => (<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}><Pencil className="h-3.5 w-3.5" /></Button>)} />
+        actions={(row) => (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )} />
       <WarehouseForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleSubmit} editData={editTarget} />
       <ConfirmDialog
         open={!!toggleTarget}
@@ -85,6 +107,15 @@ export default function WarehousePage() {
         title="상태 변경"
         description={`${toggleTarget?.warehouse_name}을(를) ${toggleTarget?.is_active ? '비활성' : '활성'}으로 변경하시겠습니까?`}
         onConfirm={handleToggle}
+      />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={() => setDeleteTarget(null)}
+        title="창고 삭제"
+        description={`"${deleteTarget?.warehouse_name}"을(를) 삭제하시겠습니까? 연결된 데이터가 있으면 삭제가 실패할 수 있습니다.`}
+        onConfirm={handleDelete}
+        confirmLabel={deleting ? '삭제 중...' : '삭제'}
+        variant="destructive"
       />
     </div>
   );

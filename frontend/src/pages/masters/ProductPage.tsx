@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import DataTable, { type Column } from '@/components/common/DataTable';
@@ -30,6 +30,8 @@ export default function ProductPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Product | null>(null);
   const [toggleTarget, setToggleTarget] = useState<Product | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,6 +75,17 @@ export default function ProductPage() {
     }
     setEditTarget(null);
     load();
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await fetchWithAuth(`/api/v1/products/${deleteTarget.product_id}`, { method: 'DELETE' });
+      setDeleteTarget(null);
+      load();
+    } catch { /* empty */ }
+    setDeleting(false);
   };
 
   const handleToggle = async () => {
@@ -123,9 +136,14 @@ export default function ProductPage() {
         columns={columns} data={filtered} loading={loading}
         searchable searchPlaceholder="품번코드, 품명, 제조사 검색" onSearch={setSearch}
         actions={(row) => (
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         )}
       />
       <ProductForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleSubmit} editData={editTarget} />
@@ -135,6 +153,15 @@ export default function ProductPage() {
         title="상태 변경"
         description={`${toggleTarget?.product_code} ${toggleTarget?.product_name}을(를) ${toggleTarget?.is_active ? '비활성' : '활성'}으로 변경하시겠습니까?`}
         onConfirm={handleToggle}
+      />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={() => setDeleteTarget(null)}
+        title="품번 삭제"
+        description={`"${deleteTarget?.product_code}"을(를) 삭제하시겠습니까? 연결된 데이터가 있으면 삭제가 실패할 수 있습니다.`}
+        onConfirm={handleDelete}
+        confirmLabel={deleting ? '삭제 중...' : '삭제'}
+        variant="destructive"
       />
     </div>
   );

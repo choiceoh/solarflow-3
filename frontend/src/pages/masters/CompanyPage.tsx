@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import DataTable, { type Column } from '@/components/common/DataTable';
@@ -16,6 +16,8 @@ export default function CompanyPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Company | null>(null);
   const [toggleTarget, setToggleTarget] = useState<Company | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,6 +51,17 @@ export default function CompanyPage() {
     await fetchWithAuth(`/api/v1/companies/${editTarget.company_id}`, { method: 'PUT', body: JSON.stringify(formData) });
     setEditTarget(null);
     load();
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await fetchWithAuth(`/api/v1/companies/${deleteTarget.company_id}`, { method: 'DELETE' });
+      setDeleteTarget(null);
+      load();
+    } catch { /* empty */ }
+    setDeleting(false);
   };
 
   const handleToggle = async () => {
@@ -94,9 +107,14 @@ export default function CompanyPage() {
         searchPlaceholder="법인명, 코드, 사업자번호 검색"
         onSearch={handleSearch}
         actions={(row) => (
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         )}
       />
       <CompanyForm
@@ -111,6 +129,15 @@ export default function CompanyPage() {
         title="상태 변경"
         description={`${toggleTarget?.company_name}을(를) ${toggleTarget?.is_active ? '비활성' : '활성'}으로 변경하시겠습니까?`}
         onConfirm={handleToggle}
+      />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={() => setDeleteTarget(null)}
+        title="법인 삭제"
+        description={`"${deleteTarget?.company_name}"을(를) 삭제하시겠습니까? 연결된 데이터가 있으면 삭제가 실패할 수 있습니다.`}
+        onConfirm={handleDelete}
+        confirmLabel={deleting ? '삭제 중...' : '삭제'}
+        variant="destructive"
       />
     </div>
   );

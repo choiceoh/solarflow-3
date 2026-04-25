@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, Pencil, Search, HardHat } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Pencil, Search, HardHat, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import EmptyState from '@/components/common/EmptyState';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type { ConstructionSite } from '@/types/masters';
@@ -287,8 +288,10 @@ export default function ConstructionSitesPage() {
   const [search,     setSearch]     = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'own' | 'epc'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [formOpen,   setFormOpen]   = useState(false);
-  const [editTarget, setEditTarget] = useState<ConstructionSite | undefined>(undefined);
+  const [formOpen,      setFormOpen]      = useState(false);
+  const [editTarget,    setEditTarget]    = useState<ConstructionSite | undefined>(undefined);
+  const [deleteTarget,  setDeleteTarget]  = useState<ConstructionSite | null>(null);
+  const [deleting,      setDeleting]      = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -308,6 +311,17 @@ export default function ConstructionSitesPage() {
     const t = setTimeout(load, 500);
     return () => clearTimeout(t);
   }, [load]);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await fetchWithAuth(`/api/v1/construction-sites/${deleteTarget.site_id}`, { method: 'DELETE' });
+      setDeleteTarget(null);
+      load();
+    } catch { /* empty */ }
+    setDeleting(false);
+  };
 
   const handleToggleActive = async (site: ConstructionSite) => {
     await fetchWithAuth(`/api/v1/construction-sites/${site.site_id}/status`, {
@@ -430,6 +444,14 @@ export default function ConstructionSitesPage() {
                   >
                     <Pencil className="size-3.5" />
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => setDeleteTarget(site)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
                 </div>
               </div>
 
@@ -449,6 +471,15 @@ export default function ConstructionSitesPage() {
         companyId={selectedCompanyId ?? ''}
         editData={editTarget}
         onSaved={load}
+      />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={() => setDeleteTarget(null)}
+        title="현장 삭제"
+        description={`"${deleteTarget?.name}"을(를) 삭제하시겠습니까? 연결된 데이터가 있으면 삭제가 실패할 수 있습니다.`}
+        onConfirm={handleDelete}
+        confirmLabel={deleting ? '삭제 중...' : '삭제'}
+        variant="destructive"
       />
     </div>
   );
