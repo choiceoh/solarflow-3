@@ -10,6 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
 import { shortMfgName } from '@/lib/utils';
+import {
+  calcWpLineAmountUsd,
+  displayPriceToUsdWp,
+  formatIntegerInput,
+  parseDecimalInput,
+  parseIntegerInput,
+  unitUsdEaToDisplayPrice,
+} from '@/lib/numberRules';
 import type { PurchaseOrder } from '@/types/procurement';
 import type { Company, Manufacturer, Product } from '@/types/masters';
 
@@ -231,9 +239,6 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       const mapLine = (l: POLineFetched): POLine => {
         const specWp = l.products?.spec_wp ?? 0;
         const isFree = l.payment_type === 'free';
-        const centsPerWp = (!isFree && l.unit_price_usd != null && specWp)
-          ? (l.unit_price_usd / specWp) * 100
-          : 0;
         const mwVal = specWp && l.quantity ? (l.quantity * specWp) / 1_000_000 : 0;
         return {
           po_line_id: l.po_line_id,
@@ -242,7 +247,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
           quantity: String(l.quantity),
           capacityKw: mwVal ? (mwVal * 1000).toFixed(1) : '',
           capacityMw: mwVal ? mwVal.toFixed(3) : '',
-          unit_price_usd_wp: centsPerWp ? parseFloat(centsPerWp.toPrecision(8)).toString() : '',
+          unit_price_usd_wp: isFree ? '' : unitUsdEaToDisplayPrice(l.unit_price_usd, specWp, 'cents'),
           priceMode: 'cents' as const,
           isFreeSpare: isFree,
           _specWp: specWp, // products 비동기 로딩 전 단가 계산용 캐시
@@ -327,7 +332,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
     if (!specWp) return { qty: 0, mw: 0, kw: 0, total: 0 };
     let qty = 0, mw = 0;
     if (l.inputMode === 'ea') {
-      qty = parseInt(l.quantity || '0');
+      qty = Number(parseIntegerInput(l.quantity) || '0');
       mw = (qty * specWp) / 1_000_000;
     } else if (l.inputMode === 'kw') {
       const kw = parseFloat(l.capacityKw || '0');
@@ -339,9 +344,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
     }
     const kw = mw * 1000;
     if (l.isFreeSpare) return { qty, mw, kw, total: 0 };
-    const rawPrice = parseFloat(l.unit_price_usd_wp || '0');
-    const pricePerWp = l.priceMode === 'cents' ? rawPrice / 100 : rawPrice;
-    const total = qty && pricePerWp ? qty * specWp * pricePerWp : 0;
+    const total = calcWpLineAmountUsd(qty, specWp, l.unit_price_usd_wp, l.priceMode);
     return { qty, mw, kw, total };
   }, [products]);
 
@@ -394,7 +397,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
     if (!editData) {
       const validLines = lines.filter((l) => {
         const c = lineCalc(l);
-        return l.product_id && (c.qty > 0 || parseInt(l.quantity || '0') > 0);
+        return l.product_id && (c.qty > 0 || Number(parseIntegerInput(l.quantity) || '0') > 0);
       });
       if (validLines.length === 0) { setSubmitError('발주품목을 최소 1행 입력해주세요'); return; }
       // 유상 라인에 단가 미입력 경고
@@ -411,12 +414,12 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       const c = lineCalc(l);
       if (c.qty > 0) return true;
       // fallback: products 미로드 상태에서도 qty 입력값 그대로 사용
-      return parseInt(l.quantity || '0') > 0;
+      return Number(parseIntegerInput(l.quantity) || '0') > 0;
     });
     const linesPayload = validLines.map((l) => {
       const c = lineCalc(l);
       const p = products.find((x) => x.product_id === l.product_id);
-      const qty = c.qty || parseInt(l.quantity || '0');
+      const qty = c.qty || Number(parseIntegerInput(l.quantity) || '0');
 
       if (l.isFreeSpare) {
         // 무상스페어: 단가 0, payment_type='free'
@@ -432,8 +435,7 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
       }
 
       // unit_price_usd = $/EA (모듈 1장 가격), total_amount_usd = 라인 총액
-      const rawPrice = parseFloat(l.unit_price_usd_wp || '0');
-      const pricePerWp = l.priceMode === 'cents' ? rawPrice / 100 : rawPrice; // USD/Wp
+      const pricePerWp = displayPriceToUsdWp(l.unit_price_usd_wp, l.priceMode) ?? 0; // USD/Wp
       const specWpFinal = p?.spec_wp ?? l._specWp ?? 0;
 
       // $/EA = spec_wp * $/Wp — qty가 없어도 계산 가능 (MW 모드에서 qty=0이어도 안전)
@@ -877,18 +879,18 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
                             {{ ea: '수량(EA)', kw: '용량(kW)', mw: '용량(MW)' }[line.inputMode]} *
                           </span>
                           {line.inputMode === 'ea' ? (
-                            <Input className="h-9 text-xs" inputMode="numeric" value={line.quantity} placeholder="0"
-                              onChange={(e) => updateLine(idx, 'quantity', e.target.value.replace(/[^0-9]/g, ''))} />
+                            <Input className="h-9 text-xs text-right font-mono tabular-nums" inputMode="numeric" value={formatIntegerInput(line.quantity)} placeholder="0"
+                              onChange={(e) => updateLine(idx, 'quantity', parseIntegerInput(e.target.value))} />
                           ) : line.inputMode === 'kw' ? (
-                            <Input className="h-9 text-xs" inputMode="decimal" value={line.capacityKw} placeholder="0.0"
+                            <Input className="h-9 text-xs text-right font-mono tabular-nums" inputMode="decimal" value={line.capacityKw} placeholder="0.0"
                               onChange={(e) => {
-                                const v = e.target.value;
+                                const v = parseDecimalInput(e.target.value, 1);
                                 if (v === '' || /^\d*\.?\d{0,1}$/.test(v)) updateLine(idx, 'capacityKw', v);
                               }} />
                           ) : (
-                            <Input className="h-9 text-xs" inputMode="decimal" value={line.capacityMw} placeholder="0.000"
+                            <Input className="h-9 text-xs text-right font-mono tabular-nums" inputMode="decimal" value={line.capacityMw} placeholder="0.000"
                               onChange={(e) => {
-                                const v = e.target.value;
+                                const v = parseDecimalInput(e.target.value, 3);
                                 if (v === '' || /^\d*\.?\d{0,3}$/.test(v)) updateLine(idx, 'capacityMw', v);
                               }} />
                           )}
@@ -917,11 +919,10 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
                       {!line.isFreeSpare && (
                         <div className="w-36 space-y-1">
                           <span className="text-[10px] text-blue-600 font-medium">단가 입력 (¢/Wp) *</span>
-                          <Input className="h-9 text-xs" inputMode="decimal" value={line.unit_price_usd_wp}
+                          <Input className="h-9 text-xs text-right font-mono tabular-nums" inputMode="decimal" value={line.unit_price_usd_wp}
                             placeholder="단가입력"
                             onChange={(e) => {
-                              const v = e.target.value;
-                              if (v === '' || /^\d*\.?\d{0,4}$/.test(v)) updateLine(idx, 'unit_price_usd_wp', v);
+                              updateLine(idx, 'unit_price_usd_wp', parseDecimalInput(e.target.value, 4));
                             }} />
                         </div>
                       )}

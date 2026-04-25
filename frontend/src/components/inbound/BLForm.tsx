@@ -13,6 +13,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
 import { formatUSD, moduleLabel, shortMfgName } from '@/lib/utils';
+import {
+  displayPriceToUsdWp,
+  formatCapacityFromKw,
+  formatDecimalPlain,
+  formatIntegerInput,
+  parseDecimalInput,
+  parseIntegerInput,
+  parseNumericInput,
+  unitUsdEaToDisplayPrice,
+  usdWpToDisplayPrice,
+} from '@/lib/numberRules';
 import type { BLShipment, BLLineItem } from '@/types/inbound';
 import type { Company, Manufacturer, Product, Warehouse } from '@/types/masters';
 
@@ -64,32 +75,6 @@ const emptyLine = (): LineItem => ({
   product_id: '', quantity: '', item_type: 'main', payment_type: 'paid',
   unit_price: '', manualInvoice: false, invoiceOverride: '',
 });
-
-function formatDecimalPlain(value: number, minDigits = 2, maxDigits = 4): string {
-  return value.toLocaleString('en-US', {
-    useGrouping: false,
-    minimumFractionDigits: minDigits,
-    maximumFractionDigits: maxDigits,
-  });
-}
-
-function formatCapacityFromKw(kw: number | null): string {
-  if (kw == null || !Number.isFinite(kw)) return '-';
-  if (Math.abs(kw) >= 1000) {
-    return `${(kw / 1000).toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MW`;
-  }
-  return `${kw.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kW`;
-}
-
-function parseIntegerInput(value: string): string {
-  return value.replace(/[^0-9]/g, '');
-}
-
-function formatIntegerInput(value: string | number | null | undefined): string {
-  const raw = String(value ?? '').replace(/[^0-9]/g, '');
-  if (!raw) return '';
-  return Number(raw).toLocaleString('ko-KR');
-}
 
 function normalizeLinesForSnapshot(lines: LineItem[]) {
   return lines.map(l => ({
@@ -616,8 +601,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
             payment_type: (l.payment_type ?? 'paid') as 'paid' | 'free',
             unit_price: l.unit_price_usd_wp != null
               ? (d.inbound_type === 'import'
-                ? formatDecimalPlain(l.unit_price_usd_wp * 100, 2, 4)
-                : String(l.unit_price_usd_wp))
+                ? usdWpToDisplayPrice(l.unit_price_usd_wp, 'cents')
+                : formatDecimalPlain(l.unit_price_usd_wp, 0, 4))
               : l.unit_price_krw_wp != null
               ? String(l.unit_price_krw_wp)
               : '',
@@ -687,13 +672,11 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
           ? ''  // 무상 라인은 단가 없음 — PO의 플레이스홀더 단가를 그대로 쓰지 않음
           : isImport
             ? (() => {
-                if (r.unit_price_usd_wp != null) return formatDecimalPlain(r.unit_price_usd_wp * 100, 2, 4); // $/Wp → ¢/Wp
+                if (r.unit_price_usd_wp != null) return usdWpToDisplayPrice(r.unit_price_usd_wp, 'cents'); // $/Wp → ¢/Wp
                 // $/EA → ¢/Wp 역산 (unit_price_usd_wp 미설정 구레코드 대응)
                 if (r.unit_price_usd != null) {
                   const prod = products.find(p => p.product_id === r.product_id);
-                  if (prod?.spec_wp && prod.spec_wp > 0) {
-                    return formatDecimalPlain(r.unit_price_usd / prod.spec_wp * 100, 2, 4);
-                  }
+                  return unitUsdEaToDisplayPrice(r.unit_price_usd, prod?.spec_wp, 'cents');
                 }
                 return '';
               })()
@@ -725,9 +708,10 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     if (l.payment_type === 'free') return null; // 무상 라인은 인보이스 금액 없음
     const q = Number(l.quantity);
     const p = products.find(x => x.product_id === l.product_id);
-    const rawPrice = l.unit_price ? parseFloat(l.unit_price) : 0;
-    if (!q || !p || !rawPrice) return null;
-    const pricePerWp = (isImport && priceMode === 'cents') ? rawPrice / 100 : rawPrice;
+    const pricePerWp = isImport
+      ? displayPriceToUsdWp(l.unit_price, priceMode)
+      : parseNumericInput(l.unit_price);
+    if (!q || !p || !pricePerWp) return null;
     return q * p.spec_wp * pricePerWp;
   };
   const fmtInvoice = (l: LineItem): string => {
@@ -743,10 +727,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       const next = prev === 'cents' ? 'dollar' : 'cents';
       setLines(ls => ls.map(l => {
         if (!l.unit_price) return l;
-        const v = parseFloat(l.unit_price);
-        if (isNaN(v)) return l;
-        const conv = next === 'cents' ? v * 100 : v / 100;
-        return { ...l, unit_price: parseFloat(conv.toPrecision(8)).toString() };
+        const valueUsdWp = displayPriceToUsdWp(l.unit_price, prev);
+        if (valueUsdWp == null) return l;
+        return { ...l, unit_price: usdWpToDisplayPrice(valueUsdWp, next) };
       }));
       return next;
     });
@@ -887,8 +870,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
         .map(l => {
           const prod = products.find(p => p.product_id === l.product_id);
           const qty = Number(l.quantity);
-          let price = l.unit_price ? parseFloat(l.unit_price) : undefined;
-          if (isImport && priceMode === 'cents' && price) price = price / 100;
+          const price = isImport
+            ? displayPriceToUsdWp(l.unit_price, priceMode)
+            : parseNumericInput(l.unit_price);
           const inv = l.manualInvoice && l.invoiceOverride
             ? parseFloat(l.invoiceOverride) : calcInvoice(l);
           return {
@@ -1445,10 +1429,10 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                                 disabled={line.payment_type === 'free'}
                                 placeholder={line.payment_type === 'free' ? '—' : isImport ? (priceMode === 'cents' ? '12.40' : '0.1240') : '200'}
                                 onChange={e => {
-                                  const v = e.target.value;
                                   if (isImport) {
-                                    if (v === '' || /^\d*\.?\d{0,4}$/.test(v)) updateLine(idx, 'unit_price', v);
+                                    updateLine(idx, 'unit_price', parseDecimalInput(e.target.value, 4));
                                   } else {
+                                    const v = e.target.value;
                                     if (v === '' || /^\d+$/.test(v)) updateLine(idx, 'unit_price', v);
                                   }
                                 }}
