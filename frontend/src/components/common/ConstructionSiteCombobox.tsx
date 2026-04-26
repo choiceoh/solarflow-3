@@ -74,7 +74,6 @@ export function ConstructionSiteCombobox({
         company_id: companyId,
         name: newName.trim(),
         site_type: newType,
-        is_active: true,
       };
       if (newLocation.trim()) body.location = newLocation.trim();
 
@@ -99,8 +98,8 @@ export function ConstructionSiteCombobox({
       setNewName('');
       setNewLocation('');
       setSearch('');
-    } catch {
-      setCreateError('현장 등록에 실패했습니다. 필수값과 법인 선택을 확인해주세요.');
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : '현장 등록에 실패했습니다. 필수값과 법인 선택을 확인해주세요.');
     } finally {
       setSaving(false);
     }

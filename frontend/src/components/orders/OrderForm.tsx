@@ -95,6 +95,30 @@ function formatKwField(v: number): string {
   return v.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
+function normalizeBusinessName(value?: string | null): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/주식회사|\(주\)|㈜|\(유\)|유한회사|\.|,|-/g, '');
+}
+
+function findPartnerByHint(partners: Partner[], hint?: string): Partner | undefined {
+  const raw = hint?.trim();
+  if (!raw) return undefined;
+  const exact = partners.find((p) => p.partner_name.trim() === raw);
+  if (exact) return exact;
+
+  const normalizedHint = normalizeBusinessName(raw);
+  const normalizedMatches = partners.filter((p) => normalizeBusinessName(p.partner_name) === normalizedHint);
+  if (normalizedMatches.length === 1) return normalizedMatches[0];
+
+  const fuzzyMatches = partners.filter((p) => {
+    const candidate = normalizeBusinessName(p.partner_name);
+    return candidate.includes(normalizedHint) || normalizedHint.includes(candidate);
+  });
+  return fuzzyMatches.length === 1 ? fuzzyMatches[0] : undefined;
+}
+
 export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCancel, editData, prefillData }: Props) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [products, setProducts] = useState<Product[]>([]);
@@ -112,7 +136,7 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
   const [spareQtyDisplay, setSpareQtyDisplay] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, reset, setValue, watch, getValues, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema) as any,
   });
 
@@ -286,17 +310,62 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
   useEffect(() => {
     if (!open || !prefillData?.customer_hint || !partners.length || editData) return;
     // 이미 customer_id가 설정된 경우 덮어쓰지 않음
-    if (watch('customer_id')) return;
-    const matched = partners.find((p) => p.partner_name === prefillData.customer_hint);
+    if (getValues('customer_id')) return;
+    const matched = findPartnerByHint(partners, prefillData.customer_hint);
     if (matched) setValue('customer_id', matched.partner_id, { shouldValidate: true });
-  }, [prefillData?.customer_hint, partners, open, editData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [prefillData?.customer_hint, partners, open, editData, getValues, setValue]);
 
   const handle = async (data: FormData) => {
     setSubmitError('');
+    if (!effectiveCompanyId || effectiveCompanyId === 'all') {
+      setSubmitError('수주 법인을 확인할 수 없습니다. 가용재고 화면에서 다시 수주 전환을 시작해주세요.');
+      return;
+    }
+
+    let fulfillmentSourceForSave = data.fulfillment_source;
+    if (isPrefill && data.fulfillment_source === 'stock' && selectedProductId) {
+      try {
+        const inv = await fetchWithAuth<InventoryResponse>('/api/v1/calc/inventory', {
+          method: 'POST',
+          body: JSON.stringify({ company_id: effectiveCompanyId }),
+        });
+        const item = inv.items.find((it) => it.product_id === selectedProductId);
+        const stockKw = item?.available_kw ?? 0;
+        if (stockKw + 0.001 < capacityKw) {
+          const incomingKw = item?.available_incoming_kw ?? 0;
+          const useIncoming = window.confirm(
+            `현재 가용 실재고가 부족합니다.\n` +
+            `필요: ${formatKwField(capacityKw)} kW / 가용 실재고: ${formatKwField(stockKw)} kW\n\n` +
+            `확인을 누르면 미착품 기준으로 수주 등록하고, 예약의 충당소스도 미착품으로 전환합니다.\n` +
+            `취소를 누르면 등록을 중단합니다.`,
+          );
+          if (!useIncoming) {
+            setSubmitError('실재고 부족으로 수주 등록을 중단했습니다. 가용재고에서 예약을 조정한 뒤 다시 진행해주세요.');
+            return;
+          }
+          if (incomingKw + 0.001 < capacityKw) {
+            setSubmitError(`미착품 가용량도 부족합니다. 가용 미착품: ${formatKwField(incomingKw)} kW`);
+            return;
+          }
+          fulfillmentSourceForSave = 'incoming';
+          setValue('fulfillment_source', 'incoming', { shouldDirty: true });
+        }
+      } catch {
+        setSubmitError('수주시점 재고 확인에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
+    }
+
+    if (fulfillmentSourceForSave === 'stock' && selectedProduct && bls.length > 0 && !blId) {
+      setSubmitError('B/L 연결은 실재고 원가 추적을 위해 필수입니다.');
+      return;
+    }
+
     const payload: Record<string, unknown> = {
       ...data,
       company_id: effectiveCompanyId,
       capacity_kw: capacityKw,
+      fulfillment_source: fulfillmentSourceForSave,
       status: editData?.status ?? 'received',
     };
     if (blId) payload.bl_id = blId;
@@ -474,7 +543,7 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
             <div className="space-y-1.5">
               <Label>
                 B/L 연결
-                <span className="ml-1 text-muted-foreground font-normal text-xs">(원가 추적용, 선택)</span>
+                <span className="ml-1 text-muted-foreground font-normal text-xs">(원가 추적용, 필수)</span>
               </Label>
               <Select value={blId || '_none'} onValueChange={(v) => setBlId(v === '_none' ? '' : (v ?? ''))}>
                 <SelectTrigger className="w-full">

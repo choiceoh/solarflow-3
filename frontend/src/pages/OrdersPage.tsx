@@ -240,6 +240,7 @@ export default function OrdersPage() {
           status: 'confirmed',
           quantity: orderQty,
           capacity_kw: orderQty * unitKw,
+          source_type: formData.fulfillment_source === 'incoming' ? 'incoming' : originalAlloc.source_type,
         }),
       });
 
@@ -260,7 +261,7 @@ export default function OrdersPage() {
               quantity: remainingQty,
               capacity_kw: remainingQty * unitKw,
               purpose: originalAlloc.purpose,
-              source_type: originalAlloc.source_type,
+              source_type: formData.fulfillment_source === 'incoming' ? 'incoming' : originalAlloc.source_type,
               customer_name: originalAlloc.customer_name,
               site_name: originalAlloc.site_name,
               site_id: originalAlloc.site_id,
