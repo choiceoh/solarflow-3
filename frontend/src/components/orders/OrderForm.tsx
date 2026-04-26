@@ -160,6 +160,22 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
   const effectiveCompanyId = isPrefill
     ? (prefillCompanyId || resolvedPrefillCompanyId || selectedCompanyId)
     : selectedCompanyId;
+  const prefillResetKey = prefillData
+    ? [
+      prefillData.alloc_id,
+      prefillData.company_id,
+      prefillData.product_id,
+      prefillData.quantity,
+      prefillData.management_category,
+      prefillData.fulfillment_source,
+      prefillData.customer_hint,
+      prefillData.site_name,
+      prefillData.order_number,
+      prefillData.bl_id,
+      prefillData.expected_price_per_wp,
+      prefillData.spare_qty,
+    ].map((v) => v ?? '').join('\u001f')
+    : '';
 
   useEffect(() => {
     setResolvedPrefillCompanyId(null);
@@ -304,7 +320,7 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
         setBlId('');
       }
     }
-  }, [open, editData, prefillData, reset]);
+  }, [open, editData, prefillResetKey, reset]);
 
   // prefill: 거래처 이름 → partner_id 자동 매칭 (partners 로드 완료 후)
   useEffect(() => {
@@ -312,8 +328,8 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
     // 이미 customer_id가 설정된 경우 덮어쓰지 않음
     if (getValues('customer_id')) return;
     const matched = findPartnerByHint(partners, prefillData.customer_hint);
-    if (matched) setValue('customer_id', matched.partner_id, { shouldValidate: true });
-  }, [prefillData?.customer_hint, partners, open, editData, getValues, setValue]);
+    if (matched) setValue('customer_id', matched.partner_id, { shouldValidate: true, shouldDirty: true });
+  }, [prefillData?.alloc_id, prefillData?.customer_hint, partners, open, editData, getValues, setValue]);
 
   const handle = async (data: FormData) => {
     setSubmitError('');

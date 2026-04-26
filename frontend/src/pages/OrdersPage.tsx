@@ -578,9 +578,7 @@ export default function OrdersPage() {
         }}
         onSubmit={handleCreateOrder}
         onPrefillCancel={handlePrefillCancel}
-        prefillData={orderFormPrefill && pendingAllocId
-          ? { ...orderFormPrefill, alloc_id: orderFormPrefill.alloc_id ?? pendingAllocId }
-          : orderFormPrefill}
+        prefillData={orderFormPrefill}
       />
       <OutboundForm open={obFormOpen} onOpenChange={setObFormOpen} onSubmit={handleCreateOutbound} />
       <ReceiptForm
