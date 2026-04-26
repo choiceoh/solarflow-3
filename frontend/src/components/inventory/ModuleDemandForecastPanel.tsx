@@ -6,10 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { fetchWithAuth } from '@/lib/api';
 import { companyQueryUrl } from '@/lib/companyUtils';
-import { cn, formatKw, shortMfgName } from '@/lib/utils';
+import { cn, formatKw, moduleLabel, shortMfgName } from '@/lib/utils';
 import type {
   InventoryItem,
   ModuleDemandForecast,
@@ -32,6 +32,7 @@ interface ModuleOption {
   width: number;
   height: number;
   securedKw: number;
+  manufacturerNames: Set<string>;
   label: string;
 }
 
@@ -88,6 +89,17 @@ function saleMonth(sale: SaleListItem): string {
   return date.slice(0, 7);
 }
 
+function SelectText({ text }: { text: string }) {
+  return <span className="flex flex-1 truncate text-left" data-slot="select-value">{text}</span>;
+}
+
+const DEMAND_STATUS_LABEL: Record<ModuleDemandForecast['status'], string> = {
+  planned: '계획',
+  confirmed: '확정',
+  done: '반영완료',
+  cancelled: '취소',
+};
+
 export default function ModuleDemandForecastPanel({ companyId, inventoryItems, manufacturers }: Props) {
   const [demands, setDemands] = useState<ModuleDemandForecast[]>([]);
   const [sales, setSales] = useState<SaleListItem[]>([]);
@@ -106,7 +118,10 @@ export default function ModuleDemandForecastPanel({ companyId, inventoryItems, m
       const securedKw = item.total_secured_kw || item.physical_kw + item.incoming_kw;
       if (prev) {
         prev.securedKw += securedKw;
+        prev.manufacturerNames.add(item.manufacturer_name);
       } else {
+        const manufacturerNames = new Set<string>();
+        manufacturerNames.add(item.manufacturer_name);
         map.set(key, {
           key,
           companyId: itemCompanyId,
@@ -114,11 +129,22 @@ export default function ModuleDemandForecastPanel({ companyId, inventoryItems, m
           width: item.module_width_mm,
           height: item.module_height_mm,
           securedKw,
-          label: `${item.module_width_mm}×${item.module_height_mm} · ${item.spec_wp}W`,
+          manufacturerNames,
+          label: '',
         });
       }
     }
-    return Array.from(map.values()).sort((a, b) => {
+    return Array.from(map.values()).map((option) => {
+      const names = Array.from(option.manufacturerNames).filter(Boolean);
+      const firstName = names[0];
+      const mfgPart = names.length <= 1
+        ? moduleLabel(firstName, option.specWp)
+        : `${shortMfgName(firstName)} 외 ${names.length - 1} · ${option.specWp}W`;
+      return {
+        ...option,
+        label: `${mfgPart} · ${option.width}×${option.height}`,
+      };
+    }).sort((a, b) => {
       if (a.companyId !== b.companyId) return a.companyId.localeCompare(b.companyId);
       if (a.width !== b.width) return a.width - b.width;
       if (a.height !== b.height) return a.height - b.height;
@@ -294,6 +320,9 @@ export default function ModuleDemandForecastPanel({ companyId, inventoryItems, m
   const selectedManufacturerName = form.manufacturerId === 'any'
     ? '제조사 무관'
     : shortMfgName(manufacturers.find((m) => m.manufacturer_id === form.manufacturerId)?.name_kr || '');
+  const selectedCompanyName = companies.find((company) => company.company_id === form.companyId)?.company_name || '법인 선택';
+  const selectedModuleLabel = moduleOptions.find((option) => option.key === form.moduleKey)?.label || '모듈군 선택';
+  const selectedStatusLabel = DEMAND_STATUS_LABEL[form.status] || '상태 선택';
 
   return (
     <Card>
@@ -405,7 +434,7 @@ export default function ModuleDemandForecastPanel({ companyId, inventoryItems, m
                     setForm((p) => ({ ...p, companyId: nextCompanyId, moduleKey: nextOption?.key ?? '' }));
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="법인 선택" /></SelectTrigger>
+                  <SelectTrigger><SelectText text={selectedCompanyName} /></SelectTrigger>
                   <SelectContent>
                     {companies.map((company) => (
                       <SelectItem key={company.company_id} value={company.company_id}>{company.company_name}</SelectItem>
@@ -428,7 +457,7 @@ export default function ModuleDemandForecastPanel({ companyId, inventoryItems, m
               <div className="space-y-1.5">
                 <Label>모듈군 *</Label>
                 <Select value={form.moduleKey} onValueChange={(v) => setForm((p) => ({ ...p, moduleKey: v ?? '' }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectText text={selectedModuleLabel} /></SelectTrigger>
                   <SelectContent>
                     {moduleOptions
                       .filter((option) => companyId !== 'all' || option.companyId === form.companyId)
@@ -441,7 +470,7 @@ export default function ModuleDemandForecastPanel({ companyId, inventoryItems, m
               <div className="space-y-1.5">
                 <Label>제조사</Label>
                 <Select value={form.manufacturerId} onValueChange={(v) => setForm((p) => ({ ...p, manufacturerId: v ?? 'any' }))}>
-                  <SelectTrigger><SelectValue placeholder={selectedManufacturerName} /></SelectTrigger>
+                  <SelectTrigger><SelectText text={selectedManufacturerName} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="any">제조사 무관</SelectItem>
                     {manufacturers.map((m) => (
@@ -459,12 +488,11 @@ export default function ModuleDemandForecastPanel({ companyId, inventoryItems, m
               <div className="space-y-1.5">
                 <Label>상태</Label>
                 <Select value={form.status} onValueChange={(v) => setForm((p) => ({ ...p, status: v as ModuleDemandForecast['status'] }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectText text={selectedStatusLabel} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="planned">계획</SelectItem>
-                    <SelectItem value="confirmed">확정</SelectItem>
-                    <SelectItem value="done">반영완료</SelectItem>
-                    <SelectItem value="cancelled">취소</SelectItem>
+                    {(Object.entries(DEMAND_STATUS_LABEL) as [ModuleDemandForecast['status'], string][]).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -444,7 +444,7 @@ export default function ProcurementPage() {
             <POListTable
               items={pos.map(p => {
                 const mfg = manufacturers.find(m => m.manufacturer_id === p.manufacturer_id);
-                return { ...p, manufacturer_name: mfg?.short_name ?? mfg?.name_kr ?? p.manufacturer_name ?? '—' };
+                return { ...p, manufacturer_name: mfg?.short_name?.trim() || mfg?.name_kr || p.manufacturer_name || '—' };
               })}
               onDetail={setSelectedPO}
               onNew={() => setPoFormOpen(true)}
