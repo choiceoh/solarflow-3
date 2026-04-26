@@ -85,6 +85,7 @@ export function PartnerCombobox({
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopPropagation();
       setOpen(false);
       setSearch('');
       setCreating(false);
@@ -93,16 +94,19 @@ export function PartnerCombobox({
     if (creating || optionCount === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      e.stopPropagation();
       setActiveIndex((idx) => (idx + 1) % optionCount);
       return;
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
+      e.stopPropagation();
       setActiveIndex((idx) => (idx - 1 + optionCount) % optionCount);
       return;
     }
     if (e.key === 'Enter') {
       e.preventDefault();
+      e.stopPropagation();
       if (activeIndex < filtered.length) {
         handleSelect(filtered[activeIndex].partner_id);
         return;
@@ -153,10 +157,12 @@ export function PartnerCombobox({
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault();
+            e.stopPropagation();
             setOpen(true);
           }
           if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             setOpen(false);
             setSearch('');
             setCreating(false);
@@ -243,10 +249,12 @@ export function PartnerCombobox({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
+                    e.stopPropagation();
                     handleCreate();
                   }
                   if (e.key === 'Escape') {
                     e.preventDefault();
+                    e.stopPropagation();
                     setCreating(false);
                     setCreateError('');
                   }

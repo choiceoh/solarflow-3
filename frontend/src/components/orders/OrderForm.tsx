@@ -260,6 +260,7 @@ function ProductInventoryCombobox({
     if (!open) return;
     if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopPropagation();
       setOpen(false);
       setSearch('');
       return;
@@ -267,16 +268,19 @@ function ProductInventoryCombobox({
     if (filtered.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      e.stopPropagation();
       setActiveIndex((idx) => (idx + 1) % filtered.length);
       return;
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
+      e.stopPropagation();
       setActiveIndex((idx) => (idx - 1 + filtered.length) % filtered.length);
       return;
     }
     if (e.key === 'Enter') {
       e.preventDefault();
+      e.stopPropagation();
       selectOption(filtered[activeIndex] ?? filtered[0]);
     }
   }
@@ -293,9 +297,12 @@ function ProductInventoryCombobox({
           if (disabled) return;
           if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault();
+            e.stopPropagation();
             setOpen(true);
           }
           if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
             setOpen(false);
             setSearch('');
           }
