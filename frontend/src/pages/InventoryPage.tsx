@@ -26,6 +26,7 @@ import { useInventory } from '@/hooks/useInventory';
 import { useForecast } from '@/hooks/useForecast';
 import { fetchWithAuth } from '@/lib/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import InventoryTable from '@/components/inventory/InventoryTable';
 import AvailInventoryTable from '@/components/inventory/AvailInventoryTable';
 import IncomingTable from '@/components/inventory/IncomingTable';
@@ -136,6 +137,7 @@ export default function InventoryPage() {
     stockAlloc: InventoryAllocation | null;   // 확정하려는 현재고 배정
     incomingAlloc: InventoryAllocation | null; // 연관된 미착품 배정
   }>({ open: false, stockAlloc: null, incomingAlloc: null });
+  const [orderConfirmAlloc, setOrderConfirmAlloc] = useState<InventoryAllocation | null>(null);
 
   // 단가 맵 (product_id → price/Wp) — AllocationForm에 전달
   const [priceMap, setPriceMap] = useState<Map<string, number>>(new Map());
@@ -238,7 +240,13 @@ export default function InventoryPage() {
       }
     }
     // group_id 없거나 연관 미착품 없음 → 바로 수주 등록 이동
-    if (!confirm('수주 등록 페이지로 이동합니다.\n예약 정보가 자동으로 입력됩니다.')) return;
+    setOrderConfirmAlloc(alloc);
+  };
+
+  const handleOrderConfirm = () => {
+    if (!orderConfirmAlloc) return;
+    const alloc = orderConfirmAlloc;
+    setOrderConfirmAlloc(null);
     navigateToOrder(alloc);
   };
 
@@ -643,6 +651,15 @@ export default function InventoryPage() {
         editData={editingAlloc}
         invItems={rawInv?.items ?? []}
         priceMapProp={priceMap}
+      />
+
+      <ConfirmDialog
+        open={!!orderConfirmAlloc}
+        onOpenChange={(open) => { if (!open) setOrderConfirmAlloc(null); }}
+        title="수주로 전환"
+        description="판매예약 정보를 수주 등록 화면으로 가져옵니다. 거래처, 품목, 수량, B/L 정보가 자동 입력됩니다."
+        confirmLabel="수주 등록"
+        onConfirm={handleOrderConfirm}
       />
 
       {/* 미착품 처리 다이얼로그 */}
