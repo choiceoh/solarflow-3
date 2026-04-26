@@ -1,4 +1,6 @@
+import { Pencil, ReceiptText } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/common/EmptyState';
 import OutboundStatusBadge from './OutboundStatusBadge';
 import { formatDate, formatNumber, formatKw } from '@/lib/utils';
@@ -9,9 +11,10 @@ interface Props {
   items: Outbound[];
   onSelect: (item: Outbound) => void;
   onNew: () => void;
+  onInvoice?: (item: Outbound) => void;
 }
 
-export default function OutboundListTable({ items, onSelect, onNew }: Props) {
+export default function OutboundListTable({ items, onSelect, onNew, onInvoice }: Props) {
   if (items.length === 0) return <EmptyState message="등록된 출고가 없습니다" actionLabel="새로 등록" onAction={onNew} />;
 
   return (
@@ -30,7 +33,9 @@ export default function OutboundListTable({ items, onSelect, onNew }: Props) {
             <TableHead>현장명</TableHead>
             <TableHead>수주연결</TableHead>
             <TableHead>그룹거래</TableHead>
+            <TableHead>계산서</TableHead>
             <TableHead>상태</TableHead>
+            <TableHead className="text-right">작업</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -65,7 +70,39 @@ export default function OutboundListTable({ items, onSelect, onNew }: Props) {
                     </span>
                   ) : '—'}
                 </TableCell>
+                <TableCell>
+                  {ob.sale ? (
+                    ob.sale.tax_invoice_date ? (
+                      <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium">
+                        {formatDate(ob.sale.tax_invoice_date)}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-yellow-100 text-yellow-700 px-1.5 py-0.5 text-[10px] font-medium">미발행</span>
+                    )
+                  ) : (
+                    <span className="rounded-full bg-slate-100 text-slate-600 px-1.5 py-0.5 text-[10px] font-medium">미등록</span>
+                  )}
+                </TableCell>
                 <TableCell><OutboundStatusBadge status={ob.status} /></TableCell>
+                <TableCell className="text-right">
+                  {onInvoice && ob.status !== 'cancelled' && ['sale', 'sale_spare'].includes(ob.usage_category) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onInvoice(ob);
+                      }}
+                    >
+                      {ob.sale ? <Pencil className="mr-1 h-3 w-3" /> : <ReceiptText className="mr-1 h-3 w-3" />}
+                      {ob.sale ? '수정' : '등록'}
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
               </TableRow>
             );
           })}

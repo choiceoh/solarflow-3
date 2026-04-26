@@ -57,6 +57,7 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, order
   const quantity = formQuantity || source?.quantity || 0;
   const capacityKw = quantity * wattageKw;
   const erpClosed = watch('erp_closed') ?? false;
+  const sourceUnitPriceWp = outbound?.unit_price_wp ?? order?.unit_price_wp;
 
   // 자동 계산
   const unitPriceEa = unitPriceWp * specWp;
@@ -86,15 +87,15 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, order
         });
       } else {
         reset({
-          customer_id: source && 'customer_id' in source ? source.customer_id : '',
+          customer_id: source?.customer_id ?? '',
           quantity: source?.quantity ?? ('' as unknown as number),
-          unit_price_wp: order?.unit_price_wp ?? ('' as unknown as number),
+          unit_price_wp: sourceUnitPriceWp ?? ('' as unknown as number),
           tax_invoice_date: '', tax_invoice_email: '',
           erp_closed: false, erp_closed_date: '', memo: '',
         });
       }
     }
-  }, [open, editData, reset, source, order?.unit_price_wp]);
+  }, [open, editData, reset, source, sourceUnitPriceWp]);
 
   const handle = async (data: FormData) => {
     setSubmitError('');

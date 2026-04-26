@@ -30,6 +30,9 @@ export interface Outbound {
   usage_category: UsageCategory;
   order_id?: string;
   order_number?: string;
+  customer_id?: string;
+  customer_name?: string;
+  unit_price_wp?: number;
   site_name?: string;
   site_address?: string;
   spare_qty?: number;

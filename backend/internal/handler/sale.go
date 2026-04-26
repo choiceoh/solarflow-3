@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"log"
+	"math"
 	"net/http"
 	"strings"
 
@@ -16,8 +17,6 @@ import (
 // SaleHandler — 판매(sales) 관련 API를 처리하는 핸들러
 // 비유: "판매 전표함" — 출고에 연결된 판매 금액, 세금계산서 정보를 관리
 // TODO: Rust 계산엔진 연동 — 마진/이익률 분석 (원가 vs 판매가)
-// TODO: Go 자동 계산 — unit_price_ea = unit_price_wp x spec_wp, supply = ea x qty, vat = supply x 0.1, total = supply + vat
-// (product 테이블에서 spec_wp 조회 필요, Phase 4 프론트엔드 연동 시 구현)
 type SaleHandler struct {
 	DB *supa.Client
 }
@@ -123,6 +122,12 @@ type saleProductRow struct {
 type salePartnerRow struct {
 	PartnerID   string `json:"partner_id"`
 	PartnerName string `json:"partner_name"`
+}
+
+type saleCalcSource struct {
+	Quantity   int
+	CapacityKw *float64
+	ProductID  string
 }
 
 func ptrString(v string) *string { return &v }
@@ -240,6 +245,70 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	return items
 }
 
+func (h *SaleHandler) saleSource(outboundID *string, orderID *string) (saleCalcSource, bool) {
+	if outboundID != nil && *outboundID != "" {
+		data, _, err := h.DB.From("outbounds").
+			Select("quantity, capacity_kw, product_id", "exact", false).
+			Eq("outbound_id", *outboundID).
+			Execute()
+		if err == nil {
+			var rows []struct {
+				Quantity   int      `json:"quantity"`
+				CapacityKw *float64 `json:"capacity_kw"`
+				ProductID  string   `json:"product_id"`
+			}
+			if json.Unmarshal(data, &rows) == nil && len(rows) > 0 {
+				return saleCalcSource{Quantity: rows[0].Quantity, CapacityKw: rows[0].CapacityKw, ProductID: rows[0].ProductID}, true
+			}
+		}
+	}
+	if orderID != nil && *orderID != "" {
+		data, _, err := h.DB.From("orders").
+			Select("quantity, capacity_kw, product_id", "exact", false).
+			Eq("order_id", *orderID).
+			Execute()
+		if err == nil {
+			var rows []struct {
+				Quantity   int      `json:"quantity"`
+				CapacityKw *float64 `json:"capacity_kw"`
+				ProductID  string   `json:"product_id"`
+			}
+			if json.Unmarshal(data, &rows) == nil && len(rows) > 0 {
+				return saleCalcSource{Quantity: rows[0].Quantity, CapacityKw: rows[0].CapacityKw, ProductID: rows[0].ProductID}, true
+			}
+		}
+	}
+	return saleCalcSource{}, false
+}
+
+func (h *SaleHandler) productSpecWp(productID string) (float64, bool) {
+	if productID == "" {
+		return 0, false
+	}
+	data, _, err := h.DB.From("products").
+		Select("spec_wp", "exact", false).
+		Eq("product_id", productID).
+		Execute()
+	if err != nil {
+		return 0, false
+	}
+	var rows []struct {
+		SpecWp *float64 `json:"spec_wp"`
+	}
+	if json.Unmarshal(data, &rows) != nil || len(rows) == 0 || rows[0].SpecWp == nil || *rows[0].SpecWp <= 0 {
+		return 0, false
+	}
+	return *rows[0].SpecWp, true
+}
+
+func applySaleAmounts(quantity int, unitPriceWp float64, specWp float64) (*float64, *float64, *float64, *float64) {
+	unitPriceEa := math.Round(unitPriceWp * specWp)
+	supplyAmount := math.Round(unitPriceEa * float64(quantity))
+	vatAmount := math.Round(supplyAmount * 0.1)
+	totalAmount := supplyAmount + vatAmount
+	return &unitPriceEa, &supplyAmount, &vatAmount, &totalAmount
+}
+
 // GetByID — GET /api/v1/sales/{id} — 판매 상세 조회
 // 비유: 특정 판매 전표를 꺼내 자세히 보는 것
 func (h *SaleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -285,6 +354,7 @@ func (h *SaleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.fillSaleDefaults(&req)
+	h.calculateSaleAmounts(&req)
 
 	data, _, err := h.DB.From("sales").
 		Insert(req, false, "", "", "").
@@ -314,44 +384,83 @@ func (h *SaleHandler) fillSaleDefaults(req *model.CreateSaleRequest) {
 	if req.Quantity != nil && req.CapacityKw != nil {
 		return
 	}
-	if req.OutboundID != nil && *req.OutboundID != "" {
-		data, _, err := h.DB.From("outbounds").
-			Select("quantity, capacity_kw", "exact", false).
-			Eq("outbound_id", *req.OutboundID).
-			Execute()
-		if err == nil {
-			var rows []struct {
-				Quantity   int      `json:"quantity"`
-				CapacityKw *float64 `json:"capacity_kw"`
-			}
-			if json.Unmarshal(data, &rows) == nil && len(rows) > 0 {
-				if req.Quantity == nil {
-					req.Quantity = &rows[0].Quantity
-				}
-				if req.CapacityKw == nil {
-					req.CapacityKw = rows[0].CapacityKw
-				}
-			}
+	if source, ok := h.saleSource(req.OutboundID, req.OrderID); ok {
+		if req.Quantity == nil {
+			req.Quantity = &source.Quantity
+		}
+		if req.CapacityKw == nil {
+			req.CapacityKw = source.CapacityKw
 		}
 	}
-	if req.OrderID != nil && *req.OrderID != "" {
-		data, _, err := h.DB.From("orders").
-			Select("quantity, capacity_kw", "exact", false).
-			Eq("order_id", *req.OrderID).
-			Execute()
-		if err == nil {
-			var rows []struct {
-				Quantity   int      `json:"quantity"`
-				CapacityKw *float64 `json:"capacity_kw"`
-			}
-			if json.Unmarshal(data, &rows) == nil && len(rows) > 0 {
-				if req.Quantity == nil {
-					req.Quantity = &rows[0].Quantity
-				}
-				if req.CapacityKw == nil {
-					req.CapacityKw = rows[0].CapacityKw
-				}
-			}
+}
+
+func (h *SaleHandler) calculateSaleAmounts(req *model.CreateSaleRequest) {
+	if req.Quantity == nil || *req.Quantity <= 0 {
+		return
+	}
+	source, ok := h.saleSource(req.OutboundID, req.OrderID)
+	if !ok {
+		return
+	}
+	specWp, ok := h.productSpecWp(source.ProductID)
+	if !ok {
+		return
+	}
+	req.UnitPriceEa, req.SupplyAmount, req.VatAmount, req.TotalAmount = applySaleAmounts(*req.Quantity, req.UnitPriceWp, specWp)
+}
+
+func (h *SaleHandler) fetchSale(id string) (model.Sale, bool) {
+	data, _, err := h.DB.From("sales").
+		Select("*", "exact", false).
+		Eq("sale_id", id).
+		Execute()
+	if err != nil {
+		return model.Sale{}, false
+	}
+	var sales []model.Sale
+	if json.Unmarshal(data, &sales) != nil || len(sales) == 0 {
+		return model.Sale{}, false
+	}
+	return sales[0], true
+}
+
+func (h *SaleHandler) calculateSaleUpdate(id string, req *model.UpdateSaleRequest) {
+	current, ok := h.fetchSale(id)
+	if !ok {
+		return
+	}
+	outboundID := current.OutboundID
+	if req.OutboundID != nil {
+		outboundID = req.OutboundID
+	}
+	orderID := current.OrderID
+	if req.OrderID != nil {
+		orderID = req.OrderID
+	}
+	source, ok := h.saleSource(outboundID, orderID)
+	if !ok {
+		return
+	}
+	quantity := source.Quantity
+	if current.Quantity != nil {
+		quantity = *current.Quantity
+	}
+	if req.Quantity != nil {
+		quantity = *req.Quantity
+	}
+	unitPriceWp := current.UnitPriceWp
+	if req.UnitPriceWp != nil {
+		unitPriceWp = *req.UnitPriceWp
+	}
+	specWp, ok := h.productSpecWp(source.ProductID)
+	if !ok || quantity <= 0 || unitPriceWp <= 0 {
+		return
+	}
+	req.UnitPriceEa, req.SupplyAmount, req.VatAmount, req.TotalAmount = applySaleAmounts(quantity, unitPriceWp, specWp)
+	if req.Quantity != nil && req.CapacityKw == nil {
+		if source.CapacityKw != nil && source.Quantity > 0 {
+			capacityKw := (*source.CapacityKw / float64(source.Quantity)) * float64(quantity)
+			req.CapacityKw = &capacityKw
 		}
 	}
 }
@@ -372,6 +481,7 @@ func (h *SaleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
+	h.calculateSaleUpdate(id, &req)
 
 	data, _, err := h.DB.From("sales").
 		Update(req, "", "").

@@ -18,25 +18,37 @@ type OutboundBLItemInput struct {
 // Outbound — 출고 정보를 담는 구조체
 // 비유: "출고 전표" — 어떤 품번을, 어디서, 몇 장, 어떤 용도로 출고했는지 기록
 type Outbound struct {
-	OutboundID      string           `json:"outbound_id"`
-	OutboundDate    string           `json:"outbound_date"`
-	CompanyID       string           `json:"company_id"`
-	ProductID       string           `json:"product_id"`
-	Quantity        int              `json:"quantity"`
-	CapacityKw      *float64         `json:"capacity_kw"`
-	WarehouseID     string           `json:"warehouse_id"`
-	UsageCategory   string           `json:"usage_category"`
-	OrderID         *string          `json:"order_id"`
-	SiteName        *string          `json:"site_name"`
-	SiteAddress     *string          `json:"site_address"`
-	SpareQty        *int             `json:"spare_qty"`
-	GroupTrade      *bool            `json:"group_trade"`
-	TargetCompanyID *string          `json:"target_company_id"`
-	ErpOutboundNo   *string          `json:"erp_outbound_no"`
-	Status          string           `json:"status"`
-	Memo            *string          `json:"memo"`
-	BLID            *string          `json:"bl_id"`
-	BLItems         []OutboundBLItem `json:"bl_items,omitempty"`
+	OutboundID        string           `json:"outbound_id"`
+	OutboundDate      string           `json:"outbound_date"`
+	CompanyID         string           `json:"company_id"`
+	CompanyName       *string          `json:"company_name,omitempty"`
+	ProductID         string           `json:"product_id"`
+	ProductName       *string          `json:"product_name,omitempty"`
+	ProductCode       *string          `json:"product_code,omitempty"`
+	SpecWp            *float64         `json:"spec_wp,omitempty"`
+	WattageKw         *float64         `json:"wattage_kw,omitempty"`
+	Quantity          int              `json:"quantity"`
+	CapacityKw        *float64         `json:"capacity_kw"`
+	WarehouseID       string           `json:"warehouse_id"`
+	WarehouseName     *string          `json:"warehouse_name,omitempty"`
+	UsageCategory     string           `json:"usage_category"`
+	OrderID           *string          `json:"order_id"`
+	OrderNumber       *string          `json:"order_number,omitempty"`
+	CustomerID        *string          `json:"customer_id,omitempty"`
+	CustomerName      *string          `json:"customer_name,omitempty"`
+	UnitPriceWp       *float64         `json:"unit_price_wp,omitempty"`
+	SiteName          *string          `json:"site_name"`
+	SiteAddress       *string          `json:"site_address"`
+	SpareQty          *int             `json:"spare_qty"`
+	GroupTrade        *bool            `json:"group_trade"`
+	TargetCompanyID   *string          `json:"target_company_id"`
+	TargetCompanyName *string          `json:"target_company_name,omitempty"`
+	ErpOutboundNo     *string          `json:"erp_outbound_no"`
+	Status            string           `json:"status"`
+	Memo              *string          `json:"memo"`
+	BLID              *string          `json:"bl_id"`
+	BLItems           []OutboundBLItem `json:"bl_items,omitempty"`
+	Sale              *Sale            `json:"sale,omitempty"`
 }
 
 // 허용되는 출고 usage_category 값 (ERP 관리구분 기반 재설계)

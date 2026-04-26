@@ -70,6 +70,36 @@ type outboundQuantityRow struct {
 	Quantity int `json:"quantity"`
 }
 
+type outboundProductRow struct {
+	ProductID   string   `json:"product_id"`
+	ProductName string   `json:"product_name"`
+	ProductCode string   `json:"product_code"`
+	SpecWp      *float64 `json:"spec_wp"`
+	WattageKw   *float64 `json:"wattage_kw"`
+}
+
+type outboundWarehouseRow struct {
+	WarehouseID   string `json:"warehouse_id"`
+	WarehouseName string `json:"warehouse_name"`
+}
+
+type outboundCompanyRow struct {
+	CompanyID   string `json:"company_id"`
+	CompanyName string `json:"company_name"`
+}
+
+type outboundOrderRow struct {
+	OrderID     string   `json:"order_id"`
+	OrderNumber *string  `json:"order_number"`
+	CustomerID  string   `json:"customer_id"`
+	UnitPriceWp *float64 `json:"unit_price_wp"`
+}
+
+type outboundPartnerRow struct {
+	PartnerID   string `json:"partner_id"`
+	PartnerName string `json:"partner_name"`
+}
+
 func (h *OutboundHandler) recalculateOrderProgress(orderID string) error {
 	if orderID == "" {
 		return nil
@@ -139,6 +169,105 @@ func outboundOrderIDString(orderID *string) string {
 	return *orderID
 }
 
+func (h *OutboundHandler) enrichOutbounds(outbounds []model.Outbound) []model.Outbound {
+	if len(outbounds) == 0 {
+		return outbounds
+	}
+	var products []outboundProductRow
+	var warehouses []outboundWarehouseRow
+	var companies []outboundCompanyRow
+	var orders []outboundOrderRow
+	var partners []outboundPartnerRow
+	var sales []model.Sale
+
+	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp, wattage_kw", "exact", false).Execute(); err == nil {
+		_ = json.Unmarshal(data, &products)
+	}
+	if data, _, err := h.DB.From("warehouses").Select("warehouse_id, warehouse_name", "exact", false).Execute(); err == nil {
+		_ = json.Unmarshal(data, &warehouses)
+	}
+	if data, _, err := h.DB.From("companies").Select("company_id, company_name", "exact", false).Execute(); err == nil {
+		_ = json.Unmarshal(data, &companies)
+	}
+	if data, _, err := h.DB.From("orders").Select("order_id, order_number, customer_id, unit_price_wp", "exact", false).Execute(); err == nil {
+		_ = json.Unmarshal(data, &orders)
+	}
+	if data, _, err := h.DB.From("partners").Select("partner_id, partner_name", "exact", false).Execute(); err == nil {
+		_ = json.Unmarshal(data, &partners)
+	}
+	if data, _, err := h.DB.From("sales").Select("*", "exact", false).Execute(); err == nil {
+		_ = json.Unmarshal(data, &sales)
+	}
+
+	productMap := make(map[string]outboundProductRow, len(products))
+	for _, p := range products {
+		productMap[p.ProductID] = p
+	}
+	warehouseMap := make(map[string]outboundWarehouseRow, len(warehouses))
+	for _, w := range warehouses {
+		warehouseMap[w.WarehouseID] = w
+	}
+	companyMap := make(map[string]outboundCompanyRow, len(companies))
+	for _, c := range companies {
+		companyMap[c.CompanyID] = c
+	}
+	orderMap := make(map[string]outboundOrderRow, len(orders))
+	for _, o := range orders {
+		orderMap[o.OrderID] = o
+	}
+	partnerMap := make(map[string]outboundPartnerRow, len(partners))
+	for _, p := range partners {
+		partnerMap[p.PartnerID] = p
+	}
+	saleMap := make(map[string]model.Sale, len(sales))
+	for _, s := range sales {
+		if s.OutboundID != nil && *s.OutboundID != "" {
+			sale := s
+			if partner, ok := partnerMap[s.CustomerID]; ok {
+				sale.CustomerName = &partner.PartnerName
+			}
+			if _, exists := saleMap[*s.OutboundID]; !exists {
+				saleMap[*s.OutboundID] = sale
+			}
+		}
+	}
+
+	for i := range outbounds {
+		ob := &outbounds[i]
+		if p, ok := productMap[ob.ProductID]; ok {
+			ob.ProductName = &p.ProductName
+			ob.ProductCode = &p.ProductCode
+			ob.SpecWp = p.SpecWp
+			ob.WattageKw = p.WattageKw
+		}
+		if w, ok := warehouseMap[ob.WarehouseID]; ok {
+			ob.WarehouseName = &w.WarehouseName
+		}
+		if c, ok := companyMap[ob.CompanyID]; ok {
+			ob.CompanyName = &c.CompanyName
+		}
+		if ob.TargetCompanyID != nil {
+			if c, ok := companyMap[*ob.TargetCompanyID]; ok {
+				ob.TargetCompanyName = &c.CompanyName
+			}
+		}
+		if ob.OrderID != nil {
+			if order, ok := orderMap[*ob.OrderID]; ok {
+				ob.OrderNumber = order.OrderNumber
+				ob.CustomerID = &order.CustomerID
+				ob.UnitPriceWp = order.UnitPriceWp
+				if partner, ok := partnerMap[order.CustomerID]; ok {
+					ob.CustomerName = &partner.PartnerName
+				}
+			}
+		}
+		if sale, ok := saleMap[ob.OutboundID]; ok {
+			ob.Sale = &sale
+		}
+	}
+	return outbounds
+}
+
 // List — GET /api/v1/outbounds — 출고 목록 조회
 // 비유: 출고 관리실에서 전체 출고 전표를 꺼내 보여주는 것
 func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -175,6 +304,7 @@ func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	outbounds = h.enrichOutbounds(outbounds)
 	response.RespondJSON(w, http.StatusOK, outbounds)
 }
 
@@ -204,7 +334,8 @@ func (h *OutboundHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ob := outbounds[0]
+	enriched := h.enrichOutbounds(outbounds)
+	ob := enriched[0]
 	ob.BLItems = h.fetchBLItems(id)
 	response.RespondJSON(w, http.StatusOK, ob)
 }

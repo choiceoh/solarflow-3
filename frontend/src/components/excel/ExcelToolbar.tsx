@@ -56,11 +56,9 @@ export default function ExcelToolbar({ type, onImportComplete }: Props) {
         {type === 'sale' && (
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger>
-                <Button variant="outline" size="sm" disabled>
-                  <FileOutput className="mr-1.5 h-4 w-4" />
-                  아마란스 매출
-                </Button>
+              <TooltipTrigger render={<Button variant="outline" size="sm" disabled />}>
+                <FileOutput className="mr-1.5 h-4 w-4" />
+                아마란스 매출
               </TooltipTrigger>
               <TooltipContent>실물 양식 확인 후 구현</TooltipContent>
             </Tooltip>

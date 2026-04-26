@@ -20,6 +20,7 @@ import ReceiptMatchingPanel from '@/components/orders/ReceiptMatchingPanel';
 import OutboundListTable from '@/components/outbound/OutboundListTable';
 import OutboundDetailView from '@/components/outbound/OutboundDetailView';
 import OutboundForm from '@/components/outbound/OutboundForm';
+import SaleForm from '@/components/outbound/SaleForm';
 import SaleListTable from '@/components/outbound/SaleListTable';
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
 import type { InventoryAllocation } from '@/components/inventory/AllocationForm';
@@ -27,7 +28,7 @@ import {
   ORDER_STATUS_LABEL, MANAGEMENT_CATEGORY_LABEL,
   type FulfillmentSource, type Order, type OrderStatus, type ManagementCategory, type Receipt,
 } from '@/types/orders';
-import { OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL, type OutboundStatus, type UsageCategory } from '@/types/outbound';
+import { OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL, type Outbound, type OutboundStatus, type UsageCategory } from '@/types/outbound';
 import type { Partner, Manufacturer } from '@/types/masters';
 import type { InventoryResponse } from '@/types/inventory';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
@@ -172,6 +173,7 @@ export default function OrdersPage() {
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null);
   const [obFormOpen, setObFormOpen] = useState(false);
   const [outboundOrder, setOutboundOrder] = useState<Order | null>(null);
+  const [invoiceOutbound, setInvoiceOutbound] = useState<Outbound | null>(null);
   const obFilters: { status?: string; usage_category?: string; manufacturer_id?: string } = {};
   if (obStatusFilter) obFilters.status = obStatusFilter;
   if (obUsageFilter) obFilters.usage_category = obUsageFilter;
@@ -187,6 +189,7 @@ export default function OrdersPage() {
   if (saleMonthFilter) saleFilters.month = saleMonthFilter;
   if (saleInvoiceFilter) saleFilters.invoice_status = saleInvoiceFilter;
   const { data: sales, loading: saleLoading, reload: reloadSales } = useSaleList(saleFilters);
+  const { data: outboundSales, reload: reloadOutboundSales } = useSaleList({});
 
   // 탭 4: 수금
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState('');
@@ -533,6 +536,30 @@ export default function OrdersPage() {
     reloadOrders();
   };
 
+  const salesByOutboundId = new Map(
+    outboundSales
+      .filter((item) => item.outbound_id)
+      .map((item) => [item.outbound_id as string, item.sale])
+  );
+  const outboundsWithSales = outbounds.map((ob) => ({
+    ...ob,
+    sale: ob.sale ?? salesByOutboundId.get(ob.outbound_id),
+  }));
+
+  const handleSubmitOutboundSale = async (formData: Record<string, unknown>) => {
+    if (!invoiceOutbound) return;
+    const existing = invoiceOutbound.sale ?? salesByOutboundId.get(invoiceOutbound.outbound_id);
+    if (existing) {
+      await fetchWithAuth(`/api/v1/sales/${existing.sale_id}`, { method: 'PUT', body: JSON.stringify(formData) });
+    } else {
+      await fetchWithAuth('/api/v1/sales', { method: 'POST', body: JSON.stringify(formData) });
+    }
+    setInvoiceOutbound(null);
+    reloadOutbounds();
+    reloadSales();
+    reloadOutboundSales();
+  };
+
   const handleSubmitReceipt = async (formData: Record<string, unknown>) => {
     if (editingReceipt) {
       await fetchWithAuth(`/api/v1/receipts/${editingReceipt.receipt_id}`, { method: 'PUT', body: JSON.stringify(formData) });
@@ -682,7 +709,12 @@ export default function OrdersPage() {
                 </div>
               </div>
               {obLoading ? <LoadingSpinner /> : (
-                <OutboundListTable items={outbounds} onSelect={(ob) => setSelectedOutbound(ob.outbound_id)} onNew={() => setObFormOpen(true)} />
+                <OutboundListTable
+                  items={outboundsWithSales}
+                  onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
+                  onNew={() => setObFormOpen(true)}
+                  onInvoice={(ob) => setInvoiceOutbound({ ...ob, sale: ob.sale ?? salesByOutboundId.get(ob.outbound_id) })}
+                />
               )}
             </>
           )}
@@ -798,6 +830,13 @@ export default function OrdersPage() {
         }}
         onSubmit={handleCreateOutbound}
         order={outboundOrder}
+      />
+      <SaleForm
+        open={!!invoiceOutbound}
+        onOpenChange={(open) => { if (!open) setInvoiceOutbound(null); }}
+        onSubmit={handleSubmitOutboundSale}
+        outbound={invoiceOutbound ?? undefined}
+        editData={invoiceOutbound?.sale ?? null}
       />
       <ReceiptForm
         open={receiptFormOpen}
