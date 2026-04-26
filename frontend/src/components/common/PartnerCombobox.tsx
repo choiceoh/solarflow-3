@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDownIcon, CheckIcon, SearchIcon } from 'lucide-react';
+import { ChevronDownIcon, CheckIcon, SearchIcon, PlusIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchWithAuth } from '@/lib/api';
 import type { Partner } from '@/types/masters';
 
 interface Props {
@@ -9,11 +10,27 @@ interface Props {
   onChange: (value: string) => void;
   error?: boolean;
   placeholder?: string;
+  creatable?: boolean;
+  createType?: 'supplier' | 'customer' | 'both';
+  onCreated?: (partner: Partner) => void;
 }
 
-export function PartnerCombobox({ partners, value, onChange, error, placeholder = '선택' }: Props) {
+export function PartnerCombobox({
+  partners,
+  value,
+  onChange,
+  error,
+  placeholder = '선택',
+  creatable = false,
+  createType = 'customer',
+  onCreated,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [createError, setCreateError] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -27,6 +44,8 @@ export function PartnerCombobox({ partners, value, onChange, error, placeholder 
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
         setSearch('');
+        setCreating(false);
+        setCreateError('');
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -43,12 +62,44 @@ export function PartnerCombobox({ partners, value, onChange, error, placeholder 
     onChange(partnerId);
     setOpen(false);
     setSearch('');
+    setCreating(false);
+    setCreateError('');
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Escape') {
       setOpen(false);
       setSearch('');
+    }
+  }
+
+  async function handleCreate() {
+    const name = newName.trim();
+    if (!name) return;
+
+    const existing = partners.find((p) => p.partner_name.trim() === name);
+    if (existing) {
+      handleSelect(existing.partner_id);
+      return;
+    }
+
+    setSaving(true);
+    setCreateError('');
+    try {
+      const created = await fetchWithAuth<Partner>('/api/v1/partners', {
+        method: 'POST',
+        body: JSON.stringify({
+          partner_name: name,
+          partner_type: createType,
+        }),
+      });
+      onCreated?.(created);
+      handleSelect(created.partner_id);
+      setNewName('');
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : '거래처 등록에 실패했습니다');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -108,6 +159,51 @@ export function PartnerCombobox({ partners, value, onChange, error, placeholder 
               ))
             )}
           </div>
+          {creatable && !creating && (
+            <button
+              type="button"
+              onClick={() => {
+                setCreating(true);
+                setNewName(search.trim());
+                setCreateError('');
+              }}
+              className="flex w-full items-center gap-2 border-t px-2.5 py-2 text-sm text-primary transition-colors hover:bg-accent"
+            >
+              <PlusIcon className="size-3.5" />
+              신규 거래처 등록{search.trim() ? ` "${search.trim()}"` : ''}
+            </button>
+          )}
+          {creatable && creating && (
+            <div className="space-y-2 border-t bg-muted/20 p-2.5">
+              <div className="text-xs font-medium text-muted-foreground">신규 거래처 등록</div>
+              <input
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                placeholder="거래처명 *"
+                className="w-full rounded border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring"
+              />
+              {createError && <div className="text-xs text-destructive">{createError}</div>}
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  disabled={!newName.trim() || saving}
+                  className="flex-1 rounded bg-primary py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {saving ? '등록 중...' : '등록'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCreating(false); setNewName(''); setCreateError(''); }}
+                  className="rounded border border-input px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

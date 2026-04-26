@@ -19,10 +19,11 @@ interface Props {
   onCreated?: (site: ConstructionSite) => void;        // 인라인 생성 후 콜백
   error?: boolean;
   placeholder?: string;
+  displayName?: string;                                // site_id가 없는 레거시/수정 데이터 표시
 }
 
 export function ConstructionSiteCombobox({
-  sites, value, onChange, companyId, siteType = 'all', onCreated, error, placeholder = '현장 검색…',
+  sites, value, onChange, companyId, siteType = 'all', onCreated, error, placeholder = '현장 검색…', displayName = '',
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -117,16 +118,18 @@ export function ConstructionSiteCombobox({
           'w-full flex items-center gap-2 rounded-md border px-3 h-9 text-sm text-left transition-colors',
           error ? 'border-destructive' : 'border-input',
           'hover:border-ring focus:outline-none focus:ring-1 focus:ring-ring',
-          !value && 'text-muted-foreground',
+          !value && !displayName && 'text-muted-foreground',
         )}
       >
         <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <span className="flex-1 truncate">
           {selectedSite
             ? `${selectedSite.name}${selectedSite.location ? ` (${selectedSite.location})` : ''}`
+            : displayName
+              ? displayName
             : placeholder}
         </span>
-        {value && (
+        {(value || displayName) && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onChange('', ''); }}

@@ -157,9 +157,13 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
   const prefillCompanyId = prefillData?.company_id && prefillData.company_id !== 'all'
     ? prefillData.company_id
     : null;
-  const effectiveCompanyId = isPrefill
-    ? (prefillCompanyId || resolvedPrefillCompanyId || selectedCompanyId)
-    : selectedCompanyId;
+  const editCompanyId = editData?.company_id && editData.company_id !== 'all'
+    ? editData.company_id
+    : null;
+  const selectedCompanyValue = selectedCompanyId && selectedCompanyId !== 'all' ? selectedCompanyId : null;
+  const effectiveCompanyId = editCompanyId || (isPrefill
+    ? (prefillCompanyId || resolvedPrefillCompanyId || selectedCompanyValue)
+    : selectedCompanyValue);
   const prefillResetKey = prefillData
     ? [
       prefillData.alloc_id,
@@ -195,7 +199,7 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
     fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers')
       .then((list) => setManufacturers(list.filter((m) => m.is_active))).catch(() => {});
     fetchWithAuth<Partner[]>('/api/v1/partners')
-      .then((list) => setPartners(list.filter((p) => p.is_active && (p.partner_type === 'customer' || p.partner_type === 'both'))))
+      .then((list) => setPartners(list.filter((p) => p.is_active)))
       .catch(() => {});
     if (effectiveCompanyId && effectiveCompanyId !== 'all') {
       fetchWithAuth<ConstructionSite[]>(`/api/v1/construction-sites?company_id=${effectiveCompanyId}`)
@@ -334,7 +338,11 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
   const handle = async (data: FormData) => {
     setSubmitError('');
     if (!effectiveCompanyId || effectiveCompanyId === 'all') {
-      setSubmitError('수주 법인을 확인할 수 없습니다. 가용재고 화면에서 다시 수주 전환을 시작해주세요.');
+      setSubmitError(editData
+        ? '수주 법인을 확인할 수 없습니다. 수주 상세를 새로고침한 뒤 다시 시도해주세요.'
+        : isPrefill
+          ? '수주 법인을 확인할 수 없습니다. 가용재고 화면에서 다시 수주 전환을 시작해주세요.'
+          : '상단에서 수주 법인을 먼저 선택해주세요.');
       return;
     }
 
@@ -445,6 +453,9 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
               value={watch('customer_id') ?? ''}
               onChange={(v) => setValue('customer_id', v, { shouldValidate: true })}
               error={!!errors.customer_id}
+              creatable
+              createType="customer"
+              onCreated={(partner) => setPartners((prev) => [...prev, partner])}
             />
             {errors.customer_id && <p className="text-xs text-destructive">{errors.customer_id.message}</p>}
           </div>
@@ -660,6 +671,7 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
             <ConstructionSiteCombobox
               sites={sites}
               value={watch('site_id') ?? ''}
+              displayName={watch('site_name') ?? ''}
               companyId={effectiveCompanyId}
               onChange={(siteId, siteName) => {
                 setValue('site_id', siteId, { shouldDirty: true });

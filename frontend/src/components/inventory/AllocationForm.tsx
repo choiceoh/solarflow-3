@@ -1151,6 +1151,9 @@ export default function AllocationForm({
                       value={customerPartnerId}
                       onChange={setCustomerPartnerId}
                       placeholder="거래처 검색"
+                      creatable
+                      createType="customer"
+                      onCreated={(partner) => setPartners((prev) => [...prev, partner])}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1172,6 +1175,9 @@ export default function AllocationForm({
                       value={customerPartnerId}
                       onChange={setCustomerPartnerId}
                       placeholder="거래처 검색"
+                      creatable
+                      createType="customer"
+                      onCreated={(partner) => setPartners((prev) => [...prev, partner])}
                     />
                   </div>
                 </>
