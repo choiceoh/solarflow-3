@@ -51,6 +51,25 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+type AvailabilityInfo = {
+  stockKw: number;
+  incomingKw: number;
+  stockEa: number;
+  incomingEa: number;
+};
+
+const PAYMENT_TERM_PRESETS = [
+  { label: '현금 100%', terms: '현금 100%', depositRate: 100 },
+  { label: '현금 50% + 신용 60일', terms: '현금 50% + 신용 60일', depositRate: 50 },
+  { label: '현금 30% + 신용 60일', terms: '현금 30% + 신용 60일', depositRate: 30 },
+  { label: '현금 50% + 신용 30일', terms: '현금 50% + 신용 30일', depositRate: 50 },
+  { label: '신용 30일', terms: '신용 30일', depositRate: 0 },
+  { label: '신용 60일', terms: '신용 60일', depositRate: 0 },
+  { label: '신용 90일', terms: '신용 90일', depositRate: 0 },
+  { label: '익월말', terms: '익월말', depositRate: 0 },
+  { label: '익익월말', terms: '익익월말', depositRate: 0 },
+];
+
 export interface OrderPrefillData {
   alloc_id?: string;
   company_id?: string;
@@ -95,6 +114,18 @@ function formatKwField(v: number): string {
   return v.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
+function formatCapacityAuto(kw: number): string {
+  if (!Number.isFinite(kw) || kw <= 0) return '0 kW';
+  if (kw >= 1000) {
+    return `${(kw / 1000).toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MW`;
+  }
+  return `${kw.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kW`;
+}
+
+function eaFromKw(kw: number, specWp?: number): number {
+  return specWp && specWp > 0 ? Math.round((kw * 1000) / specWp) : 0;
+}
+
 function normalizeBusinessName(value?: string | null): string {
   return (value ?? '')
     .toLowerCase()
@@ -125,7 +156,7 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
   const [partners, setPartners] = useState<Partner[]>([]);
   const [sites, setSites] = useState<ConstructionSite[]>([]);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
-  const [inventoryInfo, setInventoryInfo] = useState<string | null>(null);
+  const [inventoryInfo, setInventoryInfo] = useState<AvailabilityInfo | null>(null);
   const [submitError, setSubmitError] = useState('');
   const [blId, setBlId] = useState('');
   const [bls, setBls] = useState<BLShipment[]>([]);
@@ -246,19 +277,25 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
     return () => { cancelled = true; };
   }, [bls, selectedProductId]);
 
-  // 충당소스 변경 시 재고 정보 표시
+  // 선택 품목의 충당 가능량 표시
   useEffect(() => {
-    if (!fulfillmentSource || !effectiveCompanyId) { setInventoryInfo(null); return; }
+    if (!effectiveCompanyId || !selectedProductId) { setInventoryInfo(null); return; }
     fetchWithAuth<InventoryResponse>('/api/v1/calc/inventory', {
       method: 'POST',
       body: JSON.stringify({ company_id: effectiveCompanyId }),
     }).then((result) => {
-      const item = selectedProductId ? result.items.find((it) => it.product_id === selectedProductId) : undefined;
-      const stockKw = item?.available_kw ?? result.summary.total_available_kw ?? 0;
+      const item = result.items.find((it) => it.product_id === selectedProductId);
+      const stockKw = item?.available_kw ?? 0;
       const incomingKw = item?.available_incoming_kw ?? 0;
-      setInventoryInfo(`가용 실재고 ${formatKwField(stockKw)} kW · 가용 미착품 ${formatKwField(incomingKw)} kW`);
+      const specWp = selectedProduct?.spec_wp ?? item?.spec_wp;
+      setInventoryInfo({
+        stockKw,
+        incomingKw,
+        stockEa: eaFromKw(stockKw, specWp),
+        incomingEa: eaFromKw(incomingKw, specWp),
+      });
     }).catch(() => setInventoryInfo(null));
-  }, [fulfillmentSource, effectiveCompanyId, selectedProductId]);
+  }, [effectiveCompanyId, selectedProductId, selectedProduct?.spec_wp]);
 
   // 예약/기존 수주가 미착품으로 들어왔어도 현재 실재고가 충분하면 실재고를 우선합니다.
   useEffect(() => {
@@ -546,8 +583,21 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
                     ))}
                   </SelectContent>
                 </Select>
-                {inventoryInfo && <p className="text-[10px] text-blue-600">{inventoryInfo}</p>}
               </>
+            )}
+            {inventoryInfo && (
+              <div className="grid grid-cols-1 gap-2 rounded-md border bg-slate-50 px-3 py-2 text-xs sm:grid-cols-2">
+                <div>
+                  <div className="text-muted-foreground">가용 실재고</div>
+                  <div className="font-semibold text-green-700">{formatCapacityAuto(inventoryInfo.stockKw)}</div>
+                  <div className="text-[10px] text-muted-foreground">{inventoryInfo.stockEa.toLocaleString('ko-KR')} EA</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">가용 미착품</div>
+                  <div className="font-semibold text-blue-700">{formatCapacityAuto(inventoryInfo.incomingKw)}</div>
+                  <div className="text-[10px] text-muted-foreground">{inventoryInfo.incomingEa.toLocaleString('ko-KR')} EA</div>
+                </div>
+              </div>
             )}
             {errors.fulfillment_source && !isPrefill && <p className="text-xs text-destructive">{errors.fulfillment_source.message}</p>}
           </div>
@@ -716,20 +766,19 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Label className="font-medium">결제/납기 조건</Label>
               <div className="flex flex-wrap gap-1.5">
-                {['현금 100%', '현금 30% + 신용 60일', '현금 50% + 신용 30일', '신용 60일'].map((term) => (
+                {PAYMENT_TERM_PRESETS.map((preset) => (
                   <Button
-                    key={term}
+                    key={preset.label}
                     type="button"
                     variant="outline"
                     size="sm"
                     className="h-7 px-2 text-[11px]"
                     onClick={() => {
-                      setValue('payment_terms', term, { shouldDirty: true });
-                      const match = term.match(/현금\s*(\d+(?:\.\d+)?)%/);
-                      if (match) setValue('deposit_rate', Number(match[1]) as unknown as FormData['deposit_rate'], { shouldDirty: true });
+                      setValue('payment_terms', preset.terms, { shouldDirty: true });
+                      setValue('deposit_rate', preset.depositRate as unknown as FormData['deposit_rate'], { shouldDirty: true });
                     }}
                   >
-                    {term}
+                    {preset.label}
                   </Button>
                 ))}
               </div>
@@ -737,7 +786,8 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1.5 sm:col-span-1">
                 <Label>결제조건</Label>
-                <Input {...register('payment_terms')} placeholder="예: 현금 30% + 신용 60일" />
+                <Input {...register('payment_terms')} placeholder="예: 현금 50% + 신용 60일 / 익월말" />
+                <p className="text-[10px] text-muted-foreground">목록에 없으면 직접 입력</p>
               </div>
               <div className="space-y-1.5">
                 <Label>현금/선수금율 (%)</Label>
