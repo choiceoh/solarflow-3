@@ -1,6 +1,6 @@
 import EmptyState from '@/components/common/EmptyState';
 import FulfillmentSourceBadge from './FulfillmentSourceBadge';
-import { Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { cn, moduleLabel } from '@/lib/utils';
 import { formatDate, formatNumber, formatKw } from '@/lib/utils';
 import {
@@ -132,11 +132,10 @@ export default function OrderListTable({ items, onSelect, onNew, onEdit, onDelet
                         type="button"
                         title={canReturnReservation ? '예약으로 복귀' : '출고된 수주는 예약으로 복귀할 수 없습니다'}
                         disabled={!canReturnReservation}
-                        className="inline-flex h-7 items-center gap-1 rounded border px-2 text-[11px] text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-40 whitespace-nowrap"
+                        className="inline-flex h-8 w-10 items-center justify-center rounded border px-1 text-[10px] leading-[1.05] text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-40"
                         onClick={() => onCancelToReservation(o)}
                       >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        복귀
+                        <span className="text-center">예약<br />복귀</span>
                       </button>
                     )}
                     {onDelete && (

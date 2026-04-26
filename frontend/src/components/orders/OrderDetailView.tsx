@@ -36,6 +36,21 @@ function Field({ label, value }: { label: string; value: string | undefined }) {
   );
 }
 
+function safeNumber(value: unknown): number | undefined {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function formatMaybeNumber(value: unknown, suffix = ''): string | undefined {
+  const n = safeNumber(value);
+  return n === undefined ? undefined : `${formatNumber(n)}${suffix}`;
+}
+
+function formatMaybeKw(value: unknown): string | undefined {
+  const n = safeNumber(value);
+  return n === undefined ? undefined : formatKw(n);
+}
+
 export default function OrderDetailView({ orderId, onBack }: Props) {
   const { data: order, loading, reload } = useOrderDetail(orderId);
   const { data: outbounds, loading: obLoading, reload: reloadOutbounds } = useOrderOutbounds(orderId);
@@ -58,11 +73,18 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
 
   if (loading || !order) return <LoadingSpinner />;
 
-  const remaining = order.remaining_qty ?? (order.quantity - (order.shipped_qty ?? 0));
-  const totalShipped = outbounds.reduce((sum, ob) => sum + ob.quantity, 0);
+  const orderQty = safeNumber(order.quantity) ?? 0;
+  const shippedQty = safeNumber(order.shipped_qty) ?? 0;
+  const remaining = safeNumber(order.remaining_qty) ?? (orderQty - shippedQty);
+  const totalShipped = outbounds.reduce((sum, ob) => sum + (safeNumber(ob.quantity) ?? 0), 0);
   const moduleText = order.manufacturer_name || order.spec_wp
     ? moduleLabel(order.manufacturer_name, order.spec_wp)
     : undefined;
+  const statusLabel = ORDER_STATUS_LABEL[order.status] ?? order.status ?? '—';
+  const statusColor = ORDER_STATUS_COLOR[order.status] ?? 'bg-slate-100 text-slate-600';
+  const receiptMethodLabel = RECEIPT_METHOD_LABEL[order.receipt_method] ?? order.receipt_method;
+  const managementLabel = MANAGEMENT_CATEGORY_LABEL[order.management_category] ?? order.management_category;
+  const sale = sales[0];
 
   const handleUpdate = async (data: Record<string, unknown>) => {
     await fetchWithAuth(`/api/v1/orders/${orderId}`, { method: 'PUT', body: JSON.stringify(data) });
@@ -121,8 +143,8 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
         <CardHeader className="pb-2 pt-4">
           <div className="flex items-center gap-2">
             <CardTitle className="text-sm">수주 정보</CardTitle>
-            <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', ORDER_STATUS_COLOR[order.status])}>
-              {ORDER_STATUS_LABEL[order.status]}
+            <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', statusColor)}>
+              {statusLabel}
             </span>
           </div>
         </CardHeader>
@@ -131,28 +153,28 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
             <Field label="발주번호" value={order.order_number} />
             <Field label="거래처" value={order.customer_name} />
             <Field label="수주일" value={formatDate(order.order_date)} />
-            <Field label="접수방법" value={RECEIPT_METHOD_LABEL[order.receipt_method]} />
-            <Field label="관리구분" value={MANAGEMENT_CATEGORY_LABEL[order.management_category]} />
+            <Field label="접수방법" value={receiptMethodLabel} />
+            <Field label="관리구분" value={managementLabel} />
             <div>
               <p className="text-[10px] text-muted-foreground">충당소스</p>
-              <FulfillmentSourceBadge source={order.fulfillment_source} />
+              {order.fulfillment_source ? <FulfillmentSourceBadge source={order.fulfillment_source} /> : <p className="text-sm">—</p>}
             </div>
             <Field label="제조사/규격" value={moduleText} />
             <Field label="품번" value={order.product_code} />
             <Field label="품명" value={order.product_name} />
             <Field label="규격" value={order.spec_wp ? `${order.spec_wp}Wp` : undefined} />
-            <Field label="수량" value={formatNumber(order.quantity)} />
-            <Field label="잔량" value={formatNumber(remaining)} />
-            <Field label="용량" value={order.capacity_kw ? formatKw(order.capacity_kw) : undefined} />
-            <Field label="Wp단가" value={`${formatNumber(order.unit_price_wp)}원/Wp`} />
+            <Field label="수량" value={formatMaybeNumber(order.quantity)} />
+            <Field label="잔량" value={formatMaybeNumber(remaining)} />
+            <Field label="용량" value={formatMaybeKw(order.capacity_kw)} />
+            <Field label="Wp단가" value={formatMaybeNumber(order.unit_price_wp, '원/Wp')} />
             <Field label="현장명" value={order.site_name} />
             <Field label="현장 주소" value={order.site_address} />
             <Field label="현장 담당" value={order.site_contact} />
             <Field label="현장 전화" value={order.site_phone} />
             <Field label="결제조건" value={order.payment_terms} />
-            <Field label="현금/선수금율" value={order.deposit_rate ? `${order.deposit_rate}%` : undefined} />
+            <Field label="현금/선수금율" value={formatMaybeNumber(order.deposit_rate, '%')} />
             <Field label="납기일" value={order.delivery_due ? formatDate(order.delivery_due) : undefined} />
-            <Field label="스페어" value={order.spare_qty?.toString()} />
+            <Field label="스페어" value={formatMaybeNumber(order.spare_qty)} />
             {order.memo && <Field label="메모" value={order.memo} />}
           </div>
         </CardContent>
@@ -171,14 +193,14 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
         <Card>
           <CardContent className="pt-4 pb-4">
             <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-              <Field label="거래처" value={sales[0].customer_name ?? order.customer_name} />
-              <Field label="수량" value={sales[0].quantity ? formatNumber(sales[0].quantity) : formatNumber(order.quantity)} />
-              <Field label="Wp단가" value={`${formatNumber(sales[0].unit_price_wp)}원/Wp`} />
-              <Field label="공급가" value={sales[0].supply_amount ? `${formatNumber(sales[0].supply_amount)}원` : undefined} />
-              <Field label="부가세" value={sales[0].vat_amount ? `${formatNumber(sales[0].vat_amount)}원` : undefined} />
-              <Field label="합계" value={sales[0].total_amount ? `${formatNumber(sales[0].total_amount)}원` : undefined} />
-              <Field label="계산서 발행일" value={sales[0].tax_invoice_date ? formatDate(sales[0].tax_invoice_date) : undefined} />
-              <Field label="출고 연결" value={sales[0].outbound_id ? '연결됨' : '출고 전'} />
+              <Field label="거래처" value={sale.customer_name ?? order.customer_name} />
+              <Field label="수량" value={formatMaybeNumber(safeNumber(sale.quantity) ?? order.quantity)} />
+              <Field label="Wp단가" value={formatMaybeNumber(sale.unit_price_wp, '원/Wp')} />
+              <Field label="공급가" value={formatMaybeNumber(sale.supply_amount, '원')} />
+              <Field label="부가세" value={formatMaybeNumber(sale.vat_amount, '원')} />
+              <Field label="합계" value={formatMaybeNumber(sale.total_amount, '원')} />
+              <Field label="계산서 발행일" value={sale.tax_invoice_date ? formatDate(sale.tax_invoice_date) : undefined} />
+              <Field label="출고 연결" value={sale.outbound_id ? '연결됨' : '출고 전'} />
             </div>
           </CardContent>
         </Card>
@@ -220,7 +242,7 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
                 <TableRow key={ob.outbound_id}>
                   <TableCell>{formatDate(ob.outbound_date)}</TableCell>
                   <TableCell>{ob.product_name ?? '—'}</TableCell>
-                  <TableCell className="text-right">{formatNumber(ob.quantity)}</TableCell>
+                  <TableCell className="text-right">{formatMaybeNumber(ob.quantity) ?? '—'}</TableCell>
                   <TableCell>{USAGE_CATEGORY_LABEL[ob.usage_category] ?? ob.usage_category}</TableCell>
                   <TableCell>{ob.site_name ?? '—'}</TableCell>
                   <TableCell>
