@@ -13,6 +13,7 @@ import LCForm from './LCForm';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import LinkedMemoWidget from '@/components/memo/LinkedMemoWidget';
 import POInboundProgress from './POInboundProgress';
+import AttachmentWidget from '@/components/common/AttachmentWidget';
 import { parseDeposit } from './DepositStatusPanel';
 import { fetchWithAuth } from '@/lib/api';
 import { usePOLines, useLCList, useTTList } from '@/hooks/useProcurement';
@@ -33,50 +34,65 @@ function LCSubTable({ items }: { items: LCRecord[] }) {
   const totalUsd = items.reduce((s, l) => s + (l.amount_usd ?? 0), 0);
   const totalMw  = items.reduce((s, l) => s + (l.target_mw ?? 0), 0);
   return (
-    <div className="rounded-md border overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="border-b bg-muted/20">
-            <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">LC번호</th>
-            <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">은행</th>
-            <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">개설일</th>
-            <th className="px-3 py-1.5 text-right font-medium">금액(USD)</th>
-            <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">MW</th>
-            <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">만기일</th>
-            <th className="px-3 py-1.5 text-center font-medium text-muted-foreground">상태</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((lc, idx) => (
-            <tr key={lc.lc_id} className="border-t hover:bg-muted/10">
-              <td className="px-3 py-2 font-mono font-medium">
-                <span className="text-[10px] font-normal text-muted-foreground mr-1">#{idx + 1}</span>
-                {lc.lc_number || '—'}
-              </td>
-              <td className="px-3 py-2 text-muted-foreground">{lc.bank_name ?? '—'}</td>
-              <td className="px-3 py-2 text-muted-foreground">{formatDate(lc.open_date ?? '')}</td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums">{formatUSD(lc.amount_usd)}</td>
-              <td className="px-3 py-2 font-mono">{lc.target_mw != null ? `${lc.target_mw.toFixed(2)} MW` : '—'}</td>
-              <td className="px-3 py-2 text-muted-foreground">{formatDate(lc.maturity_date ?? '')}</td>
-              <td className="px-3 py-2 text-center">
-                <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', LC_STATUS_COLOR[lc.status])}>
-                  {LC_STATUS_LABEL[lc.status]}
-                </span>
-              </td>
+    <div className="space-y-3">
+      <div className="rounded-md border overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b bg-muted/20">
+              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">LC번호</th>
+              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">은행</th>
+              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">개설일</th>
+              <th className="px-3 py-1.5 text-right font-medium">금액(USD)</th>
+              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">MW</th>
+              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">만기일</th>
+              <th className="px-3 py-1.5 text-center font-medium text-muted-foreground">상태</th>
             </tr>
-          ))}
-        </tbody>
-        {items.length > 1 && (
-          <tfoot>
-            <tr className="border-t bg-muted/20">
-              <td colSpan={3} className="px-3 py-1.5 text-[10px] text-muted-foreground">합계 {items.length}건</td>
-              <td className="px-3 py-1.5 text-right font-mono font-semibold tabular-nums">{formatUSD(totalUsd)}</td>
-              <td className="px-3 py-1.5 font-mono font-semibold text-[10px]">{totalMw > 0 ? `${totalMw.toFixed(2)} MW` : '—'}</td>
-              <td colSpan={2} />
-            </tr>
-          </tfoot>
-        )}
-      </table>
+          </thead>
+          <tbody>
+            {items.map((lc, idx) => (
+              <tr key={lc.lc_id} className="border-t hover:bg-muted/10">
+                <td className="px-3 py-2 font-mono font-medium">
+                  <span className="text-[10px] font-normal text-muted-foreground mr-1">#{idx + 1}</span>
+                  {lc.lc_number || '—'}
+                </td>
+                <td className="px-3 py-2 text-muted-foreground">{lc.bank_name ?? '—'}</td>
+                <td className="px-3 py-2 text-muted-foreground">{formatDate(lc.open_date ?? '')}</td>
+                <td className="px-3 py-2 text-right font-mono tabular-nums">{formatUSD(lc.amount_usd)}</td>
+                <td className="px-3 py-2 font-mono">{lc.target_mw != null ? `${lc.target_mw.toFixed(2)} MW` : '—'}</td>
+                <td className="px-3 py-2 text-muted-foreground">{formatDate(lc.maturity_date ?? '')}</td>
+                <td className="px-3 py-2 text-center">
+                  <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', LC_STATUS_COLOR[lc.status])}>
+                    {LC_STATUS_LABEL[lc.status]}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          {items.length > 1 && (
+            <tfoot>
+              <tr className="border-t bg-muted/20">
+                <td colSpan={3} className="px-3 py-1.5 text-[10px] text-muted-foreground">합계 {items.length}건</td>
+                <td className="px-3 py-1.5 text-right font-mono font-semibold tabular-nums">{formatUSD(totalUsd)}</td>
+                <td className="px-3 py-1.5 font-mono font-semibold text-[10px]">{totalMw > 0 ? `${totalMw.toFixed(2)} MW` : '—'}</td>
+                <td colSpan={2} />
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+      <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+        {items.map((lc) => (
+          <AttachmentWidget
+            key={`${lc.lc_id}-attachments`}
+            entityType="lc_records"
+            entityId={lc.lc_id}
+            fileType="lc_swift_pdf"
+            title={`${lc.lc_number || 'LC'} 신용장 전문`}
+            uploadLabel="전문 PDF 업로드"
+            compact
+          />
+        ))}
+      </div>
     </div>
   );
 }

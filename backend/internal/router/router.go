@@ -257,6 +257,15 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Delete("/{id}", noteH.Delete)
 		})
 
+		// 비유: 업무 서류함 — LC 전문 PDF 등 첨부파일 보관
+		attachmentH := handler.NewAttachmentHandler(db)
+		r.Route("/attachments", func(r chi.Router) {
+			r.Get("/", attachmentH.List)
+			r.Post("/", attachmentH.Create)
+			r.Get("/{id}/download", attachmentH.Download)
+			r.Delete("/{id}", attachmentH.Delete)
+		})
+
 		// 비유: 아마란스10 ERP 내보내기 — 입고/출고 .xlsx (Step 29C)
 		exportH := handler.NewExportHandler(db)
 		r.Route("/export/amaranth", func(r chi.Router) {

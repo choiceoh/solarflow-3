@@ -68,9 +68,10 @@ async function getSessionToken(): Promise<string | null> {
 // getSession()에 3초 타임아웃, 401 시 토큰 갱신 후 재시도
 export async function fetchWithAuth<T>(path: string, options?: RequestInit): Promise<T> {
   const token = await getSessionToken();
+  const isFormData = options?.body instanceof FormData;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options?.headers as Record<string, string> || {}),
   };
 
@@ -122,6 +123,50 @@ export async function fetchWithAuth<T>(path: string, options?: RequestInit): Pro
   }
 
   return res.json();
+}
+
+export async function fetchBlobWithAuth(path: string, options?: RequestInit): Promise<Response> {
+  const token = await getSessionToken();
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string> || {}),
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      headers['Authorization'] = `Bearer ${newToken}`;
+      const retryRes = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers,
+      });
+      if (retryRes.ok) return retryRes;
+      if (retryRes.status === 401) {
+        await supabase.auth.signOut();
+        window.location.href = '/login';
+        throw new Error('인증이 만료되었습니다');
+      }
+      throw new Error(`HTTP ${retryRes.status}`);
+    }
+
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+    throw new Error('인증이 만료되었습니다');
+  }
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  return res;
 }
 
 // 기존 호환용
