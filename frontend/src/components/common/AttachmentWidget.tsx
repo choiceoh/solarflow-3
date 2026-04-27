@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Download, Eye, FileText, Plus, Trash2, Upload, X } from 'lucide-react';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/api';
-import { cn, formatDate } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import type { DocumentFile } from '@/types/documentFile';
 
 interface AttachmentAccess {
@@ -73,7 +73,6 @@ export default function AttachmentWidget({
     return new URL(url, window.location.origin).toString();
   };
 
-  const getDownloadUrl = (file: DocumentFile) => toBrowserUrl(downloadAccess[file.file_id]?.url ?? '');
   const hasFreshDownloadUrl = (file: DocumentFile) => {
     const access = downloadAccess[file.file_id];
     return Boolean(access?.url) && access.expires_at - Math.floor(Date.now() / 1000) > 60;
@@ -125,25 +124,36 @@ export default function AttachmentWidget({
     }
   };
 
-  const ensureDownloadUrl = async (file: DocumentFile) => {
-    if (hasFreshDownloadUrl(file)) return;
+  const downloadHref = (file: DocumentFile) => {
+    const access = downloadAccess[file.file_id];
+    return hasFreshDownloadUrl(file) && access?.url ? toBrowserUrl(access.url) : '';
+  };
+
+  const downloadFile = async (file: DocumentFile, currentHref?: string) => {
     setDownloadingId(file.file_id);
+    setError('');
     try {
-      const params = new URLSearchParams({ disposition: 'attachment' });
-      const access = await fetchWithAuth<AttachmentAccess>(`/api/v1/attachments/${file.file_id}/access?${params}`);
-      setDownloadAccess((current) => ({ ...current, [file.file_id]: access }));
+      let href = currentHref || downloadHref(file);
+      if (!href) {
+        const params = new URLSearchParams({ disposition: 'attachment' });
+        const access = await fetchWithAuth<AttachmentAccess>(`/api/v1/attachments/${file.file_id}/access?${params}`);
+        setDownloadAccess((currentAccess) => ({ ...currentAccess, [file.file_id]: access }));
+        href = toBrowserUrl(access.url);
+      }
+
+      const response = await fetch(href, { credentials: 'include' });
+      if (!response.ok) {
+        throw new Error('파일 사본을 다운로드할 수 없습니다');
+      }
+
+      const blob = await response.blob();
+      const { saveAs } = await import('file-saver');
+      saveAs(blob, file.original_name || 'attachment.pdf');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '파일 사본 링크를 만들 수 없습니다');
+      setError(err instanceof Error ? err.message : '파일 사본을 다운로드할 수 없습니다');
     } finally {
       setDownloadingId(null);
     }
-  };
-
-  const handleDownloadClick = (event: React.MouseEvent<HTMLAnchorElement>, file: DocumentFile) => {
-    if (hasFreshDownloadUrl(file)) return;
-    event.preventDefault();
-    setError('다운로드 링크를 준비 중입니다. 잠시 후 다시 눌러주세요');
-    void ensureDownloadUrl(file);
   };
 
   const remove = async (file: DocumentFile) => {
@@ -186,42 +196,37 @@ export default function AttachmentWidget({
           <p className="text-[11px] text-muted-foreground">불러오는 중...</p>
         ) : files.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">첨부된 PDF가 없습니다</p>
-        ) : files.map((file) => (
-          <div key={file.file_id} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1.5">
-            <FileText className="h-4 w-4 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium">{file.original_name}</p>
-              <p className="text-[10px] text-muted-foreground">
-                {formatBytes(file.size_bytes)} · {formatDate(file.created_at)}
-              </p>
+        ) : files.map((file) => {
+          const href = downloadHref(file);
+          return (
+            <div key={file.file_id} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1.5">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium">{file.original_name}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {formatBytes(file.size_bytes)} · {formatDate(file.created_at)}
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => previewFile(file)} title="미리보기">
+                <Eye className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                disabled={downloadingId === file.file_id}
+                onClick={() => downloadFile(file, href)}
+                title="사본 다운로드"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span className="ml-1 hidden sm:inline">{downloadingId === file.file_id ? '준비 중' : '사본'}</span>
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => remove(file)} title="삭제">
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
             </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => previewFile(file)} title="미리보기">
-              <Eye className="h-3.5 w-3.5" />
-            </Button>
-            <a
-              className={cn(
-                buttonVariants({ variant: 'ghost', size: 'sm' }),
-                'h-7 px-2 text-[11px]',
-                !hasFreshDownloadUrl(file) && 'opacity-60'
-              )}
-              href={getDownloadUrl(file) || '#'}
-              download={file.original_name}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(event) => handleDownloadClick(event, file)}
-              onFocus={() => void ensureDownloadUrl(file)}
-              onMouseEnter={() => void ensureDownloadUrl(file)}
-              aria-disabled={!hasFreshDownloadUrl(file)}
-              title="사본 다운로드"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span className="ml-1 hidden sm:inline">{downloadingId === file.file_id ? '준비 중' : '사본'}</span>
-            </a>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => remove(file)} title="삭제">
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {preview && (
@@ -241,24 +246,16 @@ export default function AttachmentWidget({
                 >
                   새 탭 열기
                 </Button>
-                <a
-                  className={cn(
-                    buttonVariants({ variant: 'outline', size: 'sm' }),
-                    !hasFreshDownloadUrl(preview.file) && 'opacity-60'
-                  )}
-                  href={getDownloadUrl(preview.file) || '#'}
-                  download={preview.file.original_name}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(event) => handleDownloadClick(event, preview.file)}
-                  onFocus={() => void ensureDownloadUrl(preview.file)}
-                  onMouseEnter={() => void ensureDownloadUrl(preview.file)}
-                  aria-disabled={!hasFreshDownloadUrl(preview.file)}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={downloadingId === preview.file.file_id}
+                  onClick={() => downloadFile(preview.file, downloadHref(preview.file))}
                   title="사본 다운로드"
                 >
                   <Download className="mr-1.5 h-3.5 w-3.5" />
                   {downloadingId === preview.file.file_id ? '준비 중' : '사본 다운로드'}
-                </a>
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
