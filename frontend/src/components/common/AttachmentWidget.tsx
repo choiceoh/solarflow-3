@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, Eye, FileText, Plus, Trash2, Upload, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import type { DocumentFile } from '@/types/documentFile';
 
 interface AttachmentAccess {
   url: string;
   expires_at: number;
+}
+
+interface PreparedAttachmentLinks {
+  inline?: string;
+  attachment?: string;
 }
 
 interface Props {
@@ -37,11 +42,9 @@ export default function AttachmentWidget({
   const [files, setFiles] = useState<DocumentFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<{ url: string; file: DocumentFile } | null>(null);
-  const objectUrlRef = useRef<Record<string, string>>({});
-  const preparingRef = useRef<Record<string, Promise<string>>>({});
+  const [accessLinks, setAccessLinks] = useState<Record<string, PreparedAttachmentLinks>>({});
 
   const accessUrl = async (file: DocumentFile, disposition: 'inline' | 'attachment') => {
     const params = new URLSearchParams({ disposition });
@@ -54,53 +57,25 @@ export default function AttachmentWidget({
     return new URL(url, window.location.origin).toString();
   };
 
-  const clearPreparedFiles = useCallback(() => {
-    Object.values(objectUrlRef.current).forEach((url) => URL.revokeObjectURL(url));
-    objectUrlRef.current = {};
-    preparingRef.current = {};
-  }, []);
-
-  const prepareFileUrl = async (file: DocumentFile) => {
-    const existing = objectUrlRef.current[file.file_id];
-    if (existing) return existing;
-
-    const preparing = preparingRef.current[file.file_id];
-    if (preparing) return preparing;
-
-    const promise = (async () => {
-      const signedUrl = toBrowserUrl(await accessUrl(file, 'inline'));
-      const response = await fetch(signedUrl, { cache: 'no-store', credentials: 'include' });
-      if (!response.ok) {
-        throw new Error('첨부 PDF 사본을 불러올 수 없습니다');
-      }
-
-      const rawBlob = await response.blob();
-      const blob = rawBlob.type === 'application/pdf'
-        ? rawBlob
-        : rawBlob.slice(0, rawBlob.size, 'application/pdf');
-      const objectUrl = URL.createObjectURL(blob);
-
-      const previousUrl = objectUrlRef.current[file.file_id];
-      if (previousUrl) URL.revokeObjectURL(previousUrl);
-
-      objectUrlRef.current[file.file_id] = objectUrl;
-      return objectUrl;
-    })();
-
-    preparingRef.current[file.file_id] = promise;
-    try {
-      return await promise;
-    } finally {
-      delete preparingRef.current[file.file_id];
-    }
+  const prepareAccessLinks = async (file: DocumentFile) => {
+    const [inlineUrl, attachmentUrl] = await Promise.all([
+      accessUrl(file, 'inline'),
+      accessUrl(file, 'attachment'),
+    ]);
+    const links = {
+      inline: toBrowserUrl(inlineUrl),
+      attachment: toBrowserUrl(attachmentUrl),
+    };
+    setAccessLinks((prev) => ({ ...prev, [file.file_id]: links }));
+    return links;
   };
 
-  const primeFileUrls = async (targetFiles: DocumentFile[]) => {
+  const primeAccessLinks = async (targetFiles: DocumentFile[]) => {
     await Promise.all(targetFiles.map(async (file) => {
       try {
-        await prepareFileUrl(file);
+        await prepareAccessLinks(file);
       } catch {
-        // 개별 파일 준비 실패는 사용자가 해당 파일을 열 때 에러로 다시 표시합니다.
+        // 개별 링크 준비 실패는 사용자가 해당 파일을 열 때 에러로 다시 표시합니다.
       }
     }));
   };
@@ -111,13 +86,13 @@ export default function AttachmentWidget({
     try {
       const params = new URLSearchParams({ entity_type: entityType, entity_id: entityId });
       const loadedFiles = await fetchWithAuth<DocumentFile[]>(`/api/v1/attachments?${params}`);
-      clearPreparedFiles();
+      setAccessLinks({});
       setFiles(loadedFiles);
-      void primeFileUrls(loadedFiles);
+      void primeAccessLinks(loadedFiles);
     } catch (err) {
       setError(err instanceof Error ? err.message : '첨부파일을 불러오지 못했습니다');
       setFiles([]);
-      clearPreparedFiles();
+      setAccessLinks({});
     } finally {
       setLoading(false);
     }
@@ -125,8 +100,7 @@ export default function AttachmentWidget({
 
   useEffect(() => {
     load();
-    return () => clearPreparedFiles();
-  }, [entityType, entityId, clearPreparedFiles]);
+  }, [entityType, entityId]);
 
   const upload = async (file: File | undefined) => {
     if (!file) return;
@@ -157,28 +131,12 @@ export default function AttachmentWidget({
   const previewFile = async (file: DocumentFile) => {
     setError('');
     try {
-      setPreview({ url: await prepareFileUrl(file), file });
+      const prepared = accessLinks[file.file_id];
+      const url = prepared?.inline || (await prepareAccessLinks(file)).inline;
+      if (!url) throw new Error('파일 미리보기 링크를 만들 수 없습니다');
+      setPreview({ url, file });
     } catch (err) {
       setError(err instanceof Error ? err.message : '파일을 열 수 없습니다');
-    }
-  };
-
-  const downloadFile = async (file: DocumentFile, currentHref?: string) => {
-    setDownloadingId(file.file_id);
-    setError('');
-    try {
-      const href = currentHref || toBrowserUrl(await accessUrl(file, 'attachment'));
-      const link = document.createElement('a');
-      link.href = href;
-      link.download = file.original_name || 'attachment.pdf';
-      link.rel = 'noopener';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '파일 사본을 다운로드할 수 없습니다');
-    } finally {
-      setDownloadingId(null);
     }
   };
 
@@ -223,6 +181,7 @@ export default function AttachmentWidget({
         ) : files.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">첨부된 PDF가 없습니다</p>
         ) : files.map((file) => {
+          const downloadHref = accessLinks[file.file_id]?.attachment;
           return (
             <div key={file.file_id} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1.5">
               <FileText className="h-4 w-4 text-muted-foreground" />
@@ -235,17 +194,20 @@ export default function AttachmentWidget({
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => previewFile(file)} title="미리보기">
                 <Eye className="h-3.5 w-3.5" />
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-[11px]"
-                disabled={downloadingId === file.file_id}
-                onClick={() => downloadFile(file)}
+              <a
+                className={cn(
+                  buttonVariants({ variant: 'ghost', size: 'sm' }),
+                  'h-7 px-2 text-[11px]',
+                  !downloadHref && 'pointer-events-none opacity-50',
+                )}
+                href={downloadHref}
+                download={file.original_name || 'attachment.pdf'}
+                rel="noopener"
                 title="사본 다운로드"
               >
                 <Download className="h-3.5 w-3.5" />
-                <span className="ml-1 hidden sm:inline">{downloadingId === file.file_id ? '준비 중' : '사본'}</span>
-              </Button>
+                <span className="ml-1 hidden sm:inline">{downloadHref ? '사본' : '준비 중'}</span>
+              </a>
               <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => remove(file)} title="삭제">
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
@@ -263,24 +225,28 @@ export default function AttachmentWidget({
                 <p className="text-[11px] text-muted-foreground">PDF 미리보기</p>
               </div>
               <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open(preview.url, '_blank', 'noopener,noreferrer')}
+                <a
+                  className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+                  href={preview.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   title="새 탭에서 열기"
                 >
                   새 탭 열기
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={downloadingId === preview.file.file_id}
-                  onClick={() => downloadFile(preview.file)}
+                </a>
+                <a
+                  className={cn(
+                    buttonVariants({ variant: 'outline', size: 'sm' }),
+                    !accessLinks[preview.file.file_id]?.attachment && 'pointer-events-none opacity-50',
+                  )}
+                  href={accessLinks[preview.file.file_id]?.attachment}
+                  download={preview.file.original_name || 'attachment.pdf'}
+                  rel="noopener"
                   title="사본 다운로드"
                 >
                   <Download className="mr-1.5 h-3.5 w-3.5" />
-                  {downloadingId === preview.file.file_id ? '준비 중' : '사본 다운로드'}
-                </Button>
+                  사본 다운로드
+                </a>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -291,17 +257,12 @@ export default function AttachmentWidget({
                 </Button>
               </div>
             </div>
-            <object
+            <iframe
               key={preview.url}
               title={`${preview.file.original_name} 미리보기`}
-              className="min-h-0 flex-1 bg-white"
-              data={`${preview.url}#toolbar=1&navpanes=0`}
-              type="application/pdf"
-            >
-              <div className="flex flex-1 items-center justify-center bg-white p-6 text-sm text-muted-foreground">
-                PDF 미리보기를 표시할 수 없습니다. 새 탭 열기 또는 사본 다운로드를 사용해 주세요.
-              </div>
-            </object>
+              className="min-h-0 flex-1 border-0 bg-white"
+              src={`${preview.url}#toolbar=1&navpanes=0`}
+            />
           </div>
         </div>
       )}
