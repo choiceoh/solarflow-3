@@ -1,7 +1,9 @@
 node_modules/
 dist/
-.env.local
 .env
+.env.*
+!.env.example
+!.env.*.example
 .wrangler/
 *.log
 .DS_Store
@@ -11,4 +13,3 @@ insert_*.sql
 
 # graphify 산출물 (로컬 분석 결과, 커밋하지 않음)
 graphify-out/
-
