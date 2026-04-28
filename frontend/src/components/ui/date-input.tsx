@@ -1,7 +1,8 @@
-import { forwardRef, useEffect, useRef, useState } from 'react';
+import { forwardRef, useRef, useState } from 'react';
 import { Calendar } from 'lucide-react';
 import { Input } from './input';
 import { cn } from '@/lib/utils';
+import { normDate } from './date-input-utils';
 
 /**
  * DateInput — 텍스트 직접 입력 + 달력 선택을 모두 지원하는 공통 날짜 컴포넌트
@@ -15,16 +16,6 @@ import { cn } from '@/lib/utils';
  * 사용:
  *   <DateInput value={date} onChange={setDate} placeholder="..." />
  */
-
-/** 8자리/축약 형식을 YYYY-MM-DD로 정규화 */
-export function normDate(v: string): string {
-  if (!v) return v;
-  const digits = v.replace(/\D/g, '');
-  if (/^\d{8}$/.test(digits)) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
-  const m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  return v;
-}
 
 interface Props {
   value: string;
@@ -41,11 +32,14 @@ export const DateInput = forwardRef<HTMLInputElement, Props>(function DateInput(
   { value, onChange, placeholder = 'YYYY-MM-DD 또는 20260407', className, disabled, id, name, onKeyDown },
   ref,
 ) {
+  // 외부 value 변경을 즉시 반영하기 위해 prev value를 추적하고 렌더 중 setState 호출 (set-state-in-effect 회피)
   const [text, setText] = useState(value ?? '');
+  const [prevValue, setPrevValue] = useState(value ?? '');
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setText(value ?? '');
+  }
   const nativeRef = useRef<HTMLInputElement>(null);
-
-  // value 외부 변경 시 text 동기화
-  useEffect(() => { setText(value ?? ''); }, [value]);
 
   const nativeDateValue = /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
 

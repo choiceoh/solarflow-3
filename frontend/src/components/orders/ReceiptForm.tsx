@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -36,9 +36,8 @@ export default function ReceiptForm({ open, onOpenChange, onSubmit, editData }: 
   const [submitError, setSubmitError] = useState('');
   const [amountDisplay, setAmountDisplay] = useState('');
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema) as unknown as Resolver<FormData>,
   });
 
   useEffect(() => {
@@ -90,6 +89,7 @@ export default function ReceiptForm({ open, onOpenChange, onSubmit, editData }: 
             <Label>거래처 *</Label>
             <PartnerCombobox
               partners={partners}
+              // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가
               value={watch('customer_id') ?? ''}
               onChange={(v) => setValue('customer_id', v, { shouldValidate: true })}
               error={!!errors.customer_id}

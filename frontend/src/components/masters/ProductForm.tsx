@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -41,9 +41,8 @@ interface Props {
 
 export default function ProductForm({ open, onOpenChange, onSubmit, editData }: Props) {
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema) as unknown as Resolver<FormData>,
   });
 
   useEffect(() => {
@@ -112,6 +111,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, editData }: 
           <div className="space-y-1.5">
             <Label>제조사 *</Label>
             <Select value={watch('manufacturer_id') ?? ''} onValueChange={(v) => setValue('manufacturer_id', v ?? '')}>
+              {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
               <SelectTrigger><Txt text={manufacturers.find(m => m.manufacturer_id === watch('manufacturer_id'))?.name_kr ?? ''} /></SelectTrigger>
               <SelectContent>
                 {manufacturers.map((m) => (

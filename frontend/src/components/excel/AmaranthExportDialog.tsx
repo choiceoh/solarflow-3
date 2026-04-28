@@ -70,8 +70,8 @@ export default function AmaranthExportDialog({ type, open, onClose }: Props) {
       URL.revokeObjectURL(url);
 
       onClose();
-    } catch (e: any) {
-      setError(e.message || '내보내기 실패');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '내보내기 실패');
     } finally {
       setLoading(false);
     }

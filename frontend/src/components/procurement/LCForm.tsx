@@ -327,7 +327,7 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData, default
       setValue('amount_usd', calcAmt, { shouldDirty: true });
       setAmountUsdDisplay(fmtDecimal(calcAmt.toString()));
     }
-  }, [watchedQty, poLines, products, setValue]);
+  }, [watchedQty, poLines, products, setValue, lcLineRows.length]);
 
   // 자동: open_date + usance_days → maturity_date
   const watchedOpenDate = watch('open_date');

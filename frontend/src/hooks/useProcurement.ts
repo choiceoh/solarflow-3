@@ -22,6 +22,8 @@ export function usePOList(filters: { status?: string; manufacturer_id?: string; 
     setLoading(false);
   }, [selectedCompanyId, filters.status, filters.manufacturer_id, filters.contract_type]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
   return { data, loading, reload: load };
 }
@@ -37,6 +39,8 @@ export function usePOLines(poId: string | null) {
     setLoading(false);
   }, [poId]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
   return { data, loading, reload: load };
 }
@@ -65,6 +69,8 @@ export function useLCList(filters: { status?: string; bank_id?: string; po_id?: 
     setLoading(false);
   }, [selectedCompanyId, filters.status, filters.bank_id, filters.po_id]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
   return { data, loading, reload: load };
 }
@@ -96,6 +102,8 @@ export function useTTList(filters: { status?: string; po_id?: string } = {}) {
     setLoading(false);
   }, [selectedCompanyId, filters.status, filters.po_id]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
   return { data, loading, reload: load };
 }
@@ -129,6 +137,8 @@ export function usePriceHistoryList(filters: { manufacturer_id?: string } = {}) 
     setLoading(false);
   }, [selectedCompanyId, filters.manufacturer_id]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
   return { data, loading, reload: load };
 }

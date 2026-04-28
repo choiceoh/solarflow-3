@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -12,7 +12,7 @@ import type { Manufacturer } from '@/types/masters';
 
 export default function ManufacturerPage() {
   const [data, setData] = useState<Manufacturer[]>([]);
-  const [filtered, setFiltered] = useState<Manufacturer[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Manufacturer | null>(null);
@@ -24,23 +24,38 @@ export default function ManufacturerPage() {
     setLoading(true);
     try {
       const list = await fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers');
-      const sorted = sortManufacturers(list);
-      setData(sorted); setFiltered(sorted);
+      setData(sortManufacturers(list));
     } catch { /* empty */ }
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // 초기 로드 — 마운트 시 1회만 비동기 fetch (load는 갱신용으로 유지)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers');
+        if (!cancelled) setData(sortManufacturers(list));
+      } catch { /* empty */ }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const handleSearch = useCallback((q: string) => {
-    if (!q) { setFiltered(data); return; }
-    const lower = q.toLowerCase();
-    setFiltered(data.filter((m) =>
+  // 검색어를 파생 값으로 계산
+  const filtered = useMemo(() => {
+    if (!searchQuery) return data;
+    const lower = searchQuery.toLowerCase();
+    return data.filter((m) =>
       m.name_kr.toLowerCase().includes(lower) ||
       (m.name_en ?? '').toLowerCase().includes(lower) ||
       m.country.toLowerCase().includes(lower)
-    ));
-  }, [data]);
+    );
+  }, [data, searchQuery]);
+
+  const handleSearch = useCallback((q: string) => {
+    setSearchQuery(q);
+  }, []);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;

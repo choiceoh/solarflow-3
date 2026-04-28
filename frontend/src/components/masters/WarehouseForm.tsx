@@ -68,6 +68,7 @@ export default function WarehouseForm({ open, onOpenChange, onSubmit, editData }
           </div>
           <div className="space-y-1.5">
             <Label>유형 *</Label>
+            {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
             <Select value={watch('warehouse_type') ?? ''} onValueChange={(v) => setValue('warehouse_type', v ?? '')}>
               <SelectTrigger><Txt text={WH_TYPE_LABEL[watch('warehouse_type') ?? ''] ?? ''} /></SelectTrigger>
               <SelectContent>

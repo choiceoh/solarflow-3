@@ -11,6 +11,7 @@ export default function SearchInput({ placeholder = '검색...', onChange }: Sea
   const [value, setValue] = useState('');
   const onChangeRef = useRef(onChange);
 
+  // ref 갱신은 effect에서 (렌더 중 ref.current 쓰기 = react-hooks/refs 위반)
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);

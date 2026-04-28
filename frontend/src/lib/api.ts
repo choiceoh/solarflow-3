@@ -95,7 +95,7 @@ async function getSessionToken(): Promise<string | null> {
 
 // fetchWithAuth — Supabase 세션 토큰을 자동 첨부하는 fetch 래퍼
 // getSession()에 3초 타임아웃, 401 시 토큰 갱신 후 재시도
-export async function fetchWithAuth<T>(path: string, options?: RequestInit): Promise<T> {
+export async function fetchWithAuth<T = unknown>(path: string, options?: RequestInit): Promise<T> {
   const token = await getSessionToken();
   const isFormData = options?.body instanceof FormData;
 
@@ -199,46 +199,48 @@ export async function fetchBlobWithAuth(path: string, options?: RequestInit): Pr
 }
 
 // 기존 호환용
-export async function api<T>(path: string, options?: RequestInit): Promise<T> {
+export async function api<T = unknown>(path: string, options?: RequestInit): Promise<T> {
   return fetchWithAuth<T>(path, options);
 }
 
 // 마스터 API 함수들
+type MasterRecord = Record<string, unknown>;
+
 export const masterApi = {
   companies: {
-    list: () => fetchWithAuth<any[]>('/api/v1/companies'),
-    get: (id: string) => fetchWithAuth<any>(`/api/v1/companies/${id}`),
-    create: (data: any) => fetchWithAuth<any>('/api/v1/companies', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: any) => fetchWithAuth<any>(`/api/v1/companies/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    list: () => fetchWithAuth<MasterRecord[]>('/api/v1/companies'),
+    get: (id: string) => fetchWithAuth<MasterRecord>(`/api/v1/companies/${id}`),
+    create: (data: MasterRecord) => fetchWithAuth<MasterRecord>('/api/v1/companies', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: MasterRecord) => fetchWithAuth<MasterRecord>(`/api/v1/companies/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   },
   manufacturers: {
-    list: () => fetchWithAuth<any[]>('/api/v1/manufacturers'),
-    get: (id: string) => fetchWithAuth<any>(`/api/v1/manufacturers/${id}`),
-    create: (data: any) => fetchWithAuth<any>('/api/v1/manufacturers', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: any) => fetchWithAuth<any>(`/api/v1/manufacturers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    list: () => fetchWithAuth<MasterRecord[]>('/api/v1/manufacturers'),
+    get: (id: string) => fetchWithAuth<MasterRecord>(`/api/v1/manufacturers/${id}`),
+    create: (data: MasterRecord) => fetchWithAuth<MasterRecord>('/api/v1/manufacturers', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: MasterRecord) => fetchWithAuth<MasterRecord>(`/api/v1/manufacturers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   },
   products: {
-    list: (params?: string) => fetchWithAuth<any[]>(`/api/v1/products${params ? '?' + params : ''}`),
-    get: (id: string) => fetchWithAuth<any>(`/api/v1/products/${id}`),
-    create: (data: any) => fetchWithAuth<any>('/api/v1/products', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: any) => fetchWithAuth<any>(`/api/v1/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    list: (params?: string) => fetchWithAuth<MasterRecord[]>(`/api/v1/products${params ? '?' + params : ''}`),
+    get: (id: string) => fetchWithAuth<MasterRecord>(`/api/v1/products/${id}`),
+    create: (data: MasterRecord) => fetchWithAuth<MasterRecord>('/api/v1/products', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: MasterRecord) => fetchWithAuth<MasterRecord>(`/api/v1/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   },
   partners: {
-    list: (params?: string) => fetchWithAuth<any[]>(`/api/v1/partners${params ? '?' + params : ''}`),
-    get: (id: string) => fetchWithAuth<any>(`/api/v1/partners/${id}`),
-    create: (data: any) => fetchWithAuth<any>('/api/v1/partners', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: any) => fetchWithAuth<any>(`/api/v1/partners/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    list: (params?: string) => fetchWithAuth<MasterRecord[]>(`/api/v1/partners${params ? '?' + params : ''}`),
+    get: (id: string) => fetchWithAuth<MasterRecord>(`/api/v1/partners/${id}`),
+    create: (data: MasterRecord) => fetchWithAuth<MasterRecord>('/api/v1/partners', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: MasterRecord) => fetchWithAuth<MasterRecord>(`/api/v1/partners/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   },
   warehouses: {
-    list: (params?: string) => fetchWithAuth<any[]>(`/api/v1/warehouses${params ? '?' + params : ''}`),
-    get: (id: string) => fetchWithAuth<any>(`/api/v1/warehouses/${id}`),
-    create: (data: any) => fetchWithAuth<any>('/api/v1/warehouses', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: any) => fetchWithAuth<any>(`/api/v1/warehouses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    list: (params?: string) => fetchWithAuth<MasterRecord[]>(`/api/v1/warehouses${params ? '?' + params : ''}`),
+    get: (id: string) => fetchWithAuth<MasterRecord>(`/api/v1/warehouses/${id}`),
+    create: (data: MasterRecord) => fetchWithAuth<MasterRecord>('/api/v1/warehouses', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: MasterRecord) => fetchWithAuth<MasterRecord>(`/api/v1/warehouses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   },
   banks: {
-    list: (params?: string) => fetchWithAuth<any[]>(`/api/v1/banks${params ? '?' + params : ''}`),
-    get: (id: string) => fetchWithAuth<any>(`/api/v1/banks/${id}`),
-    create: (data: any) => fetchWithAuth<any>('/api/v1/banks', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: any) => fetchWithAuth<any>(`/api/v1/banks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    list: (params?: string) => fetchWithAuth<MasterRecord[]>(`/api/v1/banks${params ? '?' + params : ''}`),
+    get: (id: string) => fetchWithAuth<MasterRecord>(`/api/v1/banks/${id}`),
+    create: (data: MasterRecord) => fetchWithAuth<MasterRecord>('/api/v1/banks', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: MasterRecord) => fetchWithAuth<MasterRecord>(`/api/v1/banks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   },
 };

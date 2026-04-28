@@ -206,13 +206,14 @@ function AllocationHistory({ siteId }: { siteId: string }) {
   const [allocs, setAllocs] = useState<InventoryAllocation[]>([]);
 
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
     fetchWithAuth<{ site: ConstructionSite; allocations: InventoryAllocation[] }>(
       `/api/v1/construction-sites/${siteId}`,
     )
-      .then((res) => setAllocs(res.allocations ?? []))
-      .catch(() => setAllocs([]))
-      .finally(() => setLoading(false));
+      .then((res) => { if (!cancelled) setAllocs(res.allocations ?? []); })
+      .catch(() => { if (!cancelled) setAllocs([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [siteId]);
 
   if (loading) {

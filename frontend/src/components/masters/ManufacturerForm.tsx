@@ -95,6 +95,7 @@ export default function ManufacturerForm({ open, onOpenChange, onSubmit, editDat
           </div>
           <div className="space-y-1.5">
             <Label>국내/해외 *</Label>
+            {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
             <Select value={watch('domestic_foreign') ?? ''} onValueChange={(v) => setValue('domestic_foreign', v ?? '')}>
               <SelectTrigger><Txt text={watch('domestic_foreign') ?? ''} /></SelectTrigger>
               <SelectContent>

@@ -25,6 +25,7 @@ export default function Type2CIFExpense({ onGenerate }: Props) {
   const { data, loading, generate } = useType2();
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- selectedCompanyId 변경 시 외부 API에서 BL 목록 fetch (loading 상태 동기화)
     if (!selectedCompanyId) { setBls([]); setBlsLoading(false); return; }
     setBlsLoading(true);
     Promise.all([

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +15,7 @@ const typeVariant: Record<string, 'default' | 'secondary' | 'outline'> = { suppl
 
 export default function PartnerPage() {
   const [data, setData] = useState<Partner[]>([]);
-  const [filtered, setFiltered] = useState<Partner[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Partner | null>(null);
@@ -25,21 +25,37 @@ export default function PartnerPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { const list = await fetchWithAuth<Partner[]>('/api/v1/partners'); setData(list); setFiltered(list); } catch { /* empty */ }
+    try { const list = await fetchWithAuth<Partner[]>('/api/v1/partners'); setData(list); } catch { /* empty */ }
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // 초기 로드 — 마운트 시 1회만 비동기 fetch (load는 갱신용으로 유지)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await fetchWithAuth<Partner[]>('/api/v1/partners');
+        if (!cancelled) setData(list);
+      } catch { /* empty */ }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const handleSearch = useCallback((q: string) => {
-    if (!q) { setFiltered(data); return; }
-    const lower = q.toLowerCase();
-    setFiltered(data.filter((p) =>
+  // 검색어를 파생 값으로 계산
+  const filtered = useMemo(() => {
+    if (!searchQuery) return data;
+    const lower = searchQuery.toLowerCase();
+    return data.filter((p) =>
       p.partner_name.toLowerCase().includes(lower) ||
       (p.erp_code ?? '').toLowerCase().includes(lower) ||
       (p.contact_name ?? '').toLowerCase().includes(lower)
-    ));
-  }, [data]);
+    );
+  }, [data, searchQuery]);
+
+  const handleSearch = useCallback((q: string) => {
+    setSearchQuery(q);
+  }, []);
 
   const handleSubmit = async (formData: Record<string, unknown>) => {
     if (editTarget) {

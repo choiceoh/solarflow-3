@@ -31,13 +31,15 @@ export default function CustomsPage() {
   const [declFormOpen, setDeclFormOpen] = useState(false);
   const [presetBLId, setPresetBLId] = useState<string | null>(null);
   const location = useLocation();
-  // R1-1: 사이드바 "면장/원가" 클릭 시 상세에서 목록 복귀
+  // R1-1: 사이드바 "면장/원가" 클릭 시 상세에서 목록 복귀 — URL → 상태 동기화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setSelectedDecl(null); }, [location.key]);
-  // D-085: ?bl=xxx 쿼리 → 면장 등록 폼 자동 열기
+  // D-085: ?bl=xxx 쿼리 → 면장 등록 폼 자동 열기 — URL → 상태 동기화
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const bl = params.get('bl');
     if (bl) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPresetBLId(bl);
       setDeclFormOpen(true);
     }

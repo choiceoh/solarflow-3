@@ -49,7 +49,26 @@ export default function ProductPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // 초기 로드 — 마운트 시 1회만 비동기 fetch (load 함수는 갱신용으로 유지)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [products, mfgs] = await Promise.all([
+          fetchWithAuth<Product[]>('/api/v1/products'),
+          fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers'),
+        ]);
+        if (cancelled) return;
+        setData(products.map((p) => ({
+          ...p,
+          manufacturer_name: mfgs.find((m) => m.manufacturer_id === p.manufacturer_id)?.name_kr ?? '',
+        })));
+        setManufacturers(mfgs.filter((m) => m.is_active));
+      } catch { /* empty */ }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const filtered = useMemo(() => {
     let items = data;

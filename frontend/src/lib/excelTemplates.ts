@@ -12,9 +12,22 @@ import { INBOUND_TYPE_LABEL, USAGE_CATEGORIES } from '@/types/inbound';
 import { EXPENSE_TYPE_LABEL } from '@/types/customs';
 import { RECEIPT_METHOD_LABEL, MANAGEMENT_CATEGORY_LABEL, FULFILLMENT_SOURCE_LABEL } from '@/types/orders';
 
+// ExcelJS 워크시트의 최소 인터페이스 (셀/컬럼 setter)
+interface WritableCell {
+  value: unknown;
+  font?: unknown;
+  fill?: unknown;
+  border?: unknown;
+  dataValidation?: unknown;
+}
+interface SheetWritable {
+  getCell(addr: string | number, col?: number): WritableCell;
+  getColumn(idx: number): { width?: number };
+}
+
 // 드롭다운 범위 설정 헬퍼
 function setDropdown(
-  sheet: any,
+  sheet: SheetWritable,
   col: string,
   formula: string,
   maxRow = 1000,
@@ -32,7 +45,7 @@ function setDropdown(
 
 // 코드표 시트에 목록 작성 → 시작 열 인덱스 반환
 function writeCodeColumn(
-  codeSheet: any,
+  codeSheet: SheetWritable,
   colIndex: number,
   header: string,
   values: string[],
@@ -47,7 +60,7 @@ function writeCodeColumn(
 }
 
 // 헤더 스타일 설정
-function styleHeaders(sheet: any, fields: FieldDef[]) {
+function styleHeaders(sheet: SheetWritable, fields: FieldDef[]) {
   fields.forEach((f, i) => {
     const cell = sheet.getCell(1, i + 1);
     cell.value = f.required ? `${f.label}*` : f.label;

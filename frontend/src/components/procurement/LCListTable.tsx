@@ -39,9 +39,9 @@ function progressPercent(done: number, total: number): number {
   return Math.min(100, Math.max(0, (done / total) * 100));
 }
 
-function MaturityBadge({ date }: { date?: string }) {
+function MaturityBadge({ date, now }: { date?: string; now: number }) {
   if (!date) return null;
-  const diff = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
+  const diff = Math.ceil((new Date(date).getTime() - now) / 86400000);
   if (diff < 0) return <Badge variant="destructive" className="text-[10px]">만기초과</Badge>;
   if (diff <= 7) return <Badge variant="destructive" className="text-[10px]">만기임박</Badge>;
   return null;
@@ -59,6 +59,8 @@ interface Props {
 }
 
 export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onNewBL, blsVersion }: Props) {
+  // 렌더 중 Date.now() 호출은 react-hooks/purity 위반 → useState lazy init으로 1회만 캡처
+  const [now] = useState(() => Date.now());
   const [agg, setAgg] = useState<Record<string, LCAgg>>({});
   const [deleteTarget, setDeleteTarget] = useState<LCRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -137,7 +139,7 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
       .catch(() => { if (!cancelled) setExpandedBLs([]); });
     return () => { cancelled = true; };
   // blsVersion은 외부에서 BL 생성 시 증가 → 재조회 트리거
-  }, [expandedLCId, blsVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [expandedLCId, blsVersion]);
 
   const toggleExpand = (lc: LCRecord) => {
     setExpandedLCId(prev => prev === lc.lc_id ? null : lc.lc_id);
@@ -276,7 +278,7 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
                     <td className="p-3 align-top">
                       <div className="flex items-center gap-1">
                         <span className="text-[11px]">{formatDate(lc.maturity_date ?? '')}</span>
-                        {!isRepaid && <MaturityBadge date={lc.maturity_date} />}
+                        {!isRepaid && <MaturityBadge date={lc.maturity_date} now={now} />}
                       </div>
                       {isRepaid && lc.repayment_date ? (
                         <div className="text-[10px] text-green-600 font-medium mt-0.5">

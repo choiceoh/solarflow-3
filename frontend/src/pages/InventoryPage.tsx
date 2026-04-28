@@ -218,14 +218,17 @@ export default function InventoryPage() {
   // location.key가 바뀔 때마다 (다른 메뉴→재고로 돌아올 때) 배정 목록 갱신
   useEffect(() => { fetchAllocations(); }, [fetchAllocations, location.key]);
 
+  // URL → 상태 동기화
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveTab(getInventoryTab(location.search));
   }, [location.search]);
 
-  // ?action=alloc 처리 — TopNav 빠른 등록에서 진입 시 사용예약 모달 자동 오픈
+  // ?action=alloc 처리 — TopNav 빠른 등록에서 진입 시 사용예약 모달 자동 오픈 — URL → 상태 동기화
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('action') === 'alloc') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPrefilledProductId(undefined);
       setEditingAlloc(undefined);
       setAllocFormOpen(true);
@@ -400,7 +403,8 @@ export default function InventoryPage() {
     return [...set].sort((a, b) => a - b);
   }, [rawInv, mfgFilter]);
 
-  // 제조사 변경 시 규격 필터 초기화
+  // 제조사 변경 시 규격 필터 초기화 — 사용자 입력(mfgFilter) → 의존 상태 동기화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setWpFilter(''); }, [mfgFilter]);
 
   // product_id → { product_code, product_name, spec_wp, manufacturer_name } 맵 (배정 테이블 표시용)

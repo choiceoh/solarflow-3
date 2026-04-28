@@ -10,6 +10,8 @@ export function useFavorites(userId: string | undefined) {
     if (!userId) return;
     try {
       const raw = localStorage.getItem(STORAGE_KEY(userId));
+      // 외부 저장소(localStorage)에서 즐겨찾기 복원 — 사용자 변경 시 초기화 필요
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (raw) setFavorites(JSON.parse(raw));
     } catch {
       // localStorage 읽기 실패 시 기본값 유지

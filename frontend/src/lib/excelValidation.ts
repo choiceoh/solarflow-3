@@ -63,18 +63,21 @@ const POSITIVE_FIELDS: Record<string, boolean> = {
 
 // 마스터 데이터에서 유효 코드 셋 생성
 function buildCodeSet(master: MasterDataForExcel, key: keyof MasterDataForExcel): Set<string> {
-  const items = master[key] as any[];
+  const items = (master[key] ?? []) as Array<Record<string, unknown>>;
   const set = new Set<string>();
+  const addIfString = (v: unknown) => {
+    if (typeof v === 'string' && v) set.add(v);
+  };
   for (const item of items) {
     // 코드와 이름 모두 허용
-    if (item.company_code) set.add(item.company_code);
-    if (item.company_name) set.add(item.company_name);
-    if (item.name_kr) set.add(item.name_kr);
-    if (item.product_code) set.add(item.product_code);
-    if (item.product_name) set.add(item.product_name);
-    if (item.partner_name) set.add(item.partner_name);
-    if (item.warehouse_code) set.add(item.warehouse_code);
-    if (item.warehouse_name) set.add(item.warehouse_name);
+    addIfString(item.company_code);
+    addIfString(item.company_name);
+    addIfString(item.name_kr);
+    addIfString(item.product_code);
+    addIfString(item.product_name);
+    addIfString(item.partner_name);
+    addIfString(item.warehouse_code);
+    addIfString(item.warehouse_name);
   }
   return set;
 }

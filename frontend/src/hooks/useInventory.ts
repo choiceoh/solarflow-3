@@ -93,6 +93,8 @@ export function useInventory(opts: UseInventoryOptions = {}) {
     setLoading(false);
   }, [selectedCompanyId, opts.manufacturerId, opts.productId, companies, companiesLoaded, loadCompanies]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   return { data, loading, error, reload: load };

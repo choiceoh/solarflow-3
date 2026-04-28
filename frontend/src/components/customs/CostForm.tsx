@@ -60,6 +60,7 @@ export default function CostForm({ open, onOpenChange, onSubmit, declarationId, 
   const landedWpKrw = specWp > 0 && qty > 0 ? landedTotalKrw / (qty * specWp) : 0;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 편집 모드 폼 prefill (open/editData 동기화)
     if (open) setSubmitError('');
     if (editData) {
       setProductId(editData.product_id);

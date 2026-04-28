@@ -60,17 +60,20 @@ export default function SearchableSelect({
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 드롭다운 open 시 활성 인덱스 초기화 (open prop 동기화)
       setActiveIndex(0);
       setTimeout(() => searchRef.current?.focus(), 0);
     }
   }, [open]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 검색어 변경 시 활성 인덱스 초기화 (search 동기화)
     setActiveIndex(0);
   }, [search]);
 
   useEffect(() => {
     if (filtered.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 필터링 결과 비었을 때 인덱스 0으로 (filtered.length 동기화)
       setActiveIndex(0);
       return;
     }

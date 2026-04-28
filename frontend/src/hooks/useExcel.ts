@@ -22,30 +22,34 @@ export function useExcel(type: TemplateType) {
   // 마스터 데이터 로드
   useEffect(() => {
     let cancelled = false;
-    const fetches: Promise<any[]>[] = [
-      fetchWithAuth<any[]>('/api/v1/manufacturers'),
-      fetchWithAuth<any[]>('/api/v1/products'),
-      fetchWithAuth<any[]>('/api/v1/partners'),
-      fetchWithAuth<any[]>('/api/v1/warehouses'),
+    type ActiveRow = Record<string, unknown> & { is_active?: boolean };
+    type OutboundRow = MasterDataForExcel['outbounds'] extends (infer U)[] | undefined ? U : never;
+    const fetches: Promise<ActiveRow[]>[] = [
+      fetchWithAuth<ActiveRow[]>('/api/v1/manufacturers'),
+      fetchWithAuth<ActiveRow[]>('/api/v1/products'),
+      fetchWithAuth<ActiveRow[]>('/api/v1/partners'),
+      fetchWithAuth<ActiveRow[]>('/api/v1/warehouses'),
     ];
     // 매출 양식: outbound 목록도 필요 (지적 1 반영)
     if (type === 'sale') {
-      fetches.push(fetchWithAuth<any[]>('/api/v1/outbounds?status=active'));
+      fetches.push(fetchWithAuth<ActiveRow[]>('/api/v1/outbounds?status=active'));
     }
     Promise.all(fetches).then(([manufacturers, products, partners, warehouses, outbounds]) => {
       if (cancelled) return;
       setMasterData({
         companies,
-        manufacturers: manufacturers.filter((m: any) => m.is_active),
-        products: products.filter((p: any) => p.is_active),
-        partners: partners.filter((p: any) => p.is_active),
-        warehouses: warehouses.filter((w: any) => w.is_active),
-        outbounds: outbounds ?? [],
+        manufacturers: manufacturers.filter((m) => m.is_active) as MasterDataForExcel['manufacturers'],
+        products: products.filter((p) => p.is_active) as MasterDataForExcel['products'],
+        partners: partners.filter((p) => p.is_active) as MasterDataForExcel['partners'],
+        warehouses: warehouses.filter((w) => w.is_active) as MasterDataForExcel['warehouses'],
+        outbounds: (outbounds ?? []) as OutboundRow[],
       });
     }).catch(() => {
       if (!cancelled) setError('마스터 데이터 로딩 실패');
     });
     return () => { cancelled = true; };
+    // type은 의도적으로 의존성에서 제외 — 마스터 데이터는 type 변경 시 재로딩 불필요
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companies]);
 
   // 양식 다운로드
@@ -55,8 +59,8 @@ export function useExcel(type: TemplateType) {
     try {
       const { generateTemplate } = await import('@/lib/excelTemplates');
       await generateTemplate(type, masterData);
-    } catch (e: any) {
-      setError(e.message || '양식 다운로드 실패');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '양식 다운로드 실패');
     } finally {
       setLoading(false);
     }
@@ -94,8 +98,8 @@ export function useExcel(type: TemplateType) {
           rows: validated,
         });
       }
-    } catch (e: any) {
-      setError(e.message || '파일 파싱 실패');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '파일 파싱 실패');
     } finally {
       setLoading(false);
     }
@@ -145,8 +149,8 @@ export function useExcel(type: TemplateType) {
       setImportResult(result);
       setPreview(null);
       setDeclPreview(null);
-    } catch (e: any) {
-      setError(e.message || '등록 실패');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '등록 실패');
     } finally {
       setLoading(false);
     }

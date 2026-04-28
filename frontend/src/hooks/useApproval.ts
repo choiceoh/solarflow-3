@@ -42,7 +42,7 @@ export function useType1() {
       // BL에서 실제 환율 가져오기 시도
       let actualRate = exchangeRate;
       try {
-        const bls = await fetchWithAuth<any[]>(`/api/v1/bls?po_id=${lc.po_id}`);
+        const bls = await fetchWithAuth<Array<{ exchange_rate?: number }>>(`/api/v1/bls?po_id=${lc.po_id}`);
         if (bls.length > 0 && bls[0].exchange_rate) {
           actualRate = bls[0].exchange_rate;
         }
@@ -81,8 +81,8 @@ export function useType1() {
         paymentTerms: po.payment_terms,
         incoterms: po.incoterms,
       });
-    } catch (e: any) {
-      throw new Error(e.message || '데이터 조회 실패');
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message : '데이터 조회 실패');
     } finally {
       setLoading(false);
     }
@@ -99,7 +99,25 @@ export function useType2() {
   const generate = useCallback(async (blId: string) => {
     setLoading(true);
     try {
-      const bl = await fetchWithAuth<any>(`/api/v1/bls/${blId}`);
+      // BL 응답: 백엔드 평탄 + 중첩 양쪽 형태 모두 수용 (line_items 포함 확장 필드)
+      type BLLine = {
+        quantity: number;
+        spec_wp?: number;
+        product_name?: string;
+        product_code?: string;
+        products?: { spec_wp?: number; product_name?: string };
+      };
+      type BLDetail = {
+        bl_number?: string;
+        manufacturer_name?: string;
+        manufacturer_id?: string;
+        manufacturers?: { name_kr?: string };
+        etd?: string;
+        eta?: string;
+        port?: string;
+        line_items?: BLLine[];
+      };
+      const bl = await fetchWithAuth<BLDetail>(`/api/v1/bls/${blId}`);
       const expenses = await fetchWithAuth<Expense[]>(`/api/v1/expenses?bl_id=${blId}`);
       let manufacturerName = bl.manufacturer_name ?? bl.manufacturers?.name_kr ?? '';
       if (!manufacturerName && bl.manufacturer_id) {
@@ -128,7 +146,7 @@ export function useType2() {
       // 라인아이템 요약
       const lineItems = bl.line_items ?? [];
       const productSummary = lineItems
-        .map((l: any) => {
+        .map((l) => {
           const spec = l.products?.spec_wp ?? l.spec_wp;
           const name = l.products?.product_name ?? l.product_name ?? l.product_code ?? '';
           return `${moduleLabel(manufacturerName, spec)} · ${name} ${l.quantity}장`;
@@ -149,8 +167,8 @@ export function useType2() {
         totalVat,
         grandTotal,
       });
-    } catch (e: any) {
-      throw new Error(e.message || '데이터 조회 실패');
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message : '데이터 조회 실패');
     } finally {
       setLoading(false);
     }
@@ -214,8 +232,8 @@ export function useType3() {
         totalVat,
         grandTotal: totalSupply + totalVat,
       });
-    } catch (e: any) {
-      throw new Error(e.message || '데이터 조회 실패');
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message : '데이터 조회 실패');
     } finally {
       setLoading(false);
     }
@@ -261,8 +279,8 @@ export function useType4() {
         grandTotal: totalAmount + totalVat,
         manualDetails: '',
       });
-    } catch (e: any) {
-      throw new Error(e.message || '데이터 조회 실패');
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message : '데이터 조회 실패');
     } finally {
       setLoading(false);
     }
@@ -327,8 +345,8 @@ export function useType5() {
         paymentTerms: po.payment_terms,
         incoterms: po.incoterms,
       });
-    } catch (e: any) {
-      throw new Error(e.message || '데이터 조회 실패');
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message : '데이터 조회 실패');
     } finally {
       setLoading(false);
     }
@@ -368,8 +386,8 @@ export function useType6() {
         })),
         totalTransport: 0,
       });
-    } catch (e: any) {
-      throw new Error(e.message || '데이터 조회 실패');
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message : '데이터 조회 실패');
     } finally {
       setLoading(false);
     }

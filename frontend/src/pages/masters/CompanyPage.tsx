@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -11,7 +11,7 @@ import type { Company } from '@/types/masters';
 
 export default function CompanyPage() {
   const [data, setData] = useState<Company[]>([]);
-  const [filtered, setFiltered] = useState<Company[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Company | null>(null);
@@ -24,22 +24,37 @@ export default function CompanyPage() {
     try {
       const list = await fetchWithAuth<Company[]>('/api/v1/companies');
       setData(list);
-      setFiltered(list);
     } catch { /* empty */ }
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // 초기 로드 — 마운트 시 1회만 비동기 fetch (load는 갱신용으로 유지)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await fetchWithAuth<Company[]>('/api/v1/companies');
+        if (!cancelled) setData(list);
+      } catch { /* empty */ }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const handleSearch = useCallback((q: string) => {
-    if (!q) { setFiltered(data); return; }
-    const lower = q.toLowerCase();
-    setFiltered(data.filter((c) =>
+  // 검색어를 파생 값으로 계산
+  const filtered = useMemo(() => {
+    if (!searchQuery) return data;
+    const lower = searchQuery.toLowerCase();
+    return data.filter((c) =>
       c.company_name.toLowerCase().includes(lower) ||
       c.company_code.toLowerCase().includes(lower) ||
       (c.business_number ?? '').includes(lower)
-    ));
-  }, [data]);
+    );
+  }, [data, searchQuery]);
+
+  const handleSearch = useCallback((q: string) => {
+    setSearchQuery(q);
+  }, []);
 
   const handleCreate = async (formData: Record<string, unknown>) => {
     await fetchWithAuth('/api/v1/companies', { method: 'POST', body: JSON.stringify(formData) });

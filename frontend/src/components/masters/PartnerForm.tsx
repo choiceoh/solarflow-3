@@ -65,6 +65,7 @@ export default function PartnerForm({ open, onOpenChange, onSubmit, editData }: 
           </div>
           <div className="space-y-1.5">
             <Label>유형 *</Label>
+            {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
             <Select value={watch('partner_type') ?? ''} onValueChange={(v) => setValue('partner_type', v ?? '')}>
               <SelectTrigger><Txt text={PARTNER_TYPE_LABEL[watch('partner_type') ?? ''] ?? ''} /></SelectTrigger>
               <SelectContent>

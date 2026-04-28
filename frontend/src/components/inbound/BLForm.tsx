@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2 } from 'lucide-react';
@@ -179,24 +179,6 @@ function parseDomesticPT(text: string): DomesticPT {
   }
   return base;
 }
-function calcMonthEndDue(deliveryDate: string, offset: MonthOffset): string {
-  if (!deliveryDate || !/^\d{4}-\d{2}-\d{2}/.test(deliveryDate)) return '';
-  const d = new Date(deliveryDate);
-  if (isNaN(d.getTime())) return '';
-  // 납품월 + offset → 해당 월의 말일
-  const target = new Date(d.getFullYear(), d.getMonth() + parseInt(offset) + 1, 0);
-  return target.toISOString().slice(0, 10);
-}
-
-/* ── 만기일 계산 (납품일 + N일) ── */
-function calcDueDate(deliveryDate: string, days: number): string {
-  if (!deliveryDate || !/^\d{4}-\d{2}-\d{2}/.test(deliveryDate)) return '';
-  const d = new Date(deliveryDate);
-  if (isNaN(d.getTime())) return '';
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 /* ── 헬퍼 컴포넌트 ── */
 function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: string }) {
   return (
@@ -298,7 +280,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const [importPT, setImportPT] = useState<ImportPT>(defaultImportPT());
   const [domesticPT, setDomesticPT] = useState<DomesticPT>(defaultDomesticPT());
   const [bafCaf, setBafCaf] = useState(false);
-  const [deliveryDate, setDeliveryDate] = useState(''); // 만기일 계산용 (actual_arrival 미러)
+  // F16 결제조건 섹션 삭제 이후 deliveryDate 값은 미사용, setter는 actual_arrival 미러용 유지
+  const [, setDeliveryDate] = useState('');
   const [exchangeRateLive, setExchangeRateLive] = useState(''); // 환율 실시간 미러 (KRW 재계산용)
   const [exchangeRateDisplay, setExchangeRateDisplay] = useState(''); // 환율 표시용 (천단위 콤마 포함)
   // D-085/D-087: PO 연결 — 드롭다운 + 자동 채움 + 잔여량
@@ -318,11 +301,11 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const [cifAmountKrwDisplay, setCifAmountKrwDisplay] = useState<string>('');
   const [cifAmountKrwManual, setCifAmountKrwManual] = useState<boolean>(false);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, reset, setValue, getValues, watch, formState: { isSubmitting, isDirty } } = useForm<FormData>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema) as unknown as Resolver<FormData>,
   });
   // 수정 모드 — 변경사항 감지 (RHF isDirty + 보조 state 변경 감지)
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가
   const watchedValues = watch(); // watch all → 이 컴포넌트가 폼 변화에 리렌더
   const [initialSnapshot, setInitialSnapshot] = useState<string>('');
   const currentSnapshot = JSON.stringify({
@@ -378,7 +361,6 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     fetchWithAuth<typeof lcList>(`/api/v1/lcs?po_id=${selPOId}`)
       .then((list) => setLcList(list ?? []))
       .catch(() => setLcList([]));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selPOId]);
 
   /* LC 선택 시 해당 LC의 기존 BL 입고수량 합산 */
@@ -492,7 +474,6 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   useEffect(() => {
     if (!open || !presetLCId || !lcList.length) return;
     setSelLCId(presetLCId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, presetLCId, lcList.length]);
 
   /* ── 자동채번 ── */
@@ -911,8 +892,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const totalKRW = isImport
     ? (exRateNum ? Math.round(totalInvoiceBase * exRateNum) : 0)
     : totalInvoiceBase;
-  // 결제조건 % 계산의 기준: import=USD, domestic=KRW
-  const totalForPT = isImport ? totalUSD : totalKRW;
+  // 결제조건 섹션은 F16에서 삭제됨 — totalForPT는 더 이상 필요 없음
   const autoCifAmountKrw = isImport && exRateNum > 0 && totalUSD > 0
     ? Math.round(totalUSD * exRateNum)
     : 0;
@@ -1515,167 +1495,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
                 )}
               </div>
 
-              {/* 결제조건 섹션 삭제됨 (F16) — 아래 블록은 비활성화 */}
-              {false && isImport && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">결제조건</Label>
-                  <div className="rounded-md border p-3 text-sm space-y-2">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="text-muted-foreground">계약금</span>
-                      <label className="flex items-center gap-1">
-                        <input type="radio" checked={importPT.hasDeposit} onChange={() => setImportPT(p => ({ ...p, hasDeposit: true }))} />있음
-                      </label>
-                      <label className="flex items-center gap-1">
-                        <input type="radio" checked={!importPT.hasDeposit} onChange={() => setImportPT(p => ({ ...p, hasDeposit: false }))} />없음
-                      </label>
-                      {importPT.hasDeposit && (
-                        <>
-                          <select className="h-8 rounded border px-2 text-sm" value={importPT.depositMethod}
-                            onChange={e => setImportPT(p => ({ ...p, depositMethod: e.target.value as 'tt' | 'lc' }))}>
-                            <option value="tt">T/T</option><option value="lc">L/C</option>
-                          </select>
-                          <div className="flex items-center gap-1">
-                            <Input className="w-16 h-8 text-sm" inputMode="decimal" value={importPT.depositPercent}
-                              placeholder="%"
-                              onChange={e => setImportPT(p => ({ ...p, depositPercent: e.target.value.replace(/[^0-9.]/g, '') }))} />
-                            <span>%</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            = ${(totalForPT * (parseFloat(importPT.depositPercent || '0') / 100)).toLocaleString('en-US', { maximumFractionDigits: 2 })}
-                          </span>
-                          <Button type="button" variant="outline" size="sm" className="h-7 text-[10px]"
-                            disabled={importPT.depositSplits.length >= 5}
-                            onClick={() => setImportPT(p => p.depositSplits.length >= 5 ? p : ({ ...p, depositSplits: [...p.depositSplits, ''] }))}>
-                            분할 추가 ({importPT.depositSplits.length}/5)
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                    {importPT.hasDeposit && importPT.depositSplits.length > 0 && (
-                      <div className="pl-4 space-y-1">
-                        {importPT.depositSplits.map((amt, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground w-16">분할 {i + 1}</span>
-                            <span className="text-xs text-muted-foreground">$</span>
-                            <Input className="w-40 h-8 text-sm" inputMode="decimal" value={amt} placeholder="금액"
-                              onChange={e => {
-                                const v = e.target.value.replace(/[^0-9.]/g, '');
-                                setImportPT(p => ({ ...p, depositSplits: p.depositSplits.map((x, j) => j === i ? v : x) }));
-                              }} />
-                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
-                              onClick={() => setImportPT(p => ({ ...p, depositSplits: p.depositSplits.filter((_, j) => j !== i) }))}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex flex-wrap items-center gap-3 pt-1 border-t">
-                      <span className="text-muted-foreground">잔금 L/C</span>
-                      <select className="h-8 rounded border px-2 text-sm" value={importPT.balanceDays}
-                        onChange={e => setImportPT(p => ({ ...p, balanceDays: e.target.value as ImportBalanceDay }))}>
-                        {IMPORT_BALANCE_DAYS.map(d => <option key={d} value={d}>{d}일</option>)}
-                      </select>
-                      <span className="text-xs text-muted-foreground">
-                        잔금 = ${Math.max(0, totalForPT - (importPT.hasDeposit ? totalForPT * (parseFloat(importPT.depositPercent || '0') / 100) : 0)).toLocaleString('en-US', { maximumFractionDigits: 2 })}
-                      </span>
-                      <span className="ml-auto text-xs text-muted-foreground">{composeImportPT(importPT, totalForPT)}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 결제조건 섹션 삭제됨 (F16) */}
-              {false && isDomestic && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">결제조건</Label>
-                  <div className="rounded-md border p-3 text-sm space-y-2">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="text-muted-foreground">선입금(현금)</span>
-                      <select className="h-8 rounded border px-2 text-sm" value={domesticPT.prepayMode}
-                        onChange={e => setDomesticPT(p => ({ ...p, prepayMode: e.target.value as 'percent' | 'amount', prepayValue: '' }))}>
-                        <option value="amount">금액</option>
-                        <option value="percent">%</option>
-                      </select>
-                      <div className="flex items-center gap-1">
-                        <Input className="w-32 h-8 text-sm" inputMode={domesticPT.prepayMode === 'percent' ? 'decimal' : 'numeric'}
-                          value={domesticPT.prepayMode === 'amount' && domesticPT.prepayValue
-                            ? parseInt(domesticPT.prepayValue).toLocaleString('ko-KR')
-                            : domesticPT.prepayValue}
-                          placeholder={domesticPT.prepayMode === 'percent' ? '%' : '0 (전액신용시 비움)'}
-                          onChange={e => {
-                            const v = e.target.value.replace(domesticPT.prepayMode === 'percent' ? /[^0-9.]/g : /[^0-9]/g, '');
-                            setDomesticPT(p => ({ ...p, prepayValue: v }));
-                          }} />
-                        <span>{domesticPT.prepayMode === 'percent' ? '%' : '원'}</span>
-                      </div>
-                      {domesticPT.prepayMode === 'percent' && domesticPT.prepayValue && (
-                        <span className="text-xs text-muted-foreground">
-                          = ₩{Math.round(totalForPT * (parseFloat(domesticPT.prepayValue) / 100)).toLocaleString('ko-KR')}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 pt-1 border-t">
-                      <span className="text-muted-foreground">잔금</span>
-                      <span className="text-xs">
-                        ₩{Math.max(0, totalForPT - (domesticPT.prepayMode === 'percent'
-                          ? totalForPT * (parseFloat(domesticPT.prepayValue || '0') / 100)
-                          : parseInt(domesticPT.prepayValue || '0'))).toLocaleString('ko-KR')}
-                      </span>
-                      <div className="flex flex-wrap gap-3 basis-full">
-                        <label className="flex items-center gap-1 text-xs">
-                          <input type="radio" checked={domesticPT.balanceMode === 'days5'}
-                            onChange={() => setDomesticPT(p => ({ ...p, balanceMode: 'days5' }))} />
-                          신용거래 (5일 단위)
-                        </label>
-                        <label className="flex items-center gap-1 text-xs">
-                          <input type="radio" checked={domesticPT.balanceMode === 'manual'}
-                            onChange={() => setDomesticPT(p => ({ ...p, balanceMode: 'manual' }))} />
-                          신용거래 (수기 입력)
-                        </label>
-                        <label className="flex items-center gap-1 text-xs">
-                          <input type="radio" checked={domesticPT.balanceMode === 'month'}
-                            onChange={() => setDomesticPT(p => ({ ...p, balanceMode: 'month' }))} />
-                          출고일 기준 월말
-                        </label>
-                      </div>
-                      {domesticPT.balanceMode === 'days5' && (
-                        <select className="h-8 rounded border px-2 text-sm" value={domesticPT.balanceDays}
-                          onChange={e => setDomesticPT(p => ({ ...p, balanceDays: e.target.value }))}>
-                          {DOMESTIC_DAYS5.map(d => <option key={d} value={d}>{d}일</option>)}
-                        </select>
-                      )}
-                      {domesticPT.balanceMode === 'manual' && (
-                        <div className="flex items-center gap-1">
-                          <Input className="w-20 h-8 text-sm" inputMode="numeric" value={domesticPT.balanceDays} placeholder="일수"
-                            onChange={e => setDomesticPT(p => ({ ...p, balanceDays: e.target.value.replace(/[^0-9]/g, '') }))} />
-                          <span>일</span>
-                        </div>
-                      )}
-                      {domesticPT.balanceMode === 'month' && (
-                        <select className="h-8 rounded border px-2 text-sm" value={domesticPT.monthOffset}
-                          onChange={e => setDomesticPT(p => ({ ...p, monthOffset: e.target.value as MonthOffset }))}>
-                          <option value="1">익월말</option>
-                          <option value="2">익익월말</option>
-                          <option value="3">익익익월말</option>
-                        </select>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{composeDomesticPT(domesticPT, totalForPT)}</p>
-                    {deliveryDate && (
-                      <p className="text-xs text-muted-foreground">
-                        만기일: <span className="font-medium text-foreground">
-                          {domesticPT.balanceMode === 'month'
-                            ? calcMonthEndDue(deliveryDate, domesticPT.monthOffset)
-                            : calcDueDate(deliveryDate, parseInt(domesticPT.balanceDays || '0'))}
-                        </span>
-                        <span className="ml-1">(납품일 {deliveryDate} 기준)</span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-              {/* 그룹내구매 — 결제조건 숨김 */}
+              {/* 결제조건 섹션 삭제됨 (F16) — import/domestic/group 모두 숨김 */}
             </>
           )}
 

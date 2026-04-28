@@ -27,6 +27,8 @@ export function useOutboundList(filters: { status?: string; usage_category?: str
     setLoading(false);
   }, [selectedCompanyId, filters.status, filters.usage_category, filters.manufacturer_id]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   return { data, loading, error, reload: load };
@@ -46,6 +48,8 @@ export function useOutboundDetail(outboundId: string | null) {
     setLoading(false);
   }, [outboundId]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   return { data, loading, reload: load };
@@ -74,6 +78,8 @@ export function useSaleList(filters: { customer_id?: string; month?: string; inv
     setLoading(false);
   }, [selectedCompanyId, filters.customer_id, filters.month, filters.invoice_status]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   return { data, loading, error, reload: load };

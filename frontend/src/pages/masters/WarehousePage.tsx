@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -13,7 +13,7 @@ const typeLabel: Record<string, string> = { port: '항구', factory: '공장', v
 
 export default function WarehousePage() {
   const [data, setData] = useState<Warehouse[]>([]);
-  const [filtered, setFiltered] = useState<Warehouse[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Warehouse | null>(null);
@@ -23,21 +23,37 @@ export default function WarehousePage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { const list = await fetchWithAuth<Warehouse[]>('/api/v1/warehouses'); setData(list); setFiltered(list); } catch { /* empty */ }
+    try { const list = await fetchWithAuth<Warehouse[]>('/api/v1/warehouses'); setData(list); } catch { /* empty */ }
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // 초기 로드 — 마운트 시 1회만 비동기 fetch (load는 갱신용으로 유지)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await fetchWithAuth<Warehouse[]>('/api/v1/warehouses');
+        if (!cancelled) setData(list);
+      } catch { /* empty */ }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const handleSearch = useCallback((q: string) => {
-    if (!q) { setFiltered(data); return; }
-    const lower = q.toLowerCase();
-    setFiltered(data.filter((w) =>
+  // 검색어를 파생 값으로 계산
+  const filtered = useMemo(() => {
+    if (!searchQuery) return data;
+    const lower = searchQuery.toLowerCase();
+    return data.filter((w) =>
       w.warehouse_code.toLowerCase().includes(lower) ||
       w.warehouse_name.toLowerCase().includes(lower) ||
       w.location_name.toLowerCase().includes(lower)
-    ));
-  }, [data]);
+    );
+  }, [data, searchQuery]);
+
+  const handleSearch = useCallback((q: string) => {
+    setSearchQuery(q);
+  }, []);
 
   const handleSubmit = async (formData: Record<string, unknown>) => {
     if (editTarget) {

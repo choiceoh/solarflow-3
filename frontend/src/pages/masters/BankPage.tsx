@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -13,7 +13,7 @@ import type { Bank } from '@/types/masters';
 
 export default function BankPage() {
   const [data, setData] = useState<Bank[]>([]);
-  const [filtered, setFiltered] = useState<Bank[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Bank | null>(null);
@@ -37,31 +37,38 @@ export default function BankPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-
-  // 법인 필터 + 텍스트 검색 적용
+  // 초기 로드 — 마운트 시 1회만 비동기 fetch (load는 갱신용으로 유지)
   useEffect(() => {
-    let result = data;
-    if (localFilter !== 'all') {
-      result = result.filter((b) => b.company_id === localFilter);
-    }
-    setFiltered(result);
-  }, [data, localFilter]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await fetchWithAuth<Bank[]>('/api/v1/banks');
+        if (!cancelled) setData(list);
+      } catch { /* empty */ }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const handleSearch = useCallback((q: string) => {
+  // 법인 필터 + 텍스트 검색은 파생 값으로 계산
+  const filtered = useMemo(() => {
     let result = data;
     if (localFilter !== 'all') {
       result = result.filter((b) => b.company_id === localFilter);
     }
-    if (q) {
-      const lower = q.toLowerCase();
+    if (searchQuery) {
+      const lower = searchQuery.toLowerCase();
       result = result.filter((b) =>
         b.bank_name.toLowerCase().includes(lower) ||
         (b.companies?.company_name ?? b.company_name ?? '').toLowerCase().includes(lower)
       );
     }
-    setFiltered(result);
-  }, [data, localFilter]);
+    return result;
+  }, [data, localFilter, searchQuery]);
+
+  const handleSearch = useCallback((q: string) => {
+    setSearchQuery(q);
+  }, []);
 
   const handleSubmit = async (formData: Record<string, unknown>) => {
     if (editTarget) {

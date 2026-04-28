@@ -70,6 +70,7 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
 
   useEffect(() => {
     loadSales().catch(() => setSales([]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- loadSales는 매 렌더 재생성되는 내부 헬퍼
   }, [orderId]);
 
   if (loading) return <LoadingSpinner />;

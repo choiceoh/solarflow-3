@@ -17,7 +17,7 @@ import AttachmentWidget from '@/components/common/AttachmentWidget';
 import GroupedMiniTable, { type GroupedMiniTableColumn } from '@/components/common/GroupedMiniTable';
 import ProgressMiniBar from '@/components/common/ProgressMiniBar';
 import StatusPill from '@/components/common/StatusPill';
-import { parseDeposit } from './DepositStatusPanel';
+import { parseDeposit } from './depositStatus';
 import { fetchWithAuth } from '@/lib/api';
 import { usePOLines, useLCList, useTTList } from '@/hooks/useProcurement';
 import type { BLShipment, BLLineItem } from '@/types/inbound';

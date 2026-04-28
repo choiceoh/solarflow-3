@@ -50,6 +50,7 @@ export default function DepositPaymentForm({ open, po, depositInfo, paidUsd, nex
   useEffect(() => {
     if (open) {
       const today = new Date().toISOString().slice(0, 10);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 다이얼로그 open 시 폼 prefill (open prop 동기화)
       setRemitDate(today);
       setAmountUsd(remainingUsd > 0 ? remainingUsd.toFixed(2) : '');
       setAmountUsdDisplay(remainingUsd > 0 ? remainingUsd.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
@@ -70,6 +71,7 @@ export default function DepositPaymentForm({ open, po, depositInfo, paidUsd, nex
     const rate = parseFloat(exchangeRate);
     if (usd > 0 && rate > 0) {
       const krw = Math.round(usd * rate);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- amountUsd/exchangeRate에서 파생된 KRW 동기화
       setAmountKrw(String(krw));
       setAmountKrwDisplay(krw.toLocaleString('ko-KR'));
     }

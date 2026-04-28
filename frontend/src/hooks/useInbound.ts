@@ -46,6 +46,8 @@ export function useBLList(filters: { inbound_type?: string; status?: string; man
     setLoading(false);
   }, [selectedCompanyId, filters.inbound_type, filters.status, filters.manufacturer_id]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   return { data, loading, error, reload: load };
@@ -65,6 +67,8 @@ export function useBLDetail(blId: string | null) {
     setLoading(false);
   }, [blId]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   return { data, loading, reload: load };
@@ -84,6 +88,8 @@ export function useBLLines(blId: string | null) {
     setLoading(false);
   }, [blId]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   return { data, loading, reload: load };

@@ -32,7 +32,8 @@ export default function OutboundPage() {
   const [mfgFilter, setMfgFilter] = useState('');
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null);
   const _loc = useLocation();
-  // R1-1: 사이드바 "출고/판매" 클릭 시 목록 복귀
+  // R1-1: 사이드바 "출고/판매" 클릭 시 목록 복귀 — URL → 상태 동기화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setSelectedOutbound(null); }, [_loc.key]);
   const [formOpen, setFormOpen] = useState(false);
 

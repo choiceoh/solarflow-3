@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -8,9 +9,9 @@ interface Props {
   rows: BankLimitRow[];
 }
 
-function ExpiryCell({ date }: { date?: string }) {
+function ExpiryCell({ date, now }: { date?: string; now: number }) {
   if (!date) return <span className="text-muted-foreground">—</span>;
-  const daysLeft = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
+  const daysLeft = Math.ceil((new Date(date).getTime() - now) / 86400000);
   if (daysLeft < 0) return <span className="text-red-600 font-semibold">{formatDate(date)} <span className="text-[10px] bg-red-100 text-red-700 rounded px-1">만료</span></span>;
   if (daysLeft <= 30) return <span className="text-orange-500 font-semibold">{formatDate(date)} <span className="text-[10px] bg-orange-100 text-orange-700 rounded px-1">D-{daysLeft}</span></span>;
   if (daysLeft <= 90) return <span className="text-yellow-600">{formatDate(date)} <span className="text-[10px] bg-yellow-100 text-yellow-700 rounded px-1">D-{daysLeft}</span></span>;
@@ -18,6 +19,9 @@ function ExpiryCell({ date }: { date?: string }) {
 }
 
 export default function BankLimitTable({ rows }: Props) {
+  // 렌더 중 Date.now() 호출은 react-hooks/purity 위반 → useState lazy init으로 1회만 캡처
+  const [now] = useState(() => Date.now());
+
   if (rows.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-6">은행 한도 정보가 없습니다</p>;
   }
@@ -51,7 +55,7 @@ export default function BankLimitTable({ rows }: Props) {
               <TableRow key={r.bank_name}>
                 <TableCell className="font-medium">{r.bank_name}</TableCell>
                 <TableCell>{formatDate(r.limit_approve_date ?? '')}</TableCell>
-                <TableCell><ExpiryCell date={r.limit_expiry_date} /></TableCell>
+                <TableCell><ExpiryCell date={r.limit_expiry_date} now={now} /></TableCell>
                 <TableCell className="text-right font-mono">{formatUSD(r.lc_limit_usd)}</TableCell>
                 <TableCell className="text-right font-mono">{formatUSD(r.used)}</TableCell>
                 <TableCell className="text-right font-mono font-semibold">{formatUSD(r.available)}</TableCell>

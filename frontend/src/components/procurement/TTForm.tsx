@@ -126,6 +126,7 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData, default
         <form onSubmit={handleSubmit(handle)} className="space-y-3">
           <div className="space-y-1.5">
             <Label>PO *</Label>
+            {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
             <Select value={watch('po_id') ?? ''} onValueChange={(v) => setValue('po_id', v ?? '')}><SelectTrigger className="w-full"><Txt text={(() => { const p = pos.find((x) => x.po_id === watch('po_id')); if (!p) return ''; const mw = (p.total_mw ?? 0).toFixed(1); const co = p.company_name ? `${p.company_name} | ` : ''; return `${co}${shortMfgName(p.manufacturer_name)} | ${p.po_number || p.po_id.slice(0, 8)} | ${mw}MW`; })()} /></SelectTrigger>
               <SelectContent>{pos.map((p) => { const mw = (p.total_mw ?? 0).toFixed(1); const co = p.company_name ? `${p.company_name} | ` : ''; return <SelectItem key={p.po_id} value={p.po_id}>{`${co}${shortMfgName(p.manufacturer_name)} | ${p.po_number || p.po_id.slice(0, 8)} | ${mw}MW`}</SelectItem>; })}</SelectContent>
             </Select>{errors.po_id && <p className="text-xs text-destructive">{errors.po_id.message}</p>}

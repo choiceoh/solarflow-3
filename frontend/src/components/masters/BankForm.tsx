@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -38,9 +38,8 @@ interface Props {
 
 export default function BankForm({ open, onOpenChange, onSubmit, editData }: Props) {
   const companies = useAppStore((s) => s.companies);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema) as unknown as Resolver<FormData>,
   });
 
   useEffect(() => {
@@ -87,6 +86,7 @@ export default function BankForm({ open, onOpenChange, onSubmit, editData }: Pro
           <div className="space-y-1.5">
             <Label>법인 *</Label>
             <Select value={watch('company_id') ?? ''} onValueChange={(v) => setValue('company_id', v ?? '')}>
+              {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
               <SelectTrigger><Txt text={companies.find(c => c.company_id === watch('company_id'))?.company_name ?? ''} /></SelectTrigger>
               <SelectContent>
                 {companies.map((c) => (

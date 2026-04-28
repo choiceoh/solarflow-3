@@ -273,12 +273,10 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
               }
             })
             .catch((err) => {
-              // eslint-disable-next-line no-console
               console.error('[POForm] /lines fetch error', err);
             });
         })
         .catch((err) => {
-          // eslint-disable-next-line no-console
           console.error('[POForm] detail fetch error', err);
           // 상세 실패 시에도 /lines는 시도
           fetchWithAuth<POLineFetched[]>(`/api/v1/pos/${editData.po_id}/lines`)
@@ -532,8 +530,8 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
           : l));
       }
       setQpOpen(false);
-    } catch (e: any) {
-      setQpError(e?.message ?? '등록 실패');
+    } catch (e: unknown) {
+      setQpError(e instanceof Error ? e.message : '등록 실패');
     } finally {
       setQpSubmitting(false);
     }

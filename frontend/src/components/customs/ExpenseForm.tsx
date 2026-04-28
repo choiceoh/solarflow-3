@@ -44,6 +44,7 @@ export default function ExpenseForm({ open, onOpenChange, onSubmit, editData }: 
   }, [selectedCompanyId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 편집 모드 폼 prefill (open/editData 동기화)
     if (open) setSubmitError('');
     if (editData) {
       setBlId(editData.bl_id || '');

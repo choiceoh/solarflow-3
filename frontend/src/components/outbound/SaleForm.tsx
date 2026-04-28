@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -43,13 +43,13 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, order
   const [partners, setPartners] = useState<Partner[]>([]);
   const [submitError, setSubmitError] = useState('');
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema) as unknown as Resolver<FormData>,
   });
 
   const source = outbound ?? order;
   const sourceKind = outbound ? 'outbound' : 'order';
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가
   const unitPriceWp = watch('unit_price_wp') || 0;
   const formQuantity = watch('quantity') || 0;
   const specWp = source?.spec_wp ?? 0;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Lock, Plus, Trash2 } from 'lucide-react';
@@ -122,11 +122,11 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData, o
   const [qtyDisplay, setQtyDisplay] = useState('');
   const [spareQtyDisplay, setSpareQtyDisplay] = useState('');
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema) as unknown as Resolver<FormData>,
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가
   const selectedProductId = watch('product_id');
   const selectedProduct = products.find((p) => p.product_id === selectedProductId);
   const quantity = watch('quantity') || 0;

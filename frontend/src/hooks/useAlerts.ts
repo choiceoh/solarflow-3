@@ -169,6 +169,8 @@ export function useAlerts(companyId: string | null) {
   }, [companyId]);
 
   // 초기 로드 + 법인 변경 시 재조회
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   // 5분 자동 갱신

@@ -33,6 +33,7 @@ export default function BLOutboundTrackingTab({ blId, companyId, lines }: Props)
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- companyId/blId 변경 시 외부 API에서 데이터 fetch (loading 상태 동기화)
     setLoading(true);
     setError('');
     fetchWithAuth<Outbound[]>(`/api/v1/outbounds?company_id=${companyId}`)

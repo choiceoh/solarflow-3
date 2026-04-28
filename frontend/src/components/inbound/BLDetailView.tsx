@@ -47,7 +47,7 @@ type BLDocumentFileType = typeof BL_DOCUMENT_ATTACHMENTS[number]['fileType'];
 
 function classifyBLDocument(name: string): BLDocumentFileType | null {
   const lower = name.toLowerCase();
-  const compact = lower.replace(/[\s._()\-]+/g, '');
+  const compact = lower.replace(/[\s._()-]+/g, '');
   if (lower.includes('면장') || lower.includes('수입신고') || lower.includes('declaration') || lower.includes('customs')) {
     return 'customs_declaration_pdf';
   }

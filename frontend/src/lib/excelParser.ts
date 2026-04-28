@@ -10,28 +10,46 @@ import {
   FIELDS_MAP, DECLARATION_FIELDS, DECLARATION_COST_FIELDS,
 } from '@/types/excel';
 
+// ExcelJS 셀 값 형태 (RichText/Formula 등)
+type RichTextRun = { text: string };
+type RichTextValue = { richText: RichTextRun[] };
+type FormulaValue = { result: unknown };
+
+function isRichText(v: object): v is RichTextValue {
+  return 'richText' in v && Array.isArray((v as RichTextValue).richText);
+}
+
+function isFormulaValue(v: object): v is FormulaValue {
+  return 'result' in v;
+}
+
 // 셀 값을 문자열로 변환
 function cellToString(cell: unknown): string {
   if (cell === null || cell === undefined) return '';
   if (typeof cell === 'object' && cell !== null) {
     // ExcelJS RichText 처리
-    if ('richText' in (cell as any)) {
-      return ((cell as any).richText as any[]).map((r: any) => r.text).join('');
+    if (isRichText(cell)) {
+      return cell.richText.map((r) => r.text).join('');
     }
     // ExcelJS Date
     if (cell instanceof Date) {
       return cell.toISOString().slice(0, 10);
     }
     // ExcelJS formula result
-    if ('result' in (cell as any)) {
-      return String((cell as any).result ?? '');
+    if (isFormulaValue(cell)) {
+      return String(cell.result ?? '');
     }
   }
   return String(cell);
 }
 
+// ExcelJS 워크시트의 최소 인터페이스 (rowCount + getRow.getCell.value)
+interface SheetCell { value: unknown }
+interface SheetRow { getCell(col: number): SheetCell }
+interface SheetLike { rowCount: number; getRow(r: number): SheetRow }
+
 // 시트를 ParsedRow[] 로 변환
-function parseSheet(sheet: any, fields: FieldDef[]): ParsedRow[] {
+function parseSheet(sheet: SheetLike, fields: FieldDef[]): ParsedRow[] {
   const rows: ParsedRow[] = [];
   const rowCount = sheet.rowCount;
 

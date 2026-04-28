@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Eye, FileText, Plus, Trash2, Upload, X } from 'lucide-react';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { fetchWithAuth } from '@/lib/api';
 import { cn, formatDate } from '@/lib/utils';
 import type { DocumentFile } from '@/types/documentFile';
@@ -84,7 +85,7 @@ export default function AttachmentWidget({
     }));
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -103,11 +104,14 @@ export default function AttachmentWidget({
     } finally {
       setLoading(false);
     }
-  };
+  // primeAccessLinks는 컴포넌트 내부에서 매 렌더 재생성되지만 부수효과(링크 캐싱)만 수행하므로
+  // 의존성 배열에 넣으면 무한 루프가 발생합니다. 의도적으로 제외합니다.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityType, entityId, fileType]);
 
   useEffect(() => {
     load();
-  }, [entityType, entityId, fileType, reloadKey]);
+  }, [load, reloadKey]);
 
   const upload = async (file: File | undefined) => {
     if (!file) return;

@@ -54,8 +54,8 @@ export function useSearch() {
       );
       setResult(res);
       addHistory(query);
-    } catch (e: any) {
-      setError(e.message || '검색 실패');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '검색 실패');
       setResult(null);
     } finally {
       setLoading(false);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -242,11 +242,13 @@ function ProductInventoryCombobox({
 
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 드롭다운 open 시 활성 인덱스 초기화 (open prop 동기화)
     setActiveIndex(0);
     setTimeout(() => searchRef.current?.focus(), 0);
   }, [open]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 필터링 결과에 따라 활성 인덱스 클램프 (filtered.length 동기화)
     if (activeIndex >= filtered.length) setActiveIndex(Math.max(0, filtered.length - 1));
   }, [activeIndex, filtered.length]);
 
@@ -400,9 +402,8 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
   const [paymentDueMode, setPaymentDueMode] = useState<PaymentDueMode>('days');
   const [creditDaysDisplay, setCreditDaysDisplay] = useState('');
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, getValues, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema) as unknown as Resolver<FormData>,
   });
 
   const selectedProductId = watch('product_id');
@@ -481,16 +482,19 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
         option.stockKw > 0 ||
         option.incomingKw > 0
       ))
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- productOptionText/productModuleText는 매 렌더 재생성되는 내부 헬퍼이므로 deps 추가 시 무한 루프
   ), [products, inventoryByProductId, isPrefill, editData, selectedProductId, manufacturers]);
   const selectedInventoryOption = productInventoryOptions.find((option) => option.product.product_id === selectedProductId);
-  const inventoryInfo: AvailabilityInfo | null = selectedInventoryOption
-    ? {
-      stockKw: selectedInventoryOption.stockKw,
-      incomingKw: selectedInventoryOption.incomingKw,
-      stockEa: selectedInventoryOption.stockEa,
-      incomingEa: selectedInventoryOption.incomingEa,
-    }
-    : null;
+  const inventoryInfo: AvailabilityInfo | null = useMemo(() => (
+    selectedInventoryOption
+      ? {
+        stockKw: selectedInventoryOption.stockKw,
+        incomingKw: selectedInventoryOption.incomingKw,
+        stockEa: selectedInventoryOption.stockEa,
+        incomingEa: selectedInventoryOption.incomingEa,
+      }
+      : null
+  ), [selectedInventoryOption]);
   const currentSourceKw = fulfillmentSource === 'incoming'
     ? inventoryInfo?.incomingKw ?? 0
     : inventoryInfo?.stockKw ?? 0;
@@ -699,6 +703,7 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
         setCreditDaysDisplay('');
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- prefillData는 prefillResetKey로 동기화 (변경 시점만 trigger)
   }, [open, editData, prefillResetKey, prefillCompanyId, reset, selectedCompanyValue]);
 
   // prefill: 거래처 이름 → partner_id 자동 매칭 (partners 로드 완료 후)

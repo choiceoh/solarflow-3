@@ -47,16 +47,21 @@ export default function ReceiptMatchingPanel() {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // 수금 선택 시 미수금 + 이력 자동 로드
+  // 수금 선택 변경 시 데이터 로드 (state 초기화는 onValueChange 핸들러에서 직접 처리)
+  const customerId = selectedReceipt?.customer_id;
   useEffect(() => {
-    if (selectedReceipt) {
-      loadOutstanding(selectedReceipt.customer_id);
+    if (selectedReceiptId && customerId) {
+      loadOutstanding(customerId);
       loadHistory();
-      setSelectedIds(new Set());
-      clearSuggestion();
-      setSuccessMsg(null);
     }
-  }, [selectedReceiptId, selectedReceipt?.customer_id]);
+  }, [selectedReceiptId, customerId, loadOutstanding, loadHistory]);
+
+  const handleReceiptChange = (v: string | null) => {
+    setSelectedReceiptId(v || null);
+    setSelectedIds(new Set());
+    clearSuggestion();
+    setSuccessMsg(null);
+  };
 
   // 선택 합계 계산
   const selectedTotal = useMemo(() => {
@@ -83,10 +88,12 @@ export default function ReceiptMatchingPanel() {
     await suggest(selectedReceipt.customer_id, receiptAmount);
   };
 
-  // 추천 결과 반영: 자동으로 체크
+  // 추천 결과 반영: suggestion 상태 변화에 따라 selectedIds 자동 동기화
+  // (훅 시그니처를 바꾸지 않는 한 effect 동기화가 가장 안전)
   useEffect(() => {
     if (suggestion?.suggestions) {
       const ids = new Set(suggestion.suggestions.map((s) => s.outbound_id));
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIds(ids);
     }
   }, [suggestion]);
@@ -132,7 +139,7 @@ export default function ReceiptMatchingPanel() {
         <CardContent className="pb-4">
           <Select
             value={selectedReceiptId ?? ''}
-            onValueChange={(v) => setSelectedReceiptId(v || null)}
+            onValueChange={handleReceiptChange}
           >
             <SelectTrigger className="text-xs">
               <SelectValue placeholder="미매칭/부분매칭 수금을 선택하세요" />

@@ -79,6 +79,7 @@ export default function POLineForm({ open, onOpenChange, onSubmit, editData, poI
           <div className="space-y-1.5">
             <Label>품번 *</Label>
             <Select value={watch('product_id') ?? ''} onValueChange={(v) => setValue('product_id', v ?? '')}>
+              {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
               <SelectTrigger className="w-full"><Txt text={(() => { const p = products.find((p) => p.product_id === watch('product_id')); return p ? `${p.product_code} — ${p.product_name}` : ''; })()} /></SelectTrigger>
               <SelectContent>{products.map((p) => <SelectItem key={p.product_id} value={p.product_id}>{p.product_code} — {p.product_name}</SelectItem>)}</SelectContent>
             </Select>

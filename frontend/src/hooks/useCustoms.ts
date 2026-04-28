@@ -21,6 +21,8 @@ export function useDeclarationList(filters: { bl_id?: string; month?: string } =
     setLoading(false);
   }, [selectedCompanyId, filters.bl_id]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
   return { data, loading, reload: load };
 }
@@ -39,6 +41,8 @@ export function useDeclarationDetail(id: string | null) {
     setLoading(false);
   }, [id]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
   return { data, loading, reload: load };
 }
@@ -57,6 +61,8 @@ export function useCostDetailList(declarationId: string | null) {
     setLoading(false);
   }, [declarationId]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
   return { data, loading, reload: load };
 }
@@ -80,6 +86,8 @@ export function useExpenseList(filters: { bl_id?: string; month?: string; expens
     setLoading(false);
   }, [selectedCompanyId, filters.bl_id, filters.month, filters.expense_type]);
 
+  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
   return { data, loading, reload: load };
 }

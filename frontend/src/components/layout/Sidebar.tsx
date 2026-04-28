@@ -78,6 +78,100 @@ function canSee(item: MenuItem, role: string | null): boolean {
   return !!role && item.roles.includes(role);
 }
 
+interface NavLinkProps extends MenuItem {
+  collapsed: boolean;
+  pathname: string;
+  search: string;
+  masterOpen: boolean;
+  onMasterToggle: () => void;
+}
+
+function NavLink({
+  icon: Icon, label, path, children: subs,
+  collapsed, pathname, search, masterOpen, onMasterToggle,
+}: NavLinkProps) {
+  const isActive = (() => {
+    if (!path) return pathname.startsWith('/masters');
+    const [basePath, queryStr] = path.split('?');
+    if (queryStr) {
+      // 쿼리 파라미터 포함 경로 (예: /orders?tab=receipts)
+      return pathname === basePath && search === `?${queryStr}`;
+    }
+    // /orders (수주 관리): receipts/matching 탭일 때는 비활성
+    if (path === '/orders') {
+      return pathname === '/orders' && !search.includes('tab=receipts') && !search.includes('tab=matching');
+    }
+    return pathname === path;
+  })();
+  const isSub = !!subs;
+
+  if (collapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <Link
+            to={path ?? '/masters/companies'}
+            className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-md mx-auto transition-colors',
+              isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+            )}
+          >
+            <Icon className="h-4 w-4" />
+          </Link>
+        </TooltipTrigger>
+        <TooltipContent side="right">{label}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  if (isSub) {
+    return (
+      <div>
+        <button
+          onClick={onMasterToggle}
+          className={cn(
+            'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
+            isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+          )}
+        >
+          <Icon className="h-4 w-4 shrink-0" />
+          <span className="flex-1 text-left">{label}</span>
+          {masterOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </button>
+        {masterOpen && (
+          <div className="ml-6 mt-0.5 space-y-0.5">
+            {subs!.map((sub) => (
+              <Link
+                key={sub.path}
+                to={sub.path}
+                className={cn(
+                  'block rounded-md px-3 py-1.5 text-sm transition-colors',
+                  pathname === sub.path ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50'
+                )}
+              >
+                {sub.label}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={path!}
+      className={cn(
+        'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
+        isActive ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50'
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span>{label}</span>
+    </Link>
+  );
+}
+
 export default function Sidebar() {
   const { pathname, search } = useLocation();
   const { user, logout, role } = useAuth();
@@ -96,87 +190,12 @@ export default function Sidebar() {
     ? (selectedCompany.company_code || selectedCompany.company_name.slice(0, 2))
     : '전';
 
-  const NavLink = ({ icon: Icon, label, path, children: subs }: MenuItem & { children?: MenuItem['children'] }) => {
-    const isActive = (() => {
-      if (!path) return pathname.startsWith('/masters');
-      const [basePath, queryStr] = path.split('?');
-      if (queryStr) {
-        // 쿼리 파라미터 포함 경로 (예: /orders?tab=receipts)
-        return pathname === basePath && search === `?${queryStr}`;
-      }
-      // /orders (수주 관리): receipts/matching 탭일 때는 비활성
-      if (path === '/orders') {
-        return pathname === '/orders' && !search.includes('tab=receipts') && !search.includes('tab=matching');
-      }
-      return pathname === path;
-    })();
-    const isSub = !!subs;
-
-    if (collapsed) {
-      return (
-        <Tooltip>
-          <TooltipTrigger>
-            <Link
-              to={path ?? '/masters/companies'}
-              className={cn(
-                'flex h-9 w-9 items-center justify-center rounded-md mx-auto transition-colors',
-                isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
-              )}
-            >
-              <Icon className="h-4 w-4" />
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent side="right">{label}</TooltipContent>
-        </Tooltip>
-      );
-    }
-
-    if (isSub) {
-      return (
-        <div>
-          <button
-            onClick={() => setMasterOpen(!masterOpen)}
-            className={cn(
-              'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
-              isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            <span className="flex-1 text-left">{label}</span>
-            {masterOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          </button>
-          {masterOpen && (
-            <div className="ml-6 mt-0.5 space-y-0.5">
-              {subs!.map((sub) => (
-                <Link
-                  key={sub.path}
-                  to={sub.path}
-                  className={cn(
-                    'block rounded-md px-3 py-1.5 text-sm transition-colors',
-                    pathname === sub.path ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50'
-                  )}
-                >
-                  {sub.label}
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <Link
-        to={path!}
-        className={cn(
-          'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
-          isActive ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50'
-        )}
-      >
-        <Icon className="h-4 w-4 shrink-0" />
-        <span>{label}</span>
-      </Link>
-    );
+  const navLinkBase = {
+    collapsed,
+    pathname,
+    search,
+    masterOpen,
+    onMasterToggle: () => setMasterOpen(!masterOpen),
   };
 
   return (
@@ -240,21 +259,21 @@ export default function Sidebar() {
 
       {/* 메뉴 — 가용재고 홈 → 구매 → 판매 섹션 */}
       <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-        <NavLink {...inventoryItem} />
+        <NavLink {...navLinkBase} {...inventoryItem} />
         <Separator className="my-2" />
         {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">구매</p>}
-        {purchaseItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...m} />)}
+        {purchaseItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
         <Separator className="my-2" />
         {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">판매</p>}
-        {salesItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...m} />)}
+        {salesItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
         <Separator className="my-2" />
         {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">현황/분석</p>}
-        {analysisItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...m} />)}
+        {analysisItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
         <Separator className="my-2" />
         {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">도구</p>}
-        {canSee(masterItem, role) && <NavLink {...masterItem} />}
-        {toolItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...m} />)}
-        {canSee(settingsItem, role) && <NavLink {...settingsItem} />}
+        {canSee(masterItem, role) && <NavLink {...navLinkBase} {...masterItem} />}
+        {toolItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
+        {canSee(settingsItem, role) && <NavLink {...navLinkBase} {...settingsItem} />}
       </nav>
 
       {/* 하단 사용자 */}

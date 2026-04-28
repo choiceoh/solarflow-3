@@ -127,6 +127,7 @@ export default function PriceHistoryForm({ open, onOpenChange, onSubmit, editDat
         <form onSubmit={handleSubmit(handle)} className="space-y-3">
           <div className="space-y-1.5">
             <Label>제조사 *</Label>
+            {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
             <Select value={watch('manufacturer_id') ?? ''} onValueChange={(v) => { setValue('manufacturer_id', v ?? ''); setValue('product_id', ''); }}><SelectTrigger className="w-full"><Txt text={manufacturers.find((m) => m.manufacturer_id === watch('manufacturer_id'))?.name_kr || ''} /></SelectTrigger>
               <SelectContent>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent>
             </Select>{errors.manufacturer_id && <p className="text-xs text-destructive">{errors.manufacturer_id.message}</p>}

@@ -41,6 +41,7 @@ export default function LimitChangeForm({ open, onOpenChange, onSubmit }: Props)
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 다이얼로그 open 시 폼 초기화 (open prop 동기화)
       setBankId(''); setChangeDate(''); setPreviousLimit('');
       setNewLimit(''); setReason(''); setSubmitError('');
     }

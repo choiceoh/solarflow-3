@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -48,11 +48,11 @@ export default function BLLineForm({ open, onOpenChange, onSubmit, editData, blI
   const [selItemType, setSelItemType] = useState('');
   const [selPaymentType, setSelPaymentType] = useState('');
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema) as unknown as Resolver<FormData>,
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가
   const quantity = watch('quantity');
   const selectedProduct = products.find((p) => p.product_id === selProductId);
   const capacityKw = selectedProduct && quantity ? quantity * selectedProduct.wattage_kw : 0;
