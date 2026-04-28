@@ -26,6 +26,10 @@ func NewSaleHandler(db *supa.Client) *SaleHandler {
 	return &SaleHandler{DB: db}
 }
 
+type saleStatusUpdate struct {
+	Status string `json:"status"`
+}
+
 // List — GET /api/v1/sales — 판매 목록 조회
 // 비유: 판매 전표함에서 전체 판매 내역을 꺼내 보여주는 것
 // TODO: 세금계산서 미발행 목록 필터 (tax_invoice_date IS NULL + outbound completed)
@@ -50,6 +54,11 @@ func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
 	if erpClosed := r.URL.Query().Get("erp_closed"); erpClosed != "" {
 		query = query.Eq("erp_closed", erpClosed)
 	}
+	if status := r.URL.Query().Get("status"); status != "" {
+		query = query.Eq("status", status)
+	} else {
+		query = query.Neq("status", "cancelled")
+	}
 
 	data, _, err := query.Execute()
 	if err != nil {
@@ -69,8 +78,12 @@ func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
 	companyID := r.URL.Query().Get("company_id")
 	month := r.URL.Query().Get("month")
 	invoiceStatus := r.URL.Query().Get("invoice_status")
+	statusFilter := r.URL.Query().Get("status")
 	filtered := make([]model.SaleListItem, 0, len(items))
 	for _, item := range items {
+		if statusFilter == "" && item.OutboundStatus != nil && *item.OutboundStatus != "active" {
+			continue
+		}
 		if companyID != "" && companyID != "all" && (item.CompanyID == nil || *item.CompanyID != companyID) {
 			continue
 		}
@@ -110,6 +123,7 @@ type saleOutboundRow struct {
 	CapacityKw   *float64 `json:"capacity_kw"`
 	SiteName     *string  `json:"site_name"`
 	OrderID      *string  `json:"order_id"`
+	Status       string   `json:"status"`
 }
 
 type saleProductRow struct {
@@ -145,7 +159,7 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	} else {
 		log.Printf("[매출 enrich] orders 조회 실패 — 수주 정보 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("outbounds").Select("outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id", "exact", false).Execute(); err == nil {
+	if data, _, err := h.DB.From("outbounds").Select("outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status", "exact", false).Execute(); err == nil {
 		if err := json.Unmarshal(data, &outbounds); err != nil {
 			log.Printf("[매출 enrich] outbounds 디코딩 실패 — 출고 정보 비표시: %v", err)
 		}
@@ -199,6 +213,7 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 			VatAmount:      sale.VatAmount,
 			TotalAmount:    sale.TotalAmount,
 			TaxInvoiceDate: sale.TaxInvoiceDate,
+			Status:         sale.Status,
 			Sale:           sale,
 		}
 		if sale.Quantity != nil {
@@ -213,6 +228,7 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 		if sale.OutboundID != nil {
 			if ob, ok := outboundMap[*sale.OutboundID]; ok {
 				item.OutboundDate = &ob.OutboundDate
+				item.OutboundStatus = &ob.Status
 				item.CompanyID = &ob.CompanyID
 				item.SiteName = ob.SiteName
 				productID = &ob.ProductID
@@ -405,6 +421,7 @@ func (h *SaleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeAuditLog(h.DB, r, "sales", created[0].SaleID, "create", nil, auditRawFromValue(created[0]), "")
 	response.RespondJSON(w, http.StatusCreated, created[0])
 }
 
@@ -502,6 +519,11 @@ func (h *SaleHandler) calculateSaleUpdate(id string, req *model.UpdateSaleReques
 func (h *SaleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "sales", "sale_id", id)
+	if oldErr != nil {
+		log.Printf("[판매 수정 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
+	}
+
 	var req model.UpdateSaleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[판매 수정 요청 파싱 실패] %v", err)
@@ -537,5 +559,42 @@ func (h *SaleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	auditEntityByRouteID(h.DB, r, "sales", "sale_id", "update", oldSnapshot, auditRawFromValue(updated[0]), "")
 	response.RespondJSON(w, http.StatusOK, updated[0])
+}
+
+// Delete — DELETE /api/v1/sales/{id} — 판매 취소 처리
+func (h *SaleHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "sales", "sale_id", id)
+	if oldErr != nil {
+		log.Printf("[판매 취소 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
+	}
+
+	data, _, err := h.DB.From("sales").
+		Update(saleStatusUpdate{Status: "cancelled"}, "", "").
+		Eq("sale_id", id).
+		Execute()
+	if err != nil {
+		log.Printf("[판매 취소 실패] id=%s, err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "판매 취소에 실패했습니다")
+		return
+	}
+
+	var updated []model.Sale
+	if err := json.Unmarshal(data, &updated); err != nil {
+		log.Printf("[판매 취소 결과 디코딩 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
+		return
+	}
+	if len(updated) == 0 {
+		response.RespondError(w, http.StatusNotFound, "취소할 판매를 찾을 수 없습니다")
+		return
+	}
+
+	auditEntityByRouteID(h.DB, r, "sales", "sale_id", "delete", oldSnapshot, auditRawFromValue(updated[0]), "soft_cancel")
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "cancelled"})
 }

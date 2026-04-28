@@ -67,6 +67,7 @@ var validLCStatuses = map[string]bool{
 	"opened":        true,
 	"docs_received": true,
 	"settled":       true,
+	"cancelled":     true,
 }
 
 // 허용되는 usance_type 값
@@ -116,7 +117,7 @@ func (req *CreateLCRequest) Validate() string {
 		return "status는 필수 항목입니다"
 	}
 	if !validLCStatuses[req.Status] {
-		return "status는 \"pending\", \"opened\", \"docs_received\", \"settled\" 중 하나여야 합니다"
+		return "status는 \"pending\", \"opened\", \"docs_received\", \"settled\", \"cancelled\" 중 하나여야 합니다"
 	}
 	if req.UsanceType != nil && !validUsanceTypes[*req.UsanceType] {
 		return "usance_type은 \"buyers\", \"shippers\" 중 하나여야 합니다"
@@ -215,7 +216,7 @@ func (req *UpdateLCRequest) Validate() string {
 		return "amount_usd는 양수여야 합니다"
 	}
 	if req.Status != nil && !validLCStatuses[*req.Status] {
-		return "status는 \"pending\", \"opened\", \"docs_received\", \"settled\" 중 하나여야 합니다"
+		return "status는 \"pending\", \"opened\", \"docs_received\", \"settled\", \"cancelled\" 중 하나여야 합니다"
 	}
 	if req.UsanceType != nil && !validUsanceTypes[*req.UsanceType] {
 		return "usance_type은 \"buyers\", \"shippers\" 중 하나여야 합니다"

@@ -150,7 +150,7 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
       await onDelete(deleteTarget.lc_id);
       setDeleteTarget(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제에 실패했습니다');
+      alert(err instanceof Error ? err.message : '취소 처리에 실패했습니다');
     } finally {
       setDeleting(false);
     }
@@ -459,8 +459,8 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
-        title="LC 삭제"
-        description={deleteTarget ? `LC "${deleteTarget.lc_number ?? ''}"를 삭제하시겠습니까?` : ''}
+        title="LC 취소 처리"
+        description={deleteTarget ? `LC "${deleteTarget.lc_number ?? ''}"를 취소 처리하시겠습니까? 연결 이력은 삭제되지 않습니다.` : ''}
         onConfirm={handleDelete}
         loading={deleting}
       />

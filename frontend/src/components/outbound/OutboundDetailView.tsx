@@ -97,7 +97,7 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
       setDeleteOpen(false);
       onBack();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제에 실패했습니다');
+      alert(err instanceof Error ? err.message : '취소 처리에 실패했습니다');
     } finally {
       setDeleting(false);
     }
@@ -116,9 +116,11 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
             <Pencil className="mr-1 h-3.5 w-3.5" />수정
           </Button>
         )}
-        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
-          <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
-        </Button>
+        {!isCancelled && (
+          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+            <Trash2 className="mr-1 h-3.5 w-3.5" />취소 처리
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -229,8 +231,8 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title="출고 삭제"
-        description="이 출고 건과 연결된 매출 정보가 모두 삭제됩니다. 정말 삭제하시겠습니까?"
+        title="출고 취소 처리"
+        description="이 출고 건은 취소 상태로 보존됩니다. 연결된 출고 기준 매출도 함께 취소 처리됩니다."
         onConfirm={handleDelete}
         loading={deleting}
       />

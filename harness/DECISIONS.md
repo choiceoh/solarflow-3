@@ -493,3 +493,9 @@
 - **범위**: `sf_create_outbound`, `sf_update_outbound`, `sf_delete_outbound`, `sf_delete_purchase_order`, `sf_delete_declaration`, `sf_recalculate_order_progress`.
 - **운영 기준**: 함수 추가/변경 후 PostgREST 스키마 캐시를 갱신해야 한다.
 - **날짜**: 2026-04-28
+
+## D-095: 운영 데이터 감사 로그 + soft cancel
+- **결정**: PO, LC, 출고, 매출은 `audit_logs`에 create/update/delete 요청자와 변경 전후 JSON을 남긴다. DELETE API는 실제 삭제 대신 업무 테이블의 상태를 `cancelled`로 바꾸는 soft cancel로 처리한다.
+- **이유**: 운영 데이터는 재고, 미착, 한도, 매출, 수금 분석에 연결되므로 실제 삭제 시 “누가 무엇을 지웠는지”와 연결 이력을 잃는다. 취소 상태로 보존하면 실무 오류 정정과 감사 추적이 가능하다.
+- **운영 기준**: `audit_logs.action='delete'`는 API 삭제 요청을 뜻한다. 실제 업무 행은 삭제되지 않고 `purchase_orders.status='cancelled'`, `lc_records.status='cancelled'`, `outbounds.status='cancelled'`, `sales.status='cancelled'`로 남긴다. 계산/분석 쿼리는 취소 매출을 기본 집계에서 제외한다.
+- **날짜**: 2026-04-28

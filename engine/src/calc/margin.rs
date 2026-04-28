@@ -124,6 +124,7 @@ pub async fn calculate_margin(pool: &PgPool, req: &MarginAnalysisRequest) -> Res
         JOIN products p ON o.product_id = p.product_id
         JOIN manufacturers m ON p.manufacturer_id = m.manufacturer_id
         WHERE o.company_id = $1 AND o.status = 'active'
+          AND COALESCE(s.status, 'active') <> 'cancelled'
           AND ($2::uuid IS NULL OR p.manufacturer_id = $2)
           AND ($3::uuid IS NULL OR o.product_id = $3)
           AND ($4::date IS NULL OR o.outbound_date >= $4)
@@ -213,6 +214,7 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
         JOIN partners ptr ON s.customer_id = ptr.partner_id
         JOIN outbounds o ON s.outbound_id = o.outbound_id
         WHERE o.company_id = $1 AND o.status = 'active'
+          AND COALESCE(s.status, 'active') <> 'cancelled'
           AND ($2::uuid IS NULL OR s.customer_id = $2)
           AND ($3::date IS NULL OR o.outbound_date >= $3)
           AND ($4::date IS NULL OR o.outbound_date <= $4)
@@ -242,6 +244,7 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
                (CURRENT_DATE - o.outbound_date)::int as days_elapsed
         FROM sales s JOIN outbounds o ON s.outbound_id = o.outbound_id
         WHERE o.company_id = $1 AND o.status = 'active'
+          AND COALESCE(s.status, 'active') <> 'cancelled'
           AND s.total_amount > COALESCE((SELECT SUM(rm3.matched_amount) FROM receipt_matches rm3 WHERE rm3.outbound_id = o.outbound_id), 0)
         "#,
     )
@@ -306,6 +309,7 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
         JOIN products p ON o.product_id = p.product_id
         LEFT JOIN cost_avg ca ON ca.product_id = o.product_id
         WHERE o.company_id = $1 AND o.status = 'active'
+          AND COALESCE(s.status, 'active') <> 'cancelled'
           AND ($2::uuid IS NULL OR s.customer_id = $2)
           AND ($3::date IS NULL OR o.outbound_date >= $3)
           AND ($4::date IS NULL OR o.outbound_date <= $4)
@@ -417,6 +421,7 @@ pub async fn calculate_price_trend(pool: &PgPool, req: &PriceTrendRequest) -> Re
         FROM sales s JOIN outbounds o ON s.outbound_id = o.outbound_id
         JOIN products p ON o.product_id = p.product_id
         WHERE o.company_id = $2 AND o.status = 'active'
+          AND COALESCE(s.status, 'active') <> 'cancelled'
           AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
           AND ($4::uuid IS NULL OR o.product_id = $4)
         GROUP BY o.product_id, period

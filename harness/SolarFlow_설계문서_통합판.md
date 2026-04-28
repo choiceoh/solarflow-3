@@ -771,6 +771,27 @@ LC 한도 현황 화면: 법인별→은행별 한도/개설잔액/가용한도/
 
 아마란스10 내보내기: 입고등록(34컬럼), 출고등록(35컬럼), 매출마감
 
+#### 감사 로그
+
+PO, LC, 출고, 매출은 생성/수정/삭제 요청을 모두 감사 로그로 남긴다.
+
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| audit_id | UUID | ✅ | PK |
+| entity_type | VARCHAR(40) | ✅ | purchase_orders/lc_records/outbounds/sales |
+| entity_id | UUID | ✅ | 대상 업무 데이터 ID |
+| action | VARCHAR(20) | ✅ | create/update/delete |
+| user_id | UUID | | 요청자 Supabase Auth uid |
+| user_email | TEXT | | 요청자 이메일 |
+| request_method | TEXT | | POST/PUT/DELETE |
+| request_path | TEXT | | API 경로 |
+| old_data | JSONB | | 변경 전 데이터 |
+| new_data | JSONB | | 변경 후 데이터 |
+| note | TEXT | | soft_cancel, excel_import 등 |
+| created_at | TIMESTAMPTZ | ✅ | 기록 시각 |
+
+운영 데이터 삭제 정책: PO/LC/출고/매출 DELETE는 실제 삭제가 아니라 `status='cancelled'` 취소 처리로 보존한다. `audit_logs.action='delete'`는 삭제 요청이 들어왔다는 의미이며, 업무 행은 이력 확인과 연결 추적을 위해 남긴다.
+
 #### 결재안 자동 생성 (6유형)
 1. **수입 모듈대금** — PI No., 은행, 품명, 금액, 부가세, 인수수수료, 전신료, LC No., 환율
 2. **CIF 비용/제경비** — Contract, B/L, 품명·수량, ETD/ETA, 부대비용 항목별(금액+VAT)

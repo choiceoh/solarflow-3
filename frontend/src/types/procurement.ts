@@ -1,6 +1,6 @@
-export type POStatus = 'draft' | 'contracted' | 'in_progress' | 'completed' | 'shipping';
+export type POStatus = 'draft' | 'contracted' | 'in_progress' | 'completed' | 'cancelled' | 'shipping';
 export type ContractType = 'spot' | 'frame' | 'general' | 'exclusive' | 'annual' | 'annual_frame' | 'half_year_frame';
-export type LCStatus = 'pending' | 'opened' | 'docs_received' | 'settled';
+export type LCStatus = 'pending' | 'opened' | 'docs_received' | 'settled' | 'cancelled';
 export type TTStatus = 'planned' | 'completed';
 
 export interface PurchaseOrder {
@@ -120,15 +120,15 @@ export interface PriceHistory {
   memo?: string;
 }
 
-export const PO_STATUS_LABEL: Record<POStatus, string> = { draft: '초안', contracted: '계약완료', in_progress: '진행중', completed: '완료', shipping: '선적중(레거시)' };
-export const PO_STATUS_COLOR: Record<POStatus, string> = { draft: 'bg-gray-100 text-gray-700', contracted: 'bg-blue-100 text-blue-700', in_progress: 'bg-yellow-100 text-yellow-700', completed: 'bg-green-100 text-green-700', shipping: 'bg-yellow-100 text-yellow-700' };
+export const PO_STATUS_LABEL: Record<POStatus, string> = { draft: '초안', contracted: '계약완료', in_progress: '진행중', completed: '완료', cancelled: '취소', shipping: '선적중(레거시)' };
+export const PO_STATUS_COLOR: Record<POStatus, string> = { draft: 'bg-gray-100 text-gray-700', contracted: 'bg-blue-100 text-blue-700', in_progress: 'bg-yellow-100 text-yellow-700', completed: 'bg-green-100 text-green-700', cancelled: 'bg-red-100 text-red-700', shipping: 'bg-yellow-100 text-yellow-700' };
 export const CONTRACT_TYPE_LABEL: Record<ContractType, string> = { spot: '스팟', frame: '프레임', general: '일반(레거시)', exclusive: '독점(레거시)', annual: '연간(레거시)', annual_frame: '연간프레임(레거시)', half_year_frame: '6개월프레임(레거시)' };
 /** 신규 PO에 허용되는 계약유형 (필터/등록 드롭다운에서 사용) */
 export const CONTRACT_TYPES_ACTIVE: Array<{ value: ContractType; label: string }> = [
   { value: 'spot', label: '스팟' },
   { value: 'frame', label: '프레임' },
 ];
-export const LC_STATUS_LABEL: Record<LCStatus, string> = { pending: '대기', opened: '개설', docs_received: '서류접수', settled: '결제완료' };
-export const LC_STATUS_COLOR: Record<LCStatus, string> = { pending: 'bg-gray-100 text-gray-700', opened: 'bg-blue-100 text-blue-700', docs_received: 'bg-yellow-100 text-yellow-700', settled: 'bg-green-100 text-green-700' };
+export const LC_STATUS_LABEL: Record<LCStatus, string> = { pending: '대기', opened: '개설', docs_received: '서류접수', settled: '결제완료', cancelled: '취소' };
+export const LC_STATUS_COLOR: Record<LCStatus, string> = { pending: 'bg-gray-100 text-gray-700', opened: 'bg-blue-100 text-blue-700', docs_received: 'bg-yellow-100 text-yellow-700', settled: 'bg-green-100 text-green-700', cancelled: 'bg-red-100 text-red-700' };
 export const TT_STATUS_LABEL: Record<TTStatus, string> = { planned: '예정', completed: '완료' };
 export const TT_STATUS_COLOR: Record<TTStatus, string> = { planned: 'bg-gray-100 text-gray-700', completed: 'bg-green-100 text-green-700' };

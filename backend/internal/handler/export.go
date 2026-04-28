@@ -587,6 +587,7 @@ func (h *ExportHandler) AmaranthOutbound(w http.ResponseWriter, r *http.Request)
 		saleData, _, err := h.DB.From("sales").
 			Select("outbound_id, customer_id, unit_price_ea, supply_amount, vat_amount, total_amount", "exact", false).
 			In("outbound_id", obIDs).
+			Neq("status", "cancelled").
 			Execute()
 		if err != nil {
 			log.Printf("[아마란스 출고 내보내기] 매출 조회 실패: %v", err)

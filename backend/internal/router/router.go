@@ -236,6 +236,12 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Post("/", saleH.Create)
 			r.Get("/{id}", saleH.GetByID)
 			r.Put("/{id}", saleH.Update)
+			r.Delete("/{id}", saleH.Delete)
+		})
+
+		auditH := handler.NewAuditLogHandler(db)
+		r.Route("/audit-logs", func(r chi.Router) {
+			r.Get("/", auditH.List)
 		})
 
 		limitH := handler.NewLimitChangeHandler(db)

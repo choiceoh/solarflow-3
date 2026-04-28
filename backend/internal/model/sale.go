@@ -19,6 +19,7 @@ type Sale struct {
 	TaxInvoiceEmail *string  `json:"tax_invoice_email"`
 	ErpClosed       *bool    `json:"erp_closed"`
 	ErpClosedDate   *string  `json:"erp_closed_date"`
+	Status          string   `json:"status"`
 	Memo            *string  `json:"memo"`
 }
 
@@ -29,6 +30,7 @@ type SaleListItem struct {
 	OutboundID     *string  `json:"outbound_id,omitempty"`
 	OrderID        *string  `json:"order_id,omitempty"`
 	OutboundDate   *string  `json:"outbound_date,omitempty"`
+	OutboundStatus *string  `json:"outbound_status,omitempty"`
 	OrderDate      *string  `json:"order_date,omitempty"`
 	OrderNumber    *string  `json:"order_number,omitempty"`
 	CompanyID      *string  `json:"company_id,omitempty"`
@@ -47,6 +49,7 @@ type SaleListItem struct {
 	VatAmount      *float64 `json:"vat_amount,omitempty"`
 	TotalAmount    *float64 `json:"total_amount,omitempty"`
 	TaxInvoiceDate *string  `json:"tax_invoice_date,omitempty"`
+	Status         string   `json:"status"`
 	Sale           Sale     `json:"sale"`
 }
 

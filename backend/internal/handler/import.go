@@ -647,13 +647,17 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		_, _, err = h.DB.From("outbounds").
+		outData, _, err := h.DB.From("outbounds").
 			Insert(outReq, false, "", "", "").
 			Execute()
 		if err != nil {
 			log.Printf("[출고 Import INSERT 실패] row=%d, err=%v", rowNum, err)
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "outbound", Message: "출고 등록 실패"})
 			continue
+		}
+		var createdOutbounds []model.Outbound
+		if json.Unmarshal(outData, &createdOutbounds) == nil && len(createdOutbounds) > 0 {
+			writeAuditLog(h.DB, r, "outbounds", createdOutbounds[0].OutboundID, "create", nil, auditRawFromValue(createdOutbounds[0]), "excel_import")
 		}
 
 		imported++
@@ -799,13 +803,17 @@ func (h *ImportHandler) Sales(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		_, _, err = h.DB.From("sales").
+		saleData, _, err := h.DB.From("sales").
 			Insert(saleReq, false, "", "", "").
 			Execute()
 		if err != nil {
 			log.Printf("[매출 Import INSERT 실패] row=%d, err=%v", rowNum, err)
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "sale", Message: "매출 등록 실패"})
 			continue
+		}
+		var createdSales []model.Sale
+		if json.Unmarshal(saleData, &createdSales) == nil && len(createdSales) > 0 {
+			writeAuditLog(h.DB, r, "sales", createdSales[0].SaleID, "create", nil, auditRawFromValue(createdSales[0]), "excel_import")
 		}
 
 		imported++

@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 116개 PASS |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-094 (92개, D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-095 (93개, D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -162,6 +162,39 @@
 - `npm run build` 통과
 - `npm run lint`는 기존 프론트 전체 lint 198건으로 실패 (신규 테스트 파일 원인 아님)
 - `graphify update .` 실행 시도했으나 이 worktree에 `graphify` 명령과 `graphify-out/` 디렉터리가 없어 갱신 불가
+
+---
+
+## 2026-04-28 세션 추가 — 감사 로그 + 운영 데이터 취소 보존
+
+### PO/LC/출고/매출 감사 추적
+
+#### DB / Go API
+- `backend/migrations/037_audit_logs_and_soft_cancel.sql` 추가
+  - `audit_logs` 테이블 생성: 대상 테이블, 대상 ID, action(create/update/delete), 요청자 user_id/user_email, API 경로, 변경 전후 JSON 저장
+  - PO/LC 상태에 `cancelled` 허용, `sales.status` 추가
+  - `sf_delete_outbound`, `sf_delete_purchase_order`를 soft cancel 방식으로 재정의
+- `GET /api/v1/audit-logs` 추가: entity_type/entity_id/action/user_id 필터 지원
+- PO/LC/출고/매출 생성·수정·삭제 요청 시 감사 로그 기록
+- 출고/매출 엑셀 Import 생성 건도 `note='excel_import'`로 감사 로그 기록
+
+#### Soft cancel 정책
+- PO DELETE → `purchase_orders.status='cancelled'`
+- LC DELETE → `lc_records.status='cancelled'`
+- 출고 DELETE → `outbounds.status='cancelled'`, 출고 기준 매출은 취소 처리 또는 수주 기준 매출의 outbound 연결 해제
+- 매출 DELETE → `sales.status='cancelled'`
+- Rust 마진/미수금/단가추이/검색 계산에서 취소 매출 제외
+
+#### 프론트엔드
+- PO/LC/출고 삭제 문구를 취소 처리로 변경
+- PO/LC/매출 타입에 cancelled 상태 반영
+
+#### 검증
+- `backend`: `go test ./...`, `go vet ./...`, `go build ./...` PASS
+- `engine`: `cargo test` PASS
+- `frontend`: `npm run build`는 현재 환경에 `tsc`가 없어 실행 실패
+- DB 마이그레이션 적용은 현재 환경에 `psql`이 없어 미실행
+- `graphify update .`는 현재 환경에 `graphify`가 없어 미실행
 
 ---
 

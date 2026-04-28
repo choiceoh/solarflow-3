@@ -207,7 +207,7 @@ func (h *OutboundHandler) enrichOutbounds(outbounds []model.Outbound) ([]model.O
 	} else if err := json.Unmarshal(data, &partners); err != nil {
 		return nil, fmt.Errorf("partners 디코딩 실패: %w", err)
 	}
-	if data, _, err := h.DB.From("sales").Select("*", "exact", false).Execute(); err != nil {
+	if data, _, err := h.DB.From("sales").Select("*", "exact", false).Neq("status", "cancelled").Execute(); err != nil {
 		return nil, fmt.Errorf("sales 조회 실패: %w", err)
 	} else if err := json.Unmarshal(data, &sales); err != nil {
 		return nil, fmt.Errorf("sales 디코딩 실패: %w", err)
@@ -391,6 +391,7 @@ func (h *OutboundHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "출고 등록 결과를 확인할 수 없습니다")
 		return
 	}
+	writeAuditLog(h.DB, r, "outbounds", outboundID, "create", nil, auditRawFromValue(created), "")
 	response.RespondJSON(w, http.StatusCreated, created)
 }
 
@@ -406,6 +407,11 @@ func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if msg := req.Validate(); msg != "" {
 		response.RespondError(w, http.StatusBadRequest, msg)
 		return
+	}
+
+	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "outbounds", "outbound_id", id)
+	if oldErr != nil {
+		log.Printf("[출고 수정 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
 
 	// BLItems 추출 후 nil 처리
@@ -440,24 +446,62 @@ func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "출고 수정 결과를 확인할 수 없습니다")
 		return
 	}
+	auditEntityByRouteID(h.DB, r, "outbounds", "outbound_id", "update", oldSnapshot, auditRawFromValue(updated), "")
 	response.RespondJSON(w, http.StatusOK, updated)
 }
 
-// Delete — DELETE /api/v1/outbounds/{id} — 출고 삭제
+// Delete — DELETE /api/v1/outbounds/{id} — 출고 취소 처리
 func (h *OutboundHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "outbounds", "outbound_id", id)
+	if oldErr != nil {
+		log.Printf("[출고 취소 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
+	}
+
+	var linkedSales []model.Sale
+	if saleData, _, err := h.DB.From("sales").Select("*", "exact", false).Eq("outbound_id", id).Execute(); err == nil {
+		if err := json.Unmarshal(saleData, &linkedSales); err != nil {
+			log.Printf("[출고 취소 전 매출 스냅샷 디코딩 실패] outbound_id=%s err=%v", id, err)
+		}
+	} else {
+		log.Printf("[출고 취소 전 매출 스냅샷 조회 실패] outbound_id=%s err=%v", id, err)
+	}
+
 	if err := callRPC(h.DB, "sf_delete_outbound", deleteOutboundRPCRequest{OutboundID: id}); err != nil {
-		log.Printf("[출고 트랜잭션 삭제 실패] id=%s, err=%v", id, err)
+		log.Printf("[출고 트랜잭션 취소 실패] id=%s, err=%v", id, err)
 		if isRPCNotFound(err) {
 			response.RespondError(w, http.StatusNotFound, "출고를 찾을 수 없습니다")
 			return
 		}
-		response.RespondError(w, http.StatusInternalServerError, "출고 삭제에 실패했습니다")
+		response.RespondError(w, http.StatusInternalServerError, "출고 취소에 실패했습니다")
 		return
+	}
+
+	newSnapshot, _, snapErr := auditSnapshot(h.DB, "outbounds", "outbound_id", id)
+	if snapErr != nil {
+		log.Printf("[출고 취소 후 감사 스냅샷 조회 실패] id=%s err=%v", id, snapErr)
+	}
+	auditEntityByRouteID(h.DB, r, "outbounds", "outbound_id", "delete", oldSnapshot, newSnapshot, "soft_cancel")
+
+	for _, sale := range linkedSales {
+		action := "update"
+		note := "outbound_soft_cancel_detach"
+		if sale.OrderID == nil || *sale.OrderID == "" {
+			action = "delete"
+			note = "outbound_soft_cancel"
+		}
+		after, found, afterErr := auditSnapshot(h.DB, "sales", "sale_id", sale.SaleID)
+		if afterErr != nil {
+			log.Printf("[출고 취소 후 매출 감사 스냅샷 조회 실패] sale_id=%s err=%v", sale.SaleID, afterErr)
+		}
+		if !found {
+			after = nil
+		}
+		writeAuditLog(h.DB, r, "sales", sale.SaleID, action, auditRawFromValue(sale), after, note)
 	}
 
 	response.RespondJSON(w, http.StatusOK, struct {
 		Status string `json:"status"`
-	}{Status: "deleted"})
+	}{Status: "cancelled"})
 }

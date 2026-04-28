@@ -43,6 +43,7 @@ const PO_STATUSES: Record<string, string> = {
 };
 // 레거시 읽기 호환 (UI에는 표시하지 않되 데이터에 있으면 표시)
 const PO_STATUSES_READONLY: Record<string, string> = {
+  cancelled: '취소',
   shipping: '선적중 (레거시)',
 };
 const INCOTERMS = ['FOB', 'CIF', 'CFR', 'EXW', 'FCA', 'DAP', 'DDP', 'CIP'];

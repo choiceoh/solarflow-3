@@ -76,10 +76,6 @@ export default function LCPage() {
     setEditLC(null); reload();
   };
   const handleDeleteLC = async (lcId: string) => {
-    const linkedBls = await fetchWithAuth<{ bl_id: string }[]>(`/api/v1/bls?lc_id=${lcId}`).catch(() => []);
-    if (Array.isArray(linkedBls) && linkedBls.length > 0) {
-      throw new Error(`이 LC에 연결된 입고(B/L)가 ${linkedBls.length}건 있어 삭제할 수 없습니다.`);
-    }
     await fetchWithAuth(`/api/v1/lcs/${lcId}`, { method: 'DELETE' });
     reload();
   };

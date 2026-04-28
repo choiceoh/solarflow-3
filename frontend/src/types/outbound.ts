@@ -1,6 +1,7 @@
 // 출고/판매 타입 (D-013, D-014)
 
 export type OutboundStatus = 'active' | 'cancel_pending' | 'cancelled';
+export type SaleStatus = 'active' | 'cancelled';
 export type UsageCategory =
   | 'sale' | 'sale_spare' | 'construction' | 'construction_damage' | 'repowering'
   | 'maintenance' | 'disposal' | 'transfer' | 'adjustment' | 'other';
@@ -65,6 +66,7 @@ export interface Sale {
   tax_invoice_email?: string;
   erp_closed?: boolean;
   erp_closed_date?: string;
+  status?: SaleStatus;
   memo?: string;
 }
 
@@ -73,6 +75,7 @@ export interface SaleListItem {
   outbound_id?: string;
   order_id?: string;
   outbound_date?: string;
+  outbound_status?: OutboundStatus;
   order_date?: string;
   order_number?: string;
   company_id?: string;
@@ -91,6 +94,7 @@ export interface SaleListItem {
   vat_amount?: number;
   total_amount?: number;
   tax_invoice_date?: string;
+  status?: SaleStatus;
   sale: Sale;
 }
 

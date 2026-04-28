@@ -22,6 +22,10 @@ type deletePurchaseOrderRPCRequest struct {
 	POID string `json:"p_po_id"`
 }
 
+type poStatusUpdate struct {
+	Status string `json:"status"`
+}
+
 // NewPOHandler — POHandler 생성자
 func NewPOHandler(db *supa.Client) *POHandler {
 	return &POHandler{DB: db}
@@ -202,6 +206,7 @@ func (h *POHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeAuditLog(h.DB, r, "purchase_orders", created[0].POID, "create", nil, auditRawFromValue(created[0]), "")
 	response.RespondJSON(w, http.StatusCreated, created[0])
 }
 
@@ -221,6 +226,11 @@ func (h *POHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if msg := req.Validate(); msg != "" {
 		response.RespondError(w, http.StatusBadRequest, msg)
 		return
+	}
+
+	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "purchase_orders", "po_id", id)
+	if oldErr != nil {
+		log.Printf("[발주 수정 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
 
 	// F8: status 전환 감지를 위해 기존 상태 조회
@@ -272,6 +282,7 @@ func (h *POHandler) Update(w http.ResponseWriter, r *http.Request) {
 		h.autoInsertPriceHistory(id, updated[0])
 	}
 
+	auditEntityByRouteID(h.DB, r, "purchase_orders", "po_id", "update", oldSnapshot, auditRawFromValue(updated[0]), "")
 	response.RespondJSON(w, http.StatusOK, updated[0])
 }
 
@@ -351,22 +362,32 @@ func (h *POHandler) autoInsertPriceHistory(poID string, po model.PurchaseOrder) 
 	log.Printf("[단가이력 자동등록 완료] po_id=%s lines=%d", poID, len(lines))
 }
 
-// Delete — DELETE /api/v1/pos/{id} — 발주 삭제
-// 삭제 순서: ① T/T cascade 삭제 → ② 단가이력 삭제 → ③ 라인아이템 삭제 → ④ PO 본체 삭제
+// Delete — DELETE /api/v1/pos/{id} — 발주 취소 처리
+// 운영 데이터 보존: 실제 삭제 대신 status=cancelled로 남겨 감사 추적 가능하게 한다.
 func (h *POHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "purchase_orders", "po_id", id)
+	if oldErr != nil {
+		log.Printf("[발주 취소 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
+	}
+
 	if err := callRPC(h.DB, "sf_delete_purchase_order", deletePurchaseOrderRPCRequest{POID: id}); err != nil {
-		log.Printf("[발주 트랜잭션 삭제 실패] id=%s, err=%v", id, err)
+		log.Printf("[발주 트랜잭션 취소 실패] id=%s, err=%v", id, err)
 		if isRPCNotFound(err) {
 			response.RespondError(w, http.StatusNotFound, "발주를 찾을 수 없습니다")
 			return
 		}
-		response.RespondError(w, http.StatusInternalServerError, "발주 삭제에 실패했습니다")
+		response.RespondError(w, http.StatusInternalServerError, "발주 취소에 실패했습니다")
 		return
 	}
 
+	newSnapshot, _, snapErr := auditSnapshot(h.DB, "purchase_orders", "po_id", id)
+	if snapErr != nil {
+		log.Printf("[발주 취소 후 감사 스냅샷 조회 실패] id=%s err=%v", id, snapErr)
+	}
+	auditEntityByRouteID(h.DB, r, "purchase_orders", "po_id", "delete", oldSnapshot, newSnapshot, "soft_cancel")
 	response.RespondJSON(w, http.StatusOK, struct {
 		Status string `json:"status"`
-	}{Status: "deleted"})
+	}{Status: "cancelled"})
 }

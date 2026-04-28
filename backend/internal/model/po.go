@@ -93,6 +93,7 @@ var validPOStatuses = map[string]bool{
 	"contracted":  true,
 	"in_progress": true,
 	"completed":   true,
+	"cancelled":   true,
 	"shipping":    true, // legacy — 기존 데이터 호환용
 }
 
@@ -137,7 +138,7 @@ func (req *CreatePurchaseOrderRequest) Validate() string {
 		return "status는 필수 항목입니다"
 	}
 	if !validPOStatuses[req.Status] {
-		return "status는 \"draft\", \"contracted\", \"in_progress\", \"completed\" 중 하나여야 합니다"
+		return "status는 \"draft\", \"contracted\", \"in_progress\", \"completed\", \"cancelled\" 중 하나여야 합니다"
 	}
 	if req.TotalQty != nil && *req.TotalQty <= 0 {
 		return "total_qty는 양수여야 합니다"
@@ -183,7 +184,7 @@ func (req *UpdatePurchaseOrderRequest) Validate() string {
 	}
 	if req.Status != nil {
 		if !validPOStatuses[*req.Status] {
-			return "status는 \"draft\", \"contracted\", \"in_progress\", \"completed\" 중 하나여야 합니다"
+			return "status는 \"draft\", \"contracted\", \"in_progress\", \"completed\", \"cancelled\" 중 하나여야 합니다"
 		}
 	}
 	if req.TotalQty != nil && *req.TotalQty <= 0 {

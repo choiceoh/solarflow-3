@@ -25,6 +25,10 @@ func NewLCHandler(db *supa.Client) *LCHandler {
 	return &LCHandler{DB: db}
 }
 
+type lcStatusUpdate struct {
+	Status string `json:"status"`
+}
+
 // List — GET /api/v1/lcs — LC 목록 조회 (은행/법인/PO 정보 포함)
 // 비유: LC 서류함에서 전체 개설 현황을 꺼내 보여주는 것
 // TODO: maturity_date 범위 필터 추가 (대시보드 "LC 만기 임박" 알림용)
@@ -216,15 +220,17 @@ func (h *LCHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeAuditLog(h.DB, r, "lc_records", created[0].LCID, "create", nil, auditRawFromValue(created[0]), "")
+
 	// LC 개설 시 연결된 PO 상태 contracted → in_progress 자동 전환
-	go h.autoSetPOInProgress(created[0].POID)
+	h.autoSetPOInProgress(created[0].POID, r)
 
 	response.RespondJSON(w, http.StatusCreated, created[0])
 }
 
 // autoSetPOInProgress — LC 개설 시 PO 상태를 contracted → in_progress로 자동 전환
 // 실패해도 본 요청에 영향 없음 (로그만 남김)
-func (h *LCHandler) autoSetPOInProgress(poID string) {
+func (h *LCHandler) autoSetPOInProgress(poID string, r *http.Request) {
 	poData, _, err := h.DB.From("purchase_orders").
 		Select("po_id, status", "exact", false).
 		Eq("po_id", poID).
@@ -244,14 +250,21 @@ func (h *LCHandler) autoSetPOInProgress(poID string) {
 	if pos[0].Status != "contracted" {
 		return
 	}
-	update := map[string]string{"status": "in_progress"}
-	_, _, uerr := h.DB.From("purchase_orders").
-		Update(update, "", "").
+	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "purchase_orders", "po_id", poID)
+	if oldErr != nil {
+		log.Printf("[PO in_progress 전환] 감사 스냅샷 조회 실패 po_id=%s err=%v", poID, oldErr)
+	}
+	data, _, uerr := h.DB.From("purchase_orders").
+		Update(poStatusUpdate{Status: "in_progress"}, "", "").
 		Eq("po_id", poID).
 		Execute()
 	if uerr != nil {
 		log.Printf("[PO in_progress 전환] 업데이트 실패 po_id=%s err=%v", poID, uerr)
 		return
+	}
+	var updated []model.PurchaseOrder
+	if json.Unmarshal(data, &updated) == nil && len(updated) > 0 {
+		writeAuditLog(h.DB, r, "purchase_orders", poID, "update", oldSnapshot, auditRawFromValue(updated[0]), "lc_create_auto_in_progress")
 	}
 	log.Printf("[PO in_progress 전환] po_id=%s contracted → in_progress", poID)
 }
@@ -272,6 +285,11 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if msg := req.Validate(); msg != "" {
 		response.RespondError(w, http.StatusBadRequest, msg)
 		return
+	}
+
+	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "lc_records", "lc_id", id)
+	if oldErr != nil {
+		log.Printf("[LC 수정 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
 
 	data, _, err := h.DB.From("lc_records").
@@ -304,24 +322,42 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	auditEntityByRouteID(h.DB, r, "lc_records", "lc_id", "update", oldSnapshot, auditRawFromValue(updated[0]), "")
 	response.RespondJSON(w, http.StatusOK, updated[0])
 }
 
-// Delete — DELETE /api/v1/lcs/{id} — LC 삭제
+// Delete — DELETE /api/v1/lcs/{id} — LC 취소 처리
 func (h *LCHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	_, _, err := h.DB.From("lc_records").
-		Delete("", "").
+	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "lc_records", "lc_id", id)
+	if oldErr != nil {
+		log.Printf("[LC 취소 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
+	}
+
+	data, _, err := h.DB.From("lc_records").
+		Update(lcStatusUpdate{Status: "cancelled"}, "", "").
 		Eq("lc_id", id).
 		Execute()
 	if err != nil {
-		log.Printf("[LC 삭제 실패] id=%s, err=%v", id, err)
-		response.RespondError(w, http.StatusInternalServerError, "LC 삭제에 실패했습니다")
+		log.Printf("[LC 취소 실패] id=%s, err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "LC 취소에 실패했습니다")
 		return
 	}
 
+	var updated []model.LCRecord
+	if err := json.Unmarshal(data, &updated); err != nil {
+		log.Printf("[LC 취소 결과 디코딩 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
+		return
+	}
+	if len(updated) == 0 {
+		response.RespondError(w, http.StatusNotFound, "취소할 LC를 찾을 수 없습니다")
+		return
+	}
+
+	auditEntityByRouteID(h.DB, r, "lc_records", "lc_id", "delete", oldSnapshot, auditRawFromValue(updated[0]), "soft_cancel")
 	response.RespondJSON(w, http.StatusOK, struct {
 		Status string `json:"status"`
-	}{Status: "deleted"})
+	}{Status: "cancelled"})
 }

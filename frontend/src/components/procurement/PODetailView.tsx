@@ -322,22 +322,16 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
     await fetchWithAuth(`/api/v1/pos/${po.po_id}/lines`, { method: 'POST', body: JSON.stringify(data) });
     reloadLines();
   };
-  // PO 삭제 — 연결된 BL이 있으면 차단
+  // PO 취소 — 운영 이력 보존을 위해 실제 삭제 대신 cancelled로 전환
   const handleDeletePO = async () => {
     setDeleting(true);
     setDeleteError('');
     try {
-      const linkedBls = await fetchWithAuth<{ bl_id: string }[]>(`/api/v1/bls?po_id=${po.po_id}`);
-      if (Array.isArray(linkedBls) && linkedBls.length > 0) {
-        setDeleteError(`이 PO에 연결된 입고(B/L)가 ${linkedBls.length}건 있어 삭제할 수 없습니다. 입고를 먼저 삭제하거나 PO 연결을 해제하세요.`);
-        setDeleting(false);
-        return;
-      }
       await fetchWithAuth(`/api/v1/pos/${po.po_id}`, { method: 'DELETE' });
       setDeleteOpen(false);
       onBack();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : '삭제에 실패했습니다');
+      setDeleteError(err instanceof Error ? err.message : '취소 처리에 실패했습니다');
     } finally {
       setDeleting(false);
     }
@@ -356,10 +350,12 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
         <h2 className="text-base font-semibold flex-1">PO {po.po_number || '—'}</h2>
         <StatusPill label={PO_STATUS_LABEL[po.status]} colorClassName={PO_STATUS_COLOR[po.status]} className="px-2" />
         <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}><Pencil className="mr-1 h-3.5 w-3.5" />수정</Button>
-        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive"
-          onClick={() => { setDeleteError(''); setDeleteOpen(true); }}>
-          <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
-        </Button>
+        {po.status !== 'cancelled' && (
+          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive"
+            onClick={() => { setDeleteError(''); setDeleteOpen(true); }}>
+            <Trash2 className="mr-1 h-3.5 w-3.5" />취소 처리
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={() => setLcFormOpen(true)}>
           LC 등록
         </Button>
@@ -600,8 +596,8 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={(v) => { if (!v) { setDeleteOpen(false); setDeleteError(''); } }}
-        title="PO 삭제"
-        description={deleteError || `PO "${po.po_number ?? po.po_id}"를 삭제하시겠습니까? 발주품목도 함께 제거됩니다.`}
+        title="PO 취소 처리"
+        description={deleteError || `PO "${po.po_number ?? po.po_id}"를 취소 처리하시겠습니까? 발주품목과 연결 이력은 삭제되지 않습니다.`}
         onConfirm={handleDeletePO}
         loading={deleting}
       />

@@ -247,7 +247,7 @@ async fn search_outbound(pool: &PgPool, company_id: Uuid, pq: &ParsedQuery) -> R
 
     let rows = sqlx::query_as::<_, Row>(
         r#"SELECT o.outbound_id, o.outbound_date, o.quantity, p.product_name, o.site_name, ptr.partner_name
-           FROM outbounds o JOIN products p ON o.product_id=p.product_id LEFT JOIN sales s ON s.outbound_id=o.outbound_id LEFT JOIN partners ptr ON s.customer_id=ptr.partner_id
+           FROM outbounds o JOIN products p ON o.product_id=p.product_id LEFT JOIN sales s ON s.outbound_id=o.outbound_id AND COALESCE(s.status,'active') <> 'cancelled' LEFT JOIN partners ptr ON s.customer_id=ptr.partner_id
            WHERE o.company_id=$1 AND o.status='active' AND ($2::text IS NULL OR TO_CHAR(o.outbound_date,'YYYY-MM')=$2)
            ORDER BY o.outbound_date DESC LIMIT 50"#
     ).bind(company_id).bind(&pq.month).fetch_all(pool).await?;
@@ -328,7 +328,7 @@ async fn search_outstanding(pool: &PgPool, company_id: Uuid, pq: &ParsedQuery) -
                   MAX(CURRENT_DATE - o.outbound_date)::int as max_days
            FROM sales s JOIN outbounds o ON s.outbound_id=o.outbound_id JOIN partners ptr ON s.customer_id=ptr.partner_id
            LEFT JOIN (SELECT rm.outbound_id, SUM(rm.matched_amount) as total_matched FROM receipt_matches rm GROUP BY rm.outbound_id) matched ON matched.outbound_id=o.outbound_id
-           WHERE o.company_id=$1 AND o.status='active' AND s.total_amount > COALESCE(matched.total_matched,0) AND (CURRENT_DATE-o.outbound_date)>=$2
+           WHERE o.company_id=$1 AND o.status='active' AND COALESCE(s.status,'active') <> 'cancelled' AND s.total_amount > COALESCE(matched.total_matched,0) AND (CURRENT_DATE-o.outbound_date)>=$2
            GROUP BY ptr.partner_id, ptr.partner_name HAVING SUM(s.total_amount-COALESCE(matched.total_matched,0))>0
            ORDER BY outstanding_total DESC"#
     ).bind(company_id).bind(min_days).fetch_all(pool).await?;

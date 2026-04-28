@@ -393,7 +393,7 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
                                 setDeletingId(null);
                               }
                             }}
-                          >{deletingId === po.po_id ? '…' : '삭제'}</button>
+                          >{deletingId === po.po_id ? '…' : '취소 처리'}</button>
                         </div>
                       </div>
                     ) : (
@@ -405,7 +405,7 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
                         {po.status === 'draft' && onDelete && (
                           <Button variant="ghost" size="icon"
                             className="h-7 w-7 text-muted-foreground hover:text-red-500"
-                            title="삭제 (초안만 가능)"
+                            title="취소 처리"
                             onClick={() => { setPendingDeleteId(po.po_id); setDeleteError({}); }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>

@@ -138,6 +138,7 @@ pub async fn get_outstanding_list(pool: &PgPool, req: &OutstandingListRequest) -
             FROM receipt_matches rm GROUP BY rm.outbound_id
         ) matched ON matched.outbound_id = o.outbound_id
         WHERE o.company_id = $1 AND s.customer_id = $2 AND o.status = 'active'
+          AND COALESCE(s.status, 'active') <> 'cancelled'
           AND s.total_amount > COALESCE(matched.total_matched, 0)
         ORDER BY o.outbound_date ASC
         LIMIT 50

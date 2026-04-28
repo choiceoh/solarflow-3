@@ -44,7 +44,7 @@ export default function ProcurementPage() {
   const [activeTab, setActiveTab] = useState(PROCUREMENT_TABS.has(initialTab) ? initialTab : 'po');
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
-  // 계약금 탭용 전체 PO 목록 (필터 없음) — usePOList hook으로 관리하여 삭제 시 reloadPoList()로 동기화
+  // 계약금 탭용 전체 PO 목록 (필터 없음) — usePOList hook으로 관리하여 취소 처리 시 reloadPoList()로 동기화
   const { data: poList, reload: reloadPoList } = usePOList({});
 
   const [poStatusFilter, setPoStatusFilter] = useState('');
@@ -238,17 +238,9 @@ export default function ProcurementPage() {
     }
   };
   const handleDeletePO = async (poId: string) => {
-    const [linkedBls, linkedLcs] = await Promise.all([
-      fetchWithAuth<{ bl_id: string }[]>(`/api/v1/bls?po_id=${poId}`).catch(() => []),
-      fetchWithAuth<{ lc_id: string }[]>(`/api/v1/lcs?po_id=${poId}`).catch(() => []),
-    ]);
-    if (Array.isArray(linkedBls) && linkedBls.length > 0)
-      throw new Error(`B/L 입고 ${linkedBls.length}건이 연결되어 있습니다. 먼저 입고 탭에서 삭제해 주세요.`);
-    if (Array.isArray(linkedLcs) && linkedLcs.length > 0)
-      throw new Error(`LC ${linkedLcs.length}건이 연결되어 있습니다. 먼저 PO를 펼쳐 LC를 삭제해 주세요.`);
     await fetchWithAuth(`/api/v1/pos/${poId}`, { method: 'DELETE' });
     reloadPO();
-    reloadTT(); // T/T도 cascade 삭제되므로 목록 갱신
+    reloadTT();
     reloadPoList(); // DepositStatusPanel용 전체 PO 목록 재동기화
   };
   const handleCreateBL = async (formData: Record<string, unknown>) => {
@@ -299,8 +291,6 @@ export default function ProcurementPage() {
     reloadLC();
   };
   const handleDeleteLC = async (lcId: string) => {
-    const linkedBls = await fetchWithAuth<{ bl_id: string }[]>(`/api/v1/bls?lc_id=${lcId}`).catch(() => []);
-    if (Array.isArray(linkedBls) && linkedBls.length > 0) throw new Error(`이 LC에 연결된 입고(B/L)가 ${linkedBls.length}건 있어 삭제할 수 없습니다.`);
     await fetchWithAuth(`/api/v1/lcs/${lcId}`, { method: 'DELETE' });
     reloadLC();
   };
