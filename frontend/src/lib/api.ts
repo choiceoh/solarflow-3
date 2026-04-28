@@ -64,6 +64,19 @@ async function getSessionToken(): Promise<string | null> {
   return fallback;
 }
 
+// 204 / 빈 본문 응답을 안전하게 처리 — Delete 등 본문 없는 응답에서 res.json()이 던지는 것을 방지
+async function parseJsonOrEmpty<T>(res: Response): Promise<T> {
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!text) return undefined as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch (err) {
+    console.warn('[SolarFlow] 응답 JSON 파싱 실패:', err);
+    throw new Error('응답 형식 오류');
+  }
+}
+
 // fetchWithAuth — Supabase 세션 토큰을 자동 첨부하는 fetch 래퍼
 // getSession()에 3초 타임아웃, 401 시 토큰 갱신 후 재시도
 export async function fetchWithAuth<T>(path: string, options?: RequestInit): Promise<T> {
@@ -97,7 +110,7 @@ export async function fetchWithAuth<T>(path: string, options?: RequestInit): Pro
       });
 
       if (retryRes.ok) {
-        return retryRes.json();
+        return parseJsonOrEmpty<T>(retryRes);
       }
 
       // 재시도도 401이면 로그아웃
@@ -122,7 +135,7 @@ export async function fetchWithAuth<T>(path: string, options?: RequestInit): Pro
     throw new Error(error.message || `HTTP ${res.status}`);
   }
 
-  return res.json();
+  return parseJsonOrEmpty<T>(res);
 }
 
 export async function fetchBlobWithAuth(path: string, options?: RequestInit): Promise<Response> {

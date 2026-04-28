@@ -231,12 +231,12 @@ func authAdminConfig() (string, string, error) {
 		url = strings.TrimRight(os.Getenv("SUPABASE_URL"), "/")
 	}
 
+	// 관리자 Auth API는 service_role 키만 사용 — anon 키(SUPABASE_KEY)로 fallback하면
+	// /auth/v1/admin/* 호출이 권한 부족으로 실패하거나 의도치 않은 권한으로 동작할 수 있음.
+	// 운영에서는 SUPABASE_SERVICE_ROLE_KEY를 반드시 별도로 등록해야 함.
 	key := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
-	if key == "" {
-		key = os.Getenv("SUPABASE_KEY")
-	}
 	if url == "" || key == "" {
-		return "", "", fmt.Errorf("Supabase 관리자 설정이 없습니다")
+		return "", "", fmt.Errorf("Supabase 관리자 설정이 없습니다 (SUPABASE_SERVICE_ROLE_KEY 필수)")
 	}
 	return url, key, nil
 }
