@@ -8,6 +8,8 @@ import { DateInput } from '@/components/ui/date-input';
 import { cn, formatDate, formatUSD, formatNumber, moduleLabel } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import ProgressMiniBar from '@/components/common/ProgressMiniBar';
+import StatusPill from '@/components/common/StatusPill';
 import { fetchWithAuth } from '@/lib/api';
 import { LC_STATUS_LABEL, LC_STATUS_COLOR, type LCRecord, type PurchaseOrder, type POLineItem } from '@/types/procurement';
 import type { BLShipment } from '@/types/inbound';
@@ -261,9 +263,7 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
                         {a?.totalMw ? <span className="ml-1">/ PO {formatMw(a.totalMw, 2)}</span> : null}
                       </div>
                       <div className="mt-1 flex items-center justify-end gap-2">
-                        <div className="h-1.5 w-20 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full rounded-full bg-blue-500" style={{ width: `${poOpenRate}%` }} />
-                        </div>
+                        <ProgressMiniBar percent={poOpenRate} colorClassName="bg-blue-500" className="h-1.5 w-20" />
                         <span className="text-[10px] text-muted-foreground tabular-nums">{poOpenRate.toFixed(1)}%</span>
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
@@ -291,9 +291,7 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
 
                     {/* 상태 + 액션 */}
                     <td className="p-3 text-center align-top" onClick={(e) => e.stopPropagation()}>
-                      <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium', LC_STATUS_COLOR[lc.status])}>
-                        {LC_STATUS_LABEL[lc.status]}
-                      </span>
+                      <StatusPill label={LC_STATUS_LABEL[lc.status]} colorClassName={LC_STATUS_COLOR[lc.status]} className="px-2" />
                       {isRepaid ? (
                         <div className="flex items-center justify-center gap-1 mt-1.5">
                           <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
@@ -359,9 +357,9 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
                                   </div>
                                 </div>
                                 <div className="mt-2 flex items-center gap-2">
-                                  <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                                    <div className="absolute inset-y-0 left-0 rounded-full bg-blue-300" style={{ width: `${registeredRate}%` }} />
-                                    <div className="absolute inset-y-0 left-0 rounded-full bg-green-500" style={{ width: `${completedRate}%` }} />
+                                  <div className="relative h-2 flex-1">
+                                    <ProgressMiniBar percent={registeredRate} colorClassName="bg-blue-300" className="absolute inset-0" />
+                                    <ProgressMiniBar percent={completedRate} colorClassName="bg-green-500" trackClassName="bg-transparent" className="absolute inset-0" />
                                   </div>
                                   <span className="w-16 text-right text-[10px] text-muted-foreground tabular-nums">
                                     {completedRate.toFixed(1)}%
@@ -440,9 +438,7 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
                                     <td className="py-1.5 text-muted-foreground">{formatDate(bl.actual_arrival ?? '') || '—'}</td>
                                     <td className="py-1.5 text-muted-foreground">{bl.warehouse_name ?? '—'}</td>
                                     <td className="py-1.5 text-center">
-                                      <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium', BL_STATUS_COLOR[bl.status])}>
-                                        {BL_STATUS_LABEL[bl.status]}
-                                      </span>
+                                      <StatusPill label={BL_STATUS_LABEL[bl.status]} colorClassName={BL_STATUS_COLOR[bl.status]} className="px-2" />
                                     </td>
                                   </tr>
                                   );

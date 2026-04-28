@@ -1,8 +1,10 @@
 import { useEffect, useState, Fragment } from 'react';
 import { ChevronDown, ChevronRight, FilePenLine, Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn, formatDate, formatUSD, moduleLabel, shortMfgName } from '@/lib/utils';
+import { formatDate, formatUSD, moduleLabel, shortMfgName } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
+import ProgressMiniBar from '@/components/common/ProgressMiniBar';
+import StatusPill from '@/components/common/StatusPill';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import {
@@ -84,9 +86,7 @@ function ProgressRow({
   return (
     <div className="flex items-center gap-2">
       <span className="w-10 text-[10px] text-muted-foreground text-right shrink-0">{label}</span>
-      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-      </div>
+      <ProgressMiniBar percent={pct} colorClassName={color} trackClassName="bg-gray-100" className="flex-1" />
       <span className="text-[10px] tabular-nums font-mono font-semibold w-20 text-right shrink-0">
         {mw.toFixed(2)} MW
       </span>
@@ -252,7 +252,7 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-mono font-semibold">{po.po_number || '—'}</span>
                       {po.parent_po_id && (
-                        <span className="rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-medium">변경계약</span>
+                        <StatusPill label="변경계약" colorClassName="bg-amber-100 text-amber-700" className="text-[9px]" />
                       )}
                     </div>
                     {po.contract_date && (
@@ -293,9 +293,9 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
                   {/* 계약 조건 */}
                   <td className="p-3 align-top min-w-[130px]">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-[10px]">{CONTRACT_TYPE_LABEL[po.contract_type]}</span>
+                      <StatusPill label={CONTRACT_TYPE_LABEL[po.contract_type]} colorClassName="bg-slate-100 text-slate-700" className="px-2" />
                       {po.incoterms && (
-                        <span className="rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 text-[10px] font-mono">{po.incoterms}</span>
+                        <StatusPill label={po.incoterms} colorClassName="bg-slate-100 text-slate-600" className="px-2 font-mono" />
                       )}
                     </div>
                     <div className="mt-1 space-y-0.5">
@@ -320,10 +320,12 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
                         </div>
                         <div className="flex items-center justify-end gap-1">
                           {/* T/T 미니 바 */}
-                          <div className="w-12 h-1 bg-gray-200 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${ttDone ? 'bg-green-500' : 'bg-blue-500'}`}
-                              style={{ width: `${ttPct}%` }} />
-                          </div>
+                          <ProgressMiniBar
+                            percent={ttPct}
+                            colorClassName={ttDone ? 'bg-green-500' : 'bg-blue-500'}
+                            trackClassName="bg-gray-200"
+                            className="h-1 w-12"
+                          />
                           <span className={`text-[10px] tabular-nums font-mono ${ttDone ? 'text-green-600' : 'text-orange-500'}`}>
                             {formatUSD(ttPaid)}{ttDone ? ' ✓' : ''}
                           </span>
@@ -338,9 +340,7 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
                       <>
                         <div className="font-semibold tabular-nums font-mono text-blue-700">{formatUSD(a.lcUsd)}</div>
                         <div className="flex items-center justify-end gap-1 mt-1">
-                          <div className="w-12 h-1 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-blue-500" style={{ width: `${lcUsdPct}%` }} />
-                          </div>
+                          <ProgressMiniBar percent={lcUsdPct} colorClassName="bg-blue-500" trackClassName="bg-gray-200" className="h-1 w-12" />
                           <span className="text-[10px] text-muted-foreground tabular-nums">{lcUsdPct.toFixed(0)}%</span>
                         </div>
                         {a.totalMw > 0 && (
@@ -361,9 +361,7 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
 
                   {/* 상태 */}
                   <td className="p-3 text-center align-top">
-                    <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium', PO_STATUS_COLOR[po.status])}>
-                      {PO_STATUS_LABEL[po.status]}
-                    </span>
+                    <StatusPill label={PO_STATUS_LABEL[po.status]} colorClassName={PO_STATUS_COLOR[po.status]} className="px-2" />
                   </td>
 
                   {/* 상세 / 삭제 버튼 */}
@@ -540,9 +538,7 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
                                         </td>
                                         <td className="px-3 py-2 text-muted-foreground">{formatDate(lc.maturity_date ?? '')}</td>
                                         <td className="px-3 py-2 text-center">
-                                          <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', LC_STATUS_COLOR[lc.status])}>
-                                            {LC_STATUS_LABEL[lc.status]}
-                                          </span>
+                                          <StatusPill label={LC_STATUS_LABEL[lc.status]} colorClassName={LC_STATUS_COLOR[lc.status]} />
                                         </td>
                                         <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
                                           {pendingDeleteLcId === lc.lc_id ? (
@@ -635,9 +631,10 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
                                               </td>
                                               <td className="px-3 py-1.5" />
                                               <td className="px-3 py-1.5 text-center">
-                                                <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', BL_STATUS_COLOR[b.status] ?? 'bg-gray-100 text-gray-600')}>
-                                                  {BL_STATUS_LABEL[b.status] ?? b.status}
-                                                </span>
+                                                <StatusPill
+                                                  label={BL_STATUS_LABEL[b.status] ?? b.status}
+                                                  colorClassName={BL_STATUS_COLOR[b.status] ?? 'bg-gray-100 text-gray-600'}
+                                                />
                                               </td>
                                               <td className="px-3 py-1.5" />
                                             </tr>

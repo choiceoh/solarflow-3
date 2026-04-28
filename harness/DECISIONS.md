@@ -481,3 +481,8 @@
 - **결정**: 루트 `scripts/`에 전체 검증(`verify_all.sh`)과 서비스 반영(`apply_go.sh`, `apply_rust.sh`, `apply_frontend.sh`) 스크립트를 둔다. 기본 전체 검증은 Go/Rust/프론트 빌드·테스트를 차단 기준으로 삼고, 기존 RULES lint 부채는 advisory로 표시한다. 엄격 차단이 필요할 때는 `STRICT_RULES=1 ./scripts/verify_all.sh`를 사용한다.
 - **이유**: 매 작업마다 명령어를 새로 조합하면 누락과 순서 실수가 반복된다. 특히 Go 변경 후 코드서명과 launchd bootout/bootstrap, Request 구조체 변경 후 스키마 검사가 빠지면 운영 화면에서 500 회귀가 난다. 반복 절차를 스크립트로 고정해 개발 속도를 높이고, 기존 lint 부채는 별도 정리 전까지 일상 검증을 막지 않도록 분리한다.
 - **날짜**: 2026-04-28
+
+## D-093: 변경 파일 기준 선택 검증
+- **결정**: 전체 검증과 별도로 `scripts/verify_changed.sh`를 둔다. 변경 파일 경로를 기준으로 backend, engine, frontend, shell syntax 검증만 선택 실행하고, 알 수 없는 경로가 바뀌면 `verify_all.sh`로 자동 전환한다.
+- **이유**: 모든 작업마다 Go/Rust/프론트 전체 검증을 돌리면 UI 단순 변경이나 문서 변경에서도 시간이 불필요하게 든다. 변경 범위에 맞는 검증을 먼저 돌리고, 릴리즈/PR 전에는 전체 검증을 쓰는 2단 구조가 개발 속도와 안정성의 균형이 좋다.
+- **날짜**: 2026-04-28

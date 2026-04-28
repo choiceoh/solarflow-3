@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { cn, formatNumber } from '@/lib/utils';
+import { formatNumber } from '@/lib/utils';
 import { fetchWithAuth } from '@/lib/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ProgressMiniBar from '@/components/common/ProgressMiniBar';
 import type { BLShipment, BLLineItem } from '@/types/inbound';
 import type { LCRecord, POLineItem } from '@/types/procurement';
 
@@ -95,9 +96,7 @@ export default function POInboundProgress({ poId, poLines }: Props) {
           <span>입고 진행률</span>
           <span>{progressPct.toFixed(0)}%</span>
         </div>
-        <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
-          <div className={cn('h-full rounded-full transition-all', barColor)} style={{ width: `${progressPct}%` }} />
-        </div>
+        <ProgressMiniBar percent={progressPct} colorClassName={barColor} className="h-3 w-full" barClassName="transition-all" />
       </div>
     </div>
   );

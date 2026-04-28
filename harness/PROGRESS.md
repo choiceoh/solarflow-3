@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 116개 PASS |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-092 (90개, D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-093 (91개, D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -64,6 +64,21 @@
 - 제한: 현재 작업 환경에 `psql` 없음 → schema check skip
 - 제한: 기존 RULES lint 부채 33건 advisory 표시
 - `graphify update .` 시도했으나 현재 환경에 `graphify` 명령 없음
+
+### 추가 가속 작업
+
+- `scripts/verify_changed.sh` 추가
+  - 변경 파일 기준으로 backend / engine / frontend / shell syntax 검증을 선택 실행
+  - 기준 브랜치는 upstream이 있으면 upstream, 없으면 `origin/main`
+  - 알 수 없는 경로 변경 시 `verify_all.sh`로 자동 전환
+- `GroupedMiniTable` 확장
+  - 행 클릭, 행 title, 행 뒤 추가 렌더링 지원
+  - 삭제 에러 행이 있는 리스트 테이블에도 적용 가능
+- 공통 UI 적용 확대
+  - `POListTable`: `StatusPill`, `ProgressMiniBar` 적용
+  - `POInboundProgress`: `ProgressMiniBar` 적용
+  - `LCListTable`: `StatusPill`, `ProgressMiniBar` 적용
+  - `TTListTable`: `GroupedMiniTable`, `StatusPill` 적용
 
 ---
 

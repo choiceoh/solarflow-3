@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import EmptyState from './EmptyState';
 
@@ -31,6 +31,9 @@ interface GroupedMiniTableProps<T> {
   className?: string;
   tableClassName?: string;
   rowClassName?: string | ((item: T, index: number) => string | undefined);
+  onRowClick?: (item: T, index: number) => void;
+  rowTitle?: string | ((item: T, index: number) => string | undefined);
+  renderAfterRow?: (item: T, index: number) => ReactNode;
 }
 
 function alignClass(align: Align | undefined) {
@@ -49,6 +52,9 @@ export default function GroupedMiniTable<T>({
   className,
   tableClassName,
   rowClassName,
+  onRowClick,
+  rowTitle,
+  renderAfterRow,
 }: GroupedMiniTableProps<T>) {
   if (data.length === 0) return <EmptyState message={emptyMessage} />;
 
@@ -73,20 +79,31 @@ export default function GroupedMiniTable<T>({
         </thead>
         <tbody>
           {data.map((item, index) => {
+            const rowKey = getRowKey(item, index);
             const resolvedRowClassName = typeof rowClassName === 'function'
               ? rowClassName(item, index)
               : rowClassName;
+            const resolvedRowTitle = typeof rowTitle === 'function'
+              ? rowTitle(item, index)
+              : rowTitle;
             return (
-              <tr key={getRowKey(item, index)} className={cn('border-t hover:bg-muted/10', resolvedRowClassName)}>
-                {columns.map((column) => (
-                  <td
-                    key={column.key}
-                    className={cn('px-3 py-2', alignClass(column.align), column.className)}
-                  >
-                    {column.render(item, index)}
-                  </td>
-                ))}
-              </tr>
+              <Fragment key={rowKey}>
+                <tr
+                  className={cn('border-t hover:bg-muted/10', onRowClick && 'cursor-pointer', resolvedRowClassName)}
+                  onClick={onRowClick ? () => onRowClick(item, index) : undefined}
+                  title={resolvedRowTitle}
+                >
+                  {columns.map((column) => (
+                    <td
+                      key={column.key}
+                      className={cn('px-3 py-2', alignClass(column.align), column.className)}
+                    >
+                      {column.render(item, index)}
+                    </td>
+                  ))}
+                </tr>
+                {renderAfterRow?.(item, index)}
+              </Fragment>
             );
           })}
         </tbody>
