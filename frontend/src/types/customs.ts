@@ -92,13 +92,14 @@ export const EXPENSE_TYPE_LABEL: Record<ExpenseType, string> = {
   telegraph: 'LC개설전신료',
   other: '기타비용',
 };
-/** F20: BL 부대비용 등록에서 사용하는 8종 (신규) */
+/** F20: BL 부대비용 등록에서 사용하는 주요 비용유형 */
 export const EXPENSE_TYPES_ACTIVE: Array<{ value: ExpenseType; label: string }> = [
+  { value: 'lc_fee', label: 'LC개설수수료' },
   { value: 'lc_acceptance', label: 'LC인수수수료' },
   { value: 'telegraph', label: 'LC개설전신료' },
   { value: 'dock_charge', label: '부두발생비용' },
   { value: 'shuttle', label: '셔틀및부대비용' },
-  { value: 'transport', label: '현장운송료' },
+  { value: 'transport', label: '항만-창고 운송료' },
   { value: 'customs_fee', label: '통관수수료' },
   { value: 'storage', label: '보관료' },
   { value: 'other', label: '기타비용' },
