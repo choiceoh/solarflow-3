@@ -488,10 +488,10 @@
 - **날짜**: 2026-04-28
 
 ## D-094: 핸들러 다단계 변경은 PostgREST RPC 트랜잭션으로 처리
-- **결정**: 출고 생성/수정/삭제, PO 삭제, 면장 삭제처럼 여러 테이블을 함께 변경하는 핸들러는 Go에서 순차 호출하지 않고 PostgreSQL 함수 1회 호출로 묶는다.
+- **결정**: LC 본문+라인 저장, 출고 생성/수정/삭제, PO 삭제, 면장 삭제처럼 여러 테이블을 함께 변경하는 핸들러는 Go에서 순차 호출하지 않고 PostgreSQL 함수 1회 호출로 묶는다.
 - **이유**: Go에서 여러 PostgREST 요청을 순서대로 보내면 중간 실패 시 일부 테이블만 변경될 수 있다. PostgreSQL 함수는 단일 문장 트랜잭션으로 실행되어 실패 시 전체 롤백되므로 생산 데이터 정합성 위험을 줄인다.
-- **범위**: `sf_create_outbound`, `sf_update_outbound`, `sf_delete_outbound`, `sf_delete_purchase_order`, `sf_delete_declaration`, `sf_recalculate_order_progress`.
-- **운영 기준**: 함수 추가/변경 후 PostgREST 스키마 캐시를 갱신해야 한다.
+- **범위**: `sf_create_lc_with_lines`, `sf_update_lc_with_lines`, `sf_create_outbound`, `sf_update_outbound`, `sf_delete_outbound`, `sf_delete_purchase_order`, `sf_delete_declaration`, `sf_recalculate_order_progress`.
+- **운영 기준**: 함수 추가/변경 후 PostgREST 스키마 캐시를 갱신해야 한다. 출고 등록/수정은 저장 전에 Rust 재고 집계 결과로 active 출고의 가용재고를 검증한다.
 - **날짜**: 2026-04-28
 
 ## D-095: 운영 데이터 감사 로그 + soft cancel

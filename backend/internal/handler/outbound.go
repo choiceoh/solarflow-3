@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
@@ -19,11 +20,11 @@ var errOutboundNotFound = errors.New("outbound not found")
 
 // OutboundHandler — 출고(outbounds) 관련 API를 처리하는 핸들러
 // 비유: "출고 관리실" — 창고에서 현장/고객으로 나가는 모듈 출고를 관리
-// Rust 재고 집계는 /api/v1/calc/inventory 프록시가 담당한다.
-// TODO: Phase 확장(D-031) — 출고 저장 전 Rust FIFO/가용재고 검증 결과로 차단.
+// Rust 계산엔진 연동 — 출고 저장 전 재고 차감 검증 (가용재고 >= 출고수량)
 // TODO: 그룹 내 거래 — 출고 시 상대 법인 입고 자동 생성.
 type OutboundHandler struct {
-	DB *supa.Client
+	DB     *supa.Client
+	Engine *engine.EngineClient
 }
 
 type createOutboundRPCRequest struct {
@@ -43,8 +44,12 @@ type deleteOutboundRPCRequest struct {
 }
 
 // NewOutboundHandler — OutboundHandler 생성자
-func NewOutboundHandler(db *supa.Client) *OutboundHandler {
-	return &OutboundHandler{DB: db}
+func NewOutboundHandler(db *supa.Client, engineClient ...*engine.EngineClient) *OutboundHandler {
+	var ec *engine.EngineClient
+	if len(engineClient) > 0 {
+		ec = engineClient[0]
+	}
+	return &OutboundHandler{DB: db, Engine: ec}
 }
 
 func (h *OutboundHandler) fetchOutboundByID(id string) (model.Outbound, error) {
@@ -169,6 +174,88 @@ type outboundOrderRow struct {
 type outboundPartnerRow struct {
 	PartnerID   string `json:"partner_id"`
 	PartnerName string `json:"partner_name"`
+}
+
+func (h *OutboundHandler) fetchOutboundRecord(id string) (model.Outbound, bool, error) {
+	data, _, err := h.DB.From("outbounds").
+		Select("*", "exact", false).
+		Eq("outbound_id", id).
+		Execute()
+	if err != nil {
+		return model.Outbound{}, false, err
+	}
+
+	var rows []model.Outbound
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return model.Outbound{}, false, err
+	}
+	if len(rows) == 0 {
+		return model.Outbound{}, false, nil
+	}
+	return rows[0], true, nil
+}
+
+func (h *OutboundHandler) resolveOutboundCapacityKW(productID string, quantity int, capacityKW *float64) (float64, error) {
+	if capacityKW != nil {
+		if *capacityKW <= 0 {
+			return 0, fmt.Errorf("capacity_kw는 양수여야 합니다")
+		}
+		return *capacityKW, nil
+	}
+
+	data, _, err := h.DB.From("products").
+		Select("wattage_kw", "exact", false).
+		Eq("product_id", productID).
+		Execute()
+	if err != nil {
+		return 0, err
+	}
+	var products []struct {
+		WattageKW *float64 `json:"wattage_kw"`
+	}
+	if err := json.Unmarshal(data, &products); err != nil {
+		return 0, err
+	}
+	if len(products) == 0 || products[0].WattageKW == nil || *products[0].WattageKW <= 0 {
+		return 0, fmt.Errorf("품번의 wattage_kw를 확인할 수 없습니다")
+	}
+	return float64(quantity) * *products[0].WattageKW, nil
+}
+
+func (h *OutboundHandler) ensureOutboundStockAvailable(companyID, productID string, quantity int, capacityKW *float64, status string, creditKW float64) (int, string, error) {
+	if status != "active" {
+		return 0, "", nil
+	}
+	if h.Engine == nil {
+		return http.StatusServiceUnavailable, "Rust 재고 검증을 사용할 수 없어 출고 저장을 중단했습니다", fmt.Errorf("Rust 계산엔진 미설정")
+	}
+
+	requiredKW, err := h.resolveOutboundCapacityKW(productID, quantity, capacityKW)
+	if err != nil {
+		return http.StatusInternalServerError, "출고 용량을 계산하지 못했습니다: " + err.Error(), err
+	}
+
+	inventory, err := h.Engine.GetInventory(companyID, &productID, nil)
+	if err != nil {
+		return http.StatusServiceUnavailable, "Rust 재고 검증에 실패해 출고 저장을 중단했습니다: " + err.Error(), err
+	}
+
+	availableKW := 0.0
+	for _, item := range inventory.Items {
+		if item.ProductID == productID {
+			availableKW = item.AvailableKW
+			break
+		}
+	}
+
+	maxAllowedKW := availableKW + creditKW
+	const toleranceKW = 0.000001
+	if requiredKW > maxAllowedKW+toleranceKW {
+		msg := fmt.Sprintf("재고 부족으로 출고를 저장할 수 없습니다 (필요 %.3fkW, 가용 %.3fkW)", requiredKW, maxAllowedKW)
+		return http.StatusConflict, msg, fmt.Errorf("재고 부족: 필요 %.3fkW, 가용 %.3fkW", requiredKW, maxAllowedKW)
+	}
+
+	return 0, "", nil
 }
 
 func (h *OutboundHandler) enrichOutbounds(outbounds []model.Outbound) ([]model.Outbound, error) {
@@ -366,6 +453,12 @@ func (h *OutboundHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if status, msg, err := h.ensureOutboundStockAvailable(req.CompanyID, req.ProductID, req.Quantity, req.CapacityKw, req.Status, 0); err != nil {
+		log.Printf("[출고 등록 재고 검증 실패] company_id=%s product_id=%s err=%v", req.CompanyID, req.ProductID, err)
+		response.RespondError(w, status, msg)
+		return
+	}
+
 	// BLItems를 추출하고 nil로 설정해 PostgREST에 전달되지 않게 함
 	blItems := req.BLItems
 	req.BLItems = nil
@@ -398,6 +491,7 @@ func (h *OutboundHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Update — PUT /api/v1/outbounds/{id} — 출고 수정
 func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+
 	var req model.UpdateOutboundRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[출고 수정 요청 파싱 실패] %v", err)
@@ -412,6 +506,52 @@ func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "outbounds", "outbound_id", id)
 	if oldErr != nil {
 		log.Printf("[출고 수정 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
+	}
+
+	prev, found, err := h.fetchOutboundRecord(id)
+	if err != nil {
+		log.Printf("[출고 수정 전 기존 전표 조회 실패] id=%s err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "기존 출고 조회에 실패했습니다")
+		return
+	}
+	if !found {
+		response.RespondError(w, http.StatusNotFound, "수정할 출고를 찾을 수 없습니다")
+		return
+	}
+
+	finalCompanyID := prev.CompanyID
+	if req.CompanyID != nil {
+		finalCompanyID = *req.CompanyID
+	}
+	finalProductID := prev.ProductID
+	if req.ProductID != nil {
+		finalProductID = *req.ProductID
+	}
+	finalQuantity := prev.Quantity
+	if req.Quantity != nil {
+		finalQuantity = *req.Quantity
+	}
+	finalCapacityKW := prev.CapacityKw
+	if req.CapacityKw != nil {
+		finalCapacityKW = req.CapacityKw
+	}
+	finalStatus := prev.Status
+	if req.Status != nil {
+		finalStatus = *req.Status
+	}
+
+	creditKW := 0.0
+	if prev.Status == "active" && prev.CompanyID == finalCompanyID && prev.ProductID == finalProductID {
+		if oldKW, err := h.resolveOutboundCapacityKW(prev.ProductID, prev.Quantity, prev.CapacityKw); err == nil {
+			creditKW = oldKW
+		} else {
+			log.Printf("[출고 수정 재고 검증] 기존 출고 용량 계산 실패 id=%s err=%v", id, err)
+		}
+	}
+	if status, msg, err := h.ensureOutboundStockAvailable(finalCompanyID, finalProductID, finalQuantity, finalCapacityKW, finalStatus, creditKW); err != nil {
+		log.Printf("[출고 수정 재고 검증 실패] id=%s company_id=%s product_id=%s err=%v", id, finalCompanyID, finalProductID, err)
+		response.RespondError(w, status, msg)
+		return
 	}
 
 	// BLItems 추출 후 nil 처리

@@ -79,10 +79,10 @@ describe('POListTable', () => {
     });
 
     expect(await screen.findByText('$100,000.00')).not.toBeNull();
-    fireEvent.click(screen.getByTitle('삭제 (초안만 가능)'));
+    fireEvent.click(screen.getByTitle('취소 처리'));
 
     expect(await screen.findByText(/T\/T 1건도 삭제됩니다/)).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    fireEvent.click(screen.getByRole('button', { name: '취소 처리' }));
 
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith(testPo.po_id));
   });

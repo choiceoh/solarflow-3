@@ -67,7 +67,7 @@ export async function fetchCalc<T>(
       .map((x) => `${x.id}: ${(x.r as PromiseRejectedResult).reason?.message ?? 'unknown'}`)
       .join('; ');
     console.warn(`[SolarFlow] 다중 법인 조회 실패 (${endpoint}): ${reasons}`);
-    throw new Error(`다중 법인 조회 실패 (${failed.length}/${ids.length}): ${reasons}`);
+    throw new Error(`전체 법인 계산 중 ${failed.length}/${ids.length}개 법인 계산에 실패했습니다 (${reasons})`);
   }
 
   const values = settled.map((r) => (r as PromiseFulfilledResult<T>).value);

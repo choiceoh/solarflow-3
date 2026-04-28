@@ -197,7 +197,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.With(write).Delete("/{id}", matchH.Delete)
 		})
 
-		outboundH := handler.NewOutboundHandler(db)
+		outboundH := handler.NewOutboundHandler(db, engineClient...)
 		r.Route("/outbounds", func(r chi.Router) {
 			r.Get("/", outboundH.List)
 			r.Get("/{id}", outboundH.GetByID)

@@ -198,6 +198,22 @@
 
 ---
 
+## 2026-04-28 세션 안정성 수정 — 부분 실패/재고 검증/프론트 예외
+
+### DB / Go API
+- LC 등록/라인 저장과 LC 라인 교체 수정을 PostgREST RPC 트랜잭션으로 전환
+- PO 삭제, 출고 등록/수정/삭제는 기존 핸들러 RPC 흐름 위에서 중간 실패 시 전체 롤백 유지
+- 출고 Create/Update 전에 Rust 재고 집계 결과로 active 출고 가용재고 부족 차단
+- LC RPC 응답 본문 처리를 위해 PostgREST RPC 실패 상태를 Go error로 반환하는 `internal/dbrpc` 추가
+
+### 프론트엔드 / 검증
+- 공통 fetch가 204/빈 응답/JSON 아닌 성공 응답을 안전하게 처리
+- 전체 법인 계산 중 일부 법인 실패를 더 이상 조용히 merge하지 않고 오류로 노출
+- OrdersPage setter 선언 순서와 SearchInput render 중 ref 갱신 lint 후보 수정
+- `.gitattributes`의 shell LF 규칙으로 검증 스크립트 CRLF 회귀 방지
+
+---
+
 ## 2026-04-27 세션 긴급 수정 — LC 다품목 PO 대응
 
 ### PO 라인아이템 → LC 품목 명세 연동

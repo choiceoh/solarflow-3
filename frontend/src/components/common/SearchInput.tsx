@@ -10,7 +10,10 @@ interface SearchInputProps {
 export default function SearchInput({ placeholder = '검색...', onChange }: SearchInputProps) {
   const [value, setValue] = useState('');
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   const debouncedChange = useCallback((val: string) => {
     onChangeRef.current(val);

@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbrpc"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
@@ -134,46 +135,6 @@ func (h *LCHandler) fetchLines(lcID string) ([]model.LCLineWithProduct, error) {
 	return lines, nil
 }
 
-func (h *LCHandler) replaceLines(lcID string, lines []model.CreateLCLineRequest) error {
-	_, _, err := h.DB.From("lc_line_items").
-		Delete("", "").
-		Eq("lc_id", lcID).
-		Execute()
-	if err != nil {
-		return err
-	}
-	if len(lines) == 0 {
-		return nil
-	}
-
-	inserts := make([]model.LCLineInsert, 0, len(lines))
-	for _, line := range lines {
-		if line.ItemType == "" {
-			line.ItemType = "main"
-		}
-		if line.PaymentType == "" {
-			line.PaymentType = "paid"
-		}
-		inserts = append(inserts, model.LCLineInsert{
-			LCID:           lcID,
-			POLineID:       line.POLineID,
-			ProductID:      line.ProductID,
-			Quantity:       line.Quantity,
-			CapacityKW:     line.CapacityKW,
-			AmountUSD:      line.AmountUSD,
-			UnitPriceUSDWp: line.UnitPriceUSDWp,
-			ItemType:       line.ItemType,
-			PaymentType:    line.PaymentType,
-			Memo:           line.Memo,
-		})
-	}
-
-	_, _, err = h.DB.From("lc_line_items").
-		Insert(inserts, false, "", "", "").
-		Execute()
-	return err
-}
-
 // Create — POST /api/v1/lcs — LC 등록
 // 비유: 새 LC 개설 서류를 작성하여 서류함에 보관하는 것
 func (h *LCHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -190,83 +151,31 @@ func (h *LCHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, _, err := h.DB.From("lc_records").
-		Insert(model.NewLCRecordInsert(req), false, "", "", "").
-		Execute()
+	// 비유: LC 본문과 품목 명세표를 같은 봉투에 넣어 DB 함수로 접수한다.
+	data, err := dbrpc.Call(r.Context(), "sf_create_lc_with_lines", map[string]interface{}{
+		"p_lc":    model.NewLCRecordInsert(req),
+		"p_lines": req.LineItems,
+	})
 	if err != nil {
 		log.Printf("[LC 등록 실패] %v", err)
-		response.RespondError(w, http.StatusInternalServerError, "LC 등록에 실패했습니다")
+		response.RespondError(w, dbrpc.StatusCode(err, http.StatusInternalServerError), "LC 등록에 실패했습니다: "+err.Error())
 		return
 	}
 
-	var created []model.LCRecord
+	var created model.LCRecord
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[LC 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
 		return
 	}
 
-	if len(created) == 0 {
+	if created.LCID == "" {
 		response.RespondError(w, http.StatusInternalServerError, "LC 등록 결과를 확인할 수 없습니다")
 		return
 	}
 
-	if err := h.replaceLines(created[0].LCID, req.LineItems); err != nil {
-		log.Printf("[LC 라인아이템 등록 실패] lc_id=%s err=%v", created[0].LCID, err)
-		if _, _, cleanupErr := h.DB.From("lc_records").Delete("", "").Eq("lc_id", created[0].LCID).Execute(); cleanupErr != nil {
-			log.Printf("[LC 라인아이템 실패 후 본문 정리 실패] lc_id=%s err=%v", created[0].LCID, cleanupErr)
-		}
-		response.RespondError(w, http.StatusInternalServerError, "LC 품목 저장에 실패했습니다")
-		return
-	}
-
-	writeAuditLog(h.DB, r, "lc_records", created[0].LCID, "create", nil, auditRawFromValue(created[0]), "")
-
-	// LC 개설 시 연결된 PO 상태 contracted → in_progress 자동 전환
-	h.autoSetPOInProgress(created[0].POID, r)
-
-	response.RespondJSON(w, http.StatusCreated, created[0])
-}
-
-// autoSetPOInProgress — LC 개설 시 PO 상태를 contracted → in_progress로 자동 전환
-// 실패해도 본 요청에 영향 없음 (로그만 남김)
-func (h *LCHandler) autoSetPOInProgress(poID string, r *http.Request) {
-	poData, _, err := h.DB.From("purchase_orders").
-		Select("po_id, status", "exact", false).
-		Eq("po_id", poID).
-		Execute()
-	if err != nil {
-		log.Printf("[PO in_progress 전환] 조회 실패 po_id=%s err=%v", poID, err)
-		return
-	}
-	var pos []struct {
-		POID   string `json:"po_id"`
-		Status string `json:"status"`
-	}
-	if err := json.Unmarshal(poData, &pos); err != nil || len(pos) == 0 {
-		return
-	}
-	// contracted 상태일 때만 in_progress로 전환
-	if pos[0].Status != "contracted" {
-		return
-	}
-	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "purchase_orders", "po_id", poID)
-	if oldErr != nil {
-		log.Printf("[PO in_progress 전환] 감사 스냅샷 조회 실패 po_id=%s err=%v", poID, oldErr)
-	}
-	data, _, uerr := h.DB.From("purchase_orders").
-		Update(poStatusUpdate{Status: "in_progress"}, "", "").
-		Eq("po_id", poID).
-		Execute()
-	if uerr != nil {
-		log.Printf("[PO in_progress 전환] 업데이트 실패 po_id=%s err=%v", poID, uerr)
-		return
-	}
-	var updated []model.PurchaseOrder
-	if json.Unmarshal(data, &updated) == nil && len(updated) > 0 {
-		writeAuditLog(h.DB, r, "purchase_orders", poID, "update", oldSnapshot, auditRawFromValue(updated[0]), "lc_create_auto_in_progress")
-	}
-	log.Printf("[PO in_progress 전환] po_id=%s contracted → in_progress", poID)
+	writeAuditLog(h.DB, r, "lc_records", created.LCID, "create", nil, auditRawFromValue(created), "")
+	response.RespondJSON(w, http.StatusCreated, created)
 }
 
 // Update — PUT /api/v1/lcs/{id} — LC 수정
@@ -292,6 +201,35 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[LC 수정 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
 
+	if req.LineItems != nil {
+		// 비유: LC 본문 수정과 품목 명세표 교체를 한 번에 접수해 중간 실패를 막는다.
+		data, err := dbrpc.Call(r.Context(), "sf_update_lc_with_lines", map[string]interface{}{
+			"p_lc_id":         id,
+			"p_lc":            model.NewLCRecordUpdate(req),
+			"p_lines":         req.LineItems,
+			"p_replace_lines": true,
+		})
+		if err != nil {
+			log.Printf("[LC 수정 실패] id=%s, err=%v", id, err)
+			response.RespondError(w, dbrpc.StatusCode(err, http.StatusInternalServerError), "LC 수정에 실패했습니다: "+err.Error())
+			return
+		}
+
+		var updated model.LCRecord
+		if err := json.Unmarshal(data, &updated); err != nil {
+			log.Printf("[LC 수정 결과 디코딩 실패] %v", err)
+			response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
+			return
+		}
+		if updated.LCID == "" {
+			response.RespondError(w, http.StatusNotFound, "수정할 LC를 찾을 수 없습니다")
+			return
+		}
+		auditEntityByRouteID(h.DB, r, "lc_records", "lc_id", "update", oldSnapshot, auditRawFromValue(updated), "")
+		response.RespondJSON(w, http.StatusOK, updated)
+		return
+	}
+
 	data, _, err := h.DB.From("lc_records").
 		Update(model.NewLCRecordUpdate(req), "", "").
 		Eq("lc_id", id).
@@ -312,14 +250,6 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if len(updated) == 0 {
 		response.RespondError(w, http.StatusNotFound, "수정할 LC를 찾을 수 없습니다")
 		return
-	}
-
-	if req.LineItems != nil {
-		if err := h.replaceLines(id, req.LineItems); err != nil {
-			log.Printf("[LC 라인아이템 수정 실패] lc_id=%s err=%v", id, err)
-			response.RespondError(w, http.StatusInternalServerError, "LC 품목 저장에 실패했습니다")
-			return
-		}
 	}
 
 	auditEntityByRouteID(h.DB, r, "lc_records", "lc_id", "update", oldSnapshot, auditRawFromValue(updated[0]), "")
