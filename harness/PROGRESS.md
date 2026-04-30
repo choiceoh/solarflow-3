@@ -11,8 +11,34 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 129개 PASS |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-104 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-105 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-01 세션 — 운영/개발 PR19 목업 로그인
+
+### 완료
+- 로그인 화면에 운영/개발 공통 `목업 데이터로 보기` 버튼 추가
+- 목업 세션은 Supabase 로그인/세션 조회 없이 보호 라우트에 진입하도록 분리
+- 목업 모드에서는 `fetchWithAuth`가 실제 Go/PostgREST/Rust API를 호출하지 않고 프론트 목업 응답을 반환
+- PR19 v3 목업 기준 제조사, 품번, 재고, P/O, L/C, B/L, 수주, 출고, 매출, 수금, 면장, 부대비용, 검색, OCR, 계산 API 목업 데이터 추가
+- 설계 판단 D-105 추가: 목업 로그인은 실데이터 API 앞에서 차단
+
+### 검증
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 성공
+- `cd frontend && npm run test` 성공 — 4 files / 10 tests
+- `git diff --check` 성공
+- `graphify update .` 성공
+- in-app browser에서 `목업 데이터로 보기` 클릭 후 `/inventory` 진입 확인
+
+### 제한
+- 목업 저장/삭제 요청은 실제 DB에 쓰지 않고 성공 형태의 임시 응답만 반환
+
+### 다음 작업
+- 목업 로그인 상태에서 대시보드/재고/구매/판매/설정 반응형 직접 확인
+- 디자인이 PR19 정적 목업과 어긋나는 화면부터 재이관
 
 ---
 

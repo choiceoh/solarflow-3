@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Lock, Mail } from 'lucide-react';
+import { Eye, Lock, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { isDevMockLoginAllowed } from '@/lib/devMockMode';
 import { getAuthSessionPersistence } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -34,13 +35,15 @@ function clearRememberedEmail(): void {
 }
 
 export default function LoginForm() {
-  const { login } = useAuth();
+  const { login, loginWithDevMock } = useAuth();
+  const canUseDevMock = isDevMockLoginAllowed();
   const [email, setEmail] = useState(readRememberedEmail);
   const [password, setPassword] = useState('');
   const [rememberEmail, setRememberEmail] = useState(() => readRememberedEmail() !== '');
   const [keepSignedIn, setKeepSignedIn] = useState(getAuthSessionPersistence);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMockSubmitting, setIsMockSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +64,19 @@ export default function LoginForm() {
       setError(message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDevMockLogin = async () => {
+    setError('');
+    setIsMockSubmitting(true);
+    try {
+      await loginWithDevMock();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '목업 로그인에 실패했습니다';
+      setError(message);
+    } finally {
+      setIsMockSubmitting(false);
     }
   };
 
@@ -120,9 +136,27 @@ export default function LoginForm() {
         <p className="rounded bg-[var(--sf-neg-bg)] px-3 py-2 text-xs font-medium text-[var(--sf-neg)]">{error}</p>
       )}
 
-      <Button type="submit" className="sf-login-submit mt-1" disabled={isSubmitting}>
+      <Button type="submit" className="sf-login-submit mt-1" disabled={isSubmitting || isMockSubmitting}>
         {isSubmitting ? '로그인 중...' : '로그인'}
       </Button>
+
+      {canUseDevMock ? (
+        <div className="mt-1.5 grid gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 justify-center gap-2 border-[var(--sf-line)] bg-[var(--sf-bg-1)] text-[12px] font-extrabold text-[var(--sf-ink)] hover:bg-[var(--sf-bg-2)]"
+            disabled={isSubmitting || isMockSubmitting}
+            onClick={handleDevMockLogin}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            {isMockSubmitting ? '목업 여는 중...' : '목업 데이터로 보기'}
+          </Button>
+          <p className="sf-mono text-[10px] text-[var(--sf-ink-4)]">
+            목업 모드 · 실제 자료 DB/API 호출 없음
+          </p>
+        </div>
+      ) : null}
     </form>
   );
 }

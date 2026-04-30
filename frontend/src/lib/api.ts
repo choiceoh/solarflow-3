@@ -1,4 +1,5 @@
 import { readStoredAuthToken, supabase } from './supabase';
+import { isDevMockApiActive, mockFetchBlobWithAuth, mockFetchWithAuth } from './devMockApi';
 
 // API 기본 URL — 개발에서는 프록시, 운영에서는 직접 연결
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -86,6 +87,10 @@ async function getSessionToken(): Promise<string | null> {
 // fetchWithAuth — Supabase 세션 토큰을 자동 첨부하는 fetch 래퍼
 // getSession()에 3초 타임아웃, 401 시 토큰 갱신 후 재시도
 export async function fetchWithAuth<T = unknown>(path: string, options?: RequestInit): Promise<T> {
+  if (isDevMockApiActive()) {
+    return mockFetchWithAuth<T>(path, options);
+  }
+
   const token = await getSessionToken();
   const isFormData = options?.body instanceof FormData;
 
@@ -145,6 +150,10 @@ export async function fetchWithAuth<T = unknown>(path: string, options?: Request
 }
 
 export async function fetchBlobWithAuth(path: string, options?: RequestInit): Promise<Response> {
+  if (isDevMockApiActive()) {
+    return mockFetchBlobWithAuth();
+  }
+
   const token = await getSessionToken();
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string> || {}),
