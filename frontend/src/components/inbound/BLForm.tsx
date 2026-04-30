@@ -316,6 +316,7 @@ const fallbackTradePartnerRe = /([A-Z][A-Z0-9&.,\-\s]{4,90}(?:CO\.?\s*LTD|CO\s+L
 const fallbackModelLikeRe = /(LR\d[-A-Z0-9]*|[A-Z0-9]{2,}[-][A-Z0-9-]{4,})/i;
 const ocrModelWpRe = /(?:^|[^0-9])(\d{3,4})\s*(?:M|W|WP)\b/i;
 const ocrCapacityWpRe = /([\d,]+)\s*WP\b/i;
+const OCR_PRODUCT_NONE = '__ocr_product_none__';
 type OCRZone = { x0: number; y0: number; x1: number; y1: number };
 const customsOCRZones = {
   declarationNumber: { x0: 180, y0: 250, x1: 430, y1: 315 },
@@ -726,6 +727,46 @@ function parseOCRNumber(value: string | undefined) {
   return Number(value.replace(/,/g, ''));
 }
 
+function formatOCRProductLabel(product: Product | null | undefined) {
+  if (!product) return '';
+  const manufacturer = product.manufacturers?.short_name
+    || product.manufacturers?.name_kr
+    || product.manufacturer_name
+    || '';
+  const prefix = manufacturer ? `${manufacturer} · ` : '';
+  const spec = product.spec_wp ? ` · ${product.spec_wp}Wp` : '';
+  return `${prefix}${product.product_code} ${product.product_name}${spec}`;
+}
+
+function selectableOCRProducts(item: CustomsDeclarationOCRLine, productSource: Product[], matchedProduct: Product | null) {
+  const specWp = extractOCRSpecWp(item);
+  const tokens = extractOCRModelTokens(item.model_spec?.value);
+  const rows = productSource
+    .map((product) => {
+      const haystack = normalizeOCRMatchText(`${product.product_code} ${product.product_name} ${product.series_name ?? ''}`);
+      let score = 0;
+      if (specWp > 0 && product.spec_wp === specWp) score += 500;
+      for (const token of tokens) {
+        if (haystack.includes(token)) score += 120;
+      }
+      return { product, score };
+    })
+    .filter(({ product, score }) => score > 0 || product.product_id === matchedProduct?.product_id)
+    .sort((a, b) => b.score - a.score || formatOCRProductLabel(a.product).localeCompare(formatOCRProductLabel(b.product), 'ko'))
+    .map(({ product }) => product);
+
+  if (rows.length === 0) {
+    rows.push(...productSource
+      .slice()
+      .sort((a, b) => formatOCRProductLabel(a).localeCompare(formatOCRProductLabel(b), 'ko'))
+      .slice(0, 80));
+  }
+  if (matchedProduct && !rows.some((product) => product.product_id === matchedProduct.product_id)) {
+    rows.unshift(matchedProduct);
+  }
+  return rows.slice(0, 80);
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -780,6 +821,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const [customsOCRSummary, setCustomsOCRSummary] = useState('');
   const [pendingCustomsOCRFile, setPendingCustomsOCRFile] = useState<File | null>(null);
   const [pendingCustomsOCRFields, setPendingCustomsOCRFields] = useState<CustomsDeclarationOCRFields | null>(null);
+  const [customsOCRPreviewProducts, setCustomsOCRPreviewProducts] = useState<Product[]>([]);
+  const [customsOCRProductOverrides, setCustomsOCRProductOverrides] = useState<Record<number, string>>({});
   const [customsOCRReviewOpen, setCustomsOCRReviewOpen] = useState(false);
   const [customsOCRDragActive, setCustomsOCRDragActive] = useState(false);
   // R3: LC 선택 (해외직수입만 필수) — D-095 BL>LC=차단
@@ -1110,18 +1153,27 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     return bestScore >= (manufacturerCount <= 1 ? 500 : 620) ? bestProduct : null;
   };
 
-  const applyOCRLineItems = (items: CustomsDeclarationOCRLine[] | undefined, productSource: Product[] = products) => {
-    if (!items?.length) return { appliedCount: 0, unmatched: 0 };
+  const applyOCRLineItems = (
+    items: CustomsDeclarationOCRLine[] | undefined,
+    productSource: Product[] = products,
+    productOverrides: Record<number, string> = {},
+  ) => {
+    if (!items?.length) return { appliedCount: 0, unmatched: 0, matchedProducts: [] as Product[] };
     const nextLines: LineItem[] = [];
+    const matchedProducts: Product[] = [];
     let unmatched = 0;
 
-    for (const item of items) {
-      const product = findProductForOCRLine(item, productSource);
+    for (const [index, item] of items.entries()) {
+      const overrideProduct = productOverrides[index]
+        ? productSource.find((product) => product.product_id === productOverrides[index]) ?? null
+        : null;
+      const product = overrideProduct ?? findProductForOCRLine(item, productSource);
       const quantity = parseOCRNumber(item.quantity?.value);
       if (!product || !Number.isFinite(quantity) || quantity <= 0) {
         unmatched += 1;
         continue;
       }
+      matchedProducts.push(product);
       const unitUsdWp = parseOCRNumber(item.unit_price_usd?.value);
       const amountUsd = parseOCRNumber(item.amount_usd?.value);
       const isFree = item.payment_type?.value === 'free' || /FREE|SPARE|N\.C\.V/i.test(item.model_spec?.value ?? '');
@@ -1139,10 +1191,14 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     if (nextLines.length > 0) {
       setLines(nextLines);
     }
-    return { appliedCount: nextLines.length, unmatched };
+    return { appliedCount: nextLines.length, unmatched, matchedProducts };
   };
 
-  const applyCustomsOCRFields = async (fields: CustomsDeclarationOCRFields) => {
+  const applyCustomsOCRFields = async (
+    fields: CustomsDeclarationOCRFields,
+    previewProductSource: Product[] = products,
+    productOverrides: Record<number, string> = {},
+  ) => {
     const applied = [
       applyOCRTextField('declaration_number', fields.declaration_number, '면장번호'),
       applyOCRTextField('actual_arrival', fields.arrival_date, '입항일'),
@@ -1159,15 +1215,15 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     }
 
     const tradePartnerManufacturer = !autofilled ? findManufacturerForOCRText(fields.trade_partner?.value) : null;
-    let productSource = products;
+    let productSource = previewProductSource.length > 0 ? previewProductSource : products;
     if (tradePartnerManufacturer) {
       setSelMfgId(tradePartnerManufacturer.manufacturer_id);
       setValue('manufacturer_id', tradePartnerManufacturer.manufacturer_id, { shouldDirty: true });
       applied.push(`공급사 ${tradePartnerManufacturer.short_name?.trim() || tradePartnerManufacturer.name_kr}`);
-      productSource = products.some((product) => product.manufacturer_id === tradePartnerManufacturer.manufacturer_id)
-        ? products
+      productSource = productSource.some((product) => product.manufacturer_id === tradePartnerManufacturer.manufacturer_id)
+        ? productSource
         : await loadProductsForManufacturer(tradePartnerManufacturer.manufacturer_id);
-    } else if (fields.line_items?.length) {
+    } else if (fields.line_items?.length && productSource.length === 0) {
       productSource = await loadAllProductsForOCR();
     }
 
@@ -1192,9 +1248,17 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       }
     }
 
-    const lineResult = applyOCRLineItems(fields.line_items, productSource);
+    const lineResult = applyOCRLineItems(fields.line_items, productSource, productOverrides);
     if (lineResult.appliedCount > 0) {
       applied.push(`품목 ${lineResult.appliedCount}건`);
+    }
+    const matchedManufacturerIds = Array.from(new Set(lineResult.matchedProducts.map((product) => product.manufacturer_id).filter(Boolean)));
+    if (!autofilled && !tradePartnerManufacturer && !selMfgId && matchedManufacturerIds.length === 1) {
+      const matchedManufacturer = manufacturers.find((manufacturer) => manufacturer.manufacturer_id === matchedManufacturerIds[0]);
+      setSelMfgId(matchedManufacturerIds[0]);
+      setValue('manufacturer_id', matchedManufacturerIds[0], { shouldDirty: true });
+      if (matchedManufacturer) applied.push(`공급사 ${matchedManufacturer.short_name?.trim() || matchedManufacturer.name_kr}`);
+      void loadProductsForManufacturer(matchedManufacturerIds[0]);
     }
 
     const references = [
@@ -1241,16 +1305,29 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
           ? 'OCR 원문은 읽었지만 면장 입력 후보를 찾지 못했습니다. 문서가 잘리지 않았는지 확인해주세요.'
           : 'OCR 원문을 읽지 못했습니다. 더 선명한 PDF/사진으로 다시 등록해주세요.');
       }
+      let previewProducts: Product[] = [];
+      if (fields.line_items?.length) {
+        try {
+          const list = await fetchWithAuth<Product[]>('/api/v1/products?active=true');
+          previewProducts = list.filter((product) => product.is_active);
+        } catch {
+          previewProducts = products;
+        }
+      }
+      setCustomsOCRPreviewProducts(previewProducts);
+      setCustomsOCRProductOverrides({});
       setPendingCustomsOCRFields(fields);
       setCustomsOCRReviewOpen(true);
     } catch (err) {
       setCustomsOCRError(err instanceof Error ? err.message : '면장 PDF를 읽지 못했습니다');
       setPendingCustomsOCRFile(null);
       setPendingCustomsOCRFields(null);
+      setCustomsOCRPreviewProducts([]);
+      setCustomsOCRProductOverrides({});
     } finally {
       setCustomsOCRLoading(false);
     }
-  }, []);
+  }, [products]);
 
   const prepareCustomsOCRUploadFile = useCallback((file: File) => {
     setCustomsOCRDragActive(false);
@@ -1259,6 +1336,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       setCustomsOCRError('PDF 또는 사진 파일만 등록할 수 있습니다');
       setPendingCustomsOCRFile(null);
       setPendingCustomsOCRFields(null);
+      setCustomsOCRPreviewProducts([]);
+      setCustomsOCRProductOverrides({});
       if (customsOCRInputRef.current) customsOCRInputRef.current.value = '';
       return;
     }
@@ -1278,9 +1357,12 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       setCustomsOCRReviewOpen(false);
       return;
     }
-    await applyCustomsOCRFields(pendingCustomsOCRFields);
+    const previewProductSource = customsOCRPreviewProducts.length > 0 ? customsOCRPreviewProducts : products;
+    await applyCustomsOCRFields(pendingCustomsOCRFields, previewProductSource, customsOCRProductOverrides);
     setPendingCustomsOCRFields(null);
     setPendingCustomsOCRFile(null);
+    setCustomsOCRPreviewProducts([]);
+    setCustomsOCRProductOverrides({});
     setCustomsOCRReviewOpen(false);
   };
 
@@ -1289,6 +1371,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     if (!nextOpen && !customsOCRLoading) {
       setPendingCustomsOCRFile(null);
       setPendingCustomsOCRFields(null);
+      setCustomsOCRPreviewProducts([]);
+      setCustomsOCRProductOverrides({});
     }
   };
 
@@ -1373,6 +1457,8 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     setCustomsOCRSummary('');
     setPendingCustomsOCRFile(null);
     setPendingCustomsOCRFields(null);
+    setCustomsOCRPreviewProducts([]);
+    setCustomsOCRProductOverrides({});
     setCustomsOCRReviewOpen(false);
     setCustomsOCRDragActive(false);
     setPriceMode('cents');
@@ -1804,9 +1890,22 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     { label: '세관', value: pendingCustomsOCRFields.customs_office?.value, target: '참고' },
   ].filter((row) => row.value) : [];
   const reviewLineItems = pendingCustomsOCRFields?.line_items ?? [];
+  const reviewProductSource = customsOCRPreviewProducts.length > 0 ? customsOCRPreviewProducts : products;
+  const reviewLineItemRows = reviewLineItems.map((item, index) => {
+    const overrideProduct = customsOCRProductOverrides[index]
+      ? reviewProductSource.find((product) => product.product_id === customsOCRProductOverrides[index]) ?? null
+      : null;
+    const matchedProduct = overrideProduct ?? findProductForOCRLine(item, reviewProductSource);
+    return {
+      item,
+      index,
+      matchedProduct,
+      selectableProducts: selectableOCRProducts(item, reviewProductSource, matchedProduct),
+    };
+  });
   const customsOCRReviewDialog = (
     <Dialog open={customsOCRReviewOpen} onOpenChange={setCustomsOCRReview}>
-      <DialogContent className="max-h-[82vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[82vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>OCR 입력값 확인</DialogTitle>
           <DialogDescription>
@@ -1840,9 +1939,40 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">품목 후보가 없습니다</div>
             ) : (
               <div className="divide-y">
-                {reviewLineItems.map((item, index) => (
-                  <div key={`${item.model_spec?.value ?? 'line'}-${index}`} className="grid gap-1 px-3 py-2 text-xs sm:grid-cols-[minmax(0,1fr)_80px_80px_96px]">
+                {reviewLineItemRows.map(({ item, index, matchedProduct, selectableProducts }) => (
+                  <div key={`${item.model_spec?.value ?? 'line'}-${index}`} className="grid gap-2 px-3 py-2 text-xs sm:grid-cols-[minmax(0,1.1fr)_minmax(170px,0.9fr)_72px_72px_88px]">
                     <span className="break-all font-medium">{item.model_spec?.value ?? '모델 미확인'}</span>
+                    <Select
+                      value={customsOCRProductOverrides[index] ?? matchedProduct?.product_id ?? OCR_PRODUCT_NONE}
+                      onValueChange={(value) => {
+                        const nextValue = value ?? OCR_PRODUCT_NONE;
+                        setCustomsOCRProductOverrides((prev) => {
+                          const next = { ...prev };
+                          if (nextValue === OCR_PRODUCT_NONE) delete next[index];
+                          else next[index] = nextValue;
+                          return next;
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-8 min-w-0 text-xs">
+                        <Txt text={formatOCRProductLabel(matchedProduct)} placeholder="품목 후보 없음" />
+                      </SelectTrigger>
+                      <SelectContent className="min-w-[min(560px,calc(100vw-3rem))]">
+                        {!matchedProduct && <SelectItem value={OCR_PRODUCT_NONE}>품목 후보 없음</SelectItem>}
+                        {matchedProduct && (
+                          <SelectItem value={matchedProduct.product_id}>
+                            자동 후보 · {formatOCRProductLabel(matchedProduct)}
+                          </SelectItem>
+                        )}
+                        {selectableProducts
+                          .filter((product) => product.product_id !== matchedProduct?.product_id)
+                          .map((product) => (
+                            <SelectItem key={product.product_id} value={product.product_id}>
+                              {formatOCRProductLabel(product)}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
                     <span className="text-right tabular-nums">{item.quantity?.value ? `${Number(item.quantity.value).toLocaleString('ko-KR')} EA` : '-'}</span>
                     <span className="text-right tabular-nums">{item.unit_price_usd?.value ?? '-'}</span>
                     <span className="text-right tabular-nums">{item.amount_usd?.value ? `$${Number(item.amount_usd.value).toLocaleString('en-US')}` : '-'}</span>
