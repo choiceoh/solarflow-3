@@ -248,7 +248,7 @@ export default function CustomsPage() {
           </CardB>
         </section>
 
-        <aside className="sf-customs-rail dark-scroll">
+        <aside className="sf-customs-rail card dark-scroll">
           <RailBlock title="B/L별 비용" count="KRW">
             {Object.entries(blExpenseMap).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([bl, amount], index) => (
               <div key={bl} className={`py-2 ${index ? 'border-t border-[var(--line)]' : ''}`}>
