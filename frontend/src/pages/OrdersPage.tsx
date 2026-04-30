@@ -666,8 +666,8 @@ export default function OrdersPage() {
 
         {/* 탭 1: 수주 관리 */}
         <TabsContent value="orders" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
               <Select value={orderStatusFilter || 'all'} onValueChange={(v) => setOrderStatusFilter(v === 'all' ? '' : (v ?? ''))}>
                 <SelectTrigger className="h-8 w-28 text-xs"><FT text={orderStatusFilter ? (ORDER_STATUS_LABEL[orderStatusFilter as OrderStatus] ?? '') : '전체 상태'} /></SelectTrigger>
                 <SelectContent>
@@ -696,7 +696,7 @@ export default function OrdersPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-start justify-end gap-2">
               <ExcelToolbar type="order" />
               <Button size="sm" onClick={() => setOrderFormOpen(true)}>
                 <Plus className="mr-1.5 h-4 w-4" />새로 등록
@@ -739,8 +739,8 @@ export default function OrdersPage() {
             />
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <div className="flex gap-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-wrap gap-2">
                   <Select value={obStatusFilter || 'all'} onValueChange={(v) => setObStatusFilter(v === 'all' ? '' : (v ?? ''))}>
                     <SelectTrigger className="h-8 w-28 text-xs"><FT text={obStatusFilter ? (OUTBOUND_STATUS_LABEL[obStatusFilter as OutboundStatus] ?? obStatusFilter) : '전체 상태'} /></SelectTrigger>
                     <SelectContent>
@@ -763,7 +763,7 @@ export default function OrdersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-start justify-end gap-2">
                   <ExcelToolbar type="outbound" />
                   <Button size="sm" onClick={() => { setOutboundOrder(null); setObFormOpen(true); }}><Plus className="mr-1.5 h-4 w-4" />새로 등록</Button>
                 </div>
@@ -782,8 +782,8 @@ export default function OrdersPage() {
 
         {/* 탭 3: 판매 관리 */}
         <TabsContent value="sales" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
               <div className="w-36">
                 <PartnerCombobox
                   partners={partners}
@@ -822,8 +822,8 @@ export default function OrdersPage() {
 
         {/* 탭 4: 수금 관리 */}
         <TabsContent value="receipts" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
               <Select value={receiptCustomerFilter || 'all'} onValueChange={(v) => setReceiptCustomerFilter(v === 'all' ? '' : (v ?? ''))}>
                 <SelectTrigger className="h-8 w-36 text-xs"><FT text={receiptCustomerFilter ? (partners.find(p => p.partner_id === receiptCustomerFilter)?.partner_name ?? '') : '전체 거래처'} /></SelectTrigger>
                 <SelectContent>
@@ -843,7 +843,7 @@ export default function OrdersPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-start justify-end gap-2">
               <ExcelToolbar type="receipt" />
               <Button size="sm" onClick={() => setReceiptFormOpen(true)}>
                 <Plus className="mr-1.5 h-4 w-4" />새로 등록

@@ -34,39 +34,45 @@ export default function ExcelToolbar({ type, onImportComplete }: Props) {
 
   return (
     <>
-      <div className="flex items-center gap-2">
-        <ExcelDownloadButton
-          onClick={downloadTemplate}
-          loading={loading}
-          disabled={!masterData}
-        />
-        <ExcelUploadButton
-          onFileSelect={uploadFile}
-          loading={loading}
-          disabled={!masterData}
-        />
+      <div className="flex min-w-max shrink-0 flex-col items-end gap-1">
+        <div className="flex shrink-0 items-center gap-2">
+          <ExcelDownloadButton
+            onClick={downloadTemplate}
+            loading={loading}
+            disabled={!masterData}
+          />
+          <ExcelUploadButton
+            onFileSelect={uploadFile}
+            loading={loading}
+            disabled={!masterData}
+          />
 
-        {/* 아마란스 내보내기 버튼 */}
-        {amaranthType && (
-          <Button variant="outline" size="sm" onClick={() => setAmaranthOpen(true)}>
-            <FileOutput className="mr-1.5 h-4 w-4" />
-            아마란스 {type === 'inbound' ? '입고' : '출고'}
-          </Button>
-        )}
-        {/* D-067: 매출마감 실물 양식 확보 전까지 매출 내보내기는 비활성 */}
-        {type === 'sale' && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger render={<Button variant="outline" size="sm" disabled />}>
-                <FileOutput className="mr-1.5 h-4 w-4" />
-                아마란스 매출
-              </TooltipTrigger>
-              <TooltipContent>실물 양식 확인 후 구현</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
+          {/* 아마란스 내보내기 버튼 */}
+          {amaranthType && (
+            <Button variant="outline" size="sm" onClick={() => setAmaranthOpen(true)}>
+              <FileOutput className="mr-1.5 h-4 w-4" />
+              아마란스 {type === 'inbound' ? '입고' : '출고'}
+            </Button>
+          )}
+          {/* D-067: 매출마감 실물 양식 확보 전까지 매출 내보내기는 비활성 */}
+          {type === 'sale' && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger render={<Button variant="outline" size="sm" disabled />}>
+                  <FileOutput className="mr-1.5 h-4 w-4" />
+                  아마란스 매출
+                </TooltipTrigger>
+                <TooltipContent>실물 양식 확인 후 구현</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
 
-        {error && <span className="text-xs text-red-600">{error}</span>}
+        {error && (
+          <span className="min-w-max shrink-0 whitespace-nowrap text-right text-xs text-red-600" title={error}>
+            {error}
+          </span>
+        )}
       </div>
 
       <ImportPreviewDialog

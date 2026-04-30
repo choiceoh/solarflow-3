@@ -537,7 +537,7 @@ export default function ProcurementPage() {
         </TabsList>
 
         <TabsContent value="po">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
             <Select value={poStatusFilter || 'all'} onValueChange={(v) => setPoStatusFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-28 text-xs"><FT text={poStatusLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem>{(Object.entries(PO_STATUS_LABEL) as [POStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
             <Select value={poMfgFilter || 'all'} onValueChange={(v) => setPoMfgFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={poMfgLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 제조사</SelectItem>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent></Select>
             <Select value={poTypeFilter || 'all'} onValueChange={(v) => setPoTypeFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-28 text-xs"><FT text={poTypeLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 유형</SelectItem>{CONTRACT_TYPES_ACTIVE.map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
@@ -575,7 +575,7 @@ export default function ProcurementPage() {
             />
           ) : (
             <>
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
                 <Select value={lcStatusFilter || 'all'} onValueChange={(v) => setLcStatusFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-28 text-xs"><FT text={lcStatusLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem>{(Object.entries(LC_STATUS_LABEL) as [LCStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
                 <Select value={lcBankFilter || 'all'} onValueChange={(v) => setLcBankFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={lcBankLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 은행</SelectItem>{banks.map((b) => <SelectItem key={b.bank_id} value={b.bank_id}>{b.bank_name}</SelectItem>)}</SelectContent></Select>
                 <Select value={lcMfgFilter || 'all'} onValueChange={(v) => setLcMfgFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={lcMfgLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 제조사</SelectItem>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent></Select>
@@ -601,7 +601,7 @@ export default function ProcurementPage() {
         <TabsContent value="tt" className="space-y-5">
           {/* 계약금 현황 — PO별 계약금 자동 집계 */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-foreground">계약금 현황</h2>
               <div className="flex-1" />
               <Select value={depositMfgFilter || 'all'} onValueChange={(v) => setDepositMfgFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={depositMfgLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 제조사</SelectItem>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent></Select>
@@ -616,7 +616,7 @@ export default function ProcurementPage() {
 
           {/* 구분선 */}
           <div className="border-t pt-4 space-y-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-foreground">T/T 송금 이력</h2>
               <div className="flex-1" />
               <Select value={ttStatusFilter || 'all'} onValueChange={(v) => setTtStatusFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-28 text-xs"><FT text={ttStatusLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem>{(Object.entries(TT_STATUS_LABEL) as [TTStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
@@ -671,7 +671,7 @@ export default function ProcurementPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
                 <Select value={blTypeFilter || 'all'} onValueChange={(v) => setBlTypeFilter(v === 'all' ? '' : (v ?? ''))}>
                   <SelectTrigger className="h-8 w-36 text-xs"><FT text={blTypeFilter ? (INBOUND_TYPE_LABEL[blTypeFilter as InboundType] ?? blTypeFilter) : '입고 구분'} /></SelectTrigger>
                   <SelectContent>
@@ -699,7 +699,7 @@ export default function ProcurementPage() {
         </TabsContent>
 
         <TabsContent value="price" className="space-y-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Select value={phMfgFilter || 'all'} onValueChange={(v) => setPhMfgFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={phMfgLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 제조사</SelectItem>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent></Select>
             <div className="flex-1" />
             <Button size="sm" variant="outline" onClick={handleBackfillPriceHistory} disabled={backfilling}>

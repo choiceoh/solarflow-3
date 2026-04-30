@@ -151,8 +151,8 @@ export default function CustomsPage() {
 
         {/* 탭 2: 부대비용 */}
         <TabsContent value="expenses" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
               <Select value={expBlFilter || 'all'} onValueChange={(v) => setExpBlFilter(v === 'all' ? '' : (v ?? ''))}>
                 <SelectTrigger className="h-8 w-40 text-xs"><FT text={expBlFilter ? (bls.find(b => b.bl_id === expBlFilter)?.bl_number ?? '') : '전체 B/L'} /></SelectTrigger>
                 <SelectContent>
@@ -181,7 +181,7 @@ export default function CustomsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-start justify-end gap-2">
               <ExcelToolbar type="expense" />
               <Button size="sm" onClick={() => { setEditExpense(null); setExpFormOpen(true); }}>
                 <Plus className="mr-1.5 h-4 w-4" />새로 등록

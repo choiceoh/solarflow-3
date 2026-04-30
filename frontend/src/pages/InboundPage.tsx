@@ -211,9 +211,9 @@ export default function InboundPage() {
       onDragLeave={handleCustomsOCRPageDragLeave}
       onDrop={handleCustomsOCRPageDrop}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-lg font-semibold">B/L 입고 관리</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-start justify-end gap-2">
           <ExcelToolbar type="inbound" />
           <Button size="sm" onClick={() => setFormOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />새로 등록
@@ -250,7 +250,7 @@ export default function InboundPage() {
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Select value={typeFilter || 'all'} onValueChange={(v) => setTypeFilter(v === 'all' ? '' : (v ?? ''))}>
           <SelectTrigger className="h-8 w-36 text-xs">
             <FilterText text={typeFilterLabel} />

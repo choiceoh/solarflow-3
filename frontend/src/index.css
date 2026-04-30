@@ -8,6 +8,23 @@
 /* SolarFlow 커스텀 스타일 */
 body {
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+button,
+[role="button"],
+[data-slot="button"],
+[data-slot="tabs-trigger"],
+[data-slot="select-trigger"] {
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+[class*="text-red"],
+[class*="text-destructive"] {
+  word-break: keep-all;
 }
 
 @theme inline {

@@ -115,8 +115,8 @@ export default function OutboundPage() {
         </TabsList>
 
         <TabsContent value="outbound" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
               <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? '' : (v ?? ''))}>
                 <SelectTrigger className="h-8 w-28 text-xs"><FilterText text={statusLabel} /></SelectTrigger>
                 <SelectContent>
@@ -145,7 +145,7 @@ export default function OutboundPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-start justify-end gap-2">
               <ExcelToolbar type="outbound" />
               <Button size="sm" onClick={() => setFormOpen(true)}>
                 <Plus className="mr-1.5 h-4 w-4" />새로 등록
@@ -163,8 +163,8 @@ export default function OutboundPage() {
         </TabsContent>
 
         <TabsContent value="sales" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
             <Select value={customerFilter || 'all'} onValueChange={(v) => setCustomerFilter(v === 'all' ? '' : (v ?? ''))}>
               <SelectTrigger className="h-8 w-36 text-xs"><FilterText text={customerLabel} /></SelectTrigger>
               <SelectContent>
