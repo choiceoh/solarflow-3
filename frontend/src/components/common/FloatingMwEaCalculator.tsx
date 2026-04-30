@@ -1,5 +1,5 @@
 /**
- * FloatingMwEaCalculator — 화면 우하단 떠다니는 용량↔장수 계산기
+ * FloatingMwEaCalculator — 상단 도구바(검색–알림 사이)에 들어가는 용량↔장수 계산기
  *
  * 기능:
  *   - 모듈 출력(Wp) 직접 입력
@@ -16,6 +16,7 @@ import { Calculator, X, ArrowUpDown, Package, Truck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 type PrimaryField = 'cap' | 'ea';
 type CapUnit = 'kW' | 'MW';
@@ -226,26 +227,27 @@ export default function FloatingMwEaCalculator() {
   );
 
   return (
-    <>
-      {/* 트리거 버튼 */}
-      <button
+    <div className="relative">
+      {/* 트리거 — 헤더 아이콘 버튼 (검색·알림과 동일 스타일) */}
+      <Button
         ref={triggerRef}
-        type="button"
-        aria-label="MW 장수 계산기 열기"
+        variant="ghost"
+        size="icon"
+        className={cn('h-8 w-8', open && 'bg-muted')}
+        aria-label="용량 ↔ 장수 계산기"
+        title="용량 ↔ 장수 계산기"
         onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-5 right-5 z-[200] flex h-10 items-center gap-1.5 rounded-full bg-primary px-3 text-primary-foreground shadow-lg hover:shadow-xl transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Calculator className="h-4 w-4 shrink-0" />
-        <span className="text-xs font-medium whitespace-nowrap">MW↔장수</span>
-      </button>
+        <Calculator className="h-4 w-4" />
+      </Button>
 
-      {/* 계산기 패널 */}
+      {/* 계산기 패널 — 트리거 바로 아래에 anchored */}
       {open && (
         <div
           ref={panelRef}
           role="dialog"
           aria-label="용량 장수 변환 계산기"
-          className="fixed bottom-20 right-4 z-[200] w-[calc(100vw-2rem)] max-w-80 rounded-lg border bg-background shadow-2xl sm:right-5"
+          className="absolute right-0 top-full z-[200] mt-2 w-[calc(100vw-2rem)] max-w-80 rounded-lg border bg-background shadow-2xl"
         >
           {/* 헤더 */}
           <div className="flex items-center justify-between border-b px-4 py-2">
@@ -365,6 +367,6 @@ export default function FloatingMwEaCalculator() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

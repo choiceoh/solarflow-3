@@ -270,6 +270,7 @@ export default function CommandShell() {
             >
               <Search className="h-4 w-4" />
             </Button>
+            <FloatingMwEaCalculator />
             <AlertBell
               alerts={alertState.alerts}
               totalCount={alertState.totalCount}
@@ -282,7 +283,6 @@ export default function CommandShell() {
         <main className="sf-page-scroll">
           <Outlet />
         </main>
-        <FloatingMwEaCalculator />
       </section>
     </div>
   );
