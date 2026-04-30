@@ -1,0 +1,473 @@
+/* ============================================================
+   SolarFlow 3.0 — Design System
+   Information-dense B2B · Pretendard + JetBrains Mono
+   8px baseline grid · Restrained accent · Precise interactions
+   ============================================================ */
+
+:root {
+  /* ─── Surfaces ─────────────────────────────────────── */
+  --bg:        #fbfaf7;
+  --bg-2:      #f4f1ea;
+  --bg-3:      #ede9df;
+  --surface:   #ffffff;
+  --surface-2: #fbfaf7;
+
+  /* ─── Ink (text) ───────────────────────────────────── */
+  --ink:       #14110c;
+  --ink-2:     #3a3530;
+  --ink-3:     #6e6760;
+  --ink-4:     #9c958c;
+  --ink-5:     #c2bcaf;
+
+  /* ─── Lines ────────────────────────────────────────── */
+  --line:        #ebe7df;   /* hairline */
+  --line-2:      #d8d2c7;   /* default border */
+  --line-3:      #bdb5a5;   /* strong divider */
+  --line-strong: #2a241d;   /* dark on light */
+
+  /* ─── Brand accents (use SPARINGLY) ────────────────── */
+  --solar:    #f5b800;
+  --solar-2:  #f08a1c;
+  --solar-3:  #b34800;
+  --solar-bg: #fff4d1;
+  --solar-bg-2:#ffe9c2;
+  --solar-tint: rgba(245,184,0,0.10);
+
+  /* dark sidebar palette */
+  --dark:     #1a1612;
+  --dark-2:   #221d18;
+  --dark-3:   #2d2722;
+  --dark-ink: #e6dfd2;
+  --dark-ink-2: #bdb5a5;
+  --dark-ink-3: #8a8275;
+  --dark-line: rgba(255,255,255,0.07);
+
+  /* ─── Status (muted, never neon) ───────────────────── */
+  --pos:    #2c7a3e;
+  --pos-bg: #e2efde;
+  --neg:    #b8331f;
+  --neg-bg: #fbe5e0;
+  --warn:   #a86518;
+  --warn-bg:#fdefd2;
+  --info:   #1f5f87;
+  --info-bg:#e0eef7;
+
+  /* ─── Type ─────────────────────────────────────────── */
+  --sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* type scale (px) — small steps, tight rhythm */
+  --t-9:   9px;
+  --t-10:  10px;
+  --t-11:  11px;
+  --t-12:  12px;
+  --t-13:  13px;
+  --t-14:  14px;
+  --t-16:  16px;
+  --t-20:  20px;
+  --t-26:  26px;
+  --t-32:  32px;
+  --t-44:  44px;
+  --t-56:  56px;
+
+  /* ─── Spacing (4px grid) ───────────────────────────── */
+  --s-1:  4px;
+  --s-2:  8px;
+  --s-3:  12px;
+  --s-4:  16px;
+  --s-5:  20px;
+  --s-6:  24px;
+  --s-8:  32px;
+  --s-10: 40px;
+  --s-12: 48px;
+  --s-14: 56px;
+
+  /* ─── Radii ────────────────────────────────────────── */
+  --r-1:  3px;
+  --r-2:  4px;
+  --r-3:  6px;
+  --r-4:  8px;
+  --r-5:  10px;
+
+  /* ─── Shadows (warm, soft) ─────────────────────────── */
+  --shadow-1: 0 1px 0 rgba(60,40,10,0.04);
+  --shadow-2: 0 1px 2px rgba(60,40,10,0.06), 0 1px 0 rgba(60,40,10,0.02);
+  --shadow-3: 0 6px 16px -8px rgba(60,40,10,0.12), 0 2px 4px -2px rgba(60,40,10,0.06);
+  --shadow-4: 0 24px 60px -20px rgba(60,40,10,0.18), 0 4px 12px -4px rgba(60,40,10,0.08);
+  --shadow-focus: 0 0 0 3px rgba(245,184,0,0.22);
+
+  /* ─── Motion ───────────────────────────────────────── */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 100ms;
+  --dur:      160ms;
+  --dur-slow: 240ms;
+}
+
+/* ============================================================
+   Reset & base
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--bg-2); color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--t-13);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv11', 'ss01', 'ss02';
+}
+button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+button { cursor: pointer; }
+
+::selection { background: var(--solar-bg-2); color: var(--ink); }
+
+/* ============================================================
+   Type utility
+   ============================================================ */
+.mono { font-family: var(--mono); font-feature-settings: 'tnum', 'zero', 'ss01'; letter-spacing: -0.005em; }
+.tnum { font-variant-numeric: tabular-nums; }
+.tracked { letter-spacing: 0.08em; text-transform: uppercase; }
+.tracked-tight { letter-spacing: 0.04em; text-transform: uppercase; }
+.kerned { letter-spacing: -0.018em; }
+
+/* eyebrow / overline label */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: var(--t-9);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+/* big number on a card */
+.bignum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  line-height: 1;
+}
+
+/* ============================================================
+   Frame (artboard root)
+   ============================================================ */
+.frame {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--bg);
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: var(--t-12); font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--dur) var(--ease-out),
+              border-color var(--dur) var(--ease-out),
+              color var(--dur) var(--ease-out),
+              box-shadow var(--dur) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out);
+  -webkit-user-select: none; user-select: none;
+}
+.btn:hover { border-color: var(--ink-4); color: var(--ink); }
+.btn:active { transform: translateY(0.5px); }
+.btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+.btn.xs { height: 22px; padding: 0 7px; font-size: var(--t-11); border-radius: 3px; }
+.btn.sm { height: 26px; padding: 0 9px; font-size: var(--t-11); }
+.btn.lg { height: 36px; padding: 0 14px; font-size: var(--t-13); }
+
+.btn.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+.btn.primary:hover { background: #000; border-color: #000; }
+
+.btn.solar { background: var(--solar); border-color: var(--solar); color: var(--ink); font-weight: 600; }
+.btn.solar:hover { background: var(--solar-2); border-color: var(--solar-2); color: #fff; }
+
+.btn.ghost { background: transparent; border-color: transparent; color: var(--ink-3); }
+.btn.ghost:hover { background: var(--bg-2); color: var(--ink); }
+
+.btn.danger { background: var(--surface); border-color: var(--neg); color: var(--neg); }
+.btn.danger:hover { background: var(--neg-bg); }
+
+.btn[disabled] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+/* icon-only square */
+.btn.icon { width: 28px; padding: 0; justify-content: center; }
+.btn.xs.icon { width: 22px; }
+
+/* ============================================================
+   Form fields
+   ============================================================ */
+.field {
+  height: 28px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 9px;
+  font-size: var(--t-12);
+  transition: border-color var(--dur) var(--ease-out),
+              box-shadow var(--dur) var(--ease-out);
+}
+.field::placeholder { color: var(--ink-4); }
+.field:hover { border-color: var(--ink-4); }
+.field:focus,
+.field:focus-visible { outline: none; border-color: var(--solar-2); box-shadow: var(--shadow-focus); }
+select.field { padding-right: 22px; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+                    linear-gradient(-45deg, transparent 50%, var(--ink-3) 50%);
+  background-position: right 10px top 12px, right 6px top 12px;
+  background-size: 4px 4px; background-repeat: no-repeat;
+}
+
+input[type="checkbox"] {
+  appearance: none; width: 13px; height: 13px;
+  border: 1px solid var(--line-3); border-radius: 2px;
+  background: var(--surface); cursor: pointer;
+  display: inline-grid; place-content: center;
+  transition: all var(--dur) var(--ease-out);
+}
+input[type="checkbox"]:checked {
+  background: var(--ink); border-color: var(--ink);
+}
+input[type="checkbox"]:checked::after {
+  content: ''; width: 7px; height: 4px;
+  border-left: 1.5px solid #fff; border-bottom: 1.5px solid #fff;
+  transform: rotate(-45deg) translate(0.5px, -0.5px);
+}
+input[type="checkbox"]:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+/* ============================================================
+   Tabs
+   ============================================================ */
+.tabs { display: inline-flex; border-bottom: 1px solid var(--line); }
+.tab {
+  background: transparent; border: none;
+  padding: 7px 12px;
+  font-size: var(--t-12);
+  color: var(--ink-3);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-weight: 500;
+  display: inline-flex; align-items: baseline; gap: 6px;
+  transition: color var(--dur) var(--ease-out),
+              border-color var(--dur) var(--ease-out);
+}
+.tab:hover { color: var(--ink); }
+.tab.active { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+.tab:focus-visible { outline: none; color: var(--ink); box-shadow: inset 0 0 0 2px var(--solar-bg-2); border-radius: 2px 2px 0 0; }
+
+/* ============================================================
+   Pills · status chips
+   ============================================================ */
+.pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 6px;
+  height: 16px;
+  border-radius: 3px;
+  font-size: var(--t-10);
+  font-weight: 600;
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.pill.pos   { background: var(--pos-bg);   color: var(--pos); }
+.pill.neg   { background: var(--neg-bg);   color: var(--neg); }
+.pill.warn  { background: var(--warn-bg);  color: var(--warn); }
+.pill.info  { background: var(--info-bg);  color: var(--info); }
+.pill.solar { background: var(--solar-bg); color: var(--solar-3); }
+.pill.ghost { background: var(--bg-2); color: var(--ink-3); border: 1px solid var(--line-2); font-weight: 500; }
+.pill.ink   { background: var(--ink); color: #fff; }
+
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+/* ============================================================
+   Keyboard & inline tokens
+   ============================================================ */
+.kbd {
+  font-family: var(--mono); font-size: var(--t-10);
+  padding: 1px 5px; min-width: 18px;
+  height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line-2); border-bottom-width: 2px;
+  border-radius: 3px; color: var(--ink-3); background: var(--surface);
+}
+
+/* ============================================================
+   Cards
+   ============================================================ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-1);
+}
+.card.flush { box-shadow: none; }
+.card.hover { transition: box-shadow var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out); }
+.card.hover:hover { box-shadow: var(--shadow-2); border-color: var(--line-2); }
+
+/* divider line — uses a 1px hairline, never a thick rule */
+.hr { height: 1px; background: var(--line); border: 0; margin: 0; }
+.vr { width: 1px; background: var(--line); align-self: stretch; }
+
+/* ============================================================
+   Tables — Bloomberg-density grid
+   ============================================================ */
+table.grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--t-12);
+  font-variant-numeric: tabular-nums;
+}
+table.grid thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--bg-2);
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-3);
+  font-size: var(--t-10);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-2);
+  border-top: 1px solid var(--line);
+  white-space: nowrap;
+  user-select: none;
+}
+table.grid thead th:first-child { padding-left: 14px; }
+table.grid thead th:last-child  { padding-right: 14px; }
+
+table.grid thead th.sortable { cursor: pointer; }
+table.grid thead th.sortable:hover { color: var(--ink); }
+table.grid thead th.sorted { color: var(--ink); }
+table.grid thead th.sorted::after {
+  content: ''; display: inline-block; margin-left: 4px;
+  width: 0; height: 0;
+  border-left: 3px solid transparent; border-right: 3px solid transparent;
+  border-top: 4px solid var(--ink);
+  vertical-align: middle;
+}
+table.grid thead th.sorted.asc::after { border-top: none; border-bottom: 4px solid var(--ink); }
+
+table.grid tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+table.grid tbody td:first-child { padding-left: 14px; }
+table.grid tbody td:last-child  { padding-right: 14px; }
+
+table.grid tr.zebra:nth-child(even) td { background: rgba(20,17,12,0.018); }
+table.grid tbody tr { transition: background var(--dur-fast) var(--ease-out); }
+table.grid tbody tr:hover td { background: var(--solar-tint); }
+table.grid tbody tr.selected td { background: var(--solar-bg); box-shadow: inset 2px 0 0 var(--solar-2); }
+
+table.grid td.num,
+table.grid th.num { text-align: right; font-family: var(--mono); }
+
+table.grid td.dim { color: var(--ink-4); }
+table.grid td.strong { color: var(--ink); font-weight: 500; }
+
+/* compact density modifier */
+table.grid.compact thead th { padding: 6px 8px; font-size: var(--t-9); }
+table.grid.compact tbody td { padding: 5px 8px; }
+
+/* ============================================================
+   Sparkline / bars helpers
+   ============================================================ */
+.spark { display: block; }
+.spark-grid line { stroke: var(--line); stroke-width: 1; shape-rendering: crispEdges; }
+.spark-axis { stroke: var(--line-2); stroke-width: 1; shape-rendering: crispEdges; }
+.spark-baseline { stroke: var(--ink-5); stroke-width: 1; stroke-dasharray: 2 2; }
+.bar { fill: var(--ink-4); }
+.bar.solar { fill: var(--solar-2); }
+
+/* ============================================================
+   Skeleton (loading shimmer)
+   ============================================================ */
+.skeleton {
+  position: relative;
+  background: var(--bg-2);
+  border-radius: var(--r-1);
+  overflow: hidden;
+}
+.skeleton::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+  animation: skeleton-shimmer 1.4s var(--ease-in-out) infinite;
+}
+@keyframes skeleton-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ============================================================
+   Focus ring (universal, restrained)
+   ============================================================ */
+:focus-visible { outline: none; }
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible { box-shadow: var(--shadow-focus); border-radius: 3px; }
+
+/* ============================================================
+   Scrollbars — slim, restrained
+   ============================================================ */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line-2); border-radius: 6px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--ink-4); background-clip: padding-box; border: 2px solid transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* dark scrollbars inside dark panels */
+.dark-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.10); background-clip: padding-box; border: 2px solid transparent;
+}
+.dark-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); background-clip: padding-box; border: 2px solid transparent; }
+
+/* ============================================================
+   No-scrollbar utility (artboard panes)
+   ============================================================ */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* ============================================================
+   Subtle helpers
+   ============================================================ */
+.muted { color: var(--ink-3); }
+.dim   { color: var(--ink-4); }
+.strong { color: var(--ink); }
+
+.text-pos { color: var(--pos); }
+.text-neg { color: var(--neg); }
+.text-warn { color: var(--warn); }
+.text-info { color: var(--info); }
+.text-solar { color: var(--solar-3); }
+
+/* gridline backgrounds for hero panels */
+.gridlines {
+  background-image:
+    linear-gradient(to right, rgba(20,17,12,0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20,17,12,0.025) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
