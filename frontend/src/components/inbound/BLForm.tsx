@@ -308,12 +308,15 @@ interface Props {
   /** LC 탭에서 입고 등록 시 LC 자동 선택 */
   presetLCId?: string | null;
   embedded?: boolean;
+  initialCustomsOCRFile?: File | null;
+  initialCustomsOCRFileKey?: number;
 }
 
-export default function BLForm({ open, onOpenChange, onSubmit, editData, presetPOId, presetLCId, embedded = false }: Props) {
+export default function BLForm({ open, onOpenChange, onSubmit, editData, presetPOId, presetLCId, embedded = false, initialCustomsOCRFile = null, initialCustomsOCRFileKey }: Props) {
   const globalCompanyId = useAppStore((s) => s.selectedCompanyId);
   const storeCompanies = useAppStore((s) => s.companies);
   const customsOCRInputRef = useRef<HTMLInputElement | null>(null);
+  const processedInitialCustomsOCRFileKey = useRef<number | null>(null);
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
@@ -697,9 +700,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       || /\.(pdf|png|jpe?g|webp|heic|heif|bmp|tiff?)$/i.test(name);
   };
 
-  const prepareCustomsOCRFile = (fileList: FileList | null) => {
-    const file = fileList?.[0];
-    if (!file) return;
+  const prepareCustomsOCRUploadFile = (file: File) => {
     setCustomsOCRDragActive(false);
     if (!isCustomsOCRAcceptedFile(file)) {
       setCustomsOCRSummary('');
@@ -712,6 +713,12 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     setPendingCustomsOCRFile(file);
     if (customsOCRInputRef.current) customsOCRInputRef.current.value = '';
     void handleCustomsOCRFile(file);
+  };
+
+  const prepareCustomsOCRFile = (fileList: FileList | null) => {
+    const file = fileList?.[0];
+    if (!file) return;
+    prepareCustomsOCRUploadFile(file);
   };
 
   const handleCustomsOCRFile = async (file: File) => {
@@ -888,6 +895,16 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       setLines([emptyLine()]);
     }
   }, [open, editData, reset, globalCompanyId]);
+
+  useEffect(() => {
+    if (!open || editData || !initialCustomsOCRFile || initialCustomsOCRFileKey == null) return;
+    if (processedInitialCustomsOCRFileKey.current === initialCustomsOCRFileKey) return;
+    processedInitialCustomsOCRFileKey.current = initialCustomsOCRFileKey;
+    setSelType('import');
+    setValue('inbound_type', 'import', { shouldDirty: true });
+    setAutoNumber('');
+    prepareCustomsOCRUploadFile(initialCustomsOCRFile);
+  }, [open, editData, initialCustomsOCRFile, initialCustomsOCRFileKey, setValue]);
 
   /* ── 라인아이템 ── */
   const updateLine = (i: number, f: keyof LineItem, v: string | boolean) =>

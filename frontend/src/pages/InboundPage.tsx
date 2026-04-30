@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type DragEvent } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, CheckCircle2 } from 'lucide-react';
+import { Plus, CheckCircle2, ScanText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { useAppStore } from '@/stores/appStore';
@@ -18,6 +18,17 @@ import { saveBLShipmentWithLines } from '@/lib/blShipment';
 /* 필터 드롭다운 표시용 헬퍼 — UUID/영문 대신 한글 표시 */
 function FilterText({ text }: { text: string }) {
   return <span className="flex flex-1 text-left truncate" data-slot="select-value">{text}</span>;
+}
+
+function isCustomsOCRAcceptedFile(file: File) {
+  const name = file.name.toLowerCase();
+  return file.type === 'application/pdf'
+    || file.type.startsWith('image/')
+    || /\.(pdf|png|jpe?g|webp|heic|heif|bmp|tiff?)$/i.test(name);
+}
+
+function firstCustomsOCRFile(files: FileList | null) {
+  return files ? Array.from(files).find(isCustomsOCRAcceptedFile) ?? null : null;
 }
 
 export default function InboundPage() {
@@ -42,6 +53,9 @@ export default function InboundPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  const [customsOCRDropActive, setCustomsOCRDropActive] = useState(false);
+  const [customsOCRDropFile, setCustomsOCRDropFile] = useState<File | null>(null);
+  const [customsOCRDropFileKey, setCustomsOCRDropFileKey] = useState(0);
 
   useEffect(() => {
     fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers')
@@ -99,9 +113,53 @@ export default function InboundPage() {
 
   const typeFilterLabel = typeFilter ? (INBOUND_TYPE_LABEL[typeFilter as InboundType] ?? typeFilter) : '입고 구분';
   const statusFilterLabel = statusFilter ? (BL_STATUS_LABEL[statusFilter as BLStatus] ?? statusFilter) : '입고 현황';
+  const hasDraggedFiles = (event: DragEvent<HTMLDivElement>) => Array.from(event.dataTransfer.types).includes('Files');
+
+  const handleCustomsOCRPageDrag = (event: DragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+    setCustomsOCRDropActive(true);
+  };
+
+  const handleCustomsOCRPageDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const nextTarget = event.relatedTarget as Node | null;
+    if (nextTarget && event.currentTarget.contains(nextTarget)) return;
+    setCustomsOCRDropActive(false);
+  };
+
+  const handleCustomsOCRPageDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setCustomsOCRDropActive(false);
+
+    const file = firstCustomsOCRFile(event.dataTransfer.files);
+    if (!file) {
+      setToast('PDF 또는 사진 파일만 등록할 수 있습니다');
+      return;
+    }
+
+    setSelectedBL(null);
+    setPresetPOId(null);
+    setPresetLCId(null);
+    setCustomsOCRDropFile(file);
+    setCustomsOCRDropFileKey((value) => value + 1);
+    setFormOpen(true);
+  };
 
   return (
-    <div className="p-6 space-y-4">
+    <div
+      className="min-h-[calc(100vh-5rem)] p-6 space-y-4"
+      onDragEnter={handleCustomsOCRPageDrag}
+      onDragOver={handleCustomsOCRPageDrag}
+      onDragLeave={handleCustomsOCRPageDragLeave}
+      onDrop={handleCustomsOCRPageDrop}
+    >
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">B/L 입고 관리</h1>
         <div className="flex items-center gap-2">
@@ -148,11 +206,27 @@ export default function InboundPage() {
 
       <BLForm
         open={formOpen}
-        onOpenChange={(v) => { setFormOpen(v); if (!v) { setPresetPOId(null); setPresetLCId(null); } }}
+        onOpenChange={(v) => { setFormOpen(v); if (!v) { setPresetPOId(null); setPresetLCId(null); setCustomsOCRDropFile(null); } }}
         onSubmit={handleCreate}
         presetPOId={presetPOId}
         presetLCId={presetLCId}
+        initialCustomsOCRFile={customsOCRDropFile}
+        initialCustomsOCRFileKey={customsOCRDropFileKey}
       />
+
+      {customsOCRDropActive && (
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+          <div className="mx-6 flex max-w-md flex-col items-center gap-3 rounded-md border border-primary bg-background p-6 text-center shadow-lg">
+            <div className="flex h-12 w-12 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <ScanText className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-sm font-medium">입고등록으로 바로 불러오기</div>
+              <div className="mt-1 text-xs text-muted-foreground">PDF/사진을 놓으면 해외직수입 등록창으로 이동합니다</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-md bg-green-600 text-white px-4 py-3 text-sm shadow-lg">
