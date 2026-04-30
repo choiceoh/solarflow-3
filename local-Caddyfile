@@ -19,6 +19,9 @@
     handle {
         root * /Users/chnops.ak/solarflow-3/frontend/dist
 
+        # gzip/zstd 압축 — JS/CSS는 평균 3~4배 축소 (recharts 347KB→102KB 등)
+        encode zstd gzip
+
         # Hashed assets (Vite 빌드 결과물) — 파일명에 hash 포함, 영구 캐시 OK
         @assets path /assets/*
         header @assets Cache-Control "public, max-age=31536000, immutable"
