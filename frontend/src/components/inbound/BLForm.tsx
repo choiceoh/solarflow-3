@@ -3,7 +3,7 @@ import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, ScanText, Trash2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
@@ -347,6 +347,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const [customsOCRLoading, setCustomsOCRLoading] = useState(false);
   const [customsOCRError, setCustomsOCRError] = useState('');
   const [customsOCRSummary, setCustomsOCRSummary] = useState('');
+  const [pendingCustomsOCRFile, setPendingCustomsOCRFile] = useState<File | null>(null);
+  const [pendingCustomsOCRFields, setPendingCustomsOCRFields] = useState<CustomsDeclarationOCRFields | null>(null);
+  const [customsOCRReviewOpen, setCustomsOCRReviewOpen] = useState(false);
   // R3: LC 선택 (해외직수입만 필수) — D-095 BL>LC=차단
   const [lcList, setLcList] = useState<{ lc_id: string; lc_number?: string; po_id: string; amount_usd: number; target_qty?: number; target_mw?: number; status: string; bank_name?: string }[]>([]);
   const [lcShippedQty, setLcShippedQty] = useState<number>(0); // 선택 LC의 기존 BL 합산 입고수량
@@ -686,9 +689,15 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     ].filter(Boolean).join(' / ') || '자동으로 채울 값을 찾지 못했습니다');
   };
 
-  const handleCustomsOCRFile = async (fileList: FileList | null) => {
+  const prepareCustomsOCRFile = (fileList: FileList | null) => {
     const file = fileList?.[0];
     if (!file) return;
+    setPendingCustomsOCRFile(file);
+    if (customsOCRInputRef.current) customsOCRInputRef.current.value = '';
+    void handleCustomsOCRFile(file);
+  };
+
+  const handleCustomsOCRFile = async (file: File) => {
     setCustomsOCRLoading(true);
     setCustomsOCRError('');
     setCustomsOCRSummary('');
@@ -702,12 +711,33 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       if (result.error) throw new Error(result.error);
       const fields = result.fields?.customs_declaration;
       if (!fields) throw new Error('면장 입력 후보를 찾지 못했습니다');
-      applyCustomsOCRFields(fields);
+      setPendingCustomsOCRFields(fields);
+      setCustomsOCRReviewOpen(true);
     } catch (err) {
       setCustomsOCRError(err instanceof Error ? err.message : '면장 PDF를 읽지 못했습니다');
+      setPendingCustomsOCRFile(null);
+      setPendingCustomsOCRFields(null);
     } finally {
       setCustomsOCRLoading(false);
-      if (customsOCRInputRef.current) customsOCRInputRef.current.value = '';
+    }
+  };
+
+  const confirmCustomsOCRFields = () => {
+    if (!pendingCustomsOCRFields) {
+      setCustomsOCRReviewOpen(false);
+      return;
+    }
+    applyCustomsOCRFields(pendingCustomsOCRFields);
+    setPendingCustomsOCRFields(null);
+    setPendingCustomsOCRFile(null);
+    setCustomsOCRReviewOpen(false);
+  };
+
+  const setCustomsOCRReview = (nextOpen: boolean) => {
+    setCustomsOCRReviewOpen(nextOpen);
+    if (!nextOpen && !customsOCRLoading) {
+      setPendingCustomsOCRFile(null);
+      setPendingCustomsOCRFields(null);
     }
   };
 
@@ -1108,6 +1138,76 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     return `${modPart}${lc.lc_number ?? lc.lc_id.slice(0, 8)}${bankPart} | ${formatUSD(lc.amount_usd)} | ${LC_STATUS_KR[lc.status] ?? lc.status}`;
   };
   const title = editData ? '입고수정' : '입고등록';
+  const reviewRows = pendingCustomsOCRFields ? [
+    { label: 'B/L(AWB) 번호', value: pendingCustomsOCRFields.bl_number?.value, target: 'B/L 번호' },
+    { label: '입항일', value: pendingCustomsOCRFields.arrival_date?.value, target: '실제입항일' },
+    { label: '운송주선인', value: pendingCustomsOCRFields.forwarder?.value, target: '포워더' },
+    { label: '국내도착항', value: pendingCustomsOCRFields.port?.value, target: '항구' },
+    { label: 'CIF 원화금액', value: pendingCustomsOCRFields.cif_amount_krw?.value, target: '면장 CIF 원화금액' },
+    { label: '환율', value: pendingCustomsOCRFields.exchange_rate?.value, target: '환율' },
+    { label: '수입자', value: pendingCustomsOCRFields.importer?.value, target: '참고' },
+    { label: '무역거래처', value: pendingCustomsOCRFields.trade_partner?.value, target: '참고' },
+    { label: '신고일', value: pendingCustomsOCRFields.declaration_date?.value, target: '참고' },
+    { label: 'HS코드', value: pendingCustomsOCRFields.hs_code?.value, target: '참고' },
+    { label: '세관', value: pendingCustomsOCRFields.customs_office?.value, target: '참고' },
+  ].filter((row) => row.value) : [];
+  const reviewLineItems = pendingCustomsOCRFields?.line_items ?? [];
+  const customsOCRReviewDialog = (
+    <Dialog open={customsOCRReviewOpen} onOpenChange={setCustomsOCRReview}>
+      <DialogContent className="max-h-[82vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>OCR 입력값 확인</DialogTitle>
+          <DialogDescription>
+            {pendingCustomsOCRFile ? `${pendingCustomsOCRFile.name}에서 읽은 값입니다. 맞는 값만 확인한 뒤 입력칸에 반영하세요.` : 'OCR로 읽은 값을 확인한 뒤 입력칸에 반영하세요.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="rounded-md border">
+            <div className="grid grid-cols-[120px_minmax(0,1fr)_96px] border-b bg-muted/50 px-3 py-2 text-[11px] font-medium text-muted-foreground">
+              <span>항목</span>
+              <span>읽은 값</span>
+              <span className="text-right">반영 위치</span>
+            </div>
+            {reviewRows.length === 0 ? (
+              <div className="px-3 py-6 text-center text-xs text-muted-foreground">확인할 기본값이 없습니다</div>
+            ) : (
+              reviewRows.map((row) => (
+                <div key={`${row.label}-${row.value}`} className="grid grid-cols-[120px_minmax(0,1fr)_96px] border-b px-3 py-2 last:border-b-0">
+                  <span className="text-xs text-muted-foreground">{row.label}</span>
+                  <span className="break-all text-xs font-medium">{row.value}</span>
+                  <span className="text-right text-[11px] text-muted-foreground">{row.target}</span>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="rounded-md border">
+            <div className="border-b bg-muted/50 px-3 py-2 text-[11px] font-medium text-muted-foreground">품목 후보</div>
+            {reviewLineItems.length === 0 ? (
+              <div className="px-3 py-6 text-center text-xs text-muted-foreground">품목 후보가 없습니다</div>
+            ) : (
+              <div className="divide-y">
+                {reviewLineItems.map((item, index) => (
+                  <div key={`${item.model_spec?.value ?? 'line'}-${index}`} className="grid gap-1 px-3 py-2 text-xs sm:grid-cols-[minmax(0,1fr)_80px_80px_96px]">
+                    <span className="break-all font-medium">{item.model_spec?.value ?? '모델 미확인'}</span>
+                    <span className="text-right tabular-nums">{item.quantity?.value ? `${Number(item.quantity.value).toLocaleString('ko-KR')} EA` : '-'}</span>
+                    <span className="text-right tabular-nums">{item.unit_price_usd?.value ?? '-'}</span>
+                    <span className="text-right tabular-nums">{item.amount_usd?.value ? `$${Number(item.amount_usd.value).toLocaleString('en-US')}` : '-'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setCustomsOCRReview(false)}>취소</Button>
+          <Button type="button" onClick={confirmCustomsOCRFields}>확인 후 입력칸에 반영</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   const formBody = (
     <>
@@ -1292,7 +1392,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
 	                          type="file"
 	                          accept="application/pdf,image/*,.pdf"
 	                          className="hidden"
-	                          onChange={(event) => void handleCustomsOCRFile(event.target.files)}
+	                          onChange={(event) => prepareCustomsOCRFile(event.target.files)}
 	                        />
 	                        {customsOCRSummary && <span className="text-xs text-primary">{customsOCRSummary}</span>}
 	                        {customsOCRError && <span className="text-xs text-destructive">{customsOCRError}</span>}
@@ -1723,17 +1823,23 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   if (embedded) {
     if (!open) return null;
     return (
-      <div className="rounded-lg border bg-card p-4 shadow-sm">
-        {formBody}
-      </div>
+      <>
+        <div className="rounded-lg border bg-card p-4 shadow-sm">
+          {formBody}
+        </div>
+        {customsOCRReviewDialog}
+      </>
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[82vw] sm:max-w-[82vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
-        {formBody}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="w-[82vw] sm:max-w-[82vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
+          {formBody}
+        </DialogContent>
+      </Dialog>
+      {customsOCRReviewDialog}
+    </>
   );
 }
