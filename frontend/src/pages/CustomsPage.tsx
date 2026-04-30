@@ -23,11 +23,6 @@ function FT({ text }: { text: string }) {
   return <span className="flex flex-1 text-left truncate" data-slot="select-value">{text}</span>;
 }
 
-const CUSTOMS_TAB_OPTIONS = [
-  { key: 'expenses', label: '부대비용' },
-  { key: 'exchange', label: '환율 비교' },
-];
-
 function fmtEok(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0.00';
   return (value / 100_000_000).toFixed(value >= 10_000_000_000 ? 1 : 2);
@@ -161,12 +156,60 @@ export default function CustomsPage() {
     acc[key] = (acc[key] ?? 0) + (expense.total ?? expense.amount ?? 0);
     return acc;
   }, {});
+  const customsTabOptions = [
+    { key: 'expenses', label: '부대비용', count: expenses.length },
+    { key: 'exchange', label: '환율 비교' },
+  ];
+  const customsCardControls = (
+    <div className="sf-card-controls">
+      <FilterChips options={customsTabOptions} value={activeTab} onChange={setActiveTab} />
+      {activeTab === 'expenses' ? (
+        <>
+          <div className="vr" style={{ height: 16 }} />
+          <div className="sf-card-filter-selects">
+            <Select value={expBlFilter || 'all'} onValueChange={(v) => setExpBlFilter(v === 'all' ? '' : (v ?? ''))}>
+              <SelectTrigger className="h-[26px] w-36 text-[11.5px]"><FT text={expBlFilter ? (bls.find(b => b.bl_id === expBlFilter)?.bl_number ?? '') : '전체 B/L'} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 B/L</SelectItem>
+                {bls.map((bl) => (
+                  <SelectItem key={bl.bl_id} value={bl.bl_id}>{bl.bl_number}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={expMonthFilter || 'all'} onValueChange={(v) => setExpMonthFilter(v === 'all' ? '' : (v ?? ''))}>
+              <SelectTrigger className="h-[26px] w-28 text-[11.5px]"><FT text={expMonthFilter || '전체 기간'} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 기간</SelectItem>
+                {months.map((m) => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={expTypeFilter || 'all'} onValueChange={(v) => setExpTypeFilter(v === 'all' ? '' : (v ?? ''))}>
+              <SelectTrigger className="h-[26px] w-32 text-[11.5px]"><FT text={expTypeFilter ? (EXPENSE_TYPE_LABEL[expTypeFilter as ExpenseType] ?? '') : '전체 유형'} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 유형</SelectItem>
+                {(Object.entries(EXPENSE_TYPE_LABEL) as [ExpenseType, string][]).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="vr" style={{ height: 16 }} />
+          <ExcelToolbar type="expense" />
+          <Button size="xs" className="btn xs solar" onClick={() => { setEditExpense(null); setExpFormOpen(true); }}>
+            <Plus className="h-3 w-3" />새로 등록
+          </Button>
+        </>
+      ) : null}
+    </div>
+  );
 
   return (
-    <div className="sf-page">
-      <div className="sf-procurement-layout">
-        <section className="sf-procurement-main">
-          <div className="sf-command-kpis">
+    <>
+      <div className="sf-command-surface sf-customs-shell">
+        <section className="sf-customs-main">
+          <div className="sf-command-kpis sf-customs-kpis">
             <TileB lbl="부대비용" v={fmtEok(expenseTotal)} u="억" sub={`${expenses.length}건 · VAT ${fmtEok(expenseVat)}억`} tone="solar" />
             <TileB lbl="B/L 연결" v={String(linkedExpenseCount)} u="건" sub={`전체 ${bls.length}개 B/L`} tone="info" />
             <TileB lbl="비용 유형" v={String(Object.keys(typeExpenseMap).length)} u="종" sub="운송·통관·LC 수수료" tone="warn" />
@@ -176,7 +219,7 @@ export default function CustomsPage() {
           <CardB
             title={activeTab === 'exchange' ? '환율 비교' : '부대비용'}
             sub={activeTab === 'exchange' ? '계약 환율과 최신 환율 영향 비교' : `${expenses.length}건 · ${fmtEok(expenseTotal)}억`}
-            right={<FilterChips options={CUSTOMS_TAB_OPTIONS} value={activeTab} onChange={setActiveTab} />}
+            right={customsCardControls}
           >
             <div className="sf-command-tab-body">
               <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -184,45 +227,7 @@ export default function CustomsPage() {
         {/* F20: 수입면장 탭 삭제됨 — 면장번호는 BLForm에서 직접 입력 */}
 
         {/* 탭 2: 부대비용 */}
-        <TabsContent value="expenses" className="space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
-              <Select value={expBlFilter || 'all'} onValueChange={(v) => setExpBlFilter(v === 'all' ? '' : (v ?? ''))}>
-                <SelectTrigger className="h-8 w-40 text-xs"><FT text={expBlFilter ? (bls.find(b => b.bl_id === expBlFilter)?.bl_number ?? '') : '전체 B/L'} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 B/L</SelectItem>
-                  {bls.map((bl) => (
-                    <SelectItem key={bl.bl_id} value={bl.bl_id}>{bl.bl_number}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={expMonthFilter || 'all'} onValueChange={(v) => setExpMonthFilter(v === 'all' ? '' : (v ?? ''))}>
-                <SelectTrigger className="h-8 w-28 text-xs"><FT text={expMonthFilter || '전체 기간'} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 기간</SelectItem>
-                  {months.map((m) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={expTypeFilter || 'all'} onValueChange={(v) => setExpTypeFilter(v === 'all' ? '' : (v ?? ''))}>
-                <SelectTrigger className="h-8 w-32 text-xs"><FT text={expTypeFilter ? (EXPENSE_TYPE_LABEL[expTypeFilter as ExpenseType] ?? '') : '전체 유형'} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 유형</SelectItem>
-                  {(Object.entries(EXPENSE_TYPE_LABEL) as [ExpenseType, string][]).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-wrap items-start justify-end gap-2">
-              <ExcelToolbar type="expense" />
-              <Button size="sm" onClick={() => { setEditExpense(null); setExpFormOpen(true); }}>
-                <Plus className="mr-1.5 h-4 w-4" />새로 등록
-              </Button>
-            </div>
-          </div>
-
+        <TabsContent value="expenses" className="mt-0 space-y-3">
           {expLoading ? <LoadingSpinner /> : (
             <ExpenseListTable
               items={expenses}
@@ -235,7 +240,7 @@ export default function CustomsPage() {
         </TabsContent>
 
         {/* 탭 3: 환율 비교 */}
-        <TabsContent value="exchange">
+        <TabsContent value="exchange" className="mt-0">
           <ExchangeComparePanel />
         </TabsContent>
               </Tabs>
@@ -243,7 +248,7 @@ export default function CustomsPage() {
           </CardB>
         </section>
 
-        <aside className="sf-procurement-rail card">
+        <aside className="sf-customs-rail dark-scroll">
           <RailBlock title="B/L별 비용" count="KRW">
             {Object.entries(blExpenseMap).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([bl, amount], index) => (
               <div key={bl} className={`py-2 ${index ? 'border-t border-[var(--line)]' : ''}`}>
@@ -294,6 +299,6 @@ export default function CustomsPage() {
         onConfirm={handleDeleteExpense}
         loading={deleteLoading}
       />
-    </div>
+    </>
   );
 }

@@ -180,34 +180,24 @@ export default function CommandDashboard({
   ];
 
   return (
-    <div className="sf-page">
-      <div className="sf-page-header">
-        <div>
-          <h1 className="sf-page-title">Command Center</h1>
-          <p className="sf-page-description">재고, 미착품, L/C, 매출 흐름을 한 화면에서 확인합니다.</p>
+    <div className="sf-dashboard-shell">
+      <div className="sf-dashboard-content">
+        <div className="sf-command-kpis">
+          {kpis.map((kpi, index) => (
+            <Link to={kpi.to} key={kpi.label}>
+              <TileB
+                lbl={kpi.label}
+                v={kpi.value.replace(' MW', '').replace('M$', '')}
+                u={kpi.value.includes('MW') ? 'MW' : kpi.value.includes('M$') ? 'M$' : ''}
+                sub={kpi.detail}
+                tone={index === 0 ? 'solar' : index === 1 ? 'ink' : index === 2 ? 'warn' : 'info'}
+                delta={index === 0 ? '+2.4%' : undefined}
+                spark={index === 0 ? [62, 64, 66, 68, 71, 72, 73, 74, 75, 76, 76, 76] : undefined}
+              />
+            </Link>
+          ))}
         </div>
-        <div className="sf-mono text-[10px] text-[var(--sf-ink-3)]">
-          장기재고 주의 {longTermWarning.toLocaleString('ko-KR')} · 심각 {longTermCritical.toLocaleString('ko-KR')}
-        </div>
-      </div>
 
-      <div className="sf-command-kpis">
-        {kpis.map((kpi, index) => (
-          <Link to={kpi.to} key={kpi.label}>
-            <TileB
-              lbl={kpi.label}
-              v={kpi.value.replace(' MW', '').replace('M$', '')}
-              u={kpi.value.includes('MW') ? 'MW' : kpi.value.includes('M$') ? 'M$' : ''}
-              sub={kpi.detail}
-              tone={index === 0 ? 'solar' : index === 1 ? 'ink' : index === 2 ? 'warn' : 'info'}
-              delta={index === 0 ? '+2.4%' : undefined}
-              spark={index === 0 ? [62, 64, 66, 68, 71, 72, 73, 74, 75, 76, 76, 76] : undefined}
-            />
-          </Link>
-        ))}
-      </div>
-
-      <div className="sf-dashboard-grid">
         <div className="sf-dashboard-main">
           <CardB
             title="품목별 가용재고"
@@ -299,8 +289,9 @@ export default function CommandDashboard({
             </CardB>
           </div>
         </div>
+      </div>
 
-        <aside className="sf-right-rail">
+        <aside className="sf-dashboard-rail sf-right-rail">
           <CardB
             title="단가 추이"
             right={<Link className="text-xs font-bold text-[var(--solar-3)]" to="/procurement?tab=prices">상세</Link>}
@@ -434,7 +425,6 @@ export default function CommandDashboard({
             </RailBlock>
           </div>
         </aside>
-      </div>
     </div>
   );
 }

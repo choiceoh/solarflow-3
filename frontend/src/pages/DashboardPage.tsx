@@ -13,7 +13,7 @@ import { sortManufacturers } from '@/lib/manufacturerPriority';
 import type { Manufacturer, Product } from '@/types/masters';
 import {
   canAccessMenu, hasFeature, getDashboardType,
-  ROLE_LABELS, type Role,
+  type Role,
 } from '@/config/permissions';
 
 /**
@@ -51,7 +51,6 @@ export default function DashboardPage() {
 
   // 권한 해석: 오버라이드 있으면 그 역할로 permissions.ts 헬퍼 호출, 없으면 실제 훅 값 사용
   const role = devOverride ?? realPerm.role;
-  const roleLabel = role ? (ROLE_LABELS[role] ?? role) : '—';
   const dashboardType = devOverride ? getDashboardType(devOverride) : realPerm.dashboardType;
   const showPrice      = devOverride ? hasFeature(devOverride, 'showPrice')      : realPerm.showPrice;
   const showMargin     = devOverride ? hasFeature(devOverride, 'showMargin')     : realPerm.showMargin;
@@ -88,37 +87,23 @@ export default function DashboardPage() {
   void dashboardType;
 
   return (
-    <div className="sf-dashboard-route p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">대시보드</h1>
-        <span className="text-xs text-muted-foreground">
-          {roleLabel} · 전략 뷰
-          {devOverride && (
-            <span className="ml-2 px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-medium">
-              DEV 오버라이드: {devOverride}
-            </span>
-          )}
-        </span>
-      </div>
-
-      <CommandDashboard
-        summary={summary}
-        revenue={revenue}
-        priceTrend={priceTrend}
-        inventory={{ data: inventory.data, loading: inventory.loading, error: inventory.error }}
-        turnover={{ data: turnover.data, loading: turnover.loading, error: turnover.error }}
-        forecast={{ data: forecast.data, loading: forecast.loading, error: forecast.error }}
-        sales={sales}
-        outstanding={outstanding}
-        alerts={{ data: alertState.alerts, loading: alertState.loading, error: null }}
-        incoming={incoming}
-        orderBacklog={orderBacklog}
-        manufacturers={manufacturers}
-        products={products}
-        longTermWarning={longTermWarning}
-        longTermCritical={longTermCritical}
-        flags={{ showPrice, showMargin, showSales, showDetail, showReceivable, showLcLimit }}
-      />
-    </div>
+    <CommandDashboard
+      summary={summary}
+      revenue={revenue}
+      priceTrend={priceTrend}
+      inventory={{ data: inventory.data, loading: inventory.loading, error: inventory.error }}
+      turnover={{ data: turnover.data, loading: turnover.loading, error: turnover.error }}
+      forecast={{ data: forecast.data, loading: forecast.loading, error: forecast.error }}
+      sales={sales}
+      outstanding={outstanding}
+      alerts={{ data: alertState.alerts, loading: alertState.loading, error: null }}
+      incoming={incoming}
+      orderBacklog={orderBacklog}
+      manufacturers={manufacturers}
+      products={products}
+      longTermWarning={longTermWarning}
+      longTermCritical={longTermCritical}
+      flags={{ showPrice, showMargin, showSales, showDetail, showReceivable, showLcLimit }}
+    />
   );
 }

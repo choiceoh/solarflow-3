@@ -1,7 +1,7 @@
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-type Tone = 'solar' | 'ink' | 'info' | 'warn' | 'pos';
+type Tone = 'solar' | 'ink' | 'info' | 'warn' | 'pos' | 'neg';
 
 export function Sparkline({
   data,
@@ -65,26 +65,33 @@ export function TileB({
   delta?: string;
 }) {
   const color =
-    tone === 'solar' ? 'var(--solar-3)' :
+    tone === 'solar' ? 'var(--solar-2)' :
     tone === 'pos' ? 'var(--pos)' :
     tone === 'warn' ? 'var(--warn)' :
     tone === 'info' ? 'var(--info)' :
-    'var(--ink)';
+    tone === 'neg' ? 'var(--neg)' :
+    'var(--ink-3)';
   return (
-    <div className="card hover" style={{ padding: 14, minWidth: 0 }}>
-      <div className="eyebrow">{lbl}</div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 7 }}>
-        <span className="bignum" style={{ fontSize: 24, color }}>{v}</span>
-        {u ? <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', fontWeight: 500 }}>{u}</span> : null}
-        <div style={{ flex: 1 }} />
+    <div className="card hover" style={{ padding: '12px 14px 14px', minWidth: 0, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span className="dot" style={{ background: color }} />
+        <span className="eyebrow">{lbl}</span>
         {delta ? (
-          <span className="mono" style={{ fontSize: 10.5, color, fontWeight: 600 }}>{delta}</span>
+          <span className="mono" style={{ marginLeft: 'auto', fontSize: 10, color: delta.startsWith('-') || delta.startsWith('−') ? 'var(--neg)' : 'var(--pos)', fontWeight: 600 }}>{delta}</span>
         ) : null}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, minHeight: 24 }}>
-        <div className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)', flex: 1, minWidth: 0 }}>{sub}</div>
-        {spark ? <Sparkline data={spark} w={70} h={22} color={color} /> : null}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 8 }}>
+        <span className="bignum" style={{ fontSize: 26 }}>{v}</span>
+        {u ? <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', fontWeight: 500 }}>{u}</span> : null}
       </div>
+      <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 3, paddingRight: spark ? 72 : 0 }}>
+        {sub}
+      </div>
+      {spark ? (
+        <div style={{ position: 'absolute', right: 10, bottom: 10, opacity: 0.6 }}>
+          <Sparkline data={spark} w={64} h={20} color={color} area />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -105,16 +112,16 @@ export function CardB({
   flex?: boolean;
 }) {
   return (
-    <div className="card" style={{ display: flex ? 'flex' : 'block', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.006em', color: 'var(--ink)' }}>{title}</div>
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, flex: flex ? 1 : undefined }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0, minHeight: 44 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '-0.005em', color: 'var(--ink)' }}>{title}</div>
           {sub ? <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{sub}</div> : null}
         </div>
         <div style={{ flex: 1 }} />
         {right}
       </div>
-      <div style={{ padding: padded ? 14 : 0, minHeight: 0, flex: flex ? 1 : undefined, overflow: flex ? 'auto' : undefined }}>
+      <div style={{ padding: padded ? 14 : 0, minHeight: 0, flex: 1, overflow: 'auto' }}>
         {children}
       </div>
     </div>
@@ -135,10 +142,10 @@ export function RailBlock({
   last?: boolean;
 }) {
   return (
-    <div style={{ padding: '14px 14px 12px', borderBottom: last ? 'none' : '1px solid var(--line)' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div className="eyebrow" style={{ color: accent || 'var(--ink-3)' }}>{title}</div>
-        {count != null ? <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)' }}>{count}</span> : null}
+    <div style={{ padding: '14px 14px', borderBottom: last ? 'none' : '1px solid var(--line)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div className="eyebrow">{title}</div>
+        {count != null ? <span className="mono tnum" style={{ fontSize: 10.5, color: accent || 'var(--ink-3)', fontWeight: 600 }}>{count}</span> : null}
       </div>
       {children}
     </div>

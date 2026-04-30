@@ -5,14 +5,43 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | 로그인 후 실제 권한별 PR19 반응형 확인 + 아마란스 RPA 배포 ZIP 생성/운영 PC 1회 로그인 리허설 + OCR 실사용 샘플 검증 + E2E smoke 로컬 DB 실행 확인 |
+| 다음 작업 | PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 배포 ZIP 생성/운영 PC 1회 로그인 리허설 + OCR 실사용 샘플 검증 + E2E smoke 로컬 DB 실행 확인 |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 129개 PASS |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-105 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-106 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-01 세션 — PR19 목업 재현도 보정
+
+### 완료
+- PR19 v3 목업의 공통 밀도 기준에 맞춰 `TileB`, `CardB`, `RailBlock`의 여백, 헤더 높이, 숫자 크기, 스파크라인 위치를 보정
+- 대시보드 본문 중복 제목을 제거하고 셸 제목 아래 KPI + 본문 + 256px 우측 레일 구조로 재배치
+- 재고 화면을 목업의 `ScreenInv_B` 구조에 맞춰 KPI, 중앙 재고 카드, 카드 헤더 필터, 우측 레일로 재구성
+- 면장/원가 화면을 KPI + 부대비용 카드 + 카드 헤더 필터/액션 + 256px 우측 레일 구조로 재구성
+- 환율 비교 패널의 중첩 카드를 제거하고 PR19 표/요약 스트립 밀도로 보정
+- 상단 커맨드바의 검색/알림/빠른 등록 버튼 크기를 PR19 소형 버튼 계열로 정렬
+- 공통 CSS 변수와 패널/표/반응형 규칙을 PR19 목업 기준에 가깝게 보정
+- 설계 판단 D-106 추가: PR19 재현도는 공통 부품과 256px 레일 구조를 기준으로 맞춘다
+
+### 검증
+- `cd frontend && npm run lint` 성공
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run test` 성공 — 4 files / 10 tests
+- `git diff --check` 성공
+- in-app browser에서 목업 로그인 상태로 `/inventory`, `/dashboard` 렌더 확인
+- 설치된 테스트용 Chromium에서 목업 세션으로 `/customs` 1480×900 렌더 스크린샷 확인 (`/tmp/solarflow-customs-1480.png`)
+
+### 제한
+- `/customs`는 1480px 렌더까지 확인했지만, PR19 정적 목업에 별도 면장/원가 단독 화면이 없어 `ScreenBL_B`와 공통 B-shell 기준으로 구조를 맞춤
+
+### 다음 작업
+- PR19 구매/판매/금융 화면을 같은 기준으로 데스크톱 폭 정밀 비교
+- 대시보드 우측 레일 내부 카드 밀도를 목업의 단일 레일 블록 계열로 추가 정리
 
 ---
 

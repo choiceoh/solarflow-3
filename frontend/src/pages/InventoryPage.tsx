@@ -9,7 +9,6 @@ import {
   Clock,
   PackageCheck,
   PackageX,
-  Plus,
   Search,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -493,11 +492,50 @@ export default function InventoryPage() {
   const stockAvailable = metricParts(inventoryStats?.stockAvailableKw ?? 0);
   const incomingAvailable = metricParts(inventoryStats?.incomingAvailableKw ?? 0);
   const pendingKw = metricParts(allocationStats.pendingKw);
+  const inventoryCardControls = (
+    <div className="sf-card-controls">
+      <FilterChips
+        value={activeTab}
+        onChange={handleTabChange}
+        options={[
+          { key: 'avail', label: '가용', count: invData?.items.length ?? 0 },
+          { key: 'physical', label: '실재고', count: invData?.items.length ?? 0 },
+          { key: 'incoming', label: '미착', count: incomingRailItems.length },
+          { key: 'forecast', label: '수급 전망' },
+        ]}
+      />
+      <div className="vr" style={{ height: 16 }} />
+      <div className="sf-card-filter-selects">
+        <Select value={mfgFilter || 'all'} onValueChange={(v) => setMfgFilter(v === 'all' ? '' : (v ?? ''))}>
+          <SelectTrigger className="h-[26px] w-32 text-[11.5px]">
+            <FT text={mfgFilter ? (manufacturers.find(m => m.manufacturer_id === mfgFilter)?.name_kr ?? '') : '제조사'} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">제조사 (전체)</SelectItem>
+            {manufacturers.map((m) => (
+              <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={wpFilter || 'all'} onValueChange={(v) => setWpFilter(v === 'all' ? '' : (v ?? ''))}>
+          <SelectTrigger className="h-[26px] w-24 text-[11.5px]" disabled={!mfgFilter}>
+            <FT text={wpFilter ? `${wpFilter}Wp` : '규격'} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">규격 (전체)</SelectItem>
+            {availableWps.map((wp) => (
+              <SelectItem key={wp} value={String(wp)}>{wp}Wp</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 256px', minHeight: '100%' }}>
-      <div style={{ minWidth: 0, padding: 16 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 14 }}>
+    <div className="sf-inventory-shell">
+      <div className="sf-inventory-main">
+      <div className="sf-command-kpis sf-inventory-kpis">
         <button type="button" onClick={() => handleCardClick('avail')} className="text-left">
           <TileB
             lbl="가용"
@@ -533,12 +571,6 @@ export default function InventoryPage() {
         />
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <Button className="btn solar h-[30px]" onClick={() => openAllocationForm()}>
-          <Plus className="h-3.5 w-3.5" /> 빠른 등록
-        </Button>
-      </div>
-
       {allocError && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -547,43 +579,6 @@ export default function InventoryPage() {
       )}
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <FilterChips
-            value={activeTab}
-            onChange={handleTabChange}
-            options={[
-              { key: 'avail', label: '가용', count: invData?.items.length ?? 0 },
-              { key: 'physical', label: '실재고', count: invData?.items.length ?? 0 },
-              { key: 'incoming', label: '미착', count: incomingRailItems.length },
-              { key: 'forecast', label: '수급 전망' },
-            ]}
-          />
-          <div className="flex flex-wrap gap-2">
-            <Select value={mfgFilter || 'all'} onValueChange={(v) => setMfgFilter(v === 'all' ? '' : (v ?? ''))}>
-              <SelectTrigger className="h-8 w-36 text-xs">
-                <FT text={mfgFilter ? (manufacturers.find(m => m.manufacturer_id === mfgFilter)?.name_kr ?? '') : '제조사'} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">제조사 (전체)</SelectItem>
-                {manufacturers.map((m) => (
-                  <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={wpFilter || 'all'} onValueChange={(v) => setWpFilter(v === 'all' ? '' : (v ?? ''))}>
-              <SelectTrigger className="h-8 w-28 text-xs" disabled={!mfgFilter}>
-                <FT text={wpFilter ? `${wpFilter}Wp` : '규격'} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">규격 (전체)</SelectItem>
-                {availableWps.map((wp) => (
-                  <SelectItem key={wp} value={String(wp)}>{wp}Wp</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
         {/* 실재고 탭 — 창고 보유 물리적 재고 */}
         <TabsContent value="physical">
           {invError && (
@@ -592,7 +587,7 @@ export default function InventoryPage() {
               <AlertDescription>{invError}</AlertDescription>
             </Alert>
           )}
-          <CardB title="품목별 실재고" sub="창고 보유 물리 재고">
+          <CardB title="품목별 실재고" sub="창고 보유 물리 재고" right={inventoryCardControls}>
             {invLoading ? <LoadingSpinner /> : invData && (
               <>
                 <InventoryTable items={invData.items} />
@@ -611,7 +606,7 @@ export default function InventoryPage() {
             </Alert>
           )}
           {/* 품목별 가용재고 + 배정 현황 통합 테이블 */}
-          <CardB title="재고 현황" sub="제조사 × 품번 · 단위 MW">
+          <CardB title="재고 현황" sub="제조사 × 품번 · 단위 MW" right={inventoryCardControls}>
             {invLoading ? <LoadingSpinner /> : invData ? (
               <AvailInventoryTable
                 items={invData.items}
@@ -640,7 +635,7 @@ export default function InventoryPage() {
             </Alert>
           )}
           {/* 품목별 미착품 + 배정 현황 */}
-          <CardB title="품목별 미착품 / 배정 현황" sub="L/C · B/L 예정분">
+          <CardB title="품목별 미착품 / 배정 현황" sub="L/C · B/L 예정분" right={inventoryCardControls}>
             {invLoading ? <LoadingSpinner /> : invData ? (
               <IncomingTable
                 items={invData.items}
@@ -715,7 +710,7 @@ export default function InventoryPage() {
       </Tabs>
       </div>
 
-      <aside className="dark-scroll" style={{ background: 'var(--surface)', borderLeft: '1px solid var(--line)', display: 'flex', flexDirection: 'column', minHeight: 0, overflowY: 'auto' }}>
+      <aside className="sf-inventory-rail dark-scroll">
         <RailBlock title="시장 시세" count="14:42 KST">
           {[
             { label: 'USD/KRW', value: '1,773.4', delta: '+0.06%', up: true },

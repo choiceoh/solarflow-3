@@ -49,11 +49,11 @@ export default function ExpenseListTable({ items, onEdit, onDelete }: Props) {
             <TableCell className="text-xs max-w-[120px] truncate">{e.memo || '—'}</TableCell>
             <TableCell className="text-right">
               <div className="flex items-center justify-end gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(e)}>
+                <Button variant="ghost" size="icon-xs" className="btn xs ghost icon" onClick={() => onEdit(e)}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
                 {onDelete && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(e)}>
+                  <Button variant="ghost" size="icon-xs" className="btn xs ghost icon text-destructive hover:text-destructive" onClick={() => onDelete(e)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 )}

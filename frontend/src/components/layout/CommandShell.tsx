@@ -263,8 +263,8 @@ export default function CommandShell() {
           <div className="flex shrink-0 items-center gap-1.5">
             <Button
               variant="ghost"
-              size="icon"
-              className={cn('h-8 w-8', pathname === '/search' && 'bg-muted')}
+              size="icon-xs"
+              className={cn('btn xs ghost icon', pathname === '/search' && 'bg-muted')}
               onClick={() => navigate('/search')}
               aria-label="검색 화면"
             >
