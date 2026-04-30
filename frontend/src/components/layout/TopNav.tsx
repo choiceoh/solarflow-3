@@ -4,7 +4,7 @@ import {
   StickyNote, FileSignature, Settings, LogOut, User, FileText, History, Ship,
   Building2, Factory, Tag, Handshake, Warehouse, Banknote, HardHat,
   Package, ClipboardList, Store, Shield, Truck, TrendingUp,
-  ScrollText, Receipt, Wallet, GitMerge, KeyRound,
+  ScrollText, Receipt, Wallet, GitMerge, KeyRound, ScanText,
 } from 'lucide-react';
 import QuickRegister from '@/components/layout/QuickRegister';
 import { cn } from '@/lib/utils';
@@ -49,6 +49,7 @@ const masterSubItems: { label: string; path: string; icon: React.ElementType }[]
 
 // 도구 메뉴 (개별 권한 체크)
 const toolSections: { label: string; path: string; icon: React.ElementType; menu: MenuKey }[] = [
+  { label: '문서 OCR', path: '/ocr',      icon: ScanText,      menu: 'ocr' },
   { label: '메모',   path: '/memo',     icon: StickyNote,    menu: 'memo' },
   { label: '결재안', path: '/approval', icon: FileSignature, menu: 'approval' },
   { label: '설정',   path: '/settings', icon: Settings,      menu: 'settings' },
@@ -119,7 +120,7 @@ export default function TopNav() {
   const toolsVisible    = toolSections.filter(s => canAccessMenu(r, s.menu));
 
   const isMasters = pathname.startsWith('/masters');
-  const isTools   = ['/memo', '/approval', '/settings'].some(p => pathname.startsWith(p));
+  const isTools   = ['/ocr', '/memo', '/approval', '/settings'].some(p => pathname.startsWith(p));
   const navTriggerClass = (active: boolean) => cn(
     'flex h-8 items-center gap-1.5 rounded-md border border-transparent px-2.5 text-sm font-medium transition-all outline-none select-none whitespace-nowrap',
     'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/45',

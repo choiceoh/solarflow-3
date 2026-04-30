@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAuthStore } from '@/stores/authStore';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import RoleGuard from '@/components/auth/RoleGuard';
 import AppLayout from '@/components/layout/AppLayout';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 
@@ -19,6 +20,7 @@ const BankingPage = lazy(() => import('@/pages/BankingPage'));
 const ApprovalPage = lazy(() => import('@/pages/ApprovalPage'));
 const MemoPage = lazy(() => import('@/pages/MemoPage'));
 const SearchPage = lazy(() => import('@/pages/SearchPage'));
+const OCRPage = lazy(() => import('@/pages/OCRPage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
 const CompanyPage = lazy(() => import('@/pages/masters/CompanyPage'));
@@ -67,6 +69,7 @@ export default function App() {
                 <Route path="/sales-analysis" element={<SalesAnalysisPage />} />
                 <Route path="/banking" element={<BankingPage />} />
                 <Route path="/search" element={<SearchPage />} />
+                <Route path="/ocr" element={<RoleGuard allowedRoles={['admin', 'operator']}><OCRPage /></RoleGuard>} />
                 <Route path="/memo" element={<MemoPage />} />
                 <Route path="/approval" element={<ApprovalPage />} />
                 <Route path="/settings" element={<SettingsPage />} />

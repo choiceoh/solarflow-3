@@ -35,6 +35,7 @@ export type MenuKey =
   | 'customs'       // 매출/이익 분석
   | 'masters'       // 마스터 관리
   | 'search'        // 검색
+  | 'ocr'           // 문서 OCR
   | 'memo'          // 메모
   | 'approval'      // 결재안
   | 'settings';     // 설정 (admin 전용)
@@ -84,7 +85,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
-            'dashboard','banking','customs','masters','search','memo','approval'],
+            'dashboard','banking','customs','masters','search','ocr','memo','approval'],
     // 대시보드는 전략 뷰 통일. 운영 업무(알림 처리·수주 잔량 등)는 각 메뉴에서 진행.
     dashboardType: 'strategic',
     features: {

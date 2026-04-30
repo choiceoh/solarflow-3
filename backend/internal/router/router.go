@@ -8,6 +8,7 @@ import (
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/handler"
 	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/ocr"
 
 	supa "github.com/supabase-community/supabase-go"
 )
@@ -280,6 +281,14 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Get("/{id}/download", attachmentH.Download)
 			r.With(write).Post("/", attachmentH.Create)
 			r.With(write).Delete("/{id}", attachmentH.Delete)
+		})
+
+		// 비유: OCR 검토대 — 서류 이미지/PDF를 장부에 넣기 전 원문으로 읽어냄
+		ocrH := handler.NewOCRHandler(ocr.NewFromEnv())
+		r.Route("/ocr", func(r chi.Router) {
+			r.Use(write)
+			r.Get("/health", ocrH.Health)
+			r.Post("/extract", ocrH.Extract)
 		})
 
 		// 비유: 아마란스10 ERP 내보내기 — 입고/출고 .xlsx (Step 29C)

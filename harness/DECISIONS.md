@@ -444,7 +444,7 @@
 - **결정**: admin이 설정 화면에서 역할(5종)별로 메뉴·민감정보 접근을 체크박스로 직접 설정. DB에 저장하여 런타임에 적용.
 - **구조**:
   - DB 테이블: `permission_settings (menu_key, role, allowed boolean)`
-  - 메뉴 키: procurement, lc, inbound, inventory, orders, outbound, receipts, dashboard, banking, customs, masters, search, memo, approval
+  - 메뉴 키: procurement, lc, inbound, inventory, orders, outbound, receipts, dashboard, banking, customs, masters, search, ocr, memo, approval
   - 민감정보 키: feature:show_price (단가), feature:show_margin (이익률/이익액), feature:show_full_dashboard
   - Go API: GET/PUT /api/v1/settings/permissions
   - 프론트: 설정 화면에서 역할×메뉴 매트릭스 테이블, 체크박스로 토글
@@ -499,3 +499,9 @@
 - **이유**: 운영 데이터는 재고, 미착, 한도, 매출, 수금 분석에 연결되므로 실제 삭제 시 “누가 무엇을 지웠는지”와 연결 이력을 잃는다. 취소 상태로 보존하면 실무 오류 정정과 감사 추적이 가능하다.
 - **운영 기준**: `audit_logs.action='delete'`는 API 삭제 요청을 뜻한다. 실제 업무 행은 삭제되지 않고 `purchase_orders.status='cancelled'`, `lc_records.status='cancelled'`, `outbounds.status='cancelled'`, `sales.status='cancelled'`로 남긴다. 계산/분석 쿼리는 취소 매출을 기본 집계에서 제외한다.
 - **날짜**: 2026-04-28
+
+## D-096: OCR은 자동 저장 전 미리보기 워크벤치로 내장
+- **결정**: `../module` 프로젝트의 PaddleOCR/RapidOCR ONNX sidecar 방식을 SolarFlow에 내장하되, OCR 결과를 PO/LC/B/L/면장 등에 즉시 저장하지 않고 `/ocr` 화면의 원문 검토 워크벤치로 먼저 제공한다.
+- **이유**: C/I, 면장, 규격서 양식이 제조사·기관마다 다르고, 잘못 읽은 단가·수량·환율은 원가와 재고에 직접 영향을 준다. 따라서 자동 등록보다 "추출 → 사람이 검토 → 수동 반영" 흐름이 운영 리스크가 낮다.
+- **운영 기준**: `POST /api/v1/ocr/extract`는 이미지/PDF를 받아 PaddleOCR 결과의 원문 텍스트, 줄별 신뢰도, 좌표를 반환한다. `GET /api/v1/ocr/health?warm=1`로 sidecar와 모델 로드를 사전 점검하고, `scripts/setup_ocr_sidecar.sh`로 Python 런타임을 재현 가능하게 설치한다. OCR 결과 자동 저장과 제조사별 좌표 파서는 실사용 서류 샘플이 충분히 쌓인 뒤 별도 TASK로 확장한다.
+- **날짜**: 2026-04-30

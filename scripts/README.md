@@ -61,3 +61,19 @@ RUN_GRAPHIFY=1 ./scripts/verify_changed.sh
 ```
 
 Go/Rust 스크립트는 macOS의 `codesign`과 `launchctl`이 있으면 자동으로 코드서명과 서비스 재반영까지 수행합니다.
+
+## OCR sidecar 준비
+
+```bash
+./scripts/setup_ocr_sidecar.sh
+```
+
+PaddleOCR/RapidOCR Python 런타임을 `backend/.venv-ocr`에 설치하고 sidecar 모델 로드를 확인합니다.
+Go 서버는 기본적으로 이 venv와 `backend/internal/ocr/sidecar-src/rapidocr_main.py`를 자동 탐색합니다.
+
+운영 서비스의 작업 디렉터리가 다르면 launchd 환경변수에 아래 값을 지정하세요.
+
+```bash
+OCR_PYTHON_BIN=/absolute/path/to/backend/.venv-ocr/bin/python
+OCR_SIDECAR_SCRIPT=/absolute/path/to/backend/internal/ocr/sidecar-src/rapidocr_main.py
+```

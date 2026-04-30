@@ -1,18 +1,49 @@
 # SolarFlow 진행 상황
 
-## 현재 상태 요약 (최종 업데이트: 2026-04-28)
+## 현재 상태 요약 (최종 업데이트: 2026-04-30)
 
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | E2E smoke 로컬 DB 실행 확인 + 라이젠에너지 T/T 데이터 검증 + 운영 이관 상태값/첨부/운송비/수요예측 실사용 검증 |
+| 다음 작업 | E2E smoke 로컬 DB 실행 확인 + 라이젠에너지 T/T 데이터 검증 + OCR 이미지/PDF 샘플 실사용 검증 |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
-| Go 테스트 | 116개 PASS |
+| Go 테스트 | 129개 PASS |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-095 (93개, D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-096 (94개, D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-04-30 세션 — 문서 OCR 워크벤치 내장
+
+### 완료
+- `../module` 프로젝트의 PaddleOCR/RapidOCR ONNX sidecar 패턴을 SolarFlow에 맞게 이식
+- `POST /api/v1/ocr/extract` 추가
+  - multipart `images` 여러 개 처리
+  - 이미지/PDF를 임시 파일로 전달하고 persistent sidecar가 OCR 수행
+  - OCR 결과는 DB 자동 저장 없이 원문 텍스트, 줄별 신뢰도, 좌표로 반환
+- `GET /api/v1/ocr/health` 추가
+  - sidecar 설정/실행/ready 상태 확인
+  - `warm=1`로 PaddleOCR 모델 로드까지 사전 점검
+- `/ocr` 프론트 화면 추가
+  - 이미지/PDF 선택, 추출 실행, 원문 텍스트 편집, 줄별 좌표 확인, 텍스트 복사
+  - OCR sidecar 준비 상태 표시와 수동 상태 확인 버튼 추가
+  - 사이드바 도구 메뉴에 `문서 OCR` 추가
+- `scripts/setup_ocr_sidecar.sh` 추가
+  - `backend/.venv-ocr` 생성, `rapidocr-onnxruntime`/`PyMuPDF` 설치, sidecar `--check` 실행
+- 설계 판단 D-096 추가: OCR은 자동 저장 전 미리보기 워크벤치로 운영
+
+### 제한
+- 명시적 ONNX 모델 파일은 운영 정확도 검증 후 `backend/internal/ocr/sidecar-src/models/` 또는 환경변수 경로로 배치
+- OCR 결과 자동 등록과 제조사별 좌표 파서는 별도 TASK로 확장
+- 검증: `go build ./...`, `go vet ./...`, `go test ./...` 성공
+- 검증: `./scripts/apply_go.sh` 성공(현재 환경은 `codesign`/`launchctl` 없음으로 해당 단계 스킵)
+- 검증: `node node_modules/vite/bin/vite.js build` 성공, `npm run build`는 현재 환경의 `node_modules/.bin/tsc` 없음으로 실패
+- 검증: `scripts/setup_ocr_sidecar.sh` 실행 성공, `backend/.venv-ocr` 설치 및 sidecar `{"ready": true}` 확인
+- 검증: 실제 sidecar에 PNG 경로 입력 → `{"ready": true}` 후 `{"raw": []}` 응답 확인
+- 제한: `graphify update .`는 현재 환경에 `graphify` 명령이 없어 미실행
 
 ---
 

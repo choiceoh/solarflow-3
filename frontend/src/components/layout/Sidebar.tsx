@@ -4,7 +4,7 @@ import {
   LayoutDashboard, PackageCheck, ClipboardList, Truck,
   Calculator, Landmark, Database, Search, StickyNote,
   FileSignature, Settings, ChevronDown, ChevronRight, LogOut,
-  ScrollText, Wallet, Building2, Home,
+  ScrollText, Wallet, Building2, Home, ScanText,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -65,6 +65,7 @@ const masterItem: MenuItem = {
 
 const toolItems: MenuItem[] = [
   { icon: Search,        label: '검색',  path: '/search' },
+  { icon: ScanText,      label: '문서 OCR', path: '/ocr', roles: ['admin', 'operator'] },
   { icon: StickyNote,    label: '메모',  path: '/memo',     roles: ['admin', 'operator'] },
   { icon: FileSignature, label: '결재안', path: '/approval', roles: ['admin', 'operator'] },
 ];

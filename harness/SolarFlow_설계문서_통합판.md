@@ -847,6 +847,19 @@ PO, LC, 출고, 매출은 생성/수정/삭제 요청을 모두 감사 로그로
 | size_bytes | BIGINT | ✅ | 파일 크기 |
 | uploaded_by | UUID | | 업로드 사용자 |
 
+#### 문서 OCR 워크벤치
+업무 서류 이미지/PDF에서 PaddleOCR 원문 텍스트를 추출한다. OCR 결과는 즉시 DB에 저장하지 않고 사용자가 검토·수정할 수 있는 미리보기로 제공한다.
+
+| 항목 | 내용 |
+|------|------|
+| API | `POST /api/v1/ocr/extract` |
+| Health | `GET /api/v1/ocr/health`, `GET /api/v1/ocr/health?warm=1` |
+| 입력 | multipart `images` 여러 개 (이미지/PDF) |
+| 처리 | PaddleOCR/RapidOCR ONNX sidecar |
+| 출력 | 파일별 원문 텍스트 + 줄별 신뢰도/좌표 + 파일별 오류 |
+| 설치 | `scripts/setup_ocr_sidecar.sh`로 `backend/.venv-ocr` 런타임 구성 |
+| 정책 | 원가/재고에 영향 주는 자동 저장은 금지, 검토 후 수동 반영 |
+
 ---
 
 ## 5. 데이터 흐름 (엑셀 기반)
