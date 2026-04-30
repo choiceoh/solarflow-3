@@ -191,7 +191,7 @@ export default function CommandDashboard({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
+      <div className="sf-command-kpis">
         {kpis.map((kpi, index) => (
           <Link to={kpi.to} key={kpi.label}>
             <TileB

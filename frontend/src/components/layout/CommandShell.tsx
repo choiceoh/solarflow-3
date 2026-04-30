@@ -177,7 +177,7 @@ export default function CommandShell() {
 
   return (
     <div className="sf-shell">
-      <aside className="sf-sidebar">
+      <aside className="sf-sidebar" aria-label="주요 메뉴">
         <div className="sf-sidebar-logo">
           <span className="sf-solar-mark" aria-hidden />
           <Link to="/dashboard" className="min-w-0">
@@ -203,7 +203,7 @@ export default function CommandShell() {
           </Select>
         </div>
 
-        <nav className="sf-sidebar-nav">
+        <nav className="sf-sidebar-nav" aria-label="주요 메뉴 목록">
           {NAV_GROUPS.map((group) => {
             const visibleItems = group.items.filter((item) => canAccessMenu(r, item.menu));
             if (visibleItems.length === 0) return null;

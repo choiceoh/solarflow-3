@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 129개 PASS |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-102 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-103 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -36,6 +36,32 @@
 - `cd frontend && npm run lint` 성공
 - `cd frontend && npm run build` 성공
 - in-app browser에서 `/login` 렌더 확인
+
+### 다음 작업
+- 로그인 세션이 있는 상태에서 대시보드/재고/구매/판매/설정의 권한별 반응형 화면 직접 확인
+- 아마란스 RPA 배포 ZIP 생성 및 운영 PC 1회 로그인 리허설
+- OCR 실사용 샘플 기반 품목/거래처 후보 매칭 고도화
+
+---
+
+## 2026-05-01 세션 — PR19 반응형 셸 보강
+
+### 완료
+- 640px 이하 화면에서 PR19 좌측 사이드바를 하단 가로 아이콘 도크로 전환
+- 모바일 도크에서도 실제 운영 알림 배지가 보이도록 `sf-nav-badge` 표시 규칙 보정
+- 대시보드 KPI 영역을 공통 `sf-command-kpis` 반응형 그리드로 변경
+- 좁은 화면에서 표는 원래 컬럼 구조를 유지하면서 가로 스크롤되도록 보정
+- 대시보드 라우트 외곽 패딩을 모바일에서 줄여 본문 가독성 확보
+- 설계 판단 D-103 추가: PR19 모바일 셸은 하단 아이콘 도크로 전환
+
+### 검증
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 성공
+- `cd frontend && npm run test` 성공 — 4 files / 10 tests
+- in-app browser에서 `/login` 모바일 폭 렌더 확인
+
+### 제한
+- 실제 로그인 세션이 필요한 protected 내부 화면의 권한별 모바일 클릭 검증은 아직 별도 확인 필요
 
 ### 다음 작업
 - 로그인 세션이 있는 상태에서 대시보드/재고/구매/판매/설정의 권한별 반응형 화면 직접 확인

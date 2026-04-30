@@ -88,7 +88,7 @@ export default function DashboardPage() {
   void dashboardType;
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="sf-dashboard-route p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">대시보드</h1>
         <span className="text-xs text-muted-foreground">

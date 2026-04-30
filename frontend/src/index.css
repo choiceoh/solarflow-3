@@ -305,6 +305,7 @@ body {
 }
 
 .sf-nav-link {
+  position: relative;
   display: flex;
   width: 100%;
   align-items: center;
@@ -860,5 +861,144 @@ body {
   .sf-kpi-grid,
   .sf-command-kpis {
     grid-template-columns: 1fr;
+  }
+
+  .sf-table-wrap {
+    overflow-x: auto;
+  }
+
+  .sf-table-wrap table {
+    min-width: 640px;
+  }
+}
+
+@media (max-width: 640px) {
+  .sf-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  .sf-main-shell {
+    order: 1;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .sf-sidebar {
+    order: 2;
+    height: 62px;
+    min-height: 62px;
+    flex: 0 0 auto;
+    border-top: 1px solid var(--sf-dark-line);
+  }
+
+  .sf-sidebar-logo,
+  .sf-company-switcher,
+  .sf-nav-section,
+  .sf-nav-label,
+  .sf-sidebar-user {
+    display: none;
+  }
+
+  .sf-sidebar-nav {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px;
+  }
+
+  .sf-sidebar-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sf-nav-group {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    margin-bottom: 0;
+  }
+
+  .sf-nav-link {
+    height: 46px;
+    width: 46px;
+    flex: 0 0 auto;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .sf-nav-link svg {
+    height: 17px;
+    width: 17px;
+  }
+
+  .sf-nav-badge {
+    position: absolute;
+    right: 5px;
+    top: 5px;
+    display: block;
+    min-width: 16px;
+    border-radius: 999px;
+    background: var(--sf-solar);
+    color: var(--sf-dark);
+    font-size: 9px;
+    line-height: 14px;
+    text-align: center;
+  }
+
+  .sf-nav-link[data-active="true"] .sf-nav-badge {
+    background: var(--sf-dark);
+    color: var(--sf-solar);
+  }
+
+  .sf-topbar {
+    gap: 8px;
+  }
+
+  .sf-topbar h1 {
+    font-size: 14px;
+  }
+
+  .sf-topbar-subtitle {
+    display: none;
+  }
+
+  .sf-page-scroll {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media (max-width: 520px) {
+  .sf-page {
+    gap: 12px;
+    padding: 10px;
+  }
+
+  .sf-page-title {
+    font-size: 18px;
+  }
+
+  .sf-panel-header,
+  .sf-command-tab-body {
+    padding: 10px;
+  }
+
+  .sf-kpi-card {
+    padding: 12px;
+  }
+
+  .sf-kpi-card strong {
+    font-size: 21px;
+  }
+
+  .sf-dashboard-route {
+    padding: 10px !important;
+  }
+
+  .sf-dashboard-route > .flex.items-center.justify-between {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
   }
 }
