@@ -4,6 +4,7 @@
  * 기능:
  *   - 모듈 출력(Wp) 직접 입력
  *   - 용량(kW/MW) ↔ 장수(EA) 양방향: ↕ 버튼으로 입력 방향 전환
+ *   - 장수 기준 파렛트/트럭 필요 수량 자동 계산
  *   - 1,000 kW 미만 → kW, 이상 → MW 자동 표시
  *
  * primaryField: 'cap' | 'ea'
@@ -11,7 +12,7 @@
  *   'ea'  → 장수 입력, 용량 자동계산(읽기전용)
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Calculator, X, ArrowUpDown } from 'lucide-react';
+import { Calculator, X, ArrowUpDown, Package, Truck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -19,10 +20,20 @@ import { Button } from '@/components/ui/button';
 type PrimaryField = 'cap' | 'ea';
 type CapUnit = 'kW' | 'MW';
 
+const DEFAULT_PALLET_EA = 31;
+const DEFAULT_TRUCK_PALLETS = 22;
+
 function roundEa(v: number) { return Math.round(v); }
 function roundCap(kw: number): { str: string; unit: CapUnit } {
   if (kw >= 1000) return { str: String(Math.round(kw / 1000 * 100) / 100), unit: 'MW' };
   return { str: String(Math.round(kw * 10) / 10), unit: 'kW' };
+}
+function toPositiveInt(v: string): number {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+function formatInt(n: number): string {
+  return n.toLocaleString('ko-KR');
 }
 
 export default function FloatingMwEaCalculator() {
@@ -30,6 +41,8 @@ export default function FloatingMwEaCalculator() {
   const [specWp, setSpecWp]             = useState<number>(635);
   const [specInput, setSpecInput]       = useState<string>('635');
   const [primaryField, setPrimaryField] = useState<PrimaryField>('cap');
+  const [palletEaStr, setPalletEaStr]   = useState<string>(String(DEFAULT_PALLET_EA));
+  const [truckPalletStr, setTruckPalletStr] = useState<string>(String(DEFAULT_TRUCK_PALLETS));
 
   // 용량: 내부는 항상 kW
   const [capStr, setCapStr]   = useState<string>('');
@@ -128,7 +141,32 @@ export default function FloatingMwEaCalculator() {
 
   const reset = () => {
     setCapStr(''); setEaStr(''); setCapUnit('kW'); setPrimaryField('cap');
+    setPalletEaStr(String(DEFAULT_PALLET_EA));
+    setSpecWp(635);
+    setSpecInput('635');
   };
+
+  const eaValue = toPositiveInt(eaStr);
+  const palletEa = toPositiveInt(palletEaStr);
+  const truckPallets = toPositiveInt(truckPalletStr);
+  const fullPallets = eaValue > 0 && palletEa > 0 ? Math.floor(eaValue / palletEa) : 0;
+  const remainderEa = eaValue > 0 && palletEa > 0 ? eaValue % palletEa : 0;
+  const totalPallets = eaValue > 0 && palletEa > 0 ? fullPallets + (remainderEa > 0 ? 1 : 0) : 0;
+  const fullTrucks = totalPallets > 0 && truckPallets > 0 ? Math.floor(totalPallets / truckPallets) : 0;
+  const remainderPallets = totalPallets > 0 && truckPallets > 0 ? totalPallets % truckPallets : 0;
+  const totalTrucks = totalPallets > 0 && truckPallets > 0 ? fullTrucks + (remainderPallets > 0 ? 1 : 0) : 0;
+  const palletDetail =
+    totalPallets <= 0 || palletEa <= 0
+      ? ''
+      : remainderEa > 0
+        ? fullPallets > 0 ? `${formatInt(fullPallets)}개 만재 + ${formatInt(remainderEa)}장` : `${formatInt(remainderEa)}장 잔여`
+        : `${formatInt(fullPallets)}개 만재`;
+  const truckDetail =
+    totalTrucks <= 0 || truckPallets <= 0
+      ? ''
+      : remainderPallets > 0
+        ? fullTrucks > 0 ? `${formatInt(fullTrucks)}대 만차 + ${formatInt(remainderPallets)}PLT` : `${formatInt(remainderPallets)}PLT 적재`
+        : `${formatInt(fullTrucks)}대 만차`;
 
   /* ── 공용 필드 스타일 ── */
   const inputCls  = 'h-9 flex-1 bg-background';
@@ -207,7 +245,7 @@ export default function FloatingMwEaCalculator() {
           ref={panelRef}
           role="dialog"
           aria-label="용량 장수 변환 계산기"
-          className="fixed bottom-20 right-5 z-[200] w-72 rounded-lg border bg-background shadow-2xl"
+          className="fixed bottom-20 right-4 z-[200] w-[calc(100vw-2rem)] max-w-80 rounded-lg border bg-background shadow-2xl sm:right-5"
         >
           {/* 헤더 */}
           <div className="flex items-center justify-between border-b px-4 py-2">
@@ -256,6 +294,64 @@ export default function FloatingMwEaCalculator() {
 
             {/* 장수 */}
             {EaSection}
+
+            {/* 파렛트/트럭 */}
+            <div className="space-y-3 rounded-md border bg-muted/30 p-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">파렛트당 장수</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={palletEaStr}
+                    onChange={(e) => setPalletEaStr(e.target.value)}
+                    className="h-8 text-right text-xs"
+                    placeholder="31"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">트럭당 파렛트</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={truckPalletStr}
+                    onChange={(e) => setTruckPalletStr(e.target.value)}
+                    className="h-8 text-right text-xs"
+                    placeholder="22"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-md bg-background p-2">
+                  <div className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Package className="h-3.5 w-3.5" />
+                    파렛트
+                  </div>
+                  <div className="font-mono text-base font-semibold tabular-nums">
+                    {totalPallets > 0 ? formatInt(totalPallets) : '-'} PLT
+                  </div>
+                  <div className="mt-0.5 min-h-4 text-[10px] text-muted-foreground">
+                    {palletDetail}
+                  </div>
+                </div>
+
+                <div className="rounded-md bg-background p-2">
+                  <div className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Truck className="h-3.5 w-3.5" />
+                    트럭
+                  </div>
+                  <div className="font-mono text-base font-semibold tabular-nums">
+                    {totalTrucks > 0 ? formatInt(totalTrucks) : '-'} 대
+                  </div>
+                  <div className="mt-0.5 min-h-4 text-[10px] text-muted-foreground">
+                    {truckDetail}
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* 하단 */}
             <div className="flex items-center justify-between pt-1">
