@@ -6,6 +6,8 @@ import DataTable, { type Column } from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ProductForm from '@/components/masters/ProductForm';
+import { MasterConsole } from '@/components/command/MasterConsole';
+import { RailBlock } from '@/components/command/MockupPrimitives';
 import { fetchWithAuth } from '@/lib/api';
 import { formatWp, formatSize } from '@/lib/utils';
 import type { Product, Manufacturer } from '@/types/masters';
@@ -131,11 +133,32 @@ export default function ProductPage() {
     ) },
   ];
 
+  const activeCount = data.filter((product) => product.is_active).length;
+  const avgWp = data.length ? Math.round(data.reduce((sum, product) => sum + product.spec_wp, 0) / data.length) : 0;
+  const manufacturerCounts = manufacturers
+    .map((manufacturer) => ({
+      id: manufacturer.manufacturer_id,
+      name: manufacturer.name_kr,
+      count: data.filter((product) => product.manufacturer_id === manufacturer.manufacturer_id).length,
+    }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+  const selectedManufacturerName = manufacturers.find((manufacturer) => manufacturer.manufacturer_id === filterMfg)?.name_kr ?? '전체 제조사';
+
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">품번 관리</h1>
-        <div className="flex items-center gap-2">
+    <>
+      <MasterConsole
+        title="품번 관리"
+        description="제조사별 모듈 규격, 사이즈, 활성 상태를 재고와 판매 흐름에 연결합니다."
+        tableTitle="품번 마스터"
+        tableSub={`${filtered.length.toLocaleString()} / ${data.length.toLocaleString()}개 표시`}
+        actions={
+          <Button size="sm" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
+            <Plus className="mr-1.5 h-4 w-4" />새로 등록
+          </Button>
+        }
+        toolbar={
           <select
             className="h-8 rounded-md border border-input bg-background px-2 text-sm"
             value={filterMfg}
@@ -146,25 +169,48 @@ export default function ProductPage() {
               <option key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</option>
             ))}
           </select>
-          <Button size="sm" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
-            <Plus className="mr-1.5 h-4 w-4" />새로 등록
-          </Button>
-        </div>
-      </div>
-      <DataTable
-        columns={columns} data={filtered} loading={loading}
-        searchable searchPlaceholder="품번코드, 품명, 제조사 검색" onSearch={setSearch}
-        actions={(row) => (
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
-      />
+        }
+        metrics={[
+          { label: '전체 품번', value: data.length.toLocaleString(), sub: '모듈 SKU', tone: 'solar', spark: [18, 21, 24, 28, data.length || 1] },
+          { label: '활성 품번', value: activeCount.toLocaleString(), sub: '거래 가능', tone: 'pos' },
+          { label: '제조사', value: manufacturers.length.toLocaleString(), sub: selectedManufacturerName, tone: 'info' },
+          { label: '평균 규격', value: avgWp.toLocaleString(), unit: 'Wp', sub: '등록 품번 기준', tone: 'warn' },
+        ]}
+        rail={
+          <>
+            <RailBlock title="제조사별 품번" accent="var(--solar-3)" count={manufacturerCounts.length}>
+              <div className="space-y-2">
+                {manufacturerCounts.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2 text-[12px]">
+                    <span className="truncate font-semibold text-[var(--ink)]">{item.name}</span>
+                    <span className="mono text-[var(--ink-3)]">{item.count}개</span>
+                  </div>
+                ))}
+              </div>
+            </RailBlock>
+            <RailBlock title="필터 상태" count={selectedManufacturerName}>
+              <div className="text-[11px] leading-5 text-[var(--ink-3)]">
+                제조사 필터와 검색어는 테이블 표시만 좁히고, 등록된 품번 원본은 유지됩니다.
+              </div>
+            </RailBlock>
+          </>
+        }
+      >
+        <DataTable
+          columns={columns} data={filtered} loading={loading}
+          searchable searchPlaceholder="품번코드, 품명, 제조사 검색" onSearch={setSearch}
+          actions={(row) => (
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+        />
+      </MasterConsole>
       <ProductForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleSubmit} editData={editTarget} />
       <ConfirmDialog
         open={!!toggleTarget}
@@ -182,6 +228,6 @@ export default function ProductPage() {
         confirmLabel={deleting ? '삭제 중...' : '삭제'}
         variant="destructive"
       />
-    </div>
+    </>
   );
 }

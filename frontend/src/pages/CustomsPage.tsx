@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, Receipt, ArrowLeftRight } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useAppStore } from '@/stores/appStore';
 import { useExpenseList } from '@/hooks/useCustoms';
@@ -17,9 +17,20 @@ import ExchangeComparePanel from '@/components/customs/ExchangeComparePanel';
 import { EXPENSE_TYPE_LABEL, type ExpenseType, type Expense } from '@/types/customs';
 import type { BLShipment } from '@/types/inbound';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
+import { CardB, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
 
 function FT({ text }: { text: string }) {
   return <span className="flex flex-1 text-left truncate" data-slot="select-value">{text}</span>;
+}
+
+const CUSTOMS_TAB_OPTIONS = [
+  { key: 'expenses', label: '부대비용' },
+  { key: 'exchange', label: '환율 비교' },
+];
+
+function fmtEok(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0.00';
+  return (value / 100_000_000).toFixed(value >= 10_000_000_000 ? 1 : 2);
 }
 
 export default function CustomsPage() {
@@ -54,6 +65,7 @@ export default function CustomsPage() {
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [activeTab, setActiveTab] = useState('expenses');
 
   // 마스터
   const [bls, setBls] = useState<BLShipment[]>([]);
@@ -136,21 +148,43 @@ export default function CustomsPage() {
     months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
 
-  return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-lg font-semibold">면장/원가</h1>
+  const expenseTotal = expenses.reduce((sum, expense) => sum + (expense.total ?? expense.amount ?? 0), 0);
+  const expenseVat = expenses.reduce((sum, expense) => sum + (expense.vat ?? 0), 0);
+  const linkedExpenseCount = expenses.filter((expense) => expense.bl_id).length;
+  const blExpenseMap = expenses.reduce<Record<string, number>>((acc, expense) => {
+    const key = expense.bl_number ?? expense.bl_id ?? '미지정';
+    acc[key] = (acc[key] ?? 0) + (expense.total ?? expense.amount ?? 0);
+    return acc;
+  }, {});
+  const typeExpenseMap = expenses.reduce<Record<string, number>>((acc, expense) => {
+    const key = EXPENSE_TYPE_LABEL[expense.expense_type as ExpenseType] ?? expense.expense_type;
+    acc[key] = (acc[key] ?? 0) + (expense.total ?? expense.amount ?? 0);
+    return acc;
+  }, {});
 
-      <Tabs defaultValue="expenses">
-        <TabsList>
-          {/* F20: 수입면장 탭 삭제 — 면장번호는 입고등록에서 직접 입력 */}
-          <TabsTrigger value="expenses"><Receipt className="h-3.5 w-3.5" />부대비용</TabsTrigger>
-          <TabsTrigger value="exchange"><ArrowLeftRight className="h-3.5 w-3.5" />환율 비교</TabsTrigger>
-        </TabsList>
+  return (
+    <div className="sf-page">
+      <div className="sf-procurement-layout">
+        <section className="sf-procurement-main">
+          <div className="sf-command-kpis">
+            <TileB lbl="부대비용" v={fmtEok(expenseTotal)} u="억" sub={`${expenses.length}건 · VAT ${fmtEok(expenseVat)}억`} tone="solar" />
+            <TileB lbl="B/L 연결" v={String(linkedExpenseCount)} u="건" sub={`전체 ${bls.length}개 B/L`} tone="info" />
+            <TileB lbl="비용 유형" v={String(Object.keys(typeExpenseMap).length)} u="종" sub="운송·통관·LC 수수료" tone="warn" />
+            <TileB lbl="평균 비용" v={expenses.length ? fmtEok(expenseTotal / expenses.length) : '0.00'} u="억" sub="건당 평균" tone="ink" />
+          </div>
+
+          <CardB
+            title={activeTab === 'exchange' ? '환율 비교' : '부대비용'}
+            sub={activeTab === 'exchange' ? '계약 환율과 최신 환율 영향 비교' : `${expenses.length}건 · ${fmtEok(expenseTotal)}억`}
+            right={<FilterChips options={CUSTOMS_TAB_OPTIONS} value={activeTab} onChange={setActiveTab} />}
+          >
+            <div className="sf-command-tab-body">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
 
         {/* F20: 수입면장 탭 삭제됨 — 면장번호는 BLForm에서 직접 입력 */}
 
         {/* 탭 2: 부대비용 */}
-        <TabsContent value="expenses" className="space-y-4 mt-4">
+        <TabsContent value="expenses" className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex flex-wrap gap-2">
               <Select value={expBlFilter || 'all'} onValueChange={(v) => setExpBlFilter(v === 'all' ? '' : (v ?? ''))}>
@@ -201,10 +235,44 @@ export default function CustomsPage() {
         </TabsContent>
 
         {/* 탭 3: 환율 비교 */}
-        <TabsContent value="exchange" className="mt-4">
+        <TabsContent value="exchange">
           <ExchangeComparePanel />
         </TabsContent>
-      </Tabs>
+              </Tabs>
+            </div>
+          </CardB>
+        </section>
+
+        <aside className="sf-procurement-rail card">
+          <RailBlock title="B/L별 비용" count="KRW">
+            {Object.entries(blExpenseMap).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([bl, amount], index) => (
+              <div key={bl} className={`py-2 ${index ? 'border-t border-[var(--line)]' : ''}`}>
+                <div className="flex justify-between gap-2 text-[11.5px]">
+                  <span className="mono truncate text-[var(--ink-2)]">{bl}</span>
+                  <span className="mono font-semibold text-[var(--ink)]">{fmtEok(amount)}억</span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded bg-[var(--line)]">
+                  <div className="h-full bg-[var(--solar-2)]" style={{ width: `${expenseTotal ? Math.min(100, (amount / expenseTotal) * 100) : 0}%` }} />
+                </div>
+              </div>
+            ))}
+            {expenses.length === 0 && <div className="text-xs text-[var(--ink-3)]">등록된 비용이 없습니다.</div>}
+          </RailBlock>
+          <RailBlock title="비용 유형">
+            {Object.entries(typeExpenseMap).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([type, amount], index) => (
+              <div key={type} className={`flex justify-between py-1.5 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
+                <span className="truncate text-[var(--ink-2)]">{type}</span>
+                <span className="mono font-semibold text-[var(--ink-3)]">{fmtEok(amount)}억</span>
+              </div>
+            ))}
+          </RailBlock>
+          <RailBlock title="면장/OCR 흐름" last>
+            <div className="rounded border border-dashed border-[var(--line-2)] bg-[var(--bg-2)] p-3 text-[11px] leading-5 text-[var(--ink-3)]">
+              면장번호와 OCR 후보는 B/L 입고등록에서 먼저 확인하고, 비용은 여기서 B/L 기준으로 누적 관리합니다.
+            </div>
+          </RailBlock>
+        </aside>
+      </div>
 
       <DeclarationForm
         open={declFormOpen}

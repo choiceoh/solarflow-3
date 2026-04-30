@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, Pencil, Search, HardHat, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Pencil, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { MasterConsole } from '@/components/command/MasterConsole';
+import { FilterChips, RailBlock } from '@/components/command/MockupPrimitives';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type { ConstructionSite } from '@/types/masters';
@@ -337,135 +339,151 @@ export default function ConstructionSitesPage() {
     return companies.find((c) => c.company_id === selectedCompanyId)?.company_name;
   }, [companies, selectedCompanyId, noCompany]);
 
+  const activeCount = sites.filter((site) => site.is_active).length;
+  const ownCount = sites.filter((site) => site.site_type === 'own').length;
+  const epcCount = sites.filter((site) => site.site_type === 'epc').length;
+  const totalCapacity = sites.reduce((sum, site) => sum + (site.capacity_mw ?? 0), 0);
+  const recentSites = sites.slice(0, 4);
+
   return (
-    <div className="p-6 space-y-4">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <HardHat className="size-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">공사 현장 관리</h1>
-          {companyName && (
-            <span className="text-sm text-muted-foreground">— {companyName}</span>
+    <>
+      <MasterConsole
+        title="공사 현장 관리"
+        description={companyName ? `${companyName} 현장과 공급 이력을 연결합니다.` : '법인 선택 후 현장, 용량, 공급 이력을 관리합니다.'}
+        tableTitle="현장 목록"
+        tableSub={`${sites.length.toLocaleString()}개 · ${typeFilter === 'all' ? '전체' : typeFilter.toUpperCase()}`}
+        actions={
+          <Button
+            size="sm"
+            onClick={() => { setEditTarget(undefined); setFormOpen(true); }}
+            disabled={noCompany}
+          >
+            <Plus className="mr-1.5 h-4 w-4" />새 현장 등록
+          </Button>
+        }
+        toolbar={
+          <FilterChips
+            options={[
+              { key: 'all', label: '전체', count: sites.length },
+              { key: 'own', label: '자체', count: ownCount },
+              { key: 'epc', label: 'EPC', count: epcCount },
+            ]}
+            value={typeFilter}
+            onChange={(value) => setTypeFilter(value as 'all' | 'own' | 'epc')}
+          />
+        }
+        metrics={[
+          { label: '현장 수', value: sites.length.toLocaleString(), sub: companyName ?? '법인 미선택', tone: 'solar', spark: [2, 3, 5, sites.length || 1] },
+          { label: '활성', value: activeCount.toLocaleString(), sub: '공급 가능', tone: 'pos' },
+          { label: '자체/EPC', value: `${ownCount}/${epcCount}`, sub: '현장 유형', tone: 'info' },
+          { label: '총 용량', value: totalCapacity.toFixed(2), unit: 'MW', sub: '등록 용량 합계', tone: 'warn' },
+        ]}
+        rail={
+          <>
+            <RailBlock title="선택 법인" accent="var(--solar-3)" count={companyName ?? '미선택'}>
+              <div className="text-[11px] leading-5 text-[var(--ink-3)]">
+                {noCompany ? '좌측 상단에서 법인을 선택하면 현장 등록과 조회가 활성화됩니다.' : '현장 공급 이력은 선택 법인의 재고 배정과 연결됩니다.'}
+              </div>
+            </RailBlock>
+            <RailBlock title="최근 현장" count={recentSites.length}>
+              <div className="space-y-2">
+                {recentSites.map((site) => (
+                  <div key={site.site_id} className="rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2">
+                    <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{site.name}</div>
+                    <div className="mono mt-1 text-[10px] text-[var(--ink-4)]">{site.location ?? '위치 없음'} · {site.capacity_mw ?? 0}MW</div>
+                  </div>
+                ))}
+              </div>
+            </RailBlock>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          {noCompany && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              좌측 상단에서 법인을 선택하면 해당 법인의 공사 현장을 관리할 수 있습니다
+            </div>
+          )}
+
+          <div className="relative max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-8 pl-8 text-sm"
+              placeholder="발전소명, 지명 검색..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          {loading ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">불러오는 중...</div>
+          ) : sites.length === 0 ? (
+            <EmptyState message="등록된 공사 현장이 없습니다" />
+          ) : (
+            <div className="overflow-hidden rounded-md border divide-y">
+              {sites.map((site) => (
+                <div key={site.site_id}>
+                  <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/20">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId((prev) => (prev === site.site_id ? null : site.site_id))}
+                      className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {expandedId === site.site_id
+                        ? <ChevronDown className="size-4" />
+                        : <ChevronRight className="size-4" />}
+                    </button>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">{site.name}</span>
+                        <SiteTypeBadge type={site.site_type} />
+                        {!site.is_active && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">비활성</Badge>
+                        )}
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        {site.location && <span>{site.location}</span>}
+                        {site.capacity_mw != null && <span>{site.capacity_mw} MW</span>}
+                        {site.started_at && <span>착공 {site.started_at}</span>}
+                        {site.completed_at && <span>준공 {site.completed_at}</span>}
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-3">
+                      <Switch
+                        checked={site.is_active}
+                        onCheckedChange={() => handleToggleActive(site)}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={() => { setEditTarget(site); setFormOpen(true); }}
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-red-500 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => setDeleteTarget(site)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {expandedId === site.site_id && (
+                    <AllocationHistory siteId={site.site_id} />
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
-        <Button
-          size="sm"
-          onClick={() => { setEditTarget(undefined); setFormOpen(true); }}
-          disabled={noCompany}
-        >
-          <Plus className="mr-1.5 h-4 w-4" />새 현장 등록
-        </Button>
-      </div>
+      </MasterConsole>
 
-      {noCompany && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          좌측 상단에서 법인을 선택하면 해당 법인의 공사 현장을 관리할 수 있습니다
-        </div>
-      )}
-
-      {/* 필터 바 */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-          <Input
-            className="pl-8 h-8 text-sm"
-            placeholder="발전소명, 지명 검색..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex rounded-md border overflow-hidden text-xs">
-          {(['all', 'own', 'epc'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
-              className={`px-3 py-1.5 transition-colors ${
-                typeFilter === t
-                  ? 'bg-primary text-primary-foreground'
-                  : 'hover:bg-muted text-muted-foreground'
-              }`}
-            >
-              {{ all: '전체', own: '자체', epc: 'EPC' }[t]}
-            </button>
-          ))}
-        </div>
-        <span className="text-xs text-muted-foreground">{sites.length}개</span>
-      </div>
-
-      {/* 목록 */}
-      {loading ? (
-        <div className="text-sm text-muted-foreground py-8 text-center">불러오는 중...</div>
-      ) : sites.length === 0 ? (
-        <EmptyState message="등록된 공사 현장이 없습니다" />
-      ) : (
-        <div className="rounded-md border divide-y overflow-hidden">
-          {sites.map((site) => (
-            <div key={site.site_id}>
-              {/* 현장 행 */}
-              <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
-                {/* 펼치기 버튼 */}
-                <button
-                  type="button"
-                  onClick={() => setExpandedId((prev) => (prev === site.site_id ? null : site.site_id))}
-                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {expandedId === site.site_id
-                    ? <ChevronDown className="size-4" />
-                    : <ChevronRight className="size-4" />}
-                </button>
-
-                {/* 현장 정보 */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm">{site.name}</span>
-                    <SiteTypeBadge type={site.site_type} />
-                    {!site.is_active && (
-                      <Badge variant="outline" className="text-[10px] text-muted-foreground">비활성</Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
-                    {site.location && <span>{site.location}</span>}
-                    {site.capacity_mw != null && <span>{site.capacity_mw} MW</span>}
-                    {site.started_at && <span>착공 {site.started_at}</span>}
-                    {site.completed_at && <span>준공 {site.completed_at}</span>}
-                  </div>
-                </div>
-
-                {/* 우측 액션 */}
-                <div className="flex items-center gap-3 shrink-0">
-                  <Switch
-                    checked={site.is_active}
-                    onCheckedChange={() => handleToggleActive(site)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    onClick={() => { setEditTarget(site); setFormOpen(true); }}
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 text-red-500 hover:text-red-700 hover:bg-red-50"
-                    onClick={() => setDeleteTarget(site)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* 이력 패널 (펼쳐진 경우) */}
-              {expandedId === site.site_id && (
-                <AllocationHistory siteId={site.site_id} />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 등록/수정 다이얼로그 */}
       <SiteFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -482,6 +500,6 @@ export default function ConstructionSitesPage() {
         confirmLabel={deleting ? '삭제 중...' : '삭제'}
         variant="destructive"
       />
-    </div>
+    </>
   );
 }

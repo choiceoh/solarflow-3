@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Plus, CreditCard, BellRing, History, TrendingUp } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useAppStore } from '@/stores/appStore';
 import { useAllBankLimitGroups, useLCMaturityAlert, useLimitChangeList } from '@/hooks/useBanking';
 import { fetchWithAuth } from '@/lib/api';
@@ -13,6 +12,19 @@ import LimitChangeTable from '@/components/banking/LimitChangeTable';
 import LimitChangeForm from '@/components/banking/LimitChangeForm';
 import LCDemandForecast from '@/components/banking/LCDemandForecast';
 import { formatUSD } from '@/lib/utils';
+import { CardB, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
+
+const BANKING_TAB_OPTIONS = [
+  { key: 'limits', label: '한도 현황' },
+  { key: 'maturity', label: '만기 알림' },
+  { key: 'changes', label: '변경 이력' },
+  { key: 'demand', label: '수요 예측' },
+];
+
+function fmtUsdM(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0.00';
+  return (value / 1_000_000).toFixed(value >= 10_000_000 ? 1 : 2);
+}
 
 export default function BankingPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
@@ -26,6 +38,7 @@ export default function BankingPage() {
   // 탭 3: 한도 변경 이력
   const { data: limitChanges, loading: lcLoading, reload: reloadLC } = useLimitChangeList();
   const [lcFormOpen, setLcFormOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('limits');
 
   if (!selectedCompanyId) {
     return (
@@ -49,39 +62,43 @@ export default function BankingPage() {
   const totalLimit   = visibleGroups.flatMap((g) => g.rows).reduce((s, r) => s + r.lc_limit_usd, 0);
   const totalUsed    = visibleGroups.flatMap((g) => g.rows).reduce((s, r) => s + r.used, 0);
   const totalAvail   = visibleGroups.flatMap((g) => g.rows).reduce((s, r) => s + r.available, 0);
+  const totalUsageRate = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0;
+  const allLimitRows = visibleGroups.flatMap((g) => g.rows);
+  const alertRows = maturityData?.alerts ?? [];
+  const pageTitle =
+    activeTab === 'maturity' ? 'L/C 만기 알림' :
+    activeTab === 'changes' ? '한도 변경 이력' :
+    activeTab === 'demand' ? 'L/C 수요 예측' :
+    'L/C 한도 현황';
+  const pageSub =
+    activeTab === 'maturity' ? `${alertRows.length}건 · 30일 이내` :
+    activeTab === 'changes' ? `${limitChanges.length}건 · 승인한도 변경` :
+    activeTab === 'demand' ? 'PO 기반 한도 소요 전망' :
+    `${visibleGroups.length}개 법인 · ${allLimitRows.length}개 은행`;
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-lg font-semibold">은행 / LC</h1>
+    <div className="sf-page">
+      <div className="sf-procurement-layout">
+        <section className="sf-procurement-main">
+          <div className="sf-command-kpis">
+            <TileB lbl="총 한도" v={fmtUsdM(totalLimit)} u="M$" sub={`${allLimitRows.length}개 은행`} tone="ink" />
+            <TileB lbl="사용중" v={fmtUsdM(totalUsed)} u="M$" sub={`${totalUsageRate.toFixed(1)}% · 활성 L/C`} tone="warn" delta={`${totalUsageRate.toFixed(1)}%`} spark={[48, 51, 55, 58, 62, 66, totalUsageRate]} />
+            <TileB lbl="가용" v={fmtUsdM(totalAvail)} u="M$" sub="추가 개설 가능" tone="solar" />
+            <TileB lbl="만기 알림" v={String(alertRows.length)} u="건" sub="30일 이내" tone={alertRows.length > 0 ? 'info' : 'pos'} />
+          </div>
 
-      <Tabs defaultValue="limits">
-        <TabsList>
-          <TabsTrigger value="limits"><CreditCard className="h-3.5 w-3.5" />한도 현황</TabsTrigger>
-          <TabsTrigger value="maturity"><BellRing className="h-3.5 w-3.5" />만기 알림</TabsTrigger>
-          <TabsTrigger value="changes"><History className="h-3.5 w-3.5" />한도 변경 이력</TabsTrigger>
-          <TabsTrigger value="demand"><TrendingUp className="h-3.5 w-3.5" />LC 수요 예측</TabsTrigger>
-        </TabsList>
+          <CardB
+            title={pageTitle}
+            sub={pageSub}
+            right={<FilterChips options={BANKING_TAB_OPTIONS} value={activeTab} onChange={setActiveTab} />}
+          >
+            <div className="sf-command-tab-body">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
 
         {/* 탭 1: LC 한도 현황 — 법인별 그룹 */}
-        <TabsContent value="limits" className="space-y-6 mt-4">
+        <TabsContent value="limits" className="space-y-6">
           {groupsLoading ? <LoadingSpinner /> : (
             <>
-              {/* 전체 요약 카드 */}
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: '전체 승인한도', value: formatUSD(totalLimit), color: 'text-blue-700' },
-                  { label: '전체 실행금액', value: formatUSD(totalUsed), color: 'text-orange-600' },
-                  { label: '전체 잔여한도', value: formatUSD(totalAvail), color: 'text-green-600' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="rounded-lg border bg-card p-4">
-                    <p className="text-xs text-muted-foreground mb-1">{label}</p>
-                    <p className={`text-lg font-bold font-mono ${color}`}>{value}</p>
-                  </div>
-                ))}
-              </div>
-
-              <Separator />
-
               {/* 법인별 섹션 */}
               {visibleGroups.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-6">등록된 은행 정보가 없습니다</p>
@@ -113,7 +130,7 @@ export default function BankingPage() {
         </TabsContent>
 
         {/* 탭 2: LC 만기 알림 */}
-        <TabsContent value="maturity" className="space-y-4 mt-4">
+        <TabsContent value="maturity" className="space-y-4">
           {matLoading ? <LoadingSpinner /> : matError ? (
             <p className="text-sm text-red-500 text-center py-6">{matError}</p>
           ) : maturityData ? (
@@ -124,7 +141,7 @@ export default function BankingPage() {
         </TabsContent>
 
         {/* 탭 3: 한도 변경 이력 */}
-        <TabsContent value="changes" className="space-y-4 mt-4">
+        <TabsContent value="changes" className="space-y-4">
           <div className="flex items-center justify-end">
             <Button size="sm" onClick={() => setLcFormOpen(true)}>
               <Plus className="mr-1.5 h-4 w-4" />변경 등록
@@ -136,10 +153,48 @@ export default function BankingPage() {
         </TabsContent>
 
         {/* 탭 4: LC 수요 예측 */}
-        <TabsContent value="demand" className="mt-4">
+        <TabsContent value="demand">
           <LCDemandForecast />
         </TabsContent>
-      </Tabs>
+              </Tabs>
+            </div>
+          </CardB>
+        </section>
+
+        <aside className="sf-procurement-rail card">
+          <RailBlock title="총 한도 사용률" count="live">
+            <div className="bignum text-[30px] text-[var(--solar-3)]">{totalUsageRate.toFixed(1)}<span className="mono text-sm text-[var(--ink-3)]">%</span></div>
+            <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">{formatUSD(totalUsed)} / {formatUSD(totalLimit)}</div>
+            <div className="mt-3 h-2 overflow-hidden rounded bg-[var(--bg-2)]">
+              <div className="h-full bg-[var(--solar-2)]" style={{ width: `${Math.min(100, totalUsageRate)}%` }} />
+            </div>
+          </RailBlock>
+          <RailBlock title="은행별 사용률" count="M$">
+            {allLimitRows.slice(0, 6).map((row, index) => (
+              <div key={`${row.bank_id ?? row.bank_name}-${index}`} className={`py-2 ${index ? 'border-t border-[var(--line)]' : ''}`}>
+                <div className="flex items-baseline justify-between text-[11.5px]">
+                  <span className="font-semibold text-[var(--ink-2)]">{row.bank_name}</span>
+                  <span className="mono text-[var(--ink-3)]">{fmtUsdM(row.used)} / {fmtUsdM(row.lc_limit_usd)}</span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded bg-[var(--line)]">
+                  <div className="h-full bg-[var(--solar-2)]" style={{ width: `${Math.min(100, row.usage_rate)}%` }} />
+                </div>
+              </div>
+            ))}
+          </RailBlock>
+          <RailBlock title="만기 임박" count={alertRows.length} last>
+            {alertRows.slice(0, 5).map((alert, index) => (
+              <div key={alert.lc_id} className={`grid grid-cols-[auto_1fr_auto] gap-2 py-2 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
+                <span className="mono font-bold text-[var(--warn)]">D-{alert.days_remaining}</span>
+                <span className="mono truncate text-[var(--ink-2)]">{alert.lc_number ?? alert.lc_id.slice(0, 8)}</span>
+                <span className="mono text-[var(--ink-3)]">{fmtUsdM(alert.amount_usd)}M$</span>
+              </div>
+            ))}
+            {alertRows.length === 0 && <div className="text-xs text-[var(--ink-3)]">임박 만기가 없습니다.</div>}
+            <Sparkline data={[62, 64, 65, 67, 69, 70, totalUsageRate]} w={220} h={34} color="var(--solar-2)" area />
+          </RailBlock>
+        </aside>
+      </div>
 
       <LimitChangeForm open={lcFormOpen} onOpenChange={setLcFormOpen} onSubmit={handleCreateLimitChange} />
     </div>

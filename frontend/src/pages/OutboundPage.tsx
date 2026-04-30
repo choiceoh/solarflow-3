@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, Truck, TrendingUp } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useAppStore } from '@/stores/appStore';
 import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
@@ -13,6 +13,8 @@ import OutboundDetailView from '@/components/outbound/OutboundDetailView';
 import OutboundForm from '@/components/outbound/OutboundForm';
 import SaleListTable from '@/components/outbound/SaleListTable';
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
+import { MasterConsole } from '@/components/command/MasterConsole';
+import { FilterChips, RailBlock } from '@/components/command/MockupPrimitives';
 import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
   type OutboundStatus, type UsageCategory,
@@ -31,6 +33,7 @@ export default function OutboundPage() {
   const [usageFilter, setUsageFilter] = useState('');
   const [mfgFilter, setMfgFilter] = useState('');
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'outbound' | 'sales'>('outbound');
   const _loc = useLocation();
   // R1-1: 사이드바 "출고/판매" 클릭 시 목록 복귀 — URL → 상태 동기화
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -103,16 +106,67 @@ export default function OutboundPage() {
   const customerLabel = customerFilter ? (partners.find(p => p.partner_id === customerFilter)?.partner_name ?? customerFilter) : '전체 거래처';
   const monthLabel = monthFilter || '전체 기간';
   const invoiceLabel = invoiceFilter === 'issued' ? '계산서 발행' : invoiceFilter === 'pending' ? '계산서 미발행' : '전체';
+  const activeCount = outbounds.filter((outbound) => outbound.status === 'active').length;
+  const cancelPendingCount = outbounds.filter((outbound) => outbound.status === 'cancel_pending').length;
+  const saleTotal = sales.reduce((sum, sale) => sum + (sale.supply_amount ?? sale.sale?.supply_amount ?? 0), 0);
+  const pendingInvoiceCount = sales.filter((sale) => !(sale.tax_invoice_date ?? sale.sale?.tax_invoice_date)).length;
+  const recentOutbounds = outbounds.slice(0, 4);
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-lg font-semibold">출고/판매</h1>
-
-      <Tabs defaultValue="outbound">
-        <TabsList>
-          <TabsTrigger value="outbound"><Truck className="h-3.5 w-3.5" />출고 관리</TabsTrigger>
-          <TabsTrigger value="sales"><TrendingUp className="h-3.5 w-3.5" />매출 현황</TabsTrigger>
-        </TabsList>
+    <>
+      <MasterConsole
+        eyebrow="FULFILLMENT"
+        title="출고/판매"
+        description="출고 진행과 매출·계산서 상태를 같은 운영 화면에서 확인합니다."
+        tableTitle={activeTab === 'outbound' ? '출고 관리' : '매출 현황'}
+        tableSub={activeTab === 'outbound' ? `${outbounds.length.toLocaleString()}건 · ${statusLabel}` : `${sales.length.toLocaleString()}건 · ${invoiceLabel}`}
+        actions={
+          <>
+            {activeTab === 'outbound' ? <ExcelToolbar type="outbound" /> : <ExcelToolbar type="sale" />}
+            {activeTab === 'outbound' ? (
+              <Button size="sm" onClick={() => setFormOpen(true)}>
+                <Plus className="mr-1.5 h-4 w-4" />새로 등록
+              </Button>
+            ) : null}
+          </>
+        }
+        toolbar={
+          <FilterChips
+            options={[
+              { key: 'outbound', label: '출고 관리', count: outbounds.length },
+              { key: 'sales', label: '매출 현황', count: sales.length },
+            ]}
+            value={activeTab}
+            onChange={(value) => setActiveTab(value as 'outbound' | 'sales')}
+          />
+        }
+        metrics={[
+          { label: '출고 건수', value: outbounds.length.toLocaleString(), sub: statusLabel, tone: 'solar', spark: [14, 18, 16, 23, outbounds.length || 1] },
+          { label: '정상 출고', value: activeCount.toLocaleString(), sub: usageLabel, tone: 'pos' },
+          { label: '취소 대기', value: cancelPendingCount.toLocaleString(), sub: mfgLabel, tone: cancelPendingCount > 0 ? 'warn' : 'info' },
+          { label: '매출 합계', value: (saleTotal / 100_000_000).toFixed(2), unit: '억', sub: `${pendingInvoiceCount}건 계산서 대기`, tone: pendingInvoiceCount > 0 ? 'warn' : 'ink' },
+        ]}
+        rail={
+          <>
+            <RailBlock title="최근 출고" accent="var(--solar-3)" count={recentOutbounds.length}>
+              <div className="space-y-2">
+                {recentOutbounds.map((outbound) => (
+                  <div key={outbound.outbound_id} className="rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2">
+                    <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{outbound.erp_outbound_no ?? outbound.order_number ?? outbound.outbound_id.slice(0, 8)}</div>
+                    <div className="mono mt-1 text-[10px] text-[var(--ink-4)]">{OUTBOUND_STATUS_LABEL[outbound.status] ?? outbound.status} · {outbound.quantity?.toLocaleString?.() ?? 0}장</div>
+                  </div>
+                ))}
+              </div>
+            </RailBlock>
+            <RailBlock title="필터 상태" count={activeTab === 'outbound' ? statusLabel : invoiceLabel}>
+              <div className="text-[11px] leading-5 text-[var(--ink-3)]">
+                출고 필터와 매출 필터는 탭별로 유지되어 빠르게 왕복할 수 있습니다.
+              </div>
+            </RailBlock>
+          </>
+        }
+      >
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'outbound' | 'sales')}>
 
         <TabsContent value="outbound" className="space-y-4 mt-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -144,12 +198,6 @@ export default function OutboundPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="flex flex-wrap items-start justify-end gap-2">
-              <ExcelToolbar type="outbound" />
-              <Button size="sm" onClick={() => setFormOpen(true)}>
-                <Plus className="mr-1.5 h-4 w-4" />새로 등록
-              </Button>
             </div>
           </div>
 
@@ -203,8 +251,9 @@ export default function OutboundPage() {
           )}
         </TabsContent>
       </Tabs>
+      </MasterConsole>
 
       <OutboundForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleCreate} />
-    </div>
+    </>
   );
 }

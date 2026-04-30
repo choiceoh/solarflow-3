@@ -1,11 +1,11 @@
 import { useState } from 'react';
+import { Lock, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { getAuthSessionPersistence } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const REMEMBERED_EMAIL_KEY = 'solarflow-remembered-email';
 
@@ -65,65 +65,64 @@ export default function LoginForm() {
   };
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle className="text-center text-lg">로그인</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">이메일</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="user@topsolar.kr"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">비밀번호</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="remember-email"
-                checked={rememberEmail}
-                onCheckedChange={(checked) => setRememberEmail(checked === true)}
-              />
-              <Label htmlFor="remember-email" className="cursor-pointer font-normal text-muted-foreground">
-                아이디 기억
-              </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="keep-signed-in"
-                checked={keepSignedIn}
-                onCheckedChange={(checked) => setKeepSignedIn(checked === true)}
-              />
-              <Label htmlFor="keep-signed-in" className="cursor-pointer font-normal text-muted-foreground">
-                로그인 유지
-              </Label>
-            </div>
-          </div>
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? '로그인 중...' : '로그인'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+    <form onSubmit={handleSubmit} className="sf-login-form flex flex-col gap-3">
+      <div>
+        <Label htmlFor="email" className="sf-eyebrow">이메일</Label>
+        <div className="sf-field-shell">
+          <Mail className="sf-field-icon h-3.5 w-3.5" />
+          <Input
+            id="email"
+            type="email"
+            placeholder="user@topsolar.kr"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="password" className="sf-eyebrow">비밀번호</Label>
+        <div className="sf-field-shell">
+          <Lock className="sf-field-icon h-3.5 w-3.5" />
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
+        </div>
+      </div>
+
+      <div className="mt-0.5 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--sf-ink-3)]">
+        <label htmlFor="remember-email" className="flex cursor-pointer items-center gap-2">
+          <Checkbox
+            id="remember-email"
+            checked={rememberEmail}
+            onCheckedChange={(checked) => setRememberEmail(checked === true)}
+          />
+          아이디 기억
+        </label>
+        <label htmlFor="keep-signed-in" className="flex cursor-pointer items-center gap-2">
+          <Checkbox
+            id="keep-signed-in"
+            checked={keepSignedIn}
+            onCheckedChange={(checked) => setKeepSignedIn(checked === true)}
+          />
+          이 기기에서 로그인 상태 유지
+        </label>
+      </div>
+
+      {error && (
+        <p className="rounded bg-[var(--sf-neg-bg)] px-3 py-2 text-xs font-medium text-[var(--sf-neg)]">{error}</p>
+      )}
+
+      <Button type="submit" className="sf-login-submit mt-1" disabled={isSubmitting}>
+        {isSubmitting ? '로그인 중...' : '로그인'}
+      </Button>
+    </form>
   );
 }

@@ -6,6 +6,8 @@ import DataTable, { type Column } from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import BankForm from '@/components/masters/BankForm';
+import { MasterConsole } from '@/components/command/MasterConsole';
+import { FilterChips, RailBlock } from '@/components/command/MockupPrimitives';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { formatUSD, formatPercent, formatDate } from '@/lib/utils';
@@ -138,48 +140,81 @@ export default function BankPage() {
     },
   ];
 
+  const activeCount = data.filter((bank) => bank.is_active).length;
+  const totalLimit = data.reduce((sum, bank) => sum + (bank.lc_limit_usd ?? 0), 0);
+  const expiringRows = data
+    .filter((bank) => {
+      if (!bank.limit_expiry_date) return false;
+      const daysLeft = Math.ceil((new Date(bank.limit_expiry_date).getTime() - Date.now()) / 86400000);
+      return daysLeft <= 90;
+    })
+    .slice(0, 4);
+  const companyOptions = [{ key: 'all', label: '전체', count: data.length }, ...companies.map((company) => ({
+    key: company.company_id,
+    label: company.company_name,
+    count: data.filter((bank) => bank.company_id === company.company_id).length,
+  }))];
+
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">은행 관리</h1>
-        <Button size="sm" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
-          <Plus className="mr-1.5 h-4 w-4" />새로 등록
-        </Button>
-      </div>
-
-      {/* 법인 필터 토글 */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {[{ id: 'all', name: '전체' }, ...companies.map((c) => ({ id: c.company_id, name: c.company_name }))].map(({ id, name }) => (
-          <Button
-            key={id}
-            size="sm"
-            variant={localFilter === id ? 'default' : 'outline'}
-            onClick={() => setLocalFilter(id)}
-            className="h-7 text-xs"
-          >
-            {name}
+    <>
+      <MasterConsole
+        title="은행 관리"
+        description="L/C 한도, 승인기한, 수수료율을 수입금융 화면과 공유하는 은행 기준정보입니다."
+        tableTitle="은행 마스터"
+        tableSub={`${filtered.length.toLocaleString()} / ${data.length.toLocaleString()}개 표시`}
+        actions={
+          <Button size="sm" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
+            <Plus className="mr-1.5 h-4 w-4" />새로 등록
           </Button>
-        ))}
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={filtered}
-        loading={loading}
-        searchable
-        searchPlaceholder="은행명, 법인 검색"
-        onSearch={handleSearch}
-        actions={(row) => (
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
-      />
+        }
+        toolbar={<FilterChips options={companyOptions} value={localFilter} onChange={setLocalFilter} />}
+        metrics={[
+          { label: '은행 수', value: data.length.toLocaleString(), sub: '법인별 한도 계좌', tone: 'solar', spark: [4, 5, 6, data.length || 1] },
+          { label: '활성', value: activeCount.toLocaleString(), sub: 'L/C 연결 가능', tone: 'pos' },
+          { label: '총 한도', value: formatUSD(totalLimit), sub: '승인 한도 합계', tone: 'info' },
+          { label: '만기 주의', value: expiringRows.length.toLocaleString(), sub: '90일 이내/만료', tone: expiringRows.length > 0 ? 'warn' : 'ink' },
+        ]}
+        rail={
+          <>
+            <RailBlock title="법인 필터" accent="var(--solar-3)" count={companyOptions.find((option) => option.key === localFilter)?.label}>
+              <div className="text-[11px] leading-5 text-[var(--ink-3)]">
+                법인별 은행 한도를 좁혀 보고, 수입금융의 사용률 계산 기준을 점검합니다.
+              </div>
+            </RailBlock>
+            <RailBlock title="승인기한" count={expiringRows.length}>
+              <div className="space-y-2">
+                {expiringRows.length === 0 ? (
+                  <div className="text-[11px] text-[var(--ink-4)]">90일 이내 만기 은행 없음</div>
+                ) : expiringRows.map((bank) => (
+                  <div key={bank.bank_id} className="rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2">
+                    <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{bank.bank_name}</div>
+                    <div className="mono mt-1 text-[10px] text-[var(--ink-4)]">{bank.limit_expiry_date ? formatDate(bank.limit_expiry_date) : '기한 없음'} · {formatUSD(bank.lc_limit_usd)}</div>
+                  </div>
+                ))}
+              </div>
+            </RailBlock>
+          </>
+        }
+      >
+        <DataTable
+          columns={columns}
+          data={filtered}
+          loading={loading}
+          searchable
+          searchPlaceholder="은행명, 법인 검색"
+          onSearch={handleSearch}
+          actions={(row) => (
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+        />
+      </MasterConsole>
 
       <BankForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleSubmit} editData={editTarget} />
 
@@ -200,6 +235,6 @@ export default function BankPage() {
         confirmLabel={deleting ? '삭제 중...' : '삭제'}
         variant="destructive"
       />
-    </div>
+    </>
   );
 }

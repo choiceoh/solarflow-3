@@ -6,6 +6,8 @@ import DataTable, { type Column } from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import WarehouseForm from '@/components/masters/WarehouseForm';
+import { MasterConsole } from '@/components/command/MasterConsole';
+import { RailBlock } from '@/components/command/MockupPrimitives';
 import { fetchWithAuth } from '@/lib/api';
 import type { Warehouse } from '@/types/masters';
 
@@ -99,23 +101,64 @@ export default function WarehousePage() {
     ) },
   ];
 
+  const activeCount = data.filter((warehouse) => warehouse.is_active).length;
+  const portCount = data.filter((warehouse) => warehouse.warehouse_type === 'port').length;
+  const factoryCount = data.filter((warehouse) => warehouse.warehouse_type === 'factory').length;
+  const recentRows = filtered.slice(0, 4);
+
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">창고/장소 관리</h1>
-        <Button size="sm" onClick={() => { setEditTarget(null); setFormOpen(true); }}><Plus className="mr-1.5 h-4 w-4" />새로 등록</Button>
-      </div>
-      <DataTable columns={columns} data={filtered} loading={loading} searchable searchPlaceholder="창고코드, 창고명, 장소명 검색" onSearch={handleSearch}
-        actions={(row) => (
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )} />
+    <>
+      <MasterConsole
+        title="창고/장소 관리"
+        description="입고, 보관, 출고 예약의 물류 위치 기준을 관리합니다."
+        tableTitle="창고/장소 마스터"
+        tableSub={`${filtered.length.toLocaleString()} / ${data.length.toLocaleString()}개 표시`}
+        actions={
+          <Button size="sm" onClick={() => { setEditTarget(null); setFormOpen(true); }}><Plus className="mr-1.5 h-4 w-4" />새로 등록</Button>
+        }
+        metrics={[
+          { label: '전체 위치', value: data.length.toLocaleString(), sub: '창고/장소 기준', tone: 'solar', spark: [4, 5, 6, data.length || 1] },
+          { label: '활성', value: activeCount.toLocaleString(), sub: '입출고 선택 가능', tone: 'pos' },
+          { label: '항구', value: portCount.toLocaleString(), sub: '통관/입항 연결', tone: 'info' },
+          { label: '공장', value: factoryCount.toLocaleString(), sub: '현장 직납 후보', tone: 'warn' },
+        ]}
+        rail={
+          <>
+            <RailBlock title="위치 유형" accent="var(--solar-3)" count={data.length}>
+              <div className="space-y-2 text-[12px]">
+                {Object.entries(typeLabel).map(([key, label]) => (
+                  <div key={key} className="flex justify-between">
+                    <span className="text-[var(--ink-3)]">{label}</span>
+                    <span className="mono font-semibold">{data.filter((warehouse) => warehouse.warehouse_type === key).length}</span>
+                  </div>
+                ))}
+              </div>
+            </RailBlock>
+            <RailBlock title="최근 표시" count={recentRows.length}>
+              <div className="space-y-2">
+                {recentRows.map((warehouse) => (
+                  <div key={warehouse.warehouse_id} className="rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2">
+                    <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{warehouse.warehouse_name}</div>
+                    <div className="mono mt-1 text-[10px] text-[var(--ink-4)]">{warehouse.warehouse_code} · {warehouse.location_name}</div>
+                  </div>
+                ))}
+              </div>
+            </RailBlock>
+          </>
+        }
+      >
+        <DataTable columns={columns} data={filtered} loading={loading} searchable searchPlaceholder="창고코드, 창고명, 장소명 검색" onSearch={handleSearch}
+          actions={(row) => (
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )} />
+      </MasterConsole>
       <WarehouseForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleSubmit} editData={editTarget} />
       <ConfirmDialog
         open={!!toggleTarget}
@@ -133,6 +176,6 @@ export default function WarehousePage() {
         confirmLabel={deleting ? '삭제 중...' : '삭제'}
         variant="destructive"
       />
-    </div>
+    </>
   );
 }

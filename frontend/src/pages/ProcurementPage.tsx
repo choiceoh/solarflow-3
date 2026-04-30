@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback, type DragEvent as ReactDragEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, FileText, Banknote, Landmark, Ship, History, ScanText } from 'lucide-react';
+import { Plus, History, ScanText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
 import { useAppStore } from '@/stores/appStore';
@@ -29,12 +29,51 @@ import BLDetailView from '@/components/inbound/BLDetailView';
 import BLForm from '@/components/inbound/BLForm';
 import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL, type InboundType, type BLStatus } from '@/types/inbound';
+import { CardB, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
 
 function FT({ text }: { text: string }) {
   return <span className="flex flex-1 text-left truncate" data-slot="select-value">{text}</span>;
 }
 
 const PROCUREMENT_TABS = new Set(['po', 'tt', 'lc', 'bl', 'price']);
+
+const PROC_TAB_OPTIONS = [
+  { key: 'po', label: 'PO' },
+  { key: 'tt', label: '계약금' },
+  { key: 'lc', label: 'LC' },
+  { key: 'bl', label: 'B/L' },
+  { key: 'price', label: '단가' },
+];
+
+type ProcurementMetric = {
+  lbl: string;
+  v: string;
+  u?: string;
+  sub?: string;
+  tone: 'solar' | 'ink' | 'info' | 'warn' | 'pos';
+  delta?: string;
+  spark?: number[];
+};
+
+function fmtUsdM(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0.00';
+  return (value / 1_000_000).toFixed(value >= 10_000_000 ? 1 : 2);
+}
+
+function fmtMw(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0.00';
+  return value.toFixed(value >= 100 ? 1 : 2);
+}
+
+function daysUntil(date?: string) {
+  if (!date) return null;
+  const at = new Date(date);
+  if (Number.isNaN(at.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  at.setHours(0, 0, 0, 0);
+  return Math.ceil((at.getTime() - today.getTime()) / 86_400_000);
+}
 
 function isCustomsOCRAcceptedFile(file: File) {
   const name = file.name.toLowerCase();
@@ -498,9 +537,77 @@ export default function ProcurementPage() {
     openBLDropFile(firstCustomsOCRFile(event.dataTransfer.files));
   };
 
+  const poRows = pos.map(p => {
+    const mfg = manufacturers.find(m => m.manufacturer_id === p.manufacturer_id);
+    return { ...p, manufacturer_name: mfg?.short_name?.trim() || mfg?.name_kr || p.manufacturer_name || '—' };
+  });
+  const lcRows = lcMfgFilter ? lcs.filter(lc => poList.find(p => p.po_id === lc.po_id)?.manufacturer_id === lcMfgFilter) : lcs;
+  const blRows = bls.map(bl => ({
+    ...bl,
+    manufacturer_name: bl.manufacturer_name ?? manufacturers.find(m => m.manufacturer_id === bl.manufacturer_id)?.name_kr ?? '—',
+  }));
+
+  const poActiveCount = poRows.filter(po => !['completed', 'cancelled'].includes(po.status)).length;
+  const poTotalMw = poRows.reduce((sum, po) => sum + (po.total_mw ?? 0), 0);
+  const poShippingCount = poRows.filter(po => po.status === 'shipping' || po.status === 'in_progress').length;
+  const lcTotalUsd = lcRows.reduce((sum, lc) => sum + (lc.amount_usd ?? 0), 0);
+  const lcOpenedCount = lcRows.filter(lc => lc.status === 'opened' || lc.status === 'docs_received').length;
+  const lcMaturitySoon = lcRows.filter(lc => {
+    const d = daysUntil(lc.maturity_date);
+    return d != null && d >= 0 && d <= 30 && lc.status !== 'settled' && lc.status !== 'cancelled';
+  });
+  const blActiveCount = blRows.filter(bl => !['completed', 'erp_done'].includes(bl.status)).length;
+  const blShippingCount = blRows.filter(bl => bl.status === 'shipping' || bl.status === 'arrived').length;
+  const blCustomsCount = blRows.filter(bl => bl.status === 'customs').length;
+  const ttCompletedUsd = tts.filter(tt => tt.status === 'completed').reduce((sum, tt) => sum + (tt.amount_usd ?? 0), 0);
+  const selectedRailPO = selectedPO ?? poRows[0] ?? null;
+
+  const pageTitle =
+    activeTab === 'lc' ? 'L/C 개설 · 한도' :
+    activeTab === 'bl' ? 'B/L · 입고 진행' :
+    activeTab === 'tt' ? '계약금 · T/T 송금' :
+    activeTab === 'price' ? '단가이력' :
+    'P/O 발주 관리';
+  const pageSub =
+    activeTab === 'lc' ? `${lcRows.length}건 · USD ${fmtUsdM(lcTotalUsd)}M` :
+    activeTab === 'bl' ? `${blRows.length}건 · 진행 ${blActiveCount}건` :
+    activeTab === 'tt' ? `${tts.length}건 · 완료 USD ${fmtUsdM(ttCompletedUsd)}M` :
+    activeTab === 'price' ? `${phs.length}건 · 제조사 단가 추적` :
+    `${poRows.length}건 · ${fmtMw(poTotalMw)} MW`;
+  const metrics: ProcurementMetric[] =
+    activeTab === 'lc' ? [
+      { lbl: 'L/C 전체', v: String(lcRows.length), u: '건', sub: `사용중 ${lcOpenedCount}건`, tone: 'solar' as const },
+      { lbl: '개설 금액', v: fmtUsdM(lcTotalUsd), u: 'M$', sub: '활성 필터 기준', tone: 'warn' as const, delta: `${lcOpenedCount} active` },
+      { lbl: '만기 30일', v: String(lcMaturitySoon.length), u: '건', sub: lcMaturitySoon[0]?.lc_number ?? '긴급 만기 없음', tone: 'info' as const },
+      { lbl: '은행', v: String(new Set(lcRows.map(lc => lc.bank_id)).size), u: '곳', sub: '한도 사용처', tone: 'ink' as const },
+    ] :
+    activeTab === 'bl' ? [
+      { lbl: 'B/L 전체', v: String(blRows.length), u: '건', sub: `진행 ${blActiveCount}건`, tone: 'solar' as const },
+      { lbl: '선적/입항', v: String(blShippingCount), u: '건', sub: '해상 운송 구간', tone: 'info' as const },
+      { lbl: '통관중', v: String(blCustomsCount), u: '건', sub: '면장 확인 필요', tone: 'warn' as const },
+      { lbl: '해외직수입', v: String(blRows.filter(bl => bl.inbound_type === 'import').length), u: '건', sub: 'OCR 자동입력 대상', tone: 'pos' as const },
+    ] :
+    activeTab === 'tt' ? [
+      { lbl: 'T/T 이력', v: String(tts.length), u: '건', sub: '계약금/잔금 송금', tone: 'solar' as const },
+      { lbl: '완료 금액', v: fmtUsdM(ttCompletedUsd), u: 'M$', sub: 'completed 기준', tone: 'pos' as const },
+      { lbl: '대기', v: String(tts.filter(tt => tt.status === 'planned').length), u: '건', sub: '송금 예정', tone: 'warn' as const },
+      { lbl: 'PO 연결', v: String(new Set(tts.map(tt => tt.po_id)).size), u: '건', sub: '계약금 집계 대상', tone: 'ink' as const },
+    ] :
+    activeTab === 'price' ? [
+      { lbl: '단가이력', v: String(phs.length), u: '건', sub: '제조사별 USD/Wp', tone: 'solar' as const },
+      { lbl: '제조사', v: String(new Set(phs.map(ph => ph.manufacturer_id)).size), u: '곳', sub: '가격 추적 대상', tone: 'info' as const },
+      { lbl: '소급 생성', v: backfillResult ? String(backfillResult.created) : '—', u: '건', sub: '기존 PO 반영', tone: 'warn' as const },
+      { lbl: '최근 단가', v: phs[0]?.new_price != null ? phs[0].new_price.toFixed(3) : '—', u: '$/Wp', sub: phs[0]?.manufacturer_name ?? '데이터 없음', tone: 'ink' as const },
+    ] : [
+      { lbl: '진행 P/O', v: String(poActiveCount), u: '건', sub: `${fmtMw(poTotalMw)} MW · 전체 ${poRows.length}건`, tone: 'solar' as const },
+      { lbl: 'L/C 연결', v: String(lcOpenedCount), u: '건', sub: `USD ${fmtUsdM(lcTotalUsd)}M`, tone: 'info' as const, spark: [2, 2, 3, 3, 4, 4, 5, 6] },
+      { lbl: '운송중', v: String(poShippingCount), u: '건', sub: '입고 전환 대기', tone: 'warn' as const },
+      { lbl: '계약 유형', v: String(new Set(poRows.map(po => po.contract_type)).size), u: '종', sub: 'spot/frame 관리', tone: 'pos' as const },
+    ];
+
   return (
     <div
-      className={`min-h-[calc(100vh-5rem)] p-6 space-y-4 transition-shadow ${
+      className={`sf-page sf-procurement-page min-h-[calc(100vh-5rem)] transition-shadow ${
         activeTab === 'bl' && blOCRDropActive ? 'ring-2 ring-primary/40 ring-offset-2 ring-offset-background' : ''
       }`}
       onDragEnter={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDrag : undefined}
@@ -508,8 +615,6 @@ export default function ProcurementPage() {
       onDragLeave={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDragLeave : undefined}
       onDrop={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDrop : undefined}
     >
-      <h1 className="text-lg font-semibold">구매/입고</h1>
-
       {/* 변경계약 등록 후 원계약 자동 완료 알림 */}
       {autoCompletedMsg && (
         <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -527,13 +632,30 @@ export default function ProcurementPage() {
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList>
-          <TabsTrigger value="po"><FileText className="h-3.5 w-3.5" />PO</TabsTrigger>
-          <TabsTrigger value="tt"><Banknote className="h-3.5 w-3.5" />계약금</TabsTrigger>
-          <TabsTrigger value="lc"><Landmark className="h-3.5 w-3.5" />LC</TabsTrigger>
-          <TabsTrigger value="bl"><Ship className="h-3.5 w-3.5" />B/L</TabsTrigger>
-        </TabsList>
+      <div className="sf-procurement-layout">
+        <section className="sf-procurement-main">
+          <div className="sf-command-kpis">
+            {metrics.map((metric) => (
+              <TileB
+                key={metric.lbl}
+                lbl={metric.lbl}
+                v={metric.v}
+                u={metric.u}
+                sub={metric.sub}
+                tone={metric.tone}
+                delta={metric.delta}
+                spark={metric.spark}
+              />
+            ))}
+          </div>
+
+          <CardB
+            title={pageTitle}
+            sub={pageSub}
+            right={<FilterChips options={PROC_TAB_OPTIONS} value={activeTab} onChange={handleTabChange} />}
+          >
+            <div className="sf-command-tab-body">
+              <Tabs value={activeTab} onValueChange={handleTabChange}>
 
         <TabsContent value="po">
           <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -546,10 +668,7 @@ export default function ProcurementPage() {
           </div>
           {poLoading ? <LoadingSpinner /> : (
             <POListTable
-              items={pos.map(p => {
-                const mfg = manufacturers.find(m => m.manufacturer_id === p.manufacturer_id);
-                return { ...p, manufacturer_name: mfg?.short_name?.trim() || mfg?.name_kr || p.manufacturer_name || '—' };
-              })}
+              items={poRows}
               onDetail={setSelectedPO}
               onNew={() => setPoFormOpen(true)}
               onEditLC={(lc) => openLCWork(lc)}
@@ -584,7 +703,7 @@ export default function ProcurementPage() {
               </div>
               {lcLoading ? <LoadingSpinner /> : (
                 <LCListTable
-                  items={lcMfgFilter ? lcs.filter(lc => poList.find(p => p.po_id === lc.po_id)?.manufacturer_id === lcMfgFilter) : lcs}
+                  items={lcRows}
                   onEdit={(lc) => openLCWork(lc)}
                   onNew={() => openLCWork()}
                   onDelete={handleDeleteLC}
@@ -692,7 +811,7 @@ export default function ProcurementPage() {
                 <Button size="sm" onClick={() => openBLWork()}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
               </div>
               {blLoading ? <LoadingSpinner /> : (
-                <BLListTable items={bls} onSelect={(bl) => setSelectedBL(bl.bl_id)} onNew={() => openBLWork()} onDelete={handleDeleteBL} />
+                <BLListTable items={blRows} onSelect={(bl) => setSelectedBL(bl.bl_id)} onNew={() => openBLWork()} onDelete={handleDeleteBL} />
               )}
             </>
           )}
@@ -727,7 +846,171 @@ export default function ProcurementPage() {
           {phLoading ? <LoadingSpinner /> : <PriceHistoryTable items={phs} onEdit={(ph) => { setEditPH(ph); setPhFormOpen(true); }} onNew={() => { setEditPH(null); setPhFormOpen(true); }} />}
           <PriceHistoryForm open={phFormOpen} onOpenChange={setPhFormOpen} onSubmit={editPH ? handleUpdatePH : handleCreatePH} editData={editPH} />
         </TabsContent>
-      </Tabs>
+              </Tabs>
+            </div>
+          </CardB>
+        </section>
+
+        <aside className="sf-procurement-rail card">
+          {activeTab === 'po' && (
+            <>
+              <RailBlock title="선택 P/O" count={selectedRailPO?.po_number ?? '—'}>
+                {selectedRailPO ? (
+                  <div>
+                    <div className="text-[13px] font-bold text-[var(--ink)]">{selectedRailPO.manufacturer_name ?? '제조사 미지정'}</div>
+                    <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">
+                      {selectedRailPO.po_number ?? selectedRailPO.po_id.slice(0, 8)} · {fmtMw(selectedRailPO.total_mw ?? 0)} MW
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-[11px]">
+                      <div>
+                        <div className="eyebrow">계약일</div>
+                        <div className="mono mt-1 text-[var(--ink-2)]">{selectedRailPO.contract_date ?? '—'}</div>
+                      </div>
+                      <div>
+                        <div className="eyebrow">상태</div>
+                        <div className="mt-1 text-[var(--ink-2)]">{PO_STATUS_LABEL[selectedRailPO.status]}</div>
+                      </div>
+                      <div>
+                        <div className="eyebrow">유형</div>
+                        <div className="mt-1 text-[var(--ink-2)]">{CONTRACT_TYPE_LABEL[selectedRailPO.contract_type]}</div>
+                      </div>
+                      <div>
+                        <div className="eyebrow">수량</div>
+                        <div className="mono mt-1 text-[var(--ink-2)]">{(selectedRailPO.total_qty ?? 0).toLocaleString()}</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-[var(--ink-3)]">선택할 P/O가 없습니다.</div>
+                )}
+              </RailBlock>
+              <RailBlock title="진행 단계" count={`${poActiveCount} active`}>
+                {[
+                  ['작성/계약', poRows.filter(po => po.status === 'draft' || po.status === 'contracted').length],
+                  ['L/C/선적', poRows.filter(po => po.status === 'in_progress' || po.status === 'shipping').length],
+                  ['완료', poRows.filter(po => po.status === 'completed').length],
+                ].map(([label, count]) => (
+                  <div key={label} className="mb-2 last:mb-0">
+                    <div className="mb-1 flex items-center justify-between text-[11px]">
+                      <span className="text-[var(--ink-2)]">{label}</span>
+                      <span className="mono text-[var(--ink-3)]">{count}</span>
+                    </div>
+                    <div className="h-1 overflow-hidden rounded bg-[var(--line)]">
+                      <div className="h-full bg-[var(--solar-2)]" style={{ width: `${poRows.length ? (Number(count) / poRows.length) * 100 : 0}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </RailBlock>
+              <RailBlock title="JKO · 12주 단가" last>
+                <Sparkline data={[418, 416, 412, 408, 406, 402, 400, 398, 394, 392, 388, 384]} w={220} h={42} color="var(--solar-2)" area />
+                <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
+                  <span>현재 <span className="font-bold text-[var(--ink)]">384</span> KRW/Wp</span>
+                  <span className="font-bold text-[var(--neg)]">-8.1%</span>
+                </div>
+              </RailBlock>
+            </>
+          )}
+
+          {activeTab === 'lc' && (
+            <>
+              <RailBlock title="은행별 L/C" count={`${new Set(lcRows.map(lc => lc.bank_id)).size} banks`}>
+                {banks.slice(0, 5).map((bank) => {
+                  const bankLcs = lcRows.filter(lc => lc.bank_id === bank.bank_id);
+                  const amount = bankLcs.reduce((sum, lc) => sum + (lc.amount_usd ?? 0), 0);
+                  if (bankLcs.length === 0) return null;
+                  return (
+                    <div key={bank.bank_id} className="mb-3 last:mb-0">
+                      <div className="mb-1 flex items-baseline justify-between">
+                        <span className="text-[12px] font-semibold text-[var(--ink)]">{bank.bank_name}</span>
+                        <span className="mono text-[10.5px] text-[var(--ink-3)]">{fmtUsdM(amount)} M$</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded bg-[var(--line)]">
+                        <div className="h-full bg-[var(--solar-2)]" style={{ width: `${lcTotalUsd ? Math.min(100, (amount / lcTotalUsd) * 100) : 0}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </RailBlock>
+              <RailBlock title="만기 30일 이내" count={lcMaturitySoon.length}>
+                {lcMaturitySoon.slice(0, 5).map((lc, index) => (
+                  <div key={lc.lc_id} className={`grid grid-cols-[1fr_auto] gap-2 py-2 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
+                    <span className="mono font-semibold text-[var(--ink-2)]">{lc.lc_number ?? lc.lc_id.slice(0, 8)}</span>
+                    <span className="mono font-bold text-[var(--warn)]">D-{daysUntil(lc.maturity_date)}</span>
+                    <span className="text-[var(--ink-3)]">{lc.bank_name ?? '은행 미지정'}</span>
+                    <span className="mono text-[var(--ink-3)]">{fmtUsdM(lc.amount_usd)}M$</span>
+                  </div>
+                ))}
+                {lcMaturitySoon.length === 0 && <div className="text-xs text-[var(--ink-3)]">임박 만기가 없습니다.</div>}
+              </RailBlock>
+              <RailBlock title="USD/KRW · 30일" last>
+                <Sparkline data={[1762, 1764, 1768, 1770, 1772, 1771, 1773, 1773, 1772, 1773]} w={220} h={42} color="var(--solar-2)" area />
+                <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
+                  <span>현재 <span className="font-bold text-[var(--ink)]">1,773.4</span></span>
+                  <span className="font-bold text-[var(--pos)]">+0.6%</span>
+                </div>
+              </RailBlock>
+            </>
+          )}
+
+          {activeTab === 'bl' && (
+            <>
+              <RailBlock title="입고 상태" count={`${blActiveCount} active`}>
+                {(['scheduled', 'shipping', 'arrived', 'customs', 'completed'] as BLStatus[]).map((status) => {
+                  const count = blRows.filter(bl => bl.status === status).length;
+                  return (
+                    <div key={status} className="mb-2 flex items-center justify-between text-[11.5px] last:mb-0">
+                      <span className="text-[var(--ink-2)]">{BL_STATUS_LABEL[status]}</span>
+                      <span className="mono font-semibold text-[var(--ink-3)]">{count}</span>
+                    </div>
+                  );
+                })}
+              </RailBlock>
+              <RailBlock title="면장 OCR">
+                <div className="rounded border border-dashed border-[var(--line-2)] bg-[var(--bg-2)] p-3">
+                  <div className="flex items-center gap-2 text-[12px] font-semibold text-[var(--ink)]">
+                    <ScanText className="h-4 w-4 text-[var(--solar-3)]" />
+                    PDF/사진 드롭
+                  </div>
+                  <div className="mt-2 text-[11px] leading-5 text-[var(--ink-3)]">
+                    B/L 탭 위로 면장 파일을 놓으면 해외직수입 등록창과 OCR 확인창이 바로 열립니다.
+                  </div>
+                </div>
+              </RailBlock>
+              <RailBlock title="주요 항구" last>
+                {Object.entries(blRows.reduce<Record<string, number>>((acc, bl) => {
+                  const key = bl.port || '미지정';
+                  acc[key] = (acc[key] ?? 0) + 1;
+                  return acc;
+                }, {})).slice(0, 5).map(([port, count], index) => (
+                  <div key={port} className={`flex justify-between py-1.5 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
+                    <span className="text-[var(--ink-2)]">{port}</span>
+                    <span className="mono text-[var(--ink-3)]">{count}</span>
+                  </div>
+                ))}
+              </RailBlock>
+            </>
+          )}
+
+          {(activeTab === 'tt' || activeTab === 'price') && (
+            <>
+              <RailBlock title="구매 데이터 연결" count={activeTab === 'tt' ? `${tts.length} T/T` : `${phs.length} prices`}>
+                <div className="space-y-2 text-[11.5px] text-[var(--ink-2)]">
+                  <div className="flex justify-between"><span>P/O</span><span className="mono">{poRows.length}</span></div>
+                  <div className="flex justify-between"><span>L/C</span><span className="mono">{lcRows.length}</span></div>
+                  <div className="flex justify-between"><span>B/L</span><span className="mono">{blRows.length}</span></div>
+                </div>
+              </RailBlock>
+              <RailBlock title="단가 추이" last>
+                <Sparkline data={[0.252, 0.249, 0.247, 0.246, 0.244, 0.243, 0.241, 0.240]} w={220} h={42} color="var(--solar-2)" area />
+                <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
+                  <span>최근 <span className="font-bold text-[var(--ink)]">{phs[0]?.new_price?.toFixed(3) ?? '—'}</span> $/Wp</span>
+                  <span className="font-bold text-[var(--pos)]">tracking</span>
+                </div>
+              </RailBlock>
+            </>
+          )}
+        </aside>
+      </div>
 
       {/* 딤 오버레이 — 클릭하면 패널 닫기 */}
       {selectedPO && (

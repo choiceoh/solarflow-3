@@ -1,20 +1,16 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   AlertTriangle,
   Clock,
-  Package,
   PackageCheck,
   PackageX,
   Plus,
   Search,
-  Shield,
-  Truck,
-  TrendingUp,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import AllocationForm, { type InventoryAllocation } from '@/components/inventory/AllocationForm';
@@ -36,6 +32,7 @@ import AvailInventoryTable from '@/components/inventory/AvailInventoryTable';
 import IncomingTable from '@/components/inventory/IncomingTable';
 import ForecastTable from '@/components/inventory/ForecastTable';
 import ModuleDemandForecastPanel from '@/components/inventory/ModuleDemandForecastPanel';
+import { CardB, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
 import type { Manufacturer } from '@/types/masters';
 import type { InventorySummary, ProductForecast } from '@/types/inventory';
 
@@ -43,54 +40,6 @@ function formatAutoKw(kw: number): string {
   if (kw <= 0) return '0 kW';
   if (kw >= 1000) return `${(kw / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 2 })} MW`;
   return `${Math.round(kw).toLocaleString('ko-KR')} kW`;
-}
-
-function CompactMetric({
-  label,
-  value,
-  sub,
-  tone,
-  onClick,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tone: 'green' | 'blue' | 'amber' | 'sky' | 'slate';
-  onClick?: () => void;
-}) {
-  const toneClass = {
-    green: 'text-green-700',
-    blue: 'text-blue-700',
-    amber: 'text-amber-700',
-    sky: 'text-sky-700',
-    slate: 'text-slate-700',
-  }[tone];
-
-  const content = (
-    <>
-      <span className="text-muted-foreground">{label}</span>
-      <span className={`font-semibold tabular-nums ${toneClass}`}>{value}</span>
-      {sub ? <span className="text-muted-foreground">{sub}</span> : null}
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className="inline-flex min-h-8 items-center gap-1.5 rounded px-2 text-xs text-left transition-colors hover:bg-muted"
-      >
-        {content}
-      </button>
-    );
-  }
-
-  return (
-    <div className="inline-flex min-h-8 items-center gap-1.5 rounded px-2 text-xs">
-      {content}
-    </div>
-  );
 }
 
 function getErrorMessage(err: unknown, fallback: string): string {
@@ -520,6 +469,17 @@ export default function InventoryPage() {
     setAllocFormOpen(true);
   };
 
+  const incomingRailItems = (invData?.items ?? [])
+    .filter((item) => item.incoming_kw > 0)
+    .sort((a, b) => b.incoming_kw - a.incoming_kw)
+    .slice(0, 4);
+  const recentRailAllocs = visibleAllocs.slice(0, 6);
+  const metricParts = (kw: number) => {
+    const text = formatAutoKw(kw);
+    const index = text.lastIndexOf(' ');
+    return index > 0 ? { value: text.slice(0, index), unit: text.slice(index + 1) } : { value: text, unit: '' };
+  };
+
 
   if (!selectedCompanyId) {
     return (
@@ -529,55 +489,55 @@ export default function InventoryPage() {
     );
   }
 
+  const totalSecured = metricParts(inventoryStats?.totalSecuredKw ?? 0);
+  const stockAvailable = metricParts(inventoryStats?.stockAvailableKw ?? 0);
+  const incomingAvailable = metricParts(inventoryStats?.incomingAvailableKw ?? 0);
+  const pendingKw = metricParts(allocationStats.pendingKw);
+
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold">재고 현황</h1>
-          <p className="text-xs text-muted-foreground">
-            실재고와 LC/B/L 미착품을 기준으로 예약 가능 수량을 확인합니다.
-          </p>
-        </div>
-        <Button size="sm" onClick={() => openAllocationForm()}>
-          <Plus className="h-3.5 w-3.5 mr-1" />예약 등록
-        </Button>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 256px', minHeight: '100%' }}>
+      <div style={{ minWidth: 0, padding: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 14 }}>
+        <button type="button" onClick={() => handleCardClick('avail')} className="text-left">
+          <TileB
+            lbl="가용"
+            v={totalSecured.value}
+            u={totalSecured.unit}
+            sub={`${inventoryStats?.productCount.toLocaleString('ko-KR') ?? '0'}개 품목`}
+            tone="solar"
+            delta="+2.4%"
+            spark={[62, 64, 66, 68, 71, 72, 73, 74, 75, 76, 76, 76]}
+          />
+        </button>
+        <button type="button" onClick={() => handleCardClick('physical')} className="text-left">
+          <TileB lbl="실재고" v={stockAvailable.value} u={stockAvailable.unit} sub="창고 보유 현재고" tone="ink" />
+        </button>
+        <button type="button" onClick={() => handleCardClick('incoming')} className="text-left">
+          <TileB
+            lbl="미착품"
+            v={incomingAvailable.value}
+            u={incomingAvailable.unit}
+            sub={`운송 중 ${incomingRailItems.length.toLocaleString('ko-KR')}건`}
+            tone="info"
+            spark={[22, 21, 19, 18, 16, 14, 18, 18, 18, 18, 18, 18]}
+          />
+        </button>
+        <TileB
+          lbl="예약 차감"
+          v={pendingKw.value}
+          u={pendingKw.unit}
+          sub={`${allocationStats.pendingCount.toLocaleString('ko-KR')}건 · ${allocationStats.holdCount.toLocaleString('ko-KR')}건 보류`}
+          tone="warn"
+          delta="+1.2%"
+          spark={[10, 11, 12, 11, 12, 13, 14, 14, 14, 14, 15, 15]}
+        />
       </div>
 
-      {inventoryStats && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border bg-background px-3 py-2">
-          <CompactMetric
-            label="가용"
-            value={formatAutoKw(inventoryStats.totalSecuredKw)}
-            sub={`${inventoryStats.productCount.toLocaleString('ko-KR')}개 품목`}
-            tone="green"
-            onClick={() => handleCardClick('avail')}
-          />
-          <CompactMetric
-            label="실재고"
-            value={formatAutoKw(inventoryStats.stockAvailableKw)}
-            tone="blue"
-            onClick={() => handleCardClick('physical')}
-          />
-          <CompactMetric
-            label="미착"
-            value={formatAutoKw(inventoryStats.incomingAvailableKw)}
-            tone="sky"
-            onClick={() => handleCardClick('incoming')}
-          />
-          <CompactMetric
-            label="예약"
-            value={`${allocationStats.pendingCount.toLocaleString('ko-KR')}건`}
-            sub={formatAutoKw(allocationStats.pendingKw)}
-            tone="amber"
-          />
-          <CompactMetric
-            label="보류"
-            value={`${allocationStats.holdCount.toLocaleString('ko-KR')}건`}
-            sub={formatAutoKw(allocationStats.holdKw)}
-            tone="slate"
-          />
-        </div>
-      )}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <Button className="btn solar h-[30px]" onClick={() => openAllocationForm()}>
+          <Plus className="h-3.5 w-3.5" /> 빠른 등록
+        </Button>
+      </div>
 
       {allocError && (
         <Alert variant="destructive">
@@ -588,12 +548,16 @@ export default function InventoryPage() {
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <TabsList className="h-8">
-            <TabsTrigger value="avail" className="h-7"><Shield className="h-3.5 w-3.5" />가용재고</TabsTrigger>
-            <TabsTrigger value="physical" className="h-7"><Package className="h-3.5 w-3.5" />실재고</TabsTrigger>
-            <TabsTrigger value="incoming" className="h-7"><Truck className="h-3.5 w-3.5" />미착품</TabsTrigger>
-            <TabsTrigger value="forecast" className="h-7"><TrendingUp className="h-3.5 w-3.5" />수급 전망</TabsTrigger>
-          </TabsList>
+          <FilterChips
+            value={activeTab}
+            onChange={handleTabChange}
+            options={[
+              { key: 'avail', label: '가용', count: invData?.items.length ?? 0 },
+              { key: 'physical', label: '실재고', count: invData?.items.length ?? 0 },
+              { key: 'incoming', label: '미착', count: incomingRailItems.length },
+              { key: 'forecast', label: '수급 전망' },
+            ]}
+          />
           <div className="flex flex-wrap gap-2">
             <Select value={mfgFilter || 'all'} onValueChange={(v) => setMfgFilter(v === 'all' ? '' : (v ?? ''))}>
               <SelectTrigger className="h-8 w-36 text-xs">
@@ -628,13 +592,14 @@ export default function InventoryPage() {
               <AlertDescription>{invError}</AlertDescription>
             </Alert>
           )}
-          {invLoading ? <LoadingSpinner /> : invData && (
-            <div className="mt-3 space-y-1">
-              <h2 className="text-sm font-semibold">품목별 실재고</h2>
-              <InventoryTable items={invData.items} />
-              <p className="text-[10px] text-muted-foreground text-right">계산 시점: {invData.calculated_at}</p>
-            </div>
-          )}
+          <CardB title="품목별 실재고" sub="창고 보유 물리 재고">
+            {invLoading ? <LoadingSpinner /> : invData && (
+              <>
+                <InventoryTable items={invData.items} />
+                <p className="p-2 text-right text-[10px] text-muted-foreground">계산 시점: {invData.calculated_at}</p>
+              </>
+            )}
+          </CardB>
         </TabsContent>
 
         {/* 가용재고 — 전체 너비 단일 테이블 (품목 행 클릭 시 배정 내역 펼침) */}
@@ -646,8 +611,7 @@ export default function InventoryPage() {
             </Alert>
           )}
           {/* 품목별 가용재고 + 배정 현황 통합 테이블 */}
-          <div className="mt-3 space-y-2">
-            <h2 className="text-sm font-semibold">품목별 가용재고 / 배정 현황</h2>
+          <CardB title="재고 현황" sub="제조사 × 품번 · 단위 MW">
             {invLoading ? <LoadingSpinner /> : invData ? (
               <AvailInventoryTable
                 items={invData.items}
@@ -661,11 +625,11 @@ export default function InventoryPage() {
               />
             ) : null}
             {invData && (
-              <p className="text-[10px] text-muted-foreground text-right">
+              <p className="p-2 text-right text-[10px] text-muted-foreground">
                 기준: {invData.calculated_at}
               </p>
             )}
-          </div>
+          </CardB>
         </TabsContent>
 
         <TabsContent value="incoming">
@@ -676,8 +640,7 @@ export default function InventoryPage() {
             </Alert>
           )}
           {/* 품목별 미착품 + 배정 현황 */}
-          <div className="mt-3 space-y-2">
-            <h2 className="text-sm font-semibold">품목별 미착품 / 배정 현황</h2>
+          <CardB title="품목별 미착품 / 배정 현황" sub="L/C · B/L 예정분">
             {invLoading ? <LoadingSpinner /> : invData ? (
               <IncomingTable
                 items={invData.items}
@@ -691,9 +654,9 @@ export default function InventoryPage() {
               />
             ) : null}
             {invData && (
-              <p className="text-[10px] text-muted-foreground text-right">기준: {invData.calculated_at}</p>
+              <p className="p-2 text-right text-[10px] text-muted-foreground">기준: {invData.calculated_at}</p>
             )}
-          </div>
+          </CardB>
         </TabsContent>
 
         <TabsContent value="forecast">
@@ -750,6 +713,59 @@ export default function InventoryPage() {
           )}
         </TabsContent>
       </Tabs>
+      </div>
+
+      <aside className="dark-scroll" style={{ background: 'var(--surface)', borderLeft: '1px solid var(--line)', display: 'flex', flexDirection: 'column', minHeight: 0, overflowY: 'auto' }}>
+        <RailBlock title="시장 시세" count="14:42 KST">
+          {[
+            { label: 'USD/KRW', value: '1,773.4', delta: '+0.06%', up: true },
+            { label: 'CNY/KRW', value: '244.18', delta: '-0.12%', up: false },
+            { label: 'JKO 주가', value: '$28.84', delta: '-1.42%', up: false },
+            { label: '폴리실리콘', value: '34.20', delta: '+0.40%', up: true },
+          ].map((market) => (
+            <div key={market.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '5px 0', fontSize: 11.5 }}>
+              <span style={{ color: 'var(--ink-2)' }}>{market.label}</span>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                <span className="mono tnum" style={{ fontWeight: 500 }}>{market.value}</span>
+                <span className="mono tnum" style={{ fontSize: 10, color: market.up ? 'var(--pos)' : 'var(--neg)', minWidth: 50, textAlign: 'right' }}>{market.delta}</span>
+              </div>
+            </div>
+          ))}
+        </RailBlock>
+
+        <RailBlock title="운송 중 선적" count={incomingRailItems.length} accent="var(--solar-3)">
+          {incomingRailItems.map((item) => (
+            <div key={item.product_id} style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)' }}>{item.manufacturer_name}</span>
+                <span className="mono tnum" style={{ fontSize: 10.5, color: 'var(--solar-3)', fontWeight: 600 }}>{formatAutoKw(item.incoming_kw)}</span>
+              </div>
+              <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{item.product_code}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{item.spec_wp}Wp · {item.latest_lc_open ?? 'L/C 확인 중'}</div>
+            </div>
+          ))}
+          {incomingRailItems.length === 0 ? <div className="text-xs text-[var(--ink-3)]">운송 중 미착품이 없습니다.</div> : null}
+        </RailBlock>
+
+        <RailBlock title="최근 예약" count={recentRailAllocs.length} last>
+          {recentRailAllocs.map((alloc, index) => {
+            const product = productMap.get(alloc.product_id);
+            return (
+              <div key={alloc.alloc_id} style={{ padding: '7px 0', borderBottom: index < recentRailAllocs.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{alloc.alloc_id.slice(0, 8)}</span>
+                  <span className={`pill ${alloc.status === 'hold' ? 'info' : 'warn'}`}>{alloc.status === 'hold' ? '보류' : '대기'}</span>
+                </div>
+                <div style={{ marginTop: 2, color: 'var(--ink-2)', fontSize: 12 }}>{alloc.customer_name ?? alloc.site_name ?? '거래처 미지정'}</div>
+                <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)' }}>
+                  {product?.product_code ?? alloc.product_code ?? '품목 미지정'} · {alloc.quantity.toLocaleString('ko-KR')}장
+                </div>
+              </div>
+            );
+          })}
+          {recentRailAllocs.length === 0 ? <div className="text-xs text-[var(--ink-3)]">예약 내역이 없습니다.</div> : null}
+        </RailBlock>
+      </aside>
 
       <AllocationForm
         open={allocFormOpen}

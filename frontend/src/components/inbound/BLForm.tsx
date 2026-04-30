@@ -796,7 +796,6 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     resolver: zodResolver(schema) as unknown as Resolver<FormData>,
   });
   // 수정 모드 — 변경사항 감지 (RHF isDirty + 보조 state 변경 감지)
-  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가
   const watchedValues = watch(); // watch all → 이 컴포넌트가 폼 변화에 리렌더
   const [initialSnapshot, setInitialSnapshot] = useState<string>('');
   const currentSnapshot = JSON.stringify({
@@ -1215,35 +1214,14 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     ].filter(Boolean).join(' / ') || '자동으로 채울 값을 찾지 못했습니다');
   };
 
-  const isCustomsOCRAcceptedFile = (file: File) => {
+  const isCustomsOCRAcceptedFile = useCallback((file: File) => {
     const name = file.name.toLowerCase();
     return file.type === 'application/pdf'
       || file.type.startsWith('image/')
       || /\.(pdf|png|jpe?g|webp|heic|heif|bmp|tiff?)$/i.test(name);
-  };
+  }, []);
 
-  const prepareCustomsOCRUploadFile = (file: File) => {
-    setCustomsOCRDragActive(false);
-    if (!isCustomsOCRAcceptedFile(file)) {
-      setCustomsOCRSummary('');
-      setCustomsOCRError('PDF 또는 사진 파일만 등록할 수 있습니다');
-      setPendingCustomsOCRFile(null);
-      setPendingCustomsOCRFields(null);
-      if (customsOCRInputRef.current) customsOCRInputRef.current.value = '';
-      return;
-    }
-    setPendingCustomsOCRFile(file);
-    if (customsOCRInputRef.current) customsOCRInputRef.current.value = '';
-    void handleCustomsOCRFile(file);
-  };
-
-  const prepareCustomsOCRFile = (fileList: FileList | null) => {
-    const file = fileList?.[0];
-    if (!file) return;
-    prepareCustomsOCRUploadFile(file);
-  };
-
-  const handleCustomsOCRFile = async (file: File) => {
+  const handleCustomsOCRFile = useCallback(async (file: File) => {
     setCustomsOCRLoading(true);
     setCustomsOCRError('');
     setCustomsOCRSummary('');
@@ -1272,7 +1250,28 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     } finally {
       setCustomsOCRLoading(false);
     }
-  };
+  }, []);
+
+  const prepareCustomsOCRUploadFile = useCallback((file: File) => {
+    setCustomsOCRDragActive(false);
+    if (!isCustomsOCRAcceptedFile(file)) {
+      setCustomsOCRSummary('');
+      setCustomsOCRError('PDF 또는 사진 파일만 등록할 수 있습니다');
+      setPendingCustomsOCRFile(null);
+      setPendingCustomsOCRFields(null);
+      if (customsOCRInputRef.current) customsOCRInputRef.current.value = '';
+      return;
+    }
+    setPendingCustomsOCRFile(file);
+    if (customsOCRInputRef.current) customsOCRInputRef.current.value = '';
+    void handleCustomsOCRFile(file);
+  }, [handleCustomsOCRFile, isCustomsOCRAcceptedFile]);
+
+  const prepareCustomsOCRFile = useCallback((fileList: FileList | null) => {
+    const file = fileList?.[0];
+    if (!file) return;
+    prepareCustomsOCRUploadFile(file);
+  }, [prepareCustomsOCRUploadFile]);
 
   const confirmCustomsOCRFields = async () => {
     if (!pendingCustomsOCRFields) {
@@ -1364,7 +1363,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       window.removeEventListener('dragleave', handleWindowDragLeave);
       window.removeEventListener('drop', handleWindowDrop);
     };
-  }, [customsOCRLoading, customsOCRReviewOpen, editData, hasCustomsOCRDraggedFiles, open, setValue]);
+  }, [customsOCRLoading, customsOCRReviewOpen, editData, hasCustomsOCRDraggedFiles, open, prepareCustomsOCRFile, setValue]);
 
   /* ── 폼 초기화 ── */
   useEffect(() => {
@@ -1482,7 +1481,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     setValue('inbound_type', 'import', { shouldDirty: true });
     setAutoNumber('');
     prepareCustomsOCRUploadFile(initialCustomsOCRFile);
-  }, [open, editData, initialCustomsOCRFile, initialCustomsOCRFileKey, setValue]);
+  }, [open, editData, initialCustomsOCRFile, initialCustomsOCRFileKey, prepareCustomsOCRUploadFile, setValue]);
 
   /* ── 라인아이템 ── */
   const updateLine = (i: number, f: keyof LineItem, v: string | boolean) =>

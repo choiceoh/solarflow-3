@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, AlertTriangle, CheckCircle2, Copy, FileImage, FileText, Play, RefreshCw, ScanText, Trash2, Upload } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Copy, FileImage, FileText, Play, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { MasterConsole } from '@/components/command/MasterConsole';
+import { RailBlock, Sparkline } from '@/components/command/MockupPrimitives';
 import { fetchWithAuth } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -171,16 +173,14 @@ export default function OCRPage() {
   };
 
   return (
-    <div className="space-y-4 p-4 md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <ScanText className="h-5 w-5" />
-            문서 OCR
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">PaddleOCR 원문 판독</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <MasterConsole
+      eyebrow="DOCUMENT OCR"
+      title="문서 OCR"
+      description="PDF와 이미지 문서를 판독하고 원문 텍스트와 좌표 신뢰도를 검토합니다."
+      tableTitle="OCR 워크벤치"
+      tableSub={`${results.length.toLocaleString()}개 결과 · ${totalLineCount.toLocaleString('ko-KR')}줄`}
+      actions={
+        <>
           <div className={cn('flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium', healthTone)}>
             <Activity className="h-3.5 w-3.5" />
             {healthLabel}
@@ -191,8 +191,31 @@ export default function OCRPage() {
           <Button variant="outline" disabled={results.length === 0} onClick={() => setResults([])}>
             초기화
           </Button>
-        </div>
-      </div>
+        </>
+      }
+      metrics={[
+        { label: '대기 파일', value: files.length.toLocaleString(), sub: '선택된 파일', tone: files.length > 0 ? 'solar' : 'ink', spark: [1, 2, 2, 3, Math.max(files.length, 1)] },
+        { label: '정상 결과', value: okCount.toLocaleString(), sub: `${results.length.toLocaleString()}개 중`, tone: 'pos' },
+        { label: '인식 줄', value: totalLineCount.toLocaleString('ko-KR'), sub: '좌표 포함', tone: 'info' },
+        { label: 'OCR 상태', value: health?.ready ? 'READY' : health?.configured ? 'WAIT' : 'CHECK', sub: healthLabel, tone: health?.ready ? 'pos' : health?.configured ? 'warn' : 'ink' },
+      ]}
+      rail={
+        <>
+          <RailBlock title="엔진 상태" accent={health?.ready ? 'var(--pos)' : 'var(--warn)'} count={health?.status ?? 'unknown'}>
+            <div className="space-y-2 text-[11px] leading-5 text-[var(--ink-3)]">
+              <p>{health?.ready ? 'OCR sidecar가 응답 준비 상태입니다.' : '상태 확인 또는 warm-up이 필요할 수 있습니다.'}</p>
+              <Sparkline data={[12, 20, 16, 28, 24, 36]} color={health?.ready ? 'var(--pos)' : 'var(--warn)'} area />
+            </div>
+          </RailBlock>
+          <RailBlock title="파일 규칙" count="PDF · 이미지">
+            <div className="text-[11px] leading-5 text-[var(--ink-3)]">
+              판독 결과는 자동 저장하지 않고, 사용자가 원문을 확인하고 복사하거나 후속 입력에 사용합니다.
+            </div>
+          </RailBlock>
+        </>
+      }
+    >
+      <div className="space-y-4">
 
       <Card>
         <CardHeader>
@@ -334,6 +357,7 @@ export default function OCRPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </MasterConsole>
   );
 }

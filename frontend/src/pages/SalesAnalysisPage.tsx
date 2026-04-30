@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -17,6 +16,7 @@ import { formatKRW, formatNumber, moduleLabel } from '@/lib/utils';
 import type { SaleListItem } from '@/types/outbound';
 import type { CustomerAnalysis, CustomerItem } from '@/hooks/useDashboard';
 import type { Manufacturer, Partner, Product } from '@/types/masters';
+import { CardB, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
 
 interface MarginItem {
   manufacturer_name: string;
@@ -349,63 +349,58 @@ export default function SalesAnalysisPage() {
 
   if (state.loading) return <LoadingSpinner className="h-full" />;
 
-  return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">매출/이익 분석</h1>
-          <p className="text-xs text-muted-foreground">판매, 세금계산서, 수금, BL 원가를 연결한 실무 분석 화면</p>
-        </div>
-        <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={load}>
-          새로고침
-        </button>
-      </div>
+  const periodOptions = [
+    { key: 'all', label: '전체' },
+    { key: 'last3', label: '최근 3개월' },
+    { key: 'year', label: '올해' },
+    { key: 'custom', label: '직접 지정' },
+  ];
+  const topCustomer = customers.items[0];
 
-      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 p-3">
-        <Select value={period} onValueChange={(v) => setPeriod((v ?? 'all') as PeriodFilter)}>
-          <SelectTrigger className="h-8 w-32 text-xs">
-            <span className="truncate">
-              {period === 'last3' ? '최근 3개월' : period === 'year' ? '올해' : period === 'custom' ? '직접 지정' : '전체 기간'}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 기간</SelectItem>
-            <SelectItem value="last3">최근 3개월</SelectItem>
-            <SelectItem value="year">올해</SelectItem>
-            <SelectItem value="custom">직접 지정</SelectItem>
-          </SelectContent>
-        </Select>
-        {period === 'custom' && (
-          <>
-            <DateInput value={customFrom} onChange={setCustomFrom} className="h-8 w-36 text-xs" placeholder="시작일" />
-            <DateInput value={customTo} onChange={setCustomTo} className="h-8 w-36 text-xs" placeholder="종료일" />
-          </>
-        )}
-        <div className="w-44">
-          <PartnerCombobox
-            partners={partners}
-            value={customerFilter}
-            onChange={setCustomerFilter}
-            placeholder="전체 거래처"
-            includeAllOption
-            allLabel="전체 거래처"
-          />
-        </div>
-        <Select value={manufacturerFilter || 'all'} onValueChange={(v) => setManufacturerFilter(v === 'all' ? '' : (v ?? ''))}>
-          <SelectTrigger className="h-8 w-36 text-xs">
-            <span className="truncate">{manufacturerLabel}</span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 제조사</SelectItem>
-            {manufacturers.map((m) => (
-              <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.short_name || m.name_kr}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="ml-auto text-[10px] text-muted-foreground">
-          제조사 필터는 매출 집계와 품목별 이익에 적용됩니다.
-        </div>
-      </div>
+  return (
+    <div className="sf-page">
+      <div className="sf-procurement-layout">
+        <section className="sf-procurement-main">
+          <CardB
+            title="매출/이익 분석"
+            sub="판매, 세금계산서, 수금, B/L 원가 연결"
+            right={<button type="button" className="btn xs" onClick={load}>새로고침</button>}
+            padded
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterChips options={periodOptions} value={period} onChange={(value) => setPeriod(value as PeriodFilter)} />
+              {period === 'custom' && (
+                <>
+                  <DateInput value={customFrom} onChange={setCustomFrom} className="h-8 w-36 text-xs" placeholder="시작일" />
+                  <DateInput value={customTo} onChange={setCustomTo} className="h-8 w-36 text-xs" placeholder="종료일" />
+                </>
+              )}
+              <div className="w-44">
+                <PartnerCombobox
+                  partners={partners}
+                  value={customerFilter}
+                  onChange={setCustomerFilter}
+                  placeholder="전체 거래처"
+                  includeAllOption
+                  allLabel="전체 거래처"
+                />
+              </div>
+              <Select value={manufacturerFilter || 'all'} onValueChange={(v) => setManufacturerFilter(v === 'all' ? '' : (v ?? ''))}>
+                <SelectTrigger className="h-8 w-36 text-xs">
+                  <span className="truncate">{manufacturerLabel}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체 제조사</SelectItem>
+                  {manufacturers.map((m) => (
+                    <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.short_name || m.name_kr}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="ml-auto text-[10px] text-muted-foreground">
+                제조사 필터는 매출 집계와 품목별 이익에 적용됩니다.
+              </div>
+            </div>
+          </CardB>
 
       {state.error && (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -413,21 +408,15 @@ export default function SalesAnalysisPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
-        <KpiCard label="공급가 매출" value={formatKRW(salesSummary.supply)} sub={`${formatNumber(salesSummary.count)}건`} />
-        <KpiCard label="부가세 포함" value={formatKRW(salesSummary.total)} sub="세금계산서 기준 합계" />
-        <KpiCard label="계산서 발행률" value={`${salesSummary.issueRate}%`} sub={`${formatNumber(salesSummary.issued)}건 발행 / ${formatNumber(salesSummary.pending)}건 미발행`} />
-        <KpiCard label="수금액" value={formatKRW(customers.summary.total_collected_krw)} sub="거래처 분석 기준" />
-        <KpiCard label="미수금" value={formatKRW(customers.summary.total_outstanding_krw)} sub="수금매칭 잔액 기준" />
-        <KpiCard label="이익률" value={`${margin.summary.overall_margin_rate.toFixed(1)}%`} sub={`${formatKRW(margin.summary.total_margin_krw)} · 원가 ${coveredCostCount}/${margin.items.length}건`} />
+      <div className="sf-command-kpis">
+        <TileB lbl="공급가 매출" v={(salesSummary.supply / 100000000).toFixed(2)} u="억" sub={`${formatNumber(salesSummary.count)}건`} tone="solar" />
+        <TileB lbl="부가세 포함" v={(salesSummary.total / 100000000).toFixed(2)} u="억" sub="세금계산서 기준 합계" tone="ink" />
+        <TileB lbl="계산서 발행률" v={String(salesSummary.issueRate)} u="%" sub={`${formatNumber(salesSummary.issued)}건 발행 / ${formatNumber(salesSummary.pending)}건 미발행`} tone="info" />
+        <TileB lbl="이익률" v={margin.summary.overall_margin_rate.toFixed(1)} u="%" sub={`${formatKRW(margin.summary.total_margin_krw)} · 원가 ${coveredCostCount}/${margin.items.length}건`} tone="pos" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-sm">월별 매출</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <CardB title="월별 매출" sub="공급가 · 부가세 포함" padded>
             {monthly.length === 0 ? (
               <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">매출 데이터가 없습니다</div>
             ) : (
@@ -442,14 +431,9 @@ export default function SalesAnalysisPage() {
                 </BarChart>
               </ResponsiveContainer>
             )}
-          </CardContent>
-        </Card>
+        </CardB>
 
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-sm">거래처별 청구/미수</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <CardB title="거래처별 청구/미수" sub="상위 8개 거래처" padded>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -473,15 +457,10 @@ export default function SalesAnalysisPage() {
                 )}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+        </CardB>
       </div>
 
-      <Card>
-        <CardHeader className="py-3">
-          <CardTitle className="text-sm">품목별 이익 분석</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <CardB title="품목별 이익 분석" sub="판매가 · 원가 · 이익/Wp">
           <Table>
             <TableHeader>
               <TableRow>
@@ -529,20 +508,40 @@ export default function SalesAnalysisPage() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+      </CardB>
+        </section>
 
-function KpiCard({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return (
-    <Card>
-      <CardContent className="py-3">
-        <p className="text-[10px] text-muted-foreground">{label}</p>
-        <p className="mt-1 text-lg font-bold tracking-tight">{value}</p>
-        <p className="mt-1 text-[10px] text-muted-foreground">{sub}</p>
-      </CardContent>
-    </Card>
+        <aside className="sf-procurement-rail card">
+          <RailBlock title="목표 달성률" count={period === 'all' ? '전체' : period}>
+            <div className="bignum text-[30px] text-[var(--solar-3)]">{margin.summary.overall_margin_rate.toFixed(1)}<span className="mono text-sm text-[var(--ink-3)]">%</span></div>
+            <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">총이익 {formatKRW(margin.summary.total_margin_krw)} · 매출 {formatKRW(salesSummary.supply)}</div>
+            <div className="mt-3 h-2 overflow-hidden rounded bg-[var(--bg-2)]">
+              <div className="h-full bg-[var(--solar-2)]" style={{ width: `${Math.min(100, margin.summary.overall_margin_rate * 5)}%` }} />
+            </div>
+          </RailBlock>
+          <RailBlock title="상위 거래처" count="매출">
+            {customers.items.slice(0, 5).map((item, index) => (
+              <div key={item.customer_id} className={`py-2 ${index ? 'border-t border-[var(--line)]' : ''}`}>
+                <div className="flex justify-between gap-2 text-[11.5px]">
+                  <span className="truncate text-[var(--ink-2)]">{item.customer_name}</span>
+                  <span className="mono font-semibold text-[var(--ink)]">{formatKRW(item.total_sales_krw)}</span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded bg-[var(--line)]">
+                  <div className="h-full bg-[var(--solar-2)]" style={{ width: `${customers.summary.total_sales_krw ? Math.min(100, (item.total_sales_krw / customers.summary.total_sales_krw) * 100) : 0}%` }} />
+                </div>
+              </div>
+            ))}
+          </RailBlock>
+          <RailBlock title="수금 상태" last>
+            <div className="space-y-2 text-[11.5px] text-[var(--ink-2)]">
+              <div className="flex justify-between"><span>수금액</span><span className="mono">{formatKRW(customers.summary.total_collected_krw)}</span></div>
+              <div className="flex justify-between"><span>미수금</span><span className="mono text-[var(--warn)]">{formatKRW(customers.summary.total_outstanding_krw)}</span></div>
+              <div className="flex justify-between"><span>원가 연결</span><span className="mono">{coveredCostCount}/{margin.items.length}</span></div>
+            </div>
+            {topCustomer ? <div className="mono mt-3 text-[10.5px] text-[var(--ink-3)]">TOP · {topCustomer.customer_name}</div> : null}
+          </RailBlock>
+        </aside>
+      </div>
+    </div>
   );
 }

@@ -11,6 +11,8 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import BLListTable from '@/components/inbound/BLListTable';
 import BLDetailView from '@/components/inbound/BLDetailView';
 import BLForm from '@/components/inbound/BLForm';
+import { MasterConsole } from '@/components/command/MasterConsole';
+import { RailBlock, Sparkline } from '@/components/command/MockupPrimitives';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL, type InboundType, type BLStatus } from '@/types/inbound';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { saveBLShipmentWithLines } from '@/lib/blShipment';
@@ -174,6 +176,10 @@ export default function InboundPage() {
 
   const typeFilterLabel = typeFilter ? (INBOUND_TYPE_LABEL[typeFilter as InboundType] ?? typeFilter) : '입고 구분';
   const statusFilterLabel = statusFilter ? (BL_STATUS_LABEL[statusFilter as BLStatus] ?? statusFilter) : '입고 현황';
+  const importCount = data.filter((bl) => bl.inbound_type === 'import').length;
+  const completedCount = data.filter((bl) => bl.status === 'completed').length;
+  const pendingCount = data.length - completedCount;
+  const recentRows = data.slice(0, 4);
 
   const handleCustomsOCRPageDrag = (event: ReactDragEvent<HTMLDivElement>) => {
     if (!hasDraggedFiles(event.dataTransfer)) return;
@@ -203,7 +209,7 @@ export default function InboundPage() {
 
   return (
     <div
-      className={`min-h-[calc(100vh-5rem)] p-6 space-y-4 transition-shadow ${
+      className={`min-h-[calc(100vh-5rem)] transition-shadow ${
         customsOCRDropActive ? 'ring-2 ring-primary/40 ring-offset-2 ring-offset-background' : ''
       }`}
       onDragEnter={handleCustomsOCRPageDrag}
@@ -211,78 +217,113 @@ export default function InboundPage() {
       onDragLeave={handleCustomsOCRPageDragLeave}
       onDrop={handleCustomsOCRPageDrop}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-lg font-semibold">B/L 입고 관리</h1>
-        <div className="flex flex-wrap items-start justify-end gap-2">
-          <ExcelToolbar type="inbound" />
-          <Button size="sm" onClick={() => setFormOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" />새로 등록
-          </Button>
-        </div>
-      </div>
-
-      <div
-        className={`rounded-md border-2 border-dashed p-4 transition-colors ${
-          customsOCRDropActive
-            ? 'border-primary bg-primary/10 text-primary'
-            : 'border-primary/40 bg-primary/5 text-foreground'
-        }`}
-        onDragEnter={handleCustomsOCRPageDrag}
-        onDragOver={handleCustomsOCRPageDrag}
-        onDragLeave={handleCustomsOCRPageDragLeave}
-        onDrop={handleCustomsOCRPageDrop}
-      >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-background ${
-            customsOCRDropActive ? 'border-primary text-primary' : 'border-primary/30 text-primary'
-          }`}>
-            <ScanText className="h-6 w-6" />
+      <MasterConsole
+        eyebrow="INBOUND OPS"
+        title="B/L 입고 관리"
+        description="B/L, 면장 OCR, 입고 상태를 하나의 수입 물류 콘솔에서 관리합니다."
+        tableTitle="B/L 목록"
+        tableSub={`${data.length.toLocaleString()}건 · ${typeFilterLabel} · ${statusFilterLabel}`}
+        actions={
+          <>
+            <ExcelToolbar type="inbound" />
+            <Button size="sm" onClick={() => setFormOpen(true)}>
+              <Plus className="mr-1.5 h-4 w-4" />새로 등록
+            </Button>
+          </>
+        }
+        toolbar={
+          <div className="flex flex-wrap gap-2">
+            <Select value={typeFilter || 'all'} onValueChange={(v) => setTypeFilter(v === 'all' ? '' : (v ?? ''))}>
+              <SelectTrigger className="h-8 w-36 text-xs">
+                <FilterText text={typeFilterLabel} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">입고 구분</SelectItem>
+                {(Object.entries(INBOUND_TYPE_LABEL) as [InboundType, string][]).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? '' : (v ?? ''))}>
+              <SelectTrigger className="h-8 w-28 text-xs">
+                <FilterText text={statusFilterLabel} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">입고 현황</SelectItem>
+                {(Object.entries(BL_STATUS_LABEL) as [BLStatus, string][]).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-base font-semibold">여기에 면장 PDF/사진을 끌어다 놓으세요</div>
-            <div className={`mt-1 text-sm ${customsOCRDropActive ? 'font-medium text-primary' : 'text-muted-foreground'}`}>
-              {customsOCRDropActive ? '지금 놓으면 해외직수입 입고등록으로 이동합니다' : '놓으면 입고등록 창과 OCR 입력값 확인창이 자동으로 열립니다'}
+        }
+        metrics={[
+          { label: 'B/L 건수', value: data.length.toLocaleString(), sub: statusFilterLabel, tone: 'solar', spark: [12, 14, 13, 18, data.length || 1] },
+          { label: '해외직수입', value: importCount.toLocaleString(), sub: typeFilterLabel, tone: 'info' },
+          { label: '입고 완료', value: completedCount.toLocaleString(), sub: '정산 가능', tone: 'pos' },
+          { label: '진행중', value: pendingCount.toLocaleString(), sub: '입항/통관/창고', tone: pendingCount > 0 ? 'warn' : 'ink' },
+        ]}
+        rail={
+          <>
+            <RailBlock title="OCR 드롭존" accent="var(--solar-3)" count="PDF · JPG">
+              <div className="space-y-2 text-[11px] leading-5 text-[var(--ink-3)]">
+                <p>면장 파일을 화면에 놓으면 해외직수입 등록창과 OCR 확인창이 이어집니다.</p>
+                <Sparkline data={[10, 18, 14, 26, 22, 34]} color="var(--solar-3)" area />
+              </div>
+            </RailBlock>
+            <RailBlock title="최근 B/L" count={recentRows.length}>
+              <div className="space-y-2">
+                {recentRows.map((bl) => (
+                  <div key={bl.bl_id} className="rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2">
+                    <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{bl.bl_number}</div>
+                    <div className="mono mt-1 text-[10px] text-[var(--ink-4)]">{BL_STATUS_LABEL[bl.status] ?? bl.status} · {bl.manufacturer_name ?? mfgNameMap[bl.manufacturer_id] ?? '제조사 미지정'}</div>
+                  </div>
+                ))}
+              </div>
+            </RailBlock>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div
+            className={`rounded-md border-2 border-dashed p-4 transition-colors ${
+              customsOCRDropActive
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-primary/40 bg-primary/5 text-foreground'
+            }`}
+            onDragEnter={handleCustomsOCRPageDrag}
+            onDragOver={handleCustomsOCRPageDrag}
+            onDragLeave={handleCustomsOCRPageDragLeave}
+            onDrop={handleCustomsOCRPageDrop}
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-background ${
+                customsOCRDropActive ? 'border-primary text-primary' : 'border-primary/30 text-primary'
+              }`}>
+                <ScanText className="h-6 w-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-base font-semibold">면장 PDF/사진 드롭</div>
+                <div className={`mt-1 text-sm ${customsOCRDropActive ? 'font-medium text-primary' : 'text-muted-foreground'}`}>
+                  {customsOCRDropActive ? '지금 놓으면 해외직수입 입고등록으로 이동합니다' : '놓으면 입고등록 창과 OCR 입력값 확인창이 자동으로 열립니다'}
+                </div>
+              </div>
+              <div className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                PDF · JPG · PNG
+              </div>
             </div>
           </div>
-          <div className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
-            PDF · JPG · PNG
-          </div>
+
+          {loading ? <LoadingSpinner /> : (
+            <BLListTable
+              items={data.map(bl => ({ ...bl, manufacturer_name: bl.manufacturer_name ?? mfgNameMap[bl.manufacturer_id] ?? '—' }))}
+              onSelect={(bl) => setSelectedBL(bl.bl_id)}
+              onNew={() => setFormOpen(true)}
+              onDelete={handleDelete}
+            />
+          )}
         </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Select value={typeFilter || 'all'} onValueChange={(v) => setTypeFilter(v === 'all' ? '' : (v ?? ''))}>
-          <SelectTrigger className="h-8 w-36 text-xs">
-            <FilterText text={typeFilterLabel} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">입고 구분</SelectItem>
-            {(Object.entries(INBOUND_TYPE_LABEL) as [InboundType, string][]).map(([k, v]) => (
-              <SelectItem key={k} value={k}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? '' : (v ?? ''))}>
-          <SelectTrigger className="h-8 w-28 text-xs">
-            <FilterText text={statusFilterLabel} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">입고 현황</SelectItem>
-            {(Object.entries(BL_STATUS_LABEL) as [BLStatus, string][]).map(([k, v]) => (
-              <SelectItem key={k} value={k}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {loading ? <LoadingSpinner /> : (
-        <BLListTable
-          items={data.map(bl => ({ ...bl, manufacturer_name: bl.manufacturer_name ?? mfgNameMap[bl.manufacturer_id] ?? '—' }))}
-          onSelect={(bl) => setSelectedBL(bl.bl_id)}
-          onNew={() => setFormOpen(true)}
-          onDelete={handleDelete}
-        />
-      )}
+      </MasterConsole>
 
       <BLForm
         open={formOpen}

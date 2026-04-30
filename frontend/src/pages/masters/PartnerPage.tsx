@@ -7,6 +7,8 @@ import DataTable, { type Column } from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import PartnerForm from '@/components/masters/PartnerForm';
+import { MasterConsole } from '@/components/command/MasterConsole';
+import { RailBlock } from '@/components/command/MockupPrimitives';
 import { fetchWithAuth } from '@/lib/api';
 import type { Partner } from '@/types/masters';
 
@@ -101,23 +103,61 @@ export default function PartnerPage() {
     ) },
   ];
 
+  const activeCount = data.filter((partner) => partner.is_active).length;
+  const customerCount = data.filter((partner) => partner.partner_type === 'customer' || partner.partner_type === 'both').length;
+  const supplierCount = data.filter((partner) => partner.partner_type === 'supplier' || partner.partner_type === 'both').length;
+  const recentRows = filtered.slice(0, 4);
+
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">거래처 관리</h1>
-        <Button size="sm" onClick={() => { setEditTarget(null); setFormOpen(true); }}><Plus className="mr-1.5 h-4 w-4" />새로 등록</Button>
-      </div>
-      <DataTable columns={columns} data={filtered} loading={loading} searchable searchPlaceholder="거래처명, ERP코드, 담당자 검색" onSearch={handleSearch}
-        actions={(row) => (
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )} />
+    <>
+      <MasterConsole
+        title="거래처 관리"
+        description="고객사, 공급사, 양방향 거래처를 판매·구매·수금 흐름에 연결합니다."
+        tableTitle="거래처 마스터"
+        tableSub={`${filtered.length.toLocaleString()} / ${data.length.toLocaleString()}개 표시`}
+        actions={
+          <Button size="sm" onClick={() => { setEditTarget(null); setFormOpen(true); }}><Plus className="mr-1.5 h-4 w-4" />새로 등록</Button>
+        }
+        metrics={[
+          { label: '전체 거래처', value: data.length.toLocaleString(), sub: 'ERP 코드 포함', tone: 'solar', spark: [24, 28, 31, 36, data.length || 1] },
+          { label: '고객사', value: customerCount.toLocaleString(), sub: '수주/매출 대상', tone: 'info' },
+          { label: '공급사', value: supplierCount.toLocaleString(), sub: '구매/물류 대상', tone: 'warn' },
+          { label: '활성', value: activeCount.toLocaleString(), sub: '거래 가능', tone: 'pos' },
+        ]}
+        rail={
+          <>
+            <RailBlock title="거래 유형" accent="var(--solar-3)" count={`${customerCount + supplierCount}`}>
+              <div className="space-y-2 text-[12px]">
+                <div className="flex justify-between"><span className="text-[var(--ink-3)]">고객사</span><span className="mono font-semibold">{customerCount}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--ink-3)]">공급사</span><span className="mono font-semibold">{supplierCount}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--ink-3)]">양방향</span><span className="mono font-semibold">{data.filter((partner) => partner.partner_type === 'both').length}</span></div>
+              </div>
+            </RailBlock>
+            <RailBlock title="최근 표시" count={recentRows.length}>
+              <div className="space-y-2">
+                {recentRows.map((partner) => (
+                  <div key={partner.partner_id} className="rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2">
+                    <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{partner.partner_name}</div>
+                    <div className="mono mt-1 text-[10px] text-[var(--ink-4)]">{typeLabel[partner.partner_type] ?? partner.partner_type} · {partner.erp_code ?? 'ERP 미지정'}</div>
+                  </div>
+                ))}
+              </div>
+            </RailBlock>
+          </>
+        }
+      >
+        <DataTable columns={columns} data={filtered} loading={loading} searchable searchPlaceholder="거래처명, ERP코드, 담당자 검색" onSearch={handleSearch}
+          actions={(row) => (
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )} />
+      </MasterConsole>
       <PartnerForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleSubmit} editData={editTarget} />
       <ConfirmDialog
         open={!!toggleTarget}
@@ -135,6 +175,6 @@ export default function PartnerPage() {
         confirmLabel={deleting ? '삭제 중...' : '삭제'}
         variant="destructive"
       />
-    </div>
+    </>
   );
 }

@@ -7,6 +7,8 @@ import { ROLE_LABELS, type Role } from '@/config/permissions';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import { MasterConsole } from '@/components/command/MasterConsole';
+import { RailBlock, Sparkline } from '@/components/command/MockupPrimitives';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -188,18 +190,63 @@ export default function SettingsPage() {
 
   if (!manageUsers) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
-        <p className="text-sm">시스템관리자만 이 페이지에 접근할 수 있습니다.</p>
+      <div className="sf-page">
+        <div className="rounded-md border bg-card p-8 text-center text-sm text-muted-foreground">
+          시스템관리자만 이 페이지에 접근할 수 있습니다.
+        </div>
       </div>
     );
   }
 
+  const activeUsers = users.filter((user) => user.is_active).length;
+  const adminUsers = users.filter((user) => user.role === 'admin').length;
+  const operatorUsers = users.filter((user) => user.role === 'operator').length;
+  const roleRows = ROLE_OPTIONS.map((role) => ({
+    role,
+    label: ROLE_LABELS[role],
+    count: users.filter((user) => user.role === role).length,
+  }));
+
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-lg font-semibold">설정</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">사용자 계정 및 역할을 관리합니다</p>
-      </div>
+    <>
+      <MasterConsole
+        eyebrow="SYSTEM SETTINGS"
+        title="설정"
+        description="사용자 계정, 역할, 활성 상태, 임시 비밀번호 발급을 관리합니다."
+        tableTitle="사용자 권한 관리"
+        tableSub={`${users.length.toLocaleString()}명 · ${activeUsers.toLocaleString()}명 활성`}
+        actions={
+          <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            사용자 추가
+          </Button>
+        }
+        metrics={[
+          { label: '사용자', value: users.length.toLocaleString(), sub: '등록 계정', tone: 'solar', spark: [3, 4, 5, users.length || 1] },
+          { label: '활성', value: activeUsers.toLocaleString(), sub: '로그인 가능', tone: 'pos' },
+          { label: '관리자', value: adminUsers.toLocaleString(), sub: '사용자 관리 권한', tone: adminUsers > 0 ? 'warn' : 'ink' },
+          { label: '운영팀', value: operatorUsers.toLocaleString(), sub: '입력 가능 권한', tone: 'info' },
+        ]}
+        rail={
+          <>
+            <RailBlock title="역할 분포" accent="var(--solar-3)" count={ROLE_OPTIONS.length}>
+              <div className="space-y-2">
+                {roleRows.map((row) => (
+                  <div key={row.role} className="flex items-center justify-between text-[12px]">
+                    <span className="text-[var(--ink-3)]">{row.label}</span>
+                    <span className="mono font-semibold text-[var(--ink)]">{row.count}</span>
+                  </div>
+                ))}
+              </div>
+            </RailBlock>
+            <RailBlock title="보안 작업" count="confirm">
+              <Sparkline data={[4, 5, 5, 7, 6, 8]} color="var(--warn)" area />
+              <div className="mt-2 text-[11px] leading-5 text-[var(--ink-3)]">사용자 생성과 임시 비밀번호 재설정은 제출 전 확인이 필요한 운영 작업입니다.</div>
+            </RailBlock>
+          </>
+        }
+      >
+        <div className="mx-auto max-w-4xl space-y-6">
 
       {/* 역할 안내 */}
       <div className="rounded-lg border bg-card p-4 space-y-2">
@@ -232,10 +279,6 @@ export default function SettingsPage() {
       <div className="rounded-lg border bg-card overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b bg-muted/30">
           <p className="text-sm font-medium">사용자 목록 ({users.length}명)</p>
-          <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-            사용자 추가
-          </Button>
         </div>
         {loading ? (
           <div className="p-8 text-center text-sm text-muted-foreground">불러오는 중...</div>
@@ -303,6 +346,8 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+        </div>
+      </MasterConsole>
 
       <Dialog open={createOpen} onOpenChange={(open) => { if (!open) closeCreateDialog(); else setCreateOpen(true); }}>
         <DialogContent className="sm:max-w-md">
@@ -421,6 +466,6 @@ export default function SettingsPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

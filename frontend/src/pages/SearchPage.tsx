@@ -4,6 +4,8 @@ import { Search } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { useSearch } from '@/hooks/useSearch';
+import { MasterConsole } from '@/components/command/MasterConsole';
+import { RailBlock, Sparkline } from '@/components/command/MockupPrimitives';
 import SearchResultPanel from '@/components/search/SearchResultPanel';
 import SearchHistory from '@/components/search/SearchHistory';
 
@@ -24,11 +26,40 @@ export default function SearchPage() {
     else clear();
   };
 
+  const resultCount = result?.results.length ?? 0;
+  const warningCount = result?.warnings.length ?? 0;
+  const keywordCount = result?.parsed.keywords.length ?? 0;
+
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
-      <h1 className="text-xl font-bold flex items-center gap-2">
-        <Search className="h-5 w-5" />검색
-      </h1>
+    <MasterConsole
+      eyebrow="GLOBAL SEARCH"
+      title="검색"
+      description="재고, L/C, 입고, 출고, 거래처를 자연어로 찾아 업무 화면으로 이동합니다."
+      tableTitle="검색 워크벤치"
+      tableSub={query ? `"${query}"` : '자연어 질의 대기'}
+      metrics={[
+        { label: '결과', value: resultCount.toLocaleString(), sub: result?.intent || '검색 전', tone: resultCount > 0 ? 'solar' : 'ink', spark: [1, 3, 2, 5, Math.max(resultCount, 1)] },
+        { label: '키워드', value: keywordCount.toLocaleString(), sub: result?.parsed.keywords.join(', ') || '없음', tone: 'info' },
+        { label: '경고', value: warningCount.toLocaleString(), sub: error ?? '정상', tone: warningCount || error ? 'warn' : 'pos' },
+        { label: '상태', value: loading ? 'LOAD' : result ? 'DONE' : 'READY', sub: loading ? '검색 중' : '입력 가능', tone: loading ? 'warn' : 'pos' },
+      ]}
+      rail={
+        <>
+          <RailBlock title="검색 예시" accent="var(--solar-3)" count="natural">
+            <div className="space-y-2 text-[11px] leading-5 text-[var(--ink-3)]">
+              <p>진코 640 재고</p>
+              <p>LC 만기</p>
+              <p>이번 달 출고</p>
+            </div>
+          </RailBlock>
+          <RailBlock title="검색 신호" count={result?.calculated_at ? 'synced' : 'idle'}>
+            <Sparkline data={[8, 12, 10, 18, 16, 22]} color="var(--solar-3)" area />
+            <div className="mt-2 text-[11px] leading-5 text-[var(--ink-3)]">법인 선택 상태에 맞춰 계산 API가 결과를 병합합니다.</div>
+          </RailBlock>
+        </>
+      }
+    >
+      <div className="mx-auto max-w-3xl space-y-6">
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -49,6 +80,7 @@ export default function SearchPage() {
       ) : (
         <SearchHistory onSelect={handleSearch} />
       )}
-    </div>
+      </div>
+    </MasterConsole>
   );
 }

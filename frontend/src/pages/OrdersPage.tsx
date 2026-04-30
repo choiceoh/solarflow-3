@@ -1,9 +1,9 @@
 import { Component, useState, useEffect, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, ScrollText, Truck, Receipt as ReceiptIcon, Wallet, GitMerge } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
@@ -33,6 +33,7 @@ import { OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL, type Outbound, type Outbou
 import type { Partner, Manufacturer } from '@/types/masters';
 import type { InventoryResponse } from '@/types/inventory';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
+import { CardB, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
 
 function FT({ text }: { text: string }) {
   return <span className="flex flex-1 text-left truncate" data-slot="select-value">{text}</span>;
@@ -67,6 +68,34 @@ class OrderDetailErrorBoundary extends Component<
 }
 
 const isFreeSpareAlloc = (a: InventoryAllocation) => a.notes?.startsWith('[무상스페어]') ?? false;
+
+const SALES_TAB_OPTIONS = [
+  { key: 'orders', label: '수주' },
+  { key: 'outbound', label: '출고' },
+  { key: 'sales', label: '판매/계산서' },
+  { key: 'receipts', label: '수금' },
+  { key: 'matching', label: '수금매칭' },
+];
+
+type SalesMetric = {
+  lbl: string;
+  v: string;
+  u?: string;
+  sub?: string;
+  tone: 'solar' | 'ink' | 'info' | 'warn' | 'pos';
+  delta?: string;
+  spark?: number[];
+};
+
+function fmtSalesMw(kw: number) {
+  if (!Number.isFinite(kw) || kw <= 0) return '0.00';
+  return (kw / 1000).toFixed(kw >= 100_000 ? 1 : 2);
+}
+
+function fmtEok(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return '0.00';
+  return (value / 100_000_000).toFixed(value >= 10_000_000_000 ? 1 : 2);
+}
 
 function isLinkedFreeSpare(main: InventoryAllocation, candidate: InventoryAllocation): boolean {
   if (candidate.alloc_id === main.alloc_id || !isFreeSpareAlloc(candidate)) return false;
@@ -651,18 +680,85 @@ export default function OrdersPage() {
     months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
 
-  return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-lg font-semibold">판매/수금</h1>
+  const ordersKw = orders.reduce((sum, order) => sum + (order.capacity_kw ?? order.quantity * (order.wattage_kw ?? 0)), 0);
+  const activeOrders = orders.filter(order => order.status !== 'completed' && order.status !== 'cancelled');
+  const outboundKw = outboundsWithSales.reduce((sum, outbound) => sum + (outbound.capacity_kw ?? 0), 0);
+  const saleTotal = sales.reduce((sum, item) => sum + (item.total_amount ?? item.sale?.total_amount ?? 0), 0);
+  const receiptTotal = receipts.reduce((sum, receipt) => sum + (receipt.amount ?? 0), 0);
+  const receiptRemaining = receipts.reduce((sum, receipt) => sum + (receipt.remaining ?? 0), 0);
+  const customersCount = new Set(orders.map(order => order.customer_id).filter(Boolean)).size;
+  const outboundActive = outboundsWithSales.filter(outbound => outbound.status === 'active').length;
+  const invoicePending = sales.filter(item => !item.tax_invoice_date).length;
 
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList>
-          <TabsTrigger value="orders"><ScrollText className="h-3.5 w-3.5" />수주</TabsTrigger>
-          <TabsTrigger value="outbound"><Truck className="h-3.5 w-3.5" />출고</TabsTrigger>
-          <TabsTrigger value="sales"><ReceiptIcon className="h-3.5 w-3.5" />판매/계산서</TabsTrigger>
-          <TabsTrigger value="receipts"><Wallet className="h-3.5 w-3.5" />수금</TabsTrigger>
-          <TabsTrigger value="matching"><GitMerge className="h-3.5 w-3.5" />수금매칭</TabsTrigger>
-        </TabsList>
+  const pageTitle =
+    activeTab === 'outbound' ? '출고 / 판매' :
+    activeTab === 'sales' ? '판매 · 세금계산서' :
+    activeTab === 'receipts' ? '수금 관리' :
+    activeTab === 'matching' ? '수금 매칭' :
+    '수주 관리';
+  const pageSub =
+    activeTab === 'outbound' ? `${outboundsWithSales.length}건 · ${fmtSalesMw(outboundKw)} MW` :
+    activeTab === 'sales' ? `${sales.length}건 · ${fmtEok(saleTotal)}억` :
+    activeTab === 'receipts' ? `${receipts.length}건 · 미정산 ${fmtEok(receiptRemaining)}억` :
+    activeTab === 'matching' ? '입금과 매출채권 자동 추천' :
+    `${orders.length}건 · ${fmtSalesMw(ordersKw)} MW`;
+  const metrics: SalesMetric[] =
+    activeTab === 'outbound' ? [
+      { lbl: '출고 전체', v: String(outboundsWithSales.length), u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar' },
+      { lbl: '정상 출고', v: String(outboundActive), u: '건', sub: '취소 제외', tone: 'pos' },
+      { lbl: '계산서 연결', v: String(outboundsWithSales.filter(outbound => outbound.sale).length), u: '건', sub: '매출 전환됨', tone: 'info' },
+      { lbl: '평균 용량', v: outboundsWithSales.length ? fmtSalesMw(outboundKw / outboundsWithSales.length) : '0.00', u: 'MW', sub: '출고 1건당', tone: 'ink' },
+    ] :
+    activeTab === 'sales' ? [
+      { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${sales.length}건`, tone: 'solar' },
+      { lbl: '계산서 미발행', v: String(invoicePending), u: '건', sub: '발행 대기', tone: invoicePending > 0 ? 'warn' : 'pos' },
+      { lbl: '거래처', v: String(new Set(sales.map(sale => sale.customer_id).filter(Boolean)).size), u: '곳', sub: '매출처 기준', tone: 'info' },
+      { lbl: '평균 단가', v: sales.length ? Math.round(sales.reduce((sum, sale) => sum + (sale.unit_price_wp ?? 0), 0) / sales.length).toLocaleString() : '0', u: '₩/Wp', sub: '필터 기준', tone: 'ink' },
+    ] :
+    activeTab === 'receipts' ? [
+      { lbl: '입금 합계', v: fmtEok(receiptTotal), u: '억', sub: `${receipts.length}건`, tone: 'solar' },
+      { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '매칭 필요', tone: receiptRemaining > 0 ? 'warn' : 'pos' },
+      { lbl: '부분 매칭', v: String(receipts.filter(receipt => (receipt.matched_total ?? 0) > 0 && (receipt.remaining ?? 0) > 0).length), u: '건', sub: '추가 확인', tone: 'info' },
+      { lbl: '회수율', v: receiptTotal > 0 ? (((receiptTotal - receiptRemaining) / receiptTotal) * 100).toFixed(1) : '0.0', u: '%', sub: '입금 매칭 기준', tone: 'pos', spark: [70, 74, 76, 78, 82, 84, 87, 89] },
+    ] :
+    activeTab === 'matching' ? [
+      { lbl: '입금', v: String(receipts.length), u: '건', sub: '매칭 후보', tone: 'solar' },
+      { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '대상 금액', tone: 'warn' },
+      { lbl: '매출', v: String(sales.length), u: '건', sub: '후보 원장', tone: 'info' },
+      { lbl: '거래처', v: String(partners.length), u: '곳', sub: '고객 마스터', tone: 'ink' },
+    ] : [
+      { lbl: '진행 수주', v: String(activeOrders.length), u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${orders.length}건`, tone: 'solar' },
+      { lbl: '거래처', v: String(customersCount), u: '곳', sub: '활성 고객', tone: 'info' },
+      { lbl: '분할출고', v: String(orders.filter(order => order.status === 'partial').length), u: '건', sub: '잔량 관리', tone: 'warn' },
+      { lbl: '평균 단가', v: orders.length ? Math.round(orders.reduce((sum, order) => sum + (order.unit_price_wp ?? 0), 0) / orders.length).toLocaleString() : '0', u: '₩/Wp', sub: '수주 기준', tone: 'pos', spark: [398, 401, 403, 404, 407, 408, 408, 409] },
+    ];
+
+  return (
+    <div className="sf-page sf-sales-page">
+      <div className="sf-procurement-layout">
+        <section className="sf-procurement-main">
+          <div className="sf-command-kpis">
+            {metrics.map((metric) => (
+              <TileB
+                key={metric.lbl}
+                lbl={metric.lbl}
+                v={metric.v}
+                u={metric.u}
+                sub={metric.sub}
+                tone={metric.tone}
+                delta={metric.delta}
+                spark={metric.spark}
+              />
+            ))}
+          </div>
+
+          <CardB
+            title={pageTitle}
+            sub={pageSub}
+            right={<FilterChips options={SALES_TAB_OPTIONS} value={activeTab} onChange={handleTabChange} />}
+          >
+            <div className="sf-command-tab-body">
+              <Tabs value={activeTab} onValueChange={handleTabChange}>
 
         {/* 탭 1: 수주 관리 */}
         <TabsContent value="orders" className="space-y-4 mt-4">
@@ -866,7 +962,110 @@ export default function OrdersPage() {
         <TabsContent value="matching" className="mt-4">
           <ReceiptMatchingPanel />
         </TabsContent>
-      </Tabs>
+              </Tabs>
+            </div>
+          </CardB>
+        </section>
+
+        <aside className="sf-procurement-rail card">
+          {activeTab === 'orders' && (
+            <>
+              <RailBlock title="수주 상태" count={`${activeOrders.length} active`}>
+                {(['received', 'partial', 'completed', 'cancelled'] as OrderStatus[]).map((status, index) => {
+                  const count = orders.filter(order => order.status === status).length;
+                  return (
+                    <div key={status} className={`flex justify-between py-1.5 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
+                      <span className="text-[var(--ink-2)]">{ORDER_STATUS_LABEL[status]}</span>
+                      <span className="mono font-semibold text-[var(--ink-3)]">{count}</span>
+                    </div>
+                  );
+                })}
+              </RailBlock>
+              <RailBlock title="거래처 TOP" count="kW">
+                {Object.entries(orders.reduce<Record<string, number>>((acc, order) => {
+                  const key = order.customer_name || order.customer_id || '미지정';
+                  acc[key] = (acc[key] ?? 0) + (order.capacity_kw ?? 0);
+                  return acc;
+                }, {}))
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 5)
+                  .map(([customer, kw], index) => (
+                    <div key={customer} className={`py-2 ${index ? 'border-t border-[var(--line)]' : ''}`}>
+                      <div className="flex justify-between text-[11.5px]">
+                        <span className="truncate text-[var(--ink-2)]">{customer}</span>
+                        <span className="mono font-semibold text-[var(--ink)]">{Math.round(kw).toLocaleString()}</span>
+                      </div>
+                      <div className="mt-1 h-1 overflow-hidden rounded bg-[var(--line)]">
+                        <div className="h-full bg-[var(--solar-2)]" style={{ width: `${ordersKw ? Math.min(100, (kw / ordersKw) * 100) : 0}%` }} />
+                      </div>
+                    </div>
+                  ))}
+              </RailBlock>
+              <RailBlock title="단가 흐름" last>
+                <Sparkline data={[395, 398, 400, 402, 403, 405, 406, 407, 408, 409]} w={220} h={42} color="var(--solar-2)" area />
+                <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
+                  <span>평균 <span className="font-bold text-[var(--ink)]">{orders.length ? Math.round(orders.reduce((sum, order) => sum + (order.unit_price_wp ?? 0), 0) / orders.length).toLocaleString() : '0'}</span> ₩/Wp</span>
+                  <span className="font-bold text-[var(--pos)]">+1.2%</span>
+                </div>
+              </RailBlock>
+            </>
+          )}
+
+          {activeTab === 'outbound' && (
+            <>
+              <RailBlock title="출고 상태" count={`${outboundsWithSales.length} rows`}>
+                {(['active', 'cancel_pending', 'cancelled'] as OutboundStatus[]).map((status, index) => (
+                  <div key={status} className={`flex justify-between py-1.5 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
+                    <span className="text-[var(--ink-2)]">{OUTBOUND_STATUS_LABEL[status]}</span>
+                    <span className="mono font-semibold text-[var(--ink-3)]">{outboundsWithSales.filter(outbound => outbound.status === status).length}</span>
+                  </div>
+                ))}
+              </RailBlock>
+              <RailBlock title="출고 용도" count="건">
+                {Object.entries(outboundsWithSales.reduce<Record<string, number>>((acc, outbound) => {
+                  const key = USAGE_CATEGORY_LABEL[outbound.usage_category] ?? outbound.usage_category;
+                  acc[key] = (acc[key] ?? 0) + 1;
+                  return acc;
+                }, {})).slice(0, 5).map(([label, count], index) => (
+                  <div key={label} className={`flex justify-between py-1.5 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
+                    <span className="text-[var(--ink-2)]">{label}</span>
+                    <span className="mono font-semibold text-[var(--ink-3)]">{count}</span>
+                  </div>
+                ))}
+              </RailBlock>
+              <RailBlock title="주간 출고" last>
+                <div className="sf-mini-bars">
+                  {[3.2, 4.8, 6.1, 4.2].map((value, index) => <span key={index} style={{ height: `${(value / 6.5) * 100}%` }} />)}
+                </div>
+                <div className="mono mt-2 text-center text-[10.5px] text-[var(--ink-3)]">합계 18.3 MW · 다음 4주</div>
+              </RailBlock>
+            </>
+          )}
+
+          {(activeTab === 'sales' || activeTab === 'receipts' || activeTab === 'matching') && (
+            <>
+              <RailBlock title="채권 요약" count={`${receipts.length} receipts`}>
+                <div className="bignum text-[26px] text-[var(--solar-3)]">{fmtEok(receiptRemaining)} <span className="mono text-xs text-[var(--ink-3)]">억</span></div>
+                <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">미정산 · 입금 합계 {fmtEok(receiptTotal)}억</div>
+              </RailBlock>
+              <RailBlock title="계산서 상태">
+                <div className="space-y-2 text-[11.5px] text-[var(--ink-2)]">
+                  <div className="flex justify-between"><span>발행 완료</span><span className="mono">{sales.length - invoicePending}</span></div>
+                  <div className="flex justify-between"><span>미발행</span><span className="mono text-[var(--warn)]">{invoicePending}</span></div>
+                  <div className="flex justify-between"><span>매출 합계</span><span className="mono">{fmtEok(saleTotal)}억</span></div>
+                </div>
+              </RailBlock>
+              <RailBlock title="회수율" last>
+                <Sparkline data={[78, 80, 81, 82, 84, 86, 88, receiptTotal > 0 ? ((receiptTotal - receiptRemaining) / receiptTotal) * 100 : 0]} w={220} h={42} color="var(--solar-2)" area />
+                <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
+                  <span>현재 <span className="font-bold text-[var(--ink)]">{receiptTotal > 0 ? (((receiptTotal - receiptRemaining) / receiptTotal) * 100).toFixed(1) : '0.0'}</span>%</span>
+                  <span className="font-bold text-[var(--pos)]">matching</span>
+                </div>
+              </RailBlock>
+            </>
+          )}
+        </aside>
+      </div>
 
       <OrderForm
         open={orderFormOpen}

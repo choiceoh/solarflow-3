@@ -6,6 +6,8 @@ import DataTable, { type Column } from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import CompanyForm from '@/components/masters/CompanyForm';
+import { MasterConsole } from '@/components/command/MasterConsole';
+import { RailBlock } from '@/components/command/MockupPrimitives';
 import { fetchWithAuth } from '@/lib/api';
 import type { Company } from '@/types/masters';
 
@@ -106,32 +108,75 @@ export default function CompanyPage() {
     },
   ];
 
+  const activeCount = data.filter((company) => company.is_active).length;
+  const inactiveCount = data.length - activeCount;
+  const recentRows = filtered.slice(0, 4);
+
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">법인 관리</h1>
-        <Button size="sm" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
-          <Plus className="mr-1.5 h-4 w-4" />새로 등록
-        </Button>
-      </div>
-      <DataTable
-        columns={columns}
-        data={filtered}
-        loading={loading}
-        searchable
-        searchPlaceholder="법인명, 코드, 사업자번호 검색"
-        onSearch={handleSearch}
-        actions={(row) => (
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
-      />
+    <>
+      <MasterConsole
+        title="법인 관리"
+        description="SolarFlow 권한, 은행 한도, 정산 기준이 연결되는 법인 기준정보입니다."
+        tableTitle="법인 마스터"
+        tableSub={`${filtered.length.toLocaleString()} / ${data.length.toLocaleString()}개 표시`}
+        actions={
+          <Button size="sm" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
+            <Plus className="mr-1.5 h-4 w-4" />새로 등록
+          </Button>
+        }
+        metrics={[
+          { label: '전체 법인', value: data.length.toLocaleString(), sub: '등록 기준정보', tone: 'solar', spark: [3, 4, 4, 5, 5, data.length || 1] },
+          { label: '활성', value: activeCount.toLocaleString(), sub: '업무 화면 노출', tone: 'pos' },
+          { label: '비활성', value: inactiveCount.toLocaleString(), sub: '보관 또는 중지', tone: inactiveCount > 0 ? 'warn' : 'ink' },
+          { label: '검색 결과', value: filtered.length.toLocaleString(), sub: searchQuery || '전체 목록', tone: 'info' },
+        ]}
+        rail={
+          <>
+            <RailBlock title="활성 상태" accent="var(--pos)" count={`${activeCount}/${data.length}`}>
+              <div className="space-y-2">
+                {[
+                  ['활성', activeCount, 'var(--pos)'],
+                  ['비활성', inactiveCount, 'var(--warn)'],
+                ].map(([label, value, color]) => (
+                  <div key={label} className="flex items-center justify-between text-[12px]">
+                    <span className="text-[var(--ink-3)]">{label}</span>
+                    <span className="mono font-semibold" style={{ color: String(color) }}>{Number(value).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </RailBlock>
+            <RailBlock title="최근 표시" count={recentRows.length}>
+              <div className="space-y-2">
+                {recentRows.map((company) => (
+                  <div key={company.company_id} className="rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2">
+                    <div className="text-[12px] font-semibold text-[var(--ink)]">{company.company_name}</div>
+                    <div className="mono mt-1 text-[10px] text-[var(--ink-4)]">{company.company_code} · {company.business_number ?? '사업자번호 없음'}</div>
+                  </div>
+                ))}
+              </div>
+            </RailBlock>
+          </>
+        }
+      >
+        <DataTable
+          columns={columns}
+          data={filtered}
+          loading={loading}
+          searchable
+          searchPlaceholder="법인명, 코드, 사업자번호 검색"
+          onSearch={handleSearch}
+          actions={(row) => (
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditTarget(row); setFormOpen(true); }}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteTarget(row)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+        />
+      </MasterConsole>
       <CompanyForm
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -154,6 +199,6 @@ export default function CompanyPage() {
         confirmLabel={deleting ? '삭제 중...' : '삭제'}
         variant="destructive"
       />
-    </div>
+    </>
   );
 }

@@ -6,7 +6,7 @@ import { useTurnover } from '@/hooks/useTurnover';
 import { useInventory } from '@/hooks/useInventory';
 import { useForecast } from '@/hooks/useForecast';
 import { usePermission } from '@/hooks/usePermission';
-import StrategicDashboard from '@/components/dashboard/StrategicDashboard';
+import CommandDashboard from '@/components/dashboard/CommandDashboard';
 import { fetchWithAuth } from '@/lib/api';
 import { sortManufacturers } from '@/lib/manufacturerPriority';
 import type { Manufacturer, Product } from '@/types/masters';
@@ -99,7 +99,7 @@ export default function DashboardPage() {
         </span>
       </div>
 
-      <StrategicDashboard
+      <CommandDashboard
         summary={summary}
         revenue={revenue}
         priceTrend={priceTrend}
