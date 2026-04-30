@@ -11,7 +11,6 @@ import argparse
 import json
 import os
 import sys
-import tempfile
 
 
 def _model_path(env_name: str, bundled_name: str) -> str:
@@ -60,8 +59,9 @@ def _build_reader():
     return RapidOCR()
 
 
-def ocr_image(reader, path: str, y_offset: int = 0) -> list[dict]:
-    result, _ = reader(path)
+def ocr_image(reader, image, y_offset: int = 0) -> list[dict]:
+    # image: str(파일 경로) 또는 bytes(PNG/JPG 등). RapidOCR이 두 형식을 모두 받음
+    result, _ = reader(image)
     rows = []
     if result:
         for box, text, score in result:
@@ -80,6 +80,16 @@ def ocr_image(reader, path: str, y_offset: int = 0) -> list[dict]:
     return rows
 
 
+def _pdf_dpi() -> int:
+    # OCR_PDF_DPI=144~150으로 낮추면 OCR이 더 빨라짐. 200은 인식률 기준 기본값
+    raw = os.environ.get("OCR_PDF_DPI", "").strip()
+    if raw.isdigit():
+        value = int(raw)
+        if 72 <= value <= 600:
+            return value
+    return 200
+
+
 def ocr_pdf(reader, path: str) -> list[dict]:
     try:
         import fitz
@@ -92,15 +102,14 @@ def ocr_pdf(reader, path: str) -> list[dict]:
     doc = fitz.open(path)
     rows = []
     y_offset = 0
+    dpi = _pdf_dpi()
     try:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            for page_num in range(len(doc)):
-                page = doc.load_page(page_num)
-                pix = page.get_pixmap(dpi=200)
-                image_path = os.path.join(temp_dir, f"page_{page_num}.png")
-                pix.save(image_path)
-                rows.extend(ocr_image(reader, image_path, y_offset))
-                y_offset += pix.height + 50
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            pix = page.get_pixmap(dpi=dpi)
+            # PNG bytes를 메모리에서 직접 OCR로 — 디스크 임시 파일 IO 제거
+            rows.extend(ocr_image(reader, pix.tobytes("png"), y_offset))
+            y_offset += pix.height + 50
     finally:
         doc.close()
     return rows
