@@ -153,7 +153,7 @@ export default function LoginForm() {
             {isMockSubmitting ? '목업 여는 중...' : '목업 데이터로 보기'}
           </Button>
           <p className="sf-mono text-[10px] text-[var(--sf-ink-4)]">
-            개발 전용 · 실제 자료 DB/API 호출 없음
+            목업 모드 · 실제 자료 DB/API 호출 없음
           </p>
         </div>
       ) : null}

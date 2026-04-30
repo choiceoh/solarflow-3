@@ -26,12 +26,7 @@ function writeStorageFlag(key: string, enabled: boolean): void {
 }
 
 export function isDevMockLoginAllowed(): boolean {
-  const isLocalBrowser = typeof window !== 'undefined' && (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1' ||
-    window.location.hostname === '::1'
-  );
-  return import.meta.env.DEV || isLocalBrowser || import.meta.env.VITE_ENABLE_DEV_MOCK_LOGIN === 'true';
+  return import.meta.env.VITE_ENABLE_DEV_MOCK_LOGIN !== 'false';
 }
 
 export function isDevMockSessionActive(): boolean {
@@ -40,7 +35,7 @@ export function isDevMockSessionActive(): boolean {
 
 export function startDevMockSession(): void {
   if (!isDevMockLoginAllowed()) {
-    throw new Error('개발용 목업 로그인은 현재 빌드에서 비활성화되어 있습니다');
+    throw new Error('목업 로그인은 현재 빌드에서 비활성화되어 있습니다');
   }
   writeStorageFlag(DEV_MOCK_LOGIN_KEY, true);
 }
