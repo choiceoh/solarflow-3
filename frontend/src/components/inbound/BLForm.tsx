@@ -293,6 +293,40 @@ function normalizeOCRMatchText(value: string | undefined) {
   return (value ?? '').toUpperCase().replace(/[^A-Z0-9가-힣]/g, '');
 }
 
+function normalizeOCRPartyText(value: string | undefined) {
+  return normalizeOCRMatchText(value).replace(
+    /주식회사|유한회사|합자회사|합명회사|사단법인|재단법인|농업회사법인|법인|회사|COLTD|CO|LTD|LIMITED|INCORPORATED|INC|CORPORATION|CORP|COMPANY|PTE|LLC|LLP|PLC|GMBH|HOLDINGS|HOLDING/g,
+    ''
+  );
+}
+
+function isUsefulOCRPartyToken(value: string) {
+  if (!value) return false;
+  return /[가-힣]/.test(value) ? value.length >= 2 : value.length >= 3;
+}
+
+function ocrPartyVariants(value: string | undefined) {
+  return Array.from(new Set([
+    normalizeOCRMatchText(value),
+    normalizeOCRPartyText(value),
+  ])).filter(isUsefulOCRPartyToken);
+}
+
+function scoreOCRPartyCandidate(rawValue: string | undefined, candidateValues: Array<string | undefined>) {
+  const rawVariants = ocrPartyVariants(rawValue);
+  let best = 0;
+  for (const raw of rawVariants) {
+    for (const candidateValue of candidateValues) {
+      for (const candidate of ocrPartyVariants(candidateValue)) {
+        if (raw === candidate) best = Math.max(best, 1000 + candidate.length);
+        else if (raw.includes(candidate)) best = Math.max(best, 700 + candidate.length);
+        else if (candidate.includes(raw)) best = Math.max(best, 500 + raw.length);
+      }
+    }
+  }
+  return best;
+}
+
 function parseOCRNumber(value: string | undefined) {
   if (!value) return NaN;
   return Number(value.replace(/,/g, ''));
@@ -599,23 +633,68 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     return label;
   };
 
-  const findProductForOCRLine = (item: CustomsDeclarationOCRLine): Product | null => {
+  const findCompanyForOCRText = (value: string | undefined) => {
+    let bestCompany: Company | null = null;
+    let bestScore = 0;
+    for (const company of companies) {
+      const score = scoreOCRPartyCandidate(value, [
+        company.company_name,
+        company.company_code,
+        company.business_number,
+      ]);
+      if (score > bestScore) {
+        bestCompany = company;
+        bestScore = score;
+      }
+    }
+    return bestScore >= 500 ? bestCompany : null;
+  };
+
+  const findManufacturerForOCRText = (value: string | undefined) => {
+    let bestManufacturer: Manufacturer | null = null;
+    let bestScore = 0;
+    for (const manufacturer of manufacturers) {
+      const score = scoreOCRPartyCandidate(value, [
+        manufacturer.name_kr,
+        manufacturer.name_en,
+        manufacturer.short_name,
+      ]);
+      if (score > bestScore) {
+        bestManufacturer = manufacturer;
+        bestScore = score;
+      }
+    }
+    return bestScore >= 500 ? bestManufacturer : null;
+  };
+
+  const loadProductsForManufacturer = async (manufacturerId: string) => {
+    try {
+      const list = await fetchWithAuth<Product[]>(`/api/v1/products?manufacturer_id=${manufacturerId}`);
+      const activeProducts = list.filter((p) => p.is_active);
+      setProducts(activeProducts);
+      return activeProducts;
+    } catch {
+      return products;
+    }
+  };
+
+  const findProductForOCRLine = (item: CustomsDeclarationOCRLine, productSource: Product[] = products): Product | null => {
     const raw = normalizeOCRMatchText(item.model_spec?.value);
     if (!raw) return null;
-    return products.find((product) => {
+    return productSource.find((product) => {
       const code = normalizeOCRMatchText(product.product_code);
       const name = normalizeOCRMatchText(product.product_name);
       return (code && raw.includes(code)) || (name && raw.includes(name)) || (name && name.includes(raw));
     }) ?? null;
   };
 
-  const applyOCRLineItems = (items: CustomsDeclarationOCRLine[] | undefined) => {
+  const applyOCRLineItems = (items: CustomsDeclarationOCRLine[] | undefined, productSource: Product[] = products) => {
     if (!items?.length) return { appliedCount: 0, unmatched: 0 };
     const nextLines: LineItem[] = [];
     let unmatched = 0;
 
     for (const item of items) {
-      const product = findProductForOCRLine(item);
+      const product = findProductForOCRLine(item, productSource);
       const quantity = parseOCRNumber(item.quantity?.value);
       if (!product || !Number.isFinite(quantity) || quantity <= 0) {
         unmatched += 1;
@@ -641,7 +720,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     return { appliedCount: nextLines.length, unmatched };
   };
 
-  const applyCustomsOCRFields = (fields: CustomsDeclarationOCRFields) => {
+  const applyCustomsOCRFields = async (fields: CustomsDeclarationOCRFields) => {
     const applied = [
       applyOCRTextField('declaration_number', fields.declaration_number, '면장번호'),
       applyOCRTextField('actual_arrival', fields.arrival_date, '입항일'),
@@ -650,6 +729,23 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       applyOCRTextField('invoice_number', fields.invoice_number, 'Invoice No.'),
       applyOCRTextField('bl_number', fields.bl_number, 'B/L번호', true),
     ].filter((label): label is string => Boolean(label));
+
+    const importerCompany = !autofilled ? findCompanyForOCRText(fields.importer?.value) : null;
+    if (importerCompany) {
+      setSelCompanyId(importerCompany.company_id);
+      applied.push(`구매법인 ${importerCompany.company_name}`);
+    }
+
+    const tradePartnerManufacturer = !autofilled ? findManufacturerForOCRText(fields.trade_partner?.value) : null;
+    let productSource = products;
+    if (tradePartnerManufacturer) {
+      setSelMfgId(tradePartnerManufacturer.manufacturer_id);
+      setValue('manufacturer_id', tradePartnerManufacturer.manufacturer_id, { shouldDirty: true });
+      applied.push(`공급사 ${tradePartnerManufacturer.short_name?.trim() || tradePartnerManufacturer.name_kr}`);
+      productSource = products.some((product) => product.manufacturer_id === tradePartnerManufacturer.manufacturer_id)
+        ? products
+        : await loadProductsForManufacturer(tradePartnerManufacturer.manufacturer_id);
+    }
 
     const rate = fields.exchange_rate?.value?.replace(/,/g, '').trim();
     if (rate) {
@@ -672,14 +768,15 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
       }
     }
 
-    const lineResult = applyOCRLineItems(fields.line_items);
+    const lineResult = applyOCRLineItems(fields.line_items, productSource);
     if (lineResult.appliedCount > 0) {
       applied.push(`품목 ${lineResult.appliedCount}건`);
     }
 
     const references = [
-      fields.importer?.value ? `수입자 ${fields.importer.value}` : '',
-      fields.trade_partner?.value ? `무역거래처 ${fields.trade_partner.value}` : '',
+      fields.importer?.value && !importerCompany ? `수입자 ${fields.importer.value}` : '',
+      fields.trade_partner?.value && !tradePartnerManufacturer ? `무역거래처 ${fields.trade_partner.value}` : '',
+      autofilled && (fields.importer?.value || fields.trade_partner?.value) ? 'PO 연결값 우선' : '',
       fields.declaration_date?.value ? `신고일 ${fields.declaration_date.value}` : '',
       fields.release_date?.value ? `수리/반출일 ${fields.release_date.value}` : '',
       fields.hs_code?.value ? `HS ${fields.hs_code.value}` : '',
@@ -746,12 +843,12 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     }
   };
 
-  const confirmCustomsOCRFields = () => {
+  const confirmCustomsOCRFields = async () => {
     if (!pendingCustomsOCRFields) {
       setCustomsOCRReviewOpen(false);
       return;
     }
-    applyCustomsOCRFields(pendingCustomsOCRFields);
+    await applyCustomsOCRFields(pendingCustomsOCRFields);
     setPendingCustomsOCRFields(null);
     setPendingCustomsOCRFile(null);
     setCustomsOCRReviewOpen(false);
@@ -1249,6 +1346,12 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     return `${modPart}${lc.lc_number ?? lc.lc_id.slice(0, 8)}${bankPart} | ${formatUSD(lc.amount_usd)} | ${LC_STATUS_KR[lc.status] ?? lc.status}`;
   };
   const title = editData ? '입고수정' : '입고등록';
+  const pendingImporterCompany = !autofilled
+    ? findCompanyForOCRText(pendingCustomsOCRFields?.importer?.value)
+    : null;
+  const pendingTradePartnerManufacturer = !autofilled
+    ? findManufacturerForOCRText(pendingCustomsOCRFields?.trade_partner?.value)
+    : null;
   const reviewRows = pendingCustomsOCRFields ? [
     { label: 'B/L(AWB) 번호', value: pendingCustomsOCRFields.bl_number?.value, target: 'B/L 번호' },
     { label: '입항일', value: pendingCustomsOCRFields.arrival_date?.value, target: '실제입항일' },
@@ -1256,8 +1359,16 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     { label: '국내도착항', value: pendingCustomsOCRFields.port?.value, target: '항구' },
     { label: 'CIF 원화금액', value: pendingCustomsOCRFields.cif_amount_krw?.value, target: '면장 CIF 원화금액' },
     { label: '환율', value: pendingCustomsOCRFields.exchange_rate?.value, target: '환율' },
-    { label: '수입자', value: pendingCustomsOCRFields.importer?.value, target: '참고' },
-    { label: '무역거래처', value: pendingCustomsOCRFields.trade_partner?.value, target: '참고' },
+    {
+      label: '수입자',
+      value: pendingCustomsOCRFields.importer?.value,
+      target: pendingImporterCompany ? `구매법인: ${pendingImporterCompany.company_name}` : autofilled ? 'PO 연결값 유지' : '구매법인 후보 없음',
+    },
+    {
+      label: '무역거래처',
+      value: pendingCustomsOCRFields.trade_partner?.value,
+      target: pendingTradePartnerManufacturer ? `공급사: ${pendingTradePartnerManufacturer.short_name?.trim() || pendingTradePartnerManufacturer.name_kr}` : autofilled ? 'PO 연결값 유지' : '공급사 후보 없음',
+    },
     { label: '신고일', value: pendingCustomsOCRFields.declaration_date?.value, target: '참고' },
     { label: 'HS코드', value: pendingCustomsOCRFields.hs_code?.value, target: '참고' },
     { label: '세관', value: pendingCustomsOCRFields.customs_office?.value, target: '참고' },
@@ -1275,7 +1386,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
 
         <div className="space-y-3">
           <div className="rounded-md border">
-            <div className="grid grid-cols-[120px_minmax(0,1fr)_96px] border-b bg-muted/50 px-3 py-2 text-[11px] font-medium text-muted-foreground">
+            <div className="grid grid-cols-[120px_minmax(0,1fr)_140px] border-b bg-muted/50 px-3 py-2 text-[11px] font-medium text-muted-foreground">
               <span>항목</span>
               <span>읽은 값</span>
               <span className="text-right">반영 위치</span>
@@ -1284,7 +1395,7 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">확인할 기본값이 없습니다</div>
             ) : (
               reviewRows.map((row) => (
-                <div key={`${row.label}-${row.value}`} className="grid grid-cols-[120px_minmax(0,1fr)_96px] border-b px-3 py-2 last:border-b-0">
+                <div key={`${row.label}-${row.value}`} className="grid grid-cols-[120px_minmax(0,1fr)_140px] border-b px-3 py-2 last:border-b-0">
                   <span className="text-xs text-muted-foreground">{row.label}</span>
                   <span className="break-all text-xs font-medium">{row.value}</span>
                   <span className="text-right text-[11px] text-muted-foreground">{row.target}</span>
