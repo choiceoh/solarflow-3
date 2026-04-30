@@ -202,12 +202,48 @@ body {
   font-family: var(--sf-sans);
   font-size: 13px;
   line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv11', 'ss01', 'ss02';
+}
+
+::selection {
+  background: var(--sf-solar-bg-2);
+  color: var(--sf-ink);
+}
+
+/* 솔라 포커스 링 — shadcn이 자체 ring을 갖지 않는 요소에만 (a, role=button div, tabindex). button/input은 shadcn이 처리 */
+a:focus-visible,
+[role="button"]:not(button):focus-visible,
+[tabindex]:not(input, select, textarea, button):focus-visible {
+  outline: none;
+  box-shadow: var(--sf-shadow-focus);
+  border-radius: 3px;
 }
 
 .sf-mono {
   font-family: var(--sf-mono);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
+  font-feature-settings: 'tnum', 'zero', 'ss01';
+  letter-spacing: -0.005em;
+}
+
+/* ⌘K 같은 단축키 토큰 */
+.sf-kbd {
+  font-family: var(--sf-mono);
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border: 1px solid var(--sf-line-2);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: var(--sf-surface);
+  color: var(--sf-ink-3);
 }
 
 .sf-eyebrow {
@@ -520,9 +556,11 @@ body {
 .sf-kpi-card strong {
   color: var(--sf-ink);
   font-family: var(--sf-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum', 'zero', 'ss01';
   font-size: 24px;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: -0.022em;
   line-height: 1;
 }
 
