@@ -36,7 +36,7 @@ export function loadConfig(command) {
     downloadDir: resolveLocalPath(env('AMARANTH_DOWNLOAD_DIR', 'downloads')),
     artifactDir: resolveLocalPath(env('AMARANTH_ARTIFACT_DIR', 'artifacts')),
     headless: parseBool(env('AMARANTH_HEADLESS', 'false')),
-    browserChannel: env('AMARANTH_BROWSER_CHANNEL', ''),
+    browserChannel: normalizeBrowserChannel(env('AMARANTH_BROWSER_CHANNEL', 'auto')),
     autoLogin: parseBool(env('AMARANTH_AUTO_LOGIN', 'false')),
     companyCode: env('AMARANTH_COMPANY_CODE', ''),
     loginUserID: env('AMARANTH_USER_ID', ''),
@@ -95,6 +95,14 @@ function normalizeAPIURL(value) {
   const trimmed = value.replace(/\/+$/, '');
   if (trimmed.endsWith('/api/v1')) return trimmed;
   return `${trimmed}/api/v1`;
+}
+
+function normalizeBrowserChannel(value) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized === 'installed') return 'auto';
+  if (normalized === 'edge') return 'msedge';
+  if (normalized === 'playwright' || normalized === 'chromium') return 'bundled';
+  return normalized;
 }
 
 function resolveLocalPath(value) {

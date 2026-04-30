@@ -14,6 +14,7 @@ rpa/amaranth-uploader/.profile/
 rpa/amaranth-uploader/.profile-headless-test/
 rpa/amaranth-uploader/artifacts/
 rpa/amaranth-uploader/downloads/
+rpa/amaranth-uploader/runtime/
 
 
 # graphify 산출물 (로컬 분석 결과, 커밋하지 않음)

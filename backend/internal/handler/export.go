@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"archive/zip"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"mime"
 	"net/http"
@@ -46,6 +48,39 @@ func NewExportHandler(db *supa.Client) *ExportHandler {
 // 비유: 매출마감 양식은 아직 실물 서식이 없어 닫힌 접수창으로 명확히 안내
 func (h *ExportHandler) AmaranthSalesClosing(w http.ResponseWriter, r *http.Request) {
 	response.RespondError(w, http.StatusNotImplemented, "아마란스 매출마감 내보내기는 D-067에 따라 실물 양식 확인 후 구현합니다")
+}
+
+// DownloadRPAPackage — GET /api/v1/export/amaranth/rpa-package
+// 비유: 사용자가 npm을 만지지 않도록, 운영자가 준비한 Windows 자동화 ZIP에 서버 설정을 주입해 내려준다.
+func (h *ExportHandler) DownloadRPAPackage(w http.ResponseWriter, r *http.Request) {
+	packagePath, err := findRPAPackagePath()
+	if err != nil {
+		response.RespondError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	rpaToken := strings.TrimSpace(os.Getenv("SOLARFLOW_AMARANTH_RPA_TOKEN"))
+	if rpaToken == "" {
+		response.RespondError(w, http.StatusInternalServerError, "SOLARFLOW_AMARANTH_RPA_TOKEN을 설정해야 RPA 설치 패키지를 배포할 수 있습니다")
+		return
+	}
+
+	uploadURL := strings.TrimSpace(os.Getenv("AMARANTH_OUTBOUND_UPLOAD_URL"))
+	if uploadURL == "" {
+		response.RespondError(w, http.StatusInternalServerError, "AMARANTH_OUTBOUND_UPLOAD_URL을 설정해야 RPA 설치 패키지를 배포할 수 있습니다")
+		return
+	}
+
+	tempPath, err := prepareRPAPackage(packagePath, generateRPAEnv(r, rpaToken, uploadURL))
+	if err != nil {
+		response.RespondError(w, http.StatusInternalServerError, fmt.Sprintf("RPA 설치 패키지 준비 실패: %v", err))
+		return
+	}
+	defer os.Remove(tempPath)
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", `attachment; filename="solarflow-amaranth-rpa-windows.zip"`)
+	http.ServeFile(w, r, tempPath)
 }
 
 // --- 입고 34컬럼 헤더 ---
@@ -256,6 +291,136 @@ func ptrFloat(f *float64) float64 {
 		return 0
 	}
 	return *f
+}
+
+func findRPAPackagePath() (string, error) {
+	candidates := []string{}
+	if configured := strings.TrimSpace(os.Getenv("SOLARFLOW_AMARANTH_RPA_PACKAGE")); configured != "" {
+		candidates = append(candidates, configured)
+	}
+	candidates = append(candidates,
+		filepath.Join("..", "rpa", "amaranth-uploader", "dist", "solarflow-amaranth-rpa-windows.zip"),
+		filepath.Join("rpa", "amaranth-uploader", "dist", "solarflow-amaranth-rpa-windows.zip"),
+	)
+
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf("RPA 설치 패키지를 찾지 못했습니다. SOLARFLOW_AMARANTH_RPA_PACKAGE 또는 rpa/amaranth-uploader/dist/solarflow-amaranth-rpa-windows.zip을 준비하세요")
+}
+
+func prepareRPAPackage(packagePath string, envContent string) (string, error) {
+	source, err := zip.OpenReader(packagePath)
+	if err != nil {
+		return "", err
+	}
+	defer source.Close()
+
+	tempFile, err := os.CreateTemp("", "solarflow-amaranth-rpa-*.zip")
+	if err != nil {
+		return "", err
+	}
+	tempPath := tempFile.Name()
+
+	cleanup := func(closeErr error) (string, error) {
+		tempFile.Close()
+		os.Remove(tempPath)
+		return "", closeErr
+	}
+
+	writer := zip.NewWriter(tempFile)
+	for _, sourceFile := range source.File {
+		cleanName := filepath.ToSlash(filepath.Clean(sourceFile.Name))
+		if cleanName == ".env" || strings.HasSuffix(cleanName, "/.env") {
+			continue
+		}
+
+		header := sourceFile.FileHeader
+		header.Name = cleanName
+		entry, err := writer.CreateHeader(&header)
+		if err != nil {
+			return cleanup(err)
+		}
+		if sourceFile.FileInfo().IsDir() {
+			continue
+		}
+
+		reader, err := sourceFile.Open()
+		if err != nil {
+			return cleanup(err)
+		}
+		if _, err := io.Copy(entry, reader); err != nil {
+			reader.Close()
+			return cleanup(err)
+		}
+		reader.Close()
+	}
+
+	envHeader := &zip.FileHeader{Name: ".env", Method: zip.Deflate}
+	envHeader.SetMode(0600)
+	envEntry, err := writer.CreateHeader(envHeader)
+	if err != nil {
+		return cleanup(err)
+	}
+	if _, err := envEntry.Write([]byte(envContent)); err != nil {
+		return cleanup(err)
+	}
+
+	if err := writer.Close(); err != nil {
+		return cleanup(err)
+	}
+	if err := tempFile.Close(); err != nil {
+		os.Remove(tempPath)
+		return "", err
+	}
+
+	return tempPath, nil
+}
+
+func generateRPAEnv(r *http.Request, rpaToken string, uploadURL string) string {
+	return strings.Join([]string{
+		fmt.Sprintf("SOLARFLOW_API_URL=%s", publicAPIURL(r)),
+		fmt.Sprintf("SOLARFLOW_AMARANTH_RPA_TOKEN=%s", rpaToken),
+		"SOLARFLOW_ACCESS_TOKEN=",
+		fmt.Sprintf("AMARANTH_OUTBOUND_UPLOAD_URL=%s", uploadURL),
+		"AMARANTH_USER_DATA_DIR=.profile",
+		"AMARANTH_HEADLESS=false",
+		"AMARANTH_BROWSER_CHANNEL=auto",
+		"AMARANTH_AUTO_LOGIN=false",
+		"AMARANTH_COMPANY_CODE=",
+		"AMARANTH_USER_ID=",
+		"AMARANTH_PASSWORD=",
+		"AMARANTH_LOGIN_NEXT_TEXT=다음",
+		"AMARANTH_LOGIN_SUBMIT_TEXT=로그인",
+		"AMARANTH_PAGE_READY_TEXT=출고등록엑셀업로드",
+		"AMARANTH_FEATURE_MENU_TEXT=기능모음",
+		`AMARANTH_UPLOAD_MENU_TEXT=엑셀\s*업로드|파일\s*업로드`,
+		`AMARANTH_CONVERT_CONFIRM_TEXT=변환\s*확인`,
+		`AMARANTH_SUCCESS_TEXT=정상\s*처리|업로드\s*완료|변환\s*완료|성공적으로|완료되었습니다`,
+		"AMARANTH_FAILURE_TEXT=실패|오류|에러|필수|중복|등록불가",
+		"AMARANTH_POLL_INTERVAL_MS=30000",
+		"AMARANTH_MAX_JOBS_PER_RUN=1",
+		"",
+	}, "\n")
+}
+
+func publicAPIURL(r *http.Request) string {
+	if configured := strings.TrimRight(strings.TrimSpace(os.Getenv("SOLARFLOW_PUBLIC_API_URL")), "/"); configured != "" {
+		return configured
+	}
+
+	scheme := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))
+	if scheme == "" {
+		scheme = "http"
+	}
+	host := strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
+	if host == "" {
+		host = r.Host
+	}
+	return fmt.Sprintf("%s://%s", scheme, host)
 }
 
 // buildRemark — 비고 조합 (최대 60자)

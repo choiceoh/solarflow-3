@@ -42,6 +42,7 @@ export default function AmaranthExportDialog({ type, open, onClose }: Props) {
   const [to, setTo] = useState(defaultTo);
   const [loading, setLoading] = useState(false);
   const [jobLoading, setJobLoading] = useState(false);
+  const [packageLoading, setPackageLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobMessage, setJobMessage] = useState<string | null>(null);
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
@@ -105,6 +106,28 @@ export default function AmaranthExportDialog({ type, open, onClose }: Props) {
     }
   };
 
+  const handleDownloadRPAPackage = async () => {
+    setPackageLoading(true);
+    setError(null);
+    setJobMessage(null);
+    try {
+      const res = await fetchBlobWithAuth('/api/v1/export/amaranth/rpa-package');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'solarflow-amaranth-rpa-windows.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '자동화 설치 파일 다운로드 실패');
+    } finally {
+      setPackageLoading(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="sm:max-w-md">
@@ -130,10 +153,16 @@ export default function AmaranthExportDialog({ type, open, onClose }: Props) {
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>취소</Button>
           {type === 'outbound' && (
-            <Button variant="outline" size="sm" onClick={handleCreateJob} disabled={jobLoading || loading}>
-              <UploadCloud className="mr-1.5 h-4 w-4" />
-              {jobLoading ? '작업 생성 중...' : '업로드 작업'}
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={handleDownloadRPAPackage} disabled={packageLoading || loading || jobLoading}>
+                <Download className="mr-1.5 h-4 w-4" />
+                {packageLoading ? '받는 중...' : '자동화 받기'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleCreateJob} disabled={jobLoading || loading || packageLoading}>
+                <UploadCloud className="mr-1.5 h-4 w-4" />
+                {jobLoading ? '작업 생성 중...' : '업로드 작업'}
+              </Button>
+            </>
           )}
           <Button size="sm" onClick={handleExport} disabled={loading}>
             <Download className="mr-1.5 h-4 w-4" />

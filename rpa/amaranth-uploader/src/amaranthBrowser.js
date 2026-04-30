@@ -44,16 +44,45 @@ export async function uploadOutboundExcel(config, job, filePath) {
 async function launchContext(config) {
   fs.mkdirSync(config.userDataDir, { recursive: true });
 
-  const options = {
+  const baseOptions = {
     acceptDownloads: true,
     headless: config.headless,
     viewport: { width: 1440, height: 950 },
   };
-  if (config.browserChannel) {
-    options.channel = config.browserChannel;
+
+  let lastError;
+  for (const channel of browserChannelCandidates(config.browserChannel)) {
+    const options = { ...baseOptions };
+    if (channel !== 'bundled') {
+      options.channel = channel;
+    }
+
+    try {
+      return await chromium.launchPersistentContext(config.userDataDir, options);
+    } catch (err) {
+      lastError = err;
+      if (!isMissingBrowserError(err)) {
+        throw err;
+      }
+    }
   }
 
-  return chromium.launchPersistentContext(config.userDataDir, options);
+  throw automationError(
+    'BROWSER_NOT_FOUND',
+    `설치된 Chrome 또는 Edge를 찾지 못했습니다: ${lastError?.message || 'browser not found'}`,
+    'failed',
+  );
+}
+
+function browserChannelCandidates(channel) {
+  if (!channel || channel === 'auto') {
+    return ['chrome', 'msedge'];
+  }
+  return [channel];
+}
+
+function isMissingBrowserError(err) {
+  return /browser.*not found|distribution.*not found|executable doesn't exist|cannot find/i.test(err?.message || '');
 }
 
 async function assertUploadScreen(page, config) {

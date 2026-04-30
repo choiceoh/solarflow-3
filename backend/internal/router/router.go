@@ -297,6 +297,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Get("/inbound", exportH.AmaranthInbound)
 			r.Get("/outbound", exportH.AmaranthOutbound)
 			r.Get("/sales", exportH.AmaranthSalesClosing)
+			r.Get("/rpa-package", exportH.DownloadRPAPackage)
 			r.Get("/jobs", exportH.ListUploadJobs)
 			r.Get("/jobs/{id}/download", exportH.DownloadUploadJobFile)
 			r.With(write).Post("/outbound/jobs", exportH.CreateOutboundUploadJob)

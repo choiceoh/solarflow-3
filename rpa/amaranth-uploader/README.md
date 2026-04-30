@@ -22,7 +22,6 @@ SolarFlow 업로드 작업 생성
 ```bash
 cd rpa/amaranth-uploader
 npm install
-npm run install:browsers
 cp .env.example .env
 ```
 
@@ -33,6 +32,41 @@ cp .env.example .env
 - `AMARANTH_OUTBOUND_UPLOAD_URL`: 아마란스 `출고등록엑셀업로드` 화면 URL
 
 `SOLARFLOW_AMARANTH_RPA_TOKEN`은 `/api/v1/export/amaranth/*` 경로에서만 동작합니다. 임시로 사용자 세션 토큰을 쓰려면 `SOLARFLOW_ACCESS_TOKEN`을 넣어도 됩니다.
+
+## 브라우저 정책
+
+기본값은 `AMARANTH_BROWSER_CHANNEL=auto`입니다.
+
+- 설치된 Google Chrome을 먼저 사용
+- Chrome이 없으면 Windows 기본 Microsoft Edge 사용
+- 별도 브라우저 다운로드 없음
+
+Playwright 번들 Chromium을 꼭 써야 하는 개발/장애 대응 환경에서만 `npm run install:browsers` 실행 후 `AMARANTH_BROWSER_CHANNEL=bundled`로 바꿉니다.
+
+## 사용자용 Windows 실행 파일
+
+실제 사용자 배포 ZIP에는 `node_modules/`, `runtime/node/node.exe`, `.env`, `windows/*.bat`를 포함합니다. 사용자는 터미널 명령을 치지 않고 아래 파일만 더블클릭합니다. `.env`는 SolarFlow의 `자동화 받기` 버튼이 다운로드 시 서버 주소와 RPA 토큰을 넣어 생성합니다.
+
+- `windows/login-session.bat`: 최초 1회 아마란스 로그인 세션 저장
+- `windows/run-once.bat`: 대기 작업 1건 처리
+- `windows/run-watch.bat`: 계속 감시하며 처리
+- `windows/install-startup-task.bat`: Windows 로그인 시 자동 실행 등록
+- `windows/remove-startup-task.bat`: 자동 실행 해제
+
+운영자가 배포 ZIP을 만들 때는 Windows용 portable Node.js를 `runtime/node/node.exe`에 둔 뒤 아래 스크립트를 실행합니다.
+
+```powershell
+npm ci --omit=dev
+powershell -ExecutionPolicy Bypass -File scripts/build-windows-package.ps1
+```
+
+생성된 `dist/solarflow-amaranth-rpa-windows.zip`을 서버에 두고 Go 백엔드 환경변수에 연결합니다.
+
+```env
+SOLARFLOW_AMARANTH_RPA_PACKAGE=../rpa/amaranth-uploader/dist/solarflow-amaranth-rpa-windows.zip
+SOLARFLOW_PUBLIC_API_URL=http://localhost:8080
+AMARANTH_OUTBOUND_UPLOAD_URL=https://...
+```
 
 ## 자동 로그인
 

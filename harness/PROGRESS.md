@@ -5,7 +5,7 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | 아마란스 RPA 실제 계정 1회 로그인/업로드 리허설 + OCR 실사용 샘플 검증 + 품목/거래처 후보 매칭 고도화 + E2E smoke 로컬 DB 실행 확인 |
+| 다음 작업 | 아마란스 RPA 배포 ZIP 생성/운영 PC 1회 로그인 리허설 + OCR 실사용 샘플 검증 + 품목/거래처 후보 매칭 고도화 + E2E smoke 로컬 DB 실행 확인 |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
@@ -13,6 +13,34 @@
 | Rust 테스트 | 75개 PASS |
 | DECISIONS | D-001~D-100 (98개, D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-04-30 세션 — 아마란스 RPA 사용자 배포 버튼
+
+### 완료
+- 아마란스 출고 내보내기 창에 `자동화 받기` 버튼 추가
+  - `/api/v1/export/amaranth/rpa-package`에서 Windows 자동화 ZIP 다운로드
+  - 서버가 다운로드 시 `.env`에 SolarFlow API 주소, RPA 토큰, 아마란스 업로드 URL 주입
+- RPA 워커 브라우저 정책 변경
+  - `AMARANTH_BROWSER_CHANNEL=auto`
+  - 설치된 Chrome 우선, 없으면 Windows 기본 Edge 사용
+  - 별도 Chromium 다운로드는 fallback으로만 사용
+- 사용자용 Windows 배치 파일 추가
+  - 로그인 세션 저장, 1회 실행, 감시 실행, 시작프로그램 등록/해제
+- 운영자용 패키징 스크립트 추가
+  - portable Node와 `node_modules`를 포함한 배포 ZIP 생성
+
+### 검증
+- `cd rpa/amaranth-uploader && npm run check` 성공
+- `cd backend && go test ./... && go vet ./... && go build ./...` 성공
+- `cd frontend && npm run build` 성공
+- `git diff --check` 성공
+- `graphify update .` 성공
+
+### 제한
+- 실제 배포 ZIP에는 Windows용 portable Node.js를 `runtime/node/node.exe`에 넣어야 함
+- 운영 환경변수 `SOLARFLOW_AMARANTH_RPA_PACKAGE`, `SOLARFLOW_PUBLIC_API_URL`, `AMARANTH_OUTBOUND_UPLOAD_URL` 설정 필요
 
 ---
 
