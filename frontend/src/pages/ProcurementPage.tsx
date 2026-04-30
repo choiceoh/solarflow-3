@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type DragEvent as ReactDragEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type DragEvent as ReactDragEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, History, ScanText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -267,6 +267,43 @@ export default function ProcurementPage() {
       window.removeEventListener('drop', handleWindowDrop);
     };
   }, [activeTab, blFormOpen, hasDraggedFiles, openBLDropFile, selectedBL, selectedCompanyId]);
+
+  // ⚠️ 모든 useMemo는 early return(아래 selectedCompanyId 분기) 이전이어야 함 — Hook 순서 규칙
+  const poRows = useMemo(
+    () => pos.map(p => {
+      const mfg = manufacturers.find(m => m.manufacturer_id === p.manufacturer_id);
+      return { ...p, manufacturer_name: mfg?.short_name?.trim() || mfg?.name_kr || p.manufacturer_name || '—' };
+    }),
+    [pos, manufacturers],
+  );
+  const lcRows = useMemo(
+    () => lcMfgFilter ? lcs.filter(lc => poList.find(p => p.po_id === lc.po_id)?.manufacturer_id === lcMfgFilter) : lcs,
+    [lcMfgFilter, lcs, poList],
+  );
+  const blRows = useMemo(
+    () => bls.map(bl => ({
+      ...bl,
+      manufacturer_name: bl.manufacturer_name ?? manufacturers.find(m => m.manufacturer_id === bl.manufacturer_id)?.name_kr ?? '—',
+    })),
+    [bls, manufacturers],
+  );
+
+  const poActiveCount = useMemo(() => poRows.filter(po => !['completed', 'cancelled'].includes(po.status)).length, [poRows]);
+  const poTotalMw = useMemo(() => poRows.reduce((sum, po) => sum + (po.total_mw ?? 0), 0), [poRows]);
+  const poShippingCount = useMemo(() => poRows.filter(po => po.status === 'shipping' || po.status === 'in_progress').length, [poRows]);
+  const lcTotalUsd = useMemo(() => lcRows.reduce((sum, lc) => sum + (lc.amount_usd ?? 0), 0), [lcRows]);
+  const lcOpenedCount = useMemo(() => lcRows.filter(lc => lc.status === 'opened' || lc.status === 'docs_received').length, [lcRows]);
+  const lcMaturitySoon = useMemo(
+    () => lcRows.filter(lc => {
+      const d = daysUntil(lc.maturity_date);
+      return d != null && d >= 0 && d <= 30 && lc.status !== 'settled' && lc.status !== 'cancelled';
+    }),
+    [lcRows],
+  );
+  const blActiveCount = useMemo(() => blRows.filter(bl => !['completed', 'erp_done'].includes(bl.status)).length, [blRows]);
+  const blShippingCount = useMemo(() => blRows.filter(bl => bl.status === 'shipping' || bl.status === 'arrived').length, [blRows]);
+  const blCustomsCount = useMemo(() => blRows.filter(bl => bl.status === 'customs').length, [blRows]);
+  const ttCompletedUsd = useMemo(() => tts.filter(tt => tt.status === 'completed').reduce((sum, tt) => sum + (tt.amount_usd ?? 0), 0), [tts]);
 
   if (!selectedCompanyId) {
     return <div className="flex items-center justify-center p-12"><p className="text-muted-foreground">좌측 상단에서 법인을 선택해주세요</p></div>;
@@ -537,29 +574,6 @@ export default function ProcurementPage() {
     openBLDropFile(firstCustomsOCRFile(event.dataTransfer.files));
   };
 
-  const poRows = pos.map(p => {
-    const mfg = manufacturers.find(m => m.manufacturer_id === p.manufacturer_id);
-    return { ...p, manufacturer_name: mfg?.short_name?.trim() || mfg?.name_kr || p.manufacturer_name || '—' };
-  });
-  const lcRows = lcMfgFilter ? lcs.filter(lc => poList.find(p => p.po_id === lc.po_id)?.manufacturer_id === lcMfgFilter) : lcs;
-  const blRows = bls.map(bl => ({
-    ...bl,
-    manufacturer_name: bl.manufacturer_name ?? manufacturers.find(m => m.manufacturer_id === bl.manufacturer_id)?.name_kr ?? '—',
-  }));
-
-  const poActiveCount = poRows.filter(po => !['completed', 'cancelled'].includes(po.status)).length;
-  const poTotalMw = poRows.reduce((sum, po) => sum + (po.total_mw ?? 0), 0);
-  const poShippingCount = poRows.filter(po => po.status === 'shipping' || po.status === 'in_progress').length;
-  const lcTotalUsd = lcRows.reduce((sum, lc) => sum + (lc.amount_usd ?? 0), 0);
-  const lcOpenedCount = lcRows.filter(lc => lc.status === 'opened' || lc.status === 'docs_received').length;
-  const lcMaturitySoon = lcRows.filter(lc => {
-    const d = daysUntil(lc.maturity_date);
-    return d != null && d >= 0 && d <= 30 && lc.status !== 'settled' && lc.status !== 'cancelled';
-  });
-  const blActiveCount = blRows.filter(bl => !['completed', 'erp_done'].includes(bl.status)).length;
-  const blShippingCount = blRows.filter(bl => bl.status === 'shipping' || bl.status === 'arrived').length;
-  const blCustomsCount = blRows.filter(bl => bl.status === 'customs').length;
-  const ttCompletedUsd = tts.filter(tt => tt.status === 'completed').reduce((sum, tt) => sum + (tt.amount_usd ?? 0), 0);
   const selectedRailPO = selectedPO ?? poRows[0] ?? null;
 
   const pageTitle =

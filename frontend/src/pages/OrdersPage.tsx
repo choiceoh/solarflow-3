@@ -1,4 +1,4 @@
-import { Component, useState, useEffect, type ReactNode } from 'react';
+import { Component, useState, useEffect, useMemo, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -321,6 +321,68 @@ export default function OrdersPage() {
       .catch(() => {});
   }, []);
 
+  // ⚠️ 모든 useMemo는 early return(아래 selectedCompanyId/selectedOrder 분기) 이전이어야 함 — Hook 순서 규칙
+  const salesByOutboundId = useMemo(
+    () => new Map(
+      outboundSales
+        .filter((item) => item.outbound_id)
+        .map((item) => [item.outbound_id as string, item.sale])
+    ),
+    [outboundSales],
+  );
+  const outboundsWithSales = useMemo(
+    () => outbounds.map((ob) => ({ ...ob, sale: ob.sale ?? salesByOutboundId.get(ob.outbound_id) })),
+    [outbounds, salesByOutboundId],
+  );
+
+  // 월 목록 (최근 12개월) — 마운트 후 1회만 계산
+  const months = useMemo(() => {
+    const out: string[] = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return out;
+  }, []);
+
+  const ordersKw = useMemo(
+    () => orders.reduce((sum, order) => sum + (order.capacity_kw ?? order.quantity * (order.wattage_kw ?? 0)), 0),
+    [orders],
+  );
+  const activeOrders = useMemo(
+    () => orders.filter(order => order.status !== 'completed' && order.status !== 'cancelled'),
+    [orders],
+  );
+  const outboundKw = useMemo(
+    () => outboundsWithSales.reduce((sum, outbound) => sum + (outbound.capacity_kw ?? 0), 0),
+    [outboundsWithSales],
+  );
+  const saleTotal = useMemo(
+    () => sales.reduce((sum, item) => sum + (item.total_amount ?? item.sale?.total_amount ?? 0), 0),
+    [sales],
+  );
+  const receiptTotal = useMemo(
+    () => receipts.reduce((sum, receipt) => sum + (receipt.amount ?? 0), 0),
+    [receipts],
+  );
+  const receiptRemaining = useMemo(
+    () => receipts.reduce((sum, receipt) => sum + (receipt.remaining ?? 0), 0),
+    [receipts],
+  );
+  const customersCount = useMemo(
+    () => new Set(orders.map(order => order.customer_id).filter(Boolean)).size,
+    [orders],
+  );
+  const outboundActive = useMemo(
+    () => outboundsWithSales.filter(outbound => outbound.status === 'active').length,
+    [outboundsWithSales],
+  );
+  const invoicePending = useMemo(
+    () => sales.filter(item => !item.tax_invoice_date).length,
+    [sales],
+  );
+
   if (!selectedCompanyId) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -570,16 +632,6 @@ export default function OrdersPage() {
     reloadOrders();
   };
 
-  const salesByOutboundId = new Map(
-    outboundSales
-      .filter((item) => item.outbound_id)
-      .map((item) => [item.outbound_id as string, item.sale])
-  );
-  const outboundsWithSales = outbounds.map((ob) => ({
-    ...ob,
-    sale: ob.sale ?? salesByOutboundId.get(ob.outbound_id),
-  }));
-
   const handleSubmitOutboundSale = async (formData: Record<string, unknown>) => {
     if (!invoiceOutbound && !invoiceOrder) return;
     const existing = invoiceOutbound
@@ -671,24 +723,6 @@ export default function OrdersPage() {
     }
     setDeleteLoading(false);
   };
-
-  // 월 목록 (최근 12개월)
-  const months: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-  }
-
-  const ordersKw = orders.reduce((sum, order) => sum + (order.capacity_kw ?? order.quantity * (order.wattage_kw ?? 0)), 0);
-  const activeOrders = orders.filter(order => order.status !== 'completed' && order.status !== 'cancelled');
-  const outboundKw = outboundsWithSales.reduce((sum, outbound) => sum + (outbound.capacity_kw ?? 0), 0);
-  const saleTotal = sales.reduce((sum, item) => sum + (item.total_amount ?? item.sale?.total_amount ?? 0), 0);
-  const receiptTotal = receipts.reduce((sum, receipt) => sum + (receipt.amount ?? 0), 0);
-  const receiptRemaining = receipts.reduce((sum, receipt) => sum + (receipt.remaining ?? 0), 0);
-  const customersCount = new Set(orders.map(order => order.customer_id).filter(Boolean)).size;
-  const outboundActive = outboundsWithSales.filter(outbound => outbound.status === 'active').length;
-  const invoicePending = sales.filter(item => !item.tax_invoice_date).length;
 
   const pageTitle =
     activeTab === 'outbound' ? '출고 / 판매' :

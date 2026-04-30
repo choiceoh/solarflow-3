@@ -47,10 +47,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     set({ session: data.session });
 
+    // /users/me와 loadCompanies를 병렬로 시작 — initialize()와 동일한 패턴
+    useAppStore.getState().loadCompanies();
     try {
       const profile = await fetchWithAuth<UserProfile>('/api/v1/users/me');
       set({ user: profile });
-      useAppStore.getState().loadCompanies();
     } catch (err) {
       console.error('[authStore] 프로필 조회 실패:', err);
     }
