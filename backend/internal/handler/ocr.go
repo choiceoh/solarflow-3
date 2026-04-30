@@ -10,6 +10,7 @@ import (
 
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/ocr"
+	"solarflow-backend/internal/ocrparse"
 	"solarflow-backend/internal/response"
 )
 
@@ -73,6 +74,7 @@ func (h *OCRHandler) Extract(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusBadRequest, "OCR로 읽을 이미지 또는 PDF를 선택해주세요")
 		return
 	}
+	documentType := normalizeOCRDocumentType(r.FormValue("document_type"))
 
 	out := model.OCRExtractResponse{Results: make([]model.OCRResult, 0, len(files))}
 	for _, header := range files {
@@ -111,14 +113,14 @@ func (h *OCRHandler) Extract(w http.ResponseWriter, r *http.Request) {
 			out.Results = append(out.Results, result)
 			continue
 		}
-		result = buildOCRResult(result.Filename, lines)
+		result = buildOCRResult(result.Filename, lines, documentType)
 		out.Results = append(out.Results, result)
 	}
 
 	response.RespondJSON(w, http.StatusOK, out)
 }
 
-func buildOCRResult(filename string, lines []ocr.Result) model.OCRResult {
+func buildOCRResult(filename string, lines []ocr.Result, documentType string) model.OCRResult {
 	result := model.OCRResult{
 		Filename: filename,
 		Lines:    make([]model.OCRLine, 0, len(lines)),
@@ -141,7 +143,25 @@ func buildOCRResult(filename string, lines []ocr.Result) model.OCRResult {
 		})
 	}
 	result.RawText = strings.Join(raw, "\n")
+	if documentType == "customs_declaration" {
+		fields := ocrparse.ParseCustomsDeclaration(filename, result.Lines)
+		if fields != nil {
+			result.Fields = &model.OCRFields{
+				DocumentType:       documentType,
+				CustomsDeclaration: fields,
+			}
+		}
+	}
 	return result
+}
+
+func normalizeOCRDocumentType(value string) string {
+	switch strings.TrimSpace(value) {
+	case "customs_declaration":
+		return "customs_declaration"
+	default:
+		return ""
+	}
 }
 
 func readOCRUpload(file io.ReadCloser, contentType string, filename string) ([]byte, string, error) {

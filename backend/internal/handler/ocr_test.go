@@ -54,7 +54,7 @@ func TestBuildOCRResultJoinsRawTextAndKeepsBoxes(t *testing.T) {
 		{Text: "  SolarFlow  ", Score: 0.98, X0: 1, Y0: 2, X1: 30, Y1: 12},
 		{Text: "", Score: 0.25, X0: 3, Y0: 4, X1: 5, Y1: 6},
 		{Text: "Module", Score: 0.95, X0: 8, Y0: 9, X1: 40, Y1: 20},
-	})
+	}, "")
 	if got.Filename != "spec.png" {
 		t.Fatalf("Filename = %q", got.Filename)
 	}
@@ -66,6 +66,20 @@ func TestBuildOCRResultJoinsRawTextAndKeepsBoxes(t *testing.T) {
 	}
 	if got.Lines[0].Box.X0 != 1 || got.Lines[0].Box.Y1 != 12 {
 		t.Fatalf("first box = %+v", got.Lines[0].Box)
+	}
+}
+
+func TestBuildOCRResultAddsCustomsFields(t *testing.T) {
+	got := buildOCRResult("customs.pdf", []ocr.Result{
+		{Text: "수입신고번호 81500-26-0150024", Score: 0.98},
+		{Text: "적용환율 USD 1,422.60", Score: 0.95},
+	}, "customs_declaration")
+	if got.Fields == nil || got.Fields.CustomsDeclaration == nil {
+		t.Fatal("Fields.CustomsDeclaration = nil")
+	}
+	if got.Fields.CustomsDeclaration.DeclarationNumber == nil ||
+		got.Fields.CustomsDeclaration.DeclarationNumber.Value != "81500-26-0150024" {
+		t.Fatalf("DeclarationNumber = %+v", got.Fields.CustomsDeclaration.DeclarationNumber)
 	}
 }
 
