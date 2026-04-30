@@ -1,11 +1,13 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import LoginForm from '@/components/auth/LoginForm';
+import { isDevMockLoginAllowed } from '@/lib/devMockMode';
 
 export default function LoginPage() {
   const { isAuthenticated, isLoading } = useAuth();
+  const canUseDevMock = isDevMockLoginAllowed();
 
-  if (isLoading) {
+  if (isLoading && !canUseDevMock) {
     return (
       <div className="flex h-screen items-center justify-center">
         <p className="text-muted-foreground">로딩 중...</p>

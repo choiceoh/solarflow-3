@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { isDevMockSessionActive } from '@/lib/devMockMode';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -63,6 +64,11 @@ export function readStoredAuthToken(): string | null {
   return parseAccessToken(getStorageValue(getAuthSessionStorage(), AUTH_STORAGE_KEY));
 }
 
+export function clearStoredAuthSession(): void {
+  removeStorageValue(localStorage, AUTH_STORAGE_KEY);
+  removeStorageValue(sessionStorage, AUTH_STORAGE_KEY);
+}
+
 export const supabase = createClient(
   supabaseUrl || '',
   supabaseAnonKey || '',
@@ -93,6 +99,7 @@ export const supabase = createClient(
 // 탭 복귀 시 세션 선제 갱신 — 방치 후 첫 클릭 블로킹 방지
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
+    if (isDevMockSessionActive()) return;
     supabase.auth.getSession().catch(() => {
       console.debug('[SolarFlow] 탭 복귀 시 세션 조회 실패 — 다음 API 호출 시 처리됨');
     });

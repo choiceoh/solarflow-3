@@ -1,7 +1,19 @@
 import { create } from 'zustand';
 import type { Session } from '@supabase/supabase-js';
-import { getAuthSessionPersistence, setAuthSessionPersistence, supabase } from '@/lib/supabase';
+import {
+  clearStoredAuthSession,
+  getAuthSessionPersistence,
+  setAuthSessionPersistence,
+  supabase,
+} from '@/lib/supabase';
 import { fetchWithAuth } from '@/lib/api';
+import {
+  clearDevMockSession,
+  createDevMockSession,
+  DEV_MOCK_PROFILE,
+  isDevMockSessionActive,
+  startDevMockSession,
+} from '@/lib/devMockMode';
 import { useAppStore } from '@/stores/appStore';
 import type { UserProfile } from '@/types/models';
 
@@ -14,6 +26,7 @@ interface AuthState {
   user: UserProfile | null;
   isLoading: boolean;
   login: (email: string, password: string, options?: LoginOptions) => Promise<void>;
+  loginWithDevMock: () => Promise<void>;
   logout: () => Promise<void>;
   initialize: () => void;
 }
@@ -43,15 +56,39 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
+  loginWithDevMock: async () => {
+    clearStoredAuthSession();
+    startDevMockSession();
+    set({ session: createDevMockSession(), user: DEV_MOCK_PROFILE, isLoading: false });
+    await useAppStore.getState().loadCompanies();
+  },
+
   logout: async () => {
-    await supabase.auth.signOut();
+    if (isDevMockSessionActive()) {
+      clearDevMockSession();
+      clearStoredAuthSession();
+    } else {
+      await supabase.auth.signOut();
+    }
+    useAppStore.setState({ companies: [], companiesLoaded: false, selectedCompanyId: 'all' });
     set({ session: null, user: null });
   },
 
   initialize: () => {
     let initialized = false;
 
+    if (isDevMockSessionActive()) {
+      set({ session: createDevMockSession(), user: DEV_MOCK_PROFILE, isLoading: false });
+      useAppStore.getState().loadCompanies();
+      return;
+    }
+
     const timeout = setTimeout(() => {
+      if (isDevMockSessionActive()) {
+        set({ session: createDevMockSession(), user: DEV_MOCK_PROFILE, isLoading: false });
+        initialized = true;
+        return;
+      }
       console.warn('[authStore] 초기화 타임아웃 — 세션 초기화 후 로그인으로 이동');
       supabase.auth.signOut();
       set({ session: null, user: null, isLoading: false });
@@ -61,6 +98,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       clearTimeout(timeout);
       if (initialized) return;
+      if (isDevMockSessionActive()) {
+        set({ session: createDevMockSession(), user: DEV_MOCK_PROFILE, isLoading: false });
+        useAppStore.getState().loadCompanies();
+        initialized = true;
+        return;
+      }
 
       set({ session });
 
@@ -82,6 +125,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     }).catch(() => {
       clearTimeout(timeout);
       if (initialized) return;
+      if (isDevMockSessionActive()) {
+        set({ session: createDevMockSession(), user: DEV_MOCK_PROFILE, isLoading: false });
+        useAppStore.getState().loadCompanies();
+        initialized = true;
+        return;
+      }
       console.error('[authStore] 세션 조회 실패');
       supabase.auth.signOut();
       set({ session: null, user: null, isLoading: false });
@@ -89,6 +138,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
 
     supabase.auth.onAuthStateChange((event, session) => {
+      if (isDevMockSessionActive()) return;
+
       // 초기화 완료 전이면 getSession에서 처리하므로 무시
       if (!initialized) return;
 
