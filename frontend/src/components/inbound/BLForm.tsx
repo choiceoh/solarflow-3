@@ -788,6 +788,56 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     prepareCustomsOCRFile(event.dataTransfer.files);
   };
 
+  const hasCustomsOCRDraggedFiles = useCallback((dataTransfer: DataTransfer | null) => {
+    return Boolean(dataTransfer && Array.from(dataTransfer.types).includes('Files'));
+  }, []);
+
+  useEffect(() => {
+    if (!open || editData || customsOCRLoading || customsOCRReviewOpen) {
+      setCustomsOCRDragActive(false);
+      return;
+    }
+
+    const handleWindowDrag = (event: globalThis.DragEvent) => {
+      if (!hasCustomsOCRDraggedFiles(event.dataTransfer)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+      setCustomsOCRDragActive(true);
+    };
+    const handleWindowDragLeave = (event: globalThis.DragEvent) => {
+      if (!hasCustomsOCRDraggedFiles(event.dataTransfer)) return;
+      if (
+        event.clientX <= 0 ||
+        event.clientY <= 0 ||
+        event.clientX >= window.innerWidth ||
+        event.clientY >= window.innerHeight
+      ) {
+        setCustomsOCRDragActive(false);
+      }
+    };
+    const handleWindowDrop = (event: globalThis.DragEvent) => {
+      if (!hasCustomsOCRDraggedFiles(event.dataTransfer)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setCustomsOCRDragActive(false);
+      setSelType('import');
+      setValue('inbound_type', 'import', { shouldDirty: true });
+      setAutoNumber('');
+      prepareCustomsOCRFile(event.dataTransfer?.files ?? null);
+    };
+
+    window.addEventListener('dragenter', handleWindowDrag);
+    window.addEventListener('dragover', handleWindowDrag);
+    window.addEventListener('dragleave', handleWindowDragLeave);
+    window.addEventListener('drop', handleWindowDrop);
+    return () => {
+      window.removeEventListener('dragenter', handleWindowDrag);
+      window.removeEventListener('dragover', handleWindowDrag);
+      window.removeEventListener('dragleave', handleWindowDragLeave);
+      window.removeEventListener('drop', handleWindowDrop);
+    };
+  }, [customsOCRLoading, customsOCRReviewOpen, editData, hasCustomsOCRDraggedFiles, open, setValue]);
+
   /* ── 폼 초기화 ── */
   useEffect(() => {
     if (!open) return;

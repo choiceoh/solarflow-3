@@ -222,25 +222,29 @@ export default function InboundPage() {
       </div>
 
       <div
-        className={`rounded-md border border-dashed p-3 transition-colors ${
+        className={`rounded-md border-2 border-dashed p-4 transition-colors ${
           customsOCRDropActive
             ? 'border-primary bg-primary/10 text-primary'
-            : 'border-muted-foreground/30 bg-muted/30 text-foreground'
+            : 'border-primary/40 bg-primary/5 text-foreground'
         }`}
+        onDragEnter={handleCustomsOCRPageDrag}
+        onDragOver={handleCustomsOCRPageDrag}
+        onDragLeave={handleCustomsOCRPageDragLeave}
+        onDrop={handleCustomsOCRPageDrop}
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-background ${
-            customsOCRDropActive ? 'border-primary text-primary' : 'text-muted-foreground'
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-background ${
+            customsOCRDropActive ? 'border-primary text-primary' : 'border-primary/30 text-primary'
           }`}>
-            <ScanText className="h-5 w-5" />
+            <ScanText className="h-6 w-6" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium">면장 PDF/사진 드래그 등록</div>
-            <div className={`text-xs ${customsOCRDropActive ? 'font-medium text-primary' : 'text-muted-foreground'}`}>
-              {customsOCRDropActive ? '지금 놓으면 입고등록으로 이동합니다' : '이 박스 또는 입고관리 화면 어디에나 놓을 수 있습니다'}
+            <div className="text-base font-semibold">여기에 면장 PDF/사진을 끌어다 놓으세요</div>
+            <div className={`mt-1 text-sm ${customsOCRDropActive ? 'font-medium text-primary' : 'text-muted-foreground'}`}>
+              {customsOCRDropActive ? '지금 놓으면 해외직수입 입고등록으로 이동합니다' : '놓으면 입고등록 창과 OCR 입력값 확인창이 자동으로 열립니다'}
             </div>
           </div>
-          <div className="rounded-md bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+          <div className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
             PDF · JPG · PNG
           </div>
         </div>

@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, type DragEvent as ReactDragEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, FileText, Banknote, Landmark, Ship, History } from 'lucide-react';
+import { Plus, FileText, Banknote, Landmark, Ship, History, ScanText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -35,6 +35,17 @@ function FT({ text }: { text: string }) {
 }
 
 const PROCUREMENT_TABS = new Set(['po', 'tt', 'lc', 'bl', 'price']);
+
+function isCustomsOCRAcceptedFile(file: File) {
+  const name = file.name.toLowerCase();
+  return file.type === 'application/pdf'
+    || file.type.startsWith('image/')
+    || /\.(pdf|png|jpe?g|webp|heic|heif|bmp|tiff?)$/i.test(name);
+}
+
+function firstCustomsOCRFile(files: FileList | null) {
+  return files ? Array.from(files).find(isCustomsOCRAcceptedFile) ?? null : null;
+}
 
 export default function ProcurementPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
@@ -93,6 +104,10 @@ export default function ProcurementPage() {
   const [blFormOpen, setBlFormOpen] = useState(false);
   const [blFormPresetPOId, setBlFormPresetPOId] = useState<string | null>(null);
   const [blFormPresetLCId, setBlFormPresetLCId] = useState<string | null>(null);
+  const [blOCRDropActive, setBlOCRDropActive] = useState(false);
+  const [blOCRDropError, setBlOCRDropError] = useState('');
+  const [blOCRDropFile, setBlOCRDropFile] = useState<File | null>(null);
+  const [blOCRDropFileKey, setBlOCRDropFileKey] = useState(0);
   const [blsVersion, setBlsVersion] = useState(0);
   const blFilters: { inbound_type?: string; status?: string; manufacturer_id?: string } = {};
   if (blTypeFilter) blFilters.inbound_type = blTypeFilter;
@@ -150,6 +165,69 @@ export default function ProcurementPage() {
         .then((list) => setBanks(list.filter((b) => b.is_active))).catch(() => {});
     }
   }, [selectedCompanyId]);
+
+  const hasDraggedFiles = useCallback((dataTransfer: DataTransfer | null) => {
+    return Boolean(dataTransfer && Array.from(dataTransfer.types).includes('Files'));
+  }, []);
+
+  const openBLDropFile = useCallback((file: File | null) => {
+    if (!file) {
+      setBlOCRDropError('PDF 또는 사진 파일만 등록할 수 있습니다');
+      return;
+    }
+
+    setBlOCRDropError('');
+    setSelectedBL(null);
+    setBlFormPresetPOId(null);
+    setBlFormPresetLCId(null);
+    setBlOCRDropFile(file);
+    setBlOCRDropFileKey((value) => value + 1);
+    setActiveTab('bl');
+    setBlFormOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCompanyId || activeTab !== 'bl' || selectedBL || blFormOpen) {
+      setBlOCRDropActive(false);
+      return;
+    }
+
+    const handleWindowDrag = (event: DragEvent) => {
+      if (!hasDraggedFiles(event.dataTransfer)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+      setBlOCRDropActive(true);
+    };
+    const handleWindowDragLeave = (event: DragEvent) => {
+      if (!hasDraggedFiles(event.dataTransfer)) return;
+      if (
+        event.clientX <= 0 ||
+        event.clientY <= 0 ||
+        event.clientX >= window.innerWidth ||
+        event.clientY >= window.innerHeight
+      ) {
+        setBlOCRDropActive(false);
+      }
+    };
+    const handleWindowDrop = (event: DragEvent) => {
+      if (!hasDraggedFiles(event.dataTransfer)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setBlOCRDropActive(false);
+      openBLDropFile(firstCustomsOCRFile(event.dataTransfer?.files ?? null));
+    };
+
+    window.addEventListener('dragenter', handleWindowDrag);
+    window.addEventListener('dragover', handleWindowDrag);
+    window.addEventListener('dragleave', handleWindowDragLeave);
+    window.addEventListener('drop', handleWindowDrop);
+    return () => {
+      window.removeEventListener('dragenter', handleWindowDrag);
+      window.removeEventListener('dragover', handleWindowDrag);
+      window.removeEventListener('dragleave', handleWindowDragLeave);
+      window.removeEventListener('drop', handleWindowDrop);
+    };
+  }, [activeTab, blFormOpen, hasDraggedFiles, openBLDropFile, selectedBL, selectedCompanyId]);
 
   if (!selectedCompanyId) {
     return <div className="flex items-center justify-center p-12"><p className="text-muted-foreground">좌측 상단에서 법인을 선택해주세요</p></div>;
@@ -266,6 +344,8 @@ export default function ProcurementPage() {
     setActiveTab('bl');
     setBlFormPresetPOId(presetPOId);
     setBlFormPresetLCId(presetLCId);
+    setBlOCRDropFile(null);
+    setBlOCRDropError('');
     setBlFormOpen(true);
   };
 
@@ -273,6 +353,7 @@ export default function ProcurementPage() {
     setBlFormOpen(false);
     setBlFormPresetPOId(null);
     setBlFormPresetLCId(null);
+    setBlOCRDropFile(null);
   };
 
   const handleNewBLFromLC = (lc: { lc_id: string; po_id: string }) => {
@@ -392,8 +473,41 @@ export default function ProcurementPage() {
   const ttPoLabel = ttPoFilter ? (poList.find(p => p.po_id === ttPoFilter)?.po_number ?? '') : '전체 PO';
   const phMfgLabel = phMfgFilter ? (manufacturers.find(m => m.manufacturer_id === phMfgFilter)?.name_kr ?? '') : '전체 제조사';
 
+  const handleBLDropZoneDrag = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+    setBlOCRDropActive(true);
+  };
+
+  const handleBLDropZoneDragLeave = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const nextTarget = event.relatedTarget as Node | null;
+    if (nextTarget && event.currentTarget.contains(nextTarget)) return;
+    setBlOCRDropActive(false);
+  };
+
+  const handleBLDropZoneDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setBlOCRDropActive(false);
+    openBLDropFile(firstCustomsOCRFile(event.dataTransfer.files));
+  };
+
   return (
-    <div className="p-6 space-y-4">
+    <div
+      className={`min-h-[calc(100vh-5rem)] p-6 space-y-4 transition-shadow ${
+        activeTab === 'bl' && blOCRDropActive ? 'ring-2 ring-primary/40 ring-offset-2 ring-offset-background' : ''
+      }`}
+      onDragEnter={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDrag : undefined}
+      onDragOver={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDrag : undefined}
+      onDragLeave={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDragLeave : undefined}
+      onDrop={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDrop : undefined}
+    >
       <h1 className="text-lg font-semibold">P/O 발주 / 결제</h1>
 
       {/* 변경계약 등록 후 원계약 자동 완료 알림 */}
@@ -523,9 +637,40 @@ export default function ProcurementPage() {
               onSubmit={handleCreateBL}
               presetPOId={blFormPresetPOId}
               presetLCId={blFormPresetLCId}
+              initialCustomsOCRFile={blOCRDropFile}
+              initialCustomsOCRFileKey={blOCRDropFileKey}
             />
           ) : (
             <>
+              <div
+                className={`rounded-md border-2 border-dashed p-4 transition-colors ${
+                  blOCRDropActive
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-primary/40 bg-primary/5 text-foreground'
+                }`}
+                onDragEnter={handleBLDropZoneDrag}
+                onDragOver={handleBLDropZoneDrag}
+                onDragLeave={handleBLDropZoneDragLeave}
+                onDrop={handleBLDropZoneDrop}
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-background ${
+                    blOCRDropActive ? 'border-primary text-primary' : 'border-primary/30 text-primary'
+                  }`}>
+                    <ScanText className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base font-semibold">여기에 면장 PDF/사진을 끌어다 놓으세요</div>
+                    <div className={`mt-1 text-sm ${blOCRDropActive ? 'font-medium text-primary' : 'text-muted-foreground'}`}>
+                      {blOCRDropActive ? '지금 놓으면 해외직수입 입고등록으로 이동합니다' : '놓으면 입고등록 창과 OCR 입력값 확인창이 자동으로 열립니다'}
+                    </div>
+                    {blOCRDropError && <div className="mt-2 text-xs font-medium text-destructive">{blOCRDropError}</div>}
+                  </div>
+                  <div className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                    PDF · JPG · PNG
+                  </div>
+                </div>
+              </div>
               <div className="flex items-center gap-2 mb-3">
                 <Select value={blTypeFilter || 'all'} onValueChange={(v) => setBlTypeFilter(v === 'all' ? '' : (v ?? ''))}>
                   <SelectTrigger className="h-8 w-36 text-xs"><FT text={blTypeFilter ? (INBOUND_TYPE_LABEL[blTypeFilter as InboundType] ?? blTypeFilter) : '입고 구분'} /></SelectTrigger>
