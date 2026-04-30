@@ -67,7 +67,7 @@ export default function GlobalSearchBar() {
   };
 
   return (
-    <div className="relative flex-1 max-w-md" ref={panelRef}>
+    <div className="sf-global-search relative" ref={panelRef}>
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
         <Input

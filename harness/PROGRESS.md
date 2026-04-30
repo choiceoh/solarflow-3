@@ -11,8 +11,28 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 129개 PASS |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-106 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-107 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-01 세션 — PR19 상단 검색축 고정
+
+### 완료
+- 상단 커맨드바를 flex 배치에서 좌측 정보 / 중앙 검색 / 우측 액션 3컬럼 그리드로 변경
+- 전역 검색창을 `.sf-global-search` 기준 컴포넌트로 분리해 페이지 제목 길이와 무관하게 중앙에 고정
+- 720px 이하에서는 제목/액션 1행, 검색창 2행 전체 폭으로 접히도록 반응형 규칙 보정
+- 설계 판단 D-107 추가: 상단 검색창은 헤더 전체 축을 기준으로 고정
+
+### 검증
+- `cd frontend && npm run lint` 성공
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run test` 성공 — 4 files / 10 tests
+- `git diff --check` 성공
+- 설치된 테스트용 Chromium 1480×900에서 `/dashboard`, `/inventory`, `/customs`, `/procurement`, `/orders`, `/banking`, `/sales-analysis` 검색창 중심과 헤더 중심이 모두 `846px`로 일치함 확인
+
+### 다음 작업
+- PR19 구매/판매/금융 화면을 같은 기준으로 데스크톱 폭 정밀 비교
 
 ---
 

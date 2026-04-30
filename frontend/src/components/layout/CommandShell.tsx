@@ -251,16 +251,16 @@ export default function CommandShell() {
 
       <section className="sf-main-shell">
         <header className="sf-topbar">
-          <div className="min-w-0 shrink-0">
+          <div className="sf-topbar-title">
             <h1>{meta.title}</h1>
             <div className="sf-topbar-subtitle">{meta.breadcrumb} · 계산기준 {new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</div>
           </div>
 
-          <div className="flex min-w-0 flex-1 justify-center">
+          <div className="sf-topbar-search">
             <GlobalSearchBar />
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="sf-topbar-actions">
             <Button
               variant="ghost"
               size="icon-xs"
