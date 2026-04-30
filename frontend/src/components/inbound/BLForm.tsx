@@ -1420,28 +1420,36 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
 	                {isImport && (
 	                  <>
 	                    <div
-	                      className={`rounded-md border border-dashed px-3 py-2 transition-colors sm:col-span-2 lg:col-span-3 xl:col-span-4 ${
-	                        customsOCRDragActive ? 'border-primary bg-primary/10' : 'bg-muted/40'
+	                      className={`rounded-md border border-dashed p-3 transition-colors sm:col-span-2 lg:col-span-3 xl:col-span-4 ${
+	                        customsOCRDragActive ? 'border-primary bg-primary/10' : 'border-muted-foreground/30 bg-muted/40'
 	                      } ${customsOCRLoading ? 'opacity-75' : ''}`}
 	                      onDragEnter={handleCustomsOCRDragOver}
 	                      onDragOver={handleCustomsOCRDragOver}
 	                      onDragLeave={handleCustomsOCRDragLeave}
 	                      onDrop={handleCustomsOCRDrop}
 	                    >
-	                      <div className="flex flex-wrap items-center gap-2">
+	                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+	                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border ${
+	                          customsOCRDragActive ? 'border-primary bg-background text-primary' : 'bg-background text-muted-foreground'
+	                        }`}>
+	                          <ScanText className={`h-5 w-5 ${customsOCRLoading ? 'animate-pulse' : ''}`} />
+	                        </div>
+	                        <div className="min-w-0 flex-1">
+	                          <div className="text-sm font-medium">면장 PDF/사진 자동채움</div>
+	                          <div className={`text-xs ${customsOCRDragActive ? 'font-medium text-primary' : 'text-muted-foreground'}`}>
+	                            {customsOCRDragActive ? '여기에 놓으면 바로 읽습니다' : '파일을 이 박스에 끌어다 놓거나 선택하세요'}
+	                          </div>
+	                        </div>
 	                        <Button
 	                          type="button"
 	                          variant="outline"
 	                          size="sm"
+	                          className="w-full sm:w-auto"
 	                          disabled={customsOCRLoading}
 	                          onClick={() => customsOCRInputRef.current?.click()}
 	                        >
-	                          <ScanText className={`mr-1.5 h-3.5 w-3.5 ${customsOCRLoading ? 'animate-pulse' : ''}`} />
-	                          {customsOCRLoading ? '면장 읽는 중' : '면장 PDF 자동채움'}
+	                          {customsOCRLoading ? '읽는 중' : '파일 선택'}
 	                        </Button>
-	                        <span className={`text-xs ${customsOCRDragActive ? 'font-medium text-primary' : 'text-muted-foreground'}`}>
-	                          {customsOCRDragActive ? '여기에 놓으면 읽습니다' : 'PDF/사진 드래그 가능'}
-	                        </span>
 	                        <input
 	                          ref={customsOCRInputRef}
 	                          type="file"
@@ -1449,9 +1457,13 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
 	                          className="hidden"
 	                          onChange={(event) => prepareCustomsOCRFile(event.target.files)}
 	                        />
-	                        {customsOCRSummary && <span className="text-xs text-primary">{customsOCRSummary}</span>}
-	                        {customsOCRError && <span className="text-xs text-destructive">{customsOCRError}</span>}
 	                      </div>
+	                      {(customsOCRSummary || customsOCRError) && (
+	                        <div className="mt-2 text-xs">
+	                          {customsOCRSummary && <span className="text-primary">{customsOCRSummary}</span>}
+	                          {customsOCRError && <span className="text-destructive">{customsOCRError}</span>}
+	                        </div>
+	                      )}
 	                    </div>
 	                    <div className="space-y-1.5">
 	                      <Opt>ETD</Opt>
