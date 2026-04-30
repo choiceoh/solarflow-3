@@ -60,7 +60,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://solarflow-backend.fly.dev',
+        target: 'https://api.topworks.ltd',
         changeOrigin: true,
       }
     }
@@ -85,7 +85,7 @@ mkdir -p src/lib
 cat > src/lib/api.ts << 'TSEOF'
 // API 기본 URL — 개발에서는 프록시, 운영에서는 직접 연결
 const API_BASE = import.meta.env.PROD
-  ? 'https://solarflow-backend.fly.dev'
+  ? 'https://api.topworks.ltd'
   : '';
 
 // 공통 fetch 함수
