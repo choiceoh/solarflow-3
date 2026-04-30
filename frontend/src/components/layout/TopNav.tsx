@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronDown, LayoutDashboard, Landmark, BarChart3,
-  StickyNote, FileSignature, Settings, LogOut, User, FileText, History, Ship,
+  StickyNote, FileSignature, Settings, LogOut, User, FileText, Ship,
   Building2, Factory, Tag, Handshake, Warehouse, Banknote, HardHat,
   Package, ClipboardList, Store, Shield, Truck, TrendingUp,
   ScrollText, Receipt, Wallet, GitMerge, KeyRound, ScanText,
@@ -60,7 +60,7 @@ const purchaseSections: { label: string; path: string; icon: React.ElementType; 
   { label: '계약금',   path: '/procurement?tab=tt',    icon: Banknote,      menu: 'procurement' },
   { label: 'LC 개설',  path: '/procurement?tab=lc',    icon: Landmark,      menu: 'lc' },
   { label: 'B/L 입고', path: '/procurement?tab=bl',    icon: Ship,          menu: 'inbound' },
-  { label: '단가이력', path: '/procurement?tab=price', icon: History,       menu: 'procurement' },
+  { label: '면장/원가', path: '/customs',              icon: Receipt,       menu: 'inbound' },
 ];
 
 const inventorySections: { label: string; path: string; icon: React.ElementType; menu: MenuKey }[] = [
@@ -68,7 +68,6 @@ const inventorySections: { label: string; path: string; icon: React.ElementType;
   { label: '실재고',    path: '/inventory?tab=physical',  icon: Package,       menu: 'inventory' },
   { label: '미착품',    path: '/inventory?tab=incoming',  icon: Truck,         menu: 'inventory' },
   { label: '수급 전망', path: '/inventory?tab=forecast',  icon: TrendingUp,    menu: 'inventory' },
-  { label: '예약 등록', path: '/inventory?action=alloc',  icon: ClipboardList, menu: 'inventory' },
 ];
 
 const salesSections: { label: string; path: string; icon: React.ElementType; menu: MenuKey }[] = [
@@ -104,10 +103,10 @@ export default function TopNav() {
     ? '전체'
     : (selectedCompany?.company_name ?? '법인 선택');
 
-  const isPurchase  = ['/procurement', '/lc', '/inbound'].some(p => pathname === p || pathname.startsWith(p + '/'));
+  const isPurchase  = ['/procurement', '/lc', '/inbound', '/customs'].some(p => pathname === p || pathname.startsWith(p + '/'));
   const isInventory = pathname === '/inventory' || pathname.startsWith('/inventory/');
   const isSales     = ['/orders', '/outbound'].some(p => pathname === p || pathname.startsWith(p + '/'));
-  const isAnalysis  = pathname.startsWith('/dashboard') || pathname.startsWith('/banking') || pathname.startsWith('/customs') || pathname.startsWith('/sales-analysis');
+  const isAnalysis  = pathname.startsWith('/dashboard') || pathname.startsWith('/banking') || pathname.startsWith('/sales-analysis');
 
   const showPurchase  = canAccessMenu(r, 'procurement') || canAccessMenu(r, 'lc') || canAccessMenu(r, 'inbound');
   const showInventory = canAccessMenu(r, 'inventory');
@@ -121,6 +120,11 @@ export default function TopNav() {
 
   const isMasters = pathname.startsWith('/masters');
   const isTools   = ['/ocr', '/memo', '/approval', '/settings'].some(p => pathname.startsWith(p));
+  const supportNavLabel = showMasters && toolsVisible.length > 0
+    ? '기준정보/도구'
+    : showMasters
+      ? '기준정보'
+      : '도구';
   const navTriggerClass = (active: boolean) => cn(
     'flex h-8 items-center gap-1.5 rounded-md border border-transparent px-2.5 text-sm font-medium transition-all outline-none select-none whitespace-nowrap',
     'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/45',
@@ -240,7 +244,7 @@ export default function TopNav() {
         {showInventory && inventoryVisible.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger className={navTriggerClass(isInventory)}>
-              <Package className="h-3.5 w-3.5" />가용재고
+              <Package className="h-3.5 w-3.5" />재고
               <ChevronDown className="h-3 w-3 opacity-60" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-44">
@@ -256,7 +260,7 @@ export default function TopNav() {
         {showPurchase && purchaseVisible.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger className={navTriggerClass(isPurchase)}>
-              <ClipboardList className="h-3.5 w-3.5" />구매
+              <ClipboardList className="h-3.5 w-3.5" />구매/입고
               <ChevronDown className="h-3 w-3 opacity-60" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-44">
@@ -272,7 +276,7 @@ export default function TopNav() {
         {showSales && salesVisible.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger className={navTriggerClass(isSales)}>
-              <Store className="h-3.5 w-3.5" />판매
+              <Store className="h-3.5 w-3.5" />판매/수금
               <ChevronDown className="h-3 w-3 opacity-60" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-44">
@@ -308,10 +312,11 @@ export default function TopNav() {
         {(showMasters || toolsVisible.length > 0) && (
           <DropdownMenu>
             <DropdownMenuTrigger className={navTriggerClass(isMasters || isTools)}>
-              도구
+              {supportNavLabel}
               <ChevronDown className="h-3 w-3 opacity-60" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-44">
+              {showMasters && <DropdownMenuLabel className="text-[11px] text-muted-foreground">기준정보</DropdownMenuLabel>}
               {showMasters && masterSubItems.map((s) => (
                 <DropdownMenuItem key={s.path} onClick={() => navigate(s.path)} className="gap-2">
                   <s.icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -319,6 +324,7 @@ export default function TopNav() {
                 </DropdownMenuItem>
               ))}
               {showMasters && toolsVisible.length > 0 && <DropdownMenuSeparator />}
+              {toolsVisible.length > 0 && <DropdownMenuLabel className="text-[11px] text-muted-foreground">도구</DropdownMenuLabel>}
               {toolsVisible.map((s) => (
                 <DropdownMenuItem key={s.path} onClick={() => navigate(s.path)} className="gap-2">
                   <s.icon className="h-3.5 w-3.5 text-muted-foreground" />

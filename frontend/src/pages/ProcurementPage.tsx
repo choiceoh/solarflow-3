@@ -508,7 +508,7 @@ export default function ProcurementPage() {
       onDragLeave={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDragLeave : undefined}
       onDrop={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDrop : undefined}
     >
-      <h1 className="text-lg font-semibold">P/O 발주 / 결제</h1>
+      <h1 className="text-lg font-semibold">구매/입고</h1>
 
       {/* 변경계약 등록 후 원계약 자동 완료 알림 */}
       {autoCompletedMsg && (
@@ -533,7 +533,6 @@ export default function ProcurementPage() {
           <TabsTrigger value="tt"><Banknote className="h-3.5 w-3.5" />계약금</TabsTrigger>
           <TabsTrigger value="lc"><Landmark className="h-3.5 w-3.5" />LC</TabsTrigger>
           <TabsTrigger value="bl"><Ship className="h-3.5 w-3.5" />B/L</TabsTrigger>
-          <TabsTrigger value="price"><History className="h-3.5 w-3.5" />단가이력</TabsTrigger>
         </TabsList>
 
         <TabsContent value="po">
@@ -542,6 +541,7 @@ export default function ProcurementPage() {
             <Select value={poMfgFilter || 'all'} onValueChange={(v) => setPoMfgFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={poMfgLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 제조사</SelectItem>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent></Select>
             <Select value={poTypeFilter || 'all'} onValueChange={(v) => setPoTypeFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-28 text-xs"><FT text={poTypeLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 유형</SelectItem>{CONTRACT_TYPES_ACTIVE.map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
             <div className="flex-1" />
+            <Button size="sm" variant="outline" onClick={() => handleTabChange('price')}><History className="mr-1 h-4 w-4" />단가이력</Button>
             <Button size="sm" onClick={() => setPoFormOpen(true)}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
           </div>
           {poLoading ? <LoadingSpinner /> : (
@@ -700,8 +700,10 @@ export default function ProcurementPage() {
 
         <TabsContent value="price" className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">단가이력</h2>
             <Select value={phMfgFilter || 'all'} onValueChange={(v) => setPhMfgFilter(v === 'all' ? '' : (v ?? ''))}><SelectTrigger className="h-8 w-32 text-xs"><FT text={phMfgLabel} /></SelectTrigger><SelectContent><SelectItem value="all">전체 제조사</SelectItem>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent></Select>
             <div className="flex-1" />
+            <Button size="sm" variant="outline" onClick={() => handleTabChange('po')}>PO로 돌아가기</Button>
             <Button size="sm" variant="outline" onClick={handleBackfillPriceHistory} disabled={backfilling}>
               {backfilling ? '생성 중…' : '기존 PO에서 일괄 생성'}
             </Button>

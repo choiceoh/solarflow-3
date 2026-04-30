@@ -26,19 +26,23 @@ interface MenuItem {
 }
 
 // 홈 — 가용재고 (전체 공개, 최상단 단독 배치)
-const inventoryItem: MenuItem = { icon: Home, label: '가용재고', path: '/inventory' };
+const inventoryItem: MenuItem = { icon: Home, label: '재고 현황', path: '/inventory' };
 
-// 구매: 발주 → LC → 입고  (입력 가능: admin, operator)
+// 구매/입고: PO → T/T → L/C → B/L → 면장/원가  (입력 가능: admin, operator)
 const purchaseItems: MenuItem[] = [
-  { icon: ClipboardList, label: 'P/O 발주 관리', path: '/procurement', roles: ['admin', 'operator'] },
-  { icon: Landmark,      label: 'L/C 개설 관리', path: '/lc',          roles: ['admin', 'operator'] },
-  { icon: PackageCheck,  label: 'B/L 입고 관리', path: '/inbound',     roles: ['admin', 'operator'] },
+  { icon: ClipboardList, label: 'PO 발주',  path: '/procurement',        roles: ['admin', 'operator'] },
+  { icon: Wallet,        label: '계약금',   path: '/procurement?tab=tt', roles: ['admin', 'operator'] },
+  { icon: Landmark,      label: 'LC 개설',  path: '/procurement?tab=lc', roles: ['admin', 'operator'] },
+  { icon: PackageCheck,  label: 'B/L 입고', path: '/procurement?tab=bl', roles: ['admin', 'operator'] },
+  { icon: Calculator,    label: '면장/원가', path: '/customs',           roles: ['admin', 'operator'] },
 ];
-// 판매: 수주 → 출고/판매 → 수금  (입력: admin·operator, 조회: executive)
+// 판매/수금: 수주 → 출고 → 판매/계산서 → 수금 → 수금매칭
 const salesItems: MenuItem[] = [
-  { icon: ScrollText, label: '수주 관리', path: '/orders',           roles: ['admin', 'operator', 'executive'] },
-  { icon: Truck,      label: '출고/판매', path: '/outbound',         roles: ['admin', 'operator', 'executive'] },
+  { icon: ScrollText, label: '수주',     path: '/orders',              roles: ['admin', 'operator', 'executive'] },
+  { icon: Truck,      label: '출고',     path: '/orders?tab=outbound', roles: ['admin', 'operator', 'executive'] },
+  { icon: Calculator, label: '판매/계산서', path: '/orders?tab=sales', roles: ['admin', 'operator', 'executive'] },
   { icon: Wallet,     label: '수금 관리', path: '/orders?tab=receipts', roles: ['admin', 'operator', 'executive'] },
+  { icon: Database,   label: '수금매칭', path: '/orders?tab=matching', roles: ['admin', 'operator', 'executive'] },
 ];
 
 // 현황/분석
@@ -98,10 +102,8 @@ function NavLink({
       // 쿼리 파라미터 포함 경로 (예: /orders?tab=receipts)
       return pathname === basePath && search === `?${queryStr}`;
     }
-    // /orders (수주 관리): receipts/matching 탭일 때는 비활성
-    if (path === '/orders') {
-      return pathname === '/orders' && !search.includes('tab=receipts') && !search.includes('tab=matching');
-    }
+    // 탭 컨테이너의 기본 링크는 query가 없을 때만 활성화
+    if (path === '/orders' || path === '/procurement' || path === '/inventory') return pathname === path && !search;
     return pathname === path;
   })();
   const isSub = !!subs;
@@ -262,16 +264,16 @@ export default function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
         <NavLink {...navLinkBase} {...inventoryItem} />
         <Separator className="my-2" />
-        {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">구매</p>}
+        {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">구매/입고</p>}
         {purchaseItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
         <Separator className="my-2" />
-        {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">판매</p>}
+        {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">판매/수금</p>}
         {salesItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
         <Separator className="my-2" />
         {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">현황/분석</p>}
         {analysisItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
         <Separator className="my-2" />
-        {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">도구</p>}
+        {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">기준정보/도구</p>}
         {canSee(masterItem, role) && <NavLink {...navLinkBase} {...masterItem} />}
         {toolItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
         {canSee(settingsItem, role) && <NavLink {...navLinkBase} {...settingsItem} />}

@@ -653,13 +653,13 @@ export default function OrdersPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-lg font-semibold">수주</h1>
+      <h1 className="text-lg font-semibold">판매/수금</h1>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="orders"><ScrollText className="h-3.5 w-3.5" />수주</TabsTrigger>
           <TabsTrigger value="outbound"><Truck className="h-3.5 w-3.5" />출고</TabsTrigger>
-          <TabsTrigger value="sales"><ReceiptIcon className="h-3.5 w-3.5" />판매</TabsTrigger>
+          <TabsTrigger value="sales"><ReceiptIcon className="h-3.5 w-3.5" />판매/계산서</TabsTrigger>
           <TabsTrigger value="receipts"><Wallet className="h-3.5 w-3.5" />수금</TabsTrigger>
           <TabsTrigger value="matching"><GitMerge className="h-3.5 w-3.5" />수금매칭</TabsTrigger>
         </TabsList>

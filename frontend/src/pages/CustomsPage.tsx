@@ -138,7 +138,7 @@ export default function CustomsPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-lg font-semibold">부대비용 / 환율비교</h1>
+      <h1 className="text-lg font-semibold">면장/원가</h1>
 
       <Tabs defaultValue="expenses">
         <TabsList>

@@ -533,7 +533,7 @@ export default function InventoryPage() {
     <div className="p-6 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold">가용재고</h1>
+          <h1 className="text-lg font-semibold">재고 현황</h1>
           <p className="text-xs text-muted-foreground">
             실재고와 LC/B/L 미착품을 기준으로 예약 가능 수량을 확인합니다.
           </p>
