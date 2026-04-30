@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { readStoredAuthToken, supabase } from './supabase';
 
 // API 기본 URL — 개발에서는 프록시, 운영에서는 직접 연결
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -27,16 +27,6 @@ async function refreshAccessToken(): Promise<string | null> {
   });
 
   return refreshPromise;
-}
-
-// localStorage에서 토큰 직접 읽기 — getSession() 블로킹 시 fallback
-function readTokenFromStorage(): string | null {
-  try {
-    const raw = localStorage.getItem('solarflow-auth');
-    if (!raw) return null;
-    const data = JSON.parse(raw);
-    return data?.access_token ?? null;
-  } catch { return null; }
 }
 
 // getSession()에 타임아웃 적용 — 토큰 갱신 중 블로킹 방지
@@ -85,10 +75,10 @@ async function getSessionToken(): Promise<string | null> {
     console.warn('[SolarFlow] getSession 실패:', err);
   }
 
-  // 타임아웃 또는 실패 시 localStorage fallback
-  const fallback = readTokenFromStorage();
+  // 타임아웃 또는 실패 시 선택된 브라우저 저장소 fallback
+  const fallback = readStoredAuthToken();
   if (fallback) {
-    console.debug('[SolarFlow] getSession 타임아웃 — localStorage 토큰 사용');
+    console.debug('[SolarFlow] getSession 타임아웃 — 저장된 토큰 사용');
   }
   return fallback;
 }

@@ -1,15 +1,19 @@
 import { create } from 'zustand';
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { getAuthSessionPersistence, setAuthSessionPersistence, supabase } from '@/lib/supabase';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type { UserProfile } from '@/types/models';
+
+interface LoginOptions {
+  persistSession?: boolean;
+}
 
 interface AuthState {
   session: Session | null;
   user: UserProfile | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, options?: LoginOptions) => Promise<void>;
   logout: () => Promise<void>;
   initialize: () => void;
 }
@@ -21,7 +25,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
 
-  login: async (email: string, password: string) => {
+  login: async (email: string, password: string, options?: LoginOptions) => {
+    setAuthSessionPersistence(options?.persistSession ?? getAuthSessionPersistence());
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       throw new Error(error.message);
