@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, ScanText, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/date-input';
@@ -246,6 +246,58 @@ interface POLineRow {
   thisShipmentQty: string;       // 사용자 입력 — 이번 BL에 입고할 수량
 }
 
+interface OCRFieldCandidate {
+  value: string;
+  label?: string;
+  source_text?: string;
+  confidence?: number;
+}
+
+interface CustomsDeclarationOCRFields {
+  declaration_number?: OCRFieldCandidate;
+  declaration_date?: OCRFieldCandidate;
+  arrival_date?: OCRFieldCandidate;
+  release_date?: OCRFieldCandidate;
+  importer?: OCRFieldCandidate;
+  forwarder?: OCRFieldCandidate;
+  trade_partner?: OCRFieldCandidate;
+  exchange_rate?: OCRFieldCandidate;
+  cif_amount_krw?: OCRFieldCandidate;
+  hs_code?: OCRFieldCandidate;
+  customs_office?: OCRFieldCandidate;
+  port?: OCRFieldCandidate;
+  bl_number?: OCRFieldCandidate;
+  invoice_number?: OCRFieldCandidate;
+  line_items?: CustomsDeclarationOCRLine[];
+}
+
+interface CustomsDeclarationOCRLine {
+  model_spec?: OCRFieldCandidate;
+  quantity?: OCRFieldCandidate;
+  unit_price_usd?: OCRFieldCandidate;
+  amount_usd?: OCRFieldCandidate;
+  payment_type?: OCRFieldCandidate;
+}
+
+interface OCRExtractResponse {
+  results: Array<{
+    filename: string;
+    error?: string;
+    fields?: {
+      customs_declaration?: CustomsDeclarationOCRFields;
+    };
+  }>;
+}
+
+function normalizeOCRMatchText(value: string | undefined) {
+  return (value ?? '').toUpperCase().replace(/[^A-Z0-9가-힣]/g, '');
+}
+
+function parseOCRNumber(value: string | undefined) {
+  if (!value) return NaN;
+  return Number(value.replace(/,/g, ''));
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -261,6 +313,7 @@ interface Props {
 export default function BLForm({ open, onOpenChange, onSubmit, editData, presetPOId, presetLCId, embedded = false }: Props) {
   const globalCompanyId = useAppStore((s) => s.selectedCompanyId);
   const storeCompanies = useAppStore((s) => s.companies);
+  const customsOCRInputRef = useRef<HTMLInputElement | null>(null);
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
@@ -291,6 +344,9 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
   const [autofilled, setAutofilled] = useState<boolean>(false); // 자동채움 여부 표시 (bg-muted 적용용)
   const [poLineRows, setPoLineRows] = useState<POLineRow[]>([]); // D-087: PO 발주품목 + 기입고/잔여 테이블
   const [submitError, setSubmitError] = useState('');
+  const [customsOCRLoading, setCustomsOCRLoading] = useState(false);
+  const [customsOCRError, setCustomsOCRError] = useState('');
+  const [customsOCRSummary, setCustomsOCRSummary] = useState('');
   // R3: LC 선택 (해외직수입만 필수) — D-095 BL>LC=차단
   const [lcList, setLcList] = useState<{ lc_id: string; lc_number?: string; po_id: string; amount_usd: number; target_qty?: number; target_mw?: number; status: string; bank_name?: string }[]>([]);
   const [lcShippedQty, setLcShippedQty] = useState<number>(0); // 선택 LC의 기존 BL 합산 입고수량
@@ -528,10 +584,139 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     setValue('warehouse_id', id);
   }, [setValue]);
 
+  const applyOCRTextField = (field: keyof FormData, candidate: OCRFieldCandidate | undefined, label: string, onlyIfBlank = false) => {
+    const value = candidate?.value?.trim();
+    if (!value) return '';
+    if (onlyIfBlank && String(getValues(field) ?? '').trim()) return '';
+    setValue(field, value, { shouldDirty: true });
+    return label;
+  };
+
+  const findProductForOCRLine = (item: CustomsDeclarationOCRLine): Product | null => {
+    const raw = normalizeOCRMatchText(item.model_spec?.value);
+    if (!raw) return null;
+    return products.find((product) => {
+      const code = normalizeOCRMatchText(product.product_code);
+      const name = normalizeOCRMatchText(product.product_name);
+      return (code && raw.includes(code)) || (name && raw.includes(name)) || (name && name.includes(raw));
+    }) ?? null;
+  };
+
+  const applyOCRLineItems = (items: CustomsDeclarationOCRLine[] | undefined) => {
+    if (!items?.length) return { appliedCount: 0, unmatched: 0 };
+    const nextLines: LineItem[] = [];
+    let unmatched = 0;
+
+    for (const item of items) {
+      const product = findProductForOCRLine(item);
+      const quantity = parseOCRNumber(item.quantity?.value);
+      if (!product || !Number.isFinite(quantity) || quantity <= 0) {
+        unmatched += 1;
+        continue;
+      }
+      const unitUsdWp = parseOCRNumber(item.unit_price_usd?.value);
+      const amountUsd = parseOCRNumber(item.amount_usd?.value);
+      const isFree = item.payment_type?.value === 'free' || /FREE|SPARE|N\.C\.V/i.test(item.model_spec?.value ?? '');
+      nextLines.push({
+        product_id: product.product_id,
+        quantity: String(Math.round(quantity)),
+        item_type: isFree ? 'spare' : 'main',
+        payment_type: isFree ? 'free' : 'paid',
+        unit_price: Number.isFinite(unitUsdWp) && unitUsdWp > 0 ? usdWpToDisplayPrice(unitUsdWp, priceMode) : '',
+        manualInvoice: Number.isFinite(amountUsd) && amountUsd > 0,
+        invoiceOverride: Number.isFinite(amountUsd) && amountUsd > 0 ? amountUsd.toFixed(2) : '',
+      });
+    }
+
+    if (nextLines.length > 0) {
+      setLines(nextLines);
+    }
+    return { appliedCount: nextLines.length, unmatched };
+  };
+
+  const applyCustomsOCRFields = (fields: CustomsDeclarationOCRFields) => {
+    const applied = [
+      applyOCRTextField('declaration_number', fields.declaration_number, '면장번호'),
+      applyOCRTextField('actual_arrival', fields.arrival_date, '입항일'),
+      applyOCRTextField('port', fields.port, '항구'),
+      applyOCRTextField('forwarder', fields.forwarder, '운송주선인'),
+      applyOCRTextField('invoice_number', fields.invoice_number, 'Invoice No.'),
+      applyOCRTextField('bl_number', fields.bl_number, 'B/L번호', true),
+    ].filter((label): label is string => Boolean(label));
+
+    const rate = fields.exchange_rate?.value?.replace(/,/g, '').trim();
+    if (rate) {
+      const parsed = parseFloat(rate);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        setValue('exchange_rate', String(parsed), { shouldDirty: true });
+        setExchangeRateLive(String(parsed));
+        setExchangeRateDisplay(parsed.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        applied.push('면장환율');
+      }
+    }
+
+    const cif = fields.cif_amount_krw?.value?.replace(/[^0-9]/g, '').trim();
+    if (cif) {
+      const parsed = parseInt(cif, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        setCifAmountKrwManual(true);
+        setCifAmountKrwDisplay(parsed.toLocaleString('ko-KR'));
+        applied.push('면장 CIF 원화금액');
+      }
+    }
+
+    const lineResult = applyOCRLineItems(fields.line_items);
+    if (lineResult.appliedCount > 0) {
+      applied.push(`품목 ${lineResult.appliedCount}건`);
+    }
+
+    const references = [
+      fields.importer?.value ? `수입자 ${fields.importer.value}` : '',
+      fields.trade_partner?.value ? `무역거래처 ${fields.trade_partner.value}` : '',
+      fields.declaration_date?.value ? `신고일 ${fields.declaration_date.value}` : '',
+      fields.release_date?.value ? `수리/반출일 ${fields.release_date.value}` : '',
+      fields.hs_code?.value ? `HS ${fields.hs_code.value}` : '',
+      fields.customs_office?.value ? fields.customs_office.value : '',
+      lineResult.unmatched > 0 ? `품목 미매칭 ${lineResult.unmatched}건` : '',
+    ].filter((label): label is string => Boolean(label));
+
+    setCustomsOCRSummary([
+      applied.length > 0 ? `${applied.join(', ')} 채움` : '',
+      references.length > 0 ? `참고: ${references.join(' · ')}` : '',
+    ].filter(Boolean).join(' / ') || '자동으로 채울 값을 찾지 못했습니다');
+  };
+
+  const handleCustomsOCRFile = async (fileList: FileList | null) => {
+    const file = fileList?.[0];
+    if (!file) return;
+    setCustomsOCRLoading(true);
+    setCustomsOCRError('');
+    setCustomsOCRSummary('');
+    try {
+      const form = new FormData();
+      form.append('document_type', 'customs_declaration');
+      form.append('images', file);
+      const response = await fetchWithAuth<OCRExtractResponse>('/api/v1/ocr/extract', { method: 'POST', body: form });
+      const result = response.results[0];
+      if (!result) throw new Error('OCR 결과가 없습니다');
+      if (result.error) throw new Error(result.error);
+      const fields = result.fields?.customs_declaration;
+      if (!fields) throw new Error('면장 입력 후보를 찾지 못했습니다');
+      applyCustomsOCRFields(fields);
+    } catch (err) {
+      setCustomsOCRError(err instanceof Error ? err.message : '면장 PDF를 읽지 못했습니다');
+    } finally {
+      setCustomsOCRLoading(false);
+      if (customsOCRInputRef.current) customsOCRInputRef.current.value = '';
+    }
+  };
+
   /* ── 폼 초기화 ── */
   useEffect(() => {
     if (!open) return;
     setSubmitError('');
+    setCustomsOCRError('');
+    setCustomsOCRSummary('');
     setPriceMode('cents');
     if (editData) {
       const d = editData;
@@ -1088,11 +1273,34 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
 
               {/* 날짜/물류 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {isImport && (
-                  <>
-                    <div className="space-y-1.5">
-                      <Opt>ETD</Opt>
-                      <DateInput value={watch('etd') ?? ''}
+	                {isImport && (
+	                  <>
+	                    <div className="rounded-md border bg-muted/40 px-3 py-2 sm:col-span-2 lg:col-span-3 xl:col-span-4">
+	                      <div className="flex flex-wrap items-center gap-2">
+	                        <Button
+	                          type="button"
+	                          variant="outline"
+	                          size="sm"
+	                          disabled={customsOCRLoading}
+	                          onClick={() => customsOCRInputRef.current?.click()}
+	                        >
+	                          <ScanText className={`mr-1.5 h-3.5 w-3.5 ${customsOCRLoading ? 'animate-pulse' : ''}`} />
+	                          {customsOCRLoading ? '면장 읽는 중' : '면장 PDF 자동채움'}
+	                        </Button>
+	                        <input
+	                          ref={customsOCRInputRef}
+	                          type="file"
+	                          accept="application/pdf,image/*,.pdf"
+	                          className="hidden"
+	                          onChange={(event) => void handleCustomsOCRFile(event.target.files)}
+	                        />
+	                        {customsOCRSummary && <span className="text-xs text-primary">{customsOCRSummary}</span>}
+	                        {customsOCRError && <span className="text-xs text-destructive">{customsOCRError}</span>}
+	                      </div>
+	                    </div>
+	                    <div className="space-y-1.5">
+	                      <Opt>ETD</Opt>
+	                      <DateInput value={watch('etd') ?? ''}
                         onChange={(v) => setValue('etd', v, { shouldDirty: true })} />
                     </div>
                     <div className="space-y-1.5">
