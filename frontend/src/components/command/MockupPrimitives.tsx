@@ -74,7 +74,7 @@ export function TileB({
     <div className="card hover" style={{ padding: '12px 14px 14px', minWidth: 0, position: 'relative', overflow: 'hidden', height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span className="dot" style={{ background: color }} />
-        <span className="eyebrow" style={{ fontSize: 11 }}>{lbl}</span>
+        <span className="eyebrow">{lbl}</span>
         {delta ? (
           <span className="mono" style={{ marginLeft: 'auto', fontSize: 10, color: delta.startsWith('-') || delta.startsWith('−') ? 'var(--neg)' : 'var(--pos)', fontWeight: 600 }}>{delta}</span>
         ) : null}
