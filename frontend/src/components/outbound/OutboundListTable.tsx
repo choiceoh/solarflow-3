@@ -56,31 +56,29 @@ export default function OutboundListTable({ items, onSelect, onNew, onInvoice }:
                 <TableCell className="font-mono">{ob.product_code ?? '—'}</TableCell>
                 <TableCell>{ob.product_name ?? '—'}</TableCell>
                 <TableCell>{ob.spec_wp ? `${ob.spec_wp}` : '—'}</TableCell>
-                <TableCell className="text-right">{formatNumber(ob.quantity)}</TableCell>
-                <TableCell className="text-right">{formatKw(ob.capacity_kw)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatNumber(ob.quantity)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatKw(ob.capacity_kw)}</TableCell>
                 <TableCell>{ob.warehouse_name ?? '—'}</TableCell>
                 <TableCell>{USAGE_CATEGORY_LABEL[ob.usage_category] ?? ob.usage_category}</TableCell>
                 <TableCell>{ob.site_name ?? '—'}</TableCell>
                 <TableCell>{ob.order_number ?? '—'}</TableCell>
                 <TableCell>
                   {ob.group_trade ? (
-                    <span className="inline-flex items-center gap-1">
-                      <span className="rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-[10px] font-medium">그룹</span>
-                      <span className="text-[10px]">{ob.target_company_name}</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="sf-pill info">그룹</span>
+                      <span className="text-[10px]" style={{ color: 'var(--sf-ink-3)' }}>{ob.target_company_name}</span>
                     </span>
                   ) : '—'}
                 </TableCell>
                 <TableCell>
                   {ob.sale ? (
                     ob.sale.tax_invoice_date ? (
-                      <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium">
-                        {formatDate(ob.sale.tax_invoice_date)}
-                      </span>
+                      <span className="sf-pill pos">{formatDate(ob.sale.tax_invoice_date)}</span>
                     ) : (
-                      <span className="rounded-full bg-yellow-100 text-yellow-700 px-1.5 py-0.5 text-[10px] font-medium">미발행</span>
+                      <span className="sf-pill warn">미발행</span>
                     )
                   ) : (
-                    <span className="rounded-full bg-slate-100 text-slate-600 px-1.5 py-0.5 text-[10px] font-medium">미등록</span>
+                    <span className="sf-pill ghost">미등록</span>
                   )}
                 </TableCell>
                 <TableCell><OutboundStatusBadge status={ob.status} /></TableCell>

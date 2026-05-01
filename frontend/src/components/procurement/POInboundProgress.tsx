@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatNumber } from '@/lib/utils';
 import { fetchWithAuth } from '@/lib/api';
-import LoadingSpinner from '@/components/common/LoadingSpinner';
+import SkeletonRows from '@/components/common/SkeletonRows';
 import ProgressMiniBar from '@/components/common/ProgressMiniBar';
 import type { BLShipment, BLLineItem } from '@/types/inbound';
 import type { LCRecord, POLineItem } from '@/types/procurement';
@@ -55,7 +54,7 @@ export default function POInboundProgress({ poId, poLines }: Props) {
     return () => { cancelled = true; };
   }, [poId]);
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return <SkeletonRows rows={4} />;
 
   // 계약량: PO 라인아이템 수량 합계
   const contractQty = poLines.reduce((s, l) => s + l.quantity, 0);
@@ -80,23 +79,50 @@ export default function POInboundProgress({ poId, poLines }: Props) {
   // 진행률: (입고완료 / 계약량) x 100%
   const progressPct = contractQty > 0 ? Math.min((completedQty / contractQty) * 100, 100) : 0;
   const barColor = progressPct >= 80 ? 'bg-green-500' : progressPct >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+  const progressTone =
+    progressPct >= 80 ? 'var(--sf-pos)' :
+    progressPct >= 50 ? 'var(--sf-warn)' :
+    'var(--sf-neg)';
+
+  const stats = [
+    { label: '계약량',   value: contractQty },
+    { label: 'LC개설량', value: lcQty },
+    { label: '선적완료', value: shippedQty },
+    { label: '입고완료', value: completedQty, tone: 'var(--sf-pos)' },
+    { label: '잔여량',   value: remainQty,    tone: remainQty > 0 ? 'var(--sf-warn)' : undefined },
+  ];
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-5 gap-3">
-        <Card><CardHeader className="pb-1 pt-3"><CardTitle className="text-[10px] text-muted-foreground">계약량</CardTitle></CardHeader><CardContent className="pb-3"><p className="text-sm font-semibold">{formatNumber(contractQty)}</p></CardContent></Card>
-        <Card><CardHeader className="pb-1 pt-3"><CardTitle className="text-[10px] text-muted-foreground">LC개설량</CardTitle></CardHeader><CardContent className="pb-3"><p className="text-sm font-semibold">{formatNumber(lcQty)}</p></CardContent></Card>
-        <Card><CardHeader className="pb-1 pt-3"><CardTitle className="text-[10px] text-muted-foreground">선적완료</CardTitle></CardHeader><CardContent className="pb-3"><p className="text-sm font-semibold">{formatNumber(shippedQty)}</p></CardContent></Card>
-        <Card><CardHeader className="pb-1 pt-3"><CardTitle className="text-[10px] text-muted-foreground">입고완료</CardTitle></CardHeader><CardContent className="pb-3"><p className="text-sm font-semibold">{formatNumber(completedQty)}</p></CardContent></Card>
-        <Card><CardHeader className="pb-1 pt-3"><CardTitle className="text-[10px] text-muted-foreground">잔여량</CardTitle></CardHeader><CardContent className="pb-3"><p className="text-sm font-semibold">{formatNumber(remainQty)}</p></CardContent></Card>
+      <div className="grid grid-cols-5 gap-2">
+        {stats.map((s) => (
+          <div
+            key={s.label}
+            className="flex flex-col gap-1 rounded-md p-3"
+            style={{ background: 'var(--sf-surface)', border: '1px solid var(--sf-line)' }}
+          >
+            <span className="sf-eyebrow">{s.label}</span>
+            <span
+              className="sf-mono text-base font-semibold tabular-nums"
+              style={{ color: s.tone || 'var(--sf-ink)' }}
+            >
+              {formatNumber(s.value)}
+            </span>
+          </div>
+        ))}
       </div>
 
-      <div className="space-y-1">
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>입고 진행률</span>
-          <span>{progressPct.toFixed(0)}%</span>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-baseline justify-between">
+          <span className="sf-eyebrow">입고 진행률</span>
+          <span
+            className="sf-mono text-[13px] font-semibold tabular-nums"
+            style={{ color: progressTone }}
+          >
+            {progressPct.toFixed(0)}%
+          </span>
         </div>
-        <ProgressMiniBar percent={progressPct} colorClassName={barColor} className="h-3 w-full" barClassName="transition-all" />
+        <ProgressMiniBar percent={progressPct} colorClassName={barColor} className="h-2.5 w-full" barClassName="transition-all" />
       </div>
     </div>
   );

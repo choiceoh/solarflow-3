@@ -123,7 +123,7 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
                     {companyMap[bl.company_id] && (
                       <div className="text-[10px] text-muted-foreground mb-0.5">{companyMap[bl.company_id]}</div>
                     )}
-                    <div className="font-mono font-semibold">{bl.bl_number}</div>
+                    <div className="sf-mono font-semibold" style={{ color: 'var(--sf-ink)' }}>{bl.bl_number}</div>
                     <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
                       PO: {bl.po_number ?? (bl.po_id ? bl.po_id.slice(0, 8) : '—')}
                     </div>
@@ -163,8 +163,8 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
 
                   {/* 구분 / 현황 */}
                   <td className="p-3 align-top">
-                    <div className="text-[10px] text-muted-foreground mb-1.5">
-                      {INBOUND_TYPE_LABEL[bl.inbound_type]}
+                    <div className="mb-1.5">
+                      <span className="sf-pill ghost">{INBOUND_TYPE_LABEL[bl.inbound_type]}</span>
                     </div>
                     <InboundStatusBadge status={bl.status} />
                   </td>
