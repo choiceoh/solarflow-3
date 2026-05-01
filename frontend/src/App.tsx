@@ -14,6 +14,8 @@ const InboundPage = lazy(() => import('@/pages/InboundPage'));
 const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
 const LCPage = lazy(() => import('@/pages/LCPage'));
 const OutboundPage = lazy(() => import('@/pages/OutboundPage'));
+const OutboundV2Page = lazy(() => import('@/pages/OutboundV2Page'));
+const PartnerV2Page = lazy(() => import('@/pages/PartnerV2Page'));
 const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
 const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
 const SalesAnalysisPage = lazy(() => import('@/pages/SalesAnalysisPage'));
@@ -78,11 +80,13 @@ export default function App() {
                 <Route path="/data/warehouses/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><WarehouseEditPage /></RoleGuard>} />
                 <Route path="/data/banks/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankNewPage /></RoleGuard>} />
                 <Route path="/data/banks/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankEditPage /></RoleGuard>} />
+                <Route path="/masters/partners-v2" element={<PartnerV2Page />} />
                 <Route path="/masters/construction-sites" element={<ConstructionSitesPage />} />
                 <Route path="/inbound" element={<InboundPage />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
                 <Route path="/lc" element={<LCPage />} />
                 <Route path="/outbound" element={<OutboundPage />} />
+                <Route path="/outbound-v2" element={<OutboundV2Page />} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/customs" element={<CustomsPage />} />
                 <Route path="/sales-analysis" element={<SalesAnalysisPage />} />
