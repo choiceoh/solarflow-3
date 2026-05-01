@@ -49,6 +49,7 @@ export interface Partner {
   contact_phone?: string;
   contact_email?: string;
   is_active: boolean;
+  owner_user_id?: string | null;
 }
 
 export interface Warehouse {
