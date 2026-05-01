@@ -159,6 +159,8 @@ CLAUDE.md의 macOS 절차(`launchctl`, `codesign`)는 적용되지 않는다.
 | `OCR_PYTHON_BIN` | OCR 사이드카 파이썬 경로 |
 | `OCR_SIDECAR_SCRIPT` | OCR 진입점 스크립트 |
 | `METAL_PRICE_API_KEY` | 은(silver) + USD/KRW 환율 (metalpriceapi.com) |
+| `ANTHROPIC_API_KEY` | LLM 어시스턴트(/api/v1/assistant/chat). Z.ai GLM-5.1 키 — 형식 `<id>.<secret>` |
+| `ANTHROPIC_BASE_URL` | `https://api.z.ai/api/anthropic` (Z.ai의 Anthropic-호환 엔드포인트) |
 
 ### `engine/.env`
 | 키 | 용도 |
@@ -176,7 +178,8 @@ CLAUDE.md의 macOS 절차(`launchctl`, `codesign`)는 적용되지 않는다.
 |---|---|---|
 | Supabase | (위 .env) | DB / Auth / Storage |
 | metalpriceapi.com | `METAL_PRICE_API_KEY` | XAG(은) 라이브 + USD/KRW 환율 |
-| Cloudflare | (대시보드) | Pages(프론트), Tunnel(API), DNS |
+| Z.ai (GLM) | `ANTHROPIC_API_KEY` + `ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic` | LLM 업무 도우미 (PR #144) — Anthropic-호환 엔드포인트로 GLM-5.1 호출 |
+| Cloudflare | `~/.cloudflared/api-token` (Pages 진단/수동 배포용), `~/.cloudflared/cert.pem` (터널 cert + tunnel 토큰) | Pages(프론트), Tunnel(API), DNS. Pages 프로젝트명: `topworks-module-git`. Account ID: `6d6170fb05dd6d703b7ac8ea5ee10cae`. |
 
 폴리실리콘/SCFI는 무료 실시간 API 없음 → JSON 파일 + 운영자 주간 갱신 (PR73). FBX/Bernreuter는 향후 옵션.
 
