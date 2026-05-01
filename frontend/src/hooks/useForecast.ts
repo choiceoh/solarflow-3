@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '@/stores/appStore';
 import { fetchCalc } from '@/lib/companyUtils';
 import type { ForecastResponse } from '@/types/inventory';
@@ -35,41 +35,32 @@ function mergeForecast(rs: ForecastResponse[]): ForecastResponse {
 }
 
 export function useForecast(opts: UseForecastOptions = {}) {
-  const [data, setData] = useState<ForecastResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
-
-  const load = useCallback(async () => {
-    if (!selectedCompanyId) {
-      setData(null);
-      setError('법인을 선택해주세요');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
+  const q = useQuery<ForecastResponse, Error>({
+    queryKey: ['forecast', selectedCompanyId, opts.manufacturerId, opts.productId],
+    queryFn: () => {
       const extra: Record<string, unknown> = { months_ahead: 6 };
       if (opts.manufacturerId) extra.manufacturer_id = opts.manufacturerId;
       if (opts.productId) extra.product_id = opts.productId;
+      return fetchCalc<ForecastResponse>(selectedCompanyId, '/api/v1/calc/supply-forecast', extra, mergeForecast);
+    },
+    enabled: !!selectedCompanyId,
+  });
 
-      const result = await fetchCalc<ForecastResponse>(
-        selectedCompanyId, '/api/v1/calc/supply-forecast', extra, mergeForecast,
-      );
-      setData(result);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : '수급 전망 조회 실패';
-      setError(msg.includes('503') || msg.includes('unavailable')
-        ? '계산 엔진이 일시적으로 사용할 수 없습니다'
-        : msg);
-    }
-    setLoading(false);
-  }, [selectedCompanyId, opts.manufacturerId, opts.productId]);
+  let error: string | null = null;
+  if (q.error) {
+    const msg = q.error.message;
+    error = msg.includes('503') || msg.includes('unavailable')
+      ? '계산 엔진이 일시적으로 사용할 수 없습니다'
+      : msg;
+  } else if (!selectedCompanyId) {
+    error = '법인을 선택해주세요';
+  }
 
-  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load(); }, [load]);
-
-  return { data, loading, error, reload: load };
+  return {
+    data: q.data ?? null,
+    loading: q.isLoading,
+    error,
+    reload: async () => { await q.refetch(); },
+  };
 }
