@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useForm, type Resolver } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, PackagePlus, X, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +17,6 @@ import { useAppStore } from '@/stores/appStore';
 import type {
   IntercompanyRequest,
   IntercompanyStatus,
-  CreateIntercompanyRequestPayload,
 } from '@/types/intercompany';
 import { INTERCOMPANY_STATUS_LABEL } from '@/types/intercompany';
 import type { Product, Manufacturer } from '@/types/masters';
@@ -28,15 +30,22 @@ const statusVariant: Record<IntercompanyStatus, 'default' | 'secondary' | 'outli
 };
 
 // 운영 시드 고정값 — 040 마이그레이션의 companies(`BR`/`TS`) 시드 row와 동기화.
-// 페이지 진입 즉시 list API를 호출해 cold start 1단계 단축 (companies 로드 대기 제거).
 const BARO_COMPANY_ID = 'e41f100b-c63d-4c87-b02d-e305af610018';
 
+// OrderForm과 동일한 패턴 — react-hook-form + zod로 폼 핸들러/검증 일원화.
+const requestSchema = z.object({
+  product_id: z.string().min(1, '품번은 필수입니다'),
+  quantity: z.coerce.number().int().positive('수량은 양수여야 합니다'),
+  desired_arrival_date: z.string().optional(),
+  note: z.string().optional(),
+});
+
+type RequestFormData = z.infer<typeof requestSchema>;
+
 // BARO Phase 2 — 그룹내 매입 요청 (BARO 측)
-// 비유: 바로(주)가 탑솔라에 "이 모듈 N장 받고 싶다"는 메모를 적어 보내고, 진행 상황을 추적
 export default function GroupPurchaseRequestPage() {
   const companies = useAppStore((s) => s.companies);
   const loadCompanies = useAppStore((s) => s.loadCompanies);
-  // 라벨/Select 옵션용 — list API 트리거에는 사용하지 않는다(상수 사용).
   const baroCompany = useMemo(
     () =>
       companies.find((c) => c.company_code === 'BR') ?? {
@@ -55,23 +64,21 @@ export default function GroupPurchaseRequestPage() {
   const [statusFilter, setStatusFilter] = useState<IntercompanyStatus | ''>('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
   const today = new Date().toISOString().slice(0, 10);
-  const initialDraft = (): CreateIntercompanyRequestPayload => ({
-    requester_company_id: '',
-    target_company_id: '',
-    product_id: '',
-    quantity: 0,
-    desired_arrival_date: null,
-    note: null,
+
+  const form = useForm<RequestFormData>({
+    resolver: zodResolver(requestSchema) as unknown as Resolver<RequestFormData>,
+    defaultValues: { product_id: '', quantity: 0, desired_arrival_date: today, note: '' },
   });
-  const [draft, setDraft] = useState<CreateIntercompanyRequestPayload>(initialDraft);
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = form;
+  const watchedProductId = watch('product_id');
+  const watchedDate = watch('desired_arrival_date');
 
   useEffect(() => { loadCompanies(); }, [loadCompanies]);
 
-  // 마스터(products/manufacturers)는 1회만 로드 — 매번 다시 받지 않음
+  // 마스터(products/manufacturers)는 1회만 로드.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -91,7 +98,6 @@ export default function GroupPurchaseRequestPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // 매입 요청 목록 — BARO 회사 ID 상수 사용으로 companies 로드 대기 없이 즉시 호출
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -126,38 +132,30 @@ export default function GroupPurchaseRequestPage() {
   }, [products, manufacturers]);
 
   const openForm = () => {
-    setDraft({
-      requester_company_id: baroCompany?.company_id ?? '',
-      target_company_id: topsolarCompany?.company_id ?? '',
-      product_id: '',
-      quantity: 0,
-      desired_arrival_date: today,
-      note: null,
-    });
+    reset({ product_id: '', quantity: 0, desired_arrival_date: today, note: '' });
     setSubmitError('');
     setFormOpen(true);
   };
 
-  const submit = async () => {
+  // OrderForm.handle 패턴 — 검증은 zodResolver에서, 서버 응답은 try/catch에서 표시.
+  const onSubmit = async (data: RequestFormData) => {
     setSubmitError('');
-    if (!draft.requester_company_id || !draft.target_company_id) {
-      setSubmitError('법인 정보를 확인해주세요');
-      return;
-    }
-    if (!draft.product_id) { setSubmitError('품번을 선택해주세요'); return; }
-    if (!(draft.quantity > 0)) { setSubmitError('수량은 양수여야 합니다'); return; }
-    setSubmitting(true);
     try {
       await fetchWithAuth<IntercompanyRequest>('/api/v1/intercompany-requests', {
         method: 'POST',
-        body: JSON.stringify(draft),
+        body: JSON.stringify({
+          requester_company_id: baroCompany.company_id,
+          target_company_id: topsolarCompany?.company_id ?? '',
+          product_id: data.product_id,
+          quantity: data.quantity,
+          desired_arrival_date: data.desired_arrival_date || null,
+          note: data.note || null,
+        }),
       });
       setFormOpen(false);
       await load();
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : '등록 실패');
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -292,20 +290,20 @@ export default function GroupPurchaseRequestPage() {
           <DialogHeader>
             <DialogTitle>그룹내 매입 요청</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-3">
+          <form onSubmit={handleSubmit(onSubmit)} className="grid gap-3">
             <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
-              <div>요청자: <strong>{baroCompany?.company_name ?? '바로(주)'}</strong></div>
+              <div>요청자: <strong>{baroCompany.company_name}</strong></div>
               <div>대상: <strong>{topsolarCompany?.company_name ?? '탑솔라(주)'}</strong></div>
             </div>
             <div>
               <Label className="text-xs">품번</Label>
               <Select
-                value={draft.product_id}
-                onValueChange={(v) => setDraft((d) => ({ ...d, product_id: (v as string | null) ?? '' }))}
+                value={watchedProductId || ''}
+                onValueChange={(v) => setValue('product_id', (v as string | null) ?? '', { shouldValidate: true, shouldDirty: true })}
               >
-                <SelectTrigger className="h-9 w-full text-sm">
+                <SelectTrigger className="h-9 w-full text-sm" aria-invalid={!!errors.product_id}>
                   <span className="flex-1 text-left truncate">
-                    {draft.product_id ? (productInfoById.get(draft.product_id)?.code ?? '선택') : '품번 선택'}
+                    {watchedProductId ? (productInfoById.get(watchedProductId)?.code ?? '선택') : '품번 선택'}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -319,42 +317,34 @@ export default function GroupPurchaseRequestPage() {
                   })}
                 </SelectContent>
               </Select>
+              {errors.product_id && <p className="text-xs text-destructive">{errors.product_id.message}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">수량 (장)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={draft.quantity || ''}
-                  onChange={(e) => setDraft((d) => ({ ...d, quantity: Number(e.target.value) || 0 }))}
-                />
+                <Input type="number" min="1" {...register('quantity', { valueAsNumber: true })} aria-invalid={!!errors.quantity} />
+                {errors.quantity && <p className="text-xs text-destructive">{errors.quantity.message}</p>}
               </div>
               <div>
                 <Label className="text-xs">희망 입고일</Label>
                 <DateInput
-                  value={draft.desired_arrival_date ?? ''}
-                  onChange={(v) => setDraft((d) => ({ ...d, desired_arrival_date: v || null }))}
+                  value={watchedDate ?? ''}
+                  onChange={(v) => setValue('desired_arrival_date', v, { shouldDirty: true })}
                 />
               </div>
             </div>
             <div>
               <Label className="text-xs">메모 (선택)</Label>
-              <Textarea
-                rows={2}
-                value={draft.note ?? ''}
-                onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value || null }))}
-                placeholder="예: 분기 마감 전 도착 필요"
-              />
+              <Textarea rows={2} {...register('note')} placeholder="예: 분기 마감 전 도착 필요" />
             </div>
             {submitError && <p className="text-xs text-destructive">{submitError}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setFormOpen(false)}>취소</Button>
-            <Button onClick={submit} disabled={submitting}>
-              {submitting ? '저장 중...' : '요청 등록'}
-            </Button>
-          </DialogFooter>
+            <DialogFooter className="mt-1">
+              <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>취소</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? '저장 중...' : '요청 등록'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

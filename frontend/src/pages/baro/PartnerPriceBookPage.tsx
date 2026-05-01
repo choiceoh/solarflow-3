@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useForm, type Resolver } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +13,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import DataTable, { type Column } from '@/components/common/DataTable';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { fetchWithAuth } from '@/lib/api';
-import type { PartnerPrice, CreatePartnerPriceRequest } from '@/types/baro';
+import type { PartnerPrice } from '@/types/baro';
 import type { Partner, Product, Manufacturer } from '@/types/masters';
+
+// OrderForm과 동일한 패턴 — react-hook-form + zod
+const priceSchema = z.object({
+  partner_id: z.string().min(1, '거래처는 필수입니다'),
+  product_id: z.string().min(1, '품번은 필수입니다'),
+  unit_price_wp: z.coerce.number().positive('단가는 양수여야 합니다'),
+  discount_pct: z.coerce.number().min(0, '0 이상').max(100, '100 이하').default(0),
+  effective_from: z.string().min(1, '시작일은 필수입니다'),
+  effective_to: z.string().optional(),
+  memo: z.string().optional(),
+});
+
+type PriceFormData = z.infer<typeof priceSchema>;
 
 // BARO Phase 1 — 거래처별 단가표 페이지
 // 비유: "거래처×품번 → 단가" 한 줄로 잠금 → 수주 입력 시 자동 prefill
@@ -24,19 +40,27 @@ export default function PartnerPriceBookPage() {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PartnerPrice | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string>('');
 
   const today = new Date().toISOString().slice(0, 10);
-  const [draft, setDraft] = useState<CreatePartnerPriceRequest>({
-    partner_id: '',
-    product_id: '',
-    unit_price_wp: 0,
-    discount_pct: 0,
-    effective_from: today,
-    effective_to: null,
-    memo: null,
+
+  const form = useForm<PriceFormData>({
+    resolver: zodResolver(priceSchema) as unknown as Resolver<PriceFormData>,
+    defaultValues: {
+      partner_id: '',
+      product_id: '',
+      unit_price_wp: 0,
+      discount_pct: 0,
+      effective_from: today,
+      effective_to: '',
+      memo: '',
+    },
   });
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = form;
+  const watchedPartnerId = watch('partner_id');
+  const watchedProductId = watch('product_id');
+  const watchedFrom = watch('effective_from');
+  const watchedTo = watch('effective_to');
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -130,38 +154,39 @@ export default function PartnerPriceBookPage() {
     },
   ];
 
-  const resetDraft = () => {
-    setDraft({
+  const resetForm = () => {
+    reset({
       partner_id: '',
       product_id: '',
       unit_price_wp: 0,
       discount_pct: 0,
       effective_from: today,
-      effective_to: null,
-      memo: null,
+      effective_to: '',
+      memo: '',
     });
     setSubmitError('');
   };
 
-  const handleSubmit = async () => {
+  const onSubmit = async (data: PriceFormData) => {
     setSubmitError('');
-    if (!draft.partner_id) { setSubmitError('거래처를 선택해주세요'); return; }
-    if (!draft.product_id) { setSubmitError('품번을 선택해주세요'); return; }
-    if (!(draft.unit_price_wp > 0)) { setSubmitError('단가는 양수여야 합니다'); return; }
-    setSubmitting(true);
     try {
       await fetchWithAuth<PartnerPrice>('/api/v1/partner-prices', {
         method: 'POST',
-        body: JSON.stringify(draft),
+        body: JSON.stringify({
+          partner_id: data.partner_id,
+          product_id: data.product_id,
+          unit_price_wp: data.unit_price_wp,
+          discount_pct: data.discount_pct,
+          effective_from: data.effective_from,
+          effective_to: data.effective_to || null,
+          memo: data.memo || null,
+        }),
       });
       setFormOpen(false);
-      resetDraft();
+      resetForm();
       await loadAll();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '등록 실패';
-      setSubmitError(msg);
-    } finally {
-      setSubmitting(false);
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : '등록 실패');
     }
   };
 
@@ -204,7 +229,7 @@ export default function PartnerPriceBookPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button size="xs" onClick={() => { resetDraft(); setFormOpen(true); }}>
+          <Button size="xs" onClick={() => { resetForm(); setFormOpen(true); }}>
             <Plus className="mr-1 h-3 w-3" />단가 등록
           </Button>
         </div>
@@ -229,31 +254,33 @@ export default function PartnerPriceBookPage() {
         />
       </div>
 
-      <Dialog open={formOpen} onOpenChange={(v) => { setFormOpen(v); if (!v) resetDraft(); }}>
+      <Dialog open={formOpen} onOpenChange={(v) => { setFormOpen(v); if (!v) resetForm(); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>거래처 단가 등록</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-3">
+          <form onSubmit={handleSubmit(onSubmit)} className="grid gap-3">
             <div>
               <Label className="text-xs">거래처</Label>
               <PartnerCombobox
                 partners={customerOnlyPartners}
-                value={draft.partner_id}
-                onChange={(v) => setDraft((d) => ({ ...d, partner_id: v }))}
+                value={watchedPartnerId}
+                onChange={(v) => setValue('partner_id', v, { shouldValidate: true, shouldDirty: true })}
                 placeholder="거래처 선택"
+                error={!!errors.partner_id}
               />
+              {errors.partner_id && <p className="text-xs text-destructive">{errors.partner_id.message}</p>}
             </div>
             <div>
               <Label className="text-xs">품번</Label>
               <Select
-                value={draft.product_id}
-                onValueChange={(v) => setDraft((d) => ({ ...d, product_id: (v as string | null) ?? '' }))}
+                value={watchedProductId}
+                onValueChange={(v) => setValue('product_id', (v as string | null) ?? '', { shouldValidate: true, shouldDirty: true })}
               >
-                <SelectTrigger className="h-9 w-full text-sm">
+                <SelectTrigger className="h-9 w-full text-sm" aria-invalid={!!errors.product_id}>
                   <span className="flex-1 text-left truncate">
-                    {draft.product_id
-                      ? (productInfoById.get(draft.product_id)?.code ?? '선택')
+                    {watchedProductId
+                      ? (productInfoById.get(watchedProductId)?.code ?? '선택')
                       : '품번 선택'}
                   </span>
                 </SelectTrigger>
@@ -268,62 +295,49 @@ export default function PartnerPriceBookPage() {
                   })}
                 </SelectContent>
               </Select>
+              {errors.product_id && <p className="text-xs text-destructive">{errors.product_id.message}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">단가 (원/Wp)</Label>
-                <Input
-                  type="number"
-                  step="0.001"
-                  min="0"
-                  value={draft.unit_price_wp || ''}
-                  onChange={(e) => setDraft((d) => ({ ...d, unit_price_wp: Number(e.target.value) || 0 }))}
-                />
+                <Input type="number" step="0.001" min="0" {...register('unit_price_wp', { valueAsNumber: true })} aria-invalid={!!errors.unit_price_wp} />
+                {errors.unit_price_wp && <p className="text-xs text-destructive">{errors.unit_price_wp.message}</p>}
               </div>
               <div>
                 <Label className="text-xs">할인율 (%)</Label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  value={draft.discount_pct || ''}
-                  onChange={(e) => setDraft((d) => ({ ...d, discount_pct: Number(e.target.value) || 0 }))}
-                />
+                <Input type="number" step="0.1" min="0" max="100" {...register('discount_pct', { valueAsNumber: true })} aria-invalid={!!errors.discount_pct} />
+                {errors.discount_pct && <p className="text-xs text-destructive">{errors.discount_pct.message}</p>}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">시작일</Label>
                 <DateInput
-                  value={draft.effective_from}
-                  onChange={(v) => setDraft((d) => ({ ...d, effective_from: v }))}
+                  value={watchedFrom}
+                  onChange={(v) => setValue('effective_from', v, { shouldDirty: true, shouldValidate: true })}
                 />
+                {errors.effective_from && <p className="text-xs text-destructive">{errors.effective_from.message}</p>}
               </div>
               <div>
                 <Label className="text-xs">종료일 (선택)</Label>
                 <DateInput
-                  value={draft.effective_to ?? ''}
-                  onChange={(v) => setDraft((d) => ({ ...d, effective_to: v || null }))}
+                  value={watchedTo ?? ''}
+                  onChange={(v) => setValue('effective_to', v, { shouldDirty: true })}
                 />
               </div>
             </div>
             <div>
               <Label className="text-xs">메모 (선택)</Label>
-              <Input
-                value={draft.memo ?? ''}
-                onChange={(e) => setDraft((d) => ({ ...d, memo: e.target.value || null }))}
-                placeholder="예: 분기 특가"
-              />
+              <Input {...register('memo')} placeholder="예: 분기 특가" />
             </div>
             {submitError && <p className="text-xs text-destructive">{submitError}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setFormOpen(false)}>취소</Button>
-            <Button onClick={handleSubmit} disabled={submitting}>
-              {submitting ? '저장 중...' : '저장'}
-            </Button>
-          </DialogFooter>
+            <DialogFooter className="mt-1">
+              <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>취소</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? '저장 중...' : '저장'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

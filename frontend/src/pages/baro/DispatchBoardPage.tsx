@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useForm, type Resolver } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Truck, Plus, Trash2, RefreshCw, Link as LinkIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,10 +15,21 @@ import { fetchWithAuth } from '@/lib/api';
 import type {
   DispatchRoute,
   DispatchStatus,
-  CreateDispatchRoutePayload,
 } from '@/types/dispatch';
 import { DISPATCH_STATUS_LABEL } from '@/types/dispatch';
 import type { Outbound } from '@/types/outbound';
+
+// OrderForm과 동일한 패턴 — react-hook-form + zod
+const dispatchSchema = z.object({
+  route_date: z.string().min(1, '배송일은 필수입니다'),
+  vehicle_type: z.string().optional(),
+  vehicle_plate: z.string().optional(),
+  driver_name: z.string().optional(),
+  driver_phone: z.string().optional(),
+  memo: z.string().optional(),
+});
+
+type DispatchFormData = z.infer<typeof dispatchSchema>;
 
 const statusVariant: Record<DispatchStatus, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   planned: 'secondary',
@@ -42,16 +56,21 @@ export default function DispatchBoardPage() {
   const [to, setTo] = useState<string>(addDays(todayStr(), 7));
   const [statusFilter, setStatusFilter] = useState<DispatchStatus | ''>('');
   const [formOpen, setFormOpen] = useState(false);
-  const [draft, setDraft] = useState<CreateDispatchRoutePayload>({
-    route_date: todayStr(),
-    vehicle_type: null,
-    vehicle_plate: null,
-    driver_name: null,
-    driver_phone: null,
-    memo: null,
-  });
-  const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  const form = useForm<DispatchFormData>({
+    resolver: zodResolver(dispatchSchema) as unknown as Resolver<DispatchFormData>,
+    defaultValues: {
+      route_date: todayStr(),
+      vehicle_type: '',
+      vehicle_plate: '',
+      driver_name: '',
+      driver_phone: '',
+      memo: '',
+    },
+  });
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = form;
+  const watchedRouteDate = watch('route_date');
   const [assignTarget, setAssignTarget] = useState<DispatchRoute | null>(null);
   const [assignSelection, setAssignSelection] = useState<string>('');
 
@@ -102,22 +121,32 @@ export default function DispatchBoardPage() {
     [routeOutbounds],
   );
 
-  const submitCreate = async () => {
+  const onSubmit = async (data: DispatchFormData) => {
     setSubmitError('');
-    if (!draft.route_date) { setSubmitError('배송일은 필수입니다'); return; }
-    setSubmitting(true);
     try {
       await fetchWithAuth<DispatchRoute>('/api/v1/baro/dispatch-routes', {
         method: 'POST',
-        body: JSON.stringify(draft),
+        body: JSON.stringify({
+          route_date: data.route_date,
+          vehicle_type: data.vehicle_type || null,
+          vehicle_plate: data.vehicle_plate || null,
+          driver_name: data.driver_name || null,
+          driver_phone: data.driver_phone || null,
+          memo: data.memo || null,
+        }),
       });
       setFormOpen(false);
-      setDraft({ route_date: todayStr(), vehicle_type: null, vehicle_plate: null, driver_name: null, driver_phone: null, memo: null });
+      reset({
+        route_date: todayStr(),
+        vehicle_type: '',
+        vehicle_plate: '',
+        driver_name: '',
+        driver_phone: '',
+        memo: '',
+      });
       await load();
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : '저장 실패');
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -303,41 +332,45 @@ export default function DispatchBoardPage() {
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>배차 추가</DialogTitle></DialogHeader>
-          <div className="grid gap-3">
+          <form onSubmit={handleSubmit(onSubmit)} className="grid gap-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">배송일</Label>
-                <DateInput value={draft.route_date} onChange={(v) => setDraft((d) => ({ ...d, route_date: v }))} />
+                <DateInput
+                  value={watchedRouteDate}
+                  onChange={(v) => setValue('route_date', v, { shouldValidate: true, shouldDirty: true })}
+                />
+                {errors.route_date && <p className="text-xs text-destructive">{errors.route_date.message}</p>}
               </div>
               <div>
                 <Label className="text-xs">차량 종류</Label>
-                <Input value={draft.vehicle_type ?? ''} onChange={(e) => setDraft((d) => ({ ...d, vehicle_type: e.target.value || null }))} placeholder="예: 5톤 카고" />
+                <Input {...register('vehicle_type')} placeholder="예: 5톤 카고" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">차량 번호</Label>
-                <Input value={draft.vehicle_plate ?? ''} onChange={(e) => setDraft((d) => ({ ...d, vehicle_plate: e.target.value || null }))} placeholder="예: 12가3456" />
+                <Input {...register('vehicle_plate')} placeholder="예: 12가3456" />
               </div>
               <div>
                 <Label className="text-xs">기사 이름</Label>
-                <Input value={draft.driver_name ?? ''} onChange={(e) => setDraft((d) => ({ ...d, driver_name: e.target.value || null }))} />
+                <Input {...register('driver_name')} />
               </div>
             </div>
             <div>
               <Label className="text-xs">기사 연락처</Label>
-              <Input value={draft.driver_phone ?? ''} onChange={(e) => setDraft((d) => ({ ...d, driver_phone: e.target.value || null }))} placeholder="예: 010-1234-5678" />
+              <Input {...register('driver_phone')} placeholder="예: 010-1234-5678" />
             </div>
             <div>
               <Label className="text-xs">메모 (선택)</Label>
-              <Textarea rows={2} value={draft.memo ?? ''} onChange={(e) => setDraft((d) => ({ ...d, memo: e.target.value || null }))} placeholder="예: 오전 9시 출발" />
+              <Textarea rows={2} {...register('memo')} placeholder="예: 오전 9시 출발" />
             </div>
             {submitError && <p className="text-xs text-destructive">{submitError}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setFormOpen(false)}>취소</Button>
-            <Button onClick={submitCreate} disabled={submitting}>{submitting ? '저장 중...' : '저장'}</Button>
-          </DialogFooter>
+            <DialogFooter className="mt-1">
+              <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>취소</Button>
+              <Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
