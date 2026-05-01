@@ -30,14 +30,24 @@ RETURNS TABLE (
   last_receipt_date   date,
   oldest_unpaid_days  integer
 ) LANGUAGE sql STABLE AS $$
-WITH sales_total AS (
+WITH sales_dated AS (
+  -- 매출 1건의 기준일자: 세금계산서 발행일 우선, 없으면 created_at
   SELECT
-    s.customer_id AS partner_id,
-    SUM(s.amount_krw) AS sales_sum,
-    MAX(s.sale_date) AS last_sale
+    s.sale_id,
+    s.customer_id,
+    s.total_amount,
+    s.status,
+    COALESCE(s.tax_invoice_date, s.created_at::date) AS sale_date
   FROM sales s
-  WHERE s.invoice_status IS DISTINCT FROM 'cancelled'
-  GROUP BY s.customer_id
+  WHERE s.status = 'active' AND s.total_amount IS NOT NULL
+),
+sales_total AS (
+  SELECT
+    customer_id AS partner_id,
+    SUM(total_amount) AS sales_sum,
+    MAX(sale_date) AS last_sale
+  FROM sales_dated
+  GROUP BY customer_id
 ),
 matched_total AS (
   SELECT
@@ -56,15 +66,14 @@ last_receipt AS (
 ),
 oldest_open AS (
   SELECT
-    s.customer_id AS partner_id,
-    MIN(s.sale_date) FILTER (
+    sd.customer_id AS partner_id,
+    MIN(sd.sale_date) FILTER (
       WHERE COALESCE((
-        SELECT SUM(rm2.matched_amount) FROM receipt_matches rm2 WHERE rm2.sale_id = s.sale_id
-      ), 0) < s.amount_krw
+        SELECT SUM(rm2.matched_amount) FROM receipt_matches rm2 WHERE rm2.sale_id = sd.sale_id
+      ), 0) < sd.total_amount
     ) AS oldest_open_date
-  FROM sales s
-  WHERE s.invoice_status IS DISTINCT FROM 'cancelled'
-  GROUP BY s.customer_id
+  FROM sales_dated sd
+  GROUP BY sd.customer_id
 )
 SELECT
   p.partner_id,
