@@ -523,6 +523,22 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
   const method = (options?.method ?? 'GET').toUpperCase();
   const body = await readJsonBody(options);
 
+  if (url.pathname === '/api/v1/assistant/chat' && method === 'POST') {
+    const req = body as { messages?: Array<{ role: string; content: string }>; provider?: string; model?: string };
+    const lastUser = (req?.messages ?? []).filter((m) => m.role === 'user').pop()?.content ?? '';
+    const provider = (req?.provider === 'openai' ? 'openai' : 'anthropic') as 'anthropic' | 'openai';
+    const model = req?.model || 'glm-5.1-mock';
+    const reply = [
+      '[목업 어시스턴트]',
+      '실제 LLM 호출 없이 응답하는 모드입니다.',
+      '',
+      lastUser ? `질문 요약: "${lastUser.slice(0, 120)}${lastUser.length > 120 ? '…' : ''}"` : '메시지가 비어 있습니다.',
+      '',
+      '실제 답변을 받으려면 목업 모드를 해제하고 실제 계정으로 로그인해 주세요.',
+    ].join('\n');
+    return clone({ content: reply, model, provider } as T);
+  }
+
   if (method !== 'GET' && !url.pathname.startsWith('/api/v1/calc') && url.pathname !== '/api/v1/ocr/extract') {
     return writeRoute<T>(url);
   }
