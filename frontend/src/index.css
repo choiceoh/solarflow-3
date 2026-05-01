@@ -1044,6 +1044,128 @@ a:focus-visible,
    v3 mockup parity polish — shadcn 안에 mockup density·정밀도 주입
    ============================================================ */
 
+/* Tailwind 변수 리디렉트 — bg-muted / text-muted-foreground / border-border 등이
+   자동으로 mockup 톤(웜 베이지)으로 전환. 페이지 안 모든 shadcn/Tailwind 유틸이 영향받음 */
+.sf-page,
+.sf-command-surface {
+  --background: var(--sf-bg);
+  --foreground: var(--sf-ink);
+  --card: var(--sf-surface);
+  --card-foreground: var(--sf-ink);
+  --popover: var(--sf-surface);
+  --popover-foreground: var(--sf-ink);
+  --muted: var(--sf-bg-2);
+  --muted-foreground: var(--sf-ink-3);
+  --accent: var(--sf-bg-2);
+  --accent-foreground: var(--sf-ink);
+  --border: var(--sf-line);
+  --input: var(--sf-line-2);
+  --ring: var(--sf-solar-2);
+}
+
+/* shadcn Card 텍스트 밀도 — mockup CardB 스펙에 맞춤 */
+.sf-page [data-slot="card-title"],
+.sf-command-surface [data-slot="card-title"] {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--sf-ink);
+  line-height: 1.2;
+}
+.sf-page [data-slot="card-description"],
+.sf-command-surface [data-slot="card-description"] {
+  font-family: var(--sf-mono);
+  font-size: 10px;
+  color: var(--sf-ink-3);
+  letter-spacing: 0;
+}
+.sf-page [data-slot="card-header"],
+.sf-command-surface [data-slot="card-header"] {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sf-line);
+  min-height: 44px;
+  gap: 4px;
+}
+.sf-page [data-slot="card-content"],
+.sf-command-surface [data-slot="card-content"] {
+  padding: 14px;
+}
+
+/* shadcn Button — radius/letter-spacing/active 트랜스폼 (height는 보존) */
+.sf-page [data-slot="button"],
+.sf-command-surface [data-slot="button"] {
+  border-radius: 4px;
+  letter-spacing: -0.005em;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+              color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1),
+              transform 100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sf-page [data-slot="button"]:active,
+.sf-command-surface [data-slot="button"]:active {
+  transform: translateY(0.5px);
+}
+
+/* 페이지 제목 / heading 정밀 트래킹 */
+.sf-page-title {
+  letter-spacing: -0.018em;
+  font-feature-settings: 'cv11', 'ss01', 'ss02';
+}
+.sf-topbar h1 {
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+.sf-page h1, .sf-command-surface h1 { letter-spacing: -0.018em; }
+.sf-page h2, .sf-command-surface h2 { letter-spacing: -0.012em; }
+.sf-page h3, .sf-command-surface h3 { letter-spacing: -0.005em; }
+
+/* 테이블 셀 숫자 정렬 — tabular-nums로 자릿수 맞춤 */
+.sf-page td, .sf-page [data-slot="table-cell"],
+.sf-command-surface td, .sf-command-surface [data-slot="table-cell"] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* shadcn Dropdown / Popover / Select 컨텐츠 — portal 렌더라 글로벌 적용 */
+[data-slot="dropdown-menu-content"],
+[data-slot="popover-content"],
+[data-slot="select-content"] {
+  border-color: var(--sf-line);
+  border-radius: 6px;
+  box-shadow: var(--sf-shadow-3);
+  font-size: 12px;
+}
+
+/* Dialog/Modal — mockup elevation */
+[data-slot="dialog-content"],
+[data-slot="alert-dialog-content"] {
+  border-color: var(--sf-line);
+  border-radius: 6px;
+  box-shadow: 0 24px 60px -20px rgb(60 40 10 / 0.18), 0 4px 12px -4px rgb(60 40 10 / 0.08);
+}
+[data-slot="dialog-title"],
+[data-slot="alert-dialog-title"] {
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+[data-slot="dialog-description"],
+[data-slot="alert-dialog-description"] {
+  color: var(--sf-ink-3);
+  font-size: 12px;
+}
+
+/* Tooltip — 다크 잉크 배경 + 작은 모노 텍스트 (Bloomberg-style) */
+[data-slot="tooltip-content"] {
+  background: var(--sf-ink);
+  color: var(--sf-bg);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  border-radius: 4px;
+  padding: 4px 8px;
+  box-shadow: var(--sf-shadow-2);
+}
+
 /* 테이블 wrap에 overflow:clip — sticky thead 가 .sf-page-scroll에서 동작하도록 */
 .sf-page .rounded-md.border.overflow-hidden,
 .sf-command-surface .rounded-md.border.overflow-hidden,
