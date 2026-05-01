@@ -2,7 +2,7 @@
 // 각 페이지에 <ExcelToolbar type="inbound" /> 형태로 삽입
 
 import { useState } from 'react';
-import { FileOutput } from 'lucide-react';
+import { AlertTriangle, FileOutput } from 'lucide-react';
 import type { TemplateType } from '@/types/excel';
 import { useExcel } from '@/hooks/useExcel';
 import { Button } from '@/components/ui/button';
@@ -69,7 +69,12 @@ export default function ExcelToolbar({ type, onImportComplete }: Props) {
         </div>
 
         {error && (
-          <span className="min-w-max shrink-0 whitespace-nowrap text-right text-xs text-red-600" title={error}>
+          <span
+            className="flex min-w-max shrink-0 items-center gap-1 whitespace-nowrap rounded px-2 py-0.5 text-[11px] font-medium"
+            style={{ background: 'var(--sf-neg-bg)', color: 'var(--sf-neg)' }}
+            title={error}
+          >
+            <AlertTriangle className="h-3 w-3 shrink-0" />
             {error}
           </span>
         )}

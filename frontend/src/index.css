@@ -1298,6 +1298,60 @@ a:focus-visible,
   box-shadow: var(--sf-shadow-2);
 }
 
+/* Recharts 차트 — mockup 톤으로 매핑. 그리드/축/툴팁/레전드 일관성 */
+.sf-page .recharts-cartesian-grid line,
+.sf-command-surface .recharts-cartesian-grid line {
+  stroke: var(--sf-line);
+}
+.sf-page .recharts-cartesian-axis-line,
+.sf-command-surface .recharts-cartesian-axis-line {
+  stroke: var(--sf-line-2);
+}
+.sf-page .recharts-cartesian-axis-tick-line,
+.sf-command-surface .recharts-cartesian-axis-tick-line {
+  stroke: var(--sf-line-2);
+}
+.sf-page .recharts-cartesian-axis-tick text,
+.sf-command-surface .recharts-cartesian-axis-tick text {
+  fill: var(--sf-ink-3);
+  font-family: var(--sf-mono);
+  font-size: 10px;
+}
+.sf-page .recharts-default-tooltip,
+.sf-command-surface .recharts-default-tooltip {
+  background: var(--sf-surface) !important;
+  border: 1px solid var(--sf-line-2) !important;
+  border-radius: 4px !important;
+  box-shadow: var(--sf-shadow-3);
+  padding: 6px 10px !important;
+  font-size: 11px;
+}
+.sf-page .recharts-tooltip-label,
+.sf-command-surface .recharts-tooltip-label {
+  color: var(--sf-ink-3) !important;
+  font-family: var(--sf-mono);
+  font-size: 10px !important;
+  margin-bottom: 4px !important;
+}
+.sf-page .recharts-tooltip-item,
+.sf-command-surface .recharts-tooltip-item {
+  color: var(--sf-ink) !important;
+  font-family: var(--sf-mono);
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 0 !important;
+}
+.sf-page .recharts-legend-item-text,
+.sf-command-surface .recharts-legend-item-text {
+  color: var(--sf-ink-2) !important;
+  font-size: 11px !important;
+}
+.sf-page .recharts-reference-line line,
+.sf-command-surface .recharts-reference-line line {
+  stroke: var(--sf-ink-5);
+  stroke-dasharray: 2 2;
+}
+
 /* 페이지 전환 fade-in — 라우트 변경 시 미세하게 부드러운 진입감 */
 .sf-page-scroll > * {
   animation: sf-page-fade-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
