@@ -25,6 +25,7 @@ import { fetchWithAuth } from '@/lib/api';
 import { shortMfgName } from '@/lib/utils';
 import { manufacturerRankByName, sortManufacturers } from '@/lib/manufacturerPriority';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import SkeletonRows from '@/components/common/SkeletonRows';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import InventoryTable from '@/components/inventory/InventoryTable';
 import AvailInventoryTable from '@/components/inventory/AvailInventoryTable';
@@ -587,7 +588,7 @@ export default function InventoryPage() {
             </Alert>
           )}
           <CardB title="품목별 실재고" sub="창고 보유 물리 재고" right={inventoryCardControls}>
-            {invLoading ? <LoadingSpinner /> : invData && (
+            {invLoading ? <SkeletonRows rows={8} /> :invData && (
               <>
                 <InventoryTable items={invData.items} />
                 <p className="p-2 text-right text-[10px] text-muted-foreground">계산 시점: {invData.calculated_at}</p>
@@ -606,7 +607,7 @@ export default function InventoryPage() {
           )}
           {/* 품목별 가용재고 + 배정 현황 통합 테이블 */}
           <CardB title="재고 현황" sub="제조사 × 품번 · 단위 MW" right={inventoryCardControls}>
-            {invLoading ? <LoadingSpinner /> : invData ? (
+            {invLoading ? <SkeletonRows rows={8} /> :invData ? (
               <AvailInventoryTable
                 items={invData.items}
                 allocations={visibleAllocs}
@@ -635,7 +636,7 @@ export default function InventoryPage() {
           )}
           {/* 품목별 미착품 + 배정 현황 */}
           <CardB title="품목별 미착품 / 배정 현황" sub="L/C · B/L 예정분" right={inventoryCardControls}>
-            {invLoading ? <LoadingSpinner /> : invData ? (
+            {invLoading ? <SkeletonRows rows={8} /> :invData ? (
               <IncomingTable
                 items={invData.items}
                 allocations={visibleAllocs}

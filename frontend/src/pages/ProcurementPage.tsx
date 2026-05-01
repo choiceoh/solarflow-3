@@ -9,6 +9,7 @@ import { useAppStore } from '@/stores/appStore';
 import { usePOList, useLCList, useTTList, usePriceHistoryList } from '@/hooks/useProcurement';
 import { fetchWithAuth } from '@/lib/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import SkeletonRows from '@/components/common/SkeletonRows';
 import POListTable from '@/components/procurement/POListTable';
 import PODetailView from '@/components/procurement/PODetailView';
 import POForm from '@/components/procurement/POForm';
@@ -680,7 +681,7 @@ export default function ProcurementPage() {
             <Button size="sm" variant="outline" onClick={() => handleTabChange('price')}><History className="mr-1 h-4 w-4" />단가이력</Button>
             <Button size="sm" onClick={() => setPoFormOpen(true)}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
           </div>
-          {poLoading ? <LoadingSpinner /> : (
+          {poLoading ? <SkeletonRows rows={8} /> : (
             <POListTable
               items={poRows}
               onDetail={setSelectedPO}
@@ -715,7 +716,7 @@ export default function ProcurementPage() {
                 <div className="flex-1" />
                 <Button size="sm" onClick={() => openLCWork()}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
               </div>
-              {lcLoading ? <LoadingSpinner /> : (
+              {lcLoading ? <SkeletonRows rows={8} /> : (
                 <LCListTable
                   items={lcRows}
                   onEdit={(lc) => openLCWork(lc)}
@@ -824,7 +825,7 @@ export default function ProcurementPage() {
                 <ExcelToolbar type="inbound" onImportComplete={() => { reloadBL(); setBlsVersion(v => v + 1); }} />
                 <Button size="sm" onClick={() => openBLWork()}><Plus className="mr-1 h-4 w-4" />새로 등록</Button>
               </div>
-              {blLoading ? <LoadingSpinner /> : (
+              {blLoading ? <SkeletonRows rows={8} /> : (
                 <BLListTable items={blRows} onSelect={(bl) => setSelectedBL(bl.bl_id)} onNew={() => openBLWork()} onDelete={handleDeleteBL} />
               )}
             </>

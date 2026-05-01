@@ -11,7 +11,7 @@ import { useOrderList } from '@/hooks/useOrders';
 import { useReceiptList } from '@/hooks/useReceipts';
 import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
-import LoadingSpinner from '@/components/common/LoadingSpinner';
+import SkeletonRows from '@/components/common/SkeletonRows';
 import OrderListTable from '@/components/orders/OrderListTable';
 import OrderDetailView from '@/components/orders/OrderDetailView';
 import OrderForm, { type OrderPrefillData } from '@/components/orders/OrderForm';
@@ -834,7 +834,7 @@ export default function OrdersPage() {
             </div>
           </div>
 
-          {ordersLoading ? <LoadingSpinner /> : (
+          {ordersLoading ? <SkeletonRows rows={8} /> : (
             <OrderListTable
               items={orders}
               onSelect={(o) => setSelectedOrder(o.order_id)}
@@ -898,7 +898,7 @@ export default function OrdersPage() {
                   <Button size="sm" onClick={() => { setOutboundOrder(null); setObFormOpen(true); }}><Plus className="mr-1.5 h-4 w-4" />새로 등록</Button>
                 </div>
               </div>
-              {obLoading ? <LoadingSpinner /> : (
+              {obLoading ? <SkeletonRows rows={8} /> : (
                 <OutboundListTable
                   items={outboundsWithSales}
                   onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
@@ -942,7 +942,7 @@ export default function OrdersPage() {
             </div>
             <ExcelToolbar type="sale" />
           </div>
-          {saleLoading ? <LoadingSpinner /> : (
+          {saleLoading ? <SkeletonRows rows={8} /> : (
             <>
               <SaleSummaryCards items={sales} />
               <SaleListTable items={sales} onInvoice={handleOpenSaleInvoice} />
@@ -981,7 +981,7 @@ export default function OrdersPage() {
             </div>
           </div>
 
-          {receiptsLoading ? <LoadingSpinner /> : (
+          {receiptsLoading ? <SkeletonRows rows={8} /> : (
             <ReceiptListTable
               items={receipts}
               onNew={() => setReceiptFormOpen(true)}
