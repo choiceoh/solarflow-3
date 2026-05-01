@@ -21,7 +21,6 @@ const BankingPage = lazy(() => import('@/pages/BankingPage'));
 const ApprovalPage = lazy(() => import('@/pages/ApprovalPage'));
 const MemoPage = lazy(() => import('@/pages/MemoPage'));
 const SearchPage = lazy(() => import('@/pages/SearchPage'));
-const OCRPage = lazy(() => import('@/pages/OCRPage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
 const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
@@ -95,7 +94,6 @@ export default function App() {
                 <Route path="/baro/credit-board" element={<CreditBoardPage />} />
                 <Route path="/baro/dispatch" element={<RoleGuard allowedRoles={['admin', 'operator']}><DispatchBoardPage /></RoleGuard>} />
                 <Route path="/search" element={<SearchPage />} />
-                <Route path="/ocr" element={<RoleGuard allowedRoles={['admin', 'operator']}><OCRPage /></RoleGuard>} />
                 <Route path="/memo" element={<MemoPage />} />
                 <Route path="/approval" element={<ApprovalPage />} />
                 <Route path="/assistant" element={<AssistantPage />} />
