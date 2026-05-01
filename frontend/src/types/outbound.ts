@@ -47,6 +47,8 @@ export interface Outbound {
   bl_number?: string;
   bl_items?: OutboundBLItem[];
   sale?: Sale;
+  // BARO Phase 4: 배차 묶음 FK (NULL=미배차)
+  dispatch_route_id?: string | null;
 }
 
 export interface Sale {

@@ -51,6 +51,8 @@ const salesItems: MenuItem[] = [
   { icon: Calculator, label: '판매/계산서', path: '/orders?tab=sales', roles: ['admin', 'operator', 'executive'] },
   { icon: Wallet,     label: '수금 관리', path: '/orders?tab=receipts', roles: ['admin', 'operator', 'executive'] },
   { icon: Database,   label: '수금매칭', path: '/orders?tab=matching', roles: ['admin', 'operator', 'executive'] },
+  // BARO Phase 4: 배차/일정 보드 (BARO 전용)
+  { icon: Truck,      label: '배차/일정', path: '/baro/dispatch', roles: ['admin', 'operator'], tenants: ['baro'] },
 ];
 
 // 현황/분석

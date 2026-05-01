@@ -231,6 +231,20 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Get("/", creditH.List)
 		})
 
+		// BARO Phase 4: 출고 배차/일정 보드 — 바로(주) 사용자 전용
+		drH := handler.NewDispatchRouteHandler(db)
+		r.Route("/baro/dispatch-routes", func(r chi.Router) {
+			r.Use(baroOnly)
+			r.Get("/", drH.List)
+			r.Get("/{id}", drH.GetByID)
+			r.Get("/{id}/outbounds", drH.Outbounds)
+			r.With(write).Post("/", drH.Create)
+			r.With(write).Put("/{id}", drH.Update)
+			r.With(write).Delete("/{id}", drH.Delete)
+			r.With(write).Post("/{id}/assign", drH.AssignOutbound)
+			r.With(write).Post("/unassign", drH.UnassignOutbound)
+		})
+
 		// BARO Phase 2: 그룹내 매입 요청 — 바로(BARO)와 탑솔라(TS)가 같은 테이블에 다른 권한으로 접근
 		// - BARO: 등록/내 목록/취소/입고 확인
 		// - TS:   inbox 조회/거부/출고 연결
