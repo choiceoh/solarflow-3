@@ -1,4 +1,5 @@
 import { Navigate } from 'react-router-dom';
+import { Sun } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import LoginForm from '@/components/auth/LoginForm';
 import { isDevMockLoginAllowed } from '@/lib/devMockMode';
@@ -23,7 +24,9 @@ export default function LoginPage() {
     <div className="sf-login-shell">
       <section className="sf-login-left">
         <div className="flex items-center gap-2.5">
-          <span className="sf-solar-mark" aria-hidden />
+          <span className="sf-solar-mark" aria-hidden>
+            <Sun strokeWidth={2.4} />
+          </span>
           <div>
             <div className="text-[15px] font-extrabold leading-none">
               SolarFlow <span className="text-[var(--sf-solar-3)]">3.0</span>
