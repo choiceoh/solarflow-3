@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bot, Check, Send, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, FileText, Paperclip, Send, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -58,32 +58,124 @@ const PROPOSAL_KIND_LABEL: Record<string, string> = {
   update_outbound: '출고 수정',
   delete_outbound: '출고 삭제',
   create_receipt: '수금 입력',
+  create_declaration: '면장 등록',
 };
+
+const OCR_ACCEPT = 'application/pdf,image/jpeg,image/png,image/webp,image/gif';
+const OCR_MAX_BYTES = 20 * 1024 * 1024; // 20MB per file (서버 maxOCRUploadBytes)
+
+interface OCRLineLite {
+  text: string;
+}
+
+interface OCRResult {
+  filename: string;
+  raw_text?: string;
+  lines?: OCRLineLite[];
+  error?: string;
+  fields?: { document_type?: string; customs_declaration?: Record<string, unknown> };
+}
+
+interface OCRExtractResponse {
+  results: OCRResult[];
+}
+
+// 사용자 메시지 본문에 OCR 결과를 붙이는 형식 — LLM이 인식하기 쉽도록 마커 포함.
+function buildOCRBlock(results: OCRResult[]): string {
+  const blocks: string[] = [];
+  for (const r of results) {
+    const head = `[첨부파일 OCR] ${r.filename}`;
+    if (r.error) {
+      blocks.push(`${head}\n오류: ${r.error}`);
+      continue;
+    }
+    const text = (r.raw_text ?? '').trim();
+    let body = text || '(텍스트 추출 결과 없음)';
+    if (r.fields?.customs_declaration) {
+      body += `\n\n[면장 자동 인식 후보]\n${JSON.stringify(r.fields.customs_declaration, null, 2)}`;
+    }
+    blocks.push(`${head}\n${body}`);
+  }
+  return blocks.join('\n\n');
+}
 
 export default function AssistantPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [provider, setProvider] = useState<Provider>('anthropic');
   const [model, setModel] = useState('');
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [parseAsCustoms, setParseAsCustoms] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, busy]);
 
+  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files ?? []);
+    const valid: File[] = [];
+    for (const f of picked) {
+      if (f.size > OCR_MAX_BYTES) {
+        setError(`${f.name}: 20MB 초과로 첨부 불가`);
+        continue;
+      }
+      valid.push(f);
+    }
+    setAttachments((prev) => [...prev, ...valid]);
+    e.target.value = ''; // 같은 파일 재선택 허용
+  };
+
+  const removeAttachment = (idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // OCR 사전 호출 — 첨부 파일을 서버 OCR 엔드포인트로 보내 텍스트 추출.
+  const runOCR = async (files: File[]): Promise<OCRResult[]> => {
+    const fd = new FormData();
+    for (const f of files) fd.append('images', f);
+    if (parseAsCustoms) fd.append('document_type', 'customs_declaration');
+    const res = await fetchWithAuth<OCRExtractResponse>('/api/v1/ocr/extract', {
+      method: 'POST',
+      body: fd,
+    });
+    return res.results;
+  };
+
   const send = async () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if ((!text && attachments.length === 0) || busy) return;
 
-    const next: ChatMessage[] = [...messages, { role: 'user', content: text }];
-    setMessages(next);
-    setInput('');
     setError(null);
     setBusy(true);
 
+    let userContent = text;
+    let ocrResults: OCRResult[] = [];
+
     try {
+      if (attachments.length > 0) {
+        if (isDevMockApiActive()) {
+          throw new Error('목업 모드에서는 OCR 첨부를 지원하지 않습니다');
+        }
+        setOcrBusy(true);
+        try {
+          ocrResults = await runOCR(attachments);
+        } finally {
+          setOcrBusy(false);
+        }
+        const ocrBlock = buildOCRBlock(ocrResults);
+        userContent = text ? `${text}\n\n${ocrBlock}` : ocrBlock;
+      }
+
+      const next: ChatMessage[] = [...messages, { role: 'user', content: userContent }];
+      setMessages(next);
+      setInput('');
+      setAttachments([]);
+
       const body = JSON.stringify({
         messages: next.map(({ role, content }) => ({ role, content })),
         provider,
@@ -235,19 +327,82 @@ export default function AssistantPage() {
         </div>
       )}
 
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 rounded-md border bg-muted/30 p-2">
+          {attachments.map((f, i) => (
+            <div
+              key={`${f.name}-${i}`}
+              className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs"
+            >
+              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="max-w-[180px] truncate">{f.name}</span>
+              <span className="text-muted-foreground">{(f.size / 1024).toFixed(0)}KB</span>
+              <button
+                type="button"
+                onClick={() => removeAttachment(i)}
+                className="ml-0.5 rounded p-0.5 hover:bg-muted"
+                disabled={busy}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+          <label className="flex cursor-pointer select-none items-center gap-1 px-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={parseAsCustoms}
+              onChange={(e) => setParseAsCustoms(e.target.checked)}
+              className="h-3 w-3"
+              disabled={busy}
+            />
+            면장 자동 인식
+          </label>
+        </div>
+      )}
+
       <div className="flex items-end gap-2">
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="질문을 입력하세요. Enter 전송 · Shift+Enter 줄바꿈"
+          placeholder={
+            attachments.length > 0
+              ? '첨부 파일과 함께 보낼 질문 (예: "이 면장 등록해줘")'
+              : '질문을 입력하세요. Enter 전송 · Shift+Enter 줄바꿈'
+          }
           rows={3}
           className="flex-1 resize-none"
           disabled={busy}
         />
-        <Button onClick={send} disabled={busy || !input.trim()} className="h-10">
-          <Send className="mr-1 h-4 w-4" />전송
-        </Button>
+        <div className="flex flex-col gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-10 w-10"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+            title="파일 첨부 (PDF/이미지, OCR 추출)"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={send}
+            disabled={busy || (!input.trim() && attachments.length === 0)}
+            className="h-10"
+          >
+            <Send className="mr-1 h-4 w-4" />
+            {ocrBusy ? 'OCR 중…' : '전송'}
+          </Button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={OCR_ACCEPT}
+          onChange={onPickFiles}
+          className="hidden"
+        />
       </div>
     </div>
   );
@@ -336,9 +491,10 @@ function EmptyHint() {
     <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
       <Bot className="h-8 w-8 opacity-40" />
       <div>업무 관련 질문을 입력하세요.</div>
-      <div className="text-xs">예: "거래처 한화 검색", "최근 PO 5건", "수주 LIST", "PO123에 메모 남겨줘"</div>
+      <div className="text-xs">예: "거래처 한화 검색", "최근 PO 5건", "PO123에 메모 남겨줘"</div>
+      <div className="text-xs">📎 면장 PDF 첨부 후 "이 면장 등록해줘" — OCR 인식 → 등록 제안</div>
       <div className="text-xs opacity-70">
-        Anthropic 호환에서 DB 조회(거래처·P/O·수주·출고·수금)·작성(메모·거래처) 도구가 활성화됩니다. 쓰기는 카드의 [저장] 클릭 시에만 반영됩니다.
+        Anthropic 호환에서 DB 조회·작성·OCR 도구가 활성화됩니다. 쓰기는 카드의 [저장] 클릭 시에만 반영됩니다.
       </div>
     </div>
   );

@@ -70,6 +70,7 @@ func assistantToolCatalog() []assistantTool {
 		toolUpdateOutbound(),
 		toolDeleteOutbound(),
 		toolCreateReceipt(),
+		toolCreateDeclaration(),
 	}
 }
 
@@ -1579,6 +1580,53 @@ func toolDeleteOutbound() assistantTool {
 				return "", err
 			}
 			return fmt.Sprintf("출고 삭제 제안 생성됨(id=%s). 사용자가 [저장]을 눌러야 실제로 삭제됩니다.", id), nil
+		},
+	}
+}
+
+// --- create_declaration (면장 등록, 탑솔라 전용) ---
+// OCR 결과(원문 또는 customs_declaration 파싱 필드)에서 추출한 값을 사용자가 검토 후 등록할 때 사용.
+
+func toolCreateDeclaration() assistantTool {
+	return assistantTool{
+		name:        "create_declaration",
+		description: "면장(declarations, 수입신고필증) 등록. OCR 결과의 declaration_number/날짜·hs_code·관세사 등을 사용자가 검토한 뒤 호출. 탑솔라 admin/operator 만 호출 가능. 필수: declaration_number, bl_id, company_id, declaration_date.",
+		inputSchema: json.RawMessage(`{
+			"type": "object",
+			"properties": {
+				"declaration_number": {"type": "string", "description": "신고번호 (30자 이내)"},
+				"bl_id": {"type": "string", "description": "연결할 B/L 의 bl_id"},
+				"company_id": {"type": "string", "description": "법인 ID"},
+				"declaration_date": {"type": "string", "description": "신고일 YYYY-MM-DD"},
+				"arrival_date": {"type": "string", "description": "입항일 YYYY-MM-DD (선택)"},
+				"release_date": {"type": "string", "description": "반출일 YYYY-MM-DD (선택)"},
+				"hs_code": {"type": "string"},
+				"customs_office": {"type": "string"},
+				"port": {"type": "string"},
+				"memo": {"type": "string"}
+			},
+			"required": ["declaration_number", "bl_id", "company_id", "declaration_date"]
+		}`),
+		allow: func(ctx context.Context) bool {
+			return roleIn(ctx, "admin", "operator") && tenantIs(ctx, middleware.TenantScopeTopsolar)
+		},
+		execute: func(ctx context.Context, _ *supa.Client, input json.RawMessage) (string, error) {
+			var args model.CreateDeclarationRequest
+			if err := json.Unmarshal(input, &args); err != nil {
+				return "", fmt.Errorf("입력 파싱 실패: %w", err)
+			}
+			if msg := args.Validate(); msg != "" {
+				return "", fmt.Errorf("검증 실패: %s", msg)
+			}
+			summary := fmt.Sprintf(
+				"면장 등록: %s, bl_id=%s, date=%s",
+				args.DeclarationNumber, args.BLID, args.DeclarationDate,
+			)
+			id, err := proposeWrite(ctx, "create_declaration", summary, args)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("면장 등록 제안 생성됨(id=%s). 신고번호·BL·일자가 OCR 원문과 일치하는지 한 번 더 확인 후 [저장] 클릭.", id), nil
 		},
 	}
 }
