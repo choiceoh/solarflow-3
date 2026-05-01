@@ -424,6 +424,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Use(adminOnly)
 			r.Get("/", userH.ListUsers)
 			r.Post("/", userH.CreateUser)
+			r.Put("/{id}", userH.UpdateProfile)
 			r.Put("/{id}/role", userH.UpdateRole)
 			r.Put("/{id}/active", userH.UpdateActive)
 			r.Put("/{id}/password", userH.ResetPassword)

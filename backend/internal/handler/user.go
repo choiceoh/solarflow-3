@@ -130,6 +130,20 @@ type ResetPasswordRequest struct {
 	Password string `json:"password"`
 }
 
+// UpdateProfileRequest — 사용자 정보 수정 요청 (이름·부서·전화)
+type UpdateProfileRequest struct {
+	Name       string  `json:"name"`
+	Department *string `json:"department"`
+	Phone      *string `json:"phone"`
+}
+
+// userProfileUpdate — user_profiles UPDATE payload (이름·부서·전화)
+type userProfileUpdate struct {
+	Name       string  `json:"name"`
+	Department *string `json:"department"`
+	Phone      *string `json:"phone"`
+}
+
 // authAdminUserResponse — Supabase Auth Admin 사용자 응답 중 필요한 필드
 type authAdminUserResponse struct {
 	ID    string `json:"id"`
@@ -463,6 +477,49 @@ func (h *UserHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[users] 역할 변경 실패: id=%s, role=%s, err=%v", targetID, body.Role, err)
 		response.RespondError(w, http.StatusInternalServerError, "역할 변경에 실패했습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, statusOKResponse{Status: "ok"})
+}
+
+// UpdateProfile — 사용자 정보(이름·부서·전화) 수정 (admin 전용)
+func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(r) {
+		response.RespondError(w, http.StatusForbidden, "관리자만 접근 가능합니다")
+		return
+	}
+
+	targetID := chi.URLParam(r, "id")
+	if targetID == "" {
+		response.RespondError(w, http.StatusBadRequest, "사용자를 선택해 주세요")
+		return
+	}
+
+	var body UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.RespondError(w, http.StatusBadRequest, "요청 형식 오류")
+		return
+	}
+
+	body.Name = strings.TrimSpace(body.Name)
+	if utf8.RuneCountInString(body.Name) < 2 || utf8.RuneCountInString(body.Name) > 50 {
+		response.RespondError(w, http.StatusBadRequest, "이름은 2~50자로 입력해 주세요")
+		return
+	}
+
+	payload := userProfileUpdate{
+		Name:       body.Name,
+		Department: cleanOptionalText(body.Department),
+		Phone:      cleanOptionalText(body.Phone),
+	}
+
+	_, _, err := h.DB.From("user_profiles").
+		Update(payload, "", "exact").
+		Eq("user_id", targetID).
+		Execute()
+	if err != nil {
+		log.Printf("[users] 정보 수정 실패: id=%s, err=%v", targetID, err)
+		response.RespondError(w, http.StatusInternalServerError, "사용자 정보 수정에 실패했습니다")
 		return
 	}
 	response.RespondJSON(w, http.StatusOK, statusOKResponse{Status: "ok"})

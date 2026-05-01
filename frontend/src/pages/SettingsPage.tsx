@@ -1,6 +1,6 @@
 // 설정 페이지 — 사용자 관리 (admin 전용)
 import { useEffect, useState } from 'react';
-import { KeyRound, Plus } from 'lucide-react';
+import { KeyRound, Pencil, Plus } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 import { usePermission } from '@/hooks/usePermission';
 import { ROLE_LABELS, type Role } from '@/config/permissions';
@@ -20,8 +20,15 @@ interface UserProfile {
   name: string;
   role: Role;
   department?: string;
+  phone?: string;
   is_active: boolean;
   created_at: string;
+}
+
+interface EditProfileForm {
+  name: string;
+  department: string;
+  phone: string;
 }
 
 const ROLE_OPTIONS: Role[] = ['admin', 'operator', 'executive', 'manager', 'viewer'];
@@ -66,6 +73,10 @@ export default function SettingsPage() {
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState('');
   const [isResetting, setIsResetting] = useState(false);
+  const [editTarget, setEditTarget] = useState<UserProfile | null>(null);
+  const [editForm, setEditForm] = useState<EditProfileForm>({ name: '', department: '', phone: '' });
+  const [editError, setEditError] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     if (!manageUsers) return;
@@ -141,6 +152,59 @@ export default function SettingsPage() {
       setCreateError(message);
     } finally {
       setIsCreating(false);
+    }
+  }
+
+  function openEditDialog(user: UserProfile) {
+    setEditTarget(user);
+    setEditForm({
+      name: user.name,
+      department: user.department ?? '',
+      phone: user.phone ?? '',
+    });
+    setEditError('');
+    setIsEditing(false);
+  }
+
+  function closeEditDialog() {
+    setEditTarget(null);
+    setEditForm({ name: '', department: '', phone: '' });
+    setEditError('');
+    setIsEditing(false);
+  }
+
+  async function handleEditProfile(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editTarget) return;
+    setEditError('');
+
+    const name = editForm.name.trim();
+    if (name.length < 2 || name.length > 50) {
+      setEditError('이름은 2~50자로 입력해 주세요.');
+      return;
+    }
+
+    setIsEditing(true);
+    try {
+      await fetchWithAuth(`/api/v1/users/${editTarget.user_id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name,
+          department: editForm.department.trim() || null,
+          phone: editForm.phone.trim() || null,
+        }),
+      });
+      const department = editForm.department.trim() || undefined;
+      const phone = editForm.phone.trim() || undefined;
+      setUsers((prev) => prev.map((u) =>
+        u.user_id === editTarget.user_id ? { ...u, name, department, phone } : u,
+      ));
+      closeEditDialog();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '사용자 정보 수정에 실패했습니다';
+      setEditError(message);
+    } finally {
+      setIsEditing(false);
     }
   }
 
@@ -310,6 +374,18 @@ export default function SettingsPage() {
                     variant="outline"
                     size="sm"
                     className="shrink-0 gap-1.5"
+                    onClick={() => openEditDialog(u)}
+                    disabled={isSaving}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    수정
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1.5"
                     onClick={() => openResetDialog(u)}
                     disabled={isSaving}
                   >
@@ -402,6 +478,56 @@ export default function SettingsPage() {
               </Button>
               <Button type="submit" disabled={isCreating}>
                 {isCreating ? '생성 중...' : '생성'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) closeEditDialog(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>사용자 정보 수정</DialogTitle>
+            <DialogDescription>
+              {editTarget?.email} 계정의 이름·부서·전화번호를 수정합니다.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditProfile} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-user-name">이름</Label>
+              <Input
+                id="edit-user-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="홍길동"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-user-department">부서</Label>
+              <Input
+                id="edit-user-department"
+                value={editForm.department}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, department: e.target.value }))}
+                placeholder="선택"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-user-phone">전화번호</Label>
+              <Input
+                id="edit-user-phone"
+                value={editForm.phone}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))}
+                placeholder="010-0000-0000"
+              />
+            </div>
+            {editError && <p className="text-sm text-destructive">{editError}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeEditDialog} disabled={isEditing}>
+                취소
+              </Button>
+              <Button type="submit" disabled={isEditing}>
+                {isEditing ? '저장 중...' : '저장'}
               </Button>
             </DialogFooter>
           </form>
