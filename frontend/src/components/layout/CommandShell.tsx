@@ -13,7 +13,6 @@ import {
   PanelLeftOpen,
   Inbox,
   PackagePlus,
-  ScanText,
   ScrollText,
   Search,
   Settings,
@@ -96,6 +95,8 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'orders', label: '수주 관리', abbr: '수주', path: '/orders', icon: ScrollText, menu: 'orders' },
       { key: 'outbound', label: '출고/판매', abbr: '출고', path: '/orders?tab=outbound', icon: Truck, menu: 'outbound' },
       { key: 'receipts', label: '수금 관리', abbr: '수금', path: '/orders?tab=receipts', icon: Wallet, menu: 'receipts' },
+      // BARO Phase 1: 거래처별 단가표 (BARO 전용)
+      { key: 'baro-price-book', label: '거래처 단가표', abbr: '단가', path: '/baro/price-book', icon: Tags, menu: 'baro_price_book', tenants: ['baro'] },
       // BARO Phase 4: 배차/일정 보드 (BARO 전용)
       { key: 'baro-dispatch', label: '배차/일정', abbr: '배차', path: '/baro/dispatch', icon: Truck, menu: 'baro_dispatch', tenants: ['baro'] },
     ],
@@ -115,18 +116,10 @@ const NAV_GROUPS: CommandNavGroup[] = [
     items: [
       { key: 'masters', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters' },
       { key: 'search', label: '검색', abbr: '검색', path: '/search', icon: Search, menu: 'search' },
-      // BARO Phase 1: 거래처별 단가표 (BARO 전용)
-      { key: 'baro-price-book', label: '거래처 단가표', abbr: '단가', path: '/baro/price-book', icon: Tags, menu: 'baro_price_book', tenants: ['baro'] },
-      { key: 'ocr', label: '문서 OCR', abbr: 'OCR', path: '/ocr', icon: ScanText, menu: 'ocr' },
+      { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
       { key: 'memo', label: '메모', abbr: '메모', path: '/memo', icon: StickyNote, menu: 'memo' },
       { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval' },
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
-    ],
-  },
-  {
-    label: 'AI',
-    items: [
-      { key: 'assistant', label: '업무 도우미', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
     ],
   },
 ];
@@ -139,10 +132,9 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/banking': { title: 'L/C 한도', breadcrumb: '현황 / 은행 한도' },
   '/sales-analysis': { title: '매출 분석', breadcrumb: '현황 / 매출과 이익' },
   '/search': { title: '통합 검색', breadcrumb: '도구 / 검색' },
-  '/ocr': { title: '문서 OCR', breadcrumb: '도구 / 문서 인식' },
   '/memo': { title: '메모', breadcrumb: '도구 / 업무 메모' },
   '/approval': { title: '결재안', breadcrumb: '도구 / 결재 문안' },
-  '/assistant': { title: '업무 도우미', breadcrumb: 'AI / 채팅 어시스턴트' },
+  '/assistant': { title: 'AI', breadcrumb: '도구 / 채팅 어시스턴트' },
   '/settings': { title: '설정', breadcrumb: '시스템 / 관리자' },
 };
 
