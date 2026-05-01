@@ -312,8 +312,17 @@ a:focus-visible,
 }
 .sf-shell[data-sidebar-collapsed="true"] .sf-nav-link {
   justify-content: center;
-  padding: 8px;
+  padding: 9px 4px;
   position: relative;
+}
+
+/* 접힘 상태에서 아이콘 대신 노출되는 2자 축약 — 작은 아이콘보다 의미가 즉각 들어옴 */
+.sf-shell[data-sidebar-collapsed="true"] .sf-nav-abbr {
+  font-family: var(--sf-sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 /* 접힌 사이드바에서 nav-link hover 시 우측에 라벨 툴팁 표시 — 정보 손실 보완 */

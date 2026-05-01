@@ -49,6 +49,8 @@ import type { AlertItem } from '@/types/dashboard';
 interface CommandNavItem {
   key: string;
   label: string;
+  /** 사이드바 접힘 상태에서 아이콘 대신 노출할 2자 축약 (P/O, L/C 등 라틴은 2영문, 한글은 2자) */
+  abbr: string;
   path: string;
   icon: LucideIcon;
   menu: MenuKey;
@@ -63,43 +65,43 @@ interface CommandNavGroup {
 const NAV_GROUPS: CommandNavGroup[] = [
   {
     items: [
-      { key: 'inventory', label: '가용재고', path: '/inventory', icon: Box, menu: 'inventory' },
-      { key: 'dashboard', label: '대시보드', path: '/dashboard', icon: BarChart3, menu: 'dashboard' },
+      { key: 'inventory', label: '가용재고', abbr: '재고', path: '/inventory', icon: Box, menu: 'inventory' },
+      { key: 'dashboard', label: '대시보드', abbr: '대시', path: '/dashboard', icon: BarChart3, menu: 'dashboard' },
     ],
   },
   {
     label: '구매',
     items: [
-      { key: 'po', label: 'P/O 발주', path: '/procurement', icon: ClipboardList, menu: 'procurement' },
-      { key: 'lc', label: 'L/C 개설', path: '/procurement?tab=lc', icon: Landmark, menu: 'lc' },
-      { key: 'bl', label: 'B/L 입고', path: '/procurement?tab=bl', icon: Ship, menu: 'inbound' },
-      { key: 'customs', label: '면장/원가', path: '/customs', icon: Calculator, menu: 'inbound' },
+      { key: 'po', label: 'P/O 발주', abbr: 'PO', path: '/procurement', icon: ClipboardList, menu: 'procurement' },
+      { key: 'lc', label: 'L/C 개설', abbr: 'LC', path: '/procurement?tab=lc', icon: Landmark, menu: 'lc' },
+      { key: 'bl', label: 'B/L 입고', abbr: 'BL', path: '/procurement?tab=bl', icon: Ship, menu: 'inbound' },
+      { key: 'customs', label: '면장/원가', abbr: '면장', path: '/customs', icon: Calculator, menu: 'inbound' },
     ],
   },
   {
     label: '판매',
     items: [
-      { key: 'orders', label: '수주 관리', path: '/orders', icon: ScrollText, menu: 'orders' },
-      { key: 'outbound', label: '출고/판매', path: '/orders?tab=outbound', icon: Truck, menu: 'outbound' },
-      { key: 'receipts', label: '수금 관리', path: '/orders?tab=receipts', icon: Wallet, menu: 'receipts' },
+      { key: 'orders', label: '수주 관리', abbr: '수주', path: '/orders', icon: ScrollText, menu: 'orders' },
+      { key: 'outbound', label: '출고/판매', abbr: '출고', path: '/orders?tab=outbound', icon: Truck, menu: 'outbound' },
+      { key: 'receipts', label: '수금 관리', abbr: '수금', path: '/orders?tab=receipts', icon: Wallet, menu: 'receipts' },
     ],
   },
   {
     label: '현황',
     items: [
-      { key: 'banking', label: 'L/C 한도', path: '/banking', icon: Landmark, menu: 'banking' },
-      { key: 'analysis', label: '매출 분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs' },
+      { key: 'banking', label: 'L/C 한도', abbr: '한도', path: '/banking', icon: Landmark, menu: 'banking' },
+      { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs' },
     ],
   },
   {
     label: '도구',
     items: [
-      { key: 'masters', label: '마스터', path: '/masters/products', icon: Database, menu: 'masters' },
-      { key: 'search', label: '검색', path: '/search', icon: Search, menu: 'search' },
-      { key: 'ocr', label: '문서 OCR', path: '/ocr', icon: ScanText, menu: 'ocr' },
-      { key: 'memo', label: '메모', path: '/memo', icon: StickyNote, menu: 'memo' },
-      { key: 'approval', label: '결재안', path: '/approval', icon: FileSignature, menu: 'approval' },
-      { key: 'settings', label: '설정', path: '/settings', icon: Settings, menu: 'settings' },
+      { key: 'masters', label: '마스터', abbr: '기준', path: '/masters/products', icon: Database, menu: 'masters' },
+      { key: 'search', label: '검색', abbr: '검색', path: '/search', icon: Search, menu: 'search' },
+      { key: 'ocr', label: '문서 OCR', abbr: 'OCR', path: '/ocr', icon: ScanText, menu: 'ocr' },
+      { key: 'memo', label: '메모', abbr: '메모', path: '/memo', icon: StickyNote, menu: 'memo' },
+      { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval' },
+      { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
     ],
   },
 ];
@@ -257,9 +259,15 @@ export default function CommandShell() {
                       data-tooltip={item.label}
                       title={sidebarCollapsed ? item.label : undefined}
                     >
-                      <Icon className="h-3.5 w-3.5 shrink-0" />
-                      <span className="sf-nav-label min-w-0 flex-1 truncate">{item.label}</span>
-                      {count ? <span className="sf-nav-badge">{count}</span> : null}
+                      {sidebarCollapsed ? (
+                        <span className="sf-nav-abbr">{item.abbr}</span>
+                      ) : (
+                        <>
+                          <Icon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="sf-nav-label min-w-0 flex-1 truncate">{item.label}</span>
+                          {count ? <span className="sf-nav-badge">{count}</span> : null}
+                        </>
+                      )}
                     </NavLink>
                   );
                 })}
