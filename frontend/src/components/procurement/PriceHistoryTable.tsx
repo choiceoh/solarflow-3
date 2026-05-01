@@ -6,10 +6,10 @@ import EmptyState from '@/components/common/EmptyState';
 import type { PriceHistory } from '@/types/procurement';
 
 function PriceChange({ prev, next }: { prev?: number; next: number }) {
-  if (prev == null) return <span className="text-muted-foreground">—</span>;
-  if (next > prev) return <span className="text-red-600 font-medium"><ArrowUp className="inline h-3 w-3" /> 인상</span>;
-  if (next < prev) return <span className="text-green-600 font-medium"><ArrowDown className="inline h-3 w-3" /> 인하</span>;
-  return <span className="text-muted-foreground"><Minus className="inline h-3 w-3" /> 동일</span>;
+  if (prev == null) return <span style={{ color: 'var(--sf-ink-4)' }}>—</span>;
+  if (next > prev) return <span className="sf-pill neg"><ArrowUp className="inline h-3 w-3" /> 인상</span>;
+  if (next < prev) return <span className="sf-pill pos"><ArrowDown className="inline h-3 w-3" /> 인하</span>;
+  return <span className="sf-pill ghost"><Minus className="inline h-3 w-3" /> 동일</span>;
 }
 
 interface Props { items: PriceHistory[]; onEdit: (ph: PriceHistory) => void; onNew: () => void; }
@@ -30,8 +30,8 @@ export default function PriceHistoryTable({ items, onEdit, onNew }: Props) {
               <TableCell>{shortMfgName(ph.manufacturer_name)}</TableCell>
               <TableCell>{ph.product_name ? `${ph.product_name}${ph.spec_wp ? ` (${ph.spec_wp}Wp)` : ''}` : '—'}</TableCell>
               <TableCell>{formatDate(ph.change_date)}</TableCell>
-              <TableCell className="text-right">{ph.previous_price != null ? `$${ph.previous_price.toFixed(4)}` : '—'}</TableCell>
-              <TableCell className="text-right font-medium">${ph.new_price.toFixed(4)}</TableCell>
+              <TableCell className="text-right tabular-nums">{ph.previous_price != null ? `$${ph.previous_price.toFixed(4)}` : '—'}</TableCell>
+              <TableCell className="text-right font-semibold tabular-nums" style={{ color: 'var(--sf-ink)' }}>${ph.new_price.toFixed(4)}</TableCell>
               <TableCell><PriceChange prev={ph.previous_price} next={ph.new_price} /></TableCell>
               <TableCell>{ph.reason ?? '—'}</TableCell>
               <TableCell className="font-mono">{ph.related_po_number || '—'}</TableCell>

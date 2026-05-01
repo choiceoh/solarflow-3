@@ -49,12 +49,20 @@ export default function BLLineTable({ items, currency, manufacturerName, onEdit 
               </TableCell>
               <TableCell className="font-mono">{pCode(line)}</TableCell>
               <TableCell>{pName(line)}</TableCell>
-              <TableCell className="text-right">{formatNumber(line.quantity)}</TableCell>
-              <TableCell className="text-right">{formatCapacity(line.capacity_kw, line.quantity)}</TableCell>
-              <TableCell className="text-right">{line.capacity_kw != null ? (line.capacity_kw / 1000).toFixed(3) : '—'}</TableCell>
-              <TableCell>{line.item_type === 'main' ? '본품' : '스페어'}</TableCell>
-              <TableCell>{line.payment_type === 'paid' ? '유상' : '무상'}</TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-right tabular-nums">{formatNumber(line.quantity)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatCapacity(line.capacity_kw, line.quantity)}</TableCell>
+              <TableCell className="text-right tabular-nums">{line.capacity_kw != null ? (line.capacity_kw / 1000).toFixed(3) : '—'}</TableCell>
+              <TableCell>
+                <span className={line.item_type === 'main' ? 'sf-pill ghost' : 'sf-pill solar'}>
+                  {line.item_type === 'main' ? '본품' : '스페어'}
+                </span>
+              </TableCell>
+              <TableCell>
+                <span className={line.payment_type === 'paid' ? 'sf-pill ghost' : 'sf-pill pos'}>
+                  {line.payment_type === 'paid' ? '유상' : '무상'}
+                </span>
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
                 {currency === 'USD'
                   ? (line.unit_price_usd_wp != null ? `$${line.unit_price_usd_wp.toFixed(4)}` : '—')
                   : (line.unit_price_krw_wp != null ? `${formatNumber(line.unit_price_krw_wp)}원` : '—')}

@@ -36,32 +36,27 @@ export default function SaleListTable({ items, onInvoice }: Props) {
             <TableRow key={item.sale_id}>
               <TableCell>{formatDate(item.outbound_date ?? item.order_date ?? '')}</TableCell>
               <TableCell>
-                {item.outbound_id ? (
-                  <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium">출고</span>
-                ) : (
-                  <span className="rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-[10px] font-medium">수주</span>
-                )}
+                <span className={item.outbound_id ? 'sf-pill pos' : 'sf-pill info'}>
+                  {item.outbound_id ? '출고' : '수주'}
+                </span>
               </TableCell>
               <TableCell>{item.sale.customer_name ?? '—'}</TableCell>
               <TableCell>{item.product_name ?? '—'}</TableCell>
               <TableCell>{item.spec_wp ? `${item.spec_wp}` : '—'}</TableCell>
-              <TableCell className="text-right">{formatNumber(item.quantity)}</TableCell>
-              <TableCell className="text-right">{formatNumber(item.sale.unit_price_wp)}</TableCell>
-              <TableCell className="text-right">{item.sale.supply_amount ? formatNumber(item.sale.supply_amount) : '—'}</TableCell>
-              <TableCell className="text-right">{item.sale.vat_amount ? formatNumber(item.sale.vat_amount) : '—'}</TableCell>
-              <TableCell className="text-right font-medium">{item.sale.total_amount ? formatNumber(item.sale.total_amount) : '—'}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatNumber(item.quantity)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatNumber(item.sale.unit_price_wp)}</TableCell>
+              <TableCell className="text-right tabular-nums">{item.sale.supply_amount ? formatNumber(item.sale.supply_amount) : '—'}</TableCell>
+              <TableCell className="text-right tabular-nums">{item.sale.vat_amount ? formatNumber(item.sale.vat_amount) : '—'}</TableCell>
+              <TableCell className="text-right font-semibold tabular-nums" style={{ color: 'var(--sf-ink)' }}>
+                {item.sale.total_amount ? formatNumber(item.sale.total_amount) : '—'}
+              </TableCell>
               <TableCell>
                 {item.sale.tax_invoice_date ? (
                   <button
                     type="button"
                     onClick={() => onInvoice?.(item)}
                     disabled={!onInvoice}
-                    className={cn(
-                      'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
-                      'bg-green-100 text-green-700',
-                      onInvoice && 'cursor-pointer hover:bg-green-200',
-                      !onInvoice && 'cursor-default',
-                    )}
+                    className={cn('sf-pill pos', onInvoice && 'cursor-pointer', !onInvoice && 'cursor-default')}
                     title="계산서 수정"
                   >
                     {formatDate(item.sale.tax_invoice_date)}
@@ -71,11 +66,7 @@ export default function SaleListTable({ items, onInvoice }: Props) {
                     type="button"
                     onClick={() => onInvoice?.(item)}
                     disabled={!onInvoice}
-                    className={cn(
-                      'rounded-full bg-yellow-100 text-yellow-700 px-1.5 py-0.5 text-[10px] font-medium',
-                      onInvoice && 'cursor-pointer hover:bg-yellow-200',
-                      !onInvoice && 'cursor-default',
-                    )}
+                    className={cn('sf-pill warn', onInvoice && 'cursor-pointer', !onInvoice && 'cursor-default')}
                     title="계산서 발행"
                   >
                     미발행
@@ -83,11 +74,9 @@ export default function SaleListTable({ items, onInvoice }: Props) {
                 )}
               </TableCell>
               <TableCell>
-                {item.sale.erp_closed ? (
-                  <span className="text-green-600 text-[10px]">마감</span>
-                ) : (
-                  <span className="text-muted-foreground text-[10px]">미마감</span>
-                )}
+                <span className={item.sale.erp_closed ? 'sf-pill pos' : 'sf-pill ghost'}>
+                  {item.sale.erp_closed ? '마감' : '미마감'}
+                </span>
               </TableCell>
             </TableRow>
           ))}

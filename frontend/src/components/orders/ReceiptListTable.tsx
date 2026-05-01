@@ -24,17 +24,15 @@ function getMatchStatus(r: Receipt): MatchStatus {
 function MatchBadge({ receipt }: { receipt: Receipt }) {
   const status = getMatchStatus(receipt);
   const matched = receipt.matched_total ?? 0;
-  if (status === 'full') {
-    return <span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-medium">매칭완료</span>;
-  }
+  if (status === 'full') return <span className="sf-pill pos">매칭완료</span>;
   if (status === 'partial') {
     return (
-      <span className="rounded-full bg-yellow-100 text-yellow-700 px-2 py-0.5 text-[10px] font-medium">
-        부분매칭 ({formatNumber(matched)}/{formatNumber(receipt.amount)})
+      <span className="sf-pill warn">
+        부분매칭 {formatNumber(matched)}/{formatNumber(receipt.amount)}
       </span>
     );
   }
-  return <span className="rounded-full bg-gray-100 text-gray-500 px-2 py-0.5 text-[10px] font-medium">미매칭</span>;
+  return <span className="sf-pill ghost">미매칭</span>;
 }
 
 export default function ReceiptListTable({ items, onNew, onEdit, onDelete }: Props) {
@@ -59,7 +57,7 @@ export default function ReceiptListTable({ items, onNew, onEdit, onDelete }: Pro
             <TableRow key={r.receipt_id}>
               <TableCell>{formatDate(r.receipt_date)}</TableCell>
               <TableCell>{r.customer_name ?? '—'}</TableCell>
-              <TableCell className="text-right font-medium">{formatNumber(r.amount)}원</TableCell>
+              <TableCell className="text-right font-semibold tabular-nums" style={{ color: 'var(--sf-ink)' }}>{formatNumber(r.amount)}원</TableCell>
               <TableCell>{r.bank_account ?? '—'}</TableCell>
               <TableCell><MatchBadge receipt={r} /></TableCell>
               <TableCell className="max-w-[200px] truncate">{r.memo ?? '—'}</TableCell>
