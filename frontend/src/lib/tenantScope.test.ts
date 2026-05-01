@@ -36,6 +36,10 @@ describe('tenantScope 사용처 가드', () => {
     'lib/tenantScope.test.ts',
     'lib/devMockMode.ts',
     'components/layout/Sidebar.tsx',
+    // BARO Phase 1: 빠른 재발주 카드 (#105) — 거래처 필터 시 최근 5건 노출
+    'pages/OrdersPage.tsx',
+    // BARO Phase 1: 단가 자동 채움 (#105) — 거래처+품목 선택 시 partner_price_book 조회
+    'components/orders/OrderForm.tsx',
   ]);
 
   function* walk(dir: string): Generator<string> {
