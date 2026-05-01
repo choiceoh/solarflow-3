@@ -43,12 +43,13 @@ interface Props {
 }
 
 /* ─── 상태 뱃지 ─────────────────────────────────── */
+/* sf-pill 토큰을 따라가서 웜 팔레트와 조화 — 개별 tailwind 색 직접 쓰지 않음 */
 
-const STATUS_STYLE: Record<string, string> = {
-  pending:   'bg-amber-100 text-amber-800',
-  confirmed: 'bg-green-100 text-green-800',
-  hold:      'bg-sky-100 text-sky-700',
-  cancelled: 'bg-gray-100 text-gray-500',
+const STATUS_PILL: Record<string, string> = {
+  pending:   'warn',
+  confirmed: 'pos',
+  hold:      'info',
+  cancelled: 'ghost',
 };
 const STATUS_LABEL: Record<string, string> = {
   pending:   '예약중',
@@ -128,20 +129,20 @@ function AllocSubTable({
   );
 
   const SourceBadge = ({ a }: { a: InventoryAllocation }) => (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded ${a.source_type === 'incoming' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+    <span className={`sf-pill ${a.source_type === 'incoming' ? 'info' : 'pos'}`}>
       {a.source_type === 'incoming' ? '미착품' : '현재고'}
     </span>
   );
 
   return (
-    <table className={`w-full text-xs ${colorClass}`}>
+    <table className={`w-full ${colorClass}`}>
       <thead>
         <tr className="border-b bg-muted/20">
-          <th className="text-left p-2 font-medium text-muted-foreground">거래처 / 현장</th>
-          <th className="text-right p-2 font-medium text-muted-foreground">수량</th>
-          <th className="text-center p-2 font-medium text-muted-foreground">재고구분</th>
-          <th className="text-center p-2 font-medium text-muted-foreground">상태</th>
-          <th className="text-center p-2 font-medium text-muted-foreground">작업</th>
+          <th className="text-left">거래처 / 현장</th>
+          <th className="text-right">수량</th>
+          <th className="text-center">재고구분</th>
+          <th className="text-center">상태</th>
+          <th className="text-center">작업</th>
         </tr>
       </thead>
       <tbody>
@@ -151,36 +152,34 @@ function AllocSubTable({
 
           return (
             <tr key={main.alloc_id} className="border-t hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => onEdit(main)}>
-              <td className="p-2">
+              <td>
                 <div className="font-medium leading-tight">{main.customer_name ?? main.site_name ?? '—'}</div>
                 {main.customer_name && main.site_name && (
-                  <div className="text-[10px] text-muted-foreground">{main.site_name}</div>
+                  <div className="text-[11px] text-muted-foreground">{main.site_name}</div>
                 )}
                 {spareQty > 0 && (
-                  <span className="mt-0.5 inline-flex rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
-                    무상 포함
-                  </span>
+                  <span className="sf-pill warn mt-1">무상 포함</span>
                 )}
               </td>
-              <td className="p-2 text-right font-mono whitespace-nowrap">
-                <div>{main.quantity.toLocaleString('ko-KR')} EA</div>
+              <td className="text-right whitespace-nowrap tabular-nums">
+                <div className="font-medium">{main.quantity.toLocaleString('ko-KR')} EA</div>
                 {main.capacity_kw != null && main.capacity_kw > 0 && (
-                  <div className="text-[10px] text-muted-foreground">{fmtKw(main.capacity_kw)}</div>
+                  <div className="text-[11px] text-muted-foreground">{fmtKw(main.capacity_kw)}</div>
                 )}
                 {spareQty > 0 && (
-                  <div className="mt-0.5 text-[10px] text-orange-600">
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
                     + 무상 {spareQty.toLocaleString('ko-KR')} EA
                     {spareKw > 0 ? ` · ${fmtKw(spareKw)}` : ''}
                   </div>
                 )}
               </td>
-              <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}><SourceBadge a={main} /></td>
-              <td className="p-2 text-center">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_STYLE[main.status] ?? 'bg-gray-100 text-gray-500'}`}>
+              <td className="text-center" onClick={(e) => e.stopPropagation()}><SourceBadge a={main} /></td>
+              <td className="text-center">
+                <span className={`sf-pill ${STATUS_PILL[main.status] ?? 'ghost'}`}>
                   {STATUS_LABEL[main.status] ?? main.status}
                 </span>
               </td>
-              <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
+              <td className="text-center" onClick={(e) => e.stopPropagation()}>
                 <ActionButtons a={main} isFreeSpare={false} />
               </td>
             </tr>
@@ -188,24 +187,24 @@ function AllocSubTable({
         })}
         {/* 단독 무상스페어 (매칭된 메인 행 없음) */}
         {standalone.map((a) => (
-          <tr key={a.alloc_id} className="border-t bg-orange-50/40 hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => onEdit(a)}>
-            <td className="p-2">
+          <tr key={a.alloc_id} className="border-t bg-amber-50/30 hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => onEdit(a)}>
+            <td>
               <div className="font-medium leading-tight">{a.customer_name ?? a.site_name ?? '—'}</div>
-              <span className="text-[10px] px-1 py-0.5 rounded bg-orange-100 text-orange-700">무상스페어</span>
+              <span className="sf-pill warn mt-1">무상스페어</span>
             </td>
-            <td className="p-2 text-right font-mono whitespace-nowrap">
-              <div>{a.quantity.toLocaleString('ko-KR')} EA</div>
+            <td className="text-right whitespace-nowrap tabular-nums">
+              <div className="font-medium">{a.quantity.toLocaleString('ko-KR')} EA</div>
               {a.capacity_kw != null && a.capacity_kw > 0 && (
-                <div className="text-[10px] text-muted-foreground">{fmtKw(a.capacity_kw)}</div>
+                <div className="text-[11px] text-muted-foreground">{fmtKw(a.capacity_kw)}</div>
               )}
             </td>
-            <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}><SourceBadge a={a} /></td>
-            <td className="p-2 text-center">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_STYLE[a.status] ?? 'bg-gray-100 text-gray-500'}`}>
+            <td className="text-center" onClick={(e) => e.stopPropagation()}><SourceBadge a={a} /></td>
+            <td className="text-center">
+              <span className={`sf-pill ${STATUS_PILL[a.status] ?? 'ghost'}`}>
                 {STATUS_LABEL[a.status] ?? a.status}
               </span>
             </td>
-            <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
+            <td className="text-center" onClick={(e) => e.stopPropagation()}>
               <ActionButtons a={a} isFreeSpare={true} />
             </td>
           </tr>
@@ -247,32 +246,22 @@ export default function AvailInventoryTable({
 
   return (
     <div className="rounded-md border overflow-hidden">
-      <table className="w-full text-xs">
+      <table className="w-full">
         <thead className="bg-muted/50">
           <tr>
-            <th className="w-8 p-2" />
-            <th className="text-left p-2 font-medium text-muted-foreground">품목</th>
-            <th className="text-right p-2 font-medium text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-blue-500 inline-block" />
-                실재고
-              </span>
-            </th>
-            <th className="text-right p-2 font-medium text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-yellow-500 inline-block" />
-                미착품
-              </span>
-            </th>
-            <th className="text-right p-2 font-medium text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
+            <th className="w-8" />
+            <th className="text-left">품목</th>
+            <th className="text-right">실재고</th>
+            <th className="text-right">미착품</th>
+            <th className="text-right">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="sf-dot" style={{ background: 'var(--sf-pos)' }} />
                 가용재고
               </span>
             </th>
-            <th className="text-right p-2 font-medium text-muted-foreground">판매배정</th>
-            <th className="text-right p-2 font-medium text-muted-foreground">공사배정</th>
-            <th className="text-center p-2 font-medium text-muted-foreground">작업</th>
+            <th className="text-right">판매배정</th>
+            <th className="text-right">공사배정</th>
+            <th className="text-center">작업</th>
           </tr>
         </thead>
         <tbody>
@@ -304,7 +293,7 @@ export default function AvailInventoryTable({
                   onClick={() => toggle(itemKey)}
                 >
                   {/* 토글 */}
-                  <td className="p-2 text-center text-muted-foreground">
+                  <td className="text-center text-muted-foreground">
                     {isOpen
                       ? <ChevronDown className="h-3.5 w-3.5 mx-auto" />
                       : <ChevronRight className="h-3.5 w-3.5 mx-auto" />
@@ -312,71 +301,74 @@ export default function AvailInventoryTable({
                   </td>
 
                   {/* 품목 */}
-                  <td className="p-2">
-                    <div className="font-medium leading-tight">
+                  <td>
+                    <div className="font-semibold leading-tight">
                       {moduleLabel(item.manufacturer_name, item.spec_wp)}
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-1">
                       {item.company_name && (
-                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
-                          {item.company_name}
-                        </span>
+                        <span className="sf-pill ghost">{item.company_name}</span>
                       )}
-                      <span className="font-mono text-[10px] text-muted-foreground">
+                      <span className="font-mono text-[11px] text-muted-foreground">
                         {item.product_code}
                       </span>
                       {mainAllocs.length + spareAllocs.length > 0 && (
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[11px] text-muted-foreground">
                           배정 {allocCountLabel(mainAllocs.length, spareAllocs.length)}
                         </span>
                       )}
                     </div>
                   </td>
 
-                  {/* 실재고 */}
-                  <td className="p-2 text-right tabular-nums">
-                    <div className="font-semibold text-blue-600">{fmtKw(item.physical_kw)}</div>
-                    <div className="text-[10px] text-muted-foreground">
+                  {/* 실재고 — 보조 (semibold, ink) */}
+                  <td className="text-right tabular-nums">
+                    <div className="font-semibold text-foreground">{fmtKw(item.physical_kw)}</div>
+                    <div className="text-[11px] text-muted-foreground">
                       {kwToEa(item.physical_kw, item.spec_wp).toLocaleString('ko-KR')} EA
                     </div>
                   </td>
 
-                  {/* 미착품 */}
-                  <td className="p-2 text-right tabular-nums">
-                    <div className="font-semibold text-yellow-600">{fmtKw(item.incoming_kw)}</div>
-                    <div className="text-[10px] text-muted-foreground">
+                  {/* 미착품 — 보조 */}
+                  <td className="text-right tabular-nums">
+                    <div className="font-semibold text-foreground">{fmtKw(item.incoming_kw)}</div>
+                    <div className="text-[11px] text-muted-foreground">
                       {kwToEa(item.incoming_kw, item.spec_wp).toLocaleString('ko-KR')} EA
                     </div>
                   </td>
 
-                  {/* 가용재고 */}
-                  <td className="p-2 text-right tabular-nums">
-                    <div className={`font-semibold ${item.total_secured_kw > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                  {/* 가용재고 — 주요 (단일 강조: pos green token) */}
+                  <td className="text-right tabular-nums">
+                    <div
+                      className="font-bold text-[15px] leading-tight"
+                      style={{
+                        color: item.total_secured_kw > 0 ? 'var(--sf-pos)' : 'var(--sf-ink-4)',
+                      }}
+                    >
                       {fmtKw(item.total_secured_kw)}
                     </div>
-                    <div className="text-[10px] text-muted-foreground">
+                    <div className="text-[11px] text-muted-foreground">
                       {kwToEa(item.total_secured_kw, item.spec_wp).toLocaleString('ko-KR')} EA
                     </div>
                   </td>
 
-                  {/* 판매배정 */}
-                  <td className="p-2 text-right tabular-nums">
+                  {/* 판매배정 — 보조 */}
+                  <td className="text-right tabular-nums">
                     {saleAllocs.length > 0 ? (
                       <>
-                        <div className="font-semibold text-orange-600">{fmtKw(saleKw)}</div>
-                        <div className="text-[10px] text-muted-foreground">{allocCountLabel(saleMainCount, saleSpareCount)}</div>
+                        <div className="font-semibold text-foreground">{fmtKw(saleKw)}</div>
+                        <div className="text-[11px] text-muted-foreground">{allocCountLabel(saleMainCount, saleSpareCount)}</div>
                       </>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
 
-                  {/* 공사배정 */}
-                  <td className="p-2 text-right tabular-nums">
+                  {/* 공사배정 — 보조 */}
+                  <td className="text-right tabular-nums">
                     {constAllocs.length > 0 ? (
                       <>
-                        <div className="font-semibold text-purple-600">{fmtKw(constKw)}</div>
-                        <div className="text-[10px] text-muted-foreground">{allocCountLabel(constMainCount, constSpareCount)}</div>
+                        <div className="font-semibold text-foreground">{fmtKw(constKw)}</div>
+                        <div className="text-[11px] text-muted-foreground">{allocCountLabel(constMainCount, constSpareCount)}</div>
                       </>
                     ) : (
                       <span className="text-muted-foreground">—</span>
@@ -384,11 +376,11 @@ export default function AvailInventoryTable({
                   </td>
 
                   {/* 작업 */}
-                  <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
+                  <td className="text-center" onClick={(e) => e.stopPropagation()}>
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-6 text-[11px] px-2"
+                      className="h-7 text-xs px-2"
                       onClick={() => onNewAlloc(item.product_id)}
                     >
                       <Plus className="h-3 w-3 mr-0.5" />예약
@@ -408,7 +400,7 @@ export default function AvailInventoryTable({
                         {saleAllocs.length > 0 && (
                           <div>
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-orange-50 text-orange-700">
+                              <span className="sf-pill warn">
                                 판매 예약 {allocCountLabel(saleMainCount, saleSpareCount)}
                               </span>
                             </div>
@@ -427,7 +419,7 @@ export default function AvailInventoryTable({
                         {constAllocs.length > 0 && (
                           <div>
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-purple-50 text-purple-700">
+                              <span className="sf-pill ink">
                                 공사 예약 {allocCountLabel(constMainCount, constSpareCount)}
                               </span>
                             </div>
