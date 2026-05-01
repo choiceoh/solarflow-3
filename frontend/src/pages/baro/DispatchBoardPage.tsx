@@ -203,7 +203,7 @@ export default function DispatchBoardPage() {
           <Button size="sm" variant="outline" onClick={() => void load()}>
             <RefreshCw className="mr-1 h-3.5 w-3.5" />
           </Button>
-          <Button size="sm" onClick={() => setFormOpen(true)}>
+          <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" /> 배차 추가
           </Button>
         </div>

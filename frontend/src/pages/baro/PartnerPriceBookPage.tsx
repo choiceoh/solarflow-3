@@ -204,7 +204,7 @@ export default function PartnerPriceBookPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" onClick={() => { resetDraft(); setFormOpen(true); }}>
+          <Button size="sm" variant="outline" onClick={() => { resetDraft(); setFormOpen(true); }}>
             <Plus className="mr-1 h-3.5 w-3.5" /> 단가 등록
           </Button>
         </div>

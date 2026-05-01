@@ -27,12 +27,26 @@ const statusVariant: Record<IntercompanyStatus, 'default' | 'secondary' | 'outli
   cancelled: 'destructive',
 };
 
+// 운영 시드 고정값 — 040 마이그레이션의 companies(`BR`/`TS`) 시드 row와 동기화.
+// 페이지 진입 즉시 list API를 호출해 cold start 1단계 단축 (companies 로드 대기 제거).
+const BARO_COMPANY_ID = 'e41f100b-c63d-4c87-b02d-e305af610018';
+
 // BARO Phase 2 — 그룹내 매입 요청 (BARO 측)
 // 비유: 바로(주)가 탑솔라에 "이 모듈 N장 받고 싶다"는 메모를 적어 보내고, 진행 상황을 추적
 export default function GroupPurchaseRequestPage() {
   const companies = useAppStore((s) => s.companies);
   const loadCompanies = useAppStore((s) => s.loadCompanies);
-  const baroCompany = useMemo(() => companies.find((c) => c.company_code === 'BR'), [companies]);
+  // 라벨/Select 옵션용 — list API 트리거에는 사용하지 않는다(상수 사용).
+  const baroCompany = useMemo(
+    () =>
+      companies.find((c) => c.company_code === 'BR') ?? {
+        company_id: BARO_COMPANY_ID,
+        company_name: '바로(주)',
+        company_code: 'BR',
+        is_active: true,
+      },
+    [companies],
+  );
   const topsolarCompany = useMemo(() => companies.find((c) => c.company_code === 'TS'), [companies]);
 
   const [rows, setRows] = useState<IntercompanyRequest[]>([]);
@@ -77,12 +91,11 @@ export default function GroupPurchaseRequestPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // 매입 요청 목록은 baroCompany / statusFilter 변경 시에만 재조회
+  // 매입 요청 목록 — BARO 회사 ID 상수 사용으로 companies 로드 대기 없이 즉시 호출
   const load = useCallback(async () => {
-    if (!baroCompany) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ requester_company_id: baroCompany.company_id });
+      const params = new URLSearchParams({ requester_company_id: BARO_COMPANY_ID });
       if (statusFilter) params.set('status', statusFilter);
       const list = await fetchWithAuth<IntercompanyRequest[]>(
         `/api/v1/intercompany-requests/mine?${params.toString()}`,
@@ -93,7 +106,7 @@ export default function GroupPurchaseRequestPage() {
     } finally {
       setLoading(false);
     }
-  }, [baroCompany, statusFilter]);
+  }, [statusFilter]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -242,7 +255,7 @@ export default function GroupPurchaseRequestPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" onClick={openForm}>
+          <Button size="sm" variant="outline" onClick={openForm}>
             <Plus className="mr-1 h-3.5 w-3.5" /> 매입 요청
           </Button>
         </div>
