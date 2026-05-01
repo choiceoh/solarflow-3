@@ -12,8 +12,7 @@ function mergeExchangeCompare(results: ExchangeCompareResult[]): ExchangeCompare
   };
 }
 
-// 환율 비교 (Rust API 연동)
-// D-024: 실시간 환율 API 연동 전까지 Rust가 최근 면장 환율을 현재 환율로 사용한다.
+// 환율 비교 (Rust API 연동) — 사용자 클릭 트리거이므로 useQuery 대신 명령형 유지
 export function useExchangeCompare() {
   const [result, setResult] = useState<ExchangeCompareResult | null>(null);
   const [loading, setLoading] = useState(false);

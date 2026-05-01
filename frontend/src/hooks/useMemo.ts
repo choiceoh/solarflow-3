@@ -1,34 +1,33 @@
 // 메모 CRUD 훅 (Step 31)
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchWithAuth } from '@/lib/api';
 import type { Note } from '@/types/memo';
 
 export function useNoteList(linkedTable?: string, linkedId?: string) {
-  const [data, setData] = useState<Note[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
+  const q = useQuery<Note[], Error>({
+    queryKey: ['notes', linkedTable, linkedId],
+    queryFn: async () => {
       const params = new URLSearchParams();
       if (linkedTable) params.set('linked_table', linkedTable);
       if (linkedId) params.set('linked_id', linkedId);
       const notes = await fetchWithAuth<Note[]>(`/api/v1/notes?${params}`);
-      // 최신순 정렬
       notes.sort((a, b) => b.created_at.localeCompare(a.created_at));
-      setData(notes);
-    } catch { setData([]); }
-    setLoading(false);
-  }, [linkedTable, linkedId]);
-
-  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load(); }, [load]);
-  return { data, loading, reload: load };
+      return notes;
+    },
+  });
+  return {
+    data: q.data ?? [],
+    loading: q.isLoading,
+    reload: async () => { await q.refetch(); },
+  };
 }
 
 export function useNoteActions() {
   const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['notes'] });
 
   const create = useCallback(async (content: string, linkedTable?: string, linkedId?: string) => {
     setLoading(true);
@@ -39,25 +38,29 @@ export function useNoteActions() {
       const note = await fetchWithAuth<Note>('/api/v1/notes', {
         method: 'POST', body: JSON.stringify(body),
       });
+      await invalidate();
       return note;
     } finally { setLoading(false); }
-  }, []);
+  }, [queryClient]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = useCallback(async (noteId: string, content: string) => {
     setLoading(true);
     try {
-      return await fetchWithAuth<Note>(`/api/v1/notes/${noteId}`, {
+      const result = await fetchWithAuth<Note>(`/api/v1/notes/${noteId}`, {
         method: 'PUT', body: JSON.stringify({ content }),
       });
+      await invalidate();
+      return result;
     } finally { setLoading(false); }
-  }, []);
+  }, [queryClient]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const remove = useCallback(async (noteId: string) => {
     setLoading(true);
     try {
       await fetchWithAuth(`/api/v1/notes/${noteId}`, { method: 'DELETE' });
+      await invalidate();
     } finally { setLoading(false); }
-  }, []);
+  }, [queryClient]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { loading, create, update, remove };
 }

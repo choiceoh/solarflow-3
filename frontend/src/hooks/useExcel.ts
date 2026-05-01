@@ -1,7 +1,8 @@
 // 엑셀 다운로드/업로드 훅 (Step 29A)
 // 비유: 총괄 매니저 — 마스터 데이터 로딩 + 양식 생성 + 파싱 + 검증을 일괄 관리
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type {
@@ -10,8 +11,10 @@ import type {
 } from '@/types/excel';
 import { DECLARATION_FIELDS, DECLARATION_COST_FIELDS } from '@/types/excel';
 
+type ActiveRow = Record<string, unknown> & { is_active?: boolean };
+type OutboundRow = MasterDataForExcel['outbounds'] extends (infer U)[] | undefined ? U : never;
+
 export function useExcel(type: TemplateType) {
-  const [masterData, setMasterData] = useState<MasterDataForExcel | null>(null);
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [declPreview, setDeclPreview] = useState<DeclarationImportPreview | null>(null);
@@ -19,38 +22,44 @@ export function useExcel(type: TemplateType) {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const companies = useAppStore((s) => s.companies);
 
-  // 마스터 데이터 로드
-  useEffect(() => {
-    let cancelled = false;
-    type ActiveRow = Record<string, unknown> & { is_active?: boolean };
-    type OutboundRow = MasterDataForExcel['outbounds'] extends (infer U)[] | undefined ? U : never;
-    const fetches: Promise<ActiveRow[]>[] = [
-      fetchWithAuth<ActiveRow[]>('/api/v1/manufacturers'),
-      fetchWithAuth<ActiveRow[]>('/api/v1/products'),
-      fetchWithAuth<ActiveRow[]>('/api/v1/partners'),
-      fetchWithAuth<ActiveRow[]>('/api/v1/warehouses'),
-    ];
-    // 매출 양식: outbound 목록도 필요 (지적 1 반영)
-    if (type === 'sale') {
-      fetches.push(fetchWithAuth<ActiveRow[]>('/api/v1/outbounds?status=active'));
-    }
-    Promise.all(fetches).then(([manufacturers, products, partners, warehouses, outbounds]) => {
-      if (cancelled) return;
-      setMasterData({
-        companies,
-        manufacturers: manufacturers.filter((m) => m.is_active) as MasterDataForExcel['manufacturers'],
-        products: products.filter((p) => p.is_active) as MasterDataForExcel['products'],
-        partners: partners.filter((p) => p.is_active) as MasterDataForExcel['partners'],
-        warehouses: warehouses.filter((w) => w.is_active) as MasterDataForExcel['warehouses'],
-        outbounds: (outbounds ?? []) as OutboundRow[],
-      });
-    }).catch(() => {
-      if (!cancelled) setError('마스터 데이터 로딩 실패');
-    });
-    return () => { cancelled = true; };
-    // type은 의도적으로 의존성에서 제외 — 마스터 데이터는 type 변경 시 재로딩 불필요
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companies]);
+  // 마스터 데이터 로드 — type별로 outbounds 필요 여부 분기
+  const needsOutbounds = type === 'sale';
+  const masterQuery = useQuery<{
+    manufacturers: ActiveRow[];
+    products: ActiveRow[];
+    partners: ActiveRow[];
+    warehouses: ActiveRow[];
+    outbounds: ActiveRow[];
+  }, Error>({
+    queryKey: ['excel-master', needsOutbounds],
+    queryFn: async () => {
+      const fetches: Promise<ActiveRow[]>[] = [
+        fetchWithAuth<ActiveRow[]>('/api/v1/manufacturers'),
+        fetchWithAuth<ActiveRow[]>('/api/v1/products'),
+        fetchWithAuth<ActiveRow[]>('/api/v1/partners'),
+        fetchWithAuth<ActiveRow[]>('/api/v1/warehouses'),
+      ];
+      if (needsOutbounds) fetches.push(fetchWithAuth<ActiveRow[]>('/api/v1/outbounds?status=active'));
+      const [manufacturers, products, partners, warehouses, outbounds = []] = await Promise.all(fetches);
+      return { manufacturers, products, partners, warehouses, outbounds };
+    },
+    staleTime: 5 * 60_000, // 마스터는 자주 안 바뀜
+  });
+
+  const masterData: MasterDataForExcel | null = useMemo(() => {
+    if (!masterQuery.data) return null;
+    const { manufacturers, products, partners, warehouses, outbounds } = masterQuery.data;
+    return {
+      companies,
+      manufacturers: manufacturers.filter((m) => m.is_active) as MasterDataForExcel['manufacturers'],
+      products: products.filter((p) => p.is_active) as MasterDataForExcel['products'],
+      partners: partners.filter((p) => p.is_active) as MasterDataForExcel['partners'],
+      warehouses: warehouses.filter((w) => w.is_active) as MasterDataForExcel['warehouses'],
+      outbounds: (outbounds ?? []) as OutboundRow[],
+    };
+  }, [masterQuery.data, companies]);
+
+  const masterError = masterQuery.error ? '마스터 데이터 로딩 실패' : null;
 
   // 양식 다운로드
   const downloadTemplate = useCallback(async () => {
@@ -124,8 +133,7 @@ export function useExcel(type: TemplateType) {
     }
   }, [type, preview, declPreview]);
 
-  // 확정 등록 (Step 29B)
-  // 비유: 검수 완료된 행들을 Go API로 일괄 전송
+  // 확정 등록
   const submitImport = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -156,12 +164,10 @@ export function useExcel(type: TemplateType) {
     }
   }, [type, preview, declPreview]);
 
-  // Import 결과 초기화
   const clearImportResult = useCallback(() => {
     setImportResult(null);
   }, []);
 
-  // 미리보기 초기화
   const clearPreview = useCallback(() => {
     setPreview(null);
     setDeclPreview(null);
@@ -170,8 +176,8 @@ export function useExcel(type: TemplateType) {
 
   return {
     masterData,
-    loading,
-    error,
+    loading: loading || masterQuery.isLoading,
+    error: error ?? masterError,
     preview,
     declPreview,
     importResult,

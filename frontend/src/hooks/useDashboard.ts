@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { fetchWithAuth } from '@/lib/api';
 import { fetchCalc, companyQueryUrl } from '@/lib/companyUtils';
 import type { InventoryResponse } from '@/types/inventory';
@@ -12,10 +13,7 @@ import type { LCLimitTimeline } from '@/types/banking';
 import type { SaleListItem } from '@/types/outbound';
 import type { PriceHistory } from '@/types/procurement';
 
-// 비유: 대시보드 데이터를 독립적으로 조회. 하나 실패해도 나머지는 표시.
-
 // Rust engine /api/v1/calc/customer-analysis 응답 스키마 정본
-// (engine/src/model/margin.rs::CustomerAnalysisResponse 와 맞물림)
 export interface CustomerItem {
   customer_id: string;
   customer_name: string;
@@ -28,7 +26,7 @@ export interface CustomerItem {
   avg_margin_rate?: number | null;
   total_margin_krw?: number | null;
   avg_deposit_rate?: number | null;
-  status: string; // 'normal' | 'warning' | 'overdue'
+  status: string;
 }
 export interface CustomerAnalysis {
   items: CustomerItem[];
@@ -62,19 +60,20 @@ type DashboardPriceHistory = PriceHistory & {
   manufacturers?: { name_kr?: string };
 };
 
-function makeSectionState<T>(initial?: T | null): DashboardSectionState<T> {
-  return { data: initial ?? null, loading: true, error: null };
-}
+const MFG_COLORS: Record<string, string> = {
+  '진코솔라': '#3b82f6', 'JinkoSolar': '#3b82f6',
+  '트리나솔라': '#ef4444', 'TrinaSolar': '#ef4444',
+  '라이젠에너지': '#22c55e', 'Risen': '#22c55e',
+  'LONGi': '#f97316', '롱기': '#f97316', '론지': '#f97316',
+};
+const FALLBACK_COLORS = ['#6b7280', '#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899'];
 
-// D-060: 다중 법인 합산 merge 함수들 — inventory는 엔진에서 처리하므로 제거됨
 function mergeCustomer(rs: CustomerAnalysis[]): CustomerAnalysis {
-  // 다중 법인 합산: 같은 거래처가 여러 법인에 걸쳐있으면 customer_id로 병합.
   const merged = new Map<string, CustomerItem>();
   for (const r of rs) {
     for (const it of r.items || []) {
       const prev = merged.get(it.customer_id);
       if (!prev) { merged.set(it.customer_id, { ...it }); continue; }
-      // 금액 합산, 비율은 가중 평균 (매출 가중), 일수는 최댓값
       const revA = prev.total_sales_krw, revB = it.total_sales_krw;
       const marginA = prev.total_margin_krw ?? null, marginB = it.total_margin_krw ?? null;
       const combinedRev = revA + revB;
@@ -158,16 +157,10 @@ function priceHistoriesToTrend(histories: DashboardPriceHistory[]): PriceTrend {
     periodMap.set(period, prev);
     byManufacturer.set(name, periodMap);
   }
-  const MFG_COLORS: Record<string, string> = {
-    '진코솔라': '#3b82f6', 'JinkoSolar': '#3b82f6',
-    '트리나솔라': '#ef4444', 'TrinaSolar': '#ef4444',
-    '라이젠에너지': '#22c55e', 'Risen': '#22c55e',
-    'LONGi': '#f97316', '롱기': '#f97316', '론지': '#f97316',
-  };
   return {
     manufacturers: Array.from(byManufacturer.entries()).map(([name, periodMap], i) => ({
       name,
-      color: MFG_COLORS[name] || ['#6b7280', '#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899'][i % 5],
+      color: MFG_COLORS[name] || FALLBACK_COLORS[i % FALLBACK_COLORS.length],
       data_points: Array.from(periodMap.entries())
         .map(([period, value]) => ({ period, price_usd_wp: value.sum / Math.max(value.count, 1) }))
         .sort((a, b) => a.period.localeCompare(b.period)),
@@ -201,197 +194,174 @@ function salesToMonthlyRevenue(sales: SaleListItem[]): MonthlyRevenue {
   return { months: Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month)) };
 }
 
+function section<T>(data: T | null, loading: boolean, error: string | null): DashboardSectionState<T> {
+  return { data, loading, error };
+}
+
 export function useDashboard(companyId: string | null, userRole: string) {
-  const [summary, setSummary] = useState<DashboardSectionState<DashboardSummary>>(makeSectionState());
-  const [revenue, setRevenue] = useState<DashboardSectionState<MonthlyRevenue>>(makeSectionState());
-  const [priceTrend, setPriceTrend] = useState<DashboardSectionState<PriceTrend>>(makeSectionState());
-  const [alerts, setAlerts] = useState<DashboardSectionState<AlertItem[]>>(makeSectionState());
-  const [companySummary, setCompanySummary] = useState<DashboardSectionState<CompanySummaryRow[]>>(makeSectionState());
-  const [incoming, setIncoming] = useState<DashboardSectionState<BLShipment[]>>(makeSectionState());
-  const [orderBacklog, setOrderBacklog] = useState<DashboardSectionState<Order[]>>(makeSectionState());
-  const [outstanding, setOutstanding] = useState<DashboardSectionState<CustomerAnalysis>>(makeSectionState());
-  const [sales, setSales] = useState<DashboardSectionState<SaleListItem[]>>(makeSectionState([]));
-  const [inventory, setInventory] = useState<DashboardSectionState<InventoryResponse>>(makeSectionState());
-  const [longTermWarning, setLongTermWarning] = useState(0);
-  const [longTermCritical, setLongTermCritical] = useState(0);
-
+  const queryClient = useQueryClient();
   const isManager = userRole === 'admin' || userRole === 'manager';
+  const enabled = !!companyId;
 
-  const load = useCallback(async () => {
-    if (!companyId) return;
+  const queries = useQueries({
+    queries: [
+      {
+        queryKey: ['dashboard-inventory', companyId],
+        queryFn: () => fetchCalc<InventoryResponse>(companyId, '/api/v1/calc/inventory', {}),
+        enabled,
+      },
+      {
+        queryKey: ['dashboard-sales', companyId],
+        queryFn: () => fetchWithAuth<SaleListItem[]>(companyQueryUrl('/api/v1/sales', companyId)),
+        enabled,
+      },
+      {
+        queryKey: ['dashboard-customer-analysis', companyId],
+        queryFn: () => fetchCalc<CustomerAnalysis>(companyId, '/api/v1/calc/customer-analysis', {}, mergeCustomer),
+        enabled,
+      },
+      {
+        queryKey: ['dashboard-price-trend', companyId],
+        queryFn: () => fetchCalc<PriceTrendResponse>(companyId, '/api/v1/calc/price-trend', {}, mergePriceTrend),
+        enabled,
+      },
+      {
+        queryKey: ['dashboard-lc-timeline', companyId],
+        queryFn: () => fetchCalc<LCLimitTimeline>(companyId, '/api/v1/calc/lc-limit-timeline', { months_ahead: 3 }, mergeLCTimeline),
+        enabled,
+      },
+      {
+        queryKey: ['dashboard-bls', companyId],
+        queryFn: () => fetchWithAuth<BLShipment[]>(companyQueryUrl('/api/v1/bls', companyId)),
+        enabled,
+      },
+      {
+        queryKey: ['dashboard-orders', companyId],
+        queryFn: () => fetchWithAuth<Order[]>(companyQueryUrl('/api/v1/orders', companyId)),
+        enabled,
+      },
+      {
+        queryKey: ['dashboard-price-histories', companyId],
+        queryFn: () => fetchWithAuth<DashboardPriceHistory[]>(companyQueryUrl('/api/v1/price-histories', companyId)),
+        enabled,
+      },
+    ],
+  });
 
-    // 모든 섹션 loading=true
-    setSummary((s) => ({ ...s, loading: true, error: null }));
-    setRevenue((s) => ({ ...s, loading: true, error: null }));
-    setPriceTrend((s) => ({ ...s, loading: true, error: null }));
-    setSales((s) => ({ ...s, loading: true, error: null }));
-    setInventory((s) => ({ ...s, loading: true, error: null }));
-    setAlerts((s) => ({ ...s, loading: true, error: null }));
-    setCompanySummary((s) => ({ ...s, loading: true, error: null }));
-    if (isManager) {
-      setIncoming((s) => ({ ...s, loading: true, error: null }));
-      setOrderBacklog((s) => ({ ...s, loading: true, error: null }));
-      setOutstanding((s) => ({ ...s, loading: true, error: null }));
+  const [invQ, salesQ, custQ, ptQ, tlQ, blQ, orderQ, phQ] = queries;
+
+  const invData = invQ.data ?? null;
+  const salesData = salesQ.data ?? null;
+  const custData = custQ.data ?? null;
+  const tlData = tlQ.data ?? null;
+  const blData = useMemo(() => blQ.data ?? [], [blQ.data]);
+  const orderData = useMemo(() => orderQ.data ?? [], [orderQ.data]);
+
+  const summary = useMemo<DashboardSectionState<DashboardSummary>>(() => {
+    const loading = invQ.isLoading;
+    if (invQ.isError && !invData) {
+      return section<DashboardSummary>(null, false, '재고 데이터 조회 실패');
     }
+    if (!invData) return section<DashboardSummary>(null, loading, null);
+    const s = invData.summary;
+    return section<DashboardSummary>({
+      physical_mw: s.total_physical_kw / 1000,
+      available_mw: s.total_available_kw / 1000,
+      incoming_mw: s.total_incoming_kw / 1000,
+      secured_mw: s.total_secured_kw / 1000,
+      outstanding_krw: custData?.summary?.total_outstanding_krw ?? 0,
+      lc_available_usd: tlData?.bank_summaries?.reduce((acc, b) => acc + b.available, 0) ?? 0,
+    }, loading, null);
+  }, [invQ.isLoading, invQ.isError, invData, custData, tlData]);
 
-    // D-060: fetchCalc가 "all"이면 법인별 호출 후 merge 처리
-    const fetchInventory = () => fetchCalc<InventoryResponse>(companyId, '/api/v1/calc/inventory', {});
-    const fetchCustomerAnalysis = () => fetchCalc<CustomerAnalysis>(companyId, '/api/v1/calc/customer-analysis', {}, mergeCustomer);
-    const fetchPriceTrendApi = () => fetchCalc<PriceTrendResponse>(companyId, '/api/v1/calc/price-trend', {}, mergePriceTrend);
-    const fetchPriceHistories = () => fetchWithAuth<DashboardPriceHistory[]>(companyQueryUrl('/api/v1/price-histories', companyId));
-    const fetchLCTimeline = () => fetchCalc<LCLimitTimeline>(companyId, '/api/v1/calc/lc-limit-timeline', { months_ahead: 3 }, mergeLCTimeline);
-    // CRUD: "all"이면 company_id 파라미터 생략 → 전체 반환
-    const fetchSales = () => fetchWithAuth<SaleListItem[]>(companyQueryUrl('/api/v1/sales', companyId));
-    const fetchBLs = () => fetchWithAuth<BLShipment[]>(companyQueryUrl('/api/v1/bls', companyId));
-    const fetchOrders = () => fetchWithAuth<Order[]>(companyQueryUrl('/api/v1/orders', companyId));
+  const revenue = useMemo<DashboardSectionState<MonthlyRevenue>>(() => {
+    if (salesQ.isError) return section<MonthlyRevenue>(null, false, '매출 데이터 조회 실패');
+    if (!salesData) return section<MonthlyRevenue>(null, salesQ.isLoading, null);
+    return section<MonthlyRevenue>(salesToMonthlyRevenue(salesData), false, null);
+  }, [salesQ.isLoading, salesQ.isError, salesData]);
 
-    const results = await Promise.allSettled([
-      fetchInventory(),       // 0
-      fetchSales(),           // 1
-      fetchCustomerAnalysis(),// 2
-      fetchPriceTrendApi(),   // 3
-      fetchLCTimeline(),      // 4
-      fetchBLs(),             // 5
-      fetchOrders(),          // 6
-      fetchPriceHistories(),  // 7
-    ]);
-
-    // 0: Inventory -> summary + 장기재고 알림 + inventory 섹션
-    const invResult = results[0];
-    if (invResult.status === 'fulfilled') {
-      const s = invResult.value.summary;
-      setSummary((prev) => ({
-        ...prev, loading: false,
-        data: {
-          ...prev.data!,
-          physical_mw: s.total_physical_kw / 1000,
-          available_mw: s.total_available_kw / 1000,
-          incoming_mw: s.total_incoming_kw / 1000,
-          secured_mw: s.total_secured_kw / 1000,
-          outstanding_krw: prev.data?.outstanding_krw ?? 0,
-          lc_available_usd: prev.data?.lc_available_usd ?? 0,
-        },
-      }));
-      setInventory({ data: invResult.value, loading: false, error: null });
-      setLongTermWarning(invResult.value.items.filter((i) => i.long_term_status === 'warning').length);
-      setLongTermCritical(invResult.value.items.filter((i) => i.long_term_status === 'critical').length);
-    } else {
-      setSummary((s) => ({ ...s, loading: false, error: '재고 데이터 조회 실패' }));
-      setInventory({ data: null, loading: false, error: '재고 데이터 조회 실패' });
-    }
-
-    // 1: Sales -> monthly revenue
-    const salesResult = results[1];
-    if (salesResult.status === 'fulfilled') {
-      setSales({ data: salesResult.value, loading: false, error: null });
-      setRevenue({ data: salesToMonthlyRevenue(salesResult.value), loading: false, error: null });
-    } else {
-      setSales({ data: null, loading: false, error: '매출 데이터 조회 실패' });
-      setRevenue({ data: null, loading: false, error: '매출 데이터 조회 실패' });
-    }
-
-    // 2: CustomerAnalysis -> outstanding + summary.outstanding_krw
-    const custResult = results[2];
-    let custData: CustomerAnalysis | null = null;
-    if (custResult.status === 'fulfilled') {
-      custData = custResult.value;
-      setOutstanding({ data: custData, loading: false, error: null });
-      setSummary((prev) => ({
-        ...prev,
-        data: prev.data ? { ...prev.data, outstanding_krw: custData!.summary?.total_outstanding_krw || 0 } : prev.data,
-      }));
-    } else {
-      setOutstanding({ data: null, loading: false, error: '미수금 데이터 조회 실패' });
-    }
-
-    // 3: PriceTrend
-    const ptResult = results[3];
-    if (ptResult.status === 'fulfilled') {
-      const mfgs = toManufacturerPriceRows(ptResult.value);
-      const MFG_COLORS: Record<string, string> = {
-        '진코솔라': '#3b82f6', 'JinkoSolar': '#3b82f6',
-        '트리나솔라': '#ef4444', 'TrinaSolar': '#ef4444',
-        '라이젠에너지': '#22c55e', 'Risen': '#22c55e',
-        'LONGi': '#f97316', '롱기': '#f97316', '론지': '#f97316',
-      };
-      const colored = mfgs.map((m, i: number) => ({
+  const priceTrend = useMemo<DashboardSectionState<PriceTrend>>(() => {
+    const loading = ptQ.isLoading;
+    if (ptQ.data) {
+      const mfgs = toManufacturerPriceRows(ptQ.data);
+      const colored = mfgs.map((m, i) => ({
         ...m,
-        color: MFG_COLORS[m.name] || ['#6b7280', '#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899'][i % 5],
+        color: MFG_COLORS[m.name] || FALLBACK_COLORS[i % FALLBACK_COLORS.length],
       }));
-      if (colored.length > 0) {
-        setPriceTrend({ data: { manufacturers: colored }, loading: false, error: null });
-      } else {
-        const phResult = results[7];
-        setPriceTrend({
-          data: phResult.status === 'fulfilled' ? priceHistoriesToTrend(phResult.value) : { manufacturers: [] },
-          loading: false,
-          error: null,
-        });
-      }
-    } else {
-      const phResult = results[7];
-      setPriceTrend({
-        data: phResult.status === 'fulfilled' ? priceHistoriesToTrend(phResult.value) : null,
-        loading: false,
-        error: phResult.status === 'fulfilled' ? null : '단가 추이 조회 실패',
-      });
+      if (colored.length > 0) return section<PriceTrend>({ manufacturers: colored }, false, null);
+      // fallback: price histories
+      if (phQ.data) return section<PriceTrend>(priceHistoriesToTrend(phQ.data), false, null);
+      return section<PriceTrend>({ manufacturers: [] }, false, null);
     }
-
-    // 4: LC Timeline -> summary.lc_available_usd
-    const tlResult = results[4];
-    if (tlResult.status === 'fulfilled') {
-      const avail = (tlResult.value.bank_summaries || []).reduce((s: number, b: { available: number }) => s + b.available, 0);
-      setSummary((prev) => ({
-        ...prev,
-        data: prev.data ? { ...prev.data, lc_available_usd: avail } : prev.data,
-      }));
+    if (ptQ.isError) {
+      if (phQ.data) return section<PriceTrend>(priceHistoriesToTrend(phQ.data), false, null);
+      return section<PriceTrend>(null, false, '단가 추이 조회 실패');
     }
+    return section<PriceTrend>(null, loading, null);
+  }, [ptQ.isLoading, ptQ.isError, ptQ.data, phQ.data]);
 
-    // 5: BLs
-    const blResult = results[5];
-    let blData: BLShipment[] = [];
-    if (blResult.status === 'fulfilled') {
-      blData = blResult.value;
-      if (isManager) {
-        const incomingBLs = blData
-          .filter((bl) => bl.status === 'shipping' || bl.status === 'arrived' || bl.status === 'customs')
-          .slice(0, 10);
-        setIncoming({ data: incomingBLs, loading: false, error: null });
-      }
-    } else if (isManager) {
-      setIncoming({ data: null, loading: false, error: '미착품 조회 실패' });
-    }
+  const inventory = useMemo<DashboardSectionState<InventoryResponse>>(() => {
+    if (invQ.isError) return section<InventoryResponse>(null, false, '재고 데이터 조회 실패');
+    return section<InventoryResponse>(invData, invQ.isLoading, null);
+  }, [invQ.isLoading, invQ.isError, invData]);
 
-    // 6: Orders
-    const orderResult = results[6];
-    let orderData: Order[] = [];
-    if (orderResult.status === 'fulfilled') {
-      orderData = orderResult.value;
-      if (isManager) {
-        const backlog = orderData
-          .filter((o) => (o.status === 'received' || o.status === 'partial') && (o.remaining_qty ?? 0) > 0)
-          .slice(0, 10);
-        setOrderBacklog({ data: backlog, loading: false, error: null });
-      }
-    } else if (isManager) {
-      setOrderBacklog({ data: null, loading: false, error: '수주 잔량 조회 실패' });
-    }
+  const sales = useMemo<DashboardSectionState<SaleListItem[]>>(() => {
+    if (salesQ.isError) return section<SaleListItem[]>(null, false, '매출 데이터 조회 실패');
+    return section<SaleListItem[]>(salesData, salesQ.isLoading, null);
+  }, [salesQ.isLoading, salesQ.isError, salesData]);
 
-    // 알림은 useAlerts.ts로 분리 (Step 31 감리 지적 3 반영)
-    setAlerts({ data: [], loading: false, error: null });
+  const outstanding = useMemo<DashboardSectionState<CustomerAnalysis>>(() => {
+    if (custQ.isError) return section<CustomerAnalysis>(null, false, '미수금 데이터 조회 실패');
+    return section<CustomerAnalysis>(custData, custQ.isLoading, null);
+  }, [custQ.isLoading, custQ.isError, custData]);
 
-    // 법인별 요약은 별도 (companyId가 "전체"일 때만)
-    setCompanySummary((s) => ({ ...s, loading: false }));
-  }, [companyId, isManager]);
+  const incoming = useMemo<DashboardSectionState<BLShipment[]>>(() => {
+    if (!isManager) return section<BLShipment[]>(null, false, null);
+    if (blQ.isError) return section<BLShipment[]>(null, false, '미착품 조회 실패');
+    if (!blQ.data) return section<BLShipment[]>(null, blQ.isLoading, null);
+    const incomingBLs = blData
+      .filter((bl) => bl.status === 'shipping' || bl.status === 'arrived' || bl.status === 'customs')
+      .slice(0, 10);
+    return section<BLShipment[]>(incomingBLs, false, null);
+  }, [isManager, blQ.isLoading, blQ.isError, blQ.data, blData]);
 
-  // 초기/의존성 변경 시 데이터 재조회 — load 내부에서 setLoading/setData를 호출하므로 룰 비활성화
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load(); }, [load]);
+  const orderBacklog = useMemo<DashboardSectionState<Order[]>>(() => {
+    if (!isManager) return section<Order[]>(null, false, null);
+    if (orderQ.isError) return section<Order[]>(null, false, '수주 잔량 조회 실패');
+    if (!orderQ.data) return section<Order[]>(null, orderQ.isLoading, null);
+    const backlog = orderData
+      .filter((o) => (o.status === 'received' || o.status === 'partial') && (o.remaining_qty ?? 0) > 0)
+      .slice(0, 10);
+    return section<Order[]>(backlog, false, null);
+  }, [isManager, orderQ.isLoading, orderQ.isError, orderQ.data, orderData]);
+
+  const alerts = useMemo<DashboardSectionState<AlertItem[]>>(
+    () => section<AlertItem[]>([], false, null),
+    [],
+  );
+  const companySummary = useMemo<DashboardSectionState<CompanySummaryRow[]>>(
+    () => section<CompanySummaryRow[]>(null, false, null),
+    [],
+  );
+
+  const longTermWarning = invData?.items.filter((i) => i.long_term_status === 'warning').length ?? 0;
+  const longTermCritical = invData?.items.filter((i) => i.long_term_status === 'critical').length ?? 0;
+
+  const reload = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['dashboard-inventory', companyId] });
+    await queryClient.invalidateQueries({ queryKey: ['dashboard-sales', companyId] });
+    await queryClient.invalidateQueries({ queryKey: ['dashboard-customer-analysis', companyId] });
+    await queryClient.invalidateQueries({ queryKey: ['dashboard-price-trend', companyId] });
+    await queryClient.invalidateQueries({ queryKey: ['dashboard-lc-timeline', companyId] });
+    await queryClient.invalidateQueries({ queryKey: ['dashboard-bls', companyId] });
+    await queryClient.invalidateQueries({ queryKey: ['dashboard-orders', companyId] });
+    await queryClient.invalidateQueries({ queryKey: ['dashboard-price-histories', companyId] });
+  }, [queryClient, companyId]);
 
   return {
     summary, revenue, priceTrend, alerts, companySummary,
     incoming, orderBacklog, outstanding, sales, inventory,
     longTermWarning, longTermCritical,
-    reload: load,
+    reload,
   };
 }
