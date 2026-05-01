@@ -31,6 +31,14 @@ interface MetalSnapshot {
   fetched_at: string;
 }
 
+interface CommoditySnapshot {
+  value: number;
+  change: number;
+  unit: string;
+  source: string;
+  fetched_at: string;
+}
+
 const FALLBACK_KPI = {
   inventory_available_mw: 76.42,
   reservations_pending: 28,
@@ -39,6 +47,8 @@ const FALLBACK_KPI = {
 };
 const FALLBACK_FX = { rate: 1773.4, change_pct: 0.06 };
 const FALLBACK_SILVER = { price_usd: 28.84, change_usd: -1.42 };
+const FALLBACK_POLYSILICON = { value: 34.20, change: 0.40 };
+const FALLBACK_SCFI = { value: 1284, change: -2.10 };
 const FALLBACK_QUEUE: LoginStats['work_queue'] = [
   { time: '09:00', tag: '입항', title: 'COSCO SHANGHAI 042E', meta: '8,800장 · 5,456 kW · 인천 1창고' },
   { time: '11:30', tag: 'L/C 만기', title: 'LC-26-0405', meta: 'USD 1.84M · 하나은행 · 결재 대기' },
@@ -57,6 +67,8 @@ export default function LoginPage() {
   const [stats, setStats] = useState<LoginStats | null>(null);
   const [fx, setFx] = useState<FXSnapshot | null>(null);
   const [silver, setSilver] = useState<MetalSnapshot | null>(null);
+  const [poly, setPoly] = useState<CommoditySnapshot | null>(null);
+  const [scfi, setScfi] = useState<CommoditySnapshot | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +84,14 @@ export default function LoginPage() {
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((d: MetalSnapshot) => { if (!cancelled) setSilver(d); })
       .catch((e) => console.warn('[LoginPage] silver fetch failed:', e));
+    fetch(`${API_BASE_URL}/api/v1/public/polysilicon`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: CommoditySnapshot) => { if (!cancelled) setPoly(d); })
+      .catch((e) => console.warn('[LoginPage] polysilicon fetch failed:', e));
+    fetch(`${API_BASE_URL}/api/v1/public/scfi`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: CommoditySnapshot) => { if (!cancelled) setScfi(d); })
+      .catch((e) => console.warn('[LoginPage] scfi fetch failed:', e));
     return () => { cancelled = true; };
   }, []);
 
@@ -99,6 +119,10 @@ export default function LoginPage() {
   const fxChange = fx?.change_pct ?? FALLBACK_FX.change_pct;
   const silverPrice = silver?.price_usd ?? FALLBACK_SILVER.price_usd;
   const silverChange = silver?.change_usd ?? FALLBACK_SILVER.change_usd;
+  const polyValue = poly?.value ?? FALLBACK_POLYSILICON.value;
+  const polyChange = poly?.change ?? FALLBACK_POLYSILICON.change;
+  const scfiValue = scfi?.value ?? FALLBACK_SCFI.value;
+  const scfiChange = scfi?.change ?? FALLBACK_SCFI.change;
   const queue = stats?.work_queue?.length ? stats.work_queue : FALLBACK_QUEUE;
 
   const kpi = [
@@ -191,11 +215,15 @@ export default function LoginPage() {
             {silverChange >= 0 ? '+' : ''}{silverChange.toFixed(2)}
           </span>
           <span className="mx-2 text-white/15">│</span>
-          폴리실리콘 <span className="text-[var(--sf-dark-ink)]">34.20</span>
-          <span className="ml-1 text-[#92e0a4]">+0.40</span>
+          폴리실리콘 <span className="text-[var(--sf-dark-ink)]">{polyValue.toFixed(2)}</span>
+          <span className={`ml-1 ${polyChange >= 0 ? 'text-[#92e0a4]' : 'text-[#e09a8b]'}`}>
+            {polyChange >= 0 ? '+' : ''}{polyChange.toFixed(2)}
+          </span>
           <span className="mx-2 text-white/15">│</span>
-          SCFI <span className="text-[var(--sf-dark-ink)]">1,284</span>
-          <span className="ml-1 text-[#92e0a4]">-2.10</span>
+          SCFI <span className="text-[var(--sf-dark-ink)]">{fmt.format(Math.round(scfiValue))}</span>
+          <span className={`ml-1 ${scfiChange >= 0 ? 'text-[#92e0a4]' : 'text-[#e09a8b]'}`}>
+            {scfiChange >= 0 ? '+' : ''}{scfiChange.toFixed(2)}
+          </span>
         </div>
       </section>
     </div>
