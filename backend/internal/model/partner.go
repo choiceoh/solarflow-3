@@ -17,6 +17,8 @@ type Partner struct {
 	// BARO Phase 3: 거래처 신용 한도 (NULL=미설정)
 	CreditLimitKrw    *float64 `json:"credit_limit_krw"`
 	CreditPaymentDays *int     `json:"credit_payment_days"`
+	// CRM 1차: 영업 담당자 (NULL=미배정)
+	OwnerUserID       *string  `json:"owner_user_id"`
 }
 
 // CreatePartnerRequest — 거래처 등록 시 클라이언트가 보내는 데이터
@@ -62,6 +64,8 @@ type UpdatePartnerRequest struct {
 	// BARO Phase 3: 신용 한도 / 결제일수 — 미수금 보드용
 	CreditLimitKrw    *float64 `json:"credit_limit_krw,omitempty"`
 	CreditPaymentDays *int     `json:"credit_payment_days,omitempty"`
+	// CRM 1차: 영업 담당자 변경 (빈 문자열은 해제로 해석 — 핸들러에서 NULL로 변환)
+	OwnerUserID       *string  `json:"owner_user_id,omitempty"`
 }
 
 // Validate — 거래처 수정 요청의 입력값을 검증

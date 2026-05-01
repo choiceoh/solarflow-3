@@ -91,6 +91,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'orders', label: '수주 관리', abbr: '수주', path: '/orders', icon: ScrollText, menu: 'orders' },
       { key: 'outbound', label: '출고/판매', abbr: '출고', path: '/orders?tab=outbound', icon: Truck, menu: 'outbound' },
       { key: 'receipts', label: '수금 관리', abbr: '수금', path: '/orders?tab=receipts', icon: Wallet, menu: 'receipts' },
+      { key: 'crm-inbox', label: '내 미처리 문의', abbr: '문의', path: '/crm/inbox', icon: Inbox, menu: 'crm_inbox' },
       // BARO Phase 1: 거래처별 단가표 (BARO 전용)
       { key: 'baro-price-book', label: '거래처 단가표', abbr: '단가', path: '/baro/price-book', icon: Tags, menu: 'baro_price_book', tenants: ['baro'] },
       // BARO Phase 4: 배차/일정 보드 (BARO 전용)
@@ -125,6 +126,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/orders': { title: '수주 관리', breadcrumb: '판매 / 수주 및 수금' },
   '/banking': { title: 'L/C 한도', breadcrumb: '현황 / 은행 한도' },
   '/sales-analysis': { title: '매출 분석', breadcrumb: '현황 / 매출과 이익' },
+  '/crm/inbox': { title: '내 미처리 문의', breadcrumb: '판매 / 후속 답변 대기' },
   '/search': { title: '통합 검색', breadcrumb: '도구 / 검색' },
   '/approval': { title: '결재안', breadcrumb: '도구 / 결재 문안' },
   '/assistant': { title: 'AI', breadcrumb: '도구 / 채팅 어시스턴트' },
