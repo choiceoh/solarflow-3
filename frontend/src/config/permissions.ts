@@ -34,7 +34,6 @@ export type MenuKey =
   | 'customs'       // 매출/이익 분석
   | 'masters'       // 마스터 관리
   | 'search'        // 검색
-  | 'memo'          // 메모
   | 'approval'      // 결재안
   | 'assistant'     // AI 업무 도우미
   | 'settings'      // 설정 (admin 전용)
@@ -77,7 +76,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
-            'banking','customs','masters','search','memo','approval','assistant',
+            'banking','customs','masters','search','approval','assistant',
             'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_inbox'],
     features: {
       canEdit: true,

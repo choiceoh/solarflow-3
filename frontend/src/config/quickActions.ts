@@ -1,7 +1,7 @@
 import {
   PackageSearch, ScrollText, Truck, PackageCheck,
   ClipboardList, Landmark, Handshake, Tag, HardHat,
-  StickyNote, FileSignature,
+  FileSignature,
   type LucideIcon,
 } from 'lucide-react';
 import type { MenuKey } from '@/config/permissions';
@@ -10,7 +10,7 @@ export type ActionId =
   | 'alloc' | 'order' | 'outbound' | 'inbound'
   | 'procurement' | 'lc'
   | 'partner' | 'product' | 'site'
-  | 'memo' | 'approval';
+  | 'approval';
 
 export interface QuickAction {
   id: ActionId;
@@ -35,7 +35,6 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { id: 'product',     label: '품번 등록',  icon: Tag,           path: '/data/products/new',      menuKey: 'masters',      group: '마스터' },
   { id: 'site',        label: '현장 등록',  icon: HardHat,       path: '/masters/construction-sites?new=1', menuKey: 'masters', group: '마스터' },
   // 도구
-  { id: 'memo',        label: '메모',       icon: StickyNote,    path: '/memo?new=1',             menuKey: 'memo',         group: '도구' },
   { id: 'approval',    label: '결재안',     icon: FileSignature, path: '/approval?new=1',         menuKey: 'approval',     group: '도구' },
 ];
 

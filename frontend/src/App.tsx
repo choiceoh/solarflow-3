@@ -19,7 +19,6 @@ const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
 const SalesAnalysisPage = lazy(() => import('@/pages/SalesAnalysisPage'));
 const BankingPage = lazy(() => import('@/pages/BankingPage'));
 const ApprovalPage = lazy(() => import('@/pages/ApprovalPage'));
-const MemoPage = lazy(() => import('@/pages/MemoPage'));
 const SearchPage = lazy(() => import('@/pages/SearchPage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
@@ -94,7 +93,6 @@ export default function App() {
                 <Route path="/baro/credit-board" element={<CreditBoardPage />} />
                 <Route path="/baro/dispatch" element={<RoleGuard allowedRoles={['admin', 'operator']}><DispatchBoardPage /></RoleGuard>} />
                 <Route path="/search" element={<SearchPage />} />
-                <Route path="/memo" element={<MemoPage />} />
                 <Route path="/approval" element={<ApprovalPage />} />
                 <Route path="/assistant" element={<AssistantPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
