@@ -128,7 +128,7 @@ export default function TopNav() {
       ? '기준정보'
       : '도구';
   const navTriggerClass = (active: boolean) => cn(
-    'flex h-8 items-center gap-1.5 rounded-md border border-transparent px-2.5 text-sm font-medium transition-all outline-none select-none whitespace-nowrap',
+    'flex h-9 items-center gap-1.5 rounded-md border border-transparent px-2.5 text-sm font-medium transition-all outline-none select-none whitespace-nowrap',
     'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/45',
     active
       ? 'border-border bg-muted text-foreground shadow-sm'
@@ -347,12 +347,12 @@ export default function TopNav() {
 
       {/* 사용자 드롭다운 */}
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex h-8 items-center gap-1.5 rounded-md border border-transparent px-2.5 text-xs font-medium text-muted-foreground transition-all hover:border-border hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/45">
-          <User className="h-3.5 w-3.5 shrink-0" />
-          <span className="hidden md:block max-w-[80px] truncate">
+        <DropdownMenuTrigger className="flex h-9 items-center gap-1.5 rounded-md border border-transparent px-2.5 text-sm font-medium text-muted-foreground transition-all hover:border-border hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/45">
+          <User className="h-4 w-4 shrink-0" />
+          <span className="hidden md:block max-w-[96px] truncate">
             {user?.name || user?.email || '—'}
           </span>
-          <Badge variant="secondary" className="text-[10px] px-1.5 hidden sm:inline-flex">
+          <Badge variant="secondary" className="text-[11px] px-1.5 hidden sm:inline-flex">
             {roleLabel}
           </Badge>
         </DropdownMenuTrigger>

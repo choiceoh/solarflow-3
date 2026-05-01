@@ -69,10 +69,10 @@ export default function GlobalSearchBar() {
   return (
     <div className="sf-global-search relative" ref={panelRef}>
       <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           ref={inputRef}
-          className="pl-8 pr-16 h-8 text-sm"
+          className="pl-9 pr-16 h-9 text-sm"
           placeholder="검색 (Ctrl+K)"
           value={query}
           onChange={(e) => handleChange(e.target.value)}
@@ -80,8 +80,8 @@ export default function GlobalSearchBar() {
           onKeyDown={handleKeyDown}
         />
         {query && (
-          <button className="absolute right-8 top-1/2 -translate-y-1/2" onClick={() => { setQuery(''); clear(); setOpen(false); }}>
-            <X className="h-3.5 w-3.5 text-muted-foreground" />
+          <button className="absolute right-9 top-1/2 -translate-y-1/2" onClick={() => { setQuery(''); clear(); setOpen(false); }}>
+            <X className="h-4 w-4 text-muted-foreground" />
           </button>
         )}
         <kbd className="sf-kbd absolute right-2 top-1/2 -translate-y-1/2">
