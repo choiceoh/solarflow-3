@@ -123,32 +123,32 @@ export default function PriceHistoryForm({ open, onOpenChange, onSubmit, editDat
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{editData ? '단가이력 수정' : '단가이력 등록'}</DialogTitle></DialogHeader>
-        {submitError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{submitError}</div>}
-        <form onSubmit={handleSubmit(handle)} className="space-y-3">
-          <div className="space-y-1.5">
+        {submitError && <div className="sf-banner neg"><span className="sf-banner-body">{submitError}</span></div>}
+        <form onSubmit={handleSubmit(handle)} className="sf-form">
+          <div className="sf-form-field">
             <Label>제조사 *</Label>
             {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
             <Select value={watch('manufacturer_id') ?? ''} onValueChange={(v) => { setValue('manufacturer_id', v ?? ''); setValue('product_id', ''); }}><SelectTrigger className="w-full"><Txt text={manufacturers.find((m) => m.manufacturer_id === watch('manufacturer_id'))?.name_kr || ''} /></SelectTrigger>
               <SelectContent>{manufacturers.map((m) => <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>{m.name_kr}</SelectItem>)}</SelectContent>
-            </Select>{errors.manufacturer_id && <p className="text-xs text-destructive">{errors.manufacturer_id.message}</p>}
+            </Select>{errors.manufacturer_id && <span className="sf-field-error">{errors.manufacturer_id.message}</span>}
           </div>
-          <div className="space-y-1.5">
+          <div className="sf-form-field">
             <Label>품명 *</Label>
             <Select value={selectedProductId ?? ''} onValueChange={(v) => setValue('product_id', v ?? '')}><SelectTrigger className="w-full"><Txt text={(() => { const p = filteredProducts.find((p) => p.product_id === selectedProductId); return p ? `${p.product_name}${p.spec_wp ? ` (${p.spec_wp}Wp)` : ''}` : ''; })()} /></SelectTrigger>
               <SelectContent>{filteredProducts.map((p) => <SelectItem key={p.product_id} value={p.product_id}>{p.product_name}{p.spec_wp ? ` (${p.spec_wp}Wp)` : ''}</SelectItem>)}</SelectContent>
-            </Select>{errors.product_id && <p className="text-xs text-destructive">{errors.product_id.message}</p>}
+            </Select>{errors.product_id && <span className="sf-field-error">{errors.product_id.message}</span>}
           </div>
-          <div className="space-y-1.5"><Label>변경일 *</Label><DateInput value={watch('change_date') ?? ''} onChange={(v) => setValue('change_date', v, { shouldDirty: true })} />{errors.change_date && <p className="text-xs text-destructive">{errors.change_date.message}</p>}</div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+          <div className="sf-form-field"><Label>변경일 *</Label><DateInput value={watch('change_date') ?? ''} onChange={(v) => setValue('change_date', v, { shouldDirty: true })} />{errors.change_date && <span className="sf-field-error">{errors.change_date.message}</span>}</div>
+          <div className="sf-form-row cols-2">
+            <div className="sf-form-field">
               <Label>이전단가(USD/Wp)</Label>
               <Input type="number" step="0.0001" {...register('previous_price')} />
-              {prevPriceHint && <p className="text-xs text-blue-600">{prevPriceHint}</p>}
+              {prevPriceHint && <span className="sf-form-helper" style={{ color: 'var(--sf-info)' }}>{prevPriceHint}</span>}
             </div>
-            <div className="space-y-1.5"><Label>변경단가(USD/Wp) *</Label><Input type="number" step="0.0001" {...register('new_price')} />{errors.new_price && <p className="text-xs text-destructive">{errors.new_price.message}</p>}</div>
+            <div className="sf-form-field"><Label>변경단가(USD/Wp) *</Label><Input type="number" step="0.0001" {...register('new_price')} />{errors.new_price && <span className="sf-field-error">{errors.new_price.message}</span>}</div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+          <div className="sf-form-row cols-2">
+            <div className="sf-form-field">
               <Label>사유 (선택)</Label>
               <Select value={reasonSelect ?? ''} onValueChange={(v) => setValue('reason_select', v ?? '')}><SelectTrigger className="w-full"><Txt text={reasonSelect || ''} /></SelectTrigger>
                 <SelectContent>
@@ -156,9 +156,9 @@ export default function PriceHistoryForm({ open, onOpenChange, onSubmit, editDat
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5"><Label>사유 (직접입력)</Label><Input {...register('reason_text')} placeholder="자유기재" /></div>
+            <div className="sf-form-field"><Label>사유 (직접입력)</Label><Input {...register('reason_text')} placeholder="자유기재" /></div>
           </div>
-          <div className="space-y-1.5">
+          <div className="sf-form-field">
             <Label>관련 PO</Label>
             <Select value={watch('related_po_id') ?? ''} onValueChange={(v) => setValue('related_po_id', v === 'none' ? '' : (v ?? ''))}>
               <SelectTrigger className="w-full"><Txt text={(() => { const v = watch('related_po_id'); if (!v || v === 'none') return ''; const p = pos.find((p) => p.po_id === v); return p?.po_number || v.slice(0, 8); })()} placeholder="선택 (선택사항)" /></SelectTrigger>
@@ -168,7 +168,7 @@ export default function PriceHistoryForm({ open, onOpenChange, onSubmit, editDat
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
+          <div className="sf-form-field"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
           <DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button><Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button></DialogFooter>
         </form>
       </DialogContent>
