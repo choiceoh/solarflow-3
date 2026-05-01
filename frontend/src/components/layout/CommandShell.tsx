@@ -113,7 +113,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
     items: [
       { key: 'masters', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters' },
       { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
-      { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval' },
+      { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: ['topsolar'] },
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
     ],
   },
