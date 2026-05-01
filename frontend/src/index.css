@@ -1216,6 +1216,25 @@ a:focus-visible,
   box-shadow: var(--sf-shadow-2);
 }
 
+/* 페이지 전환 fade-in — 라우트 변경 시 미세하게 부드러운 진입감 */
+.sf-page-scroll > * {
+  animation: sf-page-fade-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes sf-page-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 스크롤 시 페이지 상단 그림자 — 헤더 분리감 강화 */
+.sf-page-scroll {
+  background:
+    linear-gradient(var(--sf-bg), var(--sf-bg)) local,
+    linear-gradient(rgb(60 40 10 / 0.06), transparent) scroll;
+  background-repeat: no-repeat;
+  background-size: 100% calc(100% - 6px), 100% 6px;
+  background-attachment: local, scroll;
+}
+
 /* 테이블 wrap에 overflow:clip — sticky thead 가 .sf-page-scroll에서 동작하도록 */
 .sf-page .rounded-md.border.overflow-hidden,
 .sf-command-surface .rounded-md.border.overflow-hidden,
