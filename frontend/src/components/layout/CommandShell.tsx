@@ -14,6 +14,7 @@ import {
   Settings,
   Ship,
   StickyNote,
+  Sun,
   Truck,
   Wallet,
   type LucideIcon,
@@ -179,7 +180,9 @@ export default function CommandShell() {
     <div className="sf-shell">
       <aside className="sf-sidebar" aria-label="주요 메뉴">
         <div className="sf-sidebar-logo">
-          <span className="sf-solar-mark" aria-hidden />
+          <span className="sf-solar-mark" aria-hidden>
+            <Sun strokeWidth={2.4} />
+          </span>
           <Link to="/dashboard" className="min-w-0">
             <div className="text-[13.5px] font-bold leading-none">SolarFlow</div>
             <div className="sf-mono mt-1 text-[9.5px] font-semibold text-[var(--sf-solar)]">v3.0 · TOPSOLAR</div>
