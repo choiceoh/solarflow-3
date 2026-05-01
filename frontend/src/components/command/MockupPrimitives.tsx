@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Filter } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 type Tone = 'solar' | 'ink' | 'info' | 'warn' | 'pos' | 'neg';
 
@@ -161,22 +163,22 @@ export function FilterChips({
   onChange?: (value: string) => void;
 }) {
   return (
-    <div className="tabs" style={{ border: 'none' }}>
+    <div className="inline-flex items-center gap-1">
       {options.map((o) => {
         const active = value === o.key;
         return (
-          <button
+          <Button
             key={o.key}
-            className={`tab${active ? ' active' : ''}`}
-            onClick={() => onChange?.(o.key)}
-            style={{ padding: '5px 10px' }}
             type="button"
+            variant={active ? 'secondary' : 'ghost'}
+            size="xs"
+            onClick={() => onChange?.(o.key)}
           >
             {o.label}
             {o.count != null ? (
-              <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', marginLeft: 5 }}>{o.count}</span>
+              <span className="mono ml-1 text-[10px] text-muted-foreground">{o.count}</span>
             ) : null}
-          </button>
+          </Button>
         );
       })}
     </div>
@@ -211,36 +213,24 @@ export function FilterButton({ items }: { items: FilterItem[] }) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
+      <Button
         type="button"
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          height: 24, padding: '0 8px',
-          background: activeCount > 0 ? 'var(--bg-2)' : 'var(--surface)',
-          border: `1px solid ${open ? 'var(--solar-3)' : 'var(--line)'}`,
-          borderRadius: 6,
-          fontFamily: 'inherit',
-          fontSize: 12, fontWeight: 500,
-          color: 'var(--ink)',
-          cursor: 'pointer',
-          letterSpacing: '-0.005em',
-          boxShadow: '0 1px 2px 0 rgba(0,0,0,0.05)',
-        }}
+        variant="outline"
+        size="xs"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        data-active={activeCount > 0 ? '' : undefined}
+        className={open ? 'border-primary' : ''}
       >
-        <svg width="12" height="12" viewBox="0 0 14 14" style={{ color: 'var(--ink-3)' }}>
-          <path d="M2 3 H12 L8.5 7.5 V11.5 L5.5 12.5 V7.5 Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" />
-        </svg>
+        <Filter className="h-3 w-3" />
         <span>필터</span>
         {activeCount > 0 ? (
-          <span className="mono tnum" style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            minWidth: 16, height: 16, padding: '0 4px',
-            background: 'var(--solar-3)', color: '#fff',
-            borderRadius: 8, fontSize: 9.5, fontWeight: 700,
-          }}>{activeCount}</span>
+          <span
+            className="mono tnum ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9.5px] font-bold text-white"
+            style={{ background: 'var(--solar-3)' }}
+          >{activeCount}</span>
         ) : null}
-      </button>
+      </Button>
       {open ? (
         <div style={{
           position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30,
