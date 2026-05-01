@@ -3,6 +3,7 @@
 // 단순 검증/레이아웃/select·visibleIf 까지만 처리. 복잡 검증·계산·외부 컴포넌트는 코드 폼에 남길 것.
 
 import { useEffect, useMemo, useState } from 'react';
+import { useResolvedConfig } from './configOverride';
 import { useForm, type FieldValues } from 'react-hook-form';
 import { z, type ZodTypeAny, type ZodObject, type ZodRawShape } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -209,7 +210,9 @@ interface MetaFormProps {
   editData?: unknown;
 }
 
-export default function MetaForm({ config, open, onOpenChange, onSubmit, editData }: MetaFormProps) {
+export default function MetaForm({ config: defaultConfig, open, onOpenChange, onSubmit, editData }: MetaFormProps) {
+  // Phase 3: localStorage override 우선
+  const config = useResolvedConfig(defaultConfig, 'form');
   const allFields = useMemo(() => config.sections.flatMap((s) => s.fields), [config]);
   const schema = useMemo(() => buildZodSchema(config), [config]);
   const fieldOptions = useFieldOptions(allFields);

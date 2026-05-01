@@ -4,6 +4,7 @@
 
 import { type ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { useResolvedConfig } from './configOverride';
 import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatDate, formatNumber, formatKw } from '@/lib/utils';
@@ -109,7 +110,9 @@ export interface MetaDetailProps {
   onBack: () => void;
 }
 
-export default function MetaDetail({ config, id, onBack }: MetaDetailProps) {
+export default function MetaDetail({ config: defaultConfig, id, onBack }: MetaDetailProps) {
+  // Phase 3: localStorage override 우선
+  const config = useResolvedConfig(defaultConfig, 'detail');
   const hook = detailDataHooks[config.source.hookId];
   if (!hook) throw new Error(`[MetaDetail] detail hook not registered: ${config.source.hookId}`);
   const { data, loading } = hook(id);

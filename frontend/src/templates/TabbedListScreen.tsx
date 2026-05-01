@@ -13,8 +13,11 @@ import {
   usePageActions, makeRowActionHandler, FormsMounted, ConfirmDialogMounted, HeaderActions,
 } from './ListScreen';
 import { railBlocks, contentBlocks, detailComponents } from './registry';
+import { useResolvedConfig } from './configOverride';
 
-export default function TabbedListScreen({ config }: { config: TabbedListConfig }) {
+export default function TabbedListScreen({ config: defaultConfig }: { config: TabbedListConfig }) {
+  // Phase 3: localStorage override 우선
+  const config = useResolvedConfig(defaultConfig, 'screen');
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [activeKey, setActiveKey] = useState(config.tabs[0]?.key ?? '');
   const [selected, setSelected] = useState<{ tabKey: string; id: string } | null>(null);

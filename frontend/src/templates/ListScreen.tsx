@@ -2,6 +2,7 @@
 // config(메타) + registry(코드)를 결합해 한 도메인의 목록 화면을 렌더한다.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useResolvedConfig } from './configOverride';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -511,7 +512,9 @@ export function HeaderActions({
 }
 
 // ─── 단일 리스트 페이지 ────────────────────────────────────────────────────
-export default function ListScreen({ config }: { config: ListScreenConfig }) {
+export default function ListScreen({ config: defaultConfig }: { config: ListScreenConfig }) {
+  // Phase 3: localStorage override 우선, 없으면 defaultConfig
+  const config = useResolvedConfig(defaultConfig, 'screen');
   const [selected, setSelected] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const pageActions = usePageActions();
