@@ -164,8 +164,8 @@ export function FilterChips({
   onChange?: (value: string) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-1" style={{ border: 'none' }}>
-      {options.map((o) => {
+    <div className="inline-flex items-center" style={{ border: 'none' }}>
+      {options.map((o, i) => {
         const active = value === o.key;
         return (
           <button
@@ -173,10 +173,11 @@ export function FilterChips({
             onClick={() => onChange?.(o.key)}
             type="button"
             style={{
-              padding: '5px 10px',
+              padding: '0 12px',
               background: 'transparent',
               border: 'none',
-              borderRadius: 4,
+              borderLeft: i > 0 ? '1px solid var(--line)' : undefined,
+              borderRadius: 0,
               cursor: 'pointer',
               fontFamily: 'inherit',
               fontSize: 12.5,
@@ -184,6 +185,7 @@ export function FilterChips({
               color: active ? 'var(--ink)' : 'var(--ink-3)',
               letterSpacing: '-0.005em',
               transition: 'color 160ms cubic-bezier(0.22, 1, 0.36, 1)',
+              lineHeight: 1.4,
             }}
             onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--ink-2)'; }}
             onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--ink-3)'; }}
