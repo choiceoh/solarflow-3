@@ -203,9 +203,8 @@ export default function InboundPage() {
 
   return (
     <div
-      className={`min-h-[calc(100vh-5rem)] transition-shadow ${
-        customsOCRDropActive ? 'ring-2 ring-primary/40 ring-offset-2 ring-offset-background' : ''
-      }`}
+      className="sf-dropzone-page min-h-[calc(100vh-5rem)] transition-shadow"
+      data-active={customsOCRDropActive}
       onDragEnter={handleCustomsOCRPageDrag}
       onDragOver={handleCustomsOCRPageDrag}
       onDragLeave={handleCustomsOCRPageDragLeave}
@@ -270,31 +269,24 @@ export default function InboundPage() {
       >
         <div className="space-y-4">
           <div
-            className={`rounded-md border-2 border-dashed p-4 transition-colors ${
-              customsOCRDropActive
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-primary/40 bg-primary/5 text-foreground'
-            }`}
+            className="sf-dropzone rounded-md border-2 border-dashed p-4 transition-colors"
+            data-active={customsOCRDropActive}
             onDragEnter={handleCustomsOCRPageDrag}
             onDragOver={handleCustomsOCRPageDrag}
             onDragLeave={handleCustomsOCRPageDragLeave}
             onDrop={handleCustomsOCRPageDrop}
           >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-background ${
-                customsOCRDropActive ? 'border-primary text-primary' : 'border-primary/30 text-primary'
-              }`}>
+              <div className="sf-dropzone-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-background">
                 <ScanText className="h-6 w-6" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-base font-semibold">면장 PDF/사진 드롭</div>
-                <div className={`mt-1 text-sm ${customsOCRDropActive ? 'font-medium text-primary' : 'text-muted-foreground'}`}>
+                <div className="text-base font-semibold" style={{ color: 'var(--sf-ink)' }}>면장 PDF/사진 드롭</div>
+                <div className="mt-1 text-sm sf-dropzone-sub">
                   {customsOCRDropActive ? '지금 놓으면 해외직수입 입고등록으로 이동합니다' : '놓으면 입고등록 창과 OCR 입력값 확인창이 자동으로 열립니다'}
                 </div>
               </div>
-              <div className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                PDF · JPG · PNG
-              </div>
+              <span className="sf-pill ghost">PDF · JPG · PNG</span>
             </div>
           </div>
 

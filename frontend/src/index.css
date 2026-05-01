@@ -313,6 +313,32 @@ a:focus-visible,
 .sf-shell[data-sidebar-collapsed="true"] .sf-nav-link {
   justify-content: center;
   padding: 8px;
+  position: relative;
+}
+
+/* 접힌 사이드바에서 nav-link hover 시 우측에 라벨 툴팁 표시 — 정보 손실 보완 */
+.sf-shell[data-sidebar-collapsed="true"] .sf-nav-link::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--sf-ink);
+  color: var(--sf-bg);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: var(--sf-shadow-2);
+  transition: opacity 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 100;
+}
+.sf-shell[data-sidebar-collapsed="true"] .sf-nav-link:hover::after {
+  opacity: 1;
 }
 .sf-shell[data-sidebar-collapsed="true"] .sf-nav-group {
   margin-bottom: 4px;
@@ -321,6 +347,46 @@ a:focus-visible,
   flex-direction: column;
   gap: 6px;
   padding: 10px 6px;
+}
+
+/* 드롭존 — OCR 파일 드래그 영역. 비활성: 옅은 솔라 점선, 활성: 진한 솔라 + 배경 */
+.sf-dropzone {
+  border-color: var(--sf-line-2);
+  background: var(--sf-bg);
+  color: var(--sf-ink-2);
+  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+              background 160ms cubic-bezier(0.22, 1, 0.36, 1),
+              color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sf-dropzone[data-active="true"] {
+  border-color: var(--sf-solar-2);
+  background: var(--sf-solar-bg);
+  color: var(--sf-solar-3);
+}
+.sf-dropzone-icon {
+  border-color: var(--sf-line-2);
+  color: var(--sf-ink-3);
+  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+              color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sf-dropzone[data-active="true"] .sf-dropzone-icon {
+  border-color: var(--sf-solar-2);
+  color: var(--sf-solar-2);
+  background: var(--sf-surface);
+}
+.sf-dropzone-sub {
+  color: var(--sf-ink-3);
+  transition: color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sf-dropzone[data-active="true"] .sf-dropzone-sub {
+  color: var(--sf-solar-3);
+  font-weight: 500;
+}
+
+/* 페이지 전체 드롭존 — 파일 드래그 시 페이지에 옅은 솔라 링 */
+.sf-dropzone-page[data-active="true"] {
+  box-shadow: inset 0 0 0 2px var(--sf-solar-2),
+              inset 0 0 0 4px var(--sf-solar-bg-2);
 }
 
 /* 토글 버튼 — 다크 사이드바 안에 어우러지는 ghost icon */
@@ -1153,9 +1219,26 @@ a:focus-visible,
   --color-blue-700:  var(--sf-info);
 
   --color-emerald-700: var(--sf-pos);
+
+  --color-amber-50:    var(--sf-warn-bg);
+  --color-amber-100:   var(--sf-warn-bg);
+  --color-amber-200:   var(--sf-line-2);
+  --color-amber-300:   var(--sf-line-3);
+  --color-amber-600:   var(--sf-warn);
   --color-amber-700:   var(--sf-warn);
+  --color-amber-800:   var(--sf-warn);
+  --color-amber-900:   var(--sf-warn);
+
   --color-orange-500:  var(--sf-warn);
   --color-orange-600:  var(--sf-warn);
+
+  --color-cyan-600:    var(--sf-info);
+  --color-purple-600:  var(--sf-info);
+  --color-violet-500:  var(--sf-ink-3);
+  --color-pink-600:    var(--sf-neg);
+  --color-teal-600:    var(--sf-pos);
+  --color-slate-600:   var(--sf-ink-2);
+  --color-slate-700:   var(--sf-ink);
 }
 
 /* shadcn Card 텍스트 밀도 — mockup CardB 스펙에 맞춤 */

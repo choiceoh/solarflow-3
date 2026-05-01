@@ -604,9 +604,8 @@ export default function ProcurementPage() {
 
   return (
     <div
-      className={`sf-page sf-procurement-page min-h-[calc(100vh-5rem)] transition-shadow ${
-        activeTab === 'bl' && blOCRDropActive ? 'ring-2 ring-primary/40 ring-offset-2 ring-offset-background' : ''
-      }`}
+      className="sf-page sf-procurement-page sf-dropzone-page min-h-[calc(100vh-5rem)] transition-shadow"
+      data-active={activeTab === 'bl' && blOCRDropActive}
       onDragEnter={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDrag : undefined}
       onDragOver={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDrag : undefined}
       onDragLeave={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDragLeave : undefined}
@@ -812,32 +811,29 @@ export default function ProcurementPage() {
           ) : (
             <>
               <div
-                className={`rounded-md border-2 border-dashed p-4 transition-colors ${
-                  blOCRDropActive
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-primary/40 bg-primary/5 text-foreground'
-                }`}
+                className="sf-dropzone rounded-md border-2 border-dashed p-4"
+                data-active={blOCRDropActive}
                 onDragEnter={handleBLDropZoneDrag}
                 onDragOver={handleBLDropZoneDrag}
                 onDragLeave={handleBLDropZoneDragLeave}
                 onDrop={handleBLDropZoneDrop}
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-background ${
-                    blOCRDropActive ? 'border-primary text-primary' : 'border-primary/30 text-primary'
-                  }`}>
+                  <div className="sf-dropzone-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-background">
                     <ScanText className="h-6 w-6" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-base font-semibold">여기에 면장 PDF/사진을 끌어다 놓으세요</div>
-                    <div className={`mt-1 text-sm ${blOCRDropActive ? 'font-medium text-primary' : 'text-muted-foreground'}`}>
+                    <div className="text-base font-semibold" style={{ color: 'var(--sf-ink)' }}>
+                      여기에 면장 PDF/사진을 끌어다 놓으세요
+                    </div>
+                    <div className="mt-1 text-sm sf-dropzone-sub">
                       {blOCRDropActive ? '지금 놓으면 해외직수입 입고등록으로 이동합니다' : '놓으면 입고등록 창과 OCR 입력값 확인창이 자동으로 열립니다'}
                     </div>
-                    {blOCRDropError && <div className="mt-2 text-xs font-medium text-destructive">{blOCRDropError}</div>}
+                    {blOCRDropError && (
+                      <div className="mt-2 text-xs font-medium" style={{ color: 'var(--sf-neg)' }}>{blOCRDropError}</div>
+                    )}
                   </div>
-                  <div className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                    PDF · JPG · PNG
-                  </div>
+                  <span className="sf-pill ghost">PDF · JPG · PNG</span>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 mb-3">

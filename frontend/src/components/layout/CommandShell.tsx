@@ -254,6 +254,8 @@ export default function CommandShell() {
                       to={item.path}
                       className="sf-nav-link"
                       data-active={active}
+                      data-tooltip={item.label}
+                      title={sidebarCollapsed ? item.label : undefined}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0" />
                       <span className="sf-nav-label min-w-0 flex-1 truncate">{item.label}</span>
