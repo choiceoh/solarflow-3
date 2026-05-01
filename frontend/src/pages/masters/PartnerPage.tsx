@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import DataTable, { type Column } from '@/components/common/DataTable';
-import StatusBadge from '@/components/common/StatusBadge';
+import { activeToggleColumn } from '@/components/common/activeToggleColumn';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import PartnerForm from '@/components/masters/PartnerForm';
 import { MasterConsole } from '@/components/command/MasterConsole';
@@ -95,12 +94,7 @@ export default function PartnerPage() {
     { key: 'erp_code', label: 'ERP코드' },
     { key: 'contact_name', label: '담당자' },
     { key: 'contact_phone', label: '연락처' },
-    { key: 'is_active', label: '활성', render: (r) => (
-      <div className="flex items-center gap-2">
-        <Switch checked={r.is_active} onCheckedChange={() => setToggleTarget(r)} />
-        <StatusBadge isActive={r.is_active} />
-      </div>
-    ) },
+    activeToggleColumn<Partner>(setToggleTarget),
   ];
 
   const activeCount = data.filter((partner) => partner.is_active).length;

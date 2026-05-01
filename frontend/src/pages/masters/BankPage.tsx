@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import DataTable, { type Column } from '@/components/common/DataTable';
-import StatusBadge from '@/components/common/StatusBadge';
+import { activeToggleColumn } from '@/components/common/activeToggleColumn';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import BankForm from '@/components/masters/BankForm';
 import { MasterConsole } from '@/components/command/MasterConsole';
@@ -130,14 +129,7 @@ export default function BankPage() {
     },
     { key: 'opening_fee_rate', label: '개설수수료율', render: (r) => r.opening_fee_rate != null ? formatPercent(r.opening_fee_rate) : '—' },
     { key: 'acceptance_fee_rate', label: '인수수수료율', render: (r) => r.acceptance_fee_rate != null ? formatPercent(r.acceptance_fee_rate) : '—' },
-    {
-      key: 'is_active', label: '활성', render: (r) => (
-        <div className="flex items-center gap-2">
-          <Switch checked={r.is_active} onCheckedChange={() => setToggleTarget(r)} />
-          <StatusBadge isActive={r.is_active} />
-        </div>
-      ),
-    },
+    activeToggleColumn<Bank>(setToggleTarget),
   ];
 
   const activeCount = data.filter((bank) => bank.is_active).length;

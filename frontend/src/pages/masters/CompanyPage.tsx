@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import DataTable, { type Column } from '@/components/common/DataTable';
-import StatusBadge from '@/components/common/StatusBadge';
+import { activeToggleColumn } from '@/components/common/activeToggleColumn';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import CompanyForm from '@/components/masters/CompanyForm';
 import { MasterConsole } from '@/components/command/MasterConsole';
@@ -95,17 +94,7 @@ export default function CompanyPage() {
     { key: 'company_name', label: '법인명', sortable: true },
     { key: 'company_code', label: '법인코드', sortable: true },
     { key: 'business_number', label: '사업자번호' },
-    {
-      key: 'is_active', label: '활성', render: (row) => (
-        <div className="flex items-center gap-2">
-          <Switch
-            checked={row.is_active}
-            onCheckedChange={() => setToggleTarget(row)}
-          />
-          <StatusBadge isActive={row.is_active} />
-        </div>
-      ),
-    },
+    activeToggleColumn<Company>(setToggleTarget),
   ];
 
   const activeCount = data.filter((company) => company.is_active).length;

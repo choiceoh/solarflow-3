@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import DataTable, { type Column } from '@/components/common/DataTable';
-import StatusBadge from '@/components/common/StatusBadge';
+import { activeToggleColumn } from '@/components/common/activeToggleColumn';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ManufacturerForm from '@/components/masters/ManufacturerForm';
 import { MasterConsole } from '@/components/command/MasterConsole';
@@ -101,12 +100,7 @@ export default function ManufacturerPage() {
     { key: 'name_en', label: '제조사명(영)', sortable: true },
     { key: 'country', label: '국가', sortable: true },
     { key: 'domestic_foreign', label: '국내/해외', sortable: true },
-    { key: 'is_active', label: '활성', render: (r) => (
-      <div className="flex items-center gap-2">
-        <Switch checked={r.is_active} onCheckedChange={() => setToggleTarget(r)} />
-        <StatusBadge isActive={r.is_active} />
-      </div>
-    ) },
+    activeToggleColumn<Manufacturer>(setToggleTarget),
   ];
 
   const activeCount = data.filter((manufacturer) => manufacturer.is_active).length;

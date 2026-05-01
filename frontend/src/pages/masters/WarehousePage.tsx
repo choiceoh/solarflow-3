@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import DataTable, { type Column } from '@/components/common/DataTable';
-import StatusBadge from '@/components/common/StatusBadge';
+import { activeToggleColumn } from '@/components/common/activeToggleColumn';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import WarehouseForm from '@/components/masters/WarehouseForm';
 import { MasterConsole } from '@/components/command/MasterConsole';
@@ -93,12 +92,7 @@ export default function WarehousePage() {
     { key: 'warehouse_type', label: '유형', render: (r) => typeLabel[r.warehouse_type] ?? r.warehouse_type },
     { key: 'location_code', label: '장소코드' },
     { key: 'location_name', label: '장소명', sortable: true },
-    { key: 'is_active', label: '활성', render: (r) => (
-      <div className="flex items-center gap-2">
-        <Switch checked={r.is_active} onCheckedChange={() => setToggleTarget(r)} />
-        <StatusBadge isActive={r.is_active} />
-      </div>
-    ) },
+    activeToggleColumn<Warehouse>(setToggleTarget),
   ];
 
   const activeCount = data.filter((warehouse) => warehouse.is_active).length;
