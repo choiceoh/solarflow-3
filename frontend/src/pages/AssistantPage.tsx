@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bot, Send, Trash2, User } from 'lucide-react';
+import { Bot, Check, Send, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -10,26 +10,45 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { fetchWithAuth } from '@/lib/api';
+import { isDevMockApiActive } from '@/lib/devMockApi';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 type Role = 'user' | 'assistant';
 type Provider = 'anthropic' | 'openai';
 
+interface Proposal {
+  id: string;
+  kind: string;
+  summary: string;
+  payload: unknown;
+}
+
+type ProposalStatus = 'pending' | 'submitting' | 'confirmed' | 'rejected' | 'error';
+
+interface ProposalState extends Proposal {
+  status: ProposalStatus;
+  errorMessage?: string;
+}
+
 interface ChatMessage {
   role: Role;
   content: string;
+  proposals?: ProposalState[];
 }
 
 interface AssistantChatResponse {
   content: string;
   model: string;
   provider: Provider;
+  proposals?: Proposal[];
 }
 
-const SYSTEM_PROMPT =
-  'You are SolarFlow의 업무 도우미입니다. 한국어로 간결하게 답합니다. ' +
-  '태양광 ERP(수입/L·C/B·L/면장/원가/판매/수금) 맥락의 질문에 우선 도움을 줍니다.';
+const PROPOSAL_KIND_LABEL: Record<string, string> = {
+  create_note: '메모 작성',
+  create_partner: '거래처 등록',
+};
 
 export default function AssistantPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -55,23 +74,39 @@ export default function AssistantPage() {
     setBusy(true);
 
     try {
-      // 인증 불필요 public 라우트 — 목업/실제 모드 공통 사용 (mockFetchWithAuth 우회)
-      const res = await fetch(`${API_BASE_URL}/api/v1/public/assistant/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: next,
-          provider,
-          model: model.trim() || undefined,
-          system: SYSTEM_PROMPT,
-        }),
+      const body = JSON.stringify({
+        messages: next.map(({ role, content }) => ({ role, content })),
+        provider,
+        model: model.trim() || undefined,
       });
-      if (!res.ok) {
-        const errBody = await res.text();
-        throw new Error(`${res.status}: ${errBody.slice(0, 200)}`);
+
+      let data: AssistantChatResponse;
+      if (isDevMockApiActive()) {
+        // 목업 모드 — public 라우트로 raw fetch (mockFetchWithAuth 우회, Z.ai 직결).
+        // 도구·제안은 인증이 필요하므로 자동 비활성화 → bare LLM 응답만.
+        const res = await fetch(`${API_BASE_URL}/api/v1/public/assistant/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+        if (!res.ok) {
+          const errBody = await res.text();
+          throw new Error(`${res.status}: ${errBody.slice(0, 200)}`);
+        }
+        data = (await res.json()) as AssistantChatResponse;
+      } else {
+        // 실제 모드 — JWT 인증 라우트로 접근 (도구·제안 활성).
+        data = await fetchWithAuth<AssistantChatResponse>('/api/v1/assistant/chat', {
+          method: 'POST',
+          body,
+        });
       }
-      const data = (await res.json()) as AssistantChatResponse;
-      setMessages([...next, { role: 'assistant', content: data.content }]);
+
+      const proposals: ProposalState[] | undefined = data.proposals?.map((p) => ({
+        ...p,
+        status: 'pending',
+      }));
+      setMessages([...next, { role: 'assistant', content: data.content, proposals }]);
     } catch (e) {
       setError(e instanceof Error ? e.message : '요청 실패');
     } finally {
@@ -89,6 +124,46 @@ export default function AssistantPage() {
   const reset = () => {
     setMessages([]);
     setError(null);
+  };
+
+  const updateProposal = (msgIdx: number, propId: string, patch: Partial<ProposalState>) => {
+    setMessages((prev) =>
+      prev.map((m, i) => {
+        if (i !== msgIdx || !m.proposals) return m;
+        return {
+          ...m,
+          proposals: m.proposals.map((p) => (p.id === propId ? { ...p, ...patch } : p)),
+        };
+      }),
+    );
+  };
+
+  const onConfirm = async (msgIdx: number, prop: ProposalState) => {
+    if (prop.status !== 'pending') return;
+    updateProposal(msgIdx, prop.id, { status: 'submitting' });
+    try {
+      await fetchWithAuth(`/api/v1/assistant/proposals/${prop.id}/confirm`, { method: 'POST' });
+      updateProposal(msgIdx, prop.id, { status: 'confirmed' });
+    } catch (e) {
+      updateProposal(msgIdx, prop.id, {
+        status: 'error',
+        errorMessage: e instanceof Error ? e.message : '저장 실패',
+      });
+    }
+  };
+
+  const onReject = async (msgIdx: number, prop: ProposalState) => {
+    if (prop.status !== 'pending') return;
+    updateProposal(msgIdx, prop.id, { status: 'submitting' });
+    try {
+      await fetchWithAuth(`/api/v1/assistant/proposals/${prop.id}/reject`, { method: 'POST' });
+      updateProposal(msgIdx, prop.id, { status: 'rejected' });
+    } catch (e) {
+      updateProposal(msgIdx, prop.id, {
+        status: 'error',
+        errorMessage: e instanceof Error ? e.message : '거부 실패',
+      });
+    }
   };
 
   return (
@@ -127,7 +202,17 @@ export default function AssistantPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {messages.map((m, i) => (
-              <Bubble key={i} role={m.role} content={m.content} />
+              <div key={i} className="flex flex-col gap-2">
+                <Bubble role={m.role} content={m.content} />
+                {m.proposals?.map((p) => (
+                  <ProposalCard
+                    key={p.id}
+                    proposal={p}
+                    onConfirm={() => onConfirm(i, p)}
+                    onReject={() => onReject(i, p)}
+                  />
+                ))}
+              </div>
             ))}
             {busy && <Bubble role="assistant" content="…" pulse />}
           </div>
@@ -183,12 +268,68 @@ function Bubble({ role, content, pulse }: { role: Role; content: string; pulse?:
   );
 }
 
+function ProposalCard({
+  proposal,
+  onConfirm,
+  onReject,
+}: {
+  proposal: ProposalState;
+  onConfirm: () => void;
+  onReject: () => void;
+}) {
+  const label = PROPOSAL_KIND_LABEL[proposal.kind] ?? proposal.kind;
+  const disabled = proposal.status !== 'pending';
+
+  return (
+    <div className="ml-9 max-w-[80%] rounded-lg border border-amber-300/60 bg-amber-50/60 p-3 text-sm shadow-sm dark:border-amber-700/40 dark:bg-amber-900/20">
+      <div className="flex items-center gap-2 text-xs font-medium text-amber-900 dark:text-amber-200">
+        <span className="rounded bg-amber-200/60 px-1.5 py-0.5 text-[10px] dark:bg-amber-800/40">
+          AI 제안
+        </span>
+        <span>{label}</span>
+      </div>
+      <div className="mt-1.5 whitespace-pre-wrap text-foreground/90">{proposal.summary}</div>
+
+      {proposal.status === 'pending' && (
+        <div className="mt-2.5 flex gap-2">
+          <Button size="sm" className="h-7" onClick={onConfirm}>
+            <Check className="mr-1 h-3.5 w-3.5" />저장
+          </Button>
+          <Button size="sm" variant="outline" className="h-7" onClick={onReject} disabled={disabled}>
+            <X className="mr-1 h-3.5 w-3.5" />거부
+          </Button>
+        </div>
+      )}
+
+      {proposal.status === 'submitting' && (
+        <div className="mt-2 text-xs text-muted-foreground">처리 중…</div>
+      )}
+      {proposal.status === 'confirmed' && (
+        <div className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+          ✓ 저장됨
+        </div>
+      )}
+      {proposal.status === 'rejected' && (
+        <div className="mt-2 text-xs text-muted-foreground">거부됨 (폐기)</div>
+      )}
+      {proposal.status === 'error' && (
+        <div className="mt-2 text-xs text-destructive">
+          오류: {proposal.errorMessage ?? '알 수 없음'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EmptyHint() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
       <Bot className="h-8 w-8 opacity-40" />
       <div>업무 관련 질문을 입력하세요.</div>
-      <div className="text-xs">기본 provider는 Anthropic 호환 (서버 env로 GLM 등 베이스 URL 지정).</div>
+      <div className="text-xs">예: "거래처 한화 검색", "최근 PO 5건", "수주 LIST", "PO123에 메모 남겨줘"</div>
+      <div className="text-xs opacity-70">
+        Anthropic 호환에서 DB 조회(거래처·P/O·수주·출고·수금)·작성(메모·거래처) 도구가 활성화됩니다. 쓰기는 카드의 [저장] 클릭 시에만 반영됩니다.
+      </div>
     </div>
   );
 }

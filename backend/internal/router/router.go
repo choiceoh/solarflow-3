@@ -31,7 +31,9 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 		publicEngine = engineClient[0]
 	}
 	publicH := handler.NewPublicHandler(db, publicEngine)
-	publicAssistantH := handler.NewAssistantHandler()
+	// public 라우트는 인증이 없어 user_id가 컨텍스트에 없음 → 도구·제안이 자동 비활성화
+	// (availableAssistantTools가 빈 슬라이스 반환). 즉 bare LLM 패스스루로 동작.
+	publicAssistantH := handler.NewAssistantHandler(db)
 	r.Route("/api/v1/public", func(r chi.Router) {
 		r.Get("/login-stats", publicH.LoginStats)
 		r.Get("/fx/usdkrw", publicH.FXUsdKrw)
@@ -405,7 +407,14 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Post("/receipts", importH.Receipts)
 		})
 
-		// 업무 도우미는 /api/v1/public/assistant/chat로 이동 (목업 모드 호환)
+		// 업무 도우미 — 인증 사용자용 라우트 (권한별 DB 조회·작성 도구 활성).
+		// 목업/익명용 bare LLM 패스스루는 /api/v1/public/assistant/chat 그대로 유지.
+		// 쓰기는 항상 "제안 → 사용자 확인" 2단계: Chat이 제안만 만들고,
+		// /proposals/{id}/{confirm|reject} 에서 실제 DB 반영 또는 폐기.
+		assistantH := handler.NewAssistantHandler(db)
+		r.Post("/assistant/chat", assistantH.Chat)
+		r.Post("/assistant/proposals/{id}/confirm", assistantH.ConfirmProposal)
+		r.Post("/assistant/proposals/{id}/reject", assistantH.RejectProposal)
 
 		// 비유: "내 인사카드 보기" — 로그인한 사용자의 프로필 조회
 		userH := handler.NewUserHandler(db)
