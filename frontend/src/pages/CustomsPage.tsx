@@ -156,11 +156,9 @@ export default function CustomsPage() {
     { key: 'exchange', label: '환율 비교' },
   ];
   const customsCardControls = (
-    <div className="sf-card-controls">
-      <FilterChips options={customsTabOptions} value={activeTab} onChange={setActiveTab} />
+    <div className="sf-card-controls" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
       {activeTab === 'expenses' ? (
         <>
-          <div className="vr" style={{ height: 16 }} />
           <FilterButton items={[
             {
               label: 'B/L',
@@ -181,13 +179,14 @@ export default function CustomsPage() {
               options: (Object.entries(EXPENSE_TYPE_LABEL) as [ExpenseType, string][]).map(([k, v]) => ({ value: k, label: v })),
             },
           ]} />
-          <div className="vr" style={{ height: 16 }} />
           <ExcelToolbar type="expense" />
-          <Button size="xs" className="btn xs solar" onClick={() => { setEditExpense(null); setExpFormOpen(true); }}>
-            <Plus className="h-3 w-3" />새로 등록
+          <Button size="xs" onClick={() => { setEditExpense(null); setExpFormOpen(true); }}>
+            <Plus className="mr-1 h-3 w-3" />새로 등록
           </Button>
         </>
       ) : null}
+      <div style={{ flex: 1 }} />
+      <FilterChips options={customsTabOptions} value={activeTab} onChange={setActiveTab} />
     </div>
   );
 

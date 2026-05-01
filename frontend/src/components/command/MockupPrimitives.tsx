@@ -115,12 +115,13 @@ export function CardB({
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, flex: flex ? 1 : undefined }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0, minHeight: 44 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, flexShrink: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.005em', color: 'var(--ink)' }}>{title}</div>
           {sub ? <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{sub}</div> : null}
         </div>
-        <div style={{ flex: 1 }} />
-        {right}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+          {right}
+        </div>
       </div>
       <div style={{ padding: padded ? 14 : 0, minHeight: 0, flex: 1, overflow: 'auto' }}>
         {children}
@@ -163,22 +164,22 @@ export function FilterChips({
   onChange?: (value: string) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-1">
+    <div className="tabs" style={{ border: 'none' }}>
       {options.map((o) => {
         const active = value === o.key;
         return (
-          <Button
+          <button
             key={o.key}
-            type="button"
-            variant={active ? 'secondary' : 'ghost'}
-            size="xs"
+            className={`tab${active ? ' active' : ''}`}
             onClick={() => onChange?.(o.key)}
+            style={{ padding: '5px 10px' }}
+            type="button"
           >
             {o.label}
             {o.count != null ? (
-              <span className="mono ml-1 text-[10px] text-muted-foreground">{o.count}</span>
+              <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', marginLeft: 5 }}>{o.count}</span>
             ) : null}
-          </Button>
+          </button>
         );
       })}
     </div>
