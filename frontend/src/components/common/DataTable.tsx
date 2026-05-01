@@ -81,13 +81,26 @@ export default function DataTable<T extends Record<string, any>>({
 
   const SortIcon = ({ col }: { col: string }) => {
     if (sortKey !== col) {
-      return <ArrowUpDown className="ml-1 inline h-3 w-3 text-[var(--sf-ink-5)]" />;
+      return (
+        <ArrowUpDown
+          className="ml-1 inline h-3 w-3"
+          style={{ color: 'var(--sf-ink-5)' }}
+        />
+      );
     }
     const Icon = sortDir === 'asc' ? ArrowUp : ArrowDown;
-    return <Icon className="ml-1 inline h-3 w-3 text-[var(--sf-solar-3)]" />;
+    return (
+      <Icon
+        className="ml-1 inline h-3 w-3"
+        style={{ color: 'var(--sf-solar-3)' }}
+      />
+    );
   };
 
-  const useVirtual = virtualize?.enabled && !loading && sorted.length > 0;
+  const AUTO_VIRTUALIZE_THRESHOLD = 200;
+  const virtualEnabled = virtualize?.enabled ?? sorted.length >= AUTO_VIRTUALIZE_THRESHOLD;
+  const useVirtual = virtualEnabled && !loading && sorted.length > 0;
+  const effectiveVirtualize: VirtualizeOption = virtualize ?? { enabled: virtualEnabled };
   const colSpan = columns.length + (actions ? 1 : 0);
 
   return (
@@ -101,7 +114,7 @@ export default function DataTable<T extends Record<string, any>>({
             columns={columns}
             actions={actions}
             sorted={sorted}
-            virtualize={virtualize}
+            virtualize={effectiveVirtualize}
             handleSort={handleSort}
             SortIcon={SortIcon}
           />
