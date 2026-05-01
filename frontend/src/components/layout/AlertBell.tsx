@@ -2,7 +2,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import AlertDropdown from './AlertDropdown';
 import type { AlertItem } from '@/types/dashboard';
 
@@ -32,13 +31,17 @@ export default function AlertBell({ alerts, totalCount, criticalCount }: Props) 
       <Button variant="ghost" size="icon-xs" className="btn xs ghost icon relative" onClick={() => setOpen(!open)}>
         <Bell className="h-4 w-4" />
         {badgeCount > 0 && (
-          <Badge
-            className={`absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center ${
-              criticalCount > 0 ? 'bg-red-600' : 'bg-yellow-500'
-            } text-white border-0`}
+          <span
+            className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] font-bold tabular-nums"
+            style={{
+              background: criticalCount > 0 ? 'var(--sf-neg)' : 'var(--sf-solar-2)',
+              color: '#fff',
+              fontFamily: 'var(--sf-mono)',
+              border: '1.5px solid var(--sf-surface)',
+            }}
           >
             {badgeCount}
-          </Badge>
+          </span>
         )}
       </Button>
 

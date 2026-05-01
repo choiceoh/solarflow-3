@@ -1,19 +1,40 @@
-import { Inbox } from 'lucide-react';
+import { Inbox, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface EmptyStateProps {
   message?: string;
+  description?: string;
   actionLabel?: string;
   onAction?: () => void;
+  icon?: LucideIcon;
 }
 
-export default function EmptyState({ message = '데이터가 없습니다', actionLabel, onAction }: EmptyStateProps) {
+// 빈 상태 — mockup의 차분한 well + 미세 hierarchy 패턴
+export default function EmptyState({
+  message = '데이터가 없습니다',
+  description,
+  actionLabel,
+  onAction,
+  icon: Icon = Inbox,
+}: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
-      <Inbox className="h-10 w-10" />
-      <p className="text-sm">{message}</p>
+    <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
+      <div
+        className="mb-1 flex h-11 w-11 items-center justify-center rounded-full"
+        style={{ background: 'var(--sf-bg-2)', color: 'var(--sf-ink-4)' }}
+      >
+        <Icon className="h-5 w-5" strokeWidth={1.5} />
+      </div>
+      <p className="text-sm font-medium" style={{ color: 'var(--sf-ink-2)' }}>
+        {message}
+      </p>
+      {description && (
+        <p className="max-w-xs text-xs leading-relaxed" style={{ color: 'var(--sf-ink-3)' }}>
+          {description}
+        </p>
+      )}
       {actionLabel && onAction && (
-        <Button variant="outline" size="sm" onClick={onAction}>
+        <Button variant="outline" size="sm" onClick={onAction} className="mt-2">
           {actionLabel}
         </Button>
       )}
