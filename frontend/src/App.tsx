@@ -44,6 +44,9 @@ const WarehouseNewPage = lazy(() => import('@/pages/data/WarehouseNewPage'));
 const WarehouseEditPage = lazy(() => import('@/pages/data/WarehouseEditPage'));
 const BankNewPage = lazy(() => import('@/pages/data/BankNewPage'));
 const BankEditPage = lazy(() => import('@/pages/data/BankEditPage'));
+const PartnerPriceBookPage = lazy(() => import('@/pages/baro/PartnerPriceBookPage'));
+const GroupPurchaseRequestPage = lazy(() => import('@/pages/baro/GroupPurchaseRequestPage'));
+const BaroRequestInboxPage = lazy(() => import('@/pages/group-trade/BaroRequestInboxPage'));
 
 function Fallback() {
   return <LoadingSpinner className="h-screen" />;
@@ -96,6 +99,9 @@ export default function App() {
                 <Route path="/customs" element={<CustomsPage />} />
                 <Route path="/sales-analysis" element={<SalesAnalysisPage />} />
                 <Route path="/banking" element={<BankingPage />} />
+                <Route path="/baro/price-book" element={<RoleGuard allowedRoles={['admin', 'operator']}><PartnerPriceBookPage /></RoleGuard>} />
+                <Route path="/baro/group-purchase" element={<RoleGuard allowedRoles={['admin', 'operator']}><GroupPurchaseRequestPage /></RoleGuard>} />
+                <Route path="/group-trade/baro-inbox" element={<RoleGuard allowedRoles={['admin', 'operator']}><BaroRequestInboxPage /></RoleGuard>} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/ocr" element={<RoleGuard allowedRoles={['admin', 'operator']}><OCRPage /></RoleGuard>} />
                 <Route path="/memo" element={<MemoPage />} />

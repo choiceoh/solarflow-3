@@ -98,6 +98,12 @@
 - "다음에", "나중에", "Phase 확장 시" 등으로 미루려면 반드시 DECISIONS.md에 이유를 기록할 것.
 - 이유 없이 미루는 것은 규칙 위반.
 
+### 멀티테넌트 (BARO/탑솔라) UI 규칙
+- BARO 페이지의 시각적 디자인은 기본 페이지(탑솔라)를 그대로 따른다 — 테넌트별 별도 디자인 금지.
+- `isBaroMode()` / `detectTenantScope()`는 **메뉴 가시성**(Sidebar.tsx)과 **dev mock 프로필**(devMockMode.ts)에서만 사용 가능.
+- 그 외 컴포넌트(레이아웃, 카드, 색상, 간격, 폰트, 배지, 버튼 등)에서는 절대 분기하지 않는다.
+- 가드: `frontend/src/lib/tenantScope.test.ts`의 "tenantScope 사용처 가드"가 새 사용처를 차단. 정당한 사유로 추가하려면 ALLOWLIST를 늘리고 PR 리뷰에서 합의.
+
 ## 모듈 품질 체크리스트 (모든 CRUD 화면 공통)
 1. 등록: 모든 필드가 Go API로 정확히 전달되는지
 2. 수정: 기존 데이터가 폼에 정확히 로드되고 저장되는지

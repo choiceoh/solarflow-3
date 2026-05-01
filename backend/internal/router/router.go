@@ -50,6 +50,8 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 		adminOnly := middleware.RoleMiddleware("admin")
 		// D-108: 탑솔라 원가/금융/면장 응답은 탑솔라 테넌트 사용자에게만 — 바로 토큰은 403
 		topsolarOnly := middleware.RequireTenantScope(middleware.TenantScopeTopsolar)
+		// BARO Phase 1: 바로(주) 전용 도구 — 탑솔라 토큰은 403
+		baroOnly := middleware.RequireTenantScope(middleware.TenantScopeBaro)
 
 		companyH := handler.NewCompanyHandler(db)
 		r.Route("/companies", func(r chi.Router) {
@@ -201,6 +203,42 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.With(write).Post("/", orderH.Create)
 			r.With(write).Put("/{id}", orderH.Update)
 			r.With(write).Delete("/{id}", orderH.Delete)
+		})
+
+		// BARO Phase 1: 거래처별 단가표 — 바로(주) 사용자 전용 (탑솔라 토큰 403)
+		ppbH := handler.NewPartnerPriceBookHandler(db)
+		r.Route("/partner-prices", func(r chi.Router) {
+			r.Use(baroOnly)
+			r.Get("/", ppbH.List)
+			r.Get("/lookup", ppbH.Lookup)
+			r.Get("/{id}", ppbH.GetByID)
+			r.With(write).Post("/", ppbH.Create)
+			r.With(write).Put("/{id}", ppbH.Update)
+			r.With(write).Delete("/{id}", ppbH.Delete)
+		})
+
+		// BARO Phase 1: 빠른 재발주 — 바로(주) 사용자 전용
+		r.Route("/baro/orders", func(r chi.Router) {
+			r.Use(baroOnly)
+			r.Get("/recent", orderH.RecentByPartner)
+			r.With(write).Post("/{id}/clone", orderH.Clone)
+		})
+
+		// BARO Phase 2: 그룹내 매입 요청 — 바로(BARO)와 탑솔라(TS)가 같은 테이블에 다른 권한으로 접근
+		// - BARO: 등록/내 목록/취소/입고 확인
+		// - TS:   inbox 조회/거부/출고 연결
+		icrH := handler.NewIntercompanyRequestHandler(db)
+		r.Route("/intercompany-requests", func(r chi.Router) {
+			// BARO 측 액션
+			r.With(baroOnly).Get("/mine", icrH.Mine)
+			r.With(baroOnly, write).Post("/", icrH.Create)
+			r.With(baroOnly, write).Patch("/{id}/cancel", icrH.Cancel)
+			r.With(baroOnly, write).Patch("/{id}/receive", icrH.Receive)
+
+			// 탑솔라 측 액션
+			r.With(topsolarOnly).Get("/inbox", icrH.Inbox)
+			r.With(topsolarOnly, write).Patch("/{id}/reject", icrH.Reject)
+			r.With(topsolarOnly, write).Patch("/{id}/fulfill", icrH.Fulfill)
 		})
 
 		receiptH := handler.NewReceiptHandler(db)
