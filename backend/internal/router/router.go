@@ -94,19 +94,21 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 		r.Route("/partners", func(r chi.Router) {
 			r.Get("/", partnerH.List)
 			r.Get("/{id}", partnerH.GetByID)
-			r.Get("/{id}/activities", activityH.ListByPartner)
+			// CRM 활동 로그는 바로(주) 전용 — 탑솔라 토큰은 403
+			r.With(baroOnly).Get("/{id}/activities", activityH.ListByPartner)
 			r.With(write).Post("/", partnerH.Create)
 			r.With(write).Put("/{id}", partnerH.Update)
 			r.With(write).Patch("/{id}/status", partnerH.ToggleStatus)
 			r.With(write).Delete("/{id}", partnerH.Delete)
 		})
 
-		// CRM — 거래처 활동 로그
+		// CRM — 거래처 활동 로그 (바로(주) 전용)
 		r.Route("/partner-activities", func(r chi.Router) {
+			r.Use(baroOnly)
 			r.With(write).Post("/", activityH.Create)
 			r.With(write).Patch("/{id}/followup", activityH.ToggleFollowup)
 		})
-		r.Get("/me/open-followups", activityH.MyOpenFollowups)
+		r.With(baroOnly).Get("/me/open-followups", activityH.MyOpenFollowups)
 
 		warehouseH := handler.NewWarehouseHandler(db)
 		r.Route("/warehouses", func(r chi.Router) {

@@ -6,6 +6,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { PartnerFormBody, type PartnerFormData } from '@/components/masters/PartnerForm';
 import PartnerActivityPanel from '@/components/partners/PartnerActivityPanel';
 import { fetchWithAuth } from '@/lib/api';
+import { isBaroMode } from '@/lib/tenantScope';
 import { cn } from '@/lib/utils';
 import type { Partner } from '@/types/masters';
 
@@ -18,7 +19,11 @@ export default function PartnerEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = (searchParams.get('tab') === 'activity' ? 'activity' : 'info') as TabKey;
+  // 활동 탭은 바로(주) 전용. 탑솔라에서 ?tab=activity로 진입해도 정보 탭으로 강제.
+  const showActivityTab = isBaroMode();
+  const initialTab = (showActivityTab && searchParams.get('tab') === 'activity'
+    ? 'activity'
+    : 'info') as TabKey;
   const [tab, setTab] = useState<TabKey>(initialTab);
 
   const [editData, setEditData] = useState<Partner | null>(null);
@@ -80,14 +85,16 @@ export default function PartnerEditPage() {
       </div>
 
       <div className="card mx-auto w-full max-w-2xl p-6">
-        <div className="mb-4 flex gap-1 border-b border-[var(--line)]">
-          <TabButton active={tab === 'info'} onClick={() => handleTabChange('info')}>
-            정보
-          </TabButton>
-          <TabButton active={tab === 'activity'} onClick={() => handleTabChange('activity')}>
-            활동
-          </TabButton>
-        </div>
+        {showActivityTab && (
+          <div className="mb-4 flex gap-1 border-b border-[var(--line)]">
+            <TabButton active={tab === 'info'} onClick={() => handleTabChange('info')}>
+              정보
+            </TabButton>
+            <TabButton active={tab === 'activity'} onClick={() => handleTabChange('activity')}>
+              활동
+            </TabButton>
+          </div>
+        )}
 
         {loadError || !editData ? (
           <p className="text-sm text-destructive">거래처 정보를 불러올 수 없습니다. {loadError ?? ''}</p>

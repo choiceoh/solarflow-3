@@ -585,3 +585,12 @@
   - **테넌트 가드**: `internal/middleware/tenant_scope.go`의 `RequireTenantScope("topsolar")`를 cost-details, declarations, lcs, tts, expenses, price-histories, limit-changes, export/amaranth, 그리고 calc 프록시 중 landed-cost·exchange-compare·lc-fee·lc-limit-timeline·lc-maturity-alert·margin-analysis·price-trend에 적용한다. **이 목록이 격리 범위의 전부**이며 추가 확장은 별도 결정 없이는 하지 않는다.
   - **DNS/CDN**: `baro.topworks.ltd`를 같은 Caddy/dist에 매핑한다. Caddy 별도 리라이트는 필요 없고, 프론트가 `window.location.hostname`을 보고 BARO 모드를 결정한다.
 - **날짜**: 2026-05-01
+
+## D-109: CRM(거래처 활동 로그·미처리 문의함)은 바로(주) 전용
+- **결정**: PR #172로 도입한 CRM 1차 기능 — `partners.owner_user_id`, `partner_activities` 테이블, 거래처 상세 「활동」 탭, 「판매 / 내 미처리 문의」 메뉴 — 는 바로(주) 테넌트에서만 노출·사용한다. 탑솔라(주)에는 사이드바·탭 모두 숨기고, 백엔드도 `baroOnly`(D-108의 `RequireTenantScope("baro")`)로 차단해 토큰만으로 호출해도 403을 반환한다.
+- **이유**: 탑솔라는 해외 모듈 수입·도매 위주로 인바운드(고객 선연락) 비중이 적어 활동 로그·후속 문의 트래킹 시나리오가 거의 없다. 반면 바로(주)는 국내 고객(약 200곳) 대상 인바운드 위주라 "전화 응대 → 후속 답변" 흐름이 일상이며, 영업 6명이 담당을 분담하기 때문에 미처리함이 실무 가치가 크다. 양쪽에 노출하면 탑솔라 사용자에게 입력 부담만 늘고 데이터가 비기 쉬우므로, 사용 시나리오가 분명한 바로 한정으로 좁힌다.
+- **운영 기준**:
+  - **DB 스키마는 공유 유지**: 컬럼/테이블은 그대로 두고 미들웨어로만 막는다. 추후 탑솔라가 필요해지면 `baroOnly` 한 곳을 풀면 즉시 활성화 — 마이그레이션 재작업 불필요.
+  - **격리 범위**: `GET /partners/{id}/activities`, `POST /partner-activities`, `PATCH /partner-activities/{id}/followup`, `GET /me/open-followups` 4개 엔드포인트가 BARO 전용. `partners.owner_user_id` 컬럼 자체는 partners 테이블의 일반 컬럼으로 양 테넌트가 읽을 수 있으나, 1차에서는 BARO에서만 의미를 갖는다.
+  - **D-108 격리 목록과의 관계**: D-108은 "탑솔라 전용 → 바로 토큰 차단"의 화이트리스트였고, D-109는 반대로 "바로 전용 → 탑솔라 토큰 차단" 첫 사례다. 두 방향이 공존하므로 새 기능을 도입할 때 어느 쪽 테넌트 한정인지 명시한다.
+- **날짜**: 2026-05-01

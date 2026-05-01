@@ -91,7 +91,8 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'orders', label: '수주 관리', abbr: '수주', path: '/orders', icon: ScrollText, menu: 'orders' },
       { key: 'outbound', label: '출고/판매', abbr: '출고', path: '/orders?tab=outbound', icon: Truck, menu: 'outbound' },
       { key: 'receipts', label: '수금 관리', abbr: '수금', path: '/orders?tab=receipts', icon: Wallet, menu: 'receipts' },
-      { key: 'crm-inbox', label: '내 미처리 문의', abbr: '문의', path: '/crm/inbox', icon: Inbox, menu: 'crm_inbox' },
+      // CRM 1차: 인바운드 후속 — 바로(주) 전용 (탑솔라는 인바운드 비중이 적어 미사용)
+      { key: 'crm-inbox', label: '내 미처리 문의', abbr: '문의', path: '/crm/inbox', icon: Inbox, menu: 'crm_inbox', tenants: ['baro'] },
       // BARO Phase 1: 거래처별 단가표 (BARO 전용)
       { key: 'baro-price-book', label: '거래처 단가표', abbr: '단가', path: '/baro/price-book', icon: Tags, menu: 'baro_price_book', tenants: ['baro'] },
       // BARO Phase 4: 배차/일정 보드 (BARO 전용)
