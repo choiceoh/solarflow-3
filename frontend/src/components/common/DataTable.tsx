@@ -69,10 +69,22 @@ export default function DataTable<T extends Record<string, any>>({
   }, [data, sortKey, sortDir]);
 
   const SortIcon = ({ col }: { col: string }) => {
-    if (sortKey !== col) return <ArrowUpDown className="ml-1 inline h-3.5 w-3.5 text-muted-foreground" />;
-    return sortDir === 'asc'
-      ? <ArrowUp className="ml-1 inline h-3.5 w-3.5" />
-      : <ArrowDown className="ml-1 inline h-3.5 w-3.5" />;
+    // 비활성: 옅은 잉크-5, 활성: 솔라-3 강조
+    if (sortKey !== col) {
+      return (
+        <ArrowUpDown
+          className="ml-1 inline h-3 w-3"
+          style={{ color: 'var(--sf-ink-5)' }}
+        />
+      );
+    }
+    const Icon = sortDir === 'asc' ? ArrowUp : ArrowDown;
+    return (
+      <Icon
+        className="ml-1 inline h-3 w-3"
+        style={{ color: 'var(--sf-solar-3)' }}
+      />
+    );
   };
 
   return (
@@ -101,12 +113,12 @@ export default function DataTable<T extends Record<string, any>>({
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {columns.map((col) => (
+                  {columns.map((col, ci) => (
                     <TableCell key={col.key}>
-                      <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                      <div className="sf-skeleton h-4" style={{ width: `${88 - ((i + ci) % 4) * 4}%` }} />
                     </TableCell>
                   ))}
-                  {actions && <TableCell><div className="h-4 w-12 animate-pulse rounded bg-muted" /></TableCell>}
+                  {actions && <TableCell><div className="sf-skeleton h-4 w-12" /></TableCell>}
                 </TableRow>
               ))
             ) : sorted.length === 0 ? (

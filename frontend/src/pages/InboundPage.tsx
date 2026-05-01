@@ -334,9 +334,17 @@ export default function InboundPage() {
       )}
 
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-md bg-green-600 text-white px-4 py-3 text-sm shadow-lg">
-          <CheckCircle2 className="h-4 w-4" />
-          {toast}
+        <div
+          className="sf-toast fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-md px-4 py-2.5 text-xs font-medium"
+          style={{
+            background: 'var(--sf-ink)',
+            color: 'var(--sf-bg)',
+            boxShadow: 'var(--sf-shadow-3)',
+            borderLeft: '3px solid var(--sf-pos)',
+          }}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" style={{ color: 'var(--sf-pos)' }} />
+          <span>{toast}</span>
         </div>
       )}
     </div>
