@@ -5,7 +5,7 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | 바로(주) 테넌트 1단계 운영 적용(040 마이그레이션 + PostgREST 캐시 갱신 + DNS `baro.topworks.ltd`) → PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 배포 ZIP 생성/운영 PC 1회 로그인 리허설 + OCR 실사용 샘플 검증 + E2E smoke 로컬 DB 실행 확인 |
+| 다음 작업 | PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 배포 ZIP 생성/운영 PC 1회 로그인 리허설 + OCR 실사용 샘플 검증 + E2E smoke 로컬 DB 실행 확인 (바로(주) 테넌트 1단계 운영 적용 완료 — `baro.topworks.ltd` 라이브) |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
@@ -56,6 +56,34 @@
 - 운영 PC에서 `psql -d solarflow -f backend/migrations/040_tenant_scope.sql` → PostgREST 재시작 → `./scripts/check_schema.sh` 통과 확인
 - Caddy에 `baro.topworks.ltd` 호스트 매핑(같은 dist 서빙)
 - 바로 테스트 사용자 1명을 `tenant_scope='baro'`로 등록 후 사이드바/원가 API 차단 직접 확인
+
+---
+
+## 2026-05-01 세션 — 바로(주) 테넌트 운영 적용
+
+### 완료
+- **Supabase 적용 확인**: 마이그레이션 040은 운영 DB(`aalxpmfnsjzmhsfkuxnp`)에 이미 반영됨 (`user_profiles.tenant_scope` 컬럼 + CHECK + `companies` 바로(주) 시드 `BR` 존재)
+- **PostgREST 스키마 캐시 갱신**: 운영 DB에 `NOTIFY pgrst, 'reload schema'` 발행
+- **Go 백엔드 CORS 갱신**: `backend/.env`의 `CORS_ORIGINS`에 `https://baro.topworks.ltd` 추가, `systemctl --user restart solarflow-go` 적용. Probe로 `Access-Control-Allow-Origin: https://baro.topworks.ltd` 확인
+- **Cloudflare DNS 추가**: zone `topworks.ltd`에 CNAME `baro` → `topworks-module-git.pages.dev` (proxied) 추가. `module.topworks.ltd`와 동일 Pages 프로젝트로 라우팅
+- **바로 테스트 사용자 등록**:
+  - Supabase Auth: `baro-test@topworks.ltd` (user_id `bb92d083-b39e-4a41-b69b-ade420aced70`, password `Baro!Test260501`)
+  - `user_profiles`: `tenant_scope='baro'`, `role='manager'`, `company_id=BR(e41f100b-...)`
+- **테넌트 격리 직접 검증**(바로 토큰으로 운영 API 호출):
+  - 차단 1단계 (`403`): `/api/v1/lcs`, `/declarations`, `/cost-details`, `/expenses`, `/price-histories`, `/limit-changes`, `/tts`
+  - calc 프록시 차단 (POST `403`): `/calc/landed-cost`, `/lc-fee`, `/margin-analysis`, `/exchange-compare`, `/price-trend`, `/lc-limit-timeline`, `/lc-maturity-alert`
+  - 공유 (`200`): `/pos`, `/orders`, `/outbounds`, `/sales`, `/companies`
+  - 공유 calc (`400` 빈 body 정상): `/calc/inventory`, `/customer-analysis`, `/supply-forecast`
+
+### 검증
+- `curl -H 'Authorization: Bearer <baro-token>' http://localhost:8080/api/v1/lcs` → `403`
+- `curl http://localhost:8080/health` → `200`
+- DNS: `baro.topworks.ltd → 104.21.32.174 / 172.67.153.41` (Cloudflare)
+- 라이브: `https://baro.topworks.ltd` HTTP/2 200, SolarFlow 앱 서빙 (Pages `topworks-module-git` 프로젝트에 커스텀 도메인 등록 완료)
+
+### BARO 테넌트 진화 방향
+- 같은 코드베이스를 공유하지만 시간이 갈수록 메인 흐름과 의도적으로 분기. 바로 전용 업무 절차 연결, 추가 정보 구간이 점차 추가될 예정.
+- 새 기능 설계 시 "두 테넌트 모두에 동일 적용" 가정 금지. 사이드바 메뉴는 `tenants: ['topsolar' | 'baro']` 태그로 분기, 백엔드 차단은 D-108 1단계에 한정.
 
 ---
 
