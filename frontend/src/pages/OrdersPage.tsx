@@ -763,11 +763,9 @@ export default function OrdersPage() {
     ];
 
   const ordersCardControls = (
-    <div className="sf-card-controls">
-      <FilterChips options={SALES_TAB_OPTIONS} value={activeTab} onChange={handleTabChange} />
+    <div className="sf-card-controls" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
       {activeTab === 'orders' && (
         <>
-          <div className="vr" style={{ height: 16 }} />
           <FilterButton items={[
             {
               label: '상태',
@@ -796,7 +794,6 @@ export default function OrdersPage() {
       )}
       {activeTab === 'outbound' && !selectedOutbound && (
         <>
-          <div className="vr" style={{ height: 16 }} />
           <FilterButton items={[
             {
               label: '상태',
@@ -825,7 +822,6 @@ export default function OrdersPage() {
       )}
       {activeTab === 'sales' && (
         <>
-          <div className="vr" style={{ height: 16 }} />
           <div className="w-36">
             <PartnerCombobox
               partners={partners}
@@ -858,7 +854,6 @@ export default function OrdersPage() {
       )}
       {activeTab === 'receipts' && (
         <>
-          <div className="vr" style={{ height: 16 }} />
           <FilterButton items={[
             {
               label: '거래처',
@@ -879,6 +874,8 @@ export default function OrdersPage() {
           </Button>
         </>
       )}
+      <div style={{ flex: 1 }} />
+      <FilterChips options={SALES_TAB_OPTIONS} value={activeTab} onChange={handleTabChange} />
     </div>
   );
 
