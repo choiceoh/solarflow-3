@@ -604,11 +604,9 @@ export default function ProcurementPage() {
     ];
 
   const procurementCardControls = (
-    <div className="sf-card-controls">
-      <FilterChips options={PROC_TAB_OPTIONS} value={activeTab} onChange={handleTabChange} />
+    <div className="sf-card-controls" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
       {activeTab === 'po' && (
         <>
-          <div className="vr" style={{ height: 16 }} />
           <FilterButton items={[
             {
               label: '상태',
@@ -635,7 +633,6 @@ export default function ProcurementPage() {
       )}
       {activeTab === 'lc' && !lcFormOpen && (
         <>
-          <div className="vr" style={{ height: 16 }} />
           <FilterButton items={[
             {
               label: '상태',
@@ -661,7 +658,6 @@ export default function ProcurementPage() {
       )}
       {activeTab === 'bl' && !blFormOpen && (
         <>
-          <div className="vr" style={{ height: 16 }} />
           <FilterButton items={[
             {
               label: '입고 구분',
@@ -688,7 +684,6 @@ export default function ProcurementPage() {
       )}
       {activeTab === 'price' && (
         <>
-          <div className="vr" style={{ height: 16 }} />
           <FilterButton items={[
             {
               label: '제조사',
@@ -704,6 +699,8 @@ export default function ProcurementPage() {
           <Button size="xs" onClick={() => { setEditPH(null); setPhFormOpen(true); }}><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
         </>
       )}
+      <div style={{ flex: 1 }} />
+      <FilterChips options={PROC_TAB_OPTIONS} value={activeTab} onChange={handleTabChange} />
     </div>
   );
 

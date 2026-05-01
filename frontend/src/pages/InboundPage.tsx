@@ -217,7 +217,7 @@ export default function InboundPage() {
         tableTitle="B/L 목록"
         tableSub={`${data.length.toLocaleString()}건 · ${typeFilterLabel} · ${statusFilterLabel}`}
         toolbar={
-          <div className="sf-card-controls">
+          <div className="sf-card-controls" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
             <FilterButton items={[
               {
                 label: '입고 구분',
