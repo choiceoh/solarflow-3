@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import { formatDate, formatUSD, formatNumber, shortMfgName } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
@@ -13,7 +13,7 @@ interface Props {
   onDelete?: (ttId: string) => Promise<void>;
 }
 
-export default function TTListTable({ items, onEdit, onNew, onDelete }: Props) {
+function TTListTable({ items, onEdit, onNew, onDelete }: Props) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<Record<string, string>>({});
@@ -173,3 +173,5 @@ export default function TTListTable({ items, onEdit, onNew, onDelete }: Props) {
     />
   );
 }
+
+export default memo(TTListTable);

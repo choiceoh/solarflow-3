@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import EmptyState from '@/components/common/EmptyState';
 import { formatDate, formatNumber } from '@/lib/utils';
@@ -9,7 +10,7 @@ interface Props {
   onInvoice?: (item: SaleListItem) => void;
 }
 
-export default function SaleListTable({ items, onInvoice }: Props) {
+function SaleListTable({ items, onInvoice }: Props) {
   if (items.length === 0) return <EmptyState message="매출 데이터가 없습니다" />;
 
   return (
@@ -85,3 +86,5 @@ export default function SaleListTable({ items, onInvoice }: Props) {
     </div>
   );
 }
+
+export default memo(SaleListTable);

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,7 +13,7 @@ function pCode(l: POLineItem): string { return l.product_code ?? l.products?.pro
 function pName(l: POLineItem): string { return l.product_name ?? l.products?.product_name ?? '—'; }
 function pSpec(l: POLineItem): number | undefined { return l.spec_wp ?? l.products?.spec_wp; }
 
-export default function POLineTable({ items, onEdit, manufacturerName }: Props) {
+function POLineTable({ items, onEdit, manufacturerName }: Props) {
   if (items.length === 0) return <EmptyState message="발주품목이 없습니다" />;
   return (
     <div className="rounded-md border overflow-x-auto">
@@ -56,3 +57,5 @@ export default function POLineTable({ items, onEdit, manufacturerName }: Props) 
     </div>
   );
 }
+
+export default memo(POLineTable);

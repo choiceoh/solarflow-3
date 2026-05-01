@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import EmptyState from '@/components/common/EmptyState';
 import SortableTH from '@/components/common/SortableTH';
 import FulfillmentSourceBadge from './FulfillmentSourceBadge';
@@ -21,6 +22,8 @@ interface Props {
   sourceOverrides?: Record<string, FulfillmentSource>;
 }
 
+const EMPTY_OVERRIDES: Record<string, FulfillmentSource> = {};
+
 function StatusBadge({ status }: { status: OrderStatus }) {
   return (
     <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', ORDER_STATUS_COLOR[status])}>
@@ -29,7 +32,7 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   );
 }
 
-export default function OrderListTable({ items, onSelect, onNew, onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides = {} }: Props) {
+function OrderListTable({ items, onSelect, onNew, onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides = EMPTY_OVERRIDES }: Props) {
   const { sorted, headerProps } = useSort<Order>(items, (o, f) => {
     switch (f) {
       case 'order_number': return o.order_number ?? '';
@@ -185,3 +188,5 @@ export default function OrderListTable({ items, onSelect, onNew, onEdit, onDelet
     </div>
   );
 }
+
+export default memo(OrderListTable);

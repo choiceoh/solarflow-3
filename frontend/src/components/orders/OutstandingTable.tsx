@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatDate, formatNumber } from '@/lib/utils';
@@ -9,7 +10,7 @@ interface Props {
   onToggle: (outboundId: string) => void;
 }
 
-export default function OutstandingTable({ items, selectedIds, onToggle }: Props) {
+function OutstandingTable({ items, selectedIds, onToggle }: Props) {
   if (items.length === 0) {
     return <div className="text-center py-6 text-sm text-muted-foreground">미수금 내역이 없습니다</div>;
   }
@@ -58,3 +59,5 @@ export default function OutstandingTable({ items, selectedIds, onToggle }: Props
     </div>
   );
 }
+
+export default memo(OutstandingTable);

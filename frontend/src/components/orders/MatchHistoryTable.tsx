@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate, formatNumber } from '@/lib/utils';
 import type { ReceiptMatch } from '@/types/orders';
@@ -7,7 +8,7 @@ interface Props {
   receiptAmount: number;
 }
 
-export default function MatchHistoryTable({ items, receiptAmount }: Props) {
+function MatchHistoryTable({ items, receiptAmount }: Props) {
   if (items.length === 0) {
     return <div className="text-center py-4 text-sm text-muted-foreground">매칭 이력이 없습니다</div>;
   }
@@ -47,3 +48,5 @@ export default function MatchHistoryTable({ items, receiptAmount }: Props) {
     </div>
   );
 }
+
+export default memo(MatchHistoryTable);

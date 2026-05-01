@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ArrowUp, ArrowDown, Minus, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,7 +15,7 @@ function PriceChange({ prev, next }: { prev?: number; next: number }) {
 
 interface Props { items: PriceHistory[]; onEdit: (ph: PriceHistory) => void; onNew: () => void; }
 
-export default function PriceHistoryTable({ items, onEdit, onNew }: Props) {
+function PriceHistoryTable({ items, onEdit, onNew }: Props) {
   if (items.length === 0) return <EmptyState message="단가이력이 없습니다" actionLabel="새로 등록" onAction={onNew} />;
   return (
     <div className="rounded-md border overflow-x-auto">
@@ -43,3 +44,5 @@ export default function PriceHistoryTable({ items, onEdit, onNew }: Props) {
     </div>
   );
 }
+
+export default memo(PriceHistoryTable);
