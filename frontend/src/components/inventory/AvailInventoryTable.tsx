@@ -253,13 +253,13 @@ export default function AvailInventoryTable({
             <th className="text-left">품목</th>
             <th className="text-right">실재고</th>
             <th className="text-right">미착품</th>
+            <th className="text-right">판매배정</th>
             <th className="text-right">
               <span className="inline-flex items-center gap-1.5">
                 <span className="sf-dot" style={{ background: 'var(--sf-pos)' }} />
                 가용재고
               </span>
             </th>
-            <th className="text-right">판매배정</th>
             <th className="text-right">공사배정</th>
             <th className="text-center">작업</th>
           </tr>
@@ -326,18 +326,6 @@ export default function AvailInventoryTable({
                   {/* 미착품 */}
                   <td className="text-right tabular-nums font-semibold">{fmtKw(item.incoming_kw)}</td>
 
-                  {/* 가용재고 — 단일 강조 */}
-                  <td className="text-right tabular-nums">
-                    <span
-                      className="font-bold text-[17px]"
-                      style={{
-                        color: item.total_secured_kw > 0 ? 'var(--sf-pos)' : 'var(--sf-ink-4)',
-                      }}
-                    >
-                      {fmtKw(item.total_secured_kw)}
-                    </span>
-                  </td>
-
                   {/* 판매배정 */}
                   <td className="text-right tabular-nums">
                     {saleAllocs.length > 0 ? (
@@ -345,6 +333,18 @@ export default function AvailInventoryTable({
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
+                  </td>
+
+                  {/* 가용재고 — 컬러만 강조, 폰트는 다른 컬럼과 동일 */}
+                  <td className="text-right tabular-nums">
+                    <span
+                      className="font-semibold"
+                      style={{
+                        color: item.total_secured_kw > 0 ? 'var(--sf-pos)' : 'var(--sf-ink-4)',
+                      }}
+                    >
+                      {fmtKw(item.total_secured_kw)}
+                    </span>
                   </td>
 
                   {/* 공사배정 */}
