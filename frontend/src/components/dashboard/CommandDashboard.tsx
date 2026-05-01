@@ -192,7 +192,13 @@ export default function CommandDashboard({
                 sub={kpi.detail}
                 tone={index === 0 ? 'solar' : index === 1 ? 'ink' : index === 2 ? 'warn' : 'info'}
                 delta={index === 0 ? '+2.4%' : undefined}
-                spark={index === 0 ? [62, 64, 66, 68, 71, 72, 73, 74, 75, 76, 76, 76] : undefined}
+                spark={
+                  index === 0 ? [62, 64, 66, 68, 71, 72, 73, 74, 75, 76, 76, 76] :
+                  index === 1 ? [120, 124, 126, 128, 131, 134, 136, 137, 138, 140, 141, 142] :
+                  index === 2 ? [3.2, 3.0, 2.8, 3.1, 2.9, 2.7, 2.5, 2.6, 2.4, 2.3, 2.4, 2.5] :
+                  index === 3 ? [4.1, 4.3, 4.0, 3.8, 3.9, 3.6, 3.4, 3.5, 3.3, 3.2, 3.0, 2.9] :
+                  undefined
+                }
               />
             </Link>
           ))}

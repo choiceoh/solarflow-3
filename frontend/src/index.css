@@ -1061,6 +1061,40 @@ a:focus-visible,
   --border: var(--sf-line);
   --input: var(--sf-line-2);
   --ring: var(--sf-solar-2);
+
+  /* Tailwind palette → mockup tones — bg-red-/text-green-/bg-yellow-/bg-blue- 자동 전환 */
+  --color-red-50:    var(--sf-neg-bg);
+  --color-red-100:   var(--sf-neg-bg);
+  --color-red-200:   var(--sf-line-2);
+  --color-red-500:   var(--sf-neg);
+  --color-red-600:   var(--sf-neg);
+  --color-red-700:   var(--sf-neg);
+  --color-red-800:   var(--sf-neg);
+
+  --color-green-50:  var(--sf-pos-bg);
+  --color-green-100: var(--sf-pos-bg);
+  --color-green-200: var(--sf-line-2);
+  --color-green-500: var(--sf-pos);
+  --color-green-600: var(--sf-pos);
+  --color-green-700: var(--sf-pos);
+  --color-green-800: var(--sf-pos);
+
+  --color-yellow-50:  var(--sf-warn-bg);
+  --color-yellow-100: var(--sf-warn-bg);
+  --color-yellow-500: var(--sf-warn);
+  --color-yellow-600: var(--sf-warn);
+  --color-yellow-700: var(--sf-warn);
+
+  --color-blue-50:   var(--sf-info-bg);
+  --color-blue-100:  var(--sf-info-bg);
+  --color-blue-500:  var(--sf-info);
+  --color-blue-600:  var(--sf-info);
+  --color-blue-700:  var(--sf-info);
+
+  --color-emerald-700: var(--sf-pos);
+  --color-amber-700:   var(--sf-warn);
+  --color-orange-500:  var(--sf-warn);
+  --color-orange-600:  var(--sf-warn);
 }
 
 /* shadcn Card 텍스트 밀도 — mockup CardB 스펙에 맞춤 */
@@ -1136,22 +1170,38 @@ a:focus-visible,
   font-size: 12px;
 }
 
-/* Dialog/Modal — mockup elevation */
+/* Dialog/Modal — mockup elevation + 정밀 typography·padding */
 [data-slot="dialog-content"],
 [data-slot="alert-dialog-content"] {
   border-color: var(--sf-line);
   border-radius: 6px;
   box-shadow: 0 24px 60px -20px rgb(60 40 10 / 0.18), 0 4px 12px -4px rgb(60 40 10 / 0.08);
 }
+[data-slot="dialog-header"],
+[data-slot="alert-dialog-header"] {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--sf-line);
+  gap: 4px;
+}
 [data-slot="dialog-title"],
 [data-slot="alert-dialog-title"] {
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.012em;
+  color: var(--sf-ink);
+  line-height: 1.2;
 }
 [data-slot="dialog-description"],
 [data-slot="alert-dialog-description"] {
   color: var(--sf-ink-3);
-  font-size: 12px;
+  font-size: 11px;
+  font-family: var(--sf-mono);
+}
+[data-slot="dialog-footer"],
+[data-slot="alert-dialog-footer"] {
+  padding-top: 12px;
+  border-top: 1px solid var(--sf-line);
+  margin-top: 8px;
 }
 
 /* Tooltip — 다크 잉크 배경 + 작은 모노 텍스트 (Bloomberg-style) */
