@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, PackageCheck, ClipboardList, Truck,
   Calculator, Landmark, Database, Search, StickyNote,
-  FileSignature, Settings, ChevronDown, ChevronRight, LogOut,
+  FileSignature, Settings, LogOut,
   ScrollText, Wallet, Building2, Home, ScanText,
   type LucideIcon,
 } from 'lucide-react';
@@ -21,11 +21,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 interface MenuItem {
   icon: LucideIcon;
   label: string;
-  path?: string;
+  path: string;
   roles?: string[];
   // D-108: 표시 허용 테넌트. 미지정이면 모든 테넌트(공통)에서 노출.
   tenants?: TenantScope[];
-  children?: { label: string; path: string }[];
 }
 
 // 홈 — 가용재고 (전체 공개, 최상단 단독 배치)
@@ -58,19 +57,11 @@ const analysisItems: MenuItem[] = [
   { icon: Calculator,      label: '매출/이익 분석', path: '/sales-analysis', roles: ['admin', 'operator', 'executive'], tenants: ['topsolar'] },
 ];
 
-const masterItem: MenuItem = {
+const dataItem: MenuItem = {
   icon: Database,
-  label: '마스터 관리',
+  label: '데이터',
+  path: '/data',
   roles: ['admin', 'operator'],
-  children: [
-    { label: '법인',   path: '/masters/companies' },
-    { label: '제조사', path: '/masters/manufacturers' },
-    { label: '품번',   path: '/masters/products' },
-    { label: '거래처', path: '/masters/partners' },
-    { label: '창고',   path: '/masters/warehouses' },
-    { label: '은행',   path: '/masters/banks' },
-    { label: '공사현장', path: '/masters/construction-sites' },
-  ],
 };
 
 const toolItems: MenuItem[] = [
@@ -94,16 +85,10 @@ interface NavLinkProps extends MenuItem {
   collapsed: boolean;
   pathname: string;
   search: string;
-  masterOpen: boolean;
-  onMasterToggle: () => void;
 }
 
-function NavLink({
-  icon: Icon, label, path, children: subs,
-  collapsed, pathname, search, masterOpen, onMasterToggle,
-}: NavLinkProps) {
+function NavLink({ icon: Icon, label, path, collapsed, pathname, search }: NavLinkProps) {
   const isActive = (() => {
-    if (!path) return pathname.startsWith('/masters');
     const [basePath, queryStr] = path.split('?');
     if (queryStr) {
       // 쿼리 파라미터 포함 경로 (예: /orders?tab=receipts)
@@ -113,14 +98,13 @@ function NavLink({
     if (path === '/orders' || path === '/procurement' || path === '/inventory') return pathname === path && !search;
     return pathname === path;
   })();
-  const isSub = !!subs;
 
   if (collapsed) {
     return (
       <Tooltip>
         <TooltipTrigger>
           <Link
-            to={path ?? '/masters/companies'}
+            to={path}
             className={cn(
               'flex h-9 w-9 items-center justify-center rounded-md mx-auto transition-colors',
               isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
@@ -134,43 +118,9 @@ function NavLink({
     );
   }
 
-  if (isSub) {
-    return (
-      <div>
-        <button
-          onClick={onMasterToggle}
-          className={cn(
-            'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
-            isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
-          )}
-        >
-          <Icon className="h-4 w-4 shrink-0" />
-          <span className="flex-1 text-left">{label}</span>
-          {masterOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        </button>
-        {masterOpen && (
-          <div className="ml-6 mt-0.5 space-y-0.5">
-            {subs!.map((sub) => (
-              <Link
-                key={sub.path}
-                to={sub.path}
-                className={cn(
-                  'block rounded-md px-3 py-1.5 text-sm transition-colors',
-                  pathname === sub.path ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50'
-                )}
-              >
-                {sub.label}
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <Link
-      to={path!}
+      to={path}
       className={cn(
         'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
         isActive ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50'
@@ -190,7 +140,6 @@ export default function Sidebar() {
   const companies = useAppStore((s) => s.companies);
   const loadCompanies = useAppStore((s) => s.loadCompanies);
   const { selectedCompanyId, setCompanyId } = useAppStore();
-  const [masterOpen, setMasterOpen] = useState(pathname.startsWith('/masters'));
   // D-108: 호스트네임으로 테넌트 결정. 백엔드 격리는 별도 강제됨.
   const tenant = detectTenantScope();
 
@@ -202,13 +151,7 @@ export default function Sidebar() {
     ? (selectedCompany.company_code || selectedCompany.company_name.slice(0, 2))
     : '전';
 
-  const navLinkBase = {
-    collapsed,
-    pathname,
-    search,
-    masterOpen,
-    onMasterToggle: () => setMasterOpen(!masterOpen),
-  };
+  const navLinkBase = { collapsed, pathname, search };
 
   return (
     <aside className={cn(
@@ -302,7 +245,7 @@ export default function Sidebar() {
             <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">기준정보/도구</p>
           </>
         )}
-        {canSee(masterItem, role, tenant) && <NavLink {...navLinkBase} {...masterItem} />}
+        {canSee(dataItem, role, tenant) && <NavLink {...navLinkBase} {...dataItem} />}
         {toolItems.filter((m) => canSee(m, role, tenant)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
         {canSee(settingsItem, role, tenant) && <NavLink {...navLinkBase} {...settingsItem} />}
       </nav>

@@ -30,6 +30,7 @@ const PartnerPage = lazy(() => import('@/pages/masters/PartnerPage'));
 const WarehousePage = lazy(() => import('@/pages/masters/WarehousePage'));
 const BankPage = lazy(() => import('@/pages/masters/BankPage'));
 const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
+const DataHubPage = lazy(() => import('@/pages/masters/DataHubPage'));
 
 function Fallback() {
   return <LoadingSpinner className="h-screen" />;
@@ -53,6 +54,7 @@ export default function App() {
                 <Route index element={<Navigate to="/inventory" replace />} />
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/inventory" element={<InventoryPage />} />
+                <Route path="/data" element={<RoleGuard allowedRoles={['admin', 'operator']}><DataHubPage /></RoleGuard>} />
                 <Route path="/masters/companies" element={<CompanyPage />} />
                 <Route path="/masters/manufacturers" element={<ManufacturerPage />} />
                 <Route path="/masters/products" element={<ProductPage />} />
