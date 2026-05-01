@@ -32,7 +32,6 @@ import IncomingTable from '@/components/inventory/IncomingTable';
 import ForecastTable from '@/components/inventory/ForecastTable';
 import ModuleDemandForecastPanel from '@/components/inventory/ModuleDemandForecastPanel';
 import { CardB, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
-import type { Manufacturer } from '@/types/masters';
 import type { InventorySummary, ProductForecast } from '@/types/inventory';
 
 function formatAutoKw(kw: number): string {
@@ -110,7 +109,9 @@ export default function InventoryPage() {
   const handleCardClick = (tab: 'physical' | 'incoming' | 'avail') => {
     handleTabChange(tab);
   };
-  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  const storeManufacturers = useAppStore((s) => s.manufacturers);
+  const loadManufacturers = useAppStore((s) => s.loadManufacturers);
+  const manufacturers = useMemo(() => sortManufacturers(storeManufacturers), [storeManufacturers]);
   const [mfgFilter, setMfgFilter] = useState<string>('');
   const [wpFilter, setWpFilter] = useState<string>('');
   const [forecastScope, setForecastScope] = useState<ForecastScope>('current');
@@ -334,10 +335,8 @@ export default function InventoryPage() {
   };
 
   useEffect(() => {
-    fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers')
-      .then((list) => setManufacturers(sortManufacturers(list.filter((m) => m.is_active))))
-      .catch(() => {});
-  }, []);
+    loadManufacturers();
+  }, [loadManufacturers]);
 
   const invOpts = mfgFilter ? { manufacturerId: mfgFilter } : {};
   const { data: rawInv, loading: invLoading, error: invError, reload: reloadInv } = useInventory(invOpts);

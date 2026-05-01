@@ -15,7 +15,7 @@ import { fetchWithAuth } from '@/lib/api';
 import { formatKRW, formatNumber, moduleLabel } from '@/lib/utils';
 import type { SaleListItem } from '@/types/outbound';
 import type { CustomerAnalysis, CustomerItem } from '@/hooks/useDashboard';
-import type { Manufacturer, Partner, Product } from '@/types/masters';
+import type { Partner } from '@/types/masters';
 import { CardB, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
 
 interface MarginItem {
@@ -216,8 +216,10 @@ export default function SalesAnalysisPage() {
   const [customerFilter, setCustomerFilter] = useState('');
   const [manufacturerFilter, setManufacturerFilter] = useState('');
   const [partners, setPartners] = useState<Partner[]>([]);
-  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const manufacturers = useAppStore((s) => s.manufacturers);
+  const products = useAppStore((s) => s.products);
+  const loadManufacturers = useAppStore((s) => s.loadManufacturers);
+  const loadProducts = useAppStore((s) => s.loadProducts);
   const [state, setState] = useState<PageState>({
     loading: true,
     error: null,
@@ -235,13 +237,9 @@ export default function SalesAnalysisPage() {
     fetchWithAuth<Partner[]>('/api/v1/partners')
       .then((list) => setPartners(list.filter((p) => p.is_active && (p.partner_type === 'customer' || p.partner_type === 'both'))))
       .catch(() => setPartners([]));
-    fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers')
-      .then((list) => setManufacturers(list.filter((m) => m.is_active)))
-      .catch(() => setManufacturers([]));
-    fetchWithAuth<Product[]>('/api/v1/products')
-      .then((list) => setProducts(list.filter((p) => p.is_active)))
-      .catch(() => setProducts([]));
-  }, []);
+    loadManufacturers();
+    loadProducts();
+  }, [loadManufacturers, loadProducts]);
 
   const load = useCallback(async () => {
     if (!selectedCompanyId) {

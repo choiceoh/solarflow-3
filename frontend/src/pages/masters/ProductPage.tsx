@@ -10,6 +10,7 @@ import { MasterConsole } from '@/components/command/MasterConsole';
 import { RailBlock } from '@/components/command/MockupPrimitives';
 import { fetchWithAuth } from '@/lib/api';
 import { formatWp, formatSize } from '@/lib/utils';
+import { useAppStore } from '@/stores/appStore';
 import type { Product, Manufacturer } from '@/types/masters';
 
 // 기본 정렬: 제조사→규격(Wp)→크기(mm) ascending
@@ -35,6 +36,8 @@ export default function ProductPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const invalidateProducts = useAppStore((s) => s.invalidateProducts);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -47,9 +50,10 @@ export default function ProductPage() {
         manufacturer_name: mfgs.find((m) => m.manufacturer_id === p.manufacturer_id)?.name_kr ?? '',
       })));
       setManufacturers(mfgs.filter((m) => m.is_active));
+      invalidateProducts();
     } catch { /* empty */ }
     setLoading(false);
-  }, []);
+  }, [invalidateProducts]);
 
   // 초기 로드 — 마운트 시 1회만 비동기 fetch (load 함수는 갱신용으로 유지)
   useEffect(() => {

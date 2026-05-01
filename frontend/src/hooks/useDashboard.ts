@@ -224,6 +224,7 @@ export function useDashboard(companyId: string | null, userRole: string) {
   const [orderBacklog, setOrderBacklog] = useState<DashboardSectionState<Order[]>>(makeSectionState());
   const [outstanding, setOutstanding] = useState<DashboardSectionState<CustomerAnalysis>>(makeSectionState());
   const [sales, setSales] = useState<DashboardSectionState<SaleListItem[]>>(makeSectionState([]));
+  const [inventory, setInventory] = useState<DashboardSectionState<InventoryResponse>>(makeSectionState());
   const [longTermWarning, setLongTermWarning] = useState(0);
   const [longTermCritical, setLongTermCritical] = useState(0);
 
@@ -237,6 +238,7 @@ export function useDashboard(companyId: string | null, userRole: string) {
     setRevenue((s) => ({ ...s, loading: true, error: null }));
     setPriceTrend((s) => ({ ...s, loading: true, error: null }));
     setSales((s) => ({ ...s, loading: true, error: null }));
+    setInventory((s) => ({ ...s, loading: true, error: null }));
     setAlerts((s) => ({ ...s, loading: true, error: null }));
     setCompanySummary((s) => ({ ...s, loading: true, error: null }));
     if (isManager) {
@@ -267,7 +269,7 @@ export function useDashboard(companyId: string | null, userRole: string) {
       fetchPriceHistories(),  // 7
     ]);
 
-    // 0: Inventory -> summary + 장기재고 알림
+    // 0: Inventory -> summary + 장기재고 알림 + inventory 섹션
     const invResult = results[0];
     if (invResult.status === 'fulfilled') {
       const s = invResult.value.summary;
@@ -283,10 +285,12 @@ export function useDashboard(companyId: string | null, userRole: string) {
           lc_available_usd: prev.data?.lc_available_usd ?? 0,
         },
       }));
+      setInventory({ data: invResult.value, loading: false, error: null });
       setLongTermWarning(invResult.value.items.filter((i) => i.long_term_status === 'warning').length);
       setLongTermCritical(invResult.value.items.filter((i) => i.long_term_status === 'critical').length);
     } else {
       setSummary((s) => ({ ...s, loading: false, error: '재고 데이터 조회 실패' }));
+      setInventory({ data: null, loading: false, error: '재고 데이터 조회 실패' });
     }
 
     // 1: Sales -> monthly revenue
@@ -399,7 +403,7 @@ export function useDashboard(companyId: string | null, userRole: string) {
 
   return {
     summary, revenue, priceTrend, alerts, companySummary,
-    incoming, orderBacklog, outstanding, sales,
+    incoming, orderBacklog, outstanding, sales, inventory,
     longTermWarning, longTermCritical,
     reload: load,
   };

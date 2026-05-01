@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { fetchWithAuth } from '@/lib/api';
-import type { Company } from '@/types/masters';
+import type { Company, Manufacturer, Product } from '@/types/masters';
 
 interface AppState {
   selectedCompanyId: string | null;
@@ -10,9 +10,19 @@ interface AppState {
   companies: Company[];
   companiesLoaded: boolean;
   loadCompanies: () => Promise<void>;
+  manufacturers: Manufacturer[];
+  manufacturersLoaded: boolean;
+  loadManufacturers: () => Promise<void>;
+  invalidateManufacturers: () => void;
+  products: Product[];
+  productsLoaded: boolean;
+  loadProducts: () => Promise<void>;
+  invalidateProducts: () => void;
 }
 
-let loadPromise: Promise<void> | null = null;
+let companiesPromise: Promise<void> | null = null;
+let manufacturersPromise: Promise<void> | null = null;
+let productsPromise: Promise<void> | null = null;
 
 export const useAppStore = create<AppState>((set, get) => ({
   selectedCompanyId: 'all',
@@ -23,8 +33,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   companiesLoaded: false,
   loadCompanies: () => {
     if (get().companiesLoaded) return Promise.resolve();
-    if (loadPromise) return loadPromise;
-    loadPromise = fetchWithAuth<Company[]>('/api/v1/companies')
+    if (companiesPromise) return companiesPromise;
+    companiesPromise = fetchWithAuth<Company[]>('/api/v1/companies')
       .then((list) => {
         set({ companies: list.filter((c) => c.is_active), companiesLoaded: true });
       })
@@ -32,8 +42,44 @@ export const useAppStore = create<AppState>((set, get) => ({
         console.error('[appStore] companies 로딩 실패:', err);
       })
       .finally(() => {
-        loadPromise = null;
+        companiesPromise = null;
       });
-    return loadPromise;
+    return companiesPromise;
   },
+  manufacturers: [],
+  manufacturersLoaded: false,
+  loadManufacturers: () => {
+    if (get().manufacturersLoaded) return Promise.resolve();
+    if (manufacturersPromise) return manufacturersPromise;
+    manufacturersPromise = fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers')
+      .then((list) => {
+        set({ manufacturers: list.filter((m) => m.is_active), manufacturersLoaded: true });
+      })
+      .catch((err) => {
+        console.error('[appStore] manufacturers 로딩 실패:', err);
+      })
+      .finally(() => {
+        manufacturersPromise = null;
+      });
+    return manufacturersPromise;
+  },
+  invalidateManufacturers: () => set({ manufacturersLoaded: false }),
+  products: [],
+  productsLoaded: false,
+  loadProducts: () => {
+    if (get().productsLoaded) return Promise.resolve();
+    if (productsPromise) return productsPromise;
+    productsPromise = fetchWithAuth<Product[]>('/api/v1/products')
+      .then((list) => {
+        set({ products: list.filter((p) => p.is_active), productsLoaded: true });
+      })
+      .catch((err) => {
+        console.error('[appStore] products 로딩 실패:', err);
+      })
+      .finally(() => {
+        productsPromise = null;
+      });
+    return productsPromise;
+  },
+  invalidateProducts: () => set({ productsLoaded: false }),
 }));
