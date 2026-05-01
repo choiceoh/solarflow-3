@@ -6,6 +6,7 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import RoleGuard from '@/components/auth/RoleGuard';
 import AppLayout from '@/components/layout/AppLayout';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import MobileBlock from '@/components/common/MobileBlock';
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
@@ -62,6 +63,7 @@ export default function App() {
   }, [initialize]);
 
   return (
+    <MobileBlock>
     <TooltipProvider>
       <BrowserRouter>
         <Suspense fallback={<Fallback />}>
@@ -118,5 +120,6 @@ export default function App() {
         </Suspense>
       </BrowserRouter>
     </TooltipProvider>
+    </MobileBlock>
   );
 }
