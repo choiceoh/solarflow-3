@@ -28,10 +28,11 @@ pub async fn inventory_handler(
     State(pool): State<PgPool>,
     Json(req): Json<InventoryRequest>,
 ) -> (StatusCode, Json<Value>) {
-    if req.company_id.is_none() {
+    let has_ids = req.company_ids.as_ref().is_some_and(|v| !v.is_empty());
+    if req.company_id.is_none() && !has_ids {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({"error": "company_id는 필수 항목입니다"})),
+            Json(json!({"error": "company_id 또는 company_ids 중 하나는 필수입니다"})),
         );
     }
 

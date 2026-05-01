@@ -6,9 +6,14 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// 재고 집계 요청
+///
+/// 단일 법인: `company_id` 단독
+/// 다중 법인: `company_ids`에 법인 ID 배열 (예: 전체 법인 모드)
+/// 둘 중 하나는 반드시 있어야 한다.
 #[derive(Debug, Deserialize)]
 pub struct InventoryRequest {
     pub company_id: Option<Uuid>,
+    pub company_ids: Option<Vec<Uuid>>,
     pub product_id: Option<Uuid>,
     pub manufacturer_id: Option<Uuid>,
 }
@@ -22,8 +27,13 @@ pub struct InventoryResponse {
 }
 
 /// 품번별 재고 상세
+///
+/// 다중 법인 모드에서는 같은 product_id가 여러 법인 row로 분리되어 반환된다.
+/// 단일 법인 모드에서도 호출 법인 1개의 row만 나온다.
 #[derive(Debug, Serialize)]
 pub struct InventoryItem {
+    pub company_id: Uuid,
+    pub company_name: String,
     pub product_id: Uuid,
     pub product_code: String,
     pub product_name: String,

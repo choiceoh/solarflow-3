@@ -31,13 +31,17 @@ async function getActiveCompanyIds(): Promise<string[]> {
 }
 
 /**
- * Calc API 호출 — "all"이면 법인별로 호출 후 merge, 아니면 단일 호출
+ * Calc API 호출 — 단일 법인은 company_id, "all"은 company_ids 배열로 한 번에.
+ * Rust 엔진이 다중 법인을 단일 SQL로 처리하므로 클라이언트 merge는 더 이상 불필요.
+ *
+ * 신규/구 calc 핸들러 호환을 위해 `merge`는 옵션으로 남겨두지만 `inventory`처럼
+ * 멀티 법인 지원이 끝난 엔드포인트에서는 호출자가 생략할 수 있다.
  */
 export async function fetchCalc<T>(
   companyId: string | null,
   endpoint: string,
   extraBody: Record<string, unknown>,
-  merge: (results: T[]) => T,
+  merge?: (results: T[]) => T,
 ): Promise<T> {
   if (!isAllCompanies(companyId)) {
     return fetchWithAuth<T>(endpoint, {
@@ -45,10 +49,18 @@ export async function fetchCalc<T>(
       body: JSON.stringify({ company_id: companyId, ...extraBody }),
     });
   }
+
   const ids = await getActiveCompanyIds();
-  // 법인별 호출은 Promise.allSettled로 모은 뒤, 하나라도 실패하면 명시적으로 throw
-  // — 일부 법인이 빠진 합산을 정상처럼 보여주는 것이 가장 위험한 시나리오이므로
-  //   호출자가 부분 실패를 인지하고 에러 상태를 표시하도록 함
+
+  // merge가 제공되지 않은 엔드포인트는 엔진이 다중 법인 단일 호출을 지원한다고 간주
+  if (!merge) {
+    return fetchWithAuth<T>(endpoint, {
+      method: 'POST',
+      body: JSON.stringify({ company_ids: ids, ...extraBody }),
+    });
+  }
+
+  // 레거시 경로: 엔드포인트가 아직 단일 법인만 받는 경우 법인별 호출 후 merge
   const settled = await Promise.allSettled(
     ids.map((id) =>
       fetchWithAuth<T>(endpoint, {
