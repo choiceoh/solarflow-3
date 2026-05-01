@@ -212,7 +212,7 @@ export default function CommandDashboard({
           >
             <SectionState loading={inventory.loading} error={inventory.error}>
               <div className="sf-table-wrap rounded-none border-0">
-                <table className="grid">
+                <table>
                   <thead>
                     <tr>
                       <th>품목</th>
