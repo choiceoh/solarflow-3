@@ -7,24 +7,24 @@ import {
 import type { SearchResult } from '@/types/search';
 import { SEARCH_MODULE_ROUTE } from '@/types/search';
 
-// result_type 기준 아이콘 (module보다 더 세밀하게 표현)
+// result_type 기준 아이콘 — 색상은 mockup 5톤(info/warn/pos/neg/ink-3)으로 통일
 const TYPE_ICON: Record<string, React.ReactNode> = {
-  product:           <Package className="h-4 w-4 text-blue-600" />,
-  compare:           <Package className="h-4 w-4 text-blue-400" />,
-  inventory:         <Package className="h-4 w-4 text-blue-600" />,
-  po:                <FileText className="h-4 w-4 text-purple-600" />,
-  po_payment:        <FileText className="h-4 w-4 text-purple-600" />,
-  bl:                <Ship className="h-4 w-4 text-cyan-600" />,
-  lc_maturity:       <Landmark className="h-4 w-4 text-orange-600" />,
-  lc:                <Landmark className="h-4 w-4 text-orange-600" />,
-  outbound:          <Truck className="h-4 w-4 text-green-600" />,
-  outstanding:       <Users className="h-4 w-4 text-pink-600" />,
-  partner:           <Users className="h-4 w-4 text-pink-600" />,
-  construction_site: <HardHat className="h-4 w-4 text-amber-600" />,
-  memo_po:           <StickyNote className="h-4 w-4 text-violet-500" />,
-  memo_order:        <StickyNote className="h-4 w-4 text-violet-500" />,
-  memo_outbound:     <StickyNote className="h-4 w-4 text-violet-500" />,
-  order:             <ScrollText className="h-4 w-4 text-teal-600" />,
+  product:           <Package className="h-4 w-4" style={{ color: 'var(--sf-info)' }} />,
+  compare:           <Package className="h-4 w-4" style={{ color: 'var(--sf-info)' }} />,
+  inventory:         <Package className="h-4 w-4" style={{ color: 'var(--sf-info)' }} />,
+  po:                <FileText className="h-4 w-4" style={{ color: 'var(--sf-info)' }} />,
+  po_payment:        <FileText className="h-4 w-4" style={{ color: 'var(--sf-info)' }} />,
+  bl:                <Ship className="h-4 w-4" style={{ color: 'var(--sf-info)' }} />,
+  lc_maturity:       <Landmark className="h-4 w-4" style={{ color: 'var(--sf-warn)' }} />,
+  lc:                <Landmark className="h-4 w-4" style={{ color: 'var(--sf-warn)' }} />,
+  outbound:          <Truck className="h-4 w-4" style={{ color: 'var(--sf-pos)' }} />,
+  outstanding:       <Users className="h-4 w-4" style={{ color: 'var(--sf-neg)' }} />,
+  partner:           <Users className="h-4 w-4" style={{ color: 'var(--sf-ink-3)' }} />,
+  construction_site: <HardHat className="h-4 w-4" style={{ color: 'var(--sf-warn)' }} />,
+  memo_po:           <StickyNote className="h-4 w-4" style={{ color: 'var(--sf-ink-3)' }} />,
+  memo_order:        <StickyNote className="h-4 w-4" style={{ color: 'var(--sf-ink-3)' }} />,
+  memo_outbound:     <StickyNote className="h-4 w-4" style={{ color: 'var(--sf-ink-3)' }} />,
+  order:             <ScrollText className="h-4 w-4" style={{ color: 'var(--sf-pos)' }} />,
 };
 
 // result_type → 사람이 읽는 한국어 레이블
