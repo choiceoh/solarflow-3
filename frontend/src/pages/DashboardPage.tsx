@@ -1,16 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppStore } from '@/stores/appStore';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useTurnover } from '@/hooks/useTurnover';
-import { useInventory } from '@/hooks/useInventory';
 import { useForecast } from '@/hooks/useForecast';
 import { usePermission } from '@/hooks/usePermission';
 import CommandDashboard from '@/components/dashboard/CommandDashboard';
-import { fetchWithAuth } from '@/lib/api';
 import { sortManufacturers } from '@/lib/manufacturerPriority';
-import type { Manufacturer, Product } from '@/types/masters';
 import {
   canAccessMenu, hasFeature, getDashboardType,
   type Role,
@@ -41,8 +38,10 @@ export default function DashboardPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [searchParams] = useSearchParams();
   const realPerm = usePermission();
-  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const storeManufacturers = useAppStore((s) => s.manufacturers);
+  const products = useAppStore((s) => s.products);
+  const loadManufacturers = useAppStore((s) => s.loadManufacturers);
+  const loadProducts = useAppStore((s) => s.loadProducts);
 
   // [DEV 전용] ?role= 오버라이드
   const overrideRoleParam = searchParams.get('role');
@@ -65,22 +64,19 @@ export default function DashboardPage() {
 
   const {
     summary, revenue, priceTrend, sales, outstanding, incoming, orderBacklog,
-    longTermWarning, longTermCritical,
+    inventory, longTermWarning, longTermCritical,
   } = useDashboard(selectedCompanyId, userRole);
   const alertState = useAlerts(selectedCompanyId);
 
   const turnover = useTurnover(selectedCompanyId, 90);
-  const inventory = useInventory();
   const forecast = useForecast();
 
   useEffect(() => {
-    fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers')
-      .then((list) => setManufacturers(sortManufacturers(list.filter((m) => m.is_active))))
-      .catch(() => {});
-    fetchWithAuth<Product[]>('/api/v1/products')
-      .then((list) => setProducts(list.filter((p) => p.is_active)))
-      .catch(() => {});
-  }, []);
+    loadManufacturers();
+    loadProducts();
+  }, [loadManufacturers, loadProducts]);
+
+  const manufacturers = useMemo(() => sortManufacturers(storeManufacturers), [storeManufacturers]);
 
   // 현재 모든 정의된 역할의 dashboardType='strategic'으로 통일 (operational은 예비 타입).
   // 추후 운영 뷰가 다시 필요해지면 여기에 분기 추가.

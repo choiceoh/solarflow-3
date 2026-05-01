@@ -19,7 +19,7 @@ import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
   type OutboundStatus, type UsageCategory,
 } from '@/types/outbound';
-import type { Manufacturer, Partner } from '@/types/masters';
+import type { Partner } from '@/types/masters';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 
 function FilterText({ text }: { text: string }) {
@@ -44,7 +44,8 @@ export default function OutboundPage() {
   const [monthFilter, setMonthFilter] = useState('');
   const [invoiceFilter, setInvoiceFilter] = useState('');
 
-  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  const manufacturers = useAppStore((s) => s.manufacturers);
+  const loadManufacturers = useAppStore((s) => s.loadManufacturers);
   const [partners, setPartners] = useState<Partner[]>([]);
 
   const outboundFilters: { status?: string; usage_category?: string; manufacturer_id?: string } = {};
@@ -61,12 +62,11 @@ export default function OutboundPage() {
   const { data: sales, loading: saleLoading, reload: reloadSales } = useSaleList(saleFilters);
 
   useEffect(() => {
-    fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers')
-      .then((list) => setManufacturers(list.filter((m) => m.is_active))).catch(() => {});
+    loadManufacturers();
     fetchWithAuth<Partner[]>('/api/v1/partners')
       .then((list) => setPartners(list.filter((p) => p.is_active && (p.partner_type === 'customer' || p.partner_type === 'both'))))
       .catch(() => {});
-  }, []);
+  }, [loadManufacturers]);
 
   if (!selectedCompanyId) {
     return (

@@ -10,6 +10,7 @@ import { MasterConsole } from '@/components/command/MasterConsole';
 import { RailBlock } from '@/components/command/MockupPrimitives';
 import { fetchWithAuth } from '@/lib/api';
 import { sortManufacturers } from '@/lib/manufacturerPriority';
+import { useAppStore } from '@/stores/appStore';
 import type { Manufacturer } from '@/types/masters';
 
 export default function ManufacturerPage() {
@@ -22,14 +23,17 @@ export default function ManufacturerPage() {
   const [deleteTarget, setDeleteTarget] = useState<Manufacturer | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const invalidateManufacturers = useAppStore((s) => s.invalidateManufacturers);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const list = await fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers');
       setData(sortManufacturers(list));
+      invalidateManufacturers();
     } catch { /* empty */ }
     setLoading(false);
-  }, []);
+  }, [invalidateManufacturers]);
 
   // 초기 로드 — 마운트 시 1회만 비동기 fetch (load는 갱신용으로 유지)
   useEffect(() => {
