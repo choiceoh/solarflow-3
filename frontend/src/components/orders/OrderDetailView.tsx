@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, Pencil, Plus, Trash2, Truck } from 'lucide-react';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate, formatNumber, formatKw, moduleLabel } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
 import FulfillmentSourceBadge from './FulfillmentSourceBadge';
 import OrderForm from './OrderForm';
 import OutboundForm from '@/components/outbound/OutboundForm';
@@ -25,15 +25,6 @@ import type { Sale } from '@/types/outbound';
 interface Props {
   orderId: string;
   onBack: () => void;
-}
-
-function Field({ label, value }: { label: string; value: string | undefined }) {
-  return (
-    <div>
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className="text-sm">{value || '—'}</p>
-    </div>
-  );
 }
 
 function safeNumber(value: unknown): number | undefined {
@@ -55,12 +46,12 @@ function formatMaybeKw(value: unknown): string | undefined {
 export default function OrderDetailView({ orderId, onBack }: Props) {
   const { data: order, loading, reload } = useOrderDetail(orderId);
   const { data: outbounds, loading: obLoading, reload: reloadOutbounds } = useOrderOutbounds(orderId);
-  const [editOpen, setEditOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(false);
+  const [editingSale, setEditingSale] = useState(false);
+  const [outboundFormOpen, setOutboundFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  const [saleFormOpen, setSaleFormOpen] = useState(false);
-  const [outboundFormOpen, setOutboundFormOpen] = useState(false);
   const [sales, setSales] = useState<Sale[]>([]);
 
   const loadSales = async () => {
@@ -137,6 +128,12 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
     await reload();
   };
 
+  const statusBadge = (
+    <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', statusColor)}>
+      {statusLabel}
+    </span>
+  );
+
   return (
     <div className="space-y-4">
       <div className="sf-detail-header">
@@ -146,85 +143,133 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
         <h2 className="flex-1 text-base font-semibold" style={{ letterSpacing: '-0.012em' }}>
           수주 <span className="sf-mono">{order.order_number || shortOrderId}</span>
         </h2>
-        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-          <Pencil className="mr-1 h-3.5 w-3.5" />수정
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setOutboundFormOpen(true)} disabled={remaining <= 0}>
-          <Truck className="mr-1 h-3.5 w-3.5" />출고 등록
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)} className="text-destructive hover:text-destructive">
-          <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
-        </Button>
+        {!editingOrder && (
+          <>
+            <Button variant="outline" size="sm" onClick={() => setOutboundFormOpen(true)} disabled={remaining <= 0}>
+              <Truck className="mr-1 h-3.5 w-3.5" />출고 등록
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)} className="text-destructive hover:text-destructive">
+              <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
+            </Button>
+          </>
+        )}
       </div>
       {deleteError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{deleteError}</div>}
 
-      <Card>
-        <CardHeader className="pb-2 pt-4">
-          <div className="flex items-center gap-2">
-            <CardTitle className="text-sm">수주 정보</CardTitle>
-            <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', statusColor)}>
-              {statusLabel}
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent className="pb-4">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-            <Field label="발주번호" value={order.order_number} />
-            <Field label="거래처" value={order.customer_name} />
-            <Field label="수주일" value={formatDate(order.order_date)} />
-            <Field label="접수방법" value={receiptMethodLabel} />
-            <Field label="관리구분" value={managementLabel} />
-            <div>
-              <p className="text-[10px] text-muted-foreground">충당소스</p>
-              {order.fulfillment_source ? <FulfillmentSourceBadge source={order.fulfillment_source} /> : <p className="text-sm">—</p>}
-            </div>
-            <Field label="제조사/규격" value={moduleText} />
-            <Field label="품번" value={order.product_code} />
-            <Field label="품명" value={order.product_name} />
-            <Field label="규격" value={order.spec_wp ? `${order.spec_wp}Wp` : undefined} />
-            <Field label="수량" value={formatMaybeNumber(order.quantity)} />
-            <Field label="잔량" value={formatMaybeNumber(remaining)} />
-            <Field label="용량" value={formatMaybeKw(order.capacity_kw)} />
-            <Field label="Wp단가" value={formatMaybeNumber(order.unit_price_wp, '원/Wp')} />
-            <Field label="현장명" value={order.site_name} />
-            <Field label="현장 주소" value={order.site_address} />
-            <Field label="현장 담당" value={order.site_contact} />
-            <Field label="현장 전화" value={order.site_phone} />
-            <Field label="결제조건" value={order.payment_terms} />
-            <Field label="현금/선수금율" value={formatMaybeNumber(order.deposit_rate, '%')} />
-            <Field label="납기일" value={order.delivery_due ? formatDate(order.delivery_due) : undefined} />
-            <Field label="스페어" value={formatMaybeNumber(order.spare_qty)} />
-            {order.memo && <Field label="메모" value={order.memo} />}
-          </div>
-        </CardContent>
-      </Card>
+      {editingOrder ? (
+        <DetailSection title="수주 수정">
+          <OrderForm
+            variant="inline"
+            onOpenChange={(o) => { if (!o) setEditingOrder(false); }}
+            onSubmit={handleUpdate}
+            editData={order}
+          />
+        </DetailSection>
+      ) : (
+        <>
+          <DetailSection
+            title="기본 정보"
+            badges={statusBadge}
+            actions={(
+              <Button variant="outline" size="sm" onClick={() => setEditingOrder(true)}>
+                <Pencil className="mr-1 h-3.5 w-3.5" />수정
+              </Button>
+            )}
+          >
+            <DetailFieldGrid cols={4}>
+              <DetailField label="발주번호" value={order.order_number} />
+              <DetailField label="수주일" value={formatDate(order.order_date)} />
+              <DetailField label="거래처" value={order.customer_name} span={2} />
+              <DetailField label="접수방법" value={receiptMethodLabel} />
+              <DetailField label="관리구분" value={managementLabel} />
+              <DetailField label="충당소스">
+                {order.fulfillment_source ? <FulfillmentSourceBadge source={order.fulfillment_source} /> : '—'}
+              </DetailField>
+              <DetailField label="납기일" value={order.delivery_due ? formatDate(order.delivery_due) : undefined} />
+            </DetailFieldGrid>
+          </DetailSection>
+
+          <DetailSection title="제품 · 수량">
+            <DetailFieldGrid cols={4}>
+              <DetailField label="제조사/규격" value={moduleText} span={2} />
+              <DetailField label="품번" value={order.product_code} />
+              <DetailField label="규격" value={order.spec_wp ? `${order.spec_wp}Wp` : undefined} />
+              <DetailField label="품명" value={order.product_name} span={4} />
+              <DetailField label="수량" value={formatMaybeNumber(order.quantity)} />
+              <DetailField label="잔량" value={formatMaybeNumber(remaining)} />
+              <DetailField label="용량" value={formatMaybeKw(order.capacity_kw)} />
+              <DetailField label="스페어" value={formatMaybeNumber(order.spare_qty)} />
+              <DetailField label="Wp단가" value={formatMaybeNumber(order.unit_price_wp, '원/Wp')} />
+            </DetailFieldGrid>
+          </DetailSection>
+
+          <DetailSection title="현장">
+            <DetailFieldGrid cols={4}>
+              <DetailField label="현장명" value={order.site_name} span={2} />
+              <DetailField label="현장 주소" value={order.site_address} span={2} />
+              <DetailField label="현장 담당" value={order.site_contact} />
+              <DetailField label="현장 전화" value={order.site_phone} />
+            </DetailFieldGrid>
+          </DetailSection>
+
+          <DetailSection title="결제">
+            <DetailFieldGrid cols={4}>
+              <DetailField label="결제조건" value={order.payment_terms} span={2} />
+              <DetailField label="현금/선수금율" value={formatMaybeNumber(order.deposit_rate, '%')} />
+            </DetailFieldGrid>
+          </DetailSection>
+
+          {order.memo && (
+            <DetailSection title="메모">
+              <p className="text-sm whitespace-pre-wrap break-words">{order.memo}</p>
+            </DetailSection>
+          )}
+        </>
+      )}
 
       <Separator />
 
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">계산서</h3>
-        <Button size="sm" onClick={() => setSaleFormOpen(true)}>
-          <Plus className="mr-1 h-3.5 w-3.5" />{sales[0] ? '계산서 수정' : '출고 전 계산서'}
-        </Button>
-      </div>
-
-      {salesRows.length > 0 && sale ? (
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-              <Field label="거래처" value={sale.customer_name ?? order.customer_name} />
-              <Field label="수량" value={formatMaybeNumber(safeNumber(sale.quantity) ?? order.quantity)} />
-              <Field label="Wp단가" value={formatMaybeNumber(sale.unit_price_wp, '원/Wp')} />
-              <Field label="공급가" value={formatMaybeNumber(sale.supply_amount, '원')} />
-              <Field label="부가세" value={formatMaybeNumber(sale.vat_amount, '원')} />
-              <Field label="합계" value={formatMaybeNumber(sale.total_amount, '원')} />
-              <Field label="계산서 발행일" value={sale.tax_invoice_date ? formatDate(sale.tax_invoice_date) : undefined} />
-              <Field label="출고 연결" value={sale.outbound_id ? '연결됨' : '출고 전'} />
-            </div>
-          </CardContent>
-        </Card>
+      {editingSale ? (
+        <DetailSection title={sale ? '계산서 수정' : '계산서 등록'}>
+          <SaleForm
+            variant="inline"
+            onOpenChange={(o) => { if (!o) setEditingSale(false); }}
+            onSubmit={handleSaleSubmit}
+            order={order}
+            editData={sale ?? null}
+          />
+        </DetailSection>
+      ) : sale ? (
+        <DetailSection
+          title="계산서"
+          actions={(
+            <Button variant="outline" size="sm" onClick={() => setEditingSale(true)}>
+              <Pencil className="mr-1 h-3.5 w-3.5" />계산서 수정
+            </Button>
+          )}
+        >
+          <DetailFieldGrid cols={4}>
+            <DetailField label="거래처" value={sale.customer_name ?? order.customer_name} span={2} />
+            <DetailField label="수량" value={formatMaybeNumber(safeNumber(sale.quantity) ?? order.quantity)} />
+            <DetailField label="Wp단가" value={formatMaybeNumber(sale.unit_price_wp, '원/Wp')} />
+            <DetailField label="공급가" value={formatMaybeNumber(sale.supply_amount, '원')} />
+            <DetailField label="부가세" value={formatMaybeNumber(sale.vat_amount, '원')} />
+            <DetailField label="합계" value={formatMaybeNumber(sale.total_amount, '원')} />
+            <DetailField label="계산서 발행일" value={sale.tax_invoice_date ? formatDate(sale.tax_invoice_date) : undefined} />
+            <DetailField label="출고 연결" value={sale.outbound_id ? '연결됨' : '출고 전'} />
+          </DetailFieldGrid>
+        </DetailSection>
       ) : (
-        <div className="text-center py-6 text-sm text-muted-foreground">등록된 계산서가 없습니다</div>
+        <DetailSection
+          title="계산서"
+          actions={(
+            <Button variant="outline" size="sm" onClick={() => setEditingSale(true)}>
+              <Plus className="mr-1 h-3.5 w-3.5" />출고 전 계산서
+            </Button>
+          )}
+        >
+          <div className="text-center py-6 text-sm text-muted-foreground">등록된 계산서가 없습니다</div>
+        </DetailSection>
       )}
 
       <Separator />
@@ -283,19 +328,11 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
 
       <LinkedMemoWidget linkedTable="orders" linkedId={orderId} />
 
-      <OrderForm open={editOpen} onOpenChange={setEditOpen} onSubmit={handleUpdate} editData={order} />
       <OutboundForm
         open={outboundFormOpen}
         onOpenChange={setOutboundFormOpen}
         onSubmit={handleOutboundSubmit}
         order={order}
-      />
-      <SaleForm
-        open={saleFormOpen}
-        onOpenChange={setSaleFormOpen}
-        onSubmit={handleSaleSubmit}
-        order={order}
-        editData={salesRows[0] ?? null}
       />
       <ConfirmDialog
         open={deleteOpen}

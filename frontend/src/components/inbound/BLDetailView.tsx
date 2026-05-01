@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { formatDate, formatNumber, shortMfgName } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
 import InboundStatusBadge from './InboundStatusBadge';
 import StatusChanger from './StatusChanger';
 import BLLineTable from './BLLineTable';
@@ -25,15 +26,6 @@ import BLOutboundTrackingTab from './BLOutboundTrackingTab';
 interface Props {
   blId: string;
   onBack: () => void;
-}
-
-function Field({ label, value }: { label: string; value: string | undefined }) {
-  return (
-    <div>
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className="text-sm">{value || '—'}</p>
-    </div>
-  );
 }
 
 const BL_DOCUMENT_ATTACHMENTS = [
@@ -66,7 +58,7 @@ function classifyBLDocument(name: string): BLDocumentFileType | null {
 export default function BLDetailView({ blId, onBack }: Props) {
   const { data: bl, loading: blLoading, reload: reloadBL } = useBLDetail(blId);
   const { data: lines, loading: linesLoading, reload: reloadLines } = useBLLines(blId);
-  const [editBLOpen, setEditBLOpen] = useState(false);
+  const [editingBL, setEditingBL] = useState(false);
   const [lineFormOpen, setLineFormOpen] = useState(false);
   const [editLine, setEditLine] = useState<BLLineItem | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -81,12 +73,15 @@ export default function BLDetailView({ blId, onBack }: Props) {
   useEffect(() => {
     if (!bl?.manufacturer_id) { setManufacturerName(''); return; }
     if (bl.manufacturer_name) { setManufacturerName(bl.manufacturer_name); return; }
+    let cancelled = false;
     fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers')
       .then((list) => {
+        if (cancelled) return;
         const m = list.find((x) => x.manufacturer_id === bl.manufacturer_id);
         setManufacturerName(m?.name_kr ?? '');
       })
-      .catch(() => setManufacturerName(''));
+      .catch(() => { if (!cancelled) setManufacturerName(''); });
+    return () => { cancelled = true; };
   }, [bl?.manufacturer_id, bl?.manufacturer_name]);
 
   if (blLoading || !bl) return <LoadingSpinner />;
@@ -97,6 +92,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
     await saveBLShipmentWithLines({ ...data, bl_id: blId });
     reloadBL();
     reloadLines();
+    setEditingBL(false);
   };
 
   const handleCreateLine = async (data: Record<string, unknown>) => {
@@ -172,16 +168,28 @@ export default function BLDetailView({ blId, onBack }: Props) {
         <h2 className="flex-1 text-base font-semibold" style={{ letterSpacing: '-0.012em' }}>
           입고 <span className="sf-mono">{bl.bl_number}</span>
         </h2>
-        <StatusChanger blId={blId} currentStatus={bl.status} inboundType={bl.inbound_type} onChanged={reloadBL} />
-        <Button variant="outline" size="sm" onClick={() => setEditBLOpen(true)}>
-          <Pencil className="mr-1 h-3.5 w-3.5" />수정
-        </Button>
-        {/* F20: 면장 등록 버튼 삭제 — 면장번호는 BLForm 수정에서 직접 입력 */}
-        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
-          <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
-        </Button>
+        {!editingBL && (
+          <>
+            <StatusChanger blId={blId} currentStatus={bl.status} inboundType={bl.inbound_type} onChanged={reloadBL} />
+            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
+            </Button>
+          </>
+        )}
       </div>
 
+      {editingBL && (
+        <DetailSection title="B/L 수정">
+          <BLForm
+            variant="inline"
+            onOpenChange={(o) => { if (!o) setEditingBL(false); }}
+            onSubmit={handleUpdateBL}
+            editData={bl}
+          />
+        </DetailSection>
+      )}
+
+      {!editingBL && (
       <Tabs defaultValue="basic">
         <TabsList>
           <TabsTrigger value="basic">기본정보</TabsTrigger>
@@ -192,100 +200,125 @@ export default function BLDetailView({ blId, onBack }: Props) {
         </TabsList>
 
         <TabsContent value="basic">
-          <Card>
-            <CardHeader className="pb-2 pt-4">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-sm">기본 정보</CardTitle>
-                <InboundStatusBadge status={bl.status} />
-              </div>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-                <Field label="입고 구분" value={INBOUND_TYPE_LABEL[bl.inbound_type]} />
-                <Field label="공급사" value={shortMfgName(manufacturerName || bl.manufacturer_name)} />
-                {/* R3-보완2: PO/LC 클릭 시 상세 이동 */}
+          <div className="space-y-4">
+            <DetailSection
+              title="기본 정보"
+              badges={<InboundStatusBadge status={bl.status} />}
+              actions={(
+                <Button variant="outline" size="sm" onClick={() => setEditingBL(true)}>
+                  <Pencil className="mr-1 h-3.5 w-3.5" />수정
+                </Button>
+              )}
+            >
+              <DetailFieldGrid cols={4}>
+                <DetailField label="입고 구분" value={INBOUND_TYPE_LABEL[bl.inbound_type]} />
+                <DetailField label="공급사" value={shortMfgName(manufacturerName || bl.manufacturer_name)} />
                 {bl.po_id && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">PO번호</p>
-                    <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/procurement?po=${bl.po_id}`; }}>{bl.po_number ?? bl.po_id.slice(0, 8)}</button>
-                  </div>
+                  <DetailField label="PO번호">
+                    <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/procurement?po=${bl.po_id}`; }}>
+                      {bl.po_number ?? bl.po_id.slice(0, 8)}
+                    </button>
+                  </DetailField>
                 )}
                 {bl.lc_id && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">LC번호</p>
-                    <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/lc?lc=${bl.lc_id}`; }}>{bl.lc_number ?? bl.lc_id.slice(0, 8)}</button>
-                  </div>
+                  <DetailField label="LC번호">
+                    <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/lc?lc=${bl.lc_id}`; }}>
+                      {bl.lc_number ?? bl.lc_id.slice(0, 8)}
+                    </button>
+                  </DetailField>
                 )}
-                <Field label="통화" value={bl.currency === 'USD' ? 'USD (달러)' : 'KRW (원)'} />
-                {isImport && <Field label="환율" value={bl.exchange_rate?.toString()} />}
-                {isImport && <Field label="ETD" value={formatDate(bl.etd ?? '')} />}
-                {isImport && <Field label="ETA" value={formatDate(bl.eta ?? '')} />}
-                <Field label={isImport ? '실제입항' : '입고/납품일'} value={formatDate(bl.actual_arrival ?? '')} />
-                {isImport && <Field label="항구" value={bl.port} />}
-                {isImport && <Field label="포워더" value={bl.forwarder} />}
-                {isImport && <Field label="Invoice No." value={bl.invoice_number} />}
-                {bl.declaration_number && <Field label="면장번호" value={bl.declaration_number} />}
-                {isImport && <Field label="인코텀즈" value={bl.incoterms} />}
-                <Field label="입고 창고" value={bl.warehouse_name} />
-                {bl.payment_terms && <Field label="결제조건" value={bl.payment_terms} />}
-                {bl.counterpart_company_id && <Field label="상대법인" value={bl.counterpart_company_id} />}
-                {bl.memo && <Field label="메모" value={bl.memo} />}
-              </div>
-              {lines.length > 0 && (() => {
-                const totalQty = lines.reduce((s, l) => s + l.quantity, 0);
-                const totalMW = lines.reduce((s, l) => s + (l.capacity_kw ?? 0), 0) / 1000;
-                const totalInvoice = lines.reduce((s, l) => s + (l.invoice_amount_usd ?? 0), 0);
-                // 원가 확정: 해외직수입 = unit_price_usd_wp × exchange_rate, 국내 = unit_price_krw_wp
-                const exRate = bl.exchange_rate ?? 0;
-                const totalCostKrw = lines.reduce((s, l) => {
-                  const costWp = isImport
-                    ? (l.unit_price_usd_wp != null ? l.unit_price_usd_wp * exRate : 0)
-                    : (l.unit_price_krw_wp ?? 0);
-                  return s + costWp * (l.capacity_kw ?? 0) * 1000;
-                }, 0);
-                const hasCost = lines.some(l => l.unit_price_usd_wp != null || l.unit_price_krw_wp != null);
-                return (
-                  <div className="mt-4 pt-3 border-t grid grid-cols-3 gap-x-6">
-                    <div>
-                      <p className="text-[10px] text-muted-foreground">총 수량</p>
-                      <p className="text-sm font-mono font-medium">{formatNumber(totalQty)} EA</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground">총 용량</p>
-                      <p className="text-sm font-mono font-medium">{totalMW.toFixed(3)} MW</p>
-                    </div>
+                <DetailField label="통화" value={bl.currency === 'USD' ? 'USD (달러)' : 'KRW (원)'} />
+                {isImport && <DetailField label="환율" value={bl.exchange_rate?.toString()} />}
+                <DetailField label="입고 창고" value={bl.warehouse_name} />
+              </DetailFieldGrid>
+            </DetailSection>
+
+            {isImport && (
+              <DetailSection title="선적 일정">
+                <DetailFieldGrid cols={4}>
+                  <DetailField label="ETD" value={formatDate(bl.etd ?? '')} />
+                  <DetailField label="ETA" value={formatDate(bl.eta ?? '')} />
+                  <DetailField label="실제입항" value={formatDate(bl.actual_arrival ?? '')} />
+                  <DetailField label="항구" value={bl.port} />
+                  <DetailField label="포워더" value={bl.forwarder} />
+                  <DetailField label="Invoice No." value={bl.invoice_number} />
+                  {bl.declaration_number && <DetailField label="면장번호" value={bl.declaration_number} />}
+                  <DetailField label="인코텀즈" value={bl.incoterms} />
+                </DetailFieldGrid>
+              </DetailSection>
+            )}
+
+            {!isImport && (
+              <DetailSection title="입고/납품">
+                <DetailFieldGrid cols={4}>
+                  <DetailField label="입고/납품일" value={formatDate(bl.actual_arrival ?? '')} />
+                  {bl.declaration_number && <DetailField label="면장번호" value={bl.declaration_number} />}
+                </DetailFieldGrid>
+              </DetailSection>
+            )}
+
+            {(bl.payment_terms || bl.counterpart_company_id) && (
+              <DetailSection title="결제 · 거래">
+                <DetailFieldGrid cols={4}>
+                  {bl.payment_terms && <DetailField label="결제조건" value={bl.payment_terms} span={2} />}
+                  {bl.counterpart_company_id && <DetailField label="상대법인" value={bl.counterpart_company_id} span={2} />}
+                </DetailFieldGrid>
+              </DetailSection>
+            )}
+
+            {bl.memo && (
+              <DetailSection title="메모">
+                <p className="text-sm whitespace-pre-wrap break-words">{bl.memo}</p>
+              </DetailSection>
+            )}
+
+            {lines.length > 0 && (() => {
+              const totalQty = lines.reduce((s, l) => s + l.quantity, 0);
+              const totalMW = lines.reduce((s, l) => s + (l.capacity_kw ?? 0), 0) / 1000;
+              const totalInvoice = lines.reduce((s, l) => s + (l.invoice_amount_usd ?? 0), 0);
+              // 원가 확정: 해외직수입 = unit_price_usd_wp × exchange_rate, 국내 = unit_price_krw_wp
+              const exRate = bl.exchange_rate ?? 0;
+              const totalCostKrw = lines.reduce((s, l) => {
+                const costWp = isImport
+                  ? (l.unit_price_usd_wp != null ? l.unit_price_usd_wp * exRate : 0)
+                  : (l.unit_price_krw_wp ?? 0);
+                return s + costWp * (l.capacity_kw ?? 0) * 1000;
+              }, 0);
+              const hasCost = lines.some(l => l.unit_price_usd_wp != null || l.unit_price_krw_wp != null);
+              return (
+                <DetailSection title="합계">
+                  <DetailFieldGrid cols={3}>
+                    <DetailField label="총 수량" value={`${formatNumber(totalQty)} EA`} />
+                    <DetailField label="총 용량" value={`${totalMW.toFixed(3)} MW`} />
                     {totalInvoice > 0 && (
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">총 입고금액</p>
-                        <p className="text-sm font-mono font-medium">${formatNumber(Math.round(totalInvoice))}</p>
-                      </div>
+                      <DetailField label="총 입고금액" value={`$${formatNumber(Math.round(totalInvoice))}`} />
                     )}
-                    {hasCost && totalCostKrw > 0 && (
-                      <div className="col-span-3 mt-3 pt-3 border-t">
-                        <p className="text-[10px] text-muted-foreground mb-1">원가 확정 (BL 기준)</p>
-                        <div className="flex gap-6">
+                  </DetailFieldGrid>
+                  {hasCost && totalCostKrw > 0 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <p className="text-xs text-muted-foreground mb-1.5">원가 확정 (BL 기준)</p>
+                      <div className="flex gap-6">
+                        <div>
+                          <p className="text-xs text-muted-foreground">총 원가</p>
+                          <p className="text-sm font-mono font-medium text-blue-700">
+                            {Math.round(totalCostKrw).toLocaleString('ko-KR')}원
+                          </p>
+                        </div>
+                        {totalMW > 0 && (
                           <div>
-                            <p className="text-[10px] text-muted-foreground">총 원가</p>
+                            <p className="text-xs text-muted-foreground">평균 원가</p>
                             <p className="text-sm font-mono font-medium text-blue-700">
-                              {Math.round(totalCostKrw).toLocaleString('ko-KR')}원
+                              {(totalCostKrw / (totalMW * 1_000_000)).toFixed(2)}원/Wp
                             </p>
                           </div>
-                          {totalMW > 0 && (
-                            <div>
-                              <p className="text-[10px] text-muted-foreground">평균 원가</p>
-                              <p className="text-sm font-mono font-medium text-blue-700">
-                                {(totalCostKrw / (totalMW * 1_000_000)).toFixed(2)}원/Wp
-                              </p>
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
+                    </div>
+                  )}
+                </DetailSection>
+              );
+            })()}
+          </div>
         </TabsContent>
 
         <TabsContent value="documents">
@@ -349,7 +382,6 @@ export default function BLDetailView({ blId, onBack }: Props) {
         </TabsContent>
 
         <TabsContent value="customs">
-          {/* F20: BL 부대비용 등록 (8유형 인라인 + Wp당 자동계산) */}
           <BLExpensesTab blId={blId} lines={lines} />
         </TabsContent>
 
@@ -357,8 +389,8 @@ export default function BLDetailView({ blId, onBack }: Props) {
           <BLOutboundTrackingTab blId={blId} companyId={bl.company_id} lines={lines} />
         </TabsContent>
       </Tabs>
+      )}
 
-      <BLForm open={editBLOpen} onOpenChange={setEditBLOpen} onSubmit={handleUpdateBL} editData={bl} />
       <LinkedMemoWidget linkedTable="bl_shipments" linkedId={blId} />
 
       <BLLineForm

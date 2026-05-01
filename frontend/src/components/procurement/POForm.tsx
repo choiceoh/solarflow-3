@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { FormShell } from '@/components/common/detail';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
@@ -118,13 +119,15 @@ function Opt({ children }: { children: React.ReactNode }) {
 }
 
 interface Props {
-  open: boolean;
+  // dialog 모드에서만 의미. inline 모드에서는 무시되며 부모가 마운트로 가시성을 제어.
+  open?: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: Record<string, unknown>) => Promise<void>;
   editData?: PurchaseOrder | null;
+  variant?: 'dialog' | 'inline';
 }
 
-export default function POForm({ open, onOpenChange, onSubmit, editData }: Props) {
+export default function POForm({ open = true, onOpenChange, onSubmit, editData, variant = 'dialog' }: Props) {
   const globalCompanyId = useAppStore((s) => s.selectedCompanyId);
   const storeCompanies = useAppStore((s) => s.companies);
 
@@ -537,14 +540,8 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
     }
   };
 
-  return (
+  const body = (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[82vw] sm:max-w-[82vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
-        <DialogHeader className="pb-1">
-          <DialogTitle>{editData ? 'PO 수정' : 'PO 등록'}</DialogTitle>
-        </DialogHeader>
-
         {submitError && (
           <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
             {submitError}
@@ -1063,13 +1060,25 @@ export default function POForm({ open, onOpenChange, onSubmit, editData }: Props
             <Textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={2} />
           </div>
 
-          <DialogFooter>
+          <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
             <Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button>
-          </DialogFooter>
+          </div>
         </form>
-      </DialogContent>
-    </Dialog>
+    </>
+  );
+
+  return (
+    <>
+    <FormShell
+      variant={variant}
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editData ? 'PO 수정' : 'PO 등록'}
+      dialogContentClassName="w-[82vw] sm:max-w-[82vw] max-h-[85vh] overflow-y-auto overflow-x-hidden"
+    >
+      {body}
+    </FormShell>
 
     {/* 빠른 품번 등록 미니 다이얼로그 */}
     <Dialog open={qpOpen} onOpenChange={(o) => { if (!qpSubmitting) setQpOpen(o); }}>

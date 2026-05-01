@@ -3,7 +3,7 @@ import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Lock, Plus, Trash2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { FormShell } from '@/components/common/detail';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
@@ -45,11 +45,13 @@ type FormData = z.infer<typeof schema>;
 interface BLEntry { bl_id: string; quantity: string }
 
 interface Props {
-  open: boolean;
+  // dialog 모드에서만 의미. inline 모드에서는 무시되며 부모가 마운트로 가시성을 제어.
+  open?: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: Record<string, unknown>) => Promise<void>;
   editData?: Outbound | null;
   order?: Order | null;
+  variant?: 'dialog' | 'inline';
 }
 
 function fmtInt(v: number | string | undefined): string {
@@ -109,7 +111,7 @@ function orderCategoryToOutboundUsage(category?: string): UsageCategory {
   }
 }
 
-export default function OutboundForm({ open, onOpenChange, onSubmit, editData, order }: Props) {
+export default function OutboundForm({ open = true, onOpenChange, onSubmit, editData, order, variant = 'dialog' }: Props) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const effectiveCompanyId = order?.company_id || selectedCompanyId;
   const companies = useAppStore((s) => s.companies);
@@ -315,13 +317,8 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData, o
     : (selectedOrderId ? '' : '');
   const targetLabel = companies.find(c => c.company_id === targetCompanyId)?.company_name ?? '';
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
-        <DialogHeader>
-          <DialogTitle>{editData ? '출고 수정' : '출고 등록'}</DialogTitle>
-        </DialogHeader>
-
+  const body = (
+    <>
         {submitError && (
           <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
             {submitError}
@@ -580,12 +577,23 @@ export default function OutboundForm({ open, onOpenChange, onSubmit, editData, o
           <div className="space-y-1.5"><Label>ERP 출고번호</Label><Input {...register('erp_outbound_no')} /></div>
           <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
 
-          <DialogFooter>
+          <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
             <Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button>
-          </DialogFooter>
+          </div>
         </form>
-      </DialogContent>
-    </Dialog>
+    </>
+  );
+
+  return (
+    <FormShell
+      variant={variant}
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editData ? '출고 수정' : '출고 등록'}
+      dialogContentClassName="sm:max-w-3xl w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden"
+    >
+      {body}
+    </FormShell>
   );
 }

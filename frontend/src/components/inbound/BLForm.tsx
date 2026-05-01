@@ -768,7 +768,8 @@ function selectableOCRProducts(item: CustomsDeclarationOCRLine, productSource: P
 }
 
 interface Props {
-  open: boolean;
+  // dialog 모드에서만 의미. inline 모드에서는 무시되며 부모가 마운트로 가시성을 제어.
+  open?: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: Record<string, unknown>) => Promise<void>;
   editData?: BLShipment | null;
@@ -776,12 +777,15 @@ interface Props {
   presetPOId?: string | null;
   /** LC 탭에서 입고 등록 시 LC 자동 선택 */
   presetLCId?: string | null;
+  /** ProcurementPage 임베드 (페이지 내 카드로 렌더, 자체 헤더 포함) */
   embedded?: boolean;
+  /** 부모 카드(DetailSection) 내부에서 헤더/Dialog 없이 폼 본문만 렌더 */
+  variant?: 'dialog' | 'inline';
   initialCustomsOCRFile?: File | null;
   initialCustomsOCRFileKey?: number;
 }
 
-export default function BLForm({ open, onOpenChange, onSubmit, editData, presetPOId, presetLCId, embedded = false, initialCustomsOCRFile = null, initialCustomsOCRFileKey }: Props) {
+export default function BLForm({ open = true, onOpenChange, onSubmit, editData, presetPOId, presetLCId, embedded = false, variant = 'dialog', initialCustomsOCRFile = null, initialCustomsOCRFileKey }: Props) {
   const globalCompanyId = useAppStore((s) => s.selectedCompanyId);
   const storeCompanies = useAppStore((s) => s.companies);
   const customsOCRInputRef = useRef<HTMLInputElement | null>(null);
@@ -1991,9 +1995,10 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
     </Dialog>
   );
 
+  const isInline = variant === 'inline';
   const formBody = (
     <>
-        {embedded ? (
+        {isInline ? null : embedded ? (
           <div className="flex items-center justify-between gap-3 border-b pb-3">
             <div>
               <p className="text-xs text-muted-foreground">구매 / B/L</p>
@@ -2624,6 +2629,15 @@ export default function BLForm({ open, onOpenChange, onSubmit, editData, presetP
         </form>
     </>
   );
+
+  if (isInline) {
+    return (
+      <>
+        <div className="space-y-3">{formBody}</div>
+        {customsOCRReviewDialog}
+      </>
+    );
+  }
 
   if (embedded) {
     if (!open) return null;

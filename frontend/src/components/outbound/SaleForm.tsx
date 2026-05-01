@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { FormShell } from '@/components/common/detail';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
@@ -29,17 +29,19 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 interface Props {
-  open: boolean;
+  // dialog 모드에서만 의미. inline 모드에서는 무시되며 부모가 마운트로 가시성을 제어.
+  open?: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: Record<string, unknown>) => Promise<void>;
   outbound?: Outbound;
   order?: Order;
   editData?: Sale | null;
   costPerWp?: number | null;  // BL 원가 (원/Wp) — OutboundDetailView에서 계산해 전달
+  variant?: 'dialog' | 'inline';
 }
 
 // 비유: Wp단가 하나만 입력하면 EA단가→공급가→부가세→합계가 자동 계산되는 계산기
-export default function SaleForm({ open, onOpenChange, onSubmit, outbound, order, editData, costPerWp }: Props) {
+export default function SaleForm({ open = true, onOpenChange, onSubmit, outbound, order, editData, costPerWp, variant = 'dialog' }: Props) {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [submitError, setSubmitError] = useState('');
 
@@ -123,12 +125,8 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, order
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{editData ? '매출 수정' : '매출 등록'}</DialogTitle>
-        </DialogHeader>
+  const body = (
+    <>
         {submitError && (
           <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
             {submitError}
@@ -241,12 +239,22 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, order
 
           <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
 
-          <DialogFooter>
+          <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
             <Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button>
-          </DialogFooter>
+          </div>
         </form>
-      </DialogContent>
-    </Dialog>
+    </>
+  );
+
+  return (
+    <FormShell
+      variant={variant}
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editData ? '매출 수정' : '매출 등록'}
+    >
+      {body}
+    </FormShell>
   );
 }

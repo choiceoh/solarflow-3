@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
@@ -95,12 +95,14 @@ export interface OrderPrefillData {
 }
 
 interface Props {
-  open: boolean;
+  // dialog 모드에서만 의미. inline 모드에서는 무시되며 부모가 마운트로 가시성을 제어.
+  open?: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: Record<string, unknown>) => Promise<void>;
   onPrefillCancel?: () => void;
   editData?: Order | null;
   prefillData?: OrderPrefillData | null;
+  variant?: 'dialog' | 'inline';
 }
 
 // 정수 천단위 포맷
@@ -381,7 +383,7 @@ function ProductInventoryCombobox({
   );
 }
 
-export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCancel, editData, prefillData }: Props) {
+export default function OrderForm({ open = true, onOpenChange, onSubmit, onPrefillCancel, editData, prefillData, variant = 'dialog' }: Props) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const companies = useAppStore((s) => s.companies);
   const loadCompanies = useAppStore((s) => s.loadCompanies);
@@ -808,14 +810,12 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
     onOpenChange(nextOpen);
   };
 
-  return (
-    <Dialog open={open} onOpenChange={requestOpenChange}>
-      <DialogContent className="flex max-h-[90vh] w-[95vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
-        <DialogHeader className="shrink-0 border-b px-5 py-4">
-          <DialogTitle>{editData ? '수주 수정' : '수주 등록'}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(handle)} className="flex min-h-0 flex-1 flex-col">
-          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+  const isInline = variant === 'inline';
+
+  const body = (
+    <>
+        <form onSubmit={handleSubmit(handle)} className={isInline ? '' : 'flex min-h-0 flex-1 flex-col'}>
+          <div className={isInline ? 'space-y-4' : 'flex-1 space-y-4 overflow-y-auto px-5 py-4'}>
           {isPrefill && (
             <div className="rounded-md border bg-slate-50 px-3 py-2 text-xs text-slate-700">
               <div className="font-medium">가용재고 예약에서 수주 전환</div>
@@ -1457,11 +1457,25 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
           <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
 
           </div>
-          <DialogFooter className="shrink-0 border-t bg-background px-5 py-3">
+          <div className={isInline ? 'flex justify-end gap-2 pt-2' : 'shrink-0 flex justify-end gap-2 border-t bg-background px-5 py-3'}>
             <Button type="button" variant="outline" onClick={() => requestOpenChange(false)}>취소</Button>
             <Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button>
-          </DialogFooter>
+          </div>
         </form>
+    </>
+  );
+
+  if (isInline) {
+    return <div className="space-y-3">{body}</div>;
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={requestOpenChange}>
+      <DialogContent className="flex max-h-[90vh] w-[95vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="shrink-0 border-b px-5 py-4">
+          <DialogTitle>{editData ? '수주 수정' : '수주 등록'}</DialogTitle>
+        </DialogHeader>
+        {body}
       </DialogContent>
     </Dialog>
   );

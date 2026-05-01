@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn, formatDate, shortMfgName } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
 import POForm from './POForm';
 import POLineTable from './POLineTable';
 import POLineForm from './POLineForm';
@@ -26,10 +26,6 @@ import { LC_STATUS_LABEL, LC_STATUS_COLOR, TT_STATUS_LABEL, TT_STATUS_COLOR } fr
 import { formatUSD, formatNumber } from '@/lib/utils';
 
 interface Props { po: PurchaseOrder; onBack: () => void; onReload: () => void; allPos?: PurchaseOrder[]; }
-
-function Field({ label, value }: { label: string; value: string | undefined }) {
-  return <div><p className="text-[10px] text-muted-foreground">{label}</p><p className="text-sm">{value || '—'}</p></div>;
-}
 
 function LCSubTable({ items }: { items: LCRecord[] }) {
   const totalUsd = items.reduce((s, l) => s + (l.amount_usd ?? 0), 0);
@@ -194,7 +190,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
   // 부모 selectedPO 변경 시(다른 PO 선택 등) 동기화
   useEffect(() => { setPo(initialPo); }, [initialPo]);
 
-  const [editOpen, setEditOpen] = useState(false);
+  const [editingPO, setEditingPO] = useState(false);
   const [lineFormOpen, setLineFormOpen] = useState(false);
   const [editLine, setEditLine] = useState<POLineItem | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -218,7 +214,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
     reloadTTs();
   };
 
-  // 4단계 MW 진행률용 BL 데이터 — D-061 동일 패턴의 프론트 소규모 합산
+  // 4단계 MW 진행률용 BL 데이터 — 백엔드에 합산 엔드포인트 없어 프론트에서 합산
   const [blShipped, setBlShipped] = useState<{ shippedMw: number; completedMw: number }>({ shippedMw: 0, completedMw: 0 });
   useEffect(() => {
     let cancelled = false;
@@ -257,7 +253,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
     } catch { /* ignore */ }
   };
 
-  // R1-5: PO 헤더 PUT + 발주품목 diff CRUD (UPDATE 기존 / INSERT 신규 / DELETE 제거)
+  // PO 헤더 PUT + 발주품목 diff CRUD (UPDATE 기존 / INSERT 신규 / DELETE 제거)
   const handleUpdatePO = async (data: Record<string, unknown>) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { lines: submittedLines, ...poBody } = data as any;
@@ -353,23 +349,38 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
           PO <span className="sf-mono">{po.po_number || '—'}</span>
         </h2>
         <StatusPill label={PO_STATUS_LABEL[po.status]} colorClassName={PO_STATUS_COLOR[po.status]} className="px-2" />
-        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}><Pencil className="mr-1 h-3.5 w-3.5" />수정</Button>
-        {po.status !== 'cancelled' && (
-          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive"
-            onClick={() => { setDeleteError(''); setDeleteOpen(true); }}>
-            <Trash2 className="mr-1 h-3.5 w-3.5" />취소 처리
-          </Button>
+        {!editingPO && (
+          <>
+            {po.status !== 'cancelled' && (
+              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive"
+                onClick={() => { setDeleteError(''); setDeleteOpen(true); }}>
+                <Trash2 className="mr-1 h-3.5 w-3.5" />취소 처리
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setLcFormOpen(true)}>
+              LC 등록
+            </Button>
+            {/* PO → 입고 데이터 전달 */}
+            <Button size="sm" onClick={() => { window.location.href = `/inbound?po=${po.po_id}`; }}>
+              입고 등록
+            </Button>
+          </>
         )}
-        <Button variant="outline" size="sm" onClick={() => setLcFormOpen(true)}>
-          LC 등록
-        </Button>
-        {/* D-085: PO → 입고 데이터 전달 */}
-        <Button size="sm" onClick={() => { window.location.href = `/inbound?po=${po.po_id}`; }}>
-          입고 등록
-        </Button>
       </div>
 
-      {/* R1-8: 종합정보 / 입고품목 / LC현황 / 입고현황 — TT이력은 종합정보에 병합 */}
+      {editingPO && (
+        <DetailSection title="PO 수정">
+          <POForm
+            variant="inline"
+            onOpenChange={(o) => { if (!o) setEditingPO(false); }}
+            onSubmit={async (d) => { await handleUpdatePO(d); setEditingPO(false); }}
+            editData={po}
+          />
+        </DetailSection>
+      )}
+
+      {/* TT이력은 종합정보 탭에 병합 (별도 탭 만들지 않음) */}
+      {!editingPO && (
       <Tabs defaultValue="summary">
         <TabsList>
           <TabsTrigger value="summary">종합정보</TabsTrigger>
@@ -380,21 +391,28 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
         </TabsList>
 
         <TabsContent value="summary">
-          <Card><CardContent className="pt-4 pb-4 space-y-4">
-            {/* 기본정보 필드 */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-              <Field label="계약유형" value={CONTRACT_TYPE_LABEL[po.contract_type]} />
-              <Field label="제조사" value={shortMfgName(po.manufacturer_name)} />
-              <Field label="계약일" value={formatDate(po.contract_date ?? '')} />
-              <Field label="Incoterms" value={po.incoterms} />
-              <Field label="결제조건" value={po.payment_terms} />
-              {po.total_qty != null && <Field label="총수량" value={formatNumber(po.total_qty).toString()} />}
-              {po.total_mw != null && <Field label="총 MW" value={`${po.total_mw.toFixed(2)}MW`} />}
-              {po.memo && <Field label="메모" value={po.memo} />}
+          <div className="space-y-4">
+            <DetailSection
+              title="기본 정보"
+              actions={(
+                <Button variant="outline" size="sm" onClick={() => setEditingPO(true)}>
+                  <Pencil className="mr-1 h-3.5 w-3.5" />수정
+                </Button>
+              )}
+            >
+              <DetailFieldGrid cols={4}>
+                <DetailField label="계약유형" value={CONTRACT_TYPE_LABEL[po.contract_type]} />
+                <DetailField label="제조사" value={shortMfgName(po.manufacturer_name)} />
+                <DetailField label="계약일" value={formatDate(po.contract_date ?? '')} />
+                <DetailField label="Incoterms" value={po.incoterms} />
+                <DetailField label="결제조건" value={po.payment_terms} span={2} />
+                {po.total_qty != null && <DetailField label="총수량" value={formatNumber(po.total_qty)} />}
+                {po.total_mw != null && <DetailField label="총 MW" value={`${po.total_mw.toFixed(2)}MW`} />}
+              </DetailFieldGrid>
               {!linesLoading && lines.length > 0 && (
-                <div className="col-span-full">
-                  <p className="text-[10px] text-muted-foreground">품목</p>
-                  <div className="mt-0.5 space-y-0.5">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">품목</p>
+                  <div className="space-y-0.5">
                     {lines.map((l) => {
                       const name = l.products?.product_name ?? l.product_name ?? '';
                       const spec = l.products?.spec_wp ?? l.spec_wp;
@@ -414,7 +432,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
                 const parent = allPos.find((x) => x.po_id === po.parent_po_id);
                 const label = parent?.po_number ?? po.parent_po_id.slice(0, 8);
                 return (
-                  <div className="col-span-full rounded-md bg-amber-50 border border-amber-200 px-3 py-2 flex items-center gap-2">
+                  <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 flex items-center gap-2">
                     <span className="text-[10px] font-medium text-amber-700">원계약</span>
                     <span className="text-xs font-mono text-amber-900">{label}</span>
                     {parent?.total_mw != null && (
@@ -423,9 +441,15 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
                   </div>
                 );
               })()}
-            </div>
+              {po.memo && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">메모</p>
+                  <p className="text-sm whitespace-pre-wrap break-words">{po.memo}</p>
+                </div>
+              )}
+            </DetailSection>
 
-            {/* R1-8: T/T 납부현황 + LC 개설현황 요약 */}
+            {/* T/T 납부현황 + LC 개설현황 요약 */}
             {(() => {
               const poTotalUsd = lines.reduce((s, l) => s + (l.total_amount_usd ?? 0), 0);
               const ttTotalUsd = tts.reduce((s, t) => s + (t.amount_usd ?? 0), 0);
@@ -495,7 +519,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
               );
             })()}
 
-            {/* F6: 입고품목 / LC / 입고 요약 (종합정보에 통합) */}
+            {/* 입고품목 / LC / 입고 요약 (종합정보에 통합) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="rounded-md border p-3 space-y-1.5">
                 <div className="text-xs font-semibold flex justify-between">
@@ -542,7 +566,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
               </div>
               {ttsLoading ? <LoadingSpinner /> : <TTSubTable items={tts} poLines={lines} />}
             </div>
-          </CardContent></Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="lines">
@@ -593,10 +617,9 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
         </TabsContent>
         <TabsContent value="inbound"><POInboundProgress poId={po.po_id} poLines={lines} /></TabsContent>
       </Tabs>
+      )}
 
       <LinkedMemoWidget linkedTable="purchase_orders" linkedId={po.po_id} />
-
-      <POForm open={editOpen} onOpenChange={setEditOpen} onSubmit={handleUpdatePO} editData={po} />
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={(v) => { if (!v) { setDeleteOpen(false); setDeleteError(''); } }}
