@@ -175,7 +175,6 @@ function sumAlertCounts(alerts: AlertItem[], types: string[]) {
 
 export default function CommandShell() {
   const { pathname, search } = useLocation();
-  const navigate = useNavigate();
   const { user, role, logout } = useAuth();
   const { roleLabel } = usePermission();
   const r = role as Role | null;
