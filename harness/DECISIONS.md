@@ -571,3 +571,17 @@
 - **이유**: flex 남은 공간 중앙 정렬은 페이지마다 제목과 브레드크럼 길이가 달라 검색창 위치가 달라진다. 사용자는 검색창을 전역 커맨드바의 기준점으로 인식하므로 화면 이동 시 위치가 흔들리면 목업 재현도가 떨어진다.
 - **운영 기준**: 720px 초과 화면에서는 검색창 중심이 헤더 중심과 같아야 한다. 720px 이하에서는 제목/액션을 1행에 두고 검색창을 2행 전체 폭으로 내려 본문 폭을 확보한다.
 - **날짜**: 2026-05-01
+
+## D-108: 바로(주) 분리는 단일 DB + URL 기반 테넌트 + 코드 레벨 마스킹으로 운영
+- **결정**: 통합 설계문서 1.4절의 "바로용 별도 앱·별도 DB"를 다음 구조로 갱신한다.
+  - **단일 DB**: 탑솔라(주)·디원·화신이엔지·바로(주)는 같은 PostgreSQL을 사용한다. `companies`에 바로를 4번째 법인(`BR`)으로 등록한다.
+  - **URL 기반 분기**: 바로 사용자는 `baro.topworks.ltd`로 접속하고, 같은 React 빌드가 호스트네임을 보고 BARO 모드 사이드바/라우트를 노출한다.
+  - **코드 레벨 마스킹**: `user_profiles.tenant_scope`(`topsolar`/`baro`)을 사용자별로 못박고, Go API 게이트웨이의 `RequireTenantScope` 미들웨어가 탑솔라 원가/LC/면장/부대비용/한도/단가 이력/마진/Landed-cost/환율비교/LC fee·timeline·maturity·price-trend 엔드포인트를 `topsolar` 테넌트에만 허용한다. 바로 토큰으로 호출되면 403을 반환한다.
+  - **격리 범위 한정**: 같은 그룹 계열사이므로 격리는 "바로가 탑솔라의 수입원가/금융정보를 보지 않는다"는 1단계로 끝난다. 공유 엔드포인트(`/pos`, `/bls`, `/outbounds`, `/orders`, `/sales`, `/receipts`, 마스터, 가용재고)는 row-level `company_id` 필터를 추가하지 않고 계열사 데이터로 공유한다.
+  - **그룹내거래 확장**: D-039의 양방향 그룹내거래에 탑솔라→바로 라인이 자연스럽게 추가된다. 탑솔라 출고 = 바로 입고 자동 생성, 입고단가는 탑솔라 판매단가로 잠금. 별도 DB 동기화 큐가 필요 없다.
+- **이유**: 기존 "별도 앱·별도 DB" 안은 데이터 격리가 가장 강하지만 (1) 탑솔라→바로 그룹내거래에 동기화 큐가 필요하고 (2) 마스터 데이터(품번/제조사/거래처)가 두 DB에서 갈리며 (3) 빌드/배포 인프라가 두 벌이 된다. 한 DB로 묶고 코드와 URL로 격리하면 그룹내거래는 단일 트랜잭션이 되고 마스터는 자동으로 일치한다. 노출 위험은 탑솔라의 수입원가/LC 금융 정보 정도이므로, 그 영역만 미들웨어 1곳에서 차단하고 나머지 거래/재고는 계열사로서 공유하는 편이 운영 흐름과 잘 맞는다.
+- **운영 기준**:
+  - **마이그레이션**: `backend/migrations/040_tenant_scope.sql`을 적용하고 PostgREST 스키마 캐시를 갱신한다(`launchctl stop/start com.solarflow.postgrest`).
+  - **테넌트 가드**: `internal/middleware/tenant_scope.go`의 `RequireTenantScope("topsolar")`를 cost-details, declarations, lcs, tts, expenses, price-histories, limit-changes, export/amaranth, 그리고 calc 프록시 중 landed-cost·exchange-compare·lc-fee·lc-limit-timeline·lc-maturity-alert·margin-analysis·price-trend에 적용한다. **이 목록이 격리 범위의 전부**이며 추가 확장은 별도 결정 없이는 하지 않는다.
+  - **DNS/CDN**: `baro.topworks.ltd`를 같은 Caddy/dist에 매핑한다. Caddy 별도 리라이트는 필요 없고, 프론트가 `window.location.hostname`을 보고 BARO 모드를 결정한다.
+- **날짜**: 2026-05-01

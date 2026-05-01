@@ -34,6 +34,8 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 		write := middleware.RoleMiddleware("admin", "operator")
 		// 비유: 사용자/시스템 설정은 admin 전용
 		adminOnly := middleware.RoleMiddleware("admin")
+		// D-108: 탑솔라 원가/금융/면장 응답은 탑솔라 테넌트 사용자에게만 — 바로 토큰은 403
+		topsolarOnly := middleware.RequireTenantScope(middleware.TenantScopeTopsolar)
 
 		companyH := handler.NewCompanyHandler(db)
 		r.Route("/companies", func(r chi.Router) {
@@ -113,6 +115,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 
 		lcH := handler.NewLCHandler(db)
 		r.Route("/lcs", func(r chi.Router) {
+			r.Use(topsolarOnly) // D-108: LC 금융정보는 탑솔라 전용
 			r.Get("/", lcH.List)
 			r.Get("/{id}/lines", lcH.ListLines)
 			r.Get("/{id}", lcH.GetByID)
@@ -123,6 +126,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 
 		ttH := handler.NewTTHandler(db)
 		r.Route("/tts", func(r chi.Router) {
+			r.Use(topsolarOnly) // D-108: T/T 계약금은 탑솔라 전용
 			r.Get("/", ttH.List)
 			r.Get("/{id}", ttH.GetByID)
 			r.With(write).Post("/", ttH.Create)
@@ -148,6 +152,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 
 		declH := handler.NewDeclarationHandler(db)
 		r.Route("/declarations", func(r chi.Router) {
+			r.Use(topsolarOnly) // D-108: 수입면장은 탑솔라 전용
 			r.Get("/", declH.List)
 			r.Get("/{id}", declH.GetByID)
 			r.With(write).Post("/", declH.Create)
@@ -157,6 +162,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 
 		costH := handler.NewCostDetailHandler(db)
 		r.Route("/cost-details", func(r chi.Router) {
+			r.Use(topsolarOnly) // D-108: 수입 원가는 탑솔라 전용
 			r.Get("/", costH.List)
 			r.Get("/{id}", costH.GetByID)
 			r.With(write).Post("/", costH.Create)
@@ -166,6 +172,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 
 		expenseH := handler.NewExpenseHandler(db)
 		r.Route("/expenses", func(r chi.Router) {
+			r.Use(topsolarOnly) // D-108: 부대비용은 탑솔라 전용
 			r.Get("/", expenseH.List)
 			r.Get("/{id}", expenseH.GetByID)
 			r.With(write).Post("/", expenseH.Create)
@@ -253,12 +260,14 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 
 		limitH := handler.NewLimitChangeHandler(db)
 		r.Route("/limit-changes", func(r chi.Router) {
+			r.Use(topsolarOnly) // D-108: LC 한도 변경 이력은 탑솔라 전용
 			r.Get("/", limitH.List)
 			r.With(write).Post("/", limitH.Create)
 		})
 
 		priceH := handler.NewPriceHistoryHandler(db)
 		r.Route("/price-histories", func(r chi.Router) {
+			r.Use(topsolarOnly) // D-108: 수입 단가 이력은 탑솔라 전용
 			r.Get("/", priceH.List)
 			r.Get("/{id}", priceH.GetByID)
 			r.With(write).Post("/", priceH.Create)
@@ -294,6 +303,7 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 		// 비유: 아마란스10 ERP 내보내기 — 입고/출고 .xlsx (Step 29C)
 		exportH := handler.NewExportHandler(db)
 		r.Route("/export/amaranth", func(r chi.Router) {
+			r.Use(topsolarOnly) // D-108: 아마란스10은 탑솔라 ERP — 바로는 사용하지 않음
 			r.Get("/inbound", exportH.AmaranthInbound)
 			r.Get("/outbound", exportH.AmaranthOutbound)
 			r.Get("/sales", exportH.AmaranthSalesClosing)
@@ -340,15 +350,17 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 
 		r.Route("/api/v1/calc", func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(db))
+			// D-108: 탑솔라 원가/금융 응답이 들어가는 계산은 탑솔라 테넌트만
+			topsolarOnly := middleware.RequireTenantScope(middleware.TenantScopeTopsolar)
 			r.Post("/inventory", calcProxy.Inventory)
-			r.Post("/landed-cost", calcProxy.LandedCost)
-			r.Post("/exchange-compare", calcProxy.ExchangeCompare)
-			r.Post("/lc-fee", calcProxy.LcFee)
-			r.Post("/lc-limit-timeline", calcProxy.LcLimitTimeline)
-			r.Post("/lc-maturity-alert", calcProxy.LcMaturityAlert)
-			r.Post("/margin-analysis", calcProxy.MarginAnalysis)
+			r.With(topsolarOnly).Post("/landed-cost", calcProxy.LandedCost)
+			r.With(topsolarOnly).Post("/exchange-compare", calcProxy.ExchangeCompare)
+			r.With(topsolarOnly).Post("/lc-fee", calcProxy.LcFee)
+			r.With(topsolarOnly).Post("/lc-limit-timeline", calcProxy.LcLimitTimeline)
+			r.With(topsolarOnly).Post("/lc-maturity-alert", calcProxy.LcMaturityAlert)
+			r.With(topsolarOnly).Post("/margin-analysis", calcProxy.MarginAnalysis)
 			r.Post("/customer-analysis", calcProxy.CustomerAnalysis)
-			r.Post("/price-trend", calcProxy.PriceTrend)
+			r.With(topsolarOnly).Post("/price-trend", calcProxy.PriceTrend)
 			r.Post("/supply-forecast", calcProxy.SupplyForecast)
 			r.Post("/outstanding-list", calcProxy.OutstandingList)
 			r.Post("/receipt-match-suggest", calcProxy.ReceiptMatchSuggest)

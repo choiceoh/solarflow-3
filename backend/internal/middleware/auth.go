@@ -62,22 +62,26 @@ func getJWKS() *keyfunc.JWKS {
 }
 
 // UserProfile — user_profiles 테이블에서 조회한 사용자 프로필
-// 비유: 사원 인사카드 — 역할, 활성 여부가 적혀 있음
-// 컬럼명은 실제 DB 기준 (D-055 참조)
+// 비유: 사원 인사카드 — 역할, 활성 여부, 소속 앱이 적혀 있음
+// 컬럼명은 실제 DB 기준 (D-055, D-108 참조)
 type UserProfile struct {
-	ID       string `json:"user_id"`
-	Role     string `json:"role"`
-	Email    string `json:"email"`
-	IsActive bool   `json:"is_active"`
+	ID          string `json:"user_id"`
+	Role        string `json:"role"`
+	Email       string `json:"email"`
+	IsActive    bool   `json:"is_active"`
+	TenantScope string `json:"tenant_scope"`
 }
 
 // autoProvisionInsert — 신규 사용자 자동 프로비저닝 INSERT payload
+// 신규 자동 생성은 항상 topsolar 스코프로 시작한다.
+// 바로(주) 사용자는 admin이 user_profiles.tenant_scope을 'baro'로 명시 변경한다.
 type autoProvisionInsert struct {
-	UserID   string `json:"user_id"`
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Role     string `json:"role"`
-	IsActive bool   `json:"is_active"`
+	UserID      string `json:"user_id"`
+	Email       string `json:"email"`
+	Name        string `json:"name"`
+	Role        string `json:"role"`
+	IsActive    bool   `json:"is_active"`
+	TenantScope string `json:"tenant_scope"`
 }
 
 // AuthMiddleware — JWT 토큰을 검증하고 사용자 정보를 context에 저장하는 미들웨어
@@ -86,7 +90,7 @@ func AuthMiddleware(db *supa.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if authenticateAmaranthRPA(r) {
-				ctx := SetUserContext(r.Context(), "amaranth-rpa", "operator", "amaranth-rpa@solarflow.local", nil)
+				ctx := SetUserContext(r.Context(), "amaranth-rpa", "operator", "amaranth-rpa@solarflow.local", TenantScopeTopsolar, nil)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -170,9 +174,9 @@ func AuthMiddleware(db *supa.Client) func(http.Handler) http.Handler {
 				log.Printf("[인증 미들웨어] JWT에 email 클레임 누락 또는 비문자열: user_id=%s — 자동 프로비저닝 시 빈 email로 INSERT 시도됨", userID)
 			}
 
-			// 비유: 인사카드(user_profiles)에서 해당 사번의 역할, 활성 여부 조회
+			// 비유: 인사카드(user_profiles)에서 해당 사번의 역할, 활성 여부, 소속 앱 조회
 			data, _, err := db.From("user_profiles").
-				Select("user_id, role, email, is_active", "exact", false).
+				Select("user_id, role, email, is_active, tenant_scope", "exact", false).
 				Eq("user_id", userID).
 				Execute()
 			if err != nil {
@@ -196,11 +200,12 @@ func AuthMiddleware(db *supa.Client) func(http.Handler) http.Handler {
 					name = email[:at]
 				}
 				newProfile := autoProvisionInsert{
-					UserID:   userID,
-					Email:    email,
-					Name:     name,
-					Role:     "viewer",
-					IsActive: true,
+					UserID:      userID,
+					Email:       email,
+					Name:        name,
+					Role:        "viewer",
+					IsActive:    true,
+					TenantScope: TenantScopeTopsolar,
 				}
 				insertData, _, insertErr := db.From("user_profiles").
 					Insert(newProfile, false, "", "", "exact").
@@ -214,7 +219,7 @@ func AuthMiddleware(db *supa.Client) func(http.Handler) http.Handler {
 				var created []UserProfile
 				if err := json.Unmarshal(insertData, &created); err != nil || len(created) == 0 {
 					// INSERT 성공했지만 응답 파싱 실패 시 기본값 사용
-					profile = UserProfile{ID: userID, Email: email, Role: "viewer", IsActive: true}
+					profile = UserProfile{ID: userID, Email: email, Role: "viewer", IsActive: true, TenantScope: TenantScopeTopsolar}
 				} else {
 					profile = created[0]
 				}
@@ -234,9 +239,10 @@ func AuthMiddleware(db *supa.Client) func(http.Handler) http.Handler {
 				email = profile.Email
 			}
 
-			// 비유: 사원증에 역할, 이메일, 허용 구역을 기록하고 통과시킴
+			// 비유: 사원증에 역할, 이메일, 소속 앱, 허용 구역을 기록하고 통과시킴
 			// allowed_modules는 Phase 확장 시 추가 (D-055)
-			ctx := SetUserContext(r.Context(), userID, profile.Role, email, nil)
+			// tenant_scope이 비면 SetUserContext 내부에서 topsolar로 보정 (D-108)
+			ctx := SetUserContext(r.Context(), userID, profile.Role, email, profile.TenantScope, nil)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

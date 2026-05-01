@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { detectTenantScope, type TenantScope } from '@/lib/tenantScope';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermission } from '@/hooks/usePermission';
 import { useAppStore } from '@/stores/appStore';
@@ -22,6 +23,8 @@ interface MenuItem {
   label: string;
   path?: string;
   roles?: string[];
+  // D-108: 표시 허용 테넌트. 미지정이면 모든 테넌트(공통)에서 노출.
+  tenants?: TenantScope[];
   children?: { label: string; path: string }[];
 }
 
@@ -29,12 +32,14 @@ interface MenuItem {
 const inventoryItem: MenuItem = { icon: Home, label: '재고 현황', path: '/inventory' };
 
 // 구매/입고: PO → T/T → L/C → B/L → 면장/원가  (입력 가능: admin, operator)
+// D-108: 바로(주)는 해외 수입을 하지 않으므로 LC/계약금/B/L/면장 메뉴를 노출하지 않는다.
+//        PO는 추후 "탑솔라→바로 매입" 화면으로 재설계 예정 — 그 전까지 BARO 모드에서 숨김.
 const purchaseItems: MenuItem[] = [
-  { icon: ClipboardList, label: 'PO 발주',  path: '/procurement',        roles: ['admin', 'operator'] },
-  { icon: Wallet,        label: '계약금',   path: '/procurement?tab=tt', roles: ['admin', 'operator'] },
-  { icon: Landmark,      label: 'LC 개설',  path: '/procurement?tab=lc', roles: ['admin', 'operator'] },
-  { icon: PackageCheck,  label: 'B/L 입고', path: '/procurement?tab=bl', roles: ['admin', 'operator'] },
-  { icon: Calculator,    label: '면장/원가', path: '/customs',           roles: ['admin', 'operator'] },
+  { icon: ClipboardList, label: 'PO 발주',  path: '/procurement',        roles: ['admin', 'operator'], tenants: ['topsolar'] },
+  { icon: Wallet,        label: '계약금',   path: '/procurement?tab=tt', roles: ['admin', 'operator'], tenants: ['topsolar'] },
+  { icon: Landmark,      label: 'LC 개설',  path: '/procurement?tab=lc', roles: ['admin', 'operator'], tenants: ['topsolar'] },
+  { icon: PackageCheck,  label: 'B/L 입고', path: '/procurement?tab=bl', roles: ['admin', 'operator'], tenants: ['topsolar'] },
+  { icon: Calculator,    label: '면장/원가', path: '/customs',           roles: ['admin', 'operator'], tenants: ['topsolar'] },
 ];
 // 판매/수금: 수주 → 출고 → 판매/계산서 → 수금 → 수금매칭
 const salesItems: MenuItem[] = [
@@ -46,10 +51,11 @@ const salesItems: MenuItem[] = [
 ];
 
 // 현황/분석
+// D-108: 바로는 LC 한도/매출이익 분석(원가 기반)을 보지 않는다.
 const analysisItems: MenuItem[] = [
   { icon: LayoutDashboard, label: '대시보드',       path: '/dashboard' },                                 // 전체 공개 (내용은 권한별 분기)
-  { icon: Landmark,        label: 'LC 한도/만기',   path: '/banking', roles: ['admin', 'operator', 'executive'] },
-  { icon: Calculator,      label: '매출/이익 분석', path: '/sales-analysis', roles: ['admin', 'operator', 'executive'] },
+  { icon: Landmark,        label: 'LC 한도/만기',   path: '/banking', roles: ['admin', 'operator', 'executive'], tenants: ['topsolar'] },
+  { icon: Calculator,      label: '매출/이익 분석', path: '/sales-analysis', roles: ['admin', 'operator', 'executive'], tenants: ['topsolar'] },
 ];
 
 const masterItem: MenuItem = {
@@ -78,7 +84,8 @@ const settingsItem: MenuItem = {
   icon: Settings, label: '설정', path: '/settings', roles: ['admin'],
 };
 
-function canSee(item: MenuItem, role: string | null): boolean {
+function canSee(item: MenuItem, role: string | null, tenant: TenantScope): boolean {
+  if (item.tenants && !item.tenants.includes(tenant)) return false;
   if (!item.roles) return true;
   return !!role && item.roles.includes(role);
 }
@@ -184,6 +191,8 @@ export default function Sidebar() {
   const loadCompanies = useAppStore((s) => s.loadCompanies);
   const { selectedCompanyId, setCompanyId } = useAppStore();
   const [masterOpen, setMasterOpen] = useState(pathname.startsWith('/masters'));
+  // D-108: 호스트네임으로 테넌트 결정. 백엔드 격리는 별도 강제됨.
+  const tenant = detectTenantScope();
 
   useEffect(() => { loadCompanies(); }, [loadCompanies]);
 
@@ -265,18 +274,18 @@ export default function Sidebar() {
         <NavLink {...navLinkBase} {...inventoryItem} />
         <Separator className="my-2" />
         {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">구매/입고</p>}
-        {purchaseItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
+        {purchaseItems.filter((m) => canSee(m, role, tenant)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
         <Separator className="my-2" />
         {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">판매/수금</p>}
-        {salesItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
+        {salesItems.filter((m) => canSee(m, role, tenant)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
         <Separator className="my-2" />
         {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">현황/분석</p>}
-        {analysisItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
+        {analysisItems.filter((m) => canSee(m, role, tenant)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
         <Separator className="my-2" />
         {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">기준정보/도구</p>}
-        {canSee(masterItem, role) && <NavLink {...navLinkBase} {...masterItem} />}
-        {toolItems.filter((m) => canSee(m, role)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
-        {canSee(settingsItem, role) && <NavLink {...navLinkBase} {...settingsItem} />}
+        {canSee(masterItem, role, tenant) && <NavLink {...navLinkBase} {...masterItem} />}
+        {toolItems.filter((m) => canSee(m, role, tenant)).map((m) => <NavLink key={m.label} {...navLinkBase} {...m} />)}
+        {canSee(settingsItem, role, tenant) && <NavLink {...navLinkBase} {...settingsItem} />}
       </nav>
 
       {/* 하단 사용자 */}

@@ -5,7 +5,7 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 배포 ZIP 생성/운영 PC 1회 로그인 리허설 + OCR 실사용 샘플 검증 + E2E smoke 로컬 DB 실행 확인 |
+| 다음 작업 | 바로(주) 테넌트 1단계 운영 적용(040 마이그레이션 + PostgREST 캐시 갱신 + DNS `baro.topworks.ltd`) → PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 배포 ZIP 생성/운영 PC 1회 로그인 리허설 + OCR 실사용 샘플 검증 + E2E smoke 로컬 DB 실행 확인 |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
@@ -13,6 +13,49 @@
 | Rust 테스트 | 75개 PASS |
 | DECISIONS | D-001~D-107 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-01 세션 — 바로(주) 테넌트 분기 1단계
+
+### 완료
+- 설계 판단 D-108 추가: 바로(주) 분리는 단일 DB + URL 기반 테넌트 + 코드 레벨 마스킹으로 운영 (통합 설계문서 1.4절 "별도 앱·별도 DB" 갱신)
+- 마이그레이션 `backend/migrations/040_tenant_scope.sql` 추가
+  - `companies`에 바로(주) 시드(`company_code='BR'`)
+  - `user_profiles.tenant_scope` 컬럼 추가, CHECK(`topsolar`/`baro`), 기본값 `topsolar`
+- 백엔드 테넌트 가드 미들웨어
+  - `internal/middleware/tenant_scope.go`의 `RequireTenantScope`
+  - `internal/middleware/context.go`에 `keyTenantScope`, `GetTenantScope`, 상수 `TenantScopeTopsolar`/`TenantScopeBaro` 추가
+  - `internal/middleware/auth.go`가 `user_profiles.tenant_scope`을 읽어 context에 주입(자동 프로비저닝 신규는 `topsolar`)
+  - 라우터에서 `lcs`/`tts`/`declarations`/`cost-details`/`expenses`/`limit-changes`/`price-histories`/`export/amaranth`에 가드 적용
+  - calc 프록시의 `landed-cost`/`exchange-compare`/`lc-fee`/`lc-limit-timeline`/`lc-maturity-alert`/`margin-analysis`/`price-trend`에 가드 적용
+- 회귀 테스트 `tenant_scope_test.go` 추가(탑솔라 통과/바로 차단/기본값 보정)
+- 프론트엔드 호스트네임 분기
+  - `frontend/src/lib/tenantScope.ts` (`baro.topworks.ltd` → BARO 모드)
+  - 사이드바 `MenuItem`에 `tenants` 필드 추가, BARO 모드에서 LC/T/T/B/L/면장/LC 한도/매출이익 분석 메뉴 자동 숨김
+  - `tenantScope.test.ts` 회귀 테스트
+
+### 검증
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공 (middleware 4 PASS 추가)
+- `cd frontend && npm run lint` 성공
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run test` 성공 — 5 files / 15 tests
+- `git diff --check` 성공
+
+### 격리 범위
+- 같은 그룹 계열사이므로 격리는 1단계(원가/LC/면장/T/T/한도/단가 이력/부대비용/landed-cost·lc-fee·lc-limit-timeline·lc-maturity-alert·exchange-compare·margin-analysis·price-trend)로 끝낸다.
+- 공유 엔드포인트(`/pos`, `/bls`, `/outbounds`, `/orders`, `/sales`, `/receipts`, 마스터, 가용재고)는 row-level `company_id` 필터를 추가하지 않고 계열사 데이터로 공유한다 (D-108 갱신).
+
+### 제한
+- 본 세션은 worktree에서 진행되어 `psql`/`launchctl`/`cargo` 미설치 — DB 마이그레이션 적용, PostgREST 캐시 갱신, Rust 테스트는 운영 PC에서 실행 필요.
+- DNS `baro.topworks.ltd` Caddy 매핑은 운영 환경에서 별도 설정 필요(같은 dist를 서빙하면 됨).
+
+### 다음 작업
+- 운영 PC에서 `psql -d solarflow -f backend/migrations/040_tenant_scope.sql` → PostgREST 재시작 → `./scripts/check_schema.sh` 통과 확인
+- Caddy에 `baro.topworks.ltd` 호스트 매핑(같은 dist 서빙)
+- 바로 테스트 사용자 1명을 `tenant_scope='baro'`로 등록 후 사이드바/원가 API 차단 직접 확인
 
 ---
 
