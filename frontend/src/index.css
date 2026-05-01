@@ -1189,6 +1189,30 @@ a:focus-visible,
   box-shadow: none;
 }
 
+/* shadcn Label 정밀화 — 폼 안에서 더 컴팩트하고 mockup 톤
+   다이얼로그 내부 폼에서도 자동 적용됨 (portal이라도 .sf-page 같은 ring가 보장된 곳 외엔 글로벌 적용) */
+[data-slot="label"] {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--sf-ink-2);
+}
+.sf-page [data-slot="label"],
+.sf-command-surface [data-slot="label"],
+[data-slot="dialog-content"] [data-slot="label"] {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sf-ink-2);
+}
+
+/* 필수 표시 (*) — Korean label에 'name *' 패턴이면 별표를 솔라로 */
+[data-slot="label"]:has(span[data-required]) span[data-required],
+[data-slot="label"] .required-mark {
+  color: var(--sf-solar-3);
+  margin-left: 2px;
+  font-weight: 600;
+}
+
 /* 페이지 제목 / heading 정밀 트래킹 */
 .sf-page-title {
   letter-spacing: -0.018em;
