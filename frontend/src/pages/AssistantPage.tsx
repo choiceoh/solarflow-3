@@ -52,7 +52,11 @@ const PROPOSAL_KIND_LABEL: Record<string, string> = {
   create_partner: '거래처 등록',
   update_partner: '거래처 수정',
   create_order: '수주 등록',
+  update_order: '수주 수정',
+  delete_order: '수주 삭제',
   create_outbound: '출고 등록',
+  update_outbound: '출고 수정',
+  delete_outbound: '출고 삭제',
   create_receipt: '수금 입력',
 };
 

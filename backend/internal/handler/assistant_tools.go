@@ -39,20 +39,43 @@ func roleIn(ctx context.Context, allowed ...string) bool {
 // assistantToolCatalog — 등록 순서가 곧 LLM 노출 순서.
 func assistantToolCatalog() []assistantTool {
 	return []assistantTool{
+		// 마스터 룩업
+		toolSearchProducts(),
+		toolSearchManufacturers(),
+		toolSearchCompanies(),
+		toolSearchWarehouses(),
+		toolSearchConstructionSites(),
+		// 거래·관계
 		toolSearchPartners(),
 		toolSearchPurchaseOrders(),
 		toolSearchOrders(),
 		toolSearchOutbound(),
 		toolSearchReceipts(),
+		// 금융·물류 (일부 topsolar 전용)
+		toolSearchLC(),
+		toolSearchBL(),
+		toolSearchDeclarations(),
+		// 쓰기 — 메모
 		toolCreateNote(),
 		toolUpdateNote(),
 		toolDeleteNote(),
+		// 쓰기 — 거래처
 		toolCreatePartner(),
 		toolUpdatePartner(),
+		// 쓰기 — 거래
 		toolCreateOrder(),
+		toolUpdateOrder(),
+		toolDeleteOrder(),
 		toolCreateOutbound(),
+		toolUpdateOutbound(),
+		toolDeleteOutbound(),
 		toolCreateReceipt(),
 	}
+}
+
+// tenantIs — 현재 사용자의 테넌트 스코프 매칭.
+func tenantIs(ctx context.Context, scope string) bool {
+	return middleware.GetTenantScope(ctx) == scope
 }
 
 // fetchNoteOwner — notes 테이블에서 user_id를 꺼내 owner 검증용.
@@ -974,6 +997,588 @@ func toolCreateReceipt() assistantTool {
 				return "", err
 			}
 			return fmt.Sprintf("수금 등록 제안 생성됨(id=%s). 거래처·금액·일자 확인 후 [저장] 클릭.", id), nil
+		},
+	}
+}
+
+// ===== 마스터 룩업 =====
+
+type searchProductsInput struct {
+	Keyword        string `json:"keyword,omitempty"`
+	ManufacturerID string `json:"manufacturer_id,omitempty"`
+	Limit          int    `json:"limit,omitempty"`
+}
+
+func toolSearchProducts() assistantTool {
+	return assistantTool{
+		name:        "search_products",
+		description: "품목(products) 검색. product_code/product_name 부분일치 또는 제조사 ID로 필터. ID·스펙 조회용 — 모든 역할 호출 가능.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"keyword":{"type":"string","description":"product_code·product_name 부분일치"},
+				"manufacturer_id":{"type":"string","description":"제조사 ID 정확일치"},
+				"limit":{"type":"integer","description":"기본 20, 최대 50"}
+			}
+		}`),
+		allow: func(ctx context.Context) bool { return middleware.GetUserID(ctx) != "" },
+		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
+			var args searchProductsInput
+			if len(input) > 0 {
+				if err := json.Unmarshal(input, &args); err != nil {
+					return "", fmt.Errorf("입력 파싱 실패: %w", err)
+				}
+			}
+			limit := clampLimit(args.Limit, 20, 50)
+			q := db.From("products").Select(
+				"product_id,product_code,product_name,manufacturer_id,spec_wp,wattage_kw,module_width_mm,module_height_mm",
+				"exact", false,
+			)
+			if v := strings.TrimSpace(args.Keyword); v != "" {
+				q = q.Or(fmt.Sprintf("product_code.ilike.%%%s%%,product_name.ilike.%%%s%%", v, v), "")
+			}
+			if v := strings.TrimSpace(args.ManufacturerID); v != "" {
+				q = q.Eq("manufacturer_id", v)
+			}
+			q = q.Order("product_code", &postgrest.OrderOpts{Ascending: true}).Limit(limit, "")
+			data, _, err := q.Execute()
+			if err != nil {
+				return "", fmt.Errorf("품목 조회 실패: %w", err)
+			}
+			return string(data), nil
+		},
+	}
+}
+
+type searchManufacturersInput struct {
+	Keyword string `json:"keyword,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
+func toolSearchManufacturers() assistantTool {
+	return assistantTool{
+		name:        "search_manufacturers",
+		description: "제조사(manufacturers) 검색. name_kr/name_en/short_name 부분일치. 모든 역할 호출 가능.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"keyword":{"type":"string","description":"제조사 이름 부분일치(한국어/영어/약칭)"},
+				"limit":{"type":"integer","description":"기본 20, 최대 50"}
+			}
+		}`),
+		allow: func(ctx context.Context) bool { return middleware.GetUserID(ctx) != "" },
+		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
+			var args searchManufacturersInput
+			if len(input) > 0 {
+				if err := json.Unmarshal(input, &args); err != nil {
+					return "", fmt.Errorf("입력 파싱 실패: %w", err)
+				}
+			}
+			limit := clampLimit(args.Limit, 20, 50)
+			q := db.From("manufacturers").Select(
+				"manufacturer_id,name_kr,name_en,short_name,country,domestic_foreign,is_active",
+				"exact", false,
+			)
+			if v := strings.TrimSpace(args.Keyword); v != "" {
+				q = q.Or(fmt.Sprintf("name_kr.ilike.%%%s%%,name_en.ilike.%%%s%%,short_name.ilike.%%%s%%", v, v, v), "")
+			}
+			q = q.Order("priority_rank", &postgrest.OrderOpts{Ascending: true}).Limit(limit, "")
+			data, _, err := q.Execute()
+			if err != nil {
+				return "", fmt.Errorf("제조사 조회 실패: %w", err)
+			}
+			return string(data), nil
+		},
+	}
+}
+
+type searchCompaniesInput struct {
+	Keyword string `json:"keyword,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
+func toolSearchCompanies() assistantTool {
+	return assistantTool{
+		name:        "search_companies",
+		description: "법인(companies) 검색. company_name/company_code 부분일치. 모든 역할 호출 가능.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"keyword":{"type":"string","description":"법인명/코드 부분일치"},
+				"limit":{"type":"integer","description":"기본 20, 최대 50"}
+			}
+		}`),
+		allow: func(ctx context.Context) bool { return middleware.GetUserID(ctx) != "" },
+		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
+			var args searchCompaniesInput
+			if len(input) > 0 {
+				if err := json.Unmarshal(input, &args); err != nil {
+					return "", fmt.Errorf("입력 파싱 실패: %w", err)
+				}
+			}
+			limit := clampLimit(args.Limit, 20, 50)
+			q := db.From("companies").Select("company_id,company_name,company_code,is_active", "exact", false)
+			if v := strings.TrimSpace(args.Keyword); v != "" {
+				q = q.Or(fmt.Sprintf("company_name.ilike.%%%s%%,company_code.ilike.%%%s%%", v, v), "")
+			}
+			q = q.Order("company_code", &postgrest.OrderOpts{Ascending: true}).Limit(limit, "")
+			data, _, err := q.Execute()
+			if err != nil {
+				return "", fmt.Errorf("법인 조회 실패: %w", err)
+			}
+			return string(data), nil
+		},
+	}
+}
+
+type searchWarehousesInput struct {
+	Keyword string `json:"keyword,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
+func toolSearchWarehouses() assistantTool {
+	return assistantTool{
+		name:        "search_warehouses",
+		description: "창고(warehouses) 검색. 코드·이름·위치 부분일치. create_outbound의 warehouse_id 룩업용. 모든 역할 호출 가능.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"keyword":{"type":"string","description":"warehouse_code/name/location 부분일치"},
+				"limit":{"type":"integer","description":"기본 20, 최대 50"}
+			}
+		}`),
+		allow: func(ctx context.Context) bool { return middleware.GetUserID(ctx) != "" },
+		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
+			var args searchWarehousesInput
+			if len(input) > 0 {
+				if err := json.Unmarshal(input, &args); err != nil {
+					return "", fmt.Errorf("입력 파싱 실패: %w", err)
+				}
+			}
+			limit := clampLimit(args.Limit, 20, 50)
+			q := db.From("warehouses").Select("warehouse_id,warehouse_code,warehouse_name,warehouse_type,location_code,location_name,is_active", "exact", false)
+			if v := strings.TrimSpace(args.Keyword); v != "" {
+				q = q.Or(fmt.Sprintf("warehouse_code.ilike.%%%s%%,warehouse_name.ilike.%%%s%%,location_name.ilike.%%%s%%", v, v, v), "")
+			}
+			q = q.Order("warehouse_code", &postgrest.OrderOpts{Ascending: true}).Limit(limit, "")
+			data, _, err := q.Execute()
+			if err != nil {
+				return "", fmt.Errorf("창고 조회 실패: %w", err)
+			}
+			return string(data), nil
+		},
+	}
+}
+
+type searchSitesInput struct {
+	Keyword   string `json:"keyword,omitempty"`
+	CompanyID string `json:"company_id,omitempty"`
+	SiteType  string `json:"site_type,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
+}
+
+func toolSearchConstructionSites() assistantTool {
+	return assistantTool{
+		name:        "search_construction_sites",
+		description: "발전소·시공현장(construction_sites) 검색. 이름·지명 부분일치, 법인·유형(own/epc) 필터. 수주의 site_id 룩업용. 모든 역할 호출 가능.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"keyword":{"type":"string","description":"name/location 부분일치"},
+				"company_id":{"type":"string","description":"법인 ID 정확일치"},
+				"site_type":{"type":"string","description":"own / epc"},
+				"limit":{"type":"integer","description":"기본 20, 최대 50"}
+			}
+		}`),
+		allow: func(ctx context.Context) bool { return middleware.GetUserID(ctx) != "" },
+		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
+			var args searchSitesInput
+			if len(input) > 0 {
+				if err := json.Unmarshal(input, &args); err != nil {
+					return "", fmt.Errorf("입력 파싱 실패: %w", err)
+				}
+			}
+			limit := clampLimit(args.Limit, 20, 50)
+			q := db.From("construction_sites").Select("site_id,company_id,name,location,site_type,capacity_mw,started_at,completed_at,is_active", "exact", false)
+			if v := strings.TrimSpace(args.Keyword); v != "" {
+				q = q.Or(fmt.Sprintf("name.ilike.%%%s%%,location.ilike.%%%s%%", v, v), "")
+			}
+			if v := strings.TrimSpace(args.CompanyID); v != "" {
+				q = q.Eq("company_id", v)
+			}
+			if v := strings.TrimSpace(args.SiteType); v != "" {
+				q = q.Eq("site_type", v)
+			}
+			q = q.Order("name", &postgrest.OrderOpts{Ascending: true}).Limit(limit, "")
+			data, _, err := q.Execute()
+			if err != nil {
+				return "", fmt.Errorf("현장 조회 실패: %w", err)
+			}
+			return string(data), nil
+		},
+	}
+}
+
+// ===== 금융·물류 조회 =====
+
+type searchLCInput struct {
+	LCNumber string `json:"lc_number,omitempty"`
+	POID     string `json:"po_id,omitempty"`
+	BankID   string `json:"bank_id,omitempty"`
+	DateFrom string `json:"date_from,omitempty"`
+	DateTo   string `json:"date_to,omitempty"`
+	Limit    int    `json:"limit,omitempty"`
+}
+
+func toolSearchLC() assistantTool {
+	return assistantTool{
+		name:        "search_lc",
+		description: "L/C(신용장, lc_records) 검색. LC번호·PO·은행·개설일 범위로 필터. 탑솔라 테넌트 admin/operator/executive 만 호출 가능.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"lc_number":{"type":"string","description":"LC 번호 부분일치"},
+				"po_id":{"type":"string","description":"PO ID 정확일치"},
+				"bank_id":{"type":"string","description":"은행 ID 정확일치"},
+				"date_from":{"type":"string","description":"개설일 from(YYYY-MM-DD)"},
+				"date_to":{"type":"string","description":"개설일 to(YYYY-MM-DD)"},
+				"limit":{"type":"integer","description":"기본 20, 최대 50"}
+			}
+		}`),
+		allow: func(ctx context.Context) bool {
+			return roleIn(ctx, "admin", "operator", "executive") && tenantIs(ctx, middleware.TenantScopeTopsolar)
+		},
+		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
+			var args searchLCInput
+			if len(input) > 0 {
+				if err := json.Unmarshal(input, &args); err != nil {
+					return "", fmt.Errorf("입력 파싱 실패: %w", err)
+				}
+			}
+			limit := clampLimit(args.Limit, 20, 50)
+			q := db.From("lc_records").Select("lc_id,po_id,lc_number,bank_id,company_id,open_date,amount_usd,target_qty,target_mw,usance_days,maturity_date", "exact", false)
+			if v := strings.TrimSpace(args.LCNumber); v != "" {
+				q = q.Ilike("lc_number", "%"+v+"%")
+			}
+			if v := strings.TrimSpace(args.POID); v != "" {
+				q = q.Eq("po_id", v)
+			}
+			if v := strings.TrimSpace(args.BankID); v != "" {
+				q = q.Eq("bank_id", v)
+			}
+			if v := strings.TrimSpace(args.DateFrom); v != "" {
+				q = q.Gte("open_date", v)
+			}
+			if v := strings.TrimSpace(args.DateTo); v != "" {
+				q = q.Lte("open_date", v)
+			}
+			q = q.Order("open_date", &postgrest.OrderOpts{Ascending: false}).Limit(limit, "")
+			data, _, err := q.Execute()
+			if err != nil {
+				return "", fmt.Errorf("LC 조회 실패: %w", err)
+			}
+			return string(data), nil
+		},
+	}
+}
+
+type searchBLInput struct {
+	BLNumber       string `json:"bl_number,omitempty"`
+	POID           string `json:"po_id,omitempty"`
+	ManufacturerID string `json:"manufacturer_id,omitempty"`
+	DateFrom       string `json:"date_from,omitempty"`
+	DateTo         string `json:"date_to,omitempty"`
+	Limit          int    `json:"limit,omitempty"`
+}
+
+func toolSearchBL() assistantTool {
+	return assistantTool{
+		name:        "search_bl",
+		description: "B/L 입고(bl_shipments) 검색. BL번호·PO·제조사·ETA 범위로 필터. admin/operator/executive 만 호출 가능.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"bl_number":{"type":"string","description":"BL 번호 부분일치"},
+				"po_id":{"type":"string","description":"PO ID 정확일치"},
+				"manufacturer_id":{"type":"string","description":"제조사 ID 정확일치"},
+				"date_from":{"type":"string","description":"ETA from(YYYY-MM-DD)"},
+				"date_to":{"type":"string","description":"ETA to(YYYY-MM-DD)"},
+				"limit":{"type":"integer","description":"기본 20, 최대 50"}
+			}
+		}`),
+		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator", "executive") },
+		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
+			var args searchBLInput
+			if len(input) > 0 {
+				if err := json.Unmarshal(input, &args); err != nil {
+					return "", fmt.Errorf("입력 파싱 실패: %w", err)
+				}
+			}
+			limit := clampLimit(args.Limit, 20, 50)
+			q := db.From("bl_shipments").Select("bl_id,bl_number,po_id,lc_id,company_id,manufacturer_id,inbound_type,currency,etd,eta,actual_arrival", "exact", false)
+			if v := strings.TrimSpace(args.BLNumber); v != "" {
+				q = q.Ilike("bl_number", "%"+v+"%")
+			}
+			if v := strings.TrimSpace(args.POID); v != "" {
+				q = q.Eq("po_id", v)
+			}
+			if v := strings.TrimSpace(args.ManufacturerID); v != "" {
+				q = q.Eq("manufacturer_id", v)
+			}
+			if v := strings.TrimSpace(args.DateFrom); v != "" {
+				q = q.Gte("eta", v)
+			}
+			if v := strings.TrimSpace(args.DateTo); v != "" {
+				q = q.Lte("eta", v)
+			}
+			q = q.Order("eta", &postgrest.OrderOpts{Ascending: false}).Limit(limit, "")
+			data, _, err := q.Execute()
+			if err != nil {
+				return "", fmt.Errorf("B/L 조회 실패: %w", err)
+			}
+			return string(data), nil
+		},
+	}
+}
+
+type searchDeclarationsInput struct {
+	DeclarationNumber string `json:"declaration_number,omitempty"`
+	BLID              string `json:"bl_id,omitempty"`
+	DateFrom          string `json:"date_from,omitempty"`
+	DateTo            string `json:"date_to,omitempty"`
+	Limit             int    `json:"limit,omitempty"`
+}
+
+func toolSearchDeclarations() assistantTool {
+	return assistantTool{
+		name:        "search_declarations",
+		description: "면장(declarations, 통관 신고필증) 검색. 신고번호·BL·신고일 범위로 필터. 탑솔라 테넌트 admin/operator/executive 만 호출 가능.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"declaration_number":{"type":"string","description":"신고번호 부분일치"},
+				"bl_id":{"type":"string","description":"BL ID 정확일치"},
+				"date_from":{"type":"string","description":"신고일 from(YYYY-MM-DD)"},
+				"date_to":{"type":"string","description":"신고일 to(YYYY-MM-DD)"},
+				"limit":{"type":"integer","description":"기본 20, 최대 50"}
+			}
+		}`),
+		allow: func(ctx context.Context) bool {
+			return roleIn(ctx, "admin", "operator", "executive") && tenantIs(ctx, middleware.TenantScopeTopsolar)
+		},
+		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
+			var args searchDeclarationsInput
+			if len(input) > 0 {
+				if err := json.Unmarshal(input, &args); err != nil {
+					return "", fmt.Errorf("입력 파싱 실패: %w", err)
+				}
+			}
+			limit := clampLimit(args.Limit, 20, 50)
+			q := db.From("declarations").Select("*", "exact", false)
+			if v := strings.TrimSpace(args.DeclarationNumber); v != "" {
+				q = q.Ilike("declaration_number", "%"+v+"%")
+			}
+			if v := strings.TrimSpace(args.BLID); v != "" {
+				q = q.Eq("bl_id", v)
+			}
+			if v := strings.TrimSpace(args.DateFrom); v != "" {
+				q = q.Gte("declaration_date", v)
+			}
+			if v := strings.TrimSpace(args.DateTo); v != "" {
+				q = q.Lte("declaration_date", v)
+			}
+			q = q.Order("declaration_date", &postgrest.OrderOpts{Ascending: false}).Limit(limit, "")
+			data, _, err := q.Execute()
+			if err != nil {
+				return "", fmt.Errorf("면장 조회 실패: %w", err)
+			}
+			return string(data), nil
+		},
+	}
+}
+
+// ===== 수주·출고 update/delete =====
+
+type updateOrderToolInput struct {
+	OrderID string `json:"order_id"`
+	model.UpdateOrderRequest
+}
+
+func toolUpdateOrder() assistantTool {
+	return assistantTool{
+		name:        "update_order",
+		description: "수주(orders) 수정. order_id 필수, 변경할 필드만 지정. 단가·수량·상태 등.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"order_id":{"type":"string"},
+				"order_number":{"type":"string"},
+				"company_id":{"type":"string"},
+				"customer_id":{"type":"string"},
+				"order_date":{"type":"string"},
+				"receipt_method":{"type":"string"},
+				"product_id":{"type":"string"},
+				"quantity":{"type":"integer"},
+				"capacity_kw":{"type":"number"},
+				"unit_price_wp":{"type":"number"},
+				"site_id":{"type":"string"},
+				"site_name":{"type":"string"},
+				"payment_terms":{"type":"string"},
+				"deposit_rate":{"type":"number"},
+				"delivery_due":{"type":"string"},
+				"status":{"type":"string"},
+				"memo":{"type":"string"}
+			},
+			"required":["order_id"]
+		}`),
+		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },
+		execute: func(ctx context.Context, _ *supa.Client, input json.RawMessage) (string, error) {
+			var args updateOrderToolInput
+			if err := json.Unmarshal(input, &args); err != nil {
+				return "", fmt.Errorf("입력 파싱 실패: %w", err)
+			}
+			if strings.TrimSpace(args.OrderID) == "" {
+				return "", fmt.Errorf("order_id는 필수입니다")
+			}
+			if msg := args.UpdateOrderRequest.Validate(); msg != "" {
+				return "", fmt.Errorf("검증 실패: %s", msg)
+			}
+			summary := fmt.Sprintf("수주 수정: order_id=%s", args.OrderID)
+			if args.Status != nil {
+				summary += fmt.Sprintf(", status→%s", *args.Status)
+			}
+			if args.Quantity != nil {
+				summary += fmt.Sprintf(", qty→%d", *args.Quantity)
+			}
+			if args.UnitPriceWp != nil {
+				summary += fmt.Sprintf(", unit_price_wp→%.2f", *args.UnitPriceWp)
+			}
+			id, err := proposeWrite(ctx, "update_order", summary, args)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("수주 수정 제안 생성됨(id=%s). [저장] 클릭 시 반영.", id), nil
+		},
+	}
+}
+
+type deleteOrderToolInput struct {
+	OrderID string `json:"order_id"`
+}
+
+func toolDeleteOrder() assistantTool {
+	return assistantTool{
+		name:        "delete_order",
+		description: "수주(orders) 삭제. 출고 연결 등 FK가 있으면 DB가 거절할 수 있음.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{"order_id":{"type":"string"}},
+			"required":["order_id"]
+		}`),
+		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },
+		execute: func(ctx context.Context, _ *supa.Client, input json.RawMessage) (string, error) {
+			var args deleteOrderToolInput
+			if err := json.Unmarshal(input, &args); err != nil {
+				return "", fmt.Errorf("입력 파싱 실패: %w", err)
+			}
+			if strings.TrimSpace(args.OrderID) == "" {
+				return "", fmt.Errorf("order_id는 필수입니다")
+			}
+			summary := fmt.Sprintf("수주 삭제: order_id=%s", args.OrderID)
+			id, err := proposeWrite(ctx, "delete_order", summary, args)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("수주 삭제 제안 생성됨(id=%s). 사용자가 [저장]을 눌러야 실제로 삭제됩니다.", id), nil
+		},
+	}
+}
+
+type updateOutboundToolInput struct {
+	OutboundID string `json:"outbound_id"`
+	model.UpdateOutboundRequest
+}
+
+func toolUpdateOutbound() assistantTool {
+	return assistantTool{
+		name:        "update_outbound",
+		description: "출고(outbounds) 수정. outbound_id 필수, 변경할 필드만 지정. bl_items 라인 할당은 미지원.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"outbound_id":{"type":"string"},
+				"outbound_date":{"type":"string"},
+				"company_id":{"type":"string"},
+				"product_id":{"type":"string"},
+				"quantity":{"type":"integer"},
+				"capacity_kw":{"type":"number"},
+				"warehouse_id":{"type":"string"},
+				"usage_category":{"type":"string"},
+				"order_id":{"type":"string"},
+				"site_name":{"type":"string"},
+				"status":{"type":"string"},
+				"memo":{"type":"string"}
+			},
+			"required":["outbound_id"]
+		}`),
+		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },
+		execute: func(ctx context.Context, _ *supa.Client, input json.RawMessage) (string, error) {
+			var args updateOutboundToolInput
+			if err := json.Unmarshal(input, &args); err != nil {
+				return "", fmt.Errorf("입력 파싱 실패: %w", err)
+			}
+			if strings.TrimSpace(args.OutboundID) == "" {
+				return "", fmt.Errorf("outbound_id는 필수입니다")
+			}
+			// BLItems은 v1 미지원 — 비워둠
+			args.BLItems = nil
+			if msg := args.UpdateOutboundRequest.Validate(); msg != "" {
+				return "", fmt.Errorf("검증 실패: %s", msg)
+			}
+			summary := fmt.Sprintf("출고 수정: outbound_id=%s", args.OutboundID)
+			if args.Status != nil {
+				summary += fmt.Sprintf(", status→%s", *args.Status)
+			}
+			if args.Quantity != nil {
+				summary += fmt.Sprintf(", qty→%d", *args.Quantity)
+			}
+			id, err := proposeWrite(ctx, "update_outbound", summary, args)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("출고 수정 제안 생성됨(id=%s). 재고에 영향이 있으니 한 번 더 확인 후 [저장] 클릭.", id), nil
+		},
+	}
+}
+
+type deleteOutboundToolInput struct {
+	OutboundID string `json:"outbound_id"`
+}
+
+func toolDeleteOutbound() assistantTool {
+	return assistantTool{
+		name:        "delete_outbound",
+		description: "출고(outbounds) 삭제. 재고 환원 영향 있음.",
+		inputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{"outbound_id":{"type":"string"}},
+			"required":["outbound_id"]
+		}`),
+		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },
+		execute: func(ctx context.Context, _ *supa.Client, input json.RawMessage) (string, error) {
+			var args deleteOutboundToolInput
+			if err := json.Unmarshal(input, &args); err != nil {
+				return "", fmt.Errorf("입력 파싱 실패: %w", err)
+			}
+			if strings.TrimSpace(args.OutboundID) == "" {
+				return "", fmt.Errorf("outbound_id는 필수입니다")
+			}
+			summary := fmt.Sprintf("출고 삭제: outbound_id=%s (재고 환원)", args.OutboundID)
+			id, err := proposeWrite(ctx, "delete_outbound", summary, args)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("출고 삭제 제안 생성됨(id=%s). 사용자가 [저장]을 눌러야 실제로 삭제됩니다.", id), nil
 		},
 	}
 }

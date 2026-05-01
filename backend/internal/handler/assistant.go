@@ -363,6 +363,75 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 		log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s ok", role, userID, p.Kind, id)
 		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "data": json.RawMessage(data)})
 
+	case "update_order":
+		var args updateOrderToolInput
+		if err := json.Unmarshal(p.Payload, &args); err != nil {
+			response.RespondError(w, http.StatusInternalServerError, "제안 페이로드 파싱 실패")
+			return
+		}
+		if msg := args.UpdateOrderRequest.Validate(); msg != "" {
+			response.RespondError(w, http.StatusBadRequest, msg)
+			return
+		}
+		data, _, err := h.db.From("orders").Update(args.UpdateOrderRequest, "", "").Eq("order_id", args.OrderID).Execute()
+		if err != nil {
+			log.Printf("[assistant write/confirm] orders update 실패 id=%s err=%v", id, err)
+			response.RespondError(w, http.StatusInternalServerError, "수주 수정에 실패했습니다")
+			return
+		}
+		log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s ok", role, userID, p.Kind, id)
+		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "data": json.RawMessage(data)})
+
+	case "delete_order":
+		var args deleteOrderToolInput
+		if err := json.Unmarshal(p.Payload, &args); err != nil {
+			response.RespondError(w, http.StatusInternalServerError, "제안 페이로드 파싱 실패")
+			return
+		}
+		_, _, err := h.db.From("orders").Delete("", "").Eq("order_id", args.OrderID).Execute()
+		if err != nil {
+			log.Printf("[assistant write/confirm] orders delete 실패 id=%s err=%v", id, err)
+			response.RespondError(w, http.StatusInternalServerError, "수주 삭제에 실패했습니다 (FK 제약 가능)")
+			return
+		}
+		log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s ok", role, userID, p.Kind, id)
+		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "deleted": args.OrderID})
+
+	case "update_outbound":
+		var args updateOutboundToolInput
+		if err := json.Unmarshal(p.Payload, &args); err != nil {
+			response.RespondError(w, http.StatusInternalServerError, "제안 페이로드 파싱 실패")
+			return
+		}
+		args.BLItems = nil // v1 미지원
+		if msg := args.UpdateOutboundRequest.Validate(); msg != "" {
+			response.RespondError(w, http.StatusBadRequest, msg)
+			return
+		}
+		data, _, err := h.db.From("outbounds").Update(args.UpdateOutboundRequest, "", "").Eq("outbound_id", args.OutboundID).Execute()
+		if err != nil {
+			log.Printf("[assistant write/confirm] outbounds update 실패 id=%s err=%v", id, err)
+			response.RespondError(w, http.StatusInternalServerError, "출고 수정에 실패했습니다")
+			return
+		}
+		log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s ok", role, userID, p.Kind, id)
+		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "data": json.RawMessage(data)})
+
+	case "delete_outbound":
+		var args deleteOutboundToolInput
+		if err := json.Unmarshal(p.Payload, &args); err != nil {
+			response.RespondError(w, http.StatusInternalServerError, "제안 페이로드 파싱 실패")
+			return
+		}
+		_, _, err := h.db.From("outbounds").Delete("", "").Eq("outbound_id", args.OutboundID).Execute()
+		if err != nil {
+			log.Printf("[assistant write/confirm] outbounds delete 실패 id=%s err=%v", id, err)
+			response.RespondError(w, http.StatusInternalServerError, "출고 삭제에 실패했습니다")
+			return
+		}
+		log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s ok", role, userID, p.Kind, id)
+		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "deleted": args.OutboundID})
+
 	default:
 		response.RespondError(w, http.StatusBadRequest, "지원하지 않는 제안 종류: "+p.Kind)
 	}
