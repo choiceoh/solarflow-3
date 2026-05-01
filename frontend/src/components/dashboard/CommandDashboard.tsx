@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { CardB, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
+import MarketTickerCard from '@/components/dashboard/MarketTickerCard';
 import type { CustomerAnalysis } from '@/hooks/useDashboard';
 import type {
   AlertItem,
@@ -298,6 +299,8 @@ export default function CommandDashboard({
       </div>
 
         <aside className="sf-dashboard-rail sf-right-rail">
+          <MarketTickerCard />
+
           <CardB
             title="단가 추이"
             right={<Link className="text-xs font-bold text-[var(--solar-3)]" to="/procurement?tab=prices">상세</Link>}
