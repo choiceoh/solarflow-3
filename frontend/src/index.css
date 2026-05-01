@@ -904,6 +904,15 @@ a:focus-visible,
   justify-content: flex-end;
 }
 
+.sf-toolbar-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sf-toolbar-trigger[data-state="open"] {
+  border-color: var(--solar-3) !important;
+}
+
 .sf-procurement-page [data-slot="tabs-content"] {
   margin-top: 0;
 }

@@ -66,12 +66,27 @@ export default function ExcelToolbar({ type, onImportComplete, onNew }: Props) {
           <DropdownMenu>
             <DropdownMenuTrigger
               disabled={excelDisabled && !onNew}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-input bg-background px-2.5 text-xs font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/45 disabled:pointer-events-none disabled:opacity-50"
+              className="sf-toolbar-trigger inline-flex items-center"
+              style={{
+                gap: 4,
+                height: 24,
+                padding: '0 8px',
+                background: 'var(--surface)',
+                border: '1px solid var(--line)',
+                borderRadius: 6,
+                fontFamily: 'inherit',
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--ink)',
+                cursor: 'pointer',
+                letterSpacing: '-0.005em',
+                boxShadow: '0 1px 2px 0 rgba(0,0,0,0.05)',
+              }}
             >
               {loading
-                ? <Loader2 className="h-3 w-3 animate-spin" />
-                : <ChevronDown className="h-3 w-3" />}
-              작업
+                ? <Loader2 style={{ width: 12, height: 12, color: 'var(--ink-3)' }} className="animate-spin" />
+                : <ChevronDown style={{ width: 12, height: 12, color: 'var(--ink-3)' }} />}
+              <span>작업</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[160px]">
               {onNew && (
