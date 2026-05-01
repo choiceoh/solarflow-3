@@ -50,6 +50,8 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 		adminOnly := middleware.RoleMiddleware("admin")
 		// D-108: 탑솔라 원가/금융/면장 응답은 탑솔라 테넌트 사용자에게만 — 바로 토큰은 403
 		topsolarOnly := middleware.RequireTenantScope(middleware.TenantScopeTopsolar)
+		// BARO Phase 1: 바로(주) 전용 도구 — 탑솔라 토큰은 403
+		baroOnly := middleware.RequireTenantScope(middleware.TenantScopeBaro)
 
 		companyH := handler.NewCompanyHandler(db)
 		r.Route("/companies", func(r chi.Router) {
@@ -201,6 +203,25 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.With(write).Post("/", orderH.Create)
 			r.With(write).Put("/{id}", orderH.Update)
 			r.With(write).Delete("/{id}", orderH.Delete)
+		})
+
+		// BARO Phase 1: 거래처별 단가표 — 바로(주) 사용자 전용 (탑솔라 토큰 403)
+		ppbH := handler.NewPartnerPriceBookHandler(db)
+		r.Route("/partner-prices", func(r chi.Router) {
+			r.Use(baroOnly)
+			r.Get("/", ppbH.List)
+			r.Get("/lookup", ppbH.Lookup)
+			r.Get("/{id}", ppbH.GetByID)
+			r.With(write).Post("/", ppbH.Create)
+			r.With(write).Put("/{id}", ppbH.Update)
+			r.With(write).Delete("/{id}", ppbH.Delete)
+		})
+
+		// BARO Phase 1: 빠른 재발주 — 바로(주) 사용자 전용
+		r.Route("/baro/orders", func(r chi.Router) {
+			r.Use(baroOnly)
+			r.Get("/recent", orderH.RecentByPartner)
+			r.With(write).Post("/{id}/clone", orderH.Clone)
 		})
 
 		receiptH := handler.NewReceiptHandler(db)

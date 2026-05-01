@@ -15,6 +15,7 @@ import { Check, ChevronDown, Lock, Search } from 'lucide-react';
 import { cn, moduleLabel } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
+import { isBaroMode } from '@/lib/tenantScope';
 import {
   RECEIPT_METHOD_LABEL, MANAGEMENT_CATEGORY_LABEL, FULFILLMENT_SOURCE_LABEL,
   type Order, type ReceiptMethod, type ManagementCategory, type FulfillmentSource,
@@ -714,6 +715,34 @@ export default function OrderForm({ open, onOpenChange, onSubmit, onPrefillCance
     const matched = findPartnerByHint(partners, prefillData.customer_hint);
     if (matched) setValue('customer_id', matched.partner_id, { shouldValidate: true, shouldDirty: true });
   }, [prefillData?.alloc_id, prefillData?.customer_hint, partners, open, editData, getValues, setValue]);
+
+  // BARO Phase 1: 거래처+품번 선택 시 partner_price_book에서 단가 자동 prefill
+  // 신규 등록 시에만, 사용자가 단가를 이미 입력했으면 덮어쓰지 않는다.
+  const watchedCustomerId = watch('customer_id');
+  useEffect(() => {
+    if (!open || editData) return;
+    if (!isBaroMode()) return;
+    if (!watchedCustomerId || !selectedProductId) return;
+    const current = getValues('unit_price_wp');
+    if (current && Number(current) > 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const price = await fetchWithAuth<{ unit_price_wp: number }>(
+          `/api/v1/partner-prices/lookup?partner_id=${watchedCustomerId}&product_id=${selectedProductId}&on=${today}`,
+        );
+        if (cancelled) return;
+        if (price?.unit_price_wp && price.unit_price_wp > 0) {
+          setValue('unit_price_wp', price.unit_price_wp, { shouldValidate: true, shouldDirty: true });
+        }
+      } catch {
+        // 등록 단가가 없으면 404 — prefill 생략
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, editData, watchedCustomerId, selectedProductId, getValues, setValue]);
 
   const handle = async (data: FormData) => {
     setSubmitError('');

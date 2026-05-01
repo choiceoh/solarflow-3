@@ -4,7 +4,7 @@ import {
   LayoutDashboard, PackageCheck, ClipboardList, Truck,
   Calculator, Landmark, Database, Search, StickyNote,
   FileSignature, Settings, LogOut,
-  ScrollText, Wallet, Building2, Home, ScanText,
+  ScrollText, Wallet, Building2, Home, ScanText, Tags,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -66,6 +66,8 @@ const dataItem: MenuItem = {
 
 const toolItems: MenuItem[] = [
   { icon: Search,        label: '검색',  path: '/search' },
+  // BARO Phase 1: 거래처별 단가표 — 바로(주) 전용 도구
+  { icon: Tags,          label: '거래처 단가표', path: '/baro/price-book', roles: ['admin', 'operator'], tenants: ['baro'] },
   { icon: ScanText,      label: '문서 OCR', path: '/ocr', roles: ['admin', 'operator'] },
   { icon: StickyNote,    label: '메모',  path: '/memo',     roles: ['admin', 'operator'] },
   { icon: FileSignature, label: '결재안', path: '/approval', roles: ['admin', 'operator'] },

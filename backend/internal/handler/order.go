@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/model"
@@ -345,6 +348,159 @@ func (h *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.RespondJSON(w, http.StatusOK, updated[0])
+}
+
+// RecentByPartner — GET /api/v1/baro/orders/recent?partner_id=&limit=5
+// BARO Phase 1: 거래처별 최근 수주를 반환 (빠른 재발주 카드용)
+// 비유: 거래처를 클릭하면 "이전에 같은 분에게 보낸 주문서" 묶음을 꺼내 보여주는 것
+func (h *OrderHandler) RecentByPartner(w http.ResponseWriter, r *http.Request) {
+	partnerID := r.URL.Query().Get("partner_id")
+	if partnerID == "" {
+		response.RespondError(w, http.StatusBadRequest, "partner_id는 필수 항목입니다")
+		return
+	}
+	limit := 5
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 && v <= 50 {
+			limit = v
+		}
+	}
+
+	data, _, err := h.DB.From("orders").
+		Select("*", "exact", false).
+		Eq("customer_id", partnerID).
+		Order("order_date", &postgrest.OrderOpts{Ascending: false}).
+		Limit(limit, "").
+		Execute()
+	if err != nil {
+		log.Printf("[BARO 최근 수주 조회 실패] partner=%s err=%v", partnerID, err)
+		response.RespondError(w, http.StatusInternalServerError, "최근 수주 조회에 실패했습니다")
+		return
+	}
+
+	var orders []model.Order
+	if err := json.Unmarshal(data, &orders); err != nil {
+		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
+		return
+	}
+	h.enrichOrders(orders)
+	response.RespondJSON(w, http.StatusOK, orders)
+}
+
+// CloneOrderRequest — POST /api/v1/baro/orders/{id}/clone 본문
+// 같은 거래처/품목/수량/단가/현장으로 새 수주 draft를 만든다.
+type CloneOrderRequest struct {
+	OrderDate *string `json:"order_date,omitempty"`
+	SiteID    *string `json:"site_id,omitempty"`
+	Quantity  *int    `json:"quantity,omitempty"`
+	Memo      *string `json:"memo,omitempty"`
+}
+
+// Clone — POST /api/v1/baro/orders/{id}/clone
+// BARO Phase 1: 기존 수주를 복제해 status=received(접수)로 새 수주 1건 생성.
+// 비유: 같은 거래처가 같은 모델을 또 시켰을 때 옛 주문서를 그대로 베껴 새 주문서를 만드는 것.
+func (h *OrderHandler) Clone(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var body CloneOrderRequest
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
+			return
+		}
+	}
+
+	// 1) 원본 수주 조회
+	data, _, err := h.DB.From("orders").
+		Select("*", "exact", false).
+		Eq("order_id", id).
+		Execute()
+	if err != nil {
+		log.Printf("[BARO 수주 복제 — 원본 조회 실패] id=%s err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "원본 수주 조회에 실패했습니다")
+		return
+	}
+	var src []model.Order
+	if err := json.Unmarshal(data, &src); err != nil || len(src) == 0 {
+		response.RespondError(w, http.StatusNotFound, "원본 수주를 찾을 수 없습니다")
+		return
+	}
+	o := src[0]
+
+	// 2) 새 수주 등록 요청 구성 — 출고/매출/수금 이력은 복제하지 않는다
+	newOrderDate := time.Now().Format("2006-01-02")
+	if body.OrderDate != nil && *body.OrderDate != "" {
+		newOrderDate = *body.OrderDate
+	}
+	newQty := o.Quantity
+	if body.Quantity != nil && *body.Quantity > 0 {
+		newQty = *body.Quantity
+	}
+	siteID := o.SiteID
+	if body.SiteID != nil {
+		// 빈 문자열이면 unset
+		if *body.SiteID == "" {
+			siteID = nil
+		} else {
+			s := *body.SiteID
+			siteID = &s
+		}
+	}
+	memo := o.Memo
+	if body.Memo != nil {
+		s := *body.Memo
+		memo = &s
+	}
+
+	req := model.CreateOrderRequest{
+		CompanyID:          o.CompanyID,
+		CustomerID:         o.CustomerID,
+		OrderDate:          newOrderDate,
+		ReceiptMethod:      o.ReceiptMethod,
+		ProductID:          o.ProductID,
+		Quantity:           newQty,
+		CapacityKw:         o.CapacityKw,
+		UnitPriceWp:        o.UnitPriceWp,
+		SiteID:             siteID,
+		SiteName:           o.SiteName,
+		SiteAddress:        o.SiteAddress,
+		SiteContact:        o.SiteContact,
+		SitePhone:          o.SitePhone,
+		PaymentTerms:       o.PaymentTerms,
+		DepositRate:        o.DepositRate,
+		DeliveryDue:        o.DeliveryDue,
+		Status:             "received",
+		ManagementCategory: o.ManagementCategory,
+		FulfillmentSource:  o.FulfillmentSource,
+		SpareQty:           o.SpareQty,
+		Memo:               memo,
+	}
+	if req.ManagementCategory == "" {
+		req.ManagementCategory = "sale"
+	}
+	if req.FulfillmentSource == "" {
+		req.FulfillmentSource = "stock"
+	}
+
+	if msg := req.Validate(); msg != "" {
+		response.RespondError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	created, _, err := h.DB.From("orders").
+		Insert(req, false, "", "", "").
+		Execute()
+	if err != nil {
+		log.Printf("[BARO 수주 복제 — 등록 실패] src=%s err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "복제 수주 등록에 실패했습니다")
+		return
+	}
+	var out []model.Order
+	if err := json.Unmarshal(created, &out); err != nil || len(out) == 0 {
+		response.RespondError(w, http.StatusInternalServerError, "복제 결과를 확인할 수 없습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusCreated, out[0])
 }
 
 // Delete — DELETE /api/v1/orders/{id} — 수주 삭제
