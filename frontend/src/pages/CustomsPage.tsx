@@ -17,6 +17,7 @@ import { EXPENSE_TYPE_LABEL, type ExpenseType, type Expense } from '@/types/cust
 import type { BLShipment } from '@/types/inbound';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { CardB, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
+import { BreakdownRows } from '@/components/command/BreakdownRows';
 
 function fmtEok(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0.00';
@@ -250,12 +251,13 @@ export default function CustomsPage() {
             {expenses.length === 0 && <div className="text-xs text-[var(--ink-3)]">등록된 비용이 없습니다.</div>}
           </RailBlock>
           <RailBlock title="비용 유형">
-            {Object.entries(typeExpenseMap).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([type, amount], index) => (
-              <div key={type} className={`flex justify-between py-1.5 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
-                <span className="truncate text-[var(--ink-2)]">{type}</span>
-                <span className="mono font-semibold text-[var(--ink-3)]">{fmtEok(amount)}억</span>
-              </div>
-            ))}
+            <BreakdownRows
+              items={Object.entries(typeExpenseMap).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([type, amount]) => ({
+                key: type,
+                label: type,
+                count: `${fmtEok(amount)}억`,
+              }))}
+            />
           </RailBlock>
           <RailBlock title="면장/OCR 흐름" last>
             <div className="rounded border border-dashed border-[var(--line-2)] bg-[var(--bg-2)] p-3 text-[11px] leading-5 text-[var(--ink-3)]">

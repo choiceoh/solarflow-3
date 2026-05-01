@@ -30,6 +30,7 @@ import BLForm from '@/components/inbound/BLForm';
 import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL, type InboundType, type BLStatus } from '@/types/inbound';
 import { CardB, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
+import { BreakdownRows } from '@/components/command/BreakdownRows';
 
 const PROCUREMENT_TABS = new Set(['po', 'tt', 'lc', 'bl', 'price']);
 
@@ -1028,15 +1029,13 @@ export default function ProcurementPage() {
           {activeTab === 'bl' && (
             <>
               <RailBlock title="입고 상태" count={`${blActiveCount} active`}>
-                {(['scheduled', 'shipping', 'arrived', 'customs', 'completed'] as BLStatus[]).map((status) => {
-                  const count = blRows.filter(bl => bl.status === status).length;
-                  return (
-                    <div key={status} className="mb-2 flex items-center justify-between text-[11.5px] last:mb-0">
-                      <span className="text-[var(--ink-2)]">{BL_STATUS_LABEL[status]}</span>
-                      <span className="mono font-semibold text-[var(--ink-3)]">{count}</span>
-                    </div>
-                  );
-                })}
+                <BreakdownRows
+                  items={(['scheduled', 'shipping', 'arrived', 'customs', 'completed'] as BLStatus[]).map((status) => ({
+                    key: status,
+                    label: BL_STATUS_LABEL[status],
+                    count: blRows.filter(bl => bl.status === status).length,
+                  }))}
+                />
               </RailBlock>
               <RailBlock title="면장 OCR">
                 <div className="rounded border border-dashed border-[var(--line-2)] bg-[var(--bg-2)] p-3">
@@ -1050,16 +1049,17 @@ export default function ProcurementPage() {
                 </div>
               </RailBlock>
               <RailBlock title="주요 항구" last>
-                {Object.entries(blRows.reduce<Record<string, number>>((acc, bl) => {
-                  const key = bl.port || '미지정';
-                  acc[key] = (acc[key] ?? 0) + 1;
-                  return acc;
-                }, {})).slice(0, 5).map(([port, count], index) => (
-                  <div key={port} className={`flex justify-between py-1.5 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
-                    <span className="text-[var(--ink-2)]">{port}</span>
-                    <span className="mono text-[var(--ink-3)]">{count}</span>
-                  </div>
-                ))}
+                <BreakdownRows
+                  items={Object.entries(blRows.reduce<Record<string, number>>((acc, bl) => {
+                    const key = bl.port || '미지정';
+                    acc[key] = (acc[key] ?? 0) + 1;
+                    return acc;
+                  }, {})).slice(0, 5).map(([port, count]) => ({
+                    key: port,
+                    label: port,
+                    count,
+                  }))}
+                />
               </RailBlock>
             </>
           )}

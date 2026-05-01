@@ -33,6 +33,7 @@ import type { Partner, Manufacturer } from '@/types/masters';
 import type { InventoryResponse } from '@/types/inventory';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { CardB, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
+import { BreakdownRows } from '@/components/command/BreakdownRows';
 
 class OrderDetailErrorBoundary extends Component<
   { children: ReactNode; onBack: () => void },
@@ -994,15 +995,13 @@ export default function OrdersPage() {
           {activeTab === 'orders' && (
             <>
               <RailBlock title="수주 상태" count={`${activeOrders.length} active`}>
-                {(['received', 'partial', 'completed', 'cancelled'] as OrderStatus[]).map((status, index) => {
-                  const count = orders.filter(order => order.status === status).length;
-                  return (
-                    <div key={status} className={`flex justify-between py-1.5 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
-                      <span className="text-[var(--ink-2)]">{ORDER_STATUS_LABEL[status]}</span>
-                      <span className="mono font-semibold text-[var(--ink-3)]">{count}</span>
-                    </div>
-                  );
-                })}
+                <BreakdownRows
+                  items={(['received', 'partial', 'completed', 'cancelled'] as OrderStatus[]).map((status) => ({
+                    key: status,
+                    label: ORDER_STATUS_LABEL[status],
+                    count: orders.filter(order => order.status === status).length,
+                  }))}
+                />
               </RailBlock>
               <RailBlock title="거래처 TOP" count="kW">
                 {Object.entries(orders.reduce<Record<string, number>>((acc, order) => {
@@ -1037,24 +1036,26 @@ export default function OrdersPage() {
           {activeTab === 'outbound' && (
             <>
               <RailBlock title="출고 상태" count={`${outboundsWithSales.length} rows`}>
-                {(['active', 'cancel_pending', 'cancelled'] as OutboundStatus[]).map((status, index) => (
-                  <div key={status} className={`flex justify-between py-1.5 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
-                    <span className="text-[var(--ink-2)]">{OUTBOUND_STATUS_LABEL[status]}</span>
-                    <span className="mono font-semibold text-[var(--ink-3)]">{outboundsWithSales.filter(outbound => outbound.status === status).length}</span>
-                  </div>
-                ))}
+                <BreakdownRows
+                  items={(['active', 'cancel_pending', 'cancelled'] as OutboundStatus[]).map((status) => ({
+                    key: status,
+                    label: OUTBOUND_STATUS_LABEL[status],
+                    count: outboundsWithSales.filter(outbound => outbound.status === status).length,
+                  }))}
+                />
               </RailBlock>
               <RailBlock title="출고 용도" count="건">
-                {Object.entries(outboundsWithSales.reduce<Record<string, number>>((acc, outbound) => {
-                  const key = USAGE_CATEGORY_LABEL[outbound.usage_category] ?? outbound.usage_category;
-                  acc[key] = (acc[key] ?? 0) + 1;
-                  return acc;
-                }, {})).slice(0, 5).map(([label, count], index) => (
-                  <div key={label} className={`flex justify-between py-1.5 text-[11.5px] ${index ? 'border-t border-[var(--line)]' : ''}`}>
-                    <span className="text-[var(--ink-2)]">{label}</span>
-                    <span className="mono font-semibold text-[var(--ink-3)]">{count}</span>
-                  </div>
-                ))}
+                <BreakdownRows
+                  items={Object.entries(outboundsWithSales.reduce<Record<string, number>>((acc, outbound) => {
+                    const key = USAGE_CATEGORY_LABEL[outbound.usage_category] ?? outbound.usage_category;
+                    acc[key] = (acc[key] ?? 0) + 1;
+                    return acc;
+                  }, {})).slice(0, 5).map(([label, count]) => ({
+                    key: label,
+                    label,
+                    count,
+                  }))}
+                />
               </RailBlock>
               <RailBlock title="주간 출고" last>
                 <div className="sf-mini-bars">
