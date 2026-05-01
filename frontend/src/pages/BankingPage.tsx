@@ -77,16 +77,14 @@ export default function BankingPage() {
     `${visibleGroups.length}개 법인 · ${allLimitRows.length}개 은행`;
 
   const bankingCardControls = (
-    <div className="sf-card-controls">
-      <FilterChips options={BANKING_TAB_OPTIONS} value={activeTab} onChange={setActiveTab} />
+    <div className="sf-card-controls" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
       {activeTab === 'changes' && (
-        <>
-          <div className="vr" style={{ height: 16 }} />
-          <Button size="xs" onClick={() => setLcFormOpen(true)}>
-            <Plus className="mr-1 h-3 w-3" />변경 등록
-          </Button>
-        </>
+        <Button size="xs" onClick={() => setLcFormOpen(true)}>
+          <Plus className="mr-1 h-3 w-3" />변경 등록
+        </Button>
       )}
+      <div style={{ flex: 1 }} />
+      <FilterChips options={BANKING_TAB_OPTIONS} value={activeTab} onChange={setActiveTab} />
     </div>
   );
 

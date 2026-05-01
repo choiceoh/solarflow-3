@@ -117,26 +117,28 @@ export default function LCPage() {
           <Button size="sm" onClick={() => { setEditLC(null); setFormOpen(true); }}><Plus className="mr-1 h-4 w-4" />L/C 개설</Button>
         }
         toolbar={
-          <FilterButton items={[
-            {
-              label: '상태',
-              value: statusFilter,
-              onChange: setStatusFilter,
-              options: (Object.entries(LC_STATUS_LABEL) as [LCStatus, string][]).map(([k, v]) => ({ value: k, label: v })),
-            },
-            {
-              label: '은행',
-              value: bankFilter,
-              onChange: setBankFilter,
-              options: banks.map((b) => ({ value: b.bank_id, label: b.bank_name })),
-            },
-            {
-              label: '법인',
-              value: companyFilter,
-              onChange: setCompanyFilter,
-              options: companies.map((c) => ({ value: c.company_id, label: c.company_name })),
-            },
-          ]} />
+          <div className="sf-card-controls" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
+            <FilterButton items={[
+              {
+                label: '상태',
+                value: statusFilter,
+                onChange: setStatusFilter,
+                options: (Object.entries(LC_STATUS_LABEL) as [LCStatus, string][]).map(([k, v]) => ({ value: k, label: v })),
+              },
+              {
+                label: '은행',
+                value: bankFilter,
+                onChange: setBankFilter,
+                options: banks.map((b) => ({ value: b.bank_id, label: b.bank_name })),
+              },
+              {
+                label: '법인',
+                value: companyFilter,
+                onChange: setCompanyFilter,
+                options: companies.map((c) => ({ value: c.company_id, label: c.company_name })),
+              },
+            ]} />
+          </div>
         }
         metrics={[
           { label: 'L/C 건수', value: filtered.length.toLocaleString(), sub: statusLabel, tone: 'solar', spark: [8, 10, 9, 12, filtered.length || 1] },
