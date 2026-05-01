@@ -113,12 +113,13 @@ export function CardB({
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, flex: flex ? 1 : undefined }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0, minHeight: 44 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 220 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 220, flexShrink: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.005em', color: 'var(--ink)' }}>{title}</div>
           {sub ? <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{sub}</div> : null}
         </div>
-        <div style={{ flex: 1 }} />
-        {right}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+          {right}
+        </div>
       </div>
       <div style={{ padding: padded ? 14 : 0, minHeight: 0, flex: 1, overflow: 'auto' }}>
         {children}
