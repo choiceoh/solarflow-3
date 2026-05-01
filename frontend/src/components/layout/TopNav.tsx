@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  ChevronDown, LayoutDashboard, Landmark, BarChart3,
+  ChevronDown, Landmark, BarChart3,
   StickyNote, FileSignature, Settings, LogOut, User, FileText, Ship,
   Building2, Factory, Tag, Handshake, Warehouse, Banknote, HardHat,
   Package, ClipboardList, Store, Shield, Truck, TrendingUp,
@@ -32,7 +32,6 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 const analysisSections: { label: string; path: string; icon: React.ElementType; menu: MenuKey }[] = [
-  { label: '대시보드',       path: '/dashboard', icon: LayoutDashboard, menu: 'dashboard' },
   { label: 'LC 한도/만기',   path: '/banking', icon: Landmark,        menu: 'banking' },
   { label: '매출/이익 분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs' },
 ];
@@ -108,7 +107,7 @@ export default function TopNav() {
   const isPurchase  = ['/procurement', '/lc', '/inbound', '/customs'].some(p => pathname === p || pathname.startsWith(p + '/'));
   const isInventory = pathname === '/inventory' || pathname.startsWith('/inventory/');
   const isSales     = ['/orders', '/outbound'].some(p => pathname === p || pathname.startsWith(p + '/'));
-  const isAnalysis  = pathname.startsWith('/dashboard') || pathname.startsWith('/banking') || pathname.startsWith('/sales-analysis');
+  const isAnalysis  = pathname.startsWith('/banking') || pathname.startsWith('/sales-analysis');
 
   const showPurchase  = canAccessMenu(r, 'procurement') || canAccessMenu(r, 'lc') || canAccessMenu(r, 'inbound');
   const showInventory = canAccessMenu(r, 'inventory');

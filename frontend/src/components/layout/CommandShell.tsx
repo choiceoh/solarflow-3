@@ -49,7 +49,7 @@ function readCollapsedFromStorage(): boolean {
     return false;
   }
 }
-import type { AlertItem } from '@/types/dashboard';
+import type { AlertItem } from '@/types/alerts';
 
 interface CommandNavItem {
   key: string;
@@ -73,7 +73,6 @@ const NAV_GROUPS: CommandNavGroup[] = [
   {
     items: [
       { key: 'inventory', label: '가용재고', abbr: '재고', path: '/inventory', icon: Box, menu: 'inventory' },
-      { key: 'dashboard', label: '대시보드', abbr: '대시', path: '/dashboard', icon: BarChart3, menu: 'dashboard' },
     ],
   },
   {
@@ -126,7 +125,6 @@ const NAV_GROUPS: CommandNavGroup[] = [
 ];
 
 const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
-  '/dashboard': { title: '대시보드', breadcrumb: '현황 / Command Center' },
   '/inventory': { title: '가용재고', breadcrumb: '재고 / 예약 가능 수량' },
   '/procurement': { title: 'P/O 발주', breadcrumb: '구매 / 발주 관리' },
   '/customs': { title: '면장/원가', breadcrumb: '입고 / 원가 계산' },
@@ -212,7 +210,6 @@ export default function CommandShell() {
   const userInitial = (user?.name || user?.email || 'S').trim().slice(0, 1).toUpperCase();
   const navCounts = useMemo(() => ({
     inventory: sumAlertCounts(alertState.alerts, ['longterm_warning', 'longterm_critical']),
-    dashboard: alertState.totalCount,
     lc: sumAlertCounts(alertState.alerts, ['lc_maturity', 'lc_shortage']),
     bl: sumAlertCounts(alertState.alerts, ['eta_soon']),
     orders: sumAlertCounts(alertState.alerts, ['delivery_soon', 'no_site']),
@@ -228,7 +225,7 @@ export default function CommandShell() {
           <span className="sf-solar-mark" aria-hidden>
             <Sun strokeWidth={2.4} />
           </span>
-          <Link to="/dashboard" className="sf-sidebar-logo-text min-w-0">
+          <Link to="/inventory" className="sf-sidebar-logo-text min-w-0">
             <div className="text-[13.5px] font-bold leading-none">SolarFlow</div>
             <div className="sf-mono mt-1 text-[9.5px] font-semibold text-[var(--sf-solar)]">v3.0 · TOPSOLAR</div>
           </Link>

@@ -14,7 +14,7 @@ import { companyQueryUrl, fetchCalc } from '@/lib/companyUtils';
 import { fetchWithAuth } from '@/lib/api';
 import { formatKRW, formatNumber, moduleLabel } from '@/lib/utils';
 import type { SaleListItem } from '@/types/outbound';
-import type { CustomerAnalysis, CustomerItem } from '@/hooks/useDashboard';
+import type { CustomerAnalysis, CustomerItem } from '@/types/analysis';
 import type { Partner } from '@/types/masters';
 import { CardB, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
 

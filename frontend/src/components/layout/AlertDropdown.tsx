@@ -1,8 +1,7 @@
 // 알림 드롭다운 목록 (Step 31)
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import type { AlertItem } from '@/types/dashboard';
+import type { AlertItem } from '@/types/alerts';
 
 interface Props {
   alerts: AlertItem[];
@@ -80,12 +79,6 @@ export default function AlertDropdown({ alerts, onClose }: Props) {
           ))}
         </div>
       )}
-
-      <div className="border-t px-2 py-1.5" style={{ borderColor: 'var(--sf-line)', background: 'var(--sf-bg-2)' }}>
-        <Button variant="ghost" size="sm" className="h-7 w-full text-[11px]" onClick={() => { navigate('/dashboard'); onClose(); }}>
-          전체 보기 (대시보드)
-        </Button>
-      </div>
     </div>
   );
 }

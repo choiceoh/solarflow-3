@@ -7,7 +7,7 @@ import { fetchCalc, companyQueryUrl } from '@/lib/companyUtils';
 import type { InventoryResponse } from '@/types/inventory';
 import type { BLShipment } from '@/types/inbound';
 import type { Order } from '@/types/orders';
-import type { AlertItem } from '@/types/dashboard';
+import type { AlertItem } from '@/types/alerts';
 import type { LCLimitTimeline, LCMaturityAlert } from '@/types/banking';
 import type { Outbound } from '@/types/outbound';
 

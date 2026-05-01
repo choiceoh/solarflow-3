@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AlertDropdown from './AlertDropdown';
-import type { AlertItem } from '@/types/dashboard';
+import type { AlertItem } from '@/types/alerts';
 
 interface Props {
   alerts: AlertItem[];

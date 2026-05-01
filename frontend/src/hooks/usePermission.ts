@@ -10,7 +10,6 @@ import { useAuth } from './useAuth';
 import {
   canAccessMenu as _canAccessMenu,
   hasFeature as _hasFeature,
-  getDashboardType as _getDashboardType,
   type MenuKey,
   type FeatureKey,
   type Role,
@@ -25,25 +24,16 @@ export function usePermission() {
     role: r,
     roleLabel: r ? (ROLE_LABELS[r] ?? r) : '—',
 
-    // 기능 권한
-    canEdit:           _hasFeature(r, 'canEdit'),
-    showPrice:         _hasFeature(r, 'showPrice'),
-    showMargin:        _hasFeature(r, 'showMargin'),
-    showSales:         _hasFeature(r, 'showSales'),
-    showDetail:        _hasFeature(r, 'showDetail'),
-    showOutbound:      _hasFeature(r, 'showOutbound'),
-    showReceivable:    _hasFeature(r, 'showReceivable'),
-    showLcLimit:       _hasFeature(r, 'showLcLimit'),
-    showFullDashboard: _hasFeature(r, 'showFullDashboard'),
-    manageUsers:       _hasFeature(r, 'manageUsers'),
+    canEdit:        _hasFeature(r, 'canEdit'),
+    showPrice:      _hasFeature(r, 'showPrice'),
+    showMargin:     _hasFeature(r, 'showMargin'),
+    showSales:      _hasFeature(r, 'showSales'),
+    showOutbound:   _hasFeature(r, 'showOutbound'),
+    showReceivable: _hasFeature(r, 'showReceivable'),
+    showLcLimit:    _hasFeature(r, 'showLcLimit'),
+    manageUsers:    _hasFeature(r, 'manageUsers'),
 
-    // 대시보드 유형 (strategic | operational)
-    dashboardType: _getDashboardType(r),
-
-    // 메뉴 접근
     canAccessMenu: (menu: MenuKey) => _canAccessMenu(r, menu),
-
-    // 범용 기능 체크
     hasFeature: (feature: FeatureKey) => _hasFeature(r, feature),
   };
 }
