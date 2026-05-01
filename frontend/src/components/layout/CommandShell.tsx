@@ -218,7 +218,7 @@ export default function CommandShell() {
             aria-label={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
             title={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
           >
-            {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+            {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </button>
         </div>
 
