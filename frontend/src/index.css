@@ -1,9 +1,14 @@
+/* mockups CSS contains generic resets like `button { color: inherit }` outside any layer.
+   Wrapping it in layer(mockups) — declared first so it has the lowest precedence — lets
+   Tailwind's @layer utilities (e.g. text-primary-foreground) win over those resets. */
+@layer mockups, theme, base, components, utilities;
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 @import "@fontsource-variable/jetbrains-mono";
-@import "../mockups/v3/styles.css";
+@import "../mockups/v3/styles.css" layer(mockups);
 @import "./styles/tokens.css";
 
 @custom-variant dark (&:is(.dark *));
