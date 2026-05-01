@@ -16,7 +16,7 @@ import MetaForm from './MetaForm';
 import partnerFormConfig from '@/config/forms/partners';
 import outboundSimpleFormConfig from '@/config/forms/outbound_simple';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
-import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
+import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
 import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
   type OutboundStatus, type UsageCategory, type Outbound, type SaleListItem,
@@ -128,6 +128,12 @@ export const dataHooks: Record<string, DataHook> = {
     invoice_status: f.invoice_status || undefined,
   }) as unknown as DataHookResult,
   usePartnerList: () => useSimpleList<Partner>('/api/v1/partners') as unknown as DataHookResult,
+};
+
+// ─── Detail data hooks (단건 fetch by id) ─────────────────────────────────
+export type DetailDataHook = (id: string) => { data: unknown; loading: boolean };
+export const detailDataHooks: Record<string, DetailDataHook> = {
+  useOutboundDetail: (id) => useOutboundDetail(id) as unknown as { data: unknown; loading: boolean },
 };
 
 // ─── Metric computers ──────────────────────────────────────────────────────
@@ -311,6 +317,31 @@ export const toolbarExtras: Record<string, ToolbarExtra> = {
 // ─── Content blocks (탭 콘텐츠 위에 끼워넣는 블록) ─────────────────────────
 export const contentBlocks: Record<string, ContentBlock> = {
   sale_summary_cards: ({ items }) => <SaleSummaryCards items={items as never} />,
+  // Phase 2.5: 출고 상세의 B/L 연결 다중 행 (MetaDetail의 contentBlock 슬롯용)
+  outbound_bl_items_section: ({ items }) => {
+    const ob = items[0] as Outbound;
+    if (!ob.bl_items?.length) return null;
+    return (
+      <div className="space-y-1.5">
+        {ob.bl_items.map((item) => (
+          <div
+            key={item.outbound_bl_item_id}
+            className="flex items-center gap-3 rounded border bg-blue-50 px-3 py-2 text-xs text-blue-800"
+          >
+            <span className="font-mono font-medium">{item.bl_number ?? item.bl_id.slice(0, 8)}</span>
+            <span className="text-blue-500">·</span>
+            <span>{item.quantity.toLocaleString('ko-KR')} EA</span>
+          </div>
+        ))}
+      </div>
+    );
+  },
+  // Phase 2.5: 출고 상세의 메모 (pre-wrap 텍스트)
+  outbound_memo_section: ({ items }) => {
+    const ob = items[0] as Outbound;
+    if (!ob.memo) return null;
+    return <p className="text-sm whitespace-pre-wrap break-words">{ob.memo}</p>;
+  },
 };
 
 // ─── Master option sources ─────────────────────────────────────────────────

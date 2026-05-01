@@ -163,6 +163,45 @@ export interface MetaFormConfig {
   sections: FormSection[];
 }
 
+// ── 메타 상세화면 (Phase 2.5)
+// Detail은 입력이 아니라 데이터 표시라 Form보다 메타 친화적.
+// 단, 워크플로우 버튼·편집 모드·외부 패널은 contentBlock 슬롯으로 위임.
+export type DetailFormatter = 'date' | 'number' | 'kw' | 'currency' | 'enum';
+
+export interface DetailFieldConfig {
+  key: string;                      // 점 표기 OK ('sale.customer_name')
+  label: string;
+  formatter?: DetailFormatter;
+  enumKey?: EnumKey;                // formatter='enum'일 때 사전 키
+  rendererId?: CellRendererId;      // 셀 렌더러 재사용 (registry.cellRenderers)
+  span?: 1 | 2 | 3 | 4;
+  fallback?: string;                // 빈 값 표시 (기본 '—')
+  visibleIf?: { field: string; value: string | string[] };
+  // 단순 단위 접미사 (formatter로 표현 안 되는 "원/Wp" 등)
+  suffix?: string;
+}
+
+export interface DetailSectionConfig {
+  title: string;
+  cols?: 2 | 3 | 4;                 // grid columns (기본 4)
+  fields?: DetailFieldConfig[];     // 데이터 필드 (없으면 contentBlock 사용)
+  contentBlock?: ContentBlockConfig; // 섹션 본문을 통째로 커스텀 블록에
+  badgesBlock?: ContentBlockConfig; // 헤더 우측 배지 슬롯 (status 등)
+  actionsBlock?: ContentBlockConfig; // 헤더 우측 액션 슬롯 (수정 버튼 등)
+  visibleIf?: { field: string; value: string | string[] };
+}
+
+export interface MetaDetailConfig {
+  id: string;
+  source: { hookId: DataHookId };   // useOutboundDetail 등 — id 받아 단건 fetch
+  header: {
+    title: string;
+    actionsBlock?: ContentBlockConfig;
+  };
+  sections: DetailSectionConfig[];
+  extraBlocks?: ContentBlockConfig[];
+}
+
 // ── 클라이언트 검색 (서버 필터와 별도)
 export interface SearchableConfig {
   placeholder?: string;

@@ -1,0 +1,146 @@
+// Phase 2.5 PoC: 메타데이터 기반 상세 화면
+// Detail은 입력 없이 데이터 표시라 Form보다 메타 친화적.
+// 데이터 섹션(필드 그리드)을 메타로 그리고, 워크플로우·편집·외부 패널은 contentBlock 슬롯에 위임한다.
+
+import { type ReactNode } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { formatDate, formatNumber, formatKw } from '@/lib/utils';
+import type {
+  MetaDetailConfig, DetailSectionConfig, DetailFieldConfig, ContentBlockConfig,
+} from './types';
+import {
+  detailDataHooks, contentBlocks, cellRenderers, enumDictionaries,
+  getFieldValue,
+} from './registry';
+
+function applyFormatter(field: DetailFieldConfig, raw: unknown): string {
+  if (raw == null || raw === '') return field.fallback ?? '—';
+  switch (field.formatter) {
+    case 'date': return formatDate(raw as string);
+    case 'number': return formatNumber(raw as number);
+    case 'kw': return formatKw(raw as number);
+    case 'currency': return `${formatNumber(raw as number)}원`;
+    case 'enum': {
+      if (!field.enumKey) return String(raw);
+      const dict = enumDictionaries[field.enumKey];
+      return dict?.[String(raw)] ?? String(raw);
+    }
+    default: return String(raw);
+  }
+}
+
+function evalVisibleIf(
+  visibleIf: { field: string; value: string | string[] } | undefined,
+  data: Record<string, unknown>,
+): boolean {
+  if (!visibleIf) return true;
+  const ref = getFieldValue(data, visibleIf.field);
+  const expected = Array.isArray(visibleIf.value) ? visibleIf.value : [visibleIf.value];
+  // 특수 값 '__truthy' — 값이 truthy & non-empty (배열은 length > 0)
+  if (expected.includes('__truthy')) {
+    if (ref == null || ref === '') return false;
+    if (Array.isArray(ref)) return ref.length > 0;
+    return Boolean(ref);
+  }
+  return expected.includes(String(ref));
+}
+
+function renderFieldValue(field: DetailFieldConfig, data: Record<string, unknown>): ReactNode {
+  const raw = getFieldValue(data, field.key);
+  if (field.rendererId) {
+    const renderer = cellRenderers[field.rendererId];
+    if (renderer) return renderer(raw, data);
+  }
+  const formatted = applyFormatter(field, raw);
+  return field.suffix && formatted !== (field.fallback ?? '—') ? `${formatted}${field.suffix}` : formatted;
+}
+
+function renderBlock(
+  blockConfig: ContentBlockConfig | undefined,
+  data: Record<string, unknown>,
+): ReactNode {
+  if (!blockConfig) return null;
+  const Block = contentBlocks[blockConfig.blockId];
+  if (!Block) return null;
+  return Block({ items: [data], config: (blockConfig.props ?? {}) as Record<string, unknown> });
+}
+
+function MetaDetailSection({
+  section, data,
+}: {
+  section: DetailSectionConfig;
+  data: Record<string, unknown>;
+}) {
+  if (!evalVisibleIf(section.visibleIf, data)) return null;
+
+  return (
+    <DetailSection
+      title={section.title}
+      badges={renderBlock(section.badgesBlock, data)}
+      actions={renderBlock(section.actionsBlock, data)}
+    >
+      {section.contentBlock ? (
+        renderBlock(section.contentBlock, data)
+      ) : (
+        <DetailFieldGrid cols={section.cols ?? 4}>
+          {(section.fields ?? []).map((f) => {
+            if (!evalVisibleIf(f.visibleIf, data)) return null;
+            return (
+              <DetailField
+                key={f.key}
+                label={f.label}
+                span={f.span}
+              >
+                {renderFieldValue(f, data)}
+              </DetailField>
+            );
+          })}
+        </DetailFieldGrid>
+      )}
+    </DetailSection>
+  );
+}
+
+export interface MetaDetailProps {
+  config: MetaDetailConfig;
+  id: string;
+  onBack: () => void;
+}
+
+export default function MetaDetail({ config, id, onBack }: MetaDetailProps) {
+  const hook = detailDataHooks[config.source.hookId];
+  if (!hook) throw new Error(`[MetaDetail] detail hook not registered: ${config.source.hookId}`);
+  const { data, loading } = hook(id);
+
+  if (loading || !data) return <LoadingSpinner />;
+  const rec = data as Record<string, unknown>;
+
+  return (
+    <div className="space-y-4">
+      <div className="sf-detail-header">
+        <button
+          type="button"
+          className="sf-detail-header-back"
+          onClick={onBack}
+          aria-label="목록으로"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <h2 className="flex-1 text-base font-semibold" style={{ letterSpacing: '-0.012em' }}>
+          {config.header.title}
+        </h2>
+        {renderBlock(config.header.actionsBlock, rec)}
+      </div>
+
+      {config.sections.map((sec, idx) => (
+        <MetaDetailSection key={idx} section={sec} data={rec} />
+      ))}
+
+      {config.extraBlocks?.map((block, idx) => (
+        <div key={idx}>{renderBlock(block, rec)}</div>
+      ))}
+    </div>
+  );
+}
