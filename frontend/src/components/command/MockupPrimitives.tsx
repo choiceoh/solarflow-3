@@ -74,7 +74,7 @@ export function TileB({
     <div className="card hover" style={{ padding: '12px 14px 14px', minWidth: 0, position: 'relative', overflow: 'hidden', height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span className="dot" style={{ background: color }} />
-        <span className="eyebrow">{lbl}</span>
+        <span className="eyebrow" style={{ fontSize: 11 }}>{lbl}</span>
         {delta ? (
           <span className="mono" style={{ marginLeft: 'auto', fontSize: 10, color: delta.startsWith('-') || delta.startsWith('−') ? 'var(--neg)' : 'var(--pos)', fontWeight: 600 }}>{delta}</span>
         ) : null}
@@ -114,7 +114,7 @@ export function CardB({
     <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, flex: flex ? 1 : undefined }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0, minHeight: 44 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '-0.005em', color: 'var(--ink)' }}>{title}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.005em', color: 'var(--ink)' }}>{title}</div>
           {sub ? <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{sub}</div> : null}
         </div>
         <div style={{ flex: 1 }} />
