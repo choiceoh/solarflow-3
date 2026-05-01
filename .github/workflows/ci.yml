@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# 같은 PR에서 새 push가 오면 진행 중인 run을 취소 (CI 시간 절약)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # 어느 디렉토리가 변경됐는지 판정 — 무관한 컴포넌트 빌드는 스킵
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+      engine: ${{ steps.filter.outputs.engine }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+            backend:
+              - 'backend/**'
+              - '!backend/migrations/**'
+              - '!backend/scripts/**'
+              - '!backend/sql/**'
+            engine:
+              - 'engine/src/**'
+              - 'engine/Cargo.toml'
+              - 'engine/Cargo.lock'
+
+  # 프론트 — Cloudflare Pages가 클린 인스톨로 빌드하므로 동일 환경에서 검증.
+  # PR99에서 persist.ts deps 누락이 main에 들어가 #142~#145가 줄줄이 깨졌던 사고
+  # 재발 방지가 이 잡의 1차 목적.
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build  # tsc -b && vite build
+      - run: npm test --if-present -- --run
+
+  # 백엔드 (Go) — 운영은 cron-deploy.sh가 머지 후 빌드하므로 PR 단계에서 막아야
+  # 운영 빌드 실패 = 사용자 발견 시점이 cron 다음 회차로 늦춰짐.
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+
+  # 엔진 (Rust) — 빌드 시간이 길어 캐시 필수. release 빌드는 운영과 동일.
+  engine:
+    needs: changes
+    if: needs.changes.outputs.engine == 'true'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: engine } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - run: cargo build --release
+      - run: cargo test --release
