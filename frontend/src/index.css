@@ -944,8 +944,8 @@ a:focus-visible,
   border-radius: 0;
 }
 
-.sf-page table:not(.grid),
-.sf-command-surface table:not(.grid) {
+.sf-page table,
+.sf-command-surface table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
@@ -954,9 +954,9 @@ a:focus-visible,
 }
 
 .sf-page [data-slot="table-head"],
-.sf-page table:not(.grid) thead th,
+.sf-page table thead th,
 .sf-command-surface [data-slot="table-head"],
-.sf-command-surface table:not(.grid) thead th {
+.sf-command-surface table thead th {
   height: auto;
   border-bottom: 1px solid var(--sf-line-2);
   border-top: 1px solid var(--sf-line);
@@ -970,9 +970,9 @@ a:focus-visible,
 }
 
 .sf-page [data-slot="table-cell"],
-.sf-page table:not(.grid) tbody td,
+.sf-page table tbody td,
 .sf-command-surface [data-slot="table-cell"],
-.sf-command-surface table:not(.grid) tbody td {
+.sf-command-surface table tbody td {
   border-bottom: 1px solid var(--sf-line);
   color: var(--sf-ink-2);
   padding: 10px 12px;
@@ -980,9 +980,9 @@ a:focus-visible,
 }
 
 .sf-page [data-slot="table-row"]:hover,
-.sf-page table:not(.grid) tbody tr:hover td,
+.sf-page table tbody tr:hover td,
 .sf-command-surface [data-slot="table-row"]:hover,
-.sf-command-surface table:not(.grid) tbody tr:hover td {
+.sf-command-surface table tbody tr:hover td {
   background: var(--sf-solar-tint);
 }
 
@@ -1326,9 +1326,9 @@ a:focus-visible,
 
 /* sticky thead — 긴 테이블 스크롤 시 헤더 고정 */
 .sf-page [data-slot="table-head"],
-.sf-page table:not(.grid) thead th,
+.sf-page table thead th,
 .sf-command-surface [data-slot="table-head"],
-.sf-command-surface table:not(.grid) thead th {
+.sf-command-surface table thead th {
   position: sticky;
   top: 0;
   z-index: 2;
@@ -1336,9 +1336,9 @@ a:focus-visible,
 
 /* 테이블 행 트랜지션 + 선택된 행 솔라 인셋 */
 .sf-page [data-slot="table-row"],
-.sf-page table:not(.grid) tbody tr,
+.sf-page table tbody tr,
 .sf-command-surface [data-slot="table-row"],
-.sf-command-surface table:not(.grid) tbody tr {
+.sf-command-surface table tbody tr {
   transition: background 100ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sf-page table tbody tr.selected td,
