@@ -2,13 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Bot, Check, FileText, Inbox, Paperclip, Send, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { fetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
@@ -102,8 +95,6 @@ function buildOCRBlock(results: OCRResult[]): string {
 export default function AssistantPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [provider, setProvider] = useState<Provider>('anthropic');
-  const [model, setModel] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [parseAsCustoms, setParseAsCustoms] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
@@ -187,8 +178,7 @@ export default function AssistantPage() {
 
       const body = JSON.stringify({
         messages: next.map(({ role, content }) => ({ role, content })),
-        provider,
-        model: model.trim() || undefined,
+        provider: 'anthropic' as Provider,
       });
 
       let data: AssistantChatResponse;
@@ -286,22 +276,7 @@ export default function AssistantPage() {
           <h2 className="text-lg font-semibold">업무 도우미</h2>
         </div>
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Select value={provider} onValueChange={(v) => setProvider(v as Provider)}>
-            <SelectTrigger className="h-9 w-[160px] text-sm">
-              <span>{provider === 'anthropic' ? 'Anthropic 호환' : 'OpenAI 호환'}</span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="anthropic">Anthropic 호환</SelectItem>
-              <SelectItem value="openai">OpenAI 호환</SelectItem>
-            </SelectContent>
-          </Select>
-          <Input
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            placeholder="모델 (비우면 서버 기본값)"
-            className="h-9 w-[220px] text-sm"
-          />
+        <div className="ml-auto flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={reset} disabled={messages.length === 0}>
             <Trash2 className="mr-1 h-4 w-4" />초기화
           </Button>
