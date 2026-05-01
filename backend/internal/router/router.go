@@ -401,6 +401,10 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 			r.Post("/receipts", importH.Receipts)
 		})
 
+		// 비유: 업무 도우미 — Anthropic/OpenAI 호환 API 프록시 (provider/모델은 env)
+		assistantH := handler.NewAssistantHandler()
+		r.Post("/assistant/chat", assistantH.Chat)
+
 		// 비유: "내 인사카드 보기" — 로그인한 사용자의 프로필 조회
 		userH := handler.NewUserHandler(db)
 		r.Get("/users/me", userH.GetMe)

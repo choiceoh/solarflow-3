@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
+  Bot,
   Box,
   Calculator,
   ClipboardList,
@@ -122,6 +123,12 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
     ],
   },
+  {
+    label: 'AI',
+    items: [
+      { key: 'assistant', label: '업무 도우미', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
+    ],
+  },
 ];
 
 const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
@@ -135,6 +142,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/ocr': { title: '문서 OCR', breadcrumb: '도구 / 문서 인식' },
   '/memo': { title: '메모', breadcrumb: '도구 / 업무 메모' },
   '/approval': { title: '결재안', breadcrumb: '도구 / 결재 문안' },
+  '/assistant': { title: '업무 도우미', breadcrumb: 'AI / 채팅 어시스턴트' },
   '/settings': { title: '설정', breadcrumb: '시스템 / 관리자' },
 };
 

@@ -37,6 +37,7 @@ export type MenuKey =
   | 'ocr'           // 문서 OCR
   | 'memo'          // 메모
   | 'approval'      // 결재안
+  | 'assistant'     // AI 업무 도우미
   | 'settings'      // 설정 (admin 전용)
   // BARO 테넌트 전용 메뉴
   | 'baro_group_purchase'   // BARO: 그룹내 매입 요청 등록
@@ -77,7 +78,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
-            'banking','customs','masters','search','ocr','memo','approval',
+            'banking','customs','masters','search','ocr','memo','approval','assistant',
             'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_inbox'],
     features: {
       canEdit: true,
@@ -91,7 +92,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   executive: {
-    menus: ['inventory','orders','outbound','receipts','banking','customs','search',
+    menus: ['inventory','orders','outbound','receipts','banking','customs','search','assistant',
             'baro_credit'],
     features: {
       canEdit: false,
@@ -105,7 +106,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   manager: {
-    menus: ['inventory','search'],
+    menus: ['inventory','search','assistant'],
     features: {
       canEdit: false,
       showPrice: false,          // 단가·재고금액 차단 (역산 방지)
