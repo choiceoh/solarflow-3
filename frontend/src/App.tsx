@@ -24,14 +24,7 @@ const SearchPage = lazy(() => import('@/pages/SearchPage'));
 const OCRPage = lazy(() => import('@/pages/OCRPage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
-const CompanyPage = lazy(() => import('@/pages/masters/CompanyPage'));
-const ManufacturerPage = lazy(() => import('@/pages/masters/ManufacturerPage'));
-const ProductPage = lazy(() => import('@/pages/masters/ProductPage'));
-const PartnerPage = lazy(() => import('@/pages/masters/PartnerPage'));
-const WarehousePage = lazy(() => import('@/pages/masters/WarehousePage'));
-const BankPage = lazy(() => import('@/pages/masters/BankPage'));
 const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
-const DataHubPage = lazy(() => import('@/pages/masters/DataHubPage'));
 const DataPage = lazy(() => import('@/pages/DataPage'));
 const CompanyNewPage = lazy(() => import('@/pages/data/CompanyNewPage'));
 const CompanyEditPage = lazy(() => import('@/pages/data/CompanyEditPage'));
@@ -87,13 +80,6 @@ export default function App() {
                 <Route path="/data/warehouses/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><WarehouseEditPage /></RoleGuard>} />
                 <Route path="/data/banks/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankNewPage /></RoleGuard>} />
                 <Route path="/data/banks/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankEditPage /></RoleGuard>} />
-                <Route path="/data/hub" element={<RoleGuard allowedRoles={['admin', 'operator']}><DataHubPage /></RoleGuard>} />
-                <Route path="/masters/companies" element={<CompanyPage />} />
-                <Route path="/masters/manufacturers" element={<ManufacturerPage />} />
-                <Route path="/masters/products" element={<ProductPage />} />
-                <Route path="/masters/partners" element={<PartnerPage />} />
-                <Route path="/masters/warehouses" element={<WarehousePage />} />
-                <Route path="/masters/banks" element={<BankPage />} />
                 <Route path="/masters/construction-sites" element={<ConstructionSitesPage />} />
                 <Route path="/inbound" element={<InboundPage />} />
                 <Route path="/procurement" element={<ProcurementPage />} />

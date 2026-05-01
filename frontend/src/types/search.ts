@@ -41,6 +41,6 @@ export const SEARCH_MODULE_ROUTE: Record<string, string> = {
   'customer-analysis': '/orders',
   orders:              '/orders',
   inbound:             '/inbound',
-  partner:             '/masters/partners',
+  partner:             '/data?kind=partners',
   'construction-sites': '/masters/construction-sites',
 };

@@ -17,14 +17,14 @@ type DataKind =
   | 'banks'
   | 'construction-sites';
 
-const KINDS: { key: DataKind; label: string; legacyPath: string }[] = [
-  { key: 'companies',          label: '법인',     legacyPath: '/masters/companies' },
-  { key: 'manufacturers',      label: '제조사',   legacyPath: '/masters/manufacturers' },
-  { key: 'products',           label: '품번',     legacyPath: '/masters/products' },
-  { key: 'partners',           label: '거래처',   legacyPath: '/masters/partners' },
-  { key: 'warehouses',         label: '창고',     legacyPath: '/masters/warehouses' },
-  { key: 'banks',              label: '은행',     legacyPath: '/masters/banks' },
-  { key: 'construction-sites', label: '공사현장', legacyPath: '/masters/construction-sites' },
+const KINDS: { key: DataKind; label: string }[] = [
+  { key: 'companies',          label: '법인'     },
+  { key: 'manufacturers',      label: '제조사'   },
+  { key: 'products',           label: '품번'     },
+  { key: 'partners',           label: '거래처'   },
+  { key: 'warehouses',         label: '창고'     },
+  { key: 'banks',              label: '은행'     },
+  { key: 'construction-sites', label: '공사현장' },
 ];
 
 const DEFAULT_KIND: DataKind = 'companies';
@@ -46,8 +46,8 @@ export default function DataPage() {
 
   return (
     <MasterConsole
-      eyebrow="DATA"
-      title="데이터"
+      eyebrow="MASTER"
+      title="마스터"
       description="법인·제조사·품번·거래처·창고·은행·공사현장 등 모든 기준정보를 한곳에서 관리합니다."
       tableTitle={activeMeta.label}
       tableSub="기준정보"
@@ -60,12 +60,12 @@ export default function DataPage() {
         />
       }
     >
-      <KindSection kind={activeKind} legacyPath={activeMeta.legacyPath} label={activeMeta.label} />
+      <KindSection kind={activeKind} />
     </MasterConsole>
   );
 }
 
-function KindSection({ kind, legacyPath, label }: { kind: DataKind; legacyPath: string; label: string }) {
+function KindSection({ kind }: { kind: DataKind }) {
   const companyConfig = useCompanyConfig();
   const manufacturerConfig = useManufacturerConfig();
   const productConfig = useProductConfig();
@@ -81,18 +81,18 @@ function KindSection({ kind, legacyPath, label }: { kind: DataKind; legacyPath: 
     case 'warehouses':    return <MasterSection config={warehouseConfig} />;
     case 'banks':         return <MasterSection config={bankConfig} />;
     case 'construction-sites':
-      return <PendingSection legacyPath={legacyPath} label={label} />;
+      return <ConstructionSitesPending />;
   }
 }
 
-function PendingSection({ legacyPath, label }: { legacyPath: string; label: string }) {
+function ConstructionSitesPending() {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
       <div className="text-sm text-[var(--ink-3)]">
-        {label}은(는) 다음 단계에서 통합 페이지로 옮겨집니다.
+        공사현장은 다음 단계에서 통합 페이지로 옮겨집니다.
       </div>
-      <Link to={legacyPath} className="text-sm text-[var(--solar-3)] underline">
-        기존 {label} 관리 화면으로 이동 →
+      <Link to="/masters/construction-sites" className="text-sm text-[var(--solar-3)] underline">
+        기존 공사현장 관리 화면으로 이동 →
       </Link>
     </div>
   );

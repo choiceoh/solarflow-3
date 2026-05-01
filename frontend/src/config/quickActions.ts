@@ -31,8 +31,8 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { id: 'procurement', label: 'P/O 발주',   icon: ClipboardList, path: '/procurement?new=1',      menuKey: 'procurement',  group: '구매' },
   { id: 'lc',          label: 'L/C 개설',   icon: Landmark,      path: '/lc?new=1',               menuKey: 'lc',           group: '구매' },
   // 마스터
-  { id: 'partner',     label: '거래처 등록', icon: Handshake,    path: '/masters/partners?new=1', menuKey: 'masters',      group: '마스터' },
-  { id: 'product',     label: '품번 등록',  icon: Tag,           path: '/masters/products?new=1', menuKey: 'masters',      group: '마스터' },
+  { id: 'partner',     label: '거래처 등록', icon: Handshake,    path: '/data/partners/new',      menuKey: 'masters',      group: '마스터' },
+  { id: 'product',     label: '품번 등록',  icon: Tag,           path: '/data/products/new',      menuKey: 'masters',      group: '마스터' },
   { id: 'site',        label: '현장 등록',  icon: HardHat,       path: '/masters/construction-sites?new=1', menuKey: 'masters', group: '마스터' },
   // 도구
   { id: 'memo',        label: '메모',       icon: StickyNote,    path: '/memo?new=1',             menuKey: 'memo',         group: '도구' },

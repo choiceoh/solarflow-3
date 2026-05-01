@@ -113,7 +113,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
   {
     label: '도구',
     items: [
-      { key: 'masters', label: '마스터', abbr: '기준', path: '/masters/products', icon: Database, menu: 'masters' },
+      { key: 'masters', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters' },
       { key: 'search', label: '검색', abbr: '검색', path: '/search', icon: Search, menu: 'search' },
       // BARO Phase 1: 거래처별 단가표 (BARO 전용)
       { key: 'baro-price-book', label: '거래처 단가표', abbr: '단가', path: '/baro/price-book', icon: Tags, menu: 'baro_price_book', tenants: ['baro'] },
@@ -167,7 +167,7 @@ function routeMeta(pathname: string, search: string) {
     if (tab === 'receipts') return { title: '수금 관리', breadcrumb: '판매 / 입금 확인' };
     if (tab === 'matching') return { title: '수금매칭', breadcrumb: '판매 / 자동 추천' };
   }
-  if (pathname.startsWith('/masters')) return { title: '마스터 관리', breadcrumb: '기준정보 / 운영 기준' };
+  if (pathname === '/data' || pathname.startsWith('/data/')) return { title: '마스터 관리', breadcrumb: '기준정보 / 운영 기준' };
   return ROUTE_LABELS[pathname] ?? { title: 'SolarFlow', breadcrumb: 'Command Center' };
 }
 
@@ -177,7 +177,7 @@ function isItemActive(itemPath: string, pathname: string, search: string) {
   if (base === '/inventory' || base === '/procurement' || base === '/orders') {
     return pathname === base && !search;
   }
-  if (base.startsWith('/masters')) return pathname.startsWith('/masters');
+  if (base === '/data') return pathname === '/data' || pathname.startsWith('/data/');
   return pathname === base;
 }
 
