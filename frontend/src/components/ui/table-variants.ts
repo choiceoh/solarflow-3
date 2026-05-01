@@ -9,7 +9,7 @@ export const tableClasses = {
   container: "relative w-full overflow-x-auto",
   root: "w-full caption-bottom text-sm",
   header: "[&_tr]:border-b",
-  body: "[&_tr:last-child]:border-0",
+  body: "[&_tr:last-child]:border-0 [&_tr:nth-child(even)]:bg-muted/30",
   footer: "border-t bg-muted/50 font-medium [&>tr]:last:border-b-0",
   row: "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
   head: "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
