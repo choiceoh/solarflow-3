@@ -23,6 +23,14 @@ interface FXSnapshot {
   fetched_at: string;
 }
 
+interface MetalSnapshot {
+  price_usd: number;
+  change_usd: number | null;
+  symbol: string;
+  source: string;
+  fetched_at: string;
+}
+
 const FALLBACK_KPI = {
   inventory_available_mw: 76.42,
   reservations_pending: 28,
@@ -30,6 +38,7 @@ const FALLBACK_KPI = {
   lc_active_total_usd: 8_420_000,
 };
 const FALLBACK_FX = { rate: 1773.4, change_pct: 0.06 };
+const FALLBACK_SILVER = { price_usd: 28.84, change_usd: -1.42 };
 const FALLBACK_QUEUE: LoginStats['work_queue'] = [
   { time: '09:00', tag: '입항', title: 'COSCO SHANGHAI 042E', meta: '8,800장 · 5,456 kW · 인천 1창고' },
   { time: '11:30', tag: 'L/C 만기', title: 'LC-26-0405', meta: 'USD 1.84M · 하나은행 · 결재 대기' },
@@ -47,6 +56,7 @@ export default function LoginPage() {
 
   const [stats, setStats] = useState<LoginStats | null>(null);
   const [fx, setFx] = useState<FXSnapshot | null>(null);
+  const [silver, setSilver] = useState<MetalSnapshot | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +68,10 @@ export default function LoginPage() {
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((d: FXSnapshot) => { if (!cancelled) setFx(d); })
       .catch((e) => console.warn('[LoginPage] fx fetch failed:', e));
+    fetch(`${API_BASE_URL}/api/v1/public/metals/silver`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: MetalSnapshot) => { if (!cancelled) setSilver(d); })
+      .catch((e) => console.warn('[LoginPage] silver fetch failed:', e));
     return () => { cancelled = true; };
   }, []);
 
@@ -83,6 +97,8 @@ export default function LoginPage() {
   const lcTotalUSD = stats?.lc_active_total_usd ?? FALLBACK_KPI.lc_active_total_usd;
   const fxRate = fx?.rate ?? FALLBACK_FX.rate;
   const fxChange = fx?.change_pct ?? FALLBACK_FX.change_pct;
+  const silverPrice = silver?.price_usd ?? FALLBACK_SILVER.price_usd;
+  const silverChange = silver?.change_usd ?? FALLBACK_SILVER.change_usd;
   const queue = stats?.work_queue?.length ? stats.work_queue : FALLBACK_QUEUE;
 
   const kpi = [
@@ -170,8 +186,10 @@ export default function LoginPage() {
         </div>
 
         <div className="sf-mono border-t border-white/10 pt-3 text-[10px] text-[var(--sf-dark-ink-3)]">
-          은 <span className="text-[var(--sf-dark-ink)]">$28.84</span>
-          <span className="ml-1 text-[#e09a8b]">-1.42</span>
+          은 <span className="text-[var(--sf-dark-ink)]">${silverPrice.toFixed(2)}</span>
+          <span className={`ml-1 ${silverChange >= 0 ? 'text-[#92e0a4]' : 'text-[#e09a8b]'}`}>
+            {silverChange >= 0 ? '+' : ''}{silverChange.toFixed(2)}
+          </span>
           <span className="mx-2 text-white/15">│</span>
           폴리실리콘 <span className="text-[var(--sf-dark-ink)]">34.20</span>
           <span className="ml-1 text-[#92e0a4]">+0.40</span>

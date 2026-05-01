@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/engine"
@@ -29,17 +30,25 @@ type PublicHandler struct {
 	fxCache  *fxSnapshot
 	fxKey    string
 	fxSource string
+
+	metalMu     sync.Mutex
+	metalCache  map[string]*metalSnapshot
+	metalKey    string
+	metalSource string
 }
 
 // NewPublicHandler — PublicHandler 생성자.
 // engineClient는 nil 가능 — 그 경우 인벤토리 합계는 null로 응답.
 func NewPublicHandler(db *supa.Client, engineClient *engine.EngineClient) *PublicHandler {
 	return &PublicHandler{
-		DB:       db,
-		Engine:   engineClient,
-		HTTP:     &http.Client{Timeout: 6 * time.Second},
-		fxKey:    os.Getenv("EXCHANGERATE_HOST_KEY"),
-		fxSource: "exchangerate.host",
+		DB:          db,
+		Engine:      engineClient,
+		HTTP:        &http.Client{Timeout: 6 * time.Second},
+		fxKey:       os.Getenv("EXCHANGERATE_HOST_KEY"),
+		fxSource:    "exchangerate.host",
+		metalCache:  make(map[string]*metalSnapshot),
+		metalKey:    os.Getenv("METAL_PRICE_API_KEY"),
+		metalSource: "metalpriceapi.com",
 	}
 }
 
@@ -423,4 +432,147 @@ func fmtETA(date string) string {
 		return date
 	}
 	return t.Format("01/02")
+}
+
+// === Metals (silver, gold, ...) ===
+
+type metalSnapshot struct {
+	PriceUSD  float64   `json:"price_usd"`
+	ChangeUSD *float64  `json:"change_usd"`
+	Symbol    string    `json:"symbol"`
+	Source    string    `json:"source"`
+	FetchedAt time.Time `json:"fetched_at"`
+}
+
+// 30분 캐시 — metalpriceapi 무료/저가 플랜은 월간 호출 한도가 빡빡함.
+// 로그인 페이지 ticker 용도로는 30분이면 충분.
+const metalTTL = 30 * time.Minute
+
+// 지원 심볼: 클라이언트가 임의 문자열을 보낼 수 없게 화이트리스트.
+// (X)코드는 metalpriceapi 표준 — XAG=은, XAU=금, XPT=백금, XPD=팔라듐.
+var metalSymbols = map[string]string{
+	"silver":    "XAG",
+	"gold":      "XAU",
+	"platinum":  "XPT",
+	"palladium": "XPD",
+}
+
+// MetalPrice — GET /api/v1/public/metals/{symbol}
+// 비유: "오늘의 금속 시세판" — 로그인 화면 하단 ticker용. 단가는 USD/oz.
+// API key 없으면 503 → 프론트가 mockup으로 fallback.
+func (h *PublicHandler) MetalPrice(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "symbol")
+	code, ok := metalSymbols[name]
+	if !ok {
+		response.RespondError(w, http.StatusBadRequest, "지원하지 않는 금속 심볼")
+		return
+	}
+
+	h.metalMu.Lock()
+	if cached, hit := h.metalCache[code]; hit && time.Since(cached.FetchedAt) < metalTTL {
+		snap := *cached
+		h.metalMu.Unlock()
+		response.RespondJSON(w, http.StatusOK, snap)
+		return
+	}
+	h.metalMu.Unlock()
+
+	if h.metalKey == "" {
+		response.RespondError(w, http.StatusServiceUnavailable, "METAL_PRICE_API_KEY 미설정")
+		return
+	}
+
+	snap, err := h.fetchMetal(code)
+	if err != nil {
+		log.Printf("[금속 시세 조회 실패 %s] %v", code, err)
+		h.metalMu.Lock()
+		if cached, hit := h.metalCache[code]; hit {
+			stale := *cached
+			h.metalMu.Unlock()
+			response.RespondJSON(w, http.StatusOK, stale)
+			return
+		}
+		h.metalMu.Unlock()
+		response.RespondError(w, http.StatusBadGateway, "금속 시세 조회에 실패했습니다")
+		return
+	}
+
+	h.metalMu.Lock()
+	h.metalCache[code] = &snap
+	h.metalMu.Unlock()
+	response.RespondJSON(w, http.StatusOK, snap)
+}
+
+// metalpriceapi 응답: USD base에서 1 USD = N oz 형태로 quote.
+// USD/oz는 1/N로 변환.
+type metalpriceResponse struct {
+	Success   bool               `json:"success"`
+	Base      string             `json:"base"`
+	Timestamp int64              `json:"timestamp"`
+	Rates     map[string]float64 `json:"rates"`
+	Error     *struct {
+		Code int    `json:"code"`
+		Info string `json:"info"`
+	} `json:"error"`
+}
+
+func (h *PublicHandler) fetchMetal(code string) (metalSnapshot, error) {
+	today, err := h.fetchMetalLatest(code)
+	if err != nil {
+		return metalSnapshot{}, fmt.Errorf("today: %w", err)
+	}
+
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	var changeUSD *float64
+	if prev, err := h.fetchMetalHistorical(code, yesterday); err == nil && prev > 0 {
+		diff := today - prev
+		changeUSD = &diff
+	}
+
+	return metalSnapshot{
+		PriceUSD:  today,
+		ChangeUSD: changeUSD,
+		Symbol:    code,
+		Source:    h.metalSource,
+		FetchedAt: time.Now().UTC(),
+	}, nil
+}
+
+func (h *PublicHandler) fetchMetalLatest(code string) (float64, error) {
+	url := fmt.Sprintf("https://api.metalpriceapi.com/v1/latest?api_key=%s&base=USD&currencies=%s", h.metalKey, code)
+	return h.fetchMetalURL(url, code)
+}
+
+func (h *PublicHandler) fetchMetalHistorical(code, date string) (float64, error) {
+	url := fmt.Sprintf("https://api.metalpriceapi.com/v1/%s?api_key=%s&base=USD&currencies=%s", date, h.metalKey, code)
+	return h.fetchMetalURL(url, code)
+}
+
+func (h *PublicHandler) fetchMetalURL(url, code string) (float64, error) {
+	body, err := h.httpGet(url)
+	if err != nil {
+		return 0, err
+	}
+	var parsed metalpriceResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return 0, fmt.Errorf("파싱 실패: %w", err)
+	}
+	if !parsed.Success {
+		msg := "unknown"
+		if parsed.Error != nil {
+			msg = parsed.Error.Info
+		}
+		return 0, fmt.Errorf("metalpriceapi error: %s", msg)
+	}
+	// metalpriceapi는 두 가지 키를 같이 보냄:
+	//   USDXAG: 71.99      → 이미 USD/oz (즉 oz당 달러)
+	//   XAG:    0.01389    → 1 USD = N oz (역수)
+	// USDXAG가 있으면 그대로, 없으면 역수.
+	if rate, ok := parsed.Rates["USD"+code]; ok && rate > 0 {
+		return rate, nil
+	}
+	if rate, ok := parsed.Rates[code]; ok && rate > 0 {
+		return 1.0 / rate, nil
+	}
+	return 0, fmt.Errorf("%s quote 없음", code)
 }
