@@ -41,8 +41,8 @@ export default function QuickRegister({ userId, role }: Props) {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger className="inline-flex h-9 items-center gap-1.5 rounded-md border border-transparent bg-primary px-3 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring/45">
-          <Plus className="h-4 w-4" />
+        <DropdownMenuTrigger className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground shadow-sm transition-all hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/45">
+          <Plus className="h-3.5 w-3.5" />
           빠른 등록
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">

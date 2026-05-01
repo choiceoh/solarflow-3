@@ -57,20 +57,37 @@ export default function GroupPurchaseRequestPage() {
 
   useEffect(() => { loadCompanies(); }, [loadCompanies]);
 
+  // 마스터(products/manufacturers)는 1회만 로드 — 매번 다시 받지 않음
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [productList, manufacturerList] = await Promise.all([
+          fetchWithAuth<Product[]>('/api/v1/products'),
+          fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers'),
+        ]);
+        if (!cancelled) {
+          setProducts(productList);
+          setManufacturers(manufacturerList);
+        }
+      } catch (e) {
+        console.error('[마스터 로드 실패]', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // 매입 요청 목록은 baroCompany / statusFilter 변경 시에만 재조회
   const load = useCallback(async () => {
     if (!baroCompany) return;
     setLoading(true);
     try {
       const params = new URLSearchParams({ requester_company_id: baroCompany.company_id });
       if (statusFilter) params.set('status', statusFilter);
-      const [list, productList, manufacturerList] = await Promise.all([
-        fetchWithAuth<IntercompanyRequest[]>(`/api/v1/intercompany-requests/mine?${params.toString()}`),
-        fetchWithAuth<Product[]>('/api/v1/products'),
-        fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers'),
-      ]);
+      const list = await fetchWithAuth<IntercompanyRequest[]>(
+        `/api/v1/intercompany-requests/mine?${params.toString()}`,
+      );
       setRows(list);
-      setProducts(productList);
-      setManufacturers(manufacturerList);
     } catch (e) {
       console.error('[그룹내 매입 요청 로드 실패]', e);
     } finally {
