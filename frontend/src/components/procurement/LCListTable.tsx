@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, Fragment, memo } from 'react';
 import { Pencil, Trash2, CheckCircle2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,7 +60,7 @@ interface Props {
   blsVersion?: number;
 }
 
-export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onNewBL, blsVersion }: Props) {
+function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onNewBL, blsVersion }: Props) {
   // 렌더 중 Date.now() 호출은 react-hooks/purity 위반 → useState lazy init으로 1회만 캡처
   const [now] = useState(() => Date.now());
   const [agg, setAgg] = useState<Record<string, LCAgg>>({});
@@ -505,3 +505,5 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
     </>
   );
 }
+
+export default memo(LCListTable);

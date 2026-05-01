@@ -1,4 +1,4 @@
-import { useState, Fragment, useMemo } from 'react';
+import { useState, Fragment, useMemo, memo } from 'react';
 import { ChevronRight, ChevronDown, Plus, CheckCircle2, PauseCircle, PlayCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/common/EmptyState';
@@ -218,7 +218,7 @@ function AllocSubTable({
 
 /* ─── 메인 컴포넌트 ─────────────────────────────── */
 
-export default function AvailInventoryTable({
+function AvailInventoryTable({
   items,
   allocations,
   onNewAlloc,
@@ -465,3 +465,5 @@ export default function AvailInventoryTable({
     </div>
   );
 }
+
+export default memo(AvailInventoryTable);

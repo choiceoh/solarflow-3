@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -35,7 +36,7 @@ function MatchBadge({ receipt }: { receipt: Receipt }) {
   return <span className="sf-pill ghost">미매칭</span>;
 }
 
-export default function ReceiptListTable({ items, onNew, onEdit, onDelete }: Props) {
+function ReceiptListTable({ items, onNew, onEdit, onDelete }: Props) {
   if (items.length === 0) return <EmptyState message="등록된 수금이 없습니다" actionLabel="새로 등록" onAction={onNew} />;
 
   return (
@@ -82,3 +83,5 @@ export default function ReceiptListTable({ items, onNew, onEdit, onDelete }: Pro
     </div>
   );
 }
+
+export default memo(ReceiptListTable);

@@ -1,4 +1,4 @@
-import { useEffect, useState, Fragment } from 'react';
+import { useEffect, useState, Fragment, memo } from 'react';
 import { ChevronDown, ChevronRight, FilePenLine, Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDate, formatUSD, moduleLabel, shortMfgName } from '@/lib/utils';
@@ -102,7 +102,7 @@ function ProgressRow({
   );
 }
 
-export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC, onDelete, onDeleteLC, onSelectBL, aggVersion }: Props) {
+function POListTable({ items, onDetail, onNew, onEditLC, onNewLC, onDelete, onDeleteLC, onSelectBL, aggVersion }: Props) {
   const companies = useAppStore((s) => s.companies);
   const companyMap = Object.fromEntries(companies.map((c) => [c.company_id, c.company_name]));
   const [agg, setAgg] = useState<Record<string, Agg>>({});
@@ -706,3 +706,5 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
     </div>
   );
 }
+
+export default memo(POListTable);

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pencil, ReceiptText } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -14,7 +15,7 @@ interface Props {
   onInvoice?: (item: Outbound) => void;
 }
 
-export default function OutboundListTable({ items, onSelect, onNew, onInvoice }: Props) {
+function OutboundListTable({ items, onSelect, onNew, onInvoice }: Props) {
   if (items.length === 0) return <EmptyState message="등록된 출고가 없습니다" actionLabel="새로 등록" onAction={onNew} />;
 
   return (
@@ -109,3 +110,5 @@ export default function OutboundListTable({ items, onSelect, onNew, onInvoice }:
     </div>
   );
 }
+
+export default memo(OutboundListTable);

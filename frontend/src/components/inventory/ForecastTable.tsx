@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -151,7 +151,7 @@ function ProductForecastBlock({
   );
 }
 
-export default function ForecastTable({ products, onReserve }: Props) {
+function ForecastTable({ products, onReserve }: Props) {
   if (products.length === 0) return <EmptyState message="수급 전망 데이터가 없습니다" />;
 
   return (
@@ -162,3 +162,5 @@ export default function ForecastTable({ products, onReserve }: Props) {
     </div>
   );
 }
+
+export default memo(ForecastTable);
