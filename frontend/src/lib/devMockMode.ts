@@ -1,9 +1,12 @@
 import type { Session } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types/models';
+import { detectTenantScope } from '@/lib/tenantScope';
 
 const DEV_MOCK_LOGIN_KEY = 'solarflow-dev-mock-login';
-const DEV_MOCK_USER_ID = '00000000-0000-4000-8000-000000000019';
-const DEV_MOCK_EMAIL = 'mock@solarflow.local';
+const DEV_MOCK_USER_ID_TOPSOLAR = '00000000-0000-4000-8000-000000000019';
+const DEV_MOCK_USER_ID_BARO = '00000000-0000-4000-8000-000000000020';
+const DEV_MOCK_EMAIL_TOPSOLAR = 'mock@solarflow.local';
+const DEV_MOCK_EMAIL_BARO = 'mock@baro.local';
 
 function readStorageFlag(key: string): boolean {
   try {
@@ -44,9 +47,9 @@ export function clearDevMockSession(): void {
   writeStorageFlag(DEV_MOCK_LOGIN_KEY, false);
 }
 
-export const DEV_MOCK_PROFILE: UserProfile = {
-  user_id: DEV_MOCK_USER_ID,
-  email: DEV_MOCK_EMAIL,
+const DEV_MOCK_PROFILE_TOPSOLAR: UserProfile = {
+  user_id: DEV_MOCK_USER_ID_TOPSOLAR,
+  email: DEV_MOCK_EMAIL_TOPSOLAR,
   name: '목업 관리자',
   role: 'admin',
   department: '디자인 검토',
@@ -55,7 +58,23 @@ export const DEV_MOCK_PROFILE: UserProfile = {
   is_active: true,
 };
 
+const DEV_MOCK_PROFILE_BARO: UserProfile = {
+  user_id: DEV_MOCK_USER_ID_BARO,
+  email: DEV_MOCK_EMAIL_BARO,
+  name: '바로 목업 관리자',
+  role: 'admin',
+  department: '바로 검토',
+  phone: null,
+  avatar_url: null,
+  is_active: true,
+};
+
+export function getDevMockProfile(): UserProfile {
+  return detectTenantScope() === 'baro' ? DEV_MOCK_PROFILE_BARO : DEV_MOCK_PROFILE_TOPSOLAR;
+}
+
 export function createDevMockSession(): Session {
+  const profile = getDevMockProfile();
   const expiresAt = Math.floor(Date.now() / 1000) + (60 * 60 * 24);
   return {
     access_token: 'dev-mock-access-token',
@@ -64,16 +83,16 @@ export function createDevMockSession(): Session {
     expires_at: expiresAt,
     refresh_token: 'dev-mock-refresh-token',
     user: {
-      id: DEV_MOCK_USER_ID,
+      id: profile.user_id,
       aud: 'authenticated',
       role: 'authenticated',
-      email: DEV_MOCK_EMAIL,
+      email: profile.email,
       email_confirmed_at: '2026-05-01T00:00:00.000Z',
       phone: '',
       confirmed_at: '2026-05-01T00:00:00.000Z',
       last_sign_in_at: '2026-05-01T00:00:00.000Z',
       app_metadata: { provider: 'dev-mock', providers: ['dev-mock'] },
-      user_metadata: { name: DEV_MOCK_PROFILE.name },
+      user_metadata: { name: profile.name },
       identities: [],
       created_at: '2026-05-01T00:00:00.000Z',
       updated_at: '2026-05-01T00:00:00.000Z',

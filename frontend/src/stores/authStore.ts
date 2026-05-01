@@ -10,7 +10,7 @@ import { fetchWithAuth } from '@/lib/api';
 import {
   clearDevMockSession,
   createDevMockSession,
-  DEV_MOCK_PROFILE,
+  getDevMockProfile,
   isDevMockSessionActive,
   startDevMockSession,
 } from '@/lib/devMockMode';
@@ -60,7 +60,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   loginWithDevMock: async () => {
     clearStoredAuthSession();
     startDevMockSession();
-    set({ session: createDevMockSession(), user: DEV_MOCK_PROFILE, isLoading: false });
+    set({ session: createDevMockSession(), user: getDevMockProfile(), isLoading: false });
     await useAppStore.getState().loadCompanies();
   },
 
@@ -79,14 +79,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     let initialized = false;
 
     if (isDevMockSessionActive()) {
-      set({ session: createDevMockSession(), user: DEV_MOCK_PROFILE, isLoading: false });
+      set({ session: createDevMockSession(), user: getDevMockProfile(), isLoading: false });
       useAppStore.getState().loadCompanies();
       return;
     }
 
     const timeout = setTimeout(() => {
       if (isDevMockSessionActive()) {
-        set({ session: createDevMockSession(), user: DEV_MOCK_PROFILE, isLoading: false });
+        set({ session: createDevMockSession(), user: getDevMockProfile(), isLoading: false });
         initialized = true;
         return;
       }
@@ -100,7 +100,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       clearTimeout(timeout);
       if (initialized) return;
       if (isDevMockSessionActive()) {
-        set({ session: createDevMockSession(), user: DEV_MOCK_PROFILE, isLoading: false });
+        set({ session: createDevMockSession(), user: getDevMockProfile(), isLoading: false });
         useAppStore.getState().loadCompanies();
         initialized = true;
         return;
@@ -127,7 +127,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       clearTimeout(timeout);
       if (initialized) return;
       if (isDevMockSessionActive()) {
-        set({ session: createDevMockSession(), user: DEV_MOCK_PROFILE, isLoading: false });
+        set({ session: createDevMockSession(), user: getDevMockProfile(), isLoading: false });
         useAppStore.getState().loadCompanies();
         initialized = true;
         return;

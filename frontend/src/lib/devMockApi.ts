@@ -1,4 +1,4 @@
-import { DEV_MOCK_PROFILE, isDevMockSessionActive } from '@/lib/devMockMode';
+import { getDevMockProfile, isDevMockSessionActive } from '@/lib/devMockMode';
 
 type MockRow = Record<string, unknown>;
 type CompanyScoped = MockRow & { company_id?: string };
@@ -528,7 +528,7 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
   }
 
   if (url.pathname.startsWith('/api/v1/calc/')) return calcRoute<T>(url, body);
-  if (url.pathname === '/api/v1/users/me') return clone(DEV_MOCK_PROFILE as T);
+  if (url.pathname === '/api/v1/users/me') return clone(getDevMockProfile() as T);
   if (url.pathname === '/api/v1/ocr/health') return clone({ ok: true, mode: 'mock', engine_status: 'ready', warm: true } as T);
   if (url.pathname === '/api/v1/ocr/extract') {
     return clone({
