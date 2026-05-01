@@ -12,6 +12,8 @@ import OutboundDetailView from '@/components/outbound/OutboundDetailView';
 import OutboundForm from '@/components/outbound/OutboundForm';
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
 import PartnerForm from '@/components/masters/PartnerForm';
+import MetaForm from './MetaForm';
+import partnerFormConfig from '@/config/forms/partners';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
 import {
@@ -177,9 +179,21 @@ export const sparkComputers: Record<string, (items: unknown[]) => number[]> = {
 export const actionHandlers: Record<string, ActionHandler> = {};
 
 // ─── Forms / Detail components ─────────────────────────────────────────────
+// 메타 폼 래퍼 — config를 클로저로 받아 FormComponent 시그니처에 맞춤
+const PartnerFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={partnerFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
 export const formComponents: Record<string, FormComponent> = {
   outbound_form: OutboundForm as unknown as FormComponent,
   partner_form: PartnerForm as unknown as FormComponent,
+  partner_form_v2: PartnerFormV2,
 };
 
 export const detailComponents: Record<string, DetailComponent> = {

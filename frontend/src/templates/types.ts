@@ -117,6 +117,52 @@ export interface FormConfig {
   editIdField?: string;             // 행 데이터에서 :id로 쓸 필드
 }
 
+// ── 메타 폼 (Phase 2)
+export type FieldType =
+  | 'text' | 'select' | 'number' | 'textarea' | 'switch' | 'date';
+
+export interface FieldConfig {
+  key: string;                      // form 필드명 (zod 키 = react-hook-form 키)
+  label: string;
+  type: FieldType;
+  required?: boolean;
+  placeholder?: string;
+  defaultValue?: string | number | boolean;
+
+  // 검증
+  minLength?: number;
+  maxLength?: number;
+  minValue?: number;                // number 타입
+  maxValue?: number;
+  pattern?: { regex: string; message: string };
+
+  // select 옵션
+  optionsFrom?: 'static' | 'enum' | 'master';
+  staticOptions?: { value: string; label: string }[];
+  enumKey?: EnumKey;                // 'PARTNER_TYPE_LABEL' 등 — registry.enumDictionaries
+  masterKey?: MasterKey;            // 'manufacturers' 등
+
+  // 권한별 readonly (PoC: 단순 boolean)
+  readOnly?: boolean;
+  // 편집 가능한 역할 목록 — 현재 사용자가 이 목록에 없으면 자동 readOnly
+  // (예: ['admin'] 이면 admin만 편집 가능, 나머지는 readOnly)
+  editableByRoles?: string[];
+
+  // 조건부 표시 — 다른 필드 값에 따라 노출/숨김
+  visibleIf?: { field: string; value: string | string[] };
+}
+
+export interface FormSection {
+  cols?: 1 | 2 | 3;                 // grid 컬럼 수 (기본 1)
+  fields: FieldConfig[];
+}
+
+export interface MetaFormConfig {
+  id: string;                       // 'partner_form_v2' — registry/screen에서 참조
+  title: { create: string; edit: string };
+  sections: FormSection[];
+}
+
 // ── 클라이언트 검색 (서버 필터와 별도)
 export interface SearchableConfig {
   placeholder?: string;

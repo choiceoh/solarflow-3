@@ -77,7 +77,7 @@ const config: ListScreenConfig = {
   forms: [
     {
       id: 'partner_form',
-      componentId: 'partner_form',
+      componentId: 'partner_form_v2',           // Phase 2: 메타 폼 사용
       endpoint: '/api/v1/partners',
       editEndpoint: '/api/v1/partners/:id',
       editIdField: 'partner_id',
