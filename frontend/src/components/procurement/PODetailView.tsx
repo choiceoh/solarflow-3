@@ -345,9 +345,13 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
-        <h2 className="text-base font-semibold flex-1">PO {po.po_number || '—'}</h2>
+      <div className="sf-detail-header">
+        <button type="button" className="sf-detail-header-back" onClick={onBack} aria-label="목록으로">
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <h2 className="flex-1 text-base font-semibold" style={{ letterSpacing: '-0.012em' }}>
+          PO <span className="sf-mono">{po.po_number || '—'}</span>
+        </h2>
         <StatusPill label={PO_STATUS_LABEL[po.status]} colorClassName={PO_STATUS_COLOR[po.status]} className="px-2" />
         <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}><Pencil className="mr-1 h-3.5 w-3.5" />수정</Button>
         {po.status !== 'cancelled' && (

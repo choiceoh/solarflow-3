@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { Sun } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import LoginForm from '@/components/auth/LoginForm';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { isDevMockLoginAllowed } from '@/lib/devMockMode';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -62,8 +63,12 @@ export default function LoginPage() {
 
   if (isLoading && !canUseDevMock) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <p className="text-muted-foreground">로딩 중...</p>
+      <div className="flex h-screen flex-col items-center justify-center gap-3" style={{ background: 'var(--sf-bg)' }}>
+        <span className="sf-solar-mark" aria-hidden>
+          <Sun strokeWidth={2.4} />
+        </span>
+        <LoadingSpinner />
+        <p className="sf-mono text-[11px]" style={{ color: 'var(--sf-ink-3)' }}>SolarFlow 시작 중…</p>
       </div>
     );
   }
