@@ -35,6 +35,8 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 		r.Get("/login-stats", publicH.LoginStats)
 		r.Get("/fx/usdkrw", publicH.FXUsdKrw)
 		r.Get("/metals/{symbol}", publicH.MetalPrice)
+		r.Get("/polysilicon", publicH.Polysilicon)
+		r.Get("/scfi", publicH.SCFI)
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {

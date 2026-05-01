@@ -35,6 +35,8 @@ type PublicHandler struct {
 	metalCache  map[string]*metalSnapshot
 	metalKey    string
 	metalSource string
+
+	commoditiesPath string
 }
 
 // NewPublicHandler — PublicHandler 생성자.
@@ -49,7 +51,19 @@ func NewPublicHandler(db *supa.Client, engineClient *engine.EngineClient) *Publi
 		metalCache:  make(map[string]*metalSnapshot),
 		metalKey:    os.Getenv("METAL_PRICE_API_KEY"),
 		metalSource: "metalpriceapi.com",
+
+		commoditiesPath: commoditiesFilePath(),
 	}
+}
+
+func commoditiesFilePath() string {
+	if p := os.Getenv("COMMODITIES_FILE"); p != "" {
+		return p
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return home + "/.config/solarflow/commodities.json"
+	}
+	return "/etc/solarflow/commodities.json"
 }
 
 // === FX (USD/KRW) ===
@@ -575,4 +589,79 @@ func (h *PublicHandler) fetchMetalURL(url, code string) (float64, error) {
 		return 1.0 / rate, nil
 	}
 	return 0, fmt.Errorf("%s quote 없음", code)
+}
+
+// === Commodities (polysilicon, SCFI) ===
+//
+// 폴리실리콘과 SCFI는 무료 실시간 API가 없으므로 운영자가 주간으로 갱신하는
+// JSON 파일을 읽어 그대로 반환한다. 경로는 COMMODITIES_FILE 환경변수 또는
+// $HOME/.config/solarflow/commodities.json. 파일 없거나 항목 누락이면 503 →
+// 프론트가 mockup 값으로 fallback.
+//
+// 파일 스키마 예:
+//   {
+//     "polysilicon": {"value": 34.20, "change": 0.40, "unit": "USD/kg",
+//                     "source": "PVInsights weekly", "fetched_at": "2026-04-29"},
+//     "scfi":        {"value": 1284,  "change": -2.10, "unit": "index",
+//                     "source": "Shanghai Shipping Exchange", "fetched_at": "2026-04-26"}
+//   }
+
+type commoditySnapshot struct {
+	Value     float64 `json:"value"`
+	Change    float64 `json:"change"`
+	Unit      string  `json:"unit"`
+	Source    string  `json:"source"`
+	FetchedAt string  `json:"fetched_at"`
+}
+
+type commoditiesFile struct {
+	Polysilicon *commoditySnapshot `json:"polysilicon"`
+	SCFI        *commoditySnapshot `json:"scfi"`
+}
+
+func (h *PublicHandler) loadCommodities() (*commoditiesFile, error) {
+	body, err := os.ReadFile(h.commoditiesPath)
+	if err != nil {
+		return nil, err
+	}
+	var parsed commoditiesFile
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("파싱 실패: %w", err)
+	}
+	return &parsed, nil
+}
+
+func (h *PublicHandler) respondCommodity(w http.ResponseWriter, name string, snap *commoditySnapshot, err error) {
+	if err != nil {
+		log.Printf("[commodities %s] %v", name, err)
+		response.RespondError(w, http.StatusServiceUnavailable, fmt.Sprintf("%s 시세 미설정", name))
+		return
+	}
+	if snap == nil {
+		response.RespondError(w, http.StatusServiceUnavailable, fmt.Sprintf("%s 시세 미설정", name))
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, snap)
+}
+
+// Polysilicon — GET /api/v1/public/polysilicon
+// 비유: "이번 주 폴리실리콘 시세판" — 운영자가 commodities.json에 적은 값을 그대로 노출.
+func (h *PublicHandler) Polysilicon(w http.ResponseWriter, r *http.Request) {
+	c, err := h.loadCommodities()
+	if err != nil {
+		h.respondCommodity(w, "폴리실리콘", nil, err)
+		return
+	}
+	h.respondCommodity(w, "폴리실리콘", c.Polysilicon, nil)
+}
+
+// SCFI — GET /api/v1/public/scfi
+// 비유: "이번 주 상해 컨테이너 운임지수" — 매주 금요일 갱신, 운영자가 손으로 입력.
+func (h *PublicHandler) SCFI(w http.ResponseWriter, r *http.Request) {
+	c, err := h.loadCommodities()
+	if err != nil {
+		h.respondCommodity(w, "SCFI", nil, err)
+		return
+	}
+	h.respondCommodity(w, "SCFI", c.SCFI, nil)
 }
