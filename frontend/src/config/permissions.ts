@@ -33,7 +33,6 @@ export type MenuKey =
   | 'banking'       // LC 한도/만기
   | 'customs'       // 매출/이익 분석
   | 'masters'       // 마스터 관리
-  | 'search'        // 검색
   | 'approval'      // 결재안
   | 'assistant'     // AI 업무 도우미
   | 'settings'      // 설정 (admin 전용)
@@ -76,7 +75,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
-            'banking','customs','masters','search','approval','assistant',
+            'banking','customs','masters','approval','assistant',
             'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_inbox'],
     features: {
       canEdit: true,
@@ -90,7 +89,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   executive: {
-    menus: ['inventory','orders','outbound','receipts','banking','customs','search','assistant',
+    menus: ['inventory','orders','outbound','receipts','banking','customs','assistant',
             'baro_credit'],
     features: {
       canEdit: false,
@@ -104,7 +103,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   manager: {
-    menus: ['inventory','search','assistant'],
+    menus: ['inventory','assistant'],
     features: {
       canEdit: false,
       showPrice: false,          // 단가·재고금액 차단 (역산 방지)

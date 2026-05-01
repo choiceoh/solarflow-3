@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   BarChart3,
   Bot,
@@ -14,7 +14,6 @@ import {
   Inbox,
   PackagePlus,
   ScrollText,
-  Search,
   Settings,
   ShieldAlert,
   Ship,
@@ -26,7 +25,6 @@ import {
 } from 'lucide-react';
 import { detectTenantScope, type TenantScope } from '@/lib/tenantScope';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 import GlobalSearchBar from '@/components/search/GlobalSearchBar';
 import AlertBell from '@/components/layout/AlertBell';
 import QuickRegister from '@/components/layout/QuickRegister';
@@ -36,7 +34,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAlerts } from '@/hooks/useAlerts';
 import { usePermission } from '@/hooks/usePermission';
 import { useAppStore } from '@/stores/appStore';
-import { cn } from '@/lib/utils';
 import { useEffect, useMemo, useState } from 'react';
 
 const SIDEBAR_COLLAPSED_KEY = 'sf.sidebar.collapsed';
@@ -114,7 +111,6 @@ const NAV_GROUPS: CommandNavGroup[] = [
     label: '도구',
     items: [
       { key: 'masters', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters' },
-      { key: 'search', label: '검색', abbr: '검색', path: '/search', icon: Search, menu: 'search' },
       { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
       { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval' },
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
@@ -324,15 +320,6 @@ export default function CommandShell() {
           </div>
 
           <div className="sf-topbar-actions">
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={cn('btn xs ghost icon', pathname === '/search' && 'bg-muted')}
-              onClick={() => navigate('/search')}
-              aria-label="검색 화면"
-            >
-              <Search className="h-5 w-5" />
-            </Button>
             <FloatingMwEaCalculator />
             <AlertBell
               alerts={alertState.alerts}
