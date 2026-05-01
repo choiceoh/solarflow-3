@@ -42,7 +42,7 @@ export default function QuickRegister({ userId, role }: Props) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger className="btn xs solar">
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="h-4 w-4" />
           빠른 등록
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">

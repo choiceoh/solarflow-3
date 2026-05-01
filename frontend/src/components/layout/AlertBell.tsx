@@ -29,7 +29,7 @@ export default function AlertBell({ alerts, totalCount, criticalCount }: Props) 
   return (
     <div className="relative" ref={ref}>
       <Button variant="ghost" size="icon-xs" className="btn xs ghost icon relative" onClick={() => setOpen(!open)}>
-        <Bell className="h-4 w-4" />
+        <Bell className="h-5 w-5" />
         {badgeCount > 0 && (
           <span
             className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] font-bold tabular-nums"

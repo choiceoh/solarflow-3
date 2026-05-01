@@ -312,7 +312,7 @@ export default function CommandShell() {
               onClick={() => navigate('/search')}
               aria-label="검색 화면"
             >
-              <Search className="h-4 w-4" />
+              <Search className="h-5 w-5" />
             </Button>
             <FloatingMwEaCalculator />
             <AlertBell

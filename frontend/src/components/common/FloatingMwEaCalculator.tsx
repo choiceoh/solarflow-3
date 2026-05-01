@@ -238,7 +238,7 @@ export default function FloatingMwEaCalculator() {
         title="용량 ↔ 장수 계산기"
         onClick={() => setOpen((v) => !v)}
       >
-        <Calculator className="h-4 w-4" />
+        <Calculator className="h-5 w-5" />
       </Button>
 
       {/* 계산기 패널 — 트리거 바로 아래에 anchored */}
