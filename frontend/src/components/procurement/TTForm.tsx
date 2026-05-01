@@ -122,14 +122,14 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData, default
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{editData ? 'TT 수정' : 'TT 등록'}</DialogTitle></DialogHeader>
-        {submitError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{submitError}</div>}
-        <form onSubmit={handleSubmit(handle)} className="space-y-3">
-          <div className="space-y-1.5">
+        {submitError && <div className="sf-banner neg"><span className="sf-banner-body">{submitError}</span></div>}
+        <form onSubmit={handleSubmit(handle)} className="sf-form">
+          <div className="sf-form-field">
             <Label>PO *</Label>
             {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
             <Select value={watch('po_id') ?? ''} onValueChange={(v) => setValue('po_id', v ?? '')}><SelectTrigger className="w-full"><Txt text={(() => { const p = pos.find((x) => x.po_id === watch('po_id')); if (!p) return ''; const mw = (p.total_mw ?? 0).toFixed(1); const co = p.company_name ? `${p.company_name} | ` : ''; return `${co}${shortMfgName(p.manufacturer_name)} | ${p.po_number || p.po_id.slice(0, 8)} | ${mw}MW`; })()} /></SelectTrigger>
               <SelectContent>{pos.map((p) => { const mw = (p.total_mw ?? 0).toFixed(1); const co = p.company_name ? `${p.company_name} | ` : ''; return <SelectItem key={p.po_id} value={p.po_id}>{`${co}${shortMfgName(p.manufacturer_name)} | ${p.po_number || p.po_id.slice(0, 8)} | ${mw}MW`}</SelectItem>; })}</SelectContent>
-            </Select>{errors.po_id && <p className="text-xs text-destructive">{errors.po_id.message}</p>}
+            </Select>{errors.po_id && <span className="sf-field-error">{errors.po_id.message}</span>}
           </div>
           {/* PO 선택 시 제조사/품명/품번/총금액 정보 박스 — 공통 라벨 사용 (LCForm과 통일) */}
           {watchedPoId && (() => {
@@ -146,9 +146,9 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData, default
               </div>
             );
           })()}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>송금일</Label><DateInput value={watch('remit_date') ?? ''} onChange={(v) => setValue('remit_date', v, { shouldDirty: true })} /></div>
-            <div className="space-y-1.5">
+          <div className="sf-form-row cols-2">
+            <div className="sf-form-field"><Label>송금일</Label><DateInput value={watch('remit_date') ?? ''} onChange={(v) => setValue('remit_date', v, { shouldDirty: true })} /></div>
+            <div className="sf-form-field">
               <Label>금액(USD) *</Label>
               <Input
                 type="text"
@@ -183,12 +183,12 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData, default
                   }
                 }}
               />
-              {errors.amount_usd && <p className="text-xs text-destructive">{errors.amount_usd.message}</p>}
+              {errors.amount_usd && <span className="sf-field-error">{errors.amount_usd.message}</span>}
             </div>
           </div>
           {/* 환율 + 원화: 환율 입력 → 원화 자동 계산 */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+          <div className="sf-form-row cols-2">
+            <div className="sf-form-field">
               <div className="flex items-center justify-between">
                 <Label>환율 <span className="text-[10px] text-muted-foreground font-normal">(원/USD)</span></Label>
                 {/* 최근 환율 힌트 */}
@@ -229,7 +229,7 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData, default
                 }}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="sf-form-field">
               <div className="flex items-center justify-between">
                 <Label>원화(KRW)</Label>
                 {watch('exchange_rate') && watch('amount_usd') && (
@@ -251,17 +251,17 @@ export default function TTForm({ open, onOpenChange, onSubmit, editData, default
               />
             </div>
           </div>
-          <div className="space-y-1.5"><Label>목적</Label><Input {...register('purpose')} placeholder="계약금1차" /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+          <div className="sf-form-field"><Label>목적</Label><Input {...register('purpose')} placeholder="계약금1차" /></div>
+          <div className="sf-form-row cols-2">
+            <div className="sf-form-field">
               <Label>상태 *</Label>
               <Select value={watch('status') ?? ''} onValueChange={(v) => setValue('status', v ?? '')}><SelectTrigger className="w-full"><Txt text={{ planned: '예정', completed: '완료' }[watch('status') ?? ''] || ''} /></SelectTrigger>
                 <SelectContent><SelectItem value="planned">예정</SelectItem><SelectItem value="completed">완료</SelectItem></SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5"><Label>은행</Label><Input {...register('bank_name')} /></div>
+            <div className="sf-form-field"><Label>은행</Label><Input {...register('bank_name')} /></div>
           </div>
-          <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
+          <div className="sf-form-field"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
           <DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button><Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button></DialogFooter>
         </form>
       </DialogContent>

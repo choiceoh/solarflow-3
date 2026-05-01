@@ -104,13 +104,17 @@ export default function ExpenseForm({ open, onOpenChange, onSubmit, editData }: 
         <DialogHeader>
           <DialogTitle>{editData ? '부대비용 수정' : '부대비용 등록'}</DialogTitle>
         </DialogHeader>
-        {submitError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{submitError}</div>}
-        <div className="grid gap-3 py-2">
+        {submitError && (
+          <div className="sf-banner neg">
+            <span className="sf-banner-body">{submitError}</span>
+          </div>
+        )}
+        <div className="sf-form">
           <Alert>
             <AlertDescription className="text-xs">B/L 또는 월 중 하나는 필수입니다</AlertDescription>
           </Alert>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
+          <div className="sf-form-row cols-2">
+            <div className="sf-form-field">
               <Label>B/L</Label>
               <Select value={blId || 'none'} onValueChange={(v) => setBlId(v === 'none' ? '' : (v ?? ''))}>
                 <SelectTrigger><Txt text={bls.find(b => b.bl_id === blId)?.bl_number ?? ''} placeholder="B/L 선택" /></SelectTrigger>
@@ -122,7 +126,7 @@ export default function ExpenseForm({ open, onOpenChange, onSubmit, editData }: 
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="sf-form-field">
               <Label>월 (YYYY-MM)</Label>
               <Select value={month || 'none'} onValueChange={(v) => setMonth(v === 'none' ? '' : (v ?? ''))}>
                 <SelectTrigger><Txt text={month} placeholder="월 선택" /></SelectTrigger>
@@ -135,7 +139,7 @@ export default function ExpenseForm({ open, onOpenChange, onSubmit, editData }: 
               </Select>
             </div>
           </div>
-          <div>
+          <div className="sf-form-field">
             <Label>비용유형 *</Label>
             <Select value={expenseType || 'none'} onValueChange={(v) => setExpenseType(v === 'none' ? '' : v as ExpenseType)}>
               <SelectTrigger><Txt text={expenseType ? (EXPENSE_TYPE_LABEL[expenseType as ExpenseType] ?? '') : ''} placeholder="비용유형 선택" /></SelectTrigger>
@@ -146,25 +150,25 @@ export default function ExpenseForm({ open, onOpenChange, onSubmit, editData }: 
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
+          <div className="sf-form-row cols-3">
+            <div className="sf-form-field">
               <Label>금액 *</Label>
               <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} min={0} />
             </div>
-            <div>
+            <div className="sf-form-field">
               <Label>VAT</Label>
               <Input type="number" value={vat} onChange={(e) => setVat(e.target.value)} min={0} />
             </div>
-            <div>
+            <div className="sf-form-field">
               <Label>합계 (자동)</Label>
-              <Input value={total ? `${total.toLocaleString('ko-KR')}원` : ''} readOnly className="bg-muted" />
+              <Input value={total ? `${total.toLocaleString('ko-KR')}원` : ''} readOnly className="bg-muted tabular-nums" />
             </div>
           </div>
-          <div>
+          <div className="sf-form-field">
             <Label>거래처</Label>
             <Input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="거래처명" />
           </div>
-          <div>
+          <div className="sf-form-field">
             <Label>메모</Label>
             <Textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={2} />
           </div>

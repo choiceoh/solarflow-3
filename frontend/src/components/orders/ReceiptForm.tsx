@@ -83,9 +83,13 @@ export default function ReceiptForm({ open, onOpenChange, onSubmit, editData }: 
         <DialogHeader>
           <DialogTitle>{editData ? '수금 수정' : '수금 등록'}</DialogTitle>
         </DialogHeader>
-        {submitError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{submitError}</div>}
-        <form onSubmit={handleSubmit(handle)} className="space-y-3">
-          <div className="space-y-1.5">
+        {submitError && (
+          <div className="sf-banner neg">
+            <span className="sf-banner-body">{submitError}</span>
+          </div>
+        )}
+        <form onSubmit={handleSubmit(handle)} className="sf-form">
+          <div className="sf-form-field">
             <Label>거래처 *</Label>
             <PartnerCombobox
               partners={partners}
@@ -94,16 +98,16 @@ export default function ReceiptForm({ open, onOpenChange, onSubmit, editData }: 
               onChange={(v) => setValue('customer_id', v, { shouldValidate: true })}
               error={!!errors.customer_id}
             />
-            {errors.customer_id && <p className="text-xs text-destructive">{errors.customer_id.message}</p>}
+            {errors.customer_id && <span className="sf-field-error">{errors.customer_id.message}</span>}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+          <div className="sf-form-row cols-2">
+            <div className="sf-form-field">
               <Label>입금일 *</Label>
               <DateInput value={watch('receipt_date') ?? ''} onChange={(v) => setValue('receipt_date', v, { shouldDirty: true })} />
-              {errors.receipt_date && <p className="text-xs text-destructive">{errors.receipt_date.message}</p>}
+              {errors.receipt_date && <span className="sf-field-error">{errors.receipt_date.message}</span>}
             </div>
-            <div className="space-y-1.5">
+            <div className="sf-form-field">
               <Label>입금액 *</Label>
               <Input
                 type="text"
@@ -117,12 +121,12 @@ export default function ReceiptForm({ open, onOpenChange, onSubmit, editData }: 
                 }}
                 placeholder="0"
               />
-              {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
+              {errors.amount && <span className="sf-field-error">{errors.amount.message}</span>}
             </div>
           </div>
 
-          <div className="space-y-1.5"><Label>입금계좌</Label><Input {...register('bank_account')} /></div>
-          <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
+          <div className="sf-form-field"><Label>입금계좌</Label><Input {...register('bank_account')} /></div>
+          <div className="sf-form-field"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
