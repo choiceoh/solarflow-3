@@ -46,8 +46,8 @@ func NewPublicHandler(db *supa.Client, engineClient *engine.EngineClient) *Publi
 		DB:          db,
 		Engine:      engineClient,
 		HTTP:        &http.Client{Timeout: 6 * time.Second},
-		fxKey:       os.Getenv("EXCHANGERATE_HOST_KEY"),
-		fxSource:    "exchangerate.host",
+		fxKey:       os.Getenv("METAL_PRICE_API_KEY"),
+		fxSource:    "metalpriceapi.com",
 		metalCache:  make(map[string]*metalSnapshot),
 		metalKey:    os.Getenv("METAL_PRICE_API_KEY"),
 		metalSource: "metalpriceapi.com",
@@ -92,7 +92,7 @@ func (h *PublicHandler) FXUsdKrw(w http.ResponseWriter, r *http.Request) {
 	h.fxMu.Unlock()
 
 	if h.fxKey == "" {
-		response.RespondError(w, http.StatusServiceUnavailable, "EXCHANGERATE_HOST_KEY 미설정")
+		response.RespondError(w, http.StatusServiceUnavailable, "METAL_PRICE_API_KEY 미설정")
 		return
 	}
 
@@ -118,10 +118,10 @@ func (h *PublicHandler) FXUsdKrw(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, snap)
 }
 
-// exchangerate.host live + 전일 종가로 변동률 계산.
-// 무료 플랜은 EUR base만 허용 — USD→KRW는 (KRW/EUR) ÷ (USD/EUR) 로 산출.
+// metalpriceapi.com — 금속과 통화를 같은 키로 조회.
+// USD base에 KRW currencies 요청 → 1 USD = N KRW로 응답되어 그대로 사용.
 func (h *PublicHandler) fetchFX() (fxSnapshot, error) {
-	today, err := h.fetchExchangerateLive()
+	today, err := h.fetchFXLatest()
 	if err != nil {
 		return fxSnapshot{}, fmt.Errorf("today: %w", err)
 	}
@@ -129,7 +129,7 @@ func (h *PublicHandler) fetchFX() (fxSnapshot, error) {
 	// 전일 종가 — 변동률 계산용. 실패해도 rate는 반환.
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 	var changePct *float64
-	if prev, err := h.fetchExchangerateHistorical(yesterday); err == nil && prev > 0 {
+	if prev, err := h.fetchFXHistorical(yesterday); err == nil && prev > 0 {
 		pct := (today - prev) / prev * 100
 		changePct = &pct
 	}
@@ -142,22 +142,22 @@ func (h *PublicHandler) fetchFX() (fxSnapshot, error) {
 	}, nil
 }
 
-type exchangerateLiveResponse struct {
-	Success bool               `json:"success"`
-	Source  string             `json:"source"`
-	Quotes  map[string]float64 `json:"quotes"`
-	Error   *struct {
-		Info string `json:"info"`
-	} `json:"error"`
+func (h *PublicHandler) fetchFXLatest() (float64, error) {
+	url := fmt.Sprintf("https://api.metalpriceapi.com/v1/latest?api_key=%s&base=USD&currencies=KRW", h.fxKey)
+	return h.fetchFXURL(url)
 }
 
-func (h *PublicHandler) fetchExchangerateLive() (float64, error) {
-	url := fmt.Sprintf("https://api.exchangerate.host/live?access_key=%s&source=USD&currencies=KRW", h.fxKey)
+func (h *PublicHandler) fetchFXHistorical(date string) (float64, error) {
+	url := fmt.Sprintf("https://api.metalpriceapi.com/v1/%s?api_key=%s&base=USD&currencies=KRW", date, h.fxKey)
+	return h.fetchFXURL(url)
+}
+
+func (h *PublicHandler) fetchFXURL(url string) (float64, error) {
 	body, err := h.httpGet(url)
 	if err != nil {
 		return 0, err
 	}
-	var parsed exchangerateLiveResponse
+	var parsed metalpriceResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return 0, fmt.Errorf("파싱 실패: %w", err)
 	}
@@ -166,35 +166,16 @@ func (h *PublicHandler) fetchExchangerateLive() (float64, error) {
 		if parsed.Error != nil {
 			msg = parsed.Error.Info
 		}
-		return 0, fmt.Errorf("exchangerate.host error: %s", msg)
+		return 0, fmt.Errorf("metalpriceapi error: %s", msg)
 	}
-	rate, ok := parsed.Quotes["USDKRW"]
-	if !ok || rate <= 0 {
-		return 0, fmt.Errorf("USDKRW 시세 없음")
+	// metalpriceapi 통화 응답:
+	//   KRW:    1487.13   → 1 USD = N KRW (사용)
+	//   USDKRW: 0.000672  → 1 KRW = N USD (역수, 무시)
+	// 금속(XAG)과 방향이 반대 — 통화는 bare 코드가 직접 quote.
+	if rate, ok := parsed.Rates["KRW"]; ok && rate > 0 {
+		return rate, nil
 	}
-	return rate, nil
-}
-
-type exchangerateHistoricalResponse struct {
-	Success    bool               `json:"success"`
-	Historical bool               `json:"historical"`
-	Quotes     map[string]float64 `json:"quotes"`
-}
-
-func (h *PublicHandler) fetchExchangerateHistorical(date string) (float64, error) {
-	url := fmt.Sprintf("https://api.exchangerate.host/historical?access_key=%s&date=%s&source=USD&currencies=KRW", h.fxKey, date)
-	body, err := h.httpGet(url)
-	if err != nil {
-		return 0, err
-	}
-	var parsed exchangerateHistoricalResponse
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return 0, err
-	}
-	if !parsed.Success {
-		return 0, fmt.Errorf("historical fetch failed")
-	}
-	return parsed.Quotes["USDKRW"], nil
+	return 0, fmt.Errorf("KRW 시세 없음")
 }
 
 func (h *PublicHandler) httpGet(url string) ([]byte, error) {
