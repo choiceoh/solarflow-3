@@ -184,7 +184,7 @@ export default function CommandDashboard({
       <div className="sf-dashboard-content">
         <div className="sf-command-kpis">
           {kpis.map((kpi, index) => (
-            <Link to={kpi.to} key={kpi.label}>
+            <Link to={kpi.to} key={kpi.label} className="block h-full">
               <TileB
                 lbl={kpi.label}
                 v={kpi.value.replace(' MW', '').replace('M$', '')}

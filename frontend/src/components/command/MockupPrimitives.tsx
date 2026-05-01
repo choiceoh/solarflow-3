@@ -71,7 +71,7 @@ export function TileB({
     tone === 'neg' ? 'var(--neg)' :
     'var(--ink-3)';
   return (
-    <div className="card hover" style={{ padding: '12px 14px 14px', minWidth: 0, position: 'relative', overflow: 'hidden' }}>
+    <div className="card hover" style={{ padding: '12px 14px 14px', minWidth: 0, position: 'relative', overflow: 'hidden', height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span className="dot" style={{ background: color }} />
         <span className="eyebrow">{lbl}</span>
