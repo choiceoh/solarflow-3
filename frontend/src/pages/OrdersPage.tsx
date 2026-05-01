@@ -1,6 +1,5 @@
 import { Component, useState, useEffect, useMemo, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -787,10 +786,7 @@ export default function OrdersPage() {
               options: (Object.entries(MANAGEMENT_CATEGORY_LABEL) as [ManagementCategory, string][]).map(([k, v]) => ({ value: k, label: v })),
             },
           ]} />
-          <ExcelToolbar type="order" />
-          <Button size="xs" onClick={() => setOrderFormOpen(true)}>
-            <Plus className="mr-1 h-3 w-3" />새로 등록
-          </Button>
+          <ExcelToolbar type="order" onNew={() => setOrderFormOpen(true)} />
         </>
       )}
       {activeTab === 'outbound' && !selectedOutbound && (
@@ -815,10 +811,7 @@ export default function OrdersPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <ExcelToolbar type="outbound" />
-          <Button size="xs" onClick={() => { setOutboundOrder(null); setObFormOpen(true); }}>
-            <Plus className="mr-1 h-3 w-3" />새로 등록
-          </Button>
+          <ExcelToolbar type="outbound" onNew={() => { setOutboundOrder(null); setObFormOpen(true); }} />
         </>
       )}
       {activeTab === 'sales' && (
@@ -869,10 +862,7 @@ export default function OrdersPage() {
               options: months.map((m) => ({ value: m, label: m })),
             },
           ]} />
-          <ExcelToolbar type="receipt" />
-          <Button size="xs" onClick={() => setReceiptFormOpen(true)}>
-            <Plus className="mr-1 h-3 w-3" />새로 등록
-          </Button>
+          <ExcelToolbar type="receipt" onNew={() => setReceiptFormOpen(true)} />
         </>
       )}
       <div style={{ flex: 1 }} />

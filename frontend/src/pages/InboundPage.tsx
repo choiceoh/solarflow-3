@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, type DragEvent as ReactDragEvent } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, CheckCircle2, ScanText } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { CheckCircle2, ScanText } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { useBLList } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
@@ -232,10 +231,7 @@ export default function InboundPage() {
                 options: (Object.entries(BL_STATUS_LABEL) as [BLStatus, string][]).map(([k, v]) => ({ value: k, label: v })),
               },
             ]} />
-            <ExcelToolbar type="inbound" />
-            <Button size="xs" onClick={() => setFormOpen(true)}>
-              <Plus className="mr-1 h-3 w-3" />새로 등록
-            </Button>
+            <ExcelToolbar type="inbound" onNew={() => setFormOpen(true)} />
           </div>
         }
         metrics={[

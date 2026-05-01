@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useAppStore } from '@/stores/appStore';
 import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
@@ -129,10 +127,7 @@ export default function OutboundPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <ExcelToolbar type="outbound" />
-          <Button size="xs" onClick={() => setFormOpen(true)}>
-            <Plus className="mr-1 h-3 w-3" />새로 등록
-          </Button>
+          <ExcelToolbar type="outbound" onNew={() => setFormOpen(true)} />
         </>
       ) : (
         <>

@@ -678,8 +678,11 @@ export default function ProcurementPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <ExcelToolbar type="inbound" onImportComplete={() => { reloadBL(); setBlsVersion(v => v + 1); }} />
-          <Button size="xs" onClick={() => openBLWork()}><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
+          <ExcelToolbar
+            type="inbound"
+            onImportComplete={() => { reloadBL(); setBlsVersion(v => v + 1); }}
+            onNew={() => openBLWork()}
+          />
         </>
       )}
       {activeTab === 'price' && (

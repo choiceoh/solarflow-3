@@ -2,11 +2,11 @@
 // 각 페이지에 <ExcelToolbar type="inbound" /> 형태로 삽입
 
 import { useCallback, useRef, useState } from 'react';
-import { AlertTriangle, ChevronDown, Download, FileOutput, Loader2, Upload } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Download, FileOutput, Loader2, Plus, Upload } from 'lucide-react';
 import type { TemplateType } from '@/types/excel';
 import { useExcel } from '@/hooks/useExcel';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -17,9 +17,10 @@ import AmaranthExportDialog from './AmaranthExportDialog';
 interface Props {
   type: TemplateType;
   onImportComplete?: () => void;
+  onNew?: () => void;
 }
 
-export default function ExcelToolbar({ type, onImportComplete }: Props) {
+export default function ExcelToolbar({ type, onImportComplete, onNew }: Props) {
   const {
     masterData, loading, error,
     preview, declPreview, importResult,
@@ -27,6 +28,7 @@ export default function ExcelToolbar({ type, onImportComplete }: Props) {
     downloadErrors, clearPreview,
     submitImport, clearImportResult,
   } = useExcel(type);
+  const excelDisabled = !masterData || loading;
 
   const [amaranthOpen, setAmaranthOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -63,28 +65,37 @@ export default function ExcelToolbar({ type, onImportComplete }: Props) {
         >
           <DropdownMenu>
             <DropdownMenuTrigger
-              disabled={!masterData || loading}
+              disabled={excelDisabled && !onNew}
               className="inline-flex h-7 items-center gap-1 rounded-md border border-input bg-background px-2.5 text-xs font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/45 disabled:pointer-events-none disabled:opacity-50"
             >
               {loading
                 ? <Loader2 className="h-3 w-3 animate-spin" />
                 : <ChevronDown className="h-3 w-3" />}
-              액션
+              작업
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[160px]">
-              <DropdownMenuItem onClick={downloadTemplate} disabled={loading}>
+              {onNew && (
+                <>
+                  <DropdownMenuItem onClick={onNew}>
+                    <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                    새로 등록
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem onClick={downloadTemplate} disabled={excelDisabled}>
                 <Download className="h-3.5 w-3.5 text-muted-foreground" />
                 {loading ? '생성 중...' : '양식 다운로드'}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => inputRef.current?.click()}
-                disabled={loading}
+                disabled={excelDisabled}
               >
                 <Upload className="h-3.5 w-3.5 text-muted-foreground" />
                 {loading ? '파싱 중...' : '엑셀 업로드'}
               </DropdownMenuItem>
               {amaranthType && (
-                <DropdownMenuItem onClick={() => setAmaranthOpen(true)}>
+                <DropdownMenuItem onClick={() => setAmaranthOpen(true)} disabled={!masterData}>
                   <FileOutput className="h-3.5 w-3.5 text-muted-foreground" />
                   아마란스 {type === 'inbound' ? '입고' : '출고'}
                 </DropdownMenuItem>

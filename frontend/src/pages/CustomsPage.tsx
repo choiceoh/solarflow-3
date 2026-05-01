@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useAppStore } from '@/stores/appStore';
@@ -180,10 +178,7 @@ export default function CustomsPage() {
               options: (Object.entries(EXPENSE_TYPE_LABEL) as [ExpenseType, string][]).map(([k, v]) => ({ value: k, label: v })),
             },
           ]} />
-          <ExcelToolbar type="expense" />
-          <Button size="xs" className="btn xs solar" onClick={() => { setEditExpense(null); setExpFormOpen(true); }}>
-            <Plus className="h-3 w-3" />새로 등록
-          </Button>
+          <ExcelToolbar type="expense" onNew={() => { setEditExpense(null); setExpFormOpen(true); }} />
         </>
       ) : null}
       <div style={{ flex: 1 }} />
