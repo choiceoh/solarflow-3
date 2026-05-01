@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -14,17 +13,10 @@ interface Props {
 }
 
 function DDayBadge({ days }: { days: number }) {
-  if (days < 0) {
-    // 만기 경과
-    return <Badge className="bg-red-100 text-red-700 border-red-300">D+{Math.abs(days)}</Badge>;
-  }
-  if (days <= 7) {
-    return <Badge className="bg-red-100 text-red-700 border-red-300">D-{days}</Badge>;
-  }
-  if (days <= 14) {
-    return <Badge className="bg-orange-100 text-orange-700 border-orange-300">D-{days}</Badge>;
-  }
-  return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300">D-{days}</Badge>;
+  // <0: 만기 경과 (negative), <=7: 임박 (negative), <=14: 주의 (warn), 그 외 (info)
+  const tone = days < 0 || days <= 7 ? 'neg' : days <= 14 ? 'warn' : 'info';
+  const label = days < 0 ? `D+${Math.abs(days)}` : `D-${days}`;
+  return <span className={`sf-pill ${tone}`}>{label}</span>;
 }
 
 export default function LCMaturityTable({ alertData }: Props) {

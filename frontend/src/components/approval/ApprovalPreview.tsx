@@ -38,7 +38,17 @@ export default function ApprovalPreview({ text, originalText, onTextChange }: Pr
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">결재안 미리보기</h3>
+        <div className="flex items-center gap-2">
+          <span className="sf-eyebrow">결재안 미리보기</span>
+          {text !== originalText && (
+            <span
+              className="rounded px-1.5 py-0.5 text-[9.5px] font-bold sf-mono"
+              style={{ background: 'var(--sf-warn-bg)', color: 'var(--sf-warn)', letterSpacing: '0.04em' }}
+            >
+              EDITED
+            </span>
+          )}
+        </div>
         <div className="flex gap-2">
           {text !== originalText && (
             <Button variant="ghost" size="sm" onClick={handleReset}>
@@ -55,11 +65,13 @@ export default function ApprovalPreview({ text, originalText, onTextChange }: Pr
         </div>
       </div>
       <Textarea
-        className="font-mono text-xs leading-relaxed min-h-[400px] resize-y"
+        className="sf-mono min-h-[400px] resize-y text-xs leading-relaxed"
         value={text}
         onChange={(e) => onTextChange(e.target.value)}
       />
-      <p className="text-xs text-muted-foreground">텍스트를 직접 수정할 수 있습니다. [원본] 버튼으로 되돌리기 가능.</p>
+      <p className="sf-mono text-[10.5px]" style={{ color: 'var(--sf-ink-3)' }}>
+        텍스트를 직접 수정할 수 있습니다. [원본] 버튼으로 되돌리기 가능.
+      </p>
     </div>
   );
 }
