@@ -1,5 +1,4 @@
 import { DollarSign, CreditCard, Wallet, TrendingUp } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { formatUSD } from '@/lib/utils';
 import type { BankSummary } from '@/types/banking';
 
@@ -13,45 +12,54 @@ export default function LCLimitSummaryCards({ bankSummaries }: Props) {
   const totalAvailable = bankSummaries.reduce((s, b) => s + b.available, 0);
   const usageRate = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0;
 
-  // 사용률 색상: 0~70% 초록, 70~90% 노란, 90~100% 빨간
-  const usageColor = usageRate >= 90 ? 'text-red-600' : usageRate >= 70 ? 'text-yellow-600' : 'text-green-600';
-  const usageBarColor = usageRate >= 90 ? 'bg-red-500' : usageRate >= 70 ? 'bg-yellow-500' : 'bg-green-500';
+  // 사용률 톤: 0~70% pos, 70~90% warn, 90~100% neg
+  const usageTone = usageRate >= 90 ? 'var(--sf-neg)' : usageRate >= 70 ? 'var(--sf-warn)' : 'var(--sf-pos)';
+  const usageBgTone = usageRate >= 90 ? 'var(--sf-neg-bg)' : usageRate >= 70 ? 'var(--sf-warn-bg)' : 'var(--sf-pos-bg)';
 
   const cards = [
-    { label: '총한도', value: formatUSD(totalLimit), icon: DollarSign, color: 'text-blue-600 bg-blue-50' },
-    { label: '개설잔액', value: formatUSD(totalUsed), icon: CreditCard, color: 'text-orange-600 bg-orange-50' },
-    { label: '가용한도', value: formatUSD(totalAvailable), icon: Wallet, color: 'text-green-600 bg-green-50' },
-    { label: '사용률', value: `${usageRate.toFixed(1)}%`, icon: TrendingUp, color: `${usageColor} bg-gray-50` },
+    { label: '총한도',   value: formatUSD(totalLimit),     icon: DollarSign,  bg: 'var(--sf-info-bg)',  ink: 'var(--sf-info)' },
+    { label: '개설잔액', value: formatUSD(totalUsed),      icon: CreditCard,  bg: 'var(--sf-warn-bg)',  ink: 'var(--sf-warn)' },
+    { label: '가용한도', value: formatUSD(totalAvailable), icon: Wallet,      bg: 'var(--sf-pos-bg)',   ink: 'var(--sf-pos)' },
+    { label: '사용률',   value: `${usageRate.toFixed(1)}%`, icon: TrendingUp, bg: usageBgTone,           ink: usageTone, valueTone: usageTone },
   ];
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {cards.map(({ label, value, icon: Icon, color }) => (
-          <Card key={label}>
-            <CardContent className="flex items-center gap-3 pt-4 pb-4">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>
-                <Icon className="h-5 w-5" />
+        {cards.map(({ label, value, icon: Icon, bg, ink, valueTone }) => (
+          <div
+            key={label}
+            className="flex items-center gap-3 rounded-md p-3"
+            style={{ background: 'var(--sf-surface)', border: '1px solid var(--sf-line)', boxShadow: 'var(--sf-shadow-1)' }}
+          >
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md"
+              style={{ background: bg, color: ink }}
+            >
+              <Icon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="sf-eyebrow">{label}</div>
+              <div className="sf-mono mt-0.5 text-base font-semibold tabular-nums" style={{ color: valueTone || 'var(--sf-ink)' }}>
+                {value}
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="text-lg font-semibold">{value}</p>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
 
       {/* 사용률 Progress bar */}
       <div className="px-1">
-        <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-          <span>LC 사용률</span>
-          <span className={usageColor}>{usageRate.toFixed(1)}%</span>
+        <div className="mb-1 flex items-baseline justify-between">
+          <span className="sf-eyebrow">LC 사용률</span>
+          <span className="sf-mono text-[12px] font-semibold tabular-nums" style={{ color: usageTone }}>
+            {usageRate.toFixed(1)}%
+          </span>
         </div>
-        <div className="h-2 w-full rounded-full bg-muted">
+        <div className="h-2 w-full rounded-full" style={{ background: 'var(--sf-line)' }}>
           <div
-            className={`h-2 rounded-full transition-all ${usageBarColor}`}
-            style={{ width: `${Math.min(usageRate, 100)}%` }}
+            className="h-2 rounded-full transition-all"
+            style={{ width: `${Math.min(usageRate, 100)}%`, background: usageTone }}
           />
         </div>
       </div>

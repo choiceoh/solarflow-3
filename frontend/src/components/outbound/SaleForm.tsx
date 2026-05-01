@@ -130,19 +130,36 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, order
           <DialogTitle>{editData ? '매출 수정' : '매출 등록'}</DialogTitle>
         </DialogHeader>
         {submitError && (
-          <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
-            {submitError}
+          <div className="sf-banner neg">
+            <span className="sf-banner-body">{submitError}</span>
           </div>
         )}
         {/* 출고 품목 정보 박스 */}
-        <div className="rounded-md border p-3 bg-muted/30 text-xs grid grid-cols-4 gap-2">
-          <div><div className="text-muted-foreground">기준</div><div className="font-medium">{sourceKind === 'outbound' ? '출고' : '수주'}</div></div>
-          <div><div className="text-muted-foreground">품명</div><div className="font-medium truncate">{source?.product_name ?? '—'}</div></div>
-          <div><div className="text-muted-foreground">규격</div><div className="font-medium">{source?.product_code ?? `${source?.spec_wp ?? '—'}Wp`}</div></div>
-          <div><div className="text-muted-foreground">기준수량</div><div className="font-mono font-medium">{(source?.quantity ?? 0).toLocaleString('ko-KR')}장</div></div>
+        <div
+          className="grid grid-cols-4 gap-3 rounded-md p-3"
+          style={{ background: 'var(--sf-bg-2)', border: '1px solid var(--sf-line)' }}
+        >
+          <div className="flex flex-col gap-0.5">
+            <span className="sf-eyebrow">기준</span>
+            <span className="text-xs font-semibold" style={{ color: 'var(--sf-ink)' }}>{sourceKind === 'outbound' ? '출고' : '수주'}</span>
+          </div>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="sf-eyebrow">품명</span>
+            <span className="truncate text-xs font-semibold" style={{ color: 'var(--sf-ink)' }}>{source?.product_name ?? '—'}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="sf-eyebrow">규격</span>
+            <span className="sf-mono text-xs font-semibold" style={{ color: 'var(--sf-ink)' }}>{source?.product_code ?? `${source?.spec_wp ?? '—'}Wp`}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="sf-eyebrow">기준수량</span>
+            <span className="sf-mono text-xs font-semibold tabular-nums" style={{ color: 'var(--sf-ink)' }}>
+              {(source?.quantity ?? 0).toLocaleString('ko-KR')}장
+            </span>
+          </div>
         </div>
-        <form onSubmit={handleSubmit(handle)} className="space-y-3">
-          <div className="space-y-1.5">
+        <form onSubmit={handleSubmit(handle)} className="sf-form">
+          <div className="sf-form-field">
             <Label>거래처 *</Label>
             <PartnerCombobox
               partners={partners}
@@ -150,25 +167,25 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, order
               onChange={(v) => setValue('customer_id', v, { shouldValidate: true })}
               error={!!errors.customer_id}
             />
-            {errors.customer_id && <p className="text-xs text-destructive">{errors.customer_id.message}</p>}
+            {errors.customer_id && <span className="sf-field-error">{errors.customer_id.message}</span>}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+          <div className="sf-form-row cols-2">
+            <div className="sf-form-field">
               <Label>계산서 수량 *</Label>
               <Input type="number" step="1" className="text-right" {...register('quantity')} />
-              {errors.quantity && <p className="text-xs text-destructive">{errors.quantity.message}</p>}
+              {errors.quantity && <span className="sf-field-error">{errors.quantity.message}</span>}
             </div>
-            <div className="space-y-1.5">
+            <div className="sf-form-field">
               <Label>계산서 용량</Label>
               <Input readOnly className="bg-muted text-right" value={capacityKw ? capacityKw.toFixed(3) : '—'} />
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="sf-form-field">
             <Label>Wp 단가 (원/Wp) *</Label>
             <Input type="number" step="0.01" className="text-right" {...register('unit_price_wp')} />
-            {errors.unit_price_wp && <p className="text-xs text-destructive">{errors.unit_price_wp.message}</p>}
+            {errors.unit_price_wp && <span className="sf-field-error">{errors.unit_price_wp.message}</span>}
           </div>
 
           {unitPriceWp > 0 && specWp > 0 && (() => {
@@ -215,16 +232,16 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, order
             );
           })()}
 
-          <div className="space-y-1.5">
+          <div className="sf-form-field">
             <Label>세금계산서 발행일</Label>
             <DateInput value={watch('tax_invoice_date') ?? ''} onChange={(v) => setValue('tax_invoice_date', v, { shouldDirty: true })} />
-            <p className="text-[10px] text-muted-foreground">출고일과 다를 수 있습니다 (다음달 발행 가능)</p>
+            <span className="sf-form-helper">출고일과 다를 수 있습니다 (다음달 발행 가능)</span>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="sf-form-field">
             <Label>세금계산서 이메일</Label>
             <Input type="email" {...register('tax_invoice_email')} placeholder="example@company.com" />
-            {errors.tax_invoice_email && <p className="text-xs text-destructive">{errors.tax_invoice_email.message}</p>}
+            {errors.tax_invoice_email && <span className="sf-field-error">{errors.tax_invoice_email.message}</span>}
           </div>
 
           <div className="flex items-center gap-3 rounded-md border p-3">
@@ -233,13 +250,13 @@ export default function SaleForm({ open, onOpenChange, onSubmit, outbound, order
           </div>
 
           {erpClosed && (
-            <div className="space-y-1.5">
+            <div className="sf-form-field">
               <Label>ERP 마감일</Label>
               <DateInput value={watch('erp_closed_date') ?? ''} onChange={(v) => setValue('erp_closed_date', v, { shouldDirty: true })} />
             </div>
           )}
 
-          <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
+          <div className="sf-form-field"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>

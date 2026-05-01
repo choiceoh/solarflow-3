@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatUSD, formatDate } from '@/lib/utils';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { TimelineEvent, MonthlyProjection } from '@/types/banking';
@@ -13,49 +12,48 @@ export default function LimitTimelineView({ events, monthlyProjection }: Props) 
     <div className="space-y-4">
       {/* 한도 복원 타임라인 이벤트 */}
       {events.length > 0 && (
-        <Card>
-          <CardHeader className="py-2 px-4">
-            <CardTitle className="text-xs">한도 복원 타임라인</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
-            <div className="space-y-1.5">
-              {events.map((ev, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  <span className="text-muted-foreground w-16 shrink-0">{formatDate(ev.date)}</span>
-                  <span className="font-medium">{ev.bank_name}</span>
-                  <span className="text-green-600">+{formatUSD(ev.amount)}</span>
-                  <span className="text-muted-foreground truncate">({ev.description})</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <div
+          className="rounded-md p-4"
+          style={{ background: 'var(--sf-surface)', border: '1px solid var(--sf-line)', boxShadow: 'var(--sf-shadow-1)' }}
+        >
+          <div className="sf-eyebrow mb-3">한도 복원 타임라인</div>
+          <div className="space-y-1.5">
+            {events.map((ev, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                <span className="sf-mono w-16 shrink-0 tabular-nums" style={{ color: 'var(--sf-ink-3)' }}>{formatDate(ev.date)}</span>
+                <span className="font-semibold" style={{ color: 'var(--sf-ink)' }}>{ev.bank_name}</span>
+                <span className="sf-mono font-semibold tabular-nums" style={{ color: 'var(--sf-pos)' }}>+{formatUSD(ev.amount)}</span>
+                <span className="truncate" style={{ color: 'var(--sf-ink-3)' }}>{ev.description}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* 월별 가용한도 AreaChart */}
       {monthlyProjection.length > 0 && (
-        <Card>
-          <CardHeader className="py-2 px-4">
-            <CardTitle className="text-xs">월별 가용한도 추이</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={monthlyProjection}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000000).toFixed(1)}M`} />
-                <Tooltip formatter={(value) => formatUSD(Number(value))} />
-                <Area
-                  type="monotone"
-                  dataKey="projected_available"
-                  stroke="#22c55e"
-                  fill="#bbf7d0"
-                  name="가용한도"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        <div
+          className="rounded-md p-4"
+          style={{ background: 'var(--sf-surface)', border: '1px solid var(--sf-line)', boxShadow: 'var(--sf-shadow-1)' }}
+        >
+          <div className="sf-eyebrow mb-3">월별 가용한도 추이</div>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={monthlyProjection}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${(v / 1000000).toFixed(1)}M`} />
+              <Tooltip formatter={(value) => formatUSD(Number(value))} />
+              <Area
+                type="monotone"
+                dataKey="projected_available"
+                stroke="var(--sf-pos)"
+                fill="var(--sf-pos-bg)"
+                fillOpacity={0.6}
+                name="가용한도"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );
