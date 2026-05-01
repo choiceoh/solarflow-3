@@ -97,18 +97,7 @@ function mergeCustomer(rs: CustomerAnalysis[]): CustomerAnalysis {
     },
   };
 }
-function mergeInventory(rs: InventoryResponse[]): InventoryResponse {
-  return {
-    items: rs.flatMap((r) => r.items),
-    summary: {
-      total_physical_kw: rs.reduce((s, r) => s + r.summary.total_physical_kw, 0),
-      total_available_kw: rs.reduce((s, r) => s + r.summary.total_available_kw, 0),
-      total_incoming_kw: rs.reduce((s, r) => s + r.summary.total_incoming_kw, 0),
-      total_secured_kw: rs.reduce((s, r) => s + r.summary.total_secured_kw, 0),
-    },
-    calculated_at: rs[0]?.calculated_at ?? new Date().toISOString(),
-  };
-}
+// inventory 다중 법인 merge는 엔진에서 처리됨
 
 export function useAlerts(companyId: string | null) {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
@@ -124,7 +113,7 @@ export function useAlerts(companyId: string | null) {
       fetchCalc<LCMaturityAlert>(companyId, '/api/v1/calc/lc-maturity-alert', { days_ahead: 7 }, mergeMaturity),
       fetchCalc<LCLimitTimeline>(companyId, '/api/v1/calc/lc-limit-timeline', { months_ahead: 3 }, mergeTimeline),
       fetchCalc<CustomerAnalysis | LegacyCustomerAnalysis>(companyId, '/api/v1/calc/customer-analysis', {}, (rs) => mergeCustomer(rs as CustomerAnalysis[])),
-      fetchCalc<InventoryResponse>(companyId, '/api/v1/calc/inventory', {}, mergeInventory),
+      fetchCalc<InventoryResponse>(companyId, '/api/v1/calc/inventory', {}),
       // CRUD: "all"이면 company_id 생략
       fetchWithAuth<BLShipment[]>(companyQueryUrl('/api/v1/bls', companyId)),
       fetchWithAuth<Order[]>(companyQueryUrl('/api/v1/orders', companyId)),

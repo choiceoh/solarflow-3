@@ -66,20 +66,7 @@ function makeSectionState<T>(initial?: T | null): DashboardSectionState<T> {
   return { data: initial ?? null, loading: true, error: null };
 }
 
-// D-060: 다중 법인 합산 merge 함수들
-function mergeInventory(rs: InventoryResponse[]): InventoryResponse {
-  return {
-    items: rs.flatMap((r) => r.items),
-    summary: {
-      total_physical_kw: rs.reduce((s, r) => s + r.summary.total_physical_kw, 0),
-      total_available_kw: rs.reduce((s, r) => s + r.summary.total_available_kw, 0),
-      total_incoming_kw: rs.reduce((s, r) => s + r.summary.total_incoming_kw, 0),
-      total_secured_kw: rs.reduce((s, r) => s + r.summary.total_secured_kw, 0),
-    },
-    calculated_at: rs[0]?.calculated_at ?? new Date().toISOString(),
-  };
-}
-
+// D-060: 다중 법인 합산 merge 함수들 — inventory는 엔진에서 처리하므로 제거됨
 function mergeCustomer(rs: CustomerAnalysis[]): CustomerAnalysis {
   // 다중 법인 합산: 같은 거래처가 여러 법인에 걸쳐있으면 customer_id로 병합.
   const merged = new Map<string, CustomerItem>();
@@ -248,7 +235,7 @@ export function useDashboard(companyId: string | null, userRole: string) {
     }
 
     // D-060: fetchCalc가 "all"이면 법인별 호출 후 merge 처리
-    const fetchInventory = () => fetchCalc<InventoryResponse>(companyId, '/api/v1/calc/inventory', {}, mergeInventory);
+    const fetchInventory = () => fetchCalc<InventoryResponse>(companyId, '/api/v1/calc/inventory', {});
     const fetchCustomerAnalysis = () => fetchCalc<CustomerAnalysis>(companyId, '/api/v1/calc/customer-analysis', {}, mergeCustomer);
     const fetchPriceTrendApi = () => fetchCalc<PriceTrendResponse>(companyId, '/api/v1/calc/price-trend', {}, mergePriceTrend);
     const fetchPriceHistories = () => fetchWithAuth<DashboardPriceHistory[]>(companyQueryUrl('/api/v1/price-histories', companyId));
