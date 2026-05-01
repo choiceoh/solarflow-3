@@ -1,8 +1,10 @@
-import { useState, Fragment } from 'react';
+import { useState, Fragment, useMemo } from 'react';
 import { ChevronRight, ChevronDown, Plus, CheckCircle2, PauseCircle, PlayCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/common/EmptyState';
+import SortableTH from '@/components/common/SortableTH';
 import { moduleLabel } from '@/lib/utils';
+import { useSort } from '@/hooks/useSort';
 import type { InventoryAllocation } from './AllocationForm';
 import type { InventoryItem } from '@/types/inventory';
 
@@ -228,6 +230,34 @@ export default function AvailInventoryTable({
 }: Props) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  const allocAggMap = useMemo(() => {
+    const map = new Map<string, { saleKw: number; constKw: number }>();
+    for (const it of items) {
+      const itemAllocs = allocations.filter((a) =>
+        a.product_id === it.product_id &&
+        (!it.company_id || a.company_id === it.company_id)
+      );
+      const saleKw = itemAllocs.filter(isSale).reduce((s, a) => s + (a.capacity_kw ?? 0), 0);
+      const constKw = itemAllocs.filter(isConstruction).reduce((s, a) => s + (a.capacity_kw ?? 0), 0);
+      map.set(`${it.company_id ?? 'single'}:${it.product_id}`, { saleKw, constKw });
+    }
+    return map;
+  }, [items, allocations]);
+
+  const { sorted, headerProps } = useSort<InventoryItem>(items, (it, f) => {
+    const key = `${it.company_id ?? 'single'}:${it.product_id}`;
+    const a = allocAggMap.get(key);
+    switch (f) {
+      case 'manufacturer': return it.manufacturer_name ?? '';
+      case 'physical_kw': return it.physical_kw ?? 0;
+      case 'incoming_kw': return it.incoming_kw ?? 0;
+      case 'total_secured_kw': return it.total_secured_kw ?? 0;
+      case 'sale_kw': return a?.saleKw ?? 0;
+      case 'const_kw': return a?.constKw ?? 0;
+      default: return null;
+    }
+  });
+
   const toggle = (productId: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -250,22 +280,22 @@ export default function AvailInventoryTable({
         <thead className="bg-muted/50">
           <tr>
             <th className="w-8" />
-            <th className="text-left">품목</th>
-            <th className="text-right">실재고</th>
-            <th className="text-right">미착품</th>
-            <th className="text-right">
+            <SortableTH {...headerProps('manufacturer')} className="font-medium">품목</SortableTH>
+            <SortableTH {...headerProps('physical_kw')} align="right" className="font-medium">실재고</SortableTH>
+            <SortableTH {...headerProps('incoming_kw')} align="right" className="font-medium">미착품</SortableTH>
+            <SortableTH {...headerProps('total_secured_kw')} align="right" className="font-medium">
               <span className="inline-flex items-center gap-1.5">
                 <span className="sf-dot" style={{ background: 'var(--sf-pos)' }} />
                 가용재고
               </span>
-            </th>
-            <th className="text-right">판매배정</th>
-            <th className="text-right">공사배정</th>
+            </SortableTH>
+            <SortableTH {...headerProps('sale_kw')} align="right" className="font-medium">판매배정</SortableTH>
+            <SortableTH {...headerProps('const_kw')} align="right" className="font-medium">공사배정</SortableTH>
             <th className="text-center">작업</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => {
+          {sorted.map((item) => {
             const itemKey = `${item.company_id ?? 'single'}:${item.product_id}`;
             const isOpen = expandedIds.has(itemKey);
             const itemAllocs = allocations.filter((a) =>

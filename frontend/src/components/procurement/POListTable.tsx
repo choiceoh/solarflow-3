@@ -5,8 +5,10 @@ import { formatDate, formatUSD, moduleLabel, shortMfgName } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
 import ProgressMiniBar from '@/components/common/ProgressMiniBar';
 import StatusPill from '@/components/common/StatusPill';
+import SortableTH from '@/components/common/SortableTH';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
+import { useSort } from '@/hooks/useSort';
 import {
   PO_STATUS_LABEL, PO_STATUS_COLOR, CONTRACT_TYPE_LABEL,
   LC_STATUS_LABEL, LC_STATUS_COLOR,
@@ -198,6 +200,19 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
     });
   }
 
+  const { sorted, headerProps } = useSort<PurchaseOrder>(items, (po, f) => {
+    const a = agg[po.po_id];
+    switch (f) {
+      case 'po_number': return po.po_number ?? '';
+      case 'totalMw': return a?.totalMw ?? 0;
+      case 'contract_type': return po.contract_type ?? '';
+      case 'totalUsd': return a?.totalUsd ?? 0;
+      case 'lcUsd': return a?.lcUsd ?? 0;
+      case 'status': return po.status;
+      default: return null;
+    }
+  });
+
   if (items.length === 0) return <EmptyState message="등록된 PO가 없습니다" actionLabel="새로 등록" onAction={onNew} />;
 
   return (
@@ -206,17 +221,17 @@ export default function POListTable({ items, onDetail, onNew, onEditLC, onNewLC,
         <thead>
           <tr className="bg-muted/50 border-b">
             <th className="p-3 w-6" />
-            <th className="p-3 text-left font-medium text-muted-foreground">발주 정보</th>
-            <th className="p-3 text-left font-medium text-muted-foreground">품목 / MW</th>
-            <th className="p-3 text-left font-medium text-muted-foreground">계약 조건</th>
-            <th className="p-3 text-right font-medium">계약금액 / 결제</th>
-            <th className="p-3 text-right font-medium text-muted-foreground">L/C 현황</th>
-            <th className="p-3 text-center font-medium text-muted-foreground w-[80px]">상태</th>
+            <SortableTH {...headerProps('po_number')} className="p-3 font-medium text-muted-foreground">발주 정보</SortableTH>
+            <SortableTH {...headerProps('totalMw')} className="p-3 font-medium text-muted-foreground">품목 / MW</SortableTH>
+            <SortableTH {...headerProps('contract_type')} className="p-3 font-medium text-muted-foreground">계약 조건</SortableTH>
+            <SortableTH {...headerProps('totalUsd')} align="right" className="p-3 font-medium">계약금액 / 결제</SortableTH>
+            <SortableTH {...headerProps('lcUsd')} align="right" className="p-3 font-medium text-muted-foreground">L/C 현황</SortableTH>
+            <SortableTH {...headerProps('status')} align="center" className="p-3 font-medium text-muted-foreground w-[80px]">상태</SortableTH>
             <th className="p-3 w-[88px]" />
           </tr>
         </thead>
         <tbody>
-          {items.map(po => {
+          {sorted.map(po => {
             const a      = agg[po.po_id];
             const pt     = parsePaymentTerms(po.payment_terms);
             const isExp  = expanded.has(po.po_id);

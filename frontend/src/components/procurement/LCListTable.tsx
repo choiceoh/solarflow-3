@@ -10,7 +10,9 @@ import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ProgressMiniBar from '@/components/common/ProgressMiniBar';
 import StatusPill from '@/components/common/StatusPill';
+import SortableTH from '@/components/common/SortableTH';
 import { fetchWithAuth } from '@/lib/api';
+import { useSort } from '@/hooks/useSort';
 import { LC_STATUS_LABEL, LC_STATUS_COLOR, type LCRecord, type PurchaseOrder, type POLineItem } from '@/types/procurement';
 import type { BLShipment } from '@/types/inbound';
 import { BL_STATUS_LABEL, BL_STATUS_COLOR, INBOUND_TYPE_LABEL } from '@/types/inbound';
@@ -171,6 +173,17 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
     }
   };
 
+  const { sorted, headerProps } = useSort<LCRecord>(items, (lc, f) => {
+    switch (f) {
+      case 'lc_number': return lc.lc_number ?? '';
+      case 'manufacturer': return agg[lc.lc_id]?.manufacturerName ?? '';
+      case 'amount_usd': return lc.amount_usd ?? 0;
+      case 'maturity_date': return lc.maturity_date ?? '';
+      case 'status': return lc.status;
+      default: return null;
+    }
+  });
+
   if (items.length === 0) return <EmptyState message="등록된 LC가 없습니다" actionLabel="새로 등록" onAction={onNew} />;
 
   return (
@@ -179,15 +192,15 @@ export default function LCListTable({ items, onEdit, onNew, onDelete, onSettle, 
         <table className="w-full min-w-[800px] text-xs">
           <thead>
             <tr className="bg-muted/50 border-b">
-              <th className="p-3 text-left font-medium text-muted-foreground">LC 정보</th>
-              <th className="p-3 text-left font-medium text-muted-foreground">품목</th>
-              <th className="p-3 text-right font-medium">개설 내역</th>
-              <th className="p-3 text-left font-medium text-muted-foreground">만기 / 결제</th>
-              <th className="p-3 text-center font-medium text-muted-foreground w-[100px]">상태</th>
+              <SortableTH {...headerProps('lc_number')} className="p-3 font-medium text-muted-foreground">LC 정보</SortableTH>
+              <SortableTH {...headerProps('manufacturer')} className="p-3 font-medium text-muted-foreground">품목</SortableTH>
+              <SortableTH {...headerProps('amount_usd')} align="right" className="p-3 font-medium">개설 내역</SortableTH>
+              <SortableTH {...headerProps('maturity_date')} className="p-3 font-medium text-muted-foreground">만기 / 결제</SortableTH>
+              <SortableTH {...headerProps('status')} align="center" className="p-3 font-medium text-muted-foreground w-[100px]">상태</SortableTH>
             </tr>
           </thead>
           <tbody>
-            {items.map((lc) => {
+            {sorted.map((lc) => {
               const a = agg[lc.lc_id];
               const lcTargetMw = lc.target_mw ?? (
                 lc.target_qty != null && a?.firstSpecWp ? (lc.target_qty * a.firstSpecWp) / 1_000_000 : 0

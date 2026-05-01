@@ -4,11 +4,13 @@ import { Button } from '@/components/ui/button';
 import { formatDate, moduleLabel } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import SortableTH from '@/components/common/SortableTH';
 import InboundStatusBadge from './InboundStatusBadge';
 import { INBOUND_TYPE_LABEL, type BLShipment, type BLLineItem } from '@/types/inbound';
 import type { Manufacturer } from '@/types/masters';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
+import { useSort } from '@/hooks/useSort';
 
 interface BLAgg {
   firstLine?: { name: string; spec: string; specWp?: number };
@@ -86,6 +88,16 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
     }
   };
 
+  const { sorted, headerProps } = useSort<BLShipment>(items, (b, f) => {
+    switch (f) {
+      case 'bl_number': return b.bl_number ?? '';
+      case 'manufacturer': return b.manufacturer_name ?? mfgMap[b.manufacturer_id] ?? '';
+      case 'inbound_type': return b.inbound_type;
+      case 'etd': return b.etd ?? '';
+      default: return null;
+    }
+  });
+
   if (items.length === 0) return <EmptyState message="등록된 입고 건이 없습니다" actionLabel="새로 등록" onAction={onNew} />;
 
   return (
@@ -94,15 +106,15 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
         <table className="w-full min-w-[800px] text-xs">
           <thead>
             <tr className="bg-muted/50 border-b">
-              <th className="p-3 text-left font-medium text-muted-foreground">B/L 정보</th>
-              <th className="p-3 text-left font-medium text-muted-foreground">품목</th>
-              <th className="p-3 text-left font-medium text-muted-foreground">구분 / 현황</th>
-              <th className="p-3 text-left font-medium text-muted-foreground">선적 일정</th>
+              <SortableTH {...headerProps('bl_number')} className="p-3 font-medium text-muted-foreground">B/L 정보</SortableTH>
+              <SortableTH {...headerProps('manufacturer')} className="p-3 font-medium text-muted-foreground">품목</SortableTH>
+              <SortableTH {...headerProps('inbound_type')} className="p-3 font-medium text-muted-foreground">구분 / 현황</SortableTH>
+              <SortableTH {...headerProps('etd')} className="p-3 font-medium text-muted-foreground">선적 일정</SortableTH>
               <th className="p-3 text-center font-medium text-muted-foreground w-[70px]">작업</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((bl) => {
+            {sorted.map((bl) => {
               const a = agg[bl.bl_id];
               return (
                 <tr key={bl.bl_id} className="border-t hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => onSelect(bl)}>

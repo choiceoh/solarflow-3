@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronRight, ChevronDown, Plus, CheckCircle2, PauseCircle, PlayCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/common/EmptyState';
+import SortableTH from '@/components/common/SortableTH';
 import { moduleLabel } from '@/lib/utils';
+import { useSort } from '@/hooks/useSort';
 import type { InventoryAllocation } from './AllocationForm';
 import type { InventoryItem } from '@/types/inventory';
 
@@ -190,7 +192,28 @@ export default function IncomingTable({
     });
   };
 
-  const incoming = items.filter((i) => i.incoming_kw > 0);
+  const incoming = useMemo(() => items.filter((i) => i.incoming_kw > 0), [items]);
+
+  const allocCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const it of incoming) {
+      map.set(it.product_id, allocations.filter(
+        (a) => a.product_id === it.product_id && a.source_type === 'incoming'
+      ).length);
+    }
+    return map;
+  }, [incoming, allocations]);
+
+  const { sorted, headerProps } = useSort<InventoryItem>(incoming, (it, f) => {
+    switch (f) {
+      case 'product_code': return it.product_code ?? '';
+      case 'incoming_kw': return it.incoming_kw ?? 0;
+      case 'incoming_reserved_kw': return it.incoming_reserved_kw ?? 0;
+      case 'available_incoming_kw': return it.available_incoming_kw ?? 0;
+      case 'alloc_count': return allocCountMap.get(it.product_id) ?? 0;
+      default: return null;
+    }
+  });
 
   if (incoming.length === 0) {
     return <EmptyState message="미착품이 없습니다" />;
@@ -202,31 +225,31 @@ export default function IncomingTable({
         <thead className="bg-muted/50">
           <tr>
             <th className="w-8 p-2" />
-            <th className="text-left p-2 font-medium text-muted-foreground">품목</th>
-            <th className="text-right p-2 font-medium text-muted-foreground">
+            <SortableTH {...headerProps('product_code')} className="p-2 font-medium text-muted-foreground">품목</SortableTH>
+            <SortableTH {...headerProps('incoming_kw')} align="right" className="p-2 font-medium text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-yellow-500 inline-block" />
                 미착품
               </span>
-            </th>
-            <th className="text-right p-2 font-medium text-muted-foreground">
+            </SortableTH>
+            <SortableTH {...headerProps('incoming_reserved_kw')} align="right" className="p-2 font-medium text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-red-400 inline-block" />
                 미착예약
               </span>
-            </th>
-            <th className="text-right p-2 font-medium text-muted-foreground">
+            </SortableTH>
+            <SortableTH {...headerProps('available_incoming_kw')} align="right" className="p-2 font-medium text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
                 가용미착
               </span>
-            </th>
-            <th className="text-right p-2 font-medium text-muted-foreground">배정</th>
+            </SortableTH>
+            <SortableTH {...headerProps('alloc_count')} align="right" className="p-2 font-medium text-muted-foreground">배정</SortableTH>
             <th className="text-center p-2 font-medium text-muted-foreground">작업</th>
           </tr>
         </thead>
         <tbody>
-          {incoming.map((item) => {
+          {sorted.map((item) => {
             const isOpen = expandedIds.has(item.product_id);
             const itemAllocs = allocations.filter(
               (a) => a.product_id === item.product_id && a.source_type === 'incoming'

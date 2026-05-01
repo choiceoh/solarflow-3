@@ -1,8 +1,10 @@
 import EmptyState from '@/components/common/EmptyState';
+import SortableTH from '@/components/common/SortableTH';
 import FulfillmentSourceBadge from './FulfillmentSourceBadge';
 import { Pencil, Trash2, Truck } from 'lucide-react';
 import { cn, moduleLabel } from '@/lib/utils';
 import { formatDate, formatNumber, formatKw } from '@/lib/utils';
+import { useSort } from '@/hooks/useSort';
 import {
   ORDER_STATUS_LABEL, ORDER_STATUS_COLOR, MANAGEMENT_CATEGORY_LABEL,
   type FulfillmentSource, type Order, type OrderStatus,
@@ -28,6 +30,17 @@ function StatusBadge({ status }: { status: OrderStatus }) {
 }
 
 export default function OrderListTable({ items, onSelect, onNew, onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides = {} }: Props) {
+  const { sorted, headerProps } = useSort<Order>(items, (o, f) => {
+    switch (f) {
+      case 'order_number': return o.order_number ?? '';
+      case 'product': return o.spec_wp ?? o.product_code ?? '';
+      case 'quantity': return o.quantity ?? 0;
+      case 'delivery_due': return o.delivery_due ?? '';
+      case 'status': return o.status;
+      default: return null;
+    }
+  });
+
   if (items.length === 0) return <EmptyState message="등록된 수주가 없습니다" actionLabel="새로 등록" onAction={onNew} />;
 
   return (
@@ -35,16 +48,16 @@ export default function OrderListTable({ items, onSelect, onNew, onEdit, onDelet
       <table className="w-full text-xs">
         <thead>
           <tr className="bg-muted/50 border-b">
-            <th className="p-3 text-left font-medium text-muted-foreground">수주 정보</th>
-            <th className="p-3 text-left font-medium text-muted-foreground">품목</th>
-            <th className="p-3 text-right font-medium">수량 / 단가</th>
-            <th className="p-3 text-left font-medium text-muted-foreground">납기 / 현장</th>
-            <th className="p-3 text-center font-medium text-muted-foreground w-[80px]">상태</th>
+            <SortableTH {...headerProps('order_number')} className="p-3 font-medium text-muted-foreground">수주 정보</SortableTH>
+            <SortableTH {...headerProps('product')} className="p-3 font-medium text-muted-foreground">품목</SortableTH>
+            <SortableTH {...headerProps('quantity')} align="right" className="p-3 font-medium">수량 / 단가</SortableTH>
+            <SortableTH {...headerProps('delivery_due')} className="p-3 font-medium text-muted-foreground">납기 / 현장</SortableTH>
+            <SortableTH {...headerProps('status')} align="center" className="p-3 font-medium text-muted-foreground w-[80px]">상태</SortableTH>
             <th className="p-3 text-center font-medium text-muted-foreground w-[190px]">작업</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((o) => {
+          {sorted.map((o) => {
             const remaining = o.remaining_qty ?? (o.quantity - (o.shipped_qty ?? 0));
             const canReturnReservation = (o.shipped_qty ?? 0) <= 0 && o.status !== 'cancelled';
             const canCreateOutbound = remaining > 0 && o.status !== 'cancelled';

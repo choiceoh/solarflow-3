@@ -1,6 +1,8 @@
 import { Badge } from '@/components/ui/badge';
 import EmptyState from '@/components/common/EmptyState';
+import SortableTH, { SortIcon } from '@/components/common/SortableTH';
 import { moduleLabel } from '@/lib/utils';
+import { useSort } from '@/hooks/useSort';
 import type { InventoryItem } from '@/types/inventory';
 
 const kwToEa = (kw: number, specWp: number) =>
@@ -59,6 +61,18 @@ function MetricCell({
 
 /** compact=true: 제품정보 + 가용재고만 표시 (2열 레이아웃 좌측 패널용) */
 export default function InventoryTable({ items, compact = false }: { items: InventoryItem[]; compact?: boolean }) {
+  const { sorted, sortField, sortDirection, toggle, headerProps } = useSort<InventoryItem>(items, (it, f) => {
+    switch (f) {
+      case 'manufacturer': return it.manufacturer_name ?? '';
+      case 'product_code': return it.product_code ?? '';
+      case 'physical_kw': return it.physical_kw ?? 0;
+      case 'incoming_kw': return it.incoming_kw ?? 0;
+      case 'total_secured_kw': return it.total_secured_kw ?? 0;
+      case 'long_term_status': return it.long_term_status;
+      default: return null;
+    }
+  });
+
   if (items.length === 0) return <EmptyState message="등록된 재고 데이터가 없습니다" />;
 
   /* ── compact 모드: 제품 + 가용재고만 ── */
@@ -76,18 +90,22 @@ export default function InventoryTable({ items, compact = false }: { items: Inve
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-muted/50 border-b">
-              <th className="p-2 text-left font-medium text-muted-foreground">제품</th>
-              <th className="p-2 text-right font-medium">
+              <SortableTH {...headerProps('manufacturer')} className="p-2 font-medium text-muted-foreground">제품</SortableTH>
+              <th
+                className="p-2 text-right font-medium cursor-pointer select-none hover:bg-muted/70 transition-colors"
+                onClick={() => toggle('total_secured_kw')}
+              >
                 <div className="flex items-center justify-end gap-1">
                   <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
                   가용재고
+                  <SortIcon direction={sortField === 'total_secured_kw' ? sortDirection : null} />
                 </div>
                 <div className="text-[10px] text-muted-foreground font-normal">현재고+미착</div>
               </th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
+            {sorted.map((item) => (
               <tr key={item.product_id} className="border-t hover:bg-muted/20 transition-colors">
                 <td className="p-2 align-middle">
                   <div className="font-semibold text-[11px]">{moduleLabel(item.manufacturer_name, item.spec_wp)}</div>
@@ -132,44 +150,56 @@ export default function InventoryTable({ items, compact = false }: { items: Inve
         {/* ── 헤더 ── */}
         <thead>
           <tr className="bg-muted/50 border-b">
-            <th className="p-3 text-left font-medium text-muted-foreground w-[220px]">제품 정보</th>
+            <SortableTH {...headerProps('product_code')} className="p-3 font-medium text-muted-foreground w-[220px]">제품 정보</SortableTH>
             {/* 실재고 */}
-            <th className="p-3 text-right font-medium">
+            <th
+              className="p-3 text-right font-medium cursor-pointer select-none hover:bg-muted/70 transition-colors"
+              onClick={() => toggle('physical_kw')}
+            >
               <div className="flex items-center justify-end gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-blue-400 inline-block" />
                 실재고
+                <SortIcon direction={sortField === 'physical_kw' ? sortDirection : null} />
               </div>
               <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
                 창고 보유 현재고
               </div>
             </th>
             {/* 미착품 */}
-            <th className="p-3 text-right font-medium">
+            <th
+              className="p-3 text-right font-medium cursor-pointer select-none hover:bg-muted/70 transition-colors"
+              onClick={() => toggle('incoming_kw')}
+            >
               <div className="flex items-center justify-end gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-yellow-400 inline-block" />
                 미착품
+                <SortIcon direction={sortField === 'incoming_kw' ? sortDirection : null} />
               </div>
               <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
                 L/C 개설 기준
               </div>
             </th>
             {/* 가용재고 */}
-            <th className="p-3 text-right font-medium">
+            <th
+              className="p-3 text-right font-medium cursor-pointer select-none hover:bg-muted/70 transition-colors"
+              onClick={() => toggle('total_secured_kw')}
+            >
               <div className="flex items-center justify-end gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
                 가용재고
+                <SortIcon direction={sortField === 'total_secured_kw' ? sortDirection : null} />
               </div>
               <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
                 현재고 가용 + 미착 가용
               </div>
             </th>
-            <th className="p-3 text-center font-medium text-muted-foreground w-[80px]">장기</th>
+            <SortableTH {...headerProps('long_term_status')} align="center" className="p-3 font-medium text-muted-foreground w-[80px]">장기</SortableTH>
           </tr>
         </thead>
 
         {/* ── 데이터 행 ── */}
         <tbody>
-          {items.map((item) => (
+          {sorted.map((item) => (
             <tr key={item.product_id} className="border-t hover:bg-muted/20 transition-colors">
               {/* 제품 정보 */}
               <td className="p-3 align-top">
