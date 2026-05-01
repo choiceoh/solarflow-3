@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Filter } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 
 type Tone = 'solar' | 'ink' | 'info' | 'warn' | 'pos' | 'neg';
 
@@ -164,8 +162,8 @@ export function FilterChips({
   onChange?: (value: string) => void;
 }) {
   return (
-    <div className="inline-flex items-center" style={{ border: 'none' }}>
-      {options.map((o, i) => {
+    <div style={{ display: 'inline-flex', borderBottom: '1px solid var(--line)' }}>
+      {options.map((o) => {
         const active = value === o.key;
         return (
           <button
@@ -173,26 +171,29 @@ export function FilterChips({
             onClick={() => onChange?.(o.key)}
             type="button"
             style={{
-              padding: '0 12px',
               background: 'transparent',
               border: 'none',
-              borderLeft: i > 0 ? '1px solid var(--line)' : undefined,
+              borderBottom: `2px solid ${active ? 'var(--ink)' : 'transparent'}`,
               borderRadius: 0,
+              marginBottom: -1,
+              padding: '7px 12px',
               cursor: 'pointer',
               fontFamily: 'inherit',
-              fontSize: 12.5,
+              fontSize: 12,
               fontWeight: active ? 600 : 500,
               color: active ? 'var(--ink)' : 'var(--ink-3)',
               letterSpacing: '-0.005em',
-              transition: 'color 160ms cubic-bezier(0.22, 1, 0.36, 1)',
-              lineHeight: 1.4,
+              display: 'inline-flex',
+              alignItems: 'baseline',
+              gap: 6,
+              transition: 'color 160ms cubic-bezier(0.22, 1, 0.36, 1), border-color 160ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
-            onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--ink-2)'; }}
+            onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--ink)'; }}
             onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--ink-3)'; }}
           >
             {o.label}
             {o.count != null ? (
-              <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', marginLeft: 5 }}>{o.count}</span>
+              <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)' }}>{o.count}</span>
             ) : null}
           </button>
         );
@@ -229,24 +230,35 @@ export function FilterButton({ items }: { items: FilterItem[] }) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <Button
-        type="button"
-        variant="outline"
-        size="xs"
+      <button
         onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        data-active={activeCount > 0 ? '' : undefined}
-        className={open ? 'border-primary' : ''}
+        type="button"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          height: 28, padding: '0 10px',
+          background: activeCount > 0 ? 'var(--bg-2)' : 'var(--surface)',
+          border: `1px solid ${open ? 'var(--solar-3)' : 'var(--line)'}`,
+          borderRadius: 4,
+          fontFamily: 'inherit',
+          fontSize: 11.5, fontWeight: 600,
+          color: 'var(--ink)',
+          cursor: 'pointer',
+          letterSpacing: '-0.005em',
+        }}
       >
-        <Filter className="h-3 w-3" />
+        <svg width="12" height="12" viewBox="0 0 14 14" style={{ color: 'var(--ink-3)' }}>
+          <path d="M2 3 H12 L8.5 7.5 V11.5 L5.5 12.5 V7.5 Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" />
+        </svg>
         <span>필터</span>
         {activeCount > 0 ? (
-          <span
-            className="mono tnum ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9.5px] font-bold text-white"
-            style={{ background: 'var(--solar-3)' }}
-          >{activeCount}</span>
+          <span className="mono tnum" style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            minWidth: 16, height: 16, padding: '0 4px',
+            background: 'var(--solar-3)', color: '#fff',
+            borderRadius: 8, fontSize: 9.5, fontWeight: 700,
+          }}>{activeCount}</span>
         ) : null}
-      </Button>
+      </button>
       {open ? (
         <div style={{
           position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30,
