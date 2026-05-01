@@ -25,6 +25,17 @@ func New(db *supa.Client, engineClient ...*engine.EngineClient) http.Handler {
 	attachmentH := handler.NewAttachmentHandler(db)
 	r.Get("/api/v1/attachments/{id}/file", attachmentH.ServeSigned)
 
+	// 비유: 로비 안내판 — 로그인 전 화면용 read-only KPI/환율 (인증 불필요)
+	var publicEngine *engine.EngineClient
+	if len(engineClient) > 0 {
+		publicEngine = engineClient[0]
+	}
+	publicH := handler.NewPublicHandler(db, publicEngine)
+	r.Route("/api/v1/public", func(r chi.Router) {
+		r.Get("/login-stats", publicH.LoginStats)
+		r.Get("/fx/usdkrw", publicH.FXUsdKrw)
+	})
+
 	r.Route("/api/v1", func(r chi.Router) {
 		// 비유: /api/v1 이하 모든 경로는 사원증(JWT) 필수
 		r.Use(middleware.AuthMiddleware(db))

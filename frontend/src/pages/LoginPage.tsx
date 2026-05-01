@@ -1,12 +1,64 @@
+import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Sun } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import LoginForm from '@/components/auth/LoginForm';
 import { isDevMockLoginAllowed } from '@/lib/devMockMode';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+interface LoginStats {
+  inventory_available_mw: number | null;
+  reservations_pending: number | null;
+  lc_active_count: number | null;
+  lc_active_total_usd: number | null;
+  work_queue: { time: string; tag: string; title: string; meta: string }[];
+}
+
+interface FXSnapshot {
+  rate: number;
+  change_pct: number | null;
+  source: string;
+  fetched_at: string;
+}
+
+const FALLBACK_KPI = {
+  inventory_available_mw: 76.42,
+  reservations_pending: 28,
+  lc_active_count: 11,
+  lc_active_total_usd: 8_420_000,
+};
+const FALLBACK_FX = { rate: 1773.4, change_pct: 0.06 };
+const FALLBACK_QUEUE: LoginStats['work_queue'] = [
+  { time: '09:00', tag: '입항', title: 'COSCO SHANGHAI 042E', meta: '8,800장 · 5,456 kW · 인천 1창고' },
+  { time: '11:30', tag: 'L/C 만기', title: 'LC-26-0405', meta: 'USD 1.84M · 하나은행 · 결재 대기' },
+  { time: '14:00', tag: '결재', title: '수입대금 결재', meta: '6건 · USD 4.12M · 박지훈 결재' },
+  { time: '16:00', tag: '면장', title: '인천세관', meta: '5건 도착 · IL-25-1204-04 외 4건' },
+];
+
+const fmt = new Intl.NumberFormat('en-US');
+const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+const todayKST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+
 export default function LoginPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const canUseDevMock = isDevMockLoginAllowed();
+
+  const [stats, setStats] = useState<LoginStats | null>(null);
+  const [fx, setFx] = useState<FXSnapshot | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/v1/public/login-stats`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: LoginStats) => { if (!cancelled) setStats(d); })
+      .catch((e) => console.warn('[LoginPage] stats fetch failed:', e));
+    fetch(`${API_BASE_URL}/api/v1/public/fx/usdkrw`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: FXSnapshot) => { if (!cancelled) setFx(d); })
+      .catch((e) => console.warn('[LoginPage] fx fetch failed:', e));
+    return () => { cancelled = true; };
+  }, []);
 
   if (isLoading && !canUseDevMock) {
     return (
@@ -19,6 +71,21 @@ export default function LoginPage() {
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
   }
+
+  const inventoryMW = stats?.inventory_available_mw ?? FALLBACK_KPI.inventory_available_mw;
+  const reservations = stats?.reservations_pending ?? FALLBACK_KPI.reservations_pending;
+  const lcCount = stats?.lc_active_count ?? FALLBACK_KPI.lc_active_count;
+  const lcTotalUSD = stats?.lc_active_total_usd ?? FALLBACK_KPI.lc_active_total_usd;
+  const fxRate = fx?.rate ?? FALLBACK_FX.rate;
+  const fxChange = fx?.change_pct ?? FALLBACK_FX.change_pct;
+  const queue = stats?.work_queue?.length ? stats.work_queue : FALLBACK_QUEUE;
+
+  const kpi = [
+    { label: '가용재고', value: inventoryMW.toFixed(2), unit: 'MW', detail: '오늘 기준' },
+    { label: '예약 대기', value: String(reservations), unit: '건', detail: '미배정 포함' },
+    { label: 'L/C 사용', value: (lcTotalUSD / 1_000_000).toFixed(2), unit: 'M$', detail: `${lcCount}건` },
+    { label: 'USD/KRW', value: fmt.format(Math.round(fxRate * 10) / 10), unit: '', detail: fxChange != null ? fmtPct(fxChange) : '실시간' },
+  ];
 
   return (
     <div className="sf-login-shell">
@@ -39,8 +106,9 @@ export default function LoginPage() {
           <div className="sf-eyebrow text-[var(--sf-solar-3)]">로그인 · LOGIN</div>
           <h1 className="mt-2 text-[32px] font-extrabold leading-none text-[var(--sf-ink)]">다시 만나요.</h1>
           <p className="mt-2 mb-6 text-[13px] leading-6 text-[var(--sf-ink-3)]">
-            오늘 <strong className="font-bold text-[var(--sf-ink)]">예약 28건</strong>과{' '}
-            <strong className="font-bold text-[var(--sf-ink)]">입항 4척</strong>이 처리를 기다리고 있어요.
+            오늘 <strong className="font-bold text-[var(--sf-ink)]">예약 {reservations}건</strong>과{' '}
+            <strong className="font-bold text-[var(--sf-ink)]">입항 {queue.filter((q) => q.tag === '입항').length || 4}척</strong>이
+            처리를 기다리고 있어요.
           </p>
           <LoginForm />
           <div className="mt-5 flex items-center gap-2 rounded bg-[var(--sf-bg-2)] px-3 py-2">
@@ -57,18 +125,13 @@ export default function LoginPage() {
         <div className="relative flex items-center justify-between">
           <span className="sf-mono flex items-center gap-2 text-[10px] font-semibold text-[var(--sf-solar)]">
             <span className="h-1.5 w-1.5 rounded-full bg-[var(--sf-solar)] shadow-[0_0_0_3px_rgb(245_184_0_/_0.20)]" />
-            LIVE · 2026-04-30 KST
+            LIVE · {todayKST()} KST
           </span>
           <span className="sf-mono text-[9.5px] text-[var(--sf-dark-ink-3)]">SOLARFLOW · CMD CENTER</span>
         </div>
 
         <div className="sf-dark-kpi-grid">
-          {[
-            ['가용재고', '76.42', 'MW', '+2.4%'],
-            ['예약 대기', '28', '건', '14.82 MW · 6보류'],
-            ['L/C 사용', '8.42', 'M$', '70.2% · 11건'],
-            ['USD/KRW', '1,773.4', '', '+0.06%'],
-          ].map(([label, value, unit, detail]) => (
+          {kpi.map(({ label, value, unit, detail }) => (
             <div className="sf-dark-kpi" key={label}>
               <div className="sf-eyebrow text-[var(--sf-dark-ink-3)]">{label}</div>
               <div className="mt-1.5 flex items-baseline gap-1.5">
@@ -81,16 +144,11 @@ export default function LoginPage() {
         </div>
 
         <div className="relative flex min-h-0 flex-1 flex-col">
-          <div className="sf-eyebrow mb-2 text-[var(--sf-dark-ink-3)]">오늘의 작업 큐 · 4건</div>
+          <div className="sf-eyebrow mb-2 text-[var(--sf-dark-ink-3)]">오늘의 작업 큐 · {queue.length}건</div>
           <div className="min-h-0 flex-1">
-            {[
-              ['09:00', '입항', 'COSCO SHANGHAI 042E', '8,800장 · 5,456 kW · 인천 1창고'],
-              ['11:30', 'L/C 만기', 'LC-26-0405', 'USD 1.84M · 하나은행 · 결재 대기'],
-              ['14:00', '결재', '수입대금 결재', '6건 · USD 4.12M · 박지훈 결재'],
-              ['16:00', '면장', '인천세관', '5건 도착 · IL-25-1204-04 외 4건'],
-            ].map(([time, tag, title, meta], index) => (
+            {queue.map(({ time, tag, title, meta }) => (
               <div
-                key={`${time}-${tag}`}
+                key={`${time}-${tag}-${title}`}
                 className="grid grid-cols-[46px_64px_minmax(0,1fr)] items-start gap-3 border-b border-white/5 py-3 last:border-b-0"
               >
                 <span className="sf-mono text-xs font-bold text-[var(--sf-solar)]">{time}</span>
@@ -101,14 +159,13 @@ export default function LoginPage() {
                   <div className="text-[12.5px] font-semibold text-[var(--sf-dark-ink)]">{title}</div>
                   <div className="sf-mono mt-1 text-[10.5px] text-[var(--sf-dark-ink-3)]">{meta}</div>
                 </div>
-                {index === 1 ? null : null}
               </div>
             ))}
           </div>
         </div>
 
         <div className="sf-mono border-t border-white/10 pt-3 text-[10px] text-[var(--sf-dark-ink-3)]">
-          JKO <span className="text-[var(--sf-dark-ink)]">$28.84</span>
+          은 <span className="text-[var(--sf-dark-ink)]">$28.84</span>
           <span className="ml-1 text-[#e09a8b]">-1.42</span>
           <span className="mx-2 text-white/15">│</span>
           폴리실리콘 <span className="text-[var(--sf-dark-ink)]">34.20</span>
