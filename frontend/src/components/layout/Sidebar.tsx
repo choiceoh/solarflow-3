@@ -39,6 +39,10 @@ const purchaseItems: MenuItem[] = [
   { icon: Landmark,      label: 'LC 개설',  path: '/procurement?tab=lc', roles: ['admin', 'operator'], tenants: ['topsolar'] },
   { icon: PackageCheck,  label: 'B/L 입고', path: '/procurement?tab=bl', roles: ['admin', 'operator'], tenants: ['topsolar'] },
   { icon: Calculator,    label: '면장/원가', path: '/customs',           roles: ['admin', 'operator'], tenants: ['topsolar'] },
+  // BARO Phase 2: 탑솔라 측 — 바로(주)가 보낸 매입 요청 처리 inbox
+  { icon: Inbox,         label: '바로 매입요청', path: '/group-trade/baro-inbox', roles: ['admin', 'operator'], tenants: ['topsolar'] },
+  // BARO Phase 2: 바로(주) 측 — 탑솔라로부터 매입할 모듈을 등록
+  { icon: PackagePlus,   label: '그룹내 매입', path: '/baro/group-purchase', roles: ['admin', 'operator'], tenants: ['baro'] },
 ];
 // 판매/수금: 수주 → 출고 → 판매/계산서 → 수금 → 수금매칭
 const salesItems: MenuItem[] = [
@@ -70,6 +74,8 @@ const dataItem: MenuItem = {
 
 const toolItems: MenuItem[] = [
   { icon: Search,        label: '검색',  path: '/search' },
+  // BARO Phase 1: 거래처별 단가표 — 바로(주) 전용 도구
+  { icon: Tags,          label: '거래처 단가표', path: '/baro/price-book', roles: ['admin', 'operator'], tenants: ['baro'] },
   { icon: ScanText,      label: '문서 OCR', path: '/ocr', roles: ['admin', 'operator'] },
   { icon: StickyNote,    label: '메모',  path: '/memo',     roles: ['admin', 'operator'] },
   { icon: FileSignature, label: '결재안', path: '/approval', roles: ['admin', 'operator'] },
