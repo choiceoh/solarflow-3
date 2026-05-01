@@ -16,7 +16,7 @@ interface Props {
 
 export default function ExpenseListTable({ items, onEdit, onDelete }: Props) {
   if (items.length === 0) {
-    return <p className="py-8 text-center text-sm" style={{ color: 'var(--sf-ink-3)' }}>등록된 부대비용이 없습니다</p>;
+    return <p className="py-8 text-center text-sm text-[var(--sf-ink-3)]">등록된 부대비용이 없습니다</p>;
   }
 
   return (
@@ -44,7 +44,7 @@ export default function ExpenseListTable({ items, onEdit, onDelete }: Props) {
             <TableCell className="text-xs">{EXPENSE_TYPE_LABEL[e.expense_type as ExpenseType] || e.expense_type}</TableCell>
             <TableCell className="text-xs text-right tabular-nums">{formatKRW(e.amount)}</TableCell>
             <TableCell className="text-xs text-right tabular-nums">{e.vat != null ? formatKRW(e.vat) : '—'}</TableCell>
-            <TableCell className="text-right text-xs font-semibold tabular-nums" style={{ color: 'var(--sf-ink)' }}>{formatKRW(e.total)}</TableCell>
+            <TableCell className="text-right text-xs font-semibold tabular-nums text-[var(--sf-ink)]">{formatKRW(e.total)}</TableCell>
             <TableCell className="text-xs">{e.vendor || '—'}</TableCell>
             <TableCell className="text-xs max-w-[120px] truncate">{e.memo || '—'}</TableCell>
             <TableCell className="text-right">

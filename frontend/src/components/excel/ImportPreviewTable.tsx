@@ -17,7 +17,7 @@ export default function ImportPreviewTable({ rows, fields, filter }: Props) {
   });
 
   if (filtered.length === 0) {
-    return <p className="py-4 text-center text-sm" style={{ color: 'var(--sf-ink-3)' }}>표시할 데이터가 없습니다</p>;
+    return <p className="py-4 text-center text-sm text-[var(--sf-ink-3)]">표시할 데이터가 없습니다</p>;
   }
 
   // 에러 필드 빠른 조회용
@@ -47,7 +47,7 @@ export default function ImportPreviewTable({ rows, fields, filter }: Props) {
                 !row.valid && 'bg-red-50',
               )}
             >
-              <td className="sf-mono px-2 py-1 tabular-nums" style={{ color: 'var(--sf-ink-3)' }}>{row.rowNumber}</td>
+              <td className="sf-mono px-2 py-1 tabular-nums text-[var(--sf-ink-3)]">{row.rowNumber}</td>
               {fields.map((f) => {
                 const err = getErrorForField(row, f.label);
                 const val = row.data[f.key];

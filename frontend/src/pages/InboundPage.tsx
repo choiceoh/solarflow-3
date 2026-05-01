@@ -279,7 +279,7 @@ export default function InboundPage() {
                 <ScanText className="h-6 w-6" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-base font-semibold" style={{ color: 'var(--sf-ink)' }}>면장 PDF/사진 드롭</div>
+                <div className="text-base font-semibold text-[var(--sf-ink)]">면장 PDF/사진 드롭</div>
                 <div className="mt-1 text-sm sf-dropzone-sub">
                   {customsOCRDropActive ? '지금 놓으면 해외직수입 입고등록으로 이동합니다' : '놓으면 입고등록 창과 OCR 입력값 확인창이 자동으로 열립니다'}
                 </div>
@@ -324,16 +324,8 @@ export default function InboundPage() {
       )}
 
       {toast && (
-        <div
-          className="sf-toast fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-md px-4 py-2.5 text-xs font-medium"
-          style={{
-            background: 'var(--sf-ink)',
-            color: 'var(--sf-bg)',
-            boxShadow: 'var(--sf-shadow-3)',
-            borderLeft: '3px solid var(--sf-pos)',
-          }}
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" style={{ color: 'var(--sf-pos)' }} />
+        <div className="sf-toast fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-md border-l-[3px] border-[var(--sf-pos)] bg-[var(--sf-ink)] px-4 py-2.5 text-xs font-medium text-[var(--sf-bg)] shadow-[var(--sf-shadow-3)]">
+          <CheckCircle2 className="h-3.5 w-3.5 text-[var(--sf-pos)]" />
           <span>{toast}</span>
         </div>
       )}

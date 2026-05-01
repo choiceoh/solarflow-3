@@ -66,7 +66,7 @@ export default function OutboundListTable({ items, onSelect, onNew, onInvoice }:
                   {ob.group_trade ? (
                     <span className="inline-flex items-center gap-1.5">
                       <span className="sf-pill info">그룹</span>
-                      <span className="text-[10px]" style={{ color: 'var(--sf-ink-3)' }}>{ob.target_company_name}</span>
+                      <span className="text-[10px] text-[var(--sf-ink-3)]">{ob.target_company_name}</span>
                     </span>
                   ) : '—'}
                 </TableCell>

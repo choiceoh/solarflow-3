@@ -97,12 +97,12 @@ export default function LoginPage() {
 
   if (isLoading && !canUseDevMock) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3" style={{ background: 'var(--sf-bg)' }}>
+      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-[var(--sf-bg)]">
         <span className="sf-solar-mark" aria-hidden>
           <Sun strokeWidth={2.4} />
         </span>
         <LoadingSpinner />
-        <p className="sf-mono text-[11px]" style={{ color: 'var(--sf-ink-3)' }}>SolarFlow 시작 중…</p>
+        <p className="sf-mono text-[11px] text-[var(--sf-ink-3)]">SolarFlow 시작 중…</p>
       </div>
     );
   }

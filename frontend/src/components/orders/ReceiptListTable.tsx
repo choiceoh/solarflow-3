@@ -57,7 +57,7 @@ export default function ReceiptListTable({ items, onNew, onEdit, onDelete }: Pro
             <TableRow key={r.receipt_id}>
               <TableCell>{formatDate(r.receipt_date)}</TableCell>
               <TableCell>{r.customer_name ?? '—'}</TableCell>
-              <TableCell className="text-right font-semibold tabular-nums" style={{ color: 'var(--sf-ink)' }}>{formatNumber(r.amount)}원</TableCell>
+              <TableCell className="text-right font-semibold tabular-nums text-[var(--sf-ink)]">{formatNumber(r.amount)}원</TableCell>
               <TableCell>{r.bank_account ?? '—'}</TableCell>
               <TableCell><MatchBadge receipt={r} /></TableCell>
               <TableCell className="max-w-[200px] truncate">{r.memo ?? '—'}</TableCell>

@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -32,8 +33,9 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   const isDestructive = variant === 'destructive';
   const Icon = isDestructive ? AlertTriangle : HelpCircle;
-  const iconBg = isDestructive ? 'var(--sf-neg-bg)' : 'var(--sf-info-bg)';
-  const iconColor = isDestructive ? 'var(--sf-neg)' : 'var(--sf-info)';
+  const iconTone = isDestructive
+    ? 'bg-[var(--sf-neg-bg)] text-[var(--sf-neg)]'
+    : 'bg-[var(--sf-info-bg)] text-[var(--sf-info)]';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -41,8 +43,7 @@ export default function ConfirmDialog({
         <DialogHeader>
           <div className="flex items-start gap-3">
             <div
-              className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-              style={{ background: iconBg, color: iconColor }}
+              className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full', iconTone)}
               aria-hidden
             >
               <Icon className="h-4 w-4" />

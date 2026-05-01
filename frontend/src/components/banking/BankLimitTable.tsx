@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { formatUSD, formatPercent, formatDate } from '@/lib/utils';
+import { cn, formatUSD, formatPercent, formatDate } from '@/lib/utils';
 import type { BankLimitRow } from '@/types/banking';
 
 interface Props {
@@ -10,16 +10,16 @@ interface Props {
 }
 
 function ExpiryCell({ date, now }: { date?: string; now: number }) {
-  if (!date) return <span style={{ color: 'var(--sf-ink-4)' }}>—</span>;
+  if (!date) return <span className="text-[var(--sf-ink-4)]">—</span>;
   const daysLeft = Math.ceil((new Date(date).getTime() - now) / 86400000);
   if (daysLeft < 0) {
-    return <span className="font-semibold" style={{ color: 'var(--sf-neg)' }}>{formatDate(date)} <span className="sf-pill neg ml-1">만료</span></span>;
+    return <span className="font-semibold text-[var(--sf-neg)]">{formatDate(date)} <span className="sf-pill neg ml-1">만료</span></span>;
   }
   if (daysLeft <= 30) {
-    return <span className="font-semibold" style={{ color: 'var(--sf-warn)' }}>{formatDate(date)} <span className="sf-pill warn ml-1">D-{daysLeft}</span></span>;
+    return <span className="font-semibold text-[var(--sf-warn)]">{formatDate(date)} <span className="sf-pill warn ml-1">D-{daysLeft}</span></span>;
   }
   if (daysLeft <= 90) {
-    return <span style={{ color: 'var(--sf-warn)' }}>{formatDate(date)} <span className="sf-pill warn ml-1">D-{daysLeft}</span></span>;
+    return <span className="text-[var(--sf-warn)]">{formatDate(date)} <span className="sf-pill warn ml-1">D-{daysLeft}</span></span>;
   }
   return <span>{formatDate(date)}</span>;
 }
@@ -54,11 +54,11 @@ export default function BankLimitTable({ rows }: Props) {
         </TableHeader>
         <TableBody>
           {rows.map((r) => {
-            const rateStyle = r.usage_rate >= 90
-              ? { color: 'var(--sf-neg)', fontWeight: 700 }
+            const rateClass = r.usage_rate >= 90
+              ? 'font-bold text-[var(--sf-neg)]'
               : r.usage_rate >= 70
-              ? { color: 'var(--sf-warn)', fontWeight: 600 }
-              : { color: 'var(--sf-pos)' };
+              ? 'font-semibold text-[var(--sf-warn)]'
+              : 'text-[var(--sf-pos)]';
             return (
               <TableRow key={r.bank_name}>
                 <TableCell className="font-medium">{r.bank_name}</TableCell>
@@ -67,7 +67,7 @@ export default function BankLimitTable({ rows }: Props) {
                 <TableCell className="text-right font-mono">{formatUSD(r.lc_limit_usd)}</TableCell>
                 <TableCell className="text-right font-mono">{formatUSD(r.used)}</TableCell>
                 <TableCell className="text-right font-mono font-semibold">{formatUSD(r.available)}</TableCell>
-                <TableCell className="text-right tabular-nums" style={rateStyle}>
+                <TableCell className={cn('text-right tabular-nums', rateClass)}>
                   {r.usage_rate > 0 ? `${r.usage_rate.toFixed(1)}%` : '—'}
                 </TableCell>
                 <TableCell className="text-right">

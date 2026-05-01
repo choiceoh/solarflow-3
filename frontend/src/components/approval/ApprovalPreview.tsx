@@ -41,10 +41,7 @@ export default function ApprovalPreview({ text, originalText, onTextChange }: Pr
         <div className="flex items-center gap-2">
           <span className="sf-eyebrow">결재안 미리보기</span>
           {text !== originalText && (
-            <span
-              className="rounded px-1.5 py-0.5 text-[9.5px] font-bold sf-mono"
-              style={{ background: 'var(--sf-warn-bg)', color: 'var(--sf-warn)', letterSpacing: '0.04em' }}
-            >
+            <span className="sf-mono rounded bg-[var(--sf-warn-bg)] px-1.5 py-0.5 text-[9.5px] font-bold tracking-[0.04em] text-[var(--sf-warn)]">
               EDITED
             </span>
           )}
@@ -69,7 +66,7 @@ export default function ApprovalPreview({ text, originalText, onTextChange }: Pr
         value={text}
         onChange={(e) => onTextChange(e.target.value)}
       />
-      <p className="sf-mono text-[10.5px]" style={{ color: 'var(--sf-ink-3)' }}>
+      <p className="sf-mono text-[10.5px] text-[var(--sf-ink-3)]">
         텍스트를 직접 수정할 수 있습니다. [원본] 버튼으로 되돌리기 가능.
       </p>
     </div>

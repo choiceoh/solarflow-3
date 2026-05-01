@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { formatNumber } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 import { fetchWithAuth } from '@/lib/api';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import ProgressMiniBar from '@/components/common/ProgressMiniBar';
@@ -80,16 +80,16 @@ export default function POInboundProgress({ poId, poLines }: Props) {
   const progressPct = contractQty > 0 ? Math.min((completedQty / contractQty) * 100, 100) : 0;
   const barColor = progressPct >= 80 ? 'bg-green-500' : progressPct >= 50 ? 'bg-yellow-500' : 'bg-red-500';
   const progressTone =
-    progressPct >= 80 ? 'var(--sf-pos)' :
-    progressPct >= 50 ? 'var(--sf-warn)' :
-    'var(--sf-neg)';
+    progressPct >= 80 ? 'text-[var(--sf-pos)]' :
+    progressPct >= 50 ? 'text-[var(--sf-warn)]' :
+    'text-[var(--sf-neg)]';
 
   const stats = [
     { label: '계약량',   value: contractQty },
     { label: 'LC개설량', value: lcQty },
     { label: '선적완료', value: shippedQty },
-    { label: '입고완료', value: completedQty, tone: 'var(--sf-pos)' },
-    { label: '잔여량',   value: remainQty,    tone: remainQty > 0 ? 'var(--sf-warn)' : undefined },
+    { label: '입고완료', value: completedQty, tone: 'text-[var(--sf-pos)]' },
+    { label: '잔여량',   value: remainQty,    tone: remainQty > 0 ? 'text-[var(--sf-warn)]' : undefined },
   ];
 
   return (
@@ -98,14 +98,10 @@ export default function POInboundProgress({ poId, poLines }: Props) {
         {stats.map((s) => (
           <div
             key={s.label}
-            className="flex flex-col gap-1 rounded-md p-3"
-            style={{ background: 'var(--sf-surface)', border: '1px solid var(--sf-line)' }}
+            className="flex flex-col gap-1 rounded-md border border-[var(--sf-line)] bg-[var(--sf-surface)] p-3"
           >
             <span className="sf-eyebrow">{s.label}</span>
-            <span
-              className="sf-mono text-base font-semibold tabular-nums"
-              style={{ color: s.tone || 'var(--sf-ink)' }}
-            >
+            <span className={cn('sf-mono text-base font-semibold tabular-nums', s.tone ?? 'text-[var(--sf-ink)]')}>
               {formatNumber(s.value)}
             </span>
           </div>
@@ -115,10 +111,7 @@ export default function POInboundProgress({ poId, poLines }: Props) {
       <div className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between">
           <span className="sf-eyebrow">입고 진행률</span>
-          <span
-            className="sf-mono text-[13px] font-semibold tabular-nums"
-            style={{ color: progressTone }}
-          >
+          <span className={cn('sf-mono text-[13px] font-semibold tabular-nums', progressTone)}>
             {progressPct.toFixed(0)}%
           </span>
         </div>

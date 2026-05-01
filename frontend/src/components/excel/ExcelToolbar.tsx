@@ -70,8 +70,7 @@ export default function ExcelToolbar({ type, onImportComplete }: Props) {
 
         {error && (
           <span
-            className="flex min-w-max shrink-0 items-center gap-1 whitespace-nowrap rounded px-2 py-0.5 text-[11px] font-medium"
-            style={{ background: 'var(--sf-neg-bg)', color: 'var(--sf-neg)' }}
+            className="flex min-w-max shrink-0 items-center gap-1 whitespace-nowrap rounded bg-[var(--sf-neg-bg)] px-2 py-0.5 text-[11px] font-medium text-[var(--sf-neg)]"
             title={error}
           >
             <AlertTriangle className="h-3 w-3 shrink-0" />

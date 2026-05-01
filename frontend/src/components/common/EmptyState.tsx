@@ -19,17 +19,12 @@ export default function EmptyState({
 }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
-      <div
-        className="mb-1 flex h-11 w-11 items-center justify-center rounded-full"
-        style={{ background: 'var(--sf-bg-2)', color: 'var(--sf-ink-4)' }}
-      >
+      <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-full bg-[var(--sf-bg-2)] text-[var(--sf-ink-4)]">
         <Icon className="h-5 w-5" strokeWidth={1.5} />
       </div>
-      <p className="text-sm font-medium" style={{ color: 'var(--sf-ink-2)' }}>
-        {message}
-      </p>
+      <p className="text-sm font-medium text-[var(--sf-ink-2)]">{message}</p>
       {description && (
-        <p className="max-w-xs text-xs leading-relaxed" style={{ color: 'var(--sf-ink-3)' }}>
+        <p className="max-w-xs text-xs leading-relaxed text-[var(--sf-ink-3)]">
           {description}
         </p>
       )}

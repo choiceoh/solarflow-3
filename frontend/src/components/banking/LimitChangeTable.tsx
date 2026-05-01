@@ -2,7 +2,7 @@ import { ArrowUp, ArrowDown } from 'lucide-react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { formatUSD, formatDate } from '@/lib/utils';
+import { cn, formatUSD, formatDate } from '@/lib/utils';
 import type { LimitChange } from '@/types/banking';
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
 
 export default function LimitChangeTable({ items }: Props) {
   if (items.length === 0) {
-    return <p className="py-6 text-center text-sm" style={{ color: 'var(--sf-ink-3)' }}>한도 변경 이력이 없습니다</p>;
+    return <p className="py-6 text-center text-sm text-[var(--sf-ink-3)]">한도 변경 이력이 없습니다</p>;
   }
 
   return (
@@ -38,8 +38,10 @@ export default function LimitChangeTable({ items }: Props) {
               <TableCell className="text-sm text-right">{formatUSD(c.new_limit)}</TableCell>
               <TableCell className="text-right text-sm tabular-nums">
                 <span
-                  className="inline-flex items-center gap-0.5 font-semibold"
-                  style={{ color: isIncrease ? 'var(--sf-pos)' : 'var(--sf-neg)' }}
+                  className={cn(
+                    'inline-flex items-center gap-0.5 font-semibold',
+                    isIncrease ? 'text-[var(--sf-pos)]' : 'text-[var(--sf-neg)]',
+                  )}
                 >
                   {isIncrease ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
                   {formatUSD(Math.abs(diff))}

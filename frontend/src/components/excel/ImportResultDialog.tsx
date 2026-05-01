@@ -43,7 +43,7 @@ export default function ImportResultDialog({ result, onClose }: Props) {
               </div>
               <table className="sf-mono mt-2 w-full text-[11px]">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--sf-neg)' }}>
+                  <tr className="border-b border-[var(--sf-neg)]">
                     <th className="sf-eyebrow py-1 pr-2 text-left">행</th>
                     <th className="sf-eyebrow py-1 pr-2 text-left">필드</th>
                     <th className="sf-eyebrow py-1 text-left">메시지</th>
@@ -71,7 +71,7 @@ export default function ImportResultDialog({ result, onClose }: Props) {
               </div>
               <table className="sf-mono mt-2 w-full text-[11px]">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--sf-warn)' }}>
+                  <tr className="border-b border-[var(--sf-warn)]">
                     <th className="sf-eyebrow py-1 pr-2 text-left">행</th>
                     <th className="sf-eyebrow py-1 pr-2 text-left">필드</th>
                     <th className="sf-eyebrow py-1 text-left">메시지</th>
@@ -91,10 +91,10 @@ export default function ImportResultDialog({ result, onClose }: Props) {
           )}
 
           {/* 요약 */}
-          <p className="sf-mono text-center text-[11px]" style={{ color: 'var(--sf-ink-3)' }}>
-            <span className="tabular-nums" style={{ color: 'var(--sf-pos)' }}>{imported_count}</span>건 등록 ·{' '}
-            <span className="tabular-nums" style={{ color: 'var(--sf-neg)' }}>{error_count}</span>건 에러 ·{' '}
-            <span className="tabular-nums" style={{ color: 'var(--sf-warn)' }}>{warning_count}</span>건 경고
+          <p className="sf-mono text-center text-[11px] text-[var(--sf-ink-3)]">
+            <span className="tabular-nums text-[var(--sf-pos)]">{imported_count}</span>건 등록 ·{' '}
+            <span className="tabular-nums text-[var(--sf-neg)]">{error_count}</span>건 에러 ·{' '}
+            <span className="tabular-nums text-[var(--sf-warn)]">{warning_count}</span>건 경고
           </p>
         </div>
 

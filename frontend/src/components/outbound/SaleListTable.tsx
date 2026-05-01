@@ -47,7 +47,7 @@ export default function SaleListTable({ items, onInvoice }: Props) {
               <TableCell className="text-right tabular-nums">{formatNumber(item.sale.unit_price_wp)}</TableCell>
               <TableCell className="text-right tabular-nums">{item.sale.supply_amount ? formatNumber(item.sale.supply_amount) : '—'}</TableCell>
               <TableCell className="text-right tabular-nums">{item.sale.vat_amount ? formatNumber(item.sale.vat_amount) : '—'}</TableCell>
-              <TableCell className="text-right font-semibold tabular-nums" style={{ color: 'var(--sf-ink)' }}>
+              <TableCell className="text-right font-semibold tabular-nums text-[var(--sf-ink)]">
                 {item.sale.total_amount ? formatNumber(item.sale.total_amount) : '—'}
               </TableCell>
               <TableCell>

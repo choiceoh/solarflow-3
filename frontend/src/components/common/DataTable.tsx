@@ -81,20 +81,10 @@ export default function DataTable<T extends Record<string, any>>({
 
   const SortIcon = ({ col }: { col: string }) => {
     if (sortKey !== col) {
-      return (
-        <ArrowUpDown
-          className="ml-1 inline h-3 w-3"
-          style={{ color: 'var(--sf-ink-5)' }}
-        />
-      );
+      return <ArrowUpDown className="ml-1 inline h-3 w-3 text-[var(--sf-ink-5)]" />;
     }
     const Icon = sortDir === 'asc' ? ArrowUp : ArrowDown;
-    return (
-      <Icon
-        className="ml-1 inline h-3 w-3"
-        style={{ color: 'var(--sf-solar-3)' }}
-      />
-    );
+    return <Icon className="ml-1 inline h-3 w-3 text-[var(--sf-solar-3)]" />;
   };
 
   const useVirtual = virtualize?.enabled && !loading && sorted.length > 0;

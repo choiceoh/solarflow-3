@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 import type { ImportPreview, DeclarationImportPreview, TemplateType } from '@/types/excel';
 import {
   FIELDS_MAP, TEMPLATE_LABEL,
@@ -199,17 +200,14 @@ function FilterButton({
   className?: string;
 }) {
   const isActive = current === mode;
+  const tone = isActive
+    ? 'border-[var(--sf-solar-2)] bg-[var(--sf-solar-bg)] font-semibold text-[var(--sf-solar-3)]'
+    : 'border-transparent bg-transparent font-medium text-[var(--sf-ink-3)]';
   return (
     <button
       type="button"
       onClick={() => onClick(mode)}
-      className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${className ?? ''}`}
-      style={{
-        background: isActive ? 'var(--sf-solar-bg)' : 'transparent',
-        color: isActive ? 'var(--sf-solar-3)' : 'var(--sf-ink-3)',
-        border: `1px solid ${isActive ? 'var(--sf-solar-2)' : 'transparent'}`,
-        fontWeight: isActive ? 600 : 500,
-      }}
+      className={cn('rounded border px-2 py-1 text-[11px] transition-colors', tone, className)}
     >
       {label}
     </button>

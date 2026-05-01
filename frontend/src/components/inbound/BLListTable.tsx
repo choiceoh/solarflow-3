@@ -123,7 +123,7 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
                     {companyMap[bl.company_id] && (
                       <div className="text-[10px] text-muted-foreground mb-0.5">{companyMap[bl.company_id]}</div>
                     )}
-                    <div className="sf-mono font-semibold" style={{ color: 'var(--sf-ink)' }}>{bl.bl_number}</div>
+                    <div className="sf-mono font-semibold text-[var(--sf-ink)]">{bl.bl_number}</div>
                     <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
                       PO: {bl.po_number ?? (bl.po_id ? bl.po_id.slice(0, 8) : '—')}
                     </div>

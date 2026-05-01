@@ -286,7 +286,7 @@ export default function AvailInventoryTable({
             <SortableTH {...headerProps('sale_kw')} align="right" className="font-medium">판매배정</SortableTH>
             <SortableTH {...headerProps('total_secured_kw')} align="right" className="font-medium">
               <span className="inline-flex items-center gap-1.5">
-                <span className="sf-dot" style={{ background: 'var(--sf-pos)' }} />
+                <span className="sf-dot bg-[var(--sf-pos)]" />
                 가용재고
               </span>
             </SortableTH>
@@ -408,7 +408,7 @@ export default function AvailInventoryTable({
                         <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-muted-foreground">
                           <span>실재고 <span className="font-mono tabular-nums text-foreground">{kwToEa(item.physical_kw, item.spec_wp).toLocaleString('ko-KR')} EA</span></span>
                           <span>미착품 <span className="font-mono tabular-nums text-foreground">{kwToEa(item.incoming_kw, item.spec_wp).toLocaleString('ko-KR')} EA</span></span>
-                          <span>가용재고 <span className="font-mono tabular-nums" style={{ color: 'var(--sf-pos)' }}>{kwToEa(item.total_secured_kw, item.spec_wp).toLocaleString('ko-KR')} EA</span></span>
+                          <span>가용재고 <span className="font-mono tabular-nums text-[var(--sf-pos)]">{kwToEa(item.total_secured_kw, item.spec_wp).toLocaleString('ko-KR')} EA</span></span>
                         </div>
 
                         {itemAllocs.length === 0 && (
