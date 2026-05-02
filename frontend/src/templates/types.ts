@@ -177,6 +177,16 @@ export interface FieldConfig {
   // 표시 포맷 (computed 필드 결과 포맷팅에 사용 — number/currency/date/kw)
   formatter?: Formatter;
 
+  // Phase 4 보강: 천단위 콤마 등 숫자 입력 포맷
+  // 'thousands' — 1,000,000 (단위 없음)
+  // 'krw' — 1,000,000원
+  // 'usd' — $1,000,000.00
+  // 'plain' — 기본 (포맷 없음, 동작은 type=number 와 동일)
+  numberFormat?: 'plain' | 'thousands' | 'krw' | 'usd';
+
+  // Phase 4 보강: 필드 아래 설명 텍스트 (placeholder 와 다름 — 필드 옆 muted 글)
+  description?: string;
+
   // 권한별 readonly (PoC: 단순 boolean)
   readOnly?: boolean;
   // 편집 가능한 역할 목록 — 현재 사용자가 이 목록에 없으면 자동 readOnly
@@ -190,6 +200,9 @@ export interface FieldConfig {
 export interface FormSection {
   cols?: 1 | 2 | 3;                 // grid 컬럼 수 (기본 1)
   fields: FieldConfig[];
+  // Phase 4 보강: 섹션 헤더 (단계 그룹화 — CostForm "Stage 1: FOB" 등)
+  title?: string;
+  tone?: Tone;                      // 헤더 색상 (solar/ink/info/warn/pos)
 }
 
 // Phase 4 보강: 다이얼로그 크기 (max-w-md/lg/xl/2xl) — 큰 폼은 lg 이상

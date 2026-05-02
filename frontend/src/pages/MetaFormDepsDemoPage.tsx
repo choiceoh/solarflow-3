@@ -47,6 +47,10 @@ export default function MetaFormDepsDemoPage() {
           <li><b>computed</b> — "총액" 자동 계산 (수량 × 단가, readonly + payload 포함)</li>
           <li><b>extraPayload</b> — submit 시 자동 첨가 (static <code>form_kind</code> + fromStore <code>company_id</code>)</li>
           <li><b>dialogSize='lg'</b> — 더 넓은 다이얼로그 (3컬럼 행 표현 가능)</li>
+          <li><b>section title + tone</b> — 단계별 색상 헤더 ("기본 정보"/"제조사 선택"/"보증"/"가격 계산")</li>
+          <li><b>@today</b> — 주문일 기본값 = 오늘 날짜 (mount 시 자동 prefill)</li>
+          <li><b>numberFormat='krw'</b> — 단가 천단위 콤마 + 원 (1,000,000원 표시, 내부값은 number)</li>
+          <li><b>description</b> — 필드 아래 muted 설명 텍스트</li>
         </ul>
         <p className="mt-2">제출은 콘솔 로그만 — 저장 없음.</p>
       </div>

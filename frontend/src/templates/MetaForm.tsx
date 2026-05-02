@@ -154,6 +154,15 @@ function useFieldOptions(fields: FieldConfig[], watchedValues: Record<string, un
   return options;
 }
 
+// Phase 4 보강: 특수 기본값 해석 — '@today', '@now' 등을 실제 값으로 치환
+// 일반 string/number/boolean 은 그대로. ReceiptForm 의 receipt_date='@today' 같은 패턴.
+function resolveSpecialDefault(v: unknown): unknown {
+  if (typeof v !== 'string' || !v.startsWith('@')) return v;
+  if (v === '@today') return new Date().toISOString().slice(0, 10);
+  if (v === '@now') return new Date().toISOString();
+  return v;
+}
+
 // ─── 기본값 빌드 (편집 시 editData → 폼 값) ───────────────────────────────
 function buildDefaults(
   fields: FieldConfig[],
@@ -163,7 +172,7 @@ function buildDefaults(
   fields.forEach((f) => {
     const v = editData?.[f.key];
     if (v != null) out[f.key] = v;
-    else if (f.defaultValue != null) out[f.key] = f.defaultValue;
+    else if (f.defaultValue != null) out[f.key] = resolveSpecialDefault(f.defaultValue);
     else if (f.type === 'switch') out[f.key] = false;
     else if (f.type === 'multiselect') out[f.key] = [];
     else if (f.type === 'file') out[f.key] = null;
@@ -326,6 +335,60 @@ function MetaCombobox({
   );
 }
 
+// ─── Phase 4 보강: 천단위 콤마 등 숫자 포맷 입력 ────────────────────────────
+// 표시값은 콤마 포함 ("1,000,000"), form 값은 number. KRW/USD 접두/접미사 지원.
+function formatNumberWithFormat(value: unknown, format: string | undefined): string {
+  if (value == null || value === '') return '';
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num)) return '';
+  const commas = num.toLocaleString('ko-KR');
+  if (format === 'krw') return `${commas}원`;
+  if (format === 'usd') return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return commas; // 'thousands'
+}
+
+interface MetaNumberFmtInputProps {
+  field: FieldConfig;
+  value: unknown;
+  onChange: (n: number | undefined) => void;
+  readOnly: boolean;
+}
+
+function MetaNumberFmtInput({ field, value, onChange, readOnly }: MetaNumberFmtInputProps) {
+  const [display, setDisplay] = useState<string>(() => formatNumberWithFormat(value, field.numberFormat));
+
+  // 외부 value 가 바뀌면 (예: defaultValue, computed reset) display 도 동기화
+  useEffect(() => {
+    setDisplay(formatNumberWithFormat(value, field.numberFormat));
+  }, [value, field.numberFormat]);
+
+  const handleChange = (raw: string) => {
+    // 숫자/소수점만 추출 (USD 면 소수점 허용)
+    const allowDecimal = field.numberFormat === 'usd';
+    const stripped = raw.replace(allowDecimal ? /[^0-9.]/g : /[^0-9]/g, '');
+    if (stripped === '') {
+      setDisplay('');
+      onChange(undefined);
+      return;
+    }
+    const n = allowDecimal ? parseFloat(stripped) : parseInt(stripped, 10);
+    if (!Number.isFinite(n)) return;
+    setDisplay(formatNumberWithFormat(n, field.numberFormat));
+    onChange(n);
+  };
+
+  return (
+    <Input
+      type="text"
+      inputMode={field.numberFormat === 'usd' ? 'decimal' : 'numeric'}
+      value={display}
+      onChange={(e) => handleChange(e.target.value)}
+      placeholder={field.placeholder}
+      readOnly={readOnly}
+    />
+  );
+}
+
 // ─── 단일 필드 렌더 ────────────────────────────────────────────────────────
 interface FieldRenderProps {
   field: FieldConfig;
@@ -386,6 +449,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
             ))}
           </SelectContent>
         </Select>
+        {field.description ? <p className="text-xs text-muted-foreground">{field.description}</p> : null}
         {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
       </div>
     );
@@ -396,6 +460,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
       <div className="space-y-1.5">
         <Label>{labelText}</Label>
         <Textarea {...register(field.key)} placeholder={field.placeholder} disabled={readOnly} />
+        {field.description ? <p className="text-xs text-muted-foreground">{field.description}</p> : null}
         {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
       </div>
     );
@@ -481,15 +546,27 @@ function FieldRender({ field, value, error, options, setValue, register, watched
   }
 
   // text / number / date
+  // Phase 4 보강: number 타입에 numberFormat 이 지정되면 콤마 입력 사용
+  const useFmtNumber = field.type === 'number' && field.numberFormat && field.numberFormat !== 'plain';
   return (
     <div className="space-y-1.5">
       <Label>{labelText}</Label>
-      <Input
-        {...register(field.key)}
-        type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
-        placeholder={field.placeholder}
-        readOnly={readOnly}
-      />
+      {useFmtNumber ? (
+        <MetaNumberFmtInput
+          field={field}
+          value={value}
+          onChange={(n) => setValue(field.key, n as never)}
+          readOnly={readOnly}
+        />
+      ) : (
+        <Input
+          {...register(field.key)}
+          type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+          placeholder={field.placeholder}
+          readOnly={readOnly}
+        />
+      )}
+      {field.description ? <p className="text-xs text-muted-foreground">{field.description}</p> : null}
       {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
     </div>
   );
@@ -513,6 +590,15 @@ const DIALOG_SIZE_CLASS: Record<string, string> = {
   lg: 'sm:max-w-lg',
   xl: 'sm:max-w-xl',
   '2xl': 'sm:max-w-2xl',
+};
+
+// Phase 4 보강: 섹션 제목 색상 (Tone → tailwind text-* 매핑)
+const TONE_TEXT_CLASS: Record<string, string> = {
+  solar: 'text-orange-600',
+  ink: 'text-slate-700',
+  info: 'text-blue-600',
+  warn: 'text-amber-600',
+  pos: 'text-green-600',
 };
 
 // extraPayload + computedFields 적용 후 최종 payload 생성
@@ -606,20 +692,25 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
                             : sec.cols === 3 ? 'grid grid-cols-3 gap-3'
                             : 'space-y-3';
             return (
-              <div key={idx} className={colsClass}>
-                {sec.fields.map((f) => (
-                  <FieldRender
-                    key={f.key}
-                    field={f}
-                    value={watchedValues[f.key]}
-                    error={errors[f.key] as { message?: string } | undefined}
-                    options={fieldOptions[f.key]}
-                    setValue={(k, v) => setValue(k, v as never)}
-                    register={register}
-                    watchedValues={watchedValues}
-                    role={role}
-                  />
-                ))}
+              <div key={idx} className="space-y-2">
+                {sec.title ? (
+                  <p className={`text-xs font-semibold ${TONE_TEXT_CLASS[sec.tone ?? 'ink']}`}>{sec.title}</p>
+                ) : null}
+                <div className={colsClass}>
+                  {sec.fields.map((f) => (
+                    <FieldRender
+                      key={f.key}
+                      field={f}
+                      value={watchedValues[f.key]}
+                      error={errors[f.key] as { message?: string } | undefined}
+                      options={fieldOptions[f.key]}
+                      setValue={(k, v) => setValue(k, v as never)}
+                      register={register}
+                      watchedValues={watchedValues}
+                      role={role}
+                    />
+                  ))}
+                </div>
               </div>
             );
           })}
