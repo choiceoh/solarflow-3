@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/appStore';
-import { buildTarget, isInspectorUi } from './inspectorTarget';
+import { buildTarget, isInspectorUi, setLastTargetEl } from './inspectorTarget';
 
 interface HoverRect {
   top: number;
@@ -36,11 +36,15 @@ export const InspectorOverlay = () => {
       if (!target || isInspectorUi(target)) return;
       e.preventDefault();
       e.stopPropagation();
+      setLastTargetEl(target instanceof HTMLElement ? target : null);
       setInspectorTarget(buildTarget(target));
     };
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setInspectorTarget(null);
+      if (e.key === 'Escape') {
+        setInspectorTarget(null);
+        setLastTargetEl(null);
+      }
     };
 
     document.addEventListener('mouseover', onMove);
@@ -50,6 +54,7 @@ export const InspectorOverlay = () => {
       document.removeEventListener('mouseover', onMove);
       document.removeEventListener('click', onClick, true);
       window.removeEventListener('keydown', onKey);
+      setLastTargetEl(null);
     };
   }, [editMode, setInspectorTarget]);
 

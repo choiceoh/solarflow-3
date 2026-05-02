@@ -12,6 +12,15 @@ export interface InspectorTarget {
 
 export type InspectorMode = 'element' | 'token';
 
+export interface ClassNameDraft {
+  id: string;
+  selector: string;
+  tagName: string;
+  before: string;
+  after: string;
+  ts: number;
+}
+
 const TOKEN_OVERRIDES_KEY = 'sf.token-overrides';
 
 const readTokenOverrides = (): Record<string, string> => {
@@ -52,6 +61,10 @@ interface AppState {
   setTokenOverride: (key: string, value: string) => void;
   resetTokenOverride: (key: string) => void;
   resetAllTokenOverrides: () => void;
+  classNameDrafts: ClassNameDraft[];
+  recordClassNameDraft: (draft: Omit<ClassNameDraft, 'id' | 'ts'>) => void;
+  removeClassNameDraft: (id: string) => void;
+  clearClassNameDrafts: () => void;
   companies: Company[];
   companiesLoaded: boolean;
   loadCompanies: () => Promise<void>;
@@ -98,6 +111,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       writeTokenOverrides({});
       return { tokenOverrides: {} };
     }),
+  classNameDrafts: [],
+  recordClassNameDraft: ({ selector, tagName, before, after }) =>
+    set((s) => {
+      const existing = s.classNameDrafts.find((d) => d.selector === selector);
+      const id = existing?.id ?? `${selector}-${Date.now()}`;
+      const baseBefore = existing?.before ?? before;
+      if (after === baseBefore) {
+        // 원복 — draft 제거
+        return { classNameDrafts: s.classNameDrafts.filter((d) => d.id !== id) };
+      }
+      const next: ClassNameDraft = { id, selector, tagName, before: baseBefore, after, ts: Date.now() };
+      const filtered = s.classNameDrafts.filter((d) => d.id !== id);
+      return { classNameDrafts: [...filtered, next] };
+    }),
+  removeClassNameDraft: (id) =>
+    set((s) => ({ classNameDrafts: s.classNameDrafts.filter((d) => d.id !== id) })),
+  clearClassNameDrafts: () => set({ classNameDrafts: [] }),
   companies: [],
   companiesLoaded: false,
   loadCompanies: () => {

@@ -1,5 +1,13 @@
 import type { InspectorTarget } from '@/stores/appStore';
 
+let lastTargetEl: HTMLElement | null = null;
+
+export const setLastTargetEl = (el: HTMLElement | null) => {
+  lastTargetEl = el;
+};
+
+export const getLastTargetEl = (): HTMLElement | null => lastTargetEl;
+
 const isHTML = (el: Element): el is HTMLElement => el instanceof HTMLElement;
 
 const getClassNameString = (el: Element): string => {

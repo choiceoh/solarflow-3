@@ -34,6 +34,7 @@ import TenantSwitcher from '@/components/layout/TenantSwitcher';
 import FloatingMwEaCalculator from '@/components/common/FloatingMwEaCalculator';
 import {
   EditModeBadge,
+  EditModeToggleButton,
   InspectorOverlay,
   InspectorPanel,
   useDesignTokens,
@@ -351,6 +352,7 @@ export default function CommandShell() {
               criticalCount={alertState.criticalCount}
             />
             <QuickRegister userId={user?.user_id} role={r} />
+            <EditModeToggleButton />
           </div>
         </header>
 
