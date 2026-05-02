@@ -202,12 +202,13 @@ export default function UIConfigEditorPage() {
     <div className="flex h-[calc(100vh-80px)]">
       {/* 좌측: config 목록 */}
       <aside className="w-72 shrink-0 border-r overflow-y-auto p-3 bg-muted/20 space-y-2">
-        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">메타 Config</div>
+        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">화면·폼·상세</div>
         <input
+          ref={(el) => { if (el && filter === '') el.focus(); }}
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="검색 (라벨/id/kind)"
+          placeholder="검색 (예: 은행, 거래처)"
           className="w-full rounded border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <ul className="space-y-1">
@@ -255,16 +256,16 @@ export default function UIConfigEditorPage() {
             <span className="text-xs text-muted-foreground mono">{selected.kind} · {selected.id}</span>
             {isOverridden && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase font-semibold">
-                Override 활성
+                변경됨
               </span>
             )}
           </div>
           {selected.routeHint && (
             <div className="text-[11px] text-muted-foreground">
-              미리보기 라우트: <a href={selected.routeHint} target="_blank" rel="noreferrer" className="underline">
+              실제 화면: <a href={selected.routeHint} target="_blank" rel="noreferrer" className="underline">
                 {selected.routeHint}
               </a>
-              <span className="ml-2 opacity-60">— 새 탭에서 열어두고 적용 후 새로고침해보세요</span>
+              <span className="ml-2 opacity-60">— 새 탭에서 열어두고 [적용] 후 새로고침</span>
             </div>
           )}
         </div>

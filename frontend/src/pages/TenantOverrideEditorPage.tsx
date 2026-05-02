@@ -132,7 +132,7 @@ export default function TenantOverrideEditorPage() {
     const runtime = loadRuntimeOverride(tenantId, selected.kind, selected.id);
     if (runtime) {
       setDraft(JSON.stringify(runtime, null, 2));
-      setStatus({ kind: 'info', msg: '현재 runtime override 표시 중 (localStorage)' });
+      setStatus({ kind: 'info', msg: '저장된 변경사항을 표시 중입니다' });
     } else {
       // 코드 overlay 가 있으면 참고용으로 표시 (편집 시작점)
       const codeOverlay = tenantId === 'topworks'
@@ -142,21 +142,25 @@ export default function TenantOverrideEditorPage() {
           : tenantOverrides[tenantId]?.forms?.[selected.id]);
       if (codeOverlay) {
         setDraft(JSON.stringify(codeOverlay, null, 2));
-        setStatus({ kind: 'info', msg: '코드 overlay (config/tenants/...) 참고용 — 편집 후 적용 시 runtime 으로 저장' });
+        setStatus({ kind: 'info', msg: '계열사 기본 설정을 참고용으로 표시 중입니다 — 편집 후 [적용]' });
       } else {
         setDraft('{\n  \n}');
-        setStatus({ kind: 'info', msg: '오버라이드 없음 — partial JSON 입력 (예: { "page": { "title": "..." } })' });
+        setStatus({ kind: 'info', msg: '아직 변경사항 없음 — 편집 후 [적용] 으로 저장' });
       }
     }
   }, [tenantId, selected.kind, selected.id]);
 
   useEffect(() => { refreshActive(); }, []);
 
-  // 선택/tenant 변경 시 이력 새로고침 + visual 모드 자동 해제 (지원 안 하는 config 일 수 있음)
+  // 선택/tenant 변경 시 이력 새로고침 + Visual 모드 자동 진입 (지원하면)
+  // 지원 안 하는 config 일 때는 JSON 모드로 폴백.
   useEffect(() => {
     setHistory(loadHistory(tenantId, selected.kind, selected.id));
     setShowHistory(false);
-    setEditMode('json');
+    const supportsVisual = selected.kind === 'screen'
+      ? selected.id in SCREEN_DEFAULTS
+      : selected.id in FORM_DEFAULTS;
+    setEditMode(supportsVisual ? 'visual' : 'json');
   }, [tenantId, selected.kind, selected.id]);
 
   if (role !== 'admin') {
@@ -359,15 +363,16 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-4">
       <div>
-        <h1 className="text-base font-semibold">테넌트 Override 편집기</h1>
+        <h1 className="text-base font-semibold">계열사별 화면 조정</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          tenant 별 runtime override 를 GUI 로 편집. 코드 overlay (<code>config/tenants/&lt;id&gt;.ts</code>) 위에 한 층 더 얹어 적용.
-          partial JSON 만 입력 (예: <code>{`{ "page": { "title": "..." } }`}</code>).
+          각 계열사 (탑웍스 / 탑에너지) 의 화면이나 폼을 다르게 보이도록 조정. 변경하면 본인 브라우저에서 즉시 반영, [적용] 후 다른 사용자도 접속 시 적용 (DB 저장은 별도).
+          <br />
+          <strong>흐름:</strong> 좌측에서 화면·폼 선택 → 라벨/컬럼/필드 변경 → [적용]. 잘못되면 [초기화] 또는 [이력] 으로 복원.
         </p>
       </div>
 
       <div className="rounded-md border bg-card p-4 flex items-center gap-3">
-        <span className="text-xs font-medium text-muted-foreground">대상 Tenant:</span>
+        <span className="text-xs font-medium text-muted-foreground">대상 계열사:</span>
         <Select value={tenantId} onValueChange={(v) => setTenantId(v as TenantId)}>
           <SelectTrigger className="h-8 w-56 text-xs">
             <span>{TENANT_LABELS[tenantId]}</span>
@@ -379,18 +384,19 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
           </SelectContent>
         </Select>
         <span className="text-[11px] text-muted-foreground">
-          활성 runtime overrides: {activeKeys.filter(a => a.tenantId === tenantId).length}개
+          이 계열사의 변경된 화면·폼: {activeKeys.filter(a => a.tenantId === tenantId).length}개
         </span>
       </div>
 
       <div className="grid grid-cols-12 gap-4">
         <aside className="col-span-3 rounded-md border bg-card p-3 space-y-2 text-sm">
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Config 선택</p>
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">화면·폼 선택</p>
           <input
+            ref={(el) => { if (el && filter === '') el.focus(); }}
             type="text"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="검색 (라벨/id/kind)"
+            placeholder="검색 (예: 은행, 거래처)"
             className="w-full rounded border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
           />
           <div className="space-y-1">
@@ -437,9 +443,11 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
                 variant={editMode === 'visual' ? 'default' : 'outline'}
                 onClick={() => setEditMode((m) => m === 'visual' ? 'json' : 'visual')}
                 disabled={!baseDefault}
-                title={baseDefault ? '시각 편집기로 전환 (전체 config 편집 — 저장 시 partial 효과 잃음)' : '이 config 는 시각 편집기 미지원'}
+                title={baseDefault
+                  ? (editMode === 'visual' ? 'JSON 직접 편집으로 전환' : '시각 편집기로 전환')
+                  : '이 항목은 시각 편집기 미지원'}
               >
-                {editMode === 'visual' ? 'Visual' : 'Visual 모드'}
+                {editMode === 'visual' ? '시각 편집' : 'JSON 편집'}
               </Button>
               <Button
                 size="sm"
@@ -461,7 +469,7 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
               </Button>
               <Button size="sm" variant="outline" onClick={onOpenPreview} title="새 탭에서 프리뷰">프리뷰</Button>
               <Button size="sm" variant="outline" onClick={onExportCode} title="현재 tenant 의 모든 runtime override 를 코드로 export (clipboard)">코드 export</Button>
-              <Button size="sm" variant="ghost" onClick={onReset}>기본값 복원</Button>
+              <Button size="sm" variant="ghost" onClick={onReset} title="이 화면·폼의 변경사항을 모두 제거하고 원래대로 돌립니다">초기화</Button>
               <Button size="sm" onClick={onApply}>적용</Button>
             </div>
           </div>
