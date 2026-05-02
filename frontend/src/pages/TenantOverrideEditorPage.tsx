@@ -24,6 +24,7 @@ import { tenantOverrides } from '@/config/tenants';
 import type { ListScreenConfig, MetaFormConfig } from '@/templates/types';
 import VisualScreenEditor from './UIConfigEditor/VisualScreenEditor';
 import VisualFormEditor from './UIConfigEditor/VisualFormEditor';
+import { ScreenSchemaPreview, FormSchemaPreview } from './UIConfigEditor/SchemaPreview';
 // 마스터 화면/폼 default config — Visual 모드에서 base 로 사용
 import companiesScreen from '@/config/screens/companies';
 import banksScreen from '@/config/screens/banks';
@@ -118,6 +119,7 @@ export default function TenantOverrideEditorPage() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [editMode, setEditMode] = useState<'json' | 'visual'>('json');
+  const [showSidePreview, setShowSidePreview] = useState(false);
 
   // 안전망 (PR #248): saved 스냅샷 + undo/redo + auto-save draft + dirty 감지
   const savedDraftRef = useRef<string>('');     // 마지막으로 적용/로드된 draft (이것과 다르면 dirty)
@@ -607,7 +609,15 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
               >
                 이력 {history.length > 0 && <span className="ml-1 rounded bg-foreground/10 px-1 text-[10px]">{history.length}</span>}
               </Button>
-              <Button size="sm" variant="outline" onClick={onOpenPreview} title="새 탭에서 프리뷰">프리뷰</Button>
+              <Button
+                size="sm"
+                variant={showSidePreview ? 'default' : 'outline'}
+                onClick={() => setShowSidePreview((v) => !v)}
+                title="옆에 즉시 미리보기 (구조만)"
+              >
+                옆 미리보기
+              </Button>
+              <Button size="sm" variant="outline" onClick={onOpenPreview} title="실제 화면을 새 탭으로 열기 — [적용] 후 새로고침해야 반영">새 탭</Button>
               <Button size="sm" variant="outline" onClick={onExportCode} title="현재 tenant 의 모든 runtime override 를 코드로 export (clipboard)">코드 export</Button>
               <Button size="sm" variant="ghost" onClick={onReset} title="이 화면·폼의 변경사항을 모두 제거하고 원래대로 돌립니다">초기화</Button>
               <Button size="sm" onClick={onApply} title="적용 (⌘S)">
@@ -695,42 +705,54 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
             </div>
           )}
 
-          {editMode === 'visual' && visualValue ? (
-            <div className="rounded-md border bg-card min-h-[600px] flex flex-col">
-              {selected.kind === 'screen' ? (
-                <VisualScreenEditor
-                  value={visualValue as ListScreenConfig}
-                  onChange={(next) => setDraft(JSON.stringify(next, null, 2))}
-                  jsonDraft={draft}
-                  onJsonDraftChange={setDraft}
-                />
+          <div className={showSidePreview ? 'grid grid-cols-2 gap-4' : ''}>
+            <div className="min-w-0">
+              {editMode === 'visual' && visualValue ? (
+                <div className="rounded-md border bg-card min-h-[600px] flex flex-col">
+                  {selected.kind === 'screen' ? (
+                    <VisualScreenEditor
+                      value={visualValue as ListScreenConfig}
+                      onChange={(next) => setDraft(JSON.stringify(next, null, 2))}
+                      jsonDraft={draft}
+                      onJsonDraftChange={setDraft}
+                    />
+                  ) : (
+                    <VisualFormEditor
+                      value={visualValue as MetaFormConfig}
+                      onChange={(next) => setDraft(JSON.stringify(next, null, 2))}
+                      jsonDraft={draft}
+                      onJsonDraftChange={setDraft}
+                    />
+                  )}
+                </div>
+              ) : showDiff ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      코드 overlay (config/tenants/{tenantId}.ts) — readonly
+                    </p>
+                    <Textarea
+                      value={codeOverlayJson}
+                      readOnly
+                      rows={26}
+                      className="font-mono text-xs bg-muted/40"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      runtime override (편집 중)
+                    </p>
+                    <Textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      rows={26}
+                      className="font-mono text-xs"
+                      spellCheck={false}
+                    />
+                  </div>
+                </div>
               ) : (
-                <VisualFormEditor
-                  value={visualValue as MetaFormConfig}
-                  onChange={(next) => setDraft(JSON.stringify(next, null, 2))}
-                  jsonDraft={draft}
-                  onJsonDraftChange={setDraft}
-                />
-              )}
-            </div>
-          ) : showDiff ? (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  코드 overlay (config/tenants/{tenantId}.ts) — readonly
-                </p>
-                <Textarea
-                  value={codeOverlayJson}
-                  readOnly
-                  rows={26}
-                  className="font-mono text-xs bg-muted/40"
-                  spellCheck={false}
-                />
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  runtime override (편집 중)
-                </p>
                 <Textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
@@ -738,17 +760,17 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
                   className="font-mono text-xs"
                   spellCheck={false}
                 />
-              </div>
+              )}
             </div>
-          ) : (
-            <Textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              rows={26}
-              className="font-mono text-xs"
-              spellCheck={false}
-            />
-          )}
+            {showSidePreview && (
+              <div className="min-w-0 rounded-md border bg-muted/10 p-3 max-h-[700px] overflow-auto">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                  옆 미리보기 (구조만)
+                </p>
+                <SidePreview kind={selected.kind} value={visualValue} />
+              </div>
+            )}
+          </div>
 
           <p className="text-[11px] text-muted-foreground">
             <strong>적용 흐름:</strong> defaultConfig → 코드 overlay → <strong>runtime overlay</strong> → DB override → 화면.
@@ -758,4 +780,15 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
       </div>
     </div>
   );
+}
+
+// 옆 미리보기 — 편집 중 draft 의 구조를 즉시 시각화
+function SidePreview({ kind, value }: { kind: ConfigKind; value: Record<string, unknown> | null }) {
+  if (!value) {
+    return <div className="text-[11px] text-muted-foreground italic">기본 설정 없음 — 편집 후 미리보기 가능</div>;
+  }
+  if (kind === 'screen') {
+    return <ScreenSchemaPreview config={value as unknown as ListScreenConfig} />;
+  }
+  return <FormSchemaPreview config={value as unknown as MetaFormConfig} />;
 }
