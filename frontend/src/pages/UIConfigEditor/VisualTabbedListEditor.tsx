@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import type { TabbedListConfig } from '@/templates/types';
 import { contentBlocks } from '@/templates/registry';
-import { ArrayEditor, FieldInput, FieldSelect, moveInArray } from './ArrayEditor';
+import { ArrayEditor, FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
 
 type Tab = 'basic' | 'tabs' | 'json';
 
@@ -46,19 +46,6 @@ export default function VisualTabbedListEditor({
         )}
       </div>
     </div>
-  );
-}
-
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap
-        ${active ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-    >
-      {children}
-    </button>
   );
 }
 

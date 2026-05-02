@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import type { ListScreenConfig } from '@/templates/types';
+import { TabButton } from './ArrayEditor';
 import { ColumnsTab } from './ColumnsTab';
 import { MetricsTab } from './MetricsTab';
 import { FiltersTab } from './FiltersTab';
@@ -66,25 +67,6 @@ export default function VisualScreenEditor({
         )}
       </div>
     </div>
-  );
-}
-
-function TabButton({
-  active, onClick, children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap
-        ${active ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-    >
-      {children}
-    </button>
   );
 }
 

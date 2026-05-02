@@ -130,3 +130,23 @@ export function moveInArray<T>(arr: T[], idx: number, dir: -1 | 1): T[] {
   [next[idx], next[target]] = [next[target], next[idx]];
   return next;
 }
+
+// ─── 시각 편집기 공용 탭 버튼 ────────────────────────────────────────────
+export function TabButton({
+  active, onClick, children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap
+        ${active ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+    >
+      {children}
+    </button>
+  );
+}

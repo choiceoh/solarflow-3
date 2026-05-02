@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import type { FieldConfig, FieldType, FormSection, MetaFormConfig } from '@/templates/types';
 import { enumDictionaries, masterSources } from '@/templates/registry';
-import { FieldInput, FieldSelect, moveInArray } from './ArrayEditor';
+import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'text', label: 'text' },
@@ -74,17 +74,6 @@ export default function VisualFormEditor({
   );
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button" onClick={onClick}
-      className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap
-        ${active ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-    >
-      {children}
-    </button>
-  );
-}
 
 function BasicTab({ value, onChange }: { value: MetaFormConfig; onChange: (next: MetaFormConfig) => void }) {
   const title = value.title ?? { create: '', edit: '' };
