@@ -17,13 +17,15 @@ import partnerFormConfig from '@/config/forms/partners';
 import outboundSimpleFormConfig from '@/config/forms/outbound_simple';
 import companyFormConfig from '@/config/forms/companies';
 import bankFormConfig from '@/config/forms/banks';
+import warehouseFormConfig from '@/config/forms/warehouses';
+import manufacturerFormConfig from '@/config/forms/manufacturers';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
 import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
   type OutboundStatus, type UsageCategory, type Outbound, type SaleListItem,
 } from '@/types/outbound';
-import type { Partner, Bank } from '@/types/masters';
+import type { Partner, Bank, Warehouse, Manufacturer } from '@/types/masters';
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
@@ -101,6 +103,15 @@ export const cellRenderers: Record<string, CellRenderer> = {
     const r = row as Bank;
     return <span>{r.companies?.company_name ?? r.company_name ?? '—'}</span>;
   },
+  // Phase 4: 창고 유형 라벨 (port/factory/vendor → 항구/공장/업체)
+  warehouse_type_badge: (v) => {
+    const t = v as string;
+    const label: Record<string, string> = { port: '항구', factory: '공장', vendor: '업체' };
+    const variant: Record<string, 'default' | 'secondary' | 'outline'> = {
+      port: 'default', factory: 'secondary', vendor: 'outline',
+    };
+    return <Badge variant={variant[t] ?? 'secondary'}>{label[t] ?? t}</Badge>;
+  },
 };
 
 // 단순 리스트 fetch hook (서버 필터 없음 — 클라이언트 검색만)
@@ -137,6 +148,8 @@ export const dataHooks: Record<string, DataHook> = {
   usePartnerList: () => useSimpleList<Partner>('/api/v1/partners') as unknown as DataHookResult,
   useCompanyList: () => useSimpleList<Record<string, unknown>>('/api/v1/companies') as unknown as DataHookResult,
   useBankList: () => useSimpleList<Bank>('/api/v1/banks') as unknown as DataHookResult,
+  useWarehouseList: () => useSimpleList<Warehouse>('/api/v1/warehouses') as unknown as DataHookResult,
+  useManufacturerList: () => useSimpleList<Manufacturer>('/api/v1/manufacturers') as unknown as DataHookResult,
 };
 
 // ─── Detail data hooks (단건 fetch by id) ─────────────────────────────────
@@ -175,6 +188,17 @@ export const metricComputers: Record<string, MetricComputer> = {
       .reduce((s, b) => s + (b.lc_limit_usd ?? 0), 0);
     return (sum / 1_000_000).toFixed(1);
   },
+  // Phase 4: 창고
+  'count.warehouse_active': (items) =>
+    (items as Warehouse[]).filter((w) => w.is_active).length.toLocaleString(),
+  // Phase 4: 제조사
+  'count.manufacturer_active': (items) =>
+    (items as Manufacturer[]).filter((m) => m.is_active).length.toLocaleString(),
+  // domestic_foreign 값이 영문(domestic/foreign) 또는 한글(국내/해외)로 들어오는 케이스를 모두 처리
+  'count.manufacturer_domestic': (items) =>
+    (items as Manufacturer[]).filter((m) => m.domestic_foreign === '국내' || m.domestic_foreign === 'domestic').length.toLocaleString(),
+  'count.manufacturer_foreign': (items) =>
+    (items as Manufacturer[]).filter((m) => m.domestic_foreign === '해외' || m.domestic_foreign === 'foreign').length.toLocaleString(),
 };
 
 // ─── Sub computers (메트릭 sub 텍스트 동적 생성) ───────────────────────────
@@ -249,6 +273,28 @@ const BankFormV2: FormComponent = (props) => (
   />
 );
 
+// 창고 메타 폼 (Phase 4)
+const WarehouseFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={warehouseFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
+// 제조사 메타 폼 (Phase 4)
+const ManufacturerFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={manufacturerFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
 export const formComponents: Record<string, FormComponent> = {
   outbound_form: OutboundForm as unknown as FormComponent,
   outbound_form_simple: OutboundFormSimple,    // 메타 한계선 데모용
@@ -256,6 +302,8 @@ export const formComponents: Record<string, FormComponent> = {
   partner_form_v2: PartnerFormV2,
   company_form_v2: CompanyFormV2,              // Phase 4: 법인 마스터 메타 폼
   bank_form_v2: BankFormV2,                    // Phase 4: 은행 마스터 메타 폼
+  warehouse_form_v2: WarehouseFormV2,          // Phase 4: 창고 마스터 메타 폼
+  manufacturer_form_v2: ManufacturerFormV2,    // Phase 4: 제조사 마스터 메타 폼
 };
 
 export const detailComponents: Record<string, DetailComponent> = {
