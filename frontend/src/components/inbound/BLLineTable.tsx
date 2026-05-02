@@ -32,12 +32,13 @@ function buildColumns({ currency, manufacturerName, onEdit }: BuildOpts): Column
       cell: (line) => manufacturerName && pSpec(line) != null
         ? `${manufacturerName} ${pSpec(line)}W`
         : manufacturerName ?? (pSpec(line) != null ? `${pSpec(line)}W` : '—'),
+      sortAccessor: (line) => pSpec(line) ?? 0,
     },
-    { key: 'product_code', label: '품번', hideable: true, className: 'font-mono', cell: (l) => pCode(l) },
-    { key: 'product_name', label: '품명', hideable: true, cell: (l) => pName(l) },
-    { key: 'quantity', label: '수량', align: 'right', className: 'tabular-nums', cell: (l) => formatNumber(l.quantity) },
-    { key: 'capacity_kw', label: '용량(kW)', hideable: true, align: 'right', className: 'tabular-nums', cell: (l) => formatCapacity(l.capacity_kw, l.quantity) },
-    { key: 'capacity_mw', label: '용량(MW)', hideable: true, align: 'right', className: 'tabular-nums', cell: (l) => l.capacity_kw != null ? (l.capacity_kw / 1000).toFixed(3) : '—' },
+    { key: 'product_code', label: '품번', hideable: true, className: 'font-mono', cell: (l) => pCode(l), sortAccessor: (l) => pCode(l) },
+    { key: 'product_name', label: '품명', hideable: true, cell: (l) => pName(l), sortAccessor: (l) => pName(l) },
+    { key: 'quantity', label: '수량', align: 'right', className: 'tabular-nums', cell: (l) => formatNumber(l.quantity), sortAccessor: (l) => l.quantity },
+    { key: 'capacity_kw', label: '용량(kW)', hideable: true, align: 'right', className: 'tabular-nums', cell: (l) => formatCapacity(l.capacity_kw, l.quantity), sortAccessor: (l) => l.capacity_kw ?? 0 },
+    { key: 'capacity_mw', label: '용량(MW)', hideable: true, align: 'right', className: 'tabular-nums', cell: (l) => l.capacity_kw != null ? (l.capacity_kw / 1000).toFixed(3) : '—', sortAccessor: (l) => l.capacity_kw ?? 0 },
     {
       key: 'item_type', label: '구분', hideable: true,
       cell: (l) => (
@@ -45,6 +46,7 @@ function buildColumns({ currency, manufacturerName, onEdit }: BuildOpts): Column
           {l.item_type === 'main' ? '본품' : '스페어'}
         </span>
       ),
+      sortAccessor: (l) => l.item_type ?? '',
     },
     {
       key: 'payment_type', label: '유/무상', hideable: true,
@@ -53,12 +55,14 @@ function buildColumns({ currency, manufacturerName, onEdit }: BuildOpts): Column
           {l.payment_type === 'paid' ? '유상' : '무상'}
         </span>
       ),
+      sortAccessor: (l) => l.payment_type ?? '',
     },
     {
       key: 'unit_price', label: currency === 'USD' ? '단가(USD/Wp)' : '단가(KRW/Wp)', hideable: true, align: 'right', className: 'tabular-nums',
       cell: (l) => currency === 'USD'
         ? (l.unit_price_usd_wp != null ? `$${l.unit_price_usd_wp.toFixed(4)}` : '—')
         : (l.unit_price_krw_wp != null ? `${formatNumber(l.unit_price_krw_wp)}원` : '—'),
+      sortAccessor: (l) => (currency === 'USD' ? l.unit_price_usd_wp : l.unit_price_krw_wp) ?? 0,
     },
     {
       key: 'actions', label: '', headerClassName: 'w-10',

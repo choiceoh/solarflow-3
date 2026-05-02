@@ -2,15 +2,18 @@ import { useMemo, type ReactNode } from 'react';
 import {
   flexRender,
   getCoreRowModel,
+  getSortedRowModel,
   useReactTable,
   type ColumnDef as TSColumnDef,
   type VisibilityState,
 } from '@tanstack/react-table';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import EmptyState from './EmptyState';
 import { cn } from '@/lib/utils';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
 import { useColumnWidths, type ColumnSizingState } from '@/lib/columnWidths';
+import { useColumnSort, type SortingState } from '@/lib/columnSort';
 
 export interface ColumnDef<T> extends ColumnVisibilityMeta {
   cell: (item: T) => ReactNode;
@@ -25,10 +28,16 @@ export interface ColumnDef<T> extends ColumnVisibilityMeta {
   minWidth?: number;
   /** 최대 폭(px). 미지정 800. */
   maxWidth?: number;
+  /**
+   * 정렬 옵트인 — 함수가 주어지면 해당 컬럼 헤더가 클릭 정렬 가능해짐.
+   * cell 이 자유 JSX 라 정렬에 쓸 원본 값을 명시 (string | number | Date | null).
+   * 예) sortAccessor: (ob) => ob.outbound_date
+   */
+  sortAccessor?: (item: T) => string | number | Date | null | undefined;
 }
 
 export interface MetaTableProps<T> {
-  /** localStorage scope — 컬럼 폭 영속 저장에 사용. 미지정 시 폭 영속 비활성. */
+  /** localStorage scope — 컬럼 폭/정렬 영속 저장에 사용. 미지정 시 영속 비활성. */
   tableId?: string;
   columns: ColumnDef<T>[];
   hidden: Set<string>;
@@ -51,12 +60,12 @@ export function MetaTable<T>({
   tableId, columns, hidden, items, getRowKey, onRowClick,
   emptyMessage, emptyAction, rowClassName, tableClassName,
 }: MetaTableProps<T>) {
-  // ─── 컬럼 폭 (localStorage 영속) — tableId 없으면 비영속 무시 ─────────────
-  // 폭 hook 은 항상 호출하되 tableId 없으면 빈 상태로 동작 (Hooks 규칙)
+  // ─── 영속 hooks — tableId 없으면 빈 scope 로 비영속 동작 ──────────────────
   const widths = useColumnWidths(tableId ?? '');
-  const sizingEnabled = !!tableId;
+  const sortPersist = useColumnSort(tableId ?? '');
+  const persistEnabled = !!tableId;
 
-  // ─── visibility state — 외부에서 받은 hidden Set 을 TanStack 형태로 변환 ─
+  // ─── visibility — 외부에서 받은 hidden Set 을 TanStack 형태로 변환 ───────
   const columnVisibility: VisibilityState = useMemo(() => {
     const v: VisibilityState = {};
     for (const c of columns) v[c.key] = !hidden.has(c.key);
@@ -64,32 +73,51 @@ export function MetaTable<T>({
   }, [columns, hidden]);
 
   // ─── TanStack column defs ────────────────────────────────────────────────
-  const tsColumns = useMemo<TSColumnDef<T>[]>(() => columns.map((c) => ({
-    id: c.key,
-    header: c.label,
-    cell: ({ row }) => c.cell(row.original),
-    enableHiding: c.hideable ?? false,
-    enableResizing: c.resizable !== false,  // 기본 true
-    size: c.defaultWidth ?? 150,
-    minSize: c.minWidth ?? 40,
-    maxSize: c.maxWidth ?? 800,
-    meta: { align: c.align, className: c.className, headerClassName: c.headerClassName } as { align?: 'left' | 'right' | 'center'; className?: string; headerClassName?: string },
-  })), [columns]);
+  const tsColumns = useMemo<TSColumnDef<T>[]>(() => columns.map((c) => {
+    const accessor = c.sortAccessor;
+    return {
+      id: c.key,
+      header: c.label,
+      cell: ({ row }) => c.cell(row.original),
+      // 정렬: accessor 가 있으면 enableSorting + accessorFn 으로 값 추출
+      enableSorting: !!accessor,
+      accessorFn: accessor ? (row: T) => {
+        const v = accessor(row);
+        // Date 는 timestamp 로, null/undefined 는 정렬 시 뒤로 가도록 빈 문자열로
+        if (v == null) return '';
+        if (v instanceof Date) return v.getTime();
+        return v;
+      } : undefined,
+      sortUndefined: 'last' as const,
+      enableHiding: c.hideable ?? false,
+      enableResizing: c.resizable !== false,
+      size: c.defaultWidth ?? 150,
+      minSize: c.minWidth ?? 40,
+      maxSize: c.maxWidth ?? 800,
+      meta: { align: c.align, className: c.className, headerClassName: c.headerClassName } as { align?: 'left' | 'right' | 'center'; className?: string; headerClassName?: string },
+    };
+  }), [columns]);
 
   // ─── useReactTable ───────────────────────────────────────────────────────
   const table = useReactTable({
     data: items,
     columns: tsColumns,
-    state: { columnVisibility, columnSizing: sizingEnabled ? widths.sizing : {} },
-    onColumnSizingChange: sizingEnabled
-      ? (updater) => {
-          // updater 는 함수 또는 객체 — useColumnWidths 가 둘 다 지원
-          widths.setSizing(updater as ColumnSizingState | ((prev: ColumnSizingState) => ColumnSizingState));
-        }
+    state: {
+      columnVisibility,
+      columnSizing: persistEnabled ? widths.sizing : {},
+      sorting: persistEnabled ? sortPersist.sorting : [],
+    },
+    onColumnSizingChange: persistEnabled
+      ? (updater) => widths.setSizing(updater as ColumnSizingState | ((prev: ColumnSizingState) => ColumnSizingState))
+      : undefined,
+    onSortingChange: persistEnabled
+      ? (updater) => sortPersist.setSorting(updater as SortingState | ((prev: SortingState) => SortingState))
       : undefined,
     columnResizeMode: 'onChange',
-    enableColumnResizing: sizingEnabled,
+    enableColumnResizing: persistEnabled,
+    enableSortingRemoval: true,  // 두 번째 클릭 후 한 번 더 클릭하면 정렬 해제
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     getRowId: (row) => getRowKey(row),
   });
 
@@ -111,13 +139,32 @@ export function MetaTable<T>({
             {hg.headers.map((header) => {
               const meta = header.column.columnDef.meta as { align?: 'left' | 'right' | 'center'; headerClassName?: string } | undefined;
               const canResize = header.column.getCanResize();
+              const canSort = header.column.getCanSort();
+              const sorted = header.column.getIsSorted();
+              const SortIcon = sorted === 'asc' ? ArrowUp : sorted === 'desc' ? ArrowDown : ArrowUpDown;
               return (
                 <TableHead
                   key={header.id}
                   className={cn('relative', alignClass(meta?.align), meta?.headerClassName)}
                   style={{ width: header.getSize() }}
                 >
-                  {flexRender(header.column.columnDef.header, header.getContext())}
+                  {canSort ? (
+                    <button
+                      type="button"
+                      onClick={header.column.getToggleSortingHandler()}
+                      className={cn(
+                        'inline-flex items-center gap-1 select-none',
+                        'hover:text-foreground transition-colors',
+                        sorted ? 'text-foreground font-semibold' : 'text-muted-foreground',
+                        meta?.align === 'right' && 'flex-row-reverse',
+                      )}
+                    >
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      <SortIcon className={cn('h-3 w-3 shrink-0', !sorted && 'opacity-40')} />
+                    </button>
+                  ) : (
+                    flexRender(header.column.columnDef.header, header.getContext())
+                  )}
                   {canResize && (
                     <span
                       onMouseDown={header.getResizeHandler()}

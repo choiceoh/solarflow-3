@@ -14,7 +14,7 @@ interface Props {
 
 function buildColumns({ onInvoice }: { onInvoice?: (item: SaleListItem) => void }): ColumnDef<SaleListItem>[] {
   return [
-    { key: 'date', label: '기준일', cell: (item) => formatDate(item.outbound_date ?? item.order_date ?? '') },
+    { key: 'date', label: '기준일', cell: (item) => formatDate(item.outbound_date ?? item.order_date ?? ''), sortAccessor: (item) => item.outbound_date ?? item.order_date ?? '' },
     {
       key: 'kind', label: '구분', hideable: true,
       cell: (item) => (
@@ -22,14 +22,15 @@ function buildColumns({ onInvoice }: { onInvoice?: (item: SaleListItem) => void 
           {item.outbound_id ? '출고' : '수주'}
         </span>
       ),
+      sortAccessor: (item) => item.outbound_id ? 1 : 0,
     },
-    { key: 'customer_name', label: '거래처', hideable: true, cell: (item) => item.sale.customer_name ?? '—' },
-    { key: 'product_name', label: '품명', hideable: true, cell: (item) => item.product_name ?? '—' },
-    { key: 'spec_wp', label: '규격', hideable: true, cell: (item) => item.spec_wp ? `${item.spec_wp}` : '—' },
-    { key: 'quantity', label: '수량', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => formatNumber(item.quantity) },
-    { key: 'unit_price_wp', label: 'Wp단가', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => formatNumber(item.sale.unit_price_wp) },
-    { key: 'supply_amount', label: '공급가', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => item.sale.supply_amount ? formatNumber(item.sale.supply_amount) : '—' },
-    { key: 'vat_amount', label: '부가세', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => item.sale.vat_amount ? formatNumber(item.sale.vat_amount) : '—' },
+    { key: 'customer_name', label: '거래처', hideable: true, cell: (item) => item.sale.customer_name ?? '—', sortAccessor: (item) => item.sale.customer_name ?? '' },
+    { key: 'product_name', label: '품명', hideable: true, cell: (item) => item.product_name ?? '—', sortAccessor: (item) => item.product_name ?? '' },
+    { key: 'spec_wp', label: '규격', hideable: true, cell: (item) => item.spec_wp ? `${item.spec_wp}` : '—', sortAccessor: (item) => item.spec_wp ?? 0 },
+    { key: 'quantity', label: '수량', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => formatNumber(item.quantity), sortAccessor: (item) => item.quantity },
+    { key: 'unit_price_wp', label: 'Wp단가', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => formatNumber(item.sale.unit_price_wp), sortAccessor: (item) => item.sale.unit_price_wp ?? 0 },
+    { key: 'supply_amount', label: '공급가', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => item.sale.supply_amount ? formatNumber(item.sale.supply_amount) : '—', sortAccessor: (item) => item.sale.supply_amount ?? 0 },
+    { key: 'vat_amount', label: '부가세', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => item.sale.vat_amount ? formatNumber(item.sale.vat_amount) : '—', sortAccessor: (item) => item.sale.vat_amount ?? 0 },
     {
       key: 'total_amount', label: '합계', hideable: true, align: 'right', className: 'tabular-nums font-semibold',
       cell: (item) => (
@@ -37,9 +38,11 @@ function buildColumns({ onInvoice }: { onInvoice?: (item: SaleListItem) => void 
           {item.sale.total_amount ? formatNumber(item.sale.total_amount) : '—'}
         </span>
       ),
+      sortAccessor: (item) => item.sale.total_amount ?? 0,
     },
     {
       key: 'tax_invoice_date', label: '계산서일', hideable: true,
+      sortAccessor: (item) => item.sale.tax_invoice_date ?? '',
       cell: (item) => item.sale.tax_invoice_date ? (
         <button
           type="button"
@@ -69,6 +72,7 @@ function buildColumns({ onInvoice }: { onInvoice?: (item: SaleListItem) => void 
           {item.sale.erp_closed ? '마감' : '미마감'}
         </span>
       ),
+      sortAccessor: (item) => item.sale.erp_closed ? 1 : 0,
     },
   ];
 }

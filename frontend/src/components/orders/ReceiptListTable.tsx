@@ -41,15 +41,16 @@ function MatchBadge({ receipt }: { receipt: Receipt }) {
 
 function buildColumns({ onEdit, onDelete }: { onEdit?: (r: Receipt) => void; onDelete?: (r: Receipt) => void }): ColumnDef<Receipt>[] {
   return [
-    { key: 'receipt_date', label: '입금일', cell: (r) => formatDate(r.receipt_date) },
-    { key: 'customer_name', label: '거래처', hideable: true, cell: (r) => r.customer_name ?? '—' },
+    { key: 'receipt_date', label: '입금일', cell: (r) => formatDate(r.receipt_date), sortAccessor: (r) => r.receipt_date ?? '' },
+    { key: 'customer_name', label: '거래처', hideable: true, cell: (r) => r.customer_name ?? '—', sortAccessor: (r) => r.customer_name ?? '' },
     {
       key: 'amount', label: '입금액', hideable: true, align: 'right', className: 'tabular-nums font-semibold',
       cell: (r) => <span style={{ color: 'var(--sf-ink)' }}>{formatNumber(r.amount)}원</span>,
+      sortAccessor: (r) => r.amount,
     },
-    { key: 'bank_account', label: '입금계좌', hideable: true, cell: (r) => r.bank_account ?? '—' },
-    { key: 'match_status', label: '매칭상태', hideable: true, cell: (r) => <MatchBadge receipt={r} /> },
-    { key: 'memo', label: '메모', hideable: true, className: 'max-w-[200px] truncate', cell: (r) => r.memo ?? '—' },
+    { key: 'bank_account', label: '입금계좌', hideable: true, cell: (r) => r.bank_account ?? '—', sortAccessor: (r) => r.bank_account ?? '' },
+    { key: 'match_status', label: '매칭상태', hideable: true, cell: (r) => <MatchBadge receipt={r} />, sortAccessor: (r) => getMatchStatus(r) },
+    { key: 'memo', label: '메모', hideable: true, className: 'max-w-[200px] truncate', cell: (r) => r.memo ?? '—', sortAccessor: (r) => r.memo ?? '' },
     {
       key: 'actions', label: '작업', align: 'right',
       cell: (r) => (
