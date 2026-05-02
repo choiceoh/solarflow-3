@@ -3,6 +3,7 @@
 
 mod config;
 mod db;
+mod error;
 mod routes;
 mod calc;
 mod model;

@@ -2,5 +2,6 @@
 pub mod calc;
 pub mod config;
 pub mod db;
+pub mod error;
 pub mod model;
 pub mod routes;
