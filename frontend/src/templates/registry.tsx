@@ -632,12 +632,45 @@ export const formSubmitters: Record<string, FormSubmitter> = {
 
 // Phase 4 — Step 3 prep: 폼 안 임의 컴포넌트 슬롯 (FormSection.contentBlock)
 // list 의 contentBlocks 와 시그니처 다름 — form watch/setValue/getValues API 받음.
-export const formContentBlocks: Record<string, FormContentBlock> = {};
+export const formContentBlocks: Record<string, FormContentBlock> = {
+  // 데모: 현재 입력값 요약 — watch 로 라이브 표시
+  demo_status_widget: ({ watch }) => {
+    const poId = watch('po_id') as string | undefined;
+    const mfg = watch('manufacturer') as string | undefined;
+    const lines = watch('lines') as Array<{ quantity?: number }> | undefined;
+    const total = (lines ?? []).reduce((s, l) => s + (Number(l.quantity) || 0), 0);
+    return (
+      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs space-y-1">
+        <div className="font-semibold text-amber-900">실시간 위젯 (contentBlock)</div>
+        <div className="text-amber-800">
+          <span className="font-mono">po_id</span> = {poId || '—'} ·
+          <span className="font-mono"> 제조사</span> = {mfg || '(cascade 대기)'} ·
+          <span className="font-mono"> 라인 합계</span> = <strong>{total}</strong> EA
+        </div>
+        <div className="text-[10px] text-amber-700">
+          이 위젯은 폼의 watch() 로 라이브 표시 — OCR 위젯 / 결제조건 파서도 같은 패턴
+        </div>
+      </div>
+    );
+  },
+};
 
 // Phase 4 — Step 3 prep: 필드 cascade — 한 필드 값 변경 시 다른 필드 자동 채우기.
 // FieldConfig.cascadeId 가 이 키를 참조.
 // 함수는 idempotent 해야 함 (target value 가 이미 같으면 setValue 호출 안 함 — 무한 루프 방지).
-export const fieldCascades: Record<string, FieldCascade> = {};
+export const fieldCascades: Record<string, FieldCascade> = {
+  // 데모: PO 선택 시 제조사 + 통화 자동 fill
+  demo_po_cascade: (poId, _values, setValue) => {
+    if (!poId) return;
+    if (poId === 'po-100') {
+      setValue('manufacturer', '진코솔라');
+      setValue('currency', 'USD');
+    } else if (poId === 'po-200') {
+      setValue('manufacturer', '한화큐셀');
+      setValue('currency', 'KRW');
+    }
+  },
+};
 
 export const detailComponents: Record<string, DetailComponent> = {
   outbound: ((props) => <OutboundDetailView outboundId={props.id} onBack={props.onBack} />) as DetailComponent,

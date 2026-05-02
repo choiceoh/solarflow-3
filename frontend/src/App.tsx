@@ -19,6 +19,7 @@ const OutboundFormMetaDemoPage = lazy(() => import('@/pages/OutboundFormMetaDemo
 const OutboundDetailMetaDemoPage = lazy(() => import('@/pages/OutboundDetailMetaDemoPage'));
 const DeclarationDetailMetaDemoPage = lazy(() => import('@/pages/DeclarationDetailMetaDemoPage'));
 const MetaFormDepsDemoPage = lazy(() => import('@/pages/MetaFormDepsDemoPage'));
+const MetaFeaturesDemoPage = lazy(() => import('@/pages/MetaFeaturesDemoPage'));
 const POLineMetaDemoPage = lazy(() => import('@/pages/POLineMetaDemoPage'));
 const CostMetaDemoPage = lazy(() => import('@/pages/CostMetaDemoPage'));
 const ChildFormsMetaDemoPage = lazy(() => import('@/pages/ChildFormsMetaDemoPage'));
@@ -121,6 +122,7 @@ export default function App() {
                 <Route path="/outbound-detail-meta-demo" element={<OutboundDetailMetaDemoPage />} />
                 <Route path="/declaration-detail-meta-demo" element={<DeclarationDetailMetaDemoPage />} />
                 <Route path="/meta-form-deps-demo" element={<MetaFormDepsDemoPage />} />
+                <Route path="/meta-features-demo" element={<MetaFeaturesDemoPage />} />
                 <Route path="/po-line-meta-demo" element={<POLineMetaDemoPage />} />
                 <Route path="/cost-meta-demo" element={<CostMetaDemoPage />} />
                 <Route path="/child-forms-meta-demo" element={<ChildFormsMetaDemoPage />} />
