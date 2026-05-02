@@ -10,6 +10,33 @@ export interface InspectorTarget {
   rect: { top: number; left: number; width: number; height: number };
 }
 
+export type InspectorMode = 'element' | 'token';
+
+const TOKEN_OVERRIDES_KEY = 'sf.token-overrides';
+
+const readTokenOverrides = (): Record<string, string> => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(TOKEN_OVERRIDES_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeTokenOverrides = (overrides: Record<string, string>) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (Object.keys(overrides).length === 0) {
+      window.localStorage.removeItem(TOKEN_OVERRIDES_KEY);
+    } else {
+      window.localStorage.setItem(TOKEN_OVERRIDES_KEY, JSON.stringify(overrides));
+    }
+  } catch {
+    /* noop */
+  }
+};
+
 interface AppState {
   selectedCompanyId: string | null;
   setCompanyId: (id: string | null) => void;
@@ -19,6 +46,12 @@ interface AppState {
   toggleEditMode: () => void;
   inspectorTarget: InspectorTarget | null;
   setInspectorTarget: (target: InspectorTarget | null) => void;
+  inspectorMode: InspectorMode;
+  setInspectorMode: (mode: InspectorMode) => void;
+  tokenOverrides: Record<string, string>;
+  setTokenOverride: (key: string, value: string) => void;
+  resetTokenOverride: (key: string) => void;
+  resetAllTokenOverrides: () => void;
   companies: Company[];
   companiesLoaded: boolean;
   loadCompanies: () => Promise<void>;
@@ -45,6 +78,26 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleEditMode: () => set((s) => ({ editMode: !s.editMode, inspectorTarget: null })),
   inspectorTarget: null,
   setInspectorTarget: (target) => set({ inspectorTarget: target }),
+  inspectorMode: 'element',
+  setInspectorMode: (mode) => set({ inspectorMode: mode }),
+  tokenOverrides: readTokenOverrides(),
+  setTokenOverride: (key, value) =>
+    set((s) => {
+      const next = { ...s.tokenOverrides, [key]: value };
+      writeTokenOverrides(next);
+      return { tokenOverrides: next };
+    }),
+  resetTokenOverride: (key) =>
+    set((s) => {
+      const { [key]: _omit, ...rest } = s.tokenOverrides;
+      writeTokenOverrides(rest);
+      return { tokenOverrides: rest };
+    }),
+  resetAllTokenOverrides: () =>
+    set(() => {
+      writeTokenOverrides({});
+      return { tokenOverrides: {} };
+    }),
   companies: [],
   companiesLoaded: false,
   loadCompanies: () => {

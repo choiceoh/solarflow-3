@@ -32,7 +32,13 @@ import AlertBell from '@/components/layout/AlertBell';
 import QuickRegister from '@/components/layout/QuickRegister';
 import TenantSwitcher from '@/components/layout/TenantSwitcher';
 import FloatingMwEaCalculator from '@/components/common/FloatingMwEaCalculator';
-import { EditModeBadge, InspectorOverlay, InspectorPanel, useEditModeShortcut } from '@/components/inspector';
+import {
+  EditModeBadge,
+  InspectorOverlay,
+  InspectorPanel,
+  useDesignTokens,
+  useEditModeShortcut,
+} from '@/components/inspector';
 import { canAccessMenu, type MenuKey, type Role } from '@/config/permissions';
 import { useAuth } from '@/hooks/useAuth';
 import { useAlerts } from '@/hooks/useAlerts';
@@ -202,6 +208,7 @@ export default function CommandShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(readCollapsedFromStorage);
 
   useEditModeShortcut();
+  useDesignTokens();
 
   useEffect(() => { loadCompanies(); }, [loadCompanies]);
 

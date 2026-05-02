@@ -1,11 +1,15 @@
 import { useEffect } from 'react';
-import { useAppStore, type InspectorTarget } from '@/stores/appStore';
+import { useAppStore, type InspectorMode, type InspectorTarget } from '@/stores/appStore';
+import { cn } from '@/lib/utils';
+import { TokenPanel } from './TokenPanel';
 
 const PANEL_WIDTH = 360;
 
 export const InspectorPanel = () => {
   const editMode = useAppStore((s) => s.editMode);
   const inspectorTarget = useAppStore((s) => s.inspectorTarget);
+  const inspectorMode = useAppStore((s) => s.inspectorMode);
+  const setInspectorMode = useAppStore((s) => s.setInspectorMode);
 
   useEffect(() => {
     if (!editMode) return;
@@ -24,16 +28,56 @@ export const InspectorPanel = () => {
       className="fixed top-0 right-0 z-[90] h-screen border-l border-amber-300 bg-white shadow-2xl"
       style={{ width: PANEL_WIDTH }}
     >
-      <header className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-4 py-3">
-        <h2 className="text-sm font-semibold text-amber-900">인스펙터</h2>
-        <span className="text-xs text-amber-700">읽기 전용 · B-1</span>
+      <header className="border-b border-amber-200 bg-amber-50 px-4 pt-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-amber-900">인스펙터</h2>
+          <span className="text-xs text-amber-700">B-1·B-2</span>
+        </div>
+        <div className="-mb-px mt-2 flex gap-1 text-xs">
+          <ModeTab mode="element" current={inspectorMode} onClick={setInspectorMode}>
+            요소
+          </ModeTab>
+          <ModeTab mode="token" current={inspectorMode} onClick={setInspectorMode}>
+            디자인 토큰
+          </ModeTab>
+        </div>
       </header>
-      <div className="overflow-y-auto p-4 text-sm" style={{ height: 'calc(100vh - 49px)' }}>
-        {inspectorTarget ? <TargetInfo target={inspectorTarget} /> : <Placeholder />}
+      <div className="overflow-y-auto p-4 text-sm" style={{ height: 'calc(100vh - 73px)' }}>
+        {inspectorMode === 'element' ? (
+          inspectorTarget ? (
+            <TargetInfo target={inspectorTarget} />
+          ) : (
+            <Placeholder />
+          )
+        ) : (
+          <TokenPanel />
+        )}
       </div>
     </aside>
   );
 };
+
+interface ModeTabProps {
+  mode: InspectorMode;
+  current: InspectorMode;
+  onClick: (mode: InspectorMode) => void;
+  children: React.ReactNode;
+}
+
+const ModeTab = ({ mode, current, onClick, children }: ModeTabProps) => (
+  <button
+    type="button"
+    onClick={() => onClick(mode)}
+    className={cn(
+      'border-b-2 px-2 pb-1.5 transition',
+      current === mode
+        ? 'border-amber-600 font-medium text-amber-900'
+        : 'border-transparent text-amber-700/70 hover:text-amber-900',
+    )}
+  >
+    {children}
+  </button>
+);
 
 const Placeholder = () => (
   <div className="space-y-3 text-slate-600">
@@ -50,7 +94,7 @@ const Placeholder = () => (
         <kbd className="rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 font-mono">Esc</kbd>
         <span className="ml-2">선택 해제</span>
       </li>
-      <li className="pt-2 text-slate-400">디자인 토큰 / className 편집 — B-2·B-3 에서</li>
+      <li className="pt-2 text-slate-400">상단 "디자인 토큰" 탭 — 색·간격·모서리 슬라이더</li>
     </ul>
     <p className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
       편집 모드 중에는 페이지 이동·버튼 클릭이 비활성됩니다. 이동하려면 먼저 편집 모드를 종료하세요.
