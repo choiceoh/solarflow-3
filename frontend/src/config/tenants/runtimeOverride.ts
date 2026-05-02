@@ -4,6 +4,7 @@
 
 import type { ScreenOverride, FormOverride } from './index';
 import type { TenantId } from '@/stores/tenantStore';
+import { pushHistory } from './runtimeOverrideHistory';
 
 export type ConfigKind = 'screen' | 'form';
 
@@ -29,6 +30,8 @@ export function saveRuntimeOverride(
   override: ScreenOverride | FormOverride,
 ): void {
   if (typeof localStorage === 'undefined') return;
+  // 이전 값을 이력에 push (실수 복구용 안전망)
+  pushHistory(tenantId, kind, configId, loadRuntimeOverride(tenantId, kind, configId));
   localStorage.setItem(key(tenantId, kind, configId), JSON.stringify(override));
   // 화면/폼이 즉시 반영하도록 이벤트 발행
   window.dispatchEvent(new CustomEvent('sf-tenant-runtime-changed', {
@@ -38,6 +41,8 @@ export function saveRuntimeOverride(
 
 export function clearRuntimeOverride(tenantId: TenantId, kind: ConfigKind, configId: string): void {
   if (typeof localStorage === 'undefined') return;
+  // 이전 값을 이력에 push (삭제 후에도 복원 가능)
+  pushHistory(tenantId, kind, configId, loadRuntimeOverride(tenantId, kind, configId));
   localStorage.removeItem(key(tenantId, kind, configId));
   window.dispatchEvent(new CustomEvent('sf-tenant-runtime-changed', {
     detail: { tenantId, kind, configId },
