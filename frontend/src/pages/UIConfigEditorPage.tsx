@@ -16,13 +16,18 @@ import { usePermission } from '@/hooks/usePermission';
 import {
   loadOverride, saveOverride, clearOverride, listOverrides, type ConfigKind,
 } from '@/templates/configOverride';
-import type { ListScreenConfig } from '@/templates/types';
+import type {
+  ListScreenConfig, MetaDetailConfig, MetaFormConfig, TabbedListConfig,
+} from '@/templates/types';
 import partnersScreen from '@/config/screens/partners';
 import outboundScreen from '@/config/screens/outbound';
 import partnerForm from '@/config/forms/partners';
 import outboundFormSimple from '@/config/forms/outbound_simple';
 import outboundDetailSimple from '@/config/details/outbound_simple';
 import VisualScreenEditor from './UIConfigEditor/VisualScreenEditor';
+import VisualTabbedListEditor from './UIConfigEditor/VisualTabbedListEditor';
+import VisualFormEditor from './UIConfigEditor/VisualFormEditor';
+import VisualDetailEditor from './UIConfigEditor/VisualDetailEditor';
 
 interface KnownConfig {
   kind: ConfigKind;
@@ -210,21 +215,7 @@ export default function UIConfigEditorPage() {
         )}
 
         <div className="flex-1 min-h-0">
-          {selected.kind === 'screen' ? (
-            <ScreenEditorWrapper
-              draft={draft}
-              setDraft={setDraft}
-            />
-          ) : (
-            <div className="p-3 h-full">
-              <Textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                className="font-mono text-xs h-full resize-none"
-                spellCheck={false}
-              />
-            </div>
-          )}
+          <EditorWrapper kind={selected.kind} draft={draft} setDraft={setDraft} />
         </div>
       </main>
     </div>
@@ -232,20 +223,20 @@ export default function UIConfigEditorPage() {
 }
 
 // 시각 편집기와 JSON 편집기 양방향 동기화 wrapper.
-// JSON parse 실패 시 시각 편집기 비활성 (JSON 탭만 가능).
-function ScreenEditorWrapper({
-  draft, setDraft,
+// kind + 구조 감지로 적절한 시각 편집기 선택. JSON parse 실패 시 텍스트 폴백.
+function EditorWrapper({
+  kind, draft, setDraft,
 }: {
+  kind: ConfigKind;
   draft: string;
   setDraft: (v: string) => void;
 }) {
-  // draft → ListScreenConfig 파싱 (실패 시 null)
-  const parsed = useMemo<ListScreenConfig | null>(() => {
-    try { return JSON.parse(draft) as ListScreenConfig; }
+  const parsed = useMemo<unknown>(() => {
+    try { return JSON.parse(draft); }
     catch { return null; }
   }, [draft]);
 
-  if (!parsed) {
+  if (parsed == null) {
     return (
       <div className="p-3 h-full flex flex-col gap-2">
         <div className="rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
@@ -261,12 +252,60 @@ function ScreenEditorWrapper({
     );
   }
 
+  const setFromObj = (next: unknown) => setDraft(JSON.stringify(next, null, 2));
+
+  if (kind === 'screen') {
+    // TabbedListConfig는 'tabs' 배열을 가진다 — 구조로 감지
+    if (Array.isArray((parsed as { tabs?: unknown }).tabs)) {
+      return (
+        <VisualTabbedListEditor
+          value={parsed as TabbedListConfig}
+          onChange={setFromObj}
+          jsonDraft={draft}
+          onJsonDraftChange={setDraft}
+        />
+      );
+    }
+    return (
+      <VisualScreenEditor
+        value={parsed as ListScreenConfig}
+        onChange={setFromObj}
+        jsonDraft={draft}
+        onJsonDraftChange={setDraft}
+      />
+    );
+  }
+
+  if (kind === 'form') {
+    return (
+      <VisualFormEditor
+        value={parsed as MetaFormConfig}
+        onChange={setFromObj}
+        jsonDraft={draft}
+        onJsonDraftChange={setDraft}
+      />
+    );
+  }
+
+  if (kind === 'detail') {
+    return (
+      <VisualDetailEditor
+        value={parsed as MetaDetailConfig}
+        onChange={setFromObj}
+        jsonDraft={draft}
+        onJsonDraftChange={setDraft}
+      />
+    );
+  }
+
   return (
-    <VisualScreenEditor
-      value={parsed}
-      onChange={(next) => setDraft(JSON.stringify(next, null, 2))}
-      jsonDraft={draft}
-      onJsonDraftChange={setDraft}
-    />
+    <div className="p-3 h-full">
+      <Textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        className="font-mono text-xs h-full resize-none"
+        spellCheck={false}
+      />
+    </div>
   );
 }
