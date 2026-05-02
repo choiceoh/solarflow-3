@@ -14,6 +14,7 @@ import InboundStatusBadge from '@/components/inbound/InboundStatusBadge';
 import BLDetailView from '@/components/inbound/BLDetailView';
 import BLForm from '@/components/inbound/BLForm';
 import BLOcrWidget from '@/components/inbound/BLOcrWidget';
+import BLPaymentTermsWidget from '@/components/inbound/BLPaymentTermsWidget';
 import { useBLList, useBLDetail } from '@/hooks/useInbound';
 import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL } from '@/types/inbound';
@@ -680,21 +681,21 @@ export const formContentBlocks: Record<string, FormContentBlock> = {
       />
     );
   },
-  // Step 3e (Stub): 결제조건 파서 — composite text input
-  bl_payment_terms_widget: ({ watch }) => {
+  // Step 3e: 결제조건 파서 — REAL.
+  // BLPaymentTermsWidget 임베드 — 현재 inbound_type/payment_terms 텍스트 watch, 사용자 변경 시 setValue('payment_terms', composed).
+  bl_payment_terms_widget: ({ watch, setValue }) => {
     const inboundType = watch('inbound_type') as string | undefined;
+    const paymentTerms = watch('payment_terms') as string | undefined;
+    // 총액 — 라인 합계 (USD): meta v2 에서 lines.invoice_amount_usd 합산
+    const lines = (watch('lines') ?? []) as Array<{ invoice_amount_usd?: number }>;
+    const totalAmount = lines.reduce((s, l) => s + (Number(l?.invoice_amount_usd) || 0), 0);
     return (
-      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs space-y-1">
-        <div className="font-semibold text-amber-900">💳 결제조건 파서 (Step 3e — Stub)</div>
-        <p className="text-amber-800">
-          {inboundType === 'import'
-            ? '해외직수입: Sight / 30 / 60 / 90 / 120 일 + 분할 ratio + USD 합계'
-            : '국내: NET 30/45/60/.../120 일 + 단일 KRW 합계'}
-        </p>
-        <p className="text-[10px] text-amber-700">
-          실 파서 (~80줄, BLForm.tsx 의 composeImportPT/parseImportPT) 추출은 follow-up.
-        </p>
-      </div>
+      <BLPaymentTermsWidget
+        inboundType={inboundType}
+        totalAmount={totalAmount}
+        initialValue={paymentTerms}
+        onChange={(text) => setValue('payment_terms', text)}
+      />
     );
   },
   // 데모: 현재 입력값 요약 — watch 로 라이브 표시
