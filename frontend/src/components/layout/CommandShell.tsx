@@ -32,6 +32,7 @@ import QuickRegister from '@/components/layout/QuickRegister';
 import FloatingMwEaCalculator from '@/components/common/FloatingMwEaCalculator';
 import { FloatingAssistantButton } from '@/components/assistant/FloatingAssistantButton';
 import {
+  ContextMenuOverlay,
   EditModeBadge,
   EditModeToggleButton,
   InspectorOverlay,
@@ -377,6 +378,7 @@ export default function CommandShell() {
       <InspectorOverlay />
       <EditModeBadge />
       <InspectorPanel />
+      <ContextMenuOverlay />
       <FloatingAssistantButton />
     </div>
   );

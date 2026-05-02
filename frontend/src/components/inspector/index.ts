@@ -1,4 +1,5 @@
 export { ActionChips } from './ActionChips';
+export { ContextMenuOverlay } from './ContextMenuOverlay';
 export { DraftsList } from './DraftsList';
 export { EditModeBadge } from './EditModeBadge';
 export { EditModeToggleButton } from './EditModeToggleButton';
