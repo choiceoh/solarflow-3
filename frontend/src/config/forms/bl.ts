@@ -40,7 +40,22 @@ const config: MetaFormConfig = {
           optionsFrom: 'master', masterKey: 'warehouses' },
       ],
     },
-    // Step 3d 에서 PO·LC 연결 + fieldCascade 추가 예정 (현재 master 소스 미등록)
+    // Step 3d: PO 선택 → LC/제조사/통화 자동 fill
+    {
+      title: 'PO · LC 연결',
+      cols: 2,
+      visibleIf: { field: 'inbound_type', value: 'import' },
+      fields: [
+        { key: 'po_id', label: 'PO 연결', type: 'select',
+          placeholder: 'PO 선택 (선택사항)',
+          optionsFrom: 'master', masterKey: 'pos.import',
+          cascadeId: 'bl_po_to_lc_mfg' },
+        { key: 'lc_id', label: 'LC 연결 (해외직수입 필수)', type: 'select',
+          placeholder: 'PO 먼저 선택 → LC 자동 채움',
+          optionsFrom: 'master', masterKey: 'lcs.byPo',
+          optionsDependsOn: ['po_id'] },
+      ],
+    },
     {
       title: '선적 일정',
       cols: 4,
@@ -72,15 +87,58 @@ const config: MetaFormConfig = {
         { key: 'declaration_number', label: '면장번호 (있으면)', type: 'text' },
       ],
     },
+    // Step 3c: OCR 위젯 (해외직수입 시 PDF 면장 자동 입력) — 위젯은 Stub, 실 로직 follow-up
+    {
+      title: '면장 OCR (해외직수입 시)',
+      visibleIf: { field: 'inbound_type', value: 'import' },
+      contentBlock: { blockId: 'bl_ocr_widget' },
+    },
+    // Step 3b: 입고 품목 (lines) — child_array
+    {
+      title: '입고 품목',
+      fields: [
+        {
+          key: 'lines',
+          type: 'child_array',
+          label: '품목 라인',
+          addLabel: '+ 라인 추가',
+          required: true,
+          minItems: 1,
+          childCols: 4,
+          childFields: [
+            { key: 'product_code', label: '품번', type: 'text', placeholder: 'JKO-N620' },
+            { key: 'product_name', label: '품명', type: 'text' },
+            { key: 'quantity', label: '수량 EA', type: 'number', required: true },
+            { key: 'capacity_kw', label: '용량 kW', type: 'number' },
+            { key: 'item_type', label: '구분', type: 'select',
+              staticOptions: [
+                { value: 'main', label: '메인' },
+                { value: 'spare', label: '스페어' },
+              ],
+            },
+            { key: 'payment_type', label: '결제구분', type: 'select',
+              staticOptions: [
+                { value: 'paid', label: '유상' },
+                { value: 'free', label: '무상' },
+              ],
+            },
+            { key: 'unit_price_usd_wp', label: '단가 $/Wp', type: 'number' },
+            { key: 'invoice_amount_usd', label: 'Invoice $', type: 'number' },
+          ],
+        },
+      ],
+    },
+    // Step 3e: 결제조건 파서 (해외직수입 multi-tranche, 국내 NET) — Stub, 실 로직 follow-up
+    {
+      title: '결제 조건',
+      contentBlock: { blockId: 'bl_payment_terms_widget' },
+    },
     {
       title: '메모',
       fields: [
         { key: 'memo', label: '메모', type: 'textarea', placeholder: '비고 (선택)' },
       ],
     },
-    // Step 3b: 입고 품목 (lines) — child_array — 별 sub-step 에서 추가 예정
-    // Step 3c: OCR 위젯 — contentBlock — 별 sub-step
-    // Step 3e: 결제조건 파서 — contentBlock — 별 sub-step
   ],
 };
 
