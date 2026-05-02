@@ -3,7 +3,7 @@
 // 보강: 선택적 collapse / 검색 / drag-drop / validation badges
 
 import { useMemo, useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronUp, Plus, Trash2, GripVertical } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Trash2, GripVertical, Copy } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -31,11 +31,13 @@ export interface ArrayEditorProps<T> {
   validate?: (item: T, items: T[]) => ItemIssue[];
   // drag-drop reorder — 제공 시 collapsed 행 drag 가능. (렌더된 새 배열을 그대로 setItems)
   onReorder?: (next: T[]) => void;
+  // 복제 — 제공 시 collapsed 행 호버 액션 + expanded 헤더에 "복제" 버튼
+  onDuplicate?: (idx: number) => void;
 }
 
 export function ArrayEditor<T>({
   items, hint, addLabel, emptyMsg, onAdd, onMove, onRemove, renderRow, rowKey,
-  renderSummary, searchMatcher, validate, onReorder,
+  renderSummary, searchMatcher, validate, onReorder, onDuplicate,
 }: ArrayEditorProps<T>) {
   const [filter, setFilter] = useState('');
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -181,6 +183,12 @@ export function ArrayEditor<T>({
                       onClick={(e) => { e.stopPropagation(); onMove(idx, 1); }} disabled={idx === items.length - 1}>
                       <ChevronDown className="h-3 w-3" />
                     </Button>
+                    {onDuplicate && (
+                      <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100" title="복제"
+                        onClick={(e) => { e.stopPropagation(); onDuplicate(idx); }}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    )}
                     <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
                       onClick={(e) => { e.stopPropagation(); onRemove(idx); }}>
                       <Trash2 className="h-3 w-3" />
@@ -225,7 +233,16 @@ export function ArrayEditor<T>({
                 )}
                 {renderRow(item, idx)}
               </div>
-              <div className="col-span-1 flex justify-end">
+              <div className="col-span-1 flex flex-col items-end gap-1">
+                {onDuplicate && (
+                  <Button
+                    type="button" variant="ghost" size="icon"
+                    className="h-6 w-6 text-muted-foreground"
+                    onClick={() => onDuplicate(idx)} title="복제"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                )}
                 <Button
                   type="button" variant="ghost" size="icon"
                   className="h-7 w-7 text-muted-foreground hover:text-destructive"

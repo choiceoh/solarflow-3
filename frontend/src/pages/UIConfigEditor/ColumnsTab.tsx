@@ -70,6 +70,12 @@ export function ColumnsTab({
       onMove={(idx, dir) => onChange({ ...value, columns: moveInArray(cols, idx, dir) })}
       onRemove={(idx) => onChange({ ...value, columns: cols.filter((_, i) => i !== idx) })}
       onReorder={(next) => onChange({ ...value, columns: next })}
+      onDuplicate={(idx) => {
+        const src = cols[idx];
+        const newKey = suggestColumnKey(cols.map((c) => c.key));
+        const cloned: ColumnConfig = { ...src, key: newKey, label: `${src.label} (복사)` };
+        onChange({ ...value, columns: [...cols.slice(0, idx + 1), cloned, ...cols.slice(idx + 1)] });
+      }}
       validate={validateColumn}
       searchMatcher={(col, q) => {
         const lc = q.toLowerCase();

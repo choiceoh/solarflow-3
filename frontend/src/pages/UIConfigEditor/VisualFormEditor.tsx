@@ -63,7 +63,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, Plus, Trash2, GripVertical } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Trash2, GripVertical, Copy } from 'lucide-react';
 import type { FieldConfig, FieldType, FormSection, MetaFormConfig, Tone } from '@/templates/types';
 import { enumDictionaries, masterSources, computedFormulas } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
@@ -397,6 +397,17 @@ function SectionCard({
   const removeField = (fIdx: number) =>
     onUpdate({ ...section, fields: (section.fields ?? []).filter((_, i) => i !== fIdx) });
 
+  const duplicateField = (fIdx: number) => {
+    const src = (section.fields ?? [])[fIdx];
+    const newKey = suggestFieldKey(allFormFieldKeys);
+    const cloned: FieldConfig = { ...src, key: newKey, label: `${src.label} (복사)` };
+    const next = [...(section.fields ?? [])];
+    next.splice(fIdx + 1, 0, cloned);
+    onUpdate({ ...section, fields: next });
+    // 복제된 항목 자동 펼침
+    onAddedField(fIdx + 1);
+  };
+
   return (
     <div className="rounded border bg-card">
       {/* 섹션 헤더 */}
@@ -460,6 +471,7 @@ function SectionCard({
                 onUpdate={(next) => updateField(fIdx, next)}
                 onMoveUp={() => moveField(fIdx, -1)}
                 onMoveDown={() => moveField(fIdx, 1)}
+                onDuplicate={() => duplicateField(fIdx)}
                 onRemove={() => removeField(fIdx)}
               />
             </div>
@@ -485,7 +497,7 @@ function SectionCard({
 // + "고급 ▾" 토글: description / defaultValue / readOnly / 검증 / visibleIf / readOnlyIf
 function FieldRow({
   field, index, total, expanded, issues, onToggleExpand,
-  onUpdate, onMoveUp, onMoveDown, onRemove,
+  onUpdate, onMoveUp, onMoveDown, onDuplicate, onRemove,
 }: {
   field: FieldConfig;
   index: number;
@@ -496,6 +508,7 @@ function FieldRow({
   onUpdate: (next: FieldConfig) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onDuplicate: () => void;
   onRemove: () => void;
 }) {
   const errorCount = issues.filter((i) => i.level === 'error').length;
@@ -564,6 +577,10 @@ function FieldRow({
             <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100"
               onClick={(e) => { e.stopPropagation(); onMoveDown(); }} disabled={index === total - 1}>
               <ChevronDown className="h-3 w-3" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100" title="복제"
+              onClick={(e) => { e.stopPropagation(); onDuplicate(); }}>
+              <Copy className="h-3 w-3" />
             </Button>
             <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
               onClick={(e) => { e.stopPropagation(); onRemove(); }}>
@@ -798,8 +815,10 @@ function FieldRow({
           </>
         )}
       </div>
-      <div className="col-span-1 flex justify-end">
-        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
+      <div className="col-span-1 flex flex-col items-end gap-1">
+        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" title="복제"
+          onClick={onDuplicate}><Copy className="h-3 w-3" /></Button>
+        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" title="삭제"
           onClick={onRemove}><Trash2 className="h-3 w-3" /></Button>
       </div>
     </div>
