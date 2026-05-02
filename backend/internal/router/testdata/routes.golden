@@ -127,7 +127,6 @@ PATCH   /api/v1/partners/{id}/status
 PATCH   /api/v1/products/{id}/status
 PATCH   /api/v1/warehouses/{id}/status
 POST    /api/v1/assistant/chat
-POST    /api/v1/assistant/chat-legacy
 POST    /api/v1/assistant/match/receipts/auto
 POST    /api/v1/assistant/ocr/extract
 POST    /api/v1/assistant/proposals/{id}/confirm
@@ -187,7 +186,6 @@ POST    /api/v1/pos/{poId}/lines/
 POST    /api/v1/price-histories/
 POST    /api/v1/products/
 POST    /api/v1/public/assistant/chat
-POST    /api/v1/public/assistant/chat-legacy
 POST    /api/v1/receipt-matches/
 POST    /api/v1/receipt-matches/auto
 POST    /api/v1/receipts/

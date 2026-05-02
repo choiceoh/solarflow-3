@@ -46,8 +46,6 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 	r.Route("/api/v1/public", func(r chi.Router) {
 		publicH.RegisterRoutes(r)
 		r.Post("/assistant/chat", publicAssistantH.ChatStream)
-		// 비스트리밍 fallback — PR-4 에서 제거.
-		r.Post("/assistant/chat-legacy", publicAssistantH.Chat)
 	})
 
 	// 인증 라우트 — 알파벳 순서로 정렬 (PR 충돌 ↓, 신규 도메인은 자기 자리에 1줄 추가)
