@@ -22,6 +22,7 @@ import manufacturerFormConfig from '@/config/forms/manufacturers';
 import productFormConfig from '@/config/forms/products';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
+import { useDeclarationDetail } from '@/hooks/useCustoms';
 import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
   type OutboundStatus, type UsageCategory, type Outbound, type SaleListItem,
@@ -163,6 +164,7 @@ export const dataHooks: Record<string, DataHook> = {
 export type DetailDataHook = (id: string) => { data: unknown; loading: boolean };
 export const detailDataHooks: Record<string, DetailDataHook> = {
   useOutboundDetail: (id) => useOutboundDetail(id) as unknown as { data: unknown; loading: boolean },
+  useDeclarationDetail: (id) => useDeclarationDetail(id) as unknown as { data: unknown; loading: boolean },
 };
 
 // ─── Metric computers ──────────────────────────────────────────────────────

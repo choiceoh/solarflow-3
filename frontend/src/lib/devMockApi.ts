@@ -600,6 +600,14 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
   const route = routes[url.pathname];
   if (route) return collectionRoute<T>(url, body, route.rows, route.idKey, route.collection);
 
+  // 단일 리소스 GET 폴백 — `/api/v1/<list>/<id>` 패턴: 목록 라우트로 위임 (collectionRoute가 endpointId로 id 추출)
+  const lastSlash = url.pathname.lastIndexOf('/');
+  if (lastSlash > 0) {
+    const listPath = url.pathname.slice(0, lastSlash);
+    const listRoute = routes[listPath];
+    if (listRoute) return collectionRoute<T>(url, body, listRoute.rows, listRoute.idKey, listRoute.collection);
+  }
+
   return clone([] as T);
 }
 

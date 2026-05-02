@@ -11,7 +11,8 @@ const warehouseForm: MetaFormConfig = {
     {
       cols: 2,
       fields: [
-        { key: 'warehouse_code', label: '창고코드 (4자)', type: 'text', required: true, minLength: 4, maxLength: 4 },
+        // 4자 코드는 입출고·재고 추적의 cross-reference 키 → admin 만 편집
+        { key: 'warehouse_code', label: '창고코드 (4자)', type: 'text', required: true, minLength: 4, maxLength: 4, editableByRoles: ['admin'] },
         { key: 'warehouse_name', label: '창고명', type: 'text', required: true },
       ],
     },
@@ -32,7 +33,8 @@ const warehouseForm: MetaFormConfig = {
     {
       cols: 2,
       fields: [
-        { key: 'location_code', label: '장소코드 (4자)', type: 'text', required: true, minLength: 4, maxLength: 4 },
+        // 4자 코드는 입출고·재고 추적의 cross-reference 키 → admin 만 편집
+        { key: 'location_code', label: '장소코드 (4자)', type: 'text', required: true, minLength: 4, maxLength: 4, editableByRoles: ['admin'] },
         { key: 'location_name', label: '장소명', type: 'text', required: true },
       ],
     },

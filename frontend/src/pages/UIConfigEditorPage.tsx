@@ -34,6 +34,7 @@ import manufacturerForm from '@/config/forms/manufacturers';
 import productForm from '@/config/forms/products';
 import outboundFormSimple from '@/config/forms/outbound_simple';
 import outboundDetailSimple from '@/config/details/outbound_simple';
+import declarationDetailSimple from '@/config/details/declaration_simple';
 import VisualScreenEditor from './UIConfigEditor/VisualScreenEditor';
 import VisualTabbedListEditor from './UIConfigEditor/VisualTabbedListEditor';
 import VisualFormEditor from './UIConfigEditor/VisualFormEditor';
@@ -63,6 +64,7 @@ const KNOWN_CONFIGS: KnownConfig[] = [
   { kind: 'form', id: 'product_form_v2', label: '품번 폼 (13 필드)', routeHint: '/masters/products-v2 → 새로 등록', default: productForm },
   { kind: 'form', id: 'outbound_form_simple', label: '출고 폼 (한계선 데모)', routeHint: '/outbound-form-meta-demo', default: outboundFormSimple },
   { kind: 'detail', id: 'outbound_detail_simple', label: '출고 상세 (한계선 데모)', routeHint: '/outbound-detail-meta-demo', default: outboundDetailSimple },
+  { kind: 'detail', id: 'declaration_detail_simple', label: '면장 상세 (한계선 데모)', routeHint: '/declaration-detail-meta-demo', default: declarationDetailSimple },
 ];
 
 export default function UIConfigEditorPage() {

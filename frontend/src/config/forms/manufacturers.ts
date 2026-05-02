@@ -29,8 +29,9 @@ const manufacturerForm: MetaFormConfig = {
       cols: 1,
       fields: [
         {
+          // 표시순위는 모든 사용자의 드롭다운 정렬을 좌우 → admin 만 편집
           key: 'priority_rank', label: '표시순위 (낮을수록 드롭다운 위에 표시)', type: 'number',
-          required: true, minValue: 1, defaultValue: 999,
+          required: true, minValue: 1, defaultValue: 999, editableByRoles: ['admin'],
         },
       ],
     },

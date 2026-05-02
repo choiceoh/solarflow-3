@@ -26,7 +26,8 @@ const bankForm: MetaFormConfig = {
     {
       cols: 1,
       fields: [
-        { key: 'lc_limit_usd', label: 'LC 한도(USD)', type: 'number', required: true, minValue: 0 },
+        // LC 한도는 은행 약정 금액 → admin 만 편집 (운영자가 임의 변경 불가)
+        { key: 'lc_limit_usd', label: 'LC 한도(USD)', type: 'number', required: true, minValue: 0, editableByRoles: ['admin'] },
       ],
     },
     {

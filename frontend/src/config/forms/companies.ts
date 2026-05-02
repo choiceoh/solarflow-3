@@ -16,13 +16,15 @@ const companyForm: MetaFormConfig = {
     {
       cols: 1,
       fields: [
-        { key: 'company_code', label: '법인코드', type: 'text', required: true },
+        // 법인코드는 모든 모듈에서 cross-reference 키로 사용 → admin 만 편집
+        { key: 'company_code', label: '법인코드', type: 'text', required: true, editableByRoles: ['admin'] },
       ],
     },
     {
       cols: 1,
       fields: [
-        { key: 'business_number', label: '사업자번호', type: 'text' },
+        // 사업자번호는 세무·법적 식별자 → admin 만 편집
+        { key: 'business_number', label: '사업자번호', type: 'text', editableByRoles: ['admin'] },
       ],
     },
   ],

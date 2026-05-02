@@ -12,7 +12,8 @@ const productForm: MetaFormConfig = {
     {
       cols: 2,
       fields: [
-        { key: 'product_code', label: '품번코드', type: 'text', required: true },
+        // 품번코드는 입출고·수주·재고에서 cross-reference 키로 사용 → admin 만 편집
+        { key: 'product_code', label: '품번코드', type: 'text', required: true, editableByRoles: ['admin'] },
         { key: 'product_name', label: '품명', type: 'text', required: true },
       ],
     },
