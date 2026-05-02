@@ -1,19 +1,17 @@
 // Phase 1+1.5 PoC: 단일 리스트 화면 템플릿
 // config(메타) + registry(코드)를 결합해 한 도메인의 목록 화면을 렌더한다.
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useResolvedConfig } from './configOverride';
-import { ArrowDown, ArrowUp, ArrowUpDown, Columns, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem,
-} from '@/components/ui/dropdown-menu';
 import EmptyState from '@/components/common/EmptyState';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
+import { useColumnVisibility } from '@/lib/columnVisibility';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
 import { MasterConsole, type MasterConsoleMetric } from '@/components/command/MasterConsole';
@@ -202,33 +200,6 @@ function nextSortDirection(current: SortState, key: string): SortState {
   if (!current || current.key !== key) return { key, direction: 'asc' };
   if (current.direction === 'asc') return { key, direction: 'desc' };
   return null; // 두 번 클릭 후 해제
-}
-
-// ─── Phase 4 보강: 컬럼 가시성 (localStorage 영속) ─────────────────────────
-const COLVIS_PREFIX = 'sf.colvis.';
-function loadHiddenCols(scopeId: string): Set<string> {
-  if (typeof localStorage === 'undefined') return new Set();
-  try {
-    const raw = localStorage.getItem(COLVIS_PREFIX + scopeId);
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw);
-    return new Set(Array.isArray(arr) ? arr : []);
-  } catch {
-    return new Set();
-  }
-}
-function saveHiddenCols(scopeId: string, hidden: Set<string>): void {
-  if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(COLVIS_PREFIX + scopeId, JSON.stringify([...hidden]));
-}
-
-// 사용자 첫 방문 시 hiddenByDefault 컬럼은 자동 숨김 — 이후엔 사용자 선택 존중
-function initialHiddenCols(scopeId: string, columns: ColumnConfig[]): Set<string> {
-  const stored = loadHiddenCols(scopeId);
-  if (stored.size > 0) return stored;
-  const fromDefault = new Set<string>();
-  columns.forEach((c) => { if (c.hiddenByDefault) fromDefault.add(c.key); });
-  return fromDefault;
 }
 
 // ─── 액션 헬퍼 ─────────────────────────────────────────────────────────────
@@ -480,45 +451,6 @@ export function TableArea({
   );
 }
 
-// ─── Phase 4 보강: 컬럼 가시성 토글 + 멀티 선택 툴바 ───────────────────────
-export function ColumnVisibilityMenu({
-  columns, hidden, setHidden,
-}: {
-  columns: ColumnConfig[];
-  hidden: Set<string>;
-  setHidden: (next: Set<string>) => void;
-}) {
-  const hideable = columns.filter((c) => c.hideable);
-  if (hideable.length === 0) return null;
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="inline-flex h-7 items-center gap-1 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-sm transition-all hover:bg-muted">
-        <Columns className="h-3 w-3" />컬럼
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel>컬럼 표시</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {hideable.map((c) => {
-          const visible = !hidden.has(c.key);
-          return (
-            <DropdownMenuCheckboxItem
-              key={c.key}
-              checked={visible}
-              onCheckedChange={(checked) => {
-                const next = new Set(hidden);
-                if (checked) next.delete(c.key); else next.add(c.key);
-                setHidden(next);
-              }}
-            >
-              {c.label}
-            </DropdownMenuCheckboxItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 export function BulkActionToolbar({
   selectedCount, actions, onAction, onClear,
 }: {
@@ -720,11 +652,7 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
   // Phase 4 보강: 정렬 + 멀티 선택 + 컬럼 가시성
   const [sort, setSort] = useState<SortState>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [hiddenCols, setHiddenColsState] = useState<Set<string>>(() => initialHiddenCols(config.id, config.columns));
-  const setHiddenCols = useCallback((next: Set<string>) => {
-    setHiddenColsState(next);
-    saveHiddenCols(config.id, next);
-  }, [config.id]);
+  const { hidden: hiddenCols, setHidden: setHiddenCols } = useColumnVisibility(config.id, config.columns);
 
   const pageActions = usePageActions();
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);

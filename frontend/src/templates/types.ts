@@ -3,6 +3,7 @@
 // 타입 안전성과 디버깅을 위해 런타임 참조는 모두 ID 키로만 한다.
 
 import type { ReactNode } from 'react';
+import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
 
 // MasterConsoleMetric의 tone과 일치하게 'neg' 제외
 export type Tone = 'solar' | 'ink' | 'info' | 'warn' | 'pos';
@@ -22,9 +23,7 @@ export type MasterKey = string;
 // ── Columns
 export type Formatter = 'date' | 'number' | 'kw' | 'currency';
 
-export interface ColumnConfig {
-  key: string;                      // 데이터 필드 (점 표기 OK: 'sale.tax_invoice_date')
-  label: string;
+export interface ColumnConfig extends ColumnVisibilityMeta {
   align?: 'left' | 'right' | 'center';
   width?: string;                   // CSS width (예: '120px')
   formatter?: Formatter;            // 단순 포맷
@@ -34,11 +33,6 @@ export interface ColumnConfig {
   className?: string;
   // Phase 4 보강: 정렬 가능 헤더 (클릭 → asc → desc → 해제)
   sortable?: boolean;
-  // Phase 4 보강: 사용자가 컬럼을 숨길 수 있는지 (기본 true). false면 토글 메뉴에서 제외.
-  // localStorage 에 도메인별로 표시 상태 저장.
-  hideable?: boolean;
-  // 기본 숨김 — hideable=true 와 함께 쓰면 사용자가 명시적으로 켜야 보이는 컬럼
-  hiddenByDefault?: boolean;
 }
 
 // ── Filters
