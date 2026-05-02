@@ -153,18 +153,18 @@ export default function AssistantPage() {
           upsertSession(s);
           if (makeCurrent) setCurrentSessionId(s.id);
         }}
+        sessionsSlot={
+          <SessionsPanel
+            sessions={sessions}
+            currentSessionId={currentSessionId}
+            loadingId={sessionLoadingId}
+            enabled={sessionsEnabled}
+            onNew={newSession}
+            onLoad={loadSession}
+            onDelete={deleteSession}
+          />
+        }
       />
-      <aside className="hidden w-[340px] shrink-0 flex-col border-l bg-muted/10 lg:flex">
-        <SessionsPanel
-          sessions={sessions}
-          currentSessionId={currentSessionId}
-          loadingId={sessionLoadingId}
-          enabled={sessionsEnabled}
-          onNew={newSession}
-          onLoad={loadSession}
-          onDelete={deleteSession}
-        />
-      </aside>
     </div>
   );
 }
@@ -174,9 +174,10 @@ interface ChatBoxProps {
   sessionId: string | null;
   sessionsEnabled: boolean;
   onSessionUpserted: (s: SessionSummary, makeCurrent: boolean) => void;
+  sessionsSlot?: React.ReactNode;
 }
 
-function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted }: ChatBoxProps) {
+function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted, sessionsSlot }: ChatBoxProps) {
   // 빠른 연속 send 시 setSessionIdRef 가 반영되기 전 두 번째 호출이 또 POST 하지 않도록 ref 로 동기 추적.
   const sessionIdRef = useRef<string | null>(sessionId);
   // 쓰기 도구 승인/거부 상태 — proposal id → status. messages 와 별도 메모리 (상태 mutation 안 함).
@@ -501,7 +502,10 @@ function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserte
         </div>
       </div>
 
-      <PendingPanel pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
+      <aside className="hidden w-[340px] shrink-0 flex-col border-l bg-muted/10 lg:flex">
+        {sessionsSlot}
+        <PendingPanel pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
+      </aside>
     </>
   );
 }
