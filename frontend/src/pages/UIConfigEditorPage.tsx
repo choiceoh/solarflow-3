@@ -16,11 +16,13 @@ import { usePermission } from '@/hooks/usePermission';
 import {
   loadOverride, saveOverride, clearOverride, listOverrides, type ConfigKind,
 } from '@/templates/configOverride';
+import type { ListScreenConfig } from '@/templates/types';
 import partnersScreen from '@/config/screens/partners';
 import outboundScreen from '@/config/screens/outbound';
 import partnerForm from '@/config/forms/partners';
 import outboundFormSimple from '@/config/forms/outbound_simple';
 import outboundDetailSimple from '@/config/details/outbound_simple';
+import VisualScreenEditor from './UIConfigEditor/VisualScreenEditor';
 
 interface KnownConfig {
   kind: ConfigKind;
@@ -207,15 +209,64 @@ export default function UIConfigEditorPage() {
           </div>
         )}
 
-        <div className="flex-1 min-h-0 p-3">
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            className="font-mono text-xs h-full resize-none"
-            spellCheck={false}
-          />
+        <div className="flex-1 min-h-0">
+          {selected.kind === 'screen' ? (
+            <ScreenEditorWrapper
+              draft={draft}
+              setDraft={setDraft}
+            />
+          ) : (
+            <div className="p-3 h-full">
+              <Textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                className="font-mono text-xs h-full resize-none"
+                spellCheck={false}
+              />
+            </div>
+          )}
         </div>
       </main>
     </div>
+  );
+}
+
+// 시각 편집기와 JSON 편집기 양방향 동기화 wrapper.
+// JSON parse 실패 시 시각 편집기 비활성 (JSON 탭만 가능).
+function ScreenEditorWrapper({
+  draft, setDraft,
+}: {
+  draft: string;
+  setDraft: (v: string) => void;
+}) {
+  // draft → ListScreenConfig 파싱 (실패 시 null)
+  const parsed = useMemo<ListScreenConfig | null>(() => {
+    try { return JSON.parse(draft) as ListScreenConfig; }
+    catch { return null; }
+  }, [draft]);
+
+  if (!parsed) {
+    return (
+      <div className="p-3 h-full flex flex-col gap-2">
+        <div className="rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          JSON 파싱 실패 — 시각 편집기 비활성. 아래 텍스트로 교정 후 "포맷" 버튼.
+        </div>
+        <Textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="font-mono text-xs flex-1 min-h-0 resize-none"
+          spellCheck={false}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <VisualScreenEditor
+      value={parsed}
+      onChange={(next) => setDraft(JSON.stringify(next, null, 2))}
+      jsonDraft={draft}
+      onJsonDraftChange={setDraft}
+    />
   );
 }
