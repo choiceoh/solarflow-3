@@ -1,18 +1,27 @@
 // Phase 4 보강: MetaForm 메타 인프라 종합 시연 폼 (저장 없음 — UI 데모 전용)
-// 여섯 기능 동시 시연:
+// 아홉 기능 동시 시연:
 //   1) visibleIf — has_warranty=true 시 warranty_months 노출
 //   2) optionsDependsOn — manufacturer_id 옵션이 domestic_filter 값에 따라 필터됨
-//      (manufacturers.byDomestic master 소스가 context 사용)
 //   3) multiselect — features 다중 체크박스
 //   4) file — product_image 파일 첨부
 //   5) staticOptionsIf — delivery_slot 옵션이 delivery_type 값에 따라 분기
 //   6) masterSource.search — linked_product_id combobox (서버 검색, 디바운스 300ms)
+//   7) computed — total_price = quantity * unit_price (자동 계산, readonly)
+//   8) extraPayload — static {form_kind:'demo'} 자동 첨가 + fromStore company_id
+//   9) dialogSize='lg' — 더 넓은 폼 레이아웃
 
 import type { MetaFormConfig } from '@/templates/types';
 
 const depsDemo: MetaFormConfig = {
   id: 'deps_demo',
   title: { create: '의존성 데모', edit: '의존성 데모' },
+  // Phase 4 보강 — 다이얼로그 크기 lg (계산 필드까지 추가돼 너비 여유 필요)
+  dialogSize: 'lg',
+  // Phase 4 보강 — 외부 컨텍스트 자동 첨가 (운영 폼이 부모 ID/회사ID 합치던 패턴)
+  extraPayload: {
+    static: { form_kind: 'meta_demo' },
+    fromStore: { company_id: 'selectedCompanyId' }, // appStore.selectedCompanyId → payload.company_id
+  },
   sections: [
     {
       cols: 1,
@@ -148,6 +157,20 @@ const depsDemo: MetaFormConfig = {
           optionsFrom: 'master',
           masterKey: 'products.search',
           placeholder: '품번/품명/제조사 약칭으로 검색',
+        },
+      ],
+    },
+    {
+      cols: 3,
+      fields: [
+        { key: 'quantity', label: '수량', type: 'number', minValue: 0 },
+        { key: 'unit_price', label: '단가 (원)', type: 'number', minValue: 0 },
+        // Phase 4 보강 — 계산 필드 (자동 = quantity * unit_price, readonly)
+        {
+          key: 'total_price', label: '총액 (원, 자동)', type: 'computed',
+          formula: { computerId: 'multiply_qty_price' },
+          dependsOn: ['quantity', 'unit_price'],
+          formatter: 'number',
         },
       ],
     },

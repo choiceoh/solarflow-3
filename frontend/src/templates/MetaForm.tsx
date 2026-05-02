@@ -16,7 +16,10 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { usePermission } from '@/hooks/usePermission';
 import type { FieldConfig, MasterOptionSource, MetaFormConfig } from './types';
-import { enumDictionaries, masterSources } from './registry';
+import {
+  applyFormatter, computedFormulas, enumDictionaries, masterSources,
+} from './registry';
+import { useAppStore } from '@/stores/appStore';
 
 type Options = { value: string; label: string }[];
 
@@ -50,6 +53,9 @@ function buildFieldSchema(field: FieldConfig): ZodTypeAny {
       ? z.any().refine((v) => v instanceof File, { message: `${subj} 파일을 선택해야 합니다` })
       : z.any().optional();
   }
+
+  // computed — 사용자 입력 없음, validation skip
+  if (field.type === 'computed') return z.any().optional();
 
   // text / select / textarea / date — 모두 string
   let s = z.string();
@@ -161,6 +167,7 @@ function buildDefaults(
     else if (f.type === 'switch') out[f.key] = false;
     else if (f.type === 'multiselect') out[f.key] = [];
     else if (f.type === 'file') out[f.key] = null;
+    else if (f.type === 'computed') out[f.key] = undefined;
     else if (f.type === 'number') out[f.key] = undefined;
     else out[f.key] = '';
   });
@@ -459,6 +466,20 @@ function FieldRender({ field, value, error, options, setValue, register, watched
     );
   }
 
+  if (field.type === 'computed') {
+    // Phase 4 보강: 계산 필드 — 다른 필드 값에서 자동 계산. readonly 표시.
+    const display = value == null || value === ''
+      ? ''
+      : (field.formatter ? applyFormatter(field.formatter, value) : String(value));
+    return (
+      <div className="space-y-1.5">
+        <Label>{labelText}</Label>
+        <Input value={display} readOnly className="bg-muted" placeholder="자동 계산" />
+        {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
+      </div>
+    );
+  }
+
   // text / number / date
   return (
     <div className="space-y-1.5">
@@ -481,9 +502,55 @@ interface MetaFormProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: Record<string, unknown>) => Promise<void>;
   editData?: unknown;
+  // Phase 4 보강: 외부 컨텍스트 — extraPayload.fromContext 매핑에 사용
+  extraContext?: Record<string, unknown>;
 }
 
-export default function MetaForm({ config: defaultConfig, open, onOpenChange, onSubmit, editData }: MetaFormProps) {
+// dialogSize → max-w-* 매핑 (sm: 접두사 — 기본 Dialog 의 sm:max-w-sm 을 덮어씀)
+const DIALOG_SIZE_CLASS: Record<string, string> = {
+  sm: 'sm:max-w-sm',
+  md: 'sm:max-w-md',
+  lg: 'sm:max-w-lg',
+  xl: 'sm:max-w-xl',
+  '2xl': 'sm:max-w-2xl',
+};
+
+// extraPayload + computedFields 적용 후 최종 payload 생성
+function buildPayload(
+  data: FieldValues,
+  config: MetaFormConfig,
+  allFields: FieldConfig[],
+  extraContext?: Record<string, unknown>,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = { ...data };
+
+  // 1. computed 필드 — formula 실행해 payload 에 포함
+  allFields.forEach((f) => {
+    if (f.type !== 'computed' || !f.formula) return;
+    const fn = computedFormulas[f.formula.computerId];
+    if (!fn) return;
+    payload[f.key] = fn(payload, extraContext);
+  });
+
+  // 2. extraPayload — static / fromContext / fromStore 병합
+  const ep = config.extraPayload;
+  if (ep?.static) Object.assign(payload, ep.static);
+  if (ep?.fromContext && extraContext) {
+    ep.fromContext.forEach((k) => {
+      if (extraContext[k] !== undefined) payload[k] = extraContext[k];
+    });
+  }
+  if (ep?.fromStore) {
+    const state = useAppStore.getState() as unknown as Record<string, unknown>;
+    Object.entries(ep.fromStore).forEach(([dst, src]) => {
+      if (state[src] !== undefined) payload[dst] = state[src];
+    });
+  }
+
+  return payload;
+}
+
+export default function MetaForm({ config: defaultConfig, open, onOpenChange, onSubmit, editData, extraContext }: MetaFormProps) {
   // Phase 3: localStorage override 우선
   const config = useResolvedConfig(defaultConfig, 'form');
   const allFields = useMemo(() => config.sections.flatMap((s) => s.fields), [config]);
@@ -503,15 +570,33 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
   const watchedValues = watch();
   // optionsDependsOn 지원 — watchedValues 가 master 소스 호출 context 로 전달됨
   const fieldOptions = useFieldOptions(allFields, watchedValues);
+
+  // Phase 4 보강: computed 필드 라이브 재계산 — dependsOn 값 변화 시 setValue 로 갱신
+  // (입력 시점마다 자동 계산되어 화면에 즉시 반영)
+  useEffect(() => {
+    allFields.forEach((f) => {
+      if (f.type !== 'computed' || !f.formula) return;
+      const fn = computedFormulas[f.formula.computerId];
+      if (!fn) return;
+      const next = fn(watchedValues, extraContext);
+      if (watchedValues[f.key] !== next) setValue(f.key, next as never, { shouldDirty: false });
+    });
+    // watchedValues 가 변하면 재계산 — setValue 가 추가 watchedValues 변경 유발하므로 referential equality 로 무한 루프 방지
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(watchedValues), allFields]);
+
   const isEdit = !!editData;
   const handle = async (data: FieldValues) => {
-    await onSubmit(data as Record<string, unknown>);
+    const payload = buildPayload(data, config, allFields, extraContext);
+    await onSubmit(payload);
     onOpenChange(false);
   };
 
+  const sizeClass = DIALOG_SIZE_CLASS[config.dialogSize ?? 'md'] ?? 'max-w-md';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className={sizeClass}>
         <DialogHeader>
           <DialogTitle>{isEdit ? config.title.edit : config.title.create}</DialogTitle>
         </DialogHeader>

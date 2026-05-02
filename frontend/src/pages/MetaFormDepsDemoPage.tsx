@@ -44,6 +44,9 @@ export default function MetaFormDepsDemoPage() {
           <li><b>staticOptionsIf</b> — "배송 방식" 변경 시 "시간대" 옵션이 분기 (택배/픽업)</li>
           <li><b>file</b> — "제품 이미지" 파일 첨부 (File 객체 캡처)</li>
           <li><b>masterSource.search</b> — "연관 제품" combobox (디바운스 300ms, 입력 시 백엔드 검색 호출 — 대용량 옵션 처리)</li>
+          <li><b>computed</b> — "총액" 자동 계산 (수량 × 단가, readonly + payload 포함)</li>
+          <li><b>extraPayload</b> — submit 시 자동 첨가 (static <code>form_kind</code> + fromStore <code>company_id</code>)</li>
+          <li><b>dialogSize='lg'</b> — 더 넓은 다이얼로그 (3컬럼 행 표현 가능)</li>
         </ul>
         <p className="mt-2">제출은 콘솔 로그만 — 저장 없음.</p>
       </div>

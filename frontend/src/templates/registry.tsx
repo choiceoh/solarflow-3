@@ -32,7 +32,7 @@ import type { Partner, Bank, Warehouse, Manufacturer, Product } from '@/types/ma
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
-  Tone, MasterOptionSource, ContentBlock,
+  Tone, MasterOptionSource, ContentBlock, ComputedFormula,
 } from './types';
 import { RailBlock as RailBlockUI } from '@/components/command/MockupPrimitives';
 
@@ -549,6 +549,27 @@ export const enumDictionaries: Record<string, Record<string, string>> = {
   OUTBOUND_STATUS_LABEL,
   USAGE_CATEGORY_LABEL: USAGE_CATEGORY_LABEL as Record<string, string>,
   INVOICE_STATUS_LABEL: { issued: '발행', pending: '미발행' },
+};
+
+// ─── Phase 4 보강: Computed formulas (계산 필드용) ─────────────────────────
+// FieldConfig.formula.computerId 가 이 키를 참조. 동기 함수만 (입력 시점마다 호출).
+// values: 현재 폼의 모든 필드 값 (computed 자기 자신 포함)
+// context: MetaForm extraContext (페이지가 주입한 외부 값)
+export const computedFormulas: Record<string, ComputedFormula> = {
+  // 곱하기 — quantity * unit_price 같은 단순 계산
+  'multiply_qty_price': (values) => {
+    const q = Number(values.quantity);
+    const p = Number(values.unit_price);
+    if (!Number.isFinite(q) || !Number.isFinite(p)) return undefined;
+    return Math.round(q * p * 100) / 100;
+  },
+  // 미터 합 — module_width_mm + module_height_mm (데모용)
+  'sum_module_dims': (values) => {
+    const w = Number(values.module_width_mm);
+    const h = Number(values.module_height_mm);
+    if (!Number.isFinite(w) || !Number.isFinite(h)) return undefined;
+    return w + h;
+  },
 };
 
 // ─── Formatters ────────────────────────────────────────────────────────────

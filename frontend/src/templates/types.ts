@@ -130,7 +130,8 @@ export interface FormConfig {
 export type FieldType =
   | 'text' | 'select' | 'number' | 'textarea' | 'switch' | 'date'
   | 'multiselect'   // Phase 4 보강: 다중 선택 (값은 string[])
-  | 'file';         // Phase 4 보강: 파일 업로드 (값은 File | null — 캡처만, 업로드는 페이지가 처리)
+  | 'file'          // Phase 4 보강: 파일 업로드 (값은 File | null — 캡처만, 업로드는 페이지가 처리)
+  | 'computed';     // Phase 4 보강: 계산 필드 (다른 필드 값에서 자동 계산, readonly 표시 + payload 포함)
 
 export interface FieldConfig {
   key: string;                      // form 필드명 (zod 키 = react-hook-form 키)
@@ -167,6 +168,15 @@ export interface FieldConfig {
     fallback?: { value: string; label: string }[];
   };
 
+  // Phase 4 보강: 계산 필드 (type='computed') — 다른 필드 값에서 자동 계산
+  // formula.computerId 는 registry.computedFormulas 에 등록된 함수 키.
+  // dependsOn 에 나열된 필드 값이 변하면 재계산.
+  // submit 시 payload 에 자동 포함 (사용자 입력 없음).
+  formula?: { computerId: string };
+  dependsOn?: string[];
+  // 표시 포맷 (computed 필드 결과 포맷팅에 사용 — number/currency/date/kw)
+  formatter?: Formatter;
+
   // 권한별 readonly (PoC: 단순 boolean)
   readOnly?: boolean;
   // 편집 가능한 역할 목록 — 현재 사용자가 이 목록에 없으면 자동 readOnly
@@ -182,10 +192,33 @@ export interface FormSection {
   fields: FieldConfig[];
 }
 
+// Phase 4 보강: 다이얼로그 크기 (max-w-md/lg/xl/2xl) — 큰 폼은 lg 이상
+export type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+
+// Phase 4 보강: 폼 외부 컨텍스트를 payload 에 자동 첨가
+// (po_id, declaration_id, company_id 등 — 페이지가 직접 합치던 패턴을 메타로)
+export interface ExtraPayloadConfig {
+  // 항상 포함되는 정적 값 (예: { source: 'meta_form_v2' })
+  static?: Record<string, unknown>;
+  // MetaForm props 의 extraContext 에서 키 추출 (예: ['po_id', 'declaration_id'])
+  fromContext?: string[];
+  // appStore 의 키에서 추출 (예: { company_id: 'selectedCompanyId' })
+  fromStore?: Record<string, string>;
+}
+
+// Phase 4 보강: 계산 함수 시그니처 (registry.computedFormulas)
+export type ComputedFormula = (
+  values: Record<string, unknown>,
+  context?: Record<string, unknown>,
+) => unknown;
+
 export interface MetaFormConfig {
   id: string;                       // 'partner_form_v2' — registry/screen에서 참조
   title: { create: string; edit: string };
   sections: FormSection[];
+  // Phase 4 보강
+  dialogSize?: DialogSize;          // 기본 'md'
+  extraPayload?: ExtraPayloadConfig;
 }
 
 // ── 메타 상세화면 (Phase 2.5)
