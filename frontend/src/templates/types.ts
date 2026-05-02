@@ -125,7 +125,9 @@ export type FieldType =
   | 'text' | 'select' | 'number' | 'textarea' | 'switch' | 'date'
   | 'multiselect'   // Phase 4 보강: 다중 선택 (값은 string[])
   | 'file'          // Phase 4 보강: 파일 업로드 (값은 File | null — 캡처만, 업로드는 페이지가 처리)
-  | 'computed';     // Phase 4 보강: 계산 필드 (다른 필드 값에서 자동 계산, readonly 표시 + payload 포함)
+  | 'computed'      // Phase 4 보강: 계산 필드 (다른 필드 값에서 자동 계산, readonly 표시 + payload 포함)
+  | 'datetime'      // Phase 4 보강 Tier 3: ISO 8601 datetime-local (값은 'YYYY-MM-DDTHH:MM')
+  | 'time';         // Phase 4 보강 Tier 3: 시간 (값은 'HH:MM')
 
 export interface FieldConfig {
   key: string;                      // form 필드명 (zod 키 = react-hook-form 키)
@@ -181,6 +183,10 @@ export interface FieldConfig {
   // Phase 4 보강: 필드 아래 설명 텍스트 (placeholder 와 다름 — 필드 옆 muted 글)
   description?: string;
 
+  // Phase 4 보강 Tier 3: 파일 다중 업로드 (type='file' 와 함께)
+  // true 면 값은 File[], 표시는 메타정보 리스트
+  multiple?: boolean;
+
   // 권한별 readonly (PoC: 단순 boolean)
   readOnly?: boolean;
   // 편집 가능한 역할 목록 — 현재 사용자가 이 목록에 없으면 자동 readOnly
@@ -219,6 +225,16 @@ export type ComputedFormula = (
   context?: Record<string, unknown>,
 ) => unknown;
 
+// Phase 4 보강 Tier 3: 폼 단위 cross-field 검증 함수 (registry.formRefinements)
+// values 가 통과 → true, 실패 → false. zod superRefine 으로 통합.
+export type FormRefinement = (values: Record<string, unknown>) => boolean;
+
+export interface FormRefineRule {
+  ruleId: string;                   // registry.formRefinements 키
+  message: string;                  // 실패 시 표시 메시지
+  path?: string[];                  // 에러를 표시할 필드 경로 (미지정 시 form-level)
+}
+
 export interface MetaFormConfig {
   id: string;                       // 'partner_form_v2' — registry/screen에서 참조
   title: { create: string; edit: string };
@@ -226,6 +242,11 @@ export interface MetaFormConfig {
   // Phase 4 보강
   dialogSize?: DialogSize;          // 기본 'md'
   extraPayload?: ExtraPayloadConfig;
+  // Phase 4 보강 Tier 3: 폼 단위 cross-field 검증 (예: previous_limit !== new_limit)
+  refine?: FormRefineRule[];
+  // Phase 4 보강 Tier 3: 초안 localStorage 자동 저장 (debounced 500ms)
+  // 신규 등록 모드에만 적용 — 편집 모드는 editData 가 진실 소스.
+  draftAutoSave?: boolean;
 }
 
 // ── 메타 상세화면 (Phase 2.5)

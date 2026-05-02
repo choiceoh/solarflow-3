@@ -32,7 +32,7 @@ import type { Partner, Bank, Warehouse, Manufacturer, Product } from '@/types/ma
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
-  Tone, MasterOptionSource, ContentBlock, ComputedFormula,
+  Tone, MasterOptionSource, ContentBlock, ComputedFormula, FormRefinement,
 } from './types';
 import { RailBlock as RailBlockUI } from '@/components/command/MockupPrimitives';
 
@@ -569,6 +569,25 @@ export const computedFormulas: Record<string, ComputedFormula> = {
     const h = Number(values.module_height_mm);
     if (!Number.isFinite(w) || !Number.isFinite(h)) return undefined;
     return w + h;
+  },
+};
+
+// ─── Phase 4 보강 Tier 3: Form refinements (cross-field 검증) ─────────────
+// MetaFormConfig.refine 의 ruleId 가 이 키를 참조. 통과=true, 실패=false.
+export const formRefinements: Record<string, FormRefinement> = {
+  // 데모: quantity * unit_price <= 1억 (대규모 거래 차단 정책 시뮬레이션)
+  'limit_total_under_100m': (values) => {
+    const q = Number(values.quantity);
+    const p = Number(values.unit_price);
+    if (!Number.isFinite(q) || !Number.isFinite(p)) return true; // 미입력은 OK
+    return q * p <= 100_000_000;
+  },
+  // 데모: warranty_months 가 12 의 배수여야 (1년 단위 정책)
+  'warranty_year_aligned': (values) => {
+    if (values.has_warranty !== true) return true;
+    const m = Number(values.warranty_months);
+    if (!Number.isFinite(m)) return true;
+    return m % 12 === 0;
   },
 };
 

@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { usePermission } from '@/hooks/usePermission';
 import type { FieldConfig, MasterOptionSource, MetaFormConfig } from './types';
 import {
-  applyFormatter, computedFormulas, enumDictionaries, masterSources,
+  applyFormatter, computedFormulas, enumDictionaries, formRefinements, masterSources,
 } from './registry';
 import { useAppStore } from '@/stores/appStore';
 
@@ -48,7 +48,14 @@ function buildFieldSchema(field: FieldConfig): ZodTypeAny {
   }
 
   if (field.type === 'file') {
-    // File 객체 또는 null. zod validation 은 최소화 — 페이지가 업로드 처리.
+    // File 객체 또는 File[] (multiple) 또는 null/[].
+    // multiple=true 시 required 는 length>=1.
+    if (field.multiple) {
+      return field.required
+        ? z.array(z.any()).refine((v) => Array.isArray(v) && v.length > 0 && v.every((f) => f instanceof File),
+            { message: `${subj} 1개 이상 파일을 선택해야 합니다` })
+        : z.any().optional();
+    }
     return field.required
       ? z.any().refine((v) => v instanceof File, { message: `${subj} 파일을 선택해야 합니다` })
       : z.any().optional();
@@ -68,12 +75,29 @@ function buildFieldSchema(field: FieldConfig): ZodTypeAny {
   return s.optional();
 }
 
-export function buildZodSchema(config: MetaFormConfig): ZodObject<ZodRawShape> {
+export function buildZodSchema(config: MetaFormConfig): ZodTypeAny {
   const shape: Record<string, ZodTypeAny> = {};
   config.sections.forEach((section) => {
     section.fields.forEach((f) => { shape[f.key] = buildFieldSchema(f); });
   });
-  return z.object(shape as ZodRawShape);
+  let schema: ZodTypeAny = z.object(shape as ZodRawShape);
+  // Phase 4 보강 Tier 3: form-level cross-field refinement
+  if (config.refine && config.refine.length > 0) {
+    schema = (schema as ZodObject<ZodRawShape>).superRefine((values, ctx) => {
+      config.refine!.forEach((rule) => {
+        const fn = formRefinements[rule.ruleId];
+        if (!fn) return;
+        if (!fn(values as Record<string, unknown>)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: rule.message,
+            path: rule.path ?? [],
+          });
+        }
+      });
+    });
+  }
+  return schema;
 }
 
 // ─── 옵션 로드 (master 데이터는 비동기) ───────────────────────────────────
@@ -159,8 +183,39 @@ function useFieldOptions(fields: FieldConfig[], watchedValues: Record<string, un
 function resolveSpecialDefault(v: unknown): unknown {
   if (typeof v !== 'string' || !v.startsWith('@')) return v;
   if (v === '@today') return new Date().toISOString().slice(0, 10);
-  if (v === '@now') return new Date().toISOString();
+  // @now: datetime-local 입력 호환 형식 'YYYY-MM-DDTHH:MM' (T 포함, 초/타임존 제외)
+  if (v === '@now') {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
   return v;
+}
+
+// Phase 4 보강 Tier 3: 초안 자동 저장 (localStorage)
+// File 객체는 직렬화 불가 → 저장 시 제외, 복구 시 빈 값 유지.
+const DRAFT_PREFIX = 'sf.formdraft.';
+function loadDraft(scopeId: string): Record<string, unknown> | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(DRAFT_PREFIX + scopeId);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function saveDraft(scopeId: string, values: Record<string, unknown>): void {
+  if (typeof localStorage === 'undefined') return;
+  // File / File[] 직렬화 불가 — 제외
+  const safe: Record<string, unknown> = {};
+  Object.entries(values).forEach(([k, v]) => {
+    if (v instanceof File) return;
+    if (Array.isArray(v) && v.some((x) => x instanceof File)) return;
+    safe[k] = v;
+  });
+  try { localStorage.setItem(DRAFT_PREFIX + scopeId, JSON.stringify(safe)); } catch { /* quota */ }
+}
+function clearDraft(scopeId: string): void {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.removeItem(DRAFT_PREFIX + scopeId);
 }
 
 // ─── 기본값 빌드 (편집 시 editData → 폼 값) ───────────────────────────────
@@ -175,7 +230,7 @@ function buildDefaults(
     else if (f.defaultValue != null) out[f.key] = resolveSpecialDefault(f.defaultValue);
     else if (f.type === 'switch') out[f.key] = false;
     else if (f.type === 'multiselect') out[f.key] = [];
-    else if (f.type === 'file') out[f.key] = null;
+    else if (f.type === 'file') out[f.key] = f.multiple ? [] : null;
     else if (f.type === 'computed') out[f.key] = undefined;
     else if (f.type === 'number') out[f.key] = undefined;
     else out[f.key] = '';
@@ -511,21 +566,32 @@ function FieldRender({ field, value, error, options, setValue, register, watched
   }
 
   if (field.type === 'file') {
-    const file = value as File | null | undefined;
+    // Phase 4 보강 Tier 3: multiple=true 시 File[] 처리
+    const multiple = !!field.multiple;
+    const files: File[] = multiple
+      ? (Array.isArray(value) ? (value as File[]) : [])
+      : (value instanceof File ? [value as File] : []);
     return (
       <div className="space-y-1.5">
         <Label>{labelText}</Label>
         <input
           type="file"
-          onChange={(e) => setValue(field.key, e.target.files?.[0] ?? null)}
+          multiple={multiple}
+          onChange={(e) => {
+            const list = e.target.files ? Array.from(e.target.files) : [];
+            setValue(field.key, multiple ? list : (list[0] ?? null));
+          }}
           disabled={readOnly}
           className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-secondary/80"
         />
-        {file && (
-          <p className="text-xs text-muted-foreground">
-            {file.name} · {(file.size / 1024).toFixed(1)} KB
-          </p>
+        {files.length > 0 && (
+          <ul className="text-xs text-muted-foreground space-y-0.5">
+            {files.map((f, i) => (
+              <li key={`${f.name}-${i}`}>{f.name} · {(f.size / 1024).toFixed(1)} KB</li>
+            ))}
+          </ul>
         )}
+        {field.description ? <p className="text-xs text-muted-foreground">{field.description}</p> : null}
         {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
       </div>
     );
@@ -561,7 +627,13 @@ function FieldRender({ field, value, error, options, setValue, register, watched
       ) : (
         <Input
           {...register(field.key)}
-          type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+          type={
+            field.type === 'number' ? 'number'
+            : field.type === 'date' ? 'date'
+            : field.type === 'datetime' ? 'datetime-local'
+            : field.type === 'time' ? 'time'
+            : 'text'
+          }
           placeholder={field.placeholder}
           readOnly={readOnly}
         />
@@ -646,14 +718,36 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
   const {
     register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting },
   } = useForm<FieldValues>({
-    resolver: zodResolver(schema),
+    // schema 는 ZodObject 또는 ZodEffects (superRefine 적용 시) — 둘 다 zodResolver 호환
+    resolver: zodResolver(schema as never),
   });
 
+  // Phase 4 보강 Tier 3: draftAutoSave 복구 — 신규 모드에만 (editData 없을 때)
+  // 마운트 시 한 번 — open + 신규 + draft 가 있으면 draft 우선
+  const [draftRestored, setDraftRestored] = useState(false);
+
   useEffect(() => {
-    if (open) reset(buildDefaults(allFields, editData as Record<string, unknown> | null | undefined));
-  }, [open, editData, reset, allFields]);
+    if (!open) { setDraftRestored(false); return; }
+    const useDraft = config.draftAutoSave && !editData;
+    const draft = useDraft ? loadDraft(config.id) : null;
+    if (draft) {
+      reset({ ...buildDefaults(allFields, null), ...draft });
+      setDraftRestored(true);
+    } else {
+      reset(buildDefaults(allFields, editData as Record<string, unknown> | null | undefined));
+      setDraftRestored(false);
+    }
+  }, [open, editData, reset, allFields, config.id, config.draftAutoSave]);
 
   const watchedValues = watch();
+
+  // Phase 4 보강 Tier 3: draftAutoSave — 변경 500ms 후 localStorage 저장
+  useEffect(() => {
+    if (!config.draftAutoSave || !open || editData) return;
+    const t = setTimeout(() => saveDraft(config.id, watchedValues), 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(watchedValues), config.draftAutoSave, open, !!editData, config.id]);
   // optionsDependsOn 지원 — watchedValues 가 master 소스 호출 context 로 전달됨
   const fieldOptions = useFieldOptions(allFields, watchedValues);
 
@@ -675,7 +769,15 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
   const handle = async (data: FieldValues) => {
     const payload = buildPayload(data, config, allFields, extraContext);
     await onSubmit(payload);
+    // Phase 4 보강 Tier 3: 저장 성공 시 draft 제거
+    if (config.draftAutoSave && !editData) clearDraft(config.id);
     onOpenChange(false);
+  };
+
+  const handleClearDraft = () => {
+    clearDraft(config.id);
+    reset(buildDefaults(allFields, null));
+    setDraftRestored(false);
   };
 
   const sizeClass = DIALOG_SIZE_CLASS[config.dialogSize ?? 'md'] ?? 'max-w-md';
@@ -686,6 +788,14 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
         <DialogHeader>
           <DialogTitle>{isEdit ? config.title.edit : config.title.create}</DialogTitle>
         </DialogHeader>
+        {draftRestored ? (
+          <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
+            <span>이전에 입력하던 초안을 복구했습니다.</span>
+            <button type="button" onClick={handleClearDraft} className="text-amber-700 hover:text-amber-900 underline">
+              초기화
+            </button>
+          </div>
+        ) : null}
         <form onSubmit={handleSubmit(handle)} className="space-y-3">
           {config.sections.map((sec, idx) => {
             const colsClass = sec.cols === 2 ? 'grid grid-cols-2 gap-3'

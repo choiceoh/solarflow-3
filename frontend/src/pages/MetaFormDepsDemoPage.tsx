@@ -51,6 +51,10 @@ export default function MetaFormDepsDemoPage() {
           <li><b>@today</b> — 주문일 기본값 = 오늘 날짜 (mount 시 자동 prefill)</li>
           <li><b>numberFormat='krw'</b> — 단가 천단위 콤마 + 원 (1,000,000원 표시, 내부값은 number)</li>
           <li><b>description</b> — 필드 아래 muted 설명 텍스트</li>
+          <li><b>refine (cross-field)</b> — 총액 1억 이하 + 보증 12개월 단위 (zod superRefine)</li>
+          <li><b>file.multiple</b> — "첨부 파일" 다중 선택 (File[])</li>
+          <li><b>datetime / time</b> — 픽업 일시 + 예상 시간 (input type=datetime-local/time)</li>
+          <li><b>draftAutoSave</b> — 입력 중 500ms 디바운스로 localStorage 저장, 다음 오픈 시 복구</li>
         </ul>
         <p className="mt-2">제출은 콘솔 로그만 — 저장 없음.</p>
       </div>
