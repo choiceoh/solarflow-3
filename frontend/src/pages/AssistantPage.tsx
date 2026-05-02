@@ -10,6 +10,7 @@ import MetaForm from '@/templates/MetaForm';
 import { cn } from '@/lib/utils';
 import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
+import { MetaConfigPreview } from '@/components/assistant/MetaConfigPreview';
 import {
   toBackendMessages,
   extractProposals,
@@ -629,6 +630,10 @@ function ProposalCard({
         <span>{label}</span>
       </div>
       <div className="mt-2 whitespace-pre-wrap text-foreground/90">{proposal.summary}</div>
+
+      {proposal.kind === 'propose_ui_config_update' && (
+        <MetaConfigPreview payload={proposal.payload} />
+      )}
 
       {proposal.status === 'pending' && (
         <div className="mt-3 flex gap-2">
