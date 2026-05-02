@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 131개 PASS (router snapshot 2건 추가) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-110 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-111 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -39,8 +39,19 @@
 - 라우트 222개 골든파일 캡처 — 신규 도메인 추가 시 `go test ./internal/router -run TestRouteSnapshot -update`로 갱신
 
 ### 다음 작업
-- alias 라우트(`/api/v1/assistant/ocr/*`, `/api/v1/assistant/match/receipts/auto`) 정리 여부 결정 — 프론트 호출처 grep 후 제거/유지 결정 (별도 PR)
 - handler 패키지 도메인 폴더 분할(`handler/master/`, `handler/po/` 등) 검토 — 빅뱅 후속, 평면 50개 유지가 부담되면 진행
+
+---
+
+## 2026-05-02 세션 — D-111 alias 라우트 영구 유지 결정
+
+### 완료
+- 설계 판단 D-111 추가: `/api/v1/assistant/{ocr,match}/*` alias 3개는 영구 유지
+- 프론트 호출처 grep 결과 정리:
+  - `/assistant/match/receipts/auto` ← `frontend/src/components/orders/AutoMatchSection.tsx:61` (정식 `/receipt-matches/auto`는 호출처 0 — alias가 사실상 정식)
+  - `/assistant/ocr/extract` ← `frontend/src/pages/AssistantPage.tsx:151` (통합 챗 OCR). 정식 `/ocr/extract`는 `frontend/src/components/inbound/BLForm.tsx:1300` (B/L 입력 OCR) — 사용 맥락 다름
+  - `/assistant/ocr/health` ← 호출처 0이지만 워밍업 모니터링 가능성 + 단독 제거 가치 낮아 묶어서 유지
+- PROGRESS.md "다음 작업"에서 alias 정리 항목 제거
 
 ---
 
