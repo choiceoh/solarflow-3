@@ -12,7 +12,9 @@ import OutboundDetailView from '@/components/outbound/OutboundDetailView';
 import OutboundForm from '@/components/outbound/OutboundForm';
 import InboundStatusBadge from '@/components/inbound/InboundStatusBadge';
 import BLDetailView from '@/components/inbound/BLDetailView';
+import BLForm from '@/components/inbound/BLForm';
 import { useBLList, useBLDetail } from '@/hooks/useInbound';
+import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL } from '@/types/inbound';
 import type { BLShipment, BLLineItem, InboundType, BLStatus } from '@/types/inbound';
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
@@ -43,7 +45,7 @@ import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite 
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
-  Tone, MasterOptionSource, ContentBlock, ComputedFormula, FormRefinement,
+  Tone, MasterOptionSource, ContentBlock, ComputedFormula, FormRefinement, FormSubmitter,
 } from './types';
 import { RailBlock as RailBlockUI } from '@/components/command/MockupPrimitives';
 
@@ -563,6 +565,16 @@ const DepsDemoForm: FormComponent = (props) => (
   />
 );
 
+// Inbound (Step 2 follow-up): BLForm 등록 — submitterId='bl_save' 와 함께 사용
+const BLFormWrapper: FormComponent = (props) => (
+  <BLForm
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData as BLShipment | null}
+  />
+);
+
 export const formComponents: Record<string, FormComponent> = {
   outbound_form: OutboundForm as unknown as FormComponent,
   outbound_form_simple: OutboundFormSimple,    // 메타 한계선 데모용
@@ -580,6 +592,15 @@ export const formComponents: Record<string, FormComponent> = {
   receipt_form_v2: ReceiptFormV2,              // Phase 4 보강: 수금
   declaration_form_v2: DeclarationFormV2,      // Phase 4 보강: 면장
   deps_demo: DepsDemoForm,                     // Phase 4 보강: 의존성·동적 옵션 데모
+  bl_form: BLFormWrapper,                       // Phase 4 — Inbound: B/L 입고 (submitterId='bl_save')
+};
+
+// Phase 4 보강: 폼 저장 함수 — endpoint POST/PUT 으로 표현 안 되는 multi-step 저장
+export const formSubmitters: Record<string, FormSubmitter> = {
+  // BL: parent (BLShipment) + child (lines) 묶음 저장
+  bl_save: async (data) => {
+    await saveBLShipmentWithLines(data);
+  },
 };
 
 export const detailComponents: Record<string, DetailComponent> = {
