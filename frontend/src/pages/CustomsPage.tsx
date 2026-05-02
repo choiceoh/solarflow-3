@@ -8,7 +8,9 @@ import { fetchWithAuth } from '@/lib/api';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import DeclarationDetailView from '@/components/customs/DeclarationDetailView';
 import DeclarationForm from '@/components/customs/DeclarationForm';
-import ExpenseListTable from '@/components/customs/ExpenseListTable';
+import ExpenseListTable, { EXPENSE_TABLE_ID, EXPENSE_COLUMN_META } from '@/components/customs/ExpenseListTable';
+import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
+import { useColumnVisibility } from '@/lib/columnVisibility';
 import ExpenseForm from '@/components/customs/ExpenseForm';
 import ExchangeComparePanel from '@/components/customs/ExchangeComparePanel';
 import { EXPENSE_TYPE_LABEL, type ExpenseType, type Expense } from '@/types/customs';
@@ -69,6 +71,7 @@ export default function CustomsPage() {
 
   const reloadDecl = () => {};
   const { data: expenses, loading: expLoading, reload: reloadExp } = useExpenseList(expFilters);
+  const expenseColVis = useColumnVisibility(EXPENSE_TABLE_ID, EXPENSE_COLUMN_META);
   void declFilters;
 
   useEffect(() => {
@@ -178,6 +181,7 @@ export default function CustomsPage() {
               options: (Object.entries(EXPENSE_TYPE_LABEL) as [ExpenseType, string][]).map(([k, v]) => ({ value: k, label: v })),
             },
           ]} />
+          <ColumnVisibilityMenu columns={EXPENSE_COLUMN_META} hidden={expenseColVis.hidden} setHidden={expenseColVis.setHidden} />
           <ExcelToolbar type="expense" onNew={() => { setEditExpense(null); setExpFormOpen(true); }} />
         </>
       ) : null}
@@ -212,6 +216,7 @@ export default function CustomsPage() {
           {expLoading ? <SkeletonRows rows={6} /> : (
             <ExpenseListTable
               items={expenses}
+              hidden={expenseColVis.hidden}
               onEdit={(e) => { setEditExpense(e); setExpFormOpen(true); }}
               onNew={() => { setEditExpense(null); setExpFormOpen(true); }}
               onDelete={(e) => { setDeleteError(''); setDeletingExpense(e); }}

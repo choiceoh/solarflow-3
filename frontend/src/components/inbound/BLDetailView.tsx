@@ -10,7 +10,9 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
 import InboundStatusBadge from './InboundStatusBadge';
 import StatusChanger from './StatusChanger';
-import BLLineTable from './BLLineTable';
+import BLLineTable, { BL_LINE_TABLE_ID, BL_LINE_COLUMN_META } from './BLLineTable';
+import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
+import { useColumnVisibility } from '@/lib/columnVisibility';
 import BLLineForm from './BLLineForm';
 import LinkedMemoWidget from '@/components/memo/LinkedMemoWidget';
 import AttachmentWidget from '@/components/common/AttachmentWidget';
@@ -61,6 +63,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
   const [editingBL, setEditingBL] = useState(false);
   const [lineFormOpen, setLineFormOpen] = useState(false);
   const [editLine, setEditLine] = useState<BLLineItem | null>(null);
+  const blLineColVis = useColumnVisibility(BL_LINE_TABLE_ID, BL_LINE_COLUMN_META);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [manufacturerName, setManufacturerName] = useState<string>('');
@@ -367,13 +370,17 @@ export default function BLDetailView({ blId, onBack }: Props) {
           <Separator className="my-2" />
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">입고 품목</h3>
-            <Button size="sm" onClick={() => { setEditLine(null); setLineFormOpen(true); }}>
-              <Plus className="mr-1 h-3.5 w-3.5" />추가
-            </Button>
+            <div className="flex items-center gap-2">
+              <ColumnVisibilityMenu columns={BL_LINE_COLUMN_META} hidden={blLineColVis.hidden} setHidden={blLineColVis.setHidden} />
+              <Button size="sm" onClick={() => { setEditLine(null); setLineFormOpen(true); }}>
+                <Plus className="mr-1 h-3.5 w-3.5" />추가
+              </Button>
+            </div>
           </div>
           {linesLoading ? <LoadingSpinner /> : (
             <BLLineTable
               items={lines}
+              hidden={blLineColVis.hidden}
               currency={bl.currency}
               manufacturerName={manufacturerName || bl.manufacturer_name}
               onEdit={(line) => { setEditLine(line); setLineFormOpen(true); }}

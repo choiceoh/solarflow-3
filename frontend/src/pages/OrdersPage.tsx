@@ -10,18 +10,20 @@ import { useReceiptList } from '@/hooks/useReceipts';
 import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import SkeletonRows from '@/components/common/SkeletonRows';
-import OrderListTable from '@/components/orders/OrderListTable';
+import OrderListTable, { ORDER_TABLE_ID, ORDER_COLUMN_META } from '@/components/orders/OrderListTable';
 import OrderDetailView from '@/components/orders/OrderDetailView';
 import OrderForm, { type OrderPrefillData } from '@/components/orders/OrderForm';
-import ReceiptListTable from '@/components/orders/ReceiptListTable';
+import ReceiptListTable, { RECEIPT_TABLE_ID, RECEIPT_COLUMN_META } from '@/components/orders/ReceiptListTable';
 import ReceiptForm from '@/components/orders/ReceiptForm';
 import ReceiptMatchingPanel from '@/components/orders/ReceiptMatchingPanel';
 import AutoMatchSection from '@/components/orders/AutoMatchSection';
-import OutboundListTable from '@/components/outbound/OutboundListTable';
+import OutboundListTable, { OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META } from '@/components/outbound/OutboundListTable';
+import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
+import { useColumnVisibility } from '@/lib/columnVisibility';
 import OutboundDetailView from '@/components/outbound/OutboundDetailView';
 import OutboundForm from '@/components/outbound/OutboundForm';
 import SaleForm from '@/components/outbound/SaleForm';
-import SaleListTable from '@/components/outbound/SaleListTable';
+import SaleListTable, { SALE_TABLE_ID, SALE_COLUMN_META } from '@/components/outbound/SaleListTable';
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
 import type { InventoryAllocation } from '@/components/inventory/AllocationForm';
 import {
@@ -201,6 +203,10 @@ export default function OrdersPage() {
   const [outboundOrder, setOutboundOrder] = useState<Order | null>(null);
   const [invoiceOutbound, setInvoiceOutbound] = useState<Outbound | null>(null);
   const [invoiceOrder, setInvoiceOrder] = useState<(Order & { sale?: Sale }) | null>(null);
+  const outboundColVis = useColumnVisibility(OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META);
+  const orderColVis = useColumnVisibility(ORDER_TABLE_ID, ORDER_COLUMN_META);
+  const saleColVis = useColumnVisibility(SALE_TABLE_ID, SALE_COLUMN_META);
+  const receiptColVis = useColumnVisibility(RECEIPT_TABLE_ID, RECEIPT_COLUMN_META);
   const obFilters: { status?: string; usage_category?: string; manufacturer_id?: string } = {};
   if (obStatusFilter) obFilters.status = obStatusFilter;
   if (obUsageFilter) obFilters.usage_category = obUsageFilter;
@@ -787,6 +793,7 @@ export default function OrdersPage() {
               options: (Object.entries(MANAGEMENT_CATEGORY_LABEL) as [ManagementCategory, string][]).map(([k, v]) => ({ value: k, label: v })),
             },
           ]} />
+          <ColumnVisibilityMenu columns={ORDER_COLUMN_META} hidden={orderColVis.hidden} setHidden={orderColVis.setHidden} />
           <ExcelToolbar type="order" onNew={() => setOrderFormOpen(true)} />
         </>
       )}
@@ -812,6 +819,7 @@ export default function OrdersPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
+          <ColumnVisibilityMenu columns={OUTBOUND_COLUMN_META} hidden={outboundColVis.hidden} setHidden={outboundColVis.setHidden} />
           <ExcelToolbar type="outbound" onNew={() => { setOutboundOrder(null); setObFormOpen(true); }} />
         </>
       )}
@@ -844,6 +852,7 @@ export default function OrdersPage() {
               ],
             },
           ]} />
+          <ColumnVisibilityMenu columns={SALE_COLUMN_META} hidden={saleColVis.hidden} setHidden={saleColVis.setHidden} />
           <ExcelToolbar type="sale" />
         </>
       )}
@@ -863,6 +872,7 @@ export default function OrdersPage() {
               options: months.map((m) => ({ value: m, label: m })),
             },
           ]} />
+          <ColumnVisibilityMenu columns={RECEIPT_COLUMN_META} hidden={receiptColVis.hidden} setHidden={receiptColVis.setHidden} />
           <ExcelToolbar type="receipt" onNew={() => setReceiptFormOpen(true)} />
         </>
       )}
@@ -903,6 +913,7 @@ export default function OrdersPage() {
           {ordersLoading ? <SkeletonRows rows={8} /> : (
             <OrderListTable
               items={orders}
+              hidden={orderColVis.hidden}
               onSelect={(o) => setSelectedOrder(o.order_id)}
               onNew={() => setOrderFormOpen(true)}
               onEdit={(o) => {
@@ -938,6 +949,7 @@ export default function OrdersPage() {
               {obLoading ? <SkeletonRows rows={8} /> : (
                 <OutboundListTable
                   items={outboundsWithSales}
+                  hidden={outboundColVis.hidden}
                   onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
                   onNew={() => setObFormOpen(true)}
                   onInvoice={(ob) => setInvoiceOutbound({ ...ob, sale: ob.sale ?? salesByOutboundId.get(ob.outbound_id) })}
@@ -952,7 +964,7 @@ export default function OrdersPage() {
           {saleLoading ? <SkeletonRows rows={8} /> : (
             <>
               <SaleSummaryCards items={sales} />
-              <SaleListTable items={sales} onInvoice={handleOpenSaleInvoice} />
+              <SaleListTable items={sales} hidden={saleColVis.hidden} onInvoice={handleOpenSaleInvoice} />
             </>
           )}
         </TabsContent>
@@ -962,6 +974,7 @@ export default function OrdersPage() {
           {receiptsLoading ? <SkeletonRows rows={8} /> : (
             <ReceiptListTable
               items={receipts}
+              hidden={receiptColVis.hidden}
               onNew={() => setReceiptFormOpen(true)}
               onEdit={(r) => { setEditingReceipt(r); setReceiptFormOpen(true); }}
               onDelete={(r) => { setDeleteError(''); setDeletingReceipt(r); }}

@@ -1,81 +1,87 @@
 import { Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { formatCapacity, formatNumber } from '@/lib/utils';
-import EmptyState from '@/components/common/EmptyState';
 import { type BLLineItem } from '@/types/inbound';
+import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
+
+export const BL_LINE_TABLE_ID = 'bl-line';
 
 interface Props {
   items: BLLineItem[];
+  hidden: Set<string>;
   currency: 'USD' | 'KRW';
   manufacturerName?: string;
   onEdit: (line: BLLineItem) => void;
 }
 
-// Go API가 products를 nested로 반환 — flat/nested 모두 대응
 function pCode(l: BLLineItem) { return l.product_code ?? l.products?.product_code ?? '—'; }
 function pName(l: BLLineItem) { return l.product_name ?? l.products?.product_name ?? '—'; }
 function pSpec(l: BLLineItem) { return l.products?.spec_wp; }
 
-export default function BLLineTable({ items, currency, manufacturerName, onEdit }: Props) {
-  if (items.length === 0) return <EmptyState message="입고품목이 없습니다" />;
+interface BuildOpts {
+  currency: 'USD' | 'KRW';
+  manufacturerName?: string;
+  onEdit: (line: BLLineItem) => void;
+}
 
+function buildColumns({ currency, manufacturerName, onEdit }: BuildOpts): ColumnDef<BLLineItem>[] {
+  return [
+    {
+      key: 'manufacturer_spec', label: '제조사/규격', hideable: true,
+      cell: (line) => manufacturerName && pSpec(line) != null
+        ? `${manufacturerName} ${pSpec(line)}W`
+        : manufacturerName ?? (pSpec(line) != null ? `${pSpec(line)}W` : '—'),
+    },
+    { key: 'product_code', label: '품번', hideable: true, className: 'font-mono', cell: (l) => pCode(l) },
+    { key: 'product_name', label: '품명', hideable: true, cell: (l) => pName(l) },
+    { key: 'quantity', label: '수량', align: 'right', className: 'tabular-nums', cell: (l) => formatNumber(l.quantity) },
+    { key: 'capacity_kw', label: '용량(kW)', hideable: true, align: 'right', className: 'tabular-nums', cell: (l) => formatCapacity(l.capacity_kw, l.quantity) },
+    { key: 'capacity_mw', label: '용량(MW)', hideable: true, align: 'right', className: 'tabular-nums', cell: (l) => l.capacity_kw != null ? (l.capacity_kw / 1000).toFixed(3) : '—' },
+    {
+      key: 'item_type', label: '구분', hideable: true,
+      cell: (l) => (
+        <span className={l.item_type === 'main' ? 'sf-pill ghost' : 'sf-pill solar'}>
+          {l.item_type === 'main' ? '본품' : '스페어'}
+        </span>
+      ),
+    },
+    {
+      key: 'payment_type', label: '유/무상', hideable: true,
+      cell: (l) => (
+        <span className={l.payment_type === 'paid' ? 'sf-pill ghost' : 'sf-pill pos'}>
+          {l.payment_type === 'paid' ? '유상' : '무상'}
+        </span>
+      ),
+    },
+    {
+      key: 'unit_price', label: currency === 'USD' ? '단가(USD/Wp)' : '단가(KRW/Wp)', hideable: true, align: 'right', className: 'tabular-nums',
+      cell: (l) => currency === 'USD'
+        ? (l.unit_price_usd_wp != null ? `$${l.unit_price_usd_wp.toFixed(4)}` : '—')
+        : (l.unit_price_krw_wp != null ? `${formatNumber(l.unit_price_krw_wp)}원` : '—'),
+    },
+    {
+      key: 'actions', label: '', headerClassName: 'w-10',
+      cell: (l) => (
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
+          <Pencil className="h-3 w-3" />
+        </Button>
+      ),
+    },
+  ];
+}
+
+export const BL_LINE_COLUMN_META: ColumnVisibilityMeta[] =
+  buildColumns({ currency: 'USD', onEdit: () => {} }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
+
+export default function BLLineTable({ items, hidden, currency, manufacturerName, onEdit }: Props) {
   return (
-    <div className="rounded-md border overflow-x-auto">
-      <Table className="text-xs">
-        <TableHeader>
-          <TableRow>
-            <TableHead>제조사/규격</TableHead>
-            <TableHead>품번</TableHead>
-            <TableHead>품명</TableHead>
-            <TableHead className="text-right">수량</TableHead>
-            <TableHead className="text-right">용량(kW)</TableHead>
-            <TableHead className="text-right">용량(MW)</TableHead>
-            <TableHead>구분</TableHead>
-            <TableHead>유/무상</TableHead>
-            <TableHead className="text-right">{currency === 'USD' ? '단가(USD/Wp)' : '단가(KRW/Wp)'}</TableHead>
-            <TableHead className="w-10"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((line) => (
-            <TableRow key={line.bl_line_id}>
-              <TableCell>
-                {manufacturerName && pSpec(line) != null
-                  ? `${manufacturerName} ${pSpec(line)}W`
-                  : manufacturerName ?? (pSpec(line) != null ? `${pSpec(line)}W` : '—')}
-              </TableCell>
-              <TableCell className="font-mono">{pCode(line)}</TableCell>
-              <TableCell>{pName(line)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatNumber(line.quantity)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatCapacity(line.capacity_kw, line.quantity)}</TableCell>
-              <TableCell className="text-right tabular-nums">{line.capacity_kw != null ? (line.capacity_kw / 1000).toFixed(3) : '—'}</TableCell>
-              <TableCell>
-                <span className={line.item_type === 'main' ? 'sf-pill ghost' : 'sf-pill solar'}>
-                  {line.item_type === 'main' ? '본품' : '스페어'}
-                </span>
-              </TableCell>
-              <TableCell>
-                <span className={line.payment_type === 'paid' ? 'sf-pill ghost' : 'sf-pill pos'}>
-                  {line.payment_type === 'paid' ? '유상' : '무상'}
-                </span>
-              </TableCell>
-              <TableCell className="text-right tabular-nums">
-                {currency === 'USD'
-                  ? (line.unit_price_usd_wp != null ? `$${line.unit_price_usd_wp.toFixed(4)}` : '—')
-                  : (line.unit_price_krw_wp != null ? `${formatNumber(line.unit_price_krw_wp)}원` : '—')}
-              </TableCell>
-              <TableCell>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(line)}>
-                  <Pencil className="h-3 w-3" />
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <MetaTable
+      columns={buildColumns({ currency, manufacturerName, onEdit })}
+      hidden={hidden}
+      items={items}
+      getRowKey={(l) => l.bl_line_id}
+      emptyMessage="입고품목이 없습니다"
+    />
   );
 }

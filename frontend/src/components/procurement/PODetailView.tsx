@@ -6,7 +6,9 @@ import { cn, formatDate, shortMfgName } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
 import POForm from './POForm';
-import POLineTable from './POLineTable';
+import POLineTable, { PO_LINE_TABLE_ID, PO_LINE_COLUMN_META } from './POLineTable';
+import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
+import { useColumnVisibility } from '@/lib/columnVisibility';
 import POLineForm from './POLineForm';
 import TTForm from './TTForm';
 import LCForm from './LCForm';
@@ -197,6 +199,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const { data: lines, loading: linesLoading, reload: reloadLines } = usePOLines(po.po_id);
+  const poLineColVis = useColumnVisibility(PO_LINE_TABLE_ID, PO_LINE_COLUMN_META);
   const { data: lcs, loading: lcsLoading, reload: reloadLcs } = useLCList({ po_id: po.po_id });
   const { data: tts, loading: ttsLoading, reload: reloadTTs } = useTTList({ po_id: po.po_id });
 
@@ -571,10 +574,11 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
 
         <TabsContent value="lines">
           <div className="space-y-3">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <ColumnVisibilityMenu columns={PO_LINE_COLUMN_META} hidden={poLineColVis.hidden} setHidden={poLineColVis.setHidden} />
               <Button size="sm" onClick={() => { setEditLine(null); setLineFormOpen(true); }}><Plus className="mr-1 h-3.5 w-3.5" />추가</Button>
             </div>
-            {linesLoading ? <LoadingSpinner /> : <POLineTable items={lines} onEdit={(l) => { setEditLine(l); setLineFormOpen(true); }} manufacturerName={po.manufacturer_name} />}
+            {linesLoading ? <LoadingSpinner /> : <POLineTable items={lines} hidden={poLineColVis.hidden} onEdit={(l) => { setEditLine(l); setLineFormOpen(true); }} manufacturerName={po.manufacturer_name} />}
           </div>
         </TabsContent>
 

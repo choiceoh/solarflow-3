@@ -5,10 +5,11 @@ import { useAppStore } from '@/stores/appStore';
 import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import SkeletonRows from '@/components/common/SkeletonRows';
-import OutboundListTable from '@/components/outbound/OutboundListTable';
+import OutboundListTable, { OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META } from '@/components/outbound/OutboundListTable';
+import { useColumnVisibility } from '@/lib/columnVisibility';
 import OutboundDetailView from '@/components/outbound/OutboundDetailView';
 import OutboundForm from '@/components/outbound/OutboundForm';
-import SaleListTable from '@/components/outbound/SaleListTable';
+import SaleListTable, { SALE_TABLE_ID, SALE_COLUMN_META } from '@/components/outbound/SaleListTable';
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { FilterButton, FilterChips, RailBlock } from '@/components/command/MockupPrimitives';
@@ -26,6 +27,8 @@ export default function OutboundPage() {
   const [usageFilter, setUsageFilter] = useState('');
   const [mfgFilter, setMfgFilter] = useState('');
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null);
+  const outboundColVis = useColumnVisibility(OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META);
+  const saleColVis = useColumnVisibility(SALE_TABLE_ID, SALE_COLUMN_META);
   const [activeTab, setActiveTab] = useState<'outbound' | 'sales'>('outbound');
   const _loc = useLocation();
   // R1-1: 사이드바 "출고/판매" 클릭 시 목록 복귀 — URL → 상태 동기화
@@ -210,6 +213,7 @@ export default function OutboundPage() {
           {obLoading ? <SkeletonRows rows={6} /> : (
             <OutboundListTable
               items={outbounds}
+              hidden={outboundColVis.hidden}
               onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
               onNew={() => setFormOpen(true)}
             />
@@ -220,7 +224,7 @@ export default function OutboundPage() {
           {saleLoading ? <SkeletonRows rows={6} /> : (
             <>
               <SaleSummaryCards items={sales} />
-              <SaleListTable items={sales} />
+              <SaleListTable items={sales} hidden={saleColVis.hidden} />
             </>
           )}
         </TabsContent>
