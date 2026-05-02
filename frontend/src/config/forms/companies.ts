@@ -27,6 +27,12 @@ const companyForm: MetaFormConfig = {
         { key: 'business_number', label: '사업자번호', type: 'text', editableByRoles: ['admin'] },
       ],
     },
+    {
+      cols: 1,
+      fields: [
+        { key: 'is_active', label: '활성', type: 'switch', defaultValue: true },
+      ],
+    },
   ],
 };
 

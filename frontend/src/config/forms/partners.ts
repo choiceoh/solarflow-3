@@ -55,6 +55,12 @@ const partnerForm: MetaFormConfig = {
         },
       ],
     },
+    {
+      cols: 1,
+      fields: [
+        { key: 'is_active', label: '활성', type: 'switch', defaultValue: true },
+      ],
+    },
   ],
 };
 

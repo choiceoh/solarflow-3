@@ -56,6 +56,12 @@ const bankForm: MetaFormConfig = {
         { key: 'memo', label: '메모', type: 'textarea' },
       ],
     },
+    {
+      cols: 1,
+      fields: [
+        { key: 'is_active', label: '활성', type: 'switch', defaultValue: true },
+      ],
+    },
   ],
 };
 

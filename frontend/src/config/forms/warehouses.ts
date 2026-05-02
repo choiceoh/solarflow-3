@@ -38,6 +38,12 @@ const warehouseForm: MetaFormConfig = {
         { key: 'location_name', label: '장소명', type: 'text', required: true },
       ],
     },
+    {
+      cols: 1,
+      fields: [
+        { key: 'is_active', label: '활성', type: 'switch', defaultValue: true },
+      ],
+    },
   ],
 };
 
