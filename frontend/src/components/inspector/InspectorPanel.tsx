@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore, type InspectorMode, type InspectorTarget } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import { TokenPanel } from './TokenPanel';
+import { DraftsList } from './DraftsList';
+import { getLastTargetEl } from './inspectorTarget';
 
 const PANEL_WIDTH = 360;
 
@@ -31,7 +33,7 @@ export const InspectorPanel = () => {
       <header className="border-b border-amber-200 bg-amber-50 px-4 pt-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-amber-900">인스펙터</h2>
-          <span className="text-xs text-amber-700">B-1·B-2</span>
+          <span className="text-xs text-amber-700">B-1·B-2·B-3</span>
         </div>
         <div className="-mb-px mt-2 flex gap-1 text-xs">
           <ModeTab mode="element" current={inspectorMode} onClick={setInspectorMode}>
@@ -44,11 +46,7 @@ export const InspectorPanel = () => {
       </header>
       <div className="overflow-y-auto p-4 text-sm" style={{ height: 'calc(100vh - 73px)' }}>
         {inspectorMode === 'element' ? (
-          inspectorTarget ? (
-            <TargetInfo target={inspectorTarget} />
-          ) : (
-            <Placeholder />
-          )
+          <ElementMode target={inspectorTarget} />
         ) : (
           <TokenPanel />
         )}
@@ -79,6 +77,13 @@ const ModeTab = ({ mode, current, onClick, children }: ModeTabProps) => (
   </button>
 );
 
+const ElementMode = ({ target }: { target: InspectorTarget | null }) => (
+  <div className="space-y-4">
+    {target ? <TargetInfo target={target} /> : <Placeholder />}
+    <DraftsList />
+  </div>
+);
+
 const Placeholder = () => (
   <div className="space-y-3 text-slate-600">
     <p className="font-medium text-slate-800">편집 모드 활성</p>
@@ -89,7 +94,7 @@ const Placeholder = () => (
         <span className="ml-2">편집 모드 토글</span>
       </li>
       <li>요소 hover — 노란 outline</li>
-      <li>요소 클릭 — 정보 표시 + 진한 outline</li>
+      <li>요소 클릭 — 정보 표시 + className 편집 가능</li>
       <li>
         <kbd className="rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 font-mono">Esc</kbd>
         <span className="ml-2">선택 해제</span>
@@ -102,18 +107,61 @@ const Placeholder = () => (
   </div>
 );
 
-const TargetInfo = ({ target }: { target: InspectorTarget }) => (
-  <div className="space-y-3">
-    <Field label="태그" value={target.tagName.toLowerCase()} />
-    <Field label="selector" value={target.selector} mono />
-    <Field label="className" value={target.className} mono multiline />
-    {target.configSource && <Field label="config 출처" value={target.configSource} mono />}
-    <Field
-      label="위치"
-      value={`${Math.round(target.rect.left)},${Math.round(target.rect.top)} · ${Math.round(target.rect.width)}×${Math.round(target.rect.height)}`}
-    />
-  </div>
-);
+const TargetInfo = ({ target }: { target: InspectorTarget }) => {
+  const [draft, setDraft] = useState(target.className);
+
+  useEffect(() => {
+    setDraft(target.className);
+  }, [target.className]);
+
+  useEffect(() => {
+    const el = getLastTargetEl();
+    if (!el) return;
+    el.className = draft;
+    const t = window.setTimeout(() => {
+      useAppStore.getState().recordClassNameDraft({
+        selector: target.selector,
+        tagName: target.tagName,
+        before: target.className,
+        after: draft,
+      });
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [draft, target.selector, target.tagName, target.className]);
+
+  return (
+    <div className="space-y-3">
+      <Field label="태그" value={target.tagName.toLowerCase()} />
+      <Field label="selector" value={target.selector} mono />
+      <div>
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-medium text-slate-500">className (편집 가능)</div>
+          {draft !== target.className && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+              미적용
+            </span>
+          )}
+        </div>
+        <textarea
+          data-inspector-ui="true"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          spellCheck={false}
+          className="mt-0.5 w-full resize-y rounded border border-slate-300 bg-slate-50 p-1.5 font-mono text-xs leading-snug focus:border-amber-400 focus:bg-white focus:outline-none"
+          rows={4}
+        />
+        <p className="mt-1 text-[10px] text-slate-400">
+          입력 즉시 화면 반영 · 새로고침 시 자동 reset
+        </p>
+      </div>
+      {target.configSource && <Field label="config 출처" value={target.configSource} mono />}
+      <Field
+        label="위치"
+        value={`${Math.round(target.rect.left)},${Math.round(target.rect.top)} · ${Math.round(target.rect.width)}×${Math.round(target.rect.height)}`}
+      />
+    </div>
+  );
+};
 
 interface FieldProps {
   label: string;
