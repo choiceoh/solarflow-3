@@ -37,6 +37,7 @@ export type MenuKey =
   | 'assistant'     // AI 업무 도우미
   | 'crm_inbox'     // CRM: 내 미처리 문의
   | 'settings'      // 설정 (모든 역할 — 탭별 가시성으로 분리)
+  | 'ui_editor'     // UI 메타 config 편집기 (admin 전용)
   // BARO 테넌트 전용 메뉴
   | 'baro_group_purchase'   // BARO: 그룹내 매입 요청 등록
   | 'baro_dispatch'         // BARO: 배차/일정 보드

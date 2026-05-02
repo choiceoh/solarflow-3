@@ -49,8 +49,3 @@ export function SettingsIndexRedirect() {
   const { role } = useAuth();
   return <Navigate to={role === 'admin' ? '/settings/admin' : '/settings/personal'} replace />;
 }
-
-export function SettingsLegacyRedirect({ adminTo }: { adminTo: string }) {
-  const { role } = useAuth();
-  return <Navigate to={role === 'admin' ? adminTo : '/settings/personal'} replace />;
-}

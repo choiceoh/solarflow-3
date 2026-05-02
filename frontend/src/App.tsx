@@ -41,11 +41,9 @@ const SettingsLayout = lazy(() => import('@/pages/settings/SettingsLayout'));
 const SettingsIndexRedirect = lazy(() =>
   import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
 );
-const SettingsLegacyRedirect = lazy(() =>
-  import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsLegacyRedirect })),
-);
 const AdminSettingsPage = lazy(() => import('@/pages/settings/AdminSettingsPage'));
 const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
+const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
 const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
 const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
 const DataPage = lazy(() => import('@/pages/DataPage'));
@@ -125,7 +123,7 @@ export default function App() {
                 <Route path="/cost-meta-demo" element={<CostMetaDemoPage />} />
                 <Route path="/child-forms-meta-demo" element={<ChildFormsMetaDemoPage />} />
                 <Route path="/wizard-demo" element={<WizardDemoPage />} />
-                <Route path="/ui-config-editor" element={<SettingsLegacyRedirect adminTo="/settings/site/ui-config" />} />
+                <Route path="/ui-config-editor" element={<RoleGuard allowedRoles={['admin']}><UIConfigEditorPage /></RoleGuard>} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/customs" element={<CustomsPage />} />
                 <Route path="/sales-analysis" element={<SalesAnalysisPage />} />
@@ -142,7 +140,7 @@ export default function App() {
                 <Route path="/settings" element={<SettingsLayout />}>
                   <Route index element={<SettingsIndexRedirect />} />
                   <Route path="admin" element={<RoleGuard allowedRoles={['admin']}><AdminSettingsPage /></RoleGuard>} />
-                  <Route path="site" element={<RoleGuard allowedRoles={['admin']}><UIConfigEditorPage /></RoleGuard>} />
+                  <Route path="site" element={<RoleGuard allowedRoles={['admin']}><SitePlaceholderPage /></RoleGuard>} />
                   <Route path="personal" element={<PersonalSettingsPage />} />
                 </Route>
               </Route>
