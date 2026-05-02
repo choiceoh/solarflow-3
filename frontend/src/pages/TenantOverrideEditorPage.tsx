@@ -47,6 +47,27 @@ const KNOWN_CONFIGS: KnownConfig[] = [
 
 const TENANT_IDS: TenantId[] = ['topworks', 'topenergy'];
 
+// 프리뷰용 라우트 힌트 (id → 실제 페이지)
+// form 은 현재 별도 demo 페이지 또는 마스터 페이지의 "새로 등록" 다이얼로그로 확인.
+const ROUTE_HINTS: Record<string, string> = {
+  // screens
+  partners: '/masters/partners-v2',
+  companies: '/masters/companies-v2',
+  banks: '/masters/banks-v2',
+  warehouses: '/masters/warehouses-v2',
+  manufacturers: '/masters/manufacturers-v2',
+  products: '/masters/products-v2',
+  construction_sites: '/masters/construction-sites-v2',
+  // forms — 마스터 페이지에서 "새로 등록" 누르면 노출
+  partner_form_v2: '/masters/partners-v2',
+  company_form_v2: '/masters/companies-v2',
+  bank_form_v2: '/masters/banks-v2',
+  warehouse_form_v2: '/masters/warehouses-v2',
+  manufacturer_form_v2: '/masters/manufacturers-v2',
+  product_form_v2: '/masters/products-v2',
+  construction_site_form_v2: '/masters/construction-sites-v2',
+};
+
 export default function TenantOverrideEditorPage() {
   const { role } = usePermission();
   const [tenantId, setTenantId] = useState<TenantId>(useTenantStore.getState().tenantId);
@@ -54,6 +75,7 @@ export default function TenantOverrideEditorPage() {
   const [draft, setDraft] = useState<string>('');
   const [status, setStatus] = useState<{ kind: 'ok' | 'err' | 'info'; msg: string } | null>(null);
   const [activeKeys, setActiveKeys] = useState<{ tenantId: TenantId; kind: ConfigKind; configId: string }[]>([]);
+  const [filter, setFilter] = useState('');
 
   const selected = useMemo(
     () => KNOWN_CONFIGS.find((c) => `${c.kind}:${c.id}` === selectedKey) ?? KNOWN_CONFIGS[0],
@@ -147,6 +169,44 @@ export default function TenantOverrideEditorPage() {
     }, 50);
   };
 
+  // Phase 4 보강 (E): 현재 tenant 의 모든 runtime overrides 를 config/tenants/<id>.ts 형식으로 export
+  // 운영자가 검증 후 코드로 승격할 때 사용 (clipboard 복사).
+  const onExportCode = async () => {
+    const tenantOverridesMap: { screens: Record<string, unknown>; forms: Record<string, unknown> } = { screens: {}, forms: {} };
+    activeKeys
+      .filter((k) => k.tenantId === tenantId)
+      .forEach((k) => {
+        const v = loadRuntimeOverride(k.tenantId, k.kind, k.configId);
+        if (!v) return;
+        if (k.kind === 'screen') tenantOverridesMap.screens[k.configId] = v;
+        else tenantOverridesMap.forms[k.configId] = v;
+      });
+    const code = `// 자동 생성 — runtime override 를 코드로 승격 (Tenant Override Editor)
+import type { TenantOverrides } from './index';
+
+export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOverridesMap, null, 2)};
+`;
+    try {
+      await navigator.clipboard.writeText(code);
+      setStatus({ kind: 'ok', msg: `클립보드 복사 완료 — config/tenants/${tenantId}.ts 에 붙여넣기` });
+    } catch {
+      // 클립보드 권한 거부 시 alert 로 노출
+      alert(code);
+    }
+  };
+
+  // Phase 4 보강 (A): 프리뷰 — 적용된 override 결과를 새 탭에서 확인
+  // (저장 후 실제 라우트 접근 — 화면은 base + 코드 overlay + runtime + DB override 모두 반영)
+  const onOpenPreview = () => {
+    const route = ROUTE_HINTS[selected.id];
+    if (!route) {
+      alert(`프리뷰 라우트 없음: ${selected.id}`);
+      return;
+    }
+    const url = tenantId === 'topworks' ? route : `${route}?tenant=${tenantId}`;
+    window.open(url, '_blank', 'noopener');
+  };
+
   const isActive = (k: KnownConfig) => activeKeys.some(
     (a) => a.tenantId === tenantId && a.kind === k.kind && a.configId === k.id
   );
@@ -179,27 +239,43 @@ export default function TenantOverrideEditorPage() {
       </div>
 
       <div className="grid grid-cols-12 gap-4">
-        <aside className="col-span-3 rounded-md border bg-card p-3 space-y-1 text-sm">
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Config 선택</p>
-          {KNOWN_CONFIGS.map((c) => {
-            const k = `${c.kind}:${c.id}`;
-            const isSel = k === selectedKey;
-            return (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setSelectedKey(k)}
-                className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${isSel ? 'bg-accent font-medium' : 'hover:bg-accent/50'}`}
-              >
-                <span>
-                  <span className="font-mono text-[10px] text-muted-foreground">{c.kind}</span>{' · '}{c.label}
-                </span>
-                {isActive(c) ? (
-                  <span className="rounded px-1 py-0.5 text-[9px] bg-amber-100 text-amber-800">활성</span>
-                ) : null}
-              </button>
-            );
-          })}
+        <aside className="col-span-3 rounded-md border bg-card p-3 space-y-2 text-sm">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Config 선택</p>
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="검색 (라벨/id/kind)"
+            className="w-full rounded border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <div className="space-y-1">
+            {KNOWN_CONFIGS
+              .filter((c) => !filter
+                || c.label.toLowerCase().includes(filter.toLowerCase())
+                || c.id.toLowerCase().includes(filter.toLowerCase())
+                || c.kind.toLowerCase().includes(filter.toLowerCase()))
+              .map((c) => {
+                const k = `${c.kind}:${c.id}`;
+                const isSel = k === selectedKey;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setSelectedKey(k)}
+                    className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${isSel ? 'bg-accent font-medium' : 'hover:bg-accent/50'}`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {isActive(c) ? <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="변경됨" /> : <span className="h-1.5 w-1.5" />}
+                      <span className="font-mono text-[10px] text-muted-foreground">{c.kind}</span>
+                      <span>{c.label}</span>
+                    </span>
+                    {isActive(c) ? (
+                      <span className="rounded px-1 py-0.5 text-[9px] bg-amber-100 text-amber-800">활성</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+          </div>
         </aside>
 
         <main className="col-span-9 rounded-md border bg-card p-4 space-y-3">
@@ -211,6 +287,8 @@ export default function TenantOverrideEditorPage() {
             <div className="flex gap-1.5">
               <Button size="sm" variant="outline" onClick={onFormat}>포맷</Button>
               <Button size="sm" variant="outline" onClick={onValidate}>검증</Button>
+              <Button size="sm" variant="outline" onClick={onOpenPreview} title="새 탭에서 프리뷰">프리뷰</Button>
+              <Button size="sm" variant="outline" onClick={onExportCode} title="현재 tenant 의 모든 runtime override 를 코드로 export (clipboard)">코드 export</Button>
               <Button size="sm" variant="ghost" onClick={onReset}>기본값 복원</Button>
               <Button size="sm" onClick={onApply}>적용</Button>
             </div>

@@ -89,6 +89,7 @@ export default function UIConfigEditorPage() {
   const [draft, setDraft] = useState<string>('');
   const [status, setStatus] = useState<{ kind: 'ok' | 'err' | 'info'; msg: string } | null>(null);
   const [activeOverrides, setActiveOverrides] = useState<{ kind: ConfigKind; id: string }[]>([]);
+  const [filter, setFilter] = useState('');
 
   const selected = useMemo(
     () => KNOWN_CONFIGS.find((c) => `${c.kind}:${c.id}` === selectedKey) ?? KNOWN_CONFIGS[0],
@@ -179,13 +180,38 @@ export default function UIConfigEditorPage() {
 
   const isOverridden = activeOverrides.some((o) => o.kind === selected.kind && o.id === selected.id);
 
+  // Phase 4 보강 (A): 프리뷰 — 새 탭에서 routeHint 열기
+  const onOpenPreview = () => {
+    if (!selected.routeHint) {
+      alert(`프리뷰 라우트 없음: ${selected.id}`);
+      return;
+    }
+    // routeHint 가 "/path → 새로 등록" 형식인 경우 첫 토큰만 사용
+    const url = selected.routeHint.split(' ')[0];
+    window.open(url, '_blank', 'noopener');
+  };
+
+  const filteredConfigs = filter
+    ? KNOWN_CONFIGS.filter((c) =>
+        c.label.toLowerCase().includes(filter.toLowerCase())
+        || c.id.toLowerCase().includes(filter.toLowerCase())
+        || c.kind.toLowerCase().includes(filter.toLowerCase()))
+    : KNOWN_CONFIGS;
+
   return (
     <div className="flex h-[calc(100vh-80px)]">
       {/* 좌측: config 목록 */}
-      <aside className="w-72 shrink-0 border-r overflow-y-auto p-3 bg-muted/20">
-        <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">메타 Config</div>
+      <aside className="w-72 shrink-0 border-r overflow-y-auto p-3 bg-muted/20 space-y-2">
+        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">메타 Config</div>
+        <input
+          type="text"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="검색 (라벨/id/kind)"
+          className="w-full rounded border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+        />
         <ul className="space-y-1">
-          {KNOWN_CONFIGS.map((c) => {
+          {filteredConfigs.map((c) => {
             const key = `${c.kind}:${c.id}`;
             const overridden = activeOverrides.some((o) => o.kind === c.kind && o.id === c.id);
             const active = selectedKey === key;
@@ -198,7 +224,14 @@ export default function UIConfigEditorPage() {
                     ${active ? 'bg-foreground text-background' : 'hover:bg-muted'}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{c.label}</span>
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      {overridden ? (
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-label="override 활성" />
+                      ) : (
+                        <span className="h-1.5 w-1.5 shrink-0" />
+                      )}
+                      <span className="font-medium truncate">{c.label}</span>
+                    </span>
                     {overridden && <span className="text-[9px] uppercase font-semibold opacity-70">override</span>}
                   </div>
                   <div className={`mono mt-0.5 text-[10px] ${active ? 'opacity-60' : 'text-muted-foreground'}`}>
@@ -208,6 +241,9 @@ export default function UIConfigEditorPage() {
               </li>
             );
           })}
+          {filteredConfigs.length === 0 && (
+            <li className="text-[11px] text-muted-foreground text-center py-3">검색 결과 없음</li>
+          )}
         </ul>
       </aside>
 
@@ -236,6 +272,7 @@ export default function UIConfigEditorPage() {
         <div className="px-4 py-2 flex items-center gap-2 border-b">
           <Button size="sm" variant="outline" onClick={onFormat}>포맷</Button>
           <Button size="sm" variant="outline" onClick={onValidate}>검증</Button>
+          <Button size="sm" variant="outline" onClick={onOpenPreview} disabled={!selected.routeHint} title="새 탭에서 프리뷰">프리뷰</Button>
           <div className="flex-1" />
           <Button size="sm" variant="outline" onClick={onReset} disabled={!isOverridden}>
             기본값 복원
