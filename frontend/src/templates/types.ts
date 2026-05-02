@@ -141,6 +141,10 @@ export interface FieldConfig {
   staticOptions?: { value: string; label: string }[];
   enumKey?: EnumKey;                // 'PARTNER_TYPE_LABEL' 등 — registry.enumDictionaries
   masterKey?: MasterKey;            // 'manufacturers' 등
+  // 동적 옵션 — 다른 필드 값(들)이 바뀌면 master 소스 재로드 (context 로 전달)
+  // 예) optionsDependsOn: ['domestic_foreign'] + masterKey: 'manufacturers.byDomestic'
+  //     → 사용자가 '국내' 선택 시 manufacturers.byDomestic.load({domestic_foreign: '국내'}) 호출
+  optionsDependsOn?: string[];
 
   // 권한별 readonly (PoC: 단순 boolean)
   readOnly?: boolean;
@@ -280,7 +284,9 @@ export interface ActionContext {
 export type ActionHandler = (ctx: ActionContext, row?: unknown) => void | Promise<void>;
 
 export interface MasterOptionSource {
-  load: () => Promise<{ value: string; label: string }[]>;
+  // context: optionsDependsOn 으로 선언된 다른 필드들의 현재 값
+  // 미사용 source 는 인자를 무시. 하위호환 — 기존 source 들은 그대로 작동
+  load: (context?: Record<string, unknown>) => Promise<{ value: string; label: string }[]>;
 }
 
 export type FormComponent = (props: {

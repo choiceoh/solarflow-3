@@ -32,6 +32,7 @@ import bankForm from '@/config/forms/banks';
 import warehouseForm from '@/config/forms/warehouses';
 import manufacturerForm from '@/config/forms/manufacturers';
 import productForm from '@/config/forms/products';
+import depsDemoForm from '@/config/forms/deps_demo';
 import outboundFormSimple from '@/config/forms/outbound_simple';
 import outboundDetailSimple from '@/config/details/outbound_simple';
 import declarationDetailSimple from '@/config/details/declaration_simple';
@@ -62,6 +63,7 @@ const KNOWN_CONFIGS: KnownConfig[] = [
   { kind: 'form', id: 'warehouse_form_v2', label: '창고 폼', routeHint: '/masters/warehouses-v2 → 새로 등록', default: warehouseForm },
   { kind: 'form', id: 'manufacturer_form_v2', label: '제조사 폼', routeHint: '/masters/manufacturers-v2 → 새로 등록', default: manufacturerForm },
   { kind: 'form', id: 'product_form_v2', label: '품번 폼 (13 필드)', routeHint: '/masters/products-v2 → 새로 등록', default: productForm },
+  { kind: 'form', id: 'deps_demo', label: '의존성·동적옵션 데모', routeHint: '/meta-form-deps-demo', default: depsDemoForm },
   { kind: 'form', id: 'outbound_form_simple', label: '출고 폼 (한계선 데모)', routeHint: '/outbound-form-meta-demo', default: outboundFormSimple },
   { kind: 'detail', id: 'outbound_detail_simple', label: '출고 상세 (한계선 데모)', routeHint: '/outbound-detail-meta-demo', default: outboundDetailSimple },
   { kind: 'detail', id: 'declaration_detail_simple', label: '면장 상세 (한계선 데모)', routeHint: '/declaration-detail-meta-demo', default: declarationDetailSimple },
