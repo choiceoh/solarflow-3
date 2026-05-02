@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
 import type { ToolUIPart, UIMessage } from 'ai';
-import { Bot, Check, FileText, Inbox, MessageSquarePlus, Paperclip, Search, Send, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, FileText, Inbox, MessageSquarePlus, Paperclip, Pencil, Search, Send, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import MetaForm from '@/templates/MetaForm';
 import { cn } from '@/lib/utils';
 import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
@@ -13,6 +14,7 @@ import {
   toBackendMessages,
   extractProposals,
   extractText,
+  proposalKindToFormConfig,
   summarizeInput,
   summarizeOutput,
   type ProposalState,
@@ -317,11 +319,15 @@ function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserte
     });
   };
 
-  const onConfirm = async (prop: ProposalState) => {
+  // overridePayload — 사용자가 폼 미리보기에서 수정한 페이로드. 없으면 store 의 원본 사용.
+  const onConfirm = async (prop: ProposalState, overridePayload?: unknown) => {
     if (prop.status !== 'pending') return;
     updateProposalStatus(prop.id, { status: 'submitting' });
     try {
-      await fetchWithAuth(`/api/v1/assistant/proposals/${prop.id}/confirm`, { method: 'POST' });
+      await fetchWithAuth(`/api/v1/assistant/proposals/${prop.id}/confirm`, {
+        method: 'POST',
+        body: overridePayload === undefined ? undefined : JSON.stringify({ payload: overridePayload }),
+      });
       updateProposalStatus(prop.id, { status: 'confirmed' });
     } catch (e) {
       updateProposalStatus(prop.id, {
@@ -407,7 +413,7 @@ function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserte
                     <ProposalCard
                       key={p.id}
                       proposal={p}
-                      onConfirm={() => onConfirm(p)}
+                      onConfirm={(override) => onConfirm(p, override)}
                       onReject={() => onReject(p)}
                     />
                   ))}
@@ -602,11 +608,19 @@ function ProposalCard({
   onReject,
 }: {
   proposal: ProposalState;
-  onConfirm: () => void;
+  onConfirm: (overridePayload?: unknown) => void;
   onReject: () => void;
 }) {
   const label = PROPOSAL_KIND_LABEL[proposal.kind] ?? proposal.kind;
   const disabled = proposal.status !== 'pending';
+  const formConfig = proposalKindToFormConfig(proposal.kind);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  // 폼 미리보기에서 [저장] 시 — MetaForm 의 onSubmit 결과(수정된 payload)를 그대로 confirm 에 전달.
+  const onPreviewSubmit = async (data: Record<string, unknown>) => {
+    setPreviewOpen(false);
+    onConfirm(data);
+  };
 
   return (
     <div className="ml-11 max-w-[80%] rounded-lg border border-amber-300/60 bg-amber-50/60 p-4 text-base shadow-sm dark:border-amber-700/40 dark:bg-amber-900/20">
@@ -618,9 +632,20 @@ function ProposalCard({
 
       {proposal.status === 'pending' && (
         <div className="mt-3 flex gap-2">
-          <Button size="sm" className="h-9 px-3 text-sm" onClick={onConfirm}>
+          <Button size="sm" className="h-9 px-3 text-sm" onClick={() => onConfirm()}>
             <Check className="mr-1 h-4 w-4" />저장
           </Button>
+          {formConfig && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-9 px-3 text-sm"
+              onClick={() => setPreviewOpen(true)}
+              title="폼에서 미리보기·수정 후 저장"
+            >
+              <Pencil className="mr-1 h-4 w-4" />검토·수정
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="h-9 px-3 text-sm" onClick={onReject} disabled={disabled}>
             <X className="mr-1 h-4 w-4" />거부
           </Button>
@@ -633,6 +658,16 @@ function ProposalCard({
       {proposal.status === 'rejected' && <div className="mt-2 text-sm text-muted-foreground">거부됨 (폐기)</div>}
       {proposal.status === 'error' && (
         <div className="mt-2 text-sm text-destructive">오류: {proposal.errorMessage ?? '알 수 없음'}</div>
+      )}
+
+      {formConfig && (
+        <MetaForm
+          config={formConfig}
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          onSubmit={onPreviewSubmit}
+          editData={proposal.payload as object | undefined}
+        />
       )}
     </div>
   );

@@ -1,4 +1,9 @@
 import type { UIMessage } from 'ai';
+import type { MetaFormConfig } from '@/templates/types';
+import partnerForm from '@/config/forms/partners';
+import outboundSimple from '@/config/forms/outbound_simple';
+import receiptForm from '@/config/forms/receipt';
+import declarationForm from '@/config/forms/declaration';
 
 // 백엔드 chat 엔드포인트가 받는 평면 메시지 형식.
 // {role, content} 만 — 도구 호출 history 는 LLM 컨텍스트에 자동 인라인됨 (T1 결정).
@@ -62,6 +67,29 @@ export function extractText(message: UIMessage): string {
     .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
     .map((p) => p.text)
     .join('');
+}
+
+// proposalKindToFormConfig — proposal kind 별 미리보기 폼 메타.
+// undefined 인 kind 는 폼 메타가 없거나(create_note: 단순 텍스트) 미리보기가 의미 없음(delete_*).
+// create/update 의 경우 같은 폼을 사용 — MetaForm 의 editData 유무로 모드 자동 분기.
+export function proposalKindToFormConfig(kind: string): MetaFormConfig | undefined {
+  switch (kind) {
+    case 'create_partner':
+    case 'update_partner':
+      return partnerForm;
+    case 'create_outbound':
+    case 'update_outbound':
+      return outboundSimple;
+    case 'create_receipt':
+      return receiptForm;
+    case 'create_declaration':
+      return declarationForm;
+    // create_note/update_note: 단순 content 텍스트 — 폼이 과함. 카드 요약으로 충분.
+    // delete_*: 수정할 게 없음 (id 만 있는 페이로드). 단순 confirmation 카드.
+    // create_order/update_order/delete_order: orders 폼이 아직 메타화되지 않음.
+    default:
+      return undefined;
+  }
 }
 
 // summarizeInput — 도구 input 객체를 ToolChip 표시용 짧은 문자열로 요약.

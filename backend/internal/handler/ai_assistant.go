@@ -142,6 +142,24 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// 옵션: 사용자가 폼 미리보기에서 수정한 payload override.
+	// store 의 kind/user_id 는 그대로 보존 (소유 검증 통과 후), payload 만 교체.
+	// 각 kind 분기의 JWT user_id 재강제 + Validate() 가 그대로 동작하므로 변조 위험 차단.
+	if r.ContentLength > 0 {
+		var override struct {
+			Payload json.RawMessage `json:"payload,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&override); err != nil {
+			response.RespondError(w, http.StatusBadRequest, "요청 본문이 올바른 JSON이 아닙니다")
+			return
+		}
+		if len(override.Payload) > 0 {
+			log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s override payload=%dB",
+				role, userID, p.Kind, id, len(override.Payload))
+			p.Payload = override.Payload
+		}
+	}
+
 	switch p.Kind {
 	case "create_note":
 		var args model.CreateNoteRequest
