@@ -13,6 +13,7 @@ import LimitChangeForm from '@/components/banking/LimitChangeForm';
 import LCDemandForecast from '@/components/banking/LCDemandForecast';
 import { formatUSD } from '@/lib/utils';
 import { CardB, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
+import { autoSpark } from '@/templates/autoSpark';
 
 const BANKING_TAB_OPTIONS = [
   { key: 'limits', label: '한도 현황' },
@@ -93,10 +94,10 @@ export default function BankingPage() {
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
           <div className="sf-command-kpis">
-            <TileB lbl="총 한도" v={fmtUsdM(totalLimit)} u="M$" sub={`${allLimitRows.length}개 은행`} tone="ink" />
+            <TileB lbl="총 한도" v={fmtUsdM(totalLimit)} u="M$" sub={`${allLimitRows.length}개 은행`} tone="ink" spark={autoSpark('총 한도')} />
             <TileB lbl="사용중" v={fmtUsdM(totalUsed)} u="M$" sub={`${totalUsageRate.toFixed(1)}% · 활성 L/C`} tone="warn" delta={`${totalUsageRate.toFixed(1)}%`} spark={[48, 51, 55, 58, 62, 66, totalUsageRate]} />
-            <TileB lbl="가용" v={fmtUsdM(totalAvail)} u="M$" sub="추가 개설 가능" tone="solar" />
-            <TileB lbl="만기 알림" v={String(alertRows.length)} u="건" sub="30일 이내" tone={alertRows.length > 0 ? 'info' : 'pos'} />
+            <TileB lbl="가용" v={fmtUsdM(totalAvail)} u="M$" sub="추가 개설 가능" tone="solar" spark={autoSpark('가용')} />
+            <TileB lbl="만기 알림" v={String(alertRows.length)} u="건" sub="30일 이내" tone={alertRows.length > 0 ? 'info' : 'pos'} spark={autoSpark('만기 알림')} />
           </div>
 
           <CardB

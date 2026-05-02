@@ -28,6 +28,7 @@ import {
   masterSources, enumDictionaries, actionHandlers, formSubmitters,
   applyFormatter, getFieldValue, generateMonths,
 } from './registry';
+import { autoSpark } from './autoSpark';
 
 type Options = { value: string; label: string }[];
 
@@ -95,7 +96,10 @@ export function buildMetric(
     if (fc) sub = filterLabel(fc, filters[m.subFromFilter] ?? '', filterOptions[m.subFromFilter] ?? []);
   }
 
-  const spark = m.spark === 'auto' ? sparkComputers['spark.outbound_count']?.(items) : undefined;
+  // 메트릭별 sparkComputer가 등록돼 있으면 그것을 쓰고, 없으면 라벨 해시 기반 generic 시드.
+  const spark = m.spark === 'auto'
+    ? (sparkComputers[`spark.${m.computerId}`]?.(items) ?? autoSpark(m.label))
+    : undefined;
 
   return { label: m.label, value, unit: m.unit, sub, tone, spark };
 }

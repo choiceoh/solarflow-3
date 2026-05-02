@@ -28,6 +28,7 @@ import IncomingTable from '@/components/inventory/IncomingTable';
 import ForecastTable from '@/components/inventory/ForecastTable';
 import ModuleDemandForecastPanel from '@/components/inventory/ModuleDemandForecastPanel';
 import { CardB, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
+import { autoSpark } from '@/templates/autoSpark';
 import type { InventorySummary, ProductForecast } from '@/types/inventory';
 
 function formatAutoKw(kw: number): string {
@@ -534,7 +535,7 @@ export default function InventoryPage() {
           />
         </button>
         <button type="button" onClick={() => handleCardClick('physical')} className="text-left">
-          <TileB lbl="실재고" v={stockAvailable.value} u={stockAvailable.unit} sub="창고 보유 현재고" tone="ink" />
+          <TileB lbl="실재고" v={stockAvailable.value} u={stockAvailable.unit} sub="창고 보유 현재고" tone="ink" spark={autoSpark('실재고')} />
         </button>
         <button type="button" onClick={() => handleCardClick('incoming')} className="text-left">
           <TileB

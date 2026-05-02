@@ -17,6 +17,7 @@ import type { SaleListItem } from '@/types/outbound';
 import type { CustomerAnalysis, CustomerItem } from '@/types/analysis';
 import type { Partner } from '@/types/masters';
 import { CardB, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
+import { autoSpark } from '@/templates/autoSpark';
 
 interface MarginItem {
   manufacturer_name: string;
@@ -407,10 +408,10 @@ export default function SalesAnalysisPage() {
       )}
 
       <div className="sf-command-kpis">
-        <TileB lbl="공급가 매출" v={(salesSummary.supply / 100000000).toFixed(2)} u="억" sub={`${formatNumber(salesSummary.count)}건`} tone="solar" />
-        <TileB lbl="부가세 포함" v={(salesSummary.total / 100000000).toFixed(2)} u="억" sub="세금계산서 기준 합계" tone="ink" />
-        <TileB lbl="계산서 발행률" v={String(salesSummary.issueRate)} u="%" sub={`${formatNumber(salesSummary.issued)}건 발행 / ${formatNumber(salesSummary.pending)}건 미발행`} tone="info" />
-        <TileB lbl="이익률" v={margin.summary.overall_margin_rate.toFixed(1)} u="%" sub={`${formatKRW(margin.summary.total_margin_krw)} · 원가 ${coveredCostCount}/${margin.items.length}건`} tone="pos" />
+        <TileB lbl="공급가 매출" v={(salesSummary.supply / 100000000).toFixed(2)} u="억" sub={`${formatNumber(salesSummary.count)}건`} tone="solar" spark={autoSpark('공급가 매출')} />
+        <TileB lbl="부가세 포함" v={(salesSummary.total / 100000000).toFixed(2)} u="억" sub="세금계산서 기준 합계" tone="ink" spark={autoSpark('부가세 포함')} />
+        <TileB lbl="계산서 발행률" v={String(salesSummary.issueRate)} u="%" sub={`${formatNumber(salesSummary.issued)}건 발행 / ${formatNumber(salesSummary.pending)}건 미발행`} tone="info" spark={autoSpark('계산서 발행률')} />
+        <TileB lbl="이익률" v={margin.summary.overall_margin_rate.toFixed(1)} u="%" sub={`${formatKRW(margin.summary.total_margin_krw)} · 원가 ${coveredCostCount}/${margin.items.length}건`} tone="pos" spark={autoSpark('이익률')} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">

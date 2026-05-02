@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import type { ListScreenConfig, MetricConfig, Tone } from '@/templates/types';
 import { metricComputers, subComputers, toneComputers } from '@/templates/registry';
 import { ArrayEditor, FieldInput, FieldSelect, moveInArray } from './ArrayEditor';
+import { Label } from '@/components/ui/label';
 
 const TONE_OPTIONS = [
   { value: 'solar', label: 'solar' },
@@ -47,7 +48,7 @@ export function MetricsTab({
       hint="KPI 타일은 화면 상단에 가로로 표시됩니다. label = 타일 이름, computerId = 값 계산 함수."
       addLabel="메트릭 추가"
       emptyMsg="메트릭이 없습니다"
-      onAdd={() => onChange({ ...value, metrics: [...metrics, { label: '새 메트릭', computerId: 'count' }] })}
+      onAdd={() => onChange({ ...value, metrics: [...metrics, { label: '새 메트릭', computerId: 'count', spark: 'auto' }] })}
       onMove={(idx, dir) => onChange({ ...value, metrics: moveInArray(metrics, idx, dir) })}
       onRemove={(idx) => onChange({ ...value, metrics: metrics.filter((_, i) => i !== idx) })}
       renderRow={(m, idx) => {
@@ -64,9 +65,17 @@ export function MetricsTab({
 
             <FieldInput label="unit (단위, 예: '억', '원')" value={m.unit ?? ''}
               onChange={(v) => update(idx, { ...m, unit: v || undefined })} />
-            <FieldSelect label="spark (sparkline)" value={m.spark ?? ''} allowEmpty
-              options={[{ value: 'auto', label: 'auto' }]}
-              onChange={(v) => update(idx, { ...m, spark: (v || undefined) as 'auto' | undefined })} />
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">그래프 (sparkline)</Label>
+              <label className="flex items-center gap-2 h-7 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={m.spark === 'auto'}
+                  onChange={(e) => update(idx, { ...m, spark: e.target.checked ? 'auto' : undefined })}
+                />
+                <span className="text-muted-foreground">{m.spark === 'auto' ? '표시' : '숨김'}</span>
+              </label>
+            </div>
 
             <div className="col-span-2 flex items-center gap-2 text-xs">
               <label className="flex items-center gap-1">
