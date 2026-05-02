@@ -36,6 +36,7 @@ import blLineFormConfig from '@/config/forms/bl_line';
 import receiptFormConfig from '@/config/forms/receipt';
 import declarationFormConfig from '@/config/forms/declaration';
 import depsDemoFormConfig from '@/config/forms/deps_demo';
+import blFormConfig from '@/config/forms/bl';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
 import { useDeclarationDetail } from '@/hooks/useCustoms';
@@ -604,6 +605,17 @@ const BLFormWrapper: FormComponent = (props) => (
   />
 );
 
+// Phase 4 — Step 3 final: BL 메타 v2 폼 (config/forms/bl.ts)
+const BLFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={blFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
 export const formComponents: Record<string, FormComponent> = {
   outbound_form: OutboundForm as unknown as FormComponent,
   outbound_form_simple: OutboundFormSimple,    // 메타 한계선 데모용
@@ -622,6 +634,7 @@ export const formComponents: Record<string, FormComponent> = {
   declaration_form_v2: DeclarationFormV2,      // Phase 4 보강: 면장
   deps_demo: DepsDemoForm,                     // Phase 4 보강: 의존성·동적 옵션 데모
   bl_form: BLFormWrapper,                       // Phase 4 — Inbound: B/L 입고 (submitterId='bl_save')
+  bl_form_v2: BLFormV2,                         // Phase 4 Step 3 final: 메타 v2 BL 폼
 };
 
 // Phase 4 보강: 폼 저장 함수 — endpoint POST/PUT 으로 표현 안 되는 multi-step 저장
