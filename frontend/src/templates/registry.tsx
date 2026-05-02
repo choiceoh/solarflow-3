@@ -20,6 +20,7 @@ import bankFormConfig from '@/config/forms/banks';
 import warehouseFormConfig from '@/config/forms/warehouses';
 import manufacturerFormConfig from '@/config/forms/manufacturers';
 import productFormConfig from '@/config/forms/products';
+import constructionSiteFormConfig from '@/config/forms/construction_sites';
 import depsDemoFormConfig from '@/config/forms/deps_demo';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
@@ -28,7 +29,7 @@ import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
   type OutboundStatus, type UsageCategory, type Outbound, type SaleListItem,
 } from '@/types/outbound';
-import type { Partner, Bank, Warehouse, Manufacturer, Product } from '@/types/masters';
+import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite } from '@/types/masters';
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
@@ -111,6 +112,13 @@ export const cellRenderers: Record<string, CellRenderer> = {
     const r = row as Product;
     return <span>{r.manufacturers?.short_name ?? r.manufacturers?.name_kr ?? r.manufacturer_name ?? '—'}</span>;
   },
+  // Phase 4: 현장 유형 (own/epc → 자체/EPC)
+  site_type_badge: (v) => {
+    const t = v as string;
+    return t === 'own'
+      ? <Badge variant="outline" className="border-purple-400 text-purple-700 text-[10px]">자체</Badge>
+      : <Badge variant="outline" className="border-orange-400 text-orange-700 text-[10px]">EPC</Badge>;
+  },
   // Phase 4: 창고 유형 라벨 (port/factory/vendor → 항구/공장/업체)
   warehouse_type_badge: (v) => {
     const t = v as string;
@@ -159,6 +167,14 @@ export const dataHooks: Record<string, DataHook> = {
   useWarehouseList: () => useSimpleList<Warehouse>('/api/v1/warehouses') as unknown as DataHookResult,
   useManufacturerList: () => useSimpleList<Manufacturer>('/api/v1/manufacturers') as unknown as DataHookResult,
   useProductList: () => useSimpleList<Product>('/api/v1/products') as unknown as DataHookResult,
+  // Phase 4: 발전소 — selectedCompanyId 로 서버 필터 (requiresCompany=true)
+  useConstructionSiteList: () => {
+    const companyId = useAppStore((s) => s.selectedCompanyId);
+    const url = companyId && companyId !== 'all'
+      ? `/api/v1/construction-sites?company_id=${companyId}`
+      : '/api/v1/construction-sites';
+    return useSimpleList<ConstructionSite>(url) as unknown as DataHookResult;
+  },
 };
 
 // ─── Detail data hooks (단건 fetch by id) ─────────────────────────────────
@@ -212,6 +228,17 @@ export const metricComputers: Record<string, MetricComputer> = {
   // Phase 4: 품번
   'count.product_active': (items) =>
     (items as Product[]).filter((p) => p.is_active).length.toLocaleString(),
+  // Phase 4: 발전소
+  'count.site_active': (items) =>
+    (items as ConstructionSite[]).filter((s) => s.is_active).length.toLocaleString(),
+  'count.site_own': (items) =>
+    (items as ConstructionSite[]).filter((s) => s.site_type === 'own').length.toLocaleString(),
+  'count.site_epc': (items) =>
+    (items as ConstructionSite[]).filter((s) => s.site_type === 'epc').length.toLocaleString(),
+  'sum.site_capacity_mw': (items) => {
+    const sum = (items as ConstructionSite[]).reduce((s, it) => s + (it.capacity_mw ?? 0), 0);
+    return sum.toFixed(2);
+  },
 };
 
 // ─── Sub computers (메트릭 sub 텍스트 동적 생성) ───────────────────────────
@@ -319,6 +346,17 @@ const ProductFormV2: FormComponent = (props) => (
   />
 );
 
+// Phase 4: 발전소 메타 폼 (마지막 마스터 도메인)
+const ConstructionSiteFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={constructionSiteFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
 // Phase 4 보강: 의존성·동적 옵션 시연 폼 (UI 데모 전용 — 저장 안 함)
 const DepsDemoForm: FormComponent = (props) => (
   <MetaForm
@@ -340,6 +378,7 @@ export const formComponents: Record<string, FormComponent> = {
   warehouse_form_v2: WarehouseFormV2,          // Phase 4: 창고 마스터 메타 폼
   manufacturer_form_v2: ManufacturerFormV2,    // Phase 4: 제조사 마스터 메타 폼
   product_form_v2: ProductFormV2,              // Phase 4: 품번 마스터 메타 폼 (13 필드)
+  construction_site_form_v2: ConstructionSiteFormV2, // Phase 4: 발전소 메타 폼 (마지막 마스터)
   deps_demo: DepsDemoForm,                     // Phase 4 보강: 의존성·동적 옵션 데모
 };
 
