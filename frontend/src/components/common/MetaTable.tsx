@@ -1,10 +1,15 @@
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef as TSColumnDef,
+  type ColumnPinningState,
+  type ColumnOrderState,
+  type FilterFn,
+  type Column,
   type VisibilityState,
 } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
@@ -14,6 +19,8 @@ import { cn } from '@/lib/utils';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
 import { useColumnWidths, type ColumnSizingState } from '@/lib/columnWidths';
 import { useColumnSort, type SortingState } from '@/lib/columnSort';
+import type { ColumnPinningState as SfColumnPinningState } from '@/lib/columnPinning';
+import { useColumnOrder, resolveOrder } from '@/lib/columnOrder';
 
 export interface ColumnDef<T> extends ColumnVisibilityMeta {
   cell: (item: T) => ReactNode;
@@ -25,6 +32,10 @@ export interface ColumnDef<T> extends ColumnVisibilityMeta {
   headerClassName?: string;
   /** 폭 조절 가능 여부 — 기본 true. actions 같은 고정 폭 컬럼만 false 권장. */
   resizable?: boolean;
+  /** 사용자 순서 변경(드래그) 가능 여부 — 기본 true. */
+  reorderable?: boolean;
+  /** 사용자 고정(pin) 가능 여부 — 기본 true. 액션·셀렉트 컬럼은 false 권장. */
+  pinnable?: boolean;
   /** 기본 폭(px). 미지정이면 TanStack 기본 150. */
   defaultWidth?: number;
   /** 최소 폭(px). 미지정 40. */
@@ -37,10 +48,15 @@ export interface ColumnDef<T> extends ColumnVisibilityMeta {
    * 예) sortAccessor: (ob) => ob.outbound_date
    */
   sortAccessor?: (item: T) => string | number | Date | null | undefined;
+  /**
+   * 글로벌 검색 시 매칭 대상 텍스트. 미지정이면 cell 결과 텍스트화 fallback (오버헤드 큼).
+   * 명시하면 검색이 정확하고 빠름. 예) globalFilterText: (ob) => ob.product_name ?? ''
+   */
+  globalFilterText?: (item: T) => string;
 }
 
 export interface MetaTableProps<T> {
-  /** localStorage scope — 컬럼 폭/정렬 영속 저장에 사용. 미지정 시 영속 비활성. */
+  /** localStorage scope — 컬럼 폭/정렬/고정/순서 영속 저장에 사용. 미지정 시 영속 비활성. */
   tableId?: string;
   columns: ColumnDef<T>[];
   hidden: Set<string>;
@@ -51,6 +67,15 @@ export interface MetaTableProps<T> {
   emptyAction?: { label: string; onClick: () => void };
   rowClassName?: (item: T) => string | undefined;
   tableClassName?: string;
+  /** 글로벌 검색어 — 외부(예: ToolbarBar 검색 input)에서 제어. */
+  globalFilter?: string;
+  /** 글로벌 검색 적용 후 행 갯수 변동 시 호출. tableSub 같은 외부 카운트 표시용. */
+  onFilteredRowCountChange?: (count: number) => void;
+  /** 컬럼 고정 상태 — ColumnVisibilityMenu 와 공유하도록 페이지가 보유.
+   *  미지정 시 고정 비활성. */
+  pinning?: SfColumnPinningState;
+  /** 고정 상태 변경 콜백 — TanStack 의 onColumnPinningChange 시그니처. */
+  onPinningChange?: (next: SfColumnPinningState) => void;
 }
 
 function alignClass(align?: 'left' | 'right' | 'center'): string | undefined {
@@ -59,14 +84,42 @@ function alignClass(align?: 'left' | 'right' | 'center'): string | undefined {
   return undefined;
 }
 
+/** 고정 컬럼 sticky 위치 계산 — 같은 사이드의 누적 폭. */
+function getPinnedStyle<T>(column: Column<T>): CSSProperties | undefined {
+  const isPinned = column.getIsPinned();
+  if (!isPinned) return undefined;
+  if (isPinned === 'left') {
+    return {
+      position: 'sticky',
+      left: column.getStart('left'),
+      zIndex: 2,
+      background: 'var(--background, #fff)',
+    };
+  }
+  return {
+    position: 'sticky',
+    right: column.getAfter('right'),
+    zIndex: 2,
+    background: 'var(--background, #fff)',
+  };
+}
+
 export function MetaTable<T>({
   tableId, columns, hidden, items, getRowKey, onRowClick,
-  emptyMessage, emptyAction, rowClassName, tableClassName,
+  emptyMessage, emptyAction, rowClassName, tableClassName, globalFilter,
+  onFilteredRowCountChange, pinning, onPinningChange,
 }: MetaTableProps<T>) {
   // ─── 영속 hooks — tableId 없으면 빈 scope 로 비영속 동작 ──────────────────
+  // 폭/정렬/순서는 MetaTable 이 보유. pinning 은 ColumnVisibilityMenu 와 공유 필요해
+  // 페이지가 보유하고 prop 으로 받음.
   const widths = useColumnWidths(tableId ?? '');
   const sortPersist = useColumnSort(tableId ?? '');
+  const orderPersist = useColumnOrder(tableId ?? '');
   const persistEnabled = !!tableId;
+  const pinningEnabled = !!pinning;
+
+  // 헤더 드래그 임시 상태 — 드롭 대상 표시용
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   // ─── visibility — 외부에서 받은 hidden Set 을 TanStack 형태로 변환 ───────
   const columnVisibility: VisibilityState = useMemo(() => {
@@ -75,6 +128,13 @@ export function MetaTable<T>({
     return v;
   }, [columns, hidden]);
 
+  // ─── 컬럼 순서 해결 (저장값 + 현재 컬럼 병합) ────────────────────────────
+  const defaultIds = useMemo(() => columns.map((c) => c.key), [columns]);
+  const resolvedOrder: ColumnOrderState = useMemo(
+    () => persistEnabled ? resolveOrder(orderPersist.order, defaultIds) : defaultIds,
+    [persistEnabled, orderPersist.order, defaultIds],
+  );
+
   // ─── TanStack column defs ────────────────────────────────────────────────
   const tsColumns = useMemo<TSColumnDef<T>[]>(() => columns.map((c) => {
     const accessor = c.sortAccessor;
@@ -82,11 +142,9 @@ export function MetaTable<T>({
       id: c.key,
       header: c.label,
       cell: ({ row }) => c.cell(row.original),
-      // 정렬: accessor 가 있으면 enableSorting + accessorFn 으로 값 추출
       enableSorting: !!accessor,
       accessorFn: accessor ? (row: T) => {
         const v = accessor(row);
-        // Date 는 timestamp 로, null/undefined 는 정렬 시 뒤로 가도록 빈 문자열로
         if (v == null) return '';
         if (v instanceof Date) return v.getTime();
         return v;
@@ -94,12 +152,32 @@ export function MetaTable<T>({
       sortUndefined: 'last' as const,
       enableHiding: c.hideable ?? false,
       enableResizing: c.resizable !== false,
+      enablePinning: c.pinnable !== false,
       size: c.defaultWidth ?? 150,
       minSize: c.minWidth ?? 40,
       maxSize: c.maxWidth ?? 800,
-      meta: { align: c.align, className: c.className, headerClassName: c.headerClassName, headerCell: c.headerCell } as { align?: 'left' | 'right' | 'center'; className?: string; headerClassName?: string; headerCell?: () => ReactNode },
+      meta: {
+        align: c.align,
+        className: c.className,
+        headerClassName: c.headerClassName,
+        headerCell: c.headerCell,
+        reorderable: c.reorderable !== false,
+        globalFilterText: c.globalFilterText,
+      } as { align?: 'left' | 'right' | 'center'; className?: string; headerClassName?: string; headerCell?: () => ReactNode; reorderable?: boolean; globalFilterText?: (item: T) => string },
     };
   }), [columns]);
+
+  // ─── 글로벌 필터 함수 — 모든 컬럼의 globalFilterText 결과를 OR 매치 ──────
+  const globalFilterFn: FilterFn<T> = useMemo(() => (row, _columnId, filterValue: string) => {
+    if (!filterValue) return true;
+    const q = String(filterValue).toLowerCase();
+    for (const c of columns) {
+      if (!c.globalFilterText) continue;
+      const text = c.globalFilterText(row.original).toLowerCase();
+      if (text.includes(q)) return true;
+    }
+    return false;
+  }, [columns]);
 
   // ─── useReactTable ───────────────────────────────────────────────────────
   const table = useReactTable({
@@ -109,6 +187,9 @@ export function MetaTable<T>({
       columnVisibility,
       columnSizing: persistEnabled ? widths.sizing : {},
       sorting: persistEnabled ? sortPersist.sorting : [],
+      columnPinning: (pinning as ColumnPinningState | undefined) ?? { left: [], right: [] },
+      columnOrder: resolvedOrder,
+      globalFilter: globalFilter ?? '',
     },
     onColumnSizingChange: persistEnabled
       ? (updater) => widths.setSizing(updater as ColumnSizingState | ((prev: ColumnSizingState) => ColumnSizingState))
@@ -116,13 +197,32 @@ export function MetaTable<T>({
     onSortingChange: persistEnabled
       ? (updater) => sortPersist.setSorting(updater as SortingState | ((prev: SortingState) => SortingState))
       : undefined,
+    onColumnPinningChange: pinningEnabled && onPinningChange
+      ? (updater) => {
+          const prev = pinning ?? { left: [], right: [] };
+          const tsNext = typeof updater === 'function' ? updater({ left: prev.left, right: prev.right }) : updater;
+          onPinningChange({ left: tsNext.left ?? [], right: tsNext.right ?? [] });
+        }
+      : undefined,
+    onColumnOrderChange: persistEnabled
+      ? (updater) => orderPersist.setOrder(updater as ColumnOrderState | ((prev: ColumnOrderState) => ColumnOrderState))
+      : undefined,
     columnResizeMode: 'onChange',
     enableColumnResizing: persistEnabled,
-    enableSortingRemoval: true,  // 두 번째 클릭 후 한 번 더 클릭하면 정렬 해제
+    enableColumnPinning: pinningEnabled,
+    enableSortingRemoval: true,
+    globalFilterFn,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     getRowId: (row) => getRowKey(row),
   });
+
+  // 필터된 행 갯수 변동 시 외부 알림 (tableSub 카운트 표시 등)
+  const filteredRowCount = table.getFilteredRowModel().rows.length;
+  useEffect(() => {
+    onFilteredRowCountChange?.(filteredRowCount);
+  }, [filteredRowCount, onFilteredRowCountChange]);
 
   if (items.length === 0) {
     return (
@@ -134,22 +234,63 @@ export function MetaTable<T>({
     );
   }
 
+  // 헤더 드래그 핸들러
+  const onHeaderDragStart = (e: React.DragEvent, columnId: string) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/sf-col', columnId);
+  };
+  const onHeaderDragOver = (e: React.DragEvent, columnId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverId !== columnId) setDragOverId(columnId);
+  };
+  const onHeaderDragLeave = () => setDragOverId(null);
+  const onHeaderDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    setDragOverId(null);
+    const sourceId = e.dataTransfer.getData('text/sf-col');
+    if (!sourceId || sourceId === targetId) return;
+    if (!persistEnabled) return;
+    orderPersist.setOrder(() => {
+      const current = resolvedOrder.length ? resolvedOrder : defaultIds;
+      const without = current.filter((x) => x !== sourceId);
+      const idx = without.indexOf(targetId);
+      if (idx === -1) return [...without, sourceId];
+      return [...without.slice(0, idx), sourceId, ...without.slice(idx)];
+    });
+  };
+
   return (
     <Table className={cn('text-xs', tableClassName)} style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
       <TableHeader>
         {table.getHeaderGroups().map((hg) => (
           <TableRow key={hg.id}>
             {hg.headers.map((header) => {
-              const meta = header.column.columnDef.meta as { align?: 'left' | 'right' | 'center'; headerClassName?: string; headerCell?: () => ReactNode } | undefined;
+              const meta = header.column.columnDef.meta as { align?: 'left' | 'right' | 'center'; headerClassName?: string; headerCell?: () => ReactNode; reorderable?: boolean } | undefined;
               const canResize = header.column.getCanResize();
               const canSort = header.column.getCanSort();
               const sorted = header.column.getIsSorted();
               const SortIcon = sorted === 'asc' ? ArrowUp : sorted === 'desc' ? ArrowDown : ArrowUpDown;
+              const reorderable = persistEnabled && (meta?.reorderable !== false);
+              const pinSide = header.column.getIsPinned() as 'left' | 'right' | false;
+              const pinnedStyle = getPinnedStyle(header.column);
               return (
                 <TableHead
                   key={header.id}
-                  className={cn('relative', alignClass(meta?.align), meta?.headerClassName)}
-                  style={{ width: header.getSize() }}
+                  className={cn(
+                    'relative',
+                    alignClass(meta?.align),
+                    meta?.headerClassName,
+                    dragOverId === header.id && 'sf-col-drop-target',
+                    pinSide === 'left' && 'sf-col-pinned-left',
+                    pinSide === 'right' && 'sf-col-pinned-right',
+                  )}
+                  style={{ width: header.getSize(), ...pinnedStyle }}
+                  draggable={reorderable}
+                  onDragStart={reorderable ? (e) => onHeaderDragStart(e, header.id) : undefined}
+                  onDragOver={reorderable ? (e) => onHeaderDragOver(e, header.id) : undefined}
+                  onDragLeave={reorderable ? onHeaderDragLeave : undefined}
+                  onDrop={reorderable ? (e) => onHeaderDrop(e, header.id) : undefined}
                 >
                   {meta?.headerCell ? (
                     meta.headerCell()
@@ -198,11 +339,18 @@ export function MetaTable<T>({
           >
             {row.getVisibleCells().map((cell) => {
               const meta = cell.column.columnDef.meta as { align?: 'left' | 'right' | 'center'; className?: string } | undefined;
+              const pinSide = cell.column.getIsPinned() as 'left' | 'right' | false;
+              const pinnedStyle = getPinnedStyle(cell.column);
               return (
                 <TableCell
                   key={cell.id}
-                  className={cn(alignClass(meta?.align), meta?.className)}
-                  style={{ width: cell.column.getSize() }}
+                  className={cn(
+                    alignClass(meta?.align),
+                    meta?.className,
+                    pinSide === 'left' && 'sf-col-pinned-left',
+                    pinSide === 'right' && 'sf-col-pinned-right',
+                  )}
+                  style={{ width: cell.column.getSize(), ...pinnedStyle }}
                 >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </TableCell>

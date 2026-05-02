@@ -5,12 +5,15 @@ import { formatKRW } from '@/lib/utils';
 import { EXPENSE_TYPE_LABEL, type ExpenseType } from '@/types/customs';
 import type { Expense } from '@/types/customs';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
+import type { ColumnPinningState } from '@/lib/columnPinning';
 
 export const EXPENSE_TABLE_ID = 'expense-list';
 
 interface Props {
   items: Expense[];
   hidden: Set<string>;
+  pinning?: ColumnPinningState;
+  onPinningChange?: (next: ColumnPinningState) => void;
   onEdit: (e: Expense) => void;
   onNew: () => void;
   onDelete?: (e: Expense) => void;
@@ -56,12 +59,14 @@ function buildColumns({ onEdit, onDelete }: BuildOpts): ColumnDef<Expense>[] {
 export const EXPENSE_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({ onEdit: () => {} }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-export default function ExpenseListTable({ items, hidden, onEdit, onDelete }: Props) {
+export default function ExpenseListTable({ items, hidden, pinning, onPinningChange, onEdit, onDelete }: Props) {
   return (
     <MetaTable
       tableId={EXPENSE_TABLE_ID}
       columns={buildColumns({ onEdit, onDelete })}
       hidden={hidden}
+      pinning={pinning}
+      onPinningChange={onPinningChange}
       items={items}
       getRowKey={(e) => e.expense_id}
       rowClassName={() => 'hover:bg-muted/50'}

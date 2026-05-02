@@ -14,6 +14,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
 import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { useColumnVisibility } from '@/lib/columnVisibility';
+import { useColumnPinning } from '@/lib/columnPinning';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
 import { MasterConsole, type MasterConsoleMetric } from '@/components/command/MasterConsole';
@@ -155,23 +156,6 @@ export function useTabState(list: ListScreenConfig): TabState {
   return { filters, setFilters, filterOptions, data, loading, reload, metrics };
 }
 
-// ─── 클라이언트 검색 적용 ──────────────────────────────────────────────────
-function applySearch(
-  items: unknown[],
-  query: string,
-  fields: string[],
-): unknown[] {
-  if (!query) return items;
-  const lower = query.toLowerCase();
-  return items.filter((row) => {
-    const rec = row as Record<string, unknown>;
-    return fields.some((f) => {
-      const v = getFieldValue(rec, f);
-      return v != null && String(v).toLowerCase().includes(lower);
-    });
-  });
-}
-
 // ─── 액션 헬퍼 ─────────────────────────────────────────────────────────────
 const ICONS: Record<ActionIcon, ReactNode> = {
   plus: <Plus className="h-4 w-4" />,
@@ -262,7 +246,8 @@ export function RowActionsCell({
 // ─── 테이블 + Empty + Forms ───────────────────────────────────────────────
 export function TableArea({
   list, state, displayItems, setFormOpenId, onRowAction, onRowSelect,
-  hidden, selectedIds, setSelectedIds,
+  hidden, selectedIds, setSelectedIds, globalFilter, onFilteredRowCountChange,
+  pinning, onPinningChange,
 }: {
   list: ListScreenConfig;
   state: TabState;
@@ -275,6 +260,10 @@ export function TableArea({
   hidden: Set<string>;
   selectedIds?: Set<string>;
   setSelectedIds?: (next: Set<string>) => void;
+  globalFilter?: string;
+  onFilteredRowCountChange?: (count: number) => void;
+  pinning?: import('@/lib/columnPinning').ColumnPinningState;
+  onPinningChange?: (next: import('@/lib/columnPinning').ColumnPinningState) => void;
 }) {
   if (state.loading) return <SkeletonRows rows={6} />;
 
@@ -314,6 +303,9 @@ export function TableArea({
     setSelectedIds(next);
   };
 
+  // 글로벌 검색 대상 필드 (list.searchable.fields) — 해당 컬럼들에 globalFilterText 부착
+  const searchFields = new Set(list.searchable?.fields ?? []);
+
   // ListScreenConfig 의 ColumnConfig → MetaTable 의 ColumnDef<Record<string, unknown>> 매핑
   const dataCols: ColumnDef<Record<string, unknown>>[] = list.columns.map((c) => {
     const widthPx = c.width ? parseInt(c.width, 10) : undefined;
@@ -333,6 +325,12 @@ export function TableArea({
             if (typeof v === 'number' || typeof v === 'string') return v;
             if (typeof v === 'boolean') return v ? 1 : 0;
             return String(v);
+          }
+        : undefined,
+      globalFilterText: searchFields.has(c.key)
+        ? (row) => {
+            const v = getFieldValue(row, c.key);
+            return v == null ? '' : String(v);
           }
         : undefined,
     };
@@ -411,6 +409,10 @@ export function TableArea({
       getRowKey={getRowKey}
       onRowClick={onRowClickFn}
       rowClassName={(row) => rowClassName(row, list.rowAppearance)}
+      globalFilter={globalFilter}
+      onFilteredRowCountChange={onFilteredRowCountChange}
+      pinning={pinning}
+      onPinningChange={onPinningChange}
     />
   );
 }
@@ -622,6 +624,7 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
   // 멀티 선택 + 컬럼 가시성. (정렬은 MetaTable 이 자체 영속 — 더 이상 ListScreen 상태로 보유 안 함)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { hidden: hiddenCols, setHidden: setHiddenCols } = useColumnVisibility(config.id, config.columns);
+  const colPin = useColumnPinning(config.id);
 
   const pageActions = usePageActions();
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
@@ -647,10 +650,10 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
     );
   }
 
-  // 검색 — 정렬은 MetaTable 내부에서 (TanStack getSortedRowModel)
-  const displayItems = config.searchable
-    ? applySearch(state.data, searchQuery, config.searchable.fields)
-    : state.data;
+  // 검색·정렬 모두 MetaTable 내부에서 (TanStack globalFilter + getSortedRowModel)
+  const displayItems = state.data;
+  // 검색 적용 후 행 갯수 — MetaTable 의 onFilteredRowCountChange 콜백으로 받아옴
+  const [filteredCount, setFilteredCount] = useState<number>(state.data.length);
 
   const onRowAction = makeRowActionHandler(pageActions, state.reload);
   const headerActions = config.actions?.filter((a) => a.trigger === 'header') ?? [];
@@ -678,8 +681,8 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
     });
   };
 
-  const tableSub = config.tableSubFromTotal && config.searchable
-    ? `${displayItems.length.toLocaleString()} / ${state.data.length.toLocaleString()}개 표시`
+  const tableSub = config.tableSubFromTotal && config.searchable && searchQuery
+    ? `${filteredCount.toLocaleString()} / ${state.data.length.toLocaleString()}개 표시`
     : `${state.data.length.toLocaleString()}건`;
 
   return (
@@ -705,7 +708,15 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
             />
             <div style={{ flex: 1 }} />
             {hasHideable
-              ? <ColumnVisibilityMenu columns={config.columns} hidden={hiddenCols} setHidden={setHiddenCols} />
+              ? <ColumnVisibilityMenu
+                  columns={config.columns}
+                  hidden={hiddenCols}
+                  setHidden={setHiddenCols}
+                  pinning={colPin.pinning}
+                  pinLeft={colPin.pinLeft}
+                  pinRight={colPin.pinRight}
+                  unpin={colPin.unpin}
+                />
               : null}
           </div>
         }
@@ -731,6 +742,10 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
           hidden={hiddenCols}
           selectedIds={selectedIds}
           setSelectedIds={setSelectedIds}
+          globalFilter={searchQuery}
+          onFilteredRowCountChange={setFilteredCount}
+          pinning={colPin.pinning}
+          onPinningChange={colPin.setPinning}
         />
       </MasterConsole>
 

@@ -15,6 +15,7 @@ import {
 import { railBlocks, contentBlocks, detailComponents } from './registry';
 import { useResolvedConfig } from './configOverride';
 import { useColumnVisibility } from '@/lib/columnVisibility';
+import { useColumnPinning } from '@/lib/columnPinning';
 
 export default function TabbedListScreen({ config: defaultConfig }: { config: TabbedListConfig }) {
   // Phase 3: localStorage override 우선
@@ -33,6 +34,7 @@ export default function TabbedListScreen({ config: defaultConfig }: { config: Ta
     tab: t,
     state: useTabState(t.list),
     vis: useColumnVisibility(t.list.id, t.list.columns),
+    pin: useColumnPinning(t.list.id),
   }));
   const activeTabIdx = config.tabs.findIndex((t) => t.key === activeKey);
   const active = tabStates[activeTabIdx] ?? tabStates[0];
@@ -144,6 +146,8 @@ export default function TabbedListScreen({ config: defaultConfig }: { config: Ta
                 onRowAction={makeRowActionHandler(pageActions, ts.state.reload)}
                 onRowSelect={(id) => setSelected({ tabKey: t.key, id })}
                 hidden={ts.vis.hidden}
+                pinning={ts.pin.pinning}
+                onPinningChange={ts.pin.setPinning}
               />
             </TabsContent>
           );

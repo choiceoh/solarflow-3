@@ -13,6 +13,7 @@ import StatusChanger from './StatusChanger';
 import BLLineTable, { BL_LINE_TABLE_ID, BL_LINE_COLUMN_META } from './BLLineTable';
 import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
 import { useColumnVisibility } from '@/lib/columnVisibility';
+import { useColumnPinning } from '@/lib/columnPinning';
 import BLLineForm from './BLLineForm';
 import LinkedMemoWidget from '@/components/memo/LinkedMemoWidget';
 import AttachmentWidget from '@/components/common/AttachmentWidget';
@@ -64,6 +65,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
   const [lineFormOpen, setLineFormOpen] = useState(false);
   const [editLine, setEditLine] = useState<BLLineItem | null>(null);
   const blLineColVis = useColumnVisibility(BL_LINE_TABLE_ID, BL_LINE_COLUMN_META);
+  const blLineColPin = useColumnPinning(BL_LINE_TABLE_ID);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [manufacturerName, setManufacturerName] = useState<string>('');
@@ -371,7 +373,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">입고 품목</h3>
             <div className="flex items-center gap-2">
-              <ColumnVisibilityMenu columns={BL_LINE_COLUMN_META} hidden={blLineColVis.hidden} setHidden={blLineColVis.setHidden} />
+              <ColumnVisibilityMenu columns={BL_LINE_COLUMN_META} hidden={blLineColVis.hidden} setHidden={blLineColVis.setHidden} pinning={blLineColPin.pinning} pinLeft={blLineColPin.pinLeft} pinRight={blLineColPin.pinRight} unpin={blLineColPin.unpin} />
               <Button size="sm" onClick={() => { setEditLine(null); setLineFormOpen(true); }}>
                 <Plus className="mr-1 h-3.5 w-3.5" />추가
               </Button>
@@ -381,6 +383,8 @@ export default function BLDetailView({ blId, onBack }: Props) {
             <BLLineTable
               items={lines}
               hidden={blLineColVis.hidden}
+              pinning={blLineColPin.pinning}
+              onPinningChange={blLineColPin.setPinning}
               currency={bl.currency}
               manufacturerName={manufacturerName || bl.manufacturer_name}
               onEdit={(line) => { setEditLine(line); setLineFormOpen(true); }}

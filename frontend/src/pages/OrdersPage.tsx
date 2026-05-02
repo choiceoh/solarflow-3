@@ -20,6 +20,7 @@ import AutoMatchSection from '@/components/orders/AutoMatchSection';
 import OutboundListTable, { OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META } from '@/components/outbound/OutboundListTable';
 import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
 import { useColumnVisibility } from '@/lib/columnVisibility';
+import { useColumnPinning } from '@/lib/columnPinning';
 import OutboundDetailView from '@/components/outbound/OutboundDetailView';
 import OutboundForm from '@/components/outbound/OutboundForm';
 import SaleForm from '@/components/outbound/SaleForm';
@@ -204,9 +205,13 @@ export default function OrdersPage() {
   const [invoiceOutbound, setInvoiceOutbound] = useState<Outbound | null>(null);
   const [invoiceOrder, setInvoiceOrder] = useState<(Order & { sale?: Sale }) | null>(null);
   const outboundColVis = useColumnVisibility(OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META);
+  const outboundColPin = useColumnPinning(OUTBOUND_TABLE_ID);
   const orderColVis = useColumnVisibility(ORDER_TABLE_ID, ORDER_COLUMN_META);
+  const orderColPin = useColumnPinning(ORDER_TABLE_ID);
   const saleColVis = useColumnVisibility(SALE_TABLE_ID, SALE_COLUMN_META);
+  const saleColPin = useColumnPinning(SALE_TABLE_ID);
   const receiptColVis = useColumnVisibility(RECEIPT_TABLE_ID, RECEIPT_COLUMN_META);
+  const receiptColPin = useColumnPinning(RECEIPT_TABLE_ID);
   const obFilters: { status?: string; usage_category?: string; manufacturer_id?: string } = {};
   if (obStatusFilter) obFilters.status = obStatusFilter;
   if (obUsageFilter) obFilters.usage_category = obUsageFilter;
@@ -793,7 +798,7 @@ export default function OrdersPage() {
               options: (Object.entries(MANAGEMENT_CATEGORY_LABEL) as [ManagementCategory, string][]).map(([k, v]) => ({ value: k, label: v })),
             },
           ]} />
-          <ColumnVisibilityMenu columns={ORDER_COLUMN_META} hidden={orderColVis.hidden} setHidden={orderColVis.setHidden} />
+          <ColumnVisibilityMenu columns={ORDER_COLUMN_META} hidden={orderColVis.hidden} setHidden={orderColVis.setHidden} pinning={orderColPin.pinning} pinLeft={orderColPin.pinLeft} pinRight={orderColPin.pinRight} unpin={orderColPin.unpin} />
           <ExcelToolbar type="order" onNew={() => setOrderFormOpen(true)} />
         </>
       )}
@@ -819,7 +824,7 @@ export default function OrdersPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <ColumnVisibilityMenu columns={OUTBOUND_COLUMN_META} hidden={outboundColVis.hidden} setHidden={outboundColVis.setHidden} />
+          <ColumnVisibilityMenu columns={OUTBOUND_COLUMN_META} hidden={outboundColVis.hidden} setHidden={outboundColVis.setHidden} pinning={outboundColPin.pinning} pinLeft={outboundColPin.pinLeft} pinRight={outboundColPin.pinRight} unpin={outboundColPin.unpin} />
           <ExcelToolbar type="outbound" onNew={() => { setOutboundOrder(null); setObFormOpen(true); }} />
         </>
       )}
@@ -852,7 +857,7 @@ export default function OrdersPage() {
               ],
             },
           ]} />
-          <ColumnVisibilityMenu columns={SALE_COLUMN_META} hidden={saleColVis.hidden} setHidden={saleColVis.setHidden} />
+          <ColumnVisibilityMenu columns={SALE_COLUMN_META} hidden={saleColVis.hidden} setHidden={saleColVis.setHidden} pinning={saleColPin.pinning} pinLeft={saleColPin.pinLeft} pinRight={saleColPin.pinRight} unpin={saleColPin.unpin} />
           <ExcelToolbar type="sale" />
         </>
       )}
@@ -872,7 +877,7 @@ export default function OrdersPage() {
               options: months.map((m) => ({ value: m, label: m })),
             },
           ]} />
-          <ColumnVisibilityMenu columns={RECEIPT_COLUMN_META} hidden={receiptColVis.hidden} setHidden={receiptColVis.setHidden} />
+          <ColumnVisibilityMenu columns={RECEIPT_COLUMN_META} hidden={receiptColVis.hidden} setHidden={receiptColVis.setHidden} pinning={receiptColPin.pinning} pinLeft={receiptColPin.pinLeft} pinRight={receiptColPin.pinRight} unpin={receiptColPin.unpin} />
           <ExcelToolbar type="receipt" onNew={() => setReceiptFormOpen(true)} />
         </>
       )}
@@ -914,6 +919,8 @@ export default function OrdersPage() {
             <OrderListTable
               items={orders}
               hidden={orderColVis.hidden}
+              pinning={orderColPin.pinning}
+              onPinningChange={orderColPin.setPinning}
               onSelect={(o) => setSelectedOrder(o.order_id)}
               onNew={() => setOrderFormOpen(true)}
               onEdit={(o) => {
@@ -950,6 +957,8 @@ export default function OrdersPage() {
                 <OutboundListTable
                   items={outboundsWithSales}
                   hidden={outboundColVis.hidden}
+                  pinning={outboundColPin.pinning}
+                  onPinningChange={outboundColPin.setPinning}
                   onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
                   onNew={() => setObFormOpen(true)}
                   onInvoice={(ob) => setInvoiceOutbound({ ...ob, sale: ob.sale ?? salesByOutboundId.get(ob.outbound_id) })}
@@ -964,7 +973,7 @@ export default function OrdersPage() {
           {saleLoading ? <SkeletonRows rows={8} /> : (
             <>
               <SaleSummaryCards items={sales} />
-              <SaleListTable items={sales} hidden={saleColVis.hidden} onInvoice={handleOpenSaleInvoice} />
+              <SaleListTable items={sales} hidden={saleColVis.hidden} pinning={saleColPin.pinning} onPinningChange={saleColPin.setPinning} onInvoice={handleOpenSaleInvoice} />
             </>
           )}
         </TabsContent>
@@ -975,6 +984,8 @@ export default function OrdersPage() {
             <ReceiptListTable
               items={receipts}
               hidden={receiptColVis.hidden}
+              pinning={receiptColPin.pinning}
+              onPinningChange={receiptColPin.setPinning}
               onNew={() => setReceiptFormOpen(true)}
               onEdit={(r) => { setEditingReceipt(r); setReceiptFormOpen(true); }}
               onDelete={(r) => { setDeleteError(''); setDeletingReceipt(r); }}

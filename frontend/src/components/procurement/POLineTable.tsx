@@ -5,12 +5,15 @@ import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { formatNumber, formatUSD, formatWp } from '@/lib/utils';
 import type { POLineItem } from '@/types/procurement';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
+import type { ColumnPinningState } from '@/lib/columnPinning';
 
 export const PO_LINE_TABLE_ID = 'po-line';
 
 interface Props {
   items: POLineItem[];
   hidden: Set<string>;
+  pinning?: ColumnPinningState;
+  onPinningChange?: (next: ColumnPinningState) => void;
   onEdit: (line: POLineItem) => void;
   manufacturerName?: string;
 }
@@ -65,12 +68,14 @@ function buildColumns({ onEdit, manufacturerName }: BuildOpts): ColumnDef<POLine
 export const PO_LINE_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({ onEdit: () => {} }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function POLineTable({ items, hidden, onEdit, manufacturerName }: Props) {
+function POLineTable({ items, hidden, pinning, onPinningChange, onEdit, manufacturerName }: Props) {
   return (
     <MetaTable
       tableId={PO_LINE_TABLE_ID}
       columns={buildColumns({ onEdit, manufacturerName })}
       hidden={hidden}
+      pinning={pinning}
+      onPinningChange={onPinningChange}
       items={items}
       getRowKey={(l) => l.po_line_id}
       emptyMessage="발주품목이 없습니다"

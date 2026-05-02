@@ -6,12 +6,15 @@ import OutboundStatusBadge from './OutboundStatusBadge';
 import { formatDate, formatNumber, formatKw, cn } from '@/lib/utils';
 import { USAGE_CATEGORY_LABEL, type Outbound } from '@/types/outbound';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
+import type { ColumnPinningState } from '@/lib/columnPinning';
 
 export const OUTBOUND_TABLE_ID = 'outbound-list';
 
 interface Props {
   items: Outbound[];
   hidden: Set<string>;
+  pinning?: ColumnPinningState;
+  onPinningChange?: (next: ColumnPinningState) => void;
   onSelect: (item: Outbound) => void;
   onNew: () => void;
   onInvoice?: (item: Outbound) => void;
@@ -72,12 +75,14 @@ function buildColumns({ onInvoice }: { onInvoice?: (item: Outbound) => void }): 
 export const OUTBOUND_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({}).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function OutboundListTable({ items, hidden, onSelect, onNew, onInvoice }: Props) {
+function OutboundListTable({ items, hidden, pinning, onPinningChange, onSelect, onNew, onInvoice }: Props) {
   return (
     <MetaTable
       tableId={OUTBOUND_TABLE_ID}
       columns={buildColumns({ onInvoice })}
       hidden={hidden}
+      pinning={pinning}
+      onPinningChange={onPinningChange}
       items={items}
       getRowKey={(ob) => ob.outbound_id}
       onRowClick={onSelect}

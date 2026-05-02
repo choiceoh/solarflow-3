@@ -7,12 +7,15 @@ import OrderStatusBadge from './OrderStatusBadge';
 import { cn, formatDate, formatNumber, formatKw } from '@/lib/utils';
 import { MANAGEMENT_CATEGORY_LABEL, type FulfillmentSource, type Order } from '@/types/orders';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
+import type { ColumnPinningState } from '@/lib/columnPinning';
 
 export const ORDER_TABLE_ID = 'order-list';
 
 interface Props {
   items: Order[];
   hidden: Set<string>;
+  pinning?: ColumnPinningState;
+  onPinningChange?: (next: ColumnPinningState) => void;
   onSelect: (item: Order) => void;
   onNew: () => void;
   onEdit?: (item: Order) => void;
@@ -119,12 +122,14 @@ function buildColumns({ onEdit, onDelete, onCreateOutbound, onCancelToReservatio
 export const ORDER_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({ sourceOverrides: EMPTY_OVERRIDES }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function OrderListTable({ items, hidden, onSelect, onNew, onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides = EMPTY_OVERRIDES }: Props) {
+function OrderListTable({ items, hidden, pinning, onPinningChange, onSelect, onNew, onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides = EMPTY_OVERRIDES }: Props) {
   return (
     <MetaTable
       tableId={ORDER_TABLE_ID}
       columns={buildColumns({ onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides })}
       hidden={hidden}
+      pinning={pinning}
+      onPinningChange={onPinningChange}
       items={items}
       getRowKey={(o) => o.order_id}
       onRowClick={onSelect}

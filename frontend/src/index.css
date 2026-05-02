@@ -927,6 +927,20 @@ a:focus-visible,
   background: var(--sf-solar);
 }
 
+/* MetaTable 컬럼 고정 — 좌/우 sticky. inline style 로 left/right 픽셀이 들어오고
+   여기선 box-shadow 로 sticky 경계를 표시. */
+.sf-col-pinned-left {
+  box-shadow: 1px 0 0 0 var(--sf-line, rgb(0 0 0 / 0.08));
+}
+.sf-col-pinned-right {
+  box-shadow: -1px 0 0 0 var(--sf-line, rgb(0 0 0 / 0.08));
+}
+
+/* 헤더 드래그 드롭 대상 — 옅은 솔라 좌측 라인으로 삽입 위치 표시 */
+.sf-col-drop-target {
+  box-shadow: inset 2px 0 0 0 var(--sf-solar);
+}
+
 .sf-card-controls {
   display: flex;
   align-items: center;
