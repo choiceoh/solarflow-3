@@ -197,6 +197,32 @@ export const cellRenderers: Record<string, CellRenderer> = {
   bl_currency_label: (v) => <span>{v === 'USD' ? 'USD (달러)' : 'KRW (원)'}</span>,
 };
 
+// React Query 결과 / useSimpleList 결과를 DataHookResult 로 변환.
+// 매번 `as unknown as DataHookResult` 캐스트 대신 사용.
+type RQLikeResult<T> = {
+  data?: T[] | T | null;
+  isLoading?: boolean;
+  loading?: boolean;
+  refetch?: () => unknown;
+  reload?: () => void;
+};
+
+function adaptListHook<T>(r: RQLikeResult<T>): DataHookResult {
+  const data = Array.isArray(r.data) ? r.data : [];
+  return {
+    data: data as unknown[],
+    loading: r.isLoading ?? r.loading ?? false,
+    reload: r.reload ?? (() => { r.refetch?.(); }),
+  };
+}
+
+function adaptDetailHook<T>(r: RQLikeResult<T>): { data: unknown; loading: boolean } {
+  return {
+    data: Array.isArray(r.data) ? r.data[0] : r.data,
+    loading: r.isLoading ?? r.loading ?? false,
+  };
+}
+
 // 단순 리스트 fetch hook (서버 필터 없음 — 클라이언트 검색만)
 function useSimpleList<T>(endpoint: string): { data: T[]; loading: boolean; reload: () => void } {
   const [data, setData] = useState<T[]>([]);
@@ -216,31 +242,32 @@ function useSimpleList<T>(endpoint: string): { data: T[]; loading: boolean; relo
   return { data, loading, reload: () => setTick((n) => n + 1) };
 }
 
-// ─── Data hooks (어댑터: Record<string,string> → 타입드 hook) ──────────────
+// ─── Data hooks (어댑터: Record<string,string> → DataHookResult) ─────────────
+// `as unknown as DataHookResult` 캐스트 → adaptListHook() 헬퍼로 통일
 export const dataHooks: Record<string, DataHook> = {
-  useOutboundList: (f) => useOutboundList({
+  useOutboundList: (f) => adaptListHook(useOutboundList({
     status: f.status || undefined,
     usage_category: f.usage_category || undefined,
     manufacturer_id: f.manufacturer_id || undefined,
-  }) as unknown as DataHookResult,
-  useSaleList: (f) => useSaleList({
+  })),
+  useSaleList: (f) => adaptListHook(useSaleList({
     customer_id: f.customer_id || undefined,
     month: f.month || undefined,
     invoice_status: f.invoice_status || undefined,
-  }) as unknown as DataHookResult,
-  usePartnerList: () => useSimpleList<Partner>('/api/v1/partners') as unknown as DataHookResult,
-  useCompanyList: () => useSimpleList<Record<string, unknown>>('/api/v1/companies') as unknown as DataHookResult,
-  useBankList: () => useSimpleList<Bank>('/api/v1/banks') as unknown as DataHookResult,
-  useWarehouseList: () => useSimpleList<Warehouse>('/api/v1/warehouses') as unknown as DataHookResult,
-  useManufacturerList: () => useSimpleList<Manufacturer>('/api/v1/manufacturers') as unknown as DataHookResult,
-  useProductList: () => useSimpleList<Product>('/api/v1/products') as unknown as DataHookResult,
+  })),
+  usePartnerList: () => adaptListHook(useSimpleList<Partner>('/api/v1/partners')),
+  useCompanyList: () => adaptListHook(useSimpleList<Record<string, unknown>>('/api/v1/companies')),
+  useBankList: () => adaptListHook(useSimpleList<Bank>('/api/v1/banks')),
+  useWarehouseList: () => adaptListHook(useSimpleList<Warehouse>('/api/v1/warehouses')),
+  useManufacturerList: () => adaptListHook(useSimpleList<Manufacturer>('/api/v1/manufacturers')),
+  useProductList: () => adaptListHook(useSimpleList<Product>('/api/v1/products')),
   // Phase 4: 발전소 — selectedCompanyId 로 서버 필터 (requiresCompany=true)
   useConstructionSiteList: () => {
     const companyId = useAppStore((s) => s.selectedCompanyId);
     const url = companyId && companyId !== 'all'
       ? `/api/v1/construction-sites?company_id=${companyId}`
       : '/api/v1/construction-sites';
-    return useSimpleList<ConstructionSite>(url) as unknown as DataHookResult;
+    return adaptListHook(useSimpleList<ConstructionSite>(url));
   },
   // Inbound (Step 1): BL list + 라인 합계 (totalMw / avgCentsPerWp / 첫 라인) 클라이언트 합산
   // N+1 issue — BL 많으면 느려짐. follow-up 으로 server-side aggregation 검토.
@@ -285,17 +312,17 @@ export const dataHooks: Record<string, DataHook> = {
         : baseHook.data;
       return items.map((bl) => ({ ...bl, _agg: aggMap[bl.bl_id] }));
     }, [baseHook.data, aggMap, monthFilter]);
-    return { data: enriched, loading: baseHook.loading, reload: baseHook.reload } as unknown as DataHookResult;
+    return adaptListHook({ data: enriched, loading: baseHook.loading, reload: baseHook.reload });
   },
 };
 
 // ─── Detail data hooks (단건 fetch by id) ─────────────────────────────────
 export type DetailDataHook = (id: string) => { data: unknown; loading: boolean };
 export const detailDataHooks: Record<string, DetailDataHook> = {
-  useOutboundDetail: (id) => useOutboundDetail(id) as unknown as { data: unknown; loading: boolean },
-  useDeclarationDetail: (id) => useDeclarationDetail(id) as unknown as { data: unknown; loading: boolean },
+  useOutboundDetail: (id) => adaptDetailHook(useOutboundDetail(id)),
+  useDeclarationDetail: (id) => adaptDetailHook(useDeclarationDetail(id)),
   // Inbound Step 2
-  useBLShipmentDetail: (id) => useBLDetail(id) as unknown as { data: unknown; loading: boolean },
+  useBLShipmentDetail: (id) => adaptDetailHook(useBLDetail(id)),
 };
 
 // ─── Metric computers ──────────────────────────────────────────────────────
