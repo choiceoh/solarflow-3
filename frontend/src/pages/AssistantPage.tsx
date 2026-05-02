@@ -102,7 +102,9 @@ function buildOCRBlock(results: OCRResult[]): string {
 export default function AssistantPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [provider, setProvider] = useState<Provider>('anthropic');
+  // 운영 디폴트는 로컬 vLLM Qwen3.6 (openai 호환) — 빠르고 비용 0.
+  // Anthropic(GLM) 은 fallback 또는 사용자 명시 토글 시 사용.
+  const [provider, setProvider] = useState<Provider>('openai');
   const [model, setModel] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [parseAsCustoms, setParseAsCustoms] = useState(false);
@@ -287,7 +289,15 @@ export default function AssistantPage() {
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Select value={provider} onValueChange={(v) => setProvider(v as Provider)}>
+          <Select
+            value={provider}
+            onValueChange={(v) => {
+              // provider 변경 시 model 도 비워서 서버가 provider 기본값을 적용하도록 함.
+              // (예: provider=anthropic 인데 model='qwen…' 이면 Z.ai 가 Unknown Model 400)
+              setProvider(v as Provider);
+              setModel('');
+            }}
+          >
             <SelectTrigger className="h-9 w-[160px] text-sm">
               <span>{provider === 'anthropic' ? 'Anthropic 호환' : 'OpenAI 호환'}</span>
             </SelectTrigger>
@@ -299,7 +309,11 @@ export default function AssistantPage() {
           <Input
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder="모델 (비우면 서버 기본값)"
+            placeholder={
+              provider === 'anthropic'
+                ? '예: glm-5.1 (비우면 기본값)'
+                : '예: qwen3.6-35b-a3b (비우면 기본값)'
+            }
             className="h-9 w-[220px] text-sm"
           />
           <Button variant="ghost" size="sm" onClick={reset} disabled={messages.length === 0}>

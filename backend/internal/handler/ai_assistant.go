@@ -54,7 +54,13 @@ func (h *AssistantHandler) WithAlias(ocrH *OCRHandler, matchH *ReceiptMatchHandl
 }
 
 // 도구 호출 라운드 상한. 모델이 무한 반복하지 못하게 차단.
-const maxAssistantToolIterations = 5
+const maxAssistantToolIterations = 8
+
+// toolCallSignature — 도구명+인자 조합을 캐논 문자열로 만들어 직전 호출과 비교.
+// LLM이 같은 호출을 반복해 무한 루프에 빠지는 것을 검출하기 위함.
+func toolCallSignature(name string, args []byte) string {
+	return name + "|" + string(args)
+}
 
 type assistantMessage struct {
 	Role    string `json:"role"`
@@ -99,7 +105,7 @@ func (h *AssistantHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	if model == "" {
 		model = strings.TrimSpace(os.Getenv("ASSISTANT_MODEL"))
 	}
-	if model == "" {
+	if model == "" || !modelMatchesProvider(provider, model) {
 		model = defaultModelForProvider(provider)
 	}
 
@@ -117,11 +123,16 @@ func (h *AssistantHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	// 이번 요청에서 생성된 쓰기 제안을 응답에 포함하기 위한 collector
 	ctx, collector := withProposalCollector(r.Context())
 
+	startedAt := time.Now()
+	log.Printf("[assistant] enter provider=%s model=%s msgs=%d maxTokens=%d", provider, model, len(req.Messages), maxTokens)
 	content, usedProvider, usedModel, err := h.callWithFallback(ctx, provider, model, system, req.Messages, maxTokens, req.Provider != "")
+	elapsed := time.Since(startedAt)
 	if err != nil {
+		log.Printf("[assistant] FAIL provider=%s model=%s elapsed=%s err=%v", usedProvider, usedModel, elapsed, err)
 		response.RespondError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	log.Printf("[assistant] ok provider=%s model=%s elapsed=%s replyLen=%d", usedProvider, usedModel, elapsed, len(content))
 
 	response.RespondJSON(w, http.StatusOK, assistantResponse{
 		Content:   content,
@@ -141,6 +152,19 @@ func defaultModelForProvider(provider string) string {
 	default:
 		return ""
 	}
+}
+
+// modelMatchesProvider — 클라이언트가 보낸 model 이 해당 provider 에서 호출 가능한지 prefix 검사.
+// 잘못된 조합(예: provider=anthropic + model=qwen-...) 이면 false → 호출자가 default 로 교정.
+func modelMatchesProvider(provider, model string) bool {
+	m := strings.ToLower(model)
+	switch provider {
+	case "openai":
+		return strings.HasPrefix(m, "qwen") || strings.HasPrefix(m, "gpt") || strings.HasPrefix(m, "o1") || strings.HasPrefix(m, "o3") || strings.HasPrefix(m, "o4")
+	case "anthropic":
+		return strings.HasPrefix(m, "glm") || strings.HasPrefix(m, "claude")
+	}
+	return false
 }
 
 // callWithFallback — primary provider 호출, 인프라성 실패(5xx/타임아웃/네트워크)면 fallback 시도.
@@ -627,7 +651,13 @@ func (h *AssistantHandler) callAnthropic(ctx context.Context, model, system stri
 	// 평문 메시지를 content block 형식으로 변환
 	msgs := make([]anthropicMessage, 0, len(messages))
 	for _, m := range messages {
+		if strings.TrimSpace(m.Content) == "" {
+			continue
+		}
 		role := m.Role
+		if role == "system" {
+			continue
+		}
 		if role != "user" && role != "assistant" {
 			role = "user"
 		}
@@ -648,6 +678,7 @@ func (h *AssistantHandler) callAnthropic(ctx context.Context, model, system stri
 		})
 	}
 
+	var prevToolSigs []string
 	for iter := 0; iter < maxAssistantToolIterations; iter++ {
 		resp, err := h.callAnthropicOnce(ctx, baseURL, apiKey, version, model, system, msgs, tools, maxTokens)
 		if err != nil {
@@ -663,6 +694,37 @@ func (h *AssistantHandler) callAnthropic(ctx context.Context, model, system stri
 			}
 			return sb.String(), nil
 		}
+
+		// 이번 턴의 tool_use 시그니처 수집 — 직전 턴과 동일하면 루프 의심 → 즉시 텍스트로 종료
+		curSigs := make([]string, 0)
+		for _, c := range resp.Content {
+			if c.Type == "tool_use" {
+				curSigs = append(curSigs, toolCallSignature(c.Name, c.Input))
+			}
+		}
+		if len(prevToolSigs) > 0 && len(curSigs) == len(prevToolSigs) {
+			same := true
+			for i := range curSigs {
+				if curSigs[i] != prevToolSigs[i] {
+					same = false
+					break
+				}
+			}
+			if same {
+				log.Printf("[assistant] anthropic 도구 호출 동일 시그니처 반복 감지 → 텍스트 추출 후 종료 (iter=%d)", iter)
+				var sb strings.Builder
+				for _, c := range resp.Content {
+					if c.Type == "text" {
+						sb.WriteString(c.Text)
+					}
+				}
+				if sb.Len() == 0 {
+					sb.WriteString("(도구 호출이 반복되어 응답을 마무리할 수 없었습니다.)")
+				}
+				return sb.String(), nil
+			}
+		}
+		prevToolSigs = curSigs
 
 		// 어시스턴트 응답(텍스트+tool_use 블록)을 그대로 메시지에 추가
 		msgs = append(msgs, anthropicMessage{Role: "assistant", Content: resp.Content})
@@ -808,8 +870,14 @@ func (h *AssistantHandler) callOpenAI(ctx context.Context, model, system string,
 		msgs = append(msgs, openaiMessage{Role: "system", Content: system})
 	}
 	for _, m := range messages {
+		if strings.TrimSpace(m.Content) == "" {
+			continue
+		}
 		role := m.Role
-		if role != "user" && role != "assistant" && role != "system" {
+		if role == "system" {
+			continue
+		}
+		if role != "user" && role != "assistant" {
 			role = "user"
 		}
 		msgs = append(msgs, openaiMessage{Role: role, Content: m.Content})
@@ -828,6 +896,7 @@ func (h *AssistantHandler) callOpenAI(ctx context.Context, model, system string,
 		})
 	}
 
+	var prevToolSigs []string
 	for iter := 0; iter < maxAssistantToolIterations; iter++ {
 		resp, err := h.callOpenAIOnce(ctx, baseURL, apiKey, model, msgs, tools, maxTokens)
 		if err != nil {
@@ -841,6 +910,29 @@ func (h *AssistantHandler) callOpenAI(ctx context.Context, model, system string,
 		if choice.FinishReason != "tool_calls" || len(choice.Message.ToolCalls) == 0 {
 			return choice.Message.Content, nil
 		}
+
+		// 이번 턴의 도구 호출 시그니처 — 직전과 동일하면 루프 의심 → 텍스트로 종료
+		curSigs := make([]string, 0, len(choice.Message.ToolCalls))
+		for _, tc := range choice.Message.ToolCalls {
+			curSigs = append(curSigs, toolCallSignature(tc.Function.Name, []byte(tc.Function.Arguments)))
+		}
+		if len(prevToolSigs) > 0 && len(curSigs) == len(prevToolSigs) {
+			same := true
+			for i := range curSigs {
+				if curSigs[i] != prevToolSigs[i] {
+					same = false
+					break
+				}
+			}
+			if same {
+				log.Printf("[assistant] openai 도구 호출 동일 시그니처 반복 감지 → 텍스트 추출 후 종료 (iter=%d)", iter)
+				if strings.TrimSpace(choice.Message.Content) == "" {
+					return "(도구 호출이 반복되어 응답을 마무리할 수 없었습니다.)", nil
+				}
+				return choice.Message.Content, nil
+			}
+		}
+		prevToolSigs = curSigs
 
 		// assistant 메시지(tool_calls 포함)를 그대로 누적
 		msgs = append(msgs, choice.Message)
