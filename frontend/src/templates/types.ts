@@ -131,7 +131,11 @@ export type FieldType =
   | 'computed'      // Phase 4 보강: 계산 필드 (다른 필드 값에서 자동 계산, readonly 표시 + payload 포함)
   | 'datetime'      // Phase 4 보강 Tier 3: ISO 8601 datetime-local (값은 'YYYY-MM-DDTHH:MM')
   | 'time'          // Phase 4 보강 Tier 3: 시간 (값은 'HH:MM')
-  | 'child_array';  // Phase 4 — Step 3 prep: 자식 행 배열 (BL lines, PO lines 등). childFields 로 구조 정의.
+  | 'child_array'   // Phase 4 — Step 3 prep: 자식 행 배열 (BL lines, PO lines 등). childFields 로 구조 정의.
+  | 'date_range'    // Phase 4 메타 인프라 확장: 시작/종료 날짜 페어 — { start: string; end: string } 객체 값
+  | 'currency_amount' // 통화+금액 페어 — { currency: 'USD'|'KRW'|...; amount: number } 객체 값
+  | 'address'       // 주소 — { postcode: string; road: string; detail: string } (Daum/Kakao postcode 옵션)
+  | 'rich_text';    // 마크다운/서식 메모 — string (간단 textarea + 미리보기)
 
 export interface FieldConfig {
   key: string;                      // form 필드명 (zod 키 = react-hook-form 키)
@@ -225,6 +229,9 @@ export interface FieldConfig {
   // Phase 4 — Step 3 prep: 이 필드 값 변경 시 다른 필드 자동 채우기
   // registry.fieldCascades[cascadeId] 호출 — sourceValue/values/setValue/context 받음.
   cascadeId?: string;
+
+  // 메타 인프라 확장: type='currency_amount' 의 통화 옵션 (기본 USD/KRW)
+  currencyOptions?: { value: string; label: string }[];
 }
 
 export interface FormSection {

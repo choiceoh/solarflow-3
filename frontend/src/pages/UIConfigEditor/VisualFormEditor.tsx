@@ -80,6 +80,11 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'multiselect', label: 'multiselect' },
   { value: 'file', label: 'file' },
   { value: 'computed', label: 'computed' },
+  { value: 'child_array', label: 'child_array (자식 행 배열)' },
+  { value: 'date_range', label: 'date_range (시작/종료 페어)' },
+  { value: 'currency_amount', label: 'currency_amount (통화+금액)' },
+  { value: 'address', label: 'address (우편번호+도로명+상세)' },
+  { value: 'rich_text', label: 'rich_text (서식 메모)' },
 ];
 
 const NUMBER_FORMATS = [

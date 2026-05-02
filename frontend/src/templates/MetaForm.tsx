@@ -64,6 +64,56 @@ function buildFieldSchema(field: FieldConfig): ZodTypeAny {
   // computed — 사용자 입력 없음, validation skip
   if (field.type === 'computed') return z.any().optional();
 
+  // currency_amount — { currency: string; amount: number }
+  if (field.type === 'currency_amount') {
+    const obj = z.object({ currency: z.string(), amount: z.coerce.number() });
+    if (field.required) {
+      return obj.refine(
+        (v) => v.currency.trim() !== '' && Number.isFinite(v.amount) && v.amount > 0,
+        { message: `${subj} 통화/금액을 모두 입력해야 합니다` },
+      );
+    }
+    return obj.optional();
+  }
+
+  // address — { postcode: string; road: string; detail: string }
+  if (field.type === 'address') {
+    const obj = z.object({ postcode: z.string(), road: z.string(), detail: z.string() });
+    if (field.required) {
+      return obj.refine(
+        (v) => v.postcode.trim() !== '' && v.road.trim() !== '',
+        { message: `${subj} 우편번호와 도로명을 입력해야 합니다` },
+      );
+    }
+    return obj.optional();
+  }
+
+  // rich_text — 단순 string. 향후 서식 검증 추가 가능.
+  if (field.type === 'rich_text') {
+    let s = z.string();
+    if (field.minLength) s = s.min(field.minLength, `${subj} 최소 ${field.minLength}자 이상이어야 합니다`);
+    if (field.maxLength) s = s.max(field.maxLength, `${subj} 최대 ${field.maxLength}자까지 입력 가능합니다`);
+    return field.required ? s.min(1, `${subj} 필수입니다`) : s.optional();
+  }
+
+  // date_range — { start: string; end: string }, 빈 값은 '' 허용. required 시 둘 다 필요 + start <= end.
+  if (field.type === 'date_range') {
+    const obj = z.object({ start: z.string(), end: z.string() });
+    if (field.required) {
+      return obj.refine(
+        (v) => v.start.trim() !== '' && v.end.trim() !== '',
+        { message: `${subj} 시작과 종료 날짜를 모두 입력해야 합니다` },
+      ).refine(
+        (v) => !v.start || !v.end || v.start <= v.end,
+        { message: `${subj} 종료 날짜는 시작 이후여야 합니다`, path: ['end'] },
+      );
+    }
+    return obj.optional().refine(
+      (v) => !v || !v.start || !v.end || v.start <= v.end,
+      { message: `${subj} 종료 날짜는 시작 이후여야 합니다`, path: ['end'] },
+    );
+  }
+
   // child_array — 자식 행 배열, 각 행은 childFields 의 zod object
   if (field.type === 'child_array') {
     const shape: Record<string, ZodTypeAny> = {};
@@ -244,6 +294,10 @@ function buildDefaults(
     else if (f.type === 'file') out[f.key] = f.multiple ? [] : null;
     else if (f.type === 'computed') out[f.key] = undefined;
     else if (f.type === 'number') out[f.key] = undefined;
+    else if (f.type === 'date_range') out[f.key] = { start: '', end: '' };
+    else if (f.type === 'currency_amount') out[f.key] = { currency: 'USD', amount: 0 };
+    else if (f.type === 'address') out[f.key] = { postcode: '', road: '', detail: '' };
+    else if (f.type === 'child_array') out[f.key] = [];
     else out[f.key] = '';
   });
   return out;
@@ -793,6 +847,103 @@ function FieldRender({ field, value, error, options, setValue, register, watch, 
       <div className="space-y-1.5">
         <Label>{labelText}</Label>
         <Input value={display} readOnly className="bg-muted" placeholder="자동 계산" />
+        {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
+      </div>
+    );
+  }
+
+  // currency_amount — { currency, amount } 통화 select + 금액 input
+  if (field.type === 'currency_amount') {
+    const v = (value ?? { currency: 'USD', amount: 0 }) as { currency?: string; amount?: number };
+    const opts = field.currencyOptions ?? [
+      { value: 'USD', label: 'USD' },
+      { value: 'KRW', label: 'KRW' },
+    ];
+    return (
+      <div className="space-y-1.5">
+        <Label>{labelText}</Label>
+        <div className="flex items-center gap-2">
+          <select disabled={readOnly} value={v.currency ?? 'USD'}
+            className="h-8 rounded border border-input bg-background px-2 text-xs"
+            onChange={(e) => setValue(field.key, { currency: e.target.value, amount: v.amount ?? 0 })}>
+            {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <input type="number" disabled={readOnly} value={v.amount ?? ''}
+            className="h-8 flex-1 rounded border border-input bg-background px-2 text-xs text-right tabular-nums"
+            placeholder="0"
+            onChange={(e) => setValue(field.key, { currency: v.currency ?? 'USD', amount: e.target.value ? Number(e.target.value) : 0 })} />
+        </div>
+        {field.description ? <p className="text-[10px] text-muted-foreground">{field.description}</p> : null}
+        {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
+      </div>
+    );
+  }
+
+  // address — { postcode, road, detail }, Daum/Kakao postcode 연동은 외부 컴포넌트 (Phase 5)
+  if (field.type === 'address') {
+    const v = (value ?? { postcode: '', road: '', detail: '' }) as { postcode?: string; road?: string; detail?: string };
+    const update = (next: Partial<{ postcode: string; road: string; detail: string }>) => {
+      setValue(field.key, {
+        postcode: next.postcode ?? v.postcode ?? '',
+        road: next.road ?? v.road ?? '',
+        detail: next.detail ?? v.detail ?? '',
+      });
+    };
+    return (
+      <div className="space-y-1.5">
+        <Label>{labelText}</Label>
+        <div className="flex items-center gap-2">
+          <input type="text" disabled={readOnly} value={v.postcode ?? ''}
+            className="h-8 w-24 rounded border border-input bg-background px-2 text-xs font-mono"
+            placeholder="우편번호"
+            onChange={(e) => update({ postcode: e.target.value })} />
+          <input type="text" disabled={readOnly} value={v.road ?? ''}
+            className="h-8 flex-1 rounded border border-input bg-background px-2 text-xs"
+            placeholder="도로명 주소"
+            onChange={(e) => update({ road: e.target.value })} />
+        </div>
+        <input type="text" disabled={readOnly} value={v.detail ?? ''}
+          className="h-8 w-full rounded border border-input bg-background px-2 text-xs"
+          placeholder="상세 주소 (동/호수)"
+          onChange={(e) => update({ detail: e.target.value })} />
+        {field.description ? <p className="text-[10px] text-muted-foreground">{field.description}</p> : null}
+        {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
+      </div>
+    );
+  }
+
+  // rich_text — 간단 textarea + 미리보기 토글 (마크다운 렌더는 Phase 5 follow-up)
+  if (field.type === 'rich_text') {
+    const txt = (value ?? '') as string;
+    return (
+      <div className="space-y-1.5">
+        <Label>{labelText}</Label>
+        <textarea disabled={readOnly} value={txt}
+          className="min-h-[100px] w-full rounded border border-input bg-background px-2 py-1 text-xs"
+          placeholder={field.placeholder ?? '내용 입력 (마크다운 가능)'}
+          onChange={(e) => setValue(field.key, e.target.value)} />
+        {field.description ? <p className="text-[10px] text-muted-foreground">{field.description}</p> : null}
+        {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
+      </div>
+    );
+  }
+
+  // date_range — { start, end } 객체 값. 두 input 나란히.
+  if (field.type === 'date_range') {
+    const v = (value ?? { start: '', end: '' }) as { start?: string; end?: string };
+    return (
+      <div className="space-y-1.5">
+        <Label>{labelText}</Label>
+        <div className="flex items-center gap-2">
+          <input type="date" value={v.start ?? ''} disabled={readOnly}
+            className="h-8 flex-1 rounded border border-input bg-background px-2 text-xs"
+            onChange={(e) => setValue(field.key, { start: e.target.value, end: v.end ?? '' })} />
+          <span className="text-xs text-muted-foreground">~</span>
+          <input type="date" value={v.end ?? ''} disabled={readOnly}
+            className="h-8 flex-1 rounded border border-input bg-background px-2 text-xs"
+            onChange={(e) => setValue(field.key, { start: v.start ?? '', end: e.target.value })} />
+        </div>
+        {field.description ? <p className="text-[10px] text-muted-foreground">{field.description}</p> : null}
         {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
       </div>
     );
