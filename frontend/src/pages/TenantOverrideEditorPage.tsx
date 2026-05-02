@@ -9,7 +9,7 @@
 //   4. "포맷" → 정렬 / "검증" → JSON parse / "적용" → localStorage 저장 + 즉시 반영
 //   5. "기본값 복원" → runtime override 제거, 코드 overlay 만 적용
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { usePermission } from '@/hooks/usePermission';
@@ -119,6 +119,17 @@ export default function TenantOverrideEditorPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [editMode, setEditMode] = useState<'json' | 'visual'>('json');
 
+  // 안전망 (PR #248): saved 스냅샷 + undo/redo + auto-save draft + dirty 감지
+  const savedDraftRef = useRef<string>('');     // 마지막으로 적용/로드된 draft (이것과 다르면 dirty)
+  const undoStackRef = useRef<string[]>([]);    // 최대 20단계
+  const redoStackRef = useRef<string[]>([]);
+  const undoSnapTimerRef = useRef<number | null>(null);
+  const lastSnapDraftRef = useRef<string>('');   // 마지막 snapshot 시점 draft
+  const [, forceTick] = useState(0);              // undo/redo 버튼 활성 표시용 re-render
+
+  const draftKey = (tid: TenantId, kind: ConfigKind, id: string) =>
+    `sf.editor.draft.${tid}.${kind}.${id}`;
+
   const selected = useMemo(
     () => KNOWN_CONFIGS.find((c) => `${c.kind}:${c.id}` === selectedKey) ?? KNOWN_CONFIGS[0],
     [selectedKey],
@@ -128,29 +139,85 @@ export default function TenantOverrideEditorPage() {
   const refreshHistory = () => setHistory(loadHistory(tenantId, selected.kind, selected.id));
 
   // 선택 변경 시 현재 runtime override 또는 코드 overlay (참고용) 표시
+  // + auto-saved draft 가 있으면 우선 복원
   useEffect(() => {
+    // saved (적용된) 값 먼저 계산
     const runtime = loadRuntimeOverride(tenantId, selected.kind, selected.id);
+    let savedJson: string;
+    let savedMsg: { kind: 'ok' | 'err' | 'info'; msg: string };
     if (runtime) {
-      setDraft(JSON.stringify(runtime, null, 2));
-      setStatus({ kind: 'info', msg: '저장된 변경사항을 표시 중입니다' });
+      savedJson = JSON.stringify(runtime, null, 2);
+      savedMsg = { kind: 'info', msg: '저장된 변경사항을 표시 중입니다' };
     } else {
-      // 코드 overlay 가 있으면 참고용으로 표시 (편집 시작점)
       const codeOverlay = tenantId === 'topworks'
         ? null
         : (selected.kind === 'screen'
           ? tenantOverrides[tenantId]?.screens?.[selected.id]
           : tenantOverrides[tenantId]?.forms?.[selected.id]);
       if (codeOverlay) {
-        setDraft(JSON.stringify(codeOverlay, null, 2));
-        setStatus({ kind: 'info', msg: '계열사 기본 설정을 참고용으로 표시 중입니다 — 편집 후 [적용]' });
+        savedJson = JSON.stringify(codeOverlay, null, 2);
+        savedMsg = { kind: 'info', msg: '계열사 기본 설정을 참고용으로 표시 중입니다 — 편집 후 [적용]' };
       } else {
-        setDraft('{\n  \n}');
-        setStatus({ kind: 'info', msg: '아직 변경사항 없음 — 편집 후 [적용] 으로 저장' });
+        savedJson = '{\n  \n}';
+        savedMsg = { kind: 'info', msg: '아직 변경사항 없음 — 편집 후 [적용] 으로 저장' };
       }
     }
+    savedDraftRef.current = savedJson;
+
+    // auto-saved draft 가 있으면 복원
+    let initialDraft = savedJson;
+    let initialStatus = savedMsg;
+    try {
+      const savedDraft = localStorage.getItem(draftKey(tenantId, selected.kind, selected.id));
+      if (savedDraft && savedDraft !== savedJson) {
+        initialDraft = savedDraft;
+        initialStatus = { kind: 'info', msg: '미저장 작업 복원됨 — [적용] 으로 저장하거나 [초기화] 로 폐기' };
+      }
+    } catch { /* localStorage 비활성 — 무시 */ }
+
+    setDraft(initialDraft);
+    setStatus(initialStatus);
+    // undo/redo 스택 초기화 (config 바뀌면 새 시작)
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    lastSnapDraftRef.current = initialDraft;
   }, [tenantId, selected.kind, selected.id]);
 
   useEffect(() => { refreshActive(); }, []);
+
+  // dirty 감지 + auto-save draft + undo 스냅샷 — debounced 500ms
+  const isDirty = draft !== savedDraftRef.current;
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      // auto-save (saved 값과 같으면 굳이 저장 안 함 — 빈 키 방지)
+      try {
+        if (draft !== savedDraftRef.current) {
+          localStorage.setItem(draftKey(tenantId, selected.kind, selected.id), draft);
+        } else {
+          localStorage.removeItem(draftKey(tenantId, selected.kind, selected.id));
+        }
+      } catch { /* noop */ }
+      // undo snapshot — 직전 snapshot 과 다를 때만
+      if (lastSnapDraftRef.current && lastSnapDraftRef.current !== draft) {
+        undoStackRef.current = [...undoStackRef.current, lastSnapDraftRef.current].slice(-20);
+        redoStackRef.current = [];
+        forceTick((n) => n + 1);
+      }
+      lastSnapDraftRef.current = draft;
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [draft, tenantId, selected.kind, selected.id]);
+
+  // dirty leave warning — 변경 후 [적용] 안 했으면 떠날 때 알림
+  useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isDirty]);
 
   // 선택/tenant 변경 시 이력 새로고침 + Visual 모드 자동 진입 (지원하면)
   // 지원 안 하는 config 일 때는 JSON 모드로 폴백.
@@ -197,18 +264,44 @@ export default function TenantOverrideEditorPage() {
     saveRuntimeOverride(tenantId, selected.kind, selected.id, parsed as never);
     refreshActive();
     refreshHistory();
-    setStatus({ kind: 'ok', msg: '적용됨 — 이 tenant 의 화면/폼이 즉시 재렌더링' });
-    // tenant store 의 runtimeVersion 도 직접 bump (이벤트는 발행되지만 안전하게)
+    // saved 스냅샷 갱신 + auto-save draft 키 제거 (이제 draft == saved)
+    savedDraftRef.current = draft;
+    try { localStorage.removeItem(draftKey(tenantId, selected.kind, selected.id)); } catch { /* noop */ }
+    setStatus({ kind: 'ok', msg: '적용됨 — 이 계열사의 화면/폼이 즉시 재렌더링' });
+    // tenant store 의 runtimeVersion 도 직접 bump
     useTenantStore.getState().bumpRuntimeVersion();
   };
 
+  const onUndo = () => {
+    const stack = undoStackRef.current;
+    if (stack.length === 0) return;
+    const prev = stack[stack.length - 1];
+    undoStackRef.current = stack.slice(0, -1);
+    redoStackRef.current = [...redoStackRef.current, draft];
+    lastSnapDraftRef.current = prev; // snapshot effect 가 다시 push 안 하도록
+    setDraft(prev);
+    forceTick((n) => n + 1);
+  };
+
+  const onRedo = () => {
+    const stack = redoStackRef.current;
+    if (stack.length === 0) return;
+    const next = stack[stack.length - 1];
+    redoStackRef.current = stack.slice(0, -1);
+    undoStackRef.current = [...undoStackRef.current, draft];
+    lastSnapDraftRef.current = next;
+    setDraft(next);
+    forceTick((n) => n + 1);
+  };
+
   const onReset = () => {
-    if (!confirm(`${TENANT_LABELS[tenantId]} / ${selected.label} 의 runtime override 를 제거할까요?`)) return;
+    if (!confirm(`${TENANT_LABELS[tenantId]} / ${selected.label} 의 변경사항과 미저장 작업을 모두 제거할까요?`)) return;
     clearRuntimeOverride(tenantId, selected.kind, selected.id);
+    try { localStorage.removeItem(draftKey(tenantId, selected.kind, selected.id)); } catch { /* noop */ }
     refreshActive();
     refreshHistory();
     useTenantStore.getState().bumpRuntimeVersion();
-    setStatus({ kind: 'ok', msg: '복원 완료 — 코드 overlay 만 적용 (또는 base config)' });
+    setStatus({ kind: 'ok', msg: '초기화 완료 — 계열사 기본 설정으로 복귀' });
     // 다시 로드해서 표시 갱신
     setTimeout(() => {
       const codeOverlay = tenantId === 'topworks'
@@ -216,12 +309,13 @@ export default function TenantOverrideEditorPage() {
         : (selected.kind === 'screen'
           ? tenantOverrides[tenantId]?.screens?.[selected.id]
           : tenantOverrides[tenantId]?.forms?.[selected.id]);
-      if (codeOverlay) {
-        setDraft(JSON.stringify(codeOverlay, null, 2));
-        setStatus({ kind: 'info', msg: '코드 overlay 표시 중' });
-      } else {
-        setDraft('{\n  \n}');
-      }
+      const restored = codeOverlay ? JSON.stringify(codeOverlay, null, 2) : '{\n  \n}';
+      setDraft(restored);
+      savedDraftRef.current = restored;
+      lastSnapDraftRef.current = restored;
+      undoStackRef.current = [];
+      redoStackRef.current = [];
+      if (codeOverlay) setStatus({ kind: 'info', msg: '계열사 기본 설정 표시 중' });
     }, 50);
   };
 
@@ -262,6 +356,34 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
     const url = tenantId === 'topworks' ? route : `${route}?tenant=${tenantId}`;
     window.open(url, '_blank', 'noopener');
   };
+
+  // 키보드 단축키 — Cmd+S 적용, Cmd+Z 되돌리기, Cmd+Shift+Z 다시
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const cmd = e.metaKey || e.ctrlKey;
+      if (!cmd) return;
+      const key = e.key.toLowerCase();
+      if (key === 's') {
+        e.preventDefault();
+        onApply();
+      } else if (key === 'z' && e.shiftKey) {
+        // input/textarea 안에서 Cmd+Shift+Z 도 우리가 처리 (input 자체는 단순 type 이므로 별도 redo 없음)
+        e.preventDefault();
+        onRedo();
+      } else if (key === 'z') {
+        // input/textarea 안에서는 native undo 가 type 한 char 단위로 동작 — 그것이 우선
+        // 단, JSON 모드의 큰 textarea 에서도 native 가 우선이라 OK
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+          // 빈 input 이거나 native undo 가 더 할 게 없으면 우리꺼 — 단순화 위해 항상 native 우선
+          return;
+        }
+        e.preventDefault();
+        onUndo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onApply, onUndo, onRedo]);
 
   const isActive = (k: KnownConfig) => activeKeys.some(
     (a) => a.tenantId === tenantId && a.kind === k.kind && a.configId === k.id
@@ -436,6 +558,24 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
               <p className="font-mono text-[10px] text-muted-foreground mt-0.5">{selected.kind} · {selected.id}</p>
             </div>
             <div className="flex gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onUndo}
+                disabled={undoStackRef.current.length === 0}
+                title="되돌리기 (⌘Z)"
+              >
+                ↶
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onRedo}
+                disabled={redoStackRef.current.length === 0}
+                title="다시 (⌘⇧Z)"
+              >
+                ↷
+              </Button>
               <Button size="sm" variant="outline" onClick={onFormat}>포맷</Button>
               <Button size="sm" variant="outline" onClick={onValidate}>검증</Button>
               <Button
@@ -470,7 +610,10 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
               <Button size="sm" variant="outline" onClick={onOpenPreview} title="새 탭에서 프리뷰">프리뷰</Button>
               <Button size="sm" variant="outline" onClick={onExportCode} title="현재 tenant 의 모든 runtime override 를 코드로 export (clipboard)">코드 export</Button>
               <Button size="sm" variant="ghost" onClick={onReset} title="이 화면·폼의 변경사항을 모두 제거하고 원래대로 돌립니다">초기화</Button>
-              <Button size="sm" onClick={onApply}>적용</Button>
+              <Button size="sm" onClick={onApply} title="적용 (⌘S)">
+                {isDirty && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-amber-400" aria-label="미저장" />}
+                적용
+              </Button>
             </div>
           </div>
 
