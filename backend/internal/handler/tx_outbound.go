@@ -459,21 +459,32 @@ func (h *OutboundHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	created, code, msg, err := h.createOutboundCore(req)
+	if err != nil {
+		response.RespondError(w, code, msg)
+		return
+	}
+	writeAuditLog(h.DB, r, "outbounds", created.OutboundID, "create", nil, auditRawFromValue(created), "")
+	response.RespondJSON(w, code, created)
+}
+
+// createOutboundCore — Create 핸들러와 AI 도우미 ConfirmProposal이 공유하는 핵심 로직.
+// status 기본값/검증/재고 체크/트랜잭션 RPC/결과 조회까지 수행한다.
+// audit log 기록은 호출 측에서 (요청 컨텍스트가 필요하므로).
+// 반환: (생성된 출고, HTTP status code, 사용자용 메시지, error). err==nil이면 code는 201.
+func (h *OutboundHandler) createOutboundCore(req model.CreateOutboundRequest) (model.Outbound, int, string, error) {
 	if req.Status == "" {
 		req.Status = "active"
 	}
 	if msg := req.Validate(); msg != "" {
-		response.RespondError(w, http.StatusBadRequest, msg)
-		return
+		return model.Outbound{}, http.StatusBadRequest, msg, fmt.Errorf("validate: %s", msg)
 	}
 
 	if status, msg, err := h.ensureOutboundStockAvailable(req.CompanyID, req.ProductID, req.Quantity, req.CapacityKw, req.Status, 0); err != nil {
 		log.Printf("[출고 등록 재고 검증 실패] company_id=%s product_id=%s err=%v", req.CompanyID, req.ProductID, err)
-		response.RespondError(w, status, msg)
-		return
+		return model.Outbound{}, status, msg, err
 	}
 
-	// BLItems를 추출하고 nil로 설정해 PostgREST에 전달되지 않게 함
 	blItems := req.BLItems
 	req.BLItems = nil
 	var blItemsParam *[]model.OutboundBLItemInput
@@ -488,18 +499,15 @@ func (h *OutboundHandler) Create(w http.ResponseWriter, r *http.Request) {
 		BLItems:    blItemsParam,
 	}); err != nil {
 		log.Printf("[출고 트랜잭션 등록 실패] outbound_id=%s err=%v", outboundID, err)
-		response.RespondError(w, http.StatusInternalServerError, "출고 등록에 실패했습니다")
-		return
+		return model.Outbound{}, http.StatusInternalServerError, "출고 등록에 실패했습니다", err
 	}
 
 	created, err := h.fetchOutboundByID(outboundID)
 	if err != nil {
 		log.Printf("[출고 등록 결과 조회 실패] outbound_id=%s err=%v", outboundID, err)
-		response.RespondError(w, http.StatusInternalServerError, "출고 등록 결과를 확인할 수 없습니다")
-		return
+		return model.Outbound{}, http.StatusInternalServerError, "출고 등록 결과를 확인할 수 없습니다", err
 	}
-	writeAuditLog(h.DB, r, "outbounds", outboundID, "create", nil, auditRawFromValue(created), "")
-	response.RespondJSON(w, http.StatusCreated, created)
+	return created, http.StatusCreated, "", nil
 }
 
 // Update — PUT /api/v1/outbounds/{id} — 출고 수정
