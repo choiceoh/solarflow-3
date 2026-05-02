@@ -4,20 +4,28 @@ package main
 
 import (
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 
 	"solarflow-backend/internal/app"
 	"solarflow-backend/internal/config"
+	"solarflow-backend/internal/logger"
 	"solarflow-backend/internal/router"
 )
 
 func main() {
+	logger.Init()
+
 	cfg := config.Load()
 	a, err := app.New(cfg)
 	if err != nil {
-		log.Fatalf("❌ App 부트스트랩 실패: %v", err)
+		slog.Error("App 부트스트랩 실패", "error", err)
+		os.Exit(1)
 	}
 	addr := "0.0.0.0:" + cfg.Port
-	log.Printf("🚀 SolarFlow 3.0 서버 시작: %s", addr)
-	log.Fatal(http.ListenAndServe(addr, router.New(a)))
+	slog.Info("SolarFlow 3.0 서버 시작", "addr", addr)
+	if err := http.ListenAndServe(addr, router.New(a)); err != nil {
+		log.Fatal(err)
+	}
 }

@@ -24,6 +24,7 @@ func New(a *app.App) http.Handler {
 // 직접 주입하는 stub auth를 사용하기 위해 분리. 운영 코드에서는 New(a)를 쓴다.
 func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
+	r.Use(middleware.RequestLog)
 	r.Use(middleware.CORSMiddleware)
 	r.Get("/health", handler.HealthCheck)
 
