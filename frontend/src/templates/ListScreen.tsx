@@ -675,7 +675,6 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
   // 'toolbar' 는 'header' alias — 옛 outbound config 호환
   const headerActions = config.actions?.filter((a) => a.trigger === 'header' || a.trigger === 'toolbar') ?? [];
   const bulkActions = config.actions?.filter((a) => a.trigger === 'bulk') ?? [];
-  const hasHideable = config.columns.some((c) => c.hideable);
 
   // 멀티 액션 핸들러 — selected ids 에 일괄 적용
   const onBulkAction = (action: ActionConfig) => {
@@ -724,17 +723,16 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
               openForm={(id) => pageActions.openForm(id)}
             />
             <div style={{ flex: 1 }} />
-            {hasHideable
-              ? <ColumnVisibilityMenu
-                  columns={config.columns}
-                  hidden={hiddenCols}
-                  setHidden={setHiddenCols}
-                  pinning={colPin.pinning}
-                  pinLeft={colPin.pinLeft}
-                  pinRight={colPin.pinRight}
-                  unpin={colPin.unpin}
-                />
-              : null}
+            <ColumnVisibilityMenu
+              tableId={config.id}
+              columns={config.columns}
+              hidden={hiddenCols}
+              setHidden={setHiddenCols}
+              pinning={colPin.pinning}
+              pinLeft={colPin.pinLeft}
+              pinRight={colPin.pinRight}
+              unpin={colPin.unpin}
+            />
           </div>
         }
         rail={renderRail(config, displayItems, state.filters)}

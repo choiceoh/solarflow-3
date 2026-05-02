@@ -577,7 +577,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
         <TabsContent value="lines">
           <div className="space-y-3">
             <div className="flex justify-end gap-2">
-              <ColumnVisibilityMenu columns={PO_LINE_COLUMN_META} hidden={poLineColVis.hidden} setHidden={poLineColVis.setHidden} pinning={poLineColPin.pinning} pinLeft={poLineColPin.pinLeft} pinRight={poLineColPin.pinRight} unpin={poLineColPin.unpin} />
+              <ColumnVisibilityMenu tableId={PO_LINE_TABLE_ID} columns={PO_LINE_COLUMN_META} hidden={poLineColVis.hidden} setHidden={poLineColVis.setHidden} pinning={poLineColPin.pinning} pinLeft={poLineColPin.pinLeft} pinRight={poLineColPin.pinRight} unpin={poLineColPin.unpin} />
               <Button size="sm" onClick={() => { setEditLine(null); setLineFormOpen(true); }}><Plus className="mr-1 h-3.5 w-3.5" />추가</Button>
             </div>
             {linesLoading ? <LoadingSpinner /> : <POLineTable items={lines} hidden={poLineColVis.hidden} pinning={poLineColPin.pinning} onPinningChange={poLineColPin.setPinning} onEdit={(l) => { setEditLine(l); setLineFormOpen(true); }} manufacturerName={po.manufacturer_name} />}
