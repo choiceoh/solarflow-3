@@ -22,6 +22,7 @@ const CompaniesV2Page = lazy(() => import('@/pages/CompaniesV2Page'));
 const BanksV2Page = lazy(() => import('@/pages/BanksV2Page'));
 const WarehousesV2Page = lazy(() => import('@/pages/WarehousesV2Page'));
 const ManufacturersV2Page = lazy(() => import('@/pages/ManufacturersV2Page'));
+const ProductsV2Page = lazy(() => import('@/pages/ProductsV2Page'));
 const UIConfigEditorPage = lazy(() => import('@/pages/UIConfigEditorPage'));
 const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
 const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
@@ -93,6 +94,7 @@ export default function App() {
                 <Route path="/masters/banks-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><BanksV2Page /></RoleGuard>} />
                 <Route path="/masters/warehouses-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><WarehousesV2Page /></RoleGuard>} />
                 <Route path="/masters/manufacturers-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><ManufacturersV2Page /></RoleGuard>} />
+                <Route path="/masters/products-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><ProductsV2Page /></RoleGuard>} />
                 <Route path="/masters/construction-sites" element={<ConstructionSitesPage />} />
                 <Route path="/inbound" element={<InboundPage />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
