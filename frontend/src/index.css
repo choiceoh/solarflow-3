@@ -941,6 +941,16 @@ a:focus-visible,
   box-shadow: inset 2px 0 0 0 var(--sf-solar);
 }
 
+/* 컬럼 순서 변경 모드 — "컬럼 순서 변경" 토글이 켜진 동안 헤더가 grab 커서로 바뀌어
+   드래그 가능함을 시각적으로 표시. 평상시엔 폭 조정 우선이라 모드 OFF. */
+.sf-col-reorder-active {
+  cursor: grab;
+  background: rgb(245 184 0 / 0.06);
+}
+.sf-col-reorder-active:active {
+  cursor: grabbing;
+}
+
 /* 테이블 헤더 컬럼 사이 구분선 — 셀 풀하이트 border 대신 가운데 정렬된 짧은 1px 라인.
    엑셀/Linear/Notion DB 풍의 절제된 분리 표현. 마지막 컬럼은 제외. */
 [data-slot="table-head"] {

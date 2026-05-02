@@ -314,7 +314,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">입고 품목</h3>
             <div className="flex items-center gap-2">
-              <ColumnVisibilityMenu columns={BL_LINE_COLUMN_META} hidden={blLineColVis.hidden} setHidden={blLineColVis.setHidden} pinning={blLineColPin.pinning} pinLeft={blLineColPin.pinLeft} pinRight={blLineColPin.pinRight} unpin={blLineColPin.unpin} />
+              <ColumnVisibilityMenu tableId={BL_LINE_TABLE_ID} columns={BL_LINE_COLUMN_META} hidden={blLineColVis.hidden} setHidden={blLineColVis.setHidden} pinning={blLineColPin.pinning} pinLeft={blLineColPin.pinLeft} pinRight={blLineColPin.pinRight} unpin={blLineColPin.unpin} />
               <Button size="sm" onClick={() => { setEditLine(null); setLineFormOpen(true); }}>
                 <Plus className="mr-1 h-3.5 w-3.5" />추가
               </Button>

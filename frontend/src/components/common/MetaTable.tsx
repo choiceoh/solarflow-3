@@ -21,6 +21,7 @@ import { useColumnWidths, type ColumnSizingState } from '@/lib/columnWidths';
 import { useColumnSort, type SortingState } from '@/lib/columnSort';
 import type { ColumnPinningState as SfColumnPinningState } from '@/lib/columnPinning';
 import { useColumnOrder, resolveOrder } from '@/lib/columnOrder';
+import { useColumnReorderMode } from '@/lib/columnReorderMode';
 
 export interface ColumnDef<T> extends ColumnVisibilityMeta {
   cell: (item: T) => ReactNode;
@@ -115,6 +116,7 @@ export function MetaTable<T>({
   const widths = useColumnWidths(tableId ?? '');
   const sortPersist = useColumnSort(tableId ?? '');
   const orderPersist = useColumnOrder(tableId ?? '');
+  const reorderMode = useColumnReorderMode(tableId ?? '');
   const persistEnabled = !!tableId;
   const pinningEnabled = !!pinning;
 
@@ -272,6 +274,8 @@ export function MetaTable<T>({
               const sorted = header.column.getIsSorted();
               const SortIcon = sorted === 'asc' ? ArrowUp : sorted === 'desc' ? ArrowDown : ArrowUpDown;
               const reorderable = persistEnabled && (meta?.reorderable !== false);
+              // 폭 조정 핸들과 충돌 방지 — 토글 ON 동안만 헤더 draggable.
+              const dragActive = reorderable && reorderMode.enabled;
               const pinSide = header.column.getIsPinned() as 'left' | 'right' | false;
               const pinnedStyle = getPinnedStyle(header.column);
               return (
@@ -282,15 +286,16 @@ export function MetaTable<T>({
                     alignClass(meta?.align),
                     meta?.headerClassName,
                     dragOverId === header.id && 'sf-col-drop-target',
+                    dragActive && 'sf-col-reorder-active',
                     pinSide === 'left' && 'sf-col-pinned-left',
                     pinSide === 'right' && 'sf-col-pinned-right',
                   )}
                   style={{ width: header.getSize(), ...pinnedStyle }}
-                  draggable={reorderable}
-                  onDragStart={reorderable ? (e) => onHeaderDragStart(e, header.id) : undefined}
-                  onDragOver={reorderable ? (e) => onHeaderDragOver(e, header.id) : undefined}
-                  onDragLeave={reorderable ? onHeaderDragLeave : undefined}
-                  onDrop={reorderable ? (e) => onHeaderDrop(e, header.id) : undefined}
+                  draggable={dragActive}
+                  onDragStart={dragActive ? (e) => onHeaderDragStart(e, header.id) : undefined}
+                  onDragOver={dragActive ? (e) => onHeaderDragOver(e, header.id) : undefined}
+                  onDragLeave={dragActive ? onHeaderDragLeave : undefined}
+                  onDrop={dragActive ? (e) => onHeaderDrop(e, header.id) : undefined}
                 >
                   {meta?.headerCell ? (
                     meta.headerCell()

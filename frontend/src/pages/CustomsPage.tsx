@@ -184,7 +184,7 @@ export default function CustomsPage() {
               options: (Object.entries(EXPENSE_TYPE_LABEL) as [ExpenseType, string][]).map(([k, v]) => ({ value: k, label: v })),
             },
           ]} />
-          <ColumnVisibilityMenu columns={EXPENSE_COLUMN_META} hidden={expenseColVis.hidden} setHidden={expenseColVis.setHidden} pinning={expenseColPin.pinning} pinLeft={expenseColPin.pinLeft} pinRight={expenseColPin.pinRight} unpin={expenseColPin.unpin} />
+          <ColumnVisibilityMenu tableId={EXPENSE_TABLE_ID} columns={EXPENSE_COLUMN_META} hidden={expenseColVis.hidden} setHidden={expenseColVis.setHidden} pinning={expenseColPin.pinning} pinLeft={expenseColPin.pinLeft} pinRight={expenseColPin.pinRight} unpin={expenseColPin.unpin} />
           <ExcelToolbar type="expense" onNew={() => { setEditExpense(null); setExpFormOpen(true); }} />
         </>
       ) : null}

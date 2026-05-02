@@ -799,7 +799,7 @@ export default function OrdersPage() {
               options: (Object.entries(MANAGEMENT_CATEGORY_LABEL) as [ManagementCategory, string][]).map(([k, v]) => ({ value: k, label: v })),
             },
           ]} />
-          <ColumnVisibilityMenu columns={ORDER_COLUMN_META} hidden={orderColVis.hidden} setHidden={orderColVis.setHidden} pinning={orderColPin.pinning} pinLeft={orderColPin.pinLeft} pinRight={orderColPin.pinRight} unpin={orderColPin.unpin} />
+          <ColumnVisibilityMenu tableId={ORDER_TABLE_ID} columns={ORDER_COLUMN_META} hidden={orderColVis.hidden} setHidden={orderColVis.setHidden} pinning={orderColPin.pinning} pinLeft={orderColPin.pinLeft} pinRight={orderColPin.pinRight} unpin={orderColPin.unpin} />
           <ExcelToolbar type="order" onNew={() => setOrderFormOpen(true)} />
         </>
       )}
@@ -825,7 +825,7 @@ export default function OrdersPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <ColumnVisibilityMenu columns={OUTBOUND_COLUMN_META} hidden={outboundColVis.hidden} setHidden={outboundColVis.setHidden} pinning={outboundColPin.pinning} pinLeft={outboundColPin.pinLeft} pinRight={outboundColPin.pinRight} unpin={outboundColPin.unpin} />
+          <ColumnVisibilityMenu tableId={OUTBOUND_TABLE_ID} columns={OUTBOUND_COLUMN_META} hidden={outboundColVis.hidden} setHidden={outboundColVis.setHidden} pinning={outboundColPin.pinning} pinLeft={outboundColPin.pinLeft} pinRight={outboundColPin.pinRight} unpin={outboundColPin.unpin} />
           <ExcelToolbar type="outbound" onNew={() => { setOutboundOrder(null); setObFormOpen(true); }} />
         </>
       )}
@@ -858,7 +858,7 @@ export default function OrdersPage() {
               ],
             },
           ]} />
-          <ColumnVisibilityMenu columns={SALE_COLUMN_META} hidden={saleColVis.hidden} setHidden={saleColVis.setHidden} pinning={saleColPin.pinning} pinLeft={saleColPin.pinLeft} pinRight={saleColPin.pinRight} unpin={saleColPin.unpin} />
+          <ColumnVisibilityMenu tableId={SALE_TABLE_ID} columns={SALE_COLUMN_META} hidden={saleColVis.hidden} setHidden={saleColVis.setHidden} pinning={saleColPin.pinning} pinLeft={saleColPin.pinLeft} pinRight={saleColPin.pinRight} unpin={saleColPin.unpin} />
           <ExcelToolbar type="sale" />
         </>
       )}
@@ -878,7 +878,7 @@ export default function OrdersPage() {
               options: months.map((m) => ({ value: m, label: m })),
             },
           ]} />
-          <ColumnVisibilityMenu columns={RECEIPT_COLUMN_META} hidden={receiptColVis.hidden} setHidden={receiptColVis.setHidden} pinning={receiptColPin.pinning} pinLeft={receiptColPin.pinLeft} pinRight={receiptColPin.pinRight} unpin={receiptColPin.unpin} />
+          <ColumnVisibilityMenu tableId={RECEIPT_TABLE_ID} columns={RECEIPT_COLUMN_META} hidden={receiptColVis.hidden} setHidden={receiptColVis.setHidden} pinning={receiptColPin.pinning} pinLeft={receiptColPin.pinLeft} pinRight={receiptColPin.pinRight} unpin={receiptColPin.unpin} />
           <ExcelToolbar type="receipt" onNew={() => setReceiptFormOpen(true)} />
         </>
       )}
