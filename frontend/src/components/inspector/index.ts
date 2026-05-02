@@ -1,3 +1,4 @@
+export { ActionChips } from './ActionChips';
 export { DraftsList } from './DraftsList';
 export { EditModeBadge } from './EditModeBadge';
 export { InspectorOverlay } from './InspectorOverlay';

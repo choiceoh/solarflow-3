@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAppStore, type InspectorMode, type InspectorTarget } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
+import { ActionChips } from './ActionChips';
 import { TokenPanel } from './TokenPanel';
 import { DraftsList } from './DraftsList';
 import { getLastTargetEl } from './inspectorTarget';
@@ -131,34 +132,56 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
 
   return (
     <div className="space-y-3">
-      <Field label="태그" value={target.tagName.toLowerCase()} />
-      <Field label="selector" value={target.selector} mono />
-      <div>
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-medium text-slate-500">className (편집 가능)</div>
-          {draft !== target.className && (
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
-              미적용
-            </span>
-          )}
+      <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
+        <div>
+          <div className="text-xs font-medium text-slate-700">선택된 요소</div>
+          <code className="font-mono text-[10px] text-slate-400">
+            &lt;{target.tagName.toLowerCase()}&gt;
+          </code>
         </div>
-        <textarea
-          data-inspector-ui="true"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          spellCheck={false}
-          className="mt-0.5 w-full resize-y rounded border border-slate-300 bg-slate-50 p-1.5 font-mono text-xs leading-snug focus:border-amber-400 focus:bg-white focus:outline-none"
-          rows={4}
-        />
-        <p className="mt-1 text-[10px] text-slate-400">
-          입력 즉시 화면 반영 · 새로고침 시 자동 reset
-        </p>
+        {target.configSource && (
+          <span
+            className="truncate rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+            title={target.configSource}
+          >
+            메타: {target.configSource}
+          </span>
+        )}
       </div>
-      {target.configSource && <Field label="config 출처" value={target.configSource} mono />}
-      <Field
-        label="위치"
-        value={`${Math.round(target.rect.left)},${Math.round(target.rect.top)} · ${Math.round(target.rect.width)}×${Math.round(target.rect.height)}`}
-      />
+      <ActionChips className={draft} onChange={setDraft} />
+      <details
+        data-inspector-ui="true"
+        className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs"
+      >
+        <summary className="cursor-pointer select-none text-slate-500 hover:text-slate-800">
+          고급 — className 직접 편집 / selector / 위치
+        </summary>
+        <div className="mt-2 space-y-2">
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] font-medium text-slate-500">className</div>
+              {draft !== target.className && (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                  미적용
+                </span>
+              )}
+            </div>
+            <textarea
+              data-inspector-ui="true"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              spellCheck={false}
+              className="mt-0.5 w-full resize-y rounded border border-slate-300 bg-slate-50 p-1.5 font-mono text-[11px] leading-snug focus:border-amber-400 focus:bg-white focus:outline-none"
+              rows={4}
+            />
+          </div>
+          <Field label="selector" value={target.selector} mono />
+          <Field
+            label="위치"
+            value={`${Math.round(target.rect.left)},${Math.round(target.rect.top)} · ${Math.round(target.rect.width)}×${Math.round(target.rect.height)}`}
+          />
+        </div>
+      </details>
     </div>
   );
 };
