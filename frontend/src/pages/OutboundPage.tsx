@@ -7,6 +7,7 @@ import { fetchWithAuth } from '@/lib/api';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import OutboundListTable, { OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META } from '@/components/outbound/OutboundListTable';
 import { useColumnVisibility } from '@/lib/columnVisibility';
+import { useColumnPinning } from '@/lib/columnPinning';
 import OutboundDetailView from '@/components/outbound/OutboundDetailView';
 import OutboundForm from '@/components/outbound/OutboundForm';
 import SaleListTable, { SALE_TABLE_ID, SALE_COLUMN_META } from '@/components/outbound/SaleListTable';
@@ -28,7 +29,9 @@ export default function OutboundPage() {
   const [mfgFilter, setMfgFilter] = useState('');
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null);
   const outboundColVis = useColumnVisibility(OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META);
+  const outboundColPin = useColumnPinning(OUTBOUND_TABLE_ID);
   const saleColVis = useColumnVisibility(SALE_TABLE_ID, SALE_COLUMN_META);
+  const saleColPin = useColumnPinning(SALE_TABLE_ID);
   const [activeTab, setActiveTab] = useState<'outbound' | 'sales'>('outbound');
   const _loc = useLocation();
   // R1-1: 사이드바 "출고/판매" 클릭 시 목록 복귀 — URL → 상태 동기화
@@ -214,6 +217,8 @@ export default function OutboundPage() {
             <OutboundListTable
               items={outbounds}
               hidden={outboundColVis.hidden}
+              pinning={outboundColPin.pinning}
+              onPinningChange={outboundColPin.setPinning}
               onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
               onNew={() => setFormOpen(true)}
             />
@@ -224,7 +229,7 @@ export default function OutboundPage() {
           {saleLoading ? <SkeletonRows rows={6} /> : (
             <>
               <SaleSummaryCards items={sales} />
-              <SaleListTable items={sales} hidden={saleColVis.hidden} />
+              <SaleListTable items={sales} hidden={saleColVis.hidden} pinning={saleColPin.pinning} onPinningChange={saleColPin.setPinning} />
             </>
           )}
         </TabsContent>

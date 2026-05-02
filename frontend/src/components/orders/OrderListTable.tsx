@@ -7,12 +7,15 @@ import OrderStatusBadge from './OrderStatusBadge';
 import { cn, formatDate, formatNumber, formatKw } from '@/lib/utils';
 import { MANAGEMENT_CATEGORY_LABEL, type FulfillmentSource, type Order } from '@/types/orders';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
+import type { ColumnPinningState } from '@/lib/columnPinning';
 
 export const ORDER_TABLE_ID = 'order-list';
 
 interface Props {
   items: Order[];
   hidden: Set<string>;
+  pinning?: ColumnPinningState;
+  onPinningChange?: (next: ColumnPinningState) => void;
   onSelect: (item: Order) => void;
   onNew: () => void;
   onEdit?: (item: Order) => void;
@@ -34,11 +37,11 @@ interface BuildOpts {
 
 function buildColumns({ onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides }: BuildOpts): ColumnDef<Order>[] {
   return [
-    { key: 'order_date', label: '수주일', cell: (o) => formatDate(o.order_date) },
-    { key: 'order_number', label: '수주번호', hideable: true, className: 'font-mono', cell: (o) => o.order_number ?? '—' },
-    { key: 'customer_name', label: '거래처', hideable: true, cell: (o) => o.customer_name ?? '—' },
-    { key: 'product_name', label: '품명', hideable: true, cell: (o) => o.product_name ?? '—' },
-    { key: 'spec_wp', label: '규격', hideable: true, cell: (o) => o.spec_wp ?? '—' },
+    { key: 'order_date', label: '수주일', cell: (o) => formatDate(o.order_date), sortAccessor: (o) => o.order_date ?? '' },
+    { key: 'order_number', label: '수주번호', hideable: true, className: 'font-mono', cell: (o) => o.order_number ?? '—', sortAccessor: (o) => o.order_number ?? '' },
+    { key: 'customer_name', label: '거래처', hideable: true, cell: (o) => o.customer_name ?? '—', sortAccessor: (o) => o.customer_name ?? '' },
+    { key: 'product_name', label: '품명', hideable: true, cell: (o) => o.product_name ?? '—', sortAccessor: (o) => o.product_name ?? '' },
+    { key: 'spec_wp', label: '규격', hideable: true, cell: (o) => o.spec_wp ?? '—', sortAccessor: (o) => o.spec_wp ?? 0 },
     {
       key: 'quantity', label: '수량', hideable: true, align: 'right', className: 'tabular-nums',
       cell: (o) => {
@@ -52,14 +55,15 @@ function buildColumns({ onEdit, onDelete, onCreateOutbound, onCancelToReservatio
           </>
         );
       },
+      sortAccessor: (o) => o.quantity,
     },
-    { key: 'capacity_kw', label: '용량', hideable: true, align: 'right', className: 'tabular-nums', cell: (o) => formatKw(o.capacity_kw) },
-    { key: 'unit_price_wp', label: '단가', hideable: true, align: 'right', className: 'tabular-nums font-mono', cell: (o) => formatNumber(o.unit_price_wp) },
-    { key: 'fulfillment_source', label: '충당', hideable: true, cell: (o) => <FulfillmentSourceBadge source={sourceOverrides[o.order_id] ?? o.fulfillment_source} /> },
-    { key: 'management_category', label: '구분', hideable: true, cell: (o) => MANAGEMENT_CATEGORY_LABEL[o.management_category] ?? o.management_category },
-    { key: 'delivery_due', label: '납기', hideable: true, cell: (o) => o.delivery_due ? formatDate(o.delivery_due) : '—' },
-    { key: 'site_name', label: '현장', hideable: true, className: 'max-w-[160px] truncate', cell: (o) => o.site_name ?? '—' },
-    { key: 'status', label: '상태', cell: (o) => <OrderStatusBadge status={o.status} /> },
+    { key: 'capacity_kw', label: '용량', hideable: true, align: 'right', className: 'tabular-nums', cell: (o) => formatKw(o.capacity_kw), sortAccessor: (o) => o.capacity_kw ?? 0 },
+    { key: 'unit_price_wp', label: '단가', hideable: true, align: 'right', className: 'tabular-nums font-mono', cell: (o) => formatNumber(o.unit_price_wp), sortAccessor: (o) => o.unit_price_wp ?? 0 },
+    { key: 'fulfillment_source', label: '충당', hideable: true, cell: (o) => <FulfillmentSourceBadge source={sourceOverrides[o.order_id] ?? o.fulfillment_source} />, sortAccessor: (o) => sourceOverrides[o.order_id] ?? o.fulfillment_source ?? '' },
+    { key: 'management_category', label: '구분', hideable: true, cell: (o) => MANAGEMENT_CATEGORY_LABEL[o.management_category] ?? o.management_category, sortAccessor: (o) => MANAGEMENT_CATEGORY_LABEL[o.management_category] ?? o.management_category },
+    { key: 'delivery_due', label: '납기', hideable: true, cell: (o) => o.delivery_due ? formatDate(o.delivery_due) : '—', sortAccessor: (o) => o.delivery_due ?? '' },
+    { key: 'site_name', label: '현장', hideable: true, className: 'max-w-[160px] truncate', cell: (o) => o.site_name ?? '—', sortAccessor: (o) => o.site_name ?? '' },
+    { key: 'status', label: '상태', cell: (o) => <OrderStatusBadge status={o.status} />, sortAccessor: (o) => o.status },
     {
       key: 'actions', label: '작업', align: 'right',
       cell: (o) => {
@@ -118,11 +122,14 @@ function buildColumns({ onEdit, onDelete, onCreateOutbound, onCancelToReservatio
 export const ORDER_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({ sourceOverrides: EMPTY_OVERRIDES }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function OrderListTable({ items, hidden, onSelect, onNew, onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides = EMPTY_OVERRIDES }: Props) {
+function OrderListTable({ items, hidden, pinning, onPinningChange, onSelect, onNew, onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides = EMPTY_OVERRIDES }: Props) {
   return (
     <MetaTable
+      tableId={ORDER_TABLE_ID}
       columns={buildColumns({ onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides })}
       hidden={hidden}
+      pinning={pinning}
+      onPinningChange={onPinningChange}
       items={items}
       getRowKey={(o) => o.order_id}
       onRowClick={onSelect}

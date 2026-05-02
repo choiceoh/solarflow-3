@@ -20,6 +20,12 @@ import bankFormConfig from '@/config/forms/banks';
 import warehouseFormConfig from '@/config/forms/warehouses';
 import manufacturerFormConfig from '@/config/forms/manufacturers';
 import productFormConfig from '@/config/forms/products';
+import constructionSiteFormConfig from '@/config/forms/construction_sites';
+import poLineFormConfig from '@/config/forms/po_line';
+import costFormConfig from '@/config/forms/cost';
+import blLineFormConfig from '@/config/forms/bl_line';
+import receiptFormConfig from '@/config/forms/receipt';
+import declarationFormConfig from '@/config/forms/declaration';
 import depsDemoFormConfig from '@/config/forms/deps_demo';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
@@ -28,7 +34,8 @@ import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
   type OutboundStatus, type UsageCategory, type Outbound, type SaleListItem,
 } from '@/types/outbound';
-import type { Partner, Bank, Warehouse, Manufacturer, Product } from '@/types/masters';
+import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite } from '@/types/masters';
+import type { BLShipment } from '@/types/inbound';
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
@@ -111,6 +118,13 @@ export const cellRenderers: Record<string, CellRenderer> = {
     const r = row as Product;
     return <span>{r.manufacturers?.short_name ?? r.manufacturers?.name_kr ?? r.manufacturer_name ?? '—'}</span>;
   },
+  // Phase 4: 현장 유형 (own/epc → 자체/EPC)
+  site_type_badge: (v) => {
+    const t = v as string;
+    return t === 'own'
+      ? <Badge variant="outline" className="border-purple-400 text-purple-700 text-[10px]">자체</Badge>
+      : <Badge variant="outline" className="border-orange-400 text-orange-700 text-[10px]">EPC</Badge>;
+  },
   // Phase 4: 창고 유형 라벨 (port/factory/vendor → 항구/공장/업체)
   warehouse_type_badge: (v) => {
     const t = v as string;
@@ -159,6 +173,14 @@ export const dataHooks: Record<string, DataHook> = {
   useWarehouseList: () => useSimpleList<Warehouse>('/api/v1/warehouses') as unknown as DataHookResult,
   useManufacturerList: () => useSimpleList<Manufacturer>('/api/v1/manufacturers') as unknown as DataHookResult,
   useProductList: () => useSimpleList<Product>('/api/v1/products') as unknown as DataHookResult,
+  // Phase 4: 발전소 — selectedCompanyId 로 서버 필터 (requiresCompany=true)
+  useConstructionSiteList: () => {
+    const companyId = useAppStore((s) => s.selectedCompanyId);
+    const url = companyId && companyId !== 'all'
+      ? `/api/v1/construction-sites?company_id=${companyId}`
+      : '/api/v1/construction-sites';
+    return useSimpleList<ConstructionSite>(url) as unknown as DataHookResult;
+  },
 };
 
 // ─── Detail data hooks (단건 fetch by id) ─────────────────────────────────
@@ -212,6 +234,17 @@ export const metricComputers: Record<string, MetricComputer> = {
   // Phase 4: 품번
   'count.product_active': (items) =>
     (items as Product[]).filter((p) => p.is_active).length.toLocaleString(),
+  // Phase 4: 발전소
+  'count.site_active': (items) =>
+    (items as ConstructionSite[]).filter((s) => s.is_active).length.toLocaleString(),
+  'count.site_own': (items) =>
+    (items as ConstructionSite[]).filter((s) => s.site_type === 'own').length.toLocaleString(),
+  'count.site_epc': (items) =>
+    (items as ConstructionSite[]).filter((s) => s.site_type === 'epc').length.toLocaleString(),
+  'sum.site_capacity_mw': (items) => {
+    const sum = (items as ConstructionSite[]).reduce((s, it) => s + (it.capacity_mw ?? 0), 0);
+    return sum.toFixed(2);
+  },
 };
 
 // ─── Sub computers (메트릭 sub 텍스트 동적 생성) ───────────────────────────
@@ -319,6 +352,75 @@ const ProductFormV2: FormComponent = (props) => (
   />
 );
 
+// Phase 4: 발전소 메타 폼 (마지막 마스터 도메인)
+const ConstructionSiteFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={constructionSiteFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
+// Phase 4 보강: PO 라인 메타 폼 (child 라인 폼 첫 변환)
+const POLineFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={poLineFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+    extraContext={(props as { extraContext?: Record<string, unknown> }).extraContext}
+  />
+);
+
+// Phase 4 보강: 면장 원가 메타 폼 (CostForm 변환 — 17 필드, 4 computed, 3 stage)
+const CostFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={costFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+    extraContext={(props as { extraContext?: Record<string, unknown> }).extraContext}
+  />
+);
+
+// Phase 4 보강: BL 라인 메타 폼 (BLLineForm 변환)
+const BLLineFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={blLineFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+    extraContext={(props as { extraContext?: Record<string, unknown> }).extraContext}
+  />
+);
+
+// Phase 4 보강: 수금 메타 폼 (ReceiptForm 변환)
+const ReceiptFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={receiptFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
+// Phase 4 보강: 면장 메타 폼 (DeclarationForm 변환)
+const DeclarationFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={declarationFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
 // Phase 4 보강: 의존성·동적 옵션 시연 폼 (UI 데모 전용 — 저장 안 함)
 const DepsDemoForm: FormComponent = (props) => (
   <MetaForm
@@ -340,6 +442,12 @@ export const formComponents: Record<string, FormComponent> = {
   warehouse_form_v2: WarehouseFormV2,          // Phase 4: 창고 마스터 메타 폼
   manufacturer_form_v2: ManufacturerFormV2,    // Phase 4: 제조사 마스터 메타 폼
   product_form_v2: ProductFormV2,              // Phase 4: 품번 마스터 메타 폼 (13 필드)
+  construction_site_form_v2: ConstructionSiteFormV2, // Phase 4: 발전소 메타 폼 (마지막 마스터)
+  po_line_form_v2: POLineFormV2,               // Phase 4 보강: PO 라인 (child 라인 폼 첫 변환)
+  cost_form_v2: CostFormV2,                    // Phase 4 보강: 면장 원가 (가장 복잡한 child 라인 폼)
+  bl_line_form_v2: BLLineFormV2,               // Phase 4 보강: BL 라인 아이템
+  receipt_form_v2: ReceiptFormV2,              // Phase 4 보강: 수금
+  declaration_form_v2: DeclarationFormV2,      // Phase 4 보강: 면장
   deps_demo: DepsDemoForm,                     // Phase 4 보강: 의존성·동적 옵션 데모
 };
 
@@ -471,6 +579,10 @@ export const contentBlocks: Record<string, ContentBlock> = {
   },
 };
 
+// Phase 4 — 제품 라이트 캐시: products.search 가 호출될 때마다 갱신.
+// computed formula 등 동기 lookup 이 필요한 곳에서 사용.
+const productCacheById = new Map<string, Product>();
+
 // ─── Master option sources ─────────────────────────────────────────────────
 export const masterSources: Record<string, MasterOptionSource> = {
   manufacturers: {
@@ -506,9 +618,11 @@ export const masterSources: Record<string, MasterOptionSource> = {
   // search 가 정의돼 있어 MetaForm 이 combobox 모드로 전환됨.
   // 실제 운영에서는 백엔드 query 파라미터로 검색 (예: /api/v1/products?search=jko)
   // 현재 mock 은 전체 반환 → 클라이언트에서 필터 (대용량 데이터셋 시뮬레이션).
+  // Phase 4 보강 — 부수효과로 productCacheById 채움 (computed formula 가 spec_wp 등 조회)
   'products.search': {
     load: async () => {
       const list = await fetchWithAuth<Product[]>('/api/v1/products');
+      list.forEach((p) => productCacheById.set(p.product_id, p));
       return list
         .filter((p) => p.is_active)
         .slice(0, 20)
@@ -517,6 +631,7 @@ export const masterSources: Record<string, MasterOptionSource> = {
     search: async (query) => {
       // 운영 백엔드 예시: `/api/v1/products?search=${encodeURIComponent(query)}&limit=20`
       const list = await fetchWithAuth<Product[]>('/api/v1/products');
+      list.forEach((p) => productCacheById.set(p.product_id, p));
       const lower = query.trim().toLowerCase();
       return list
         .filter((p) => p.is_active)
@@ -530,6 +645,7 @@ export const masterSources: Record<string, MasterOptionSource> = {
     resolveLabel: async (value) => {
       // 운영: `/api/v1/products/${value}` 단일 조회. mock 은 list 에서 검색.
       const list = await fetchWithAuth<Product[]>('/api/v1/products');
+      list.forEach((p) => productCacheById.set(p.product_id, p));
       const found = list.find((p) => p.product_id === value);
       return found ? `${found.product_code} · ${found.product_name}` : null;
     },
@@ -540,6 +656,20 @@ export const masterSources: Record<string, MasterOptionSource> = {
       return list
         .filter((p) => p.is_active && (p.partner_type === 'customer' || p.partner_type === 'both'))
         .map((p) => ({ value: p.partner_id, label: p.partner_name }));
+    },
+  },
+  // Phase 4 보강: BL 마스터 (DeclarationForm 메타화용) — selectedCompanyId 로 필터
+  'bls.byCompany': {
+    load: async () => {
+      const companyId = useAppStore.getState().selectedCompanyId;
+      const url = companyId && companyId !== 'all'
+        ? `/api/v1/bls?company_id=${companyId}`
+        : '/api/v1/bls';
+      const list = await fetchWithAuth<BLShipment[]>(url);
+      return list.map((b) => ({
+        value: b.bl_id,
+        label: b.bl_number + (b.manufacturer_name ? ` · ${b.manufacturer_name}` : ''),
+      }));
     },
   },
 };
@@ -569,6 +699,59 @@ export const computedFormulas: Record<string, ComputedFormula> = {
     const h = Number(values.module_height_mm);
     if (!Number.isFinite(w) || !Number.isFinite(h)) return undefined;
     return w + h;
+  },
+  // PO 라인 총액 — quantity * spec_wp (제품 캐시 lookup) * unit_price_usd (USD/Wp)
+  // products.search 가 mount 시점에 캐시 채워둔 상태여야 함 (combobox 자동 호출).
+  'po_line_total_amount_usd': (values) => {
+    const q = Number(values.quantity);
+    const u = Number(values.unit_price_usd);
+    const productId = String(values.product_id ?? '');
+    if (!Number.isFinite(q) || !Number.isFinite(u) || !productId) return undefined;
+    const product = productCacheById.get(productId);
+    if (!product) return undefined;
+    return Math.round(q * product.spec_wp * u * 100) / 100;
+  },
+  // 면장 원가 — 용량 kW (= 수량 * spec_wp / 1000)
+  'cost_capacity_kw': (values) => {
+    const q = Number(values.quantity);
+    const productId = String(values.product_id ?? '');
+    if (!Number.isFinite(q) || !productId) return undefined;
+    const product = productCacheById.get(productId);
+    if (!product) return undefined;
+    return Math.round(q * product.spec_wp / 10) / 100; // 소수점 2자리 (kW)
+  },
+  // 면장 원가 — CIF Wp 단가 (KRW / Wp) = cif_total_krw / (수량 * spec_wp)
+  'cost_cif_wp_krw': (values) => {
+    const q = Number(values.quantity);
+    const cif = Number(values.cif_total_krw);
+    const productId = String(values.product_id ?? '');
+    if (!Number.isFinite(q) || !Number.isFinite(cif) || q <= 0 || !productId) return undefined;
+    const product = productCacheById.get(productId);
+    if (!product || product.spec_wp <= 0) return undefined;
+    return Math.round((cif / (q * product.spec_wp)) * 100) / 100;
+  },
+  // 면장 원가 — Landed 합계 KRW = cif_total + tariff + customs_fee + incidental
+  'cost_landed_total_krw': (values) => {
+    const cif = Number(values.cif_total_krw) || 0;
+    const tariff = Number(values.tariff_amount) || 0;
+    const customs = Number(values.customs_fee) || 0;
+    const incidental = Number(values.incidental_cost) || 0;
+    const total = cif + tariff + customs + incidental;
+    return total > 0 ? total : undefined;
+  },
+  // 면장 원가 — Landed Wp 단가 (KRW / Wp) = landed_total / (수량 * spec_wp)
+  'cost_landed_wp_krw': (values) => {
+    const q = Number(values.quantity);
+    const productId = String(values.product_id ?? '');
+    if (!Number.isFinite(q) || q <= 0 || !productId) return undefined;
+    const product = productCacheById.get(productId);
+    if (!product || product.spec_wp <= 0) return undefined;
+    const landed = (Number(values.cif_total_krw) || 0)
+      + (Number(values.tariff_amount) || 0)
+      + (Number(values.customs_fee) || 0)
+      + (Number(values.incidental_cost) || 0);
+    if (landed <= 0) return undefined;
+    return Math.round((landed / (q * product.spec_wp)) * 100) / 100;
   },
 };
 

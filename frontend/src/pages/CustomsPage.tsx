@@ -11,6 +11,7 @@ import DeclarationForm from '@/components/customs/DeclarationForm';
 import ExpenseListTable, { EXPENSE_TABLE_ID, EXPENSE_COLUMN_META } from '@/components/customs/ExpenseListTable';
 import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
 import { useColumnVisibility } from '@/lib/columnVisibility';
+import { useColumnPinning } from '@/lib/columnPinning';
 import ExpenseForm from '@/components/customs/ExpenseForm';
 import ExchangeComparePanel from '@/components/customs/ExchangeComparePanel';
 import { EXPENSE_TYPE_LABEL, type ExpenseType, type Expense } from '@/types/customs';
@@ -72,6 +73,7 @@ export default function CustomsPage() {
   const reloadDecl = () => {};
   const { data: expenses, loading: expLoading, reload: reloadExp } = useExpenseList(expFilters);
   const expenseColVis = useColumnVisibility(EXPENSE_TABLE_ID, EXPENSE_COLUMN_META);
+  const expenseColPin = useColumnPinning(EXPENSE_TABLE_ID);
   void declFilters;
 
   useEffect(() => {
@@ -181,7 +183,7 @@ export default function CustomsPage() {
               options: (Object.entries(EXPENSE_TYPE_LABEL) as [ExpenseType, string][]).map(([k, v]) => ({ value: k, label: v })),
             },
           ]} />
-          <ColumnVisibilityMenu columns={EXPENSE_COLUMN_META} hidden={expenseColVis.hidden} setHidden={expenseColVis.setHidden} />
+          <ColumnVisibilityMenu columns={EXPENSE_COLUMN_META} hidden={expenseColVis.hidden} setHidden={expenseColVis.setHidden} pinning={expenseColPin.pinning} pinLeft={expenseColPin.pinLeft} pinRight={expenseColPin.pinRight} unpin={expenseColPin.unpin} />
           <ExcelToolbar type="expense" onNew={() => { setEditExpense(null); setExpFormOpen(true); }} />
         </>
       ) : null}
@@ -217,6 +219,8 @@ export default function CustomsPage() {
             <ExpenseListTable
               items={expenses}
               hidden={expenseColVis.hidden}
+              pinning={expenseColPin.pinning}
+              onPinningChange={expenseColPin.setPinning}
               onEdit={(e) => { setEditExpense(e); setExpFormOpen(true); }}
               onNew={() => { setEditExpense(null); setExpFormOpen(true); }}
               onDelete={(e) => { setDeleteError(''); setDeletingExpense(e); }}

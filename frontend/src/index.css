@@ -904,6 +904,43 @@ a:focus-visible,
   border-radius: 0;
 }
 
+/* MetaTable 컬럼 리사이저 — TableHead 우측 모서리에 절대 배치되는 5px 드래그 영역.
+   기본 상태에서는 보이지 않다가 hover 시 옅은 솔라 라인이 살짝 비치고,
+   드래그 중에는 진한 솔라로 강조. */
+.sf-col-resizer {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+  z-index: 1;
+  background: transparent;
+  transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sf-col-resizer:hover {
+  background: rgb(245 184 0 / 0.35);
+}
+.sf-col-resizer-active {
+  background: var(--sf-solar);
+}
+
+/* MetaTable 컬럼 고정 — 좌/우 sticky. inline style 로 left/right 픽셀이 들어오고
+   여기선 box-shadow 로 sticky 경계를 표시. */
+.sf-col-pinned-left {
+  box-shadow: 1px 0 0 0 var(--sf-line, rgb(0 0 0 / 0.08));
+}
+.sf-col-pinned-right {
+  box-shadow: -1px 0 0 0 var(--sf-line, rgb(0 0 0 / 0.08));
+}
+
+/* 헤더 드래그 드롭 대상 — 옅은 솔라 좌측 라인으로 삽입 위치 표시 */
+.sf-col-drop-target {
+  box-shadow: inset 2px 0 0 0 var(--sf-solar);
+}
+
 .sf-card-controls {
   display: flex;
   align-items: center;

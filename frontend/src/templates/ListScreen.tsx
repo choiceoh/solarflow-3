@@ -3,15 +3,18 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useResolvedConfig } from './configOverride';
-import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Plus, Trash2 } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { applyTenantToScreen } from '@/config/tenants';
+import { useTenantStore } from '@/stores/tenantStore';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import EmptyState from '@/components/common/EmptyState';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
+import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { useColumnVisibility } from '@/lib/columnVisibility';
+import { useColumnPinning } from '@/lib/columnPinning';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
 import { MasterConsole, type MasterConsoleMetric } from '@/components/command/MasterConsole';
@@ -153,55 +156,6 @@ export function useTabState(list: ListScreenConfig): TabState {
   return { filters, setFilters, filterOptions, data, loading, reload, metrics };
 }
 
-// ─── 클라이언트 검색 적용 ──────────────────────────────────────────────────
-function applySearch(
-  items: unknown[],
-  query: string,
-  fields: string[],
-): unknown[] {
-  if (!query) return items;
-  const lower = query.toLowerCase();
-  return items.filter((row) => {
-    const rec = row as Record<string, unknown>;
-    return fields.some((f) => {
-      const v = getFieldValue(rec, f);
-      return v != null && String(v).toLowerCase().includes(lower);
-    });
-  });
-}
-
-// ─── Phase 4 보강: 정렬 ────────────────────────────────────────────────────
-export type SortState = { key: string; direction: 'asc' | 'desc' } | null;
-
-function applySort(items: unknown[], sort: SortState): unknown[] {
-  if (!sort) return items;
-  const sorted = [...items];
-  sorted.sort((a, b) => {
-    const va = getFieldValue(a as Record<string, unknown>, sort.key);
-    const vb = getFieldValue(b as Record<string, unknown>, sort.key);
-    if (va == null && vb == null) return 0;
-    if (va == null) return 1;
-    if (vb == null) return -1;
-    // 숫자/Date 처리 — 양쪽 모두 number 면 숫자 비교, 그 외엔 문자열 비교
-    if (typeof va === 'number' && typeof vb === 'number') {
-      return sort.direction === 'asc' ? va - vb : vb - va;
-    }
-    if (typeof va === 'boolean' && typeof vb === 'boolean') {
-      return sort.direction === 'asc' ? Number(va) - Number(vb) : Number(vb) - Number(va);
-    }
-    const sa = String(va);
-    const sb = String(vb);
-    return sort.direction === 'asc' ? sa.localeCompare(sb, 'ko') : sb.localeCompare(sa, 'ko');
-  });
-  return sorted;
-}
-
-function nextSortDirection(current: SortState, key: string): SortState {
-  if (!current || current.key !== key) return { key, direction: 'asc' };
-  if (current.direction === 'asc') return { key, direction: 'desc' };
-  return null; // 두 번 클릭 후 해제
-}
-
 // ─── 액션 헬퍼 ─────────────────────────────────────────────────────────────
 const ICONS: Record<ActionIcon, ReactNode> = {
   plus: <Plus className="h-4 w-4" />,
@@ -292,7 +246,8 @@ export function RowActionsCell({
 // ─── 테이블 + Empty + Forms ───────────────────────────────────────────────
 export function TableArea({
   list, state, displayItems, setFormOpenId, onRowAction, onRowSelect,
-  visibleColumns, sort, setSort, selectedIds, setSelectedIds,
+  hidden, selectedIds, setSelectedIds, globalFilter, onFilteredRowCountChange,
+  pinning, onPinningChange,
 }: {
   list: ListScreenConfig;
   state: TabState;
@@ -302,22 +257,23 @@ export function TableArea({
   onOpenEdit?: (formId: string, editData: unknown) => void;
   onRowAction: (action: ActionConfig, row: Record<string, unknown>) => void;
   onRowSelect: (id: string) => void;
-  // Phase 4 보강: 정렬 + 멀티 선택 (선택적 — 미전달 시 비활성)
-  visibleColumns?: ColumnConfig[];
-  sort?: SortState;
-  setSort?: (next: SortState) => void;
+  hidden: Set<string>;
   selectedIds?: Set<string>;
   setSelectedIds?: (next: Set<string>) => void;
+  globalFilter?: string;
+  onFilteredRowCountChange?: (count: number) => void;
+  pinning?: import('@/lib/columnPinning').ColumnPinningState;
+  onPinningChange?: (next: import('@/lib/columnPinning').ColumnPinningState) => void;
 }) {
   if (state.loading) return <SkeletonRows rows={6} />;
 
-  const cols = visibleColumns ?? list.columns;
   const rowActions = list.actions?.filter((a) => a.trigger === 'row') ?? [];
   const hasRowActions = rowActions.length > 0;
   const bulkActions = list.actions?.filter((a) => a.trigger === 'bulk') ?? [];
   const showBulkColumn = bulkActions.length > 0 && !!selectedIds && !!setSelectedIds;
   const idField = bulkActions.find((a) => a.idField)?.idField
     ?? (list.onRowClick && 'idField' in list.onRowClick ? list.onRowClick.idField : undefined);
+  const rowIdField = list.onRowClick && 'idField' in list.onRowClick ? list.onRowClick.idField : undefined;
 
   if (displayItems.length === 0 && list.emptyState) {
     const action = list.actions?.find((a) => a.id === list.emptyState!.actionId);
@@ -347,107 +303,117 @@ export function TableArea({
     setSelectedIds(next);
   };
 
-  return (
-    <>
-      <div className="rounded-md border">
-        <Table className="text-xs">
-          <TableHeader>
-            <TableRow>
-              {showBulkColumn ? (
-                <TableHead style={{ width: 36 }}>
-                  <input
-                    type="checkbox"
-                    aria-label="모두 선택"
-                    className="h-3.5 w-3.5"
-                    checked={allSelected}
-                    ref={(el) => { if (el) el.indeterminate = partiallySelected; }}
-                    onChange={toggleAll}
-                  />
-                </TableHead>
-              ) : null}
-              {cols.map((c) => {
-                const sortable = c.sortable && setSort;
-                const isSorted = sort?.key === c.key;
-                const SortIcon = isSorted
-                  ? (sort?.direction === 'asc' ? ArrowUp : ArrowDown)
-                  : ArrowUpDown;
-                return (
-                  <TableHead
-                    key={c.key}
-                    className={cn(c.align === 'right' && 'text-right', c.align === 'center' && 'text-center')}
-                    style={c.width ? { width: c.width } : undefined}
-                  >
-                    {sortable ? (
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 hover:text-foreground"
-                        onClick={() => setSort!(nextSortDirection(sort ?? null, c.key))}
-                      >
-                        {c.label}
-                        <SortIcon className={cn('h-3 w-3', isSorted ? 'opacity-100' : 'opacity-40')} />
-                      </button>
-                    ) : c.label}
-                  </TableHead>
-                );
-              })}
-              {hasRowActions ? <TableHead className="text-right">작업</TableHead> : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {displayItems.map((row, idx) => {
-              const rec = row as Record<string, unknown>;
-              const idVal = list.onRowClick && 'idField' in list.onRowClick
-                ? String(getFieldValue(rec, list.onRowClick.idField) ?? idx)
-                : String(idx);
-              const bulkRowId = idField ? String(getFieldValue(rec, idField) ?? '') : '';
-              const onClick = list.onRowClick?.kind === 'detail'
-                ? () => onRowSelect(idVal)
-                : undefined;
-              return (
-                <TableRow
-                  key={idVal}
-                  className={cn(
-                    onClick && 'cursor-pointer hover:bg-accent/50',
-                    rowClassName(rec, list.rowAppearance),
-                  )}
-                  onClick={onClick}
-                >
-                  {showBulkColumn ? (
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        aria-label="행 선택"
-                        className="h-3.5 w-3.5"
-                        checked={selectedIds!.has(bulkRowId)}
-                        onChange={() => toggleRow(bulkRowId)}
-                      />
-                    </TableCell>
-                  ) : null}
-                  {cols.map((c) => (
-                    <TableCell
-                      key={c.key}
-                      className={cn(
-                        c.align === 'right' && 'text-right tabular-nums',
-                        c.align === 'center' && 'text-center',
-                        c.className,
-                      )}
-                    >
-                      {renderCell(c, rec)}
-                    </TableCell>
-                  ))}
-                  {hasRowActions ? (
-                    <TableCell className="text-right">
-                      <RowActionsCell row={rec} actions={rowActions} onAction={onRowAction} />
-                    </TableCell>
-                  ) : null}
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+  // 글로벌 검색 대상 필드 (list.searchable.fields) — 해당 컬럼들에 globalFilterText 부착
+  const searchFields = new Set(list.searchable?.fields ?? []);
 
-    </>
+  // ListScreenConfig 의 ColumnConfig → MetaTable 의 ColumnDef<Record<string, unknown>> 매핑
+  const dataCols: ColumnDef<Record<string, unknown>>[] = list.columns.map((c) => {
+    const widthPx = c.width ? parseInt(c.width, 10) : undefined;
+    return {
+      key: c.key,
+      label: c.label,
+      hideable: c.hideable,
+      hiddenByDefault: c.hiddenByDefault,
+      align: c.align,
+      className: c.className,
+      defaultWidth: widthPx && Number.isFinite(widthPx) ? widthPx : undefined,
+      cell: (row) => renderCell(c, row),
+      sortAccessor: c.sortable
+        ? (row) => {
+            const v = getFieldValue(row, c.key);
+            if (v == null) return '';
+            if (typeof v === 'number' || typeof v === 'string') return v;
+            if (typeof v === 'boolean') return v ? 1 : 0;
+            return String(v);
+          }
+        : undefined,
+      globalFilterText: searchFields.has(c.key)
+        ? (row) => {
+            const v = getFieldValue(row, c.key);
+            return v == null ? '' : String(v);
+          }
+        : undefined,
+    };
+  });
+
+  // 멀티선택 컬럼 — 헤더는 indeterminate 체크박스, 셀은 행 체크박스
+  const selectCol: ColumnDef<Record<string, unknown>> | null = showBulkColumn ? {
+    key: '__select',
+    label: '',
+    resizable: false,
+    defaultWidth: 40,
+    minWidth: 40,
+    maxWidth: 40,
+    headerCell: () => (
+      <input
+        type="checkbox"
+        aria-label="모두 선택"
+        className="h-3.5 w-3.5"
+        checked={allSelected}
+        ref={(el) => { if (el) el.indeterminate = partiallySelected; }}
+        onChange={toggleAll}
+      />
+    ),
+    cell: (row) => {
+      const id = idField ? String(getFieldValue(row, idField) ?? '') : '';
+      return (
+        <span onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            aria-label="행 선택"
+            className="h-3.5 w-3.5"
+            checked={selectedIds!.has(id)}
+            onChange={() => toggleRow(id)}
+          />
+        </span>
+      );
+    },
+  } : null;
+
+  // 행 작업 컬럼 — 우측 고정
+  const actionsCol: ColumnDef<Record<string, unknown>> | null = hasRowActions ? {
+    key: '__actions',
+    label: '작업',
+    align: 'right',
+    resizable: false,
+    defaultWidth: 100,
+    cell: (row) => <RowActionsCell row={row} actions={rowActions} onAction={onRowAction} />,
+  } : null;
+
+  const columns: ColumnDef<Record<string, unknown>>[] = [
+    ...(selectCol ? [selectCol] : []),
+    ...dataCols,
+    ...(actionsCol ? [actionsCol] : []),
+  ];
+
+  const getRowKey = (row: Record<string, unknown>): string => {
+    if (rowIdField) return String(getFieldValue(row, rowIdField) ?? '');
+    if (idField) return String(getFieldValue(row, idField) ?? '');
+    // fallback — 식별자 없으면 stringify (안정적이진 않지만 sort 후에도 키 유지됨)
+    return JSON.stringify(row);
+  };
+
+  const onRowClickFn = list.onRowClick?.kind === 'detail'
+    ? (row: Record<string, unknown>) => {
+        const idVal = rowIdField ? String(getFieldValue(row, rowIdField) ?? '') : '';
+        if (idVal) onRowSelect(idVal);
+      }
+    : undefined;
+
+  return (
+    <MetaTable
+      tableId={list.id}
+      columns={columns}
+      hidden={hidden}
+      items={displayItems as Record<string, unknown>[]}
+      getRowKey={getRowKey}
+      onRowClick={onRowClickFn}
+      rowClassName={(row) => rowClassName(row, list.rowAppearance)}
+      globalFilter={globalFilter}
+      onFilteredRowCountChange={onFilteredRowCountChange}
+      pinning={pinning}
+      onPinningChange={onPinningChange}
+    />
   );
 }
 
@@ -645,14 +611,22 @@ export function HeaderActions({
 
 // ─── 단일 리스트 페이지 ────────────────────────────────────────────────────
 export default function ListScreen({ config: defaultConfig }: { config: ListScreenConfig }) {
-  // Phase 3: localStorage override 우선, 없으면 defaultConfig
-  const config = useResolvedConfig(defaultConfig, 'screen');
+  // Phase 4 PoC: tenant 오버레이 (계열사 포크) — base 에 tenant override 먼저 적용
+  const tenantId = useTenantStore((s) => s.tenantId);
+  // runtimeVersion 변경 시 재계산 (admin GUI 로 runtime override 편집 시)
+  const runtimeVersion = useTenantStore((s) => s.runtimeVersion);
+  const tenantConfig = useMemo(
+    () => applyTenantToScreen(defaultConfig, tenantId),
+    [defaultConfig, tenantId, runtimeVersion],
+  );
+  // Phase 3: localStorage override 우선, 없으면 (tenant 적용된) defaultConfig
+  const config = useResolvedConfig(tenantConfig, 'screen');
   const [selected, setSelected] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  // Phase 4 보강: 정렬 + 멀티 선택 + 컬럼 가시성
-  const [sort, setSort] = useState<SortState>(null);
+  // 멀티 선택 + 컬럼 가시성. (정렬은 MetaTable 이 자체 영속 — 더 이상 ListScreen 상태로 보유 안 함)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { hidden: hiddenCols, setHidden: setHiddenCols } = useColumnVisibility(config.id, config.columns);
+  const colPin = useColumnPinning(config.id);
 
   const pageActions = usePageActions();
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
@@ -678,14 +652,10 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
     );
   }
 
-  // 검색 → 정렬 → 표시
-  const searched = config.searchable
-    ? applySearch(state.data, searchQuery, config.searchable.fields)
-    : state.data;
-  const displayItems = applySort(searched, sort);
-
-  // 가시 컬럼 (사용자가 숨긴 항목 제외)
-  const visibleColumns = config.columns.filter((c) => !hiddenCols.has(c.key));
+  // 검색·정렬 모두 MetaTable 내부에서 (TanStack globalFilter + getSortedRowModel)
+  const displayItems = state.data;
+  // 검색 적용 후 행 갯수 — MetaTable 의 onFilteredRowCountChange 콜백으로 받아옴
+  const [filteredCount, setFilteredCount] = useState<number>(state.data.length);
 
   const onRowAction = makeRowActionHandler(pageActions, state.reload);
   const headerActions = config.actions?.filter((a) => a.trigger === 'header') ?? [];
@@ -713,8 +683,8 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
     });
   };
 
-  const tableSub = config.tableSubFromTotal && config.searchable
-    ? `${displayItems.length.toLocaleString()} / ${state.data.length.toLocaleString()}개 표시`
+  const tableSub = config.tableSubFromTotal && config.searchable && searchQuery
+    ? `${filteredCount.toLocaleString()} / ${state.data.length.toLocaleString()}개 표시`
     : `${state.data.length.toLocaleString()}건`;
 
   return (
@@ -740,7 +710,15 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
             />
             <div style={{ flex: 1 }} />
             {hasHideable
-              ? <ColumnVisibilityMenu columns={config.columns} hidden={hiddenCols} setHidden={setHiddenCols} />
+              ? <ColumnVisibilityMenu
+                  columns={config.columns}
+                  hidden={hiddenCols}
+                  setHidden={setHiddenCols}
+                  pinning={colPin.pinning}
+                  pinLeft={colPin.pinLeft}
+                  pinRight={colPin.pinRight}
+                  unpin={colPin.unpin}
+                />
               : null}
           </div>
         }
@@ -763,11 +741,13 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
           setFormOpenId={(id) => { if (id) pageActions.openForm(id); }}
           onRowAction={onRowAction}
           onRowSelect={setSelected}
-          visibleColumns={visibleColumns}
-          sort={sort}
-          setSort={setSort}
+          hidden={hiddenCols}
           selectedIds={selectedIds}
           setSelectedIds={setSelectedIds}
+          globalFilter={searchQuery}
+          onFilteredRowCountChange={setFilteredCount}
+          pinning={colPin.pinning}
+          onPinningChange={colPin.setPinning}
         />
       </MasterConsole>
 

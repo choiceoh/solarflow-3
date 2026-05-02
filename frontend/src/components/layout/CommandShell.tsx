@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import GlobalSearchBar from '@/components/search/GlobalSearchBar';
 import AlertBell from '@/components/layout/AlertBell';
 import QuickRegister from '@/components/layout/QuickRegister';
+import TenantSwitcher from '@/components/layout/TenantSwitcher';
 import FloatingMwEaCalculator from '@/components/common/FloatingMwEaCalculator';
 import { canAccessMenu, type MenuKey, type Role } from '@/config/permissions';
 import { useAuth } from '@/hooks/useAuth';
@@ -251,6 +252,9 @@ export default function CommandShell() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Phase 4 PoC: 계열사 포크 — tenant 전환 (사이드바 인디케이터) */}
+        <TenantSwitcher />
 
         <nav className="sf-sidebar-nav" aria-label="주요 메뉴 목록">
           {NAV_GROUPS.map((group) => {
