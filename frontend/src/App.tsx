@@ -21,6 +21,7 @@ const OutboundDetailMetaDemoPage = lazy(() => import('@/pages/OutboundDetailMeta
 const DeclarationDetailMetaDemoPage = lazy(() => import('@/pages/DeclarationDetailMetaDemoPage'));
 const MetaFormDepsDemoPage = lazy(() => import('@/pages/MetaFormDepsDemoPage'));
 const TenantForkDemoPage = lazy(() => import('@/pages/TenantForkDemoPage'));
+const POLineMetaDemoPage = lazy(() => import('@/pages/POLineMetaDemoPage'));
 const PartnerV2Page = lazy(() => import('@/pages/PartnerV2Page'));
 const CompaniesV2Page = lazy(() => import('@/pages/CompaniesV2Page'));
 const BanksV2Page = lazy(() => import('@/pages/BanksV2Page'));
@@ -114,6 +115,7 @@ export default function App() {
                 <Route path="/declaration-detail-meta-demo" element={<DeclarationDetailMetaDemoPage />} />
                 <Route path="/meta-form-deps-demo" element={<MetaFormDepsDemoPage />} />
                 <Route path="/tenant-fork-demo" element={<TenantForkDemoPage />} />
+                <Route path="/po-line-meta-demo" element={<POLineMetaDemoPage />} />
                 <Route path="/ui-config-editor" element={<RoleGuard allowedRoles={['admin']}><UIConfigEditorPage /></RoleGuard>} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/customs" element={<CustomsPage />} />

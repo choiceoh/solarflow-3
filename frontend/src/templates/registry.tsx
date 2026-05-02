@@ -21,6 +21,7 @@ import warehouseFormConfig from '@/config/forms/warehouses';
 import manufacturerFormConfig from '@/config/forms/manufacturers';
 import productFormConfig from '@/config/forms/products';
 import constructionSiteFormConfig from '@/config/forms/construction_sites';
+import poLineFormConfig from '@/config/forms/po_line';
 import depsDemoFormConfig from '@/config/forms/deps_demo';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
@@ -357,6 +358,18 @@ const ConstructionSiteFormV2: FormComponent = (props) => (
   />
 );
 
+// Phase 4 보강: PO 라인 메타 폼 (child 라인 폼 첫 변환)
+const POLineFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={poLineFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+    extraContext={(props as { extraContext?: Record<string, unknown> }).extraContext}
+  />
+);
+
 // Phase 4 보강: 의존성·동적 옵션 시연 폼 (UI 데모 전용 — 저장 안 함)
 const DepsDemoForm: FormComponent = (props) => (
   <MetaForm
@@ -379,6 +392,7 @@ export const formComponents: Record<string, FormComponent> = {
   manufacturer_form_v2: ManufacturerFormV2,    // Phase 4: 제조사 마스터 메타 폼
   product_form_v2: ProductFormV2,              // Phase 4: 품번 마스터 메타 폼 (13 필드)
   construction_site_form_v2: ConstructionSiteFormV2, // Phase 4: 발전소 메타 폼 (마지막 마스터)
+  po_line_form_v2: POLineFormV2,               // Phase 4 보강: PO 라인 (child 라인 폼 첫 변환)
   deps_demo: DepsDemoForm,                     // Phase 4 보강: 의존성·동적 옵션 데모
 };
 
@@ -510,6 +524,10 @@ export const contentBlocks: Record<string, ContentBlock> = {
   },
 };
 
+// Phase 4 — 제품 라이트 캐시: products.search 가 호출될 때마다 갱신.
+// computed formula 등 동기 lookup 이 필요한 곳에서 사용.
+const productCacheById = new Map<string, Product>();
+
 // ─── Master option sources ─────────────────────────────────────────────────
 export const masterSources: Record<string, MasterOptionSource> = {
   manufacturers: {
@@ -545,9 +563,11 @@ export const masterSources: Record<string, MasterOptionSource> = {
   // search 가 정의돼 있어 MetaForm 이 combobox 모드로 전환됨.
   // 실제 운영에서는 백엔드 query 파라미터로 검색 (예: /api/v1/products?search=jko)
   // 현재 mock 은 전체 반환 → 클라이언트에서 필터 (대용량 데이터셋 시뮬레이션).
+  // Phase 4 보강 — 부수효과로 productCacheById 채움 (computed formula 가 spec_wp 등 조회)
   'products.search': {
     load: async () => {
       const list = await fetchWithAuth<Product[]>('/api/v1/products');
+      list.forEach((p) => productCacheById.set(p.product_id, p));
       return list
         .filter((p) => p.is_active)
         .slice(0, 20)
@@ -556,6 +576,7 @@ export const masterSources: Record<string, MasterOptionSource> = {
     search: async (query) => {
       // 운영 백엔드 예시: `/api/v1/products?search=${encodeURIComponent(query)}&limit=20`
       const list = await fetchWithAuth<Product[]>('/api/v1/products');
+      list.forEach((p) => productCacheById.set(p.product_id, p));
       const lower = query.trim().toLowerCase();
       return list
         .filter((p) => p.is_active)
@@ -569,6 +590,7 @@ export const masterSources: Record<string, MasterOptionSource> = {
     resolveLabel: async (value) => {
       // 운영: `/api/v1/products/${value}` 단일 조회. mock 은 list 에서 검색.
       const list = await fetchWithAuth<Product[]>('/api/v1/products');
+      list.forEach((p) => productCacheById.set(p.product_id, p));
       const found = list.find((p) => p.product_id === value);
       return found ? `${found.product_code} · ${found.product_name}` : null;
     },
@@ -608,6 +630,17 @@ export const computedFormulas: Record<string, ComputedFormula> = {
     const h = Number(values.module_height_mm);
     if (!Number.isFinite(w) || !Number.isFinite(h)) return undefined;
     return w + h;
+  },
+  // PO 라인 총액 — quantity * spec_wp (제품 캐시 lookup) * unit_price_usd (USD/Wp)
+  // products.search 가 mount 시점에 캐시 채워둔 상태여야 함 (combobox 자동 호출).
+  'po_line_total_amount_usd': (values) => {
+    const q = Number(values.quantity);
+    const u = Number(values.unit_price_usd);
+    const productId = String(values.product_id ?? '');
+    if (!Number.isFinite(q) || !Number.isFinite(u) || !productId) return undefined;
+    const product = productCacheById.get(productId);
+    if (!product) return undefined;
+    return Math.round(q * product.spec_wp * u * 100) / 100;
   },
 };
 
