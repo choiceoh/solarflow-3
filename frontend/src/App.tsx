@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAuthStore } from '@/stores/authStore';
+import { useTenantStore } from '@/stores/tenantStore';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import RoleGuard from '@/components/auth/RoleGuard';
 import AppLayout from '@/components/layout/AppLayout';
@@ -19,6 +20,7 @@ const OutboundFormMetaDemoPage = lazy(() => import('@/pages/OutboundFormMetaDemo
 const OutboundDetailMetaDemoPage = lazy(() => import('@/pages/OutboundDetailMetaDemoPage'));
 const DeclarationDetailMetaDemoPage = lazy(() => import('@/pages/DeclarationDetailMetaDemoPage'));
 const MetaFormDepsDemoPage = lazy(() => import('@/pages/MetaFormDepsDemoPage'));
+const TenantForkDemoPage = lazy(() => import('@/pages/TenantForkDemoPage'));
 const PartnerV2Page = lazy(() => import('@/pages/PartnerV2Page'));
 const CompaniesV2Page = lazy(() => import('@/pages/CompaniesV2Page'));
 const BanksV2Page = lazy(() => import('@/pages/BanksV2Page'));
@@ -62,10 +64,12 @@ function Fallback() {
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize);
+  const initTenant = useTenantStore((s) => s.initialize);
 
   useEffect(() => {
     initialize();
-  }, [initialize]);
+    initTenant();
+  }, [initialize, initTenant]);
 
   return (
     <MobileBlock>
@@ -109,6 +113,7 @@ export default function App() {
                 <Route path="/outbound-detail-meta-demo" element={<OutboundDetailMetaDemoPage />} />
                 <Route path="/declaration-detail-meta-demo" element={<DeclarationDetailMetaDemoPage />} />
                 <Route path="/meta-form-deps-demo" element={<MetaFormDepsDemoPage />} />
+                <Route path="/tenant-fork-demo" element={<TenantForkDemoPage />} />
                 <Route path="/ui-config-editor" element={<RoleGuard allowedRoles={['admin']}><UIConfigEditorPage /></RoleGuard>} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/customs" element={<CustomsPage />} />

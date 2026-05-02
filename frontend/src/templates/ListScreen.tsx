@@ -3,6 +3,8 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useResolvedConfig } from './configOverride';
+import { applyTenantToScreen } from '@/config/tenants';
+import { useTenantStore } from '@/stores/tenantStore';
 import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -645,8 +647,14 @@ export function HeaderActions({
 
 // ─── 단일 리스트 페이지 ────────────────────────────────────────────────────
 export default function ListScreen({ config: defaultConfig }: { config: ListScreenConfig }) {
-  // Phase 3: localStorage override 우선, 없으면 defaultConfig
-  const config = useResolvedConfig(defaultConfig, 'screen');
+  // Phase 4 PoC: tenant 오버레이 (계열사 포크) — base 에 tenant override 먼저 적용
+  const tenantId = useTenantStore((s) => s.tenantId);
+  const tenantConfig = useMemo(
+    () => applyTenantToScreen(defaultConfig, tenantId),
+    [defaultConfig, tenantId],
+  );
+  // Phase 3: localStorage override 우선, 없으면 (tenant 적용된) defaultConfig
+  const config = useResolvedConfig(tenantConfig, 'screen');
   const [selected, setSelected] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   // Phase 4 보강: 정렬 + 멀티 선택 + 컬럼 가시성
