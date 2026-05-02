@@ -594,3 +594,28 @@
   - **격리 범위**: `GET /partners/{id}/activities`, `POST /partner-activities`, `PATCH /partner-activities/{id}/followup`, `GET /me/open-followups` 4개 엔드포인트가 BARO 전용. `partners.owner_user_id` 컬럼 자체는 partners 테이블의 일반 컬럼으로 양 테넌트가 읽을 수 있으나, 1차에서는 BARO에서만 의미를 갖는다.
   - **D-108 격리 목록과의 관계**: D-108은 "탑솔라 전용 → 바로 토큰 차단"의 화이트리스트였고, D-109는 반대로 "바로 전용 → 탑솔라 토큰 차단" 첫 사례다. 두 방향이 공존하므로 새 기능을 도입할 때 어느 쪽 테넌트 한정인지 명시한다.
 - **날짜**: 2026-05-01
+
+## D-110: Go 백엔드 라우팅은 `App` + 핸들러 `RegisterRoutes` 패턴으로 통일
+- **결정**: `internal/router/router.go` 단일 500줄에서 50개 핸들러를 직접 인스턴스화·라우트 등록하던 구조를 다음과 같이 분리한다.
+  - **단일 의존성 컨테이너**: `internal/app/app.App{ DB, Eng, OCR, Cfg, Gates }` + `app.New(cfg) (*App, error)`. `main.go`는 `cfg → app.New → router.New(app) → ListenAndServe` 4줄로 축소.
+  - **가드 묶음**: `middleware.Gates{ Write, AdminOnly, TopsolarOnly, BaroOnly }`를 `middleware.NewGates()`로 한 곳에서 만들고 핸들러에 통째로 전달.
+  - **핸들러 자기소유 라우트**: 각 핸들러는 `RegisterRoutes(r chi.Router, g middleware.Gates)` 메서드로 자기 URL·가드·중첩 라우트를 직접 마운트. 50개 메서드는 가독성을 위해 `internal/handler/routes.go` 한 파일에 알파벳 순서로 모은다.
+  - **router.go는 호출만**: 알파벳 순서로 `handler.NewXxx(a.DB).RegisterRoutes(r, a.Gates)` 1줄씩. 신규 도메인 추가 시 자기 자리에만 1줄 끼워넣어 PR 충돌이 거의 없다.
+  - **옵셔널 의존성**: Rust 엔진은 `app.HasEngine()` 헬퍼로 `router.New`에서 한 번만 분기. nil 체크가 핸들러로 새지 않는다.
+  - **Assistant alias 처리**: `/assistant/ocr/*`, `/assistant/match/receipts/auto`는 `NewAssistantHandler(db).WithAlias(ocrH, matchH)` 빌더 패턴으로 위임 의존성을 주입. `NewAssistantHandler(db)` 1인자 시그니처는 보존(non-breaking) — public 챗(`/api/v1/public/assistant/chat`)은 alias 미주입 별도 인스턴스를 사용해 원본 분리 의도를 유지. 정식 라우트(`/api/v1/ocr/*`, `/api/v1/receipt-matches/auto`)는 그대로 유지 — alias 자체 제거 여부는 프론트 호출처 grep이 필요한 별도 결정으로 보류.
+  - **회귀 가드**: `internal/router/router_test.go`의 `TestRouteSnapshot`이 `chi.Walk`로 정렬한 `[METHOD, PATH]` 222개를 `testdata/routes.golden`과 비교한다. 라우트 누락·추가·메서드/URL 변경이 즉시 깨지며, 신규 도메인 추가 시 `go test ./internal/router -run TestRouteSnapshot -update`로 갱신.
+- **이유**: Phase 4 마스터 메타화 8연속 머지(법인→은행→창고→제조사→품번 …)에서 매번 `router.go` 단일 파일을 수정해 PR 충돌이 빈발했고, 신규 도메인 추가 시 마이그레이션 + 핸들러 + 모델 + 라우트 4곳을 모두 손대야 하는 마찰이 누적됐다. D-108/D-109로 테넌트 가드(`topsolarOnly`/`baroOnly`)가 라우트 단위에 박히면서 가드 누락 위험도 함께 커졌다. RegisterRoutes 패턴은 (1) 핸들러가 자기 URL·가드를 한 파일 안에 소유 → 응집도, (2) router.go는 호출만 → 알파벳 정렬로 충돌 면적 최소, (3) snapshot 테스트가 회귀를 즉시 잡음, 세 가지를 한 번에 해결한다.
+- **운영 기준**:
+  - **신규 도메인 추가 절차**(RULES.md "신규 도메인 추가 절차" 참조):
+    1. 핸들러 파일에 `NewXxxHandler` + 메서드 추가
+    2. `internal/handler/routes.go`의 알파벳 자리에 `(h *XxxHandler) RegisterRoutes(r chi.Router, g middleware.Gates)` 추가
+    3. `internal/router/router.go`의 알파벳 자리에 1줄 호출 추가
+    4. `go test ./internal/router -run TestRouteSnapshot -update`로 골든파일 갱신
+    5. 테넌트 한정 라우트면 `harness/{baro,module}.md`의 라우트 표 갱신 (D-108/D-109 동기화 규칙)
+  - **빅뱅 도입 사유**: 점진 분할안(PR1=골격, PR2~N=도메인 묶음)을 검토했으나 면적이 50개로 한정적이고 `routes.golden` 회귀 가드가 충분하다고 판단. 한 PR로 병합.
+  - **alias 정리 후속**: `/assistant/ocr/*`, `/assistant/match/receipts/auto` 두 alias의 제거 여부는 프론트 호출처 점검이 필요한 별도 PR로 보류한다. 그동안은 위임 형태로 유지하며 정식 라우트와 동등 동작을 보장.
+- **검증**:
+  - `go build ./...`, `go vet ./...`, `go test ./...` 모두 성공 (router 신규 테스트 2건 PASS — TestRouteSnapshot, TestRouteSnapshot_NoEngine)
+  - 라우트 222개(engine 포함) 골든파일 캡처
+  - main.go 44줄 → 23줄, router.go 500줄 → 89줄
+- **날짜**: 2026-05-02

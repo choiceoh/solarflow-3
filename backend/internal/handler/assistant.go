@@ -26,16 +26,31 @@ import (
 // Anthropic Messages API와 OpenAI Chat Completions API를 모두 호출 가능.
 // GLM 등 호환 엔드포인트는 *_BASE_URL 환경변수로 지정.
 // Anthropic 분기는 tool use(읽기 전용 DB 조회)를 지원, OpenAI 분기는 미지원(v1).
+//
+// ocrH·matchH는 /assistant/ocr/*, /assistant/match/receipts/auto alias 위임용 (선택).
+// 인증 외 챗(/api/v1/public/assistant/chat)에서는 alias 없이 .Chat만 사용 — WithAlias 미호출.
 type AssistantHandler struct {
 	httpClient *http.Client
 	db         *supa.Client
+	ocrH       *OCRHandler         // nil 허용 — alias 비활성
+	matchH     *ReceiptMatchHandler // nil 허용 — alias 비활성
 }
 
+// NewAssistantHandler — 기본 생성자 (public/auth 공통). alias 라우트가 필요한 경우 WithAlias로 의존성을 주입한다.
 func NewAssistantHandler(db *supa.Client) *AssistantHandler {
 	return &AssistantHandler{
 		httpClient: &http.Client{Timeout: 90 * time.Second},
 		db:         db,
 	}
+}
+
+// WithAlias — /assistant/ocr/*, /assistant/match/receipts/auto alias 라우트에 위임할 핸들러를 주입한다.
+// 인증 라우트에서 RegisterRoutes 호출 직전에 한 번 호출. public 라우트(.Chat 직접 호출)에는 불필요.
+// 비유: AI 통합 입구에 OCR/자동매칭 데스크 안내판을 다는 작업.
+func (h *AssistantHandler) WithAlias(ocrH *OCRHandler, matchH *ReceiptMatchHandler) *AssistantHandler {
+	h.ocrH = ocrH
+	h.matchH = matchH
+	return h
 }
 
 // 도구 호출 라운드 상한. 모델이 무한 반복하지 못하게 차단.

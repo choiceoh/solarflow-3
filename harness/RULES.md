@@ -104,6 +104,17 @@
 - 그 외 컴포넌트(레이아웃, 카드, 색상, 간격, 폰트, 배지, 버튼 등)에서는 절대 분기하지 않는다.
 - 가드: `frontend/src/lib/tenantScope.test.ts`의 "tenantScope 사용처 가드"가 새 사용처를 차단. 정당한 사유로 추가하려면 ALLOWLIST를 늘리고 PR 리뷰에서 합의.
 
+### 신규 도메인 추가 절차 (D-110 RegisterRoutes 패턴)
+백엔드에 새 도메인(예: `/api/v1/foo`)을 추가할 때 다음 순서를 그대로 따른다:
+1. **핸들러 파일**: `backend/internal/handler/foo.go`에 `FooHandler` 구조체와 `NewFooHandler(db *supa.Client) *FooHandler` 생성자, 그리고 메서드(`List`, `GetByID`, `Create` 등)를 작성한다.
+2. **RegisterRoutes 메서드**: `backend/internal/handler/routes.go`의 알파벳 자리에 `func (h *FooHandler) RegisterRoutes(r chi.Router, g middleware.Gates)`를 추가한다. 가드는 `r.With(g.Write)`, `r.Use(g.TopsolarOnly)` 형태로 직접 적용한다.
+3. **router.go 1줄 추가**: `backend/internal/router/router.go`의 알파벳 자리에 `handler.NewFooHandler(a.DB).RegisterRoutes(r, a.Gates)` 1줄을 추가한다.
+4. **golden 갱신**: `cd backend && go test ./internal/router -run TestRouteSnapshot -update`로 `testdata/routes.golden`을 갱신한다. (이 명령은 라우트 추가/변경 시 항상 실행 — 잊으면 CI에서 깨짐)
+5. **테넌트 한정 라우트면**: D-108/D-109 동기화 규칙에 따라 `harness/{baro,module}.md`의 라우트 표를 같은 PR에서 갱신한다.
+6. **검증**: `go build ./... && go vet ./... && go test ./...` 모두 통과. 모델 필드를 추가했다면 위 "Go 모델 필드 변경 시 필수 절차"(CLAUDE.md)도 함께 수행.
+
+⚠️ **router.go에 직접 `r.Route("/foo", ...)` 등록 금지** — 반드시 핸들러의 RegisterRoutes 메서드로 캡슐화한다. PR 충돌·가드 누락의 주된 원인이었음(D-110 도입 배경).
+
 ### 도메인별 인덱스 동기화 규칙
 - 한쪽 테넌트 한정 기능(예: `tenants: ['baro']`, `topsolarOnly`/`baroOnly` 미들웨어)을 추가·삭제·이동하면 **반드시** `harness/{baro,module}.md`의 해당 섹션을 같은 PR에서 갱신할 것.
   - 활성 메뉴, `*Only` 미들웨어 적용 라우트 표, 「관련 결정」 D-NNN 링크 — 셋 중 영향 받는 곳을 갱신.

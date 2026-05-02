@@ -1,18 +1,46 @@
 # SolarFlow 진행 상황
 
-## 현재 상태 요약 (최종 업데이트: 2026-05-01)
+## 현재 상태 요약 (최종 업데이트: 2026-05-02)
 
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 배포 ZIP 생성/운영 PC 1회 로그인 리허설 + OCR 실사용 샘플 검증 + E2E smoke 로컬 DB 실행 확인 (바로(주) 테넌트 1단계 운영 적용 완료 — `baro.topworks.ltd` 라이브) |
+| 다음 작업 | PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 배포 ZIP 생성/운영 PC 1회 로그인 리허설 + OCR 실사용 샘플 검증 + E2E smoke 로컬 DB 실행 확인 (D-110 RegisterRoutes 빅뱅 머지 완료, 신규 도메인 추가 절차는 RULES.md 참조) |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
-| Go 테스트 | 129개 PASS |
+| Go 테스트 | 131개 PASS (router snapshot 2건 추가) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-107 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-110 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-02 세션 — Go 백엔드 라우팅 D-110 RegisterRoutes 빅뱅
+
+### 완료
+- 설계 판단 D-110 추가: `App` 컨테이너 + 핸들러 `RegisterRoutes` 패턴으로 라우팅 통일
+- 신규 파일
+  - `backend/internal/app/app.go` — `App{DB,Eng,OCR,Cfg,Gates}` + `New(cfg)` + `HasEngine()`
+  - `backend/internal/middleware/gates.go` — `Gates{Write,AdminOnly,TopsolarOnly,BaroOnly}` + `NewGates()`
+  - `backend/internal/handler/routes.go` — 50개 핸들러의 `RegisterRoutes` 메서드 알파벳 정렬 1파일 (516줄)
+  - `backend/internal/router/router_test.go` — `TestRouteSnapshot`(222 라우트 골든파일 비교) + `TestRouteSnapshot_NoEngine`(엔진 미설정 시 calc/engine 라우트 미마운트 검증)
+  - `backend/internal/router/testdata/routes.golden` — 222 라우트 정렬 캡처
+- 수정
+  - `backend/main.go` 44줄 → 23줄 (cfg → app.New → router.New → ListenAndServe)
+  - `backend/internal/router/router.go` 500줄 → 86줄 (알파벳 정렬 RegisterRoutes 호출만)
+  - `backend/internal/handler/assistant.go` `NewAssistantHandler(db, ocrH, matchH)` — alias 위임용 의존성 주입
+  - `harness/RULES.md` "신규 도메인 추가 절차" 섹션 추가 (RegisterRoutes 패턴 + golden 갱신 단계)
+
+### 검증
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공 — 131 PASS (router 2건 신규)
+- 라우트 222개 골든파일 캡처 — 신규 도메인 추가 시 `go test ./internal/router -run TestRouteSnapshot -update`로 갱신
+
+### 다음 작업
+- alias 라우트(`/api/v1/assistant/ocr/*`, `/api/v1/assistant/match/receipts/auto`) 정리 여부 결정 — 프론트 호출처 grep 후 제거/유지 결정 (별도 PR)
+- handler 패키지 도메인 폴더 분할(`handler/master/`, `handler/po/` 등) 검토 — 빅뱅 후속, 평면 50개 유지가 부담되면 진행
 
 ---
 

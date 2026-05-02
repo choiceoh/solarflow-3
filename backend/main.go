@@ -1,44 +1,23 @@
+// SolarFlow 3.0 백엔드 진입점.
+// 모든 의존성 부트스트랩은 internal/app.New로 위임 — main은 cfg 로드와 ListenAndServe만.
 package main
 
 import (
 	"log"
 	"net/http"
-	"os"
 
-	supa "github.com/supabase-community/supabase-go"
-
+	"solarflow-backend/internal/app"
 	"solarflow-backend/internal/config"
-	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/router"
 )
 
 func main() {
 	cfg := config.Load()
-
-	db, err := supa.NewClient(cfg.SupabaseURL, cfg.SupabaseKey, &supa.ClientOptions{})
+	a, err := app.New(cfg)
 	if err != nil {
-		log.Fatalf("❌ Supabase 연결 실패: %v", err)
+		log.Fatalf("❌ App 부트스트랩 실패: %v", err)
 	}
-	log.Println("✅ Supabase 연결 성공")
-
-	// 비유: Rust 계산실과의 연락선 확인 — 없어도 Go 서버는 정상 시��
-	var engineClient *engine.EngineClient
-	engineURL := os.Getenv("ENGINE_URL")
-	if engineURL != "" {
-		engineClient = engine.NewEngineClient(engineURL)
-		_, err := engineClient.CheckHealth()
-		if err != nil {
-			log.Printf("⚠️  경고: Rust 엔진 연결 실패 — 계산 기능 비활성 (%v)", err)
-		} else {
-			log.Println("✅ Rust 엔진 연결 성공")
-		}
-	} else {
-		log.Println("ℹ️  ENGINE_URL 미설정 — Rust 엔진 미사용")
-	}
-
-	r := router.New(db, engineClient)
-
 	addr := "0.0.0.0:" + cfg.Port
 	log.Printf("🚀 SolarFlow 3.0 서버 시작: %s", addr)
-	log.Fatal(http.ListenAndServe(addr, r))
+	log.Fatal(http.ListenAndServe(addr, router.New(a)))
 }
