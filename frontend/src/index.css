@@ -918,6 +918,15 @@ a:focus-visible,
   margin-top: 0;
 }
 
+.sf-sales-page .sf-command-tab-body {
+  padding: 0;
+}
+
+.sf-sales-page .sf-command-tab-body .rounded-md.border {
+  border: 0;
+  border-radius: 0;
+}
+
 .sf-procurement-page .rounded-md.border.overflow-x-auto {
   border-color: var(--sf-line);
   background: var(--sf-surface);
