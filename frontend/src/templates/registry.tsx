@@ -16,13 +16,14 @@ import MetaForm from './MetaForm';
 import partnerFormConfig from '@/config/forms/partners';
 import outboundSimpleFormConfig from '@/config/forms/outbound_simple';
 import companyFormConfig from '@/config/forms/companies';
+import bankFormConfig from '@/config/forms/banks';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
 import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
   type OutboundStatus, type UsageCategory, type Outbound, type SaleListItem,
 } from '@/types/outbound';
-import type { Partner } from '@/types/masters';
+import type { Partner, Bank } from '@/types/masters';
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
@@ -95,6 +96,11 @@ export const cellRenderers: Record<string, CellRenderer> = {
   active_badge: (v) => (
     <span className={v ? 'sf-pill pos' : 'sf-pill ghost'}>{v ? '활성' : '비활성'}</span>
   ),
+  // Phase 4: 은행 행에서 법인명 표시 — Go JOIN 결과(companies.company_name) 또는 평면 컬럼
+  bank_company_name: (_v, row) => {
+    const r = row as Bank;
+    return <span>{r.companies?.company_name ?? r.company_name ?? '—'}</span>;
+  },
 };
 
 // 단순 리스트 fetch hook (서버 필터 없음 — 클라이언트 검색만)
@@ -130,6 +136,7 @@ export const dataHooks: Record<string, DataHook> = {
   }) as unknown as DataHookResult,
   usePartnerList: () => useSimpleList<Partner>('/api/v1/partners') as unknown as DataHookResult,
   useCompanyList: () => useSimpleList<Record<string, unknown>>('/api/v1/companies') as unknown as DataHookResult,
+  useBankList: () => useSimpleList<Bank>('/api/v1/banks') as unknown as DataHookResult,
 };
 
 // ─── Detail data hooks (단건 fetch by id) ─────────────────────────────────
@@ -159,6 +166,15 @@ export const metricComputers: Record<string, MetricComputer> = {
     (items as Partner[]).filter((p) => p.partner_type === 'customer' || p.partner_type === 'both').length.toLocaleString(),
   'count.partner_supplier': (items) =>
     (items as Partner[]).filter((p) => p.partner_type === 'supplier' || p.partner_type === 'both').length.toLocaleString(),
+  // Phase 4: 은행 마스터 — 활성 은행 수 + LC 한도 총합(백만USD)
+  'count.bank_active': (items) =>
+    (items as Bank[]).filter((b) => b.is_active).length.toLocaleString(),
+  'sum.bank_lc_limit_million': (items) => {
+    const sum = (items as Bank[])
+      .filter((b) => b.is_active)
+      .reduce((s, b) => s + (b.lc_limit_usd ?? 0), 0);
+    return (sum / 1_000_000).toFixed(1);
+  },
 };
 
 // ─── Sub computers (메트릭 sub 텍스트 동적 생성) ───────────────────────────
@@ -222,12 +238,24 @@ const CompanyFormV2: FormComponent = (props) => (
   />
 );
 
+// 은행 메타 폼 (Phase 4)
+const BankFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={bankFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
 export const formComponents: Record<string, FormComponent> = {
   outbound_form: OutboundForm as unknown as FormComponent,
   outbound_form_simple: OutboundFormSimple,    // 메타 한계선 데모용
   partner_form: PartnerForm as unknown as FormComponent,
   partner_form_v2: PartnerFormV2,
   company_form_v2: CompanyFormV2,              // Phase 4: 법인 마스터 메타 폼
+  bank_form_v2: BankFormV2,                    // Phase 4: 은행 마스터 메타 폼
 };
 
 export const detailComponents: Record<string, DetailComponent> = {
@@ -364,6 +392,12 @@ export const masterSources: Record<string, MasterOptionSource> = {
     load: async () => {
       await useAppStore.getState().loadManufacturers();
       return useAppStore.getState().manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr }));
+    },
+  },
+  companies: {
+    load: async () => {
+      await useAppStore.getState().loadCompanies();
+      return useAppStore.getState().companies.map((c) => ({ value: c.company_id, label: c.company_name }));
     },
   },
   'partners.customer': {
