@@ -25,12 +25,12 @@ const config: ListScreenConfig = {
     { label: '활성', computerId: 'count.partner_active', tone: 'pos' },
   ],
   columns: [
-    { key: 'partner_name', label: '거래처명' },
-    { key: 'partner_type', label: '유형', rendererId: 'partner_type_badge' },
-    { key: 'erp_code', label: 'ERP코드' },
-    { key: 'contact_name', label: '담당자' },
-    { key: 'contact_phone', label: '연락처' },
-    { key: 'is_active', label: '상태', rendererId: 'active_badge' },
+    { key: 'partner_name', label: '거래처명', sortable: true },
+    { key: 'partner_type', label: '유형', rendererId: 'partner_type_badge', sortable: true, hideable: true },
+    { key: 'erp_code', label: 'ERP코드', sortable: true, hideable: true },
+    { key: 'contact_name', label: '담당자', hideable: true },
+    { key: 'contact_phone', label: '연락처', hideable: true, hiddenByDefault: true },
+    { key: 'is_active', label: '상태', rendererId: 'active_badge', sortable: true },
   ],
   actions: [
     {

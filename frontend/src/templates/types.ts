@@ -32,6 +32,13 @@ export interface ColumnConfig {
   fallback?: string;                // 빈 값 표시 (기본 '—')
   visibleIf?: string;               // 권한/조건 (PoC에서는 미사용)
   className?: string;
+  // Phase 4 보강: 정렬 가능 헤더 (클릭 → asc → desc → 해제)
+  sortable?: boolean;
+  // Phase 4 보강: 사용자가 컬럼을 숨길 수 있는지 (기본 true). false면 토글 메뉴에서 제외.
+  // localStorage 에 도메인별로 표시 상태 저장.
+  hideable?: boolean;
+  // 기본 숨김 — hideable=true 와 함께 쓰면 사용자가 명시적으로 켜야 보이는 컬럼
+  hiddenByDefault?: boolean;
 }
 
 // ── Filters
@@ -62,8 +69,10 @@ export interface MetricConfig {
 }
 
 // ── Actions
-export type ActionTrigger = 'toolbar' | 'row' | 'header';
-export type ActionKind = 'open_form' | 'edit_form' | 'confirm_call' | 'custom';
+// trigger='bulk' — 다중선택된 행에 일괄 적용 (체크박스 컬럼 + 선택 시 툴바 노출)
+export type ActionTrigger = 'toolbar' | 'row' | 'header' | 'bulk';
+// kind='bulk_call' — 선택된 모든 행에 confirm_call 처럼 endpoint 호출 (idField 로 :id 치환)
+export type ActionKind = 'open_form' | 'edit_form' | 'confirm_call' | 'custom' | 'bulk_call';
 export type ActionVariant = 'primary' | 'outline' | 'ghost' | 'destructive';
 export type ActionIcon = 'plus' | 'pencil' | 'trash';
 

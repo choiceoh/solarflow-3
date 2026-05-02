@@ -1,12 +1,16 @@
 // Phase 1+1.5 PoC: 단일 리스트 화면 템플릿
 // config(메타) + registry(코드)를 결합해 한 도메인의 목록 화면을 렌더한다.
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useResolvedConfig } from './configOverride';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Columns, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem,
+} from '@/components/ui/dropdown-menu';
 import EmptyState from '@/components/common/EmptyState';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -168,6 +172,65 @@ function applySearch(
   });
 }
 
+// ─── Phase 4 보강: 정렬 ────────────────────────────────────────────────────
+export type SortState = { key: string; direction: 'asc' | 'desc' } | null;
+
+function applySort(items: unknown[], sort: SortState): unknown[] {
+  if (!sort) return items;
+  const sorted = [...items];
+  sorted.sort((a, b) => {
+    const va = getFieldValue(a as Record<string, unknown>, sort.key);
+    const vb = getFieldValue(b as Record<string, unknown>, sort.key);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    // 숫자/Date 처리 — 양쪽 모두 number 면 숫자 비교, 그 외엔 문자열 비교
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return sort.direction === 'asc' ? va - vb : vb - va;
+    }
+    if (typeof va === 'boolean' && typeof vb === 'boolean') {
+      return sort.direction === 'asc' ? Number(va) - Number(vb) : Number(vb) - Number(va);
+    }
+    const sa = String(va);
+    const sb = String(vb);
+    return sort.direction === 'asc' ? sa.localeCompare(sb, 'ko') : sb.localeCompare(sa, 'ko');
+  });
+  return sorted;
+}
+
+function nextSortDirection(current: SortState, key: string): SortState {
+  if (!current || current.key !== key) return { key, direction: 'asc' };
+  if (current.direction === 'asc') return { key, direction: 'desc' };
+  return null; // 두 번 클릭 후 해제
+}
+
+// ─── Phase 4 보강: 컬럼 가시성 (localStorage 영속) ─────────────────────────
+const COLVIS_PREFIX = 'sf.colvis.';
+function loadHiddenCols(scopeId: string): Set<string> {
+  if (typeof localStorage === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(COLVIS_PREFIX + scopeId);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+function saveHiddenCols(scopeId: string, hidden: Set<string>): void {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(COLVIS_PREFIX + scopeId, JSON.stringify([...hidden]));
+}
+
+// 사용자 첫 방문 시 hiddenByDefault 컬럼은 자동 숨김 — 이후엔 사용자 선택 존중
+function initialHiddenCols(scopeId: string, columns: ColumnConfig[]): Set<string> {
+  const stored = loadHiddenCols(scopeId);
+  if (stored.size > 0) return stored;
+  const fromDefault = new Set<string>();
+  columns.forEach((c) => { if (c.hiddenByDefault) fromDefault.add(c.key); });
+  return fromDefault;
+}
+
 // ─── 액션 헬퍼 ─────────────────────────────────────────────────────────────
 const ICONS: Record<ActionIcon, ReactNode> = {
   plus: <Plus className="h-4 w-4" />,
@@ -258,6 +321,7 @@ export function RowActionsCell({
 // ─── 테이블 + Empty + Forms ───────────────────────────────────────────────
 export function TableArea({
   list, state, displayItems, setFormOpenId, onRowAction, onRowSelect,
+  visibleColumns, sort, setSort, selectedIds, setSelectedIds,
 }: {
   list: ListScreenConfig;
   state: TabState;
@@ -267,11 +331,22 @@ export function TableArea({
   onOpenEdit?: (formId: string, editData: unknown) => void;
   onRowAction: (action: ActionConfig, row: Record<string, unknown>) => void;
   onRowSelect: (id: string) => void;
+  // Phase 4 보강: 정렬 + 멀티 선택 (선택적 — 미전달 시 비활성)
+  visibleColumns?: ColumnConfig[];
+  sort?: SortState;
+  setSort?: (next: SortState) => void;
+  selectedIds?: Set<string>;
+  setSelectedIds?: (next: Set<string>) => void;
 }) {
   if (state.loading) return <SkeletonRows rows={6} />;
 
+  const cols = visibleColumns ?? list.columns;
   const rowActions = list.actions?.filter((a) => a.trigger === 'row') ?? [];
   const hasRowActions = rowActions.length > 0;
+  const bulkActions = list.actions?.filter((a) => a.trigger === 'bulk') ?? [];
+  const showBulkColumn = bulkActions.length > 0 && !!selectedIds && !!setSelectedIds;
+  const idField = bulkActions.find((a) => a.idField)?.idField
+    ?? (list.onRowClick && 'idField' in list.onRowClick ? list.onRowClick.idField : undefined);
 
   if (displayItems.length === 0 && list.emptyState) {
     const action = list.actions?.find((a) => a.id === list.emptyState!.actionId);
@@ -284,21 +359,66 @@ export function TableArea({
     );
   }
 
+  const allRowIds = showBulkColumn && idField
+    ? displayItems.map((r) => String(getFieldValue(r as Record<string, unknown>, idField) ?? ''))
+    : [];
+  const allSelected = showBulkColumn && allRowIds.length > 0 && allRowIds.every((id) => selectedIds!.has(id));
+  const partiallySelected = showBulkColumn && allRowIds.some((id) => selectedIds!.has(id)) && !allSelected;
+
+  const toggleAll = () => {
+    if (!setSelectedIds) return;
+    setSelectedIds(allSelected ? new Set() : new Set(allRowIds));
+  };
+  const toggleRow = (id: string) => {
+    if (!setSelectedIds || !selectedIds) return;
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedIds(next);
+  };
+
   return (
     <>
       <div className="rounded-md border">
         <Table className="text-xs">
           <TableHeader>
             <TableRow>
-              {list.columns.map((c) => (
-                <TableHead
-                  key={c.key}
-                  className={cn(c.align === 'right' && 'text-right', c.align === 'center' && 'text-center')}
-                  style={c.width ? { width: c.width } : undefined}
-                >
-                  {c.label}
+              {showBulkColumn ? (
+                <TableHead style={{ width: 36 }}>
+                  <input
+                    type="checkbox"
+                    aria-label="모두 선택"
+                    className="h-3.5 w-3.5"
+                    checked={allSelected}
+                    ref={(el) => { if (el) el.indeterminate = partiallySelected; }}
+                    onChange={toggleAll}
+                  />
                 </TableHead>
-              ))}
+              ) : null}
+              {cols.map((c) => {
+                const sortable = c.sortable && setSort;
+                const isSorted = sort?.key === c.key;
+                const SortIcon = isSorted
+                  ? (sort?.direction === 'asc' ? ArrowUp : ArrowDown)
+                  : ArrowUpDown;
+                return (
+                  <TableHead
+                    key={c.key}
+                    className={cn(c.align === 'right' && 'text-right', c.align === 'center' && 'text-center')}
+                    style={c.width ? { width: c.width } : undefined}
+                  >
+                    {sortable ? (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 hover:text-foreground"
+                        onClick={() => setSort!(nextSortDirection(sort ?? null, c.key))}
+                      >
+                        {c.label}
+                        <SortIcon className={cn('h-3 w-3', isSorted ? 'opacity-100' : 'opacity-40')} />
+                      </button>
+                    ) : c.label}
+                  </TableHead>
+                );
+              })}
               {hasRowActions ? <TableHead className="text-right">작업</TableHead> : null}
             </TableRow>
           </TableHeader>
@@ -308,6 +428,7 @@ export function TableArea({
               const idVal = list.onRowClick && 'idField' in list.onRowClick
                 ? String(getFieldValue(rec, list.onRowClick.idField) ?? idx)
                 : String(idx);
+              const bulkRowId = idField ? String(getFieldValue(rec, idField) ?? '') : '';
               const onClick = list.onRowClick?.kind === 'detail'
                 ? () => onRowSelect(idVal)
                 : undefined;
@@ -320,7 +441,18 @@ export function TableArea({
                   )}
                   onClick={onClick}
                 >
-                  {list.columns.map((c) => (
+                  {showBulkColumn ? (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label="행 선택"
+                        className="h-3.5 w-3.5"
+                        checked={selectedIds!.has(bulkRowId)}
+                        onChange={() => toggleRow(bulkRowId)}
+                      />
+                    </TableCell>
+                  ) : null}
+                  {cols.map((c) => (
                     <TableCell
                       key={c.key}
                       className={cn(
@@ -345,6 +477,74 @@ export function TableArea({
       </div>
 
     </>
+  );
+}
+
+// ─── Phase 4 보강: 컬럼 가시성 토글 + 멀티 선택 툴바 ───────────────────────
+export function ColumnVisibilityMenu({
+  columns, hidden, setHidden,
+}: {
+  columns: ColumnConfig[];
+  hidden: Set<string>;
+  setHidden: (next: Set<string>) => void;
+}) {
+  const hideable = columns.filter((c) => c.hideable);
+  if (hideable.length === 0) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="inline-flex h-7 items-center gap-1 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-sm transition-all hover:bg-muted">
+        <Columns className="h-3 w-3" />컬럼
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuLabel>컬럼 표시</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {hideable.map((c) => {
+          const visible = !hidden.has(c.key);
+          return (
+            <DropdownMenuCheckboxItem
+              key={c.key}
+              checked={visible}
+              onCheckedChange={(checked) => {
+                const next = new Set(hidden);
+                if (checked) next.delete(c.key); else next.add(c.key);
+                setHidden(next);
+              }}
+            >
+              {c.label}
+            </DropdownMenuCheckboxItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function BulkActionToolbar({
+  selectedCount, actions, onAction, onClear,
+}: {
+  selectedCount: number;
+  actions: ActionConfig[];
+  onAction: (action: ActionConfig) => void;
+  onClear: () => void;
+}) {
+  if (selectedCount === 0 || actions.length === 0) return null;
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs">
+      <span className="font-medium">{selectedCount.toLocaleString()}개 선택됨</span>
+      <div className="flex-1" />
+      {actions.map((a) => (
+        <Button
+          key={a.id}
+          size="sm"
+          variant={a.variant === 'destructive' ? 'destructive' : (a.variant === 'outline' ? 'outline' : 'default')}
+          onClick={() => onAction(a)}
+        >
+          {a.iconId ? <span className="mr-1">{ICONS[a.iconId]}</span> : null}
+          {a.label}
+        </Button>
+      ))}
+      <Button size="sm" variant="ghost" onClick={onClear}>선택 해제</Button>
+    </div>
   );
 }
 
@@ -517,6 +717,15 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
   const config = useResolvedConfig(defaultConfig, 'screen');
   const [selected, setSelected] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  // Phase 4 보강: 정렬 + 멀티 선택 + 컬럼 가시성
+  const [sort, setSort] = useState<SortState>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [hiddenCols, setHiddenColsState] = useState<Set<string>>(() => initialHiddenCols(config.id, config.columns));
+  const setHiddenCols = useCallback((next: Set<string>) => {
+    setHiddenColsState(next);
+    saveHiddenCols(config.id, next);
+  }, [config.id]);
+
   const pageActions = usePageActions();
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const requiresCompany = config.requiresCompany ?? true;
@@ -541,12 +750,40 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
     );
   }
 
-  const displayItems = config.searchable
+  // 검색 → 정렬 → 표시
+  const searched = config.searchable
     ? applySearch(state.data, searchQuery, config.searchable.fields)
     : state.data;
+  const displayItems = applySort(searched, sort);
+
+  // 가시 컬럼 (사용자가 숨긴 항목 제외)
+  const visibleColumns = config.columns.filter((c) => !hiddenCols.has(c.key));
 
   const onRowAction = makeRowActionHandler(pageActions, state.reload);
   const headerActions = config.actions?.filter((a) => a.trigger === 'header') ?? [];
+  const bulkActions = config.actions?.filter((a) => a.trigger === 'bulk') ?? [];
+  const hasHideable = config.columns.some((c) => c.hideable);
+
+  // 멀티 액션 핸들러 — selected ids 에 일괄 적용
+  const onBulkAction = (action: ActionConfig) => {
+    if (action.kind !== 'bulk_call' || !action.endpoint || !action.method || !action.idField) return;
+    const ids = [...selectedIds];
+    const desc = (action.confirm?.description ?? '선택한 {count}개 항목에 적용하시겠습니까?').replace('{count}', String(ids.length));
+    pageActions.setPendingConfirm({
+      title: action.confirm?.title ?? action.label,
+      description: desc,
+      confirmLabel: action.confirm?.confirmLabel,
+      variant: action.confirm?.variant,
+      onConfirm: async () => {
+        await Promise.all(ids.map((id) => fetchWithAuth(
+          action.endpoint!.replace(':id', id),
+          { method: action.method!, body: action.body ? JSON.stringify(action.body) : undefined },
+        )));
+        setSelectedIds(new Set());
+        state.reload();
+      },
+    });
+  };
 
   const tableSub = config.tableSubFromTotal && config.searchable
     ? `${displayItems.length.toLocaleString()} / ${state.data.length.toLocaleString()}개 표시`
@@ -574,10 +811,23 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
               openForm={(id) => pageActions.openForm(id)}
             />
             <div style={{ flex: 1 }} />
+            {hasHideable
+              ? <ColumnVisibilityMenu columns={config.columns} hidden={hiddenCols} setHidden={setHiddenCols} />
+              : null}
           </div>
         }
         rail={renderRail(config, displayItems, state.filters)}
       >
+        {bulkActions.length > 0 && selectedIds.size > 0 ? (
+          <div className="mb-3">
+            <BulkActionToolbar
+              selectedCount={selectedIds.size}
+              actions={bulkActions}
+              onAction={onBulkAction}
+              onClear={() => setSelectedIds(new Set())}
+            />
+          </div>
+        ) : null}
         <TableArea
           list={config}
           state={state}
@@ -585,6 +835,11 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
           setFormOpenId={(id) => { if (id) pageActions.openForm(id); }}
           onRowAction={onRowAction}
           onRowSelect={setSelected}
+          visibleColumns={visibleColumns}
+          sort={sort}
+          setSort={setSort}
+          selectedIds={selectedIds}
+          setSelectedIds={setSelectedIds}
         />
       </MasterConsole>
 
