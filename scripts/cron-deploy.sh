@@ -6,13 +6,15 @@
 #   1) git pull --ff-only origin main
 #   2) HEAD 차이 없으면 즉시 종료
 #   3) 차이 있으면 변경된 파일을 분류:
-#      backend/migrations/*.sql        → 경고만 (수동 적용)
+#      backend/migrations/*.sql        → apply_migrations.py 호출 (헤더 게이트)
 #      backend/(non-migration)         → Go 빌드 + solarflow-go 재시작
 #      engine/(src|Cargo.{toml,lock})  → Rust 빌드 + solarflow-engine 재시작
 #      frontend/*                      → 무시 (Cloudflare Pages 자동 배포)
 #      그 외 (docs/harness 등)         → 무시
-#   4) 빌드 실패 시 재시작 생략 — 기존 서비스 유지
-#   5) 동시 실행 방지 (flock)
+#   4) 마이그레이션은 `-- @auto-apply: yes` 헤더 있는 파일만 자동 적용.
+#      미게이트 파일은 SKIP + 경고. 마이그레이션 SQL 실패 시 Go 재시작 생략 (DB 정합 우선).
+#   5) 빌드 실패 시 재시작 생략 — 기존 서비스 유지
+#   6) 동시 실행 방지 (flock)
 
 set -uo pipefail
 
@@ -20,6 +22,8 @@ REPO=/home/choiceoh/공개/solarflow-3
 LOCK=/tmp/solarflow-cron-deploy.lock
 GO_DIR="$REPO/backend"
 ENGINE_DIR="$REPO/engine"
+PY_BIN="$REPO/backend/.venv-ocr/bin/python"   # psycopg2 가 들어 있는 venv
+APPLY_MIG="$REPO/scripts/apply_migrations.py"
 
 # 동시 실행 방지 (이전 실행이 빌드 중이면 skip)
 exec 9>"$LOCK"
@@ -77,8 +81,36 @@ while IFS= read -r f; do
   esac
 done <<< "$CHANGED"
 
+# 마이그레이션 자동 적용 (Go 빌드보다 먼저 — 새 코드가 새 스키마를 가정하므로)
+mig_ok=1   # 1=성공/skip, 0=실패
+if [[ $has_migration -eq 1 ]]; then
+  echo "[$(date -Iseconds)] 마이그레이션 변경 감지:"
+  for m in "${migrations[@]}"; do
+    echo "    $m"
+  done
+  if [[ -x "$PY_BIN" && -f "$APPLY_MIG" ]]; then
+    # backend/.env 의 SUPABASE_DB_URL 을 환경에 주입
+    if [[ -f "$REPO/backend/.env" ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source "$REPO/backend/.env"
+      set +a
+    fi
+    echo "[$(date -Iseconds)] apply_migrations.py 실행"
+    if "$PY_BIN" "$APPLY_MIG"; then
+      echo "[$(date -Iseconds)] 마이그레이션 적용 완료"
+    else
+      rc=$?
+      echo "[$(date -Iseconds)] ❌ apply_migrations.py 실패 (exit=$rc) — Go 재시작 보류"
+      mig_ok=0
+    fi
+  else
+    echo "[$(date -Iseconds)] ⚠️  apply_migrations.py 또는 venv python 없음 — 수동 적용 필요"
+  fi
+fi
+
 # Go 빌드 + 재시작
-if [[ $need_go -eq 1 ]]; then
+if [[ $need_go -eq 1 && $mig_ok -eq 1 ]]; then
   echo "[$(date -Iseconds)] Go 빌드 시작"
   if (cd "$GO_DIR" && go build -o solarflow-go . 2>&1); then
     if systemctl --user restart solarflow-go.service 2>&1; then
@@ -94,6 +126,8 @@ if [[ $need_go -eq 1 ]]; then
   else
     echo "[$(date -Iseconds)] Go 빌드 실패 — 기존 서비스 유지"
   fi
+elif [[ $need_go -eq 1 && $mig_ok -eq 0 ]]; then
+  echo "[$(date -Iseconds)] Go 변경분 빌드 보류 — 마이그레이션 실패 해결 후 다음 회차에 재시도"
 fi
 
 # Rust 빌드 + 재시작
@@ -115,13 +149,6 @@ if [[ $need_engine -eq 1 ]]; then
   fi
 fi
 
-# 마이그레이션은 자동 적용하지 않음 — 수동 검토 필요
-if [[ $has_migration -eq 1 ]]; then
-  echo "[$(date -Iseconds)] ⚠️  마이그레이션 변경 감지 — 수동 적용 필요:"
-  for m in "${migrations[@]}"; do
-    echo "    $m"
-  done
-  echo "    적용 절차: harness/PRODUCTION.md 'DB 마이그레이션' 섹션 참조"
-fi
+# (마이그레이션은 위 분기에서 이미 처리됨 — apply_migrations.py 헤더 게이트)
 
 exit 0
