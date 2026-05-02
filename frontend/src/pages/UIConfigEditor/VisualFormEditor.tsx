@@ -144,6 +144,9 @@ function BasicTab({ value, onChange }: { value: MetaFormConfig; onChange: (next:
 
 function SectionsTab({ value, onChange }: { value: MetaFormConfig; onChange: (next: MetaFormConfig) => void }) {
   const sections = value.sections ?? [];
+  const [filter, setFilter] = useState('');
+  // 검색·전체토글로 추가/제거되는 expand 집합. key: `${sIdx}.${fIdx}`
+  const [expandedSet, setExpandedSet] = useState<Set<string>>(new Set());
 
   const setSections = (next: FormSection[]) => onChange({ ...value, sections: next });
   const updateSection = (idx: number, next: FormSection) =>
@@ -158,13 +161,62 @@ function SectionsTab({ value, onChange }: { value: MetaFormConfig; onChange: (ne
   const addSection = () =>
     setSections([...sections, { cols: 1, fields: [] }]);
 
+  const totalFields = sections.reduce((s, sec) => s + (sec.fields?.length ?? 0), 0);
+
+  // 검색 일치하는 필드는 자동 expand (검색 결과로 즉시 보이게)
+  const filteredSet = useMemo(() => {
+    if (!filter) return null;
+    const lc = filter.toLowerCase();
+    const set = new Set<string>();
+    sections.forEach((sec, sIdx) => {
+      (sec.fields ?? []).forEach((f, fIdx) => {
+        if (f.key.toLowerCase().includes(lc)
+          || f.label.toLowerCase().includes(lc)
+          || f.type.toLowerCase().includes(lc)) {
+          set.add(`${sIdx}.${fIdx}`);
+        }
+      });
+    });
+    return set;
+  }, [filter, sections]);
+
+  const expandAll = () => {
+    const set = new Set<string>();
+    sections.forEach((sec, sIdx) => {
+      (sec.fields ?? []).forEach((_, fIdx) => set.add(`${sIdx}.${fIdx}`));
+    });
+    setExpandedSet(set);
+  };
+  const collapseAll = () => setExpandedSet(new Set());
+
+  const toggleField = (sIdx: number, fIdx: number) => {
+    const k = `${sIdx}.${fIdx}`;
+    setExpandedSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
-          섹션은 폼에서 위→아래 순. 각 섹션은 cols(1/2/3) grid + 필드 배열.
-        </p>
-        <Button size="sm" variant="outline" onClick={addSection}>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder={`필드 검색 (key/label/type) — 일치 시 자동 펼침`}
+          className="h-7 flex-1 min-w-[240px] rounded border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        {filter && (
+          <span className="text-[10px] text-muted-foreground">
+            {filteredSet?.size ?? 0} / {totalFields}
+          </span>
+        )}
+        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={expandAll}>모두 펼치기</Button>
+        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={collapseAll}>모두 접기</Button>
+        <Button size="sm" variant="outline" className="h-7" onClick={addSection}>
           <Plus className="h-3 w-3 mr-1" />섹션 추가
         </Button>
       </div>
@@ -175,6 +227,11 @@ function SectionsTab({ value, onChange }: { value: MetaFormConfig; onChange: (ne
             section={sec}
             index={sIdx}
             total={sections.length}
+            filter={filter}
+            filteredSet={filteredSet}
+            expandedSet={expandedSet}
+            onToggleField={(fIdx) => toggleField(sIdx, fIdx)}
+            onAddedField={(fIdx) => setExpandedSet((p) => new Set(p).add(`${sIdx}.${fIdx}`))}
             onUpdate={(next) => updateSection(sIdx, next)}
             onMoveUp={() => moveSection(sIdx, -1)}
             onMoveDown={() => moveSection(sIdx, 1)}
@@ -192,11 +249,17 @@ function SectionsTab({ value, onChange }: { value: MetaFormConfig; onChange: (ne
 }
 
 function SectionCard({
-  section, index, total, onUpdate, onMoveUp, onMoveDown, onRemove,
+  section, index, total, filter, filteredSet, expandedSet,
+  onToggleField, onAddedField, onUpdate, onMoveUp, onMoveDown, onRemove,
 }: {
   section: FormSection;
   index: number;
   total: number;
+  filter: string;
+  filteredSet: Set<string> | null;
+  expandedSet: Set<string>;
+  onToggleField: (fIdx: number) => void;
+  onAddedField: (fIdx: number) => void;
   onUpdate: (next: FormSection) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -205,8 +268,12 @@ function SectionCard({
   const updateField = (fIdx: number, next: FieldConfig) =>
     onUpdate({ ...section, fields: (section.fields ?? []).map((f, i) => (i === fIdx ? next : f)) });
 
-  const addField = () =>
+  const addField = () => {
+    const newIdx = (section.fields ?? []).length;
     onUpdate({ ...section, fields: [...(section.fields ?? []), { key: 'new_field', label: '새 필드', type: 'text' }] });
+    // 새 필드는 자동으로 펼침
+    onAddedField(newIdx);
+  };
 
   const moveField = (fIdx: number, dir: -1 | 1) =>
     onUpdate({ ...section, fields: moveInArray(section.fields ?? [], fIdx, dir) });
@@ -245,21 +312,35 @@ function SectionCard({
             <Plus className="h-3 w-3 mr-1" />필드 추가
           </Button>
         </div>
-        {(section.fields ?? []).map((field, fIdx) => (
-          <FieldRow
-            key={fIdx}
-            field={field}
-            index={fIdx}
-            total={(section.fields ?? []).length}
-            onUpdate={(next) => updateField(fIdx, next)}
-            onMoveUp={() => moveField(fIdx, -1)}
-            onMoveDown={() => moveField(fIdx, 1)}
-            onRemove={() => removeField(fIdx)}
-          />
-        ))}
+        {(section.fields ?? []).map((field, fIdx) => {
+          const k = `${index}.${fIdx}`;
+          // 검색 활성 시 매칭 안 된 필드는 숨김 (filteredSet 이 있는데 not in)
+          if (filteredSet && !filteredSet.has(k)) return null;
+          // 검색 매칭 또는 사용자가 직접 펼친 경우 expanded
+          const isExpanded = expandedSet.has(k) || (filter !== '' && filteredSet?.has(k) === true);
+          return (
+            <FieldRow
+              key={fIdx}
+              field={field}
+              index={fIdx}
+              total={(section.fields ?? []).length}
+              expanded={isExpanded}
+              onToggleExpand={() => onToggleField(fIdx)}
+              onUpdate={(next) => updateField(fIdx, next)}
+              onMoveUp={() => moveField(fIdx, -1)}
+              onMoveDown={() => moveField(fIdx, 1)}
+              onRemove={() => removeField(fIdx)}
+            />
+          );
+        })}
         {(section.fields ?? []).length === 0 && (
           <div className="text-center py-3 text-[10px] text-muted-foreground border border-dashed rounded">
             필드가 없습니다
+          </div>
+        )}
+        {filter && (section.fields ?? []).length > 0 && filteredSet && (section.fields ?? []).every((_, fIdx) => !filteredSet.has(`${index}.${fIdx}`)) && (
+          <div className="text-center py-2 text-[10px] text-muted-foreground italic">
+            "{filter}" 일치하는 필드 없음
           </div>
         )}
       </div>
@@ -271,17 +352,20 @@ function SectionCard({
 // + type 별 보조 (select/multiselect 옵션, file multiple, computed formula+dependsOn, number numberFormat)
 // + "고급 ▾" 토글: description / defaultValue / readOnly / 검증 / visibleIf / readOnlyIf
 function FieldRow({
-  field, index, total, onUpdate, onMoveUp, onMoveDown, onRemove,
+  field, index, total, expanded, onToggleExpand,
+  onUpdate, onMoveUp, onMoveDown, onRemove,
 }: {
   field: FieldConfig;
   index: number;
   total: number;
+  expanded: boolean;
+  onToggleExpand: () => void;
   onUpdate: (next: FieldConfig) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onRemove: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const enumOpts = useMemo(() => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })), []);
   const masterOpts = useMemo(() => Object.keys(masterSources).sort().map((id) => ({ value: id, label: id })), []);
   const formulaOpts = useMemo(() => Object.keys(computedFormulas).sort().map((id) => ({ value: id, label: id })), []);
@@ -291,10 +375,56 @@ function FieldRow({
   const isNumber = field.type === 'number';
   const isFile = field.type === 'file';
 
+  // Collapsed 모드 — 한 줄 요약 (검색·스캔 빠르게)
+  if (!expanded) {
+    const badges: string[] = [];
+    if (field.required) badges.push('필수');
+    if (field.readOnly) badges.push('readonly');
+    if (field.visibleIf?.field) badges.push('조건부');
+    if (field.formula?.computerId) badges.push(`= ${field.formula.computerId}`);
+    return (
+      <div
+        className="rounded border bg-background hover:bg-muted/30 cursor-pointer transition-colors group"
+        onClick={onToggleExpand}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleExpand(); } }}
+      >
+        <div className="flex items-center gap-2 px-2 py-1.5 text-xs">
+          <span className="text-[9px] text-muted-foreground mono w-6 text-right shrink-0">#{index + 1}</span>
+          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+          <span className="font-mono text-[11px] text-foreground/80 shrink-0">{field.key}</span>
+          <span className="text-foreground/60 shrink-0">·</span>
+          <span className="truncate">{field.label}</span>
+          <span className="ml-auto flex items-center gap-1.5 shrink-0">
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">{field.type}</span>
+            {badges.map((b) => (
+              <span key={b} className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] text-amber-900">{b}</span>
+            ))}
+            <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100"
+              onClick={(e) => { e.stopPropagation(); onMoveUp(); }} disabled={index === 0}>
+              <ChevronUp className="h-3 w-3" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100"
+              onClick={(e) => { e.stopPropagation(); onMoveDown(); }} disabled={index === total - 1}>
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+              onClick={(e) => { e.stopPropagation(); onRemove(); }}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded border p-2 grid grid-cols-12 gap-2 items-start text-xs bg-muted/20">
       <div className="col-span-1 flex flex-col items-center gap-1">
         <span className="text-[9px] text-muted-foreground mono">#{index + 1}</span>
+        <Button type="button" variant="ghost" size="icon" className="h-5 w-5" title="접기"
+          onClick={onToggleExpand}><ChevronUp className="h-3 w-3" /></Button>
         <Button type="button" variant="ghost" size="icon" className="h-5 w-5"
           onClick={onMoveUp} disabled={index === 0}><ChevronUp className="h-3 w-3" /></Button>
         <Button type="button" variant="ghost" size="icon" className="h-5 w-5"
@@ -395,15 +525,15 @@ function FieldRow({
         {/* 고급 토글 */}
         <div className="col-span-2 mt-1">
           <button type="button"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => setAdvancedOpen((v) => !v)}
             className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5"
           >
-            {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {advancedOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             고급 (description / 검증 / readOnly / 조건부)
           </button>
         </div>
 
-        {expanded && (
+        {advancedOpen && (
           <>
             <FieldInput label="description (필드 아래 도움말)"
               value={field.description ?? ''}
