@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore, type InspectorMode, type InspectorTarget } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import { ActionChips } from './ActionChips';
+import { HandleOverlay } from './HandleOverlay';
 import { TokenPanel } from './TokenPanel';
 import { DraftsList } from './DraftsList';
 import { getLastTargetEl } from './inspectorTarget';
@@ -120,6 +121,16 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
     const el = getLastTargetEl();
     if (!el) return;
     el.className = draft;
+    // 드래그 핸들이 element 의 최신 위치를 따라가도록 rect 동기화 — 다음 frame 에서 측정.
+    // requestAnimationFrame 으로 layout 반영 후 측정.
+    const rafId = requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect();
+      useAppStore.getState().setInspectorTarget({
+        ...target,
+        className: draft,
+        rect: { top: r.top, left: r.left, width: r.width, height: r.height },
+      });
+    });
     const t = window.setTimeout(() => {
       useAppStore.getState().recordClassNameDraft({
         selector: target.selector,
@@ -128,7 +139,10 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
         after: draft,
       });
     }, 300);
-    return () => window.clearTimeout(t);
+    return () => {
+      window.clearTimeout(t);
+      cancelAnimationFrame(rafId);
+    };
   }, [draft, target.selector, target.tagName, target.className]);
 
   return (
@@ -150,6 +164,7 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
         )}
       </div>
       <ActionChips className={draft} onChange={setDraft} />
+      <HandleOverlay target={target} className={draft} onChange={setDraft} />
       <details
         data-inspector-ui="true"
         className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs"
