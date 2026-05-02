@@ -14,7 +14,15 @@ import (
 )
 
 // New — App 의존성 컨테이너를 받아 chi.Mux를 구성한다.
+// 운영용 진입점. AuthMiddleware는 Supabase JWKS 검증 + user_profiles 조회로 채워진다.
 func New(a *app.App) http.Handler {
+	return NewWithAuth(a, middleware.AuthMiddleware(a.DB))
+}
+
+// NewWithAuth — auth 미들웨어를 외부에서 주입할 수 있는 변형.
+// 가드 매트릭스 테스트(router_test.go)에서 X-Test-Tenant/X-Test-Role 헤더로 컨텍스트를
+// 직접 주입하는 stub auth를 사용하기 위해 분리. 운영 코드에서는 New(a)를 쓴다.
+func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.CORSMiddleware)
 	r.Get("/health", handler.HealthCheck)
@@ -39,7 +47,7 @@ func New(a *app.App) http.Handler {
 
 	// 인증 라우트 — 알파벳 순서로 정렬 (PR 충돌 ↓, 신규 도메인은 자기 자리에 1줄 추가)
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(middleware.AuthMiddleware(a.DB))
+		r.Use(authMW)
 
 		handler.NewAssistantHandler(a.DB).WithAlias(ocrH, matchH).RegisterRoutes(r, a.Gates)
 		attachH.RegisterRoutes(r, a.Gates)
@@ -82,8 +90,9 @@ func New(a *app.App) http.Handler {
 	})
 
 	// Rust 계산실 프록시 — engine 미사용 환경에서는 라우트 자체를 mount하지 않는다.
+	// calc/engine 트리는 별도 Route라 같은 authMW를 다시 주입한다.
 	if a.HasEngine() {
-		handler.NewCalcProxyHandler(a.Eng).RegisterRoutes(r, a.Gates, middleware.AuthMiddleware(a.DB))
+		handler.NewCalcProxyHandler(a.Eng).RegisterRoutes(r, a.Gates, authMW)
 	}
 	return r
 }

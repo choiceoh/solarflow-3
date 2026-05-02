@@ -603,7 +603,8 @@
   - **router.go는 호출만**: 알파벳 순서로 `handler.NewXxx(a.DB).RegisterRoutes(r, a.Gates)` 1줄씩. 신규 도메인 추가 시 자기 자리에만 1줄 끼워넣어 PR 충돌이 거의 없다.
   - **옵셔널 의존성**: Rust 엔진은 `app.HasEngine()` 헬퍼로 `router.New`에서 한 번만 분기. nil 체크가 핸들러로 새지 않는다.
   - **Assistant alias 처리**: `/assistant/ocr/*`, `/assistant/match/receipts/auto`는 `NewAssistantHandler(db).WithAlias(ocrH, matchH)` 빌더 패턴으로 위임 의존성을 주입. `NewAssistantHandler(db)` 1인자 시그니처는 보존(non-breaking) — public 챗(`/api/v1/public/assistant/chat`)은 alias 미주입 별도 인스턴스를 사용해 원본 분리 의도를 유지. 정식 라우트(`/api/v1/ocr/*`, `/api/v1/receipt-matches/auto`)는 그대로 유지 — alias 자체 제거 여부는 프론트 호출처 grep이 필요한 별도 결정으로 보류.
-  - **회귀 가드**: `internal/router/router_test.go`의 `TestRouteSnapshot`이 `chi.Walk`로 정렬한 `[METHOD, PATH]` 222개를 `testdata/routes.golden`과 비교한다. 라우트 누락·추가·메서드/URL 변경이 즉시 깨지며, 신규 도메인 추가 시 `go test ./internal/router -run TestRouteSnapshot -update`로 갱신.
+  - **회귀 가드 1 — 라우트 스냅샷**: `internal/router/router_test.go`의 `TestRouteSnapshot`이 `chi.Walk`로 정렬한 `[METHOD, PATH]` 222개를 `testdata/routes.golden`과 비교한다. 라우트 누락·추가·메서드/URL 변경이 즉시 깨지며, 신규 도메인 추가 시 `go test ./internal/router -run TestRouteSnapshot -update`로 갱신.
+  - **회귀 가드 2 — 가드 매트릭스**: `TestGuardMatrix`가 D-108(topsolarOnly)·D-109(baroOnly)·adminOnly·write 가드 적용을 49개 대표 라우트에 대해 검증. `NewWithAuth(a, stubAuth)`로 X-Test-Tenant/X-Test-Role 헤더 컨텍스트를 주입한 합성 요청을 흘려, (a) 통과 컨텍스트는 403이 아니어야 하고 (b) 각 가드를 실패시키는 컨텍스트는 정확히 403이어야 한다. 실수로 `topsolarOnly`를 `baroOnly`로 바꾸거나 `g.Write`를 빼먹으면 컴파일·CI 시점에 즉시 차단 (sanity 검증 완료 — fault injection으로 3건 실패 확인 후 원복).
 - **이유**: Phase 4 마스터 메타화 8연속 머지(법인→은행→창고→제조사→품번 …)에서 매번 `router.go` 단일 파일을 수정해 PR 충돌이 빈발했고, 신규 도메인 추가 시 마이그레이션 + 핸들러 + 모델 + 라우트 4곳을 모두 손대야 하는 마찰이 누적됐다. D-108/D-109로 테넌트 가드(`topsolarOnly`/`baroOnly`)가 라우트 단위에 박히면서 가드 누락 위험도 함께 커졌다. RegisterRoutes 패턴은 (1) 핸들러가 자기 URL·가드를 한 파일 안에 소유 → 응집도, (2) router.go는 호출만 → 알파벳 정렬로 충돌 면적 최소, (3) snapshot 테스트가 회귀를 즉시 잡음, 세 가지를 한 번에 해결한다.
 - **운영 기준**:
   - **신규 도메인 추가 절차**(RULES.md "신규 도메인 추가 절차" 참조):
@@ -615,9 +616,10 @@
   - **빅뱅 도입 사유**: 점진 분할안(PR1=골격, PR2~N=도메인 묶음)을 검토했으나 면적이 50개로 한정적이고 `routes.golden` 회귀 가드가 충분하다고 판단. 한 PR로 병합.
   - **alias 정리 후속**: `/assistant/ocr/*`, `/assistant/match/receipts/auto` 두 alias의 제거 여부는 프론트 호출처 점검이 필요한 별도 PR로 보류한다. 그동안은 위임 형태로 유지하며 정식 라우트와 동등 동작을 보장.
 - **검증**:
-  - `go build ./...`, `go vet ./...`, `go test ./...` 모두 성공 (router 신규 테스트 2건 PASS — TestRouteSnapshot, TestRouteSnapshot_NoEngine)
+  - `go build ./...`, `go vet ./...`, `go test ./...` 모두 성공 (router 신규 테스트 3건 PASS — TestRouteSnapshot, TestRouteSnapshot_NoEngine, TestGuardMatrix 49개 sub-case)
   - 라우트 222개(engine 포함) 골든파일 캡처
-  - main.go 44줄 → 23줄, router.go 500줄 → 89줄
+  - 가드 매트릭스 49개 라우트 — D-108 17건 + calc 7건 + D-109 10건 + intercompany 4건 + adminOnly 5건 + write 6건
+  - main.go 44줄 → 23줄, router.go 500줄 → 95줄 (NewWithAuth 분리 후)
 - **날짜**: 2026-05-02
 
 ## D-111: `/api/v1/assistant/{ocr,match}/*` alias 라우트는 영구 유지
