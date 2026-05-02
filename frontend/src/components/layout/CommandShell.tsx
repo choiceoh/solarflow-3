@@ -22,7 +22,6 @@ import {
   Truck,
   Wallet,
   Wand2,
-  GitFork,
   type LucideIcon,
 } from 'lucide-react';
 import { detectTenantScope, type TenantScope } from '@/lib/tenantScope';
@@ -30,7 +29,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import GlobalSearchBar from '@/components/search/GlobalSearchBar';
 import AlertBell from '@/components/layout/AlertBell';
 import QuickRegister from '@/components/layout/QuickRegister';
-import TenantSwitcher from '@/components/layout/TenantSwitcher';
 import FloatingMwEaCalculator from '@/components/common/FloatingMwEaCalculator';
 import {
   EditModeBadge,
@@ -128,8 +126,6 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: ['topsolar'] },
       // admin 전용 — 메타 config 시각 편집 (DB 영구 저장, 모든 사용자 영향)
       { key: 'ui-editor', label: 'UI 편집기', abbr: 'UI', path: '/ui-config-editor', icon: Wand2, menu: 'ui_editor' },
-      // admin 전용 — tenant 별 runtime override (localStorage, 본인 브라우저)
-      { key: 'tenant-editor', label: 'Tenant 편집기', abbr: '계열', path: '/tenant-config-editor', icon: GitFork, menu: 'tenant_editor' },
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
     ],
   },
@@ -148,7 +144,6 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/assistant': { title: 'AI', breadcrumb: '도구 / 채팅 어시스턴트' },
   '/settings': { title: '설정', breadcrumb: '시스템 / 관리자' },
   '/ui-config-editor': { title: 'UI 편집기', breadcrumb: '도구 / 화면·폼 시각 편집 (모든 사용자)' },
-  '/tenant-config-editor': { title: 'Tenant 편집기', breadcrumb: '도구 / 계열사별 화면 조정 (본인 브라우저)' },
 };
 
 function routeMeta(pathname: string, search: string) {
@@ -271,9 +266,6 @@ export default function CommandShell() {
             </SelectContent>
           </Select>
         </div>
-
-        {/* Phase 4 PoC: 계열사 포크 — tenant 전환 (사이드바 인디케이터) */}
-        <TenantSwitcher />
 
         <nav className="sf-sidebar-nav" aria-label="주요 메뉴 목록">
           {NAV_GROUPS.map((group) => {

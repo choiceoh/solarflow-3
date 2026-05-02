@@ -4,8 +4,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useResolvedConfig } from './configOverride';
-import { applyTenantToForm } from '@/config/tenants';
-import { useTenantStore } from '@/stores/tenantStore';
 import { useForm, type FieldValues } from 'react-hook-form';
 import { z, type ZodTypeAny, type ZodObject, type ZodRawShape } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -728,15 +726,8 @@ function buildPayload(
 }
 
 export default function MetaForm({ config: defaultConfig, open, onOpenChange, onSubmit, editData, extraContext }: MetaFormProps) {
-  // Phase 4 PoC: tenant 오버레이 (계열사 포크)
-  const tenantId = useTenantStore((s) => s.tenantId);
-  const runtimeVersion = useTenantStore((s) => s.runtimeVersion);
-  const tenantConfig = useMemo(
-    () => applyTenantToForm(defaultConfig, tenantId),
-    [defaultConfig, tenantId, runtimeVersion],
-  );
-  // Phase 3: localStorage override 우선, 없으면 (tenant 적용된) defaultConfig
-  const config = useResolvedConfig(tenantConfig, 'form');
+  // Phase 3: localStorage override 우선, 없으면 defaultConfig
+  const config = useResolvedConfig(defaultConfig, 'form');
   const allFields = useMemo(() => config.sections.flatMap((s) => s.fields), [config]);
   const schema = useMemo(() => buildZodSchema(config), [config]);
   const { role } = usePermission();

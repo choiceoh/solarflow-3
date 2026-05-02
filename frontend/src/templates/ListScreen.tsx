@@ -3,8 +3,6 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useResolvedConfig } from './configOverride';
-import { applyTenantToScreen } from '@/config/tenants';
-import { useTenantStore } from '@/stores/tenantStore';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -611,16 +609,8 @@ export function HeaderActions({
 
 // ─── 단일 리스트 페이지 ────────────────────────────────────────────────────
 export default function ListScreen({ config: defaultConfig }: { config: ListScreenConfig }) {
-  // Phase 4 PoC: tenant 오버레이 (계열사 포크) — base 에 tenant override 먼저 적용
-  const tenantId = useTenantStore((s) => s.tenantId);
-  // runtimeVersion 변경 시 재계산 (admin GUI 로 runtime override 편집 시)
-  const runtimeVersion = useTenantStore((s) => s.runtimeVersion);
-  const tenantConfig = useMemo(
-    () => applyTenantToScreen(defaultConfig, tenantId),
-    [defaultConfig, tenantId, runtimeVersion],
-  );
-  // Phase 3: localStorage override 우선, 없으면 (tenant 적용된) defaultConfig
-  const config = useResolvedConfig(tenantConfig, 'screen');
+  // Phase 3: localStorage override 우선, 없으면 defaultConfig
+  const config = useResolvedConfig(defaultConfig, 'screen');
   const [selected, setSelected] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   // 멀티 선택 + 컬럼 가시성. (정렬은 MetaTable 이 자체 영속 — 더 이상 ListScreen 상태로 보유 안 함)

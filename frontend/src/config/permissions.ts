@@ -38,7 +38,6 @@ export type MenuKey =
   | 'crm_inbox'     // CRM: 내 미처리 문의
   | 'settings'      // 설정 (admin 전용)
   | 'ui_editor'     // UI 메타 config 편집기 (admin 전용)
-  | 'tenant_editor' // Tenant runtime override 편집기 (admin 전용)
   // BARO 테넌트 전용 메뉴
   | 'baro_group_purchase'   // BARO: 그룹내 매입 요청 등록
   | 'baro_dispatch'         // BARO: 배차/일정 보드
