@@ -2,7 +2,7 @@ import { Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { formatCapacity, formatNumber } from '@/lib/utils';
-import { type BLLineItem } from '@/types/inbound';
+import type { BLLineItem } from '@/types/inbound';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
 
 export const BL_LINE_TABLE_ID = 'bl-line';

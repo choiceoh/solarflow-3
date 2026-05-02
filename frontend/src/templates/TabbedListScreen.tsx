@@ -24,6 +24,9 @@ export default function TabbedListScreen({ config: defaultConfig }: { config: Ta
   const pageActions = usePageActions();
 
   // 모든 탭의 상태를 동시에 유지 (메트릭이 비활성 탭 데이터도 사용할 수 있게)
+  // config.tabs는 컴포넌트 인스턴스 수명 동안 길이가 변하지 않는다는 전제로 hook을 map 안에서 호출.
+  // 길이가 변하면 React state가 깨지므로 향후 per-tab 컴포넌트 분리로 리팩터 예정.
+  // biome-ignore lint/correctness/useHookAtTopLevel: 위 전제 하에 의도된 사용
   const tabStates = config.tabs.map((t) => ({ tab: t, state: useTabState(t.list) }));
   const activeTabIdx = config.tabs.findIndex((t) => t.key === activeKey);
   const active = tabStates[activeTabIdx] ?? tabStates[0];

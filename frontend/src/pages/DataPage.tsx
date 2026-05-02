@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { type Column } from '@/components/common/DataTable';
+import type { Column } from '@/components/common/DataTable';
 import { Badge } from '@/components/ui/badge';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { FilterChips } from '@/components/command/MockupPrimitives';

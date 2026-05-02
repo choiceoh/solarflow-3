@@ -16,8 +16,13 @@ React + Vite + TypeScript + Tailwind 기반 SolarFlow 업무 화면입니다.
 npm install
 npm run dev
 npm run build
-npm run lint
+npm run lint     # Biome 린트만
+npm run format   # Biome 포맷만 (--write)
+npm run check    # 린트 + 포맷 동시 (--write)
 ```
+
+> 린트/포맷은 [Biome](https://biomejs.dev) 사용 (ESLint + ts-eslint에서 이관, ~10–30배 빠름).
+> 설정: `biome.json`. CI에서는 `npm run ci` (Biome `ci` 모드, write 안 함).
 
 ## 환경변수
 
