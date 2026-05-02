@@ -388,30 +388,28 @@ export default function AssistantPage() {
               : '질문을 입력하세요. Enter 전송 · Shift+Enter 줄바꿈'
           }
           rows={5}
-          className="flex-1 resize-none text-base leading-relaxed"
+          className="flex-1 resize-none text-lg leading-relaxed md:text-lg"
           disabled={busy}
         />
-        <div className="flex flex-col gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-12 w-12"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={busy}
-            title="파일 첨부 (PDF/이미지, OCR 추출)"
-          >
-            <Paperclip className="h-5 w-5" />
-          </Button>
-          <Button
-            onClick={send}
-            disabled={busy || (!input.trim() && attachments.length === 0)}
-            className="h-12 px-5 text-base"
-          >
-            <Send className="mr-1.5 h-5 w-5" />
-            {ocrBusy ? 'OCR 중…' : '전송'}
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-12 w-12 shrink-0"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={busy}
+          title="파일 첨부 (PDF/이미지, OCR 추출)"
+        >
+          <Paperclip className="h-5 w-5" />
+        </Button>
+        <Button
+          onClick={send}
+          disabled={busy || (!input.trim() && attachments.length === 0)}
+          className="h-12 shrink-0 px-5 text-base"
+        >
+          <Send className="mr-1.5 h-5 w-5" />
+          {ocrBusy ? 'OCR 중…' : '전송'}
+        </Button>
         <input
           ref={fileInputRef}
           type="file"
