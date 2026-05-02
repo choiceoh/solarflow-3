@@ -21,6 +21,43 @@ import {
 } from '@/config/tenants/runtimeOverride';
 import { loadHistory, clearHistory, type HistoryEntry } from '@/config/tenants/runtimeOverrideHistory';
 import { tenantOverrides } from '@/config/tenants';
+import type { ListScreenConfig, MetaFormConfig } from '@/templates/types';
+import VisualScreenEditor from './UIConfigEditor/VisualScreenEditor';
+import VisualFormEditor from './UIConfigEditor/VisualFormEditor';
+// 마스터 화면/폼 default config — Visual 모드에서 base 로 사용
+import companiesScreen from '@/config/screens/companies';
+import banksScreen from '@/config/screens/banks';
+import warehousesScreen from '@/config/screens/warehouses';
+import manufacturersScreen from '@/config/screens/manufacturers';
+import productsScreen from '@/config/screens/products';
+import constructionSitesScreen from '@/config/screens/construction_sites';
+import partnersScreen from '@/config/screens/partners';
+import companyForm from '@/config/forms/companies';
+import bankForm from '@/config/forms/banks';
+import warehouseForm from '@/config/forms/warehouses';
+import manufacturerForm from '@/config/forms/manufacturers';
+import productForm from '@/config/forms/products';
+import constructionSiteForm from '@/config/forms/construction_sites';
+import partnerForm from '@/config/forms/partners';
+
+const SCREEN_DEFAULTS: Record<string, ListScreenConfig> = {
+  companies: companiesScreen,
+  banks: banksScreen,
+  warehouses: warehousesScreen,
+  manufacturers: manufacturersScreen,
+  products: productsScreen,
+  construction_sites: constructionSitesScreen,
+  partners: partnersScreen,
+};
+const FORM_DEFAULTS: Record<string, MetaFormConfig> = {
+  company_form_v2: companyForm,
+  bank_form_v2: bankForm,
+  warehouse_form_v2: warehouseForm,
+  manufacturer_form_v2: manufacturerForm,
+  product_form_v2: productForm,
+  construction_site_form_v2: constructionSiteForm,
+  partner_form_v2: partnerForm,
+};
 
 interface KnownConfig {
   kind: ConfigKind;
@@ -80,6 +117,7 @@ export default function TenantOverrideEditorPage() {
   const [showDiff, setShowDiff] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [editMode, setEditMode] = useState<'json' | 'visual'>('json');
 
   const selected = useMemo(
     () => KNOWN_CONFIGS.find((c) => `${c.kind}:${c.id}` === selectedKey) ?? KNOWN_CONFIGS[0],
@@ -114,10 +152,11 @@ export default function TenantOverrideEditorPage() {
 
   useEffect(() => { refreshActive(); }, []);
 
-  // 선택/tenant 변경 시 이력 새로고침
+  // 선택/tenant 변경 시 이력 새로고침 + visual 모드 자동 해제 (지원 안 하는 config 일 수 있음)
   useEffect(() => {
     setHistory(loadHistory(tenantId, selected.kind, selected.id));
     setShowHistory(false);
+    setEditMode('json');
   }, [tenantId, selected.kind, selected.id]);
 
   if (role !== 'admin') {
@@ -256,6 +295,44 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
     [codeOverlay],
   );
 
+  // Visual 모드용: base default 가 등록된 config 인지 (등록 안 됨 = visual 비활성)
+  const baseDefault = useMemo(() => {
+    if (selected.kind === 'screen') return SCREEN_DEFAULTS[selected.id] ?? null;
+    return FORM_DEFAULTS[selected.id] ?? null;
+  }, [selected.kind, selected.id]);
+
+  // Visual 모드 진입 시: base + code overlay + 현재 draft 를 merge 해서 시각 편집기에 전달
+  const visualValue = useMemo(() => {
+    if (!baseDefault) return null;
+    let parsedDraft: Record<string, unknown> = {};
+    try {
+      const p = JSON.parse(draft);
+      if (p && typeof p === 'object') parsedDraft = p as Record<string, unknown>;
+    } catch { /* invalid — base+code 만 사용 */ }
+
+    // applyTenantToScreen / Form 은 loadRuntimeOverride 를 호출하므로 사용 못 함 (편집중 draft 가 아니라 저장된 값)
+    // 직접 merge: base → code → draft (page/title 만 deep merge, 나머지는 교체)
+    const code = (selected.kind === 'screen'
+      ? tenantOverrides[tenantId]?.screens?.[selected.id]
+      : tenantOverrides[tenantId]?.forms?.[selected.id]) ?? {};
+    const nestedKey = selected.kind === 'screen' ? 'page' : 'title';
+
+    const merged: Record<string, unknown> = { ...(baseDefault as unknown as Record<string, unknown>) };
+    for (const layer of [code as Record<string, unknown>, parsedDraft]) {
+      for (const [k, v] of Object.entries(layer)) {
+        if (v === undefined) continue;
+        if (k === nestedKey && v !== null && typeof v === 'object' && !Array.isArray(v)) {
+          const baseVal = merged[k];
+          const baseObj = (baseVal && typeof baseVal === 'object' ? baseVal : {}) as Record<string, unknown>;
+          merged[k] = { ...baseObj, ...(v as Record<string, unknown>) };
+        } else {
+          merged[k] = v;
+        }
+      }
+    }
+    return merged;
+  }, [baseDefault, tenantId, selected.kind, selected.id, draft]);
+
   // top-level 키 단위 변경 요약 (added/removed/changed)
   const keyDiff = useMemo(() => {
     let runtime: Record<string, unknown> | null = null;
@@ -357,9 +434,19 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
               <Button size="sm" variant="outline" onClick={onValidate}>검증</Button>
               <Button
                 size="sm"
+                variant={editMode === 'visual' ? 'default' : 'outline'}
+                onClick={() => setEditMode((m) => m === 'visual' ? 'json' : 'visual')}
+                disabled={!baseDefault}
+                title={baseDefault ? '시각 편집기로 전환 (전체 config 편집 — 저장 시 partial 효과 잃음)' : '이 config 는 시각 편집기 미지원'}
+              >
+                {editMode === 'visual' ? 'Visual' : 'Visual 모드'}
+              </Button>
+              <Button
+                size="sm"
                 variant={showDiff ? 'default' : 'outline'}
                 onClick={() => setShowDiff((v) => !v)}
-                title="코드 overlay 와 runtime override 비교"
+                disabled={editMode === 'visual'}
+                title="코드 overlay 와 runtime override 비교 (JSON 모드에서만)"
               >
                 Diff
               </Button>
@@ -434,7 +521,15 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
             </div>
           )}
 
-          {showDiff && (keyDiff.added.length + keyDiff.removed.length + keyDiff.changed.length > 0) && (
+          {editMode === 'visual' && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+              <strong>Visual 모드</strong> — base default + 코드 overlay + 현재 runtime 을 합쳐 전체 config 편집 중.
+              [적용] 시 runtime override 가 <strong>전체 config 로 교체</strong>됩니다 (partial 효과 잃음 — 이후 base/code 변경이 자동 반영되지 않음).
+              partial 으로 돌아가려면 [기본값 복원] 후 JSON 모드에서 다시 작성하세요.
+            </div>
+          )}
+
+          {editMode === 'json' && showDiff && (keyDiff.added.length + keyDiff.removed.length + keyDiff.changed.length > 0) && (
             <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px]">
               <span className="font-medium text-amber-900">최상위 키 차이:</span>
               {keyDiff.added.map((k) => (
@@ -449,7 +544,25 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
             </div>
           )}
 
-          {showDiff ? (
+          {editMode === 'visual' && visualValue ? (
+            <div className="rounded-md border bg-card min-h-[600px] flex flex-col">
+              {selected.kind === 'screen' ? (
+                <VisualScreenEditor
+                  value={visualValue as ListScreenConfig}
+                  onChange={(next) => setDraft(JSON.stringify(next, null, 2))}
+                  jsonDraft={draft}
+                  onJsonDraftChange={setDraft}
+                />
+              ) : (
+                <VisualFormEditor
+                  value={visualValue as MetaFormConfig}
+                  onChange={(next) => setDraft(JSON.stringify(next, null, 2))}
+                  jsonDraft={draft}
+                  onJsonDraftChange={setDraft}
+                />
+              )}
+            </div>
+          ) : showDiff ? (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
