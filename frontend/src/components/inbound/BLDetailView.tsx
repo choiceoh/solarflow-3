@@ -21,7 +21,9 @@ import BLForm from './BLForm';
 import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { useBLDetail, useBLLines } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
-import { INBOUND_TYPE_LABEL, type BLLineItem } from '@/types/inbound';
+import { type BLLineItem } from '@/types/inbound';
+import { MetaDetailBody } from '@/templates/MetaDetail';
+import blShipmentDetailConfig from '@/config/details/bl_shipment';
 import type { Manufacturer } from '@/types/masters';
 import BLExpensesTab from './BLExpensesTab';
 import BLOutboundTrackingTab from './BLOutboundTrackingTab';
@@ -88,6 +90,13 @@ export default function BLDetailView({ blId, onBack }: Props) {
       .catch(() => { if (!cancelled) setManufacturerName(''); });
     return () => { cancelled = true; };
   }, [bl?.manufacturer_id, bl?.manufacturer_name]);
+
+  // Step 2: MetaDetail contentBlock (bl_edit_button) 가 발행하는 이벤트 구독
+  useEffect(() => {
+    const onEdit = () => setEditingBL(true);
+    window.addEventListener('sf-bl-detail-edit', onEdit);
+    return () => window.removeEventListener('sf-bl-detail-edit', onEdit);
+  }, []);
 
   if (blLoading || !bl) return <LoadingSpinner />;
 
@@ -206,76 +215,11 @@ export default function BLDetailView({ blId, onBack }: Props) {
 
         <TabsContent value="basic">
           <div className="space-y-4">
-            <DetailSection
-              title="기본 정보"
-              badges={<InboundStatusBadge status={bl.status} />}
-              actions={(
-                <Button variant="outline" size="sm" onClick={() => setEditingBL(true)}>
-                  <Pencil className="mr-1 h-3.5 w-3.5" />수정
-                </Button>
-              )}
-            >
-              <DetailFieldGrid cols={4}>
-                <DetailField label="입고 구분" value={INBOUND_TYPE_LABEL[bl.inbound_type]} />
-                <DetailField label="공급사" value={shortMfgName(manufacturerName || bl.manufacturer_name)} />
-                {bl.po_id && (
-                  <DetailField label="PO번호">
-                    <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/procurement?po=${bl.po_id}`; }}>
-                      {bl.po_number ?? bl.po_id.slice(0, 8)}
-                    </button>
-                  </DetailField>
-                )}
-                {bl.lc_id && (
-                  <DetailField label="LC번호">
-                    <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/lc?lc=${bl.lc_id}`; }}>
-                      {bl.lc_number ?? bl.lc_id.slice(0, 8)}
-                    </button>
-                  </DetailField>
-                )}
-                <DetailField label="통화" value={bl.currency === 'USD' ? 'USD (달러)' : 'KRW (원)'} />
-                {isImport && <DetailField label="환율" value={bl.exchange_rate?.toString()} />}
-                <DetailField label="입고 창고" value={bl.warehouse_name} />
-              </DetailFieldGrid>
-            </DetailSection>
-
-            {isImport && (
-              <DetailSection title="선적 일정">
-                <DetailFieldGrid cols={4}>
-                  <DetailField label="ETD" value={formatDate(bl.etd ?? '')} />
-                  <DetailField label="ETA" value={formatDate(bl.eta ?? '')} />
-                  <DetailField label="실제입항" value={formatDate(bl.actual_arrival ?? '')} />
-                  <DetailField label="항구" value={bl.port} />
-                  <DetailField label="포워더" value={bl.forwarder} />
-                  <DetailField label="Invoice No." value={bl.invoice_number} />
-                  {bl.declaration_number && <DetailField label="면장번호" value={bl.declaration_number} />}
-                  <DetailField label="인코텀즈" value={bl.incoterms} />
-                </DetailFieldGrid>
-              </DetailSection>
-            )}
-
-            {!isImport && (
-              <DetailSection title="입고/납품">
-                <DetailFieldGrid cols={4}>
-                  <DetailField label="입고/납품일" value={formatDate(bl.actual_arrival ?? '')} />
-                  {bl.declaration_number && <DetailField label="면장번호" value={bl.declaration_number} />}
-                </DetailFieldGrid>
-              </DetailSection>
-            )}
-
-            {(bl.payment_terms || bl.counterpart_company_id) && (
-              <DetailSection title="결제 · 거래">
-                <DetailFieldGrid cols={4}>
-                  {bl.payment_terms && <DetailField label="결제조건" value={bl.payment_terms} span={2} />}
-                  {bl.counterpart_company_id && <DetailField label="상대법인" value={bl.counterpart_company_id} span={2} />}
-                </DetailFieldGrid>
-              </DetailSection>
-            )}
-
-            {bl.memo && (
-              <DetailSection title="메모">
-                <p className="text-sm whitespace-pre-wrap break-words">{bl.memo}</p>
-              </DetailSection>
-            )}
+            <MetaDetailBody config={blShipmentDetailConfig} data={{
+              ...bl,
+              // 공급사 짧은 이름 + 별도 lookup 보강
+              manufacturer_name: shortMfgName(manufacturerName || bl.manufacturer_name),
+            } as Record<string, unknown>} />
 
             {lines.length > 0 && (() => {
               const totalQty = lines.reduce((s, l) => s + l.quantity, 0);

@@ -12,7 +12,7 @@ import OutboundDetailView from '@/components/outbound/OutboundDetailView';
 import OutboundForm from '@/components/outbound/OutboundForm';
 import InboundStatusBadge from '@/components/inbound/InboundStatusBadge';
 import BLDetailView from '@/components/inbound/BLDetailView';
-import { useBLList } from '@/hooks/useInbound';
+import { useBLList, useBLDetail } from '@/hooks/useInbound';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL } from '@/types/inbound';
 import type { BLShipment, BLLineItem, InboundType, BLStatus } from '@/types/inbound';
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
@@ -173,6 +173,26 @@ export const cellRenderers: Record<string, CellRenderer> = {
     const name = companies.find((c) => c.company_id === r.company_id)?.company_name;
     return <span>{name ?? '—'}</span>;
   },
+  // Inbound Step 2: detail PO/LC 링크 + 통화 라벨
+  bl_po_link: (_v, row) => {
+    const r = row as BLShipment;
+    if (!r.po_id) return <span>—</span>;
+    return (
+      <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/procurement?po=${r.po_id}`; }}>
+        {r.po_number ?? r.po_id.slice(0, 8)}
+      </button>
+    );
+  },
+  bl_lc_link: (_v, row) => {
+    const r = row as BLShipment;
+    if (!r.lc_id) return <span>—</span>;
+    return (
+      <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/lc?lc=${r.lc_id}`; }}>
+        {r.lc_number ?? r.lc_id.slice(0, 8)}
+      </button>
+    );
+  },
+  bl_currency_label: (v) => <span>{v === 'USD' ? 'USD (달러)' : 'KRW (원)'}</span>,
 };
 
 // 단순 리스트 fetch hook (서버 필터 없음 — 클라이언트 검색만)
@@ -272,6 +292,8 @@ export type DetailDataHook = (id: string) => { data: unknown; loading: boolean }
 export const detailDataHooks: Record<string, DetailDataHook> = {
   useOutboundDetail: (id) => useOutboundDetail(id) as unknown as { data: unknown; loading: boolean },
   useDeclarationDetail: (id) => useDeclarationDetail(id) as unknown as { data: unknown; loading: boolean },
+  // Inbound Step 2
+  useBLShipmentDetail: (id) => useBLDetail(id) as unknown as { data: unknown; loading: boolean },
 };
 
 // ─── Metric computers ──────────────────────────────────────────────────────
@@ -654,6 +676,27 @@ export const toolbarExtras: Record<string, ToolbarExtra> = {
 // ─── Content blocks (탭 콘텐츠 위에 끼워넣는 블록) ─────────────────────────
 export const contentBlocks: Record<string, ContentBlock> = {
   sale_summary_cards: ({ items }) => <SaleSummaryCards items={items as never} />,
+  // Inbound Step 2: 기본 정보 섹션 헤더의 status badge
+  bl_status_badge: ({ items }) => {
+    const r = items[0] as BLShipment;
+    return <InboundStatusBadge status={r.status} />;
+  },
+  // Inbound Step 2: 기본 정보 섹션 헤더의 수정 버튼 — 클릭 시 BLDetailView 가 구독중인 이벤트 발행
+  bl_edit_button: () => (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 rounded border border-input bg-background px-2.5 py-1 text-xs hover:bg-muted"
+      onClick={() => window.dispatchEvent(new CustomEvent('sf-bl-detail-edit'))}
+    >
+      ✏️ 수정
+    </button>
+  ),
+  // Inbound Step 2: 메모 섹션 본문
+  bl_memo_block: ({ items }) => {
+    const r = items[0] as BLShipment;
+    if (!r.memo) return null;
+    return <p className="whitespace-pre-wrap text-sm text-foreground">{r.memo}</p>;
+  },
   // Phase 2.5: 출고 상세의 B/L 연결 다중 행 (MetaDetail의 contentBlock 슬롯용)
   outbound_bl_items_section: ({ items }) => {
     const ob = items[0] as Outbound;

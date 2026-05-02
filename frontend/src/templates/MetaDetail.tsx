@@ -68,6 +68,23 @@ function renderBlock(
   return Block({ items: [data], config: (blockConfig.props ?? {}) as Record<string, unknown> });
 }
 
+// 외부 host (예: BLDetailView 가 자체 header/tab 으로 감싸는 경우) 가 직접 섹션만 렌더하도록 export.
+// MetaDetail 의 fetch / header 로직 우회.
+export function MetaDetailBody({
+  config, data,
+}: {
+  config: MetaDetailConfig;
+  data: Record<string, unknown>;
+}) {
+  return (
+    <>
+      {config.sections.map((sec, idx) => (
+        <MetaDetailSection key={idx} section={sec} data={data} />
+      ))}
+    </>
+  );
+}
+
 function MetaDetailSection({
   section, data,
 }: {
