@@ -197,6 +197,35 @@ export async function fetchBlobWithAuth(path: string, options?: RequestInit): Pr
   return res;
 }
 
+// streamFetchWithAuth — Vercel AI SDK 의 transport.fetch 에 주입할 fetch 래퍼.
+// fetch 시그니처(input, init) 그대로 받아 Response 반환. 401 시 토큰 갱신 후 1회 재시도.
+// fetchWithAuth 와 달리 본문 파싱 안 함 — 스트림은 호출자가 res.body 로 직접 읽음.
+export const streamFetchWithAuth: typeof fetch = async (input, init) => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+  const token = await getSessionToken();
+
+  const headers = new Headers(init?.headers);
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (!headers.has('Content-Type') && !(init?.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const finalURL = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+  const res = await fetch(finalURL, { ...init, headers });
+  if (res.status !== 401) return res;
+
+  const newToken = await refreshAccessToken();
+  if (!newToken) {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+    throw new Error('인증이 만료되었습니다');
+  }
+  headers.set('Authorization', `Bearer ${newToken}`);
+  return fetch(finalURL, { ...init, headers });
+};
+
 // 기존 호환용
 export async function api<T = unknown>(path: string, options?: RequestInit): Promise<T> {
   return fetchWithAuth<T>(path, options);

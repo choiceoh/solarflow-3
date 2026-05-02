@@ -13,12 +13,15 @@ import (
 	"solarflow-backend/internal/middleware"
 )
 
-// assistantTool — LLM에 노출하는 읽기 전용 DB 조회 도구.
+// assistantTool — LLM에 노출하는 도구 정의.
+// kind="read" 는 즉시 실행 후 결과를 LLM 에 회신하고 클라이언트 UI 에 tool-invocation 으로 가시화.
+// kind="propose" 는 proposalStore 에 stash 후 사용자 승인 단계로 위임 — 클라이언트 UI 에는 data part 로 proposal 객체만 흘려보냄.
 // allow(ctx)로 역할 기반 노출/차단을 결정하고, execute는 결과 JSON 문자열을 반환.
 type assistantTool struct {
 	name        string
 	description string
 	inputSchema json.RawMessage
+	kind        string // "read" | "propose"
 	allow       func(ctx context.Context) bool
 	execute     func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error)
 }
@@ -34,8 +37,9 @@ func roleIn(ctx context.Context, allowed ...string) bool {
 }
 
 // assistantToolCatalog — 등록 순서가 곧 LLM 노출 순서.
+// kind 는 카탈로그 한 곳에서 일괄 부여 — 개별 tool*() 함수가 자기 분류를 신경 쓸 필요 없음.
 func assistantToolCatalog() []assistantTool {
-	return []assistantTool{
+	reads := []assistantTool{
 		// 마스터 룩업
 		toolSearchProducts(),
 		toolSearchManufacturers(),
@@ -52,6 +56,8 @@ func assistantToolCatalog() []assistantTool {
 		toolSearchLC(),
 		toolSearchBL(),
 		toolSearchDeclarations(),
+	}
+	proposes := []assistantTool{
 		// 쓰기 — 메모
 		toolCreateNote(),
 		toolUpdateNote(),
@@ -69,6 +75,16 @@ func assistantToolCatalog() []assistantTool {
 		toolCreateReceipt(),
 		toolCreateDeclaration(),
 	}
+	out := make([]assistantTool, 0, len(reads)+len(proposes))
+	for _, t := range reads {
+		t.kind = "read"
+		out = append(out, t)
+	}
+	for _, t := range proposes {
+		t.kind = "propose"
+		out = append(out, t)
+	}
+	return out
 }
 
 // tenantIs — 현재 사용자의 테넌트 스코프 매칭.

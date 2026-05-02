@@ -33,7 +33,9 @@ import (
 // ocrH·matchH는 alias 라우트(/assistant/ocr/*, /assistant/match/receipts/auto) 위임용 — 생성자에서 주입.
 func (h *AssistantHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/assistant", func(r chi.Router) {
-		r.Post("/chat", h.Chat)
+		r.Post("/chat", h.ChatStream)
+		// 비스트리밍 fallback — PR-4 에서 제거. 도입 직후 회귀 시 프론트가 이 라우트로 직접 호출 가능.
+		r.Post("/chat-legacy", h.Chat)
 		r.Post("/proposals/{id}/confirm", h.ConfirmProposal)
 		r.Post("/proposals/{id}/reject", h.RejectProposal)
 		// 대화 세션 영구 저장소 — 우측상단 세션목록이 사용

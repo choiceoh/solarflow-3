@@ -1,49 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import type { UIMessage } from 'ai';
 import { Bot, Check, FileText, Inbox, MessageSquarePlus, Paperclip, Send, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
-
-type Role = 'user' | 'assistant';
-type Provider = 'anthropic' | 'openai';
-
-interface Proposal {
-  id: string;
-  kind: string;
-  summary: string;
-  payload: unknown;
-}
-
-type ProposalStatus = 'pending' | 'submitting' | 'confirmed' | 'rejected' | 'error';
-
-interface ProposalState extends Proposal {
-  status: ProposalStatus;
-  errorMessage?: string;
-}
-
-interface ChatMessage {
-  role: Role;
-  content: string;
-  proposals?: ProposalState[];
-}
-
-interface AssistantChatResponse {
-  content: string;
-  model: string;
-  provider: Provider;
-  proposals?: Proposal[];
-}
+import {
+  toBackendMessages,
+  extractProposals,
+  extractText,
+  type ProposalState,
+  type ProposalStatus,
+} from '@/lib/assistantMessages';
 
 interface SessionSummary {
   id: string;
@@ -53,18 +25,12 @@ interface SessionSummary {
 }
 
 interface SessionDetail extends SessionSummary {
-  messages: ChatMessage[];
+  messages: UIMessage[];
 }
 
 const SESSION_TITLE_MAX = 30;
-
-function buildSessionTitle(messages: ChatMessage[]): string {
-  const firstUser = messages.find((m) => m.role === 'user');
-  const text = firstUser?.content?.trim() ?? '';
-  if (!text) return '새 대화';
-  const oneLine = text.replace(/\s+/g, ' ');
-  return oneLine.length > SESSION_TITLE_MAX ? oneLine.slice(0, SESSION_TITLE_MAX) + '…' : oneLine;
-}
+const OCR_ACCEPT = 'application/pdf,image/jpeg,image/png,image/webp,image/gif';
+const OCR_MAX_BYTES = 20 * 1024 * 1024;
 
 const PROPOSAL_KIND_LABEL: Record<string, string> = {
   create_note: '메모 작성',
@@ -82,13 +48,9 @@ const PROPOSAL_KIND_LABEL: Record<string, string> = {
   create_declaration: '면장 등록',
 };
 
-const OCR_ACCEPT = 'application/pdf,image/jpeg,image/png,image/webp,image/gif';
-const OCR_MAX_BYTES = 20 * 1024 * 1024; // 20MB per file (서버 maxOCRUploadBytes)
-
 interface OCRLineLite {
   text: string;
 }
-
 interface OCRResult {
   filename: string;
   raw_text?: string;
@@ -96,12 +58,10 @@ interface OCRResult {
   error?: string;
   fields?: { document_type?: string; customs_declaration?: Record<string, unknown> };
 }
-
 interface OCRExtractResponse {
   results: OCRResult[];
 }
 
-// 사용자 메시지 본문에 OCR 결과를 붙이는 형식 — LLM이 인식하기 쉽도록 마커 포함.
 function buildOCRBlock(results: OCRResult[]): string {
   const blocks: string[] = [];
   for (const r of results) {
@@ -120,28 +80,21 @@ function buildOCRBlock(results: OCRResult[]): string {
   return blocks.join('\n\n');
 }
 
+function buildSessionTitle(messages: UIMessage[]): string {
+  const firstUser = messages.find((m) => m.role === 'user');
+  const text = firstUser ? extractText(firstUser).trim() : '';
+  if (!text) return '새 대화';
+  const oneLine = text.replace(/\s+/g, ' ');
+  return oneLine.length > SESSION_TITLE_MAX ? oneLine.slice(0, SESSION_TITLE_MAX) + '…' : oneLine;
+}
+
 export default function AssistantPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  // 운영 디폴트는 로컬 vLLM Qwen3.6 (openai 호환) — 빠르고 비용 0.
-  // Anthropic(GLM) 은 fallback 또는 사용자 명시 토글 시 사용.
-  const [provider, setProvider] = useState<Provider>('openai');
-  const [model, setModel] = useState('');
-  const [attachments, setAttachments] = useState<File[]>([]);
-  const [parseAsCustoms, setParseAsCustoms] = useState(false);
-  const [ocrBusy, setOcrBusy] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [highlightedIdx, setHighlightedIdx] = useState<number | null>(null);
+  const sessionsEnabled = !isDevMockApiActive();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [sessionLoadingId, setSessionLoadingId] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  // 빠른 연속 send 시 setCurrentSessionId가 반영되기 전 두 번째 호출이 또 POST하지 않도록 ref로 동기 추적.
-  const sessionIdRef = useRef<string | null>(null);
-
-  const sessionsEnabled = !isDevMockApiActive();
+  const [chatKey, setChatKey] = useState(0);
 
   useEffect(() => {
     if (!sessionsEnabled) return;
@@ -150,31 +103,145 @@ export default function AssistantPage() {
       .catch(() => {});
   }, [sessionsEnabled]);
 
-  const setCurrent = (id: string | null) => {
-    sessionIdRef.current = id;
-    setCurrentSessionId(id);
+  const upsertSession = (s: SessionSummary) =>
+    setSessions((prev) => [
+      { id: s.id, title: s.title, created_at: s.created_at, updated_at: s.updated_at },
+      ...prev.filter((x) => x.id !== s.id),
+    ]);
+
+  const newSession = () => {
+    setCurrentSessionId(null);
+    setInitialMessages([]);
+    setChatKey((k) => k + 1);
   };
 
-  const upsertSession = (s: SessionSummary) => {
-    setSessions((prev) => {
-      const without = prev.filter((x) => x.id !== s.id);
-      return [
-        { id: s.id, title: s.title, created_at: s.created_at, updated_at: s.updated_at },
-        ...without,
-      ];
-    });
+  const loadSession = async (id: string) => {
+    if (id === currentSessionId || sessionLoadingId) return;
+    setSessionLoadingId(id);
+    try {
+      const detail = await fetchWithAuth<SessionDetail>(`/api/v1/assistant/sessions/${id}`);
+      setInitialMessages(Array.isArray(detail.messages) ? detail.messages : []);
+      setCurrentSessionId(detail.id);
+      setChatKey((k) => k + 1);
+    } catch {
+      // 실패 시 현 세션 유지
+    } finally {
+      setSessionLoadingId(null);
+    }
   };
 
-  const scrollToMessage = (idx: number) => {
-    const el = document.getElementById(`assistant-msg-${idx}`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setHighlightedIdx(idx);
-    window.setTimeout(() => setHighlightedIdx((v) => (v === idx ? null : v)), 1500);
+  const deleteSession = async (id: string) => {
+    try {
+      await fetchWithAuth(`/api/v1/assistant/sessions/${id}`, { method: 'DELETE' });
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      if (currentSessionId === id) newSession();
+    } catch {
+      // 무시 — 다음 새로고침 시 정합 회복
+    }
+  };
+
+  return (
+    <div className="flex h-full min-h-0">
+      <ChatBox
+        key={chatKey}
+        initialMessages={initialMessages}
+        sessionId={currentSessionId}
+        sessionsEnabled={sessionsEnabled}
+        onSessionUpserted={(s, makeCurrent) => {
+          upsertSession(s);
+          if (makeCurrent) setCurrentSessionId(s.id);
+        }}
+      />
+      <aside className="hidden w-[340px] shrink-0 flex-col border-l bg-muted/10 lg:flex">
+        <SessionsPanel
+          sessions={sessions}
+          currentSessionId={currentSessionId}
+          loadingId={sessionLoadingId}
+          enabled={sessionsEnabled}
+          onNew={newSession}
+          onLoad={loadSession}
+          onDelete={deleteSession}
+        />
+      </aside>
+    </div>
+  );
+}
+
+interface ChatBoxProps {
+  initialMessages: UIMessage[];
+  sessionId: string | null;
+  sessionsEnabled: boolean;
+  onSessionUpserted: (s: SessionSummary, makeCurrent: boolean) => void;
+}
+
+function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted }: ChatBoxProps) {
+  // 빠른 연속 send 시 setSessionIdRef 가 반영되기 전 두 번째 호출이 또 POST 하지 않도록 ref 로 동기 추적.
+  const sessionIdRef = useRef<string | null>(sessionId);
+  // 쓰기 도구 승인/거부 상태 — proposal id → status. messages 와 별도 메모리 (상태 mutation 안 함).
+  const [proposalStatuses, setProposalStatuses] = useState<Map<string, { status: ProposalStatus; errorMessage?: string }>>(
+    new Map(),
+  );
+  const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [parseAsCustoms, setParseAsCustoms] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // mock 모드에선 인증 우회 public 라우트 (Caddy 가 같은 SSE 인코딩으로 응답).
+  const apiPath = isDevMockApiActive() ? '/api/v1/public/assistant/chat' : '/api/v1/assistant/chat';
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: apiPath,
+        fetch: streamFetchWithAuth,
+        // 백엔드는 평면 메시지 + provider/model (P3: 미전송) 만 받음. parts/도구 history 는 떨굼.
+        prepareSendMessagesRequest: ({ messages, body }) => ({
+          body: {
+            messages: toBackendMessages(messages),
+            ...(body ?? {}),
+          },
+        }),
+      }),
+    [apiPath],
+  );
+
+  const { messages, sendMessage, status, error: chatError } = useChat({
+    transport,
+    messages: initialMessages,
+    onFinish: ({ messages: msgs }) => {
+      void persistMessages(msgs);
+    },
+  });
+
+  const persistMessages = async (msgs: UIMessage[]) => {
+    if (!sessionsEnabled || msgs.length === 0) return;
+    try {
+      if (!sessionIdRef.current) {
+        const created = await fetchWithAuth<SessionDetail>('/api/v1/assistant/sessions', {
+          method: 'POST',
+          body: JSON.stringify({ title: buildSessionTitle(msgs), messages: msgs }),
+        });
+        sessionIdRef.current = created.id;
+        onSessionUpserted(created, true);
+      } else {
+        const updated = await fetchWithAuth<SessionDetail>(
+          `/api/v1/assistant/sessions/${sessionIdRef.current}`,
+          { method: 'PATCH', body: JSON.stringify({ messages: msgs }) },
+        );
+        onSessionUpserted(updated, false);
+      }
+    } catch {
+      // 채팅 자체는 영향 없음 (다음 턴에서 다시 시도)
+    }
   };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, busy]);
+  }, [messages, status]);
 
   const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files ?? []);
@@ -187,15 +254,11 @@ export default function AssistantPage() {
       valid.push(f);
     }
     setAttachments((prev) => [...prev, ...valid]);
-    e.target.value = ''; // 같은 파일 재선택 허용
+    e.target.value = '';
   };
 
-  const removeAttachment = (idx: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== idx));
-  };
+  const removeAttachment = (idx: number) => setAttachments((prev) => prev.filter((_, i) => i !== idx));
 
-  // OCR 사전 호출 — 첨부 파일을 서버 OCR 엔드포인트로 보내 텍스트 추출.
-  // /api/v1/assistant/ocr/extract: AI 통합 네임스페이스 (기존 /api/v1/ocr/extract와 alias).
   const runOCR = async (files: File[]): Promise<OCRResult[]> => {
     const fd = new FormData();
     for (const f of files) fd.append('images', f);
@@ -207,358 +270,241 @@ export default function AssistantPage() {
     return res.results;
   };
 
+  const busy = status === 'submitted' || status === 'streaming' || ocrBusy;
+
   const send = async () => {
     const text = input.trim();
     if ((!text && attachments.length === 0) || busy) return;
-
     setError(null);
-    setBusy(true);
 
     let userContent = text;
-    let ocrResults: OCRResult[] = [];
-
     try {
       if (attachments.length > 0) {
-        if (isDevMockApiActive()) {
-          throw new Error('목업 모드에서는 OCR 첨부를 지원하지 않습니다');
-        }
+        if (isDevMockApiActive()) throw new Error('목업 모드에서는 OCR 첨부를 지원하지 않습니다');
         setOcrBusy(true);
         try {
-          ocrResults = await runOCR(attachments);
+          const ocrResults = await runOCR(attachments);
+          const block = buildOCRBlock(ocrResults);
+          userContent = text ? `${text}\n\n${block}` : block;
         } finally {
           setOcrBusy(false);
         }
-        const ocrBlock = buildOCRBlock(ocrResults);
-        userContent = text ? `${text}\n\n${ocrBlock}` : ocrBlock;
       }
-
-      const next: ChatMessage[] = [...messages, { role: 'user', content: userContent }];
-      setMessages(next);
       setInput('');
       setAttachments([]);
-
-      const body = JSON.stringify({
-        messages: next.map(({ role, content }) => ({ role, content })),
-        provider,
-        model: model.trim() || undefined,
-      });
-
-      let data: AssistantChatResponse;
-      if (isDevMockApiActive()) {
-        // 목업 모드 — public 라우트로 raw fetch (mockFetchWithAuth 우회, Z.ai 직결).
-        // 도구·제안은 인증이 필요하므로 자동 비활성화 → bare LLM 응답만.
-        const res = await fetch(`${API_BASE_URL}/api/v1/public/assistant/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body,
-        });
-        if (!res.ok) {
-          const errBody = await res.text();
-          throw new Error(`${res.status}: ${errBody.slice(0, 200)}`);
-        }
-        data = (await res.json()) as AssistantChatResponse;
-      } else {
-        // 실제 모드 — JWT 인증 라우트로 접근 (도구·제안 활성).
-        data = await fetchWithAuth<AssistantChatResponse>('/api/v1/assistant/chat', {
-          method: 'POST',
-          body,
-        });
-      }
-
-      const proposals: ProposalState[] | undefined = data.proposals?.map((p) => ({
-        ...p,
-        status: 'pending',
-      }));
-      const finalMessages: ChatMessage[] = [...next, { role: 'assistant', content: data.content, proposals }];
-      setMessages(finalMessages);
-      void persistMessages(finalMessages);
+      await sendMessage({ text: userContent });
     } catch (e) {
       setError(e instanceof Error ? e.message : '요청 실패');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // 세션 저장 — 메시지 배열을 받아 현재 세션이 없으면 생성, 있으면 PATCH.
-  // sessionIdRef로 동기 추적해서 빠른 연속 send 시 중복 POST를 막는다.
-  const persistMessages = async (msgs: ChatMessage[]) => {
-    if (!sessionsEnabled || msgs.length === 0) return;
-    try {
-      if (!sessionIdRef.current) {
-        const created = await fetchWithAuth<SessionDetail>('/api/v1/assistant/sessions', {
-          method: 'POST',
-          body: JSON.stringify({ title: buildSessionTitle(msgs), messages: msgs }),
-        });
-        setCurrent(created.id);
-        upsertSession(created);
-      } else {
-        const updated = await fetchWithAuth<SessionDetail>(
-          `/api/v1/assistant/sessions/${sessionIdRef.current}`,
-          { method: 'PATCH', body: JSON.stringify({ messages: msgs }) },
-        );
-        upsertSession(updated);
-      }
-    } catch {
-      // 세션 저장 실패는 채팅 내용 자체에 영향 주지 않음
-    }
-  };
-
-  const newSession = () => {
-    setMessages([]);
-    setCurrent(null);
-    setError(null);
-  };
-
-  const loadSession = async (id: string) => {
-    if (id === currentSessionId || sessionLoadingId) return;
-    setSessionLoadingId(id);
-    setError(null);
-    try {
-      const detail = await fetchWithAuth<SessionDetail>(`/api/v1/assistant/sessions/${id}`);
-      setMessages(Array.isArray(detail.messages) ? detail.messages : []);
-      setCurrent(detail.id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '세션 불러오기 실패');
-    } finally {
-      setSessionLoadingId(null);
-    }
-  };
-
-  const deleteSession = async (id: string) => {
-    try {
-      await fetchWithAuth(`/api/v1/assistant/sessions/${id}`, { method: 'DELETE' });
-      setSessions((prev) => prev.filter((s) => s.id !== id));
-      if (sessionIdRef.current === id) newSession();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '세션 삭제 실패');
     }
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      send();
+      void send();
     }
   };
 
-  const updateProposal = (msgIdx: number, propId: string, patch: Partial<ProposalState>) => {
-    setMessages((prev) =>
-      prev.map((m, i) => {
-        if (i !== msgIdx || !m.proposals) return m;
-        return {
-          ...m,
-          proposals: m.proposals.map((p) => (p.id === propId ? { ...p, ...patch } : p)),
-        };
-      }),
-    );
+  const updateProposalStatus = (id: string, patch: { status: ProposalStatus; errorMessage?: string }) => {
+    setProposalStatuses((prev) => {
+      const next = new Map(prev);
+      next.set(id, patch);
+      return next;
+    });
   };
 
-  const onConfirm = async (msgIdx: number, prop: ProposalState) => {
+  const onConfirm = async (prop: ProposalState) => {
     if (prop.status !== 'pending') return;
-    updateProposal(msgIdx, prop.id, { status: 'submitting' });
+    updateProposalStatus(prop.id, { status: 'submitting' });
     try {
       await fetchWithAuth(`/api/v1/assistant/proposals/${prop.id}/confirm`, { method: 'POST' });
-      updateProposal(msgIdx, prop.id, { status: 'confirmed' });
+      updateProposalStatus(prop.id, { status: 'confirmed' });
     } catch (e) {
-      updateProposal(msgIdx, prop.id, {
+      updateProposalStatus(prop.id, {
         status: 'error',
         errorMessage: e instanceof Error ? e.message : '저장 실패',
       });
     }
   };
 
-  const onReject = async (msgIdx: number, prop: ProposalState) => {
+  const onReject = async (prop: ProposalState) => {
     if (prop.status !== 'pending') return;
-    updateProposal(msgIdx, prop.id, { status: 'submitting' });
+    updateProposalStatus(prop.id, { status: 'submitting' });
     try {
       await fetchWithAuth(`/api/v1/assistant/proposals/${prop.id}/reject`, { method: 'POST' });
-      updateProposal(msgIdx, prop.id, { status: 'rejected' });
+      updateProposalStatus(prop.id, { status: 'rejected' });
     } catch (e) {
-      updateProposal(msgIdx, prop.id, {
+      updateProposalStatus(prop.id, {
         status: 'error',
         errorMessage: e instanceof Error ? e.message : '거부 실패',
       });
     }
   };
 
+  // 메시지별 proposal 상태 결합. messages 변경 시 proposalStatuses 의 기본값(pending) 으로 채움.
+  const messagesWithProposals = useMemo(
+    () =>
+      messages.map((m) => ({
+        message: m,
+        proposals: extractProposals(m).map<ProposalState>((p) => ({
+          ...p,
+          status: proposalStatuses.get(p.id)?.status ?? 'pending',
+          errorMessage: proposalStatuses.get(p.id)?.errorMessage,
+        })),
+      })),
+    [messages, proposalStatuses],
+  );
+
+  const pendingItems = useMemo(() => {
+    const items: { proposal: ProposalState; msgId: string }[] = [];
+    for (const { message, proposals } of messagesWithProposals) {
+      for (const p of proposals) {
+        if (p.status === 'pending') items.push({ proposal: p, msgId: message.id });
+      }
+    }
+    return items;
+  }, [messagesWithProposals]);
+
+  const scrollToMessage = (msgId: string) => {
+    const el = document.getElementById(`assistant-msg-${msgId}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedKey(msgId);
+    window.setTimeout(() => setHighlightedKey((v) => (v === msgId ? null : v)), 1500);
+  };
+
+  const liveError = error ?? (chatError ? chatError.message : null);
+
   return (
-    <div className="flex h-full min-h-0">
+    <>
       <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
-      <header className="flex flex-wrap items-center gap-3 border-b pb-3">
-        <div className="flex items-center gap-2">
-          <Bot className="h-6 w-6 text-[var(--sf-solar)]" />
-          <h2 className="text-lg font-semibold">업무 도우미</h2>
+        <header className="flex flex-wrap items-center gap-3 border-b pb-3">
+          <div className="flex items-center gap-2">
+            <Bot className="h-6 w-6 text-[var(--sf-solar)]" />
+            <h2 className="text-lg font-semibold">업무 도우미</h2>
+          </div>
+        </header>
+
+        <div ref={scrollRef} className="flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
+          {messagesWithProposals.length === 0 ? (
+            <EmptyHint />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {messagesWithProposals.map(({ message, proposals }) => (
+                <div
+                  key={message.id}
+                  id={`assistant-msg-${message.id}`}
+                  className={cn(
+                    'flex flex-col gap-2 rounded-md transition-colors',
+                    highlightedKey === message.id && 'bg-[var(--sf-solar)]/10 ring-2 ring-[var(--sf-solar)]/40',
+                  )}
+                >
+                  <Bubble role={message.role} content={extractText(message)} />
+                  {proposals.map((p) => (
+                    <ProposalCard
+                      key={p.id}
+                      proposal={p}
+                      onConfirm={() => onConfirm(p)}
+                      onReject={() => onReject(p)}
+                    />
+                  ))}
+                </div>
+              ))}
+              {(status === 'submitted' || status === 'streaming') && messages.at(-1)?.role !== 'assistant' && (
+                <Bubble role="assistant" content="…" pulse />
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Select
-            value={provider}
-            onValueChange={(v) => {
-              // provider 변경 시 model 도 비워서 서버가 provider 기본값을 적용하도록 함.
-              // (예: provider=anthropic 인데 model='qwen…' 이면 Z.ai 가 Unknown Model 400)
-              setProvider(v as Provider);
-              setModel('');
-            }}
-          >
-            <SelectTrigger className="h-9 w-[160px] text-sm">
-              <span>{provider === 'anthropic' ? 'Anthropic 호환' : 'OpenAI 호환'}</span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="anthropic">Anthropic 호환</SelectItem>
-              <SelectItem value="openai">OpenAI 호환</SelectItem>
-            </SelectContent>
-          </Select>
-          <Input
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            placeholder={
-              provider === 'anthropic'
-                ? '예: glm-5.1 (비우면 기본값)'
-                : '예: qwen3.6-35b-a3b (비우면 기본값)'
-            }
-            className="h-9 w-[220px] text-sm"
-          />
-          <Button variant="ghost" size="sm" onClick={newSession} disabled={messages.length === 0}>
-            <MessageSquarePlus className="mr-1 h-4 w-4" />새 대화
-          </Button>
-        </div>
-      </header>
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
-        {messages.length === 0 ? (
-          <EmptyHint />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                id={`assistant-msg-${i}`}
-                className={cn(
-                  'flex flex-col gap-2 rounded-md transition-colors',
-                  highlightedIdx === i && 'bg-[var(--sf-solar)]/10 ring-2 ring-[var(--sf-solar)]/40',
-                )}
-              >
-                <Bubble role={m.role} content={m.content} />
-                {m.proposals?.map((p) => (
-                  <ProposalCard
-                    key={p.id}
-                    proposal={p}
-                    onConfirm={() => onConfirm(i, p)}
-                    onReject={() => onReject(i, p)}
-                  />
-                ))}
-              </div>
-            ))}
-            {busy && <Bubble role="assistant" content="…" pulse />}
+        {liveError && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive">
+            {liveError}
           </div>
         )}
-      </div>
 
-      {error && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive">
-          {error}
-        </div>
-      )}
-
-      {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 rounded-md border bg-muted/30 p-2">
-          {attachments.map((f, i) => (
-            <div
-              key={`${f.name}-${i}`}
-              className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs"
-            >
-              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="max-w-[180px] truncate">{f.name}</span>
-              <span className="text-muted-foreground">{(f.size / 1024).toFixed(0)}KB</span>
-              <button
-                type="button"
-                onClick={() => removeAttachment(i)}
-                className="ml-0.5 rounded p-0.5 hover:bg-muted"
-                disabled={busy}
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 rounded-md border bg-muted/30 p-2">
+            {attachments.map((f, i) => (
+              <div
+                key={`${f.name}-${i}`}
+                className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs"
               >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-          <label className="flex cursor-pointer select-none items-center gap-1 px-2 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={parseAsCustoms}
-              onChange={(e) => setParseAsCustoms(e.target.checked)}
-              className="h-3 w-3"
-              disabled={busy}
-            />
-            면장 자동 인식
-          </label>
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="max-w-[180px] truncate">{f.name}</span>
+                <span className="text-muted-foreground">{(f.size / 1024).toFixed(0)}KB</span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(i)}
+                  className="ml-0.5 rounded p-0.5 hover:bg-muted"
+                  disabled={busy}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            <label className="flex cursor-pointer select-none items-center gap-1 px-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={parseAsCustoms}
+                onChange={(e) => setParseAsCustoms(e.target.checked)}
+                className="h-3 w-3"
+                disabled={busy}
+              />
+              면장 자동 인식
+            </label>
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={
+              attachments.length > 0
+                ? '첨부 파일과 함께 보낼 질문 (예: "이 면장 등록해줘")'
+                : '질문을 입력하세요. Enter 전송 · Shift+Enter 줄바꿈'
+            }
+            rows={5}
+            className="flex-1 resize-none text-lg leading-relaxed md:text-lg"
+            disabled={busy}
+          />
+          <Input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={OCR_ACCEPT}
+            onChange={onPickFiles}
+            className="hidden"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-12 w-12 shrink-0"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+            title="파일 첨부 (PDF/이미지, OCR 추출)"
+          >
+            <Paperclip className="h-5 w-5" />
+          </Button>
+          <Button
+            onClick={() => void send()}
+            disabled={busy || (!input.trim() && attachments.length === 0)}
+            className="h-12 shrink-0 px-5 text-base"
+          >
+            <Send className="mr-1.5 h-5 w-5" />
+            {ocrBusy ? 'OCR 중…' : '전송'}
+          </Button>
         </div>
-      )}
-
-      <div className="flex items-end gap-2">
-        <Textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={
-            attachments.length > 0
-              ? '첨부 파일과 함께 보낼 질문 (예: "이 면장 등록해줘")'
-              : '질문을 입력하세요. Enter 전송 · Shift+Enter 줄바꿈'
-          }
-          rows={5}
-          className="flex-1 resize-none text-lg leading-relaxed md:text-lg"
-          disabled={busy}
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-12 w-12 shrink-0"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={busy}
-          title="파일 첨부 (PDF/이미지, OCR 추출)"
-        >
-          <Paperclip className="h-5 w-5" />
-        </Button>
-        <Button
-          onClick={send}
-          disabled={busy || (!input.trim() && attachments.length === 0)}
-          className="h-12 shrink-0 px-5 text-base"
-        >
-          <Send className="mr-1.5 h-5 w-5" />
-          {ocrBusy ? 'OCR 중…' : '전송'}
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={OCR_ACCEPT}
-          onChange={onPickFiles}
-          className="hidden"
-        />
-      </div>
       </div>
 
-      <aside className="hidden w-[340px] shrink-0 flex-col border-l bg-muted/10 lg:flex">
-        <SessionsPanel
-          sessions={sessions}
-          currentSessionId={currentSessionId}
-          loadingId={sessionLoadingId}
-          enabled={sessionsEnabled}
-          onNew={newSession}
-          onLoad={loadSession}
-          onDelete={deleteSession}
-        />
-        <PendingPanel
-          messages={messages}
-          onConfirm={onConfirm}
-          onReject={onReject}
-          onSelect={scrollToMessage}
-        />
-      </aside>
-    </div>
+      <PendingPanel pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
+    </>
   );
 }
 
-function Bubble({ role, content, pulse }: { role: Role; content: string; pulse?: boolean }) {
+function Bubble({ role, content, pulse }: { role: UIMessage['role']; content: string; pulse?: boolean }) {
   const isUser = role === 'user';
   return (
     <div className={cn('flex gap-2.5', isUser ? 'flex-row-reverse' : 'flex-row')}>
@@ -598,9 +544,7 @@ function ProposalCard({
   return (
     <div className="ml-11 max-w-[80%] rounded-lg border border-amber-300/60 bg-amber-50/60 p-4 text-base shadow-sm dark:border-amber-700/40 dark:bg-amber-900/20">
       <div className="flex items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-200">
-        <span className="rounded bg-amber-200/60 px-2 py-0.5 text-xs dark:bg-amber-800/40">
-          AI 제안
-        </span>
+        <span className="rounded bg-amber-200/60 px-2 py-0.5 text-xs dark:bg-amber-800/40">AI 제안</span>
         <span>{label}</span>
       </div>
       <div className="mt-2 whitespace-pre-wrap text-foreground/90">{proposal.summary}</div>
@@ -615,44 +559,29 @@ function ProposalCard({
           </Button>
         </div>
       )}
-
-      {proposal.status === 'submitting' && (
-        <div className="mt-2 text-sm text-muted-foreground">처리 중…</div>
-      )}
+      {proposal.status === 'submitting' && <div className="mt-2 text-sm text-muted-foreground">처리 중…</div>}
       {proposal.status === 'confirmed' && (
-        <div className="mt-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
-          ✓ 저장됨
-        </div>
+        <div className="mt-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">✓ 저장됨</div>
       )}
-      {proposal.status === 'rejected' && (
-        <div className="mt-2 text-sm text-muted-foreground">거부됨 (폐기)</div>
-      )}
+      {proposal.status === 'rejected' && <div className="mt-2 text-sm text-muted-foreground">거부됨 (폐기)</div>}
       {proposal.status === 'error' && (
-        <div className="mt-2 text-sm text-destructive">
-          오류: {proposal.errorMessage ?? '알 수 없음'}
-        </div>
+        <div className="mt-2 text-sm text-destructive">오류: {proposal.errorMessage ?? '알 수 없음'}</div>
       )}
     </div>
   );
 }
 
 function PendingPanel({
-  messages,
+  pending,
   onConfirm,
   onReject,
   onSelect,
 }: {
-  messages: ChatMessage[];
-  onConfirm: (msgIdx: number, prop: ProposalState) => void;
-  onReject: (msgIdx: number, prop: ProposalState) => void;
-  onSelect: (msgIdx: number) => void;
+  pending: { proposal: ProposalState; msgId: string }[];
+  onConfirm: (prop: ProposalState) => void;
+  onReject: (prop: ProposalState) => void;
+  onSelect: (msgId: string) => void;
 }) {
-  const pending = messages.flatMap((m, mi) =>
-    (m.proposals ?? [])
-      .filter((p) => p.status === 'pending')
-      .map((p) => ({ proposal: p, msgIdx: mi })),
-  );
-
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-2 border-b px-4 py-3">
@@ -662,7 +591,6 @@ function PendingPanel({
           {pending.length}건
         </span>
       </header>
-
       <div className="flex-1 overflow-y-auto p-3">
         {pending.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
@@ -672,15 +600,40 @@ function PendingPanel({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {pending.map(({ proposal, msgIdx }) => (
-              <PendingItem
-                key={proposal.id}
-                proposal={proposal}
-                onSelect={() => onSelect(msgIdx)}
-                onConfirm={() => onConfirm(msgIdx, proposal)}
-                onReject={() => onReject(msgIdx, proposal)}
-              />
-            ))}
+            {pending.map(({ proposal, msgId }) => {
+              const label = PROPOSAL_KIND_LABEL[proposal.kind] ?? proposal.kind;
+              return (
+                <div
+                  key={proposal.id}
+                  className="rounded-lg border border-amber-300/60 bg-amber-50/60 p-3 shadow-sm dark:border-amber-700/40 dark:bg-amber-900/20"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelect(msgId)}
+                    className="block w-full text-left"
+                    title="채팅에서 보기"
+                  >
+                    <div className="text-xs font-medium text-amber-900 dark:text-amber-200">{label}</div>
+                    <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-foreground/90">
+                      {proposal.summary}
+                    </div>
+                  </button>
+                  <div className="mt-2.5 flex gap-2">
+                    <Button size="sm" className="h-8 flex-1 text-sm" onClick={() => onConfirm(proposal)}>
+                      <Check className="mr-1 h-4 w-4" />저장
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 flex-1 text-sm"
+                      onClick={() => onReject(proposal)}
+                    >
+                      <X className="mr-1 h-4 w-4" />거부
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -710,17 +663,10 @@ function SessionsPanel({
       <header className="flex items-center gap-2 border-b px-4 py-3">
         <MessageSquarePlus className="h-4 w-4 text-[var(--sf-solar)]" />
         <h3 className="text-sm font-semibold">세션목록</h3>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="ml-auto h-7 px-2 text-xs"
-          onClick={onNew}
-          title="새 대화 시작"
-        >
+        <Button size="sm" variant="ghost" className="ml-auto h-7 px-2 text-xs" onClick={onNew} title="새 대화 시작">
           + 새 대화
         </Button>
       </header>
-
       <div className="flex-1 overflow-y-auto p-3">
         {!enabled ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
@@ -736,98 +682,36 @@ function SessionsPanel({
         ) : (
           <div className="flex flex-col gap-1.5">
             {sessions.map((s) => (
-              <SessionItem
+              <div
                 key={s.id}
-                session={s}
-                active={s.id === currentSessionId}
-                loading={s.id === loadingId}
-                onLoad={() => onLoad(s.id)}
-                onDelete={() => onDelete(s.id)}
-              />
+                className={cn(
+                  'group flex items-center gap-1 rounded-md border bg-background px-2 py-1.5 text-sm shadow-sm transition-colors hover:border-[var(--sf-solar)]/40',
+                  s.id === currentSessionId && 'border-[var(--sf-solar)]/60 bg-[var(--sf-solar)]/5',
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => onLoad(s.id)}
+                  disabled={s.id === loadingId}
+                  className="min-w-0 flex-1 truncate text-left"
+                  title={s.title}
+                >
+                  <span className="truncate">{s.title || '새 대화'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(s.id)}
+                  className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-destructive group-hover:opacity-100"
+                  title="삭제"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             ))}
           </div>
         )}
       </div>
     </section>
-  );
-}
-
-function SessionItem({
-  session,
-  active,
-  loading,
-  onLoad,
-  onDelete,
-}: {
-  session: SessionSummary;
-  active: boolean;
-  loading: boolean;
-  onLoad: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div
-      className={cn(
-        'group flex items-center gap-1 rounded-md border bg-background px-2 py-1.5 text-sm shadow-sm transition-colors hover:border-[var(--sf-solar)]/40',
-        active && 'border-[var(--sf-solar)]/60 bg-[var(--sf-solar)]/5',
-      )}
-    >
-      <button
-        type="button"
-        onClick={onLoad}
-        disabled={loading}
-        className="min-w-0 flex-1 truncate text-left"
-        title={session.title}
-      >
-        <span className="truncate">{session.title || '새 대화'}</span>
-      </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-destructive group-hover:opacity-100"
-        title="삭제"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}
-
-function PendingItem({
-  proposal,
-  onSelect,
-  onConfirm,
-  onReject,
-}: {
-  proposal: ProposalState;
-  onSelect: () => void;
-  onConfirm: () => void;
-  onReject: () => void;
-}) {
-  const label = PROPOSAL_KIND_LABEL[proposal.kind] ?? proposal.kind;
-
-  return (
-    <div className="rounded-lg border border-amber-300/60 bg-amber-50/60 p-3 shadow-sm dark:border-amber-700/40 dark:bg-amber-900/20">
-      <button
-        type="button"
-        onClick={onSelect}
-        className="block w-full text-left"
-        title="채팅에서 보기"
-      >
-        <div className="text-xs font-medium text-amber-900 dark:text-amber-200">{label}</div>
-        <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-foreground/90">
-          {proposal.summary}
-        </div>
-      </button>
-      <div className="mt-2.5 flex gap-2">
-        <Button size="sm" className="h-8 flex-1 text-sm" onClick={onConfirm}>
-          <Check className="mr-1 h-4 w-4" />저장
-        </Button>
-        <Button size="sm" variant="outline" className="h-8 flex-1 text-sm" onClick={onReject}>
-          <X className="mr-1 h-4 w-4" />거부
-        </Button>
-      </div>
-    </div>
   );
 }
 
@@ -838,9 +722,7 @@ function EmptyHint() {
       <div>업무 관련 질문을 입력하세요.</div>
       <div className="text-sm">예: "거래처 한화 검색", "최근 PO 5건", "PO123에 메모 남겨줘"</div>
       <div className="text-sm">📎 면장 PDF 첨부 후 "이 면장 등록해줘" — OCR 인식 → 등록 제안</div>
-      <div className="text-sm opacity-70">
-        Anthropic 호환에서 DB 조회·작성·OCR 도구가 활성화됩니다. 쓰기는 카드의 [저장] 클릭 시에만 반영됩니다.
-      </div>
+      <div className="text-sm opacity-70">DB 조회·작성·OCR 도구가 활성화됩니다. 쓰기는 카드의 [저장] 클릭 시에만 반영됩니다.</div>
     </div>
   );
 }
