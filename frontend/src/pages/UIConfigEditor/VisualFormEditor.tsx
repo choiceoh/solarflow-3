@@ -6,8 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
-import type { FieldConfig, FieldType, FormSection, MetaFormConfig } from '@/templates/types';
-import { enumDictionaries, masterSources } from '@/templates/registry';
+import type { FieldConfig, FieldType, FormSection, MetaFormConfig, Tone } from '@/templates/types';
+import { enumDictionaries, masterSources, computedFormulas } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
@@ -17,6 +17,31 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'textarea', label: 'textarea' },
   { value: 'switch', label: 'switch' },
   { value: 'date', label: 'date' },
+  { value: 'datetime', label: 'datetime' },
+  { value: 'time', label: 'time' },
+  { value: 'multiselect', label: 'multiselect' },
+  { value: 'file', label: 'file' },
+  { value: 'computed', label: 'computed' },
+];
+
+const NUMBER_FORMATS = [
+  { value: 'plain', label: 'plain' },
+  { value: 'thousands', label: 'thousands (1,000)' },
+  { value: 'krw', label: 'krw (1,000원)' },
+  { value: 'usd', label: 'usd ($1,000.00)' },
+];
+
+const TONES: { value: Tone; label: string }[] = [
+  { value: 'solar', label: 'solar (오렌지)' },
+  { value: 'ink', label: 'ink (블루)' },
+  { value: 'info', label: 'info (시안)' },
+  { value: 'warn', label: 'warn (앰버)' },
+  { value: 'pos', label: 'pos (그린)' },
+];
+
+const VISIBLE_SOURCES = [
+  { value: 'field', label: 'field (같은 폼 다른 필드)' },
+  { value: 'context', label: 'context (extraContext)' },
 ];
 
 const COLS_OPTIONS = [
@@ -77,6 +102,10 @@ export default function VisualFormEditor({
 
 function BasicTab({ value, onChange }: { value: MetaFormConfig; onChange: (next: MetaFormConfig) => void }) {
   const title = value.title ?? { create: '', edit: '' };
+  const dialogSizes = [
+    { value: 'sm', label: 'sm' }, { value: 'md', label: 'md (기본)' },
+    { value: 'lg', label: 'lg' }, { value: 'xl', label: 'xl' }, { value: '2xl', label: '2xl' },
+  ];
   return (
     <div className="max-w-2xl space-y-4">
       <div className="space-y-1.5">
@@ -92,6 +121,22 @@ function BasicTab({ value, onChange }: { value: MetaFormConfig; onChange: (next:
         <Label className="text-xs">title.edit (수정 다이얼로그 제목)</Label>
         <Input value={title.edit}
           onChange={(e) => onChange({ ...value, title: { ...title, edit: e.target.value } })} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <FieldSelect label="dialogSize" value={value.dialogSize ?? ''} allowEmpty options={dialogSizes}
+          onChange={(v) => onChange({ ...value, dialogSize: (v || undefined) as MetaFormConfig['dialogSize'] })} />
+        <div className="flex items-center gap-3 pt-4">
+          <label className="flex items-center gap-1.5 text-xs">
+            <input type="checkbox" checked={value.wizard ?? false}
+              onChange={(e) => onChange({ ...value, wizard: e.target.checked || undefined })} />
+            wizard (다단계 마법사)
+          </label>
+          <label className="flex items-center gap-1.5 text-xs">
+            <input type="checkbox" checked={value.draftAutoSave ?? false}
+              onChange={(e) => onChange({ ...value, draftAutoSave: e.target.checked || undefined })} />
+            draftAutoSave (초안 자동저장)
+          </label>
+        </div>
       </div>
     </div>
   );
@@ -157,9 +202,6 @@ function SectionCard({
   onMoveDown: () => void;
   onRemove: () => void;
 }) {
-  const enumOpts = useMemo(() => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })), []);
-  const masterOpts = useMemo(() => Object.keys(masterSources).sort().map((id) => ({ value: id, label: id })), []);
-
   const updateField = (fIdx: number, next: FieldConfig) =>
     onUpdate({ ...section, fields: (section.fields ?? []).map((f, i) => (i === fIdx ? next : f)) });
 
@@ -175,12 +217,18 @@ function SectionCard({
   return (
     <div className="rounded border bg-card">
       {/* 섹션 헤더 */}
-      <div className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-3 py-2">
         <span className="text-[10px] text-muted-foreground mono">섹션 #{index + 1}</span>
         <FieldSelect label="" value={String(section.cols ?? 1)} options={COLS_OPTIONS}
           onChange={(v) => onUpdate({ ...section, cols: Number(v) as 1 | 2 | 3 })} />
         <span className="text-[10px] text-muted-foreground">cols</span>
-        <span className="ml-auto" />
+        <input type="text" value={section.title ?? ''}
+          onChange={(e) => onUpdate({ ...section, title: e.target.value || undefined })}
+          placeholder="title (옵션 — 섹션 헤더)"
+          className="h-7 flex-1 min-w-[140px] rounded border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring" />
+        <FieldSelect label="" value={section.tone ?? ''} allowEmpty options={TONES}
+          onChange={(v) => onUpdate({ ...section, tone: (v || undefined) as Tone | undefined })} />
+        <span className="text-[10px] text-muted-foreground">tone</span>
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
           onClick={onMoveUp} disabled={index === 0}><ChevronUp className="h-3.5 w-3.5" /></Button>
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
@@ -198,66 +246,265 @@ function SectionCard({
           </Button>
         </div>
         {(section.fields ?? []).map((field, fIdx) => (
-          <div key={fIdx} className="rounded border p-2 grid grid-cols-12 gap-2 items-start text-xs bg-muted/20">
-            <div className="col-span-1 flex flex-col items-center gap-1">
-              <span className="text-[9px] text-muted-foreground mono">#{fIdx + 1}</span>
-              <Button type="button" variant="ghost" size="icon" className="h-5 w-5"
-                onClick={() => moveField(fIdx, -1)} disabled={fIdx === 0}><ChevronUp className="h-3 w-3" /></Button>
-              <Button type="button" variant="ghost" size="icon" className="h-5 w-5"
-                onClick={() => moveField(fIdx, 1)} disabled={fIdx === (section.fields ?? []).length - 1}><ChevronDown className="h-3 w-3" /></Button>
-            </div>
-            <div className="col-span-10 grid grid-cols-2 gap-2">
-              <FieldInput label="key" value={field.key} mono
-                onChange={(v) => updateField(fIdx, { ...field, key: v })} />
-              <FieldInput label="label" value={field.label}
-                onChange={(v) => updateField(fIdx, { ...field, label: v })} />
-              <FieldSelect label="type" value={field.type} options={FIELD_TYPES}
-                onChange={(v) => updateField(fIdx, { ...field, type: v as FieldType })} />
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-1 text-[10px]">
-                  <input type="checkbox" checked={field.required ?? false}
-                    onChange={(e) => updateField(fIdx, { ...field, required: e.target.checked })} />
-                  required
-                </label>
-              </div>
-              <FieldInput label="placeholder" value={field.placeholder ?? ''}
-                onChange={(v) => updateField(fIdx, { ...field, placeholder: v || undefined })} />
-              <FieldInput label="editableByRoles (콤마, 예: 'admin,operator')"
-                value={(field.editableByRoles ?? []).join(',')}
-                onChange={(v) => updateField(fIdx, {
-                  ...field,
-                  editableByRoles: v ? v.split(',').map(s => s.trim()).filter(Boolean) : undefined,
-                })} />
-              {/* select 타입 보조 */}
-              {field.type === 'select' && (
-                <>
-                  <FieldSelect label="optionsFrom" value={field.optionsFrom ?? ''} allowEmpty options={OPTIONS_FROM}
-                    onChange={(v) => updateField(fIdx, {
-                      ...field,
-                      optionsFrom: (v || undefined) as 'enum' | 'master' | 'static' | undefined,
-                    })} />
-                  {field.optionsFrom === 'enum' && (
-                    <FieldSelect label="enumKey" value={field.enumKey ?? ''} allowEmpty options={enumOpts}
-                      onChange={(v) => updateField(fIdx, { ...field, enumKey: v || undefined })} />
-                  )}
-                  {field.optionsFrom === 'master' && (
-                    <FieldSelect label="masterKey" value={field.masterKey ?? ''} allowEmpty options={masterOpts}
-                      onChange={(v) => updateField(fIdx, { ...field, masterKey: v || undefined })} />
-                  )}
-                </>
-              )}
-            </div>
-            <div className="col-span-1 flex justify-end">
-              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                onClick={() => removeField(fIdx)}><Trash2 className="h-3 w-3" /></Button>
-            </div>
-          </div>
+          <FieldRow
+            key={fIdx}
+            field={field}
+            index={fIdx}
+            total={(section.fields ?? []).length}
+            onUpdate={(next) => updateField(fIdx, next)}
+            onMoveUp={() => moveField(fIdx, -1)}
+            onMoveDown={() => moveField(fIdx, 1)}
+            onRemove={() => removeField(fIdx)}
+          />
         ))}
         {(section.fields ?? []).length === 0 && (
           <div className="text-center py-3 text-[10px] text-muted-foreground border border-dashed rounded">
             필드가 없습니다
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// 필드 행 — 핵심 속성 (key/label/type/required/placeholder/editableByRoles)
+// + type 별 보조 (select/multiselect 옵션, file multiple, computed formula+dependsOn, number numberFormat)
+// + "고급 ▾" 토글: description / defaultValue / readOnly / 검증 / visibleIf / readOnlyIf
+function FieldRow({
+  field, index, total, onUpdate, onMoveUp, onMoveDown, onRemove,
+}: {
+  field: FieldConfig;
+  index: number;
+  total: number;
+  onUpdate: (next: FieldConfig) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onRemove: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const enumOpts = useMemo(() => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })), []);
+  const masterOpts = useMemo(() => Object.keys(masterSources).sort().map((id) => ({ value: id, label: id })), []);
+  const formulaOpts = useMemo(() => Object.keys(computedFormulas).sort().map((id) => ({ value: id, label: id })), []);
+
+  const isOptionField = field.type === 'select' || field.type === 'multiselect';
+  const isComputed = field.type === 'computed';
+  const isNumber = field.type === 'number';
+  const isFile = field.type === 'file';
+
+  return (
+    <div className="rounded border p-2 grid grid-cols-12 gap-2 items-start text-xs bg-muted/20">
+      <div className="col-span-1 flex flex-col items-center gap-1">
+        <span className="text-[9px] text-muted-foreground mono">#{index + 1}</span>
+        <Button type="button" variant="ghost" size="icon" className="h-5 w-5"
+          onClick={onMoveUp} disabled={index === 0}><ChevronUp className="h-3 w-3" /></Button>
+        <Button type="button" variant="ghost" size="icon" className="h-5 w-5"
+          onClick={onMoveDown} disabled={index === total - 1}><ChevronDown className="h-3 w-3" /></Button>
+      </div>
+      <div className="col-span-10 grid grid-cols-2 gap-2">
+        <FieldInput label="key" value={field.key} mono
+          onChange={(v) => onUpdate({ ...field, key: v })} />
+        <FieldInput label="label" value={field.label}
+          onChange={(v) => onUpdate({ ...field, label: v })} />
+        <FieldSelect label="type" value={field.type} options={FIELD_TYPES}
+          onChange={(v) => onUpdate({ ...field, type: v as FieldType })} />
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1 text-[10px]">
+            <input type="checkbox" checked={field.required ?? false}
+              onChange={(e) => onUpdate({ ...field, required: e.target.checked })} />
+            required
+          </label>
+        </div>
+        {!isComputed && (
+          <FieldInput label="placeholder" value={field.placeholder ?? ''}
+            onChange={(v) => onUpdate({ ...field, placeholder: v || undefined })} />
+        )}
+        <FieldInput label="editableByRoles (콤마, 예: 'admin,operator')"
+          value={(field.editableByRoles ?? []).join(',')}
+          onChange={(v) => onUpdate({
+            ...field,
+            editableByRoles: v ? v.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+          })} />
+
+        {/* select / multiselect 보조 */}
+        {isOptionField && (
+          <>
+            <FieldSelect label="optionsFrom" value={field.optionsFrom ?? ''} allowEmpty options={OPTIONS_FROM}
+              onChange={(v) => onUpdate({
+                ...field,
+                optionsFrom: (v || undefined) as 'enum' | 'master' | 'static' | undefined,
+              })} />
+            {field.optionsFrom === 'enum' && (
+              <FieldSelect label="enumKey" value={field.enumKey ?? ''} allowEmpty options={enumOpts}
+                onChange={(v) => onUpdate({ ...field, enumKey: v || undefined })} />
+            )}
+            {field.optionsFrom === 'master' && (
+              <>
+                <FieldSelect label="masterKey" value={field.masterKey ?? ''} allowEmpty options={masterOpts}
+                  onChange={(v) => onUpdate({ ...field, masterKey: v || undefined })} />
+                <FieldInput label="optionsDependsOn (콤마 — master 재로드 트리거)"
+                  value={(field.optionsDependsOn ?? []).join(',')} mono
+                  onChange={(v) => onUpdate({
+                    ...field,
+                    optionsDependsOn: v ? v.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+                  })} />
+              </>
+            )}
+          </>
+        )}
+
+        {/* number 보조 */}
+        {isNumber && (
+          <>
+            <FieldSelect label="numberFormat" value={field.numberFormat ?? ''} allowEmpty options={NUMBER_FORMATS}
+              onChange={(v) => onUpdate({
+                ...field,
+                numberFormat: (v || undefined) as 'plain' | 'thousands' | 'krw' | 'usd' | undefined,
+              })} />
+            <div /> {/* spacer */}
+          </>
+        )}
+
+        {/* file 보조 */}
+        {isFile && (
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-[10px]">
+              <input type="checkbox" checked={field.multiple ?? false}
+                onChange={(e) => onUpdate({ ...field, multiple: e.target.checked || undefined })} />
+              multiple (다중 업로드)
+            </label>
+          </div>
+        )}
+
+        {/* computed 보조 */}
+        {isComputed && (
+          <>
+            <FieldSelect label="formula.computerId" value={field.formula?.computerId ?? ''} allowEmpty options={formulaOpts}
+              onChange={(v) => onUpdate({
+                ...field,
+                formula: v ? { computerId: v } : undefined,
+              })} />
+            <FieldInput label="dependsOn (콤마 — 재계산 트리거)"
+              value={(field.dependsOn ?? []).join(',')} mono
+              onChange={(v) => onUpdate({
+                ...field,
+                dependsOn: v ? v.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+              })} />
+          </>
+        )}
+
+        {/* 고급 토글 */}
+        <div className="col-span-2 mt-1">
+          <button type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+          >
+            {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            고급 (description / 검증 / readOnly / 조건부)
+          </button>
+        </div>
+
+        {expanded && (
+          <>
+            <FieldInput label="description (필드 아래 도움말)"
+              value={field.description ?? ''}
+              onChange={(v) => onUpdate({ ...field, description: v || undefined })} />
+            <FieldInput label="defaultValue (string/number/boolean)"
+              value={field.defaultValue == null ? '' : String(field.defaultValue)}
+              onChange={(v) => {
+                if (v === '') return onUpdate({ ...field, defaultValue: undefined });
+                if (v === 'true') return onUpdate({ ...field, defaultValue: true });
+                if (v === 'false') return onUpdate({ ...field, defaultValue: false });
+                const n = Number(v);
+                onUpdate({ ...field, defaultValue: !Number.isNaN(n) && v.trim() !== '' ? n : v });
+              }} />
+
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1 text-[10px]">
+                <input type="checkbox" checked={field.readOnly ?? false}
+                  onChange={(e) => onUpdate({ ...field, readOnly: e.target.checked || undefined })} />
+                readOnly
+              </label>
+            </div>
+            <div /> {/* spacer */}
+
+            {/* 검증 — text/textarea */}
+            {(field.type === 'text' || field.type === 'textarea') && (
+              <>
+                <FieldInput label="minLength" value={field.minLength == null ? '' : String(field.minLength)}
+                  onChange={(v) => onUpdate({ ...field, minLength: v ? Number(v) : undefined })} />
+                <FieldInput label="maxLength" value={field.maxLength == null ? '' : String(field.maxLength)}
+                  onChange={(v) => onUpdate({ ...field, maxLength: v ? Number(v) : undefined })} />
+              </>
+            )}
+            {/* 검증 — number */}
+            {isNumber && (
+              <>
+                <FieldInput label="minValue" value={field.minValue == null ? '' : String(field.minValue)}
+                  onChange={(v) => onUpdate({ ...field, minValue: v ? Number(v) : undefined })} />
+                <FieldInput label="maxValue" value={field.maxValue == null ? '' : String(field.maxValue)}
+                  onChange={(v) => onUpdate({ ...field, maxValue: v ? Number(v) : undefined })} />
+              </>
+            )}
+
+            {/* visibleIf */}
+            <div className="col-span-2 rounded border border-dashed p-2 space-y-1.5 bg-background">
+              <p className="text-[10px] font-semibold text-muted-foreground">visibleIf (조건부 노출)</p>
+              <div className="grid grid-cols-3 gap-2">
+                <FieldInput label="field (의존)" value={field.visibleIf?.field ?? ''} mono
+                  onChange={(v) => onUpdate({
+                    ...field,
+                    visibleIf: v ? { ...(field.visibleIf ?? { value: '' }), field: v } : undefined,
+                  })} />
+                <FieldInput label="value (문자열 또는 콤마 다중)" value={
+                  Array.isArray(field.visibleIf?.value)
+                    ? field.visibleIf!.value.join(',')
+                    : (field.visibleIf?.value ?? '')
+                }
+                  onChange={(v) => {
+                    if (!field.visibleIf?.field) return;
+                    const value = v.includes(',') ? v.split(',').map(s => s.trim()).filter(Boolean) : v;
+                    onUpdate({ ...field, visibleIf: { ...field.visibleIf, value } });
+                  }} />
+                <FieldSelect label="source" value={field.visibleIf?.source ?? 'field'} options={VISIBLE_SOURCES}
+                  onChange={(v) => {
+                    if (!field.visibleIf?.field) return;
+                    onUpdate({ ...field, visibleIf: { ...field.visibleIf, source: v as 'field' | 'context' } });
+                  }} />
+              </div>
+            </div>
+
+            {/* readOnlyIf */}
+            <div className="col-span-2 rounded border border-dashed p-2 space-y-1.5 bg-background">
+              <p className="text-[10px] font-semibold text-muted-foreground">readOnlyIf (조건부 readonly)</p>
+              <div className="grid grid-cols-3 gap-2">
+                <FieldInput label="field (의존)" value={field.readOnlyIf?.field ?? ''} mono
+                  onChange={(v) => onUpdate({
+                    ...field,
+                    readOnlyIf: v ? { ...(field.readOnlyIf ?? { value: '' }), field: v } : undefined,
+                  })} />
+                <FieldInput label="value (문자열 또는 콤마 다중)" value={
+                  Array.isArray(field.readOnlyIf?.value)
+                    ? field.readOnlyIf!.value.join(',')
+                    : (field.readOnlyIf?.value ?? '')
+                }
+                  onChange={(v) => {
+                    if (!field.readOnlyIf?.field) return;
+                    const value = v.includes(',') ? v.split(',').map(s => s.trim()).filter(Boolean) : v;
+                    onUpdate({ ...field, readOnlyIf: { ...field.readOnlyIf, value } });
+                  }} />
+                <FieldSelect label="source" value={field.readOnlyIf?.source ?? 'field'} options={VISIBLE_SOURCES}
+                  onChange={(v) => {
+                    if (!field.readOnlyIf?.field) return;
+                    onUpdate({ ...field, readOnlyIf: { ...field.readOnlyIf, source: v as 'field' | 'context' } });
+                  }} />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      <div className="col-span-1 flex justify-end">
+        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
+          onClick={onRemove}><Trash2 className="h-3 w-3" /></Button>
       </div>
     </div>
   );
