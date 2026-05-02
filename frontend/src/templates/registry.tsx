@@ -45,7 +45,7 @@ import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite 
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
-  Tone, MasterOptionSource, ContentBlock, ComputedFormula, FormRefinement, FormSubmitter, FormContentBlock,
+  Tone, MasterOptionSource, ContentBlock, ComputedFormula, FormRefinement, FormSubmitter, FormContentBlock, FieldCascade,
 } from './types';
 import { RailBlock as RailBlockUI } from '@/components/command/MockupPrimitives';
 
@@ -633,6 +633,11 @@ export const formSubmitters: Record<string, FormSubmitter> = {
 // Phase 4 — Step 3 prep: 폼 안 임의 컴포넌트 슬롯 (FormSection.contentBlock)
 // list 의 contentBlocks 와 시그니처 다름 — form watch/setValue/getValues API 받음.
 export const formContentBlocks: Record<string, FormContentBlock> = {};
+
+// Phase 4 — Step 3 prep: 필드 cascade — 한 필드 값 변경 시 다른 필드 자동 채우기.
+// FieldConfig.cascadeId 가 이 키를 참조.
+// 함수는 idempotent 해야 함 (target value 가 이미 같으면 setValue 호출 안 함 — 무한 루프 방지).
+export const fieldCascades: Record<string, FieldCascade> = {};
 
 export const detailComponents: Record<string, DetailComponent> = {
   outbound: ((props) => <OutboundDetailView outboundId={props.id} onBack={props.onBack} />) as DetailComponent,
