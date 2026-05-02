@@ -5,6 +5,7 @@ import { ActionChips } from './ActionChips';
 import { TokenPanel } from './TokenPanel';
 import { DraftsList } from './DraftsList';
 import { getLastTargetEl } from './inspectorTarget';
+import { tagLabel } from './tagLabel';
 
 const PANEL_WIDTH = 360;
 
@@ -134,10 +135,10 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
     <div className="space-y-3">
       <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
         <div>
-          <div className="text-xs font-medium text-slate-700">선택된 요소</div>
-          <code className="font-mono text-[10px] text-slate-400">
-            &lt;{target.tagName.toLowerCase()}&gt;
-          </code>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+            선택된 요소
+          </div>
+          <div className="text-sm font-medium text-slate-800">{tagLabel(target.tagName)}</div>
         </div>
         {target.configSource && (
           <span
