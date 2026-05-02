@@ -619,3 +619,18 @@
   - 라우트 222개(engine 포함) 골든파일 캡처
   - main.go 44줄 → 23줄, router.go 500줄 → 89줄
 - **날짜**: 2026-05-02
+
+## D-111: `/api/v1/assistant/{ocr,match}/*` alias 라우트는 영구 유지
+- **결정**: D-110에서 보류했던 assistant 서브트리 alias 3개(`GET /assistant/ocr/health`, `POST /assistant/ocr/extract`, `POST /assistant/match/receipts/auto`)는 **제거하지 않고 영구 유지**한다. 정식 라우트(`/api/v1/ocr/*`, `/api/v1/receipt-matches/auto`)도 그대로 유지하여 두 진입점이 공존한다.
+- **이유**: 프론트 호출처 grep 결과 alias가 단순 중복이 아니라 **실사용 중인 의미적 분리**임이 확인됐다.
+  - `POST /assistant/match/receipts/auto`: [`frontend/src/components/orders/AutoMatchSection.tsx:61`](../frontend/src/components/orders/AutoMatchSection.tsx)이 호출. 정식 `/receipt-matches/auto`는 어디서도 호출되지 않음 — **alias가 사실상 정식 진입점**이라 제거하면 즉시 운영 회귀.
+  - `POST /assistant/ocr/extract`: [`frontend/src/pages/AssistantPage.tsx:151`](../frontend/src/pages/AssistantPage.tsx)이 호출(통합 챗 안의 OCR). 정식 `/ocr/extract`는 [`frontend/src/components/inbound/BLForm.tsx:1300`](../frontend/src/components/inbound/BLForm.tsx)이 호출(B/L 입력 화면 안의 직접 OCR). **둘 다 활성**이며 사용 맥락이 달라 한쪽이 다른 쪽을 대체할 수 없음.
+  - `GET /assistant/ocr/health`: 프론트 호출처 0이지만 워밍업/모니터링이 silently 부를 수 있고, 1개만 단독 제거하는 PR은 가치 대비 위험이 크다. 묶어서 유지.
+  - 프론트 코드 주석에도 "AI 통합 네임스페이스 (기존 ... alias)"라고 명시 — 의도된 설계.
+- **운영 기준**:
+  - **신규 AI 통합 진입점**: 같은 패턴으로 등록 — 정식 도메인 핸들러를 `WithAlias`로 위임받고 `/api/v1/assistant/*` 아래 별칭으로 노출.
+  - **정식 라우트 변경 시**: signature/body/응답 타입을 바꾸면 alias도 같은 동작이 되도록 `AssistantHandler.RegisterRoutes`(routes.go) 안에서 함께 확인. 라우트가 한 메서드에 모여 있으므로 시각적으로 보장됨.
+  - **routes.golden 가드**: TestRouteSnapshot이 alias·정식 7개 라우트를 모두 캡처하므로, 의도치 않은 alias 추가/삭제는 즉시 감지된다.
+  - **거꾸로 정리 — 정식 라우트 제거 안 함**: `/receipt-matches/auto` 같은 정식 라우트가 호출처 0이더라도 제거하지 않는다. ReceiptMatchHandler가 자기 라우트를 잃어 RegisterRoutes 패턴(D-110)의 정합성이 깨진다.
+- **검증**: `grep -rn "assistant/ocr\|assistant/match" frontend/src/` 결과 = AutoMatchSection 1건, AssistantPage 1건 (각 alias 직접 호출). 이 결정 이후 동일 grep으로 사용 패턴이 유지되는지 확인 가능.
+- **날짜**: 2026-05-02
