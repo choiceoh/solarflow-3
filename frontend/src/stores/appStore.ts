@@ -2,11 +2,23 @@ import { create } from 'zustand';
 import { fetchWithAuth } from '@/lib/api';
 import type { Company, Manufacturer, Product } from '@/types/masters';
 
+export interface InspectorTarget {
+  selector: string;
+  tagName: string;
+  className: string;
+  configSource?: string;
+  rect: { top: number; left: number; width: number; height: number };
+}
+
 interface AppState {
   selectedCompanyId: string | null;
   setCompanyId: (id: string | null) => void;
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  editMode: boolean;
+  toggleEditMode: () => void;
+  inspectorTarget: InspectorTarget | null;
+  setInspectorTarget: (target: InspectorTarget | null) => void;
   companies: Company[];
   companiesLoaded: boolean;
   loadCompanies: () => Promise<void>;
@@ -29,6 +41,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCompanyId: (id) => set({ selectedCompanyId: id }),
   sidebarCollapsed: false,
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  editMode: false,
+  toggleEditMode: () => set((s) => ({ editMode: !s.editMode, inspectorTarget: null })),
+  inspectorTarget: null,
+  setInspectorTarget: (target) => set({ inspectorTarget: target }),
   companies: [],
   companiesLoaded: false,
   loadCompanies: () => {
