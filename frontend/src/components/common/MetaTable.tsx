@@ -17,6 +17,9 @@ import { useColumnSort, type SortingState } from '@/lib/columnSort';
 
 export interface ColumnDef<T> extends ColumnVisibilityMeta {
   cell: (item: T) => ReactNode;
+  /** 헤더 셀 커스텀 렌더 — 기본 라벨(+정렬 아이콘) 대신 이 결과를 사용.
+   * 예: 모두선택 체크박스. headerCell 이 있으면 정렬 옵트인은 무시됨. */
+  headerCell?: () => ReactNode;
   align?: 'left' | 'right' | 'center';
   className?: string;
   headerClassName?: string;
@@ -94,7 +97,7 @@ export function MetaTable<T>({
       size: c.defaultWidth ?? 150,
       minSize: c.minWidth ?? 40,
       maxSize: c.maxWidth ?? 800,
-      meta: { align: c.align, className: c.className, headerClassName: c.headerClassName } as { align?: 'left' | 'right' | 'center'; className?: string; headerClassName?: string },
+      meta: { align: c.align, className: c.className, headerClassName: c.headerClassName, headerCell: c.headerCell } as { align?: 'left' | 'right' | 'center'; className?: string; headerClassName?: string; headerCell?: () => ReactNode },
     };
   }), [columns]);
 
@@ -137,7 +140,7 @@ export function MetaTable<T>({
         {table.getHeaderGroups().map((hg) => (
           <TableRow key={hg.id}>
             {hg.headers.map((header) => {
-              const meta = header.column.columnDef.meta as { align?: 'left' | 'right' | 'center'; headerClassName?: string } | undefined;
+              const meta = header.column.columnDef.meta as { align?: 'left' | 'right' | 'center'; headerClassName?: string; headerCell?: () => ReactNode } | undefined;
               const canResize = header.column.getCanResize();
               const canSort = header.column.getCanSort();
               const sorted = header.column.getIsSorted();
@@ -148,7 +151,9 @@ export function MetaTable<T>({
                   className={cn('relative', alignClass(meta?.align), meta?.headerClassName)}
                   style={{ width: header.getSize() }}
                 >
-                  {canSort ? (
+                  {meta?.headerCell ? (
+                    meta.headerCell()
+                  ) : canSort ? (
                     <button
                       type="button"
                       onClick={header.column.getToggleSortingHandler()}
