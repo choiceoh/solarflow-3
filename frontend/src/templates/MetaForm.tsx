@@ -59,13 +59,14 @@ export function buildZodSchema(config: MetaFormConfig): ZodObject<ZodRawShape> {
 }
 
 // ─── 옵션 로드 (master 데이터는 비동기) ───────────────────────────────────
-function useFieldOptions(fields: FieldConfig[]): Record<string, Options> {
+// watchedValues 를 받아 optionsDependsOn 변경 시 master 소스를 재로드한다.
+// 의존성 필드 값들의 직렬화를 effect dep 로 사용 — 동일 값이면 재실행 없음.
+function useFieldOptions(fields: FieldConfig[], watchedValues: Record<string, unknown>): Record<string, Options> {
   const [options, setOptions] = useState<Record<string, Options>>({});
 
+  // 정적/enum 옵션 — fields 변경 시 한 번만
   useEffect(() => {
-    let cancelled = false;
     const next: Record<string, Options> = {};
-
     fields.forEach((f) => {
       if (f.type !== 'select') return;
       if (f.optionsFrom === 'enum' && f.enumKey) {
@@ -75,19 +76,36 @@ function useFieldOptions(fields: FieldConfig[]): Record<string, Options> {
         next[f.key] = f.staticOptions;
       }
     });
-    setOptions(next);
-
-    fields.forEach(async (f) => {
-      if (f.type === 'select' && f.optionsFrom === 'master' && f.masterKey) {
-        const src = masterSources[f.masterKey];
-        if (!src) return;
-        const opts = await src.load();
-        if (!cancelled) setOptions((prev) => ({ ...prev, [f.key]: opts }));
-      }
-    });
-
-    return () => { cancelled = true; };
+    setOptions((prev) => ({ ...prev, ...next }));
   }, [fields]);
+
+  // master 옵션 — 의존 필드 값 변경 시 재로드. 의존성이 없으면 mount 시 1회만.
+  // depKey: 의존 필드 값들의 직렬화 — useEffect dep 로 안정적으로 비교
+  const depKey = useMemo(() => {
+    const parts: string[] = [];
+    fields.forEach((f) => {
+      if (f.type !== 'select' || f.optionsFrom !== 'master' || !f.masterKey) return;
+      const ctx = (f.optionsDependsOn ?? []).map((k) => `${k}=${String(watchedValues[k] ?? '')}`).join('|');
+      parts.push(`${f.key}:${f.masterKey}@${ctx}`);
+    });
+    return parts.join(';');
+  }, [fields, watchedValues]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fields.forEach(async (f) => {
+      if (f.type !== 'select' || f.optionsFrom !== 'master' || !f.masterKey) return;
+      const src = masterSources[f.masterKey];
+      if (!src) return;
+      const ctx: Record<string, unknown> = {};
+      (f.optionsDependsOn ?? []).forEach((k) => { ctx[k] = watchedValues[k]; });
+      const opts = await src.load(ctx);
+      if (!cancelled) setOptions((prev) => ({ ...prev, [f.key]: opts }));
+    });
+    return () => { cancelled = true; };
+    // depKey 가 의존 필드 값 직렬화를 포함 — eslint-disable 으로 watchedValues 직접 의존 회피
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields, depKey]);
 
   return options;
 }
@@ -215,7 +233,6 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
   const config = useResolvedConfig(defaultConfig, 'form');
   const allFields = useMemo(() => config.sections.flatMap((s) => s.fields), [config]);
   const schema = useMemo(() => buildZodSchema(config), [config]);
-  const fieldOptions = useFieldOptions(allFields);
   const { role } = usePermission();
 
   const {
@@ -229,6 +246,8 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
   }, [open, editData, reset, allFields]);
 
   const watchedValues = watch();
+  // optionsDependsOn 지원 — watchedValues 가 master 소스 호출 context 로 전달됨
+  const fieldOptions = useFieldOptions(allFields, watchedValues);
   const isEdit = !!editData;
   const handle = async (data: FieldValues) => {
     await onSubmit(data as Record<string, unknown>);

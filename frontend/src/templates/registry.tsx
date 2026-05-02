@@ -20,6 +20,7 @@ import bankFormConfig from '@/config/forms/banks';
 import warehouseFormConfig from '@/config/forms/warehouses';
 import manufacturerFormConfig from '@/config/forms/manufacturers';
 import productFormConfig from '@/config/forms/products';
+import depsDemoFormConfig from '@/config/forms/deps_demo';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
 import { useDeclarationDetail } from '@/hooks/useCustoms';
@@ -318,6 +319,17 @@ const ProductFormV2: FormComponent = (props) => (
   />
 );
 
+// Phase 4 보강: 의존성·동적 옵션 시연 폼 (UI 데모 전용 — 저장 안 함)
+const DepsDemoForm: FormComponent = (props) => (
+  <MetaForm
+    config={depsDemoFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
 export const formComponents: Record<string, FormComponent> = {
   outbound_form: OutboundForm as unknown as FormComponent,
   outbound_form_simple: OutboundFormSimple,    // 메타 한계선 데모용
@@ -328,6 +340,7 @@ export const formComponents: Record<string, FormComponent> = {
   warehouse_form_v2: WarehouseFormV2,          // Phase 4: 창고 마스터 메타 폼
   manufacturer_form_v2: ManufacturerFormV2,    // Phase 4: 제조사 마스터 메타 폼
   product_form_v2: ProductFormV2,              // Phase 4: 품번 마스터 메타 폼 (13 필드)
+  deps_demo: DepsDemoForm,                     // Phase 4 보강: 의존성·동적 옵션 데모
 };
 
 export const detailComponents: Record<string, DetailComponent> = {
@@ -464,6 +477,23 @@ export const masterSources: Record<string, MasterOptionSource> = {
     load: async () => {
       await useAppStore.getState().loadManufacturers();
       return useAppStore.getState().manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr }));
+    },
+  },
+  // Phase 4 보강: 동적 옵션 시연 — context.domestic_filter 또는 .domestic_foreign 으로 필터
+  // (값이 '전체'/비어있으면 전체 반환). 영문(domestic/foreign) / 한글(국내/해외) 데이터 혼재 처리.
+  'manufacturers.byDomestic': {
+    load: async (ctx) => {
+      await useAppStore.getState().loadManufacturers();
+      const want = (ctx?.domestic_filter ?? ctx?.domestic_foreign) as string | undefined;
+      const list = useAppStore.getState().manufacturers;
+      const filtered = (!want || want === '전체')
+        ? list
+        : list.filter((m) => {
+          if (want === '국내' || want === 'domestic') return m.domestic_foreign === '국내' || m.domestic_foreign === 'domestic';
+          if (want === '해외' || want === 'foreign') return m.domestic_foreign === '해외' || m.domestic_foreign === 'foreign';
+          return true;
+        });
+      return filtered.map((m) => ({ value: m.manufacturer_id, label: m.name_kr }));
     },
   },
   companies: {
