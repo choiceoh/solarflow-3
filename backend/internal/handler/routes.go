@@ -3,11 +3,21 @@ package handler
 // 본 파일은 모든 핸들러의 RegisterRoutes 메서드를 한 곳에 모은다 (D-RegisterRoutes 빅뱅).
 // 각 메서드는 자기 핸들러가 소유하는 URL·가드·중첩 라우트를 한 번에 선언한다.
 //
+// 핸들러 파일 prefix 컨벤션 (시각적 그룹핑, 패키지는 단일 handler 유지):
+//   - master_*  : 마스터 CRUD (bank/company/manufacturer/partner/product/warehouse/construction_site)
+//   - tx_*      : 거래·재무 트랜잭션 (po/lc/bl/sale/receipt/declaration/expense/import-financial 등)
+//   - baro_*    : 바로(주) 전용 (D-109)
+//   - sys_*     : 시스템·관리 (user/ui_config/audit_log/note/public/health/attachment)
+//   - ai_*      : AI 도우미·OCR (assistant/assistant_tools/ocr)
+//   - io_*      : 일괄 import/export (Amaranth)
+//   - routes.go : 본 파일 (분류 안함, 중앙)
+//
 // 신규 도메인 추가 시 절차:
-//   1. 새 핸들러 파일에 NewXxxHandler/메서드 추가
-//   2. 본 파일에 (h *XxxHandler) RegisterRoutes(r chi.Router, g middleware.Gates) 추가
-//   3. internal/router/router.go의 알파벳 자리에 1줄 호출 추가
-//   4. router_test.go의 routes.golden 갱신 (`go test -run TestRouteSnapshot -update`)
+//   1. 위 prefix 중 하나를 골라 새 핸들러 파일 추가 (예: master_xxx.go)
+//   2. NewXxxHandler/메서드 작성
+//   3. 본 파일에 (h *XxxHandler) RegisterRoutes(r chi.Router, g middleware.Gates) 추가
+//   4. internal/router/router.go의 알파벳 자리에 1줄 호출 추가
+//   5. router_test.go의 routes.golden 갱신 (`go test -run TestRouteSnapshot -update`)
 
 import (
 	"net/http"

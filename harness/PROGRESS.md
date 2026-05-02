@@ -9,10 +9,30 @@
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
-| Go 테스트 | 131개 PASS (router snapshot 2건 추가) |
+| Go 테스트 | 180개 PASS (router snapshot 2건 + guard matrix 49 sub-case) |
 | Rust 테스트 | 75개 PASS |
 | DECISIONS | D-001~D-111 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-02 세션 — 핸들러 파일 prefix 정리 + ai_assistant_tools god-file 분할 (F+B)
+
+### 완료
+- **F (파일 prefix 컨벤션)**: `internal/handler/` 평면 50개 파일을 카테고리별 prefix로 rename — `master_`(7)/`tx_`(21)/`baro_`(4)/`sys_`(7)/`ai_`(5)/`io_`(4). 패키지는 단일 `handler` 유지 → import 경로·private 캡슐화 변화 0.
+  - 신규 도메인 추가 시 prefix를 강제(RULES.md "신규 도메인 추가 절차" 갱신, routes.go 헤더 주석에 컨벤션 명시)
+  - audit/rpc/util 등 cross-file private 함수가 그대로 보존됨 (정통 패키지 분할 안의 부작용을 회피)
+- **B (god-file 분할)**: `ai_assistant_tools.go` 1,632줄 → 3개 파일로 분리.
+  - `ai_assistant_tools.go` 195줄 (core: assistantTool 타입, roleIn/tenantIs, fetch helpers, proposeWrite, assistantToolCatalog, dispatchAssistantTool, clampLimit)
+  - `ai_assistant_tools_search.go` 705줄 (13개 read-only search 도구)
+  - `ai_assistant_tools_write.go` 765줄 (CRUD 제안 도구 — note·partner·order·outbound·receipt·declaration)
+  - 효과: 매번 그 파일 손댈 때 PR 충돌·리뷰 부담 감소
+
+### 검증
+- `go build ./...` 성공
+- `go vet ./...` 경고 0
+- `go test ./...` 모두 PASS (router 51건 PASS — TestRouteSnapshot/NoEngine + TestGuardMatrix 49)
+- 라우트 변화 없음 (rename + 분할은 동작 보존) — `routes.golden` 갱신 불필요
 
 ---
 

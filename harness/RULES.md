@@ -106,7 +106,7 @@
 
 ### 신규 도메인 추가 절차 (D-110 RegisterRoutes 패턴)
 백엔드에 새 도메인(예: `/api/v1/foo`)을 추가할 때 다음 순서를 그대로 따른다:
-1. **핸들러 파일**: `backend/internal/handler/foo.go`에 `FooHandler` 구조체와 `NewFooHandler(db *supa.Client) *FooHandler` 생성자, 그리고 메서드(`List`, `GetByID`, `Create` 등)를 작성한다.
+1. **핸들러 파일**: `backend/internal/handler/{prefix}_foo.go`에 `FooHandler` 구조체와 `NewFooHandler(db *supa.Client) *FooHandler` 생성자, 그리고 메서드(`List`, `GetByID`, `Create` 등)를 작성한다. **prefix는 영역별로 강제** — `master_`(마스터 CRUD), `tx_`(트랜잭션), `baro_`(바로 전용), `sys_`(시스템·관리), `ai_`(AI/OCR), `io_`(import/export). 패키지는 단일 `handler`를 유지하므로 import 경로는 변하지 않음.
 2. **RegisterRoutes 메서드**: `backend/internal/handler/routes.go`의 알파벳 자리에 `func (h *FooHandler) RegisterRoutes(r chi.Router, g middleware.Gates)`를 추가한다. 가드는 `r.With(g.Write)`, `r.Use(g.TopsolarOnly)` 형태로 직접 적용한다.
 3. **router.go 1줄 추가**: `backend/internal/router/router.go`의 알파벳 자리에 `handler.NewFooHandler(a.DB).RegisterRoutes(r, a.Gates)` 1줄을 추가한다.
 4. **golden 갱신**: `cd backend && go test ./internal/router -run TestRouteSnapshot -update`로 `testdata/routes.golden`을 갱신한다. (이 명령은 라우트 추가/변경 시 항상 실행 — 잊으면 CI에서 깨짐)
