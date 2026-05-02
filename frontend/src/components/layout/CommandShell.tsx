@@ -42,6 +42,7 @@ import {
 import { canAccessMenu, type MenuKey, type Role } from '@/config/permissions';
 import { useAuth } from '@/hooks/useAuth';
 import { useAlerts } from '@/hooks/useAlerts';
+import { useMenuVisibility } from '@/hooks/useMenuVisibility';
 import { usePermission } from '@/hooks/usePermission';
 import { useAppStore } from '@/stores/appStore';
 import { useEffect, useMemo, useState } from 'react';
@@ -68,6 +69,20 @@ interface CommandNavItem {
   count?: number;
   /** D-108: 표시 허용 테넌트. 미지정이면 모든 테넌트 공통. */
   tenants?: TenantScope[];
+  /** 운영 검증 미완 — 사이트 설정 > 메뉴 가시성에서 admin이 끌 수 있는 대상 표시 */
+  isWip?: boolean;
+}
+
+export interface SidebarMenuRegistryItem {
+  key: string;
+  label: string;
+}
+
+/** 사이트 설정 > 메뉴 가시성 카드가 토글 후보로 노출하는 항목 (NAV_GROUPS 평탄화 + isWip 필터) */
+export function listWipMenus(): SidebarMenuRegistryItem[] {
+  return NAV_GROUPS.flatMap((g) => g.items)
+    .filter((i) => i.isWip)
+    .map((i) => ({ key: i.key, label: i.label }));
 }
 
 interface CommandNavGroup {
@@ -124,7 +139,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
     items: [
       { key: 'masters', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters' },
       { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
-      { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: ['topsolar'] },
+      { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: ['topsolar'], isWip: true },
       // admin 전용 — 메타 config 시각 편집 (DB 영구 저장, 모든 사용자 영향)
       { key: 'ui-editor', label: 'UI 편집기', abbr: 'UI', path: '/ui-config-editor', icon: Wand2, menu: 'ui_editor' },
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
@@ -197,6 +212,7 @@ export default function CommandShell() {
   const { pathname, search } = useLocation();
   const { user, role, logout } = useAuth();
   const { roleLabel } = usePermission();
+  const { hidden: hiddenMenus } = useMenuVisibility();
   const r = role as Role | null;
   // D-108: 호스트네임으로 BARO 모드 결정 — 메뉴 가시성 분기에만 사용 (보안 경계는 백엔드 RequireTenantScope)
   const currentTenant = detectTenantScope();
@@ -277,7 +293,8 @@ export default function CommandShell() {
             const visibleItems = group.items.filter(
               (item) =>
                 canAccessMenu(r, item.menu) &&
-                (!item.tenants || item.tenants.includes(currentTenant)),
+                (!item.tenants || item.tenants.includes(currentTenant)) &&
+                !hiddenMenus.has(item.key),
             );
             if (visibleItems.length === 0) return null;
             return (

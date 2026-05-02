@@ -86,6 +86,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		handler.NewProductHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewReceiptHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewSaleHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewSystemSettingsHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewTTHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewUIConfigHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewUserHandler(a.DB).RegisterRoutes(r, a.Gates)

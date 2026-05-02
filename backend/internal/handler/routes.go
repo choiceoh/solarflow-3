@@ -496,6 +496,14 @@ func (h *TTHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
+// SystemSettingsHandler — 사이트 단위 전역 설정 (메뉴 가시성·공지 배너 등). 읽기는 인증, 쓰기는 admin.
+func (h *SystemSettingsHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/system-settings", func(r chi.Router) {
+		r.Get("/{key}", h.Get)
+		r.With(g.AdminOnly).Put("/{key}", h.Upsert)
+	})
+}
+
 // UIConfigHandler — 운영자 GUI 메타 편집기 (Phase 3). 읽기는 인증, 쓰기는 admin.
 func (h *UIConfigHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/ui-configs", func(r chi.Router) {

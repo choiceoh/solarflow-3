@@ -1,7 +1,11 @@
-// 사이트 설정 — 전역 설정 placeholder (admin 전용)
-// 실 항목은 후속 PR에서 하나씩 채워 넣는다.
-import { Bell, Building2, Calendar, DollarSign, Warehouse } from 'lucide-react';
+// 사이트 설정 — 전역 설정 (admin 전용).
+// 첫 항목: 메뉴 가시성 (운영 검증 미완 메뉴를 사이드바에서 켜고 끄기)
+// 후속 항목들은 placeholder 카드로 자리만 잡아둠.
+import { Bell, Building2, Calendar, DollarSign, Eye, Warehouse } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { listWipMenus } from '@/components/layout/CommandShell';
+import { useMenuVisibility } from '@/hooks/useMenuVisibility';
 
 interface PlannedItem {
   icon: LucideIcon;
@@ -37,6 +41,56 @@ const PLANNED: PlannedItem[] = [
   },
 ];
 
+function MenuVisibilityCard() {
+  const wip = listWipMenus();
+  const { hidden, loading, setMenuHidden } = useMenuVisibility();
+
+  return (
+    <article className="rounded-lg border bg-card p-4">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 rounded-md bg-muted p-2">
+          <Eye className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-medium">메뉴 가시성</h2>
+            <span className="rounded bg-emerald-100 text-emerald-700 px-1.5 py-0.5 text-[10px] font-medium">활성</span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground leading-5">
+            운영 검증이 끝나지 않은 미완 메뉴를 사이드바에서 숨길 수 있습니다. 변경은 모든 사용자에게 즉시 반영됩니다.
+          </p>
+
+          {wip.length === 0 ? (
+            <p className="mt-3 rounded bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              현재 미완 표시된 메뉴가 없습니다 (코드의 NAV_GROUPS에서 `isWip: true` 부여 시 여기 노출).
+            </p>
+          ) : (
+            <ul className="mt-3 divide-y rounded border">
+              {wip.map((item) => {
+                const isHidden = hidden.has(item.key);
+                return (
+                  <li key={item.key} className="flex items-center justify-between px-3 py-2">
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-[11px] text-muted-foreground">{isHidden ? '사이드바에서 숨겨짐' : '사이드바에 노출 중'}</p>
+                    </div>
+                    <Switch
+                      checked={!isHidden}
+                      onCheckedChange={(v) => setMenuHidden(item.key, !v)}
+                      disabled={loading}
+                      aria-label={`${item.label} 사이드바 노출 토글`}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function SitePlaceholderPage() {
   return (
     <div className="sf-page">
@@ -51,9 +105,7 @@ export default function SitePlaceholderPage() {
       </div>
 
       <div className="mx-auto max-w-4xl space-y-3">
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          현재 채워진 항목이 없습니다. 아래 카드에 표시된 항목들이 후속 PR로 추가될 예정입니다.
-        </div>
+        <MenuVisibilityCard />
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {PLANNED.map((item) => (
             <article key={item.title} className="rounded-lg border bg-card p-4">
