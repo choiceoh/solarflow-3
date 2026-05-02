@@ -13,6 +13,7 @@ import OutboundForm from '@/components/outbound/OutboundForm';
 import InboundStatusBadge from '@/components/inbound/InboundStatusBadge';
 import BLDetailView from '@/components/inbound/BLDetailView';
 import BLForm from '@/components/inbound/BLForm';
+import BLOcrWidget from '@/components/inbound/BLOcrWidget';
 import { useBLList, useBLDetail } from '@/hooks/useInbound';
 import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL } from '@/types/inbound';
@@ -633,17 +634,52 @@ export const formSubmitters: Record<string, FormSubmitter> = {
 // Phase 4 — Step 3 prep: 폼 안 임의 컴포넌트 슬롯 (FormSection.contentBlock)
 // list 의 contentBlocks 와 시그니처 다름 — form watch/setValue/getValues API 받음.
 export const formContentBlocks: Record<string, FormContentBlock> = {
-  // Step 3c (Stub): BL OCR 위젯 — 면장 PDF 업로드 → 자동 fill
-  // 실 OCR 로직 (~700줄) 은 BLForm.tsx 에 그대로. 별 PR 에서 BLOcrWidget 컴포넌트 추출 후 여기 등록.
-  bl_ocr_widget: () => (
-    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs space-y-1">
-      <div className="font-semibold text-amber-900">📄 면장 OCR 위젯 (Step 3c — Stub)</div>
-      <p className="text-amber-800">
-        해외직수입 시 면장 PDF 를 드롭하면 BL 번호/제조사/품목 자동 채움.
-        실 OCR 로직 추출은 follow-up (BLForm.tsx 에 약 700줄).
-      </p>
-    </div>
-  ),
+  // Step 3c: BL OCR 위젯 — REAL.
+  // 면장 PDF 업로드 → 후보 추출 → review dialog → 폼 필드 자동 fill (단순 setValue 기반)
+  bl_ocr_widget: ({ setValue, extraContext }) => {
+    const initialFile = (extraContext?.initialOcrFile ?? null) as File | null;
+    const initialFileKey = (extraContext?.initialOcrFileKey ?? undefined) as number | undefined;
+    return (
+      <BLOcrWidget
+        initialFile={initialFile}
+        initialFileKey={initialFileKey}
+        onApply={async ({ fields, productOverrides, productSource }) => {
+          // 메타 v2 의 단순 적용 — 직접 매칭되는 필드만 setValue.
+          // 복잡한 cifAmountKrwManual / exchangeRateDisplay state 같은 BLForm 전용 동작은 메타 v2 미지원.
+          if (fields.declaration_number?.value) setValue('declaration_number', fields.declaration_number.value);
+          if (fields.bl_number?.value) setValue('bl_number', fields.bl_number.value);
+          if (fields.arrival_date?.value) setValue('actual_arrival', fields.arrival_date.value);
+          if (fields.port?.value) setValue('port', fields.port.value);
+          if (fields.forwarder?.value) setValue('forwarder', fields.forwarder.value);
+          if (fields.invoice_number?.value) setValue('invoice_number', fields.invoice_number.value);
+          if (fields.exchange_rate?.value) {
+            const rate = parseFloat(fields.exchange_rate.value.replace(/,/g, '').trim());
+            if (Number.isFinite(rate) && rate > 0) setValue('exchange_rate', rate);
+          }
+          // line_items → child_array 'lines' 에 mapping (가장 간단한 매핑)
+          if (fields.line_items?.length) {
+            const lines = fields.line_items.map((item, idx) => {
+              const overrideId = productOverrides[idx];
+              const matched = overrideId
+                ? productSource.find((p) => p.product_id === overrideId)
+                : null;
+              return {
+                product_code: matched?.product_code ?? '',
+                product_name: matched?.product_name ?? item.model_spec?.value ?? '',
+                quantity: item.quantity?.value ? Number(item.quantity.value) : 0,
+                capacity_kw: 0,
+                item_type: 'main',
+                payment_type: item.payment_type?.value === 'free' ? 'free' : 'paid',
+                unit_price_usd_wp: item.unit_price_usd?.value ? Number(item.unit_price_usd.value) : 0,
+                invoice_amount_usd: item.amount_usd?.value ? Number(item.amount_usd.value) : 0,
+              };
+            });
+            setValue('lines', lines);
+          }
+        }}
+      />
+    );
+  },
   // Step 3e (Stub): 결제조건 파서 — composite text input
   bl_payment_terms_widget: ({ watch }) => {
     const inboundType = watch('inbound_type') as string | undefined;
