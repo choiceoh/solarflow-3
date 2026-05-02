@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
-import type { UIMessage } from 'ai';
-import { Bot, Check, FileText, Inbox, MessageSquarePlus, Paperclip, Send, Trash2, User, X } from 'lucide-react';
+import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
+import type { ToolUIPart, UIMessage } from 'ai';
+import { Bot, Check, FileText, Inbox, MessageSquarePlus, Paperclip, Search, Send, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,8 @@ import {
   toBackendMessages,
   extractProposals,
   extractText,
+  summarizeInput,
+  summarizeOutput,
   type ProposalState,
   type ProposalStatus,
 } from '@/lib/assistantMessages';
@@ -398,7 +400,7 @@ function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserte
                     highlightedKey === message.id && 'bg-[var(--sf-solar)]/10 ring-2 ring-[var(--sf-solar)]/40',
                   )}
                 >
-                  <Bubble role={message.role} content={extractText(message)} />
+                  <MessageParts message={message} />
                   {proposals.map((p) => (
                     <ProposalCard
                       key={p.id}
@@ -501,6 +503,66 @@ function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserte
 
       <PendingPanel pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
     </>
+  );
+}
+
+// MessageParts — 한 메시지의 parts 를 순서대로 렌더링.
+// text → Bubble (텍스트 박스), tool-* → ToolChip (회색 칩), data-proposal 은 상위에서 ProposalCard 로 처리하므로 무시.
+function MessageParts({ message }: { message: UIMessage }) {
+  const nodes: React.ReactNode[] = [];
+  for (let i = 0; i < message.parts.length; i++) {
+    const part = message.parts[i];
+    if (part.type === 'text') {
+      if (!part.text.trim()) continue;
+      nodes.push(<Bubble key={i} role={message.role} content={part.text} />);
+      continue;
+    }
+    if (isToolUIPart(part)) {
+      nodes.push(<ToolChip key={i} part={part} />);
+      continue;
+    }
+    // data-proposal / step-start 등은 상위에서 처리하거나 무시.
+  }
+  // 메시지에 text 가 하나도 없고 tool 만 있는 경우(드물게 발생) 빈 메시지 방지 — 폴백 텍스트 박스.
+  if (nodes.length === 0 && message.role === 'assistant') {
+    nodes.push(<Bubble key="fallback" role={message.role} content={extractText(message)} />);
+  }
+  return <>{nodes}</>;
+}
+
+// ToolChip — 한 도구 호출의 input/output 을 작은 인라인 칩으로 표시.
+// state 별 표시:
+//   input-streaming/input-available → "실행 중…"
+//   output-available → 결과 요약
+//   output-error → "오류: …"
+function ToolChip({ part }: { part: ToolUIPart }) {
+  const toolName = String(getToolName(part));
+  const inputSummary = summarizeInput(part.input);
+  const stateLabel =
+    part.state === 'output-available'
+      ? summarizeOutput(part.output)
+      : part.state === 'output-error'
+        ? `오류: ${part.errorText ?? '알 수 없음'}`
+        : '실행 중…';
+  const errored = part.state === 'output-error';
+  return (
+    <div
+      className={cn(
+        'ml-11 inline-flex max-w-[80%] items-center gap-1.5 self-start rounded-full border px-2.5 py-1 text-xs',
+        errored
+          ? 'border-destructive/40 bg-destructive/10 text-destructive'
+          : 'border-muted-foreground/20 bg-muted/40 text-muted-foreground',
+      )}
+      title={`${toolName}${inputSummary} → ${stateLabel}`}
+    >
+      <Search className="h-3 w-3 shrink-0" aria-hidden />
+      <span className="truncate font-mono">
+        {toolName}
+        {inputSummary}
+      </span>
+      <span aria-hidden>→</span>
+      <span className="truncate">{stateLabel}</span>
+    </div>
   );
 }
 

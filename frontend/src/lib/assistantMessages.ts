@@ -63,3 +63,49 @@ export function extractText(message: UIMessage): string {
     .map((p) => p.text)
     .join('');
 }
+
+// summarizeInput — 도구 input 객체를 ToolChip 표시용 짧은 문자열로 요약.
+// 빈/없음 → "()". 객체면 키-값 1~2개를 "k=v" 형태로. v 가 길면 truncate.
+export function summarizeInput(input: unknown): string {
+  if (input == null) return '()';
+  if (typeof input !== 'object' || Array.isArray(input)) {
+    const s = JSON.stringify(input);
+    return `(${s.length > 40 ? s.slice(0, 40) + '…' : s})`;
+  }
+  const entries = Object.entries(input as Record<string, unknown>);
+  if (entries.length === 0) return '()';
+  const parts = entries.slice(0, 2).map(([k, v]) => {
+    const sv = typeof v === 'string' ? v : JSON.stringify(v);
+    const truncated = sv.length > 20 ? sv.slice(0, 20) + '…' : sv;
+    return `${k}=${truncated}`;
+  });
+  if (entries.length > 2) parts.push('…');
+  return `(${parts.join(', ')})`;
+}
+
+// summarizeOutput — 도구 결과를 ToolChip 표시용 짧은 문자열로 요약.
+// 백엔드는 결과를 JSON 문자열 또는 파싱된 JSON 으로 emit. array 면 "N건", object 면 .total/.items.length 우선, fallback 키 요약.
+export function summarizeOutput(output: unknown): string {
+  if (output == null) return '';
+  if (typeof output === 'string') {
+    const trimmed = output.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        return summarizeOutput(JSON.parse(trimmed));
+      } catch {
+        // fall through
+      }
+    }
+    return trimmed.length > 40 ? trimmed.slice(0, 40) + '…' : trimmed;
+  }
+  if (Array.isArray(output)) return `${output.length}건`;
+  if (typeof output === 'object') {
+    const obj = output as Record<string, unknown>;
+    if (Array.isArray(obj.items)) return `${(obj.items as unknown[]).length}건`;
+    if (typeof obj.total === 'number') return `${obj.total}건`;
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return '{}';
+    return `{${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '…' : ''}}`;
+  }
+  return String(output);
+}
