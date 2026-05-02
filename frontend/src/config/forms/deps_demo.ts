@@ -1,5 +1,5 @@
 // Phase 4 보강: MetaForm 메타 인프라 종합 시연 폼 (저장 없음 — UI 데모 전용)
-// 13 기능 동시 시연:
+// 17 기능 동시 시연:
 //   1) visibleIf — has_warranty=true 시 warranty_months 노출
 //   2) optionsDependsOn — manufacturer_id 옵션이 domestic_filter 값에 따라 필터됨
 //   3) multiselect — features 다중 체크박스
@@ -11,21 +11,40 @@
 //   9) dialogSize='lg' — 더 넓은 폼 레이아웃
 //   10) section title + tone — 단계별 색상 섹션 헤더
 //   11) @today defaultValue — order_date 기본값 = 오늘
-//   12) numberFormat='thousands' — unit_price 천단위 콤마 입력
+//   12) numberFormat='krw' — unit_price 천단위 콤마 입력
 //   13) description — 필드 아래 설명 텍스트
+//   14) refine (cross-field) — total <= 1억, warranty_months % 12 == 0
+//   15) file.multiple — attachments 다중 파일
+//   16) datetime/time — pickup_at, expected_time
+//   17) draftAutoSave — 입력 중 localStorage 자동 저장, 복구
 
 import type { MetaFormConfig } from '@/templates/types';
 
 const depsDemo: MetaFormConfig = {
   id: 'deps_demo',
   title: { create: '의존성 데모', edit: '의존성 데모' },
-  // Phase 4 보강 — 다이얼로그 크기 lg (계산 필드까지 추가돼 너비 여유 필요)
+  // Phase 4 보강 — 다이얼로그 크기 lg
   dialogSize: 'lg',
-  // Phase 4 보강 — 외부 컨텍스트 자동 첨가 (운영 폼이 부모 ID/회사ID 합치던 패턴)
+  // Phase 4 보강 — 외부 컨텍스트 자동 첨가
   extraPayload: {
     static: { form_kind: 'meta_demo' },
-    fromStore: { company_id: 'selectedCompanyId' }, // appStore.selectedCompanyId → payload.company_id
+    fromStore: { company_id: 'selectedCompanyId' },
   },
+  // Phase 4 보강 Tier 3 — 폼 단위 cross-field 검증
+  refine: [
+    {
+      ruleId: 'limit_total_under_100m',
+      message: '총액이 1억원을 초과합니다 (정책: quantity × unit_price ≤ 100,000,000).',
+      path: ['unit_price'],
+    },
+    {
+      ruleId: 'warranty_year_aligned',
+      message: '보증 기간은 12 개월 단위여야 합니다 (12, 24, 36, ...).',
+      path: ['warranty_months'],
+    },
+  ],
+  // Phase 4 보강 Tier 3 — 초안 자동 저장
+  draftAutoSave: true,
   sections: [
     // Phase 4 보강 — 섹션 제목 + tone (단계 그룹화)
     {
@@ -155,10 +174,30 @@ const depsDemo: MetaFormConfig = {
       ],
     },
     {
+      title: '첨부 · 시간',
+      tone: 'warn',
       cols: 1,
       fields: [
-        // 파일 첨부 — File 객체 캡처. 실제 업로드는 페이지 책임.
-        { key: 'product_image', label: '제품 이미지', type: 'file' },
+        // 단일 파일 (기존)
+        { key: 'product_image', label: '제품 이미지 (단일)', type: 'file' },
+        // Phase 4 보강 Tier 3 — multifile (File[])
+        {
+          key: 'attachments', label: '첨부 파일 (다중)', type: 'file', multiple: true,
+          description: '여러 파일을 한 번에 선택 가능 (multiple=true).',
+        },
+      ],
+    },
+    {
+      cols: 2,
+      fields: [
+        // Phase 4 보강 Tier 3 — datetime
+        {
+          key: 'pickup_at', label: '픽업 일시 (datetime)', type: 'datetime',
+          defaultValue: '@now',
+          description: 'datetime-local 입력. 기본값 @now.',
+        },
+        // Phase 4 보강 Tier 3 — time
+        { key: 'expected_time', label: '예상 시간 (time)', type: 'time' },
       ],
     },
     {
