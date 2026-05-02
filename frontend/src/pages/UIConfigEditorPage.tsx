@@ -36,6 +36,9 @@ import productForm from '@/config/forms/products';
 import constructionSiteForm from '@/config/forms/construction_sites';
 import poLineForm from '@/config/forms/po_line';
 import costForm from '@/config/forms/cost';
+import blLineForm from '@/config/forms/bl_line';
+import receiptForm from '@/config/forms/receipt';
+import declarationForm from '@/config/forms/declaration';
 import depsDemoForm from '@/config/forms/deps_demo';
 import outboundFormSimple from '@/config/forms/outbound_simple';
 import outboundDetailSimple from '@/config/details/outbound_simple';
@@ -71,6 +74,9 @@ const KNOWN_CONFIGS: KnownConfig[] = [
   { kind: 'form', id: 'construction_site_form_v2', label: '발전소 폼', routeHint: '/masters/construction-sites-v2 → 새 현장 등록', default: constructionSiteForm },
   { kind: 'form', id: 'po_line_form_v2', label: 'PO 라인 폼 (메타 변환)', routeHint: '/po-line-meta-demo', default: poLineForm },
   { kind: 'form', id: 'cost_form_v2', label: '면장 원가 폼 (메타 변환, 17 필드)', routeHint: '/cost-meta-demo', default: costForm },
+  { kind: 'form', id: 'bl_line_form_v2', label: 'BL 라인 폼 (메타 변환)', routeHint: '/child-forms-meta-demo', default: blLineForm },
+  { kind: 'form', id: 'receipt_form_v2', label: '수금 폼 (메타 변환)', routeHint: '/child-forms-meta-demo', default: receiptForm },
+  { kind: 'form', id: 'declaration_form_v2', label: '면장 폼 (메타 변환)', routeHint: '/child-forms-meta-demo', default: declarationForm },
   { kind: 'form', id: 'deps_demo', label: '의존성·동적옵션 데모', routeHint: '/meta-form-deps-demo', default: depsDemoForm },
   { kind: 'form', id: 'outbound_form_simple', label: '출고 폼 (한계선 데모)', routeHint: '/outbound-form-meta-demo', default: outboundFormSimple },
   { kind: 'detail', id: 'outbound_detail_simple', label: '출고 상세 (한계선 데모)', routeHint: '/outbound-detail-meta-demo', default: outboundDetailSimple },

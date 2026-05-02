@@ -23,6 +23,9 @@ import productFormConfig from '@/config/forms/products';
 import constructionSiteFormConfig from '@/config/forms/construction_sites';
 import poLineFormConfig from '@/config/forms/po_line';
 import costFormConfig from '@/config/forms/cost';
+import blLineFormConfig from '@/config/forms/bl_line';
+import receiptFormConfig from '@/config/forms/receipt';
+import declarationFormConfig from '@/config/forms/declaration';
 import depsDemoFormConfig from '@/config/forms/deps_demo';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
@@ -32,6 +35,7 @@ import {
   type OutboundStatus, type UsageCategory, type Outbound, type SaleListItem,
 } from '@/types/outbound';
 import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite } from '@/types/masters';
+import type { BLShipment } from '@/types/inbound';
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
@@ -383,6 +387,40 @@ const CostFormV2: FormComponent = (props) => (
   />
 );
 
+// Phase 4 보강: BL 라인 메타 폼 (BLLineForm 변환)
+const BLLineFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={blLineFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+    extraContext={(props as { extraContext?: Record<string, unknown> }).extraContext}
+  />
+);
+
+// Phase 4 보강: 수금 메타 폼 (ReceiptForm 변환)
+const ReceiptFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={receiptFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
+// Phase 4 보강: 면장 메타 폼 (DeclarationForm 변환)
+const DeclarationFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={declarationFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
 // Phase 4 보강: 의존성·동적 옵션 시연 폼 (UI 데모 전용 — 저장 안 함)
 const DepsDemoForm: FormComponent = (props) => (
   <MetaForm
@@ -407,6 +445,9 @@ export const formComponents: Record<string, FormComponent> = {
   construction_site_form_v2: ConstructionSiteFormV2, // Phase 4: 발전소 메타 폼 (마지막 마스터)
   po_line_form_v2: POLineFormV2,               // Phase 4 보강: PO 라인 (child 라인 폼 첫 변환)
   cost_form_v2: CostFormV2,                    // Phase 4 보강: 면장 원가 (가장 복잡한 child 라인 폼)
+  bl_line_form_v2: BLLineFormV2,               // Phase 4 보강: BL 라인 아이템
+  receipt_form_v2: ReceiptFormV2,              // Phase 4 보강: 수금
+  declaration_form_v2: DeclarationFormV2,      // Phase 4 보강: 면장
   deps_demo: DepsDemoForm,                     // Phase 4 보강: 의존성·동적 옵션 데모
 };
 
@@ -615,6 +656,20 @@ export const masterSources: Record<string, MasterOptionSource> = {
       return list
         .filter((p) => p.is_active && (p.partner_type === 'customer' || p.partner_type === 'both'))
         .map((p) => ({ value: p.partner_id, label: p.partner_name }));
+    },
+  },
+  // Phase 4 보강: BL 마스터 (DeclarationForm 메타화용) — selectedCompanyId 로 필터
+  'bls.byCompany': {
+    load: async () => {
+      const companyId = useAppStore.getState().selectedCompanyId;
+      const url = companyId && companyId !== 'all'
+        ? `/api/v1/bls?company_id=${companyId}`
+        : '/api/v1/bls';
+      const list = await fetchWithAuth<BLShipment[]>(url);
+      return list.map((b) => ({
+        value: b.bl_id,
+        label: b.bl_number + (b.manufacturer_name ? ` · ${b.manufacturer_name}` : ''),
+      }));
     },
   },
 };
