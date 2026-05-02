@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/MicahParks/keyfunc/v2"
@@ -18,47 +19,75 @@ import (
 	"solarflow-backend/internal/response"
 )
 
-// jwksCache — Supabase JWKS 공개키 캐시 (서버 시작 시 1회 로드, 1시간마다 갱신)
+// JWKS 로드 정책 (회귀 방지 — D-JWKS-RETRY)
+//   - 한 번 성공하면 keyfunc가 1시간마다 자체 refresh.
+//   - 한 번 실패해도 영원히 nil이 되지 않도록, 다음 호출에서 jwksRetryCooldown만큼
+//     기다렸다 재시도. 이전 sync.Once 패턴은 부팅 시 Supabase 콜드/네트워크 글리치
+//     한 번에 영구 401(전체 인증 마비)을 유발했음.
+//   - cooldown은 폭주 방지용 최소 간격. 정상 운영 중 이 값이 보일 일은 없음.
+const jwksRetryCooldown = 30 * time.Second
+
 var (
-	jwksOnce sync.Once
-	jwksFunc *keyfunc.JWKS
+	jwksPtr     atomic.Pointer[keyfunc.JWKS]
+	jwksLastTry atomic.Int64 // 마지막 시도 시각 (UnixNano). 0이면 미시도.
+	jwksMu      sync.Mutex   // 동시 다발 시도가 같은 endpoint를 두드리지 않도록 직렬화.
 )
 
-// getJWKS — Supabase JWKS 엔드포인트에서 공개키를 가져옴 (lazy init + 자동 갱신)
+// getJWKS — Supabase JWKS 엔드포인트에서 공개키를 가져옴.
+// 성공한 캐시가 있으면 즉시 반환. 없으면 cooldown 후 재시도.
 func getJWKS() *keyfunc.JWKS {
-	jwksOnce.Do(func() {
-		jwksURL := os.Getenv("SUPABASE_JWKS_URL")
-		if jwksURL == "" {
-			supaURL := os.Getenv("SUPABASE_URL")
-			if supaURL != "" {
-				jwksURL = strings.TrimRight(supaURL, "/") + "/auth/v1/.well-known/jwks.json"
-			}
-		}
-		if jwksURL == "" {
-			log.Printf("[인증 미들웨어] JWKS URL을 결정할 수 없습니다 (SUPABASE_JWKS_URL 또는 SUPABASE_URL 필요)")
-			return
-		}
+	if f := jwksPtr.Load(); f != nil {
+		return f
+	}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+	// cooldown 체크 — 락 잡기 전에 빠른 거부 (대부분의 호출이 여기서 끝남)
+	if last := jwksLastTry.Load(); last != 0 && time.Since(time.Unix(0, last)) < jwksRetryCooldown {
+		return nil
+	}
 
-		opts := keyfunc.Options{
-			Ctx:               ctx,
-			RefreshInterval:   time.Hour,
-			RefreshRateLimit:  5 * time.Minute,
-			RefreshUnknownKID: true,
-		}
+	jwksMu.Lock()
+	defer jwksMu.Unlock()
 
-		var err error
-		jwksFunc, err = keyfunc.Get(jwksURL, opts)
-		if err != nil {
-			log.Printf("[인증 미들웨어] JWKS 로드 실패: %v", err)
-			jwksFunc = nil
-		} else {
-			log.Printf("[인증 미들웨어] JWKS 로드 성공: %s", jwksURL)
+	// 락 안에서 재확인 — 다른 고루틴이 그 사이 성공/시도했을 수 있음
+	if f := jwksPtr.Load(); f != nil {
+		return f
+	}
+	if last := jwksLastTry.Load(); last != 0 && time.Since(time.Unix(0, last)) < jwksRetryCooldown {
+		return nil
+	}
+
+	jwksLastTry.Store(time.Now().UnixNano())
+
+	jwksURL := os.Getenv("SUPABASE_JWKS_URL")
+	if jwksURL == "" {
+		supaURL := os.Getenv("SUPABASE_URL")
+		if supaURL != "" {
+			jwksURL = strings.TrimRight(supaURL, "/") + "/auth/v1/.well-known/jwks.json"
 		}
-	})
-	return jwksFunc
+	}
+	if jwksURL == "" {
+		log.Printf("[인증 미들웨어] JWKS URL을 결정할 수 없습니다 (SUPABASE_JWKS_URL 또는 SUPABASE_URL 필요)")
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	opts := keyfunc.Options{
+		Ctx:               ctx,
+		RefreshInterval:   time.Hour,
+		RefreshRateLimit:  5 * time.Minute,
+		RefreshUnknownKID: true,
+	}
+
+	f, err := keyfunc.Get(jwksURL, opts)
+	if err != nil {
+		log.Printf("[인증 미들웨어] JWKS 로드 실패 — %s 후 재시도: %v", jwksRetryCooldown, err)
+		return nil
+	}
+	log.Printf("[인증 미들웨어] JWKS 로드 성공: %s", jwksURL)
+	jwksPtr.Store(f)
+	return f
 }
 
 // UserProfile — user_profiles 테이블에서 조회한 사용자 프로필
