@@ -23,11 +23,12 @@ export default function BLMetaDemoPage() {
       <div className="rounded-md border bg-card p-4 space-y-2 text-xs">
         <div className="font-semibold">진행 상황</div>
         <ul className="list-disc pl-5 space-y-0.5 text-muted-foreground">
-          <li>✅ <strong>3a (현재)</strong>: 기본 fields ~10개 (구분/번호/제조사/통화/환율/창고/일정/메모)</li>
-          <li>⏳ 3b: 입고 품목 (lines) — child_array</li>
-          <li>⏳ 3c: OCR 위젯 — contentBlock</li>
-          <li>⏳ 3d: PO/LC cascade — fieldCascade</li>
-          <li>⏳ 3e: 결제조건 파서 — contentBlock</li>
+          <li>✅ <strong>3a</strong>: 기본 fields ~10개 (구분/번호/제조사/통화/환율/창고/일정/메모)</li>
+          <li>✅ <strong>3b</strong>: 입고 품목 (lines) — child_array (8 자식 필드)</li>
+          <li>🟡 <strong>3c</strong>: OCR 위젯 — contentBlock 슬롯 등록 완료, 실 로직 (~700줄) follow-up</li>
+          <li>✅ <strong>3d</strong>: PO/LC cascade — pos.import + lcs.byPo master + bl_po_to_lc_mfg cascade</li>
+          <li>🟡 <strong>3e</strong>: 결제조건 파서 — contentBlock 슬롯 등록, 파서 (~80줄) follow-up</li>
+          <li>⏳ <strong>final</strong>: /inbound 교체 — OCR 실 로직 추출 후 가능</li>
         </ul>
       </div>
 

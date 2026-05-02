@@ -633,6 +633,34 @@ export const formSubmitters: Record<string, FormSubmitter> = {
 // Phase 4 — Step 3 prep: 폼 안 임의 컴포넌트 슬롯 (FormSection.contentBlock)
 // list 의 contentBlocks 와 시그니처 다름 — form watch/setValue/getValues API 받음.
 export const formContentBlocks: Record<string, FormContentBlock> = {
+  // Step 3c (Stub): BL OCR 위젯 — 면장 PDF 업로드 → 자동 fill
+  // 실 OCR 로직 (~700줄) 은 BLForm.tsx 에 그대로. 별 PR 에서 BLOcrWidget 컴포넌트 추출 후 여기 등록.
+  bl_ocr_widget: () => (
+    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs space-y-1">
+      <div className="font-semibold text-amber-900">📄 면장 OCR 위젯 (Step 3c — Stub)</div>
+      <p className="text-amber-800">
+        해외직수입 시 면장 PDF 를 드롭하면 BL 번호/제조사/품목 자동 채움.
+        실 OCR 로직 추출은 follow-up (BLForm.tsx 에 약 700줄).
+      </p>
+    </div>
+  ),
+  // Step 3e (Stub): 결제조건 파서 — composite text input
+  bl_payment_terms_widget: ({ watch }) => {
+    const inboundType = watch('inbound_type') as string | undefined;
+    return (
+      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs space-y-1">
+        <div className="font-semibold text-amber-900">💳 결제조건 파서 (Step 3e — Stub)</div>
+        <p className="text-amber-800">
+          {inboundType === 'import'
+            ? '해외직수입: Sight / 30 / 60 / 90 / 120 일 + 분할 ratio + USD 합계'
+            : '국내: NET 30/45/60/.../120 일 + 단일 KRW 합계'}
+        </p>
+        <p className="text-[10px] text-amber-700">
+          실 파서 (~80줄, BLForm.tsx 의 composeImportPT/parseImportPT) 추출은 follow-up.
+        </p>
+      </div>
+    );
+  },
   // 데모: 현재 입력값 요약 — watch 로 라이브 표시
   demo_status_widget: ({ watch }) => {
     const poId = watch('po_id') as string | undefined;
@@ -668,6 +696,27 @@ export const fieldCascades: Record<string, FieldCascade> = {
     } else if (poId === 'po-200') {
       setValue('manufacturer', '한화큐셀');
       setValue('currency', 'KRW');
+    }
+  },
+  // Step 3d: BL 폼의 PO 선택 → LC/제조사/통화 자동 fill
+  // PO 상세 fetch 해서 manufacturer_id / currency / 첫 LC id 채움.
+  bl_po_to_lc_mfg: async (poId, _values, setValue) => {
+    if (!poId || typeof poId !== 'string') return;
+    try {
+      const po = await fetchWithAuth<{
+        po_id: string;
+        manufacturer_id?: string;
+        currency?: string;
+        // 일부 응답이 lcs nested array 또는 첫 lc_id 만 평탄
+        lcs?: Array<{ lc_id?: string }>;
+        lc_id?: string;
+      }>(`/api/v1/pos/${poId}`);
+      if (po.manufacturer_id) setValue('manufacturer_id', po.manufacturer_id);
+      if (po.currency) setValue('currency', po.currency);
+      const firstLc = po.lcs?.[0]?.lc_id ?? po.lc_id;
+      if (firstLc) setValue('lc_id', firstLc);
+    } catch {
+      // PO 조회 실패 — 무시 (사용자가 직접 입력)
     }
   },
 };
@@ -833,6 +882,38 @@ export const masterSources: Record<string, MasterOptionSource> = {
     load: async () => {
       await useAppStore.getState().loadManufacturers();
       return useAppStore.getState().manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr }));
+    },
+  },
+  // Step 3d: 해외직수입 PO 목록 (BLForm 의 PO 선택용)
+  'pos.import': {
+    load: async () => {
+      const companyId = useAppStore.getState().selectedCompanyId;
+      if (!companyId || companyId === 'all') return [];
+      try {
+        const list = await fetchWithAuth<Array<{ po_id: string; po_number?: string; manufacturer_id?: string; manufacturer_name?: string }>>(
+          `/api/v1/pos?company_id=${companyId}&contract_type=import`
+        );
+        return list.map((p) => ({
+          value: p.po_id,
+          label: `${p.po_number ?? p.po_id.slice(0, 8)}${p.manufacturer_name ? ` · ${p.manufacturer_name}` : ''}`,
+        }));
+      } catch { return []; }
+    },
+  },
+  // Step 3d: 선택한 PO 에 연결된 LC 목록 (PO cascade 후 LC 선택)
+  'lcs.byPo': {
+    load: async (ctx) => {
+      const poId = ctx?.po_id as string | undefined;
+      if (!poId) return [];
+      try {
+        const list = await fetchWithAuth<Array<{ lc_id: string; lc_number?: string; status?: string }>>(
+          `/api/v1/lcs?po_id=${poId}`
+        );
+        return list.map((l) => ({
+          value: l.lc_id,
+          label: `${l.lc_number ?? l.lc_id.slice(0, 8)}${l.status ? ` · ${l.status}` : ''}`,
+        }));
+      } catch { return []; }
     },
   },
   // Phase 4 보강: 동적 옵션 시연 — context.domestic_filter 또는 .domestic_foreign 으로 필터
