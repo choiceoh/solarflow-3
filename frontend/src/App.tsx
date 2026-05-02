@@ -18,6 +18,7 @@ const OutboundV2Page = lazy(() => import('@/pages/OutboundV2Page'));
 const OutboundFormMetaDemoPage = lazy(() => import('@/pages/OutboundFormMetaDemoPage'));
 const OutboundDetailMetaDemoPage = lazy(() => import('@/pages/OutboundDetailMetaDemoPage'));
 const PartnerV2Page = lazy(() => import('@/pages/PartnerV2Page'));
+const CompaniesV2Page = lazy(() => import('@/pages/CompaniesV2Page'));
 const UIConfigEditorPage = lazy(() => import('@/pages/UIConfigEditorPage'));
 const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
 const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
@@ -85,6 +86,7 @@ export default function App() {
                 <Route path="/data/banks/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankNewPage /></RoleGuard>} />
                 <Route path="/data/banks/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankEditPage /></RoleGuard>} />
                 <Route path="/masters/partners-v2" element={<PartnerV2Page />} />
+                <Route path="/masters/companies-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><CompaniesV2Page /></RoleGuard>} />
                 <Route path="/masters/construction-sites" element={<ConstructionSitesPage />} />
                 <Route path="/inbound" element={<InboundPage />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
