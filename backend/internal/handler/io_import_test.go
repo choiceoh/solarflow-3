@@ -214,6 +214,172 @@ func TestValidateRequired(t *testing.T) {
 	}
 }
 
+// TestAssertFloat — assertFloat가 다양한 입력 타입을 안전하게 변환하는지 검증.
+// 비유: 봉투 안 숫자가 어떤 형태로 와도(float/int/json.Number/문자열) 동일 규격으로 꺼냄.
+// 회귀 위험: 타입 단정 실패를 zero value로 흘리면 VAT 0원 같은 무성 손상 발생.
+func TestAssertFloat(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   interface{}
+		want    float64
+		wantOK  bool
+	}{
+		{"float64", 12.5, 12.5, true},
+		{"float32", float32(7.25), 7.25, true},
+		{"int", 100, 100, true},
+		{"int64", int64(9999), 9999, true},
+		{"json.Number 정수", json.Number("42"), 42, true},
+		{"json.Number 소수", json.Number("3.14"), 3.14, true},
+		{"json.Number 잘못된 형식", json.Number("abc"), 0, false},
+		{"string 정수", "100", 100, true},
+		{"string 소수", "  2.5  ", 2.5, true},
+		{"string 빈문자", "", 0, false},
+		{"string 공백만", "   ", 0, false},
+		{"string 잘못된 형식", "abc", 0, false},
+		{"nil", nil, 0, false},
+		{"bool 미지원", true, 0, false},
+		{"map 미지원", map[string]string{}, 0, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, ok := assertFloat(c.input)
+			if ok != c.wantOK {
+				t.Errorf("ok 기대: %v, 실제: %v", c.wantOK, ok)
+			}
+			if got != c.want {
+				t.Errorf("값 기대: %v, 실제: %v", c.want, got)
+			}
+		})
+	}
+}
+
+// TestGetInt — getInt: float에서 int 변환
+func TestGetInt(t *testing.T) {
+	row := map[string]interface{}{
+		"int":   42,
+		"float": 7.9,
+		"nil":   nil,
+		"bad":   "abc",
+	}
+	cases := []struct {
+		key    string
+		want   int
+		wantOK bool
+	}{
+		{"int", 42, true},
+		{"float", 7, true}, // 소수 절단
+		{"nil", 0, false},
+		{"bad", 0, false},
+		{"missing", 0, false},
+	}
+	for _, c := range cases {
+		t.Run(c.key, func(t *testing.T) {
+			got, ok := getInt(row, c.key)
+			if ok != c.wantOK || got != c.want {
+				t.Errorf("기대: (%d, %v), 실제: (%d, %v)", c.want, c.wantOK, got, ok)
+			}
+		})
+	}
+}
+
+// TestGetFloatPtr — 값 있으면 *float64, 없으면 nil
+func TestGetFloatPtr(t *testing.T) {
+	row := map[string]interface{}{"v": 1.5, "z": nil}
+	if p := getFloatPtr(row, "v"); p == nil || *p != 1.5 {
+		t.Errorf("기대: *1.5, 실제: %v", p)
+	}
+	if p := getFloatPtr(row, "z"); p != nil {
+		t.Errorf("nil 입력에 nil 기대, 실제: %v", *p)
+	}
+	if p := getFloatPtr(row, "missing"); p != nil {
+		t.Errorf("미존재 키에 nil 기대, 실제: %v", *p)
+	}
+}
+
+// TestGetStringPtr — 값 있으면 *string, 빈문자/없으면 nil
+func TestGetStringPtr(t *testing.T) {
+	row := map[string]interface{}{"v": "hello", "empty": "", "trim": "  x  "}
+	if p := getStringPtr(row, "v"); p == nil || *p != "hello" {
+		t.Errorf("기대: *hello, 실제: %v", p)
+	}
+	if p := getStringPtr(row, "trim"); p == nil || *p != "x" {
+		t.Errorf("trim 기대: *x, 실제: %v", p)
+	}
+	if p := getStringPtr(row, "empty"); p != nil {
+		t.Errorf("빈문자에 nil 기대, 실제: *%v", *p)
+	}
+	if p := getStringPtr(row, "missing"); p != nil {
+		t.Errorf("미존재 키에 nil 기대")
+	}
+}
+
+// TestGetIntPtr — 값 있으면 *int, 없으면 nil
+func TestGetIntPtr(t *testing.T) {
+	row := map[string]interface{}{"v": 7, "z": nil}
+	if p := getIntPtr(row, "v"); p == nil || *p != 7 {
+		t.Errorf("기대: *7, 실제: %v", p)
+	}
+	if p := getIntPtr(row, "z"); p != nil {
+		t.Errorf("nil에 nil 기대")
+	}
+	if p := getIntPtr(row, "missing"); p != nil {
+		t.Errorf("missing에 nil 기대")
+	}
+}
+
+// TestRequireFloat — 형식 오류 시 ImportError 반환
+func TestRequireFloat(t *testing.T) {
+	row := map[string]interface{}{"good": 1.5, "bad": "abc", "nil": nil}
+
+	if v, err := requireFloat(2, row, "good"); err != nil || v != 1.5 {
+		t.Errorf("정상 케이스 실패: v=%v err=%v", v, err)
+	}
+	if _, err := requireFloat(3, row, "bad"); err == nil {
+		t.Error("잘못된 형식인데 에러 없음")
+	} else if err.Row != 3 || err.Field != "bad" {
+		t.Errorf("에러 메타 잘못됨: row=%d field=%s", err.Row, err.Field)
+	}
+	if _, err := requireFloat(4, row, "nil"); err == nil {
+		t.Error("nil인데 에러 없음")
+	}
+}
+
+// TestRequireInt — 형식 오류 시 ImportError 반환
+func TestRequireInt(t *testing.T) {
+	row := map[string]interface{}{"good": 7, "bad": "x", "nil": nil}
+
+	if v, err := requireInt(5, row, "good"); err != nil || v != 7 {
+		t.Errorf("정상 케이스 실패: v=%d err=%v", v, err)
+	}
+	if _, err := requireInt(6, row, "bad"); err == nil {
+		t.Error("잘못된 형식인데 에러 없음")
+	} else if err.Row != 6 || err.Field != "bad" {
+		t.Errorf("에러 메타 잘못됨: row=%d field=%s", err.Row, err.Field)
+	}
+}
+
+// TestValidateAllowedValues — 허용값 외에는 ImportError 반환, 빈 값은 통과
+func TestValidateAllowedValues(t *testing.T) {
+	allowed := map[string]bool{"A": true, "B": true, "C": true}
+
+	if err := validateAllowedValues(2, "", "category", allowed); err != nil {
+		t.Errorf("빈 값은 통과해야 하는데 에러: %v", err)
+	}
+	if err := validateAllowedValues(3, "A", "category", allowed); err != nil {
+		t.Errorf("허용값 'A' 통과 기대, 에러: %v", err)
+	}
+	if err := validateAllowedValues(4, "Z", "category", allowed); err == nil {
+		t.Error("허용 외 'Z'에 에러 기대, 없음")
+	} else {
+		if err.Row != 4 || err.Field != "category" {
+			t.Errorf("에러 메타 잘못됨: row=%d field=%s", err.Row, err.Field)
+		}
+		if !strings.Contains(err.Message, "category") {
+			t.Errorf("에러 메시지에 field 누락: %s", err.Message)
+		}
+	}
+}
+
 // TestImportResponse_JSONFormat — ImportResponse JSON 직렬화
 func TestImportResponse_JSONFormat(t *testing.T) {
 	resp := model.ImportResponse{

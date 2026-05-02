@@ -7,6 +7,149 @@ import (
 	"testing"
 )
 
+// helper for *string/*float64 in tests
+func sptr(s string) *string   { return &s }
+func fptr(f float64) *float64 { return &f }
+
+// TestBuildAmaranthInboundWorkbook_Domestic — 국내 입고: VAT 10% 적용, exchange_rate=1
+func TestBuildAmaranthInboundWorkbook_Domestic(t *testing.T) {
+	bls := []blShipmentForExport{{
+		BLID:           "BL1",
+		BLNumber:       "BL-001",
+		InboundType:    "domestic",
+		Currency:       "KRW",
+		ExchangeRate:   fptr(1),
+		ActualArrival:  sptr("2026-05-01"),
+		POID:           sptr("PO1"),
+		ManufacturerID: "MFG1",
+		WarehouseID:    sptr("WH1"),
+	}}
+	lines := []inboundLineForExport{{
+		BLID:           "BL1",
+		ProductID:      "PROD1",
+		Quantity:       10,
+		UnitPriceKRWWp: fptr(100),
+		Products:       &inboundProductJoin{ProductCode: "PC1", SpecWP: 500},
+	}}
+	lookups := inboundExportLookups{
+		Warehouses:    map[string]warehouseInfo{"WH1": {warehouseCode: "WH-A", locationCode: "LC-A"}},
+		PartnerERPs:   map[string]string{"제조사1": "P-001"},
+		Manufacturers: map[string]string{"MFG1": "제조사1"},
+		POs:           map[string]string{"PO1": "PO-001"},
+	}
+
+	f := buildAmaranthInboundWorkbook(bls, lines, lookups)
+	sheet := "Sheet1"
+
+	mustCell := func(t *testing.T, cell, want string) {
+		t.Helper()
+		got, err := f.GetCellValue(sheet, cell)
+		if err != nil {
+			t.Fatalf("%s 읽기 실패: %v", cell, err)
+		}
+		if got != want {
+			t.Errorf("%s 기대=%q 실제=%q", cell, want, got)
+		}
+	}
+	mustCell(t, "A3", "0")        // 거래구분: domestic = 0
+	mustCell(t, "B3", "20260501") // 입고일자 (하이픈 제거)
+	mustCell(t, "C3", "P-001")    // 거래처코드
+	mustCell(t, "D3", "KRW")      // 환종
+	mustCell(t, "E3", "1")        // 환율
+	mustCell(t, "F3", "0")        // 과세구분: domestic = 0
+	mustCell(t, "H3", "WH-A")     // 창고코드
+	mustCell(t, "K3", "PC1")      // 품번
+	mustCell(t, "L3", "10")       // 입고수량
+	mustCell(t, "O3", "50000")    // 부가세미포함단가 = 100 × 500
+	mustCell(t, "P3", "55000")    // 부가세포함단가 = 50000 × 1.1
+	mustCell(t, "Q3", "500000")   // 공급가 = 50000 × 10
+	mustCell(t, "R3", "50000")    // 부가세 = 500000 × 0.1 (domestic)
+	mustCell(t, "S3", "550000")   // 합계 = 공급+부가세
+	mustCell(t, "V3", "LC-A")     // 장소코드
+	mustCell(t, "AA3", "PO-001")  // 발주번호
+	mustCell(t, "AC3", "BL-001")  // 수입선적번호
+}
+
+// TestBuildAmaranthInboundWorkbook_Import — 수입 입고: 영세, VAT=0, 단가 = cif_wp_krw × spec_wp
+func TestBuildAmaranthInboundWorkbook_Import(t *testing.T) {
+	bls := []blShipmentForExport{{
+		BLID:           "BL2",
+		BLNumber:       "BL-002",
+		InboundType:    "import",
+		Currency:       "USD",
+		ExchangeRate:   fptr(1300),
+		ActualArrival:  sptr("2026-05-02"),
+		ManufacturerID: "MFG2",
+	}}
+	lines := []inboundLineForExport{{
+		BLID:             "BL2",
+		ProductID:        "PROD2",
+		Quantity:         5,
+		InvoiceAmountUSD: fptr(2500),
+		UnitPriceUSDWp:   fptr(0.5),
+		Products:         &inboundProductJoin{ProductCode: "PC2", SpecWP: 400},
+	}}
+	lookups := inboundExportLookups{
+		Manufacturers: map[string]string{"MFG2": "제조사2"},
+		PartnerERPs:   map[string]string{"제조사2": "P-002"},
+		CIFByProduct:  map[string]float64{"PROD2": 700}, // 700원/Wp × 400 = 280,000원/장
+	}
+
+	f := buildAmaranthInboundWorkbook(bls, lines, lookups)
+	sheet := "Sheet1"
+
+	mustCell := func(t *testing.T, cell, want string) {
+		t.Helper()
+		got, _ := f.GetCellValue(sheet, cell)
+		if got != want {
+			t.Errorf("%s 기대=%q 실제=%q", cell, want, got)
+		}
+	}
+	mustCell(t, "A3", "3")       // 거래구분: import = 3
+	mustCell(t, "F3", "1")       // 과세구분: import = 1
+	mustCell(t, "O3", "280000")  // 단가 = cif × spec
+	mustCell(t, "P3", "280000")  // 부가세포함 == 단가 (영세)
+	mustCell(t, "Q3", "1400000") // 공급가 = 280000 × 5
+	mustCell(t, "R3", "0")       // 부가세 = 0 (import 영세)
+	mustCell(t, "S3", "1400000") // 합계 = 공급
+	mustCell(t, "T3", "200")     // 외화단가 = 0.5 × 400
+	mustCell(t, "U3", "2500")    // 외화금액
+}
+
+// TestBuildAmaranthInboundWorkbook_Empty — 입력 없으면 헤더만 (3행 비어있음)
+func TestBuildAmaranthInboundWorkbook_Empty(t *testing.T) {
+	f := buildAmaranthInboundWorkbook(nil, nil, inboundExportLookups{})
+	rows, err := f.GetRows("Sheet1")
+	if err != nil {
+		t.Fatalf("rows 읽기 실패: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Errorf("기대: 2행 (헤더+ERP), 실제: %d행", len(rows))
+	}
+}
+
+// TestBuildAmaranthInboundWorkbook_DateFallback — actual_arrival 없으면 eta 사용
+func TestBuildAmaranthInboundWorkbook_DateFallback(t *testing.T) {
+	bls := []blShipmentForExport{{
+		BLID:        "BL3",
+		BLNumber:    "BL-003",
+		InboundType: "domestic",
+		Currency:    "KRW",
+		ETA:         sptr("2026-04-30"),
+	}}
+	lines := []inboundLineForExport{{
+		BLID:           "BL3",
+		Quantity:       1,
+		UnitPriceKRWWp: fptr(0),
+		Products:       &inboundProductJoin{ProductCode: "PC3", SpecWP: 300},
+	}}
+	f := buildAmaranthInboundWorkbook(bls, lines, inboundExportLookups{})
+	got, _ := f.GetCellValue("Sheet1", "B3")
+	if got != "20260430" {
+		t.Errorf("ETA fallback 기대=20260430, 실제=%q", got)
+	}
+}
+
 // --- Export 핸들러 테스트 ---
 // 비유: 헤더 매핑, 유틸리티 함수, 컬럼 수 검증
 // DB 의존 API는 통합 테스트에서 검증

@@ -195,31 +195,45 @@ func (h *OutboundHandler) fetchOutboundRecord(id string) (model.Outbound, bool, 
 	return rows[0], true, nil
 }
 
-func (h *OutboundHandler) resolveOutboundCapacityKW(productID string, quantity int, capacityKW *float64) (float64, error) {
-	if capacityKW != nil {
-		if *capacityKW <= 0 {
+// computeOutboundCapacityKW — 출고 용량(kW) 계산의 pure 함수.
+// explicit capacity_kw가 주어지면 양수 검증 후 그대로 반환.
+// 아니면 quantity × productWattageKW로 계산. productWattageKW는 호출 측에서 DB 조회 후 전달.
+// DB·HTTP 의존 없음 — 단위테스트는 tx_outbound_test.go.
+func computeOutboundCapacityKW(quantity int, explicitKW *float64, productWattageKW *float64) (float64, error) {
+	if explicitKW != nil {
+		if *explicitKW <= 0 {
 			return 0, fmt.Errorf("capacity_kw는 양수여야 합니다")
 		}
-		return *capacityKW, nil
+		return *explicitKW, nil
 	}
-
-	data, _, err := h.DB.From("products").
-		Select("wattage_kw", "exact", false).
-		Eq("product_id", productID).
-		Execute()
-	if err != nil {
-		return 0, err
-	}
-	var products []struct {
-		WattageKW *float64 `json:"wattage_kw"`
-	}
-	if err := json.Unmarshal(data, &products); err != nil {
-		return 0, err
-	}
-	if len(products) == 0 || products[0].WattageKW == nil || *products[0].WattageKW <= 0 {
+	if productWattageKW == nil || *productWattageKW <= 0 {
 		return 0, fmt.Errorf("품번의 wattage_kw를 확인할 수 없습니다")
 	}
-	return float64(quantity) * *products[0].WattageKW, nil
+	return float64(quantity) * *productWattageKW, nil
+}
+
+func (h *OutboundHandler) resolveOutboundCapacityKW(productID string, quantity int, capacityKW *float64) (float64, error) {
+	var wattage *float64
+	if capacityKW == nil {
+		// explicit이 없을 때만 DB 조회
+		data, _, err := h.DB.From("products").
+			Select("wattage_kw", "exact", false).
+			Eq("product_id", productID).
+			Execute()
+		if err != nil {
+			return 0, err
+		}
+		var products []struct {
+			WattageKW *float64 `json:"wattage_kw"`
+		}
+		if err := json.Unmarshal(data, &products); err != nil {
+			return 0, err
+		}
+		if len(products) > 0 {
+			wattage = products[0].WattageKW
+		}
+	}
+	return computeOutboundCapacityKW(quantity, capacityKW, wattage)
 }
 
 func (h *OutboundHandler) ensureOutboundStockAvailable(companyID, productID string, quantity int, capacityKW *float64, status string, creditKW float64) (int, string, error) {

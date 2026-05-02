@@ -267,6 +267,186 @@ type blShipmentForExport struct {
 	CompanyID      string   `json:"company_id"`
 }
 
+// inboundLineForExport — 아마란스 입고 내보내기용 라인아이템 (B/L 라인).
+// 핸들러가 DB에서 조회해 buildAmaranthInboundWorkbook에 전달.
+type inboundLineForExport struct {
+	BLLineID         string              `json:"bl_line_id"`
+	BLID             string              `json:"bl_id"`
+	ProductID        string              `json:"product_id"`
+	Quantity         int                 `json:"quantity"`
+	InvoiceAmountUSD *float64            `json:"invoice_amount_usd"`
+	UnitPriceUSDWp   *float64            `json:"unit_price_usd_wp"`
+	UnitPriceKRWWp   *float64            `json:"unit_price_krw_wp"`
+	Memo             *string             `json:"memo"`
+	Products         *inboundProductJoin `json:"products"`
+}
+
+// inboundExportLookups — 아마란스 입고 워크북 빌드에 필요한 코드/이름 룩업 묶음.
+// 핸들러가 DB에서 미리 조회해 전달. buildAmaranthInboundWorkbook은 DB에 의존하지 않는다.
+type inboundExportLookups struct {
+	Warehouses    map[string]warehouseInfo // warehouse_id → {code, location}
+	PartnerERPs   map[string]string        // partner_name → erp_code
+	Manufacturers map[string]string        // manufacturer_id → name_kr
+	POs           map[string]string        // po_id → po_number
+	CIFByProduct  map[string]float64       // product_id → cif_wp_krw
+}
+
+// buildAmaranthInboundWorkbook — 입고 데이터를 아마란스10 양식 .xlsx 워크북으로 변환.
+// pure 함수 — DB·HTTP 의존 없음. 단위테스트는 io_export_test.go.
+// 호출 측이 DB 조회 후 모든 데이터를 넘겨야 한다.
+func buildAmaranthInboundWorkbook(bls []blShipmentForExport, lines []inboundLineForExport, lookups inboundExportLookups) *excelize.File {
+	f := excelize.NewFile()
+	sheet := "Sheet1"
+	writeHeaders(f, sheet, inboundHeaders, inboundERPCodes)
+
+	row := 3
+	for _, bl := range bls {
+		blID := bl.BLID
+		inboundType := bl.InboundType
+		currency := bl.Currency
+		blNumber := bl.BLNumber
+		blMemo := ptrStr(bl.Memo)
+		mfgID := bl.ManufacturerID
+		whID := ptrStr(bl.WarehouseID)
+		poID := ptrStr(bl.POID)
+
+		// 날짜: actual_arrival 우선, 없으면 eta
+		var datePtr *string
+		if bl.ActualArrival != nil && *bl.ActualArrival != "" {
+			datePtr = bl.ActualArrival
+		} else if bl.ETA != nil && *bl.ETA != "" {
+			datePtr = bl.ETA
+		}
+
+		exchangeRate := ptrFloat(bl.ExchangeRate)
+		if currency == "KRW" {
+			exchangeRate = 1
+		}
+
+		// 거래구분
+		tradeType := "0"
+		if inboundType == "import" {
+			tradeType = "3"
+		}
+
+		// 과세구분
+		vatType := "0"
+		if inboundType == "import" {
+			vatType = "1"
+		}
+
+		// 거래처코드: 제조사 이름 → partners erp_code
+		mfgName := lookups.Manufacturers[mfgID]
+		trCode := lookups.PartnerERPs[mfgName]
+
+		// 창고
+		whCode := ""
+		lcCode := ""
+		if wh, ok := lookups.Warehouses[whID]; ok {
+			whCode = wh.warehouseCode
+			lcCode = wh.locationCode
+		}
+
+		// PO 번호
+		poNumber := ""
+		if poID != "" {
+			poNumber = lookups.POs[poID]
+		}
+
+		// 라인 순번
+		lineSeq := 0
+		for _, line := range lines {
+			if line.BLID != blID {
+				continue
+			}
+			lineSeq++
+
+			productCode := ""
+			specWP := 0
+			if line.Products != nil {
+				productCode = line.Products.ProductCode
+				specWP = line.Products.SpecWP
+			}
+
+			// 단가 계산
+			var unitPriceKRW float64
+			if inboundType == "import" {
+				// import: cif_wp_krw * spec_wp
+				cifWpKrw := lookups.CIFByProduct[line.ProductID]
+				unitPriceKRW = cifWpKrw * float64(specWP)
+			} else {
+				// domestic: unit_price_krw_wp * spec_wp
+				unitPriceKRW = ptrFloat(line.UnitPriceKRWWp) * float64(specWP)
+			}
+
+			// 부가세포함단가
+			vatUM := unitPriceKRW * 1.1
+			if inboundType == "import" {
+				vatUM = unitPriceKRW // 수입 영세
+			}
+
+			qty := float64(line.Quantity)
+			supplyAmt := qty * unitPriceKRW
+			vatAmt := 0.0
+			if inboundType != "import" {
+				vatAmt = supplyAmt * 0.1
+			}
+			totalAmt := supplyAmt + vatAmt
+
+			// 외화단가 (USD/EA)
+			exchUM := ptrFloat(line.UnitPriceUSDWp) * float64(specWP)
+
+			seqStr := fmt.Sprintf("%d", lineSeq)
+			remark := buildRemark(blNumber, blMemo)
+			lineRemark := ptrStr(line.Memo)
+
+			// 34컬럼 기록
+			cells := []interface{}{
+				tradeType,                       // A 거래구분
+				formatDate(datePtr),             // B 입고일자
+				trCode,                          // C 거래처코드
+				currency,                        // D 환종
+				exchangeRate,                    // E 환율
+				vatType,                         // F 과세구분
+				"0",                             // G 단가구분
+				whCode,                          // H 창고코드
+				"",                              // I 담당자코드
+				remark,                          // J 비고(건)
+				productCode,                     // K 품번
+				line.Quantity,                   // L 입고수량
+				line.Quantity,                   // M 재고단위수량
+				"",                              // N 단가유형
+				unitPriceKRW,                    // O 부가세미포함단가
+				vatUM,                           // P 부가세포함단가
+				supplyAmt,                       // Q 공급가
+				vatAmt,                          // R 부가세
+				totalAmt,                        // S 합계액
+				exchUM,                          // T 외화단가
+				ptrFloat(line.InvoiceAmountUSD), // U 외화금액
+				lcCode,                          // V 장소코드
+				"",                              // W LOT번호
+				"",                              // X 관리구분 (D-068)
+				"",                              // Y 프로젝트코드
+				lineRemark,                      // Z 비고(내역)
+				poNumber,                        // AA 발주번호
+				seqStr,                          // AB 발주순번
+				blNumber,                        // AC 수입선적번호
+				seqStr,                          // AD 수입선적순번
+				"", "", "", "", // AE~AH 입고의뢰/입고검사 번호·순번
+			}
+
+			for ci, val := range cells {
+				cell := fmt.Sprintf("%s%d", colName(ci), row)
+				if err := f.SetCellValue(sheet, cell, val); err != nil {
+					log.Printf("[아마란스 입고] 셀 %s 값 설정 실패: %v", cell, err)
+				}
+			}
+			row++
+		}
+	}
+	return f
+}
+
 // --- 유틸리티 ---
 
 // formatDate — YYYY-MM-DD → YYYYMMDD (하이픈 제거)
@@ -542,19 +722,7 @@ func (h *ExportHandler) AmaranthInbound(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// 라인아이템 조회
-	type lineItem struct {
-		BLLineID         string              `json:"bl_line_id"`
-		BLID             string              `json:"bl_id"`
-		ProductID        string              `json:"product_id"`
-		Quantity         int                 `json:"quantity"`
-		InvoiceAmountUSD *float64            `json:"invoice_amount_usd"`
-		UnitPriceUSDWp   *float64            `json:"unit_price_usd_wp"`
-		UnitPriceKRWWp   *float64            `json:"unit_price_krw_wp"`
-		Memo             *string             `json:"memo"`
-		Products         *inboundProductJoin `json:"products"`
-	}
-
-	var allLines []lineItem
+	var allLines []inboundLineForExport
 	if len(blIDs) > 0 {
 		lineQuery := h.DB.From("bl_line_items").
 			Select("bl_line_id, bl_id, product_id, quantity, invoice_amount_usd, unit_price_usd_wp, unit_price_krw_wp, memo, products(product_code, spec_wp)", "exact", false).
@@ -614,156 +782,14 @@ func (h *ExportHandler) AmaranthInbound(w http.ResponseWriter, r *http.Request) 
 		cifMap = make(map[string]float64)
 	}
 
-	// 엑셀 생성
-	f := excelize.NewFile()
-	sheet := "Sheet1"
-	writeHeaders(f, sheet, inboundHeaders, inboundERPCodes)
-
-	row := 3
-	for _, bl := range filteredBLs {
-		blID := bl.BLID
-		inboundType := bl.InboundType
-		currency := bl.Currency
-		blNumber := bl.BLNumber
-		blMemo := ptrStr(bl.Memo)
-		mfgID := bl.ManufacturerID
-		whID := ptrStr(bl.WarehouseID)
-		poID := ptrStr(bl.POID)
-
-		// 날짜: actual_arrival 우선, 없으면 eta
-		var datePtr *string
-		if bl.ActualArrival != nil && *bl.ActualArrival != "" {
-			datePtr = bl.ActualArrival
-		} else if bl.ETA != nil && *bl.ETA != "" {
-			datePtr = bl.ETA
-		}
-
-		exchangeRate := ptrFloat(bl.ExchangeRate)
-		if currency == "KRW" {
-			exchangeRate = 1
-		}
-
-		// 거래구분
-		tradeType := "0"
-		if inboundType == "import" {
-			tradeType = "3"
-		}
-
-		// 과세구분
-		vatType := "0"
-		if inboundType == "import" {
-			vatType = "1"
-		}
-
-		// 거래처코드: 제조사 이름 → partners erp_code
-		mfgName := mfgMap[mfgID]
-		trCode := partnerMap[mfgName]
-
-		// 창고
-		whCode := ""
-		lcCode := ""
-		if wh, ok := whMap[whID]; ok {
-			whCode = wh.warehouseCode
-			lcCode = wh.locationCode
-		}
-
-		// PO 번호
-		poNumber := ""
-		if poID != "" {
-			poNumber = poMap[poID]
-		}
-
-		// 라인 순번
-		lineSeq := 0
-		for _, line := range allLines {
-			if line.BLID != blID {
-				continue
-			}
-			lineSeq++
-
-			productCode := ""
-			specWP := 0
-			if line.Products != nil {
-				productCode = line.Products.ProductCode
-				specWP = line.Products.SpecWP
-			}
-
-			// 단가 계산
-			var unitPriceKRW float64
-			if inboundType == "import" {
-				// import: cif_wp_krw * spec_wp
-				cifWpKrw := cifMap[line.ProductID]
-				unitPriceKRW = cifWpKrw * float64(specWP)
-			} else {
-				// domestic: unit_price_krw_wp * spec_wp
-				unitPriceKRW = ptrFloat(line.UnitPriceKRWWp) * float64(specWP)
-			}
-
-			// 부가세포함단가
-			vatUM := unitPriceKRW * 1.1
-			if inboundType == "import" {
-				vatUM = unitPriceKRW // 수입 영세
-			}
-
-			qty := float64(line.Quantity)
-			supplyAmt := qty * unitPriceKRW
-			vatAmt := 0.0
-			if inboundType != "import" {
-				vatAmt = supplyAmt * 0.1
-			}
-			totalAmt := supplyAmt + vatAmt
-
-			// 외화단가 (USD/EA)
-			exchUM := ptrFloat(line.UnitPriceUSDWp) * float64(specWP)
-
-			seqStr := fmt.Sprintf("%d", lineSeq)
-			remark := buildRemark(blNumber, blMemo)
-			lineRemark := ptrStr(line.Memo)
-
-			// 34컬럼 기록
-			cells := []interface{}{
-				tradeType,                       // A 거래구분
-				formatDate(datePtr),             // B 입고일자
-				trCode,                          // C 거래처코드
-				currency,                        // D 환종
-				exchangeRate,                    // E 환율
-				vatType,                         // F 과세구분
-				"0",                             // G 단가구분
-				whCode,                          // H 창고코드
-				"",                              // I 담당자코드
-				remark,                          // J 비고(건)
-				productCode,                     // K 품번
-				line.Quantity,                   // L 입고수량
-				line.Quantity,                   // M 재고단위수량
-				"",                              // N 단가유형
-				unitPriceKRW,                    // O 부가세미포함단가
-				vatUM,                           // P 부가세포함단가
-				supplyAmt,                       // Q 공급가
-				vatAmt,                          // R 부가세
-				totalAmt,                        // S 합계액
-				exchUM,                          // T 외화단가
-				ptrFloat(line.InvoiceAmountUSD), // U 외화금액
-				lcCode,                          // V 장소코드
-				"",                              // W LOT번호
-				"",                              // X 관리구분 (D-068)
-				"",                              // Y 프로젝트코드
-				lineRemark,                      // Z 비고(내역)
-				poNumber,                        // AA 발주번호
-				seqStr,                          // AB 발주순번
-				blNumber,                        // AC 수입선적번호
-				seqStr,                          // AD 수입선적순번
-				"", "", "", "",                  // AE~AH 입고의뢰/입고검사 번호·순번
-			}
-
-			for ci, val := range cells {
-				cell := fmt.Sprintf("%s%d", colName(ci), row)
-				if err := f.SetCellValue(sheet, cell, val); err != nil {
-					log.Printf("[아마란스 입고] 셀 %s 값 설정 실패: %v", cell, err)
-				}
-			}
-			row++
-		}
-	}
+	// 엑셀 생성 — pure builder에 위임
+	f := buildAmaranthInboundWorkbook(filteredBLs, allLines, inboundExportLookups{
+		Warehouses:    whMap,
+		PartnerERPs:   partnerMap,
+		Manufacturers: mfgMap,
+		POs:           poMap,
+		CIFByProduct:  cifMap,
+	})
 
 	// 파일 전송
 	today := time.Now().Format("20060102")
