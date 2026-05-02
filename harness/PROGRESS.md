@@ -16,6 +16,32 @@
 
 ---
 
+## 2026-05-02 세션 — 나머지 5개 import 파서 추출 (Outbound/Sales/Declaration+Cost/Expenses/Orders)
+
+### 완료
+PR #206에서 Receipts/Inbound 그룹핑만 추출했던 것을 7종 모두로 확장:
+- `parseExpenseRow(rowNum, row, companyID, blID)` — 부대비용
+- `parseOutboundRow(rowNum, row, companyID, productID, warehouseID, wattageKW, orderID, targetCompanyID)` — 출고
+- `parseOrderRow(rowNum, row, companyID, customerID, productID, wattageKW)` — 수주 (receipt_method/management/fulfillment 허용값 포함)
+- `parseSaleRow(rowNum, row, outboundID, customerID, outboundQuantity, specWP)` — 매출 (자동 EA단가/VAT/합계)
+- `parseDeclarationRow(rowNum, row, blID, companyID)` — 면장
+- `parseDeclarationCostRow(rowNum, row, declID, productID, wattageKW)` — 원가 (자동 cif_wp_krw)
+
+각 핸들러는 FK 해석 후 pure 함수에 위임. 5개 핸들러 메서드가 평균 80→30줄로 축소.
+
+### 검증
+- `go build ./...` 성공
+- `go vet ./...` 경고 0
+- `go test ./...` 모두 PASS — 5 신규 파서 테스트 (~22 sub-case)
+- 핸들러 동작 보존
+
+### LOC
+- io_import.go: 1381(원본) → 1083 (-298줄, 22% 축소)
+- io_import_parsers.go: 374줄 (7개 파서 + 1개 그룹핑)
+- io_import_parsers_test.go: 552줄
+
+---
+
 ## 2026-05-02 세션 — 복잡 핸들러 pure function 추출 (테스트 가능 단위 5종)
 
 ### 완료 (B 옵션 — 풀 service/repository 대신 좁힌 추출)

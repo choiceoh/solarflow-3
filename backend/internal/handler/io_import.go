@@ -525,17 +525,7 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		qty, qErr := requireInt(rowNum, row, "quantity")
-		if qErr != nil {
-			importErrors = append(importErrors, *qErr)
-			continue
-		}
-		capacityKW := float64(qty) * wattageKW
-
-		// group_trade: "Y" -> true
-		groupTrade := getBoolPtr(row, "group_trade")
-
-		// 상대법인 FK (그룹거래 시)
+		// 상대법인 FK (그룹거래 시 선택)
 		var targetCompanyID *string
 		if tc := getString(row, "target_company_code"); tc != "" {
 			tcID, err := h.resolveFK("companies", "company_code", tc, "company_id")
@@ -557,27 +547,10 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 			orderID = &oID
 		}
 
-		outReq := model.CreateOutboundRequest{
-			OutboundDate:    getString(row, "outbound_date"),
-			CompanyID:       companyID,
-			ProductID:       productID,
-			Quantity:        qty,
-			CapacityKw:      &capacityKW,
-			WarehouseID:     warehouseID,
-			UsageCategory:   getString(row, "usage_category"),
-			OrderID:         orderID,
-			SiteName:        getStringPtr(row, "site_name"),
-			SiteAddress:     getStringPtr(row, "site_address"),
-			SpareQty:        getIntPtr(row, "spare_qty"),
-			GroupTrade:      groupTrade,
-			TargetCompanyID: targetCompanyID,
-			ErpOutboundNo:   getStringPtr(row, "erp_outbound_no"),
-			Status:          "active",
-			Memo:            getStringPtr(row, "memo"),
-		}
-
-		if msg := outReq.Validate(); msg != "" {
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "outbound", Message: msg})
+		// 검증·페이로드 빌드 — pure 함수에 위임 (io_import_parsers.go)
+		outReq, parseErrs := parseOutboundRow(rowNum, row, companyID, productID, warehouseID, wattageKW, orderID, targetCompanyID)
+		if len(parseErrs) > 0 {
+			importErrors = append(importErrors, parseErrs...)
 			continue
 		}
 
@@ -692,48 +665,16 @@ func (h *ImportHandler) Sales(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// 거래처 FK
-		customerName := getString(row, "customer_name")
-		customerID, err := h.resolveFK("partners", "partner_name", customerName, "partner_id")
+		customerID, err := h.resolveFK("partners", "partner_name", getString(row, "customer_name"), "partner_id")
 		if err != nil {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "customer_name", Message: err.Error()})
 			continue
 		}
 
-		unitPriceWp, upErr := requireFloat(rowNum, row, "unit_price_wp")
-		if upErr != nil {
-			importErrors = append(importErrors, *upErr)
-			continue
-		}
-		if unitPriceWp <= 0 {
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "unit_price_wp", Message: "unit_price_wp는 양수여야 합니다"})
-			continue
-		}
-
-		// 자동계산: ea = wp × spec_wp, supply = ea × qty, vat = supply × 0.1, total = supply + vat
-		unitPriceEa := unitPriceWp * specWP
-		supplyAmount := unitPriceEa * quantity
-		vatAmount := supplyAmount * 0.1
-		totalAmount := supplyAmount + vatAmount
-
-		invoiceQty := int(quantity)
-		saleReq := model.CreateSaleRequest{
-			OutboundID:      &outboundID,
-			CustomerID:      customerID,
-			Quantity:        &invoiceQty,
-			UnitPriceWp:     unitPriceWp,
-			UnitPriceEa:     &unitPriceEa,
-			SupplyAmount:    &supplyAmount,
-			VatAmount:       &vatAmount,
-			TotalAmount:     &totalAmount,
-			TaxInvoiceDate:  getStringPtr(row, "tax_invoice_date"),
-			TaxInvoiceEmail: getStringPtr(row, "tax_invoice_email"),
-			ErpClosed:       getBoolPtr(row, "erp_closed"),
-			ErpClosedDate:   getStringPtr(row, "erp_closed_date"),
-			Memo:            getStringPtr(row, "memo"),
-		}
-
-		if msg := saleReq.Validate(); msg != "" {
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "sale", Message: msg})
+		// 검증·자동계산·페이로드 빌드 — pure 함수에 위임 (io_import_parsers.go)
+		saleReq, parseErrs := parseSaleRow(rowNum, row, outboundID, customerID, quantity, specWP)
+		if len(parseErrs) > 0 {
+			importErrors = append(importErrors, parseErrs...)
 			continue
 		}
 
@@ -817,21 +758,10 @@ func (h *ImportHandler) Declarations(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		declReq := model.CreateDeclarationRequest{
-			DeclarationNumber: getString(row, "declaration_number"),
-			BLID:              blID,
-			CompanyID:         companyID,
-			DeclarationDate:   getString(row, "declaration_date"),
-			ArrivalDate:       getStringPtr(row, "arrival_date"),
-			ReleaseDate:       getStringPtr(row, "release_date"),
-			HSCode:            getStringPtr(row, "hs_code"),
-			CustomsOffice:     getStringPtr(row, "customs_office"),
-			Port:              getStringPtr(row, "port"),
-			Memo:              getStringPtr(row, "memo"),
-		}
-
-		if msg := declReq.Validate(); msg != "" {
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "declaration", Message: msg})
+		// 검증·페이로드 빌드 — pure 함수에 위임 (io_import_parsers.go)
+		declReq, parseErrs := parseDeclarationRow(rowNum, row, blID, companyID)
+		if len(parseErrs) > 0 {
+			importErrors = append(importErrors, parseErrs...)
 			continue
 		}
 
@@ -876,59 +806,16 @@ func (h *ImportHandler) Declarations(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		productCode := getString(row, "product_code")
-		productID, wattageKW, err := h.resolveProductWithWattage(productCode)
+		productID, wattageKW, err := h.resolveProductWithWattage(getString(row, "product_code"))
 		if err != nil {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "product_code", Message: err.Error()})
 			continue
 		}
 
-		qty, qErr := requireInt(rowNum, row, "quantity")
-		if qErr != nil {
-			importErrors = append(importErrors, *qErr)
-			continue
-		}
-		capacityKW := float64(qty) * wattageKW
-		exchangeRate, exErr := requireFloat(rowNum, row, "exchange_rate")
-		if exErr != nil {
-			importErrors = append(importErrors, *exErr)
-			continue
-		}
-		cifTotalKrw, cifErr := requireFloat(rowNum, row, "cif_total_krw")
-		if cifErr != nil {
-			importErrors = append(importErrors, *cifErr)
-			continue
-		}
-
-		// cif_wp_krw 자동: cif_total_krw / (qty * spec_wp) — spec_wp가 0이면 0
-		cifWpKrw := 0.0
-		if capacityKW > 0 {
-			cifWpKrw = cifTotalKrw / (capacityKW * 1000)
-		}
-
-		costReq := model.CreateCostDetailRequest{
-			DeclarationID:  declID,
-			ProductID:      productID,
-			Quantity:       qty,
-			CapacityKw:     &capacityKW,
-			FobUnitUsd:     getFloatPtr(row, "fob_unit_usd"),
-			FobTotalUsd:    getFloatPtr(row, "fob_total_usd"),
-			FobWpKrw:       getFloatPtr(row, "fob_wp_krw"),
-			ExchangeRate:   exchangeRate,
-			CifUnitUsd:     getFloatPtr(row, "cif_unit_usd"),
-			CifTotalUsd:    getFloatPtr(row, "cif_total_usd"),
-			CifTotalKrw:    cifTotalKrw,
-			CifWpKrw:       cifWpKrw,
-			TariffRate:     getFloatPtr(row, "tariff_rate"),
-			TariffAmount:   getFloatPtr(row, "tariff_amount"),
-			VatAmount:      getFloatPtr(row, "vat_amount"),
-			CustomsFee:     getFloatPtr(row, "customs_fee"),
-			IncidentalCost: getFloatPtr(row, "incidental_cost"),
-			Memo:           getStringPtr(row, "memo"),
-		}
-
-		if msg := costReq.Validate(); msg != "" {
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "cost_detail", Message: msg})
+		// 검증·자동 cif_wp_krw 계산·페이로드 빌드 — pure 함수에 위임 (io_import_parsers.go)
+		costReq, parseErrs := parseDeclarationCostRow(rowNum, row, declID, productID, wattageKW)
+		if len(parseErrs) > 0 {
+			importErrors = append(importErrors, parseErrs...)
 			continue
 		}
 
@@ -981,23 +868,8 @@ func (h *ImportHandler) Expenses(w http.ResponseWriter, r *http.Request) {
 	for i, row := range req.Rows {
 		rowNum := i + 2
 
-		errs := validateRequired(rowNum, row, []string{"company_code", "expense_type", "amount"})
-		if len(errs) > 0 {
+		if errs := validateRequired(rowNum, row, []string{"company_code", "expense_type", "amount"}); len(errs) > 0 {
 			importErrors = append(importErrors, errs...)
-			continue
-		}
-
-		// 허용값 검증 (감리 즉시수정)
-		if e := validateAllowedValues(rowNum, getString(row, "expense_type"), "expense_type", allowedExpenseTypes); e != nil {
-			importErrors = append(importErrors, *e)
-			continue
-		}
-
-		// bl_id 또는 month 필수
-		blNum := getString(row, "bl_number")
-		month := getString(row, "month")
-		if blNum == "" && month == "" {
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "bl_number/month", Message: "B/L 또는 월 중 하나는 필수입니다"})
 			continue
 		}
 
@@ -1008,7 +880,7 @@ func (h *ImportHandler) Expenses(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var blID *string
-		if blNum != "" {
+		if blNum := getString(row, "bl_number"); blNum != "" {
 			bID, err := h.resolveFK("bl_shipments", "bl_number", blNum, "bl_id")
 			if err != nil {
 				importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "bl_number", Message: err.Error()})
@@ -1017,36 +889,10 @@ func (h *ImportHandler) Expenses(w http.ResponseWriter, r *http.Request) {
 			blID = &bID
 		}
 
-		amount, amErr := requireFloat(rowNum, row, "amount")
-		if amErr != nil {
-			importErrors = append(importErrors, *amErr)
-			continue
-		}
-		vat := getFloatPtr(row, "vat")
-		total := amount
-		if vat != nil {
-			total = amount + *vat
-		}
-
-		var monthPtr *string
-		if month != "" {
-			monthPtr = &month
-		}
-
-		expReq := model.CreateExpenseRequest{
-			BLID:        blID,
-			Month:       monthPtr,
-			CompanyID:   companyID,
-			ExpenseType: getString(row, "expense_type"),
-			Amount:      amount,
-			Vat:         vat,
-			Total:       total,
-			Vendor:      getStringPtr(row, "vendor"),
-			Memo:        getStringPtr(row, "memo"),
-		}
-
-		if msg := expReq.Validate(); msg != "" {
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "expense", Message: msg})
+		// 검증·페이로드 빌드 — pure 함수에 위임 (io_import_parsers.go)
+		expReq, parseErrs := parseExpenseRow(rowNum, row, companyID, blID)
+		if len(parseErrs) > 0 {
+			importErrors = append(importErrors, parseErrs...)
 			continue
 		}
 
@@ -1099,31 +945,11 @@ func (h *ImportHandler) Orders(w http.ResponseWriter, r *http.Request) {
 	for i, row := range req.Rows {
 		rowNum := i + 2
 
-		errs := validateRequired(rowNum, row, []string{
+		if errs := validateRequired(rowNum, row, []string{
 			"company_code", "customer_name", "order_date", "receipt_method",
 			"management_category", "fulfillment_source", "product_code", "quantity", "unit_price_wp",
-		})
-		if len(errs) > 0 {
+		}); len(errs) > 0 {
 			importErrors = append(importErrors, errs...)
-			continue
-		}
-
-		// 허용값 검증 (감리 즉시수정)
-		allowedErrs := false
-		for _, av := range []struct {
-			val, field string
-			allowed    map[string]bool
-		}{
-			{getString(row, "receipt_method"), "receipt_method", allowedReceiptMethods},
-			{getString(row, "management_category"), "management_category", allowedManagementCategories},
-			{getString(row, "fulfillment_source"), "fulfillment_source", allowedFulfillmentSources},
-		} {
-			if e := validateAllowedValues(rowNum, av.val, av.field, av.allowed); e != nil {
-				importErrors = append(importErrors, *e)
-				allowedErrs = true
-			}
-		}
-		if allowedErrs {
 			continue
 		}
 
@@ -1132,62 +958,21 @@ func (h *ImportHandler) Orders(w http.ResponseWriter, r *http.Request) {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "company_code", Message: err.Error()})
 			continue
 		}
-
 		customerID, err := h.resolveFK("partners", "partner_name", getString(row, "customer_name"), "partner_id")
 		if err != nil {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "customer_name", Message: err.Error()})
 			continue
 		}
-
-		productCode := getString(row, "product_code")
-		productID, wattageKW, err := h.resolveProductWithWattage(productCode)
+		productID, wattageKW, err := h.resolveProductWithWattage(getString(row, "product_code"))
 		if err != nil {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "product_code", Message: err.Error()})
 			continue
 		}
 
-		qty, qErr := requireInt(rowNum, row, "quantity")
-		if qErr != nil {
-			importErrors = append(importErrors, *qErr)
-			continue
-		}
-		capacityKW := float64(qty) * wattageKW
-		unitPriceWp, upErr := requireFloat(rowNum, row, "unit_price_wp")
-		if upErr != nil {
-			importErrors = append(importErrors, *upErr)
-			continue
-		}
-
-		// 자동값: shipped_qty=0, remaining_qty=quantity, status="received"
-		shippedQty := 0
-		remainingQty := qty
-
-		orderReq := model.CreateOrderRequest{
-			OrderNumber:        getStringPtr(row, "order_number"),
-			CompanyID:          companyID,
-			CustomerID:         customerID,
-			OrderDate:          getString(row, "order_date"),
-			ReceiptMethod:      getString(row, "receipt_method"),
-			ProductID:          productID,
-			Quantity:           qty,
-			CapacityKw:         &capacityKW,
-			UnitPriceWp:        unitPriceWp,
-			SiteName:           getStringPtr(row, "site_name"),
-			SiteAddress:        getStringPtr(row, "site_address"),
-			SiteContact:        getStringPtr(row, "site_contact"),
-			SitePhone:          getStringPtr(row, "site_phone"),
-			PaymentTerms:       getStringPtr(row, "payment_terms"),
-			DepositRate:        getFloatPtr(row, "deposit_rate"),
-			DeliveryDue:        getStringPtr(row, "delivery_due"),
-			Status:             "received",
-			ManagementCategory: getString(row, "management_category"),
-			FulfillmentSource:  getString(row, "fulfillment_source"),
-			SpareQty:           getIntPtr(row, "spare_qty"),
-			Memo:               getStringPtr(row, "memo"),
-		}
-
-		if msg := orderReq.Validate(); msg != "" {
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "order", Message: msg})
+		// 검증·페이로드 빌드 — pure 함수에 위임 (io_import_parsers.go)
+		orderReq, parseErrs := parseOrderRow(rowNum, row, companyID, customerID, productID, wattageKW)
+		if len(parseErrs) > 0 {
+			importErrors = append(importErrors, parseErrs...)
 			continue
 		}
 
@@ -1197,11 +982,10 @@ func (h *ImportHandler) Orders(w http.ResponseWriter, r *http.Request) {
 			ShippedQty   int `json:"shipped_qty"`
 			RemainingQty int `json:"remaining_qty"`
 		}
-
 		insertData := orderInsert{
 			CreateOrderRequest: orderReq,
-			ShippedQty:         shippedQty,
-			RemainingQty:       remainingQty,
+			ShippedQty:         0,
+			RemainingQty:       orderReq.Quantity,
 		}
 
 		_, _, err = h.DB.From("orders").
