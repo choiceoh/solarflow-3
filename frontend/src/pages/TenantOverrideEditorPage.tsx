@@ -19,6 +19,7 @@ import {
   loadRuntimeOverride, saveRuntimeOverride, clearRuntimeOverride, listRuntimeOverrides,
   type ConfigKind,
 } from '@/config/tenants/runtimeOverride';
+import { loadHistory, clearHistory, type HistoryEntry } from '@/config/tenants/runtimeOverrideHistory';
 import { tenantOverrides } from '@/config/tenants';
 
 interface KnownConfig {
@@ -77,6 +78,8 @@ export default function TenantOverrideEditorPage() {
   const [activeKeys, setActiveKeys] = useState<{ tenantId: TenantId; kind: ConfigKind; configId: string }[]>([]);
   const [filter, setFilter] = useState('');
   const [showDiff, setShowDiff] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const selected = useMemo(
     () => KNOWN_CONFIGS.find((c) => `${c.kind}:${c.id}` === selectedKey) ?? KNOWN_CONFIGS[0],
@@ -84,6 +87,7 @@ export default function TenantOverrideEditorPage() {
   );
 
   const refreshActive = () => setActiveKeys(listRuntimeOverrides());
+  const refreshHistory = () => setHistory(loadHistory(tenantId, selected.kind, selected.id));
 
   // 선택 변경 시 현재 runtime override 또는 코드 overlay (참고용) 표시
   useEffect(() => {
@@ -109,6 +113,12 @@ export default function TenantOverrideEditorPage() {
   }, [tenantId, selected.kind, selected.id]);
 
   useEffect(() => { refreshActive(); }, []);
+
+  // 선택/tenant 변경 시 이력 새로고침
+  useEffect(() => {
+    setHistory(loadHistory(tenantId, selected.kind, selected.id));
+    setShowHistory(false);
+  }, [tenantId, selected.kind, selected.id]);
 
   if (role !== 'admin') {
     return <div className="p-12 text-center text-sm text-muted-foreground">관리자만 접근 가능합니다.</div>;
@@ -143,6 +153,7 @@ export default function TenantOverrideEditorPage() {
     if (parsed == null) return;
     saveRuntimeOverride(tenantId, selected.kind, selected.id, parsed as never);
     refreshActive();
+    refreshHistory();
     setStatus({ kind: 'ok', msg: '적용됨 — 이 tenant 의 화면/폼이 즉시 재렌더링' });
     // tenant store 의 runtimeVersion 도 직접 bump (이벤트는 발행되지만 안전하게)
     useTenantStore.getState().bumpRuntimeVersion();
@@ -152,6 +163,7 @@ export default function TenantOverrideEditorPage() {
     if (!confirm(`${TENANT_LABELS[tenantId]} / ${selected.label} 의 runtime override 를 제거할까요?`)) return;
     clearRuntimeOverride(tenantId, selected.kind, selected.id);
     refreshActive();
+    refreshHistory();
     useTenantStore.getState().bumpRuntimeVersion();
     setStatus({ kind: 'ok', msg: '복원 완료 — 코드 overlay 만 적용 (또는 base config)' });
     // 다시 로드해서 표시 갱신
@@ -211,6 +223,25 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
   const isActive = (k: KnownConfig) => activeKeys.some(
     (a) => a.tenantId === tenantId && a.kind === k.kind && a.configId === k.id
   );
+
+  // Phase 4 보강 (이력): 특정 시점 값을 draft 로 복원 (저장은 운영자가 [적용] 클릭 시)
+  const onRestoreFromHistory = (entry: HistoryEntry) => {
+    if (entry.value == null) {
+      setDraft('{\n  \n}');
+      setStatus({ kind: 'info', msg: '이력의 "override 없음" 시점 — 빈 객체 로드 (적용 시 빈 override 저장됨; 완전 제거하려면 "기본값 복원")' });
+    } else {
+      setDraft(JSON.stringify(entry.value, null, 2));
+      setStatus({ kind: 'info', msg: `이력 복원 — ${new Date(entry.ts).toLocaleString()} 시점 로드 ([적용] 시 저장)` });
+    }
+    setShowHistory(false);
+  };
+
+  const onClearHistory = () => {
+    if (!confirm(`${TENANT_LABELS[tenantId]} / ${selected.label} 의 이력을 모두 삭제할까요?`)) return;
+    clearHistory(tenantId, selected.kind, selected.id);
+    refreshHistory();
+    setStatus({ kind: 'ok', msg: '이력 삭제됨' });
+  };
 
   // Phase 4 보강 (Diff): 현재 선택된 config 의 코드 overlay (참고용 readonly)
   const codeOverlay = useMemo(() => {
@@ -332,6 +363,15 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
               >
                 Diff
               </Button>
+              <Button
+                size="sm"
+                variant={showHistory ? 'default' : 'outline'}
+                onClick={() => setShowHistory((v) => !v)}
+                disabled={history.length === 0}
+                title={history.length === 0 ? '이력 없음 (아직 [적용] 한 적이 없음)' : `이력 ${history.length}개`}
+              >
+                이력 {history.length > 0 && <span className="ml-1 rounded bg-foreground/10 px-1 text-[10px]">{history.length}</span>}
+              </Button>
               <Button size="sm" variant="outline" onClick={onOpenPreview} title="새 탭에서 프리뷰">프리뷰</Button>
               <Button size="sm" variant="outline" onClick={onExportCode} title="현재 tenant 의 모든 runtime override 를 코드로 export (clipboard)">코드 export</Button>
               <Button size="sm" variant="ghost" onClick={onReset}>기본값 복원</Button>
@@ -346,6 +386,51 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
               'bg-blue-50 text-blue-800 border border-blue-200'
             }`}>
               {status.msg}
+            </div>
+          )}
+
+          {showHistory && history.length > 0 && (
+            <div className="rounded-md border bg-muted/20 p-2 space-y-1">
+              <div className="flex items-center justify-between px-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  변경 이력 (최신순) — 클릭 시 draft 로 복원, [적용] 으로 저장
+                </p>
+                <button
+                  type="button"
+                  onClick={onClearHistory}
+                  className="text-[10px] text-muted-foreground hover:text-destructive underline-offset-2 hover:underline"
+                >
+                  이력 삭제
+                </button>
+              </div>
+              <ul className="space-y-0.5">
+                {history.map((entry, i) => {
+                  const date = new Date(entry.ts);
+                  const summary = entry.value == null
+                    ? '(override 없음 시점)'
+                    : (() => {
+                      const keys = Object.keys(entry.value as Record<string, unknown>);
+                      return keys.length === 0 ? '{}' : keys.slice(0, 3).join(', ') + (keys.length > 3 ? `, +${keys.length - 3}` : '');
+                    })();
+                  return (
+                    <li key={`${entry.ts}-${i}`}>
+                      <button
+                        type="button"
+                        onClick={() => onRestoreFromHistory(entry)}
+                        className="w-full flex items-center justify-between gap-3 rounded px-2 py-1 text-left text-xs hover:bg-accent"
+                      >
+                        <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+                          {date.toLocaleString()}
+                        </span>
+                        <span className="flex-1 truncate text-foreground/80">
+                          {summary}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">복원 →</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
 
