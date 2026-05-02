@@ -76,6 +76,7 @@ export default function TenantOverrideEditorPage() {
   const [status, setStatus] = useState<{ kind: 'ok' | 'err' | 'info'; msg: string } | null>(null);
   const [activeKeys, setActiveKeys] = useState<{ tenantId: TenantId; kind: ConfigKind; configId: string }[]>([]);
   const [filter, setFilter] = useState('');
+  const [showDiff, setShowDiff] = useState(false);
 
   const selected = useMemo(
     () => KNOWN_CONFIGS.find((c) => `${c.kind}:${c.id}` === selectedKey) ?? KNOWN_CONFIGS[0],
@@ -211,6 +212,42 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
     (a) => a.tenantId === tenantId && a.kind === k.kind && a.configId === k.id
   );
 
+  // Phase 4 보강 (Diff): 현재 선택된 config 의 코드 overlay (참고용 readonly)
+  const codeOverlay = useMemo(() => {
+    if (tenantId === 'topworks') return null; // 코드 overlay 없음 (base default 만)
+    return selected.kind === 'screen'
+      ? tenantOverrides[tenantId]?.screens?.[selected.id]
+      : tenantOverrides[tenantId]?.forms?.[selected.id];
+  }, [tenantId, selected.kind, selected.id]);
+
+  const codeOverlayJson = useMemo(
+    () => (codeOverlay ? JSON.stringify(codeOverlay, null, 2) : '(코드 overlay 없음)'),
+    [codeOverlay],
+  );
+
+  // top-level 키 단위 변경 요약 (added/removed/changed)
+  const keyDiff = useMemo(() => {
+    let runtime: Record<string, unknown> | null = null;
+    try {
+      const parsed = JSON.parse(draft);
+      if (parsed && typeof parsed === 'object') runtime = parsed as Record<string, unknown>;
+    } catch { /* invalid JSON — 무시 */ }
+    const code = (codeOverlay as Record<string, unknown> | null) ?? {};
+    const r = runtime ?? {};
+    const all = Array.from(new Set([...Object.keys(code), ...Object.keys(r)])).sort();
+    const added: string[] = [];
+    const removed: string[] = [];
+    const changed: string[] = [];
+    for (const k of all) {
+      const inC = k in code;
+      const inR = k in r;
+      if (!inC && inR) added.push(k);
+      else if (inC && !inR) removed.push(k);
+      else if (JSON.stringify(code[k]) !== JSON.stringify(r[k])) changed.push(k);
+    }
+    return { added, removed, changed };
+  }, [codeOverlay, draft]);
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-4">
       <div>
@@ -287,6 +324,14 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
             <div className="flex gap-1.5">
               <Button size="sm" variant="outline" onClick={onFormat}>포맷</Button>
               <Button size="sm" variant="outline" onClick={onValidate}>검증</Button>
+              <Button
+                size="sm"
+                variant={showDiff ? 'default' : 'outline'}
+                onClick={() => setShowDiff((v) => !v)}
+                title="코드 overlay 와 runtime override 비교"
+              >
+                Diff
+              </Button>
               <Button size="sm" variant="outline" onClick={onOpenPreview} title="새 탭에서 프리뷰">프리뷰</Button>
               <Button size="sm" variant="outline" onClick={onExportCode} title="현재 tenant 의 모든 runtime override 를 코드로 export (clipboard)">코드 export</Button>
               <Button size="sm" variant="ghost" onClick={onReset}>기본값 복원</Button>
@@ -304,13 +349,58 @@ export const ${tenantId}Overrides: TenantOverrides = ${JSON.stringify(tenantOver
             </div>
           )}
 
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={26}
-            className="font-mono text-xs"
-            spellCheck={false}
-          />
+          {showDiff && (keyDiff.added.length + keyDiff.removed.length + keyDiff.changed.length > 0) && (
+            <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px]">
+              <span className="font-medium text-amber-900">최상위 키 차이:</span>
+              {keyDiff.added.map((k) => (
+                <span key={`a-${k}`} className="rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[10px] text-emerald-800">+ {k}</span>
+              ))}
+              {keyDiff.removed.map((k) => (
+                <span key={`r-${k}`} className="rounded bg-rose-100 px-1.5 py-0.5 font-mono text-[10px] text-rose-800">− {k}</span>
+              ))}
+              {keyDiff.changed.map((k) => (
+                <span key={`c-${k}`} className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] text-amber-900">~ {k}</span>
+              ))}
+            </div>
+          )}
+
+          {showDiff ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  코드 overlay (config/tenants/{tenantId}.ts) — readonly
+                </p>
+                <Textarea
+                  value={codeOverlayJson}
+                  readOnly
+                  rows={26}
+                  className="font-mono text-xs bg-muted/40"
+                  spellCheck={false}
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  runtime override (편집 중)
+                </p>
+                <Textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={26}
+                  className="font-mono text-xs"
+                  spellCheck={false}
+                />
+              </div>
+            </div>
+          ) : (
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={26}
+              className="font-mono text-xs"
+              spellCheck={false}
+            />
+          )}
+
           <p className="text-[11px] text-muted-foreground">
             <strong>적용 흐름:</strong> defaultConfig → 코드 overlay → <strong>runtime overlay</strong> → DB override → 화면.
             objects (page/title) 은 deep merge, arrays (columns/sections/metrics) 은 통째로 교체.
