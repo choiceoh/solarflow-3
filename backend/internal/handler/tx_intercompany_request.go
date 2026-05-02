@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -242,6 +243,33 @@ func (h *IntercompanyRequestHandler) Receive(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	response.RespondJSON(w, http.StatusOK, map[string]string{"status": "received"})
+}
+
+// 그룹내 매입요청 상태 머신 (D-039 + D-108 BARO Phase 2):
+//   pending → cancelled  (BARO: 본인 요청 취소)
+//   pending → rejected   (탑솔라: 거부)
+//   pending → shipped    (탑솔라: 출고 연결 — Fulfill)
+//   shipped → received   (BARO: 입고 확인)
+// 그 외 모든 전이는 409 (잘못된 상태에서 호출).
+var intercompanyAllowedTransitions = map[string][]string{
+	"pending": {"cancelled", "rejected", "shipped"},
+	"shipped": {"received"},
+}
+
+// validateIntercompanyTransition — 현재 상태에서 target 상태로 전이 가능한지 검증.
+// pure 함수 — DB·HTTP 의존 없음. 상태 머신 명세를 코드로 못박는 역할.
+// 단위테스트는 tx_intercompany_request_test.go.
+func validateIntercompanyTransition(current, target string) error {
+	allowed, ok := intercompanyAllowedTransitions[current]
+	if !ok {
+		return fmt.Errorf("현재 상태 %q는 종결 상태이거나 미정의 — 전이 불가", current)
+	}
+	for _, t := range allowed {
+		if t == target {
+			return nil
+		}
+	}
+	return fmt.Errorf("%q → %q 전이는 허용되지 않습니다 (허용: %v)", current, target, allowed)
 }
 
 // statusGuard — 현재 status가 expected인지 사전 확인. 다르면 409 반환 후 false.

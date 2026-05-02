@@ -9,10 +9,53 @@
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
-| Go 테스트 | 180개 PASS (router snapshot 2건 + guard matrix 49 sub-case) |
+| Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 49 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
 | DECISIONS | D-001~D-111 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-02 세션 — 복잡 핸들러 pure function 추출 (테스트 가능 단위 5종)
+
+### 완료 (B 옵션 — 풀 service/repository 대신 좁힌 추출)
+
+5개 영역에서 비즈니스 로직을 pure 함수로 분리하고 단위테스트 추가:
+
+1. **io_import 기존 18개 utility 단위테스트 보강** (`io_import_test.go`)
+   - 추가: `TestAssertFloat` (15 sub-case — float32/int64/json.Number/string 등 변환)
+   - `TestGetInt`, `TestGetFloatPtr`, `TestGetStringPtr`, `TestGetIntPtr`
+   - `TestRequireFloat`, `TestRequireInt`, `TestValidateAllowedValues`
+   - 기존 4건(`TestGetString`, `TestGetFloat`, `TestGetBoolPtr`, `TestValidateRequired`) + 신규 8건
+   - 회귀 위험: `assertFloat`의 타입 단정 실패가 zero value로 흘러 VAT 0원 같은 무성 손상 발생 — 테스트로 차단
+2. **tx_outbound 용량 계산 pure 추출** (`tx_outbound.go` + `tx_outbound_test.go` 신규)
+   - `computeOutboundCapacityKW(quantity, explicitKW, productWattageKW)` 분리. DB 의존 없는 pure 함수.
+   - `resolveOutboundCapacityKW`(handler 메서드)는 DB 조회 후 pure 함수에 위임
+   - 9 sub-case (explicit 양수/음수/0, wattage nil/0/음수 조합)
+3. **tx_intercompany 상태 전이 validator 추출** (`tx_intercompany_request.go` + 테스트 신규)
+   - `validateIntercompanyTransition(current, target)` pure 함수 + `intercompanyAllowedTransitions` 명세
+   - 13 sub-case — 4개 허용 전이 + 8개 무효 전이 + 종결 상태에서의 전이 시도
+   - 상태 머신을 코드 한 곳(map)에 못박음
+4. **io_export 워크북 빌더 추출** (`io_export.go` + 테스트 추가)
+   - `buildAmaranthInboundWorkbook(bls, lines, lookups)` 155줄 pure 함수로 분리
+   - `inboundLineForExport`, `inboundExportLookups` 타입 정의
+   - 4 테스트 — Domestic VAT 10%, Import 영세, Empty input, ETA fallback
+5. **io_import row parser 추출 (Receipts 전체 + Inbound 그룹핑)** (`io_import_parsers.go` 신규 + 테스트 신규)
+   - `parseReceiptRow(rowNum, row, customerID)` — FK 해석은 호출 측, 검증·페이로드 빌드는 pure
+   - `groupInboundRowsByBL(rows)` — 130줄짜리 그룹핑·검증 로직을 pure로 분리
+   - 11 sub-case — 정상/음수/0/형식오류, 단일/멀티라인, 메타 불일치 경고, 필수 누락, 허용값 위반
+   - **future**: Outbound/Sales/Declarations/Expenses/Orders 5개 핸들러는 동일 패턴으로 추후 확장 가능
+
+### 검증
+- `go build ./...` 성공
+- `go vet ./...` 경고 0
+- `go test ./...` 모두 PASS — 신규 sub-case ~62건 (#1 26 + #4 9 + #5 13 + #3 4 + #2 10)
+- 핸들러 동작 보존 — 추출은 모두 동일 결과를 내는 리팩터
+
+### 다음 작업
+- 5번의 future: 나머지 import 5종 동일 패턴 추출 (Outbound 152줄/Sales 155/Declarations 190/Expenses 117/Orders 153) — 각 30분~1시간씩
+- (큰 변경) service/repository 풀 도입은 보류 — ROI 낮음 (마스터 CRUD엔 과잉, 8개 복잡 핸들러는 본 PR로 대부분 해소)
+- 통합 테스트 인프라 (옵션 E from grill) — docker-compose로 로컬 PG+PostgREST 띄우기 — 추후 검토
 
 ---
 

@@ -309,82 +309,16 @@ func (h *ImportHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var importErrors []model.ImportError
-	var warnings []model.ImportWarning
 	imported := 0
 
-	// B/L No.별 그룹핑
-	type blGroup struct {
-		firstRow  map[string]interface{}
-		firstIdx  int
-		lineRows  []map[string]interface{}
-		lineIdxes []int
-	}
-	groups := make(map[string]*blGroup)
-	groupOrder := []string{}
-
-	for i, row := range req.Rows {
-		rowNum := i + 2
-		blNum := getString(row, "bl_number")
-
-		// 필수 검증
-		errs := validateRequired(rowNum, row, []string{
-			"bl_number", "inbound_type", "company_code", "manufacturer_name",
-			"currency", "product_code", "quantity", "item_type", "payment_type", "usage_category",
-		})
-		if len(errs) > 0 {
-			importErrors = append(importErrors, errs...)
-			continue
-		}
-
-		// 허용값 검증 (감리 즉시수정)
-		allowedErrs := false
-		for _, av := range []struct {
-			val, field string
-			allowed    map[string]bool
-		}{
-			{getString(row, "inbound_type"), "inbound_type", allowedInboundTypes},
-			{getString(row, "item_type"), "item_type", allowedItemTypes},
-			{getString(row, "payment_type"), "payment_type", allowedPaymentTypes},
-			{getString(row, "usage_category"), "usage_category", allowedUsageCategories},
-		} {
-			if e := validateAllowedValues(rowNum, av.val, av.field, av.allowed); e != nil {
-				importErrors = append(importErrors, *e)
-				allowedErrs = true
-			}
-		}
-		if allowedErrs {
-			continue
-		}
-
-		if _, exists := groups[blNum]; !exists {
-			groups[blNum] = &blGroup{firstRow: row, firstIdx: rowNum}
-			groupOrder = append(groupOrder, blNum)
-		} else {
-			// 지적 3: B/L 기본정보 불일치 경고
-			first := groups[blNum].firstRow
-			checkFields := []string{"etd", "eta", "actual_arrival", "port", "forwarder"}
-			for _, f := range checkFields {
-				firstVal := getString(first, f)
-				curVal := getString(row, f)
-				if curVal != "" && firstVal != "" && curVal != firstVal {
-					warnings = append(warnings, model.ImportWarning{
-						Row: rowNum, Field: f,
-						Message: fmt.Sprintf("B/L 기본정보(%s)가 첫 행과 다릅니다 (첫 행 값 사용)", f),
-					})
-				}
-			}
-		}
-
-		groups[blNum].lineRows = append(groups[blNum].lineRows, row)
-		groups[blNum].lineIdxes = append(groups[blNum].lineIdxes, rowNum)
-	}
+	// B/L 번호별 그룹핑·검증 — pure 함수에 위임 (io_import_parsers.go)
+	groups, groupOrder, importErrors, warnings := groupInboundRowsByBL(req.Rows)
 
 	// 그룹별 INSERT
 	for _, blNum := range groupOrder {
 		grp := groups[blNum]
-		first := grp.firstRow
-		rowNum := grp.firstIdx
+		first := grp.FirstRow
+		rowNum := grp.FirstIdx
 
 		// FK 해소: company, manufacturer
 		companyID, err := h.resolveFK("companies", "company_code", getString(first, "company_code"), "company_id")
@@ -451,8 +385,8 @@ func (h *ImportHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 
 		// 라인아이템 INSERT
 		lineOK := true
-		for j, lineRow := range grp.lineRows {
-			lineRowNum := grp.lineIdxes[j]
+		for j, lineRow := range grp.LineRows {
+			lineRowNum := grp.LineIdxes[j]
 
 			productCode := getString(lineRow, "product_code")
 			productID, wattageKW, err := h.resolveProductWithWattage(productCode)
@@ -502,7 +436,7 @@ func (h *ImportHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if lineOK {
-			imported += len(grp.lineRows)
+			imported += len(grp.LineRows)
 		}
 	}
 
@@ -1319,8 +1253,8 @@ func (h *ImportHandler) Receipts(w http.ResponseWriter, r *http.Request) {
 	for i, row := range req.Rows {
 		rowNum := i + 2
 
-		errs := validateRequired(rowNum, row, []string{"customer_name", "receipt_date", "amount"})
-		if len(errs) > 0 {
+		// 필수 검증 (FK 해석 전에 selectively)
+		if errs := validateRequired(rowNum, row, []string{"customer_name", "receipt_date", "amount"}); len(errs) > 0 {
 			importErrors = append(importErrors, errs...)
 			continue
 		}
@@ -1331,26 +1265,10 @@ func (h *ImportHandler) Receipts(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		amount, amErr := requireFloat(rowNum, row, "amount")
-		if amErr != nil {
-			importErrors = append(importErrors, *amErr)
-			continue
-		}
-		if amount <= 0 {
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "amount", Message: "amount는 양수여야 합니다"})
-			continue
-		}
-
-		receiptReq := model.CreateReceiptRequest{
-			CustomerID:  customerID,
-			ReceiptDate: getString(row, "receipt_date"),
-			Amount:      amount,
-			BankAccount: getStringPtr(row, "bank_account"),
-			Memo:        getStringPtr(row, "memo"),
-		}
-
-		if msg := receiptReq.Validate(); msg != "" {
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "receipt", Message: msg})
+		// 필드 추출 + 검증 — pure 함수로 위임
+		receiptReq, parseErrs := parseReceiptRow(rowNum, row, customerID)
+		if len(parseErrs) > 0 {
+			importErrors = append(importErrors, parseErrs...)
 			continue
 		}
 
