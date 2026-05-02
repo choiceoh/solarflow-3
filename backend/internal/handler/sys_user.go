@@ -462,6 +462,11 @@ func (h *UserHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	targetID := chi.URLParam(r, "id")
+	if middleware.GetUserID(r.Context()) == targetID {
+		response.RespondError(w, http.StatusBadRequest, "본인의 역할은 변경할 수 없습니다")
+		return
+	}
+
 	var body struct {
 		Role string `json:"role"`
 	}
@@ -565,14 +570,59 @@ func (h *UserHandler) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
 
 // ChangeMyPasswordRequest — 본인 비밀번호 변경 요청
 type ChangeMyPasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	Password        string `json:"password"`
+}
+
+// signInPayload — Supabase Auth password grant payload
+type signInPayload struct {
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
+// verifyCurrentPassword — Supabase /auth/v1/token?grant_type=password 호출로 현재 비밀번호 검증.
+// 비유: 사원증 옆 "본인 확인용 비밀번호" 한 번 더 입력 — 세션 탈취 시 비번 변경까지 즉시 이어지지 않게 막음.
+func verifyCurrentPassword(email, currentPassword string) (int, string, error) {
+	supaURL := strings.TrimRight(os.Getenv("SUPABASE_URL"), "/")
+	anonKey := os.Getenv("SUPABASE_KEY")
+	if supaURL == "" || anonKey == "" {
+		return http.StatusInternalServerError, "Supabase 설정이 없습니다", fmt.Errorf("SUPABASE_URL/SUPABASE_KEY missing")
+	}
+
+	body, err := json.Marshal(signInPayload{Email: email, Password: currentPassword})
+	if err != nil {
+		return http.StatusInternalServerError, "요청 생성에 실패했습니다", err
+	}
+	req, err := http.NewRequest(http.MethodPost, supaURL+"/auth/v1/token?grant_type=password", bytes.NewReader(body))
+	if err != nil {
+		return http.StatusInternalServerError, "인증 서버 요청 생성에 실패했습니다", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("apikey", anonKey)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return http.StatusBadGateway, "인증 서버에 연결하지 못했습니다", err
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+
+	if resp.StatusCode == http.StatusOK {
+		return http.StatusOK, "", nil
+	}
+	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnauthorized {
+		return http.StatusUnauthorized, "현재 비밀번호가 일치하지 않습니다", fmt.Errorf("current password mismatch")
+	}
+	return http.StatusBadGateway, "인증 서버 응답이 비정상입니다", fmt.Errorf("auth signin status=%d", resp.StatusCode)
+}
+
 // ChangeMyPassword — 본인 비밀번호 변경 (인증된 모든 사용자)
-// TODO: 현재 비밀번호 재인증 추가 — 현재는 유효한 JWT 보유 자체로 인증 충분 가정.
+// 현재 비밀번호 검증 후 신규 비밀번호로 업데이트.
 func (h *UserHandler) ChangeMyPassword(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
+	email := middleware.GetUserEmail(r.Context())
+	if userID == "" || email == "" {
 		response.RespondError(w, http.StatusUnauthorized, "인증이 필요합니다")
 		return
 	}
@@ -582,8 +632,18 @@ func (h *UserHandler) ChangeMyPassword(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusBadRequest, "요청 형식 오류")
 		return
 	}
+	if body.CurrentPassword == "" {
+		response.RespondError(w, http.StatusBadRequest, "현재 비밀번호를 입력해 주세요")
+		return
+	}
 	if msg := validatePassword(body.Password); msg != "" {
 		response.RespondError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	if status, message, err := verifyCurrentPassword(email, body.CurrentPassword); err != nil {
+		log.Printf("[users/me] 현재 비밀번호 검증 실패: id=%s, status=%d, err=%v", userID, status, err)
+		response.RespondError(w, status, message)
 		return
 	}
 
@@ -606,6 +666,11 @@ func (h *UserHandler) UpdateActive(w http.ResponseWriter, r *http.Request) {
 	}
 
 	targetID := chi.URLParam(r, "id")
+	if middleware.GetUserID(r.Context()) == targetID {
+		response.RespondError(w, http.StatusBadRequest, "본인 계정은 비활성화할 수 없습니다")
+		return
+	}
+
 	var body struct {
 		IsActive bool `json:"is_active"`
 	}

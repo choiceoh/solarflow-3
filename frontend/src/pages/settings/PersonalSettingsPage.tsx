@@ -19,6 +19,7 @@ export default function PersonalSettingsPage() {
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
 
+  const [pwCurrent, setPwCurrent] = useState('');
   const [pwNew, setPwNew] = useState('');
   const [pwConfirm, setPwConfirm] = useState('');
   const [pwSaving, setPwSaving] = useState(false);
@@ -68,6 +69,10 @@ export default function PersonalSettingsPage() {
     setPwError('');
     setPwSuccess('');
 
+    if (!pwCurrent) {
+      setPwError('현재 비밀번호를 입력해 주세요.');
+      return;
+    }
     if (pwNew.length < 8) {
       setPwError('새 비밀번호는 8자 이상으로 입력해 주세요.');
       return;
@@ -81,9 +86,10 @@ export default function PersonalSettingsPage() {
     try {
       await fetchWithAuth('/api/v1/users/me/password', {
         method: 'PUT',
-        body: JSON.stringify({ password: pwNew }),
+        body: JSON.stringify({ current_password: pwCurrent, password: pwNew }),
       });
       setPwSuccess('비밀번호를 변경했습니다.');
+      setPwCurrent('');
       setPwNew('');
       setPwConfirm('');
     } catch (err) {
@@ -157,6 +163,17 @@ export default function PersonalSettingsPage() {
             <p className="text-xs text-muted-foreground">8자 이상의 새 비밀번호를 입력하세요.</p>
           </header>
           <form onSubmit={handlePasswordChange} className="p-4 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="me-pw-current">현재 비밀번호</Label>
+              <Input
+                id="me-pw-current"
+                type="password"
+                value={pwCurrent}
+                onChange={(e) => setPwCurrent(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="me-pw-new">새 비밀번호</Label>

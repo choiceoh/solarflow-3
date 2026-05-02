@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { KeyRound, Pencil, Plus } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 import { usePermission } from '@/hooks/usePermission';
 import { ROLE_LABELS, type Role } from '@/config/permissions';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -55,6 +56,7 @@ function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: str
 
 export default function AdminSettingsPage() {
   const { manageUsers } = usePermission();
+  const { user: me } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -328,6 +330,7 @@ export default function AdminSettingsPage() {
           <div className="divide-y">
             {users.map((u) => {
               const isSaving = savingId === u.user_id;
+              const isSelf = me?.user_id === u.user_id;
               return (
                 <div key={u.user_id} className={`flex items-center gap-4 px-4 py-3 ${!u.is_active ? 'opacity-50' : ''}`}>
                   {/* 사용자 정보 */}
@@ -337,16 +340,19 @@ export default function AdminSettingsPage() {
                       <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ROLE_BADGE_VARIANT[u.role] ?? 'bg-gray-100 text-gray-600'}`}>
                         {ROLE_LABELS[u.role] ?? u.role}
                       </span>
+                      {isSelf && (
+                        <span className="shrink-0 rounded bg-emerald-100 text-emerald-700 px-1.5 py-0.5 text-[10px] font-medium">본인</span>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground truncate">{u.email}{u.department ? ` · ${u.department}` : ''}</p>
                   </div>
 
-                  {/* 역할 변경 */}
-                  <div className="w-32 shrink-0">
+                  {/* 역할 변경 — 본인 행은 잠금 (스스로 강등 사고 방지) */}
+                  <div className="w-32 shrink-0" title={isSelf ? '본인의 역할은 변경할 수 없습니다' : undefined}>
                     <Select
                       value={u.role}
                       onValueChange={(v) => handleRoleChange(u.user_id, v as Role)}
-                      disabled={isSaving}
+                      disabled={isSaving || isSelf}
                     >
                       <SelectTrigger>
                         <Txt text={ROLE_LABELS[u.role] ?? u.role} />
@@ -359,12 +365,12 @@ export default function AdminSettingsPage() {
                     </Select>
                   </div>
 
-                  {/* 활성/비활성 */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  {/* 활성/비활성 — 본인 행은 잠금 (스스로 비활성화 시 즉시 락아웃) */}
+                  <div className="flex items-center gap-2 shrink-0" title={isSelf ? '본인 계정은 비활성화할 수 없습니다' : undefined}>
                     <Switch
                       checked={u.is_active}
                       onCheckedChange={(v) => handleActiveChange(u.user_id, v)}
-                      disabled={isSaving}
+                      disabled={isSaving || isSelf}
                     />
                     <span className="text-xs text-muted-foreground w-8">{u.is_active ? '활성' : '비활성'}</span>
                   </div>
