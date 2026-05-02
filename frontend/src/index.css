@@ -941,6 +941,23 @@ a:focus-visible,
   box-shadow: inset 2px 0 0 0 var(--sf-solar);
 }
 
+/* 테이블 헤더 컬럼 사이 구분선 — 셀 풀하이트 border 대신 가운데 정렬된 짧은 1px 라인.
+   엑셀/Linear/Notion DB 풍의 절제된 분리 표현. 마지막 컬럼은 제외. */
+[data-slot="table-head"] {
+  position: relative;
+}
+[data-slot="table-head"]:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 1rem;
+  width: 1px;
+  background: var(--sf-line-2);
+  pointer-events: none;
+}
+
 .sf-card-controls {
   display: flex;
   align-items: center;
