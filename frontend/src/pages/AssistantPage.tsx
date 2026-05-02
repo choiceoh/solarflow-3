@@ -8,8 +8,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import MetaForm from '@/templates/MetaForm';
 import { cn } from '@/lib/utils';
+import { useLocation } from 'react-router-dom';
 import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
+import { detectPageContext } from '@/lib/pageContext';
 import { MetaConfigPreview } from '@/components/assistant/MetaConfigPreview';
 import {
   toBackendMessages,
@@ -200,15 +202,21 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
   // mock 모드에선 인증 우회 public 라우트 (Caddy 가 같은 SSE 인코딩으로 응답).
   const apiPath = isDevMockApiActive() ? '/api/v1/public/assistant/chat' : '/api/v1/assistant/chat';
 
+  // 5.1 PR-B: 현재 페이지 컨텍스트 자동 주입 — backend 가 system prompt 에 합성
+  const location = useLocation();
+  const pageContextRef = useRef(detectPageContext(location.pathname));
+  pageContextRef.current = detectPageContext(location.pathname);
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: apiPath,
         fetch: streamFetchWithAuth,
-        // 백엔드는 평면 메시지 + provider/model (P3: 미전송) 만 받음. parts/도구 history 는 떨굼.
+        // 백엔드는 평면 메시지 + provider/model + page_context 만 받음. parts/도구 history 는 떨굼.
         prepareSendMessagesRequest: ({ messages, body }) => ({
           body: {
             messages: toBackendMessages(messages),
+            page_context: pageContextRef.current,
             ...(body ?? {}),
           },
         }),

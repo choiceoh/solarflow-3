@@ -72,11 +72,21 @@ type assistantMessage struct {
 }
 
 // system 프롬프트는 서버가 JWT context로 구성하므로 클라이언트에서 받지 않는다 (변조 방지).
+// 단 page_context 는 *어떤 화면을 보고 있는지* 만 알리는 용도라 서버가 합성에 통합한다 (변조 위험 낮음 — pathname/scope/config_id 만).
 type assistantRequest struct {
-	Messages  []assistantMessage `json:"messages"`
-	Model     string             `json:"model,omitempty"`
-	Provider  string             `json:"provider,omitempty"`
-	MaxTokens int                `json:"max_tokens,omitempty"`
+	Messages    []assistantMessage   `json:"messages"`
+	Model       string               `json:"model,omitempty"`
+	Provider    string               `json:"provider,omitempty"`
+	MaxTokens   int                  `json:"max_tokens,omitempty"`
+	PageContext *assistantPageContext `json:"page_context,omitempty"`
+}
+
+// assistantPageContext — 클라이언트가 현재 보고 있는 화면 정보. 서버가 system prompt 에 자동 주입.
+// 권한·도구 노출은 영향 안 받음 — 단순 hint.
+type assistantPageContext struct {
+	Path     string `json:"path,omitempty"`
+	Scope    string `json:"scope,omitempty"`
+	ConfigID string `json:"config_id,omitempty"`
 }
 
 // defaultModelForProvider — provider별 모델 기본값.
@@ -687,7 +697,8 @@ const assistantRulesBlock = `
 
 // buildSystemPrompt — JWT context의 사용자 정보를 시스템 프롬프트에 주입.
 // 클라이언트가 보내는 system 필드는 받지 않음 (프롬프트 변조 방지).
-func buildSystemPrompt(ctx context.Context) string {
+// pageContext 는 클라이언트가 보낸 *현재 화면 hint* — 권한 외 정보 누설 위험 없음 (path/scope/config_id 만).
+func buildSystemPrompt(ctx context.Context, pageContext *assistantPageContext) string {
 	role := middleware.GetUserRole(ctx)
 	email := middleware.GetUserEmail(ctx)
 	scope := middleware.GetTenantScope(ctx)
@@ -710,6 +721,16 @@ func buildSystemPrompt(ctx context.Context) string {
 	b.WriteString("당신은 SolarFlow ERP 업무 도우미입니다. 한국어로 간결하고 정확하게 답하세요.\n\n")
 	fmt.Fprintf(&b, "[사용자]\n- 이메일: %s\n- 역할: %s (%s)\n- 테넌트: %s\n- 오늘: %s\n\n",
 		email, roleLabel, role, tenantLabel, today)
+	if pageContext != nil && pageContext.Path != "" {
+		fmt.Fprintf(&b, "[현재 화면]\n- 경로: %s\n", pageContext.Path)
+		if pageContext.ConfigID != "" {
+			fmt.Fprintf(&b, "- 메타 config: scope=%s, config_id=%s (사용자가 \"이 화면\" 변경을 요청하면 read_ui_config / propose_ui_config_update 의 인자로 사용하세요).\n",
+				pageContext.Scope, pageContext.ConfigID)
+		} else {
+			b.WriteString("- 메타 config 미매핑 — 사용자가 \"이 화면\" 변경 요청 시 어떤 화면인지 명시 요청하거나 화면 목록을 함께 제시하세요.\n")
+		}
+		b.WriteString("\n")
+	}
 	b.WriteString(assistantDomainBlock)
 	fmt.Fprintf(&b, "\n[역할별 가이드]\n%s\n", roleGuide)
 	b.WriteString(assistantRulesBlock)
