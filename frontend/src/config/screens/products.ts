@@ -22,7 +22,7 @@ const config: ListScreenConfig = {
   },
   metrics: [
     { label: '전체 품번', computerId: 'count', tone: 'solar', spark: 'auto' },
-    { label: '활성', computerId: 'count.product_active', tone: 'pos' },
+    { label: '활성', computerId: 'count.product_active', tone: 'pos', spark: 'auto' },
   ],
   columns: [
     { key: 'product_code', label: '품번코드', className: 'font-mono', sortable: true },

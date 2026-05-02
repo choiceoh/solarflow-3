@@ -31,6 +31,7 @@ import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL, type InboundType, type BLStatus } from '@/types/inbound';
 import { CardB, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
+import { autoSpark } from '@/templates/autoSpark';
 
 const PROCUREMENT_TABS = new Set(['po', 'tt', 'lc', 'bl', 'price']);
 
@@ -748,7 +749,7 @@ export default function ProcurementPage() {
                 sub={metric.sub}
                 tone={metric.tone}
                 delta={metric.delta}
-                spark={metric.spark}
+                spark={metric.spark ?? autoSpark(metric.lbl)}
               />
             ))}
           </div>

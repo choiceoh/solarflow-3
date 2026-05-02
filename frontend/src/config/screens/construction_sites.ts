@@ -20,10 +20,10 @@ const config: ListScreenConfig = {
   },
   metrics: [
     { label: '현장 수', computerId: 'count', tone: 'solar', spark: 'auto' },
-    { label: '활성', computerId: 'count.site_active', tone: 'pos' },
-    { label: '자체', computerId: 'count.site_own', tone: 'info' },
-    { label: 'EPC', computerId: 'count.site_epc', tone: 'warn' },
-    { label: '총 용량', unit: 'MW', computerId: 'sum.site_capacity_mw', tone: 'ink' },
+    { label: '활성', computerId: 'count.site_active', tone: 'pos', spark: 'auto' },
+    { label: '자체', computerId: 'count.site_own', tone: 'info', spark: 'auto' },
+    { label: 'EPC', computerId: 'count.site_epc', tone: 'warn', spark: 'auto' },
+    { label: '총 용량', unit: 'MW', computerId: 'sum.site_capacity_mw', tone: 'ink', spark: 'auto' },
   ],
   columns: [
     { key: 'name', label: '발전소명', sortable: true },

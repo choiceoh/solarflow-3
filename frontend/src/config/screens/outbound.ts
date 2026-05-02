@@ -95,16 +95,16 @@ const config: TabbedListConfig = {
     },
     {
       label: '정상 출고', computerId: 'count.outbound_active', sourceTabKey: 'outbound',
-      tone: 'pos', subFromFilter: 'usage_category',
+      tone: 'pos', spark: 'auto', subFromFilter: 'usage_category',
     },
     {
       label: '취소 대기', computerId: 'count.outbound_cancel_pending', sourceTabKey: 'outbound',
-      tone: { computerId: 'tone.cancel_pending' }, subFromFilter: 'manufacturer_id',
+      tone: { computerId: 'tone.cancel_pending' }, spark: 'auto', subFromFilter: 'manufacturer_id',
     },
     {
       label: '매출 합계', computerId: 'sum.supply_amount_billion', sourceTabKey: 'sale',
       unit: '억',
-      tone: { computerId: 'tone.invoice_pending' }, subFromComputer: 'sub.sale_invoice_pending',
+      tone: { computerId: 'tone.invoice_pending' }, spark: 'auto', subFromComputer: 'sub.sale_invoice_pending',
     },
   ],
   rail: [

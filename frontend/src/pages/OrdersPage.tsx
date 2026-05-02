@@ -37,6 +37,7 @@ import type { InventoryResponse } from '@/types/inventory';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { CardB, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
+import { autoSpark } from '@/templates/autoSpark';
 
 class OrderDetailErrorBoundary extends Component<
   { children: ReactNode; onBack: () => void },
@@ -900,7 +901,7 @@ export default function OrdersPage() {
                 sub={metric.sub}
                 tone={metric.tone}
                 delta={metric.delta}
-                spark={metric.spark}
+                spark={metric.spark ?? autoSpark(metric.lbl)}
               />
             ))}
           </div>

@@ -19,7 +19,7 @@ const config: ListScreenConfig = {
   },
   metrics: [
     { label: '전체 창고', computerId: 'count', tone: 'solar', spark: 'auto' },
-    { label: '활성', computerId: 'count.warehouse_active', tone: 'pos' },
+    { label: '활성', computerId: 'count.warehouse_active', tone: 'pos', spark: 'auto' },
   ],
   columns: [
     { key: 'warehouse_code', label: '창고코드', className: 'font-mono' },

@@ -20,8 +20,8 @@ const config: ListScreenConfig = {
   },
   metrics: [
     { label: '전체 은행', computerId: 'count', tone: 'solar', spark: 'auto' },
-    { label: '활성', computerId: 'count.bank_active', tone: 'pos' },
-    { label: 'LC 한도 합계', unit: 'M USD', computerId: 'sum.bank_lc_limit_million', tone: 'info' },
+    { label: '활성', computerId: 'count.bank_active', tone: 'pos', spark: 'auto' },
+    { label: 'LC 한도 합계', unit: 'M USD', computerId: 'sum.bank_lc_limit_million', tone: 'info', spark: 'auto' },
   ],
   columns: [
     { key: 'company_name', label: '법인', rendererId: 'bank_company_name' },

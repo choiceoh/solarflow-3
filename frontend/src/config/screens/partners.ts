@@ -20,9 +20,9 @@ const config: ListScreenConfig = {
   },
   metrics: [
     { label: '전체 거래처', computerId: 'count', tone: 'solar', spark: 'auto' },
-    { label: '고객사', computerId: 'count.partner_customer', tone: 'info' },
-    { label: '공급사', computerId: 'count.partner_supplier', tone: 'warn' },
-    { label: '활성', computerId: 'count.partner_active', tone: 'pos' },
+    { label: '고객사', computerId: 'count.partner_customer', tone: 'info', spark: 'auto' },
+    { label: '공급사', computerId: 'count.partner_supplier', tone: 'warn', spark: 'auto' },
+    { label: '활성', computerId: 'count.partner_active', tone: 'pos', spark: 'auto' },
   ],
   columns: [
     { key: 'partner_name', label: '거래처명', sortable: true },

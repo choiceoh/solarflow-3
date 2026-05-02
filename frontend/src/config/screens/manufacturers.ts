@@ -18,9 +18,9 @@ const config: ListScreenConfig = {
   },
   metrics: [
     { label: '전체 제조사', computerId: 'count', tone: 'solar', spark: 'auto' },
-    { label: '국내', computerId: 'count.manufacturer_domestic', tone: 'info' },
-    { label: '해외', computerId: 'count.manufacturer_foreign', tone: 'warn' },
-    { label: '활성', computerId: 'count.manufacturer_active', tone: 'pos' },
+    { label: '국내', computerId: 'count.manufacturer_domestic', tone: 'info', spark: 'auto' },
+    { label: '해외', computerId: 'count.manufacturer_foreign', tone: 'warn', spark: 'auto' },
+    { label: '활성', computerId: 'count.manufacturer_active', tone: 'pos', spark: 'auto' },
   ],
   columns: [
     { key: 'priority_rank', label: '순위', align: 'right', className: 'tabular-nums' },
