@@ -19,13 +19,14 @@ import companyFormConfig from '@/config/forms/companies';
 import bankFormConfig from '@/config/forms/banks';
 import warehouseFormConfig from '@/config/forms/warehouses';
 import manufacturerFormConfig from '@/config/forms/manufacturers';
+import productFormConfig from '@/config/forms/products';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
 import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
   type OutboundStatus, type UsageCategory, type Outbound, type SaleListItem,
 } from '@/types/outbound';
-import type { Partner, Bank, Warehouse, Manufacturer } from '@/types/masters';
+import type { Partner, Bank, Warehouse, Manufacturer, Product } from '@/types/masters';
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
@@ -103,6 +104,11 @@ export const cellRenderers: Record<string, CellRenderer> = {
     const r = row as Bank;
     return <span>{r.companies?.company_name ?? r.company_name ?? '—'}</span>;
   },
+  // Phase 4: 품번 행에서 제조사명 표시 — Go JOIN 결과(manufacturers.name_kr) 또는 평면 컬럼
+  product_manufacturer_name: (_v, row) => {
+    const r = row as Product;
+    return <span>{r.manufacturers?.short_name ?? r.manufacturers?.name_kr ?? r.manufacturer_name ?? '—'}</span>;
+  },
   // Phase 4: 창고 유형 라벨 (port/factory/vendor → 항구/공장/업체)
   warehouse_type_badge: (v) => {
     const t = v as string;
@@ -150,6 +156,7 @@ export const dataHooks: Record<string, DataHook> = {
   useBankList: () => useSimpleList<Bank>('/api/v1/banks') as unknown as DataHookResult,
   useWarehouseList: () => useSimpleList<Warehouse>('/api/v1/warehouses') as unknown as DataHookResult,
   useManufacturerList: () => useSimpleList<Manufacturer>('/api/v1/manufacturers') as unknown as DataHookResult,
+  useProductList: () => useSimpleList<Product>('/api/v1/products') as unknown as DataHookResult,
 };
 
 // ─── Detail data hooks (단건 fetch by id) ─────────────────────────────────
@@ -199,6 +206,9 @@ export const metricComputers: Record<string, MetricComputer> = {
     (items as Manufacturer[]).filter((m) => m.domestic_foreign === '국내' || m.domestic_foreign === 'domestic').length.toLocaleString(),
   'count.manufacturer_foreign': (items) =>
     (items as Manufacturer[]).filter((m) => m.domestic_foreign === '해외' || m.domestic_foreign === 'foreign').length.toLocaleString(),
+  // Phase 4: 품번
+  'count.product_active': (items) =>
+    (items as Product[]).filter((p) => p.is_active).length.toLocaleString(),
 };
 
 // ─── Sub computers (메트릭 sub 텍스트 동적 생성) ───────────────────────────
@@ -295,6 +305,17 @@ const ManufacturerFormV2: FormComponent = (props) => (
   />
 );
 
+// 품번 메타 폼 (Phase 4 — 13 필드, masterKey=manufacturers, 메타 인프라 최대 복잡도)
+const ProductFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={productFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
 export const formComponents: Record<string, FormComponent> = {
   outbound_form: OutboundForm as unknown as FormComponent,
   outbound_form_simple: OutboundFormSimple,    // 메타 한계선 데모용
@@ -304,6 +325,7 @@ export const formComponents: Record<string, FormComponent> = {
   bank_form_v2: BankFormV2,                    // Phase 4: 은행 마스터 메타 폼
   warehouse_form_v2: WarehouseFormV2,          // Phase 4: 창고 마스터 메타 폼
   manufacturer_form_v2: ManufacturerFormV2,    // Phase 4: 제조사 마스터 메타 폼
+  product_form_v2: ProductFormV2,              // Phase 4: 품번 마스터 메타 폼 (13 필드)
 };
 
 export const detailComponents: Record<string, DetailComponent> = {
