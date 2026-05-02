@@ -892,7 +892,16 @@ a:focus-visible,
 }
 
 .sf-command-tab-body {
-  padding: 14px;
+  padding: 0;
+}
+
+.sf-command-tab-body [data-slot="tabs-content"] {
+  margin-top: 0;
+}
+
+.sf-command-tab-body [data-slot="tabs-content"] > .rounded-md.border {
+  border: 0;
+  border-radius: 0;
 }
 
 .sf-card-controls {
@@ -913,19 +922,6 @@ a:focus-visible,
   border-color: var(--solar-3) !important;
 }
 
-.sf-procurement-page [data-slot="tabs-content"],
-.sf-sales-page [data-slot="tabs-content"] {
-  margin-top: 0;
-}
-
-.sf-sales-page .sf-command-tab-body {
-  padding: 0;
-}
-
-.sf-sales-page .sf-command-tab-body .rounded-md.border {
-  border: 0;
-  border-radius: 0;
-}
 
 .sf-procurement-page .rounded-md.border.overflow-x-auto {
   border-color: var(--sf-line);
