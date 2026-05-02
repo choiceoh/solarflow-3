@@ -21,7 +21,9 @@ import type {
 } from '@/templates/types';
 import partnersScreen from '@/config/screens/partners';
 import outboundScreen from '@/config/screens/outbound';
+import companiesScreen from '@/config/screens/companies';
 import partnerForm from '@/config/forms/partners';
+import companyForm from '@/config/forms/companies';
 import outboundFormSimple from '@/config/forms/outbound_simple';
 import outboundDetailSimple from '@/config/details/outbound_simple';
 import VisualScreenEditor from './UIConfigEditor/VisualScreenEditor';
@@ -40,7 +42,9 @@ interface KnownConfig {
 const KNOWN_CONFIGS: KnownConfig[] = [
   { kind: 'screen', id: 'partners', label: '거래처 목록', routeHint: '/masters/partners-v2', default: partnersScreen },
   { kind: 'screen', id: 'outbound_page', label: '출고/판매 (탭)', routeHint: '/outbound-v2', default: outboundScreen },
+  { kind: 'screen', id: 'companies', label: '법인 마스터', routeHint: '/masters/companies-v2', default: companiesScreen },
   { kind: 'form', id: 'partner_form_v2', label: '거래처 폼', routeHint: '/masters/partners-v2 → 새로 등록', default: partnerForm },
+  { kind: 'form', id: 'company_form_v2', label: '법인 폼', routeHint: '/masters/companies-v2 → 새로 등록', default: companyForm },
   { kind: 'form', id: 'outbound_form_simple', label: '출고 폼 (한계선 데모)', routeHint: '/outbound-form-meta-demo', default: outboundFormSimple },
   { kind: 'detail', id: 'outbound_detail_simple', label: '출고 상세 (한계선 데모)', routeHint: '/outbound-detail-meta-demo', default: outboundDetailSimple },
 ];

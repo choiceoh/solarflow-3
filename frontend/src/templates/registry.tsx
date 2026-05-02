@@ -15,6 +15,7 @@ import PartnerForm from '@/components/masters/PartnerForm';
 import MetaForm from './MetaForm';
 import partnerFormConfig from '@/config/forms/partners';
 import outboundSimpleFormConfig from '@/config/forms/outbound_simple';
+import companyFormConfig from '@/config/forms/companies';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
 import {
@@ -128,6 +129,7 @@ export const dataHooks: Record<string, DataHook> = {
     invoice_status: f.invoice_status || undefined,
   }) as unknown as DataHookResult,
   usePartnerList: () => useSimpleList<Partner>('/api/v1/partners') as unknown as DataHookResult,
+  useCompanyList: () => useSimpleList<Record<string, unknown>>('/api/v1/companies') as unknown as DataHookResult,
 };
 
 // ─── Detail data hooks (단건 fetch by id) ─────────────────────────────────
@@ -209,11 +211,23 @@ const OutboundFormSimple: FormComponent = (props) => (
   />
 );
 
+// 법인 메타 폼 (Phase 4 신규 도메인 적용)
+const CompanyFormV2: FormComponent = (props) => (
+  <MetaForm
+    config={companyFormConfig}
+    open={props.open}
+    onOpenChange={props.onOpenChange}
+    onSubmit={props.onSubmit}
+    editData={props.editData}
+  />
+);
+
 export const formComponents: Record<string, FormComponent> = {
   outbound_form: OutboundForm as unknown as FormComponent,
   outbound_form_simple: OutboundFormSimple,    // 메타 한계선 데모용
   partner_form: PartnerForm as unknown as FormComponent,
   partner_form_v2: PartnerFormV2,
+  company_form_v2: CompanyFormV2,              // Phase 4: 법인 마스터 메타 폼
 };
 
 export const detailComponents: Record<string, DetailComponent> = {
