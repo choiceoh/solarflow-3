@@ -10,6 +10,7 @@ import { useAppStore } from '@/stores/appStore';
 import BLForm from '@/components/inbound/BLForm';
 import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import ListScreen from '@/templates/ListScreen';
+import { useActionHandler } from '@/templates/registry';
 import inboundConfig from '@/config/screens/inbound';
 import type { BLShipment } from '@/types/inbound';
 
@@ -38,27 +39,18 @@ export default function InboundPage() {
   const [customsOCRDropActive, setCustomsOCRDropActive] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  // ListScreen actionHandler 이벤트 구독
-  useEffect(() => {
-    const onCreate = () => {
-      setEditTarget(null);
-      setPresetPOId(null);
-      setPresetLCId(null);
-      setCustomsOCRDropFile(null);
-      setFormOpen(true);
-    };
-    const onEdit = (e: Event) => {
-      const ce = e as CustomEvent<BLShipment>;
-      setEditTarget(ce.detail);
-      setFormOpen(true);
-    };
-    window.addEventListener('sf-inbound-open-create', onCreate);
-    window.addEventListener('sf-inbound-open-edit', onEdit as EventListener);
-    return () => {
-      window.removeEventListener('sf-inbound-open-create', onCreate);
-      window.removeEventListener('sf-inbound-open-edit', onEdit as EventListener);
-    };
-  }, []);
+  // ListScreen actionHandler 직접 콜백 등록 — CustomEvent 우회 패턴 제거
+  useActionHandler('inbound_open_create', () => {
+    setEditTarget(null);
+    setPresetPOId(null);
+    setPresetLCId(null);
+    setCustomsOCRDropFile(null);
+    setFormOpen(true);
+  });
+  useActionHandler('inbound_open_edit', (row) => {
+    setEditTarget(row as BLShipment);
+    setFormOpen(true);
+  });
 
   // D-085: ?po=xxx?lc=xxx 쿼리 → 입고 등록 자동 열기 + 프리셋
   useEffect(() => {

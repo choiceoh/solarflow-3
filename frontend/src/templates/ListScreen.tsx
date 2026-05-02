@@ -660,7 +660,8 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
   const displayItems = state.data;
 
   const onRowAction = makeRowActionHandler(pageActions, state.reload);
-  const headerActions = config.actions?.filter((a) => a.trigger === 'header') ?? [];
+  // 'toolbar' 는 'header' alias — 옛 outbound config 호환
+  const headerActions = config.actions?.filter((a) => a.trigger === 'header' || a.trigger === 'toolbar') ?? [];
   const bulkActions = config.actions?.filter((a) => a.trigger === 'bulk') ?? [];
   const hasHideable = config.columns.some((c) => c.hideable);
 

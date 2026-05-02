@@ -23,6 +23,7 @@ import { useBLDetail, useBLLines } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
 import { type BLLineItem } from '@/types/inbound';
 import { MetaDetailBody } from '@/templates/MetaDetail';
+import { useActionHandler } from '@/templates/registry';
 import blShipmentDetailConfig from '@/config/details/bl_shipment';
 import type { Manufacturer } from '@/types/masters';
 import BLExpensesTab from './BLExpensesTab';
@@ -91,12 +92,8 @@ export default function BLDetailView({ blId, onBack }: Props) {
     return () => { cancelled = true; };
   }, [bl?.manufacturer_id, bl?.manufacturer_name]);
 
-  // Step 2: MetaDetail contentBlock (bl_edit_button) 가 발행하는 이벤트 구독
-  useEffect(() => {
-    const onEdit = () => setEditingBL(true);
-    window.addEventListener('sf-bl-detail-edit', onEdit);
-    return () => window.removeEventListener('sf-bl-detail-edit', onEdit);
-  }, []);
+  // Step 2: MetaDetail contentBlock (bl_edit_button) 가 호출하는 actionHandler 등록
+  useActionHandler('bl_detail_edit', () => setEditingBL(true));
 
   if (blLoading || !bl) return <LoadingSpinner />;
 

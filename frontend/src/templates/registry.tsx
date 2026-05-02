@@ -2,7 +2,7 @@
 // 메타데이터(config)에서 ID로 참조되는 모든 런타임 객체를 한 곳에 등록한다.
 // 새 도메인이 합류할 때 여기에만 등록하면 새 화면 config가 즉시 동작한다.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchWithAuth } from '@/lib/api';
 import { formatDate, formatNumber, formatKw } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
@@ -384,16 +384,25 @@ export const sparkComputers: Record<string, (items: unknown[]) => number[]> = {
 };
 
 // ─── Action handlers ───────────────────────────────────────────────────────
-export const actionHandlers: Record<string, ActionHandler> = {
-  // Inbound (Step 1): "새로 등록" — 페이지가 BLForm dialog 띄우도록 이벤트 발행
-  inbound_open_create: () => {
-    window.dispatchEvent(new CustomEvent('sf-inbound-open-create'));
-  },
-  // Inbound: 행 편집 — editData 와 함께 이벤트 발행
-  inbound_open_edit: (row) => {
-    window.dispatchEvent(new CustomEvent('sf-inbound-open-edit', { detail: row }));
-  },
-};
+// 전역 actionHandlers 레지스트리 — 페이지에서 useActionHandler hook 으로 등록/해제.
+// 이전에는 CustomEvent dispatch 로 페이지 콜백 호출했으나 디버깅 어렵고 leak 가능 →
+// 페이지가 hook 으로 자기 콜백 등록하면 직접 호출됨.
+export const actionHandlers: Record<string, ActionHandler> = {};
+
+// 페이지 내 컴포넌트가 actionHandler 를 등록 (마운트 동안만 활성).
+// 의존성 deps 같은 게 필요 없도록 ref 로 최신 closure 추적.
+export function useActionHandler(id: string, handler: ActionHandler): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  useEffect(() => {
+    const wrapped: ActionHandler = (row) => handlerRef.current(row);
+    actionHandlers[id] = wrapped;
+    return () => {
+      // 같은 id 로 등록된 게 우리 wrapper 인 경우만 해제
+      if (actionHandlers[id] === wrapped) delete actionHandlers[id];
+    };
+  }, [id]);
+}
 
 // ─── Forms / Detail components ─────────────────────────────────────────────
 // 메타 폼 래퍼 — config를 클로저로 받아 FormComponent 시그니처에 맞춤
@@ -681,12 +690,12 @@ export const contentBlocks: Record<string, ContentBlock> = {
     const r = items[0] as BLShipment;
     return <InboundStatusBadge status={r.status} />;
   },
-  // Inbound Step 2: 기본 정보 섹션 헤더의 수정 버튼 — 클릭 시 BLDetailView 가 구독중인 이벤트 발행
+  // Inbound Step 2: 기본 정보 섹션 헤더의 수정 버튼 — actionHandlers['bl_detail_edit'] 호출
   bl_edit_button: () => (
     <button
       type="button"
       className="inline-flex items-center gap-1 rounded border border-input bg-background px-2.5 py-1 text-xs hover:bg-muted"
-      onClick={() => window.dispatchEvent(new CustomEvent('sf-bl-detail-edit'))}
+      onClick={() => actionHandlers.bl_detail_edit?.()}
     >
       ✏️ 수정
     </button>
