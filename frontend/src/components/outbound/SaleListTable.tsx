@@ -79,6 +79,7 @@ export const SALE_COLUMN_META: ColumnVisibilityMeta[] =
 function SaleListTable({ items, hidden, onInvoice }: Props) {
   return (
     <MetaTable
+      tableId={SALE_TABLE_ID}
       columns={buildColumns({ onInvoice })}
       hidden={hidden}
       items={items}

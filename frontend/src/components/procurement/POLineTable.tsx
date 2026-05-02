@@ -63,6 +63,7 @@ export const PO_LINE_COLUMN_META: ColumnVisibilityMeta[] =
 function POLineTable({ items, hidden, onEdit, manufacturerName }: Props) {
   return (
     <MetaTable
+      tableId={PO_LINE_TABLE_ID}
       columns={buildColumns({ onEdit, manufacturerName })}
       hidden={hidden}
       items={items}

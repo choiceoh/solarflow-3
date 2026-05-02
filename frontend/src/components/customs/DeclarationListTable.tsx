@@ -30,6 +30,7 @@ export const DECLARATION_COLUMN_META: ColumnVisibilityMeta[] =
 export default function DeclarationListTable({ items, hidden, onSelect }: Props) {
   return (
     <MetaTable
+      tableId={DECLARATION_TABLE_ID}
       columns={columns}
       hidden={hidden}
       items={items}

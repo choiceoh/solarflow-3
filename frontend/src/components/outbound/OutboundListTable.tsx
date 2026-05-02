@@ -73,6 +73,7 @@ export const OUTBOUND_COLUMN_META: ColumnVisibilityMeta[] =
 function OutboundListTable({ items, hidden, onSelect, onNew, onInvoice }: Props) {
   return (
     <MetaTable
+      tableId={OUTBOUND_TABLE_ID}
       columns={buildColumns({ onInvoice })}
       hidden={hidden}
       items={items}

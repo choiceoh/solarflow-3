@@ -58,6 +58,7 @@ export const EXPENSE_COLUMN_META: ColumnVisibilityMeta[] =
 export default function ExpenseListTable({ items, hidden, onEdit, onDelete }: Props) {
   return (
     <MetaTable
+      tableId={EXPENSE_TABLE_ID}
       columns={buildColumns({ onEdit, onDelete })}
       hidden={hidden}
       items={items}

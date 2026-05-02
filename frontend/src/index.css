@@ -904,6 +904,29 @@ a:focus-visible,
   border-radius: 0;
 }
 
+/* MetaTable 컬럼 리사이저 — TableHead 우측 모서리에 절대 배치되는 5px 드래그 영역.
+   기본 상태에서는 보이지 않다가 hover 시 옅은 솔라 라인이 살짝 비치고,
+   드래그 중에는 진한 솔라로 강조. */
+.sf-col-resizer {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+  z-index: 1;
+  background: transparent;
+  transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sf-col-resizer:hover {
+  background: rgb(245 184 0 / 0.35);
+}
+.sf-col-resizer-active {
+  background: var(--sf-solar);
+}
+
 .sf-card-controls {
   display: flex;
   align-items: center;

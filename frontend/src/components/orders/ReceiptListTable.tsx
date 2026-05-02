@@ -76,6 +76,7 @@ export const RECEIPT_COLUMN_META: ColumnVisibilityMeta[] =
 function ReceiptListTable({ items, hidden, onNew, onEdit, onDelete }: Props) {
   return (
     <MetaTable
+      tableId={RECEIPT_TABLE_ID}
       columns={buildColumns({ onEdit, onDelete })}
       hidden={hidden}
       items={items}

@@ -77,6 +77,7 @@ export const BL_LINE_COLUMN_META: ColumnVisibilityMeta[] =
 export default function BLLineTable({ items, hidden, currency, manufacturerName, onEdit }: Props) {
   return (
     <MetaTable
+      tableId={BL_LINE_TABLE_ID}
       columns={buildColumns({ currency, manufacturerName, onEdit })}
       hidden={hidden}
       items={items}

@@ -121,6 +121,7 @@ export const ORDER_COLUMN_META: ColumnVisibilityMeta[] =
 function OrderListTable({ items, hidden, onSelect, onNew, onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides = EMPTY_OVERRIDES }: Props) {
   return (
     <MetaTable
+      tableId={ORDER_TABLE_ID}
       columns={buildColumns({ onEdit, onDelete, onCreateOutbound, onCancelToReservation, sourceOverrides })}
       hidden={hidden}
       items={items}
