@@ -180,7 +180,7 @@ interface ChatBoxProps {
   sessionsSlot?: React.ReactNode;
 }
 
-function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted, sessionsSlot }: ChatBoxProps) {
+export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted, sessionsSlot }: ChatBoxProps) {
   // 빠른 연속 send 시 setSessionIdRef 가 반영되기 전 두 번째 호출이 또 POST 하지 않도록 ref 로 동기 추적.
   const sessionIdRef = useRef<string | null>(sessionId);
   // 쓰기 도구 승인/거부 상태 — proposal id → status. messages 와 별도 메모리 (상태 mutation 안 함).

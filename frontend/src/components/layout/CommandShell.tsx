@@ -30,6 +30,7 @@ import GlobalSearchBar from '@/components/search/GlobalSearchBar';
 import AlertBell from '@/components/layout/AlertBell';
 import QuickRegister from '@/components/layout/QuickRegister';
 import FloatingMwEaCalculator from '@/components/common/FloatingMwEaCalculator';
+import { FloatingAssistantButton } from '@/components/assistant/FloatingAssistantButton';
 import {
   EditModeBadge,
   EditModeToggleButton,
@@ -355,6 +356,7 @@ export default function CommandShell() {
       <InspectorOverlay />
       <EditModeBadge />
       <InspectorPanel />
+      <FloatingAssistantButton />
     </div>
   );
 }
