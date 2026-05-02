@@ -32,8 +32,9 @@ import (
 type AssistantHandler struct {
 	httpClient *http.Client
 	db         *supa.Client
-	ocrH       *OCRHandler         // nil 허용 — alias 비활성
+	ocrH       *OCRHandler          // nil 허용 — alias 비활성
 	matchH     *ReceiptMatchHandler // nil 허용 — alias 비활성
+	outboundH  *OutboundHandler     // nil 허용 — ConfirmProposal/create_outbound는 outboundH 미주입 시 503
 }
 
 // NewAssistantHandler — 기본 생성자 (public/auth 공통). alias 라우트가 필요한 경우 WithAlias로 의존성을 주입한다.
@@ -50,6 +51,14 @@ func NewAssistantHandler(db *supa.Client) *AssistantHandler {
 func (h *AssistantHandler) WithAlias(ocrH *OCRHandler, matchH *ReceiptMatchHandler) *AssistantHandler {
 	h.ocrH = ocrH
 	h.matchH = matchH
+	return h
+}
+
+// WithWriters — ConfirmProposal에서 위임할 도메인 핸들러를 주입한다.
+// 일반 등록 핸들러와 동일한 트랜잭션·검증·진행률 재계산을 거치게 하기 위함.
+// 인증 라우트에서 RegisterRoutes 호출 직전에 한 번 호출.
+func (h *AssistantHandler) WithWriters(outboundH *OutboundHandler) *AssistantHandler {
+	h.outboundH = outboundH
 	return h
 }
 
@@ -384,6 +393,11 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "data": json.RawMessage(data)})
 
 	case "create_outbound":
+		if h.outboundH == nil {
+			log.Printf("[assistant write/confirm] outbound 핸들러 미주입 id=%s", id)
+			response.RespondError(w, http.StatusServiceUnavailable, "출고 핸들러 미설정")
+			return
+		}
 		var args createOutboundToolInput
 		if err := json.Unmarshal(p.Payload, &args); err != nil {
 			response.RespondError(w, http.StatusInternalServerError, "제안 페이로드 파싱 실패")
@@ -408,18 +422,15 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 			Memo:            args.Memo,
 			BLID:            args.BLID,
 		}
-		if msg := req.Validate(); msg != "" {
-			response.RespondError(w, http.StatusBadRequest, msg)
-			return
-		}
-		data, _, err := h.db.From("outbounds").Insert(req, false, "", "", "").Execute()
+		created, code, msg, err := h.outboundH.createOutboundCore(req)
 		if err != nil {
-			log.Printf("[assistant write/confirm] outbounds insert 실패 id=%s err=%v", id, err)
-			response.RespondError(w, http.StatusInternalServerError, "출고 등록에 실패했습니다")
+			log.Printf("[assistant write/confirm] outbounds insert 실패 id=%s code=%d err=%v", id, code, err)
+			response.RespondError(w, code, msg)
 			return
 		}
-		log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s ok", role, userID, p.Kind, id)
-		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "data": json.RawMessage(data)})
+		writeAuditLog(h.db, r, "outbounds", created.OutboundID, "create", nil, auditRawFromValue(created), "assistant_proposal")
+		log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s ok outbound_id=%s", role, userID, p.Kind, id, created.OutboundID)
+		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "data": created})
 
 	case "create_receipt":
 		var args model.CreateReceiptRequest

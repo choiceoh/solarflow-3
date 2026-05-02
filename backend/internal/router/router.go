@@ -32,6 +32,8 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 	ocrH := handler.NewOCRHandler(a.OCR)
 	matchH := handler.NewReceiptMatchHandler(a.DB, a.Eng)
 	publicH := handler.NewPublicHandler(a.DB, a.Eng)
+	// AssistantHandler.ConfirmProposal/case "create_outbound"가 위임하므로 단일 인스턴스 공유.
+	outboundH := handler.NewOutboundHandler(a.DB, a.Eng)
 
 	// AssistantHandler는 public/auth 두 인스턴스로 분리.
 	// - publicAssistantH: alias 없음, 비로그인 bare LLM 패스스루 전용 (도구는 user_id 부재로 자동 비활성)
@@ -49,7 +51,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
 
-		handler.NewAssistantHandler(a.DB).WithAlias(ocrH, matchH).RegisterRoutes(r, a.Gates)
+		handler.NewAssistantHandler(a.DB).WithAlias(ocrH, matchH).WithWriters(outboundH).RegisterRoutes(r, a.Gates)
 		attachH.RegisterRoutes(r, a.Gates)
 		handler.NewAuditLogHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBankHandler(a.DB).RegisterRoutes(r, a.Gates)
@@ -73,7 +75,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		handler.NewNoteHandler(a.DB).RegisterRoutes(r, a.Gates)
 		ocrH.RegisterRoutes(r, a.Gates)
 		handler.NewOrderHandler(a.DB).RegisterRoutes(r, a.Gates)
-		handler.NewOutboundHandler(a.DB, a.Eng).RegisterRoutes(r, a.Gates)
+		outboundH.RegisterRoutes(r, a.Gates)
 		partnerActH := handler.NewPartnerActivityHandler(a.DB)
 		handler.NewPartnerHandler(a.DB).RegisterRoutes(r, a.Gates, partnerActH)
 		partnerActH.RegisterRoutes(r, a.Gates)
