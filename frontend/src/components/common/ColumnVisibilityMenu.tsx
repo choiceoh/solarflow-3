@@ -29,8 +29,9 @@ export function ColumnVisibilityMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="inline-flex h-7 items-center gap-1 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-sm transition-all hover:bg-muted">
-        <Columns className="h-3 w-3" />컬럼
+      <DropdownMenuTrigger className="sf-toolbar-trigger">
+        <Columns style={{ width: 12, height: 12, color: 'var(--ink-3)' }} />
+        <span>컬럼</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel>컬럼 표시</DropdownMenuLabel>

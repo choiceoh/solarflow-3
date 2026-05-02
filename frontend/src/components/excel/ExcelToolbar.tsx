@@ -66,22 +66,7 @@ export default function ExcelToolbar({ type, onImportComplete, onNew }: Props) {
           <DropdownMenu>
             <DropdownMenuTrigger
               disabled={excelDisabled && !onNew}
-              className="sf-toolbar-trigger inline-flex items-center"
-              style={{
-                gap: 4,
-                height: 24,
-                padding: '0 8px',
-                background: 'var(--surface)',
-                border: '1px solid var(--line)',
-                borderRadius: 6,
-                fontFamily: 'inherit',
-                fontSize: 12,
-                fontWeight: 500,
-                color: 'var(--ink)',
-                cursor: 'pointer',
-                letterSpacing: '-0.005em',
-                boxShadow: '0 1px 2px 0 rgba(0,0,0,0.05)',
-              }}
+              className="sf-toolbar-trigger"
             >
               {loading
                 ? <Loader2 style={{ width: 12, height: 12, color: 'var(--ink-3)' }} className="animate-spin" />
