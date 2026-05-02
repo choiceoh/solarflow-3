@@ -1,6 +1,64 @@
 // MetaFormConfig 시각 편집기 — 섹션별 cols + 필드 인라인 편집.
 
 import { useMemo, useState } from 'react';
+
+// 필드 검증 — registry/key 충돌/누락 의존성 즉시 감지
+type FieldIssue = { level: 'error' | 'warn'; msg: string };
+function validateField(
+  field: FieldConfig,
+  allFieldKeys: string[],
+  allFormFieldKeys: string[],
+): FieldIssue[] {
+  const issues: FieldIssue[] = [];
+  if (!field.key.trim()) issues.push({ level: 'error', msg: 'key 가 비어 있습니다' });
+  if (!field.label.trim()) issues.push({ level: 'error', msg: 'label 이 비어 있습니다' });
+  if (allFieldKeys.filter((k) => k === field.key).length > 1) {
+    issues.push({ level: 'error', msg: `key '${field.key}' 가 폼 내에서 중복됩니다` });
+  }
+  // registry 검증
+  if (field.optionsFrom === 'enum' && field.enumKey && !(field.enumKey in enumDictionaries)) {
+    issues.push({ level: 'error', msg: `enumKey '${field.enumKey}' 가 registry 에 없습니다` });
+  }
+  if (field.optionsFrom === 'master' && field.masterKey && !(field.masterKey in masterSources)) {
+    issues.push({ level: 'error', msg: `masterKey '${field.masterKey}' 가 registry 에 없습니다` });
+  }
+  if (field.formula?.computerId && !(field.formula.computerId in computedFormulas)) {
+    issues.push({ level: 'error', msg: `formula.computerId '${field.formula.computerId}' 가 registry 에 없습니다` });
+  }
+  if (field.type === 'computed' && !field.formula?.computerId) {
+    issues.push({ level: 'warn', msg: 'computed 타입인데 formula.computerId 미지정' });
+  }
+  // 의존성 필드 존재 확인
+  for (const dep of field.dependsOn ?? []) {
+    if (!allFormFieldKeys.includes(dep)) {
+      issues.push({ level: 'warn', msg: `dependsOn '${dep}' 필드가 폼에 없습니다` });
+    }
+  }
+  for (const dep of field.optionsDependsOn ?? []) {
+    if (!allFormFieldKeys.includes(dep)) {
+      issues.push({ level: 'warn', msg: `optionsDependsOn '${dep}' 필드가 폼에 없습니다` });
+    }
+  }
+  if (field.visibleIf?.field && (field.visibleIf.source ?? 'field') === 'field'
+      && !allFormFieldKeys.includes(field.visibleIf.field)) {
+    issues.push({ level: 'warn', msg: `visibleIf.field '${field.visibleIf.field}' 가 폼에 없습니다` });
+  }
+  if (field.readOnlyIf?.field && (field.readOnlyIf.source ?? 'field') === 'field'
+      && !allFormFieldKeys.includes(field.readOnlyIf.field)) {
+    issues.push({ level: 'warn', msg: `readOnlyIf.field '${field.readOnlyIf.field}' 가 폼에 없습니다` });
+  }
+  return issues;
+}
+
+// 새 필드 key 생성 — 충돌 안 나는 'field_N' 또는 'new_field_N'
+function suggestFieldKey(existingKeys: string[]): string {
+  const base = 'field';
+  for (let i = 1; i < 1000; i++) {
+    const candidate = `${base}_${i}`;
+    if (!existingKeys.includes(candidate)) return candidate;
+  }
+  return 'new_field';
+}
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -163,6 +221,26 @@ function SectionsTab({ value, onChange }: { value: MetaFormConfig; onChange: (ne
 
   const totalFields = sections.reduce((s, sec) => s + (sec.fields?.length ?? 0), 0);
 
+  // 폼 전체 필드 key 목록 — 의존성 검증 + smart key 추천
+  const allFormFieldKeys = useMemo(
+    () => sections.flatMap((s) => (s.fields ?? []).map((f) => f.key)),
+    [sections],
+  );
+
+  // 폼 전체 검증 요약 — 상단 배너에 표시
+  const formIssueCounts = useMemo(() => {
+    let error = 0; let warn = 0;
+    sections.forEach((sec) => {
+      (sec.fields ?? []).forEach((f) => {
+        validateField(f, allFormFieldKeys, allFormFieldKeys).forEach((i) => {
+          if (i.level === 'error') error++;
+          else warn++;
+        });
+      });
+    });
+    return { error, warn };
+  }, [sections, allFormFieldKeys]);
+
   // 검색 일치하는 필드는 자동 expand (검색 결과로 즉시 보이게)
   const filteredSet = useMemo(() => {
     if (!filter) return null;
@@ -220,6 +298,25 @@ function SectionsTab({ value, onChange }: { value: MetaFormConfig; onChange: (ne
           <Plus className="h-3 w-3 mr-1" />섹션 추가
         </Button>
       </div>
+
+      {(formIssueCounts.error > 0 || formIssueCounts.warn > 0) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px]">
+          <span className="font-medium text-amber-900">검증:</span>
+          {formIssueCounts.error > 0 && (
+            <span className="rounded bg-rose-200 px-1.5 py-0.5 font-medium text-rose-800">
+              error {formIssueCounts.error}
+            </span>
+          )}
+          {formIssueCounts.warn > 0 && (
+            <span className="rounded bg-amber-200 px-1.5 py-0.5 font-medium text-amber-800">
+              warn {formIssueCounts.warn}
+            </span>
+          )}
+          <span className="text-muted-foreground">
+            붉은/노란 점이 표시된 행을 펼쳐 상세 메시지 확인
+          </span>
+        </div>
+      )}
       <div className="space-y-3">
         {sections.map((sec, sIdx) => (
           <SectionCard
@@ -230,6 +327,7 @@ function SectionsTab({ value, onChange }: { value: MetaFormConfig; onChange: (ne
             filter={filter}
             filteredSet={filteredSet}
             expandedSet={expandedSet}
+            allFormFieldKeys={allFormFieldKeys}
             onToggleField={(fIdx) => toggleField(sIdx, fIdx)}
             onAddedField={(fIdx) => setExpandedSet((p) => new Set(p).add(`${sIdx}.${fIdx}`))}
             onUpdate={(next) => updateSection(sIdx, next)}
@@ -249,7 +347,7 @@ function SectionsTab({ value, onChange }: { value: MetaFormConfig; onChange: (ne
 }
 
 function SectionCard({
-  section, index, total, filter, filteredSet, expandedSet,
+  section, index, total, filter, filteredSet, expandedSet, allFormFieldKeys,
   onToggleField, onAddedField, onUpdate, onMoveUp, onMoveDown, onRemove,
 }: {
   section: FormSection;
@@ -258,6 +356,7 @@ function SectionCard({
   filter: string;
   filteredSet: Set<string> | null;
   expandedSet: Set<string>;
+  allFormFieldKeys: string[];
   onToggleField: (fIdx: number) => void;
   onAddedField: (fIdx: number) => void;
   onUpdate: (next: FormSection) => void;
@@ -286,7 +385,8 @@ function SectionCard({
 
   const addField = () => {
     const newIdx = (section.fields ?? []).length;
-    onUpdate({ ...section, fields: [...(section.fields ?? []), { key: 'new_field', label: '새 필드', type: 'text' }] });
+    const newKey = suggestFieldKey(allFormFieldKeys);
+    onUpdate({ ...section, fields: [...(section.fields ?? []), { key: newKey, label: '새 필드', type: 'text' }] });
     // 새 필드는 자동으로 펼침
     onAddedField(newIdx);
   };
@@ -336,6 +436,7 @@ function SectionCard({
           const isExpanded = expandedSet.has(k) || (filter !== '' && filteredSet?.has(k) === true);
           const isDragging = dragIdx === fIdx;
           const isDragOver = overIdx === fIdx && dragIdx !== fIdx;
+          const issues = validateField(field, allFormFieldKeys, allFormFieldKeys);
           return (
             <div
               key={fIdx}
@@ -354,6 +455,7 @@ function SectionCard({
                 index={fIdx}
                 total={(section.fields ?? []).length}
                 expanded={isExpanded}
+                issues={issues}
                 onToggleExpand={() => onToggleField(fIdx)}
                 onUpdate={(next) => updateField(fIdx, next)}
                 onMoveUp={() => moveField(fIdx, -1)}
@@ -382,19 +484,23 @@ function SectionCard({
 // + type 별 보조 (select/multiselect 옵션, file multiple, computed formula+dependsOn, number numberFormat)
 // + "고급 ▾" 토글: description / defaultValue / readOnly / 검증 / visibleIf / readOnlyIf
 function FieldRow({
-  field, index, total, expanded, onToggleExpand,
+  field, index, total, expanded, issues, onToggleExpand,
   onUpdate, onMoveUp, onMoveDown, onRemove,
 }: {
   field: FieldConfig;
   index: number;
   total: number;
   expanded: boolean;
+  issues: FieldIssue[];
   onToggleExpand: () => void;
   onUpdate: (next: FieldConfig) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onRemove: () => void;
 }) {
+  const errorCount = issues.filter((i) => i.level === 'error').length;
+  const warnCount = issues.filter((i) => i.level === 'warn').length;
+  const issueTitle = issues.map((i) => `[${i.level}] ${i.msg}`).join('\n');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const enumOpts = useMemo(() => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })), []);
   const masterOpts = useMemo(() => Object.keys(masterSources).sort().map((id) => ({ value: id, label: id })), []);
@@ -423,6 +529,14 @@ function FieldRow({
         <div className="flex items-center gap-2 px-2 py-1.5 text-xs">
           <GripVertical className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing"
             onClick={(e) => e.stopPropagation()} />
+          {/* 검증 표시: 에러는 빨간 점, 경고는 노란 점, 정상은 빈 칸 */}
+          {errorCount > 0 ? (
+            <span title={issueTitle} className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" aria-label={`error ${errorCount}개`} />
+          ) : warnCount > 0 ? (
+            <span title={issueTitle} className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" aria-label={`warn ${warnCount}개`} />
+          ) : (
+            <span className="h-1.5 w-1.5 shrink-0" />
+          )}
           <span className="text-[9px] text-muted-foreground mono w-6 text-right shrink-0">#{index + 1}</span>
           <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
           <span className="font-mono text-[11px] text-foreground/80 shrink-0">{field.key}</span>
@@ -433,6 +547,16 @@ function FieldRow({
             {badges.map((b) => (
               <span key={b} className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] text-amber-900">{b}</span>
             ))}
+            {errorCount > 0 && (
+              <span title={issueTitle} className="rounded bg-rose-100 px-1.5 py-0.5 text-[9px] font-medium text-rose-800">
+                error {errorCount}
+              </span>
+            )}
+            {warnCount > 0 && errorCount === 0 && (
+              <span title={issueTitle} className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800">
+                warn {warnCount}
+              </span>
+            )}
             <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100"
               onClick={(e) => { e.stopPropagation(); onMoveUp(); }} disabled={index === 0}>
               <ChevronUp className="h-3 w-3" />
@@ -463,6 +587,16 @@ function FieldRow({
           onClick={onMoveDown} disabled={index === total - 1}><ChevronDown className="h-3 w-3" /></Button>
       </div>
       <div className="col-span-10 grid grid-cols-2 gap-2">
+        {issues.length > 0 && (
+          <div className="col-span-2 space-y-0.5 rounded border border-rose-200 bg-rose-50 px-2 py-1">
+            {issues.map((iss, i) => (
+              <div key={i} className={`text-[10px] flex items-start gap-1 ${iss.level === 'error' ? 'text-rose-800' : 'text-amber-800'}`}>
+                <span className={`rounded px-1 py-0 text-[9px] font-medium uppercase ${iss.level === 'error' ? 'bg-rose-200' : 'bg-amber-200'}`}>{iss.level}</span>
+                <span>{iss.msg}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <FieldInput label="key" value={field.key} mono
           onChange={(v) => onUpdate({ ...field, key: v })} />
         <FieldInput label="label" value={field.label}
