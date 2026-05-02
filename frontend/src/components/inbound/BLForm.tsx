@@ -37,6 +37,11 @@ import {
   extractOCRSpecWp, extractOCRModelTokens, parseOCRNumber,
   formatOCRProductLabel, selectableOCRProducts, findProductForOCRLine,
 } from '@/lib/blOcr';
+import {
+  type ImportPT, type DomesticPT, IMPORT_BALANCE_DAYS, DOMESTIC_DAYS5,
+  defaultImportPT, defaultDomesticPT, monthLabel,
+  composeImportPT, parseImportPT, composeDomesticPT, parseDomesticPT,
+} from '@/lib/blPaymentTerms';
 
 const LC_STATUS_KR: Record<string, string> = {
   pending: '대기', opened: '개설완료', docs_received: '서류접수', settled: '결제완료',
@@ -100,96 +105,8 @@ function normalizeLinesForSnapshot(lines: LineItem[]) {
   }));
 }
 
-/* ── 해외직수입 결제조건 — 계약금 % + 잔금 기간 (30/45/60/90/120/180) ── */
-const IMPORT_BALANCE_DAYS = ['30', '45', '60', '90', '120', '180'] as const;
-type ImportBalanceDay = typeof IMPORT_BALANCE_DAYS[number];
-interface ImportPT {
-  hasDeposit: boolean;
-  depositMethod: 'tt' | 'lc';
-  depositPercent: string;      // 총구매금액 × %
-  depositSplits: string[];     // 분할 시 각 행 금액
-  balanceDays: ImportBalanceDay;
-}
-const defaultImportPT = (): ImportPT => ({
-  hasDeposit: false, depositMethod: 'tt', depositPercent: '', depositSplits: [], balanceDays: '90',
-});
-function composeImportPT(pt: ImportPT, totalAmount: number): string {
-  const bal = `잔금 L/C ${pt.balanceDays}days`;
-  if (pt.hasDeposit && pt.depositPercent) {
-    const m = pt.depositMethod === 'tt' ? 'T/T' : 'L/C';
-    const pct = pt.depositPercent;
-    const amt = totalAmount ? Math.round(totalAmount * (parseFloat(pct) / 100)) : 0;
-    const splitStr = pt.depositSplits.length
-      ? ` (분할 ${pt.depositSplits.filter(Boolean).length}회)` : '';
-    return `계약금 ${pct}% ${m} ${amt.toLocaleString('en-US')}${splitStr}, ${bal}`;
-  }
-  return bal;
-}
-function parseImportPT(text: string): ImportPT {
-  const dep = text.match(/계약금\s*([\d.]+)%?\s*(T\/T|L\/C)/i);
-  const bal = text.match(/L\/C\s*(\d+)\s*days?/i);
-  const days = (bal?.[1] ?? '90') as string;
-  return {
-    hasDeposit: !!dep,
-    depositMethod: dep?.[2]?.toUpperCase() === 'L/C' ? 'lc' : 'tt',
-    depositPercent: dep?.[1] ?? '',
-    depositSplits: [],
-    balanceDays: (IMPORT_BALANCE_DAYS.includes(days as ImportBalanceDay) ? days : '90') as ImportBalanceDay,
-  };
-}
-
-/* ── 국내구매 결제조건 — 선입금(%/금액) + 잔금 3가지 옵션 ──
- * 선입금: percent 또는 amount 모드. 0이면 전액 신용거래.
- * 잔금: days5(5단위 30~120), manual(수기 일수), month(익월말/익익월말/익익익월말)
- */
-const DOMESTIC_DAYS5 = Array.from({ length: 19 }, (_, i) => String(30 + i * 5)); // 30,35,...,120
-type DomesticBalanceMode = 'days5' | 'manual' | 'month';
-type MonthOffset = '1' | '2' | '3';
-interface DomesticPT {
-  prepayMode: 'percent' | 'amount';
-  prepayValue: string;          // % 또는 원
-  balanceMode: DomesticBalanceMode;
-  balanceDays: string;          // days5 또는 manual 일수
-  monthOffset: MonthOffset;     // 1/2/3 = 익월말/익익월말/익익익월말
-}
-const defaultDomesticPT = (): DomesticPT => ({
-  prepayMode: 'amount', prepayValue: '', balanceMode: 'days5', balanceDays: '60', monthOffset: '1',
-});
-function monthLabel(o: MonthOffset): string {
-  return o === '1' ? '익월말' : o === '2' ? '익익월말' : '익익익월말';
-}
-function composeDomesticPT(pt: DomesticPT, totalAmount: number): string {
-  const prepayAmt = pt.prepayMode === 'percent'
-    ? Math.round(totalAmount * (parseFloat(pt.prepayValue || '0') / 100))
-    : parseInt(pt.prepayValue || '0');
-  const prepayStr = prepayAmt > 0
-    ? `선입금 ${prepayAmt.toLocaleString('ko-KR')}원${pt.prepayMode === 'percent' ? ` (${pt.prepayValue}%)` : ''}`
-    : '전액';
-  const balStr = pt.balanceMode === 'days5' || pt.balanceMode === 'manual'
-    ? `잔금 신용거래 ${pt.balanceDays}일`
-    : `잔금 ${monthLabel(pt.monthOffset)}`;
-  return `${prepayStr} + ${balStr}`;
-}
-function parseDomesticPT(text: string): DomesticPT {
-  const amtM = text.match(/선입금\s*([\d,]+)\s*원/);
-  const pctM = text.match(/\((\d+(?:\.\d+)?)%\)/);
-  const daysM = text.match(/신용거래\s*(\d+)\s*일/);
-  const monthM = text.match(/(익익익월말|익익월말|익월말)/);
-  const base: DomesticPT = defaultDomesticPT();
-  if (amtM) {
-    base.prepayValue = pctM ? pctM[1] : amtM[1].replace(/,/g, '');
-    base.prepayMode = pctM ? 'percent' : 'amount';
-  }
-  if (daysM) {
-    const d = daysM[1];
-    base.balanceMode = DOMESTIC_DAYS5.includes(d) ? 'days5' : 'manual';
-    base.balanceDays = d;
-  } else if (monthM) {
-    base.balanceMode = 'month';
-    base.monthOffset = monthM[1] === '익월말' ? '1' : monthM[1] === '익익월말' ? '2' : '3';
-  }
-  return base;
-}
+// 결제조건 타입/헬퍼 — lib/blPaymentTerms.ts 에서 import
+// (PT 위젯 추출과 함께 모듈화 — DRY)
 /* ── 헬퍼 컴포넌트 ── */
 function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: string }) {
   return (
