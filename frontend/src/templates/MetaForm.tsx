@@ -17,7 +17,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { FieldConfig, MasterOptionSource, MetaFormConfig } from './types';
 import { GhostInput } from '@/components/forms/GhostInput';
 import {
-  applyFormatter, computedFormulas, enumDictionaries, formRefinements, masterSources,
+  applyFormatter, computedFormulas, enumDictionaries, formRefinements, formContentBlocks, masterSources,
 } from './registry';
 import { useAppStore } from '@/stores/appStore';
 
@@ -891,24 +891,40 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
                 {sec.title && !wizardEnabled ? (
                   <p className={`text-xs font-semibold ${TONE_TEXT_CLASS[sec.tone ?? 'ink']}`}>{sec.title}</p>
                 ) : null}
-                <div className={colsClass}>
-                  {sec.fields.map((f) => (
-                    <FieldRender
-                      key={f.key}
-                      field={f}
-                      value={watchedValues[f.key]}
-                      error={errors[f.key] as { message?: string } | undefined}
-                      options={fieldOptions[f.key]}
-                      setValue={(k, v) => setValue(k, v as never)}
-                      register={register}
-                      watch={watch}
-                      watchedValues={watchedValues}
-                      role={role}
-                      extraContext={extraContext}
-                      formId={config.id}
-                    />
-                  ))}
-                </div>
+                {sec.contentBlock ? (() => {
+                  // Phase 4 — Step 3 prep: 임의 위젯 임베드 (OCR / 결제조건 파서 등)
+                  const Block = formContentBlocks[sec.contentBlock.blockId];
+                  if (!Block) {
+                    console.warn(`[MetaForm] formContentBlock not registered: ${sec.contentBlock.blockId}`);
+                    return null;
+                  }
+                  return Block({
+                    watch,
+                    setValue: (k, v) => setValue(k, v as never),
+                    getValues: () => watchedValues,
+                    extraContext,
+                    config: (sec.contentBlock.props ?? {}) as Record<string, unknown>,
+                  });
+                })() : (
+                  <div className={colsClass}>
+                    {sec.fields.map((f) => (
+                      <FieldRender
+                        key={f.key}
+                        field={f}
+                        value={watchedValues[f.key]}
+                        error={errors[f.key] as { message?: string } | undefined}
+                        options={fieldOptions[f.key]}
+                        setValue={(k, v) => setValue(k, v as never)}
+                        register={register}
+                        watch={watch}
+                        watchedValues={watchedValues}
+                        role={role}
+                        extraContext={extraContext}
+                        formId={config.id}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

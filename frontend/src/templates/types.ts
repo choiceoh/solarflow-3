@@ -219,6 +219,10 @@ export interface FormSection {
   // Phase 4 보강: 섹션 헤더 (단계 그룹화 — CostForm "Stage 1: FOB" 등)
   title?: string;
   tone?: Tone;                      // 헤더 색상 (solar/ink/info/warn/pos)
+  // Phase 4 — Step 3 prep: 임의 React 컴포넌트 슬롯
+  // 제공 시 fields 대신 렌더 (registry.formContentBlocks[blockId] 호출)
+  // 메타로 표현 안 되는 OCR 위젯, 결제조건 파서 등 도메인 특수 로직 임베드용.
+  contentBlock?: ContentBlockConfig;
 }
 
 // Phase 4 보강: 다이얼로그 크기 (max-w-md/lg/xl/2xl) — 큰 폼은 lg 이상
@@ -240,6 +244,22 @@ export type ComputedFormula = (
   values: Record<string, unknown>,
   context?: Record<string, unknown>,
 ) => unknown;
+
+// Phase 4 — Step 3 prep: 폼 안에 임의 React 컴포넌트 임베드 (FormSection.contentBlock 슬롯용)
+// list 의 ContentBlock 과 다른 시그니처 — form 의 watch/setValue API 와 extraContext 받음.
+export interface FormContentBlockProps {
+  /** react-hook-form 의 watch — 키 미지정 시 전체, 키 지정 시 해당 필드 값 */
+  watch: (name?: string) => unknown;
+  /** 다른 필드 값 자동 채움 등 */
+  setValue: (name: string, value: unknown) => void;
+  /** 현재 모든 폼 값 (한 번 스냅샷) */
+  getValues: () => Record<string, unknown>;
+  /** 페이지가 주입한 외부 컨텍스트 (BL OCR 파일 등) */
+  extraContext?: Record<string, unknown>;
+  /** ContentBlockConfig.props 통과 */
+  config?: Record<string, unknown>;
+}
+export type FormContentBlock = (props: FormContentBlockProps) => import('react').ReactNode;
 
 // Phase 4 보강: 폼 저장 함수 (registry.formSubmitters)
 // FormConfig.submitterId 가 이 키를 참조. parent + child lines 같이 multi-step 저장 처리.

@@ -45,7 +45,7 @@ import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite 
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
-  Tone, MasterOptionSource, ContentBlock, ComputedFormula, FormRefinement, FormSubmitter,
+  Tone, MasterOptionSource, ContentBlock, ComputedFormula, FormRefinement, FormSubmitter, FormContentBlock,
 } from './types';
 import { RailBlock as RailBlockUI } from '@/components/command/MockupPrimitives';
 
@@ -629,6 +629,10 @@ export const formSubmitters: Record<string, FormSubmitter> = {
     await saveBLShipmentWithLines(data);
   },
 };
+
+// Phase 4 — Step 3 prep: 폼 안 임의 컴포넌트 슬롯 (FormSection.contentBlock)
+// list 의 contentBlocks 와 시그니처 다름 — form watch/setValue/getValues API 받음.
+export const formContentBlocks: Record<string, FormContentBlock> = {};
 
 export const detailComponents: Record<string, DetailComponent> = {
   outbound: ((props) => <OutboundDetailView outboundId={props.id} onBack={props.onBack} />) as DetailComponent,
