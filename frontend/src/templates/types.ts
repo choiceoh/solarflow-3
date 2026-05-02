@@ -221,6 +221,10 @@ export interface FieldConfig {
   minItems?: number;                // 최소 행 (validation)
   maxItems?: number;                // 최대 행
   childCols?: 1 | 2 | 3 | 4;        // 자식 행 grid 컬럼 (기본 4)
+
+  // Phase 4 — Step 3 prep: 이 필드 값 변경 시 다른 필드 자동 채우기
+  // registry.fieldCascades[cascadeId] 호출 — sourceValue/values/setValue/context 받음.
+  cascadeId?: string;
 }
 
 export interface FormSection {
@@ -254,6 +258,17 @@ export type ComputedFormula = (
   values: Record<string, unknown>,
   context?: Record<string, unknown>,
 ) => unknown;
+
+// Phase 4 — Step 3 prep: 한 필드 값 변경 시 다른 필드들 자동 채우기 (cascade).
+// 예: PO 선택 → 그 PO 의 LC/제조사/통화 자동 fill.
+// FieldConfig.cascadeId 가 이 키를 참조 (registry.fieldCascades).
+// 함수는 idempotent 해야 함 — 결과가 같으면 setValue 호출 안 함 (무한 루프 방지).
+export type FieldCascade = (
+  sourceValue: unknown,
+  values: Record<string, unknown>,
+  setValue: (key: string, value: unknown) => void,
+  context?: Record<string, unknown>,
+) => void | Promise<void>;
 
 // Phase 4 — Step 3 prep: 폼 안에 임의 React 컴포넌트 임베드 (FormSection.contentBlock 슬롯용)
 // list 의 ContentBlock 과 다른 시그니처 — form 의 watch/setValue API 와 extraContext 받음.

@@ -17,7 +17,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { FieldConfig, MasterOptionSource, MetaFormConfig } from './types';
 import { GhostInput } from '@/components/forms/GhostInput';
 import {
-  applyFormatter, computedFormulas, enumDictionaries, formRefinements, formContentBlocks, masterSources,
+  applyFormatter, computedFormulas, enumDictionaries, formRefinements, formContentBlocks, fieldCascades, masterSources,
 } from './registry';
 import { useAppStore } from '@/stores/appStore';
 
@@ -991,6 +991,22 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
       if (watchedValues[f.key] !== next) setValue(f.key, next as never, { shouldDirty: false });
     });
     // watchedValues 가 변하면 재계산 — setValue 가 추가 watchedValues 변경 유발하므로 referential equality 로 무한 루프 방지
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(watchedValues), allFields]);
+
+  // Phase 4 — Step 3 prep: 필드 cascade — source 필드 값 변경 시 다른 필드 자동 채우기.
+  // 마지막 source 값을 ref 로 추적 — 변경 시에만 cascade 호출 (idempotent + 루프 방지).
+  const lastCascadeValueRef = useRef<Record<string, unknown>>({});
+  useEffect(() => {
+    allFields.forEach((f) => {
+      if (!f.cascadeId) return;
+      const cascade = fieldCascades[f.cascadeId];
+      if (!cascade) return;
+      const cur = watchedValues[f.key];
+      if (lastCascadeValueRef.current[f.key] === cur) return;
+      lastCascadeValueRef.current[f.key] = cur;
+      cascade(cur, watchedValues, (k, v) => setValue(k, v as never), extraContext);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(watchedValues), allFields]);
 
