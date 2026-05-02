@@ -115,9 +115,12 @@ export interface ToolbarExtraConfig {
 export interface FormConfig {
   id: FormComponentId;
   componentId: string;              // 등록된 폼 컴포넌트
-  endpoint: string;                 // POST 대상 (신규 등록)
+  endpoint: string;                 // POST 대상 (신규 등록) — submitterId 없을 때만 사용
   editEndpoint?: string;            // PUT 대상 (수정) — :id 치환
   editIdField?: string;             // 행 데이터에서 :id로 쓸 필드
+  // Phase 4: 단순 endpoint POST/PUT 으로 표현 안 되는 저장 (parent + child lines, multi-step) 처리.
+  // 제공 시 endpoint 무시하고 registry.formSubmitters[submitterId] 호출.
+  submitterId?: string;
 }
 
 // ── 메타 폼 (Phase 2)
@@ -237,6 +240,15 @@ export type ComputedFormula = (
   values: Record<string, unknown>,
   context?: Record<string, unknown>,
 ) => unknown;
+
+// Phase 4 보강: 폼 저장 함수 (registry.formSubmitters)
+// FormConfig.submitterId 가 이 키를 참조. parent + child lines 같이 multi-step 저장 처리.
+// data: 폼이 onSubmit 으로 넘긴 값 (id 포함 가능 — 수정 시).
+// editData: 편집 모드일 때 원본 (없으면 신규).
+export type FormSubmitter = (
+  data: Record<string, unknown>,
+  editData: unknown | null,
+) => Promise<void>;
 
 // Phase 4 보강 Tier 3: 폼 단위 cross-field 검증 함수 (registry.formRefinements)
 // values 가 통과 → true, 실패 → false. zod superRefine 으로 통합.

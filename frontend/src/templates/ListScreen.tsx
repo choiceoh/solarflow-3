@@ -25,7 +25,7 @@ import type {
 import {
   cellRenderers, dataHooks, metricComputers, toneComputers, sparkComputers, subComputers,
   formComponents, detailComponents, railBlocks, toolbarExtras,
-  masterSources, enumDictionaries, actionHandlers,
+  masterSources, enumDictionaries, actionHandlers, formSubmitters,
   applyFormatter, getFieldValue, generateMonths,
 } from './registry';
 
@@ -532,7 +532,15 @@ export function FormsMounted({
             open={actions.formOpenId === f.id}
             onOpenChange={(o: boolean) => { if (!o) actions.closeForm(f.id); }}
             onSubmit={async (formData: Record<string, unknown>) => {
-              if (editData && f.editEndpoint && f.editIdField) {
+              // Phase 4: submitterId 가 있으면 registry.formSubmitters 호출 (multi-step 저장)
+              if (f.submitterId) {
+                const submitter = formSubmitters[f.submitterId];
+                if (!submitter) {
+                  console.error(`[ListScreen] formSubmitter not registered: ${f.submitterId}`);
+                  return;
+                }
+                await submitter(formData, editData ?? null);
+              } else if (editData && f.editEndpoint && f.editIdField) {
                 const id = (editData as Record<string, unknown>)[f.editIdField];
                 const url = f.editEndpoint.replace(':id', String(id));
                 await fetchWithAuth(url, { method: 'PUT', body: JSON.stringify(formData) });
