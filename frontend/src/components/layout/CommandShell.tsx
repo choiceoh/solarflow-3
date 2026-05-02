@@ -80,7 +80,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'bl', label: 'B/L 입고', abbr: 'BL', path: '/procurement?tab=bl', icon: Ship, menu: 'inbound', tenants: ['topsolar'] },
       { key: 'customs', label: '면장/원가', abbr: '면장', path: '/customs', icon: Calculator, menu: 'inbound', tenants: ['topsolar'] },
       // BARO Phase 2: 탑솔라 측 — 바로(주)가 보낸 매입 요청 처리 inbox
-      { key: 'baro-inbox', label: '바로 매입요청', abbr: '바로', path: '/group-trade/baro-inbox', icon: Inbox, menu: 'baro_inbox', tenants: ['topsolar'] },
+      { key: 'baro-inbox', label: '그룹 요청', abbr: '그룹', path: '/group-trade/baro-inbox', icon: Inbox, menu: 'baro_inbox', tenants: ['topsolar'] },
       // BARO Phase 2: 바로(주) 측 — 탑솔라로부터 매입할 모듈을 등록
       { key: 'baro-purchase', label: '그룹내 매입', abbr: '매입', path: '/baro/group-purchase', icon: PackagePlus, menu: 'baro_group_purchase', tenants: ['baro'] },
     ],

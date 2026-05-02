@@ -161,7 +161,7 @@ export default function BaroRequestInboxPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Inbox className="h-4 w-4 text-primary" />
-          <h1 className="text-base font-semibold">바로 매입 요청</h1>
+          <h1 className="text-base font-semibold">그룹 요청</h1>
           <span className="text-xs text-muted-foreground">
             바로(주)가 보낸 매입 요청을 group_trade 출고와 연결하거나 거부합니다.
           </span>
