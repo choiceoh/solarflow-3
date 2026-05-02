@@ -1,7 +1,7 @@
 // 배열 편집 chrome — 컬럼·메트릭·필터·액션·rail이 공통으로 쓰는 패턴
 // (헤더 안내문 + 추가 버튼, 행별 ↑↓/삭제 버튼)
 
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';

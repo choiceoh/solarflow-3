@@ -2,7 +2,7 @@
 // Detail은 입력 없이 데이터 표시라 Form보다 메타 친화적.
 // 데이터 섹션(필드 그리드)을 메타로 그리고, 워크플로우·편집·외부 패널은 contentBlock 슬롯에 위임한다.
 
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useResolvedConfig } from './configOverride';
 import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
