@@ -202,21 +202,22 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
   // mock 모드에선 인증 우회 public 라우트 (Caddy 가 같은 SSE 인코딩으로 응답).
   const apiPath = isDevMockApiActive() ? '/api/v1/public/assistant/chat' : '/api/v1/assistant/chat';
 
-  // 5.1 PR-B: 현재 페이지 컨텍스트 자동 주입 — backend 가 system prompt 에 합성
+  // 5.1 PR-B: 현재 페이지 컨텍스트 자동 주입 — backend 가 system prompt 에 합성.
+  // 단 /assistant 풀 페이지에선 의미 없는 noise 라 스킵 (drawer 안에서만 가치).
   const location = useLocation();
-  const pageContextRef = useRef(detectPageContext(location.pathname));
-  pageContextRef.current = detectPageContext(location.pathname);
+  const pageContextRef = useRef<ReturnType<typeof detectPageContext> | undefined>(undefined);
+  pageContextRef.current = location.pathname === '/assistant' ? undefined : detectPageContext(location.pathname);
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: apiPath,
         fetch: streamFetchWithAuth,
-        // 백엔드는 평면 메시지 + provider/model + page_context 만 받음. parts/도구 history 는 떨굼.
+        // 백엔드는 평면 메시지 + provider/model + page_context (선택) 만 받음. parts/도구 history 는 떨굼.
         prepareSendMessagesRequest: ({ messages, body }) => ({
           body: {
             messages: toBackendMessages(messages),
-            page_context: pageContextRef.current,
+            ...(pageContextRef.current ? { page_context: pageContextRef.current } : {}),
             ...(body ?? {}),
           },
         }),

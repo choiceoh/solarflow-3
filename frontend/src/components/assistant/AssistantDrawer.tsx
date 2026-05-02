@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import type { UIMessage } from 'ai';
 import { ChatBox } from '@/pages/AssistantPage';
 import { fetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
+import { detectPageLabel } from '@/lib/pageContext';
 
 interface AssistantDrawerProps {
   open: boolean;
@@ -35,6 +37,8 @@ const DRAWER_WIDTH = 460;
  */
 export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
   const sessionsEnabled = !isDevMockApiActive();
+  const location = useLocation();
+  const pageLabel = detectPageLabel(location.pathname);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [chatKey, setChatKey] = useState(0);
@@ -110,41 +114,49 @@ export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
         className="fixed top-0 right-0 z-[111] flex h-screen flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
         style={{ width: DRAWER_WIDTH }}
       >
-        <header className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
-              AI
-            </span>
-            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">어시스턴트</h2>
-            {loading ? (
-              <span className="text-xs text-slate-400">불러오는 중…</span>
-            ) : (
-              <span className="truncate text-xs text-slate-400">
-                {currentSessionId ? '이전 대화 이어서' : '새 대화'}
+        <header className="flex shrink-0 flex-col gap-1 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                AI
               </span>
-            )}
+              <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">어시스턴트</h2>
+              {loading ? (
+                <span className="text-xs text-slate-400">불러오는 중…</span>
+              ) : (
+                <span className="truncate text-xs text-slate-400">
+                  {currentSessionId ? '이전 대화 이어서' : '새 대화'}
+                </span>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={startNew}
+                disabled={loading}
+                className="flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                title="새 대화 시작"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                새 대화
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                aria-label="닫기"
+                title="닫기 (Esc)"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={startNew}
-              disabled={loading}
-              className="flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              title="새 대화 시작"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              새 대화
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              aria-label="닫기"
-              title="닫기 (Esc)"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          {pageLabel && (
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">
+              현재 화면: <span className="font-medium text-slate-700 dark:text-slate-200">{pageLabel}</span>
+              <span className="ml-2 text-slate-400">— "이 화면" 변경 요청 시 자동 인식</span>
+            </div>
+          )}
         </header>
         <div className="flex min-h-0 flex-1 flex-col">
           <ChatBox
