@@ -2,12 +2,15 @@ import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { formatDate } from '@/lib/utils';
 import type { Declaration } from '@/types/customs';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
+import type { ColumnPinningState } from '@/lib/columnPinning';
 
 export const DECLARATION_TABLE_ID = 'declaration-list';
 
 interface Props {
   items: Declaration[];
   hidden: Set<string>;
+  pinning?: ColumnPinningState;
+  onPinningChange?: (next: ColumnPinningState) => void;
   onSelect: (d: Declaration) => void;
   onNew: () => void;
 }
@@ -27,12 +30,14 @@ const columns: ColumnDef<Declaration>[] = [
 export const DECLARATION_COLUMN_META: ColumnVisibilityMeta[] =
   columns.map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-export default function DeclarationListTable({ items, hidden, onSelect }: Props) {
+export default function DeclarationListTable({ items, hidden, pinning, onPinningChange, onSelect }: Props) {
   return (
     <MetaTable
       tableId={DECLARATION_TABLE_ID}
       columns={columns}
       hidden={hidden}
+      pinning={pinning}
+      onPinningChange={onPinningChange}
       items={items}
       getRowKey={(d) => d.declaration_id}
       onRowClick={onSelect}

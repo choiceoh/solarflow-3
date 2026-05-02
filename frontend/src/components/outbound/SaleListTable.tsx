@@ -3,12 +3,15 @@ import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { formatDate, formatNumber, cn } from '@/lib/utils';
 import type { SaleListItem } from '@/types/outbound';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
+import type { ColumnPinningState } from '@/lib/columnPinning';
 
 export const SALE_TABLE_ID = 'sale-list';
 
 interface Props {
   items: SaleListItem[];
   hidden: Set<string>;
+  pinning?: ColumnPinningState;
+  onPinningChange?: (next: ColumnPinningState) => void;
   onInvoice?: (item: SaleListItem) => void;
 }
 
@@ -80,12 +83,14 @@ function buildColumns({ onInvoice }: { onInvoice?: (item: SaleListItem) => void 
 export const SALE_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({}).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function SaleListTable({ items, hidden, onInvoice }: Props) {
+function SaleListTable({ items, hidden, pinning, onPinningChange, onInvoice }: Props) {
   return (
     <MetaTable
       tableId={SALE_TABLE_ID}
       columns={buildColumns({ onInvoice })}
       hidden={hidden}
+      pinning={pinning}
+      onPinningChange={onPinningChange}
       items={items}
       getRowKey={(item) => item.sale_id}
       emptyMessage="매출 데이터가 없습니다"

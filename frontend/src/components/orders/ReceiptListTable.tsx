@@ -5,12 +5,15 @@ import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { formatDate, formatNumber } from '@/lib/utils';
 import type { Receipt } from '@/types/orders';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
+import type { ColumnPinningState } from '@/lib/columnPinning';
 
 export const RECEIPT_TABLE_ID = 'receipt-list';
 
 interface Props {
   items: Receipt[];
   hidden: Set<string>;
+  pinning?: ColumnPinningState;
+  onPinningChange?: (next: ColumnPinningState) => void;
   onNew: () => void;
   onEdit?: (r: Receipt) => void;
   onDelete?: (r: Receipt) => void;
@@ -74,12 +77,14 @@ function buildColumns({ onEdit, onDelete }: { onEdit?: (r: Receipt) => void; onD
 export const RECEIPT_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({}).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function ReceiptListTable({ items, hidden, onNew, onEdit, onDelete }: Props) {
+function ReceiptListTable({ items, hidden, pinning, onPinningChange, onNew, onEdit, onDelete }: Props) {
   return (
     <MetaTable
       tableId={RECEIPT_TABLE_ID}
       columns={buildColumns({ onEdit, onDelete })}
       hidden={hidden}
+      pinning={pinning}
+      onPinningChange={onPinningChange}
       items={items}
       getRowKey={(r) => r.receipt_id}
       emptyMessage="등록된 수금이 없습니다"

@@ -4,12 +4,15 @@ import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { formatCapacity, formatNumber } from '@/lib/utils';
 import type { BLLineItem } from '@/types/inbound';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
+import type { ColumnPinningState } from '@/lib/columnPinning';
 
 export const BL_LINE_TABLE_ID = 'bl-line';
 
 interface Props {
   items: BLLineItem[];
   hidden: Set<string>;
+  pinning?: ColumnPinningState;
+  onPinningChange?: (next: ColumnPinningState) => void;
   currency: 'USD' | 'KRW';
   manufacturerName?: string;
   onEdit: (line: BLLineItem) => void;
@@ -78,12 +81,14 @@ function buildColumns({ currency, manufacturerName, onEdit }: BuildOpts): Column
 export const BL_LINE_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({ currency: 'USD', onEdit: () => {} }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-export default function BLLineTable({ items, hidden, currency, manufacturerName, onEdit }: Props) {
+export default function BLLineTable({ items, hidden, pinning, onPinningChange, currency, manufacturerName, onEdit }: Props) {
   return (
     <MetaTable
       tableId={BL_LINE_TABLE_ID}
       columns={buildColumns({ currency, manufacturerName, onEdit })}
       hidden={hidden}
+      pinning={pinning}
+      onPinningChange={onPinningChange}
       items={items}
       getRowKey={(l) => l.bl_line_id}
       emptyMessage="입고품목이 없습니다"
