@@ -33,6 +33,13 @@ export interface ColumnConfig extends ColumnVisibilityMeta {
   className?: string;
   // Phase 4 보강: 정렬 가능 헤더 (클릭 → asc → desc → 해제)
   sortable?: boolean;
+  // 메타 인프라 확장: 인라인 편집 가능 (ListScreen.inlineEdit.enabled 와 함께 사용)
+  // 셀 클릭 → input → blur/Enter 시 endpoint PATCH 자동 저장.
+  inlineEditable?: boolean;
+  // 메타 인프라 확장: 인라인 편집 시 input 타입 (text|number|select|date)
+  inlineEditType?: 'text' | 'number' | 'select' | 'date';
+  // select 타입 시 옵션 (static)
+  inlineEditOptions?: { value: string; label: string }[];
 }
 
 // ── Filters
@@ -131,7 +138,11 @@ export type FieldType =
   | 'computed'      // Phase 4 보강: 계산 필드 (다른 필드 값에서 자동 계산, readonly 표시 + payload 포함)
   | 'datetime'      // Phase 4 보강 Tier 3: ISO 8601 datetime-local (값은 'YYYY-MM-DDTHH:MM')
   | 'time'          // Phase 4 보강 Tier 3: 시간 (값은 'HH:MM')
-  | 'child_array';  // Phase 4 — Step 3 prep: 자식 행 배열 (BL lines, PO lines 등). childFields 로 구조 정의.
+  | 'child_array'   // Phase 4 — Step 3 prep: 자식 행 배열 (BL lines, PO lines 등). childFields 로 구조 정의.
+  | 'date_range'    // Phase 4 메타 인프라 확장: 시작/종료 날짜 페어 — { start: string; end: string } 객체 값
+  | 'currency_amount' // 통화+금액 페어 — { currency: 'USD'|'KRW'|...; amount: number } 객체 값
+  | 'address'       // 주소 — { postcode: string; road: string; detail: string } (Daum/Kakao postcode 옵션)
+  | 'rich_text';    // 마크다운/서식 메모 — string (간단 textarea + 미리보기)
 
 export interface FieldConfig {
   key: string;                      // form 필드명 (zod 키 = react-hook-form 키)
@@ -225,6 +236,16 @@ export interface FieldConfig {
   // Phase 4 — Step 3 prep: 이 필드 값 변경 시 다른 필드 자동 채우기
   // registry.fieldCascades[cascadeId] 호출 — sourceValue/values/setValue/context 받음.
   cascadeId?: string;
+
+  // 메타 인프라 확장: type='currency_amount' 의 통화 옵션 (기본 USD/KRW)
+  currencyOptions?: { value: string; label: string }[];
+
+  // 메타 인프라 확장 (보안):
+  // 이 역할들에는 값을 마스킹 (***) 표시. e.g. ['viewer', 'manager'] → 단가/원가 숨김.
+  maskByRoles?: string[];
+  // 동적 권한 — 컨텍스트 기반 권한 체크. 호출 시 false 반환하면 readOnly + 마스킹.
+  // registry.permissionGuards[id] (Phase 5 follow-up)
+  permissionGuardId?: string;
 }
 
 export interface FormSection {
@@ -237,6 +258,10 @@ export interface FormSection {
   // 제공 시 fields 대신 렌더 (registry.formContentBlocks[blockId] 호출)
   // 메타로 표현 안 되는 OCR 위젯, 결제조건 파서 등 도메인 특수 로직 임베드용.
   contentBlock?: ContentBlockConfig;
+  // 메타 인프라 확장: 역할별 섹션 노출 (admin 전용 섹션 등). 빈 배열/미지정 = 모두 가능.
+  visibleByRoles?: string[];
+  // 메타 인프라 확장: 섹션 접기/펼치기. true 면 기본 펼침, 'collapsed' 면 기본 접힘.
+  collapsible?: boolean | 'collapsed';
 }
 
 // Phase 4 보강: 다이얼로그 크기 (max-w-md/lg/xl/2xl) — 큰 폼은 lg 이상
@@ -305,6 +330,20 @@ export interface FormRefineRule {
   path?: string[];                  // 에러를 표시할 필드 경로 (미지정 시 form-level)
 }
 
+// 메타 인프라 확장: 비동기 cross-field 검증 (예: BL 번호 DB 중복 체크)
+// MetaForm 의 submit 직전에 실행. 실패 시 onSubmit 호출 안 됨 + 에러 표시.
+// fn 은 true(통과) 또는 string(에러 메시지) 반환. 비동기 OK.
+export type AsyncFormRefinement = (
+  values: Record<string, unknown>,
+  context?: Record<string, unknown>,
+) => Promise<boolean | string>;
+
+export interface AsyncRefineRule {
+  ruleId: string;                   // registry.asyncRefinements 키
+  message: string;                  // fn 이 false 반환 시 표시 (string 반환 시 그게 우선)
+  path?: string[];                  // 에러를 표시할 필드 경로
+}
+
 export interface MetaFormConfig {
   id: string;                       // 'partner_form_v2' — registry/screen에서 참조
   title: { create: string; edit: string };
@@ -314,6 +353,8 @@ export interface MetaFormConfig {
   extraPayload?: ExtraPayloadConfig;
   // Phase 4 보강 Tier 3: 폼 단위 cross-field 검증 (예: previous_limit !== new_limit)
   refine?: FormRefineRule[];
+  // 메타 인프라 확장: 비동기 cross-field 검증 (DB 중복 체크 등). submit 직전 실행.
+  asyncRefine?: AsyncRefineRule[];
   // Phase 4 보강 Tier 3: 초안 localStorage 자동 저장 (debounced 500ms)
   // 신규 등록 모드에만 적용 — 편집 모드는 editData 가 진실 소스.
   draftAutoSave?: boolean;
@@ -339,6 +380,10 @@ export interface DetailFieldConfig {
   visibleIf?: { field: string; value: string | string[] };
   // 단순 단위 접미사 (formatter로 표현 안 되는 "원/Wp" 등)
   suffix?: string;
+  // 메타 인프라 확장: 인라인 편집 (이 필드 클릭 시 input → 즉시 저장)
+  inlineEditable?: boolean;
+  inlineEditType?: 'text' | 'number' | 'select' | 'date';
+  inlineEditOptions?: { value: string; label: string }[];
 }
 
 export interface DetailSectionConfig {
@@ -351,6 +396,15 @@ export interface DetailSectionConfig {
   visibleIf?: { field: string; value: string | string[] };
 }
 
+// 메타 인프라 확장: Detail 탭 구조 (BLDetailView 같은 multi-tab 상세 화면)
+export interface DetailTabConfig {
+  key: string;                      // 탭 식별자
+  label: string;                    // 탭 라벨
+  sections?: DetailSectionConfig[]; // 데이터 섹션 (탭 안에서)
+  contentBlock?: ContentBlockConfig; // 또는 통째로 커스텀 컴포넌트 (BLLineTable 같은)
+  visibleIf?: { field: string; value: string | string[] };
+}
+
 export interface MetaDetailConfig {
   id: string;
   source: { hookId: DataHookId };   // useOutboundDetail 등 — id 받아 단건 fetch
@@ -360,6 +414,15 @@ export interface MetaDetailConfig {
   };
   sections: DetailSectionConfig[];
   extraBlocks?: ContentBlockConfig[];
+  // 메타 인프라 확장: 탭 모드 (sections 대신 또는 함께). 제공 시 탭 네비 + 각 탭 내 sections/contentBlock.
+  tabs?: DetailTabConfig[];
+  defaultTab?: string;              // 기본 활성 탭 key
+  // 메타 인프라 확장: 인라인 편집 (DetailField.inlineEditable=true 인 필드 즉시 저장)
+  inlineEdit?: {
+    enabled: boolean;
+    endpoint?: string;              // PATCH endpoint (e.g. '/api/v1/bls/:id')
+    idField?: string;               // 행 데이터에서 :id 로 쓸 필드
+  };
 }
 
 // ── 클라이언트 검색 (서버 필터와 별도)
@@ -389,6 +452,27 @@ export interface ListScreenConfig {
   forms?: FormConfig[];
   tableTitleFromFilter?: string;
   tableSubFromTotal?: boolean;      // "X / Y개 표시" 식 부제 (검색 시)
+  // 메타 인프라 확장: pagination 설정. 미지정 시 client-side, 모든 행 표시.
+  // serverMode 시 dataHook 이 _page/_limit 필터 받아 paged data 반환 (반드시 total 도 반환).
+  pagination?: {
+    defaultPageSize?: number;       // 기본 50
+    allowedSizes?: number[];        // 사용자 선택 가능 사이즈 (e.g. [25, 50, 100])
+    serverMode?: boolean;           // true 면 dataHook 이 서버 측 pagination 처리
+  };
+  // 메타 인프라 확장: 인라인 편집 가능 컬럼 (form 안 열고 셀 클릭으로 수정)
+  // 활성 시 col.inlineEditable=true 인 컬럼만 편집 가능.
+  // 저장 endpoint: /api/v1/<entity>/:id PATCH { [col.key]: newValue }
+  inlineEdit?: {
+    enabled: boolean;
+    endpoint?: string;              // PATCH endpoint (e.g. '/api/v1/bls/:id')
+    idField?: string;               // 행 데이터에서 :id 로 쓸 필드
+  };
+  // 메타 인프라 확장: 저장된 뷰 (admin 이 filter+sort+columns 명명 저장)
+  // localStorage 'sf.list.<id>.savedViews' 에 저장. 로드 시 활성 뷰 적용.
+  savedViews?: {
+    enabled: boolean;
+    storage?: 'localStorage' | 'db'; // 기본 localStorage
+  };
 }
 
 // ── 탭 묶음 화면 — 메트릭/Rail은 공통이지만 어느 탭 데이터를 쓸지는 명시
@@ -429,7 +513,9 @@ export type MetricComputer = (
   items: unknown[],
   filters: Record<string, string>,
 ) => string | number;
-export type DataHookResult = { data: unknown[]; loading: boolean; reload: () => void };
+// 메타 인프라 확장: total — server pagination 시 전체 행 수 (data 는 현재 page 만 포함).
+// client-mode 에선 omit. ListScreen 이 fallback 으로 data.length 사용.
+export type DataHookResult = { data: unknown[]; loading: boolean; reload: () => void; total?: number };
 export type DataHook = (filters: Record<string, string>) => DataHookResult;
 
 export interface ActionContext {

@@ -49,6 +49,7 @@ import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
   Tone, MasterOptionSource, ContentBlock, ComputedFormula, FormRefinement, FormSubmitter, FormContentBlock, FieldCascade,
+  AsyncFormRefinement,
 } from './types';
 import { RailBlock as RailBlockUI } from '@/components/command/MockupPrimitives';
 
@@ -1151,6 +1152,18 @@ export const formRefinements: Record<string, FormRefinement> = {
     return m % 12 === 0;
   },
 };
+
+// 메타 인프라 확장: 비동기 cross-field 검증 (DB 중복 등) — MetaForm submit 직전 실행.
+// 통과 시 true, 실패 시 string(에러 메시지) 또는 false 반환.
+export const asyncRefinements: Record<string, AsyncFormRefinement> = {};
+
+// 메타 인프라 확장: 동적 권한 가드 (FieldConfig.permissionGuardId 참조).
+// 컨텍스트 (현재 row, 사용자 등) 기반 readOnly/visible 판단.
+// false 반환 시 readOnly + 마스킹 표시. (Phase 5 향후 — 현재 type 정의 + 빈 registry)
+export type PermissionGuard = (
+  context: { values: Record<string, unknown>; role: string | null; userId?: string },
+) => boolean;
+export const permissionGuards: Record<string, PermissionGuard> = {};
 
 // ─── Formatters ────────────────────────────────────────────────────────────
 export function applyFormatter(formatter: string | undefined, value: unknown): string {
