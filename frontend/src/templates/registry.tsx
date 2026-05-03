@@ -1221,7 +1221,22 @@ export type PermissionGuardEntry = {
   label: string;
   description?: string;
 };
-export const permissionGuards: Record<string, PermissionGuardEntry> = {};
+export const permissionGuards: Record<string, PermissionGuardEntry> = {
+  // Phase 4 (bank-meta): 시스템관리자만 편집 — admin role 외에는 readOnly + 마스킹.
+  // 은행 LC 한도, 통제 한도 등 임의 변경 위험이 큰 필드에 부착.
+  adminOnly: {
+    label: '시스템관리자만',
+    description: 'admin role 사용자만 편집 가능. 다른 역할은 readOnly + 마스킹 표시.',
+    fn: (ctx) => ctx.role === 'admin',
+  },
+  // Phase 4: 운영팀 + 시스템관리자 편집 가능 — viewer/manager/executive 는 readOnly.
+  // 일상 운영값 (수수료 갱신 등) 에 부착.
+  operatorOrAdmin: {
+    label: '운영팀 + 관리자만',
+    description: 'admin / operator role 만 편집 가능. 그 외 역할은 readOnly + 마스킹.',
+    fn: (ctx) => ctx.role === 'admin' || ctx.role === 'operator',
+  },
+};
 
 // ─── 레거시 registry 메타데이터 (점진 적용) ────────────────────────────────
 // 기존 registry (cellRenderers / formContentBlocks 등) 는 함수 record 형태로
