@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { Toaster } from '@/components/ui/sonner';
 import { useAuthStore } from '@/stores/authStore';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import RoleGuard from '@/components/auth/RoleGuard';
@@ -82,6 +83,7 @@ export default function App() {
   return (
     <MobileBlock>
     <TooltipProvider>
+      <Toaster />
       <BrowserRouter>
         <Suspense fallback={<Fallback />}>
           <Routes>
