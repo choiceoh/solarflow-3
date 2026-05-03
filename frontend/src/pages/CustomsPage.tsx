@@ -17,7 +17,7 @@ import ExchangeComparePanel from '@/components/customs/ExchangeComparePanel';
 import { EXPENSE_TYPE_LABEL, type ExpenseType, type Expense } from '@/types/customs';
 import type { BLShipment } from '@/types/inbound';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
-import { CardB, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
+import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
 import { flatSpark, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
 
@@ -196,11 +196,15 @@ export default function CustomsPage() {
       <FilterChips options={customsTabOptions} value={activeTab} onChange={setActiveTab} />
     </div>
   );
+  const pageTitle = activeTab === 'exchange' ? '환율 비교' : '부대비용';
+  const pageSub = activeTab === 'exchange' ? '계약 환율과 최신 환율 영향 비교' : `${expenses.length}건 · ${fmtEok(expenseTotal)}억`;
 
   return (
     <>
       <div className="sf-command-surface sf-customs-shell">
         <section className="sf-customs-main">
+          <CommandTopLine title={pageTitle} sub={pageSub} right={customsCardControls} />
+
           <div className="sf-command-kpis sf-customs-kpis">
             <TileB lbl="부대비용" v={fmtEok(expenseTotal)} u="억" sub={`${expenses.length}건 · VAT ${fmtEok(expenseVat)}억`} tone="solar" spark={totalSpark} />
             <TileB lbl="B/L 연결" v={String(linkedExpenseCount)} u="건" sub={`전체 ${bls.length}개 B/L`} tone="info" spark={linkedSpark} />
@@ -210,9 +214,10 @@ export default function CustomsPage() {
 
           <div data-onboarding-step="customs.declaration.attach">
           <CardB
-            title={activeTab === 'exchange' ? '환율 비교' : '부대비용'}
-            sub={activeTab === 'exchange' ? '계약 환율과 최신 환율 영향 비교' : `${expenses.length}건 · ${fmtEok(expenseTotal)}억`}
+            title={pageTitle}
+            sub={pageSub}
             right={customsCardControls}
+            headerless
           >
             <div className="sf-command-tab-body">
               <Tabs value={activeTab} onValueChange={setActiveTab}>

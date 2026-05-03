@@ -36,7 +36,7 @@ import { OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL, type Outbound, type Outbou
 import type { Partner, Manufacturer } from '@/types/masters';
 import type { InventoryResponse } from '@/types/inventory';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
-import { CardB, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
+import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
 import { flatSparkFromValue, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
 
@@ -1004,6 +1004,8 @@ export default function OrdersPage() {
     <div className="sf-page sf-sales-page">
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
+          <CommandTopLine title={pageTitle} sub={pageSub} right={ordersCardControls} />
+
           <div className="sf-command-kpis">
             {metrics.map((metric) => (
               <TileB
@@ -1023,6 +1025,7 @@ export default function OrdersPage() {
             title={pageTitle}
             sub={pageSub}
             right={ordersCardControls}
+            headerless
           >
             <div className="sf-command-tab-body">
               <Tabs value={activeTab} onValueChange={handleTabChange}>

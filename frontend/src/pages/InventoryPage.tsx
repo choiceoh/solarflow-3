@@ -28,7 +28,7 @@ import AvailInventoryTable from '@/components/inventory/AvailInventoryTable';
 import IncomingTable from '@/components/inventory/IncomingTable';
 import ForecastTable from '@/components/inventory/ForecastTable';
 import ModuleDemandForecastPanel from '@/components/inventory/ModuleDemandForecastPanel';
-import { CardB, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
+import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
 import { flatSpark } from '@/templates/sparkUtils';
 import type { InventorySummary, ProductForecast } from '@/types/inventory';
 
@@ -565,43 +565,55 @@ export default function InventoryPage() {
       />
     </div>
   );
+  const inventoryTitle =
+    activeTab === 'physical' ? '품목별 실재고' :
+    activeTab === 'incoming' ? '품목별 미착품 / 배정 현황' :
+    activeTab === 'forecast' ? '수급 전망' :
+    '재고 현황';
+  const inventorySub =
+    activeTab === 'physical' ? '창고 보유 물리 재고' :
+    activeTab === 'incoming' ? 'L/C · B/L 예정분' :
+    activeTab === 'forecast' ? `표시 ${forecastProducts.length.toLocaleString('ko-KR')}건 · 현재 관련 ${activeForecastProductCount.toLocaleString('ko-KR')}건` :
+    '제조사 × 품번 · 단위 MW';
 
   return (
     <div className="sf-inventory-shell">
       <div className="sf-inventory-main">
-      <div className="sf-command-kpis sf-inventory-kpis">
-        <button type="button" onClick={() => handleCardClick('avail')} className="text-left">
+        <CommandTopLine title={inventoryTitle} sub={inventorySub} right={inventoryCardControls} />
+
+        <div className="sf-command-kpis sf-inventory-kpis">
+          <button type="button" onClick={() => handleCardClick('avail')} className="text-left">
+            <TileB
+              lbl="가용"
+              v={totalSecured.value}
+              u={totalSecured.unit}
+              sub={`${inventoryStats?.productCount.toLocaleString('ko-KR') ?? '0'}개 품목`}
+              tone="solar"
+              spark={flatSpark(inventoryStats?.totalSecuredKw ?? 0)}
+            />
+          </button>
+          <button type="button" onClick={() => handleCardClick('physical')} className="text-left">
+            <TileB lbl="실재고" v={stockAvailable.value} u={stockAvailable.unit} sub="창고 보유 현재고" tone="ink" spark={flatSpark(inventoryStats?.stockAvailableKw ?? 0)} />
+          </button>
+          <button type="button" onClick={() => handleCardClick('incoming')} className="text-left">
+            <TileB
+              lbl="미착품"
+              v={incomingAvailable.value}
+              u={incomingAvailable.unit}
+              sub={`운송 중 ${incomingRailItems.length.toLocaleString('ko-KR')}건`}
+              tone="info"
+              spark={flatSpark(inventoryStats?.incomingAvailableKw ?? 0)}
+            />
+          </button>
           <TileB
-            lbl="가용"
-            v={totalSecured.value}
-            u={totalSecured.unit}
-            sub={`${inventoryStats?.productCount.toLocaleString('ko-KR') ?? '0'}개 품목`}
-            tone="solar"
-            spark={flatSpark(inventoryStats?.totalSecuredKw ?? 0)}
+            lbl="예약 차감"
+            v={pendingKw.value}
+            u={pendingKw.unit}
+            sub={`${allocationStats.pendingCount.toLocaleString('ko-KR')}건 · ${allocationStats.holdCount.toLocaleString('ko-KR')}건 보류`}
+            tone="warn"
+            spark={flatSpark(allocationStats.pendingKw)}
           />
-        </button>
-        <button type="button" onClick={() => handleCardClick('physical')} className="text-left">
-          <TileB lbl="실재고" v={stockAvailable.value} u={stockAvailable.unit} sub="창고 보유 현재고" tone="ink" spark={flatSpark(inventoryStats?.stockAvailableKw ?? 0)} />
-        </button>
-        <button type="button" onClick={() => handleCardClick('incoming')} className="text-left">
-          <TileB
-            lbl="미착품"
-            v={incomingAvailable.value}
-            u={incomingAvailable.unit}
-            sub={`운송 중 ${incomingRailItems.length.toLocaleString('ko-KR')}건`}
-            tone="info"
-            spark={flatSpark(inventoryStats?.incomingAvailableKw ?? 0)}
-          />
-        </button>
-        <TileB
-          lbl="예약 차감"
-          v={pendingKw.value}
-          u={pendingKw.unit}
-          sub={`${allocationStats.pendingCount.toLocaleString('ko-KR')}건 · ${allocationStats.holdCount.toLocaleString('ko-KR')}건 보류`}
-          tone="warn"
-          spark={flatSpark(allocationStats.pendingKw)}
-        />
-      </div>
+        </div>
 
       {allocError && (
         <Alert variant="destructive">
@@ -619,7 +631,7 @@ export default function InventoryPage() {
               <AlertDescription>{invError}</AlertDescription>
             </Alert>
           )}
-          <CardB title="품목별 실재고" sub="창고 보유 물리 재고" right={inventoryCardControls}>
+          <CardB title="품목별 실재고" sub="창고 보유 물리 재고" right={inventoryCardControls} headerless>
             {invLoading ? <SkeletonRows rows={8} /> :invData && (
               <>
                 <InventoryTable items={invData.items} />
@@ -638,7 +650,7 @@ export default function InventoryPage() {
             </Alert>
           )}
           {/* 품목별 가용재고 + 배정 현황 통합 테이블 */}
-          <CardB title="재고 현황" sub="제조사 × 품번 · 단위 MW" right={inventoryCardControls}>
+          <CardB title="재고 현황" sub="제조사 × 품번 · 단위 MW" right={inventoryCardControls} headerless>
             {invLoading ? <SkeletonRows rows={8} /> :invData ? (
               <AvailInventoryTable
                 items={invData.items}
@@ -667,7 +679,7 @@ export default function InventoryPage() {
             </Alert>
           )}
           {/* 품목별 미착품 + 배정 현황 */}
-          <CardB title="품목별 미착품 / 배정 현황" sub="L/C · B/L 예정분" right={inventoryCardControls}>
+          <CardB title="품목별 미착품 / 배정 현황" sub="L/C · B/L 예정분" right={inventoryCardControls} headerless>
             {invLoading ? <SkeletonRows rows={8} /> :invData ? (
               <IncomingTable
                 items={invData.items}
