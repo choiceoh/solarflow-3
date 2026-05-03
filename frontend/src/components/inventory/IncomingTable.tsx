@@ -374,16 +374,17 @@ function IncomingTable({
           })}
         </tbody>
         <tfoot>
-          <tr className="border-t bg-muted/50">
+          <tr className="border-t bg-muted/20">
             <td />
             <td className="p-2">
-              <div className="font-semibold">합계</div>
-              <div className="text-[10px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+              <span className="whitespace-nowrap font-medium">
+                합계 · {sorted.length.toLocaleString('ko-KR')}건
+              </span>
             </td>
-            <td className="p-2 text-right tabular-nums font-semibold text-yellow-600">{fmtKw(totals.incoming)}</td>
-            <td className="p-2 text-right tabular-nums font-semibold text-red-500">{fmtKw(totals.reserved)}</td>
-            <td className="p-2 text-right tabular-nums font-semibold text-green-600">{fmtKw(totals.available)}</td>
-            <td className="p-2 text-right tabular-nums font-semibold">{totals.allocCount.toLocaleString('ko-KR')}건</td>
+            <td className="p-2 text-right tabular-nums font-medium text-yellow-600">{fmtKw(totals.incoming)}</td>
+            <td className="p-2 text-right tabular-nums font-medium text-red-500">{fmtKw(totals.reserved)}</td>
+            <td className="p-2 text-right tabular-nums font-medium text-green-600">{fmtKw(totals.available)}</td>
+            <td className="p-2 text-right tabular-nums font-medium">{totals.allocCount.toLocaleString('ko-KR')}건</td>
             <td />
           </tr>
         </tfoot>

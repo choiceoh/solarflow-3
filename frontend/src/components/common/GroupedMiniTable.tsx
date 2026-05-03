@@ -69,13 +69,12 @@ export default function GroupedMiniTable<T>({
       ? columns.map((column, index) => ({
           key: column.key,
           content: index === 0 ? (
-            <span className="flex flex-col">
-              <span className="font-semibold">합계</span>
-              <span className="text-[10px] text-muted-foreground">{data.length.toLocaleString('ko-KR')}건</span>
+            <span className="whitespace-nowrap font-medium">
+              합계 · {data.length.toLocaleString('ko-KR')}건
             </span>
           ) : summaryCells.get(column.key) ?? null,
           align: column.align,
-          className: summaryCells.has(column.key) ? 'font-mono font-semibold tabular-nums' : undefined,
+          className: summaryCells.has(column.key) ? 'font-mono font-medium tabular-nums' : undefined,
         }))
       : undefined;
 

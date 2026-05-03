@@ -171,12 +171,13 @@ export default function BLListTable({ items, onSelect }: Props) {
             })}
           </tbody>
           <tfoot>
-            <tr className="border-t bg-muted/50">
+            <tr className="border-t bg-muted/20">
               <td className="p-3">
-                <div className="font-semibold">합계</div>
-                <div className="text-[11px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+                <span className="whitespace-nowrap font-medium">
+                  합계 · {sorted.length.toLocaleString('ko-KR')}건
+                </span>
               </td>
-              <td className="p-3 font-mono font-semibold tabular-nums">{totalMw > 0 ? `${totalMw.toFixed(2)} MW` : '—'}</td>
+              <td className="p-3 font-mono font-medium tabular-nums">{totalMw > 0 ? `${totalMw.toFixed(2)} MW` : '—'}</td>
               <td />
               <td />
             </tr>

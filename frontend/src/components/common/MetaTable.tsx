@@ -412,7 +412,7 @@ export function MetaTable<T>({
                     key={column.id}
                     className={cn(
                       alignClass(meta?.align),
-                      hasSummary && 'tabular-nums font-semibold',
+                      hasSummary && 'tabular-nums font-medium',
                       hasSummary && !meta?.align && 'text-right',
                       pinSide === 'left' && 'sf-col-pinned-left',
                       pinSide === 'right' && 'sf-col-pinned-right',
@@ -420,9 +420,8 @@ export function MetaTable<T>({
                     style={{ width: column.getSize(), ...pinnedStyle }}
                   >
                     {idx === 0 ? (
-                      <span className="flex flex-col">
-                        <span className="font-semibold">합계</span>
-                        <span className="text-[11px] text-muted-foreground">{filteredRowCount.toLocaleString('ko-KR')}건</span>
+                      <span className="whitespace-nowrap font-medium">
+                        합계 · {filteredRowCount.toLocaleString('ko-KR')}건
                       </span>
                     ) : content ?? null}
                   </TableCell>

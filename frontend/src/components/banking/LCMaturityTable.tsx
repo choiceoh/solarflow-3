@@ -91,11 +91,11 @@ export default function LCMaturityTable({ alertData }: Props) {
       <TableFooter>
         <TableRow>
           <TableCell />
-          <TableCell className="font-semibold">합계</TableCell>
+          <TableCell className="font-medium">합계</TableCell>
           <TableCell className="text-xs text-muted-foreground">{alerts.length.toLocaleString('ko-KR')}건</TableCell>
           <TableCell />
           <TableCell />
-          <TableCell className="text-right font-semibold">{formatUSD(totalAmount)}</TableCell>
+          <TableCell className="text-right font-medium">{formatUSD(totalAmount)}</TableCell>
           <TableCell colSpan={2} />
         </TableRow>
       </TableFooter>

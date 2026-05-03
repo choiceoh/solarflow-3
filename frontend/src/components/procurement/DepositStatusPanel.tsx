@@ -446,14 +446,15 @@ export default function DepositStatusPanel({ pos, tts }: DepositStatusPanelProps
             })}
           </tbody>
           <tfoot>
-            <tr className="border-t bg-muted/50">
+            <tr className="border-t bg-muted/20">
               <td />
               <td className="p-3">
-                <div className="font-semibold">합계</div>
-                <div className="text-[11px] text-muted-foreground">{leafPOs.length.toLocaleString('ko-KR')}건</div>
+                <span className="whitespace-nowrap font-medium">
+                  합계 · {leafPOs.length.toLocaleString('ko-KR')}건
+                </span>
               </td>
               <td />
-              <td className="p-3 text-right font-mono font-semibold tabular-nums">
+              <td className="p-3 text-right font-mono font-medium tabular-nums">
                 <div>{formatUSD(depositTotals.totalUsd)}</div>
                 <div className="text-[10px] text-muted-foreground">
                   기지급 {formatUSD(depositTotals.paidUsd)}
@@ -508,11 +509,11 @@ function TTSection({
           ))}
         </tbody>
         <tfoot>
-          <tr className="border-t bg-muted/50">
-            <td className="px-3 py-1.5 text-center font-semibold">합계</td>
+          <tr className="border-t bg-muted/20">
+            <td className="px-3 py-1.5 text-center font-medium">합계</td>
             <td className="px-3 py-1.5 text-xs text-muted-foreground">{tts.length.toLocaleString('ko-KR')}건</td>
-            <td className="px-3 py-1.5 text-right font-mono font-semibold">{formatUSD(totals.usd)}</td>
-            <td className="px-3 py-1.5 text-right font-semibold tabular-nums">
+            <td className="px-3 py-1.5 text-right font-mono font-medium">{formatUSD(totals.usd)}</td>
+            <td className="px-3 py-1.5 text-right font-medium tabular-nums">
               {totals.krw > 0 ? `₩${Math.round(totals.krw).toLocaleString('ko-KR')}` : '—'}
             </td>
             <td colSpan={3} />

@@ -56,13 +56,13 @@ export default function LimitChangeTable({ items }: Props) {
       </TableBody>
       <TableFooter>
         <TableRow>
-          <TableCell className="font-semibold">합계</TableCell>
+          <TableCell className="font-medium">합계</TableCell>
           <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}건</TableCell>
           <TableCell />
           <TableCell />
           <TableCell className="text-right text-sm tabular-nums">
             <span
-              className="inline-flex items-center gap-0.5 font-semibold"
+              className="inline-flex items-center gap-0.5 font-medium"
               style={{ color: isTotalIncrease ? 'var(--sf-pos)' : isTotalDecrease ? 'var(--sf-neg)' : 'var(--sf-ink)' }}
             >
               {isTotalIncrease ? <ArrowUp className="h-3.5 w-3.5" /> : isTotalDecrease ? <ArrowDown className="h-3.5 w-3.5" /> : null}

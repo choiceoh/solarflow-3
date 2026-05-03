@@ -158,12 +158,12 @@ export default function BLOutboundTrackingTab({ blId, companyId, lines }: Props)
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t bg-muted/50">
-                  <td className="px-3 py-2 font-semibold">합계</td>
-                  <td className="px-3 py-2 text-right font-semibold">{formatNumber(productTotals.inboundQty)} EA</td>
-                  <td className="px-3 py-2 text-right font-semibold">{formatNumber(productTotals.shippedQty)} EA</td>
-                  <td className="px-3 py-2 text-right font-semibold">{formatNumber(productTotals.remainingQty)} EA</td>
-                  <td className="px-3 py-2 text-right font-semibold">{formatKw(productTotals.inboundKw)}</td>
+                <tr className="border-t bg-muted/20">
+                  <td className="px-3 py-2 font-medium">합계</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatNumber(productTotals.inboundQty)} EA</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatNumber(productTotals.shippedQty)} EA</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatNumber(productTotals.remainingQty)} EA</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatKw(productTotals.inboundKw)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -214,13 +214,13 @@ export default function BLOutboundTrackingTab({ blId, companyId, lines }: Props)
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t bg-muted/50">
-                    <td className="px-3 py-2 font-semibold">합계</td>
+                  <tr className="border-t bg-muted/20">
+                    <td className="px-3 py-2 font-medium">합계</td>
                     <td />
                     <td />
                     <td className="px-3 py-2 text-xs text-muted-foreground">{outbounds.length.toLocaleString('ko-KR')}건</td>
-                    <td className="px-3 py-2 text-right font-semibold">{formatNumber(outboundTotals.qty)} EA</td>
-                    <td className="px-3 py-2 text-right font-semibold">{formatKw(outboundTotals.capacityKw)}</td>
+                    <td className="px-3 py-2 text-right font-medium">{formatNumber(outboundTotals.qty)} EA</td>
+                    <td className="px-3 py-2 text-right font-medium">{formatKw(outboundTotals.capacityKw)}</td>
                     <td />
                   </tr>
                 </tfoot>

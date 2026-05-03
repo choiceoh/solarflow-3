@@ -535,8 +535,8 @@ function POListTable({ items, onDetail, onSelectBL, aggVersion }: Props) {
                                 <tfoot>
                                   <tr className="border-t bg-muted/20">
                                     <td colSpan={2} className="px-3 py-1.5 text-[10px] text-muted-foreground">합계</td>
-                                    <td className="px-3 py-1.5 text-right font-mono font-semibold tabular-nums">{formatUSD(a.lcUsd)}</td>
-                                    <td className="px-3 py-1.5 text-[10px] font-mono font-semibold text-muted-foreground">
+                                    <td className="px-3 py-1.5 text-right font-mono font-medium tabular-nums">{formatUSD(a.lcUsd)}</td>
+                                    <td className="px-3 py-1.5 text-[10px] font-mono font-medium text-muted-foreground">
                                       {a.lcMw > 0 ? `${a.lcMw.toFixed(2)} MW` : '—'}
                                     </td>
                                     <td colSpan={2} />
@@ -568,16 +568,17 @@ function POListTable({ items, onDetail, onSelectBL, aggVersion }: Props) {
           })}
         </tbody>
         <tfoot>
-          <tr className="border-t bg-muted/50">
+          <tr className="border-t bg-muted/20">
             <td />
             <td className="p-3">
-              <div className="font-semibold">합계</div>
-              <div className="text-[11px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+              <span className="whitespace-nowrap font-medium">
+                합계 · {sorted.length.toLocaleString('ko-KR')}건
+              </span>
             </td>
-            <td className="p-3 font-mono font-semibold tabular-nums">{totals.totalMw > 0 ? `${totals.totalMw.toFixed(2)} MW` : '—'}</td>
+            <td className="p-3 font-mono font-medium tabular-nums">{totals.totalMw > 0 ? `${totals.totalMw.toFixed(2)} MW` : '—'}</td>
             <td />
-            <td className="p-3 text-right font-mono font-semibold tabular-nums">{formatUSD(totals.totalUsd)}</td>
-            <td className="p-3 text-right font-mono font-semibold tabular-nums">
+            <td className="p-3 text-right font-mono font-medium tabular-nums">{formatUSD(totals.totalUsd)}</td>
+            <td className="p-3 text-right font-mono font-medium tabular-nums">
               <div>{formatUSD(totals.lcUsd)}</div>
               <div className="text-[10px] text-muted-foreground">{totals.lcMw > 0 ? `${totals.lcMw.toFixed(2)} MW` : '—'}</div>
             </td>

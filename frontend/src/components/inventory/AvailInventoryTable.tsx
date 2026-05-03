@@ -474,17 +474,18 @@ function AvailInventoryTable({
           })}
         </tbody>
         <tfoot>
-          <tr className="border-t bg-muted/50">
+          <tr className="border-t bg-muted/20">
             <td />
             <td>
-              <div className="font-semibold">합계</div>
-              <div className="text-[11px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+              <span className="whitespace-nowrap font-medium">
+                합계 · {sorted.length.toLocaleString('ko-KR')}건
+              </span>
             </td>
-            <td className="text-right tabular-nums font-semibold" style={{ color: 'var(--sf-pos)' }}>{fmtKw(totals.totalSecured)}</td>
-            <td className="text-right tabular-nums font-semibold">{fmtKw(totals.sale)}</td>
-            <td className="text-right tabular-nums font-semibold">{fmtKw(totals.construction)}</td>
-            <td className="text-right tabular-nums font-semibold">{fmtKw(totals.physical)}</td>
-            <td className="text-right tabular-nums font-semibold">{fmtKw(totals.incoming)}</td>
+            <td className="text-right tabular-nums font-medium" style={{ color: 'var(--sf-pos)' }}>{fmtKw(totals.totalSecured)}</td>
+            <td className="text-right tabular-nums font-medium">{fmtKw(totals.sale)}</td>
+            <td className="text-right tabular-nums font-medium">{fmtKw(totals.construction)}</td>
+            <td className="text-right tabular-nums font-medium">{fmtKw(totals.physical)}</td>
+            <td className="text-right tabular-nums font-medium">{fmtKw(totals.incoming)}</td>
             <td />
           </tr>
         </tfoot>

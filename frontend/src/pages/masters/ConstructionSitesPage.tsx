@@ -276,12 +276,12 @@ function AllocationHistory({ siteId }: { siteId: string }) {
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t bg-muted/50">
-              <td className="py-1.5 pr-4 font-semibold">합계</td>
-              <td className="py-1.5 pr-4 text-right font-semibold tabular-nums">
+            <tr className="border-t bg-muted/20">
+              <td className="py-1.5 pr-4 font-medium">합계</td>
+              <td className="py-1.5 pr-4 text-right font-medium tabular-nums">
                 {totalQty.toLocaleString('ko-KR')} EA
               </td>
-              <td className="py-1.5 pr-4 text-right font-semibold tabular-nums">
+              <td className="py-1.5 pr-4 text-right font-medium tabular-nums">
                 {totalKw >= 1000 ? (totalKw / 1000).toFixed(2) + ' MW' : Math.round(totalKw) + ' kW'}
               </td>
               <td colSpan={3} className="py-1.5 text-xs text-muted-foreground">

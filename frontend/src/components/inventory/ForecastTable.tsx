@@ -121,15 +121,15 @@ function ProductForecastBlock({
               </TableBody>
               <TableFooter>
                 <TableRow>
-                  <TableCell className="font-semibold whitespace-nowrap">합계</TableCell>
+                  <TableCell className="font-medium whitespace-nowrap">합계</TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">{product.months.length.toLocaleString('ko-KR')}개월</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">{formatKw(totals.incoming)}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">{formatKw(totals.sale)}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">{formatKw(totals.construction)}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">{formatKw(totals.incoming)}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">{formatKw(totals.sale)}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">{formatKw(totals.construction)}</TableCell>
                   <TableCell className="text-right tabular-nums">{lastMonth ? formatKw(lastMonth.closing_kw) : '—'}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">{formatKw(totals.reserved)}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">{formatKw(totals.allocated)}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums" style={{ color: 'var(--sf-pos)' }}>
+                  <TableCell className="text-right font-medium tabular-nums">{formatKw(totals.reserved)}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">{formatKw(totals.allocated)}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums" style={{ color: 'var(--sf-pos)' }}>
                     {lastMonth ? formatKw(lastMonth.available_kw) : '—'}
                   </TableCell>
                 </TableRow>

@@ -41,7 +41,7 @@ export default function AllocatedExpensesView({ allocatedExpenses }: Props) {
                 <TableCell className="text-xs text-right">{formatKRW(value)}</TableCell>
               </TableRow>
             ))}
-            <TableRow className="font-semibold">
+            <TableRow className="border-t bg-muted/20 font-medium">
               <TableCell className="text-xs">합계</TableCell>
               <TableCell className="text-xs text-right">{formatKRW(total)}</TableCell>
             </TableRow>

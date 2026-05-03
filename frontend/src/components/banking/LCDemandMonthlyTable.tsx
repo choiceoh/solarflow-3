@@ -70,11 +70,11 @@ export default function LCDemandMonthlyTable({ items }: Props) {
         </TableBody>
         <TableFooter>
           <TableRow>
-            <TableCell className="font-semibold">합계</TableCell>
-            <TableCell className="text-right font-semibold">{formatUSD(totals.demand)}</TableCell>
-            <TableCell className="text-right font-semibold">{formatUSD(totals.recovery)}</TableCell>
-            <TableCell className="text-right font-semibold">{formatUSD(lastProjected)}</TableCell>
-            <TableCell className="text-right font-semibold">
+            <TableCell className="font-medium">합계</TableCell>
+            <TableCell className="text-right font-medium">{formatUSD(totals.demand)}</TableCell>
+            <TableCell className="text-right font-medium">{formatUSD(totals.recovery)}</TableCell>
+            <TableCell className="text-right font-medium">{formatUSD(lastProjected)}</TableCell>
+            <TableCell className="text-right font-medium">
               {totals.shortage >= 0 ? '+' : ''}{formatUSD(totals.shortage)}
             </TableCell>
             <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}개월</TableCell>
