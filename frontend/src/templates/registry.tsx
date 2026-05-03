@@ -59,6 +59,7 @@ import type {
   AsyncFormRefinement,
 } from './types';
 import { RailBlock as RailBlockUI } from '@/components/command/MockupPrimitives';
+import { monthlyCount } from './sparkUtils';
 
 // ─── Cell renderers ─────────────────────────────────────────────────────────
 export const cellRenderers: Record<string, CellRenderer> = {
@@ -448,9 +449,12 @@ export const toneComputers: Record<string, (items: unknown[]) => Tone> = {
     (items as SaleListItem[]).filter((i) => !(i.tax_invoice_date ?? i.sale?.tax_invoice_date)).length > 0 ? 'warn' : 'ink',
 };
 
-// ─── Spark computers (sparkline 시드 데이터) ───────────────────────────────
+// ─── Spark computers (sparkline 실데이터) ─────────────────────────────────
+// 실제 시계열을 만들 수 있는 메트릭만 등록. 등록되지 않은 메트릭은 ListScreen에서
+// 현재값 기반 평행선(flatSparkFromValue)으로 자동 폴백.
 export const sparkComputers: Record<string, (items: unknown[]) => number[]> = {
-  'spark.outbound_count': (items) => [14, 18, 16, 23, items.length || 1],
+  'spark.outbound_count': (items) =>
+    monthlyCount(items as Outbound[], (o) => o.outbound_date),
 };
 
 // ─── Action handlers ───────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL, type InboundType, type BLStatus } from '@/types/inbound';
 import { CardB, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
-import { autoSpark } from '@/templates/autoSpark';
+import { flatSparkFromValue, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
 
 const PROCUREMENT_TABS = new Set(['po', 'tt', 'lc', 'bl']);
 
@@ -494,28 +494,37 @@ export default function ProcurementPage() {
     activeTab === 'bl' ? `${blRows.length}건 · 진행 ${blActiveCount}건` :
     activeTab === 'tt' ? `${tts.length}건 · 완료 USD ${fmtUsdM(ttCompletedUsd)}M` :
     `${poRows.length}건 · ${fmtMw(poTotalMw)} MW`;
+  // KPI sparkline 시계열 — 데이터 범위 기반 (최근 6개월 캡, sparkUtils 참고).
+  const lcOpenSpark = monthlyCount(lcRows, (l) => l.open_date);
+  const lcAmountSpark = monthlyTrend(lcRows, (l) => l.open_date, (l) => (l.amount_usd ?? 0) / 1_000_000);
+  const blDateOf = (b: typeof blRows[number]) => b.actual_arrival ?? b.eta ?? b.etd ?? null;
+  const blAllSpark = monthlyCount(blRows, blDateOf);
+  const ttSpark = monthlyCount(tts, (t) => t.remit_date);
+  const ttAmountSpark = monthlyTrend(tts.filter(t => t.status === 'completed'), (t) => t.remit_date, (t) => (t.amount_usd ?? 0) / 1_000_000);
+  const poSpark = monthlyCount(poRows, (p) => p.contract_date);
+
   const metrics: ProcurementMetric[] =
     activeTab === 'lc' ? [
-      { lbl: 'L/C 전체', v: String(lcRows.length), u: '건', sub: `사용중 ${lcOpenedCount}건`, tone: 'solar' as const },
-      { lbl: '개설 금액', v: fmtUsdM(lcTotalUsd), u: 'M$', sub: '활성 필터 기준', tone: 'warn' as const, delta: `${lcOpenedCount} active` },
+      { lbl: 'L/C 전체', v: String(lcRows.length), u: '건', sub: `사용중 ${lcOpenedCount}건`, tone: 'solar' as const, spark: lcOpenSpark },
+      { lbl: '개설 금액', v: fmtUsdM(lcTotalUsd), u: 'M$', sub: '활성 필터 기준', tone: 'warn' as const, spark: lcAmountSpark },
       { lbl: '만기 30일', v: String(lcMaturitySoon.length), u: '건', sub: lcMaturitySoon[0]?.lc_number ?? '긴급 만기 없음', tone: 'info' as const },
       { lbl: '은행', v: String(new Set(lcRows.map(lc => lc.bank_id)).size), u: '곳', sub: '한도 사용처', tone: 'ink' as const },
     ] :
     activeTab === 'bl' ? [
-      { lbl: 'B/L 전체', v: String(blRows.length), u: '건', sub: `진행 ${blActiveCount}건`, tone: 'solar' as const },
-      { lbl: '선적/입항', v: String(blShippingCount), u: '건', sub: '해상 운송 구간', tone: 'info' as const },
-      { lbl: '통관중', v: String(blCustomsCount), u: '건', sub: '면장 확인 필요', tone: 'warn' as const },
-      { lbl: '해외직수입', v: String(blRows.filter(bl => bl.inbound_type === 'import').length), u: '건', sub: 'OCR 자동입력 대상', tone: 'pos' as const },
+      { lbl: 'B/L 전체', v: String(blRows.length), u: '건', sub: `진행 ${blActiveCount}건`, tone: 'solar' as const, spark: blAllSpark },
+      { lbl: '선적/입항', v: String(blShippingCount), u: '건', sub: '해상 운송 구간', tone: 'info' as const, spark: monthlyCount(blRows.filter(b => b.status === 'shipping' || b.status === 'arrived'), blDateOf) },
+      { lbl: '통관중', v: String(blCustomsCount), u: '건', sub: '면장 확인 필요', tone: 'warn' as const, spark: monthlyCount(blRows.filter(b => b.status === 'customs'), blDateOf) },
+      { lbl: '해외직수입', v: String(blRows.filter(bl => bl.inbound_type === 'import').length), u: '건', sub: 'OCR 자동입력 대상', tone: 'pos' as const, spark: monthlyCount(blRows.filter(bl => bl.inbound_type === 'import'), blDateOf) },
     ] :
     activeTab === 'tt' ? [
-      { lbl: 'T/T 이력', v: String(tts.length), u: '건', sub: '계약금/잔금 송금', tone: 'solar' as const },
-      { lbl: '완료 금액', v: fmtUsdM(ttCompletedUsd), u: 'M$', sub: 'completed 기준', tone: 'pos' as const },
-      { lbl: '대기', v: String(tts.filter(tt => tt.status === 'planned').length), u: '건', sub: '송금 예정', tone: 'warn' as const },
+      { lbl: 'T/T 이력', v: String(tts.length), u: '건', sub: '계약금/잔금 송금', tone: 'solar' as const, spark: ttSpark },
+      { lbl: '완료 금액', v: fmtUsdM(ttCompletedUsd), u: 'M$', sub: 'completed 기준', tone: 'pos' as const, spark: ttAmountSpark },
+      { lbl: '대기', v: String(tts.filter(tt => tt.status === 'planned').length), u: '건', sub: '송금 예정', tone: 'warn' as const, spark: monthlyCount(tts.filter(t => t.status === 'planned'), (t) => t.remit_date) },
       { lbl: 'PO 연결', v: String(new Set(tts.map(tt => tt.po_id)).size), u: '건', sub: '계약금 집계 대상', tone: 'ink' as const },
     ] : [
-      { lbl: '진행 P/O', v: String(poActiveCount), u: '건', sub: `${fmtMw(poTotalMw)} MW · 전체 ${poRows.length}건`, tone: 'solar' as const },
-      { lbl: 'L/C 연결', v: String(lcOpenedCount), u: '건', sub: `USD ${fmtUsdM(lcTotalUsd)}M`, tone: 'info' as const, spark: [2, 2, 3, 3, 4, 4, 5, 6] },
-      { lbl: '운송중', v: String(poShippingCount), u: '건', sub: '입고 전환 대기', tone: 'warn' as const },
+      { lbl: '진행 P/O', v: String(poActiveCount), u: '건', sub: `${fmtMw(poTotalMw)} MW · 전체 ${poRows.length}건`, tone: 'solar' as const, spark: poSpark },
+      { lbl: 'L/C 연결', v: String(lcOpenedCount), u: '건', sub: `USD ${fmtUsdM(lcTotalUsd)}M`, tone: 'info' as const, spark: lcOpenSpark },
+      { lbl: '운송중', v: String(poShippingCount), u: '건', sub: '입고 전환 대기', tone: 'warn' as const, spark: monthlyCount(poRows.filter(p => p.status === 'shipping' || p.status === 'in_progress'), (p) => p.contract_date) },
       { lbl: '계약 유형', v: String(new Set(poRows.map(po => po.contract_type)).size), u: '종', sub: 'spot/frame 관리', tone: 'pos' as const },
     ];
 
@@ -647,7 +656,7 @@ export default function ProcurementPage() {
                 sub={metric.sub}
                 tone={metric.tone}
                 delta={metric.delta}
-                spark={metric.spark ?? autoSpark(metric.lbl)}
+                spark={metric.spark ?? flatSparkFromValue(metric.v)}
               />
             ))}
           </div>

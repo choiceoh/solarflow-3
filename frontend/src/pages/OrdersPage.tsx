@@ -38,7 +38,7 @@ import type { InventoryResponse } from '@/types/inventory';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { CardB, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
-import { autoSpark } from '@/templates/autoSpark';
+import { flatSparkFromValue, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
 
 class OrderDetailErrorBoundary extends Component<
   { children: ReactNode; onBack: () => void },
@@ -756,35 +756,46 @@ export default function OrdersPage() {
     activeTab === 'receipts' ? `${receipts.length}건 · 미정산 ${fmtEok(receiptRemaining)}억` :
     activeTab === 'matching' ? '입금과 매출채권 자동 추천' :
     `${orders.length}건 · ${fmtSalesMw(ordersKw)} MW`;
+  // KPI sparkline 시계열 — 데이터 범위 기반 (최근 6개월 캡, sparkUtils 참고). 스냅샷은 JSX 폴백에서 평행선.
+  const outboundCountSpark = monthlyCount(outboundsWithSales, (o) => o.outbound_date);
+  const outboundActiveSpark = monthlyCount(
+    outboundsWithSales.filter((o) => o.status === 'active'),
+    (o) => o.outbound_date,
+  );
+  const saleTotalSpark = monthlyTrend(sales, (s) => s.tax_invoice_date ?? s.outbound_date ?? null, (s) => s.total_amount ?? s.sale?.total_amount ?? 0);
+  const receiptTotalSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.amount ?? 0);
+  const receiptRemainingSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.remaining ?? 0);
+  const activeOrderSpark = monthlyCount(activeOrders, (o) => o.order_date);
+
   const metrics: SalesMetric[] =
     activeTab === 'outbound' ? [
-      { lbl: '출고 전체', v: String(outboundsWithSales.length), u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar' },
-      { lbl: '정상 출고', v: String(outboundActive), u: '건', sub: '취소 제외', tone: 'pos' },
-      { lbl: '계산서 연결', v: String(outboundsWithSales.filter(outbound => outbound.sale).length), u: '건', sub: '매출 전환됨', tone: 'info' },
+      { lbl: '출고 전체', v: String(outboundsWithSales.length), u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar', spark: outboundCountSpark },
+      { lbl: '정상 출고', v: String(outboundActive), u: '건', sub: '취소 제외', tone: 'pos', spark: outboundActiveSpark },
+      { lbl: '계산서 연결', v: String(outboundsWithSales.filter(outbound => outbound.sale).length), u: '건', sub: '매출 전환됨', tone: 'info', spark: monthlyCount(outboundsWithSales.filter(o => o.sale), (o) => o.outbound_date) },
       { lbl: '평균 용량', v: outboundsWithSales.length ? fmtSalesMw(outboundKw / outboundsWithSales.length) : '0.00', u: 'MW', sub: '출고 1건당', tone: 'ink' },
     ] :
     activeTab === 'sales' ? [
-      { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${sales.length}건`, tone: 'solar' },
-      { lbl: '계산서 미발행', v: String(invoicePending), u: '건', sub: '발행 대기', tone: invoicePending > 0 ? 'warn' : 'pos' },
+      { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${sales.length}건`, tone: 'solar', spark: saleTotalSpark },
+      { lbl: '계산서 미발행', v: String(invoicePending), u: '건', sub: '발행 대기', tone: invoicePending > 0 ? 'warn' : 'pos', spark: monthlyCount(sales.filter(s => !s.tax_invoice_date), (s) => s.outbound_date ?? null) },
       { lbl: '거래처', v: String(new Set(sales.map(sale => sale.customer_id).filter(Boolean)).size), u: '곳', sub: '매출처 기준', tone: 'info' },
       { lbl: '평균 단가', v: sales.length ? Math.round(sales.reduce((sum, sale) => sum + (sale.unit_price_wp ?? 0), 0) / sales.length).toLocaleString() : '0', u: '₩/Wp', sub: '필터 기준', tone: 'ink' },
     ] :
     activeTab === 'receipts' ? [
-      { lbl: '입금 합계', v: fmtEok(receiptTotal), u: '억', sub: `${receipts.length}건`, tone: 'solar' },
-      { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '매칭 필요', tone: receiptRemaining > 0 ? 'warn' : 'pos' },
-      { lbl: '부분 매칭', v: String(receipts.filter(receipt => (receipt.matched_total ?? 0) > 0 && (receipt.remaining ?? 0) > 0).length), u: '건', sub: '추가 확인', tone: 'info' },
-      { lbl: '회수율', v: receiptTotal > 0 ? (((receiptTotal - receiptRemaining) / receiptTotal) * 100).toFixed(1) : '0.0', u: '%', sub: '입금 매칭 기준', tone: 'pos', spark: [70, 74, 76, 78, 82, 84, 87, 89] },
+      { lbl: '입금 합계', v: fmtEok(receiptTotal), u: '억', sub: `${receipts.length}건`, tone: 'solar', spark: receiptTotalSpark },
+      { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '매칭 필요', tone: receiptRemaining > 0 ? 'warn' : 'pos', spark: receiptRemainingSpark },
+      { lbl: '부분 매칭', v: String(receipts.filter(receipt => (receipt.matched_total ?? 0) > 0 && (receipt.remaining ?? 0) > 0).length), u: '건', sub: '추가 확인', tone: 'info', spark: monthlyCount(receipts.filter(r => (r.matched_total ?? 0) > 0 && (r.remaining ?? 0) > 0), (r) => r.receipt_date) },
+      { lbl: '회수율', v: receiptTotal > 0 ? (((receiptTotal - receiptRemaining) / receiptTotal) * 100).toFixed(1) : '0.0', u: '%', sub: '입금 매칭 기준', tone: 'pos', spark: receiptTotalSpark.map((t, i) => (t > 0 ? Math.round(((t - receiptRemainingSpark[i]!) / t) * 100) : 0)) },
     ] :
     activeTab === 'matching' ? [
-      { lbl: '입금', v: String(receipts.length), u: '건', sub: '매칭 후보', tone: 'solar' },
-      { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '대상 금액', tone: 'warn' },
-      { lbl: '매출', v: String(sales.length), u: '건', sub: '후보 원장', tone: 'info' },
+      { lbl: '입금', v: String(receipts.length), u: '건', sub: '매칭 후보', tone: 'solar', spark: monthlyCount(receipts, (r) => r.receipt_date) },
+      { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '대상 금액', tone: 'warn', spark: receiptRemainingSpark },
+      { lbl: '매출', v: String(sales.length), u: '건', sub: '후보 원장', tone: 'info', spark: monthlyCount(sales, (s) => s.outbound_date ?? null) },
       { lbl: '거래처', v: String(partners.length), u: '곳', sub: '고객 마스터', tone: 'ink' },
     ] : [
-      { lbl: '진행 수주', v: String(activeOrders.length), u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${orders.length}건`, tone: 'solar' },
+      { lbl: '진행 수주', v: String(activeOrders.length), u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${orders.length}건`, tone: 'solar', spark: activeOrderSpark },
       { lbl: '거래처', v: String(customersCount), u: '곳', sub: '활성 고객', tone: 'info' },
-      { lbl: '분할출고', v: String(orders.filter(order => order.status === 'partial').length), u: '건', sub: '잔량 관리', tone: 'warn' },
-      { lbl: '평균 단가', v: orders.length ? Math.round(orders.reduce((sum, order) => sum + (order.unit_price_wp ?? 0), 0) / orders.length).toLocaleString() : '0', u: '₩/Wp', sub: '수주 기준', tone: 'pos', spark: [398, 401, 403, 404, 407, 408, 408, 409] },
+      { lbl: '분할출고', v: String(orders.filter(order => order.status === 'partial').length), u: '건', sub: '잔량 관리', tone: 'warn', spark: monthlyCount(orders.filter(o => o.status === 'partial'), (o) => o.order_date) },
+      { lbl: '평균 단가', v: orders.length ? Math.round(orders.reduce((sum, order) => sum + (order.unit_price_wp ?? 0), 0) / orders.length).toLocaleString() : '0', u: '₩/Wp', sub: '수주 기준', tone: 'pos' },
     ];
 
   const ordersCardControls = (
@@ -913,7 +924,7 @@ export default function OrdersPage() {
                 sub={metric.sub}
                 tone={metric.tone}
                 delta={metric.delta}
-                spark={metric.spark ?? autoSpark(metric.lbl)}
+                spark={metric.spark ?? flatSparkFromValue(metric.v)}
               />
             ))}
           </div>
