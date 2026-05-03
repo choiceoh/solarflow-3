@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { ProductCombobox } from '@/components/common/ProductCombobox';
 import { OrderCombobox } from '@/components/common/OrderCombobox';
+import { BLCombobox } from '@/components/common/BLCombobox';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
 import { companyParams } from '@/lib/companyUtils';
@@ -21,7 +22,6 @@ import { USAGE_CATEGORY_LABEL, type Outbound, type UsageCategory } from '@/types
 import type { Order } from '@/types/orders';
 import type { Product, Warehouse } from '@/types/masters';
 import type { BLShipment } from '@/types/inbound';
-import { statusLabel } from '@/types/inbound';
 
 function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: string }) {
   return <span className={`flex flex-1 text-left truncate ${text ? '' : 'text-muted-foreground'}`} data-slot="select-value">{text || placeholder}</span>;
@@ -141,6 +141,12 @@ export default function OutboundForm({ open = true, onOpenChange, onSubmit, edit
   const selectedOrder = order ?? orders.find((o) => o.order_id === selectedOrderId);
   const usageCat = watch('usage_category') ?? '';
   const warehouseId = watch('warehouse_id') ?? '';
+  const blSumQty = blEntries.reduce((sum, e) => {
+    const n = parseInt(e.quantity.replace(/[^0-9]/g, ''), 10);
+    return sum + (Number.isFinite(n) ? n : 0);
+  }, 0);
+  const outboundQty = Number(quantity) || 0;
+  const blSumMatches = blSumQty === outboundQty;
   const targetCompanyId = watch('target_company_id') ?? '';
 
   useEffect(() => {
@@ -482,33 +488,12 @@ export default function OutboundForm({ open = true, onOpenChange, onSubmit, edit
                 return (
                   <div key={i} className="flex gap-2 items-start">
                     <div className="flex-1 space-y-1">
-                      <Select value={entry.bl_id} onValueChange={(v) => updateBlEntry(i, 'bl_id', v === '_none' ? '' : (v ?? ''))}>
-                        <SelectTrigger className="w-full h-8 text-xs">
-                          <span className={`flex flex-1 text-left truncate ${entry.bl_id ? '' : 'text-muted-foreground'}`}>
-                            {selectedBl
-                              ? (() => {
-                                  const date = selectedBl.actual_arrival?.slice(0, 10) ?? selectedBl.eta?.slice(0, 10) ?? '—';
-                                  const stKo = statusLabel(selectedBl.inbound_type, selectedBl.status);
-                                  return `${blModuleLabel(selectedBl, selectedProduct, order)} | ${selectedBl.bl_number} | ${date} | ${stKo}`;
-                                })()
-                              : '— B/L 선택 —'}
-                          </span>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_none">— 선택 안함 —</SelectItem>
-                          {bls.map((b) => {
-                            const date = b.actual_arrival?.slice(0, 10) ?? b.eta?.slice(0, 10) ?? '—';
-                            const stKo = statusLabel(b.inbound_type, b.status);
-                            const isCompleted = ['completed', 'erp_done'].includes(b.status);
-                            return (
-                              <SelectItem key={b.bl_id} value={b.bl_id}>
-                                <span className={`text-xs font-medium mr-1.5 ${isCompleted ? 'text-green-600' : 'text-blue-600'}`}>[{stKo}]</span>
-                                {blModuleLabel(b, selectedProduct, order)} | {b.bl_number} | {date}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                      <BLCombobox
+                        bls={bls}
+                        value={entry.bl_id}
+                        onChange={(v) => updateBlEntry(i, 'bl_id', v)}
+                        formatModule={(b) => blModuleLabel(b, selectedProduct, order)}
+                      />
                       {selectedBl && (
                         <div className="rounded border bg-blue-50 px-2 py-1 text-[10px] text-blue-700 flex gap-3">
                           <span>항구: {selectedBl.port ?? '—'}</span>
@@ -540,6 +525,12 @@ export default function OutboundForm({ open = true, onOpenChange, onSubmit, edit
                 );
               })}
             </div>
+            {blEntries.length > 0 && (
+              <p className={`text-[10px] ${blSumMatches ? 'text-muted-foreground' : 'text-destructive font-medium'}`}>
+                BL 합계 {blSumQty.toLocaleString('ko-KR')}장 / 출고 수량 {outboundQty.toLocaleString('ko-KR')}장
+                {!blSumMatches && outboundQty > 0 && ` · 차이 ${Math.abs(outboundQty - blSumQty).toLocaleString('ko-KR')}장`}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
