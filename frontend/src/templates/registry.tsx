@@ -1155,15 +1155,30 @@ export const formRefinements: Record<string, FormRefinement> = {
 
 // 메타 인프라 확장: 비동기 cross-field 검증 (DB 중복 등) — MetaForm submit 직전 실행.
 // 통과 시 true, 실패 시 string(에러 메시지) 또는 false 반환.
-export const asyncRefinements: Record<string, AsyncFormRefinement> = {};
+//
+// 메타데이터 wrapper (RULES.md #0 — GUI 편집기에서 콤보박스 + 설명 노출):
+//   { fn, label, description? }
+// GUI 편집기 (UIConfigEditor) 가 admin 에게 등록된 ruleId 목록을 라벨/설명까지 보여줌.
+export type AsyncFormRefinementEntry = {
+  fn: AsyncFormRefinement;
+  label: string;            // admin 이 픽커에서 보는 사람 친화 라벨
+  description?: string;     // 픽커에서 보조 설명 (한 줄 권장)
+};
+export const asyncRefinements: Record<string, AsyncFormRefinementEntry> = {};
 
 // 메타 인프라 확장: 동적 권한 가드 (FieldConfig.permissionGuardId 참조).
 // 컨텍스트 (현재 row, 사용자 등) 기반 readOnly/visible 판단.
-// false 반환 시 readOnly + 마스킹 표시. (Phase 5 향후 — 현재 type 정의 + 빈 registry)
+// false 반환 시 readOnly + 마스킹 표시.
 export type PermissionGuard = (
   context: { values: Record<string, unknown>; role: string | null; userId?: string },
 ) => boolean;
-export const permissionGuards: Record<string, PermissionGuard> = {};
+// 메타데이터 wrapper (asyncRefinements 와 동일 패턴 — registry GUI 편집기 콤보박스용)
+export type PermissionGuardEntry = {
+  fn: PermissionGuard;
+  label: string;
+  description?: string;
+};
+export const permissionGuards: Record<string, PermissionGuardEntry> = {};
 
 // ─── Formatters ────────────────────────────────────────────────────────────
 export function applyFormatter(formatter: string | undefined, value: unknown): string {

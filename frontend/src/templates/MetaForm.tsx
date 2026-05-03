@@ -699,7 +699,7 @@ function FieldRender({ field, value, error, options, setValue, register, watch, 
   // 메타 인프라 확장 (보안): permissionGuard — 컨텍스트 기반 동적 권한
   // false 반환 시 readOnly + 마스킹 (maskByRoles 와 동일 효과)
   const guardDenied = field.permissionGuardId
-    ? !(permissionGuards[field.permissionGuardId]?.({ values: watchedValues, role }) ?? true)
+    ? !(permissionGuards[field.permissionGuardId]?.fn?.({ values: watchedValues, role }) ?? true)
     : false;
   const readOnly = isReadOnly(field, role) || conditionalReadOnly || !!isMasked || guardDenied;
   const labelText = `${field.label}${field.required ? ' *' : ''}${readOnly && (field.editableByRoles || field.readOnlyIf) ? ' (읽기전용)' : ''}${isMasked ? ' (마스킹)' : ''}`;
@@ -1191,13 +1191,13 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
     // 메타 인프라 확장: 비동기 검증 (DB 중복 체크 등)
     if (config.asyncRefine && config.asyncRefine.length > 0) {
       for (const rule of config.asyncRefine) {
-        const fn = asyncRefinements[rule.ruleId];
-        if (!fn) {
+        const entry = asyncRefinements[rule.ruleId];
+        if (!entry) {
           console.warn(`[MetaForm] asyncRefinement not registered: ${rule.ruleId}`);
           continue;
         }
         try {
-          const result = await fn(payload as Record<string, unknown>, extraContext);
+          const result = await entry.fn(payload as Record<string, unknown>, extraContext);
           if (result === true) continue;
           const msg = typeof result === 'string' ? result : rule.message;
           setAsyncRefineError(msg);
