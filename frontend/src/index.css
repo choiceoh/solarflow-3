@@ -249,10 +249,10 @@ a:focus-visible,
   align-items: center;
   justify-content: center;
   margin-left: auto;
-  height: 32px;
-  width: 32px;
+  height: 24px;
+  width: 24px;
   flex-shrink: 0;
-  border-radius: 5px;
+  border-radius: 4px;
   background: transparent;
   border: 0;
   color: var(--sf-dark-ink-3);
@@ -261,8 +261,8 @@ a:focus-visible,
               color 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sf-sidebar-toggle svg {
-  height: 20px;
-  width: 20px;
+  height: 16px;
+  width: 16px;
 }
 .sf-sidebar-toggle:hover {
   background: rgb(255 255 255 / 0.06);
