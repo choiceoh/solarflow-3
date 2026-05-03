@@ -33,7 +33,7 @@ export const ScopePanel = ({ target, draft }: ScopePanelProps) => {
 
   return (
     <section className="space-y-1.5 rounded border border-blue-200 bg-blue-50/50 p-2 dark:border-blue-900/40 dark:bg-blue-900/10">
-      <header className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-blue-900 dark:text-blue-200">
+      <header className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-blue-900 dark:text-blue-200">
         <Target className="h-3 w-3" />
         변경 범위
       </header>
@@ -72,7 +72,7 @@ interface ScopeCardProps {
 const ScopeCard = ({ icon, label, subLabel, desc, active = false, actionLabel, actionDisabled, onAction }: ScopeCardProps) => (
   <div
     className={cn(
-      'flex flex-col gap-1 rounded border p-1.5 text-[11px]',
+      'flex flex-col gap-1 rounded border p-1.5 text-xs',
       active
         ? 'border-blue-500 bg-white dark:border-blue-600 dark:bg-slate-900'
         : 'border-slate-200 bg-white/60 dark:border-slate-700 dark:bg-slate-900/40',
@@ -83,13 +83,13 @@ const ScopeCard = ({ icon, label, subLabel, desc, active = false, actionLabel, a
       <span className="truncate">{label}</span>
     </div>
     <div className="text-[9px] text-slate-500">{subLabel}</div>
-    <p className="text-[10px] leading-snug text-slate-600 dark:text-slate-400">{desc}</p>
+    <p className="text-xs leading-snug text-slate-600 dark:text-slate-400">{desc}</p>
     {actionLabel && (
       <button
         type="button"
         onClick={onAction}
         disabled={actionDisabled}
-        className="mt-auto flex items-center justify-center gap-1 rounded border border-purple-300 bg-white px-2 py-0.5 text-[10px] text-purple-700 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-purple-700/40 dark:bg-slate-800 dark:text-purple-300"
+        className="mt-auto flex items-center justify-center gap-1 rounded border border-purple-300 bg-white px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-purple-700/40 dark:bg-slate-800 dark:text-purple-300"
       >
         <Sparkles className="h-2.5 w-2.5" />
         {actionLabel}

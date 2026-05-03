@@ -66,7 +66,7 @@ export function MetricsTab({
             <FieldInput label="unit (단위, 예: '억', '원')" value={m.unit ?? ''}
               onChange={(v) => update(idx, { ...m, unit: v || undefined })} />
             <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">그래프 (sparkline)</Label>
+              <Label className="text-xs text-muted-foreground">그래프 (sparkline)</Label>
               <label className="flex items-center gap-2 h-7 text-xs cursor-pointer">
                 <input
                   type="checkbox"

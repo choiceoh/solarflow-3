@@ -89,7 +89,7 @@ export function PanelSelectionHeader({
       )}
       <div className="min-w-0 flex-1">
         <div className="truncate">{title}</div>
-        {subtitle && <div className="text-[10px] font-normal text-muted-foreground truncate">{subtitle}</div>}
+        {subtitle && <div className="text-xs font-normal text-muted-foreground truncate">{subtitle}</div>}
       </div>
     </div>
   );
@@ -110,7 +110,7 @@ export function PanelGroup({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-1 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted/40"
+        className="flex w-full items-center gap-1 px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted/40"
       >
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         {title}
@@ -127,7 +127,7 @@ export function PanelGroup({
 // ─── 빈 selection 상태 hint ────────────────────────────────────────────────
 export function PanelEmpty({ message }: { message: string }) {
   return (
-    <div className="px-3 py-6 text-center text-[11px] text-muted-foreground">
+    <div className="px-3 py-6 text-center text-xs text-muted-foreground">
       {message}
     </div>
   );

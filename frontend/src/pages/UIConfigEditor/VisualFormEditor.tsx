@@ -310,10 +310,10 @@ function FormLevelPanel({
           rules.map((r, i) => (
             <div key={i} className="rounded border p-2 space-y-1.5 bg-background">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground">규칙 #{i + 1}</span>
+                <span className="text-xs text-muted-foreground">규칙 #{i + 1}</span>
                 <button
                   type="button"
-                  className="text-[10px] text-muted-foreground hover:text-destructive"
+                  className="text-xs text-muted-foreground hover:text-destructive"
                   onClick={() => removeRule(i)}
                   aria-label="삭제"
                 >
@@ -348,7 +348,7 @@ function FormLevelPanel({
         <button
           type="button"
           onClick={addRule}
-          className="w-full text-[11px] text-muted-foreground hover:text-foreground border border-dashed rounded py-1.5"
+          className="w-full text-xs text-muted-foreground hover:text-foreground border border-dashed rounded py-1.5"
         >
           + 비동기 검증 규칙 추가
         </button>
@@ -493,19 +493,19 @@ function SectionsTab({ value, onChange, onSelectField }: {
           className="h-7 flex-1 min-w-[240px] rounded border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
         />
         {filter && (
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {filteredSet?.size ?? 0} / {totalFields}
           </span>
         )}
-        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={expandAll}>모두 펼치기</Button>
-        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={collapseAll}>모두 접기</Button>
+        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={expandAll}>모두 펼치기</Button>
+        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={collapseAll}>모두 접기</Button>
         <Button size="sm" variant="outline" className="h-7" onClick={addSection}>
           <Plus className="h-3 w-3 mr-1" />섹션 추가
         </Button>
       </div>
 
       {(formIssueCounts.error > 0 || formIssueCounts.warn > 0) && (
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px]">
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs">
           <span className="font-medium text-amber-900">검증:</span>
           {formIssueCounts.error > 0 && (
             <span className="rounded bg-rose-200 px-1.5 py-0.5 font-medium text-rose-800">
@@ -619,17 +619,17 @@ function SectionCard({
     <div className="rounded border bg-card">
       {/* 섹션 헤더 */}
       <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-3 py-2">
-        <span className="text-[10px] text-muted-foreground mono">섹션 #{index + 1}</span>
+        <span className="text-xs text-muted-foreground mono">섹션 #{index + 1}</span>
         <FieldSelect label="" value={String(section.cols ?? 1)} options={COLS_OPTIONS}
           onChange={(v) => onUpdate({ ...section, cols: Number(v) as 1 | 2 | 3 })} />
-        <span className="text-[10px] text-muted-foreground">cols</span>
+        <span className="text-xs text-muted-foreground">cols</span>
         <input type="text" value={section.title ?? ''}
           onChange={(e) => onUpdate({ ...section, title: e.target.value || undefined })}
           placeholder="title (옵션 — 섹션 헤더)"
           className="h-7 flex-1 min-w-[140px] rounded border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring" />
         <FieldSelect label="" value={section.tone ?? ''} allowEmpty options={TONES}
           onChange={(v) => onUpdate({ ...section, tone: (v || undefined) as Tone | undefined })} />
-        <span className="text-[10px] text-muted-foreground">tone</span>
+        <span className="text-xs text-muted-foreground">tone</span>
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
           onClick={onMoveUp} disabled={index === 0}><ChevronUp className="h-3.5 w-3.5" /></Button>
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
@@ -641,8 +641,8 @@ function SectionCard({
       {/* 섹션 본문 — 필드 배열 */}
       <div className="p-3 space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] text-muted-foreground">필드 ({(section.fields ?? []).length})</p>
-          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={addField}>
+          <p className="text-xs text-muted-foreground">필드 ({(section.fields ?? []).length})</p>
+          <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={addField}>
             <Plus className="h-3 w-3 mr-1" />필드 추가
           </Button>
         </div>
@@ -686,12 +686,12 @@ function SectionCard({
           );
         })}
         {(section.fields ?? []).length === 0 && (
-          <div className="text-center py-3 text-[10px] text-muted-foreground border border-dashed rounded">
+          <div className="text-center py-3 text-xs text-muted-foreground border border-dashed rounded">
             필드가 없습니다
           </div>
         )}
         {filter && (section.fields ?? []).length > 0 && filteredSet && (section.fields ?? []).every((_, fIdx) => !filteredSet.has(`${index}.${fIdx}`)) && (
-          <div className="text-center py-2 text-[10px] text-muted-foreground italic">
+          <div className="text-center py-2 text-xs text-muted-foreground italic">
             "{filter}" 일치하는 필드 없음
           </div>
         )}
@@ -761,7 +761,7 @@ function FieldRow({
           )}
           <span className="text-[9px] text-muted-foreground mono w-6 text-right shrink-0">#{index + 1}</span>
           <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
-          <span className="font-mono text-[11px] text-foreground/80 shrink-0">{field.key}</span>
+          <span className="font-mono text-xs text-foreground/80 shrink-0">{field.key}</span>
           <span className="text-foreground/60 shrink-0">·</span>
           <span className="truncate">{field.label}</span>
           <span className="ml-auto flex items-center gap-1.5 shrink-0">
@@ -822,7 +822,7 @@ function FieldRow({
         {issues.length > 0 && (
           <div className="col-span-2 space-y-0.5 rounded border border-rose-200 bg-rose-50 px-2 py-1">
             {issues.map((iss, i) => (
-              <div key={i} className={`text-[10px] flex items-start gap-1 ${iss.level === 'error' ? 'text-rose-800' : 'text-amber-800'}`}>
+              <div key={i} className={`text-xs flex items-start gap-1 ${iss.level === 'error' ? 'text-rose-800' : 'text-amber-800'}`}>
                 <span className={`rounded px-1 py-0 text-[9px] font-medium uppercase ${iss.level === 'error' ? 'bg-rose-200' : 'bg-amber-200'}`}>{iss.level}</span>
                 <span>{iss.msg}</span>
               </div>
@@ -836,7 +836,7 @@ function FieldRow({
         <FieldSelect label="type" value={field.type} options={FIELD_TYPES}
           onChange={(v) => onUpdate({ ...field, type: v as FieldType })} />
         <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1 text-[10px]">
+          <label className="flex items-center gap-1 text-xs">
             <input type="checkbox" checked={field.required ?? false}
               onChange={(e) => onUpdate({ ...field, required: e.target.checked })} />
             required
@@ -895,7 +895,7 @@ function FieldRow({
         {/* file 보조 */}
         {isFile && (
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1 text-[10px]">
+            <label className="flex items-center gap-1 text-xs">
               <input type="checkbox" checked={field.multiple ?? false}
                 onChange={(e) => onUpdate({ ...field, multiple: e.target.checked || undefined })} />
               multiple (다중 업로드)
@@ -924,7 +924,7 @@ function FieldRow({
         <div className="col-span-2 mt-1">
           <button type="button"
             onClick={() => setAdvancedOpen((v) => !v)}
-            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5"
           >
             {advancedOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             고급 (description / 검증 / readOnly / 조건부)
@@ -947,7 +947,7 @@ function FieldRow({
               }} />
 
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-1 text-[10px]">
+              <label className="flex items-center gap-1 text-xs">
                 <input type="checkbox" checked={field.readOnly ?? false}
                   onChange={(e) => onUpdate({ ...field, readOnly: e.target.checked || undefined })} />
                 readOnly
@@ -976,7 +976,7 @@ function FieldRow({
 
             {/* visibleIf */}
             <div className="col-span-2 rounded border border-dashed p-2 space-y-1.5 bg-background">
-              <p className="text-[10px] font-semibold text-muted-foreground">visibleIf (조건부 노출)</p>
+              <p className="text-xs font-semibold text-muted-foreground">visibleIf (조건부 노출)</p>
               <div className="grid grid-cols-3 gap-2">
                 <FieldInput label="field (의존)" value={field.visibleIf?.field ?? ''} mono
                   onChange={(v) => onUpdate({
@@ -1003,7 +1003,7 @@ function FieldRow({
 
             {/* readOnlyIf */}
             <div className="col-span-2 rounded border border-dashed p-2 space-y-1.5 bg-background">
-              <p className="text-[10px] font-semibold text-muted-foreground">readOnlyIf (조건부 readonly)</p>
+              <p className="text-xs font-semibold text-muted-foreground">readOnlyIf (조건부 readonly)</p>
               <div className="grid grid-cols-3 gap-2">
                 <FieldInput label="field (의존)" value={field.readOnlyIf?.field ?? ''} mono
                   onChange={(v) => onUpdate({
