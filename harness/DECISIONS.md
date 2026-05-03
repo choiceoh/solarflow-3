@@ -708,3 +708,17 @@
   - 반환 대상은 B/L 라인 단가(`unit_price_krw_wp`, `unit_price_usd_wp`)와 금액 추정치까지이며, `cost_details`/`declarations`/`expenses`/`lcs`/`tts`는 여전히 탑솔라 전용으로 둔다.
   - 신규 메뉴 key는 `baro_purchase_history`, 사이드바 경로는 `/baro/purchase-history`.
 - **날짜**: 2026-05-03
+
+## D-118: 런타임 인스펙터 기능 제거
+- **결정**: 앱 런타임 위에 떠 있던 인스펙터 기능을 제거한다. 제거 범위는 편집 모드 토글, DOM 선택 오버레이, 인스펙터 패널, 역할 미리보기 override, token override, className draft, context menu, assistant의 선택 요소 page context까지 포함한다. 정식 화면/폼 편집 경로는 기존 `/ui-config-editor`와 메타 config 편집기로 유지한다.
+- **이유**: 운영 앱의 기본 표면에 Webflow류 임시 인스펙터가 남아 있으면 실제 사용자 업무 화면과 관리자용 GUI 편집기의 경계가 흐려진다. D-115 이후 운영 화면은 조회·분석 중심으로 단순화되고, UI 변경은 별도 편집기에서 다뤄야 하므로 런타임 인스펙터는 혼란과 권한 preview 우회 표면만 남긴다.
+- **운영 기준**:
+  - 일반 shell에는 편집 모드 진입점과 전역 DOM 선택 이벤트를 두지 않는다.
+  - 권한 표시는 실제 JWT 역할만 기준으로 계산한다. 다른 역할로 보는 기능이 필요하면 별도 admin 전용 설정/미리보기 화면으로 재설계한다.
+  - Assistant page context는 화면 경로와 메타 config 식별자만 전달한다. 특정 DOM 요소 선택 설명 기능은 제공하지 않는다.
+  - 디자인 토큰이나 컴포넌트 className 변경은 `/ui-config-editor` 또는 코드 변경으로만 수행한다.
+- **검증**:
+  - `rg`로 인스펙터 코드 참조 없음 확인 (`frontend/src`, `backend/internal` 기준)
+  - `go build ./...`, `go vet ./...`, `go test ./...` 성공
+  - `npm run build`, `npm run test`, `npm run lint` 성공 (`lint`는 기존 baseline warning 유지)
+- **날짜**: 2026-05-03

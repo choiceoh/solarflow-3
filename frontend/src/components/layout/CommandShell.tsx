@@ -32,17 +32,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import AlertBell from '@/components/layout/AlertBell';
 import FloatingMwEaCalculator from '@/components/common/FloatingMwEaCalculator';
 import { FloatingAssistantButton } from '@/components/assistant/FloatingAssistantButton';
-import {
-  ContextMenuOverlay,
-  EditModeBadge,
-  EditModeToggleButton,
-  InspectorOverlay,
-  InspectorPanel,
-  OnboardingHint,
-  useApplyClassNameDrafts,
-  useDesignTokens,
-  useEditModeShortcut,
-} from '@/components/inspector';
 import { canAccessMenu, type MenuKey, type Role } from '@/config/permissions';
 import { useAuth } from '@/hooks/useAuth';
 import { useAlerts } from '@/hooks/useAlerts';
@@ -261,10 +250,6 @@ export default function CommandShell() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(readCollapsedFromStorage);
 
-  useEditModeShortcut();
-  useDesignTokens();
-  useApplyClassNameDrafts();
-
   useEffect(() => { loadCompanies(); }, [loadCompanies]);
 
   const toggleSidebar = () => {
@@ -435,7 +420,6 @@ export default function CommandShell() {
                 엑셀 입력
               </Link>
             )}
-            <EditModeToggleButton />
           </div>
         </header>
 
@@ -443,11 +427,6 @@ export default function CommandShell() {
           <Outlet />
         </main>
       </section>
-      <InspectorOverlay />
-      <EditModeBadge />
-      <InspectorPanel />
-      <ContextMenuOverlay />
-      <OnboardingHint />
       <FloatingAssistantButton />
     </div>
   );

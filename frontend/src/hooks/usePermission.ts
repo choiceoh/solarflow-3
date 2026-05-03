@@ -7,7 +7,6 @@
  *   {canEdit && <Button>수정</Button>}
  */
 import { useAuth } from './useAuth';
-import { useAppStore } from '@/stores/appStore';
 import {
   canAccessMenu as _canAccessMenu,
   hasFeature as _hasFeature,
@@ -19,10 +18,7 @@ import {
 
 export function usePermission() {
   const { role } = useAuth();
-  // 인스펙터 *다른 역할로 미리보기* override — 실제 JWT 가 admin 일 때만 (권한 우회 방지).
-  const previewOverride = useAppStore((s) => s.inspectorPreviewRole);
-  const effective = role === 'admin' && previewOverride ? (previewOverride as Role) : (role as Role | null);
-  const r = effective;
+  const r = role as Role | null;
 
   return {
     role: r,

@@ -11,8 +11,31 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-117 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-118 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-03 세션 — 런타임 인스펙터 제거
+
+### 완료
+- 상단 헤더의 편집 모드 진입 버튼, 전역 선택 오버레이, 우측 인스펙터 패널, context menu, 온보딩 toast를 제거
+- `frontend/src/components/inspector/` 전체와 전용 eye-dropper helper 삭제
+- Zustand 전역 상태에서 인스펙터 선택 대상, 역할 미리보기, 토큰 override, className draft 상태 제거
+- `usePermission`의 인스펙터 역할 미리보기 override 제거 — 권한 표시는 실제 JWT 역할만 기준으로 복귀
+- Assistant page context에서 인스펙터 선택 요소 주입 제거
+- 백엔드 assistant system prompt에서 `selected_element` 처리와 "인스펙터로 클릭한 element" 문맥 제거
+- D-118 결정 기록 추가 — 런타임 인스펙터는 폐기하고 `/ui-config-editor`를 정식 UI 편집 경로로 유지
+
+### 검증
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd frontend && npm ci` 성공 — 누락된 로컬 의존성 복원
+- `cd frontend && npm run build` 성공 — Vite dynamic import warning 1건은 기존 assistant drawer/static import 구조 경고
+- `cd frontend && npm run test` 성공 — 7 files / 63 tests
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 86건 출력
+- `graphify update .` 성공 — 3192 nodes / 5420 edges / 348 communities
 
 ---
 
