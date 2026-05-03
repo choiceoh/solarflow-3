@@ -28,7 +28,7 @@ export default function SettingsLayout() {
             to={t.to}
             className={({ isActive }) =>
               cn(
-                'relative px-4 py-2.5 text-sm font-medium transition-colors',
+                'relative px-5 py-3 text-base font-medium transition-colors',
                 isActive
                   ? 'text-foreground after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-foreground'
                   : 'text-muted-foreground hover:text-foreground',

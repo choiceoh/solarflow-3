@@ -109,15 +109,15 @@ export default function PersonalSettingsPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="mx-auto max-w-5xl space-y-6">
         <section className="rounded-lg border bg-card">
-          <header className="flex items-center justify-between gap-3 px-4 py-3 border-b bg-muted/30">
+          <header className="flex items-center justify-between gap-3 px-5 py-4 border-b bg-muted/30">
             <div>
-              <h2 className="text-sm font-medium">내 프로필</h2>
-              <p className="text-xs text-muted-foreground">{user.email} · {ROLE_LABELS[user.role as Role] ?? user.role}</p>
+              <h2 className="text-base font-semibold">내 프로필</h2>
+              <p className="text-sm text-muted-foreground">{user.email} · {ROLE_LABELS[user.role as Role] ?? user.role}</p>
             </div>
           </header>
-          <form onSubmit={handleProfileSave} className="p-4 space-y-4">
+          <form onSubmit={handleProfileSave} className="p-5 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="me-name">이름</Label>
               <Input
@@ -158,11 +158,11 @@ export default function PersonalSettingsPage() {
         </section>
 
         <section className="rounded-lg border bg-card">
-          <header className="px-4 py-3 border-b bg-muted/30">
-            <h2 className="text-sm font-medium">비밀번호 변경</h2>
-            <p className="text-xs text-muted-foreground">8자 이상의 새 비밀번호를 입력하세요.</p>
+          <header className="px-5 py-4 border-b bg-muted/30">
+            <h2 className="text-base font-semibold">비밀번호 변경</h2>
+            <p className="text-sm text-muted-foreground">8자 이상의 새 비밀번호를 입력하세요.</p>
           </header>
-          <form onSubmit={handlePasswordChange} className="p-4 space-y-4">
+          <form onSubmit={handlePasswordChange} className="p-5 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="me-pw-current">현재 비밀번호</Label>
               <Input
