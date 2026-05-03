@@ -25,15 +25,22 @@ export interface VisualScreenEditorProps {
   onJsonDraftChange: (next: string) => void;
 }
 
-export default function VisualScreenEditor({
-  value, onChange, jsonDraft, onJsonDraftChange,
-}: VisualScreenEditorProps) {
-  const [tab, setTab] = useState<Tab>('basic');
-  // Phase 4 follow-up #1: 선택된 컬럼 idx (selection-driven 우측 패널)
-  const [selectedColumnIdx, setSelectedColumnIdx] = useState<number | null>(null);
-  const selectedColumn = selectedColumnIdx !== null ? value.columns[selectedColumnIdx] : null;
+// 레이아웃 wrapper — 본체 (Body) 와 우측 패널 (EditorWithPanel) 을 합침.
+// 외부 (UIConfigEditorPage) 는 default export 사용. 재귀 (TabbedList 안) 은 Body 사용.
+export default function VisualScreenEditor(props: VisualScreenEditorProps) {
+  return <VisualScreenEditorWithPanel {...props} />;
+}
 
-  const main = (
+// 본체만 — 우측 패널 없이 main content 만 렌더. TabbedList recursive editor 용.
+// L1 list-level 설정 (pagination 등) 은 상위가 별도로 노출 — 또는 JSON 탭에서.
+export function VisualScreenEditorBody({
+  value, onChange, jsonDraft, onJsonDraftChange, onSelectColumn,
+}: VisualScreenEditorProps & {
+  onSelectColumn?: (idx: number | null) => void;
+}) {
+  const [tab, setTab] = useState<Tab>('basic');
+
+  return (
     <div className="flex flex-col h-full min-h-0">
       <div className="border-b px-3 flex gap-1 overflow-x-auto">
         <TabButton active={tab === 'basic'} onClick={() => setTab('basic')}>기본 정보</TabButton>
@@ -59,7 +66,7 @@ export default function VisualScreenEditor({
         {tab === 'basic' && <BasicTab value={value} onChange={onChange} />}
         {tab === 'metrics' && <MetricsTab value={value} onChange={onChange} />}
         {tab === 'filters' && <FiltersTab value={value} onChange={onChange} />}
-        {tab === 'columns' && <ColumnsTab value={value} onChange={onChange} onSelectColumn={setSelectedColumnIdx} />}
+        {tab === 'columns' && <ColumnsTab value={value} onChange={onChange} onSelectColumn={onSelectColumn} />}
         {tab === 'actions' && <ActionsTab value={value} onChange={onChange} />}
         {tab === 'rail' && <RailTab value={value} onChange={onChange} />}
         {tab === 'json' && (
@@ -72,6 +79,18 @@ export default function VisualScreenEditor({
         )}
       </div>
     </div>
+  );
+}
+
+// 우측 패널 포함 wrapper — 일반적인 standalone 편집기 모드.
+function VisualScreenEditorWithPanel(props: VisualScreenEditorProps) {
+  const { value, onChange } = props;
+  // Phase 4 follow-up #1: 선택된 컬럼 idx (selection-driven 우측 패널)
+  const [selectedColumnIdx, setSelectedColumnIdx] = useState<number | null>(null);
+  const selectedColumn = selectedColumnIdx !== null ? value.columns[selectedColumnIdx] : null;
+
+  const main = (
+    <VisualScreenEditorBody {...props} onSelectColumn={setSelectedColumnIdx} />
   );
 
   // 우측 패널 — 컬럼 선택 시 selection-driven, 아니면 list-level

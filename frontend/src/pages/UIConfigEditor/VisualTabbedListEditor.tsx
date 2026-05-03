@@ -1,14 +1,18 @@
 // TabbedListConfig 시각 편집기 — 페이지 헤더·탭 메타데이터(key/label/aboveTable) 편집.
-// 각 탭의 내부 ListScreenConfig는 JSON sub-textarea (recursive 시각 편집은 follow-up).
+// Phase 4 follow-up #3: 각 탭의 내부 ListScreenConfig 도 시각 편집 (recursive
+// VisualScreenEditorBody) — 더 이상 JSON sub-textarea 강제 안 함.
 
 import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import type { TabbedListConfig } from '@/templates/types';
 import { contentBlocks } from '@/templates/registry';
 import { ArrayEditor, FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
 import { EditorWithPanel, PanelGroup, PanelEmpty } from './RightPanel';
+import { VisualScreenEditorBody } from './VisualScreenEditor';
 
 type Tab = 'basic' | 'tabs' | 'json';
 
@@ -23,20 +27,96 @@ export default function VisualTabbedListEditor({
   value, onChange, jsonDraft, onJsonDraftChange,
 }: VisualTabbedListEditorProps) {
   const [tab, setTab] = useState<Tab>('basic');
+  // Follow-up #3: 탭의 내부 list 를 시각 편집 중일 때 그 탭 idx (null = 일반 모드)
+  const [editingListIdx, setEditingListIdx] = useState<number | null>(null);
+  const tabs = value.tabs ?? [];
 
+  // 내부 list 편집 모드 — 좌측 본체를 그 탭의 list 시각 편집기로 전환
+  if (editingListIdx !== null && tabs[editingListIdx]) {
+    const editingTab = tabs[editingListIdx];
+    return (
+      <EditorWithPanel
+        panel={
+          <>
+            <PanelGroup title="내부 list 편집 중">
+              <p className="text-[11px] text-muted-foreground">
+                탭 <span className="font-mono font-semibold">{editingTab.key}</span> ·
+                {' '}{editingTab.label}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                컬럼 행 ⚙ 클릭은 이 좁은 패널에서는 동작 안 함 (탭 list 편집은 단순 모드).
+                상세 편집은 "← 돌아가기" 후 JSON 탭에서.
+              </p>
+            </PanelGroup>
+            <PanelEmpty message="이 탭의 list 만 편집 중. 탭 묶음 정보는 ← 돌아가서." />
+          </>
+        }
+        panelTitle={`⚙ ${editingTab.label} list 편집`}
+      >
+        <div className="flex flex-col h-full min-h-0">
+          <div className="flex items-center gap-2 border-b bg-muted/20 px-3 py-1.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setEditingListIdx(null)}
+            >
+              <ArrowLeft className="h-3 w-3 mr-1" />
+              탭 묶음으로 돌아가기
+            </Button>
+            <span className="text-[11px] text-muted-foreground">
+              · 편집 중: <span className="font-mono">{editingTab.key}</span>
+            </span>
+          </div>
+          <div className="flex-1 min-h-0">
+            <VisualScreenEditorBody
+              value={editingTab.list}
+              onChange={(nextList) => {
+                onChange({
+                  ...value,
+                  tabs: tabs.map((t, i) => i === editingListIdx ? { ...t, list: nextList } : t),
+                });
+              }}
+              jsonDraft={JSON.stringify(editingTab.list, null, 2)}
+              onJsonDraftChange={(json) => {
+                try {
+                  const parsed = JSON.parse(json);
+                  onChange({
+                    ...value,
+                    tabs: tabs.map((t, i) => i === editingListIdx ? { ...t, list: parsed } : t),
+                  });
+                } catch {
+                  // invalid JSON — wait for user fix
+                }
+              }}
+            />
+          </div>
+        </div>
+      </EditorWithPanel>
+    );
+  }
+
+  // 일반 모드 (탭 묶음 편집)
   const main = (
     <div className="flex flex-col h-full min-h-0">
       <div className="border-b px-3 flex gap-1 overflow-x-auto">
         <TabButton active={tab === 'basic'} onClick={() => setTab('basic')}>기본 정보</TabButton>
         <TabButton active={tab === 'tabs'} onClick={() => setTab('tabs')}>
-          탭 ({(value.tabs ?? []).length})
+          탭 ({tabs.length})
         </TabButton>
         <TabButton active={tab === 'json'} onClick={() => setTab('json')}>JSON (고급)</TabButton>
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto p-4">
         {tab === 'basic' && <BasicTab value={value} onChange={onChange} />}
-        {tab === 'tabs' && <TabsTab value={value} onChange={onChange} />}
+        {tab === 'tabs' && (
+          <TabsTab
+            value={value}
+            onChange={onChange}
+            onEditList={(idx) => setEditingListIdx(idx)}
+          />
+        )}
         {tab === 'json' && (
           <Textarea
             value={jsonDraft}
@@ -55,11 +135,9 @@ export default function VisualTabbedListEditor({
         <>
           <PanelGroup title="TabbedList 정보">
             <p className="text-[11px] text-muted-foreground">
-              탭 묶음 — 각 탭의 list (pagination/inlineEdit/savedViews 등) 는
-              해당 list 의 JSON 영역에서 편집.
+              탭 묶음 — 각 탭의 list 는 행의 "list 시각 편집" 버튼으로 진입.
             </p>
           </PanelGroup>
-          <PanelEmpty message="탭별 list 의 시각 편집은 follow-up (recursive editor)" />
         </>
       }
       panelTitle="⚙ 탭 묶음 화면 설정"
@@ -99,14 +177,18 @@ function BasicTab({ value, onChange }: { value: TabbedListConfig; onChange: (nex
   );
 }
 
-function TabsTab({ value, onChange }: { value: TabbedListConfig; onChange: (next: TabbedListConfig) => void }) {
+function TabsTab({ value, onChange, onEditList }: {
+  value: TabbedListConfig;
+  onChange: (next: TabbedListConfig) => void;
+  onEditList: (idx: number) => void;
+}) {
   const tabs = value.tabs ?? [];
   const blockOptions = Object.keys(contentBlocks).sort().map((id) => ({ value: id, label: id }));
 
   return (
     <ArrayEditor
       items={tabs}
-      hint="각 탭의 key/label은 여기서, 내부 list 구성은 JSON 탭에서 편집. 새 탭은 빈 list로 추가됨."
+      hint="각 탭의 key/label 은 여기서, list 시각 편집은 행의 [list 편집 →] 버튼으로."
       addLabel="탭 추가"
       emptyMsg="탭이 없습니다"
       rowKey={(_, i) => `${i}-${tabs[i].key}`}
@@ -130,7 +212,7 @@ function TabsTab({ value, onChange }: { value: TabbedListConfig; onChange: (next
       renderRow={(t, idx) => {
         const update = (next: typeof t) =>
           onChange({ ...value, tabs: tabs.map((x, i) => (i === idx ? next : x)) });
-        const innerListJson = JSON.stringify(t.list, null, 2);
+        const cols = t.list.columns?.length ?? 0;
         return (
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-2">
@@ -146,22 +228,22 @@ function TabsTab({ value, onChange }: { value: TabbedListConfig; onChange: (next
                 })} />
               <div />
             </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">
-                내부 list (ListScreenConfig — 깊은 편집은 별도 단계, JSON 직편)
-              </Label>
-              <Textarea
-                className="font-mono text-[10px]"
-                rows={5}
-                value={innerListJson}
-                onChange={(e) => {
-                  try {
-                    update({ ...t, list: JSON.parse(e.target.value) });
-                  } catch {
-                    // invalid — 사용자 수정 대기
-                  }
-                }}
-              />
+            <div className="flex items-center justify-between rounded border bg-muted/20 px-3 py-2">
+              <div className="text-[11px] text-muted-foreground">
+                <span className="font-mono">{t.list.id}</span>
+                {' · '}컬럼 {cols}개
+                {' · '}메트릭 {t.list.metrics?.length ?? 0}
+                {' · '}필터 {t.list.filters?.length ?? 0}
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => onEditList(idx)}
+              >
+                list 시각 편집 →
+              </Button>
             </div>
           </div>
         );
