@@ -148,26 +148,49 @@ export function CommandTopLine({
   sub?: string;
   right?: ReactNode;
 }) {
-  const [target, setTarget] = useState<HTMLElement | null>(() => (
-    typeof document === 'undefined' ? null : document.getElementById('sf-command-topline-slot')
-  ));
+  const [targets, setTargets] = useState<{
+    title: HTMLElement | null;
+    actions: HTMLElement | null;
+  }>(() => ({
+    title: typeof document === 'undefined' ? null : document.getElementById('sf-command-title-slot'),
+    actions: typeof document === 'undefined' ? null : document.getElementById('sf-command-topline-slot'),
+  }));
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    setTarget(document.getElementById('sf-command-topline-slot'));
+    setTargets({
+      title: document.getElementById('sf-command-title-slot'),
+      actions: document.getElementById('sf-command-topline-slot'),
+    });
   }, []);
 
-  const content = (
-    <div className="sf-command-topline">
-      <div className="sf-command-topline-copy">
-        <div className="sf-command-topline-title">{title}</div>
-        {sub ? <div className="sf-command-topline-sub">{sub}</div> : null}
-      </div>
-      <div className="sf-command-topline-actions">{right}</div>
+  const copy = (
+    <div className="sf-command-topline-copy">
+      <div className="sf-command-topline-title">{title}</div>
+      {sub ? <div className="sf-command-topline-sub">{sub}</div> : null}
     </div>
   );
 
-  return target ? createPortal(content, target) : content;
+  if (targets.actions) {
+    return (
+      <>
+        {targets.title ? createPortal(copy, targets.title) : null}
+        {createPortal(
+          <div className="sf-command-topline sf-command-topline--actions-only">
+            <div className="sf-command-topline-actions">{right}</div>
+          </div>,
+          targets.actions,
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div className="sf-command-topline">
+      {copy}
+      <div className="sf-command-topline-actions">{right}</div>
+    </div>
+  );
 }
 
 export function RailBlock({

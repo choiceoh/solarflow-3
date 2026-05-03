@@ -407,6 +407,7 @@ export default function CommandShell() {
         <header className="sf-topbar">
           <div className="sf-topbar-title">
             <h1>{meta.title}</h1>
+            <div id="sf-command-title-slot" className="sf-topbar-command-title" />
           </div>
 
           <div id="sf-command-topline-slot" className="sf-topbar-command" />
