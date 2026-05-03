@@ -14,6 +14,7 @@ export interface Declaration {
   customs_office?: string;
   port?: string;
   memo?: string;
+  is_sandbox?: boolean;
 }
 
 export interface DeclarationCost {
@@ -45,6 +46,7 @@ export interface DeclarationCost {
   landed_wp_krw?: number;
   allocated_expenses?: Record<string, number>;
   memo?: string;
+  is_sandbox?: boolean;
 }
 
 export type ExpenseType =
@@ -68,6 +70,7 @@ export interface Expense {
   vehicle_type?: string;
   destination?: string;
   memo?: string;
+  is_sandbox?: boolean;
 }
 
 export interface ExchangeCompareItem {

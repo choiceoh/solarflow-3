@@ -14,6 +14,7 @@ import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
 import { EXPENSE_TYPE_LABEL, type ExpenseType, type Expense } from '@/types/customs';
 import type { BLShipment } from '@/types/inbound';
+import { SandboxBanner, useFormReadOnly } from '@/onboarding';
 
 interface Props {
   open: boolean;
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export default function ExpenseForm({ open, onOpenChange, onSubmit, editData }: Props) {
+  const readOnly = useFormReadOnly(editData);
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [bls, setBls] = useState<BLShipment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,6 +78,7 @@ export default function ExpenseForm({ open, onOpenChange, onSubmit, editData }: 
   }
 
   const handleSubmit = async () => {
+    if (readOnly) return;
     setLoading(true);
     setSubmitError('');
     try {
@@ -104,7 +107,9 @@ export default function ExpenseForm({ open, onOpenChange, onSubmit, editData }: 
         <DialogHeader>
           <DialogTitle>{editData ? '부대비용 수정' : '부대비용 등록'}</DialogTitle>
         </DialogHeader>
+        {readOnly && <SandboxBanner />}
         {submitError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{submitError}</div>}
+        <fieldset disabled={readOnly} className="contents">
         <div className="grid gap-3 py-2">
           <Alert>
             <AlertDescription className="text-xs">B/L 또는 월 중 하나는 필수입니다</AlertDescription>
@@ -169,11 +174,14 @@ export default function ExpenseForm({ open, onOpenChange, onSubmit, editData }: 
             <Textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={2} />
           </div>
         </div>
+        </fieldset>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>취소</Button>
-          <Button onClick={handleSubmit} disabled={loading || !expenseType || !amount || !hasRef}>
-            {loading ? '처리 중...' : editData ? '수정' : '등록'}
-          </Button>
+          {!readOnly && (
+            <Button onClick={handleSubmit} disabled={loading || !expenseType || !amount || !hasRef}>
+              {loading ? '처리 중...' : editData ? '수정' : '등록'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

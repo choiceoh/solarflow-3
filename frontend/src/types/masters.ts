@@ -50,6 +50,7 @@ export interface Partner {
   contact_email?: string;
   is_active: boolean;
   owner_user_id?: string | null;
+  is_sandbox?: boolean;
 }
 
 export interface Warehouse {

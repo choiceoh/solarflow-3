@@ -21,6 +21,7 @@ import {
 } from '@/lib/numberRules';
 import type { PurchaseOrder } from '@/types/procurement';
 import type { Company, Manufacturer, Product } from '@/types/masters';
+import { SandboxBanner, useFormReadOnly } from '@/onboarding';
 
 /* ── 상수 ── */
 const CONTRACT_TYPES: Record<string, string> = {
@@ -128,6 +129,7 @@ interface Props {
 }
 
 export default function POForm({ open = true, onOpenChange, onSubmit, editData, variant = 'dialog' }: Props) {
+  const readOnly = useFormReadOnly(editData);
   const globalCompanyId = useAppStore((s) => s.selectedCompanyId);
   const storeCompanies = useAppStore((s) => s.companies);
 
@@ -485,6 +487,7 @@ export default function POForm({ open = true, onOpenChange, onSubmit, editData, 
     };
     Object.keys(payload).forEach((k) => { if (payload[k] === undefined) delete payload[k]; });
 
+    if (readOnly) return; // 박물관 표본 — 입력 차단
     setIsSubmitting(true);
     try {
       await onSubmit(payload);
@@ -542,12 +545,14 @@ export default function POForm({ open = true, onOpenChange, onSubmit, editData, 
 
   const body = (
     <>
+        {readOnly && <SandboxBanner />}
         {submitError && (
           <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
             {submitError}
           </div>
         )}
 
+        <fieldset disabled={readOnly} className="contents">
         <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') e.preventDefault(); }}
           className="space-y-3">
@@ -1062,9 +1067,10 @@ export default function POForm({ open = true, onOpenChange, onSubmit, editData, 
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
-            <Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button>
+            {!readOnly && <Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button>}
           </div>
         </form>
+        </fieldset>
     </>
   );
 
