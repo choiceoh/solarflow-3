@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useAppStore } from '@/stores/appStore';
 import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
@@ -33,6 +34,7 @@ export default function OutboundPage() {
   const saleColVis = useColumnVisibility(SALE_TABLE_ID, SALE_COLUMN_META);
   const saleColPin = useColumnPinning(SALE_TABLE_ID);
   const [activeTab, setActiveTab] = useState<'outbound' | 'sales'>('outbound');
+  const [searchText, setSearchText] = useState('');
   const _loc = useLocation();
   // R1-1: 사이드바 "출고/판매" 클릭 시 목록 복귀 — URL → 상태 동기화
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -75,16 +77,6 @@ export default function OutboundPage() {
     );
   }
 
-  if (selectedOutbound) {
-    return (
-      <div className="p-6">
-        <OutboundDetailView
-          outboundId={selectedOutbound}
-          onBack={() => { setSelectedOutbound(null); reloadOutbounds(); reloadSales(); }}
-        />
-      </div>
-    );
-  }
 
   const handleCreate = async (formData: Record<string, unknown>) => {
     await fetchWithAuth('/api/v1/outbounds', { method: 'POST', body: JSON.stringify(formData) });
@@ -109,8 +101,19 @@ export default function OutboundPage() {
   const pendingInvoiceCount = sales.filter((sale) => !(sale.tax_invoice_date ?? sale.sale?.tax_invoice_date)).length;
   const recentOutbounds = outbounds.slice(0, 4);
 
+  const searchPlaceholder = activeTab === 'outbound' ? '품번/품명/현장/창고/수주번호/ERP번호 검색' : '거래처/품명 검색';
   const outboundCardControls = (
     <div className="sf-card-controls" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <input
+          type="text"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          placeholder={searchPlaceholder}
+          className="h-8 w-64 rounded-md border border-input bg-background pl-7 pr-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/45"
+        />
+      </div>
       {activeTab === 'outbound' ? (
         <>
           <FilterButton items={[
@@ -170,13 +173,14 @@ export default function OutboundPage() {
           { key: 'sales', label: '매출 현황', count: sales.length },
         ]}
         value={activeTab}
-        onChange={(value) => setActiveTab(value as 'outbound' | 'sales')}
+        onChange={(value) => { setActiveTab(value as 'outbound' | 'sales'); setSearchText(''); }}
       />
     </div>
   );
 
   return (
     <>
+      <div className={selectedOutbound ? 'hidden' : 'contents'}>
       <MasterConsole
         eyebrow="FULFILLMENT"
         title="출고/판매"
@@ -210,7 +214,7 @@ export default function OutboundPage() {
           </>
         }
       >
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'outbound' | 'sales')}>
+        <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value as 'outbound' | 'sales'); setSearchText(''); }}>
 
         <TabsContent value="outbound" className="space-y-4 mt-4">
           {obLoading ? <SkeletonRows rows={6} /> : (
@@ -221,6 +225,7 @@ export default function OutboundPage() {
               onPinningChange={outboundColPin.setPinning}
               onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
               onNew={() => setFormOpen(true)}
+              globalFilter={searchText}
             />
           )}
         </TabsContent>
@@ -229,12 +234,22 @@ export default function OutboundPage() {
           {saleLoading ? <SkeletonRows rows={6} /> : (
             <>
               <SaleSummaryCards items={sales} />
-              <SaleListTable items={sales} hidden={saleColVis.hidden} pinning={saleColPin.pinning} onPinningChange={saleColPin.setPinning} />
+              <SaleListTable items={sales} hidden={saleColVis.hidden} pinning={saleColPin.pinning} onPinningChange={saleColPin.setPinning} globalFilter={searchText} />
             </>
           )}
         </TabsContent>
       </Tabs>
       </MasterConsole>
+      </div>
+
+      {selectedOutbound && (
+        <div className="p-6">
+          <OutboundDetailView
+            outboundId={selectedOutbound}
+            onBack={() => { setSelectedOutbound(null); reloadOutbounds(); reloadSales(); }}
+          />
+        </div>
+      )}
 
       <OutboundForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleCreate} />
     </>

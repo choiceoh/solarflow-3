@@ -13,6 +13,7 @@ interface Props {
   pinning?: ColumnPinningState;
   onPinningChange?: (next: ColumnPinningState) => void;
   onInvoice?: (item: SaleListItem) => void;
+  globalFilter?: string;
 }
 
 function buildColumns({ onInvoice }: { onInvoice?: (item: SaleListItem) => void }): ColumnDef<SaleListItem>[] {
@@ -27,8 +28,8 @@ function buildColumns({ onInvoice }: { onInvoice?: (item: SaleListItem) => void 
       ),
       sortAccessor: (item) => item.outbound_id ? 1 : 0,
     },
-    { key: 'customer_name', label: '거래처', hideable: true, cell: (item) => item.sale.customer_name ?? '—', sortAccessor: (item) => item.sale.customer_name ?? '' },
-    { key: 'product_name', label: '품명', hideable: true, cell: (item) => item.product_name ?? '—', sortAccessor: (item) => item.product_name ?? '' },
+    { key: 'customer_name', label: '거래처', hideable: true, cell: (item) => item.sale.customer_name ?? '—', sortAccessor: (item) => item.sale.customer_name ?? '', globalFilterText: (item) => item.sale.customer_name ?? '' },
+    { key: 'product_name', label: '품명', hideable: true, cell: (item) => item.product_name ?? '—', sortAccessor: (item) => item.product_name ?? '', globalFilterText: (item) => item.product_name ?? '' },
     { key: 'spec_wp', label: '규격', hideable: true, cell: (item) => item.spec_wp ? `${item.spec_wp}` : '—', sortAccessor: (item) => item.spec_wp ?? 0 },
     { key: 'quantity', label: '수량', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => formatNumber(item.quantity), sortAccessor: (item) => item.quantity },
     { key: 'unit_price_wp', label: 'Wp단가', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => formatNumber(item.sale.unit_price_wp), sortAccessor: (item) => item.sale.unit_price_wp ?? 0 },
@@ -83,7 +84,7 @@ function buildColumns({ onInvoice }: { onInvoice?: (item: SaleListItem) => void 
 export const SALE_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({}).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function SaleListTable({ items, hidden, pinning, onPinningChange, onInvoice }: Props) {
+function SaleListTable({ items, hidden, pinning, onPinningChange, onInvoice, globalFilter }: Props) {
   return (
     <MetaTable
       tableId={SALE_TABLE_ID}
@@ -92,6 +93,7 @@ function SaleListTable({ items, hidden, pinning, onPinningChange, onInvoice }: P
       pinning={pinning}
       onPinningChange={onPinningChange}
       items={items}
+      globalFilter={globalFilter}
       getRowKey={(item) => item.sale_id}
       emptyMessage="매출 데이터가 없습니다"
     />
