@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Database,
   FileSignature,
+  GraduationCap,
   History,
   Landmark,
   LogOut,
@@ -51,6 +52,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useSidebarTabs } from '@/hooks/useSidebarTabs';
 import { useUserPersona } from '@/hooks/useUserPersona';
 import { useAppStore } from '@/stores/appStore';
+import { FirstLoginToast, OnboardingTour } from '@/onboarding';
 import { useEffect, useMemo, useState } from 'react';
 
 const SIDEBAR_COLLAPSED_KEY = 'sf.sidebar.collapsed';
@@ -157,6 +159,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: ['topsolar'], isWip: true },
       // admin 전용 — 메타 config 시각 편집 (DB 영구 저장, 모든 사용자 영향)
       { key: 'ui-editor', label: 'UI 편집기', abbr: 'UI', path: '/ui-config-editor', icon: Wand2, menu: 'ui_editor' },
+      { key: 'tutorial', label: '튜토리얼', abbr: '학습', path: '/tutorial', icon: GraduationCap, menu: 'tutorial' },
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
     ],
   },
@@ -343,7 +346,7 @@ export default function CommandShell() {
           </div>
         ) : null}
 
-        <nav className="sf-sidebar-nav" aria-label="주요 메뉴 목록">
+        <nav className="sf-sidebar-nav" aria-label="주요 메뉴 목록" data-onboarding-step="self-demo.sidebar.intro">
           {NAV_GROUPS.map((group) => {
             const visibleItems = group.items.filter(
               (item) =>
@@ -415,7 +418,7 @@ export default function CommandShell() {
             <GlobalSearchBar />
           </div>
 
-          <div className="sf-topbar-actions">
+          <div className="sf-topbar-actions" data-onboarding-step="self-demo.topbar.actions">
             <FloatingMwEaCalculator />
             <AlertBell
               alerts={alertState.alerts}
@@ -436,6 +439,8 @@ export default function CommandShell() {
       <InspectorPanel />
       <ContextMenuOverlay />
       <OnboardingHint />
+      <OnboardingTour />
+      <FirstLoginToast />
       <FloatingAssistantButton />
     </div>
   );

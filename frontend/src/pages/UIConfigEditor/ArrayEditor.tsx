@@ -98,12 +98,12 @@ export function ArrayEditor<T>({
           <p className="flex-1 min-w-0 text-xs text-muted-foreground">{hint}</p>
         )}
         {filter && filteredIdx && (
-          <span className="text-[10px] text-muted-foreground shrink-0">{filteredIdx.size} / {items.length}</span>
+          <span className="text-xs text-muted-foreground shrink-0">{filteredIdx.size} / {items.length}</span>
         )}
         {renderSummary && (
           <>
-            <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={expandAll}>모두 펼치기</Button>
-            <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={collapseAll}>모두 접기</Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={expandAll}>모두 펼치기</Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={collapseAll}>모두 접기</Button>
           </>
         )}
         <Button size="sm" variant="outline" className="h-7" onClick={onAdd}>
@@ -112,7 +112,7 @@ export function ArrayEditor<T>({
       </div>
 
       {validate && (issueCounts.error > 0 || issueCounts.warn > 0) && (
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px]">
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs">
           <span className="font-medium text-amber-900">검증:</span>
           {issueCounts.error > 0 && (
             <span className="rounded bg-rose-200 px-1.5 py-0.5 font-medium text-rose-800">error {issueCounts.error}</span>
@@ -206,7 +206,7 @@ export function ArrayEditor<T>({
               className="rounded border bg-card p-3 grid grid-cols-12 gap-2 items-start"
             >
               <div className="col-span-1 flex flex-col items-center gap-1">
-                <span className="text-[10px] text-muted-foreground mono">#{idx + 1}</span>
+                <span className="text-xs text-muted-foreground mono">#{idx + 1}</span>
                 {renderSummary && (
                   <Button type="button" variant="ghost" size="icon" className="h-6 w-6" title="접기"
                     onClick={() => toggleRow(idx)}><ChevronUp className="h-3.5 w-3.5" /></Button>
@@ -224,7 +224,7 @@ export function ArrayEditor<T>({
                 {validate && issues.length > 0 && (
                   <div className="space-y-0.5 rounded border border-rose-200 bg-rose-50 px-2 py-1">
                     {issues.map((iss, i) => (
-                      <div key={i} className={`text-[10px] flex items-start gap-1 ${iss.level === 'error' ? 'text-rose-800' : 'text-amber-800'}`}>
+                      <div key={i} className={`text-xs flex items-start gap-1 ${iss.level === 'error' ? 'text-rose-800' : 'text-amber-800'}`}>
                         <span className={`rounded px-1 py-0 text-[9px] font-medium uppercase ${iss.level === 'error' ? 'bg-rose-200' : 'bg-amber-200'}`}>{iss.level}</span>
                         <span>{iss.msg}</span>
                       </div>
@@ -260,7 +260,7 @@ export function ArrayEditor<T>({
           </div>
         )}
         {filter && filteredIdx && filteredIdx.size === 0 && items.length > 0 && (
-          <div className="text-center py-3 text-[10px] text-muted-foreground italic border border-dashed rounded">
+          <div className="text-center py-3 text-xs text-muted-foreground italic border border-dashed rounded">
             "{filter}" 일치 항목 없음
           </div>
         )}
@@ -281,7 +281,7 @@ export function FieldInput({
 }) {
   return (
     <div className="space-y-1">
-      <Label className="text-[10px] text-muted-foreground">{label}</Label>
+      <Label className="text-xs text-muted-foreground">{label}</Label>
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -304,7 +304,7 @@ export function FieldSelect({
 }) {
   return (
     <div className="space-y-1">
-      <Label className="text-[10px] text-muted-foreground">{label}</Label>
+      <Label className="text-xs text-muted-foreground">{label}</Label>
       <select
         className="w-full h-7 text-xs border rounded px-2 bg-background"
         value={value}

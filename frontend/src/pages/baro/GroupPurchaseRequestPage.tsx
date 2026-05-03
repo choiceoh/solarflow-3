@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import DataTable, { type Column } from '@/components/common/DataTable';
 import { fetchWithAuth } from '@/lib/api';
+import { confirmDialog } from '@/lib/dialogs';
 import { useAppStore } from '@/stores/appStore';
 import type {
   IntercompanyRequest,
@@ -160,7 +161,12 @@ export default function GroupPurchaseRequestPage() {
   };
 
   const cancelRow = async (row: IntercompanyRequest) => {
-    if (!window.confirm('이 매입 요청을 취소하시겠습니까?')) return;
+    const ok = await confirmDialog({
+      description: '이 매입 요청을 취소하시겠습니까?',
+      variant: 'destructive',
+      confirmLabel: '취소',
+    });
+    if (!ok) return;
     try {
       await fetchWithAuth(`/api/v1/intercompany-requests/${row.request_id}/cancel`, { method: 'PATCH' });
       await load();
@@ -170,7 +176,11 @@ export default function GroupPurchaseRequestPage() {
   };
 
   const receiveRow = async (row: IntercompanyRequest) => {
-    if (!window.confirm('이 매입 요청의 입고를 확인하시겠습니까?')) return;
+    const ok = await confirmDialog({
+      description: '이 매입 요청의 입고를 확인하시겠습니까?',
+      confirmLabel: '입고 확인',
+    });
+    if (!ok) return;
     try {
       await fetchWithAuth(`/api/v1/intercompany-requests/${row.request_id}/receive`, { method: 'PATCH' });
       await load();

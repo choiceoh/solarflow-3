@@ -20,6 +20,7 @@ import BLForm from './BLForm';
 import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { useBLDetail, useBLLines } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
+import { notify } from '@/lib/notify';
 import { type BLLineItem } from '@/types/inbound';
 import { MetaDetailBody } from '@/templates/MetaDetail';
 import { useActionHandler } from '@/templates/registry';
@@ -124,7 +125,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
       setDeleteOpen(false);
       onBack();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제에 실패했습니다');
+      notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다');
     } finally {
       setDeleting(false);
     }

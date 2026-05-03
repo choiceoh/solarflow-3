@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { fetchWithAuth } from '@/lib/api';
+import { notify } from '@/lib/notify';
+import { confirmDialog } from '@/lib/dialogs';
 import { useAppStore } from '@/stores/appStore';
 import { EXPENSE_TYPES_ACTIVE, type Expense, type ExpenseType } from '@/types/customs';
 import type { BLLineItem } from '@/types/inbound';
@@ -139,12 +141,17 @@ export default function BLExpensesTab({ blId, lines }: Props) {
       setRows((prev) => ({ ...prev, [type]: emptyRow() }));
       return;
     }
-    if (!confirm(`${EXPENSE_TYPES_ACTIVE.find(t => t.value === type)?.label} 항목을 삭제하시겠습니까?`)) return;
+    const ok = await confirmDialog({
+      description: `${EXPENSE_TYPES_ACTIVE.find(t => t.value === type)?.label} 항목을 삭제하시겠습니까?`,
+      variant: 'destructive',
+      confirmLabel: '삭제',
+    });
+    if (!ok) return;
     try {
       await fetchWithAuth(`/api/v1/expenses/${r.expense_id}`, { method: 'DELETE' });
       await load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제 실패');
+      notify.error(err instanceof Error ? err.message : '삭제 실패');
     }
   };
 

@@ -131,10 +131,10 @@ export const AiVariantsPanel = ({ target, className, onApply }: AiVariantsPanelP
                 data-inspector-ui="true"
                 type="button"
                 onClick={() => onApply(v)}
-                className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-left text-[11px] hover:border-purple-400 hover:bg-purple-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-purple-900/20"
+                className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-left text-xs hover:border-purple-400 hover:bg-purple-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-purple-900/20"
               >
-                <div className="text-[10px] font-medium text-purple-700 dark:text-purple-300">변형 {i + 1}</div>
-                <code className="mt-0.5 block break-all font-mono text-[10px] text-slate-700 dark:text-slate-300">
+                <div className="text-xs font-medium text-purple-700 dark:text-purple-300">변형 {i + 1}</div>
+                <code className="mt-0.5 block break-all font-mono text-xs text-slate-700 dark:text-slate-300">
                   {v}
                 </code>
               </button>
@@ -143,10 +143,10 @@ export const AiVariantsPanel = ({ target, className, onApply }: AiVariantsPanelP
         </ul>
       )}
       {isLoading && variants.length === 0 && (
-        <div className="text-[10px] text-slate-500">응답 받는 중…</div>
+        <div className="text-xs text-slate-500">응답 받는 중…</div>
       )}
       {!isLoading && messages.length > 0 && variants.length === 0 && (
-        <details className="rounded border border-amber-200 bg-amber-50 p-2 text-[10px] text-amber-900 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200">
+        <details className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200">
           <summary className="cursor-pointer select-none font-medium">
             AI 응답에서 백틱 className 후보를 못 찾았어요 — 원본 응답 보기
           </summary>

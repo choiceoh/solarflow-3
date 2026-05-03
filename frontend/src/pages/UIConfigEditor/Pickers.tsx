@@ -31,7 +31,7 @@ export function BooleanPicker({
         />
         <span>{label}</span>
       </label>
-      {hint && <p className="text-[10px] text-muted-foreground pl-5.5">{hint}</p>}
+      {hint && <p className="text-xs text-muted-foreground pl-5.5">{hint}</p>}
     </div>
   );
 }
@@ -58,7 +58,7 @@ export function RolePicker({
   };
   return (
     <div className="space-y-1">
-      <Label className="text-[10px] text-muted-foreground">{label}</Label>
+      <Label className="text-xs text-muted-foreground">{label}</Label>
       <div className="flex flex-wrap gap-1">
         {ALL_ROLES.map((r) => {
           const on = selected.has(r);
@@ -67,7 +67,7 @@ export function RolePicker({
               key={r}
               type="button"
               onClick={() => toggle(r)}
-              className={`px-2 py-0.5 text-[10px] rounded-full border transition-colors ${
+              className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
                 on
                   ? 'bg-foreground text-background border-foreground'
                   : 'bg-background text-muted-foreground border-input hover:border-foreground'
@@ -79,7 +79,7 @@ export function RolePicker({
           );
         })}
       </div>
-      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -105,7 +105,7 @@ export function RegistryIdPicker({
 
   return (
     <div className="space-y-1">
-      <Label className="text-[10px] text-muted-foreground">{label}</Label>
+      <Label className="text-xs text-muted-foreground">{label}</Label>
       <select
         className={`w-full h-7 text-xs border rounded px-2 bg-background font-mono ${
           !isRegistered ? 'border-destructive text-destructive' : ''
@@ -125,18 +125,18 @@ export function RegistryIdPicker({
         )}
       </select>
       {!isRegistered && value && (
-        <p className="flex items-center gap-1 text-[10px] text-destructive">
+        <p className="flex items-center gap-1 text-xs text-destructive">
           <AlertTriangle className="h-3 w-3" />
           코드에 등록되지 않은 ID — runtime 에서 무시됨
         </p>
       )}
       {selected?.description && (
-        <p className="text-[10px] text-muted-foreground italic">
+        <p className="text-xs text-muted-foreground italic">
           {selected.description}
         </p>
       )}
       {!selected && hint && (
-        <p className="text-[10px] text-muted-foreground">{hint}</p>
+        <p className="text-xs text-muted-foreground">{hint}</p>
       )}
     </div>
   );
@@ -155,7 +155,7 @@ export function EndpointPicker({
   const hasIdToken = (value ?? '').includes(':id');
   return (
     <div className="space-y-1">
-      <Label className="text-[10px] text-muted-foreground">{label}</Label>
+      <Label className="text-xs text-muted-foreground">{label}</Label>
       <Input
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value || undefined)}
@@ -165,12 +165,12 @@ export function EndpointPicker({
         }`}
       />
       {value && !hasIdToken && (
-        <p className="flex items-center gap-1 text-[10px] text-amber-700">
+        <p className="flex items-center gap-1 text-xs text-amber-700">
           <AlertTriangle className="h-3 w-3" />
           URL 에 :id 자리표시자 없음
         </p>
       )}
-      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -190,7 +190,7 @@ export function IdFieldPicker({
   const isKnown = !value || columnKeys.includes(value);
   return (
     <div className="space-y-1">
-      <Label className="text-[10px] text-muted-foreground">{label}</Label>
+      <Label className="text-xs text-muted-foreground">{label}</Label>
       <select
         className={`w-full h-7 text-xs border rounded px-2 bg-background font-mono ${
           !isKnown ? 'border-destructive text-destructive' : ''
@@ -203,12 +203,12 @@ export function IdFieldPicker({
         {!isKnown && value && <option value={value}>⚠ {value} (컬럼에 없음)</option>}
       </select>
       {!isKnown && value && (
-        <p className="flex items-center gap-1 text-[10px] text-destructive">
+        <p className="flex items-center gap-1 text-xs text-destructive">
           <AlertTriangle className="h-3 w-3" />
           컬럼 목록에 없는 키 — 행 데이터에 없을 수 있음
         </p>
       )}
-      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -228,9 +228,9 @@ export function InlineEditOptionsPicker({
 
   return (
     <div className="space-y-1.5">
-      <Label className="text-[10px] text-muted-foreground">inlineEditOptions</Label>
+      <Label className="text-xs text-muted-foreground">inlineEditOptions</Label>
       {items.length === 0 && (
-        <p className="text-[10px] text-muted-foreground italic">옵션 없음 — 아래 + 로 추가</p>
+        <p className="text-xs text-muted-foreground italic">옵션 없음 — 아래 + 로 추가</p>
       )}
       {items.map((item, i) => (
         <div key={i} className="flex items-center gap-1">
@@ -256,7 +256,7 @@ export function InlineEditOptionsPicker({
           />
           <button
             type="button"
-            className="text-[11px] text-muted-foreground hover:text-destructive px-1"
+            className="text-xs text-muted-foreground hover:text-destructive px-1"
             onClick={() => update(items.filter((_, j) => j !== i))}
             aria-label="옵션 삭제"
           >
@@ -266,7 +266,7 @@ export function InlineEditOptionsPicker({
       ))}
       <button
         type="button"
-        className="text-[10px] text-muted-foreground hover:text-foreground"
+        className="text-xs text-muted-foreground hover:text-foreground"
         onClick={() => update([...items, { value: '', label: '' }])}
       >
         + 옵션 추가
@@ -292,7 +292,7 @@ export function InlineEditTypePicker({
 }) {
   return (
     <div className="space-y-1">
-      <Label className="text-[10px] text-muted-foreground">inlineEditType</Label>
+      <Label className="text-xs text-muted-foreground">inlineEditType</Label>
       <select
         className="w-full h-7 text-xs border rounded px-2 bg-background"
         value={value ?? 'text'}
@@ -326,7 +326,7 @@ export function CollapsiblePicker({
   const stringValue = value === true ? 'true' : value === 'collapsed' ? 'collapsed' : '';
   return (
     <div className="space-y-1">
-      <Label className="text-[10px] text-muted-foreground">collapsible</Label>
+      <Label className="text-xs text-muted-foreground">collapsible</Label>
       <select
         className="w-full h-7 text-xs border rounded px-2 bg-background"
         value={stringValue}
@@ -355,7 +355,7 @@ export function AllowedSizesPicker({
 }) {
   return (
     <div className="space-y-1">
-      <Label className="text-[10px] text-muted-foreground">allowedSizes (콤마)</Label>
+      <Label className="text-xs text-muted-foreground">allowedSizes (콤마)</Label>
       <Input
         value={(value ?? []).join(',')}
         onChange={(e) => {
@@ -368,7 +368,7 @@ export function AllowedSizesPicker({
         placeholder="25,50,100"
         className="h-7 text-xs font-mono"
       />
-      <p className="text-[10px] text-muted-foreground">사용자가 선택 가능한 페이지 크기들</p>
+      <p className="text-xs text-muted-foreground">사용자가 선택 가능한 페이지 크기들</p>
     </div>
   );
 }

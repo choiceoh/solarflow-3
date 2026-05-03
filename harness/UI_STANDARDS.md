@@ -18,7 +18,10 @@
 | 페이지 전체 로드 실패 (e.g., GET /pos 500) | **Inline ErrorState** (전체 차지) | 페이지가 그릴 콘텐츠 자체 없음 |
 | 빈 상태 | **EmptyState** (`components/common/EmptyState.tsx`) | 에러 아님 |
 
-`alert()`, `window.confirm()`, `window.prompt()` — **금지**. Biome `noAlert: error` 룰로 차단(PR-1.2 부터 활성).
+`alert()`, `window.confirm()`, `window.prompt()` — **금지**. Biome `suspicious/noAlert: error` 룰로 차단 — PR-1.2 부터 활성. 대체:
+- 알림 (info / 성공 / 실패) → `notify.info / success / error / warning` (`@/lib/notify`)
+- 확인 다이얼로그 → `confirmDialog({ description, variant: 'destructive', confirmLabel })` (`@/lib/dialogs`) — Promise<boolean>
+- 입력 다이얼로그 → `promptDialog({ description })` (`@/lib/dialogs`) — Promise<string | null>
 
 ### 1.2 토스트 동작 표면
 

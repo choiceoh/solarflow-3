@@ -350,7 +350,7 @@ function SelectedTabPanel({
           })}
           hint="registry.contentBlocks"
         />
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           제공되면 sections 대신 이 블록 렌더. props 는 JSON 탭에서.
         </p>
       </PanelGroup>
@@ -382,7 +382,7 @@ function BasicTab({ value, onChange }: { value: MetaDetailConfig; onChange: (nex
         <Input value={header.title}
           onChange={(e) => onChange({ ...value, header: { ...header, title: e.target.value } })} />
       </div>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         header.actionsBlock·extraBlocks 편집은 JSON 탭. 같은 패턴으로 별도 탭 가능 (follow-up).
       </p>
     </div>
@@ -586,7 +586,7 @@ function SectionCard({
         <ChevronDown
           className={`h-3 w-3 shrink-0 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`}
         />
-        <span className="text-[10px] text-muted-foreground mono">섹션 #{index + 1}</span>
+        <span className="text-xs text-muted-foreground mono">섹션 #{index + 1}</span>
         <Input className="h-7 text-xs flex-1 max-w-md" value={section.title}
           onChange={(e) => onUpdate({ ...section, title: e.target.value })}
           placeholder="섹션 제목" />
@@ -599,7 +599,7 @@ function SectionCard({
         )}
         <FieldSelect label="" value={String(section.cols ?? 4)} options={COLS_OPTIONS}
           onChange={(v) => onUpdate({ ...section, cols: Number(v) as 1 | 2 | 3 | 4 })} />
-        <span className="text-[10px] text-muted-foreground">cols</span>
+        <span className="text-xs text-muted-foreground">cols</span>
         <span className="ml-auto" />
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
           onClick={onMoveUp} disabled={index === 0}><ChevronUp className="h-3.5 w-3.5" /></Button>
@@ -640,8 +640,8 @@ function SectionCard({
         ) : (
           <>
             <div className="flex items-center justify-between">
-              <p className="text-[10px] text-muted-foreground">필드 ({fields.length})</p>
-              <Button size="sm" variant="ghost" className="h-6 text-[10px]"
+              <p className="text-xs text-muted-foreground">필드 ({fields.length})</p>
+              <Button size="sm" variant="ghost" className="h-6 text-xs"
                 onClick={() => onUpdate({
                   ...section,
                   fields: [...fields, { key: 'new_field', label: '새 필드' }],
@@ -720,7 +720,7 @@ function SectionCard({
               );
             })}
             {fields.length === 0 && (
-              <div className="text-center py-3 text-[10px] text-muted-foreground border border-dashed rounded">
+              <div className="text-center py-3 text-xs text-muted-foreground border border-dashed rounded">
                 필드가 없습니다
               </div>
             )}

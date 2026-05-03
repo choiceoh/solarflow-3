@@ -84,7 +84,7 @@ export const LayerPanel = () => {
   return (
     <div className="space-y-3 text-xs" key={refreshKey}>
       <section>
-        <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">위 (조상)</h3>
+        <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">위 (조상)</h3>
         <div className="space-y-0.5">
           {parents.map((el, i) => (
             <Layer
@@ -97,7 +97,7 @@ export const LayerPanel = () => {
       </section>
       {children.length > 0 && (
         <section>
-          <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
             아래 (자식 {children.length}{children.length === MAX_CHILDREN ? '+' : ''})
           </h3>
           <div className="space-y-0.5">
@@ -111,7 +111,7 @@ export const LayerPanel = () => {
           </div>
         </section>
       )}
-      <p className="rounded border border-slate-200 bg-slate-50 p-2 text-[10px] text-slate-500">
+      <p className="rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-500">
         항목을 클릭하면 그 요소가 선택됩니다 (인스펙터 자동 갱신).
       </p>
     </div>

@@ -137,7 +137,7 @@ export const HandleOverlay = ({ target, className, onChange }: HandleOverlayProp
       {session?.toast && (
         <div
           data-inspector-ui="true"
-          className="pointer-events-none fixed z-[83] -translate-x-1/2 rounded bg-slate-900 px-2 py-1 text-[11px] font-medium text-white shadow-lg"
+          className="pointer-events-none fixed z-[83] -translate-x-1/2 rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white shadow-lg"
           style={{
             top: rect.top - 32,
             left: rect.left + rect.width / 2,
@@ -175,7 +175,7 @@ const Handle = ({ x, y, size, color, label, labelOffset, onStart }: HandleProps)
       className={`h-full w-full cursor-nwse-resize rounded-full ${color} ring-2 ring-white shadow-md transition hover:scale-125`}
     />
     <span
-      className={`pointer-events-none invisible absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-0.5 text-[10px] font-medium text-white shadow-lg group-hover:visible ${
+      className={`pointer-events-none invisible absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-0.5 text-xs font-medium text-white shadow-lg group-hover:visible ${
         labelOffset === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'
       }`}
     >

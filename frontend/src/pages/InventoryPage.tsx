@@ -17,6 +17,7 @@ import { useAppStore } from '@/stores/appStore';
 import { useInventory } from '@/hooks/useInventory';
 import { useForecast } from '@/hooks/useForecast';
 import { fetchWithAuth } from '@/lib/api';
+import { confirmDialog } from '@/lib/dialogs';
 import { shortMfgName } from '@/lib/utils';
 import { manufacturerRankByName, sortManufacturers } from '@/lib/manufacturerPriority';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
@@ -274,7 +275,12 @@ export default function InventoryPage() {
   const handleIncomingDelete = async () => {
     const { stockAlloc, incomingAlloc } = incomingDialog;
     if (!stockAlloc || !incomingAlloc) return;
-    if (!confirm('미착품 배정을 삭제합니다. 계속할까요?')) return;
+    const ok = await confirmDialog({
+      description: '미착품 배정을 삭제합니다. 계속할까요?',
+      variant: 'destructive',
+      confirmLabel: '삭제',
+    });
+    if (!ok) return;
     setIncomingDialog({ open: false, stockAlloc: null, incomingAlloc: null });
     try {
       await fetchWithAuth(`/api/v1/inventory/allocations/${incomingAlloc.alloc_id}`, {
@@ -320,7 +326,12 @@ export default function InventoryPage() {
   };
 
   const handleDeleteAlloc = async (allocId: string) => {
-    if (!confirm('삭제하면 복원할 수 없습니다. 삭제할까요?')) return;
+    const ok = await confirmDialog({
+      description: '삭제하면 복원할 수 없습니다. 삭제할까요?',
+      variant: 'destructive',
+      confirmLabel: '삭제',
+    });
+    if (!ok) return;
     try {
       await fetchWithAuth(`/api/v1/inventory/allocations/${allocId}`, { method: 'DELETE' });
       setAllocError('');

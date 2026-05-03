@@ -3,6 +3,7 @@ import { Download, Eye, FileText, Plus, Trash2, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { fetchWithAuth } from '@/lib/api';
+import { confirmDialog } from '@/lib/dialogs';
 import { cn, formatDate } from '@/lib/utils';
 import type { DocumentFile } from '@/types/documentFile';
 
@@ -172,7 +173,12 @@ export default function AttachmentWidget({
   };
 
   const remove = async (file: DocumentFile) => {
-    if (!window.confirm(`"${file.original_name}" 첨부파일을 삭제할까요?`)) return;
+    const ok = await confirmDialog({
+      description: `"${file.original_name}" 첨부파일을 삭제할까요?`,
+      variant: 'destructive',
+      confirmLabel: '삭제',
+    });
+    if (!ok) return;
     setError('');
     try {
       await fetchWithAuth(`/api/v1/attachments/${file.file_id}`, { method: 'DELETE' });

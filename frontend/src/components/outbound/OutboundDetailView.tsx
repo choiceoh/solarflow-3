@@ -15,6 +15,7 @@ import LinkedMemoWidget from '@/components/memo/LinkedMemoWidget';
 import OutboundTransportCostPanel from './OutboundTransportCostPanel';
 import { useOutboundDetail } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
+import { notify } from '@/lib/notify';
 import { USAGE_CATEGORY_LABEL } from '@/types/outbound';
 import type { BLShipment, BLLineItem } from '@/types/inbound';
 
@@ -88,7 +89,7 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
       setDeleteOpen(false);
       onBack();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '취소 처리에 실패했습니다');
+      notify.error(err instanceof Error ? err.message : '취소 처리에 실패했습니다');
     } finally {
       setDeleting(false);
     }

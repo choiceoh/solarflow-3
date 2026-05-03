@@ -39,11 +39,11 @@ export default function VisualTabbedListEditor({
         panel={
           <>
             <PanelGroup title="내부 list 편집 중">
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 탭 <span className="font-mono font-semibold">{editingTab.key}</span> ·
                 {' '}{editingTab.label}
               </p>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 컬럼 행 ⚙ 클릭은 이 좁은 패널에서는 동작 안 함 (탭 list 편집은 단순 모드).
                 상세 편집은 "← 돌아가기" 후 JSON 탭에서.
               </p>
@@ -65,7 +65,7 @@ export default function VisualTabbedListEditor({
               <ArrowLeft className="h-3 w-3 mr-1" />
               탭 묶음으로 돌아가기
             </Button>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               · 편집 중: <span className="font-mono">{editingTab.key}</span>
             </span>
           </div>
@@ -134,7 +134,7 @@ export default function VisualTabbedListEditor({
       panel={
         <>
           <PanelGroup title="TabbedList 정보">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               탭 묶음 — 각 탭의 list 는 행의 "list 시각 편집" 버튼으로 진입.
             </p>
           </PanelGroup>
@@ -170,7 +170,7 @@ function BasicTab({ value, onChange }: { value: TabbedListConfig; onChange: (nex
         <Textarea rows={2} value={page.description}
           onChange={(e) => onChange({ ...value, page: { ...page, description: e.target.value } })} />
       </div>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         공통 메트릭·Rail 편집은 JSON 탭에서. 같은 패턴으로 별도 탭 가능 (follow-up).
       </p>
     </div>
@@ -229,7 +229,7 @@ function TabsTab({ value, onChange, onEditList }: {
               <div />
             </div>
             <div className="flex items-center justify-between rounded border bg-muted/20 px-3 py-2">
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-xs text-muted-foreground">
                 <span className="font-mono">{t.list.id}</span>
                 {' · '}컬럼 {cols}개
                 {' · '}메트릭 {t.list.metrics?.length ?? 0}

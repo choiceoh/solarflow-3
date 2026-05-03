@@ -91,7 +91,7 @@ export function ColumnsTab({
       }}
       renderSummary={(col, idx) => (
         <span className="flex items-center gap-2 min-w-0 w-full">
-          <span className="font-mono text-[11px] text-foreground/80 shrink-0">{col.key}</span>
+          <span className="font-mono text-xs text-foreground/80 shrink-0">{col.key}</span>
           <span className="text-foreground/60 shrink-0">·</span>
           <span className="truncate">{col.label}</span>
           {col.formatter && (
