@@ -71,6 +71,8 @@ const config: ListScreenConfig = {
       },
     },
   ],
+  // Phase 4 마무리: 행 클릭 → MetaDetail (registry.detailComponents.construction_site)
+  onRowClick: { kind: 'detail', detailId: 'construction_site', idField: 'site_id' },
   emptyState: { message: '등록된 공사 현장이 없습니다', actionId: 'create' },
   forms: [
     {

@@ -26,22 +26,60 @@ const bankForm: MetaFormConfig = {
     {
       cols: 1,
       fields: [
-        // LC 한도는 은행 약정 금액 → admin 만 편집 (운영자가 임의 변경 불가)
-        { key: 'lc_limit_usd', label: 'LC 한도(USD)', type: 'number', required: true, minValue: 0, editableByRoles: ['admin'] },
+        // LC 한도 — 은행 약정 금액. 신규 메타 인프라 13·14 의 첫 실제 등록.
+        // - editableByRoles: ['admin']  — 정적 role 화이트리스트 (기존 보호장치)
+        // - permissionGuardId: 'adminOnly' — 동적 가드 (registry.permissionGuards 의 첫 entry)
+        //   같이 적용 — 둘 중 하나만 막아도 readOnly. (RLS 계층은 backend 가 별도 보장)
+        // - maskByRoles: ['viewer', 'manager']  — 조회·본부장 역할에는 ●●●●●● 마스킹 표시
+        //   (운영팀·경영진·시스템관리자는 평문)
+        {
+          key: 'lc_limit_usd',
+          label: 'LC 한도(USD)',
+          type: 'number',
+          required: true,
+          minValue: 0,
+          editableByRoles: ['admin'],
+          permissionGuardId: 'adminOnly',
+          maskByRoles: ['viewer', 'manager'],
+        },
       ],
     },
     {
       cols: 2,
       fields: [
-        { key: 'limit_approve_date', label: '승인일', type: 'date' },
-        { key: 'limit_expiry_date', label: '승인기한', type: 'date' },
+        // 승인일·기한도 LC 한도 변경과 함께 admin 이 결정 — 같은 가드 적용
+        {
+          key: 'limit_approve_date',
+          label: '승인일',
+          type: 'date',
+          permissionGuardId: 'adminOnly',
+        },
+        {
+          key: 'limit_expiry_date',
+          label: '승인기한',
+          type: 'date',
+          permissionGuardId: 'adminOnly',
+        },
       ],
     },
     {
       cols: 2,
       fields: [
-        { key: 'opening_fee_rate', label: '개설수수료율(%)', type: 'number', minValue: 0 },
-        { key: 'acceptance_fee_rate', label: '인수수수료율(%)', type: 'number', minValue: 0 },
+        // 수수료율은 admin + operator 둘 다 갱신 가능 (일상 운영값)
+        {
+          key: 'opening_fee_rate',
+          label: '개설수수료율(%)',
+          type: 'number',
+          minValue: 0,
+          permissionGuardId: 'operatorOrAdmin',
+        },
+        {
+          key: 'acceptance_fee_rate',
+          label: '인수수수료율(%)',
+          type: 'number',
+          minValue: 0,
+          permissionGuardId: 'operatorOrAdmin',
+        },
       ],
     },
     {

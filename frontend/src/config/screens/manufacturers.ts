@@ -68,6 +68,8 @@ const config: ListScreenConfig = {
       },
     },
   ],
+  // Phase 4 follow-up: 행 클릭 → MetaDetail (registry.detailComponents.manufacturer)
+  onRowClick: { kind: 'detail', detailId: 'manufacturer', idField: 'manufacturer_id' },
   emptyState: { message: '등록된 제조사가 없습니다', actionId: 'create' },
   forms: [
     {
