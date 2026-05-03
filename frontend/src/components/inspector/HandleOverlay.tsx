@@ -116,33 +116,23 @@ export const HandleOverlay = ({ target, className, onChange }: HandleOverlayProp
 
   return (
     <>
-      <button
-        type="button"
-        data-inspector-ui="true"
-        onMouseDown={(e) => startDrag(e, 'padding')}
-        title="드래그해서 안쪽 여백 조정"
-        aria-label="안쪽 여백 핸들"
-        className="fixed z-[82] cursor-nwse-resize rounded-full bg-amber-500 ring-2 ring-white shadow-md transition hover:scale-125"
-        style={{
-          top: padding.top,
-          left: padding.left,
-          width: HANDLE,
-          height: HANDLE,
-        }}
+      <Handle
+        x={padding.left}
+        y={padding.top}
+        size={HANDLE}
+        color="bg-amber-500"
+        label="내부 여백"
+        labelOffset="below"
+        onStart={(e) => startDrag(e, 'padding')}
       />
-      <button
-        type="button"
-        data-inspector-ui="true"
-        onMouseDown={(e) => startDrag(e, 'rounded')}
-        title="드래그해서 모서리 둥글기 조정"
-        aria-label="모서리 둥글기 핸들"
-        className="fixed z-[82] cursor-nwse-resize rounded-full bg-amber-400 ring-2 ring-white shadow-md transition hover:scale-125"
-        style={{
-          top: rounded.top,
-          left: rounded.left,
-          width: HANDLE,
-          height: HANDLE,
-        }}
+      <Handle
+        x={rounded.left}
+        y={rounded.top}
+        size={HANDLE}
+        color="bg-amber-400"
+        label="둥글기"
+        labelOffset="above"
+        onStart={(e) => startDrag(e, 'rounded')}
       />
       {session?.toast && (
         <div
@@ -159,3 +149,37 @@ export const HandleOverlay = ({ target, className, onChange }: HandleOverlayProp
     </>
   );
 };
+
+interface HandleProps {
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+  label: string;
+  labelOffset: 'above' | 'below';
+  onStart: (e: React.MouseEvent) => void;
+}
+
+/** 작은 점 + hover 시 라벨 toast — 사용자가 어떤 핸들이 무엇인지 명확. */
+const Handle = ({ x, y, size, color, label, labelOffset, onStart }: HandleProps) => (
+  <div
+    data-inspector-ui="true"
+    className="group fixed z-[82]"
+    style={{ top: y, left: x, width: size, height: size }}
+  >
+    <button
+      type="button"
+      onMouseDown={onStart}
+      title={`드래그해서 ${label} 조정`}
+      aria-label={`${label} 핸들`}
+      className={`h-full w-full cursor-nwse-resize rounded-full ${color} ring-2 ring-white shadow-md transition hover:scale-125`}
+    />
+    <span
+      className={`pointer-events-none invisible absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-0.5 text-[10px] font-medium text-white shadow-lg group-hover:visible ${
+        labelOffset === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'
+      }`}
+    >
+      {label}
+    </span>
+  </div>
+);

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAppStore } from '@/stores/appStore';
+import { getLastTargetEl } from './inspectorTarget';
 
 /**
  * classNameDrafts 를 페이지 로드 후 자동 재적용 — localStorage 영속과 짝.
@@ -34,6 +35,16 @@ export const useApplyClassNameDrafts = () => {
         } catch {
           // selector 가 invalid 한 경우 — 무시
         }
+      }
+      // 자동 적용 후 inspectorTarget 의 rect 도 갱신 — outline 어긋남 방지
+      const target = useAppStore.getState().inspectorTarget;
+      const lastEl = getLastTargetEl();
+      if (target && lastEl && document.body.contains(lastEl)) {
+        const r = lastEl.getBoundingClientRect();
+        useAppStore.getState().setInspectorTarget({
+          ...target,
+          rect: { top: r.top, left: r.left, width: r.width, height: r.height },
+        });
       }
     }, 800);
     return () => window.clearTimeout(t);

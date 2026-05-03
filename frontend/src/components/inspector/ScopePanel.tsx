@@ -17,16 +17,19 @@ export const ScopePanel = ({ target, draft }: ScopePanelProps) => {
   const setAssistantDrawerOpen = useAppStore((s) => s.setAssistantDrawerOpen);
   const setAssistantDrawerInitialPrompt = useAppStore((s) => s.setAssistantDrawerInitialPrompt);
 
+  const isModified = draft !== target.className;
+
   const onAskForGlobal = () => {
     // M-2: 어시스턴트 drawer 자동 open + prompt prefill
-    const prompt =
-      `현재 선택된 요소(${target.tagName.toLowerCase()})의 className 을 "${draft}" 로 변경했습니다. ` +
-      `이걸 모든 인스턴스에 영구 반영해주세요 — 메타 config 갱신 (read_ui_config / propose_ui_config_update).`;
+    // 변경 있으면 그 변경 명시, 없으면 일반 요청 (사용자가 자연어로 보강)
+    const prompt = isModified
+      ? `현재 선택된 요소(${target.tagName.toLowerCase()})의 className 을 "${draft}" 로 변경했습니다. ` +
+        `이걸 모든 인스턴스에 영구 반영해주세요 — 메타 config 갱신 (read_ui_config / propose_ui_config_update).`
+      : `현재 선택된 요소(${target.tagName.toLowerCase()})를 모든 인스턴스에 변경하고 싶어요. ` +
+        `(아래 인스펙터로 미리 디자인을 조정한 뒤 다시 부르거나, 자연어로 의도를 알려주세요.)`;
     setAssistantDrawerInitialPrompt(prompt);
     setAssistantDrawerOpen(true);
   };
-
-  const isModified = draft !== target.className;
 
   return (
     <section className="space-y-1.5 rounded border border-blue-200 bg-blue-50/50 p-2 dark:border-blue-900/40 dark:bg-blue-900/10">
@@ -47,8 +50,7 @@ export const ScopePanel = ({ target, draft }: ScopePanelProps) => {
           label="모든 인스턴스"
           subLabel="메타 config 영속"
           desc="모든 사용자 즉시 반영. AI 어시스턴트 통해서만."
-          actionLabel={isModified ? 'AI 에 부탁' : 'AI 어시스턴트로'}
-          actionDisabled={!isModified}
+          actionLabel={isModified ? 'AI 에 변경 전달' : 'AI 어시스턴트 열기'}
           onAction={onAskForGlobal}
         />
       </div>

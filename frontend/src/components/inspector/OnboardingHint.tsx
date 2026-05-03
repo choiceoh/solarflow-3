@@ -42,8 +42,16 @@ export const OnboardingHint = () => {
       return;
     }
     // 편집 모드 진입 후 600ms 뒤 표시 (인스펙터 패널이 슬라이드 인 한 다음)
-    const t = window.setTimeout(() => setVisible(true), 600);
-    return () => window.clearTimeout(t);
+    const showT = window.setTimeout(() => setVisible(true), 600);
+    // 표시 후 30초 뒤 자동 dismiss (사용자가 명시 dismiss 안 해도 다음에 안 보임)
+    const autoDismissT = window.setTimeout(() => {
+      writeDismissed(true);
+      setVisible(false);
+    }, 30_600);
+    return () => {
+      window.clearTimeout(showT);
+      window.clearTimeout(autoDismissT);
+    };
   }, [editMode]);
 
   const onDismiss = () => {

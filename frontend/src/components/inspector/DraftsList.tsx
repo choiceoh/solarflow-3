@@ -63,7 +63,7 @@ export const DraftsList = () => {
           </button>
         </div>
       </header>
-      <ul className="space-y-2">
+      <ul className="max-h-64 space-y-2 overflow-y-auto pr-1">
         {drafts.map((d) => (
           <li key={d.id} className="rounded border border-slate-200 bg-white p-2">
             <div className="flex items-start justify-between gap-2">
