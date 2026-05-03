@@ -1,5 +1,3 @@
-import { Pencil } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { formatCapacity, formatNumber } from '@/lib/utils';
 import type { BLLineItem } from '@/types/inbound';
@@ -15,7 +13,6 @@ interface Props {
   onPinningChange?: (next: ColumnPinningState) => void;
   currency: 'USD' | 'KRW';
   manufacturerName?: string;
-  onEdit: (line: BLLineItem) => void;
 }
 
 function pCode(l: BLLineItem) { return l.product_code ?? l.products?.product_code ?? '—'; }
@@ -25,10 +22,9 @@ function pSpec(l: BLLineItem) { return l.products?.spec_wp; }
 interface BuildOpts {
   currency: 'USD' | 'KRW';
   manufacturerName?: string;
-  onEdit: (line: BLLineItem) => void;
 }
 
-function buildColumns({ currency, manufacturerName, onEdit }: BuildOpts): ColumnDef<BLLineItem>[] {
+function buildColumns({ currency, manufacturerName }: BuildOpts): ColumnDef<BLLineItem>[] {
   return [
     {
       key: 'manufacturer_spec', label: '제조사/규격', hideable: true,
@@ -67,25 +63,17 @@ function buildColumns({ currency, manufacturerName, onEdit }: BuildOpts): Column
         : (l.unit_price_krw_wp != null ? `${formatNumber(l.unit_price_krw_wp)}원` : '—'),
       sortAccessor: (l) => (currency === 'USD' ? l.unit_price_usd_wp : l.unit_price_krw_wp) ?? 0,
     },
-    {
-      key: 'actions', label: '', headerClassName: 'w-10',
-      cell: (l) => (
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)}>
-          <Pencil className="h-3 w-3" />
-        </Button>
-      ),
-    },
   ];
 }
 
 export const BL_LINE_COLUMN_META: ColumnVisibilityMeta[] =
-  buildColumns({ currency: 'USD', onEdit: () => {} }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
+  buildColumns({ currency: 'USD' }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-export default function BLLineTable({ items, hidden, pinning, onPinningChange, currency, manufacturerName, onEdit }: Props) {
+export default function BLLineTable({ items, hidden, pinning, onPinningChange, currency, manufacturerName }: Props) {
   return (
     <MetaTable
       tableId={BL_LINE_TABLE_ID}
-      columns={buildColumns({ currency, manufacturerName, onEdit })}
+      columns={buildColumns({ currency, manufacturerName })}
       hidden={hidden}
       pinning={pinning}
       onPinningChange={onPinningChange}

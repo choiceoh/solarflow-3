@@ -1,18 +1,14 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn, formatDate, shortMfgName } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
-import POForm from './POForm';
 import POLineTable, { PO_LINE_TABLE_ID, PO_LINE_COLUMN_META } from './POLineTable';
 import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
 import { useColumnVisibility } from '@/lib/columnVisibility';
 import { useColumnPinning } from '@/lib/columnPinning';
-import POLineForm from './POLineForm';
-import TTForm from './TTForm';
-import LCForm from './LCForm';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import LinkedMemoWidget from '@/components/memo/LinkedMemoWidget';
 import POInboundProgress from './POInboundProgress';
@@ -187,37 +183,20 @@ function TTSubTable({ items, poLines }: { items: TTRemittance[]; poLines: POLine
   );
 }
 
-export default function PODetailView({ po: initialPo, onBack, onReload, allPos = [] }: Props) {
+export default function PODetailView({ po: initialPo, onBack, allPos = [] }: Props) {
   // 로컬 PO 미러 — 저장 후 서버 fresh로 갱신 (parent prop은 stale일 수 있음)
   const [po, setPo] = useState<PurchaseOrder>(initialPo);
   // 부모 selectedPO 변경 시(다른 PO 선택 등) 동기화
   useEffect(() => { setPo(initialPo); }, [initialPo]);
 
-  const [editingPO, setEditingPO] = useState(false);
-  const [lineFormOpen, setLineFormOpen] = useState(false);
-  const [editLine, setEditLine] = useState<POLineItem | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  const { data: lines, loading: linesLoading, reload: reloadLines } = usePOLines(po.po_id);
+  const { data: lines, loading: linesLoading } = usePOLines(po.po_id);
   const poLineColVis = useColumnVisibility(PO_LINE_TABLE_ID, PO_LINE_COLUMN_META);
   const poLineColPin = useColumnPinning(PO_LINE_TABLE_ID);
-  const { data: lcs, loading: lcsLoading, reload: reloadLcs } = useLCList({ po_id: po.po_id });
-  const { data: tts, loading: ttsLoading, reload: reloadTTs } = useTTList({ po_id: po.po_id });
-
-  const [ttFormOpen, setTtFormOpen] = useState(false);
-  const [lcFormOpen, setLcFormOpen] = useState(false);
-
-  const handleCreateLC = async (d: Record<string, unknown>) => {
-    await fetchWithAuth('/api/v1/lcs', { method: 'POST', body: JSON.stringify(d) });
-    reloadLcs();
-    onReload();
-  };
-
-  const handleCreateTT = async (d: Record<string, unknown>) => {
-    await fetchWithAuth('/api/v1/tts', { method: 'POST', body: JSON.stringify({ ...d, po_id: po.po_id }) });
-    reloadTTs();
-  };
+  const { data: lcs, loading: lcsLoading } = useLCList({ po_id: po.po_id });
+  const { data: tts, loading: ttsLoading } = useTTList({ po_id: po.po_id });
 
   // 4단계 MW 진행률용 BL 데이터 — 백엔드에 합산 엔드포인트 없어 프론트에서 합산
   const [blShipped, setBlShipped] = useState<{ shippedMw: number; completedMw: number }>({ shippedMw: 0, completedMw: 0 });
@@ -250,79 +229,6 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
     return () => { cancelled = true; };
   }, [po.po_id]);
 
-  // 저장 후 PO 헤더 새로고침
-  const refreshPO = async () => {
-    try {
-      const fresh = await fetchWithAuth<PurchaseOrder>(`/api/v1/pos/${po.po_id}`);
-      if (fresh) setPo(fresh);
-    } catch { /* ignore */ }
-  };
-
-  // PO 헤더 PUT + 발주품목 diff CRUD (UPDATE 기존 / INSERT 신규 / DELETE 제거)
-  const handleUpdatePO = async (data: Record<string, unknown>) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { lines: submittedLines, ...poBody } = data as any;
-    try {
-      // 1) PO 헤더 업데이트
-      await fetchWithAuth(`/api/v1/pos/${po.po_id}`, { method: 'PUT', body: JSON.stringify(poBody) });
-
-      if (Array.isArray(submittedLines)) {
-        // 2) 기존 발주품목 목록 조회
-        const existing = await fetchWithAuth<{ po_line_id: string }[]>(`/api/v1/pos/${po.po_id}/lines`);
-        const existingIds = new Set((existing ?? []).map(l => l.po_line_id));
-        const submittedIds = new Set(
-          submittedLines
-            .filter((l: { po_line_id?: string }) => l.po_line_id)
-            .map((l: { po_line_id?: string }) => l.po_line_id as string),
-        );
-
-        const failures: string[] = [];
-
-        // 3) 삭제: 기존엔 있는데 제출엔 없는 것
-        for (const id of existingIds) {
-          if (!submittedIds.has(id)) {
-            try {
-              await fetchWithAuth(`/api/v1/pos/${po.po_id}/lines/${id}`, { method: 'DELETE' });
-            } catch (err) {
-              failures.push(`삭제 실패: ${err instanceof Error ? err.message : '알 수 없음'}`);
-            }
-          }
-        }
-
-        // 4) 업데이트 or 삽입
-        for (const line of submittedLines) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { po_line_id, ...body } = line as any;
-          try {
-            if (po_line_id && existingIds.has(po_line_id)) {
-              await fetchWithAuth(`/api/v1/pos/${po.po_id}/lines/${po_line_id}`, {
-                method: 'PUT', body: JSON.stringify(body),
-              });
-            } else {
-              await fetchWithAuth(`/api/v1/pos/${po.po_id}/lines`, {
-                method: 'POST', body: JSON.stringify({ ...body, po_id: po.po_id }),
-              });
-            }
-          } catch (err) {
-            failures.push(err instanceof Error ? err.message : '알 수 없는 오류');
-          }
-        }
-
-        if (failures.length > 0) {
-          throw new Error(`발주품목 ${failures.length}건 처리 실패: ${failures.join('; ')}`);
-        }
-      }
-    } finally {
-      onReload();
-      reloadLines();
-      await refreshPO();
-    }
-  };
-
-  const handleCreateLine = async (data: Record<string, unknown>) => {
-    await fetchWithAuth(`/api/v1/pos/${po.po_id}/lines`, { method: 'POST', body: JSON.stringify(data) });
-    reloadLines();
-  };
   // PO 취소 — 운영 이력 보존을 위해 실제 삭제 대신 cancelled로 전환
   const handleDeletePO = async () => {
     setDeleting(true);
@@ -338,12 +244,6 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
     }
   };
 
-  const handleUpdateLine = async (data: Record<string, unknown>) => {
-    if (!editLine) return;
-    await fetchWithAuth(`/api/v1/pos/${po.po_id}/lines/${editLine.po_line_id}`, { method: 'PUT', body: JSON.stringify(data) });
-    setEditLine(null); reloadLines();
-  };
-
   return (
     <div className="space-y-4">
       <div className="sf-detail-header">
@@ -354,38 +254,15 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
           PO <span className="sf-mono">{po.po_number || '—'}</span>
         </h2>
         <StatusPill label={PO_STATUS_LABEL[po.status]} colorClassName={PO_STATUS_COLOR[po.status]} className="px-2" />
-        {!editingPO && (
-          <>
-            {po.status !== 'cancelled' && (
-              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive"
-                onClick={() => { setDeleteError(''); setDeleteOpen(true); }}>
-                <Trash2 className="mr-1 h-3.5 w-3.5" />취소 처리
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => setLcFormOpen(true)}>
-              LC 등록
-            </Button>
-            {/* PO → 입고 데이터 전달 */}
-            <Button size="sm" onClick={() => { window.location.href = `/procurement?tab=bl&action=new&po_id=${po.po_id}`; }}>
-              입고 등록
-            </Button>
-          </>
+        {po.status !== 'cancelled' && (
+          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive"
+            onClick={() => { setDeleteError(''); setDeleteOpen(true); }}>
+            <Trash2 className="mr-1 h-3.5 w-3.5" />취소 처리
+          </Button>
         )}
       </div>
 
-      {editingPO && (
-        <DetailSection title="PO 수정">
-          <POForm
-            variant="inline"
-            onOpenChange={(o) => { if (!o) setEditingPO(false); }}
-            onSubmit={async (d) => { await handleUpdatePO(d); setEditingPO(false); }}
-            editData={po}
-          />
-        </DetailSection>
-      )}
-
       {/* TT이력은 종합정보 탭에 병합 (별도 탭 만들지 않음) */}
-      {!editingPO && (
       <Tabs defaultValue="summary">
         <TabsList>
           <TabsTrigger value="summary">종합정보</TabsTrigger>
@@ -399,11 +276,6 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
           <div className="space-y-4">
             <DetailSection
               title="기본 정보"
-              actions={(
-                <Button variant="outline" size="sm" onClick={() => setEditingPO(true)}>
-                  <Pencil className="mr-1 h-3.5 w-3.5" />수정
-                </Button>
-              )}
             >
               <DetailFieldGrid cols={4}>
                 <DetailField label="계약유형" value={CONTRACT_TYPE_LABEL[po.contract_type]} />
@@ -567,7 +439,6 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-semibold">T/T 이력</h4>
-                <Button size="sm" onClick={() => setTtFormOpen(true)}><Plus className="mr-1 h-3.5 w-3.5" />T/T 등록</Button>
               </div>
               {ttsLoading ? <LoadingSpinner /> : <TTSubTable items={tts} poLines={lines} />}
             </div>
@@ -578,9 +449,8 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
           <div className="space-y-3">
             <div className="flex justify-end gap-2">
               <ColumnVisibilityMenu tableId={PO_LINE_TABLE_ID} columns={PO_LINE_COLUMN_META} hidden={poLineColVis.hidden} setHidden={poLineColVis.setHidden} pinning={poLineColPin.pinning} pinLeft={poLineColPin.pinLeft} pinRight={poLineColPin.pinRight} unpin={poLineColPin.unpin} />
-              <Button size="sm" onClick={() => { setEditLine(null); setLineFormOpen(true); }}><Plus className="mr-1 h-3.5 w-3.5" />추가</Button>
             </div>
-            {linesLoading ? <LoadingSpinner /> : <POLineTable items={lines} hidden={poLineColVis.hidden} pinning={poLineColPin.pinning} onPinningChange={poLineColPin.setPinning} onEdit={(l) => { setEditLine(l); setLineFormOpen(true); }} manufacturerName={po.manufacturer_name} />}
+            {linesLoading ? <LoadingSpinner /> : <POLineTable items={lines} hidden={poLineColVis.hidden} pinning={poLineColPin.pinning} onPinningChange={poLineColPin.setPinning} manufacturerName={po.manufacturer_name} />}
           </div>
         </TabsContent>
 
@@ -607,23 +477,16 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
                 </div>
               );
             })()}
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => setTtFormOpen(true)}><Plus className="mr-1 h-3.5 w-3.5" />계약금 등록</Button>
-            </div>
             {ttsLoading ? <LoadingSpinner /> : <TTSubTable items={tts} poLines={lines} />}
           </div>
         </TabsContent>
         <TabsContent value="lc">
           <div className="space-y-3">
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => setLcFormOpen(true)}><Plus className="mr-1 h-3.5 w-3.5" />LC 등록</Button>
-            </div>
             {lcsLoading ? <LoadingSpinner /> : <LCSubTable items={lcs} />}
           </div>
         </TabsContent>
         <TabsContent value="inbound"><POInboundProgress poId={po.po_id} poLines={lines} /></TabsContent>
       </Tabs>
-      )}
 
       <LinkedMemoWidget linkedTable="purchase_orders" linkedId={po.po_id} />
       <ConfirmDialog
@@ -634,9 +497,6 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
         onConfirm={handleDeletePO}
         loading={deleting}
       />
-      <POLineForm open={lineFormOpen} onOpenChange={setLineFormOpen} onSubmit={editLine ? handleUpdateLine : handleCreateLine} editData={editLine} poId={po.po_id} />
-      <TTForm open={ttFormOpen} onOpenChange={setTtFormOpen} onSubmit={handleCreateTT} editData={null} defaultPoId={po.po_id} />
-      <LCForm open={lcFormOpen} onOpenChange={setLcFormOpen} onSubmit={handleCreateLC} editData={null} defaultPoId={po.po_id} />
     </div>
   );
 }

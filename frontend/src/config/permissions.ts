@@ -33,6 +33,7 @@ export type MenuKey =
   | 'banking'       // LC 한도/만기
   | 'customs'       // 매출/이익 분석
   | 'purchase_history' // 구매 이력 read-only 통합 타임라인 (현황 그룹)
+  | 'import_hub'    // 엑셀 입력 허브
   | 'masters'       // 마스터 관리
   | 'approval'      // 결재안
   | 'assistant'     // AI 업무 도우미
@@ -79,7 +80,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
-            'banking','customs','purchase_history','masters','approval','assistant','crm_inbox',
+            'banking','customs','purchase_history','import_hub','masters','approval','assistant','crm_inbox',
             'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_inbox',
             'settings','tutorial'],
     features: {

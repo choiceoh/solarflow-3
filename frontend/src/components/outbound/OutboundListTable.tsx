@@ -1,6 +1,4 @@
 import { memo } from 'react';
-import { Pencil, ReceiptText } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import OutboundStatusBadge from './OutboundStatusBadge';
 import { formatDate, formatNumber, formatKw, cn } from '@/lib/utils';
@@ -16,12 +14,10 @@ interface Props {
   pinning?: ColumnPinningState;
   onPinningChange?: (next: ColumnPinningState) => void;
   onSelect: (item: Outbound) => void;
-  onNew: () => void;
-  onInvoice?: (item: Outbound) => void;
   globalFilter?: string;
 }
 
-function buildColumns({ onInvoice }: { onInvoice?: (item: Outbound) => void }): ColumnDef<Outbound>[] {
+function buildColumns(): ColumnDef<Outbound>[] {
   return [
     { key: 'outbound_date', label: '출고일', cell: (ob) => formatDate(ob.outbound_date), sortAccessor: (ob) => ob.outbound_date ?? '' },
     { key: 'site_name', label: '현장명', hideable: true, cell: (ob) => ob.site_name ?? '—', sortAccessor: (ob) => ob.site_name ?? '', globalFilterText: (ob) => ob.site_name ?? '' },
@@ -54,34 +50,17 @@ function buildColumns({ onInvoice }: { onInvoice?: (item: Outbound) => void }): 
       sortAccessor: (ob) => ob.sale?.tax_invoice_date ?? (ob.sale ? '0' : ''),
     },
     { key: 'status', label: '상태', cell: (ob) => <OutboundStatusBadge status={ob.status} />, sortAccessor: (ob) => ob.status },
-    {
-      key: 'actions', label: '작업', align: 'right',
-      cell: (ob) => (
-        onInvoice && ob.status !== 'cancelled' && ['sale', 'sale_spare'].includes(ob.usage_category) ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 px-2 text-[11px]"
-            onClick={(e) => { e.stopPropagation(); onInvoice(ob); }}
-          >
-            {ob.sale ? <Pencil className="mr-1 h-3 w-3" /> : <ReceiptText className="mr-1 h-3 w-3" />}
-            {ob.sale ? '수정' : '등록'}
-          </Button>
-        ) : <span className="text-muted-foreground">—</span>
-      ),
-    },
   ];
 }
 
 export const OUTBOUND_COLUMN_META: ColumnVisibilityMeta[] =
-  buildColumns({}).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
+  buildColumns().map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function OutboundListTable({ items, hidden, pinning, onPinningChange, onSelect, onNew, onInvoice, globalFilter }: Props) {
+function OutboundListTable({ items, hidden, pinning, onPinningChange, onSelect, globalFilter }: Props) {
   return (
     <MetaTable
       tableId={OUTBOUND_TABLE_ID}
-      columns={buildColumns({ onInvoice })}
+      columns={buildColumns()}
       hidden={hidden}
       pinning={pinning}
       onPinningChange={onPinningChange}
@@ -95,7 +74,6 @@ function OutboundListTable({ items, hidden, pinning, onPinningChange, onSelect, 
         ob.status === 'cancelled' && 'bg-gray-50 text-muted-foreground line-through',
       )}
       emptyMessage="등록된 출고가 없습니다"
-      emptyAction={{ label: '새로 등록', onClick: onNew }}
     />
   );
 }

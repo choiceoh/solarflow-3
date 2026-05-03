@@ -504,7 +504,7 @@ a:focus-visible,
   gap: 8px;
 }
 
-/* 우상단 액션 — Calculator/AlertBell/QuickRegister 트리거 통합 height 32.
+/* 우상단 액션 — Calculator/AlertBell/Excel Input 트리거 통합 height 32.
    아이콘 사이즈는 각 컴포넌트가 inline 클래스로 직접 지정해서 패널 내부와 충돌 방지. */
 .sf-topbar-actions > .btn,
 .sf-topbar-actions > [data-slot="button"],

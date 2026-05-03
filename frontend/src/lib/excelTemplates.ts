@@ -24,6 +24,19 @@ interface SheetWritable {
   getCell(addr: string | number, col?: number): WritableCell;
   getColumn(idx: number): { width?: number };
 }
+interface WorkbookWritable {
+  addWorksheet(name: string): SheetWritable;
+}
+
+const UNIFIED_TEMPLATE_ORDER: TemplateType[] = [
+  'order',
+  'outbound',
+  'sale',
+  'receipt',
+  'inbound',
+  'declaration',
+  'expense',
+];
 
 // 드롭다운 범위 설정 헬퍼
 function setDropdown(
@@ -84,6 +97,39 @@ export async function generateTemplate(
 
   const workbook = new ExcelJS.Workbook();
   const label = TEMPLATE_LABEL[type];
+  addTemplateSheets(workbook, type, masterData);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  saveAs(blob, `SolarFlow_${label}_양식_${today}.xlsx`);
+}
+
+export async function generateUnifiedTemplate(
+  masterData: MasterDataForExcel,
+): Promise<void> {
+  const ExcelJS = await import('exceljs');
+  const { saveAs } = await import('file-saver');
+
+  const workbook = new ExcelJS.Workbook();
+  UNIFIED_TEMPLATE_ORDER.forEach((type) => {
+    addTemplateSheets(workbook, type, masterData, `코드표_${TEMPLATE_LABEL[type]}`);
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  saveAs(blob, `SolarFlow_통합입력양식_${today}.xlsx`);
+}
+
+function addTemplateSheets(
+  workbook: WorkbookWritable,
+  type: TemplateType,
+  masterData: MasterDataForExcel,
+  codeSheetName = '코드표',
+) {
+  const label = TEMPLATE_LABEL[type];
+  const codeRef = `'${codeSheetName}'`;
 
   // 코드표 데이터 준비
   const companyCodes = masterData.companies.map((c) => c.company_code);
@@ -104,7 +150,7 @@ export async function generateTemplate(
     // 면장: 시트 3개 (면장등록 + 원가등록 + 코드표)
     const declSheet = workbook.addWorksheet('면장등록');
     const costSheet = workbook.addWorksheet('원가등록');
-    const codeSheet = workbook.addWorksheet('코드표');
+    const codeSheet = workbook.addWorksheet(codeSheetName);
 
     styleHeaders(declSheet, DECLARATION_FIELDS);
     styleHeaders(costSheet, DECLARATION_COST_FIELDS);
@@ -115,14 +161,14 @@ export async function generateTemplate(
     const cProd = writeCodeColumn(codeSheet, col++, '품번코드', productCodes);
 
     // 면장등록 드롭다운: C(법인)
-    setDropdown(declSheet, 'C', `'코드표'!$${cCo.colLetter}$2:$${cCo.colLetter}$${cCo.lastRow}`);
+    setDropdown(declSheet, 'C', `${codeRef}!$${cCo.colLetter}$2:$${cCo.colLetter}$${cCo.lastRow}`);
     // 원가등록 드롭다운: B(품번)
-    setDropdown(costSheet, 'B', `'코드표'!$${cProd.colLetter}$2:$${cProd.colLetter}$${cProd.lastRow}`);
+    setDropdown(costSheet, 'B', `${codeRef}!$${cProd.colLetter}$2:$${cProd.colLetter}$${cProd.lastRow}`);
   } else {
     // 일반 양식: 데이터시트 + 코드표
     const fields = getFieldsForType(type);
     const dataSheet = workbook.addWorksheet(`${label}등록`);
-    const codeSheet = workbook.addWorksheet('코드표');
+    const codeSheet = workbook.addWorksheet(codeSheetName);
 
     styleHeaders(dataSheet, fields);
 
@@ -139,15 +185,15 @@ export async function generateTemplate(
         const cItemType = writeCodeColumn(codeSheet, col++, '본품/스페어', ['main', 'spare']);
         const cPayType = writeCodeColumn(codeSheet, col++, '유상/무상', ['paid', 'free']);
         const cUsage = writeCodeColumn(codeSheet, col++, '용도', usageCategories);
-        setDropdown(dataSheet, 'B', `'코드표'!$${cType.colLetter}$2:$${cType.colLetter}$${cType.lastRow}`);
-        setDropdown(dataSheet, 'C', `'코드표'!$${cCo.colLetter}$2:$${cCo.colLetter}$${cCo.lastRow}`);
-        setDropdown(dataSheet, 'D', `'코드표'!$${cMfg.colLetter}$2:$${cMfg.colLetter}$${cMfg.lastRow}`);
-        setDropdown(dataSheet, 'E', `'코드표'!$${cCurr.colLetter}$2:$${cCurr.colLetter}$${cCurr.lastRow}`);
-        setDropdown(dataSheet, 'L', `'코드표'!$${cWh.colLetter}$2:$${cWh.colLetter}$${cWh.lastRow}`);
-        setDropdown(dataSheet, 'O', `'코드표'!$${cProd.colLetter}$2:$${cProd.colLetter}$${cProd.lastRow}`);
-        setDropdown(dataSheet, 'Q', `'코드표'!$${cItemType.colLetter}$2:$${cItemType.colLetter}$${cItemType.lastRow}`);
-        setDropdown(dataSheet, 'R', `'코드표'!$${cPayType.colLetter}$2:$${cPayType.colLetter}$${cPayType.lastRow}`);
-        setDropdown(dataSheet, 'V', `'코드표'!$${cUsage.colLetter}$2:$${cUsage.colLetter}$${cUsage.lastRow}`);
+        setDropdown(dataSheet, 'B', `${codeRef}!$${cType.colLetter}$2:$${cType.colLetter}$${cType.lastRow}`);
+        setDropdown(dataSheet, 'C', `${codeRef}!$${cCo.colLetter}$2:$${cCo.colLetter}$${cCo.lastRow}`);
+        setDropdown(dataSheet, 'D', `${codeRef}!$${cMfg.colLetter}$2:$${cMfg.colLetter}$${cMfg.lastRow}`);
+        setDropdown(dataSheet, 'E', `${codeRef}!$${cCurr.colLetter}$2:$${cCurr.colLetter}$${cCurr.lastRow}`);
+        setDropdown(dataSheet, 'L', `${codeRef}!$${cWh.colLetter}$2:$${cWh.colLetter}$${cWh.lastRow}`);
+        setDropdown(dataSheet, 'O', `${codeRef}!$${cProd.colLetter}$2:$${cProd.colLetter}$${cProd.lastRow}`);
+        setDropdown(dataSheet, 'Q', `${codeRef}!$${cItemType.colLetter}$2:$${cItemType.colLetter}$${cItemType.lastRow}`);
+        setDropdown(dataSheet, 'R', `${codeRef}!$${cPayType.colLetter}$2:$${cPayType.colLetter}$${cPayType.lastRow}`);
+        setDropdown(dataSheet, 'V', `${codeRef}!$${cUsage.colLetter}$2:$${cUsage.colLetter}$${cUsage.lastRow}`);
         break;
       }
       case 'outbound': {
@@ -157,12 +203,12 @@ export async function generateTemplate(
         const cUsage = writeCodeColumn(codeSheet, col++, '용도', usageCategories);
         const cYN = writeCodeColumn(codeSheet, col++, 'Y/N', ['Y', 'N']);
         const cCo2 = writeCodeColumn(codeSheet, col++, '상대법인코드', companyCodes);
-        setDropdown(dataSheet, 'B', `'코드표'!$${cCo.colLetter}$2:$${cCo.colLetter}$${cCo.lastRow}`);
-        setDropdown(dataSheet, 'C', `'코드표'!$${cProd.colLetter}$2:$${cProd.colLetter}$${cProd.lastRow}`);
-        setDropdown(dataSheet, 'E', `'코드표'!$${cWh.colLetter}$2:$${cWh.colLetter}$${cWh.lastRow}`);
-        setDropdown(dataSheet, 'F', `'코드표'!$${cUsage.colLetter}$2:$${cUsage.colLetter}$${cUsage.lastRow}`);
-        setDropdown(dataSheet, 'K', `'코드표'!$${cYN.colLetter}$2:$${cYN.colLetter}$${cYN.lastRow}`);
-        setDropdown(dataSheet, 'L', `'코드표'!$${cCo2.colLetter}$2:$${cCo2.colLetter}$${cCo2.lastRow}`);
+        setDropdown(dataSheet, 'B', `${codeRef}!$${cCo.colLetter}$2:$${cCo.colLetter}$${cCo.lastRow}`);
+        setDropdown(dataSheet, 'C', `${codeRef}!$${cProd.colLetter}$2:$${cProd.colLetter}$${cProd.lastRow}`);
+        setDropdown(dataSheet, 'E', `${codeRef}!$${cWh.colLetter}$2:$${cWh.colLetter}$${cWh.lastRow}`);
+        setDropdown(dataSheet, 'F', `${codeRef}!$${cUsage.colLetter}$2:$${cUsage.colLetter}$${cUsage.lastRow}`);
+        setDropdown(dataSheet, 'K', `${codeRef}!$${cYN.colLetter}$2:$${cYN.colLetter}$${cYN.lastRow}`);
+        setDropdown(dataSheet, 'L', `${codeRef}!$${cCo2.colLetter}$2:$${cCo2.colLetter}$${cCo2.lastRow}`);
         break;
       }
       case 'sale': {
@@ -173,16 +219,16 @@ export async function generateTemplate(
         const cOb = writeCodeColumn(codeSheet, col++, 'outbound_id', outboundLabels);
         const cCust = writeCodeColumn(codeSheet, col++, '거래처', customerNames);
         const cYN = writeCodeColumn(codeSheet, col++, 'Y/N', ['Y', 'N']);
-        setDropdown(dataSheet, 'A', `'코드표'!$${cOb.colLetter}$2:$${cOb.colLetter}$${cOb.lastRow}`);
-        setDropdown(dataSheet, 'B', `'코드표'!$${cCust.colLetter}$2:$${cCust.colLetter}$${cCust.lastRow}`);
-        setDropdown(dataSheet, 'F', `'코드표'!$${cYN.colLetter}$2:$${cYN.colLetter}$${cYN.lastRow}`);
+        setDropdown(dataSheet, 'A', `${codeRef}!$${cOb.colLetter}$2:$${cOb.colLetter}$${cOb.lastRow}`);
+        setDropdown(dataSheet, 'B', `${codeRef}!$${cCust.colLetter}$2:$${cCust.colLetter}$${cCust.lastRow}`);
+        setDropdown(dataSheet, 'F', `${codeRef}!$${cYN.colLetter}$2:$${cYN.colLetter}$${cYN.lastRow}`);
         break;
       }
       case 'expense': {
         const cCo = writeCodeColumn(codeSheet, col++, '법인코드', companyCodes);
         const cExpType = writeCodeColumn(codeSheet, col++, '비용유형', expenseTypes);
-        setDropdown(dataSheet, 'C', `'코드표'!$${cCo.colLetter}$2:$${cCo.colLetter}$${cCo.lastRow}`);
-        setDropdown(dataSheet, 'D', `'코드표'!$${cExpType.colLetter}$2:$${cExpType.colLetter}$${cExpType.lastRow}`);
+        setDropdown(dataSheet, 'C', `${codeRef}!$${cCo.colLetter}$2:$${cCo.colLetter}$${cCo.lastRow}`);
+        setDropdown(dataSheet, 'D', `${codeRef}!$${cExpType.colLetter}$2:$${cExpType.colLetter}$${cExpType.lastRow}`);
         break;
       }
       case 'order': {
@@ -192,26 +238,21 @@ export async function generateTemplate(
         const cMgmt = writeCodeColumn(codeSheet, col++, '관리구분', mgmtCategories);
         const cFulfill = writeCodeColumn(codeSheet, col++, '충당소스', fulfillmentSources);
         const cProd = writeCodeColumn(codeSheet, col++, '품번코드', productCodes);
-        setDropdown(dataSheet, 'B', `'코드표'!$${cCo.colLetter}$2:$${cCo.colLetter}$${cCo.lastRow}`);
-        setDropdown(dataSheet, 'C', `'코드표'!$${cCust.colLetter}$2:$${cCust.colLetter}$${cCust.lastRow}`);
-        setDropdown(dataSheet, 'E', `'코드표'!$${cMethod.colLetter}$2:$${cMethod.colLetter}$${cMethod.lastRow}`);
-        setDropdown(dataSheet, 'F', `'코드표'!$${cMgmt.colLetter}$2:$${cMgmt.colLetter}$${cMgmt.lastRow}`);
-        setDropdown(dataSheet, 'G', `'코드표'!$${cFulfill.colLetter}$2:$${cFulfill.colLetter}$${cFulfill.lastRow}`);
-        setDropdown(dataSheet, 'H', `'코드표'!$${cProd.colLetter}$2:$${cProd.colLetter}$${cProd.lastRow}`);
+        setDropdown(dataSheet, 'B', `${codeRef}!$${cCo.colLetter}$2:$${cCo.colLetter}$${cCo.lastRow}`);
+        setDropdown(dataSheet, 'C', `${codeRef}!$${cCust.colLetter}$2:$${cCust.colLetter}$${cCust.lastRow}`);
+        setDropdown(dataSheet, 'E', `${codeRef}!$${cMethod.colLetter}$2:$${cMethod.colLetter}$${cMethod.lastRow}`);
+        setDropdown(dataSheet, 'F', `${codeRef}!$${cMgmt.colLetter}$2:$${cMgmt.colLetter}$${cMgmt.lastRow}`);
+        setDropdown(dataSheet, 'G', `${codeRef}!$${cFulfill.colLetter}$2:$${cFulfill.colLetter}$${cFulfill.lastRow}`);
+        setDropdown(dataSheet, 'H', `${codeRef}!$${cProd.colLetter}$2:$${cProd.colLetter}$${cProd.lastRow}`);
         break;
       }
       case 'receipt': {
         const cCust = writeCodeColumn(codeSheet, col++, '거래처', customerNames);
-        setDropdown(dataSheet, 'A', `'코드표'!$${cCust.colLetter}$2:$${cCust.colLetter}$${cCust.lastRow}`);
+        setDropdown(dataSheet, 'A', `${codeRef}!$${cCust.colLetter}$2:$${cCust.colLetter}$${cCust.lastRow}`);
         break;
       }
     }
   }
-
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  saveAs(blob, `SolarFlow_${label}_양식_${today}.xlsx`);
 }
 
 function getFieldsForType(type: TemplateType): FieldDef[] {

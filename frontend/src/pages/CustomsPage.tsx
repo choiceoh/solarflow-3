@@ -1,20 +1,15 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useAppStore } from '@/stores/appStore';
 import { useExpenseList } from '@/hooks/useCustoms';
 import { fetchWithAuth } from '@/lib/api';
 import SkeletonRows from '@/components/common/SkeletonRows';
-import DeclarationDetailView from '@/components/customs/DeclarationDetailView';
-import DeclarationForm from '@/components/customs/DeclarationForm';
 import ExpenseListTable, { EXPENSE_TABLE_ID, EXPENSE_COLUMN_META } from '@/components/customs/ExpenseListTable';
 import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
 import { useColumnVisibility } from '@/lib/columnVisibility';
 import { useColumnPinning } from '@/lib/columnPinning';
-import ExpenseForm from '@/components/customs/ExpenseForm';
 import ExchangeComparePanel from '@/components/customs/ExchangeComparePanel';
-import { EXPENSE_TYPE_LABEL, type ExpenseType, type Expense } from '@/types/customs';
+import { EXPENSE_TYPE_LABEL, type ExpenseType } from '@/types/customs';
 import type { BLShipment } from '@/types/inbound';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { CardB, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
@@ -29,53 +24,23 @@ function fmtEok(value: number) {
 export default function CustomsPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
 
-  // 탭 1: 수입면장
-  const [declBlFilter] = useState('');
-  const [selectedDecl, setSelectedDecl] = useState<string | null>(null);
-  const [declFormOpen, setDeclFormOpen] = useState(false);
-  const [presetBLId, setPresetBLId] = useState<string | null>(null);
-  const location = useLocation();
-  // R1-1: 사이드바 "면장/원가" 클릭 시 상세에서 목록 복귀 — URL → 상태 동기화
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setSelectedDecl(null); }, [location.key]);
-  // D-085: ?bl=xxx 쿼리 → 면장 등록 폼 자동 열기 — URL → 상태 동기화
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const bl = params.get('bl');
-    if (bl) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPresetBLId(bl);
-      setDeclFormOpen(true);
-    }
-  }, [location.search]);
-
-  // 탭 2: 부대비용
+  // 탭 1: 부대비용
   const [expBlFilter, setExpBlFilter] = useState('');
   const [expMonthFilter, setExpMonthFilter] = useState('');
   const [expTypeFilter, setExpTypeFilter] = useState('');
-  const [expFormOpen, setExpFormOpen] = useState(false);
-  const [editExpense, setEditExpense] = useState<Expense | null>(null);
-  const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
   const [activeTab, setActiveTab] = useState('expenses');
 
   // 마스터
   const [bls, setBls] = useState<BLShipment[]>([]);
-
-  const declFilters: { bl_id?: string } = {};
-  if (declBlFilter) declFilters.bl_id = declBlFilter;
 
   const expFilters: { bl_id?: string; month?: string; expense_type?: string } = {};
   if (expBlFilter) expFilters.bl_id = expBlFilter;
   if (expMonthFilter) expFilters.month = expMonthFilter;
   if (expTypeFilter) expFilters.expense_type = expTypeFilter;
 
-  const reloadDecl = () => {};
-  const { data: expenses, loading: expLoading, reload: reloadExp } = useExpenseList(expFilters);
+  const { data: expenses, loading: expLoading } = useExpenseList(expFilters);
   const expenseColVis = useColumnVisibility(EXPENSE_TABLE_ID, EXPENSE_COLUMN_META);
   const expenseColPin = useColumnPinning(EXPENSE_TABLE_ID);
-  void declFilters;
 
   useEffect(() => {
     if (selectedCompanyId) {
@@ -91,49 +56,6 @@ export default function CustomsPage() {
       </div>
     );
   }
-
-  // 면장 상세
-  if (selectedDecl) {
-    return (
-      <div className="p-6">
-        <DeclarationDetailView
-          declarationId={selectedDecl}
-          onBack={() => { setSelectedDecl(null); reloadDecl(); }}
-        />
-      </div>
-    );
-  }
-
-  const handleCreateDecl = async (data: Record<string, unknown>) => {
-    await fetchWithAuth('/api/v1/declarations', { method: 'POST', body: JSON.stringify(data) });
-    reloadDecl();
-  };
-
-  const handleCreateExp = async (data: Record<string, unknown>) => {
-    await fetchWithAuth('/api/v1/expenses', { method: 'POST', body: JSON.stringify(data) });
-    reloadExp();
-  };
-
-  const handleUpdateExp = async (data: Record<string, unknown>) => {
-    if (!editExpense) return;
-    await fetchWithAuth(`/api/v1/expenses/${editExpense.expense_id}`, { method: 'PUT', body: JSON.stringify(data) });
-    setEditExpense(null);
-    reloadExp();
-  };
-
-  const handleDeleteExpense = async () => {
-    if (!deletingExpense) return;
-    setDeleteLoading(true);
-    setDeleteError('');
-    try {
-      await fetchWithAuth(`/api/v1/expenses/${deletingExpense.expense_id}`, { method: 'DELETE' });
-      setDeletingExpense(null);
-      reloadExp();
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : '삭제에 실패했습니다');
-    }
-    setDeleteLoading(false);
-  };
 
   // 월 목록 (최근 12개월)
   const months: string[] = [];
@@ -189,7 +111,7 @@ export default function CustomsPage() {
             },
           ]} />
           <ColumnVisibilityMenu tableId={EXPENSE_TABLE_ID} columns={EXPENSE_COLUMN_META} hidden={expenseColVis.hidden} setHidden={expenseColVis.setHidden} pinning={expenseColPin.pinning} pinLeft={expenseColPin.pinLeft} pinRight={expenseColPin.pinRight} unpin={expenseColPin.unpin} />
-          <ExcelToolbar type="expense" onNew={() => { setEditExpense(null); setExpFormOpen(true); }} />
+          <ExcelToolbar type="expense" />
         </>
       ) : null}
       <div style={{ flex: 1 }} />
@@ -217,9 +139,7 @@ export default function CustomsPage() {
             <div className="sf-command-tab-body">
               <Tabs value={activeTab} onValueChange={setActiveTab}>
 
-        {/* F20: 수입면장 탭 삭제됨 — 면장번호는 BLForm에서 직접 입력 */}
-
-        {/* 탭 2: 부대비용 */}
+        {/* 탭 1: 부대비용 */}
         <TabsContent value="expenses" className="mt-0 space-y-3">
           {expLoading ? <SkeletonRows rows={6} /> : (
             <ExpenseListTable
@@ -227,12 +147,8 @@ export default function CustomsPage() {
               hidden={expenseColVis.hidden}
               pinning={expenseColPin.pinning}
               onPinningChange={expenseColPin.setPinning}
-              onEdit={(e) => { setEditExpense(e); setExpFormOpen(true); }}
-              onNew={() => { setEditExpense(null); setExpFormOpen(true); }}
-              onDelete={(e) => { setDeleteError(''); setDeletingExpense(e); }}
             />
           )}
-          {deleteError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{deleteError}</div>}
         </TabsContent>
 
         {/* 탭 3: 환율 비교 */}
@@ -271,32 +187,11 @@ export default function CustomsPage() {
           </RailBlock>
           <RailBlock title="면장/OCR 흐름" last>
             <div className="rounded border border-dashed border-[var(--line-2)] bg-[var(--bg-2)] p-3 text-[11px] leading-5 text-[var(--ink-3)]">
-              면장번호와 OCR 후보는 B/L 입고등록에서 먼저 확인하고, 비용은 여기서 B/L 기준으로 누적 관리합니다.
+              면장번호와 OCR 후보는 엑셀 입력에서 가져오고, 비용은 여기서 B/L 기준으로 누적 관리합니다.
             </div>
           </RailBlock>
         </aside>
       </div>
-
-      <DeclarationForm
-        open={declFormOpen}
-        onOpenChange={(v) => { setDeclFormOpen(v); if (!v) setPresetBLId(null); }}
-        onSubmit={handleCreateDecl}
-        presetBLId={presetBLId}
-      />
-      <ExpenseForm
-        open={expFormOpen}
-        onOpenChange={setExpFormOpen}
-        onSubmit={editExpense ? handleUpdateExp : handleCreateExp}
-        editData={editExpense}
-      />
-      <ConfirmDialog
-        open={!!deletingExpense}
-        onOpenChange={(o) => { if (!o) setDeletingExpense(null); }}
-        title="부대비용 삭제"
-        description={deletingExpense ? `${EXPENSE_TYPE_LABEL[deletingExpense.expense_type as ExpenseType] || deletingExpense.expense_type} ${deletingExpense.amount.toLocaleString()}원 부대비용을 삭제합니다.` : ''}
-        onConfirm={handleDeleteExpense}
-        loading={deleteLoading}
-      />
     </>
   );
 }

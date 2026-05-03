@@ -1,5 +1,5 @@
 import { useEffect, useState, Fragment, memo } from 'react';
-import { ChevronDown, ChevronRight, FilePenLine, Plus, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FilePenLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDate, formatUSD, moduleLabel, shortMfgName } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
@@ -31,11 +31,6 @@ const BL_STATUS_COLOR: Record<string, string> = {
 interface Props {
   items: PurchaseOrder[];
   onDetail: (po: PurchaseOrder) => void;
-  onNew: () => void;
-  onEditLC?: (lc: LCRecord) => void;
-  onNewLC?: (po: PurchaseOrder) => void;
-  onDelete?: (poId: string) => Promise<void>;
-  onDeleteLC?: (lcId: string) => Promise<void>;
   onSelectBL?: (blId: string) => void;
   aggVersion?: number;
 }
@@ -102,18 +97,12 @@ function ProgressRow({
   );
 }
 
-function POListTable({ items, onDetail, onNew, onEditLC, onNewLC, onDelete, onDeleteLC, onSelectBL, aggVersion }: Props) {
+function POListTable({ items, onDetail, onSelectBL, aggVersion }: Props) {
   const companies = useAppStore((s) => s.companies);
   const companyMap = Object.fromEntries(companies.map((c) => [c.company_id, c.company_name]));
   const [agg, setAgg] = useState<Record<string, Agg>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [blDetail, setBlDetail] = useState<Record<string, BLDetail>>({});
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<Record<string, string>>({});
-  const [pendingDeleteLcId, setPendingDeleteLcId] = useState<string | null>(null);
-  const [deletingLcId, setDeletingLcId] = useState<string | null>(null);
-  const [deleteLcError, setDeleteLcError] = useState<Record<string, string>>({});
 
   // ── 초기 집계: lines + lcs + tts fetch ──
   useEffect(() => {
@@ -213,7 +202,7 @@ function POListTable({ items, onDetail, onNew, onEditLC, onNewLC, onDelete, onDe
     }
   });
 
-  if (items.length === 0) return <EmptyState message="등록된 PO가 없습니다" actionLabel="새로 등록" onAction={onNew} />;
+  if (items.length === 0) return <EmptyState message="등록된 PO가 없습니다" />;
 
   return (
     <div className="rounded-md border overflow-x-auto">
@@ -378,73 +367,14 @@ function POListTable({ items, onDetail, onNew, onEditLC, onNewLC, onDelete, onDe
                     <StatusPill label={PO_STATUS_LABEL[po.status]} colorClassName={PO_STATUS_COLOR[po.status]} className="px-2" />
                   </td>
 
-                  {/* 상세 / 삭제 버튼 */}
+                  {/* 상세 버튼 */}
                   <td className="p-3 text-center align-top" onClick={e => e.stopPropagation()}>
-                    {pendingDeleteId === po.po_id ? (
-                      /* 삭제 확인 인라인 UI */
-                      <div className="flex flex-col items-center gap-1">
-                        {a?.ttCount > 0 && (
-                          <div className="text-[10px] text-amber-600 font-medium">
-                            ⚠ T/T {a.ttCount}건도 삭제됩니다
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1">
-                          <button
-                            className="text-[10px] px-1.5 py-0.5 rounded border border-gray-300 text-muted-foreground hover:bg-muted transition-colors"
-                            onClick={() => { setPendingDeleteId(null); setDeleteError({}); }}
-                          >취소</button>
-                          <button
-                            disabled={deletingId === po.po_id}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
-                            onClick={async () => {
-                              if (!onDelete) return;
-                              setDeletingId(po.po_id);
-                              setDeleteError({});
-                              try {
-                                await onDelete(po.po_id);
-                                setPendingDeleteId(null);
-                              } catch (err) {
-                                setDeleteError({ [po.po_id]: err instanceof Error ? err.message : '삭제 실패' });
-                                setDeletingId(null);
-                              }
-                            }}
-                          >{deletingId === po.po_id ? '…' : '취소 처리'}</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-0.5 justify-center">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          title="상세 보기 / 편집" onClick={() => onDetail(po)}>
-                          <FilePenLine className="h-3.5 w-3.5" />
-                        </Button>
-                        {po.status === 'draft' && onDelete && (
-                          <Button variant="ghost" size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-red-500"
-                            title="취소 처리"
-                            onClick={() => { setPendingDeleteId(po.po_id); setDeleteError({}); }}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    )}
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      title="상세 보기" onClick={() => onDetail(po)}>
+                      <FilePenLine className="h-3.5 w-3.5" />
+                    </Button>
                   </td>
                 </tr>
-
-                {/* ── 삭제 에러 배너 행 ── */}
-                {deleteError[po.po_id] && (
-                  <tr key={`${po.po_id}-err`} className="bg-red-50 border-t border-red-200">
-                    <td colSpan={8} className="px-4 py-2" onClick={e => e.stopPropagation()}>
-                      <div className="flex items-start gap-2">
-                        <span className="text-red-500 mt-0.5 shrink-0">⚠</span>
-                        <span className="text-xs text-red-700 flex-1">{deleteError[po.po_id]}</span>
-                        <button
-                          className="text-[10px] text-red-400 hover:text-red-600 shrink-0"
-                          onClick={() => setDeleteError(prev => { const n = {...prev}; delete n[po.po_id]; return n; })}
-                        >✕</button>
-                      </div>
-                    </td>
-                  </tr>
-                )}
 
                 {/* ── 펼침 상세 행 ── */}
                 {isExp && (
@@ -497,20 +427,6 @@ function POListTable({ items, onDetail, onNew, onEditLC, onNewLC, onDelete, onDe
                                 {bl?.loading && <span className="ml-2">로딩 중…</span>}
                               </span>
                             </span>
-                            <div className="flex items-center gap-1">
-                              <Button size="sm" variant="ghost"
-                                className="h-6 text-[11px] px-2 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                onClick={e => { e.stopPropagation(); onNewLC?.(po); }}
-                              >
-                                <Plus className="h-3 w-3" />L/C 추가
-                              </Button>
-                              <Button size="sm" variant="ghost"
-                                className="h-6 text-[11px] px-2 gap-1 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                onClick={e => { e.stopPropagation(); window.location.href = `/procurement?tab=bl&action=new&po_id=${po.po_id}`; }}
-                              >
-                                <Plus className="h-3 w-3" />입고 등록
-                              </Button>
-                            </div>
                           </div>
                           {a && a.lcs.length > 0 ? (
                             <table className="w-full text-xs">
@@ -522,7 +438,6 @@ function POListTable({ items, onDetail, onNew, onEditLC, onNewLC, onDelete, onDe
                                   <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">모듈 / 규격(W)</th>
                                   <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">만기일</th>
                                   <th className="px-3 py-1.5 text-center font-medium text-muted-foreground">상태</th>
-                                  <th className="px-3 py-1.5 w-20" />
                                 </tr>
                               </thead>
                               <tbody>
@@ -553,65 +468,6 @@ function POListTable({ items, onDetail, onNew, onEditLC, onNewLC, onDelete, onDe
                                         <td className="px-3 py-2 text-muted-foreground">{formatDate(lc.maturity_date ?? '')}</td>
                                         <td className="px-3 py-2 text-center">
                                           <StatusPill label={LC_STATUS_LABEL[lc.status]} colorClassName={LC_STATUS_COLOR[lc.status]} />
-                                        </td>
-                                        <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
-                                          {pendingDeleteLcId === lc.lc_id ? (
-                                            <div className="flex flex-col items-center gap-0.5">
-                                              <div className="flex items-center gap-1">
-                                                <button
-                                                  className="text-[10px] px-1.5 py-0.5 rounded border border-gray-300 text-muted-foreground hover:bg-muted transition-colors"
-                                                  onClick={() => { setPendingDeleteLcId(null); setDeleteLcError({}); }}
-                                                >취소</button>
-                                                <button
-                                                  disabled={deletingLcId === lc.lc_id}
-                                                  className="text-[10px] px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
-                                                  onClick={async () => {
-                                                    setDeletingLcId(lc.lc_id);
-                                                    setDeleteLcError({});
-                                                    try {
-                                                      await onDeleteLC?.(lc.lc_id);
-                                                      setPendingDeleteLcId(null);
-                                                      // 로컬 agg 즉시 반영
-                                                      setAgg(prev => {
-                                                        const updated = { ...prev };
-                                                        if (updated[po.po_id]) {
-                                                          const lcs = updated[po.po_id].lcs.filter(l => l.lc_id !== lc.lc_id);
-                                                          const lcUsd = lcs.reduce((s, l) => s + l.amount_usd, 0);
-                                                          const lcMw = lcs.reduce((s, l) => s + (l.target_mw ?? 0), 0);
-                                                          updated[po.po_id] = { ...updated[po.po_id], lcs, lcUsd, lcMw, lcRemainUsd: updated[po.po_id].totalUsd - lcUsd };
-                                                        }
-                                                        return updated;
-                                                      });
-                                                    } catch (err) {
-                                                      setDeleteLcError({ [lc.lc_id]: err instanceof Error ? err.message : '삭제 실패' });
-                                                      setDeletingLcId(null);
-                                                    }
-                                                  }}
-                                                >{deletingLcId === lc.lc_id ? '…' : '삭제'}</button>
-                                              </div>
-                                              {deleteLcError[lc.lc_id] && (
-                                                <div className="text-[9px] text-red-500 max-w-[100px] leading-tight">{deleteLcError[lc.lc_id]}</div>
-                                              )}
-                                            </div>
-                                          ) : (
-                                            <div className="flex items-center gap-0.5 justify-center">
-                                              <button
-                                                className="p-1 rounded hover:bg-muted text-muted-foreground/30 group-hover:text-muted-foreground transition-colors"
-                                                title="LC 수정" onClick={() => onEditLC?.(lc)}
-                                              >
-                                                <Pencil className="h-3 w-3" />
-                                              </button>
-                                              {onDeleteLC && (
-                                                <button
-                                                  className="p-1 rounded hover:bg-muted text-muted-foreground/30 group-hover:text-red-400 hover:text-red-500 transition-colors"
-                                                  title="LC 삭제"
-                                                  onClick={() => { setPendingDeleteLcId(lc.lc_id); setDeleteLcError({}); }}
-                                                >
-                                                  <Trash2 className="h-3 w-3" />
-                                                </button>
-                                              )}
-                                            </div>
-                                          )}
                                         </td>
                                       </tr>
                                       {/* BL 행 — 항상 표시 */}
@@ -650,13 +506,12 @@ function POListTable({ items, onDetail, onNew, onEditLC, onNewLC, onDelete, onDe
                                                   colorClassName={BL_STATUS_COLOR[b.status] ?? 'bg-gray-100 text-gray-600'}
                                                 />
                                               </td>
-                                              <td className="px-3 py-1.5" />
                                             </tr>
                                           );
                                         })
                                       ) : (
                                         <tr className="border-t bg-muted/5">
-                                          <td colSpan={7} className="pl-8 pr-3 py-1.5 text-[10px] text-muted-foreground italic">
+                                          <td colSpan={6} className="pl-8 pr-3 py-1.5 text-[10px] text-muted-foreground italic">
                                             입고 미등록
                                           </td>
                                         </tr>
@@ -674,7 +529,7 @@ function POListTable({ items, onDetail, onNew, onEditLC, onNewLC, onDelete, onDe
                                     <td className="px-3 py-1.5 text-[10px] font-mono font-semibold text-muted-foreground">
                                       {a.lcMw > 0 ? `${a.lcMw.toFixed(2)} MW` : '—'}
                                     </td>
-                                    <td colSpan={3} />
+                                    <td colSpan={2} />
                                   </tr>
                                 </tfoot>
                               )}

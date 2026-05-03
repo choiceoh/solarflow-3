@@ -14,7 +14,7 @@ const outboundList: ListScreenConfig = {
     { key: 'manufacturer_id', label: '제조사', type: 'select', optionsFrom: 'master', masterKey: 'manufacturers', allLabel: '전체 제조사' },
   ],
   toolbarExtras: [
-    { extraId: 'excel_toolbar', props: { type: 'outbound', createFormId: 'outbound_create' } },
+    { extraId: 'excel_toolbar', props: { type: 'outbound' } },
   ],
   metrics: [],   // 메트릭은 탭 묶음 레벨에서 공통
   columns: [
@@ -37,13 +37,8 @@ const outboundList: ListScreenConfig = {
     { whenEquals: { field: 'status', value: 'cancelled' }, className: 'bg-gray-50 text-muted-foreground line-through' },
   ],
   onRowClick: { kind: 'detail', detailId: 'outbound', idField: 'outbound_id' },
-  forms: [
-    { id: 'outbound_create', componentId: 'outbound_form', endpoint: '/api/v1/outbounds' },
-  ],
-  actions: [
-    { id: 'open_create', label: '새로 등록', trigger: 'toolbar', kind: 'open_form', formId: 'outbound_create' },
-  ],
-  emptyState: { message: '등록된 출고가 없습니다', actionId: 'open_create' },
+  actions: [],
+  emptyState: { message: '등록된 출고가 없습니다. 엑셀 입력에서 업로드하세요' },
 };
 
 const saleList: ListScreenConfig = {

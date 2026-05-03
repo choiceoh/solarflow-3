@@ -20,7 +20,7 @@ import type {
 import { DISPATCH_STATUS_LABEL } from '@/types/dispatch';
 import type { Outbound } from '@/types/outbound';
 
-// OrderForm과 동일한 패턴 — react-hook-form + zod
+// react-hook-form + zod
 const dispatchSchema = z.object({
   route_date: z.string().min(1, '배송일은 필수입니다'),
   vehicle_type: z.string().optional(),

@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment, memo } from 'react';
-import { Pencil, Trash2, CheckCircle2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { DateInput } from '@/components/ui/date-input';
 import { cn, formatDate, formatUSD, formatNumber, moduleLabel } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ProgressMiniBar from '@/components/common/ProgressMiniBar';
 import StatusPill from '@/components/common/StatusPill';
 import SortableTH from '@/components/common/SortableTH';
@@ -52,21 +51,15 @@ function MaturityBadge({ date, now }: { date?: string; now: number }) {
 
 interface Props {
   items: LCRecord[];
-  onEdit: (lc: LCRecord) => void;
-  onNew: () => void;
-  onDelete?: (lcId: string) => Promise<void>;
   onSettle?: (lc: LCRecord, repaymentDate: string) => Promise<void>;
   onSelectBL?: (blId: string) => void;
-  onNewBL?: (lc: LCRecord) => void;
   blsVersion?: number;
 }
 
-function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onNewBL, blsVersion }: Props) {
+function LCListTable({ items, onSettle, onSelectBL, blsVersion }: Props) {
   // 렌더 중 Date.now() 호출은 react-hooks/purity 위반 → useState lazy init으로 1회만 캡처
   const [now] = useState(() => Date.now());
   const [agg, setAgg] = useState<Record<string, LCAgg>>({});
-  const [deleteTarget, setDeleteTarget] = useState<LCRecord | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [settleTarget, setSettleTarget] = useState<LCRecord | null>(null);
   const [settleDate, setSettleDate] = useState('');
   const [settling, setSettling] = useState(false);
@@ -148,19 +141,6 @@ function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onN
     setExpandedLCId(prev => prev === lc.lc_id ? null : lc.lc_id);
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget || !onDelete) return;
-    setDeleting(true);
-    try {
-      await onDelete(deleteTarget.lc_id);
-      setDeleteTarget(null);
-    } catch (err) {
-      notify.error(err instanceof Error ? err.message : '취소 처리에 실패했습니다');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   const handleSettle = async () => {
     if (!settleTarget || !onSettle) return;
     setSettling(true);
@@ -185,7 +165,7 @@ function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onN
     }
   });
 
-  if (items.length === 0) return <EmptyState message="등록된 LC가 없습니다" actionLabel="새로 등록" onAction={onNew} />;
+  if (items.length === 0) return <EmptyState message="등록된 LC가 없습니다" />;
 
   return (
     <>
@@ -305,7 +285,7 @@ function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onN
                       )}
                     </td>
 
-                    {/* 상태 + 액션 */}
+                    {/* 상태 + 연결 처리 */}
                     <td className="p-3 text-center align-top" onClick={(e) => e.stopPropagation()}>
                       <StatusPill label={LC_STATUS_LABEL[lc.status]} colorClassName={LC_STATUS_COLOR[lc.status]} className="px-2" />
                       {isRepaid ? (
@@ -315,14 +295,6 @@ function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onN
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-0.5 mt-1.5">
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(lc)}>
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          {onDelete && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setDeleteTarget(lc)}>
-                              <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                            </Button>
-                          )}
                           {onSettle && (
                             <Button
                               variant="ghost"
@@ -404,15 +376,6 @@ function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onN
                                 </span>
                               )}
                             </span>
-                            {onNewBL && (
-                              <Button
-                                size="sm" variant="ghost"
-                                className="h-6 text-[11px] px-2 gap-1 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                onClick={(e) => { e.stopPropagation(); onNewBL(lc); }}
-                              >
-                                <Plus className="h-3 w-3" />입고 등록
-                              </Button>
-                            )}
                           </div>
 
                           {/* BL 목록 */}
@@ -472,14 +435,6 @@ function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onN
           </tbody>
         </table>
       </div>
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
-        title="LC 취소 처리"
-        description={deleteTarget ? `LC "${deleteTarget.lc_number ?? ''}"를 취소 처리하시겠습니까? 연결 이력은 삭제되지 않습니다.` : ''}
-        onConfirm={handleDelete}
-        loading={deleting}
-      />
       <Dialog open={!!settleTarget} onOpenChange={(v) => { if (!v) setSettleTarget(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>

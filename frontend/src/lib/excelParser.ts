@@ -7,7 +7,7 @@ import type {
   ImportPreview, DeclarationImportPreview,
 } from '@/types/excel';
 import {
-  FIELDS_MAP, DECLARATION_FIELDS, DECLARATION_COST_FIELDS,
+  FIELDS_MAP, DECLARATION_FIELDS, DECLARATION_COST_FIELDS, TEMPLATE_LABEL,
 } from '@/types/excel';
 
 // ExcelJS 셀 값 형태 (RichText/Formula 등)
@@ -115,7 +115,8 @@ export async function parseExcelFile(
 
   // 일반 양식
   const fields = FIELDS_MAP[type];
-  const firstSheet = workbook.worksheets[0];
+  const expectedSheet = workbook.getWorksheet(`${TEMPLATE_LABEL[type]}등록`);
+  const firstSheet = expectedSheet ?? workbook.worksheets[0];
   if (!firstSheet) {
     throw new Error('시트를 찾을 수 없습니다');
   }

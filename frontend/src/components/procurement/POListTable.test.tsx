@@ -25,7 +25,6 @@ function renderTable(props: Partial<ComponentProps<typeof POListTable>> = {}) {
     <POListTable
       items={[testPo]}
       onDetail={vi.fn()}
-      onNew={vi.fn()}
       {...props}
     />,
   );
@@ -40,10 +39,9 @@ describe('POListTable', () => {
   it('loads PO aggregates first and lazy-loads B/L MW when expanded', async () => {
     seedCompanyStore();
     mockPOListApi();
-    const onNewLC = vi.fn();
     const onSelectBL = vi.fn();
 
-    renderTable({ onNewLC, onSelectBL });
+    renderTable({ onSelectBL });
 
     expect(await screen.findByText('$100,000.00')).not.toBeNull();
     expect(await screen.findByText('$60,000.00')).not.toBeNull();
@@ -61,45 +59,19 @@ describe('POListTable', () => {
     });
     expect(callsFor(`/api/v1/bls?po_id=${testPo.po_id}`)).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /L\/C 추가/ }));
-    expect(onNewLC).toHaveBeenCalledWith(testPo);
-
     fireEvent.click(screen.getByText(testBl.bl_number));
     expect(onSelectBL).toHaveBeenCalledWith(testBl.bl_id);
   });
 
-  it('warns that linked T/T rows are deleted before deleting a draft PO', async () => {
-    seedCompanyStore();
-    mockPOListApi();
-    const onDelete = vi.fn().mockResolvedValue(undefined);
-
-    renderTable({
-      items: [{ ...testPo, status: 'draft' }],
-      onDelete,
-    });
-
-    expect(await screen.findByText('$100,000.00')).not.toBeNull();
-    fireEvent.click(screen.getByTitle('취소 처리'));
-
-    expect(await screen.findByText(/T\/T 1건도 삭제됩니다/)).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '취소 처리' }));
-
-    await waitFor(() => expect(onDelete).toHaveBeenCalledWith(testPo.po_id));
-  });
-
-  it('renders an empty action state when no PO exists', () => {
-    const onNew = vi.fn();
-
+  it('renders an empty state when no PO exists', () => {
     render(
       <POListTable
         items={[]}
         onDetail={vi.fn()}
-        onNew={onNew}
       />,
     );
 
     expect(screen.getByText('등록된 PO가 없습니다')).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '새로 등록' }));
-    expect(onNew).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: '새로 등록' })).toBeNull();
   });
 });

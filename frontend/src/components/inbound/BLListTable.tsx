@@ -1,15 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { formatDate, moduleLabel } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import SortableTH from '@/components/common/SortableTH';
 import InboundStatusBadge from './InboundStatusBadge';
 import { INBOUND_TYPE_LABEL, type BLShipment, type BLLineItem } from '@/types/inbound';
 import type { Manufacturer } from '@/types/masters';
 import { fetchWithAuth } from '@/lib/api';
-import { notify } from '@/lib/notify';
 import { useAppStore } from '@/stores/appStore';
 import { useSort } from '@/hooks/useSort';
 
@@ -23,18 +19,14 @@ interface BLAgg {
 interface Props {
   items: BLShipment[];
   onSelect: (bl: BLShipment) => void;
-  onNew: () => void;
-  onDelete?: (blId: string) => Promise<void>;
 }
 
-export default function BLListTable({ items, onSelect, onNew, onDelete }: Props) {
+export default function BLListTable({ items, onSelect }: Props) {
   const companies = useAppStore((s) => s.companies);
   const companyMap = Object.fromEntries(companies.map((c) => [c.company_id, c.company_name]));
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const mfgMap = Object.fromEntries(manufacturers.map((m) => [m.manufacturer_id, m.name_kr]));
   const [agg, setAgg] = useState<Record<string, BLAgg>>({});
-  const [deleteTarget, setDeleteTarget] = useState<BLShipment | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   // 제조사 목록 1회 로드 (manufacturer_id → name_kr 룩업용)
   useEffect(() => {
@@ -76,19 +68,6 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items.map((bl) => bl.bl_id).join(',')]);
 
-  const handleDelete = async () => {
-    if (!deleteTarget || !onDelete) return;
-    setDeleting(true);
-    try {
-      await onDelete(deleteTarget.bl_id);
-      setDeleteTarget(null);
-    } catch (err) {
-      notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   const { sorted, headerProps } = useSort<BLShipment>(items, (b, f) => {
     switch (f) {
       case 'bl_number': return b.bl_number ?? '';
@@ -99,11 +78,10 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
     }
   });
 
-  if (items.length === 0) return <EmptyState message="등록된 입고 건이 없습니다" actionLabel="새로 등록" onAction={onNew} />;
+  if (items.length === 0) return <EmptyState message="등록된 입고 건이 없습니다" />;
 
   return (
-    <>
-      <div className="rounded-md border overflow-x-auto">
+    <div className="rounded-md border overflow-x-auto">
         <table className="w-full min-w-[800px] text-xs">
           <thead>
             <tr className="bg-muted/50 border-b">
@@ -111,7 +89,6 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
               <SortableTH {...headerProps('manufacturer')} className="p-3 font-medium text-muted-foreground">품목</SortableTH>
               <SortableTH {...headerProps('inbound_type')} className="p-3 font-medium text-muted-foreground">구분 / 현황</SortableTH>
               <SortableTH {...headerProps('etd')} className="p-3 font-medium text-muted-foreground">선적 일정</SortableTH>
-              <th className="p-3 text-center font-medium text-muted-foreground w-[70px]">작업</th>
             </tr>
           </thead>
           <tbody>
@@ -187,37 +164,11 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
                       </div>
                     </div>
                   </td>
-
-                  {/* 작업 */}
-                  <td className="p-3 text-center align-top" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-center gap-0.5">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="수정"
-                        onClick={() => onSelect(bl)}>
-                        <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
-                      </Button>
-                      {onDelete && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7" title="삭제"
-                          onClick={() => setDeleteTarget(bl)}>
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-      </div>
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
-        title="입고 삭제"
-        description={deleteTarget ? `"${deleteTarget.bl_number}" 입고 건을 삭제하시겠습니까?` : ''}
-        onConfirm={handleDelete}
-        loading={deleting}
-      />
-    </>
+    </div>
   );
 }

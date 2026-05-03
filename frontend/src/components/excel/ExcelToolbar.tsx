@@ -2,11 +2,11 @@
 // 각 페이지에 <ExcelToolbar type="inbound" /> 형태로 삽입
 
 import { useCallback, useRef, useState } from 'react';
-import { AlertTriangle, ChevronDown, Download, FileOutput, Loader2, Plus, Upload } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Download, FileOutput, Loader2, Upload } from 'lucide-react';
 import type { TemplateType } from '@/types/excel';
 import { useExcel } from '@/hooks/useExcel';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -18,10 +18,9 @@ import AmaranthExportDialog from './AmaranthExportDialog';
 interface Props {
   type: TemplateType;
   onImportComplete?: () => void;
-  onNew?: () => void;
 }
 
-export default function ExcelToolbar({ type, onImportComplete, onNew }: Props) {
+export default function ExcelToolbar({ type, onImportComplete }: Props) {
   const {
     masterData, loading, error,
     preview, declPreview, importResult,
@@ -66,24 +65,15 @@ export default function ExcelToolbar({ type, onImportComplete, onNew }: Props) {
         >
           <DropdownMenu>
             <DropdownMenuTrigger
-              disabled={excelDisabled && !onNew}
+              disabled={excelDisabled}
               className="sf-toolbar-trigger"
             >
               {loading
                 ? <Loader2 style={{ width: 12, height: 12, color: 'var(--ink-3)' }} className="animate-spin" />
                 : <ChevronDown style={{ width: 12, height: 12, color: 'var(--ink-3)' }} />}
-              <span>작업</span>
+              <span>엑셀</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[160px]">
-              {onNew && (
-                <>
-                  <DropdownMenuItem onClick={onNew}>
-                    <Plus className="h-3.5 w-3.5 text-muted-foreground" />
-                    새로 등록
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
               <DropdownMenuItem onClick={downloadTemplate} disabled={excelDisabled}>
                 <Download className="h-3.5 w-3.5 text-muted-foreground" />
                 {loading ? '생성 중...' : '양식 다운로드'}

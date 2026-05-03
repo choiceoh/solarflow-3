@@ -33,7 +33,7 @@ const statusVariant: Record<IntercompanyStatus, 'default' | 'secondary' | 'outli
 // 운영 시드 고정값 — 040 마이그레이션의 companies(`BR`/`TS`) 시드 row와 동기화.
 const BARO_COMPANY_ID = 'e41f100b-c63d-4c87-b02d-e305af610018';
 
-// OrderForm과 동일한 패턴 — react-hook-form + zod로 폼 핸들러/검증 일원화.
+// react-hook-form + zod로 폼 핸들러/검증 일원화.
 const requestSchema = z.object({
   product_id: z.string().min(1, '품번은 필수입니다'),
   quantity: z.coerce.number().int().positive('수량은 양수여야 합니다'),
@@ -138,7 +138,7 @@ export default function GroupPurchaseRequestPage() {
     setFormOpen(true);
   };
 
-  // OrderForm.handle 패턴 — 검증은 zodResolver에서, 서버 응답은 try/catch에서 표시.
+  // 검증은 zodResolver에서, 서버 응답은 try/catch에서 표시.
   const onSubmit = async (data: RequestFormData) => {
     setSubmitError('');
     try {

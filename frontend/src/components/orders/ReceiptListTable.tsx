@@ -1,6 +1,4 @@
 import { memo } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { formatDate, formatNumber } from '@/lib/utils';
 import type { Receipt } from '@/types/orders';
@@ -14,9 +12,6 @@ interface Props {
   hidden: Set<string>;
   pinning?: ColumnPinningState;
   onPinningChange?: (next: ColumnPinningState) => void;
-  onNew: () => void;
-  onEdit?: (r: Receipt) => void;
-  onDelete?: (r: Receipt) => void;
 }
 
 type MatchStatus = 'full' | 'partial' | 'none';
@@ -42,7 +37,7 @@ function MatchBadge({ receipt }: { receipt: Receipt }) {
   return <span className="sf-pill ghost">미매칭</span>;
 }
 
-function buildColumns({ onEdit, onDelete }: { onEdit?: (r: Receipt) => void; onDelete?: (r: Receipt) => void }): ColumnDef<Receipt>[] {
+function buildColumns(): ColumnDef<Receipt>[] {
   return [
     { key: 'receipt_date', label: '입금일', cell: (r) => formatDate(r.receipt_date), sortAccessor: (r) => r.receipt_date ?? '' },
     { key: 'customer_name', label: '거래처', hideable: true, cell: (r) => r.customer_name ?? '—', sortAccessor: (r) => r.customer_name ?? '' },
@@ -54,41 +49,23 @@ function buildColumns({ onEdit, onDelete }: { onEdit?: (r: Receipt) => void; onD
     { key: 'bank_account', label: '입금계좌', hideable: true, cell: (r) => r.bank_account ?? '—', sortAccessor: (r) => r.bank_account ?? '' },
     { key: 'match_status', label: '매칭상태', hideable: true, cell: (r) => <MatchBadge receipt={r} />, sortAccessor: (r) => getMatchStatus(r) },
     { key: 'memo', label: '메모', hideable: true, className: 'max-w-[200px] truncate', cell: (r) => r.memo ?? '—', sortAccessor: (r) => r.memo ?? '' },
-    {
-      key: 'actions', label: '작업', align: 'right',
-      cell: (r) => (
-        <div className="flex items-center justify-end gap-1">
-          {onEdit && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(r)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {onDelete && (
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(r)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-      ),
-    },
   ];
 }
 
 export const RECEIPT_COLUMN_META: ColumnVisibilityMeta[] =
-  buildColumns({}).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
+  buildColumns().map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function ReceiptListTable({ items, hidden, pinning, onPinningChange, onNew, onEdit, onDelete }: Props) {
+function ReceiptListTable({ items, hidden, pinning, onPinningChange }: Props) {
   return (
     <MetaTable
       tableId={RECEIPT_TABLE_ID}
-      columns={buildColumns({ onEdit, onDelete })}
+      columns={buildColumns()}
       hidden={hidden}
       pinning={pinning}
       onPinningChange={onPinningChange}
       items={items}
       getRowKey={(r) => r.receipt_id}
       emptyMessage="등록된 수금이 없습니다"
-      emptyAction={{ label: '새로 등록', onClick: onNew }}
     />
   );
 }

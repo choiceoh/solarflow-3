@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Pencil, Plus, Trash2, Truck } from 'lucide-react';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -9,9 +8,6 @@ import { cn } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
 import FulfillmentSourceBadge from './FulfillmentSourceBadge';
-import OrderForm from './OrderForm';
-import OutboundForm from '@/components/outbound/OutboundForm';
-import SaleForm from '@/components/outbound/SaleForm';
 import LinkedMemoWidget from '@/components/memo/LinkedMemoWidget';
 import { useOrderDetail, useOrderOutbounds } from '@/hooks/useOrders';
 import { fetchWithAuth } from '@/lib/api';
@@ -44,14 +40,8 @@ function formatMaybeKw(value: unknown): string | undefined {
 }
 
 export default function OrderDetailView({ orderId, onBack }: Props) {
-  const { data: order, loading, reload } = useOrderDetail(orderId);
-  const { data: outbounds, loading: obLoading, reload: reloadOutbounds } = useOrderOutbounds(orderId);
-  const [editingOrder, setEditingOrder] = useState(false);
-  const [editingSale, setEditingSale] = useState(false);
-  const [outboundFormOpen, setOutboundFormOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
+  const { data: order, loading } = useOrderDetail(orderId);
+  const { data: outbounds, loading: obLoading } = useOrderOutbounds(orderId);
   const [sales, setSales] = useState<Sale[]>([]);
 
   const loadSales = async () => {
@@ -94,40 +84,6 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
   const managementLabel = order.management_category ? (MANAGEMENT_CATEGORY_LABEL[order.management_category] ?? order.management_category) : undefined;
   const sale = salesRows[0];
 
-  const handleUpdate = async (data: Record<string, unknown>) => {
-    await fetchWithAuth(`/api/v1/orders/${orderId}`, { method: 'PUT', body: JSON.stringify(data) });
-    reload();
-  };
-
-  const handleDelete = async () => {
-    setDeleting(true);
-    setDeleteError('');
-    try {
-      await fetchWithAuth(`/api/v1/orders/${orderId}`, { method: 'DELETE' });
-      setDeleteOpen(false);
-      onBack();
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : '삭제에 실패했습니다');
-    }
-    setDeleting(false);
-  };
-
-  const handleSaleSubmit = async (data: Record<string, unknown>) => {
-    const existing = sales[0];
-    if (existing) {
-      await fetchWithAuth(`/api/v1/sales/${existing.sale_id}`, { method: 'PUT', body: JSON.stringify(data) });
-    } else {
-      await fetchWithAuth('/api/v1/sales', { method: 'POST', body: JSON.stringify(data) });
-    }
-    await loadSales();
-  };
-
-  const handleOutboundSubmit = async (data: Record<string, unknown>) => {
-    await fetchWithAuth('/api/v1/outbounds', { method: 'POST', body: JSON.stringify(data) });
-    await reloadOutbounds();
-    await reload();
-  };
-
   const statusBadge = (
     <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', statusColor)}>
       {statusLabel}
@@ -143,39 +99,12 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
         <h2 className="flex-1 text-base font-semibold" style={{ letterSpacing: '-0.012em' }}>
           수주 <span className="sf-mono">{order.order_number || shortOrderId}</span>
         </h2>
-        {!editingOrder && (
-          <>
-            <Button variant="outline" size="sm" onClick={() => setOutboundFormOpen(true)} disabled={remaining <= 0}>
-              <Truck className="mr-1 h-3.5 w-3.5" />출고 등록
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)} className="text-destructive hover:text-destructive">
-              <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
-            </Button>
-          </>
-        )}
       </div>
-      {deleteError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{deleteError}</div>}
 
-      {editingOrder ? (
-        <DetailSection title="수주 수정">
-          <OrderForm
-            variant="inline"
-            onOpenChange={(o) => { if (!o) setEditingOrder(false); }}
-            onSubmit={handleUpdate}
-            editData={order}
-          />
-        </DetailSection>
-      ) : (
-        <>
-          <DetailSection
-            title="기본 정보"
-            badges={statusBadge}
-            actions={(
-              <Button variant="outline" size="sm" onClick={() => setEditingOrder(true)}>
-                <Pencil className="mr-1 h-3.5 w-3.5" />수정
-              </Button>
-            )}
-          >
+      <DetailSection
+        title="기본 정보"
+        badges={statusBadge}
+      >
             <DetailFieldGrid cols={4}>
               <DetailField label="발주번호" value={order.order_number} />
               <DetailField label="수주일" value={formatDate(order.order_date)} />
@@ -187,9 +116,9 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
               </DetailField>
               <DetailField label="납기일" value={order.delivery_due ? formatDate(order.delivery_due) : undefined} />
             </DetailFieldGrid>
-          </DetailSection>
+      </DetailSection>
 
-          <DetailSection title="제품 · 수량">
+      <DetailSection title="제품 · 수량">
             <DetailFieldGrid cols={4}>
               <DetailField label="제조사/규격" value={moduleText} span={2} />
               <DetailField label="품번" value={order.product_code} />
@@ -201,53 +130,34 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
               <DetailField label="스페어" value={formatMaybeNumber(order.spare_qty)} />
               <DetailField label="Wp단가" value={formatMaybeNumber(order.unit_price_wp, '원/Wp')} />
             </DetailFieldGrid>
-          </DetailSection>
+      </DetailSection>
 
-          <DetailSection title="현장">
+      <DetailSection title="현장">
             <DetailFieldGrid cols={4}>
               <DetailField label="현장명" value={order.site_name} span={2} />
               <DetailField label="현장 주소" value={order.site_address} span={2} />
               <DetailField label="현장 담당" value={order.site_contact} />
               <DetailField label="현장 전화" value={order.site_phone} />
             </DetailFieldGrid>
-          </DetailSection>
+      </DetailSection>
 
-          <DetailSection title="결제">
+      <DetailSection title="결제">
             <DetailFieldGrid cols={4}>
               <DetailField label="결제조건" value={order.payment_terms} span={2} />
               <DetailField label="현금/선수금율" value={formatMaybeNumber(order.deposit_rate, '%')} />
             </DetailFieldGrid>
-          </DetailSection>
+      </DetailSection>
 
-          {order.memo && (
-            <DetailSection title="메모">
-              <p className="text-sm whitespace-pre-wrap break-words">{order.memo}</p>
-            </DetailSection>
-          )}
-        </>
+      {order.memo && (
+        <DetailSection title="메모">
+          <p className="text-sm whitespace-pre-wrap break-words">{order.memo}</p>
+        </DetailSection>
       )}
 
       <Separator />
 
-      {editingSale ? (
-        <DetailSection title={sale ? '계산서 수정' : '계산서 등록'}>
-          <SaleForm
-            variant="inline"
-            onOpenChange={(o) => { if (!o) setEditingSale(false); }}
-            onSubmit={handleSaleSubmit}
-            order={order}
-            editData={sale ?? null}
-          />
-        </DetailSection>
-      ) : sale ? (
-        <DetailSection
-          title="계산서"
-          actions={(
-            <Button variant="outline" size="sm" onClick={() => setEditingSale(true)}>
-              <Pencil className="mr-1 h-3.5 w-3.5" />계산서 수정
-            </Button>
-          )}
-        >
+      {sale ? (
+        <DetailSection title="계산서">
           <DetailFieldGrid cols={4}>
             <DetailField label="거래처" value={sale.customer_name ?? order.customer_name} span={2} />
             <DetailField label="수량" value={formatMaybeNumber(safeNumber(sale.quantity) ?? order.quantity)} />
@@ -260,14 +170,7 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
           </DetailFieldGrid>
         </DetailSection>
       ) : (
-        <DetailSection
-          title="계산서"
-          actions={(
-            <Button variant="outline" size="sm" onClick={() => setEditingSale(true)}>
-              <Plus className="mr-1 h-3.5 w-3.5" />출고 전 계산서
-            </Button>
-          )}
-        >
+        <DetailSection title="계산서">
           <div className="text-center py-6 text-sm text-muted-foreground">등록된 계산서가 없습니다</div>
         </DetailSection>
       )}
@@ -280,9 +183,6 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
           <p className="text-xs text-muted-foreground">
             출고: {formatNumber(totalShipped)} / 잔량: {formatNumber(remaining)}
           </p>
-          <Button size="sm" variant="outline" onClick={() => setOutboundFormOpen(true)} disabled={remaining <= 0}>
-            <Plus className="mr-1 h-3.5 w-3.5" />출고 등록
-          </Button>
         </div>
       </div>
 
@@ -327,21 +227,6 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
       )}
 
       <LinkedMemoWidget linkedTable="orders" linkedId={orderId} />
-
-      <OutboundForm
-        open={outboundFormOpen}
-        onOpenChange={setOutboundFormOpen}
-        onSubmit={handleOutboundSubmit}
-        order={order}
-      />
-      <ConfirmDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title="수주 삭제"
-        description={`수주 "${order.order_number || shortOrderId}"을(를) 삭제합니다. 연결된 출고가 있으면 먼저 삭제해야 합니다.`}
-        onConfirm={handleDelete}
-        loading={deleting}
-      />
     </div>
   );
 }

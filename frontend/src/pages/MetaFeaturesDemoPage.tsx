@@ -15,7 +15,7 @@ export default function MetaFeaturesDemoPage() {
       <div>
         <h1 className="text-base font-semibold">메타 인프라 통합 데모 (Step 3 prep)</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Step 3 (BLForm 메타화) 진입 전 깔린 3 인프라가 합쳐서 동작하는지 검증.
+          메타 폼 인프라 3종이 합쳐서 동작하는지 검증.
         </p>
       </div>
 

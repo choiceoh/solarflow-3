@@ -1,6 +1,4 @@
 import { memo } from 'react';
-import { Pencil } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { formatNumber, formatUSD, formatWp } from '@/lib/utils';
 import type { POLineItem } from '@/types/procurement';
@@ -14,7 +12,6 @@ interface Props {
   hidden: Set<string>;
   pinning?: ColumnPinningState;
   onPinningChange?: (next: ColumnPinningState) => void;
-  onEdit: (line: POLineItem) => void;
   manufacturerName?: string;
 }
 
@@ -23,11 +20,10 @@ function pName(l: POLineItem): string { return l.product_name ?? l.products?.pro
 function pSpec(l: POLineItem): number | undefined { return l.spec_wp ?? l.products?.spec_wp; }
 
 interface BuildOpts {
-  onEdit: (line: POLineItem) => void;
   manufacturerName?: string;
 }
 
-function buildColumns({ onEdit, manufacturerName }: BuildOpts): ColumnDef<POLineItem>[] {
+function buildColumns({ manufacturerName }: BuildOpts): ColumnDef<POLineItem>[] {
   return [
     { key: 'manufacturer', label: '제조사', hideable: true, cell: () => manufacturerName ?? '—' },
     { key: 'product_code', label: '품번', hideable: true, className: 'font-mono', cell: (l) => pCode(l), sortAccessor: (l) => pCode(l) },
@@ -54,25 +50,17 @@ function buildColumns({ onEdit, manufacturerName }: BuildOpts): ColumnDef<POLine
       },
     },
     { key: 'total_usd', label: '총액(USD)', hideable: true, align: 'right', className: 'font-medium', cell: (l) => l.total_amount_usd != null ? formatUSD(l.total_amount_usd) : '—', sortAccessor: (l) => l.total_amount_usd ?? 0 },
-    {
-      key: 'actions', label: '', headerClassName: 'w-10',
-      cell: (l) => (
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(l)} disabled={l.payment_type === 'free'}>
-          <Pencil className="h-3 w-3" />
-        </Button>
-      ),
-    },
   ];
 }
 
 export const PO_LINE_COLUMN_META: ColumnVisibilityMeta[] =
-  buildColumns({ onEdit: () => {} }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
+  buildColumns({}).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function POLineTable({ items, hidden, pinning, onPinningChange, onEdit, manufacturerName }: Props) {
+function POLineTable({ items, hidden, pinning, onPinningChange, manufacturerName }: Props) {
   return (
     <MetaTable
       tableId={PO_LINE_TABLE_ID}
-      columns={buildColumns({ onEdit, manufacturerName })}
+      columns={buildColumns({ manufacturerName })}
       hidden={hidden}
       pinning={pinning}
       onPinningChange={onPinningChange}
