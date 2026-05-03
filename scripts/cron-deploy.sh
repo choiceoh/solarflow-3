@@ -30,6 +30,16 @@
 
 set -uo pipefail
 
+# cron 환경에서 systemctl --user 가 동작하려면 user systemd 인스턴스의 소켓을 가리키는
+# XDG_RUNTIME_DIR 와 DBUS_SESSION_BUS_ADDRESS 가 필요하다. 인터랙티브 로그인 셸에는
+# pam_systemd 가 자동 주입하지만 cron 의 환경엔 없어서, restart 호출이 다음과 같이 실패한다:
+#   "Failed to connect to bus: No medium found"
+# 이 경우 swap 후 systemd 가 새 바이너리를 못 잡고, 디스크/메모리 mismatch 가 발생한다.
+# 한 번 운영자 조치 필요: `loginctl enable-linger choiceoh` (로그아웃 후에도 user systemd 유지).
+USER_UID=$(id -u)
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$USER_UID}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+
 REPO=/home/choiceoh/공개/solarflow-3
 LOCK=/tmp/solarflow-cron-deploy.lock
 GO_DIR="$REPO/backend"
