@@ -288,30 +288,30 @@ export default function AdminSettingsPage() {
           { label: '운영팀', value: operatorUsers.toLocaleString(), sub: '입력 가능 권한', tone: 'info' },
         ]}
       >
-        <div className="mx-auto max-w-4xl space-y-6">
+        <div className="mx-auto max-w-screen-2xl space-y-7">
 
       {/* 역할 안내 */}
-      <div className="rounded-lg border bg-card p-4 space-y-2">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">역할 안내</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+      <div className="rounded-lg border bg-card p-7 space-y-4">
+        <p className="text-lg font-medium text-muted-foreground uppercase tracking-wide">역할 안내</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-lg">
           <div className="flex gap-2 items-start">
-            <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ROLE_BADGE_VARIANT.admin}`}>시스템관리자</span>
+            <span className={`mt-0.5 shrink-0 rounded px-2.5 py-0.5 text-sm font-medium ${ROLE_BADGE_VARIANT.admin}`}>시스템관리자</span>
             <span className="text-muted-foreground">전체 기능 + 사용자 관리·설정</span>
           </div>
           <div className="flex gap-2 items-start">
-            <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ROLE_BADGE_VARIANT.operator}`}>운영팀</span>
+            <span className={`mt-0.5 shrink-0 rounded px-2.5 py-0.5 text-sm font-medium ${ROLE_BADGE_VARIANT.operator}`}>운영팀</span>
             <span className="text-muted-foreground">전체 기능 (설정 제외)</span>
           </div>
           <div className="flex gap-2 items-start">
-            <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ROLE_BADGE_VARIANT.executive}`}>경영진</span>
+            <span className={`mt-0.5 shrink-0 rounded px-2.5 py-0.5 text-sm font-medium ${ROLE_BADGE_VARIANT.executive}`}>경영진</span>
             <span className="text-muted-foreground">전체 조회 (민감정보 포함, 입력 없음)</span>
           </div>
           <div className="flex gap-2 items-start">
-            <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ROLE_BADGE_VARIANT.manager}`}>본부장</span>
+            <span className={`mt-0.5 shrink-0 rounded px-2.5 py-0.5 text-sm font-medium ${ROLE_BADGE_VARIANT.manager}`}>본부장</span>
             <span className="text-muted-foreground">재고·가용재고 조회 (민감정보 제외)</span>
           </div>
           <div className="flex gap-2 items-start">
-            <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ROLE_BADGE_VARIANT.viewer}`}>조회</span>
+            <span className={`mt-0.5 shrink-0 rounded px-2.5 py-0.5 text-sm font-medium ${ROLE_BADGE_VARIANT.viewer}`}>조회</span>
             <span className="text-muted-foreground">재고·대시보드만</span>
           </div>
         </div>
@@ -319,32 +319,32 @@ export default function AdminSettingsPage() {
 
       {/* 사용자 목록 */}
       <div className="rounded-lg border bg-card overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b bg-muted/30">
-          <p className="text-sm font-medium">사용자 목록 ({users.length}명)</p>
+        <div className="flex items-center justify-between gap-3 px-7 py-5 border-b bg-muted/30">
+          <p className="text-xl font-semibold">사용자 목록 ({users.length}명)</p>
         </div>
         {loading ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">불러오는 중...</div>
+          <div className="p-8 text-center text-lg text-muted-foreground">불러오는 중...</div>
         ) : users.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">등록된 사용자가 없습니다</div>
+          <div className="p-8 text-center text-lg text-muted-foreground">등록된 사용자가 없습니다</div>
         ) : (
           <div className="divide-y">
             {users.map((u) => {
               const isSaving = savingId === u.user_id;
               const isSelf = me?.user_id === u.user_id;
               return (
-                <div key={u.user_id} className={`flex items-center gap-4 px-4 py-3 ${!u.is_active ? 'opacity-50' : ''}`}>
+                <div key={u.user_id} className={`flex items-center gap-5 px-7 py-6 ${!u.is_active ? 'opacity-50' : ''}`}>
                   {/* 사용자 정보 */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium truncate">{u.name}</p>
-                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ROLE_BADGE_VARIANT[u.role] ?? 'bg-gray-100 text-gray-600'}`}>
+                      <p className="text-xl font-medium truncate">{u.name}</p>
+                      <span className={`shrink-0 rounded px-2.5 py-0.5 text-sm font-medium ${ROLE_BADGE_VARIANT[u.role] ?? 'bg-gray-100 text-gray-600'}`}>
                         {ROLE_LABELS[u.role] ?? u.role}
                       </span>
                       {isSelf && (
-                        <span className="shrink-0 rounded bg-emerald-100 text-emerald-700 px-1.5 py-0.5 text-[10px] font-medium">본인</span>
+                        <span className="shrink-0 rounded bg-emerald-100 text-emerald-700 px-2.5 py-0.5 text-sm font-medium">본인</span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">{u.email}{u.department ? ` · ${u.department}` : ''}</p>
+                    <p className="text-lg text-muted-foreground truncate">{u.email}{u.department ? ` · ${u.department}` : ''}</p>
                   </div>
 
                   {/* 역할 변경 — 본인 행은 잠금 (스스로 강등 사고 방지) */}
@@ -372,7 +372,7 @@ export default function AdminSettingsPage() {
                       onCheckedChange={(v) => handleActiveChange(u.user_id, v)}
                       disabled={isSaving || isSelf}
                     />
-                    <span className="text-xs text-muted-foreground w-8">{u.is_active ? '활성' : '비활성'}</span>
+                    <span className="text-lg text-muted-foreground w-16">{u.is_active ? '활성' : '비활성'}</span>
                   </div>
 
                   <Button

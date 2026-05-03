@@ -1,14 +1,18 @@
 // MetaDetailConfig 시각 편집기 — 섹션별 cols + 필드 (formatter/span 위주) 인라인 편집.
+// Phase 4: tabs[] 편집 + 우측 패널 (L1 inlineEdit) + selection-driven tab metadata.
 
 import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
-import type { DetailFieldConfig, DetailFormatter, DetailSectionConfig, MetaDetailConfig } from '@/templates/types';
-import { cellRenderers, contentBlocks, enumDictionaries } from '@/templates/registry';
+import { ChevronDown, ChevronUp, Plus, Settings2, Trash2 } from 'lucide-react';
+import type { DetailFieldConfig, DetailFormatter, DetailSectionConfig, DetailTabConfig, MetaDetailConfig } from '@/templates/types';
+import { buildRegistryEntries, cellRenderers, cellRendererMeta, contentBlocks, contentBlockMeta, enumDictionaries } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
+import { EditorWithPanel, PanelGroup, PanelSelectionHeader, PanelEmpty } from './RightPanel';
+import { TabsEditor } from './TabsEditor';
+import { BooleanPicker, EndpointPicker, IdFieldPicker, InlineEditOptionsPicker, InlineEditTypePicker, RegistryIdPicker } from './Pickers';
 
 const FORMATTER_OPTIONS = [
   { value: 'date', label: 'date' },
@@ -31,7 +35,7 @@ const SPAN_OPTIONS = [
   { value: '4', label: '4' },
 ];
 
-type Tab = 'basic' | 'sections' | 'json';
+type Tab = 'basic' | 'sections' | 'tabs' | 'json';
 
 export interface VisualDetailEditorProps {
   value: MetaDetailConfig;
@@ -44,22 +48,48 @@ export default function VisualDetailEditor({
   value, onChange, jsonDraft, onJsonDraftChange,
 }: VisualDetailEditorProps) {
   const [tab, setTab] = useState<Tab>('basic');
+  // Phase 4 메타 인프라: tabs[] 편집 시 선택된 탭 (selection-driven 우측 패널).
+  const [selectedTabIdx, setSelectedTabIdx] = useState<number | null>(null);
+  // Phase 4 follow-up #1: sections 의 detailField 선택 (selection-driven 우측 패널).
+  const [selectedDetailField, setSelectedDetailField] = useState<{ sec: number; field: number } | null>(null);
   const sections = value.sections ?? [];
   const fieldCount = sections.reduce((s, sec) => s + (sec.fields?.length ?? 0), 0);
+  const tabs = value.tabs ?? [];
 
-  return (
+  const selectedDetailFieldConfig = selectedDetailField
+    ? sections[selectedDetailField.sec]?.fields?.[selectedDetailField.field]
+    : null;
+
+  const main = (
     <div className="flex flex-col h-full min-h-0">
       <div className="border-b px-3 flex gap-1 overflow-x-auto">
         <TabButton active={tab === 'basic'} onClick={() => setTab('basic')}>기본 정보</TabButton>
         <TabButton active={tab === 'sections'} onClick={() => setTab('sections')}>
           섹션 ({sections.length}) · 필드 ({fieldCount})
         </TabButton>
+        <TabButton active={tab === 'tabs'} onClick={() => setTab('tabs')}>
+          탭 ({tabs.length})
+        </TabButton>
         <TabButton active={tab === 'json'} onClick={() => setTab('json')}>JSON (고급)</TabButton>
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto p-4">
         {tab === 'basic' && <BasicTab value={value} onChange={onChange} />}
-        {tab === 'sections' && <SectionsTab value={value} onChange={onChange} />}
+        {tab === 'sections' && (
+          <SectionsTab
+            value={value}
+            onChange={onChange}
+            onSelectDetailField={(sec, field) => setSelectedDetailField({ sec, field })}
+          />
+        )}
+        {tab === 'tabs' && (
+          <TabsTab
+            value={value}
+            onChange={onChange}
+            selectedIdx={selectedTabIdx}
+            onSelectIdx={setSelectedTabIdx}
+          />
+        )}
         {tab === 'json' && (
           <Textarea
             value={jsonDraft}
@@ -70,6 +100,263 @@ export default function VisualDetailEditor({
         )}
       </div>
     </div>
+  );
+
+  // 우측 패널 — 우선순위: detailField 선택 > 탭 선택 > detail-level
+  const panel = selectedDetailFieldConfig
+    ? (
+      <DetailFieldPanel
+        field={selectedDetailFieldConfig}
+        onChange={(next) => {
+          if (!selectedDetailField) return;
+          const newSections = sections.map((s, sIdx) => {
+            if (sIdx !== selectedDetailField.sec) return s;
+            const newFields = (s.fields ?? []).map((f, fIdx) => fIdx === selectedDetailField.field ? next : f);
+            return { ...s, fields: newFields };
+          });
+          onChange({ ...value, sections: newSections });
+        }}
+        onBack={() => setSelectedDetailField(null)}
+      />
+    )
+    : tab === 'tabs' && selectedTabIdx !== null && tabs[selectedTabIdx]
+    ? (
+      <SelectedTabPanel
+        tab={tabs[selectedTabIdx]}
+        onChange={(next) => onChange({
+          ...value,
+          tabs: tabs.map((t, i) => i === selectedTabIdx ? next : t),
+        })}
+        onBack={() => setSelectedTabIdx(null)}
+      />
+    )
+    : <DetailLevelPanel value={value} onChange={onChange} />;
+
+  const panelTitle = selectedDetailFieldConfig
+    ? `선택: ${selectedDetailFieldConfig.label || selectedDetailFieldConfig.key}`
+    : tab === 'tabs' && selectedTabIdx !== null
+    ? `선택: ${tabs[selectedTabIdx]?.label ?? ''}`
+    : '⚙ 상세 화면 설정';
+
+  return <EditorWithPanel panel={panel} panelTitle={panelTitle}>{main}</EditorWithPanel>;
+}
+
+// ─── 우측 패널: 선택된 detailField 의 L3/L4 ────────────────────────────────
+function DetailFieldPanel({
+  field, onChange, onBack,
+}: {
+  field: import('@/templates/types').DetailFieldConfig;
+  onChange: (next: import('@/templates/types').DetailFieldConfig) => void;
+  onBack: () => void;
+}) {
+  return (
+    <>
+      <PanelSelectionHeader
+        title={field.label || field.key}
+        subtitle={field.key}
+        onBack={onBack}
+      />
+      <PanelGroup title="인라인 편집 (필드 클릭)">
+        <BooleanPicker
+          label="inlineEditable"
+          value={field.inlineEditable ?? false}
+          onChange={(v) => onChange({ ...field, inlineEditable: v || undefined })}
+          hint="MetaDetailConfig.inlineEdit.enabled 도 활성화 필요"
+        />
+        {field.inlineEditable && (
+          <>
+            <InlineEditTypePicker
+              value={field.inlineEditType}
+              onChange={(v) => onChange({ ...field, inlineEditType: v as import('@/templates/types').DetailFieldConfig['inlineEditType'] })}
+            />
+            {field.inlineEditType === 'select' && (
+              <InlineEditOptionsPicker
+                value={field.inlineEditOptions}
+                onChange={(v) => onChange({ ...field, inlineEditOptions: v })}
+              />
+            )}
+          </>
+        )}
+      </PanelGroup>
+      <PanelGroup title="조건부 노출 (visibleIf)" defaultOpen={false}>
+        <FieldInput
+          label="field (의존)"
+          value={field.visibleIf?.field ?? ''}
+          onChange={(v) => onChange({
+            ...field,
+            visibleIf: v ? { ...(field.visibleIf ?? { value: '' }), field: v } : undefined,
+          })}
+          mono
+        />
+        <FieldInput
+          label="value (콤마 = 다중)"
+          value={Array.isArray(field.visibleIf?.value) ? field.visibleIf!.value.join(',') : (field.visibleIf?.value ?? '')}
+          onChange={(v) => {
+            if (!field.visibleIf?.field) return;
+            const value = v.includes(',') ? v.split(',').map(s => s.trim()).filter(Boolean) : v;
+            onChange({ ...field, visibleIf: { ...field.visibleIf, value } });
+          }}
+        />
+      </PanelGroup>
+      <PanelEmpty message="key/label/formatter/span 은 해당 필드 행에서 직접 편집" />
+    </>
+  );
+}
+
+// ─── 탭 편집 sub-tab ──────────────────────────────────────────────────────
+function TabsTab({
+  value, onChange, selectedIdx, onSelectIdx,
+}: {
+  value: MetaDetailConfig;
+  onChange: (next: MetaDetailConfig) => void;
+  selectedIdx: number | null;
+  onSelectIdx: (idx: number | null) => void;
+}) {
+  const tabs = value.tabs ?? [];
+  return (
+    <div className="space-y-3">
+      <div className="rounded border bg-card">
+        <TabsEditor
+          tabs={tabs}
+          onChange={(next) => onChange({ ...value, tabs: next.length === 0 ? undefined : next })}
+          selectedIdx={selectedIdx}
+          onSelectIdx={onSelectIdx}
+        />
+      </div>
+      {tabs.length === 0 ? (
+        <div className="rounded border border-dashed p-8 text-center text-xs text-muted-foreground">
+          탭이 없습니다. 위 [+ 탭 추가] 로 시작하세요.<br />
+          탭은 sections 와 함께 사용 가능 — 정의되면 sections 대신 탭 모드로 렌더.
+        </div>
+      ) : selectedIdx === null ? (
+        <div className="rounded border border-dashed p-6 text-center text-xs text-muted-foreground">
+          탭을 클릭하면 우측 패널에서 메타 편집 (label/key/visibleIf/contentBlock)
+        </div>
+      ) : (
+        <div className="rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+          선택: <span className="font-mono">{tabs[selectedIdx]?.key}</span>
+          {' — '}내용 (sections / contentBlock) 은 우측 패널.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 우측 패널: detail-level 컨테이너 설정 (L1) ───────────────────────────
+function DetailLevelPanel({
+  value, onChange,
+}: {
+  value: MetaDetailConfig;
+  onChange: (next: MetaDetailConfig) => void;
+}) {
+  const inlineEdit = value.inlineEdit;
+  return (
+    <>
+      <PanelGroup title="인라인 편집 (DetailField.inlineEditable)">
+        <BooleanPicker
+          label="활성화 (inlineEdit.enabled)"
+          value={inlineEdit?.enabled ?? false}
+          onChange={(v) => onChange({
+            ...value,
+            inlineEdit: v ? { ...(inlineEdit ?? {}), enabled: true } : undefined,
+          })}
+          hint="DetailField.inlineEditable=true 인 필드 즉시 편집 가능"
+        />
+        {inlineEdit?.enabled && (
+          <>
+            <EndpointPicker
+              label="endpoint (PATCH URL)"
+              value={inlineEdit.endpoint}
+              onChange={(v) => onChange({ ...value, inlineEdit: { ...inlineEdit, endpoint: v } })}
+              hint=":id 자리표시자 필요 — 예: /api/v1/banks/:id"
+            />
+            <IdFieldPicker
+              label="idField (행 데이터 키)"
+              value={inlineEdit.idField}
+              onChange={(v) => onChange({ ...value, inlineEdit: { ...inlineEdit, idField: v } })}
+              columnKeys={[]}
+              hint="JSON 탭에서 직접 입력 가능 (예: id, bank_id)"
+            />
+          </>
+        )}
+      </PanelGroup>
+      <PanelGroup title="기본 탭 (defaultTab)" defaultOpen={false}>
+        <FieldInput
+          label="defaultTab (탭 모드 시 기본 활성)"
+          value={value.defaultTab ?? ''}
+          onChange={(v) => onChange({ ...value, defaultTab: v || undefined })}
+          mono
+          placeholder="첫번째 탭 자동"
+        />
+      </PanelGroup>
+    </>
+  );
+}
+
+// ─── 우측 패널: 선택된 탭 메타 (selection-driven) ──────────────────────────
+function SelectedTabPanel({
+  tab, onChange, onBack,
+}: {
+  tab: DetailTabConfig;
+  onChange: (next: DetailTabConfig) => void;
+  onBack: () => void;
+}) {
+  const blockEntries = useMemo(() => buildRegistryEntries(contentBlocks, contentBlockMeta), []);
+  return (
+    <>
+      <PanelSelectionHeader title={tab.label || tab.key} subtitle={`key: ${tab.key}`} onBack={onBack} />
+      <PanelGroup title="기본">
+        <FieldInput
+          label="key (식별자, 변경 시 영속 상태 무효화)"
+          value={tab.key}
+          onChange={(v) => onChange({ ...tab, key: v })}
+          mono
+        />
+        <FieldInput
+          label="label"
+          value={tab.label}
+          onChange={(v) => onChange({ ...tab, label: v })}
+        />
+      </PanelGroup>
+      <PanelGroup title="조건부 노출 (visibleIf)" defaultOpen={false}>
+        <FieldInput
+          label="field (의존 필드)"
+          value={tab.visibleIf?.field ?? ''}
+          onChange={(v) => onChange({
+            ...tab,
+            visibleIf: v ? { ...(tab.visibleIf ?? { value: '' }), field: v } : undefined,
+          })}
+          mono
+        />
+        <FieldInput
+          label="value (콤마 = 다중)"
+          value={Array.isArray(tab.visibleIf?.value) ? tab.visibleIf!.value.join(',') : (tab.visibleIf?.value ?? '')}
+          onChange={(v) => {
+            if (!tab.visibleIf?.field) return;
+            const value = v.includes(',') ? v.split(',').map(s => s.trim()).filter(Boolean) : v;
+            onChange({ ...tab, visibleIf: { ...tab.visibleIf, value } });
+          }}
+        />
+      </PanelGroup>
+      <PanelGroup title="contentBlock (커스텀 React 컴포넌트)" defaultOpen={false}>
+        <RegistryIdPicker
+          label="blockId"
+          value={tab.contentBlock?.blockId}
+          entries={blockEntries}
+          onChange={(v) => onChange({
+            ...tab,
+            contentBlock: v ? { blockId: v, props: tab.contentBlock?.props } : undefined,
+          })}
+          hint="registry.contentBlocks"
+        />
+        <p className="text-xs text-muted-foreground">
+          제공되면 sections 대신 이 블록 렌더. props 는 JSON 탭에서.
+        </p>
+      </PanelGroup>
+      {!tab.sections && !tab.contentBlock && (
+        <PanelEmpty message="이 탭에 sections / contentBlock 모두 없음 — JSON 탭에서 sections 추가 가능" />
+      )}
+    </>
   );
 }
 
@@ -94,14 +381,18 @@ function BasicTab({ value, onChange }: { value: MetaDetailConfig; onChange: (nex
         <Input value={header.title}
           onChange={(e) => onChange({ ...value, header: { ...header, title: e.target.value } })} />
       </div>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         header.actionsBlock·extraBlocks 편집은 JSON 탭. 같은 패턴으로 별도 탭 가능 (follow-up).
       </p>
     </div>
   );
 }
 
-function SectionsTab({ value, onChange }: { value: MetaDetailConfig; onChange: (next: MetaDetailConfig) => void }) {
+function SectionsTab({ value, onChange, onSelectDetailField }: {
+  value: MetaDetailConfig;
+  onChange: (next: MetaDetailConfig) => void;
+  onSelectDetailField?: (sectionIdx: number, fieldIdx: number) => void;
+}) {
   const sections = value.sections ?? [];
   const blockOptions = useMemo(() => Object.keys(contentBlocks).sort().map((id) => ({ value: id, label: id })), []);
 
@@ -134,6 +425,7 @@ function SectionsTab({ value, onChange }: { value: MetaDetailConfig; onChange: (
             onMoveUp={() => onChange({ ...value, sections: moveInArray(sections, sIdx, -1) })}
             onMoveDown={() => onChange({ ...value, sections: moveInArray(sections, sIdx, 1) })}
             onRemove={() => onChange({ ...value, sections: sections.filter((_, i) => i !== sIdx) })}
+            onSelectField={onSelectDetailField ? (fIdx) => onSelectDetailField(sIdx, fIdx) : undefined}
           />
         ))}
         {sections.length === 0 && (
@@ -147,7 +439,7 @@ function SectionsTab({ value, onChange }: { value: MetaDetailConfig; onChange: (
 }
 
 function SectionCard({
-  section, index, total, blockOptions, onUpdate, onMoveUp, onMoveDown, onRemove,
+  section, index, total, blockOptions, onUpdate, onMoveUp, onMoveDown, onRemove, onSelectField,
 }: {
   section: DetailSectionConfig;
   index: number;
@@ -157,9 +449,10 @@ function SectionCard({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onRemove: () => void;
+  onSelectField?: (fIdx: number) => void;
 }) {
   const enumOpts = useMemo(() => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })), []);
-  const rendererOpts = useMemo(() => Object.keys(cellRenderers).sort().map((id) => ({ value: id, label: id })), []);
+  const rendererEntries = useMemo(() => buildRegistryEntries(cellRenderers, cellRendererMeta), []);
 
   const isContentBlock = !!section.contentBlock;
   const fields = section.fields ?? [];
@@ -170,13 +463,13 @@ function SectionCard({
   return (
     <div className="rounded border bg-card">
       <div className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2">
-        <span className="text-[10px] text-muted-foreground mono">섹션 #{index + 1}</span>
+        <span className="text-xs text-muted-foreground mono">섹션 #{index + 1}</span>
         <Input className="h-7 text-xs flex-1 max-w-md" value={section.title}
           onChange={(e) => onUpdate({ ...section, title: e.target.value })}
           placeholder="섹션 제목" />
         <FieldSelect label="" value={String(section.cols ?? 4)} options={COLS_OPTIONS}
           onChange={(v) => onUpdate({ ...section, cols: Number(v) as 2 | 3 | 4 })} />
-        <span className="text-[10px] text-muted-foreground">cols</span>
+        <span className="text-xs text-muted-foreground">cols</span>
         <span className="ml-auto" />
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
           onClick={onMoveUp} disabled={index === 0}><ChevronUp className="h-3.5 w-3.5" /></Button>
@@ -216,8 +509,8 @@ function SectionCard({
         ) : (
           <>
             <div className="flex items-center justify-between">
-              <p className="text-[10px] text-muted-foreground">필드 ({fields.length})</p>
-              <Button size="sm" variant="ghost" className="h-6 text-[10px]"
+              <p className="text-xs text-muted-foreground">필드 ({fields.length})</p>
+              <Button size="sm" variant="ghost" className="h-6 text-xs"
                 onClick={() => onUpdate({
                   ...section,
                   fields: [...fields, { key: 'new_field', label: '새 필드' }],
@@ -250,9 +543,10 @@ function SectionCard({
                     <FieldSelect label="enumKey" value={field.enumKey ?? ''} allowEmpty options={enumOpts}
                       onChange={(v) => updateField(fIdx, { ...field, enumKey: v || undefined })} />
                   )}
-                  <FieldSelect label="rendererId (커스텀, formatter보다 우선)"
-                    value={field.rendererId ?? ''} allowEmpty options={rendererOpts}
-                    onChange={(v) => updateField(fIdx, { ...field, rendererId: v || undefined })} />
+                  <RegistryIdPicker label="rendererId (커스텀, formatter보다 우선)"
+                    value={field.rendererId} entries={rendererEntries}
+                    onChange={(v) => updateField(fIdx, { ...field, rendererId: v })}
+                    hint="registry.cellRenderers — 메타 채워진 entry 만 라벨/설명 표시" />
                   <FieldSelect label="span" value={String(field.span ?? 1)} options={SPAN_OPTIONS}
                     onChange={(v) => updateField(fIdx, { ...field, span: Number(v) as 1 | 2 | 3 | 4 })} />
                   <FieldInput label="suffix (예: 'Wp', '원/Wp')" value={field.suffix ?? ''}
@@ -260,7 +554,14 @@ function SectionCard({
                   <FieldInput label="fallback (빈 값, 기본 '—')" value={field.fallback ?? ''}
                     onChange={(v) => updateField(fIdx, { ...field, fallback: v || undefined })} />
                 </div>
-                <div className="col-span-1 flex justify-end">
+                <div className="col-span-1 flex flex-col items-end gap-0.5">
+                  {onSelectField && (
+                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6"
+                      onClick={() => onSelectField(fIdx)}
+                      title="우측 패널에서 inlineEditable·visibleIf 편집">
+                      <Settings2 className="h-3 w-3" />
+                    </Button>
+                  )}
                   <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
                     onClick={() => onUpdate({ ...section, fields: fields.filter((_, i) => i !== fIdx) })}>
                     <Trash2 className="h-3 w-3" />
@@ -269,7 +570,7 @@ function SectionCard({
               </div>
             ))}
             {fields.length === 0 && (
-              <div className="text-center py-3 text-[10px] text-muted-foreground border border-dashed rounded">
+              <div className="text-center py-3 text-xs text-muted-foreground border border-dashed rounded">
                 필드가 없습니다
               </div>
             )}

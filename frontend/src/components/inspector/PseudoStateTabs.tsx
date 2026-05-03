@@ -21,7 +21,7 @@ export const PseudoStateTabs = () => {
 
   return (
     <div className="space-y-1">
-      <div className="text-[10px] font-medium uppercase tracking-wider text-slate-500">상태 변종</div>
+      <div className="text-xs font-medium uppercase tracking-wider text-slate-500">상태 변종</div>
       <div className="flex flex-wrap gap-1">
         {TABS.map((tab) => (
           <button
@@ -30,7 +30,7 @@ export const PseudoStateTabs = () => {
             onClick={() => setCurrent(tab.id)}
             title={tab.hint}
             className={cn(
-              'rounded border px-2 py-0.5 text-[11px] transition',
+              'rounded border px-2 py-0.5 text-xs transition',
               current === tab.id
                 ? 'border-amber-500 bg-amber-100 font-medium text-amber-900 dark:border-amber-600 dark:bg-amber-900/40 dark:text-amber-100'
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
@@ -41,7 +41,7 @@ export const PseudoStateTabs = () => {
         ))}
       </div>
       {current !== 'default' && (
-        <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-[10px] text-amber-800 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200">
+        <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs text-amber-800 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200">
           이 변종에서만 적용됩니다. 평소 모습은 "기본" 으로 돌아가서 조정하세요.
         </p>
       )}

@@ -6,6 +6,7 @@ import { ChatBox } from '@/pages/AssistantPage';
 import { fetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
 import { detectPageLabel } from '@/lib/pageContext';
+import { useAppStore } from '@/stores/appStore';
 
 interface AssistantDrawerProps {
   open: boolean;
@@ -39,10 +40,20 @@ export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
   const sessionsEnabled = !isDevMockApiActive();
   const location = useLocation();
   const pageLabel = detectPageLabel(location.pathname);
+  // M-2: 외부 (ScopePanel 등) 가 prefill 한 첫 입력 — 마운트 시 한번 사용 후 clear
+  const initialPrompt = useAppStore((s) => s.assistantDrawerInitialPrompt);
+  const setInitialPrompt = useAppStore((s) => s.setAssistantDrawerInitialPrompt);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [chatKey, setChatKey] = useState(0);
   const [loading, setLoading] = useState(false);
+
+  // drawer 가 닫힐 때 initialPrompt clear — 다음 open 때 재사용 안 함
+  useEffect(() => {
+    if (!open && initialPrompt) {
+      setInitialPrompt(null);
+    }
+  }, [open, initialPrompt, setInitialPrompt]);
 
   // drawer 가 열릴 때 마지막 세션 자동 로드. 닫혀 있으면 fetch 안 함.
   useEffect(() => {
@@ -167,6 +178,7 @@ export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
             onSessionUpserted={(s, makeCurrent) => {
               if (makeCurrent) setCurrentSessionId(s.id);
             }}
+            initialInput={initialPrompt ?? undefined}
           />
         </div>
       </aside>

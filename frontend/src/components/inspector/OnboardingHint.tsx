@@ -42,8 +42,16 @@ export const OnboardingHint = () => {
       return;
     }
     // 편집 모드 진입 후 600ms 뒤 표시 (인스펙터 패널이 슬라이드 인 한 다음)
-    const t = window.setTimeout(() => setVisible(true), 600);
-    return () => window.clearTimeout(t);
+    const showT = window.setTimeout(() => setVisible(true), 600);
+    // 표시 후 30초 뒤 자동 dismiss (사용자가 명시 dismiss 안 해도 다음에 안 보임)
+    const autoDismissT = window.setTimeout(() => {
+      writeDismissed(true);
+      setVisible(false);
+    }, 30_600);
+    return () => {
+      window.clearTimeout(showT);
+      window.clearTimeout(autoDismissT);
+    };
   }, [editMode]);
 
   const onDismiss = () => {
@@ -78,7 +86,7 @@ export const OnboardingHint = () => {
           <span className="font-medium text-amber-900 dark:text-amber-200">미리보기</span> 입니다 —
           새로고침하면 사라지고, 코드는 자동 반영되지 않습니다.
         </p>
-        <ul className="space-y-1 text-[11px]">
+        <ul className="space-y-1 text-xs">
           <li>
             <span className="font-medium">화면 위 점</span> — 모서리 ↖ 핸들로 둥글기, 우하단 ↘ 핸들로 안쪽 여백
           </li>
@@ -92,7 +100,7 @@ export const OnboardingHint = () => {
             <span className="font-medium">단독 보기</span> — 선택 요소만 모달로 (Storybook 처럼)
           </li>
         </ul>
-        <p className="rounded border border-slate-200 bg-slate-50 p-2 text-[10px] text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+        <p className="rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
           마음에 드는 변경을 코드에 반영하려면 변경 사항 목록의{' '}
           <span className="font-mono">전체 복사</span> → AI 어시스턴트에 붙여넣기.
         </p>

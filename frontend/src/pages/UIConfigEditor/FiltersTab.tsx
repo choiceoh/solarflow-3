@@ -92,9 +92,9 @@ export function FiltersTab({
           {f.optionsFrom === 'static' && (
             <div className="col-span-2 space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="text-[10px] text-muted-foreground">staticOptions (정적 value/label 쌍)</Label>
+                <Label className="text-xs text-muted-foreground">staticOptions (정적 value/label 쌍)</Label>
                 <Button
-                  type="button" variant="ghost" size="sm" className="h-6 text-[10px]"
+                  type="button" variant="ghost" size="sm" className="h-6 text-xs"
                   onClick={() => update(idx, {
                     ...f,
                     staticOptions: [...(f.staticOptions ?? []), { value: '', label: '' }],

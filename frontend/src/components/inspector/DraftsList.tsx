@@ -1,5 +1,6 @@
 import { Copy, GitCompare, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAppStore, type ClassNameDraft } from '@/stores/appStore';
 import { VariantsDiffModal } from './VariantsDiffModal';
 
@@ -23,24 +24,31 @@ const copy = async (text: string, setStatus: (s: string) => void) => {
 };
 
 export const DraftsList = () => {
-  const drafts = useAppStore((s) => s.classNameDrafts);
+  const allDrafts = useAppStore((s) => s.classNameDrafts);
   const removeClassNameDraft = useAppStore((s) => s.removeClassNameDraft);
   const clearClassNameDrafts = useAppStore((s) => s.clearClassNameDrafts);
   const [status, setStatus] = useState('');
   const [diffDraft, setDiffDraft] = useState<ClassNameDraft | null>(null);
+  const location = useLocation();
+  // 페이지 격리 — 현재 path 의 drafts 만 표시 (다른 페이지 drafts 는 노이즈)
+  const drafts = useMemo(
+    () => allDrafts.filter((d) => d.path === location.pathname),
+    [allDrafts, location.pathname],
+  );
+  const otherPagesCount = allDrafts.length - drafts.length;
 
-  if (drafts.length === 0) return null;
+  if (drafts.length === 0 && otherPagesCount === 0) return null;
 
   return (
     <section className="rounded border border-slate-200 bg-slate-50 p-2">
       <header className="mb-2 flex items-center justify-between">
         <div className="text-xs font-semibold text-slate-700">변경 사항 ({drafts.length})</div>
         <div className="flex items-center gap-2">
-          {status && <span className="text-[10px] text-emerald-700">{status}</span>}
+          {status && <span className="text-xs text-emerald-700">{status}</span>}
           <button
             type="button"
             onClick={() => copy(formatAll(drafts), setStatus)}
-            className="flex items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 hover:bg-slate-100"
+            className="flex items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-700 hover:bg-slate-100"
             title="모두 클립보드에 복사 (AI 에 붙여넣기)"
           >
             <Copy className="h-3 w-3" />
@@ -49,26 +57,26 @@ export const DraftsList = () => {
           <button
             type="button"
             onClick={clearClassNameDrafts}
-            className="rounded border border-rose-200 bg-white px-1.5 py-0.5 text-[10px] text-rose-700 hover:bg-rose-50"
+            className="rounded border border-rose-200 bg-white px-1.5 py-0.5 text-xs text-rose-700 hover:bg-rose-50"
           >
             모두 지우기
           </button>
         </div>
       </header>
-      <ul className="space-y-2">
+      <ul className="max-h-64 space-y-2 overflow-y-auto pr-1">
         {drafts.map((d) => (
           <li key={d.id} className="rounded border border-slate-200 bg-white p-2">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <div className="truncate font-mono text-[10px] text-slate-600">
+                <div className="truncate font-mono text-xs text-slate-600">
                   <span className="text-slate-400">[{d.tagName.toLowerCase()}]</span> {d.selector}
                 </div>
                 <div className="mt-1 space-y-0.5">
-                  <div className="break-all font-mono text-[10px] text-rose-700">
+                  <div className="break-all font-mono text-xs text-rose-700">
                     <span className="text-rose-400">- </span>
                     {d.before || <em className="text-slate-300">(빈 className)</em>}
                   </div>
-                  <div className="break-all font-mono text-[10px] text-emerald-700">
+                  <div className="break-all font-mono text-xs text-emerald-700">
                     <span className="text-emerald-400">+ </span>
                     {d.after || <em className="text-slate-300">(빈 className)</em>}
                   </div>
@@ -107,8 +115,10 @@ export const DraftsList = () => {
           </li>
         ))}
       </ul>
-      <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-1.5 text-[10px] text-amber-800">
-        새로고침 시 화면은 자동 reset 되지만 변경 목록은 사라집니다 (영속 X). 결정 후 "전체 복사" → AI 에 붙여 코드 반영.
+      <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-1.5 text-xs text-amber-800">
+        이 페이지({location.pathname}) 의 변경만 표시.
+        {otherPagesCount > 0 && ` 다른 페이지 ${otherPagesCount}건은 그 페이지에서 보입니다.`}
+        새로고침 후에도 selector 매칭으로 자동 재적용. 영구 반영은 "전체 복사" → AI.
       </p>
       <VariantsDiffModal draft={diffDraft} onClose={() => setDiffDraft(null)} />
     </section>

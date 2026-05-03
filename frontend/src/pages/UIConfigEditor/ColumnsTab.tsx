@@ -1,9 +1,12 @@
 // 컬럼 탭 — 행별 인라인 편집 + collapse + 검색 + drag-drop + 검증
+// Phase 4 follow-up #1: 행 ⚙ 버튼 → 우측 패널에서 selection-driven L3/L4 편집.
 
 import { useMemo } from 'react';
+import { Settings2 } from 'lucide-react';
 import type { ColumnConfig, Formatter, ListScreenConfig } from '@/templates/types';
-import { cellRenderers } from '@/templates/registry';
+import { buildRegistryEntries, cellRenderers, cellRendererMeta } from '@/templates/registry';
 import { ArrayEditor, FieldInput, FieldSelect, moveInArray, type ItemIssue } from './ArrayEditor';
+import { RegistryIdPicker } from './Pickers';
 
 const FORMATTER_OPTIONS: { value: string; label: string }[] = [
   { value: 'date', label: 'date (날짜)' },
@@ -42,14 +45,16 @@ function suggestColumnKey(existing: string[]): string {
 }
 
 export function ColumnsTab({
-  value, onChange,
+  value, onChange, onSelectColumn,
 }: {
   value: ListScreenConfig;
   onChange: (next: ListScreenConfig) => void;
+  // Phase 4 follow-up #1: 컬럼 행 ⚙ 클릭 → 우측 패널에서 L3/L4 편집.
+  onSelectColumn?: (idx: number) => void;
 }) {
   const cols = value.columns;
-  const rendererOptions = useMemo(
-    () => Object.keys(cellRenderers).sort().map((id) => ({ value: id, label: id })),
+  const rendererEntries = useMemo(
+    () => buildRegistryEntries(cellRenderers, cellRendererMeta),
     [],
   );
 
@@ -84,9 +89,9 @@ export function ColumnsTab({
           || (col.formatter ?? '').toLowerCase().includes(lc)
           || (col.rendererId ?? '').toLowerCase().includes(lc);
       }}
-      renderSummary={(col) => (
-        <span className="flex items-center gap-2 min-w-0">
-          <span className="font-mono text-[11px] text-foreground/80 shrink-0">{col.key}</span>
+      renderSummary={(col, idx) => (
+        <span className="flex items-center gap-2 min-w-0 w-full">
+          <span className="font-mono text-xs text-foreground/80 shrink-0">{col.key}</span>
           <span className="text-foreground/60 shrink-0">·</span>
           <span className="truncate">{col.label}</span>
           {col.formatter && (
@@ -95,8 +100,22 @@ export function ColumnsTab({
           {col.rendererId && (
             <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] text-amber-900 shrink-0">renderer</span>
           )}
+          {col.inlineEditable && (
+            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] text-blue-900 shrink-0">inline-edit</span>
+          )}
           {col.align && col.align !== 'left' && (
             <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground shrink-0">{col.align}</span>
+          )}
+          {onSelectColumn && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onSelectColumn(idx); }}
+              className="ml-auto shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+              title="우측 패널에서 자세히 편집"
+              aria-label="패널에서 편집"
+            >
+              <Settings2 className="h-3 w-3" />
+            </button>
           )}
         </span>
       )}
@@ -110,9 +129,10 @@ export function ColumnsTab({
           <FieldSelect label="formatter" value={col.formatter ?? ''} allowEmpty options={FORMATTER_OPTIONS}
             onChange={(v) => updateCol(idx, { ...col, formatter: (v || undefined) as Formatter | undefined })} />
 
-          <FieldSelect label="rendererId (커스텀, formatter보다 우선)" value={col.rendererId ?? ''}
-            allowEmpty options={rendererOptions}
-            onChange={(v) => updateCol(idx, { ...col, rendererId: v || undefined })} />
+          <RegistryIdPicker label="rendererId (커스텀, formatter보다 우선)"
+            value={col.rendererId} entries={rendererEntries}
+            onChange={(v) => updateCol(idx, { ...col, rendererId: v })}
+            hint="registry.cellRenderers — 메타 채워진 entry 만 라벨/설명 표시" />
 
           <FieldSelect label="align" value={col.align ?? 'left'} options={ALIGN_OPTIONS}
             onChange={(v) => updateCol(idx, { ...col, align: v as 'left' | 'right' | 'center' })} />

@@ -70,7 +70,7 @@ export const VariantsDiffModal = ({ draft, onClose }: VariantsDiffModalProps) =>
             <span className="rounded bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-900 dark:bg-purple-900/40 dark:text-purple-100">
               변경 전·후 비교
             </span>
-            <code className="font-mono text-[10px] text-slate-500">{draft.selector}</code>
+            <code className="font-mono text-xs text-slate-500">{draft.selector}</code>
           </div>
           <button
             type="button"
@@ -85,10 +85,10 @@ export const VariantsDiffModal = ({ draft, onClose }: VariantsDiffModalProps) =>
         <div className="grid flex-1 grid-cols-2 gap-2 overflow-auto bg-[var(--sf-bg)] p-3" style={{ minHeight: 0 }}>
           <div className="flex flex-col">
             <div className="mb-1 flex items-center gap-2">
-              <span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-200">
+              <span className="rounded bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-200">
                 이전
               </span>
-              <code className="truncate font-mono text-[10px] text-slate-500">{draft.before || '(빈 className)'}</code>
+              <code className="truncate font-mono text-xs text-slate-500">{draft.before || '(빈 className)'}</code>
             </div>
             <div className="flex flex-1 items-center justify-center rounded border border-rose-200 bg-[var(--sf-surface)] p-3 dark:border-rose-700/40">
               <div ref={beforeRef} />
@@ -96,10 +96,10 @@ export const VariantsDiffModal = ({ draft, onClose }: VariantsDiffModalProps) =>
           </div>
           <div className="flex flex-col">
             <div className="mb-1 flex items-center gap-2">
-              <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+              <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
                 이후
               </span>
-              <code className="truncate font-mono text-[10px] text-slate-500">{draft.after || '(빈 className)'}</code>
+              <code className="truncate font-mono text-xs text-slate-500">{draft.after || '(빈 className)'}</code>
             </div>
             <div className="flex flex-1 items-center justify-center rounded border border-emerald-200 bg-[var(--sf-surface)] p-3 dark:border-emerald-700/40">
               <div ref={afterRef} />

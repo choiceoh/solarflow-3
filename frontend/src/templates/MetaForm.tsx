@@ -557,11 +557,11 @@ function ChildArrayField({
   return (
     <div className="space-y-2 rounded border border-input bg-background/50 p-2">
       {rows.length === 0 && (
-        <p className="text-center text-[11px] text-muted-foreground py-2">행이 없습니다 — "{field.addLabel ?? '+ 추가'}" 클릭해서 추가하세요</p>
+        <p className="text-center text-xs text-muted-foreground py-2">행이 없습니다 — "{field.addLabel ?? '+ 추가'}" 클릭해서 추가하세요</p>
       )}
       {rows.map((row, idx) => (
         <div key={row.id} className="flex items-start gap-2 rounded border bg-card p-2">
-          <span className="text-[10px] text-muted-foreground font-mono pt-1.5 shrink-0">#{idx + 1}</span>
+          <span className="text-xs text-muted-foreground font-mono pt-1.5 shrink-0">#{idx + 1}</span>
           <div className={`flex-1 ${colsClass}`}>
             {childFields.map((cf) => {
               // 조건부 visible — 같은 행 내 다른 필드 값 기반
@@ -612,7 +612,7 @@ function ChildFieldInput({
     const opts = field.staticOptions ?? [];
     return (
       <div className="space-y-1">
-        <Label className="text-[10px] text-muted-foreground">{field.label}</Label>
+        <Label className="text-xs text-muted-foreground">{field.label}</Label>
         <select
           className="h-8 w-full rounded border border-input bg-background px-2 text-xs"
           {...register(fullName)}
@@ -626,7 +626,7 @@ function ChildFieldInput({
   if (field.type === 'number') {
     return (
       <div className="space-y-1">
-        <Label className="text-[10px] text-muted-foreground">{field.label}</Label>
+        <Label className="text-xs text-muted-foreground">{field.label}</Label>
         <Input type="number" placeholder={placeholder}
           className="h-8 text-xs text-right tabular-nums"
           {...register(fullName, { valueAsNumber: true })} />
@@ -636,7 +636,7 @@ function ChildFieldInput({
   if (field.type === 'textarea') {
     return (
       <div className="space-y-1">
-        <Label className="text-[10px] text-muted-foreground">{field.label}</Label>
+        <Label className="text-xs text-muted-foreground">{field.label}</Label>
         <textarea placeholder={placeholder}
           className="min-h-[40px] w-full rounded border border-input bg-background px-2 py-1 text-xs"
           {...register(fullName)} />
@@ -646,7 +646,7 @@ function ChildFieldInput({
   if (field.type === 'switch') {
     return (
       <div className="space-y-1">
-        <Label className="text-[10px] text-muted-foreground">{field.label}</Label>
+        <Label className="text-xs text-muted-foreground">{field.label}</Label>
         <input type="checkbox" className="h-4 w-4" {...register(fullName)} />
       </div>
     );
@@ -654,7 +654,7 @@ function ChildFieldInput({
   if (field.type === 'date') {
     return (
       <div className="space-y-1">
-        <Label className="text-[10px] text-muted-foreground">{field.label}</Label>
+        <Label className="text-xs text-muted-foreground">{field.label}</Label>
         <Input type="date" className="h-8 text-xs" {...register(fullName)} />
       </div>
     );
@@ -662,7 +662,7 @@ function ChildFieldInput({
   // text 기본 (다른 타입은 MVP 에서 미지원 — child 행에서 file/computed 등은 드뭄)
   return (
     <div className="space-y-1">
-      <Label className="text-[10px] text-muted-foreground">{field.label}</Label>
+      <Label className="text-xs text-muted-foreground">{field.label}</Label>
       <Input placeholder={placeholder} className="h-8 text-xs" {...register(fullName)} />
     </div>
   );
@@ -699,7 +699,7 @@ function FieldRender({ field, value, error, options, setValue, register, watch, 
   // 메타 인프라 확장 (보안): permissionGuard — 컨텍스트 기반 동적 권한
   // false 반환 시 readOnly + 마스킹 (maskByRoles 와 동일 효과)
   const guardDenied = field.permissionGuardId
-    ? !(permissionGuards[field.permissionGuardId]?.({ values: watchedValues, role }) ?? true)
+    ? !(permissionGuards[field.permissionGuardId]?.fn?.({ values: watchedValues, role }) ?? true)
     : false;
   const readOnly = isReadOnly(field, role) || conditionalReadOnly || !!isMasked || guardDenied;
   const labelText = `${field.label}${field.required ? ' *' : ''}${readOnly && (field.editableByRoles || field.readOnlyIf) ? ' (읽기전용)' : ''}${isMasked ? ' (마스킹)' : ''}`;
@@ -893,7 +893,7 @@ function FieldRender({ field, value, error, options, setValue, register, watch, 
             placeholder="0"
             onChange={(e) => setValue(field.key, { currency: v.currency ?? 'USD', amount: e.target.value ? Number(e.target.value) : 0 })} />
         </div>
-        {field.description ? <p className="text-[10px] text-muted-foreground">{field.description}</p> : null}
+        {field.description ? <p className="text-xs text-muted-foreground">{field.description}</p> : null}
         {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
       </div>
     );
@@ -926,7 +926,7 @@ function FieldRender({ field, value, error, options, setValue, register, watch, 
           className="h-8 w-full rounded border border-input bg-background px-2 text-xs"
           placeholder="상세 주소 (동/호수)"
           onChange={(e) => update({ detail: e.target.value })} />
-        {field.description ? <p className="text-[10px] text-muted-foreground">{field.description}</p> : null}
+        {field.description ? <p className="text-xs text-muted-foreground">{field.description}</p> : null}
         {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
       </div>
     );
@@ -942,7 +942,7 @@ function FieldRender({ field, value, error, options, setValue, register, watch, 
           className="min-h-[100px] w-full rounded border border-input bg-background px-2 py-1 text-xs"
           placeholder={field.placeholder ?? '내용 입력 (마크다운 가능)'}
           onChange={(e) => setValue(field.key, e.target.value)} />
-        {field.description ? <p className="text-[10px] text-muted-foreground">{field.description}</p> : null}
+        {field.description ? <p className="text-xs text-muted-foreground">{field.description}</p> : null}
         {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
       </div>
     );
@@ -963,7 +963,7 @@ function FieldRender({ field, value, error, options, setValue, register, watch, 
             className="h-8 flex-1 rounded border border-input bg-background px-2 text-xs"
             onChange={(e) => setValue(field.key, { start: v.start ?? '', end: e.target.value })} />
         </div>
-        {field.description ? <p className="text-[10px] text-muted-foreground">{field.description}</p> : null}
+        {field.description ? <p className="text-xs text-muted-foreground">{field.description}</p> : null}
         {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
       </div>
     );
@@ -1191,13 +1191,13 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
     // 메타 인프라 확장: 비동기 검증 (DB 중복 체크 등)
     if (config.asyncRefine && config.asyncRefine.length > 0) {
       for (const rule of config.asyncRefine) {
-        const fn = asyncRefinements[rule.ruleId];
-        if (!fn) {
+        const entry = asyncRefinements[rule.ruleId];
+        if (!entry) {
           console.warn(`[MetaForm] asyncRefinement not registered: ${rule.ruleId}`);
           continue;
         }
         try {
-          const result = await fn(payload as Record<string, unknown>, extraContext);
+          const result = await entry.fn(payload as Record<string, unknown>, extraContext);
           if (result === true) continue;
           const msg = typeof result === 'string' ? result : rule.message;
           setAsyncRefineError(msg);
@@ -1292,7 +1292,7 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
                     onClick={collapsibleEnabled
                       ? () => setCollapsedSections((p) => ({ ...p, [idx]: !isCollapsed }))
                       : undefined}>
-                    {collapsibleEnabled && <span className="text-[10px]">{isCollapsed ? '▶' : '▼'}</span>}
+                    {collapsibleEnabled && <span className="text-xs">{isCollapsed ? '▶' : '▼'}</span>}
                     {sec.title}
                   </p>
                 ) : null}

@@ -21,9 +21,35 @@ export interface ClassNameDraft {
   before: string;
   after: string;
   ts: number;
+  /** 변경이 만들어진 페이지 pathname — 자동 재적용 시 같은 pathname 일 때만 적용 (다른 화면 영향 차단) */
+  path: string;
 }
 
 const TOKEN_OVERRIDES_KEY = 'sf.token-overrides';
+const CLASSNAME_DRAFTS_KEY = 'sf.inspector.classname-drafts';
+
+const readDrafts = (): ClassNameDraft[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(CLASSNAME_DRAFTS_KEY);
+    return raw ? (JSON.parse(raw) as ClassNameDraft[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeDrafts = (drafts: ClassNameDraft[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (drafts.length === 0) {
+      window.localStorage.removeItem(CLASSNAME_DRAFTS_KEY);
+    } else {
+      window.localStorage.setItem(CLASSNAME_DRAFTS_KEY, JSON.stringify(drafts));
+    }
+  } catch {
+    /* noop */
+  }
+};
 
 const readTokenOverrides = (): Record<string, string> => {
   if (typeof window === 'undefined') return {};
@@ -64,12 +90,18 @@ interface AppState {
   /** 인스펙터에서 *다른 역할로 미리보기* 활성 시 그 역할. null 이면 실제 JWT 역할. */
   inspectorPreviewRole: string | null;
   setInspectorPreviewRole: (role: string | null) => void;
+  /** 어시스턴트 drawer 열림 상태 — FloatingAssistantButton + 외부 트리거 (Scope 패널 등) 공유 */
+  assistantDrawerOpen: boolean;
+  setAssistantDrawerOpen: (open: boolean) => void;
+  /** drawer 가 열릴 때 ChatBox 입력에 자동 채울 텍스트 (M-2b 후속) */
+  assistantDrawerInitialPrompt: string | null;
+  setAssistantDrawerInitialPrompt: (text: string | null) => void;
   tokenOverrides: Record<string, string>;
   setTokenOverride: (key: string, value: string) => void;
   resetTokenOverride: (key: string) => void;
   resetAllTokenOverrides: () => void;
   classNameDrafts: ClassNameDraft[];
-  recordClassNameDraft: (draft: Omit<ClassNameDraft, 'id' | 'ts'>) => void;
+  recordClassNameDraft: (draft: Omit<ClassNameDraft, 'id' | 'ts' | 'path'>) => void;
   removeClassNameDraft: (id: string) => void;
   clearClassNameDrafts: () => void;
   contextMenuPosition: { x: number; y: number } | null;
@@ -108,6 +140,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setInspectorPseudoState: (state) => set({ inspectorPseudoState: state }),
   inspectorPreviewRole: null,
   setInspectorPreviewRole: (role) => set({ inspectorPreviewRole: role }),
+  assistantDrawerOpen: false,
+  setAssistantDrawerOpen: (open) => set({ assistantDrawerOpen: open }),
+  assistantDrawerInitialPrompt: null,
+  setAssistantDrawerInitialPrompt: (text) => set({ assistantDrawerInitialPrompt: text }),
   tokenOverrides: readTokenOverrides(),
   setTokenOverride: (key, value) =>
     set((s) => {
@@ -126,23 +162,37 @@ export const useAppStore = create<AppState>((set, get) => ({
       writeTokenOverrides({});
       return { tokenOverrides: {} };
     }),
-  classNameDrafts: [],
+  classNameDrafts: readDrafts(),
   recordClassNameDraft: ({ selector, tagName, before, after }) =>
     set((s) => {
-      const existing = s.classNameDrafts.find((d) => d.selector === selector);
-      const id = existing?.id ?? `${selector}-${Date.now()}`;
+      // path 자동 캡쳐 — 변경 발생 시점 pathname (자동 재적용 시 페이지 격리에 사용)
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      // 같은 selector + 같은 path 의 기존 entry 만 매칭 (다른 페이지의 같은 selector 는 별개)
+      const existing = s.classNameDrafts.find((d) => d.selector === selector && d.path === path);
+      const id = existing?.id ?? `${selector}|${path}|${Date.now()}`;
       const baseBefore = existing?.before ?? before;
+      let next: ClassNameDraft[];
       if (after === baseBefore) {
         // 원복 — draft 제거
-        return { classNameDrafts: s.classNameDrafts.filter((d) => d.id !== id) };
+        next = s.classNameDrafts.filter((d) => d.id !== id);
+      } else {
+        const newDraft: ClassNameDraft = { id, selector, tagName, before: baseBefore, after, ts: Date.now(), path };
+        next = [...s.classNameDrafts.filter((d) => d.id !== id), newDraft];
       }
-      const next: ClassNameDraft = { id, selector, tagName, before: baseBefore, after, ts: Date.now() };
-      const filtered = s.classNameDrafts.filter((d) => d.id !== id);
-      return { classNameDrafts: [...filtered, next] };
+      writeDrafts(next);
+      return { classNameDrafts: next };
     }),
   removeClassNameDraft: (id) =>
-    set((s) => ({ classNameDrafts: s.classNameDrafts.filter((d) => d.id !== id) })),
-  clearClassNameDrafts: () => set({ classNameDrafts: [] }),
+    set((s) => {
+      const next = s.classNameDrafts.filter((d) => d.id !== id);
+      writeDrafts(next);
+      return { classNameDrafts: next };
+    }),
+  clearClassNameDrafts: () =>
+    set(() => {
+      writeDrafts([]);
+      return { classNameDrafts: [] };
+    }),
   contextMenuPosition: null,
   setContextMenuPosition: (pos) => set({ contextMenuPosition: pos }),
   copiedClassName: null,

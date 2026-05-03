@@ -172,7 +172,7 @@ function InlineEditCell({ col, row, onSave }: {
         title="클릭하여 편집"
       >
         {renderCell(col, row)}
-        <span className="ml-1 text-[10px] opacity-30">✏️</span>
+        <span className="ml-1 text-xs opacity-30">✏️</span>
       </button>
     );
   }
@@ -202,7 +202,7 @@ function InlineEditCell({ col, row, onSave }: {
           }}
         />
       )}
-      {saving && <span className="text-[10px] text-muted-foreground">저장중</span>}
+      {saving && <span className="text-xs text-muted-foreground">저장중</span>}
     </div>
   );
 }
@@ -297,7 +297,7 @@ function SavedViewsMenu({
                     </button>
                     <button
                       type="button"
-                      className="px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+                      className="px-1.5 text-xs text-muted-foreground hover:text-destructive"
                       onClick={() => remove(v.name)}
                       aria-label="삭제"
                     >
@@ -307,7 +307,7 @@ function SavedViewsMenu({
                 ))}
               </>
             ) : (
-              <div className="px-3 py-1.5 text-[11px] text-muted-foreground">저장된 뷰 없음</div>
+              <div className="px-3 py-1.5 text-xs text-muted-foreground">저장된 뷰 없음</div>
             )}
           </div>
         </>

@@ -64,7 +64,7 @@ export const ActionChips = ({ className, onChange }: ActionChipsProps) => {
             <button
               type="button"
               onClick={() => toggleCategory(catId)}
-              className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
               aria-expanded={!isCollapsed}
             >
               {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -133,7 +133,7 @@ const ChipRow = ({ scale, className, pseudoState, onChange }: ChipRowProps) => {
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <span className="truncate text-xs font-medium text-slate-700">{scale.label}</span>
-          <span className="shrink-0 text-[10px] text-slate-500">
+          <span className="shrink-0 text-xs text-slate-500">
             {stepLabel(state.index, totalSteps)}
           </span>
         </div>

@@ -1,5 +1,6 @@
 export { ActionChips } from './ActionChips';
 export { AiVariantsPanel } from './AiVariantsPanel';
+export { CollapsibleSection } from './CollapsibleSection';
 export { ComponentStoryModal } from './ComponentStoryModal';
 export { ContextMenuOverlay } from './ContextMenuOverlay';
 export { DraftsList } from './DraftsList';
@@ -14,5 +15,6 @@ export { PseudoStateTabs } from './PseudoStateTabs';
 export { ScopePanel } from './ScopePanel';
 export { VariantsDiffModal } from './VariantsDiffModal';
 export { TokenPanel } from './TokenPanel';
+export { useApplyClassNameDrafts } from './useApplyClassNameDrafts';
 export { useDesignTokens } from './useDesignTokens';
 export { useEditModeShortcut } from './useEditModeShortcut';

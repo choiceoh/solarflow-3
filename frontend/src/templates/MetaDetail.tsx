@@ -120,7 +120,7 @@ function InlineEditField({ field, data, onSave }: {
     return (
       <button type="button" className="text-left hover:bg-muted/40 rounded px-1 -mx-1 cursor-pointer text-sm" onClick={() => setEditing(true)} title="클릭하여 편집">
         {renderFieldValue(field, data) ?? <span className="text-muted-foreground italic">—</span>}
-        <span className="ml-1 text-[10px] opacity-30">✏️</span>
+        <span className="ml-1 text-xs opacity-30">✏️</span>
       </button>
     );
   }
@@ -150,7 +150,7 @@ function InlineEditField({ field, data, onSave }: {
           }}
         />
       )}
-      {saving && <span className="text-[10px] text-muted-foreground">저장 중...</span>}
+      {saving && <span className="text-xs text-muted-foreground">저장 중...</span>}
     </div>
   );
 }

@@ -1,5 +1,22 @@
 # SolarFlow 3.0 — 개발 규칙 (모든 작업에 적용)
 
+## ⚡ 듀얼 product 관점 (헌법 #0)
+
+이 프로젝트는 **두 개의 product 를 동시에 개발**한다 — 어느 한쪽이 다른 한쪽의 부속이 아님:
+
+1. **ERP 시스템** — 무역/재고/회계 등 SolarFlow 그 자체 (도메인 product)
+2. **GUI 메타 편집기** — Webflow/Figma/Builder.io 부류의 화면 편집 도구 (인프라 product)
+   - `frontend/src/templates/{MetaForm,MetaDetail,ListScreen}.tsx` (런타임)
+   - `frontend/src/pages/UIConfigEditor/*` (편집기)
+   - `frontend/src/templates/registry.tsx` (코드 등록소)
+
+### 판단 기준
+- **반쪽 GUI 금지** — 새 메타 인프라 기능을 추가했는데 편집기에 픽커가 없으면 미완성. 한 PR 안에서 인프라 + 편집기 픽커 둘 다 들어가야 함.
+- **runtime mimicry** — 편집기 UX 는 실제 화면과 닮게 (WYSIWYG). tabs 편집기 = 진짜 탭 네비, sections = 진짜 sections grid.
+- **discoverable by GUI alone** — admin 이 docs 안 봐도 알 수 있어야 함. registry key (cellRendererId, permissionGuardId, asyncRefine.ruleId 등) 는 무조건 combobox / dropdown 으로 노출. 자유 텍스트 금지.
+- **product polish 기준** — "내부 도구라 대충" 절대 금지. 편집기 작업도 ERP 도메인과 동등한 코드 리뷰 / UX / 검증 통과해야 commit.
+- **우선순위 동등** — "도메인 작업 빨라야 하니 편집기는 나중에" 절대 금지. 새 메타 기능 추가 → 편집기 픽커 → 도메인 적용 순서.
+
 ## 아키텍처 원칙
 - Go: 프론트엔드 (화면 UI, HTTP 처리, 자주 변경되는 부분)
 - Rust: 백엔드 계산엔진 (원가, 환율, 재고집계, 마진, LC만기 등)
@@ -60,6 +77,7 @@
 
 ## 참조 문서
 - 설계문서: harness/SolarFlow_설계문서_통합판.md
+- UI 표준 헌장 (버튼/테이블/필터/에러/상태 뱃지): harness/UI_STANDARDS.md
 - 이 규칙은 모든 Go/Rust 코드 작업에 적용
 
 ---

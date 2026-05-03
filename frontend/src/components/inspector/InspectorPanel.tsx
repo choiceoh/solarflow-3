@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useAppStore, type InspectorMode, type InspectorTarget } from '@/stores/appStore';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { Maximize2 } from 'lucide-react';
 import { ActionChips } from './ActionChips';
 import { AiVariantsPanel } from './AiVariantsPanel';
+import { CollapsibleSection } from './CollapsibleSection';
 import { ComponentStoryModal } from './ComponentStoryModal';
 import { HandleOverlay } from './HandleOverlay';
 import { LayerPanel } from './LayerPanel';
@@ -112,7 +114,7 @@ const Placeholder = () => (
       </li>
       <li className="pt-2 text-slate-400">상단 "디자인 토큰" 탭 — 색·간격·모서리 슬라이더</li>
     </ul>
-    <p className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
+    <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
       편집 모드 중에는 페이지 이동·버튼 클릭이 비활성됩니다. 이동하려면 먼저 편집 모드를 종료하세요.
     </p>
   </div>
@@ -121,6 +123,8 @@ const Placeholder = () => (
 const TargetInfo = ({ target }: { target: InspectorTarget }) => {
   const [draft, setDraft] = useState(target.className);
   const [storyOpen, setStoryOpen] = useState(false);
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
 
   useEffect(() => {
     setDraft(target.className);
@@ -158,7 +162,7 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
     <div className="space-y-3">
       <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
         <div>
-          <div className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+          <div className="text-xs font-medium uppercase tracking-wider text-slate-500">
             선택된 요소
           </div>
           <div className="text-sm font-medium text-slate-800">{tagLabel(target.tagName)}</div>
@@ -166,7 +170,7 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
         <div className="flex items-center gap-1">
           {target.configSource && (
             <span
-              className="truncate rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+              className="truncate rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800"
               title={target.configSource}
             >
               메타: {target.configSource}
@@ -175,7 +179,7 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
           <button
             type="button"
             onClick={() => setStoryOpen(true)}
-            className="flex items-center gap-1 rounded border border-purple-300 bg-white px-1.5 py-0.5 text-[10px] text-purple-700 hover:bg-purple-50 dark:border-purple-700/40 dark:bg-slate-800 dark:text-purple-300"
+            className="flex items-center gap-1 rounded border border-purple-300 bg-white px-1.5 py-0.5 text-xs text-purple-700 hover:bg-purple-50 dark:border-purple-700/40 dark:bg-slate-800 dark:text-purple-300"
             title="이 요소만 단독 미리보기 (모달)"
           >
             <Maximize2 className="h-3 w-3" />
@@ -184,12 +188,24 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
         </div>
       </div>
       <ComponentStoryModal open={storyOpen} onClose={() => setStoryOpen(false)} />
-      <ScopePanel target={target} draft={draft} />
-      <PreviewRolePanel />
-      <PseudoStateTabs />
-      <ActionChips className={draft} onChange={setDraft} />
+      <CollapsibleSection id="actions" title="디자인 조정" defaultOpen={true}>
+        <ActionChips className={draft} onChange={setDraft} />
+      </CollapsibleSection>
       <HandleOverlay target={target} className={draft} onChange={setDraft} />
-      <AiVariantsPanel target={target} className={draft} onApply={setDraft} />
+      <CollapsibleSection id="ai-variants" title="AI 변형 제안" defaultOpen={false}>
+        <AiVariantsPanel target={target} className={draft} onApply={setDraft} />
+      </CollapsibleSection>
+      <CollapsibleSection id="pseudo" title="상태 변종 (호버·포커스 등)" defaultOpen={false}>
+        <PseudoStateTabs />
+      </CollapsibleSection>
+      <CollapsibleSection id="scope" title="변경 범위" defaultOpen={false}>
+        <ScopePanel target={target} draft={draft} />
+      </CollapsibleSection>
+      {isAdmin && (
+        <CollapsibleSection id="role" title="다른 역할로 보기" defaultOpen={false}>
+          <PreviewRolePanel />
+        </CollapsibleSection>
+      )}
       <details
         data-inspector-ui="true"
         className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs"
@@ -200,9 +216,9 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
         <div className="mt-2 space-y-2">
           <div>
             <div className="flex items-center justify-between">
-              <div className="text-[11px] font-medium text-slate-500">className</div>
+              <div className="text-xs font-medium text-slate-500">className</div>
               {draft !== target.className && (
-                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
                   미적용
                 </span>
               )}
@@ -212,7 +228,7 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               spellCheck={false}
-              className="mt-0.5 w-full resize-y rounded border border-slate-300 bg-slate-50 p-1.5 font-mono text-[11px] leading-snug focus:border-amber-400 focus:bg-white focus:outline-none"
+              className="mt-0.5 w-full resize-y rounded border border-slate-300 bg-slate-50 p-1.5 font-mono text-xs leading-snug focus:border-amber-400 focus:bg-white focus:outline-none"
               rows={4}
             />
           </div>
