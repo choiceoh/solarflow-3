@@ -61,6 +61,9 @@ interface AppState {
   setInspectorMode: (mode: InspectorMode) => void;
   inspectorPseudoState: InspectorPseudoState;
   setInspectorPseudoState: (state: InspectorPseudoState) => void;
+  /** 인스펙터에서 *다른 역할로 미리보기* 활성 시 그 역할. null 이면 실제 JWT 역할. */
+  inspectorPreviewRole: string | null;
+  setInspectorPreviewRole: (role: string | null) => void;
   tokenOverrides: Record<string, string>;
   setTokenOverride: (key: string, value: string) => void;
   resetTokenOverride: (key: string) => void;
@@ -103,6 +106,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setInspectorMode: (mode) => set({ inspectorMode: mode }),
   inspectorPseudoState: 'default',
   setInspectorPseudoState: (state) => set({ inspectorPseudoState: state }),
+  inspectorPreviewRole: null,
+  setInspectorPreviewRole: (role) => set({ inspectorPreviewRole: role }),
   tokenOverrides: readTokenOverrides(),
   setTokenOverride: (key, value) =>
     set((s) => {

@@ -5,6 +5,7 @@ import { ActionChips } from './ActionChips';
 import { AiVariantsPanel } from './AiVariantsPanel';
 import { HandleOverlay } from './HandleOverlay';
 import { LayerPanel } from './LayerPanel';
+import { PreviewRolePanel } from './PreviewRolePanel';
 import { PseudoStateTabs } from './PseudoStateTabs';
 import { TokenPanel } from './TokenPanel';
 import { DraftsList } from './DraftsList';
@@ -167,6 +168,7 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
           </span>
         )}
       </div>
+      <PreviewRolePanel />
       <PseudoStateTabs />
       <ActionChips className={draft} onChange={setDraft} />
       <HandleOverlay target={target} className={draft} onChange={setDraft} />
