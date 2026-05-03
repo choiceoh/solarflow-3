@@ -148,6 +148,20 @@ export default function InventoryTable({ items, compact = false }: { items: Inve
         <thead>
           <tr className="bg-muted/50 border-b">
             <SortableTH {...headerProps('product_code')} className="p-3 font-medium text-muted-foreground w-[220px]">제품 정보</SortableTH>
+            {/* 가용재고 */}
+            <th
+              className="p-3 text-right font-medium cursor-pointer select-none hover:bg-muted/70 transition-colors"
+              onClick={() => toggle('total_secured_kw')}
+            >
+              <div className="flex items-center justify-end gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
+                가용재고
+                <SortIcon direction={sortField === 'total_secured_kw' ? sortDirection : null} />
+              </div>
+              <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
+                현재고 가용 + 미착 가용
+              </div>
+            </th>
             {/* 실재고 */}
             <th
               className="p-3 text-right font-medium cursor-pointer select-none hover:bg-muted/70 transition-colors"
@@ -176,20 +190,6 @@ export default function InventoryTable({ items, compact = false }: { items: Inve
                 L/C 개설 기준
               </div>
             </th>
-            {/* 가용재고 */}
-            <th
-              className="p-3 text-right font-medium cursor-pointer select-none hover:bg-muted/70 transition-colors"
-              onClick={() => toggle('total_secured_kw')}
-            >
-              <div className="flex items-center justify-end gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
-                가용재고
-                <SortIcon direction={sortField === 'total_secured_kw' ? sortDirection : null} />
-              </div>
-              <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
-                현재고 가용 + 미착 가용
-              </div>
-            </th>
             <SortableTH {...headerProps('long_term_status')} align="center" className="p-3 font-medium text-muted-foreground w-[80px]">장기</SortableTH>
           </tr>
         </thead>
@@ -210,25 +210,6 @@ export default function InventoryTable({ items, compact = false }: { items: Inve
                   </div>
                 )}
               </td>
-
-              {/* 실재고 */}
-              <MetricCell
-                kw={item.physical_kw}
-                specWp={item.spec_wp}
-                deductions={[
-                  { label: '수주예약', kw: item.reserved_kw },
-                  { label: '배정',    kw: item.allocated_kw },
-                ]}
-              />
-
-              {/* 미착품 */}
-              <MetricCell
-                kw={item.incoming_kw}
-                specWp={item.spec_wp}
-                deductions={[
-                  { label: '미착예약', kw: item.incoming_reserved_kw },
-                ]}
-              />
 
               {/* 가용재고 = available_kw + available_incoming_kw = total_secured_kw */}
               <td className="p-3 text-right align-top min-w-[130px]">
@@ -253,6 +234,25 @@ export default function InventoryTable({ items, compact = false }: { items: Inve
                   </div>
                 </div>
               </td>
+
+              {/* 실재고 */}
+              <MetricCell
+                kw={item.physical_kw}
+                specWp={item.spec_wp}
+                deductions={[
+                  { label: '수주예약', kw: item.reserved_kw },
+                  { label: '배정',    kw: item.allocated_kw },
+                ]}
+              />
+
+              {/* 미착품 */}
+              <MetricCell
+                kw={item.incoming_kw}
+                specWp={item.spec_wp}
+                deductions={[
+                  { label: '미착예약', kw: item.incoming_reserved_kw },
+                ]}
+              />
 
               {/* 장기재고 */}
               <td className="p-3 text-center align-top">

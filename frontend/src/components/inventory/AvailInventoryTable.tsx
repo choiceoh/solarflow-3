@@ -281,16 +281,16 @@ function AvailInventoryTable({
           <tr>
             <th className="w-10" />
             <SortableTH {...headerProps('manufacturer')} className="font-medium">품목</SortableTH>
-            <SortableTH {...headerProps('physical_kw')} align="right" className="font-medium">실재고</SortableTH>
-            <SortableTH {...headerProps('incoming_kw')} align="right" className="font-medium">미착품</SortableTH>
-            <SortableTH {...headerProps('sale_kw')} align="right" className="font-medium">판매배정</SortableTH>
             <SortableTH {...headerProps('total_secured_kw')} align="right" className="font-medium">
               <span className="inline-flex items-center gap-1.5">
                 <span className="sf-dot" style={{ background: 'var(--sf-pos)' }} />
                 가용재고
               </span>
             </SortableTH>
+            <SortableTH {...headerProps('sale_kw')} align="right" className="font-medium">판매배정</SortableTH>
             <SortableTH {...headerProps('const_kw')} align="right" className="font-medium">공사배정</SortableTH>
+            <SortableTH {...headerProps('physical_kw')} align="right" className="font-medium">실재고</SortableTH>
+            <SortableTH {...headerProps('incoming_kw')} align="right" className="font-medium">미착품</SortableTH>
             <th className="text-center">작업</th>
           </tr>
         </thead>
@@ -350,21 +350,6 @@ function AvailInventoryTable({
                     </div>
                   </td>
 
-                  {/* 실재고 */}
-                  <td className="text-right tabular-nums font-semibold">{fmtKw(item.physical_kw)}</td>
-
-                  {/* 미착품 */}
-                  <td className="text-right tabular-nums font-semibold">{fmtKw(item.incoming_kw)}</td>
-
-                  {/* 판매배정 */}
-                  <td className="text-right tabular-nums">
-                    {saleAllocs.length > 0 ? (
-                      <span className="font-semibold">{fmtKw(saleKw)}</span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-
                   {/* 가용재고 — 컬러만 강조, 폰트는 다른 컬럼과 동일 */}
                   <td className="text-right tabular-nums">
                     <span
@@ -377,6 +362,15 @@ function AvailInventoryTable({
                     </span>
                   </td>
 
+                  {/* 판매배정 */}
+                  <td className="text-right tabular-nums">
+                    {saleAllocs.length > 0 ? (
+                      <span className="font-semibold">{fmtKw(saleKw)}</span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+
                   {/* 공사배정 */}
                   <td className="text-right tabular-nums">
                     {constAllocs.length > 0 ? (
@@ -385,6 +379,12 @@ function AvailInventoryTable({
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
+
+                  {/* 실재고 */}
+                  <td className="text-right tabular-nums font-semibold">{fmtKw(item.physical_kw)}</td>
+
+                  {/* 미착품 */}
+                  <td className="text-right tabular-nums font-semibold">{fmtKw(item.incoming_kw)}</td>
 
                   {/* 작업 */}
                   <td className="text-center" onClick={(e) => e.stopPropagation()}>

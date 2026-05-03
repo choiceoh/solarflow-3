@@ -22,6 +22,20 @@ function TTListTable({ items, onEdit, onNew, onDelete }: Props) {
 
   const columns: GroupedMiniTableColumn<TTRemittance>[] = [
     {
+      key: 'remit_date',
+      label: '송금일',
+      headerClassName: 'p-3',
+      className: 'p-3',
+      render: (tt) => formatDate(tt.remit_date ?? ''),
+    },
+    {
+      key: 'bank',
+      label: '은행',
+      headerClassName: 'p-3',
+      className: 'p-3 text-muted-foreground',
+      render: (tt) => tt.bank_name ?? '—',
+    },
+    {
       key: 'po_number',
       label: 'PO번호',
       headerClassName: 'p-3',
@@ -34,13 +48,6 @@ function TTListTable({ items, onEdit, onNew, onDelete }: Props) {
       headerClassName: 'p-3',
       className: 'p-3 text-muted-foreground',
       render: (tt) => shortMfgName(tt.manufacturer_name),
-    },
-    {
-      key: 'remit_date',
-      label: '송금일',
-      headerClassName: 'p-3',
-      className: 'p-3',
-      render: (tt) => formatDate(tt.remit_date ?? ''),
     },
     {
       key: 'amount_usd',
@@ -82,13 +89,6 @@ function TTListTable({ items, onEdit, onNew, onDelete }: Props) {
       headerClassName: 'p-3',
       className: 'p-3',
       render: (tt) => <StatusPill label={TT_STATUS_LABEL[tt.status]} colorClassName={TT_STATUS_COLOR[tt.status]} className="px-2" />,
-    },
-    {
-      key: 'bank',
-      label: '은행',
-      headerClassName: 'p-3',
-      className: 'p-3 text-muted-foreground',
-      render: (tt) => tt.bank_name ?? '—',
     },
     {
       key: 'actions',

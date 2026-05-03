@@ -19,6 +19,7 @@ const outboundList: ListScreenConfig = {
   metrics: [],   // 메트릭은 탭 묶음 레벨에서 공통
   columns: [
     { key: 'outbound_date', label: '출고일', formatter: 'date' },
+    { key: 'site_name', label: '현장명' },
     { key: 'product_code', label: '품번', className: 'font-mono' },
     { key: 'product_name', label: '품명' },
     { key: 'spec_wp', label: '규격' },
@@ -26,7 +27,6 @@ const outboundList: ListScreenConfig = {
     { key: 'capacity_kw', label: '용량', align: 'right', formatter: 'kw' },
     { key: 'warehouse_name', label: '창고' },
     { key: 'usage_category', label: '용도', rendererId: 'usage_category_label' },
-    { key: 'site_name', label: '현장명' },
     { key: 'order_number', label: '수주연결' },
     { key: '_group_trade', label: '그룹거래', rendererId: 'outbound_group_trade' },
     { key: '_invoice', label: '계산서', rendererId: 'outbound_invoice_pill' },
@@ -66,8 +66,8 @@ const saleList: ListScreenConfig = {
   metrics: [],
   columns: [
     { key: '_base_date', label: '기준일', rendererId: 'sale_base_date' },
-    { key: '_kind', label: '구분', rendererId: 'sale_kind_pill' },
     { key: 'sale.customer_name', label: '거래처' },
+    { key: '_kind', label: '구분', rendererId: 'sale_kind_pill' },
     { key: 'product_name', label: '품명' },
     { key: 'spec_wp', label: '규격' },
     { key: 'quantity', label: '수량', align: 'right', formatter: 'number' },

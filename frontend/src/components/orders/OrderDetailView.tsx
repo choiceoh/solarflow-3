@@ -294,10 +294,10 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
             <TableHeader>
               <TableRow>
                 <TableHead>출고일</TableHead>
+                <TableHead>현장명</TableHead>
                 <TableHead>품명</TableHead>
                 <TableHead className="text-right">수량</TableHead>
                 <TableHead>용도</TableHead>
-                <TableHead>현장명</TableHead>
                 <TableHead>상태</TableHead>
               </TableRow>
             </TableHeader>
@@ -305,10 +305,10 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
               {outboundRows.map((ob) => (
                 <TableRow key={ob.outbound_id}>
                   <TableCell>{formatDate(ob.outbound_date)}</TableCell>
+                  <TableCell>{ob.site_name ?? '—'}</TableCell>
                   <TableCell>{ob.product_name ?? '—'}</TableCell>
                   <TableCell className="text-right">{formatMaybeNumber(ob.quantity) ?? '—'}</TableCell>
                   <TableCell>{USAGE_CATEGORY_LABEL[ob.usage_category] ?? ob.usage_category}</TableCell>
-                  <TableCell>{ob.site_name ?? '—'}</TableCell>
                   <TableCell>
                     <span className={cn(
                       'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
