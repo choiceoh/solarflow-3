@@ -8,6 +8,7 @@ export { EditModeToggleButton } from './EditModeToggleButton';
 export { InspectorOverlay } from './InspectorOverlay';
 export { InspectorPanel } from './InspectorPanel';
 export { LayerPanel } from './LayerPanel';
+export { OnboardingHint, OnboardingResetButton } from './OnboardingHint';
 export { PreviewRolePanel } from './PreviewRolePanel';
 export { PseudoStateTabs } from './PseudoStateTabs';
 export { TokenPanel } from './TokenPanel';

@@ -37,6 +37,7 @@ import {
   EditModeToggleButton,
   InspectorOverlay,
   InspectorPanel,
+  OnboardingHint,
   useDesignTokens,
   useEditModeShortcut,
 } from '@/components/inspector';
@@ -379,6 +380,7 @@ export default function CommandShell() {
       <EditModeBadge />
       <InspectorPanel />
       <ContextMenuOverlay />
+      <OnboardingHint />
       <FloatingAssistantButton />
     </div>
   );
