@@ -9,6 +9,7 @@ import { HandleOverlay } from './HandleOverlay';
 import { LayerPanel } from './LayerPanel';
 import { PreviewRolePanel } from './PreviewRolePanel';
 import { PseudoStateTabs } from './PseudoStateTabs';
+import { ScopePanel } from './ScopePanel';
 import { TokenPanel } from './TokenPanel';
 import { DraftsList } from './DraftsList';
 import { getLastTargetEl } from './inspectorTarget';
@@ -183,6 +184,7 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
         </div>
       </div>
       <ComponentStoryModal open={storyOpen} onClose={() => setStoryOpen(false)} />
+      <ScopePanel target={target} draft={draft} />
       <PreviewRolePanel />
       <PseudoStateTabs />
       <ActionChips className={draft} onChange={setDraft} />
