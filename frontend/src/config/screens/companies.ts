@@ -64,6 +64,8 @@ const config: ListScreenConfig = {
       },
     },
   ],
+  // Phase 4 마무리: 행 클릭 → MetaDetail (registry.detailComponents.company)
+  onRowClick: { kind: 'detail', detailId: 'company', idField: 'company_id' },
   emptyState: { message: '등록된 법인이 없습니다', actionId: 'create' },
   forms: [
     {

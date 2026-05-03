@@ -9,6 +9,7 @@ import InboundStatusBadge from './InboundStatusBadge';
 import { INBOUND_TYPE_LABEL, type BLShipment, type BLLineItem } from '@/types/inbound';
 import type { Manufacturer } from '@/types/masters';
 import { fetchWithAuth } from '@/lib/api';
+import { notify } from '@/lib/notify';
 import { useAppStore } from '@/stores/appStore';
 import { useSort } from '@/hooks/useSort';
 
@@ -82,7 +83,7 @@ export default function BLListTable({ items, onSelect, onNew, onDelete }: Props)
       await onDelete(deleteTarget.bl_id);
       setDeleteTarget(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제에 실패했습니다');
+      notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다');
     } finally {
       setDeleting(false);
     }

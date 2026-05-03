@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { fetchWithAuth } from '@/lib/api';
+import { notify } from '@/lib/notify';
 import type { OutboundStatus } from '@/types/outbound';
 
 interface Props {
@@ -26,7 +27,7 @@ export default function OutboundCancelFlow({ outboundId, currentStatus, onChange
       });
       onChanged();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '상태 변경에 실패했습니다');
+      notify.error(err instanceof Error ? err.message : '상태 변경에 실패했습니다');
     }
     setLoading(false);
     setAction(null);

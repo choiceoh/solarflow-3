@@ -20,6 +20,7 @@ import type {
   ListScreenConfig, MetaDetailConfig, MetaFormConfig, TabbedListConfig,
 } from '@/templates/types';
 import { KNOWN_CONFIGS } from '@/config/knownConfigs';
+import { notify } from '@/lib/notify';
 import VisualScreenEditor from './UIConfigEditor/VisualScreenEditor';
 import VisualTabbedListEditor from './UIConfigEditor/VisualTabbedListEditor';
 import VisualFormEditor from './UIConfigEditor/VisualFormEditor';
@@ -126,7 +127,7 @@ export default function UIConfigEditorPage() {
   // Phase 4 보강 (A): 프리뷰 — 새 탭에서 routeHint 열기
   const onOpenPreview = () => {
     if (!selected.routeHint) {
-      alert(`프리뷰 라우트 없음: ${selected.id}`);
+      notify.warning(`프리뷰 라우트 없음: ${selected.id}`);
       return;
     }
     // routeHint 가 "/path → 새로 등록" 형식인 경우 첫 토큰만 사용

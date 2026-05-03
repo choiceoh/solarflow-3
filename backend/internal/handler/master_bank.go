@@ -121,8 +121,10 @@ func (h *BankHandler) Create(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusCreated, created[0])
 }
 
-// Update — PUT /api/v1/banks/{id} — 은행 수정
-// 비유: 기존 은행 거래 카드의 정보를 수정하는 것
+// Update — PUT/PATCH /api/v1/banks/{id} — 은행 수정 (부분 업데이트도 지원)
+// 비유: 기존 은행 거래 카드의 정보를 수정하는 것 — 비어 있는 항목은 그대로 두고
+// 적은 항목만 갱신 (UpdateBankRequest 의 모든 필드가 optional 이라 가능).
+// PATCH 는 메타 GUI 의 inline 편집 (셀 클릭 → 단일 필드 저장) 진입점.
 func (h *BankHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
