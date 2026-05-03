@@ -939,14 +939,15 @@ a:focus-visible,
 }
 
 .sf-command-control-strip {
+  --sf-filter-chip-padding: 2px 8px;
   display: flex;
   min-width: 0;
-  min-height: 34px;
+  min-height: 28px;
   align-items: center;
   border: 1px solid var(--sf-line);
-  border-radius: 6px;
+  border-radius: 5px;
   background: color-mix(in srgb, var(--sf-surface) 92%, var(--sf-bg));
-  padding: 4px 6px;
+  padding: 2px 6px;
 }
 
 .sf-command-control-strip .sf-command-topline-actions {
@@ -956,7 +957,7 @@ a:focus-visible,
 
 .sf-command-control-strip .sf-card-controls {
   width: 100%;
-  min-height: 24px;
+  min-height: 22px;
   overflow: hidden;
   flex-wrap: nowrap;
   gap: 6px;
@@ -969,7 +970,19 @@ a:focus-visible,
 }
 
 .sf-command-control-strip .tab {
-  padding: 4px 9px;
+  color: var(--sf-ink-3);
+  font-size: 11.5px;
+  padding: 2px 8px;
+}
+
+.sf-command-control-strip .tab:hover {
+  color: var(--sf-ink-2);
+}
+
+.sf-command-control-strip .tab.active {
+  color: var(--sf-ink);
+  border-bottom-color: var(--sf-ink);
+  font-weight: 650;
 }
 
 .sf-procurement-layout {
@@ -2216,7 +2229,7 @@ textarea::placeholder {
   }
 
   .sf-command-control-strip {
-    min-height: 36px;
+    min-height: 30px;
   }
 
   .sf-command-control-strip .sf-card-controls {
