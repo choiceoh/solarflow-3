@@ -86,6 +86,10 @@ func (h *BankHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
+		// 비유: PUT 과 PATCH 같은 핸들러 — UpdateBankRequest 의 모든 필드가 optional
+		// (포인터 + omitempty) 이라 부분 업데이트로 그대로 동작. 메타 GUI 의 inline
+		// 편집 (셀 클릭 → PATCH /api/v1/banks/{id} { 한 필드 } ) 가 이 라우트로.
+		r.With(g.Write).Patch("/{id}", h.Update)
 		r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
