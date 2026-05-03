@@ -1,5 +1,6 @@
 import { Copy, GitCompare, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAppStore, type ClassNameDraft } from '@/stores/appStore';
 import { VariantsDiffModal } from './VariantsDiffModal';
 
@@ -23,13 +24,20 @@ const copy = async (text: string, setStatus: (s: string) => void) => {
 };
 
 export const DraftsList = () => {
-  const drafts = useAppStore((s) => s.classNameDrafts);
+  const allDrafts = useAppStore((s) => s.classNameDrafts);
   const removeClassNameDraft = useAppStore((s) => s.removeClassNameDraft);
   const clearClassNameDrafts = useAppStore((s) => s.clearClassNameDrafts);
   const [status, setStatus] = useState('');
   const [diffDraft, setDiffDraft] = useState<ClassNameDraft | null>(null);
+  const location = useLocation();
+  // 페이지 격리 — 현재 path 의 drafts 만 표시 (다른 페이지 drafts 는 노이즈)
+  const drafts = useMemo(
+    () => allDrafts.filter((d) => d.path === location.pathname),
+    [allDrafts, location.pathname],
+  );
+  const otherPagesCount = allDrafts.length - drafts.length;
 
-  if (drafts.length === 0) return null;
+  if (drafts.length === 0 && otherPagesCount === 0) return null;
 
   return (
     <section className="rounded border border-slate-200 bg-slate-50 p-2">
@@ -108,8 +116,9 @@ export const DraftsList = () => {
         ))}
       </ul>
       <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-1.5 text-[10px] text-amber-800">
-        변경 목록은 자동 저장되며, 새로고침 후에도 selector 매칭으로 자동 재적용됩니다.
-        영구 반영(모든 사용자)은 "전체 복사" → AI 에 붙여 메타 config 갱신.
+        이 페이지({location.pathname}) 의 변경만 표시.
+        {otherPagesCount > 0 && ` 다른 페이지 ${otherPagesCount}건은 그 페이지에서 보입니다.`}
+        새로고침 후에도 selector 매칭으로 자동 재적용. 영구 반영은 "전체 복사" → AI.
       </p>
       <VariantsDiffModal draft={diffDraft} onClose={() => setDiffDraft(null)} />
     </section>

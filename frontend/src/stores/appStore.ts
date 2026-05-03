@@ -21,6 +21,8 @@ export interface ClassNameDraft {
   before: string;
   after: string;
   ts: number;
+  /** 변경이 만들어진 페이지 pathname — 자동 재적용 시 같은 pathname 일 때만 적용 (다른 화면 영향 차단) */
+  path: string;
 }
 
 const TOKEN_OVERRIDES_KEY = 'sf.token-overrides';
@@ -99,7 +101,7 @@ interface AppState {
   resetTokenOverride: (key: string) => void;
   resetAllTokenOverrides: () => void;
   classNameDrafts: ClassNameDraft[];
-  recordClassNameDraft: (draft: Omit<ClassNameDraft, 'id' | 'ts'>) => void;
+  recordClassNameDraft: (draft: Omit<ClassNameDraft, 'id' | 'ts' | 'path'>) => void;
   removeClassNameDraft: (id: string) => void;
   clearClassNameDrafts: () => void;
   contextMenuPosition: { x: number; y: number } | null;
@@ -163,15 +165,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   classNameDrafts: readDrafts(),
   recordClassNameDraft: ({ selector, tagName, before, after }) =>
     set((s) => {
-      const existing = s.classNameDrafts.find((d) => d.selector === selector);
-      const id = existing?.id ?? `${selector}-${Date.now()}`;
+      // path 자동 캡쳐 — 변경 발생 시점 pathname (자동 재적용 시 페이지 격리에 사용)
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      // 같은 selector + 같은 path 의 기존 entry 만 매칭 (다른 페이지의 같은 selector 는 별개)
+      const existing = s.classNameDrafts.find((d) => d.selector === selector && d.path === path);
+      const id = existing?.id ?? `${selector}|${path}|${Date.now()}`;
       const baseBefore = existing?.before ?? before;
       let next: ClassNameDraft[];
       if (after === baseBefore) {
         // 원복 — draft 제거
         next = s.classNameDrafts.filter((d) => d.id !== id);
       } else {
-        const newDraft: ClassNameDraft = { id, selector, tagName, before: baseBefore, after, ts: Date.now() };
+        const newDraft: ClassNameDraft = { id, selector, tagName, before: baseBefore, after, ts: Date.now(), path };
         next = [...s.classNameDrafts.filter((d) => d.id !== id), newDraft];
       }
       writeDrafts(next);
