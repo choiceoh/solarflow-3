@@ -36,6 +36,44 @@ const SPAN_OPTIONS = [
   { value: '4', label: '4' },
 ];
 
+// PR #242 패턴 — DetailField 검증 (registry/key 충돌/누락 의존성)
+type FieldIssue = { level: 'error' | 'warn'; msg: string };
+function validateDetailField(
+  field: DetailFieldConfig,
+  allFieldKeys: string[],
+  allDetailFieldKeys: string[],
+): FieldIssue[] {
+  const issues: FieldIssue[] = [];
+  if (!field.key?.trim()) issues.push({ level: 'error', msg: 'key 가 비어 있습니다' });
+  if (!field.label?.trim()) issues.push({ level: 'error', msg: 'label 이 비어 있습니다' });
+  if (field.key && allFieldKeys.filter((k) => k === field.key).length > 1) {
+    issues.push({ level: 'error', msg: `key '${field.key}' 가 detail 내에서 중복됩니다` });
+  }
+  if (field.formatter === 'enum') {
+    if (!field.enumKey) {
+      issues.push({ level: 'warn', msg: "formatter='enum' 인데 enumKey 미지정" });
+    } else if (!(field.enumKey in enumDictionaries)) {
+      issues.push({ level: 'error', msg: `enumKey '${field.enumKey}' 가 registry 에 없습니다` });
+    }
+  }
+  if (field.rendererId && !(field.rendererId in cellRenderers)) {
+    issues.push({ level: 'error', msg: `rendererId '${field.rendererId}' 가 registry 에 없습니다` });
+  }
+  if (field.visibleIf?.field && !allDetailFieldKeys.includes(field.visibleIf.field)) {
+    issues.push({ level: 'warn', msg: `visibleIf.field '${field.visibleIf.field}' 가 detail 에 없습니다` });
+  }
+  return issues;
+}
+
+// 섹션 검증 — contentBlock.blockId 가 registry 에 있는지
+function validateSection(section: DetailSectionConfig): FieldIssue[] {
+  const issues: FieldIssue[] = [];
+  if (section.contentBlock?.blockId && !(section.contentBlock.blockId in contentBlocks)) {
+    issues.push({ level: 'error', msg: `contentBlock.blockId '${section.contentBlock.blockId}' 가 registry 에 없습니다` });
+  }
+  return issues;
+}
+
 type Tab = 'basic' | 'sections' | 'tabs' | 'json';
 
 export interface VisualDetailEditorProps {
@@ -416,6 +454,29 @@ function SectionsTab({ value, onChange, onSelectDetailField }: {
 
   const matchedCount = sections.filter(matchesSearch).length;
 
+  // PR #242 패턴 — detail 전체 필드 key 목록 + 검증 요약
+  const allDetailFieldKeys = useMemo(
+    () => sections.flatMap((s) => (s.fields ?? []).map((f) => f.key)),
+    [sections],
+  );
+  const detailIssueCounts = useMemo(() => {
+    let error = 0;
+    let warn = 0;
+    sections.forEach((sec) => {
+      validateSection(sec).forEach((i) => {
+        if (i.level === 'error') error++;
+        else warn++;
+      });
+      (sec.fields ?? []).forEach((f) => {
+        validateDetailField(f, allDetailFieldKeys, allDetailFieldKeys).forEach((i) => {
+          if (i.level === 'error') error++;
+          else warn++;
+        });
+      });
+    });
+    return { error, warn };
+  }, [sections, allDetailFieldKeys]);
+
   const toggleSection = (idx: number) => {
     setCollapsedSet((prev) => {
       const next = new Set(prev);
@@ -454,6 +515,24 @@ function SectionsTab({ value, onChange, onSelectDetailField }: {
           <Plus className="h-3 w-3 mr-1" />섹션 추가
         </Button>
       </div>
+      {(detailIssueCounts.error > 0 || detailIssueCounts.warn > 0) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px]">
+          <span className="font-medium text-amber-900">검증:</span>
+          {detailIssueCounts.error > 0 && (
+            <span className="rounded bg-rose-200 px-1.5 py-0.5 font-medium text-rose-800">
+              error {detailIssueCounts.error}
+            </span>
+          )}
+          {detailIssueCounts.warn > 0 && (
+            <span className="rounded bg-amber-200 px-1.5 py-0.5 font-medium text-amber-800">
+              warn {detailIssueCounts.warn}
+            </span>
+          )}
+          <span className="text-muted-foreground">
+            붉은/노란 점이 표시된 섹션·필드를 펼쳐 상세 메시지 확인
+          </span>
+        </div>
+      )}
       {sections.length > 1 && (
         <div className="flex items-center gap-2">
           <div className="relative flex-1 max-w-sm">
@@ -492,6 +571,7 @@ function SectionsTab({ value, onChange, onSelectDetailField }: {
               total={sections.length}
               blockOptions={blockOptions}
               collapsed={isCollapsed}
+              allDetailFieldKeys={allDetailFieldKeys}
               onToggleCollapse={() => toggleSection(sIdx)}
               onUpdate={(next) => updateSection(sIdx, next)}
               onMoveUp={() => onChange({ ...value, sections: moveInArray(sections, sIdx, -1) })}
@@ -517,7 +597,7 @@ function SectionsTab({ value, onChange, onSelectDetailField }: {
 }
 
 function SectionCard({
-  section, index, total, blockOptions, collapsed, onToggleCollapse,
+  section, index, total, blockOptions, collapsed, allDetailFieldKeys, onToggleCollapse,
   onUpdate, onMoveUp, onMoveDown, onRemove, onSelectField,
 }: {
   section: DetailSectionConfig;
@@ -525,6 +605,7 @@ function SectionCard({
   total: number;
   blockOptions: { value: string; label: string }[];
   collapsed: boolean;
+  allDetailFieldKeys: string[];
   onToggleCollapse: () => void;
   onUpdate: (next: DetailSectionConfig) => void;
   onMoveUp: () => void;
@@ -537,6 +618,22 @@ function SectionCard({
 
   const isContentBlock = !!section.contentBlock;
   const fields = section.fields ?? [];
+
+  // 섹션·필드 검증 결과 — 헤더 dot + 필드 행 inline message
+  const sectionIssues = validateSection(section);
+  const fieldIssuesByIdx = fields.map((f) => validateDetailField(f, allDetailFieldKeys, allDetailFieldKeys));
+  const sectionErrorCount =
+    sectionIssues.filter((i) => i.level === 'error').length +
+    fieldIssuesByIdx.reduce((s, arr) => s + arr.filter((i) => i.level === 'error').length, 0);
+  const sectionWarnCount =
+    sectionIssues.filter((i) => i.level === 'warn').length +
+    fieldIssuesByIdx.reduce((s, arr) => s + arr.filter((i) => i.level === 'warn').length, 0);
+  const sectionIssueTitle = [
+    ...sectionIssues.map((i) => `[${i.level}] (섹션) ${i.msg}`),
+    ...fieldIssuesByIdx.flatMap((arr, fIdx) =>
+      arr.map((i) => `[${i.level}] #${fIdx + 1} ${fields[fIdx]?.key || ''}: ${i.msg}`),
+    ),
+  ].join('\n');
 
   const updateField = (fIdx: number, next: DetailFieldConfig) =>
     onUpdate({ ...section, fields: fields.map((f, i) => (i === fIdx ? next : f)) });
@@ -586,6 +683,11 @@ function SectionCard({
         <ChevronDown
           className={`h-3 w-3 shrink-0 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`}
         />
+        {sectionErrorCount > 0 ? (
+          <span title={sectionIssueTitle} className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" aria-label={`error ${sectionErrorCount}개`} />
+        ) : sectionWarnCount > 0 ? (
+          <span title={sectionIssueTitle} className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" aria-label={`warn ${sectionWarnCount}개`} />
+        ) : null}
         <span className="text-xs text-muted-foreground mono">섹션 #{index + 1}</span>
         <Input className="h-7 text-xs flex-1 max-w-md" value={section.title}
           onChange={(e) => onUpdate({ ...section, title: e.target.value })}
@@ -595,6 +697,16 @@ function SectionCard({
             {section.contentBlock
               ? `[${section.contentBlock.blockId}]`
               : `필드 ${(section.fields ?? []).length}개`}
+          </span>
+        )}
+        {collapsed && sectionErrorCount > 0 && (
+          <span title={sectionIssueTitle} className="rounded bg-rose-100 px-1.5 py-0.5 text-[9px] font-medium text-rose-800">
+            error {sectionErrorCount}
+          </span>
+        )}
+        {collapsed && sectionWarnCount > 0 && sectionErrorCount === 0 && (
+          <span title={sectionIssueTitle} className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800">
+            warn {sectionWarnCount}
           </span>
         )}
         <FieldSelect label="" value={String(section.cols ?? 4)} options={COLS_OPTIONS}
@@ -611,6 +723,16 @@ function SectionCard({
 
       {!collapsed && (
       <div className="p-3 space-y-2">
+        {sectionIssues.length > 0 && (
+          <div className="space-y-0.5 rounded border border-rose-200 bg-rose-50 px-2 py-1">
+            {sectionIssues.map((iss, i) => (
+              <div key={i} className={`text-[10px] flex items-start gap-1 ${iss.level === 'error' ? 'text-rose-800' : 'text-amber-800'}`}>
+                <span className={`rounded px-1 py-0 text-[9px] font-medium uppercase ${iss.level === 'error' ? 'bg-rose-200' : 'bg-amber-200'}`}>{iss.level}</span>
+                <span>{iss.msg}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-3 text-xs">
           <label className="flex items-center gap-1">
             <input type="radio" name={`mode-${index}`} checked={!isContentBlock}
@@ -652,6 +774,9 @@ function SectionCard({
             {fields.map((field, fIdx) => {
               const isDragging = dragIdx === fIdx;
               const isDragOver = overIdx === fIdx && dragIdx !== fIdx;
+              const fieldIssues = fieldIssuesByIdx[fIdx] ?? [];
+              const fErrorCount = fieldIssues.filter((i) => i.level === 'error').length;
+              const fWarnCount = fieldIssues.filter((i) => i.level === 'warn').length;
               return (
               <div
                 key={fIdx}
@@ -663,13 +788,18 @@ function SectionCard({
                 onDragOver={(e) => { e.preventDefault(); onDragOver(fIdx); }}
                 onDragEnd={onDragEnd}
                 onDrop={(e) => { e.preventDefault(); onDrop(fIdx); }}
-                className={`group rounded border p-2 grid grid-cols-12 gap-2 text-xs bg-muted/20 transition-opacity ${isDragging ? 'opacity-40' : ''} ${isDragOver ? 'border-t-2 border-t-foreground' : ''}`}
+                className={`group rounded border p-2 grid grid-cols-12 gap-2 text-xs bg-muted/20 transition-opacity ${isDragging ? 'opacity-40' : ''} ${isDragOver ? 'border-t-2 border-t-foreground' : ''} ${fErrorCount > 0 ? 'border-rose-300' : fWarnCount > 0 ? 'border-amber-300' : ''}`}
               >
                 <div className="col-span-1 flex flex-col items-center gap-1">
                   <GripVertical
                     className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground cursor-grab active:cursor-grabbing"
                     onClick={(e) => e.stopPropagation()}
                   />
+                  {fErrorCount > 0 ? (
+                    <span title={fieldIssues.map((i) => `[${i.level}] ${i.msg}`).join('\n')} className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" aria-label={`error ${fErrorCount}개`} />
+                  ) : fWarnCount > 0 ? (
+                    <span title={fieldIssues.map((i) => `[${i.level}] ${i.msg}`).join('\n')} className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" aria-label={`warn ${fWarnCount}개`} />
+                  ) : null}
                   <span className="text-[9px] mono">#{fIdx + 1}</span>
                   <Button type="button" variant="ghost" size="icon" className="h-5 w-5"
                     onClick={() => onUpdate({ ...section, fields: moveInArray(fields, fIdx, -1) })}
@@ -679,6 +809,16 @@ function SectionCard({
                     disabled={fIdx === fields.length - 1}><ChevronDown className="h-3 w-3" /></Button>
                 </div>
                 <div className="col-span-10 grid grid-cols-2 gap-2">
+                  {fieldIssues.length > 0 && (
+                    <div className="col-span-2 space-y-0.5 rounded border border-rose-200 bg-rose-50 px-2 py-1">
+                      {fieldIssues.map((iss, i) => (
+                        <div key={i} className={`text-[10px] flex items-start gap-1 ${iss.level === 'error' ? 'text-rose-800' : 'text-amber-800'}`}>
+                          <span className={`rounded px-1 py-0 text-[9px] font-medium uppercase ${iss.level === 'error' ? 'bg-rose-200' : 'bg-amber-200'}`}>{iss.level}</span>
+                          <span>{iss.msg}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <FieldInput label="key (데이터 경로)" value={field.key} mono
                     onChange={(v) => updateField(fIdx, { ...field, key: v })} />
                   <FieldInput label="label" value={field.label}
