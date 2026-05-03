@@ -33,6 +33,13 @@ export interface ColumnConfig extends ColumnVisibilityMeta {
   className?: string;
   // Phase 4 보강: 정렬 가능 헤더 (클릭 → asc → desc → 해제)
   sortable?: boolean;
+  // 메타 인프라 확장: 인라인 편집 가능 (ListScreen.inlineEdit.enabled 와 함께 사용)
+  // 셀 클릭 → input → blur/Enter 시 endpoint PATCH 자동 저장.
+  inlineEditable?: boolean;
+  // 메타 인프라 확장: 인라인 편집 시 input 타입 (text|number|select|date)
+  inlineEditType?: 'text' | 'number' | 'select' | 'date';
+  // select 타입 시 옵션 (static)
+  inlineEditOptions?: { value: string; label: string }[];
 }
 
 // ── Filters
@@ -232,6 +239,13 @@ export interface FieldConfig {
 
   // 메타 인프라 확장: type='currency_amount' 의 통화 옵션 (기본 USD/KRW)
   currencyOptions?: { value: string; label: string }[];
+
+  // 메타 인프라 확장 (보안):
+  // 이 역할들에는 값을 마스킹 (***) 표시. e.g. ['viewer', 'manager'] → 단가/원가 숨김.
+  maskByRoles?: string[];
+  // 동적 권한 — 컨텍스트 기반 권한 체크. 호출 시 false 반환하면 readOnly + 마스킹.
+  // registry.permissionGuards[id] (Phase 5 follow-up)
+  permissionGuardId?: string;
 }
 
 export interface FormSection {
@@ -366,6 +380,10 @@ export interface DetailFieldConfig {
   visibleIf?: { field: string; value: string | string[] };
   // 단순 단위 접미사 (formatter로 표현 안 되는 "원/Wp" 등)
   suffix?: string;
+  // 메타 인프라 확장: 인라인 편집 (이 필드 클릭 시 input → 즉시 저장)
+  inlineEditable?: boolean;
+  inlineEditType?: 'text' | 'number' | 'select' | 'date';
+  inlineEditOptions?: { value: string; label: string }[];
 }
 
 export interface DetailSectionConfig {
@@ -378,6 +396,15 @@ export interface DetailSectionConfig {
   visibleIf?: { field: string; value: string | string[] };
 }
 
+// 메타 인프라 확장: Detail 탭 구조 (BLDetailView 같은 multi-tab 상세 화면)
+export interface DetailTabConfig {
+  key: string;                      // 탭 식별자
+  label: string;                    // 탭 라벨
+  sections?: DetailSectionConfig[]; // 데이터 섹션 (탭 안에서)
+  contentBlock?: ContentBlockConfig; // 또는 통째로 커스텀 컴포넌트 (BLLineTable 같은)
+  visibleIf?: { field: string; value: string | string[] };
+}
+
 export interface MetaDetailConfig {
   id: string;
   source: { hookId: DataHookId };   // useOutboundDetail 등 — id 받아 단건 fetch
@@ -387,6 +414,15 @@ export interface MetaDetailConfig {
   };
   sections: DetailSectionConfig[];
   extraBlocks?: ContentBlockConfig[];
+  // 메타 인프라 확장: 탭 모드 (sections 대신 또는 함께). 제공 시 탭 네비 + 각 탭 내 sections/contentBlock.
+  tabs?: DetailTabConfig[];
+  defaultTab?: string;              // 기본 활성 탭 key
+  // 메타 인프라 확장: 인라인 편집 (DetailField.inlineEditable=true 인 필드 즉시 저장)
+  inlineEdit?: {
+    enabled: boolean;
+    endpoint?: string;              // PATCH endpoint (e.g. '/api/v1/bls/:id')
+    idField?: string;               // 행 데이터에서 :id 로 쓸 필드
+  };
 }
 
 // ── 클라이언트 검색 (서버 필터와 별도)
@@ -416,6 +452,27 @@ export interface ListScreenConfig {
   forms?: FormConfig[];
   tableTitleFromFilter?: string;
   tableSubFromTotal?: boolean;      // "X / Y개 표시" 식 부제 (검색 시)
+  // 메타 인프라 확장: pagination 설정. 미지정 시 client-side, 모든 행 표시.
+  // serverMode 시 dataHook 이 _page/_limit 필터 받아 paged data 반환 (반드시 total 도 반환).
+  pagination?: {
+    defaultPageSize?: number;       // 기본 50
+    allowedSizes?: number[];        // 사용자 선택 가능 사이즈 (e.g. [25, 50, 100])
+    serverMode?: boolean;           // true 면 dataHook 이 서버 측 pagination 처리
+  };
+  // 메타 인프라 확장: 인라인 편집 가능 컬럼 (form 안 열고 셀 클릭으로 수정)
+  // 활성 시 col.inlineEditable=true 인 컬럼만 편집 가능.
+  // 저장 endpoint: /api/v1/<entity>/:id PATCH { [col.key]: newValue }
+  inlineEdit?: {
+    enabled: boolean;
+    endpoint?: string;              // PATCH endpoint (e.g. '/api/v1/bls/:id')
+    idField?: string;               // 행 데이터에서 :id 로 쓸 필드
+  };
+  // 메타 인프라 확장: 저장된 뷰 (admin 이 filter+sort+columns 명명 저장)
+  // localStorage 'sf.list.<id>.savedViews' 에 저장. 로드 시 활성 뷰 적용.
+  savedViews?: {
+    enabled: boolean;
+    storage?: 'localStorage' | 'db'; // 기본 localStorage
+  };
 }
 
 // ── 탭 묶음 화면 — 메트릭/Rail은 공통이지만 어느 탭 데이터를 쓸지는 명시
@@ -456,7 +513,9 @@ export type MetricComputer = (
   items: unknown[],
   filters: Record<string, string>,
 ) => string | number;
-export type DataHookResult = { data: unknown[]; loading: boolean; reload: () => void };
+// 메타 인프라 확장: total — server pagination 시 전체 행 수 (data 는 현재 page 만 포함).
+// client-mode 에선 omit. ListScreen 이 fallback 으로 data.length 사용.
+export type DataHookResult = { data: unknown[]; loading: boolean; reload: () => void; total?: number };
 export type DataHook = (filters: Record<string, string>) => DataHookResult;
 
 export interface ActionContext {

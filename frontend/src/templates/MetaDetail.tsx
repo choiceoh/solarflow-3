@@ -2,7 +2,7 @@
 // Detail은 입력 없이 데이터 표시라 Form보다 메타 친화적.
 // 데이터 섹션(필드 그리드)을 메타로 그리고, 워크플로우·편집·외부 패널은 contentBlock 슬롯에 위임한다.
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useResolvedConfig } from './configOverride';
 import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
@@ -134,8 +134,17 @@ export default function MetaDetail({ config: defaultConfig, id, onBack }: MetaDe
   if (!hook) throw new Error(`[MetaDetail] detail hook not registered: ${config.source.hookId}`);
   const { data, loading } = hook(id);
 
+  // 메타 인프라 확장: 탭 활성 상태
+  const [activeTab, setActiveTab] = useState<string>(
+    config.tabs?.[0]?.key ? (config.defaultTab ?? config.tabs[0].key) : ''
+  );
+
   if (loading || !data) return <LoadingSpinner />;
   const rec = data as Record<string, unknown>;
+
+  // 탭 모드 — visibleIf 통과한 탭만 표시
+  const visibleTabs = (config.tabs ?? []).filter((t) => evalVisibleIf(t.visibleIf, rec));
+  const currentTab = visibleTabs.find((t) => t.key === activeTab) ?? visibleTabs[0];
 
   return (
     <div className="space-y-4">
@@ -154,9 +163,38 @@ export default function MetaDetail({ config: defaultConfig, id, onBack }: MetaDe
         {renderBlock(config.header.actionsBlock, rec)}
       </div>
 
-      {config.sections.map((sec, idx) => (
-        <MetaDetailSection key={idx} section={sec} data={rec} />
-      ))}
+      {/* 탭 네비 (있을 때) */}
+      {visibleTabs.length > 0 && (
+        <div className="flex gap-1 border-b">
+          {visibleTabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setActiveTab(t.key)}
+              className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap
+                ${currentTab?.key === t.key
+                  ? 'border-foreground text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 탭 컨텐츠 (탭 모드) 또는 sections (기본 모드) */}
+      {currentTab ? (
+        <>
+          {currentTab.contentBlock ? renderBlock(currentTab.contentBlock, rec) : null}
+          {(currentTab.sections ?? []).map((sec, idx) => (
+            <MetaDetailSection key={idx} section={sec} data={rec} />
+          ))}
+        </>
+      ) : (
+        config.sections.map((sec, idx) => (
+          <MetaDetailSection key={idx} section={sec} data={rec} />
+        ))
+      )}
 
       {config.extraBlocks?.map((block, idx) => (
         <div key={idx}>{renderBlock(block, rec)}</div>

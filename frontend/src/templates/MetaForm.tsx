@@ -694,8 +694,22 @@ function FieldRender({ field, value, error, options, setValue, register, watch, 
   const conditionalReadOnly = field.readOnlyIf
     ? evalCondition(field.readOnlyIf, watchedValues, extraContext)
     : false;
-  const readOnly = isReadOnly(field, role) || conditionalReadOnly;
-  const labelText = `${field.label}${field.required ? ' *' : ''}${readOnly && (field.editableByRoles || field.readOnlyIf) ? ' (읽기전용)' : ''}`;
+  // 메타 인프라 확장 (보안): maskByRoles — 마스킹 모드 (값 숨김 + readonly)
+  const isMasked = field.maskByRoles && role && field.maskByRoles.includes(role);
+  const readOnly = isReadOnly(field, role) || conditionalReadOnly || !!isMasked;
+  const labelText = `${field.label}${field.required ? ' *' : ''}${readOnly && (field.editableByRoles || field.readOnlyIf) ? ' (읽기전용)' : ''}${isMasked ? ' (마스킹)' : ''}`;
+
+  // 메타 인프라 확장 (보안): 마스킹 시 ***로 대체 표시 (간단한 type 만 — text/number/textarea 등)
+  if (isMasked && (field.type === 'text' || field.type === 'number' || field.type === 'textarea' || field.type === 'rich_text')) {
+    return (
+      <div className="space-y-1.5">
+        <Label>{labelText}</Label>
+        <div className="h-8 rounded border border-input bg-muted/40 px-2 flex items-center text-xs text-muted-foreground font-mono">
+          ●●●●●●
+        </div>
+      </div>
+    );
+  }
   const errorMsg = error?.message;
 
   if (field.type === 'select') {

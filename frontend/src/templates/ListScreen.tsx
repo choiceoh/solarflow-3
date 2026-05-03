@@ -140,22 +140,28 @@ export interface TabState {
   loading: boolean;
   reload: () => void;
   metrics: MasterConsoleMetric[];
+  total?: number; // 서버 pagination 시 전체 행 수
 }
 
-export function useTabState(list: ListScreenConfig): TabState {
+export function useTabState(list: ListScreenConfig, extraFilters?: Record<string, string>): TabState {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const filterOptions = useFilterOptions(list.filters);
 
   const hook = dataHooks[list.source.hookId];
   if (!hook) throw new Error(`[ListScreen] data hook not registered: ${list.source.hookId}`);
-  const { data, loading, reload } = hook(filters);
+  // 메타 인프라 확장: server pagination 시 _page/_limit 같은 외부 필터 merge
+  const mergedFilters = useMemo(
+    () => ({ ...filters, ...(extraFilters ?? {}) }),
+    [filters, extraFilters],
+  );
+  const { data, loading, reload, total } = hook(mergedFilters);
 
   const metrics = useMemo(
     () => list.metrics.map((m) => buildMetric(m, data, filters, list.filters, filterOptions)),
     [list.metrics, list.filters, data, filters, filterOptions],
   );
 
-  return { filters, setFilters, filterOptions, data, loading, reload, metrics };
+  return { filters, setFilters, filterOptions, data, loading, reload, metrics, total };
 }
 
 // ─── 액션 헬퍼 ─────────────────────────────────────────────────────────────
@@ -645,7 +651,19 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const requiresCompany = config.requiresCompany ?? true;
 
-  const state = useTabState(config);
+  // 메타 인프라 확장: pagination state
+  const paginationCfg = config.pagination;
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(paginationCfg?.defaultPageSize ?? 50);
+  // serverMode 시 _page/_limit 을 dataHook 으로 전달 (filters 와 함께 merge)
+  const extraFilters = useMemo<Record<string, string> | undefined>(
+    () => paginationCfg?.serverMode
+      ? { _page: String(page), _limit: String(pageSize) }
+      : undefined,
+    [paginationCfg?.serverMode, page, pageSize],
+  );
+
+  const state = useTabState(config, extraFilters);
   // 검색·정렬 모두 MetaTable 내부에서 (TanStack globalFilter + getSortedRowModel)
   // 검색 적용 후 행 갯수 — MetaTable 의 onFilteredRowCountChange 콜백으로 받아옴.
   // 주의: 모든 hook 은 early return 전에 호출되어야 React rules-of-hooks 위반 안 함.
@@ -669,7 +687,17 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
     );
   }
 
-  const displayItems = state.data;
+  // 메타 인프라 확장: client-side pagination 적용 (server mode 면 dataHook 이 이미 paged 반환)
+  // serverMode=true 면 state.total 가 전체 행 수, state.data 는 현재 페이지만.
+  const totalRows = state.total ?? state.data.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const isServerMode = paginationCfg?.serverMode ?? false;
+  const displayItems = paginationCfg
+    ? (isServerMode
+        ? state.data
+        : state.data.slice(safePage * pageSize, (safePage + 1) * pageSize))
+    : state.data;
 
   const onRowAction = makeRowActionHandler(pageActions, state.reload);
   // 'toolbar' 는 'header' alias — 옛 outbound config 호환
@@ -762,6 +790,30 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
           pinning={colPin.pinning}
           onPinningChange={colPin.setPinning}
         />
+        {paginationCfg && totalRows > pageSize && (
+          <div className="flex items-center justify-between gap-2 border-t bg-muted/20 px-3 py-2 text-xs">
+            <span className="text-muted-foreground">
+              {totalRows.toLocaleString()}건 · {safePage + 1} / {totalPages} 페이지
+            </span>
+            <div className="flex items-center gap-1.5">
+              {paginationCfg.allowedSizes && (
+                <select
+                  className="h-7 rounded border border-input bg-background px-2 text-xs"
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+                >
+                  {paginationCfg.allowedSizes.map((s) => (
+                    <option key={s} value={s}>{s}건/페이지</option>
+                  ))}
+                </select>
+              )}
+              <Button size="sm" variant="outline" className="h-7 text-xs"
+                onClick={() => setPage(Math.max(0, safePage - 1))} disabled={safePage === 0}>이전</Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs"
+                onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))} disabled={safePage >= totalPages - 1}>다음</Button>
+            </div>
+          </div>
+        )}
       </MasterConsole>
 
       {config.forms ? <FormsMounted forms={config.forms} reload={state.reload} actions={pageActions} /> : null}
