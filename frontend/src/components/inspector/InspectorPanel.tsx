@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useAppStore, type InspectorMode, type InspectorTarget } from '@/stores/appStore';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { Maximize2 } from 'lucide-react';
 import { ActionChips } from './ActionChips';
 import { AiVariantsPanel } from './AiVariantsPanel';
+import { CollapsibleSection } from './CollapsibleSection';
 import { ComponentStoryModal } from './ComponentStoryModal';
 import { HandleOverlay } from './HandleOverlay';
 import { LayerPanel } from './LayerPanel';
@@ -121,6 +123,8 @@ const Placeholder = () => (
 const TargetInfo = ({ target }: { target: InspectorTarget }) => {
   const [draft, setDraft] = useState(target.className);
   const [storyOpen, setStoryOpen] = useState(false);
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
 
   useEffect(() => {
     setDraft(target.className);
@@ -184,12 +188,24 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
         </div>
       </div>
       <ComponentStoryModal open={storyOpen} onClose={() => setStoryOpen(false)} />
-      <ScopePanel target={target} draft={draft} />
-      <PreviewRolePanel />
-      <PseudoStateTabs />
-      <ActionChips className={draft} onChange={setDraft} />
+      <CollapsibleSection id="actions" title="디자인 조정" defaultOpen={true}>
+        <ActionChips className={draft} onChange={setDraft} />
+      </CollapsibleSection>
       <HandleOverlay target={target} className={draft} onChange={setDraft} />
-      <AiVariantsPanel target={target} className={draft} onApply={setDraft} />
+      <CollapsibleSection id="ai-variants" title="AI 변형 제안" defaultOpen={false}>
+        <AiVariantsPanel target={target} className={draft} onApply={setDraft} />
+      </CollapsibleSection>
+      <CollapsibleSection id="pseudo" title="상태 변종 (호버·포커스 등)" defaultOpen={false}>
+        <PseudoStateTabs />
+      </CollapsibleSection>
+      <CollapsibleSection id="scope" title="변경 범위" defaultOpen={false}>
+        <ScopePanel target={target} draft={draft} />
+      </CollapsibleSection>
+      {isAdmin && (
+        <CollapsibleSection id="role" title="다른 역할로 보기" defaultOpen={false}>
+          <PreviewRolePanel />
+        </CollapsibleSection>
+      )}
       <details
         data-inspector-ui="true"
         className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs"
