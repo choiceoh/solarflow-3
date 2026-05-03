@@ -9,4 +9,5 @@ export interface UserProfile {
   phone: string | null;
   avatar_url: string | null;
   is_active: boolean;
+  persona: string | null; // D-112: 사이드바 탭 key. NULL이면 default_tab fallback
 }

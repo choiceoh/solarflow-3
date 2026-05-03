@@ -29,6 +29,7 @@ interface AuthState {
   loginWithDevMock: () => Promise<void>;
   logout: () => Promise<void>;
   initialize: () => void;
+  setUser: (user: UserProfile | null) => void;
 }
 
 const INIT_TIMEOUT_MS = 5000;
@@ -37,6 +38,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   user: null,
   isLoading: true,
+
+  setUser: (user) => set({ user }),
 
   login: async (email: string, password: string, options?: LoginOptions) => {
     setAuthSessionPersistence(options?.persistSession ?? getAuthSessionPersistence());

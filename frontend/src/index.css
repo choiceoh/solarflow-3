@@ -134,6 +134,7 @@ a:focus-visible,
 }
 .sf-shell[data-sidebar-collapsed="true"] .sf-sidebar-logo-text,
 .sf-shell[data-sidebar-collapsed="true"] .sf-company-switcher,
+.sf-shell[data-sidebar-collapsed="true"] .sf-sidebar-tabs,
 .sf-shell[data-sidebar-collapsed="true"] .sf-nav-section,
 .sf-shell[data-sidebar-collapsed="true"] .sf-nav-label,
 .sf-shell[data-sidebar-collapsed="true"] .sf-nav-badge,
@@ -313,6 +314,44 @@ a:focus-visible,
   background: rgb(255 255 255 / 0.04);
   color: var(--sf-dark-ink);
   font-size: 12px;
+}
+
+/* D-112: 사이드바 탭 (persona) — 펼친 상태에서만 노출, 접힌 상태에서는 숨김 (a-2) */
+.sf-sidebar-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--sf-dark-line);
+  padding: 8px 10px;
+}
+
+.sf-sidebar-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.04);
+  padding: 4px 8px;
+  color: var(--sf-dark-ink-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.sf-sidebar-tab:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: var(--sf-dark-ink);
+}
+
+.sf-sidebar-tab[data-active="true"] {
+  background: var(--sf-solar);
+  border-color: var(--sf-solar);
+  color: #1a1300;
+  font-weight: 600;
 }
 
 .sf-sidebar-nav {

@@ -636,3 +636,20 @@
   - **거꾸로 정리 — 정식 라우트 제거 안 함**: `/receipt-matches/auto` 같은 정식 라우트가 호출처 0이더라도 제거하지 않는다. ReceiptMatchHandler가 자기 라우트를 잃어 RegisterRoutes 패턴(D-110)의 정합성이 깨진다.
 - **검증**: `grep -rn "assistant/ocr\|assistant/match" frontend/src/` 결과 = AutoMatchSection 1건, AssistantPage 1건 (각 alias 직접 호출). 이 결정 이후 동일 grep으로 사용 패턴이 유지되는지 확인 가능.
 - **날짜**: 2026-05-02
+
+
+## D-112: 사이드바 탭(persona)은 admin이 데이터로 정의, 사용자 클릭 = 즉시 영구
+- **결정**: 업무 담당별 사이드바를 코드의 새 enum으로 박지 않고 admin이 사이트 설정에서 자유 정의하는 데이터 차원으로 도입한다. 메뉴 가시성(`canAccessMenu`)·사이트 가시성(`useMenuVisibility`)과 직교하는 세 번째 필터.
+  - **저장 (탭 정의)**: `system_settings`에 테넌트별 key — `sidebar_tabs.topsolar`, `sidebar_tabs.baro`. JSON 스키마: `{ default_tab, tabs: [{ key, label, menus }] }`. `menus`는 메뉴 key 배열 또는 `"all"` (= 코드의 NAV_GROUPS 평탄화 결과 전부 — 신규 메뉴 자동 노출 안전망). key 자체 미존재 또는 `tabs` 빈 배열 = 탭 UI 비활성, 사이드바는 기존 동작.
+  - **저장 (사용자 persona)**: `user_profiles.persona text NULL` 컬럼 추가. NULL이면 `default_tab` fallback. 탭 정의가 바뀌어 dangling되면 프론트가 자동 default 폴백.
+  - **탭 클릭 의미**: v1 = 즉시 PATCH (`PUT /users/me/persona`). 잠깐 엿보기 vs 기본 분리(default vs current)는 v2에서 도입할 수 있음.
+  - **합성**: 메뉴 노출 = `canAccessMenu(role) AND !hiddenMenus.has(key) AND (activeTab.menus === "all" OR activeTab.menus.includes(key))` 3-AND. Role은 보안 천장, menu_visibility는 운영 통제, persona는 편의 필터.
+  - **테넌트별 독립**: BARO/탑솔라 admin이 각자 자기 사이트 설정에서 독립 편집. D-108 정신 유지.
+  - **사이드바 접힌 상태**: 탭 row 숨김 (a-2). 펼친 상태에서만 노출. 접힌 상태에서도 사용자 persona는 그대로 적용되어 메뉴 필터링은 유지.
+  - **편집 UI**: `/settings/site`의 「사이드바 탭」 카드. label 편집 + 메뉴 체크박스 매핑 + 기본 탭 라디오. 탭 메타에서 아이콘/색은 admin 미편집(시각 일관성 유지) — 필요 시 v2에서 확장.
+- **이유**: BARO 영업 6명과 탑솔라 PO/LC/면장 담당의 매일 보는 메뉴는 다르지만 기존 Role(admin/operator/executive/manager/viewer)은 *권한 등급*이지 *업무 분담*이 아니다. 새 enum을 코드에 박으면 (1) 업무 분담이 바뀔 때마다 코드 수정·배포 필요, (2) BARO는 사실상 단일 persona라 enum이 무의미. 데이터로 정의하면 admin이 즉시 변경 가능하고 BARO는 탭을 안 두면 그만이다.
+- **운영 기준**:
+  - **마이그레이션**: `backend/migrations/052_user_persona.sql` 적용 후 PostgREST 스키마 캐시 갱신, `check_schema.sh` 검증.
+  - **신규 메뉴 추가 시**: NAV_GROUPS에 메뉴를 추가하는 것만으로 "전체" 탭(menus="all")이 있는 테넌트에서는 즉시 노출. 다른 탭에 분류하려면 admin이 사이트 설정에서 매핑 추가 (module.md/baro.md 체크리스트 갱신).
+  - **persona 값 검증 안 함**: 백엔드는 `PUT /users/me/persona`에서 persona 값을 자유 문자열로 수용 (탭 정의가 admin 데이터라 enum 검증 불가). 프론트가 탭 목록과 매칭 안 되면 default 자동 폴백.
+- **날짜**: 2026-05-03

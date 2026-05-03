@@ -32,6 +32,7 @@ type UserProfileResponse struct {
 	Phone      *string `json:"phone"`
 	AvatarURL  *string `json:"avatar_url"`
 	IsActive   bool    `json:"is_active"`
+	Persona    *string `json:"persona"` // D-112: 사이드바 탭 key. NULL이면 default_tab fallback
 }
 
 // UserHandler — 사용자 관련 핸들러
@@ -56,7 +57,7 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	email := middleware.GetUserEmail(r.Context())
 
 	data, _, err := h.DB.From("user_profiles").
-		Select("user_id, email, name, role, department, phone, avatar_url, is_active", "exact", false).
+		Select("user_id, email, name, role, department, phone, avatar_url, is_active, persona", "exact", false).
 		Eq("user_id", userID).
 		Execute()
 	if err != nil {
@@ -186,6 +187,7 @@ type userListItem struct {
 	Department *string `json:"department"`
 	Phone      *string `json:"phone"`
 	IsActive   bool    `json:"is_active"`
+	Persona    *string `json:"persona"`
 	CreatedAt  string  `json:"created_at"`
 }
 
@@ -321,7 +323,7 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, _, err := h.DB.From("user_profiles").
-		Select("user_id, email, name, role, department, phone, is_active, created_at", "exact", false).
+		Select("user_id, email, name, role, department, phone, is_active, persona, created_at", "exact", false).
 		Execute()
 	if err != nil {
 		log.Printf("[users] 목록 조회 실패: %v", err)
@@ -563,6 +565,46 @@ func (h *UserHandler) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[users/me] 본인 정보 수정 실패: id=%s, err=%v", userID, err)
 		response.RespondError(w, http.StatusInternalServerError, "프로필 저장에 실패했습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, statusOKResponse{Status: "ok"})
+}
+
+// UpdateMyPersonaRequest — 본인 사이드바 탭(persona) 변경 요청 (D-112)
+type UpdateMyPersonaRequest struct {
+	Persona *string `json:"persona"` // null 또는 "" 보내면 NULL로 저장 → default_tab fallback
+}
+
+// userPersonaUpdate — user_profiles persona UPDATE payload
+type userPersonaUpdate struct {
+	Persona *string `json:"persona"`
+}
+
+// UpdateMyPersona — 본인 사이드바 탭 선택 즉시 저장 (인증된 모든 사용자, D-112)
+// persona 값 검증은 의도적으로 하지 않는다 — 탭 정의는 admin이 system_settings에서 자유 변경하므로
+// 백엔드는 자유 문자열로 수용하고, 프론트가 탭 목록과 매칭되지 않으면 default로 폴백한다.
+func (h *UserHandler) UpdateMyPersona(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		response.RespondError(w, http.StatusUnauthorized, "인증이 필요합니다")
+		return
+	}
+
+	var body UpdateMyPersonaRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.RespondError(w, http.StatusBadRequest, "요청 형식 오류")
+		return
+	}
+
+	payload := userPersonaUpdate{Persona: cleanOptionalText(body.Persona)}
+
+	_, _, err := h.DB.From("user_profiles").
+		Update(payload, "", "exact").
+		Eq("user_id", userID).
+		Execute()
+	if err != nil {
+		log.Printf("[users/me] persona 저장 실패: id=%s, err=%v", userID, err)
+		response.RespondError(w, http.StatusInternalServerError, "사이드바 탭 저장에 실패했습니다")
 		return
 	}
 	response.RespondJSON(w, http.StatusOK, statusOKResponse{Status: "ok"})
