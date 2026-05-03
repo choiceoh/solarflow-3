@@ -464,7 +464,7 @@ a:focus-visible,
 .sf-topbar {
   --sf-command-side-rail: 256px;
   display: grid;
-  grid-template-columns: minmax(120px, 184px) minmax(0, 1fr) minmax(220px, var(--sf-command-side-rail));
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr) minmax(220px, var(--sf-command-side-rail));
   height: 56px;
   flex: 0 0 auto;
   align-items: center;
@@ -482,6 +482,19 @@ a:focus-visible,
   min-width: 0;
   overflow: hidden;
   justify-self: start;
+}
+
+.sf-topbar-title:has(.sf-topbar-command-title > *) > h1 {
+  display: none;
+}
+
+.sf-topbar-command-title:empty {
+  display: none;
+}
+
+.sf-topbar-command-title {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .sf-topbar h1 {
@@ -521,12 +534,27 @@ a:focus-visible,
   padding: 0;
 }
 
+.sf-topbar-command-title .sf-command-topline-copy,
 .sf-topbar-command .sf-command-topline-copy {
   min-width: 0;
 }
 
-.sf-topbar-command .sf-command-topline-title {
-  font-size: 15px;
+.sf-topbar-command-title .sf-command-topline-title {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.sf-topbar-command-title .sf-command-topline-sub {
+  font-size: 12px;
+}
+
+.sf-topbar-command .sf-command-topline--actions-only {
+  justify-content: flex-end;
+}
+
+.sf-topbar-command .sf-command-topline-actions {
+  width: 100%;
 }
 
 .sf-topbar-command .sf-card-controls {
