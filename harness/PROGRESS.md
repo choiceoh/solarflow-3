@@ -32,7 +32,7 @@
 - `cd frontend && npm run test` 성공 — 8 files / 65 tests
 - `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 85건 출력
 - `git diff --check` 성공
-- `graphify update .` 성공 — 3225 nodes / 5497 edges / 340 communities
+- `graphify update .` 성공 — 3213 nodes / 5496 edges / 337 communities
 
 ---
 

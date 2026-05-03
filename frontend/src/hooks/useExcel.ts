@@ -8,7 +8,32 @@ import type {
   TemplateType, MasterDataForExcel, ImportPreview, DeclarationImportPreview,
   ImportResult,
 } from '@/types/excel';
+import type { Company } from '@/types/masters';
 import { DECLARATION_FIELDS, DECLARATION_COST_FIELDS } from '@/types/excel';
+
+function textValue(value: unknown): string {
+  return String(value ?? '').trim();
+}
+
+function buildCompanyPayload(row: Record<string, unknown>) {
+  const businessNumber = textValue(row.business_number);
+  return {
+    company_name: textValue(row.company_name),
+    company_code: textValue(row.company_code),
+    ...(businessNumber ? { business_number: businessNumber } : {}),
+  };
+}
+
+function mergeCreatedCompanies(created: Company[]) {
+  if (created.length === 0) return;
+  useAppStore.setState((state) => {
+    const byId = new Map(state.companies.map((company) => [company.company_id, company]));
+    created.forEach((company) => {
+      if (company.is_active) byId.set(company.company_id, company);
+    });
+    return { companies: Array.from(byId.values()), companiesLoaded: true };
+  });
+}
 
 export function useExcel(type: TemplateType) {
   const [masterData, setMasterData] = useState<MasterDataForExcel | null>(null);
@@ -48,9 +73,7 @@ export function useExcel(type: TemplateType) {
       if (!cancelled) setError('마스터 데이터 로딩 실패');
     });
     return () => { cancelled = true; };
-    // type은 의도적으로 의존성에서 제외 — 마스터 데이터는 type 변경 시 재로딩 불필요
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companies]);
+  }, [companies, type]);
 
   // 양식 다운로드
   const downloadTemplate = useCallback(async () => {
@@ -136,6 +159,40 @@ export function useExcel(type: TemplateType) {
         const validCosts = declPreview.costs.filter((r) => r.valid).map((r) => r.data);
         body = { declarations: validDecl, costs: validCosts };
       } else if (preview) {
+        if (type === 'company') {
+          const errors: ImportResult['errors'] = [];
+          const created: Company[] = [];
+          const validRows = preview.rows.filter((r) => r.valid);
+
+          for (const row of validRows) {
+            try {
+              const company = await fetchWithAuth<Company>('/api/v1/companies', {
+                method: 'POST',
+                body: JSON.stringify(buildCompanyPayload(row.data)),
+              });
+              created.push(company);
+            } catch (e) {
+              errors.push({
+                row: row.rowNumber,
+                field: '법인',
+                message: e instanceof Error ? e.message : '법인 등록 실패',
+              });
+            }
+          }
+
+          mergeCreatedCompanies(created);
+          setImportResult({
+            success: errors.length === 0,
+            imported_count: created.length,
+            error_count: errors.length,
+            warning_count: 0,
+            errors,
+            warnings: [],
+          });
+          setPreview(null);
+          setDeclPreview(null);
+          return;
+        }
         const validRows = preview.rows.filter((r) => r.valid).map((r) => r.data);
         body = { rows: validRows };
       } else {

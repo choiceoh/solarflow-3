@@ -5,7 +5,6 @@ import {
   Box,
   Calculator,
   ClipboardList,
-  Database,
   FileSpreadsheet,
   FileSignature,
   History,
@@ -148,7 +147,6 @@ const NAV_GROUPS: CommandNavGroup[] = [
     items: [
       { key: 'import-hub', label: '엑셀 입력', abbr: '입력', path: '/import', icon: FileSpreadsheet, menu: 'import_hub' },
       { key: 'library', label: '자료실', abbr: '자료', path: '/library', icon: LibraryBig, menu: 'library' },
-      { key: 'masters', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters' },
       { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
       { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: ['topsolar'], isWip: true },
       // admin 전용 — 메타 config 시각 편집 (DB 영구 저장, 모든 사용자 영향)

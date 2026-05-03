@@ -5,11 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { FilterChips } from '@/components/command/MockupPrimitives';
 import MasterSection, { type MasterSectionConfig } from '@/components/data/MasterSection';
-import type { Company, Manufacturer, Product, Partner, Warehouse, Bank } from '@/types/masters';
+import type { Manufacturer, Product, Partner, Warehouse, Bank } from '@/types/masters';
 import { formatWp, formatSize, formatUSD, formatDate, formatPercent } from '@/lib/utils';
 
 type DataKind =
-  | 'companies'
   | 'manufacturers'
   | 'products'
   | 'partners'
@@ -18,7 +17,6 @@ type DataKind =
   | 'construction-sites';
 
 const KINDS: { key: DataKind; label: string }[] = [
-  { key: 'companies',          label: '법인'     },
   { key: 'manufacturers',      label: '제조사'   },
   { key: 'products',           label: '품번'     },
   { key: 'partners',           label: '거래처'   },
@@ -27,7 +25,7 @@ const KINDS: { key: DataKind; label: string }[] = [
   { key: 'construction-sites', label: '공사현장' },
 ];
 
-const DEFAULT_KIND: DataKind = 'companies';
+const DEFAULT_KIND: DataKind = 'manufacturers';
 
 function isDataKind(value: string | null): value is DataKind {
   return KINDS.some((k) => k.key === value);
@@ -48,7 +46,7 @@ export default function DataPage() {
     <MasterConsole
       eyebrow="MASTER"
       title="마스터"
-      description="법인·제조사·품번·거래처·창고·은행·공사현장 등 모든 기준정보를 한곳에서 관리합니다."
+      description="제조사·품번·거래처·창고·은행·공사현장 기준정보를 조회하고 연결 상태를 정리합니다. 법인은 엑셀 입력에서 등록합니다."
       tableTitle={activeMeta.label}
       tableSub="기준정보"
       metrics={[]}
@@ -66,7 +64,6 @@ export default function DataPage() {
 }
 
 function KindSection({ kind }: { kind: DataKind }) {
-  const companyConfig = useCompanyConfig();
   const manufacturerConfig = useManufacturerConfig();
   const productConfig = useProductConfig();
   const partnerConfig = usePartnerConfig();
@@ -74,7 +71,6 @@ function KindSection({ kind }: { kind: DataKind }) {
   const bankConfig = useBankConfig();
 
   switch (kind) {
-    case 'companies':     return <MasterSection config={companyConfig} />;
     case 'manufacturers': return <MasterSection config={manufacturerConfig} />;
     case 'products':      return <MasterSection config={productConfig} />;
     case 'partners':      return <MasterSection config={partnerConfig} />;
@@ -96,28 +92,6 @@ function ConstructionSitesPending() {
       </Link>
     </div>
   );
-}
-
-function useCompanyConfig(): MasterSectionConfig<Company> {
-  return useMemo(() => ({
-    typeLabel: '법인',
-    endpoint: '/api/v1/companies',
-    getId: (r) => r.company_id,
-    getLabel: (r) => r.company_name,
-    columns: [
-      { key: 'company_name', label: '법인명', sortable: true },
-      { key: 'company_code', label: '법인코드', sortable: true },
-      { key: 'business_number', label: '사업자번호' },
-    ] as Column<Company>[],
-    hasStatusToggle: true,
-    searchPlaceholder: '법인명, 코드, 사업자번호 검색',
-    searchPredicate: (row, q) =>
-      row.company_name.toLowerCase().includes(q) ||
-      row.company_code.toLowerCase().includes(q) ||
-      (row.business_number ?? '').includes(q),
-    newPath: '/data/companies/new',
-    editPath: (r) => `/data/companies/${r.company_id}/edit`,
-  }), []);
 }
 
 function useManufacturerConfig(): MasterSectionConfig<Manufacturer> {
