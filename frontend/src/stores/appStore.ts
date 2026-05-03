@@ -12,6 +12,8 @@ export interface InspectorTarget {
 
 export type InspectorMode = 'element' | 'token' | 'structure';
 
+export type InspectorPseudoState = 'default' | 'hover' | 'focus' | 'active' | 'disabled';
+
 export interface ClassNameDraft {
   id: string;
   selector: string;
@@ -57,6 +59,8 @@ interface AppState {
   setInspectorTarget: (target: InspectorTarget | null) => void;
   inspectorMode: InspectorMode;
   setInspectorMode: (mode: InspectorMode) => void;
+  inspectorPseudoState: InspectorPseudoState;
+  setInspectorPseudoState: (state: InspectorPseudoState) => void;
   tokenOverrides: Record<string, string>;
   setTokenOverride: (key: string, value: string) => void;
   resetTokenOverride: (key: string) => void;
@@ -97,6 +101,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setInspectorTarget: (target) => set({ inspectorTarget: target }),
   inspectorMode: 'element',
   setInspectorMode: (mode) => set({ inspectorMode: mode }),
+  inspectorPseudoState: 'default',
+  setInspectorPseudoState: (state) => set({ inspectorPseudoState: state }),
   tokenOverrides: readTokenOverrides(),
   setTokenOverride: (key, value) =>
     set((s) => {
