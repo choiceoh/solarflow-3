@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 type Tone = 'solar' | 'ink' | 'info' | 'warn' | 'pos' | 'neg';
 
@@ -147,7 +148,16 @@ export function CommandTopLine({
   sub?: string;
   right?: ReactNode;
 }) {
-  return (
+  const [target, setTarget] = useState<HTMLElement | null>(() => (
+    typeof document === 'undefined' ? null : document.getElementById('sf-command-topline-slot')
+  ));
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    setTarget(document.getElementById('sf-command-topline-slot'));
+  }, []);
+
+  const content = (
     <div className="sf-command-topline">
       <div className="sf-command-topline-copy">
         <div className="sf-command-topline-title">{title}</div>
@@ -156,6 +166,8 @@ export function CommandTopLine({
       <div className="sf-command-topline-actions">{right}</div>
     </div>
   );
+
+  return target ? createPortal(content, target) : content;
 }
 
 export function RailBlock({

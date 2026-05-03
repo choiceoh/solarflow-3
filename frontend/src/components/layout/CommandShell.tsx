@@ -410,8 +410,9 @@ export default function CommandShell() {
         <header className="sf-topbar">
           <div className="sf-topbar-title">
             <h1>{meta.title}</h1>
-            <div className="sf-topbar-subtitle">{meta.breadcrumb} · 계산기준 {new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</div>
           </div>
+
+          <div id="sf-command-topline-slot" className="sf-topbar-command" />
 
           <div className="sf-topbar-actions" data-onboarding-step="self-demo.topbar.actions">
             <FloatingMwEaCalculator />

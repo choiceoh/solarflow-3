@@ -463,7 +463,7 @@ a:focus-visible,
 
 .sf-topbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(120px, 0.55fr) minmax(0, 1.45fr) auto;
   height: 56px;
   flex: 0 0 auto;
   align-items: center;
@@ -471,6 +471,10 @@ a:focus-visible,
   border-bottom: 1px solid var(--sf-line);
   background: var(--sf-surface);
   padding: 0 18px;
+}
+
+.sf-topbar:not(:has(.sf-topbar-command > *)) {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .sf-topbar-title {
@@ -481,19 +485,10 @@ a:focus-visible,
 .sf-topbar h1 {
   margin: 0;
   color: var(--sf-ink);
-  font-size: 16px;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: 0;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
-.sf-topbar-subtitle {
-  margin-top: 3px;
-  color: var(--sf-ink-3);
-  font-family: var(--sf-mono);
-  font-size: 10px;
-  letter-spacing: 0.02em;
+  line-height: 1;
   white-space: nowrap;
 }
 
@@ -502,6 +497,37 @@ a:focus-visible,
   align-items: center;
   justify-self: end;
   gap: 8px;
+}
+
+.sf-topbar-command {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-self: stretch;
+}
+
+.sf-topbar-command:empty {
+  display: none;
+}
+
+.sf-topbar-command .sf-command-topline {
+  width: 100%;
+  min-height: 32px;
+  gap: 12px;
+  padding: 0;
+}
+
+.sf-topbar-command .sf-command-topline-copy {
+  min-width: 112px;
+}
+
+.sf-topbar-command .sf-command-topline-title {
+  font-size: 15px;
+}
+
+.sf-topbar-command .sf-card-controls {
+  width: 100%;
+  flex-wrap: nowrap;
 }
 
 /* 우상단 액션 — Calculator/AlertBell/Excel Input 트리거 통합 height 32.
@@ -826,8 +852,9 @@ a:focus-visible,
   display: flex;
   min-width: 220px;
   flex: 0 1 auto;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .sf-command-topline-title {
@@ -841,15 +868,7 @@ a:focus-visible,
 }
 
 .sf-command-topline-sub {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--sf-ink-3);
-  font-family: var(--sf-mono);
-  font-size: 10.5px;
-  letter-spacing: 0;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: none;
 }
 
 .sf-command-topline-actions {
@@ -2084,6 +2103,17 @@ textarea::placeholder {
     justify-content: flex-start;
   }
 
+  .sf-topbar-command .sf-command-topline {
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .sf-topbar-command .sf-command-topline-actions {
+    width: auto;
+    justify-content: flex-end;
+  }
+
   .sf-inventory-rail {
     border-left: 0;
     border-top: 1px solid var(--line);
@@ -2141,6 +2171,25 @@ textarea::placeholder {
   .sf-topbar-actions {
     grid-column: 2;
     grid-row: 1;
+  }
+
+  .sf-topbar-command {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .sf-topbar-command .sf-command-topline {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sf-topbar-command .sf-command-topline-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .sf-topbar-command .sf-card-controls {
+    flex-wrap: wrap;
   }
 
   .sf-topbar-title {
@@ -2265,10 +2314,6 @@ textarea::placeholder {
 
   .sf-topbar h1 {
     font-size: 14px;
-  }
-
-  .sf-topbar-subtitle {
-    display: none;
   }
 
   .sf-page-scroll {
