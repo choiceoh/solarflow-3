@@ -4,6 +4,7 @@ export { EditModeBadge } from './EditModeBadge';
 export { EditModeToggleButton } from './EditModeToggleButton';
 export { InspectorOverlay } from './InspectorOverlay';
 export { InspectorPanel } from './InspectorPanel';
+export { LayerPanel } from './LayerPanel';
 export { TokenPanel } from './TokenPanel';
 export { useDesignTokens } from './useDesignTokens';
 export { useEditModeShortcut } from './useEditModeShortcut';
