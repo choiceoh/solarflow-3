@@ -8,11 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import type { DetailFieldConfig, DetailFormatter, DetailSectionConfig, DetailTabConfig, MetaDetailConfig } from '@/templates/types';
-import { cellRenderers, contentBlocks, enumDictionaries } from '@/templates/registry';
+import { buildRegistryEntries, cellRenderers, cellRendererMeta, contentBlocks, contentBlockMeta, enumDictionaries } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
 import { EditorWithPanel, PanelGroup, PanelSelectionHeader, PanelEmpty } from './RightPanel';
 import { TabsEditor } from './TabsEditor';
-import { BooleanPicker, EndpointPicker, IdFieldPicker } from './Pickers';
+import { BooleanPicker, EndpointPicker, IdFieldPicker, RegistryIdPicker } from './Pickers';
 
 const FORMATTER_OPTIONS = [
   { value: 'date', label: 'date' },
@@ -209,7 +209,7 @@ function SelectedTabPanel({
   onChange: (next: DetailTabConfig) => void;
   onBack: () => void;
 }) {
-  const blockOptions = useMemo(() => Object.keys(contentBlocks).sort().map((id) => ({ value: id, label: id })), []);
+  const blockEntries = useMemo(() => buildRegistryEntries(contentBlocks, contentBlockMeta), []);
   return (
     <>
       <PanelSelectionHeader title={tab.label || tab.key} subtitle={`key: ${tab.key}`} onBack={onBack} />
@@ -247,15 +247,15 @@ function SelectedTabPanel({
         />
       </PanelGroup>
       <PanelGroup title="contentBlock (커스텀 React 컴포넌트)" defaultOpen={false}>
-        <FieldSelect
-          label="blockId (registry.contentBlocks)"
-          value={tab.contentBlock?.blockId ?? ''}
-          allowEmpty
-          options={blockOptions}
+        <RegistryIdPicker
+          label="blockId"
+          value={tab.contentBlock?.blockId}
+          entries={blockEntries}
           onChange={(v) => onChange({
             ...tab,
             contentBlock: v ? { blockId: v, props: tab.contentBlock?.props } : undefined,
           })}
+          hint="registry.contentBlocks"
         />
         <p className="text-[10px] text-muted-foreground">
           제공되면 sections 대신 이 블록 렌더. props 는 JSON 탭에서.
@@ -354,7 +354,7 @@ function SectionCard({
   onRemove: () => void;
 }) {
   const enumOpts = useMemo(() => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })), []);
-  const rendererOpts = useMemo(() => Object.keys(cellRenderers).sort().map((id) => ({ value: id, label: id })), []);
+  const rendererEntries = useMemo(() => buildRegistryEntries(cellRenderers, cellRendererMeta), []);
 
   const isContentBlock = !!section.contentBlock;
   const fields = section.fields ?? [];
@@ -445,9 +445,10 @@ function SectionCard({
                     <FieldSelect label="enumKey" value={field.enumKey ?? ''} allowEmpty options={enumOpts}
                       onChange={(v) => updateField(fIdx, { ...field, enumKey: v || undefined })} />
                   )}
-                  <FieldSelect label="rendererId (커스텀, formatter보다 우선)"
-                    value={field.rendererId ?? ''} allowEmpty options={rendererOpts}
-                    onChange={(v) => updateField(fIdx, { ...field, rendererId: v || undefined })} />
+                  <RegistryIdPicker label="rendererId (커스텀, formatter보다 우선)"
+                    value={field.rendererId} entries={rendererEntries}
+                    onChange={(v) => updateField(fIdx, { ...field, rendererId: v })}
+                    hint="registry.cellRenderers — 메타 채워진 entry 만 라벨/설명 표시" />
                   <FieldSelect label="span" value={String(field.span ?? 1)} options={SPAN_OPTIONS}
                     onChange={(v) => updateField(fIdx, { ...field, span: Number(v) as 1 | 2 | 3 | 4 })} />
                   <FieldInput label="suffix (예: 'Wp', '원/Wp')" value={field.suffix ?? ''}

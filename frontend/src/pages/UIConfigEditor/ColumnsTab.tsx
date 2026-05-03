@@ -2,8 +2,9 @@
 
 import { useMemo } from 'react';
 import type { ColumnConfig, Formatter, ListScreenConfig } from '@/templates/types';
-import { cellRenderers } from '@/templates/registry';
+import { buildRegistryEntries, cellRenderers, cellRendererMeta } from '@/templates/registry';
 import { ArrayEditor, FieldInput, FieldSelect, moveInArray, type ItemIssue } from './ArrayEditor';
+import { RegistryIdPicker } from './Pickers';
 
 const FORMATTER_OPTIONS: { value: string; label: string }[] = [
   { value: 'date', label: 'date (날짜)' },
@@ -48,8 +49,8 @@ export function ColumnsTab({
   onChange: (next: ListScreenConfig) => void;
 }) {
   const cols = value.columns;
-  const rendererOptions = useMemo(
-    () => Object.keys(cellRenderers).sort().map((id) => ({ value: id, label: id })),
+  const rendererEntries = useMemo(
+    () => buildRegistryEntries(cellRenderers, cellRendererMeta),
     [],
   );
 
@@ -110,9 +111,10 @@ export function ColumnsTab({
           <FieldSelect label="formatter" value={col.formatter ?? ''} allowEmpty options={FORMATTER_OPTIONS}
             onChange={(v) => updateCol(idx, { ...col, formatter: (v || undefined) as Formatter | undefined })} />
 
-          <FieldSelect label="rendererId (커스텀, formatter보다 우선)" value={col.rendererId ?? ''}
-            allowEmpty options={rendererOptions}
-            onChange={(v) => updateCol(idx, { ...col, rendererId: v || undefined })} />
+          <RegistryIdPicker label="rendererId (커스텀, formatter보다 우선)"
+            value={col.rendererId} entries={rendererEntries}
+            onChange={(v) => updateCol(idx, { ...col, rendererId: v })}
+            hint="registry.cellRenderers — 메타 채워진 entry 만 라벨/설명 표시" />
 
           <FieldSelect label="align" value={col.align ?? 'left'} options={ALIGN_OPTIONS}
             onChange={(v) => updateCol(idx, { ...col, align: v as 'left' | 'right' | 'center' })} />

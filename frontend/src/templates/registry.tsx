@@ -1180,6 +1180,38 @@ export type PermissionGuardEntry = {
 };
 export const permissionGuards: Record<string, PermissionGuardEntry> = {};
 
+// ─── 레거시 registry 메타데이터 (점진 적용) ────────────────────────────────
+// 기존 registry (cellRenderers / formContentBlocks 등) 는 함수 record 형태로
+// 이미 많은 entry 가 등록돼 있음. 모두 wrapper 로 마이그레이션하면 비용 큼.
+// 대신 side-by-side `*Meta` record 를 두고, GUI 편집기 (RegistryIdPicker) 가
+// 둘 다 참조 — 메타 없으면 id 만 표시, 있으면 라벨/설명까지.
+//
+// 새 entry 등록 시 권장 — 동일 키로 `*Meta` 도 같이 채우기 (admin 이 GUI 에서
+// 의미 추측 안 하도록). 이미 등록된 24+ 개 entry 는 도메인 PR 시 점진 채움.
+export type RegistryMeta = Record<string, { label: string; description?: string }>;
+
+export const cellRendererMeta: RegistryMeta = {};
+export const formContentBlockMeta: RegistryMeta = {};
+export const fieldCascadeMeta: RegistryMeta = {};
+export const formSubmitterMeta: RegistryMeta = {};
+export const computedFormulaMeta: RegistryMeta = {};
+export const formRefinementMeta: RegistryMeta = {};
+export const contentBlockMeta: RegistryMeta = {};
+export const masterSourceMeta: RegistryMeta = {};
+
+// 헬퍼 — registry + meta 를 RegistryIdPicker 의 entries[] 형식으로 변환.
+// fallback: meta 없으면 label = id, description = undefined.
+export function buildRegistryEntries<F>(
+  registry: Record<string, F>,
+  meta: RegistryMeta,
+): { id: string; label: string; description?: string }[] {
+  return Object.keys(registry).sort().map((id) => ({
+    id,
+    label: meta[id]?.label ?? id,
+    description: meta[id]?.description,
+  }));
+}
+
 // ─── Formatters ────────────────────────────────────────────────────────────
 export function applyFormatter(formatter: string | undefined, value: unknown): string {
   if (value == null || value === '') return '';
