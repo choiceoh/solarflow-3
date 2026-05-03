@@ -131,16 +131,14 @@ export default function InventoryTable({ items, compact = false }: { items: Inve
               </tr>
             ))}
             {/* 합계 */}
-            <tr className="border-t-2 bg-muted/50">
-              <td className="p-2 text-right text-muted-foreground font-semibold text-[11px]">합계</td>
+            <tr className="border-t bg-muted/20">
+              <td className="p-2 text-right text-muted-foreground font-medium text-[11px]">합계</td>
               <td className="p-2 text-right">
-                <div className="font-bold tabular-nums text-green-600">{fmw(totals.totalSecured)}</div>
-                <div className="text-[10px] text-muted-foreground">
-                  현재고 <span className="tabular-nums">{fmw(totals.available)}</span>
-                </div>
-                <div className="text-[10px] text-muted-foreground">
-                  미착 <span className="tabular-nums">{fmw(totals.availableIncoming)}</span>
-                </div>
+                <span className="font-medium tabular-nums text-green-600">{fmw(totals.totalSecured)}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {' '}· 현재고 <span className="tabular-nums">{fmw(totals.available)}</span>
+                  {' '}· 미착 <span className="tabular-nums">{fmw(totals.availableIncoming)}</span>
+                </span>
               </td>
             </tr>
           </tbody>
@@ -271,14 +269,15 @@ export default function InventoryTable({ items, compact = false }: { items: Inve
           ))}
         </tbody>
         <tfoot>
-          <tr className="border-t bg-muted/50">
+          <tr className="border-t bg-muted/20">
             <td className="p-3">
-              <div className="font-semibold">합계</div>
-              <div className="text-[11px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+              <span className="whitespace-nowrap font-medium">
+                합계 · {sorted.length.toLocaleString('ko-KR')}건
+              </span>
             </td>
-            <td className="p-3 text-right tabular-nums font-semibold text-green-600">{fmw(fullTotals.totalSecured)}</td>
-            <td className="p-3 text-right tabular-nums font-semibold">{fmw(fullTotals.physical)}</td>
-            <td className="p-3 text-right tabular-nums font-semibold">{fmw(fullTotals.incoming)}</td>
+            <td className="p-3 text-right tabular-nums font-medium text-green-600">{fmw(fullTotals.totalSecured)}</td>
+            <td className="p-3 text-right tabular-nums font-medium">{fmw(fullTotals.physical)}</td>
+            <td className="p-3 text-right tabular-nums font-medium">{fmw(fullTotals.incoming)}</td>
             <td />
           </tr>
         </tfoot>

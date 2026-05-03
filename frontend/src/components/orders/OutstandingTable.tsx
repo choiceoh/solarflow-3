@@ -67,12 +67,12 @@ function OutstandingTable({ items, selectedIds, onToggle }: Props) {
         <TableFooter>
           <TableRow>
             <TableCell />
-            <TableCell className="font-semibold">합계</TableCell>
+            <TableCell className="font-medium">합계</TableCell>
             <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}건</TableCell>
             <TableCell />
-            <TableCell className="text-right font-semibold">{formatNumber(totals.total)}</TableCell>
-            <TableCell className="text-right font-semibold">{formatNumber(totals.matched)}</TableCell>
-            <TableCell className="text-right font-semibold">{formatNumber(totals.outstanding)}</TableCell>
+            <TableCell className="text-right font-medium">{formatNumber(totals.total)}</TableCell>
+            <TableCell className="text-right font-medium">{formatNumber(totals.matched)}</TableCell>
+            <TableCell className="text-right font-medium">{formatNumber(totals.outstanding)}</TableCell>
           </TableRow>
         </TableFooter>
       </Table>

@@ -40,10 +40,10 @@ function MatchHistoryTable({ items, receiptAmount }: Props) {
           </TableBody>
           <TableFooter>
             <TableRow>
-              <TableCell className="font-semibold">합계</TableCell>
+              <TableCell className="font-medium">합계</TableCell>
               <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}건</TableCell>
               <TableCell />
-              <TableCell className="text-right font-semibold">{formatNumber(matchedTotal)}원</TableCell>
+              <TableCell className="text-right font-medium">{formatNumber(matchedTotal)}원</TableCell>
             </TableRow>
           </TableFooter>
         </Table>

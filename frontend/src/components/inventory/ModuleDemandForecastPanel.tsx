@@ -399,11 +399,11 @@ export default function ModuleDemandForecastPanel({ companyId, inventoryItems, m
             </tbody>
             {forecastRows.length > 0 && (
               <tfoot>
-                <tr className="border-t bg-muted/50">
-                  <td className="px-3 py-2 font-semibold">합계</td>
-                  <td className="px-3 py-2 text-right font-semibold">{formatKw(forecastTotals.secured)}</td>
-                  <td className="px-3 py-2 text-right font-semibold">{formatKw(forecastTotals.distribution)}</td>
-                  <td className="px-3 py-2 text-right font-semibold">{formatKw(forecastTotals.construction)}</td>
+                <tr className="border-t bg-muted/20">
+                  <td className="px-3 py-2 font-medium">합계</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatKw(forecastTotals.secured)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatKw(forecastTotals.distribution)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatKw(forecastTotals.construction)}</td>
                   <td className="px-3 py-2 text-center text-muted-foreground">{forecastRows.length.toLocaleString('ko-KR')}건</td>
                   <td />
                   <td />

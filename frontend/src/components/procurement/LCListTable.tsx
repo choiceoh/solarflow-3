@@ -445,13 +445,14 @@ function LCListTable({ items, onSettle, onSelectBL, blsVersion }: Props) {
             })}
           </tbody>
           <tfoot>
-            <tr className="border-t bg-muted/50">
+            <tr className="border-t bg-muted/20">
               <td className="p-3">
-                <div className="font-semibold">합계</div>
-                <div className="text-[11px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+                <span className="whitespace-nowrap font-medium">
+                  합계 · {sorted.length.toLocaleString('ko-KR')}건
+                </span>
               </td>
               <td />
-              <td className="p-3 text-right font-mono font-semibold tabular-nums">
+              <td className="p-3 text-right font-mono font-medium tabular-nums">
                 <div>{formatUSD(totals.amountUsd)}</div>
                 <div className="text-[10px] text-muted-foreground">{formatMw(totals.targetMw, 2)}</div>
               </td>

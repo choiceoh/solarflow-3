@@ -66,13 +66,13 @@ export default function LCDemandByPOTable({ items }: Props) {
       </TableBody>
       <TableFooter>
         <TableRow>
-          <TableCell className="font-semibold">합계</TableCell>
+          <TableCell className="font-medium">합계</TableCell>
           <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}건</TableCell>
-          <TableCell className="text-right font-semibold">{totals.lcNeeded > 0 ? formatUSD(totals.lcNeeded) : '—'}</TableCell>
+          <TableCell className="text-right font-medium">{totals.lcNeeded > 0 ? formatUSD(totals.lcNeeded) : '—'}</TableCell>
           <TableCell />
-          <TableCell className="text-right font-semibold">{formatUSD(totals.poTotal)}</TableCell>
-          <TableCell className="text-right font-semibold">{formatUSD(totals.ttPaid)}</TableCell>
-          <TableCell className="text-right font-semibold">{formatUSD(totals.lcOpened)}</TableCell>
+          <TableCell className="text-right font-medium">{formatUSD(totals.poTotal)}</TableCell>
+          <TableCell className="text-right font-medium">{formatUSD(totals.ttPaid)}</TableCell>
+          <TableCell className="text-right font-medium">{formatUSD(totals.lcOpened)}</TableCell>
         </TableRow>
       </TableFooter>
     </Table>

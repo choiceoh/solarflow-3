@@ -94,8 +94,8 @@ function LCSubTable({ items }: { items: LCRecord[] }) {
         emptyMessage="연결된 LC가 없습니다"
         footerCells={items.length > 1 ? [
           { content: `합계 ${items.length}건`, colSpan: 3, className: 'text-[10px] text-muted-foreground' },
-          { content: formatUSD(totalUsd), align: 'right', className: 'font-mono font-semibold tabular-nums' },
-          { content: totalMw > 0 ? `${totalMw.toFixed(2)} MW` : '—', className: 'font-mono font-semibold text-[10px]' },
+          { content: formatUSD(totalUsd), align: 'right', className: 'font-mono font-medium tabular-nums' },
+          { content: totalMw > 0 ? `${totalMw.toFixed(2)} MW` : '—', className: 'font-mono font-medium text-[10px]' },
           { content: null, colSpan: 2 },
         ] : undefined}
       />
@@ -176,7 +176,7 @@ function TTSubTable({ items, poLines }: { items: TTRemittance[]; poLines: POLine
       emptyMessage="연결된 TT가 없습니다"
       footerCells={[
         { content: `합계 ${items.length}건`, className: 'text-[10px] text-muted-foreground' },
-        { content: formatUSD(totalUsd), align: 'right', className: 'font-mono font-semibold tabular-nums' },
+        { content: formatUSD(totalUsd), align: 'right', className: 'font-mono font-medium tabular-nums' },
         { content: `송금비율 ${remitRatio.toFixed(1)}%`, colSpan: 4, className: 'text-[10px] text-muted-foreground' },
       ]}
     />

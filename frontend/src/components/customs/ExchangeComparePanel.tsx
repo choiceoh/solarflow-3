@@ -81,12 +81,12 @@ export default function ExchangeComparePanel() {
             </TableBody>
             <TableFooter>
               <TableRow>
-                <TableCell className="font-semibold">합계</TableCell>
+                <TableCell className="font-medium">합계</TableCell>
                 <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}건</TableCell>
                 <TableCell />
                 <TableCell />
                 <TableCell />
-                <TableCell className={`sf-mono text-right text-xs font-semibold ${totalImpact > 0 ? 'text-red-600' : totalImpact < 0 ? 'text-green-600' : ''}`}>
+                <TableCell className={`sf-mono text-right text-xs font-medium ${totalImpact > 0 ? 'text-red-600' : totalImpact < 0 ? 'text-green-600' : ''}`}>
                   {totalImpact > 0 ? '+' : ''}{formatKRW(totalImpact)}
                 </TableCell>
               </TableRow>

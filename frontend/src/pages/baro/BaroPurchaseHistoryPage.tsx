@@ -292,11 +292,10 @@ export default function BaroPurchaseHistoryPage() {
           emptyMessage="표시할 구매이력이 없습니다."
           defaultSort={{ key: 'purchase_date', direction: 'desc' }}
           footer={(
-            <TableRow className="bg-muted/30 hover:bg-muted/30">
+            <TableRow className="bg-muted/20 hover:bg-muted/20">
               <TableCell>
-                <span className="flex flex-col">
-                  <span className="font-semibold">합계</span>
-                  <span className="text-[11px] text-muted-foreground">필터 결과 {filteredRows.length.toLocaleString('ko-KR')}건</span>
+                <span className="whitespace-nowrap font-medium">
+                  합계 · 필터 결과 {filteredRows.length.toLocaleString('ko-KR')}건
                 </span>
               </TableCell>
               <TableCell className="text-xs text-muted-foreground">전체 품목</TableCell>
@@ -304,21 +303,21 @@ export default function BaroPurchaseHistoryPage() {
                 원가 연결 {summary.costCovered.toLocaleString('ko-KR')}건
               </TableCell>
               <TableCell className="text-right tabular-nums">
-                <span className="flex flex-col">
-                  <span className="font-semibold">{formatNumber(summary.totalQty)}장</span>
-                  <span className="text-[11px] text-muted-foreground">{formatCapacity(summary.totalKw)}</span>
+                <span className="whitespace-nowrap">
+                  <span className="font-medium">{formatNumber(summary.totalQty)}장</span>
+                  <span className="text-[11px] text-muted-foreground"> · {formatCapacity(summary.totalKw)}</span>
                 </span>
               </TableCell>
               <TableCell className="text-right tabular-nums">
-                <span className="flex flex-col">
-                  <span className="font-semibold">{formatKrwWp(summary.avgKrwWp ?? undefined)}</span>
-                  <span className="text-[11px] text-muted-foreground">{formatUsdWp(summary.avgUsdWp ?? undefined)}</span>
+                <span className="whitespace-nowrap">
+                  <span className="font-medium">{formatKrwWp(summary.avgKrwWp ?? undefined)}</span>
+                  <span className="text-[11px] text-muted-foreground"> · {formatUsdWp(summary.avgUsdWp ?? undefined)}</span>
                 </span>
               </TableCell>
               <TableCell className="text-right tabular-nums">
-                <span className="flex flex-col">
-                  <span className="font-semibold">{summary.totalKrw > 0 ? formatKRW(summary.totalKrw) : '—'}</span>
-                  <span className="text-[11px] text-muted-foreground">{summary.totalUsd > 0 ? formatUSD(summary.totalUsd) : '—'}</span>
+                <span className="whitespace-nowrap">
+                  <span className="font-medium">{summary.totalKrw > 0 ? formatKRW(summary.totalKrw) : '—'}</span>
+                  <span className="text-[11px] text-muted-foreground"> · {summary.totalUsd > 0 ? formatUSD(summary.totalUsd) : '—'}</span>
                 </span>
               </TableCell>
               <TableCell className="text-xs text-muted-foreground">현재 검색/필터 기준</TableCell>

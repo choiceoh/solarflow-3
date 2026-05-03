@@ -83,8 +83,8 @@ export default function BankLimitTable({ rows }: Props) {
         </TableBody>
         {rows.length > 1 && (
           <tfoot>
-            <TableRow className="bg-muted/40 font-semibold">
-              <TableCell className="font-semibold">합계</TableCell>
+            <TableRow className="bg-muted/20 font-medium">
+              <TableCell className="font-medium">합계</TableCell>
               <TableCell className="text-right font-mono">{formatUSD(totalAvail)}</TableCell>
               <TableCell className="text-right">
                 {totalLimit > 0 ? `${((totalUsed / totalLimit) * 100).toFixed(1)}%` : '—'}
