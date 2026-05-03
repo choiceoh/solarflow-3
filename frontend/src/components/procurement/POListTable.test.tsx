@@ -43,8 +43,8 @@ describe('POListTable', () => {
 
     renderTable({ onSelectBL });
 
-    expect(await screen.findByText('$100,000.00')).not.toBeNull();
-    expect(await screen.findByText('$60,000.00')).not.toBeNull();
+    expect((await screen.findAllByText('$100,000.00')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('$60,000.00')).length).toBeGreaterThan(0);
     expect(screen.getByText('미개설').textContent).toContain('미개설');
     expect(callsFor(`/api/v1/bls?po_id=${testPo.po_id}`)).toHaveLength(0);
 

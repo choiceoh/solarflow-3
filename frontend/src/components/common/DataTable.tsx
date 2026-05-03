@@ -1,20 +1,20 @@
-import { useState, useMemo, useCallback, type ReactNode } from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { useMemo, type ReactNode } from 'react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import type { TableSummaryMode } from '@/lib/tableSummary';
+import MetaTable, { type ColumnDef } from './MetaTable';
 import SearchInput from './SearchInput';
-import EmptyState from './EmptyState';
 
 export interface Column<T> {
   key: string;
   label: string;
   sortable?: boolean;
   render?: (row: T) => ReactNode;
+  summary?: TableSummaryMode;
+  summaryAccessor?: (row: T) => number | null | undefined;
+  summaryFormatter?: (value: number, rows: T[]) => ReactNode;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface DataTableProps<T extends Record<string, any>> {
+interface DataTableProps<T extends object> {
   columns: Column<T>[];
   data: T[];
   loading: boolean;
@@ -24,10 +24,29 @@ interface DataTableProps<T extends Record<string, any>> {
   actions?: (row: T) => ReactNode;
   emptyMessage?: string;
   defaultSort?: { key: string; direction: 'asc' | 'desc' };
+  footer?: ReactNode;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function DataTable<T extends Record<string, any>>({
+const NO_HIDDEN_COLUMNS = new Set<string>();
+
+function getCellValue<T extends object>(row: T, key: string): unknown {
+  return (row as Record<string, unknown>)[key];
+}
+
+function getSortValue<T extends object>(row: T, key: string): string | number | Date | null | undefined {
+  const value = getCellValue(row, key);
+  if (
+    value == null
+    || typeof value === 'string'
+    || typeof value === 'number'
+    || value instanceof Date
+  ) {
+    return value;
+  }
+  return '';
+}
+
+export default function DataTable<T extends object>({
   columns,
   data,
   loading,
@@ -37,55 +56,44 @@ export default function DataTable<T extends Record<string, any>>({
   actions,
   emptyMessage,
   defaultSort,
+  footer,
 }: DataTableProps<T>) {
-  const [sortKey, setSortKey] = useState(defaultSort?.key ?? '');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSort?.direction ?? 'asc');
-
-  const handleSort = useCallback((key: string) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
-  }, [sortKey]);
-
-  const sorted = useMemo(() => {
-    if (!sortKey) return data;
-    return [...data].sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
-      if (av == null && bv == null) return 0;
-      if (av == null) return 1;
-      if (bv == null) return -1;
-      let cmp = 0;
-      if (typeof av === 'string' && typeof bv === 'string') {
-        cmp = av.localeCompare(bv, 'ko');
-      } else {
-        cmp = (av as number) - (bv as number);
-      }
-      return sortDir === 'asc' ? cmp : -cmp;
+  const rowKeys = useMemo(() => {
+    const map = new Map<T, string>();
+    data.forEach((row, index) => {
+      const id = getCellValue(row, 'id');
+      map.set(row, String(id ?? index));
     });
-  }, [data, sortKey, sortDir]);
+    return map;
+  }, [data]);
 
-  const SortIcon = ({ col }: { col: string }) => {
-    // 비활성: 옅은 잉크-5, 활성: 솔라-3 강조
-    if (sortKey !== col) {
-      return (
-        <ArrowUpDown
-          className="ml-1 inline h-3 w-3"
-          style={{ color: 'var(--sf-ink-5)' }}
-        />
-      );
+  const metaColumns = useMemo<ColumnDef<T>[]>(() => {
+    const mapped = columns.map((col): ColumnDef<T> => ({
+      key: col.key,
+      label: col.label,
+      cell: (row) => (col.render ? col.render(row) : String(getCellValue(row, col.key) ?? '—')),
+      sortAccessor: col.sortable ? (row) => getSortValue(row, col.key) : undefined,
+      summary: col.summary,
+      summaryAccessor: col.summaryAccessor,
+      summaryFormatter: col.summaryFormatter,
+    }));
+
+    if (actions) {
+      mapped.push({
+        key: '__actions',
+        label: '수정',
+        cell: actions,
+        align: 'right',
+        resizable: false,
+        reorderable: false,
+        pinnable: false,
+        defaultWidth: 96,
+        summary: false,
+      });
     }
-    const Icon = sortDir === 'asc' ? ArrowUp : ArrowDown;
-    return (
-      <Icon
-        className="ml-1 inline h-3 w-3"
-        style={{ color: 'var(--sf-solar-3)' }}
-      />
-    );
-  };
+
+    return mapped;
+  }, [columns, actions]);
 
   return (
     <div className="space-y-3">
@@ -93,54 +101,48 @@ export default function DataTable<T extends Record<string, any>>({
         <SearchInput placeholder={searchPlaceholder} onChange={onSearch} />
       )}
       <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {columns.map((col) => (
-                <TableHead
-                  key={col.key}
-                  className={col.sortable ? 'cursor-pointer select-none' : ''}
-                  onClick={col.sortable ? () => handleSort(col.key) : undefined}
-                >
-                  {col.label}
-                  {col.sortable && <SortIcon col={col.key} />}
-                </TableHead>
-              ))}
-              {actions && <TableHead className="w-20">수정</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  {columns.map((col, ci) => (
-                    <TableCell key={col.key}>
-                      <div className="sf-skeleton h-4" style={{ width: `${88 - ((i + ci) % 4) * 4}%` }} />
-                    </TableCell>
-                  ))}
-                  {actions && <TableCell><div className="sf-skeleton h-4 w-12" /></TableCell>}
-                </TableRow>
-              ))
-            ) : sorted.length === 0 ? (
+        {loading ? (
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={columns.length + (actions ? 1 : 0)}>
-                  <EmptyState message={emptyMessage} />
-                </TableCell>
+                {columns.map((col) => (
+                  <TableHead key={col.key}>{col.label}</TableHead>
+                ))}
+                {actions && <TableHead className="w-20">수정</TableHead>}
               </TableRow>
-            ) : (
-              sorted.map((row, idx) => (
-                <TableRow key={(row as Record<string, unknown>)['id'] as string ?? idx}>
-                  {columns.map((col) => (
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 5 }).map((_, rowIndex) => (
+                <TableRow key={rowIndex}>
+                  {columns.map((col, colIndex) => (
                     <TableCell key={col.key}>
-                      {col.render ? col.render(row) : String(row[col.key] ?? '—')}
+                      <div
+                        className="sf-skeleton h-4"
+                        style={{ width: `${88 - ((rowIndex + colIndex) % 4) * 4}%` }}
+                      />
                     </TableCell>
                   ))}
-                  {actions && <TableCell>{actions(row)}</TableCell>}
+                  {actions && (
+                    <TableCell>
+                      <div className="sf-skeleton h-4 w-12" />
+                    </TableCell>
+                  )}
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <MetaTable
+            columns={metaColumns}
+            hidden={NO_HIDDEN_COLUMNS}
+            items={data}
+            getRowKey={(row) => rowKeys.get(row) ?? ''}
+            defaultSort={defaultSort}
+            emptyMessage={emptyMessage}
+            footer={footer}
+            fillWidth
+          />
+        )}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { formatUSD } from '@/lib/utils';
 import type { LCDemandMonthly } from '@/types/banking';
@@ -28,6 +28,15 @@ export default function LCDemandMonthlyTable({ items }: Props) {
 
   // 부족한 월 경고 메시지
   const shortageMonths = items.filter((m) => m.status === 'shortage');
+  const totals = items.reduce(
+    (acc, m) => ({
+      demand: acc.demand + m.lc_demand_usd,
+      recovery: acc.recovery + m.limit_recovery_usd,
+      shortage: acc.shortage + m.shortage_usd,
+    }),
+    { demand: 0, recovery: 0, shortage: 0 },
+  );
+  const lastProjected = items.at(-1)?.projected_available_usd ?? 0;
 
   return (
     <div className="space-y-3">
@@ -59,6 +68,18 @@ export default function LCDemandMonthlyTable({ items }: Props) {
             );
           })}
         </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell className="font-semibold">합계</TableCell>
+            <TableCell className="text-right font-semibold">{formatUSD(totals.demand)}</TableCell>
+            <TableCell className="text-right font-semibold">{formatUSD(totals.recovery)}</TableCell>
+            <TableCell className="text-right font-semibold">{formatUSD(lastProjected)}</TableCell>
+            <TableCell className="text-right font-semibold">
+              {totals.shortage >= 0 ? '+' : ''}{formatUSD(totals.shortage)}
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}개월</TableCell>
+          </TableRow>
+        </TableFooter>
       </Table>
 
       {/* 부족 시 대응방안 안내 */}

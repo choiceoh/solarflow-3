@@ -82,6 +82,29 @@ export default function BLOutboundTrackingTab({ blId, companyId, lines }: Props)
       };
     });
   }, [activeOutbounds, blId, lines]);
+  const productTotals = useMemo(
+    () => productRows.reduce(
+      (acc, row) => ({
+        inboundQty: acc.inboundQty + row.inboundQty,
+        shippedQty: acc.shippedQty + row.shippedQty,
+        remainingQty: acc.remainingQty + row.remainingQty,
+        inboundKw: acc.inboundKw + row.inboundKw,
+      }),
+      { inboundQty: 0, shippedQty: 0, remainingQty: 0, inboundKw: 0 },
+    ),
+    [productRows],
+  );
+  const outboundTotals = useMemo(
+    () => activeOutbounds.reduce((acc, outbound) => {
+      const qty = allocatedQuantity(outbound, blId);
+      const capacityKw = outbound.spec_wp ? qty * outbound.spec_wp / 1000 : 0;
+      return {
+        qty: acc.qty + qty,
+        capacityKw: acc.capacityKw + capacityKw,
+      };
+    }, { qty: 0, capacityKw: 0 }),
+    [activeOutbounds, blId],
+  );
 
   if (loading) return <LoadingSpinner />;
 
@@ -134,6 +157,15 @@ export default function BLOutboundTrackingTab({ blId, companyId, lines }: Props)
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t bg-muted/50">
+                  <td className="px-3 py-2 font-semibold">합계</td>
+                  <td className="px-3 py-2 text-right font-semibold">{formatNumber(productTotals.inboundQty)} EA</td>
+                  <td className="px-3 py-2 text-right font-semibold">{formatNumber(productTotals.shippedQty)} EA</td>
+                  <td className="px-3 py-2 text-right font-semibold">{formatNumber(productTotals.remainingQty)} EA</td>
+                  <td className="px-3 py-2 text-right font-semibold">{formatKw(productTotals.inboundKw)}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </CardContent>
@@ -181,6 +213,17 @@ export default function BLOutboundTrackingTab({ blId, companyId, lines }: Props)
                     );
                   })}
                 </tbody>
+                <tfoot>
+                  <tr className="border-t bg-muted/50">
+                    <td className="px-3 py-2 font-semibold">합계</td>
+                    <td />
+                    <td />
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{outbounds.length.toLocaleString('ko-KR')}건</td>
+                    <td className="px-3 py-2 text-right font-semibold">{formatNumber(outboundTotals.qty)} EA</td>
+                    <td className="px-3 py-2 text-right font-semibold">{formatKw(outboundTotals.capacityKw)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}

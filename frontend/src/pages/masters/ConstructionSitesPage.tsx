@@ -230,6 +230,7 @@ function AllocationHistory({ siteId }: { siteId: string }) {
   }
 
   const totalKw = allocs.reduce((s, a) => s + (a.capacity_kw ?? 0), 0);
+  const totalQty = allocs.reduce((s, a) => s + a.quantity, 0);
 
   return (
     <div className="bg-muted/20 border-t px-4 py-3">
@@ -274,6 +275,20 @@ function AllocationHistory({ siteId }: { siteId: string }) {
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr className="border-t bg-muted/50">
+              <td className="py-1.5 pr-4 font-semibold">합계</td>
+              <td className="py-1.5 pr-4 text-right font-semibold tabular-nums">
+                {totalQty.toLocaleString('ko-KR')} EA
+              </td>
+              <td className="py-1.5 pr-4 text-right font-semibold tabular-nums">
+                {totalKw >= 1000 ? (totalKw / 1000).toFixed(2) + ' MW' : Math.round(totalKw) + ' kW'}
+              </td>
+              <td colSpan={3} className="py-1.5 text-xs text-muted-foreground">
+                {allocs.length.toLocaleString('ko-KR')}건
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>

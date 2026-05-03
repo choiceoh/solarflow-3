@@ -156,6 +156,22 @@ export default function DepositStatusPanel({ pos, tts }: DepositStatusPanelProps
     );
   }
 
+  const depositTotals = leafPOs.reduce((acc, po) => {
+    const chain = buildChain(po, pos);
+    const chainPoIds = new Set(chain.map(c => c.po_id));
+    const chainTTs = tts.filter(t => chainPoIds.has(t.po_id));
+    const paidUsd = chainTTs.filter(t => t.status === 'completed').reduce((s, t) => s + t.amount_usd, 0);
+    const plannedUsd = chainTTs.filter(t => t.status === 'planned').reduce((s, t) => s + t.amount_usd, 0);
+    const totalUsd = parseDeposit(po.payment_terms).depositAmountUsd;
+    const remainUsd = Math.max(0, totalUsd - paidUsd);
+    return {
+      totalUsd: acc.totalUsd + totalUsd,
+      paidUsd: acc.paidUsd + paidUsd,
+      plannedUsd: acc.plannedUsd + plannedUsd,
+      remainUsd: acc.remainUsd + remainUsd,
+    };
+  }, { totalUsd: 0, paidUsd: 0, plannedUsd: 0, remainUsd: 0 });
+
   return (
     <div className="space-y-0">
       <div className="rounded-md border overflow-x-auto">
@@ -429,6 +445,26 @@ export default function DepositStatusPanel({ pos, tts }: DepositStatusPanelProps
               );
             })}
           </tbody>
+          <tfoot>
+            <tr className="border-t bg-muted/50">
+              <td />
+              <td className="p-3">
+                <div className="font-semibold">합계</div>
+                <div className="text-[11px] text-muted-foreground">{leafPOs.length.toLocaleString('ko-KR')}건</div>
+              </td>
+              <td />
+              <td className="p-3 text-right font-mono font-semibold tabular-nums">
+                <div>{formatUSD(depositTotals.totalUsd)}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  기지급 {formatUSD(depositTotals.paidUsd)}
+                  {depositTotals.plannedUsd > 0 ? ` · 예정 ${formatUSD(depositTotals.plannedUsd)}` : ''}
+                </div>
+                <div className="text-[10px] text-red-600">잔여 {formatUSD(depositTotals.remainUsd)}</div>
+              </td>
+              <td />
+              <td />
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
@@ -444,6 +480,14 @@ function TTSection({
   tts: TTRemittance[];
   startIdx: number;
 }) {
+  const totals = tts.reduce((acc, tt) => {
+    const krw = tt.amount_krw ?? (tt.exchange_rate ? tt.amount_usd * tt.exchange_rate : 0);
+    return {
+      usd: acc.usd + tt.amount_usd,
+      krw: acc.krw + krw,
+    };
+  }, { usd: 0, krw: 0 });
+
   return (
     <div className="rounded-md border overflow-x-auto">
       <table className="w-full min-w-[700px] text-xs">
@@ -463,6 +507,17 @@ function TTSection({
             <TTRow key={tt.tt_id} idx={startIdx + i} tt={tt} />
           ))}
         </tbody>
+        <tfoot>
+          <tr className="border-t bg-muted/50">
+            <td className="px-3 py-1.5 text-center font-semibold">합계</td>
+            <td className="px-3 py-1.5 text-xs text-muted-foreground">{tts.length.toLocaleString('ko-KR')}건</td>
+            <td className="px-3 py-1.5 text-right font-mono font-semibold">{formatUSD(totals.usd)}</td>
+            <td className="px-3 py-1.5 text-right font-semibold tabular-nums">
+              {totals.krw > 0 ? `₩${Math.round(totals.krw).toLocaleString('ko-KR')}` : '—'}
+            </td>
+            <td colSpan={3} />
+          </tr>
+        </tfoot>
       </table>
     </div>
   );

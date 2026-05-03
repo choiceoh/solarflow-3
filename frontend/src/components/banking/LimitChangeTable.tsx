@@ -1,6 +1,6 @@
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { formatUSD, formatDate } from '@/lib/utils';
 import type { LimitChange } from '@/types/banking';
@@ -13,6 +13,10 @@ export default function LimitChangeTable({ items }: Props) {
   if (items.length === 0) {
     return <p className="py-6 text-center text-sm" style={{ color: 'var(--sf-ink-3)' }}>한도 변경 이력이 없습니다</p>;
   }
+
+  const totalDiff = items.reduce((sum, c) => sum + c.new_limit - c.previous_limit, 0);
+  const isTotalIncrease = totalDiff > 0;
+  const isTotalDecrease = totalDiff < 0;
 
   return (
     <Table>
@@ -50,6 +54,24 @@ export default function LimitChangeTable({ items }: Props) {
           );
         })}
       </TableBody>
+      <TableFooter>
+        <TableRow>
+          <TableCell className="font-semibold">합계</TableCell>
+          <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}건</TableCell>
+          <TableCell />
+          <TableCell />
+          <TableCell className="text-right text-sm tabular-nums">
+            <span
+              className="inline-flex items-center gap-0.5 font-semibold"
+              style={{ color: isTotalIncrease ? 'var(--sf-pos)' : isTotalDecrease ? 'var(--sf-neg)' : 'var(--sf-ink)' }}
+            >
+              {isTotalIncrease ? <ArrowUp className="h-3.5 w-3.5" /> : isTotalDecrease ? <ArrowDown className="h-3.5 w-3.5" /> : null}
+              {formatUSD(Math.abs(totalDiff))}
+            </span>
+          </TableCell>
+          <TableCell />
+        </TableRow>
+      </TableFooter>
     </Table>
   );
 }

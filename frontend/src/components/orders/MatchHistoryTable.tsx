@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDate, formatNumber } from '@/lib/utils';
 import type { ReceiptMatch } from '@/types/orders';
 
@@ -38,6 +38,14 @@ function MatchHistoryTable({ items, receiptAmount }: Props) {
               </TableRow>
             ))}
           </TableBody>
+          <TableFooter>
+            <TableRow>
+              <TableCell className="font-semibold">합계</TableCell>
+              <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}건</TableCell>
+              <TableCell />
+              <TableCell className="text-right font-semibold">{formatNumber(matchedTotal)}원</TableCell>
+            </TableRow>
+          </TableFooter>
         </Table>
       </div>
       <div className="flex justify-end gap-4 text-xs">

@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { TableCell, TableRow } from '@/components/ui/table';
 import DataTable, { type Column } from '@/components/common/DataTable';
 import { fetchWithAuth } from '@/lib/api';
 import { formatCapacity, formatDate, formatKRW, formatNumber, formatUSD, moduleLabel } from '@/lib/utils';
@@ -98,14 +99,20 @@ export default function BaroPurchaseHistoryPage() {
     const totalQty = filteredRows.reduce((sum, row) => sum + row.quantity, 0);
     const totalKw = filteredRows.reduce((sum, row) => sum + row.capacity_kw, 0);
     const krwRows = filteredRows.filter((row) => row.unit_price_krw_wp != null && row.capacity_kw > 0);
+    const usdRows = filteredRows.filter((row) => row.unit_price_usd_wp != null && row.capacity_kw > 0);
     const weightedKrw = krwRows.reduce((sum, row) => sum + Number(row.unit_price_krw_wp) * row.capacity_kw, 0);
     const weightedKw = krwRows.reduce((sum, row) => sum + row.capacity_kw, 0);
+    const weightedUsd = usdRows.reduce((sum, row) => sum + Number(row.unit_price_usd_wp) * row.capacity_kw, 0);
+    const weightedUsdKw = usdRows.reduce((sum, row) => sum + row.capacity_kw, 0);
     const totalKrw = filteredRows.reduce((sum, row) => sum + (row.estimated_amount_krw ?? 0), 0);
+    const totalUsd = filteredRows.reduce((sum, row) => sum + (row.estimated_amount_usd ?? 0), 0);
     return {
       totalQty,
       totalKw,
       avgKrwWp: weightedKw > 0 ? weightedKrw / weightedKw : null,
+      avgUsdWp: weightedUsdKw > 0 ? weightedUsd / weightedUsdKw : null,
       totalKrw,
+      totalUsd,
       costCovered: filteredRows.filter(hasCost).length,
     };
   }, [filteredRows]);
@@ -284,6 +291,39 @@ export default function BaroPurchaseHistoryPage() {
           loading={loading}
           emptyMessage="표시할 구매이력이 없습니다."
           defaultSort={{ key: 'purchase_date', direction: 'desc' }}
+          footer={(
+            <TableRow className="bg-muted/30 hover:bg-muted/30">
+              <TableCell>
+                <span className="flex flex-col">
+                  <span className="font-semibold">합계</span>
+                  <span className="text-[11px] text-muted-foreground">필터 결과 {filteredRows.length.toLocaleString('ko-KR')}건</span>
+                </span>
+              </TableCell>
+              <TableCell className="text-xs text-muted-foreground">전체 품목</TableCell>
+              <TableCell className="text-xs text-muted-foreground">
+                원가 연결 {summary.costCovered.toLocaleString('ko-KR')}건
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                <span className="flex flex-col">
+                  <span className="font-semibold">{formatNumber(summary.totalQty)}장</span>
+                  <span className="text-[11px] text-muted-foreground">{formatCapacity(summary.totalKw)}</span>
+                </span>
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                <span className="flex flex-col">
+                  <span className="font-semibold">{formatKrwWp(summary.avgKrwWp ?? undefined)}</span>
+                  <span className="text-[11px] text-muted-foreground">{formatUsdWp(summary.avgUsdWp ?? undefined)}</span>
+                </span>
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                <span className="flex flex-col">
+                  <span className="font-semibold">{summary.totalKrw > 0 ? formatKRW(summary.totalKrw) : '—'}</span>
+                  <span className="text-[11px] text-muted-foreground">{summary.totalUsd > 0 ? formatUSD(summary.totalUsd) : '—'}</span>
+                </span>
+              </TableCell>
+              <TableCell className="text-xs text-muted-foreground">현재 검색/필터 기준</TableCell>
+            </TableRow>
+          )}
         />
       </div>
     </div>

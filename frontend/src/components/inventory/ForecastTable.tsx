@@ -2,7 +2,7 @@ import { useState, memo } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { formatKw, formatWp } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
@@ -36,6 +36,17 @@ function ProductForecastBlock({
   const hasUnscheduled = product.unscheduled.sale_kw > 0 || product.unscheduled.construction_kw > 0 || product.unscheduled.incoming_kw > 0;
   const currentAvailable = product.months[0]?.available_kw ?? 0;
   const minAvailable = product.months.reduce((min, month) => Math.min(min, month.available_kw), currentAvailable);
+  const totals = product.months.reduce(
+    (acc, month) => ({
+      incoming: acc.incoming + month.incoming_kw,
+      sale: acc.sale + month.outgoing_sale_kw,
+      construction: acc.construction + month.outgoing_construction_kw,
+      reserved: acc.reserved + month.reserved_kw,
+      allocated: acc.allocated + month.allocated_kw,
+    }),
+    { incoming: 0, sale: 0, construction: 0, reserved: 0, allocated: 0 },
+  );
+  const lastMonth = product.months.at(-1);
 
   return (
     <div className="space-y-2">
@@ -108,6 +119,21 @@ function ProductForecastBlock({
                   </TableRow>
                 ))}
               </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell className="font-semibold whitespace-nowrap">합계</TableCell>
+                  <TableCell className="text-right text-xs text-muted-foreground">{product.months.length.toLocaleString('ko-KR')}개월</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{formatKw(totals.incoming)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{formatKw(totals.sale)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{formatKw(totals.construction)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{lastMonth ? formatKw(lastMonth.closing_kw) : '—'}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{formatKw(totals.reserved)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{formatKw(totals.allocated)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums" style={{ color: 'var(--sf-pos)' }}>
+                    {lastMonth ? formatKw(lastMonth.available_kw) : '—'}
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
             </Table>
           </div>
 

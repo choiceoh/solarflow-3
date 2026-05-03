@@ -80,6 +80,8 @@ export default function BLListTable({ items, onSelect }: Props) {
 
   if (items.length === 0) return <EmptyState message="등록된 입고 건이 없습니다" />;
 
+  const totalMw = sorted.reduce((sum, bl) => sum + (agg[bl.bl_id]?.totalMw ?? 0), 0);
+
   return (
     <div className="rounded-md border overflow-x-auto">
         <table className="w-full min-w-[800px] text-xs">
@@ -168,6 +170,17 @@ export default function BLListTable({ items, onSelect }: Props) {
               );
             })}
           </tbody>
+          <tfoot>
+            <tr className="border-t bg-muted/50">
+              <td className="p-3">
+                <div className="font-semibold">합계</div>
+                <div className="text-[11px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+              </td>
+              <td className="p-3 font-mono font-semibold tabular-nums">{totalMw > 0 ? `${totalMw.toFixed(2)} MW` : '—'}</td>
+              <td />
+              <td />
+            </tr>
+          </tfoot>
         </table>
     </div>
   );

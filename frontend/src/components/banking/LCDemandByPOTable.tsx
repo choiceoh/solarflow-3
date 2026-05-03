@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { formatUSD, formatDate, shortMfgName } from '@/lib/utils';
 import type { LCDemandByPO } from '@/types/banking';
@@ -23,6 +23,16 @@ export default function LCDemandByPOTable({ items }: Props) {
   if (items.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-6">LC 개설 수요가 없습니다</p>;
   }
+
+  const totals = items.reduce(
+    (acc, d) => ({
+      lcNeeded: acc.lcNeeded + d.lc_needed_usd,
+      poTotal: acc.poTotal + d.po_total_usd,
+      ttPaid: acc.ttPaid + d.tt_paid_usd,
+      lcOpened: acc.lcOpened + d.lc_opened_usd,
+    }),
+    { lcNeeded: 0, poTotal: 0, ttPaid: 0, lcOpened: 0 },
+  );
 
   return (
     <Table>
@@ -54,6 +64,17 @@ export default function LCDemandByPOTable({ items }: Props) {
           </TableRow>
         ))}
       </TableBody>
+      <TableFooter>
+        <TableRow>
+          <TableCell className="font-semibold">합계</TableCell>
+          <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}건</TableCell>
+          <TableCell className="text-right font-semibold">{totals.lcNeeded > 0 ? formatUSD(totals.lcNeeded) : '—'}</TableCell>
+          <TableCell />
+          <TableCell className="text-right font-semibold">{formatUSD(totals.poTotal)}</TableCell>
+          <TableCell className="text-right font-semibold">{formatUSD(totals.ttPaid)}</TableCell>
+          <TableCell className="text-right font-semibold">{formatUSD(totals.lcOpened)}</TableCell>
+        </TableRow>
+      </TableFooter>
     </Table>
   );
 }

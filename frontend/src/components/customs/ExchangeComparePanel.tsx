@@ -1,7 +1,7 @@
 import { ArrowRightLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { formatNumber, formatKRW } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
@@ -11,6 +11,7 @@ import { useExchangeCompare } from '@/hooks/useExchange';
 export default function ExchangeComparePanel() {
   const { result, loading, error, compare } = useExchangeCompare();
   const items = result?.items ?? [];
+  const totalImpact = items.reduce((sum, item) => sum + item.rate_impact_krw, 0);
 
   return (
     <div className="space-y-3">
@@ -78,6 +79,18 @@ export default function ExchangeComparePanel() {
                 );
               })}
             </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell className="font-semibold">합계</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}건</TableCell>
+                <TableCell />
+                <TableCell />
+                <TableCell />
+                <TableCell className={`sf-mono text-right text-xs font-semibold ${totalImpact > 0 ? 'text-red-600' : totalImpact < 0 ? 'text-green-600' : ''}`}>
+                  {totalImpact > 0 ? '+' : ''}{formatKRW(totalImpact)}
+                </TableCell>
+              </TableRow>
+            </TableFooter>
           </Table>
         </div>
       )}

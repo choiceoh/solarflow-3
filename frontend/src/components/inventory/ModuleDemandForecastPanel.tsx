@@ -329,6 +329,14 @@ export default function ModuleDemandForecastPanel({ companyId, inventoryItems, m
   const selectedCompanyName = companies.find((company) => company.company_id === form.companyId)?.company_name || '법인 선택';
   const selectedModuleLabel = moduleOptions.find((option) => option.key === form.moduleKey)?.label || '모듈군 선택';
   const selectedStatusLabel = DEMAND_STATUS_LABEL[form.status] || '상태 선택';
+  const forecastTotals = forecastRows.reduce(
+    (acc, row) => ({
+      secured: acc.secured + row.securedKw,
+      distribution: acc.distribution + row.monthlyDistributionKw,
+      construction: acc.construction + row.plannedConstructionKw,
+    }),
+    { secured: 0, distribution: 0, construction: 0 },
+  );
 
   return (
     <Card>
@@ -389,6 +397,19 @@ export default function ModuleDemandForecastPanel({ companyId, inventoryItems, m
                 </tr>
               ))}
             </tbody>
+            {forecastRows.length > 0 && (
+              <tfoot>
+                <tr className="border-t bg-muted/50">
+                  <td className="px-3 py-2 font-semibold">합계</td>
+                  <td className="px-3 py-2 text-right font-semibold">{formatKw(forecastTotals.secured)}</td>
+                  <td className="px-3 py-2 text-right font-semibold">{formatKw(forecastTotals.distribution)}</td>
+                  <td className="px-3 py-2 text-right font-semibold">{formatKw(forecastTotals.construction)}</td>
+                  <td className="px-3 py-2 text-center text-muted-foreground">{forecastRows.length.toLocaleString('ko-KR')}건</td>
+                  <td />
+                  <td />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 

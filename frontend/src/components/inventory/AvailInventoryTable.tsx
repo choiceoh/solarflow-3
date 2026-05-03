@@ -274,6 +274,18 @@ function AvailInventoryTable({
     return <EmptyState message="품목 재고 데이터가 없습니다" />;
   }
 
+  const totals = sorted.reduce((acc, item) => {
+    const key = `${item.company_id ?? 'single'}:${item.product_id}`;
+    const a = allocAggMap.get(key);
+    return {
+      totalSecured: acc.totalSecured + (item.total_secured_kw || 0),
+      sale: acc.sale + (a?.saleKw ?? 0),
+      construction: acc.construction + (a?.constKw ?? 0),
+      physical: acc.physical + (item.physical_kw || 0),
+      incoming: acc.incoming + (item.incoming_kw || 0),
+    };
+  }, { totalSecured: 0, sale: 0, construction: 0, physical: 0, incoming: 0 });
+
   return (
     <div className="rounded-md border overflow-hidden sf-avail-table">
       <table className="w-full">
@@ -461,6 +473,21 @@ function AvailInventoryTable({
             );
           })}
         </tbody>
+        <tfoot>
+          <tr className="border-t bg-muted/50">
+            <td />
+            <td>
+              <div className="font-semibold">합계</div>
+              <div className="text-[11px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+            </td>
+            <td className="text-right tabular-nums font-semibold" style={{ color: 'var(--sf-pos)' }}>{fmtKw(totals.totalSecured)}</td>
+            <td className="text-right tabular-nums font-semibold">{fmtKw(totals.sale)}</td>
+            <td className="text-right tabular-nums font-semibold">{fmtKw(totals.construction)}</td>
+            <td className="text-right tabular-nums font-semibold">{fmtKw(totals.physical)}</td>
+            <td className="text-right tabular-nums font-semibold">{fmtKw(totals.incoming)}</td>
+            <td />
+          </tr>
+        </tfoot>
       </table>
     </div>
   );

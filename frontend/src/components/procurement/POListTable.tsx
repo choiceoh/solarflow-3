@@ -204,6 +204,16 @@ function POListTable({ items, onDetail, onSelectBL, aggVersion }: Props) {
 
   if (items.length === 0) return <EmptyState message="등록된 PO가 없습니다" />;
 
+  const totals = sorted.reduce((acc, po) => {
+    const a = agg[po.po_id];
+    return {
+      totalMw: acc.totalMw + (a?.totalMw ?? 0),
+      totalUsd: acc.totalUsd + (a?.totalUsd ?? 0),
+      lcUsd: acc.lcUsd + (a?.lcUsd ?? 0),
+      lcMw: acc.lcMw + (a?.lcMw ?? 0),
+    };
+  }, { totalMw: 0, totalUsd: 0, lcUsd: 0, lcMw: 0 });
+
   return (
     <div className="rounded-md border overflow-x-auto">
       <table className="w-full min-w-[900px] text-xs">
@@ -557,6 +567,24 @@ function POListTable({ items, onDetail, onSelectBL, aggVersion }: Props) {
             );
           })}
         </tbody>
+        <tfoot>
+          <tr className="border-t bg-muted/50">
+            <td />
+            <td className="p-3">
+              <div className="font-semibold">합계</div>
+              <div className="text-[11px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+            </td>
+            <td className="p-3 font-mono font-semibold tabular-nums">{totals.totalMw > 0 ? `${totals.totalMw.toFixed(2)} MW` : '—'}</td>
+            <td />
+            <td className="p-3 text-right font-mono font-semibold tabular-nums">{formatUSD(totals.totalUsd)}</td>
+            <td className="p-3 text-right font-mono font-semibold tabular-nums">
+              <div>{formatUSD(totals.lcUsd)}</div>
+              <div className="text-[10px] text-muted-foreground">{totals.lcMw > 0 ? `${totals.lcMw.toFixed(2)} MW` : '—'}</div>
+            </td>
+            <td />
+            <td />
+          </tr>
+        </tfoot>
       </table>
     </div>
   );

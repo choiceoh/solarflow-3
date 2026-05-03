@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatDate, formatNumber } from '@/lib/utils';
 import type { OutstandingItem } from '@/types/orders';
@@ -14,6 +14,15 @@ function OutstandingTable({ items, selectedIds, onToggle }: Props) {
   if (items.length === 0) {
     return <div className="text-center py-6 text-sm text-muted-foreground">미수금 내역이 없습니다</div>;
   }
+
+  const totals = items.reduce(
+    (acc, item) => ({
+      total: acc.total + item.total_amount,
+      matched: acc.matched + item.matched_amount,
+      outstanding: acc.outstanding + item.outstanding_amount,
+    }),
+    { total: 0, matched: 0, outstanding: 0 },
+  );
 
   return (
     <div className="rounded-md border">
@@ -55,6 +64,17 @@ function OutstandingTable({ items, selectedIds, onToggle }: Props) {
             </TableRow>
           ))}
         </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell />
+            <TableCell className="font-semibold">합계</TableCell>
+            <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}건</TableCell>
+            <TableCell />
+            <TableCell className="text-right font-semibold">{formatNumber(totals.total)}</TableCell>
+            <TableCell className="text-right font-semibold">{formatNumber(totals.matched)}</TableCell>
+            <TableCell className="text-right font-semibold">{formatNumber(totals.outstanding)}</TableCell>
+          </TableRow>
+        </TableFooter>
       </Table>
     </div>
   );
