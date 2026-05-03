@@ -86,3 +86,10 @@ func (s *statusCapturer) Write(b []byte) (int, error) {
 	}
 	return s.ResponseWriter.Write(b)
 }
+
+// Flush — SSE/스트리밍 핸들러의 w.(http.Flusher) 단언이 래퍼 너머 원본까지 닿게 하기 위한 위임.
+func (s *statusCapturer) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
