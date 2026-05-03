@@ -37,6 +37,11 @@ func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("lc_records").
 		Select("*, banks(bank_name), companies(company_name, company_code), purchase_orders(po_number)", "exact", false)
 
+	// 박물관 표본(is_sandbox=true) 자동 제외 — ?include_sandbox=true 명시 시 우회.
+	if r.URL.Query().Get("include_sandbox") != "true" {
+		query = query.Eq("is_sandbox", "false")
+	}
+
 	// 비유: ?po_id=xxx — 특정 PO의 LC만 필터
 	if poID := r.URL.Query().Get("po_id"); poID != "" {
 		query = query.Eq("po_id", poID)
