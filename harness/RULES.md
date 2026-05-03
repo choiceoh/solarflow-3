@@ -77,6 +77,7 @@
 
 ## 참조 문서
 - 설계문서: harness/SolarFlow_설계문서_통합판.md
+- UI 표준 헌장 (버튼/테이블/필터/에러/상태 뱃지): harness/UI_STANDARDS.md
 - 이 규칙은 모든 Go/Rust 코드 작업에 적용
 
 ---
