@@ -65,7 +65,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Plus, Trash2, GripVertical, Copy, Settings2 } from 'lucide-react';
 import type { AsyncRefineRule, FieldConfig, FieldType, FormSection, MetaFormConfig, Tone } from '@/templates/types';
-import { asyncRefinements, enumDictionaries, masterSources, computedFormulas, permissionGuards } from '@/templates/registry';
+import { asyncRefinements, buildRegistryEntries, enumDictionaries, masterSources, masterSourceMeta, computedFormulas, permissionGuards } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
 import { EditorWithPanel, PanelGroup, PanelEmpty, PanelSelectionHeader } from './RightPanel';
 import { BooleanPicker, RegistryIdPicker, RolePicker, type RegistryEntry } from './Pickers';
@@ -725,7 +725,7 @@ function FieldRow({
   const issueTitle = issues.map((i) => `[${i.level}] ${i.msg}`).join('\n');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const enumOpts = useMemo(() => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })), []);
-  const masterOpts = useMemo(() => Object.keys(masterSources).sort().map((id) => ({ value: id, label: id })), []);
+  const masterEntries = useMemo(() => buildRegistryEntries(masterSources, masterSourceMeta), []);
   const formulaOpts = useMemo(() => Object.keys(computedFormulas).sort().map((id) => ({ value: id, label: id })), []);
 
   const isOptionField = field.type === 'select' || field.type === 'multiselect';
@@ -867,8 +867,10 @@ function FieldRow({
             )}
             {field.optionsFrom === 'master' && (
               <>
-                <FieldSelect label="masterKey" value={field.masterKey ?? ''} allowEmpty options={masterOpts}
-                  onChange={(v) => onUpdate({ ...field, masterKey: v || undefined })} />
+                <RegistryIdPicker label="masterKey"
+                  value={field.masterKey} entries={masterEntries}
+                  onChange={(v) => onUpdate({ ...field, masterKey: v })}
+                  hint="registry.masterSources" />
                 <FieldInput label="optionsDependsOn (콤마 — master 재로드 트리거)"
                   value={(field.optionsDependsOn ?? []).join(',')} mono
                   onChange={(v) => onUpdate({

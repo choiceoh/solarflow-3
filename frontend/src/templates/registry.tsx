@@ -1421,7 +1421,40 @@ export const contentBlockMeta: RegistryMeta = {
     description: '모듈 입고 / 발주 연결 / 시공 일정 — 향후 위젯',
   },
 };
-export const masterSourceMeta: RegistryMeta = {};
+export const masterSourceMeta: RegistryMeta = {
+  manufacturers: {
+    label: '제조사 목록',
+    description: '국내/해외 모든 제조사 — priority_rank 순',
+  },
+  'manufacturers.byDomestic': {
+    label: '제조사 (domestic_foreign 별)',
+    description: '필드 의존 — domestic_foreign 값에 따라 국내 또는 해외 만',
+  },
+  companies: {
+    label: '법인 목록',
+    description: '활성 법인 — company_id 별 옵션',
+  },
+  'pos.import': {
+    label: '수입 PO 목록',
+    description: '발주서 (수입 모드) — PO 번호 + 제조사 라벨',
+  },
+  'lcs.byPo': {
+    label: 'L/C (PO 별)',
+    description: 'PO 선택 시 그 PO 의 LC 만 — po_id 의존',
+  },
+  'products.search': {
+    label: '제품 검색',
+    description: '서버 검색 (대용량) — 코드/이름 부분일치, 콤보박스 모드',
+  },
+  'partners.customer': {
+    label: '거래처 (고객사)',
+    description: 'partner_type=customer 또는 both 만 필터',
+  },
+  'bls.byCompany': {
+    label: 'BL (법인 별)',
+    description: '선택된 법인의 BL 만 — company_id 의존',
+  },
+};
 
 // 헬퍼 — registry + meta 를 RegistryIdPicker 의 entries[] 형식으로 변환.
 // fallback: meta 없으면 label = id, description = undefined.
