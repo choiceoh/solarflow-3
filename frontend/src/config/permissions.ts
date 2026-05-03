@@ -34,6 +34,7 @@ export type MenuKey =
   | 'customs'       // 매출/이익 분석
   | 'purchase_history' // 구매 이력 read-only 통합 타임라인 (현황 그룹)
   | 'import_hub'    // 엑셀 입력 허브
+  | 'library'       // 자료실
   | 'masters'       // 마스터 관리
   | 'approval'      // 결재안
   | 'assistant'     // AI 업무 도우미
@@ -81,7 +82,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
-            'banking','customs','purchase_history','import_hub','masters','approval','assistant','crm_inbox',
+            'banking','customs','purchase_history','import_hub','library','masters','approval','assistant','crm_inbox',
             'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_incoming','baro_purchase_history','baro_inbox',
             'settings'],
     features: {
@@ -96,7 +97,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   executive: {
-    menus: ['inventory','orders','outbound','receipts','banking','customs','purchase_history','assistant','crm_inbox',
+    menus: ['inventory','orders','outbound','receipts','banking','customs','purchase_history','library','assistant','crm_inbox',
             'baro_credit','baro_incoming','baro_purchase_history','settings'],
     features: {
       canEdit: false,
@@ -110,7 +111,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   manager: {
-    menus: ['inventory','baro_incoming','assistant','settings'],
+    menus: ['inventory','library','baro_incoming','assistant','settings'],
     features: {
       canEdit: false,
       showPrice: false,          // 단가·재고금액 차단 (역산 방지)
@@ -123,7 +124,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   viewer: {
-    menus: ['inventory','baro_incoming','settings'],
+    menus: ['inventory','library','baro_incoming','settings'],
     features: {
       canEdit: false,
       showPrice: false,

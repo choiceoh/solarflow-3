@@ -44,6 +44,7 @@ const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
 const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
 const DataPage = lazy(() => import('@/pages/DataPage'));
 const ImportHubPage = lazy(() => import('@/pages/ImportHubPage'));
+const LibraryPage = lazy(() => import('@/pages/LibraryPage'));
 const CompanyNewPage = lazy(() => import('@/pages/data/CompanyNewPage'));
 const CompanyEditPage = lazy(() => import('@/pages/data/CompanyEditPage'));
 const ManufacturerNewPage = lazy(() => import('@/pages/data/ManufacturerNewPage'));
@@ -112,6 +113,7 @@ export default function App() {
                 <Route path="/dashboard" element={<Navigate to="/inventory" replace />} />
                 <Route path="/inventory" element={<InventoryPage />} />
                 <Route path="/import" element={<RoleGuard allowedRoles={['admin', 'operator']}><ImportHubPage /></RoleGuard>} />
+                <Route path="/library" element={<LibraryPage />} />
                 <Route path="/data" element={<RoleGuard allowedRoles={['admin', 'operator']}><DataPage /></RoleGuard>} />
                 <Route path="/data/companies/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><CompanyNewPage /></RoleGuard>} />
                 <Route path="/data/companies/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><CompanyEditPage /></RoleGuard>} />
