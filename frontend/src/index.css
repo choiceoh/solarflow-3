@@ -1128,12 +1128,12 @@ a:focus-visible,
   opacity: 0.76;
 }
 
-.sf-page .rounded-md.border,
-.sf-page .border.bg-background,
-.sf-page .rounded-md.border.overflow-hidden,
-.sf-command-surface .rounded-md.border,
-.sf-command-surface .border.bg-background,
-.sf-command-surface .rounded-md.border.overflow-hidden {
+.sf-page .rounded-md.border:not([data-slot="button"]),
+.sf-page .border.bg-background:not([data-slot="button"]),
+.sf-page .rounded-md.border.overflow-hidden:not([data-slot="button"]),
+.sf-command-surface .rounded-md.border:not([data-slot="button"]),
+.sf-command-surface .border.bg-background:not([data-slot="button"]),
+.sf-command-surface .rounded-md.border.overflow-hidden:not([data-slot="button"]) {
   border-color: var(--sf-line);
   background-color: var(--sf-surface);
 }
