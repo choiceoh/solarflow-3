@@ -462,8 +462,9 @@ a:focus-visible,
 }
 
 .sf-topbar {
+  --sf-command-side-rail: 256px;
   display: grid;
-  grid-template-columns: minmax(120px, 0.55fr) minmax(0, 1.45fr) auto;
+  grid-template-columns: minmax(120px, 184px) minmax(0, 1fr) minmax(220px, var(--sf-command-side-rail));
   height: 56px;
   flex: 0 0 auto;
   align-items: center;
@@ -474,11 +475,12 @@ a:focus-visible,
 }
 
 .sf-topbar:not(:has(.sf-topbar-command > *)) {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, var(--sf-command-side-rail));
 }
 
 .sf-topbar-title {
   min-width: 0;
+  overflow: hidden;
   justify-self: start;
 }
 
@@ -489,6 +491,8 @@ a:focus-visible,
   font-weight: 700;
   letter-spacing: 0;
   line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -518,7 +522,7 @@ a:focus-visible,
 }
 
 .sf-topbar-command .sf-command-topline-copy {
-  min-width: 112px;
+  min-width: 0;
 }
 
 .sf-topbar-command .sf-command-topline-title {
@@ -527,7 +531,14 @@ a:focus-visible,
 
 .sf-topbar-command .sf-card-controls {
   width: 100%;
+  overflow: hidden;
   flex-wrap: nowrap;
+}
+
+.sf-topbar-command .tabs {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 /* 우상단 액션 — Calculator/AlertBell/Excel Input 트리거 통합 height 32.
@@ -852,23 +863,43 @@ a:focus-visible,
   display: flex;
   min-width: 220px;
   flex: 0 1 auto;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  align-items: baseline;
+  gap: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .sf-command-topline-title {
+  flex: 0 1 auto;
   min-width: 0;
+  overflow: hidden;
   color: var(--sf-ink);
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0;
   line-height: 1.2;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .sf-command-topline-sub {
-  display: none;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--sf-ink-3);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-command-topline-sub::before {
+  content: "/";
+  margin: 0 8px;
+  color: var(--sf-ink-4);
+  font-weight: 500;
 }
 
 .sf-command-topline-actions {
@@ -2075,6 +2106,14 @@ textarea::placeholder {
 }
 
 @media (max-width: 1180px) {
+  .sf-topbar {
+    grid-template-columns: minmax(120px, 0.55fr) minmax(0, 1.45fr) auto;
+  }
+
+  .sf-topbar:not(:has(.sf-topbar-command > *)) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .sf-kpi-grid,
   .sf-command-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
