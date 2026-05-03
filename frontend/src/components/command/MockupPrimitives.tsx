@@ -227,12 +227,12 @@ export function FilterChips({
             key={o.key}
             className={`tab${active ? ' active' : ''}`}
             onClick={() => onChange?.(o.key)}
-            style={{ padding: '5px 10px' }}
+            style={{ padding: 'var(--sf-filter-chip-padding, 5px 10px)' }}
             type="button"
           >
             {o.label}
             {o.count != null ? (
-              <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', marginLeft: 5 }}>{o.count}</span>
+              <span className="mono" style={{ fontSize: 10, color: 'inherit', marginLeft: 5 }}>{o.count}</span>
             ) : null}
           </button>
         );
