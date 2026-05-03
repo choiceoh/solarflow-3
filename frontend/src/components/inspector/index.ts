@@ -1,5 +1,6 @@
 export { ActionChips } from './ActionChips';
 export { AiVariantsPanel } from './AiVariantsPanel';
+export { ComponentStoryModal } from './ComponentStoryModal';
 export { ContextMenuOverlay } from './ContextMenuOverlay';
 export { DraftsList } from './DraftsList';
 export { EditModeBadge } from './EditModeBadge';
