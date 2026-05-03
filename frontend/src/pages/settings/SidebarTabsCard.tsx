@@ -68,26 +68,26 @@ export default function SidebarTabsCard() {
   };
 
   return (
-    <article className="rounded-lg border bg-card p-6">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-md bg-muted p-2.5">
-          <LayoutGrid className="h-6 w-6 text-muted-foreground" />
+    <article className="rounded-lg border bg-card p-7">
+      <div className="flex items-start gap-4">
+        <div className="mt-0.5 rounded-md bg-muted p-3">
+          <LayoutGrid className="h-7 w-7 text-muted-foreground" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">사이드바 탭 ({tenant})</h2>
-            <span className={`rounded px-2 py-0.5 text-xs font-medium ${draft.tabs.length > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
+            <h2 className="text-xl font-semibold">사이드바 탭 ({tenant})</h2>
+            <span className={`rounded px-2.5 py-0.5 text-sm font-medium ${draft.tabs.length > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
               {draft.tabs.length > 0 ? '활성' : '비활성'}
             </span>
           </div>
-          <p className="mt-2 text-base text-muted-foreground leading-7">
+          <p className="mt-2.5 text-lg text-muted-foreground leading-8">
             업무 담당별 사이드바 — 탭을 추가하면 사용자가 자기 업무에 맞는 메뉴만 볼 수 있습니다. "전체" 탭(메뉴 자동 포함)을 두면 신규 메뉴가 자동 노출되어 안전합니다. 변경은 모든 사용자에게 즉시 반영.
           </p>
 
           {loading ? (
-            <p className="mt-3 rounded bg-muted/50 px-3 py-2 text-base text-muted-foreground">불러오는 중…</p>
+            <p className="mt-4 rounded bg-muted/50 px-4 py-3 text-lg text-muted-foreground">불러오는 중…</p>
           ) : draft.tabs.length === 0 ? (
-            <p className="mt-3 rounded bg-muted/50 px-3 py-2 text-base text-muted-foreground">
+            <p className="mt-4 rounded bg-muted/50 px-4 py-3 text-lg text-muted-foreground">
               탭이 없습니다. 아래에서 추가하면 사이드바에 노출됩니다.
             </p>
           ) : (
@@ -95,9 +95,9 @@ export default function SidebarTabsCard() {
               {draft.tabs.map((tab, idx) => {
                 const isAll = tab.menus === 'all';
                 return (
-                  <li key={idx} className="space-y-2 px-5 py-4">
+                  <li key={idx} className="space-y-3 px-6 py-5">
                     <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-1.5 text-sm text-muted-foreground" title="기본 탭(신규 사용자가 처음 보는 탭)">
+                      <label className="flex items-center gap-2 text-base text-muted-foreground" title="기본 탭(신규 사용자가 처음 보는 탭)">
                         <input
                           type="radio"
                           name="default_tab"
@@ -107,13 +107,13 @@ export default function SidebarTabsCard() {
                         기본
                       </label>
                       <input
-                        className="flex-1 rounded border px-3 py-1.5 text-base"
+                        className="flex-1 rounded border px-3 py-2 text-lg"
                         value={tab.label}
                         onChange={(e) => updateTab(idx, { label: e.target.value })}
                         placeholder="라벨 (예: 수입)"
                       />
                       <input
-                        className="w-36 rounded border px-3 py-1.5 text-sm font-mono text-muted-foreground"
+                        className="w-40 rounded border px-3 py-2 text-base font-mono text-muted-foreground"
                         value={tab.key}
                         onChange={(e) => updateTab(idx, { key: e.target.value.replace(/\s+/g, '_') })}
                         placeholder="key"
@@ -121,26 +121,26 @@ export default function SidebarTabsCard() {
                       <button
                         type="button"
                         onClick={() => removeTab(idx)}
-                        className="rounded p-2 text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                        className="rounded p-2.5 text-muted-foreground hover:bg-red-50 hover:text-red-600"
                         title="이 탭 삭제"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-5 w-5" />
                       </button>
                     </div>
                     {isAll ? (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-base text-muted-foreground">
                         ✓ 모든 메뉴 자동 포함 (신규 메뉴도 즉시 노출)
                       </p>
                     ) : (
-                      <details className="text-base">
+                      <details className="text-lg">
                         <summary className="cursor-pointer text-muted-foreground">
                           메뉴 선택 ({tab.menus.length}/{allMenus.length})
                         </summary>
-                        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                           {allMenus.map((m) => {
                             const checked = tab.menus.includes(m.key);
                             return (
-                              <label key={m.key} className="flex items-center gap-2 text-sm">
+                              <label key={m.key} className="flex items-center gap-2.5 text-base">
                                 <input
                                   type="checkbox"
                                   checked={checked}
@@ -164,36 +164,36 @@ export default function SidebarTabsCard() {
             </ul>
           )}
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-5 flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={() => addTab(false)}
-              className="inline-flex items-center gap-2 rounded border bg-white px-4 py-2 text-base font-medium hover:bg-muted"
+              className="inline-flex items-center gap-2 rounded border bg-white px-5 py-2.5 text-lg font-medium hover:bg-muted"
             >
-              <Plus className="h-4 w-4" /> 일반 탭
+              <Plus className="h-5 w-5" /> 일반 탭
             </button>
             <button
               type="button"
               onClick={() => addTab(true)}
               disabled={hasAllTab}
-              className="inline-flex items-center gap-2 rounded border bg-white px-4 py-2 text-base font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded border bg-white px-5 py-2.5 text-lg font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               title={hasAllTab ? '"전체" 탭은 한 개만' : '모든 메뉴를 자동 포함하는 안전망 탭'}
             >
-              <Plus className="h-4 w-4" /> "전체" 탭
+              <Plus className="h-5 w-5" /> "전체" 탭
             </button>
             <span className="flex-1" />
             <button
               type="button"
               onClick={onSave}
               disabled={!isDirty || saving}
-              className="rounded bg-foreground px-5 py-2 text-base font-medium text-background disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded bg-foreground px-6 py-2.5 text-lg font-medium text-background disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? '저장 중…' : '저장'}
             </button>
           </div>
 
           {unclassified.length > 0 ? (
-            <p className="mt-2 rounded bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <p className="mt-3 rounded bg-amber-50 px-4 py-3 text-base text-amber-800">
               분류되지 않은 메뉴 {unclassified.length}개: {unclassified.map((m) => m.label).join(', ')}
               {' '}— "전체" 탭을 추가하거나 다른 탭에 분류하세요.
             </p>
