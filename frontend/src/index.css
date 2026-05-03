@@ -835,6 +835,44 @@ a:focus-visible,
   font-weight: 700;
 }
 
+.sf-login-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sf-family-site {
+  display: flex;
+  width: min(100%, 318px);
+  align-items: center;
+  gap: 8px;
+}
+
+.sf-family-site-trigger {
+  flex: 1;
+  height: 34px;
+  min-width: 0;
+  border-color: var(--sf-line-2);
+  border-radius: 4px;
+  background: var(--sf-surface);
+  color: var(--sf-ink-2);
+  font-family: var(--sf-sans);
+  font-size: 11.5px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.sf-family-site-button {
+  height: 34px;
+  border-color: var(--sf-line-2);
+  border-radius: 4px;
+  background: var(--sf-bg-1);
+  color: var(--sf-ink-2);
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
 .sf-login-right {
   position: relative;
   display: flex;
