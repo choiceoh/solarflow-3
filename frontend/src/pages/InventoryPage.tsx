@@ -579,8 +579,6 @@ export default function InventoryPage() {
   return (
     <div className="sf-inventory-shell">
       <div className="sf-inventory-main">
-        <CommandTopLine title={inventoryTitle} sub={inventorySub} right={inventoryCardControls} />
-
         <div className="sf-command-kpis sf-inventory-kpis">
           <button type="button" onClick={() => handleCardClick('avail')} className="text-left">
             <TileB
@@ -615,31 +613,33 @@ export default function InventoryPage() {
           />
         </div>
 
-      {allocError && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>{allocError}</AlertDescription>
-        </Alert>
-      )}
+        <CommandTopLine title={inventoryTitle} sub={inventorySub} right={inventoryCardControls} />
 
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
-        {/* 실재고 탭 — 창고 보유 물리적 재고 */}
-        <TabsContent value="physical">
-          {invError && (
-            <Alert variant="destructive" className="mb-3">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>{invError}</AlertDescription>
-            </Alert>
-          )}
-          <CardB title="품목별 실재고" sub="창고 보유 물리 재고" right={inventoryCardControls} headerless>
-            {invLoading ? <SkeletonRows rows={8} /> :invData && (
-              <>
-                <InventoryTable items={invData.items} />
-                <p className="p-2 text-right text-[10px] text-muted-foreground">계산 시점: {invData.calculated_at}</p>
-              </>
+        {allocError && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{allocError}</AlertDescription>
+          </Alert>
+        )}
+
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
+          {/* 실재고 탭 — 창고 보유 물리적 재고 */}
+          <TabsContent value="physical">
+            {invError && (
+              <Alert variant="destructive" className="mb-3">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{invError}</AlertDescription>
+              </Alert>
             )}
-          </CardB>
-        </TabsContent>
+            <CardB title="품목별 실재고" sub="창고 보유 물리 재고" right={inventoryCardControls} headerless>
+              {invLoading ? <SkeletonRows rows={8} /> :invData && (
+                <>
+                  <InventoryTable items={invData.items} />
+                  <p className="p-2 text-right text-[10px] text-muted-foreground">계산 시점: {invData.calculated_at}</p>
+                </>
+              )}
+            </CardB>
+          </TabsContent>
 
         {/* 가용재고 — 전체 너비 단일 테이블 (품목 행 클릭 시 배정 내역 펼침) */}
         <TabsContent value="avail">

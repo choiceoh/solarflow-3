@@ -125,14 +125,14 @@ export default function CustomsPage() {
     <>
       <div className="sf-command-surface sf-customs-shell">
         <section className="sf-customs-main">
-          <CommandTopLine title={pageTitle} sub={pageSub} right={customsCardControls} />
-
           <div className="sf-command-kpis sf-customs-kpis">
             <TileB lbl="부대비용" v={fmtEok(expenseTotal)} u="억" sub={`${expenses.length}건 · VAT ${fmtEok(expenseVat)}억`} tone="solar" spark={totalSpark} />
             <TileB lbl="B/L 연결" v={String(linkedExpenseCount)} u="건" sub={`전체 ${bls.length}개 B/L`} tone="info" spark={linkedSpark} />
             <TileB lbl="비용 유형" v={String(Object.keys(typeExpenseMap).length)} u="종" sub="운송·통관·LC 수수료" tone="warn" spark={flatSpark(Object.keys(typeExpenseMap).length)} />
             <TileB lbl="평균 비용" v={expenses.length ? fmtEok(expenseTotal / expenses.length) : '0.00'} u="억" sub="건당 평균" tone="ink" spark={flatSpark(expenses.length ? expenseTotal / expenses.length / 1e8 : 0)} />
           </div>
+
+          <CommandTopLine title={pageTitle} sub={pageSub} right={customsCardControls} />
 
           <CardB
             title={pageTitle}

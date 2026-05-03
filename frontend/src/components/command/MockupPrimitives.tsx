@@ -148,20 +148,13 @@ export function CommandTopLine({
   sub?: string;
   right?: ReactNode;
 }) {
-  const [targets, setTargets] = useState<{
-    title: HTMLElement | null;
-    actions: HTMLElement | null;
-  }>(() => ({
-    title: typeof document === 'undefined' ? null : document.getElementById('sf-command-title-slot'),
-    actions: typeof document === 'undefined' ? null : document.getElementById('sf-command-topline-slot'),
-  }));
+  const [titleTarget, setTitleTarget] = useState<HTMLElement | null>(() => (
+    typeof document === 'undefined' ? null : document.getElementById('sf-command-title-slot')
+  ));
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    setTargets({
-      title: document.getElementById('sf-command-title-slot'),
-      actions: document.getElementById('sf-command-topline-slot'),
-    });
+    setTitleTarget(document.getElementById('sf-command-title-slot'));
   }, []);
 
   const copy = (
@@ -171,16 +164,15 @@ export function CommandTopLine({
     </div>
   );
 
-  if (targets.actions) {
+  if (titleTarget) {
     return (
       <>
-        {targets.title ? createPortal(copy, targets.title) : null}
-        {createPortal(
-          <div className="sf-command-topline sf-command-topline--actions-only">
+        {createPortal(copy, titleTarget)}
+        {right ? (
+          <div className="sf-command-control-strip">
             <div className="sf-command-topline-actions">{right}</div>
-          </div>,
-          targets.actions,
-        )}
+          </div>
+        ) : null}
       </>
     );
   }

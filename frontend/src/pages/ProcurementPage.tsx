@@ -374,8 +374,6 @@ export default function ProcurementPage() {
 
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
-          <CommandTopLine title={pageTitle} sub={pageSub} right={procurementCardControls} />
-
           <div className="sf-command-kpis">
             {metrics.map((metric) => (
               <TileB
@@ -390,6 +388,8 @@ export default function ProcurementPage() {
               />
             ))}
           </div>
+
+          <CommandTopLine title={pageTitle} sub={pageSub} right={procurementCardControls} />
 
           <CardB
             title={pageTitle}

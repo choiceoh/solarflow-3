@@ -53,8 +53,6 @@ export function MasterConsole({
         style={hasRail ? undefined : { gridTemplateColumns: 'minmax(0, 1fr)' }}
       >
         <section className="sf-procurement-main">
-          <CommandTopLine title={tableTitle} sub={tableSub} right={toolbar} />
-
           <div className="sf-command-kpis">
             {metrics.map((metric) => (
               <TileB
@@ -69,6 +67,8 @@ export function MasterConsole({
               />
             ))}
           </div>
+
+          <CommandTopLine title={tableTitle} sub={tableSub} right={toolbar} />
 
           <CardB
             title={tableTitle}
