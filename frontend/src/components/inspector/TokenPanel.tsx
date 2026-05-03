@@ -1,5 +1,6 @@
-import { RotateCcw } from 'lucide-react';
+import { Pipette, RotateCcw } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
+import { isEyeDropperSupported, pickColor } from '@/lib/eyeDropper';
 import {
   CATEGORY_LABEL,
   CATEGORY_ORDER,
@@ -72,46 +73,65 @@ interface TokenRowProps {
   onReset: () => void;
 }
 
-const TokenRow = ({ token, value, isOverridden, onChange, onReset }: TokenRowProps) => (
-  <div className="flex items-center gap-2 py-1.5">
-    {token.type === 'color' ? (
-      <input
-        type="color"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-7 w-9 cursor-pointer rounded border border-slate-300 bg-transparent p-0"
-        aria-label={token.label}
-        title={`${token.label} — 클릭해서 색 선택`}
-      />
-    ) : (
-      <input
-        type="range"
-        min={token.min}
-        max={token.max}
-        step={token.step}
-        value={remToNumber(value)}
-        onChange={(e) => onChange(numberToRem(Number.parseFloat(e.target.value)))}
-        className="h-7 w-12 cursor-pointer"
-        aria-label={token.label}
-        title={`${token.label} — 슬라이더로 조정`}
-      />
-    )}
-    <div className="min-w-0 flex-1 truncate text-xs text-slate-700">{token.label}</div>
-    <code className="shrink-0 font-mono text-[10px] text-slate-500">
-      {token.type === 'rem' ? `${remToPx(value)}px` : ''}
-    </code>
-    {isOverridden ? (
-      <button
-        type="button"
-        onClick={onReset}
-        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-        title="기본값으로 복원"
-        aria-label="기본값으로 복원"
-      >
-        <RotateCcw className="h-3 w-3" />
-      </button>
-    ) : (
-      <span className="w-5" />
-    )}
-  </div>
-);
+const TokenRow = ({ token, value, isOverridden, onChange, onReset }: TokenRowProps) => {
+  const onPickFromScreen = async () => {
+    const hex = await pickColor();
+    if (hex) onChange(hex);
+  };
+  const eyeDropperReady = token.type === 'color' && isEyeDropperSupported();
+
+  return (
+    <div className="flex items-center gap-2 py-1.5">
+      {token.type === 'color' ? (
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-7 w-9 cursor-pointer rounded border border-slate-300 bg-transparent p-0"
+          aria-label={token.label}
+          title={`${token.label} — 클릭해서 색 선택`}
+        />
+      ) : (
+        <input
+          type="range"
+          min={token.min}
+          max={token.max}
+          step={token.step}
+          value={remToNumber(value)}
+          onChange={(e) => onChange(numberToRem(Number.parseFloat(e.target.value)))}
+          className="h-7 w-12 cursor-pointer"
+          aria-label={token.label}
+          title={`${token.label} — 슬라이더로 조정`}
+        />
+      )}
+      <div className="min-w-0 flex-1 truncate text-xs text-slate-700">{token.label}</div>
+      <code className="shrink-0 font-mono text-[10px] text-slate-500">
+        {token.type === 'rem' ? `${remToPx(value)}px` : ''}
+      </code>
+      {eyeDropperReady && (
+        <button
+          type="button"
+          onClick={onPickFromScreen}
+          className="rounded p-1 text-slate-400 hover:bg-purple-100 hover:text-purple-700 dark:hover:bg-purple-900/30 dark:hover:text-purple-300"
+          title="화면에서 색 추출 (스포이트)"
+          aria-label="화면에서 색 추출"
+        >
+          <Pipette className="h-3 w-3" />
+        </button>
+      )}
+      {isOverridden ? (
+        <button
+          type="button"
+          onClick={onReset}
+          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          title="기본값으로 복원"
+          aria-label="기본값으로 복원"
+        >
+          <RotateCcw className="h-3 w-3" />
+        </button>
+      ) : (
+        <span className="w-5" />
+      )}
+    </div>
+  );
+};
