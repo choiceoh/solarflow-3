@@ -1421,6 +1421,35 @@ export const contentBlockMeta: RegistryMeta = {
     description: '모듈 입고 / 발주 연결 / 시공 일정 — 향후 위젯',
   },
 };
+// enumDictionaries 는 Record<string, Record<string, string>> 형태로 함수가 아니지만
+// GUI 편집기 picker 에서 같은 RegistryIdPicker 패턴을 쓰므로 *Meta 도 동일.
+export const enumDictionaryMeta: RegistryMeta = {
+  OUTBOUND_STATUS_LABEL: {
+    label: '출고 상태',
+    description: '예약 / 진행 / 완료 / 취소 등 outbound 워크플로우 상태',
+  },
+  USAGE_CATEGORY_LABEL: {
+    label: '용도 카테고리',
+    description: '국내/수출 등 판매 용도 분류 — 출고 행에서 표시',
+  },
+  INVOICE_STATUS_LABEL: {
+    label: '세금계산서 상태',
+    description: '발행 / 미발행 — 출고·수주 행에서 표시',
+  },
+  INBOUND_TYPE_LABEL: {
+    label: '입고 구분',
+    description: '수입 / 국내 / 반품 등 BL 입고 종류',
+  },
+  BL_STATUS_LABEL: {
+    label: 'BL 상태',
+    description: '예정 / 출항 / 도착 / 입고완료 등 BL 워크플로우',
+  },
+  BANK_ACTIVE_LABEL: {
+    label: '활성 / 비활성',
+    description: 'boolean → "활성" / "비활성" — 모든 master 의 is_active 표시 공통',
+  },
+};
+
 export const masterSourceMeta: RegistryMeta = {
   manufacturers: {
     label: '제조사 목록',

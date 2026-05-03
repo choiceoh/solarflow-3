@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Plus, Settings2, Trash2 } from 'lucide-react';
 import type { DetailFieldConfig, DetailFormatter, DetailSectionConfig, DetailTabConfig, MetaDetailConfig } from '@/templates/types';
-import { buildRegistryEntries, cellRenderers, cellRendererMeta, contentBlocks, contentBlockMeta, enumDictionaries } from '@/templates/registry';
+import { buildRegistryEntries, cellRenderers, cellRendererMeta, contentBlocks, contentBlockMeta, enumDictionaries, enumDictionaryMeta } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
 import { EditorWithPanel, PanelGroup, PanelSelectionHeader, PanelEmpty } from './RightPanel';
 import { TabsEditor } from './TabsEditor';
@@ -451,7 +451,7 @@ function SectionCard({
   onRemove: () => void;
   onSelectField?: (fIdx: number) => void;
 }) {
-  const enumOpts = useMemo(() => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })), []);
+  const enumEntries = useMemo(() => buildRegistryEntries(enumDictionaries, enumDictionaryMeta), []);
   const rendererEntries = useMemo(() => buildRegistryEntries(cellRenderers, cellRendererMeta), []);
 
   const isContentBlock = !!section.contentBlock;
@@ -540,8 +540,10 @@ function SectionCard({
                       formatter: (v || undefined) as DetailFormatter | undefined,
                     })} />
                   {field.formatter === 'enum' && (
-                    <FieldSelect label="enumKey" value={field.enumKey ?? ''} allowEmpty options={enumOpts}
-                      onChange={(v) => updateField(fIdx, { ...field, enumKey: v || undefined })} />
+                    <RegistryIdPicker label="enumKey"
+                      value={field.enumKey} entries={enumEntries}
+                      onChange={(v) => updateField(fIdx, { ...field, enumKey: v })}
+                      hint="registry.enumDictionaries" />
                   )}
                   <RegistryIdPicker label="rendererId (커스텀, formatter보다 우선)"
                     value={field.rendererId} entries={rendererEntries}

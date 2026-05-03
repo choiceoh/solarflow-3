@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import type { FilterConfig, FilterType, ListScreenConfig } from '@/templates/types';
-import { buildRegistryEntries, enumDictionaries, masterSources, masterSourceMeta } from '@/templates/registry';
+import { buildRegistryEntries, enumDictionaries, enumDictionaryMeta, masterSources, masterSourceMeta } from '@/templates/registry';
 import { ArrayEditor, FieldInput, FieldSelect, moveInArray } from './ArrayEditor';
 import { RegistryIdPicker } from './Pickers';
 import { Button } from '@/components/ui/button';
@@ -31,8 +31,8 @@ export function FiltersTab({
 }) {
   const filters = value.filters;
 
-  const enumOptions = useMemo(
-    () => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })),
+  const enumEntries = useMemo(
+    () => buildRegistryEntries(enumDictionaries, enumDictionaryMeta),
     [],
   );
   const masterEntries = useMemo(
@@ -77,9 +77,10 @@ export function FiltersTab({
 
           {/* 보조 필드 — optionsFrom에 따라 분기 */}
           {f.optionsFrom === 'enum' && (
-            <FieldSelect label="enumKey (registry.enumDictionaries)" value={f.enumKey ?? ''}
-              allowEmpty options={enumOptions}
-              onChange={(v) => update(idx, { ...f, enumKey: v || undefined })} />
+            <RegistryIdPicker label="enumKey"
+              value={f.enumKey} entries={enumEntries}
+              onChange={(v) => update(idx, { ...f, enumKey: v })}
+              hint="registry.enumDictionaries — 메타 채워진 entry 만 라벨/설명 표시" />
           )}
           {f.optionsFrom === 'master' && (
             <RegistryIdPicker label="masterKey"

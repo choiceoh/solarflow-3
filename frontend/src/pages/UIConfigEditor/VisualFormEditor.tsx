@@ -65,7 +65,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Plus, Trash2, GripVertical, Copy, Settings2 } from 'lucide-react';
 import type { AsyncRefineRule, FieldConfig, FieldType, FormSection, MetaFormConfig, Tone } from '@/templates/types';
-import { asyncRefinements, buildRegistryEntries, enumDictionaries, masterSources, masterSourceMeta, computedFormulas, permissionGuards } from '@/templates/registry';
+import { asyncRefinements, buildRegistryEntries, enumDictionaries, enumDictionaryMeta, masterSources, masterSourceMeta, computedFormulas, permissionGuards } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
 import { EditorWithPanel, PanelGroup, PanelEmpty, PanelSelectionHeader } from './RightPanel';
 import { BooleanPicker, RegistryIdPicker, RolePicker, type RegistryEntry } from './Pickers';
@@ -724,7 +724,7 @@ function FieldRow({
   const warnCount = issues.filter((i) => i.level === 'warn').length;
   const issueTitle = issues.map((i) => `[${i.level}] ${i.msg}`).join('\n');
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const enumOpts = useMemo(() => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })), []);
+  const enumEntries = useMemo(() => buildRegistryEntries(enumDictionaries, enumDictionaryMeta), []);
   const masterEntries = useMemo(() => buildRegistryEntries(masterSources, masterSourceMeta), []);
   const formulaOpts = useMemo(() => Object.keys(computedFormulas).sort().map((id) => ({ value: id, label: id })), []);
 
@@ -862,8 +862,10 @@ function FieldRow({
                 optionsFrom: (v || undefined) as 'enum' | 'master' | 'static' | undefined,
               })} />
             {field.optionsFrom === 'enum' && (
-              <FieldSelect label="enumKey" value={field.enumKey ?? ''} allowEmpty options={enumOpts}
-                onChange={(v) => onUpdate({ ...field, enumKey: v || undefined })} />
+              <RegistryIdPicker label="enumKey"
+                value={field.enumKey} entries={enumEntries}
+                onChange={(v) => onUpdate({ ...field, enumKey: v })}
+                hint="registry.enumDictionaries" />
             )}
             {field.optionsFrom === 'master' && (
               <>
