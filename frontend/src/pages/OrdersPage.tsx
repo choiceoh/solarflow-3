@@ -603,8 +603,6 @@ export default function OrdersPage() {
     <div className="sf-page sf-sales-page">
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
-          <CommandTopLine title={pageTitle} sub={pageSub} right={ordersCardControls} />
-
           <div className="sf-command-kpis">
             {metrics.map((metric) => (
               <TileB
@@ -619,6 +617,8 @@ export default function OrdersPage() {
               />
             ))}
           </div>
+
+          <CommandTopLine title={pageTitle} sub={pageSub} right={ordersCardControls} />
 
           <CardB
             title={pageTitle}

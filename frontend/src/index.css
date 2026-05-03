@@ -938,6 +938,40 @@ a:focus-visible,
   justify-content: flex-end;
 }
 
+.sf-command-control-strip {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  border: 1px solid var(--sf-line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--sf-surface) 92%, var(--sf-bg));
+  padding: 4px 6px;
+}
+
+.sf-command-control-strip .sf-command-topline-actions {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.sf-command-control-strip .sf-card-controls {
+  width: 100%;
+  min-height: 24px;
+  overflow: hidden;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.sf-command-control-strip .tabs {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.sf-command-control-strip .tab {
+  padding: 4px 9px;
+}
+
 .sf-procurement-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 256px;
@@ -990,7 +1024,7 @@ a:focus-visible,
 }
 
 .sf-inventory-kpis {
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
 .sf-inventory-rail {
@@ -2179,6 +2213,14 @@ textarea::placeholder {
   .sf-topbar-command .sf-command-topline-actions {
     width: auto;
     justify-content: flex-end;
+  }
+
+  .sf-command-control-strip {
+    min-height: 36px;
+  }
+
+  .sf-command-control-strip .sf-card-controls {
+    flex-wrap: wrap;
   }
 
   .sf-inventory-rail {
