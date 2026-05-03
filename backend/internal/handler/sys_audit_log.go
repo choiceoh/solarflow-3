@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/middleware"
@@ -24,6 +26,7 @@ func NewAuditLogHandler(db *supa.Client) *AuditLogHandler {
 }
 
 // List — GET /api/v1/audit-logs
+// Query params: entity_type, entity_id, action, user_id, from(ISO date), limit(default 500, max 5000)
 func (h *AuditLogHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("audit_logs").
 		Select("*", "exact", false)
@@ -40,6 +43,20 @@ func (h *AuditLogHandler) List(w http.ResponseWriter, r *http.Request) {
 	if userID := r.URL.Query().Get("user_id"); userID != "" {
 		query = query.Eq("user_id", userID)
 	}
+	if from := r.URL.Query().Get("from"); from != "" {
+		query = query.Gte("created_at", from)
+	}
+
+	limit := 500
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			if parsed > 5000 {
+				parsed = 5000
+			}
+			limit = parsed
+		}
+	}
+	query = query.Order("created_at", &postgrest.OrderOpts{Ascending: false}).Limit(limit, "")
 
 	data, _, err := query.Execute()
 	if err != nil {

@@ -32,6 +32,7 @@ export type MenuKey =
   | 'receipts'      // 수금 관리
   | 'banking'       // LC 한도/만기
   | 'customs'       // 매출/이익 분석
+  | 'purchase_history' // 구매 이력 read-only 통합 타임라인 (현황 그룹)
   | 'masters'       // 마스터 관리
   | 'approval'      // 결재안
   | 'assistant'     // AI 업무 도우미
@@ -77,7 +78,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
-            'banking','customs','masters','approval','assistant','crm_inbox',
+            'banking','customs','purchase_history','masters','approval','assistant','crm_inbox',
             'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_inbox',
             'settings'],
     features: {
@@ -92,7 +93,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   executive: {
-    menus: ['inventory','orders','outbound','receipts','banking','customs','assistant','crm_inbox',
+    menus: ['inventory','orders','outbound','receipts','banking','customs','purchase_history','assistant','crm_inbox',
             'baro_credit','settings'],
     features: {
       canEdit: false,
