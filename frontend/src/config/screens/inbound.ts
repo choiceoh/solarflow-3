@@ -48,54 +48,9 @@ const config: ListScreenConfig = {
 
   onRowClick: { kind: 'detail', detailId: 'bl', idField: 'bl_id' },
 
-  // Step 3 final: BLForm → 메타 v2 (bl_form_v2 + saveBLShipmentWithLines submitter)
-  forms: [
-    {
-      id: 'bl_form',
-      componentId: 'bl_form_v2',
-      endpoint: '/api/v1/bls',         // submitterId 가 우선 — endpoint 무시
-      editEndpoint: '/api/v1/bls/:id',
-      editIdField: 'bl_id',
-      submitterId: 'bl_save',          // saveBLShipmentWithLines (parent + child lines)
-    },
-  ],
+  actions: [],
 
-  actions: [
-    {
-      id: 'open_create',
-      label: '새로 등록',
-      trigger: 'header',
-      kind: 'open_form',
-      formId: 'bl_form',
-      iconId: 'plus',
-    },
-    {
-      id: 'edit_bl',
-      label: '수정',
-      trigger: 'row',
-      kind: 'edit_form',
-      formId: 'bl_form',
-      iconId: 'pencil',
-    },
-    {
-      id: 'delete_bl',
-      label: '삭제',
-      trigger: 'row',
-      kind: 'confirm_call',
-      endpoint: '/api/v1/bls/:id',
-      method: 'DELETE',
-      idField: 'bl_id',
-      iconId: 'trash',
-      variant: 'destructive',
-      confirm: {
-        title: '입고 삭제',
-        description: '"{bl_number}" 입고 건을 삭제하시겠습니까?',
-        variant: 'destructive',
-      },
-    },
-  ],
-
-  emptyState: { message: '등록된 입고 건이 없습니다', actionId: 'open_create' },
+  emptyState: { message: '등록된 입고 건이 없습니다. 엑셀 입력에서 업로드하세요' },
 
   requiresCompany: true,
 };

@@ -252,7 +252,7 @@ export interface FieldConfig {
 export interface FormSection {
   cols?: 1 | 2 | 3 | 4;             // grid 컬럼 수 (기본 1)
   fields?: FieldConfig[];           // contentBlock 만 쓰는 섹션은 비울 수 있음
-  // Phase 4 보강: 섹션 헤더 (단계 그룹화 — CostForm "Stage 1: FOB" 등)
+  // Phase 4 보강: 섹션 헤더 (단계 그룹화)
   title?: string;
   tone?: Tone;                      // 헤더 색상 (solar/ink/info/warn/pos)
   // Phase 4 — Step 3 prep: 임의 React 컴포넌트 슬롯

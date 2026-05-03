@@ -1,5 +1,5 @@
 // 공사현장 선택 콤보박스 — 검색 + 인라인 생성
-// OrderForm, AllocationForm 공용
+// AllocationForm 공용
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Search, Plus, Check, MapPin } from 'lucide-react';

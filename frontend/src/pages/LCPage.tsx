@@ -1,19 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/stores/appStore';
 import { useLCList } from '@/hooks/useProcurement';
 import { fetchWithAuth } from '@/lib/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import LCListTable from '@/components/procurement/LCListTable';
-import LCForm from '@/components/procurement/LCForm';
-import BLForm from '@/components/inbound/BLForm';
 import BLDetailView from '@/components/inbound/BLDetailView';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { FilterButton, RailBlock, Sparkline } from '@/components/command/MockupPrimitives';
 import { LC_STATUS_LABEL, type LCRecord, type LCStatus } from '@/types/procurement';
 import type { Bank, Company } from '@/types/masters';
-import { saveBLShipmentWithLines } from '@/lib/blShipment';
 
 export default function LCPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
@@ -24,15 +19,8 @@ export default function LCPage() {
   const [bankFilter, setBankFilter] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [editLC, setEditLC] = useState<LCRecord | null>(null);
   const [selectedBL, setSelectedBL] = useState<string | null>(null);
   const [blsVersion, setBlsVersion] = useState(0);
-
-  // BL 등록 폼 인라인
-  const [blFormOpen, setBlFormOpen] = useState(false);
-  const [blPresetPOId, setBlPresetPOId] = useState<string | null>(null);
-  const [blPresetLCId, setBlPresetLCId] = useState<string | null>(null);
 
   const filters: Record<string, string> = {};
   if (statusFilter) filters.status = statusFilter;
@@ -63,34 +51,12 @@ export default function LCPage() {
     );
   }
 
-  const handleCreate = async (d: Record<string, unknown>) => {
-    await fetchWithAuth('/api/v1/lcs', { method: 'POST', body: JSON.stringify(d) });
-    reload();
-  };
-  const handleUpdate = async (d: Record<string, unknown>) => {
-    if (!editLC) return;
-    await fetchWithAuth(`/api/v1/lcs/${editLC.lc_id}`, { method: 'PUT', body: JSON.stringify(d) });
-    setEditLC(null); reload();
-  };
-  const handleDeleteLC = async (lcId: string) => {
-    await fetchWithAuth(`/api/v1/lcs/${lcId}`, { method: 'DELETE' });
-    reload();
-  };
   const handleSettleLC = async (lc: LCRecord, repaymentDate: string) => {
     await fetchWithAuth(`/api/v1/lcs/${lc.lc_id}`, {
       method: 'PUT',
       body: JSON.stringify({ repaid: true, repayment_date: repaymentDate, status: 'settled' }),
     });
     reload();
-  };
-  const handleNewBLFromLC = (lc: LCRecord) => {
-    setBlPresetPOId(lc.po_id);
-    setBlPresetLCId(lc.lc_id);
-    setBlFormOpen(true);
-  };
-  const handleCreateBL = async (formData: Record<string, unknown>) => {
-    await saveBLShipmentWithLines(formData);
-    setBlsVersion(v => v + 1);
   };
 
   const statusLabel = statusFilter ? (LC_STATUS_LABEL[statusFilter as LCStatus] ?? statusFilter) : '전체 상태';
@@ -113,9 +79,6 @@ export default function LCPage() {
         description="신용장 개설, 상환, B/L 생성 흐름을 수입금융 콘솔 기준으로 관리합니다."
         tableTitle="L/C 목록"
         tableSub={`${filtered.length.toLocaleString()} / ${lcs.length.toLocaleString()}건 표시`}
-        actions={
-          <Button size="sm" onClick={() => { setEditLC(null); setFormOpen(true); }}><Plus className="mr-1 h-4 w-4" />L/C 개설</Button>
-        }
         toolbar={
           <div className="sf-card-controls" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
             <FilterButton items={[
@@ -168,24 +131,12 @@ export default function LCPage() {
         {loading ? <LoadingSpinner /> : (
           <LCListTable
             items={filtered}
-            onEdit={(lc) => { setEditLC(lc); setFormOpen(true); }}
-            onNew={() => { setEditLC(null); setFormOpen(true); }}
-            onDelete={handleDeleteLC}
             onSettle={handleSettleLC}
             onSelectBL={setSelectedBL}
-            onNewBL={handleNewBLFromLC}
             blsVersion={blsVersion}
           />
         )}
       </MasterConsole>
-      <LCForm open={formOpen} onOpenChange={setFormOpen} onSubmit={editLC ? handleUpdate : handleCreate} editData={editLC} />
-      <BLForm
-        open={blFormOpen}
-        onOpenChange={(v) => { setBlFormOpen(v); if (!v) { setBlPresetPOId(null); setBlPresetLCId(null); } }}
-        onSubmit={handleCreateBL}
-        presetPOId={blPresetPOId}
-        presetLCId={blPresetLCId}
-      />
     </>
   );
 }

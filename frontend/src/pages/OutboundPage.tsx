@@ -15,7 +15,6 @@ import OutboundListTable, { OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META } from '@/co
 import { useColumnVisibility } from '@/lib/columnVisibility';
 import { useColumnPinning } from '@/lib/columnPinning';
 import OutboundDetailView from '@/components/outbound/OutboundDetailView';
-import OutboundForm from '@/components/outbound/OutboundForm';
 import SaleListTable, { SALE_TABLE_ID, SALE_COLUMN_META } from '@/components/outbound/SaleListTable';
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
 import { MasterConsole } from '@/components/command/MasterConsole';
@@ -49,7 +48,6 @@ export default function OutboundPage() {
   // R1-1: 사이드바 "출고/판매" 클릭 시 목록 복귀 — URL → 상태 동기화
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setSelectedOutbound(null); }, [_loc.key]);
-  const [formOpen, setFormOpen] = useState(false);
 
   const [customerFilter, setCustomerFilter] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
@@ -86,12 +84,6 @@ export default function OutboundPage() {
       </div>
     );
   }
-
-
-  const handleCreate = async (formData: Record<string, unknown>) => {
-    await fetchWithAuth('/api/v1/outbounds', { method: 'POST', body: JSON.stringify(formData) });
-    reloadOutbounds();
-  };
 
   const isSalePending = (item: SaleListItem) =>
     !(item.tax_invoice_date ?? item.sale?.tax_invoice_date);
@@ -177,7 +169,7 @@ export default function OutboundPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <ExcelToolbar type="outbound" onNew={() => setFormOpen(true)} />
+          <ExcelToolbar type="outbound" />
         </>
       ) : (
         <>
@@ -265,7 +257,6 @@ export default function OutboundPage() {
               pinning={outboundColPin.pinning}
               onPinningChange={outboundColPin.setPinning}
               onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
-              onNew={() => setFormOpen(true)}
               globalFilter={searchText}
             />
           )}
@@ -318,8 +309,6 @@ export default function OutboundPage() {
           />
         </div>
       )}
-
-      <OutboundForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleCreate} />
 
       <Dialog open={bulkInvoiceOpen} onOpenChange={setBulkInvoiceOpen}>
         <DialogContent className="sm:max-w-md">

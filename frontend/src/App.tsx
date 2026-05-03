@@ -17,15 +17,8 @@ const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
 const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
 import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
 const OutboundV2Page = lazy(() => import('@/pages/OutboundV2Page'));
-const OutboundFormMetaDemoPage = lazy(() => import('@/pages/OutboundFormMetaDemoPage'));
-const OutboundDetailMetaDemoPage = lazy(() => import('@/pages/OutboundDetailMetaDemoPage'));
-const DeclarationDetailMetaDemoPage = lazy(() => import('@/pages/DeclarationDetailMetaDemoPage'));
 const MetaFormDepsDemoPage = lazy(() => import('@/pages/MetaFormDepsDemoPage'));
 const MetaFeaturesDemoPage = lazy(() => import('@/pages/MetaFeaturesDemoPage'));
-const BLMetaDemoPage = lazy(() => import('@/pages/BLMetaDemoPage'));
-const POLineMetaDemoPage = lazy(() => import('@/pages/POLineMetaDemoPage'));
-const CostMetaDemoPage = lazy(() => import('@/pages/CostMetaDemoPage'));
-const ChildFormsMetaDemoPage = lazy(() => import('@/pages/ChildFormsMetaDemoPage'));
 const WizardDemoPage = lazy(() => import('@/pages/WizardDemoPage'));
 const PartnerV2Page = lazy(() => import('@/pages/PartnerV2Page'));
 const CompaniesV2Page = lazy(() => import('@/pages/CompaniesV2Page'));
@@ -50,6 +43,7 @@ const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderP
 const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
 const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
 const DataPage = lazy(() => import('@/pages/DataPage'));
+const ImportHubPage = lazy(() => import('@/pages/ImportHubPage'));
 const CompanyNewPage = lazy(() => import('@/pages/data/CompanyNewPage'));
 const CompanyEditPage = lazy(() => import('@/pages/data/CompanyEditPage'));
 const ManufacturerNewPage = lazy(() => import('@/pages/data/ManufacturerNewPage'));
@@ -79,10 +73,6 @@ function LegacyRedirect({ to }: { to: string }) {
   const [pathname, baseSearch = ''] = to.split('?');
   const params = new URLSearchParams(baseSearch);
   const legacy = new URLSearchParams(search);
-
-  if (legacy.get('new') === '1' || legacy.get('action') === 'new') {
-    params.set('action', 'new');
-  }
 
   for (const [key, value] of legacy) {
     if (key === 'new' || key === 'action') continue;
@@ -120,6 +110,7 @@ export default function App() {
                 <Route index element={<Navigate to="/inventory" replace />} />
                 <Route path="/dashboard" element={<Navigate to="/inventory" replace />} />
                 <Route path="/inventory" element={<InventoryPage />} />
+                <Route path="/import" element={<RoleGuard allowedRoles={['admin', 'operator']}><ImportHubPage /></RoleGuard>} />
                 <Route path="/data" element={<RoleGuard allowedRoles={['admin', 'operator']}><DataPage /></RoleGuard>} />
                 <Route path="/data/companies/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><CompanyNewPage /></RoleGuard>} />
                 <Route path="/data/companies/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><CompanyEditPage /></RoleGuard>} />
@@ -147,15 +138,8 @@ export default function App() {
                 <Route path="/lc" element={<LegacyRedirect to="/procurement?tab=lc" />} />
                 <Route path="/outbound" element={<LegacyRedirect to="/orders?tab=outbound" />} />
                 <Route path="/outbound-v2" element={<OutboundV2Page />} />
-                <Route path="/outbound-form-meta-demo" element={<OutboundFormMetaDemoPage />} />
-                <Route path="/outbound-detail-meta-demo" element={<OutboundDetailMetaDemoPage />} />
-                <Route path="/declaration-detail-meta-demo" element={<DeclarationDetailMetaDemoPage />} />
                 <Route path="/meta-form-deps-demo" element={<MetaFormDepsDemoPage />} />
                 <Route path="/meta-features-demo" element={<MetaFeaturesDemoPage />} />
-                <Route path="/bl-meta-demo" element={<BLMetaDemoPage />} />
-                <Route path="/po-line-meta-demo" element={<POLineMetaDemoPage />} />
-                <Route path="/cost-meta-demo" element={<CostMetaDemoPage />} />
-                <Route path="/child-forms-meta-demo" element={<ChildFormsMetaDemoPage />} />
                 <Route path="/wizard-demo" element={<WizardDemoPage />} />
                 <Route path="/ui-config-editor" element={<RoleGuard allowedRoles={['admin']}><UIConfigEditorPage /></RoleGuard>} />
                 <Route path="/orders" element={<OrdersPage />} />

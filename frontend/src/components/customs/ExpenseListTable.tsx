@@ -1,5 +1,3 @@
-import { Pencil, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
 import { formatKRW } from '@/lib/utils';
 import { EXPENSE_TYPE_LABEL, type ExpenseType } from '@/types/customs';
@@ -14,17 +12,9 @@ interface Props {
   hidden: Set<string>;
   pinning?: ColumnPinningState;
   onPinningChange?: (next: ColumnPinningState) => void;
-  onEdit: (e: Expense) => void;
-  onNew: () => void;
-  onDelete?: (e: Expense) => void;
 }
 
-interface BuildOpts {
-  onEdit: (e: Expense) => void;
-  onDelete?: (e: Expense) => void;
-}
-
-function buildColumns({ onEdit, onDelete }: BuildOpts): ColumnDef<Expense>[] {
+function buildColumns(): ColumnDef<Expense>[] {
   return [
     { key: 'bl_or_month', label: 'B/L / 월', className: 'text-xs', cell: (e) => e.bl_number || e.bl_id?.slice(0, 8) || e.month || '—', sortAccessor: (e) => e.bl_number || e.month || '' },
     { key: 'expense_type', label: '비용유형', hideable: true, className: 'text-xs', cell: (e) => EXPENSE_TYPE_LABEL[e.expense_type as ExpenseType] || e.expense_type, sortAccessor: (e) => EXPENSE_TYPE_LABEL[e.expense_type as ExpenseType] || e.expense_type },
@@ -38,32 +28,17 @@ function buildColumns({ onEdit, onDelete }: BuildOpts): ColumnDef<Expense>[] {
     { key: 'vat', label: 'VAT', hideable: true, align: 'right', className: 'text-xs tabular-nums', cell: (e) => e.vat != null ? formatKRW(e.vat) : '—', sortAccessor: (e) => e.vat ?? 0 },
     { key: 'company_name', label: '법인', hideable: true, className: 'text-xs', cell: (e) => e.company_name || '—', sortAccessor: (e) => e.company_name || '' },
     { key: 'memo', label: '메모', hideable: true, className: 'text-xs max-w-[120px] truncate', cell: (e) => e.memo || '—', sortAccessor: (e) => e.memo || '' },
-    {
-      key: 'actions', label: '작업', align: 'right',
-      cell: (e) => (
-        <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="icon-xs" className="btn xs ghost icon" onClick={() => onEdit(e)}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          {onDelete && (
-            <Button variant="ghost" size="icon-xs" className="btn xs ghost icon text-destructive hover:text-destructive" onClick={() => onDelete(e)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-      ),
-    },
   ];
 }
 
 export const EXPENSE_COLUMN_META: ColumnVisibilityMeta[] =
-  buildColumns({ onEdit: () => {} }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
+  buildColumns().map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-export default function ExpenseListTable({ items, hidden, pinning, onPinningChange, onEdit, onDelete }: Props) {
+export default function ExpenseListTable({ items, hidden, pinning, onPinningChange }: Props) {
   return (
     <MetaTable
       tableId={EXPENSE_TABLE_ID}
-      columns={buildColumns({ onEdit, onDelete })}
+      columns={buildColumns()}
       hidden={hidden}
       pinning={pinning}
       onPinningChange={onPinningChange}

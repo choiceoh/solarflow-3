@@ -2,7 +2,6 @@ import { Component, useState, useEffect, useMemo, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
 import { useOrderList } from '@/hooks/useOrders';
@@ -13,9 +12,7 @@ import { confirmDialog } from '@/lib/dialogs';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import OrderListTable, { ORDER_TABLE_ID, ORDER_COLUMN_META } from '@/components/orders/OrderListTable';
 import OrderDetailView from '@/components/orders/OrderDetailView';
-import OrderForm, { type OrderPrefillData } from '@/components/orders/OrderForm';
 import ReceiptListTable, { RECEIPT_TABLE_ID, RECEIPT_COLUMN_META } from '@/components/orders/ReceiptListTable';
-import ReceiptForm from '@/components/orders/ReceiptForm';
 import ReceiptMatchingPanel from '@/components/orders/ReceiptMatchingPanel';
 import AutoMatchSection from '@/components/orders/AutoMatchSection';
 import OutboundListTable, { OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META } from '@/components/outbound/OutboundListTable';
@@ -23,16 +20,14 @@ import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
 import { useColumnVisibility } from '@/lib/columnVisibility';
 import { useColumnPinning } from '@/lib/columnPinning';
 import OutboundDetailView from '@/components/outbound/OutboundDetailView';
-import OutboundForm from '@/components/outbound/OutboundForm';
-import SaleForm from '@/components/outbound/SaleForm';
 import SaleListTable, { SALE_TABLE_ID, SALE_COLUMN_META } from '@/components/outbound/SaleListTable';
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
 import type { InventoryAllocation } from '@/components/inventory/AllocationForm';
 import {
   ORDER_STATUS_LABEL, MANAGEMENT_CATEGORY_LABEL,
-  type FulfillmentSource, type Order, type OrderStatus, type ManagementCategory, type Receipt,
+  type FulfillmentSource, type Order, type OrderStatus, type ManagementCategory,
 } from '@/types/orders';
-import { OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL, type Outbound, type OutboundStatus, type UsageCategory, type Sale, type SaleListItem } from '@/types/outbound';
+import { OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL, type OutboundStatus, type UsageCategory } from '@/types/outbound';
 import type { Partner, Manufacturer } from '@/types/masters';
 import type { InventoryResponse } from '@/types/inventory';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
@@ -67,8 +62,6 @@ class OrderDetailErrorBoundary extends Component<
     );
   }
 }
-
-const isFreeSpareAlloc = (a: InventoryAllocation) => a.notes?.startsWith('[무상스페어]') ?? false;
 
 const SALES_TAB_OPTIONS = [
   { key: 'orders', label: '수주' },
@@ -114,18 +107,6 @@ function fmtEok(value: number) {
   return (value / 100_000_000).toFixed(value >= 10_000_000_000 ? 1 : 2);
 }
 
-function isLinkedFreeSpare(main: InventoryAllocation, candidate: InventoryAllocation): boolean {
-  if (candidate.alloc_id === main.alloc_id || !isFreeSpareAlloc(candidate)) return false;
-  if (candidate.company_id !== main.company_id || candidate.product_id !== main.product_id) return false;
-  if (candidate.purpose !== main.purpose) return false;
-  if (main.group_id && candidate.group_id) return main.group_id === candidate.group_id;
-  return (
-    (candidate.customer_name ?? '') === (main.customer_name ?? '') &&
-    (candidate.site_name ?? '') === (main.site_name ?? '') &&
-    (candidate.bl_id ?? '') === (main.bl_id ?? '')
-  );
-}
-
 export default function OrdersPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
 
@@ -145,70 +126,6 @@ export default function OrdersPage() {
   // URL 탭 파라미터 읽기 (사이드바 수주/수금 링크 구분)
   const urlTab = new URLSearchParams(_loc.search).get('tab') ?? 'orders';
   const activeTab = SALES_TABS.has(urlTab) ? urlTab : 'orders';
-  const [orderFormOpen, setOrderFormOpen] = useState(false);
-  // 가용재고 배정 → 수주 자동 연동
-  const [pendingAllocId, setPendingAllocId] = useState<string | null>(null);
-  const [pendingLinkedAllocId, setPendingLinkedAllocId] = useState<string | null>(null); // 연관 미착품 alloc_id
-  const [orderFormPrefill, setOrderFormPrefill] = useState<OrderPrefillData | null>(null);
-
-  // 가용재고 배정 → 수주 자동 연동: 마운트 시 URL 파라미터 읽어 폼 자동 오픈
-  // window.location.href로 이동하므로 컴포넌트가 새로 마운트됨 → 빈 deps 배열 사용
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('new') !== '1') return;
-    const allocId  = params.get('alloc_id');
-    const companyId = params.get('company_id') ?? undefined;
-    const productId = params.get('product_id');
-    const qty = params.get('qty');
-    if (!allocId || !productId || !qty) return;
-
-    const purpose       = params.get('purpose') ?? 'sale';
-    const sourceType    = params.get('source_type') ?? 'stock';
-    const customer      = params.get('customer') ?? undefined;
-    const site          = params.get('site') ?? undefined;
-    const orderNo       = params.get('order_no') ?? undefined;
-    const linkedAllocId = params.get('linked_alloc_id') ?? undefined;
-    const blId          = params.get('bl_id') ?? undefined;
-    const expectedPrice = params.get('expected_price_per_wp');
-    const spareQty      = params.get('spare_qty');
-
-    let cancelled = false;
-    const openPrefilledOrder = async () => {
-      let effectiveCompanyId = companyId;
-      if (!effectiveCompanyId || effectiveCompanyId === 'all') {
-        try {
-          const alloc = await fetchWithAuth<InventoryAllocation>(`/api/v1/inventory/allocations/${allocId}`);
-          effectiveCompanyId = alloc.company_id;
-        } catch {
-          effectiveCompanyId = undefined;
-        }
-      }
-      if (cancelled) return;
-
-      setPendingAllocId(allocId);
-      if (linkedAllocId) setPendingLinkedAllocId(linkedAllocId);
-      setOrderFormPrefill({
-        alloc_id: allocId,
-        company_id: effectiveCompanyId,
-        product_id: productId,
-        quantity: parseInt(qty, 10),
-        management_category: purpose === 'construction' ? 'construction' : 'sale',
-        fulfillment_source: sourceType === 'incoming' ? 'incoming' : 'stock',
-        customer_hint: customer,
-        site_name: site,
-        order_number: orderNo,
-        bl_id: blId,
-        expected_price_per_wp: expectedPrice ? Number(expectedPrice) : undefined,
-        spare_qty: spareQty ? Number(spareQty) : undefined,
-      });
-      setOrderFormOpen(true);
-      // URL 정리 (파라미터 제거)
-      navigate('/orders', { replace: true });
-    };
-
-    void openPrefilledOrder();
-    return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const handleTabChange = (tab: string) => {
     setSelectedOrder(null);
     const nextTab = SALES_TABS.has(tab) ? tab : 'orders';
@@ -230,10 +147,6 @@ export default function OrdersPage() {
   const [obUsageFilter, setObUsageFilter] = useState('');
   const [obMfgFilter, setObMfgFilter] = useState('');
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null);
-  const [obFormOpen, setObFormOpen] = useState(false);
-  const [outboundOrder, setOutboundOrder] = useState<Order | null>(null);
-  const [invoiceOutbound, setInvoiceOutbound] = useState<Outbound | null>(null);
-  const [invoiceOrder, setInvoiceOrder] = useState<(Order & { sale?: Sale }) | null>(null);
   const outboundColVis = useColumnVisibility(OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META);
   const outboundColPin = useColumnPinning(OUTBOUND_TABLE_ID);
   const orderColVis = useColumnVisibility(ORDER_TABLE_ID, ORDER_COLUMN_META);
@@ -257,19 +170,10 @@ export default function OrdersPage() {
   if (saleMonthFilter) saleFilters.month = saleMonthFilter;
   if (saleInvoiceFilter) saleFilters.invoice_status = saleInvoiceFilter;
   const { data: sales, loading: saleLoading, reload: reloadSales } = useSaleList(saleFilters);
-  const { data: outboundSales, reload: reloadOutboundSales } = useSaleList({});
 
   // 탭 4: 수금
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState('');
   const [receiptMonthFilter, setReceiptMonthFilter] = useState('');
-  const [receiptFormOpen, setReceiptFormOpen] = useState(false);
-  const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
-  const [deletingReceipt, setDeletingReceipt] = useState<Receipt | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
-  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
-  const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
-  const [orderActionLoading, setOrderActionLoading] = useState(false);
   const [orderActionError, setOrderActionError] = useState('');
   const [orderSourceHints, setOrderSourceHints] = useState<Record<string, FulfillmentSource>>({});
 
@@ -277,7 +181,7 @@ export default function OrdersPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
 
-  // 빠른 등록/알림 딥링크 intent 처리
+  // 알림 딥링크 intent 처리
   useEffect(() => {
     const params = new URLSearchParams(_loc.search);
     setOrderWorkQueue(getOrderWorkQueue(params.get('alert')));
@@ -285,38 +189,7 @@ export default function OrdersPage() {
     if (invoiceStatus === 'issued' || invoiceStatus === 'pending') {
       setSaleInvoiceFilter(invoiceStatus);
     }
-
-    const wantsNew = params.get('action') === 'new' || params.get('new') === '1';
-    const hasPrefillPayload = Boolean(params.get('alloc_id') || params.get('product_id') || params.get('qty'));
-    if (!wantsNew || hasPrefillPayload) return;
-
-    const tabParam = params.get('tab') ?? 'orders';
-    const tab = SALES_TABS.has(tabParam) ? tabParam : 'orders';
-
-    if (tab === 'orders') {
-      setSelectedOrder(null);
-      setEditingOrder(null);
-      setPendingAllocId(null);
-      setPendingLinkedAllocId(null);
-      setOrderFormPrefill(null);
-      setOrderFormOpen(true);
-    } else if (tab === 'outbound') {
-      setSelectedOutbound(null);
-      setOutboundOrder(null);
-      setObFormOpen(true);
-    } else if (tab === 'receipts') {
-      setEditingReceipt(null);
-      setReceiptFormOpen(true);
-    } else {
-      return;
-    }
-
-    params.delete('action');
-    params.delete('new');
-    if (tab === 'orders') params.delete('tab');
-    const next = params.toString();
-    navigate(`/orders${next ? `?${next}` : ''}`, { replace: true });
-  }, [_loc.search, navigate]);
+  }, [_loc.search]);
 
   const orderFilters: { status?: string; customer_id?: string; management_category?: string } = {};
   if (orderStatusFilter) orderFilters.status = orderStatusFilter;
@@ -328,7 +201,7 @@ export default function OrdersPage() {
   if (receiptMonthFilter) receiptFilters.month = receiptMonthFilter;
 
   const { data: orders, loading: ordersLoading, reload: reloadOrders } = useOrderList(orderFilters);
-  const { data: receipts, loading: receiptsLoading, reload: reloadReceipts } = useReceiptList(receiptFilters);
+  const { data: receipts, loading: receiptsLoading } = useReceiptList(receiptFilters);
 
   const visibleOrders = useMemo(() => {
     if (!orderWorkQueue) return orders;
@@ -412,18 +285,7 @@ export default function OrdersPage() {
   }, []);
 
   // ⚠️ 모든 useMemo는 early return(아래 selectedCompanyId/selectedOrder 분기) 이전이어야 함 — Hook 순서 규칙
-  const salesByOutboundId = useMemo(
-    () => new Map(
-      outboundSales
-        .filter((item) => item.outbound_id)
-        .map((item) => [item.outbound_id as string, item.sale])
-    ),
-    [outboundSales],
-  );
-  const outboundsWithSales = useMemo(
-    () => outbounds.map((ob) => ({ ...ob, sale: ob.sale ?? salesByOutboundId.get(ob.outbound_id) })),
-    [outbounds, salesByOutboundId],
-  );
+  const outboundsWithSales = outbounds;
 
   // 월 목록 (최근 12개월) — 마운트 후 1회만 계산
   const months = useMemo(() => {
@@ -496,162 +358,6 @@ export default function OrdersPage() {
     );
   }
 
-  const handleCreateOrder = async (formData: Record<string, unknown>) => {
-    const requestedQty = Number(formData.quantity) || 0;
-    if (pendingAllocId && orderFormPrefill?.quantity && requestedQty > orderFormPrefill.quantity) {
-      throw new Error('예약 수량보다 많은 수주는 먼저 가용재고에서 추가 예약한 뒤 등록해주세요.');
-    }
-
-    const created = await fetchWithAuth<{ order_id: string }>(
-      '/api/v1/orders', { method: 'POST', body: JSON.stringify(formData) }
-    );
-
-    // 함수 호출 시점 값 캡처 (setState는 비동기 → 함수 내내 원본값 유지됨)
-    const origAllocId        = pendingAllocId;
-    const origLinkedAllocId  = pendingLinkedAllocId;
-
-    const createdOrderId = created?.order_id;
-    const resolvedSource = formData.fulfillment_source === 'incoming' ? 'incoming' : 'stock';
-
-    // ① 메인 배정 confirmed + order_id 설정. 일부 수주이면 잔량 처리 선택
-    if (origAllocId && created?.order_id) {
-      const originalAlloc = await fetchWithAuth<InventoryAllocation>(`/api/v1/inventory/allocations/${origAllocId}`);
-      const orderQty = Number(formData.quantity) || 0;
-      const orderKw = Number(formData.capacity_kw) || 0;
-      const unitKw = orderQty > 0 ? orderKw / orderQty : ((originalAlloc.capacity_kw ?? 0) / originalAlloc.quantity);
-      const remainingQty = Math.max(originalAlloc.quantity - orderQty, 0);
-
-      await fetchWithAuth(`/api/v1/inventory/allocations/${origAllocId}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          order_id: created.order_id,
-          status: 'confirmed',
-          quantity: orderQty,
-          capacity_kw: orderQty * unitKw,
-          source_type: resolvedSource,
-        }),
-      });
-
-      if (remainingQty > 0) {
-        let residualStatus: 'pending' | 'hold' | 'cancelled' = 'cancelled';
-        if (await confirmDialog({
-          description: `예약 잔량 ${remainingQty.toLocaleString('ko-KR')}EA를 계속 예약으로 유지할까요?`,
-          confirmLabel: '예약 유지',
-        })) {
-          residualStatus = 'pending';
-        } else if (await confirmDialog({
-          description: '예약 잔량을 보류로 남길까요? 취소하면 잔량 예약은 삭제됩니다.',
-          confirmLabel: '보류',
-        })) {
-          residualStatus = 'hold';
-        }
-
-        if (residualStatus !== 'cancelled') {
-          await fetchWithAuth('/api/v1/inventory/allocations', {
-            method: 'POST',
-            body: JSON.stringify({
-              company_id: originalAlloc.company_id,
-              product_id: originalAlloc.product_id,
-              quantity: remainingQty,
-              capacity_kw: remainingQty * unitKw,
-              purpose: originalAlloc.purpose,
-              source_type: resolvedSource,
-              customer_name: originalAlloc.customer_name,
-              site_name: originalAlloc.site_name,
-              site_id: originalAlloc.site_id,
-              notes: originalAlloc.notes,
-              expected_price_per_wp: originalAlloc.expected_price_per_wp,
-              free_spare_qty: originalAlloc.free_spare_qty,
-              group_id: originalAlloc.group_id,
-              bl_id: originalAlloc.bl_id,
-              status: residualStatus,
-            }),
-          });
-        }
-      }
-      setPendingAllocId(null);
-      setOrderFormPrefill(null);
-    }
-
-    // ② 연관 미착품 배정 confirmed (group_id로 묶인 쌍)
-    if (origLinkedAllocId && created?.order_id) {
-      await fetchWithAuth(`/api/v1/inventory/allocations/${origLinkedAllocId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ order_id: created.order_id, status: 'confirmed' }),
-      });
-      setPendingLinkedAllocId(null);
-    }
-
-    // ③ 스페어 처리 — 예정등록 → 수주 흐름에서만
-    //   - 예정 시 스페어 있었음 → pending 상태의 [무상스페어] alloc을 confirmed로 전환
-    //   - 예정 시 스페어 없었음 + 수주 시 새로 입력됨 → 신규 스페어 alloc 생성 후 confirmed
-    if (createdOrderId && origAllocId && formData.product_id) {
-      const spareQty = Number(formData.spare_qty) || 0;
-      const originalAlloc = await fetchWithAuth<InventoryAllocation>(`/api/v1/inventory/allocations/${origAllocId}`);
-      // 같은 예약에 딸린 pending 무상스페어만 탐색 (다른 거래처의 무상스페어 오연결 방지)
-      const pendingList = await fetchWithAuth<InventoryAllocation[]>(
-        `/api/v1/inventory/allocations?company_id=${originalAlloc.company_id}&product_id=${formData.product_id as string}&status=pending`
-      );
-
-      const reservationSpare = pendingList.find((a) => isLinkedFreeSpare(originalAlloc, a));
-
-      if (reservationSpare) {
-        // 예정 시 스페어 있었음 → confirm 처리 (order_id 연결)
-        await fetchWithAuth(`/api/v1/inventory/allocations/${reservationSpare.alloc_id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ order_id: created.order_id, status: 'confirmed' }),
-        });
-      } else if (spareQty > 0) {
-        // 예정 시 스페어 없었음 + 수주 시 신규 입력 → 가용재고 차감 allocation 생성
-        const orderQty = Number(formData.quantity) || 1;
-        const capKw    = Number(formData.capacity_kw) || 0;
-        const spareCapKw = orderQty > 0 ? (capKw / orderQty) * spareQty : 0;
-        await fetchWithAuth('/api/v1/inventory/allocations', {
-          method: 'POST',
-          body: JSON.stringify({
-            company_id:    originalAlloc.company_id,
-            product_id:    formData.product_id,
-            quantity:      spareQty,
-            capacity_kw:   spareCapKw,
-            purpose:       'sale',
-            source_type:   resolvedSource,
-            status:        'confirmed',
-            order_id:      created.order_id,
-            bl_id:         formData.bl_id,
-            free_spare_qty: 0,
-            notes:         '[무상스페어]',
-          }),
-        });
-      }
-    }
-
-    reloadOrders();
-  };
-
-  const handleUpdateOrder = async (formData: Record<string, unknown>) => {
-    if (!editingOrder) return;
-    await fetchWithAuth(`/api/v1/orders/${editingOrder.order_id}`, {
-      method: 'PUT',
-      body: JSON.stringify(formData),
-    });
-    setEditingOrder(null);
-    reloadOrders();
-  };
-
-  const handleDeleteOrder = async () => {
-    if (!deletingOrder) return;
-    setOrderActionLoading(true);
-    setOrderActionError('');
-    try {
-      await fetchWithAuth(`/api/v1/orders/${deletingOrder.order_id}`, { method: 'DELETE' });
-      setDeletingOrder(null);
-      reloadOrders();
-    } catch (err) {
-      setOrderActionError(err instanceof Error ? err.message : '수주 삭제에 실패했습니다');
-    }
-    setOrderActionLoading(false);
-  };
-
   const purposeFromOrder = (order: Order): InventoryAllocation['purpose'] => {
     if (order.management_category === 'construction' || order.management_category === 'repowering') return 'construction_own';
     if (order.management_category === 'other') return 'other';
@@ -670,7 +376,6 @@ export default function OrdersPage() {
     });
     if (!ok) return;
 
-    setOrderActionLoading(true);
     setOrderActionError('');
     try {
       const restoredSource = orderSourceHints[order.order_id] ?? order.fulfillment_source;
@@ -717,112 +422,6 @@ export default function OrdersPage() {
     } catch (err) {
       setOrderActionError(err instanceof Error ? err.message : '예약 복귀 처리에 실패했습니다');
     }
-    setOrderActionLoading(false);
-  };
-
-  const handlePrefillCancel = () => {
-    setPendingAllocId(null);
-    setPendingLinkedAllocId(null);
-    setOrderFormPrefill(null);
-    navigate('/inventory', { replace: true });
-  };
-
-  const handleCreateOutbound = async (formData: Record<string, unknown>) => {
-    await fetchWithAuth('/api/v1/outbounds', { method: 'POST', body: JSON.stringify(formData) });
-    reloadOutbounds();
-    reloadOrders();
-  };
-
-  const handleSubmitOutboundSale = async (formData: Record<string, unknown>) => {
-    if (!invoiceOutbound && !invoiceOrder) return;
-    const existing = invoiceOutbound
-      ? invoiceOutbound.sale ?? salesByOutboundId.get(invoiceOutbound.outbound_id)
-      : invoiceOrder?.sale;
-    if (existing) {
-      await fetchWithAuth(`/api/v1/sales/${existing.sale_id}`, { method: 'PUT', body: JSON.stringify(formData) });
-    } else {
-      await fetchWithAuth('/api/v1/sales', { method: 'POST', body: JSON.stringify(formData) });
-    }
-    setInvoiceOutbound(null);
-    setInvoiceOrder(null);
-    reloadOutbounds();
-    reloadSales();
-    reloadOutboundSales();
-  };
-
-  const handleOpenSaleInvoice = (item: SaleListItem) => {
-    const sale = item.sale;
-    if (item.outbound_id) {
-      setInvoiceOrder(null);
-      setInvoiceOutbound({
-        outbound_id: item.outbound_id,
-        outbound_date: item.outbound_date ?? item.order_date ?? new Date().toISOString().slice(0, 10),
-        company_id: item.company_id ?? selectedCompanyId,
-        product_id: item.product_id ?? '',
-        product_name: item.product_name,
-        product_code: item.product_code,
-        spec_wp: item.spec_wp,
-        wattage_kw: item.spec_wp ? item.spec_wp / 1000 : undefined,
-        quantity: item.quantity,
-        capacity_kw: item.capacity_kw ?? (item.spec_wp ? item.quantity * item.spec_wp / 1000 : 0),
-        warehouse_id: '',
-        usage_category: 'sale',
-        customer_id: sale.customer_id ?? item.customer_id,
-        customer_name: sale.customer_name ?? item.customer_name,
-        unit_price_wp: sale.unit_price_wp ?? item.unit_price_wp,
-        status: 'active',
-        sale,
-      });
-      return;
-    }
-
-    if (item.order_id) {
-      setInvoiceOutbound(null);
-      setInvoiceOrder({
-        order_id: item.order_id,
-        order_number: item.order_number,
-        company_id: item.company_id ?? selectedCompanyId,
-        customer_id: sale.customer_id ?? item.customer_id,
-        customer_name: sale.customer_name ?? item.customer_name,
-        order_date: item.order_date ?? item.outbound_date ?? new Date().toISOString().slice(0, 10),
-        receipt_method: 'other',
-        management_category: 'sale',
-        fulfillment_source: 'stock',
-        product_id: item.product_id ?? '',
-        product_name: item.product_name,
-        product_code: item.product_code,
-        spec_wp: item.spec_wp,
-        wattage_kw: item.spec_wp ? item.spec_wp / 1000 : undefined,
-        quantity: item.quantity,
-        capacity_kw: item.capacity_kw,
-        unit_price_wp: sale.unit_price_wp ?? item.unit_price_wp,
-        status: 'received',
-        sale,
-      });
-    }
-  };
-
-  const handleSubmitReceipt = async (formData: Record<string, unknown>) => {
-    if (editingReceipt) {
-      await fetchWithAuth(`/api/v1/receipts/${editingReceipt.receipt_id}`, { method: 'PUT', body: JSON.stringify(formData) });
-    } else {
-      await fetchWithAuth('/api/v1/receipts', { method: 'POST', body: JSON.stringify(formData) });
-    }
-    reloadReceipts();
-  };
-
-  const handleDeleteReceipt = async () => {
-    if (!deletingReceipt) return;
-    setDeleteLoading(true);
-    setDeleteError('');
-    try {
-      await fetchWithAuth(`/api/v1/receipts/${deletingReceipt.receipt_id}`, { method: 'DELETE' });
-      setDeletingReceipt(null);
-      reloadReceipts();
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : '삭제에 실패했습니다');
-    }
-    setDeleteLoading(false);
   };
 
   const pageTitle =
@@ -913,7 +512,7 @@ export default function OrdersPage() {
             },
           ]} />
           <ColumnVisibilityMenu tableId={ORDER_TABLE_ID} columns={ORDER_COLUMN_META} hidden={orderColVis.hidden} setHidden={orderColVis.setHidden} pinning={orderColPin.pinning} pinLeft={orderColPin.pinLeft} pinRight={orderColPin.pinRight} unpin={orderColPin.unpin} />
-          <ExcelToolbar type="order" onNew={() => setOrderFormOpen(true)} />
+          <ExcelToolbar type="order" />
         </>
       )}
       {activeTab === 'outbound' && !selectedOutbound && (
@@ -939,7 +538,7 @@ export default function OrdersPage() {
             },
           ]} />
           <ColumnVisibilityMenu tableId={OUTBOUND_TABLE_ID} columns={OUTBOUND_COLUMN_META} hidden={outboundColVis.hidden} setHidden={outboundColVis.setHidden} pinning={outboundColPin.pinning} pinLeft={outboundColPin.pinLeft} pinRight={outboundColPin.pinRight} unpin={outboundColPin.unpin} />
-          <ExcelToolbar type="outbound" onNew={() => { setOutboundOrder(null); setObFormOpen(true); }} />
+          <ExcelToolbar type="outbound" />
         </>
       )}
       {activeTab === 'sales' && (
@@ -992,7 +591,7 @@ export default function OrdersPage() {
             },
           ]} />
           <ColumnVisibilityMenu tableId={RECEIPT_TABLE_ID} columns={RECEIPT_COLUMN_META} hidden={receiptColVis.hidden} setHidden={receiptColVis.setHidden} pinning={receiptColPin.pinning} pinLeft={receiptColPin.pinLeft} pinRight={receiptColPin.pinRight} unpin={receiptColPin.unpin} />
-          <ExcelToolbar type="receipt" onNew={() => setReceiptFormOpen(true)} />
+          <ExcelToolbar type="receipt" />
         </>
       )}
       <div style={{ flex: 1 }} />
@@ -1039,17 +638,6 @@ export default function OrdersPage() {
               pinning={orderColPin.pinning}
               onPinningChange={orderColPin.setPinning}
               onSelect={(o) => setSelectedOrder(o.order_id)}
-              onNew={() => setOrderFormOpen(true)}
-              onEdit={(o) => {
-                setOrderActionError('');
-                setEditingOrder({ ...o, fulfillment_source: orderSourceHints[o.order_id] ?? o.fulfillment_source });
-              }}
-              onDelete={(o) => { setOrderActionError(''); setDeletingOrder(o); }}
-              onCreateOutbound={(o) => {
-                setOrderActionError('');
-                setOutboundOrder({ ...o, fulfillment_source: orderSourceHints[o.order_id] ?? o.fulfillment_source });
-                setObFormOpen(true);
-              }}
               onCancelToReservation={handleCancelOrderToReservation}
               sourceOverrides={orderSourceHints}
             />
@@ -1077,8 +665,6 @@ export default function OrdersPage() {
                   pinning={outboundColPin.pinning}
                   onPinningChange={outboundColPin.setPinning}
                   onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
-                  onNew={() => setObFormOpen(true)}
-                  onInvoice={(ob) => setInvoiceOutbound({ ...ob, sale: ob.sale ?? salesByOutboundId.get(ob.outbound_id) })}
                 />
               )}
             </>
@@ -1090,7 +676,7 @@ export default function OrdersPage() {
           {saleLoading ? <SkeletonRows rows={8} /> : (
             <>
               <SaleSummaryCards items={sales} />
-              <SaleListTable items={sales} hidden={saleColVis.hidden} pinning={saleColPin.pinning} onPinningChange={saleColPin.setPinning} onInvoice={handleOpenSaleInvoice} />
+              <SaleListTable items={sales} hidden={saleColVis.hidden} pinning={saleColPin.pinning} onPinningChange={saleColPin.setPinning} />
             </>
           )}
         </TabsContent>
@@ -1103,12 +689,8 @@ export default function OrdersPage() {
               hidden={receiptColVis.hidden}
               pinning={receiptColPin.pinning}
               onPinningChange={receiptColPin.setPinning}
-              onNew={() => setReceiptFormOpen(true)}
-              onEdit={(r) => { setEditingReceipt(r); setReceiptFormOpen(true); }}
-              onDelete={(r) => { setDeleteError(''); setDeletingReceipt(r); }}
             />
           )}
-          {deleteError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{deleteError}</div>}
         </TabsContent>
 
         {/* 탭 3: 수금 매칭 */}
@@ -1221,63 +803,6 @@ export default function OrdersPage() {
         </aside>
       </div>
 
-      <OrderForm
-        open={orderFormOpen}
-        onOpenChange={(o) => {
-          setOrderFormOpen(o);
-          // 폼 닫힐 때(저장 취소) 배정 연동 상태 초기화
-          if (!o) { setPendingAllocId(null); setPendingLinkedAllocId(null); setOrderFormPrefill(null); }
-        }}
-        onSubmit={handleCreateOrder}
-        onPrefillCancel={handlePrefillCancel}
-        prefillData={orderFormPrefill}
-      />
-      <OrderForm
-        open={!!editingOrder}
-        onOpenChange={(o) => { if (!o) setEditingOrder(null); }}
-        onSubmit={handleUpdateOrder}
-        editData={editingOrder}
-      />
-      <OutboundForm
-        open={obFormOpen}
-        onOpenChange={(open) => {
-          setObFormOpen(open);
-          if (!open) setOutboundOrder(null);
-        }}
-        onSubmit={handleCreateOutbound}
-        order={outboundOrder}
-      />
-      <SaleForm
-        open={!!invoiceOutbound || !!invoiceOrder}
-        onOpenChange={(open) => { if (!open) { setInvoiceOutbound(null); setInvoiceOrder(null); } }}
-        onSubmit={handleSubmitOutboundSale}
-        outbound={invoiceOutbound ?? undefined}
-        order={invoiceOrder ?? undefined}
-        editData={invoiceOutbound?.sale ?? invoiceOrder?.sale ?? null}
-      />
-      <ReceiptForm
-        open={receiptFormOpen}
-        onOpenChange={(o) => { setReceiptFormOpen(o); if (!o) setEditingReceipt(null); }}
-        onSubmit={handleSubmitReceipt}
-        editData={editingReceipt}
-      />
-      <ConfirmDialog
-        open={!!deletingReceipt}
-        onOpenChange={(o) => { if (!o) setDeletingReceipt(null); }}
-        title="수금 삭제"
-        description={deletingReceipt ? `${deletingReceipt.customer_name ?? ''} ${deletingReceipt.amount.toLocaleString()}원 수금을 삭제합니다. 연결된 매칭도 함께 제거됩니다.` : ''}
-        onConfirm={handleDeleteReceipt}
-        loading={deleteLoading}
-      />
-      <ConfirmDialog
-        open={!!deletingOrder}
-        onOpenChange={(o) => { if (!o) setDeletingOrder(null); }}
-        title="수주 삭제"
-        description={deletingOrder ? `${deletingOrder.order_number ?? deletingOrder.order_id?.slice(0, 8) ?? '—'} 수주를 삭제합니다. 연결된 출고가 있으면 삭제가 제한될 수 있습니다.` : ''}
-        onConfirm={handleDeleteOrder}
-        loading={orderActionLoading}
-        variant="destructive"
-      />
     </div>
   );
 }

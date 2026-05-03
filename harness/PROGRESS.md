@@ -1,18 +1,32 @@
 # SolarFlow 진행 상황
 
-## 현재 상태 요약 (최종 업데이트: 2026-05-02)
+## 현재 상태 요약 (최종 업데이트: 2026-05-03)
 
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 배포 ZIP 생성/운영 PC 1회 로그인 리허설 + OCR 실사용 샘플 검증 + E2E smoke 로컬 DB 실행 확인 (D-110 RegisterRoutes 빅뱅 머지 완료, 신규 도메인 추가 절차는 RULES.md 참조) |
+| 다음 작업 | Excel Import Hub 중심 운영 입력 전환 마무리 + PO/LC/T/T import 스펙·서버 검증 추가 + PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 리허설 |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 49 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-111 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-115 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-03 세션 — Excel Import Hub 중심 입력 전환
+
+### 완료
+- 설계 정본을 "웹 직접 입력 보조"에서 "Excel Import Hub 단일 입력 경로 + 웹 조회/분석" 원칙으로 갱신.
+- D-115 추가: 운영 데이터 생성은 Excel Import Hub로 모으고, 웹 수정은 연결 지정·상태 전환·수금 매칭·서류 첨부 중심으로 제한.
+- 그룹 입고 요청은 원장 입력이 아니라 회사 간 요청/승인/출고연결 워크플로우 예외로 D-115에 명시.
+- 프론트엔드에서 전역 빠른 등록과 업무 화면의 직접 생성 CTA를 제거하는 작업 진행.
+
+### 다음 작업
+- PO/LC/T/T 구매 계약 데이터용 Excel import 스펙과 서버 검증 추가.
+- 숨겨진 예외/관리자 입력 경로를 점검해 운영 메뉴에서 노출되지 않도록 후속 정리.
 
 ---
 

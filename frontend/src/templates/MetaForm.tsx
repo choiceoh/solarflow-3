@@ -240,7 +240,7 @@ function useFieldOptions(fields: FieldConfig[], watchedValues: Record<string, un
 }
 
 // Phase 4 보강: 특수 기본값 해석 — '@today', '@now' 등을 실제 값으로 치환
-// 일반 string/number/boolean 은 그대로. ReceiptForm 의 receipt_date='@today' 같은 패턴.
+// 일반 string/number/boolean 은 그대로. '@today' 같은 기본값 패턴.
 function resolveSpecialDefault(v: unknown): unknown {
   if (typeof v !== 'string' || !v.startsWith('@')) return v;
   if (v === '@today') return new Date().toISOString().slice(0, 10);

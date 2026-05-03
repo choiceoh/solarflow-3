@@ -16,7 +16,7 @@ import { fetchWithAuth } from '@/lib/api';
 import type { PartnerPrice } from '@/types/baro';
 import type { Partner, Product, Manufacturer } from '@/types/masters';
 
-// OrderForm과 동일한 패턴 — react-hook-form + zod
+// react-hook-form + zod
 const priceSchema = z.object({
   partner_id: z.string().min(1, '거래처는 필수입니다'),
   product_id: z.string().min(1, '품번은 필수입니다'),

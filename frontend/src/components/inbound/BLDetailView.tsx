@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Plus, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -13,17 +13,12 @@ import BLLineTable, { BL_LINE_TABLE_ID, BL_LINE_COLUMN_META } from './BLLineTabl
 import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
 import { useColumnVisibility } from '@/lib/columnVisibility';
 import { useColumnPinning } from '@/lib/columnPinning';
-import BLLineForm from './BLLineForm';
 import LinkedMemoWidget from '@/components/memo/LinkedMemoWidget';
 import AttachmentWidget from '@/components/common/AttachmentWidget';
-import BLForm from './BLForm';
-import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { useBLDetail, useBLLines } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
 import { notify } from '@/lib/notify';
-import { type BLLineItem } from '@/types/inbound';
 import { MetaDetailBody } from '@/templates/MetaDetail';
-import { useActionHandler } from '@/templates/registry';
 import blShipmentDetailConfig from '@/config/details/bl_shipment';
 import type { Manufacturer } from '@/types/masters';
 import BLExpensesTab from './BLExpensesTab';
@@ -63,10 +58,7 @@ function classifyBLDocument(name: string): BLDocumentFileType | null {
 
 export default function BLDetailView({ blId, onBack }: Props) {
   const { data: bl, loading: blLoading, reload: reloadBL } = useBLDetail(blId);
-  const { data: lines, loading: linesLoading, reload: reloadLines } = useBLLines(blId);
-  const [editingBL, setEditingBL] = useState(false);
-  const [lineFormOpen, setLineFormOpen] = useState(false);
-  const [editLine, setEditLine] = useState<BLLineItem | null>(null);
+  const { data: lines, loading: linesLoading } = useBLLines(blId);
   const blLineColVis = useColumnVisibility(BL_LINE_TABLE_ID, BL_LINE_COLUMN_META);
   const blLineColPin = useColumnPinning(BL_LINE_TABLE_ID);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -92,31 +84,9 @@ export default function BLDetailView({ blId, onBack }: Props) {
     return () => { cancelled = true; };
   }, [bl?.manufacturer_id, bl?.manufacturer_name]);
 
-  // Step 2: MetaDetail contentBlock (bl_edit_button) 가 호출하는 actionHandler 등록
-  useActionHandler('bl_detail_edit', () => setEditingBL(true));
-
   if (blLoading || !bl) return <LoadingSpinner />;
 
   const isImport = bl.inbound_type === 'import';
-
-  const handleUpdateBL = async (data: Record<string, unknown>) => {
-    await saveBLShipmentWithLines({ ...data, bl_id: blId });
-    reloadBL();
-    reloadLines();
-    setEditingBL(false);
-  };
-
-  const handleCreateLine = async (data: Record<string, unknown>) => {
-    await fetchWithAuth(`/api/v1/bls/${blId}/lines`, { method: 'POST', body: JSON.stringify(data) });
-    reloadLines();
-  };
-
-  const handleUpdateLine = async (data: Record<string, unknown>) => {
-    if (!editLine) return;
-    await fetchWithAuth(`/api/v1/bls/${blId}/lines/${editLine.bl_line_id}`, { method: 'PUT', body: JSON.stringify(data) });
-    setEditLine(null);
-    reloadLines();
-  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -179,34 +149,18 @@ export default function BLDetailView({ blId, onBack }: Props) {
         <h2 className="flex-1 text-base font-semibold" style={{ letterSpacing: '-0.012em' }}>
           입고 <span className="sf-mono">{bl.bl_number}</span>
         </h2>
-        {!editingBL && (
-          <>
-            <StatusChanger blId={blId} currentStatus={bl.status} inboundType={bl.inbound_type} onChanged={reloadBL} />
-            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
-              <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
-            </Button>
-          </>
-        )}
+        <StatusChanger blId={blId} currentStatus={bl.status} inboundType={bl.inbound_type} onChanged={reloadBL} />
+        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+          <Trash2 className="mr-1 h-3.5 w-3.5" />삭제
+        </Button>
       </div>
 
-      {editingBL && (
-        <DetailSection title="B/L 수정">
-          <BLForm
-            variant="inline"
-            onOpenChange={(o) => { if (!o) setEditingBL(false); }}
-            onSubmit={handleUpdateBL}
-            editData={bl}
-          />
-        </DetailSection>
-      )}
-
-      {!editingBL && (
       <Tabs defaultValue="basic">
         <TabsList>
           <TabsTrigger value="basic">기본정보</TabsTrigger>
           <TabsTrigger value="documents">서류</TabsTrigger>
           <TabsTrigger value="lines">입고품목</TabsTrigger>
-          <TabsTrigger value="customs">부대비용 등록</TabsTrigger>
+          <TabsTrigger value="customs">부대비용</TabsTrigger>
           <TabsTrigger value="outbound">출고추적</TabsTrigger>
         </TabsList>
 
@@ -257,7 +211,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
                               {(totalCostKrw / (totalMW * 1_000_000)).toFixed(2)}원/Wp
                             </p>
                           </div>
-                        )}
+        )}
                       </div>
                     </div>
                   )}
@@ -315,9 +269,6 @@ export default function BLDetailView({ blId, onBack }: Props) {
             <h3 className="text-sm font-semibold">입고 품목</h3>
             <div className="flex items-center gap-2">
               <ColumnVisibilityMenu tableId={BL_LINE_TABLE_ID} columns={BL_LINE_COLUMN_META} hidden={blLineColVis.hidden} setHidden={blLineColVis.setHidden} pinning={blLineColPin.pinning} pinLeft={blLineColPin.pinLeft} pinRight={blLineColPin.pinRight} unpin={blLineColPin.unpin} />
-              <Button size="sm" onClick={() => { setEditLine(null); setLineFormOpen(true); }}>
-                <Plus className="mr-1 h-3.5 w-3.5" />추가
-              </Button>
             </div>
           </div>
           {linesLoading ? <LoadingSpinner /> : (
@@ -328,7 +279,6 @@ export default function BLDetailView({ blId, onBack }: Props) {
               onPinningChange={blLineColPin.setPinning}
               currency={bl.currency}
               manufacturerName={manufacturerName || bl.manufacturer_name}
-              onEdit={(line) => { setEditLine(line); setLineFormOpen(true); }}
             />
           )}
         </TabsContent>
@@ -341,19 +291,8 @@ export default function BLDetailView({ blId, onBack }: Props) {
           <BLOutboundTrackingTab blId={blId} companyId={bl.company_id} lines={lines} />
         </TabsContent>
       </Tabs>
-      )}
 
       <LinkedMemoWidget linkedTable="bl_shipments" linkedId={blId} />
-
-      <BLLineForm
-        open={lineFormOpen}
-        onOpenChange={setLineFormOpen}
-        onSubmit={editLine ? handleUpdateLine : handleCreateLine}
-        editData={editLine}
-        blId={blId}
-        currency={bl.currency}
-        manufacturerId={bl.manufacturer_id}
-      />
 
       <ConfirmDialog
         open={deleteOpen}

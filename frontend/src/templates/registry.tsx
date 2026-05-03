@@ -9,14 +9,9 @@ import { useAppStore } from '@/stores/appStore';
 import { Badge } from '@/components/ui/badge';
 import OutboundStatusBadge from '@/components/outbound/OutboundStatusBadge';
 import OutboundDetailView from '@/components/outbound/OutboundDetailView';
-import OutboundForm from '@/components/outbound/OutboundForm';
 import InboundStatusBadge from '@/components/inbound/InboundStatusBadge';
 import BLDetailView from '@/components/inbound/BLDetailView';
-import BLForm from '@/components/inbound/BLForm';
-import BLOcrWidget from '@/components/inbound/BLOcrWidget';
-import BLPaymentTermsWidget from '@/components/inbound/BLPaymentTermsWidget';
 import { useBLList, useBLDetail } from '@/hooks/useInbound';
-import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL } from '@/types/inbound';
 import type { BLShipment, BLLineItem, InboundType, BLStatus } from '@/types/inbound';
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
@@ -30,20 +25,13 @@ import partnerDetailConfig from '@/config/details/partners';
 import companyDetailConfig from '@/config/details/companies';
 import constructionSiteDetailConfig from '@/config/details/construction_sites';
 import partnerFormConfig from '@/config/forms/partners';
-import outboundSimpleFormConfig from '@/config/forms/outbound_simple';
 import companyFormConfig from '@/config/forms/companies';
 import bankFormConfig from '@/config/forms/banks';
 import warehouseFormConfig from '@/config/forms/warehouses';
 import manufacturerFormConfig from '@/config/forms/manufacturers';
 import productFormConfig from '@/config/forms/products';
 import constructionSiteFormConfig from '@/config/forms/construction_sites';
-import poLineFormConfig from '@/config/forms/po_line';
-import costFormConfig from '@/config/forms/cost';
-import blLineFormConfig from '@/config/forms/bl_line';
-import receiptFormConfig from '@/config/forms/receipt';
-import declarationFormConfig from '@/config/forms/declaration';
 import depsDemoFormConfig from '@/config/forms/deps_demo';
-import blFormConfig from '@/config/forms/bl';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { useOutboundList, useSaleList, useOutboundDetail } from '@/hooks/useOutbound';
 import { useDeclarationDetail } from '@/hooks/useCustoms';
@@ -490,18 +478,6 @@ const PartnerFormV2: FormComponent = (props) => (
   />
 );
 
-// PoC: 출고 폼 메타 한계선 데모 — 단순 필드 7개만. 실제 출고 등록에 충분치 않음
-// (수량·창고·품번 등은 코드 OutboundForm에 남김). 메타화 가능 영역 입증용
-const OutboundFormSimple: FormComponent = (props) => (
-  <MetaForm
-    config={outboundSimpleFormConfig}
-    open={props.open}
-    onOpenChange={props.onOpenChange}
-    onSubmit={props.onSubmit}
-    editData={props.editData}
-  />
-);
-
 // 법인 메타 폼 (Phase 4 신규 도메인 적용)
 const CompanyFormV2: FormComponent = (props) => (
   <MetaForm
@@ -568,64 +544,6 @@ const ConstructionSiteFormV2: FormComponent = (props) => (
   />
 );
 
-// Phase 4 보강: PO 라인 메타 폼 (child 라인 폼 첫 변환)
-const POLineFormV2: FormComponent = (props) => (
-  <MetaForm
-    config={poLineFormConfig}
-    open={props.open}
-    onOpenChange={props.onOpenChange}
-    onSubmit={props.onSubmit}
-    editData={props.editData}
-    extraContext={(props as { extraContext?: Record<string, unknown> }).extraContext}
-  />
-);
-
-// Phase 4 보강: 면장 원가 메타 폼 (CostForm 변환 — 17 필드, 4 computed, 3 stage)
-const CostFormV2: FormComponent = (props) => (
-  <MetaForm
-    config={costFormConfig}
-    open={props.open}
-    onOpenChange={props.onOpenChange}
-    onSubmit={props.onSubmit}
-    editData={props.editData}
-    extraContext={(props as { extraContext?: Record<string, unknown> }).extraContext}
-  />
-);
-
-// Phase 4 보강: BL 라인 메타 폼 (BLLineForm 변환)
-const BLLineFormV2: FormComponent = (props) => (
-  <MetaForm
-    config={blLineFormConfig}
-    open={props.open}
-    onOpenChange={props.onOpenChange}
-    onSubmit={props.onSubmit}
-    editData={props.editData}
-    extraContext={(props as { extraContext?: Record<string, unknown> }).extraContext}
-  />
-);
-
-// Phase 4 보강: 수금 메타 폼 (ReceiptForm 변환)
-const ReceiptFormV2: FormComponent = (props) => (
-  <MetaForm
-    config={receiptFormConfig}
-    open={props.open}
-    onOpenChange={props.onOpenChange}
-    onSubmit={props.onSubmit}
-    editData={props.editData}
-  />
-);
-
-// Phase 4 보강: 면장 메타 폼 (DeclarationForm 변환)
-const DeclarationFormV2: FormComponent = (props) => (
-  <MetaForm
-    config={declarationFormConfig}
-    open={props.open}
-    onOpenChange={props.onOpenChange}
-    onSubmit={props.onSubmit}
-    editData={props.editData}
-  />
-);
-
 // Phase 4 보강: 의존성·동적 옵션 시연 폼 (UI 데모 전용 — 저장 안 함)
 const DepsDemoForm: FormComponent = (props) => (
   <MetaForm
@@ -637,30 +555,7 @@ const DepsDemoForm: FormComponent = (props) => (
   />
 );
 
-// Inbound (Step 2 follow-up): BLForm 등록 — submitterId='bl_save' 와 함께 사용
-const BLFormWrapper: FormComponent = (props) => (
-  <BLForm
-    open={props.open}
-    onOpenChange={props.onOpenChange}
-    onSubmit={props.onSubmit}
-    editData={props.editData as BLShipment | null}
-  />
-);
-
-// Phase 4 — Step 3 final: BL 메타 v2 폼 (config/forms/bl.ts)
-const BLFormV2: FormComponent = (props) => (
-  <MetaForm
-    config={blFormConfig}
-    open={props.open}
-    onOpenChange={props.onOpenChange}
-    onSubmit={props.onSubmit}
-    editData={props.editData}
-  />
-);
-
 export const formComponents: Record<string, FormComponent> = {
-  outbound_form: OutboundForm as unknown as FormComponent,
-  outbound_form_simple: OutboundFormSimple,    // 메타 한계선 데모용
   partner_form: PartnerForm as unknown as FormComponent,
   partner_form_v2: PartnerFormV2,
   company_form_v2: CompanyFormV2,              // Phase 4: 법인 마스터 메타 폼
@@ -669,90 +564,14 @@ export const formComponents: Record<string, FormComponent> = {
   manufacturer_form_v2: ManufacturerFormV2,    // Phase 4: 제조사 마스터 메타 폼
   product_form_v2: ProductFormV2,              // Phase 4: 품번 마스터 메타 폼 (13 필드)
   construction_site_form_v2: ConstructionSiteFormV2, // Phase 4: 발전소 메타 폼 (마지막 마스터)
-  po_line_form_v2: POLineFormV2,               // Phase 4 보강: PO 라인 (child 라인 폼 첫 변환)
-  cost_form_v2: CostFormV2,                    // Phase 4 보강: 면장 원가 (가장 복잡한 child 라인 폼)
-  bl_line_form_v2: BLLineFormV2,               // Phase 4 보강: BL 라인 아이템
-  receipt_form_v2: ReceiptFormV2,              // Phase 4 보강: 수금
-  declaration_form_v2: DeclarationFormV2,      // Phase 4 보강: 면장
   deps_demo: DepsDemoForm,                     // Phase 4 보강: 의존성·동적 옵션 데모
-  bl_form: BLFormWrapper,                       // Phase 4 — Inbound: B/L 입고 (submitterId='bl_save')
-  bl_form_v2: BLFormV2,                         // Phase 4 Step 3 final: 메타 v2 BL 폼
 };
 
-// Phase 4 보강: 폼 저장 함수 — endpoint POST/PUT 으로 표현 안 되는 multi-step 저장
-export const formSubmitters: Record<string, FormSubmitter> = {
-  // BL: parent (BLShipment) + child (lines) 묶음 저장
-  bl_save: async (data) => {
-    await saveBLShipmentWithLines(data);
-  },
-};
+export const formSubmitters: Record<string, FormSubmitter> = {};
 
 // Phase 4 — Step 3 prep: 폼 안 임의 컴포넌트 슬롯 (FormSection.contentBlock)
 // list 의 contentBlocks 와 시그니처 다름 — form watch/setValue/getValues API 받음.
 export const formContentBlocks: Record<string, FormContentBlock> = {
-  // Step 3c: BL OCR 위젯 — REAL.
-  // 면장 PDF 업로드 → 후보 추출 → review dialog → 폼 필드 자동 fill (단순 setValue 기반)
-  bl_ocr_widget: ({ setValue, extraContext }) => {
-    const initialFile = (extraContext?.initialOcrFile ?? null) as File | null;
-    const initialFileKey = (extraContext?.initialOcrFileKey ?? undefined) as number | undefined;
-    return (
-      <BLOcrWidget
-        initialFile={initialFile}
-        initialFileKey={initialFileKey}
-        onApply={async ({ fields, productOverrides, productSource }) => {
-          // 메타 v2 의 단순 적용 — 직접 매칭되는 필드만 setValue.
-          // 복잡한 cifAmountKrwManual / exchangeRateDisplay state 같은 BLForm 전용 동작은 메타 v2 미지원.
-          if (fields.declaration_number?.value) setValue('declaration_number', fields.declaration_number.value);
-          if (fields.bl_number?.value) setValue('bl_number', fields.bl_number.value);
-          if (fields.arrival_date?.value) setValue('actual_arrival', fields.arrival_date.value);
-          if (fields.port?.value) setValue('port', fields.port.value);
-          if (fields.forwarder?.value) setValue('forwarder', fields.forwarder.value);
-          if (fields.invoice_number?.value) setValue('invoice_number', fields.invoice_number.value);
-          if (fields.exchange_rate?.value) {
-            const rate = parseFloat(fields.exchange_rate.value.replace(/,/g, '').trim());
-            if (Number.isFinite(rate) && rate > 0) setValue('exchange_rate', rate);
-          }
-          // line_items → child_array 'lines' 에 mapping (가장 간단한 매핑)
-          if (fields.line_items?.length) {
-            const lines = fields.line_items.map((item, idx) => {
-              const overrideId = productOverrides[idx];
-              const matched = overrideId
-                ? productSource.find((p) => p.product_id === overrideId)
-                : null;
-              return {
-                product_code: matched?.product_code ?? '',
-                product_name: matched?.product_name ?? item.model_spec?.value ?? '',
-                quantity: item.quantity?.value ? Number(item.quantity.value) : 0,
-                capacity_kw: 0,
-                item_type: 'main',
-                payment_type: item.payment_type?.value === 'free' ? 'free' : 'paid',
-                unit_price_usd_wp: item.unit_price_usd?.value ? Number(item.unit_price_usd.value) : 0,
-                invoice_amount_usd: item.amount_usd?.value ? Number(item.amount_usd.value) : 0,
-              };
-            });
-            setValue('lines', lines);
-          }
-        }}
-      />
-    );
-  },
-  // Step 3e: 결제조건 파서 — REAL.
-  // BLPaymentTermsWidget 임베드 — 현재 inbound_type/payment_terms 텍스트 watch, 사용자 변경 시 setValue('payment_terms', composed).
-  bl_payment_terms_widget: ({ watch, setValue }) => {
-    const inboundType = watch('inbound_type') as string | undefined;
-    const paymentTerms = watch('payment_terms') as string | undefined;
-    // 총액 — 라인 합계 (USD): meta v2 에서 lines.invoice_amount_usd 합산
-    const lines = (watch('lines') ?? []) as Array<{ invoice_amount_usd?: number }>;
-    const totalAmount = lines.reduce((s, l) => s + (Number(l?.invoice_amount_usd) || 0), 0);
-    return (
-      <BLPaymentTermsWidget
-        inboundType={inboundType}
-        totalAmount={totalAmount}
-        initialValue={paymentTerms}
-        onChange={(text) => setValue('payment_terms', text)}
-      />
-    );
-  },
   // 데모: 현재 입력값 요약 — watch 로 라이브 표시
   demo_status_widget: ({ watch }) => {
     const poId = watch('po_id') as string | undefined;
@@ -788,27 +607,6 @@ export const fieldCascades: Record<string, FieldCascade> = {
     } else if (poId === 'po-200') {
       setValue('manufacturer', '한화큐셀');
       setValue('currency', 'KRW');
-    }
-  },
-  // Step 3d: BL 폼의 PO 선택 → LC/제조사/통화 자동 fill
-  // PO 상세 fetch 해서 manufacturer_id / currency / 첫 LC id 채움.
-  bl_po_to_lc_mfg: async (poId, _values, setValue) => {
-    if (!poId || typeof poId !== 'string') return;
-    try {
-      const po = await fetchWithAuth<{
-        po_id: string;
-        manufacturer_id?: string;
-        currency?: string;
-        // 일부 응답이 lcs nested array 또는 첫 lc_id 만 평탄
-        lcs?: Array<{ lc_id?: string }>;
-        lc_id?: string;
-      }>(`/api/v1/pos/${poId}`);
-      if (po.manufacturer_id) setValue('manufacturer_id', po.manufacturer_id);
-      if (po.currency) setValue('currency', po.currency);
-      const firstLc = po.lcs?.[0]?.lc_id ?? po.lc_id;
-      if (firstLc) setValue('lc_id', firstLc);
-    } catch {
-      // PO 조회 실패 — 무시 (사용자가 직접 입력)
     }
   },
 };
@@ -911,14 +709,9 @@ export const railBlocks: Record<string, RailBlock> = {
 
 // ─── Toolbar extras ────────────────────────────────────────────────────────
 export const toolbarExtras: Record<string, ToolbarExtra> = {
-  excel_toolbar: ({ config, openForm }) => {
-    const c = config as { type: 'outbound' | 'sale' | 'inbound'; createFormId?: string };
-    return (
-      <ExcelToolbar
-        type={c.type}
-        onNew={c.createFormId ? () => openForm(c.createFormId!) : undefined}
-      />
-    );
+  excel_toolbar: ({ config }) => {
+    const c = config as { type: 'outbound' | 'sale' | 'inbound' };
+    return <ExcelToolbar type={c.type} />;
   },
 };
 
@@ -1027,38 +820,6 @@ export const masterSources: Record<string, MasterOptionSource> = {
       return useAppStore.getState().manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr }));
     },
   },
-  // Step 3d: 해외직수입 PO 목록 (BLForm 의 PO 선택용)
-  'pos.import': {
-    load: async () => {
-      const companyId = useAppStore.getState().selectedCompanyId;
-      if (!companyId || companyId === 'all') return [];
-      try {
-        const list = await fetchWithAuth<Array<{ po_id: string; po_number?: string; manufacturer_id?: string; manufacturer_name?: string }>>(
-          `/api/v1/pos?company_id=${companyId}&contract_type=import`
-        );
-        return list.map((p) => ({
-          value: p.po_id,
-          label: `${p.po_number ?? p.po_id.slice(0, 8)}${p.manufacturer_name ? ` · ${p.manufacturer_name}` : ''}`,
-        }));
-      } catch { return []; }
-    },
-  },
-  // Step 3d: 선택한 PO 에 연결된 LC 목록 (PO cascade 후 LC 선택)
-  'lcs.byPo': {
-    load: async (ctx) => {
-      const poId = ctx?.po_id as string | undefined;
-      if (!poId) return [];
-      try {
-        const list = await fetchWithAuth<Array<{ lc_id: string; lc_number?: string; status?: string }>>(
-          `/api/v1/lcs?po_id=${poId}`
-        );
-        return list.map((l) => ({
-          value: l.lc_id,
-          label: `${l.lc_number ?? l.lc_id.slice(0, 8)}${l.status ? ` · ${l.status}` : ''}`,
-        }));
-      } catch { return []; }
-    },
-  },
   // Phase 4 보강: 동적 옵션 시연 — context.domestic_filter 또는 .domestic_foreign 으로 필터
   // (값이 '전체'/비어있으면 전체 반환). 영문(domestic/foreign) / 한글(국내/해외) 데이터 혼재 처리.
   'manufacturers.byDomestic': {
@@ -1124,20 +885,6 @@ export const masterSources: Record<string, MasterOptionSource> = {
       return list
         .filter((p) => p.is_active && (p.partner_type === 'customer' || p.partner_type === 'both'))
         .map((p) => ({ value: p.partner_id, label: p.partner_name }));
-    },
-  },
-  // Phase 4 보강: BL 마스터 (DeclarationForm 메타화용) — selectedCompanyId 로 필터
-  'bls.byCompany': {
-    load: async () => {
-      const companyId = useAppStore.getState().selectedCompanyId;
-      const url = companyId && companyId !== 'all'
-        ? `/api/v1/bls?company_id=${companyId}`
-        : '/api/v1/bls';
-      const list = await fetchWithAuth<BLShipment[]>(url);
-      return list.map((b) => ({
-        value: b.bl_id,
-        label: b.bl_number + (b.manufacturer_name ? ` · ${b.manufacturer_name}` : ''),
-      }));
     },
   },
 };
@@ -1377,14 +1124,6 @@ export const cellRendererMeta: RegistryMeta = {
   bl_currency_label: { label: 'BL 통화', description: 'currency enum → 한글' },
 };
 export const formContentBlockMeta: RegistryMeta = {
-  bl_ocr_widget: {
-    label: 'BL OCR 자동 입력',
-    description: '업로드한 BL PDF 에서 항목 추출 → 폼 자동 채움',
-  },
-  bl_payment_terms_widget: {
-    label: 'BL 결제 조건 위젯',
-    description: '복합 결제조건 (DP/DA/AT-SIGHT 등) 시각 편집',
-  },
   demo_status_widget: { label: '데모 상태 위젯', description: '메타 contentBlock 데모 — has_warranty 토글' },
 };
 export const fieldCascadeMeta: RegistryMeta = {
@@ -1392,23 +1131,13 @@ export const fieldCascadeMeta: RegistryMeta = {
     label: 'PO 선택 → 자동 채움 (데모)',
     description: 'PO 선택 시 LC/제조사/통화 자동 fill — 메타 cascade 데모',
   },
-  bl_po_to_lc_mfg: {
-    label: 'BL: PO → L/C·제조사 자동 채움',
-    description: 'BL Form 에서 PO 선택 시 그 PO 의 LC·제조사·통화·인코텀즈 등을 자동 fill',
-  },
 };
-export const formSubmitterMeta: RegistryMeta = {
-  bl_save: {
-    label: 'BL 저장 (parent + lines)',
-    description: 'BLShipment 본체 + 라인 아이템 multi-step 저장. saveBLShipmentWithLines 호출',
-  },
-};
+export const formSubmitterMeta: RegistryMeta = {};
 export const computedFormulaMeta: RegistryMeta = {};
 export const formRefinementMeta: RegistryMeta = {};
 export const contentBlockMeta: RegistryMeta = {
   sale_summary_cards: { label: '판매 요약 카드', description: '판매 통계 (건수/총액/마감률) 카드' },
   bl_status_badge: { label: 'BL 상태 뱃지', description: 'detail 헤더 — 입고 상태 표시' },
-  bl_edit_button: { label: 'BL 수정 버튼', description: 'detail 헤더 — 폼 다이얼로그 오픈' },
   bl_memo_block: { label: 'BL 메모 블록', description: 'detail 메모 섹션 — pre-wrap 텍스트' },
   outbound_bl_items_section: { label: '출고 → BL 연결 행', description: '여러 BL 라인 표시' },
   outbound_memo_section: { label: '출고 메모', description: 'pre-wrap 텍스트' },
@@ -1438,14 +1167,6 @@ export const masterSourceMeta: RegistryMeta = {
     label: '법인 목록',
     description: '활성 법인 — company_id 별 옵션',
   },
-  'pos.import': {
-    label: '수입 PO 목록',
-    description: '발주서 (수입 모드) — PO 번호 + 제조사 라벨',
-  },
-  'lcs.byPo': {
-    label: 'L/C (PO 별)',
-    description: 'PO 선택 시 그 PO 의 LC 만 — po_id 의존',
-  },
   'products.search': {
     label: '제품 검색',
     description: '서버 검색 (대용량) — 코드/이름 부분일치, 콤보박스 모드',
@@ -1453,10 +1174,6 @@ export const masterSourceMeta: RegistryMeta = {
   'partners.customer': {
     label: '거래처 (고객사)',
     description: 'partner_type=customer 또는 both 만 필터',
-  },
-  'bls.byCompany': {
-    label: 'BL (법인 별)',
-    description: '선택된 법인의 BL 만 — company_id 의존',
   },
 };
 

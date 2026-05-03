@@ -1,11 +1,9 @@
 import { useState, useEffect, Fragment } from 'react';
-import { Plus, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 import { formatUSD, formatDate, shortMfgName } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
 import type { PurchaseOrder, TTRemittance, POLineItem } from '@/types/procurement';
-import DepositPaymentForm from './DepositPaymentForm';
 import { parseDeposit } from './depositStatus';
 
 /* ─────────────────────────────────────────────
@@ -69,12 +67,9 @@ function ProgressBar({ pct, done }: { pct: number; done: boolean }) {
 /* ─────────────────────────────────────────────
    T/T 행 (펼침 내부 테이블용)
    ───────────────────────────────────────────── */
-function TTRow({
-  idx, tt, onEdit,
-}: {
+function TTRow({ idx, tt }: {
   idx: number;
   tt: TTRemittance;
-  onEdit?: (tt: TTRemittance) => void;
 }) {
   const isDone = tt.status === 'completed';
   const krw = tt.amount_krw ?? (tt.exchange_rate ? tt.amount_usd * tt.exchange_rate : null);
@@ -96,17 +91,7 @@ function TTRow({
           {isDone ? '완료' : '예정'}
         </span>
       </td>
-      <td className="px-3 py-2 text-center">
-        {onEdit && (
-          <button
-            onClick={e => { e.stopPropagation(); onEdit(tt); }}
-            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-            title="수정"
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-        )}
-      </td>
+      <td className="px-3 py-2" />
     </tr>
   );
 }
@@ -117,14 +102,12 @@ function TTRow({
 export interface DepositStatusPanelProps {
   pos: PurchaseOrder[];          // 전체 PO 목록 (completed 포함)
   tts: TTRemittance[];           // 전체 T/T 목록
-  onPaymentCreated: (poId: string) => void;
-  onEditTT?: (tt: TTRemittance) => void;
 }
 
 /* ─────────────────────────────────────────────
    메인 컴포넌트
    ───────────────────────────────────────────── */
-export default function DepositStatusPanel({ pos, tts, onPaymentCreated, onEditTT }: DepositStatusPanelProps) {
+export default function DepositStatusPanel({ pos, tts }: DepositStatusPanelProps) {
   const companies = useAppStore((s) => s.companies);
   const companyMap = Object.fromEntries(companies.map((c) => [c.company_id, c.company_name]));
 
@@ -154,9 +137,6 @@ export default function DepositStatusPanel({ pos, tts, onPaymentCreated, onEditT
     ).then(results => setLinesMap(Object.fromEntries(results)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leafKey]);
-
-  /* 지급 등록 폼 상태 */
-  const [payFormPo, setPayFormPo] = useState<PurchaseOrder | null>(null);
 
   /* 행 펼침 상태 */
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -348,18 +328,8 @@ export default function DepositStatusPanel({ pos, tts, onPaymentCreated, onEditT
                       )}
                     </td>
 
-                    {/* 액션 버튼 */}
-                    <td className="p-3 text-center align-top" onClick={e => e.stopPropagation()}>
-                      {!isDone ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 text-[11px] px-2 whitespace-nowrap"
-                          onClick={() => setPayFormPo(po)}
-                        >
-                          <Plus className="h-3 w-3 mr-0.5" />지급 등록
-                        </Button>
-                      ) : (
+                    <td className="p-3 text-center align-top">
+                      {isDone && (
                         <span className="text-[10px] bg-green-50 text-green-700 rounded px-1.5 py-0.5">
                           납부완료
                         </span>
@@ -410,7 +380,6 @@ export default function DepositStatusPanel({ pos, tts, onPaymentCreated, onEditT
                                   <TTSection
                                     tts={poTTs}
                                     startIdx={prevTTCount + 1}
-                                    onEdit={onEditTT}
                                   />
                                 </div>
                               );
@@ -420,7 +389,6 @@ export default function DepositStatusPanel({ pos, tts, onPaymentCreated, onEditT
                             <TTSection
                               tts={chainTTs.sort((a, b) => (a.remit_date ?? '').localeCompare(b.remit_date ?? ''))}
                               startIdx={1}
-                              onEdit={onEditTT}
                             />
                           )}
 
@@ -463,32 +431,6 @@ export default function DepositStatusPanel({ pos, tts, onPaymentCreated, onEditT
           </tbody>
         </table>
       </div>
-
-      {/* 지급 등록 폼 */}
-      {payFormPo && (() => {
-        const dep    = parseDeposit(payFormPo.payment_terms);
-        const chain  = buildChain(payFormPo, pos);
-        const chainPoIds = new Set(chain.map(c => c.po_id));
-        const paidUsd = tts
-          .filter(t => chainPoIds.has(t.po_id) && t.status === 'completed')
-          .reduce((s, t) => s + t.amount_usd, 0);
-        const allTTs = tts.filter(t => chainPoIds.has(t.po_id));
-        return (
-          <DepositPaymentForm
-            open={true}
-            po={payFormPo}
-            depositInfo={dep}
-            paidUsd={paidUsd}
-            nextInstallment={allTTs.length + 1}
-            onOpenChange={open => { if (!open) setPayFormPo(null); }}
-            onSubmit={async data => {
-              await fetchWithAuth('/api/v1/tts', { method: 'POST', body: JSON.stringify(data) });
-              setPayFormPo(null);
-              onPaymentCreated(payFormPo.po_id);
-            }}
-          />
-        );
-      })()}
     </div>
   );
 }
@@ -497,11 +439,10 @@ export default function DepositStatusPanel({ pos, tts, onPaymentCreated, onEditT
    TTSection — T/T 목록 테이블 (섹션 내부 공통)
    ───────────────────────────────────────────── */
 function TTSection({
-  tts, startIdx, onEdit,
+  tts, startIdx,
 }: {
   tts: TTRemittance[];
   startIdx: number;
-  onEdit?: (tt: TTRemittance) => void;
 }) {
   return (
     <div className="rounded-md border overflow-x-auto">
@@ -519,7 +460,7 @@ function TTSection({
         </thead>
         <tbody>
           {tts.map((tt, i) => (
-            <TTRow key={tt.tt_id} idx={startIdx + i} tt={tt} onEdit={onEdit} />
+            <TTRow key={tt.tt_id} idx={startIdx + i} tt={tt} />
           ))}
         </tbody>
       </table>

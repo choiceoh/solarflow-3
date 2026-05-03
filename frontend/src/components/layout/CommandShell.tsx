@@ -6,6 +6,7 @@ import {
   Calculator,
   ClipboardList,
   Database,
+  FileSpreadsheet,
   FileSignature,
   GraduationCap,
   History,
@@ -29,7 +30,6 @@ import {
 import { detectTenantScope, type TenantScope } from '@/lib/tenantScope';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import AlertBell from '@/components/layout/AlertBell';
-import QuickRegister from '@/components/layout/QuickRegister';
 import FloatingMwEaCalculator from '@/components/common/FloatingMwEaCalculator';
 import { FloatingAssistantButton } from '@/components/assistant/FloatingAssistantButton';
 import {
@@ -153,6 +153,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
   {
     label: '도구',
     items: [
+      { key: 'import-hub', label: '엑셀 입력', abbr: '입력', path: '/import', icon: FileSpreadsheet, menu: 'import_hub' },
       { key: 'masters', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters' },
       { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
       { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: ['topsolar'], isWip: true },
@@ -173,6 +174,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/banking': { title: 'L/C 한도', breadcrumb: '현황 / 은행 한도' },
   '/sales-analysis': { title: '매출 분석', breadcrumb: '현황 / 매출과 이익' },
   '/crm/inbox': { title: '내 미처리 문의', breadcrumb: '판매 / 후속 답변 대기' },
+  '/import': { title: '엑셀 입력', breadcrumb: '도구 / 일괄 가져오기' },
   '/approval': { title: '결재안', breadcrumb: '도구 / 결재 문안' },
   '/assistant': { title: 'AI', breadcrumb: '도구 / 채팅 어시스턴트' },
   '/settings': { title: '설정', breadcrumb: '시스템 / 설정' },
@@ -418,7 +420,15 @@ export default function CommandShell() {
               totalCount={alertState.totalCount}
               criticalCount={alertState.criticalCount}
             />
-            <QuickRegister userId={user?.user_id} role={r} />
+            {canAccessMenu(r, 'import_hub') && (
+              <Link
+                to="/import"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 text-xs font-semibold text-[var(--ink)] transition hover:bg-[var(--bg-2)]"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5 text-[var(--ink-3)]" />
+                엑셀 입력
+              </Link>
+            )}
             <EditModeToggleButton />
           </div>
         </header>

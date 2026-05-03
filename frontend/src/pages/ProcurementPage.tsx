@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useMemo, type DragEvent as ReactDragEvent } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle2, History, Plus, ScanText, X } from 'lucide-react';
+import { History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 
@@ -11,21 +11,16 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import POListTable from '@/components/procurement/POListTable';
 import PODetailView from '@/components/procurement/PODetailView';
-import POForm from '@/components/procurement/POForm';
 import LCListTable from '@/components/procurement/LCListTable';
-import LCForm from '@/components/procurement/LCForm';
 import TTListTable from '@/components/procurement/TTListTable';
-import TTForm from '@/components/procurement/TTForm';
 import DepositStatusPanel from '@/components/procurement/DepositStatusPanel';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { PO_STATUS_LABEL, CONTRACT_TYPE_LABEL, CONTRACT_TYPES_ACTIVE, LC_STATUS_LABEL, TT_STATUS_LABEL } from '@/types/procurement';
-import type { PurchaseOrder, LCRecord, TTRemittance, POStatus, LCStatus, TTStatus } from '@/types/procurement';
+import type { PurchaseOrder, POStatus, LCStatus, TTStatus } from '@/types/procurement';
 import type { Manufacturer, Bank } from '@/types/masters';
 import { useBLList } from '@/hooks/useInbound';
 import BLListTable from '@/components/inbound/BLListTable';
 import BLDetailView from '@/components/inbound/BLDetailView';
-import BLForm from '@/components/inbound/BLForm';
-import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL, type InboundType, type BLStatus } from '@/types/inbound';
 import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
@@ -70,17 +65,6 @@ function daysUntil(date?: string) {
   return Math.ceil((at.getTime() - today.getTime()) / 86_400_000);
 }
 
-function isCustomsOCRAcceptedFile(file: File) {
-  const name = file.name.toLowerCase();
-  return file.type === 'application/pdf'
-    || file.type.startsWith('image/')
-    || /\.(pdf|png|jpe?g|webp|heic|heif|bmp|tiff?)$/i.test(name);
-}
-
-function firstCustomsOCRFile(files: FileList | null) {
-  return files ? Array.from(files).find(isCustomsOCRAcceptedFile) ?? null : null;
-}
-
 export default function ProcurementPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const location = useLocation();
@@ -118,7 +102,6 @@ export default function ProcurementPage() {
     const target = poList.find((p) => p.po_id === targetId);
     if (target) setSelectedPO(target);
   }, [location.search, poList]);
-  const [poFormOpen, setPoFormOpen] = useState(false);
   const poFilters: Record<string, string> = {};
   if (poStatusFilter) poFilters.status = poStatusFilter;
   if (poMfgFilter) poFilters.manufacturer_id = poMfgFilter;
@@ -129,9 +112,6 @@ export default function ProcurementPage() {
   const [lcStatusFilter, setLcStatusFilter] = useState('');
   const [lcBankFilter, setLcBankFilter] = useState('');
   const [lcMfgFilter, setLcMfgFilter] = useState('');
-  const [lcFormOpen, setLcFormOpen] = useState(false);
-  const [editLC, setEditLC] = useState<LCRecord | null>(null);
-  const [newLcDefaultPoId, setNewLcDefaultPoId] = useState<string | undefined>(undefined);
   const lcFilters: Record<string, string> = {};
   if (lcStatusFilter) lcFilters.status = lcStatusFilter;
   if (lcBankFilter) lcFilters.bank_id = lcBankFilter;
@@ -139,25 +119,16 @@ export default function ProcurementPage() {
 
   const [ttStatusFilter, setTtStatusFilter] = useState('');
   const [ttPoFilter, setTtPoFilter] = useState('');
-  const [ttFormOpen, setTtFormOpen] = useState(false);
-  const [editTT, setEditTT] = useState<TTRemittance | null>(null);
   const ttFilters: Record<string, string> = {};
   if (ttStatusFilter) ttFilters.status = ttStatusFilter;
   if (ttPoFilter) ttFilters.po_id = ttPoFilter;
-  const { data: tts, loading: ttLoading, reload: reloadTT } = useTTList(ttFilters);
+  const { data: tts, loading: ttLoading } = useTTList(ttFilters);
 
   // BL 탭
   const [blTypeFilter, setBlTypeFilter] = useState('');
   const [blStatusFilter, setBlStatusFilter] = useState('');
   const [blMfgFilter, setBlMfgFilter] = useState('');
   const [selectedBL, setSelectedBL] = useState<string | null>(null);
-  const [blFormOpen, setBlFormOpen] = useState(false);
-  const [blFormPresetPOId, setBlFormPresetPOId] = useState<string | null>(null);
-  const [blFormPresetLCId, setBlFormPresetLCId] = useState<string | null>(null);
-  const [blOCRDropActive, setBlOCRDropActive] = useState(false);
-  const [blOCRDropError, setBlOCRDropError] = useState('');
-  const [blOCRDropFile, setBlOCRDropFile] = useState<File | null>(null);
-  const [blOCRDropFileKey, setBlOCRDropFileKey] = useState(0);
   const [blsVersion, setBlsVersion] = useState(0);
   const blFilters: { inbound_type?: string; status?: string; manufacturer_id?: string } = {};
   if (blTypeFilter) blFilters.inbound_type = blTypeFilter;
@@ -166,50 +137,6 @@ export default function ProcurementPage() {
   const { data: bls, loading: blLoading, reload: reloadBL } = useBLList(blFilters);
 
   const [depositMfgFilter, setDepositMfgFilter] = useState('');
-
-  const [autoCompletedMsg, setAutoCompletedMsg] = useState<string | null>(null);
-
-  // 빠른 등록/알림 딥링크 intent 처리
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const tabParam = params.get('tab') ?? 'po';
-    const tab = PROCUREMENT_TABS.has(tabParam) ? tabParam : 'po';
-    const status = params.get('status');
-    if (tab === 'bl' && status) {
-      setBlStatusFilter(status);
-    }
-
-    const wantsNew = params.get('action') === 'new' || params.get('new') === '1';
-    if (!wantsNew) return;
-
-    setSelectedPO(null);
-    setActiveTab(tab);
-    if (tab === 'po') {
-      setPoFormOpen(true);
-    } else if (tab === 'lc') {
-      setEditLC(null);
-      setNewLcDefaultPoId(undefined);
-      setLcFormOpen(true);
-    } else if (tab === 'tt') {
-      setEditTT(null);
-      setTtFormOpen(true);
-    } else if (tab === 'bl') {
-      const poId = params.get('po_id') ?? params.get('po');
-      const lcId = params.get('lc_id') ?? params.get('lc');
-      setSelectedBL(null);
-      setBlFormPresetPOId(poId);
-      setBlFormPresetLCId(lcId);
-      setBlOCRDropFile(null);
-      setBlOCRDropError('');
-      setBlFormOpen(true);
-    }
-
-    params.delete('action');
-    params.delete('new');
-    if (tab === 'po') params.delete('tab');
-    const next = params.toString();
-    navigate(`/procurement${next ? `?${next}` : ''}`, { replace: true });
-  }, [location.search, navigate]);
 
   // 우측 슬라이드 패널 — 드래그 리사이즈
   const [panelWidth, setPanelWidth] = useState(900);
@@ -251,69 +178,6 @@ export default function ProcurementPage() {
         .then((list) => setBanks(list.filter((b) => b.is_active))).catch(() => {});
     }
   }, [selectedCompanyId]);
-
-  const hasDraggedFiles = useCallback((dataTransfer: DataTransfer | null) => {
-    return Boolean(dataTransfer && Array.from(dataTransfer.types).includes('Files'));
-  }, []);
-
-  const openBLDropFile = useCallback((file: File | null) => {
-    if (!file) {
-      setBlOCRDropError('PDF 또는 사진 파일만 등록할 수 있습니다');
-      return;
-    }
-
-    setBlOCRDropError('');
-    setSelectedBL(null);
-    setBlFormPresetPOId(null);
-    setBlFormPresetLCId(null);
-    setBlOCRDropFile(file);
-    setBlOCRDropFileKey((value) => value + 1);
-    setActiveTab('bl');
-    setBlFormOpen(true);
-  }, []);
-
-  useEffect(() => {
-    if (!selectedCompanyId || activeTab !== 'bl' || selectedBL || blFormOpen) {
-      setBlOCRDropActive(false);
-      return;
-    }
-
-    const handleWindowDrag = (event: DragEvent) => {
-      if (!hasDraggedFiles(event.dataTransfer)) return;
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-      setBlOCRDropActive(true);
-    };
-    const handleWindowDragLeave = (event: DragEvent) => {
-      if (!hasDraggedFiles(event.dataTransfer)) return;
-      if (
-        event.clientX <= 0 ||
-        event.clientY <= 0 ||
-        event.clientX >= window.innerWidth ||
-        event.clientY >= window.innerHeight
-      ) {
-        setBlOCRDropActive(false);
-      }
-    };
-    const handleWindowDrop = (event: DragEvent) => {
-      if (!hasDraggedFiles(event.dataTransfer)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      setBlOCRDropActive(false);
-      openBLDropFile(firstCustomsOCRFile(event.dataTransfer?.files ?? null));
-    };
-
-    window.addEventListener('dragenter', handleWindowDrag);
-    window.addEventListener('dragover', handleWindowDrag);
-    window.addEventListener('dragleave', handleWindowDragLeave);
-    window.addEventListener('drop', handleWindowDrop);
-    return () => {
-      window.removeEventListener('dragenter', handleWindowDrag);
-      window.removeEventListener('dragover', handleWindowDrag);
-      window.removeEventListener('dragleave', handleWindowDragLeave);
-      window.removeEventListener('drop', handleWindowDrop);
-    };
-  }, [activeTab, blFormOpen, hasDraggedFiles, openBLDropFile, selectedBL, selectedCompanyId]);
 
   // ⚠️ 모든 useMemo는 early return(아래 selectedCompanyId 분기) 이전이어야 함 — Hook 순서 규칙
   const poRows = useMemo(
@@ -361,169 +225,9 @@ export default function ProcurementPage() {
     navigate(tab === 'po' ? '/procurement' : `/procurement?tab=${tab}`, { replace: true });
   };
 
-  const handleCreatePO = async (d: Record<string, unknown>) => {
-    // 발주품목(po_lines)을 PO 본체와 분리하여 등록 (입고관리와 동일 패턴)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { lines, ...poData } = d as any;
-    const parentPoId: string | undefined = poData.parent_po_id;
-    try {
-      const created = await fetchWithAuth<{ po_id: string }>('/api/v1/pos', { method: 'POST', body: JSON.stringify(poData) });
-      if (Array.isArray(lines) && lines.length > 0 && created?.po_id) {
-        const failures: string[] = [];
-        for (const line of lines) {
-          // 신규 생성 경로에서는 po_line_id는 무시
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { po_line_id: _plid, _price_per_wp_usd: _pp, _spec_wp: _sw, ...body } = line;
-          try {
-            await fetchWithAuth(`/api/v1/pos/${created.po_id}/lines`, {
-              method: 'POST', body: JSON.stringify({ ...body, po_id: created.po_id }),
-            });
-          } catch (err) {
-            failures.push(err instanceof Error ? err.message : '알 수 없는 오류');
-          }
-        }
-        if (failures.length > 0) {
-          throw new Error(`발주품목 ${failures.length}건 등록 실패: ${failures.join('; ')}`);
-        }
-
-        // ── 단가이력 자동 등록 (PO 신규 등록 시) ──
-        const changeDate = (poData.contract_date as string | undefined) ?? new Date().toISOString().slice(0, 10);
-        const incotermsStr = (poData.incoterms as string | undefined) ?? '';
-        const paymentStr = (poData.payment_terms as string | undefined) ?? '';
-        for (const line of lines) {
-          const pricePerWpUsd: number | undefined = line._price_per_wp_usd;
-          if (!pricePerWpUsd || pricePerWpUsd <= 0) continue;
-          const specWp: number | undefined = line._spec_wp;
-          const mw = specWp && line.quantity ? (line.quantity * specWp) / 1_000_000 : undefined;
-          const memoParts = [
-            incotermsStr && `선적조건: ${incotermsStr}`,
-            paymentStr && `결제조건: ${paymentStr}`,
-            mw != null && mw > 0 && `발주용량: ${mw.toFixed(3)}MW`,
-          ].filter(Boolean);
-          const phPayload = {
-            product_id: line.product_id,
-            manufacturer_id: poData.manufacturer_id,
-            company_id: poData.company_id,
-            change_date: changeDate,
-            new_price: Number(pricePerWpUsd.toFixed(6)), // USD/Wp
-            reason: '최초계약',
-            related_po_id: created.po_id,
-            memo: memoParts.length > 0 ? memoParts.join(' | ') : undefined,
-          };
-          // 실패해도 PO 등록은 성공 처리 (단가이력은 부가정보)
-          await fetchWithAuth('/api/v1/price-histories', {
-            method: 'POST', body: JSON.stringify(phPayload),
-          }).catch(() => {});
-        }
-      }
-
-      // ── 변경계약 등록 시 원계약 자동 완료 처리 ──
-      // 원계약 PO를 completed 로 전환 → 이후 LC/BL 드롭다운에서 자동 제외
-      if (created?.po_id && parentPoId) {
-        const parentPo = pos.find((p) => p.po_id === parentPoId);
-        try {
-          await fetchWithAuth(`/api/v1/pos/${parentPoId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ status: 'completed' }),
-          });
-          const label = parentPo?.po_number ?? parentPoId.slice(0, 8);
-          setAutoCompletedMsg(`원계약 ${label}이 완료(completed) 처리되었습니다. 이제 해당 PO로 LC/입고 신규 등록이 차단됩니다.`);
-        } catch {
-          // 실패해도 변경계약 PO 등록 자체는 성공
-        }
-      }
-    } finally {
-      reloadPO();
-      reloadPoList(); // 계약금 현황 갱신 (결제조건 변경 반영)
-    }
-  };
-  const handleDeletePO = async (poId: string) => {
-    await fetchWithAuth(`/api/v1/pos/${poId}`, { method: 'DELETE' });
-    reloadPO();
-    reloadTT();
-    reloadPoList(); // DepositStatusPanel용 전체 PO 목록 재동기화
-  };
-  const handleCreateBL = async (formData: Record<string, unknown>) => {
-    await saveBLShipmentWithLines(formData);
-    reloadBL();
-    setBlsVersion(v => v + 1); // LC 탭의 BL 드릴다운 목록 재조회 트리거
-  };
-
-  const openLCWork = (lc: LCRecord | null = null, defaultPoId?: string) => {
-    setActiveTab('lc');
-    setEditLC(lc);
-    setNewLcDefaultPoId(lc ? undefined : defaultPoId);
-    setLcFormOpen(true);
-  };
-
-  const closeLCWork = () => {
-    setLcFormOpen(false);
-    setEditLC(null);
-    setNewLcDefaultPoId(undefined);
-  };
-
-  const openBLWork = (presetPOId: string | null = null, presetLCId: string | null = null) => {
-    setActiveTab('bl');
-    setBlFormPresetPOId(presetPOId);
-    setBlFormPresetLCId(presetLCId);
-    setBlOCRDropFile(null);
-    setBlOCRDropError('');
-    setBlFormOpen(true);
-  };
-
-  const closeBLWork = () => {
-    setBlFormOpen(false);
-    setBlFormPresetPOId(null);
-    setBlFormPresetLCId(null);
-    setBlOCRDropFile(null);
-  };
-
-  const handleNewBLFromLC = (lc: { lc_id: string; po_id: string }) => {
-    openBLWork(lc.po_id, lc.lc_id);
-  };
-
-  const handleDeleteBL = async (blId: string) => {
-    await fetchWithAuth(`/api/v1/bls/${blId}`, { method: 'DELETE' });
-    reloadBL();
-  };
-
-  const handleCreateLC = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/lcs', { method: 'POST', body: JSON.stringify(d) }); reloadLC(); setLcAggVersion(v => v + 1); };
-  const handleUpdateLC = async (d: Record<string, unknown>) => { if (!editLC) return; await fetchWithAuth(`/api/v1/lcs/${editLC.lc_id}`, { method: 'PUT', body: JSON.stringify(d) }); setEditLC(null); reloadLC(); };
   const handleSettleLC = async (lc: import('@/types/procurement').LCRecord, repaymentDate: string) => {
     await fetchWithAuth(`/api/v1/lcs/${lc.lc_id}`, { method: 'PUT', body: JSON.stringify({ repaid: true, repayment_date: repaymentDate, status: 'settled' }) });
     reloadLC();
-  };
-  const handleDeleteLC = async (lcId: string) => {
-    await fetchWithAuth(`/api/v1/lcs/${lcId}`, { method: 'DELETE' });
-    reloadLC();
-  };
-  const handleCreateTT = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/tts', { method: 'POST', body: JSON.stringify(d) }); reloadTT(); };
-  const handleUpdateTT = async (d: Record<string, unknown>) => { if (!editTT) return; await fetchWithAuth(`/api/v1/tts/${editTT.tt_id}`, { method: 'PUT', body: JSON.stringify(d) }); setEditTT(null); reloadTT(); };
-  const handleDeleteTT = async (ttId: string) => { await fetchWithAuth(`/api/v1/tts/${ttId}`, { method: 'DELETE' }); reloadTT(); };
-
-  const handleBLDropZoneDrag = (event: ReactDragEvent<HTMLDivElement>) => {
-    if (!hasDraggedFiles(event.dataTransfer)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = 'copy';
-    setBlOCRDropActive(true);
-  };
-
-  const handleBLDropZoneDragLeave = (event: ReactDragEvent<HTMLDivElement>) => {
-    if (!hasDraggedFiles(event.dataTransfer)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const nextTarget = event.relatedTarget as Node | null;
-    if (nextTarget && event.currentTarget.contains(nextTarget)) return;
-    setBlOCRDropActive(false);
-  };
-
-  const handleBLDropZoneDrop = (event: ReactDragEvent<HTMLDivElement>) => {
-    if (!hasDraggedFiles(event.dataTransfer)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    setBlOCRDropActive(false);
-    openBLDropFile(firstCustomsOCRFile(event.dataTransfer.files));
   };
 
   const selectedRailPO = selectedPO ?? poRows[0] ?? null;
@@ -597,10 +301,9 @@ export default function ProcurementPage() {
             },
           ]} />
           <Button size="xs" variant="outline" onClick={() => navigate('/purchase-history')}><History className="mr-1 h-3 w-3" />구매 이력</Button>
-          <Button size="xs" onClick={() => setPoFormOpen(true)} data-onboarding-step="po.list.add"><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
         </>
       )}
-      {activeTab === 'lc' && !lcFormOpen && (
+      {activeTab === 'lc' && (
         <>
           <FilterButton items={[
             {
@@ -622,10 +325,9 @@ export default function ProcurementPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <Button size="xs" onClick={() => openLCWork()} data-onboarding-step="lc.list.open"><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
         </>
       )}
-      {activeTab === 'bl' && !blFormOpen && (
+      {activeTab === 'bl' && (
         <>
           <FilterButton items={[
             {
@@ -651,7 +353,6 @@ export default function ProcurementPage() {
             <ExcelToolbar
               type="inbound"
               onImportComplete={() => { reloadBL(); setBlsVersion(v => v + 1); }}
-              onNew={() => openBLWork()}
             />
           </span>
         </>
@@ -662,24 +363,7 @@ export default function ProcurementPage() {
   );
 
   return (
-    <div
-      className="sf-page sf-procurement-page sf-dropzone-page min-h-[calc(100vh-5rem)] transition-shadow"
-      data-active={activeTab === 'bl' && blOCRDropActive}
-      onDragEnter={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDrag : undefined}
-      onDragOver={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDrag : undefined}
-      onDragLeave={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDragLeave : undefined}
-      onDrop={activeTab === 'bl' && !selectedBL && !blFormOpen ? handleBLDropZoneDrop : undefined}
-    >
-      {/* 변경계약 등록 후 원계약 자동 완료 알림 */}
-      {autoCompletedMsg && (
-        <div className="sf-banner warn">
-          <CheckCircle2 className="sf-banner-icon h-4 w-4" />
-          <span className="sf-banner-body">{autoCompletedMsg}</span>
-          <button className="sf-banner-close" aria-label="알림 닫기" onClick={() => setAutoCompletedMsg(null)}>
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
+    <div className="sf-page sf-procurement-page min-h-[calc(100vh-5rem)] transition-shadow">
 
       {/* BL 상세 — 탭 바깥에서 전체 화면으로 표시 */}
       {selectedBL && (
@@ -723,43 +407,20 @@ export default function ProcurementPage() {
             <POListTable
               items={poRows}
               onDetail={setSelectedPO}
-              onNew={() => setPoFormOpen(true)}
-              onEditLC={(lc) => openLCWork(lc)}
-              onNewLC={(po) => openLCWork(null, po.po_id)}
-              onDelete={handleDeletePO}
-              onDeleteLC={handleDeleteLC}
               onSelectBL={setSelectedBL}
               aggVersion={lcAggVersion}
             />
           )}
-          <POForm open={poFormOpen} onOpenChange={setPoFormOpen} onSubmit={handleCreatePO} />
         </TabsContent>
 
         <TabsContent value="lc">
-          {lcFormOpen ? (
-            <LCForm
-              embedded
-              open={lcFormOpen}
-              onOpenChange={(o) => { if (!o) closeLCWork(); }}
-              onSubmit={editLC ? handleUpdateLC : handleCreateLC}
-              editData={editLC}
-              defaultPoId={editLC ? undefined : newLcDefaultPoId}
+          {lcLoading ? <SkeletonRows rows={8} /> : (
+            <LCListTable
+              items={lcRows}
+              onSettle={handleSettleLC}
+              onSelectBL={setSelectedBL}
+              blsVersion={blsVersion}
             />
-          ) : (
-            <>
-              {lcLoading ? <SkeletonRows rows={8} /> : (
-                <LCListTable
-                  items={lcRows}
-                  onEdit={(lc) => openLCWork(lc)}
-                  onNew={() => openLCWork()}
-                  onDelete={handleDeleteLC}
-                  onSettle={handleSettleLC}
-                  onSelectBL={setSelectedBL}
-                  onNewBL={handleNewBLFromLC}
-                  blsVersion={blsVersion}
-                />
-              )}
-            </>
           )}
         </TabsContent>
 
@@ -781,8 +442,6 @@ export default function ProcurementPage() {
             <DepositStatusPanel
               pos={depositMfgFilter ? poList.filter(p => p.manufacturer_id === depositMfgFilter) : poList}
               tts={tts}
-              onPaymentCreated={() => reloadTT()}
-              onEditTT={(tt) => { setEditTT(tt); setTtFormOpen(true); }}
             />
           </div>
 
@@ -805,57 +464,14 @@ export default function ProcurementPage() {
                   options: poList.map((p) => ({ value: p.po_id, label: p.po_number || p.po_id.slice(0, 8) })),
                 },
               ]} />
-              <Button size="xs" onClick={() => { setEditTT(null); setTtFormOpen(true); }}><Plus className="mr-1 h-3 w-3" />수동 등록</Button>
             </div>
-            {ttLoading ? <LoadingSpinner /> : <TTListTable items={tts} onEdit={(tt) => { setEditTT(tt); setTtFormOpen(true); }} onNew={() => { setEditTT(null); setTtFormOpen(true); }} onDelete={handleDeleteTT} />}
-            <TTForm open={ttFormOpen} onOpenChange={setTtFormOpen} onSubmit={editTT ? handleUpdateTT : handleCreateTT} editData={editTT} />
+            {ttLoading ? <LoadingSpinner /> : <TTListTable items={tts} />}
           </div>
         </TabsContent>
 
         <TabsContent value="bl" className="space-y-3">
-          {blFormOpen ? (
-            <BLForm
-              embedded
-              open={blFormOpen}
-              onOpenChange={(o) => { if (!o) closeBLWork(); }}
-              onSubmit={handleCreateBL}
-              presetPOId={blFormPresetPOId}
-              presetLCId={blFormPresetLCId}
-              initialCustomsOCRFile={blOCRDropFile}
-              initialCustomsOCRFileKey={blOCRDropFileKey}
-            />
-          ) : (
-            <>
-              <div
-                className="sf-dropzone rounded-md border-2 border-dashed p-4"
-                data-active={blOCRDropActive}
-                onDragEnter={handleBLDropZoneDrag}
-                onDragOver={handleBLDropZoneDrag}
-                onDragLeave={handleBLDropZoneDragLeave}
-                onDrop={handleBLDropZoneDrop}
-              >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <div className="sf-dropzone-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-background">
-                    <ScanText className="h-6 w-6" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-base font-semibold" style={{ color: 'var(--sf-ink)' }}>
-                      여기에 면장 PDF/사진을 끌어다 놓으세요
-                    </div>
-                    <div className="mt-1 text-sm sf-dropzone-sub">
-                      {blOCRDropActive ? '지금 놓으면 해외직수입 입고등록으로 이동합니다' : '놓으면 입고등록 창과 OCR 입력값 확인창이 자동으로 열립니다'}
-                    </div>
-                    {blOCRDropError && (
-                      <div className="mt-2 text-xs font-medium" style={{ color: 'var(--sf-neg)' }}>{blOCRDropError}</div>
-                    )}
-                  </div>
-                  <span className="sf-pill ghost">PDF · JPG · PNG</span>
-                </div>
-              </div>
-              {blLoading ? <SkeletonRows rows={8} /> : (
-                <BLListTable items={blRows} onSelect={(bl) => setSelectedBL(bl.bl_id)} onNew={() => openBLWork()} onDelete={handleDeleteBL} />
-              )}
-            </>
+          {blLoading ? <SkeletonRows rows={8} /> : (
+            <BLListTable items={blRows} onSelect={(bl) => setSelectedBL(bl.bl_id)} />
           )}
         </TabsContent>
 
@@ -975,17 +591,6 @@ export default function ProcurementPage() {
                     count: blRows.filter(bl => bl.status === status).length,
                   }))}
                 />
-              </RailBlock>
-              <RailBlock title="면장 OCR">
-                <div className="rounded border border-dashed border-[var(--line-2)] bg-[var(--bg-2)] p-3">
-                  <div className="flex items-center gap-2 text-[12px] font-semibold text-[var(--ink)]">
-                    <ScanText className="h-4 w-4 text-[var(--solar-3)]" />
-                    PDF/사진 드롭
-                  </div>
-                  <div className="mt-2 text-[11px] leading-5 text-[var(--ink-3)]">
-                    B/L 탭 위로 면장 파일을 놓으면 해외직수입 등록창과 OCR 확인창이 바로 열립니다.
-                  </div>
-                </div>
               </RailBlock>
               <RailBlock title="주요 항구" last>
                 <BreakdownRows

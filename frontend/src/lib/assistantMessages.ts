@@ -1,9 +1,6 @@
 import type { UIMessage } from 'ai';
 import type { MetaFormConfig } from '@/templates/types';
 import partnerForm from '@/config/forms/partners';
-import outboundSimple from '@/config/forms/outbound_simple';
-import receiptForm from '@/config/forms/receipt';
-import declarationForm from '@/config/forms/declaration';
 
 // 백엔드 chat 엔드포인트가 받는 평면 메시지 형식.
 // {role, content} 만 — 도구 호출 history 는 LLM 컨텍스트에 자동 인라인됨 (T1 결정).
@@ -77,13 +74,6 @@ export function proposalKindToFormConfig(kind: string): MetaFormConfig | undefin
     case 'create_partner':
     case 'update_partner':
       return partnerForm;
-    case 'create_outbound':
-    case 'update_outbound':
-      return outboundSimple;
-    case 'create_receipt':
-      return receiptForm;
-    case 'create_declaration':
-      return declarationForm;
     // create_note/update_note: 단순 content 텍스트 — 폼이 과함. 카드 요약으로 충분.
     // delete_*: 수정할 게 없음 (id 만 있는 페이로드). 단순 confirmation 카드.
     // create_order/update_order/delete_order: orders 폼이 아직 메타화되지 않음.
