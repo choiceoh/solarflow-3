@@ -11,6 +11,7 @@ export { LayerPanel } from './LayerPanel';
 export { OnboardingHint, OnboardingResetButton } from './OnboardingHint';
 export { PreviewRolePanel } from './PreviewRolePanel';
 export { PseudoStateTabs } from './PseudoStateTabs';
+export { ScopePanel } from './ScopePanel';
 export { VariantsDiffModal } from './VariantsDiffModal';
 export { TokenPanel } from './TokenPanel';
 export { useDesignTokens } from './useDesignTokens';
