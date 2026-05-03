@@ -89,6 +89,7 @@ function buildColumns({
   }
   cols.push(
     { key: 'date', label: '기준일', cell: (item) => formatDate(item.outbound_date ?? item.order_date ?? ''), sortAccessor: (item) => item.outbound_date ?? item.order_date ?? '' },
+    { key: 'customer_name', label: '거래처', hideable: true, cell: (item) => item.sale.customer_name ?? '—', sortAccessor: (item) => item.sale.customer_name ?? '', globalFilterText: (item) => item.sale.customer_name ?? '' },
     {
       key: 'kind', label: '구분', hideable: true,
       cell: (item) => (
@@ -98,7 +99,6 @@ function buildColumns({
       ),
       sortAccessor: (item) => item.outbound_id ? 1 : 0,
     },
-    { key: 'customer_name', label: '거래처', hideable: true, cell: (item) => item.sale.customer_name ?? '—', sortAccessor: (item) => item.sale.customer_name ?? '', globalFilterText: (item) => item.sale.customer_name ?? '' },
     { key: 'product_name', label: '품명', hideable: true, cell: (item) => item.product_name ?? '—', sortAccessor: (item) => item.product_name ?? '', globalFilterText: (item) => item.product_name ?? '' },
     { key: 'spec_wp', label: '규격', hideable: true, cell: (item) => item.spec_wp ? `${item.spec_wp}` : '—', sortAccessor: (item) => item.spec_wp ?? 0 },
     { key: 'quantity', label: '수량', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => formatNumber(item.quantity), sortAccessor: (item) => item.quantity },

@@ -29,28 +29,28 @@ export default function LCDemandByPOTable({ items }: Props) {
       <TableHeader>
         <TableRow>
           <TableHead>PO번호</TableHead>
+          <TableHead>개설필요시점</TableHead>
+          <TableHead className="text-right">LC미개설</TableHead>
           <TableHead>제조사</TableHead>
           <TableHead className="text-right">PO총액 (USD)</TableHead>
           <TableHead className="text-right">TT입금</TableHead>
           <TableHead className="text-right">LC개설</TableHead>
-          <TableHead className="text-right">LC미개설</TableHead>
-          <TableHead>개설필요시점</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {items.map((d) => (
           <TableRow key={d.po_id}>
             <TableCell className="text-sm font-medium">{d.po_number || d.po_id.slice(0, 8)}</TableCell>
+            <TableCell>
+              <UrgencyBadge urgency={d.urgency} date={d.lc_due_date} />
+            </TableCell>
+            <TableCell className="text-sm text-right font-medium">
+              {d.lc_needed_usd > 0 ? formatUSD(d.lc_needed_usd) : '—'}
+            </TableCell>
             <TableCell className="text-sm">{shortMfgName(d.manufacturer_name)}</TableCell>
             <TableCell className="text-sm text-right">{formatUSD(d.po_total_usd)}</TableCell>
             <TableCell className="text-sm text-right">{formatUSD(d.tt_paid_usd)}</TableCell>
             <TableCell className="text-sm text-right">{formatUSD(d.lc_opened_usd)}</TableCell>
-            <TableCell className="text-sm text-right font-medium">
-              {d.lc_needed_usd > 0 ? formatUSD(d.lc_needed_usd) : '—'}
-            </TableCell>
-            <TableCell>
-              <UrgencyBadge urgency={d.urgency} date={d.lc_due_date} />
-            </TableCell>
           </TableRow>
         ))}
       </TableBody>

@@ -24,6 +24,7 @@ interface Props {
 function buildColumns({ onInvoice }: { onInvoice?: (item: Outbound) => void }): ColumnDef<Outbound>[] {
   return [
     { key: 'outbound_date', label: '출고일', cell: (ob) => formatDate(ob.outbound_date), sortAccessor: (ob) => ob.outbound_date ?? '' },
+    { key: 'site_name', label: '현장명', hideable: true, cell: (ob) => ob.site_name ?? '—', sortAccessor: (ob) => ob.site_name ?? '', globalFilterText: (ob) => ob.site_name ?? '' },
     { key: 'product_code', label: '품번', hideable: true, className: 'font-mono', cell: (ob) => ob.product_code ?? '—', sortAccessor: (ob) => ob.product_code ?? '', globalFilterText: (ob) => ob.product_code ?? '' },
     { key: 'product_name', label: '품명', hideable: true, cell: (ob) => ob.product_name ?? '—', sortAccessor: (ob) => ob.product_name ?? '', globalFilterText: (ob) => ob.product_name ?? '' },
     { key: 'spec_wp', label: '규격', hideable: true, cell: (ob) => (ob.spec_wp ? `${ob.spec_wp}` : '—'), sortAccessor: (ob) => ob.spec_wp ?? 0 },
@@ -31,7 +32,6 @@ function buildColumns({ onInvoice }: { onInvoice?: (item: Outbound) => void }): 
     { key: 'capacity_kw', label: '용량', hideable: true, align: 'right', className: 'tabular-nums', cell: (ob) => formatKw(ob.capacity_kw), sortAccessor: (ob) => ob.capacity_kw ?? 0 },
     { key: 'warehouse_name', label: '창고', hideable: true, cell: (ob) => ob.warehouse_name ?? '—', sortAccessor: (ob) => ob.warehouse_name ?? '', globalFilterText: (ob) => ob.warehouse_name ?? '' },
     { key: 'usage_category', label: '용도', hideable: true, cell: (ob) => USAGE_CATEGORY_LABEL[ob.usage_category] ?? ob.usage_category, sortAccessor: (ob) => USAGE_CATEGORY_LABEL[ob.usage_category] ?? ob.usage_category },
-    { key: 'site_name', label: '현장명', hideable: true, cell: (ob) => ob.site_name ?? '—', sortAccessor: (ob) => ob.site_name ?? '', globalFilterText: (ob) => ob.site_name ?? '' },
     { key: 'order_number', label: '수주연결', hideable: true, cell: (ob) => ob.order_number ?? '—', sortAccessor: (ob) => ob.order_number ?? '', globalFilterText: (ob) => `${ob.order_number ?? ''} ${ob.erp_outbound_no ?? ''}` },
     {
       key: 'group_trade', label: '그룹거래', hideable: true, hiddenByDefault: true,

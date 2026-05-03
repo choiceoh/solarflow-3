@@ -43,12 +43,12 @@ export default function LCMaturityTable({ alertData }: Props) {
       <TableHeader>
         <TableRow>
           <TableHead className="w-8" />
+          <TableHead>D-Day</TableHead>
+          <TableHead>만기일</TableHead>
           <TableHead>LC번호</TableHead>
-          <TableHead>PO번호</TableHead>
           <TableHead>은행</TableHead>
           <TableHead className="text-right">금액 (USD)</TableHead>
-          <TableHead>만기일</TableHead>
-          <TableHead>D-Day</TableHead>
+          <TableHead>PO번호</TableHead>
           <TableHead>상태</TableHead>
         </TableRow>
       </TableHeader>
@@ -65,12 +65,12 @@ export default function LCMaturityTable({ alertData }: Props) {
                   ? <ChevronDown className="h-3.5 w-3.5" />
                   : <ChevronRight className="h-3.5 w-3.5" />}
               </TableCell>
+              <TableCell><DDayBadge days={a.days_remaining} /></TableCell>
+              <TableCell className="text-sm">{formatDate(a.maturity_date)}</TableCell>
               <TableCell className="text-sm font-medium">{a.lc_number || a.lc_id.slice(0, 8)}</TableCell>
-              <TableCell className="text-sm">{a.po_number || '—'}</TableCell>
               <TableCell className="text-sm">{a.bank_name}</TableCell>
               <TableCell className="text-sm text-right">{formatUSD(a.amount_usd)}</TableCell>
-              <TableCell className="text-sm">{formatDate(a.maturity_date)}</TableCell>
-              <TableCell><DDayBadge days={a.days_remaining} /></TableCell>
+              <TableCell className="text-sm">{a.po_number || '—'}</TableCell>
               <TableCell className="text-sm">{a.status}</TableCell>
             </TableRow>
             {expandedId === a.lc_id && (
