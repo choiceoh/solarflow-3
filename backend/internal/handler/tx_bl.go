@@ -33,11 +33,6 @@ func NewBLHandler(db *supa.Client) *BLHandler {
 func (h *BLHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("bl_shipments").Select("*", "exact", false)
 
-	// 박물관 표본(is_sandbox=true) 자동 제외 — ?include_sandbox=true 명시 시 우회.
-	if r.URL.Query().Get("include_sandbox") != "true" {
-		query = query.Eq("is_sandbox", "false")
-	}
-
 	// 입력 필터 조건을 디버그 로그에 기록
 	poID := r.URL.Query().Get("po_id")
 	lcID := r.URL.Query().Get("lc_id")

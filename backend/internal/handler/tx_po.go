@@ -38,11 +38,6 @@ func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
 	// purchase_orders_ext: manufacturer_name(name_kr alias) 포함 뷰
 	query := h.DB.From("purchase_orders_ext").Select("*", "exact", false)
 
-	// 박물관 표본(is_sandbox=true) 자동 제외 — ?include_sandbox=true 명시 시 우회.
-	if r.URL.Query().Get("include_sandbox") != "true" {
-		query = query.Eq("is_sandbox", "false")
-	}
-
 	// 비유: ?company_id=xxx — 특정 법인의 계약만 필터
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
 		query = query.Eq("company_id", compID)

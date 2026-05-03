@@ -349,12 +349,10 @@ export default function ProcurementPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <span data-onboarding-step="bl.list.inbound">
-            <ExcelToolbar
-              type="inbound"
-              onImportComplete={() => { reloadBL(); setBlsVersion(v => v + 1); }}
-            />
-          </span>
+          <ExcelToolbar
+            type="inbound"
+            onImportComplete={() => { reloadBL(); setBlsVersion(v => v + 1); }}
+          />
         </>
       )}
       <div style={{ flex: 1 }} />

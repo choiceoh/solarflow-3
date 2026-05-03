@@ -22,7 +22,6 @@ export interface PurchaseOrder {
   status: POStatus;
   memo?: string;
   parent_po_id?: string;
-  is_sandbox?: boolean;
 }
 
 export interface POLineItem {
@@ -64,7 +63,6 @@ export interface LCRecord {
   repaid?: boolean;
   status: LCStatus;
   memo?: string;
-  is_sandbox?: boolean;
 }
 
 export interface LCLineItem {
