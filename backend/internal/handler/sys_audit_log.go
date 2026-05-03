@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -15,6 +16,47 @@ import (
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
+
+// 허용된 entity_type — 운영 entity만 조회 가능. PostgREST `Eq`에 임의 문자열을 흘리는 것을 막고,
+// 미래에 새 entity가 audit_logs에 들어올 때 의도적인 추가만 노출되도록 한다.
+// 모든 audit 호출처(tx_po/tx_lc/tx_outbound/tx_sale 등)와 정합성 유지.
+var allowedAuditEntityTypes = map[string]struct{}{
+	"purchase_orders":  {},
+	"lcs":              {},
+	"bls":              {},
+	"tts":              {},
+	"price_histories":  {},
+	"orders":           {},
+	"outbounds":        {},
+	"sales":            {},
+	"receipts":         {},
+	"receipt_matches":  {},
+	"declarations":     {},
+	"cost_details":     {},
+	"expenses":         {},
+	"partners":         {},
+	"banks":            {},
+	"warehouses":       {},
+	"manufacturers":    {},
+	"products":         {},
+	"companies":        {},
+	"intercompany_requests": {},
+}
+
+// entity_id / user_id 안전선 — UUID v4 형태이거나 영숫자/하이픈/언더스코어만(legacy id 호환).
+// 길이는 1..64로 제한. PostgREST의 Eq에 자유 문자열이 흐르는 표면을 좁힘.
+var auditIdentifierRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+func validAuditIdentifier(s string) bool {
+	return auditIdentifierRe.MatchString(s)
+}
+
+// audit_logs.action — 운영 핸들러가 쓰는 값만 허용.
+var allowedAuditActions = map[string]struct{}{
+	"create": {},
+	"update": {},
+	"delete": {},
+}
 
 // 허용되는 from 입력 형식 — Postgres timestamp 필터 안전선.
 // 자유 문자열을 그대로 PostgREST에 넘기면 .Gte 안에서 파싱 오류 또는 의도치 않은
@@ -50,15 +92,31 @@ func (h *AuditLogHandler) List(w http.ResponseWriter, r *http.Request) {
 		Select("*", "exact", false)
 
 	if entityType := r.URL.Query().Get("entity_type"); entityType != "" {
+		if _, ok := allowedAuditEntityTypes[entityType]; !ok {
+			response.RespondError(w, http.StatusBadRequest, "entity_type 파라미터가 허용되지 않은 값입니다")
+			return
+		}
 		query = query.Eq("entity_type", entityType)
 	}
 	if entityID := r.URL.Query().Get("entity_id"); entityID != "" {
+		if !validAuditIdentifier(entityID) {
+			response.RespondError(w, http.StatusBadRequest, "entity_id는 64자 이내의 영숫자/하이픈/언더스코어만 허용됩니다")
+			return
+		}
 		query = query.Eq("entity_id", entityID)
 	}
 	if action := r.URL.Query().Get("action"); action != "" {
+		if _, ok := allowedAuditActions[action]; !ok {
+			response.RespondError(w, http.StatusBadRequest, "action 파라미터는 create/update/delete 중 하나여야 합니다")
+			return
+		}
 		query = query.Eq("action", action)
 	}
 	if userID := r.URL.Query().Get("user_id"); userID != "" {
+		if !validAuditIdentifier(userID) {
+			response.RespondError(w, http.StatusBadRequest, "user_id는 64자 이내의 영숫자/하이픈/언더스코어만 허용됩니다")
+			return
+		}
 		query = query.Eq("user_id", userID)
 	}
 	if from := r.URL.Query().Get("from"); from != "" {

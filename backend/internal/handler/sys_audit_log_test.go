@@ -37,3 +37,36 @@ func TestParseAuditFrom_RejectsGarbage(t *testing.T) {
 		}
 	}
 }
+
+func TestValidAuditIdentifier_AcceptsCommonShapes(t *testing.T) {
+	cases := []string{
+		"po-2604-jko",                          // 운영 PO id
+		"e51d1a6e-5a87-4d80-9c7e-3fbc3a8a9d00", // UUID v4
+		"abc123",                               // 단순 영숫자
+		"user_42",                              // 언더스코어
+		"A",                                    // 1자
+	}
+	for _, in := range cases {
+		if !validAuditIdentifier(in) {
+			t.Errorf("input %q should be accepted", in)
+		}
+	}
+}
+
+func TestValidAuditIdentifier_RejectsHostileInput(t *testing.T) {
+	cases := []string{
+		"",                       // 빈 문자열
+		"contains space",         // 공백
+		"semi;colon",             // 세미콜론
+		"' OR 1=1",               // SQL/PostgREST 인젝션
+		"path/traversal",         // 슬래시
+		"a.b",                    // 점 (PostgREST 관계 문법)
+		"퍼센트%",                  // 멀티바이트
+		string(make([]byte, 65)), // 64자 초과 (NUL bytes — 길이만 검사)
+	}
+	for _, in := range cases {
+		if validAuditIdentifier(in) {
+			t.Errorf("input %q should be rejected", in)
+		}
+	}
+}
