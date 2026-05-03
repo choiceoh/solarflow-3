@@ -64,9 +64,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Plus, Trash2, GripVertical, Copy } from 'lucide-react';
-import type { FieldConfig, FieldType, FormSection, MetaFormConfig, Tone } from '@/templates/types';
-import { enumDictionaries, masterSources, computedFormulas } from '@/templates/registry';
+import type { AsyncRefineRule, FieldConfig, FieldType, FormSection, MetaFormConfig, Tone } from '@/templates/types';
+import { asyncRefinements, enumDictionaries, masterSources, computedFormulas } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
+import { EditorWithPanel, PanelGroup, PanelEmpty } from './RightPanel';
+import { RegistryIdPicker, type RegistryEntry } from './Pickers';
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'text', label: 'text' },
@@ -136,7 +138,7 @@ export default function VisualFormEditor({
   const sections = value.sections ?? [];
   const fieldCount = sections.reduce((s, sec) => s + (sec.fields?.length ?? 0), 0);
 
-  return (
+  const main = (
     <div className="flex flex-col h-full min-h-0">
       <div className="border-b px-3 flex gap-1 overflow-x-auto">
         <TabButton active={tab === 'basic'} onClick={() => setTab('basic')}>기본 정보</TabButton>
@@ -159,6 +161,102 @@ export default function VisualFormEditor({
         )}
       </div>
     </div>
+  );
+
+  return (
+    <EditorWithPanel
+      panel={<FormLevelPanel value={value} onChange={onChange} />}
+      panelTitle="⚙ 폼 설정"
+    >
+      {main}
+    </EditorWithPanel>
+  );
+}
+
+// ─── 우측 패널: form-level 컨테이너 설정 (L1) ─────────────────────────────
+// asyncRefine[] 비동기 검증 규칙 편집 — 가장 새 메타 인프라 항목.
+function FormLevelPanel({
+  value, onChange,
+}: {
+  value: MetaFormConfig;
+  onChange: (next: MetaFormConfig) => void;
+}) {
+  const asyncRefineEntries: RegistryEntry[] = useMemo(
+    () => Object.entries(asyncRefinements).map(([id, e]) => ({
+      id,
+      label: e.label,
+      description: e.description,
+    })),
+    [],
+  );
+  const rules = value.asyncRefine ?? [];
+
+  const addRule = () => {
+    const next: AsyncRefineRule = { ruleId: '', message: '검증 실패' };
+    onChange({ ...value, asyncRefine: [...rules, next] });
+  };
+  const updateRule = (idx: number, patch: Partial<AsyncRefineRule>) => {
+    const next = rules.map((r, i) => i === idx ? { ...r, ...patch } : r);
+    onChange({ ...value, asyncRefine: next });
+  };
+  const removeRule = (idx: number) => {
+    const next = rules.filter((_, i) => i !== idx);
+    onChange({ ...value, asyncRefine: next.length === 0 ? undefined : next });
+  };
+
+  return (
+    <>
+      <PanelGroup title="비동기 검증 (asyncRefine)">
+        {rules.length === 0 ? (
+          <PanelEmpty message="규칙 없음 — 아래 + 로 추가" />
+        ) : (
+          rules.map((r, i) => (
+            <div key={i} className="rounded border p-2 space-y-1.5 bg-background">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-muted-foreground">규칙 #{i + 1}</span>
+                <button
+                  type="button"
+                  className="text-[10px] text-muted-foreground hover:text-destructive"
+                  onClick={() => removeRule(i)}
+                  aria-label="삭제"
+                >
+                  ✕
+                </button>
+              </div>
+              <RegistryIdPicker
+                label="ruleId"
+                value={r.ruleId}
+                onChange={(v) => updateRule(i, { ruleId: v ?? '' })}
+                entries={asyncRefineEntries}
+                hint="registry.asyncRefinements 에 등록된 키"
+                allowEmpty={false}
+              />
+              <FieldInput
+                label="message (실패 시 표시)"
+                value={r.message}
+                onChange={(v) => updateRule(i, { message: v })}
+              />
+              <FieldInput
+                label="path (콤마 = 다중, 비우면 form-level)"
+                value={(r.path ?? []).join(',')}
+                onChange={(v) => {
+                  const path = v.split(',').map(s => s.trim()).filter(Boolean);
+                  updateRule(i, { path: path.length === 0 ? undefined : path });
+                }}
+                mono
+              />
+            </div>
+          ))
+        )}
+        <button
+          type="button"
+          onClick={addRule}
+          className="w-full text-[11px] text-muted-foreground hover:text-foreground border border-dashed rounded py-1.5"
+        >
+          + 비동기 검증 규칙 추가
+        </button>
+      </PanelGroup>
+    </>
   );
 }
 

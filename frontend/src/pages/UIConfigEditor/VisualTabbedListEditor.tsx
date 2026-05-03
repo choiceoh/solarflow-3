@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import type { TabbedListConfig } from '@/templates/types';
 import { contentBlocks } from '@/templates/registry';
 import { ArrayEditor, FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
+import { EditorWithPanel, PanelGroup, PanelEmpty } from './RightPanel';
 
 type Tab = 'basic' | 'tabs' | 'json';
 
@@ -23,7 +24,7 @@ export default function VisualTabbedListEditor({
 }: VisualTabbedListEditorProps) {
   const [tab, setTab] = useState<Tab>('basic');
 
-  return (
+  const main = (
     <div className="flex flex-col h-full min-h-0">
       <div className="border-b px-3 flex gap-1 overflow-x-auto">
         <TabButton active={tab === 'basic'} onClick={() => setTab('basic')}>기본 정보</TabButton>
@@ -46,6 +47,25 @@ export default function VisualTabbedListEditor({
         )}
       </div>
     </div>
+  );
+
+  return (
+    <EditorWithPanel
+      panel={
+        <>
+          <PanelGroup title="TabbedList 정보">
+            <p className="text-[11px] text-muted-foreground">
+              탭 묶음 — 각 탭의 list (pagination/inlineEdit/savedViews 등) 는
+              해당 list 의 JSON 영역에서 편집.
+            </p>
+          </PanelGroup>
+          <PanelEmpty message="탭별 list 의 시각 편집은 follow-up (recursive editor)" />
+        </>
+      }
+      panelTitle="⚙ 탭 묶음 화면 설정"
+    >
+      {main}
+    </EditorWithPanel>
   );
 }
 

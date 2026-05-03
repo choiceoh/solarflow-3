@@ -2,17 +2,19 @@
 // 기본 정보·메트릭·필터·컬럼·액션·rail을 인라인 편집. JSON 탭은 고급/폴백.
 // 분기마다 ./{ColumnsTab,MetricsTab,FiltersTab,ActionsTab,RailTab}.tsx에 행 렌더러 위치.
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import type { ListScreenConfig } from '@/templates/types';
-import { TabButton } from './ArrayEditor';
+import { TabButton, FieldInput } from './ArrayEditor';
 import { ColumnsTab } from './ColumnsTab';
 import { MetricsTab } from './MetricsTab';
 import { FiltersTab } from './FiltersTab';
 import { ActionsTab } from './ActionsTab';
 import { RailTab } from './RailTab';
+import { EditorWithPanel, PanelGroup } from './RightPanel';
+import { BooleanPicker, EndpointPicker, IdFieldPicker, AllowedSizesPicker } from './Pickers';
 
 type Tab = 'basic' | 'metrics' | 'filters' | 'columns' | 'actions' | 'rail' | 'json';
 
@@ -28,7 +30,7 @@ export default function VisualScreenEditor({
 }: VisualScreenEditorProps) {
   const [tab, setTab] = useState<Tab>('basic');
 
-  return (
+  const main = (
     <div className="flex flex-col h-full min-h-0">
       <div className="border-b px-3 flex gap-1 overflow-x-auto">
         <TabButton active={tab === 'basic'} onClick={() => setTab('basic')}>기본 정보</TabButton>
@@ -67,6 +69,108 @@ export default function VisualScreenEditor({
         )}
       </div>
     </div>
+  );
+
+  return (
+    <EditorWithPanel
+      panel={<ListLevelPanel value={value} onChange={onChange} />}
+      panelTitle="⚙ 리스트 화면 설정"
+    >
+      {main}
+    </EditorWithPanel>
+  );
+}
+
+// ─── 우측 패널: list-level 컨테이너 설정 (L1) ─────────────────────────────
+// pagination / savedViews / inlineEdit — Phase 4 메타 인프라 신규 항목들.
+function ListLevelPanel({
+  value, onChange,
+}: {
+  value: ListScreenConfig;
+  onChange: (next: ListScreenConfig) => void;
+}) {
+  const pagination = value.pagination;
+  const savedViews = value.savedViews;
+  const inlineEdit = value.inlineEdit;
+  const columnKeys = useMemo(() => value.columns.map((c) => c.key), [value.columns]);
+
+  return (
+    <>
+      <PanelGroup title="페이지네이션">
+        <BooleanPicker
+          label="활성화"
+          value={!!pagination}
+          onChange={(v) => onChange({ ...value, pagination: v ? { defaultPageSize: 50 } : undefined })}
+          hint="대용량 리스트 — page-size 선택 + 이전/다음"
+        />
+        {pagination && (
+          <>
+            <FieldInput
+              label="defaultPageSize"
+              value={String(pagination.defaultPageSize ?? 50)}
+              onChange={(v) => onChange({
+                ...value,
+                pagination: { ...pagination, defaultPageSize: Number(v) || 50 },
+              })}
+            />
+            <AllowedSizesPicker
+              value={pagination.allowedSizes}
+              onChange={(v) => onChange({ ...value, pagination: { ...pagination, allowedSizes: v } })}
+            />
+            <BooleanPicker
+              label="serverMode (dataHook 이 paged 반환)"
+              value={pagination.serverMode ?? false}
+              onChange={(v) => onChange({
+                ...value,
+                pagination: { ...pagination, serverMode: v || undefined },
+              })}
+              hint="비활성 = client-side slicing"
+            />
+          </>
+        )}
+      </PanelGroup>
+
+      <PanelGroup title="저장된 뷰 (savedViews)">
+        <BooleanPicker
+          label="활성화"
+          value={savedViews?.enabled ?? false}
+          onChange={(v) => onChange({
+            ...value,
+            savedViews: v ? { enabled: true } : undefined,
+          })}
+          hint="툴바에 '뷰' 드롭다운 — filter+hidden+pageSize 묶음 명명 저장"
+        />
+      </PanelGroup>
+
+      <PanelGroup title="인라인 편집 (셀)">
+        <BooleanPicker
+          label="활성화"
+          value={inlineEdit?.enabled ?? false}
+          onChange={(v) => onChange({
+            ...value,
+            inlineEdit: v ? { ...(inlineEdit ?? {}), enabled: true } : undefined,
+          })}
+          hint="ColumnConfig.inlineEditable=true 인 셀 클릭 → input → PATCH"
+        />
+        {inlineEdit?.enabled && (
+          <>
+            <EndpointPicker
+              label="endpoint"
+              value={inlineEdit.endpoint}
+              onChange={(v) => onChange({ ...value, inlineEdit: { ...inlineEdit, endpoint: v } })}
+              hint=":id 자리표시 — /api/v1/<resource>/:id"
+            />
+            <IdFieldPicker
+              label="idField"
+              value={inlineEdit.idField}
+              onChange={(v) => onChange({ ...value, inlineEdit: { ...inlineEdit, idField: v } })}
+              columnKeys={columnKeys}
+              hint="현재 컬럼 키 중 하나"
+            />
+          </>
+        )}
+      </PanelGroup>
+    </>
   );
 }
 
