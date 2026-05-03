@@ -45,6 +45,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useMenuVisibility } from '@/hooks/useMenuVisibility';
 import { usePermission } from '@/hooks/usePermission';
+import { useSidebarTabs } from '@/hooks/useSidebarTabs';
+import { useUserPersona } from '@/hooks/useUserPersona';
 import { useAppStore } from '@/stores/appStore';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -83,6 +85,13 @@ export interface SidebarMenuRegistryItem {
 export function listWipMenus(): SidebarMenuRegistryItem[] {
   return NAV_GROUPS.flatMap((g) => g.items)
     .filter((i) => i.isWip)
+    .map((i) => ({ key: i.key, label: i.label }));
+}
+
+/** D-112 사이드바 탭 카드가 메뉴 매핑 후보로 노출하는 항목 (현재 테넌트의 모든 NAV 메뉴) */
+export function listAllMenusForTenant(tenant: TenantScope): SidebarMenuRegistryItem[] {
+  return NAV_GROUPS.flatMap((g) => g.items)
+    .filter((i) => !i.tenants || i.tenants.includes(tenant))
     .map((i) => ({ key: i.key, label: i.label }));
 }
 
@@ -217,6 +226,20 @@ export default function CommandShell() {
   const r = role as Role | null;
   // D-108: 호스트네임으로 BARO 모드 결정 — 메뉴 가시성 분기에만 사용 (보안 경계는 백엔드 RequireTenantScope)
   const currentTenant = detectTenantScope();
+  // D-112: admin이 정의한 사이드바 탭 — config 미존재면 탭 비활성 (현재 사이드바 그대로)
+  const { config: tabsConfig } = useSidebarTabs(currentTenant);
+  const { persona, setPersona } = useUserPersona();
+  // 현재 선택 탭: user.persona가 탭 목록에 있으면 그것, 없으면 default_tab, 그래도 없으면 첫 번째
+  const activeTabKey = useMemo(() => {
+    if (!tabsConfig) return null;
+    const fromPersona = persona ? tabsConfig.tabs.find((t) => t.key === persona) : undefined;
+    const fromDefault = tabsConfig.tabs.find((t) => t.key === tabsConfig.default_tab);
+    return (fromPersona ?? fromDefault ?? tabsConfig.tabs[0])?.key ?? null;
+  }, [tabsConfig, persona]);
+  const activeTab = useMemo(
+    () => (tabsConfig && activeTabKey ? tabsConfig.tabs.find((t) => t.key === activeTabKey) ?? null : null),
+    [tabsConfig, activeTabKey],
+  );
   const companies = useAppStore((s) => s.companies);
   const loadCompanies = useAppStore((s) => s.loadCompanies);
   const { selectedCompanyId, setCompanyId } = useAppStore();
@@ -289,13 +312,39 @@ export default function CommandShell() {
           </Select>
         </div>
 
+        {tabsConfig && !sidebarCollapsed ? (
+          <div className="sf-sidebar-tabs" role="tablist" aria-label="사이드바 탭">
+            {tabsConfig.tabs.map((tab) => {
+              const isActive = tab.key === activeTabKey;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className="sf-sidebar-tab"
+                  data-active={isActive}
+                  onClick={() => {
+                    if (!isActive) void setPersona(tab.key);
+                  }}
+                  title={tab.label}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
         <nav className="sf-sidebar-nav" aria-label="주요 메뉴 목록">
           {NAV_GROUPS.map((group) => {
             const visibleItems = group.items.filter(
               (item) =>
                 canAccessMenu(r, item.menu) &&
                 (!item.tenants || item.tenants.includes(currentTenant)) &&
-                !hiddenMenus.has(item.key),
+                !hiddenMenus.has(item.key) &&
+                // D-112: 활성 탭이 있으면 그 탭의 menus 화이트리스트, "all"이면 통과
+                (!activeTab || activeTab.menus === 'all' || activeTab.menus.includes(item.key)),
             );
             if (visibleItems.length === 0) return null;
             return (

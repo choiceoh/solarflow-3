@@ -6,6 +6,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { listWipMenus } from '@/components/layout/CommandShell';
 import { useMenuVisibility } from '@/hooks/useMenuVisibility';
+import SidebarTabsCard from '@/pages/settings/SidebarTabsCard';
 
 interface PlannedItem {
   icon: LucideIcon;
@@ -105,6 +106,7 @@ export default function SitePlaceholderPage() {
       </div>
 
       <div className="mx-auto max-w-4xl space-y-3">
+        <SidebarTabsCard />
         <MenuVisibilityCard />
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {PLANNED.map((item) => (
