@@ -17,7 +17,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { FieldConfig, MasterOptionSource, MetaFormConfig } from './types';
 import { GhostInput } from '@/components/forms/GhostInput';
 import {
-  applyFormatter, computedFormulas, enumDictionaries, formRefinements, formContentBlocks, fieldCascades, masterSources, asyncRefinements,
+  applyFormatter, computedFormulas, enumDictionaries, formRefinements, formContentBlocks, fieldCascades, masterSources, asyncRefinements, permissionGuards,
 } from './registry';
 import { useAppStore } from '@/stores/appStore';
 
@@ -696,11 +696,17 @@ function FieldRender({ field, value, error, options, setValue, register, watch, 
     : false;
   // 메타 인프라 확장 (보안): maskByRoles — 마스킹 모드 (값 숨김 + readonly)
   const isMasked = field.maskByRoles && role && field.maskByRoles.includes(role);
-  const readOnly = isReadOnly(field, role) || conditionalReadOnly || !!isMasked;
+  // 메타 인프라 확장 (보안): permissionGuard — 컨텍스트 기반 동적 권한
+  // false 반환 시 readOnly + 마스킹 (maskByRoles 와 동일 효과)
+  const guardDenied = field.permissionGuardId
+    ? !(permissionGuards[field.permissionGuardId]?.({ values: watchedValues, role }) ?? true)
+    : false;
+  const readOnly = isReadOnly(field, role) || conditionalReadOnly || !!isMasked || guardDenied;
   const labelText = `${field.label}${field.required ? ' *' : ''}${readOnly && (field.editableByRoles || field.readOnlyIf) ? ' (읽기전용)' : ''}${isMasked ? ' (마스킹)' : ''}`;
 
   // 메타 인프라 확장 (보안): 마스킹 시 ***로 대체 표시 (간단한 type 만 — text/number/textarea 등)
-  if (isMasked && (field.type === 'text' || field.type === 'number' || field.type === 'textarea' || field.type === 'rich_text')) {
+  // permissionGuard 거부 시도 동일 효과
+  if ((isMasked || guardDenied) && (field.type === 'text' || field.type === 'number' || field.type === 'textarea' || field.type === 'rich_text')) {
     return (
       <div className="space-y-1.5">
         <Label>{labelText}</Label>
