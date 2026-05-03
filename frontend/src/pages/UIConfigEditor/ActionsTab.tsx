@@ -76,6 +76,15 @@ export function ActionsTab({
       })}
       onMove={(idx, dir) => onChange({ ...value, actions: moveInArray(actions, idx, dir) })}
       onRemove={(idx) => onChange({ ...value, actions: actions.filter((_, i) => i !== idx) })}
+      onReorder={(next) => onChange({ ...value, actions: next })}
+      onDuplicate={(idx) => {
+        const src = actions[idx];
+        const baseId = src.id || 'action';
+        let n = 2;
+        while (actions.some((a) => a.id === `${baseId}_${n}`)) n++;
+        const cloned: ActionConfig = { ...src, id: `${baseId}_${n}`, label: `${src.label} (복사)` };
+        onChange({ ...value, actions: [...actions.slice(0, idx + 1), cloned, ...actions.slice(idx + 1)] });
+      }}
       renderRow={(a, idx) => (
         <div className="grid grid-cols-2 gap-2">
           <FieldInput label="id (고유 식별자)" value={a.id} mono

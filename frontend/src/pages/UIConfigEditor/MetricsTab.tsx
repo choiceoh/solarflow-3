@@ -51,6 +51,12 @@ export function MetricsTab({
       onAdd={() => onChange({ ...value, metrics: [...metrics, { label: '새 메트릭', computerId: 'count', spark: 'auto' }] })}
       onMove={(idx, dir) => onChange({ ...value, metrics: moveInArray(metrics, idx, dir) })}
       onRemove={(idx) => onChange({ ...value, metrics: metrics.filter((_, i) => i !== idx) })}
+      onReorder={(next) => onChange({ ...value, metrics: next })}
+      onDuplicate={(idx) => {
+        const src = metrics[idx];
+        const cloned: MetricConfig = { ...src, label: `${src.label} (복사)` };
+        onChange({ ...value, metrics: [...metrics.slice(0, idx + 1), cloned, ...metrics.slice(idx + 1)] });
+      }}
       renderRow={(m, idx) => {
         const toneIsDynamic = typeof m.tone === 'object' && m.tone !== null && 'computerId' in m.tone;
         const toneStatic = typeof m.tone === 'string' ? m.tone : '';
