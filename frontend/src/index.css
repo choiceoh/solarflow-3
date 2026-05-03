@@ -118,7 +118,7 @@ a:focus-visible,
 
 .sf-shell {
   display: grid;
-  grid-template-columns: 184px minmax(0, 1fr);
+  grid-template-columns: 168px minmax(0, 1fr);
   height: 100vh;
   min-height: 0;
   overflow: hidden;

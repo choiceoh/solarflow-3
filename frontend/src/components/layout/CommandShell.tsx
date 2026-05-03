@@ -281,7 +281,7 @@ export default function CommandShell() {
     outbound: sumAlertCounts(alertState.alerts, ['no_invoice']),
     receipts: sumAlertCounts(alertState.alerts, ['overdue_warning', 'overdue_critical']),
     banking: sumAlertCounts(alertState.alerts, ['lc_maturity', 'lc_shortage']),
-  }), [alertState.alerts, alertState.totalCount]);
+  }), [alertState.alerts]);
 
   return (
     <div className="sf-shell" data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}>
@@ -292,7 +292,6 @@ export default function CommandShell() {
           </span>
           <Link to="/inventory" className="sf-sidebar-logo-text min-w-0">
             <div className="text-[13.5px] font-bold leading-none">SolarFlow</div>
-            <div className="sf-mono mt-1 text-[9.5px] font-semibold text-[var(--sf-solar)]">v3.0 · TOPSOLAR</div>
           </Link>
           <button
             type="button"
