@@ -28,6 +28,8 @@
 
 **BARO 전용**:
 - 그룹내 매입 (`/baro/group-purchase`) — Phase 2
+- 입고예정 (`/baro/incoming`) — ETA·공급예정 수량 read-only
+- 구매이력 (`/baro/purchase-history`) — BARO 자체 국내 타사/그룹내 매입 원가 read-only
 - 거래처 단가표 (`/baro/price-book`) — Phase 1
 - 배차/일정 (`/baro/dispatch`) — Phase 4
 - 미수금/한도 (`/baro/credit-board`) — Phase 3
@@ -44,6 +46,8 @@
 - **[D-108](DECISIONS.md#d-108)** — 바로(주) 분리 정의: 단일 DB + URL 분기 + 코드 레벨 마스킹. **이 도메인의 헌법**.
 - **[D-109](DECISIONS.md#d-109)** — CRM(거래처 활동 로그·미처리 문의함)은 바로(주) 전용
 - **[D-039](DECISIONS.md#d-039)** — 그룹내거래(탑솔라↔바로) 양방향. 탑솔라 출고 = 바로 입고 자동 생성, 입고단가는 탑솔라 판매단가로 잠금.
+- **[D-116](DECISIONS.md#d-116)** — BARO 입고예정은 전용 sanitized API로 ETA·수량만 노출
+- **[D-117](DECISIONS.md#d-117)** — BARO 자체 구매이력은 BR 법인 원가만 별도 노출
 
 ## BARO 전용 백엔드 엔드포인트 (`baroOnly` 미들웨어)
 
@@ -52,6 +56,8 @@
 | 경로 | 용도 | 도입 |
 |---|---|---|
 | `/api/v1/baro/price-book/*` | 거래처별 단가 이력 | Phase 1 |
+| `/api/v1/baro/incoming` | 입고예정/ETA read-only | D-116 |
+| `/api/v1/baro/purchase-history` | BR 법인 자체 매입 원가/구매이력 | D-117 |
 | `/api/v1/intercompany-requests/*` (mine/create/cancel/receive) | 그룹내 매입 요청 | Phase 2 |
 | `/api/v1/baro/credit-board` | 거래처 미수금/한도 보드 | Phase 3 |
 | `/api/v1/baro/dispatch/*` | 배차/일정 | Phase 4 |
@@ -61,7 +67,9 @@
 
 ## 운영 메모
 
-- **사이드바 「판매」 그룹 비중**: BARO 영업이 주력 메뉴라 「판매」가 가장 무거움. 「구매」는 그룹내 매입 1개뿐.
+- **사이드바 「판매」 그룹 비중**: BARO 영업이 주력 메뉴라 「판매」가 가장 무거움. 「구매」는 그룹내 매입, 입고예정, 구매이력만 둔다.
+- **입고예정 확인**: 고객 문의 응대용 ETA는 `/baro/incoming`에서 직접 확인한다. 원 B/L 라인 API는 단가·인보이스 금액을 포함할 수 있으므로 BARO 화면은 sanitized API만 사용한다.
+- **구매이력 원가**: BARO 자기 법인(`BR`)의 국내 타사/그룹내 매입 단가는 `/baro/purchase-history`에서 확인한다. 탑솔라 `price-histories`, 면장/원가, L/C/T/T는 계속 차단한다.
 - **인바운드 위주 → CRM 도입 배경**: 영업 6명이 200곳을 분담, 고객이 먼저 전화하는 경우가 많아 "통화 내용·후속 답변 추적"이 일상. 이게 CRM 1차의 사용 시나리오 (D-109).
 - **결재안 제거**: BARO는 결재 흐름이 별도 시스템에 있어 SolarFlow 결재안을 안 씀(D-173 PR #173).
 

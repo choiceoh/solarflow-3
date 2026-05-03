@@ -9,10 +9,40 @@
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
-| Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 49 + pure function 62 sub-case) |
+| Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-115 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-117 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-03 세션 — BARO 입고예정/ETA + 구매이력 보드
+
+### 완료
+- BARO 영업이 module 담당자에게 묻지 않고 직접 확인할 수 있는 `/baro/incoming` 화면 추가
+- `GET /api/v1/baro/incoming` BARO 전용 sanitized API 추가
+  - B/L 원본/라인 API를 그대로 노출하지 않고 품번·수량·용량·ETD·ETA·입고일·창고·상태만 반환
+  - 환율/L/C/T/T/면장/인보이스 금액/단가/CIF/Landed Cost 필드 제외
+- BARO 자체 구매이력 `/baro/purchase-history` 화면 추가
+- `GET /api/v1/baro/purchase-history` BARO 전용 API 추가
+  - 조회 범위는 `company_code='BR'` 법인 B/L 라인으로 고정
+  - 국내 타사/그룹내 매입 단가(`unit_price_krw_wp`, `unit_price_usd_wp`)와 추정 매입금액 제공
+  - `admin`/`operator`/`executive`만 접근, `manager`/`viewer`는 원가 조회 차단
+- 사이드바 메뉴 `baro_incoming`, `baro_purchase_history` 추가, BARO 테넌트에서만 노출
+- `harness/baro.md`, `harness/module.md`, D-116/D-117 결정 기록 동기화
+
+### 검증
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공 — routes.golden 갱신
+- `TestBaroPurchaseHistoryCostRoleGate` 추가 — BARO operator 통과, BARO manager 차단, 탑솔라 토큰 차단
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run test` 성공 — 9 files / 75 tests
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 149건 출력
+- `git diff --check` 성공
+- `graphify update .` 성공
+- `curl -I http://baro.localhost:5173/baro/purchase-history` → 200
 
 ---
 

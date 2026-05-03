@@ -15,6 +15,7 @@ import {
   PanelLeftOpen,
   Inbox,
   PackagePlus,
+  ReceiptText,
   ScrollText,
   Settings,
   ShieldAlert,
@@ -120,6 +121,10 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'baro-inbox', label: '그룹 요청', abbr: '그룹', path: '/group-trade/baro-inbox', icon: Inbox, menu: 'baro_inbox', tenants: ['topsolar'] },
       // BARO Phase 2: 바로(주) 측 — 탑솔라로부터 매입할 모듈을 등록
       { key: 'baro-purchase', label: '그룹내 매입', abbr: '매입', path: '/baro/group-purchase', icon: PackagePlus, menu: 'baro_group_purchase', tenants: ['baro'] },
+      // BARO 영업용 — 가격·환율 없이 공급예정 ETA만 확인
+      { key: 'baro-incoming', label: '입고예정', abbr: '입고', path: '/baro/incoming', icon: Ship, menu: 'baro_incoming', tenants: ['baro'] },
+      // BARO 자체 구매 — 국내 타사/그룹내 매입 원가 이력
+      { key: 'baro-purchase-history', label: '구매이력', abbr: '이력', path: '/baro/purchase-history', icon: ReceiptText, menu: 'baro_purchase_history', tenants: ['baro'] },
     ],
   },
   {
@@ -178,6 +183,8 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/settings/admin': { title: '관리자 설정', breadcrumb: '시스템 / 사용자 관리' },
   '/settings/site': { title: '사이트 설정', breadcrumb: '시스템 / 전역 설정' },
   '/settings/personal': { title: '개인 설정', breadcrumb: '시스템 / 내 계정' },
+  '/baro/incoming': { title: '입고예정', breadcrumb: '구매 / ETA와 공급예정' },
+  '/baro/purchase-history': { title: '구매이력', breadcrumb: '구매 / 자체 매입 원가' },
   '/ui-config-editor': { title: 'UI 편집기', breadcrumb: '도구 / 화면·폼 시각 편집 (admin)' },
 };
 

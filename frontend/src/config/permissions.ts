@@ -45,6 +45,8 @@ export type MenuKey =
   | 'baro_dispatch'         // BARO: 배차/일정 보드
   | 'baro_credit'           // BARO: 거래처 미수금/한도 보드
   | 'baro_price_book'       // BARO: 거래처별 단가표
+  | 'baro_incoming'         // BARO: 입고예정/ETA 보드
+  | 'baro_purchase_history' // BARO: 자체 구매이력/원가 read-only
   | 'baro_inbox';           // 탑솔라: 바로 매입요청 inbox
 
 /** 기능 권한 키 */
@@ -80,7 +82,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
             'banking','customs','purchase_history','import_hub','masters','approval','assistant','crm_inbox',
-            'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_inbox',
+            'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_incoming','baro_purchase_history','baro_inbox',
             'settings'],
     features: {
       canEdit: true,
@@ -95,7 +97,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   executive: {
     menus: ['inventory','orders','outbound','receipts','banking','customs','purchase_history','assistant','crm_inbox',
-            'baro_credit','settings'],
+            'baro_credit','baro_incoming','baro_purchase_history','settings'],
     features: {
       canEdit: false,
       showPrice: true,
@@ -108,7 +110,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   manager: {
-    menus: ['inventory','assistant','settings'],
+    menus: ['inventory','baro_incoming','assistant','settings'],
     features: {
       canEdit: false,
       showPrice: false,          // 단가·재고금액 차단 (역산 방지)
@@ -121,7 +123,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   viewer: {
-    menus: ['inventory','settings'],
+    menus: ['inventory','baro_incoming','settings'],
     features: {
       canEdit: false,
       showPrice: false,

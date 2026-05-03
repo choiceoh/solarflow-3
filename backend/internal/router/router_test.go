@@ -226,6 +226,8 @@ func TestGuardMatrix(t *testing.T) {
 		// ---- D-109 BaroOnly ----
 		{"GET", "/api/v1/partner-prices/", g(guardSet{baroOnly: true})},
 		{"POST", "/api/v1/partner-prices/", g(guardSet{baroOnly: true, write: true})},
+		{"GET", "/api/v1/baro/incoming/", g(guardSet{baroOnly: true})},
+		{"GET", "/api/v1/baro/purchase-history/", g(guardSet{baroOnly: true})},
 		{"GET", "/api/v1/baro/credit-board/", g(guardSet{baroOnly: true})},
 		{"GET", "/api/v1/baro/dispatch-routes/", g(guardSet{baroOnly: true})},
 		{"POST", "/api/v1/baro/dispatch-routes/", g(guardSet{baroOnly: true, write: true})},
@@ -270,5 +272,20 @@ func TestGuardMatrix(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBaroPurchaseHistoryCostRoleGate(t *testing.T) {
+	a := newTestApp(t, true)
+	h := router.NewWithAuth(a, stubAuth)
+
+	if code := fire(h, "GET", "/api/v1/baro/purchase-history/", middleware.TenantScopeBaro, "operator"); code == http.StatusForbidden {
+		t.Fatalf("BARO operator는 구매이력 원가 조회를 통과해야 합니다")
+	}
+	if code := fire(h, "GET", "/api/v1/baro/purchase-history/", middleware.TenantScopeBaro, "manager"); code != http.StatusForbidden {
+		t.Fatalf("BARO manager는 구매이력 원가 조회가 차단돼야 합니다: got %d", code)
+	}
+	if code := fire(h, "GET", "/api/v1/baro/purchase-history/", middleware.TenantScopeTopsolar, "operator"); code != http.StatusForbidden {
+		t.Fatalf("탑솔라 토큰은 BARO 구매이력 조회가 차단돼야 합니다: got %d", code)
 	}
 }
