@@ -119,10 +119,13 @@ export default function ProcurementPage() {
     if (target) setSelectedPO(target);
   }, [location.search, poList]);
   const [poFormOpen, setPoFormOpen] = useState(false);
-  const poFilters: Record<string, string> = {};
+  // Onboarding tour 진행 중이면 박물관 표본 row를 list에 포함 (PR #2-D).
+  const tourActive = new URLSearchParams(location.search).has('tour');
+  const poFilters: { status?: string; manufacturer_id?: string; contract_type?: string; include_sandbox?: boolean } = {};
   if (poStatusFilter) poFilters.status = poStatusFilter;
   if (poMfgFilter) poFilters.manufacturer_id = poMfgFilter;
   if (poTypeFilter) poFilters.contract_type = poTypeFilter;
+  if (tourActive) poFilters.include_sandbox = true;
   const { data: pos, loading: poLoading, reload: reloadPO } = usePOList(poFilters);
 
   const [lcAggVersion, setLcAggVersion] = useState(0);

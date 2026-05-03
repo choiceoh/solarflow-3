@@ -4,16 +4,17 @@ import { companyParams } from '@/lib/companyUtils';
 import { useListQuery } from '@/lib/queryHelpers';
 import type { PurchaseOrder, POLineItem, LCRecord, TTRemittance, PriceHistory } from '@/types/procurement';
 
-export function usePOList(filters: { status?: string; manufacturer_id?: string; contract_type?: string } = {}) {
+export function usePOList(filters: { status?: string; manufacturer_id?: string; contract_type?: string; include_sandbox?: boolean } = {}) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
 
   return useListQuery<PurchaseOrder>(
-    ['pos', selectedCompanyId, filters.status, filters.manufacturer_id, filters.contract_type],
+    ['pos', selectedCompanyId, filters.status, filters.manufacturer_id, filters.contract_type, filters.include_sandbox ?? false],
     () => {
       const params = companyParams(selectedCompanyId!);
       if (filters.status) params.set('status', filters.status);
       if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id);
       if (filters.contract_type) params.set('contract_type', filters.contract_type);
+      if (filters.include_sandbox) params.set('include_sandbox', 'true');
       return fetchWithAuth<PurchaseOrder[]>(`/api/v1/pos?${params}`);
     },
     { enabled: !!selectedCompanyId },

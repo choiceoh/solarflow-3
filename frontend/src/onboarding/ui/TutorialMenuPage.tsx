@@ -1,17 +1,22 @@
-import { Link } from "react-router-dom"
-import { CheckCircle2, GraduationCap, PlayCircle } from "lucide-react"
-import { ALL_FLOWS } from "../flows"
-import { startTourHref } from "../engine/useTourFromUrl"
-import { useOnboardingProgress } from "../engine/useOnboardingProgress"
+import { Link } from 'react-router-dom';
+import { AlertCircle, CheckCircle2, GraduationCap, PlayCircle } from 'lucide-react';
+import { ALL_FLOWS } from '../flows';
+import { startTourHref } from '../engine/useTourFromUrl';
+import { useOnboardingProgress } from '../engine/useOnboardingProgress';
+import { useSandboxStatus } from '../engine/useSandboxStatus';
 
 /**
  * 사이드바 🎓 튜토리얼 — Q6·Q7 결정 (multi-flow shell).
  *
  * ALL_FLOWS의 모든 흐름을 카드 목록으로 노출. 새 흐름 추가 시 자동 반영.
  * 완료한 흐름은 ✓ 표시 (현재는 localStorage; PR #2 이후 DB와 합집합).
+ *
+ * PR #2-D: 박물관 표본 셋업 여부 자동 감지 → 미셋업 시 셋업 안내 배너.
+ * 셋업 완료 시 흐름이 진짜 표본 데이터로 동작 가능 (후속 PR에서 자동 폼 open).
  */
 export const TutorialMenuPage = () => {
-  const { isCompleted } = useOnboardingProgress()
+  const { isCompleted } = useOnboardingProgress();
+  const sandboxStatus = useSandboxStatus();
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-6">
@@ -26,9 +31,24 @@ export const TutorialMenuPage = () => {
         </div>
       </header>
 
+      {!sandboxStatus.loading && !sandboxStatus.hasAny ? (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <div className="font-medium">박물관 표본 데이터가 아직 셋업되지 않았어요</div>
+            <p className="mt-0.5 text-[11px] text-amber-800 dark:text-amber-300">
+              튜토리얼은 풍선 안내까지는 동작하지만, 실제 표본 데이터로 폼을 만져보는 부분은
+              운영자가 시드 셋업을 해야 합니다.{' '}
+              <span className="font-mono">harness/ONBOARDING_SANDBOX.md</span> 절차로 1회 셋업 후 다시
+              방문하세요.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <div className="space-y-2">
         {ALL_FLOWS.map((flow) => {
-          const done = isCompleted(flow.id)
+          const done = isCompleted(flow.id);
           return (
             <Link
               key={flow.id}
@@ -57,7 +77,7 @@ export const TutorialMenuPage = () => {
                 </p>
               </div>
             </Link>
-          )
+          );
         })}
       </div>
 
@@ -65,7 +85,7 @@ export const TutorialMenuPage = () => {
         실제 도메인 흐름(PO·LC·BL·면장·원가, BARO 영업)은 곧 추가됩니다.
       </p>
     </div>
-  )
-}
+  );
+};
 
-export default TutorialMenuPage
+export default TutorialMenuPage;
