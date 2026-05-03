@@ -15,6 +15,7 @@ import {
   startDevMockSession,
 } from '@/lib/devMockMode';
 import { useAppStore } from '@/stores/appStore';
+import { queryClient } from '@/lib/queryClient';
 import type { UserProfile } from '@/types/models';
 
 interface LoginOptions {
@@ -75,6 +76,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       await supabase.auth.signOut();
     }
     useAppStore.setState({ companies: [], companiesLoaded: false, selectedCompanyId: 'all' });
+    queryClient.clear();
     set({ session: null, user: null });
   },
 
