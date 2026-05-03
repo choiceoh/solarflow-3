@@ -84,9 +84,17 @@ type assistantRequest struct {
 // assistantPageContext — 클라이언트가 현재 보고 있는 화면 정보. 서버가 system prompt 에 자동 주입.
 // 권한·도구 노출은 영향 안 받음 — 단순 hint.
 type assistantPageContext struct {
-	Path     string `json:"path,omitempty"`
-	Scope    string `json:"scope,omitempty"`
-	ConfigID string `json:"config_id,omitempty"`
+	Path            string                          `json:"path,omitempty"`
+	Scope           string                          `json:"scope,omitempty"`
+	ConfigID        string                          `json:"config_id,omitempty"`
+	SelectedElement *assistantSelectedElement       `json:"selected_element,omitempty"`
+}
+
+// assistantSelectedElement — 인스펙터에서 현재 선택된 요소. 사용자가 "이 요소" 자연어 요청 시 LLM 이 활용.
+type assistantSelectedElement struct {
+	TagName   string `json:"tag_name,omitempty"`
+	ClassName string `json:"class_name,omitempty"`
+	Selector  string `json:"selector,omitempty"`
 }
 
 // defaultModelForProvider — provider별 모델 기본값.
@@ -730,6 +738,20 @@ func buildSystemPrompt(ctx context.Context, pageContext *assistantPageContext) s
 			b.WriteString("- 메타 config 미매핑 — 사용자가 \"이 화면\" 변경 요청 시 어떤 화면인지 명시 요청하거나 화면 목록을 함께 제시하세요.\n")
 		}
 		b.WriteString("\n")
+	}
+	if pageContext != nil && pageContext.SelectedElement != nil {
+		se := pageContext.SelectedElement
+		b.WriteString("[선택된 요소 — 인스펙터로 클릭한 element]\n")
+		if se.TagName != "" {
+			fmt.Fprintf(&b, "- 태그: %s\n", se.TagName)
+		}
+		if se.Selector != "" {
+			fmt.Fprintf(&b, "- selector: %s\n", se.Selector)
+		}
+		if se.ClassName != "" {
+			fmt.Fprintf(&b, "- 현재 className: %s\n", se.ClassName)
+		}
+		b.WriteString("사용자가 \"이 요소\" / \"이 버튼\" / \"이 카드\" 변경을 요청하면 위 className 을 시작점으로 Tailwind 변형을 제시하세요. 응답에 새 className 후보를 포함할 때는 백틱으로 명확히 표시 (예: `bg-amber-500 text-white px-4 py-2 rounded-lg`).\n\n")
 	}
 	b.WriteString(assistantDomainBlock)
 	fmt.Fprintf(&b, "\n[역할별 가이드]\n%s\n", roleGuide)
