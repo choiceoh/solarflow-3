@@ -9,6 +9,12 @@
 
 import { KNOWN_CONFIGS } from '@/config/knownConfigs';
 
+export interface SelectedElementContext {
+  tag_name?: string;
+  class_name?: string;
+  selector?: string;
+}
+
 export interface PageContextInfo {
   /** 현재 pathname (예: '/masters/partners-v2') */
   path: string;
@@ -16,6 +22,8 @@ export interface PageContextInfo {
   scope?: 'screen' | 'form' | 'detail';
   /** config_id: 추론 실패 시 undefined */
   config_id?: string;
+  /** 인스펙터에서 선택된 요소 (있을 때만). LLM 이 "이 요소" 변경 요청 처리에 사용. */
+  selected_element?: SelectedElementContext;
 }
 
 const screenPathToId = new Map<string, string>(
