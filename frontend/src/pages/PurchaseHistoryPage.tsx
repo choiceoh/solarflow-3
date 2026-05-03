@@ -6,7 +6,7 @@ import { useAppStore } from '@/stores/appStore';
 import { usePOList, usePriceHistoryList, useLCList, useTTList } from '@/hooks/useProcurement';
 import { useBLList } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
-import { buildChains, diffAuditFields, eventDeepLink, sanitizeAuditLogs, type Chain, type EventKind, type SafeAuditLog } from '@/lib/purchaseHistory';
+import { buildChains, diffAuditFields, eventDeepLink, isValidChainParam, sanitizeAuditLogs, type Chain, type EventKind, type SafeAuditLog } from '@/lib/purchaseHistory';
 import { CardB, FilterButton, TileB } from '@/components/command/MockupPrimitives';
 import { monthlyCount, flatSparkFromValue } from '@/templates/sparkUtils';
 import { CONTRACT_TYPE_LABEL, LC_STATUS_LABEL, PO_STATUS_LABEL } from '@/types/procurement';
@@ -284,7 +284,9 @@ export default function PurchaseHistoryPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const chainParam = searchParams.get('chain') ?? '';
+  // chainParam은 외부 URL 조작 방지를 위해 형식 검증 — 허용 외 값은 무시 (= 미선택 상태로 간주)
+  const rawChainParam = searchParams.get('chain') ?? '';
+  const chainParam = isValidChainParam(rawChainParam) ? rawChainParam : '';
 
   const [mfgFilter, setMfgFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -311,12 +313,21 @@ export default function PurchaseHistoryPage() {
     const from = new Date();
     from.setFullYear(from.getFullYear() - 1);
     const fromIso = from.toISOString().slice(0, 10);
+    // 페이지 이탈 시 in-flight fetch 취소 — 응답이 unmount 후 도착해 setState 경고/메모리 누수 방지
+    const controller = new AbortController();
     fetchWithAuth<unknown>(
       `/api/v1/audit-logs?entity_type=purchase_orders&from=${fromIso}&limit=1000`,
+      { signal: controller.signal },
     )
       .then((raw) => setAudits(sanitizeAuditLogs(raw)))
-      .catch(() => setAudits([]))
-      .finally(() => setAuditsLoading(false));
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        setAudits([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setAuditsLoading(false);
+      });
+    return () => controller.abort();
   }, [selectedCompanyId]);
 
   const chains = useMemo(() => buildChains(pos), [pos]);

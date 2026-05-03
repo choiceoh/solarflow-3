@@ -4,6 +4,7 @@ import {
   diffAuditFields,
   eventDeepLink,
   findChainHeadId,
+  isValidChainParam,
   MAX_CHAIN_DEPTH,
   sanitizeAuditLogs,
 } from './purchaseHistory';
@@ -228,5 +229,39 @@ describe('sanitizeAuditLogs', () => {
     const out = sanitizeAuditLogs(raw);
     expect(out[0].old_data).toEqual({ status: 'draft' });
     expect(out[0].new_data).toEqual({ status: 'contracted' });
+  });
+});
+
+describe('isValidChainParam', () => {
+  it('accepts common id shapes', () => {
+    expect(isValidChainParam('po-2604-jko')).toBe(true);
+    expect(isValidChainParam('e51d1a6e-5a87-4d80-9c7e-3fbc3a8a9d00')).toBe(true);
+    expect(isValidChainParam('abc123')).toBe(true);
+    expect(isValidChainParam('user_42')).toBe(true);
+    expect(isValidChainParam('A')).toBe(true);
+  });
+
+  it('rejects empty/oversized/special-char inputs', () => {
+    expect(isValidChainParam('')).toBe(false);
+    expect(isValidChainParam('a'.repeat(65))).toBe(false);
+    expect(isValidChainParam('has space')).toBe(false);
+    expect(isValidChainParam('semi;colon')).toBe(false);
+    expect(isValidChainParam('path/seg')).toBe(false);
+    expect(isValidChainParam("'\"<script>")).toBe(false);
+    expect(isValidChainParam('퍼센트%')).toBe(false);
+  });
+});
+
+describe('eventDeepLink — encodeURIComponent', () => {
+  it('encodes special characters in po_id', () => {
+    // po_id 자체는 isValidChainParam 통과 형식이 보장되지만,
+    // 미래에 ID 형식이 바뀌어도 URL 안전성이 유지되도록 인코딩 보존성 테스트.
+    const url = eventDeepLink({ kind: 'po_create', po_id: 'po with space' });
+    expect(url).toBe('/procurement?po_id=po%20with%20space');
+  });
+
+  it('does not double-encode safe ids', () => {
+    const url = eventDeepLink({ kind: 'po_create', po_id: 'po-2604-jko' });
+    expect(url).toBe('/procurement?po_id=po-2604-jko');
   });
 });

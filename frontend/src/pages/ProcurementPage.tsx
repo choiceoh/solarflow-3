@@ -109,10 +109,12 @@ export default function ProcurementPage() {
     const nextTab = new URLSearchParams(location.search).get('tab') ?? 'po';
     if (PROCUREMENT_TABS.has(nextTab)) setActiveTab(nextTab);
   }, [location.search]);
-  // /purchase-history → /procurement?po_id=... 딥링크: pos 로드 후 자동 선택
+  // /purchase-history → /procurement?po_id=... 딥링크: pos 로드 후 자동 선택.
+  // po_id는 URL을 통해 외부에서 조작 가능하므로 형식 검증 후에만 매칭 시도.
   useEffect(() => {
     const targetId = new URLSearchParams(location.search).get('po_id');
     if (!targetId || poList.length === 0) return;
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(targetId)) return;
     const target = poList.find((p) => p.po_id === targetId);
     if (target) setSelectedPO(target);
   }, [location.search, poList]);

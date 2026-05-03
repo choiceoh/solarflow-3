@@ -21,13 +21,14 @@ export interface TimelineEventLike {
 // 이벤트 클릭 시 운영 페이지로 점프할 URL.
 // PO 관련은 ?po_id=...로 PODetailView 자동 펼침. 그 외는 탭 단위.
 // price_change는 운영 진입점 없음 (Q9=Z 결정대로 단가 편집 폐기) → null 반환 = 비활성.
+// po_id는 encodeURIComponent로 감싸 URL 깨짐·인젝션 방지.
 export function eventDeepLink(evt: TimelineEventLike): string | null {
   switch (evt.kind) {
     case 'po_create':
     case 'variant_create':
     case 'po_update':
     case 'po_cancel':
-      return evt.po_id ? `/procurement?po_id=${evt.po_id}` : '/procurement';
+      return evt.po_id ? `/procurement?po_id=${encodeURIComponent(evt.po_id)}` : '/procurement';
     case 'lc_open':
     case 'lc_settle':
       return '/procurement?tab=lc';
@@ -38,6 +39,14 @@ export function eventDeepLink(evt: TimelineEventLike): string | null {
     case 'price_change':
       return null;
   }
+}
+
+// chain query 파라미터 검증 — `/purchase-history?chain=` 진입 시 외부에서 임의 문자열로 조작될 수 있음.
+// 백엔드 audit_id와 같은 안전선(영숫자/하이픈/언더스코어 64자 이내)을 프론트에서도 적용해
+// (a) 우연한 URL 깨짐, (b) 잘못 매칭으로 비결정적 동작 둘 다 방지.
+const CHAIN_PARAM_RE = /^[A-Za-z0-9_-]{1,64}$/;
+export function isValidChainParam(s: string): boolean {
+  return CHAIN_PARAM_RE.test(s);
 }
 
 export interface Chain {
