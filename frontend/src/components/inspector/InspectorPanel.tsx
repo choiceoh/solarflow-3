@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useAppStore, type InspectorMode, type InspectorTarget } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
+import { Maximize2 } from 'lucide-react';
 import { ActionChips } from './ActionChips';
 import { AiVariantsPanel } from './AiVariantsPanel';
+import { ComponentStoryModal } from './ComponentStoryModal';
 import { HandleOverlay } from './HandleOverlay';
 import { LayerPanel } from './LayerPanel';
 import { PreviewRolePanel } from './PreviewRolePanel';
@@ -117,6 +119,7 @@ const Placeholder = () => (
 
 const TargetInfo = ({ target }: { target: InspectorTarget }) => {
   const [draft, setDraft] = useState(target.className);
+  const [storyOpen, setStoryOpen] = useState(false);
 
   useEffect(() => {
     setDraft(target.className);
@@ -159,15 +162,27 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
           </div>
           <div className="text-sm font-medium text-slate-800">{tagLabel(target.tagName)}</div>
         </div>
-        {target.configSource && (
-          <span
-            className="truncate rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
-            title={target.configSource}
+        <div className="flex items-center gap-1">
+          {target.configSource && (
+            <span
+              className="truncate rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+              title={target.configSource}
+            >
+              메타: {target.configSource}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setStoryOpen(true)}
+            className="flex items-center gap-1 rounded border border-purple-300 bg-white px-1.5 py-0.5 text-[10px] text-purple-700 hover:bg-purple-50 dark:border-purple-700/40 dark:bg-slate-800 dark:text-purple-300"
+            title="이 요소만 단독 미리보기 (모달)"
           >
-            메타: {target.configSource}
-          </span>
-        )}
+            <Maximize2 className="h-3 w-3" />
+            단독 보기
+          </button>
+        </div>
       </div>
+      <ComponentStoryModal open={storyOpen} onClose={() => setStoryOpen(false)} />
       <PreviewRolePanel />
       <PseudoStateTabs />
       <ActionChips className={draft} onChange={setDraft} />
