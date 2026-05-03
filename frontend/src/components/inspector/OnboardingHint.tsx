@@ -95,15 +95,14 @@ export const OnboardingHint = () => {
             <span className="font-medium">우클릭</span> — 빠른 메뉴 (여백 ↑↓ / 스타일 복사·붙이기)
           </li>
           <li>
-            <span className="font-medium">우측 패널</span> — 한국어 액션 칩, 디자인 토큰, 구조 트리, AI 변형
+            <span className="font-medium">우측 패널</span> — 한국어 액션 칩, 디자인 토큰, 구조 트리
           </li>
           <li>
             <span className="font-medium">단독 보기</span> — 선택 요소만 모달로 (Storybook 처럼)
           </li>
         </ul>
         <p className="rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-          마음에 드는 변경을 코드에 반영하려면 변경 사항 목록의{' '}
-          <span className="font-mono">전체 복사</span> → AI 어시스턴트에 붙여넣기.
+          마음에 드는 변경은 변경 사항 목록에서 복사해 코드 반영 작업에 사용하세요.
         </p>
         <button
           type="button"

@@ -77,7 +77,7 @@ const PAGE_MAP: Record<string, PageEntry> = {
   '/customs': {
     label: '면장/원가',
     chips: [
-      { text: '면장 PDF 첨부 → 등록', icon: '📎' },
+      { text: '면장 PDF OCR 내용 분석', icon: '📎' },
       { text: '이 면장 원가 계산', icon: '🧮' },
     ],
   },
@@ -98,7 +98,7 @@ const PAGE_MAP: Record<string, PageEntry> = {
   '/masters/partners-v2': {
     label: '거래처 마스터',
     chips: [
-      { text: '거래처 추가', icon: '➕' },
+      { text: '거래처 유형 분포', icon: '📊' },
       { text: '중복 거래처 찾아줘', icon: '🔍' },
     ],
   },

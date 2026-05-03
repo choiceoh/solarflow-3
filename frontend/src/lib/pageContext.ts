@@ -1,6 +1,6 @@
 /**
  * pathname → (scope, config_id) 매핑.
- * 어시스턴트가 "이 화면" 변경 요청을 받았을 때 어느 ui_configs 행을 다룰지 자동 결정.
+ * 어시스턴트가 현재 화면을 조회·설명할 때 어느 ui_configs 행을 참조할지 자동 결정.
  *
  * 단일 정본 — config/knownConfigs.ts 의 KNOWN_CONFIGS 에서 routeHint 가
  * 정확히 pathname 인 screen 항목만 매핑. 새 화면 추가 시 KNOWN_CONFIGS 만
@@ -22,7 +22,7 @@ export interface PageContextInfo {
   scope?: 'screen' | 'form' | 'detail';
   /** config_id: 추론 실패 시 undefined */
   config_id?: string;
-  /** 인스펙터에서 선택된 요소 (있을 때만). LLM 이 "이 요소" 변경 요청 처리에 사용. */
+  /** 인스펙터에서 선택된 요소 (있을 때만). LLM 이 "이 요소" 설명 요청에 사용. */
   selected_element?: SelectedElementContext;
 }
 
@@ -33,7 +33,7 @@ const screenPathToId = new Map<string, string>(
 
 /**
  * pathname 으로부터 PageContextInfo 추론. 매핑 못 찾으면 path 만 채워서 반환.
- * 매핑된 화면 = AI 가 read_ui_config / propose_ui_config_update 호출 시 (scope, config_id) 자동 사용.
+ * 매핑된 화면 = AI 가 read_ui_config 호출 시 (scope, config_id) 자동 사용.
  */
 export const detectPageContext = (pathname: string): PageContextInfo => {
   const id = screenPathToId.get(pathname);

@@ -49,7 +49,7 @@ export const DraftsList = () => {
             type="button"
             onClick={() => copy(formatAll(drafts), setStatus)}
             className="flex items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-700 hover:bg-slate-100"
-            title="모두 클립보드에 복사 (AI 에 붙여넣기)"
+            title="모두 클립보드에 복사"
           >
             <Copy className="h-3 w-3" />
             전체 복사
@@ -118,7 +118,7 @@ export const DraftsList = () => {
       <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-1.5 text-xs text-amber-800">
         이 페이지({location.pathname}) 의 변경만 표시.
         {otherPagesCount > 0 && ` 다른 페이지 ${otherPagesCount}건은 그 페이지에서 보입니다.`}
-        새로고침 후에도 selector 매칭으로 자동 재적용. 영구 반영은 "전체 복사" → AI.
+        새로고침 후에도 selector 매칭으로 자동 재적용. 영구 반영은 코드 반영 작업에서 처리하세요.
       </p>
       <VariantsDiffModal draft={diffDraft} onClose={() => setDiffDraft(null)} />
     </section>
