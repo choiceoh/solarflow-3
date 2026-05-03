@@ -5,7 +5,7 @@
 // - 순서 변경 = drag-drop (native HTML5, ArrayEditor 패턴 차용)
 // - 이름 편집 = 더블클릭 → in-place input
 // - 추가 = 탭바 끝 [ + ] 인라인 버튼
-// - 삭제 = hover 시 × 표시 + window.confirm
+// - 삭제 = hover 시 × 표시 + 확인 다이얼로그
 // - 선택 = 클릭 → onSelectIdx 호출 (부모가 우측 패널에서 그 탭 메타 편집)
 //
 // 부모는 이 컴포넌트와 별개로 selectedIdx 를 관리. selectedIdx === idx 인 탭이
@@ -13,6 +13,7 @@
 
 import { useState, type DragEvent } from 'react';
 import { Plus, X } from 'lucide-react';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import type { DetailTabConfig } from '@/templates/types';
 
 export function TabsEditor({
@@ -28,6 +29,7 @@ export function TabsEditor({
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [pendingRemoveIdx, setPendingRemoveIdx] = useState<number | null>(null);
 
   // ─── 추가 ─────────────────────────────────────────────────────────────────
   const add = () => {
@@ -48,12 +50,16 @@ export function TabsEditor({
 
   // ─── 삭제 ─────────────────────────────────────────────────────────────────
   const remove = (idx: number) => {
-    const ok = window.confirm(`"${tabs[idx]?.label ?? ''}" 탭을 삭제할까요?`);
-    if (!ok) return;
+    setPendingRemoveIdx(idx);
+  };
+  const confirmRemove = () => {
+    if (pendingRemoveIdx === null) return;
+    const idx = pendingRemoveIdx;
     const next = tabs.filter((_, i) => i !== idx);
     onChange(next);
     if (selectedIdx === idx) onSelectIdx(null);
     else if (selectedIdx !== null && selectedIdx > idx) onSelectIdx(selectedIdx - 1);
+    setPendingRemoveIdx(null);
   };
 
   // ─── 이름 편집 (in-place) ────────────────────────────────────────────────
@@ -105,74 +111,85 @@ export function TabsEditor({
 
   // ─── 렌더 ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex items-center gap-1 border-b overflow-x-auto px-1 py-1">
-      {tabs.map((t, idx) => {
-        const isActive = selectedIdx === idx;
-        const isDragging = dragIdx === idx;
-        const isDragOver = dragOverIdx === idx && !isDragging;
-        const isHovered = hoveredIdx === idx;
-        const isRenaming = renamingIdx === idx;
+    <>
+      <div className="flex items-center gap-1 border-b overflow-x-auto px-1 py-1">
+        {tabs.map((t, idx) => {
+          const isActive = selectedIdx === idx;
+          const isDragging = dragIdx === idx;
+          const isDragOver = dragOverIdx === idx && !isDragging;
+          const isHovered = hoveredIdx === idx;
+          const isRenaming = renamingIdx === idx;
 
-        return (
-          <div
-            key={`${idx}-${t.key}`}
-            draggable={!isRenaming}
-            onDragStart={onDragStart(idx)}
-            onDragOver={onDragOverTab(idx)}
-            onDrop={onDropTab(idx)}
-            onDragEnd={onDragEnd}
-            onMouseEnter={() => setHoveredIdx(idx)}
-            onMouseLeave={() => setHoveredIdx(null)}
-            onClick={() => { if (!isRenaming) onSelectIdx(idx); }}
-            onDoubleClick={() => startRename(idx)}
-            className={`group relative flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-t border-b-2 cursor-pointer whitespace-nowrap transition-colors ${
-              isActive
-                ? 'border-foreground text-foreground bg-background'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
-            } ${isDragging ? 'opacity-40' : ''} ${
-              isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''
-            }`}
-            title="더블클릭으로 이름 변경 / 드래그로 순서 변경"
-          >
-            {isRenaming ? (
-              <input
-                autoFocus
-                value={renameDraft}
-                onChange={(e) => setRenameDraft(e.target.value)}
-                onBlur={commitRename}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
-                  else if (e.key === 'Escape') { cancelRename(); }
-                }}
-                onClick={(e) => e.stopPropagation()}
-                className="h-5 w-32 rounded border border-input bg-background px-1.5 text-xs"
-              />
-            ) : (
-              <span>{t.label || t.key}</span>
-            )}
-            {/* hover 시 × 노출 (활성 탭은 항상 노출) */}
-            {!isRenaming && (isHovered || isActive) && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); remove(idx); }}
-                className="ml-0.5 rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                aria-label={`"${t.label}" 삭제`}
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
-            )}
-          </div>
-        );
-      })}
-      <button
-        type="button"
-        onClick={add}
-        className="flex items-center gap-1 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 rounded-t whitespace-nowrap"
-        title="새 탭 추가"
-      >
-        <Plus className="h-3 w-3" />
-        탭 추가
-      </button>
-    </div>
+          return (
+            <div
+              key={`${idx}-${t.key}`}
+              draggable={!isRenaming}
+              onDragStart={onDragStart(idx)}
+              onDragOver={onDragOverTab(idx)}
+              onDrop={onDropTab(idx)}
+              onDragEnd={onDragEnd}
+              onMouseEnter={() => setHoveredIdx(idx)}
+              onMouseLeave={() => setHoveredIdx(null)}
+              onClick={() => { if (!isRenaming) onSelectIdx(idx); }}
+              onDoubleClick={() => startRename(idx)}
+              className={`group relative flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-t border-b-2 cursor-pointer whitespace-nowrap transition-colors ${
+                isActive
+                  ? 'border-foreground text-foreground bg-background'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
+              } ${isDragging ? 'opacity-40' : ''} ${
+                isDragOver ? 'ring-2 ring-blue-400 ring-inset' : ''
+              }`}
+              title="더블클릭으로 이름 변경 / 드래그로 순서 변경"
+            >
+              {isRenaming ? (
+                <input
+                  autoFocus
+                  value={renameDraft}
+                  onChange={(e) => setRenameDraft(e.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+                    else if (e.key === 'Escape') { cancelRename(); }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="h-5 w-32 rounded border border-input bg-background px-1.5 text-xs"
+                />
+              ) : (
+                <span>{t.label || t.key}</span>
+              )}
+              {/* hover 시 × 노출 (활성 탭은 항상 노출) */}
+              {!isRenaming && (isHovered || isActive) && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); remove(idx); }}
+                  className="ml-0.5 rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  aria-label={`"${t.label}" 삭제`}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              )}
+            </div>
+          );
+        })}
+        <button
+          type="button"
+          onClick={add}
+          className="flex items-center gap-1 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 rounded-t whitespace-nowrap"
+          title="새 탭 추가"
+        >
+          <Plus className="h-3 w-3" />
+          탭 추가
+        </button>
+      </div>
+      <ConfirmDialog
+        open={pendingRemoveIdx !== null}
+        onOpenChange={(open) => { if (!open) setPendingRemoveIdx(null); }}
+        title="탭 삭제"
+        description={`"${pendingRemoveIdx === null ? '' : tabs[pendingRemoveIdx]?.label ?? ''}" 탭을 삭제할까요?`}
+        confirmLabel="삭제"
+        variant="destructive"
+        onConfirm={confirmRemove}
+      />
+    </>
   );
 }
