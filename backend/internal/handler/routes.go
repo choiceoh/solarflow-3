@@ -147,6 +147,8 @@ func (h *CompanyHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
+		// 메타 GUI inline 편집 진입점 — UpdateCompanyRequest 가 pointer + omitempty
+		r.With(g.Write).Patch("/{id}", h.Update)
 		r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
@@ -159,6 +161,8 @@ func (h *ConstructionSiteHandler) RegisterRoutes(r chi.Router, g middleware.Gate
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
+		// 메타 GUI inline 편집 진입점 — UpdateConstructionSiteRequest 가 pointer + omitempty
+		r.With(g.Write).Patch("/{id}", h.Update)
 		r.With(g.Write).Patch("/{id}/status", h.ToggleActive)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})

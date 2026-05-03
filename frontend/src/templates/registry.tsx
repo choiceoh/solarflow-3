@@ -27,6 +27,8 @@ import bankDetailConfig from '@/config/details/banks';
 import warehouseDetailConfig from '@/config/details/warehouses';
 import manufacturerDetailConfig from '@/config/details/manufacturers';
 import partnerDetailConfig from '@/config/details/partners';
+import companyDetailConfig from '@/config/details/companies';
+import constructionSiteDetailConfig from '@/config/details/construction_sites';
 import partnerFormConfig from '@/config/forms/partners';
 import outboundSimpleFormConfig from '@/config/forms/outbound_simple';
 import companyFormConfig from '@/config/forms/companies';
@@ -359,6 +361,9 @@ export const detailDataHooks: Record<string, DetailDataHook> = {
   useWarehouseDetail: (id) => useSimpleDetail<Warehouse>('/api/v1/warehouses/:id', id),
   useManufacturerDetail: (id) => useSimpleDetail<Manufacturer>('/api/v1/manufacturers/:id', id),
   usePartnerDetail: (id) => useSimpleDetail<Partner>('/api/v1/partners/:id', id),
+  // Phase 4 마무리: companies / construction_sites detail 추가 — 모든 master 도메인 커버
+  useCompanyDetail: (id) => useSimpleDetail<Record<string, unknown>>('/api/v1/companies/:id', id),
+  useConstructionSiteDetail: (id) => useSimpleDetail<ConstructionSite>('/api/v1/construction-sites/:id', id),
 };
 
 // ─── Metric computers ──────────────────────────────────────────────────────
@@ -814,6 +819,9 @@ export const detailComponents: Record<string, DetailComponent> = {
   warehouse: ((props) => <MetaDetail config={warehouseDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
   manufacturer: ((props) => <MetaDetail config={manufacturerDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
   partner: ((props) => <MetaDetail config={partnerDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  // Phase 4 마무리: 법인 / 공사 현장 detail
+  company: ((props) => <MetaDetail config={companyDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  construction_site: ((props) => <MetaDetail config={constructionSiteDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
 };
 
 // ─── Rail blocks ───────────────────────────────────────────────────────────
@@ -983,6 +991,20 @@ export const contentBlocks: Record<string, ContentBlock> = {
         <p className="font-mono">
           유형: {p.partner_type ?? '—'}
           {' · '}ERP: {p.erp_code ?? '—'}
+        </p>
+      </div>
+    );
+  },
+  // Phase 4 마무리: 공사 현장 detail 의 "진척" 탭 placeholder.
+  // 향후 발주 연결 / 모듈 입고 진척률 / 시공 일정 등.
+  site_progress_placeholder: ({ items }) => {
+    const site = items[0] as ConstructionSite;
+    return (
+      <div className="rounded border border-dashed bg-muted/20 p-6 text-center text-xs text-muted-foreground space-y-2">
+        <p>이 현장의 진척 / 모듈 입고 / 발주 연결 — 향후 위젯 연결 예정.</p>
+        <p className="font-mono">
+          용량: {site.capacity_mw ?? '—'} MW
+          {' · '}유형: {site.site_type ?? '—'}
         </p>
       </div>
     );
@@ -1393,6 +1415,10 @@ export const contentBlockMeta: RegistryMeta = {
   partner_transactions_placeholder: {
     label: '거래처 거래 현황',
     description: 'PO/Sale 집계 — 향후 위젯 연결',
+  },
+  site_progress_placeholder: {
+    label: '발전소 진척',
+    description: '모듈 입고 / 발주 연결 / 시공 일정 — 향후 위젯',
   },
 };
 export const masterSourceMeta: RegistryMeta = {};
