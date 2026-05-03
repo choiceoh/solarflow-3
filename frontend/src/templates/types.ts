@@ -391,7 +391,7 @@ export interface DetailFieldConfig {
 
 export interface DetailSectionConfig {
   title: string;
-  cols?: 2 | 3 | 4;                 // grid columns (기본 4)
+  cols?: 1 | 2 | 3 | 4;             // grid columns (기본 4)
   fields?: DetailFieldConfig[];     // 데이터 필드 (없으면 contentBlock 사용)
   contentBlock?: ContentBlockConfig; // 섹션 본문을 통째로 커스텀 블록에
   badgesBlock?: ContentBlockConfig; // 헤더 우측 배지 슬롯 (status 등)
