@@ -38,6 +38,7 @@ import {
   InspectorOverlay,
   InspectorPanel,
   OnboardingHint,
+  useApplyClassNameDrafts,
   useDesignTokens,
   useEditModeShortcut,
 } from '@/components/inspector';
@@ -251,6 +252,7 @@ export default function CommandShell() {
 
   useEditModeShortcut();
   useDesignTokens();
+  useApplyClassNameDrafts();
 
   useEffect(() => { loadCompanies(); }, [loadCompanies]);
 

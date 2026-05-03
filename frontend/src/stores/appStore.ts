@@ -24,6 +24,30 @@ export interface ClassNameDraft {
 }
 
 const TOKEN_OVERRIDES_KEY = 'sf.token-overrides';
+const CLASSNAME_DRAFTS_KEY = 'sf.inspector.classname-drafts';
+
+const readDrafts = (): ClassNameDraft[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(CLASSNAME_DRAFTS_KEY);
+    return raw ? (JSON.parse(raw) as ClassNameDraft[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeDrafts = (drafts: ClassNameDraft[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (drafts.length === 0) {
+      window.localStorage.removeItem(CLASSNAME_DRAFTS_KEY);
+    } else {
+      window.localStorage.setItem(CLASSNAME_DRAFTS_KEY, JSON.stringify(drafts));
+    }
+  } catch {
+    /* noop */
+  }
+};
 
 const readTokenOverrides = (): Record<string, string> => {
   if (typeof window === 'undefined') return {};
@@ -136,23 +160,34 @@ export const useAppStore = create<AppState>((set, get) => ({
       writeTokenOverrides({});
       return { tokenOverrides: {} };
     }),
-  classNameDrafts: [],
+  classNameDrafts: readDrafts(),
   recordClassNameDraft: ({ selector, tagName, before, after }) =>
     set((s) => {
       const existing = s.classNameDrafts.find((d) => d.selector === selector);
       const id = existing?.id ?? `${selector}-${Date.now()}`;
       const baseBefore = existing?.before ?? before;
+      let next: ClassNameDraft[];
       if (after === baseBefore) {
         // 원복 — draft 제거
-        return { classNameDrafts: s.classNameDrafts.filter((d) => d.id !== id) };
+        next = s.classNameDrafts.filter((d) => d.id !== id);
+      } else {
+        const newDraft: ClassNameDraft = { id, selector, tagName, before: baseBefore, after, ts: Date.now() };
+        next = [...s.classNameDrafts.filter((d) => d.id !== id), newDraft];
       }
-      const next: ClassNameDraft = { id, selector, tagName, before: baseBefore, after, ts: Date.now() };
-      const filtered = s.classNameDrafts.filter((d) => d.id !== id);
-      return { classNameDrafts: [...filtered, next] };
+      writeDrafts(next);
+      return { classNameDrafts: next };
     }),
   removeClassNameDraft: (id) =>
-    set((s) => ({ classNameDrafts: s.classNameDrafts.filter((d) => d.id !== id) })),
-  clearClassNameDrafts: () => set({ classNameDrafts: [] }),
+    set((s) => {
+      const next = s.classNameDrafts.filter((d) => d.id !== id);
+      writeDrafts(next);
+      return { classNameDrafts: next };
+    }),
+  clearClassNameDrafts: () =>
+    set(() => {
+      writeDrafts([]);
+      return { classNameDrafts: [] };
+    }),
   contextMenuPosition: null,
   setContextMenuPosition: (pos) => set({ contextMenuPosition: pos }),
   copiedClassName: null,

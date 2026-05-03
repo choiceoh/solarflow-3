@@ -108,7 +108,8 @@ export const DraftsList = () => {
         ))}
       </ul>
       <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-1.5 text-[10px] text-amber-800">
-        새로고침 시 화면은 자동 reset 되지만 변경 목록은 사라집니다 (영속 X). 결정 후 "전체 복사" → AI 에 붙여 코드 반영.
+        변경 목록은 자동 저장되며, 새로고침 후에도 selector 매칭으로 자동 재적용됩니다.
+        영구 반영(모든 사용자)은 "전체 복사" → AI 에 붙여 메타 config 갱신.
       </p>
       <VariantsDiffModal draft={diffDraft} onClose={() => setDiffDraft(null)} />
     </section>
