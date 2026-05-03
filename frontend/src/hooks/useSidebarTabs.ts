@@ -1,5 +1,5 @@
 // D-112: 사이드바 탭(persona) 정의 — admin이 system_settings에서 자유 정의.
-// key: sidebar_tabs.{tenant} — 테넌트별로 독립 (BARO/탑솔라가 다른 탭 구성 가능).
+// key: sidebar_tabs.{tenant} — 테넌트별로 독립 (module/cable/BARO가 다른 탭 구성 가능).
 // key 자체 미존재 또는 enabled 의미 ⇒ 탭 UI 비활성, 사이드바는 기존 동작 그대로.
 import { useCallback, useEffect, useState } from 'react';
 import { fetchWithAuth } from '@/lib/api';

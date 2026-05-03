@@ -15,10 +15,11 @@ const (
 	keyAllowedModules contextKey = "allowed_modules"
 )
 
-// 테넌트 스코프 상수 (D-108)
-// 탑솔라 SolarFlow와 바로 SolarFlow가 같은 코드/DB를 공유하되, 사용자별로 어느 앱에 속하는지 구분
+// 테넌트 스코프 상수 (D-108, D-119)
+// module/cable/baro가 같은 코드/DB를 공유하되, 사용자별로 어느 앱에 속하는지 구분
 const (
 	TenantScopeTopsolar = "topsolar"
+	TenantScopeCable    = "cable"
 	TenantScopeBaro     = "baro"
 )
 

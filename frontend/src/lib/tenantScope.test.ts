@@ -11,7 +11,16 @@ describe('detectTenantScope', () => {
     expect(detectTenantScope('baro-stage.topworks.ltd')).toBe('baro');
   });
 
+  it('cable.topworks.ltd는 cable로 분기', () => {
+    expect(detectTenantScope('cable.topworks.ltd')).toBe('cable');
+  });
+
+  it('cable-stage 같은 변종 호스트도 cable로 분기', () => {
+    expect(detectTenantScope('cable-stage.topworks.ltd')).toBe('cable');
+  });
+
   it('탑솔라 운영 도메인은 topsolar', () => {
+    expect(detectTenantScope('module.topworks.ltd')).toBe('topsolar');
     expect(detectTenantScope('solarflow3.com')).toBe('topsolar');
   });
 

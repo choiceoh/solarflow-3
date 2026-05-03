@@ -232,6 +232,7 @@ var assistantRoleLabels = map[string]string{
 
 var assistantTenantLabels = map[string]string{
 	"topsolar": "탑솔라 (수입·유통 본사)",
+	"cable":    "케이블 (module 포크 분기)",
 	"baro":     "바로(주) (단가표·배차·매입요청 중심)",
 }
 

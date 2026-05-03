@@ -4,8 +4,10 @@ import { detectTenantScope } from '@/lib/tenantScope';
 
 const DEV_MOCK_LOGIN_KEY = 'solarflow-dev-mock-login';
 const DEV_MOCK_USER_ID_TOPSOLAR = '00000000-0000-4000-8000-000000000019';
+const DEV_MOCK_USER_ID_CABLE = '00000000-0000-4000-8000-000000000021';
 const DEV_MOCK_USER_ID_BARO = '00000000-0000-4000-8000-000000000020';
 const DEV_MOCK_EMAIL_TOPSOLAR = 'mock@solarflow.local';
+const DEV_MOCK_EMAIL_CABLE = 'mock@cable.local';
 const DEV_MOCK_EMAIL_BARO = 'mock@baro.local';
 
 function readStorageFlag(key: string): boolean {
@@ -73,8 +75,24 @@ const DEV_MOCK_PROFILE_BARO: UserProfile = {
   preferences: null,
 };
 
+const DEV_MOCK_PROFILE_CABLE: UserProfile = {
+  user_id: DEV_MOCK_USER_ID_CABLE,
+  email: DEV_MOCK_EMAIL_CABLE,
+  name: '케이블 목업 관리자',
+  role: 'admin',
+  department: '케이블 검토',
+  phone: null,
+  avatar_url: null,
+  is_active: true,
+  persona: null,
+  preferences: null,
+};
+
 export function getDevMockProfile(): UserProfile {
-  return detectTenantScope() === 'baro' ? DEV_MOCK_PROFILE_BARO : DEV_MOCK_PROFILE_TOPSOLAR;
+  const tenant = detectTenantScope();
+  if (tenant === 'baro') return DEV_MOCK_PROFILE_BARO;
+  if (tenant === 'cable') return DEV_MOCK_PROFILE_CABLE;
+  return DEV_MOCK_PROFILE_TOPSOLAR;
 }
 
 export function createDevMockSession(): Session {
