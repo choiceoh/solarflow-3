@@ -65,6 +65,10 @@ interface AppState {
   recordClassNameDraft: (draft: Omit<ClassNameDraft, 'id' | 'ts'>) => void;
   removeClassNameDraft: (id: string) => void;
   clearClassNameDrafts: () => void;
+  contextMenuPosition: { x: number; y: number } | null;
+  setContextMenuPosition: (pos: { x: number; y: number } | null) => void;
+  copiedClassName: string | null;
+  setCopiedClassName: (cls: string | null) => void;
   companies: Company[];
   companiesLoaded: boolean;
   loadCompanies: () => Promise<void>;
@@ -128,6 +132,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeClassNameDraft: (id) =>
     set((s) => ({ classNameDrafts: s.classNameDrafts.filter((d) => d.id !== id) })),
   clearClassNameDrafts: () => set({ classNameDrafts: [] }),
+  contextMenuPosition: null,
+  setContextMenuPosition: (pos) => set({ contextMenuPosition: pos }),
+  copiedClassName: null,
+  setCopiedClassName: (cls) => set({ copiedClassName: cls }),
   companies: [],
   companiesLoaded: false,
   loadCompanies: () => {

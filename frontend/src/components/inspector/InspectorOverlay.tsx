@@ -38,6 +38,17 @@ export const InspectorOverlay = () => {
       e.stopPropagation();
       setLastTargetEl(target instanceof HTMLElement ? target : null);
       setInspectorTarget(buildTarget(target));
+      // 좌클릭 시 컨텍스트 메뉴 닫기
+      useAppStore.getState().setContextMenuPosition(null);
+    };
+
+    const onContextMenu = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (!target || isInspectorUi(target)) return;
+      e.preventDefault();
+      setLastTargetEl(target instanceof HTMLElement ? target : null);
+      useAppStore.getState().setInspectorTarget(buildTarget(target));
+      useAppStore.getState().setContextMenuPosition({ x: e.clientX, y: e.clientY });
     };
 
     const onKey = (e: KeyboardEvent) => {
@@ -49,10 +60,12 @@ export const InspectorOverlay = () => {
 
     document.addEventListener('mouseover', onMove);
     document.addEventListener('click', onClick, true);
+    document.addEventListener('contextmenu', onContextMenu, true);
     window.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('mouseover', onMove);
       document.removeEventListener('click', onClick, true);
+      document.removeEventListener('contextmenu', onContextMenu, true);
       window.removeEventListener('keydown', onKey);
       setLastTargetEl(null);
     };
