@@ -10,7 +10,7 @@ export interface InspectorTarget {
   rect: { top: number; left: number; width: number; height: number };
 }
 
-export type InspectorMode = 'element' | 'token';
+export type InspectorMode = 'element' | 'token' | 'structure';
 
 export interface ClassNameDraft {
   id: string;

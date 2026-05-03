@@ -3,6 +3,7 @@ import { useAppStore, type InspectorMode, type InspectorTarget } from '@/stores/
 import { cn } from '@/lib/utils';
 import { ActionChips } from './ActionChips';
 import { HandleOverlay } from './HandleOverlay';
+import { LayerPanel } from './LayerPanel';
 import { TokenPanel } from './TokenPanel';
 import { DraftsList } from './DraftsList';
 import { getLastTargetEl } from './inspectorTarget';
@@ -42,17 +43,18 @@ export const InspectorPanel = () => {
           <ModeTab mode="element" current={inspectorMode} onClick={setInspectorMode}>
             요소
           </ModeTab>
+          <ModeTab mode="structure" current={inspectorMode} onClick={setInspectorMode}>
+            구조
+          </ModeTab>
           <ModeTab mode="token" current={inspectorMode} onClick={setInspectorMode}>
             디자인 토큰
           </ModeTab>
         </div>
       </header>
       <div className="overflow-y-auto p-4 text-sm" style={{ height: 'calc(100vh - 73px)' }}>
-        {inspectorMode === 'element' ? (
-          <ElementMode target={inspectorTarget} />
-        ) : (
-          <TokenPanel />
-        )}
+        {inspectorMode === 'element' && <ElementMode target={inspectorTarget} />}
+        {inspectorMode === 'structure' && <LayerPanel />}
+        {inspectorMode === 'token' && <TokenPanel />}
       </div>
     </aside>
   );
