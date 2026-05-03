@@ -1,7 +1,7 @@
 // Phase 1+1.5 PoC: 단일 리스트 화면 템플릿
 // config(메타) + registry(코드)를 결합해 한 도메인의 목록 화면을 렌더한다.
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, useCallback, type ReactNode } from 'react';
 import { useResolvedConfig } from './configOverride';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -131,6 +131,189 @@ export function renderCell(col: ColumnConfig, row: Record<string, unknown>): Rea
   return String(value);
 }
 
+// 메타 인프라 확장: 인라인 편집 셀 (List 용) — 클릭 시 input → blur/Enter 시 onSave 호출.
+// MetaDetail.InlineEditField 와 동일한 UX, 셀 컨텍스트 (ColumnConfig) 사용.
+function InlineEditCell({ col, row, onSave }: {
+  col: ColumnConfig;
+  row: Record<string, unknown>;
+  onSave: (key: string, value: unknown, row: Record<string, unknown>) => Promise<void>;
+}) {
+  const initial = getFieldValue(row, col.key);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(String(initial ?? ''));
+  const [saving, setSaving] = useState(false);
+  const editType = col.inlineEditType ?? 'text';
+
+  useEffect(() => { setDraft(String(initial ?? '')); }, [initial]);
+
+  const commit = async () => {
+    if (saving) return;
+    const next = editType === 'number' ? Number(draft) : draft;
+    if (next === initial) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      await onSave(col.key, next, row);
+      setEditing(false);
+    } catch (err) {
+      console.error('[ListScreen] inline save failed', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="text-left hover:bg-muted/40 rounded px-1 -mx-1 cursor-pointer w-full"
+        onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+        title="클릭하여 편집"
+      >
+        {renderCell(col, row)}
+        <span className="ml-1 text-[10px] opacity-30">✏️</span>
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+      {editType === 'select' ? (
+        <select
+          autoFocus
+          className="h-6 flex-1 rounded border border-input bg-background px-1.5 text-xs"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+        >
+          {(col.inlineEditOptions ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      ) : (
+        <input
+          autoFocus
+          type={editType}
+          className="h-6 flex-1 rounded border border-input bg-background px-1.5 text-xs"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            else if (e.key === 'Escape') { setDraft(String(initial ?? '')); setEditing(false); }
+          }}
+        />
+      )}
+      {saving && <span className="text-[10px] text-muted-foreground">저장중</span>}
+    </div>
+  );
+}
+
+// ─── 메타 인프라 확장: 저장된 뷰 (filter + hidden cols + pageSize 묶음) ──
+// localStorage 'sf.list.<id>.savedViews' 에 JSON 배열로 저장.
+type SavedView = {
+  name: string;
+  filters: Record<string, string>;
+  hidden: string[];
+  searchQuery?: string;
+  pageSize?: number;
+};
+
+function loadSavedViews(listId: string): SavedView[] {
+  try {
+    const raw = localStorage.getItem(`sf.list.${listId}.savedViews`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistSavedViews(listId: string, views: SavedView[]) {
+  try {
+    localStorage.setItem(`sf.list.${listId}.savedViews`, JSON.stringify(views));
+  } catch (err) {
+    console.warn('[SavedViews] persist failed', err);
+  }
+}
+
+function SavedViewsMenu({
+  listId, current, onApply,
+}: {
+  listId: string;
+  current: SavedView;
+  onApply: (view: SavedView) => void;
+}) {
+  const [views, setViews] = useState<SavedView[]>(() => loadSavedViews(listId));
+  const [open, setOpen] = useState(false);
+
+  const save = () => {
+    const name = window.prompt('뷰 이름:');
+    if (!name) return;
+    const next = [...views.filter((v) => v.name !== name), { ...current, name }];
+    setViews(next);
+    persistSavedViews(listId, next);
+  };
+
+  const remove = (name: string) => {
+    const next = views.filter((v) => v.name !== name);
+    setViews(next);
+    persistSavedViews(listId, next);
+  };
+
+  return (
+    <div className="relative">
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="h-7 text-xs"
+        onClick={() => setOpen((o) => !o)}
+        title="저장된 뷰"
+      >
+        뷰
+      </Button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-20 w-56 rounded-md border bg-background py-1 shadow-md">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted"
+              onClick={() => { setOpen(false); save(); }}
+            >
+              + 현재 상태 저장…
+            </button>
+            {views.length > 0 ? (
+              <>
+                <div className="my-1 h-px bg-border" />
+                {views.map((v) => (
+                  <div key={v.name} className="flex items-center gap-1 px-1 hover:bg-muted">
+                    <button
+                      type="button"
+                      className="flex-1 px-2 py-1.5 text-left text-xs"
+                      onClick={() => { onApply(v); setOpen(false); }}
+                    >
+                      {v.name}
+                    </button>
+                    <button
+                      type="button"
+                      className="px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+                      onClick={() => remove(v.name)}
+                      aria-label="삭제"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="px-3 py-1.5 text-[11px] text-muted-foreground">저장된 뷰 없음</div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── 한 리스트의 전체 상태 (탭 안에서 재사용) ─────────────────────────────
 export interface TabState {
   filters: Record<string, string>;
@@ -255,7 +438,7 @@ export function RowActionsCell({
 export function TableArea({
   list, state, displayItems, setFormOpenId, onRowAction, onRowSelect,
   hidden, selectedIds, setSelectedIds, globalFilter, onFilteredRowCountChange,
-  pinning, onPinningChange,
+  pinning, onPinningChange, onInlineSave,
 }: {
   list: ListScreenConfig;
   state: TabState;
@@ -272,6 +455,8 @@ export function TableArea({
   onFilteredRowCountChange?: (count: number) => void;
   pinning?: import('@/lib/columnPinning').ColumnPinningState;
   onPinningChange?: (next: import('@/lib/columnPinning').ColumnPinningState) => void;
+  // 메타 인프라 확장: 인라인 편집 핸들러 (config.inlineEdit.enabled 시 ListScreen 이 주입)
+  onInlineSave?: (key: string, value: unknown, row: Record<string, unknown>) => Promise<void>;
 }) {
   if (state.loading) return <SkeletonRows rows={6} />;
 
@@ -325,7 +510,9 @@ export function TableArea({
       align: c.align,
       className: c.className,
       defaultWidth: widthPx && Number.isFinite(widthPx) ? widthPx : undefined,
-      cell: (row) => renderCell(c, row),
+      cell: (row) => (c.inlineEditable && onInlineSave)
+        ? <InlineEditCell col={c} row={row} onSave={onInlineSave} />
+        : renderCell(c, row),
       sortAccessor: c.sortable
         ? (row) => {
             const v = getFieldValue(row, c.key);
@@ -700,6 +887,22 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
     : state.data;
 
   const onRowAction = makeRowActionHandler(pageActions, state.reload);
+
+  // 메타 인프라 확장: 인라인 편집 핸들러 — config.inlineEdit.enabled 시 PATCH 호출 후 reload
+  const inlineEditCfg = config.inlineEdit;
+  const onInlineSave = inlineEditCfg?.enabled ? async (key: string, value: unknown, row: Record<string, unknown>) => {
+    if (!inlineEditCfg.endpoint || !inlineEditCfg.idField) {
+      console.warn('[ListScreen] inlineEdit.endpoint/idField required');
+      return;
+    }
+    const rowId = row[inlineEditCfg.idField];
+    const url = inlineEditCfg.endpoint.replace(':id', String(rowId));
+    await fetchWithAuth(url, {
+      method: 'PATCH',
+      body: JSON.stringify({ [key]: value }),
+    });
+    state.reload();
+  } : undefined;
   // 'toolbar' 는 'header' alias — 옛 outbound config 호환
   const headerActions = config.actions?.filter((a) => a.trigger === 'header' || a.trigger === 'toolbar') ?? [];
   const bulkActions = config.actions?.filter((a) => a.trigger === 'bulk') ?? [];
@@ -729,6 +932,23 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
     ? `${filteredCount.toLocaleString()} / ${state.data.length.toLocaleString()}개 표시`
     : `${state.data.length.toLocaleString()}건`;
 
+  // 메타 인프라 확장: 저장된 뷰 — 현재 상태 스냅샷 + apply 핸들러
+  const savedViewsCfg = config.savedViews;
+  const currentView: SavedView = {
+    name: '',
+    filters: state.filters,
+    hidden: [...hiddenCols],
+    searchQuery,
+    pageSize,
+  };
+  const applyView = useCallback((v: SavedView) => {
+    state.setFilters(v.filters ?? {});
+    setHiddenCols(new Set(v.hidden ?? []));
+    setSearchQuery(v.searchQuery ?? '');
+    if (v.pageSize) setPageSize(v.pageSize);
+    setPage(0);
+  }, [state, setHiddenCols]);
+
   return (
     <>
       <MasterConsole
@@ -751,6 +971,13 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
               openForm={(id) => pageActions.openForm(id)}
             />
             <div style={{ flex: 1 }} />
+            {savedViewsCfg?.enabled && (
+              <SavedViewsMenu
+                listId={config.id}
+                current={currentView}
+                onApply={applyView}
+              />
+            )}
             <ColumnVisibilityMenu
               tableId={config.id}
               columns={config.columns}
@@ -789,6 +1016,7 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
           onFilteredRowCountChange={setFilteredCount}
           pinning={colPin.pinning}
           onPinningChange={colPin.setPinning}
+          onInlineSave={onInlineSave}
         />
         {paginationCfg && totalRows > pageSize && (
           <div className="flex items-center justify-between gap-2 border-t bg-muted/20 px-3 py-2 text-xs">

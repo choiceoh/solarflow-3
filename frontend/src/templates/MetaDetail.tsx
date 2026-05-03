@@ -2,11 +2,12 @@
 // Detail은 입력 없이 데이터 표시라 Form보다 메타 친화적.
 // 데이터 섹션(필드 그리드)을 메타로 그리고, 워크플로우·편집·외부 패널은 contentBlock 슬롯에 위임한다.
 
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useResolvedConfig } from './configOverride';
 import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { fetchWithAuth } from '@/lib/api';
 import { formatDate, formatNumber, formatKw } from '@/lib/utils';
 import type {
   MetaDetailConfig, DetailSectionConfig, DetailFieldConfig, ContentBlockConfig,
@@ -71,25 +72,95 @@ function renderBlock(
 // 외부 host (예: BLDetailView 가 자체 header/tab 으로 감싸는 경우) 가 직접 섹션만 렌더하도록 export.
 // MetaDetail 의 fetch / header 로직 우회.
 export function MetaDetailBody({
-  config, data,
+  config, data, onInlineSave,
 }: {
   config: MetaDetailConfig;
   data: Record<string, unknown>;
+  onInlineSave?: (key: string, value: unknown) => Promise<void>;
 }) {
   return (
     <>
       {config.sections.map((sec, idx) => (
-        <MetaDetailSection key={idx} section={sec} data={data} />
+        <MetaDetailSection key={idx} section={sec} data={data} onInlineSave={onInlineSave} />
       ))}
     </>
   );
 }
 
+// 메타 인프라 확장: 인라인 편집 셀 — 클릭 시 input → blur/Enter 시 onSave 호출
+function InlineEditField({ field, data, onSave }: {
+  field: DetailFieldConfig;
+  data: Record<string, unknown>;
+  onSave: (key: string, value: unknown) => Promise<void>;
+}) {
+  const initial = data[field.key];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(String(initial ?? ''));
+  const [saving, setSaving] = useState(false);
+  const editType = field.inlineEditType ?? 'text';
+
+  useEffect(() => { setDraft(String(initial ?? '')); }, [initial]);
+
+  const commit = async () => {
+    if (saving) return;
+    const next = editType === 'number' ? Number(draft) : draft;
+    if (next === initial) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      await onSave(field.key, next);
+      setEditing(false);
+    } catch (err) {
+      console.error('[MetaDetail] inline save failed', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <button type="button" className="text-left hover:bg-muted/40 rounded px-1 -mx-1 cursor-pointer text-sm" onClick={() => setEditing(true)} title="클릭하여 편집">
+        {renderFieldValue(field, data) ?? <span className="text-muted-foreground italic">—</span>}
+        <span className="ml-1 text-[10px] opacity-30">✏️</span>
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5">
+      {editType === 'select' ? (
+        <select
+          autoFocus
+          className="h-7 flex-1 rounded border border-input bg-background px-2 text-xs"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+        >
+          {(field.inlineEditOptions ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      ) : (
+        <input
+          autoFocus
+          type={editType}
+          className="h-7 flex-1 rounded border border-input bg-background px-2 text-xs"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            else if (e.key === 'Escape') { setDraft(String(initial ?? '')); setEditing(false); }
+          }}
+        />
+      )}
+      {saving && <span className="text-[10px] text-muted-foreground">저장 중...</span>}
+    </div>
+  );
+}
+
 function MetaDetailSection({
-  section, data,
+  section, data, onInlineSave,
 }: {
   section: DetailSectionConfig;
   data: Record<string, unknown>;
+  onInlineSave?: (key: string, value: unknown) => Promise<void>;
 }) {
   if (!evalVisibleIf(section.visibleIf, data)) return null;
 
@@ -105,13 +176,18 @@ function MetaDetailSection({
         <DetailFieldGrid cols={section.cols ?? 4}>
           {(section.fields ?? []).map((f) => {
             if (!evalVisibleIf(f.visibleIf, data)) return null;
+            const isInline = f.inlineEditable && onInlineSave;
             return (
               <DetailField
                 key={f.key}
                 label={f.label}
                 span={f.span}
               >
-                {renderFieldValue(f, data)}
+                {isInline ? (
+                  <InlineEditField field={f} data={data} onSave={onInlineSave!} />
+                ) : (
+                  renderFieldValue(f, data)
+                )}
               </DetailField>
             );
           })}
@@ -145,6 +221,23 @@ export default function MetaDetail({ config: defaultConfig, id, onBack }: MetaDe
   // 탭 모드 — visibleIf 통과한 탭만 표시
   const visibleTabs = (config.tabs ?? []).filter((t) => evalVisibleIf(t.visibleIf, rec));
   const currentTab = visibleTabs.find((t) => t.key === activeTab) ?? visibleTabs[0];
+
+  // 메타 인프라 확장: 인라인 편집 핸들러 — endpoint PATCH 호출
+  const onInlineSave = config.inlineEdit?.enabled ? async (key: string, value: unknown) => {
+    const cfg = config.inlineEdit!;
+    if (!cfg.endpoint || !cfg.idField) {
+      console.warn('[MetaDetail] inlineEdit.endpoint/idField required');
+      return;
+    }
+    const rowId = (rec as Record<string, unknown>)[cfg.idField];
+    const url = cfg.endpoint.replace(':id', String(rowId));
+    await fetchWithAuth(url, {
+      method: 'PATCH',
+      body: JSON.stringify({ [key]: value }),
+    });
+    // 단순 reload — useDetailQuery 가 자체 캐시 있으면 invalidate 필요할 수 있음
+    window.location.reload();
+  } : undefined;
 
   return (
     <div className="space-y-4">
@@ -187,12 +280,12 @@ export default function MetaDetail({ config: defaultConfig, id, onBack }: MetaDe
         <>
           {currentTab.contentBlock ? renderBlock(currentTab.contentBlock, rec) : null}
           {(currentTab.sections ?? []).map((sec, idx) => (
-            <MetaDetailSection key={idx} section={sec} data={rec} />
+            <MetaDetailSection key={idx} section={sec} data={rec} onInlineSave={onInlineSave} />
           ))}
         </>
       ) : (
         config.sections.map((sec, idx) => (
-          <MetaDetailSection key={idx} section={sec} data={rec} />
+          <MetaDetailSection key={idx} section={sec} data={rec} onInlineSave={onInlineSave} />
         ))
       )}
 
