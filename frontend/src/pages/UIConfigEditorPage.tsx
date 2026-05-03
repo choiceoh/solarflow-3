@@ -10,9 +10,11 @@
 //   5. "기본값 복원" → DELETE → DB 행 제거, 코드 default로 폴백
 
 import { useEffect, useMemo, useState } from 'react';
+import { Undo2, Redo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { usePermission } from '@/hooks/usePermission';
+import { useHistory } from '@/hooks/useHistory';
 import {
   loadOverride, saveOverride, clearOverride, listOverrides, type ConfigKind,
 } from '@/templates/configOverride';
@@ -30,7 +32,10 @@ import VisualDetailEditor from './UIConfigEditor/VisualDetailEditor';
 export default function UIConfigEditorPage() {
   const { role } = usePermission();
   const [selectedKey, setSelectedKey] = useState<string>(`${KNOWN_CONFIGS[0].kind}:${KNOWN_CONFIGS[0].id}`);
-  const [draft, setDraft] = useState<string>('');
+  // Polish P-3 — undo/redo 히스토리 (draft JSON 기준)
+  const draftHistory = useHistory<string>('');
+  const draft = draftHistory.value;
+  const setDraft = draftHistory.set;
   const [status, setStatus] = useState<{ kind: 'ok' | 'err' | 'info'; msg: string } | null>(null);
   const [activeOverrides, setActiveOverrides] = useState<{ kind: ConfigKind; id: string }[]>([]);
   const [filter, setFilter] = useState('');
@@ -45,19 +50,47 @@ export default function UIConfigEditorPage() {
   };
 
   // 선택 변경 시 현재 override(있으면) 또는 default를 textarea로
+  // config 전환 시 history 도 리셋 — 이전 config 의 변경이 undo 로 새 config 에 적용되면 안 됨
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const override = await loadOverride<typeof selected.default>(selected.kind, selected.id);
       if (cancelled) return;
       const value = override ?? selected.default;
-      setDraft(JSON.stringify(value, null, 2));
+      draftHistory.reset(JSON.stringify(value, null, 2));
       setStatus(override ? { kind: 'info', msg: '현재 DB override 표시 중' } : { kind: 'info', msg: '코드 기본값 표시 중' });
     })();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected.kind, selected.id, selected.default]);
 
   useEffect(() => { void refreshOverrides(); }, []);
+
+  // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z 또는 Cmd/Ctrl+Y = redo
+  // 입력창(input/textarea) 포커스 중이면 브라우저 native undo 가 작동하도록 양보
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const target = e.target as HTMLElement | null;
+      const inEditable =
+        !!target && (
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable
+        );
+      if (inEditable) return;
+      const key = e.key.toLowerCase();
+      if (key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        draftHistory.undo();
+      } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+        e.preventDefault();
+        draftHistory.redo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [draftHistory.undo, draftHistory.redo]);
 
   if (role !== 'admin') {
     return (
@@ -114,7 +147,7 @@ export default function UIConfigEditorPage() {
   const onReset = async () => {
     try {
       await clearOverride(selected.kind, selected.id);
-      setDraft(JSON.stringify(selected.default, null, 2));
+      draftHistory.reset(JSON.stringify(selected.default, null, 2));
       setStatus({ kind: 'ok', msg: '기본값 복원 — DB 행 삭제됨' });
       await refreshOverrides();
     } catch (e) {
@@ -215,6 +248,25 @@ export default function UIConfigEditorPage() {
         </div>
 
         <div className="px-4 py-2 flex items-center gap-2 border-b">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={draftHistory.undo}
+            disabled={!draftHistory.canUndo}
+            title="실행 취소 (Cmd/Ctrl+Z)"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={draftHistory.redo}
+            disabled={!draftHistory.canRedo}
+            title="다시 실행 (Cmd/Ctrl+Shift+Z / Cmd+Y)"
+          >
+            <Redo2 className="h-3.5 w-3.5" />
+          </Button>
+          <span className="h-5 w-px bg-border" />
           <Button size="sm" variant="outline" onClick={onFormat}>포맷</Button>
           <Button size="sm" variant="outline" onClick={onValidate}>검증</Button>
           <Button size="sm" variant="outline" onClick={onOpenPreview} disabled={!selected.routeHint} title="새 탭에서 프리뷰">프리뷰</Button>
