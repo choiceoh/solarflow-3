@@ -22,6 +22,8 @@ import type { BLShipment, BLLineItem, InboundType, BLStatus } from '@/types/inbo
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
 import PartnerForm from '@/components/masters/PartnerForm';
 import MetaForm from './MetaForm';
+import MetaDetail from './MetaDetail';
+import bankDetailConfig from '@/config/details/banks';
 import partnerFormConfig from '@/config/forms/partners';
 import outboundSimpleFormConfig from '@/config/forms/outbound_simple';
 import companyFormConfig from '@/config/forms/companies';
@@ -246,6 +248,27 @@ function useSimpleList<T>(endpoint: string): { data: T[]; loading: boolean; relo
   return { data, loading, reload: () => setTick((n) => n + 1) };
 }
 
+// 단순 단건 fetch hook (id 별 endpoint — useSimpleList 의 detail 버전)
+// detailDataHooks 의 단순한 master 도메인 (Bank 등) 에서 재사용.
+function useSimpleDetail<T>(endpointPattern: string, id: string): { data: T | null; loading: boolean } {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) { setData(null); setLoading(false); return; }
+    let cancelled = false;
+    setLoading(true);
+    const url = endpointPattern.replace(':id', id);
+    fetchWithAuth<T>(url)
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch(() => { /* empty */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [endpointPattern, id]);
+
+  return { data, loading };
+}
+
 // ─── Data hooks (어댑터: Record<string,string> → DataHookResult) ─────────────
 // `as unknown as DataHookResult` 캐스트 → adaptListHook() 헬퍼로 통일
 export const dataHooks: Record<string, DataHook> = {
@@ -327,6 +350,8 @@ export const detailDataHooks: Record<string, DetailDataHook> = {
   useDeclarationDetail: (id) => adaptDetailHook(useDeclarationDetail(id)),
   // Inbound Step 2
   useBLShipmentDetail: (id) => adaptDetailHook(useBLDetail(id)),
+  // Phase 4 (bank-meta 브랜치): 은행 master 의 메타 detail
+  useBankDetail: (id) => useSimpleDetail<Bank>('/api/v1/banks/:id', id),
 };
 
 // ─── Metric computers ──────────────────────────────────────────────────────
@@ -776,6 +801,8 @@ export const detailComponents: Record<string, DetailComponent> = {
   outbound: ((props) => <OutboundDetailView outboundId={props.id} onBack={props.onBack} />) as DetailComponent,
   // Inbound (Step 1): BLDetailView 래퍼 — props {blId, onBack} → DetailComponent {id, onBack}
   bl: ((props) => <BLDetailView blId={props.id} onBack={props.onBack} />) as DetailComponent,
+  // Phase 4 (bank-meta): 은행 master detail — 메타 인프라 풀 적용 (tabs + inlineEdit)
+  bank: ((props) => <MetaDetail config={bankDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
 };
 
 // ─── Rail blocks ───────────────────────────────────────────────────────────
@@ -921,6 +948,20 @@ export const contentBlocks: Record<string, ContentBlock> = {
     if (!ob.memo) return null;
     return <p className="text-sm whitespace-pre-wrap break-words">{ob.memo}</p>;
   },
+  // Phase 4 (bank-meta): 은행 detail 의 "L/C 사용 현황" 탭 placeholder.
+  // 향후 LCLimitSummaryCards / BankLimitTable 같은 banking 위젯과 연결.
+  bank_lc_usage_placeholder: ({ items }) => {
+    const bank = items[0] as Bank;
+    return (
+      <div className="rounded border border-dashed bg-muted/20 p-6 text-center text-xs text-muted-foreground space-y-2">
+        <p>이 은행의 L/C 사용 요약 — 다음 작업 단계에서 LCLimitSummaryCards 와 연결 예정.</p>
+        <p className="font-mono">
+          한도: {bank.lc_limit_usd?.toLocaleString() ?? '—'} USD
+          {' · '}만료: {bank.limit_expiry_date ?? '—'}
+        </p>
+      </div>
+    );
+  },
 };
 
 // Phase 4 — 제품 라이트 캐시: products.search 가 호출될 때마다 갱신.
@@ -1058,6 +1099,8 @@ export const enumDictionaries: Record<string, Record<string, string>> = {
   // Inbound (Step 1)
   INBOUND_TYPE_LABEL: INBOUND_TYPE_LABEL as Record<string, string>,
   BL_STATUS_LABEL: BL_STATUS_LABEL as Record<string, string>,
+  // Phase 4 (bank-meta): 은행 활성/비활성 (boolean → 한글 라벨)
+  BANK_ACTIVE_LABEL: { true: '활성', false: '비활성' },
 };
 
 // ─── Phase 4 보강: Computed formulas (계산 필드용) ─────────────────────────
@@ -1155,15 +1198,62 @@ export const formRefinements: Record<string, FormRefinement> = {
 
 // 메타 인프라 확장: 비동기 cross-field 검증 (DB 중복 등) — MetaForm submit 직전 실행.
 // 통과 시 true, 실패 시 string(에러 메시지) 또는 false 반환.
-export const asyncRefinements: Record<string, AsyncFormRefinement> = {};
+//
+// 메타데이터 wrapper (RULES.md #0 — GUI 편집기에서 콤보박스 + 설명 노출):
+//   { fn, label, description? }
+// GUI 편집기 (UIConfigEditor) 가 admin 에게 등록된 ruleId 목록을 라벨/설명까지 보여줌.
+export type AsyncFormRefinementEntry = {
+  fn: AsyncFormRefinement;
+  label: string;            // admin 이 픽커에서 보는 사람 친화 라벨
+  description?: string;     // 픽커에서 보조 설명 (한 줄 권장)
+};
+export const asyncRefinements: Record<string, AsyncFormRefinementEntry> = {};
 
 // 메타 인프라 확장: 동적 권한 가드 (FieldConfig.permissionGuardId 참조).
 // 컨텍스트 (현재 row, 사용자 등) 기반 readOnly/visible 판단.
-// false 반환 시 readOnly + 마스킹 표시. (Phase 5 향후 — 현재 type 정의 + 빈 registry)
+// false 반환 시 readOnly + 마스킹 표시.
 export type PermissionGuard = (
   context: { values: Record<string, unknown>; role: string | null; userId?: string },
 ) => boolean;
-export const permissionGuards: Record<string, PermissionGuard> = {};
+// 메타데이터 wrapper (asyncRefinements 와 동일 패턴 — registry GUI 편집기 콤보박스용)
+export type PermissionGuardEntry = {
+  fn: PermissionGuard;
+  label: string;
+  description?: string;
+};
+export const permissionGuards: Record<string, PermissionGuardEntry> = {};
+
+// ─── 레거시 registry 메타데이터 (점진 적용) ────────────────────────────────
+// 기존 registry (cellRenderers / formContentBlocks 등) 는 함수 record 형태로
+// 이미 많은 entry 가 등록돼 있음. 모두 wrapper 로 마이그레이션하면 비용 큼.
+// 대신 side-by-side `*Meta` record 를 두고, GUI 편집기 (RegistryIdPicker) 가
+// 둘 다 참조 — 메타 없으면 id 만 표시, 있으면 라벨/설명까지.
+//
+// 새 entry 등록 시 권장 — 동일 키로 `*Meta` 도 같이 채우기 (admin 이 GUI 에서
+// 의미 추측 안 하도록). 이미 등록된 24+ 개 entry 는 도메인 PR 시 점진 채움.
+export type RegistryMeta = Record<string, { label: string; description?: string }>;
+
+export const cellRendererMeta: RegistryMeta = {};
+export const formContentBlockMeta: RegistryMeta = {};
+export const fieldCascadeMeta: RegistryMeta = {};
+export const formSubmitterMeta: RegistryMeta = {};
+export const computedFormulaMeta: RegistryMeta = {};
+export const formRefinementMeta: RegistryMeta = {};
+export const contentBlockMeta: RegistryMeta = {};
+export const masterSourceMeta: RegistryMeta = {};
+
+// 헬퍼 — registry + meta 를 RegistryIdPicker 의 entries[] 형식으로 변환.
+// fallback: meta 없으면 label = id, description = undefined.
+export function buildRegistryEntries<F>(
+  registry: Record<string, F>,
+  meta: RegistryMeta,
+): { id: string; label: string; description?: string }[] {
+  return Object.keys(registry).sort().map((id) => ({
+    id,
+    label: meta[id]?.label ?? id,
+    description: meta[id]?.description,
+  }));
+}
 
 // ─── Formatters ────────────────────────────────────────────────────────────
 export function applyFormatter(formatter: string | undefined, value: unknown): string {

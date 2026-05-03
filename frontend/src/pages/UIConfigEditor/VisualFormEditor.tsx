@@ -63,10 +63,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, Plus, Trash2, GripVertical, Copy } from 'lucide-react';
-import type { FieldConfig, FieldType, FormSection, MetaFormConfig, Tone } from '@/templates/types';
-import { enumDictionaries, masterSources, computedFormulas } from '@/templates/registry';
+import { ChevronDown, ChevronUp, Plus, Trash2, GripVertical, Copy, Settings2 } from 'lucide-react';
+import type { AsyncRefineRule, FieldConfig, FieldType, FormSection, MetaFormConfig, Tone } from '@/templates/types';
+import { asyncRefinements, buildRegistryEntries, enumDictionaries, masterSources, computedFormulas, permissionGuards } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
+import { EditorWithPanel, PanelGroup, PanelEmpty, PanelSelectionHeader } from './RightPanel';
+import { BooleanPicker, RegistryIdPicker, RolePicker, type RegistryEntry } from './Pickers';
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'text', label: 'text' },
@@ -132,11 +134,17 @@ export default function VisualFormEditor({
   value, onChange, jsonDraft, onJsonDraftChange,
 }: VisualFormEditorProps) {
   const [tab, setTab] = useState<Tab>('basic');
+  // Phase 4 follow-up #1: 선택된 필드 (sectionIdx, fieldIdx) — selection-driven 우측 패널
+  const [selectedField, setSelectedField] = useState<{ sec: number; field: number } | null>(null);
   // 방어: sections·fields가 누락된 부분 JSON에서도 안전하게
   const sections = value.sections ?? [];
   const fieldCount = sections.reduce((s, sec) => s + (sec.fields?.length ?? 0), 0);
 
-  return (
+  const selectedFieldConfig = selectedField
+    ? sections[selectedField.sec]?.fields?.[selectedField.field]
+    : null;
+
+  const main = (
     <div className="flex flex-col h-full min-h-0">
       <div className="border-b px-3 flex gap-1 overflow-x-auto">
         <TabButton active={tab === 'basic'} onClick={() => setTab('basic')}>기본 정보</TabButton>
@@ -148,7 +156,13 @@ export default function VisualFormEditor({
 
       <div className="flex-1 min-h-0 overflow-auto p-4">
         {tab === 'basic' && <BasicTab value={value} onChange={onChange} />}
-        {tab === 'sections' && <SectionsTab value={value} onChange={onChange} />}
+        {tab === 'sections' && (
+          <SectionsTab
+            value={value}
+            onChange={onChange}
+            onSelectField={(sec, field) => setSelectedField({ sec, field })}
+          />
+        )}
         {tab === 'json' && (
           <Textarea
             value={jsonDraft}
@@ -159,6 +173,187 @@ export default function VisualFormEditor({
         )}
       </div>
     </div>
+  );
+
+  // 우측 패널: 필드 선택 시 selection-driven, 아니면 form-level
+  const panel = selectedFieldConfig
+    ? (
+      <FieldPanel
+        field={selectedFieldConfig}
+        onChange={(next) => {
+          if (!selectedField) return;
+          const newSections = sections.map((s, sIdx) => {
+            if (sIdx !== selectedField.sec) return s;
+            const newFields = (s.fields ?? []).map((f, fIdx) => fIdx === selectedField.field ? next : f);
+            return { ...s, fields: newFields };
+          });
+          onChange({ ...value, sections: newSections });
+        }}
+        onBack={() => setSelectedField(null)}
+      />
+    )
+    : <FormLevelPanel value={value} onChange={onChange} />;
+
+  const panelTitle = selectedFieldConfig
+    ? `선택: ${selectedFieldConfig.label || selectedFieldConfig.key}`
+    : '⚙ 폼 설정';
+
+  return <EditorWithPanel panel={panel} panelTitle={panelTitle}>{main}</EditorWithPanel>;
+}
+
+// ─── 우측 패널: 선택된 필드의 L3/L4 (selection-driven, security focus) ─────
+// Phase 4 follow-up #1 — Q8-B 풀 구현. 새 인프라 보안 픽커는 여기.
+// 기존 inline 필드 (key/label/type/검증 등) 는 sections 탭의 row 에서 그대로 편집.
+// 이 패널은 보안·동적 권한 등 새 메타 인프라 항목 전용.
+function FieldPanel({
+  field, onChange, onBack,
+}: {
+  field: FieldConfig;
+  onChange: (next: FieldConfig) => void;
+  onBack: () => void;
+}) {
+  const guardEntries = useMemo(
+    () => Object.entries(permissionGuards).map(([id, e]) => ({
+      id,
+      label: e.label,
+      description: e.description,
+    })),
+    [],
+  );
+  return (
+    <>
+      <PanelSelectionHeader
+        title={field.label || field.key}
+        subtitle={`${field.key} · ${field.type}`}
+        onBack={onBack}
+      />
+      <PanelGroup title="보안 (역할 기반)">
+        <RolePicker
+          label="maskByRoles (마스킹 — ●●●●●●)"
+          value={field.maskByRoles}
+          onChange={(v) => onChange({ ...field, maskByRoles: v })}
+          hint="이 역할에는 값을 마스킹 표시 + 편집 불가"
+        />
+        <RolePicker
+          label="editableByRoles (편집 허용 역할)"
+          value={field.editableByRoles}
+          onChange={(v) => onChange({ ...field, editableByRoles: v })}
+          hint="비우면 모두 편집 가능. 지정 시 그 외 역할은 readOnly"
+        />
+        <RegistryIdPicker
+          label="permissionGuardId (동적 권한)"
+          value={field.permissionGuardId}
+          onChange={(v) => onChange({ ...field, permissionGuardId: v })}
+          entries={guardEntries}
+          hint="컨텍스트 (현재 row, role) 로 readOnly 동적 결정"
+        />
+      </PanelGroup>
+      <PanelGroup title="기본 설정" defaultOpen={false}>
+        <BooleanPicker
+          label="readOnly (정적)"
+          value={field.readOnly ?? false}
+          onChange={(v) => onChange({ ...field, readOnly: v || undefined })}
+        />
+        <BooleanPicker
+          label="required"
+          value={field.required ?? false}
+          onChange={(v) => onChange({ ...field, required: v || undefined })}
+        />
+        <FieldInput
+          label="description (필드 아래 설명)"
+          value={field.description ?? ''}
+          onChange={(v) => onChange({ ...field, description: v || undefined })}
+        />
+      </PanelGroup>
+      <PanelEmpty message="key/label/type/검증/visibleIf 는 해당 필드 행에서 직접 편집" />
+    </>
+  );
+}
+
+// ─── 우측 패널: form-level 컨테이너 설정 (L1) ─────────────────────────────
+// asyncRefine[] 비동기 검증 규칙 편집 — 가장 새 메타 인프라 항목.
+function FormLevelPanel({
+  value, onChange,
+}: {
+  value: MetaFormConfig;
+  onChange: (next: MetaFormConfig) => void;
+}) {
+  const asyncRefineEntries: RegistryEntry[] = useMemo(
+    () => Object.entries(asyncRefinements).map(([id, e]) => ({
+      id,
+      label: e.label,
+      description: e.description,
+    })),
+    [],
+  );
+  const rules = value.asyncRefine ?? [];
+
+  const addRule = () => {
+    const next: AsyncRefineRule = { ruleId: '', message: '검증 실패' };
+    onChange({ ...value, asyncRefine: [...rules, next] });
+  };
+  const updateRule = (idx: number, patch: Partial<AsyncRefineRule>) => {
+    const next = rules.map((r, i) => i === idx ? { ...r, ...patch } : r);
+    onChange({ ...value, asyncRefine: next });
+  };
+  const removeRule = (idx: number) => {
+    const next = rules.filter((_, i) => i !== idx);
+    onChange({ ...value, asyncRefine: next.length === 0 ? undefined : next });
+  };
+
+  return (
+    <>
+      <PanelGroup title="비동기 검증 (asyncRefine)">
+        {rules.length === 0 ? (
+          <PanelEmpty message="규칙 없음 — 아래 + 로 추가" />
+        ) : (
+          rules.map((r, i) => (
+            <div key={i} className="rounded border p-2 space-y-1.5 bg-background">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-muted-foreground">규칙 #{i + 1}</span>
+                <button
+                  type="button"
+                  className="text-[10px] text-muted-foreground hover:text-destructive"
+                  onClick={() => removeRule(i)}
+                  aria-label="삭제"
+                >
+                  ✕
+                </button>
+              </div>
+              <RegistryIdPicker
+                label="ruleId"
+                value={r.ruleId}
+                onChange={(v) => updateRule(i, { ruleId: v ?? '' })}
+                entries={asyncRefineEntries}
+                hint="registry.asyncRefinements 에 등록된 키"
+                allowEmpty={false}
+              />
+              <FieldInput
+                label="message (실패 시 표시)"
+                value={r.message}
+                onChange={(v) => updateRule(i, { message: v })}
+              />
+              <FieldInput
+                label="path (콤마 = 다중, 비우면 form-level)"
+                value={(r.path ?? []).join(',')}
+                onChange={(v) => {
+                  const path = v.split(',').map(s => s.trim()).filter(Boolean);
+                  updateRule(i, { path: path.length === 0 ? undefined : path });
+                }}
+                mono
+              />
+            </div>
+          ))
+        )}
+        <button
+          type="button"
+          onClick={addRule}
+          className="w-full text-[11px] text-muted-foreground hover:text-foreground border border-dashed rounded py-1.5"
+        >
+          + 비동기 검증 규칙 추가
+        </button>
+      </PanelGroup>
+    </>
   );
 }
 
@@ -205,7 +400,12 @@ function BasicTab({ value, onChange }: { value: MetaFormConfig; onChange: (next:
   );
 }
 
-function SectionsTab({ value, onChange }: { value: MetaFormConfig; onChange: (next: MetaFormConfig) => void }) {
+function SectionsTab({ value, onChange, onSelectField }: {
+  value: MetaFormConfig;
+  onChange: (next: MetaFormConfig) => void;
+  // Phase 4 follow-up #1: 필드 ⚙ 클릭 → 우측 패널.
+  onSelectField?: (sectionIdx: number, fieldIdx: number) => void;
+}) {
   const sections = value.sections ?? [];
   const [filter, setFilter] = useState('');
   // 검색·전체토글로 추가/제거되는 expand 집합. key: `${sIdx}.${fIdx}`
@@ -339,6 +539,7 @@ function SectionsTab({ value, onChange }: { value: MetaFormConfig; onChange: (ne
             onMoveUp={() => moveSection(sIdx, -1)}
             onMoveDown={() => moveSection(sIdx, 1)}
             onRemove={() => removeSection(sIdx)}
+            onSelectField={(fIdx) => onSelectField?.(sIdx, fIdx)}
           />
         ))}
         {sections.length === 0 && (
@@ -353,7 +554,7 @@ function SectionsTab({ value, onChange }: { value: MetaFormConfig; onChange: (ne
 
 function SectionCard({
   section, index, total, filter, filteredSet, expandedSet, allFormFieldKeys,
-  onToggleField, onAddedField, onUpdate, onMoveUp, onMoveDown, onRemove,
+  onToggleField, onAddedField, onUpdate, onMoveUp, onMoveDown, onRemove, onSelectField,
 }: {
   section: FormSection;
   index: number;
@@ -368,6 +569,7 @@ function SectionCard({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onRemove: () => void;
+  onSelectField?: (fIdx: number) => void;
 }) {
   // 드래그 상태 — 섹션 내 필드 재정렬 (section-local)
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -478,6 +680,7 @@ function SectionCard({
                 onMoveDown={() => moveField(fIdx, 1)}
                 onDuplicate={() => duplicateField(fIdx)}
                 onRemove={() => removeField(fIdx)}
+                onSelect={onSelectField ? () => onSelectField(fIdx) : undefined}
               />
             </div>
           );
@@ -502,7 +705,7 @@ function SectionCard({
 // + "고급 ▾" 토글: description / defaultValue / readOnly / 검증 / visibleIf / readOnlyIf
 function FieldRow({
   field, index, total, expanded, issues, onToggleExpand,
-  onUpdate, onMoveUp, onMoveDown, onDuplicate, onRemove,
+  onUpdate, onMoveUp, onMoveDown, onDuplicate, onRemove, onSelect,
 }: {
   field: FieldConfig;
   index: number;
@@ -515,6 +718,7 @@ function FieldRow({
   onMoveDown: () => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  onSelect?: () => void;
 }) {
   const errorCount = issues.filter((i) => i.level === 'error').length;
   const warnCount = issues.filter((i) => i.level === 'warn').length;
@@ -574,6 +778,12 @@ function FieldRow({
               <span title={issueTitle} className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800">
                 warn {warnCount}
               </span>
+            )}
+            {onSelect && (
+              <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100" title="우측 패널에서 보안·검증 편집"
+                onClick={(e) => { e.stopPropagation(); onSelect(); }}>
+                <Settings2 className="h-3 w-3" />
+              </Button>
             )}
             <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100"
               onClick={(e) => { e.stopPropagation(); onMoveUp(); }} disabled={index === 0}>

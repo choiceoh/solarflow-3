@@ -1,5 +1,19 @@
 # SolarFlow 3.0 — Claude Code 작업 안내
 
+## ⚡ 듀얼 product 관점 (모든 작업의 전제)
+
+이 프로젝트는 **두 개의 product 를 동시에 개발**한다:
+1. **ERP 시스템** (도메인 — 무역/재고/회계 등 SolarFlow 그 자체)
+2. **GUI 메타 편집기** (인프라 — Webflow / Figma / Builder.io 부류의 화면 편집 도구)
+
+`frontend/src/templates/{MetaForm,MetaDetail,ListScreen}.tsx` + `frontend/src/pages/UIConfigEditor/*` 가 두 번째 product. 이쪽 작업은 ERP 도메인 작업과 **동등한 수준의 product polish 기준** 으로 다룬다 — "내부 도구" 정도로 취급하지 않는다.
+
+판단 기준:
+- 새 메타 인프라 기능을 추가하면 GUI 편집기에도 픽커가 있어야 함 (반쪽 GUI 금지)
+- admin 이 docs 봐야 알 수 있는 키 (registry id 등) 는 무조건 combobox / dropdown 으로
+- 편집기 UX 는 runtime UI 와 mimicry — 사용자가 보는 결과를 그대로 편집창으로 (WYSIWYG)
+- "곧 도메인 작업 들어가야 하니 편집기는 나중에" 라는 우선순위 절대 금지
+
 ## 읽기 순서
 이 프로젝트에서 작업하기 전에 아래 순서로 읽으세요:
 1. harness/PROGRESS.md — 현재 위치 확인 (이것만 읽으면 지금 어디인지 파악)
