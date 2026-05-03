@@ -92,6 +92,22 @@ func (h *BankHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
+// BaroIncomingHandler — BARO 전용 입고예정/ETA 보드 (가격·환율 제외).
+func (h *BaroIncomingHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/baro/incoming", func(r chi.Router) {
+		r.Use(g.BaroOnly)
+		r.Get("/", h.List)
+	})
+}
+
+// BaroPurchaseHistoryHandler — BARO 자체 매입 원가/구매이력 (BR 법인만).
+func (h *BaroPurchaseHistoryHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/baro/purchase-history", func(r chi.Router) {
+		r.Use(g.BaroOnly)
+		r.With(middleware.RoleMiddleware("admin", "operator", "executive")).Get("/", h.List)
+	})
+}
+
 // BLHandler — 선하증권 + 중첩 라인. 자식 BLLineHandler를 인자로 받아 부모 안에서 마운트한다.
 func (h *BLHandler) RegisterRoutes(r chi.Router, g middleware.Gates, lineH *BLLineHandler) {
 	r.Route("/bls", func(r chi.Router) {

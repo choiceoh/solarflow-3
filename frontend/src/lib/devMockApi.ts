@@ -8,6 +8,7 @@ const nowIso = '2026-05-01T00:00:00.000Z';
 const companies = [
   { company_id: 'company-topsolar', company_name: '탑솔라', company_code: 'TOP', business_number: '123-81-45678', is_active: true },
   { company_id: 'company-energy', company_name: '탑에너지', company_code: 'TEN', business_number: '234-82-56789', is_active: false },
+  { company_id: 'company-baro', company_name: '바로(주)', company_code: 'BR', business_number: '345-83-67890', is_active: true },
 ];
 
 const manufacturers = [
@@ -77,6 +78,8 @@ const purchaseOrders = [
   { po_id: 'po-2604-jko', po_number: 'PO-26-0412', company_id: 'company-topsolar', company_name: '탑솔라', manufacturer_id: 'mfg-jko', manufacturer_name: '진코솔라', first_spec_wp: 620, contract_type: 'frame', contract_date: '2026-04-12', incoterms: 'FOB Shanghai', payment_terms: 'LC 90D', total_qty: 21000, total_mw: 13.02, status: 'in_progress', memo: '목업 P/O' },
   { po_id: 'po-2604-trn', po_number: 'PO-26-0408', company_id: 'company-topsolar', company_name: '탑솔라', manufacturer_id: 'mfg-trn', manufacturer_name: '트리나솔라', first_spec_wp: 605, contract_type: 'spot', contract_date: '2026-04-08', incoterms: 'FOB Ningbo', payment_terms: 'LC 60D', total_qty: 5200, total_mw: 3.15, status: 'in_progress', memo: '목업 P/O' },
   { po_id: 'po-2603-lon', po_number: 'PO-26-0331', company_id: 'company-energy', company_name: '탑에너지', manufacturer_id: 'mfg-lon', manufacturer_name: '론지', first_spec_wp: 600, contract_type: 'frame', contract_date: '2026-03-31', incoterms: 'FOB Shanghai', payment_terms: 'TT 30/70', total_qty: 6400, total_mw: 3.84, status: 'completed', memo: '목업 P/O' },
+  { po_id: 'po-br-2604-hnw', po_number: 'BR-PO-26-0418', company_id: 'company-baro', company_name: '바로(주)', manufacturer_id: 'mfg-hnw', manufacturer_name: '한화큐셀', first_spec_wp: 425, contract_type: 'spot', contract_date: '2026-04-18', incoterms: '국내창고 인도', payment_terms: '월말 + 30일', total_qty: 600, total_mw: 0.255, status: 'completed', memo: 'BARO 국내 타사 구매 목업' },
+  { po_id: 'po-br-2604-jko', po_number: 'BR-PO-26-0420', company_id: 'company-baro', company_name: '바로(주)', manufacturer_id: 'mfg-jko', manufacturer_name: '진코솔라', first_spec_wp: 580, contract_type: 'spot', contract_date: '2026-04-20', incoterms: '탑솔라 평택창고 인도', payment_terms: '그룹내 월말정산', total_qty: 1200, total_mw: 0.696, status: 'completed', memo: 'BARO 그룹내 매입 목업' },
 ];
 
 const poLines = [
@@ -84,6 +87,8 @@ const poLines = [
   { po_line_id: 'pol-jko-n580', po_id: 'po-2604-jko', product_id: 'prd-jko-n580', product_code: 'JKO-N580', product_name: 'JKO-N580 N-type TOPCon', spec_wp: 580, quantity: 12200, unit_price_usd_wp: 0.111, unit_price_usd: 64.38, total_amount_usd: 785436, item_type: 'main', payment_type: 'paid' },
   { po_line_id: 'pol-trn-v605', po_id: 'po-2604-trn', product_id: 'prd-trn-v605', product_code: 'TRN-V605', product_name: 'TRN-V605 Vertex N', spec_wp: 605, quantity: 5200, unit_price_usd_wp: 0.119, unit_price_usd: 71.995, total_amount_usd: 374374, item_type: 'main', payment_type: 'paid' },
   { po_line_id: 'pol-lon-x600', po_id: 'po-2603-lon', product_id: 'prd-lon-x600', product_code: 'LON-X600', product_name: 'LON-X600 Hi-MO 7', spec_wp: 600, quantity: 6400, unit_price_usd_wp: 0.113, unit_price_usd: 67.8, total_amount_usd: 433920, item_type: 'main', payment_type: 'paid' },
+  { po_line_id: 'pol-br-hnw-q425', po_id: 'po-br-2604-hnw', product_id: 'prd-hnw-q425', product_code: 'HNW-Q425', product_name: 'HNW-Q425 Q.PEAK DUO', spec_wp: 425, quantity: 600, unit_price_krw_wp: 382, item_type: 'main', payment_type: 'paid' },
+  { po_line_id: 'pol-br-jko-n580', po_id: 'po-br-2604-jko', product_id: 'prd-jko-n580', product_code: 'JKO-N580', product_name: 'JKO-N580 N-type TOPCon', spec_wp: 580, quantity: 1200, unit_price_krw_wp: 374, item_type: 'main', payment_type: 'paid' },
 ];
 
 const lcs = [
@@ -116,12 +121,16 @@ const bls = [
   { bl_id: 'bl-260412', bl_number: 'BL-26-0412', po_id: 'po-2604-jko', po_number: 'PO-26-0412', lc_id: 'lc-260405', lc_number: 'LC-26-0405', company_id: 'company-topsolar', manufacturer_id: 'mfg-jko', manufacturer_name: '진코솔라', inbound_type: 'import', currency: 'USD', exchange_rate: 1364.2, etd: '2026-04-25', eta: '2026-05-02', port: '인천항', forwarder: '동해국제물류', warehouse_id: 'wh-incheon-1', warehouse_name: '인천 1창고', invoice_number: 'INV-JKO-260412', status: 'shipping', payment_terms: 'LC 90D', incoterms: 'FOB Shanghai', declaration_number: 'IL-25-1204-04', cif_amount_krw: 928400000 },
   { bl_id: 'bl-260408', bl_number: 'BL-26-0408', po_id: 'po-2604-trn', po_number: 'PO-26-0408', lc_id: 'lc-260412', lc_number: 'LC-26-0412', company_id: 'company-topsolar', manufacturer_id: 'mfg-trn', manufacturer_name: '트리나솔라', inbound_type: 'import', currency: 'USD', exchange_rate: 1362.1, etd: '2026-04-23', eta: '2026-05-04', port: '인천항', forwarder: '동해국제물류', warehouse_id: 'wh-incheon-1', warehouse_name: '인천 1창고', invoice_number: 'INV-TRN-260408', status: 'shipping', payment_terms: 'LC 60D', incoterms: 'FOB Ningbo', cif_amount_krw: 515400000 },
   { bl_id: 'bl-260331', bl_number: 'BL-26-0331', po_id: 'po-2603-lon', po_number: 'PO-26-0331', company_id: 'company-energy', manufacturer_id: 'mfg-lon', manufacturer_name: '론지', inbound_type: 'import', currency: 'USD', exchange_rate: 1358.7, etd: '2026-03-20', eta: '2026-03-31', actual_arrival: '2026-03-31', port: '평택항', forwarder: '동해국제물류', warehouse_id: 'wh-pyeongtaek', warehouse_name: '평택 모듈창고', invoice_number: 'INV-LON-260331', status: 'completed', erp_registered: true, payment_terms: 'TT 30/70', incoterms: 'FOB Shanghai', cif_amount_krw: 604200000 },
+  { bl_id: 'bl-br-hnw-260424', bl_number: 'BR-IN-26-0424', po_id: 'po-br-2604-hnw', po_number: 'BR-PO-26-0418', company_id: 'company-baro', manufacturer_id: 'mfg-hnw', manufacturer_name: '한화큐셀', inbound_type: 'domestic_foreign', currency: 'KRW', actual_arrival: '2026-04-24', port: '국내 타사 창고', warehouse_id: 'wh-pyeongtaek', warehouse_name: '평택 모듈창고', status: 'completed', payment_terms: '월말 + 30일', incoterms: '국내창고 인도' },
+  { bl_id: 'bl-br-jko-260421', bl_number: 'BR-GRP-26-0421', po_id: 'po-br-2604-jko', po_number: 'BR-PO-26-0420', company_id: 'company-baro', manufacturer_id: 'mfg-jko', manufacturer_name: '진코솔라', inbound_type: 'group', currency: 'KRW', actual_arrival: '2026-04-21', port: '탑솔라 평택창고', warehouse_id: 'wh-pyeongtaek', warehouse_name: '평택 모듈창고', status: 'completed', payment_terms: '그룹내 월말정산', incoterms: '창고 인도', counterpart_company_id: 'company-topsolar' },
 ];
 
 const blLines = [
   { bl_line_id: 'bll-jko-n620', bl_id: 'bl-260412', product_id: 'prd-jko-n620', po_line_id: 'pol-jko-n620', product_name: 'JKO-N620 N-type TOPCon', product_code: 'JKO-N620', quantity: 8800, capacity_kw: 5456, item_type: 'main', payment_type: 'paid', invoice_amount_usd: 632896, unit_price_usd_wp: 0.116, usage_category: 'sale' },
   { bl_line_id: 'bll-trn-v605', bl_id: 'bl-260408', product_id: 'prd-trn-v605', po_line_id: 'pol-trn-v605', product_name: 'TRN-V605 Vertex N', product_code: 'TRN-V605', quantity: 5200, capacity_kw: 3146, item_type: 'main', payment_type: 'paid', invoice_amount_usd: 374374, unit_price_usd_wp: 0.119, usage_category: 'sale' },
   { bl_line_id: 'bll-lon-x600', bl_id: 'bl-260331', product_id: 'prd-lon-x600', po_line_id: 'pol-lon-x600', product_name: 'LON-X600 Hi-MO 7', product_code: 'LON-X600', quantity: 6400, capacity_kw: 3840, item_type: 'main', payment_type: 'paid', invoice_amount_usd: 433920, unit_price_usd_wp: 0.113, usage_category: 'sale' },
+  { bl_line_id: 'bll-br-hnw-q425', bl_id: 'bl-br-hnw-260424', product_id: 'prd-hnw-q425', po_line_id: 'pol-br-hnw-q425', product_name: 'HNW-Q425 Q.PEAK DUO', product_code: 'HNW-Q425', quantity: 600, capacity_kw: 255, item_type: 'main', payment_type: 'paid', unit_price_krw_wp: 382, usage_category: 'sale' },
+  { bl_line_id: 'bll-br-jko-n580', bl_id: 'bl-br-jko-260421', product_id: 'prd-jko-n580', po_line_id: 'pol-br-jko-n580', product_name: 'JKO-N580 N-type TOPCon', product_code: 'JKO-N580', quantity: 1200, capacity_kw: 696, item_type: 'main', payment_type: 'paid', unit_price_krw_wp: 374, usage_category: 'sale' },
 ];
 
 const constructionSites = [
@@ -555,6 +564,12 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     const blId = endpointId(url.pathname, 'bls');
     return clone(blLines.filter((line) => line.bl_id === blId) as T);
   }
+  if (url.pathname === '/api/v1/baro/incoming') {
+    return clone(baroIncomingRows(url) as T);
+  }
+  if (url.pathname === '/api/v1/baro/purchase-history') {
+    return clone(baroPurchaseHistoryRows(url) as T);
+  }
   if (url.pathname.startsWith('/api/v1/lcs/') && url.pathname.endsWith('/lines')) {
     const lcId = endpointId(url.pathname, 'lcs');
     return clone(lcLines.filter((line) => line.lc_id === lcId) as T);
@@ -641,4 +656,113 @@ function moduleDemandForecasts(): MockRow[] {
     { forecast_id: 'forecast-yeonggwang-05', company_id: 'company-topsolar', site_id: 'site-yeonggwang', site_name: '영광 갈동 태양광', demand_month: '2026-05', demand_type: 'construction', manufacturer_id: 'mfg-jko', spec_wp: 620, module_width_mm: 1134, module_height_mm: 2465, required_kw: 1800, status: 'confirmed', notes: '목업 공사 수요', created_at: nowIso, updated_at: nowIso },
     { forecast_id: 'forecast-dangjin-06', company_id: 'company-topsolar', site_id: 'site-dangjin', site_name: '당진 물류센터 지붕', demand_month: '2026-06', demand_type: 'construction', manufacturer_id: 'mfg-trn', spec_wp: 605, module_width_mm: 1134, module_height_mm: 2384, required_kw: 1452, status: 'planned', notes: '목업 공사 수요', created_at: nowIso, updated_at: nowIso },
   ];
+}
+
+function baroIncomingRows(url: URL): MockRow[] {
+  const status = url.searchParams.get('status');
+  const scope = url.searchParams.get('scope') ?? 'open';
+  const openStatuses = new Set(['scheduled', 'shipping', 'arrived', 'customs']);
+
+  return blLines.flatMap((line) => {
+    const bl = bls.find((item) => item.bl_id === line.bl_id);
+    if (!bl) return [];
+    if (status && bl.status !== status) return [];
+    if (!status && scope !== 'all' && !openStatuses.has(String(bl.status))) return [];
+
+    const product = products.find((item) => item.product_id === line.product_id);
+    const warehouse = warehouses.find((item) => item.warehouse_id === bl.warehouse_id);
+    const company = companies.find((item) => item.company_id === bl.company_id);
+    return [{
+      id: line.bl_line_id,
+      bl_id: bl.bl_id,
+      bl_number: bl.bl_number,
+      company_id: bl.company_id,
+      company_name: company?.company_name,
+      manufacturer_id: bl.manufacturer_id,
+      manufacturer_name: bl.manufacturer_name,
+      inbound_type: bl.inbound_type,
+      status: bl.status,
+      etd: bl.etd,
+      eta: bl.eta,
+      actual_arrival: bl.actual_arrival,
+      sales_available_date: bl.actual_arrival ?? bl.eta,
+      port: bl.port,
+      warehouse_id: bl.warehouse_id,
+      warehouse_name: warehouse?.warehouse_name,
+      product_id: line.product_id,
+      product_code: product?.product_code ?? line.product_code,
+      product_name: product?.product_name ?? line.product_name,
+      spec_wp: product?.spec_wp,
+      module_width_mm: product?.module_width_mm,
+      module_height_mm: product?.module_height_mm,
+      quantity: line.quantity,
+      capacity_kw: line.capacity_kw,
+    }];
+  });
+}
+
+function baroPurchaseHistoryRows(url: URL): MockRow[] {
+  const inboundType = url.searchParams.get('inbound_type');
+  return blLines.flatMap((line) => {
+    const costRow = line as Record<string, unknown>;
+    const invoiceAmountUsd = typeof costRow.invoice_amount_usd === 'number' ? costRow.invoice_amount_usd : undefined;
+    const unitPriceUsdWp = typeof costRow.unit_price_usd_wp === 'number' ? costRow.unit_price_usd_wp : undefined;
+    const unitPriceKrwWp = typeof costRow.unit_price_krw_wp === 'number' ? costRow.unit_price_krw_wp : undefined;
+    const bl = bls.find((item) => item.bl_id === line.bl_id);
+    if (!bl || bl.company_id !== 'company-baro') return [];
+    if (inboundType && bl.inbound_type !== inboundType) return [];
+
+    const product = products.find((item) => item.product_id === line.product_id);
+    const warehouse = warehouses.find((item) => item.warehouse_id === bl.warehouse_id);
+    const company = companies.find((item) => item.company_id === bl.company_id);
+    const counterpart = bl.counterpart_company_id
+      ? companies.find((item) => item.company_id === bl.counterpart_company_id)
+      : undefined;
+    const totalKrw = unitPriceKrwWp != null
+      ? Math.round(unitPriceKrwWp * line.capacity_kw * 1000)
+      : undefined;
+    const totalUsd = invoiceAmountUsd ?? (unitPriceUsdWp != null ? unitPriceUsdWp * line.capacity_kw * 1000 : undefined);
+    return [{
+      id: line.bl_line_id,
+      bl_id: bl.bl_id,
+      bl_number: bl.bl_number,
+      po_id: bl.po_id,
+      po_number: bl.po_number,
+      company_id: bl.company_id,
+      company_name: company?.company_name,
+      manufacturer_id: bl.manufacturer_id,
+      manufacturer_name: bl.manufacturer_name,
+      source_name: bl.inbound_type === 'group' ? counterpart?.company_name : bl.manufacturer_name,
+      inbound_type: bl.inbound_type,
+      status: bl.status,
+      currency: bl.currency,
+      exchange_rate: bl.exchange_rate,
+      etd: bl.etd,
+      eta: bl.eta,
+      actual_arrival: bl.actual_arrival,
+      purchase_date: bl.actual_arrival ?? bl.eta ?? bl.etd,
+      port: bl.port,
+      warehouse_id: bl.warehouse_id,
+      warehouse_name: warehouse?.warehouse_name,
+      product_id: line.product_id,
+      product_code: product?.product_code ?? line.product_code,
+      product_name: product?.product_name ?? line.product_name,
+      spec_wp: product?.spec_wp,
+      module_width_mm: product?.module_width_mm,
+      module_height_mm: product?.module_height_mm,
+      quantity: line.quantity,
+      capacity_kw: line.capacity_kw,
+      item_type: line.item_type,
+      payment_type: line.payment_type,
+      usage_category: line.usage_category,
+      unit_price_usd_wp: unitPriceUsdWp,
+      unit_price_krw_wp: unitPriceKrwWp,
+      invoice_amount_usd: invoiceAmountUsd,
+      estimated_amount_usd: totalUsd,
+      estimated_amount_krw: totalKrw,
+      payment_terms: bl.payment_terms,
+      incoterms: bl.incoterms,
+      counterpart_company_id: bl.counterpart_company_id,
+    }];
+  }).sort((a, b) => String(b.purchase_date ?? '').localeCompare(String(a.purchase_date ?? '')));
 }

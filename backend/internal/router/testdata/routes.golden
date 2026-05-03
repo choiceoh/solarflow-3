@@ -41,7 +41,9 @@ GET     /api/v1/baro/credit-board/
 GET     /api/v1/baro/dispatch-routes/
 GET     /api/v1/baro/dispatch-routes/{id}
 GET     /api/v1/baro/dispatch-routes/{id}/outbounds
+GET     /api/v1/baro/incoming/
 GET     /api/v1/baro/orders/recent
+GET     /api/v1/baro/purchase-history/
 GET     /api/v1/bls/
 GET     /api/v1/bls/{blId}/lines/
 GET     /api/v1/bls/{id}

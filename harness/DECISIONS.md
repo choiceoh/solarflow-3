@@ -690,3 +690,21 @@
   - PO/LC/T/T처럼 import 엔드포인트가 아직 없는 구매 계약 데이터는 화면 직접 생성 CTA를 제거하고, 후속 작업에서 import 스펙과 서버 검증을 추가한다.
   - **그룹 입고 요청 예외**: `/baro/group-purchase`와 `/group-trade/baro-inbox`는 운영 원장 데이터 생성이 아니라 회사 간 요청/승인/출고연결 워크플로우로 본다. BARO는 요청 티켓을 만들고, 탑솔라는 기존 `group_trade` 출고와 연결하거나 거부한다. 바로 측 `입고 확인`도 새 입고 행 직접 입력이 아니라 상태 전환으로 처리한다.
 - **날짜**: 2026-05-03
+
+## D-116: BARO 입고예정은 전용 sanitized API로 ETA·수량만 노출
+- **결정**: BARO 사용자가 고객 문의에 직접 답할 수 있도록 `/baro/incoming` 화면과 `GET /api/v1/baro/incoming` API를 추가한다. 이 API는 `baroOnly` read-only이며 B/L 원본/라인 API를 그대로 프록시하지 않고, 품번·제조사·수량·용량·ETD·ETA·입고일·도착 창고·상태만 반환한다. 환율, L/C, T/T, 면장, 인보이스 금액, 단가, CIF/Landed Cost 계열 필드는 응답에 포함하지 않는다.
+- **이유**: BARO 영업은 고객에게 "언제 들어오나"를 자주 답해야 하므로 module 담당자에게 매번 확인하면 왕복 비용이 크다. 하지만 기존 B/L 라인 응답에는 화면에 숨기더라도 네트워크 응답으로 단가/인보이스 금액이 포함될 수 있다. 별도 sanitized API를 두면 업무 속도는 올리면서 D-108의 원가/금융 마스킹 원칙을 지킬 수 있다.
+- **운영 기준**:
+  - 기본 조회는 진행중 상태(`scheduled`, `shipping`, `arrived`, `customs`)만 반환한다. `scope=all`은 완료/ERP등록까지 포함한다.
+  - BARO 화면은 `/api/v1/bls/{id}/lines`를 직접 호출하지 않는다.
+  - 신규 메뉴 key는 `baro_incoming`, 사이드바 경로는 `/baro/incoming`.
+- **날짜**: 2026-05-03
+
+## D-117: BARO 자체 구매이력은 BR 법인 원가만 별도 노출
+- **결정**: BARO가 탑솔라 그룹내 매입 외에도 국내 타사에서 직접 매입한 물품의 원가를 확인할 수 있도록 `/baro/purchase-history` 화면과 `GET /api/v1/baro/purchase-history` API를 추가한다. 이 API는 `baroOnly`이며 `companies.company_code='BR'` 법인의 B/L 라인만 조회해 품번·수량·매입처·입고일·KRW/USD Wp 단가·추정 매입금액을 반환한다. 접근 역할은 `admin`/`operator`/`executive`로 한정한다.
+- **이유**: D-108은 BARO가 탑솔라의 수입원가·금융정보를 보지 못하게 막는 결정이지, BARO 자기 법인의 매입 원가까지 숨기라는 결정은 아니다. BARO는 국내 타사 조달과 그룹내 매입이 섞여 있어 판매 응대와 마진 판단을 위해 자기 매입단가 이력이 필요하다. 다만 기존 `/price-histories`, `/cost-details`, L/C/T/T/면장 API를 풀면 탑솔라 원가가 섞일 수 있으므로 BR 법인 B/L 라인만 반환하는 전용 API로 제한한다.
+- **운영 기준**:
+  - 조회 범위는 `company_code='BR'`로 고정한다. 클라이언트가 `company_id`를 넘겨도 탑솔라 법인 원가는 조회하지 않는다.
+  - 반환 대상은 B/L 라인 단가(`unit_price_krw_wp`, `unit_price_usd_wp`)와 금액 추정치까지이며, `cost_details`/`declarations`/`expenses`/`lcs`/`tts`는 여전히 탑솔라 전용으로 둔다.
+  - 신규 메뉴 key는 `baro_purchase_history`, 사이드바 경로는 `/baro/purchase-history`.
+- **날짜**: 2026-05-03
