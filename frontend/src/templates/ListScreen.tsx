@@ -865,6 +865,23 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
   // 주의: 모든 hook 은 early return 전에 호출되어야 React rules-of-hooks 위반 안 함.
   const [filteredCount, setFilteredCount] = useState<number>(state.data.length);
 
+  // 메타 인프라 확장: 저장된 뷰 — 현재 상태 스냅샷 + apply 핸들러
+  const savedViewsCfg = config.savedViews;
+  const currentView: SavedView = {
+    name: '',
+    filters: state.filters,
+    hidden: [...hiddenCols],
+    searchQuery,
+    pageSize,
+  };
+  const applyView = useCallback((v: SavedView) => {
+    state.setFilters(v.filters ?? {});
+    setHiddenCols(new Set(v.hidden ?? []));
+    setSearchQuery(v.searchQuery ?? '');
+    if (v.pageSize) setPageSize(v.pageSize);
+    setPage(0);
+  }, [state, setHiddenCols]);
+
   if (requiresCompany && !selectedCompanyId) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -940,23 +957,6 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
   const tableSub = config.tableSubFromTotal && config.searchable && searchQuery
     ? `${filteredCount.toLocaleString()} / ${state.data.length.toLocaleString()}개 표시`
     : `${state.data.length.toLocaleString()}건`;
-
-  // 메타 인프라 확장: 저장된 뷰 — 현재 상태 스냅샷 + apply 핸들러
-  const savedViewsCfg = config.savedViews;
-  const currentView: SavedView = {
-    name: '',
-    filters: state.filters,
-    hidden: [...hiddenCols],
-    searchQuery,
-    pageSize,
-  };
-  const applyView = useCallback((v: SavedView) => {
-    state.setFilters(v.filters ?? {});
-    setHiddenCols(new Set(v.hidden ?? []));
-    setSearchQuery(v.searchQuery ?? '');
-    if (v.pageSize) setPageSize(v.pageSize);
-    setPage(0);
-  }, [state, setHiddenCols]);
 
   return (
     <>
@@ -1058,4 +1058,3 @@ export default function ListScreen({ config: defaultConfig }: { config: ListScre
     </>
   );
 }
-
