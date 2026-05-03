@@ -15,6 +15,7 @@ import { useColumnVisibility } from '@/lib/columnVisibility';
 import { useColumnPinning } from '@/lib/columnPinning';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
+import { promptDialog } from '@/lib/dialogs';
 import { MasterConsole, type MasterConsoleMetric } from '@/components/command/MasterConsole';
 import { FilterButton } from '@/components/command/MockupPrimitives';
 import { cn } from '@/lib/utils';
@@ -246,8 +247,8 @@ function SavedViewsMenu({
   const [views, setViews] = useState<SavedView[]>(() => loadSavedViews(listId));
   const [open, setOpen] = useState(false);
 
-  const save = () => {
-    const name = window.prompt('뷰 이름:');
+  const save = async () => {
+    const name = await promptDialog({ title: '뷰 저장', description: '뷰 이름을 입력하세요.' });
     if (!name) return;
     const next = [...views.filter((v) => v.name !== name), { ...current, name }];
     setViews(next);

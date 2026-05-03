@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { HelpCircle, Sparkles, X } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
+import { notify } from '@/lib/notify';
 
 const DISMISSED_KEY = 'sf.inspector.onboarding-dismissed';
 
@@ -121,7 +122,7 @@ export const OnboardingResetButton = () => {
   const onReset = () => {
     writeDismissed(false);
     // 편집 모드 끄고 다시 켜야 hint 재표시 — 단순화 위해 페이지 새로고침 제안 대신 안내 메시지.
-    window.alert('편집 모드를 한 번 종료한 후 다시 켜시면 안내가 다시 보입니다 (Cmd+Shift+E 두 번).');
+    notify.info('편집 모드를 한 번 종료한 후 다시 켜시면 안내가 다시 보입니다 (Cmd+Shift+E 두 번).');
   };
   return (
     <button

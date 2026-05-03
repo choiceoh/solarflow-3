@@ -52,7 +52,8 @@
         "noExplicitAny": "off",
         "noArrayIndexKey": "off",
         "noGlobalIsNan": "warn",
-        "useIterableCallbackReturn": "warn"
+        "useIterableCallbackReturn": "warn",
+        "noAlert": "error"
       },
       "complexity": {
         "noForEach": "off",

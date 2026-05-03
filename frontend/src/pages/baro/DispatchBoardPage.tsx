@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { fetchWithAuth } from '@/lib/api';
+import { confirmDialog } from '@/lib/dialogs';
 import type {
   DispatchRoute,
   DispatchStatus,
@@ -163,7 +164,12 @@ export default function DispatchBoardPage() {
   };
 
   const deleteRoute = async (route: DispatchRoute) => {
-    if (!window.confirm(`${route.route_date} 배차를 삭제할까요? (출고는 유지되고 미배차로 돌아갑니다)`)) return;
+    const ok = await confirmDialog({
+      description: `${route.route_date} 배차를 삭제할까요? (출고는 유지되고 미배차로 돌아갑니다)`,
+      variant: 'destructive',
+      confirmLabel: '삭제',
+    });
+    if (!ok) return;
     try {
       await fetchWithAuth(`/api/v1/baro/dispatch-routes/${route.route_id}`, { method: 'DELETE' });
       await load();

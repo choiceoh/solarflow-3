@@ -15,6 +15,7 @@ import { Check, ChevronDown, Lock, Search } from 'lucide-react';
 import { cn, moduleLabel } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
+import { confirmDialog } from '@/lib/dialogs';
 import {
   RECEIPT_METHOD_LABEL, MANAGEMENT_CATEGORY_LABEL, FULFILLMENT_SOURCE_LABEL,
   type Order, type ReceiptMethod, type ManagementCategory, type FulfillmentSource,
@@ -742,12 +743,14 @@ export default function OrderForm({ open = true, onOpenChange, onSubmit, onPrefi
           setValue('fulfillment_source', 'stock', { shouldDirty: true });
         } else if (data.fulfillment_source === 'stock' && stockKw + 0.001 < capacityKw) {
           const incomingKw = item?.available_incoming_kw ?? 0;
-          const useIncoming = window.confirm(
-            `현재 가용 실재고가 부족합니다.\n` +
-            `필요: ${formatKwField(capacityKw)} kW / 가용 실재고: ${formatKwField(stockKw)} kW\n\n` +
-            `확인을 누르면 미착품 기준으로 수주 등록하고, 예약의 충당소스도 미착품으로 전환합니다.\n` +
-            `취소를 누르면 등록을 중단합니다.`,
-          );
+          const useIncoming = await confirmDialog({
+            title: '실재고 부족 — 미착품으로 등록할까요?',
+            description:
+              `필요: ${formatKwField(capacityKw)} kW / 가용 실재고: ${formatKwField(stockKw)} kW\n\n` +
+              '확인을 누르면 미착품 기준으로 수주 등록하고, 예약의 충당소스도 미착품으로 전환합니다.\n' +
+              '취소를 누르면 등록을 중단합니다.',
+            confirmLabel: '미착품으로 등록',
+          });
           if (!useIncoming) {
             setSubmitError('실재고 부족으로 수주 등록을 중단했습니다. 가용재고에서 예약을 조정한 뒤 다시 진행해주세요.');
             return;

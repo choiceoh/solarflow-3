@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import DataTable, { type Column } from '@/components/common/DataTable';
 import { fetchWithAuth } from '@/lib/api';
+import { confirmDialog } from '@/lib/dialogs';
 import { useAppStore } from '@/stores/appStore';
 import type { IntercompanyRequest, IntercompanyStatus } from '@/types/intercompany';
 import { INTERCOMPANY_STATUS_LABEL } from '@/types/intercompany';
@@ -59,7 +60,12 @@ export default function BaroRequestInboxPage() {
   useEffect(() => { void load(); }, [load]);
 
   const reject = async (row: IntercompanyRequest) => {
-    if (!window.confirm(`이 매입 요청을 거부하시겠습니까?\n\n품번: ${row.product_code ?? row.product_id.slice(0, 8)}\n수량: ${row.quantity}장`)) return;
+    const ok = await confirmDialog({
+      description: `이 매입 요청을 거부하시겠습니까?\n\n품번: ${row.product_code ?? row.product_id.slice(0, 8)}\n수량: ${row.quantity}장`,
+      variant: 'destructive',
+      confirmLabel: '거부',
+    });
+    if (!ok) return;
     try {
       await fetchWithAuth(`/api/v1/intercompany-requests/${row.request_id}/reject`, { method: 'PATCH' });
       await load();

@@ -12,6 +12,7 @@ import ProgressMiniBar from '@/components/common/ProgressMiniBar';
 import StatusPill from '@/components/common/StatusPill';
 import SortableTH from '@/components/common/SortableTH';
 import { fetchWithAuth } from '@/lib/api';
+import { notify } from '@/lib/notify';
 import { useSort } from '@/hooks/useSort';
 import { LC_STATUS_LABEL, LC_STATUS_COLOR, type LCRecord, type PurchaseOrder, type POLineItem } from '@/types/procurement';
 import type { BLShipment } from '@/types/inbound';
@@ -154,7 +155,7 @@ function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onN
       await onDelete(deleteTarget.lc_id);
       setDeleteTarget(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : '취소 처리에 실패했습니다');
+      notify.error(err instanceof Error ? err.message : '취소 처리에 실패했습니다');
     } finally {
       setDeleting(false);
     }
@@ -167,7 +168,7 @@ function LCListTable({ items, onEdit, onNew, onDelete, onSettle, onSelectBL, onN
       await onSettle(settleTarget, settleDate);
       setSettleTarget(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : '상환완료 처리에 실패했습니다');
+      notify.error(err instanceof Error ? err.message : '상환완료 처리에 실패했습니다');
     } finally {
       setSettling(false);
     }

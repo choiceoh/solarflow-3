@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { fetchWithAuth } from '@/lib/api';
+import { confirmDialog } from '@/lib/dialogs';
 import { formatNumber } from '@/lib/utils';
 import type { Expense } from '@/types/customs';
 import type { Outbound } from '@/types/outbound';
@@ -121,7 +122,12 @@ export default function OutboundTransportCostPanel({ outbound }: Props) {
       setForm(emptyState);
       return;
     }
-    if (!confirm('이 출고 운임을 삭제할까요?')) return;
+    const ok = await confirmDialog({
+      description: '이 출고 운임을 삭제할까요?',
+      variant: 'destructive',
+      confirmLabel: '삭제',
+    });
+    if (!ok) return;
     setSaving(true);
     setError('');
     try {
