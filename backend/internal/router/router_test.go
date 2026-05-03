@@ -255,6 +255,8 @@ func TestGuardMatrix(t *testing.T) {
 		// ---- Write only (테넌트 가드 없음) ----
 		{"POST", "/api/v1/companies/", g(guardSet{write: true})},
 		{"PATCH", "/api/v1/companies/test-id/status", g(guardSet{write: true})},
+		{"POST", "/api/v1/library-posts/", g(guardSet{write: true})},
+		{"DELETE", "/api/v1/library-posts/test-id", g(guardSet{write: true})},
 		{"POST", "/api/v1/notes/", g(guardSet{write: true})},
 		{"POST", "/api/v1/import/inbound", g(guardSet{write: true})},
 		{"POST", "/api/v1/ocr/extract", g(guardSet{write: true})},

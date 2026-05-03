@@ -225,6 +225,50 @@ const notes = [
   { note_id: 'note-pr19', company_id: 'company-topsolar', title: 'PR19 디자인 검토', body: '목업 로그인 모드에서는 실제 DB에 접근하지 않습니다.', target_type: 'system', target_id: 'dev-mock', created_at: nowIso, updated_at: nowIso },
 ];
 
+const libraryPosts = [
+  {
+    post_id: 'lib-ops-guide',
+    title: '입고 검수 체크리스트',
+    content: '창고 입고 시 제품명, 품번, 수량, 외관 파손 여부를 먼저 확인하고 사진 자료를 함께 보관합니다.',
+    created_by: 'dev-mock-user',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+  {
+    post_id: 'lib-template-pack',
+    title: '운영 양식 모음',
+    content: '반복 사용하는 내부 양식과 공지 파일을 자료실에 올려두는 예시입니다.',
+    created_by: 'dev-mock-user',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+];
+
+const attachmentFiles = [
+  {
+    file_id: 'file-lib-ops-guide-pdf',
+    entity_type: 'library_posts',
+    entity_id: 'lib-ops-guide',
+    file_type: 'library',
+    original_name: '입고검수_체크리스트.pdf',
+    content_type: 'application/pdf',
+    size_bytes: 182400,
+    uploaded_by: 'dev-mock-user',
+    created_at: nowIso,
+  },
+  {
+    file_id: 'file-lib-template-xlsx',
+    entity_type: 'library_posts',
+    entity_id: 'lib-template-pack',
+    file_type: 'library',
+    original_name: '운영양식_모음.xlsx',
+    content_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    size_bytes: 89420,
+    uploaded_by: 'dev-mock-user',
+    created_at: nowIso,
+  },
+];
+
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -243,7 +287,7 @@ function queryValue(url: URL, body: MockRow, key: string): string | undefined {
 }
 
 function filterRows<T extends CompanyScoped>(rows: T[], url: URL, body: MockRow): T[] {
-  const exactFilters = ['company_id', 'manufacturer_id', 'product_id', 'po_id', 'lc_id', 'bank_id', 'bl_id', 'declaration_id', 'outbound_id', 'order_id', 'receipt_id', 'customer_id', 'status', 'inbound_type'];
+  const exactFilters = ['company_id', 'manufacturer_id', 'product_id', 'po_id', 'lc_id', 'bank_id', 'bl_id', 'declaration_id', 'outbound_id', 'order_id', 'receipt_id', 'customer_id', 'status', 'inbound_type', 'entity_type', 'entity_id', 'file_type'];
   return rows.filter((row) => exactFilters.every((key) => {
     const expected = queryValue(url, body, key);
     if (!expected || expected === 'all') return true;
@@ -534,8 +578,40 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
   const method = (options?.method ?? 'GET').toUpperCase();
   const body = await readJsonBody(options);
 
+  if (url.pathname === '/api/v1/library-posts' && method === 'POST') {
+    return clone({
+      post_id: `lib-${Date.now()}`,
+      title: String(body.title ?? '새 자료'),
+      content: String(body.content ?? ''),
+      created_by: 'dev-mock-user',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as T);
+  }
+
+  if (url.pathname === '/api/v1/attachments' && method === 'POST') {
+    return clone({
+      file_id: `file-${Date.now()}`,
+      entity_type: 'library_posts',
+      entity_id: 'mock',
+      file_type: 'library',
+      original_name: 'mock-attachment.txt',
+      content_type: 'text/plain;charset=utf-8',
+      size_bytes: 42,
+      uploaded_by: 'dev-mock-user',
+      created_at: new Date().toISOString(),
+    } as T);
+  }
+
   if (method !== 'GET' && !url.pathname.startsWith('/api/v1/calc') && url.pathname !== '/api/v1/ocr/extract') {
     return writeRoute<T>(url);
+  }
+
+  if (url.pathname.startsWith('/api/v1/attachments/') && url.pathname.endsWith('/access')) {
+    return clone({
+      url: 'data:text/plain;charset=utf-8,SolarFlow%20dev%20mock%20attachment',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    } as T);
   }
 
   if (url.pathname.startsWith('/api/v1/calc/')) return calcRoute<T>(url, body);
@@ -608,8 +684,9 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     '/api/v1/construction-sites': { rows: constructionSites, idKey: 'site_id', collection: 'construction-sites' },
     '/api/v1/limit-changes': { rows: limitChanges, idKey: 'limit_change_id', collection: 'limit-changes' },
     '/api/v1/notes': { rows: notes, idKey: 'note_id', collection: 'notes' },
+    '/api/v1/library-posts': { rows: libraryPosts, idKey: 'post_id', collection: 'library-posts' },
     '/api/v1/module-demand-forecasts': { rows: moduleDemandForecasts(), idKey: 'forecast_id', collection: 'module-demand-forecasts' },
-    '/api/v1/attachments': { rows: [], idKey: 'attachment_id', collection: 'attachments' },
+    '/api/v1/attachments': { rows: attachmentFiles, idKey: 'file_id', collection: 'attachments' },
   };
 
   const route = routes[url.pathname];

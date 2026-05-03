@@ -318,6 +318,18 @@ func (h *LimitChangeHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
+// LibraryPostHandler — 자료실 게시글 + 첨부파일 연결.
+func (h *LibraryPostHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/library-posts", func(r chi.Router) {
+		r.Get("/", h.List)
+		r.Get("/{id}", h.GetByID)
+		r.With(g.Write).Post("/", h.Create)
+		r.With(g.Write).Put("/{id}", h.Update)
+		r.With(g.Write).Patch("/{id}", h.Update)
+		r.With(g.Write).Delete("/{id}", h.Delete)
+	})
+}
+
 // ManufacturerHandler — 제조사 마스터 CRUD.
 func (h *ManufacturerHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/manufacturers", func(r chi.Router) {
