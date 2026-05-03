@@ -1,4 +1,5 @@
 export { ActionChips } from './ActionChips';
+export { AiVariantsPanel } from './AiVariantsPanel';
 export { ContextMenuOverlay } from './ContextMenuOverlay';
 export { DraftsList } from './DraftsList';
 export { EditModeBadge } from './EditModeBadge';

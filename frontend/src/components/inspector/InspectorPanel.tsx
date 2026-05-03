@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore, type InspectorMode, type InspectorTarget } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import { ActionChips } from './ActionChips';
+import { AiVariantsPanel } from './AiVariantsPanel';
 import { HandleOverlay } from './HandleOverlay';
 import { LayerPanel } from './LayerPanel';
 import { PseudoStateTabs } from './PseudoStateTabs';
@@ -169,6 +170,7 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
       <PseudoStateTabs />
       <ActionChips className={draft} onChange={setDraft} />
       <HandleOverlay target={target} className={draft} onChange={setDraft} />
+      <AiVariantsPanel target={target} className={draft} onApply={setDraft} />
       <details
         data-inspector-ui="true"
         className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs"
