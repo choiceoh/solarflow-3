@@ -31,6 +31,11 @@ func (h *CostDetailHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("cost_details").
 		Select("*", "exact", false)
 
+	// 박물관 표본(is_sandbox=true) 자동 제외 — ?include_sandbox=true 명시 시 우회.
+	if r.URL.Query().Get("include_sandbox") != "true" {
+		query = query.Eq("is_sandbox", "false")
+	}
+
 	// 비유: ?declaration_id=xxx — 특정 면장의 원가만 필터 (필수 권장)
 	if declID := r.URL.Query().Get("declaration_id"); declID != "" {
 		query = query.Eq("declaration_id", declID)
