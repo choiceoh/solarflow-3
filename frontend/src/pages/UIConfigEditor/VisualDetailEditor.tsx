@@ -1,7 +1,7 @@
 // MetaDetailConfig 시각 편집기 — 섹션별 cols + 필드 (formatter/span 위주) 인라인 편집.
 // Phase 4: tabs[] 편집 + 우측 패널 (L1 inlineEdit) + selection-driven tab metadata.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -98,6 +98,60 @@ export default function VisualDetailEditor({
   const selectedDetailFieldConfig = selectedDetailField
     ? sections[selectedDetailField.sec]?.fields?.[selectedDetailField.field]
     : null;
+
+  // Polish P-2 — 우측 패널 선택 기반 단축키
+  // Esc: 선택 해제 / Del·Backspace: 선택된 필드 제거 / Cmd+D: 선택된 필드 복제
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!selectedDetailField) return;
+      const target = e.target as HTMLElement | null;
+      const inEditable = !!target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      );
+      if (inEditable) return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSelectedDetailField(null);
+        return;
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        const { sec, field } = selectedDetailField;
+        const newSections = sections.map((s, sIdx) => {
+          if (sIdx !== sec) return s;
+          return { ...s, fields: (s.fields ?? []).filter((_, i) => i !== field) };
+        });
+        onChange({ ...value, sections: newSections });
+        setSelectedDetailField(null);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        const { sec, field } = selectedDetailField;
+        const target = sections[sec]?.fields?.[field];
+        if (!target) return;
+        // detail 전체 필드 key 충돌 회피
+        const allKeys = new Set(sections.flatMap((s) => (s.fields ?? []).map((f) => f.key)));
+        let candidate = `${target.key}_copy`;
+        let n = 2;
+        while (allKeys.has(candidate)) { candidate = `${target.key}_copy${n}`; n++; }
+        const cloned: DetailFieldConfig = { ...target, key: candidate, label: `${target.label} (복사)` };
+        const newSections = sections.map((s, sIdx) => {
+          if (sIdx !== sec) return s;
+          const fs = s.fields ?? [];
+          return { ...s, fields: [...fs.slice(0, field + 1), cloned, ...fs.slice(field + 1)] };
+        });
+        onChange({ ...value, sections: newSections });
+        // 새로 복제된 필드를 선택
+        setSelectedDetailField({ sec, field: field + 1 });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedDetailField, sections, value, onChange]);
 
   const main = (
     <div className="flex flex-col h-full min-h-0">

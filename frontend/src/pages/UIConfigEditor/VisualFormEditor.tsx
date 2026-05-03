@@ -1,6 +1,6 @@
 // MetaFormConfig 시각 편집기 — 섹션별 cols + 필드 인라인 편집.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 // 필드 검증 — registry/key 충돌/누락 의존성 즉시 감지
 type FieldIssue = { level: 'error' | 'warn'; msg: string };
@@ -143,6 +143,59 @@ export default function VisualFormEditor({
   const selectedFieldConfig = selectedField
     ? sections[selectedField.sec]?.fields?.[selectedField.field]
     : null;
+
+  // Polish P-2 — 우측 패널 선택 기반 단축키
+  // Esc: 선택 해제 / Del·Backspace: 선택된 필드 제거 / Cmd+D: 선택된 필드 복제
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!selectedField) return;
+      const target = e.target as HTMLElement | null;
+      const inEditable = !!target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      );
+      if (inEditable) return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSelectedField(null);
+        return;
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        const { sec, field } = selectedField;
+        const newSections = sections.map((s, sIdx) => {
+          if (sIdx !== sec) return s;
+          return { ...s, fields: (s.fields ?? []).filter((_, i) => i !== field) };
+        });
+        onChange({ ...value, sections: newSections });
+        setSelectedField(null);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        const { sec, field } = selectedField;
+        const tgt = sections[sec]?.fields?.[field];
+        if (!tgt) return;
+        // 폼 전체 필드 key 충돌 회피
+        const allKeys = new Set(sections.flatMap((s) => (s.fields ?? []).map((f) => f.key)));
+        let candidate = `${tgt.key}_copy`;
+        let n = 2;
+        while (allKeys.has(candidate)) { candidate = `${tgt.key}_copy${n}`; n++; }
+        const cloned: FieldConfig = { ...tgt, key: candidate, label: `${tgt.label} (복사)` };
+        const newSections = sections.map((s, sIdx) => {
+          if (sIdx !== sec) return s;
+          const fs = s.fields ?? [];
+          return { ...s, fields: [...fs.slice(0, field + 1), cloned, ...fs.slice(field + 1)] };
+        });
+        onChange({ ...value, sections: newSections });
+        setSelectedField({ sec, field: field + 1 });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedField, sections, value, onChange]);
 
   const main = (
     <div className="flex flex-col h-full min-h-0">
