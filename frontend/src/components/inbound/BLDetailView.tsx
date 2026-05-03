@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import { formatDate, formatNumber, shortMfgName } from '@/lib/utils';
+import { formatNumber, shortMfgName } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
-import InboundStatusBadge from './InboundStatusBadge';
 import StatusChanger from './StatusChanger';
 import BLLineTable, { BL_LINE_TABLE_ID, BL_LINE_COLUMN_META } from './BLLineTable';
 import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';

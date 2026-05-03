@@ -139,7 +139,7 @@ function buildFieldSchema(field: FieldConfig): ZodTypeAny {
 export function buildZodSchema(config: MetaFormConfig): ZodTypeAny {
   const shape: Record<string, ZodTypeAny> = {};
   config.sections.forEach((section) => {
-    section.fields.forEach((f) => { shape[f.key] = buildFieldSchema(f); });
+    section.fields?.forEach((f) => { shape[f.key] = buildFieldSchema(f); });
   });
   let schema: ZodTypeAny = z.object(shape as ZodRawShape);
   // Phase 4 보강 Tier 3: form-level cross-field refinement
@@ -568,7 +568,7 @@ function ChildArrayField({
               if (cf.visibleIf) {
                 // FIXME: 행별 visibleIf 평가 — watchedValues 의 array 인덱스 접근 필요
                 // 우선 글로벌 visibleIf 만 (행 인덱스 무시). 향후 행 컨텍스트 분리.
-                if (!evalCondition(cf.visibleIf, watchedValues)) return null;
+                if (!evalCondition(cf.visibleIf, watchedValues, undefined)) return null;
               }
               return (
                 <ChildFieldInput
@@ -1111,7 +1111,7 @@ function buildPayload(
 export default function MetaForm({ config: defaultConfig, open, onOpenChange, onSubmit, editData, extraContext }: MetaFormProps) {
   // Phase 3: localStorage override 우선, 없으면 defaultConfig
   const config = useResolvedConfig(defaultConfig, 'form');
-  const allFields = useMemo(() => config.sections.flatMap((s) => s.fields), [config]);
+  const allFields = useMemo(() => config.sections.flatMap((s) => s.fields ?? []), [config]);
   const schema = useMemo(() => buildZodSchema(config), [config]);
   const { role } = usePermission();
 
@@ -1235,7 +1235,7 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
   // 다음 step 으로 이동 — 현재 step 의 필드만 검증
   const goNextStep = async () => {
     if (!wizardEnabled) return;
-    const stepFieldKeys = config.sections[currentStep].fields.map((f) => f.key);
+    const stepFieldKeys = (config.sections[currentStep].fields ?? []).map((f) => f.key);
     const ok = await trigger(stepFieldKeys as never);
     if (ok) setCurrentStep((s) => Math.min(s + 1, config.sections.length - 1));
   };
@@ -1312,7 +1312,7 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
                   });
                 })() : (
                   <div className={colsClass}>
-                    {sec.fields.map((f) => (
+                    {(sec.fields ?? []).map((f) => (
                       <FieldRender
                         key={f.key}
                         field={f}

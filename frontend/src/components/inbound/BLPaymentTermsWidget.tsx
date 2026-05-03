@@ -145,7 +145,7 @@ export default function BLPaymentTermsWidget({ inboundType, totalAmount, initial
             <Label className="text-[10px] text-muted-foreground">잔금 일수</Label>
             {domesticPT.balanceMode === 'days5' ? (
               <Select value={domesticPT.balanceDays}
-                onValueChange={(v) => setDomesticPT({ ...domesticPT, balanceDays: v })}>
+                onValueChange={(v) => setDomesticPT({ ...domesticPT, balanceDays: v ?? domesticPT.balanceDays })}>
                 <SelectTrigger className="h-8 text-xs"><span>{domesticPT.balanceDays}일</span></SelectTrigger>
                 <SelectContent>
                   {DOMESTIC_DAYS5.map((d) => <SelectItem key={d} value={d}>{d}일</SelectItem>)}
