@@ -56,6 +56,34 @@ export const PreviewRolePanel = () => {
           현재 <span className="font-medium">{ROLE_LABELS[previewRole as Role] ?? previewRole}</span> 으로 보고 있습니다 — 화면 hint·메뉴·버튼이 그 역할 기준. 실제 데이터는 본인 권한 그대로.
         </p>
       )}
+      <FloatingPreviewBanner previewRole={previewRole} actualRole={actualRole} onClear={() => setPreviewRole(null)} />
     </section>
+  );
+};
+
+interface FloatingBannerProps {
+  previewRole: string | null;
+  actualRole: string | null;
+  onClear: () => void;
+}
+
+/** 화면 *전체 상단* 에 띄우는 영구 배너 — 사용자가 인스펙터 패널 닫아도 미리보기 활성 시 인지 */
+const FloatingPreviewBanner = ({ previewRole, actualRole, onClear }: FloatingBannerProps) => {
+  if (!previewRole || previewRole === actualRole) return null;
+  return (
+    <div
+      data-inspector-ui="true"
+      className="fixed top-3 left-1/2 z-[95] flex -translate-x-1/2 items-center gap-2 rounded-full bg-purple-600 px-3 py-1 text-xs font-medium text-white shadow-lg"
+    >
+      <Eye className="h-3 w-3" />
+      <span>{ROLE_LABELS[previewRole as Role] ?? previewRole} 으로 미리보기 중</span>
+      <button
+        type="button"
+        onClick={onClear}
+        className="ml-1 rounded bg-white/20 px-1.5 py-0.5 text-[10px] hover:bg-white/30"
+      >
+        해제
+      </button>
+    </div>
   );
 };

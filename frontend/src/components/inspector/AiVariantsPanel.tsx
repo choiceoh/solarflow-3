@@ -145,6 +145,16 @@ export const AiVariantsPanel = ({ target, className, onApply }: AiVariantsPanelP
       {isLoading && variants.length === 0 && (
         <div className="text-[10px] text-slate-500">응답 받는 중…</div>
       )}
+      {!isLoading && messages.length > 0 && variants.length === 0 && (
+        <details className="rounded border border-amber-200 bg-amber-50 p-2 text-[10px] text-amber-900 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200">
+          <summary className="cursor-pointer select-none font-medium">
+            AI 응답에서 백틱 className 후보를 못 찾았어요 — 원본 응답 보기
+          </summary>
+          <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-[9px]">
+            {extractTextFromMessage(messages[messages.length - 1])}
+          </pre>
+        </details>
+      )}
     </section>
   );
 };

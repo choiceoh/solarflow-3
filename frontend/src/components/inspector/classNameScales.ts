@@ -31,14 +31,14 @@ export const SCALE_CATEGORIES: Array<{ id: ScaleCategory; label: string }> = [
 export const SCALES: ClassNameScale[] = [
   {
     id: 'padding',
-    label: '여백 (안쪽)',
+    label: '내부 여백',
     category: 'spacing',
     values: ['p-0', 'p-0.5', 'p-1', 'p-1.5', 'p-2', 'p-2.5', 'p-3', 'p-3.5', 'p-4', 'p-5', 'p-6', 'p-7', 'p-8', 'p-9', 'p-10', 'p-12', 'p-14', 'p-16', 'p-20', 'p-24'],
     pattern: /\bp-(?:0|0\.5|1|1\.5|2|2\.5|3|3\.5|4|5|6|7|8|9|10|12|14|16|20|24)\b/g,
   },
   {
     id: 'margin',
-    label: '여백 (바깥쪽)',
+    label: '외부 여백',
     category: 'spacing',
     values: ['m-0', 'm-0.5', 'm-1', 'm-1.5', 'm-2', 'm-2.5', 'm-3', 'm-3.5', 'm-4', 'm-5', 'm-6', 'm-7', 'm-8', 'm-9', 'm-10', 'm-12', 'm-14', 'm-16', 'm-20', 'm-24'],
     pattern: /\bm-(?:0|0\.5|1|1\.5|2|2\.5|3|3\.5|4|5|6|7|8|9|10|12|14|16|20|24)\b/g,
@@ -52,7 +52,7 @@ export const SCALES: ClassNameScale[] = [
   },
   {
     id: 'rounded',
-    label: '모서리 둥글기',
+    label: '둥글기',
     category: 'shape',
     values: ['rounded-none', 'rounded-sm', 'rounded', 'rounded-md', 'rounded-lg', 'rounded-xl', 'rounded-2xl', 'rounded-3xl', 'rounded-full'],
     pattern: /\brounded(?:-none|-sm|-md|-lg|-xl|-2xl|-3xl|-full)?\b/g,
