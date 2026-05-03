@@ -319,7 +319,7 @@ export default function AdminSettingsPage() {
 
       {/* 사용자 목록 */}
       <div className="rounded-lg border bg-card overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b bg-muted/30">
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b bg-muted/30">
           <p className="text-base font-semibold">사용자 목록 ({users.length}명)</p>
         </div>
         {loading ? (
