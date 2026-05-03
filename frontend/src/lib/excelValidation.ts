@@ -1,4 +1,4 @@
-// 엑셀 업로드 검증 7종 (Step 29A)
+// 엑셀 업로드 검증 8종 (Step 29A)
 // 비유: 검수 라인 — 각 행을 규칙에 맞는지 하나하나 확인
 
 import type {
@@ -122,7 +122,7 @@ function validateRow(
     if (strVal === '') continue;
 
     // 2. 코드 존재 체크
-    if (field.key in CODE_FIELD_MAP) {
+    if (type !== 'company' && field.key in CODE_FIELD_MAP) {
       const masterKey = CODE_FIELD_MAP[field.key];
       const codeSet = buildCodeSet(master, masterKey);
       if (!codeSet.has(strVal)) {
@@ -170,7 +170,19 @@ function validateRow(
     }
   }
 
-  // 6. 매출: outbound_id에서 UUID 부분만 추출 (코드표 드롭다운에 "UUID | 날짜 | 수량 | 현장명" 형식)
+  // 6. 법인 등록: 서버 모델의 길이 제한을 업로드 전에 먼저 보여준다.
+  if (type === 'company') {
+    const name = String(row.data['company_name'] ?? '').trim();
+    const code = String(row.data['company_code'] ?? '').trim();
+    if (name.length > 100) {
+      errors.push({ field: '법인명', message: '100자를 초과할 수 없습니다' });
+    }
+    if (code.length > 10) {
+      errors.push({ field: '법인코드', message: '10자를 초과할 수 없습니다' });
+    }
+  }
+
+  // 7. 매출: outbound_id에서 UUID 부분만 추출 (코드표 드롭다운에 "UUID | 날짜 | 수량 | 현장명" 형식)
   if (type === 'sale' && row.data['outbound_id']) {
     const obVal = String(row.data['outbound_id']).trim();
     // 파이프 구분자가 있으면 첫 부분(UUID)만 사용
@@ -179,7 +191,7 @@ function validateRow(
     }
   }
 
-  // 7. 부대비용: B/L 또는 월 중 하나는 필수
+  // 8. 부대비용: B/L 또는 월 중 하나는 필수
   if (type === 'expense') {
     const bl = String(row.data['bl_number'] ?? '').trim();
     const month = String(row.data['month'] ?? '').trim();
@@ -203,7 +215,34 @@ export function validateRows(
   fieldOverride?: FieldDef[],
 ): ParsedRow[] {
   const fields = fieldOverride ?? FIELDS_MAP[type];
-  return rows.map((row) => validateRow(row, fields, master, type));
+  const checked = rows.map((row) => validateRow(row, fields, master, type));
+
+  if (type !== 'company') return checked;
+
+  const existingCodes = new Set(master.companies.map((company) => company.company_code));
+  const seenCodes = new Map<string, number>();
+  return checked.map((row) => {
+    const code = String(row.data['company_code'] ?? '').trim();
+    if (!code) return row;
+
+    const errors = [...row.errors];
+    if (existingCodes.has(code)) {
+      errors.push({ field: '법인코드', message: '이미 등록된 법인코드입니다' });
+    }
+
+    const firstRow = seenCodes.get(code);
+    if (firstRow) {
+      errors.push({ field: '법인코드', message: `${firstRow}행과 중복된 법인코드입니다` });
+    } else {
+      seenCodes.set(code, row.rowNumber);
+    }
+
+    return {
+      ...row,
+      valid: errors.length === 0,
+      errors,
+    };
+  });
 }
 
 // 면장 검증 (2시트 분리)

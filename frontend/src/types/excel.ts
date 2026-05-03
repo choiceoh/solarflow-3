@@ -1,6 +1,7 @@
 // 엑셀 Import/Export 타입 (Step 29A)
 
 export type TemplateType =
+  | 'company'
   | 'inbound'
   | 'outbound'
   | 'sale'
@@ -46,6 +47,7 @@ export interface MasterDataForExcel {
 
 // 양식별 한글 이름
 export const TEMPLATE_LABEL: Record<TemplateType, string> = {
+  company: '법인',
   inbound: '입고',
   outbound: '출고',
   sale: '매출',
@@ -62,6 +64,13 @@ export interface FieldDef {
   required: boolean;
   type: 'string' | 'number' | 'date' | 'boolean';
 }
+
+// 법인 필드
+export const COMPANY_FIELDS: FieldDef[] = [
+  { key: 'company_name', label: '법인명', required: true, type: 'string' },
+  { key: 'company_code', label: '법인코드', required: true, type: 'string' },
+  { key: 'business_number', label: '사업자번호', required: false, type: 'string' },
+];
 
 // 입고 필드
 export const INBOUND_FIELDS: FieldDef[] = [
@@ -222,6 +231,7 @@ export interface ImportResult {
 
 // 양식별 필드 맵
 export const FIELDS_MAP: Record<TemplateType, FieldDef[]> = {
+  company: COMPANY_FIELDS,
   inbound: INBOUND_FIELDS,
   outbound: OUTBOUND_FIELDS,
   sale: SALE_FIELDS,

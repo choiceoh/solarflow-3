@@ -2,7 +2,6 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 
 const menuItems = [
   { path: '/', label: '대시보드', icon: '📊' },
-  { path: '/companies', label: '법인', icon: '🏢' },
   { path: '/manufacturers', label: '제조사', icon: '🏭' },
   { path: '/products', label: '품번', icon: '📦' },
   { path: '/partners', label: '거래처', icon: '🤝' },

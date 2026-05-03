@@ -1,10 +1,10 @@
-// 엑셀 양식 7종 생성 (Step 29A)
+// 엑셀 양식 8종 생성 (Step 29A)
 // 비유: 양식 공장 — 각 업무별 빈 양식지를 만들어 드롭다운까지 미리 설정
 // ExcelJS는 반드시 dynamic import (지적 1 반영)
 
 import type { TemplateType, MasterDataForExcel, FieldDef } from '@/types/excel';
 import {
-  TEMPLATE_LABEL, INBOUND_FIELDS, OUTBOUND_FIELDS, SALE_FIELDS,
+  TEMPLATE_LABEL, COMPANY_FIELDS, INBOUND_FIELDS, OUTBOUND_FIELDS, SALE_FIELDS,
   DECLARATION_FIELDS, DECLARATION_COST_FIELDS, EXPENSE_FIELDS,
   ORDER_FIELDS, RECEIPT_FIELDS,
 } from '@/types/excel';
@@ -52,6 +52,7 @@ interface WorkbookWritable {
 }
 
 const UNIFIED_TEMPLATE_ORDER: TemplateType[] = [
+  'company',
   'order',
   'outbound',
   'sale',
@@ -98,7 +99,9 @@ const POSITIVE_NUMBER_FIELDS = new Set([
 const FIELD_HELP: Record<string, string> = {
   bl_number: '같은 B/L No.로 여러 품목을 입력하면 하나의 입고로 묶입니다.',
   inbound_type: '그룹 입고는 "그룹내구매"를 선택하세요.',
-  company_code: '코드표의 법인코드를 선택하세요.',
+  company_name: '시스템에서 표시할 법인명을 입력하세요.',
+  company_code: '법인 등록 시에는 새 고유 코드를 입력하고, 운영 데이터에서는 코드표의 법인코드를 선택하세요.',
+  business_number: '사업자번호는 선택 입력입니다.',
   manufacturer_name: '코드표의 제조사명을 선택하세요.',
   currency: 'USD 또는 KRW만 사용합니다.',
   exchange_rate: 'KRW 입고는 비워둘 수 있습니다. USD 입고는 적용 환율을 숫자로 입력하세요.',
@@ -121,6 +124,7 @@ const FIELD_HELP: Record<string, string> = {
 };
 
 const TYPE_GUIDE: Record<TemplateType, string> = {
+  company: '법인명과 법인코드를 먼저 등록하면 다른 업무 양식에서 법인코드를 선택할 수 있습니다.',
   order: '수주 입력 후 출고, 매출, 수금으로 이어집니다.',
   outbound: '수주번호를 넣으면 수주와 연결되고, 그룹거래는 상대법인코드를 함께 입력합니다.',
   sale: '출고 선택값을 고르면 출고 수량과 제품 정보로 매출 금액이 계산됩니다.',
@@ -417,11 +421,15 @@ function firstOutboundLabel(masterData: MasterDataForExcel): string {
   return `${outbound.outbound_id} | ${outbound.outbound_date} | ${outbound.quantity}장 | ${outbound.site_name ?? ''}`;
 }
 
-function exampleValue(field: FieldDef, masterData: MasterDataForExcel): unknown {
+function exampleValue(field: FieldDef, masterData: MasterDataForExcel, type?: TemplateType): unknown {
+  if (type === 'company' && field.key === 'company_code') return 'NEWCO';
+
   const examples: Record<string, unknown> = {
     bl_number: 'BL-2026-001',
     inbound_type: '그룹내구매',
+    company_name: '탑솔라',
     company_code: masterData.companies[0]?.company_code ?? '법인코드 선택',
+    business_number: '000-00-00000',
     manufacturer_name: masterData.manufacturers[0]?.name_kr ?? '제조사 선택',
     currency: 'KRW',
     exchange_rate: 1350,
@@ -500,6 +508,7 @@ function writeExampleBlock(
   title: string,
   fields: FieldDef[],
   masterData: MasterDataForExcel,
+  type?: TemplateType,
 ): number {
   const titleCell = sheet.getCell(startRow, 1);
   titleCell.value = title;
@@ -528,7 +537,7 @@ function writeExampleBlock(
     header.note = fieldNote(field);
 
     const value = sheet.getCell(valueRow, col);
-    value.value = exampleValue(field, masterData);
+    value.value = exampleValue(field, masterData, type);
     value.border = HEADER_BORDER;
     value.alignment = { vertical: 'middle', wrapText: false };
     value.numFmt = columnFormat(field);
@@ -565,7 +574,7 @@ function addExampleSheet(
       row = writeExampleBlock(sheet, row, '원가등록 예시', DECLARATION_COST_FIELDS, masterData);
       return;
     }
-    row = writeExampleBlock(sheet, row, `${TEMPLATE_LABEL[type]}등록 예시`, getFieldsForType(type), masterData);
+    row = writeExampleBlock(sheet, row, `${TEMPLATE_LABEL[type]}등록 예시`, getFieldsForType(type), masterData, type);
   });
 
   return sheet;
@@ -651,6 +660,13 @@ async function addTemplateSheets(
   const mgmtCategoryCodes = Object.keys(MANAGEMENT_CATEGORY_LABEL);
   const fulfillmentSources = Object.values(FULFILLMENT_SOURCE_LABEL);
   const fulfillmentSourceCodes = Object.keys(FULFILLMENT_SOURCE_LABEL);
+
+  if (type === 'company') {
+    const dataSheet = workbook.addWorksheet('법인등록');
+    styleHeaders(dataSheet, COMPANY_FIELDS);
+    await protectSheet(dataSheet);
+    return;
+  }
 
   if (type === 'declaration') {
     // 면장: 시트 3개 (면장등록 + 원가등록 + 코드표)
@@ -799,6 +815,7 @@ async function addTemplateSheets(
 
 function getFieldsForType(type: TemplateType): FieldDef[] {
   switch (type) {
+    case 'company': return COMPANY_FIELDS;
     case 'inbound': return INBOUND_FIELDS;
     case 'outbound': return OUTBOUND_FIELDS;
     case 'sale': return SALE_FIELDS;

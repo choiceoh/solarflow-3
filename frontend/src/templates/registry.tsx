@@ -22,10 +22,8 @@ import bankDetailConfig from '@/config/details/banks';
 import warehouseDetailConfig from '@/config/details/warehouses';
 import manufacturerDetailConfig from '@/config/details/manufacturers';
 import partnerDetailConfig from '@/config/details/partners';
-import companyDetailConfig from '@/config/details/companies';
 import constructionSiteDetailConfig from '@/config/details/construction_sites';
 import partnerFormConfig from '@/config/forms/partners';
-import companyFormConfig from '@/config/forms/companies';
 import bankFormConfig from '@/config/forms/banks';
 import warehouseFormConfig from '@/config/forms/warehouses';
 import manufacturerFormConfig from '@/config/forms/manufacturers';
@@ -230,6 +228,7 @@ function useSimpleList<T>(endpoint: string): { data: T[]; loading: boolean; relo
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
+    void tick;
     let cancelled = false;
     setLoading(true);
     fetchWithAuth<T[]>(endpoint)
@@ -478,17 +477,6 @@ const PartnerFormV2: FormComponent = (props) => (
   />
 );
 
-// 법인 메타 폼 (Phase 4 신규 도메인 적용)
-const CompanyFormV2: FormComponent = (props) => (
-  <MetaForm
-    config={companyFormConfig}
-    open={props.open}
-    onOpenChange={props.onOpenChange}
-    onSubmit={props.onSubmit}
-    editData={props.editData}
-  />
-);
-
 // 은행 메타 폼 (Phase 4)
 const BankFormV2: FormComponent = (props) => (
   <MetaForm
@@ -558,7 +546,6 @@ const DepsDemoForm: FormComponent = (props) => (
 export const formComponents: Record<string, FormComponent> = {
   partner_form: PartnerForm as unknown as FormComponent,
   partner_form_v2: PartnerFormV2,
-  company_form_v2: CompanyFormV2,              // Phase 4: 법인 마스터 메타 폼
   bank_form_v2: BankFormV2,                    // Phase 4: 은행 마스터 메타 폼
   warehouse_form_v2: WarehouseFormV2,          // Phase 4: 창고 마스터 메타 폼
   manufacturer_form_v2: ManufacturerFormV2,    // Phase 4: 제조사 마스터 메타 폼
@@ -621,8 +608,7 @@ export const detailComponents: Record<string, DetailComponent> = {
   warehouse: ((props) => <MetaDetail config={warehouseDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
   manufacturer: ((props) => <MetaDetail config={manufacturerDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
   partner: ((props) => <MetaDetail config={partnerDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
-  // Phase 4 마무리: 법인 / 공사 현장 detail
-  company: ((props) => <MetaDetail config={companyDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  // Phase 4 마무리: 공사 현장 detail
   construction_site: ((props) => <MetaDetail config={constructionSiteDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
 };
 
@@ -851,7 +837,7 @@ export const masterSources: Record<string, MasterOptionSource> = {
   'products.search': {
     load: async () => {
       const list = await fetchWithAuth<Product[]>('/api/v1/products');
-      list.forEach((p) => productCacheById.set(p.product_id, p));
+      for (const p of list) productCacheById.set(p.product_id, p);
       return list
         .filter((p) => p.is_active)
         .slice(0, 20)
@@ -860,7 +846,7 @@ export const masterSources: Record<string, MasterOptionSource> = {
     search: async (query) => {
       // 운영 백엔드 예시: `/api/v1/products?search=${encodeURIComponent(query)}&limit=20`
       const list = await fetchWithAuth<Product[]>('/api/v1/products');
-      list.forEach((p) => productCacheById.set(p.product_id, p));
+      for (const p of list) productCacheById.set(p.product_id, p);
       const lower = query.trim().toLowerCase();
       return list
         .filter((p) => p.is_active)
@@ -874,7 +860,7 @@ export const masterSources: Record<string, MasterOptionSource> = {
     resolveLabel: async (value) => {
       // 운영: `/api/v1/products/${value}` 단일 조회. mock 은 list 에서 검색.
       const list = await fetchWithAuth<Product[]>('/api/v1/products');
-      list.forEach((p) => productCacheById.set(p.product_id, p));
+      for (const p of list) productCacheById.set(p.product_id, p);
       const found = list.find((p) => p.product_id === value);
       return found ? `${found.product_code} · ${found.product_name}` : null;
     },
