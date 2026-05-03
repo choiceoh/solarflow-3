@@ -72,6 +72,15 @@ export default function InventoryTable({ items, compact = false }: { items: Inve
 
   if (items.length === 0) return <EmptyState message="등록된 재고 데이터가 없습니다" />;
 
+  const fullTotals = sorted.reduce(
+    (acc, item) => ({
+      totalSecured: acc.totalSecured + (item.total_secured_kw || 0),
+      physical:     acc.physical     + (item.physical_kw || 0),
+      incoming:     acc.incoming     + (item.incoming_kw || 0),
+    }),
+    { totalSecured: 0, physical: 0, incoming: 0 },
+  );
+
   /* ── compact 모드: 제품 + 가용재고만 ── */
   if (compact) {
     const totals = items.reduce(
@@ -261,6 +270,18 @@ export default function InventoryTable({ items, compact = false }: { items: Inve
             </tr>
           ))}
         </tbody>
+        <tfoot>
+          <tr className="border-t bg-muted/50">
+            <td className="p-3">
+              <div className="font-semibold">합계</div>
+              <div className="text-[11px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+            </td>
+            <td className="p-3 text-right tabular-nums font-semibold text-green-600">{fmw(fullTotals.totalSecured)}</td>
+            <td className="p-3 text-right tabular-nums font-semibold">{fmw(fullTotals.physical)}</td>
+            <td className="p-3 text-right tabular-nums font-semibold">{fmw(fullTotals.incoming)}</td>
+            <td />
+          </tr>
+        </tfoot>
       </table>
     </div>
   );

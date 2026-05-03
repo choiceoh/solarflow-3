@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { formatUSD, formatDate } from '@/lib/utils';
 import LCFeeDetail from './LCFeeDetail';
@@ -37,6 +37,7 @@ export default function LCMaturityTable({ alertData }: Props) {
       calcFee(lcId);
     }
   };
+  const totalAmount = alerts.reduce((sum, alert) => sum + alert.amount_usd, 0);
 
   return (
     <Table>
@@ -87,6 +88,17 @@ export default function LCMaturityTable({ alertData }: Props) {
           </>
         ))}
       </TableBody>
+      <TableFooter>
+        <TableRow>
+          <TableCell />
+          <TableCell className="font-semibold">합계</TableCell>
+          <TableCell className="text-xs text-muted-foreground">{alerts.length.toLocaleString('ko-KR')}건</TableCell>
+          <TableCell />
+          <TableCell />
+          <TableCell className="text-right font-semibold">{formatUSD(totalAmount)}</TableCell>
+          <TableCell colSpan={2} />
+        </TableRow>
+      </TableFooter>
     </Table>
   );
 }

@@ -3,7 +3,7 @@ import {
   Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { DateInput } from '@/components/ui/date-input';
@@ -373,6 +373,14 @@ export default function SalesAnalysisPage() {
     { key: 'custom', label: '직접 지정' },
   ];
   const topCustomer = customers.items[0];
+  const shownCustomers = customers.items.slice(0, 8);
+  const shownCustomerTotals = shownCustomers.reduce(
+    (acc, item) => ({
+      sales: acc.sales + item.total_sales_krw,
+      outstanding: acc.outstanding + item.outstanding_krw,
+    }),
+    { sales: 0, outstanding: 0 },
+  );
 
   return (
     <div className="sf-page">
@@ -461,7 +469,7 @@ export default function SalesAnalysisPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {customers.items.slice(0, 8).map((item) => (
+                {shownCustomers.map((item) => (
                   <TableRow key={item.customer_id}>
                     <TableCell className="text-xs font-medium">{item.customer_name}</TableCell>
                     <TableCell className="text-right text-xs">{formatKRW(item.total_sales_krw)}</TableCell>
@@ -473,6 +481,16 @@ export default function SalesAnalysisPage() {
                   <TableRow><TableCell colSpan={4} className="py-8 text-center text-xs text-muted-foreground">거래처 분석 데이터가 없습니다</TableCell></TableRow>
                 )}
               </TableBody>
+              {shownCustomers.length > 0 && (
+                <TableFooter>
+                  <TableRow>
+                    <TableCell className="text-xs font-semibold">합계</TableCell>
+                    <TableCell className="text-right text-xs font-semibold">{formatKRW(shownCustomerTotals.sales)}</TableCell>
+                    <TableCell className="text-right text-xs font-semibold">{formatKRW(shownCustomerTotals.outstanding)}</TableCell>
+                    <TableCell className="text-right text-xs text-muted-foreground">{shownCustomers.length.toLocaleString('ko-KR')}건</TableCell>
+                  </TableRow>
+                </TableFooter>
+              )}
             </Table>
         </CardB>
       </div>
@@ -524,6 +542,22 @@ export default function SalesAnalysisPage() {
                 <TableRow><TableCell colSpan={10} className="py-8 text-center text-xs text-muted-foreground">이익 분석 데이터가 없습니다</TableCell></TableRow>
               )}
             </TableBody>
+            {margin.items.length > 0 && (
+              <TableFooter>
+                <TableRow>
+                  <TableCell className="text-xs font-semibold">합계</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{margin.items.length.toLocaleString('ko-KR')}건</TableCell>
+                  <TableCell className="text-right text-xs font-semibold">{formatNumber(margin.items.reduce((sum, item) => sum + item.total_sold_qty, 0))}</TableCell>
+                  <TableCell />
+                  <TableCell className="text-xs text-muted-foreground">원가 연결 {coveredCostCount.toLocaleString('ko-KR')}건</TableCell>
+                  <TableCell />
+                  <TableCell />
+                  <TableCell className="text-right text-xs font-semibold">{margin.summary.overall_margin_rate.toFixed(1)}%</TableCell>
+                  <TableCell className="text-right text-xs font-semibold">{formatKRW(margin.summary.total_revenue_krw)}</TableCell>
+                  <TableCell className="text-right text-xs font-semibold">{formatKRW(margin.summary.total_margin_krw)}</TableCell>
+                </TableRow>
+              </TableFooter>
+            )}
           </Table>
       </CardB>
         </section>

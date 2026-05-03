@@ -219,6 +219,16 @@ function IncomingTable({
     return <EmptyState message="미착품이 없습니다" />;
   }
 
+  const totals = sorted.reduce(
+    (acc, item) => ({
+      incoming: acc.incoming + (item.incoming_kw || 0),
+      reserved: acc.reserved + (item.incoming_reserved_kw || 0),
+      available: acc.available + (item.available_incoming_kw || 0),
+      allocCount: acc.allocCount + (allocCountMap.get(item.product_id) ?? 0),
+    }),
+    { incoming: 0, reserved: 0, available: 0, allocCount: 0 },
+  );
+
   return (
     <div className="rounded-md border overflow-hidden">
       <table className="w-full text-xs">
@@ -363,6 +373,20 @@ function IncomingTable({
             );
           })}
         </tbody>
+        <tfoot>
+          <tr className="border-t bg-muted/50">
+            <td />
+            <td className="p-2">
+              <div className="font-semibold">합계</div>
+              <div className="text-[10px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+            </td>
+            <td className="p-2 text-right tabular-nums font-semibold text-yellow-600">{fmtKw(totals.incoming)}</td>
+            <td className="p-2 text-right tabular-nums font-semibold text-red-500">{fmtKw(totals.reserved)}</td>
+            <td className="p-2 text-right tabular-nums font-semibold text-green-600">{fmtKw(totals.available)}</td>
+            <td className="p-2 text-right tabular-nums font-semibold">{totals.allocCount.toLocaleString('ko-KR')}건</td>
+            <td />
+          </tr>
+        </tfoot>
       </table>
     </div>
   );

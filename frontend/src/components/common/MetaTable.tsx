@@ -13,9 +13,10 @@ import {
   type VisibilityState,
 } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import EmptyState from './EmptyState';
 import { cn } from '@/lib/utils';
+import { buildTableSummary, type TableSummaryMode } from '@/lib/tableSummary';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
 import { useColumnWidths, type ColumnSizingState } from '@/lib/columnWidths';
 import { useColumnSort, type SortingState } from '@/lib/columnSort';
@@ -54,6 +55,13 @@ export interface ColumnDef<T> extends ColumnVisibilityMeta {
    * 명시하면 검색이 정확하고 빠름. 예) globalFilterText: (ob) => ob.product_name ?? ''
    */
   globalFilterText?: (item: T) => string;
+  /**
+   * 하단 합계 줄. 미지정 시 컬럼 key/label 기준으로 합산 가능한 숫자만 자동 합산.
+   * 단가·환율·규격·일수처럼 더하면 안 되는 값은 자동 제외한다.
+   */
+  summary?: TableSummaryMode;
+  summaryAccessor?: (item: T) => number | null | undefined;
+  summaryFormatter?: (value: number, rows: T[]) => ReactNode;
 }
 
 export interface MetaTableProps<T> {
@@ -63,9 +71,14 @@ export interface MetaTableProps<T> {
   hidden: Set<string>;
   items: T[];
   getRowKey: (item: T) => string;
+  defaultSort?: { key: string; direction: 'asc' | 'desc' };
   onRowClick?: (item: T) => void;
   emptyMessage?: string;
   emptyAction?: { label: string; onClick: () => void };
+  /** 페이지가 직접 구성한 하단 요약 행. 미지정 시 MetaTable 이 자동 합계를 만든다. */
+  footer?: ReactNode;
+  /** 단순 테이블 호환용 — 컬럼 폭 합계 대신 부모 폭을 채운다. */
+  fillWidth?: boolean;
   rowClassName?: (item: T) => string | undefined;
   tableClassName?: string;
   /** 글로벌 검색어 — 외부(예: ToolbarBar 검색 input)에서 제어. */
@@ -106,8 +119,8 @@ function getPinnedStyle<T>(column: Column<T>): CSSProperties | undefined {
 }
 
 export function MetaTable<T>({
-  tableId, columns, hidden, items, getRowKey, onRowClick,
-  emptyMessage, emptyAction, rowClassName, tableClassName, globalFilter,
+  tableId, columns, hidden, items, getRowKey, defaultSort, onRowClick,
+  emptyMessage, emptyAction, footer, fillWidth, rowClassName, tableClassName, globalFilter,
   onFilteredRowCountChange, pinning, onPinningChange,
 }: MetaTableProps<T>) {
   // ─── 영속 hooks — tableId 없으면 빈 scope 로 비영속 동작 ──────────────────
@@ -122,6 +135,9 @@ export function MetaTable<T>({
 
   // 헤더 드래그 임시 상태 — 드롭 대상 표시용
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [localSorting, setLocalSorting] = useState<SortingState>(() => (
+    defaultSort ? [{ id: defaultSort.key, desc: defaultSort.direction === 'desc' }] : []
+  ));
 
   // ─── visibility — 외부에서 받은 hidden Set 을 TanStack 형태로 변환 ───────
   const columnVisibility: VisibilityState = useMemo(() => {
@@ -188,7 +204,7 @@ export function MetaTable<T>({
     state: {
       columnVisibility,
       columnSizing: persistEnabled ? widths.sizing : {},
-      sorting: persistEnabled ? sortPersist.sorting : [],
+      sorting: persistEnabled ? sortPersist.sorting : localSorting,
       columnPinning: (pinning as ColumnPinningState | undefined) ?? { left: [], right: [] },
       columnOrder: resolvedOrder,
       globalFilter: globalFilter ?? '',
@@ -198,7 +214,12 @@ export function MetaTable<T>({
       : undefined,
     onSortingChange: persistEnabled
       ? (updater) => sortPersist.setSorting(updater as SortingState | ((prev: SortingState) => SortingState))
-      : undefined,
+      : (updater) => {
+          setLocalSorting((prev) => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            return next as SortingState;
+          });
+        },
     onColumnPinningChange: pinningEnabled && onPinningChange
       ? (updater) => {
           const prev = pinning ?? { left: [], right: [] };
@@ -222,6 +243,15 @@ export function MetaTable<T>({
 
   // 필터된 행 갯수 변동 시 외부 알림 (tableSub 카운트 표시 등)
   const filteredRowCount = table.getFilteredRowModel().rows.length;
+  const filteredRows = table.getFilteredRowModel().rows.map((row) => row.original);
+  const summaryCells = useMemo(
+    () => buildTableSummary(columns, filteredRows, (column, row) => {
+      const source = columns.find((c) => c.key === column.key);
+      if (source?.sortAccessor) return source.sortAccessor(row);
+      return (row as Record<string, unknown>)[column.key];
+    }),
+    [columns, filteredRows],
+  );
   useEffect(() => {
     onFilteredRowCountChange?.(filteredRowCount);
   }, [filteredRowCount, onFilteredRowCountChange]);
@@ -263,7 +293,10 @@ export function MetaTable<T>({
   };
 
   return (
-    <Table className={cn('text-xs', tableClassName)} style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
+    <Table
+      className={cn('text-xs', tableClassName)}
+      style={{ width: fillWidth ? '100%' : table.getTotalSize(), tableLayout: 'fixed' }}
+    >
       <TableHeader>
         {table.getHeaderGroups().map((hg) => (
           <TableRow key={hg.id}>
@@ -364,6 +397,41 @@ export function MetaTable<T>({
           </TableRow>
         ))}
       </TableBody>
+      {filteredRowCount > 0 && (footer || summaryCells.size > 0) && (
+        <TableFooter>
+          {footer ?? (
+            <TableRow>
+              {table.getVisibleLeafColumns().map((column, idx) => {
+                const meta = column.columnDef.meta as { align?: 'left' | 'right' | 'center'; className?: string } | undefined;
+                const pinSide = column.getIsPinned() as 'left' | 'right' | false;
+                const pinnedStyle = getPinnedStyle(column);
+                const content = summaryCells.get(column.id);
+                const hasSummary = idx !== 0 && content != null;
+                return (
+                  <TableCell
+                    key={column.id}
+                    className={cn(
+                      alignClass(meta?.align),
+                      hasSummary && 'tabular-nums font-semibold',
+                      hasSummary && !meta?.align && 'text-right',
+                      pinSide === 'left' && 'sf-col-pinned-left',
+                      pinSide === 'right' && 'sf-col-pinned-right',
+                    )}
+                    style={{ width: column.getSize(), ...pinnedStyle }}
+                  >
+                    {idx === 0 ? (
+                      <span className="flex flex-col">
+                        <span className="font-semibold">합계</span>
+                        <span className="text-[11px] text-muted-foreground">{filteredRowCount.toLocaleString('ko-KR')}건</span>
+                      </span>
+                    ) : content ?? null}
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+          )}
+        </TableFooter>
+      )}
     </Table>
   );
 }

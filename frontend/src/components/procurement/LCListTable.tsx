@@ -167,6 +167,17 @@ function LCListTable({ items, onSettle, onSelectBL, blsVersion }: Props) {
 
   if (items.length === 0) return <EmptyState message="등록된 LC가 없습니다" />;
 
+  const totals = sorted.reduce((acc, lc) => {
+    const a = agg[lc.lc_id];
+    const targetMw = lc.target_mw ?? (
+      lc.target_qty != null && a?.firstSpecWp ? (lc.target_qty * a.firstSpecWp) / 1_000_000 : 0
+    );
+    return {
+      amountUsd: acc.amountUsd + (lc.amount_usd ?? 0),
+      targetMw: acc.targetMw + targetMw,
+    };
+  }, { amountUsd: 0, targetMw: 0 });
+
   return (
     <>
       <div className="rounded-md border overflow-x-auto">
@@ -433,6 +444,21 @@ function LCListTable({ items, onSettle, onSelectBL, blsVersion }: Props) {
               );
             })}
           </tbody>
+          <tfoot>
+            <tr className="border-t bg-muted/50">
+              <td className="p-3">
+                <div className="font-semibold">합계</div>
+                <div className="text-[11px] text-muted-foreground">{sorted.length.toLocaleString('ko-KR')}건</div>
+              </td>
+              <td />
+              <td className="p-3 text-right font-mono font-semibold tabular-nums">
+                <div>{formatUSD(totals.amountUsd)}</div>
+                <div className="text-[10px] text-muted-foreground">{formatMw(totals.targetMw, 2)}</div>
+              </td>
+              <td />
+              <td />
+            </tr>
+          </tfoot>
         </table>
       </div>
       <Dialog open={!!settleTarget} onOpenChange={(v) => { if (!v) setSettleTarget(null); }}>
