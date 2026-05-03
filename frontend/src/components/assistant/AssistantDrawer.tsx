@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Bot, Plus, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import type { UIMessage } from 'ai';
 import { ChatBox } from '@/pages/AssistantPage';
 import { fetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
 import { detectPageLabel } from '@/lib/pageContext';
+import { getPageChips } from '@/lib/assistantChips';
 import { useAppStore } from '@/stores/appStore';
 
 interface AssistantDrawerProps {
@@ -24,22 +25,25 @@ interface SessionDetail extends SessionSummary {
   messages: UIMessage[];
 }
 
-const DRAWER_WIDTH = 460;
+const DRAWER_WIDTH = 380;
 
 /**
  * 화면 우측 슬라이드 drawer 안에 ChatBox 임베드.
- * 페이지 전환 없이 현재 화면 그 자리에서 어시스턴트 사용.
+ * "팝업" 의미에 맞게 가볍게 — 무거운 작업은 /assistant 풀 페이지에서.
  *
- * 세션 정책:
- * - drawer 가 열릴 때 세션 목록 fetch → 가장 최근 (updated_at desc 첫 번째) 자동 로드
- * - 풀 /assistant 페이지와 동일 backend 세션 사용 — drawer/풀 페이지에서 한 대화가 양쪽 모두 영속
- * - "새 대화" 버튼으로 빈 세션 시작 가능
- * - 단 mock 모드 (isDevMockApiActive) 면 세션 비활성
+ * 헤더 = 2줄:
+ *   1줄: 🤖 어시스턴트 · 세션 상태 · [+ 새 대화] [X]
+ *   2줄: 📍 {pageLabel} — AI 가 이 화면 인식 중 (라벨 추론 실패 시 생략)
+ *
+ * 세션:
+ * - drawer 가 열릴 때 가장 최근 세션 자동 로드 — 풀 페이지와 동일 backend 세션 공유
+ * - "+ 새 대화" 로 빈 세션. 다른 세션 점프는 풀 페이지에서 (팝업은 가볍게)
+ * - mock 모드면 세션 비활성
  */
 export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
   const sessionsEnabled = !isDevMockApiActive();
   const location = useLocation();
-  const pageLabel = detectPageLabel(location.pathname);
+  const pageLabel = detectPageLabel(location.pathname) ?? getPageChips(location.pathname).label;
   // M-2: 외부 (ScopePanel 등) 가 prefill 한 첫 입력 — 마운트 시 한번 사용 후 clear
   const initialPrompt = useAppStore((s) => s.assistantDrawerInitialPrompt);
   const setInitialPrompt = useAppStore((s) => s.setAssistantDrawerInitialPrompt);
@@ -111,6 +115,8 @@ export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
 
   if (!open) return null;
 
+  const sessionStatusLabel = loading ? '불러오는 중…' : currentSessionId ? '이전 대화 이어서' : '새 대화';
+
   return (
     <>
       <button
@@ -125,22 +131,14 @@ export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
         className="fixed top-0 right-0 z-[111] flex h-screen flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
         style={{ width: DRAWER_WIDTH }}
       >
-        <header className="flex shrink-0 flex-col gap-1 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+        <header className="flex shrink-0 flex-col gap-1 border-b border-slate-200 px-4 py-2.5 dark:border-slate-700">
           <div className="flex min-w-0 items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
-                AI
-              </span>
+              <Bot className="h-5 w-5 shrink-0 text-[var(--sf-solar)]" aria-hidden />
               <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">어시스턴트</h2>
-              {loading ? (
-                <span className="text-xs text-slate-400">불러오는 중…</span>
-              ) : (
-                <span className="truncate text-xs text-slate-400">
-                  {currentSessionId ? '이전 대화 이어서' : '새 대화'}
-                </span>
-              )}
+              <span className="truncate text-xs text-slate-400">{sessionStatusLabel}</span>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex shrink-0 items-center gap-0.5">
               <button
                 type="button"
                 onClick={startNew}
@@ -163,9 +161,12 @@ export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
             </div>
           </div>
           {pageLabel && (
-            <div className="text-[11px] text-slate-500 dark:text-slate-400">
-              현재 화면: <span className="font-medium text-slate-700 dark:text-slate-200">{pageLabel}</span>
-              <span className="ml-2 text-slate-400">— "이 화면" 변경 요청 시 자동 인식</span>
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <span aria-hidden>📍</span>
+              <span className="truncate">
+                <span className="font-medium text-slate-700 dark:text-slate-200">{pageLabel}</span>
+                <span className="ml-1.5 text-slate-400">— AI 가 이 화면 인식 중</span>
+              </span>
             </div>
           )}
         </header>
@@ -175,10 +176,11 @@ export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
             initialMessages={initialMessages}
             sessionId={currentSessionId}
             sessionsEnabled={sessionsEnabled}
+            embedded
+            initialInput={initialPrompt ?? undefined}
             onSessionUpserted={(s, makeCurrent) => {
               if (makeCurrent) setCurrentSessionId(s.id);
             }}
-            initialInput={initialPrompt ?? undefined}
           />
         </div>
       </aside>

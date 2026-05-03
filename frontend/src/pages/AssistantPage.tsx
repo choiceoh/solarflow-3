@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
 import type { ToolUIPart, UIMessage } from 'ai';
-import { Bot, Check, FileText, Inbox, MessageSquarePlus, Paperclip, Pencil, Search, Send, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronUp, FileText, Inbox, MessageSquarePlus, Paperclip, Pencil, Search, Send, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
 import { detectPageContext } from '@/lib/pageContext';
+import { getPageChips, type ChipDef } from '@/lib/assistantChips';
 import { MetaConfigPreview } from '@/components/assistant/MetaConfigPreview';
 import {
   toBackendMessages,
@@ -182,11 +183,13 @@ interface ChatBoxProps {
   sessionsEnabled: boolean;
   onSessionUpserted: (s: SessionSummary, makeCurrent: boolean) => void;
   sessionsSlot?: React.ReactNode;
+  /** drawer 안에서 사용 시 — 자체 헤더 숨김 (drawer 헤더가 대신함) */
+  embedded?: boolean;
   /** drawer 등 외부에서 자동 채워주는 첫 입력 — 마운트 시 input 에 prefill (사용자가 검토 후 send) */
   initialInput?: string;
 }
 
-export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted, sessionsSlot, initialInput }: ChatBoxProps) {
+export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted, sessionsSlot, embedded, initialInput }: ChatBoxProps) {
   // 빠른 연속 send 시 setSessionIdRef 가 반영되기 전 두 번째 호출이 또 POST 하지 않도록 ref 로 동기 추적.
   const sessionIdRef = useRef<string | null>(sessionId);
   // 쓰기 도구 승인/거부 상태 — proposal id → status. messages 와 별도 메모리 (상태 mutation 안 함).
@@ -413,22 +416,26 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
 
   const liveError = error ?? (chatError ? chatError.message : null);
 
+  const pageChips = getPageChips(location.pathname);
+
   return (
     <>
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
-        <header
-          className="flex flex-wrap items-center gap-3 border-b pb-3"
-          data-onboarding-step="self-demo.assistant.entry"
-        >
-          <div className="flex items-center gap-2">
-            <Bot className="h-6 w-6 text-[var(--sf-solar)]" />
-            <h2 className="text-lg font-semibold">업무 도우미</h2>
-          </div>
-        </header>
+      <div className={cn('flex min-w-0 flex-1 flex-col gap-3', embedded ? 'p-3' : 'p-4')}>
+        {!embedded && (
+          <header
+            className="flex flex-wrap items-center gap-3 border-b pb-3"
+            data-onboarding-step="self-demo.assistant.entry"
+          >
+            <div className="flex items-center gap-2">
+              <Bot className="h-6 w-6 text-[var(--sf-solar)]" />
+              <h2 className="text-lg font-semibold">업무 도우미</h2>
+            </div>
+          </header>
+        )}
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
           {messagesWithProposals.length === 0 ? (
-            <EmptyHint />
+            <ChipEmpty chips={pageChips.chips} onPick={(t) => setInput(t)} />
           ) : (
             <div className="flex flex-col gap-3">
               {messagesWithProposals.map(({ message, proposals }) => (
@@ -505,10 +512,10 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
             placeholder={
               attachments.length > 0
                 ? '첨부 파일과 함께 보낼 질문 (예: "이 면장 등록해줘")'
-                : '질문을 입력하세요. Enter 전송 · Shift+Enter 줄바꿈'
+                : '질문을 입력하세요…'
             }
-            rows={5}
-            className="flex-1 resize-none text-lg leading-relaxed md:text-lg"
+            rows={embedded ? 3 : 5}
+            className="flex-1 resize-none text-base leading-relaxed md:text-base"
             disabled={busy}
           />
           <Input
@@ -539,12 +546,19 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
             {ocrBusy ? 'OCR 중…' : '전송'}
           </Button>
         </div>
+        <div className="-mt-1 px-1 text-[11px] text-muted-foreground/70">
+          Enter 전송 · Shift+Enter 줄바꿈
+        </div>
       </div>
 
-      <aside className="hidden w-[340px] shrink-0 flex-col border-l bg-muted/10 lg:flex">
-        {sessionsSlot}
-        <PendingPanel pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
-      </aside>
+      {embedded ? (
+        <PendingFooter pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
+      ) : (
+        <aside className="hidden w-[340px] shrink-0 flex-col border-l bg-muted/10 lg:flex">
+          {sessionsSlot}
+          <PendingPanel pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
+        </aside>
+      )}
     </>
   );
 }
@@ -853,14 +867,135 @@ function SessionsPanel({
   );
 }
 
-function EmptyHint() {
+/**
+ * 빈 상태 — chip 클릭으로 입력창 채우기 (자동 전송 X — 사용자가 다듬어 전송).
+ * chip 구성 = 공통 2개 + 페이지별 0~2개. 정의는 lib/assistantChips.ts.
+ */
+function ChipEmpty({ chips, onPick }: { chips: ChipDef[]; onPick: (text: string) => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-base text-muted-foreground">
-      <Bot className="h-10 w-10 opacity-40" />
-      <div>업무 관련 질문을 입력하세요.</div>
-      <div className="text-sm">예: "거래처 한화 검색", "최근 PO 5건", "PO123에 메모 남겨줘"</div>
-      <div className="text-sm">📎 면장 PDF 첨부 후 "이 면장 등록해줘" — OCR 인식 → 등록 제안</div>
-      <div className="text-sm opacity-70">DB 조회·작성·OCR 도구가 활성화됩니다. 쓰기는 카드의 [저장] 클릭 시에만 반영됩니다.</div>
+    <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-muted-foreground">
+      <Bot className="h-10 w-10 opacity-40" aria-hidden />
+      <div className="text-sm">무엇을 도와드릴까요?</div>
+      <div className="flex flex-wrap justify-center gap-1.5 px-2">
+        {chips.map((c) => (
+          <button
+            key={c.text}
+            type="button"
+            onClick={() => onPick(c.text)}
+            className="rounded-full border border-slate-300 bg-background px-3 py-1.5 text-xs text-slate-700 shadow-sm transition-colors hover:border-[var(--sf-solar)]/60 hover:bg-[var(--sf-solar)]/5 hover:text-[var(--sf-solar)] dark:border-slate-700 dark:text-slate-200 dark:hover:bg-[var(--sf-solar)]/10"
+          >
+            {c.icon && <span className="mr-1">{c.icon}</span>}
+            {c.text}
+          </button>
+        ))}
+      </div>
+      <div className="px-4 text-[11px] opacity-60">
+        💡 클릭하면 입력창에 채워집니다 · 📎 PDF/이미지 첨부 시 OCR 자동 인식
+      </div>
     </div>
+  );
+}
+
+/**
+ * drawer 전용 — pending 0건이면 한 줄로 collapse, N>0이면 자동 펼침.
+ * 펼친 상태에서는 컴팩트 카드 리스트 (PendingPanel 보다 좁은 폭에 최적).
+ */
+function PendingFooter({
+  pending,
+  onConfirm,
+  onReject,
+  onSelect,
+}: {
+  pending: { proposal: ProposalState; msgId: string }[];
+  onConfirm: (prop: ProposalState) => void;
+  onReject: (prop: ProposalState) => void;
+  onSelect: (msgId: string) => void;
+}) {
+  const hasItems = pending.length > 0;
+  const [open, setOpen] = useState(hasItems);
+  // pending 항목이 새로 생기면 자동 펼침.
+  useEffect(() => {
+    if (hasItems) setOpen(true);
+  }, [hasItems]);
+  if (!hasItems && !open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex shrink-0 items-center justify-center gap-1.5 border-t border-slate-200 px-3 py-1.5 text-xs text-muted-foreground hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+        title="작업목록 펼치기"
+      >
+        <Inbox className="h-3 w-3" aria-hidden />
+        <span>작업목록</span>
+        <ChevronUp className="h-3 w-3" aria-hidden />
+      </button>
+    );
+  }
+  return (
+    <section className="flex shrink-0 flex-col border-t border-slate-200 dark:border-slate-700">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:bg-slate-50 dark:hover:bg-slate-800"
+        title={open ? '접기' : '펼치기'}
+      >
+        <Inbox className="h-3 w-3 text-[var(--sf-solar)]" aria-hidden />
+        <span className="font-medium">작업목록</span>
+        {hasItems && (
+          <span className="rounded-full bg-[var(--sf-solar)]/15 px-1.5 text-[10px] font-medium text-[var(--sf-solar)]">
+            {pending.length}
+          </span>
+        )}
+        <span className="ml-auto">
+          {open ? <ChevronDown className="h-3 w-3" aria-hidden /> : <ChevronUp className="h-3 w-3" aria-hidden />}
+        </span>
+      </button>
+      {open && (
+        <div className="max-h-48 overflow-y-auto border-t border-slate-200 px-2 py-2 dark:border-slate-700">
+          {!hasItems ? (
+            <div className="py-3 text-center text-xs text-muted-foreground/70">
+              AI 제안이 생기면 여기에 모입니다.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {pending.map(({ proposal, msgId }) => {
+                const label = PROPOSAL_KIND_LABEL[proposal.kind] ?? proposal.kind;
+                return (
+                  <div
+                    key={proposal.id}
+                    className="rounded-md border border-amber-300/60 bg-amber-50/60 p-2 text-xs shadow-sm dark:border-amber-700/40 dark:bg-amber-900/20"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onSelect(msgId)}
+                      className="block w-full text-left"
+                      title="채팅에서 보기"
+                    >
+                      <div className="font-medium text-amber-900 dark:text-amber-200">{label}</div>
+                      <div className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-foreground/90">
+                        {proposal.summary}
+                      </div>
+                    </button>
+                    <div className="mt-1.5 flex gap-1">
+                      <Button size="sm" className="h-7 flex-1 text-xs" onClick={() => onConfirm(proposal)}>
+                        <Check className="mr-1 h-3 w-3" />저장
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 flex-1 text-xs"
+                        onClick={() => onReject(proposal)}
+                      >
+                        <X className="mr-1 h-3 w-3" />거부
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
