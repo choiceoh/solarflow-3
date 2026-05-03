@@ -68,7 +68,7 @@ export const INBOUND_FIELDS: FieldDef[] = [
   { key: 'bl_number', label: 'B/L No.', required: true, type: 'string' },
   { key: 'inbound_type', label: '입고유형', required: true, type: 'string' },
   { key: 'company_code', label: '법인코드', required: true, type: 'string' },
-  { key: 'manufacturer_name', label: '제조사코드', required: true, type: 'string' },
+  { key: 'manufacturer_name', label: '제조사명', required: true, type: 'string' },
   { key: 'currency', label: '통화', required: true, type: 'string' },
   { key: 'exchange_rate', label: '환율', required: false, type: 'number' },
   { key: 'etd', label: 'ETD', required: false, type: 'date' },
@@ -110,8 +110,8 @@ export const OUTBOUND_FIELDS: FieldDef[] = [
 
 // 매출 필드 (지적 1 반영: outbound_id 필수, 출고일/품번 제거 — outbound에서 자동 조회)
 export const SALE_FIELDS: FieldDef[] = [
-  { key: 'outbound_id', label: 'outbound_id', required: true, type: 'string' },
-  { key: 'customer_name', label: '거래처코드', required: true, type: 'string' },
+  { key: 'outbound_id', label: '출고 선택', required: true, type: 'string' },
+  { key: 'customer_name', label: '거래처명', required: true, type: 'string' },
   { key: 'unit_price_wp', label: 'Wp단가(원)', required: true, type: 'number' },
   { key: 'tax_invoice_date', label: '세금계산서발행일', required: false, type: 'date' },
   { key: 'tax_invoice_email', label: '발행메일', required: false, type: 'string' },
@@ -170,7 +170,7 @@ export const EXPENSE_FIELDS: FieldDef[] = [
 export const ORDER_FIELDS: FieldDef[] = [
   { key: 'order_number', label: '발주번호', required: false, type: 'string' },
   { key: 'company_code', label: '법인코드', required: true, type: 'string' },
-  { key: 'customer_name', label: '거래처코드', required: true, type: 'string' },
+  { key: 'customer_name', label: '거래처명', required: true, type: 'string' },
   { key: 'order_date', label: '수주일', required: true, type: 'date' },
   { key: 'receipt_method', label: '접수방법', required: true, type: 'string' },
   { key: 'management_category', label: '관리구분', required: true, type: 'string' },
@@ -191,7 +191,7 @@ export const ORDER_FIELDS: FieldDef[] = [
 
 // 수금 필드
 export const RECEIPT_FIELDS: FieldDef[] = [
-  { key: 'customer_name', label: '거래처코드', required: true, type: 'string' },
+  { key: 'customer_name', label: '거래처명', required: true, type: 'string' },
   { key: 'receipt_date', label: '입금일', required: true, type: 'date' },
   { key: 'amount', label: '입금액(원)', required: true, type: 'number' },
   { key: 'bank_account', label: '입금계좌', required: false, type: 'string' },

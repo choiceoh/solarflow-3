@@ -14,32 +14,50 @@ import { RECEIPT_METHOD_LABEL, MANAGEMENT_CATEGORY_LABEL, FULFILLMENT_SOURCE_LAB
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_PATTERN = /^\d{4}-\d{2}$/;
 
-// 허용값 맵 (감리 규칙: map 방식, if-else 나열 금지)
-const ALLOWED_VALUES: Record<string, Record<string, boolean>> = {
-  inbound_type: Object.fromEntries(
-    [...Object.keys(INBOUND_TYPE_LABEL), ...Object.values(INBOUND_TYPE_LABEL)].map((k) => [k, true]),
-  ),
-  currency: { USD: true, KRW: true },
-  item_type: { main: true, spare: true, '본품': true, '스페어': true },
-  payment_type: { paid: true, free: true, '유상': true, '무상': true },
-  usage_category: Object.fromEntries(
-    [...Object.keys(USAGE_CATEGORIES), ...Object.values(USAGE_CATEGORIES)].map((k) => [k, true]),
-  ),
-  expense_type: Object.fromEntries(
-    [...Object.keys(EXPENSE_TYPE_LABEL), ...Object.values(EXPENSE_TYPE_LABEL)].map((k) => [k, true]),
-  ),
-  receipt_method: Object.fromEntries(
-    [...Object.keys(RECEIPT_METHOD_LABEL), ...Object.values(RECEIPT_METHOD_LABEL)].map((k) => [k, true]),
-  ),
-  management_category: Object.fromEntries(
-    [...Object.keys(MANAGEMENT_CATEGORY_LABEL), ...Object.values(MANAGEMENT_CATEGORY_LABEL)].map((k) => [k, true]),
-  ),
-  fulfillment_source: Object.fromEntries(
-    [...Object.keys(FULFILLMENT_SOURCE_LABEL), ...Object.values(FULFILLMENT_SOURCE_LABEL)].map((k) => [k, true]),
-  ),
-  group_trade: { Y: true, N: true, y: true, n: true },
-  erp_closed: { Y: true, N: true, y: true, n: true },
+function buildNormalizer(
+  labels: Record<string, string>,
+  extras: Record<string, string> = {},
+): Record<string, string> {
+  const normalizer: Record<string, string> = {};
+  Object.entries(labels).forEach(([key, label]) => {
+    normalizer[key] = key;
+    normalizer[label] = key;
+  });
+  Object.entries(extras).forEach(([label, key]) => {
+    normalizer[label] = key;
+  });
+  return normalizer;
+}
+
+// 사람이 고르는 한글 표시값을 서버가 받는 코드값으로 정규화한다.
+const NORMALIZED_VALUES: Record<string, Record<string, string>> = {
+  inbound_type: buildNormalizer(INBOUND_TYPE_LABEL, {
+    domestic_foreign: 'domestic_foreign',
+    국내유통사: 'domestic_foreign',
+  }),
+  currency: { USD: 'USD', KRW: 'KRW', usd: 'USD', krw: 'KRW' },
+  item_type: { main: 'main', spare: 'spare', 본품: 'main', 스페어: 'spare' },
+  payment_type: { paid: 'paid', free: 'free', 유상: 'paid', 무상: 'free' },
+  usage_category: buildNormalizer(USAGE_CATEGORIES),
+  expense_type: buildNormalizer(EXPENSE_TYPE_LABEL),
+  receipt_method: buildNormalizer(RECEIPT_METHOD_LABEL),
+  management_category: buildNormalizer(MANAGEMENT_CATEGORY_LABEL),
+  fulfillment_source: buildNormalizer(FULFILLMENT_SOURCE_LABEL),
+  group_trade: { Y: 'Y', N: 'N', y: 'Y', n: 'N' },
+  erp_closed: { Y: 'Y', N: 'N', y: 'Y', n: 'N' },
 };
+
+// 허용값 맵 (감리 규칙: map 방식, if-else 나열 금지)
+const ALLOWED_VALUES: Record<string, Record<string, boolean>> = Object.fromEntries(
+  Object.entries(NORMALIZED_VALUES).map(([field, values]) => [
+    field,
+    Object.fromEntries(Object.keys(values).map((k) => [k, true])),
+  ]),
+);
+
+function normalizeAllowedValue(field: string, value: string): string {
+  return NORMALIZED_VALUES[field]?.[value] ?? value;
+}
 
 // 코드 존재 검증 대상 필드 → 마스터 데이터 키 매핑
 const CODE_FIELD_MAP: Record<string, keyof MasterDataForExcel> = {
@@ -116,10 +134,14 @@ function validateRow(
       }
     }
 
-    // 3. 양수 체크
-    if (field.type === 'number' && field.key in POSITIVE_FIELDS) {
+    // 3. 숫자/양수 체크
+    if (field.type === 'number') {
       const n = Number(val);
-      if (!isNaN(n) && n <= 0) {
+      if (Number.isNaN(n)) {
+        errors.push({ field: field.label, message: '숫자여야 합니다' });
+        continue;
+      }
+      if (field.key in POSITIVE_FIELDS && n <= 0) {
         errors.push({ field: field.label, message: '양수여야 합니다' });
       }
     }
@@ -128,6 +150,8 @@ function validateRow(
     if (field.key in ALLOWED_VALUES) {
       if (!ALLOWED_VALUES[field.key][strVal]) {
         errors.push({ field: field.label, message: '허용되지 않는 값입니다' });
+      } else {
+        row.data[field.key] = normalizeAllowedValue(field.key, strVal);
       }
     }
 
