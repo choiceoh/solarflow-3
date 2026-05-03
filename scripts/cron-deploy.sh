@@ -34,10 +34,23 @@ fi
 
 cd "$REPO" || { echo "[$(date -Iseconds)] repo cd 실패"; exit 1; }
 
+# 운영 박스는 main 만 따라잡는다.
+# `git pull --ff-only origin` 은 현재 브랜치 기준 ff 인데, 운영 박스가 작업 브랜치로
+# 체크아웃돼 있으면 원격 main 의 새 커밋을 못 가져와 침묵으로 멈춘다 (이전 사고 사례).
+# 다른 브랜치 발견 시 즉시 중단하고 큰소리로 알린다 — 자동 복구는 안 함 (작업 손실 위험).
+CURRENT_BRANCH=$(git symbolic-ref --short -q HEAD || echo "DETACHED")
+if [[ "$CURRENT_BRANCH" != "main" ]]; then
+  echo "[$(date -Iseconds)] ❌ 운영 박스가 main 이 아닌 브랜치($CURRENT_BRANCH)에 있음 — 배포 중단"
+  echo "    원인: 누군가 운영 박스에서 다른 브랜치를 체크아웃해 둠"
+  echo "    조치: cd $REPO && git checkout main && git pull --ff-only origin main"
+  echo "    작업은 다른 worktree 또는 다른 박스에서 (예: git worktree add ../solarflow-3-work feat/xxx)"
+  exit 1
+fi
+
 BEFORE=$(git rev-parse HEAD)
 
 # pull (실패해도 다음 cron이 다시 시도)
-if ! git pull --ff-only origin 2>&1; then
+if ! git pull --ff-only origin main 2>&1; then
   echo "[$(date -Iseconds)] git pull 실패 — 다음 cron에서 재시도"
   exit 1
 fi
