@@ -49,6 +49,7 @@ import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
   FormComponent, DetailComponent, RailBlock, ToolbarExtra,
   Tone, MasterOptionSource, ContentBlock, ComputedFormula, FormRefinement, FormSubmitter, FormContentBlock, FieldCascade,
+  AsyncFormRefinement,
 } from './types';
 import { RailBlock as RailBlockUI } from '@/components/command/MockupPrimitives';
 
@@ -1151,6 +1152,10 @@ export const formRefinements: Record<string, FormRefinement> = {
     return m % 12 === 0;
   },
 };
+
+// 메타 인프라 확장: 비동기 cross-field 검증 (DB 중복 등) — MetaForm submit 직전 실행.
+// 통과 시 true, 실패 시 string(에러 메시지) 또는 false 반환.
+export const asyncRefinements: Record<string, AsyncFormRefinement> = {};
 
 // ─── Formatters ────────────────────────────────────────────────────────────
 export function applyFormatter(formatter: string | undefined, value: unknown): string {

@@ -244,6 +244,10 @@ export interface FormSection {
   // 제공 시 fields 대신 렌더 (registry.formContentBlocks[blockId] 호출)
   // 메타로 표현 안 되는 OCR 위젯, 결제조건 파서 등 도메인 특수 로직 임베드용.
   contentBlock?: ContentBlockConfig;
+  // 메타 인프라 확장: 역할별 섹션 노출 (admin 전용 섹션 등). 빈 배열/미지정 = 모두 가능.
+  visibleByRoles?: string[];
+  // 메타 인프라 확장: 섹션 접기/펼치기. true 면 기본 펼침, 'collapsed' 면 기본 접힘.
+  collapsible?: boolean | 'collapsed';
 }
 
 // Phase 4 보강: 다이얼로그 크기 (max-w-md/lg/xl/2xl) — 큰 폼은 lg 이상
@@ -312,6 +316,20 @@ export interface FormRefineRule {
   path?: string[];                  // 에러를 표시할 필드 경로 (미지정 시 form-level)
 }
 
+// 메타 인프라 확장: 비동기 cross-field 검증 (예: BL 번호 DB 중복 체크)
+// MetaForm 의 submit 직전에 실행. 실패 시 onSubmit 호출 안 됨 + 에러 표시.
+// fn 은 true(통과) 또는 string(에러 메시지) 반환. 비동기 OK.
+export type AsyncFormRefinement = (
+  values: Record<string, unknown>,
+  context?: Record<string, unknown>,
+) => Promise<boolean | string>;
+
+export interface AsyncRefineRule {
+  ruleId: string;                   // registry.asyncRefinements 키
+  message: string;                  // fn 이 false 반환 시 표시 (string 반환 시 그게 우선)
+  path?: string[];                  // 에러를 표시할 필드 경로
+}
+
 export interface MetaFormConfig {
   id: string;                       // 'partner_form_v2' — registry/screen에서 참조
   title: { create: string; edit: string };
@@ -321,6 +339,8 @@ export interface MetaFormConfig {
   extraPayload?: ExtraPayloadConfig;
   // Phase 4 보강 Tier 3: 폼 단위 cross-field 검증 (예: previous_limit !== new_limit)
   refine?: FormRefineRule[];
+  // 메타 인프라 확장: 비동기 cross-field 검증 (DB 중복 체크 등). submit 직전 실행.
+  asyncRefine?: AsyncRefineRule[];
   // Phase 4 보강 Tier 3: 초안 localStorage 자동 저장 (debounced 500ms)
   // 신규 등록 모드에만 적용 — 편집 모드는 editData 가 진실 소스.
   draftAutoSave?: boolean;

@@ -17,7 +17,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { FieldConfig, MasterOptionSource, MetaFormConfig } from './types';
 import { GhostInput } from '@/components/forms/GhostInput';
 import {
-  applyFormatter, computedFormulas, enumDictionaries, formRefinements, formContentBlocks, fieldCascades, masterSources,
+  applyFormatter, computedFormulas, enumDictionaries, formRefinements, formContentBlocks, fieldCascades, masterSources, asyncRefinements,
 } from './registry';
 import { useAppStore } from '@/stores/appStore';
 
@@ -1162,8 +1162,32 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
   }, [JSON.stringify(watchedValues), allFields]);
 
   const isEdit = !!editData;
+  const [asyncRefineError, setAsyncRefineError] = useState<string>('');
+  // 메타 인프라 확장: 섹션별 collapsed 상태 (key = section idx)
+  const [collapsedSections, setCollapsedSections] = useState<Record<number, boolean>>({});
   const handle = async (data: FieldValues) => {
     const payload = buildPayload(data, config, allFields, extraContext);
+    setAsyncRefineError('');
+    // 메타 인프라 확장: 비동기 검증 (DB 중복 체크 등)
+    if (config.asyncRefine && config.asyncRefine.length > 0) {
+      for (const rule of config.asyncRefine) {
+        const fn = asyncRefinements[rule.ruleId];
+        if (!fn) {
+          console.warn(`[MetaForm] asyncRefinement not registered: ${rule.ruleId}`);
+          continue;
+        }
+        try {
+          const result = await fn(payload as Record<string, unknown>, extraContext);
+          if (result === true) continue;
+          const msg = typeof result === 'string' ? result : rule.message;
+          setAsyncRefineError(msg);
+          return; // 검증 실패 — submit 안 함
+        } catch (err) {
+          setAsyncRefineError(err instanceof Error ? err.message : '검증 중 오류 발생');
+          return;
+        }
+      }
+    }
     await onSubmit(payload);
     // Phase 4 보강 Tier 3: 저장 성공 시 draft 제거
     if (config.draftAutoSave && !editData) clearDraft(config.id);
@@ -1229,15 +1253,30 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
             </div>
           ) : null}
           {visibleSections.map((sec, idx) => {
+            // 메타 인프라 확장 — visibleByRoles 체크
+            if (sec.visibleByRoles && sec.visibleByRoles.length > 0) {
+              if (!role || !sec.visibleByRoles.includes(role)) return null;
+            }
+            // 메타 인프라 확장 — collapsible 처리
+            const collapsibleEnabled = sec.collapsible !== undefined && sec.collapsible !== false;
+            const isCollapsed = collapsibleEnabled
+              ? (collapsedSections[idx] ?? sec.collapsible === 'collapsed')
+              : false;
             const colsClass = sec.cols === 2 ? 'grid grid-cols-2 gap-3'
                             : sec.cols === 3 ? 'grid grid-cols-3 gap-3'
                             : 'space-y-3';
             return (
               <div key={`${currentStep}-${idx}`} className="space-y-2">
                 {sec.title && !wizardEnabled ? (
-                  <p className={`text-xs font-semibold ${TONE_TEXT_CLASS[sec.tone ?? 'ink']}`}>{sec.title}</p>
+                  <p className={`text-xs font-semibold ${TONE_TEXT_CLASS[sec.tone ?? 'ink']} ${collapsibleEnabled ? 'cursor-pointer flex items-center gap-1.5 hover:opacity-80' : ''}`}
+                    onClick={collapsibleEnabled
+                      ? () => setCollapsedSections((p) => ({ ...p, [idx]: !isCollapsed }))
+                      : undefined}>
+                    {collapsibleEnabled && <span className="text-[10px]">{isCollapsed ? '▶' : '▼'}</span>}
+                    {sec.title}
+                  </p>
                 ) : null}
-                {sec.contentBlock ? (() => {
+                {!isCollapsed && (sec.contentBlock ? (() => {
                   // Phase 4 — Step 3 prep: 임의 위젯 임베드 (OCR / 결제조건 파서 등)
                   const Block = formContentBlocks[sec.contentBlock.blockId];
                   if (!Block) {
@@ -1271,10 +1310,15 @@ export default function MetaForm({ config: defaultConfig, open, onOpenChange, on
                       />
                     ))}
                   </div>
-                )}
+                ))}
               </div>
             );
           })}
+          {asyncRefineError && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              {asyncRefineError}
+            </div>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
             {wizardEnabled && !isFirstStep ? (
