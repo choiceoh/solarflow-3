@@ -6,7 +6,7 @@ import (
 )
 
 // AssistantSession — AI 어시스턴트 대화 세션 한 건.
-// messages는 프런트의 ChatMessage[] (role/content/proposals?)를 JSONB로 그대로 보관.
+// messages는 프런트의 UIMessage[]를 JSONB로 그대로 보관.
 type AssistantSession struct {
 	ID        string          `json:"id"`
 	UserID    string          `json:"user_id"`

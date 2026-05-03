@@ -17,9 +17,9 @@ CREATE TABLE IF NOT EXISTS assistant_sessions (
 );
 
 COMMENT ON TABLE assistant_sessions IS
-  'AI 어시스턴트 대화 세션 — 사용자별 채팅 히스토리. messages는 ChatMessage[] JSONB.';
+  'AI 어시스턴트 대화 세션 — 사용자별 채팅 히스토리. messages는 UIMessage[] JSONB.';
 COMMENT ON COLUMN assistant_sessions.messages IS
-  'jsonb 배열 — 각 원소는 {role, content, proposals?} 구조의 ChatMessage';
+  'jsonb 배열 — 프런트 UIMessage 배열';
 
 CREATE INDEX IF NOT EXISTS idx_assistant_sessions_user_updated
   ON assistant_sessions(user_id, updated_at DESC);

@@ -4,14 +4,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { Maximize2 } from 'lucide-react';
 import { ActionChips } from './ActionChips';
-import { AiVariantsPanel } from './AiVariantsPanel';
 import { CollapsibleSection } from './CollapsibleSection';
 import { ComponentStoryModal } from './ComponentStoryModal';
 import { HandleOverlay } from './HandleOverlay';
 import { LayerPanel } from './LayerPanel';
 import { PreviewRolePanel } from './PreviewRolePanel';
 import { PseudoStateTabs } from './PseudoStateTabs';
-import { ScopePanel } from './ScopePanel';
 import { TokenPanel } from './TokenPanel';
 import { DraftsList } from './DraftsList';
 import { getLastTargetEl } from './inspectorTarget';
@@ -192,14 +190,8 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
         <ActionChips className={draft} onChange={setDraft} />
       </CollapsibleSection>
       <HandleOverlay target={target} className={draft} onChange={setDraft} />
-      <CollapsibleSection id="ai-variants" title="AI 변형 제안" defaultOpen={false}>
-        <AiVariantsPanel target={target} className={draft} onApply={setDraft} />
-      </CollapsibleSection>
       <CollapsibleSection id="pseudo" title="상태 변종 (호버·포커스 등)" defaultOpen={false}>
         <PseudoStateTabs />
-      </CollapsibleSection>
-      <CollapsibleSection id="scope" title="변경 범위" defaultOpen={false}>
-        <ScopePanel target={target} draft={draft} />
       </CollapsibleSection>
       {isAdmin && (
         <CollapsibleSection id="role" title="다른 역할로 보기" defaultOpen={false}>
