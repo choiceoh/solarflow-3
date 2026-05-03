@@ -16,6 +16,41 @@
 
 ---
 
+## 2026-05-03 세션 — 자료실 게시글/첨부 업로드 전환
+
+### 완료
+- 기존 `/library` 링크 허브를 제목·내용·첨부파일을 등록하는 자료실 게시판으로 교체
+- `library_posts` 테이블 마이그레이션 추가
+  - 제목 120자, 내용 5000자 검증
+  - 등록자/등록일/수정일 추적
+- `GET/POST/PUT/PATCH/DELETE /api/v1/library-posts` API 추가
+- 기존 `document_files` 첨부 시스템에 `entity_type=library_posts` 허용
+- 자료실 첨부는 PDF뿐 아니라 이미지, Office 문서, TXT/CSV/ZIP 업무 파일 업로드 가능
+- 자료실 글 삭제 시 연결된 첨부 메타데이터와 실제 파일을 함께 정리하도록 처리
+- 프론트엔드 자료실 화면 추가
+  - 제목/내용 작성
+  - 다중 첨부파일 선택 및 등록
+  - 자료 목록, 첨부 수, 최근 등록, 쓰기 권한 KPI 표시
+  - 첨부 다운로드 및 삭제
+- 개발 목업 API에 자료실 게시글/첨부 샘플 데이터 추가
+
+### 검증
+- `cd backend && go build ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공 — routes.golden 갱신
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지
+- `cd frontend && npm run test` 성공 — 8 files / 67 tests
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 80건 출력
+- `git diff --check` 성공
+- `graphify update .` 성공 — 3251 nodes / 5587 edges / 346 communities
+
+### 운영 반영 메모
+- Go 운영 바이너리 `backend/solarflow-go` 빌드 및 ad-hoc codesign 성공
+- 현재 세션에서 로컬 PostgreSQL 소켓과 `com.solarflow.*` launchd 서비스가 떠 있지 않아 `053_library_posts.sql` 적용과 서비스 재시작은 수행되지 않음
+
+---
+
 ## 2026-05-03 세션 — 자료실 사이드바 진입 추가
 
 ### 완료

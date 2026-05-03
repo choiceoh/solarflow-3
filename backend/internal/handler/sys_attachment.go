@@ -36,14 +36,32 @@ var allowedAttachmentEntities = map[string]bool{
 	"lc_records":      true,
 	"bl_shipments":    true,
 	"declarations":    true,
+	"library_posts":   true,
 	"outbounds":       true,
 	"sales":           true,
 	"orders":          true,
 	"receipts":        true,
 }
 
-// AttachmentHandler — 업무 데이터에 연결되는 PDF 첨부파일 처리
-// D-064: 현재는 PDF 보관/조회만 담당한다.
+var allowedAttachmentExtensions = map[string]string{
+	".pdf":  "application/pdf",
+	".png":  "image/png",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".webp": "image/webp",
+	".doc":  "application/msword",
+	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	".xls":  "application/vnd.ms-excel",
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	".ppt":  "application/vnd.ms-powerpoint",
+	".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	".txt":  "text/plain; charset=utf-8",
+	".csv":  "text/csv; charset=utf-8",
+	".zip":  "application/zip",
+}
+
+// AttachmentHandler — 업무 데이터에 연결되는 첨부파일 처리
+// D-064: PDF 원문 보관/조회에서 시작했고, 자료실은 일반 업무 첨부 확장자까지 허용한다.
 // TODO: Phase 5(D-064) — PDF 자동 데이터 입력은 파싱→미리보기→확정등록 흐름으로 별도 구현.
 type AttachmentHandler struct {
 	DB *supa.Client
@@ -114,7 +132,7 @@ func (h *AttachmentHandler) Access(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, attachmentAccessResponse{URL: url, ExpiresAt: expiresAt})
 }
 
-// Create — POST /api/v1/attachments — multipart/form-data PDF 업로드
+// Create — POST /api/v1/attachments — multipart/form-data 첨부파일 업로드
 func (h *AttachmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -148,10 +166,11 @@ func (h *AttachmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	originalName := sanitizeDisplayFileName(header.Filename)
 	if originalName == "" {
-		originalName = "document.pdf"
+		originalName = "attachment.pdf"
 	}
-	if !strings.EqualFold(filepath.Ext(originalName), ".pdf") {
-		response.RespondError(w, http.StatusBadRequest, "PDF 파일만 업로드할 수 있습니다")
+	ext, msg := validateAttachmentExtension(originalName)
+	if msg != "" {
+		response.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
 	if header.Size > maxAttachmentBytes {
@@ -160,7 +179,7 @@ func (h *AttachmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fileID := uuid.NewString()
-	storedName := fileID + ".pdf"
+	storedName := fileID + ext
 	dir := filepath.Join(attachmentRoot(), entityType, entityID)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		log.Printf("[첨부파일 디렉터리 생성 실패] %v", err)
@@ -190,10 +209,7 @@ func (h *AttachmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/pdf"
-	}
+	contentType := normalizeAttachmentContentType(header.Header.Get("Content-Type"), ext)
 
 	req := model.CreateDocumentFileRequest{
 		EntityType:   entityType,
@@ -288,11 +304,13 @@ func (h *AttachmentHandler) serveFile(w http.ResponseWriter, r *http.Request, fi
 	}
 	defer f.Close()
 
-	contentType := "application/pdf"
+	contentType := "application/octet-stream"
 	if disposition == "attachment" {
 		contentType = "application/octet-stream"
 	} else if file.ContentType != nil && *file.ContentType != "" {
 		contentType = *file.ContentType
+	} else if guessed := mime.TypeByExtension(strings.ToLower(filepath.Ext(file.OriginalName))); guessed != "" {
+		contentType = guessed
 	}
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": file.OriginalName}))
@@ -384,6 +402,33 @@ func validateAttachmentTarget(entityType, entityID string) string {
 		return "entity_id는 UUID 형식이어야 합니다"
 	}
 	return ""
+}
+
+func validateAttachmentExtension(name string) (string, string) {
+	ext := strings.ToLower(filepath.Ext(name))
+	if ext == "" {
+		return "", "첨부파일 확장자를 확인할 수 없습니다"
+	}
+	if !strings.EqualFold(ext, ".pdf") {
+		if _, ok := allowedAttachmentExtensions[ext]; !ok {
+			return "", "지원하지 않는 첨부파일 형식입니다"
+		}
+	}
+	return ext, ""
+}
+
+func normalizeAttachmentContentType(headerValue, ext string) string {
+	headerValue = strings.TrimSpace(headerValue)
+	if headerValue != "" && headerValue != "application/octet-stream" {
+		return headerValue
+	}
+	if value := allowedAttachmentExtensions[ext]; value != "" {
+		return value
+	}
+	if value := mime.TypeByExtension(ext); value != "" {
+		return value
+	}
+	return "application/octet-stream"
 }
 
 func attachmentRoot() string {

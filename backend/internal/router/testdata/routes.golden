@@ -11,6 +11,7 @@ DELETE  /api/v1/declarations/{id}
 DELETE  /api/v1/expenses/{id}
 DELETE  /api/v1/inventory/allocations/{id}
 DELETE  /api/v1/lcs/{id}
+DELETE  /api/v1/library-posts/{id}
 DELETE  /api/v1/manufacturers/{id}
 DELETE  /api/v1/module-demand-forecasts/{id}
 DELETE  /api/v1/notes/{id}
@@ -72,6 +73,8 @@ GET     /api/v1/inventory/allocations/{id}
 GET     /api/v1/lcs/
 GET     /api/v1/lcs/{id}
 GET     /api/v1/lcs/{id}/lines
+GET     /api/v1/library-posts/
+GET     /api/v1/library-posts/{id}
 GET     /api/v1/limit-changes/
 GET     /api/v1/manufacturers/
 GET     /api/v1/manufacturers/{id}
@@ -127,6 +130,7 @@ PATCH   /api/v1/intercompany-requests/{id}/cancel
 PATCH   /api/v1/intercompany-requests/{id}/fulfill
 PATCH   /api/v1/intercompany-requests/{id}/receive
 PATCH   /api/v1/intercompany-requests/{id}/reject
+PATCH   /api/v1/library-posts/{id}
 PATCH   /api/v1/manufacturers/{id}
 PATCH   /api/v1/manufacturers/{id}/status
 PATCH   /api/v1/partner-activities/{id}/followup
@@ -178,6 +182,7 @@ POST    /api/v1/import/sales
 POST    /api/v1/intercompany-requests/
 POST    /api/v1/inventory/allocations/
 POST    /api/v1/lcs/
+POST    /api/v1/library-posts/
 POST    /api/v1/limit-changes/
 POST    /api/v1/manufacturers/
 POST    /api/v1/module-demand-forecasts/
@@ -212,6 +217,7 @@ PUT     /api/v1/expenses/{id}
 PUT     /api/v1/export/amaranth/jobs/{id}/status
 PUT     /api/v1/inventory/allocations/{id}
 PUT     /api/v1/lcs/{id}
+PUT     /api/v1/library-posts/{id}
 PUT     /api/v1/manufacturers/{id}
 PUT     /api/v1/module-demand-forecasts/{id}
 PUT     /api/v1/notes/{id}
