@@ -73,6 +73,8 @@ const config: ListScreenConfig = {
     { blockId: 'partner_type_breakdown', props: { title: '거래 유형' } },
     { blockId: 'partner_recent', props: { title: '최근 표시', limit: 4 } },
   ],
+  // Phase 4 follow-up: 행 클릭 → MetaDetail (registry.detailComponents.partner)
+  onRowClick: { kind: 'detail', detailId: 'partner', idField: 'partner_id' },
   emptyState: { message: '등록된 거래처가 없습니다', actionId: 'create' },
   forms: [
     {

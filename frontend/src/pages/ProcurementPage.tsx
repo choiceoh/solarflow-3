@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 
 import { useAppStore } from '@/stores/appStore';
-import { usePOList, useLCList, useTTList, usePriceHistoryList } from '@/hooks/useProcurement';
+import { usePOList, useLCList, useTTList } from '@/hooks/useProcurement';
 import { fetchWithAuth } from '@/lib/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SkeletonRows from '@/components/common/SkeletonRows';
@@ -17,11 +17,9 @@ import LCForm from '@/components/procurement/LCForm';
 import TTListTable from '@/components/procurement/TTListTable';
 import TTForm from '@/components/procurement/TTForm';
 import DepositStatusPanel from '@/components/procurement/DepositStatusPanel';
-import PriceHistoryTable from '@/components/procurement/PriceHistoryTable';
-import PriceHistoryForm from '@/components/procurement/PriceHistoryForm';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { PO_STATUS_LABEL, CONTRACT_TYPE_LABEL, CONTRACT_TYPES_ACTIVE, LC_STATUS_LABEL, TT_STATUS_LABEL } from '@/types/procurement';
-import type { PurchaseOrder, POLineItem, LCRecord, TTRemittance, PriceHistory, POStatus, LCStatus, TTStatus } from '@/types/procurement';
+import type { PurchaseOrder, LCRecord, TTRemittance, POStatus, LCStatus, TTStatus } from '@/types/procurement';
 import type { Manufacturer, Bank } from '@/types/masters';
 import { useBLList } from '@/hooks/useInbound';
 import BLListTable from '@/components/inbound/BLListTable';
@@ -31,16 +29,15 @@ import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL, type InboundType, type BLStatus } from '@/types/inbound';
 import { CardB, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
-import { autoSpark } from '@/templates/autoSpark';
+import { flatSparkFromValue, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
 
-const PROCUREMENT_TABS = new Set(['po', 'tt', 'lc', 'bl', 'price']);
+const PROCUREMENT_TABS = new Set(['po', 'tt', 'lc', 'bl']);
 
 const PROC_TAB_OPTIONS = [
   { key: 'po', label: 'PO' },
   { key: 'tt', label: '계약금' },
   { key: 'lc', label: 'LC' },
   { key: 'bl', label: 'B/L' },
-  { key: 'price', label: '단가' },
 ];
 
 type ProcurementMetric = {
@@ -90,6 +87,13 @@ export default function ProcurementPage() {
   const navigate = useNavigate();
   const initialTab = new URLSearchParams(location.search).get('tab') ?? 'po';
   const [activeTab, setActiveTab] = useState(PROCUREMENT_TABS.has(initialTab) ? initialTab : 'po');
+
+  // 단가 탭은 /purchase-history로 통합 — query param ?tab=price 진입 시 새 페이지로 리다이렉트
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get('tab') === 'price') {
+      navigate('/purchase-history', { replace: true });
+    }
+  }, [location.search, navigate]);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
   // 계약금 탭용 전체 PO 목록 (필터 없음) — usePOList hook으로 관리하여 취소 처리 시 reloadPoList()로 동기화
@@ -105,6 +109,13 @@ export default function ProcurementPage() {
     const nextTab = new URLSearchParams(location.search).get('tab') ?? 'po';
     if (PROCUREMENT_TABS.has(nextTab)) setActiveTab(nextTab);
   }, [location.search]);
+  // /purchase-history → /procurement?po_id=... 딥링크: pos 로드 후 자동 선택
+  useEffect(() => {
+    const targetId = new URLSearchParams(location.search).get('po_id');
+    if (!targetId || poList.length === 0) return;
+    const target = poList.find((p) => p.po_id === targetId);
+    if (target) setSelectedPO(target);
+  }, [location.search, poList]);
   const [poFormOpen, setPoFormOpen] = useState(false);
   const poFilters: Record<string, string> = {};
   if (poStatusFilter) poFilters.status = poStatusFilter;
@@ -154,12 +165,6 @@ export default function ProcurementPage() {
 
   const [depositMfgFilter, setDepositMfgFilter] = useState('');
 
-  const [phMfgFilter, setPhMfgFilter] = useState('');
-  const [phFormOpen, setPhFormOpen] = useState(false);
-  const [editPH, setEditPH] = useState<PriceHistory | null>(null);
-  const { data: phs, loading: phLoading, reload: reloadPH } = usePriceHistoryList(phMfgFilter ? { manufacturer_id: phMfgFilter } : {});
-  const [backfilling, setBackfilling] = useState(false);
-  const [backfillResult, setBackfillResult] = useState<{ created: number; skipped: number; failed: number } | null>(null);
   const [autoCompletedMsg, setAutoCompletedMsg] = useState<string | null>(null);
 
   // 우측 슬라이드 패널 — 드래그 리사이즈
@@ -366,7 +371,6 @@ export default function ProcurementPage() {
             method: 'POST', body: JSON.stringify(phPayload),
           }).catch(() => {});
         }
-        reloadPH();
       }
 
       // ── 변경계약 등록 시 원계약 자동 완료 처리 ──
@@ -452,87 +456,6 @@ export default function ProcurementPage() {
   const handleCreateTT = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/tts', { method: 'POST', body: JSON.stringify(d) }); reloadTT(); };
   const handleUpdateTT = async (d: Record<string, unknown>) => { if (!editTT) return; await fetchWithAuth(`/api/v1/tts/${editTT.tt_id}`, { method: 'PUT', body: JSON.stringify(d) }); setEditTT(null); reloadTT(); };
   const handleDeleteTT = async (ttId: string) => { await fetchWithAuth(`/api/v1/tts/${ttId}`, { method: 'DELETE' }); reloadTT(); };
-  const handleCreatePH = async (d: Record<string, unknown>) => { await fetchWithAuth('/api/v1/price-histories', { method: 'POST', body: JSON.stringify(d) }); reloadPH(); };
-  const handleUpdatePH = async (d: Record<string, unknown>) => { if (!editPH) return; await fetchWithAuth(`/api/v1/price-histories/${editPH.price_history_id}`, { method: 'PUT', body: JSON.stringify(d) }); setEditPH(null); reloadPH(); };
-
-  // 기존 PO → 단가이력 일괄 생성 (신규 등록 이전 PO 소급 처리)
-  const handleBackfillPriceHistory = async () => {
-    if (!selectedCompanyId) return;
-    setBackfilling(true);
-    setBackfillResult(null);
-    let created = 0, skipped = 0, failed = 0;
-    try {
-      // 기존 단가이력 조회 (중복 방지: product_id + related_po_id 조합)
-      const existingPH = await fetchWithAuth<PriceHistory[]>(
-        `/api/v1/price-histories?company_id=${selectedCompanyId}`
-      ).catch(() => [] as PriceHistory[]);
-      const existingKeys = new Set(
-        existingPH.map((ph) => `${ph.product_id}__${ph.related_po_id ?? ''}`)
-      );
-
-      // 전체 PO 조회
-      const allPos = await fetchWithAuth<PurchaseOrder[]>(
-        `/api/v1/pos?company_id=${selectedCompanyId}`
-      );
-
-      // 각 PO의 라인 병렬 조회
-      const poLines = await Promise.all(
-        allPos.map((po) =>
-          fetchWithAuth<POLineItem[]>(`/api/v1/pos/${po.po_id}/lines`)
-            .then((lines) => ({ po, lines }))
-            .catch(() => ({ po, lines: [] as POLineItem[] }))
-        )
-      );
-
-      for (const { po, lines } of poLines) {
-        for (const line of lines) {
-          const specWp = line.products?.spec_wp ?? line.spec_wp;
-          if (!specWp || specWp <= 0) { skipped++; continue; }
-
-          // 단가 계산: total / (qty × specWp) = USD/Wp
-          let pricePerWpUsd: number | undefined;
-          if (line.total_amount_usd && line.quantity && specWp) {
-            pricePerWpUsd = line.total_amount_usd / (line.quantity * specWp);
-          } else if (line.unit_price_usd && specWp) {
-            pricePerWpUsd = line.unit_price_usd / specWp;
-          }
-          if (!pricePerWpUsd || pricePerWpUsd <= 0) { skipped++; continue; }
-
-          // 중복 스킵
-          const key = `${line.product_id}__${po.po_id}`;
-          if (existingKeys.has(key)) { skipped++; continue; }
-
-          const mw = (line.quantity * specWp) / 1_000_000;
-          const memoParts = [
-            po.incoterms && `선적조건: ${po.incoterms}`,
-            po.payment_terms && `결제조건: ${po.payment_terms}`,
-            mw > 0 && `발주용량: ${mw.toFixed(3)}MW`,
-          ].filter(Boolean);
-
-          try {
-            await fetchWithAuth('/api/v1/price-histories', {
-              method: 'POST',
-              body: JSON.stringify({
-                product_id: line.product_id,
-                manufacturer_id: po.manufacturer_id,
-                company_id: po.company_id,
-                change_date: po.contract_date ?? new Date().toISOString().slice(0, 10),
-                new_price: Number(pricePerWpUsd.toFixed(6)),
-                reason: '최초계약',
-                related_po_id: po.po_id,
-                memo: memoParts.length > 0 ? memoParts.join(' | ') : undefined,
-              }),
-            });
-            existingKeys.add(key);
-            created++;
-          } catch { failed++; }
-        }
-      }
-    } catch { failed++; }
-    setBackfilling(false);
-    setBackfillResult({ created, skipped, failed });
-    reloadPH();
-  };
 
   const handleBLDropZoneDrag = (event: ReactDragEvent<HTMLDivElement>) => {
     if (!hasDraggedFiles(event.dataTransfer)) return;
@@ -565,42 +488,43 @@ export default function ProcurementPage() {
     activeTab === 'lc' ? 'L/C 개설 · 한도' :
     activeTab === 'bl' ? 'B/L · 입고 진행' :
     activeTab === 'tt' ? '계약금 · T/T 송금' :
-    activeTab === 'price' ? '단가이력' :
     'P/O 발주 관리';
   const pageSub =
     activeTab === 'lc' ? `${lcRows.length}건 · USD ${fmtUsdM(lcTotalUsd)}M` :
     activeTab === 'bl' ? `${blRows.length}건 · 진행 ${blActiveCount}건` :
     activeTab === 'tt' ? `${tts.length}건 · 완료 USD ${fmtUsdM(ttCompletedUsd)}M` :
-    activeTab === 'price' ? `${phs.length}건 · 제조사 단가 추적` :
     `${poRows.length}건 · ${fmtMw(poTotalMw)} MW`;
+  // KPI sparkline 시계열 — 데이터 범위 기반 (최근 6개월 캡, sparkUtils 참고).
+  const lcOpenSpark = monthlyCount(lcRows, (l) => l.open_date);
+  const lcAmountSpark = monthlyTrend(lcRows, (l) => l.open_date, (l) => (l.amount_usd ?? 0) / 1_000_000);
+  const blDateOf = (b: typeof blRows[number]) => b.actual_arrival ?? b.eta ?? b.etd ?? null;
+  const blAllSpark = monthlyCount(blRows, blDateOf);
+  const ttSpark = monthlyCount(tts, (t) => t.remit_date);
+  const ttAmountSpark = monthlyTrend(tts.filter(t => t.status === 'completed'), (t) => t.remit_date, (t) => (t.amount_usd ?? 0) / 1_000_000);
+  const poSpark = monthlyCount(poRows, (p) => p.contract_date);
+
   const metrics: ProcurementMetric[] =
     activeTab === 'lc' ? [
-      { lbl: 'L/C 전체', v: String(lcRows.length), u: '건', sub: `사용중 ${lcOpenedCount}건`, tone: 'solar' as const },
-      { lbl: '개설 금액', v: fmtUsdM(lcTotalUsd), u: 'M$', sub: '활성 필터 기준', tone: 'warn' as const, delta: `${lcOpenedCount} active` },
+      { lbl: 'L/C 전체', v: String(lcRows.length), u: '건', sub: `사용중 ${lcOpenedCount}건`, tone: 'solar' as const, spark: lcOpenSpark },
+      { lbl: '개설 금액', v: fmtUsdM(lcTotalUsd), u: 'M$', sub: '활성 필터 기준', tone: 'warn' as const, spark: lcAmountSpark },
       { lbl: '만기 30일', v: String(lcMaturitySoon.length), u: '건', sub: lcMaturitySoon[0]?.lc_number ?? '긴급 만기 없음', tone: 'info' as const },
       { lbl: '은행', v: String(new Set(lcRows.map(lc => lc.bank_id)).size), u: '곳', sub: '한도 사용처', tone: 'ink' as const },
     ] :
     activeTab === 'bl' ? [
-      { lbl: 'B/L 전체', v: String(blRows.length), u: '건', sub: `진행 ${blActiveCount}건`, tone: 'solar' as const },
-      { lbl: '선적/입항', v: String(blShippingCount), u: '건', sub: '해상 운송 구간', tone: 'info' as const },
-      { lbl: '통관중', v: String(blCustomsCount), u: '건', sub: '면장 확인 필요', tone: 'warn' as const },
-      { lbl: '해외직수입', v: String(blRows.filter(bl => bl.inbound_type === 'import').length), u: '건', sub: 'OCR 자동입력 대상', tone: 'pos' as const },
+      { lbl: 'B/L 전체', v: String(blRows.length), u: '건', sub: `진행 ${blActiveCount}건`, tone: 'solar' as const, spark: blAllSpark },
+      { lbl: '선적/입항', v: String(blShippingCount), u: '건', sub: '해상 운송 구간', tone: 'info' as const, spark: monthlyCount(blRows.filter(b => b.status === 'shipping' || b.status === 'arrived'), blDateOf) },
+      { lbl: '통관중', v: String(blCustomsCount), u: '건', sub: '면장 확인 필요', tone: 'warn' as const, spark: monthlyCount(blRows.filter(b => b.status === 'customs'), blDateOf) },
+      { lbl: '해외직수입', v: String(blRows.filter(bl => bl.inbound_type === 'import').length), u: '건', sub: 'OCR 자동입력 대상', tone: 'pos' as const, spark: monthlyCount(blRows.filter(bl => bl.inbound_type === 'import'), blDateOf) },
     ] :
     activeTab === 'tt' ? [
-      { lbl: 'T/T 이력', v: String(tts.length), u: '건', sub: '계약금/잔금 송금', tone: 'solar' as const },
-      { lbl: '완료 금액', v: fmtUsdM(ttCompletedUsd), u: 'M$', sub: 'completed 기준', tone: 'pos' as const },
-      { lbl: '대기', v: String(tts.filter(tt => tt.status === 'planned').length), u: '건', sub: '송금 예정', tone: 'warn' as const },
+      { lbl: 'T/T 이력', v: String(tts.length), u: '건', sub: '계약금/잔금 송금', tone: 'solar' as const, spark: ttSpark },
+      { lbl: '완료 금액', v: fmtUsdM(ttCompletedUsd), u: 'M$', sub: 'completed 기준', tone: 'pos' as const, spark: ttAmountSpark },
+      { lbl: '대기', v: String(tts.filter(tt => tt.status === 'planned').length), u: '건', sub: '송금 예정', tone: 'warn' as const, spark: monthlyCount(tts.filter(t => t.status === 'planned'), (t) => t.remit_date) },
       { lbl: 'PO 연결', v: String(new Set(tts.map(tt => tt.po_id)).size), u: '건', sub: '계약금 집계 대상', tone: 'ink' as const },
-    ] :
-    activeTab === 'price' ? [
-      { lbl: '단가이력', v: String(phs.length), u: '건', sub: '제조사별 USD/Wp', tone: 'solar' as const },
-      { lbl: '제조사', v: String(new Set(phs.map(ph => ph.manufacturer_id)).size), u: '곳', sub: '가격 추적 대상', tone: 'info' as const },
-      { lbl: '소급 생성', v: backfillResult ? String(backfillResult.created) : '—', u: '건', sub: '기존 PO 반영', tone: 'warn' as const },
-      { lbl: '최근 단가', v: phs[0]?.new_price != null ? phs[0].new_price.toFixed(3) : '—', u: '$/Wp', sub: phs[0]?.manufacturer_name ?? '데이터 없음', tone: 'ink' as const },
     ] : [
-      { lbl: '진행 P/O', v: String(poActiveCount), u: '건', sub: `${fmtMw(poTotalMw)} MW · 전체 ${poRows.length}건`, tone: 'solar' as const },
-      { lbl: 'L/C 연결', v: String(lcOpenedCount), u: '건', sub: `USD ${fmtUsdM(lcTotalUsd)}M`, tone: 'info' as const, spark: [2, 2, 3, 3, 4, 4, 5, 6] },
-      { lbl: '운송중', v: String(poShippingCount), u: '건', sub: '입고 전환 대기', tone: 'warn' as const },
+      { lbl: '진행 P/O', v: String(poActiveCount), u: '건', sub: `${fmtMw(poTotalMw)} MW · 전체 ${poRows.length}건`, tone: 'solar' as const, spark: poSpark },
+      { lbl: 'L/C 연결', v: String(lcOpenedCount), u: '건', sub: `USD ${fmtUsdM(lcTotalUsd)}M`, tone: 'info' as const, spark: lcOpenSpark },
+      { lbl: '운송중', v: String(poShippingCount), u: '건', sub: '입고 전환 대기', tone: 'warn' as const, spark: monthlyCount(poRows.filter(p => p.status === 'shipping' || p.status === 'in_progress'), (p) => p.contract_date) },
       { lbl: '계약 유형', v: String(new Set(poRows.map(po => po.contract_type)).size), u: '종', sub: 'spot/frame 관리', tone: 'pos' as const },
     ];
 
@@ -628,8 +552,8 @@ export default function ProcurementPage() {
               options: CONTRACT_TYPES_ACTIVE.map(({ value, label }) => ({ value, label })),
             },
           ]} />
-          <Button size="xs" variant="outline" onClick={() => handleTabChange('price')}><History className="mr-1 h-3 w-3" />단가이력</Button>
-          <Button size="xs" onClick={() => setPoFormOpen(true)}><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
+          <Button size="xs" variant="outline" onClick={() => navigate('/purchase-history')}><History className="mr-1 h-3 w-3" />구매 이력</Button>
+          <Button size="xs" onClick={() => setPoFormOpen(true)} data-onboarding-step="po.list.add"><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
         </>
       )}
       {activeTab === 'lc' && !lcFormOpen && (
@@ -654,7 +578,7 @@ export default function ProcurementPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <Button size="xs" onClick={() => openLCWork()}><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
+          <Button size="xs" onClick={() => openLCWork()} data-onboarding-step="lc.list.open"><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
         </>
       )}
       {activeTab === 'bl' && !blFormOpen && (
@@ -679,28 +603,13 @@ export default function ProcurementPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <ExcelToolbar
-            type="inbound"
-            onImportComplete={() => { reloadBL(); setBlsVersion(v => v + 1); }}
-            onNew={() => openBLWork()}
-          />
-        </>
-      )}
-      {activeTab === 'price' && (
-        <>
-          <FilterButton items={[
-            {
-              label: '제조사',
-              value: phMfgFilter,
-              onChange: setPhMfgFilter,
-              options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
-            },
-          ]} />
-          <Button size="xs" variant="outline" onClick={() => handleTabChange('po')}>PO로 돌아가기</Button>
-          <Button size="xs" variant="outline" onClick={handleBackfillPriceHistory} disabled={backfilling}>
-            {backfilling ? '생성 중…' : '기존 PO에서 일괄 생성'}
-          </Button>
-          <Button size="xs" onClick={() => { setEditPH(null); setPhFormOpen(true); }}><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
+          <span data-onboarding-step="bl.list.inbound">
+            <ExcelToolbar
+              type="inbound"
+              onImportComplete={() => { reloadBL(); setBlsVersion(v => v + 1); }}
+              onNew={() => openBLWork()}
+            />
+          </span>
         </>
       )}
       <div style={{ flex: 1 }} />
@@ -749,7 +658,7 @@ export default function ProcurementPage() {
                 sub={metric.sub}
                 tone={metric.tone}
                 delta={metric.delta}
-                spark={metric.spark ?? autoSpark(metric.lbl)}
+                spark={metric.spark ?? flatSparkFromValue(metric.v)}
               />
             ))}
           </div>
@@ -903,24 +812,6 @@ export default function ProcurementPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="price" className="space-y-3">
-          {/* 일괄 생성 결과 배너 */}
-          {backfillResult && (
-            <div className={`flex items-center justify-between rounded-md px-4 py-2.5 text-sm border ${backfillResult.created > 0 ? 'bg-green-50 border-green-200 text-green-800' : 'bg-muted border-muted-foreground/20 text-muted-foreground'}`}>
-              <span>
-                {backfillResult.created > 0
-                  ? `✓ ${backfillResult.created}건 단가이력 생성 완료`
-                  : '새로 생성할 단가이력이 없습니다'}
-                {backfillResult.skipped > 0 && <span className="ml-2 opacity-70">(이미 존재 {backfillResult.skipped}건 건너뜀)</span>}
-                {backfillResult.failed > 0 && <span className="ml-2 text-red-600">{backfillResult.failed}건 실패</span>}
-              </span>
-              <button className="text-xs opacity-50 hover:opacity-100 ml-4" onClick={() => setBackfillResult(null)}>✕</button>
-            </div>
-          )}
-
-          {phLoading ? <LoadingSpinner /> : <PriceHistoryTable items={phs} onEdit={(ph) => { setEditPH(ph); setPhFormOpen(true); }} onNew={() => { setEditPH(null); setPhFormOpen(true); }} />}
-          <PriceHistoryForm open={phFormOpen} onOpenChange={setPhFormOpen} onSubmit={editPH ? handleUpdatePH : handleCreatePH} editData={editPH} />
-        </TabsContent>
               </Tabs>
             </div>
           </CardB>
@@ -1065,23 +956,14 @@ export default function ProcurementPage() {
             </>
           )}
 
-          {(activeTab === 'tt' || activeTab === 'price') && (
-            <>
-              <RailBlock title="구매 데이터 연결" count={activeTab === 'tt' ? `${tts.length} T/T` : `${phs.length} prices`}>
-                <div className="space-y-2 text-[11.5px] text-[var(--ink-2)]">
-                  <div className="flex justify-between"><span>P/O</span><span className="mono">{poRows.length}</span></div>
-                  <div className="flex justify-between"><span>L/C</span><span className="mono">{lcRows.length}</span></div>
-                  <div className="flex justify-between"><span>B/L</span><span className="mono">{blRows.length}</span></div>
-                </div>
-              </RailBlock>
-              <RailBlock title="단가 추이" last>
-                <Sparkline data={[0.252, 0.249, 0.247, 0.246, 0.244, 0.243, 0.241, 0.240]} w={220} h={42} color="var(--solar-2)" area />
-                <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
-                  <span>최근 <span className="font-bold text-[var(--ink)]">{phs[0]?.new_price?.toFixed(3) ?? '—'}</span> $/Wp</span>
-                  <span className="font-bold text-[var(--pos)]">tracking</span>
-                </div>
-              </RailBlock>
-            </>
+          {activeTab === 'tt' && (
+            <RailBlock title="구매 데이터 연결" count={`${tts.length} T/T`} last>
+              <div className="space-y-2 text-[11.5px] text-[var(--ink-2)]">
+                <div className="flex justify-between"><span>P/O</span><span className="mono">{poRows.length}</span></div>
+                <div className="flex justify-between"><span>L/C</span><span className="mono">{lcRows.length}</span></div>
+                <div className="flex justify-between"><span>B/L</span><span className="mono">{blRows.length}</span></div>
+              </div>
+            </RailBlock>
           )}
         </aside>
       </div>

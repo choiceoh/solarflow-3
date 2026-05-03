@@ -49,7 +49,7 @@ export default function ConfirmDialog({
             </div>
             <div className="min-w-0 flex-1">
               <DialogTitle>{title}</DialogTitle>
-              <DialogDescription className="mt-1">{description}</DialogDescription>
+              <DialogDescription className="mt-1 whitespace-pre-line">{description}</DialogDescription>
             </div>
           </div>
         </DialogHeader>

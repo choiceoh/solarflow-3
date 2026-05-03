@@ -2,17 +2,19 @@
 // 기본 정보·메트릭·필터·컬럼·액션·rail을 인라인 편집. JSON 탭은 고급/폴백.
 // 분기마다 ./{ColumnsTab,MetricsTab,FiltersTab,ActionsTab,RailTab}.tsx에 행 렌더러 위치.
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import type { ListScreenConfig } from '@/templates/types';
-import { TabButton } from './ArrayEditor';
+import type { ColumnConfig, ListScreenConfig } from '@/templates/types';
+import { TabButton, FieldInput } from './ArrayEditor';
 import { ColumnsTab } from './ColumnsTab';
 import { MetricsTab } from './MetricsTab';
 import { FiltersTab } from './FiltersTab';
 import { ActionsTab } from './ActionsTab';
 import { RailTab } from './RailTab';
+import { EditorWithPanel, PanelGroup, PanelSelectionHeader } from './RightPanel';
+import { BooleanPicker, EndpointPicker, IdFieldPicker, AllowedSizesPicker, InlineEditTypePicker, InlineEditOptionsPicker } from './Pickers';
 
 type Tab = 'basic' | 'metrics' | 'filters' | 'columns' | 'actions' | 'rail' | 'json';
 
@@ -23,9 +25,19 @@ export interface VisualScreenEditorProps {
   onJsonDraftChange: (next: string) => void;
 }
 
-export default function VisualScreenEditor({
-  value, onChange, jsonDraft, onJsonDraftChange,
-}: VisualScreenEditorProps) {
+// 레이아웃 wrapper — 본체 (Body) 와 우측 패널 (EditorWithPanel) 을 합침.
+// 외부 (UIConfigEditorPage) 는 default export 사용. 재귀 (TabbedList 안) 은 Body 사용.
+export default function VisualScreenEditor(props: VisualScreenEditorProps) {
+  return <VisualScreenEditorWithPanel {...props} />;
+}
+
+// 본체만 — 우측 패널 없이 main content 만 렌더. TabbedList recursive editor 용.
+// L1 list-level 설정 (pagination 등) 은 상위가 별도로 노출 — 또는 JSON 탭에서.
+export function VisualScreenEditorBody({
+  value, onChange, jsonDraft, onJsonDraftChange, onSelectColumn,
+}: VisualScreenEditorProps & {
+  onSelectColumn?: (idx: number | null) => void;
+}) {
   const [tab, setTab] = useState<Tab>('basic');
 
   return (
@@ -54,7 +66,7 @@ export default function VisualScreenEditor({
         {tab === 'basic' && <BasicTab value={value} onChange={onChange} />}
         {tab === 'metrics' && <MetricsTab value={value} onChange={onChange} />}
         {tab === 'filters' && <FiltersTab value={value} onChange={onChange} />}
-        {tab === 'columns' && <ColumnsTab value={value} onChange={onChange} />}
+        {tab === 'columns' && <ColumnsTab value={value} onChange={onChange} onSelectColumn={onSelectColumn} />}
         {tab === 'actions' && <ActionsTab value={value} onChange={onChange} />}
         {tab === 'rail' && <RailTab value={value} onChange={onChange} />}
         {tab === 'json' && (
@@ -67,6 +79,197 @@ export default function VisualScreenEditor({
         )}
       </div>
     </div>
+  );
+}
+
+// 우측 패널 포함 wrapper — 일반적인 standalone 편집기 모드.
+function VisualScreenEditorWithPanel(props: VisualScreenEditorProps) {
+  const { value, onChange } = props;
+  // Phase 4 follow-up #1: 선택된 컬럼 idx (selection-driven 우측 패널)
+  const [selectedColumnIdx, setSelectedColumnIdx] = useState<number | null>(null);
+  const selectedColumn = selectedColumnIdx !== null ? value.columns[selectedColumnIdx] : null;
+
+  const main = (
+    <VisualScreenEditorBody {...props} onSelectColumn={setSelectedColumnIdx} />
+  );
+
+  // 우측 패널 — 컬럼 선택 시 selection-driven, 아니면 list-level
+  const panel = selectedColumn
+    ? (
+      <ColumnPanel
+        col={selectedColumn}
+        onChange={(next) => onChange({
+          ...value,
+          columns: value.columns.map((c, i) => i === selectedColumnIdx ? next : c),
+        })}
+        onBack={() => setSelectedColumnIdx(null)}
+      />
+    )
+    : <ListLevelPanel value={value} onChange={onChange} />;
+
+  const panelTitle = selectedColumn
+    ? `선택: ${selectedColumn.label}`
+    : '⚙ 리스트 화면 설정';
+
+  return <EditorWithPanel panel={panel} panelTitle={panelTitle}>{main}</EditorWithPanel>;
+}
+
+// ─── 우측 패널: 선택된 컬럼의 L3/L4 (selection-driven) ─────────────────────
+// Phase 4 follow-up #1 — Q8-B 풀 구현. 컬럼 행 ⚙ 클릭 → 이 패널로 전환.
+function ColumnPanel({
+  col, onChange, onBack,
+}: {
+  col: ColumnConfig;
+  onChange: (next: ColumnConfig) => void;
+  onBack: () => void;
+}) {
+  return (
+    <>
+      <PanelSelectionHeader title={col.label || col.key} subtitle={`key: ${col.key}`} onBack={onBack} />
+      <PanelGroup title="기본">
+        <FieldInput label="key" value={col.key} mono onChange={(v) => onChange({ ...col, key: v })} />
+        <FieldInput label="label" value={col.label} onChange={(v) => onChange({ ...col, label: v })} />
+        <FieldInput label="width (예: 120px)" value={col.width ?? ''} mono
+          onChange={(v) => onChange({ ...col, width: v || undefined })} />
+        <FieldInput label="fallback (빈 값, 기본 '—')" value={col.fallback ?? ''}
+          onChange={(v) => onChange({ ...col, fallback: v || undefined })} />
+      </PanelGroup>
+      <PanelGroup title="가시성·정렬" defaultOpen={false}>
+        <BooleanPicker
+          label="sortable"
+          value={col.sortable ?? false}
+          onChange={(v) => onChange({ ...col, sortable: v || undefined })}
+          hint="헤더 클릭 → asc → desc → 해제"
+        />
+        <BooleanPicker
+          label="hideable"
+          value={col.hideable ?? false}
+          onChange={(v) => onChange({ ...col, hideable: v || undefined })}
+          hint="컬럼 가시성 메뉴에 노출"
+        />
+        <BooleanPicker
+          label="hiddenByDefault"
+          value={col.hiddenByDefault ?? false}
+          onChange={(v) => onChange({ ...col, hiddenByDefault: v || undefined })}
+          hint="처음 페이지 진입 시 숨김 (admin 이 toggle 로 표시)"
+        />
+      </PanelGroup>
+      <PanelGroup title="인라인 편집 (셀 클릭)" defaultOpen={false}>
+        <BooleanPicker
+          label="inlineEditable"
+          value={col.inlineEditable ?? false}
+          onChange={(v) => onChange({ ...col, inlineEditable: v || undefined })}
+          hint="ListScreenConfig.inlineEdit.enabled 도 활성화 필요"
+        />
+        {col.inlineEditable && (
+          <>
+            <InlineEditTypePicker
+              value={col.inlineEditType}
+              onChange={(v) => onChange({ ...col, inlineEditType: v as ColumnConfig['inlineEditType'] })}
+            />
+            {col.inlineEditType === 'select' && (
+              <InlineEditOptionsPicker
+                value={col.inlineEditOptions}
+                onChange={(v) => onChange({ ...col, inlineEditOptions: v })}
+              />
+            )}
+          </>
+        )}
+      </PanelGroup>
+    </>
+  );
+}
+
+// ─── 우측 패널: list-level 컨테이너 설정 (L1) ─────────────────────────────
+// pagination / savedViews / inlineEdit — Phase 4 메타 인프라 신규 항목들.
+function ListLevelPanel({
+  value, onChange,
+}: {
+  value: ListScreenConfig;
+  onChange: (next: ListScreenConfig) => void;
+}) {
+  const pagination = value.pagination;
+  const savedViews = value.savedViews;
+  const inlineEdit = value.inlineEdit;
+  const columnKeys = useMemo(() => value.columns.map((c) => c.key), [value.columns]);
+
+  return (
+    <>
+      <PanelGroup title="페이지네이션">
+        <BooleanPicker
+          label="활성화"
+          value={!!pagination}
+          onChange={(v) => onChange({ ...value, pagination: v ? { defaultPageSize: 50 } : undefined })}
+          hint="대용량 리스트 — page-size 선택 + 이전/다음"
+        />
+        {pagination && (
+          <>
+            <FieldInput
+              label="defaultPageSize"
+              value={String(pagination.defaultPageSize ?? 50)}
+              onChange={(v) => onChange({
+                ...value,
+                pagination: { ...pagination, defaultPageSize: Number(v) || 50 },
+              })}
+            />
+            <AllowedSizesPicker
+              value={pagination.allowedSizes}
+              onChange={(v) => onChange({ ...value, pagination: { ...pagination, allowedSizes: v } })}
+            />
+            <BooleanPicker
+              label="serverMode (dataHook 이 paged 반환)"
+              value={pagination.serverMode ?? false}
+              onChange={(v) => onChange({
+                ...value,
+                pagination: { ...pagination, serverMode: v || undefined },
+              })}
+              hint="비활성 = client-side slicing"
+            />
+          </>
+        )}
+      </PanelGroup>
+
+      <PanelGroup title="저장된 뷰 (savedViews)">
+        <BooleanPicker
+          label="활성화"
+          value={savedViews?.enabled ?? false}
+          onChange={(v) => onChange({
+            ...value,
+            savedViews: v ? { enabled: true } : undefined,
+          })}
+          hint="툴바에 '뷰' 드롭다운 — filter+hidden+pageSize 묶음 명명 저장"
+        />
+      </PanelGroup>
+
+      <PanelGroup title="인라인 편집 (셀)">
+        <BooleanPicker
+          label="활성화"
+          value={inlineEdit?.enabled ?? false}
+          onChange={(v) => onChange({
+            ...value,
+            inlineEdit: v ? { ...(inlineEdit ?? {}), enabled: true } : undefined,
+          })}
+          hint="ColumnConfig.inlineEditable=true 인 셀 클릭 → input → PATCH"
+        />
+        {inlineEdit?.enabled && (
+          <>
+            <EndpointPicker
+              label="endpoint"
+              value={inlineEdit.endpoint}
+              onChange={(v) => onChange({ ...value, inlineEdit: { ...inlineEdit, endpoint: v } })}
+              hint=":id 자리표시 — /api/v1/<resource>/:id"
+            />
+            <IdFieldPicker
+              label="idField"
+              value={inlineEdit.idField}
+              onChange={(v) => onChange({ ...value, inlineEdit: { ...inlineEdit, idField: v } })}
+              columnKeys={columnKeys}
+              hint="현재 컬럼 키 중 하나"
+            />
+          </>
+        )}
+      </PanelGroup>
+    </>
   );
 }
 

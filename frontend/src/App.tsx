@@ -1,7 +1,10 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { Toaster } from '@/components/ui/sonner';
+import { DialogHost } from '@/lib/dialogs';
 import { useAuthStore } from '@/stores/authStore';
+import { usePreferencesStore } from '@/stores/preferencesStore';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import RoleGuard from '@/components/auth/RoleGuard';
 import AppLayout from '@/components/layout/AppLayout';
@@ -12,6 +15,8 @@ const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
 const InboundPage = lazy(() => import('@/pages/InboundPage'));
 const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
+const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
+import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
 const LCPage = lazy(() => import('@/pages/LCPage'));
 const OutboundPage = lazy(() => import('@/pages/OutboundPage'));
 const OutboundV2Page = lazy(() => import('@/pages/OutboundV2Page'));
@@ -67,6 +72,7 @@ const BaroRequestInboxPage = lazy(() => import('@/pages/group-trade/BaroRequestI
 const CreditBoardPage = lazy(() => import('@/pages/baro/CreditBoardPage'));
 const DispatchBoardPage = lazy(() => import('@/pages/baro/DispatchBoardPage'));
 const CRMInboxPage = lazy(() => import('@/pages/CRMInboxPage'));
+const TutorialMenuPage = lazy(() => import('@/onboarding/ui/TutorialMenuPage'));
 
 function Fallback() {
   return <LoadingSpinner className="h-screen" />;
@@ -74,14 +80,22 @@ function Fallback() {
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize);
+  const userPreferences = useAuthStore((s) => s.user?.preferences);
+  const syncPreferences = usePreferencesStore((s) => s.syncFromUser);
 
   useEffect(() => {
     initialize();
   }, [initialize]);
 
+  useEffect(() => {
+    syncPreferences(userPreferences);
+  }, [userPreferences, syncPreferences]);
+
   return (
     <MobileBlock>
     <TooltipProvider>
+      <Toaster />
+      <DialogHost />
       <BrowserRouter>
         <Suspense fallback={<Fallback />}>
           <Routes>
@@ -114,6 +128,7 @@ export default function App() {
                 <Route path="/masters/construction-sites" element={<ConstructionSitesPage />} />
                 <Route path="/inbound" element={<InboundPage />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
+                <Route path="/purchase-history" element={<PurchaseHistoryErrorBoundary><PurchaseHistoryPage /></PurchaseHistoryErrorBoundary>} />
                 <Route path="/lc" element={<LCPage />} />
                 <Route path="/outbound" element={<OutboundPage />} />
                 <Route path="/outbound-v2" element={<OutboundV2Page />} />
@@ -138,6 +153,7 @@ export default function App() {
                 <Route path="/baro/credit-board" element={<CreditBoardPage />} />
                 <Route path="/baro/dispatch" element={<RoleGuard allowedRoles={['admin', 'operator']}><DispatchBoardPage /></RoleGuard>} />
                 <Route path="/crm/inbox" element={<CRMInboxPage />} />
+                <Route path="/tutorial" element={<TutorialMenuPage />} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/approval" element={<ApprovalPage />} />
                 <Route path="/assistant" element={<AssistantPage />} />

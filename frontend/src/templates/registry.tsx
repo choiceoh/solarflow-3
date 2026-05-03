@@ -22,6 +22,13 @@ import type { BLShipment, BLLineItem, InboundType, BLStatus } from '@/types/inbo
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
 import PartnerForm from '@/components/masters/PartnerForm';
 import MetaForm from './MetaForm';
+import MetaDetail from './MetaDetail';
+import bankDetailConfig from '@/config/details/banks';
+import warehouseDetailConfig from '@/config/details/warehouses';
+import manufacturerDetailConfig from '@/config/details/manufacturers';
+import partnerDetailConfig from '@/config/details/partners';
+import companyDetailConfig from '@/config/details/companies';
+import constructionSiteDetailConfig from '@/config/details/construction_sites';
 import partnerFormConfig from '@/config/forms/partners';
 import outboundSimpleFormConfig from '@/config/forms/outbound_simple';
 import companyFormConfig from '@/config/forms/companies';
@@ -52,6 +59,7 @@ import type {
   AsyncFormRefinement,
 } from './types';
 import { RailBlock as RailBlockUI } from '@/components/command/MockupPrimitives';
+import { monthlyCount } from './sparkUtils';
 
 // ─── Cell renderers ─────────────────────────────────────────────────────────
 export const cellRenderers: Record<string, CellRenderer> = {
@@ -66,7 +74,7 @@ export const cellRenderers: Record<string, CellRenderer> = {
     return r.group_trade ? (
       <span className="inline-flex items-center gap-1.5">
         <span className="sf-pill info">그룹</span>
-        <span className="text-[10px]" style={{ color: 'var(--sf-ink-3)' }}>{r.target_company_name}</span>
+        <span className="text-xs" style={{ color: 'var(--sf-ink-3)' }}>{r.target_company_name}</span>
       </span>
     ) : <span>—</span>;
   },
@@ -132,8 +140,8 @@ export const cellRenderers: Record<string, CellRenderer> = {
   site_type_badge: (v) => {
     const t = v as string;
     return t === 'own'
-      ? <Badge variant="outline" className="border-purple-400 text-purple-700 text-[10px]">자체</Badge>
-      : <Badge variant="outline" className="border-orange-400 text-orange-700 text-[10px]">EPC</Badge>;
+      ? <Badge variant="outline" className="border-purple-400 text-purple-700 text-xs">자체</Badge>
+      : <Badge variant="outline" className="border-orange-400 text-orange-700 text-xs">EPC</Badge>;
   },
   // Phase 4: 창고 유형 라벨 (port/factory/vendor → 항구/공장/업체)
   warehouse_type_badge: (v) => {
@@ -154,9 +162,9 @@ export const cellRenderers: Record<string, CellRenderer> = {
     const r = row as BLShipment & { _agg?: { firstName?: string; firstCode?: string; extraCount?: number } };
     if (!r._agg?.firstName) return <span className="text-muted-foreground">—</span>;
     return (
-      <div className="text-[11px]">
+      <div className="text-xs">
         <div className="truncate max-w-[200px]">{r._agg.firstName}</div>
-        <div className="text-[10px] text-muted-foreground font-mono">
+        <div className="text-xs text-muted-foreground font-mono">
           {r._agg.firstCode ?? '—'}{r._agg.extraCount ? ` 외 ${r._agg.extraCount}건` : ''}
         </div>
       </div>
@@ -246,6 +254,27 @@ function useSimpleList<T>(endpoint: string): { data: T[]; loading: boolean; relo
   return { data, loading, reload: () => setTick((n) => n + 1) };
 }
 
+// 단순 단건 fetch hook (id 별 endpoint — useSimpleList 의 detail 버전)
+// detailDataHooks 의 단순한 master 도메인 (Bank 등) 에서 재사용.
+function useSimpleDetail<T>(endpointPattern: string, id: string): { data: T | null; loading: boolean } {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) { setData(null); setLoading(false); return; }
+    let cancelled = false;
+    setLoading(true);
+    const url = endpointPattern.replace(':id', id);
+    fetchWithAuth<T>(url)
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch(() => { /* empty */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [endpointPattern, id]);
+
+  return { data, loading };
+}
+
 // ─── Data hooks (어댑터: Record<string,string> → DataHookResult) ─────────────
 // `as unknown as DataHookResult` 캐스트 → adaptListHook() 헬퍼로 통일
 export const dataHooks: Record<string, DataHook> = {
@@ -327,6 +356,15 @@ export const detailDataHooks: Record<string, DetailDataHook> = {
   useDeclarationDetail: (id) => adaptDetailHook(useDeclarationDetail(id)),
   // Inbound Step 2
   useBLShipmentDetail: (id) => adaptDetailHook(useBLDetail(id)),
+  // Phase 4 (bank-meta 브랜치): 은행 master 의 메타 detail
+  useBankDetail: (id) => useSimpleDetail<Bank>('/api/v1/banks/:id', id),
+  // Phase 4: 창고 / 제조사 / 거래처 master detail (bank 패턴 복제)
+  useWarehouseDetail: (id) => useSimpleDetail<Warehouse>('/api/v1/warehouses/:id', id),
+  useManufacturerDetail: (id) => useSimpleDetail<Manufacturer>('/api/v1/manufacturers/:id', id),
+  usePartnerDetail: (id) => useSimpleDetail<Partner>('/api/v1/partners/:id', id),
+  // Phase 4 마무리: companies / construction_sites detail 추가 — 모든 master 도메인 커버
+  useCompanyDetail: (id) => useSimpleDetail<Record<string, unknown>>('/api/v1/companies/:id', id),
+  useConstructionSiteDetail: (id) => useSimpleDetail<ConstructionSite>('/api/v1/construction-sites/:id', id),
 };
 
 // ─── Metric computers ──────────────────────────────────────────────────────
@@ -411,9 +449,12 @@ export const toneComputers: Record<string, (items: unknown[]) => Tone> = {
     (items as SaleListItem[]).filter((i) => !(i.tax_invoice_date ?? i.sale?.tax_invoice_date)).length > 0 ? 'warn' : 'ink',
 };
 
-// ─── Spark computers (sparkline 시드 데이터) ───────────────────────────────
+// ─── Spark computers (sparkline 실데이터) ─────────────────────────────────
+// 실제 시계열을 만들 수 있는 메트릭만 등록. 등록되지 않은 메트릭은 ListScreen에서
+// 현재값 기반 평행선(flatSparkFromValue)으로 자동 폴백.
 export const sparkComputers: Record<string, (items: unknown[]) => number[]> = {
-  'spark.outbound_count': (items) => [14, 18, 16, 23, items.length || 1],
+  'spark.outbound_count': (items) =>
+    monthlyCount(items as Outbound[], (o) => o.outbound_date),
 };
 
 // ─── Action handlers ───────────────────────────────────────────────────────
@@ -726,7 +767,7 @@ export const formContentBlocks: Record<string, FormContentBlock> = {
           <span className="font-mono"> 제조사</span> = {mfg || '(cascade 대기)'} ·
           <span className="font-mono"> 라인 합계</span> = <strong>{total}</strong> EA
         </div>
-        <div className="text-[10px] text-amber-700">
+        <div className="text-xs text-amber-700">
           이 위젯은 폼의 watch() 로 라이브 표시 — OCR 위젯 / 결제조건 파서도 같은 패턴
         </div>
       </div>
@@ -776,6 +817,15 @@ export const detailComponents: Record<string, DetailComponent> = {
   outbound: ((props) => <OutboundDetailView outboundId={props.id} onBack={props.onBack} />) as DetailComponent,
   // Inbound (Step 1): BLDetailView 래퍼 — props {blId, onBack} → DetailComponent {id, onBack}
   bl: ((props) => <BLDetailView blId={props.id} onBack={props.onBack} />) as DetailComponent,
+  // Phase 4 (bank-meta): 은행 master detail — 메타 인프라 풀 적용 (tabs + inlineEdit)
+  bank: ((props) => <MetaDetail config={bankDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  // Phase 4 follow-up: 창고 / 제조사 / 거래처 master detail (bank 패턴 복제)
+  warehouse: ((props) => <MetaDetail config={warehouseDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  manufacturer: ((props) => <MetaDetail config={manufacturerDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  partner: ((props) => <MetaDetail config={partnerDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  // Phase 4 마무리: 법인 / 공사 현장 detail
+  company: ((props) => <MetaDetail config={companyDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  construction_site: ((props) => <MetaDetail config={constructionSiteDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
 };
 
 // ─── Rail blocks ───────────────────────────────────────────────────────────
@@ -802,7 +852,7 @@ export const railBlocks: Record<string, RailBlock> = {
               <div key={(r[c.idField] as string) ?? idx} className="rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2">
                 <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{primary}</div>
                 {c.metaRender === 'outbound' ? (
-                  <div className="mono mt-1 text-[10px] text-[var(--ink-4)]">
+                  <div className="mono mt-1 text-xs text-[var(--ink-4)]">
                     {OUTBOUND_STATUS_LABEL[ob.status] ?? ob.status} · {ob.quantity?.toLocaleString?.() ?? 0}장
                   </div>
                 ) : null}
@@ -839,7 +889,7 @@ export const railBlocks: Record<string, RailBlock> = {
           {list.map((p) => (
             <div key={p.partner_id} className="rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2">
               <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{p.partner_name}</div>
-              <div className="mono mt-1 text-[10px] text-[var(--ink-4)]">
+              <div className="mono mt-1 text-xs text-[var(--ink-4)]">
                 {labels[p.partner_type] ?? p.partner_type} · {p.erp_code ?? 'ERP 미지정'}
               </div>
             </div>
@@ -853,7 +903,7 @@ export const railBlocks: Record<string, RailBlock> = {
     const count = c.countFromFilter ? filters[c.countFromFilter] || '전체' : undefined;
     return (
       <RailBlockUI title={c.title} count={count}>
-        <div className="text-[11px] leading-5 text-[var(--ink-3)]">{c.text}</div>
+        <div className="text-xs leading-5 text-[var(--ink-3)]">{c.text}</div>
       </RailBlockUI>
     );
   },
@@ -920,6 +970,48 @@ export const contentBlocks: Record<string, ContentBlock> = {
     const ob = items[0] as Outbound;
     if (!ob.memo) return null;
     return <p className="text-sm whitespace-pre-wrap break-words">{ob.memo}</p>;
+  },
+  // Phase 4 (bank-meta): 은행 detail 의 "L/C 사용 현황" 탭 placeholder.
+  // 향후 LCLimitSummaryCards / BankLimitTable 같은 banking 위젯과 연결.
+  bank_lc_usage_placeholder: ({ items }) => {
+    const bank = items[0] as Bank;
+    return (
+      <div className="rounded border border-dashed bg-muted/20 p-6 text-center text-xs text-muted-foreground space-y-2">
+        <p>이 은행의 L/C 사용 요약 — 다음 작업 단계에서 LCLimitSummaryCards 와 연결 예정.</p>
+        <p className="font-mono">
+          한도: {bank.lc_limit_usd?.toLocaleString() ?? '—'} USD
+          {' · '}만료: {bank.limit_expiry_date ?? '—'}
+        </p>
+      </div>
+    );
+  },
+  // Phase 4 follow-up: 거래처 detail 의 "거래 현황" 탭 placeholder.
+  // 향후 PO/Sale 통계, 미수금/미지급 잔액, 최근 거래 일자 등.
+  partner_transactions_placeholder: ({ items }) => {
+    const p = items[0] as Partner;
+    return (
+      <div className="rounded border border-dashed bg-muted/20 p-6 text-center text-xs text-muted-foreground space-y-2">
+        <p>이 거래처의 거래 현황 — PO/Sale 집계 위젯 연결 예정.</p>
+        <p className="font-mono">
+          유형: {p.partner_type ?? '—'}
+          {' · '}ERP: {p.erp_code ?? '—'}
+        </p>
+      </div>
+    );
+  },
+  // Phase 4 마무리: 공사 현장 detail 의 "진척" 탭 placeholder.
+  // 향후 발주 연결 / 모듈 입고 진척률 / 시공 일정 등.
+  site_progress_placeholder: ({ items }) => {
+    const site = items[0] as ConstructionSite;
+    return (
+      <div className="rounded border border-dashed bg-muted/20 p-6 text-center text-xs text-muted-foreground space-y-2">
+        <p>이 현장의 진척 / 모듈 입고 / 발주 연결 — 향후 위젯 연결 예정.</p>
+        <p className="font-mono">
+          용량: {site.capacity_mw ?? '—'} MW
+          {' · '}유형: {site.site_type ?? '—'}
+        </p>
+      </div>
+    );
   },
 };
 
@@ -1058,6 +1150,8 @@ export const enumDictionaries: Record<string, Record<string, string>> = {
   // Inbound (Step 1)
   INBOUND_TYPE_LABEL: INBOUND_TYPE_LABEL as Record<string, string>,
   BL_STATUS_LABEL: BL_STATUS_LABEL as Record<string, string>,
+  // Phase 4 (bank-meta): 은행 활성/비활성 (boolean → 한글 라벨)
+  BANK_ACTIVE_LABEL: { true: '활성', false: '비활성' },
 };
 
 // ─── Phase 4 보강: Computed formulas (계산 필드용) ─────────────────────────
@@ -1155,15 +1249,229 @@ export const formRefinements: Record<string, FormRefinement> = {
 
 // 메타 인프라 확장: 비동기 cross-field 검증 (DB 중복 등) — MetaForm submit 직전 실행.
 // 통과 시 true, 실패 시 string(에러 메시지) 또는 false 반환.
-export const asyncRefinements: Record<string, AsyncFormRefinement> = {};
+//
+// 메타데이터 wrapper (RULES.md #0 — GUI 편집기에서 콤보박스 + 설명 노출):
+//   { fn, label, description? }
+// GUI 편집기 (UIConfigEditor) 가 admin 에게 등록된 ruleId 목록을 라벨/설명까지 보여줌.
+export type AsyncFormRefinementEntry = {
+  fn: AsyncFormRefinement;
+  label: string;            // admin 이 픽커에서 보는 사람 친화 라벨
+  description?: string;     // 픽커에서 보조 설명 (한 줄 권장)
+};
+export const asyncRefinements: Record<string, AsyncFormRefinementEntry> = {};
 
 // 메타 인프라 확장: 동적 권한 가드 (FieldConfig.permissionGuardId 참조).
 // 컨텍스트 (현재 row, 사용자 등) 기반 readOnly/visible 판단.
-// false 반환 시 readOnly + 마스킹 표시. (Phase 5 향후 — 현재 type 정의 + 빈 registry)
+// false 반환 시 readOnly + 마스킹 표시.
 export type PermissionGuard = (
   context: { values: Record<string, unknown>; role: string | null; userId?: string },
 ) => boolean;
-export const permissionGuards: Record<string, PermissionGuard> = {};
+// 메타데이터 wrapper (asyncRefinements 와 동일 패턴 — registry GUI 편집기 콤보박스용)
+export type PermissionGuardEntry = {
+  fn: PermissionGuard;
+  label: string;
+  description?: string;
+};
+export const permissionGuards: Record<string, PermissionGuardEntry> = {
+  // Phase 4 (bank-meta): 시스템관리자만 편집 — admin role 외에는 readOnly + 마스킹.
+  // 은행 LC 한도, 통제 한도 등 임의 변경 위험이 큰 필드에 부착.
+  adminOnly: {
+    label: '시스템관리자만',
+    description: 'admin role 사용자만 편집 가능. 다른 역할은 readOnly + 마스킹 표시.',
+    fn: (ctx) => ctx.role === 'admin',
+  },
+  // Phase 4: 운영팀 + 시스템관리자 편집 가능 — viewer/manager/executive 는 readOnly.
+  // 일상 운영값 (수수료 갱신 등) 에 부착.
+  operatorOrAdmin: {
+    label: '운영팀 + 관리자만',
+    description: 'admin / operator role 만 편집 가능. 그 외 역할은 readOnly + 마스킹.',
+    fn: (ctx) => ctx.role === 'admin' || ctx.role === 'operator',
+  },
+};
+
+// ─── 레거시 registry 메타데이터 (점진 적용) ────────────────────────────────
+// 기존 registry (cellRenderers / formContentBlocks 등) 는 함수 record 형태로
+// 이미 많은 entry 가 등록돼 있음. 모두 wrapper 로 마이그레이션하면 비용 큼.
+// 대신 side-by-side `*Meta` record 를 두고, GUI 편집기 (RegistryIdPicker) 가
+// 둘 다 참조 — 메타 없으면 id 만 표시, 있으면 라벨/설명까지.
+//
+// 새 entry 등록 시 권장 — 동일 키로 `*Meta` 도 같이 채우기 (admin 이 GUI 에서
+// 의미 추측 안 하도록). 이미 등록된 24+ 개 entry 는 도메인 PR 시 점진 채움.
+export type RegistryMeta = Record<string, { label: string; description?: string }>;
+
+// Phase 4 follow-up: 메타 GUI 편집기 RegistryIdPicker 가 라벨/설명을 콤보박스에
+// 노출 — admin 이 docs 안 봐도 어떤 entry 인지 추측 가능 (RULES.md #0).
+export const cellRendererMeta: RegistryMeta = {
+  // Outbound (출고)
+  outbound_status_badge: {
+    label: '출고 상태 뱃지',
+    description: '출고 상태 enum → 색상 뱃지 (예약/완료/취소 등)',
+  },
+  sale_base_date: {
+    label: '판매 기준일',
+    description: 'outbound_date / order_date 폴백 — formatDate',
+  },
+  usage_category_label: {
+    label: '용도 카테고리',
+    description: 'USAGE_CATEGORY enum → 한글 라벨',
+  },
+  outbound_group_trade: {
+    label: '그룹 거래 표시',
+    description: '그룹 거래일 때 "그룹" 뱃지 + 대상 회사명',
+  },
+  outbound_invoice_pill: {
+    label: '세금계산서 발행 상태',
+    description: '발행일자 / 미발행 / 미등록 — pill 색상',
+  },
+  // Sale (수주)
+  sale_kind_pill: {
+    label: '판매 종류 뱃지',
+    description: 'outbound_id 유무 → "출고" 또는 "수주" pill',
+  },
+  sale_total_amount: {
+    label: '판매 총액',
+    description: 'sale.total_amount → 한국식 천단위 콤마',
+  },
+  sale_invoice_pill: { label: '판매 세금계산서', description: '발행일 / 미발행 pill' },
+  sale_erp_closed_pill: {
+    label: 'ERP 마감 상태',
+    description: '마감 / 미마감 — sale.erp_closed boolean',
+  },
+  // Master (마스터)
+  partner_type_badge: {
+    label: '거래처 유형 뱃지',
+    description: '공급사 / 고객사 / 공급+고객 — 색상 변경',
+  },
+  active_badge: {
+    label: '활성 / 비활성 뱃지',
+    description: 'boolean → 활성 (pos) / 비활성 (ghost)',
+  },
+  bank_company_name: {
+    label: '은행 행: 법인명',
+    description: 'companies JOIN 결과 또는 평면 컬럼 폴백',
+  },
+  product_manufacturer_name: {
+    label: '품번 행: 제조사명',
+    description: 'manufacturers.short_name / name_kr 폴백',
+  },
+  site_type_badge: {
+    label: '발전소 유형 뱃지',
+    description: 'own (자체) / epc — 색상 변경',
+  },
+  warehouse_type_badge: {
+    label: '창고 유형 뱃지',
+    description: 'port (항구) / factory (공장) / vendor (업체)',
+  },
+  // Inbound (입고)
+  inbound_type_pill: { label: '입고 구분 pill', description: 'INBOUND_TYPE enum 라벨' },
+  inbound_status_badge: { label: '입고 상태 뱃지', description: 'BL_STATUS enum → 색상 뱃지' },
+  bl_first_product: {
+    label: 'BL 행: 첫 품번',
+    description: '_agg.firstName / firstCode + 추가 N개',
+  },
+  bl_total_mw: { label: 'BL 행: 총 MW', description: '_agg.totalMw' },
+  bl_avg_cents: { label: 'BL 행: 평균 단가', description: '_agg.avgCentsPerWp ¢/Wp' },
+  bl_company_name: { label: 'BL 행: 법인명', description: 'companies JOIN' },
+  bl_po_link: { label: 'BL → PO 링크', description: '연결된 발주서로 이동' },
+  bl_lc_link: { label: 'BL → L/C 링크', description: '연결된 L/C 로 이동' },
+  bl_currency_label: { label: 'BL 통화', description: 'currency enum → 한글' },
+};
+export const formContentBlockMeta: RegistryMeta = {
+  bl_ocr_widget: {
+    label: 'BL OCR 자동 입력',
+    description: '업로드한 BL PDF 에서 항목 추출 → 폼 자동 채움',
+  },
+  bl_payment_terms_widget: {
+    label: 'BL 결제 조건 위젯',
+    description: '복합 결제조건 (DP/DA/AT-SIGHT 등) 시각 편집',
+  },
+  demo_status_widget: { label: '데모 상태 위젯', description: '메타 contentBlock 데모 — has_warranty 토글' },
+};
+export const fieldCascadeMeta: RegistryMeta = {
+  demo_po_cascade: {
+    label: 'PO 선택 → 자동 채움 (데모)',
+    description: 'PO 선택 시 LC/제조사/통화 자동 fill — 메타 cascade 데모',
+  },
+  bl_po_to_lc_mfg: {
+    label: 'BL: PO → L/C·제조사 자동 채움',
+    description: 'BL Form 에서 PO 선택 시 그 PO 의 LC·제조사·통화·인코텀즈 등을 자동 fill',
+  },
+};
+export const formSubmitterMeta: RegistryMeta = {
+  bl_save: {
+    label: 'BL 저장 (parent + lines)',
+    description: 'BLShipment 본체 + 라인 아이템 multi-step 저장. saveBLShipmentWithLines 호출',
+  },
+};
+export const computedFormulaMeta: RegistryMeta = {};
+export const formRefinementMeta: RegistryMeta = {};
+export const contentBlockMeta: RegistryMeta = {
+  sale_summary_cards: { label: '판매 요약 카드', description: '판매 통계 (건수/총액/마감률) 카드' },
+  bl_status_badge: { label: 'BL 상태 뱃지', description: 'detail 헤더 — 입고 상태 표시' },
+  bl_edit_button: { label: 'BL 수정 버튼', description: 'detail 헤더 — 폼 다이얼로그 오픈' },
+  bl_memo_block: { label: 'BL 메모 블록', description: 'detail 메모 섹션 — pre-wrap 텍스트' },
+  outbound_bl_items_section: { label: '출고 → BL 연결 행', description: '여러 BL 라인 표시' },
+  outbound_memo_section: { label: '출고 메모', description: 'pre-wrap 텍스트' },
+  bank_lc_usage_placeholder: {
+    label: '은행 L/C 사용 현황',
+    description: '한도 / 만료 표시 — LCLimitSummaryCards 연결 예정',
+  },
+  partner_transactions_placeholder: {
+    label: '거래처 거래 현황',
+    description: 'PO/Sale 집계 — 향후 위젯 연결',
+  },
+  site_progress_placeholder: {
+    label: '발전소 진척',
+    description: '모듈 입고 / 발주 연결 / 시공 일정 — 향후 위젯',
+  },
+};
+export const masterSourceMeta: RegistryMeta = {
+  manufacturers: {
+    label: '제조사 목록',
+    description: '국내/해외 모든 제조사 — priority_rank 순',
+  },
+  'manufacturers.byDomestic': {
+    label: '제조사 (domestic_foreign 별)',
+    description: '필드 의존 — domestic_foreign 값에 따라 국내 또는 해외 만',
+  },
+  companies: {
+    label: '법인 목록',
+    description: '활성 법인 — company_id 별 옵션',
+  },
+  'pos.import': {
+    label: '수입 PO 목록',
+    description: '발주서 (수입 모드) — PO 번호 + 제조사 라벨',
+  },
+  'lcs.byPo': {
+    label: 'L/C (PO 별)',
+    description: 'PO 선택 시 그 PO 의 LC 만 — po_id 의존',
+  },
+  'products.search': {
+    label: '제품 검색',
+    description: '서버 검색 (대용량) — 코드/이름 부분일치, 콤보박스 모드',
+  },
+  'partners.customer': {
+    label: '거래처 (고객사)',
+    description: 'partner_type=customer 또는 both 만 필터',
+  },
+  'bls.byCompany': {
+    label: 'BL (법인 별)',
+    description: '선택된 법인의 BL 만 — company_id 의존',
+  },
+};
+
+// 헬퍼 — registry + meta 를 RegistryIdPicker 의 entries[] 형식으로 변환.
+// fallback: meta 없으면 label = id, description = undefined.
+export function buildRegistryEntries<F>(
+  registry: Record<string, F>,
+  meta: RegistryMeta,
+): { id: string; label: string; description?: string }[] {
+  return Object.keys(registry).sort().map((id) => ({
+    id,
+    label: meta[id]?.label ?? id,
+    description: meta[id]?.description,
+  }));
+}
 
 // ─── Formatters ────────────────────────────────────────────────────────────
 export function applyFormatter(formatter: string | undefined, value: unknown): string {

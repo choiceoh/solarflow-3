@@ -185,16 +185,18 @@ interface ChatBoxProps {
   sessionsSlot?: React.ReactNode;
   /** drawer 안에서 사용 시 — 자체 헤더 숨김 (drawer 헤더가 대신함) */
   embedded?: boolean;
+  /** drawer 등 외부에서 자동 채워주는 첫 입력 — 마운트 시 input 에 prefill (사용자가 검토 후 send) */
+  initialInput?: string;
 }
 
-export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted, sessionsSlot, embedded }: ChatBoxProps) {
+export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted, sessionsSlot, embedded, initialInput }: ChatBoxProps) {
   // 빠른 연속 send 시 setSessionIdRef 가 반영되기 전 두 번째 호출이 또 POST 하지 않도록 ref 로 동기 추적.
   const sessionIdRef = useRef<string | null>(sessionId);
   // 쓰기 도구 승인/거부 상태 — proposal id → status. messages 와 별도 메모리 (상태 mutation 안 함).
   const [proposalStatuses, setProposalStatuses] = useState<Map<string, { status: ProposalStatus; errorMessage?: string }>>(
     new Map(),
   );
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialInput ?? '');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [parseAsCustoms, setParseAsCustoms] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
@@ -420,7 +422,10 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     <>
       <div className={cn('flex min-w-0 flex-1 flex-col gap-3', embedded ? 'p-3' : 'p-4')}>
         {!embedded && (
-          <header className="flex flex-wrap items-center gap-3 border-b pb-3">
+          <header
+            className="flex flex-wrap items-center gap-3 border-b pb-3"
+            data-onboarding-step="self-demo.assistant.entry"
+          >
             <div className="flex items-center gap-2">
               <Bot className="h-6 w-6 text-[var(--sf-solar)]" />
               <h2 className="text-lg font-semibold">업무 도우미</h2>

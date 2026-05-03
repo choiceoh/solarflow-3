@@ -14,32 +14,26 @@ interface ScopePanelProps {
  * - 모든 인스턴스: 어시스턴트 호출 → 메타 config 변경 제안 → 모든 사용자 즉시 반영 (영속).
  */
 export const ScopePanel = ({ target, draft }: ScopePanelProps) => {
-  const setContextMenuPosition = useAppStore((s) => s.setContextMenuPosition);
-  void setContextMenuPosition; // 미사용 placeholder
-
-  const onAskForGlobal = () => {
-    // 어시스턴트 drawer 자동 열기 위해 floating 버튼 클릭 시뮬 — 단순화 위해 confirm + 안내.
-    const proceed = window.confirm(
-      [
-        '"모든 인스턴스" 변경 = 메타 config 갱신 (모든 사용자 즉시 반영, 영속).',
-        '',
-        '단계:',
-        '1. 어시스턴트 drawer 열기 (우하단 Bot 버튼 또는 ⌘.)',
-        '2. "이 화면 컬럼/필드를 ...로 변경" 자연어 요청',
-        '3. AI 가 propose_ui_config_update 카드 생성 → [저장] 클릭',
-        '',
-        '계속하시겠습니까? (이 다이얼로그는 안내용 — drawer 는 우하단 버튼으로 열어주세요.)',
-      ].join('\n'),
-    );
-    if (!proceed) return;
-    // TODO: drawer 자동 open + 자연어 prefill — 후속 PR. 1차는 안내만.
-  };
+  const setAssistantDrawerOpen = useAppStore((s) => s.setAssistantDrawerOpen);
+  const setAssistantDrawerInitialPrompt = useAppStore((s) => s.setAssistantDrawerInitialPrompt);
 
   const isModified = draft !== target.className;
 
+  const onAskForGlobal = () => {
+    // M-2: 어시스턴트 drawer 자동 open + prompt prefill
+    // 변경 있으면 그 변경 명시, 없으면 일반 요청 (사용자가 자연어로 보강)
+    const prompt = isModified
+      ? `현재 선택된 요소(${target.tagName.toLowerCase()})의 className 을 "${draft}" 로 변경했습니다. ` +
+        `이걸 모든 인스턴스에 영구 반영해주세요 — 메타 config 갱신 (read_ui_config / propose_ui_config_update).`
+      : `현재 선택된 요소(${target.tagName.toLowerCase()})를 모든 인스턴스에 변경하고 싶어요. ` +
+        `(아래 인스펙터로 미리 디자인을 조정한 뒤 다시 부르거나, 자연어로 의도를 알려주세요.)`;
+    setAssistantDrawerInitialPrompt(prompt);
+    setAssistantDrawerOpen(true);
+  };
+
   return (
     <section className="space-y-1.5 rounded border border-blue-200 bg-blue-50/50 p-2 dark:border-blue-900/40 dark:bg-blue-900/10">
-      <header className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-blue-900 dark:text-blue-200">
+      <header className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-blue-900 dark:text-blue-200">
         <Target className="h-3 w-3" />
         변경 범위
       </header>
@@ -56,8 +50,7 @@ export const ScopePanel = ({ target, draft }: ScopePanelProps) => {
           label="모든 인스턴스"
           subLabel="메타 config 영속"
           desc="모든 사용자 즉시 반영. AI 어시스턴트 통해서만."
-          actionLabel={isModified ? 'AI 에 부탁' : 'AI 어시스턴트로'}
-          actionDisabled={!isModified}
+          actionLabel={isModified ? 'AI 에 변경 전달' : 'AI 어시스턴트 열기'}
           onAction={onAskForGlobal}
         />
       </div>
@@ -79,7 +72,7 @@ interface ScopeCardProps {
 const ScopeCard = ({ icon, label, subLabel, desc, active = false, actionLabel, actionDisabled, onAction }: ScopeCardProps) => (
   <div
     className={cn(
-      'flex flex-col gap-1 rounded border p-1.5 text-[11px]',
+      'flex flex-col gap-1 rounded border p-1.5 text-xs',
       active
         ? 'border-blue-500 bg-white dark:border-blue-600 dark:bg-slate-900'
         : 'border-slate-200 bg-white/60 dark:border-slate-700 dark:bg-slate-900/40',
@@ -90,13 +83,13 @@ const ScopeCard = ({ icon, label, subLabel, desc, active = false, actionLabel, a
       <span className="truncate">{label}</span>
     </div>
     <div className="text-[9px] text-slate-500">{subLabel}</div>
-    <p className="text-[10px] leading-snug text-slate-600 dark:text-slate-400">{desc}</p>
+    <p className="text-xs leading-snug text-slate-600 dark:text-slate-400">{desc}</p>
     {actionLabel && (
       <button
         type="button"
         onClick={onAction}
         disabled={actionDisabled}
-        className="mt-auto flex items-center justify-center gap-1 rounded border border-purple-300 bg-white px-2 py-0.5 text-[10px] text-purple-700 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-purple-700/40 dark:bg-slate-800 dark:text-purple-300"
+        className="mt-auto flex items-center justify-center gap-1 rounded border border-purple-300 bg-white px-2 py-0.5 text-xs text-purple-700 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-purple-700/40 dark:bg-slate-800 dark:text-purple-300"
       >
         <Sparkles className="h-2.5 w-2.5" />
         {actionLabel}

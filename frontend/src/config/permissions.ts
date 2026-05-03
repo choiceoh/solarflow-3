@@ -32,11 +32,13 @@ export type MenuKey =
   | 'receipts'      // 수금 관리
   | 'banking'       // LC 한도/만기
   | 'customs'       // 매출/이익 분석
+  | 'purchase_history' // 구매 이력 read-only 통합 타임라인 (현황 그룹)
   | 'masters'       // 마스터 관리
   | 'approval'      // 결재안
   | 'assistant'     // AI 업무 도우미
   | 'crm_inbox'     // CRM: 내 미처리 문의
   | 'settings'      // 설정 (모든 역할 — 탭별 가시성으로 분리)
+  | 'tutorial'      // 🎓 튜토리얼 — 모든 역할 (학습용)
   | 'ui_editor'     // UI 메타 config 편집기 (admin 전용)
   // BARO 테넌트 전용 메뉴
   | 'baro_group_purchase'   // BARO: 그룹내 매입 요청 등록
@@ -77,9 +79,9 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
-            'banking','customs','masters','approval','assistant','crm_inbox',
+            'banking','customs','purchase_history','masters','approval','assistant','crm_inbox',
             'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_inbox',
-            'settings'],
+            'settings','tutorial'],
     features: {
       canEdit: true,
       showPrice: true,
@@ -92,8 +94,8 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   executive: {
-    menus: ['inventory','orders','outbound','receipts','banking','customs','assistant','crm_inbox',
-            'baro_credit','settings'],
+    menus: ['inventory','orders','outbound','receipts','banking','customs','purchase_history','assistant','crm_inbox',
+            'baro_credit','settings','tutorial'],
     features: {
       canEdit: false,
       showPrice: true,
@@ -106,7 +108,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   manager: {
-    menus: ['inventory','assistant','settings'],
+    menus: ['inventory','assistant','settings','tutorial'],
     features: {
       canEdit: false,
       showPrice: false,          // 단가·재고금액 차단 (역산 방지)
@@ -119,7 +121,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   viewer: {
-    menus: ['inventory','settings'],
+    menus: ['inventory','settings','tutorial'],
     features: {
       canEdit: false,
       showPrice: false,

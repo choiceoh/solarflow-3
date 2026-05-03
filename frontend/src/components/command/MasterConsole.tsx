@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CardB, RailBlock, Sparkline, TileB } from './MockupPrimitives';
+import { CardB, RailBlock, TileB } from './MockupPrimitives';
 
 export interface MasterConsoleMetric {
   label: string;
@@ -71,7 +71,7 @@ export function MasterConsole({
           <CardB
             title={tableTitle}
             sub={tableSub}
-            right={toolbar ?? <Sparkline data={[28, 34, 31, 41, 36, 48, 52]} color="var(--solar-3)" />}
+            right={toolbar}
           >
             <div className="sf-command-tab-body">{children}</div>
           </CardB>

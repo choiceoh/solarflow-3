@@ -7,6 +7,8 @@ import {
   ClipboardList,
   Database,
   FileSignature,
+  GraduationCap,
+  History,
   Landmark,
   LogOut,
   PanelLeftClose,
@@ -38,6 +40,7 @@ import {
   InspectorOverlay,
   InspectorPanel,
   OnboardingHint,
+  useApplyClassNameDrafts,
   useDesignTokens,
   useEditModeShortcut,
 } from '@/components/inspector';
@@ -49,6 +52,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useSidebarTabs } from '@/hooks/useSidebarTabs';
 import { useUserPersona } from '@/hooks/useUserPersona';
 import { useAppStore } from '@/stores/appStore';
+import { FirstLoginToast, OnboardingTour } from '@/onboarding';
 import { useEffect, useMemo, useState } from 'react';
 
 const SIDEBAR_COLLAPSED_KEY = 'sf.sidebar.collapsed';
@@ -141,6 +145,8 @@ const NAV_GROUPS: CommandNavGroup[] = [
       // D-108: LC 한도/매출 분석은 탑솔라 전용 (원가 기반)
       { key: 'banking', label: 'L/C 한도', abbr: '한도', path: '/banking', icon: Landmark, menu: 'banking', tenants: ['topsolar'] },
       { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs', tenants: ['topsolar'] },
+      // 구매 이력: PO/단가/변경계약 read-only 통합 타임라인 (탑솔라 모듈 수입 흐름 전용, executive 포함)
+      { key: 'purchase-history', label: '구매 이력', abbr: '이력', path: '/purchase-history', icon: History, menu: 'purchase_history', tenants: ['topsolar'] },
       // BARO Phase 3: 거래처별 미수금/한도 보드 (BARO 전용)
       { key: 'baro-credit', label: '미수금/한도', abbr: '미수', path: '/baro/credit-board', icon: ShieldAlert, menu: 'baro_credit', tenants: ['baro'] },
     ],
@@ -153,6 +159,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: ['topsolar'], isWip: true },
       // admin 전용 — 메타 config 시각 편집 (DB 영구 저장, 모든 사용자 영향)
       { key: 'ui-editor', label: 'UI 편집기', abbr: 'UI', path: '/ui-config-editor', icon: Wand2, menu: 'ui_editor' },
+      { key: 'tutorial', label: '튜토리얼', abbr: '학습', path: '/tutorial', icon: GraduationCap, menu: 'tutorial' },
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
     ],
   },
@@ -161,6 +168,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
 const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/inventory': { title: '가용재고', breadcrumb: '재고 / 예약 가능 수량' },
   '/procurement': { title: 'P/O 발주', breadcrumb: '구매 / 발주 관리' },
+  '/purchase-history': { title: '구매 이력', breadcrumb: '현황 / 계약 체인 통합 타임라인' },
   '/customs': { title: '면장/원가', breadcrumb: '입고 / 원가 계산' },
   '/orders': { title: '수주 관리', breadcrumb: '판매 / 수주 및 수금' },
   '/banking': { title: 'L/C 한도', breadcrumb: '현황 / 은행 한도' },
@@ -251,6 +259,7 @@ export default function CommandShell() {
 
   useEditModeShortcut();
   useDesignTokens();
+  useApplyClassNameDrafts();
 
   useEffect(() => { loadCompanies(); }, [loadCompanies]);
 
@@ -337,7 +346,7 @@ export default function CommandShell() {
           </div>
         ) : null}
 
-        <nav className="sf-sidebar-nav" aria-label="주요 메뉴 목록">
+        <nav className="sf-sidebar-nav" aria-label="주요 메뉴 목록" data-onboarding-step="self-demo.sidebar.intro">
           {NAV_GROUPS.map((group) => {
             const visibleItems = group.items.filter(
               (item) =>
@@ -409,7 +418,7 @@ export default function CommandShell() {
             <GlobalSearchBar />
           </div>
 
-          <div className="sf-topbar-actions">
+          <div className="sf-topbar-actions" data-onboarding-step="self-demo.topbar.actions">
             <FloatingMwEaCalculator />
             <AlertBell
               alerts={alertState.alerts}
@@ -430,6 +439,8 @@ export default function CommandShell() {
       <InspectorPanel />
       <ContextMenuOverlay />
       <OnboardingHint />
+      <OnboardingTour />
+      <FirstLoginToast />
       <FloatingAssistantButton />
     </div>
   );

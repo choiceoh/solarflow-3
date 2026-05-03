@@ -30,16 +30,13 @@ export function useMenuVisibility() {
     refresh();
   }, [refresh]);
 
-  const setMenuHidden = useCallback(async (key: string, isHidden: boolean) => {
-    const next = new Set(hidden);
-    if (isHidden) next.add(key);
-    else next.delete(key);
-    setHidden(next);
+  const save = useCallback(async (next: Set<string>) => {
     await fetchWithAuth(`/api/v1/system-settings/${KEY}`, {
       method: 'PUT',
       body: JSON.stringify({ hidden: Array.from(next) }),
     });
-  }, [hidden]);
+    setHidden(new Set(next));
+  }, []);
 
-  return { hidden, loading, refresh, setMenuHidden };
+  return { hidden, loading, refresh, save };
 }

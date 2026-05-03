@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { fetchWithAuth } from '@/lib/api';
+import { confirmDialog } from '@/lib/dialogs';
 import { companyQueryUrl } from '@/lib/companyUtils';
 import { cn, formatKw, moduleLabel, shortMfgName } from '@/lib/utils';
 import type {
@@ -248,7 +249,12 @@ export default function ModuleDemandForecastPanel({ companyId, inventoryItems, m
   };
 
   const remove = async (item: ModuleDemandForecast) => {
-    if (!confirm(`${item.site_name} 수요 계획을 삭제할까요?`)) return;
+    const ok = await confirmDialog({
+      description: `${item.site_name} 수요 계획을 삭제할까요?`,
+      variant: 'destructive',
+      confirmLabel: '삭제',
+    });
+    if (!ok) return;
     try {
       await fetchWithAuth(`/api/v1/module-demand-forecasts/${item.forecast_id}`, { method: 'DELETE' });
       await load();

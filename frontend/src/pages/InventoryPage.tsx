@@ -17,6 +17,7 @@ import { useAppStore } from '@/stores/appStore';
 import { useInventory } from '@/hooks/useInventory';
 import { useForecast } from '@/hooks/useForecast';
 import { fetchWithAuth } from '@/lib/api';
+import { confirmDialog } from '@/lib/dialogs';
 import { shortMfgName } from '@/lib/utils';
 import { manufacturerRankByName, sortManufacturers } from '@/lib/manufacturerPriority';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
@@ -28,7 +29,7 @@ import IncomingTable from '@/components/inventory/IncomingTable';
 import ForecastTable from '@/components/inventory/ForecastTable';
 import ModuleDemandForecastPanel from '@/components/inventory/ModuleDemandForecastPanel';
 import { CardB, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
-import { autoSpark } from '@/templates/autoSpark';
+import { flatSpark } from '@/templates/sparkUtils';
 import type { InventorySummary, ProductForecast } from '@/types/inventory';
 
 function formatAutoKw(kw: number): string {
@@ -274,7 +275,12 @@ export default function InventoryPage() {
   const handleIncomingDelete = async () => {
     const { stockAlloc, incomingAlloc } = incomingDialog;
     if (!stockAlloc || !incomingAlloc) return;
-    if (!confirm('미착품 배정을 삭제합니다. 계속할까요?')) return;
+    const ok = await confirmDialog({
+      description: '미착품 배정을 삭제합니다. 계속할까요?',
+      variant: 'destructive',
+      confirmLabel: '삭제',
+    });
+    if (!ok) return;
     setIncomingDialog({ open: false, stockAlloc: null, incomingAlloc: null });
     try {
       await fetchWithAuth(`/api/v1/inventory/allocations/${incomingAlloc.alloc_id}`, {
@@ -320,7 +326,12 @@ export default function InventoryPage() {
   };
 
   const handleDeleteAlloc = async (allocId: string) => {
-    if (!confirm('삭제하면 복원할 수 없습니다. 삭제할까요?')) return;
+    const ok = await confirmDialog({
+      description: '삭제하면 복원할 수 없습니다. 삭제할까요?',
+      variant: 'destructive',
+      confirmLabel: '삭제',
+    });
+    if (!ok) return;
     try {
       await fetchWithAuth(`/api/v1/inventory/allocations/${allocId}`, { method: 'DELETE' });
       setAllocError('');
@@ -530,12 +541,11 @@ export default function InventoryPage() {
             u={totalSecured.unit}
             sub={`${inventoryStats?.productCount.toLocaleString('ko-KR') ?? '0'}개 품목`}
             tone="solar"
-            delta="+2.4%"
-            spark={[62, 64, 66, 68, 71, 72, 73, 74, 75, 76, 76, 76]}
+            spark={flatSpark(inventoryStats?.totalSecuredKw ?? 0)}
           />
         </button>
         <button type="button" onClick={() => handleCardClick('physical')} className="text-left">
-          <TileB lbl="실재고" v={stockAvailable.value} u={stockAvailable.unit} sub="창고 보유 현재고" tone="ink" spark={autoSpark('실재고')} />
+          <TileB lbl="실재고" v={stockAvailable.value} u={stockAvailable.unit} sub="창고 보유 현재고" tone="ink" spark={flatSpark(inventoryStats?.stockAvailableKw ?? 0)} />
         </button>
         <button type="button" onClick={() => handleCardClick('incoming')} className="text-left">
           <TileB
@@ -544,7 +554,7 @@ export default function InventoryPage() {
             u={incomingAvailable.unit}
             sub={`운송 중 ${incomingRailItems.length.toLocaleString('ko-KR')}건`}
             tone="info"
-            spark={[22, 21, 19, 18, 16, 14, 18, 18, 18, 18, 18, 18]}
+            spark={flatSpark(inventoryStats?.incomingAvailableKw ?? 0)}
           />
         </button>
         <TileB
@@ -553,8 +563,7 @@ export default function InventoryPage() {
           u={pendingKw.unit}
           sub={`${allocationStats.pendingCount.toLocaleString('ko-KR')}건 · ${allocationStats.holdCount.toLocaleString('ko-KR')}건 보류`}
           tone="warn"
-          delta="+1.2%"
-          spark={[10, 11, 12, 11, 12, 13, 14, 14, 14, 14, 15, 15]}
+          spark={flatSpark(allocationStats.pendingKw)}
         />
       </div>
 

@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { notify } from '@/lib/notify';
 import ImportPreviewDialog from './ImportPreviewDialog';
 import ImportResultDialog from './ImportResultDialog';
 import AmaranthExportDialog from './AmaranthExportDialog';
@@ -38,7 +39,7 @@ export default function ExcelToolbar({ type, onImportComplete, onNew }: Props) {
 
   const pickFile = useCallback((file: File) => {
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      alert('엑셀 파일(.xlsx, .xls)만 업로드 가능합니다');
+      notify.error('엑셀 파일(.xlsx, .xls)만 업로드 가능합니다');
       return;
     }
     uploadFile(file);

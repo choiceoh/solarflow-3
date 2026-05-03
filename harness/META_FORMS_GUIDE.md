@@ -2,6 +2,8 @@
 
 SolarFlow 의 **메타데이터 기반 UI 인프라** — config 파일 한 개만 추가하면 새 화면/폼/상세가 생긴다. 운영자는 GUI 로 라벨/컬럼/필드를 편집하고, 계열사 별로 override 할 수 있다.
 
+> **⚡ 듀얼 product 관점 (RULES.md #0)** — 이 메타 인프라 + GUI 편집기는 SolarFlow ERP 의 부속 도구가 아니라 **그 자체로 product**. Webflow / Figma / Builder.io 부류의 화면 편집기를 만든다고 생각해라. 새 인프라 기능을 추가하면 편집기에도 픽커가 따라와야 하고, registry key 는 combobox 로 노출해야 하고, 편집기 UX 는 runtime 과 mimicry 해야 함. 자세한 판단 기준은 `harness/RULES.md` 참고.
+
 ## 목차
 
 1. [개요](#개요)

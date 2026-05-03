@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import { formatError, notify } from '@/lib/notify';
 
 const TWO_MIN = 2 * 60_000;
 const ONE_DAY = 24 * 60 * 60_000;
@@ -17,6 +18,7 @@ export const queryClient = new QueryClient({
     },
     mutations: {
       retry: 0,
+      onError: (e) => notify.error(formatError(e)),
     },
   },
 });

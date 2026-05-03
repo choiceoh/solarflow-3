@@ -66,6 +66,8 @@ const config: ListScreenConfig = {
       },
     },
   ],
+  // Phase 4 follow-up: 행 클릭 → MetaDetail (registry.detailComponents.warehouse)
+  onRowClick: { kind: 'detail', detailId: 'warehouse', idField: 'warehouse_id' },
   emptyState: { message: '등록된 창고가 없습니다', actionId: 'create' },
   forms: [
     {

@@ -15,6 +15,7 @@ import { useColumnVisibility } from '@/lib/columnVisibility';
 import { useColumnPinning } from '@/lib/columnPinning';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
+import { promptDialog } from '@/lib/dialogs';
 import { MasterConsole, type MasterConsoleMetric } from '@/components/command/MasterConsole';
 import { FilterButton } from '@/components/command/MockupPrimitives';
 import { cn } from '@/lib/utils';
@@ -28,7 +29,7 @@ import {
   masterSources, enumDictionaries, actionHandlers, formSubmitters,
   applyFormatter, getFieldValue, generateMonths,
 } from './registry';
-import { autoSpark } from './autoSpark';
+import { flatSparkFromValue } from './sparkUtils';
 
 type Options = { value: string; label: string }[];
 
@@ -98,9 +99,9 @@ export function buildMetric(
     sub = m.sub;
   }
 
-  // 메트릭별 sparkComputer가 등록돼 있으면 그것을 쓰고, 없으면 라벨 해시 기반 generic 시드.
+  // 시계열이 있으면 sparkComputer로 실데이터 → 없으면 현재값 기반 평행선 (이전 = 현재 가정).
   const spark = m.spark === 'auto'
-    ? (sparkComputers[`spark.${m.computerId}`]?.(items) ?? autoSpark(m.label))
+    ? (sparkComputers[`spark.${m.computerId}`]?.(items) ?? flatSparkFromValue(value))
     : undefined;
 
   return { label: m.label, value, unit: m.unit, sub, tone, spark };
@@ -172,7 +173,7 @@ function InlineEditCell({ col, row, onSave }: {
         title="클릭하여 편집"
       >
         {renderCell(col, row)}
-        <span className="ml-1 text-[10px] opacity-30">✏️</span>
+        <span className="ml-1 text-xs opacity-30">✏️</span>
       </button>
     );
   }
@@ -202,7 +203,7 @@ function InlineEditCell({ col, row, onSave }: {
           }}
         />
       )}
-      {saving && <span className="text-[10px] text-muted-foreground">저장중</span>}
+      {saving && <span className="text-xs text-muted-foreground">저장중</span>}
     </div>
   );
 }
@@ -246,8 +247,8 @@ function SavedViewsMenu({
   const [views, setViews] = useState<SavedView[]>(() => loadSavedViews(listId));
   const [open, setOpen] = useState(false);
 
-  const save = () => {
-    const name = window.prompt('뷰 이름:');
+  const save = async () => {
+    const name = await promptDialog({ title: '뷰 저장', description: '뷰 이름을 입력하세요.' });
     if (!name) return;
     const next = [...views.filter((v) => v.name !== name), { ...current, name }];
     setViews(next);
@@ -297,7 +298,7 @@ function SavedViewsMenu({
                     </button>
                     <button
                       type="button"
-                      className="px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+                      className="px-1.5 text-xs text-muted-foreground hover:text-destructive"
                       onClick={() => remove(v.name)}
                       aria-label="삭제"
                     >
@@ -307,7 +308,7 @@ function SavedViewsMenu({
                 ))}
               </>
             ) : (
-              <div className="px-3 py-1.5 text-[11px] text-muted-foreground">저장된 뷰 없음</div>
+              <div className="px-3 py-1.5 text-xs text-muted-foreground">저장된 뷰 없음</div>
             )}
           </div>
         </>

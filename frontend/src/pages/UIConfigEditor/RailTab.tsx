@@ -44,7 +44,7 @@ export function RailTab({
               onChange={(v) => update(idx, { ...b, blockId: v })} />
 
             <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">
+              <Label className="text-xs text-muted-foreground">
                 props (JSON 객체 — 블록별 시그니처는 registry.railBlocks 정의 참조)
               </Label>
               <Textarea

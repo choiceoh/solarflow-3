@@ -100,7 +100,7 @@ export const ContextMenuOverlay = () => {
 };
 
 const MenuHeader = ({ icon, label }: { icon: React.ReactNode; label: string }) => (
-  <div className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+  <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
     {icon}
     {label}
   </div>
