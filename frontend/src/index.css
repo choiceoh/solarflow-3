@@ -1059,6 +1059,220 @@ a:focus-visible,
   overflow: hidden;
 }
 
+/* /purchase-history — 좌측 PO 체인 리스트 + 우측 통합 타임라인 */
+.sf-purchase-history-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin-top: 8px;
+}
+@media (max-width: 900px) {
+  .sf-purchase-history-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.sf-ph-search-row {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.sf-ph-search-input {
+  position: relative;
+}
+.sf-ph-search-input svg {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  color: var(--ink-3);
+}
+.sf-ph-search-input input {
+  width: 100%;
+  padding: 6px 8px 6px 26px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+}
+.sf-ph-search-input input:focus {
+  outline: 2px solid var(--solar-2);
+  outline-offset: -1px;
+}
+
+.sf-ph-chain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+}
+.sf-ph-chain-row {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-left: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: inherit;
+  color: inherit;
+}
+.sf-ph-chain-row:hover {
+  background: var(--bg-2);
+}
+.sf-ph-chain-row:focus-visible {
+  outline: 2px solid var(--solar-2);
+  outline-offset: -2px;
+}
+.sf-ph-chain-row[data-active="true"] {
+  background: rgba(245, 158, 11, 0.08);
+  border-left-color: var(--solar-2);
+}
+.sf-ph-chain-row .sf-ph-chain-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+.sf-ph-chain-row .sf-ph-chain-num {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sf-ph-chain-row .sf-ph-chain-variant-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--warn);
+}
+.sf-ph-chain-row .sf-ph-chain-mfg {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.sf-ph-chain-row .sf-ph-chain-date {
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.sf-ph-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--ink-3);
+}
+.sf-ph-empty svg {
+  width: 32px;
+  height: 32px;
+  margin: 0 auto 8px;
+  opacity: 0.4;
+}
+
+.sf-ph-skeleton-row {
+  height: 60px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(90deg, var(--bg-2) 25%, rgba(255, 255, 255, 0.4) 50%, var(--bg-2) 75%);
+  background-size: 200% 100%;
+  animation: sf-ph-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes sf-ph-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.sf-ph-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+}
+.sf-ph-timeline > li {
+  border-bottom: 1px solid var(--line);
+}
+.sf-ph-timeline > li:last-child {
+  border-bottom: none;
+}
+.sf-ph-event-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px 16px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.sf-ph-event-row[data-link="false"] {
+  cursor: default;
+}
+.sf-ph-event-row:hover[data-link="true"] {
+  background: var(--bg-2);
+}
+.sf-ph-event-row:focus-visible {
+  outline: 2px solid var(--solar-2);
+  outline-offset: -2px;
+}
+.sf-ph-event-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sf-ph-event-body {
+  flex: 1;
+  min-width: 0;
+}
+.sf-ph-event-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sf-ph-event-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sf-ph-event-date {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+.sf-ph-event-subtitle {
+  font-size: 11.5px;
+  color: var(--ink-2);
+  margin-top: 2px;
+}
+.sf-ph-event-detail {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+.sf-ph-clear-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.sf-ph-clear-btn:hover {
+  background: var(--bg-2);
+}
+
 .sf-right-rail {
   gap: 8px;
 }

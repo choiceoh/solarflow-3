@@ -653,3 +653,23 @@
   - **신규 메뉴 추가 시**: NAV_GROUPS에 메뉴를 추가하는 것만으로 "전체" 탭(menus="all")이 있는 테넌트에서는 즉시 노출. 다른 탭에 분류하려면 admin이 사이트 설정에서 매핑 추가 (module.md/baro.md 체크리스트 갱신).
   - **persona 값 검증 안 함**: 백엔드는 `PUT /users/me/persona`에서 persona 값을 자유 문자열로 수용 (탭 정의가 admin 데이터라 enum 검증 불가). 프론트가 탭 목록과 매칭 안 되면 default 자동 폴백.
 - **날짜**: 2026-05-03
+
+## D-113: `/purchase-history` — PO 체인 기준 read-only 통합 타임라인
+- **결정**: 단가이력을 별도 페이지 `/purchase-history`(현황 그룹)로 분리하고, 좌측 PO 체인 리스트 + 우측 통합 타임라인(PO 생성·변경계약·단가·PO audit·LC·BL·TT) 9종 이벤트로 구성한다. 새 페이지는 **완전 read-only**이며 모든 이벤트는 `/procurement` 운영 페이지로 딥링크된다. 기존 `/procurement?tab=price` 단가 탭과 단가 수동 입력/수정/일괄 생성 기능은 폐기하고, `?tab=price` 진입 시 `/purchase-history`로 자동 리다이렉트한다.
+- **이유**:
+  - **단가이력의 본질이 "PO에 종속된 시간축 이벤트"** — `purchase_orders.po_id` = 한 계약 한 시점, 변경계약은 별도 PO row(`parent_po_id` 체인)로 관리됨. 단가만 따로 보는 화면(이전 단가 탭)은 변경계약·발주 변경 audit과 분절돼 운영자 멘탈 모델과 맞지 않았다.
+  - **통합 타임라인의 가치**: "이 계약은 어떻게 시작해서 어떻게 끝났는가"를 한 화면에 — PO 탭 → LC 탭 → BL 탭 순회 없이 답할 수 있다.
+  - **클라이언트 합성 (백엔드 변경 0 약속)**: `/api/v1/pos`, `/price-histories`, `/lcs`, `/bls`, `/tts`, `/audit-logs` 6개 기존 엔드포인트 병렬 fetch + 클라이언트 정규화. 단, 운영 누적 대비 audit_logs는 `from`/`limit` 필터를 백엔드 핸들러에 추가해 "최근 1년 + 1000건" 컷오프(이건 백엔드 1파일 패치).
+  - **단가 수동 편집 폐기 (회귀 trade-off)**: PO 자동 생성 단가이력만 유지하고 수동 등록·수정·일괄 생성은 제거. 자동 생성 단가에 오타 발생 시 정정 경로가 사라짐 — 운영자 합의 후 admin 스크립트로 보완 예정.
+- **운영 기준**:
+  - **체인 식별자**: `parent_po_id`가 null인 원계약 PO의 `po_id`가 chain_id. URL은 `/purchase-history?chain={chain_id}`.
+  - **체인 그룹핑 안전선**: `findChainHeadId` (frontend/src/lib/purchaseHistory.ts)에 cycle 방문 추적 + 32 깊이 cap. DB 무결성 깨져도 페이지가 무한루프 안 함.
+  - **사이드바 진입**: `현황` 그룹, `tenants: ['topsolar']`, `menu: 'purchase_history'` 신규 키 — admin/operator/executive 모두 접근(executive도 구매 이력 read-only 조회 필요).
+  - **딥링크**: PO 관련 이벤트는 `/procurement?po_id={po_id}` → ProcurementPage가 query 받아 PODetailView 자동 펼침. LC/BL/TT는 탭 단위까지 (`?tab=lc` 등) — 향후 별건 작업으로 LC/BL/TT 자동 선택 추가 가능.
+  - **수동 단가이력 표시**: `related_po_id`가 null인 PriceHistory는 (a) 체인 뷰: 제조사 일치하면 컨텍스트로 노출, (b) 회사 전체 뷰: `[PO 미연결]` 라벨로 별도 노출.
+  - **audit diff 표시**: `purchase_orders` audit `update`만 처리 — `old_data`/`new_data` 객체 비교, `updated_at`/`created_at`/`po_id`/`company_id` 메타 필드 스킵, 한국어 라벨(`status` → `상태` 등) 적용.
+- **검증**:
+  - `frontend/src/lib/purchaseHistory.test.ts` — 16 PASS (체인 빌더 사이클·깊이 안전선, audit diff edge case)
+  - 타입체크: 변경 파일 0건 신규 에러 (baseline 27건은 BL/Meta/templates 기존 잔존)
+  - PR 분할: PR1(골격+단가/변경계약), PR2(audit/LC/BL/TT 통합), PR3(단가 탭 제거+리다이렉트), PR4(권한·딥링크·UX·테스트)
+- **날짜**: 2026-05-03

@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Database,
   FileSignature,
+  History,
   Landmark,
   LogOut,
   PanelLeftClose,
@@ -142,6 +143,8 @@ const NAV_GROUPS: CommandNavGroup[] = [
       // D-108: LC 한도/매출 분석은 탑솔라 전용 (원가 기반)
       { key: 'banking', label: 'L/C 한도', abbr: '한도', path: '/banking', icon: Landmark, menu: 'banking', tenants: ['topsolar'] },
       { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs', tenants: ['topsolar'] },
+      // 구매 이력: PO/단가/변경계약 read-only 통합 타임라인 (탑솔라 모듈 수입 흐름 전용, executive 포함)
+      { key: 'purchase-history', label: '구매 이력', abbr: '이력', path: '/purchase-history', icon: History, menu: 'purchase_history', tenants: ['topsolar'] },
       // BARO Phase 3: 거래처별 미수금/한도 보드 (BARO 전용)
       { key: 'baro-credit', label: '미수금/한도', abbr: '미수', path: '/baro/credit-board', icon: ShieldAlert, menu: 'baro_credit', tenants: ['baro'] },
     ],
@@ -162,6 +165,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
 const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/inventory': { title: '가용재고', breadcrumb: '재고 / 예약 가능 수량' },
   '/procurement': { title: 'P/O 발주', breadcrumb: '구매 / 발주 관리' },
+  '/purchase-history': { title: '구매 이력', breadcrumb: '현황 / 계약 체인 통합 타임라인' },
   '/customs': { title: '면장/원가', breadcrumb: '입고 / 원가 계산' },
   '/orders': { title: '수주 관리', breadcrumb: '판매 / 수주 및 수금' },
   '/banking': { title: 'L/C 한도', breadcrumb: '현황 / 은행 한도' },
