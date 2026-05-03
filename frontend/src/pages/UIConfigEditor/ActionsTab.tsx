@@ -116,7 +116,7 @@ export function ActionsTab({
               <FieldInput label="idField (행에서 :id로 쓸 필드)" value={a.idField ?? ''} mono
                 onChange={(v) => update(idx, { ...a, idField: v || undefined })} />
               <div className="col-span-2 space-y-1">
-                <Label className="text-[10px] text-muted-foreground">
+                <Label className="text-xs text-muted-foreground">
                   confirm 다이얼로그 (title / description / 버튼 라벨 / variant)
                 </Label>
                 <div className="grid grid-cols-2 gap-2">

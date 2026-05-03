@@ -36,7 +36,7 @@ export const TokenPanel = () => {
           <button
             type="button"
             onClick={resetAllTokenOverrides}
-            className="rounded border border-slate-300 px-2 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50"
+            className="rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-50"
           >
             전체 기본값 ({overriddenCount})
           </button>
@@ -44,7 +44,7 @@ export const TokenPanel = () => {
       </div>
       {groupedTokens.map(({ category, tokens }) => (
         <section key={category}>
-          <h3 className="mb-1.5 border-b border-slate-200 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          <h3 className="mb-1.5 border-b border-slate-200 pb-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
             {CATEGORY_LABEL[category]}
           </h3>
           <div className="divide-y divide-slate-100">
@@ -105,7 +105,7 @@ const TokenRow = ({ token, value, isOverridden, onChange, onReset }: TokenRowPro
         />
       )}
       <div className="min-w-0 flex-1 truncate text-xs text-slate-700">{token.label}</div>
-      <code className="shrink-0 font-mono text-[10px] text-slate-500">
+      <code className="shrink-0 font-mono text-xs text-slate-500">
         {token.type === 'rem' ? `${remToPx(value)}px` : ''}
       </code>
       {eyeDropperReady && (

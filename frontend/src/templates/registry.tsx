@@ -68,7 +68,7 @@ export const cellRenderers: Record<string, CellRenderer> = {
     return r.group_trade ? (
       <span className="inline-flex items-center gap-1.5">
         <span className="sf-pill info">그룹</span>
-        <span className="text-[10px]" style={{ color: 'var(--sf-ink-3)' }}>{r.target_company_name}</span>
+        <span className="text-xs" style={{ color: 'var(--sf-ink-3)' }}>{r.target_company_name}</span>
       </span>
     ) : <span>—</span>;
   },
@@ -134,8 +134,8 @@ export const cellRenderers: Record<string, CellRenderer> = {
   site_type_badge: (v) => {
     const t = v as string;
     return t === 'own'
-      ? <Badge variant="outline" className="border-purple-400 text-purple-700 text-[10px]">자체</Badge>
-      : <Badge variant="outline" className="border-orange-400 text-orange-700 text-[10px]">EPC</Badge>;
+      ? <Badge variant="outline" className="border-purple-400 text-purple-700 text-xs">자체</Badge>
+      : <Badge variant="outline" className="border-orange-400 text-orange-700 text-xs">EPC</Badge>;
   },
   // Phase 4: 창고 유형 라벨 (port/factory/vendor → 항구/공장/업체)
   warehouse_type_badge: (v) => {
@@ -156,9 +156,9 @@ export const cellRenderers: Record<string, CellRenderer> = {
     const r = row as BLShipment & { _agg?: { firstName?: string; firstCode?: string; extraCount?: number } };
     if (!r._agg?.firstName) return <span className="text-muted-foreground">—</span>;
     return (
-      <div className="text-[11px]">
+      <div className="text-xs">
         <div className="truncate max-w-[200px]">{r._agg.firstName}</div>
-        <div className="text-[10px] text-muted-foreground font-mono">
+        <div className="text-xs text-muted-foreground font-mono">
           {r._agg.firstCode ?? '—'}{r._agg.extraCount ? ` 외 ${r._agg.extraCount}건` : ''}
         </div>
       </div>
@@ -751,7 +751,7 @@ export const formContentBlocks: Record<string, FormContentBlock> = {
           <span className="font-mono"> 제조사</span> = {mfg || '(cascade 대기)'} ·
           <span className="font-mono"> 라인 합계</span> = <strong>{total}</strong> EA
         </div>
-        <div className="text-[10px] text-amber-700">
+        <div className="text-xs text-amber-700">
           이 위젯은 폼의 watch() 로 라이브 표시 — OCR 위젯 / 결제조건 파서도 같은 패턴
         </div>
       </div>
@@ -829,7 +829,7 @@ export const railBlocks: Record<string, RailBlock> = {
               <div key={(r[c.idField] as string) ?? idx} className="rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2">
                 <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{primary}</div>
                 {c.metaRender === 'outbound' ? (
-                  <div className="mono mt-1 text-[10px] text-[var(--ink-4)]">
+                  <div className="mono mt-1 text-xs text-[var(--ink-4)]">
                     {OUTBOUND_STATUS_LABEL[ob.status] ?? ob.status} · {ob.quantity?.toLocaleString?.() ?? 0}장
                   </div>
                 ) : null}
@@ -866,7 +866,7 @@ export const railBlocks: Record<string, RailBlock> = {
           {list.map((p) => (
             <div key={p.partner_id} className="rounded border border-[var(--line)] bg-[var(--bg-2)] px-2.5 py-2">
               <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{p.partner_name}</div>
-              <div className="mono mt-1 text-[10px] text-[var(--ink-4)]">
+              <div className="mono mt-1 text-xs text-[var(--ink-4)]">
                 {labels[p.partner_type] ?? p.partner_type} · {p.erp_code ?? 'ERP 미지정'}
               </div>
             </div>
@@ -880,7 +880,7 @@ export const railBlocks: Record<string, RailBlock> = {
     const count = c.countFromFilter ? filters[c.countFromFilter] || '전체' : undefined;
     return (
       <RailBlockUI title={c.title} count={count}>
-        <div className="text-[11px] leading-5 text-[var(--ink-3)]">{c.text}</div>
+        <div className="text-xs leading-5 text-[var(--ink-3)]">{c.text}</div>
       </RailBlockUI>
     );
   },
