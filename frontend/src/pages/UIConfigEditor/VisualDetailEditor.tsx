@@ -91,6 +91,8 @@ export default function VisualDetailEditor({
   const [selectedTabIdx, setSelectedTabIdx] = useState<number | null>(null);
   // Phase 4 follow-up #1: sections 의 detailField 선택 (selection-driven 우측 패널).
   const [selectedDetailField, setSelectedDetailField] = useState<{ sec: number; field: number } | null>(null);
+  // Polish P-4 — 다중 선택 (Cmd/Ctrl+클릭). 키 'sec-field' 형식.
+  const [multiSelected, setMultiSelected] = useState<Set<string>>(new Set());
   const sections = value.sections ?? [];
   const fieldCount = sections.reduce((s, sec) => s + (sec.fields?.length ?? 0), 0);
   const tabs = value.tabs ?? [];
@@ -99,11 +101,13 @@ export default function VisualDetailEditor({
     ? sections[selectedDetailField.sec]?.fields?.[selectedDetailField.field]
     : null;
 
-  // Polish P-2 — 우측 패널 선택 기반 단축키
+  // Polish P-2 — 우측 패널 선택 기반 단축키 + Polish P-4 — 다중 선택 일괄 처리
   // Esc: 선택 해제 / Del·Backspace: 선택된 필드 제거 / Cmd+D: 선택된 필드 복제
+  // multiSelected 가 비어있지 않으면 batch 동작 (selectedDetailField 보다 우선)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!selectedDetailField) return;
+      const hasMulti = multiSelected.size > 0;
+      if (!selectedDetailField && !hasMulti) return;
       const target = e.target as HTMLElement | null;
       const inEditable = !!target && (
         target.tagName === 'INPUT' ||
@@ -115,43 +119,97 @@ export default function VisualDetailEditor({
       if (e.key === 'Escape') {
         e.preventDefault();
         setSelectedDetailField(null);
+        setMultiSelected(new Set());
         return;
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
-        const { sec, field } = selectedDetailField;
-        const newSections = sections.map((s, sIdx) => {
-          if (sIdx !== sec) return s;
-          return { ...s, fields: (s.fields ?? []).filter((_, i) => i !== field) };
-        });
-        onChange({ ...value, sections: newSections });
-        setSelectedDetailField(null);
+        if (hasMulti) {
+          // 다중 일괄 삭제 — 각 sec 별로 한 번에 filter (인덱스 시프트 회피)
+          const removeBySec = new Map<number, Set<number>>();
+          multiSelected.forEach((k) => {
+            const [s, f] = k.split('-').map(Number);
+            if (!removeBySec.has(s)) removeBySec.set(s, new Set());
+            removeBySec.get(s)!.add(f);
+          });
+          const newSections = sections.map((s, sIdx) => {
+            const toRemove = removeBySec.get(sIdx);
+            if (!toRemove) return s;
+            return { ...s, fields: (s.fields ?? []).filter((_, i) => !toRemove.has(i)) };
+          });
+          onChange({ ...value, sections: newSections });
+          setMultiSelected(new Set());
+          return;
+        }
+        if (selectedDetailField) {
+          const { sec, field } = selectedDetailField;
+          const newSections = sections.map((s, sIdx) => {
+            if (sIdx !== sec) return s;
+            return { ...s, fields: (s.fields ?? []).filter((_, i) => i !== field) };
+          });
+          onChange({ ...value, sections: newSections });
+          setSelectedDetailField(null);
+        }
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
         e.preventDefault();
-        const { sec, field } = selectedDetailField;
-        const target = sections[sec]?.fields?.[field];
-        if (!target) return;
-        // detail 전체 필드 key 충돌 회피
-        const allKeys = new Set(sections.flatMap((s) => (s.fields ?? []).map((f) => f.key)));
-        let candidate = `${target.key}_copy`;
-        let n = 2;
-        while (allKeys.has(candidate)) { candidate = `${target.key}_copy${n}`; n++; }
-        const cloned: DetailFieldConfig = { ...target, key: candidate, label: `${target.label} (복사)` };
-        const newSections = sections.map((s, sIdx) => {
-          if (sIdx !== sec) return s;
-          const fs = s.fields ?? [];
-          return { ...s, fields: [...fs.slice(0, field + 1), cloned, ...fs.slice(field + 1)] };
-        });
-        onChange({ ...value, sections: newSections });
-        // 새로 복제된 필드를 선택
-        setSelectedDetailField({ sec, field: field + 1 });
+        if (hasMulti) {
+          // 다중 일괄 복제 — 각 sec 별로 한 번에 splice (역순)
+          const dupBySec = new Map<number, number[]>();
+          multiSelected.forEach((k) => {
+            const [s, f] = k.split('-').map(Number);
+            if (!dupBySec.has(s)) dupBySec.set(s, []);
+            dupBySec.get(s)!.push(f);
+          });
+          const allKeys = new Set(sections.flatMap((s) => (s.fields ?? []).map((f) => f.key)));
+          const dedupKey = (base: string): string => {
+            let candidate = `${base}_copy`;
+            let n = 2;
+            while (allKeys.has(candidate)) { candidate = `${base}_copy${n}`; n++; }
+            allKeys.add(candidate);
+            return candidate;
+          };
+          const newSections = sections.map((s, sIdx) => {
+            const indices = dupBySec.get(sIdx);
+            if (!indices) return s;
+            const fs = [...(s.fields ?? [])];
+            // 역순으로 splice — 인덱스 시프트 회피
+            indices.sort((a, b) => b - a).forEach((fIdx) => {
+              const tgt = fs[fIdx];
+              if (!tgt) return;
+              const cloned: DetailFieldConfig = { ...tgt, key: dedupKey(tgt.key), label: `${tgt.label} (복사)` };
+              fs.splice(fIdx + 1, 0, cloned);
+            });
+            return { ...s, fields: fs };
+          });
+          onChange({ ...value, sections: newSections });
+          // 복제 후 multi 해제 (새 항목 인덱스 추적 복잡 — 단순화)
+          setMultiSelected(new Set());
+          return;
+        }
+        if (selectedDetailField) {
+          const { sec, field } = selectedDetailField;
+          const tgt = sections[sec]?.fields?.[field];
+          if (!tgt) return;
+          const allKeys = new Set(sections.flatMap((s) => (s.fields ?? []).map((f) => f.key)));
+          let candidate = `${tgt.key}_copy`;
+          let n = 2;
+          while (allKeys.has(candidate)) { candidate = `${tgt.key}_copy${n}`; n++; }
+          const cloned: DetailFieldConfig = { ...tgt, key: candidate, label: `${tgt.label} (복사)` };
+          const newSections = sections.map((s, sIdx) => {
+            if (sIdx !== sec) return s;
+            const fs = s.fields ?? [];
+            return { ...s, fields: [...fs.slice(0, field + 1), cloned, ...fs.slice(field + 1)] };
+          });
+          onChange({ ...value, sections: newSections });
+          setSelectedDetailField({ sec, field: field + 1 });
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedDetailField, sections, value, onChange]);
+  }, [selectedDetailField, multiSelected, sections, value, onChange]);
 
   const main = (
     <div className="flex flex-col h-full min-h-0">
@@ -173,6 +231,17 @@ export default function VisualDetailEditor({
             value={value}
             onChange={onChange}
             onSelectDetailField={(sec, field) => setSelectedDetailField({ sec, field })}
+            multiSelected={multiSelected}
+            onToggleMultiSelect={(sec, field) => {
+              const k = `${sec}-${field}`;
+              setMultiSelected((prev) => {
+                const next = new Set(prev);
+                if (next.has(k)) next.delete(k);
+                else next.add(k);
+                return next;
+              });
+              setSelectedDetailField(null); // 우측 패널 단일 선택 해제 (배타)
+            }}
           />
         )}
         {tab === 'tabs' && (
@@ -481,10 +550,12 @@ function BasicTab({ value, onChange }: { value: MetaDetailConfig; onChange: (nex
   );
 }
 
-function SectionsTab({ value, onChange, onSelectDetailField }: {
+function SectionsTab({ value, onChange, onSelectDetailField, multiSelected, onToggleMultiSelect }: {
   value: MetaDetailConfig;
   onChange: (next: MetaDetailConfig) => void;
   onSelectDetailField?: (sectionIdx: number, fieldIdx: number) => void;
+  multiSelected?: Set<string>;
+  onToggleMultiSelect?: (sectionIdx: number, fieldIdx: number) => void;
 }) {
   const sections = value.sections ?? [];
   const blockOptions = useMemo(() => Object.keys(contentBlocks).sort().map((id) => ({ value: id, label: id })), []);
@@ -569,6 +640,14 @@ function SectionsTab({ value, onChange, onSelectDetailField }: {
           <Plus className="h-3 w-3 mr-1" />섹션 추가
         </Button>
       </div>
+      {multiSelected && multiSelected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-[11px]">
+          <span className="font-medium text-primary">{multiSelected.size}개 선택됨</span>
+          <span className="text-muted-foreground">
+            Cmd/Ctrl+D 일괄 복제 · Del 일괄 삭제 · Esc 해제
+          </span>
+        </div>
+      )}
       {(detailIssueCounts.error > 0 || detailIssueCounts.warn > 0) && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px]">
           <span className="font-medium text-amber-900">검증:</span>
@@ -626,6 +705,8 @@ function SectionsTab({ value, onChange, onSelectDetailField }: {
               blockOptions={blockOptions}
               collapsed={isCollapsed}
               allDetailFieldKeys={allDetailFieldKeys}
+              multiSelected={multiSelected}
+              onToggleMultiSelect={onToggleMultiSelect ? (fIdx) => onToggleMultiSelect(sIdx, fIdx) : undefined}
               onToggleCollapse={() => toggleSection(sIdx)}
               onUpdate={(next) => updateSection(sIdx, next)}
               onMoveUp={() => onChange({ ...value, sections: moveInArray(sections, sIdx, -1) })}
@@ -671,8 +752,9 @@ function SectionsTab({ value, onChange, onSelectDetailField }: {
 }
 
 function SectionCard({
-  section, index, total, blockOptions, collapsed, allDetailFieldKeys, onToggleCollapse,
-  onUpdate, onMoveUp, onMoveDown, onDuplicate, onRemove, onSelectField,
+  section, index, total, blockOptions, collapsed, allDetailFieldKeys,
+  multiSelected, onToggleMultiSelect,
+  onToggleCollapse, onUpdate, onMoveUp, onMoveDown, onDuplicate, onRemove, onSelectField,
 }: {
   section: DetailSectionConfig;
   index: number;
@@ -680,6 +762,8 @@ function SectionCard({
   blockOptions: { value: string; label: string }[];
   collapsed: boolean;
   allDetailFieldKeys: string[];
+  multiSelected?: Set<string>;
+  onToggleMultiSelect?: (fIdx: number) => void;
   onToggleCollapse: () => void;
   onUpdate: (next: DetailSectionConfig) => void;
   onMoveUp: () => void;
@@ -854,6 +938,8 @@ function SectionCard({
               const fieldIssues = fieldIssuesByIdx[fIdx] ?? [];
               const fErrorCount = fieldIssues.filter((i) => i.level === 'error').length;
               const fWarnCount = fieldIssues.filter((i) => i.level === 'warn').length;
+              const multiKey = `${index}-${fIdx}`;
+              const isMultiSelected = !!multiSelected?.has(multiKey);
               return (
               <div
                 key={fIdx}
@@ -865,7 +951,15 @@ function SectionCard({
                 onDragOver={(e) => { e.preventDefault(); onDragOver(fIdx); }}
                 onDragEnd={onDragEnd}
                 onDrop={(e) => { e.preventDefault(); onDrop(fIdx); }}
-                className={`group rounded border p-2 grid grid-cols-12 gap-2 text-xs bg-muted/20 transition-opacity ${isDragging ? 'opacity-40' : ''} ${isDragOver ? 'border-t-2 border-t-foreground' : ''} ${fErrorCount > 0 ? 'border-rose-300' : fWarnCount > 0 ? 'border-amber-300' : ''}`}
+                onClick={(e) => {
+                  // Cmd/Ctrl+클릭 시에만 multi-select 토글 — 입력/버튼 클릭은 무시
+                  if (!(e.metaKey || e.ctrlKey)) return;
+                  if (!onToggleMultiSelect) return;
+                  if ((e.target as HTMLElement).closest('input,textarea,button,select,[role="combobox"]')) return;
+                  e.preventDefault();
+                  onToggleMultiSelect(fIdx);
+                }}
+                className={`group rounded border p-2 grid grid-cols-12 gap-2 text-xs bg-muted/20 transition-opacity ${isDragging ? 'opacity-40' : ''} ${isDragOver ? 'border-t-2 border-t-foreground' : ''} ${fErrorCount > 0 ? 'border-rose-300' : fWarnCount > 0 ? 'border-amber-300' : ''} ${isMultiSelected ? 'ring-2 ring-primary bg-primary/5' : ''}`}
               >
                 <div className="col-span-1 flex flex-col items-center gap-1">
                   <GripVertical
