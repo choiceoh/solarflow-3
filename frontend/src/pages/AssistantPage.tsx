@@ -8,7 +8,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
-import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
 import { detectPageContext } from '@/lib/pageContext';
@@ -180,24 +179,12 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
 
   // 5.1 PR-B: 현재 페이지 컨텍스트 자동 주입 — backend 가 system prompt 에 합성.
   // 단 /assistant 풀 페이지에선 의미 없는 noise 라 스킵 (drawer 안에서만 가치).
-  // C-1: 인스펙터에서 선택된 요소도 함께 — LLM 이 "이 요소" 설명 요청에 활용.
   const location = useLocation();
   const pageContextRef = useRef<ReturnType<typeof detectPageContext> | undefined>(undefined);
   if (location.pathname === '/assistant') {
     pageContextRef.current = undefined;
   } else {
-    const base = detectPageContext(location.pathname);
-    const target = useAppStore.getState().inspectorTarget;
-    pageContextRef.current = target
-      ? {
-          ...base,
-          selected_element: {
-            tag_name: target.tagName,
-            class_name: target.className,
-            selector: target.selector,
-          },
-        }
-      : base;
+    pageContextRef.current = detectPageContext(location.pathname);
   }
 
   const transport = useMemo(

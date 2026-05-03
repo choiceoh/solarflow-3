@@ -59,7 +59,7 @@ type assistantMessage struct {
 }
 
 // system 프롬프트는 서버가 JWT context로 구성하므로 클라이언트에서 받지 않는다 (변조 방지).
-// 단 page_context 는 *어떤 화면을 보고 있는지* 만 알리는 용도라 서버가 합성에 통합한다 (변조 위험 낮음 — pathname/scope/config_id 만).
+// 단 page_context 는 *어떤 화면을 보고 있는지* 만 알리는 용도라 서버가 합성에 통합한다.
 type assistantRequest struct {
 	Messages    []assistantMessage    `json:"messages"`
 	Model       string                `json:"model,omitempty"`
@@ -71,17 +71,9 @@ type assistantRequest struct {
 // assistantPageContext — 클라이언트가 현재 보고 있는 화면 정보. 서버가 system prompt 에 자동 주입.
 // 권한·도구 노출은 영향 안 받음 — 단순 hint.
 type assistantPageContext struct {
-	Path            string                    `json:"path,omitempty"`
-	Scope           string                    `json:"scope,omitempty"`
-	ConfigID        string                    `json:"config_id,omitempty"`
-	SelectedElement *assistantSelectedElement `json:"selected_element,omitempty"`
-}
-
-// assistantSelectedElement — 인스펙터에서 현재 선택된 요소. 사용자가 "이 요소" 자연어 요청 시 LLM 이 활용.
-type assistantSelectedElement struct {
-	TagName   string `json:"tag_name,omitempty"`
-	ClassName string `json:"class_name,omitempty"`
-	Selector  string `json:"selector,omitempty"`
+	Path     string `json:"path,omitempty"`
+	Scope    string `json:"scope,omitempty"`
+	ConfigID string `json:"config_id,omitempty"`
 }
 
 // defaultModelForProvider — provider별 모델 기본값.
@@ -309,20 +301,6 @@ func buildSystemPrompt(ctx context.Context, pageContext *assistantPageContext) s
 			b.WriteString("- 메타 config 미매핑 — 이 화면의 구조를 설명할 수는 있지만 변경은 AI가 수행하지 않습니다.\n")
 		}
 		b.WriteString("\n")
-	}
-	if pageContext != nil && pageContext.SelectedElement != nil {
-		se := pageContext.SelectedElement
-		b.WriteString("[선택된 요소 — 인스펙터로 클릭한 element]\n")
-		if se.TagName != "" {
-			fmt.Fprintf(&b, "- 태그: %s\n", se.TagName)
-		}
-		if se.Selector != "" {
-			fmt.Fprintf(&b, "- selector: %s\n", se.Selector)
-		}
-		if se.ClassName != "" {
-			fmt.Fprintf(&b, "- 현재 className: %s\n", se.ClassName)
-		}
-		b.WriteString("사용자가 \"이 요소\" / \"이 버튼\" / \"이 카드\"를 언급하면 현재 구조와 역할을 설명하세요. 스타일 변경안 작성이나 className 후보 생성은 하지 마세요.\n\n")
 	}
 	b.WriteString(assistantDomainBlock)
 	fmt.Fprintf(&b, "\n[역할별 가이드]\n%s\n", roleGuide)
