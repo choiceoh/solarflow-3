@@ -16,6 +16,26 @@
 
 ---
 
+## 2026-05-03 세션 — 자료실 사이드바 진입 추가
+
+### 완료
+- 왼쪽 사이드바 `도구` 그룹에 `자료실` 메뉴 추가 (`/library`)
+- `library` 메뉴 권한 키 추가 — admin 전체, operator/executive/manager/viewer 모두 자료실 진입 가능
+- `/library` 페이지 추가
+  - 사용자 권한과 테넌트(topsolar/baro)에 따라 열 수 있는 자료 카드만 표시
+  - 엑셀 입력 양식, B/L 서류 보관, 구매이력, BARO 입고예정/구매이력, 결재안, 기준정보, AI OCR, 개인 설정으로 연결
+- 상단 라우트 타이틀/브레드크럼에 `자료실` 추가
+
+### 검증
+- `cd frontend && npm ci` 성공 — 워크트리 로컬 의존성 복원
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지
+- `cd frontend && npm run test` 성공 — 8 files / 65 tests
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 85건 출력
+- `git diff --check` 성공
+- `graphify update .` 성공 — 3213 nodes / 5496 edges / 337 communities
+
+---
+
 ## 2026-05-03 세션 — 런타임 인스펙터 제거
 
 ### 완료
