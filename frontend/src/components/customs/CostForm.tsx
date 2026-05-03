@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { fetchWithAuth } from '@/lib/api';
 import type { Product } from '@/types/masters';
 import type { DeclarationCost } from '@/types/customs';
+import { SandboxBanner, useFormReadOnly } from '@/onboarding';
 
 function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: string }) {
   return <span className={`flex flex-1 text-left truncate ${text ? '' : 'text-muted-foreground'}`} data-slot="select-value">{text || placeholder}</span>;
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export default function CostForm({ open, onOpenChange, onSubmit, declarationId, editData }: Props) {
+  const readOnly = useFormReadOnly(editData);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -88,6 +90,7 @@ export default function CostForm({ open, onOpenChange, onSubmit, declarationId, 
   }, [editData, open]);
 
   const handleSubmit = async () => {
+    if (readOnly) return;
     setLoading(true);
     setSubmitError('');
     try {
@@ -127,7 +130,9 @@ export default function CostForm({ open, onOpenChange, onSubmit, declarationId, 
         <DialogHeader>
           <DialogTitle>{editData ? '원가 수정' : '원가 추가'}</DialogTitle>
         </DialogHeader>
+        {readOnly && <SandboxBanner />}
         {submitError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{submitError}</div>}
+        <fieldset disabled={readOnly} className="contents">
         <div className="grid gap-3 py-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -237,11 +242,14 @@ export default function CostForm({ open, onOpenChange, onSubmit, declarationId, 
             <Textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={2} />
           </div>
         </div>
+        </fieldset>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>취소</Button>
-          <Button onClick={handleSubmit} disabled={loading || !productId || !quantity || !exchangeRate || !cifTotalKrw}>
-            {loading ? '처리 중...' : editData ? '수정' : '추가'}
-          </Button>
+          {!readOnly && (
+            <Button onClick={handleSubmit} disabled={loading || !productId || !quantity || !exchangeRate || !cifTotalKrw}>
+              {loading ? '처리 중...' : editData ? '수정' : '추가'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

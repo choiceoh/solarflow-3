@@ -26,6 +26,7 @@ import {
 } from '@/lib/numberRules';
 import type { BLShipment, BLLineItem } from '@/types/inbound';
 import type { Company, Manufacturer, Product, Warehouse } from '@/types/masters';
+import { SandboxBanner, useFormReadOnly } from '@/onboarding';
 import {
   type OCRFieldCandidate, type CustomsDeclarationOCRFields, type CustomsDeclarationOCRLine,
   type OCRExtractResponse,
@@ -194,6 +195,7 @@ interface Props {
 }
 
 export default function BLForm({ open = true, onOpenChange, onSubmit, editData, presetPOId, presetLCId, embedded = false, variant = 'dialog', initialCustomsOCRFile = null, initialCustomsOCRFileKey }: Props) {
+  const readOnly = useFormReadOnly(editData);
   const globalCompanyId = useAppStore((s) => s.selectedCompanyId);
   const storeCompanies = useAppStore((s) => s.companies);
   const customsOCRInputRef = useRef<HTMLInputElement | null>(null);
@@ -1426,8 +1428,10 @@ export default function BLForm({ open = true, onOpenChange, onSubmit, editData, 
           </div>
         )}
 
+        {readOnly && <SandboxBanner />}
+        <fieldset disabled={readOnly} className="contents">
         <form
-          onSubmit={(e) => { e.preventDefault(); handle(); }}
+          onSubmit={(e) => { e.preventDefault(); if (!readOnly) handle(); }}
           onKeyDown={(e) => {
             // Enter 키로 폼 제출 방지 (Textarea 제외) — 저장 버튼 클릭 시에만 제출
             if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
@@ -2030,11 +2034,14 @@ export default function BLForm({ open = true, onOpenChange, onSubmit, editData, 
               <span className="text-xs text-muted-foreground mr-auto">수정사항 없음</span>
             )}
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
-            <Button type="submit" disabled={isSubmitting || !selType || (!!editData && !isDirtyAll)}>
-              {isSubmitting ? '저장 중...' : '저장'}
-            </Button>
+            {!readOnly && (
+              <Button type="submit" disabled={isSubmitting || !selType || (!!editData && !isDirtyAll)}>
+                {isSubmitting ? '저장 중...' : '저장'}
+              </Button>
+            )}
           </DialogFooter>
         </form>
+        </fieldset>
     </>
   );
 

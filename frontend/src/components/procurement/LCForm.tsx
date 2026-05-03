@@ -14,6 +14,7 @@ import { fetchWithAuth } from '@/lib/api';
 import { formatUSD, shortMfgName, poMfgSpecLabel, poLineSummary } from '@/lib/utils';
 import type { LCLineItem, LCRecord, PurchaseOrder, POLineItem, TTRemittance } from '@/types/procurement';
 import type { Bank, Company, Product } from '@/types/masters';
+import { SandboxBanner, useFormReadOnly } from '@/onboarding';
 
 function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: string }) {
   return <span className={`flex flex-1 text-left truncate ${text ? '' : 'text-muted-foreground'}`} data-slot="select-value">{text || placeholder}</span>;
@@ -153,6 +154,7 @@ function rowAmountUSD(row: LCLineRow, qty: number): number {
 }
 
 export default function LCForm({ open, onOpenChange, onSubmit, editData, defaultPoId, embedded = false }: Props) {
+  const readOnly = useFormReadOnly(editData);
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
@@ -423,8 +425,10 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData, default
         ) : (
           <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         )}
+        {readOnly && <SandboxBanner />}
         {submitError && <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{submitError}</div>}
-        <form onSubmit={handleSubmit(handle)} className="space-y-3">
+        <fieldset disabled={readOnly} className="contents">
+        <form onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit(handle)} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>LC번호</Label><Input {...register('lc_number')} /></div>
             <div className="space-y-1.5">
@@ -731,8 +735,9 @@ export default function LCForm({ open, onOpenChange, onSubmit, editData, default
             </Select>
           </div>
           <div className="space-y-1.5"><Label>메모</Label><Textarea {...register('memo')} rows={2} /></div>
-          <DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button><Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button></DialogFooter>
+          <DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>{!readOnly && <Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button>}</DialogFooter>
         </form>
+        </fieldset>
     </>
   );
 
