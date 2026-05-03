@@ -2,9 +2,14 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { DateInput } from '@/components/ui/date-input';
 import { useAppStore } from '@/stores/appStore';
 import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
+import { notify } from '@/lib/notify';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import OutboundListTable, { OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META } from '@/components/outbound/OutboundListTable';
 import { useColumnVisibility } from '@/lib/columnVisibility';
@@ -15,6 +20,7 @@ import SaleListTable, { SALE_TABLE_ID, SALE_COLUMN_META } from '@/components/out
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { FilterButton, FilterChips, RailBlock } from '@/components/command/MockupPrimitives';
+import type { SaleListItem } from '@/types/outbound';
 import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
   type OutboundStatus, type UsageCategory,
@@ -35,6 +41,10 @@ export default function OutboundPage() {
   const saleColPin = useColumnPinning(SALE_TABLE_ID);
   const [activeTab, setActiveTab] = useState<'outbound' | 'sales'>('outbound');
   const [searchText, setSearchText] = useState('');
+  const [selectedSaleIds, setSelectedSaleIds] = useState<Set<string>>(new Set());
+  const [bulkInvoiceOpen, setBulkInvoiceOpen] = useState(false);
+  const [bulkInvoiceDate, setBulkInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [bulkInvoiceSubmitting, setBulkInvoiceSubmitting] = useState(false);
   const _loc = useLocation();
   // R1-1: 사이드바 "출고/판매" 클릭 시 목록 복귀 — URL → 상태 동기화
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -81,6 +91,37 @@ export default function OutboundPage() {
   const handleCreate = async (formData: Record<string, unknown>) => {
     await fetchWithAuth('/api/v1/outbounds', { method: 'POST', body: JSON.stringify(formData) });
     reloadOutbounds();
+  };
+
+  const isSalePending = (item: SaleListItem) =>
+    !(item.tax_invoice_date ?? item.sale?.tax_invoice_date);
+
+  const selectedPendingSales = sales.filter((sale) => selectedSaleIds.has(sale.sale_id) && isSalePending(sale));
+
+  const handleBulkInvoice = async () => {
+    if (selectedPendingSales.length === 0) return;
+    setBulkInvoiceSubmitting(true);
+    const results = await Promise.allSettled(
+      selectedPendingSales.map((item) =>
+        fetchWithAuth(`/api/v1/sales/${item.sale_id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ ...item.sale, tax_invoice_date: bulkInvoiceDate }),
+        })
+      )
+    );
+    const ok = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - ok;
+    setBulkInvoiceSubmitting(false);
+    if (failed === 0) {
+      notify.success(`계산서 ${ok}건 발행 완료`);
+    } else if (ok === 0) {
+      notify.error(`계산서 발행 실패 — ${failed}건 모두 실패`);
+    } else {
+      notify.warning(`계산서 ${ok}건 발행 / ${failed}건 실패`);
+    }
+    setBulkInvoiceOpen(false);
+    setSelectedSaleIds(new Set());
+    reloadSales();
   };
 
   const months: string[] = [];
@@ -173,7 +214,7 @@ export default function OutboundPage() {
           { key: 'sales', label: '매출 현황', count: sales.length },
         ]}
         value={activeTab}
-        onChange={(value) => { setActiveTab(value as 'outbound' | 'sales'); setSearchText(''); }}
+        onChange={(value) => { setActiveTab(value as 'outbound' | 'sales'); setSearchText(''); setSelectedSaleIds(new Set()); }}
       />
     </div>
   );
@@ -214,7 +255,7 @@ export default function OutboundPage() {
           </>
         }
       >
-        <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value as 'outbound' | 'sales'); setSearchText(''); }}>
+        <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value as 'outbound' | 'sales'); setSearchText(''); setSelectedSaleIds(new Set()); }}>
 
         <TabsContent value="outbound" className="space-y-4 mt-4">
           {obLoading ? <SkeletonRows rows={6} /> : (
@@ -234,7 +275,34 @@ export default function OutboundPage() {
           {saleLoading ? <SkeletonRows rows={6} /> : (
             <>
               <SaleSummaryCards items={sales} />
-              <SaleListTable items={sales} hidden={saleColVis.hidden} pinning={saleColPin.pinning} onPinningChange={saleColPin.setPinning} globalFilter={searchText} />
+              {selectedSaleIds.size > 0 && (
+                <div className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+                  <span className="font-medium">{selectedSaleIds.size}건 선택됨</span>
+                  <span className="text-xs text-muted-foreground">
+                    (발행 가능 {selectedPendingSales.length}건 / 이미 발행됨 {selectedSaleIds.size - selectedPendingSales.length}건)
+                  </span>
+                  <div className="flex-1" />
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedSaleIds(new Set())}>선택 해제</Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={selectedPendingSales.length === 0}
+                    onClick={() => setBulkInvoiceOpen(true)}
+                  >
+                    계산서 일괄 발행
+                  </Button>
+                </div>
+              )}
+              <SaleListTable
+                items={sales}
+                hidden={saleColVis.hidden}
+                pinning={saleColPin.pinning}
+                onPinningChange={saleColPin.setPinning}
+                globalFilter={searchText}
+                selectedIds={selectedSaleIds}
+                onSelectedIdsChange={setSelectedSaleIds}
+                isRowSelectable={isSalePending}
+              />
             </>
           )}
         </TabsContent>
@@ -252,6 +320,46 @@ export default function OutboundPage() {
       )}
 
       <OutboundForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleCreate} />
+
+      <Dialog open={bulkInvoiceOpen} onOpenChange={setBulkInvoiceOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>계산서 일괄 발행</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              미발행 매출 <b>{selectedPendingSales.length}</b>건에 동일 발행일을 적용합니다.
+            </p>
+            <div className="space-y-1.5">
+              <Label>발행일 *</Label>
+              <DateInput value={bulkInvoiceDate} onChange={setBulkInvoiceDate} />
+            </div>
+            {selectedPendingSales.length > 0 && (
+              <div className="max-h-40 overflow-y-auto rounded border bg-muted/30 px-2 py-1 text-xs">
+                {selectedPendingSales.slice(0, 8).map((item) => (
+                  <div key={item.sale_id} className="flex justify-between gap-2 py-0.5">
+                    <span className="truncate">{item.sale.customer_name ?? '—'} · {item.product_name ?? '—'}</span>
+                    <span className="tabular-nums shrink-0">{(item.sale.total_amount ?? 0).toLocaleString('ko-KR')}원</span>
+                  </div>
+                ))}
+                {selectedPendingSales.length > 8 && (
+                  <div className="pt-1 text-muted-foreground">…외 {selectedPendingSales.length - 8}건</div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setBulkInvoiceOpen(false)}>취소</Button>
+            <Button
+              type="button"
+              disabled={bulkInvoiceSubmitting || !bulkInvoiceDate || selectedPendingSales.length === 0}
+              onClick={handleBulkInvoice}
+            >
+              {bulkInvoiceSubmitting ? '발행 중...' : `${selectedPendingSales.length}건 발행`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
