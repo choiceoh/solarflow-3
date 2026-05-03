@@ -673,3 +673,9 @@
   - 타입체크: 변경 파일 0건 신규 에러 (baseline 27건은 BL/Meta/templates 기존 잔존)
   - PR 분할: PR1(골격+단가/변경계약), PR2(audit/LC/BL/TT 통합), PR3(단가 탭 제거+리다이렉트), PR4(권한·딥링크·UX·테스트)
 - **날짜**: 2026-05-03
+
+## D-114: 상단 전역 검색은 제거하고 운영은 당분간 PC-only로 고정
+- **결정**: D-107의 상단 전역 검색창과 `/search` 화면은 현재 운영 범위에서 제거한다. 헤더는 좌측 화면 제목 + 우측 업무 액션의 2컬럼 구조로 단순화하고, 빠른 등록은 `/orders`, `/procurement` canonical 화면에 `action=new` intent를 전달해 실제 등록 폼을 연다. 768px 이하 접근은 `MobileBlock`의 PC 접속 안내를 정본으로 유지한다.
+- **이유**: 현재 검색 결과는 상세 객체로 바로 들어가지 못하고 `/inventory` 같은 모듈 입구로만 이동해, 사용자가 “찾았다” 다음에 다시 탐색해야 했다. 반면 실무 가치는 빠른 등록과 알림에서 곧바로 처리 큐로 진입하는 쪽이 더 크다. 모바일은 고밀도 테이블·슬라이드 패널·엑셀 작업의 검증 범위 밖이므로, 당분간 PC 업무 화면 품질을 먼저 고정한다.
+- **운영 기준**: legacy `/inbound`, `/lc`, `/outbound` 진입은 각각 `/procurement?tab=bl`, `/procurement?tab=lc`, `/orders?tab=outbound`로 리다이렉트한다. 알림 링크는 가능한 한 탭과 필터를 함께 담는다(`invoice_status`, `status`, `long_term_status`, `alert`). 모바일 CSS는 향후 재개를 위해 보존하되, 실제 접근 정책은 `MobileBlock`이 우선한다.
+- **날짜**: 2026-05-03

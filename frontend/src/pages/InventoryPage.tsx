@@ -45,10 +45,15 @@ function getErrorMessage(err: unknown, fallback: string): string {
 type InventoryTab = 'avail' | 'physical' | 'incoming' | 'forecast';
 const INVENTORY_TABS = new Set<string>(['avail', 'physical', 'incoming', 'forecast']);
 type ForecastScope = 'current' | 'all';
+type LongTermFilter = '' | 'warning' | 'critical';
 
 function getInventoryTab(search: string): InventoryTab {
   const tab = new URLSearchParams(search).get('tab');
   return INVENTORY_TABS.has(tab ?? '') ? (tab as InventoryTab) : 'avail';
+}
+
+function getLongTermFilter(value: string | null): LongTermFilter {
+  return value === 'warning' || value === 'critical' ? value : '';
 }
 
 function hasForecastActivity(product: ProductForecast): boolean {
@@ -112,6 +117,7 @@ export default function InventoryPage() {
   const manufacturers = useMemo(() => sortManufacturers(storeManufacturers), [storeManufacturers]);
   const [mfgFilter, setMfgFilter] = useState<string>('');
   const [wpFilter, setWpFilter] = useState<string>('');
+  const [longTermFilter, setLongTermFilter] = useState<LongTermFilter>(() => getLongTermFilter(new URLSearchParams(location.search).get('long_term_status')));
   const [forecastScope, setForecastScope] = useState<ForecastScope>('current');
   const [forecastSearch, setForecastSearch] = useState('');
 
@@ -169,6 +175,8 @@ export default function InventoryPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveTab(getInventoryTab(location.search));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLongTermFilter(getLongTermFilter(new URLSearchParams(location.search).get('long_term_status')));
   }, [location.search]);
 
   // ?action=alloc 처리 — TopNav 빠른 등록에서 진입 시 사용예약 모달 자동 오픈 — URL → 상태 동기화
@@ -375,12 +383,31 @@ export default function InventoryPage() {
     return m;
   }, [rawInv]);
 
-  // 규격 필터 적용 — items 필터링 후 summary도 재계산
+  const handleLongTermFilterChange = useCallback((value: string) => {
+    const nextFilter = getLongTermFilter(value);
+    setLongTermFilter(nextFilter);
+    const params = new URLSearchParams(location.search);
+    if (nextFilter) params.set('long_term_status', nextFilter);
+    else {
+      params.delete('long_term_status');
+      params.delete('alert');
+    }
+    const nextSearch = params.toString();
+    navigate(`/inventory${nextSearch ? '?' + nextSearch : ''}`, { replace: true });
+  }, [location.search, navigate]);
+
+  // 규격/장기재고 필터 적용 — items 필터링 후 summary도 재계산
   const invData = useMemo(() => {
     if (!rawInv) return null;
-    if (!wpFilter) return rawInv;
-    const wp = parseFloat(wpFilter);
-    const items = rawInv.items.filter((it) => it.spec_wp === wp);
+    let items = rawInv.items;
+    if (wpFilter) {
+      const wp = parseFloat(wpFilter);
+      items = items.filter((it) => it.spec_wp === wp);
+    }
+    if (longTermFilter) {
+      items = items.filter((it) => it.long_term_status === longTermFilter);
+    }
+    if (!wpFilter && !longTermFilter) return rawInv;
     const summary: InventorySummary = {
       total_physical_kw:  items.reduce((s, it) => s + it.physical_kw,       0),
       total_available_kw: items.reduce((s, it) => s + it.available_kw,      0),
@@ -388,7 +415,7 @@ export default function InventoryPage() {
       total_secured_kw:   items.reduce((s, it) => s + it.total_secured_kw,  0),
     };
     return { ...rawInv, items, summary };
-  }, [rawInv, wpFilter]);
+  }, [longTermFilter, rawInv, wpFilter]);
 
   // 제조사 필터 적용된 배정 목록
   const visibleAllocs = useMemo(() =>
@@ -514,6 +541,15 @@ export default function InventoryPage() {
           onChange: setWpFilter,
           options: availableWps.map((wp) => ({ value: String(wp), label: `${wp}Wp` })),
           disabled: !mfgFilter,
+        },
+        {
+          label: '장기',
+          value: longTermFilter,
+          onChange: handleLongTermFilterChange,
+          options: [
+            { value: 'warning', label: '180일+' },
+            { value: 'critical', label: '365일+' },
+          ],
         },
       ]} />
       <div style={{ flex: 1 }} />

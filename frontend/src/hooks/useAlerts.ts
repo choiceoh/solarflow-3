@@ -114,14 +114,14 @@ async function loadAlerts(companyId: string): Promise<AlertItem[]> {
   // 1: LC 만기 임박 (7일 이내)
   if (matResult.status === 'fulfilled') {
     const cnt = (matResult.value.alerts || []).filter((a) => a.days_remaining >= 0 && a.days_remaining <= 7).length;
-    if (cnt > 0) items.push({ id: String(++id), type: 'lc_maturity', severity: 'critical', icon: 'Clock', title: 'LC 만기 임박', description: `7일 이내 만기 LC ${cnt}건`, count: cnt, link: '/banking?tab=maturity' });
+    if (cnt > 0) items.push({ id: String(++id), type: 'lc_maturity', severity: 'critical', icon: 'Clock', title: 'LC 만기 임박', description: `7일 이내 만기 LC ${cnt}건`, count: cnt, link: '/banking?tab=maturity&alert=lc_maturity' });
   }
 
   // 2: LC 한도 부족
   if (tlResult.status === 'fulfilled') {
     const projections = tlResult.value.monthly_projection || [];
     const shortageMonths = projections.filter((p: { projected_available: number }) => p.projected_available < 0);
-    if (shortageMonths.length > 0) items.push({ id: String(++id), type: 'lc_shortage', severity: 'critical', icon: 'TrendingDown', title: 'LC 한도 부족', description: `3개월 내 한도 부족 예상 ${shortageMonths.length}개월`, count: shortageMonths.length, link: '/banking?tab=demand' });
+    if (shortageMonths.length > 0) items.push({ id: String(++id), type: 'lc_shortage', severity: 'critical', icon: 'TrendingDown', title: 'LC 한도 부족', description: `3개월 내 한도 부족 예상 ${shortageMonths.length}개월`, count: shortageMonths.length, link: '/banking?tab=demand&alert=lc_shortage' });
   }
 
   // 3,4: 미수금 주의/연체
@@ -133,8 +133,8 @@ async function loadAlerts(companyId: string): Promise<AlertItem[]> {
       return days > 30 && days <= 60;
     }).length;
     const crit60 = customers.filter((c) => customerOverdueDays(c) > 60).length;
-    if (crit60 > 0) items.push({ id: String(++id), type: 'overdue_critical', severity: 'critical', icon: 'AlertCircle', title: '미수금 연체', description: `60일 초과 거래처 ${crit60}곳`, count: crit60, link: '/orders?tab=matching' });
-    if (warn30 > 0) items.push({ id: String(++id), type: 'overdue_warning', severity: 'warning', icon: 'AlertTriangle', title: '미수금 주의', description: `30일 초과 거래처 ${warn30}곳`, count: warn30, link: '/orders?tab=matching' });
+    if (crit60 > 0) items.push({ id: String(++id), type: 'overdue_critical', severity: 'critical', icon: 'AlertCircle', title: '미수금 연체', description: `60일 초과 거래처 ${crit60}곳`, count: crit60, link: '/orders?tab=matching&alert=overdue_critical' });
+    if (warn30 > 0) items.push({ id: String(++id), type: 'overdue_warning', severity: 'warning', icon: 'AlertTriangle', title: '미수금 주의', description: `30일 초과 거래처 ${warn30}곳`, count: warn30, link: '/orders?tab=matching&alert=overdue_warning' });
   }
 
   // 5: 계산서 미발행
@@ -148,7 +148,7 @@ async function loadAlerts(companyId: string): Promise<AlertItem[]> {
     const sale = o.sale ?? salesByOutboundId.get(o.outbound_id);
     return !hasIssuedTaxInvoice(sale);
   }).length;
-  if (noInvoice > 0) items.push({ id: String(++id), type: 'no_invoice', severity: 'warning', icon: 'FileText', title: '계산서 미발행', description: `출고완료+미발행 ${noInvoice}건`, count: noInvoice, link: '/orders?tab=sales' });
+  if (noInvoice > 0) items.push({ id: String(++id), type: 'no_invoice', severity: 'warning', icon: 'FileText', title: '계산서 미발행', description: `출고완료+미발행 ${noInvoice}건`, count: noInvoice, link: '/orders?tab=sales&invoice_status=pending&alert=no_invoice' });
 
   // 6: 입항 예정
   const today = new Date();
@@ -161,14 +161,14 @@ async function loadAlerts(companyId: string): Promise<AlertItem[]> {
     if (diff == null) return false;
     return diff >= 0 && diff <= 7;
   }).length;
-  if (eta7 > 0) items.push({ id: String(++id), type: 'eta_soon', severity: 'info', icon: 'Ship', title: '입항 예정', description: `7일 이내 입항 ${eta7}건`, count: eta7, link: '/procurement?tab=bl' });
+  if (eta7 > 0) items.push({ id: String(++id), type: 'eta_soon', severity: 'info', icon: 'Ship', title: '입항 예정', description: `7일 이내 입항 ${eta7}건`, count: eta7, link: '/procurement?tab=bl&status=shipping&alert=eta_soon' });
 
   // 7,8: 장기재고
   if (invResult.status === 'fulfilled') {
     const warnCnt = invResult.value.items.filter((i) => i.long_term_status === 'warning').length;
     const critCnt = invResult.value.items.filter((i) => i.long_term_status === 'critical').length;
-    if (critCnt > 0) items.push({ id: String(++id), type: 'longterm_critical', severity: 'critical', icon: 'PackageX', title: '장기재고 심각', description: `365일+ ${critCnt}건`, count: critCnt, link: '/inventory' });
-    if (warnCnt > 0) items.push({ id: String(++id), type: 'longterm_warning', severity: 'warning', icon: 'Package', title: '장기재고 주의', description: `180일+ ${warnCnt}건`, count: warnCnt, link: '/inventory' });
+    if (critCnt > 0) items.push({ id: String(++id), type: 'longterm_critical', severity: 'critical', icon: 'PackageX', title: '장기재고 심각', description: `365일+ ${critCnt}건`, count: critCnt, link: '/inventory?tab=physical&long_term_status=critical&alert=longterm_critical' });
+    if (warnCnt > 0) items.push({ id: String(++id), type: 'longterm_warning', severity: 'warning', icon: 'Package', title: '장기재고 주의', description: `180일+ ${warnCnt}건`, count: warnCnt, link: '/inventory?tab=physical&long_term_status=warning&alert=longterm_warning' });
   }
 
   // 9: 출고 예정
@@ -181,13 +181,13 @@ async function loadAlerts(companyId: string): Promise<AlertItem[]> {
     if (diff == null) return false;
     return diff >= 0 && diff <= 7;
   }).length;
-  if (deliverySoon > 0) items.push({ id: String(++id), type: 'delivery_soon', severity: 'info', icon: 'Truck', title: '출고 예정', description: `납기 7일 이내 미출고 ${deliverySoon}건`, count: deliverySoon, link: '/orders' });
+  if (deliverySoon > 0) items.push({ id: String(++id), type: 'delivery_soon', severity: 'info', icon: 'Truck', title: '출고 예정', description: `납기 7일 이내 미출고 ${deliverySoon}건`, count: deliverySoon, link: '/orders?alert=delivery_soon' });
 
   // 10: 현장 미등록 수주
   const noSite = orderData.filter((o) =>
     (o.status === 'received' || o.status === 'partial') && !o.site_id
   ).length;
-  if (noSite > 0) items.push({ id: String(++id), type: 'no_site', severity: 'warning', icon: 'MapPin', title: '현장 미등록 수주', description: `현장 미입력 진행중 수주 ${noSite}건`, count: noSite, link: '/orders' });
+  if (noSite > 0) items.push({ id: String(++id), type: 'no_site', severity: 'warning', icon: 'MapPin', title: '현장 미등록 수주', description: `현장 미입력 진행중 수주 ${noSite}건`, count: noSite, link: '/orders?alert=no_site' });
 
   const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
   items.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);

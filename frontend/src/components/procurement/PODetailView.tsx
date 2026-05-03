@@ -366,7 +366,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
               LC 등록
             </Button>
             {/* PO → 입고 데이터 전달 */}
-            <Button size="sm" onClick={() => { window.location.href = `/inbound?po=${po.po_id}`; }}>
+            <Button size="sm" onClick={() => { window.location.href = `/procurement?tab=bl&action=new&po_id=${po.po_id}`; }}>
               입고 등록
             </Button>
           </>

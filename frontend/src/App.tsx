@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
 import { DialogHost } from '@/lib/dialogs';
@@ -13,12 +13,9 @@ import MobileBlock from '@/components/common/MobileBlock';
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
-const InboundPage = lazy(() => import('@/pages/InboundPage'));
 const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
 const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
 import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
-const LCPage = lazy(() => import('@/pages/LCPage'));
-const OutboundPage = lazy(() => import('@/pages/OutboundPage'));
 const OutboundV2Page = lazy(() => import('@/pages/OutboundV2Page'));
 const OutboundFormMetaDemoPage = lazy(() => import('@/pages/OutboundFormMetaDemoPage'));
 const OutboundDetailMetaDemoPage = lazy(() => import('@/pages/OutboundDetailMetaDemoPage'));
@@ -43,7 +40,6 @@ const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
 const SalesAnalysisPage = lazy(() => import('@/pages/SalesAnalysisPage'));
 const BankingPage = lazy(() => import('@/pages/BankingPage'));
 const ApprovalPage = lazy(() => import('@/pages/ApprovalPage'));
-const SearchPage = lazy(() => import('@/pages/SearchPage'));
 const SettingsLayout = lazy(() => import('@/pages/settings/SettingsLayout'));
 const SettingsIndexRedirect = lazy(() =>
   import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
@@ -76,6 +72,25 @@ const TutorialMenuPage = lazy(() => import('@/onboarding/ui/TutorialMenuPage'));
 
 function Fallback() {
   return <LoadingSpinner className="h-screen" />;
+}
+
+function LegacyRedirect({ to }: { to: string }) {
+  const { search } = useLocation();
+  const [pathname, baseSearch = ''] = to.split('?');
+  const params = new URLSearchParams(baseSearch);
+  const legacy = new URLSearchParams(search);
+
+  if (legacy.get('new') === '1' || legacy.get('action') === 'new') {
+    params.set('action', 'new');
+  }
+
+  for (const [key, value] of legacy) {
+    if (key === 'new' || key === 'action') continue;
+    if (!params.has(key)) params.set(key, value);
+  }
+
+  const next = params.toString();
+  return <Navigate to={`${pathname}${next ? `?${next}` : ''}`} replace />;
 }
 
 export default function App() {
@@ -126,11 +141,11 @@ export default function App() {
                 <Route path="/masters/products-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><ProductsV2Page /></RoleGuard>} />
                 <Route path="/masters/construction-sites-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><ConstructionSitesV2Page /></RoleGuard>} />
                 <Route path="/masters/construction-sites" element={<ConstructionSitesPage />} />
-                <Route path="/inbound" element={<InboundPage />} />
+                <Route path="/inbound" element={<LegacyRedirect to="/procurement?tab=bl" />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
                 <Route path="/purchase-history" element={<PurchaseHistoryErrorBoundary><PurchaseHistoryPage /></PurchaseHistoryErrorBoundary>} />
-                <Route path="/lc" element={<LCPage />} />
-                <Route path="/outbound" element={<OutboundPage />} />
+                <Route path="/lc" element={<LegacyRedirect to="/procurement?tab=lc" />} />
+                <Route path="/outbound" element={<LegacyRedirect to="/orders?tab=outbound" />} />
                 <Route path="/outbound-v2" element={<OutboundV2Page />} />
                 <Route path="/outbound-form-meta-demo" element={<OutboundFormMetaDemoPage />} />
                 <Route path="/outbound-detail-meta-demo" element={<OutboundDetailMetaDemoPage />} />
@@ -154,7 +169,6 @@ export default function App() {
                 <Route path="/baro/dispatch" element={<RoleGuard allowedRoles={['admin', 'operator']}><DispatchBoardPage /></RoleGuard>} />
                 <Route path="/crm/inbox" element={<CRMInboxPage />} />
                 <Route path="/tutorial" element={<TutorialMenuPage />} />
-                <Route path="/search" element={<SearchPage />} />
                 <Route path="/approval" element={<ApprovalPage />} />
                 <Route path="/assistant" element={<AssistantPage />} />
                 <Route path="/settings" element={<SettingsLayout />}>
