@@ -544,7 +544,7 @@ export default function ProcurementPage() {
             },
           ]} />
           <Button size="xs" variant="outline" onClick={() => navigate('/purchase-history')}><History className="mr-1 h-3 w-3" />구매 이력</Button>
-          <Button size="xs" onClick={() => setPoFormOpen(true)}><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
+          <Button size="xs" onClick={() => setPoFormOpen(true)} data-onboarding-step="po.list.add"><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
         </>
       )}
       {activeTab === 'lc' && !lcFormOpen && (
@@ -569,7 +569,7 @@ export default function ProcurementPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <Button size="xs" onClick={() => openLCWork()}><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
+          <Button size="xs" onClick={() => openLCWork()} data-onboarding-step="lc.list.open"><Plus className="mr-1 h-3 w-3" />새로 등록</Button>
         </>
       )}
       {activeTab === 'bl' && !blFormOpen && (
@@ -594,11 +594,13 @@ export default function ProcurementPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
-          <ExcelToolbar
-            type="inbound"
-            onImportComplete={() => { reloadBL(); setBlsVersion(v => v + 1); }}
-            onNew={() => openBLWork()}
-          />
+          <span data-onboarding-step="bl.list.inbound">
+            <ExcelToolbar
+              type="inbound"
+              onImportComplete={() => { reloadBL(); setBlsVersion(v => v + 1); }}
+              onNew={() => openBLWork()}
+            />
+          </span>
         </>
       )}
       <div style={{ flex: 1 }} />

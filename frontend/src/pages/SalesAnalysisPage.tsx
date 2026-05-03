@@ -359,7 +359,7 @@ export default function SalesAnalysisPage() {
   return (
     <div className="sf-page">
       <div className="sf-procurement-layout">
-        <section className="sf-procurement-main">
+        <section className="sf-procurement-main" data-onboarding-step="sales.summary.cost">
           <CardB
             title="매출/이익 분석"
             sub="판매, 세금계산서, 수금, B/L 원가 연결"
