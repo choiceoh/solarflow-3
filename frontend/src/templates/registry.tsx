@@ -24,6 +24,9 @@ import PartnerForm from '@/components/masters/PartnerForm';
 import MetaForm from './MetaForm';
 import MetaDetail from './MetaDetail';
 import bankDetailConfig from '@/config/details/banks';
+import warehouseDetailConfig from '@/config/details/warehouses';
+import manufacturerDetailConfig from '@/config/details/manufacturers';
+import partnerDetailConfig from '@/config/details/partners';
 import partnerFormConfig from '@/config/forms/partners';
 import outboundSimpleFormConfig from '@/config/forms/outbound_simple';
 import companyFormConfig from '@/config/forms/companies';
@@ -352,6 +355,10 @@ export const detailDataHooks: Record<string, DetailDataHook> = {
   useBLShipmentDetail: (id) => adaptDetailHook(useBLDetail(id)),
   // Phase 4 (bank-meta 브랜치): 은행 master 의 메타 detail
   useBankDetail: (id) => useSimpleDetail<Bank>('/api/v1/banks/:id', id),
+  // Phase 4: 창고 / 제조사 / 거래처 master detail (bank 패턴 복제)
+  useWarehouseDetail: (id) => useSimpleDetail<Warehouse>('/api/v1/warehouses/:id', id),
+  useManufacturerDetail: (id) => useSimpleDetail<Manufacturer>('/api/v1/manufacturers/:id', id),
+  usePartnerDetail: (id) => useSimpleDetail<Partner>('/api/v1/partners/:id', id),
 };
 
 // ─── Metric computers ──────────────────────────────────────────────────────
@@ -803,6 +810,10 @@ export const detailComponents: Record<string, DetailComponent> = {
   bl: ((props) => <BLDetailView blId={props.id} onBack={props.onBack} />) as DetailComponent,
   // Phase 4 (bank-meta): 은행 master detail — 메타 인프라 풀 적용 (tabs + inlineEdit)
   bank: ((props) => <MetaDetail config={bankDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  // Phase 4 follow-up: 창고 / 제조사 / 거래처 master detail (bank 패턴 복제)
+  warehouse: ((props) => <MetaDetail config={warehouseDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  manufacturer: ((props) => <MetaDetail config={manufacturerDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  partner: ((props) => <MetaDetail config={partnerDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
 };
 
 // ─── Rail blocks ───────────────────────────────────────────────────────────
@@ -958,6 +969,20 @@ export const contentBlocks: Record<string, ContentBlock> = {
         <p className="font-mono">
           한도: {bank.lc_limit_usd?.toLocaleString() ?? '—'} USD
           {' · '}만료: {bank.limit_expiry_date ?? '—'}
+        </p>
+      </div>
+    );
+  },
+  // Phase 4 follow-up: 거래처 detail 의 "거래 현황" 탭 placeholder.
+  // 향후 PO/Sale 통계, 미수금/미지급 잔액, 최근 거래 일자 등.
+  partner_transactions_placeholder: ({ items }) => {
+    const p = items[0] as Partner;
+    return (
+      <div className="rounded border border-dashed bg-muted/20 p-6 text-center text-xs text-muted-foreground space-y-2">
+        <p>이 거래처의 거래 현황 — PO/Sale 집계 위젯 연결 예정.</p>
+        <p className="font-mono">
+          유형: {p.partner_type ?? '—'}
+          {' · '}ERP: {p.erp_code ?? '—'}
         </p>
       </div>
     );

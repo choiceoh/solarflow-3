@@ -308,6 +308,8 @@ func (h *ManufacturerHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
+		// 메타 GUI inline 편집 진입점 — UpdateManufacturerRequest 의 모든 필드가 optional.
+		r.With(g.Write).Patch("/{id}", h.Update)
 		r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
@@ -389,6 +391,8 @@ func (h *PartnerHandler) RegisterRoutes(r chi.Router, g middleware.Gates, activi
 		r.With(g.BaroOnly).Get("/{id}/activities", activityH.ListByPartner)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
+		// 메타 GUI inline 편집 진입점 — UpdatePartnerRequest 의 모든 필드가 optional.
+		r.With(g.Write).Patch("/{id}", h.Update)
 		r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
@@ -543,6 +547,9 @@ func (h *WarehouseHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
+		// 메타 GUI inline 편집 진입점 — UpdateWarehouseRequest 의 모든 필드가 optional
+		// (포인터 + omitempty) 이라 부분 업데이트로 동작.
+		r.With(g.Write).Patch("/{id}", h.Update)
 		r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
