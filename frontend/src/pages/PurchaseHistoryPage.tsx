@@ -6,40 +6,13 @@ import { useAppStore } from '@/stores/appStore';
 import { usePOList, usePriceHistoryList, useLCList, useTTList } from '@/hooks/useProcurement';
 import { useBLList } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
-import { buildChains, diffAuditFields, type Chain } from '@/lib/purchaseHistory';
+import { buildChains, diffAuditFields, eventDeepLink, sanitizeAuditLogs, type Chain, type EventKind, type SafeAuditLog } from '@/lib/purchaseHistory';
 import { CardB, FilterButton, TileB } from '@/components/command/MockupPrimitives';
 import { autoSpark } from '@/templates/autoSpark';
 import { CONTRACT_TYPE_LABEL, LC_STATUS_LABEL, PO_STATUS_LABEL } from '@/types/procurement';
 import type { PurchaseOrder, PriceHistory, LCRecord, TTRemittance } from '@/types/procurement';
 import { BL_STATUS_LABEL } from '@/types/inbound';
 import type { BLShipment } from '@/types/inbound';
-
-// audit_logs 응답 (백엔드 model.AuditLog 미러). entity_type='purchase_orders' 만 사용.
-interface AuditLogEntry {
-  audit_id: string;
-  entity_type: string;
-  entity_id: string;
-  action: string; // 'create' | 'update' | 'delete'
-  user_id?: string | null;
-  user_email?: string | null;
-  request_method?: string | null;
-  request_path?: string | null;
-  old_data?: unknown;
-  new_data?: unknown;
-  note?: string | null;
-  created_at: string;
-}
-
-type EventKind =
-  | 'po_create'
-  | 'variant_create'
-  | 'price_change'
-  | 'po_update'
-  | 'po_cancel'
-  | 'lc_open'
-  | 'lc_settle'
-  | 'bl_event'
-  | 'tt_send';
 
 interface TimelineEvent {
   id: string;
@@ -184,7 +157,7 @@ function ttEvents(tts: TTRemittance[], poIds: Set<string>, chainId: string): Tim
     });
 }
 
-function auditEvents(audits: AuditLogEntry[], poIds: Set<string>, chainId: string): TimelineEvent[] {
+function auditEvents(audits: SafeAuditLog[], poIds: Set<string>, chainId: string): TimelineEvent[] {
   const events: TimelineEvent[] = [];
   for (const a of audits) {
     if (a.entity_type !== 'purchase_orders' || !poIds.has(a.entity_id) || a.action === 'create') continue;
@@ -224,7 +197,7 @@ interface EventSources {
   lcs: LCRecord[];
   bls: BLShipment[];
   tts: TTRemittance[];
-  audits: AuditLogEntry[];
+  audits: SafeAuditLog[];
 }
 
 function buildChainEvents(chain: Chain, src: EventSources): TimelineEvent[] {
@@ -305,23 +278,6 @@ function eventTone(kind: EventKind): string {
   }
 }
 
-// 이벤트 클릭 시 운영 페이지로 점프할 URL.
-// PO 관련 이벤트는 ?po_id=...로 PODetailView 자동 펼침. 그 외는 탭 단위.
-function eventDeepLink(evt: TimelineEvent): string | null {
-  switch (evt.kind) {
-    case 'po_create':
-    case 'variant_create':
-    case 'po_update':
-    case 'po_cancel':
-      return evt.po_id ? `/procurement?po_id=${evt.po_id}` : '/procurement';
-    case 'lc_open':
-    case 'lc_settle': return '/procurement?tab=lc';
-    case 'bl_event': return '/procurement?tab=bl';
-    case 'tt_send': return '/procurement?tab=tt';
-    case 'price_change': return null;
-  }
-}
-
 const RECENT_LIMIT = 20;
 
 export default function PurchaseHistoryPage() {
@@ -341,7 +297,7 @@ export default function PurchaseHistoryPage() {
   const { data: bls, loading: blsLoading } = useBLList({});
   const { data: tts, loading: ttsLoading } = useTTList({});
 
-  const [audits, setAudits] = useState<AuditLogEntry[]>([]);
+  const [audits, setAudits] = useState<SafeAuditLog[]>([]);
   const [auditsLoading, setAuditsLoading] = useState(false);
 
   useEffect(() => {
@@ -355,10 +311,10 @@ export default function PurchaseHistoryPage() {
     const from = new Date();
     from.setFullYear(from.getFullYear() - 1);
     const fromIso = from.toISOString().slice(0, 10);
-    fetchWithAuth<AuditLogEntry[]>(
+    fetchWithAuth<unknown>(
       `/api/v1/audit-logs?entity_type=purchase_orders&from=${fromIso}&limit=1000`,
     )
-      .then((list) => setAudits(list ?? []))
+      .then((raw) => setAudits(sanitizeAuditLogs(raw)))
       .catch(() => setAudits([]))
       .finally(() => setAuditsLoading(false));
   }, [selectedCompanyId]);

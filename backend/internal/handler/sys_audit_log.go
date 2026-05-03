@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/supabase-community/postgrest-go"
@@ -14,6 +15,23 @@ import (
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
+
+// 허용되는 from 입력 형식 — Postgres timestamp 필터 안전선.
+// 자유 문자열을 그대로 PostgREST에 넘기면 .Gte 안에서 파싱 오류 또는 의도치 않은
+// 비교가 발생할 수 있으므로 ISO 8601 date / datetime 두 형태만 통과시킨다.
+var auditFromFormats = []string{
+	"2006-01-02",
+	time.RFC3339,
+}
+
+func parseAuditFrom(s string) (string, bool) {
+	for _, layout := range auditFromFormats {
+		if _, err := time.Parse(layout, s); err == nil {
+			return s, true
+		}
+	}
+	return "", false
+}
 
 // AuditLogHandler — 감사 로그 조회 API
 // 비유: 운영 장부를 펼쳐서 누가 어떤 전표를 만졌는지 확인하는 창구
@@ -44,17 +62,29 @@ func (h *AuditLogHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("user_id", userID)
 	}
 	if from := r.URL.Query().Get("from"); from != "" {
-		query = query.Gte("created_at", from)
+		valid, ok := parseAuditFrom(from)
+		if !ok {
+			response.RespondError(w, http.StatusBadRequest, "from 파라미터는 YYYY-MM-DD 또는 RFC3339 형식이어야 합니다")
+			return
+		}
+		query = query.Gte("created_at", valid)
 	}
 
-	limit := 500
+	const (
+		defaultLimit = 500
+		maxLimit     = 5000
+	)
+	limit := defaultLimit
 	if v := r.URL.Query().Get("limit"); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
-			if parsed > 5000 {
-				parsed = 5000
-			}
-			limit = parsed
+		parsed, err := strconv.Atoi(v)
+		if err != nil || parsed <= 0 {
+			response.RespondError(w, http.StatusBadRequest, "limit 파라미터는 양의 정수여야 합니다")
+			return
 		}
+		if parsed > maxLimit {
+			parsed = maxLimit
+		}
+		limit = parsed
 	}
 	query = query.Order("created_at", &postgrest.OrderOpts{Ascending: false}).Limit(limit, "")
 
