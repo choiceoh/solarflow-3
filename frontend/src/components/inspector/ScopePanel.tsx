@@ -14,25 +14,16 @@ interface ScopePanelProps {
  * - 모든 인스턴스: 어시스턴트 호출 → 메타 config 변경 제안 → 모든 사용자 즉시 반영 (영속).
  */
 export const ScopePanel = ({ target, draft }: ScopePanelProps) => {
-  const setContextMenuPosition = useAppStore((s) => s.setContextMenuPosition);
-  void setContextMenuPosition; // 미사용 placeholder
+  const setAssistantDrawerOpen = useAppStore((s) => s.setAssistantDrawerOpen);
+  const setAssistantDrawerInitialPrompt = useAppStore((s) => s.setAssistantDrawerInitialPrompt);
 
   const onAskForGlobal = () => {
-    // 어시스턴트 drawer 자동 열기 위해 floating 버튼 클릭 시뮬 — 단순화 위해 confirm + 안내.
-    const proceed = window.confirm(
-      [
-        '"모든 인스턴스" 변경 = 메타 config 갱신 (모든 사용자 즉시 반영, 영속).',
-        '',
-        '단계:',
-        '1. 어시스턴트 drawer 열기 (우하단 Bot 버튼 또는 ⌘.)',
-        '2. "이 화면 컬럼/필드를 ...로 변경" 자연어 요청',
-        '3. AI 가 propose_ui_config_update 카드 생성 → [저장] 클릭',
-        '',
-        '계속하시겠습니까? (이 다이얼로그는 안내용 — drawer 는 우하단 버튼으로 열어주세요.)',
-      ].join('\n'),
-    );
-    if (!proceed) return;
-    // TODO: drawer 자동 open + 자연어 prefill — 후속 PR. 1차는 안내만.
+    // M-2: 어시스턴트 drawer 자동 open + prompt prefill
+    const prompt =
+      `현재 선택된 요소(${target.tagName.toLowerCase()})의 className 을 "${draft}" 로 변경했습니다. ` +
+      `이걸 모든 인스턴스에 영구 반영해주세요 — 메타 config 갱신 (read_ui_config / propose_ui_config_update).`;
+    setAssistantDrawerInitialPrompt(prompt);
+    setAssistantDrawerOpen(true);
   };
 
   const isModified = draft !== target.className;

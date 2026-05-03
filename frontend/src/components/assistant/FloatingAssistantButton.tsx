@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Bot } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppStore } from '@/stores/appStore';
 import { AssistantDrawer } from './AssistantDrawer';
 
 /**
@@ -9,10 +10,14 @@ import { AssistantDrawer } from './AssistantDrawer';
  *
  * 권한: admin only — 일반 사용자에게는 /assistant 사이드바 메뉴로 충분.
  *       (admin 의 진짜 use case = "현재 화면 보면서 메타 변경 요청")
+ *
+ * drawer open 상태는 store 에 lift — 인스펙터 ScopePanel 등 다른 컴포넌트가
+ * 외부에서 drawer 를 열 수 있도록.
  */
 export const FloatingAssistantButton = () => {
   const { role } = useAuth();
-  const [open, setOpen] = useState(false);
+  const open = useAppStore((s) => s.assistantDrawerOpen);
+  const setOpen = useAppStore((s) => s.setAssistantDrawerOpen);
 
   useEffect(() => {
     if (role !== 'admin') return;
@@ -20,11 +25,11 @@ export const FloatingAssistantButton = () => {
       const isMod = e.metaKey || e.ctrlKey;
       if (!isMod || e.key !== '.') return;
       e.preventDefault();
-      setOpen((v) => !v);
+      setOpen(!useAppStore.getState().assistantDrawerOpen);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [role]);
+  }, [role, setOpen]);
 
   if (role !== 'admin') return null;
 

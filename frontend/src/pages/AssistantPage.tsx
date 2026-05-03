@@ -182,16 +182,18 @@ interface ChatBoxProps {
   sessionsEnabled: boolean;
   onSessionUpserted: (s: SessionSummary, makeCurrent: boolean) => void;
   sessionsSlot?: React.ReactNode;
+  /** drawer 등 외부에서 자동 채워주는 첫 입력 — 마운트 시 input 에 prefill (사용자가 검토 후 send) */
+  initialInput?: string;
 }
 
-export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted, sessionsSlot }: ChatBoxProps) {
+export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted, sessionsSlot, initialInput }: ChatBoxProps) {
   // 빠른 연속 send 시 setSessionIdRef 가 반영되기 전 두 번째 호출이 또 POST 하지 않도록 ref 로 동기 추적.
   const sessionIdRef = useRef<string | null>(sessionId);
   // 쓰기 도구 승인/거부 상태 — proposal id → status. messages 와 별도 메모리 (상태 mutation 안 함).
   const [proposalStatuses, setProposalStatuses] = useState<Map<string, { status: ProposalStatus; errorMessage?: string }>>(
     new Map(),
   );
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialInput ?? '');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [parseAsCustoms, setParseAsCustoms] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
