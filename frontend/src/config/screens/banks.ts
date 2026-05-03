@@ -69,6 +69,8 @@ const config: ListScreenConfig = {
       },
     },
   ],
+  // Phase 4 (bank-meta): 행 클릭 → MetaDetail 상세 화면 (registry.detailComponents.bank)
+  onRowClick: { kind: 'detail', detailId: 'bank', idField: 'bank_id' },
   emptyState: { message: '등록된 은행이 없습니다', actionId: 'create' },
   forms: [
     {
