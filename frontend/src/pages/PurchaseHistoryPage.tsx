@@ -8,7 +8,7 @@ import { useBLList } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
 import { buildChains, diffAuditFields, type Chain } from '@/lib/purchaseHistory';
 import { CardB, FilterButton, TileB } from '@/components/command/MockupPrimitives';
-import { autoSpark } from '@/templates/autoSpark';
+import { monthlyCount, flatSparkFromValue } from '@/templates/sparkUtils';
 import { CONTRACT_TYPE_LABEL, LC_STATUS_LABEL, PO_STATUS_LABEL } from '@/types/procurement';
 import type { PurchaseOrder, PriceHistory, LCRecord, TTRemittance } from '@/types/procurement';
 import { BL_STATUS_LABEL } from '@/types/inbound';
@@ -417,17 +417,17 @@ export default function PurchaseHistoryPage() {
   }
 
   const metrics = [
-    { lbl: '계약 체인', v: String(chains.length), u: '건', sub: `${chainsWithVariants}건은 변경계약 포함`, tone: 'solar' as const },
-    { lbl: '변경계약', v: String(variantCount), u: '건', sub: '체인 내 추가 PO', tone: 'warn' as const },
-    { lbl: '단가 변동', v: String(phs.length), u: '건', sub: '제조사별 USD/Wp', tone: 'info' as const },
-    { lbl: '최근 이벤트', v: String(events.length), u: '건', sub: selectedChain ? '선택 체인 기준' : '전체 회사 최근', tone: 'ink' as const },
+    { lbl: '계약 체인', v: String(chains.length), u: '건', sub: `${chainsWithVariants}건은 변경계약 포함`, tone: 'solar' as const, spark: monthlyCount(chains, (c) => c.head.contract_date) },
+    { lbl: '변경계약', v: String(variantCount), u: '건', sub: '체인 내 추가 PO', tone: 'warn' as const, spark: monthlyCount(chains.flatMap((c) => c.pos.slice(1)), (p) => p.contract_date) },
+    { lbl: '단가 변동', v: String(phs.length), u: '건', sub: '제조사별 USD/Wp', tone: 'info' as const, spark: monthlyCount(phs, (p) => p.change_date) },
+    { lbl: '최근 이벤트', v: String(events.length), u: '건', sub: selectedChain ? '선택 체인 기준' : '전체 회사 최근', tone: 'ink' as const, spark: monthlyCount(events, (e) => e.date) },
   ];
 
   return (
     <div className="sf-page sf-purchase-history-page min-h-[calc(100vh-5rem)]">
       <div className="sf-command-kpis">
         {metrics.map((m) => (
-          <TileB key={m.lbl} lbl={m.lbl} v={m.v} u={m.u} sub={m.sub} tone={m.tone} spark={autoSpark(m.lbl)} />
+          <TileB key={m.lbl} lbl={m.lbl} v={m.v} u={m.u} sub={m.sub} tone={m.tone} spark={m.spark ?? flatSparkFromValue(m.v)} />
         ))}
       </div>
 
