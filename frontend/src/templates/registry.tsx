@@ -1273,13 +1273,128 @@ export const permissionGuards: Record<string, PermissionGuardEntry> = {
 // 의미 추측 안 하도록). 이미 등록된 24+ 개 entry 는 도메인 PR 시 점진 채움.
 export type RegistryMeta = Record<string, { label: string; description?: string }>;
 
-export const cellRendererMeta: RegistryMeta = {};
-export const formContentBlockMeta: RegistryMeta = {};
-export const fieldCascadeMeta: RegistryMeta = {};
-export const formSubmitterMeta: RegistryMeta = {};
+// Phase 4 follow-up: 메타 GUI 편집기 RegistryIdPicker 가 라벨/설명을 콤보박스에
+// 노출 — admin 이 docs 안 봐도 어떤 entry 인지 추측 가능 (RULES.md #0).
+export const cellRendererMeta: RegistryMeta = {
+  // Outbound (출고)
+  outbound_status_badge: {
+    label: '출고 상태 뱃지',
+    description: '출고 상태 enum → 색상 뱃지 (예약/완료/취소 등)',
+  },
+  sale_base_date: {
+    label: '판매 기준일',
+    description: 'outbound_date / order_date 폴백 — formatDate',
+  },
+  usage_category_label: {
+    label: '용도 카테고리',
+    description: 'USAGE_CATEGORY enum → 한글 라벨',
+  },
+  outbound_group_trade: {
+    label: '그룹 거래 표시',
+    description: '그룹 거래일 때 "그룹" 뱃지 + 대상 회사명',
+  },
+  outbound_invoice_pill: {
+    label: '세금계산서 발행 상태',
+    description: '발행일자 / 미발행 / 미등록 — pill 색상',
+  },
+  // Sale (수주)
+  sale_kind_pill: {
+    label: '판매 종류 뱃지',
+    description: 'outbound_id 유무 → "출고" 또는 "수주" pill',
+  },
+  sale_total_amount: {
+    label: '판매 총액',
+    description: 'sale.total_amount → 한국식 천단위 콤마',
+  },
+  sale_invoice_pill: { label: '판매 세금계산서', description: '발행일 / 미발행 pill' },
+  sale_erp_closed_pill: {
+    label: 'ERP 마감 상태',
+    description: '마감 / 미마감 — sale.erp_closed boolean',
+  },
+  // Master (마스터)
+  partner_type_badge: {
+    label: '거래처 유형 뱃지',
+    description: '공급사 / 고객사 / 공급+고객 — 색상 변경',
+  },
+  active_badge: {
+    label: '활성 / 비활성 뱃지',
+    description: 'boolean → 활성 (pos) / 비활성 (ghost)',
+  },
+  bank_company_name: {
+    label: '은행 행: 법인명',
+    description: 'companies JOIN 결과 또는 평면 컬럼 폴백',
+  },
+  product_manufacturer_name: {
+    label: '품번 행: 제조사명',
+    description: 'manufacturers.short_name / name_kr 폴백',
+  },
+  site_type_badge: {
+    label: '발전소 유형 뱃지',
+    description: 'own (자체) / epc — 색상 변경',
+  },
+  warehouse_type_badge: {
+    label: '창고 유형 뱃지',
+    description: 'port (항구) / factory (공장) / vendor (업체)',
+  },
+  // Inbound (입고)
+  inbound_type_pill: { label: '입고 구분 pill', description: 'INBOUND_TYPE enum 라벨' },
+  inbound_status_badge: { label: '입고 상태 뱃지', description: 'BL_STATUS enum → 색상 뱃지' },
+  bl_first_product: {
+    label: 'BL 행: 첫 품번',
+    description: '_agg.firstName / firstCode + 추가 N개',
+  },
+  bl_total_mw: { label: 'BL 행: 총 MW', description: '_agg.totalMw' },
+  bl_avg_cents: { label: 'BL 행: 평균 단가', description: '_agg.avgCentsPerWp ¢/Wp' },
+  bl_company_name: { label: 'BL 행: 법인명', description: 'companies JOIN' },
+  bl_po_link: { label: 'BL → PO 링크', description: '연결된 발주서로 이동' },
+  bl_lc_link: { label: 'BL → L/C 링크', description: '연결된 L/C 로 이동' },
+  bl_currency_label: { label: 'BL 통화', description: 'currency enum → 한글' },
+};
+export const formContentBlockMeta: RegistryMeta = {
+  bl_ocr_widget: {
+    label: 'BL OCR 자동 입력',
+    description: '업로드한 BL PDF 에서 항목 추출 → 폼 자동 채움',
+  },
+  bl_payment_terms_widget: {
+    label: 'BL 결제 조건 위젯',
+    description: '복합 결제조건 (DP/DA/AT-SIGHT 등) 시각 편집',
+  },
+  demo_status_widget: { label: '데모 상태 위젯', description: '메타 contentBlock 데모 — has_warranty 토글' },
+};
+export const fieldCascadeMeta: RegistryMeta = {
+  demo_po_cascade: {
+    label: 'PO 선택 → 자동 채움 (데모)',
+    description: 'PO 선택 시 LC/제조사/통화 자동 fill — 메타 cascade 데모',
+  },
+  bl_po_to_lc_mfg: {
+    label: 'BL: PO → L/C·제조사 자동 채움',
+    description: 'BL Form 에서 PO 선택 시 그 PO 의 LC·제조사·통화·인코텀즈 등을 자동 fill',
+  },
+};
+export const formSubmitterMeta: RegistryMeta = {
+  bl_save: {
+    label: 'BL 저장 (parent + lines)',
+    description: 'BLShipment 본체 + 라인 아이템 multi-step 저장. saveBLShipmentWithLines 호출',
+  },
+};
 export const computedFormulaMeta: RegistryMeta = {};
 export const formRefinementMeta: RegistryMeta = {};
-export const contentBlockMeta: RegistryMeta = {};
+export const contentBlockMeta: RegistryMeta = {
+  sale_summary_cards: { label: '판매 요약 카드', description: '판매 통계 (건수/총액/마감률) 카드' },
+  bl_status_badge: { label: 'BL 상태 뱃지', description: 'detail 헤더 — 입고 상태 표시' },
+  bl_edit_button: { label: 'BL 수정 버튼', description: 'detail 헤더 — 폼 다이얼로그 오픈' },
+  bl_memo_block: { label: 'BL 메모 블록', description: 'detail 메모 섹션 — pre-wrap 텍스트' },
+  outbound_bl_items_section: { label: '출고 → BL 연결 행', description: '여러 BL 라인 표시' },
+  outbound_memo_section: { label: '출고 메모', description: 'pre-wrap 텍스트' },
+  bank_lc_usage_placeholder: {
+    label: '은행 L/C 사용 현황',
+    description: '한도 / 만료 표시 — LCLimitSummaryCards 연결 예정',
+  },
+  partner_transactions_placeholder: {
+    label: '거래처 거래 현황',
+    description: 'PO/Sale 집계 — 향후 위젯 연결',
+  },
+};
 export const masterSourceMeta: RegistryMeta = {};
 
 // 헬퍼 — registry + meta 를 RegistryIdPicker 의 entries[] 형식으로 변환.
