@@ -1,31 +1,92 @@
-import { Minus, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronRight, Minus, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
 import {
   applyScaleStep,
   detectInScale,
+  SCALE_CATEGORIES,
   SCALES,
   type ClassNameScale,
+  type ScaleCategory,
 } from './classNameScales';
+import type { InspectorPseudoState } from '@/stores/appStore';
 
 interface ActionChipsProps {
   className: string;
   onChange: (next: string) => void;
 }
 
+const COLLAPSED_KEY = 'sf.inspector.scale-categories-collapsed';
+
+const readCollapsed = (): Set<ScaleCategory> => {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as ScaleCategory[];
+    return new Set(arr);
+  } catch {
+    return new Set();
+  }
+};
+
+const writeCollapsed = (set: Set<ScaleCategory>) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify(Array.from(set)));
+  } catch {
+    /* noop */
+  }
+};
+
 export const ActionChips = ({ className, onChange }: ActionChipsProps) => {
   const pseudoState = useAppStore((s) => s.inspectorPseudoState);
+  const [collapsed, setCollapsedState] = useState<Set<ScaleCategory>>(() => readCollapsed());
+
+  const toggleCategory = (cat: ScaleCategory) => {
+    setCollapsedState((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      writeCollapsed(next);
+      return next;
+    });
+  };
+
   return (
-    <div className="space-y-1">
-      {SCALES.map((scale) => (
-        <ChipRow
-          key={scale.id}
-          scale={scale}
-          className={className}
-          pseudoState={pseudoState}
-          onChange={onChange}
-        />
-      ))}
+    <div className="space-y-2">
+      {SCALE_CATEGORIES.map(({ id: catId, label }) => {
+        const scales = SCALES.filter((s) => s.category === catId);
+        const isCollapsed = collapsed.has(catId);
+        return (
+          <section key={catId}>
+            <button
+              type="button"
+              onClick={() => toggleCategory(catId)}
+              className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
+              aria-expanded={!isCollapsed}
+            >
+              {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              <span>{label}</span>
+              <span className="ml-auto text-[9px] text-slate-400">{scales.length}</span>
+            </button>
+            {!isCollapsed && (
+              <div className="mt-1 space-y-1">
+                {scales.map((scale) => (
+                  <ChipRow
+                    key={scale.id}
+                    scale={scale}
+                    className={className}
+                    pseudoState={pseudoState}
+                    onChange={onChange}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 };
@@ -33,11 +94,10 @@ export const ActionChips = ({ className, onChange }: ActionChipsProps) => {
 interface ChipRowProps {
   scale: ClassNameScale;
   className: string;
-  pseudoState: 'default' | 'hover' | 'focus' | 'active' | 'disabled';
+  pseudoState: InspectorPseudoState;
   onChange: (next: string) => void;
 }
 
-/** 스케일 위치별 한국어 단계 라벨. 코드값(p-4) 대신 직관 표현. */
 const stepLabel = (index: number, total: number): string => {
   if (index === -1) return '미설정';
   if (total <= 1) return '단계 1';
@@ -96,7 +156,6 @@ const ChipRow = ({ scale, className, pseudoState, onChange }: ChipRowProps) => {
   );
 };
 
-/** 시각 단계 막대 — 가로로 채워지는 progress bar. 단계 갯수와 무관하게 같은 너비. */
 const StepBar = ({ index, total }: { index: number; total: number }) => {
   const pct = index < 0 ? 0 : ((index + 1) / total) * 100;
   return (
@@ -108,3 +167,4 @@ const StepBar = ({ index, total }: { index: number; total: number }) => {
     </div>
   );
 };
+
