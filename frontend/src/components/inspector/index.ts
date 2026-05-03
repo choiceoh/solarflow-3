@@ -6,6 +6,7 @@ export { EditModeToggleButton } from './EditModeToggleButton';
 export { InspectorOverlay } from './InspectorOverlay';
 export { InspectorPanel } from './InspectorPanel';
 export { LayerPanel } from './LayerPanel';
+export { PseudoStateTabs } from './PseudoStateTabs';
 export { TokenPanel } from './TokenPanel';
 export { useDesignTokens } from './useDesignTokens';
 export { useEditModeShortcut } from './useEditModeShortcut';

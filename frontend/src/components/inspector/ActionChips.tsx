@@ -1,5 +1,6 @@
 import { Minus, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/stores/appStore';
 import {
   applyScaleStep,
   detectInScale,
@@ -12,22 +13,27 @@ interface ActionChipsProps {
   onChange: (next: string) => void;
 }
 
-export const ActionChips = ({ className, onChange }: ActionChipsProps) => (
-  <div className="space-y-1">
-    {SCALES.map((scale) => (
-      <ChipRow
-        key={scale.id}
-        scale={scale}
-        className={className}
-        onChange={onChange}
-      />
-    ))}
-  </div>
-);
+export const ActionChips = ({ className, onChange }: ActionChipsProps) => {
+  const pseudoState = useAppStore((s) => s.inspectorPseudoState);
+  return (
+    <div className="space-y-1">
+      {SCALES.map((scale) => (
+        <ChipRow
+          key={scale.id}
+          scale={scale}
+          className={className}
+          pseudoState={pseudoState}
+          onChange={onChange}
+        />
+      ))}
+    </div>
+  );
+};
 
 interface ChipRowProps {
   scale: ClassNameScale;
   className: string;
+  pseudoState: 'default' | 'hover' | 'focus' | 'active' | 'disabled';
   onChange: (next: string) => void;
 }
 
@@ -43,8 +49,8 @@ const stepLabel = (index: number, total: number): string => {
   return '아주 큼';
 };
 
-const ChipRow = ({ scale, className, onChange }: ChipRowProps) => {
-  const state = detectInScale(className, scale);
+const ChipRow = ({ scale, className, pseudoState, onChange }: ChipRowProps) => {
+  const state = detectInScale(className, scale, pseudoState);
   const atMin = state.index === 0;
   const atMax = state.index === scale.values.length - 1;
   const totalSteps = scale.values.length;
@@ -53,7 +59,7 @@ const ChipRow = ({ scale, className, onChange }: ChipRowProps) => {
     <div className="flex items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1.5">
       <button
         type="button"
-        onClick={() => onChange(applyScaleStep(className, scale, -1))}
+        onClick={() => onChange(applyScaleStep(className, scale, -1, pseudoState))}
         disabled={atMin}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded border border-slate-300 text-slate-600',
@@ -75,7 +81,7 @@ const ChipRow = ({ scale, className, onChange }: ChipRowProps) => {
       </div>
       <button
         type="button"
-        onClick={() => onChange(applyScaleStep(className, scale, +1))}
+        onClick={() => onChange(applyScaleStep(className, scale, +1, pseudoState))}
         disabled={atMax}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded border border-slate-300 text-slate-600',

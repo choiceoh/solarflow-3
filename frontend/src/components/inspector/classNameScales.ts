@@ -1,7 +1,12 @@
 /**
  * Tailwind 클래스 스케일 — 액션 칩 ↑↓ 동작에 사용.
  * 사용자가 코드/Tailwind 를 모르므로 한국어 라벨로 노출, 내부적으로 클래스 교체.
+ *
+ * pseudoState (hover/focus/active/disabled) 를 받으면 해당 prefix 가 붙은
+ * 클래스만 detect/apply 한다. default 면 prefix 없이 그대로.
  */
+
+import { buildPrefixedPattern, PSEUDO_PREFIX, type PseudoState, withPseudoPrefix } from './pseudoState';
 
 export interface ClassNameScale {
   id: string;
@@ -70,17 +75,30 @@ interface ScaleState {
   current: string | null;
 }
 
-export const detectInScale = (className: string, scale: ClassNameScale): ScaleState => {
-  const match = className.match(scale.pattern);
+export const detectInScale = (
+  className: string,
+  scale: ClassNameScale,
+  pseudoState: PseudoState = 'default',
+): ScaleState => {
+  const pattern = buildPrefixedPattern(scale.pattern, pseudoState);
+  const match = className.match(pattern);
   if (!match || match.length === 0) return { index: -1, current: null };
   // 마지막 매칭을 기준으로 (여러 개 있으면 마지막 것이 적용된 값)
   const last = match[match.length - 1];
-  const idx = scale.values.indexOf(last);
+  // prefix 떼고 base value 매칭 (예: "hover:p-4" → "p-4")
+  const prefix = PSEUDO_PREFIX[pseudoState];
+  const baseValue = prefix && last.startsWith(prefix) ? last.slice(prefix.length) : last;
+  const idx = scale.values.indexOf(baseValue);
   return { index: idx, current: last };
 };
 
-export const applyScaleStep = (className: string, scale: ClassNameScale, delta: number): string => {
-  const state = detectInScale(className, scale);
+export const applyScaleStep = (
+  className: string,
+  scale: ClassNameScale,
+  delta: number,
+  pseudoState: PseudoState = 'default',
+): string => {
+  const state = detectInScale(className, scale, pseudoState);
   let nextIdx: number;
   if (state.index === -1) {
     // 미적용 상태에서 ↑ 누르면 첫 항목, ↓ 누르면 마지막 항목 (대칭)
@@ -88,9 +106,11 @@ export const applyScaleStep = (className: string, scale: ClassNameScale, delta: 
   } else {
     nextIdx = Math.max(0, Math.min(scale.values.length - 1, state.index + delta));
   }
-  // 기존 동일 패턴 클래스 제거 후 신규 추가
-  const cleaned = className.replace(scale.pattern, '').replace(/\s+/g, ' ').trim();
-  const next = scale.values[nextIdx];
+  // 기존 동일 패턴 (prefix 포함) 클래스 제거 후 신규 추가
+  const pattern = buildPrefixedPattern(scale.pattern, pseudoState);
+  const cleaned = className.replace(pattern, '').replace(/\s+/g, ' ').trim();
+  const baseValue = scale.values[nextIdx];
+  const next = withPseudoPrefix(baseValue, pseudoState);
   return cleaned ? `${cleaned} ${next}` : next;
 };
 

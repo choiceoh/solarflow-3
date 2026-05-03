@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { ActionChips } from './ActionChips';
 import { HandleOverlay } from './HandleOverlay';
 import { LayerPanel } from './LayerPanel';
+import { PseudoStateTabs } from './PseudoStateTabs';
 import { TokenPanel } from './TokenPanel';
 import { DraftsList } from './DraftsList';
 import { getLastTargetEl } from './inspectorTarget';
@@ -165,6 +166,7 @@ const TargetInfo = ({ target }: { target: InspectorTarget }) => {
           </span>
         )}
       </div>
+      <PseudoStateTabs />
       <ActionChips className={draft} onChange={setDraft} />
       <HandleOverlay target={target} className={draft} onChange={setDraft} />
       <details

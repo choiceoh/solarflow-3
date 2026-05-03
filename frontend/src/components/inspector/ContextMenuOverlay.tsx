@@ -15,6 +15,7 @@ export const ContextMenuOverlay = () => {
   const setCopiedClassName = useAppStore((s) => s.setCopiedClassName);
   const recordClassNameDraft = useAppStore((s) => s.recordClassNameDraft);
   const setInspectorTarget = useAppStore((s) => s.setInspectorTarget);
+  const pseudoState = useAppStore((s) => s.inspectorPseudoState);
 
   // Esc / 외부 클릭 → 닫기
   useEffect(() => {
@@ -39,7 +40,7 @@ export const ContextMenuOverlay = () => {
     const scale = findScale(scaleId);
     if (!el || !scale) return;
     const before = el.className;
-    const after = applyScaleStep(before, scale, delta);
+    const after = applyScaleStep(before, scale, delta, pseudoState);
     el.className = after;
     // store 의 inspectorTarget 갱신 (rect + className)
     const t = buildTarget(el);
