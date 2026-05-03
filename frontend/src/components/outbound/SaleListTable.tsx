@@ -14,10 +14,80 @@ interface Props {
   onPinningChange?: (next: ColumnPinningState) => void;
   onInvoice?: (item: SaleListItem) => void;
   globalFilter?: string;
+  // 다중 선택 — 미발행 매출만 선택 가능하도록 selectableRow가 false면 체크박스 비활성
+  selectedIds?: Set<string>;
+  onSelectedIdsChange?: (next: Set<string>) => void;
+  isRowSelectable?: (item: SaleListItem) => boolean;
 }
 
-function buildColumns({ onInvoice }: { onInvoice?: (item: SaleListItem) => void }): ColumnDef<SaleListItem>[] {
-  return [
+function buildColumns({
+  onInvoice,
+  selectedIds,
+  onSelectedIdsChange,
+  isRowSelectable,
+  visibleItems,
+}: {
+  onInvoice?: (item: SaleListItem) => void;
+  selectedIds?: Set<string>;
+  onSelectedIdsChange?: (next: Set<string>) => void;
+  isRowSelectable?: (item: SaleListItem) => boolean;
+  visibleItems?: SaleListItem[];
+}): ColumnDef<SaleListItem>[] {
+  const selectionEnabled = !!onSelectedIdsChange;
+  const selectableVisible = selectionEnabled && visibleItems
+    ? visibleItems.filter((item) => !isRowSelectable || isRowSelectable(item))
+    : [];
+  const allChecked = selectableVisible.length > 0 && selectableVisible.every((item) => selectedIds?.has(item.sale_id));
+  const someChecked = !allChecked && selectableVisible.some((item) => selectedIds?.has(item.sale_id));
+  const cols: ColumnDef<SaleListItem>[] = [];
+  if (selectionEnabled) {
+    cols.push({
+      key: '_select',
+      label: '',
+      minWidth: 32,
+      maxWidth: 32,
+      headerCell: () => (
+        <input
+          type="checkbox"
+          aria-label="전체 선택"
+          checked={allChecked}
+          ref={(el) => { if (el) el.indeterminate = someChecked; }}
+          onChange={(e) => {
+            if (!onSelectedIdsChange) return;
+            const next = new Set(selectedIds ?? []);
+            if (e.target.checked) {
+              for (const item of selectableVisible) next.add(item.sale_id);
+            } else {
+              for (const item of selectableVisible) next.delete(item.sale_id);
+            }
+            onSelectedIdsChange(next);
+          }}
+          className="size-3.5 cursor-pointer"
+        />
+      ),
+      cell: (item) => {
+        const selectable = !isRowSelectable || isRowSelectable(item);
+        if (!selectable) return null;
+        const checked = selectedIds?.has(item.sale_id) ?? false;
+        return (
+          <input
+            type="checkbox"
+            aria-label={`${item.sale_id} 선택`}
+            checked={checked}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => {
+              if (!onSelectedIdsChange) return;
+              const next = new Set(selectedIds ?? []);
+              if (e.target.checked) next.add(item.sale_id); else next.delete(item.sale_id);
+              onSelectedIdsChange(next);
+            }}
+            className="size-3.5 cursor-pointer"
+          />
+        );
+      },
+    });
+  }
+  cols.push(
     { key: 'date', label: '기준일', cell: (item) => formatDate(item.outbound_date ?? item.order_date ?? ''), sortAccessor: (item) => item.outbound_date ?? item.order_date ?? '' },
     {
       key: 'kind', label: '구분', hideable: true,
@@ -78,17 +148,18 @@ function buildColumns({ onInvoice }: { onInvoice?: (item: SaleListItem) => void 
       ),
       sortAccessor: (item) => item.sale.erp_closed ? 1 : 0,
     },
-  ];
+  );
+  return cols;
 }
 
 export const SALE_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({}).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function SaleListTable({ items, hidden, pinning, onPinningChange, onInvoice, globalFilter }: Props) {
+function SaleListTable({ items, hidden, pinning, onPinningChange, onInvoice, globalFilter, selectedIds, onSelectedIdsChange, isRowSelectable }: Props) {
   return (
     <MetaTable
       tableId={SALE_TABLE_ID}
-      columns={buildColumns({ onInvoice })}
+      columns={buildColumns({ onInvoice, selectedIds, onSelectedIdsChange, isRowSelectable, visibleItems: items })}
       hidden={hidden}
       pinning={pinning}
       onPinningChange={onPinningChange}
