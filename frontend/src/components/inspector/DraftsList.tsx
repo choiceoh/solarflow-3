@@ -1,6 +1,7 @@
-import { Copy, Trash2 } from 'lucide-react';
+import { Copy, GitCompare, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore, type ClassNameDraft } from '@/stores/appStore';
+import { VariantsDiffModal } from './VariantsDiffModal';
 
 const formatDraft = (d: ClassNameDraft): string =>
   `[${d.tagName.toLowerCase()}] ${d.selector}\n  before: "${d.before}"\n  after:  "${d.after}"`;
@@ -26,6 +27,7 @@ export const DraftsList = () => {
   const removeClassNameDraft = useAppStore((s) => s.removeClassNameDraft);
   const clearClassNameDrafts = useAppStore((s) => s.clearClassNameDrafts);
   const [status, setStatus] = useState('');
+  const [diffDraft, setDiffDraft] = useState<ClassNameDraft | null>(null);
 
   if (drafts.length === 0) return null;
 
@@ -75,6 +77,15 @@ export const DraftsList = () => {
               <div className="flex shrink-0 flex-col gap-1">
                 <button
                   type="button"
+                  onClick={() => setDiffDraft(d)}
+                  className="rounded p-1 text-slate-400 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-900/20 dark:hover:text-purple-300"
+                  title="변경 전·후 시각 비교"
+                  aria-label="변경 전·후 시각 비교"
+                >
+                  <GitCompare className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => copy(formatDraft(d), setStatus)}
                   className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                   title="이 항목 복사"
@@ -99,6 +110,7 @@ export const DraftsList = () => {
       <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-1.5 text-[10px] text-amber-800">
         새로고침 시 화면은 자동 reset 되지만 변경 목록은 사라집니다 (영속 X). 결정 후 "전체 복사" → AI 에 붙여 코드 반영.
       </p>
+      <VariantsDiffModal draft={diffDraft} onClose={() => setDiffDraft(null)} />
     </section>
   );
 };
