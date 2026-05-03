@@ -25,11 +25,13 @@ interface SessionDetail extends SessionSummary {
   messages: UIMessage[];
 }
 
-const DRAWER_WIDTH = 380;
+const POPUP_WIDTH = 380;
+const POPUP_MAX_HEIGHT = 600;
 
 /**
- * 화면 우측 슬라이드 drawer 안에 ChatBox 임베드.
- * "팝업" 의미에 맞게 가볍게 — 무거운 작업은 /assistant 풀 페이지에서.
+ * 우하단 작은 팝업 안에 ChatBox 임베드 — 페이지 위 떠있는 작은 챗 위젯.
+ * "팝업" 의미에 맞게: 화면 우측 전체를 점유하지 않음, backdrop 없음 (페이지 그대로 조작 가능),
+ * 무거운 세션 탐색은 /assistant 풀 페이지에서.
  *
  * 헤더 = 2줄:
  *   1줄: 🤖 어시스턴트 · 세션 상태 · [+ 새 대화] [X]
@@ -119,17 +121,14 @@ export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
 
   return (
     <>
-      <button
-        type="button"
-        aria-label="어시스턴트 닫기"
-        onClick={onClose}
-        className="fixed inset-0 z-[110] bg-black/20 backdrop-blur-[1px] transition-opacity"
-      />
       <aside
         role="dialog"
         aria-label="AI 어시스턴트"
-        className="fixed top-0 right-0 z-[111] flex h-screen flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
-        style={{ width: DRAWER_WIDTH }}
+        className="fixed bottom-5 right-5 z-[111] flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        style={{
+          width: POPUP_WIDTH,
+          height: `min(${POPUP_MAX_HEIGHT}px, calc(100vh - 40px))`,
+        }}
       >
         <header className="flex shrink-0 flex-col gap-1 border-b border-slate-200 px-4 py-2.5 dark:border-slate-700">
           <div className="flex min-w-0 items-center justify-between gap-2">
