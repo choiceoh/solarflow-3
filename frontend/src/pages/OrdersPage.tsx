@@ -77,6 +77,22 @@ const SALES_TAB_OPTIONS = [
   { key: 'receipts', label: '수금' },
   { key: 'matching', label: '수금매칭' },
 ];
+const SALES_TABS = new Set(SALES_TAB_OPTIONS.map((tab) => tab.key));
+type OrderWorkQueue = '' | 'delivery_soon' | 'no_site';
+
+function getOrderWorkQueue(value: string | null): OrderWorkQueue {
+  return value === 'delivery_soon' || value === 'no_site' ? value : '';
+}
+
+function isDeliveryDueSoon(order: Order, today: Date) {
+  if (order.status !== 'received' && order.status !== 'partial') return false;
+  if (!order.delivery_due || (order.remaining_qty ?? 0) <= 0) return false;
+  const due = new Date(order.delivery_due);
+  if (Number.isNaN(due.getTime())) return false;
+  due.setHours(0, 0, 0, 0);
+  const diff = Math.floor((due.getTime() - today.getTime()) / 86_400_000);
+  return diff >= 0 && diff <= 7;
+}
 
 type SalesMetric = {
   lbl: string;
@@ -119,6 +135,7 @@ export default function OrdersPage() {
   const [orderCategoryFilter, setOrderCategoryFilter] = useState('');
   const _loc = useLocation();
   const navigate = useNavigate();
+  const [orderWorkQueue, setOrderWorkQueue] = useState<OrderWorkQueue>(() => getOrderWorkQueue(new URLSearchParams(_loc.search).get('alert')));
   const [selectedOrderState, setSelectedOrderState] = useState<{ id: string | null; locationKey: string }>({
     id: null,
     locationKey: _loc.key,
@@ -127,7 +144,7 @@ export default function OrdersPage() {
   const setSelectedOrder = (id: string | null) => setSelectedOrderState({ id, locationKey: _loc.key });
   // URL 탭 파라미터 읽기 (사이드바 수주/수금 링크 구분)
   const urlTab = new URLSearchParams(_loc.search).get('tab') ?? 'orders';
-  const activeTab = urlTab;
+  const activeTab = SALES_TABS.has(urlTab) ? urlTab : 'orders';
   const [orderFormOpen, setOrderFormOpen] = useState(false);
   // 가용재고 배정 → 수주 자동 연동
   const [pendingAllocId, setPendingAllocId] = useState<string | null>(null);
@@ -194,7 +211,18 @@ export default function OrdersPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const handleTabChange = (tab: string) => {
     setSelectedOrder(null);
-    navigate(tab === 'orders' ? '/orders' : `/orders?tab=${tab}`, { replace: true });
+    const nextTab = SALES_TABS.has(tab) ? tab : 'orders';
+    navigate(nextTab === 'orders' ? '/orders' : `/orders?tab=${nextTab}`, { replace: true });
+  };
+
+  const handleOrderWorkQueueChange = (value: string) => {
+    const nextQueue = getOrderWorkQueue(value);
+    setOrderWorkQueue(nextQueue);
+    const params = new URLSearchParams(_loc.search);
+    if (nextQueue) params.set('alert', nextQueue);
+    else params.delete('alert');
+    const next = params.toString();
+    navigate(`/orders${next ? `?${next}` : ''}`, { replace: true });
   };
 
   // 탭 2: 출고
@@ -249,6 +277,47 @@ export default function OrdersPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
 
+  // 빠른 등록/알림 딥링크 intent 처리
+  useEffect(() => {
+    const params = new URLSearchParams(_loc.search);
+    setOrderWorkQueue(getOrderWorkQueue(params.get('alert')));
+    const invoiceStatus = params.get('invoice_status');
+    if (invoiceStatus === 'issued' || invoiceStatus === 'pending') {
+      setSaleInvoiceFilter(invoiceStatus);
+    }
+
+    const wantsNew = params.get('action') === 'new' || params.get('new') === '1';
+    const hasPrefillPayload = Boolean(params.get('alloc_id') || params.get('product_id') || params.get('qty'));
+    if (!wantsNew || hasPrefillPayload) return;
+
+    const tabParam = params.get('tab') ?? 'orders';
+    const tab = SALES_TABS.has(tabParam) ? tabParam : 'orders';
+
+    if (tab === 'orders') {
+      setSelectedOrder(null);
+      setEditingOrder(null);
+      setPendingAllocId(null);
+      setPendingLinkedAllocId(null);
+      setOrderFormPrefill(null);
+      setOrderFormOpen(true);
+    } else if (tab === 'outbound') {
+      setSelectedOutbound(null);
+      setOutboundOrder(null);
+      setObFormOpen(true);
+    } else if (tab === 'receipts') {
+      setEditingReceipt(null);
+      setReceiptFormOpen(true);
+    } else {
+      return;
+    }
+
+    params.delete('action');
+    params.delete('new');
+    if (tab === 'orders') params.delete('tab');
+    const next = params.toString();
+    navigate(`/orders${next ? `?${next}` : ''}`, { replace: true });
+  }, [_loc.search, navigate]);
+
   const orderFilters: { status?: string; customer_id?: string; management_category?: string } = {};
   if (orderStatusFilter) orderFilters.status = orderStatusFilter;
   if (orderCustomerFilter) orderFilters.customer_id = orderCustomerFilter;
@@ -260,6 +329,18 @@ export default function OrdersPage() {
 
   const { data: orders, loading: ordersLoading, reload: reloadOrders } = useOrderList(orderFilters);
   const { data: receipts, loading: receiptsLoading, reload: reloadReceipts } = useReceiptList(receiptFilters);
+
+  const visibleOrders = useMemo(() => {
+    if (!orderWorkQueue) return orders;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (orderWorkQueue === 'delivery_soon') {
+      return orders.filter((order) => isDeliveryDueSoon(order, today));
+    }
+    return orders.filter((order) =>
+      (order.status === 'received' || order.status === 'partial') && !order.site_id
+    );
+  }, [orderWorkQueue, orders]);
 
   useEffect(() => {
     const incomingOrders = orders.filter((order) =>
@@ -356,12 +437,12 @@ export default function OrdersPage() {
   }, []);
 
   const ordersKw = useMemo(
-    () => orders.reduce((sum, order) => sum + (order.capacity_kw ?? order.quantity * (order.wattage_kw ?? 0)), 0),
-    [orders],
+    () => visibleOrders.reduce((sum, order) => sum + (order.capacity_kw ?? order.quantity * (order.wattage_kw ?? 0)), 0),
+    [visibleOrders],
   );
   const activeOrders = useMemo(
-    () => orders.filter(order => order.status !== 'completed' && order.status !== 'cancelled'),
-    [orders],
+    () => visibleOrders.filter(order => order.status !== 'completed' && order.status !== 'cancelled'),
+    [visibleOrders],
   );
   const outboundKw = useMemo(
     () => outboundsWithSales.reduce((sum, outbound) => sum + (outbound.capacity_kw ?? 0), 0),
@@ -380,8 +461,8 @@ export default function OrdersPage() {
     [receipts],
   );
   const customersCount = useMemo(
-    () => new Set(orders.map(order => order.customer_id).filter(Boolean)).size,
-    [orders],
+    () => new Set(visibleOrders.map(order => order.customer_id).filter(Boolean)).size,
+    [visibleOrders],
   );
   const outboundActive = useMemo(
     () => outboundsWithSales.filter(outbound => outbound.status === 'active').length,
@@ -755,7 +836,7 @@ export default function OrdersPage() {
     activeTab === 'sales' ? `${sales.length}건 · ${fmtEok(saleTotal)}억` :
     activeTab === 'receipts' ? `${receipts.length}건 · 미정산 ${fmtEok(receiptRemaining)}억` :
     activeTab === 'matching' ? '입금과 매출채권 자동 추천' :
-    `${orders.length}건 · ${fmtSalesMw(ordersKw)} MW`;
+    `${visibleOrders.length}건 · ${fmtSalesMw(ordersKw)} MW${orderWorkQueue ? ` · 전체 ${orders.length}건` : ''}`;
   // KPI sparkline 시계열 — 데이터 범위 기반 (최근 6개월 캡, sparkUtils 참고). 스냅샷은 JSX 폴백에서 평행선.
   const outboundCountSpark = monthlyCount(outboundsWithSales, (o) => o.outbound_date);
   const outboundActiveSpark = monthlyCount(
@@ -794,8 +875,8 @@ export default function OrdersPage() {
     ] : [
       { lbl: '진행 수주', v: String(activeOrders.length), u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${orders.length}건`, tone: 'solar', spark: activeOrderSpark },
       { lbl: '거래처', v: String(customersCount), u: '곳', sub: '활성 고객', tone: 'info' },
-      { lbl: '분할출고', v: String(orders.filter(order => order.status === 'partial').length), u: '건', sub: '잔량 관리', tone: 'warn', spark: monthlyCount(orders.filter(o => o.status === 'partial'), (o) => o.order_date) },
-      { lbl: '평균 단가', v: orders.length ? Math.round(orders.reduce((sum, order) => sum + (order.unit_price_wp ?? 0), 0) / orders.length).toLocaleString() : '0', u: '₩/Wp', sub: '수주 기준', tone: 'pos' },
+      { lbl: '분할출고', v: String(visibleOrders.filter(order => order.status === 'partial').length), u: '건', sub: '잔량 관리', tone: 'warn', spark: monthlyCount(visibleOrders.filter(o => o.status === 'partial'), (o) => o.order_date) },
+      { lbl: '평균 단가', v: visibleOrders.length ? Math.round(visibleOrders.reduce((sum, order) => sum + (order.unit_price_wp ?? 0), 0) / visibleOrders.length).toLocaleString() : '0', u: '₩/Wp', sub: '수주 기준', tone: 'pos' },
     ];
 
   const ordersCardControls = (
@@ -820,6 +901,15 @@ export default function OrdersPage() {
               value: orderCategoryFilter,
               onChange: setOrderCategoryFilter,
               options: (Object.entries(MANAGEMENT_CATEGORY_LABEL) as [ManagementCategory, string][]).map(([k, v]) => ({ value: k, label: v })),
+            },
+            {
+              label: '업무',
+              value: orderWorkQueue,
+              onChange: handleOrderWorkQueueChange,
+              options: [
+                { value: 'delivery_soon', label: '납기 7일' },
+                { value: 'no_site', label: '현장 미등록' },
+              ],
             },
           ]} />
           <ColumnVisibilityMenu tableId={ORDER_TABLE_ID} columns={ORDER_COLUMN_META} hidden={orderColVis.hidden} setHidden={orderColVis.setHidden} pinning={orderColPin.pinning} pinLeft={orderColPin.pinLeft} pinRight={orderColPin.pinRight} unpin={orderColPin.unpin} />
@@ -941,7 +1031,7 @@ export default function OrdersPage() {
         <TabsContent value="orders" className="space-y-4 mt-4">
           {ordersLoading ? <SkeletonRows rows={8} /> : (
             <OrderListTable
-              items={orders}
+              items={visibleOrders}
               hidden={orderColVis.hidden}
               pinning={orderColPin.pinning}
               onPinningChange={orderColPin.setPinning}
@@ -1036,12 +1126,12 @@ export default function OrdersPage() {
                   items={(['received', 'partial', 'completed', 'cancelled'] as OrderStatus[]).map((status) => ({
                     key: status,
                     label: ORDER_STATUS_LABEL[status],
-                    count: orders.filter(order => order.status === status).length,
+                    count: visibleOrders.filter(order => order.status === status).length,
                   }))}
                 />
               </RailBlock>
               <RailBlock title="거래처 TOP" count="kW">
-                {Object.entries(orders.reduce<Record<string, number>>((acc, order) => {
+                {Object.entries(visibleOrders.reduce<Record<string, number>>((acc, order) => {
                   const key = order.customer_name || order.customer_id || '미지정';
                   acc[key] = (acc[key] ?? 0) + (order.capacity_kw ?? 0);
                   return acc;
@@ -1063,7 +1153,7 @@ export default function OrdersPage() {
               <RailBlock title="단가 흐름" last>
                 <Sparkline data={[395, 398, 400, 402, 403, 405, 406, 407, 408, 409]} w={220} h={42} color="var(--solar-2)" area />
                 <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
-                  <span>평균 <span className="font-bold text-[var(--ink)]">{orders.length ? Math.round(orders.reduce((sum, order) => sum + (order.unit_price_wp ?? 0), 0) / orders.length).toLocaleString() : '0'}</span> ₩/Wp</span>
+                  <span>평균 <span className="font-bold text-[var(--ink)]">{visibleOrders.length ? Math.round(visibleOrders.reduce((sum, order) => sum + (order.unit_price_wp ?? 0), 0) / visibleOrders.length).toLocaleString() : '0'}</span> ₩/Wp</span>
                   <span className="font-bold text-[var(--pos)]">+1.2%</span>
                 </div>
               </RailBlock>

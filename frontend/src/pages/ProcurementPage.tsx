@@ -169,6 +169,48 @@ export default function ProcurementPage() {
 
   const [autoCompletedMsg, setAutoCompletedMsg] = useState<string | null>(null);
 
+  // 빠른 등록/알림 딥링크 intent 처리
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab') ?? 'po';
+    const tab = PROCUREMENT_TABS.has(tabParam) ? tabParam : 'po';
+    const status = params.get('status');
+    if (tab === 'bl' && status) {
+      setBlStatusFilter(status);
+    }
+
+    const wantsNew = params.get('action') === 'new' || params.get('new') === '1';
+    if (!wantsNew) return;
+
+    setSelectedPO(null);
+    setActiveTab(tab);
+    if (tab === 'po') {
+      setPoFormOpen(true);
+    } else if (tab === 'lc') {
+      setEditLC(null);
+      setNewLcDefaultPoId(undefined);
+      setLcFormOpen(true);
+    } else if (tab === 'tt') {
+      setEditTT(null);
+      setTtFormOpen(true);
+    } else if (tab === 'bl') {
+      const poId = params.get('po_id') ?? params.get('po');
+      const lcId = params.get('lc_id') ?? params.get('lc');
+      setSelectedBL(null);
+      setBlFormPresetPOId(poId);
+      setBlFormPresetLCId(lcId);
+      setBlOCRDropFile(null);
+      setBlOCRDropError('');
+      setBlFormOpen(true);
+    }
+
+    params.delete('action');
+    params.delete('new');
+    if (tab === 'po') params.delete('tab');
+    const next = params.toString();
+    navigate(`/procurement${next ? `?${next}` : ''}`, { replace: true });
+  }, [location.search, navigate]);
+
   // 우측 슬라이드 패널 — 드래그 리사이즈
   const [panelWidth, setPanelWidth] = useState(900);
   const panelRef = useRef<HTMLDivElement>(null);

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
@@ -21,6 +22,12 @@ const BANKING_TAB_OPTIONS = [
   { key: 'changes', label: '변경 이력' },
   { key: 'demand', label: '수요 예측' },
 ];
+const BANKING_TABS = new Set(BANKING_TAB_OPTIONS.map((tab) => tab.key));
+
+function getBankingTab(search: string) {
+  const tab = new URLSearchParams(search).get('tab') ?? 'limits';
+  return BANKING_TABS.has(tab) ? tab : 'limits';
+}
 
 function fmtUsdM(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0.00';
@@ -29,6 +36,24 @@ function fmtUsdM(value: number) {
 
 export default function BankingPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState(() => getBankingTab(location.search));
+
+  useEffect(() => {
+    setActiveTab(getBankingTab(location.search));
+  }, [location.search]);
+
+  const handleTabChange = (tab: string) => {
+    const nextTab = BANKING_TABS.has(tab) ? tab : 'limits';
+    setActiveTab(nextTab);
+    const params = new URLSearchParams(location.search);
+    params.delete('alert');
+    if (nextTab === 'limits') params.delete('tab');
+    else params.set('tab', nextTab);
+    const next = params.toString();
+    navigate(`/banking${next ? `?${next}` : ''}`, { replace: true });
+  };
 
   // 탭 1: 한도 현황 — Go API 직접 집계 (Rust 의존 제거)
   const { groups, loading: groupsLoading } = useAllBankLimitGroups();
@@ -39,7 +64,6 @@ export default function BankingPage() {
   // 탭 3: 한도 변경 이력
   const { data: limitChanges, loading: lcLoading, reload: reloadLC } = useLimitChangeList();
   const [lcFormOpen, setLcFormOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('limits');
 
   if (!selectedCompanyId) {
     return (
@@ -85,7 +109,7 @@ export default function BankingPage() {
         </Button>
       )}
       <div style={{ flex: 1 }} />
-      <FilterChips options={BANKING_TAB_OPTIONS} value={activeTab} onChange={setActiveTab} />
+      <FilterChips options={BANKING_TAB_OPTIONS} value={activeTab} onChange={handleTabChange} />
     </div>
   );
 
@@ -106,7 +130,7 @@ export default function BankingPage() {
             right={bankingCardControls}
           >
             <div className="sf-command-tab-body">
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <Tabs value={activeTab} onValueChange={handleTabChange}>
 
         {/* 탭 1: LC 한도 현황 — 법인별 그룹 */}
         <TabsContent value="limits" className="space-y-6">

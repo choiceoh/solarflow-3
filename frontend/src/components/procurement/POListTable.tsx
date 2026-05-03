@@ -506,7 +506,7 @@ function POListTable({ items, onDetail, onNew, onEditLC, onNewLC, onDelete, onDe
                               </Button>
                               <Button size="sm" variant="ghost"
                                 className="h-6 text-[11px] px-2 gap-1 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                onClick={e => { e.stopPropagation(); window.location.href = `/inbound?po=${po.po_id}`; }}
+                                onClick={e => { e.stopPropagation(); window.location.href = `/procurement?tab=bl&action=new&po_id=${po.po_id}`; }}
                               >
                                 <Plus className="h-3 w-3" />입고 등록
                               </Button>

@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/stores/appStore';
 import { useAlerts } from '@/hooks/useAlerts';
 import UserMenu from './UserMenu';
-import GlobalSearchBar from '@/components/search/GlobalSearchBar';
 import AlertBell from './AlertBell';
 
 export default function Header() {
@@ -17,7 +16,6 @@ export default function Header() {
       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleSidebar}>
         <Menu className="h-4 w-4" />
       </Button>
-      <GlobalSearchBar />
       <AlertBell alerts={alertState.alerts} totalCount={alertState.totalCount} criticalCount={alertState.criticalCount} />
       <UserMenu />
     </header>

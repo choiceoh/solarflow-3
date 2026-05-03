@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 import { detectTenantScope, type TenantScope } from '@/lib/tenantScope';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import GlobalSearchBar from '@/components/search/GlobalSearchBar';
 import AlertBell from '@/components/layout/AlertBell';
 import QuickRegister from '@/components/layout/QuickRegister';
 import FloatingMwEaCalculator from '@/components/common/FloatingMwEaCalculator';
@@ -174,7 +173,6 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/banking': { title: 'L/C 한도', breadcrumb: '현황 / 은행 한도' },
   '/sales-analysis': { title: '매출 분석', breadcrumb: '현황 / 매출과 이익' },
   '/crm/inbox': { title: '내 미처리 문의', breadcrumb: '판매 / 후속 답변 대기' },
-  '/search': { title: '통합 검색', breadcrumb: '도구 / 검색' },
   '/approval': { title: '결재안', breadcrumb: '도구 / 결재 문안' },
   '/assistant': { title: 'AI', breadcrumb: '도구 / 채팅 어시스턴트' },
   '/settings': { title: '설정', breadcrumb: '시스템 / 설정' },
@@ -411,10 +409,6 @@ export default function CommandShell() {
           <div className="sf-topbar-title">
             <h1>{meta.title}</h1>
             <div className="sf-topbar-subtitle">{meta.breadcrumb} · 계산기준 {new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</div>
-          </div>
-
-          <div className="sf-topbar-search">
-            <GlobalSearchBar />
           </div>
 
           <div className="sf-topbar-actions" data-onboarding-step="self-demo.topbar.actions">

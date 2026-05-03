@@ -192,7 +192,7 @@ export const cellRenderers: Record<string, CellRenderer> = {
     const r = row as BLShipment;
     if (!r.po_id) return <span>—</span>;
     return (
-      <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/procurement?po=${r.po_id}`; }}>
+      <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/procurement?po_id=${r.po_id}`; }}>
         {r.po_number ?? r.po_id.slice(0, 8)}
       </button>
     );
@@ -201,7 +201,7 @@ export const cellRenderers: Record<string, CellRenderer> = {
     const r = row as BLShipment;
     if (!r.lc_id) return <span>—</span>;
     return (
-      <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/lc?lc=${r.lc_id}`; }}>
+      <button className="text-sm text-primary underline" onClick={() => { window.location.href = `/procurement?tab=lc&lc_id=${r.lc_id}`; }}>
         {r.lc_number ?? r.lc_id.slice(0, 8)}
       </button>
     );
