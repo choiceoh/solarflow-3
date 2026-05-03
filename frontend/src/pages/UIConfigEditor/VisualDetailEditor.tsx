@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, Plus, Search, Settings2, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, GripVertical, Plus, Search, Settings2, Trash2 } from 'lucide-react';
 import type { DetailFieldConfig, DetailFormatter, DetailSectionConfig, DetailTabConfig, MetaDetailConfig } from '@/templates/types';
 import { buildRegistryEntries, cellRenderers, cellRendererMeta, contentBlocks, contentBlockMeta, enumDictionaries } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
@@ -23,6 +23,7 @@ const FORMATTER_OPTIONS = [
 ];
 
 const COLS_OPTIONS = [
+  { value: '1', label: '1' },
   { value: '2', label: '2' },
   { value: '3', label: '3' },
   { value: '4', label: '4' },
@@ -540,6 +541,29 @@ function SectionCard({
   const updateField = (fIdx: number, next: DetailFieldConfig) =>
     onUpdate({ ...section, fields: fields.map((f, i) => (i === fIdx ? next : f)) });
 
+  // PR #241 패턴 — 섹션 내 필드 drag-drop 재정렬 (HTML5 native, 라이브러리 없이)
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+  const onDragStart = (fIdx: number) => setDragIdx(fIdx);
+  const onDragEnd = () => {
+    setDragIdx(null);
+    setOverIdx(null);
+  };
+  const onDragOver = (fIdx: number) => {
+    if (fIdx !== dragIdx) setOverIdx(fIdx);
+  };
+  const onDrop = (fIdx: number) => {
+    if (dragIdx === null || dragIdx === fIdx) {
+      onDragEnd();
+      return;
+    }
+    const next = [...fields];
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(fIdx, 0, moved);
+    onUpdate({ ...section, fields: next });
+    onDragEnd();
+  };
+
   return (
     <div className="rounded border bg-card">
       <div
@@ -574,7 +598,7 @@ function SectionCard({
           </span>
         )}
         <FieldSelect label="" value={String(section.cols ?? 4)} options={COLS_OPTIONS}
-          onChange={(v) => onUpdate({ ...section, cols: Number(v) as 2 | 3 | 4 })} />
+          onChange={(v) => onUpdate({ ...section, cols: Number(v) as 1 | 2 | 3 | 4 })} />
         <span className="text-[10px] text-muted-foreground">cols</span>
         <span className="ml-auto" />
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
@@ -625,9 +649,27 @@ function SectionCard({
                 <Plus className="h-3 w-3 mr-1" />필드 추가
               </Button>
             </div>
-            {fields.map((field, fIdx) => (
-              <div key={fIdx} className="rounded border p-2 grid grid-cols-12 gap-2 text-xs bg-muted/20">
+            {fields.map((field, fIdx) => {
+              const isDragging = dragIdx === fIdx;
+              const isDragOver = overIdx === fIdx && dragIdx !== fIdx;
+              return (
+              <div
+                key={fIdx}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  onDragStart(fIdx);
+                }}
+                onDragOver={(e) => { e.preventDefault(); onDragOver(fIdx); }}
+                onDragEnd={onDragEnd}
+                onDrop={(e) => { e.preventDefault(); onDrop(fIdx); }}
+                className={`group rounded border p-2 grid grid-cols-12 gap-2 text-xs bg-muted/20 transition-opacity ${isDragging ? 'opacity-40' : ''} ${isDragOver ? 'border-t-2 border-t-foreground' : ''}`}
+              >
                 <div className="col-span-1 flex flex-col items-center gap-1">
+                  <GripVertical
+                    className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+                    onClick={(e) => e.stopPropagation()}
+                  />
                   <span className="text-[9px] mono">#{fIdx + 1}</span>
                   <Button type="button" variant="ghost" size="icon" className="h-5 w-5"
                     onClick={() => onUpdate({ ...section, fields: moveInArray(fields, fIdx, -1) })}
@@ -675,7 +717,8 @@ function SectionCard({
                   </Button>
                 </div>
               </div>
-            ))}
+              );
+            })}
             {fields.length === 0 && (
               <div className="text-center py-3 text-[10px] text-muted-foreground border border-dashed rounded">
                 필드가 없습니다
