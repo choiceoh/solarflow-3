@@ -27,7 +27,7 @@ import BLDetailView from '@/components/inbound/BLDetailView';
 import BLForm from '@/components/inbound/BLForm';
 import { saveBLShipmentWithLines } from '@/lib/blShipment';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL, type InboundType, type BLStatus } from '@/types/inbound';
-import { CardB, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
+import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
 import { flatSparkFromValue, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
 
@@ -692,6 +692,8 @@ export default function ProcurementPage() {
 
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
+          <CommandTopLine title={pageTitle} sub={pageSub} right={procurementCardControls} />
+
           <div className="sf-command-kpis">
             {metrics.map((metric) => (
               <TileB
@@ -711,6 +713,7 @@ export default function ProcurementPage() {
             title={pageTitle}
             sub={pageSub}
             right={procurementCardControls}
+            headerless
           >
             <div className="sf-command-tab-body">
               <Tabs value={activeTab} onValueChange={handleTabChange}>

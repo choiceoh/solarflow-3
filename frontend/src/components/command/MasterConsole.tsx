@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CardB, RailBlock, TileB } from './MockupPrimitives';
+import { CardB, CommandTopLine, RailBlock, TileB } from './MockupPrimitives';
 
 export interface MasterConsoleMetric {
   label: string;
@@ -53,6 +53,8 @@ export function MasterConsole({
         style={hasRail ? undefined : { gridTemplateColumns: 'minmax(0, 1fr)' }}
       >
         <section className="sf-procurement-main">
+          <CommandTopLine title={tableTitle} sub={tableSub} right={toolbar} />
+
           <div className="sf-command-kpis">
             {metrics.map((metric) => (
               <TileB
@@ -72,6 +74,7 @@ export function MasterConsole({
             title={tableTitle}
             sub={tableSub}
             right={toolbar}
+            headerless
           >
             <div className="sf-command-tab-body">{children}</div>
           </CardB>

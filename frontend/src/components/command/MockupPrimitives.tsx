@@ -108,6 +108,7 @@ export function CardB({
   children,
   padded = false,
   flex,
+  headerless = false,
 }: {
   title: string;
   sub?: string;
@@ -115,21 +116,44 @@ export function CardB({
   children: ReactNode;
   padded?: boolean;
   flex?: boolean;
+  headerless?: boolean;
 }) {
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, flex: flex ? 1 : undefined }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0, minHeight: 44 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 220, flexShrink: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.005em', color: 'var(--ink)' }}>{title}</div>
-          {sub ? <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{sub}</div> : null}
+      {!headerless ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0, minHeight: 44 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 220, flexShrink: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.005em', color: 'var(--ink)' }}>{title}</div>
+            {sub ? <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{sub}</div> : null}
+          </div>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+            {right}
+          </div>
         </div>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-          {right}
-        </div>
-      </div>
+      ) : null}
       <div style={{ padding: padded ? 14 : 0, minHeight: 0, flex: 1, overflow: 'auto' }}>
         {children}
       </div>
+    </div>
+  );
+}
+
+export function CommandTopLine({
+  title,
+  sub,
+  right,
+}: {
+  title: string;
+  sub?: string;
+  right?: ReactNode;
+}) {
+  return (
+    <div className="sf-command-topline">
+      <div className="sf-command-topline-copy">
+        <div className="sf-command-topline-title">{title}</div>
+        {sub ? <div className="sf-command-topline-sub">{sub}</div> : null}
+      </div>
+      <div className="sf-command-topline-actions">{right}</div>
     </div>
   );
 }
