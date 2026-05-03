@@ -12,6 +12,12 @@ const IMPORT_GROUPS: Array<{
   items: Array<{ type: TemplateType; label: string; sub: string }>;
 }> = [
   {
+    title: '기준정보',
+    items: [
+      { type: 'company', label: '법인', sub: '법인명 · 법인코드 · 사업자번호' },
+    ],
+  },
+  {
     title: '판매',
     items: [
       { type: 'order', label: '수주', sub: '수주번호 · 거래처 · 품번 · 수량 · 단가' },
@@ -67,8 +73,8 @@ export default function ImportHubPage() {
         </Button>
       )}
       metrics={[
-        { label: '통합 양식', value: '1', unit: '파일', sub: '7개 시트', tone: 'solar', spark: [1, 2, 3, 5, 7] },
-        { label: '업무 양식', value: '7', unit: '종', sub: '업로드 검증', tone: 'info' },
+        { label: '통합 양식', value: '1', unit: '파일', sub: '8개 시트', tone: 'solar', spark: [1, 2, 3, 5, 8] },
+        { label: '업무 양식', value: '8', unit: '종', sub: '업로드 검증', tone: 'info' },
         { label: '웹 입력', value: '0', unit: 'CTA', sub: '조회/분석 중심', tone: 'pos' },
         { label: '연결 보정', value: '매칭', sub: '관계·상태 관리', tone: 'ink' },
       ]}

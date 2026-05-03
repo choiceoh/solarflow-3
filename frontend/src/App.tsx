@@ -21,7 +21,6 @@ const MetaFormDepsDemoPage = lazy(() => import('@/pages/MetaFormDepsDemoPage'));
 const MetaFeaturesDemoPage = lazy(() => import('@/pages/MetaFeaturesDemoPage'));
 const WizardDemoPage = lazy(() => import('@/pages/WizardDemoPage'));
 const PartnerV2Page = lazy(() => import('@/pages/PartnerV2Page'));
-const CompaniesV2Page = lazy(() => import('@/pages/CompaniesV2Page'));
 const BanksV2Page = lazy(() => import('@/pages/BanksV2Page'));
 const WarehousesV2Page = lazy(() => import('@/pages/WarehousesV2Page'));
 const ManufacturersV2Page = lazy(() => import('@/pages/ManufacturersV2Page'));
@@ -44,8 +43,6 @@ const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
 const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
 const DataPage = lazy(() => import('@/pages/DataPage'));
 const ImportHubPage = lazy(() => import('@/pages/ImportHubPage'));
-const CompanyNewPage = lazy(() => import('@/pages/data/CompanyNewPage'));
-const CompanyEditPage = lazy(() => import('@/pages/data/CompanyEditPage'));
 const ManufacturerNewPage = lazy(() => import('@/pages/data/ManufacturerNewPage'));
 const ManufacturerEditPage = lazy(() => import('@/pages/data/ManufacturerEditPage'));
 const ProductNewPage = lazy(() => import('@/pages/data/ProductNewPage'));
@@ -113,8 +110,6 @@ export default function App() {
                 <Route path="/inventory" element={<InventoryPage />} />
                 <Route path="/import" element={<RoleGuard allowedRoles={['admin', 'operator']}><ImportHubPage /></RoleGuard>} />
                 <Route path="/data" element={<RoleGuard allowedRoles={['admin', 'operator']}><DataPage /></RoleGuard>} />
-                <Route path="/data/companies/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><CompanyNewPage /></RoleGuard>} />
-                <Route path="/data/companies/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><CompanyEditPage /></RoleGuard>} />
                 <Route path="/data/manufacturers/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><ManufacturerNewPage /></RoleGuard>} />
                 <Route path="/data/manufacturers/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><ManufacturerEditPage /></RoleGuard>} />
                 <Route path="/data/products/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><ProductNewPage /></RoleGuard>} />
@@ -126,7 +121,6 @@ export default function App() {
                 <Route path="/data/banks/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankNewPage /></RoleGuard>} />
                 <Route path="/data/banks/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankEditPage /></RoleGuard>} />
                 <Route path="/masters/partners-v2" element={<PartnerV2Page />} />
-                <Route path="/masters/companies-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><CompaniesV2Page /></RoleGuard>} />
                 <Route path="/masters/banks-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><BanksV2Page /></RoleGuard>} />
                 <Route path="/masters/warehouses-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><WarehousesV2Page /></RoleGuard>} />
                 <Route path="/masters/manufacturers-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><ManufacturersV2Page /></RoleGuard>} />
