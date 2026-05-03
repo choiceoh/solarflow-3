@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAuthStore } from '@/stores/authStore';
+import { usePreferencesStore } from '@/stores/preferencesStore';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import RoleGuard from '@/components/auth/RoleGuard';
 import AppLayout from '@/components/layout/AppLayout';
@@ -74,10 +75,16 @@ function Fallback() {
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize);
+  const userPreferences = useAuthStore((s) => s.user?.preferences);
+  const syncPreferences = usePreferencesStore((s) => s.syncFromUser);
 
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  useEffect(() => {
+    syncPreferences(userPreferences);
+  }, [userPreferences, syncPreferences]);
 
   return (
     <MobileBlock>

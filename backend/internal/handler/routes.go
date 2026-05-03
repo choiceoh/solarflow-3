@@ -520,6 +520,7 @@ func (h *UserHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Put("/users/me", h.UpdateMyProfile)
 	r.Put("/users/me/password", h.ChangeMyPassword)
 	r.Put("/users/me/persona", h.UpdateMyPersona) // D-112: 사이드바 탭 즉시 저장
+	r.Put("/users/me/preferences", h.UpdateMyPreferences)
 	r.Route("/users", func(r chi.Router) {
 		r.Use(g.AdminOnly)
 		r.Get("/", h.ListUsers)

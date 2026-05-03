@@ -1,16 +1,49 @@
-// 개인 설정 — 본인 프로필 + 비밀번호 변경 (모든 인증 역할)
-import { useState } from 'react';
+// 개인 설정 — 본인 프로필 + 표시 단위 + 비밀번호 변경 (모든 인증 역할)
+import { useEffect, useState } from 'react';
 import { fetchWithAuth } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useAuthStore } from '@/stores/authStore';
+import { usePreferencesStore } from '@/stores/preferencesStore';
 import { ROLE_LABELS, type Role } from '@/config/permissions';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { formatKRW, formatCapacity } from '@/lib/utils';
+import {
+  DEFAULT_PREFERENCES,
+  type AmountUnit,
+  type CapacityUnit,
+  type UserPreferences,
+} from '@/types/models';
+
+const AMOUNT_OPTIONS: { value: AmountUnit; label: string }[] = [
+  { value: 'auto', label: '자동 (금액 크기에 따라)' },
+  { value: 'won', label: '원' },
+  { value: 'thousand', label: '천원' },
+  { value: 'manwon', label: '만원' },
+  { value: 'million', label: '백만원' },
+  { value: 'eok', label: '억원' },
+];
+
+const CAPACITY_OPTIONS: { value: CapacityUnit; label: string }[] = [
+  { value: 'auto', label: '자동 (1MW 기준)' },
+  { value: 'kw', label: 'kW 고정' },
+  { value: 'mw', label: 'MW 고정' },
+];
+
+const PREVIEW_AMOUNTS = [5_000, 12_345_678, 150_000_000];
+const PREVIEW_CAPACITIES: { kw: number; ea: number }[] = [
+  { kw: 750, ea: 1_200 },
+  { kw: 1_500, ea: 2_500 },
+];
 
 export default function PersonalSettingsPage() {
   const { user } = useAuth();
   const refreshAuth = useAuthStore((s) => s.initialize);
+  const storedPrefs = usePreferencesStore((s) => s.prefs);
+  const setStorePrefs = usePreferencesStore((s) => s.setPrefs);
 
   const [profileName, setProfileName] = useState(user?.name ?? '');
   const [profileDept, setProfileDept] = useState(user?.department ?? '');
@@ -18,6 +51,17 @@ export default function PersonalSettingsPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
+
+  const [draftPrefs, setDraftPrefs] = useState<UserPreferences>(storedPrefs);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsError, setPrefsError] = useState('');
+  const [prefsSuccess, setPrefsSuccess] = useState('');
+
+  // user.preferences가 비동기로 늦게 도착하면 초기 draftPrefs(=defaults)를 덮어씀.
+  // 사용자가 편집 중이어도 store가 외부에서 바뀌면 동기화 (외부 변경 자체가 거의 없음).
+  useEffect(() => {
+    setDraftPrefs(storedPrefs);
+  }, [storedPrefs]);
 
   const [pwCurrent, setPwCurrent] = useState('');
   const [pwNew, setPwNew] = useState('');
@@ -62,6 +106,31 @@ export default function PersonalSettingsPage() {
     } finally {
       setProfileSaving(false);
     }
+  }
+
+  async function handlePrefsSave(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPrefsError('');
+    setPrefsSuccess('');
+    setPrefsSaving(true);
+    try {
+      await fetchWithAuth('/api/v1/users/me/preferences', {
+        method: 'PUT',
+        body: JSON.stringify({ preferences: draftPrefs }),
+      });
+      setStorePrefs(draftPrefs);
+      setPrefsSuccess('표시 단위 설정을 저장했습니다. 다른 화면 진입 시 적용됩니다.');
+    } catch (err) {
+      setPrefsError(err instanceof Error ? err.message : '표시 단위 저장에 실패했습니다');
+    } finally {
+      setPrefsSaving(false);
+    }
+  }
+
+  function handlePrefsReset() {
+    setDraftPrefs(DEFAULT_PREFERENCES);
+    setPrefsError('');
+    setPrefsSuccess('');
   }
 
   async function handlePasswordChange(e: React.FormEvent<HTMLFormElement>) {
@@ -152,6 +221,97 @@ export default function PersonalSettingsPage() {
             <div className="flex justify-end">
               <Button type="submit" disabled={profileSaving}>
                 {profileSaving ? '저장 중...' : '저장'}
+              </Button>
+            </div>
+          </form>
+        </section>
+
+        <section className="rounded-lg border bg-card">
+          <header className="px-5 py-4 border-b bg-muted/30">
+            <h2 className="text-base font-semibold">표시 단위</h2>
+            <p className="text-sm text-muted-foreground">금액·용량 표시 방식을 선택합니다. 입력 필드는 항상 원/EA 단위입니다.</p>
+          </header>
+          <form onSubmit={handlePrefsSave} className="p-5 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="pref-amount">금액 단위</Label>
+                <Select
+                  value={draftPrefs.amount_unit}
+                  onValueChange={(v) => v && setDraftPrefs((p) => ({ ...p, amount_unit: v as AmountUnit }))}
+                >
+                  <SelectTrigger id="pref-amount">
+                    <span className="flex flex-1 text-left truncate" data-slot="select-value">
+                      {AMOUNT_OPTIONS.find((o) => o.value === draftPrefs.amount_unit)?.label ?? ''}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AMOUNT_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pref-capacity">용량 단위</Label>
+                <Select
+                  value={draftPrefs.capacity_unit}
+                  onValueChange={(v) => v && setDraftPrefs((p) => ({ ...p, capacity_unit: v as CapacityUnit }))}
+                >
+                  <SelectTrigger id="pref-capacity">
+                    <span className="flex flex-1 text-left truncate" data-slot="select-value">
+                      {CAPACITY_OPTIONS.find((o) => o.value === draftPrefs.capacity_unit)?.label ?? ''}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CAPACITY_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <label htmlFor="pref-show-ea" className="flex cursor-pointer items-center gap-2 text-sm">
+              <Checkbox
+                id="pref-show-ea"
+                checked={draftPrefs.show_ea}
+                onCheckedChange={(checked) => setDraftPrefs((p) => ({ ...p, show_ea: checked === true }))}
+              />
+              <span>모듈 장수(EA) 동시 표시</span>
+            </label>
+
+            <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+              <div className="text-sm font-medium text-muted-foreground">미리보기 (저장 전 즉시 반영)</div>
+              <div className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+                <div className="space-y-1">
+                  <div className="text-sm text-muted-foreground">금액</div>
+                  {PREVIEW_AMOUNTS.map((amount) => (
+                    <div key={amount} className="font-mono">
+                      <span className="text-muted-foreground">{amount.toLocaleString('ko-KR')}원 → </span>
+                      {formatKRW(amount, draftPrefs)}
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm text-muted-foreground">용량</div>
+                  {PREVIEW_CAPACITIES.map(({ kw, ea }) => (
+                    <div key={kw} className="font-mono">
+                      <span className="text-muted-foreground">{kw.toLocaleString('ko-KR')}kW / {ea.toLocaleString('ko-KR')}EA → </span>
+                      {formatCapacity(kw, ea, draftPrefs)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {prefsError && <p className="text-sm text-destructive">{prefsError}</p>}
+            {prefsSuccess && <p className="text-sm text-emerald-700">{prefsSuccess}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={handlePrefsReset} disabled={prefsSaving}>
+                기본값으로
+              </Button>
+              <Button type="submit" disabled={prefsSaving}>
+                {prefsSaving ? '저장 중...' : '저장'}
               </Button>
             </div>
           </form>

@@ -1,5 +1,7 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { getCurrentPreferences } from "@/stores/preferencesStore"
+import type { AmountUnit, CapacityUnit, UserPreferences } from "@/types/models"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -19,9 +21,64 @@ export function formatUSD(n: number | null | undefined): string {
     : '—';
 }
 
-export function formatKRW(n: number | null | undefined): string {
+// --- 금액 단위 환산 (개인 설정 amount_unit 적용) ---
+// 기본은 store의 현재 prefs를 자동 참조 (Q7-C: 모든 호출처 자동 새 동작).
+// 단위 변환 후 절댓값이 0.1 미만이면 한 단계 작은 단위로 강등 (Q11 fallback).
+
+const AMOUNT_DIVISOR: Record<Exclude<AmountUnit, 'auto'>, number> = {
+  won: 1,
+  thousand: 1_000,
+  manwon: 10_000,
+  million: 1_000_000,
+  eok: 100_000_000,
+};
+
+const AMOUNT_SUFFIX: Record<Exclude<AmountUnit, 'auto'>, string> = {
+  won: '원',
+  thousand: '천원',
+  manwon: '만원',
+  million: '백만원',
+  eok: '억원',
+};
+
+// 작은 단위로 강등 시 사용하는 우선순위(큰→작은). manwon→won 두 단계 점프 등.
+const FALLBACK_ORDER: Exclude<AmountUnit, 'auto'>[] = ['eok', 'million', 'manwon', 'thousand', 'won'];
+
+function pickAutoUnit(absValue: number): Exclude<AmountUnit, 'auto'> {
+  if (absValue >= 100_000_000) return 'eok';
+  if (absValue >= 10_000) return 'manwon';
+  return 'won';
+}
+
+function formatWithUnit(value: number, unit: Exclude<AmountUnit, 'auto'>): string {
+  const divisor = AMOUNT_DIVISOR[unit];
+  const suffix = AMOUNT_SUFFIX[unit];
+  if (unit === 'won') {
+    return `${Math.round(value).toLocaleString('ko-KR')}${suffix}`;
+  }
+  const scaled = value / divisor;
+  return `${scaled.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}${suffix}`;
+}
+
+// 수동 단위 선택 시 너무 작은 값은 한 단계 작은 단위로 강등.
+function applyFallback(value: number, unit: Exclude<AmountUnit, 'auto'>): Exclude<AmountUnit, 'auto'> {
+  const idx = FALLBACK_ORDER.indexOf(unit);
+  let current = unit;
+  for (let i = idx; i < FALLBACK_ORDER.length - 1; i++) {
+    const scaled = Math.abs(value) / AMOUNT_DIVISOR[current];
+    if (scaled >= 0.1) return current;
+    current = FALLBACK_ORDER[i + 1];
+  }
+  return 'won';
+}
+
+export function formatKRW(n: number | null | undefined, prefsOverride?: UserPreferences): string {
   const value = Number(n);
-  return Number.isFinite(value) ? `${value.toLocaleString('ko-KR')}원` : '—';
+  if (!Number.isFinite(value)) return '—';
+  const prefs = prefsOverride ?? getCurrentPreferences();
+  const unit: Exclude<AmountUnit, 'auto'> =
+    prefs.amount_unit === 'auto' ? pickAutoUnit(Math.abs(value)) : applyFallback(value, prefs.amount_unit);
+  return formatWithUnit(value, unit);
 }
 
 export function formatPercent(n: number | null | undefined): string {
@@ -39,27 +96,54 @@ export function formatWp(n: number | null | undefined): string {
   return Number.isFinite(value) ? `${value}Wp` : '—';
 }
 
-/**
- * kW 값을 "X.XMW (X,XXXkW)" 형식으로 통일 표시.
- * 용량 표기 = MW 기본 + kW 부수. EA는 알 수 있는 경우 formatCapacity로 추가.
- */
-export function formatKw(n: number | null | undefined): string {
-  const value = Number(n);
-  if (!Number.isFinite(value)) return '—';
-  const mw = (value / 1000).toFixed(1);
-  const kw = Math.round(value).toLocaleString('ko-KR');
-  return `${mw}MW (${kw}kW)`;
+// --- 용량 단위 환산 (개인 설정 capacity_unit 적용) ---
+// auto: 1,000kW 기준 자동 (기존 동작 유지)
+// kw: 항상 "X,XXXkW"
+// mw: 항상 "X.XMW" (단, 0.1MW 미만이면 kW로 강등 — Q11 fallback)
+
+function formatCapacityCore(kw: number, unit: CapacityUnit): string {
+  if (unit === 'kw') {
+    return `${Math.round(kw).toLocaleString('ko-KR')}kW`;
+  }
+  if (unit === 'mw') {
+    if (Math.abs(kw) / 1000 < 0.1) {
+      return `${Math.round(kw).toLocaleString('ko-KR')}kW`;
+    }
+    return `${(kw / 1000).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}MW`;
+  }
+  // auto: 기존 동작 — "X.XMW (X,XXXkW)"
+  const mw = (kw / 1000).toFixed(1);
+  const kwStr = Math.round(kw).toLocaleString('ko-KR');
+  return `${mw}MW (${kwStr}kW)`;
 }
 
 /**
- * kW + EA(모듈 장수) 함께 표시: "X.XMW (X,XXXkW / X,XXXEA)"
- * ea가 주어지지 않으면 formatKw와 동일.
+ * kW 값을 개인 설정 단위로 표시. 기본(자동) "X.XMW (X,XXXkW)".
+ * EA는 formatCapacity로 추가.
  */
-export function formatCapacity(kw: number | null | undefined, ea?: number): string {
-  const base = formatKw(kw);
-  if (base === '—') return base;
-  if (ea == null || ea === 0) return base;
-  return `${base.slice(0, -1)} / ${Math.round(ea).toLocaleString('ko-KR')}EA)`;
+export function formatKw(n: number | null | undefined, prefsOverride?: UserPreferences): string {
+  const value = Number(n);
+  if (!Number.isFinite(value)) return '—';
+  const prefs = prefsOverride ?? getCurrentPreferences();
+  return formatCapacityCore(value, prefs.capacity_unit);
+}
+
+/**
+ * kW + EA(모듈 장수) 동시 표시. show_ea=false 또는 ea 미지정 시 EA 생략.
+ */
+export function formatCapacity(kw: number | null | undefined, ea?: number, prefsOverride?: UserPreferences): string {
+  const value = Number(kw);
+  if (!Number.isFinite(value)) return '—';
+  const prefs = prefsOverride ?? getCurrentPreferences();
+  const base = formatCapacityCore(value, prefs.capacity_unit);
+  if (!prefs.show_ea || ea == null || ea === 0) return base;
+  const eaStr = `${Math.round(ea).toLocaleString('ko-KR')}EA`;
+  // auto 모드: "X.XMW (X,XXXkW)" 형태 → 닫는 괄호 안에 EA 삽입
+  if (prefs.capacity_unit === 'auto') {
+    return `${base.slice(0, -1)} / ${eaStr})`;
+  }
+  // kw/mw 모드: "X kW" 또는 "X.X MW" → 괄호로 EA 추가
+  return `${base} (${eaStr})`;
 }
 
 export function formatMW(n: number | null | undefined): string {
