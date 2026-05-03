@@ -204,6 +204,7 @@ export default function CustomsPage() {
             <TileB lbl="평균 비용" v={expenses.length ? fmtEok(expenseTotal / expenses.length) : '0.00'} u="억" sub="건당 평균" tone="ink" spark={autoSpark('평균 비용')} />
           </div>
 
+          <div data-onboarding-step="customs.declaration.attach">
           <CardB
             title={activeTab === 'exchange' ? '환율 비교' : '부대비용'}
             sub={activeTab === 'exchange' ? '계약 환율과 최신 환율 영향 비교' : `${expenses.length}건 · ${fmtEok(expenseTotal)}억`}
@@ -237,6 +238,7 @@ export default function CustomsPage() {
               </Tabs>
             </div>
           </CardB>
+          </div>
         </section>
 
         <aside className="sf-customs-rail card dark-scroll">

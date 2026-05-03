@@ -1,5 +1,6 @@
 import type { FlowDefinition } from "../engine/types"
 import { selfDemoFlow } from "./self-demo"
+import { poFlow } from "./po-flow"
 
 /**
  * 흐름 등록 — Q8 결정 (코드 디렉토리 컨벤션).
@@ -13,6 +14,6 @@ import { selfDemoFlow } from "./self-demo"
  * PR #2: po-flow.ts (탑솔라 PO → LC → BL → 면장 → 원가)
  * PR #3: baro-sales-flow.ts (BARO 영업 견적 → 수주 → 출고 → 수금 → 미수금)
  */
-export const ALL_FLOWS: FlowDefinition[] = [selfDemoFlow]
+export const ALL_FLOWS: FlowDefinition[] = [selfDemoFlow, poFlow]
 
-export { selfDemoFlow }
+export { selfDemoFlow, poFlow }
