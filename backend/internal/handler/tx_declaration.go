@@ -33,11 +33,6 @@ func (h *DeclarationHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("import_declarations").
 		Select("*", "exact", false)
 
-	// 박물관 표본(is_sandbox=true) 자동 제외 — ?include_sandbox=true 명시 시 우회.
-	if r.URL.Query().Get("include_sandbox") != "true" {
-		query = query.Eq("is_sandbox", "false")
-	}
-
 	// 비유: ?bl_id=xxx — 특정 B/L의 면장만 필터
 	if blID := r.URL.Query().Get("bl_id"); blID != "" {
 		query = query.Eq("bl_id", blID)

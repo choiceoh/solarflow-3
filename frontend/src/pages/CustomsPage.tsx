@@ -134,7 +134,6 @@ export default function CustomsPage() {
             <TileB lbl="평균 비용" v={expenses.length ? fmtEok(expenseTotal / expenses.length) : '0.00'} u="억" sub="건당 평균" tone="ink" spark={flatSpark(expenses.length ? expenseTotal / expenses.length / 1e8 : 0)} />
           </div>
 
-          <div data-onboarding-step="customs.declaration.attach">
           <CardB
             title={pageTitle}
             sub={pageSub}
@@ -163,7 +162,6 @@ export default function CustomsPage() {
               </Tabs>
             </div>
           </CardB>
-          </div>
         </section>
 
         <aside className="sf-customs-rail card dark-scroll">

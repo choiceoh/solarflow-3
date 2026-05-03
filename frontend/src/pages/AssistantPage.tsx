@@ -321,10 +321,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     <>
       <div className={cn('flex min-w-0 flex-1 flex-col gap-3', embedded ? 'p-3' : 'p-4')}>
         {!embedded && (
-          <header
-            className="flex flex-wrap items-center gap-3 border-b pb-3"
-            data-onboarding-step="self-demo.assistant.entry"
-          >
+          <header className="flex flex-wrap items-center gap-3 border-b pb-3">
             <div className="flex items-center gap-2">
               <Bot className="h-6 w-6 text-[var(--sf-solar)]" />
               <h2 className="text-lg font-semibold">업무 도우미</h2>
