@@ -3,18 +3,30 @@
 #
 # 사용처: 운영 서버(Linux gx10-f96e)의 crontab에서 매 10분 호출.
 # 동작:
-#   1) git pull --ff-only origin main
-#   2) HEAD 차이 없으면 즉시 종료
-#   3) 차이 있으면 변경된 파일을 분류:
+#   1) [CI 게이트] 원격 main HEAD의 GitHub Actions 결과 확인 (gh CLI 필요)
+#      - success/no_runs → 진행, pending → 다음 cron 회차로, failure → 차단
+#      - gh 미설치 시 게이트 스킵하고 기존 빌드 가드에 의존
+#   2) git pull --ff-only origin main
+#   3) HEAD 차이 없으면 즉시 종료
+#   4) 차이 있으면 변경된 파일을 분류:
 #      backend/migrations/*.sql        → apply_migrations.py 호출 (헤더 게이트)
 #      backend/(non-migration)         → Go 빌드 + solarflow-go 재시작
 #      engine/(src|Cargo.{toml,lock})  → Rust 빌드 + solarflow-engine 재시작
 #      frontend/*                      → 무시 (Cloudflare Pages 자동 배포)
 #      그 외 (docs/harness 등)         → 무시
-#   4) 마이그레이션은 `-- @auto-apply: yes` 헤더 있는 파일만 자동 적용.
+#   5) 마이그레이션은 `-- @auto-apply: yes` 헤더 있는 파일만 자동 적용.
 #      미게이트 파일은 SKIP + 경고. 마이그레이션 SQL 실패 시 Go 재시작 생략 (DB 정합 우선).
-#   5) 빌드 실패 시 재시작 생략 — 기존 서비스 유지
-#   6) 동시 실행 방지 (flock)
+#   6) 빌드 실패 시 재시작 생략 — 기존 서비스 유지
+#   7) [자동 롤백] 재시작 후 health(/health) 실패 시 이전 바이너리(.prev)로 복원하고
+#      다시 재시작. Go·Rust 모두 적용. .prev는 빌드 직전 백업으로 갱신됨.
+#   8) 동시 실행 방지 (flock)
+#
+# 운영 안전선 (개떡같은 PR이 머지돼도 운영 무영향):
+#   - CI 빨간색 → deploy 자체가 안 일어남 (1)
+#   - 빌드 실패 → 재시작 생략 (6)
+#   - 마이그레이션 실패 → Go 재시작 보류 (5, apply_migrations.py 트랜잭션)
+#   - 빌드는 됐지만 런타임 panic → health 실패 → 자동 롤백 (7)
+#   - 그래도 안 되면 systemd가 service Restart=on-failure로 재시도
 
 set -uo pipefail
 
@@ -48,6 +60,42 @@ if [[ "$CURRENT_BRANCH" != "main" ]]; then
 fi
 
 BEFORE=$(git rev-parse HEAD)
+
+# CI 게이트 — pull 전에 원격 main HEAD의 GitHub Actions 결과를 확인.
+# 빨간 빌드가 머지돼도 운영이 깨지지 않도록 deploy 자체를 막는다.
+# - success / no_runs(워크플로 없음) → 진행
+# - pending → 다음 cron 회차에서 재시도 (pull 안 함, 상태 그대로 유지)
+# - failure → 알람만 찍고 중단 (수동 개입 필요 — 보통 다음 fix PR 머지로 자동 해소)
+# - gh CLI 미설치 / API 실패 → 게이트 건너뛰고 기존 빌드 가드(npm/go build 실패 시 재시작 보류)에 의존
+if command -v gh >/dev/null 2>&1; then
+  REMOTE_SHA=$(git ls-remote origin main 2>/dev/null | awk '{print $1}')
+  if [[ -n "$REMOTE_SHA" && "$REMOTE_SHA" != "$BEFORE" ]]; then
+    CI_STATE=$(gh api "repos/choiceoh/solarflow/commits/$REMOTE_SHA/check-runs" \
+      --jq 'if (.check_runs | length) == 0 then "no_runs"
+            elif any(.check_runs[]; .status != "completed") then "pending"
+            elif any(.check_runs[]; .conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "action_required") then "failure"
+            else "success" end' 2>/dev/null || echo "unknown")
+    case "$CI_STATE" in
+      success|no_runs)
+        : # 정상 — 아래 git pull로 진행
+        ;;
+      pending)
+        echo "[$(date -Iseconds)] CI pending on ${REMOTE_SHA:0:7} — 다음 cron 회차에서 재시도"
+        exit 0
+        ;;
+      failure)
+        echo "[$(date -Iseconds)] ❌ CI red on ${REMOTE_SHA:0:7} — deploy 차단. 수동 개입 필요"
+        echo "    조치: 회귀 fix PR 머지 → 다음 cron이 새 SHA의 CI를 다시 평가"
+        exit 1
+        ;;
+      unknown)
+        echo "[$(date -Iseconds)] ⚠️  CI 상태 조회 실패 — 기존 빌드 가드만 의존하고 진행"
+        ;;
+    esac
+  fi
+else
+  echo "[$(date -Iseconds)] ⚠️  gh CLI 미설치 — CI 게이트 비활성화"
+fi
 
 # pull (실패해도 다음 cron이 다시 시도)
 if ! git pull --ff-only origin main 2>&1; then
@@ -122,43 +170,76 @@ if [[ $has_migration -eq 1 ]]; then
   fi
 fi
 
-# Go 빌드 + 재시작
+# 재시작 후 health 확인 + 실패 시 이전 바이너리로 자동 롤백.
+# 호출: restart_with_rollback <service-name> <bin-path> <bin-prev-path> <health-url>
+# 동작:
+#   1) systemctl restart
+#   2) sleep + health curl
+#   3) health 실패 → 이전 바이너리(.prev) 복원 → systemctl restart → health 재확인
+#   4) 롤백도 실패하면 last bad state 그대로 두고 알림 (systemd 자체 재시작 정책에 위임)
+restart_with_rollback() {
+  local svc=$1 bin=$2 prev=$3 health=$4
+  if ! systemctl --user restart "$svc" 2>&1; then
+    echo "[$(date -Iseconds)] ❌ $svc systemctl restart 실패"
+    return 1
+  fi
+  sleep 3
+  if curl -fsS -m 5 -o /dev/null "$health"; then
+    echo "[$(date -Iseconds)] $svc 재시작 OK (health 200)"
+    return 0
+  fi
+  echo "[$(date -Iseconds)] ❌ $svc health 실패 — 자동 롤백 시도"
+  if [[ ! -f "$prev" ]]; then
+    echo "[$(date -Iseconds)] ❌ 이전 바이너리($prev) 없음 — 자동 롤백 불가, 수동 개입 필요"
+    return 1
+  fi
+  mv -f "$prev" "$bin"
+  if ! systemctl --user restart "$svc" 2>&1; then
+    echo "[$(date -Iseconds)] ❌ 롤백 후 systemctl restart 실패 — 수동 개입 필요"
+    return 1
+  fi
+  sleep 3
+  if curl -fsS -m 5 -o /dev/null "$health"; then
+    echo "[$(date -Iseconds)] ✓ $svc 이전 바이너리로 자동 롤백 완료 (health 200)"
+    return 0
+  fi
+  echo "[$(date -Iseconds)] ❌ $svc 롤백 후에도 health 실패 — journalctl + 수동 개입 필요"
+  return 1
+}
+
+# Go 빌드 + 재시작 (이전 바이너리 백업 → 자동 롤백 가드 포함)
+GO_BIN="$GO_DIR/solarflow-go"
+GO_BIN_PREV="$GO_DIR/solarflow-go.prev"
+GO_BIN_NEW="$GO_DIR/solarflow-go.new"
 if [[ $need_go -eq 1 && $mig_ok -eq 1 ]]; then
-  echo "[$(date -Iseconds)] Go 빌드 시작"
-  if (cd "$GO_DIR" && go build -o solarflow-go . 2>&1); then
-    if systemctl --user restart solarflow-go.service 2>&1; then
-      sleep 2
-      if curl -fsS -o /dev/null http://localhost:8080/health; then
-        echo "[$(date -Iseconds)] solarflow-go 재시작 OK (health 200)"
-      else
-        echo "[$(date -Iseconds)] solarflow-go 재시작했으나 health 응답 없음 — journalctl 확인 필요"
-      fi
-    else
-      echo "[$(date -Iseconds)] solarflow-go systemctl restart 실패"
-    fi
+  echo "[$(date -Iseconds)] Go 빌드 시작 (-> solarflow-go.new)"
+  if (cd "$GO_DIR" && go build -o solarflow-go.new . 2>&1); then
+    # 백업: 현재 운영 중인 바이너리를 .prev로, 새 빌드를 운영 자리로 원자적 swap
+    [[ -f "$GO_BIN" ]] && cp -f "$GO_BIN" "$GO_BIN_PREV"
+    mv -f "$GO_BIN_NEW" "$GO_BIN"
+    restart_with_rollback solarflow-go.service "$GO_BIN" "$GO_BIN_PREV" http://localhost:8080/health
   else
     echo "[$(date -Iseconds)] Go 빌드 실패 — 기존 서비스 유지"
+    rm -f "$GO_BIN_NEW"
   fi
 elif [[ $need_go -eq 1 && $mig_ok -eq 0 ]]; then
   echo "[$(date -Iseconds)] Go 변경분 빌드 보류 — 마이그레이션 실패 해결 후 다음 회차에 재시도"
 fi
 
 # Rust 빌드 + 재시작
+# cargo는 빌드 결과를 in-place로 덮어쓰므로 (Go의 -o .new 패턴이 안 됨) 빌드 직전에 미리 백업.
+# cargo build는 실패 시 기존 바이너리를 건드리지 않으므로 pre-build 백업이 의미를 가진다.
+ENGINE_BIN="$ENGINE_DIR/target/release/solarflow-engine"
+ENGINE_BIN_PREV="$ENGINE_DIR/target/release/solarflow-engine.prev"
 if [[ $need_engine -eq 1 ]]; then
   echo "[$(date -Iseconds)] Rust 빌드 시작 (release)"
+  # 빌드 직전 백업 (현재 운영 중 바이너리)
+  [[ -f "$ENGINE_BIN" ]] && cp -f "$ENGINE_BIN" "$ENGINE_BIN_PREV"
   if (cd "$ENGINE_DIR" && cargo build --release 2>&1); then
-    if systemctl --user restart solarflow-engine.service 2>&1; then
-      sleep 3
-      if curl -fsS -o /dev/null http://localhost:8081/health; then
-        echo "[$(date -Iseconds)] solarflow-engine 재시작 OK (health 200)"
-      else
-        echo "[$(date -Iseconds)] solarflow-engine 재시작했으나 health 응답 없음 — journalctl 확인 필요"
-      fi
-    else
-      echo "[$(date -Iseconds)] solarflow-engine systemctl restart 실패"
-    fi
+    restart_with_rollback solarflow-engine.service "$ENGINE_BIN" "$ENGINE_BIN_PREV" http://localhost:8081/health
   else
     echo "[$(date -Iseconds)] Rust 빌드 실패 — 기존 서비스 유지"
+    # 빌드 실패 시 .prev는 그대로 둔다 (다음 빌드 시 다시 갱신됨)
   fi
 fi
 
