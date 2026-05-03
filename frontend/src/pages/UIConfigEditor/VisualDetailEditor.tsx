@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, Plus, Settings2, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, GripVertical, Plus, Search, Settings2, Trash2 } from 'lucide-react';
 import type { DetailFieldConfig, DetailFormatter, DetailSectionConfig, DetailTabConfig, MetaDetailConfig } from '@/templates/types';
 import { buildRegistryEntries, cellRenderers, cellRendererMeta, contentBlocks, contentBlockMeta, enumDictionaries } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
@@ -23,6 +23,7 @@ const FORMATTER_OPTIONS = [
 ];
 
 const COLS_OPTIONS = [
+  { value: '1', label: '1' },
   { value: '2', label: '2' },
   { value: '3', label: '3' },
   { value: '4', label: '4' },
@@ -396,41 +397,118 @@ function SectionsTab({ value, onChange, onSelectDetailField }: {
   const sections = value.sections ?? [];
   const blockOptions = useMemo(() => Object.keys(contentBlocks).sort().map((id) => ({ value: id, label: id })), []);
 
+  // VisualFormEditor 사용성 시리즈 패턴 적용 — 섹션 collapse + 검색
+  const [collapsedSet, setCollapsedSet] = useState<Set<number>>(new Set());
+  const [search, setSearch] = useState('');
+  const searchLower = search.trim().toLowerCase();
+
+  // 검색 매칭 — title / fields key·label / contentBlock.blockId
+  const matchesSearch = (sec: DetailSectionConfig): boolean => {
+    if (!searchLower) return true;
+    if (sec.title?.toLowerCase().includes(searchLower)) return true;
+    if (sec.contentBlock?.blockId?.toLowerCase().includes(searchLower)) return true;
+    return (sec.fields ?? []).some(
+      (f) =>
+        f.key?.toLowerCase().includes(searchLower) ||
+        f.label?.toLowerCase().includes(searchLower),
+    );
+  };
+
+  const matchedCount = sections.filter(matchesSearch).length;
+
+  const toggleSection = (idx: number) => {
+    setCollapsedSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
+  const expandAll = () => setCollapsedSet(new Set());
+  const collapseAll = () => setCollapsedSet(new Set(sections.map((_, i) => i)));
+
   const updateSection = (idx: number, next: DetailSectionConfig) =>
     onChange({ ...value, sections: sections.map((s, i) => (i === idx ? next : s)) });
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex-1 text-xs text-muted-foreground">
           데이터 섹션 또는 contentBlock 슬롯. 필드와 contentBlock은 둘 중 하나만 사용.
         </p>
         <Button size="sm" variant="outline"
-          onClick={() => onChange({
-            ...value,
-            sections: [...sections, { title: '새 섹션', cols: 4, fields: [] }],
-          })}>
+          onClick={() => {
+            const newIdx = sections.length;
+            onChange({
+              ...value,
+              sections: [...sections, { title: '새 섹션', cols: 4, fields: [] }],
+            });
+            // 새 섹션은 자동 펼침 — 즉시 편집 가능
+            setCollapsedSet((prev) => {
+              const next = new Set(prev);
+              next.delete(newIdx);
+              return next;
+            });
+          }}>
           <Plus className="h-3 w-3 mr-1" />섹션 추가
         </Button>
       </div>
+      {sections.length > 1 && (
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="섹션·필드 검색 (title / key / label)"
+              className="h-7 pl-7 text-xs"
+            />
+            {searchLower && (
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
+                {matchedCount}/{sections.length}
+              </span>
+            )}
+          </div>
+          <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={expandAll}>
+            모두 펼침
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={collapseAll}>
+            모두 접기
+          </Button>
+        </div>
+      )}
       <div className="space-y-3">
-        {sections.map((sec, sIdx) => (
-          <SectionCard
-            key={sIdx}
-            section={sec}
-            index={sIdx}
-            total={sections.length}
-            blockOptions={blockOptions}
-            onUpdate={(next) => updateSection(sIdx, next)}
-            onMoveUp={() => onChange({ ...value, sections: moveInArray(sections, sIdx, -1) })}
-            onMoveDown={() => onChange({ ...value, sections: moveInArray(sections, sIdx, 1) })}
-            onRemove={() => onChange({ ...value, sections: sections.filter((_, i) => i !== sIdx) })}
-            onSelectField={onSelectDetailField ? (fIdx) => onSelectDetailField(sIdx, fIdx) : undefined}
-          />
-        ))}
+        {sections.map((sec, sIdx) => {
+          const isMatch = matchesSearch(sec);
+          if (searchLower && !isMatch) return null;
+          // 검색 매칭 시 자동 펼침 (사용자가 찾는 항목 즉시 보이도록)
+          const isCollapsed = searchLower ? false : collapsedSet.has(sIdx);
+          return (
+            <SectionCard
+              key={sIdx}
+              section={sec}
+              index={sIdx}
+              total={sections.length}
+              blockOptions={blockOptions}
+              collapsed={isCollapsed}
+              onToggleCollapse={() => toggleSection(sIdx)}
+              onUpdate={(next) => updateSection(sIdx, next)}
+              onMoveUp={() => onChange({ ...value, sections: moveInArray(sections, sIdx, -1) })}
+              onMoveDown={() => onChange({ ...value, sections: moveInArray(sections, sIdx, 1) })}
+              onRemove={() => onChange({ ...value, sections: sections.filter((_, i) => i !== sIdx) })}
+              onSelectField={onSelectDetailField ? (fIdx) => onSelectDetailField(sIdx, fIdx) : undefined}
+            />
+          );
+        })}
         {sections.length === 0 && (
           <div className="text-center py-8 text-xs text-muted-foreground border border-dashed rounded">
             섹션이 없습니다
+          </div>
+        )}
+        {sections.length > 0 && searchLower && matchedCount === 0 && (
+          <div className="text-center py-4 text-xs text-muted-foreground border border-dashed rounded">
+            검색 결과 없음 — "{search}" 와 매칭되는 섹션·필드 없음
           </div>
         )}
       </div>
@@ -439,12 +517,15 @@ function SectionsTab({ value, onChange, onSelectDetailField }: {
 }
 
 function SectionCard({
-  section, index, total, blockOptions, onUpdate, onMoveUp, onMoveDown, onRemove, onSelectField,
+  section, index, total, blockOptions, collapsed, onToggleCollapse,
+  onUpdate, onMoveUp, onMoveDown, onRemove, onSelectField,
 }: {
   section: DetailSectionConfig;
   index: number;
   total: number;
   blockOptions: { value: string; label: string }[];
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   onUpdate: (next: DetailSectionConfig) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -460,15 +541,64 @@ function SectionCard({
   const updateField = (fIdx: number, next: DetailFieldConfig) =>
     onUpdate({ ...section, fields: fields.map((f, i) => (i === fIdx ? next : f)) });
 
+  // PR #241 패턴 — 섹션 내 필드 drag-drop 재정렬 (HTML5 native, 라이브러리 없이)
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+  const onDragStart = (fIdx: number) => setDragIdx(fIdx);
+  const onDragEnd = () => {
+    setDragIdx(null);
+    setOverIdx(null);
+  };
+  const onDragOver = (fIdx: number) => {
+    if (fIdx !== dragIdx) setOverIdx(fIdx);
+  };
+  const onDrop = (fIdx: number) => {
+    if (dragIdx === null || dragIdx === fIdx) {
+      onDragEnd();
+      return;
+    }
+    const next = [...fields];
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(fIdx, 0, moved);
+    onUpdate({ ...section, fields: next });
+    onDragEnd();
+  };
+
   return (
     <div className="rounded border bg-card">
-      <div className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2">
+      <div
+        className="flex cursor-pointer items-center gap-2 border-b bg-muted/30 px-3 py-2 hover:bg-muted/50"
+        onClick={(e) => {
+          // input/button 등 inner click 은 무시 — 헤더 *공백* 클릭만 토글
+          if ((e.target as HTMLElement).closest('input,button,select,[role="combobox"]')) return;
+          onToggleCollapse();
+        }}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleCollapse();
+          }
+        }}
+        title={collapsed ? '클릭해서 펼치기' : '클릭해서 접기'}
+      >
+        <ChevronDown
+          className={`h-3 w-3 shrink-0 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`}
+        />
         <span className="text-xs text-muted-foreground mono">섹션 #{index + 1}</span>
         <Input className="h-7 text-xs flex-1 max-w-md" value={section.title}
           onChange={(e) => onUpdate({ ...section, title: e.target.value })}
           placeholder="섹션 제목" />
+        {collapsed && (
+          <span className="text-[10px] text-muted-foreground">
+            {section.contentBlock
+              ? `[${section.contentBlock.blockId}]`
+              : `필드 ${(section.fields ?? []).length}개`}
+          </span>
+        )}
         <FieldSelect label="" value={String(section.cols ?? 4)} options={COLS_OPTIONS}
-          onChange={(v) => onUpdate({ ...section, cols: Number(v) as 2 | 3 | 4 })} />
+          onChange={(v) => onUpdate({ ...section, cols: Number(v) as 1 | 2 | 3 | 4 })} />
         <span className="text-xs text-muted-foreground">cols</span>
         <span className="ml-auto" />
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
@@ -479,6 +609,7 @@ function SectionCard({
           onClick={onRemove}><Trash2 className="h-3.5 w-3.5" /></Button>
       </div>
 
+      {!collapsed && (
       <div className="p-3 space-y-2">
         <div className="flex items-center gap-3 text-xs">
           <label className="flex items-center gap-1">
@@ -518,9 +649,27 @@ function SectionCard({
                 <Plus className="h-3 w-3 mr-1" />필드 추가
               </Button>
             </div>
-            {fields.map((field, fIdx) => (
-              <div key={fIdx} className="rounded border p-2 grid grid-cols-12 gap-2 text-xs bg-muted/20">
+            {fields.map((field, fIdx) => {
+              const isDragging = dragIdx === fIdx;
+              const isDragOver = overIdx === fIdx && dragIdx !== fIdx;
+              return (
+              <div
+                key={fIdx}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  onDragStart(fIdx);
+                }}
+                onDragOver={(e) => { e.preventDefault(); onDragOver(fIdx); }}
+                onDragEnd={onDragEnd}
+                onDrop={(e) => { e.preventDefault(); onDrop(fIdx); }}
+                className={`group rounded border p-2 grid grid-cols-12 gap-2 text-xs bg-muted/20 transition-opacity ${isDragging ? 'opacity-40' : ''} ${isDragOver ? 'border-t-2 border-t-foreground' : ''}`}
+              >
                 <div className="col-span-1 flex flex-col items-center gap-1">
+                  <GripVertical
+                    className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+                    onClick={(e) => e.stopPropagation()}
+                  />
                   <span className="text-[9px] mono">#{fIdx + 1}</span>
                   <Button type="button" variant="ghost" size="icon" className="h-5 w-5"
                     onClick={() => onUpdate({ ...section, fields: moveInArray(fields, fIdx, -1) })}
@@ -568,7 +717,8 @@ function SectionCard({
                   </Button>
                 </div>
               </div>
-            ))}
+              );
+            })}
             {fields.length === 0 && (
               <div className="text-center py-3 text-xs text-muted-foreground border border-dashed rounded">
                 필드가 없습니다
@@ -577,6 +727,7 @@ function SectionCard({
           </>
         )}
       </div>
+      )}
     </div>
   );
 }
