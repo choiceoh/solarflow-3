@@ -15,7 +15,7 @@
 | 테넌트 식별 | `user_profiles.tenant_scope = 'baro'` (D-108) |
 | 호스트 검출 | 프론트의 `detectTenantScope()`가 `^baro\.` 패턴으로 BARO 모드 결정 |
 
-탑솔라 SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미들웨어로만 격리한다(D-108). 인프라(Linux 서버, cloudflared 터널, Cloudflare Pages)는 [PRODUCTION.md](PRODUCTION.md) 참조.
+module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미들웨어로만 격리한다(D-108, D-119). 인프라(Linux 서버, cloudflared 터널, Cloudflare Pages)는 [PRODUCTION.md](PRODUCTION.md) 참조.
 
 ## 활성 메뉴 (사이드바에 노출되는 것)
 
@@ -35,7 +35,7 @@
 - 미수금/한도 (`/baro/credit-board`) — Phase 3
 - 내 미처리 문의 (`/crm/inbox`) — CRM 1차
 
-**노출되지 않는 것** (탑솔라 전용 — D-108로 차단):
+**노출되지 않는 것** (module 계열 전용 — D-108/D-119로 차단):
 - P/O 발주, L/C 개설, B/L 입고, 면장/원가
 - L/C 한도, 매출 분석
 - 결재안 (D-173 PR #173로 BARO에서 제거)
@@ -44,6 +44,7 @@
 ## 관련 결정 (DECISIONS.md 색인)
 
 - **[D-108](DECISIONS.md#d-108)** — 바로(주) 분리 정의: 단일 DB + URL 분기 + 코드 레벨 마스킹. **이 도메인의 헌법**.
+- **[D-119](DECISIONS.md#d-119)** — `cable.topworks.ltd`는 module 계열의 별도 분기이며, BARO 전용 라우트는 cable 토큰도 차단한다.
 - **[D-109](DECISIONS.md#d-109)** — CRM(거래처 활동 로그·미처리 문의함)은 바로(주) 전용
 - **[D-039](DECISIONS.md#d-039)** — 그룹내거래(탑솔라↔바로) 양방향. 탑솔라 출고 = 바로 입고 자동 생성, 입고단가는 탑솔라 판매단가로 잠금.
 - **[D-116](DECISIONS.md#d-116)** — BARO 입고예정은 전용 sanitized API로 ETA·수량만 노출
@@ -51,7 +52,7 @@
 
 ## BARO 전용 백엔드 엔드포인트 (`baroOnly` 미들웨어)
 
-`internal/middleware/tenant_scope.go`의 `RequireTenantScope("baro")`가 적용된 라우트. 탑솔라 토큰으로 호출하면 403:
+`internal/middleware/tenant_scope.go`의 `RequireTenantScope("baro")`가 적용된 라우트. module/cable 토큰으로 호출하면 403:
 
 | 경로 | 용도 | 도입 |
 |---|---|---|

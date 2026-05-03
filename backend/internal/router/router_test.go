@@ -113,6 +113,7 @@ func newTestApp(t *testing.T, withEngine bool) *app.App {
 // 실수 시나리오 — 회귀 검출 능력:
 //   - /lcs의 topsolarOnly를 baroOnly로 잘못 바꾸면 → topsolar 사용자는 403, baro 사용자는 통과.
 //     → 본 테스트의 (a) 조건에서 topsolar 컨텍스트가 403 받음 → 실패 → CI 차단.
+//   - D-119 이후 topsolarOnly는 legacy 이름이지만 module 계열(topsolar+cable)을 통과시킨다.
 //   - POST /companies에서 g.Write를 빼먹으면 → viewer 사용자가 통과 → (b) write 검증 실패.
 
 type guardSet struct {
@@ -156,6 +157,7 @@ func failingCases(g guardSet) []failCase {
 	}
 	if g.baroOnly {
 		out = append(out, failCase{middleware.TenantScopeTopsolar, pR, "baroOnly"})
+		out = append(out, failCase{middleware.TenantScopeCable, pR, "baroOnly"})
 	}
 	return out
 }
@@ -287,5 +289,33 @@ func TestBaroPurchaseHistoryCostRoleGate(t *testing.T) {
 	}
 	if code := fire(h, "GET", "/api/v1/baro/purchase-history/", middleware.TenantScopeTopsolar, "operator"); code != http.StatusForbidden {
 		t.Fatalf("탑솔라 토큰은 BARO 구매이력 조회가 차단돼야 합니다: got %d", code)
+	}
+	if code := fire(h, "GET", "/api/v1/baro/purchase-history/", middleware.TenantScopeCable, "operator"); code != http.StatusForbidden {
+		t.Fatalf("cable 토큰은 BARO 구매이력 조회가 차단돼야 합니다: got %d", code)
+	}
+}
+
+func TestModuleFamilyGateAllowsCable(t *testing.T) {
+	a := newTestApp(t, true)
+	h := router.NewWithAuth(a, stubAuth)
+
+	cases := []guardCase{
+		{"GET", "/api/v1/lcs/", guardSet{topsolarOnly: true}},
+		{"GET", "/api/v1/declarations/", guardSet{topsolarOnly: true}},
+		{"GET", "/api/v1/cost-details/", guardSet{topsolarOnly: true}},
+		{"POST", "/api/v1/calc/margin-analysis", guardSet{topsolarOnly: true}},
+		{"GET", "/api/v1/intercompany-requests/inbox", guardSet{topsolarOnly: true}},
+	}
+
+	for _, c := range cases {
+		c := c
+		t.Run(c.method+" "+c.path, func(t *testing.T) {
+			if code := fire(h, c.method, c.path, middleware.TenantScopeCable, "operator"); code == http.StatusForbidden {
+				t.Fatalf("cable은 module 계열 가드를 통과해야 합니다: got 403")
+			}
+			if code := fire(h, c.method, c.path, middleware.TenantScopeBaro, "operator"); code != http.StatusForbidden {
+				t.Fatalf("BARO는 module 계열 가드에서 차단돼야 합니다: got %d", code)
+			}
+		})
 	}
 }

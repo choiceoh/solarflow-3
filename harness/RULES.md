@@ -118,7 +118,7 @@
 
 ### 멀티테넌트 (BARO/탑솔라) UI 규칙
 - BARO 페이지의 시각적 디자인은 기본 페이지(탑솔라)를 그대로 따른다 — 테넌트별 별도 디자인 금지.
-- `isBaroMode()` / `detectTenantScope()`는 **메뉴 가시성**(Sidebar.tsx)과 **dev mock 프로필**(devMockMode.ts)에서만 사용 가능.
+- `isBaroMode()` / `detectTenantScope()`는 **메뉴 가시성**(Sidebar.tsx), **사이드바 탭 테넌트 키**, **dev mock 프로필**(devMockMode.ts)에서만 사용 가능.
 - 그 외 컴포넌트(레이아웃, 카드, 색상, 간격, 폰트, 배지, 버튼 등)에서는 절대 분기하지 않는다.
 - 가드: `frontend/src/lib/tenantScope.test.ts`의 "tenantScope 사용처 가드"가 새 사용처를 차단. 정당한 사유로 추가하려면 ALLOWLIST를 늘리고 PR 리뷰에서 합의.
 
@@ -128,13 +128,13 @@
 2. **RegisterRoutes 메서드**: `backend/internal/handler/routes.go`의 알파벳 자리에 `func (h *FooHandler) RegisterRoutes(r chi.Router, g middleware.Gates)`를 추가한다. 가드는 `r.With(g.Write)`, `r.Use(g.TopsolarOnly)` 형태로 직접 적용한다.
 3. **router.go 1줄 추가**: `backend/internal/router/router.go`의 알파벳 자리에 `handler.NewFooHandler(a.DB).RegisterRoutes(r, a.Gates)` 1줄을 추가한다.
 4. **golden 갱신**: `cd backend && go test ./internal/router -run TestRouteSnapshot -update`로 `testdata/routes.golden`을 갱신한다. (이 명령은 라우트 추가/변경 시 항상 실행 — 잊으면 CI에서 깨짐)
-5. **테넌트 한정 라우트면**: D-108/D-109 동기화 규칙에 따라 `harness/{baro,module}.md`의 라우트 표를 같은 PR에서 갱신한다.
+5. **테넌트 한정 라우트면**: D-108/D-109/D-119 동기화 규칙에 따라 `harness/{module,cable,baro}.md`의 라우트 표를 같은 PR에서 갱신한다.
 6. **검증**: `go build ./... && go vet ./... && go test ./...` 모두 통과. 모델 필드를 추가했다면 위 "Go 모델 필드 변경 시 필수 절차"(CLAUDE.md)도 함께 수행.
 
 ⚠️ **router.go에 직접 `r.Route("/foo", ...)` 등록 금지** — 반드시 핸들러의 RegisterRoutes 메서드로 캡슐화한다. PR 충돌·가드 누락의 주된 원인이었음(D-110 도입 배경).
 
 ### 도메인별 인덱스 동기화 규칙
-- 한쪽 테넌트 한정 기능(예: `tenants: ['baro']`, `topsolarOnly`/`baroOnly` 미들웨어)을 추가·삭제·이동하면 **반드시** `harness/{baro,module}.md`의 해당 섹션을 같은 PR에서 갱신할 것.
+- 한쪽 테넌트 한정 기능(예: `tenants: ['baro']`, `tenants: ['topsolar', 'cable']`, `topsolarOnly`/`baroOnly` 미들웨어)을 추가·삭제·이동하면 **반드시** `harness/{module,cable,baro}.md`의 해당 섹션을 같은 PR에서 갱신할 것.
   - 활성 메뉴, `*Only` 미들웨어 적용 라우트 표, 「관련 결정」 D-NNN 링크 — 셋 중 영향 받는 곳을 갱신.
 - 새 결정은 DECISIONS.md(정본)에 D-NNN으로 추가하고, 테넌트 한정이면 그 도메인 파일의 「관련 결정」에 1줄 색인만 추가. 결정 본문 복제 금지(SoT는 DECISIONS).
 - 이 규칙을 지키지 않으면 도메인 파일이 곧 거짓이 되어, 새 사람이 들어왔을 때 어떤 사이트에 어떤 기능이 있는지 잘못 인식한다(CRM처럼 양쪽에 박는 실수의 재발 방지).

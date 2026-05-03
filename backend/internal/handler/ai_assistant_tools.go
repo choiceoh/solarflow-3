@@ -47,7 +47,7 @@ func assistantToolCatalog() []assistantTool {
 		toolSearchOrders(),
 		toolSearchOutbound(),
 		toolSearchReceipts(),
-		// 금융·물류 (일부 topsolar 전용)
+		// 금융·물류 (일부 module 계열 전용)
 		toolSearchLC(),
 		toolSearchBL(),
 		toolSearchDeclarations(),
@@ -57,8 +57,14 @@ func assistantToolCatalog() []assistantTool {
 }
 
 // tenantIs — 현재 사용자의 테넌트 스코프 매칭.
-func tenantIs(ctx context.Context, scope string) bool {
-	return middleware.GetTenantScope(ctx) == scope
+func tenantIs(ctx context.Context, scopes ...string) bool {
+	current := middleware.GetTenantScope(ctx)
+	for _, scope := range scopes {
+		if current == scope {
+			return true
+		}
+	}
+	return false
 }
 
 func availableAssistantTools(ctx context.Context) []assistantTool {

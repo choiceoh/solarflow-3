@@ -574,16 +574,16 @@
 
 ## D-108: 바로(주) 분리는 단일 DB + URL 기반 테넌트 + 코드 레벨 마스킹으로 운영
 - **결정**: 통합 설계문서 1.4절의 "바로용 별도 앱·별도 DB"를 다음 구조로 갱신한다.
-  - **단일 DB**: 탑솔라(주)·디원·화신이엔지·바로(주)는 같은 PostgreSQL을 사용한다. `companies`에 바로를 4번째 법인(`BR`)으로 등록한다.
-  - **URL 기반 분기**: 바로 사용자는 `baro.topworks.ltd`로 접속하고, 같은 React 빌드가 호스트네임을 보고 BARO 모드 사이드바/라우트를 노출한다.
-  - **코드 레벨 마스킹**: `user_profiles.tenant_scope`(`topsolar`/`baro`)을 사용자별로 못박고, Go API 게이트웨이의 `RequireTenantScope` 미들웨어가 탑솔라 원가/LC/면장/부대비용/한도/단가 이력/마진/Landed-cost/환율비교/LC fee·timeline·maturity·price-trend 엔드포인트를 `topsolar` 테넌트에만 허용한다. 바로 토큰으로 호출되면 403을 반환한다.
-  - **격리 범위 한정**: 같은 그룹 계열사이므로 격리는 "바로가 탑솔라의 수입원가/금융정보를 보지 않는다"는 1단계로 끝난다. 공유 엔드포인트(`/pos`, `/bls`, `/outbounds`, `/orders`, `/sales`, `/receipts`, 마스터, 가용재고)는 row-level `company_id` 필터를 추가하지 않고 계열사 데이터로 공유한다.
+  - **단일 DB**: 탑솔라(주)·디원·화신이엔지·바로(주)는 같은 PostgreSQL을 사용한다. `companies`에 바로를 4번째 법인(`BR`)으로 등록한다. D-119 이후 `cable`도 같은 DB의 별도 테넌트 스코프로 운영한다.
+  - **URL 기반 분기**: 바로 사용자는 `baro.topworks.ltd`로 접속하고, 같은 React 빌드가 호스트네임을 보고 BARO 모드 사이드바/라우트를 노출한다. D-119 이후 `cable.topworks.ltd`는 `cable` 스코프로 분기한다.
+  - **코드 레벨 마스킹**: `user_profiles.tenant_scope`(`topsolar`/`cable`/`baro`)을 사용자별로 못박고, Go API 게이트웨이의 `RequireTenantScope` 미들웨어가 module 계열 원가/LC/면장/부대비용/한도/단가 이력/마진/Landed-cost/환율비교/LC fee·timeline·maturity·price-trend 엔드포인트를 `topsolar`/`cable` 테넌트에만 허용한다. 바로 토큰으로 호출되면 403을 반환한다.
+  - **격리 범위 한정**: 같은 그룹 계열사이므로 격리는 "바로가 module 계열의 수입원가/금융정보를 보지 않는다"는 1단계로 끝난다. 공유 엔드포인트(`/pos`, `/bls`, `/outbounds`, `/orders`, `/sales`, `/receipts`, 마스터, 가용재고)는 row-level `company_id` 필터를 추가하지 않고 계열사 데이터로 공유한다.
   - **그룹내거래 확장**: D-039의 양방향 그룹내거래에 탑솔라→바로 라인이 자연스럽게 추가된다. 탑솔라 출고 = 바로 입고 자동 생성, 입고단가는 탑솔라 판매단가로 잠금. 별도 DB 동기화 큐가 필요 없다.
 - **이유**: 기존 "별도 앱·별도 DB" 안은 데이터 격리가 가장 강하지만 (1) 탑솔라→바로 그룹내거래에 동기화 큐가 필요하고 (2) 마스터 데이터(품번/제조사/거래처)가 두 DB에서 갈리며 (3) 빌드/배포 인프라가 두 벌이 된다. 한 DB로 묶고 코드와 URL로 격리하면 그룹내거래는 단일 트랜잭션이 되고 마스터는 자동으로 일치한다. 노출 위험은 탑솔라의 수입원가/LC 금융 정보 정도이므로, 그 영역만 미들웨어 1곳에서 차단하고 나머지 거래/재고는 계열사로서 공유하는 편이 운영 흐름과 잘 맞는다.
 - **운영 기준**:
   - **마이그레이션**: `backend/migrations/040_tenant_scope.sql`을 적용하고 PostgREST 스키마 캐시를 갱신한다(`launchctl stop/start com.solarflow.postgrest`).
-  - **테넌트 가드**: `internal/middleware/tenant_scope.go`의 `RequireTenantScope("topsolar")`를 cost-details, declarations, lcs, tts, expenses, price-histories, limit-changes, export/amaranth, 그리고 calc 프록시 중 landed-cost·exchange-compare·lc-fee·lc-limit-timeline·lc-maturity-alert·margin-analysis·price-trend에 적용한다. **이 목록이 격리 범위의 전부**이며 추가 확장은 별도 결정 없이는 하지 않는다.
-  - **DNS/CDN**: `baro.topworks.ltd`를 같은 Caddy/dist에 매핑한다. Caddy 별도 리라이트는 필요 없고, 프론트가 `window.location.hostname`을 보고 BARO 모드를 결정한다.
+  - **테넌트 가드**: `internal/middleware/gates.go`의 legacy `TopsolarOnly`는 D-119 이후 `RequireTenantScope("topsolar", "cable")`를 적용한다. 대상은 cost-details, declarations, lcs, tts, expenses, price-histories, limit-changes, export/amaranth, 그리고 calc 프록시 중 landed-cost·exchange-compare·lc-fee·lc-limit-timeline·lc-maturity-alert·margin-analysis·price-trend다. **이 목록이 격리 범위의 전부**이며 추가 확장은 별도 결정 없이는 하지 않는다.
+  - **DNS/CDN**: `baro.topworks.ltd`와 `cable.topworks.ltd`를 같은 Pages/dist에 매핑한다. Caddy 별도 리라이트는 필요 없고, 프론트가 `window.location.hostname`을 보고 테넌트 모드를 결정한다.
 - **날짜**: 2026-05-01
 
 ## D-109: CRM(거래처 활동 로그·미처리 문의함)은 바로(주) 전용
@@ -612,7 +612,7 @@
     2. `internal/handler/routes.go`의 알파벳 자리에 `(h *XxxHandler) RegisterRoutes(r chi.Router, g middleware.Gates)` 추가
     3. `internal/router/router.go`의 알파벳 자리에 1줄 호출 추가
     4. `go test ./internal/router -run TestRouteSnapshot -update`로 골든파일 갱신
-    5. 테넌트 한정 라우트면 `harness/{baro,module}.md`의 라우트 표 갱신 (D-108/D-109 동기화 규칙)
+    5. 테넌트 한정 라우트면 `harness/{module,cable,baro}.md`의 라우트 표 갱신 (D-108/D-109/D-119 동기화 규칙)
   - **빅뱅 도입 사유**: 점진 분할안(PR1=골격, PR2~N=도메인 묶음)을 검토했으나 면적이 50개로 한정적이고 `routes.golden` 회귀 가드가 충분하다고 판단. 한 PR로 병합.
   - **alias 정리 후속**: `/assistant/ocr/*`, `/assistant/match/receipts/auto` 두 alias의 제거 여부는 프론트 호출처 점검이 필요한 별도 PR로 보류한다. 그동안은 위임 형태로 유지하며 정식 라우트와 동등 동작을 보장.
 - **검증**:
@@ -640,7 +640,7 @@
 
 ## D-112: 사이드바 탭(persona)은 admin이 데이터로 정의, 사용자 클릭 = 즉시 영구
 - **결정**: 업무 담당별 사이드바를 코드의 새 enum으로 박지 않고 admin이 사이트 설정에서 자유 정의하는 데이터 차원으로 도입한다. 메뉴 가시성(`canAccessMenu`)·사이트 가시성(`useMenuVisibility`)과 직교하는 세 번째 필터.
-  - **저장 (탭 정의)**: `system_settings`에 테넌트별 key — `sidebar_tabs.topsolar`, `sidebar_tabs.baro`. JSON 스키마: `{ default_tab, tabs: [{ key, label, menus }] }`. `menus`는 메뉴 key 배열 또는 `"all"` (= 코드의 NAV_GROUPS 평탄화 결과 전부 — 신규 메뉴 자동 노출 안전망). key 자체 미존재 또는 `tabs` 빈 배열 = 탭 UI 비활성, 사이드바는 기존 동작.
+  - **저장 (탭 정의)**: `system_settings`에 테넌트별 key — `sidebar_tabs.topsolar`, `sidebar_tabs.cable`, `sidebar_tabs.baro`. JSON 스키마: `{ default_tab, tabs: [{ key, label, menus }] }`. `menus`는 메뉴 key 배열 또는 `"all"` (= 코드의 NAV_GROUPS 평탄화 결과 전부 — 신규 메뉴 자동 노출 안전망). key 자체 미존재 또는 `tabs` 빈 배열 = 탭 UI 비활성, 사이드바는 기존 동작.
   - **저장 (사용자 persona)**: `user_profiles.persona text NULL` 컬럼 추가. NULL이면 `default_tab` fallback. 탭 정의가 바뀌어 dangling되면 프론트가 자동 default 폴백.
   - **탭 클릭 의미**: v1 = 즉시 PATCH (`PUT /users/me/persona`). 잠깐 엿보기 vs 기본 분리(default vs current)는 v2에서 도입할 수 있음.
   - **합성**: 메뉴 노출 = `canAccessMenu(role) AND !hiddenMenus.has(key) AND (activeTab.menus === "all" OR activeTab.menus.includes(key))` 3-AND. Role은 보안 천장, menu_visibility는 운영 통제, persona는 편의 필터.
@@ -664,7 +664,7 @@
 - **운영 기준**:
   - **체인 식별자**: `parent_po_id`가 null인 원계약 PO의 `po_id`가 chain_id. URL은 `/purchase-history?chain={chain_id}`.
   - **체인 그룹핑 안전선**: `findChainHeadId` (frontend/src/lib/purchaseHistory.ts)에 cycle 방문 추적 + 32 깊이 cap. DB 무결성 깨져도 페이지가 무한루프 안 함.
-  - **사이드바 진입**: `현황` 그룹, `tenants: ['topsolar']`, `menu: 'purchase_history'` 신규 키 — admin/operator/executive 모두 접근(executive도 구매 이력 read-only 조회 필요).
+  - **사이드바 진입**: `현황` 그룹, module 계열(`MODULE_TENANTS = ['topsolar', 'cable']`), `menu: 'purchase_history'` 신규 키 — admin/operator/executive 모두 접근(executive도 구매 이력 read-only 조회 필요).
   - **딥링크**: PO 관련 이벤트는 `/procurement?po_id={po_id}` → ProcurementPage가 query 받아 PODetailView 자동 펼침. LC/BL/TT는 탭 단위까지 (`?tab=lc` 등) — 향후 별건 작업으로 LC/BL/TT 자동 선택 추가 가능.
   - **수동 단가이력 표시**: `related_po_id`가 null인 PriceHistory는 (a) 체인 뷰: 제조사 일치하면 컨텍스트로 노출, (b) 회사 전체 뷰: `[PO 미연결]` 라벨로 별도 노출.
   - **audit diff 표시**: `purchase_orders` audit `update`만 처리 — `old_data`/`new_data` 객체 비교, `updated_at`/`created_at`/`po_id`/`company_id` 메타 필드 스킵, 한국어 라벨(`status` → `상태` 등) 적용.
@@ -721,4 +721,23 @@
   - `rg`로 인스펙터 코드 참조 없음 확인 (`frontend/src`, `backend/internal` 기준)
   - `go build ./...`, `go vet ./...`, `go test ./...` 성공
   - `npm run build`, `npm run test`, `npm run lint` 성공 (`lint`는 기존 baseline warning 유지)
+- **날짜**: 2026-05-03
+
+## D-119: `cable.topworks.ltd`는 module 기능 표면을 포크한 독립 테넌트
+- **결정**: `cable.topworks.ltd`를 `module.topworks.ltd`의 단순 별칭이 아니라 `user_profiles.tenant_scope='cable'`을 갖는 별도 테넌트 분기로 추가한다. 초기 기능 표면은 module과 동일하게 시작한다.
+  - **호스트 분기**: 프론트의 `detectTenantScope()`가 `^cable\.`/`^cable-` 호스트를 `cable`로 반환한다. `baro`는 기존처럼 `baro`, 그 외 module 운영 호스트는 `topsolar` 기본값.
+  - **메뉴 표면**: 기존 `tenants: ['topsolar']`였던 P/O, L/C, B/L, 면장/원가, 그룹 요청 inbox, L/C 한도, 매출 분석, 구매 이력, 결재안은 `MODULE_TENANTS = ['topsolar', 'cable']`로 묶어 cable에도 노출한다. BARO 전용 메뉴는 계속 `baro`만 노출한다.
+  - **서버 가드**: 기존 `TopsolarOnly` 이름은 라우트 변경 범위를 줄이기 위해 유지하되, 실제 허용 스코프는 `RequireTenantScope("topsolar", "cable")`로 확장한다. BARO 전용 `BaroOnly`는 `baro`만 허용하며 cable 토큰도 403을 받아야 한다.
+  - **설정 분리**: D-112 사이드바 탭은 `system_settings`의 `sidebar_tabs.cable` key를 사용하므로 module의 `sidebar_tabs.topsolar`와 독립 편집된다.
+  - **DB 마이그레이션**: `backend/migrations/053_cable_tenant_scope.sql`로 `user_profiles_tenant_scope_check`에 `cable`을 추가한다. 신규 자동 프로비저닝은 기존 호환을 위해 계속 `topsolar`로 시작하고, cable 사용자는 admin이 명시 변경한다.
+- **이유**: `cable.topworks.ltd`는 module의 업무 표면을 그대로 시작하지만 운영상 별도 사이트/사용자군/사이드바 설정을 가져야 한다. 단순히 `topsolar` 기본값으로 두면 나중에 cable 전용 메뉴, 설정, 사용자 관리를 분리할 수 없다.
+- **운영 기준**:
+  - Cloudflare DNS에서 `cable` CNAME을 `topworks-module-git.pages.dev`로 추가하고, Pages 프로젝트에 `cable.topworks.ltd` custom domain을 연결한다.
+  - 운영 `backend/.env`의 `CORS_ORIGINS`에 `https://cable.topworks.ltd`를 추가하고 Go 서비스를 재시작한다.
+  - API 검증은 cable 토큰으로 module 계열 라우트(`/api/v1/lcs`, `/api/v1/declarations`, `/api/v1/cost-details`, `/api/v1/calc/margin-analysis`)가 403이 아닌지, BARO 전용 라우트(`/api/v1/baro/purchase-history`)가 403인지 확인한다.
+  - 이번 결정은 URL/메뉴/권한/설정 스코프 분리다. 거래·재고 행 단위 테넌트 격리는 추가하지 않는다. 필요하면 테이블별 tenant/company 필터를 별도 결정으로 설계한다.
+- **검증**:
+  - `tenant_scope_test.go`에 cable module 계열 통과 테스트 추가.
+  - `router_test.go`에 cable module 계열 통과 및 BARO 전용 차단 테스트 추가.
+  - `tenantScope.test.ts`에 `cable.topworks.ltd`/`cable-stage` 호스트 감지 테스트 추가.
 - **날짜**: 2026-05-03

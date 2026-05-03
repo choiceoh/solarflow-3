@@ -537,7 +537,7 @@ type searchLCInput struct {
 func toolSearchLC() assistantTool {
 	return assistantTool{
 		name:        "search_lc",
-		description: "L/C(신용장, lc_records) 검색. LC번호·PO·은행·개설일 범위로 필터. 탑솔라 테넌트 admin/operator/executive 만 호출 가능.",
+		description: "L/C(신용장, lc_records) 검색. LC번호·PO·은행·개설일 범위로 필터. module 계열 테넌트 admin/operator/executive 만 호출 가능.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -550,7 +550,8 @@ func toolSearchLC() assistantTool {
 			}
 		}`),
 		allow: func(ctx context.Context) bool {
-			return roleIn(ctx, "admin", "operator", "executive") && tenantIs(ctx, middleware.TenantScopeTopsolar)
+			return roleIn(ctx, "admin", "operator", "executive") &&
+				tenantIs(ctx, middleware.TenantScopeTopsolar, middleware.TenantScopeCable)
 		},
 		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
 			var args searchLCInput
@@ -656,7 +657,7 @@ type searchDeclarationsInput struct {
 func toolSearchDeclarations() assistantTool {
 	return assistantTool{
 		name:        "search_declarations",
-		description: "면장(declarations, 통관 신고필증) 검색. 신고번호·BL·신고일 범위로 필터. 탑솔라 테넌트 admin/operator/executive 만 호출 가능.",
+		description: "면장(declarations, 통관 신고필증) 검색. 신고번호·BL·신고일 범위로 필터. module 계열 테넌트 admin/operator/executive 만 호출 가능.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -668,7 +669,8 @@ func toolSearchDeclarations() assistantTool {
 			}
 		}`),
 		allow: func(ctx context.Context) bool {
-			return roleIn(ctx, "admin", "operator", "executive") && tenantIs(ctx, middleware.TenantScopeTopsolar)
+			return roleIn(ctx, "admin", "operator", "executive") &&
+				tenantIs(ctx, middleware.TenantScopeTopsolar, middleware.TenantScopeCable)
 		},
 		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
 			var args searchDeclarationsInput

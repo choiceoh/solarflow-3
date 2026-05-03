@@ -7,11 +7,11 @@
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
 | 다음 작업 | Excel Import Hub 중심 운영 입력 전환 마무리 + PO/LC/T/T import 스펙·서버 검증 추가 + PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 리허설 |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
-| 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173 |
+| 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-118 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-119 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -33,6 +33,35 @@
 - `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 85건 출력
 - `git diff --check` 성공
 - `graphify update .` 성공 — 3213 nodes / 5496 edges / 337 communities
+
+---
+
+## 2026-05-03 세션 — cable.topworks.ltd 별도 테넌트 분기
+
+### 완료
+- `cable.topworks.ltd`를 module의 단순 별칭이 아니라 `user_profiles.tenant_scope='cable'` 독립 분기로 추가
+- `frontend/src/lib/tenantScope.ts`에서 `cable.*`/`cable-*` 호스트를 `cable`로 감지
+- module 계열 메뉴를 `MODULE_TENANTS=['topsolar','cable']`로 묶어 P/O, L/C, B/L, 면장/원가, 그룹 요청 inbox, L/C 한도, 매출 분석, 구매 이력, 결재안을 cable에도 노출
+- 서버 `TopsolarOnly` legacy 가드를 `RequireTenantScope("topsolar", "cable")`로 확장하고, BARO 전용 가드는 cable도 차단하도록 router guard 테스트 보강
+- `backend/migrations/053_cable_tenant_scope.sql` 추가 — `user_profiles_tenant_scope_check`에 `cable` 허용
+- `harness/cable.md` 신규 도메인 인덱스 추가, D-119 결정 기록, module/baro/운영 문서/CORS 예시 동기화
+
+### 검증
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd frontend && npm ci` 성공 — 이 worktree에 누락된 로컬 의존성 복원
+- `cd frontend && npm run test` 성공 — 8 files / 67 tests
+- `cd frontend && npm run build` 성공 — Vite dynamic import warning 1건은 기존 assistant drawer/static import 구조 경고
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline warning 85건 출력
+- `git diff --check` 성공
+- `graphify update .` 성공 — 3224 nodes / 5499 edges / 349 communities
+
+### 운영 적용 필요
+- Cloudflare DNS: `cable` CNAME → `topworks-module-git.pages.dev` (proxied)
+- Cloudflare Pages: `cable.topworks.ltd` custom domain 연결
+- 운영 `backend/.env` `CORS_ORIGINS`에 `https://cable.topworks.ltd` 추가 후 Go 서비스 재시작
+- 운영 DB에 053 마이그레이션 적용 후 PostgREST schema reload
 
 ---
 

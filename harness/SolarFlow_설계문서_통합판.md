@@ -36,11 +36,12 @@
 - **화신이엔지**: 해외 수입 + 국내 구매 → 공사/판매. ERP 미사용, SolarFlow가 유일한 시스템.
 - **추후 법인 추가 가능**
 
-### 1.4 테넌트 구성 (D-108)
-- 탑솔라(주) + 디원 + 화신이엔지 + 바로(주) 4개 법인을 **단일 DB · 단일 코드베이스**로 운영한다.
-- **URL 분기**: 탑솔라 사용자는 `solarflow3.com`(또는 Tailscale/localhost), 바로 사용자는 `baro.topworks.ltd`로 접속한다. 같은 `dist/`를 두 호스트에서 서빙하고, 프론트가 `window.location.hostname`을 보고 BARO 모드 사이드바/메뉴를 노출한다.
-- **테넌트 스코프**: `user_profiles.tenant_scope`(`topsolar`/`baro`)을 사용자별로 못박는다. 백엔드는 `RequireTenantScope` 미들웨어로 **탑솔라 원가/면장/LC/T/T/한도 변경/단가 이력/부대비용/landed-cost·lc-fee·lc-limit-timeline·lc-maturity-alert·exchange-compare·margin-analysis·price-trend** 응답을 `topsolar` 사용자에게만 허용하고, 바로 토큰으로 호출되면 403을 반환한다. 그 외 공유 엔드포인트(가용재고/PO/B/L/출고/수주/매출/수금/마스터)는 같은 계열사 데이터로 공유한다.
-- **격리 범위**: 격리는 "바로가 탑솔라의 수입원가/금융정보를 못 보게" 하는 1단계 블록이다. 같은 그룹 계열사이므로 거래/재고 행 단위 격리는 추가하지 않는다.
+### 1.4 테넌트 구성 (D-108, D-119)
+- 탑솔라(주) + 디원 + 화신이엔지 + 바로(주)와 `cable` 분기를 **단일 DB · 단일 코드베이스**로 운영한다.
+- **URL 분기**: module 사용자는 `module.topworks.ltd`/`solarflow3.com`(또는 Tailscale/localhost), cable 사용자는 `cable.topworks.ltd`, 바로 사용자는 `baro.topworks.ltd`로 접속한다. 같은 `dist/`를 세 호스트에서 서빙하고, 프론트가 `window.location.hostname`을 보고 사이드바/메뉴 분기를 결정한다.
+- **테넌트 스코프**: `user_profiles.tenant_scope`(`topsolar`/`cable`/`baro`)을 사용자별로 못박는다. 백엔드는 `RequireTenantScope` 미들웨어로 **수입원가/면장/LC/T/T/한도 변경/단가 이력/부대비용/landed-cost·lc-fee·lc-limit-timeline·lc-maturity-alert·exchange-compare·margin-analysis·price-trend** 응답을 module 계열(`topsolar` + `cable`) 사용자에게만 허용하고, 바로 토큰으로 호출되면 403을 반환한다. 그 외 공유 엔드포인트(가용재고/PO/B/L/출고/수주/매출/수금/마스터)는 같은 계열사 데이터로 공유한다.
+- **cable 분기**: `cable.topworks.ltd`는 `module.topworks.ltd`의 기능 표면을 포크한 별도 테넌트다. 사이드바 탭 설정은 `sidebar_tabs.cable`로 독립 저장한다.
+- **격리 범위**: 격리는 "바로가 module 계열의 수입원가/금융정보를 못 보게" 하는 1단계 블록이다. 같은 그룹 계열사이므로 거래/재고 행 단위 격리는 추가하지 않는다.
 
 ### 1.5 핵심 원칙
 1. **쉬운 접근**: 실무자가 바로 사용 가능

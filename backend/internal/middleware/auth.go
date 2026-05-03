@@ -103,7 +103,7 @@ type UserProfile struct {
 
 // autoProvisionInsert — 신규 사용자 자동 프로비저닝 INSERT payload
 // 신규 자동 생성은 항상 topsolar 스코프로 시작한다.
-// 바로(주) 사용자는 admin이 user_profiles.tenant_scope을 'baro'로 명시 변경한다.
+// cable/baro 사용자는 admin이 user_profiles.tenant_scope을 명시 변경한다.
 type autoProvisionInsert struct {
 	UserID      string `json:"user_id"`
 	Email       string `json:"email"`

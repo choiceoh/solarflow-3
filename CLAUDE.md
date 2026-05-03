@@ -26,6 +26,7 @@
 ## 도메인별 인덱스 (테넌트 한정 작업 시)
 변경 작업이 한쪽 사이트에만 적용된다면 해당 도메인 인덱스부터 보세요 — 활성 메뉴, 관련 결정(D-NNN), `*Only` 미들웨어 적용 라우트가 한 페이지에 정리돼 있습니다.
 - harness/module.md — `module.topworks.ltd` (탑솔라(주), 해외 모듈 수입·도매)
+- harness/cable.md — `cable.topworks.ltd` (module 포크, 별도 `cable` 테넌트)
 - harness/baro.md — `baro.topworks.ltd` (바로(주), 국내 도매·인바운드 위주)
 
 양 테넌트에 공통으로 영향 가는 작업은 통합판 + DECISIONS를 그대로 참조.

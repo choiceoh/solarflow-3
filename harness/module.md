@@ -11,9 +11,9 @@
 | URL | `module.topworks.ltd` |
 | 비즈니스 | 해외 태양광 모듈 **수입·도매** (탑솔라(주) + 디원 + 화신이엔지) |
 | 테넌트 식별 | `user_profiles.tenant_scope = 'topsolar'` (D-108, 기본값) |
-| 호스트 검출 | 프론트의 `detectTenantScope()`가 `^baro\.` 패턴 외엔 모두 `topsolar`로 결정 |
+| 호스트 검출 | 프론트의 `detectTenantScope()`가 `^cable\.`은 `cable`, `^baro\.`은 `baro`, 그 외 module 운영 호스트는 `topsolar`로 결정 |
 
-SolarFlow의 **원본 도메인** — D-108로 BARO가 분리되기 전까지는 이 한 사이트가 전부였다. 인프라(Linux 서버, cloudflared 터널, Cloudflare Pages)는 [PRODUCTION.md](PRODUCTION.md), 운영 자동화(webhook, cron-deploy)도 동일 문서 참조.
+SolarFlow의 **원본 도메인** — D-108로 BARO가 분리되기 전까지는 이 한 사이트가 전부였다. D-119 이후 `cable.topworks.ltd`가 이 기능 표면을 별도 테넌트로 포크한다. 인프라(Linux 서버, cloudflared 터널, Cloudflare Pages)는 [PRODUCTION.md](PRODUCTION.md), 운영 자동화(webhook, cron-deploy)도 동일 문서 참조.
 
 ## 활성 메뉴 (사이드바에 노출되는 것)
 
@@ -22,7 +22,7 @@ BARO와 **공유**:
 - 수주 관리 (`/orders`), 출고/판매 (`/orders?tab=outbound`), 수금 관리 (`/orders?tab=receipts`)
 - 마스터 (`/data`), AI 도우미 (`/assistant`), 설정 (`/settings`)
 
-**탑솔라 전용** (BARO에는 미노출):
+**module 계열 전용** (`topsolar` + `cable`, BARO에는 미노출):
 - P/O 발주 (`/procurement`) — 해외 공급사 발주
 - L/C 개설 (`/procurement?tab=lc`) — 신용장 발행/추적
 - B/L 입고 (`/procurement?tab=bl`) — 선적·입고
@@ -73,10 +73,11 @@ BARO와 **공유**:
 
 **테넌트 분리 자체**
 - [D-108](DECISIONS.md#d-108) — 바로(주) 분리 정의. 탑솔라 입장에선 "원가/금융 정보가 BARO 토큰으로 새지 않게 막는 가드 목록"이 핵심.
+- [D-119](DECISIONS.md#d-119) — `cable.topworks.ltd`를 module 기능 표면에서 포크한 독립 `cable` 테넌트로 추가.
 
-## 탑솔라 전용 백엔드 엔드포인트 (`topsolarOnly` 미들웨어)
+## module 계열 백엔드 엔드포인트 (`topsolarOnly` legacy 미들웨어)
 
-`internal/middleware/tenant_scope.go`의 `RequireTenantScope("topsolar")`가 적용된 라우트. BARO 토큰으로 호출하면 403. **D-108이 이 목록을 격리 범위의 전부로 못박았다 — 별도 결정 없이 추가 확장 금지**:
+`internal/middleware/gates.go`의 `TopsolarOnly`가 적용된 라우트. D-119 이후 legacy 이름은 유지하지만 실제 허용 스코프는 `RequireTenantScope("topsolar", "cable")`이다. BARO 토큰으로 호출하면 403. **D-108/D-119가 이 목록을 격리 범위의 전부로 못박았다 — 별도 결정 없이 추가 확장 금지**:
 
 | 경로 | 영역 |
 |---|---|
@@ -98,8 +99,8 @@ BARO와 **공유**:
 ## 변경 시 체크리스트
 
 새 탑솔라 전용 기능을 추가할 때:
-1. 백엔드 라우트에 `topsolarOnly` 미들웨어 적용 (D-108 패턴)
-2. 사이드바(`CommandShell.tsx`) 메뉴에 `tenants: ['topsolar']` 명시
+1. 백엔드 라우트에 `topsolarOnly` legacy 미들웨어 적용 (D-108/D-119 패턴 — `topsolar` + `cable` 통과)
+2. 사이드바(`CommandShell.tsx`) 메뉴에 `tenants: ['topsolar', 'cable']` 명시하거나 `MODULE_TENANTS`를 재사용
 3. 공유 화면에서 탑솔라 전용 UI는 `!isBaroMode()` 또는 tenant 체크로 가드
 4. **DECISIONS.md에 D-NNN 추가** + 본 문서 「관련 결정」 섹션에 링크 1줄 추가
 5. **D-108 격리 목록을 늘리는 변경이라면 D-108을 갱신할지 별도 D-NNN을 둘지 명시** — D-108은 "이 목록이 격리 범위의 전부"라고 못박았으므로 추가 확장은 결정 기록 필수

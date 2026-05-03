@@ -92,6 +92,8 @@ interface CommandNavGroup {
   items: CommandNavItem[];
 }
 
+const MODULE_TENANTS: TenantScope[] = ['topsolar', 'cable'];
+
 const NAV_GROUPS: CommandNavGroup[] = [
   {
     items: [
@@ -101,13 +103,13 @@ const NAV_GROUPS: CommandNavGroup[] = [
   {
     label: '구매',
     items: [
-      // D-108: 탑솔라 수입 흐름 — 바로(주)에는 노출하지 않음
-      { key: 'po', label: 'P/O 발주', abbr: 'PO', path: '/procurement', icon: ClipboardList, menu: 'procurement', tenants: ['topsolar'] },
-      { key: 'lc', label: 'L/C 개설', abbr: 'LC', path: '/procurement?tab=lc', icon: Landmark, menu: 'lc', tenants: ['topsolar'] },
-      { key: 'bl', label: 'B/L 입고', abbr: 'BL', path: '/procurement?tab=bl', icon: Ship, menu: 'inbound', tenants: ['topsolar'] },
-      { key: 'customs', label: '면장/원가', abbr: '면장', path: '/customs', icon: Calculator, menu: 'inbound', tenants: ['topsolar'] },
-      // BARO Phase 2: 탑솔라 측 — 바로(주)가 보낸 매입 요청 처리 inbox
-      { key: 'baro-inbox', label: '그룹 요청', abbr: '그룹', path: '/group-trade/baro-inbox', icon: Inbox, menu: 'baro_inbox', tenants: ['topsolar'] },
+      // D-108/D-119: module 계열 수입 흐름 — 바로(주)에는 노출하지 않음
+      { key: 'po', label: 'P/O 발주', abbr: 'PO', path: '/procurement', icon: ClipboardList, menu: 'procurement', tenants: MODULE_TENANTS },
+      { key: 'lc', label: 'L/C 개설', abbr: 'LC', path: '/procurement?tab=lc', icon: Landmark, menu: 'lc', tenants: MODULE_TENANTS },
+      { key: 'bl', label: 'B/L 입고', abbr: 'BL', path: '/procurement?tab=bl', icon: Ship, menu: 'inbound', tenants: MODULE_TENANTS },
+      { key: 'customs', label: '면장/원가', abbr: '면장', path: '/customs', icon: Calculator, menu: 'inbound', tenants: MODULE_TENANTS },
+      // BARO Phase 2: module 계열 측 — 바로(주)가 보낸 매입 요청 처리 inbox
+      { key: 'baro-inbox', label: '그룹 요청', abbr: '그룹', path: '/group-trade/baro-inbox', icon: Inbox, menu: 'baro_inbox', tenants: MODULE_TENANTS },
       // BARO Phase 2: 바로(주) 측 — 탑솔라로부터 매입할 모듈을 등록
       { key: 'baro-purchase', label: '그룹내 매입', abbr: '매입', path: '/baro/group-purchase', icon: PackagePlus, menu: 'baro_group_purchase', tenants: ['baro'] },
       // BARO 영업용 — 가격·환율 없이 공급예정 ETA만 확인
@@ -133,11 +135,11 @@ const NAV_GROUPS: CommandNavGroup[] = [
   {
     label: '현황',
     items: [
-      // D-108: LC 한도/매출 분석은 탑솔라 전용 (원가 기반)
-      { key: 'banking', label: 'L/C 한도', abbr: '한도', path: '/banking', icon: Landmark, menu: 'banking', tenants: ['topsolar'] },
-      { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs', tenants: ['topsolar'] },
-      // 구매 이력: PO/단가/변경계약 read-only 통합 타임라인 (탑솔라 모듈 수입 흐름 전용, executive 포함)
-      { key: 'purchase-history', label: '구매 이력', abbr: '이력', path: '/purchase-history', icon: History, menu: 'purchase_history', tenants: ['topsolar'] },
+      // D-108/D-119: LC 한도/매출 분석은 module 계열 전용 (원가 기반)
+      { key: 'banking', label: 'L/C 한도', abbr: '한도', path: '/banking', icon: Landmark, menu: 'banking', tenants: MODULE_TENANTS },
+      { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs', tenants: MODULE_TENANTS },
+      // 구매 이력: PO/단가/변경계약 read-only 통합 타임라인 (module 계열 수입 흐름 전용, executive 포함)
+      { key: 'purchase-history', label: '구매 이력', abbr: '이력', path: '/purchase-history', icon: History, menu: 'purchase_history', tenants: MODULE_TENANTS },
       // BARO Phase 3: 거래처별 미수금/한도 보드 (BARO 전용)
       { key: 'baro-credit', label: '미수금/한도', abbr: '미수', path: '/baro/credit-board', icon: ShieldAlert, menu: 'baro_credit', tenants: ['baro'] },
     ],
@@ -148,7 +150,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'import-hub', label: '엑셀 입력', abbr: '입력', path: '/import', icon: FileSpreadsheet, menu: 'import_hub' },
       { key: 'library', label: '자료실', abbr: '자료', path: '/library', icon: LibraryBig, menu: 'library' },
       { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
-      { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: ['topsolar'], isWip: true },
+      { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: MODULE_TENANTS, isWip: true },
       // admin 전용 — 메타 config 시각 편집 (DB 영구 저장, 모든 사용자 영향)
       { key: 'ui-editor', label: 'UI 편집기', abbr: 'UI', path: '/ui-config-editor', icon: Wand2, menu: 'ui_editor' },
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
@@ -227,7 +229,7 @@ export default function CommandShell() {
   const { roleLabel } = usePermission();
   const { hidden: hiddenMenus } = useMenuVisibility();
   const r = role as Role | null;
-  // D-108: 호스트네임으로 BARO 모드 결정 — 메뉴 가시성 분기에만 사용 (보안 경계는 백엔드 RequireTenantScope)
+  // D-108/D-119: 호스트네임으로 tenant 모드 결정 — 메뉴 가시성 분기에만 사용 (보안 경계는 백엔드 RequireTenantScope)
   const currentTenant = detectTenantScope();
   // D-112: admin이 정의한 사이드바 탭 — config 미존재면 탭 비활성 (현재 사이드바 그대로)
   const { config: tabsConfig } = useSidebarTabs(currentTenant);

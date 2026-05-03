@@ -21,6 +21,8 @@
 ```
                   Cloudflare CDN
                   ├── module.topworks.ltd ──→ Cloudflare Pages (auto-deploy from main)
+                  ├── cable.topworks.ltd  ──→ Cloudflare Pages (same project/custom domain)
+                  ├── baro.topworks.ltd   ──→ Cloudflare Pages (same project/custom domain)
                   └── api.topworks.ltd    ──→ cloudflared tunnel ──→ Linux:8080
                                                                       │
    Linux box (gx10-f96e)                                              ▼
@@ -35,7 +37,7 @@
                        └── Supabase Auth, Storage, PostgREST(:hosted)
 ```
 
-- **프론트엔드는 이 박스에서 서빙하지 않는다.** `module.topworks.ltd`는 Cloudflare Pages가 main 브랜치 push 시 자동 빌드/배포. 이 박스의 `frontend/dist/`는 로컬 개발/검증용일 뿐 운영 노출과 무관.
+- **프론트엔드는 이 박스에서 서빙하지 않는다.** `module.topworks.ltd`, `cable.topworks.ltd`, `baro.topworks.ltd`는 같은 Cloudflare Pages 프로젝트가 main 브랜치 push 시 자동 빌드/배포. 이 박스의 `frontend/dist/`는 로컬 개발/검증용일 뿐 운영 노출과 무관.
 - 8080은 cloudflared 터널을 통해서만 외부에 보이고, 8081은 같은 박스 안에서 Go가 호출하는 사내 포트.
 
 ## systemd user 서비스 (4개)
@@ -88,7 +90,7 @@ ingress:
   - service: http_status:404
 ```
 
-이 박스는 **API만** 외부 노출. 다른 도메인(`baro.topworks.ltd`, `solarflow3.com` 등)은 이 박스에서 처리하지 않음.
+이 박스는 **API만** 외부 노출. 다른 도메인(`module.topworks.ltd`, `cable.topworks.ltd`, `baro.topworks.ltd`, `solarflow3.com` 등)은 이 박스에서 처리하지 않음.
 
 ## 데이터베이스
 
@@ -188,7 +190,7 @@ CLAUDE.md의 macOS 절차(`launchctl`, `codesign`)는 적용되지 않는다.
 | `SUPABASE_JWT_SECRET` | Supabase JWT 검증 |
 | `SUPABASE_DB_URL` | (Rust 엔진/마이그레이션이 직접 PG 연결) |
 | `ENGINE_URL` | `http://127.0.0.1:8081` |
-| `CORS_ORIGINS` | `https://module.topworks.ltd,http://localhost:5173` |
+| `CORS_ORIGINS` | `https://module.topworks.ltd,https://cable.topworks.ltd,https://baro.topworks.ltd,http://localhost:5173` |
 | `PORT` | `8080` |
 | `SOLARFLOW_FILE_ROOT` | 첨부파일 디스크 경로 (`~/.local/share/solarflow/files`) |
 | `OCR_PYTHON_BIN` | OCR 사이드카 파이썬 경로 |
@@ -214,7 +216,7 @@ CLAUDE.md의 macOS 절차(`launchctl`, `codesign`)는 적용되지 않는다.
 | Supabase | (위 .env) | DB / Auth / Storage |
 | metalpriceapi.com | `METAL_PRICE_API_KEY` | XAG(은) 라이브 + USD/KRW 환율 |
 | Z.ai (GLM) | `ANTHROPIC_API_KEY` + `ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic` | LLM 업무 도우미 (PR #144) — Anthropic-호환 엔드포인트로 GLM-5.1 호출 |
-| Cloudflare | `~/.cloudflared/api-token` (Pages 진단/수동 배포용), `~/.cloudflared/cert.pem` (터널 cert + tunnel 토큰) | Pages(프론트), Tunnel(API), DNS. Pages 프로젝트명: `topworks-module-git`. Account ID: `6d6170fb05dd6d703b7ac8ea5ee10cae`. |
+| Cloudflare | `~/.cloudflared/api-token` (Pages 진단/수동 배포용), `~/.cloudflared/cert.pem` (터널 cert + tunnel 토큰) | Pages(프론트), Tunnel(API), DNS. Pages 프로젝트명: `topworks-module-git`. Custom domains: `module.topworks.ltd`, `cable.topworks.ltd`, `baro.topworks.ltd`. Account ID: `6d6170fb05dd6d703b7ac8ea5ee10cae`. |
 
 폴리실리콘/SCFI는 무료 실시간 API 없음 → JSON 파일 + 운영자 주간 갱신 (PR73). FBX/Bernreuter는 향후 옵션.
 

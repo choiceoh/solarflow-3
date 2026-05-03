@@ -1,14 +1,20 @@
-// D-108: 단일 코드/DB로 탑솔라/바로 두 앱을 운영하기 위한 호스트네임 기반 테넌트 분기
+// D-108/D-119: 단일 코드/DB로 module/cable/baro 앱을 운영하기 위한 호스트네임 기반 테넌트 분기
 //
-// 같은 React 빌드(dist/)가 두 호스트에서 서빙된다:
-//   - 탑솔라:    solarflow3.com / 100.123.70.19:5173 / localhost
+// 같은 React 빌드(dist/)가 세 호스트에서 서빙된다:
+//   - 탑솔라:    module.topworks.ltd / solarflow3.com / 100.123.70.19:5173 / localhost
+//   - 케이블:    cable.topworks.ltd
 //   - 바로(주):  baro.topworks.ltd
 //
-// 이 모듈은 window.location.hostname을 보고 BARO 모드 여부를 결정한다.
+// 이 모듈은 window.location.hostname을 보고 테넌트 모드를 결정한다.
 // 백엔드는 user_profiles.tenant_scope으로 격리를 강제하므로,
 // 이 함수는 UI 노출 제어용이지 보안 경계가 아니다(보안은 서버에서 RequireTenantScope).
 
-export type TenantScope = 'topsolar' | 'baro';
+export type TenantScope = 'topsolar' | 'cable' | 'baro';
+
+const CABLE_HOST_PATTERNS: Array<RegExp | string> = [
+  /^cable\./i,
+  /^cable-/i,
+];
 
 const BARO_HOST_PATTERNS: Array<RegExp | string> = [
   /^baro\./i,
@@ -16,6 +22,14 @@ const BARO_HOST_PATTERNS: Array<RegExp | string> = [
 ];
 
 export function detectTenantScope(hostname: string = window.location.hostname): TenantScope {
+  for (const pattern of CABLE_HOST_PATTERNS) {
+    if (typeof pattern === 'string') {
+      if (hostname === pattern) return 'cable';
+    } else if (pattern.test(hostname)) {
+      return 'cable';
+    }
+  }
+
   for (const pattern of BARO_HOST_PATTERNS) {
     if (typeof pattern === 'string') {
       if (hostname === pattern) return 'baro';

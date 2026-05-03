@@ -43,7 +43,7 @@ SUPABASE_JWT_SECRET=<jwt secret>
 POSTGREST_JWT_SECRET=<jwt secret — Supabase 클라우드 직결 시 동일하게 사용>
 SUPABASE_DB_URL=postgresql://postgres.<PROJECT_REF>:<DB_PASSWORD>@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres
 ENGINE_URL=http://127.0.0.1:8081
-CORS_ORIGINS=http://127.0.0.1:5174,http://localhost:5174
+CORS_ORIGINS=http://127.0.0.1:5174,http://localhost:5174,https://module.topworks.ltd,https://cable.topworks.ltd,https://baro.topworks.ltd
 SOLARFLOW_FILE_ROOT=C:\SolarFlow\files
 ```
 
