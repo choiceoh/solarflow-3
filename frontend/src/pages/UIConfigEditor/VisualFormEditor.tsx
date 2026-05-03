@@ -65,7 +65,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Plus, Trash2, GripVertical, Copy, Settings2 } from 'lucide-react';
 import type { AsyncRefineRule, FieldConfig, FieldType, FormSection, MetaFormConfig, Tone } from '@/templates/types';
-import { asyncRefinements, buildRegistryEntries, enumDictionaries, masterSources, computedFormulas, permissionGuards } from '@/templates/registry';
+import { asyncRefinements, enumDictionaries, masterSources, computedFormulas, permissionGuards } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
 import { EditorWithPanel, PanelGroup, PanelEmpty, PanelSelectionHeader } from './RightPanel';
 import { BooleanPicker, RegistryIdPicker, RolePicker, type RegistryEntry } from './Pickers';
