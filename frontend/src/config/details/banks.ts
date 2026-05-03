@@ -101,7 +101,6 @@ const bankDetailConfig: MetaDetailConfig = {
         },
         {
           title: '비고',
-          cols: 1,
           fields: [
             {
               key: 'memo',

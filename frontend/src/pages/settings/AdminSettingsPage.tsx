@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { KeyRound, Pencil, Plus } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
+import { notify } from '@/lib/notify';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermission } from '@/hooks/usePermission';
 import { ROLE_LABELS, type Role } from '@/config/permissions';
@@ -97,7 +98,7 @@ export default function AdminSettingsPage() {
       });
       setUsers((prev) => prev.map((u) => u.user_id === userId ? { ...u, role: newRole } : u));
     } catch {
-      alert('역할 변경에 실패했습니다');
+      notify.error('역할 변경에 실패했습니다');
     } finally {
       setSavingId(null);
     }
@@ -112,7 +113,7 @@ export default function AdminSettingsPage() {
       });
       setUsers((prev) => prev.map((u) => u.user_id === userId ? { ...u, is_active: isActive } : u));
     } catch {
-      alert('상태 변경에 실패했습니다');
+      notify.error('상태 변경에 실패했습니다');
     } finally {
       setSavingId(null);
     }

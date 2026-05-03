@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
+import { DialogHost } from '@/lib/dialogs';
 import { useAuthStore } from '@/stores/authStore';
 import { usePreferencesStore } from '@/stores/preferencesStore';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
@@ -92,6 +93,7 @@ export default function App() {
     <MobileBlock>
     <TooltipProvider>
       <Toaster />
+      <DialogHost />
       <BrowserRouter>
         <Suspense fallback={<Fallback />}>
           <Routes>

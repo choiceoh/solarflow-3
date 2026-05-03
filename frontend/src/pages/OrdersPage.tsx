@@ -9,6 +9,7 @@ import { useOrderList } from '@/hooks/useOrders';
 import { useReceiptList } from '@/hooks/useReceipts';
 import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
+import { confirmDialog } from '@/lib/dialogs';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import OrderListTable, { ORDER_TABLE_ID, ORDER_COLUMN_META } from '@/components/orders/OrderListTable';
 import OrderDetailView from '@/components/orders/OrderDetailView';
@@ -452,9 +453,15 @@ export default function OrdersPage() {
 
       if (remainingQty > 0) {
         let residualStatus: 'pending' | 'hold' | 'cancelled' = 'cancelled';
-        if (window.confirm(`예약 잔량 ${remainingQty.toLocaleString('ko-KR')}EA를 계속 예약으로 유지할까요?`)) {
+        if (await confirmDialog({
+          description: `예약 잔량 ${remainingQty.toLocaleString('ko-KR')}EA를 계속 예약으로 유지할까요?`,
+          confirmLabel: '예약 유지',
+        })) {
           residualStatus = 'pending';
-        } else if (window.confirm('예약 잔량을 보류로 남길까요? 취소하면 잔량 예약은 삭제됩니다.')) {
+        } else if (await confirmDialog({
+          description: '예약 잔량을 보류로 남길까요? 취소하면 잔량 예약은 삭제됩니다.',
+          confirmLabel: '보류',
+        })) {
           residualStatus = 'hold';
         }
 
@@ -575,7 +582,12 @@ export default function OrdersPage() {
       setOrderActionError('이미 출고된 수주는 예약으로 복귀할 수 없습니다. 출고 취소 흐름을 먼저 진행해주세요.');
       return;
     }
-    if (!window.confirm('수주를 취소하고 같은 수량을 가용재고 예약으로 되돌릴까요?')) return;
+    const ok = await confirmDialog({
+      description: '수주를 취소하고 같은 수량을 가용재고 예약으로 되돌릴까요?',
+      variant: 'destructive',
+      confirmLabel: '수주 취소',
+    });
+    if (!ok) return;
 
     setOrderActionLoading(true);
     setOrderActionError('');
