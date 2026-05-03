@@ -1,6 +1,7 @@
 // 사이트 설정 — 전역 설정 (admin 전용).
 // 첫 항목: 메뉴 가시성 (운영 검증 미완 메뉴를 사이드바에서 켜고 끄기)
 // 후속 항목들은 placeholder 카드로 자리만 잡아둠.
+import { useEffect, useState } from 'react';
 import { Bell, Building2, Calendar, DollarSign, Eye, Warehouse } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -42,9 +43,32 @@ const PLANNED: PlannedItem[] = [
   },
 ];
 
+function setEq(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const k of a) if (!b.has(k)) return false;
+  return true;
+}
+
 function MenuVisibilityCard() {
   const wip = listWipMenus();
-  const { hidden, loading, setMenuHidden } = useMenuVisibility();
+  const { hidden, loading, save } = useMenuVisibility();
+  const [draft, setDraft] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDraft((prev) => (setEq(prev, hidden) ? prev : new Set(hidden)));
+  }, [hidden]);
+
+  const isDirty = !setEq(draft, hidden);
+
+  const onSave = async () => {
+    setSaving(true);
+    try {
+      await save(draft);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <article className="rounded-lg border bg-card p-7">
@@ -58,7 +82,7 @@ function MenuVisibilityCard() {
             <span className="rounded bg-emerald-100 text-emerald-700 px-2.5 py-0.5 text-sm font-medium">활성</span>
           </div>
           <p className="mt-2.5 text-lg text-muted-foreground leading-8">
-            운영 검증이 끝나지 않은 미완 메뉴를 사이드바에서 숨길 수 있습니다. 변경은 모든 사용자에게 즉시 반영됩니다.
+            운영 검증이 끝나지 않은 미완 메뉴를 사이드바에서 숨길 수 있습니다. 저장하면 모든 사용자에게 즉시 반영됩니다.
           </p>
 
           {wip.length === 0 ? (
@@ -66,25 +90,44 @@ function MenuVisibilityCard() {
               현재 미완 표시된 메뉴가 없습니다 (코드의 NAV_GROUPS에서 `isWip: true` 부여 시 여기 노출).
             </p>
           ) : (
-            <ul className="mt-3 divide-y rounded border">
-              {wip.map((item) => {
-                const isHidden = hidden.has(item.key);
-                return (
-                  <li key={item.key} className="flex items-center justify-between px-6 py-5">
-                    <div>
-                      <p className="text-xl font-medium">{item.label}</p>
-                      <p className="text-base text-muted-foreground">{isHidden ? '사이드바에서 숨겨짐' : '사이드바에 노출 중'}</p>
-                    </div>
-                    <Switch
-                      checked={!isHidden}
-                      onCheckedChange={(v) => setMenuHidden(item.key, !v)}
-                      disabled={loading}
-                      aria-label={`${item.label} 사이드바 노출 토글`}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
+            <>
+              <ul className="mt-3 divide-y rounded border">
+                {wip.map((item) => {
+                  const isHidden = draft.has(item.key);
+                  return (
+                    <li key={item.key} className="flex items-center justify-between px-6 py-5">
+                      <div>
+                        <p className="text-xl font-medium">{item.label}</p>
+                        <p className="text-base text-muted-foreground">{isHidden ? '사이드바에서 숨겨짐' : '사이드바에 노출 중'}</p>
+                      </div>
+                      <Switch
+                        checked={!isHidden}
+                        onCheckedChange={(v) => {
+                          setDraft((d) => {
+                            const next = new Set(d);
+                            if (v) next.delete(item.key);
+                            else next.add(item.key);
+                            return next;
+                          });
+                        }}
+                        disabled={loading}
+                        aria-label={`${item.label} 사이드바 노출 토글`}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={onSave}
+                  disabled={!isDirty || saving || loading}
+                  className="rounded bg-foreground px-6 py-2.5 text-lg font-medium text-background disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? '저장 중…' : '저장'}
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
