@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAppStore } from '@/stores/appStore';
 
 /**
@@ -7,24 +8,24 @@ import { useAppStore } from '@/stores/appStore';
  * 동작:
  *   - 마운트 후 800ms 지연 (React 렌더 안정화)
  *   - 각 draft 의 selector 로 querySelectorAll → 매칭 element 의 className 교체
+ *   - **path 격리**: draft.path 가 현재 pathname 과 같을 때만 적용 (다른 화면 영향 차단)
  *
  * 한계:
- *   - selector 가 *유니크* 보장 안 됨. 같은 selector 의 모든 인스턴스에 적용됨.
- *     (예: ".sf-card" → 모든 카드. 의도가 *한 카드만* 이라도 모두 적용)
+ *   - selector 가 *유니크* 보장 안 됨. 같은 selector + 같은 path 의 모든 인스턴스에 적용됨.
  *   - React re-mount 시 element 가 새로 생기면 className override 사라짐.
  *     이 hook 이 *주기적* 재적용 안 함. 사용자가 새로고침 해야 다시 적용.
- *
- * 따라서 권장 사용:
- *   - admin 디자인 실험 (본인 브라우저 only)
- *   - 영구 반영 원하면 메타 config (ScopePanel "모든 인스턴스" → AI 어시스턴트)
+ *   - SPA 라우팅 (history.push) 으로 pathname 변경 시 다시 적용됨.
  */
 export const useApplyClassNameDrafts = () => {
   const drafts = useAppStore((s) => s.classNameDrafts);
+  const location = useLocation();
 
   useEffect(() => {
-    if (drafts.length === 0) return;
+    const currentPath = location.pathname;
+    const matching = drafts.filter((d) => d.path === currentPath);
+    if (matching.length === 0) return;
     const t = window.setTimeout(() => {
-      for (const draft of drafts) {
+      for (const draft of matching) {
         try {
           const els = document.querySelectorAll(draft.selector);
           els.forEach((el) => {
@@ -36,5 +37,5 @@ export const useApplyClassNameDrafts = () => {
       }
     }, 800);
     return () => window.clearTimeout(t);
-  }, [drafts]);
+  }, [drafts, location.pathname]);
 };
