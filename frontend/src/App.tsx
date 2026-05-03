@@ -16,6 +16,7 @@ const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
 const InboundPage = lazy(() => import('@/pages/InboundPage'));
 const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
 const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
+import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
 const LCPage = lazy(() => import('@/pages/LCPage'));
 const OutboundPage = lazy(() => import('@/pages/OutboundPage'));
 const OutboundV2Page = lazy(() => import('@/pages/OutboundV2Page'));
@@ -127,7 +128,7 @@ export default function App() {
                 <Route path="/masters/construction-sites" element={<ConstructionSitesPage />} />
                 <Route path="/inbound" element={<InboundPage />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
-                <Route path="/purchase-history" element={<PurchaseHistoryPage />} />
+                <Route path="/purchase-history" element={<PurchaseHistoryErrorBoundary><PurchaseHistoryPage /></PurchaseHistoryErrorBoundary>} />
                 <Route path="/lc" element={<LCPage />} />
                 <Route path="/outbound" element={<OutboundPage />} />
                 <Route path="/outbound-v2" element={<OutboundV2Page />} />

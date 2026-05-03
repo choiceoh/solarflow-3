@@ -1,6 +1,45 @@
 // /purchase-history 페이지의 순수 로직 — 테스트 대상으로 컴포넌트와 분리.
 import type { PurchaseOrder } from '@/types/procurement';
 
+// 타임라인 이벤트 종류 — 페이지·테스트가 공유.
+export type EventKind =
+  | 'po_create'
+  | 'variant_create'
+  | 'price_change'
+  | 'po_update'
+  | 'po_cancel'
+  | 'lc_open'
+  | 'lc_settle'
+  | 'bl_event'
+  | 'tt_send';
+
+export interface TimelineEventLike {
+  kind: EventKind;
+  po_id?: string;
+}
+
+// 이벤트 클릭 시 운영 페이지로 점프할 URL.
+// PO 관련은 ?po_id=...로 PODetailView 자동 펼침. 그 외는 탭 단위.
+// price_change는 운영 진입점 없음 (Q9=Z 결정대로 단가 편집 폐기) → null 반환 = 비활성.
+export function eventDeepLink(evt: TimelineEventLike): string | null {
+  switch (evt.kind) {
+    case 'po_create':
+    case 'variant_create':
+    case 'po_update':
+    case 'po_cancel':
+      return evt.po_id ? `/procurement?po_id=${evt.po_id}` : '/procurement';
+    case 'lc_open':
+    case 'lc_settle':
+      return '/procurement?tab=lc';
+    case 'bl_event':
+      return '/procurement?tab=bl';
+    case 'tt_send':
+      return '/procurement?tab=tt';
+    case 'price_change':
+      return null;
+  }
+}
+
 export interface Chain {
   chain_id: string;
   head: PurchaseOrder;
@@ -56,6 +95,54 @@ export function buildChains(pos: PurchaseOrder[]): Chain[] {
   }
   chains.sort((a, b) => (b.latest_contract_date ?? '').localeCompare(a.latest_contract_date ?? ''));
   return chains;
+}
+
+// audit_logs API 응답에서 신뢰할 수 있는 필드만 골라낸 좁은 형태.
+// 백엔드 스키마가 바뀌거나 손상된 row가 섞여 와도 페이지 전체가 깨지지 않게 한다.
+export interface SafeAuditLog {
+  audit_id: string;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  user_id: string | null;
+  user_email: string | null;
+  note: string | null;
+  created_at: string;
+  old_data: unknown;
+  new_data: unknown;
+}
+
+function asString(v: unknown): string | null {
+  return typeof v === 'string' && v.length > 0 ? v : null;
+}
+
+// 응답이 배열이 아니거나, 개별 row에 필수 필드(audit_id/entity_type/entity_id/created_at)가
+// 없으면 그 row만 버린다. 빈 배열이면 빈 배열을 반환.
+export function sanitizeAuditLogs(raw: unknown): SafeAuditLog[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SafeAuditLog[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const r = item as Record<string, unknown>;
+    const auditId = asString(r.audit_id);
+    const entityType = asString(r.entity_type);
+    const entityId = asString(r.entity_id);
+    const createdAt = asString(r.created_at);
+    if (!auditId || !entityType || !entityId || !createdAt) continue;
+    out.push({
+      audit_id: auditId,
+      entity_type: entityType,
+      entity_id: entityId,
+      action: asString(r.action) ?? 'update',
+      user_id: asString(r.user_id),
+      user_email: asString(r.user_email),
+      note: asString(r.note),
+      created_at: createdAt,
+      old_data: r.old_data,
+      new_data: r.new_data,
+    });
+  }
+  return out;
 }
 
 // 사람이 읽지 않는 메타 필드 — diff에서 노이즈 제거

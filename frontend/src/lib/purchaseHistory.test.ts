@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildChains, diffAuditFields, findChainHeadId, MAX_CHAIN_DEPTH } from './purchaseHistory';
+import {
+  buildChains,
+  diffAuditFields,
+  eventDeepLink,
+  findChainHeadId,
+  MAX_CHAIN_DEPTH,
+  sanitizeAuditLogs,
+} from './purchaseHistory';
 import type { PurchaseOrder } from '@/types/procurement';
 
 function po(id: string, parentId: string | null, contractDate?: string, mfgId = 'm1'): PurchaseOrder {
@@ -139,5 +146,87 @@ describe('diffAuditFields', () => {
     const diffs = diffAuditFields({ memo: '' }, { memo: longStr });
     expect(diffs[0]).toContain('…');
     expect(diffs[0]).not.toContain(longStr);
+  });
+});
+
+describe('eventDeepLink', () => {
+  it('builds /procurement?po_id=... for PO-bound events', () => {
+    expect(eventDeepLink({ kind: 'po_create', po_id: 'P1' })).toBe('/procurement?po_id=P1');
+    expect(eventDeepLink({ kind: 'variant_create', po_id: 'P2' })).toBe('/procurement?po_id=P2');
+    expect(eventDeepLink({ kind: 'po_update', po_id: 'P3' })).toBe('/procurement?po_id=P3');
+    expect(eventDeepLink({ kind: 'po_cancel', po_id: 'P4' })).toBe('/procurement?po_id=P4');
+  });
+
+  it('falls back to /procurement when po_id is missing', () => {
+    expect(eventDeepLink({ kind: 'po_create' })).toBe('/procurement');
+  });
+
+  it('routes LC events to the lc tab', () => {
+    expect(eventDeepLink({ kind: 'lc_open' })).toBe('/procurement?tab=lc');
+    expect(eventDeepLink({ kind: 'lc_settle' })).toBe('/procurement?tab=lc');
+  });
+
+  it('routes BL/TT events to their respective tabs', () => {
+    expect(eventDeepLink({ kind: 'bl_event' })).toBe('/procurement?tab=bl');
+    expect(eventDeepLink({ kind: 'tt_send' })).toBe('/procurement?tab=tt');
+  });
+
+  it('returns null for price_change (no operating page since manual editing was retired)', () => {
+    expect(eventDeepLink({ kind: 'price_change' })).toBeNull();
+  });
+});
+
+describe('sanitizeAuditLogs', () => {
+  it('returns [] for non-array input', () => {
+    expect(sanitizeAuditLogs(null)).toEqual([]);
+    expect(sanitizeAuditLogs(undefined)).toEqual([]);
+    expect(sanitizeAuditLogs({})).toEqual([]);
+    expect(sanitizeAuditLogs('error')).toEqual([]);
+  });
+
+  it('drops items missing required fields', () => {
+    const raw = [
+      { audit_id: 'a1', entity_type: 'purchase_orders', entity_id: 'p1', created_at: '2026-01-01T00:00:00Z' },
+      { entity_type: 'purchase_orders', entity_id: 'p1', created_at: '2026-01-01T00:00:00Z' }, // no audit_id
+      { audit_id: 'a3', entity_id: 'p1', created_at: '2026-01-01T00:00:00Z' }, // no entity_type
+      { audit_id: 'a4', entity_type: 'x', created_at: '2026-01-01T00:00:00Z' }, // no entity_id
+      { audit_id: 'a5', entity_type: 'x', entity_id: 'p1' }, // no created_at
+      null,
+      'string',
+    ];
+    const out = sanitizeAuditLogs(raw);
+    expect(out).toHaveLength(1);
+    expect(out[0].audit_id).toBe('a1');
+  });
+
+  it('defaults action to "update" if missing or non-string', () => {
+    const raw = [
+      { audit_id: 'a1', entity_type: 'x', entity_id: 'p1', created_at: '2026-01-01T00:00:00Z' },
+      { audit_id: 'a2', entity_type: 'x', entity_id: 'p1', created_at: '2026-01-01T00:00:00Z', action: 42 },
+    ];
+    const out = sanitizeAuditLogs(raw);
+    expect(out[0].action).toBe('update');
+    expect(out[1].action).toBe('update');
+  });
+
+  it('coerces empty/non-string user fields to null', () => {
+    const raw = [{
+      audit_id: 'a1', entity_type: 'x', entity_id: 'p1', created_at: '2026-01-01T00:00:00Z',
+      user_email: '', user_id: 123, note: null,
+    }];
+    const out = sanitizeAuditLogs(raw);
+    expect(out[0].user_email).toBeNull();
+    expect(out[0].user_id).toBeNull();
+    expect(out[0].note).toBeNull();
+  });
+
+  it('preserves old_data/new_data as opaque unknown', () => {
+    const raw = [{
+      audit_id: 'a1', entity_type: 'x', entity_id: 'p1', created_at: '2026-01-01T00:00:00Z',
+      old_data: { status: 'draft' }, new_data: { status: 'contracted' },
+    }];
+    const out = sanitizeAuditLogs(raw);
+    expect(out[0].old_data).toEqual({ status: 'draft' });
+    expect(out[0].new_data).toEqual({ status: 'contracted' });
   });
 });
