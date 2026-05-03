@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { ProductCombobox } from '@/components/common/ProductCombobox';
+import { OrderCombobox } from '@/components/common/OrderCombobox';
 import { useAppStore } from '@/stores/appStore';
 import { fetchWithAuth } from '@/lib/api';
 import { companyParams } from '@/lib/companyUtils';
@@ -123,6 +125,7 @@ export default function OutboundForm({ open = true, onOpenChange, onSubmit, edit
   const [submitError, setSubmitError] = useState('');
   const [qtyDisplay, setQtyDisplay] = useState('');
   const [spareQtyDisplay, setSpareQtyDisplay] = useState('');
+  const productTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema) as unknown as Resolver<FormData>,
@@ -266,7 +269,10 @@ export default function OutboundForm({ open = true, onOpenChange, onSubmit, edit
   const updateBlEntry = (i: number, field: keyof BLEntry, val: string) =>
     setBlEntries(prev => prev.map((e, idx) => idx === i ? { ...e, [field]: val } : e));
 
-  const handle = async (data: FormData) => {
+  // 연속 입력 모드: editData(수정)/order(수주에서 진입) 컨텍스트에서는 의미가 없으므로 비활성
+  const allowContinue = !editData && !order;
+
+  const doSubmit = async (data: FormData): Promise<boolean> => {
     setSubmitError('');
     const validBLItems = blEntries
       .filter(e => e.bl_id && e.quantity && parseInt(e.quantity) > 0)
@@ -275,12 +281,12 @@ export default function OutboundForm({ open = true, onOpenChange, onSubmit, edit
     const selectedRemaining = selectedOrder ? orderRemainingQty(selectedOrder) : null;
     if (selectedRemaining != null && outboundQty > selectedRemaining) {
       setSubmitError(`출고 수량이 수주 잔량 ${selectedRemaining.toLocaleString('ko-KR')}EA를 초과합니다`);
-      return;
+      return false;
     }
     const blQty = validBLItems.reduce((sum, item) => sum + item.quantity, 0);
     if (validBLItems.length > 0 && blQty !== outboundQty) {
       setSubmitError(`B/L 연결 수량 합계(${blQty.toLocaleString('ko-KR')}EA)가 출고 수량과 같아야 합니다`);
-      return;
+      return false;
     }
 
     const payload: Record<string, unknown> = {
@@ -298,11 +304,41 @@ export default function OutboundForm({ open = true, onOpenChange, onSubmit, edit
     }
     try {
       await onSubmit(payload);
-      onOpenChange(false);
+      return true;
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : '저장에 실패했습니다');
+      return false;
     }
   };
+
+  const onSaveClose = handleSubmit(async (data) => {
+    if (await doSubmit(data)) onOpenChange(false);
+  });
+
+  // 저장 후 컨텍스트성 필드 유지, 나머지 비움 + 품번 콤보로 포커스
+  const onSaveContinue = handleSubmit(async (data) => {
+    if (!(await doSubmit(data))) return;
+    reset({
+      outbound_date: data.outbound_date,
+      usage_category: data.usage_category,
+      warehouse_id: data.warehouse_id,
+      group_trade: data.group_trade,
+      target_company_id: data.target_company_id,
+      product_id: '',
+      quantity: '' as unknown as number,
+      order_id: '',
+      site_name: '',
+      site_address: '',
+      spare_qty: '',
+      erp_outbound_no: '',
+      memo: '',
+    });
+    setQtyDisplay('');
+    setSpareQtyDisplay('');
+    setBlEntries([]);
+    setSubmitError('');
+    setTimeout(() => productTriggerRef.current?.focus(), 0);
+  });
 
   const otherCompanies = companies.filter((c) => c.company_id !== effectiveCompanyId);
   const productLabel = selectedProduct
@@ -336,7 +372,7 @@ export default function OutboundForm({ open = true, onOpenChange, onSubmit, edit
           </div>
         )}
 
-        <form onSubmit={handleSubmit(handle)} className="space-y-3">
+        <form onSubmit={onSaveClose} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>출고일 *</Label>
@@ -365,16 +401,13 @@ export default function OutboundForm({ open = true, onOpenChange, onSubmit, edit
                 <span className="flex-1 truncate">{productLabel || order.product_name || order.product_id}</span>
               </div>
             ) : (
-              <Select value={selectedProductId ?? ''} onValueChange={(v) => setValue('product_id', v ?? '')}>
-                <SelectTrigger className="w-full"><Txt text={productLabel} /></SelectTrigger>
-                <SelectContent>
-                  {products.map((p) => (
-                    <SelectItem key={p.product_id} value={p.product_id}>
-                      {moduleLabel(p.manufacturers ?? p.manufacturer_name, p.spec_wp)} | {p.product_code} | {p.product_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ProductCombobox
+                products={products}
+                value={selectedProductId ?? ''}
+                onChange={(v) => setValue('product_id', v, { shouldValidate: true, shouldDirty: true })}
+                error={!!errors.product_id}
+                triggerRef={productTriggerRef}
+              />
             )}
             {errors.product_id && <p className="text-xs text-destructive">{errors.product_id.message}</p>}
             {selectedProduct && (
@@ -517,17 +550,13 @@ export default function OutboundForm({ open = true, onOpenChange, onSubmit, edit
                 <span className="flex-1 truncate">{orderLabel || order.order_number || order.order_id?.slice(0, 8) || '—'}</span>
               </div>
             ) : (
-              <Select value={selectedOrderId ?? ''} onValueChange={(v) => setValue('order_id', v === '_none' ? '' : (v ?? ''))}>
-                <SelectTrigger className="w-full"><Txt text={orderLabel || '연결 안함'} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">연결 안함</SelectItem>
-                  {orders.map((o) => (
-                    <SelectItem key={o.order_id} value={o.order_id}>
-                      {o.order_number ?? o.order_id?.slice(0, 8) ?? '—'} · {o.product_name ?? o.product_code ?? ''} · 잔량 {orderRemainingQty(o).toLocaleString('ko-KR')}EA
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <OrderCombobox
+                orders={orders}
+                value={selectedOrderId ?? ''}
+                onChange={(v) => setValue('order_id', v, { shouldDirty: true })}
+                placeholder="연결 안함"
+                includeNoneOption
+              />
             )}
             {selectedOrder && (
               <p className="text-[10px] text-blue-600">수주잔량: {orderRemainingQty(selectedOrder).toLocaleString('ko-KR')}장</p>
@@ -580,6 +609,11 @@ export default function OutboundForm({ open = true, onOpenChange, onSubmit, edit
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
             <Button type="submit" disabled={isSubmitting}>{isSubmitting ? '저장 중...' : '저장'}</Button>
+            {allowContinue && (
+              <Button type="button" disabled={isSubmitting} onClick={onSaveContinue}>
+                {isSubmitting ? '저장 중...' : '저장하고 새로 입력'}
+              </Button>
+            )}
           </div>
         </form>
     </>
