@@ -2,8 +2,9 @@
 
 import { useMemo } from 'react';
 import type { FilterConfig, FilterType, ListScreenConfig } from '@/templates/types';
-import { enumDictionaries, masterSources } from '@/templates/registry';
+import { buildRegistryEntries, enumDictionaries, masterSources, masterSourceMeta } from '@/templates/registry';
 import { ArrayEditor, FieldInput, FieldSelect, moveInArray } from './ArrayEditor';
+import { RegistryIdPicker } from './Pickers';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
@@ -34,8 +35,8 @@ export function FiltersTab({
     () => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })),
     [],
   );
-  const masterOptions = useMemo(
-    () => Object.keys(masterSources).sort().map((id) => ({ value: id, label: id })),
+  const masterEntries = useMemo(
+    () => buildRegistryEntries(masterSources, masterSourceMeta),
     [],
   );
 
@@ -81,9 +82,10 @@ export function FiltersTab({
               onChange={(v) => update(idx, { ...f, enumKey: v || undefined })} />
           )}
           {f.optionsFrom === 'master' && (
-            <FieldSelect label="masterKey (registry.masterSources)" value={f.masterKey ?? ''}
-              allowEmpty options={masterOptions}
-              onChange={(v) => update(idx, { ...f, masterKey: v || undefined })} />
+            <RegistryIdPicker label="masterKey"
+              value={f.masterKey} entries={masterEntries}
+              onChange={(v) => update(idx, { ...f, masterKey: v })}
+              hint="registry.masterSources — 메타가 있으면 라벨/설명 노출" />
           )}
           {f.optionsFrom === 'months' && (
             <FieldInput label="monthsBack (최근 N개월, 기본 12)" value={String(f.monthsBack ?? '')}
