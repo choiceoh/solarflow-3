@@ -5,7 +5,7 @@
 // - 순서 변경 = drag-drop (native HTML5, ArrayEditor 패턴 차용)
 // - 이름 편집 = 더블클릭 → in-place input
 // - 추가 = 탭바 끝 [ + ] 인라인 버튼
-// - 삭제 = hover 시 × 표시 + confirmDialog
+// - 삭제 = hover 시 × 표시 + window.confirm
 // - 선택 = 클릭 → onSelectIdx 호출 (부모가 우측 패널에서 그 탭 메타 편집)
 //
 // 부모는 이 컴포넌트와 별개로 selectedIdx 를 관리. selectedIdx === idx 인 탭이
@@ -13,7 +13,6 @@
 
 import { useState, type DragEvent } from 'react';
 import { Plus, X } from 'lucide-react';
-import { confirmDialog } from '@/lib/dialogs';
 import type { DetailTabConfig } from '@/templates/types';
 
 export function TabsEditor({
@@ -48,12 +47,8 @@ export function TabsEditor({
   };
 
   // ─── 삭제 ─────────────────────────────────────────────────────────────────
-  const remove = async (idx: number) => {
-    const ok = await confirmDialog({
-      description: `"${tabs[idx]?.label ?? ''}" 탭을 삭제할까요?`,
-      variant: 'destructive',
-      confirmLabel: '삭제',
-    });
+  const remove = (idx: number) => {
+    const ok = window.confirm(`"${tabs[idx]?.label ?? ''}" 탭을 삭제할까요?`);
     if (!ok) return;
     const next = tabs.filter((_, i) => i !== idx);
     onChange(next);

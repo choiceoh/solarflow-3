@@ -71,6 +71,7 @@ const BaroRequestInboxPage = lazy(() => import('@/pages/group-trade/BaroRequestI
 const CreditBoardPage = lazy(() => import('@/pages/baro/CreditBoardPage'));
 const DispatchBoardPage = lazy(() => import('@/pages/baro/DispatchBoardPage'));
 const CRMInboxPage = lazy(() => import('@/pages/CRMInboxPage'));
+const TutorialMenuPage = lazy(() => import('@/onboarding/ui/TutorialMenuPage'));
 
 function Fallback() {
   return <LoadingSpinner className="h-screen" />;
@@ -151,6 +152,7 @@ export default function App() {
                 <Route path="/baro/credit-board" element={<CreditBoardPage />} />
                 <Route path="/baro/dispatch" element={<RoleGuard allowedRoles={['admin', 'operator']}><DispatchBoardPage /></RoleGuard>} />
                 <Route path="/crm/inbox" element={<CRMInboxPage />} />
+                <Route path="/tutorial" element={<TutorialMenuPage />} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/approval" element={<ApprovalPage />} />
                 <Route path="/assistant" element={<AssistantPage />} />
