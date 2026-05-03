@@ -64,6 +64,12 @@ interface AppState {
   /** 인스펙터에서 *다른 역할로 미리보기* 활성 시 그 역할. null 이면 실제 JWT 역할. */
   inspectorPreviewRole: string | null;
   setInspectorPreviewRole: (role: string | null) => void;
+  /** 어시스턴트 drawer 열림 상태 — FloatingAssistantButton + 외부 트리거 (Scope 패널 등) 공유 */
+  assistantDrawerOpen: boolean;
+  setAssistantDrawerOpen: (open: boolean) => void;
+  /** drawer 가 열릴 때 ChatBox 입력에 자동 채울 텍스트 (M-2b 후속) */
+  assistantDrawerInitialPrompt: string | null;
+  setAssistantDrawerInitialPrompt: (text: string | null) => void;
   tokenOverrides: Record<string, string>;
   setTokenOverride: (key: string, value: string) => void;
   resetTokenOverride: (key: string) => void;
@@ -108,6 +114,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setInspectorPseudoState: (state) => set({ inspectorPseudoState: state }),
   inspectorPreviewRole: null,
   setInspectorPreviewRole: (role) => set({ inspectorPreviewRole: role }),
+  assistantDrawerOpen: false,
+  setAssistantDrawerOpen: (open) => set({ assistantDrawerOpen: open }),
+  assistantDrawerInitialPrompt: null,
+  setAssistantDrawerInitialPrompt: (text) => set({ assistantDrawerInitialPrompt: text }),
   tokenOverrides: readTokenOverrides(),
   setTokenOverride: (key, value) =>
     set((s) => {
