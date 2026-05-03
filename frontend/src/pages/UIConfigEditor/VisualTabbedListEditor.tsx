@@ -209,6 +209,27 @@ function TabsTab({ value, onChange, onEditList }: {
       })}
       onMove={(idx, dir) => onChange({ ...value, tabs: moveInArray(tabs, idx, dir) })}
       onRemove={(idx) => onChange({ ...value, tabs: tabs.filter((_, i) => i !== idx) })}
+      onReorder={(next) => onChange({ ...value, tabs: next })}
+      onDuplicate={(idx) => {
+        const src = tabs[idx];
+        const baseKey = src.key || 'tab';
+        let n = 2;
+        while (tabs.some((t) => t.key === `${baseKey}_${n}`)) n++;
+        const newKey = `${baseKey}_${n}`;
+        // list.id 도 충돌 회피
+        const listIdBase = src.list.id || `${value.id}_${newKey}`;
+        let listN = 2;
+        const existingListIds = new Set(tabs.map((t) => t.list.id));
+        let newListId = `${listIdBase}_copy`;
+        while (existingListIds.has(newListId)) { newListId = `${listIdBase}_copy${listN}`; listN++; }
+        const cloned = {
+          ...src,
+          key: newKey,
+          label: `${src.label} (복사)`,
+          list: { ...src.list, id: newListId },
+        };
+        onChange({ ...value, tabs: [...tabs.slice(0, idx + 1), cloned, ...tabs.slice(idx + 1)] });
+      }}
       renderRow={(t, idx) => {
         const update = (next: typeof t) =>
           onChange({ ...value, tabs: tabs.map((x, i) => (i === idx ? next : x)) });

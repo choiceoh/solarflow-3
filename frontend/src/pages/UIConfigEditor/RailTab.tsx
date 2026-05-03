@@ -36,6 +36,12 @@ export function RailTab({
       })}
       onMove={(idx, dir) => onChange({ ...value, rail: moveInArray(rail, idx, dir) })}
       onRemove={(idx) => onChange({ ...value, rail: rail.filter((_, i) => i !== idx) })}
+      onReorder={(next) => onChange({ ...value, rail: next })}
+      onDuplicate={(idx) => {
+        const src = rail[idx];
+        const cloned: RailBlockConfig = { ...src, props: src.props ? { ...src.props } : undefined };
+        onChange({ ...value, rail: [...rail.slice(0, idx + 1), cloned, ...rail.slice(idx + 1)] });
+      }}
       renderRow={(b, idx) => {
         const propsText = JSON.stringify(b.props ?? {}, null, 2);
         return (

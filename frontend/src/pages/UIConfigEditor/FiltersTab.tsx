@@ -55,6 +55,15 @@ export function FiltersTab({
       })}
       onMove={(idx, dir) => onChange({ ...value, filters: moveInArray(filters, idx, dir) })}
       onRemove={(idx) => onChange({ ...value, filters: filters.filter((_, i) => i !== idx) })}
+      onReorder={(next) => onChange({ ...value, filters: next })}
+      onDuplicate={(idx) => {
+        const src = filters[idx];
+        const baseKey = src.key || 'filter';
+        let n = 2;
+        while (filters.some((f) => f.key === `${baseKey}_${n}`)) n++;
+        const cloned: FilterConfig = { ...src, key: `${baseKey}_${n}`, label: `${src.label} (복사)` };
+        onChange({ ...value, filters: [...filters.slice(0, idx + 1), cloned, ...filters.slice(idx + 1)] });
+      }}
       renderRow={(f, idx) => (
         <div className="grid grid-cols-2 gap-2">
           <FieldInput label="key (서버 필터 파라미터)" value={f.key} mono

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, GripVertical, Plus, Search, Settings2, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, GripVertical, Plus, Search, Settings2, Trash2 } from 'lucide-react';
 import type { DetailFieldConfig, DetailFormatter, DetailSectionConfig, DetailTabConfig, MetaDetailConfig } from '@/templates/types';
 import { buildRegistryEntries, cellRenderers, cellRendererMeta, contentBlocks, contentBlockMeta, enumDictionaries } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
@@ -576,6 +576,26 @@ function SectionsTab({ value, onChange, onSelectDetailField }: {
               onUpdate={(next) => updateSection(sIdx, next)}
               onMoveUp={() => onChange({ ...value, sections: moveInArray(sections, sIdx, -1) })}
               onMoveDown={() => onChange({ ...value, sections: moveInArray(sections, sIdx, 1) })}
+              onDuplicate={() => {
+                const src = sections[sIdx];
+                // 필드 key 충돌 회피 — 모든 필드 key 에 _copy 접미
+                const existingKeys = new Set(allDetailFieldKeys);
+                const dedupedFields = (src.fields ?? []).map((f) => {
+                  if (!f.key) return { ...f };
+                  let candidate = `${f.key}_copy`;
+                  let n = 2;
+                  while (existingKeys.has(candidate)) { candidate = `${f.key}_copy${n}`; n++; }
+                  existingKeys.add(candidate);
+                  return { ...f, key: candidate };
+                });
+                const cloned: DetailSectionConfig = {
+                  ...src,
+                  title: `${src.title} (복사)`,
+                  fields: src.fields ? dedupedFields : undefined,
+                  contentBlock: src.contentBlock ? { ...src.contentBlock } : undefined,
+                };
+                onChange({ ...value, sections: [...sections.slice(0, sIdx + 1), cloned, ...sections.slice(sIdx + 1)] });
+              }}
               onRemove={() => onChange({ ...value, sections: sections.filter((_, i) => i !== sIdx) })}
               onSelectField={onSelectDetailField ? (fIdx) => onSelectDetailField(sIdx, fIdx) : undefined}
             />
@@ -598,7 +618,7 @@ function SectionsTab({ value, onChange, onSelectDetailField }: {
 
 function SectionCard({
   section, index, total, blockOptions, collapsed, allDetailFieldKeys, onToggleCollapse,
-  onUpdate, onMoveUp, onMoveDown, onRemove, onSelectField,
+  onUpdate, onMoveUp, onMoveDown, onDuplicate, onRemove, onSelectField,
 }: {
   section: DetailSectionConfig;
   index: number;
@@ -610,6 +630,7 @@ function SectionCard({
   onUpdate: (next: DetailSectionConfig) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onDuplicate: () => void;
   onRemove: () => void;
   onSelectField?: (fIdx: number) => void;
 }) {
@@ -717,6 +738,8 @@ function SectionCard({
           onClick={onMoveUp} disabled={index === 0}><ChevronUp className="h-3.5 w-3.5" /></Button>
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
           onClick={onMoveDown} disabled={index === total - 1}><ChevronDown className="h-3.5 w-3.5" /></Button>
+        <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
+          onClick={(e) => { e.stopPropagation(); onDuplicate(); }} title="섹션 복제"><Copy className="h-3.5 w-3.5" /></Button>
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
           onClick={onRemove}><Trash2 className="h-3.5 w-3.5" /></Button>
       </div>
@@ -851,6 +874,18 @@ function SectionCard({
                       <Settings2 className="h-3 w-3" />
                     </Button>
                   )}
+                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6"
+                    onClick={() => {
+                      const existingKeys = new Set(allDetailFieldKeys);
+                      let candidate = `${field.key}_copy`;
+                      let n = 2;
+                      while (existingKeys.has(candidate)) { candidate = `${field.key}_copy${n}`; n++; }
+                      const cloned: DetailFieldConfig = { ...field, key: candidate, label: `${field.label} (복사)` };
+                      onUpdate({ ...section, fields: [...fields.slice(0, fIdx + 1), cloned, ...fields.slice(fIdx + 1)] });
+                    }}
+                    title="필드 복제">
+                    <Copy className="h-3 w-3" />
+                  </Button>
                   <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
                     onClick={() => onUpdate({ ...section, fields: fields.filter((_, i) => i !== fIdx) })}>
                     <Trash2 className="h-3 w-3" />
