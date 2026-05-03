@@ -20,7 +20,7 @@ import { FilterButton } from '@/components/command/MockupPrimitives';
 import { cn } from '@/lib/utils';
 import type {
   ListScreenConfig, FilterConfig, FormConfig, MetricConfig, ColumnConfig,
-  ActionConfig, ActionIcon, Tone,
+  ActionConfig, ActionIcon, Tone, ActionContext,
 } from './types';
 import {
   cellRenderers, dataHooks, metricComputers, toneComputers, sparkComputers, subComputers,
@@ -94,6 +94,8 @@ export function buildMetric(
   } else if (m.subFromFilter) {
     const fc = filterConfigs.find((f) => f.key === m.subFromFilter);
     if (fc) sub = filterLabel(fc, filters[m.subFromFilter] ?? '', filterOptions[m.subFromFilter] ?? []);
+  } else if (m.sub) {
+    sub = m.sub;
   }
 
   // 메트릭별 sparkComputer가 등록돼 있으면 그것을 쓰고, 없으면 라벨 해시 기반 generic 시드.
@@ -703,8 +705,14 @@ export function makeRowActionHandler(actions: PageActions, reload: () => void) {
       });
     } else if (action.kind === 'custom' && action.handlerId) {
       const handler = actionHandlers[action.handlerId];
-      if (handler) handler(row);
-      else console.warn(`[ListScreen] actionHandler not registered: ${action.handlerId}`);
+      if (handler) {
+        const ctx: ActionContext = {
+          reload,
+          openForm: (formId) => actions.openForm(formId),
+          selectRow: () => {},
+        };
+        handler(ctx, row);
+      } else console.warn(`[ListScreen] actionHandler not registered: ${action.handlerId}`);
     }
   };
 }

@@ -30,16 +30,16 @@ import {
   type OCRFieldCandidate, type CustomsDeclarationOCRFields, type CustomsDeclarationOCRLine,
   type OCRExtractResponse,
   OCR_PRODUCT_NONE,
-  normalizeOCRMatchText, normalizeOCRIdentifier, normalizeOCRDecimal, normalizeOCRDate,
-  fallbackPort, hasCustomsOCRCandidates, buildFallbackCustomsOCRFields,
-  lineItemOCRCompleteness, mergeCustomsOCRFields,
+  normalizeOCRMatchText,
+  buildFallbackCustomsOCRFields,
+  mergeCustomsOCRFields,
   scoreOCRPartyCandidate, manufacturerOCRAliases,
   extractOCRSpecWp, extractOCRModelTokens, parseOCRNumber,
-  formatOCRProductLabel, selectableOCRProducts, findProductForOCRLine,
+  formatOCRProductLabel, selectableOCRProducts,
 } from '@/lib/blOcr';
 import {
-  type ImportPT, type DomesticPT, IMPORT_BALANCE_DAYS, DOMESTIC_DAYS5,
-  defaultImportPT, defaultDomesticPT, monthLabel,
+  type ImportPT, type DomesticPT,
+  defaultImportPT, defaultDomesticPT,
   composeImportPT, parseImportPT, composeDomesticPT, parseDomesticPT,
 } from '@/lib/blPaymentTerms';
 

@@ -65,6 +65,7 @@ export interface MetricConfig {
   unit?: string;
   tone?: Tone | { computerId: ComputerId };  // 동적 톤은 computer 결과로 결정
   spark?: 'auto';                   // 현재 값 기반 sparkline
+  sub?: string;                     // 정적 sub 텍스트 (subFromFilter/subFromComputer 가 비어있을 때 사용)
   subFromFilter?: string;           // 필터 키 — 그 필터 라벨이 sub로
   subFromComputer?: ComputerId;     // 동적 sub 텍스트 (subComputers 레지스트리)
 }
@@ -249,8 +250,8 @@ export interface FieldConfig {
 }
 
 export interface FormSection {
-  cols?: 1 | 2 | 3;                 // grid 컬럼 수 (기본 1)
-  fields: FieldConfig[];
+  cols?: 1 | 2 | 3 | 4;             // grid 컬럼 수 (기본 1)
+  fields?: FieldConfig[];           // contentBlock 만 쓰는 섹션은 비울 수 있음
   // Phase 4 보강: 섹션 헤더 (단계 그룹화 — CostForm "Stage 1: FOB" 등)
   title?: string;
   tone?: Tone;                      // 헤더 색상 (solar/ink/info/warn/pos)
@@ -262,6 +263,8 @@ export interface FormSection {
   visibleByRoles?: string[];
   // 메타 인프라 확장: 섹션 접기/펼치기. true 면 기본 펼침, 'collapsed' 면 기본 접힘.
   collapsible?: boolean | 'collapsed';
+  // 메타 인프라 확장: 다른 필드 값에 따라 섹션 통째로 노출/숨김 (FieldConfig.visibleIf 와 동일 시그니처)
+  visibleIf?: { field: string; value: string | string[]; source?: 'field' | 'context' };
 }
 
 // Phase 4 보강: 다이얼로그 크기 (max-w-md/lg/xl/2xl) — 큰 폼은 lg 이상
@@ -523,7 +526,7 @@ export interface ActionContext {
   openForm: (formId: FormComponentId) => void;
   selectRow: (id: string | null) => void;
 }
-export type ActionHandler = (ctx: ActionContext, row?: unknown) => void | Promise<void>;
+export type ActionHandler = (ctx?: ActionContext, row?: unknown) => void | Promise<void>;
 
 export interface MasterOptionSource {
   // context: optionsDependsOn 으로 선언된 다른 필드들의 현재 값

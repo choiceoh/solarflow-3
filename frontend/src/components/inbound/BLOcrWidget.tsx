@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { fetchWithAuth } from '@/lib/api';
 import {
   type CustomsDeclarationOCRFields,
-  type CustomsDeclarationOCRLine,
   type OCRExtractResponse,
   OCR_PRODUCT_NONE,
   buildFallbackCustomsOCRFields, mergeCustomsOCRFields,

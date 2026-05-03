@@ -428,7 +428,7 @@ export function useActionHandler(id: string, handler: ActionHandler): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
   useEffect(() => {
-    const wrapped: ActionHandler = (row) => handlerRef.current(row);
+    const wrapped: ActionHandler = (ctx, row) => handlerRef.current(ctx, row);
     actionHandlers[id] = wrapped;
     return () => {
       // 같은 id 로 등록된 게 우리 wrapper 인 경우만 해제
