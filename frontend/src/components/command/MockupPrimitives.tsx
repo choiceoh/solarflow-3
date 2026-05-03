@@ -16,12 +16,18 @@ export function Sparkline({
   area?: boolean;
 }) {
   if (!data || data.length === 0) return null;
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const pts = data.map((v, i) => [
-    (i / Math.max(data.length - 1, 1)) * (w - 2) + 1,
-    h - 1 - ((v - min) / range) * (h - 3),
+  // 단일 포인트는 polyline 으로 안 보이므로 양 끝 동일 값으로 평행선 처리.
+  const series = data.length === 1 ? [data[0]!, data[0]!] : data;
+  const min = Math.min(...series);
+  const max = Math.max(...series);
+  const range = max - min;
+  // range === 0: 스냅샷 메트릭 (시계열 없음) — 가운데 평행선으로 그린다.
+  const yOf = range > 0
+    ? (v: number) => h - 1 - ((v - min) / range) * (h - 3)
+    : () => h / 2;
+  const pts = series.map((v, i) => [
+    (i / Math.max(series.length - 1, 1)) * (w - 2) + 1,
+    yOf(v),
   ]);
   const line = pts.map((p) => `${p[0]},${p[1]}`).join(' ');
   return (

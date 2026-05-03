@@ -29,7 +29,7 @@ import {
   masterSources, enumDictionaries, actionHandlers, formSubmitters,
   applyFormatter, getFieldValue, generateMonths,
 } from './registry';
-import { autoSpark } from './autoSpark';
+import { flatSparkFromValue } from './sparkUtils';
 
 type Options = { value: string; label: string }[];
 
@@ -99,9 +99,9 @@ export function buildMetric(
     sub = m.sub;
   }
 
-  // 메트릭별 sparkComputer가 등록돼 있으면 그것을 쓰고, 없으면 라벨 해시 기반 generic 시드.
+  // 시계열이 있으면 sparkComputer로 실데이터 → 없으면 현재값 기반 평행선 (이전 = 현재 가정).
   const spark = m.spark === 'auto'
-    ? (sparkComputers[`spark.${m.computerId}`]?.(items) ?? autoSpark(m.label))
+    ? (sparkComputers[`spark.${m.computerId}`]?.(items) ?? flatSparkFromValue(value))
     : undefined;
 
   return { label: m.label, value, unit: m.unit, sub, tone, spark };

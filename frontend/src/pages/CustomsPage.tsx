@@ -19,7 +19,7 @@ import type { BLShipment } from '@/types/inbound';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { CardB, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
-import { autoSpark } from '@/templates/autoSpark';
+import { flatSpark, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
 
 function fmtEok(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0.00';
@@ -146,6 +146,10 @@ export default function CustomsPage() {
   const expenseTotal = expenses.reduce((sum, expense) => sum + (expense.total ?? expense.amount ?? 0), 0);
   const expenseVat = expenses.reduce((sum, expense) => sum + (expense.vat ?? 0), 0);
   const linkedExpenseCount = expenses.filter((expense) => expense.bl_id).length;
+  // KPI sparkline — Expense.month 기반 월별 집계 (없는 항목은 무시 → 평행선 대체).
+  const expenseDate = (e: typeof expenses[number]) => e.month ?? null;
+  const totalSpark = monthlyTrend(expenses, expenseDate, (e) => e.total ?? e.amount ?? 0);
+  const linkedSpark = monthlyCount(expenses.filter((e) => e.bl_id), expenseDate);
   const blExpenseMap = expenses.reduce<Record<string, number>>((acc, expense) => {
     const key = expense.bl_number ?? expense.bl_id ?? '미지정';
     acc[key] = (acc[key] ?? 0) + (expense.total ?? expense.amount ?? 0);
@@ -198,10 +202,10 @@ export default function CustomsPage() {
       <div className="sf-command-surface sf-customs-shell">
         <section className="sf-customs-main">
           <div className="sf-command-kpis sf-customs-kpis">
-            <TileB lbl="부대비용" v={fmtEok(expenseTotal)} u="억" sub={`${expenses.length}건 · VAT ${fmtEok(expenseVat)}억`} tone="solar" spark={autoSpark('부대비용')} />
-            <TileB lbl="B/L 연결" v={String(linkedExpenseCount)} u="건" sub={`전체 ${bls.length}개 B/L`} tone="info" spark={autoSpark('B/L 연결')} />
-            <TileB lbl="비용 유형" v={String(Object.keys(typeExpenseMap).length)} u="종" sub="운송·통관·LC 수수료" tone="warn" spark={autoSpark('비용 유형')} />
-            <TileB lbl="평균 비용" v={expenses.length ? fmtEok(expenseTotal / expenses.length) : '0.00'} u="억" sub="건당 평균" tone="ink" spark={autoSpark('평균 비용')} />
+            <TileB lbl="부대비용" v={fmtEok(expenseTotal)} u="억" sub={`${expenses.length}건 · VAT ${fmtEok(expenseVat)}억`} tone="solar" spark={totalSpark} />
+            <TileB lbl="B/L 연결" v={String(linkedExpenseCount)} u="건" sub={`전체 ${bls.length}개 B/L`} tone="info" spark={linkedSpark} />
+            <TileB lbl="비용 유형" v={String(Object.keys(typeExpenseMap).length)} u="종" sub="운송·통관·LC 수수료" tone="warn" spark={flatSpark(Object.keys(typeExpenseMap).length)} />
+            <TileB lbl="평균 비용" v={expenses.length ? fmtEok(expenseTotal / expenses.length) : '0.00'} u="억" sub="건당 평균" tone="ink" spark={flatSpark(expenses.length ? expenseTotal / expenses.length / 1e8 : 0)} />
           </div>
 
           <div data-onboarding-step="customs.declaration.attach">

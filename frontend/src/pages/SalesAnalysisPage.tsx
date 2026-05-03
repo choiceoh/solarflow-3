@@ -17,7 +17,7 @@ import type { SaleListItem } from '@/types/outbound';
 import type { CustomerAnalysis, CustomerItem } from '@/types/analysis';
 import type { Partner } from '@/types/masters';
 import { CardB, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
-import { autoSpark } from '@/templates/autoSpark';
+import { flatSpark, monthlyTrend } from '@/templates/sparkUtils';
 
 interface MarginItem {
   manufacturer_name: string;
@@ -333,6 +333,24 @@ export default function SalesAnalysisPage() {
     };
   }, [filteredSales]);
 
+  // KPI sparkline — 최근 8개월 실제 매출/세금 흐름.
+  const saleDate = (item: SaleListItem) => item.outbound_date ?? item.order_date ?? null;
+  const supplySpark = useMemo(
+    () => monthlyTrend(filteredSales, saleDate, (i) => i.sale.supply_amount ?? 0),
+    [filteredSales],
+  );
+  const totalSpark = useMemo(
+    () => monthlyTrend(filteredSales, saleDate, (i) => i.sale.total_amount ?? 0),
+    [filteredSales],
+  );
+  const issueRateSpark = useMemo(() => {
+    // total 과 issued 가 같은 데이터 범위(filteredSales 의 minMonth)를 공유하도록
+    // 동일 items 위에서 conditional getValue 로 계산 — 부분집합으로 분리하면 길이가 어긋남.
+    const totalByMonth = monthlyTrend(filteredSales, saleDate, () => 1);
+    const issuedByMonth = monthlyTrend(filteredSales, saleDate, (i) => (i.sale.tax_invoice_date ? 1 : 0));
+    return totalByMonth.map((t, i) => (t > 0 ? Math.round((issuedByMonth[i]! / t) * 100) : 0));
+  }, [filteredSales]);
+
   const margin = state.margin ?? emptyMargin;
   const customers = state.customers ?? emptyCustomers;
   const coveredCostCount = margin.items.filter((item) => item.avg_cost_wp != null).length;
@@ -408,10 +426,10 @@ export default function SalesAnalysisPage() {
       )}
 
       <div className="sf-command-kpis">
-        <TileB lbl="공급가 매출" v={(salesSummary.supply / 100000000).toFixed(2)} u="억" sub={`${formatNumber(salesSummary.count)}건`} tone="solar" spark={autoSpark('공급가 매출')} />
-        <TileB lbl="부가세 포함" v={(salesSummary.total / 100000000).toFixed(2)} u="억" sub="세금계산서 기준 합계" tone="ink" spark={autoSpark('부가세 포함')} />
-        <TileB lbl="계산서 발행률" v={String(salesSummary.issueRate)} u="%" sub={`${formatNumber(salesSummary.issued)}건 발행 / ${formatNumber(salesSummary.pending)}건 미발행`} tone="info" spark={autoSpark('계산서 발행률')} />
-        <TileB lbl="이익률" v={margin.summary.overall_margin_rate.toFixed(1)} u="%" sub={`${formatKRW(margin.summary.total_margin_krw)} · 원가 ${coveredCostCount}/${margin.items.length}건`} tone="pos" spark={autoSpark('이익률')} />
+        <TileB lbl="공급가 매출" v={(salesSummary.supply / 100000000).toFixed(2)} u="억" sub={`${formatNumber(salesSummary.count)}건`} tone="solar" spark={supplySpark} />
+        <TileB lbl="부가세 포함" v={(salesSummary.total / 100000000).toFixed(2)} u="억" sub="세금계산서 기준 합계" tone="ink" spark={totalSpark} />
+        <TileB lbl="계산서 발행률" v={String(salesSummary.issueRate)} u="%" sub={`${formatNumber(salesSummary.issued)}건 발행 / ${formatNumber(salesSummary.pending)}건 미발행`} tone="info" spark={issueRateSpark} />
+        <TileB lbl="이익률" v={margin.summary.overall_margin_rate.toFixed(1)} u="%" sub={`${formatKRW(margin.summary.total_margin_krw)} · 원가 ${coveredCostCount}/${margin.items.length}건`} tone="pos" spark={flatSpark(margin.summary.overall_margin_rate)} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
