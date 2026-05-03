@@ -47,22 +47,22 @@ function MenuVisibilityCard() {
   const { hidden, loading, setMenuHidden } = useMenuVisibility();
 
   return (
-    <article className="rounded-lg border bg-card p-6">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-md bg-muted p-2.5">
-          <Eye className="h-6 w-6 text-muted-foreground" />
+    <article className="rounded-lg border bg-card p-7">
+      <div className="flex items-start gap-4">
+        <div className="mt-0.5 rounded-md bg-muted p-3">
+          <Eye className="h-7 w-7 text-muted-foreground" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">메뉴 가시성</h2>
-            <span className="rounded bg-emerald-100 text-emerald-700 px-2 py-0.5 text-xs font-medium">활성</span>
+            <h2 className="text-xl font-semibold">메뉴 가시성</h2>
+            <span className="rounded bg-emerald-100 text-emerald-700 px-2.5 py-0.5 text-sm font-medium">활성</span>
           </div>
-          <p className="mt-2 text-base text-muted-foreground leading-7">
+          <p className="mt-2.5 text-lg text-muted-foreground leading-8">
             운영 검증이 끝나지 않은 미완 메뉴를 사이드바에서 숨길 수 있습니다. 변경은 모든 사용자에게 즉시 반영됩니다.
           </p>
 
           {wip.length === 0 ? (
-            <p className="mt-3 rounded bg-muted/50 px-3 py-2 text-base text-muted-foreground">
+            <p className="mt-3 rounded bg-muted/50 px-4 py-3 text-lg text-muted-foreground">
               현재 미완 표시된 메뉴가 없습니다 (코드의 NAV_GROUPS에서 `isWip: true` 부여 시 여기 노출).
             </p>
           ) : (
@@ -70,10 +70,10 @@ function MenuVisibilityCard() {
               {wip.map((item) => {
                 const isHidden = hidden.has(item.key);
                 return (
-                  <li key={item.key} className="flex items-center justify-between px-5 py-4">
+                  <li key={item.key} className="flex items-center justify-between px-6 py-5">
                     <div>
-                      <p className="text-lg font-medium">{item.label}</p>
-                      <p className="text-sm text-muted-foreground">{isHidden ? '사이드바에서 숨겨짐' : '사이드바에 노출 중'}</p>
+                      <p className="text-xl font-medium">{item.label}</p>
+                      <p className="text-base text-muted-foreground">{isHidden ? '사이드바에서 숨겨짐' : '사이드바에 노출 중'}</p>
                     </div>
                     <Switch
                       checked={!isHidden}
@@ -105,22 +105,22 @@ export default function SitePlaceholderPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl space-y-4">
+      <div className="mx-auto max-w-screen-2xl space-y-5">
         <SidebarTabsCard />
         <MenuVisibilityCard />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {PLANNED.map((item) => (
-            <article key={item.title} className="rounded-lg border bg-card p-6">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-md bg-muted p-2.5">
-                  <item.icon className="h-6 w-6 text-muted-foreground" />
+            <article key={item.title} className="rounded-lg border bg-card p-7">
+              <div className="flex items-start gap-4">
+                <div className="mt-0.5 rounded-md bg-muted p-3">
+                  <item.icon className="h-7 w-7 text-muted-foreground" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-semibold">{item.title}</h2>
-                    <span className="rounded bg-gray-100 text-gray-600 px-2 py-0.5 text-xs font-medium">준비 중</span>
+                    <h2 className="text-xl font-semibold">{item.title}</h2>
+                    <span className="rounded bg-gray-100 text-gray-600 px-2.5 py-0.5 text-sm font-medium">준비 중</span>
                   </div>
-                  <p className="mt-2 text-base text-muted-foreground leading-7">{item.desc}</p>
+                  <p className="mt-2.5 text-lg text-muted-foreground leading-8">{item.desc}</p>
                 </div>
               </div>
             </article>

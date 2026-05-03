@@ -178,15 +178,15 @@ export default function PersonalSettingsPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-screen-2xl space-y-7">
         <section className="rounded-lg border bg-card">
-          <header className="flex items-center justify-between gap-3 px-6 py-5 border-b bg-muted/30">
+          <header className="flex items-center justify-between gap-3 px-7 py-6 border-b bg-muted/30">
             <div>
-              <h2 className="text-lg font-semibold">내 프로필</h2>
-              <p className="text-base text-muted-foreground">{user.email} · {ROLE_LABELS[user.role as Role] ?? user.role}</p>
+              <h2 className="text-xl font-semibold">내 프로필</h2>
+              <p className="text-lg text-muted-foreground">{user.email} · {ROLE_LABELS[user.role as Role] ?? user.role}</p>
             </div>
           </header>
-          <form onSubmit={handleProfileSave} className="p-6 space-y-5">
+          <form onSubmit={handleProfileSave} className="p-7 space-y-6">
             <div className="space-y-2">
               <Label htmlFor="me-name">이름</Label>
               <Input
@@ -227,11 +227,11 @@ export default function PersonalSettingsPage() {
         </section>
 
         <section className="rounded-lg border bg-card">
-          <header className="px-6 py-5 border-b bg-muted/30">
-            <h2 className="text-lg font-semibold">표시 단위</h2>
-            <p className="text-base text-muted-foreground">금액·용량 표시 방식을 선택합니다. 입력 필드는 항상 원/EA 단위입니다.</p>
+          <header className="px-7 py-6 border-b bg-muted/30">
+            <h2 className="text-xl font-semibold">표시 단위</h2>
+            <p className="text-lg text-muted-foreground">금액·용량 표시 방식을 선택합니다. 입력 필드는 항상 원/EA 단위입니다.</p>
           </header>
-          <form onSubmit={handlePrefsSave} className="p-6 space-y-5">
+          <form onSubmit={handlePrefsSave} className="p-7 space-y-6">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="pref-amount">금액 단위</Label>
@@ -271,7 +271,7 @@ export default function PersonalSettingsPage() {
               </div>
             </div>
 
-            <label htmlFor="pref-show-ea" className="flex cursor-pointer items-center gap-2 text-sm">
+            <label htmlFor="pref-show-ea" className="flex cursor-pointer items-center gap-2.5 text-base">
               <Checkbox
                 id="pref-show-ea"
                 checked={draftPrefs.show_ea}
@@ -280,11 +280,11 @@ export default function PersonalSettingsPage() {
               <span>모듈 장수(EA) 동시 표시</span>
             </label>
 
-            <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-              <div className="text-sm font-medium text-muted-foreground">미리보기 (저장 전 즉시 반영)</div>
-              <div className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+            <div className="rounded-md border bg-muted/30 p-4 space-y-2">
+              <div className="text-base font-medium text-muted-foreground">미리보기 (저장 전 즉시 반영)</div>
+              <div className="grid grid-cols-1 gap-1 text-base sm:grid-cols-2">
                 <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">금액</div>
+                  <div className="text-base text-muted-foreground">금액</div>
                   {PREVIEW_AMOUNTS.map((amount) => (
                     <div key={amount} className="font-mono">
                       <span className="text-muted-foreground">{amount.toLocaleString('ko-KR')}원 → </span>
@@ -293,7 +293,7 @@ export default function PersonalSettingsPage() {
                   ))}
                 </div>
                 <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">용량</div>
+                  <div className="text-base text-muted-foreground">용량</div>
                   {PREVIEW_CAPACITIES.map(({ kw, ea }) => (
                     <div key={kw} className="font-mono">
                       <span className="text-muted-foreground">{kw.toLocaleString('ko-KR')}kW / {ea.toLocaleString('ko-KR')}EA → </span>
@@ -318,11 +318,11 @@ export default function PersonalSettingsPage() {
         </section>
 
         <section className="rounded-lg border bg-card">
-          <header className="px-6 py-5 border-b bg-muted/30">
-            <h2 className="text-lg font-semibold">비밀번호 변경</h2>
-            <p className="text-base text-muted-foreground">8자 이상의 새 비밀번호를 입력하세요.</p>
+          <header className="px-7 py-6 border-b bg-muted/30">
+            <h2 className="text-xl font-semibold">비밀번호 변경</h2>
+            <p className="text-lg text-muted-foreground">8자 이상의 새 비밀번호를 입력하세요.</p>
           </header>
-          <form onSubmit={handlePasswordChange} className="p-6 space-y-5">
+          <form onSubmit={handlePasswordChange} className="p-7 space-y-6">
             <div className="space-y-2">
               <Label htmlFor="me-pw-current">현재 비밀번호</Label>
               <Input
