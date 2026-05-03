@@ -24,15 +24,16 @@ import (
 // 비유: "내 인사카드" — 로그인한 사용자의 프로필 정보
 // 컬럼명은 실제 DB 기준 (D-055 참조)
 type UserProfileResponse struct {
-	UserID     string  `json:"user_id"`
-	Email      string  `json:"email"`
-	Name       string  `json:"name"`
-	Role       string  `json:"role"`
-	Department *string `json:"department"`
-	Phone      *string `json:"phone"`
-	AvatarURL  *string `json:"avatar_url"`
-	IsActive   bool    `json:"is_active"`
-	Persona    *string `json:"persona"` // D-112: 사이드바 탭 key. NULL이면 default_tab fallback
+	UserID      string                 `json:"user_id"`
+	Email       string                 `json:"email"`
+	Name        string                 `json:"name"`
+	Role        string                 `json:"role"`
+	Department  *string                `json:"department"`
+	Phone       *string                `json:"phone"`
+	AvatarURL   *string                `json:"avatar_url"`
+	IsActive    bool                   `json:"is_active"`
+	Persona     *string                `json:"persona"` // D-112: 사이드바 탭 key. NULL이면 default_tab fallback
+	Preferences map[string]interface{} `json:"preferences"`
 }
 
 // UserHandler — 사용자 관련 핸들러
@@ -57,7 +58,7 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	email := middleware.GetUserEmail(r.Context())
 
 	data, _, err := h.DB.From("user_profiles").
-		Select("user_id, email, name, role, department, phone, avatar_url, is_active, persona", "exact", false).
+		Select("user_id, email, name, role, department, phone, avatar_url, is_active, persona, preferences", "exact", false).
 		Eq("user_id", userID).
 		Execute()
 	if err != nil {
@@ -605,6 +606,47 @@ func (h *UserHandler) UpdateMyPersona(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[users/me] persona 저장 실패: id=%s, err=%v", userID, err)
 		response.RespondError(w, http.StatusInternalServerError, "사이드바 탭 저장에 실패했습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, statusOKResponse{Status: "ok"})
+}
+
+// UpdateMyPreferencesRequest — 본인 환경설정(JSONB) 갱신 요청
+// 키 화이트리스트로 검증하지 않음 — 프론트가 보낸 객체 전체를 그대로 저장 (스키마 유연성).
+type UpdateMyPreferencesRequest struct {
+	Preferences map[string]interface{} `json:"preferences"`
+}
+
+// userProfilePreferencesUpdate — preferences 컬럼만 갱신하는 payload
+type userProfilePreferencesUpdate struct {
+	Preferences map[string]interface{} `json:"preferences"`
+}
+
+// UpdateMyPreferences — 본인 환경설정(표시 단위 등) 저장 (인증된 모든 사용자)
+func (h *UserHandler) UpdateMyPreferences(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		response.RespondError(w, http.StatusUnauthorized, "인증이 필요합니다")
+		return
+	}
+
+	var body UpdateMyPreferencesRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.RespondError(w, http.StatusBadRequest, "요청 형식 오류")
+		return
+	}
+	if body.Preferences == nil {
+		body.Preferences = map[string]interface{}{}
+	}
+
+	payload := userProfilePreferencesUpdate{Preferences: body.Preferences}
+	_, _, err := h.DB.From("user_profiles").
+		Update(payload, "", "exact").
+		Eq("user_id", userID).
+		Execute()
+	if err != nil {
+		log.Printf("[users/me/preferences] 저장 실패: id=%s, err=%v", userID, err)
+		response.RespondError(w, http.StatusInternalServerError, "환경설정 저장에 실패했습니다")
 		return
 	}
 	response.RespondJSON(w, http.StatusOK, statusOKResponse{Status: "ok"})

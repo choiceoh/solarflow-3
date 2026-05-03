@@ -226,6 +226,7 @@ PUT     /api/v1/ui-configs/{scope}/{config_id}
 PUT     /api/v1/users/me
 PUT     /api/v1/users/me/password
 PUT     /api/v1/users/me/persona
+PUT     /api/v1/users/me/preferences
 PUT     /api/v1/users/{id}
 PUT     /api/v1/users/{id}/active
 PUT     /api/v1/users/{id}/password

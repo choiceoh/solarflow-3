@@ -57,6 +57,7 @@ const DEV_MOCK_PROFILE_TOPSOLAR: UserProfile = {
   avatar_url: null,
   is_active: true,
   persona: null,
+  preferences: null,
 };
 
 const DEV_MOCK_PROFILE_BARO: UserProfile = {
@@ -69,6 +70,7 @@ const DEV_MOCK_PROFILE_BARO: UserProfile = {
   avatar_url: null,
   is_active: true,
   persona: null,
+  preferences: null,
 };
 
 export function getDevMockProfile(): UserProfile {
