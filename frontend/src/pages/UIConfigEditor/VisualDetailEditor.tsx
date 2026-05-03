@@ -6,13 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Settings2, Trash2 } from 'lucide-react';
 import type { DetailFieldConfig, DetailFormatter, DetailSectionConfig, DetailTabConfig, MetaDetailConfig } from '@/templates/types';
 import { buildRegistryEntries, cellRenderers, cellRendererMeta, contentBlocks, contentBlockMeta, enumDictionaries } from '@/templates/registry';
 import { FieldInput, FieldSelect, TabButton, moveInArray } from './ArrayEditor';
 import { EditorWithPanel, PanelGroup, PanelSelectionHeader, PanelEmpty } from './RightPanel';
 import { TabsEditor } from './TabsEditor';
-import { BooleanPicker, EndpointPicker, IdFieldPicker, RegistryIdPicker } from './Pickers';
+import { BooleanPicker, EndpointPicker, IdFieldPicker, InlineEditOptionsPicker, InlineEditTypePicker, RegistryIdPicker } from './Pickers';
 
 const FORMATTER_OPTIONS = [
   { value: 'date', label: 'date' },
@@ -50,9 +50,15 @@ export default function VisualDetailEditor({
   const [tab, setTab] = useState<Tab>('basic');
   // Phase 4 메타 인프라: tabs[] 편집 시 선택된 탭 (selection-driven 우측 패널).
   const [selectedTabIdx, setSelectedTabIdx] = useState<number | null>(null);
+  // Phase 4 follow-up #1: sections 의 detailField 선택 (selection-driven 우측 패널).
+  const [selectedDetailField, setSelectedDetailField] = useState<{ sec: number; field: number } | null>(null);
   const sections = value.sections ?? [];
   const fieldCount = sections.reduce((s, sec) => s + (sec.fields?.length ?? 0), 0);
   const tabs = value.tabs ?? [];
+
+  const selectedDetailFieldConfig = selectedDetailField
+    ? sections[selectedDetailField.sec]?.fields?.[selectedDetailField.field]
+    : null;
 
   const main = (
     <div className="flex flex-col h-full min-h-0">
@@ -69,7 +75,13 @@ export default function VisualDetailEditor({
 
       <div className="flex-1 min-h-0 overflow-auto p-4">
         {tab === 'basic' && <BasicTab value={value} onChange={onChange} />}
-        {tab === 'sections' && <SectionsTab value={value} onChange={onChange} />}
+        {tab === 'sections' && (
+          <SectionsTab
+            value={value}
+            onChange={onChange}
+            onSelectDetailField={(sec, field) => setSelectedDetailField({ sec, field })}
+          />
+        )}
         {tab === 'tabs' && (
           <TabsTab
             value={value}
@@ -90,8 +102,24 @@ export default function VisualDetailEditor({
     </div>
   );
 
-  // 우측 패널 — 탭 모드일 때 선택된 탭 메타, 아니면 detail-level inlineEdit
-  const panel = tab === 'tabs' && selectedTabIdx !== null && tabs[selectedTabIdx]
+  // 우측 패널 — 우선순위: detailField 선택 > 탭 선택 > detail-level
+  const panel = selectedDetailFieldConfig
+    ? (
+      <DetailFieldPanel
+        field={selectedDetailFieldConfig}
+        onChange={(next) => {
+          if (!selectedDetailField) return;
+          const newSections = sections.map((s, sIdx) => {
+            if (sIdx !== selectedDetailField.sec) return s;
+            const newFields = (s.fields ?? []).map((f, fIdx) => fIdx === selectedDetailField.field ? next : f);
+            return { ...s, fields: newFields };
+          });
+          onChange({ ...value, sections: newSections });
+        }}
+        onBack={() => setSelectedDetailField(null)}
+      />
+    )
+    : tab === 'tabs' && selectedTabIdx !== null && tabs[selectedTabIdx]
     ? (
       <SelectedTabPanel
         tab={tabs[selectedTabIdx]}
@@ -104,11 +132,75 @@ export default function VisualDetailEditor({
     )
     : <DetailLevelPanel value={value} onChange={onChange} />;
 
-  const panelTitle = tab === 'tabs' && selectedTabIdx !== null
+  const panelTitle = selectedDetailFieldConfig
+    ? `선택: ${selectedDetailFieldConfig.label || selectedDetailFieldConfig.key}`
+    : tab === 'tabs' && selectedTabIdx !== null
     ? `선택: ${tabs[selectedTabIdx]?.label ?? ''}`
     : '⚙ 상세 화면 설정';
 
   return <EditorWithPanel panel={panel} panelTitle={panelTitle}>{main}</EditorWithPanel>;
+}
+
+// ─── 우측 패널: 선택된 detailField 의 L3/L4 ────────────────────────────────
+function DetailFieldPanel({
+  field, onChange, onBack,
+}: {
+  field: import('@/templates/types').DetailFieldConfig;
+  onChange: (next: import('@/templates/types').DetailFieldConfig) => void;
+  onBack: () => void;
+}) {
+  return (
+    <>
+      <PanelSelectionHeader
+        title={field.label || field.key}
+        subtitle={field.key}
+        onBack={onBack}
+      />
+      <PanelGroup title="인라인 편집 (필드 클릭)">
+        <BooleanPicker
+          label="inlineEditable"
+          value={field.inlineEditable ?? false}
+          onChange={(v) => onChange({ ...field, inlineEditable: v || undefined })}
+          hint="MetaDetailConfig.inlineEdit.enabled 도 활성화 필요"
+        />
+        {field.inlineEditable && (
+          <>
+            <InlineEditTypePicker
+              value={field.inlineEditType}
+              onChange={(v) => onChange({ ...field, inlineEditType: v as import('@/templates/types').DetailFieldConfig['inlineEditType'] })}
+            />
+            {field.inlineEditType === 'select' && (
+              <InlineEditOptionsPicker
+                value={field.inlineEditOptions}
+                onChange={(v) => onChange({ ...field, inlineEditOptions: v })}
+              />
+            )}
+          </>
+        )}
+      </PanelGroup>
+      <PanelGroup title="조건부 노출 (visibleIf)" defaultOpen={false}>
+        <FieldInput
+          label="field (의존)"
+          value={field.visibleIf?.field ?? ''}
+          onChange={(v) => onChange({
+            ...field,
+            visibleIf: v ? { ...(field.visibleIf ?? { value: '' }), field: v } : undefined,
+          })}
+          mono
+        />
+        <FieldInput
+          label="value (콤마 = 다중)"
+          value={Array.isArray(field.visibleIf?.value) ? field.visibleIf!.value.join(',') : (field.visibleIf?.value ?? '')}
+          onChange={(v) => {
+            if (!field.visibleIf?.field) return;
+            const value = v.includes(',') ? v.split(',').map(s => s.trim()).filter(Boolean) : v;
+            onChange({ ...field, visibleIf: { ...field.visibleIf, value } });
+          }}
+        />
+      </PanelGroup>
+      <PanelEmpty message="key/label/formatter/span 은 해당 필드 행에서 직접 편집" />
+    </>
+  );
 }
 
 // ─── 탭 편집 sub-tab ──────────────────────────────────────────────────────
@@ -296,7 +388,11 @@ function BasicTab({ value, onChange }: { value: MetaDetailConfig; onChange: (nex
   );
 }
 
-function SectionsTab({ value, onChange }: { value: MetaDetailConfig; onChange: (next: MetaDetailConfig) => void }) {
+function SectionsTab({ value, onChange, onSelectDetailField }: {
+  value: MetaDetailConfig;
+  onChange: (next: MetaDetailConfig) => void;
+  onSelectDetailField?: (sectionIdx: number, fieldIdx: number) => void;
+}) {
   const sections = value.sections ?? [];
   const blockOptions = useMemo(() => Object.keys(contentBlocks).sort().map((id) => ({ value: id, label: id })), []);
 
@@ -329,6 +425,7 @@ function SectionsTab({ value, onChange }: { value: MetaDetailConfig; onChange: (
             onMoveUp={() => onChange({ ...value, sections: moveInArray(sections, sIdx, -1) })}
             onMoveDown={() => onChange({ ...value, sections: moveInArray(sections, sIdx, 1) })}
             onRemove={() => onChange({ ...value, sections: sections.filter((_, i) => i !== sIdx) })}
+            onSelectField={onSelectDetailField ? (fIdx) => onSelectDetailField(sIdx, fIdx) : undefined}
           />
         ))}
         {sections.length === 0 && (
@@ -342,7 +439,7 @@ function SectionsTab({ value, onChange }: { value: MetaDetailConfig; onChange: (
 }
 
 function SectionCard({
-  section, index, total, blockOptions, onUpdate, onMoveUp, onMoveDown, onRemove,
+  section, index, total, blockOptions, onUpdate, onMoveUp, onMoveDown, onRemove, onSelectField,
 }: {
   section: DetailSectionConfig;
   index: number;
@@ -352,6 +449,7 @@ function SectionCard({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onRemove: () => void;
+  onSelectField?: (fIdx: number) => void;
 }) {
   const enumOpts = useMemo(() => Object.keys(enumDictionaries).sort().map((id) => ({ value: id, label: id })), []);
   const rendererEntries = useMemo(() => buildRegistryEntries(cellRenderers, cellRendererMeta), []);
@@ -456,7 +554,14 @@ function SectionCard({
                   <FieldInput label="fallback (빈 값, 기본 '—')" value={field.fallback ?? ''}
                     onChange={(v) => updateField(fIdx, { ...field, fallback: v || undefined })} />
                 </div>
-                <div className="col-span-1 flex justify-end">
+                <div className="col-span-1 flex flex-col items-end gap-0.5">
+                  {onSelectField && (
+                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6"
+                      onClick={() => onSelectField(fIdx)}
+                      title="우측 패널에서 inlineEditable·visibleIf 편집">
+                      <Settings2 className="h-3 w-3" />
+                    </Button>
+                  )}
                   <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
                     onClick={() => onUpdate({ ...section, fields: fields.filter((_, i) => i !== fIdx) })}>
                     <Trash2 className="h-3 w-3" />

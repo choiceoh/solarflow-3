@@ -6,15 +6,15 @@ import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import type { ListScreenConfig } from '@/templates/types';
+import type { ColumnConfig, ListScreenConfig } from '@/templates/types';
 import { TabButton, FieldInput } from './ArrayEditor';
 import { ColumnsTab } from './ColumnsTab';
 import { MetricsTab } from './MetricsTab';
 import { FiltersTab } from './FiltersTab';
 import { ActionsTab } from './ActionsTab';
 import { RailTab } from './RailTab';
-import { EditorWithPanel, PanelGroup } from './RightPanel';
-import { BooleanPicker, EndpointPicker, IdFieldPicker, AllowedSizesPicker } from './Pickers';
+import { EditorWithPanel, PanelGroup, PanelSelectionHeader } from './RightPanel';
+import { BooleanPicker, EndpointPicker, IdFieldPicker, AllowedSizesPicker, InlineEditTypePicker, InlineEditOptionsPicker } from './Pickers';
 
 type Tab = 'basic' | 'metrics' | 'filters' | 'columns' | 'actions' | 'rail' | 'json';
 
@@ -29,6 +29,9 @@ export default function VisualScreenEditor({
   value, onChange, jsonDraft, onJsonDraftChange,
 }: VisualScreenEditorProps) {
   const [tab, setTab] = useState<Tab>('basic');
+  // Phase 4 follow-up #1: 선택된 컬럼 idx (selection-driven 우측 패널)
+  const [selectedColumnIdx, setSelectedColumnIdx] = useState<number | null>(null);
+  const selectedColumn = selectedColumnIdx !== null ? value.columns[selectedColumnIdx] : null;
 
   const main = (
     <div className="flex flex-col h-full min-h-0">
@@ -56,7 +59,7 @@ export default function VisualScreenEditor({
         {tab === 'basic' && <BasicTab value={value} onChange={onChange} />}
         {tab === 'metrics' && <MetricsTab value={value} onChange={onChange} />}
         {tab === 'filters' && <FiltersTab value={value} onChange={onChange} />}
-        {tab === 'columns' && <ColumnsTab value={value} onChange={onChange} />}
+        {tab === 'columns' && <ColumnsTab value={value} onChange={onChange} onSelectColumn={setSelectedColumnIdx} />}
         {tab === 'actions' && <ActionsTab value={value} onChange={onChange} />}
         {tab === 'rail' && <RailTab value={value} onChange={onChange} />}
         {tab === 'json' && (
@@ -71,13 +74,90 @@ export default function VisualScreenEditor({
     </div>
   );
 
+  // 우측 패널 — 컬럼 선택 시 selection-driven, 아니면 list-level
+  const panel = selectedColumn
+    ? (
+      <ColumnPanel
+        col={selectedColumn}
+        onChange={(next) => onChange({
+          ...value,
+          columns: value.columns.map((c, i) => i === selectedColumnIdx ? next : c),
+        })}
+        onBack={() => setSelectedColumnIdx(null)}
+      />
+    )
+    : <ListLevelPanel value={value} onChange={onChange} />;
+
+  const panelTitle = selectedColumn
+    ? `선택: ${selectedColumn.label}`
+    : '⚙ 리스트 화면 설정';
+
+  return <EditorWithPanel panel={panel} panelTitle={panelTitle}>{main}</EditorWithPanel>;
+}
+
+// ─── 우측 패널: 선택된 컬럼의 L3/L4 (selection-driven) ─────────────────────
+// Phase 4 follow-up #1 — Q8-B 풀 구현. 컬럼 행 ⚙ 클릭 → 이 패널로 전환.
+function ColumnPanel({
+  col, onChange, onBack,
+}: {
+  col: ColumnConfig;
+  onChange: (next: ColumnConfig) => void;
+  onBack: () => void;
+}) {
   return (
-    <EditorWithPanel
-      panel={<ListLevelPanel value={value} onChange={onChange} />}
-      panelTitle="⚙ 리스트 화면 설정"
-    >
-      {main}
-    </EditorWithPanel>
+    <>
+      <PanelSelectionHeader title={col.label || col.key} subtitle={`key: ${col.key}`} onBack={onBack} />
+      <PanelGroup title="기본">
+        <FieldInput label="key" value={col.key} mono onChange={(v) => onChange({ ...col, key: v })} />
+        <FieldInput label="label" value={col.label} onChange={(v) => onChange({ ...col, label: v })} />
+        <FieldInput label="width (예: 120px)" value={col.width ?? ''} mono
+          onChange={(v) => onChange({ ...col, width: v || undefined })} />
+        <FieldInput label="fallback (빈 값, 기본 '—')" value={col.fallback ?? ''}
+          onChange={(v) => onChange({ ...col, fallback: v || undefined })} />
+      </PanelGroup>
+      <PanelGroup title="가시성·정렬" defaultOpen={false}>
+        <BooleanPicker
+          label="sortable"
+          value={col.sortable ?? false}
+          onChange={(v) => onChange({ ...col, sortable: v || undefined })}
+          hint="헤더 클릭 → asc → desc → 해제"
+        />
+        <BooleanPicker
+          label="hideable"
+          value={col.hideable ?? false}
+          onChange={(v) => onChange({ ...col, hideable: v || undefined })}
+          hint="컬럼 가시성 메뉴에 노출"
+        />
+        <BooleanPicker
+          label="hiddenByDefault"
+          value={col.hiddenByDefault ?? false}
+          onChange={(v) => onChange({ ...col, hiddenByDefault: v || undefined })}
+          hint="처음 페이지 진입 시 숨김 (admin 이 toggle 로 표시)"
+        />
+      </PanelGroup>
+      <PanelGroup title="인라인 편집 (셀 클릭)" defaultOpen={false}>
+        <BooleanPicker
+          label="inlineEditable"
+          value={col.inlineEditable ?? false}
+          onChange={(v) => onChange({ ...col, inlineEditable: v || undefined })}
+          hint="ListScreenConfig.inlineEdit.enabled 도 활성화 필요"
+        />
+        {col.inlineEditable && (
+          <>
+            <InlineEditTypePicker
+              value={col.inlineEditType}
+              onChange={(v) => onChange({ ...col, inlineEditType: v as ColumnConfig['inlineEditType'] })}
+            />
+            {col.inlineEditType === 'select' && (
+              <InlineEditOptionsPicker
+                value={col.inlineEditOptions}
+                onChange={(v) => onChange({ ...col, inlineEditOptions: v })}
+              />
+            )}
+          </>
+        )}
+      </PanelGroup>
+    </>
   );
 }
 
