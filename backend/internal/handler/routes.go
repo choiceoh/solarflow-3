@@ -412,6 +412,8 @@ func (h *OutboundHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Get("/", h.List)
 		r.Get("/summary", h.Summary)
 		r.Get("/{id}", h.GetByID)
+		// D-064 PR 29: ERP FIFO 매칭(입고 LOT ↔ 출고) 라인 + 합계
+		r.Get("/{id}/fifo-matches", h.FifoMatches)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
 		r.With(g.Write).Delete("/{id}", h.Delete)

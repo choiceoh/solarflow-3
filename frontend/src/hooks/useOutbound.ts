@@ -4,6 +4,7 @@ import { useAppStore } from '@/stores/appStore';
 import { companyParams } from '@/lib/companyUtils';
 import { useListQuery, useDetailQuery } from '@/lib/queryHelpers';
 import type { Outbound, SaleListItem } from '@/types/outbound';
+import type { OutboundFifoMatchesResponse } from '@/types/fifo';
 
 // 청크 누적 페이지네이션 — server mode 미도입 화면(예: OrdersPage 출고 탭)이
 // 옛 동작(전체 출고를 한 번에 받음) 을 유지하기 위한 호환 헬퍼.
@@ -162,6 +163,16 @@ export function useOutboundDetail(outboundId: string | null) {
   return useDetailQuery<Outbound>(
     ['outbound', outboundId],
     () => fetchWithAuth<Outbound>(`/api/v1/outbounds/${outboundId}`),
+    { enabled: !!outboundId },
+  );
+}
+
+// D-064 PR 29: 출고 한 건의 FIFO 매칭 (입고 LOT ↔ 출고 배분 + 원가/이익).
+// fifo_matches 가 0 인 출고도 정상 — 응답 매치 빈 배열.
+export function useOutboundFifoMatches(outboundId: string | null) {
+  return useDetailQuery<OutboundFifoMatchesResponse>(
+    ['outbound-fifo-matches', outboundId],
+    () => fetchWithAuth<OutboundFifoMatchesResponse>(`/api/v1/outbounds/${outboundId}/fifo-matches`),
     { enabled: !!outboundId },
   );
 }

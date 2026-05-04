@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 
 	"solarflow-backend/internal/app"
 	"solarflow-backend/internal/handler"
@@ -24,7 +25,13 @@ func New(a *app.App) http.Handler {
 // 직접 주입하는 stub auth를 사용하기 위해 분리. 운영 코드에서는 New(a)를 쓴다.
 func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
+	// gzip 압축 — 가장 바깥(첫 Use)에 두어 RequestLog 의 statusCapturer 가 raw 바이트로
+	// body_sha 를 계산하도록 한다. D-122 traffic replay diff 의 응답 동등성 비교 호환성 유지.
+	// 기본 content-type 화이트리스트(application/json, text/* 등)에만 적용되므로
+	// SSE(text/event-stream) 와 첨부 다운로드는 자동 제외.
+	r.Use(chimw.Compress(5))
 	r.Use(middleware.RequestLog)
+	r.Use(middleware.Metrics)
 	r.Use(middleware.CORSMiddleware)
 	r.Get("/health", handler.HealthCheck)
 

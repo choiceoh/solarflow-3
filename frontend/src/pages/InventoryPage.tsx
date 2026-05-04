@@ -117,6 +117,10 @@ export default function InventoryPage() {
   const storeManufacturers = useAppStore((s) => s.manufacturers);
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
   const manufacturers = useMemo(() => sortManufacturers(storeManufacturers), [storeManufacturers]);
+  // D-064 PR 31: products.safety_stock 비교용 — 미달 행 amber 강조
+  const products = useAppStore((s) => s.products);
+  const loadProductsStore = useAppStore((s) => s.loadProducts);
+  useEffect(() => { loadProductsStore(); }, [loadProductsStore]);
   const [mfgFilter, setMfgFilter] = useState<string>('');
   const [wpFilter, setWpFilter] = useState<string>('');
   const [longTermFilter, setLongTermFilter] = useState<LongTermFilter>(() => getLongTermFilter(new URLSearchParams(location.search).get('long_term_status')));
@@ -663,6 +667,7 @@ export default function InventoryPage() {
               <AvailInventoryTable
                 items={invData.items}
                 allocations={visibleAllocs}
+                products={products}
                 onNewAlloc={(productId) => openAllocationForm(productId)}
                 onEdit={(alloc) => { setEditingAlloc(alloc); setPrefilledProductId(undefined); setAllocFormOpen(true); }}
                 onConfirm={handleConfirmAlloc}
