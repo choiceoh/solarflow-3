@@ -77,6 +77,7 @@ const (
 	IDMasterBank             FeatureID = "master.bank"
 	IDMasterCompany          FeatureID = "master.company"
 	IDMasterCompanyAlias     FeatureID = "master.company_alias"
+	IDMasterPartnerAlias     FeatureID = "master.partner_alias"
 	IDMasterManufacturer     FeatureID = "master.manufacturer"
 	IDMasterPartner          FeatureID = "master.partner"
 	IDMasterPartnerAlias     FeatureID = "master.partner_alias"
@@ -186,6 +187,11 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDMasterCompanyAlias, Name: "법인 별칭", Description: "법인명 별칭 매핑(외부 양식 변환기 매핑)",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{"/api/v1/company-aliases/"},
+	},
+	IDMasterPartnerAlias: {
+		ID: IDMasterPartnerAlias, Name: "거래처 별칭", Description: "거래처명 별칭 매핑(외부 양식 변환기 매핑)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/partner-aliases/"},
 	},
 	IDMasterManufacturer: {
 		ID: IDMasterManufacturer, Name: "제조사 마스터", Description: "제조사 마스터 CRUD",
