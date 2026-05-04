@@ -7,7 +7,7 @@
  *
  * 클릭 동작 = 입력창 채우기만 (자동 전송 X) — 사용자가 PO 번호 등 가변 부분을 다듬어 보낼 여지.
  *
- * 페이지 라벨도 함께 — KNOWN_CONFIGS 에 없는 비메타 페이지(/procurement, /inventory 등)도 라벨 제공.
+ * 페이지 라벨도 여기서 단일 정본으로 관리한다 (D-120 이후 KNOWN_CONFIGS 폐기).
  */
 
 export interface ChipDef {
@@ -53,13 +53,6 @@ const PAGE_MAP: Record<string, PageEntry> = {
       { text: '진행 중 수주 합계', icon: '📦' },
     ],
   },
-  '/outbound-v2': {
-    label: '출고/판매',
-    chips: [
-      { text: '이번 주 출고 예정', icon: '🚚' },
-      { text: '미수금 출고 건', icon: '💰' },
-    ],
-  },
   '/lc': {
     label: 'L/C 개설',
     chips: [
@@ -93,13 +86,6 @@ const PAGE_MAP: Record<string, PageEntry> = {
     chips: [
       { text: '이번 달 매출 요약', icon: '💹' },
       { text: '거래처별 매출 TOP 5', icon: '🏆' },
-    ],
-  },
-  '/masters/partners-v2': {
-    label: '거래처 마스터',
-    chips: [
-      { text: '거래처 유형 분포', icon: '📊' },
-      { text: '중복 거래처 찾아줘', icon: '🔍' },
     ],
   },
 };
