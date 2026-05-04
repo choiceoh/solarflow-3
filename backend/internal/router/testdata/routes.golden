@@ -156,6 +156,7 @@ POST    /api/v1/assistant/chat
 POST    /api/v1/assistant/match/receipts/auto
 POST    /api/v1/assistant/ocr/extract
 POST    /api/v1/assistant/sessions
+POST    /api/v1/assistant/sessions/{id}/summarize-title
 POST    /api/v1/attachments/
 POST    /api/v1/banks/
 POST    /api/v1/baro/dispatch-routes/
