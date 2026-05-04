@@ -170,6 +170,11 @@ function BasicTab({ value, onChange }: { value: TabbedListConfig; onChange: (nex
         <Textarea rows={2} value={page.description}
           onChange={(e) => onChange({ ...value, page: { ...page, description: e.target.value } })} />
       </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">aiHint <span className="text-muted-foreground">(AI 어시스턴트 전용 — 사용자 안 보임)</span></Label>
+        <Textarea rows={2} value={page.aiHint ?? ''}
+          onChange={(e) => onChange({ ...value, page: { ...page, aiHint: e.target.value || undefined } })} />
+      </div>
       <p className="text-xs text-muted-foreground">
         공통 메트릭·Rail 편집은 JSON 탭에서. 같은 패턴으로 별도 탭 가능 (follow-up).
       </p>

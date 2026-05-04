@@ -360,6 +360,19 @@ function DetailFieldPanel({
           }}
         />
       </PanelGroup>
+      <PanelGroup title="도움말 (description / aiHint)" defaultOpen={false}>
+        <FieldInput
+          label="description (라벨 옆 도움말)"
+          value={field.description ?? ''}
+          onChange={(v) => onChange({ ...field, description: v || undefined })}
+        />
+        <FieldInput
+          label="aiHint (AI 전용)"
+          value={field.aiHint ?? ''}
+          onChange={(v) => onChange({ ...field, aiHint: v || undefined })}
+          hint="사용자 안 보임 — AI 시스템 프롬프트에만 첨부"
+        />
+      </PanelGroup>
       <PanelEmpty message="key/label/formatter/span 은 해당 필드 행에서 직접 편집" />
     </>
   );
@@ -542,6 +555,16 @@ function BasicTab({ value, onChange }: { value: MetaDetailConfig; onChange: (nex
         <Label className="text-xs">header.title (페이지 제목)</Label>
         <Input value={header.title}
           onChange={(e) => onChange({ ...value, header: { ...header, title: e.target.value } })} />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">description (헤더 부제 + AI 도움말 자동 주입)</Label>
+        <Input value={value.description ?? ''}
+          onChange={(e) => onChange({ ...value, description: e.target.value || undefined })} />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">aiHint (AI 어시스턴트 전용 — 사용자 안 보임)</Label>
+        <Input value={value.aiHint ?? ''}
+          onChange={(e) => onChange({ ...value, aiHint: e.target.value || undefined })} />
       </div>
       <p className="text-xs text-muted-foreground">
         header.actionsBlock·extraBlocks 편집은 JSON 탭. 같은 패턴으로 별도 탭 가능 (follow-up).

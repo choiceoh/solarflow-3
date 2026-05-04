@@ -197,7 +197,12 @@ export interface FieldConfig {
   numberFormat?: 'plain' | 'thousands' | 'krw' | 'usd';
 
   // Phase 4 보강: 필드 아래 설명 텍스트 (placeholder 와 다름 — 필드 옆 muted 글)
+  // 사용자에게 표시 + AI 어시스턴트의 [화면 도움말] 섹션에 자동 주입.
   description?: string;
+  // AI 어시스턴트 전용 추가 컨텍스트 (사용자에게는 표시 안 됨).
+  // description 으로 표현하기엔 길거나 내부 설명이 필요한 경우 (예: "이 필드는 PO 등록 시
+  // 자동 채워지지만 admin 은 수동 수정 가능").
+  aiHint?: string;
 
   // Phase 4 보강 Tier 3: 파일 다중 업로드 (type='file' 와 함께)
   // true 면 값은 File[], 표시는 메타정보 리스트
@@ -356,6 +361,10 @@ export interface AsyncRefineRule {
 export interface MetaFormConfig {
   id: string;                       // 'partner_form_v2' — registry/screen에서 참조
   title: { create: string; edit: string };
+  // 폼 단위 도움말 — 사용자 표시 (다이얼로그 헤더 sub) + AI 어시스턴트 [화면 도움말] 자동 주입.
+  description?: string;
+  // AI 전용 추가 컨텍스트 (사용자에게는 표시 안 됨).
+  aiHint?: string;
   sections: FormSection[];
   // Phase 4 보강
   dialogSize?: DialogSize;          // 기본 'md'
@@ -389,6 +398,10 @@ export interface DetailFieldConfig {
   visibleIf?: { field: string; value: string | string[] };
   // 단순 단위 접미사 (formatter로 표현 안 되는 "원/Wp" 등)
   suffix?: string;
+  // 필드 도움말 (라벨 옆 tooltip) + AI 어시스턴트 [화면 도움말] 자동 주입.
+  description?: string;
+  // AI 전용 추가 컨텍스트 (사용자에게는 표시 안 됨).
+  aiHint?: string;
   // 메타 인프라 확장: 인라인 편집 (이 필드 클릭 시 input → 즉시 저장)
   inlineEditable?: boolean;
   inlineEditType?: 'text' | 'number' | 'select' | 'date';
@@ -416,6 +429,10 @@ export interface DetailTabConfig {
 
 export interface MetaDetailConfig {
   id: string;
+  // 상세 화면 도움말 — 사용자 표시 (헤더 sub) + AI 어시스턴트 [화면 도움말] 자동 주입.
+  description?: string;
+  // AI 전용 추가 컨텍스트 (사용자에게는 표시 안 됨).
+  aiHint?: string;
   source: { hookId: DataHookId };   // useOutboundDetail 등 — id 받아 단건 fetch
   header: {
     title: string;
@@ -443,7 +460,7 @@ export interface SearchableConfig {
 // ── 단일 리스트 화면
 export interface ListScreenConfig {
   id: string;
-  page: { eyebrow: string; title: string; description: string };
+  page: { eyebrow: string; title: string; description: string; aiHint?: string };
   source: { hookId: DataHookId };
   filters: FilterConfig[];
   searchable?: SearchableConfig;
@@ -504,7 +521,7 @@ export type ContentBlock = (props: {
 
 export interface TabbedListConfig {
   id: string;
-  page: { eyebrow: string; title: string; description: string };
+  page: { eyebrow: string; title: string; description: string; aiHint?: string };
   metrics?: SharedMetricConfig[];
   rail?: SharedRailBlockConfig[];
   tabs: Array<{
