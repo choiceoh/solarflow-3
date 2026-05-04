@@ -242,9 +242,15 @@ var pathPrefixToDocFile = []struct {
 	{"/data", "masters.md"},
 	// banking
 	{"/banking", "banking.md"},
-	// baro 테넌트 — 그룹거래 인박스도 baro 컨텍스트
-	{"/group-trade", "baro.md"},
-	{"/baro", "baro.md"},
+	// baro 테넌트 — 더 구체적인 prefix 가 위에 와야 함 (등록 순서대로 첫 매칭)
+	{"/baro/price-book", "baro-prices.md"},
+	{"/baro/purchase-history", "baro-prices.md"},
+	{"/baro/group-purchase", "baro-group-trade.md"},
+	{"/baro/incoming", "baro-group-trade.md"},
+	{"/baro/dispatch", "baro-ops.md"},
+	{"/baro/credit-board", "baro-ops.md"},
+	{"/group-trade", "baro-group-trade.md"}, // topsolar 측 baro-inbox 도 그룹내 거래 도큐
+	{"/baro", "baro.md"},                    // fallback — /baro/<unmapped> 는 개요로
 }
 
 var (
