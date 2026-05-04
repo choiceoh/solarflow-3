@@ -27,9 +27,19 @@ import (
 )
 
 const (
-	maxAttachmentBytes  int64 = 25 << 20 // 25MB
-	attachmentAccessTTL       = 24 * time.Hour
+	maxAttachmentBytes        int64 = 25 << 20  // 25MB — PO/LC/BL 등 일반 업무 첨부 기본 한도
+	libraryMaxAttachmentBytes int64 = 500 << 20 // 500MB — 자료실 전용 (대용량 매뉴얼/영상 등)
+	attachmentAccessTTL             = 24 * time.Hour
 )
+
+// attachmentBytesLimit — entity_type 별 첨부 용량 상한.
+// 자료실(library_posts)만 500MB 까지 허용하고, 그 외 업무 도메인은 기존 25MB 유지.
+func attachmentBytesLimit(entityType string) int64 {
+	if entityType == "library_posts" {
+		return libraryMaxAttachmentBytes
+	}
+	return maxAttachmentBytes
+}
 
 var allowedAttachmentEntities = map[string]bool{
 	"purchase_orders": true,
@@ -140,8 +150,10 @@ func (h *AttachmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxAttachmentBytes+1<<20)
-	if err := r.ParseMultipartForm(maxAttachmentBytes + 1<<20); err != nil {
+	// entity_type 을 알기 전이라 가장 큰 한도(자료실)를 기준으로 본문을 받고,
+	// 실제 한도 검사는 entity_type 파싱 직후에 수행한다.
+	r.Body = http.MaxBytesReader(w, r.Body, libraryMaxAttachmentBytes+1<<20)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		response.RespondError(w, http.StatusBadRequest, "파일 크기가 너무 크거나 요청 형식이 올바르지 않습니다")
 		return
 	}
@@ -173,8 +185,9 @@ func (h *AttachmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
-	if header.Size > maxAttachmentBytes {
-		response.RespondError(w, http.StatusBadRequest, "첨부파일은 25MB 이하만 업로드할 수 있습니다")
+	limitBytes := attachmentBytesLimit(entityType)
+	if header.Size > limitBytes {
+		response.RespondError(w, http.StatusBadRequest, fmt.Sprintf("첨부파일은 %dMB 이하만 업로드할 수 있습니다", limitBytes>>20))
 		return
 	}
 
@@ -195,7 +208,7 @@ func (h *AttachmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	size, copyErr := io.Copy(out, io.LimitReader(file, maxAttachmentBytes+1))
+	size, copyErr := io.Copy(out, io.LimitReader(file, limitBytes+1))
 	closeErr := out.Close()
 	if copyErr != nil || closeErr != nil {
 		removeStoredFile(storedPath)
@@ -203,9 +216,9 @@ func (h *AttachmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "첨부파일 저장 중 오류가 발생했습니다")
 		return
 	}
-	if size > maxAttachmentBytes {
+	if size > limitBytes {
 		removeStoredFile(storedPath)
-		response.RespondError(w, http.StatusBadRequest, "첨부파일은 25MB 이하만 업로드할 수 있습니다")
+		response.RespondError(w, http.StatusBadRequest, fmt.Sprintf("첨부파일은 %dMB 이하만 업로드할 수 있습니다", limitBytes>>20))
 		return
 	}
 
