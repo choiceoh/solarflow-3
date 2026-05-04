@@ -55,6 +55,7 @@
 | `master.company_alias` | 법인 별칭 | ★ | global |
 | `master.manufacturer` | 제조사 마스터 | ★ | global |
 | `master.partner` | 거래처 마스터 | ★ | global |
+| `master.partner_alias` | 거래처 별칭 | ★ | global |
 | `master.product` | 품번 마스터 | ★ | global |
 | `master.product_alias` | 품번 별칭 | ★ | global |
 | `master.warehouse` | 창고 마스터 | ★ | global |

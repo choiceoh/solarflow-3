@@ -79,6 +79,7 @@ const (
 	IDMasterCompanyAlias     FeatureID = "master.company_alias"
 	IDMasterManufacturer     FeatureID = "master.manufacturer"
 	IDMasterPartner          FeatureID = "master.partner"
+	IDMasterPartnerAlias     FeatureID = "master.partner_alias"
 	IDMasterProduct          FeatureID = "master.product"
 	IDMasterProductAlias     FeatureID = "master.product_alias"
 	IDMasterWarehouse        FeatureID = "master.warehouse"
@@ -201,6 +202,11 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/partners/", "/api/v1/partners/{id}",
 			"/api/v1/partners/{id}/status",
 		},
+	},
+	IDMasterPartnerAlias: {
+		ID: IDMasterPartnerAlias, Name: "거래처 별칭", Description: "거래처명 별칭 매핑 (D-057 출고+매출 자동등록 흐름)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/partner-aliases/"},
 	},
 	IDMasterProduct: {
 		ID: IDMasterProduct, Name: "품번 마스터", Description: "품번 마스터 CRUD",
