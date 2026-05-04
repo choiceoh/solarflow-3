@@ -222,6 +222,19 @@ func getIntPtr(row map[string]interface{}, key string) *int {
 	return &i
 }
 
+// getJSONObject — 외부 양식 변환기가 첨부한 source_payload 같은 JSONB 컬럼을 안전 추출.
+// map[string]interface{} 그대로면 채택, 아니면 nil. 표준 양식 업로드는 항상 nil.
+func getJSONObject(row map[string]interface{}, key string) map[string]interface{} {
+	v, ok := row[key]
+	if !ok || v == nil {
+		return nil
+	}
+	if m, ok := v.(map[string]interface{}); ok && len(m) > 0 {
+		return m
+	}
+	return nil
+}
+
 // validateRequired — 필수 필드 검증
 // 비유: 접수 창구에서 빈 칸 확인
 func validateRequired(rowNum int, row map[string]interface{}, fields []string) []model.ImportError {

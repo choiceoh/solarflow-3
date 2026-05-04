@@ -83,6 +83,48 @@ export const cellRenderers: Record<string, CellRenderer> = {
       ? <span className="sf-pill pos">{formatDate(r.sale.tax_invoice_date)}</span>
       : <span className="sf-pill warn">미발행</span>;
   },
+  // D-055: 외부 양식 체크박스 4개를 컴팩트 pill 묶음으로 표시.
+  // 거래(거래명세서) / 검수(인수검수요청서) / 결재(결재요청) / 계산(계산서발행)
+  outbound_workflow_pills: (_v, row) => {
+    const r = row as Outbound;
+    const items: Array<{ label: string; on: boolean; title: string }> = [
+      { label: '거래', on: !!r.tx_statement_ready, title: '거래명세서 준비' },
+      { label: '검수', on: !!r.inspection_request_sent, title: '인수검수요청서 발송' },
+      { label: '결재', on: !!r.approval_requested, title: '결재 요청' },
+      { label: '계산', on: !!r.tax_invoice_issued, title: '계산서 발행' },
+    ];
+    return (
+      <span className="inline-flex items-center gap-1">
+        {items.map((it) => (
+          <span
+            key={it.label}
+            title={`${it.title}: ${it.on ? '완료' : '대기'}`}
+            className={it.on ? 'sf-pill pos' : 'sf-pill ghost'}
+            style={{ fontSize: 10, padding: '1px 5px' }}
+          >
+            {it.label}
+          </span>
+        ))}
+      </span>
+    );
+  },
+  // D-055: source_payload 존재 여부만 작은 배지로 표시 (상세에서 풀어 봄)
+  outbound_source_badge: (_v, row) => {
+    const r = row as Outbound;
+    if (!r.source_payload || Object.keys(r.source_payload).length === 0) {
+      return <span style={{ color: 'var(--ink-3)', fontSize: 11 }}>—</span>;
+    }
+    const count = Object.keys(r.source_payload).length;
+    return (
+      <span
+        className="sf-pill info"
+        title={`외부 양식 변환 — 원본 ${count}개 컬럼 보존`}
+        style={{ fontSize: 10, padding: '1px 5px' }}
+      >
+        외부{count}
+      </span>
+    );
+  },
   sale_kind_pill: (_v, row) => {
     const r = row as SaleListItem;
     return (
@@ -1503,6 +1545,14 @@ export const cellRendererMeta: RegistryMeta = {
   outbound_invoice_pill: {
     label: '세금계산서 발행 상태',
     description: '발행일자 / 미발행 / 미등록 — pill 색상',
+  },
+  outbound_workflow_pills: {
+    label: '워크플로우 4종 pill',
+    description: '거래명세서·인수검수·결재·계산서 4개 체크박스 — 완료(pos) / 대기(ghost)',
+  },
+  outbound_source_badge: {
+    label: '외부 양식 출처 배지',
+    description: 'source_payload 존재 시 보존된 원본 컬럼 수 표시',
   },
   // Sale (수주)
   sale_kind_pill: {

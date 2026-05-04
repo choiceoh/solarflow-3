@@ -11,6 +11,7 @@ import InvoiceStatusBadge from './InvoiceStatusBadge';
 import OutboundCancelFlow from './OutboundCancelFlow';
 import LinkedMemoWidget from '@/components/memo/LinkedMemoWidget';
 import OutboundTransportCostPanel from './OutboundTransportCostPanel';
+import OutboundWorkflowPanel from './OutboundWorkflowPanel';
 import { useOutboundDetail } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { notify } from '@/lib/notify';
@@ -122,6 +123,9 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
           <p className="text-sm whitespace-pre-wrap break-words">{ob.memo}</p>
         </DetailSection>
       )}
+
+      {/* D-055: 외부 양식(탑솔라 그룹 등) 변환 시 보존된 워크플로우 4종 + 원본 행 */}
+      <OutboundWorkflowPanel outbound={ob} onUpdated={reload} />
 
       <OutboundTransportCostPanel outbound={ob} />
 

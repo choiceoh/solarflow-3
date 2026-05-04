@@ -30,6 +30,9 @@ const outboundList: ListScreenConfig = {
     { key: 'order_number', label: '수주연결' },
     { key: '_group_trade', label: '그룹거래', rendererId: 'outbound_group_trade' },
     { key: '_invoice', label: '계산서', rendererId: 'outbound_invoice_pill' },
+    // D-055: 워크플로우 4개 + 외부 양식 출처
+    { key: '_workflow', label: '진행', rendererId: 'outbound_workflow_pills' },
+    { key: '_source', label: '출처', rendererId: 'outbound_source_badge' },
     { key: 'status', label: '상태', rendererId: 'outbound_status_badge' },
   ],
   rowAppearance: [

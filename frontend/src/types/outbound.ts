@@ -49,6 +49,13 @@ export interface Outbound {
   sale?: Sale;
   // BARO Phase 4: 배차 묶음 FK (NULL=미배차)
   dispatch_route_id?: string | null;
+  // D-055: 워크플로우 체크박스 4개 (탑솔라 그룹 양식 매핑)
+  tx_statement_ready?: boolean;
+  inspection_request_sent?: boolean;
+  approval_requested?: boolean;
+  tax_invoice_issued?: boolean;
+  // D-055: 외부 양식 변환 시 원본 행 보존 (정보 손실 0)
+  source_payload?: Record<string, unknown>;
 }
 
 export interface Sale {

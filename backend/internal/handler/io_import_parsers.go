@@ -92,6 +92,8 @@ func parseExpenseRow(rowNum int, row map[string]interface{}, companyID string, b
 // parseOutboundRow — 출고 행 파싱. FK는 호출 측이 미리 해석:
 //   companyID, productID, warehouseID (필수), wattageKW, orderID/targetCompanyID (선택)
 // usage_category·group_trade 허용값은 호출 측이 검증.
+// D-055: 워크플로우 체크박스 4개(tx_statement_ready/inspection_request_sent/approval_requested/tax_invoice_issued)
+// + source_payload(JSONB) 도 함께 흘려보낸다.
 func parseOutboundRow(rowNum int, row map[string]interface{}, companyID, productID, warehouseID string, wattageKW float64, orderID, targetCompanyID *string) (model.CreateOutboundRequest, []model.ImportError) {
 	qty, qErr := requireInt(rowNum, row, "quantity")
 	if qErr != nil {
@@ -100,22 +102,27 @@ func parseOutboundRow(rowNum int, row map[string]interface{}, companyID, product
 	capacityKW := float64(qty) * wattageKW
 
 	req := model.CreateOutboundRequest{
-		OutboundDate:    getString(row, "outbound_date"),
-		CompanyID:       companyID,
-		ProductID:       productID,
-		Quantity:        qty,
-		CapacityKw:      &capacityKW,
-		WarehouseID:     warehouseID,
-		UsageCategory:   getString(row, "usage_category"),
-		OrderID:         orderID,
-		SiteName:        getStringPtr(row, "site_name"),
-		SiteAddress:     getStringPtr(row, "site_address"),
-		SpareQty:        getIntPtr(row, "spare_qty"),
-		GroupTrade:      getBoolPtr(row, "group_trade"),
-		TargetCompanyID: targetCompanyID,
-		ErpOutboundNo:   getStringPtr(row, "erp_outbound_no"),
-		Status:          "active",
-		Memo:            getStringPtr(row, "memo"),
+		OutboundDate:          getString(row, "outbound_date"),
+		CompanyID:             companyID,
+		ProductID:             productID,
+		Quantity:              qty,
+		CapacityKw:            &capacityKW,
+		WarehouseID:           warehouseID,
+		UsageCategory:         getString(row, "usage_category"),
+		OrderID:               orderID,
+		SiteName:              getStringPtr(row, "site_name"),
+		SiteAddress:           getStringPtr(row, "site_address"),
+		SpareQty:              getIntPtr(row, "spare_qty"),
+		GroupTrade:            getBoolPtr(row, "group_trade"),
+		TargetCompanyID:       targetCompanyID,
+		ErpOutboundNo:         getStringPtr(row, "erp_outbound_no"),
+		Status:                "active",
+		Memo:                  getStringPtr(row, "memo"),
+		TxStatementReady:      getBoolPtr(row, "tx_statement_ready"),
+		InspectionRequestSent: getBoolPtr(row, "inspection_request_sent"),
+		ApprovalRequested:     getBoolPtr(row, "approval_requested"),
+		TaxInvoiceIssued:      getBoolPtr(row, "tax_invoice_issued"),
+		SourcePayload:         getJSONObject(row, "source_payload"),
 	}
 	if msg := req.Validate(); msg != "" {
 		return req, []model.ImportError{{Row: rowNum, Field: "outbound", Message: msg}}

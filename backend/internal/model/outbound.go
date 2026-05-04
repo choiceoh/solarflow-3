@@ -47,8 +47,15 @@ type Outbound struct {
 	Status            string           `json:"status"`
 	Memo              *string          `json:"memo"`
 	BLID              *string          `json:"bl_id"`
-	BLItems           []OutboundBLItem `json:"bl_items,omitempty"`
-	Sale              *Sale            `json:"sale,omitempty"`
+	// 워크플로우 상태 — 탑솔라 그룹 양식 체크박스 4개 매핑 (D-055)
+	TxStatementReady      bool `json:"tx_statement_ready"`
+	InspectionRequestSent bool `json:"inspection_request_sent"`
+	ApprovalRequested     bool `json:"approval_requested"`
+	TaxInvoiceIssued      bool `json:"tax_invoice_issued"`
+	// 외부 양식 변환 시 원본 행 보존 — 정보 손실 0 안전망 (D-055)
+	SourcePayload map[string]interface{} `json:"source_payload,omitempty"`
+	BLItems       []OutboundBLItem       `json:"bl_items,omitempty"`
+	Sale          *Sale                  `json:"sale,omitempty"`
 }
 
 // 허용되는 출고 usage_category 값 (ERP 관리구분 기반 재설계)
@@ -92,7 +99,14 @@ type CreateOutboundRequest struct {
 	Status          string                `json:"status"`
 	Memo            *string               `json:"memo"`
 	BLID            *string               `json:"bl_id"`
-	BLItems         []OutboundBLItemInput `json:"bl_items,omitempty"`
+	// 워크플로우 상태 (D-055) — 탑솔라 그룹 체크박스 4개. 미지정 시 false.
+	TxStatementReady      *bool `json:"tx_statement_ready,omitempty"`
+	InspectionRequestSent *bool `json:"inspection_request_sent,omitempty"`
+	ApprovalRequested     *bool `json:"approval_requested,omitempty"`
+	TaxInvoiceIssued      *bool `json:"tax_invoice_issued,omitempty"`
+	// 외부 양식 원본 보존 (D-055) — 표준 등록 시 nil.
+	SourcePayload map[string]interface{} `json:"source_payload,omitempty"`
+	BLItems       []OutboundBLItemInput  `json:"bl_items,omitempty"`
 }
 
 // Validate — 출고 등록 요청의 입력값을 검증
@@ -153,7 +167,13 @@ type UpdateOutboundRequest struct {
 	Status          *string               `json:"status,omitempty"`
 	Memo            *string               `json:"memo,omitempty"`
 	BLID            *string               `json:"bl_id,omitempty"`
-	BLItems         []OutboundBLItemInput `json:"bl_items,omitempty"`
+	// 워크플로우 상태 (D-055)
+	TxStatementReady      *bool                  `json:"tx_statement_ready,omitempty"`
+	InspectionRequestSent *bool                  `json:"inspection_request_sent,omitempty"`
+	ApprovalRequested     *bool                  `json:"approval_requested,omitempty"`
+	TaxInvoiceIssued      *bool                  `json:"tax_invoice_issued,omitempty"`
+	SourcePayload         map[string]interface{} `json:"source_payload,omitempty"`
+	BLItems               []OutboundBLItemInput  `json:"bl_items,omitempty"`
 }
 
 // Validate — 출고 수정 요청의 입력값을 검증
