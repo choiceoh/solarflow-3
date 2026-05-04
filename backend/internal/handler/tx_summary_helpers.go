@@ -58,6 +58,27 @@ func distinctCount(values map[string]struct{}) int64 {
 	return int64(len(values))
 }
 
+// uniqueNonEmpty — 문자열 슬라이스에서 빈 값과 중복을 제거하고 입력 순서를 보존한다.
+// IN(...) 필터에 들어갈 ID 집합을 만들 때 사용한다.
+func uniqueNonEmpty(values []string) []string {
+	if len(values) == 0 {
+		return values
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
 func dateMonth(date *string) string {
 	if date == nil || len(*date) < 7 {
 		return ""
