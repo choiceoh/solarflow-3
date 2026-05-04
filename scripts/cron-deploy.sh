@@ -3,29 +3,29 @@
 #
 # 사용처: 운영 서버(Linux gx10-f96e)의 crontab에서 매 10분 호출.
 # 동작:
-#   1) [CI 게이트] 원격 main HEAD의 GitHub Actions 결과 확인 (gh CLI 필요)
-#      - success/no_runs → 진행, pending → 다음 cron 회차로, failure → 차단
-#      - gh 미설치 시 게이트 스킵하고 기존 빌드 가드에 의존
-#   2) git pull --ff-only origin main
-#   3) HEAD 차이 없으면 즉시 종료
-#   4) 차이 있으면 변경된 파일을 분류:
+#   1) git pull --ff-only origin main
+#   2) HEAD 차이 없으면 즉시 종료
+#   3) 차이 있으면 변경된 파일을 분류:
 #      backend/migrations/*.sql        → apply_migrations.py 호출 (헤더 게이트)
 #      backend/(non-migration)         → Go 빌드 + solarflow-go 재시작
 #      engine/(src|Cargo.{toml,lock})  → Rust 빌드 + solarflow-engine 재시작
 #      frontend/*                      → 무시 (Cloudflare Pages 자동 배포)
 #      그 외 (docs/harness 등)         → 무시
-#   5) 마이그레이션은 `-- @auto-apply: yes` 헤더 있는 파일만 자동 적용.
+#   4) 마이그레이션은 `-- @auto-apply: yes` 헤더 있는 파일만 자동 적용.
 #      미게이트 파일은 SKIP + 경고. 마이그레이션 SQL 실패 시 Go 재시작 생략 (DB 정합 우선).
-#   6) 빌드 실패 시 재시작 생략 — 기존 서비스 유지
-#   7) [자동 롤백] 재시작 후 health(/health) 실패 시 이전 바이너리(.prev)로 복원하고
+#   5) 빌드 실패 시 재시작 생략 — 기존 서비스 유지
+#   6) [자동 롤백] 재시작 후 health(/health) 실패 시 이전 바이너리(.prev)로 복원하고
 #      다시 재시작. Go·Rust 모두 적용. .prev는 빌드 직전 백업으로 갱신됨.
-#   8) 동시 실행 방지 (flock)
+#   7) 동시 실행 방지 (flock)
 #
-# 운영 안전선 (개떡같은 PR이 머지돼도 운영 무영향):
-#   - CI 빨간색 → deploy 자체가 안 일어남 (1)
-#   - 빌드 실패 → 재시작 생략 (6)
-#   - 마이그레이션 실패 → Go 재시작 보류 (5, apply_migrations.py 트랜잭션)
-#   - 빌드는 됐지만 런타임 panic → health 실패 → 자동 롤백 (7)
+# CI 게이트는 제거됨 — main 브랜치 protection 으로 CI red 머지가 차단되므로
+# 여기서 다시 확인할 이유 없음. 머지된 = CI green 가정. 머지는 됐는데 배포가
+# 멈춰서 "왜 안 되지?" 혼란이 생기던 패턴 제거.
+#
+# 운영 안전선 (만일을 위한 다중 가드):
+#   - 빌드 실패 → 재시작 생략 (5)
+#   - 마이그레이션 실패 → Go 재시작 보류 (4, apply_migrations.py 트랜잭션)
+#   - 빌드는 됐지만 런타임 panic → health 실패 → 자동 롤백 (6)
 #   - 그래도 안 되면 systemd가 service Restart=on-failure로 재시도
 
 set -uo pipefail
@@ -71,41 +71,10 @@ fi
 
 BEFORE=$(git rev-parse HEAD)
 
-# CI 게이트 — pull 전에 원격 main HEAD의 GitHub Actions 결과를 확인.
-# 빨간 빌드가 머지돼도 운영이 깨지지 않도록 deploy 자체를 막는다.
-# - success / no_runs(워크플로 없음) → 진행
-# - pending → 다음 cron 회차에서 재시도 (pull 안 함, 상태 그대로 유지)
-# - failure → 알람만 찍고 중단 (수동 개입 필요 — 보통 다음 fix PR 머지로 자동 해소)
-# - gh CLI 미설치 / API 실패 → 게이트 건너뛰고 기존 빌드 가드(npm/go build 실패 시 재시작 보류)에 의존
-if command -v gh >/dev/null 2>&1; then
-  REMOTE_SHA=$(git ls-remote origin main 2>/dev/null | awk '{print $1}')
-  if [[ -n "$REMOTE_SHA" && "$REMOTE_SHA" != "$BEFORE" ]]; then
-    CI_STATE=$(gh api "repos/choiceoh/solarflow/commits/$REMOTE_SHA/check-runs" \
-      --jq 'if (.check_runs | length) == 0 then "no_runs"
-            elif any(.check_runs[]; .status != "completed") then "pending"
-            elif any(.check_runs[]; .conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "action_required") then "failure"
-            else "success" end' 2>/dev/null || echo "unknown")
-    case "$CI_STATE" in
-      success|no_runs)
-        : # 정상 — 아래 git pull로 진행
-        ;;
-      pending)
-        echo "[$(date -Iseconds)] CI pending on ${REMOTE_SHA:0:7} — 다음 cron 회차에서 재시도"
-        exit 0
-        ;;
-      failure)
-        echo "[$(date -Iseconds)] ❌ CI red on ${REMOTE_SHA:0:7} — deploy 차단. 수동 개입 필요"
-        echo "    조치: 회귀 fix PR 머지 → 다음 cron이 새 SHA의 CI를 다시 평가"
-        exit 1
-        ;;
-      unknown)
-        echo "[$(date -Iseconds)] ⚠️  CI 상태 조회 실패 — 기존 빌드 가드만 의존하고 진행"
-        ;;
-    esac
-  fi
-else
-  echo "[$(date -Iseconds)] ⚠️  gh CLI 미설치 — CI 게이트 비활성화"
-fi
+# CI 게이트는 GitHub branch protection 으로 이전됨 (머지 자체를 막음).
+# main 에 도달한 모든 commit 은 backend + changes CI green 가정.
+# 빌드/health/롤백 다중 가드는 그대로 — main 에 코드 결함이 들어와도
+# 운영은 health 실패 시 .prev 로 자동 복원.
 
 # pull (실패해도 다음 cron이 다시 시도)
 if ! git pull --ff-only origin main 2>&1; then
