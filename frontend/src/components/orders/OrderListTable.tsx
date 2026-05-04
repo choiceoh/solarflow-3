@@ -101,6 +101,7 @@ function OrderListTable({ items, hidden, pinning, onPinningChange, onSelect, onC
       onRowClick={onSelect}
       rowClassName={(o) => cn('hover:bg-accent/50', o.status === 'cancelled' && 'bg-gray-50 text-muted-foreground line-through')}
       emptyMessage="등록된 수주가 없습니다"
+      pageSize={50}
     />
   );
 }

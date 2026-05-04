@@ -168,6 +168,7 @@ function SaleListTable({ items, hidden, pinning, onPinningChange, onInvoice, glo
       globalFilter={globalFilter}
       getRowKey={(item) => item.sale_id}
       emptyMessage="매출 데이터가 없습니다"
+      pageSize={50}
     />
   );
 }
