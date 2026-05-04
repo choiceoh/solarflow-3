@@ -92,7 +92,6 @@ export default function SaleAutoRegisterDialog({
       let canonical: PartnerLite | null = candidate;
       if (!canonical) {
         canonical = await autoRegisterPartner(rawCustomer);
-        setResolvedPartners((prev) => [...prev, canonical!]);
       } else {
         await learnPartnerAlias(canonical.partner_id, rawCustomer);
       }
@@ -122,7 +121,6 @@ export default function SaleAutoRegisterDialog({
           notify.error(`${name} 자동 등록 실패: ${e instanceof Error ? e.message : ''}`);
         }
       }
-      setResolvedPartners((prev) => [...prev, ...created]);
       setSeeds((prev) => prev.map((s) => {
         if (s.match?.level !== 'none') return s;
         const found = created.find((c) => c.partner_name === s.rawCustomer);
