@@ -24,6 +24,7 @@ interface LoginStats {
   lc_active_count: number | null;
   lc_active_total_usd: number | null;
   work_queue: { time: string; tag: string; title: string; meta: string }[];
+  pending_counts: Record<string, number>;
 }
 
 interface FXSnapshot {
@@ -59,6 +60,12 @@ const FALLBACK_FX = { rate: 1773.4, change_pct: 0.06 };
 const FALLBACK_SILVER = { price_usd: 28.84, change_usd: -1.42 };
 const FALLBACK_POLYSILICON = { value: 34.20, change: 0.40 };
 const FALLBACK_SCFI = { value: 1284, change: -2.10 };
+const FALLBACK_PENDING_COUNTS: Record<string, number> = {
+  예약: 28,
+  출고: 12,
+  만기: 5,
+  그룹요청: 7,
+};
 const FALLBACK_QUEUE: LoginStats['work_queue'] = [
   { time: '09:00', tag: '입항', title: 'COSCO SHANGHAI 042E', meta: '8,800장 · 5,456 kW · 인천 1창고' },
   { time: '11:30', tag: 'L/C 만기', title: 'LC-26-0405', meta: 'USD 1.84M · 하나은행 · 결재 대기' },
@@ -139,6 +146,14 @@ export default function LoginPage() {
   const scfiValue = scfi?.value ?? FALLBACK_SCFI.value;
   const scfiChange = scfi?.change ?? FALLBACK_SCFI.change;
   const queue = stats?.work_queue?.length ? stats.work_queue : FALLBACK_QUEUE;
+  const pendingCounts =
+    stats?.pending_counts && Object.keys(stats.pending_counts).length
+      ? stats.pending_counts
+      : FALLBACK_PENDING_COUNTS;
+  const topPending = Object.entries(pendingCounts)
+    .filter(([, n]) => n > 0)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 2);
 
   const kpi = [
     { label: '가용재고', value: inventoryMW.toFixed(2), unit: 'MW', detail: '오늘 기준' },
@@ -173,9 +188,29 @@ export default function LoginPage() {
           <div className="sf-eyebrow text-[var(--sf-solar-3)]">로그인 · LOGIN</div>
           <h1 className="mt-2 text-[32px] font-extrabold leading-none text-[var(--sf-ink)]">다시 만나요.</h1>
           <p className="mt-2 mb-6 text-[13px] leading-6 text-[var(--sf-ink-3)]">
-            오늘 <strong className="font-bold text-[var(--sf-ink)]">예약 {reservations}건</strong>과{' '}
-            <strong className="font-bold text-[var(--sf-ink)]">입항 {queue.filter((q) => q.tag === '입항').length || 4}척</strong>이
-            처리를 기다리고 있어요.
+            {topPending.length === 0 ? (
+              <>오늘은 처리 대기 중인 작업이 없어요.</>
+            ) : topPending.length === 1 ? (
+              <>
+                오늘{' '}
+                <strong className="font-bold text-[var(--sf-ink)]">
+                  {topPending[0][0]} {topPending[0][1]}건
+                </strong>
+                이 처리를 기다리고 있어요.
+              </>
+            ) : (
+              <>
+                오늘{' '}
+                <strong className="font-bold text-[var(--sf-ink)]">
+                  {topPending[0][0]} {topPending[0][1]}건
+                </strong>
+                과{' '}
+                <strong className="font-bold text-[var(--sf-ink)]">
+                  {topPending[1][0]} {topPending[1][1]}건
+                </strong>
+                이 처리를 기다리고 있어요.
+              </>
+            )}
           </p>
           <LoginForm />
           <div className="mt-5 flex items-center gap-2 rounded bg-[var(--sf-bg-2)] px-3 py-2">
