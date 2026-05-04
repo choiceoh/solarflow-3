@@ -73,19 +73,23 @@ export default function EditableDetailField({
     const displayNode: ReactNode = display !== undefined
       ? (display === null || display === '' ? '—' : display)
       : (value === null || value === undefined || value === '' ? '—' : String(value));
+    if (disabled) {
+      return (
+        <DetailField label={label} span={span}>
+          <span className="text-sm break-words text-muted-foreground">{displayNode}</span>
+        </DetailField>
+      );
+    }
     return (
       <DetailField label={label} span={span}>
         <button
           type="button"
           onClick={startEdit}
-          disabled={disabled}
-          className="group flex w-full items-center justify-between gap-1.5 rounded text-left hover:bg-muted/50 disabled:cursor-not-allowed disabled:hover:bg-transparent px-1 -mx-1 py-0.5 -my-0.5"
-          title={disabled ? '편집할 수 없습니다' : '클릭하여 편집'}
+          className="group flex w-full items-center justify-between gap-1.5 rounded border border-dashed border-input/60 bg-background/40 px-1.5 py-1 -mx-1.5 -my-1 text-left transition-colors hover:border-input hover:bg-muted/40 focus-visible:border-input focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:outline-none"
+          title="클릭하여 편집"
         >
           <span className="text-sm break-words min-w-0 flex-1">{displayNode}</span>
-          {!disabled && (
-            <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100" />
-          )}
+          <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-foreground" />
         </button>
       </DetailField>
     );
