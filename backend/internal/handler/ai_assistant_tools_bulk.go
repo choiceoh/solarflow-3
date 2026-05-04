@@ -26,6 +26,42 @@ import (
 // 한계를 동시에 고려한 값. 초과 요청은 LLM 이 분할 호출하도록 도구 description 에 명시.
 const bulkUpdateMaxRows = 200
 
+// outboundUpdateProps — update_outbound / bulk_update_outbound items 가 공유하는 필드 정의.
+// 새 필드 추가 시 본 상수 한 곳만 수정. additionalProperties:false 와 함께 사용해 LLM
+// 추측 키 호출 차단 (도구 별로 required 만 다르게 부여 — 단일은 outbound_id 필수, bulk
+// items 도 outbound_id 필수).
+const outboundUpdateProps = `"outbound_id":{"type":"string"},
+"outbound_date":{"type":"string"},
+"company_id":{"type":"string"},
+"product_id":{"type":"string"},
+"quantity":{"type":"integer"},
+"capacity_kw":{"type":"number"},
+"warehouse_id":{"type":"string"},
+"usage_category":{"type":"string"},
+"order_id":{"type":"string"},
+"site_name":{"type":"string"},
+"status":{"type":"string"},
+"memo":{"type":"string"}`
+
+// orderUpdateProps — update_order / bulk_update_order items 가 공유하는 필드 정의.
+const orderUpdateProps = `"order_id":{"type":"string"},
+"order_number":{"type":"string"},
+"company_id":{"type":"string"},
+"customer_id":{"type":"string"},
+"order_date":{"type":"string"},
+"receipt_method":{"type":"string"},
+"product_id":{"type":"string"},
+"quantity":{"type":"integer"},
+"capacity_kw":{"type":"number"},
+"unit_price_wp":{"type":"number"},
+"site_id":{"type":"string"},
+"site_name":{"type":"string"},
+"payment_terms":{"type":"string"},
+"deposit_rate":{"type":"number"},
+"delivery_due":{"type":"string"},
+"status":{"type":"string"},
+"memo":{"type":"string"}`
+
 // --- bulk_update_outbound ---
 
 type bulkUpdateOutboundInput struct {
@@ -38,36 +74,23 @@ func toolBulkUpdateOutbound() assistantTool {
 		name: "bulk_update_outbound",
 		description: "출고(outbounds) 일괄 수정 — 여러 건을 한 번의 제안으로 묶음. 사용자는 카드에서 [저장] 한 번 누르면 전부 row-by-row 적용 (실패한 행만 보고). 각 항목은 outbound_id 필수 + 변경할 필드. 최대 200건 — 초과 시 분할 호출. summary 는 한 줄 요약(예: '출고 152건 site_address 채움'). 외부 시트 fetch_url 결과로 빈 칸 채울 때 사용.",
 		inputSchema: json.RawMessage(`{
-			"type": "object",
-			"additionalProperties": false,
-			"properties": {
-				"updates": {
-					"type": "array",
-					"minItems": 1,
-					"maxItems": 200,
-					"items": {
-						"type": "object",
-						"additionalProperties": false,
-						"properties": {
-							"outbound_id": {"type": "string"},
-							"outbound_date": {"type": "string"},
-							"company_id": {"type": "string"},
-							"product_id": {"type": "string"},
-							"quantity": {"type": "integer"},
-							"capacity_kw": {"type": "number"},
-							"warehouse_id": {"type": "string"},
-							"usage_category": {"type": "string"},
-							"order_id": {"type": "string"},
-							"site_name": {"type": "string"},
-							"status": {"type": "string"},
-							"memo": {"type": "string"}
-						},
-						"required": ["outbound_id"]
+			"type":"object",
+			"additionalProperties":false,
+			"properties":{
+				"updates":{
+					"type":"array",
+					"minItems":1,
+					"maxItems":200,
+					"items":{
+						"type":"object",
+						"additionalProperties":false,
+						"properties":{` + outboundUpdateProps + `},
+						"required":["outbound_id"]
 					}
 				},
-				"summary": {"type": "string", "description": "사용자 카드에 표시될 한 줄 한국어 요약"}
+				"summary":{"type":"string","description":"사용자 카드에 표시될 한 줄 한국어 요약"}
 			},
-			"required": ["updates", "summary"]
+			"required":["updates","summary"]
 		}`),
 		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },
 		execute: func(ctx context.Context, _ *supa.Client, input json.RawMessage) (string, error) {
@@ -118,41 +141,23 @@ func toolBulkUpdateOrder() assistantTool {
 		name: "bulk_update_order",
 		description: "수주(orders) 일괄 수정 — 여러 건을 한 번의 제안으로 묶음. 사용자는 카드에서 [저장] 한 번 누르면 전부 row-by-row 적용. 각 항목은 order_id 필수 + 변경할 필드. 최대 200건. summary 는 한 줄 요약(예: '수주 87건 unit_price_wp 입력'). 외부 시트의 단가 정보로 ERP 빈 칸 채울 때 사용.",
 		inputSchema: json.RawMessage(`{
-			"type": "object",
-			"additionalProperties": false,
-			"properties": {
-				"updates": {
-					"type": "array",
-					"minItems": 1,
-					"maxItems": 200,
-					"items": {
-						"type": "object",
-						"additionalProperties": false,
-						"properties": {
-							"order_id": {"type": "string"},
-							"order_number": {"type": "string"},
-							"company_id": {"type": "string"},
-							"customer_id": {"type": "string"},
-							"order_date": {"type": "string"},
-							"receipt_method": {"type": "string"},
-							"product_id": {"type": "string"},
-							"quantity": {"type": "integer"},
-							"capacity_kw": {"type": "number"},
-							"unit_price_wp": {"type": "number"},
-							"site_id": {"type": "string"},
-							"site_name": {"type": "string"},
-							"payment_terms": {"type": "string"},
-							"deposit_rate": {"type": "number"},
-							"delivery_due": {"type": "string"},
-							"status": {"type": "string"},
-							"memo": {"type": "string"}
-						},
-						"required": ["order_id"]
+			"type":"object",
+			"additionalProperties":false,
+			"properties":{
+				"updates":{
+					"type":"array",
+					"minItems":1,
+					"maxItems":200,
+					"items":{
+						"type":"object",
+						"additionalProperties":false,
+						"properties":{` + orderUpdateProps + `},
+						"required":["order_id"]
 					}
 				},
-				"summary": {"type": "string", "description": "사용자 카드에 표시될 한 줄 한국어 요약"}
+				"summary":{"type":"string","description":"사용자 카드에 표시될 한 줄 한국어 요약"}
 			},
-			"required": ["updates", "summary"]
+			"required":["updates","summary"]
 		}`),
 		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },
 		execute: func(ctx context.Context, _ *supa.Client, input json.RawMessage) (string, error) {
