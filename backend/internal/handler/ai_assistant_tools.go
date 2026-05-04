@@ -77,6 +77,9 @@ func assistantToolCatalog() []assistantTool {
 		toolSolarQuery(),
 		toolSolarExplain(),
 		toolSolarPath(),
+		// 외부 웹 (admin/operator/executive 한정)
+		toolWebSearch(),
+		toolFetchURL(),
 	}
 	proposes := []assistantTool{
 		// 쓰기 — 메모
