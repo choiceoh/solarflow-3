@@ -9,7 +9,7 @@ import type { BLShipment } from '@/types/inbound';
 import type { Order } from '@/types/orders';
 import type { AlertItem } from '@/types/alerts';
 import type { LCLimitTimeline, LCMaturityAlert } from '@/types/banking';
-import type { Outbound } from '@/types/outbound';
+import type { OutboundSummary } from '@/hooks/useOutbound';
 
 interface CustomerAnalysisAlertItem {
   customer_id?: string;
@@ -30,15 +30,6 @@ interface CustomerAnalysis {
   total_outstanding?: number;
 }
 
-interface Sale {
-  sale_id: string;
-  outbound_id?: string;
-  tax_invoice_date?: string;
-  sale?: {
-    tax_invoice_date?: string;
-  };
-}
-
 function customerRows(data: CustomerAnalysis): CustomerAnalysisAlertItem[] {
   return data.items ?? data.customers ?? [];
 }
@@ -56,10 +47,6 @@ function daysUntil(value: string | undefined, today: Date) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return Math.floor((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function hasIssuedTaxInvoice(sale: Sale | undefined) {
-  return Boolean(sale?.tax_invoice_date ?? sale?.sale?.tax_invoice_date);
 }
 
 interface LegacyCustomerAnalysis {
@@ -103,11 +90,12 @@ async function loadAlerts(companyId: string): Promise<AlertItem[]> {
     fetchCalc<InventoryResponse>(companyId, '/api/v1/calc/inventory', {}),
     fetchWithAuth<BLShipment[]>(companyQueryUrl('/api/v1/bls', companyId)),
     fetchWithAuth<Order[]>(companyQueryUrl('/api/v1/orders', companyId)),
-    fetchWithAuth<Outbound[]>(companyQueryUrl('/api/v1/outbounds', companyId)),
-    fetchWithAuth<Sale[]>(companyQueryUrl('/api/v1/sales', companyId)),
+    // 계산서 미발행 카운트는 서버 집계(/outbounds/summary)에서 받는다 — outbounds list 는 기본 100건 페이지네이션
+    // 이라 클라이언트에서 직접 세면 항상 ≤100 으로 캡됨. status=active 로 출고완료 분만 본다 (D-102).
+    fetchWithAuth<OutboundSummary>(companyQueryUrl('/api/v1/outbounds/summary?status=active', companyId)),
   ]);
 
-  const [matResult, tlResult, custResult, invResult, blResult, orderResult, outResult, saleResult] = results;
+  const [matResult, tlResult, custResult, invResult, blResult, orderResult, summaryResult] = results;
   const items: AlertItem[] = [];
   let id = 0;
 
@@ -137,17 +125,10 @@ async function loadAlerts(companyId: string): Promise<AlertItem[]> {
     if (warn30 > 0) items.push({ id: String(++id), type: 'overdue_warning', severity: 'warning', icon: 'AlertTriangle', title: '미수금 주의', description: `30일 초과 거래처 ${warn30}곳`, count: warn30, link: '/orders?tab=matching&alert=overdue_warning' });
   }
 
-  // 5: 계산서 미발행
-  let outbounds: Outbound[] = [];
-  let sales: Sale[] = [];
-  if (outResult.status === 'fulfilled') outbounds = outResult.value;
-  if (saleResult.status === 'fulfilled') sales = saleResult.value;
-  const salesByOutboundId = new Map(sales.filter((s) => s.outbound_id).map((s) => [s.outbound_id!, s]));
-  const noInvoice = outbounds.filter((o) => {
-    if (o.status !== 'active') return false;
-    const sale = o.sale ?? salesByOutboundId.get(o.outbound_id);
-    return !hasIssuedTaxInvoice(sale);
-  }).length;
+  // 5: 계산서 미발행 — 서버 집계 사용 (페이지네이션 의존 X)
+  const noInvoice = summaryResult.status === 'fulfilled'
+    ? (summaryResult.value.invoice_pending_count ?? 0)
+    : 0;
   if (noInvoice > 0) items.push({ id: String(++id), type: 'no_invoice', severity: 'warning', icon: 'FileText', title: '계산서 미발행', description: `출고완료+미발행 ${noInvoice}건`, count: noInvoice, link: '/orders?tab=sales&invoice_status=pending&alert=no_invoice' });
 
   // 6: 입항 예정
