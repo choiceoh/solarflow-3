@@ -91,3 +91,44 @@ var validAliasSource = map[string]bool{
 	"learned": true,
 	"import":  true,
 }
+
+// PartnerAlias — 거래처명 alias 학습 사전 항목 (D-057).
+// company_aliases 와 동일한 구조 — 별도 테이블만 차이.
+type PartnerAlias struct {
+	AliasID             string  `json:"alias_id"`
+	CanonicalPartnerID  string  `json:"canonical_partner_id"`
+	AliasText           string  `json:"alias_text"`
+	AliasTextNormalized string  `json:"alias_text_normalized"`
+	Source              string  `json:"source"`
+	CreatedAt           string  `json:"created_at"`
+	CreatedBy           *string `json:"created_by,omitempty"`
+}
+
+type CreatePartnerAliasRequest struct {
+	CanonicalPartnerID  string `json:"canonical_partner_id"`
+	AliasText           string `json:"alias_text"`
+	AliasTextNormalized string `json:"alias_text_normalized"`
+	Source              string `json:"source"`
+}
+
+func (r *CreatePartnerAliasRequest) Validate() string {
+	if r.CanonicalPartnerID == "" {
+		return "canonical_partner_id는 필수 항목입니다"
+	}
+	if r.AliasText == "" {
+		return "alias_text는 필수 항목입니다"
+	}
+	if utf8.RuneCountInString(r.AliasText) > 100 {
+		return "alias_text는 100자를 초과할 수 없습니다"
+	}
+	if r.AliasTextNormalized == "" {
+		return "alias_text_normalized는 필수 항목입니다"
+	}
+	if r.Source == "" {
+		r.Source = "manual"
+	}
+	if !validAliasSource[r.Source] {
+		return "source는 manual/learned/import 중 하나여야 합니다"
+	}
+	return ""
+}

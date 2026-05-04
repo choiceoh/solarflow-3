@@ -37,3 +37,21 @@ export interface CreateProductAliasRequest {
   alias_code_normalized: string;
   source?: AliasSource;
 }
+
+// 거래처 alias (D-057) — 매출 자동 등록 시 customer_name 매칭에 사용.
+export interface PartnerAlias {
+  alias_id: string;
+  canonical_partner_id: string;
+  alias_text: string;
+  alias_text_normalized: string;
+  source: AliasSource;
+  created_at: string;
+  created_by?: string;
+}
+
+export interface CreatePartnerAliasRequest {
+  canonical_partner_id: string;
+  alias_text: string;
+  alias_text_normalized: string;
+  source?: AliasSource;
+}

@@ -2,8 +2,8 @@
 // 변환 미리보기에서 사용자가 [신규 등록] / [같음] 선택한 결과를 백엔드에 영구 저장.
 
 import { fetchWithAuth } from '@/lib/api';
-import type { CompanyAlias, ProductAlias } from '@/types/aliases';
-import type { CompanyLite, ProductLite } from './matching';
+import type { CompanyAlias, PartnerAlias, ProductAlias } from '@/types/aliases';
+import type { CompanyLite, PartnerLite, ProductLite } from './matching';
 import { normalizeCompanyName, normalizeProductCode } from './matching';
 import type { ManufacturerLite } from './productInference';
 import { inferProduct, resolveManufacturerId } from './productInference';
@@ -115,4 +115,46 @@ export async function fetchCompanyAliases(): Promise<CompanyAlias[]> {
 
 export async function fetchProductAliases(): Promise<ProductAlias[]> {
   return fetchWithAuth<ProductAlias[]>('/api/v1/product-aliases').catch(() => []);
+}
+
+// ──────────────────── 거래처 (D-057) ────────────────────
+
+export async function autoRegisterPartner(
+  rawName: string,
+  partnerType: 'customer' | 'supplier' | 'both' = 'customer',
+): Promise<PartnerLite> {
+  const partner = await fetchWithAuth<PartnerLite>('/api/v1/partners', {
+    method: 'POST',
+    body: JSON.stringify({
+      partner_name: rawName.slice(0, 100),
+      partner_type: partnerType,
+    }),
+  });
+  await learnPartnerAlias(partner.partner_id, rawName).catch(() => undefined);
+  return partner;
+}
+
+export async function learnPartnerAlias(
+  canonicalPartnerId: string,
+  rawText: string,
+): Promise<PartnerAlias | null> {
+  const normalized = normalizeCompanyName(rawText);
+  if (!normalized) return null;
+  try {
+    return await fetchWithAuth<PartnerAlias>('/api/v1/partner-aliases', {
+      method: 'POST',
+      body: JSON.stringify({
+        canonical_partner_id: canonicalPartnerId,
+        alias_text: rawText,
+        alias_text_normalized: normalized,
+        source: 'learned',
+      }),
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchPartnerAliases(): Promise<PartnerAlias[]> {
+  return fetchWithAuth<PartnerAlias[]>('/api/v1/partner-aliases').catch(() => []);
 }

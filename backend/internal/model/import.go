@@ -2,6 +2,8 @@ package model
 
 // ImportResponse — 엑셀 Import API의 공통 응답 구조체
 // 비유: "일괄 등록 결과 보고서" — 성공/에러/경고 건수와 상세 내역
+// D-057: ImportedIDs — 외부 양식 변환 후 후속 매출 자동 등록을 위해 출고 import 가
+//        등록된 outbound_id 목록을 응답에 포함. 다른 import 종류는 빈 배열.
 type ImportResponse struct {
 	Success       bool            `json:"success"`
 	ImportedCount int             `json:"imported_count"`
@@ -9,6 +11,7 @@ type ImportResponse struct {
 	WarningCount  int             `json:"warning_count"`
 	Errors        []ImportError   `json:"errors"`
 	Warnings      []ImportWarning `json:"warnings"`
+	ImportedIDs   []string        `json:"imported_ids,omitempty"`
 }
 
 // ImportError — Import 시 개별 행의 에러 정보

@@ -5,7 +5,7 @@
 //   2. 유사 후보 있음 (Levenshtein ≤ 2 또는 substring) → 사용자 확인 (level: 'fuzzy')
 //   3. 비슷한 것 전혀 없음 → 자동 신규 등록 (level: 'none')
 
-import type { CompanyAlias, ProductAlias } from '@/types/aliases';
+import type { CompanyAlias, PartnerAlias, ProductAlias } from '@/types/aliases';
 
 export interface CompanyLite {
   company_id: string;
@@ -17,6 +17,13 @@ export interface ProductLite {
   product_id: string;
   product_code: string;
   product_name?: string;
+}
+
+// D-057: 매출 자동 등록 시 사용
+export interface PartnerLite {
+  partner_id: string;
+  partner_name: string;
+  partner_type: string;
 }
 
 export type MatchLevel = 'exact' | 'fuzzy' | 'none';
@@ -32,6 +39,13 @@ export interface ProductMatchResult {
   level: MatchLevel;
   matched?: ProductLite;
   candidates?: ProductLite[];
+  normalizedKey: string;
+}
+
+export interface PartnerMatchResult {
+  level: MatchLevel;
+  matched?: PartnerLite;
+  candidates?: PartnerLite[];
   normalizedKey: string;
 }
 
@@ -119,6 +133,42 @@ export function findCompanyMatch(
       || isSimilar(normalizeCompanyName(c.company_code), key)
     ) {
       candidates.push(c);
+      if (candidates.length >= 5) break;
+    }
+  }
+  if (candidates.length > 0) {
+    return { level: 'fuzzy', candidates, normalizedKey: key };
+  }
+
+  return { level: 'none', normalizedKey: key };
+}
+
+// ──────────────────── 거래처 매칭 (D-057) ────────────────────
+
+export function findPartnerMatch(
+  rawName: string,
+  master: PartnerLite[],
+  aliases: PartnerAlias[],
+): PartnerMatchResult {
+  const key = normalizeCompanyName(rawName);  // 회사 정규화 룰 재사용
+  if (!key) return { level: 'none', normalizedKey: '' };
+
+  const aliasHit = aliases.find((a) => a.alias_text_normalized === key);
+  if (aliasHit) {
+    const matched = master.find((p) => p.partner_id === aliasHit.canonical_partner_id);
+    if (matched) return { level: 'exact', matched, normalizedKey: key };
+  }
+
+  for (const p of master) {
+    if (normalizeCompanyName(p.partner_name) === key) {
+      return { level: 'exact', matched: p, normalizedKey: key };
+    }
+  }
+
+  const candidates: PartnerLite[] = [];
+  for (const p of master) {
+    if (isSimilar(normalizeCompanyName(p.partner_name), key)) {
+      candidates.push(p);
       if (candidates.length >= 5) break;
     }
   }

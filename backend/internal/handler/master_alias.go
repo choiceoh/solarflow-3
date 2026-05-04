@@ -23,11 +23,10 @@ func NewAliasHandler(db *supa.Client) *AliasHandler {
 	return &AliasHandler{DB: db}
 }
 
-// RegisterRoutes — 4개 endpoint 등록.
-//   GET    /api/v1/company-aliases
-//   POST   /api/v1/company-aliases
-//   GET    /api/v1/product-aliases
-//   POST   /api/v1/product-aliases
+// RegisterRoutes — 6개 endpoint 등록 (company / product / partner aliases).
+//   GET/POST /api/v1/company-aliases
+//   GET/POST /api/v1/product-aliases
+//   GET/POST /api/v1/partner-aliases  (D-057)
 func (h *AliasHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/company-aliases", func(r chi.Router) {
 		r.Get("/", h.ListCompanyAliases)
@@ -36,6 +35,10 @@ func (h *AliasHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/product-aliases", func(r chi.Router) {
 		r.Get("/", h.ListProductAliases)
 		r.With(g.Write).Post("/", h.CreateProductAlias)
+	})
+	r.Route("/partner-aliases", func(r chi.Router) {
+		r.Get("/", h.ListPartnerAliases)
+		r.With(g.Write).Post("/", h.CreatePartnerAlias)
 	})
 }
 
@@ -142,6 +145,59 @@ func (h *AliasHandler) CreateProductAlias(w http.ResponseWriter, r *http.Request
 	_ = json.Unmarshal(data, &rows)
 	if len(rows) == 0 {
 		response.RespondError(w, http.StatusInternalServerError, "품번 alias 등록 결과를 확인할 수 없습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusCreated, rows[0])
+}
+
+// ListPartnerAliases — GET /api/v1/partner-aliases (D-057)
+func (h *AliasHandler) ListPartnerAliases(w http.ResponseWriter, r *http.Request) {
+	data, _, err := h.DB.From("partner_aliases").
+		Select("*", "exact", false).
+		Execute()
+	if err != nil {
+		log.Printf("[거래처 alias 목록 조회 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "거래처 alias 조회에 실패했습니다")
+		return
+	}
+	var rows []model.PartnerAlias
+	if err := json.Unmarshal(data, &rows); err != nil {
+		log.Printf("[거래처 alias 디코딩 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 처리에 실패했습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, rows)
+}
+
+// CreatePartnerAlias — POST /api/v1/partner-aliases (D-057)
+func (h *AliasHandler) CreatePartnerAlias(w http.ResponseWriter, r *http.Request) {
+	var req model.CreatePartnerAliasRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
+		return
+	}
+	if msg := req.Validate(); msg != "" {
+		response.RespondError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	data, _, err := h.DB.From("partner_aliases").
+		Insert(req, false, "", "", "").
+		Execute()
+	if err != nil {
+		log.Printf("[거래처 alias 등록 실패] %v", err)
+		if isUniqueViolation(err) {
+			response.RespondError(w, http.StatusConflict, "이미 등록된 alias입니다")
+			return
+		}
+		response.RespondError(w, http.StatusInternalServerError, "거래처 alias 등록에 실패했습니다")
+		return
+	}
+
+	var rows []model.PartnerAlias
+	_ = json.Unmarshal(data, &rows)
+	if len(rows) == 0 {
+		response.RespondError(w, http.StatusInternalServerError, "거래처 alias 등록 결과를 확인할 수 없습니다")
 		return
 	}
 	response.RespondJSON(w, http.StatusCreated, rows[0])

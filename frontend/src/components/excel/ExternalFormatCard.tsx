@@ -2,7 +2,7 @@
 // 흐름: 파일 드롭 → 변환(매칭 메타 포함) → 모호 행 인라인 확인 → 자동 등록·alias 학습
 // → "검증으로 진행" → 표준 검증 파이프라인.
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, Plus, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,11 +12,12 @@ import { useExcel } from '@/hooks/useExcel';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import { TEMPLATE_LABEL } from '@/types/excel';
+import type { ImportResult } from '@/types/excel';
 import type { ExternalFormat } from '@/lib/externalFormats/registry';
 import type {
   ConvertResult, ResolveContext, RowMatchMeta,
 } from '@/lib/externalFormats/topsolarOutbound';
-import type { CompanyLite, ProductLite } from '@/lib/externalFormats/matching';
+import type { CompanyLite, PartnerLite, ProductLite } from '@/lib/externalFormats/matching';
 import {
   autoRegisterCompany, autoRegisterProduct,
   fetchCompanyAliases, fetchProductAliases,
@@ -25,6 +26,7 @@ import {
 import type { ManufacturerLite } from '@/lib/externalFormats/productInference';
 import ImportPreviewDialog from './ImportPreviewDialog';
 import ImportResultDialog from './ImportResultDialog';
+import SaleAutoRegisterDialog from './SaleAutoRegisterDialog';
 
 interface Props {
   format: ExternalFormat;
@@ -44,9 +46,26 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
   const [dragOver, setDragOver] = useState(false);
   const [converting, setConverting] = useState(false);
   const [converted, setConverted] = useState<ConvertedState | null>(null);
+  // D-057: 출고 등록 완료 후 매출 자동 등록을 위해 변환 결과 보관
+  const [pendingSaleSource, setPendingSaleSource] = useState<ConvertedState | null>(null);
+  const [saleDialogOpen, setSaleDialogOpen] = useState(false);
 
   const disabled = !excel.masterData || excel.loading || converting;
   const targetLabel = TEMPLATE_LABEL[format.targetType];
+
+  // 출고 importResult 도착 시 매출 다이얼로그 트리거 — 외부 양식 출처 + imported_ids 있을 때.
+  // 안전 조건: imported_ids 의 길이가 valid 행 수와 정확히 같아야 매출 매핑이 안전.
+  // 부분 실패(일부 행만 INSERT 성공)는 매출 자동 등록을 건너뛰고 일반 결과 다이얼로그만 표시.
+  useEffect(() => {
+    if (!excel.importResult || !pendingSaleSource || format.targetType !== 'outbound') return;
+    const ids = excel.importResult.imported_ids ?? [];
+    const validCount = (excel.preview?.rows ?? []).filter((r) => r.valid).length;
+    if (excel.importResult.success && ids.length > 0 && ids.length === validCount) {
+      setSaleDialogOpen(true);
+    } else if (ids.length !== validCount && validCount > 0) {
+      notify.warning(`출고 ${ids.length}/${validCount}건만 성공 — 매출 자동 등록 건너뜀`);
+    }
+  }, [excel.importResult, excel.preview, pendingSaleSource, format.targetType]);
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
@@ -96,8 +115,20 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
   const proceedToValidation = useCallback(() => {
     if (!converted) return;
     excel.injectRows(converted.result.rows, converted.fileName);
+    // 변환 결과를 보관 — 출고 등록 완료 후 매출 자동 등록에서 source_payload 활용
+    setPendingSaleSource(converted);
     setConverted(null);
   }, [converted, excel]);
+
+  const closeSaleDialog = useCallback((saleResult?: ImportResult) => {
+    setSaleDialogOpen(false);
+    setPendingSaleSource(null);
+    excel.clearImportResult();
+    if (saleResult) {
+      notify.success(`매출 ${saleResult.imported_count}건 등록 완료`);
+    }
+    onImportComplete?.();
+  }, [excel, onImportComplete]);
 
   const closeConverted = useCallback(() => setConverted(null), []);
 
@@ -169,13 +200,34 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
         onSubmit={excel.submitImport}
       />
 
-      <ImportResultDialog
-        result={excel.importResult}
-        onClose={() => {
-          excel.clearImportResult();
-          onImportComplete?.();
-        }}
-      />
+      {/* 매출 자동 등록 다이얼로그가 떠 있을 때는 출고 결과 다이얼로그 표시 안 함 — 매출 다이얼로그가 결과 통합 책임 */}
+      {!saleDialogOpen && (
+        <ImportResultDialog
+          result={excel.importResult}
+          onClose={() => {
+            excel.clearImportResult();
+            setPendingSaleSource(null);
+            onImportComplete?.();
+          }}
+        />
+      )}
+
+      {pendingSaleSource && excel.importResult && (
+        <SaleAutoRegisterDialog
+          open={saleDialogOpen}
+          outboundRows={(excel.preview?.rows ?? pendingSaleSource.result.rows).filter((r) => r.valid)}
+          importedOutboundIds={excel.importResult.imported_ids ?? []}
+          partners={(excel.masterData?.partners ?? [])
+            .filter((p) => p.partner_type === 'customer' || p.partner_type === 'both')
+            .map((p) => ({
+              partner_id: p.partner_id,
+              partner_name: p.partner_name,
+              partner_type: p.partner_type,
+            })) as PartnerLite[]}
+          onClose={() => closeSaleDialog()}
+          onCompleted={(r) => closeSaleDialog(r)}
+        />
+      )}
     </>
   );
 }
