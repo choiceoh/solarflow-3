@@ -6,7 +6,7 @@ import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type {
   TemplateType, MasterDataForExcel, ImportPreview, DeclarationImportPreview,
-  ImportResult,
+  ImportResult, ParsedRow,
 } from '@/types/excel';
 import type { Company } from '@/types/masters';
 import { DECLARATION_FIELDS, DECLARATION_COST_FIELDS } from '@/types/excel';
@@ -142,6 +142,34 @@ export function useExcel(type: TemplateType) {
     }
   }, [type, masterData]);
 
+  // 외부 양식 변환기 등에서 ParsedRow[] 를 직접 주입 — 파일 파싱을 건너뛰고 검증부터 시작.
+  // 변환 단계는 자기 다이얼로그에서 끝내고, 마스터 매칭(법인·품번·창고 코드 검증)은 기존 파이프라인에 위임한다.
+  const injectRows = useCallback(async (rows: ParsedRow[], fileName: string) => {
+    if (!masterData) return;
+    if (type === 'declaration') {
+      setError('면장 양식은 외부 변환 주입을 지원하지 않습니다');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setDeclPreview(null);
+    try {
+      const { validateRows } = await import('@/lib/excelValidation');
+      const validated = validateRows(rows, type, masterData);
+      setPreview({
+        fileName,
+        totalRows: validated.length,
+        validRows: validated.filter((r) => r.valid).length,
+        errorRows: validated.filter((r) => !r.valid).length,
+        rows: validated,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '변환 행 검증 실패');
+    } finally {
+      setLoading(false);
+    }
+  }, [type, masterData]);
+
   // 에러 행 다운로드
   const downloadErrors = useCallback(async () => {
     if (type === 'declaration' && declPreview) {
@@ -257,6 +285,7 @@ export function useExcel(type: TemplateType) {
     importResult,
     downloadTemplate,
     uploadFile,
+    injectRows,
     downloadErrors,
     clearPreview,
     submitImport,
