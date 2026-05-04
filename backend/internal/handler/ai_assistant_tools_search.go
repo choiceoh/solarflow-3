@@ -79,7 +79,8 @@ type searchPurchaseOrdersInput struct {
 func toolSearchPurchaseOrders() assistantTool {
 	return assistantTool{
 		name:        "search_purchase_orders",
-		description: "P/O(발주) 검색. PO 번호·제조사명·상태·계약일 범위로 필터. manager/viewer 역할은 호출 불가. 결과의 manufacturer_name 은 view 가 자동 제공 — 추가 search_manufacturers 불필요.",
+		description: "P/O(발주) 검색. PO 번호·제조사명·상태·계약일 범위로 필터. manager/viewer 역할은 호출 불가. module 계열 테넌트(topsolar/cable) 만 노출 — baro 는 직수입을 안 함 (그룹사 매입요청으로 대체). 결과의 manufacturer_name 은 view 가 자동 제공 — 추가 search_manufacturers 불필요.",
+		allowScopes: []string{middleware.TenantScopeTopsolar, middleware.TenantScopeCable},
 		inputSchema: json.RawMessage(`{
 			"type": "object",
 			"additionalProperties": false,
@@ -548,6 +549,7 @@ func toolSearchLC() assistantTool {
 	return assistantTool{
 		name:        "search_lc",
 		description: "L/C(신용장, lc_records) 검색. LC번호·PO·은행·개설일 범위로 필터. module 계열 테넌트(topsolar/cable) admin/operator/executive 만 호출 가능. baro 테넌트엔 노출 안 됨. po_id 모르면 search_purchase_orders 먼저.",
+		allowScopes: []string{middleware.TenantScopeTopsolar, middleware.TenantScopeCable},
 		inputSchema: json.RawMessage(`{
 			"type":"object",
 			"additionalProperties": false,
@@ -610,7 +612,8 @@ type searchBLInput struct {
 func toolSearchBL() assistantTool {
 	return assistantTool{
 		name:        "search_bl",
-		description: "B/L 입고(bl_shipments) 검색. BL번호·PO·제조사·ETA 범위로 필터. admin/operator/executive 만 호출 가능. po_id/manufacturer_id 모르면 각각 search_purchase_orders/search_manufacturers 먼저.",
+		description: "B/L 입고(bl_shipments) 검색. BL번호·PO·제조사·ETA 범위로 필터. admin/operator/executive 만 호출 가능. module 계열 테넌트(topsolar/cable) 만 노출 — baro 의 입고 정보는 sanitized 보드(/baro/incoming) 에서만 조회 가능. po_id/manufacturer_id 모르면 각각 search_purchase_orders/search_manufacturers 먼저.",
+		allowScopes: []string{middleware.TenantScopeTopsolar, middleware.TenantScopeCable},
 		inputSchema: json.RawMessage(`{
 			"type":"object",
 			"additionalProperties": false,
@@ -670,6 +673,7 @@ func toolSearchDeclarations() assistantTool {
 	return assistantTool{
 		name:        "search_declarations",
 		description: "면장(declarations, 통관 신고필증) 검색. 신고번호·BL·신고일 범위로 필터. module 계열 테넌트(topsolar/cable) admin/operator/executive 만 호출 가능. baro 테넌트엔 노출 안 됨. bl_id 모르면 search_bl 먼저.",
+		allowScopes: []string{middleware.TenantScopeTopsolar, middleware.TenantScopeCable},
 		inputSchema: json.RawMessage(`{
 			"type":"object",
 			"additionalProperties": false,

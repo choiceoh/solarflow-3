@@ -14,11 +14,15 @@ import (
 // assistantTool — LLM에 노출하는 도구 정의.
 // 모든 도구는 조회 전용이며, 실행 결과를 LLM 에 회신하고 클라이언트 UI 에 tool-invocation 으로 가시화한다.
 // allow(ctx)로 역할 기반 노출/차단을 결정하고, execute는 결과 JSON 문자열을 반환.
+//
+// allowScopes — 빈 슬라이스(nil) 면 모든 테넌트에 노출. 값이 있으면 해당 테넌트만 catalog 에 포함.
+// 도메인이 명확히 분리된 도구(예: LC·BL·면장은 수입 테넌트만)에 사용. role 기반 allow 와 AND 조건.
 type assistantTool struct {
 	name        string
 	description string
 	inputSchema json.RawMessage
 	allow       func(ctx context.Context) bool
+	allowScopes []string
 	execute     func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error)
 }
 
@@ -71,9 +75,13 @@ func availableAssistantTools(ctx context.Context) []assistantTool {
 	all := assistantToolCatalog()
 	out := make([]assistantTool, 0, len(all))
 	for _, t := range all {
-		if t.allow(ctx) {
-			out = append(out, t)
+		if !t.allow(ctx) {
+			continue
 		}
+		if len(t.allowScopes) > 0 && !tenantIs(ctx, t.allowScopes...) {
+			continue
+		}
+		out = append(out, t)
 	}
 	return out
 }
