@@ -95,6 +95,7 @@ type SalesMetric = {
   tone: 'solar' | 'ink' | 'info' | 'warn' | 'pos';
   delta?: string;
   spark?: number[];
+  metricId?: string;  // /insights/:metric 으로 드릴다운 — 등록된 metric 만.
 };
 
 function fmtSalesMw(kw: number) {
@@ -588,10 +589,10 @@ export default function OrdersPage() {
 
   const metrics: SalesMetric[] =
     activeTab === 'outbound' ? [
-      { lbl: '출고 전체', v: String(outboundsWithSales.length), u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar', spark: outboundCountSpark },
-      { lbl: '계산서 연결률', v: saleConversionRate.toFixed(1), u: '%', sub: `${saleLinkedOutbounds.length.toLocaleString()} / ${saleConversionDenom.toLocaleString()}건 매출대상`, tone: saleConversionTone, spark: saleConversionSpark },
-      { lbl: '전월 출고 용량', v: fmtSalesMw(monthlyOutboundKw.prev), u: 'MW', sub: `${monthlyOutboundKw.prevMonth}월 · 최근 6개월`, tone: 'ink', spark: outboundKwSpark },
-      { lbl: '금년 출고 용량', v: fmtSalesMw(monthlyOutboundKw.year), u: 'MW', sub: monthlyOutboundKw.yoyPct != null ? `${monthlyOutboundKw.currYear}년 누계 · 전년比 ${monthlyOutboundKw.yoyPct >= 0 ? '+' : ''}${monthlyOutboundKw.yoyPct.toFixed(1)}%` : `${monthlyOutboundKw.currYear}년 누계`, tone: 'pos', spark: monthlyOutboundKw.yoy3y },
+      { lbl: '출고 전체', v: String(outboundsWithSales.length), u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar', spark: outboundCountSpark, metricId: 'outbound.count' },
+      { lbl: '계산서 연결률', v: saleConversionRate.toFixed(1), u: '%', sub: `${saleLinkedOutbounds.length.toLocaleString()} / ${saleConversionDenom.toLocaleString()}건 매출대상`, tone: saleConversionTone, spark: saleConversionSpark, metricId: 'outbound.sale_conversion' },
+      { lbl: '전월 출고 용량', v: fmtSalesMw(monthlyOutboundKw.prev), u: 'MW', sub: `${monthlyOutboundKw.prevMonth}월 · 최근 6개월`, tone: 'ink', spark: outboundKwSpark, metricId: 'outbound.kw_prev_month' },
+      { lbl: '금년 출고 용량', v: fmtSalesMw(monthlyOutboundKw.year), u: 'MW', sub: monthlyOutboundKw.yoyPct != null ? `${monthlyOutboundKw.currYear}년 누계 · 전년比 ${monthlyOutboundKw.yoyPct >= 0 ? '+' : ''}${monthlyOutboundKw.yoyPct.toFixed(1)}%` : `${monthlyOutboundKw.currYear}년 누계`, tone: 'pos', spark: monthlyOutboundKw.yoy3y, metricId: 'outbound.kw_year' },
     ] :
     activeTab === 'sales' ? [
       { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${sales.length}건`, tone: 'solar', spark: saleTotalSpark },
@@ -753,6 +754,7 @@ export default function OrdersPage() {
                 tone={metric.tone}
                 delta={metric.delta}
                 spark={metric.spark ?? flatSparkFromValue(metric.v)}
+                metricId={metric.metricId}
               />
             ))}
           </div>

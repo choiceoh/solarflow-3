@@ -52,6 +52,7 @@ const BaroRequestInboxPage = lazy(() => import('@/pages/group-trade/BaroRequestI
 const CreditBoardPage = lazy(() => import('@/pages/baro/CreditBoardPage'));
 const DispatchBoardPage = lazy(() => import('@/pages/baro/DispatchBoardPage'));
 const CRMInboxPage = lazy(() => import('@/pages/CRMInboxPage'));
+const InsightsPage = lazy(() => import('@/pages/InsightsPage'));
 
 function Fallback() {
   return <LoadingSpinner className="h-screen" />;
@@ -122,6 +123,7 @@ export default function App() {
                 <Route path="/customs" element={<CustomsPage />} />
                 <Route path="/sales-analysis" element={<SalesAnalysisPage />} />
                 <Route path="/banking" element={<BankingPage />} />
+                <Route path="/insights/:metric" element={<InsightsPage />} />
                 <Route path="/baro/price-book" element={<RoleGuard allowedRoles={['admin', 'operator']}><PartnerPriceBookPage /></RoleGuard>} />
                 <Route path="/baro/incoming" element={<IncomingBoardPage />} />
                 <Route path="/baro/purchase-history" element={<RoleGuard allowedRoles={['admin', 'operator', 'executive']}><BaroPurchaseHistoryPage /></RoleGuard>} />

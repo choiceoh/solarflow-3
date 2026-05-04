@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 
 type Tone = 'solar' | 'ink' | 'info' | 'warn' | 'pos' | 'neg';
 
@@ -61,6 +62,7 @@ export function TileB({
   tone = 'ink',
   spark,
   delta,
+  metricId,
 }: {
   lbl: string;
   v: string;
@@ -69,7 +71,10 @@ export function TileB({
   tone?: Tone;
   spark?: number[];
   delta?: string;
+  // /insights/:metric 으로 드릴다운 — 등록된 metricId 면 타일이 클릭 가능해진다.
+  metricId?: string;
 }) {
+  const navigate = useNavigate();
   const color =
     tone === 'solar' ? 'var(--solar-2)' :
     tone === 'pos' ? 'var(--pos)' :
@@ -77,13 +82,34 @@ export function TileB({
     tone === 'info' ? 'var(--info)' :
     tone === 'neg' ? 'var(--neg)' :
     'var(--ink-3)';
+  const clickable = !!metricId;
+  const onActivate = clickable ? () => navigate(`/insights/${metricId}`) : undefined;
+  const onKey = clickable
+    ? (e: KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onActivate?.();
+        }
+      }
+    : undefined;
   return (
-    <div className="card hover" style={{ padding: '12px 14px 14px', minWidth: 0, position: 'relative', overflow: 'hidden', height: '100%' }}>
+    <div
+      className="card hover"
+      style={{ padding: '12px 14px 14px', minWidth: 0, position: 'relative', overflow: 'hidden', height: '100%', cursor: clickable ? 'pointer' : undefined }}
+      onClick={onActivate}
+      onKeyDown={onKey}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? `${lbl} 상세 보기` : undefined}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span className="dot" style={{ background: color }} />
         <span className="eyebrow">{lbl}</span>
         {delta ? (
           <span className="mono" style={{ marginLeft: 'auto', fontSize: 10, color: delta.startsWith('-') || delta.startsWith('−') ? 'var(--neg)' : 'var(--pos)', fontWeight: 600 }}>{delta}</span>
+        ) : null}
+        {clickable && !delta ? (
+          <span className="mono" style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--ink-3)' }} aria-hidden>↗</span>
         ) : null}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 8 }}>
