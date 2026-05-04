@@ -38,6 +38,12 @@ export interface ResolveContext {
   products: ProductLite[];
   companyAliases: CompanyAlias[];
   productAliases: ProductAlias[];
+  // D-059: 구글 시트 등 외부 소스 출처 — 채우면 source_payload 에 spreadsheet_id /
+  // sheet_gid / sheet_row_index 가 들어가 dedup UNIQUE 인덱스가 작동.
+  sourceMeta?: {
+    spreadsheet_id: string;
+    sheet_gid: number;
+  };
 }
 
 // 행마다 첨부되는 매칭 메타 (다이얼로그가 사용)
@@ -412,6 +418,13 @@ export async function convertTopsolarOutbound(
       vat_amount: vatAmount,
       total_amount: totalAmount,
     };
+    // D-059: sourceMeta 가 있으면 dedup 키 첨부 (058 마이그레이션 UNIQUE 인덱스 작동)
+    if (ctx.sourceMeta) {
+      sourcePayload.source = 'google_sheet';
+      sourcePayload.spreadsheet_id = ctx.sourceMeta.spreadsheet_id;
+      sourcePayload.sheet_gid = ctx.sourceMeta.sheet_gid;
+      sourcePayload.sheet_row_index = excelRowNumber;
+    }
 
     const data: Record<string, unknown> = {
       outbound_date: dateParsed.iso,
