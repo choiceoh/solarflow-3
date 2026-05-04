@@ -28,12 +28,12 @@ import (
 
 const (
 	maxAttachmentBytes        int64 = 25 << 20  // 25MB — PO/LC/BL 등 일반 업무 첨부 기본 한도
-	libraryMaxAttachmentBytes int64 = 500 << 20 // 500MB — 자료실 전용 (대용량 매뉴얼/영상 등)
+	libraryMaxAttachmentBytes int64 = 100 << 20 // 100MB — 자료실 전용. Cloudflare Free/Pro 본문 한도(100MB)에 맞춤
 	attachmentAccessTTL             = 24 * time.Hour
 )
 
 // attachmentBytesLimit — entity_type 별 첨부 용량 상한.
-// 자료실(library_posts)만 500MB 까지 허용하고, 그 외 업무 도메인은 기존 25MB 유지.
+// 자료실(library_posts)만 100MB 까지 허용하고, 그 외 업무 도메인은 기존 25MB 유지.
 func attachmentBytesLimit(entityType string) int64 {
 	if entityType == "library_posts" {
 		return libraryMaxAttachmentBytes

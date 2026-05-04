@@ -281,7 +281,7 @@ export default function LibraryPage() {
                   <Paperclip className="h-4 w-4 text-[var(--solar-3)]" />
                   첨부파일
                 </div>
-                <p className="mt-1 text-[11px] leading-5 text-[var(--ink-3)]">PDF, 이미지, Office, CSV, TXT, ZIP · 파일당 500MB</p>
+                <p className="mt-1 text-[11px] leading-5 text-[var(--ink-3)]">PDF, 이미지, Office, CSV, TXT, ZIP · 파일당 100MB</p>
                 <Button
                   type="button"
                   variant="outline"
