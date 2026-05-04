@@ -24,6 +24,36 @@
 - DB: 로컬 PostgreSQL + PostgREST, 인증은 Supabase Auth 사용
 - 이 구조를 임의로 변경하지 않음
 
+## ⚙ 테넌트 격리 = feature 카탈로그 (헌법 — D-120)
+
+테넌트별로 보이고/안 보이는 기능은 **무조건 feature 카탈로그 + 배선 매트릭스** 두 축으로 표현한다.
+새 미들웨어 이름(`xxxOnly`)이나 if-else 분기로 표현하지 않는다.
+
+### 변경 시 의무 절차 (PR 차단 룰)
+
+라우트를 추가/수정하거나 어떤 테넌트가 어느 기능을 쓰는지가 바뀌면 **반드시 같은 PR 안에서**:
+
+1. `backend/internal/feature/catalog.go` 의 `Catalog` 갱신 (entry 추가 또는 Paths 수정)
+2. `harness/FEATURE-WIRING-MATRIX.md` 의 표 갱신 (같은 ID 행 추가/수정)
+3. 라우트 정의에서 `r.Use(g.Feature(feature.IDXxx))` 적용
+4. 새 테넌트 분리이거나 격리 범위가 달라지면 `harness/DECISIONS.md` 에 D-NNN 추가
+5. `go test ./internal/feature ./internal/middleware ./internal/router` 통과
+
+(1)~(2) 중 하나만 반영하면 `TestMatrixConsistency` 가 잡고,
+(1)~(3) 중 하나만 반영하면 `TestFeatureCoverage` 가 잡는다.
+
+### 두 축은 분리한다
+
+- **기능 배선 (capability)** — 호출 가능 여부. `RequireFeature(id)` 에서 강제(403).
+- **데이터 배선 (scope)** — 같은 feature 안에서 어느 행/컬럼만 보는가. 쿼리/응답 변환에서 강제.
+
+같은 코드 경로에서 합치지 않는다 — 한 축이 뚫려도 다른 축이 fail-closed 로 막아야 한다.
+
+### Legacy 가드 (DEPRECATED)
+
+`g.TopsolarOnly` / `g.BaroOnly` 는 마이그레이션 호환을 위해 보존하지만 **신규 사용 금지**.
+새 라우트는 `g.Feature(feature.IDXxx)` 로만 게이트한다.
+
 ## 코드 작성 규칙
 1. 모든 데이터는 구조체(struct)로 타입 정의 (map[string]interface{} 사용 금지)
 2. 모든 에러는 반드시 처리 (에러 무시 금지, _ 로 버리기 금지)

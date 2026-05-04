@@ -24,6 +24,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 )
 
@@ -95,7 +96,7 @@ func (h *BankHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 // BaroIncomingHandler — BARO 전용 입고예정/ETA 보드 (가격·환율 제외).
 func (h *BaroIncomingHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/baro/incoming", func(r chi.Router) {
-		r.Use(g.BaroOnly)
+		r.Use(g.Feature(feature.IDBaroIncoming))
 		r.Get("/", h.List)
 	})
 }
@@ -103,7 +104,7 @@ func (h *BaroIncomingHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 // BaroPurchaseHistoryHandler — BARO 자체 매입 원가/구매이력 (BR 법인만).
 func (h *BaroPurchaseHistoryHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/baro/purchase-history", func(r chi.Router) {
-		r.Use(g.BaroOnly)
+		r.Use(g.Feature(feature.IDBaroPurchaseHistory))
 		r.With(middleware.RoleMiddleware("admin", "operator", "executive")).Get("/", h.List)
 	})
 }
@@ -127,29 +128,31 @@ func (h *BLHandler) RegisterRoutes(r chi.Router, g middleware.Gates, lineH *BLLi
 
 // CalcProxyHandler — Rust 계산실 프록시. router.New에서 HasEngine() 분기 후 직접 호출한다.
 // authMW는 router 외부에서 주입 — calc/engine은 별도 r.Route 트리이므로 여기서 Use 처리.
-// D-108: 탑솔라 원가/금융 응답이 들어가는 계산은 g.TopsolarOnly 적용.
+// D-120: 각 계산은 feature 카탈로그 기반 게이트(g.Feature)로 분리한다.
+//   - module 계열 전용(landed-cost, lc-*, exchange-compare, margin, price-trend) → tx 결정과 동일
+//   - 모든 테넌트 공통(inventory, customer-analysis, supply-forecast, outstanding-list, ...)
 func (h *CalcProxyHandler) RegisterRoutes(root chi.Router, g middleware.Gates, authMW func(http.Handler) http.Handler) {
 	root.Route("/api/v1/calc", func(r chi.Router) {
 		r.Use(authMW)
-		r.Post("/inventory", h.Inventory)
-		r.With(g.TopsolarOnly).Post("/landed-cost", h.LandedCost)
-		r.With(g.TopsolarOnly).Post("/exchange-compare", h.ExchangeCompare)
-		r.With(g.TopsolarOnly).Post("/lc-fee", h.LcFee)
-		r.With(g.TopsolarOnly).Post("/lc-limit-timeline", h.LcLimitTimeline)
-		r.With(g.TopsolarOnly).Post("/lc-maturity-alert", h.LcMaturityAlert)
-		r.With(g.TopsolarOnly).Post("/margin-analysis", h.MarginAnalysis)
-		r.Post("/customer-analysis", h.CustomerAnalysis)
-		r.With(g.TopsolarOnly).Post("/price-trend", h.PriceTrend)
-		r.Post("/supply-forecast", h.SupplyForecast)
-		r.Post("/outstanding-list", h.OutstandingList)
-		r.Post("/receipt-match-suggest", h.ReceiptMatchSuggest)
-		r.Post("/search", h.Search)
-		r.Post("/inventory-turnover", h.InventoryTurnover)
+		r.With(g.Feature(feature.IDCalcInventory)).Post("/inventory", h.Inventory)
+		r.With(g.Feature(feature.IDCalcLandedCost)).Post("/landed-cost", h.LandedCost)
+		r.With(g.Feature(feature.IDCalcExchangeCompare)).Post("/exchange-compare", h.ExchangeCompare)
+		r.With(g.Feature(feature.IDCalcLCFee)).Post("/lc-fee", h.LcFee)
+		r.With(g.Feature(feature.IDCalcLCLimitTimeline)).Post("/lc-limit-timeline", h.LcLimitTimeline)
+		r.With(g.Feature(feature.IDCalcLCMaturityAlert)).Post("/lc-maturity-alert", h.LcMaturityAlert)
+		r.With(g.Feature(feature.IDCalcMarginAnalysis)).Post("/margin-analysis", h.MarginAnalysis)
+		r.With(g.Feature(feature.IDCalcCustomerAnalysis)).Post("/customer-analysis", h.CustomerAnalysis)
+		r.With(g.Feature(feature.IDCalcPriceTrend)).Post("/price-trend", h.PriceTrend)
+		r.With(g.Feature(feature.IDCalcSupplyForecast)).Post("/supply-forecast", h.SupplyForecast)
+		r.With(g.Feature(feature.IDCalcOutstandingList)).Post("/outstanding-list", h.OutstandingList)
+		r.With(g.Feature(feature.IDCalcReceiptMatchSugges)).Post("/receipt-match-suggest", h.ReceiptMatchSuggest)
+		r.With(g.Feature(feature.IDCalcSearch)).Post("/search", h.Search)
+		r.With(g.Feature(feature.IDCalcInventoryTurnover)).Post("/inventory-turnover", h.InventoryTurnover)
 	})
 	root.Route("/api/v1/engine", func(r chi.Router) {
 		r.Use(authMW)
-		r.Get("/health", h.EngineHealth)
-		r.Get("/ready", h.EngineReady)
+		r.With(g.Feature(feature.IDEngineHealth)).Get("/health", h.EngineHealth)
+		r.With(g.Feature(feature.IDEngineHealth)).Get("/ready", h.EngineReady)
 	})
 }
 
@@ -181,10 +184,10 @@ func (h *ConstructionSiteHandler) RegisterRoutes(r chi.Router, g middleware.Gate
 	})
 }
 
-// CostDetailHandler — 수입 원가 (D-108 탑솔라 전용).
+// CostDetailHandler — 수입 원가 (D-120: feature.IDTxCostDetail).
 func (h *CostDetailHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/cost-details", func(r chi.Router) {
-		r.Use(g.TopsolarOnly)
+		r.Use(g.Feature(feature.IDTxCostDetail))
 		r.Get("/", h.List)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
@@ -193,18 +196,18 @@ func (h *CostDetailHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
-// CreditBoardHandler — 거래처별 미수금/한도 보드 (BARO Phase 3, baroOnly).
+// CreditBoardHandler — 거래처별 미수금/한도 보드 (BARO Phase 3).
 func (h *CreditBoardHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/baro/credit-board", func(r chi.Router) {
-		r.Use(g.BaroOnly)
+		r.Use(g.Feature(feature.IDBaroCreditBoard))
 		r.Get("/", h.List)
 	})
 }
 
-// DeclarationHandler — 수입 면장 (D-108 탑솔라 전용).
+// DeclarationHandler — 수입 면장 (D-120: feature.IDTxDeclaration).
 func (h *DeclarationHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/declarations", func(r chi.Router) {
-		r.Use(g.TopsolarOnly)
+		r.Use(g.Feature(feature.IDTxDeclaration))
 		r.Get("/", h.List)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
@@ -213,10 +216,10 @@ func (h *DeclarationHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
-// DispatchRouteHandler — 출고 배차/일정 보드 (BARO Phase 4, baroOnly).
+// DispatchRouteHandler — 출고 배차/일정 보드 (BARO Phase 4).
 func (h *DispatchRouteHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/baro/dispatch-routes", func(r chi.Router) {
-		r.Use(g.BaroOnly)
+		r.Use(g.Feature(feature.IDBaroDispatch))
 		r.Get("/", h.List)
 		r.Get("/{id}", h.GetByID)
 		r.Get("/{id}/outbounds", h.Outbounds)
@@ -228,10 +231,10 @@ func (h *DispatchRouteHandler) RegisterRoutes(r chi.Router, g middleware.Gates) 
 	})
 }
 
-// ExpenseHandler — 부대비용 (D-108 탑솔라 전용).
+// ExpenseHandler — 부대비용 (D-120: feature.IDTxExpense).
 func (h *ExpenseHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/expenses", func(r chi.Router) {
-		r.Use(g.TopsolarOnly)
+		r.Use(g.Feature(feature.IDTxExpense))
 		r.Get("/", h.List)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
@@ -240,10 +243,10 @@ func (h *ExpenseHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
-// ExportHandler — 아마란스10 ERP 내보내기 (D-108 탑솔라 전용) + 통합 덤프.
+// ExportHandler — 아마란스10 ERP 내보내기 (D-120: feature.IDIOExportAmaranth) + 통합 덤프.
 func (h *ExportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/export/amaranth", func(r chi.Router) {
-		r.Use(g.TopsolarOnly)
+		r.Use(g.Feature(feature.IDIOExportAmaranth))
 		r.Get("/inbound", h.AmaranthInbound)
 		r.Get("/outbound", h.AmaranthOutbound)
 		r.Get("/sales", h.AmaranthSalesClosing)
@@ -254,8 +257,7 @@ func (h *ExportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.With(g.Write).Post("/jobs/{id}/claim", h.ClaimUploadJob)
 		r.With(g.Write).Put("/jobs/{id}/status", h.UpdateUploadJobStatus)
 	})
-	// 전체 컬렉션 통합 덤프 — admin 전용, 테넌트 스코프 분리(D-108).
-	// baro: company_code=BR / topsolar·cable: 그 외. sales·receipts 는 outbound_id 경유.
+	// 전체 컬렉션 통합 덤프 — admin 전용, 데이터 스코프는 핸들러 내부에서 tenant_company 기준 처리.
 	r.With(g.AdminOnly).Get("/export/all", h.FullDataDump)
 }
 
@@ -275,18 +277,19 @@ func (h *ImportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
-// IntercompanyRequestHandler — 그룹내 매입 요청 (BARO Phase 2, 양쪽 테넌트가 같은 테이블 다른 권한).
+// IntercompanyRequestHandler — 그룹내 매입 요청 (BARO Phase 2).
+// 양쪽 테넌트가 같은 테이블에 다른 액션 권한을 가지므로 두 feature 로 분리(D-120).
 func (h *IntercompanyRequestHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/intercompany-requests", func(r chi.Router) {
-		// BARO 측 액션
-		r.With(g.BaroOnly).Get("/mine", h.Mine)
-		r.With(g.BaroOnly, g.Write).Post("/", h.Create)
-		r.With(g.BaroOnly, g.Write).Patch("/{id}/cancel", h.Cancel)
-		r.With(g.BaroOnly, g.Write).Patch("/{id}/receive", h.Receive)
-		// 탑솔라 측 액션
-		r.With(g.TopsolarOnly).Get("/inbox", h.Inbox)
-		r.With(g.TopsolarOnly, g.Write).Patch("/{id}/reject", h.Reject)
-		r.With(g.TopsolarOnly, g.Write).Patch("/{id}/fulfill", h.Fulfill)
+		// BARO 측 액션 — feature.IDIntercompanyRequestBaro
+		r.With(g.Feature(feature.IDIntercompanyRequestBaro)).Get("/mine", h.Mine)
+		r.With(g.Feature(feature.IDIntercompanyRequestBaro), g.Write).Post("/", h.Create)
+		r.With(g.Feature(feature.IDIntercompanyRequestBaro), g.Write).Patch("/{id}/cancel", h.Cancel)
+		r.With(g.Feature(feature.IDIntercompanyRequestBaro), g.Write).Patch("/{id}/receive", h.Receive)
+		// module 측 액션 — feature.IDIntercompanyRequestInbox
+		r.With(g.Feature(feature.IDIntercompanyRequestInbox)).Get("/inbox", h.Inbox)
+		r.With(g.Feature(feature.IDIntercompanyRequestInbox), g.Write).Patch("/{id}/reject", h.Reject)
+		r.With(g.Feature(feature.IDIntercompanyRequestInbox), g.Write).Patch("/{id}/fulfill", h.Fulfill)
 	})
 }
 
@@ -301,10 +304,10 @@ func (h *InventoryAllocationHandler) RegisterRoutes(r chi.Router, g middleware.G
 	})
 }
 
-// LCHandler — 신용장 (D-108 탑솔라 전용).
+// LCHandler — 신용장 (D-120: feature.IDTxLC).
 func (h *LCHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/lcs", func(r chi.Router) {
-		r.Use(g.TopsolarOnly)
+		r.Use(g.Feature(feature.IDTxLC))
 		r.Get("/", h.List)
 		r.Get("/{id}/lines", h.ListLines)
 		r.Get("/{id}", h.GetByID)
@@ -317,10 +320,10 @@ func (h *LCHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
-// LimitChangeHandler — LC 한도 변경 이력 (D-108 탑솔라 전용).
+// LimitChangeHandler — LC 한도 변경 이력 (D-120: feature.IDTxLCLimit).
 func (h *LimitChangeHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/limit-changes", func(r chi.Router) {
-		r.Use(g.TopsolarOnly)
+		r.Use(g.Feature(feature.IDTxLCLimit))
 		r.Get("/", h.List)
 		r.With(g.Write).Post("/", h.Create)
 	})
@@ -392,7 +395,7 @@ func (h *OrderHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
 	r.Route("/baro/orders", func(r chi.Router) {
-		r.Use(g.BaroOnly)
+		r.Use(g.Feature(feature.IDBaroOrders))
 		r.Get("/recent", h.RecentByPartner)
 		r.With(g.Write).Post("/{id}/clone", h.Clone)
 	})
@@ -409,14 +412,14 @@ func (h *OutboundHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
-// PartnerActivityHandler — CRM 활동 로그 (BARO 전용). /partners/{id}/activities는 PartnerHandler가 마운트.
+// PartnerActivityHandler — CRM 활동 로그 (BARO 전용 D-109, feature.IDCRMPartnerActivity).
 func (h *PartnerActivityHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/partner-activities", func(r chi.Router) {
-		r.Use(g.BaroOnly)
+		r.Use(g.Feature(feature.IDCRMPartnerActivity))
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Patch("/{id}/followup", h.ToggleFollowup)
 	})
-	r.With(g.BaroOnly).Get("/me/open-followups", h.MyOpenFollowups)
+	r.With(g.Feature(feature.IDCRMPartnerActivity)).Get("/me/open-followups", h.MyOpenFollowups)
 }
 
 // PartnerHandler — /partners CRUD + /{id}/activities (PartnerActivity 위임).
@@ -424,8 +427,8 @@ func (h *PartnerHandler) RegisterRoutes(r chi.Router, g middleware.Gates, activi
 	r.Route("/partners", func(r chi.Router) {
 		r.Get("/", h.List)
 		r.Get("/{id}", h.GetByID)
-		// CRM 활동 로그는 BARO 전용 alias — 탑솔라 토큰은 403
-		r.With(g.BaroOnly).Get("/{id}/activities", activityH.ListByPartner)
+		// CRM 활동 로그는 BARO 전용 alias — 다른 테넌트 토큰은 403 (D-109)
+		r.With(g.Feature(feature.IDCRMPartnerActivity)).Get("/{id}/activities", activityH.ListByPartner)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
 		// 메타 GUI inline 편집 진입점 — UpdatePartnerRequest 의 모든 필드가 optional.
@@ -435,10 +438,10 @@ func (h *PartnerHandler) RegisterRoutes(r chi.Router, g middleware.Gates, activi
 	})
 }
 
-// PartnerPriceBookHandler — 거래처별 단가표 (BARO Phase 1, baroOnly).
+// PartnerPriceBookHandler — 거래처별 단가표 (BARO Phase 1, feature.IDBaroPriceBook).
 func (h *PartnerPriceBookHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/partner-prices", func(r chi.Router) {
-		r.Use(g.BaroOnly)
+		r.Use(g.Feature(feature.IDBaroPriceBook))
 		r.Get("/", h.List)
 		r.Get("/lookup", h.Lookup)
 		r.Get("/{id}", h.GetByID)
@@ -468,10 +471,10 @@ func (h *POHandler) RegisterRoutes(r chi.Router, g middleware.Gates, lineH *POLi
 	})
 }
 
-// PriceHistoryHandler — 수입 단가 이력 (D-108 탑솔라 전용, DELETE 없음).
+// PriceHistoryHandler — 수입 단가 이력 (D-120: feature.IDTxPriceHistory, DELETE 없음).
 func (h *PriceHistoryHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/price-histories", func(r chi.Router) {
-		r.Use(g.TopsolarOnly)
+		r.Use(g.Feature(feature.IDTxPriceHistory))
 		r.Get("/", h.List)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
@@ -535,10 +538,10 @@ func (h *SaleHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
-// TTHandler — T/T 계약금 (D-108 탑솔라 전용).
+// TTHandler — T/T 계약금 (D-120: feature.IDTxTT).
 func (h *TTHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/tts", func(r chi.Router) {
-		r.Use(g.TopsolarOnly)
+		r.Use(g.Feature(feature.IDTxTT))
 		r.Get("/", h.List)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)

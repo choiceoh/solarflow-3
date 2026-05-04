@@ -741,3 +741,43 @@
   - `router_test.go`에 cable module 계열 통과 및 BARO 전용 차단 테스트 추가.
   - `tenantScope.test.ts`에 `cable.topworks.ltd`/`cable-stage` 호스트 감지 테스트 추가.
 - **날짜**: 2026-05-03
+
+## D-120: 테넌트 격리는 feature 카탈로그 + 배선 매트릭스로 일원화한다
+- **결정**: `topsolarOnly`/`baroOnly`로 표현되던 테넌트 게이트를 **feature 단위 카탈로그 + 배선 매트릭스** 두 축으로 재구성한다. 코드는 어떤 feature를 만드는지만 선언하고, "어느 테넌트가 어느 feature를 쓰는가(기능 배선)"와 "그 feature가 어느 행/컬럼을 보는가(데이터 배선)"는 별개의 데이터 레이어에서 관리한다.
+  - **feature_id 명명 규약**: `domain.action[.qualifier]` 도트 표기. 예) `cost.detail.read`, `lc.line.write`, `baro.incoming.read`. 도메인은 단일 단어 소문자, action은 `read|write|delete|admin`을 기본으로 하되 도메인 고유 액션(`fulfill`, `match` 등)도 허용. 와일드카드 매칭은 배선 단계에서만 쓰며 `*`는 마지막 segment에 한해 허용(`baro.*` ✅, `*.read` ❌).
+  - **feature 그래뉼러러티**: **"하나의 비즈니스 액션 = 하나의 feature"**가 기본. 한 라우트가 한 feature에 매핑되거나, 의미상 같이 다니는 라우트 군이 하나로 묶일 수 있다(예: `/cost-details/*`의 모든 메서드 = `cost.detail.*` 두 개 — read/write). UI 화면 단위는 너무 거칠고, 라우트 단위는 너무 잘다.
+  - **두 축 분리(기능 배선 ↔ 데이터 배선)**:
+    - **기능 배선(capability)**: `(tenant, feature_id) → enabled`. 미들웨어 `RequireFeature(id)`가 강제. 위반 시 403.
+    - **데이터 배선(scope)**: `(tenant, feature_id) → row_filter, column_mask`. 같은 feature가 켜진 두 테넌트가 서로 다른 행/컬럼만 보게 한다. 쿼리 레이어 + 응답 변환에서 강제. row_filter 누락 시 0행, column_mask 누락 시 모든 컬럼 노출.
+    - 두 축은 절대 한 코드 경로에 합치지 않는다. 한 축이 뚫려도 다른 축이 fail-closed로 막아야 한다.
+  - **데이터 스코프 DSL**: row_filter/column_mask는 JSON으로 표현해 메타 편집기에서 admin이 직접 편집 가능하게 한다. 초기 지원 형식:
+    ```
+    {
+      "row_filter": { "company_code": { "$in": ["TS","D1","HS"] } },
+      "column_mask": ["unit_price", "amount"]
+    }
+    ```
+    SQL fragment 직접 입력은 금지(admin이 SQL 못 씀 + injection 위험). 새 연산자 필요 시 카탈로그 측에 명시 추가.
+  - **카탈로그 정본 위치**: `backend/internal/feature/catalog.go`가 코드 측 정본. 각 entry는 `{ ID, Name, Description, DefaultTenants, DefaultDataScope }`. `harness/FEATURE-WIRING-MATRIX.md`는 사람이 읽는 인덱스로 카탈로그를 그대로 미러링한다(자동 검증 대상).
+  - **DB 배선 테이블**: `tenant_features (tenant text, feature_id text, enabled bool, ...)`, `tenant_data_scopes (tenant, feature_id, row_filter jsonb, column_mask jsonb, ...)`. 카탈로그 default는 코드에 있고, DB 행이 있으면 그 행이 default를 override 한다(per-tenant override).
+  - **fail-closed 정책**: `RequireFeature(id)`는 (1) catalog에 id가 없으면 500(설정 오류), (2) tenant ∈ resolved enabled set이 아니면 403. **이번 PR에서는 호환을 위해 catalog default가 곧 enabled set이고 DB 테이블은 빈 상태로 둔다(=현재 동작 그대로)**. 모든 라우트의 마이그레이션이 끝나고 회귀 테스트가 통과한 뒤 fail-closed 스위치(빈 카탈로그 = 0 tenants)는 별도 D-NNN으로 결정한다.
+  - **강제 메커니즘 (다층)**:
+    1. **카탈로그가 단일 소스** — `RequireFeature("foo")`의 인자는 `feature.IDXxx` 상수만 허용 (자유 문자열 금지). 미정의 ID는 컴파일 에러는 아니지만 startup 시 패닉.
+    2. **`feature_coverage_test.go`** — chi 라우터를 walk하면서 모든 비공개 라우트가 정확히 하나의 feature_id에 매핑됨을 검증. 라우트 추가 시 카탈로그 미갱신이면 테스트 실패.
+    3. **`matrix_consistency_test.go`** — `harness/FEATURE-WIRING-MATRIX.md`에 적힌 모든 (feature, tenant) 쌍이 catalog와 일치함을 검증. 매트릭스 누락 = 테스트 실패.
+    4. **PR 체크리스트 갱신** — `harness/RULES.md`에 "기능 추가/수정 시 catalog + matrix 동시 갱신" 항목 추가. PR template에서 명시.
+  - **legacy 호환**: 기존 `g.TopsolarOnly`/`g.BaroOnly`는 카탈로그의 가상 feature `__legacy.topsolar_only`/`__legacy.baro_only`로 매핑 유지. routes.go 마이그레이션은 한 번에 끝낸다(부분 마이그레이션 시 어느 게이트가 권위인지 헷갈림).
+- **이유**: 현재 `TopsolarOnly`라는 이름과 실제 의미(`{topsolar, cable}` 부분집합)가 어긋나고(D-119), 새 테넌트가 추가될 때마다 미들웨어 이름과 그룹 정의를 다시 손봐야 한다. 또한 D-116처럼 "행은 보이지만 컬럼은 가려야 하는" 케이스가 sanitized API 별도 라우트로 fork돼 같은 패턴이 늘어나면 유지비가 폭발한다. feature 카탈로그 + 두 축 분리로 옮기면:
+  - 새 테넌트 추가 = 카탈로그/매트릭스에 enabled 행 추가. 코드 변경 0.
+  - 행/컬럼 마스킹 = sanitized API fork 없이 데이터 배선 한 줄.
+  - admin이 메타 편집기에서 매트릭스를 직접 편집 가능 → GUI 메타 편집기 product 비전과 정합.
+- **운영 기준**:
+  - 모든 신규 라우트는 `r.Use(middleware.RequireFeature(feature.IDXxx))` 형태로 게이트한다. `g.TopsolarOnly`/`g.BaroOnly` 신규 사용 금지(legacy 호환만).
+  - 카탈로그(catalog.go)와 매트릭스(FEATURE-WIRING-MATRIX.md)는 같은 PR에서 동시 갱신한다. 한쪽만 갱신된 PR은 일치 검증 테스트가 잡는다.
+  - 데이터 배선 row_filter/column_mask 실제 강제(쿼리 레이어 통합)는 후속 작업으로 분리한다. 이번 결정은 (a) 두 축의 스키마와 (b) 기능 배선 enforcement까지만 적용한다.
+  - 메타 편집기에 기능 배선 / 데이터 스코프 탭 추가는 별도 작업으로 분리하고 카탈로그/매트릭스가 안정된 후 착수한다.
+- **검증**:
+  - `feature_coverage_test.go`: chi.Walk으로 비공개 라우트가 모두 catalog ID에 매핑됨을 확인.
+  - `matrix_consistency_test.go`: 매트릭스 markdown ↔ catalog 일치.
+  - 기존 `tenant_scope_test.go`/`router_test.go`의 BARO·cable·topsolar 차단/통과 케이스가 RequireFeature 마이그레이션 후에도 동일하게 통과(회귀 가드).
+- **날짜**: 2026-05-04
