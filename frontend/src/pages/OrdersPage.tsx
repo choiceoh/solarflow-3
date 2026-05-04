@@ -330,6 +330,30 @@ export default function OrdersPage() {
     () => outboundsWithSales.filter(outbound => outbound.status === 'active').length,
     [outboundsWithSales],
   );
+  // 최근 4주(이번 주 포함, 월요일 시작) 출고 capacity. 좌→우 = 과거→현재.
+  const weeklyOutbound = useMemo(() => {
+    const buckets = [0, 0, 0, 0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayDow = today.getDay();
+    const todayOffset = todayDow === 0 ? 6 : todayDow - 1;
+    const thisWeekStart = new Date(today);
+    thisWeekStart.setDate(today.getDate() - todayOffset);
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    for (const outbound of outboundsWithSales) {
+      if (!outbound.outbound_date) continue;
+      const d = new Date(outbound.outbound_date);
+      if (Number.isNaN(d.getTime())) continue;
+      d.setHours(0, 0, 0, 0);
+      const dow = d.getDay();
+      const offset = dow === 0 ? 6 : dow - 1;
+      const itemWeekStart = new Date(d);
+      itemWeekStart.setDate(d.getDate() - offset);
+      const diff = Math.round((thisWeekStart.getTime() - itemWeekStart.getTime()) / weekMs);
+      if (diff >= 0 && diff < 4) buckets[3 - diff] += outbound.capacity_kw ?? 0;
+    }
+    return { buckets, total: buckets.reduce((s, v) => s + v, 0), max: Math.max(...buckets) };
+  }, [outboundsWithSales]);
   const invoicePending = useMemo(
     () => sales.filter(item => !item.tax_invoice_date).length,
     [sales],
@@ -771,9 +795,16 @@ export default function OrdersPage() {
               </RailBlock>
               <RailBlock title="주간 출고" last>
                 <div className="sf-mini-bars">
-                  {[3.2, 4.8, 6.1, 4.2].map((value, index) => <span key={index} style={{ height: `${(value / 6.5) * 100}%` }} />)}
+                  {weeklyOutbound.buckets.map((value, index) => (
+                    <span
+                      key={index}
+                      style={{ height: `${weeklyOutbound.max > 0 ? (value / weeklyOutbound.max) * 100 : 0}%` }}
+                    />
+                  ))}
                 </div>
-                <div className="mono mt-2 text-center text-[10.5px] text-[var(--ink-3)]">합계 18.3 MW · 다음 4주</div>
+                <div className="mono mt-2 text-center text-[10.5px] text-[var(--ink-3)]">
+                  합계 {fmtSalesMw(weeklyOutbound.total)} MW · 최근 4주
+                </div>
               </RailBlock>
             </>
           )}
