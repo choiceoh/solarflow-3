@@ -94,6 +94,10 @@ const config: MetaDetailConfig = {
       title: '라인 (품목 명세)',
       contentBlock: { blockId: 'po_lines_block' },
     },
+    {
+      title: '첨부파일',
+      contentBlock: { blockId: 'po_attachments_block' },
+    },
   ],
 };
 

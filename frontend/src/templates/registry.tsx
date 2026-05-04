@@ -46,8 +46,9 @@ import {
   type POStatus, type LCStatus,
   type PurchaseOrder, type LCRecord,
 } from '@/types/procurement';
-import { usePOList, useLCList, usePOLines } from '@/hooks/useProcurement';
+import { usePOList, useLCList, usePOLines, useLCLines } from '@/hooks/useProcurement';
 import StatusPill from '@/components/common/StatusPill';
+import AttachmentWidget from '@/components/common/AttachmentWidget';
 import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite } from '@/types/masters';
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
@@ -828,6 +829,87 @@ function POLinesContentBlock({ poId }: { poId: string }) {
   );
 }
 
+// LC 라인 미니 테이블 — PO 라인 패턴 대칭. 분할 인수 라인을 quick read.
+function LCLinesContentBlock({ lcId }: { lcId: string }) {
+  const { data: lines, loading } = useLCLines(lcId || null);
+  if (!lcId) return null;
+  if (loading) {
+    return <p className="text-xs text-muted-foreground">라인 로드 중...</p>;
+  }
+  if (!lines || lines.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        등록된 라인이 없습니다 — /procurement에서 LC "라인" 버튼으로 추가
+      </p>
+    );
+  }
+  const totalQty = lines.reduce((s, l) => s + (l.quantity ?? 0), 0);
+  const totalUsd = lines.reduce((s, l) => s + (l.amount_usd ?? 0), 0);
+  const totalKw = lines.reduce((s, l) => s + (l.capacity_kw ?? 0), 0);
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full text-[12px]">
+        <thead className="bg-muted/50 text-muted-foreground">
+          <tr>
+            <th className="p-2 text-left">품번</th>
+            <th className="p-2 text-right">수량</th>
+            <th className="p-2 text-right">용량(kW)</th>
+            <th className="p-2 text-right">USD/Wp</th>
+            <th className="p-2 text-right">금액(USD)</th>
+            <th className="p-2 text-center">구분</th>
+            <th className="p-2 text-center">유무상</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l) => (
+            <tr key={l.lc_line_id} className="border-t">
+              <td className="p-2 font-medium">
+                {l.product_code ?? l.products?.product_code ?? '—'}
+              </td>
+              <td className="p-2 text-right font-mono tabular-nums">
+                {(l.quantity ?? 0).toLocaleString()}
+              </td>
+              <td className="p-2 text-right font-mono tabular-nums">
+                {(l.capacity_kw ?? 0).toFixed(2)}
+              </td>
+              <td className="p-2 text-right font-mono tabular-nums">
+                {l.unit_price_usd_wp != null ? l.unit_price_usd_wp.toFixed(3) : '—'}
+              </td>
+              <td className="p-2 text-right font-mono tabular-nums">
+                {l.amount_usd != null
+                  ? l.amount_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                  : '—'}
+              </td>
+              <td className="p-2 text-center text-muted-foreground">
+                {l.item_type === 'main' ? '본품' : l.item_type === 'spare' ? '스페어' : '—'}
+              </td>
+              <td className="p-2 text-center text-muted-foreground">
+                {l.payment_type === 'paid' ? '유상' : l.payment_type === 'free' ? '무상' : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="bg-muted/30">
+          <tr className="border-t font-medium">
+            <td className="p-2">합계 {lines.length}건</td>
+            <td className="p-2 text-right font-mono tabular-nums">
+              {totalQty.toLocaleString()}
+            </td>
+            <td className="p-2 text-right font-mono tabular-nums">
+              {totalKw.toFixed(2)}
+            </td>
+            <td className="p-2" />
+            <td className="p-2 text-right font-mono tabular-nums">
+              {totalUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            </td>
+            <td className="p-2" colSpan={2} />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 // ─── Content blocks (탭 콘텐츠 위에 끼워넣는 블록) ─────────────────────────
 export const contentBlocks: Record<string, ContentBlock> = {
   sale_summary_cards: ({ items }) => <SaleSummaryCards items={items as never} />,
@@ -882,6 +964,39 @@ export const contentBlocks: Record<string, ContentBlock> = {
   po_lines_block: ({ items }) => {
     const po = items[0] as PurchaseOrder;
     return <POLinesContentBlock poId={po?.po_id ?? ''} />;
+  },
+  // 신용장(LC) 상세 — 라인(분할 인수) 미니 테이블. PO 패턴 대칭.
+  lc_lines_block: ({ items }) => {
+    const lc = items[0] as LCRecord;
+    return <LCLinesContentBlock lcId={lc?.lc_id ?? ''} />;
+  },
+  // 발주(PO) 상세 — 첨부파일 위젯 (계약서 PDF 등). banks AttachmentWidget 패턴.
+  po_attachments_block: ({ items }) => {
+    const po = items[0] as PurchaseOrder;
+    if (!po?.po_id) return null;
+    return (
+      <AttachmentWidget
+        entityType="purchase_orders"
+        entityId={po.po_id}
+        fileType="po_contract_pdf"
+        title={`${po.po_number ?? 'PO'} 계약서`}
+        uploadLabel="계약서 PDF 업로드"
+      />
+    );
+  },
+  // 신용장(LC) 상세 — 첨부파일 위젯. PODetailView의 LC 서브테이블이 lc_swift_pdf를 쓰므로 메타 상세는 lc_documents로 분리.
+  lc_attachments_block: ({ items }) => {
+    const lc = items[0] as LCRecord;
+    if (!lc?.lc_id) return null;
+    return (
+      <AttachmentWidget
+        entityType="lc_records"
+        entityId={lc.lc_id}
+        fileType="lc_documents"
+        title={`${lc.lc_number ?? 'LC'} 문서`}
+        uploadLabel="LC 문서 업로드"
+      />
+    );
   },
   // Phase 4 (bank-meta): 은행 detail 의 "L/C 사용 현황" 탭 placeholder.
   // 향후 LCLimitSummaryCards / BankLimitTable 같은 banking 위젯과 연결.
@@ -1307,6 +1422,9 @@ export const computedFormulaMeta: RegistryMeta = {};
 export const formRefinementMeta: RegistryMeta = {};
 export const contentBlockMeta: RegistryMeta = {
   po_lines_block: { label: 'PO 라인 미니 테이블', description: 'usePOLines로 라인 fetch + 품번/수량/단가/합계 표시' },
+  lc_lines_block: { label: 'LC 라인 미니 테이블', description: 'useLCLines로 분할 인수 라인 fetch + 품번/수량/용량/금액 표시' },
+  po_attachments_block: { label: 'PO 첨부파일', description: 'AttachmentWidget — purchase_orders / po_contract_pdf' },
+  lc_attachments_block: { label: 'LC 첨부파일', description: 'AttachmentWidget — lc_records / lc_documents (PODetailView LC swift PDF와 분리)' },
   sale_summary_cards: { label: '판매 요약 카드', description: '판매 통계 (건수/총액/마감률) 카드' },
   bl_status_badge: { label: 'BL 상태 뱃지', description: 'detail 헤더 — 입고 상태 표시' },
   bl_memo_block: { label: 'BL 메모 블록', description: 'detail 메모 섹션 — pre-wrap 텍스트' },

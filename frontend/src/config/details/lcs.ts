@@ -86,6 +86,14 @@ const config: MetaDetailConfig = {
         },
       ],
     },
+    {
+      title: '라인 (분할 인수 명세)',
+      contentBlock: { blockId: 'lc_lines_block' },
+    },
+    {
+      title: '첨부파일',
+      contentBlock: { blockId: 'lc_attachments_block' },
+    },
   ],
 };
 
