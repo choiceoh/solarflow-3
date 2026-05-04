@@ -241,15 +241,96 @@ export function FilterChips({
   );
 }
 
-export type FilterItem = {
-  label: string;
-  value: string;
-  onChange: (next: string) => void;
-  options: { value: string; label: string }[];
-  disabled?: boolean;
-};
+export type DateRangeValue = { start: string; end: string } | null;
+
+export type FilterItem =
+  | {
+      kind?: 'select';
+      label: string;
+      value: string;
+      onChange: (next: string) => void;
+      options: { value: string; label: string }[];
+      disabled?: boolean;
+    }
+  | {
+      kind: 'date_range';
+      label: string;
+      value: DateRangeValue;
+      onChange: (next: DateRangeValue) => void;
+      // 빠른 선택 프리셋 (이번 달, 지난 달, 최근 7일 등). 미지정 시 기본 프리셋 사용.
+      presets?: { label: string; range: () => { start: string; end: string } }[];
+      disabled?: boolean;
+    };
 
 const isAllValue = (v: string) => !v || v === 'all';
+
+const isItemActive = (it: FilterItem) =>
+  it.kind === 'date_range' ? it.value !== null : !isAllValue(it.value);
+
+const resetItem = (it: FilterItem) => {
+  if (it.disabled) return;
+  if (it.kind === 'date_range') {
+    if (it.value !== null) it.onChange(null);
+  } else if (!isAllValue(it.value)) {
+    it.onChange('');
+  }
+};
+
+// YYYY-MM-DD 로컬 날짜 포맷 (UTC 변환 없이 사용자 시간대 기준).
+const ymd = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const defaultDateRangePresets: NonNullable<Extract<FilterItem, { kind: 'date_range' }>['presets']> = [
+  {
+    label: '이번 달',
+    range: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { start: ymd(start), end: ymd(end) };
+    },
+  },
+  {
+    label: '지난 달',
+    range: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      return { start: ymd(start), end: ymd(end) };
+    },
+  },
+  {
+    label: '최근 7일',
+    range: () => {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(end.getDate() - 6);
+      return { start: ymd(start), end: ymd(end) };
+    },
+  },
+  {
+    label: '최근 30일',
+    range: () => {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(end.getDate() - 29);
+      return { start: ymd(start), end: ymd(end) };
+    },
+  },
+  {
+    label: '올해',
+    range: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), 0, 1);
+      const end = new Date(now.getFullYear(), 11, 31);
+      return { start: ymd(start), end: ymd(end) };
+    },
+  },
+];
 
 export function FilterButton({ items }: { items: FilterItem[] }) {
   const [open, setOpen] = useState(false);
@@ -293,8 +374,8 @@ export function FilterButton({ items }: { items: FilterItem[] }) {
     };
   }, [open]);
 
-  const activeCount = items.filter((it) => !isAllValue(it.value)).length;
-  const reset = () => items.forEach((it) => { if (!it.disabled && !isAllValue(it.value)) it.onChange(''); });
+  const activeCount = items.filter(isItemActive).length;
+  const reset = () => items.forEach(resetItem);
 
   return (
     <>
@@ -352,26 +433,27 @@ export function FilterButton({ items }: { items: FilterItem[] }) {
             >초기화</button>
           </div>
           <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 360, overflowY: 'auto' }}>
-            {items.map((it) => {
-              const allActive = isAllValue(it.value);
-              return (
-                <div key={it.label} style={{ opacity: it.disabled ? 0.5 : 1 }}>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-2)', fontWeight: 600, marginBottom: 6, letterSpacing: '-0.005em' }}>{it.label}</div>
+            {items.map((it) => (
+              <div key={it.label} style={{ opacity: it.disabled ? 0.5 : 1 }}>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-2)', fontWeight: 600, marginBottom: 6, letterSpacing: '-0.005em' }}>{it.label}</div>
+                {it.kind === 'date_range' ? (
+                  <DateRangePicker item={it} />
+                ) : (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    <FilterChip label="전체" active={allActive} disabled={it.disabled} onClick={() => it.onChange('')} />
+                    <FilterChip label="전체" active={isAllValue(it.value)} disabled={it.disabled} onClick={() => it.onChange('')} />
                     {it.options.map((o) => (
                       <FilterChip
                         key={o.value}
                         label={o.label}
-                        active={!allActive && it.value === o.value}
+                        active={!isAllValue(it.value) && it.value === o.value}
                         disabled={it.disabled}
                         onClick={() => it.onChange(o.value)}
                       />
                     ))}
                   </div>
-                </div>
-              );
-            })}
+                )}
+              </div>
+            ))}
           </div>
           <div style={{ borderTop: '1px solid var(--line)', padding: '8px 14px', display: 'flex', justifyContent: 'flex-end' }}>
             <button
@@ -416,5 +498,85 @@ function FilterChip({ label, active, disabled, onClick }: {
         letterSpacing: '-0.005em',
       }}
     >{label}</button>
+  );
+}
+
+function DateRangePicker({ item }: { item: Extract<FilterItem, { kind: 'date_range' }> }) {
+  const presets = item.presets ?? defaultDateRangePresets;
+  const start = item.value?.start ?? '';
+  const end = item.value?.end ?? '';
+  const matchedPreset = item.value
+    ? presets.find((p) => {
+        const r = p.range();
+        return r.start === item.value!.start && r.end === item.value!.end;
+      })
+    : null;
+
+  const commit = (next: { start: string; end: string }) => {
+    if (item.disabled) return;
+    if (!next.start || !next.end) return;
+    // start 가 end 보다 늦으면 자동으로 swap — UX 친화적.
+    const ordered = next.start > next.end ? { start: next.end, end: next.start } : next;
+    item.onChange(ordered);
+  };
+
+  const inputStyle = {
+    flex: 1,
+    minWidth: 0,
+    padding: '4px 6px',
+    border: '1px solid var(--line)',
+    borderRadius: 3,
+    fontFamily: 'inherit',
+    fontSize: 11,
+    color: 'var(--ink)',
+    background: 'var(--surface)',
+  } as const;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        <FilterChip label="전체" active={item.value === null} disabled={item.disabled} onClick={() => item.onChange(null)} />
+        {presets.map((p) => (
+          <FilterChip
+            key={p.label}
+            label={p.label}
+            active={matchedPreset?.label === p.label}
+            disabled={item.disabled}
+            onClick={() => commit(p.range())}
+          />
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          type="date"
+          value={start}
+          disabled={item.disabled}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (!next) {
+              if (!end) item.onChange(null);
+              return;
+            }
+            commit({ start: next, end: end || next });
+          }}
+          style={inputStyle}
+        />
+        <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>~</span>
+        <input
+          type="date"
+          value={end}
+          disabled={item.disabled}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (!next) {
+              if (!start) item.onChange(null);
+              return;
+            }
+            commit({ start: start || next, end: next });
+          }}
+          style={inputStyle}
+        />
+      </div>
+    </div>
   );
 }

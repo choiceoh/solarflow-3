@@ -40,7 +40,13 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 비유: ?month=2025-03 — 특정 월의 부대비용만 필터
-	if month := r.URL.Query().Get("month"); month != "" {
+	// ?start=YYYY-MM-DD&end=YYYY-MM-DD — 날짜 범위. month 컬럼이 YYYY-MM 문자열이라
+	// 범위의 start/end 에서 앞 7자(YYYY-MM)를 잘라 범위 비교한다. start+end 가 함께 지정되면 month 보다 우선.
+	start := r.URL.Query().Get("start")
+	end := r.URL.Query().Get("end")
+	if len(start) >= 7 && len(end) >= 7 {
+		query = query.Gte("month", start[:7]).Lte("month", end[:7])
+	} else if month := r.URL.Query().Get("month"); month != "" {
 		query = query.Eq("month", month)
 	}
 
