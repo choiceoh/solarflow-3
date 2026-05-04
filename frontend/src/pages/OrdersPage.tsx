@@ -6,7 +6,7 @@ import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
 import { useOrderList } from '@/hooks/useOrders';
 import { useReceiptList } from '@/hooks/useReceipts';
-import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
+import { useOutboundListAll, useSaleList } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import SkeletonRows from '@/components/common/SkeletonRows';
@@ -156,7 +156,7 @@ export default function OrdersPage() {
   const receiptColVis = useColumnVisibility(RECEIPT_TABLE_ID, RECEIPT_COLUMN_META);
   const receiptColPin = useColumnPinning(RECEIPT_TABLE_ID);
   // 칩 필터는 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
-  const { data: allOutbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundList();
+  const { data: allOutbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundListAll();
 
   const outbounds = useMemo(() => allOutbounds.filter((o) => {
     if (obStatusFilter && o.status !== obStatusFilter) return false
