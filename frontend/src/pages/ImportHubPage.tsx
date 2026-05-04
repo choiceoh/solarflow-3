@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Database, Download, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
+import ExternalFormatCard from '@/components/excel/ExternalFormatCard';
 import UnifiedImportDialog from '@/components/excel/UnifiedImportDialog';
 import UnifiedImportResultDialog from '@/components/excel/UnifiedImportResultDialog';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnifiedExcel } from '@/hooks/useUnifiedExcel';
+import { EXTERNAL_FORMATS } from '@/lib/externalFormats/registry';
 import { notify } from '@/lib/notify';
 import type { TemplateType } from '@/types/excel';
 
@@ -157,30 +160,54 @@ export default function ImportHubPage() {
         { label: '연결 보정', value: '매칭', sub: '관계·상태 관리', tone: 'ink' },
       ]}
     >
-      <div className="grid gap-4 xl:grid-cols-2">
-        {IMPORT_GROUPS.map((group) => (
-          <section key={group.title} className="space-y-3">
-            <div className="eyebrow">{group.title}</div>
-            <div className="grid gap-2">
-              {group.items.map((item) => (
-                <div
-                  key={item.type}
-                  className="flex min-h-[68px] items-center gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2"
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--line)] bg-[var(--bg-2)]">
-                    <FileSpreadsheet className="h-4 w-4 text-[var(--ink-3)]" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-semibold text-[var(--ink)]">{item.label}</div>
-                    <div className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{item.sub}</div>
-                  </div>
-                  <ExcelToolbar type={item.type} />
+      <Tabs defaultValue="standard">
+        <TabsList variant="line">
+          <TabsTrigger value="standard">표준 양식</TabsTrigger>
+          <TabsTrigger value="external">외부 양식 변환</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="standard" className="mt-4">
+          <div className="grid gap-4 xl:grid-cols-2">
+            {IMPORT_GROUPS.map((group) => (
+              <section key={group.title} className="space-y-3">
+                <div className="eyebrow">{group.title}</div>
+                <div className="grid gap-2">
+                  {group.items.map((item) => (
+                    <div
+                      key={item.type}
+                      className="flex min-h-[68px] items-center gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2"
+                    >
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--line)] bg-[var(--bg-2)]">
+                        <FileSpreadsheet className="h-4 w-4 text-[var(--ink-3)]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[13px] font-semibold text-[var(--ink)]">{item.label}</div>
+                        <div className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{item.sub}</div>
+                      </div>
+                      <ExcelToolbar type={item.type} />
+                    </div>
+                  ))}
                 </div>
+              </section>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="external" className="mt-4">
+          <section className="space-y-3">
+            <div className="eyebrow">외부 양식 변환</div>
+            <p className="text-[12px] text-[var(--ink-3)]">
+              협력사·그룹사에서 받은 비표준 엑셀을 SolarFlow 표준 양식으로 자동 변환합니다.
+              변환 후 표준 검증 단계(법인·품번·창고 매칭)로 자동 연결됩니다.
+            </p>
+            <div className="grid gap-2">
+              {EXTERNAL_FORMATS.map((fmt) => (
+                <ExternalFormatCard key={fmt.id} format={fmt} />
               ))}
             </div>
           </section>
-        ))}
-      </div>
+        </TabsContent>
+      </Tabs>
 
       <UnifiedImportDialog
         preview={unified.preview}
