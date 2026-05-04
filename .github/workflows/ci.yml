@@ -27,15 +27,18 @@ jobs:
           filters: |
             frontend:
               - 'frontend/**'
+              - '.github/workflows/ci.yml'
             backend:
               - 'backend/**'
               - '!backend/migrations/**'
               - '!backend/scripts/**'
               - '!backend/sql/**'
+              - '.github/workflows/ci.yml'
             engine:
               - 'engine/src/**'
               - 'engine/Cargo.toml'
               - 'engine/Cargo.lock'
+              - '.github/workflows/ci.yml'
 
   # 프론트 — Cloudflare Pages가 클린 인스톨로 빌드하므로 동일 환경에서 검증.
   # PR99에서 persist.ts deps 누락이 main에 들어가 #142~#145가 줄줄이 깨졌던 사고
@@ -53,7 +56,27 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - run: npm run build  # tsc -b && vite build
+      # vite/tsc 의 incremental 산출물(.vite, .tmp/*.tsbuildinfo)을 캐시.
+      # github.sha 키는 항상 미스 → restore-keys 로 직전 캐시 복원하는 incremental 패턴.
+      - name: Cache vite + tsc incrementals
+        uses: actions/cache@v4
+        with:
+          path: |
+            frontend/node_modules/.vite
+            frontend/node_modules/.tmp
+          key: ${{ runner.os }}-fe-build-${{ hashFiles('frontend/package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-fe-build-${{ hashFiles('frontend/package-lock.json') }}-
+            ${{ runner.os }}-fe-build-
+      # tsc 는 noEmit, vite 가 emit 전담이라 직렬일 이유 없음. 둘 다 실패 캐치.
+      - name: Type check + build (parallel)
+        shell: bash
+        run: |
+          set -e
+          npx tsc -b &
+          TSC_PID=$!
+          npx vite build
+          wait $TSC_PID
       - run: npm test --if-present -- --run
 
   # 백엔드 (Go) — 운영은 cron-deploy.sh가 머지 후 빌드하므로 PR 단계에서 막아야

@@ -6,7 +6,7 @@ import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
 import { useOrderList } from '@/hooks/useOrders';
 import { useReceiptList } from '@/hooks/useReceipts';
-import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
+import { useOutboundListAll, useSaleList } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import SkeletonRows from '@/components/common/SkeletonRows';
@@ -156,7 +156,7 @@ export default function OrdersPage() {
   const receiptColVis = useColumnVisibility(RECEIPT_TABLE_ID, RECEIPT_COLUMN_META);
   const receiptColPin = useColumnPinning(RECEIPT_TABLE_ID);
   // 칩 필터는 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
-  const { data: allOutbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundList();
+  const { data: allOutbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundListAll();
 
   const outbounds = useMemo(() => allOutbounds.filter((o) => {
     if (obStatusFilter && o.status !== obStatusFilter) return false
@@ -390,10 +390,14 @@ export default function OrdersPage() {
     const prevMonthYear = prevMonthDate.getFullYear();
     const prevMonthIdx = prevMonthDate.getMonth();
     const lastYear = currYear - 1;
+    const twoYearsAgo = currYear - 2;
     let year = 0;
     let prev = 0;
     let lastYearSame = 0;
     let lastYearHasAny = false;
+    // 최근 3년 전년동기 월별 capacity (Jan → 현재월), 좌→우 = (Y-2) … (Y-1) … Y 순차 배치.
+    const monthsThisYear = currMonth + 1;
+    const yoy3y = Array<number>(monthsThisYear * 3).fill(0);
     for (const outbound of outboundsWithSales) {
       if (!outbound.outbound_date) continue;
       const d = new Date(outbound.outbound_date);
@@ -408,11 +412,16 @@ export default function OrdersPage() {
         lastYearHasAny = true;
         if (m < currMonth || (m === currMonth && day <= currDay)) lastYearSame += kw;
       }
+      if (m <= currMonth) {
+        if (y === twoYearsAgo) yoy3y[m] += kw;
+        else if (y === lastYear) yoy3y[monthsThisYear + m] += kw;
+        else if (y === currYear) yoy3y[monthsThisYear * 2 + m] += kw;
+      }
     }
     const yoyPct = lastYearHasAny && lastYearSame > 0
       ? ((year - lastYearSame) / lastYearSame) * 100
       : null;
-    return { year, prev, currYear, prevMonth: prevMonthIdx + 1, yoyPct };
+    return { year, prev, currYear, prevMonth: prevMonthIdx + 1, yoyPct, yoy3y };
   }, [outboundsWithSales]);
   // 최근 12주(이번 주 포함, 월요일 시작) 출고 capacity. 좌→우 = 과거→현재.
   const weeklyOutbound = useMemo(() => {
@@ -563,7 +572,7 @@ export default function OrdersPage() {
       { lbl: '출고 전체', v: String(outboundsWithSales.length), u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar', spark: outboundCountSpark },
       { lbl: '계산서 연결', v: String(outboundsWithSales.filter(outbound => outbound.sale).length), u: '건', sub: '매출 전환됨', tone: 'info', spark: monthlyCount(outboundsWithSales.filter(o => o.sale), (o) => o.outbound_date) },
       { lbl: '전월 출고 용량', v: fmtSalesMw(monthlyOutboundKw.prev), u: 'MW', sub: `${monthlyOutboundKw.prevMonth}월 · 최근 6개월`, tone: 'ink', spark: outboundKwSpark },
-      { lbl: '금년 출고 용량', v: fmtSalesMw(monthlyOutboundKw.year), u: 'MW', sub: monthlyOutboundKw.yoyPct != null ? `${monthlyOutboundKw.currYear}년 누계 · 전년比 ${monthlyOutboundKw.yoyPct >= 0 ? '+' : ''}${monthlyOutboundKw.yoyPct.toFixed(1)}%` : `${monthlyOutboundKw.currYear}년 누계`, tone: 'pos' },
+      { lbl: '금년 출고 용량', v: fmtSalesMw(monthlyOutboundKw.year), u: 'MW', sub: monthlyOutboundKw.yoyPct != null ? `${monthlyOutboundKw.currYear}년 누계 · 전년比 ${monthlyOutboundKw.yoyPct >= 0 ? '+' : ''}${monthlyOutboundKw.yoyPct.toFixed(1)}%` : `${monthlyOutboundKw.currYear}년 누계`, tone: 'pos', spark: monthlyOutboundKw.yoy3y },
     ] :
     activeTab === 'sales' ? [
       { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${sales.length}건`, tone: 'solar', spark: saleTotalSpark },

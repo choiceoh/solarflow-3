@@ -75,6 +75,15 @@ export interface ColumnDef<T> extends ColumnVisibilityMeta {
   summaryFormatter?: (value: number, rows: T[]) => ReactNode;
 }
 
+export interface MetaTableServerMode {
+  pageIndex: number;
+  pageSize: number;
+  totalRowCount: number;
+  onPageChange: (next: { pageIndex: number; pageSize: number }) => void;
+  sorting?: SortingState;
+  onSortingChange?: (next: SortingState) => void;
+}
+
 export interface MetaTableProps<T> {
   /** localStorage scope — 컬럼 폭/정렬/고정/순서 영속 저장에 사용. 미지정 시 영속 비활성. */
   tableId?: string;
@@ -105,6 +114,14 @@ export interface MetaTableProps<T> {
   pageSize?: number;
   /** 페이지 크기 선택지. 기본 [25, 50, 100]. */
   pageSizeOptions?: number[];
+  /**
+   * 서버사이드 모드 제어. 미지정 시 기존 클라이언트 모드(items 전체 적재 후 client 페이지네이션·정렬·필터).
+   * 지정 시 items 는 이미 서버에서 페이지/정렬/필터된 한 페이지 분량이고,
+   * 페이지·정렬·전체 카운트·페이지 변경 콜백을 외부에서 통제한다.
+   *
+   * 모드 호환: serverMode 미지정 → 기존 동작 그대로. 다른 화면들은 영향 없음.
+   */
+  serverMode?: MetaTableServerMode;
 }
 
 function alignClass(align?: 'left' | 'right' | 'center'): string | undefined {
@@ -139,13 +156,17 @@ export function MetaTable<T>({
   tableId, columns, hidden, items, getRowKey, defaultSort, onRowClick,
   emptyMessage, emptyAction, footer, fillWidth, rowClassName, tableClassName, globalFilter,
   onFilteredRowCountChange, pinning, onPinningChange,
-  pageSize, pageSizeOptions,
+  pageSize, pageSizeOptions, serverMode,
 }: MetaTableProps<T>) {
-  const paginationEnabled = pageSize != null;
-  const [pagination, setPagination] = useState<PaginationState>(() => ({
+  const isServerMode = serverMode != null;
+  const paginationEnabled = isServerMode || pageSize != null;
+  const [clientPagination, setClientPagination] = useState<PaginationState>(() => ({
     pageIndex: 0,
     pageSize: pageSize ?? 50,
   }));
+  const pagination: PaginationState = isServerMode
+    ? { pageIndex: serverMode.pageIndex, pageSize: serverMode.pageSize }
+    : clientPagination;
   // ─── 영속 hooks — tableId 없으면 빈 scope 로 비영속 동작 ──────────────────
   // 폭/정렬/순서는 MetaTable 이 보유. pinning 은 ColumnVisibilityMenu 와 공유 필요해
   // 페이지가 보유하고 prop 으로 받음.
@@ -220,6 +241,11 @@ export function MetaTable<T>({
     return false;
   }, [columns]);
 
+  // ─── 서버 모드 정렬 상태 — serverMode.sorting / onSortingChange 위임 ─────
+  const sortingState: SortingState = isServerMode
+    ? (serverMode.sorting ?? [])
+    : (persistEnabled ? sortPersist.sorting : localSorting);
+
   // ─── useReactTable ───────────────────────────────────────────────────────
   const table = useReactTable({
     data: items,
@@ -227,7 +253,7 @@ export function MetaTable<T>({
     state: {
       columnVisibility,
       columnSizing: persistEnabled ? widths.sizing : {},
-      sorting: persistEnabled ? sortPersist.sorting : localSorting,
+      sorting: sortingState,
       columnPinning: (pinning as ColumnPinningState | undefined) ?? { left: [], right: [] },
       columnOrder: resolvedOrder,
       globalFilter: globalFilter ?? '',
@@ -236,7 +262,14 @@ export function MetaTable<T>({
     onColumnSizingChange: persistEnabled
       ? (updater) => widths.setSizing(updater as ColumnSizingState | ((prev: ColumnSizingState) => ColumnSizingState))
       : undefined,
-    onSortingChange: persistEnabled
+    onSortingChange: isServerMode
+      ? (updater) => {
+          if (!serverMode.onSortingChange) return;
+          const prev = sortingState;
+          const next = typeof updater === 'function' ? updater(prev) : updater;
+          serverMode.onSortingChange(next as SortingState);
+        }
+      : persistEnabled
       ? (updater) => sortPersist.setSorting(updater as SortingState | ((prev: SortingState) => SortingState))
       : (updater) => {
           setLocalSorting((prev) => {
@@ -254,23 +287,43 @@ export function MetaTable<T>({
     onColumnOrderChange: persistEnabled
       ? (updater) => orderPersist.setOrder(updater as ColumnOrderState | ((prev: ColumnOrderState) => ColumnOrderState))
       : undefined,
-    onPaginationChange: paginationEnabled ? setPagination : undefined,
-    autoResetPageIndex: true,
+    onPaginationChange: paginationEnabled
+      ? (updater) => {
+          if (isServerMode) {
+            const prev = pagination;
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            serverMode.onPageChange({ pageIndex: next.pageIndex, pageSize: next.pageSize });
+            return;
+          }
+          setClientPagination(updater);
+        }
+      : undefined,
+    autoResetPageIndex: !isServerMode,
     columnResizeMode: 'onChange',
     enableColumnResizing: persistEnabled,
     enableColumnPinning: pinningEnabled,
-    enableSortingRemoval: true,
+    enableSortingRemoval: !isServerMode,
+    manualPagination: isServerMode,
+    manualSorting: isServerMode,
+    manualFiltering: isServerMode,
+    pageCount: isServerMode ? Math.max(1, Math.ceil(serverMode.totalRowCount / serverMode.pageSize)) : undefined,
     globalFilterFn,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    ...(paginationEnabled ? { getPaginationRowModel: getPaginationRowModel() } : {}),
+    ...(isServerMode ? {} : { getSortedRowModel: getSortedRowModel() }),
+    ...(isServerMode ? {} : { getFilteredRowModel: getFilteredRowModel() }),
+    ...(paginationEnabled && !isServerMode ? { getPaginationRowModel: getPaginationRowModel() } : {}),
     getRowId: (row) => getRowKey(row),
   });
 
-  // 필터된 행 갯수 변동 시 외부 알림 (tableSub 카운트 표시 등)
-  const filteredRowCount = table.getFilteredRowModel().rows.length;
-  const filteredRows = table.getFilteredRowModel().rows.map((row) => row.original);
+  // 필터된 행 갯수 변동 시 외부 알림 (tableSub 카운트 표시 등).
+  // server 모드: totalRowCount 그대로 (한 페이지가 아닌 필터 후 전체).
+  // client 모드: 클라이언트 필터 후 행 수.
+  const filteredRowCount = isServerMode
+    ? serverMode.totalRowCount
+    : table.getFilteredRowModel().rows.length;
+  const filteredRows = isServerMode
+    ? items
+    : table.getFilteredRowModel().rows.map((row) => row.original);
   const summaryCells = useMemo(
     () => buildTableSummary(columns, filteredRows, (column, row) => {
       const source = columns.find((c) => c.key === column.key);
@@ -283,7 +336,9 @@ export function MetaTable<T>({
     onFilteredRowCountChange?.(filteredRowCount);
   }, [filteredRowCount, onFilteredRowCountChange]);
 
-  if (items.length === 0) {
+  // server 모드는 한 페이지가 비어도 totalRowCount > 0 이면 데이터 있는 상태 — 페이지 컨트롤 보존이 필요.
+  const isEmpty = isServerMode ? filteredRowCount === 0 : items.length === 0;
+  if (isEmpty) {
     return (
       <EmptyState
         message={emptyMessage}
@@ -489,7 +544,12 @@ export function MetaTable<T>({
               value={pagination.pageSize}
               onChange={(e) => {
                 const next = Number(e.target.value);
-                setPagination((prev) => ({ pageIndex: 0, pageSize: Number.isFinite(next) ? next : prev.pageSize }));
+                const newSize = Number.isFinite(next) ? next : pagination.pageSize;
+                if (isServerMode) {
+                  serverMode.onPageChange({ pageIndex: 0, pageSize: newSize });
+                } else {
+                  setClientPagination({ pageIndex: 0, pageSize: newSize });
+                }
               }}
               className="h-7 rounded-md border border-input bg-background px-1.5 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/45"
             >

@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search } from 'lucide-react';
+import type { SortingState } from '@tanstack/react-table';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { DateInput } from '@/components/ui/date-input';
 import { useAppStore } from '@/stores/appStore';
-import { useOutboundList, useSaleList } from '@/hooks/useOutbound';
+import { useOutboundList, useOutboundSummary, useSaleList } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { notify } from '@/lib/notify';
 import SkeletonRows from '@/components/common/SkeletonRows';
@@ -26,6 +27,11 @@ import {
 } from '@/types/outbound';
 import type { Partner } from '@/types/masters';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
+
+// 출고 테이블 기본 페이지 사이즈. 100 으로 잡으면 한 화면에 적당히 보이고 페이지 호출 횟수도 줄어든다.
+const OUTBOUND_PAGE_SIZE = 100;
+// 검색어 입력 디바운스 — 타이핑 중 매 키스트로크마다 백엔드 호출하지 않게 350ms 지연.
+const SEARCH_DEBOUNCE_MS = 350;
 
 export default function OutboundPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
@@ -57,17 +63,52 @@ export default function OutboundPage() {
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
   const [partners, setPartners] = useState<Partner[]>([]);
 
-  // 칩 필터는 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
-  const { data: allOutbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundList();
+  // ─── 출고 — 서버사이드 페이지·검색·정렬 상태 ────────────────────────────
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(OUTBOUND_PAGE_SIZE);
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'outbound_date', desc: true }]);
+  // 입력 중인 검색어와 디바운스된 서버 쿼리어 분리 — 타이핑마다 호출 안 함.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    if (activeTab !== 'outbound') return;
+    const t = setTimeout(() => setDebouncedSearch(searchText.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchText, activeTab]);
+
+  // 필터/검색 변경 시 페이지를 0 으로 리셋 — autoResetPageIndex 가 server 모드에서 비활성이라 직접 처리.
+  useEffect(() => {
+    setPageIndex(0);
+  }, [statusFilter, usageFilter, mfgFilter, debouncedSearch]);
+
+  const sortKey = sorting[0]?.id;
+  const sortOrder: 'asc' | 'desc' = sorting[0]?.desc === false ? 'asc' : 'desc';
+
+  const {
+    items: outbounds,
+    totalCount: outboundsTotal,
+    loading: obLoading,
+    reload: reloadOutbounds,
+  } = useOutboundList({
+    status: statusFilter || undefined,
+    usage_category: usageFilter || undefined,
+    manufacturer_id: mfgFilter || undefined,
+    q: debouncedSearch || undefined,
+    sort: sortKey || undefined,
+    order: sortKey ? sortOrder : undefined,
+    pageIndex,
+    pageSize,
+  });
+
+  const { summary } = useOutboundSummary({
+    status: statusFilter || undefined,
+    usage_category: usageFilter || undefined,
+    manufacturer_id: mfgFilter || undefined,
+    q: debouncedSearch || undefined,
+  });
+
+  // 매출 탭은 Phase 2 범위 외 — 기존 클라이언트 필터 그대로 유지.
   const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleList();
-
-  const outbounds = useMemo(() => allOutbounds.filter((o) => {
-    if (statusFilter && o.status !== statusFilter) return false
-    if (usageFilter && o.usage_category !== usageFilter) return false
-    if (mfgFilter && o.manufacturer_id !== mfgFilter) return false
-    return true
-  }), [allOutbounds, statusFilter, usageFilter, mfgFilter]);
-
   const sales = useMemo(() => allSales.filter((s) => {
     if (customerFilter && s.customer_id !== customerFilter) return false
     const taxDate = s.tax_invoice_date ?? s.sale?.tax_invoice_date ?? null
@@ -131,11 +172,17 @@ export default function OutboundPage() {
   const usageLabel = usageFilter ? ((USAGE_CATEGORY_LABEL as Record<string, string>)[usageFilter] ?? usageFilter) : '전체 용도';
   const mfgLabel = mfgFilter ? (manufacturers.find(m => m.manufacturer_id === mfgFilter)?.name_kr ?? mfgFilter) : '전체 제조사';
   const invoiceLabel = invoiceFilter === 'issued' ? '계산서 발행' : invoiceFilter === 'pending' ? '계산서 미발행' : '전체';
-  const activeCount = outbounds.filter((outbound) => outbound.status === 'active').length;
-  const cancelPendingCount = outbounds.filter((outbound) => outbound.status === 'cancel_pending').length;
+  // 출고 KPI 는 서버 집계(useOutboundSummary) 사용 — summary 가 아직 안 왔으면 0 으로 표기.
+  const totalOutbounds = summary?.total ?? outboundsTotal;
+  const activeCount = summary?.active_count ?? 0;
+  const cancelPendingCount = summary?.cancel_pending_count ?? 0;
+  const outboundSaleTotal = summary?.sale_amount_sum ?? 0;
+  const outboundPendingInvoiceCount = summary?.invoice_pending_count ?? 0;
+  // 매출 탭 KPI 는 클라이언트 합계 그대로.
   const saleTotal = sales.reduce((sum, sale) => sum + (sale.supply_amount ?? sale.sale?.supply_amount ?? 0), 0);
   const pendingInvoiceCount = sales.filter((sale) => !(sale.tax_invoice_date ?? sale.sale?.tax_invoice_date)).length;
-  const recentOutbounds = outbounds.slice(0, 4);
+  // 최근 출고는 첫 페이지 + outbound_date desc 기본 정렬일 때 자연스럽게 최근 4건.
+  const recentOutbounds = pageIndex === 0 ? outbounds.slice(0, 4) : [];
 
   const searchPlaceholder = activeTab === 'outbound' ? '품번/품명/현장/창고/수주번호/ERP번호 검색' : '거래처/품명 검색';
   const outboundCardControls = (
@@ -205,7 +252,7 @@ export default function OutboundPage() {
       <div style={{ flex: 1 }} />
       <FilterChips
         options={[
-          { key: 'outbound', label: '출고 관리', count: outbounds.length },
+          { key: 'outbound', label: '출고 관리', count: totalOutbounds },
           { key: 'sales', label: '매출 현황', count: sales.length },
         ]}
         value={activeTab}
@@ -222,10 +269,15 @@ export default function OutboundPage() {
         title="출고/판매"
         description="출고 진행과 매출·계산서 상태를 같은 운영 화면에서 확인합니다."
         tableTitle={activeTab === 'outbound' ? '출고 관리' : '매출 현황'}
-        tableSub={activeTab === 'outbound' ? `${outbounds.length.toLocaleString()}건 · ${statusLabel}` : `${sales.length.toLocaleString()}건 · ${invoiceLabel}`}
+        tableSub={activeTab === 'outbound' ? `${totalOutbounds.toLocaleString()}건 · ${statusLabel}` : `${sales.length.toLocaleString()}건 · ${invoiceLabel}`}
         toolbar={outboundCardControls}
-        metrics={[
-          { label: '출고 건수', value: outbounds.length.toLocaleString(), sub: statusLabel, tone: 'solar', spark: [14, 18, 16, 23, outbounds.length || 1] },
+        metrics={activeTab === 'outbound' ? [
+          { label: '출고 건수', value: totalOutbounds.toLocaleString(), sub: statusLabel, tone: 'solar', spark: [14, 18, 16, 23, totalOutbounds || 1] },
+          { label: '정상 출고', value: activeCount.toLocaleString(), sub: usageLabel, tone: 'pos' },
+          { label: '취소 대기', value: cancelPendingCount.toLocaleString(), sub: mfgLabel, tone: cancelPendingCount > 0 ? 'warn' : 'info' },
+          { label: '매출 합계', value: (outboundSaleTotal / 100_000_000).toFixed(2), unit: '억', sub: `${outboundPendingInvoiceCount}건 계산서 대기`, tone: outboundPendingInvoiceCount > 0 ? 'warn' : 'ink' },
+        ] : [
+          { label: '출고 건수', value: totalOutbounds.toLocaleString(), sub: statusLabel, tone: 'solar', spark: [14, 18, 16, 23, totalOutbounds || 1] },
           { label: '정상 출고', value: activeCount.toLocaleString(), sub: usageLabel, tone: 'pos' },
           { label: '취소 대기', value: cancelPendingCount.toLocaleString(), sub: mfgLabel, tone: cancelPendingCount > 0 ? 'warn' : 'info' },
           { label: '매출 합계', value: (saleTotal / 100_000_000).toFixed(2), unit: '억', sub: `${pendingInvoiceCount}건 계산서 대기`, tone: pendingInvoiceCount > 0 ? 'warn' : 'ink' },
@@ -260,7 +312,17 @@ export default function OutboundPage() {
               pinning={outboundColPin.pinning}
               onPinningChange={outboundColPin.setPinning}
               onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
-              globalFilter={searchText}
+              serverMode={{
+                pageIndex,
+                pageSize,
+                totalRowCount: outboundsTotal,
+                onPageChange: ({ pageIndex: nextIdx, pageSize: nextSize }) => {
+                  setPageIndex(nextIdx);
+                  setPageSize(nextSize);
+                },
+                sorting,
+                onSortingChange: setSorting,
+              }}
             />
           )}
         </TabsContent>

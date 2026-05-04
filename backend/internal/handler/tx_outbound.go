@@ -7,9 +7,11 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/engine"
@@ -19,11 +21,23 @@ import (
 
 // outboundDefaultLimit / outboundMaxLimit — Supabase Cloud PostgREST 가 강제하는
 // db-max-rows=1000 가드를 그대로 따라 단일 응답 최대 1000행으로 클램프한다.
-// 1000 초과는 프론트에서 offset 을 증가시키며 청크 호출로 누적한다.
 const (
-	outboundDefaultLimit = 1000
+	outboundDefaultLimit = 100
 	outboundMaxLimit     = 1000
 )
+
+// outboundSortable — 정렬 가능 컬럼 화이트리스트 (SQL 인젝션 방어).
+// 컬럼명은 outbounds 테이블의 실제 컬럼.
+var outboundSortable = map[string]struct{}{
+	"outbound_date":   {},
+	"erp_outbound_no": {},
+	"site_name":       {},
+	"quantity":        {},
+	"capacity_kw":     {},
+	"usage_category":  {},
+	"status":          {},
+	"created_at":      {},
+}
 
 var errOutboundNotFound = errors.New("outbound not found")
 
@@ -442,7 +456,34 @@ func (h *OutboundHandler) productIDsByManufacturer(manufacturerID string) ([]str
 	return ids, nil
 }
 
-// parseLimitOffset — ?limit, ?offset 파싱 + 클램프. 호환성 유지 위해 미지정 시 기본 1000.
+// idsBySearch — 단일 컬럼 ilike 로 자식 테이블의 ID 후보를 끌어와 outbounds.<fk> IN (...) 에 사용.
+// q 가 빈 문자열이거나 매칭이 0건이면 빈 슬라이스 반환 (호출 측에서 OR 조건 생략).
+func (h *OutboundHandler) idsBySearch(table, idColumn string, columns []string, q string) ([]string, error) {
+	or := make([]string, 0, len(columns))
+	for _, col := range columns {
+		or = append(or, fmt.Sprintf("%s.ilike.*%s*", col, q))
+	}
+	data, _, err := h.DB.From(table).
+		Select(idColumn, "exact", false).
+		Or(strings.Join(or, ","), "").
+		Execute()
+	if err != nil {
+		return nil, err
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if v, ok := row[idColumn].(string); ok {
+			ids = append(ids, v)
+		}
+	}
+	return ids, nil
+}
+
+// parseLimitOffset — ?limit, ?offset 파싱 + 클램프.
 func parseLimitOffset(r *http.Request, defaultLimit, maxLimit int) (limit, offset int) {
 	limit = defaultLimit
 	if raw := r.URL.Query().Get("limit"); raw != "" {
@@ -461,13 +502,74 @@ func parseLimitOffset(r *http.Request, defaultLimit, maxLimit int) (limit, offse
 	return limit, offset
 }
 
-// List — GET /api/v1/outbounds — 출고 목록 조회
-// 비유: 출고 관리실에서 출고 전표를 페이지 단위로 꺼내 보여주는 것
-// ?limit (기본·최대 1000), ?offset (기본 0) 으로 페이지네이션. 전체 건수는 X-Total-Count 헤더.
-func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("outbounds").
-		Select("*", "exact", false)
+// parseSort — ?sort=<column>&?order=<asc|desc> 파싱. 화이트리스트 검증.
+// 기본값은 outbound_date desc (운영자가 가장 최근 출고를 먼저 보길 기대).
+func parseOutboundSort(r *http.Request) (column string, ascending bool) {
+	column = "outbound_date"
+	ascending = false
+	if raw := r.URL.Query().Get("sort"); raw != "" {
+		if _, ok := outboundSortable[raw]; ok {
+			column = raw
+		}
+	}
+	if r.URL.Query().Get("order") == "asc" {
+		ascending = true
+	}
+	return column, ascending
+}
 
+// sanitizeSearchTerm — q 에서 PostgREST OR 파서가 읽는 reserved 문자(쉼표·괄호·점·따옴표)를
+// 공백으로 치환. 빈 문자열이 되면 검색 미적용으로 떨어진다.
+func sanitizeSearchTerm(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(",", " ", "(", " ", ")", " ", ".", " ", "*", " ", "\"", " ")
+	return strings.TrimSpace(replacer.Replace(q))
+}
+
+// applyOutboundSearch — ?q 검색어를 outbound 쿼리에 적용한다.
+// outbounds 직접 컬럼(site_name, erp_outbound_no, target_company_name) 은 ilike OR 로,
+// 자식 테이블(products/orders/warehouses) 의 컬럼은 먼저 ID 리스트를 끌어와 IN 으로 결합한다.
+// 매칭되는 컬럼이 하나도 없으면 false 를 반환하고 빈 응답을 보내야 한다.
+func (h *OutboundHandler) applyOutboundSearch(query *postgrest.FilterBuilder, q string) (*postgrest.FilterBuilder, bool, error) {
+	clauses := []string{
+		fmt.Sprintf("site_name.ilike.*%s*", q),
+		fmt.Sprintf("erp_outbound_no.ilike.*%s*", q),
+		fmt.Sprintf("target_company_name.ilike.*%s*", q),
+	}
+
+	productIDs, err := h.idsBySearch("products", "product_id", []string{"product_code", "product_name"}, q)
+	if err != nil {
+		return query, false, fmt.Errorf("products 검색 실패: %w", err)
+	}
+	if len(productIDs) > 0 {
+		clauses = append(clauses, fmt.Sprintf("product_id.in.(%s)", strings.Join(productIDs, ",")))
+	}
+
+	orderIDs, err := h.idsBySearch("orders", "order_id", []string{"order_number"}, q)
+	if err != nil {
+		return query, false, fmt.Errorf("orders 검색 실패: %w", err)
+	}
+	if len(orderIDs) > 0 {
+		clauses = append(clauses, fmt.Sprintf("order_id.in.(%s)", strings.Join(orderIDs, ",")))
+	}
+
+	warehouseIDs, err := h.idsBySearch("warehouses", "warehouse_id", []string{"warehouse_name"}, q)
+	if err != nil {
+		return query, false, fmt.Errorf("warehouses 검색 실패: %w", err)
+	}
+	if len(warehouseIDs) > 0 {
+		clauses = append(clauses, fmt.Sprintf("warehouse_id.in.(%s)", strings.Join(warehouseIDs, ",")))
+	}
+
+	return query.Or(strings.Join(clauses, ","), ""), true, nil
+}
+
+// applyOutboundFilters — List 와 Summary 가 공유하는 필터 로직.
+// q/manufacturer_id 처리에 추가 DB 호출이 발생할 수 있어 (success bool, err) 시그니처로 빈 결과를 신호한다.
+func (h *OutboundHandler) applyOutboundFilters(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
 		query = query.Eq("company_id", compID)
 	}
@@ -484,22 +586,55 @@ func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("status", status)
 	}
 
-	// manufacturer_id 는 outbounds 컬럼이 아니므로 products → product_id IN (...) 으로 변환해 DB-level 적용.
-	// 페이지네이션이 정확히 동작하려면 enrichment 후 클라이언트 필터로는 안 됨 (페이지마다 결과 수 달라짐).
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
 		productIDs, err := h.productIDsByManufacturer(mfgID)
 		if err != nil {
-			log.Printf("[출고 목록 - 제조사 필터 product_id 조회 실패] %v", err)
-			response.RespondError(w, http.StatusInternalServerError, "제조사 필터 처리에 실패했습니다")
-			return
+			return query, false, fmt.Errorf("manufacturer_id 처리 실패: %w", err)
 		}
 		if len(productIDs) == 0 {
-			w.Header().Set("X-Total-Count", "0")
-			response.RespondJSON(w, http.StatusOK, []model.Outbound{})
-			return
+			return query, false, nil
 		}
 		query = query.In("product_id", productIDs)
 	}
+
+	if q := sanitizeSearchTerm(r.URL.Query().Get("q")); q != "" {
+		next, ok, err := h.applyOutboundSearch(query, q)
+		if err != nil {
+			return query, false, err
+		}
+		if !ok {
+			return query, false, nil
+		}
+		query = next
+	}
+
+	return query, true, nil
+}
+
+// List — GET /api/v1/outbounds — 출고 목록 조회 (서버사이드 페이지네이션·검색·정렬).
+// 쿼리 파라미터:
+//   - limit/offset: 페이지네이션 (기본 100, 최대 1000)
+//   - sort/order:   화이트리스트 컬럼 정렬 (기본 outbound_date desc)
+//   - q:            site_name/erp_outbound_no/target_company_name 및 product/order/warehouse 이름 검색
+//   - company_id/warehouse_id/usage_category/order_id/status/manufacturer_id: 등치 필터
+//
+// 응답 헤더 X-Total-Count 로 필터 후 전체 건수 노출.
+func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
+	query := h.DB.From("outbounds").Select("*", "exact", false)
+	query, ok, err := h.applyOutboundFilters(r, query)
+	if err != nil {
+		log.Printf("[출고 목록 필터 처리 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "출고 목록 필터 처리에 실패했습니다")
+		return
+	}
+	if !ok {
+		w.Header().Set("X-Total-Count", "0")
+		response.RespondJSON(w, http.StatusOK, []model.Outbound{})
+		return
+	}
+
+	sortCol, asc := parseOutboundSort(r)
+	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
 	limit, offset := parseLimitOffset(r, outboundDefaultLimit, outboundMaxLimit)
 	query = query.Range(offset, offset+limit-1, "")
@@ -531,6 +666,108 @@ func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, outbounds)
+}
+
+// OutboundSummary — KPI 카드용 집계 응답.
+// 매출 합계와 계산서 미발행 건수는 sales 테이블에서 outbound 단위로 조인 집계한다.
+type OutboundSummary struct {
+	Total              int64   `json:"total"`
+	ActiveCount        int64   `json:"active_count"`
+	CancelPendingCount int64   `json:"cancel_pending_count"`
+	CancelledCount     int64   `json:"cancelled_count"`
+	SaleAmountSum      float64 `json:"sale_amount_sum"`
+	InvoicePendingCount int64  `json:"invoice_pending_count"`
+}
+
+// Summary — GET /api/v1/outbounds/summary — KPI 카드용 집계.
+// List 와 동일한 필터(company_id, warehouse_id, usage_category, manufacturer_id, q) 를 받아
+// 페이지 사이즈에 무관하게 전체에 대한 카운트/합계를 돌려준다.
+func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	// 출고 카운트 — head=true 로 본문 없이 X-Total-Count 만 받는다 (전체).
+	totalQ := h.DB.From("outbounds").Select("outbound_id", "exact", true)
+	totalQ, ok, err := h.applyOutboundFilters(r, totalQ)
+	if err != nil {
+		log.Printf("[출고 요약 필터 처리 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "출고 요약 필터 처리에 실패했습니다")
+		return
+	}
+	if !ok {
+		response.RespondJSON(w, http.StatusOK, OutboundSummary{})
+		return
+	}
+
+	summary := OutboundSummary{}
+	if _, count, err := totalQ.Range(0, 0, "").Execute(); err != nil {
+		log.Printf("[출고 요약 - total 카운트 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "출고 요약 조회에 실패했습니다")
+		return
+	} else {
+		summary.Total = count
+	}
+
+	// status 별 카운트는 List 와 동일 필터 + status 추가로 재조회.
+	// status 가 이미 query string 에 있으면 그 값으로 고정되어 다른 status 카운트는 0 으로 떨어짐 (의도).
+	for _, st := range []struct {
+		key    string
+		target *int64
+	}{
+		{"active", &summary.ActiveCount},
+		{"cancel_pending", &summary.CancelPendingCount},
+		{"cancelled", &summary.CancelledCount},
+	} {
+		q := h.DB.From("outbounds").Select("outbound_id", "exact", true)
+		q, ok2, err := h.applyOutboundFilters(r, q)
+		if err != nil || !ok2 {
+			continue
+		}
+		// 사용자가 status 필터를 이미 걸었다면 그쪽이 우선 — Eq 추가는 더 좁히는 효과만.
+		q = q.Eq("status", st.key)
+		if _, c, err := q.Range(0, 0, "").Execute(); err == nil {
+			*st.target = c
+		}
+	}
+
+	// 매출 합계와 계산서 미발행 건수는 sales 에서 직접 집계.
+	// outbound 필터를 sales.outbound_id 로 재투영하기 위해 List 와 같은 필터로 outbound_id 후보를 끌어온 뒤
+	// sales 에서 IN 으로 거른다 — 후보가 매우 많으면(>10k) PostgREST URL 길이 한계 우려가 있으나
+	// 운영 데이터 규모상 당분간 안전.
+	idQ := h.DB.From("outbounds").Select("outbound_id", "exact", false)
+	idQ, ok3, err := h.applyOutboundFilters(r, idQ)
+	if err == nil && ok3 {
+		if data, _, err := idQ.Execute(); err == nil {
+			var idRows []struct {
+				OutboundID string `json:"outbound_id"`
+			}
+			if json.Unmarshal(data, &idRows) == nil && len(idRows) > 0 {
+				ids := make([]string, 0, len(idRows))
+				for _, row := range idRows {
+					ids = append(ids, row.OutboundID)
+				}
+				if saleData, _, err := h.DB.From("sales").
+					Select("supply_amount, tax_invoice_date, outbound_id", "exact", false).
+					In("outbound_id", ids).
+					Neq("status", "cancelled").
+					Execute(); err == nil {
+					var sales []struct {
+						SupplyAmount   *float64 `json:"supply_amount"`
+						TaxInvoiceDate *string  `json:"tax_invoice_date"`
+					}
+					if json.Unmarshal(saleData, &sales) == nil {
+						for _, s := range sales {
+							if s.SupplyAmount != nil {
+								summary.SaleAmountSum += *s.SupplyAmount
+							}
+							if s.TaxInvoiceDate == nil {
+								summary.InvoicePendingCount++
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	response.RespondJSON(w, http.StatusOK, summary)
 }
 
 // GetByID — GET /api/v1/outbounds/{id} — 출고 상세 조회
