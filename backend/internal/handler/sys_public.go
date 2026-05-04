@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/engine"
@@ -27,7 +28,7 @@ type PublicHandler struct {
 	HTTP   *http.Client
 
 	fxMu     sync.Mutex
-	fxCache  *fxSnapshot
+	fxCache  map[string]*fxSnapshot // pair → snapshot (usdkrw, cnykrw)
 	fxKey    string
 	fxSource string
 
@@ -42,10 +43,11 @@ type PublicHandler struct {
 // NewPublicHandler — PublicHandler 생성자.
 // engineClient는 nil 가능 — 그 경우 인벤토리 합계는 null로 응답.
 func NewPublicHandler(db *supa.Client, engineClient *engine.EngineClient) *PublicHandler {
-	return &PublicHandler{
+	h := &PublicHandler{
 		DB:          db,
 		Engine:      engineClient,
 		HTTP:        &http.Client{Timeout: 6 * time.Second},
+		fxCache:     make(map[string]*fxSnapshot),
 		fxKey:       os.Getenv("METAL_PRICE_API_KEY"),
 		fxSource:    "metalpriceapi.com",
 		metalCache:  make(map[string]*metalSnapshot),
@@ -54,6 +56,12 @@ func NewPublicHandler(db *supa.Client, engineClient *engine.EngineClient) *Publi
 
 		commoditiesPath: commoditiesFilePath(),
 	}
+	// 부팅 시 fx_daily 30일 백필 — 빈 테이블이면 metalpriceapi historical 30회 호출.
+	// 비동기로 startup 지연 회피, 실패해도 무시.
+	if h.fxKey != "" {
+		go h.backfillFXDaily(30)
+	}
+	return h
 }
 
 func commoditiesFilePath() string {
@@ -66,7 +74,7 @@ func commoditiesFilePath() string {
 	return "/etc/solarflow/commodities.json"
 }
 
-// === FX (USD/KRW) ===
+// === FX (USD/KRW, CNY/KRW) ===
 
 type fxSnapshot struct {
 	Rate      float64   `json:"rate"`
@@ -78,13 +86,75 @@ type fxSnapshot struct {
 // 5분 캐시 — 로그인 페이지가 매 새로고침마다 외부 호출 못 하게 차단.
 const fxTTL = 5 * time.Minute
 
-// FXUsdKrw — GET /api/v1/public/fx/usdkrw
-// 환율 단일 페어 (USD→KRW) + 전일 대비 변동률.
-// API key가 비어있으면 503 반환 (프론트는 mockup 값으로 fallback).
-func (h *PublicHandler) FXUsdKrw(w http.ResponseWriter, r *http.Request) {
+// 지원 페어 화이트리스트. value는 metalpriceapi 통화 코드 (USD base).
+//
+//	usdkrw → KRW (1 USD = N KRW, API 직접)
+//	cnykrw → KRW/CNY 비율로 계산 (1 CNY = N KRW)
+var fxPairs = map[string][]string{
+	"usdkrw": {"KRW"},
+	"cnykrw": {"KRW", "CNY"},
+}
+
+// fxFetchCurrencies — 화이트리스트 페어가 필요로 하는 통화 코드 합집합.
+// metalpriceapi에 한 번 호출로 모든 페어 분량을 받기 위해.
+func fxFetchCurrencies() string {
+	seen := map[string]bool{}
+	for _, codes := range fxPairs {
+		for _, c := range codes {
+			seen[c] = true
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for c := range seen {
+		out = append(out, c)
+	}
+	sort.Strings(out)
+	return strings_Join(out, ",")
+}
+
+// strings_Join — strings 패키지 미import용 인라인 join.
+func strings_Join(parts []string, sep string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	out := parts[0]
+	for _, p := range parts[1:] {
+		out += sep + p
+	}
+	return out
+}
+
+// computePair — 통화 코드 map (KRW=1773, CNY=7.27)에서 페어 환율 계산.
+// usdkrw = KRW 직접, cnykrw = KRW/CNY (1 CNY → N KRW).
+func computePair(pair string, rates map[string]float64) (float64, bool) {
+	switch pair {
+	case "usdkrw":
+		v, ok := rates["KRW"]
+		return v, ok && v > 0
+	case "cnykrw":
+		krw, hasK := rates["KRW"]
+		cny, hasC := rates["CNY"]
+		if hasK && hasC && cny > 0 {
+			return krw / cny, true
+		}
+		return 0, false
+	}
+	return 0, false
+}
+
+// FXSpot — GET /api/v1/public/fx/{pair}
+// 단일 페어 spot rate + 전일 대비 변동률. pair는 fxPairs 화이트리스트.
+// 5분 캐시. API key가 비어있으면 503.
+func (h *PublicHandler) FXSpot(w http.ResponseWriter, r *http.Request) {
+	pair := chi.URLParam(r, "pair")
+	if _, ok := fxPairs[pair]; !ok {
+		response.RespondError(w, http.StatusBadRequest, "지원하지 않는 페어")
+		return
+	}
+
 	h.fxMu.Lock()
-	if h.fxCache != nil && time.Since(h.fxCache.FetchedAt) < fxTTL {
-		snap := *h.fxCache
+	if cached, hit := h.fxCache[pair]; hit && time.Since(cached.FetchedAt) < fxTTL {
+		snap := *cached
 		h.fxMu.Unlock()
 		response.RespondJSON(w, http.StatusOK, snap)
 		return
@@ -96,15 +166,14 @@ func (h *PublicHandler) FXUsdKrw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	snap, err := h.fetchFX()
-	if err != nil {
+	if err := h.refreshFXAll(); err != nil {
 		log.Printf("[FX 조회 실패] %v", err)
-		// 캐시가 있으면 stale 이라도 응답 (외부 API 일시 장애 대비)
+		// 캐시 stale 라도 있으면 응답.
 		h.fxMu.Lock()
-		if h.fxCache != nil {
-			cached := *h.fxCache
+		if cached, hit := h.fxCache[pair]; hit {
+			snap := *cached
 			h.fxMu.Unlock()
-			response.RespondJSON(w, http.StatusOK, cached)
+			response.RespondJSON(w, http.StatusOK, snap)
 			return
 		}
 		h.fxMu.Unlock()
@@ -113,69 +182,286 @@ func (h *PublicHandler) FXUsdKrw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.fxMu.Lock()
-	h.fxCache = &snap
+	cached, ok := h.fxCache[pair]
 	h.fxMu.Unlock()
-	response.RespondJSON(w, http.StatusOK, snap)
+	if !ok {
+		response.RespondError(w, http.StatusBadGateway, "페어 시세 없음")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, *cached)
 }
 
-// metalpriceapi.com — 금속과 통화를 같은 키로 조회.
-// USD base에 KRW currencies 요청 → 1 USD = N KRW로 응답되어 그대로 사용.
-func (h *PublicHandler) fetchFX() (fxSnapshot, error) {
-	today, err := h.fetchFXLatest()
+// refreshFXAll — 모든 화이트리스트 페어를 한 번의 today + 한 번의 yesterday
+// metalpriceapi 호출로 채운다. 캐시 + fx_daily upsert.
+func (h *PublicHandler) refreshFXAll() error {
+	today, err := h.fetchFXMulti("")
 	if err != nil {
-		return fxSnapshot{}, fmt.Errorf("today: %w", err)
+		return fmt.Errorf("today: %w", err)
 	}
-
-	// 전일 종가 — 변동률 계산용. 실패해도 rate는 반환.
+	todayDate := time.Now().UTC().Format("2006-01-02")
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	var changePct *float64
-	if prev, err := h.fetchFXHistorical(yesterday); err == nil && prev > 0 {
-		pct := (today - prev) / prev * 100
-		changePct = &pct
+
+	prev, prevErr := h.fetchFXMulti(yesterday)
+	if prevErr != nil {
+		log.Printf("[FX yesterday 조회 실패 %s] %v", yesterday, prevErr)
 	}
 
-	return fxSnapshot{
-		Rate:      today,
-		ChangePct: changePct,
-		Source:    h.fxSource,
-		FetchedAt: time.Now().UTC(),
-	}, nil
+	now := time.Now().UTC()
+	for pair := range fxPairs {
+		todayRate, ok := computePair(pair, today)
+		if !ok {
+			continue
+		}
+		var changePct *float64
+		if prevErr == nil {
+			if prevRate, prevOk := computePair(pair, prev); prevOk && prevRate > 0 {
+				pct := (todayRate - prevRate) / prevRate * 100
+				changePct = &pct
+				_ = h.upsertFXDaily(pair, yesterday, prevRate)
+			}
+		}
+		_ = h.upsertFXDaily(pair, todayDate, todayRate)
+
+		snap := fxSnapshot{
+			Rate:      todayRate,
+			ChangePct: changePct,
+			Source:    h.fxSource,
+			FetchedAt: now,
+		}
+		h.fxMu.Lock()
+		h.fxCache[pair] = &snap
+		h.fxMu.Unlock()
+	}
+	return nil
 }
 
-func (h *PublicHandler) fetchFXLatest() (float64, error) {
-	url := fmt.Sprintf("https://api.metalpriceapi.com/v1/latest?api_key=%s&base=USD&currencies=KRW", h.fxKey)
-	return h.fetchFXURL(url)
-}
-
-func (h *PublicHandler) fetchFXHistorical(date string) (float64, error) {
-	url := fmt.Sprintf("https://api.metalpriceapi.com/v1/%s?api_key=%s&base=USD&currencies=KRW", date, h.fxKey)
-	return h.fetchFXURL(url)
-}
-
-func (h *PublicHandler) fetchFXURL(url string) (float64, error) {
+// fetchFXMulti — metalpriceapi에서 USD base + 다중 통화 한 번에.
+// date == "" 이면 /v1/latest, 아니면 /v1/{date}.
+func (h *PublicHandler) fetchFXMulti(date string) (map[string]float64, error) {
+	currencies := fxFetchCurrencies()
+	endpoint := "latest"
+	if date != "" {
+		endpoint = date
+	}
+	url := fmt.Sprintf("https://api.metalpriceapi.com/v1/%s?api_key=%s&base=USD&currencies=%s",
+		endpoint, h.fxKey, currencies)
 	body, err := h.httpGet(url)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	var parsed metalpriceResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return 0, fmt.Errorf("파싱 실패: %w", err)
+		return nil, fmt.Errorf("파싱 실패: %w", err)
 	}
 	if !parsed.Success {
 		msg := "unknown"
 		if parsed.Error != nil {
 			msg = parsed.Error.Info
 		}
-		return 0, fmt.Errorf("metalpriceapi error: %s", msg)
+		return nil, fmt.Errorf("metalpriceapi error: %s", msg)
 	}
-	// metalpriceapi 통화 응답:
-	//   KRW:    1487.13   → 1 USD = N KRW (사용)
-	//   USDKRW: 0.000672  → 1 KRW = N USD (역수, 무시)
-	// 금속(XAG)과 방향이 반대 — 통화는 bare 코드가 직접 quote.
-	if rate, ok := parsed.Rates["KRW"]; ok && rate > 0 {
-		return rate, nil
+	// metalpriceapi 통화: bare 코드(KRW=1487)가 quote per USD. 그대로 사용.
+	out := map[string]float64{}
+	for _, c := range []string{"KRW", "CNY"} {
+		if rate, ok := parsed.Rates[c]; ok && rate > 0 {
+			out[c] = rate
+		}
 	}
-	return 0, fmt.Errorf("KRW 시세 없음")
+	if len(out) == 0 {
+		return nil, fmt.Errorf("응답에 통화 시세 없음")
+	}
+	return out, nil
+}
+
+// upsertFXDaily — fx_daily(pair, date) UPSERT.
+func (h *PublicHandler) upsertFXDaily(pair, date string, rate float64) error {
+	row := map[string]any{
+		"pair":       pair,
+		"date":       date,
+		"rate":       rate,
+		"source":     h.fxSource,
+		"fetched_at": time.Now().UTC().Format(time.RFC3339),
+	}
+	_, _, err := h.DB.From("fx_daily").Upsert(row, "pair,date", "", "").Execute()
+	return err
+}
+
+// backfillFXDaily — fx_daily가 비어있거나 부족하면 metalpriceapi historical을
+// 최근 N일까지 호출하여 모든 페어를 채운다. 부팅 시 1회 비동기 실행.
+// 1회 호출에 KRW+CNY 모두 받아 페어별 upsert (호출 비용은 N일 = N회).
+func (h *PublicHandler) backfillFXDaily(days int) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[fx_daily backfill panic] %v", r)
+		}
+	}()
+
+	existing, err := h.fetchFXDailyKeys(days + 5)
+	if err != nil {
+		log.Printf("[fx_daily backfill 기존 조회] %v", err)
+	}
+	have := make(map[string]bool, len(existing))
+	for _, k := range existing {
+		have[k] = true
+	}
+
+	now := time.Now().UTC()
+	calls := 0
+	for i := 1; i <= days; i++ {
+		date := now.AddDate(0, 0, -i).Format("2006-01-02")
+
+		// 모든 페어가 이미 누적되어 있으면 그 날짜는 skip.
+		allHave := true
+		for pair := range fxPairs {
+			if !have[pair+"|"+date] {
+				allHave = false
+				break
+			}
+		}
+		if allHave {
+			continue
+		}
+
+		rates, err := h.fetchFXMulti(date)
+		if err != nil {
+			log.Printf("[fx_daily backfill %s 실패] %v", date, err)
+			continue
+		}
+		for pair := range fxPairs {
+			if have[pair+"|"+date] {
+				continue
+			}
+			rate, ok := computePair(pair, rates)
+			if !ok {
+				continue
+			}
+			if err := h.upsertFXDaily(pair, date, rate); err != nil {
+				log.Printf("[fx_daily backfill %s/%s upsert] %v", pair, date, err)
+			}
+		}
+		calls++
+		// 외부 API rate-limit 회피용 짧은 간격.
+		time.Sleep(250 * time.Millisecond)
+	}
+	if calls > 0 {
+		log.Printf("[fx_daily backfill] %d일 채움 (페어 %d종)", calls, len(fxPairs))
+	}
+}
+
+func (h *PublicHandler) fetchFXDailyKeys(limit int) ([]string, error) {
+	data, _, err := h.DB.From("fx_daily").
+		Select("pair,date", "exact", false).
+		Order("date", &postgrest.OrderOpts{Ascending: false}).
+		Limit(limit*len(fxPairs), "").
+		Execute()
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		Pair string `json:"pair"`
+		Date string `json:"date"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	out := make([]string, len(rows))
+	for i, r := range rows {
+		out[i] = r.Pair + "|" + r.Date
+	}
+	return out, nil
+}
+
+// === FX timeseries ===
+
+type fxPoint struct {
+	Date string  `json:"date"`
+	Rate float64 `json:"rate"`
+}
+
+type fxTimeseries struct {
+	Series    []fxPoint `json:"series"`
+	Latest    *float64  `json:"latest"`
+	ChangePct *float64  `json:"change_pct"`
+	Source    string    `json:"source"`
+	FetchedAt time.Time `json:"fetched_at"`
+}
+
+// FXTimeseries — GET /api/v1/public/fx/{pair}/timeseries?days=30
+// fx_daily에서 최근 N일 ASC 정렬 반환. days 기본 30, 최대 90.
+func (h *PublicHandler) FXTimeseries(w http.ResponseWriter, r *http.Request) {
+	pair := chi.URLParam(r, "pair")
+	if _, ok := fxPairs[pair]; !ok {
+		response.RespondError(w, http.StatusBadRequest, "지원하지 않는 페어")
+		return
+	}
+
+	days := 30
+	if v := r.URL.Query().Get("days"); v != "" {
+		if n, err := strconvAtoiClamp(v, 1, 90); err == nil {
+			days = n
+		}
+	}
+
+	data, _, err := h.DB.From("fx_daily").
+		Select("date,rate", "exact", false).
+		Eq("pair", pair).
+		Order("date", &postgrest.OrderOpts{Ascending: false}).
+		Limit(days, "").
+		Execute()
+	if err != nil {
+		log.Printf("[fx_daily 시계열 조회 %s] %v", pair, err)
+		response.RespondError(w, http.StatusBadGateway, "환율 시계열 조회 실패")
+		return
+	}
+	var rows []struct {
+		Date string  `json:"date"`
+		Rate float64 `json:"rate"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		response.RespondError(w, http.StatusInternalServerError, "환율 시계열 파싱 실패")
+		return
+	}
+
+	// DESC로 받았으니 ASC로 뒤집어 sparkline 친화적 순서로.
+	series := make([]fxPoint, len(rows))
+	for i, r := range rows {
+		series[len(rows)-1-i] = fxPoint{Date: r.Date, Rate: r.Rate}
+	}
+
+	resp := fxTimeseries{
+		Series:    series,
+		Source:    h.fxSource,
+		FetchedAt: time.Now().UTC(),
+	}
+	if n := len(series); n > 0 {
+		latest := series[n-1].Rate
+		resp.Latest = &latest
+		if n >= 2 {
+			prev := series[n-2].Rate
+			if prev > 0 {
+				pct := (latest - prev) / prev * 100
+				resp.ChangePct = &pct
+			}
+		}
+	}
+	response.RespondJSON(w, http.StatusOK, resp)
+}
+
+func strconvAtoiClamp(s string, min, max int) (int, error) {
+	n := 0
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("invalid")
+		}
+		n = n*10 + int(c-'0')
+		if n > max {
+			return max, nil
+		}
+	}
+	if n < min {
+		return min, nil
+	}
+	return n, nil
 }
 
 func (h *PublicHandler) httpGet(url string) ([]byte, error) {
@@ -450,6 +736,7 @@ var metalSymbols = map[string]string{
 	"gold":      "XAU",
 	"platinum":  "XPT",
 	"palladium": "XPD",
+	"copper":    "XCU",
 }
 
 // MetalPrice — GET /api/v1/public/metals/{symbol}

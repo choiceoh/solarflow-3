@@ -19,6 +19,7 @@ import { PO_STATUS_LABEL, CONTRACT_TYPE_LABEL, CONTRACT_TYPES_ACTIVE, LC_STATUS_
 import type { PurchaseOrder, POStatus, LCStatus, TTStatus } from '@/types/procurement';
 import type { Manufacturer, Bank } from '@/types/masters';
 import { useBLList } from '@/hooks/useInbound';
+import { useFxTimeseries } from '@/hooks/usePublicFx';
 import BLListTable from '@/components/inbound/BLListTable';
 import BLDetailView from '@/components/inbound/BLDetailView';
 import { INBOUND_TYPE_LABEL, BL_STATUS_LABEL, type InboundType, type BLStatus } from '@/types/inbound';
@@ -27,6 +28,8 @@ import { BreakdownRows } from '@/components/command/BreakdownRows';
 import { flatSparkFromValue, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
 
 const PROCUREMENT_TABS = new Set(['po', 'tt', 'lc', 'bl']);
+
+const fxNumberFmt = new Intl.NumberFormat('en-US');
 
 const PROC_TAB_OPTIONS = [
   { key: 'po', label: 'PO' },
@@ -178,6 +181,9 @@ export default function ProcurementPage() {
         .then((list) => setBanks(list.filter((b) => b.is_active))).catch(() => {});
     }
   }, [selectedCompanyId]);
+
+  // USD/KRW 30일 시계열 — LC 탭 우측 레일. 다른 탭에서는 fetch 생략.
+  const { data: fx } = useFxTimeseries('usdkrw', 30, activeTab === 'lc');
 
   // ⚠️ 모든 useMemo는 early return(아래 selectedCompanyId 분기) 이전이어야 함 — Hook 순서 규칙
   const poRows = useMemo(
@@ -569,12 +575,33 @@ export default function ProcurementPage() {
                 ))}
                 {lcMaturitySoon.length === 0 && <div className="text-xs text-[var(--ink-3)]">임박 만기가 없습니다.</div>}
               </RailBlock>
-              <RailBlock title="USD/KRW · 30일" last>
-                <Sparkline data={[1762, 1764, 1768, 1770, 1772, 1771, 1773, 1773, 1772, 1773]} w={220} h={42} color="var(--solar-2)" area />
-                <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
-                  <span>현재 <span className="font-bold text-[var(--ink)]">1,773.4</span></span>
-                  <span className="font-bold text-[var(--pos)]">+0.6%</span>
-                </div>
+              <RailBlock title={`USD/KRW · ${fx?.series.length ?? 30}일`} last>
+                {fx && fx.series.length > 0 ? (
+                  <>
+                    <Sparkline
+                      data={fx.series.map((p) => p.rate)}
+                      w={220}
+                      h={42}
+                      color="var(--solar-2)"
+                      area
+                    />
+                    <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
+                      <span>
+                        현재{' '}
+                        <span className="font-bold text-[var(--ink)]">
+                          {fx.latest != null ? fxNumberFmt.format(Math.round(fx.latest * 10) / 10) : '—'}
+                        </span>
+                      </span>
+                      {fx.change_pct != null && (
+                        <span className={`font-bold ${fx.change_pct >= 0 ? 'text-[var(--pos)]' : 'text-[var(--neg)]'}`}>
+                          {fx.change_pct >= 0 ? '+' : ''}{fx.change_pct.toFixed(2)}%
+                        </span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-[var(--ink-3)]">환율 로드 중…</div>
+                )}
               </RailBlock>
             </>
           )}
