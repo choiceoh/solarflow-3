@@ -222,11 +222,109 @@ func TestBuildSystemPrompt_BaroDoesNotExposeLCOrDeclarations(t *testing.T) {
 	if !strings.Contains(prompt, "L/C·면장 도구는 노출되지 않음") {
 		t.Errorf("baro 테넌트 가이드 누락")
 	}
-	// L/C·면장은 module 계열(topsolar/cable) 전용 — baro 에 노출되면 안 됨.
-	for _, banned := range []string{"- search_lc ", "- search_declarations "} {
+	// 수입 흐름 도구는 module 계열(topsolar/cable) 전용 — baro 에 노출되면 안 됨.
+	for _, banned := range []string{"- search_lc ", "- search_declarations ", "- search_bl ", "- search_purchase_orders "} {
 		if strings.Contains(prompt, banned) {
 			t.Errorf("baro 에 노출되면 안 되는 도구 %q 가 포함됨", banned)
 		}
+	}
+}
+
+// TestAvailableAssistantTools_BaroExcludesImportTools — catalog 단위 검증.
+// availableAssistantTools 가 scope 게이트로 LC/BL/면장/PO 를 baro 에서 빼는지.
+func TestAvailableAssistantTools_BaroExcludesImportTools(t *testing.T) {
+	ctx := ctxFor("operator", middleware.TenantScopeBaro)
+	tools := availableAssistantTools(ctx)
+	names := map[string]bool{}
+	for _, t := range tools {
+		names[t.name] = true
+	}
+	for _, banned := range []string{"search_lc", "search_bl", "search_declarations", "search_purchase_orders"} {
+		if names[banned] {
+			t.Errorf("baro operator 에게 %q 가 catalog 에 노출됨 (allowScopes 게이트 누락)", banned)
+		}
+	}
+	// 공용 도구는 여전히 노출되어야 함.
+	for _, must := range []string{"search_partners", "search_products", "search_manufacturers"} {
+		if !names[must] {
+			t.Errorf("baro operator 에게 공용 도구 %q 가 사라짐 (allowScopes 과대 적용)", must)
+		}
+	}
+}
+
+// TestAvailableAssistantTools_TopsolarHasImportTools — 반대 방향 회귀 보호.
+func TestAvailableAssistantTools_TopsolarHasImportTools(t *testing.T) {
+	ctx := ctxFor("operator", middleware.TenantScopeTopsolar)
+	tools := availableAssistantTools(ctx)
+	names := map[string]bool{}
+	for _, t := range tools {
+		names[t.name] = true
+	}
+	for _, must := range []string{"search_lc", "search_bl", "search_declarations", "search_purchase_orders"} {
+		if !names[must] {
+			t.Errorf("topsolar operator 에게 수입 흐름 도구 %q 가 사라짐", must)
+		}
+	}
+}
+
+// TestAvailableAssistantTools_CableSharesImportToolsWithTopsolar — cable 도 module 계열.
+func TestAvailableAssistantTools_CableSharesImportToolsWithTopsolar(t *testing.T) {
+	ctx := ctxFor("operator", middleware.TenantScopeCable)
+	tools := availableAssistantTools(ctx)
+	names := map[string]bool{}
+	for _, t := range tools {
+		names[t.name] = true
+	}
+	for _, must := range []string{"search_lc", "search_bl", "search_declarations", "search_purchase_orders"} {
+		if !names[must] {
+			t.Errorf("cable operator 에게 수입 흐름 도구 %q 가 사라짐 (cable 도 module 계열이어야)", must)
+		}
+	}
+}
+
+// TestBuildSystemPrompt_BaroUsesBaroDomainBlock — baro 사용자는 baro 도메인 정본을 받아야.
+// module 의 P/O→L/C 흐름이 baro 프롬프트에 박히면 모델이 헛소리.
+func TestBuildSystemPrompt_BaroUsesBaroDomainBlock(t *testing.T) {
+	ctx := ctxFor("operator", middleware.TenantScopeBaro)
+	prompt := buildSystemPrompt(ctx, nil, nil)
+
+	// baro 흐름 마커
+	for _, must := range []string{
+		"바로(주) 국내 도매 ERP",
+		"단가표 등록 →",
+		"그룹사 매입요청",
+		"인커밍 보드",
+		"배차",
+		"채권 보드",
+	} {
+		if !strings.Contains(prompt, must) {
+			t.Errorf("baro 도메인 블록에 %q 누락", must)
+		}
+	}
+	// module 의 정본 흐름 라벨이 박히면 안 됨 — baro 에 부적절.
+	if strings.Contains(prompt, "P/O 발주 → L/C 개설") {
+		t.Errorf("baro 프롬프트에 module 흐름(P/O→L/C) 이 누설됨")
+	}
+}
+
+// TestBuildSystemPrompt_CableUsesModuleDomainBlock — cable 도 module 정본을 받아야 (분기 동일).
+func TestBuildSystemPrompt_CableUsesModuleDomainBlock(t *testing.T) {
+	ctx := ctxFor("operator", middleware.TenantScopeCable)
+	prompt := buildSystemPrompt(ctx, nil, nil)
+	if !strings.Contains(prompt, "P/O 발주 → L/C 개설") {
+		t.Errorf("cable 프롬프트에 module 흐름(P/O→L/C) 누락")
+	}
+	if strings.Contains(prompt, "단가표 등록 →") {
+		t.Errorf("cable 프롬프트에 baro 흐름이 누설됨")
+	}
+}
+
+// TestBuildSystemPrompt_UnknownScopeFallsBackToModule — 새 테넌트가 추가됐으나 매핑 누락 시 안전한 fallback.
+func TestBuildSystemPrompt_UnknownScopeFallsBackToModule(t *testing.T) {
+	ctx := ctxFor("operator", "future-tenant")
+	prompt := buildSystemPrompt(ctx, nil, nil)
+	if !strings.Contains(prompt, "P/O 발주 → L/C 개설") {
+		t.Errorf("매핑 안 된 scope 는 module 블록을 받아야 함 (보수적 fallback)")
 	}
 }
 

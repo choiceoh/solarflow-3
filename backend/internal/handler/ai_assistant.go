@@ -288,7 +288,19 @@ var assistantRoleGuides = map[string]string{
 톤: 금액·이익 단어가 등장하면 즉시 권한 외 안내.`,
 }
 
-const assistantDomainBlock = `[도메인 — 태양광 패널 수입·유통 ERP]
+// assistantDomainBlocks — 테넌트별 도메인 정본. baro 와 module 계열의 업무 모델이
+// 다르므로 동일 블록을 공유하면 모델이 엉뚱한 흐름을 가정함.
+//   - topsolar/cable: 해외 수입·유통 (P/O → L/C → B/L → 면장 → 재고 → 수주 → 출고 → 수금)
+//   - baro: 국내 도매 (단가표 → 그룹매입요청 또는 자체매입 → 인커밍 → 배차 → 출고 → 채권)
+//
+// 매핑 못 찾으면 module 블록을 fallback (기존 단일 블록과 호환).
+var assistantDomainBlocks = map[string]string{
+	"topsolar": assistantDomainBlockModule,
+	"cable":    assistantDomainBlockModule,
+	"baro":     assistantDomainBlockBaro,
+}
+
+const assistantDomainBlockModule = `[도메인 — 태양광 패널 수입·유통 ERP]
 업무 흐름: P/O 발주 → L/C 개설 → B/L 입고 → 통관(면장) → 재고 → 수주 → 출고/판매 → 수금
 용어:
 - P/O (Purchase Order): 해외 공급사 발주서
@@ -297,6 +309,19 @@ const assistantDomainBlock = `[도메인 — 태양광 패널 수입·유통 ERP
 - 면장: 통관 신고필증
 - 매입원가: CIF + 부대비용
 - 수금: 거래처 입금 회수
+`
+
+const assistantDomainBlockBaro = `[도메인 — 바로(주) 국내 도매 ERP]
+업무 흐름: 단가표 등록 → 수주 (단가 prefill) → (필요 시) 그룹사 매입요청 또는 국내 자체매입 → 인커밍 보드(입고예정) → 배차 → 출고 → 채권/수금
+이 테넌트는 직수입을 하지 않습니다 — L/C·면장·해외 P/O 흐름은 등장하지 않으며 해당 도구도 노출되지 않습니다. 수입 흐름 질문이 들어오면 "이 테넌트(바로)에서는 직수입을 다루지 않습니다. 그룹사 매입요청은 /baro/group-purchase 에서 진행됩니다" 로 안내하세요.
+
+용어:
+- 단가표 (price-book): 거래처×품번 시간대별(effective_from/to) 판매 단가 마스터. 수주 입력 시 자동 prefill 의 정본.
+- 매입요청 (group-purchase): baro → topsolar 그룹사 역구매 요청. intercompany_requests 행.
+- 인커밍 보드 (incoming): topsolar 가 baro 로 발송할 선적 정보를 *금액 가린 채* 읽기 전용으로 표시 (D-116 sanitized).
+- 배차 (dispatch): 일자×차량 단위 슬롯. 출고 라인을 끌어다 묶음.
+- 채권 보드 (credit-board): 거래처별 누적매출/입금/미수잔액·한도사용률·최장미수일.
+- 그룹내 거래: 외상이 아닌 그룹 내부 정산 — 채권 보드에 잡히지 않음.
 `
 
 const assistantRulesBlock = `
@@ -395,7 +420,11 @@ func buildSystemPrompt(ctx context.Context, pageContext *assistantPageContext, t
 			fmt.Fprintf(&b, "[참고 문서 — %s 영역]\n%s\n\n", pageContext.Path, pageContext.docs)
 		}
 	}
-	b.WriteString(assistantDomainBlock)
+	domainBlock, ok := assistantDomainBlocks[scope]
+	if !ok {
+		domainBlock = assistantDomainBlockModule // unknown scope → 보수적으로 module 흐름
+	}
+	b.WriteString(domainBlock)
 	fmt.Fprintf(&b, "\n[역할별 가이드 — %s]\n%s\n", roleLabel, roleGuide)
 	if toolsBlock := formatToolsBlock(tools); toolsBlock != "" {
 		b.WriteString(toolsBlock)
