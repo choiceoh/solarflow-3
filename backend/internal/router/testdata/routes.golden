@@ -91,6 +91,7 @@ GET     /api/v1/ocr/health
 GET     /api/v1/orders/
 GET     /api/v1/orders/{id}
 GET     /api/v1/outbounds/
+GET     /api/v1/outbounds/summary
 GET     /api/v1/outbounds/{id}
 GET     /api/v1/partner-aliases/
 GET     /api/v1/partner-prices/

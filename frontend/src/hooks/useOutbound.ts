@@ -1,30 +1,28 @@
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { fetchWithAuth, fetchWithAuthMeta } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { companyParams } from '@/lib/companyUtils';
 import { useListQuery, useDetailQuery } from '@/lib/queryHelpers';
 import type { Outbound, SaleListItem } from '@/types/outbound';
 
-// 백엔드와 동일한 단일 페이지 상한. Supabase Cloud db-max-rows=1000 이 강제하므로
-// 한 번에 더 받을 수 없고, 1000 초과는 offset 을 늘리며 청크 누적한다.
-const OUTBOUND_PAGE_SIZE = 1000;
-// 데이터 폭주 시 무한 루프 가드 — 50만건까지 안전.
+// 청크 누적 페이지네이션 — server mode 미도입 화면(예: OrdersPage 출고 탭)이
+// 옛 동작(전체 출고를 한 번에 받음) 을 유지하기 위한 호환 헬퍼.
+// Supabase db-max-rows=1000 제한을 offset 증가 청크로 우회한다.
+const OUTBOUND_CHUNK_SIZE = 1000;
 const OUTBOUND_MAX_PAGES = 500;
 
 async function fetchAllOutbounds(baseQuery: string): Promise<Outbound[]> {
   const first = await fetchWithAuthMeta<Outbound[]>(
-    `/api/v1/outbounds?${baseQuery}&limit=${OUTBOUND_PAGE_SIZE}&offset=0`,
+    `/api/v1/outbounds?${baseQuery}&limit=${OUTBOUND_CHUNK_SIZE}&offset=0`,
   );
   const accumulated: Outbound[] = [...first.data];
   const total = first.totalCount;
-
-  // totalCount 가 null(dev mock) 이거나 첫 페이지로 충분하면 종료.
   if (total === null || accumulated.length >= total) return accumulated;
-
   for (let page = 1; page < OUTBOUND_MAX_PAGES; page++) {
-    const offset = page * OUTBOUND_PAGE_SIZE;
+    const offset = page * OUTBOUND_CHUNK_SIZE;
     if (offset >= total) break;
     const next = await fetchWithAuth<Outbound[]>(
-      `/api/v1/outbounds?${baseQuery}&limit=${OUTBOUND_PAGE_SIZE}&offset=${offset}`,
+      `/api/v1/outbounds?${baseQuery}&limit=${OUTBOUND_CHUNK_SIZE}&offset=${offset}`,
     );
     if (next.length === 0) break;
     accumulated.push(...next);
@@ -33,10 +31,80 @@ async function fetchAllOutbounds(baseQuery: string): Promise<Outbound[]> {
   return accumulated;
 }
 
-export function useOutboundList(filters: { status?: string; usage_category?: string; manufacturer_id?: string } = {}) {
+export interface OutboundListParams {
+  status?: string;
+  usage_category?: string;
+  manufacturer_id?: string;
+  q?: string;
+  sort?: string;
+  order?: 'asc' | 'desc';
+  pageIndex: number;
+  pageSize: number;
+}
+
+export interface OutboundListResult {
+  items: Outbound[];
+  totalCount: number;
+  loading: boolean;
+  isFetching: boolean;
+  error: string | null;
+  reload: () => Promise<void>;
+}
+
+// useOutboundList — 서버사이드 페이지네이션·검색·정렬.
+// 한 페이지(items)와 필터 적용 후 전체 건수(totalCount) 를 함께 반환한다.
+// keepPreviousData 로 페이지 전환 시 직전 페이지가 잠시 보이고 새 데이터로 교체.
+export function useOutboundList(params: OutboundListParams): OutboundListResult {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
+  const queryKey = [
+    'outbounds',
+    selectedCompanyId,
+    params.status ?? '',
+    params.usage_category ?? '',
+    params.manufacturer_id ?? '',
+    params.q ?? '',
+    params.sort ?? '',
+    params.order ?? '',
+    params.pageIndex,
+    params.pageSize,
+  ];
+  const q = useQuery<{ items: Outbound[]; totalCount: number }, Error>({
+    queryKey,
+    queryFn: async () => {
+      const search = companyParams(selectedCompanyId!);
+      if (params.status) search.set('status', params.status);
+      if (params.usage_category) search.set('usage_category', params.usage_category);
+      if (params.manufacturer_id) search.set('manufacturer_id', params.manufacturer_id);
+      if (params.q) search.set('q', params.q);
+      if (params.sort) search.set('sort', params.sort);
+      if (params.order) search.set('order', params.order);
+      search.set('limit', String(params.pageSize));
+      search.set('offset', String(params.pageIndex * params.pageSize));
+      const res = await fetchWithAuthMeta<Outbound[]>(`/api/v1/outbounds?${search}`);
+      return { items: res.data, totalCount: res.totalCount ?? res.data.length };
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  });
+  return {
+    items: q.data?.items ?? [],
+    totalCount: q.data?.totalCount ?? 0,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch(); },
+  };
+}
+
+// useOutboundListAll — 호환 훅. 옛 시그니처(filters만 받고 전체 데이터를 한 번에 반환).
+// 새 화면은 useOutboundList(params) 를 쓰고, 아직 server mode 마이그레이션 안 된 화면이 사용한다.
+// 청크 누적이라 데이터 5만건 넘으면 무거워지니 점차 페이지네이션으로 이전 권장.
+export function useOutboundListAll(
+  filters: { status?: string; usage_category?: string; manufacturer_id?: string } = {},
+) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   return useListQuery<Outbound>(
-    ['outbounds', selectedCompanyId, filters.status, filters.usage_category, filters.manufacturer_id],
+    ['outbounds-all', selectedCompanyId, filters.status, filters.usage_category, filters.manufacturer_id],
     () => {
       const params = companyParams(selectedCompanyId!);
       if (filters.status) params.set('status', filters.status);
@@ -46,6 +114,48 @@ export function useOutboundList(filters: { status?: string; usage_category?: str
     },
     { enabled: !!selectedCompanyId },
   );
+}
+
+export interface OutboundSummary {
+  total: number;
+  active_count: number;
+  cancel_pending_count: number;
+  cancelled_count: number;
+  sale_amount_sum: number;
+  invoice_pending_count: number;
+}
+
+// useOutboundSummary — KPI 카드용 집계.
+// List 와 동일 필터(status/usage_category/manufacturer_id/q) 를 사용해 페이지에 무관한 전체 집계를 받는다.
+export function useOutboundSummary(params: Omit<OutboundListParams, 'pageIndex' | 'pageSize' | 'sort' | 'order'>) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
+  const queryKey = [
+    'outbounds-summary',
+    selectedCompanyId,
+    params.status ?? '',
+    params.usage_category ?? '',
+    params.manufacturer_id ?? '',
+    params.q ?? '',
+  ];
+  const q = useQuery<OutboundSummary, Error>({
+    queryKey,
+    queryFn: async () => {
+      const search = companyParams(selectedCompanyId!);
+      if (params.status) search.set('status', params.status);
+      if (params.usage_category) search.set('usage_category', params.usage_category);
+      if (params.manufacturer_id) search.set('manufacturer_id', params.manufacturer_id);
+      if (params.q) search.set('q', params.q);
+      return fetchWithAuth<OutboundSummary>(`/api/v1/outbounds/summary?${search}`);
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  });
+  return {
+    summary: q.data ?? null,
+    loading: q.isLoading,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch(); },
+  };
 }
 
 export function useOutboundDetail(outboundId: string | null) {
