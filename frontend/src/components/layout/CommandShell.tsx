@@ -296,7 +296,7 @@ export default function CommandShell() {
           </button>
         </div>
 
-        {currentTenant !== 'baro' ? (
+        {currentTenant === 'topsolar' ? (
           <div className="sf-company-switcher">
             <div className="sf-eyebrow mb-1.5 text-[var(--sf-dark-ink-3)]">법인</div>
             <Select value={selectedCompanyId || 'all'} onValueChange={setCompanyId}>
