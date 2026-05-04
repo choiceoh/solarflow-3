@@ -1,2 +1,6 @@
 # 셸 스크립트는 항상 LF (Windows 체크아웃이라도 bash가 깨지지 않도록)
 *.sh text eol=lf
+# go test -update 가 LF 로 쓰는 golden 파일이 Windows 에서 CRLF 변환되면 snapshot diff 가 끝없이 표류
+*.golden text eol=lf
+# SQL 마이그레이션도 운영 적용 시 LF 권장 (cron 자동적용 스크립트 일관성)
+*.sql text eol=lf

@@ -48,6 +48,7 @@ export default function ImportHubPage() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const [downloading, setDownloading] = useState(false);
+  const [downloadingMaster, setDownloadingMaster] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   // 통합 업로드 — 한 파일로 모든 섹션 동시 처리. PO/LC 코드표(은행·발주번호)도 이 훅이 채운다.
@@ -64,9 +65,23 @@ export default function ImportHubPage() {
       const { generateUnifiedTemplate } = await import('@/lib/excelTemplates');
       await generateUnifiedTemplate(masterData);
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : '통합 양식 다운로드 실패');
+      notify.error(error instanceof Error ? error.message : '통합 거래 양식 다운로드 실패');
     } finally {
       setDownloading(false);
+    }
+  }, [masterData]);
+
+  // 통합 마스터 양식 다운로드 — 기준정보 6종(법인·제조사·품번·창고·은행·거래처) 한 파일로.
+  const handleUnifiedMasterDownload = useCallback(async () => {
+    if (!masterData) return;
+    setDownloadingMaster(true);
+    try {
+      const { generateUnifiedMasterTemplate } = await import('@/lib/excelTemplates');
+      await generateUnifiedMasterTemplate(masterData);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : '통합 마스터 양식 다운로드 실패');
+    } finally {
+      setDownloadingMaster(false);
     }
   }, [masterData]);
 
@@ -104,6 +119,18 @@ export default function ImportHubPage() {
       tableSub="통합 양식 + 업무별 검증 업로드"
       actions={(
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            disabled={!masterData || loading || downloadingMaster}
+            onClick={handleUnifiedMasterDownload}
+            title="법인·제조사·품번·창고·은행·거래처 6종 시트가 한 파일로"
+          >
+            {downloadingMaster ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            통합 마스터 다운로드
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -166,11 +193,11 @@ export default function ImportHubPage() {
           <TabsTrigger value="external">외부 양식 변환</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="standard" className="mt-4">
-          <div className="grid gap-4 xl:grid-cols-2">
+        <TabsContent value="standard" className="mt-8">
+          <div className="grid gap-6 xl:grid-cols-2">
             {IMPORT_GROUPS.map((group) => (
               <section key={group.title} className="space-y-3">
-                <div className="eyebrow">{group.title}</div>
+                <div className="eyebrow pt-1">{group.title}</div>
                 <div className="grid gap-2">
                   {group.items.map((item) => (
                     <div
@@ -193,7 +220,7 @@ export default function ImportHubPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="external" className="mt-4">
+        <TabsContent value="external" className="mt-8">
           <section className="space-y-3">
             <div className="grid gap-2">
               {EXTERNAL_FORMATS.map((fmt) => (

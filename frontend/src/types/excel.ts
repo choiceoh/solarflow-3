@@ -2,6 +2,11 @@
 
 export type TemplateType =
   | 'company'
+  | 'manufacturer'
+  | 'product'
+  | 'warehouse'
+  | 'bank'
+  | 'partner'
   | 'inbound'
   | 'outbound'
   | 'sale'
@@ -54,6 +59,11 @@ export interface MasterDataForExcel {
 // 양식별 한글 이름
 export const TEMPLATE_LABEL: Record<TemplateType, string> = {
   company: '법인',
+  manufacturer: '제조사',
+  product: '품번',
+  warehouse: '창고',
+  bank: '은행',
+  partner: '거래처',
   inbound: '입고',
   outbound: '출고',
   sale: '매출',
@@ -78,6 +88,66 @@ export const COMPANY_FIELDS: FieldDef[] = [
   { key: 'company_name', label: '법인명', required: true, type: 'string' },
   { key: 'company_code', label: '법인코드', required: true, type: 'string' },
   { key: 'business_number', label: '사업자번호', required: false, type: 'string' },
+];
+
+// 제조사 필드 — 통합 마스터 양식
+export const MANUFACTURER_FIELDS: FieldDef[] = [
+  { key: 'name_kr', label: '제조사명(한)', required: true, type: 'string' },
+  { key: 'name_en', label: '제조사명(영)', required: false, type: 'string' },
+  { key: 'short_name', label: '약칭', required: false, type: 'string' },
+  { key: 'priority_rank', label: '표시순위', required: true, type: 'number' },
+  { key: 'country', label: '국가', required: true, type: 'string' },
+  { key: 'domestic_foreign', label: '국내/해외', required: true, type: 'string' },
+];
+
+// 품번 필드 — manufacturer는 자연키(name_kr)로 받아 서버 전송 직전에 manufacturer_id로 매핑
+export const PRODUCT_FIELDS: FieldDef[] = [
+  { key: 'product_code', label: '품번코드', required: true, type: 'string' },
+  { key: 'product_name', label: '품명', required: true, type: 'string' },
+  { key: 'manufacturer_name', label: '제조사명', required: true, type: 'string' },
+  { key: 'spec_wp', label: '스펙(Wp)', required: true, type: 'number' },
+  { key: 'wattage_kw', label: '와트수(kW)', required: true, type: 'number' },
+  { key: 'module_width_mm', label: '모듈폭(mm)', required: true, type: 'number' },
+  { key: 'module_height_mm', label: '모듈높이(mm)', required: true, type: 'number' },
+  { key: 'module_depth_mm', label: '모듈두께(mm)', required: false, type: 'number' },
+  { key: 'weight_kg', label: '중량(kg)', required: false, type: 'number' },
+  { key: 'wafer_platform', label: '웨이퍼 플랫폼', required: false, type: 'string' },
+  { key: 'cell_config', label: '셀 구성', required: false, type: 'string' },
+  { key: 'series_name', label: '시리즈명', required: false, type: 'string' },
+  { key: 'memo', label: '메모', required: false, type: 'string' },
+];
+
+// 창고 필드
+export const WAREHOUSE_FIELDS: FieldDef[] = [
+  { key: 'warehouse_code', label: '창고코드', required: true, type: 'string' },
+  { key: 'warehouse_name', label: '창고명', required: true, type: 'string' },
+  { key: 'warehouse_type', label: '창고유형', required: true, type: 'string' },
+  { key: 'location_code', label: '장소코드', required: true, type: 'string' },
+  { key: 'location_name', label: '장소명', required: true, type: 'string' },
+];
+
+// 은행 필드 — company는 자연키(company_code)로 받아 서버 전송 직전에 company_id로 매핑
+export const BANK_FIELDS: FieldDef[] = [
+  { key: 'company_code', label: '법인코드', required: true, type: 'string' },
+  { key: 'bank_name', label: '은행명', required: true, type: 'string' },
+  { key: 'lc_limit_usd', label: 'L/C 한도(USD)', required: true, type: 'number' },
+  { key: 'limit_approve_date', label: '한도 승인일', required: false, type: 'date' },
+  { key: 'limit_expiry_date', label: '한도 만기일', required: false, type: 'date' },
+  { key: 'opening_fee_rate', label: '개설수수료율(%)', required: false, type: 'number' },
+  { key: 'acceptance_fee_rate', label: '인수수수료율(%)', required: false, type: 'number' },
+  { key: 'fee_calc_method', label: '수수료 계산방법', required: false, type: 'string' },
+  { key: 'memo', label: '메모', required: false, type: 'string' },
+];
+
+// 거래처 필드
+export const PARTNER_FIELDS: FieldDef[] = [
+  { key: 'partner_name', label: '거래처명', required: true, type: 'string' },
+  { key: 'partner_type', label: '거래처유형', required: true, type: 'string' },
+  { key: 'erp_code', label: 'ERP코드', required: false, type: 'string' },
+  { key: 'payment_terms', label: '결제조건', required: false, type: 'string' },
+  { key: 'contact_name', label: '담당자명', required: false, type: 'string' },
+  { key: 'contact_phone', label: '담당자연락처', required: false, type: 'string' },
+  { key: 'contact_email', label: '담당자이메일', required: false, type: 'string' },
 ];
 
 // 입고 필드
@@ -316,6 +386,11 @@ export interface UnifiedSubmitResult {
 // 양식별 필드 맵
 export const FIELDS_MAP: Record<TemplateType, FieldDef[]> = {
   company: COMPANY_FIELDS,
+  manufacturer: MANUFACTURER_FIELDS,
+  product: PRODUCT_FIELDS,
+  warehouse: WAREHOUSE_FIELDS,
+  bank: BANK_FIELDS,
+  partner: PARTNER_FIELDS,
   inbound: INBOUND_FIELDS,
   outbound: OUTBOUND_FIELDS,
   sale: SALE_FIELDS,

@@ -7,6 +7,7 @@ import {
   TEMPLATE_LABEL, COMPANY_FIELDS, INBOUND_FIELDS, OUTBOUND_FIELDS, SALE_FIELDS,
   DECLARATION_FIELDS, DECLARATION_COST_FIELDS, EXPENSE_FIELDS,
   ORDER_FIELDS, RECEIPT_FIELDS, PURCHASE_ORDER_FIELDS, LC_FIELDS,
+  MANUFACTURER_FIELDS, PRODUCT_FIELDS, WAREHOUSE_FIELDS, BANK_FIELDS, PARTNER_FIELDS,
 } from '@/types/excel';
 import { INBOUND_TYPE_LABEL, USAGE_CATEGORIES } from '@/types/inbound';
 import { EXPENSE_TYPE_LABEL } from '@/types/customs';
@@ -52,10 +53,19 @@ interface WorkbookWritable {
   addWorksheet(name: string, options?: unknown): SheetWritable;
 }
 
-// 발주 → 신용장 → 입고(B/L) → 면장 → 부대비용 흐름. 같은 파일 안에서 PO 행이 LC보다 먼저 있어야
-// LC.po_number 자연키 매핑이 1차 시도에서 성공한다 (서버는 부분 실패 허용이라 순서가 강제는 아님).
-const UNIFIED_TEMPLATE_ORDER: TemplateType[] = [
+// 통합 마스터 — 셋업 단계. 의존 순서: 법인 → 제조사 → 품번(제조사 참조) / 법인 → 은행(법인 참조).
+const UNIFIED_MASTER_ORDER: TemplateType[] = [
   'company',
+  'manufacturer',
+  'product',
+  'warehouse',
+  'bank',
+  'partner',
+];
+
+// 통합 거래 — 운영 단계. 발주 → 신용장 → 입고(B/L) → 면장 → 부대비용 흐름. 같은 파일 안에서
+// PO 행이 LC보다 먼저 있어야 LC.po_number 자연키 매핑이 1차 시도에서 성공한다 (서버는 부분 실패 허용이라 순서가 강제는 아님).
+const UNIFIED_TRANSACTION_ORDER: TemplateType[] = [
   'order',
   'outbound',
   'sale',
@@ -145,6 +155,11 @@ const FIELD_HELP: Record<string, string> = {
 
 const TYPE_GUIDE: Record<TemplateType, string> = {
   company: '법인명과 법인코드를 먼저 등록하면 다른 업무 양식에서 법인코드를 선택할 수 있습니다.',
+  manufacturer: '제조사를 먼저 등록해야 품번 시트에서 제조사명을 선택할 수 있습니다.',
+  product: '제조사명은 제조사 시트에 등록된 이름과 정확히 일치해야 합니다.',
+  warehouse: '창고코드와 장소코드는 각 4자리입니다.',
+  bank: '법인코드는 법인 시트에 등록된 코드와 일치해야 합니다. L/C 한도는 USD 기준 금액입니다.',
+  partner: '거래처유형은 공급사/고객사/공급+고객 중에서 선택합니다.',
   order: '수주 입력 후 출고, 매출, 수금으로 이어집니다.',
   outbound: '수주번호를 넣으면 수주와 연결되고, 그룹거래는 상대법인코드를 함께 입력합니다.',
   sale: '출고 선택값을 고르면 출고 수량과 제품 정보로 매출 금액이 계산됩니다.',
@@ -435,6 +450,11 @@ const GROUP_DIVIDER_BORDER = {
 // 다음 컬럼(boundary+1)의 좌측에 굵은 보더가 그어진다. 빈 배열은 그룹 없음.
 const FIELD_GROUPS: Record<TemplateType, number[]> = {
   company: [],
+  manufacturer: [],
+  product: [3, 8],            // [코드/이름/제조사] | [Wp/와트/모듈치수] | [추가스펙~메모]
+  warehouse: [],
+  bank: [3, 5],               // [법인/은행/한도] | [한도일자] | [수수료/메모]
+  partner: [2, 4],            // [거래처/유형] | [ERP/결제] | [담당자]
   inbound: [],
   outbound: [6, 10],          // [출고일~용도] | [수주~스페어] | [그룹~메모]
   sale: [3, 5],               // [출고~Wp단가] | [세금~메일] | [ERP~메모]
@@ -718,6 +738,43 @@ function exampleValue(field: FieldDef, masterData: MasterDataForExcel, type?: Te
     usance_days: 90,
     usance_type: "BANKER'S USANCE",
     maturity_date: '2026-08-02',
+    // 마스터 — 제조사
+    name_kr: '예시 제조사',
+    name_en: 'Example Mfg',
+    short_name: '예시',
+    priority_rank: 999,
+    country: 'CN',
+    domestic_foreign: '해외',
+    // 마스터 — 품번
+    product_name: '예시 품번명',
+    spec_wp: 540,
+    wattage_kw: 0.54,
+    module_width_mm: 2278,
+    module_height_mm: 1134,
+    module_depth_mm: 35,
+    weight_kg: 27.5,
+    wafer_platform: 'M10',
+    cell_config: '108셀',
+    series_name: 'Tiger Pro',
+    // 마스터 — 창고
+    warehouse_name: '예시 창고',
+    warehouse_type: '항구',
+    location_code: 'PORT',
+    location_name: '예시 부두',
+    // 마스터 — 은행
+    lc_limit_usd: 1000000,
+    limit_approve_date: '2026-05-01',
+    limit_expiry_date: '2027-05-01',
+    opening_fee_rate: 0.5,
+    acceptance_fee_rate: 1.5,
+    fee_calc_method: '잔액기준',
+    // 마스터 — 거래처
+    partner_name: '예시 거래처',
+    partner_type: '공급+고객',
+    erp_code: 'CUST-001',
+    contact_name: '홍길동',
+    contact_phone: '010-0000-0000',
+    contact_email: 'contact@example.com',
   };
   return examples[field.key] ?? '';
 }
@@ -833,20 +890,126 @@ export async function generateUnifiedTemplate(
   setWorkbookMeta(workbook);
   // 안내·예시·코드표는 잠그지 않는다 — 헤더 이름 매칭으로 업로드가 견고하므로
   // 사용자가 메모를 적거나 코드표를 확장해도 무방.
-  addGuideSheet(workbook, UNIFIED_TEMPLATE_ORDER);
-  addExampleSheet(workbook, UNIFIED_TEMPLATE_ORDER, masterData);
+  addGuideSheet(workbook, UNIFIED_TRANSACTION_ORDER);
+  addExampleSheet(workbook, UNIFIED_TRANSACTION_ORDER, masterData);
   // 통합 코드표 — 16개 코드 컬럼을 한 시트에 모아 모든 데이터 시트가 공용 참조한다.
   // (단일 다운로드 generateTemplate은 기존 per-type 코드표 유지)
   const codeSheetName = '코드표';
   const refs = addUnifiedCodeSheet(workbook, codeSheetName, masterData);
-  for (const type of UNIFIED_TEMPLATE_ORDER) {
+  for (const type of UNIFIED_TRANSACTION_ORDER) {
     await addUnifiedDataSheet(workbook, type, refs, codeSheetName, masterData);
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  saveAs(blob, `SolarFlow_통합입력양식_${today}.xlsx`);
+  saveAs(blob, `SolarFlow_통합거래양식_${today}.xlsx`);
+}
+
+// 통합 마스터 양식 — 기준정보 6종(법인·제조사·품번·창고·은행·거래처)을 한 파일로 묶는다.
+// 의존 순서대로 시트가 배치되어 사용자가 위에서부터 채워 내려가면 자연스럽게 FK가 풀린다.
+export async function generateUnifiedMasterTemplate(
+  masterData: MasterDataForExcel,
+): Promise<void> {
+  const ExcelJS = await import('exceljs');
+  const { saveAs } = await import('file-saver');
+
+  const workbook = new ExcelJS.Workbook();
+  setWorkbookMeta(workbook);
+  addGuideSheet(workbook, UNIFIED_MASTER_ORDER);
+  addExampleSheet(workbook, UNIFIED_MASTER_ORDER, masterData);
+  const codeSheetName = '코드표';
+  const refs = addUnifiedMasterCodeSheet(workbook, codeSheetName, masterData);
+  for (const type of UNIFIED_MASTER_ORDER) {
+    await addUnifiedMasterDataSheet(workbook, type, refs, codeSheetName);
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  saveAs(blob, `SolarFlow_통합마스터양식_${today}.xlsx`);
+}
+
+// 마스터 양식 코드표 — 마스터 시트끼리만 참조하는 5개 코드 컬럼.
+interface UnifiedMasterCodeRefs {
+  company: CodeColumnRef;
+  manufacturer: CodeColumnRef;
+  partnerType: CodeColumnRef;
+  warehouseType: CodeColumnRef;
+  domesticForeign: CodeColumnRef;
+}
+
+function addUnifiedMasterCodeSheet(
+  workbook: WorkbookWritable,
+  sheetName: string,
+  masterData: MasterDataForExcel,
+): UnifiedMasterCodeRefs {
+  const codeSheet = workbook.addWorksheet(sheetName);
+
+  const companyCodes = masterData.companies.map((c) => c.company_code);
+  const companyNames = masterData.companies.map((c) => c.company_name);
+  const mfgNames = masterData.manufacturers.map((m) => m.name_kr);
+
+  let col = 1;
+  const company = writeCodeColumn(codeSheet, col, '법인코드', companyCodes, companyNames);
+  col = company.nextCol;
+  const manufacturer = writeCodeColumn(codeSheet, col, '제조사', mfgNames);
+  col = manufacturer.nextCol;
+  const partnerType = writeCodeColumn(
+    codeSheet, col, '거래처유형',
+    ['공급사', '고객사', '공급+고객'], ['supplier', 'customer', 'both'],
+  );
+  col = partnerType.nextCol;
+  const warehouseType = writeCodeColumn(
+    codeSheet, col, '창고유형',
+    ['항구', '공장', '업체'], ['port', 'factory', 'vendor'],
+  );
+  col = warehouseType.nextCol;
+  const domesticForeign = writeCodeColumn(codeSheet, col, '국내/해외', ['국내', '해외']);
+  col = domesticForeign.nextCol;
+
+  finishCodeSheet(codeSheet, col - 1);
+  return { company, manufacturer, partnerType, warehouseType, domesticForeign };
+}
+
+async function addUnifiedMasterDataSheet(
+  workbook: WorkbookWritable,
+  type: TemplateType,
+  refs: UnifiedMasterCodeRefs,
+  codeSheetName: string,
+): Promise<void> {
+  const codeRef = `'${codeSheetName}'`;
+  const label = TEMPLATE_LABEL[type];
+  const fields = getFieldsForType(type);
+  const dataSheet = workbook.addWorksheet(`${label}등록`);
+  styleHeaders(dataSheet, fields, { type });
+
+  switch (type) {
+    case 'company':
+      // 코드/이름은 자유 입력
+      break;
+    case 'manufacturer':
+      // F = 국내/해외
+      setDropdownFromRef(dataSheet, 'F', codeRef, refs.domesticForeign, true);
+      break;
+    case 'product':
+      // C = 제조사명
+      setDropdownFromRef(dataSheet, 'C', codeRef, refs.manufacturer, true);
+      break;
+    case 'warehouse':
+      // C = 창고유형
+      setDropdownFromRef(dataSheet, 'C', codeRef, refs.warehouseType, true);
+      break;
+    case 'bank':
+      // A = 법인코드
+      setDropdownFromRef(dataSheet, 'A', codeRef, refs.company, true);
+      break;
+    case 'partner':
+      // B = 거래처유형
+      setDropdownFromRef(dataSheet, 'B', codeRef, refs.partnerType, true);
+      break;
+  }
+  await protectSheet(dataSheet);
 }
 
 // 통합 코드표 컬럼 참조 모음 — 모든 데이터 시트가 이 객체로 dropdown range를 잡는다.
@@ -1310,6 +1473,11 @@ async function addTemplateSheets(
 function getFieldsForType(type: TemplateType): FieldDef[] {
   switch (type) {
     case 'company': return COMPANY_FIELDS;
+    case 'manufacturer': return MANUFACTURER_FIELDS;
+    case 'product': return PRODUCT_FIELDS;
+    case 'warehouse': return WAREHOUSE_FIELDS;
+    case 'bank': return BANK_FIELDS;
+    case 'partner': return PARTNER_FIELDS;
     case 'inbound': return INBOUND_FIELDS;
     case 'outbound': return OUTBOUND_FIELDS;
     case 'sale': return SALE_FIELDS;
