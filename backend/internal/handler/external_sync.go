@@ -414,6 +414,19 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 	if err != nil {
 		return 0, 0, fmt.Errorf("rows 읽기: %w", err)
 	}
+	headerIdx, colMap := detectHeaderRow(rows)
+	if headerIdx < 0 {
+		log.Printf("[external sync] 헤더 행 자동 탐지 실패 — 기본(이전 형식) 컬럼 인덱스로 폴백")
+		colMap = map[string]int{
+			"gubun": 0, "date": 1, "customer": 2, "site_name": 3, "site_address": 4,
+			"order_number": 5, "product_code": 6, "quantity": 7, "capacity": 8,
+			"remarks": 9, "unit_price": 10, "supply_amount": 11, "vat_amount": 12,
+			"total_amount": 13, "tx_statement_ready": 14, "inspection_request_sent": 15,
+			"approval_requested": 16, "tax_invoice_issued": 17,
+		}
+	} else {
+		log.Printf("[external sync] 헤더 매핑 — row=%d keys=%d", headerIdx, len(colMap))
+	}
 
 	// 마스터 캐시 — 매 행마다 SELECT 안 하도록 한 번에.
 	companies, err := h.fetchCompaniesByCode()
@@ -447,7 +460,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 	var scanSeller string
 	var scanMonth int
 	for _, row := range rows {
-		cell0 := safeCell(row, 0)
+		cell0 := safeCellByKey(row, colMap, "gubun")
 		if s, mo := parseSectionMarkerForDate(cell0); s != "" {
 			scanSeller, scanMonth = s, mo
 			key := fmt.Sprintf("%s-%d", s, mo)
@@ -459,7 +472,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 		if scanSeller == "" || cell0 == "구분" || cell0 == "합 계" || cell0 == "합계" {
 			continue
 		}
-		rawDate := safeCell(row, 1)
+		rawDate := safeCellByKey(row, colMap, "date")
 		if iso := parseTopsolarDate(rawDate); iso != "" && len(iso) >= 4 {
 			if year, err := strconv.Atoi(iso[:4]); err == nil {
 				key := fmt.Sprintf("%s-%d", scanSeller, scanMonth)
@@ -490,8 +503,8 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 		if gubun == "구분" || gubun == "합 계" || gubun == "합계" {
 			continue
 		}
-		productCode := safeCell(row, 6)
-		qtyStr := safeCell(row, 7)
+		productCode := safeCellByKey(row, colMap, "product_code")
+		qtyStr := safeCellByKey(row, colMap, "quantity")
 		if productCode == "" || qtyStr == "" {
 			continue
 		}
@@ -549,9 +562,6 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 		}
 		_ = dateRaw
 
-		// Topsolar 시트 col 11("단가")은 장당 단가(₩/장). source_payload 에는 의미 맞는 키로 보존.
-		// 기존 키(unit_price_wp)는 잘못된 명명이지만 SaleAutoRegisterDialog 호환을 위해 둘 다 둔다.
-		rawUnitEa := parseTopsolarNumber(safeCell(row, 10))
 		sourcePayload := map[string]interface{}{
 			"source":           "google_sheet",
 			"spreadsheet_id":   src.SpreadsheetID,
@@ -559,15 +569,23 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			"sheet_row_index":  excelRowNum,
 			"section":          currentSection,
 			"date_raw":         dateRaw,
-			"customer_name":    safeCell(row, 2),
-			"site_name":        safeCell(row, 3),
-			"site_address":     safeCell(row, 4),
-			"order_number":     safeCell(row, 5),
-			"unit_price_ea":    rawUnitEa,
-			"unit_price_wp":    rawUnitEa, // legacy 키 — 호환용 (실제로는 장당값)
-			"supply_amount":    parseTopsolarNumber(safeCell(row, 11)),
-			"vat_amount":       parseTopsolarNumber(safeCell(row, 12)),
-			"total_amount":     parseTopsolarNumber(safeCell(row, 13)),
+			"customer_name":    safeCellByKey(row, colMap, "customer"),
+			"site_name":        safeCellByKey(row, colMap, "site_name"),
+			"site_address":     safeCellByKey(row, colMap, "site_address"),
+			"order_number":     safeCellByKey(row, colMap, "order_number"),
+			"unit_price_wp":    parseTopsolarNumber(safeCellByKey(row, colMap, "unit_price")),
+			"supply_amount":    parseTopsolarNumber(safeCellByKey(row, colMap, "supply_amount")),
+			"vat_amount":       parseTopsolarNumber(safeCellByKey(row, colMap, "vat_amount")),
+			"total_amount":     parseTopsolarNumber(safeCellByKey(row, colMap, "total_amount")),
+			// PR 15 추가 컬럼 (새 시트만 채워짐)
+			"note":                     safeCellByKey(row, colMap, "note"),
+			"site_contact":             safeCellByKey(row, colMap, "site_contact"),
+			"delivery_history":         safeCellByKey(row, colMap, "delivery_history"),
+			"fd_ready":                 safeCellByKey(row, colMap, "fd_ready"),
+			"ks_cert_ready":            safeCellByKey(row, colMap, "ks_cert_ready"),
+			"power_license":            safeCellByKey(row, colMap, "power_license"),
+			"delivered":                safeCellByKey(row, colMap, "delivered"),
+			"power_license_delivered": safeCellByKey(row, colMap, "power_license_delivered"),
 		}
 
 		var capacityKW *float64
@@ -606,9 +624,8 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			if id, ok := orders[normalizeCode(orderNumber)]; ok {
 				orderIDPtr = &id
 			} else {
-				// 시트 col 11 = 장당 단가. spec_wp 가 있으면 ₩/Wp 도 계산해 둘 다 저장.
-				specWP := pmeta.WattageKW * 1000
-				newOrderID, regErr := h.autoRegisterOrder(orderNumber, companyID, customerID, productID, qty, rawUnitEa, specWP, capacityKW, dateISO, optStr(safeCell(row, 3)), optStr(safeCell(row, 4)))
+				unitPrice := parseTopsolarNumber(safeCell(row, 10))
+				newOrderID, regErr := h.autoRegisterOrder(orderNumber, companyID, customerID, productID, qty, unitPrice, capacityKW, dateISO, optStr(safeCell(row, 3)), optStr(safeCell(row, 4)))
 				if regErr != nil {
 					log.Printf("[external sync] order 등록 실패 %s: %v", orderNumber, regErr)
 				} else {
@@ -889,13 +906,7 @@ func (h *ExternalSyncHandler) autoRegisterPartner(rawName string) (string, error
 
 // D-059 PR 14: 수주 자동 등록
 //   defaults — receipt_method=purchase_order, management_category=sale, fulfillment_source=stock
-//   unitPriceEa: 장당 단가(원/장) — Topsolar 시트 col 11 원본값
-//   specWP    : 품번의 정격 출력(W). >0 이면 unit_price_wp = ea / specWP 계산해서 같이 저장.
-func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customerID, productID string, qty int, unitPriceEa, specWP float64, capacityKW *float64, orderDate string, siteName, siteAddress *string) (string, error) {
-	unitPriceWp := 0.0
-	if specWP > 0 {
-		unitPriceWp = unitPriceEa / specWP
-	}
+func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customerID, productID string, qty int, unitPriceWp float64, capacityKW *float64, orderDate string, siteName, siteAddress *string) (string, error) {
 	body := map[string]interface{}{
 		"order_number":        orderNumber,
 		"company_id":          companyID,
@@ -903,7 +914,6 @@ func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customer
 		"product_id":          productID,
 		"quantity":            qty,
 		"unit_price_wp":       unitPriceWp,
-		"unit_price_ea":       unitPriceEa,
 		"order_date":          orderDate,
 		"receipt_method":      "purchase_order",
 		"management_category": "sale",
@@ -927,8 +937,117 @@ func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customer
 	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
 		return "", fmt.Errorf("등록 결과 확인 실패")
 	}
-	log.Printf("[external sync] order 자동 등록: %s (qty=%d, ea=%.0f, wp=%.2f)", orderNumber, qty, unitPriceEa, unitPriceWp)
+	log.Printf("[external sync] order 자동 등록: %s (qty=%d, unit=%.0f)", orderNumber, qty, unitPriceWp)
 	return rows[0].OrderID, nil
+}
+
+
+// D-059 PR 15: 헤더 이름 기반 동적 컬럼 매핑.
+// 두 번째 탑솔라 시트는 "입고일자"·"기타사항"·"발주번호" 같이 라벨이 다르거나 추가됨.
+// 라벨 alias 사전으로 표준 키(date/gubun/customer/...)로 변환.
+
+// label normalization — 공백·특수기호 제거 + 소문자
+func normalizeHeaderLabel(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') ||
+			(r >= 0xAC00 && r <= 0xD7AF) || (r >= 0x4E00 && r <= 0x9FFF) {
+			if r >= 'A' && r <= 'Z' {
+				r += 32
+			}
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// label → 표준 키 (alias 통합)
+var headerAliases = map[string]string{
+	// 핵심 컬럼
+	normalizeHeaderLabel("구분"):           "gubun",
+	normalizeHeaderLabel("납품일자"):       "date",
+	normalizeHeaderLabel("입고일자"):       "date",
+	normalizeHeaderLabel("출고일자"):       "date",
+	normalizeHeaderLabel("업체명"):         "customer",
+	normalizeHeaderLabel("거래처"):         "customer",
+	normalizeHeaderLabel("발전소명"):       "site_name",
+	normalizeHeaderLabel("현장명"):         "site_name",
+	normalizeHeaderLabel("주소"):           "site_address",
+	normalizeHeaderLabel("주 소"):          "site_address",
+	normalizeHeaderLabel("발주번호"):       "order_number",
+	normalizeHeaderLabel("수주번호"):       "order_number",
+	normalizeHeaderLabel("PO"):             "order_number",
+	normalizeHeaderLabel("모델명"):         "product_code",
+	normalizeHeaderLabel("모듈명"):         "product_code",
+	normalizeHeaderLabel("품번"):           "product_code",
+	normalizeHeaderLabel("수량"):           "quantity",
+	normalizeHeaderLabel("수량(EA)"):       "quantity",
+	normalizeHeaderLabel("수량EA"):         "quantity",
+	normalizeHeaderLabel("용량"):           "capacity",
+	normalizeHeaderLabel("용량(kW)"):       "capacity",
+	normalizeHeaderLabel("용량kW"):         "capacity",
+	normalizeHeaderLabel("출고잔량"):       "remarks",
+	normalizeHeaderLabel("잔량/스페어"):    "remarks",
+	normalizeHeaderLabel("잔량스페어"):     "remarks",
+	// 매출 보조
+	normalizeHeaderLabel("단가"):           "unit_price",
+	normalizeHeaderLabel("공급가액"):       "supply_amount",
+	normalizeHeaderLabel("세액"):           "vat_amount",
+	normalizeHeaderLabel("합계"):           "total_amount",
+	// 워크플로우 (기존 시트)
+	normalizeHeaderLabel("거래명세서"):     "tx_statement_ready",
+	normalizeHeaderLabel("인수검수요청서"): "inspection_request_sent",
+	normalizeHeaderLabel("결재요청"):       "approval_requested",
+	normalizeHeaderLabel("계산서발행"):     "tax_invoice_issued",
+	// 추가 메타 (새 시트) — source_payload 보존
+	normalizeHeaderLabel("기타사항"):              "note",
+	normalizeHeaderLabel("현장담당자"):            "site_contact",
+	normalizeHeaderLabel("납기 변경 히스토리"):    "delivery_history",
+	normalizeHeaderLabel("FD 여부"):                "fd_ready",
+	normalizeHeaderLabel("KS인증서 여부"):         "ks_cert_ready",
+	normalizeHeaderLabel("발전사업허가증"):        "power_license",
+	normalizeHeaderLabel("전달여부"):              "delivered",
+	normalizeHeaderLabel("발전사업허가증 전달 여부"): "power_license_delivered",
+}
+
+// detectHeaderRow — 시트 첫 5 행 안에서 "구분"·"gubun" 라벨이 보이는 행을 헤더로 사용.
+// 반환: (row_index, key→col_index 매핑)
+func detectHeaderRow(rows [][]string) (int, map[string]int) {
+	colMap := map[string]int{}
+	for i := 0; i < len(rows) && i < 8; i++ {
+		row := rows[i]
+		tempMap := map[string]int{}
+		for j, c := range row {
+			norm := normalizeHeaderLabel(c)
+			if norm == "" {
+				continue
+			}
+			if key, ok := headerAliases[norm]; ok {
+				if _, exists := tempMap[key]; !exists {
+					tempMap[key] = j
+				}
+			}
+		}
+		// 핵심 키 (gubun + date + product_code + quantity) 가 모두 있어야 헤더로 인정
+		_, hasGubun := tempMap["gubun"]
+		_, hasDate := tempMap["date"]
+		_, hasProd := tempMap["product_code"]
+		_, hasQty := tempMap["quantity"]
+		if hasGubun && hasDate && hasProd && hasQty {
+			colMap = tempMap
+			return i, colMap
+		}
+	}
+	return -1, nil
+}
+
+// safeCellByKey — 헤더 매핑된 키로 셀 값 추출
+func safeCellByKey(row []string, colMap map[string]int, key string) string {
+	idx, ok := colMap[key]
+	if !ok {
+		return ""
+	}
+	return safeCell(row, idx)
 }
 
 // ──────────────── 변환 보조 ────────────────

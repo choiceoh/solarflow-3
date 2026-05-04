@@ -107,28 +107,36 @@ export default function ProcurementPage() {
     const target = poList.find((p) => p.po_id === targetId);
     if (target) setSelectedPO(target);
   }, [location.search, poList]);
-  const poFilters: Record<string, string> = {};
-  if (poStatusFilter) poFilters.status = poStatusFilter;
-  if (poMfgFilter) poFilters.manufacturer_id = poMfgFilter;
-  if (poTypeFilter) poFilters.contract_type = poTypeFilter;
-  const { data: pos, loading: poLoading, reload: reloadPO } = usePOList(poFilters);
+  // 칩 필터는 모두 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
+  const { data: allPos, loading: poLoading, reload: reloadPO } = usePOList();
+  const pos = useMemo(() => allPos.filter((p) => {
+    if (poStatusFilter && p.status !== poStatusFilter) return false
+    if (poMfgFilter && p.manufacturer_id !== poMfgFilter) return false
+    if (poTypeFilter && p.contract_type !== poTypeFilter) return false
+    return true
+  }), [allPos, poStatusFilter, poMfgFilter, poTypeFilter]);
 
   const [lcAggVersion, setLcAggVersion] = useState(0);
   const [lcStatusFilter, setLcStatusFilter] = useState('');
   const [lcBankFilter, setLcBankFilter] = useState('');
   const [lcMfgFilter, setLcMfgFilter] = useState('');
-  const lcFilters: Record<string, string> = {};
-  if (lcStatusFilter) lcFilters.status = lcStatusFilter;
-  if (lcBankFilter) lcFilters.bank_id = lcBankFilter;
-  if (lcMfgFilter) lcFilters.manufacturer_id = lcMfgFilter;
-  const { data: lcs, loading: lcLoading, reload: reloadLC } = useLCList(lcFilters);
+  const { data: allLcs, loading: lcLoading, reload: reloadLC } = useLCList();
+  const lcs = useMemo(() => allLcs.filter((l) => {
+    if (lcStatusFilter && l.status !== lcStatusFilter) return false
+    if (lcBankFilter && l.bank_id !== lcBankFilter) return false
+    // manufacturer_id 는 useLCList 가 PO join 에서 매핑해 채움.
+    if (lcMfgFilter && l.manufacturer_id !== lcMfgFilter) return false
+    return true
+  }), [allLcs, lcStatusFilter, lcBankFilter, lcMfgFilter]);
 
   const [ttStatusFilter, setTtStatusFilter] = useState('');
   const [ttPoFilter, setTtPoFilter] = useState('');
-  const ttFilters: Record<string, string> = {};
-  if (ttStatusFilter) ttFilters.status = ttStatusFilter;
-  if (ttPoFilter) ttFilters.po_id = ttPoFilter;
-  const { data: tts, loading: ttLoading } = useTTList(ttFilters);
+  const { data: allTts, loading: ttLoading } = useTTList();
+  const tts = useMemo(() => allTts.filter((t) => {
+    if (ttStatusFilter && t.status !== ttStatusFilter) return false
+    if (ttPoFilter && t.po_id !== ttPoFilter) return false
+    return true
+  }), [allTts, ttStatusFilter, ttPoFilter]);
 
   // BL 탭
   const [blTypeFilter, setBlTypeFilter] = useState('');
@@ -136,11 +144,13 @@ export default function ProcurementPage() {
   const [blMfgFilter, setBlMfgFilter] = useState('');
   const [selectedBL, setSelectedBL] = useState<string | null>(null);
   const [blsVersion, setBlsVersion] = useState(0);
-  const blFilters: { inbound_type?: string; status?: string; manufacturer_id?: string } = {};
-  if (blTypeFilter) blFilters.inbound_type = blTypeFilter;
-  if (blStatusFilter) blFilters.status = blStatusFilter;
-  if (blMfgFilter) blFilters.manufacturer_id = blMfgFilter;
-  const { data: bls, loading: blLoading, reload: reloadBL } = useBLList(blFilters);
+  const { data: allBls, loading: blLoading, reload: reloadBL } = useBLList();
+  const bls = useMemo(() => allBls.filter((b) => {
+    if (blTypeFilter && b.inbound_type !== blTypeFilter) return false
+    if (blStatusFilter && b.status !== blStatusFilter) return false
+    if (blMfgFilter && b.manufacturer_id !== blMfgFilter) return false
+    return true
+  }), [allBls, blTypeFilter, blStatusFilter, blMfgFilter]);
 
   const [depositMfgFilter, setDepositMfgFilter] = useState('');
 
@@ -200,10 +210,8 @@ export default function ProcurementPage() {
     }),
     [pos, manufacturers],
   );
-  const lcRows = useMemo(
-    () => lcMfgFilter ? lcs.filter(lc => poList.find(p => p.po_id === lc.po_id)?.manufacturer_id === lcMfgFilter) : lcs,
-    [lcMfgFilter, lcs, poList],
-  );
+  // 칩 필터(lcs)에서 이미 manufacturer_id 까지 적용됨.
+  const lcRows = lcs;
   const blRows = useMemo(
     () => bls.map(bl => ({
       ...bl,

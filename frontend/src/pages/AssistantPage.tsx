@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
 import type { ToolUIPart, UIMessage } from 'ai';
-import { Bot, FileText, MessageSquarePlus, Paperclip, Search, Send, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronUp, FileText, Inbox, MessageSquarePlus, Paperclip, Search, Send, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -14,9 +14,12 @@ import { detectPageContext } from '@/lib/pageContext';
 import { getPageChips, type ChipDef } from '@/lib/assistantChips';
 import {
   toBackendMessages,
+  extractProposals,
   extractText,
   summarizeInput,
   summarizeOutput,
+  type ProposalState,
+  type ProposalStatus,
 } from '@/lib/assistantMessages';
 
 interface SessionSummary {
@@ -33,6 +36,23 @@ interface SessionDetail extends SessionSummary {
 const SESSION_TITLE_MAX = 30;
 const OCR_ACCEPT = 'application/pdf,image/jpeg,image/png,image/webp,image/gif';
 const OCR_MAX_BYTES = 20 * 1024 * 1024;
+
+const PROPOSAL_KIND_LABEL: Record<string, string> = {
+  create_note: '메모 작성',
+  update_note: '메모 수정',
+  delete_note: '메모 삭제',
+  create_partner: '거래처 등록',
+  update_partner: '거래처 수정',
+  create_order: '수주 등록',
+  update_order: '수주 수정',
+  delete_order: '수주 삭제',
+  create_outbound: '출고 등록',
+  update_outbound: '출고 수정',
+  delete_outbound: '출고 삭제',
+  create_receipt: '수금 입력',
+  create_declaration: '면장 등록',
+  propose_ui_config_update: '메타 화면/폼 변경',
+};
 
 interface OCRLineLite {
   text: string;
@@ -185,16 +205,23 @@ interface ChatBoxProps {
   sessionsSlot?: React.ReactNode;
   /** drawer 안에서 사용 시 — 자체 헤더 숨김 (drawer 헤더가 대신함) */
   embedded?: boolean;
+  /** drawer 등 외부에서 자동 채워주는 첫 입력 — 마운트 시 input 에 prefill (사용자가 검토 후 send) */
+  initialInput?: string;
 }
 
-export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted, sessionsSlot, embedded }: ChatBoxProps) {
+export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSessionUpserted, sessionsSlot, embedded, initialInput }: ChatBoxProps) {
   // 빠른 연속 send 시 setSessionIdRef 가 반영되기 전 두 번째 호출이 또 POST 하지 않도록 ref 로 동기 추적.
   const sessionIdRef = useRef<string | null>(sessionId);
-  const [input, setInput] = useState('');
+  // 쓰기 도구 승인/거부 상태 — proposal id → status. messages 와 별도 메모리 (상태 mutation 안 함).
+  const [proposalStatuses, setProposalStatuses] = useState<Map<string, { status: ProposalStatus; errorMessage?: string }>>(
+    new Map(),
+  );
+  const [input, setInput] = useState(initialInput ?? '');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [parseAsCustoms, setParseAsCustoms] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -326,6 +353,77 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     }
   };
 
+  const updateProposalStatus = (id: string, patch: { status: ProposalStatus; errorMessage?: string }) => {
+    setProposalStatuses((prev) => {
+      const next = new Map(prev);
+      next.set(id, patch);
+      return next;
+    });
+  };
+
+  // overridePayload — 사용자가 폼 미리보기에서 수정한 페이로드. 없으면 store 의 원본 사용.
+  const onConfirm = async (prop: ProposalState, overridePayload?: unknown) => {
+    if (prop.status !== 'pending') return;
+    updateProposalStatus(prop.id, { status: 'submitting' });
+    try {
+      await fetchWithAuth(`/api/v1/assistant/proposals/${prop.id}/confirm`, {
+        method: 'POST',
+        body: overridePayload === undefined ? undefined : JSON.stringify({ payload: overridePayload }),
+      });
+      updateProposalStatus(prop.id, { status: 'confirmed' });
+    } catch (e) {
+      updateProposalStatus(prop.id, {
+        status: 'error',
+        errorMessage: e instanceof Error ? e.message : '저장 실패',
+      });
+    }
+  };
+
+  const onReject = async (prop: ProposalState) => {
+    if (prop.status !== 'pending') return;
+    updateProposalStatus(prop.id, { status: 'submitting' });
+    try {
+      await fetchWithAuth(`/api/v1/assistant/proposals/${prop.id}/reject`, { method: 'POST' });
+      updateProposalStatus(prop.id, { status: 'rejected' });
+    } catch (e) {
+      updateProposalStatus(prop.id, {
+        status: 'error',
+        errorMessage: e instanceof Error ? e.message : '거부 실패',
+      });
+    }
+  };
+
+  // 메시지별 proposal 상태 결합. messages 변경 시 proposalStatuses 의 기본값(pending) 으로 채움.
+  const messagesWithProposals = useMemo(
+    () =>
+      messages.map((m) => ({
+        message: m,
+        proposals: extractProposals(m).map<ProposalState>((p) => ({
+          ...p,
+          status: proposalStatuses.get(p.id)?.status ?? 'pending',
+          errorMessage: proposalStatuses.get(p.id)?.errorMessage,
+        })),
+      })),
+    [messages, proposalStatuses],
+  );
+
+  const pendingItems = useMemo(() => {
+    const items: { proposal: ProposalState; msgId: string }[] = [];
+    for (const { message, proposals } of messagesWithProposals) {
+      for (const p of proposals) {
+        if (p.status === 'pending') items.push({ proposal: p, msgId: message.id });
+      }
+    }
+    return items;
+  }, [messagesWithProposals]);
+
+  const scrollToMessage = (msgId: string) => {
+    const el = document.getElementById(`assistant-msg-${msgId}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedKey(msgId);
+    window.setTimeout(() => setHighlightedKey((v) => (v === msgId ? null : v)), 1500);
+  };
+
   const liveError = error ?? (chatError ? chatError.message : null);
 
   const pageChips = getPageChips(location.pathname);
@@ -343,17 +441,28 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
         )}
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
-          {messages.length === 0 ? (
+          {messagesWithProposals.length === 0 ? (
             <ChipEmpty chips={pageChips.chips} onPick={(t) => setInput(t)} />
           ) : (
             <div className="flex flex-col gap-3">
-              {messages.map((message) => (
+              {messagesWithProposals.map(({ message, proposals }) => (
                 <div
                   key={message.id}
                   id={`assistant-msg-${message.id}`}
-                  className="flex flex-col gap-2 rounded-md transition-colors"
+                  className={cn(
+                    'flex flex-col gap-2 rounded-md transition-colors',
+                    highlightedKey === message.id && 'bg-[var(--sf-solar)]/10 ring-2 ring-[var(--sf-solar)]/40',
+                  )}
                 >
                   <MessageParts message={message} />
+                  {proposals.map((p) => (
+                    <ProposalCard
+                      key={p.id}
+                      proposal={p}
+                      onConfirm={(override) => onConfirm(p, override)}
+                      onReject={() => onReject(p)}
+                    />
+                  ))}
                 </div>
               ))}
               {(status === 'submitted' || status === 'streaming') && messages.at(-1)?.role !== 'assistant' && (
@@ -409,7 +518,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
             onKeyDown={onKeyDown}
             placeholder={
               attachments.length > 0
-                ? '첨부 파일과 함께 분석할 질문 (예: "이 면장 OCR 내용 검토해줘")'
+                ? '첨부 파일과 함께 보낼 질문 (예: "이 면장 등록해줘")'
                 : '질문을 입력하세요…'
             }
             rows={embedded ? 3 : 5}
@@ -449,9 +558,12 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
         </div>
       </div>
 
-      {!embedded && (
+      {embedded ? (
+        <PendingFooter pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
+      ) : (
         <aside className="hidden w-[340px] shrink-0 flex-col border-l bg-muted/10 lg:flex">
           {sessionsSlot}
+          <PendingPanel pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
         </aside>
       )}
     </>
@@ -459,7 +571,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
 }
 
 // MessageParts — 한 메시지의 parts 를 순서대로 렌더링.
-// text → Bubble (텍스트 박스), tool-* → ToolChip (회색 칩).
+// text → Bubble (텍스트 박스), tool-* → ToolChip (회색 칩), data-proposal 은 상위에서 ProposalCard 로 처리하므로 무시.
 function MessageParts({ message }: { message: UIMessage }) {
   const nodes: React.ReactNode[] = [];
   for (let i = 0; i < message.parts.length; i++) {
@@ -473,7 +585,7 @@ function MessageParts({ message }: { message: UIMessage }) {
       nodes.push(<ToolChip key={i} part={part} />);
       continue;
     }
-    // step-start 등 보조 part 는 표시하지 않음.
+    // data-proposal / step-start 등은 상위에서 처리하거나 무시.
   }
   // 메시지에 text 가 하나도 없고 tool 만 있는 경우(드물게 발생) 빈 메시지 방지 — 폴백 텍스트 박스.
   if (nodes.length === 0 && message.role === 'assistant') {
@@ -540,6 +652,118 @@ function Bubble({ role, content, pulse }: { role: UIMessage['role']; content: st
         {content}
       </div>
     </div>
+  );
+}
+
+function ProposalCard({
+  proposal,
+  onConfirm,
+  onReject,
+}: {
+  proposal: ProposalState;
+  onConfirm: (overridePayload?: unknown) => void;
+  onReject: () => void;
+}) {
+  const label = PROPOSAL_KIND_LABEL[proposal.kind] ?? proposal.kind;
+  const disabled = proposal.status !== 'pending';
+
+  return (
+    <div className="ml-11 max-w-[80%] rounded-lg border border-amber-300/60 bg-amber-50/60 p-4 text-base shadow-sm dark:border-amber-700/40 dark:bg-amber-900/20">
+      <div className="flex items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-200">
+        <span className="rounded bg-amber-200/60 px-2 py-0.5 text-xs dark:bg-amber-800/40">AI 제안</span>
+        <span>{label}</span>
+      </div>
+      <div className="mt-2 whitespace-pre-wrap text-foreground/90">{proposal.summary}</div>
+
+      {proposal.status === 'pending' && (
+        <div className="mt-3 flex gap-2">
+          <Button size="sm" className="h-9 px-3 text-sm" onClick={() => onConfirm()}>
+            <Check className="mr-1 h-4 w-4" />저장
+          </Button>
+          <Button size="sm" variant="outline" className="h-9 px-3 text-sm" onClick={onReject} disabled={disabled}>
+            <X className="mr-1 h-4 w-4" />거부
+          </Button>
+        </div>
+      )}
+      {proposal.status === 'submitting' && <div className="mt-2 text-sm text-muted-foreground">처리 중…</div>}
+      {proposal.status === 'confirmed' && (
+        <div className="mt-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">✓ 저장됨</div>
+      )}
+      {proposal.status === 'rejected' && <div className="mt-2 text-sm text-muted-foreground">거부됨 (폐기)</div>}
+      {proposal.status === 'error' && (
+        <div className="mt-2 text-sm text-destructive">오류: {proposal.errorMessage ?? '알 수 없음'}</div>
+      )}
+    </div>
+  );
+}
+
+function PendingPanel({
+  pending,
+  onConfirm,
+  onReject,
+  onSelect,
+}: {
+  pending: { proposal: ProposalState; msgId: string }[];
+  onConfirm: (prop: ProposalState) => void;
+  onReject: (prop: ProposalState) => void;
+  onSelect: (msgId: string) => void;
+}) {
+  return (
+    <section className="flex min-h-0 flex-1 flex-col">
+      <header className="flex items-center gap-2 border-b px-4 py-3">
+        <Inbox className="h-4 w-4 text-[var(--sf-solar)]" />
+        <h3 className="text-sm font-semibold">작업목록</h3>
+        <span className="ml-auto rounded-full bg-[var(--sf-solar)]/15 px-2 py-0.5 text-xs font-medium text-[var(--sf-solar)]">
+          {pending.length}건
+        </span>
+      </header>
+      <div className="flex-1 overflow-y-auto p-3">
+        {pending.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+            <Inbox className="h-7 w-7 opacity-30" />
+            <div>대기 중인 작업이 없습니다.</div>
+            <div className="text-xs opacity-70">AI 제안이 생기면 여기에 모입니다.</div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {pending.map(({ proposal, msgId }) => {
+              const label = PROPOSAL_KIND_LABEL[proposal.kind] ?? proposal.kind;
+              return (
+                <div
+                  key={proposal.id}
+                  className="rounded-lg border border-amber-300/60 bg-amber-50/60 p-3 shadow-sm dark:border-amber-700/40 dark:bg-amber-900/20"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelect(msgId)}
+                    className="block w-full text-left"
+                    title="채팅에서 보기"
+                  >
+                    <div className="text-xs font-medium text-amber-900 dark:text-amber-200">{label}</div>
+                    <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-foreground/90">
+                      {proposal.summary}
+                    </div>
+                  </button>
+                  <div className="mt-2.5 flex gap-2">
+                    <Button size="sm" className="h-8 flex-1 text-sm" onClick={() => onConfirm(proposal)}>
+                      <Check className="mr-1 h-4 w-4" />저장
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 flex-1 text-sm"
+                      onClick={() => onReject(proposal)}
+                    >
+                      <X className="mr-1 h-4 w-4" />거부
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -643,5 +867,109 @@ function ChipEmpty({ chips, onPick }: { chips: ChipDef[]; onPick: (text: string)
         💡 클릭하면 입력창에 채워집니다 · 📎 PDF/이미지 첨부 시 OCR 자동 인식
       </div>
     </div>
+  );
+}
+
+/**
+ * drawer 전용 — pending 0건이면 한 줄로 collapse, N>0이면 자동 펼침.
+ * 펼친 상태에서는 컴팩트 카드 리스트 (PendingPanel 보다 좁은 폭에 최적).
+ */
+function PendingFooter({
+  pending,
+  onConfirm,
+  onReject,
+  onSelect,
+}: {
+  pending: { proposal: ProposalState; msgId: string }[];
+  onConfirm: (prop: ProposalState) => void;
+  onReject: (prop: ProposalState) => void;
+  onSelect: (msgId: string) => void;
+}) {
+  const hasItems = pending.length > 0;
+  const [open, setOpen] = useState(hasItems);
+  // pending 항목이 새로 생기면 자동 펼침.
+  useEffect(() => {
+    if (hasItems) setOpen(true);
+  }, [hasItems]);
+  if (!hasItems && !open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex shrink-0 items-center justify-center gap-1.5 border-t border-slate-200 px-3 py-1.5 text-xs text-muted-foreground hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+        title="작업목록 펼치기"
+      >
+        <Inbox className="h-3 w-3" aria-hidden />
+        <span>작업목록</span>
+        <ChevronUp className="h-3 w-3" aria-hidden />
+      </button>
+    );
+  }
+  return (
+    <section className="flex shrink-0 flex-col border-t border-slate-200 dark:border-slate-700">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:bg-slate-50 dark:hover:bg-slate-800"
+        title={open ? '접기' : '펼치기'}
+      >
+        <Inbox className="h-3 w-3 text-[var(--sf-solar)]" aria-hidden />
+        <span className="font-medium">작업목록</span>
+        {hasItems && (
+          <span className="rounded-full bg-[var(--sf-solar)]/15 px-1.5 text-[10px] font-medium text-[var(--sf-solar)]">
+            {pending.length}
+          </span>
+        )}
+        <span className="ml-auto">
+          {open ? <ChevronDown className="h-3 w-3" aria-hidden /> : <ChevronUp className="h-3 w-3" aria-hidden />}
+        </span>
+      </button>
+      {open && (
+        <div className="max-h-48 overflow-y-auto border-t border-slate-200 px-2 py-2 dark:border-slate-700">
+          {!hasItems ? (
+            <div className="py-3 text-center text-xs text-muted-foreground/70">
+              AI 제안이 생기면 여기에 모입니다.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {pending.map(({ proposal, msgId }) => {
+                const label = PROPOSAL_KIND_LABEL[proposal.kind] ?? proposal.kind;
+                return (
+                  <div
+                    key={proposal.id}
+                    className="rounded-md border border-amber-300/60 bg-amber-50/60 p-2 text-xs shadow-sm dark:border-amber-700/40 dark:bg-amber-900/20"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onSelect(msgId)}
+                      className="block w-full text-left"
+                      title="채팅에서 보기"
+                    >
+                      <div className="font-medium text-amber-900 dark:text-amber-200">{label}</div>
+                      <div className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-foreground/90">
+                        {proposal.summary}
+                      </div>
+                    </button>
+                    <div className="mt-1.5 flex gap-1">
+                      <Button size="sm" className="h-7 flex-1 text-xs" onClick={() => onConfirm(proposal)}>
+                        <Check className="mr-1 h-3 w-3" />저장
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 flex-1 text-xs"
+                        onClick={() => onReject(proposal)}
+                      >
+                        <X className="mr-1 h-3 w-3" />거부
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

@@ -155,21 +155,30 @@ export default function OrdersPage() {
   const saleColPin = useColumnPinning(SALE_TABLE_ID);
   const receiptColVis = useColumnVisibility(RECEIPT_TABLE_ID, RECEIPT_COLUMN_META);
   const receiptColPin = useColumnPinning(RECEIPT_TABLE_ID);
-  const obFilters: { status?: string; usage_category?: string; manufacturer_id?: string } = {};
-  if (obStatusFilter) obFilters.status = obStatusFilter;
-  if (obUsageFilter) obFilters.usage_category = obUsageFilter;
-  if (obMfgFilter) obFilters.manufacturer_id = obMfgFilter;
-  const { data: outbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundList(obFilters);
+  // 칩 필터는 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
+  const { data: allOutbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundList();
+
+  const outbounds = useMemo(() => allOutbounds.filter((o) => {
+    if (obStatusFilter && o.status !== obStatusFilter) return false
+    if (obUsageFilter && o.usage_category !== obUsageFilter) return false
+    if (obMfgFilter && o.manufacturer_id !== obMfgFilter) return false
+    return true
+  }), [allOutbounds, obStatusFilter, obUsageFilter, obMfgFilter]);
 
   // 탭 3: 판매
   const [saleCustomerFilter, setSaleCustomerFilter] = useState('');
   const [saleMonthFilter, setSaleMonthFilter] = useState('');
   const [saleInvoiceFilter, setSaleInvoiceFilter] = useState('');
-  const saleFilters: { customer_id?: string; month?: string; invoice_status?: string } = {};
-  if (saleCustomerFilter) saleFilters.customer_id = saleCustomerFilter;
-  if (saleMonthFilter) saleFilters.month = saleMonthFilter;
-  if (saleInvoiceFilter) saleFilters.invoice_status = saleInvoiceFilter;
-  const { data: sales, loading: saleLoading, reload: reloadSales } = useSaleList(saleFilters);
+  const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleList();
+
+  const sales = useMemo(() => allSales.filter((s) => {
+    if (saleCustomerFilter && s.customer_id !== saleCustomerFilter) return false
+    const taxDate = s.tax_invoice_date ?? s.sale?.tax_invoice_date ?? null
+    if (saleMonthFilter && (!taxDate || !taxDate.startsWith(saleMonthFilter))) return false
+    if (saleInvoiceFilter === 'issued' && !taxDate) return false
+    if (saleInvoiceFilter === 'pending' && taxDate) return false
+    return true
+  }), [allSales, saleCustomerFilter, saleMonthFilter, saleInvoiceFilter]);
 
   // 탭 4: 수금
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState('');
@@ -326,6 +335,57 @@ export default function OrdersPage() {
     () => new Set(visibleOrders.map(order => order.customer_id).filter(Boolean)).size,
     [visibleOrders],
   );
+  const recent30AvgUnitPriceWp = useMemo(() => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const recent = orders.filter(order => {
+      const t = order.order_date ? new Date(order.order_date).getTime() : NaN;
+      return Number.isFinite(t) && t >= cutoff;
+    });
+    if (!recent.length) return null;
+    const sum = recent.reduce(
+      (acc, order) => acc + (order.unit_price_wp ?? (order.spec_wp ? (order.unit_price_ea ?? 0) / order.spec_wp : 0)),
+      0,
+    );
+    return { avg: sum / recent.length, count: recent.length };
+  }, [orders]);
+  const unitPriceWpMa15Spark = useMemo(() => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const WINDOW = 15;
+    const VISIBLE_DAYS = 180;
+    const totalDays = VISIBLE_DAYS + WINDOW - 1;
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const buckets: { sum: number; count: number }[] = Array.from({ length: totalDays }, () => ({ sum: 0, count: 0 }));
+    let any = false;
+    for (const order of orders) {
+      if (!order.order_date) continue;
+      const t = new Date(order.order_date).getTime();
+      if (!Number.isFinite(t)) continue;
+      const od = new Date(t);
+      const orderStart = new Date(od.getFullYear(), od.getMonth(), od.getDate()).getTime();
+      const diff = Math.round((todayStart - orderStart) / DAY_MS);
+      if (diff < 0 || diff >= totalDays) continue;
+      const idx = totalDays - 1 - diff;
+      const wp = order.unit_price_wp ?? (order.spec_wp ? (order.unit_price_ea ?? 0) / order.spec_wp : 0);
+      buckets[idx]!.sum += wp;
+      buckets[idx]!.count += 1;
+      any = true;
+    }
+    if (!any) return [];
+    const out: number[] = [];
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < totalDays; i++) {
+      sum += buckets[i]!.sum;
+      count += buckets[i]!.count;
+      if (i - WINDOW >= 0) {
+        sum -= buckets[i - WINDOW]!.sum;
+        count -= buckets[i - WINDOW]!.count;
+      }
+      if (i >= WINDOW - 1) out.push(count > 0 ? sum / count : 0);
+    }
+    return out;
+  }, [orders]);
   const monthlyOutboundKw = useMemo(() => {
     const today = new Date();
     const currYear = today.getFullYear();
@@ -531,7 +591,7 @@ export default function OrdersPage() {
       { lbl: '진행 수주', v: String(activeOrders.length), u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${orders.length}건`, tone: 'solar', spark: activeOrderSpark },
       { lbl: '거래처', v: String(customersCount), u: '곳', sub: '활성 고객', tone: 'info' },
       { lbl: '분할출고', v: String(visibleOrders.filter(order => order.status === 'partial').length), u: '건', sub: '잔량 관리', tone: 'warn', spark: monthlyCount(visibleOrders.filter(o => o.status === 'partial'), (o) => o.order_date) },
-      { lbl: '평균 단가', v: visibleOrders.length ? (visibleOrders.reduce((sum, order) => sum + (order.unit_price_wp ?? (order.spec_wp ? (order.unit_price_ea ?? 0) / order.spec_wp : 0)), 0) / visibleOrders.length).toFixed(1) : '0.0', u: '원/Wp', sub: '수주 기준', tone: 'pos' },
+      { lbl: '평균 단가', v: recent30AvgUnitPriceWp ? recent30AvgUnitPriceWp.avg.toFixed(1) : '0.0', u: '원/Wp', sub: recent30AvgUnitPriceWp ? `최근 30일 · ${recent30AvgUnitPriceWp.count}건` : '최근 30일', tone: 'pos', spark: unitPriceWpMa15Spark },
     ];
 
   const ordersCardControls = (

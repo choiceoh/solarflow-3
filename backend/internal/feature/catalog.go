@@ -523,6 +523,8 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/assistant/sessions/{id}/summarize-title",
 			"/api/v1/assistant/ocr/health", "/api/v1/assistant/ocr/extract",
 			"/api/v1/assistant/match/receipts/auto",
+			"/api/v1/assistant/proposals/{id}/confirm",
+			"/api/v1/assistant/proposals/{id}/reject",
 		},
 	},
 	IDAIOCR: {
