@@ -731,6 +731,13 @@ func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	// outbound 필터를 sales.outbound_id 로 재투영하기 위해 List 와 같은 필터로 outbound_id 후보를 끌어온 뒤
 	// sales 에서 IN 으로 거른다 — 후보가 매우 많으면(>10k) PostgREST URL 길이 한계 우려가 있으나
 	// 운영 데이터 규모상 당분간 안전.
+	//
+	// InvoicePendingCount 는 "outbound 단위" 로 센다 (D-102 정의):
+	//   - 매출 row 자체가 없는 출고 → 미발행
+	//   - 매출이 있어도 모든 sale 의 tax_invoice_date 가 null → 미발행
+	//   - tax_invoice_date 가 채워진 sale 이 하나라도 있으면 → 발행 (제외)
+	// 과거에는 sale row 개수를 그대로 셌어서 (a) 매출 없는 출고를 누락하고 (b) 한 출고에 sale 이 여러 건이면
+	// 중복 카운트하는 두 가지 결함이 있었음. 알림(useAlerts) 가 이 값을 그대로 사용하므로 정의가 일치해야 함.
 	idQ := h.DB.From("outbounds").Select("outbound_id", "exact", false)
 	idQ, ok3, err := h.applyOutboundFilters(r, idQ)
 	if err == nil && ok3 {
@@ -751,16 +758,19 @@ func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
 					var sales []struct {
 						SupplyAmount   *float64 `json:"supply_amount"`
 						TaxInvoiceDate *string  `json:"tax_invoice_date"`
+						OutboundID     *string  `json:"outbound_id"`
 					}
 					if json.Unmarshal(saleData, &sales) == nil {
+						issuedOutbounds := make(map[string]struct{})
 						for _, s := range sales {
 							if s.SupplyAmount != nil {
 								summary.SaleAmountSum += *s.SupplyAmount
 							}
-							if s.TaxInvoiceDate == nil {
-								summary.InvoicePendingCount++
+							if s.TaxInvoiceDate != nil && s.OutboundID != nil {
+								issuedOutbounds[*s.OutboundID] = struct{}{}
 							}
 						}
+						summary.InvoicePendingCount = int64(len(ids) - len(issuedOutbounds))
 					}
 				}
 			}
