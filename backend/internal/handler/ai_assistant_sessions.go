@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/supabase-community/postgrest-go"
@@ -179,6 +180,81 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 	}
 	if len(rows) == 0 {
 		response.RespondError(w, http.StatusNotFound, "수정할 세션을 찾을 수 없습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, rows[0])
+}
+
+// SummarizeTitle — POST /api/v1/assistant/sessions/{id}/summarize-title
+// fallback 모델로 첫 user 메시지를 한 줄 제목으로 요약 → title 만 PATCH.
+// 실패·미설정 시 슬라이스 fallback 으로 떨어뜨려 항상 200 반환 (사용자에 노출되는 영향 없음).
+//
+// body 는 선택. {first_user_text} 가 오면 그걸 사용해 DB 조회 1회 절약.
+// 없으면 세션 row 의 messages 에서 추출.
+func (h *AssistantHandler) SummarizeTitle(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		response.RespondError(w, http.StatusUnauthorized, "인증 정보가 없습니다")
+		return
+	}
+
+	var req struct {
+		FirstUserText string `json:"first_user_text,omitempty"`
+	}
+	if r.ContentLength > 0 {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	firstUserText := strings.TrimSpace(req.FirstUserText)
+
+	if firstUserText == "" {
+		data, _, err := h.db.From("assistant_sessions").
+			Select("messages", "exact", false).
+			Eq("id", id).
+			Eq("user_id", userID).
+			Execute()
+		if err != nil {
+			log.Printf("[assistant sessions/summarize get] %v", err)
+			response.RespondError(w, http.StatusInternalServerError, "세션 조회 실패")
+			return
+		}
+		var rows []struct {
+			Messages json.RawMessage `json:"messages"`
+		}
+		if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
+			response.RespondError(w, http.StatusNotFound, "세션을 찾을 수 없습니다")
+			return
+		}
+		firstUserText = extractFirstUserText(rows[0].Messages)
+	}
+	if firstUserText == "" {
+		response.RespondError(w, http.StatusBadRequest, "사용자 메시지가 없습니다")
+		return
+	}
+
+	title := h.summarizeTitleWithFallback(r.Context(), firstUserText)
+	if title == "" {
+		title = sliceFallbackTitle(firstUserText)
+	}
+
+	data, _, err := h.db.From("assistant_sessions").
+		Update(map[string]any{"title": title}, "", "").
+		Eq("id", id).
+		Eq("user_id", userID).
+		Execute()
+	if err != nil {
+		log.Printf("[assistant sessions/summarize update] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "제목 저장 실패")
+		return
+	}
+	var rows []model.AssistantSession
+	if err := json.Unmarshal(data, &rows); err != nil {
+		log.Printf("[assistant sessions/summarize decode] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 디코딩 실패")
+		return
+	}
+	if len(rows) == 0 {
+		response.RespondError(w, http.StatusNotFound, "세션을 찾을 수 없습니다")
 		return
 	}
 	response.RespondJSON(w, http.StatusOK, rows[0])

@@ -43,6 +43,8 @@ func (h *AssistantHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Get("/sessions/{id}", h.GetSession)
 		r.With(g.Write).Patch("/sessions/{id}", h.UpdateSession)
 		r.With(g.Write).Delete("/sessions/{id}", h.DeleteSession)
+		// 첫 턴 직후 fallback 모델로 제목 자동 요약 (실패 시 슬라이스 fallback)
+		r.With(g.Write).Post("/sessions/{id}/summarize-title", h.SummarizeTitle)
 		// alias of /api/v1/ocr/* — AI 통합 입구로도 노출
 		if h.ocrH != nil {
 			r.Get("/ocr/health", h.ocrH.Health)
@@ -344,6 +346,8 @@ func (h *LibraryPostHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 func (h *ManufacturerHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/manufacturers", func(r chi.Router) {
 		r.Get("/", h.List)
+		// /{id} 보다 먼저 — chi 가 usage-counts 를 ID로 잡지 않도록 정적 경로 우선
+		r.Get("/usage-counts", h.UsageCounts)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
@@ -425,6 +429,8 @@ func (h *PartnerActivityHandler) RegisterRoutes(r chi.Router, g middleware.Gates
 func (h *PartnerHandler) RegisterRoutes(r chi.Router, g middleware.Gates, activityH *PartnerActivityHandler) {
 	r.Route("/partners", func(r chi.Router) {
 		r.Get("/", h.List)
+		// /{id} 보다 먼저 — 정적 경로 우선
+		r.Get("/usage-counts", h.UsageCounts)
 		r.Get("/{id}", h.GetByID)
 		// CRM 활동 로그는 BARO 전용 alias — 다른 테넌트 토큰은 403 (D-109)
 		r.With(g.Feature(feature.IDCRMPartnerActivity)).Get("/{id}/activities", activityH.ListByPartner)
@@ -482,6 +488,8 @@ func (h *PriceHistoryHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 func (h *ProductHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/products", func(r chi.Router) {
 		r.Get("/", h.List)
+		// /{id} 보다 먼저 — 정적 경로 우선
+		r.Get("/usage-counts", h.UsageCounts)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
@@ -584,6 +592,8 @@ func (h *UserHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 func (h *WarehouseHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/warehouses", func(r chi.Router) {
 		r.Get("/", h.List)
+		// /{id} 보다 먼저 — 정적 경로 우선
+		r.Get("/usage-counts", h.UsageCounts)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)

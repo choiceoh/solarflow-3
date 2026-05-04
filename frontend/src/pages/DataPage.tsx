@@ -31,6 +31,32 @@ function isDataKind(value: string | null): value is DataKind {
   return KINDS.some((k) => k.key === value);
 }
 
+// "참조" 컬럼 공통 렌더러 — 0 인 항목은 회색으로, 전부 0 이면 '—'.
+// 비유: 명함 옆에 도장 찍을 때, 0 건은 흐리게 찍어 한눈에 분별되도록.
+function renderUsage(
+  counts: Record<string, number> | undefined,
+  parts: { key: string; label: string }[],
+) {
+  if (!counts) return <span className="text-muted-foreground">—</span>;
+  const total = parts.reduce((sum, p) => sum + (counts[p.key] ?? 0), 0);
+  if (total === 0) return <span className="text-muted-foreground text-xs">0</span>;
+  return (
+    <span className="text-xs tabular-nums">
+      {parts.map((p, i) => {
+        const n = counts[p.key] ?? 0;
+        return (
+          <span key={p.key}>
+            {i > 0 && <span className="mx-1 text-muted-foreground">·</span>}
+            <span className={n === 0 ? 'text-muted-foreground' : ''}>
+              {p.label} {n.toLocaleString()}
+            </span>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 export default function DataPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const kindParam = searchParams.get('kind');
@@ -115,6 +141,16 @@ function useManufacturerConfig(): MasterSectionConfig<Manufacturer> {
       row.country.toLowerCase().includes(q),
     newPath: '/data/manufacturers/new',
     editPath: (r) => `/data/manufacturers/${r.manufacturer_id}/edit`,
+    usage: {
+      endpoint: '/api/v1/manufacturers/usage-counts',
+      rowKey: 'manufacturer_id',
+      countKey: 'manufacturer_id',
+      label: '참조',
+      render: (counts) => renderUsage(counts, [
+        { key: 'products',  label: '품번' },
+        { key: 'purchases', label: '매입' },
+      ]),
+    },
   }), []);
 }
 
@@ -141,6 +177,16 @@ function useProductConfig(): MasterSectionConfig<Product> {
       (row.manufacturer_name ?? row.manufacturers?.name_kr ?? '').toLowerCase().includes(q),
     newPath: '/data/products/new',
     editPath: (r) => `/data/products/${r.product_id}/edit`,
+    usage: {
+      endpoint: '/api/v1/products/usage-counts',
+      rowKey: 'product_id',
+      countKey: 'product_id',
+      label: '참조',
+      render: (counts) => renderUsage(counts, [
+        { key: 'purchases', label: '매입' },
+        { key: 'outbounds', label: '출고' },
+      ]),
+    },
   }), []);
 }
 
@@ -175,6 +221,16 @@ function usePartnerConfig(): MasterSectionConfig<Partner> {
       (row.contact_name ?? '').toLowerCase().includes(q),
     newPath: '/data/partners/new',
     editPath: (r) => `/data/partners/${r.partner_id}/edit`,
+    usage: {
+      endpoint: '/api/v1/partners/usage-counts',
+      rowKey: 'partner_id',
+      countKey: 'partner_id',
+      label: '참조',
+      render: (counts) => renderUsage(counts, [
+        { key: 'sales',    label: '매출' },
+        { key: 'receipts', label: '입금' },
+      ]),
+    },
   }), []);
 }
 
@@ -201,6 +257,16 @@ function useWarehouseConfig(): MasterSectionConfig<Warehouse> {
       row.location_name.toLowerCase().includes(q),
     newPath: '/data/warehouses/new',
     editPath: (r) => `/data/warehouses/${r.warehouse_id}/edit`,
+    usage: {
+      endpoint: '/api/v1/warehouses/usage-counts',
+      rowKey: 'warehouse_id',
+      countKey: 'warehouse_id',
+      label: '참조',
+      render: (counts) => renderUsage(counts, [
+        { key: 'inbounds',  label: '입고' },
+        { key: 'outbounds', label: '출고' },
+      ]),
+    },
   }), []);
 }
 

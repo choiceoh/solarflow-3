@@ -94,6 +94,30 @@ function buildSessionTitle(messages: UIMessage[]): string {
   return oneLine.length > SESSION_TITLE_MAX ? oneLine.slice(0, SESSION_TITLE_MAX) + '…' : oneLine;
 }
 
+function firstUserText(messages: UIMessage[]): string {
+  const u = messages.find((m) => m.role === 'user');
+  return u ? extractText(u).trim() : '';
+}
+
+// 새 세션 첫 턴 직후 fallback LLM 으로 제목 요약 — fire-and-forget.
+// 실패 시 백엔드가 슬라이스 fallback 으로 떨어뜨려 200 반환하므로 프론트에선 그냥 무시.
+async function refineSessionTitle(
+  sessionId: string,
+  text: string,
+  onSessionUpserted: (s: SessionSummary, makeCurrent: boolean) => void,
+) {
+  if (!text) return;
+  try {
+    const refined = await fetchWithAuth<SessionSummary>(
+      `/api/v1/assistant/sessions/${sessionId}/summarize-title`,
+      { method: 'POST', body: JSON.stringify({ first_user_text: text }) },
+    );
+    onSessionUpserted(refined, false);
+  } catch {
+    // 슬라이스 제목 그대로 유지 — 사용자 영향 없음
+  }
+}
+
 export default function AssistantPage() {
   const sessionsEnabled = !isDevMockApiActive();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -249,6 +273,8 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
         });
         sessionIdRef.current = created.id;
         onSessionUpserted(created, true);
+        // 새 세션만 fallback 모델로 제목 다듬기. 실패해도 슬라이스 제목 그대로 유지.
+        void refineSessionTitle(created.id, firstUserText(msgs), onSessionUpserted);
       } else {
         const updated = await fetchWithAuth<SessionDetail>(
           `/api/v1/assistant/sessions/${sessionIdRef.current}`,

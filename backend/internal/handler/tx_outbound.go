@@ -452,6 +452,16 @@ func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "출고 참조 데이터 처리에 실패했습니다")
 		return
 	}
+	// manufacturer_id는 outbounds 컬럼이 아니라 products join 으로 채워지므로 enrichment 후 필터.
+	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
+		filtered := outbounds[:0]
+		for _, ob := range outbounds {
+			if ob.ManufacturerID != nil && *ob.ManufacturerID == mfgID {
+				filtered = append(filtered, ob)
+			}
+		}
+		outbounds = filtered
+	}
 	blItemsByOutbound := h.fetchBLItemsByOutbound()
 	for i := range outbounds {
 		outbounds[i].BLItems = blItemsByOutbound[outbounds[i].OutboundID]

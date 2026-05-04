@@ -194,6 +194,7 @@ var Catalog = map[FeatureID]Feature{
 		Paths: []string{
 			"/api/v1/manufacturers/", "/api/v1/manufacturers/{id}",
 			"/api/v1/manufacturers/{id}/status",
+			"/api/v1/manufacturers/usage-counts",
 		},
 	},
 	IDMasterPartner: {
@@ -202,6 +203,7 @@ var Catalog = map[FeatureID]Feature{
 		Paths: []string{
 			"/api/v1/partners/", "/api/v1/partners/{id}",
 			"/api/v1/partners/{id}/status",
+			"/api/v1/partners/usage-counts",
 		},
 	},
 	IDMasterPartnerAlias: {
@@ -215,6 +217,7 @@ var Catalog = map[FeatureID]Feature{
 		Paths: []string{
 			"/api/v1/products/", "/api/v1/products/{id}",
 			"/api/v1/products/{id}/status",
+			"/api/v1/products/usage-counts",
 		},
 	},
 	IDMasterProductAlias: {
@@ -228,6 +231,7 @@ var Catalog = map[FeatureID]Feature{
 		Paths: []string{
 			"/api/v1/warehouses/", "/api/v1/warehouses/{id}",
 			"/api/v1/warehouses/{id}/status",
+			"/api/v1/warehouses/usage-counts",
 		},
 	},
 	IDMasterConstructionSite: {
@@ -516,6 +520,7 @@ var Catalog = map[FeatureID]Feature{
 		Paths: []string{
 			"/api/v1/assistant/chat",
 			"/api/v1/assistant/sessions", "/api/v1/assistant/sessions/{id}",
+			"/api/v1/assistant/sessions/{id}/summarize-title",
 			"/api/v1/assistant/ocr/health", "/api/v1/assistant/ocr/extract",
 			"/api/v1/assistant/match/receipts/auto",
 			"/api/v1/assistant/proposals/{id}/confirm",

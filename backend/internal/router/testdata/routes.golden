@@ -82,6 +82,7 @@ GET     /api/v1/library-posts/
 GET     /api/v1/library-posts/{id}
 GET     /api/v1/limit-changes/
 GET     /api/v1/manufacturers/
+GET     /api/v1/manufacturers/usage-counts
 GET     /api/v1/manufacturers/{id}
 GET     /api/v1/me/open-followups
 GET     /api/v1/module-demand-forecasts/
@@ -96,6 +97,7 @@ GET     /api/v1/partner-prices/
 GET     /api/v1/partner-prices/lookup
 GET     /api/v1/partner-prices/{id}
 GET     /api/v1/partners/
+GET     /api/v1/partners/usage-counts
 GET     /api/v1/partners/{id}
 GET     /api/v1/partners/{id}/activities
 GET     /api/v1/pos/
@@ -105,6 +107,7 @@ GET     /api/v1/price-histories/
 GET     /api/v1/price-histories/{id}
 GET     /api/v1/product-aliases/
 GET     /api/v1/products/
+GET     /api/v1/products/usage-counts
 GET     /api/v1/products/{id}
 GET     /api/v1/public/fx/{pair}
 GET     /api/v1/public/fx/{pair}/timeseries
@@ -125,6 +128,7 @@ GET     /api/v1/ui-configs/{scope}/{config_id}
 GET     /api/v1/users/
 GET     /api/v1/users/me
 GET     /api/v1/warehouses/
+GET     /api/v1/warehouses/usage-counts
 GET     /api/v1/warehouses/{id}
 GET     /health
 PATCH   /api/v1/assistant/sessions/{id}
@@ -154,6 +158,7 @@ POST    /api/v1/assistant/ocr/extract
 POST    /api/v1/assistant/proposals/{id}/confirm
 POST    /api/v1/assistant/proposals/{id}/reject
 POST    /api/v1/assistant/sessions
+POST    /api/v1/assistant/sessions/{id}/summarize-title
 POST    /api/v1/attachments/
 POST    /api/v1/banks/
 POST    /api/v1/baro/dispatch-routes/

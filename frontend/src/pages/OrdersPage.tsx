@@ -514,7 +514,7 @@ export default function OrdersPage() {
       { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${sales.length}건`, tone: 'solar', spark: saleTotalSpark },
       { lbl: '계산서 미발행', v: String(invoicePending), u: '건', sub: '발행 대기', tone: invoicePending > 0 ? 'warn' : 'pos', spark: monthlyCount(sales.filter(s => !s.tax_invoice_date), (s) => s.outbound_date ?? null) },
       { lbl: '거래처', v: String(new Set(sales.map(sale => sale.customer_id).filter(Boolean)).size), u: '곳', sub: '매출처 기준', tone: 'info' },
-      { lbl: '평균 단가', v: sales.length ? Math.round(sales.reduce((sum, sale) => sum + (sale.unit_price_wp ?? 0), 0) / sales.length).toLocaleString() : '0', u: '₩/Wp', sub: '필터 기준', tone: 'ink' },
+      { lbl: '평균 단가', v: sales.length ? (sales.reduce((sum, sale) => sum + (sale.unit_price_wp ?? (sale.spec_wp ? (sale.unit_price_ea ?? 0) / sale.spec_wp : 0)), 0) / sales.length).toFixed(1) : '0.0', u: '원/Wp', sub: '필터 기준', tone: 'ink' },
     ] :
     activeTab === 'receipts' ? [
       { lbl: '입금 합계', v: fmtEok(receiptTotal), u: '억', sub: `${receipts.length}건`, tone: 'solar', spark: receiptTotalSpark },
@@ -531,7 +531,7 @@ export default function OrdersPage() {
       { lbl: '진행 수주', v: String(activeOrders.length), u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${orders.length}건`, tone: 'solar', spark: activeOrderSpark },
       { lbl: '거래처', v: String(customersCount), u: '곳', sub: '활성 고객', tone: 'info' },
       { lbl: '분할출고', v: String(visibleOrders.filter(order => order.status === 'partial').length), u: '건', sub: '잔량 관리', tone: 'warn', spark: monthlyCount(visibleOrders.filter(o => o.status === 'partial'), (o) => o.order_date) },
-      { lbl: '평균 단가', v: visibleOrders.length ? Math.round(visibleOrders.reduce((sum, order) => sum + (order.unit_price_wp ?? 0), 0) / visibleOrders.length).toLocaleString() : '0', u: '₩/Wp', sub: '수주 기준', tone: 'pos' },
+      { lbl: '평균 단가', v: visibleOrders.length ? (visibleOrders.reduce((sum, order) => sum + (order.unit_price_wp ?? (order.spec_wp ? (order.unit_price_ea ?? 0) / order.spec_wp : 0)), 0) / visibleOrders.length).toFixed(1) : '0.0', u: '원/Wp', sub: '수주 기준', tone: 'pos' },
     ];
 
   const ordersCardControls = (
@@ -794,7 +794,7 @@ export default function OrdersPage() {
               <RailBlock title="단가 흐름" last>
                 <Sparkline data={[395, 398, 400, 402, 403, 405, 406, 407, 408, 409]} w={220} h={42} color="var(--solar-2)" area />
                 <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
-                  <span>평균 <span className="font-bold text-[var(--ink)]">{visibleOrders.length ? Math.round(visibleOrders.reduce((sum, order) => sum + (order.unit_price_wp ?? 0), 0) / visibleOrders.length).toLocaleString() : '0'}</span> ₩/Wp</span>
+                  <span>평균 <span className="font-bold text-[var(--ink)]">{visibleOrders.length ? (visibleOrders.reduce((sum, order) => sum + (order.unit_price_wp ?? (order.spec_wp ? (order.unit_price_ea ?? 0) / order.spec_wp : 0)), 0) / visibleOrders.length).toFixed(1) : '0.0'}</span> 원/Wp</span>
                   <span className="font-bold text-[var(--pos)]">+1.2%</span>
                 </div>
               </RailBlock>

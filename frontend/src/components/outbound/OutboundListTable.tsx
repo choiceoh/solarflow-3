@@ -75,6 +75,7 @@ function OutboundListTable({ items, hidden, pinning, onPinningChange, onSelect, 
         ob.status === 'cancelled' && 'bg-gray-50 text-muted-foreground line-through',
       )}
       emptyMessage="등록된 출고가 없습니다"
+      pageSize={50}
     />
   );
 }

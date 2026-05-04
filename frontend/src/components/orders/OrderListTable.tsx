@@ -54,7 +54,15 @@ function buildColumns({ onCancelToReservation, sourceOverrides }: BuildOpts): Co
     { key: 'order_number', label: '수주번호', hideable: true, className: 'font-mono', cell: (o) => o.order_number ?? '—', sortAccessor: (o) => o.order_number ?? '' },
     { key: 'management_category', label: '구분', hideable: true, cell: (o) => MANAGEMENT_CATEGORY_LABEL[o.management_category] ?? o.management_category, sortAccessor: (o) => MANAGEMENT_CATEGORY_LABEL[o.management_category] ?? o.management_category },
     { key: 'fulfillment_source', label: '충당', hideable: true, cell: (o) => <FulfillmentSourceBadge source={sourceOverrides[o.order_id] ?? o.fulfillment_source} />, sortAccessor: (o) => sourceOverrides[o.order_id] ?? o.fulfillment_source ?? '' },
-    { key: 'unit_price_wp', label: '단가', hideable: true, align: 'right', className: 'tabular-nums font-mono', cell: (o) => formatNumber(o.unit_price_wp), sortAccessor: (o) => o.unit_price_wp ?? 0 },
+    {
+      key: 'unit_price_ea', label: '단가(장)', hideable: true, align: 'right', className: 'tabular-nums font-mono',
+      cell: (o) => {
+        const ea = o.unit_price_ea ?? (o.unit_price_wp != null && o.spec_wp ? o.unit_price_wp * o.spec_wp : null);
+        return ea != null ? formatNumber(ea) : '—';
+      },
+      sortAccessor: (o) => o.unit_price_ea ?? (o.unit_price_wp != null && o.spec_wp ? o.unit_price_wp * o.spec_wp : 0),
+    },
+    { key: 'unit_price_wp', label: 'Wp단가', hideable: true, hiddenByDefault: true, align: 'right', className: 'tabular-nums font-mono', cell: (o) => o.unit_price_wp != null ? o.unit_price_wp.toFixed(1) : '—', sortAccessor: (o) => o.unit_price_wp ?? 0 },
     { key: 'delivery_due', label: '납기', hideable: true, cell: (o) => o.delivery_due ? formatDate(o.delivery_due) : '—', sortAccessor: (o) => o.delivery_due ?? '' },
     { key: 'status', label: '상태', cell: (o) => <OrderStatusBadge status={o.status} />, sortAccessor: (o) => o.status },
   ];
@@ -101,6 +109,7 @@ function OrderListTable({ items, hidden, pinning, onPinningChange, onSelect, onC
       onRowClick={onSelect}
       rowClassName={(o) => cn('hover:bg-accent/50', o.status === 'cancelled' && 'bg-gray-50 text-muted-foreground line-through')}
       emptyMessage="등록된 수주가 없습니다"
+      pageSize={50}
     />
   );
 }

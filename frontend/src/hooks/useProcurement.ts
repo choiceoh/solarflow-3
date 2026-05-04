@@ -36,16 +36,17 @@ export function useLCLines(lcId: string | null) {
   );
 }
 
-export function useLCList(filters: { status?: string; bank_id?: string; po_id?: string } = {}) {
+export function useLCList(filters: { status?: string; bank_id?: string; po_id?: string; manufacturer_id?: string } = {}) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
 
   return useListQuery<LCRecord>(
-    ['lcs', selectedCompanyId, filters.status, filters.bank_id, filters.po_id],
+    ['lcs', selectedCompanyId, filters.status, filters.bank_id, filters.po_id, filters.manufacturer_id],
     async () => {
       const params = companyParams(selectedCompanyId!);
       if (filters.status) params.set('status', filters.status);
       if (filters.bank_id) params.set('bank_id', filters.bank_id);
       if (filters.po_id) params.set('po_id', filters.po_id);
+      if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id);
       const raw = await fetchWithAuth<Array<LCRecord & { banks?: { bank_name?: string }; companies?: { company_name?: string }; purchase_orders?: { po_number?: string } }>>(`/api/v1/lcs?${params}`);
       return raw.map((r) => ({
         ...r,
