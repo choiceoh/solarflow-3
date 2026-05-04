@@ -567,10 +567,29 @@ export default function OrdersPage() {
   const receiptRemainingSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.remaining ?? 0);
   const activeOrderSpark = monthlyCount(activeOrders, (o) => o.order_date);
 
+  // 계산서 연결률 — D-064: ERP 관리구분 기반 분모 정정
+  // 자체현장분/공사사용/유지관리/폐기 등 비매출 출고는 분모에서 제외해 실제 매출 누락만 보임
+  const saleEligibleOutbounds = outboundsWithSales.filter(
+    (o) => o.usage_category === 'sale' || o.usage_category === 'sale_spare',
+  );
+  const saleLinkedOutbounds = saleEligibleOutbounds.filter((o) => o.sale);
+  const saleConversionDenom = saleEligibleOutbounds.length || outboundsWithSales.length;
+  const saleConversionRate =
+    saleConversionDenom > 0
+      ? Math.round((saleLinkedOutbounds.length / saleConversionDenom) * 1000) / 10
+      : 0;
+  const saleEligibleSpark = monthlyCount(saleEligibleOutbounds, (o) => o.outbound_date);
+  const saleLinkedSpark = monthlyCount(saleLinkedOutbounds, (o) => o.outbound_date);
+  const saleConversionSpark = saleEligibleSpark.map((t, i) =>
+    t > 0 ? Math.round(((saleLinkedSpark[i] ?? 0) / t) * 100) : 0,
+  );
+  const saleConversionTone: SalesMetric['tone'] =
+    saleConversionRate >= 90 ? 'pos' : saleConversionRate >= 60 ? 'info' : 'warn';
+
   const metrics: SalesMetric[] =
     activeTab === 'outbound' ? [
       { lbl: '출고 전체', v: String(outboundsWithSales.length), u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar', spark: outboundCountSpark },
-      { lbl: '계산서 연결', v: String(outboundsWithSales.filter(outbound => outbound.sale).length), u: '건', sub: '매출 전환됨', tone: 'info', spark: monthlyCount(outboundsWithSales.filter(o => o.sale), (o) => o.outbound_date) },
+      { lbl: '계산서 연결률', v: saleConversionRate.toFixed(1), u: '%', sub: `${saleLinkedOutbounds.length.toLocaleString()} / ${saleConversionDenom.toLocaleString()}건 매출대상`, tone: saleConversionTone, spark: saleConversionSpark },
       { lbl: '전월 출고 용량', v: fmtSalesMw(monthlyOutboundKw.prev), u: 'MW', sub: `${monthlyOutboundKw.prevMonth}월 · 최근 6개월`, tone: 'ink', spark: outboundKwSpark },
       { lbl: '금년 출고 용량', v: fmtSalesMw(monthlyOutboundKw.year), u: 'MW', sub: monthlyOutboundKw.yoyPct != null ? `${monthlyOutboundKw.currYear}년 누계 · 전년比 ${monthlyOutboundKw.yoyPct >= 0 ? '+' : ''}${monthlyOutboundKw.yoyPct.toFixed(1)}%` : `${monthlyOutboundKw.currYear}년 누계`, tone: 'pos', spark: monthlyOutboundKw.yoy3y },
     ] :
