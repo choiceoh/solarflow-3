@@ -55,6 +55,7 @@ export interface ConvertResult {
   warnings: string[];
   sourceRowCount: number;
   resolvedFromSection: number;  // 자유 형식 날짜를 섹션 컨텍스트로 보정한 행 수
+  filledFromAbove: number;      // forward-fill 로 메타 셀을 위 행에서 상속받은 행 수 (D-058)
 }
 
 interface RawCell {
@@ -85,6 +86,30 @@ function readCell(value: unknown): unknown {
     if ('text' in v) return v.text;
   }
   return value;
+}
+
+// 셀 메모(comment/note)는 cell.value 가 아니라 cell.note 에 들어감. value 만 읽으므로 자연 무시.
+// 색상·서식·취소선·폰트 굵기도 모두 무시 — 본 변환기는 셀 값만 채택 (D-058).
+
+// ExcelJS 셀 병합 처리 — 병합된 영역의 모든 위치에서 master cell 의 값을 사용.
+// 보통 사용자는 같은 발전소·업체에 여러 모델이 들어갈 때 메타 컬럼만 한 번 적고
+// 위쪽 셀과 병합하거나 빈 칸으로 두는 패턴을 씀. 병합 셀은 master 만 값을 가짐.
+function readMergedCell(row: { getCell: (c: number) => unknown }, c: number): unknown {
+  const cell = row.getCell(c) as { value?: unknown; master?: { value?: unknown } };
+  if (cell.master && cell.master !== cell) {
+    return readCell(cell.master.value);
+  }
+  return readCell(cell.value);
+}
+
+// Forward-fill 대상 컬럼 — 같은 출고 묶음에 여러 모델이 들어갈 때 첫 행에만 메타가
+// 적힌 패턴(=병합 또는 빈 셀)을 위 행 값으로 채움. 섹션 변경 시 reset.
+const FILL_COLS = [0, 1, 2, 3, 4, 5];  // 구분/날짜/업체/발전소/주소/수주번호
+
+function isCellEmpty(v: unknown): boolean {
+  if (v === null || v === undefined) return true;
+  if (typeof v === 'string' && v.trim() === '') return true;
+  return false;
 }
 
 function asString(v: unknown): string {
@@ -193,14 +218,13 @@ function normalizeSeller(
   return { name: null, tagNote };
 }
 
+// forward-fill 적용 후의 빈 행 판정 — 핵심 컬럼(모델 6 / 수량 7) 둘 다 비어있으면 스킵.
+// 그 외 메타 컬럼(구분·날짜·업체·발전소·주소·수주번호)은 forward-fill 로 채워지므로
+// 비어있어도 살린다 (D-058).
 function isSkipRow(cells: RawCell[]): boolean {
   const g = asString(cells[0]?.value);
   if (g === '구분' || g === '합 계' || g === '합계') return true;
-  const empty = [1, 2, 3, 6, 7].every((i) => {
-    const v = cells[i]?.value;
-    return v === null || v === undefined || v === '';
-  });
-  return empty;
+  return isCellEmpty(cells[6]?.value) && isCellEmpty(cells[7]?.value);
 }
 
 // ──────────────────── 본 변환기 ────────────────────
@@ -217,15 +241,49 @@ export async function convertTopsolarOutbound(
   const ws = wb.worksheets[0];
   if (!ws) throw new Error('시트가 비어있습니다');
 
-  // 18 컬럼 모두 읽기 (col 14-17 워크플로우 체크박스 포함)
+  // 18 컬럼 모두 읽기 — 셀 병합은 master 값으로 펼침 (D-058).
   const rawRows: RawRow[] = [];
   ws.eachRow({ includeEmpty: false }, (row, idx) => {
     const cells: RawCell[] = [];
     for (let c = 1; c <= 18; c += 1) {
-      cells.push({ value: readCell(row.getCell(c).value) });
+      cells.push({ value: readMergedCell(row, c) });
     }
     rawRows.push({ cells, excelRowNumber: idx });
   });
+
+  // Forward-fill — 메타 컬럼(0~5)이 빈 칸이면 위 행 값을 상속. 섹션 변경 시 reset.
+  // (D-058) "엑셀 형태" 보정: 같은 발전소·업체에 여러 모델이 들어갈 때 메타를 첫 행에만
+  // 적는 패턴 처리. 헤더 반복/합계/완전 빈 행은 fill 에서 제외.
+  let filledFromAbove = 0;
+  {
+    const lastFill: Record<number, unknown> = {};
+    for (const raw of rawRows) {
+      const cell0 = asString(raw.cells[0]?.value);
+      // 섹션 마커 만나면 reset
+      if (parseSectionLabel(cell0)) {
+        for (const k of Object.keys(lastFill)) delete lastFill[Number(k)];
+        continue;
+      }
+      // 헤더 반복·합계 행은 forward-fill 영향 안 줌 + lastFill 도 영향 안 받음
+      if (cell0 === '구분' || cell0 === '합 계' || cell0 === '합계') continue;
+      // 완전 빈 행도 lastFill 영향 안 줌 (그냥 패스)
+      const allEmpty = raw.cells.every((c) => isCellEmpty(c.value));
+      if (allEmpty) continue;
+
+      let filledThisRow = false;
+      for (const col of FILL_COLS) {
+        if (isCellEmpty(raw.cells[col]?.value)) {
+          if (lastFill[col] !== undefined) {
+            raw.cells[col] = { value: lastFill[col] };
+            filledThisRow = true;
+          }
+        } else {
+          lastFill[col] = raw.cells[col].value;
+        }
+      }
+      if (filledThisRow) filledFromAbove += 1;
+    }
+  }
 
   // 1차 패스: 섹션 컨텍스트 캐시 (자유 형식 날짜 보정용)
   // 같은 섹션 안에서 정상 datetime 의 연도를 캐치하여 자유 형식 행에 적용.
@@ -409,5 +467,6 @@ export async function convertTopsolarOutbound(
     warnings,
     sourceRowCount: rawRows.length,
     resolvedFromSection,
+    filledFromAbove,
   };
 }
