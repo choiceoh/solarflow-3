@@ -1,8 +1,9 @@
-// 외부 양식 변환 카드 — '엑셀 입력' 페이지의 "외부 양식 변환" 탭에서 사용.
-// 흐름: 파일 드롭/선택 → 변환 다이얼로그(미리보기·경고) → "검증으로 진행" → 표준 검증 파이프라인.
+// 외부 양식 변환 카드 (D-055/056).
+// 흐름: 파일 드롭 → 변환(매칭 메타 포함) → 모호 행 인라인 확인 → 자동 등록·alias 학습
+// → "검증으로 진행" → 표준 검증 파이프라인.
 
 import { useCallback, useRef, useState } from 'react';
-import { AlertTriangle, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, Plus, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -12,7 +13,16 @@ import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 import { TEMPLATE_LABEL } from '@/types/excel';
 import type { ExternalFormat } from '@/lib/externalFormats/registry';
-import type { ConvertResult } from '@/lib/externalFormats/topsolarOutbound';
+import type {
+  ConvertResult, ResolveContext, RowMatchMeta,
+} from '@/lib/externalFormats/topsolarOutbound';
+import type { CompanyLite, ProductLite } from '@/lib/externalFormats/matching';
+import {
+  autoRegisterCompany, autoRegisterProduct,
+  fetchCompanyAliases, fetchProductAliases,
+  learnCompanyAlias, learnProductAlias,
+} from '@/lib/externalFormats/autoRegister';
+import type { ManufacturerLite } from '@/lib/externalFormats/productInference';
 import ImportPreviewDialog from './ImportPreviewDialog';
 import ImportResultDialog from './ImportResultDialog';
 
@@ -24,6 +34,8 @@ interface Props {
 interface ConvertedState {
   fileName: string;
   result: ConvertResult;
+  ctx: ResolveContext;
+  manufacturers: ManufacturerLite[];
 }
 
 export default function ExternalFormatCard({ format, onImportComplete }: Props) {
@@ -41,16 +53,38 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
       notify.error('엑셀 파일(.xlsx, .xls)만 변환할 수 있습니다');
       return;
     }
+    if (!excel.masterData) {
+      notify.error('마스터 데이터 로딩 전입니다');
+      return;
+    }
     setConverting(true);
     try {
-      const result = await format.convert(file);
-      setConverted({ fileName: file.name, result });
+      // 마스터에서 변환에 필요한 슬림 형태만 추출
+      const companies: CompanyLite[] = excel.masterData.companies.map((c) => ({
+        company_id: c.company_id, company_code: c.company_code, company_name: c.company_name,
+      }));
+      const products: ProductLite[] = excel.masterData.products.map((p) => ({
+        product_id: p.product_id, product_code: p.product_code, product_name: p.product_name,
+      }));
+      // 제조사도 별도 fetch 필요 (excel.masterData.manufacturers 는 name_kr 만)
+      const manufacturers: ManufacturerLite[] = excel.masterData.manufacturers.map((m) => ({
+        manufacturer_id: m.manufacturer_id,
+        name_kr: m.name_kr,
+      }));
+      // alias 사전 fetch
+      const [companyAliases, productAliases] = await Promise.all([
+        fetchCompanyAliases(),
+        fetchProductAliases(),
+      ]);
+      const ctx: ResolveContext = { companies, products, companyAliases, productAliases };
+      const result = await format.convert(file, ctx);
+      setConverted({ fileName: file.name, result, ctx, manufacturers });
     } catch (e) {
       notify.error(e instanceof Error ? e.message : '변환 실패');
     } finally {
       setConverting(false);
     }
-  }, [format]);
+  }, [format, excel.masterData]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -117,11 +151,11 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
       {converted && (
         <ConvertResultDialog
           open
-          fileName={converted.fileName}
-          result={converted.result}
+          state={converted}
           targetLabel={targetLabel}
           onClose={closeConverted}
           onProceed={proceedToValidation}
+          onUpdate={(next) => setConverted(next)}
         />
       )}
 
@@ -146,25 +180,129 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
   );
 }
 
+// ─────────────────────────────────────────────────────
+// 변환 결과 다이얼로그 — 모호 행 인라인 확인 + 자동 등록
+// ─────────────────────────────────────────────────────
+
 interface ResultProps {
   open: boolean;
-  fileName: string;
-  result: ConvertResult;
+  state: ConvertedState;
   targetLabel: string;
   onClose: () => void;
   onProceed: () => void;
+  onUpdate: (next: ConvertedState) => void;
 }
 
-function ConvertResultDialog({
-  open, fileName, result, targetLabel, onClose, onProceed,
-}: ResultProps) {
-  const { rows, warnings } = result;
-  const [showAllWarnings, setShowAllWarnings] = useState(false);
-  const visibleWarnings = showAllWarnings ? warnings : warnings.slice(0, 10);
+function ConvertResultDialog({ open, state, targetLabel, onClose, onProceed, onUpdate }: ResultProps) {
+  const { result, ctx, manufacturers, fileName } = state;
+  const [busy, setBusy] = useState(false);
+
+  const ambiguousCompany = result.meta.filter((m) => m.company.level === 'fuzzy');
+  const ambiguousProduct = result.meta.filter((m) => m.product.level === 'fuzzy');
+  const newCompany = result.meta.filter((m) => m.company.level === 'none' && m.rawCompanyText);
+  const newProduct = result.meta.filter((m) => m.product.level === 'none' && m.rawProductCode);
+
+  const totalActions = ambiguousCompany.length + ambiguousProduct.length
+    + newCompany.length + newProduct.length;
+  const canProceed = totalActions === 0;
+
+  // 회사: ambiguous 행에서 사용자가 후보를 선택 → row.data 갱신 + alias 학습
+  const resolveCompanyFuzzy = useCallback(async (rowNum: number, candidate: CompanyLite | null) => {
+    setBusy(true);
+    try {
+      const target = result.meta.find((m) => m.rowNumber === rowNum);
+      if (!target) return;
+      let canonical: CompanyLite | null = candidate;
+      if (!canonical) {
+        // [신규 등록] 클릭 시 — 자동 등록
+        canonical = await autoRegisterCompany(target.rawCompanyText);
+      } else {
+        // [같음] 선택 시 — alias 학습
+        await learnCompanyAlias(canonical.company_id, target.rawCompanyText);
+      }
+      // 같은 raw 텍스트의 모든 행에 일괄 반영
+      const newCtx: ResolveContext = {
+        ...ctx,
+        companies: candidate ? ctx.companies : [...ctx.companies, canonical],
+      };
+      const next: ConvertedState = {
+        ...state,
+        ctx: newCtx,
+        result: applyCompanyResolution(result, target.rawCompanyText, canonical),
+      };
+      onUpdate(next);
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : '회사 매핑 실패');
+    } finally {
+      setBusy(false);
+    }
+  }, [result, ctx, state, onUpdate]);
+
+  const resolveProductFuzzy = useCallback(async (rowNum: number, candidate: ProductLite | null) => {
+    setBusy(true);
+    try {
+      const target = result.meta.find((m) => m.rowNumber === rowNum);
+      if (!target) return;
+      let canonical: ProductLite | null = candidate;
+      if (!canonical) {
+        canonical = await autoRegisterProduct(target.rawProductCode, manufacturers);
+      } else {
+        await learnProductAlias(canonical.product_id, target.rawProductCode);
+      }
+      const newCtx: ResolveContext = {
+        ...ctx,
+        products: candidate ? ctx.products : [...ctx.products, canonical],
+      };
+      const next: ConvertedState = {
+        ...state,
+        ctx: newCtx,
+        result: applyProductResolution(result, target.rawProductCode, canonical),
+      };
+      onUpdate(next);
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : '품번 매핑 실패');
+    } finally {
+      setBusy(false);
+    }
+  }, [result, ctx, state, manufacturers, onUpdate]);
+
+  // 모든 'none' 행 일괄 자동 등록
+  const autoRegisterAllNew = useCallback(async () => {
+    setBusy(true);
+    try {
+      let res = result;
+      let nextCtx = ctx;
+      // 회사 dedup
+      const uniqueCompanyTexts = new Set<string>(newCompany.map((m) => m.rawCompanyText));
+      for (const text of uniqueCompanyTexts) {
+        try {
+          const created = await autoRegisterCompany(text);
+          nextCtx = { ...nextCtx, companies: [...nextCtx.companies, created] };
+          res = applyCompanyResolution(res, text, created);
+        } catch (e) {
+          notify.error(`${text} 자동 등록 실패: ${e instanceof Error ? e.message : ''}`);
+        }
+      }
+      // 품번 dedup
+      const uniqueProductCodes = new Set<string>(newProduct.map((m) => m.rawProductCode));
+      for (const code of uniqueProductCodes) {
+        try {
+          const created = await autoRegisterProduct(code, manufacturers);
+          nextCtx = { ...nextCtx, products: [...nextCtx.products, created] };
+          res = applyProductResolution(res, code, created);
+        } catch (e) {
+          notify.error(`${code} 자동 등록 실패: ${e instanceof Error ? e.message : ''}`);
+        }
+      }
+      onUpdate({ ...state, ctx: nextCtx, result: res });
+    } finally {
+      setBusy(false);
+    }
+  }, [result, ctx, newCompany, newProduct, manufacturers, state, onUpdate]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-3xl max-h-[88vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
@@ -173,57 +311,241 @@ function ConvertResultDialog({
           <p className="text-xs text-muted-foreground">{fileName}</p>
         </DialogHeader>
 
-        <div className="flex gap-2 text-xs">
-          <span
-            className="rounded px-2 py-1 font-medium"
-            style={{ background: 'var(--sf-pos-bg)', color: 'var(--sf-pos)' }}
-          >
-            변환 {rows.length}행
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-pos-bg)', color: 'var(--sf-pos)' }}>
+            변환 {result.rows.length}행
           </span>
-          {warnings.length > 0 && (
-            <span
-              className="flex items-center gap-1 rounded px-2 py-1 font-medium"
-              style={{ background: 'var(--sf-warn-bg)', color: 'var(--sf-warn)' }}
-            >
+          {result.resolvedFromSection > 0 && (
+            <span className="rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-info-bg)', color: 'var(--sf-info)' }}>
+              자유 날짜 보정 {result.resolvedFromSection}건
+            </span>
+          )}
+          {ambiguousCompany.length + ambiguousProduct.length > 0 && (
+            <span className="flex items-center gap-1 rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-warn-bg)', color: 'var(--sf-warn)' }}>
               <AlertTriangle className="h-3 w-3" />
-              검토 필요 {warnings.length}건
+              유사 후보 확인 {ambiguousCompany.length + ambiguousProduct.length}건
+            </span>
+          )}
+          {newCompany.length + newProduct.length > 0 && (
+            <span className="flex items-center gap-1 rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-info-bg)', color: 'var(--sf-info)' }}>
+              <Plus className="h-3 w-3" />
+              신규 등록 대기 {newCompany.length + newProduct.length}건
+            </span>
+          )}
+          {result.warnings.length > 0 && (
+            <span className="rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-warn-bg)', color: 'var(--sf-warn)' }}>
+              누락 행 {result.warnings.length}건
             </span>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto rounded border border-[var(--line)] bg-[var(--bg-2)] p-3 text-[12px]">
-          {warnings.length === 0 ? (
-            <p className="text-[var(--ink-3)]">필수 컬럼 누락 없이 변환되었습니다. 다음 단계의 표준 검증에서 마스터(법인·품번·창고) 매칭이 진행됩니다.</p>
-          ) : (
-            <>
-              <p className="mb-2 text-[var(--ink-2)]">
-                아래 행은 자동 매핑이 부분적으로 실패했습니다. 검증 단계에서 누락 컬럼을 직접 채울 수 있습니다.
+        <div className="flex-1 overflow-y-auto space-y-3">
+          {ambiguousCompany.length === 0 && ambiguousProduct.length === 0
+              && newCompany.length === 0 && newProduct.length === 0 && (
+            <div className="rounded border border-[var(--line)] bg-[var(--sf-pos-bg)] p-3 text-[12px]" style={{ color: 'var(--sf-pos)' }}>
+              <CheckCircle2 className="mr-1.5 inline h-4 w-4" />
+              모든 행이 자동 매핑되었습니다. 다음 단계의 표준 검증으로 진행하세요.
+            </div>
+          )}
+
+          {ambiguousCompany.length > 0 && (
+            <FuzzySection
+              title={`회사 유사 후보 (${ambiguousCompany.length}건)`}
+              metas={ambiguousCompany}
+              busy={busy}
+              kind="company"
+              onResolve={resolveCompanyFuzzy as (n: number, c: unknown | null) => Promise<void>}
+            />
+          )}
+
+          {ambiguousProduct.length > 0 && (
+            <FuzzySection
+              title={`품번 유사 후보 (${ambiguousProduct.length}건)`}
+              metas={ambiguousProduct}
+              busy={busy}
+              kind="product"
+              onResolve={resolveProductFuzzy as (n: number, c: unknown | null) => Promise<void>}
+            />
+          )}
+
+          {(newCompany.length > 0 || newProduct.length > 0) && (
+            <div className="rounded border border-[var(--line)] bg-[var(--bg-2)] p-3">
+              <div className="mb-2 text-sm font-semibold">신규 등록 대기</div>
+              {newCompany.length > 0 && (
+                <div className="mb-2">
+                  <div className="text-xs text-[var(--ink-3)] mb-1">회사 {new Set(newCompany.map((m) => m.rawCompanyText)).size}건</div>
+                  <div className="flex flex-wrap gap-1">
+                    {Array.from(new Set(newCompany.map((m) => m.rawCompanyText))).map((t) => (
+                      <span key={t} className="sf-pill ghost text-[11px]">{t}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {newProduct.length > 0 && (
+                <div className="mb-2">
+                  <div className="text-xs text-[var(--ink-3)] mb-1">품번 {new Set(newProduct.map((m) => m.rawProductCode)).size}건</div>
+                  <div className="flex flex-wrap gap-1">
+                    {Array.from(new Set(newProduct.map((m) => m.rawProductCode))).map((c) => (
+                      <span key={c} className="sf-pill ghost text-[11px] font-mono">{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <Button size="sm" onClick={autoRegisterAllNew} disabled={busy} className="mt-1">
+                {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                일괄 자동 등록
+              </Button>
+              <p className="mt-1.5 text-[10px] text-[var(--ink-3)]">
+                품번 자동 등록은 prefix 룰(TSM/LR/JKM/RSM)로 제조사·wattage 추론. 추론 실패 시 마스터 화면에서 사후 보정 필요.
               </p>
-              <ul className="space-y-1 font-mono">
-                {visibleWarnings.map((w, i) => (
+            </div>
+          )}
+
+          {result.warnings.length > 0 && (
+            <details className="rounded border border-[var(--line)] bg-[var(--bg-2)] p-3 text-[12px]">
+              <summary className="cursor-pointer font-medium">필수 누락 행 ({result.warnings.length}건)</summary>
+              <ul className="mt-2 space-y-1 font-mono">
+                {result.warnings.slice(0, 20).map((w, i) => (
                   <li key={i} className="text-[var(--ink-2)]">• {w}</li>
                 ))}
+                {result.warnings.length > 20 && (
+                  <li className="text-[var(--ink-3)]">... 그 외 {result.warnings.length - 20}건</li>
+                )}
               </ul>
-              {warnings.length > 10 && !showAllWarnings && (
-                <button
-                  type="button"
-                  className="mt-2 text-[11px] text-primary underline"
-                  onClick={() => setShowAllWarnings(true)}
-                >
-                  나머지 {warnings.length - 10}건 더 보기
-                </button>
-              )}
-            </>
+            </details>
           )}
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>취소</Button>
-          <Button type="button" onClick={onProceed} disabled={rows.length === 0}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>취소</Button>
+          <Button type="button" onClick={onProceed} disabled={busy || !canProceed || result.rows.length === 0}>
             {targetLabel} 검증으로 진행
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// 헬퍼: 매칭 해결 결과를 result 에 일괄 반영
+// ─────────────────────────────────────────────────────
+
+function applyCompanyResolution(
+  result: ConvertResult,
+  rawText: string,
+  canonical: CompanyLite,
+): ConvertResult {
+  const newRows = result.rows.slice();
+  const newMeta = result.meta.map((m) => {
+    if (m.rawCompanyText === rawText) {
+      const idx = m.rowNumber - 1;
+      newRows[idx] = {
+        ...newRows[idx],
+        data: { ...newRows[idx].data, company_code: canonical.company_code },
+      };
+      return {
+        ...m,
+        company: { level: 'exact' as const, matched: canonical, normalizedKey: m.company.normalizedKey },
+      };
+    }
+    return m;
+  });
+  return { ...result, rows: newRows, meta: newMeta };
+}
+
+function applyProductResolution(
+  result: ConvertResult,
+  rawCode: string,
+  canonical: ProductLite,
+): ConvertResult {
+  const newRows = result.rows.slice();
+  const newMeta = result.meta.map((m) => {
+    if (m.rawProductCode === rawCode) {
+      const idx = m.rowNumber - 1;
+      newRows[idx] = {
+        ...newRows[idx],
+        data: { ...newRows[idx].data, product_code: canonical.product_code },
+      };
+      return {
+        ...m,
+        product: { level: 'exact' as const, matched: canonical, normalizedKey: m.product.normalizedKey },
+      };
+    }
+    return m;
+  });
+  return { ...result, rows: newRows, meta: newMeta };
+}
+
+// ─────────────────────────────────────────────────────
+// 모호 후보 섹션 — 같은 raw 텍스트끼리 묶어 한 번에 결정
+// ─────────────────────────────────────────────────────
+
+interface FuzzyProps<T> {
+  title: string;
+  metas: RowMatchMeta[];
+  busy: boolean;
+  kind: 'company' | 'product';
+  onResolve: (rowNum: number, candidate: T | null) => Promise<void>;
+}
+
+function FuzzySection<T extends CompanyLite | ProductLite>({
+  title, metas, busy, kind, onResolve,
+}: FuzzyProps<T>) {
+  // raw 텍스트별로 묶어 한 번만 보여줌 (한 번 결정하면 모든 행에 적용됨)
+  const grouped = new Map<string, RowMatchMeta>();
+  for (const m of metas) {
+    const k = kind === 'company' ? m.rawCompanyText : m.rawProductCode;
+    if (!grouped.has(k)) grouped.set(k, m);
+  }
+
+  return (
+    <div className="rounded border border-[var(--line)] bg-[var(--bg-2)] p-3">
+      <div className="mb-2 text-sm font-semibold">{title}</div>
+      <div className="space-y-2">
+        {Array.from(grouped.values()).map((m) => {
+          const raw = kind === 'company' ? m.rawCompanyText : m.rawProductCode;
+          const candidates = (kind === 'company' ? m.company.candidates : m.product.candidates) as T[];
+          return (
+            <div key={raw} className="flex flex-wrap items-center gap-2 rounded border border-[var(--line)] bg-[var(--surface)] p-2">
+              <span className={cn('text-[12px]', kind === 'product' && 'font-mono')}>
+                <span className="text-[var(--ink-3)]">원본:</span>{' '}
+                <span className="font-semibold text-[var(--ink)]">{raw}</span>
+              </span>
+              <span className="text-[var(--ink-3)] text-[11px]">→</span>
+              {candidates?.map((c) => {
+                const id = kind === 'company' ? (c as CompanyLite).company_id : (c as ProductLite).product_id;
+                const label = kind === 'company'
+                  ? `${(c as CompanyLite).company_name} (${(c as CompanyLite).company_code})`
+                  : (c as ProductLite).product_code;
+                return (
+                  <Button
+                    key={id}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px]"
+                    disabled={busy}
+                    onClick={() => onResolve(m.rowNumber, c)}
+                  >
+                    {label} 동일
+                  </Button>
+                );
+              })}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 text-[11px]"
+                disabled={busy}
+                onClick={() => onResolve(m.rowNumber, null)}
+              >
+                <Plus className="h-3 w-3" /> 신규 등록
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
