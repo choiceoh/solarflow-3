@@ -55,6 +55,13 @@ func assistantToolCatalog() []assistantTool {
 		toolSearchLC(),
 		toolSearchBL(),
 		toolSearchDeclarations(),
+		// baro 테넌트 전용 (allowScopes=[baro])
+		toolBaroCreditBoard(),
+		toolBaroDispatchRoutes(),
+		toolBaroPartnerPrices(),
+		toolBaroPartnerPriceLookup(),
+		toolBaroIncoming(),
+		toolBaroPurchaseHistory(),
 		// 메타 config — 화면/폼/상세 단건 조회 (admin only)
 		toolReadUIConfig(),
 	}
