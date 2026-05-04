@@ -57,6 +57,11 @@ interface PageState {
 }
 
 type PeriodFilter = 'all' | 'last3' | 'year' | 'custom';
+// D-064 PR 30: 마진 분석 원가 기준 토글.
+// fifo: ERP fifo_matches (PR 26) 직접 사용 — 가장 정확. 매칭된 출고만 cover.
+// landed: 면장 + 부대비용 합산 (관세/부가세 포함 확정원가 추정).
+// cif: 면장 CIF 만 (관세 전).
+type CostBasis = 'fifo' | 'landed' | 'cif';
 
 const emptyMargin: MarginAnalysis = {
   items: [],
@@ -217,6 +222,8 @@ export default function SalesAnalysisPage() {
   const [customerFilter, setCustomerFilter] = useState('');
   const [manufacturerFilter, setManufacturerFilter] = useState('');
   const [partners, setPartners] = useState<Partner[]>([]);
+  // D-064 PR 30: 원가 기준 토글 — 기본 fifo (가장 정확). cost_details 만 있는 환경은 landed 로 폴백.
+  const [costBasis, setCostBasis] = useState<CostBasis>('fifo');
   const manufacturers = useAppStore((s) => s.manufacturers);
   const products = useAppStore((s) => s.products);
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
@@ -250,7 +257,7 @@ export default function SalesAnalysisPage() {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const calcFilterBody = {
-        cost_basis: 'landed',
+        cost_basis: costBasis,
         ...(dateRange.dateFrom ? { date_from: dateRange.dateFrom } : {}),
         ...(dateRange.dateTo ? { date_to: dateRange.dateTo } : {}),
       };
@@ -289,7 +296,7 @@ export default function SalesAnalysisPage() {
         error: err instanceof Error ? err.message : '매출/이익 분석 데이터를 불러오지 못했습니다',
       }));
     }
-  }, [customerFilter, dateRange.dateFrom, dateRange.dateTo, manufacturerFilter, selectedCompanyId]);
+  }, [costBasis, customerFilter, dateRange.dateFrom, dateRange.dateTo, manufacturerFilter, selectedCompanyId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -412,6 +419,16 @@ export default function SalesAnalysisPage() {
                   allLabel="전체 거래처"
                 />
               </div>
+              {/* D-064 PR 30: 원가 기준 토글 — fifo 정합치 / landed 추정 / cif 추정 */}
+              <FilterChips
+                options={[
+                  { value: 'fifo', label: 'FIFO 정합' },
+                  { value: 'landed', label: 'Landed' },
+                  { value: 'cif', label: 'CIF' },
+                ]}
+                value={costBasis}
+                onChange={(value) => setCostBasis(value as CostBasis)}
+              />
               <Select value={manufacturerFilter || 'all'} onValueChange={(v) => setManufacturerFilter(v === 'all' ? '' : (v ?? ''))}>
                 <SelectTrigger className="h-8 w-36 text-xs">
                   <span className="truncate">{manufacturerLabel}</span>
