@@ -47,13 +47,15 @@ const config: ListScreenConfig = {
   columns: [
     { key: 'po_number', label: '발주번호' },
     { key: 'manufacturer_name', label: '제조사', fallback: '—' },
-    { key: 'contract_type', label: '유형' },
+    { key: 'contract_type', label: '유형', rendererId: 'contract_type_pill' },
     { key: 'contract_date', label: '계약일', formatter: 'date' },
     { key: 'total_qty', label: '수량', align: 'right', className: 'tabular-nums', formatter: 'number' },
     { key: 'total_mw', label: 'MW', align: 'right', className: 'tabular-nums', formatter: 'number' },
-    { key: 'status', label: '상태' },
+    { key: 'status', label: '상태', rendererId: 'po_status_badge' },
   ],
   actions: [],
+  // 행 클릭 → 메타 상세 화면 (config/details/purchase_orders.ts)
+  onRowClick: { kind: 'detail', detailId: 'purchase_order', idField: 'po_id' },
   emptyState: { message: '등록된 PO가 없습니다 — /procurement에서 신규 등록하세요' },
   tableSubFromTotal: true,
 };

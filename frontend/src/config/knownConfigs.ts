@@ -11,6 +11,8 @@ import productsScreen from '@/config/screens/products';
 import constructionSitesScreen from '@/config/screens/construction_sites';
 import purchaseOrdersScreen from '@/config/screens/purchase_orders';
 import lcsScreen from '@/config/screens/lcs';
+import purchaseOrderDetail from '@/config/details/purchase_orders';
+import lcDetail from '@/config/details/lcs';
 import partnerForm from '@/config/forms/partners';
 import bankForm from '@/config/forms/banks';
 import warehouseForm from '@/config/forms/warehouses';
@@ -38,8 +40,10 @@ export const KNOWN_CONFIGS: KnownConfig[] = [
   { kind: 'screen', id: 'manufacturers', label: '제조사 마스터', routeHint: '/masters/manufacturers-v2', default: manufacturersScreen },
   { kind: 'screen', id: 'products', label: '품번 마스터', routeHint: '/masters/products-v2', default: productsScreen },
   { kind: 'screen', id: 'construction_sites', label: '발전소 마스터', routeHint: '/masters/construction-sites-v2', default: constructionSitesScreen },
-  { kind: 'screen', id: 'purchase_orders', label: '발주(PO) 목록', routeHint: '/procurement (메타 버전 미라우트)', default: purchaseOrdersScreen },
-  { kind: 'screen', id: 'lcs', label: '신용장(L/C) 목록', routeHint: '/procurement (메타 버전 미라우트)', default: lcsScreen },
+  { kind: 'screen', id: 'purchase_orders', label: '발주(PO) 목록', routeHint: '/procurement/po-v2', default: purchaseOrdersScreen },
+  { kind: 'screen', id: 'lcs', label: '신용장(L/C) 목록', routeHint: '/procurement/lc-v2', default: lcsScreen },
+  { kind: 'detail', id: 'purchase_order_detail', label: '발주(PO) 상세', routeHint: '/procurement/po-v2 → 행 클릭', default: purchaseOrderDetail },
+  { kind: 'detail', id: 'lc_detail', label: '신용장(L/C) 상세', routeHint: '/procurement/lc-v2 → 행 클릭', default: lcDetail },
   { kind: 'form', id: 'partner_form_v2', label: '거래처 폼', routeHint: '/masters/partners-v2 → 새로 등록', default: partnerForm },
   { kind: 'form', id: 'bank_form_v2', label: '은행 폼', routeHint: '/masters/banks-v2 → 새로 등록', default: bankForm },
   { kind: 'form', id: 'warehouse_form_v2', label: '창고 폼', routeHint: '/masters/warehouses-v2 → 새로 등록', default: warehouseForm },

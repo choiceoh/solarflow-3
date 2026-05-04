@@ -45,9 +45,10 @@ const config: ListScreenConfig = {
     { key: 'amount_usd', label: '금액(USD)', align: 'right', className: 'tabular-nums', formatter: 'number' },
     { key: 'usance_days', label: '유산스(일)', align: 'right', className: 'tabular-nums', fallback: '—' },
     { key: 'maturity_date', label: '만기일', formatter: 'date' },
-    { key: 'status', label: '상태' },
+    { key: 'status', label: '상태', rendererId: 'lc_status_badge' },
   ],
   actions: [],
+  onRowClick: { kind: 'detail', detailId: 'lc', idField: 'lc_id' },
   emptyState: { message: '등록된 L/C가 없습니다 — /procurement에서 신규 등록하세요' },
   tableSubFromTotal: true,
 };

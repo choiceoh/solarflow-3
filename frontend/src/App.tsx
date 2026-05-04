@@ -26,6 +26,8 @@ const WarehousesV2Page = lazy(() => import('@/pages/WarehousesV2Page'));
 const ManufacturersV2Page = lazy(() => import('@/pages/ManufacturersV2Page'));
 const ProductsV2Page = lazy(() => import('@/pages/ProductsV2Page'));
 const ConstructionSitesV2Page = lazy(() => import('@/pages/ConstructionSitesV2Page'));
+const PurchaseOrdersV2Page = lazy(() => import('@/pages/PurchaseOrdersV2Page'));
+const LCsV2Page = lazy(() => import('@/pages/LCsV2Page'));
 const UIConfigEditorPage = lazy(() => import('@/pages/UIConfigEditorPage'));
 const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
 const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
@@ -131,6 +133,8 @@ export default function App() {
                 <Route path="/masters/construction-sites" element={<ConstructionSitesPage />} />
                 <Route path="/inbound" element={<LegacyRedirect to="/procurement?tab=bl" />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
+                <Route path="/procurement/po-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><PurchaseOrdersV2Page /></RoleGuard>} />
+                <Route path="/procurement/lc-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><LCsV2Page /></RoleGuard>} />
                 <Route path="/purchase-history" element={<PurchaseHistoryErrorBoundary><PurchaseHistoryPage /></PurchaseHistoryErrorBoundary>} />
                 <Route path="/lc" element={<LegacyRedirect to="/procurement?tab=lc" />} />
                 <Route path="/outbound" element={<LegacyRedirect to="/orders?tab=outbound" />} />
