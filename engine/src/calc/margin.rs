@@ -139,10 +139,11 @@ pub async fn calculate_margin(pool: &PgPool, req: &MarginAnalysisRequest) -> Res
     .fetch_all(pool).await?;
 
     // 원가 조회 (cost_basis에 따라)
-    let cost_map = if req.cost_basis == "landed" {
-        fetch_cost_avg(pool, company_id, req.product_id, "landed").await?
-    } else {
-        fetch_cost_avg(pool, company_id, req.product_id, "cif").await?
+    // D-064 PR 30: 'fifo' — ERP fifo_matches (PR 26) 직접 사용. 가장 정확.
+    let cost_map = match req.cost_basis.as_str() {
+        "fifo" => fetch_cost_avg_fifo(pool, company_id, req.product_id).await?,
+        "landed" => fetch_cost_avg(pool, company_id, req.product_id, "landed").await?,
+        _ => fetch_cost_avg(pool, company_id, req.product_id, "cif").await?,
     };
 
     let mut items: Vec<MarginItem> = Vec::new();
@@ -466,6 +467,30 @@ pub async fn calculate_price_trend(pool: &PgPool, req: &PriceTrendRequest) -> Re
 }
 
 // === 헬퍼 ===
+
+/// D-064 PR 30: ERP fifo_matches 기반 품번별 가중평균 원가(₩/Wp).
+/// FIFO 매칭이 실제 입고 LOT ↔ 출고 배분 결과라 cost_details/BL 추정치보다 정확.
+/// allocated_qty × spec_wp 로 분모, cost_amount 합으로 분자.
+async fn fetch_cost_avg_fifo(pool: &PgPool, company_id: Uuid, product_id: Option<Uuid>) -> Result<HashMap<Uuid, f64>, sqlx::Error> {
+    let sql = r#"
+    SELECT fm.product_id,
+           CASE WHEN SUM(fm.allocated_qty * p.spec_wp) > 0
+             THEN SUM(fm.cost_amount)::float8 / SUM(fm.allocated_qty * p.spec_wp)
+             ELSE NULL END AS avg_wp
+    FROM fifo_matches fm
+    JOIN products p ON fm.product_id = p.product_id
+    LEFT JOIN outbounds o ON fm.outbound_id = o.outbound_id
+    WHERE fm.allocated_qty IS NOT NULL AND fm.allocated_qty > 0
+      AND fm.cost_amount IS NOT NULL
+      AND ($2::uuid IS NULL OR fm.product_id = $2)
+      AND ($1::uuid IS NULL OR o.company_id IS NULL OR o.company_id = $1)
+    GROUP BY fm.product_id
+    "#;
+    let rows = sqlx::query_as::<_, CostAvgRow>(sql)
+        .bind(company_id).bind(product_id)
+        .fetch_all(pool).await?;
+    Ok(rows.into_iter().filter_map(|r| r.avg_wp.map(|v| (r.product_id, v))).collect())
+}
 
 async fn fetch_cost_avg(pool: &PgPool, company_id: Uuid, product_id: Option<Uuid>, basis: &str) -> Result<HashMap<Uuid, f64>, sqlx::Error> {
     let col = if basis == "landed" { "cd.landed_wp_krw" } else { "cd.cif_wp_krw" };
