@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -27,10 +28,8 @@ type PublicHandler struct {
 	Engine *engine.EngineClient
 	HTTP   *http.Client
 
-	fxMu     sync.Mutex
-	fxCache  map[string]*fxSnapshot // pair → snapshot (usdkrw, cnykrw)
-	fxKey    string
-	fxSource string
+	fxMu    sync.Mutex
+	fxCache map[string]*fxSnapshot // pair → snapshot (usdkrw, cnykrw)
 
 	metalMu     sync.Mutex
 	metalCache  map[string]*metalSnapshot
@@ -48,19 +47,15 @@ func NewPublicHandler(db *supa.Client, engineClient *engine.EngineClient) *Publi
 		Engine:      engineClient,
 		HTTP:        &http.Client{Timeout: 6 * time.Second},
 		fxCache:     make(map[string]*fxSnapshot),
-		fxKey:       os.Getenv("METAL_PRICE_API_KEY"),
-		fxSource:    "metalpriceapi.com",
 		metalCache:  make(map[string]*metalSnapshot),
 		metalKey:    os.Getenv("METAL_PRICE_API_KEY"),
 		metalSource: "metalpriceapi.com",
 
 		commoditiesPath: commoditiesFilePath(),
 	}
-	// 부팅 시 fx_daily 30일 백필 — 빈 테이블이면 metalpriceapi historical 30회 호출.
+	// 부팅 시 fx_daily 50일 백필 — ECOS 범위 호출이라 페어당 1회 (총 2회).
 	// 비동기로 startup 지연 회피, 실패해도 무시.
-	if h.fxKey != "" {
-		go h.backfillFXDaily(30)
-	}
+	go h.backfillFXDaily(50)
 	return h
 }
 
@@ -74,7 +69,32 @@ func commoditiesFilePath() string {
 	return "/etc/solarflow/commodities.json"
 }
 
-// === FX (USD/KRW, CNY/KRW) ===
+// === FX (USD/KRW, CNY/KRW) — 한국은행 ECOS 매매기준율 ===
+//
+// 한국은행 ECOS 통계코드 731Y001 (주요국 통화의 대원화환율, 일별)을 사용한다.
+// 페어당 1회 범위 호출이면 30~50일치 시계열 + 최신 spot 까지 모두 받을 수 있어
+// metalpriceapi 30회 historical 호출이 페어당 1회 (총 2회) 로 줄어든다.
+//
+// BOK는 영업일에만 발표 → 응답에 주말/공휴일 행 없음. fx_daily 에도 영업일만 누적.
+// L/C 우측 패널 sparkline 용 참고치(매매기준율). 실제 개설 환율은 거래은행
+// 전신환매도율로 별도이며, 이 값은 시장 추이 표시 목적.
+
+// ECOS API 키 — 공개 통계 데이터 접근용 (rate-limit 외 악용 가능 표면 없음).
+const ecosAPIKey = "AY150WBZGJNTX89286FZ"
+
+// fx_daily.source 컬럼 라벨 — 출처 추적 용도.
+const ecosFXSource = "ecos.bok.or.kr"
+
+// ECOS 통계코드 — 주요국 통화의 대원화환율(매매기준율, 일별).
+const ecosFXStatCode = "731Y001"
+
+// 페어 → ECOS 항목 코드 (731Y001 통계 안에서 통화 구분).
+//   0000001 = 원/미국달러(매매기준율)
+//   0000053 = 원/위안(매매기준율)
+var fxPairs = map[string]string{
+	"usdkrw": "0000001",
+	"cnykrw": "0000053",
+}
 
 type fxSnapshot struct {
 	Rate      float64   `json:"rate"`
@@ -83,68 +103,73 @@ type fxSnapshot struct {
 	FetchedAt time.Time `json:"fetched_at"`
 }
 
-// 5분 캐시 — 로그인 페이지가 매 새로고침마다 외부 호출 못 하게 차단.
+// 5분 캐시 — ECOS는 일별 발표라 더 길게도 가능하지만 spot 경로 일관성 유지.
 const fxTTL = 5 * time.Minute
 
-// 지원 페어 화이트리스트. value는 metalpriceapi 통화 코드 (USD base).
-//
-//	usdkrw → KRW (1 USD = N KRW, API 직접)
-//	cnykrw → KRW/CNY 비율로 계산 (1 CNY = N KRW)
-var fxPairs = map[string][]string{
-	"usdkrw": {"KRW"},
-	"cnykrw": {"KRW", "CNY"},
+// ECOS 응답 row — TIME 은 YYYYMMDD, DATA_VALUE 는 환율 문자열.
+type ecosFXRow struct {
+	Time      string `json:"TIME"`
+	DataValue string `json:"DATA_VALUE"`
 }
 
-// fxFetchCurrencies — 화이트리스트 페어가 필요로 하는 통화 코드 합집합.
-// metalpriceapi에 한 번 호출로 모든 페어 분량을 받기 위해.
-func fxFetchCurrencies() string {
-	seen := map[string]bool{}
-	for _, codes := range fxPairs {
-		for _, c := range codes {
-			seen[c] = true
+type ecosFXResponse struct {
+	StatisticSearch *struct {
+		Row []ecosFXRow `json:"row"`
+	} `json:"StatisticSearch"`
+	Result *struct {
+		Code    string `json:"CODE"`
+		Message string `json:"MESSAGE"`
+	} `json:"RESULT"`
+}
+
+// fetchECOSRange — 페어를 ECOS에서 [startYMD, endYMD] 범위로 한 번에 조회.
+// 영업일만 응답에 포함 → 캘린더 N일이면 영업일은 약 N*5/7 행. 날짜는 YYYYMMDD.
+// 결과는 date ASC 정렬. 빈 응답(INFO-200)은 nil, nil 로 반환.
+func (h *PublicHandler) fetchECOSRange(pair, startYMD, endYMD string) ([]fxPoint, error) {
+	item, ok := fxPairs[pair]
+	if !ok {
+		return nil, fmt.Errorf("페어 미지원: %s", pair)
+	}
+	url := fmt.Sprintf("https://ecos.bok.or.kr/api/StatisticSearch/%s/json/kr/1/200/%s/D/%s/%s/%s",
+		ecosAPIKey, ecosFXStatCode, startYMD, endYMD, item)
+	body, err := h.httpGet(url)
+	if err != nil {
+		return nil, err
+	}
+	var parsed ecosFXResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("ECOS 응답 파싱: %w", err)
+	}
+	if parsed.StatisticSearch == nil {
+		// INFO-200 = 데이터 없음 (미래 날짜·키 직후 등). 호출 자체는 정상.
+		if parsed.Result != nil && parsed.Result.Code == "INFO-200" {
+			return nil, nil
 		}
-	}
-	out := make([]string, 0, len(seen))
-	for c := range seen {
-		out = append(out, c)
-	}
-	sort.Strings(out)
-	return strings_Join(out, ",")
-}
-
-// strings_Join — strings 패키지 미import용 인라인 join.
-func strings_Join(parts []string, sep string) string {
-	if len(parts) == 0 {
-		return ""
-	}
-	out := parts[0]
-	for _, p := range parts[1:] {
-		out += sep + p
-	}
-	return out
-}
-
-// computePair — 통화 코드 map (KRW=1773, CNY=7.27)에서 페어 환율 계산.
-// usdkrw = KRW 직접, cnykrw = KRW/CNY (1 CNY → N KRW).
-func computePair(pair string, rates map[string]float64) (float64, bool) {
-	switch pair {
-	case "usdkrw":
-		v, ok := rates["KRW"]
-		return v, ok && v > 0
-	case "cnykrw":
-		krw, hasK := rates["KRW"]
-		cny, hasC := rates["CNY"]
-		if hasK && hasC && cny > 0 {
-			return krw / cny, true
+		if parsed.Result != nil {
+			return nil, fmt.Errorf("ECOS error %s: %s", parsed.Result.Code, parsed.Result.Message)
 		}
-		return 0, false
+		return nil, fmt.Errorf("ECOS 응답 구조 비정상")
 	}
-	return 0, false
+	rows := parsed.StatisticSearch.Row
+	out := make([]fxPoint, 0, len(rows))
+	for _, r := range rows {
+		if len(r.Time) != 8 {
+			continue
+		}
+		rate, err := strconv.ParseFloat(r.DataValue, 64)
+		if err != nil || rate <= 0 {
+			continue
+		}
+		// 20260401 → 2026-04-01
+		iso := r.Time[:4] + "-" + r.Time[4:6] + "-" + r.Time[6:]
+		out = append(out, fxPoint{Date: iso, Rate: rate})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Date < out[j].Date })
+	return out, nil
 }
 
 // FXSpot — GET /api/v1/public/fx/{pair}
-// 단일 페어 spot rate + 전일 대비 변동률. pair는 fxPairs 화이트리스트.
-// 5분 캐시. API key가 비어있으면 503.
+// 단일 페어 최신 매매기준율 + 직전 영업일 대비 %.
 func (h *PublicHandler) FXSpot(w http.ResponseWriter, r *http.Request) {
 	pair := chi.URLParam(r, "pair")
 	if _, ok := fxPairs[pair]; !ok {
@@ -160,11 +185,6 @@ func (h *PublicHandler) FXSpot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.fxMu.Unlock()
-
-	if h.fxKey == "" {
-		response.RespondError(w, http.StatusServiceUnavailable, "METAL_PRICE_API_KEY 미설정")
-		return
-	}
 
 	if err := h.refreshFXAll(); err != nil {
 		log.Printf("[FX 조회 실패] %v", err)
@@ -191,86 +211,51 @@ func (h *PublicHandler) FXSpot(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, *cached)
 }
 
-// refreshFXAll — 모든 화이트리스트 페어를 한 번의 today + 한 번의 yesterday
-// metalpriceapi 호출로 채운다. 캐시 + fx_daily upsert.
+// refreshFXAll — 모든 페어를 ECOS 최근 10일 범위로 한 번씩 조회.
+// 캘린더 10일이면 연휴 끼어도 영업일 2개 이상 보장 → 전일대비 % 계산 가능.
+// fx_daily UPSERT 도 같이 수행하여 spot 호출이 backfill 보조 역할도 겸함.
 func (h *PublicHandler) refreshFXAll() error {
-	today, err := h.fetchFXMulti("")
-	if err != nil {
-		return fmt.Errorf("today: %w", err)
-	}
-	todayDate := time.Now().UTC().Format("2006-01-02")
-	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	now := time.Now()
+	start := now.AddDate(0, 0, -10).Format("20060102")
+	end := now.Format("20060102")
+	fetchedAt := now.UTC()
 
-	prev, prevErr := h.fetchFXMulti(yesterday)
-	if prevErr != nil {
-		log.Printf("[FX yesterday 조회 실패 %s] %v", yesterday, prevErr)
-	}
-
-	now := time.Now().UTC()
+	var firstErr error
 	for pair := range fxPairs {
-		todayRate, ok := computePair(pair, today)
-		if !ok {
+		points, err := h.fetchECOSRange(pair, start, end)
+		if err != nil {
+			log.Printf("[ECOS %s 조회 실패] %v", pair, err)
+			if firstErr == nil {
+				firstErr = err
+			}
 			continue
 		}
+		if len(points) == 0 {
+			continue
+		}
+		for _, p := range points {
+			_ = h.upsertFXDaily(pair, p.Date, p.Rate)
+		}
+		latest := points[len(points)-1]
 		var changePct *float64
-		if prevErr == nil {
-			if prevRate, prevOk := computePair(pair, prev); prevOk && prevRate > 0 {
-				pct := (todayRate - prevRate) / prevRate * 100
+		if len(points) >= 2 {
+			prev := points[len(points)-2].Rate
+			if prev > 0 {
+				pct := (latest.Rate - prev) / prev * 100
 				changePct = &pct
-				_ = h.upsertFXDaily(pair, yesterday, prevRate)
 			}
 		}
-		_ = h.upsertFXDaily(pair, todayDate, todayRate)
-
 		snap := fxSnapshot{
-			Rate:      todayRate,
+			Rate:      latest.Rate,
 			ChangePct: changePct,
-			Source:    h.fxSource,
-			FetchedAt: now,
+			Source:    ecosFXSource,
+			FetchedAt: fetchedAt,
 		}
 		h.fxMu.Lock()
 		h.fxCache[pair] = &snap
 		h.fxMu.Unlock()
 	}
-	return nil
-}
-
-// fetchFXMulti — metalpriceapi에서 USD base + 다중 통화 한 번에.
-// date == "" 이면 /v1/latest, 아니면 /v1/{date}.
-func (h *PublicHandler) fetchFXMulti(date string) (map[string]float64, error) {
-	currencies := fxFetchCurrencies()
-	endpoint := "latest"
-	if date != "" {
-		endpoint = date
-	}
-	url := fmt.Sprintf("https://api.metalpriceapi.com/v1/%s?api_key=%s&base=USD&currencies=%s",
-		endpoint, h.fxKey, currencies)
-	body, err := h.httpGet(url)
-	if err != nil {
-		return nil, err
-	}
-	var parsed metalpriceResponse
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return nil, fmt.Errorf("파싱 실패: %w", err)
-	}
-	if !parsed.Success {
-		msg := "unknown"
-		if parsed.Error != nil {
-			msg = parsed.Error.Info
-		}
-		return nil, fmt.Errorf("metalpriceapi error: %s", msg)
-	}
-	// metalpriceapi 통화: bare 코드(KRW=1487)가 quote per USD. 그대로 사용.
-	out := map[string]float64{}
-	for _, c := range []string{"KRW", "CNY"} {
-		if rate, ok := parsed.Rates[c]; ok && rate > 0 {
-			out[c] = rate
-		}
-	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("응답에 통화 시세 없음")
-	}
-	return out, nil
+	return firstErr
 }
 
 // upsertFXDaily — fx_daily(pair, date) UPSERT.
@@ -279,16 +264,14 @@ func (h *PublicHandler) upsertFXDaily(pair, date string, rate float64) error {
 		"pair":       pair,
 		"date":       date,
 		"rate":       rate,
-		"source":     h.fxSource,
+		"source":     ecosFXSource,
 		"fetched_at": time.Now().UTC().Format(time.RFC3339),
 	}
 	_, _, err := h.DB.From("fx_daily").Upsert(row, "pair,date", "", "").Execute()
 	return err
 }
 
-// backfillFXDaily — fx_daily가 비어있거나 부족하면 metalpriceapi historical을
-// 최근 N일까지 호출하여 모든 페어를 채운다. 부팅 시 1회 비동기 실행.
-// 1회 호출에 KRW+CNY 모두 받아 페어별 upsert (호출 비용은 N일 = N회).
+// backfillFXDaily — 부팅 시 1회 비동기 실행. 페어당 ECOS 범위 호출 1회로 N일치 채움.
 func (h *PublicHandler) backfillFXDaily(days int) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -296,79 +279,28 @@ func (h *PublicHandler) backfillFXDaily(days int) {
 		}
 	}()
 
-	existing, err := h.fetchFXDailyKeys(days + 5)
-	if err != nil {
-		log.Printf("[fx_daily backfill 기존 조회] %v", err)
-	}
-	have := make(map[string]bool, len(existing))
-	for _, k := range existing {
-		have[k] = true
-	}
+	now := time.Now()
+	start := now.AddDate(0, 0, -days).Format("20060102")
+	end := now.Format("20060102")
 
-	now := time.Now().UTC()
-	calls := 0
-	for i := 1; i <= days; i++ {
-		date := now.AddDate(0, 0, -i).Format("2006-01-02")
-
-		// 모든 페어가 이미 누적되어 있으면 그 날짜는 skip.
-		allHave := true
-		for pair := range fxPairs {
-			if !have[pair+"|"+date] {
-				allHave = false
-				break
-			}
-		}
-		if allHave {
-			continue
-		}
-
-		rates, err := h.fetchFXMulti(date)
+	upserted := 0
+	for pair := range fxPairs {
+		points, err := h.fetchECOSRange(pair, start, end)
 		if err != nil {
-			log.Printf("[fx_daily backfill %s 실패] %v", date, err)
+			log.Printf("[fx_daily backfill %s] %v", pair, err)
 			continue
 		}
-		for pair := range fxPairs {
-			if have[pair+"|"+date] {
+		for _, p := range points {
+			if err := h.upsertFXDaily(pair, p.Date, p.Rate); err != nil {
+				log.Printf("[fx_daily backfill %s/%s upsert] %v", pair, p.Date, err)
 				continue
 			}
-			rate, ok := computePair(pair, rates)
-			if !ok {
-				continue
-			}
-			if err := h.upsertFXDaily(pair, date, rate); err != nil {
-				log.Printf("[fx_daily backfill %s/%s upsert] %v", pair, date, err)
-			}
+			upserted++
 		}
-		calls++
-		// 외부 API rate-limit 회피용 짧은 간격.
-		time.Sleep(250 * time.Millisecond)
 	}
-	if calls > 0 {
-		log.Printf("[fx_daily backfill] %d일 채움 (페어 %d종)", calls, len(fxPairs))
+	if upserted > 0 {
+		log.Printf("[fx_daily backfill] %d행 (페어 %d, 캘린더 %d일)", upserted, len(fxPairs), days)
 	}
-}
-
-func (h *PublicHandler) fetchFXDailyKeys(limit int) ([]string, error) {
-	data, _, err := h.DB.From("fx_daily").
-		Select("pair,date", "exact", false).
-		Order("date", &postgrest.OrderOpts{Ascending: false}).
-		Limit(limit*len(fxPairs), "").
-		Execute()
-	if err != nil {
-		return nil, err
-	}
-	var rows []struct {
-		Pair string `json:"pair"`
-		Date string `json:"date"`
-	}
-	if err := json.Unmarshal(data, &rows); err != nil {
-		return nil, err
-	}
-	out := make([]string, len(rows))
-	for i, r := range rows {
-		out[i] = r.Pair + "|" + r.Date
-	}
-	return out, nil
 }
 
 // === FX timeseries ===
@@ -430,7 +362,7 @@ func (h *PublicHandler) FXTimeseries(w http.ResponseWriter, r *http.Request) {
 
 	resp := fxTimeseries{
 		Series:    series,
-		Source:    h.fxSource,
+		Source:    ecosFXSource,
 		FetchedAt: time.Now().UTC(),
 	}
 	if n := len(series); n > 0 {
