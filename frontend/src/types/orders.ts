@@ -25,6 +25,7 @@ export interface Order {
   quantity: number;
   capacity_kw?: number;
   unit_price_wp: number;
+  unit_price_ea?: number;
   site_id?: string;
   site_name?: string;
   site_address?: string;

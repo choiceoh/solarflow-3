@@ -52,6 +52,7 @@ type Order struct {
 	Quantity           int      `json:"quantity"`
 	CapacityKw         *float64 `json:"capacity_kw"`
 	UnitPriceWp        float64  `json:"unit_price_wp"`
+	UnitPriceEa        *float64 `json:"unit_price_ea,omitempty"`
 	SiteID             *string  `json:"site_id"`
 	SiteName           *string  `json:"site_name"`
 	SiteAddress        *string  `json:"site_address"`
@@ -82,6 +83,7 @@ type CreateOrderRequest struct {
 	Quantity           int      `json:"quantity"`
 	CapacityKw         *float64 `json:"capacity_kw"`
 	UnitPriceWp        float64  `json:"unit_price_wp"`
+	UnitPriceEa        *float64 `json:"unit_price_ea,omitempty"`
 	SiteID             *string  `json:"site_id,omitempty"`
 	SiteName           *string  `json:"site_name"`
 	SiteAddress        *string  `json:"site_address"`
@@ -125,6 +127,9 @@ func (req *CreateOrderRequest) Validate() string {
 	if req.UnitPriceWp <= 0 {
 		return "unit_price_wp는 양수여야 합니다"
 	}
+	if req.UnitPriceEa != nil && *req.UnitPriceEa <= 0 {
+		return "unit_price_ea는 양수여야 합니다"
+	}
 	if req.Status == "" {
 		return "status는 필수 항목입니다"
 	}
@@ -160,6 +165,7 @@ type UpdateOrderRequest struct {
 	Quantity           *int     `json:"quantity,omitempty"`
 	CapacityKw         *float64 `json:"capacity_kw,omitempty"`
 	UnitPriceWp        *float64 `json:"unit_price_wp,omitempty"`
+	UnitPriceEa        *float64 `json:"unit_price_ea,omitempty"`
 	SiteID             *string  `json:"site_id,omitempty"`
 	SiteName           *string  `json:"site_name,omitempty"`
 	SiteAddress        *string  `json:"site_address,omitempty"`
@@ -197,6 +203,9 @@ func (req *UpdateOrderRequest) Validate() string {
 	}
 	if req.UnitPriceWp != nil && *req.UnitPriceWp <= 0 {
 		return "unit_price_wp는 양수여야 합니다"
+	}
+	if req.UnitPriceEa != nil && *req.UnitPriceEa <= 0 {
+		return "unit_price_ea는 양수여야 합니다"
 	}
 	if req.Status != nil && !validOrderStatuses[*req.Status] {
 		return "status는 \"received\", \"partial\", \"completed\", \"cancelled\" 중 하나여야 합니다"
