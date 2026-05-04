@@ -26,6 +26,7 @@ const SettingsIndexRedirect = lazy(() =>
   import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
 );
 const AdminSettingsPage = lazy(() => import('@/pages/settings/AdminSettingsPage'));
+const AuditLogsPage = lazy(() => import('@/pages/settings/AuditLogsPage'));
 const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
 const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
 const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
@@ -134,6 +135,7 @@ export default function App() {
                 <Route path="/settings" element={<SettingsLayout />}>
                   <Route index element={<SettingsIndexRedirect />} />
                   <Route path="admin" element={<RoleGuard allowedRoles={['admin']}><AdminSettingsPage /></RoleGuard>} />
+                  <Route path="audit-logs" element={<RoleGuard allowedRoles={['admin']}><AuditLogsPage /></RoleGuard>} />
                   <Route path="site" element={<RoleGuard allowedRoles={['admin']}><SitePlaceholderPage /></RoleGuard>} />
                   <Route path="personal" element={<PersonalSettingsPage />} />
                 </Route>
