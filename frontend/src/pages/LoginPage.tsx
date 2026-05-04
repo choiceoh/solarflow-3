@@ -1,20 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { ExternalLink, Sun } from 'lucide-react';
+import { ArrowUpRight, Sun } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import LoginForm from '@/components/auth/LoginForm';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { isDevMockLoginAllowed } from '@/lib/devMockMode';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -83,7 +73,6 @@ export default function LoginPage() {
   const [silver, setSilver] = useState<MetalSnapshot | null>(null);
   const [poly, setPoly] = useState<CommoditySnapshot | null>(null);
   const [scfi, setScfi] = useState<CommoditySnapshot | null>(null);
-  const [selectedFamilySite, setSelectedFamilySite] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -146,14 +135,6 @@ export default function LoginPage() {
     { label: 'L/C 사용', value: (lcTotalUSD / 1_000_000).toFixed(2), unit: 'M$', detail: `${lcCount}건` },
     { label: 'USD/KRW', value: fmt.format(Math.round(fxRate * 10) / 10), unit: '', detail: fxChange != null ? fmtPct(fxChange) : '실시간' },
   ];
-  const selectedFamilySiteInfo = FAMILY_SITES.find((site) => site.value === selectedFamilySite);
-  const handleOpenFamilySite = () => {
-    if (!selectedFamilySiteInfo) {
-      return;
-    }
-    window.open(selectedFamilySiteInfo.href, '_blank', 'noopener,noreferrer');
-  };
-
   return (
     <div className="sf-login-shell">
       <section className="sf-login-left">
@@ -187,32 +168,29 @@ export default function LoginPage() {
 
         <div className="sf-login-footer">
           <div className="sf-family-site">
-            <Select value={selectedFamilySite} onValueChange={(value) => setSelectedFamilySite(value ?? '')}>
-              <SelectTrigger className="sf-family-site-trigger" aria-label="패밀리사이트 선택">
-                <SelectValue placeholder="패밀리사이트" />
-              </SelectTrigger>
-              <SelectContent side="top" align="start" alignItemWithTrigger={false}>
-                <SelectGroup>
-                  <SelectLabel>패밀리사이트</SelectLabel>
-                  {FAMILY_SITES.map((site) => (
-                    <SelectItem key={site.value} value={site.value}>
-                      {site.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="sf-family-site-button"
-              disabled={!selectedFamilySiteInfo}
-              onClick={handleOpenFamilySite}
-            >
-              <ExternalLink data-icon="inline-start" />
-              이동
-            </Button>
+            <div className="sf-eyebrow flex items-center gap-2 text-[var(--sf-ink-3)]">
+              <span className="h-px w-5 bg-[var(--sf-line-2)]" aria-hidden />
+              패밀리 사이트 · FAMILY SITES
+            </div>
+            <div className="sf-family-site-list">
+              {FAMILY_SITES.map((site) => (
+                <a
+                  key={site.value}
+                  href={site.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="sf-family-site-link"
+                >
+                  <span className="sf-family-site-link-body">
+                    <span className="sf-family-site-link-label">{site.label}</span>
+                    <span className="sf-mono sf-family-site-link-host">
+                      {new URL(site.href).host}
+                    </span>
+                  </span>
+                  <ArrowUpRight className="sf-family-site-link-icon" strokeWidth={2.2} aria-hidden />
+                </a>
+              ))}
+            </div>
           </div>
           <div className="sf-mono text-[10px] text-[var(--sf-ink-4)]">v3.0.0 · command center</div>
         </div>
