@@ -417,7 +417,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 	if err != nil {
 		return 0, 0, fmt.Errorf("companies fetch: %w", err)
 	}
-	products, err := h.fetchProductsByCode()
+	products, err := h.fetchProductsLookup()
 	if err != nil {
 		return 0, 0, fmt.Errorf("products fetch: %w", err)
 	}
@@ -501,17 +501,18 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			companyID = newID
 			companies[normalizeCorp(seller)] = newID
 		}
-		productID, ok := products[normalizeCode(productCode)]
+		pmeta, ok := products[normalizeCode(productCode)]
 		if !ok {
-			newID, regErr := h.autoRegisterProduct(productCode, mfgIndex)
+			newID, wattage, regErr := h.autoRegisterProductWithWattage(productCode, mfgIndex)
 			if regErr != nil {
 				log.Printf("[external sync] product 등록 실패 %s: %v", productCode, regErr)
 				bump("product_register_fail")
 				continue
 			}
-			productID = newID
-			products[normalizeCode(productCode)] = newID
+			pmeta = productMeta{ID: newID, WattageKW: wattage}
+			products[normalizeCode(productCode)] = pmeta
 		}
+		productID := pmeta.ID
 		// 창고는 탑솔라 양식에 정보 없음 — 기본 창고 매핑은 마스터에 한 개만 있을 때 자동
 		warehouseID := ""
 		if src.DefaultWarehouseID != nil && *src.DefaultWarehouseID != "" {
@@ -554,11 +555,17 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			"total_amount":     parseTopsolarNumber(safeCell(row, 13)),
 		}
 
+		var capacityKW *float64
+		if pmeta.WattageKW > 0 {
+			v := float64(qty) * pmeta.WattageKW
+			capacityKW = &v
+		}
 		req := model.CreateOutboundRequest{
 			OutboundDate:   dateISO,
 			CompanyID:      companyID,
 			ProductID:      productID,
 			Quantity:       qty,
+			CapacityKw:     capacityKW,
 			WarehouseID:    warehouseID,
 			UsageCategory:  "sale",
 			Status:         "active",
@@ -661,6 +668,44 @@ func (h *ExternalSyncHandler) autoRegisterProduct(rawCode string, mfgIndex map[s
 	}
 	log.Printf("[external sync] product 자동 등록: %s (mfg=%v, wattage=%dW)", rawCode, mfgID != "", wattageW)
 	return rows[0].ProductID, nil
+}
+
+
+// D-059 PR 12: 신규 product 등록 + 추론한 wattage 반환 (capacity_kw 자동 계산용)
+func (h *ExternalSyncHandler) autoRegisterProductWithWattage(rawCode string, mfgIndex map[string]string) (string, float64, error) {
+	mfgID, wattageW := inferProductMeta(rawCode, mfgIndex)
+	code := rawCode
+	if len(code) > 30 {
+		code = code[:30]
+	}
+	name := rawCode
+	if len(name) > 100 {
+		name = name[:100]
+	}
+	body := map[string]interface{}{
+		"product_code": code,
+		"product_name": name,
+		"is_active":    true,
+	}
+	wattageKW := 0.0
+	if mfgID != "" {
+		body["manufacturer_id"] = mfgID
+	}
+	if wattageW > 0 {
+		body["spec_wp"] = wattageW
+		wattageKW = float64(wattageW) / 1000.0
+		body["wattage_kw"] = wattageKW
+	}
+	data, _, err := h.DB.From("products").Insert(body, false, "", "", "").Execute()
+	if err != nil {
+		return "", 0, err
+	}
+	var rows []model.Product
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
+		return "", 0, fmt.Errorf("등록 결과 확인 실패")
+	}
+	log.Printf("[external sync] product 자동 등록: %s (mfg=%v, wattage=%dW)", rawCode, mfgID != "", wattageW)
+	return rows[0].ProductID, wattageKW, nil
 }
 
 func (h *ExternalSyncHandler) autoRegisterCompany(rawName string) (string, error) {
@@ -851,6 +896,60 @@ func (h *ExternalSyncHandler) fetchCompaniesByCode() (map[string]string, error) 
 			for _, a := range aliases {
 				if _, exists := out[a.AliasTextNormalized]; !exists {
 					out[a.AliasTextNormalized] = a.CanonicalCompanyID
+				}
+			}
+		}
+	}
+	delete(out, "")
+	return out, nil
+}
+
+
+// D-059 PR 12: product_code → (product_id, wattage_kw) 인덱스. capacity_kw 자동 계산용.
+type productMeta struct {
+	ID         string
+	WattageKW  float64
+}
+
+func (h *ExternalSyncHandler) fetchProductsLookup() (map[string]productMeta, error) {
+	data, _, err := h.DB.From("products").Select("product_id,product_code,wattage_kw", "exact", false).Execute()
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ProductID  string   `json:"product_id"`
+		ProductCode string  `json:"product_code"`
+		WattageKW  *float64 `json:"wattage_kw"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[string]productMeta, len(rows))
+	for _, p := range rows {
+		w := 0.0
+		if p.WattageKW != nil {
+			w = *p.WattageKW
+		}
+		out[normalizeCode(p.ProductCode)] = productMeta{ID: p.ProductID, WattageKW: w}
+	}
+	// alias 사전 머지
+	aliasData, _, err := h.DB.From("product_aliases").Select("canonical_product_id,alias_code_normalized", "exact", false).Execute()
+	if err == nil {
+		var aliases []model.ProductAlias
+		if json.Unmarshal(aliasData, &aliases) == nil {
+			// canonical_product_id → wattage_kw 룩업 보조 맵
+			wByID := make(map[string]float64, len(rows))
+			for _, p := range rows {
+				if p.WattageKW != nil {
+					wByID[p.ProductID] = *p.WattageKW
+				}
+			}
+			for _, a := range aliases {
+				if _, exists := out[a.AliasCodeNormalized]; !exists {
+					out[a.AliasCodeNormalized] = productMeta{
+						ID:        a.CanonicalProductID,
+						WattageKW: wByID[a.CanonicalProductID],
+					}
 				}
 			}
 		}
