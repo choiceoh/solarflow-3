@@ -296,22 +296,24 @@ export default function CommandShell() {
           </button>
         </div>
 
-        <div className="sf-company-switcher">
-          <div className="sf-eyebrow mb-1.5 text-[var(--sf-dark-ink-3)]">법인</div>
-          <Select value={selectedCompanyId || 'all'} onValueChange={setCompanyId}>
-            <SelectTrigger>
-              <span className="truncate text-left">{selectedCompany?.company_name ?? '전체'}</span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              {companies.map((company) => (
-                <SelectItem key={company.company_id} value={company.company_id}>
-                  {company.company_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {currentTenant !== 'baro' ? (
+          <div className="sf-company-switcher">
+            <div className="sf-eyebrow mb-1.5 text-[var(--sf-dark-ink-3)]">법인</div>
+            <Select value={selectedCompanyId || 'all'} onValueChange={setCompanyId}>
+              <SelectTrigger>
+                <span className="truncate text-left">{selectedCompany?.company_name ?? '전체'}</span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체</SelectItem>
+                {companies.map((company) => (
+                  <SelectItem key={company.company_id} value={company.company_id}>
+                    {company.company_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
 
         {tabsConfig && !sidebarCollapsed ? (
           <div className="sf-sidebar-tabs" role="tablist" aria-label="사이드바 탭">
