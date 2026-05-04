@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
-import { fetchBlobWithAuth } from '@/lib/api';
+import { fetchBlobWithAuth, fetchWithAuth } from '@/lib/api';
 import { useExcel } from '@/hooks/useExcel';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
@@ -41,6 +41,21 @@ interface ConvertedState {
   manufacturers: ManufacturerLite[];
 }
 
+
+// 등록된 sync source — format.id ↔ external_format_id 매칭 (D-059 PR 7)
+interface RegisteredSync {
+  sync_id: string;
+  name: string;
+  spreadsheet_id: string;
+  sheet_gid: number;
+  schedule: string;
+  enabled: boolean;
+  last_synced_at?: string | null;
+  last_sync_count?: number | null;
+  last_skipped_count?: number | null;
+  last_error?: string | null;
+}
+
 interface SheetSource {
   spreadsheet_id: string;
   sheet_gid: number;
@@ -64,6 +79,9 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
   // D-059: 구글 시트 URL 변환 진입점
   const [sheetUrl, setSheetUrl] = useState('');
   const [fetchingSheet, setFetchingSheet] = useState(false);
+  // D-059 PR 7: 카드의 format.id 와 매칭되는 등록된 시트 (1시간 cron + 즉시 trigger)
+  const [registeredSync, setRegisteredSync] = useState<RegisteredSync | null>(null);
+  const [runningSync, setRunningSync] = useState(false);
   // D-057: 출고 등록 완료 후 매출 자동 등록을 위해 변환 결과 보관
   const [pendingSaleSource, setPendingSaleSource] = useState<ConvertedState | null>(null);
   const [saleDialogOpen, setSaleDialogOpen] = useState(false);
@@ -156,6 +174,47 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
     }
   }, [sheetUrl, handleFile]);
 
+
+  // 등록된 sync source 중 이 카드의 format.id 와 매칭되는 것 찾기
+  useEffect(() => {
+    let cancelled = false;
+    fetchWithAuth<RegisteredSync[]>('/api/v1/external-sync-sources')
+      .then((all) => {
+        if (cancelled) return;
+        const list = (all as unknown as Array<RegisteredSync & { external_format_id: string }>) ?? [];
+        const match = list.find((s) => s.external_format_id === format.id);
+        setRegisteredSync(match ?? null);
+      })
+      .catch(() => {/* 401·네트워크 무시 — 카드 자체는 동작해야 함 */});
+    return () => { cancelled = true; };
+  }, [format.id]);
+
+  // 등록된 시트 즉시 동기화 trigger (URL 입력 없이 카드의 버튼만으로)
+  const triggerRegisteredSync = useCallback(async () => {
+    if (!registeredSync) return;
+    setRunningSync(true);
+    try {
+      await fetchWithAuth(`/api/v1/external-sync-sources/${registeredSync.sync_id}/run`, {
+        method: 'POST',
+      });
+      notify.success(`${registeredSync.name} 동기화 시작 — 백그라운드 실행 중. 잠시 후 마지막 동기화 시각이 갱신됩니다`);
+      // 5초 후 last_synced_at 갱신 polling 1회
+      setTimeout(() => {
+        fetchWithAuth<RegisteredSync[]>('/api/v1/external-sync-sources')
+          .then((all) => {
+            const list = (all as unknown as Array<RegisteredSync & { external_format_id: string }>) ?? [];
+            const next = list.find((s) => s.external_format_id === format.id);
+            if (next) setRegisteredSync(next);
+          })
+          .catch(() => {});
+      }, 5000);
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : '동기화 trigger 실패');
+    } finally {
+      setRunningSync(false);
+    }
+  }, [registeredSync, format.id]);
+
   const proceedToValidation = useCallback(() => {
     if (!converted) return;
     excel.injectRows(converted.result.rows, converted.fileName);
@@ -221,6 +280,40 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
           }}
         />
       </div>
+
+
+      {/* D-059 PR 7: 등록된 시트가 있으면 즉시 동기화 버튼 노출 */}
+      {registeredSync && (
+        <div className="flex items-center gap-2 border-t border-[var(--line)] px-3 py-2 bg-[var(--bg-2)]">
+          <Globe className="h-3.5 w-3.5 text-[var(--ink-3)] shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[12px] font-medium text-[var(--ink)]">
+              {registeredSync.name}
+              <span className="ml-1.5 text-[10px] text-[var(--ink-3)] font-normal">
+                ({registeredSync.schedule === 'hourly' ? '자동 1시간' : '수동만'})
+              </span>
+            </div>
+            <div className="text-[10px] text-[var(--ink-3)]">
+              {registeredSync.last_synced_at
+                ? `마지막 동기화: ${new Date(registeredSync.last_synced_at).toLocaleString('ko-KR')}`
+                : '아직 동기화 기록 없음'}
+              {registeredSync.last_sync_count !== null && registeredSync.last_sync_count !== undefined && (
+                <span> · 최근 imported {registeredSync.last_sync_count} / skipped {registeredSync.last_skipped_count ?? 0}</span>
+              )}
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 gap-1 text-[11px]"
+            disabled={runningSync || !registeredSync.enabled}
+            onClick={triggerRegisteredSync}
+          >
+            {runningSync ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
+            {runningSync ? '동기화 중...' : '지금 동기화'}
+          </Button>
+        </div>
+      )}
 
       {/* D-059: 구글 시트 URL 입력 — 백엔드 proxy 로 다운로드 후 같은 변환 흐름 */}
       <div className="flex items-center gap-2 border-t border-[var(--line)] px-3 py-2 bg-[var(--bg-2)]">
