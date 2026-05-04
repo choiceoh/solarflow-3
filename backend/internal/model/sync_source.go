@@ -15,6 +15,7 @@ type ExternalSyncSource struct {
 	LastSyncCount     *int    `json:"last_sync_count"`
 	LastSkippedCount  *int    `json:"last_skipped_count"`
 	LastError         *string `json:"last_error"`
+	DefaultWarehouseID *string `json:"default_warehouse_id"`
 	CreatedAt         string  `json:"created_at"`
 	CreatedBy         *string `json:"created_by,omitempty"`
 }
@@ -55,9 +56,10 @@ func (r *CreateExternalSyncSourceRequest) Validate() string {
 }
 
 type UpdateExternalSyncSourceRequest struct {
-	Name             *string `json:"name,omitempty"`
-	Schedule         *string `json:"schedule,omitempty"`
-	Enabled          *bool   `json:"enabled,omitempty"`
+	Name               *string `json:"name,omitempty"`
+	Schedule           *string `json:"schedule,omitempty"`
+	Enabled            *bool   `json:"enabled,omitempty"`
+	DefaultWarehouseID *string `json:"default_warehouse_id,omitempty"`
 }
 
 func (r *UpdateExternalSyncSourceRequest) Validate() string {

@@ -367,7 +367,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			skipped++
 			continue
 		}
-		companyID, ok := companies[normalizeCode(seller)]
+		companyID, ok := companies[normalizeCorp(seller)]
 		if !ok {
 			skipped++
 			continue
@@ -379,7 +379,12 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			continue
 		}
 		// 창고는 탑솔라 양식에 정보 없음 — 기본 창고 매핑은 마스터에 한 개만 있을 때 자동
-		warehouseID := pickDefaultWarehouse(warehouses)
+		warehouseID := ""
+		if src.DefaultWarehouseID != nil && *src.DefaultWarehouseID != "" {
+			warehouseID = *src.DefaultWarehouseID
+		} else {
+			warehouseID = pickDefaultWarehouse(warehouses)
+		}
 		if warehouseID == "" {
 			skipped++
 			continue
@@ -483,20 +488,37 @@ func normalizeTopsolarSeller(gubun, section string) string {
 	return ""
 }
 
-// normalizeCode — 영숫자만 + 대문자 (회사 코드, 품번 코드 비교용).
+// normalizeCode — 비교용 정규화: 영숫자(대문자) + 한글 음절/자모 + CJK 한자 보존,
+// 공백·하이픈·괄호·점·쉼표·㈜ 같은 표기 변형은 모두 제거.
+// (D-059 PR 10: 한글 회사명/품번 매칭이 빈 문자열이 되어 모두 SKIP되던 문제 해결.)
 func normalizeCode(s string) string {
 	var b strings.Builder
 	for _, r := range s {
-		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			if r >= 'a' && r <= 'z' {
-				r -= 32
-			}
+		switch {
+		case r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r - 32)
+		case r >= 0xAC00 && r <= 0xD7AF: // 한글 음절
+			b.WriteRune(r)
+		case r >= 0x3131 && r <= 0x318F: // 한글 자모
+			b.WriteRune(r)
+		case r >= 0x4E00 && r <= 0x9FFF: // CJK 한자
 			b.WriteRune(r)
 		}
-		// 한글·기호는 그대로 매칭 안 됨 → 한글 코드는 별도 매핑 필요. 여기서는 영문 코드만 자동.
 	}
 	return b.String()
 }
+
+// normalizeCorp — 회사·거래처명 정규화: normalizeCode 와 같지만 ㈜·(주)·(株)·(유) 등
+// 법인 약칭을 미리 제거해서 alias 사전(공통 정규화 키 사용)과 호환.
+func normalizeCorp(s string) string {
+	for _, t := range []string{"(주)", "㈜", "주식회사", "(株)", "(유)", "(합)"} {
+		s = strings.ReplaceAll(s, t, "")
+	}
+	return normalizeCode(s)
+}
+
 
 // 자동 모드 단순화: ISO 날짜 (YYYY-MM-DD) 또는 한국 표기 ("2026. 1. 3" / "2026-01-03") 만 인식.
 // 자유 형식 ("1/12 오후착") 은 SKIP (수동 모드에서 보정).
@@ -561,9 +583,22 @@ func (h *ExternalSyncHandler) fetchCompaniesByCode() (map[string]string, error) 
 	}
 	out := make(map[string]string, len(rows)*2)
 	for _, c := range rows {
-		out[normalizeCode(c.CompanyCode)] = c.CompanyID
-		out[normalizeCode(c.CompanyName)] = c.CompanyID
+		out[normalizeCorp(c.CompanyCode)] = c.CompanyID
+		out[normalizeCorp(c.CompanyName)] = c.CompanyID
 	}
+	// alias 사전 머지 (D-059 PR 10) — 수동 모드에서 학습된 매핑을 자동 모드도 활용
+	aliasData, _, err := h.DB.From("company_aliases").Select("canonical_company_id,alias_text_normalized", "exact", false).Execute()
+	if err == nil {
+		var aliases []model.CompanyAlias
+		if json.Unmarshal(aliasData, &aliases) == nil {
+			for _, a := range aliases {
+				if _, exists := out[a.AliasTextNormalized]; !exists {
+					out[a.AliasTextNormalized] = a.CanonicalCompanyID
+				}
+			}
+		}
+	}
+	delete(out, "")
 	return out, nil
 }
 
@@ -580,6 +615,19 @@ func (h *ExternalSyncHandler) fetchProductsByCode() (map[string]string, error) {
 	for _, p := range rows {
 		out[normalizeCode(p.ProductCode)] = p.ProductID
 	}
+	// alias 사전 머지 (D-059 PR 10)
+	aliasData, _, err := h.DB.From("product_aliases").Select("canonical_product_id,alias_code_normalized", "exact", false).Execute()
+	if err == nil {
+		var aliases []model.ProductAlias
+		if json.Unmarshal(aliasData, &aliases) == nil {
+			for _, a := range aliases {
+				if _, exists := out[a.AliasCodeNormalized]; !exists {
+					out[a.AliasCodeNormalized] = a.CanonicalProductID
+				}
+			}
+		}
+	}
+	delete(out, "")
 	return out, nil
 }
 
