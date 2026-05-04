@@ -53,6 +53,11 @@ func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("status", status)
 	}
 
+	// 비유: ?contract_type=spot — 계약 유형(spot/annual_frame/half_year_frame) 필터
+	if ct := r.URL.Query().Get("contract_type"); ct != "" {
+		query = query.Eq("contract_type", ct)
+	}
+
 	data, _, err := query.Execute()
 	if err != nil {
 		log.Printf("[발주 목록 조회 실패] %v", err)
