@@ -23,7 +23,10 @@ interface LoginStats {
   reservations_pending: number | null;
   lc_active_count: number | null;
   lc_active_total_usd: number | null;
+  inbound_ships_today: number;
   work_queue: { time: string; tag: string; title: string; meta: string }[];
+  health: { db_ms: number; engine_ms: number } | null;
+  generated_at: string;
 }
 
 interface FXSnapshot {
@@ -54,11 +57,14 @@ const FALLBACK_KPI = {
   reservations_pending: 28,
   lc_active_count: 11,
   lc_active_total_usd: 8_420_000,
+  inbound_ships_today: 4,
 };
 const FALLBACK_FX = { rate: 1773.4, change_pct: 0.06 };
 const FALLBACK_SILVER = { price_usd: 28.84, change_usd: -1.42 };
 const FALLBACK_POLYSILICON = { value: 34.20, change: 0.40 };
 const FALLBACK_SCFI = { value: 1284, change: -2.10 };
+const FALLBACK_HEALTH = { db_ms: 12.1, engine_ms: 3.2 };
+const FALLBACK_API_MS = 8.4;
 const FALLBACK_QUEUE: LoginStats['work_queue'] = [
   { time: '09:00', tag: '입항', title: 'COSCO SHANGHAI 042E', meta: '8,800장 · 5,456 kW · 인천 1창고' },
   { time: '11:30', tag: 'L/C 만기', title: 'LC-26-0405', meta: 'USD 1.84M · 하나은행 · 결재 대기' },
@@ -73,12 +79,27 @@ const FAMILY_SITES = [
 const fmt = new Intl.NumberFormat('en-US');
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 const todayKST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+const fmtKstHHmm = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '--:--';
+  return d.toLocaleTimeString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+};
+const fmtMs = (ms: number) => (ms >= 100 ? ms.toFixed(0) : ms.toFixed(1));
+
+declare const __LAST_MERGED_PR__: string;
+const versionLabel = __LAST_MERGED_PR__ ? `PR #${__LAST_MERGED_PR__}` : 'v3.0.0';
 
 export default function LoginPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const canUseDevMock = isDevMockLoginAllowed();
 
   const [stats, setStats] = useState<LoginStats | null>(null);
+  const [apiMs, setApiMs] = useState<number | null>(null);
   const [fx, setFx] = useState<FXSnapshot | null>(null);
   const [silver, setSilver] = useState<MetalSnapshot | null>(null);
   const [poly, setPoly] = useState<CommoditySnapshot | null>(null);
@@ -87,9 +108,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const t0 = performance.now();
     fetch(`${API_BASE_URL}/api/v1/public/login-stats`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((d: LoginStats) => { if (!cancelled) setStats(d); })
+      .then((d: LoginStats) => {
+        if (cancelled) return;
+        setStats(d);
+        setApiMs(performance.now() - t0);
+      })
       .catch((e) => console.warn('[LoginPage] stats fetch failed:', e));
     fetch(`${API_BASE_URL}/api/v1/public/fx/usdkrw`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
@@ -130,6 +156,7 @@ export default function LoginPage() {
   const reservations = stats?.reservations_pending ?? FALLBACK_KPI.reservations_pending;
   const lcCount = stats?.lc_active_count ?? FALLBACK_KPI.lc_active_count;
   const lcTotalUSD = stats?.lc_active_total_usd ?? FALLBACK_KPI.lc_active_total_usd;
+  const inboundShipsToday = stats?.inbound_ships_today ?? FALLBACK_KPI.inbound_ships_today;
   const fxRate = fx?.rate ?? FALLBACK_FX.rate;
   const fxChange = fx?.change_pct ?? FALLBACK_FX.change_pct;
   const silverPrice = silver?.price_usd ?? FALLBACK_SILVER.price_usd;
@@ -139,6 +166,10 @@ export default function LoginPage() {
   const scfiValue = scfi?.value ?? FALLBACK_SCFI.value;
   const scfiChange = scfi?.change ?? FALLBACK_SCFI.change;
   const queue = stats?.work_queue?.length ? stats.work_queue : FALLBACK_QUEUE;
+  const apiLatencyMs = apiMs ?? FALLBACK_API_MS;
+  const dbLatencyMs = stats?.health?.db_ms ?? FALLBACK_HEALTH.db_ms;
+  const engineLatencyMs = stats?.health?.engine_ms ?? FALLBACK_HEALTH.engine_ms;
+  const lastSyncLabel = stats?.generated_at ? fmtKstHHmm(stats.generated_at) : '--:--';
 
   const kpi = [
     { label: '가용재고', value: inventoryMW.toFixed(2), unit: 'MW', detail: '오늘 기준' },
@@ -174,14 +205,16 @@ export default function LoginPage() {
           <h1 className="mt-2 text-[32px] font-extrabold leading-none text-[var(--sf-ink)]">다시 만나요.</h1>
           <p className="mt-2 mb-6 text-[13px] leading-6 text-[var(--sf-ink-3)]">
             오늘 <strong className="font-bold text-[var(--sf-ink)]">예약 {reservations}건</strong>과{' '}
-            <strong className="font-bold text-[var(--sf-ink)]">입항 {queue.filter((q) => q.tag === '입항').length || 4}척</strong>이
+            <strong className="font-bold text-[var(--sf-ink)]">입항 {inboundShipsToday}척</strong>이
             처리를 기다리고 있어요.
           </p>
           <LoginForm />
           <div className="mt-5 flex items-center gap-2 rounded bg-[var(--sf-bg-2)] px-3 py-2">
             <span className="h-1.5 w-1.5 rounded-full bg-[var(--sf-pos)] shadow-[0_0_0_3px_rgb(44_122_62_/_0.15)]" />
-            <div className="sf-mono flex-1 text-[10.5px] text-[var(--sf-ink-2)]">API 8.4ms · DB 12.1ms · 엔진 3.2ms</div>
-            <span className="sf-mono text-[10px] text-[var(--sf-ink-4)]">Last sync 14:42</span>
+            <div className="sf-mono flex-1 text-[10.5px] text-[var(--sf-ink-2)]">
+              API {fmtMs(apiLatencyMs)}ms · DB {fmtMs(dbLatencyMs)}ms · 엔진 {fmtMs(engineLatencyMs)}ms
+            </div>
+            <span className="sf-mono text-[10px] text-[var(--sf-ink-4)]">Last sync {lastSyncLabel}</span>
           </div>
         </div>
 
@@ -214,7 +247,7 @@ export default function LoginPage() {
               이동
             </Button>
           </div>
-          <div className="sf-mono text-[10px] text-[var(--sf-ink-4)]">v3.0.0 · command center</div>
+          <div className="sf-mono text-[10px] text-[var(--sf-ink-4)]">{versionLabel} · command center</div>
         </div>
       </section>
 

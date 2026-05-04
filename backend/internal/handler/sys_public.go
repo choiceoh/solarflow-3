@@ -483,7 +483,9 @@ type loginStats struct {
 	ReservationsPending  *int        `json:"reservations_pending"`
 	LCActiveCount        *int        `json:"lc_active_count"`
 	LCActiveTotalUSD     *float64    `json:"lc_active_total_usd"`
+	InboundShipsToday    int         `json:"inbound_ships_today"`
 	WorkQueue            []workItem  `json:"work_queue"`
+	Health               *healthInfo `json:"health,omitempty"`
 	GeneratedAt          time.Time   `json:"generated_at"`
 }
 
@@ -494,56 +496,100 @@ type workItem struct {
 	Meta  string `json:"meta"`
 }
 
+// healthInfo — 로그인 stats를 만들 때 측정한 백엔드 내부 지연.
+// 비유: "오늘 안내판을 만든 직원의 작업 일지" — DB 조회/엔진 호출에 각각
+// 몇 ms 걸렸는지. 프론트는 이 값을 받아 라이브 상태바에 표시한다.
+type healthInfo struct {
+	DBms     float64 `json:"db_ms"`
+	EngineMs float64 `json:"engine_ms"`
+}
+
+// msSince — time.Since를 ms(소수 1자리) float로 환산.
+func msSince(start time.Time) float64 {
+	return float64(time.Since(start).Microseconds()) / 1000.0
+}
+
 // LoginStats — GET /api/v1/public/login-stats
 // 비유: "건물 로비의 오늘자 요약 안내판" — 로그인 전 화면 KPI 4종.
 // 각 필드는 best-effort: 한 쿼리가 실패해도 다른 필드는 정상 반환.
 func (h *PublicHandler) LoginStats(w http.ResponseWriter, r *http.Request) {
 	stats := loginStats{
-		WorkQueue:   []workItem{},
-		GeneratedAt: time.Now().UTC(),
+		WorkQueue: []workItem{},
 	}
 
-	if mw, err := h.fetchInventoryAvailableMW(); err == nil {
-		stats.InventoryAvailableMW = &mw
-	} else {
-		log.Printf("[login-stats inventory] %v", err)
+	var dbMs, engineMs float64
+
+	// 인벤토리: 회사 ID 조회(DB) + 엔진 호출(Rust). 분리해서 각각 측정.
+	t := time.Now()
+	companyIDs, idsErr := h.fetchActiveCompanyIDs()
+	dbMs += msSince(t)
+	if idsErr != nil {
+		log.Printf("[login-stats companies] %v", idsErr)
+	} else if len(companyIDs) > 0 && h.Engine != nil {
+		t = time.Now()
+		mw, err := h.fetchInventoryFromEngine(companyIDs)
+		engineMs += msSince(t)
+		if err == nil {
+			stats.InventoryAvailableMW = &mw
+		} else {
+			log.Printf("[login-stats inventory] %v", err)
+		}
 	}
 
+	t = time.Now()
 	if n, err := h.fetchReservationsPending(); err == nil {
 		stats.ReservationsPending = &n
 	} else {
 		log.Printf("[login-stats reservations] %v", err)
 	}
+	dbMs += msSince(t)
 
+	t = time.Now()
 	if cnt, total, err := h.fetchActiveLCs(); err == nil {
 		stats.LCActiveCount = &cnt
 		stats.LCActiveTotalUSD = &total
 	} else {
 		log.Printf("[login-stats lcs] %v", err)
 	}
+	dbMs += msSince(t)
 
+	t = time.Now()
+	if n, err := h.fetchInboundShipsToday(); err == nil {
+		stats.InboundShipsToday = n
+	} else {
+		log.Printf("[login-stats inbound] %v", err)
+	}
+	dbMs += msSince(t)
+
+	t = time.Now()
 	stats.WorkQueue = h.buildWorkQueue()
+	dbMs += msSince(t)
+
+	stats.Health = &healthInfo{
+		DBms:     roundMs(dbMs),
+		EngineMs: roundMs(engineMs),
+	}
+	stats.GeneratedAt = time.Now().UTC()
 
 	response.RespondJSON(w, http.StatusOK, stats)
 }
 
-// fetchInventoryAvailableMW — Rust 엔진을 호출하여 전 법인 가용재고(MW) 합산.
-// 엔진 클라이언트가 없거나 실패하면 에러 — 호출자가 nil로 처리.
-func (h *PublicHandler) fetchInventoryAvailableMW() (float64, error) {
+// roundMs — 0.1ms 단위로 반올림. 라이브 라인 표시용.
+func roundMs(v float64) float64 {
+	return float64(int64(v*10+0.5)) / 10.0
+}
+
+// fetchInventoryFromEngine — 활성 법인 ID 목록을 받아 Rust 엔진에서 가용재고(MW) 합산.
+// 비유: "법인 명부를 들고 계산실에 가서 전체 재고를 합산해 받아오는 것".
+// LoginStats는 DB(법인 조회)와 엔진(합산) 시간을 따로 측정해야 해서 둘로 나뉘어 있다.
+func (h *PublicHandler) fetchInventoryFromEngine(companyIDs []string) (float64, error) {
 	if h.Engine == nil {
 		return 0, fmt.Errorf("engine 미연결")
-	}
-
-	// 활성 법인 ID 목록 (status=active만 — 휴면 법인 제외)
-	companyIDs, err := h.fetchActiveCompanyIDs()
-	if err != nil {
-		return 0, err
 	}
 	if len(companyIDs) == 0 {
 		return 0, nil
 	}
 
-	// 엔진은 company_ids 배열 지원 — CallCalc raw 사용
 	body, err := h.Engine.CallCalc("inventory", map[string]any{"company_ids": companyIDs})
 	if err != nil {
 		return 0, err
@@ -558,6 +604,27 @@ func (h *PublicHandler) fetchInventoryAvailableMW() (float64, error) {
 		return 0, fmt.Errorf("inventory 응답 파싱: %w", err)
 	}
 	return resp.Summary.TotalAvailableKW / 1000.0, nil
+}
+
+// fetchInboundShipsToday — 오늘(KST) eta_date인 BL 척수.
+// 비유: "오늘자 입항 예정 선박 명부의 줄 수" — 로그인 화면 카피
+// "입항 N척" 표기에 사용. 작업 큐는 7일치라 카운트 용도로 못 씀.
+func (h *PublicHandler) fetchInboundShipsToday() (int, error) {
+	today := time.Now().Format("2006-01-02")
+	data, count, err := h.DB.From("bls").
+		Select("id", "exact", true).
+		Eq("eta_date", today).
+		In("status", []string{"in_transit", "arrived", "shipping"}).
+		Execute()
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return int(count), nil
+	}
+	var rows []map[string]any
+	_ = json.Unmarshal(data, &rows)
+	return len(rows), nil
 }
 
 func (h *PublicHandler) fetchActiveCompanyIDs() ([]string, error) {
