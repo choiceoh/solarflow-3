@@ -277,13 +277,25 @@ func (h *POHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// F8: draft → contracted 전환 시 단가이력 자동 등록
-	if req.Status != nil && *req.Status == "contracted" && prevStatus != "contracted" {
+	// F8: draft → contracted 전환 시 단가이력 자동 등록.
+	// PUT/PATCH 모두 본 핸들러로 들어오므로 메타 인라인 편집 (PATCH /pos/:id { status: 'contracted' })
+	// 도 동일하게 트리거된다.
+	if shouldAutoInsertPriceHistory(req.Status, prevStatus) {
 		h.autoInsertPriceHistory(id, updated[0])
 	}
 
 	auditEntityByRouteID(h.DB, r, "purchase_orders", "po_id", "update", oldSnapshot, auditRawFromValue(updated[0]), "")
 	response.RespondJSON(w, http.StatusOK, updated[0])
+}
+
+// shouldAutoInsertPriceHistory — 단가이력 자동 등록 게이트.
+// 비유: contracted로 새로 전환됐을 때만 기록. 이미 contracted였거나 다른 상태로 가는 경우는 skip.
+// pure 함수 — DB 의존 없이 단위테스트로 회귀 방지 (PUT/PATCH 양쪽 동일하게 동작 보장).
+func shouldAutoInsertPriceHistory(reqStatus *string, prevStatus string) bool {
+	if reqStatus == nil {
+		return false
+	}
+	return *reqStatus == "contracted" && prevStatus != "contracted"
 }
 
 // F8: PO status가 contracted로 전환될 때 각 발주품목의 단가이력 자동 등록

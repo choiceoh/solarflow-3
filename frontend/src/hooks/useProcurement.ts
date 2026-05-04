@@ -2,7 +2,7 @@ import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { companyParams } from '@/lib/companyUtils';
 import { useListQuery } from '@/lib/queryHelpers';
-import type { PurchaseOrder, POLineItem, LCRecord, TTRemittance, PriceHistory } from '@/types/procurement';
+import type { PurchaseOrder, POLineItem, LCRecord, LCLineItem, TTRemittance, PriceHistory } from '@/types/procurement';
 
 export function usePOList(filters: { status?: string; manufacturer_id?: string; contract_type?: string } = {}) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
@@ -25,6 +25,14 @@ export function usePOLines(poId: string | null) {
     ['po-lines', poId],
     () => fetchWithAuth<POLineItem[]>(`/api/v1/pos/${poId}/lines`),
     { enabled: !!poId },
+  );
+}
+
+export function useLCLines(lcId: string | null) {
+  return useListQuery<LCLineItem>(
+    ['lc-lines', lcId],
+    () => fetchWithAuth<LCLineItem[]>(`/api/v1/lcs/${lcId}/lines`),
+    { enabled: !!lcId },
   );
 }
 
