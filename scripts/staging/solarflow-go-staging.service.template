@@ -1,0 +1,16 @@
+[Unit]
+Description=SolarFlow Go Backend (staging — D-122 traffic replay diff)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/choiceoh/공개/solarflow-3/backend
+ExecStart=/home/choiceoh/공개/solarflow-3/backend/solarflow-go
+EnvironmentFile=/home/choiceoh/공개/solarflow-3/scripts/staging/staging.env
+Restart=on-failure
+RestartSec=5
+# staging 만 SIGTERM 후 graceful shutdown 5초 대기
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

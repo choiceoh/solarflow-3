@@ -20,3 +20,7 @@ rpa/amaranth-uploader/runtime/
 # graphify 산출물 (로컬 분석 결과, 커밋하지 않음)
 graphify-out/
 .webhook.env
+
+# D-122 staging 환경변수는 secret 포함 — example 만 커밋
+scripts/staging/staging.env
+scripts/staging/staging.env.bak.*

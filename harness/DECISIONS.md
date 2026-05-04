@@ -797,3 +797,34 @@
 - **남는 메타화 작업물 중 보존되는 것**: 발주(PO)·신용장(LC) 입력 다이얼로그(`POCreateDialog`/`LCCreateDialog`/`LCLineEditDialog`), Excel 통합양식 PO/LC 시트, backend bulk import 핸들러(`/import/{purchase-orders,lcs}`), 파서 단위테스트, `shouldAutoInsertPriceHistory` 게이트 + `tx_po_test.go`. 이들은 D-115 정신(Excel Hub 단일화)과 도메인 게이트 회귀 방지에 정합적이라 유지.
 - **D-120 과의 관계**: D-120 의 "메타 편집기에 기능 배선 / 데이터 스코프 탭 추가는 별도 작업으로 분리" 후속 작업은 본 결정으로 자동 폐기된다. tenant feature 카탈로그/매트릭스 자체(D-120 본문)는 backend·markdown 으로 표현되며 GUI 편집기에 의존하지 않으므로 영향 없음.
 - **날짜**: 2026-05-04
+
+## D-122: 데이터 배선 enforcement 는 staging 독립 스택 + traffic replay diff 로 단계 적용
+- **결정**: D-120 의 두 축 중 데이터 배선(row_filter / column_mask) 의 실제 enforcement 는 운영(prod) 에 직접 적용하지 않고, **별도 staging 스택을 띄워 운영 트래픽을 리플레이하면서 응답 차이를 자동 비교**하는 게이트를 통과한 feature 만 prod 로 옮긴다.
+  - **운영 영향 0** — staging 은 prod 와 분리된 systemd 서비스(다른 포트), 분리된 DB(매일 `pg_dump` snapshot), 분리된 cloudflared 호스트(`staging.topworks.ltd`).
+  - **리플레이 단위**: `journalctl --user -u solarflow-go` 의 구조화 로그 한 행 = 한 요청. D-122 보강으로 (method, path, query, tenant, user, body_sha) 가 모두 기록되므로 **GET 요청은 정확 재구성 가능**. mutation(POST/PUT/DELETE) 은 멱등 아니라 리플레이 대상에서 제외(snapshot DB 가 어차피 어제까지 데이터).
+  - **diff 분류기 — 성공 기준**:
+    - 데이터 배선이 영향 없어야 하는 요청 (예: topsolar 가 module 데이터 조회) → **body_sha byte-identical**
+    - 영향 있어야 하는 요청 (예: BARO 가 BL 라인 조회 → unit_price 마스크) → **카탈로그의 column_mask 와 정확히 일치하는 expected diff**
+    - 둘 다 아닌 경우 → **unexpected diff** = 즉시 알람, prod 적용 차단
+  - **단계 게이트**:
+    - **Phase 0** — staging 띄우고 enforcement OFF. 모든 응답이 prod 와 byte-identical 이어야 함(하네스 정확성 검증).
+    - **Phase 1** — 1개 feature 만 staging 에 enforcement ON (D-116 BARO incoming 부터, 이미 sanitized 형태). 운영 트래픽 1주치 리플레이 → unexpected diff 0건이면 prod ON.
+    - **Phase 2** — feature 별로 1주에 1~2개씩 ON. 추가마다 영향받는 frontend 타입/계산 함수 사전 점검.
+    - **Phase 3** — 전수 ON 후 fail-closed 스위치(카탈로그 미정의 = 0 tenants) 활성. 별도 D-NNN 으로 결정.
+  - **로그 보강(필수 선행)** — outer RequestLog 가 inner auth 의 context 를 못 보던 한계를 mutable `Observability` 홀더(pointer in context) 로 해결. auth 가 `SetUserContext` 호출 시 같이 채우고, RequestLog 가 핸들러 종료 후 읽어 한 행에 모두 출력. SHA256 응답 해시는 `statusCapturer.Write` 에서 청크 단위 누적.
+  - **column_mask 정책 — null 채우기**: 마스크된 컬럼은 응답에서 *제거* 하지 않고 **null 로 둔다**. JSON shape 보존 → frontend 빌드 깨짐 방지. frontend 타입 nullable 화는 별도 사전 PR.
+  - **mask 가능 컬럼 화이트리스트** — 카탈로그에 명시 안 한 컬럼은 마스크 적용 불가(외래키 실수 mask 방지). startup 시 검증.
+  - **데이터 드리프트 처리** — staging DB 는 매일 새벽 cron 으로 prod `pg_dump` reload. 마이그레이션도 같이 적용. logical replication 은 운영 부담 ↑ 라 단순 일일 reload 가 기본.
+  - **비-데이터-배선 활용** — staging 은 마이그레이션 dry-run, 새 카탈로그 회귀 검증, AI assistant 응답 비교, D-039 cross-tenant 시나리오 테스트에도 그대로 재사용.
+- **이유**: D-120 결정문에서 "데이터 배선 row_filter/column_mask 실제 enforcement 는 후속 작업" 으로 분리했는데, 이 작업은 **잘못되면 사일런트 corruption** 이다(403 없이 행 누락 / null 컬럼 / NaN 합계). 운영 직접 적용 전에 **결정적 byte-level 비교 게이트** 가 필요하다. shadow-in-process 만으로도 audit 는 가능하지만, prod 코드 경로를 우회하지 않으므로 핸들러 버그가 prod 에 그대로 노출된다. 별도 스택 + 리플레이는 prod 코드 경로를 0에 가깝게 건드리면서 enforcement 효과를 확정 검증.
+- **운영 기준**:
+  - staging 은 prod 와 동일 호스트(gx10-f96e) 에 다른 포트(`solarflow-go-staging.service`, 8082).
+  - DB 는 `solarflow_staging` 별도 데이터베이스. 매일 03:00 KST 에 prod `pg_dump --schema-only --schema-and-data` reload + 055 등 마이그레이션 재적용.
+  - cloudflared 라우트 추가: `staging.topworks.ltd` → `localhost:8082`.
+  - 리플레이 하네스(`scripts/replay-diff.sh` + `cmd/replay-diff/`) 는 별도 후속 PR.
+  - 결과 dashboard: `staging-replay-diff.html` 생성 후 `module.topworks.ltd/staging-diff/` 등으로 노출(또는 cloudflare R2 업로드).
+- **검증**:
+  - 본 PR(로그 보강): `go test ./internal/middleware` — RequestLog 의 query/tenant/user/body_sha 캡처 + Observability mutation 양방향 + SSE/대용량 hash 누적 회귀 가드.
+  - staging 스택(별도 PR): `scripts/staging-up.sh` 실행 후 `staging.topworks.ltd/health` 200 + DB row count 가 prod 대비 ±N% 이내.
+  - replay 하네스(별도 PR): Phase 0 검증으로 1일치 트래픽 리플레이 시 unexpected diff = 0.
+- **날짜**: 2026-05-04
