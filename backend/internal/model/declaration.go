@@ -4,6 +4,7 @@ import "unicode/utf8"
 
 // ImportDeclaration — 수입신고(면장) 정보를 담는 구조체
 // 비유: "수입신고 면장" — 세관에 제출하는 수입 신고서
+// D-064 PR 24/28: ERP 면장 자료(50컬럼)에서 필수+분석 컬럼 노출. source_payload 는 DB에만.
 type ImportDeclaration struct {
 	DeclarationID     string  `json:"declaration_id"`
 	DeclarationNumber string  `json:"declaration_number"`
@@ -16,6 +17,40 @@ type ImportDeclaration struct {
 	CustomsOffice     *string `json:"customs_office"`
 	Port              *string `json:"port"`
 	Memo              *string `json:"memo"`
+	// 통관·계약 식별 (PR 24)
+	LCNo            *string  `json:"lc_no,omitempty"`
+	InvoiceNo       *string  `json:"invoice_no,omitempty"`
+	BLNumber        *string  `json:"bl_number,omitempty"`
+	SupplierNameEN  *string  `json:"supplier_name_en,omitempty"`
+	SupplierNameKR  *string  `json:"supplier_name_kr,omitempty"`
+	PONumber        *string  `json:"po_number,omitempty"`
+	// 환율·금액
+	ExchangeRate            *float64 `json:"exchange_rate,omitempty"`
+	ContractUnitPriceUSDWp  *float64 `json:"contract_unit_price_usd_wp,omitempty"`
+	ContractTotalUSD        *float64 `json:"contract_total_usd,omitempty"`
+	ContractTotalKRW        *float64 `json:"contract_total_krw,omitempty"`
+	CIFKrw                  *float64 `json:"cif_krw,omitempty"`
+	Incoterms               *string  `json:"incoterms,omitempty"`
+	// 관세·부가세
+	CustomsRate    *float64 `json:"customs_rate,omitempty"`
+	CustomsAmount  *float64 `json:"customs_amount,omitempty"`
+	VATAmount      *float64 `json:"vat_amount,omitempty"`
+	// 유상·무상 분리
+	PaidQty     *int     `json:"paid_qty,omitempty"`
+	FreeQty     *int     `json:"free_qty,omitempty"`
+	FreeRatio   *float64 `json:"free_ratio,omitempty"`
+	PaidCIFKrw  *float64 `json:"paid_cif_krw,omitempty"`
+	FreeCIFKrw  *float64 `json:"free_cif_krw,omitempty"`
+	// 원가단가 (★ 핵심)
+	CostUnitPriceWp *float64 `json:"cost_unit_price_wp,omitempty"`
+	CostUnitPriceEa *float64 `json:"cost_unit_price_ea,omitempty"`
+	// 모델·수량
+	ProductID       *string  `json:"product_id,omitempty"`
+	Quantity        *int     `json:"quantity,omitempty"`
+	CapacityKw      *float64 `json:"capacity_kw,omitempty"`
+	// ERP cross-key
+	ErpInboundNo       *string `json:"erp_inbound_no,omitempty"`
+	DeclarationLineNo  *string `json:"declaration_line_no,omitempty"`
 }
 
 // CreateDeclarationRequest — 면장 등록 시 클라이언트가 보내는 데이터
