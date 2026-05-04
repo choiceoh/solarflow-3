@@ -1,2 +1,3 @@
 solarflow-go*
 .venv-ocr/
+tmp/

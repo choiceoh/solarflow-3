@@ -1,7 +1,8 @@
 # SolarFlow backend dev helper (Windows / PowerShell)
 # Usage: cd backend; .\scripts\dev.ps1
-# Loads backend/.env into the current process and runs `go run .`
-# Ctrl+C to stop. After editing code, press Up + Enter to re-run.
+# Loads backend/.env into the current process and runs the backend.
+# If air is installed, uses it for auto-reload on file save.
+# Otherwise falls back to `go run .` — Ctrl+C to stop, Up + Enter to re-run.
 # See harness/WINDOWS.md for details.
 
 $ErrorActionPreference = 'Stop'
@@ -34,5 +35,13 @@ if (-not $env:SOLARFLOW_FILE_ROOT) {
 }
 New-Item -ItemType Directory -Force -Path $env:SOLARFLOW_FILE_ROOT | Out-Null
 
-Write-Host "backend dev starting (port 8080) - Ctrl+C to stop" -ForegroundColor Cyan
-go run .
+$hasAir = $null -ne (Get-Command air -ErrorAction SilentlyContinue)
+
+if ($hasAir) {
+    Write-Host "backend dev starting (port 8080, auto-reload via air) - Ctrl+C to stop" -ForegroundColor Cyan
+    air
+} else {
+    Write-Host "backend dev starting (port 8080) - Ctrl+C to stop" -ForegroundColor Cyan
+    Write-Host "tip: 'go install github.com/air-verse/air@latest' for auto-reload on save" -ForegroundColor DarkGray
+    go run .
+}

@@ -1,7 +1,8 @@
 # SolarFlow calc engine dev helper (Windows / PowerShell)
 # Usage: cd engine; .\scripts\dev.ps1
-# Loads engine/.env into the current process and runs `cargo run --release`
-# First build takes 5-10 minutes; incremental afterwards.
+# Loads engine/.env into the current process and runs the engine.
+# By default uses debug profile (faster builds). Set RELEASE=1 for release.
+# If cargo-watch is installed, uses it for auto-reload on file save.
 # See harness/WINDOWS.md for details.
 
 $ErrorActionPreference = 'Stop'
@@ -30,5 +31,18 @@ Get-Content $envFile | ForEach-Object {
 }
 
 $port = if ($env:PORT) { $env:PORT } else { '8081' }
-Write-Host "engine dev starting (port $port) - Ctrl+C to stop" -ForegroundColor Cyan
-cargo run --release
+$useRelease = $env:RELEASE -eq '1'
+$cargoArgs = if ($useRelease) { @('run', '--release') } else { @('run') }
+$profile = if ($useRelease) { 'release' } else { 'debug' }
+
+$hasCargoWatch = $null -ne (Get-Command cargo-watch -ErrorAction SilentlyContinue)
+
+if ($hasCargoWatch) {
+    Write-Host "engine dev starting (port $port, $profile, auto-reload via cargo-watch) - Ctrl+C to stop" -ForegroundColor Cyan
+    $watchArgs = @('-x', ($cargoArgs -join ' '))
+    & cargo-watch @watchArgs
+} else {
+    Write-Host "engine dev starting (port $port, $profile) - Ctrl+C to stop" -ForegroundColor Cyan
+    Write-Host "tip: 'cargo install cargo-watch' for auto-reload on save" -ForegroundColor DarkGray
+    & cargo @cargoArgs
+}
