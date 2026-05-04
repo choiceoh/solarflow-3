@@ -11,7 +11,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
 import { companyQueryUrl, fetchCalc } from '@/lib/companyUtils';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchAllPaginated, fetchWithAuth } from '@/lib/api';
 import { formatKRW, formatNumber, moduleLabel } from '@/lib/utils';
 import type { SaleListItem } from '@/types/outbound';
 import type { CustomerAnalysis, CustomerItem } from '@/types/analysis';
@@ -254,12 +254,14 @@ export default function SalesAnalysisPage() {
         ...(dateRange.dateFrom ? { date_from: dateRange.dateFrom } : {}),
         ...(dateRange.dateTo ? { date_to: dateRange.dateTo } : {}),
       };
-      let salesUrl = companyQueryUrl('/api/v1/sales', selectedCompanyId);
-      if (customerFilter) {
-        salesUrl += `${salesUrl.includes('?') ? '&' : '?'}customer_id=${customerFilter}`;
-      }
+      const salesQueryParts: string[] = [];
+      const baseUrl = companyQueryUrl('/api/v1/sales', selectedCompanyId);
+      const baseQueryFromUrl = baseUrl.includes('?') ? baseUrl.split('?')[1] ?? '' : '';
+      if (baseQueryFromUrl) salesQueryParts.push(baseQueryFromUrl);
+      if (customerFilter) salesQueryParts.push(`customer_id=${customerFilter}`);
+      const salesQuery = salesQueryParts.join('&');
       const [sales, margin, customers] = await Promise.all([
-        fetchWithAuth<SaleListItem[]>(salesUrl),
+        fetchAllPaginated<SaleListItem>('/api/v1/sales', salesQuery),
         fetchCalc<MarginAnalysis>(
           selectedCompanyId,
           '/api/v1/calc/margin-analysis',
