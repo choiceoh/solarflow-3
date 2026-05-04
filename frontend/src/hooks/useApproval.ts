@@ -2,7 +2,7 @@
 // 비유: 결재안에 필요한 데이터를 각 API에서 모아오는 배달부
 
 import { useState, useCallback } from 'react';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchAllPaginated, fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import type { LCRecord, PurchaseOrder, POLineItem, TTRemittance } from '@/types/procurement';
 import type { Expense } from '@/types/customs';
@@ -185,7 +185,7 @@ export function useType3() {
   const generate = useCallback(async (customerId: string, customerName: string, from: string, to: string) => {
     setLoading(true);
     try {
-      const sales = await fetchWithAuth<Sale[]>(`/api/v1/sales?customer_id=${customerId}`);
+      const sales = await fetchAllPaginated<Sale>('/api/v1/sales', `customer_id=${customerId}`);
 
       // outbound_id로 outbound 정보 가져오기
       const outboundIds = [...new Set(sales.map((s) => s.outbound_id).filter((id): id is string => !!id))];
@@ -254,7 +254,7 @@ export function useType4() {
       const params = new URLSearchParams();
       if (selectedCompanyId) params.set('company_id', selectedCompanyId);
 
-      const allExpenses = await fetchWithAuth<Expense[]>(`/api/v1/expenses?${params}`);
+      const allExpenses = await fetchAllPaginated<Expense>('/api/v1/expenses', params.toString());
       const filtered = allExpenses.filter(
         (e) => e.expense_type === 'transport' && e.vendor === vendor && e.month === month,
       );
@@ -367,7 +367,7 @@ export function useType6() {
       const params = new URLSearchParams({ usage_category: 'construction' });
       if (selectedCompanyId) params.set('company_id', selectedCompanyId);
 
-      const outbounds = await fetchWithAuth<Outbound[]>(`/api/v1/outbounds?${params}`);
+      const outbounds = await fetchAllPaginated<Outbound>('/api/v1/outbounds', params.toString());
       const filtered = outbounds.filter((ob) => {
         if (from && ob.outbound_date < from) return false;
         if (to && ob.outbound_date > to) return false;

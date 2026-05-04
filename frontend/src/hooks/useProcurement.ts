@@ -1,4 +1,4 @@
-import { fetchWithAuth } from '@/lib/api';
+import { fetchAllPaginated, fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { companyParams } from '@/lib/companyUtils';
 import { useListQuery } from '@/lib/queryHelpers';
@@ -14,7 +14,7 @@ export function usePOList(filters: { status?: string; manufacturer_id?: string; 
       if (filters.status) params.set('status', filters.status);
       if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id);
       if (filters.contract_type) params.set('contract_type', filters.contract_type);
-      return fetchWithAuth<PurchaseOrder[]>(`/api/v1/pos?${params}`);
+      return fetchAllPaginated<PurchaseOrder>('/api/v1/pos', params.toString());
     },
     { enabled: !!selectedCompanyId },
   );
@@ -47,7 +47,7 @@ export function useLCList(filters: { status?: string; bank_id?: string; po_id?: 
       if (filters.bank_id) params.set('bank_id', filters.bank_id);
       if (filters.po_id) params.set('po_id', filters.po_id);
       if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id);
-      const raw = await fetchWithAuth<Array<LCRecord & { banks?: { bank_name?: string }; companies?: { company_name?: string }; purchase_orders?: { po_number?: string; manufacturer_id?: string }; manufacturer_id?: string }>>(`/api/v1/lcs?${params}`);
+      const raw = await fetchAllPaginated<LCRecord & { banks?: { bank_name?: string }; companies?: { company_name?: string }; purchase_orders?: { po_number?: string; manufacturer_id?: string }; manufacturer_id?: string }>('/api/v1/lcs', params.toString());
       return raw.map((r) => ({
         ...r,
         bank_name: r.bank_name ?? r.banks?.bank_name,
@@ -74,7 +74,7 @@ export function useTTList(filters: { status?: string; po_id?: string } = {}) {
       const params = companyParams(selectedCompanyId!);
       if (filters.status) params.set('status', filters.status);
       if (filters.po_id) params.set('po_id', filters.po_id);
-      const raw = await fetchWithAuth<RawTT[]>(`/api/v1/tts?${params}`);
+      const raw = await fetchAllPaginated<RawTT>('/api/v1/tts', params.toString());
       return raw.map((r) => ({
         ...r,
         po_number: r.po_number ?? r.purchase_orders?.po_number ?? undefined,
@@ -99,7 +99,7 @@ export function usePriceHistoryList(filters: { manufacturer_id?: string } = {}) 
     async () => {
       const params = companyParams(selectedCompanyId!);
       if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id);
-      const raw = await fetchWithAuth<RawPriceHistory[]>(`/api/v1/price-histories?${params}`);
+      const raw = await fetchAllPaginated<RawPriceHistory>('/api/v1/price-histories', params.toString());
       return raw.map((r) => ({
         ...r,
         manufacturer_name: r.manufacturer_name ?? r.manufacturers?.name_kr,

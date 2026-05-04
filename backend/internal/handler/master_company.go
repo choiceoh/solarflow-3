@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
@@ -26,8 +27,10 @@ func NewCompanyHandler(db *supa.Client) *CompanyHandler {
 // List — GET /api/v1/companies — 법인 목록 조회
 // 비유: 법인 관리실에서 전체 명함첩을 꺼내 보여주는 것
 func (h *CompanyHandler) List(w http.ResponseWriter, r *http.Request) {
-	data, _, err := h.DB.From("companies").
+	limit, offset := parseLimitOffset(r, 100, 1000)
+	data, count, err := h.DB.From("companies").
 		Select("*", "exact", false).
+		Range(offset, offset+limit-1, "").
 		Execute()
 	if err != nil {
 		log.Printf("[법인 목록 조회 실패] %v", err)
@@ -42,6 +45,7 @@ func (h *CompanyHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, companies)
 }
 
