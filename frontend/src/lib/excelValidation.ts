@@ -59,6 +59,18 @@ const NORMALIZED_VALUES: Record<string, Record<string, string>> = {
       [t.label, t.value],
     ]),
   ),
+  // 마스터 — 거래처 유형. PartnerForm 의 PARTNER_TYPE_LABEL 기준.
+  partner_type: {
+    supplier: 'supplier', customer: 'customer', both: 'both',
+    공급사: 'supplier', 고객사: 'customer', '공급+고객': 'both',
+  },
+  // 마스터 — 창고 유형. WarehouseForm 의 WH_TYPE_LABEL 기준.
+  warehouse_type: {
+    port: 'port', factory: 'factory', vendor: 'vendor',
+    항구: 'port', 공장: 'factory', 업체: 'vendor',
+  },
+  // 마스터 — 제조사 국내/해외. 코드값 자체가 한글.
+  domestic_foreign: { 국내: '국내', 해외: '해외' },
 };
 
 // 허용값 맵 (감리 규칙: map 방식, if-else 나열 금지)
@@ -85,6 +97,15 @@ const CODE_FIELD_MAP: Record<string, keyof MasterDataForExcel> = {
   bank_name: 'banks',
 };
 
+// 마스터 양식이 직접 생성하는 필드 — 자기 자신을 검증 대상에서 제외.
+// 예: 법인 등록의 company_code 는 새로 만드는 값이라 "기존 법인에 없음" 으로 잡으면 안 된다.
+const SELF_CREATED_FK_FIELDS: Partial<Record<TemplateType, Set<string>>> = {
+  company: new Set(['company_code']),
+  product: new Set(['product_code']),
+  warehouse: new Set(['warehouse_code']),
+  bank: new Set(['bank_name']),
+};
+
 // 양수 검증 대상 필드 (감리 규칙: 물리적으로 양수인 필드 <= 0 체크)
 const POSITIVE_FIELDS: Record<string, boolean> = {
   quantity: true, amount: true, exchange_rate: true, unit_price_wp: true,
@@ -95,6 +116,10 @@ const POSITIVE_FIELDS: Record<string, boolean> = {
   spare_qty: true,
   // PO/LC 추가
   amount_usd: true, target_qty: true, usance_days: true,
+  // 마스터 추가 — 품번 스펙·치수와 은행 한도, 제조사 표시순위
+  spec_wp: true, wattage_kw: true,
+  module_width_mm: true, module_height_mm: true, module_depth_mm: true, weight_kg: true,
+  lc_limit_usd: true, priority_rank: true,
 };
 
 // 마스터 데이터에서 유효 코드 셋 생성
@@ -140,8 +165,8 @@ function validateRow(
 
     if (strVal === '') continue;
 
-    // 2. 코드 존재 체크
-    if (type !== 'company' && field.key in CODE_FIELD_MAP) {
+    // 2. 코드 존재 체크 — 자기가 생성하는 필드는 제외 (마스터 양식 자기 self-FK 회피).
+    if (field.key in CODE_FIELD_MAP && !SELF_CREATED_FK_FIELDS[type]?.has(field.key)) {
       const masterKey = CODE_FIELD_MAP[field.key];
       const codeSet = buildCodeSet(master, masterKey);
       if (!codeSet.has(strVal)) {
@@ -227,6 +252,87 @@ function validateRow(
   };
 }
 
+// 마스터 단일키 중복 검증 설정 — 파일 내 / 마스터 기존값 중복 모두 차단.
+// bank는 (company_code, bank_name) 복합키라 별도 처리.
+const MASTER_DUP_CONFIG: Partial<Record<TemplateType, {
+  key: string;
+  label: string;
+  existing: (m: MasterDataForExcel) => Set<string>;
+}>> = {
+  company: {
+    key: 'company_code', label: '법인코드',
+    existing: (m) => new Set(m.companies.map((c) => c.company_code)),
+  },
+  manufacturer: {
+    key: 'name_kr', label: '제조사명(한)',
+    existing: (m) => new Set(m.manufacturers.map((mf) => mf.name_kr)),
+  },
+  product: {
+    key: 'product_code', label: '품번코드',
+    existing: (m) => new Set(m.products.map((p) => p.product_code)),
+  },
+  warehouse: {
+    key: 'warehouse_code', label: '창고코드',
+    existing: (m) => new Set(m.warehouses.map((w) => w.warehouse_code)),
+  },
+  partner: {
+    key: 'partner_name', label: '거래처명',
+    existing: (m) => new Set(m.partners.map((p) => p.partner_name)),
+  },
+};
+
+function applySingleKeyDupCheck(
+  rows: ParsedRow[],
+  cfg: { key: string; label: string; existing: (m: MasterDataForExcel) => Set<string> },
+  master: MasterDataForExcel,
+): ParsedRow[] {
+  const existing = cfg.existing(master);
+  const seen = new Map<string, number>();
+  return rows.map((row) => {
+    const value = String(row.data[cfg.key] ?? '').trim();
+    if (!value) return row;
+
+    const errors = [...row.errors];
+    if (existing.has(value)) {
+      errors.push({ field: cfg.label, message: `이미 등록된 ${cfg.label}입니다` });
+    }
+    const firstRow = seen.get(value);
+    if (firstRow) {
+      errors.push({ field: cfg.label, message: `${firstRow}행과 중복된 ${cfg.label}입니다` });
+    } else {
+      seen.set(value, row.rowNumber);
+    }
+    return { ...row, valid: errors.length === 0, errors };
+  });
+}
+
+// 은행 — (법인코드, 은행명) 복합 중복 검증.
+function applyBankDupCheck(rows: ParsedRow[], master: MasterDataForExcel): ParsedRow[] {
+  const companyById = new Map(master.companies.map((c) => [c.company_id, c.company_code]));
+  const existing = new Set(
+    (master.banks ?? []).map((b) => `${companyById.get(b.company_id) ?? ''}|${b.bank_name}`),
+  );
+  const seen = new Map<string, number>();
+  return rows.map((row) => {
+    const company = String(row.data['company_code'] ?? '').trim();
+    const bank = String(row.data['bank_name'] ?? '').trim();
+    if (!company || !bank) return row;
+
+    const compoundKey = `${company}|${bank}`;
+    const errors = [...row.errors];
+    if (existing.has(compoundKey)) {
+      errors.push({ field: '은행', message: '이미 등록된 (법인 × 은행) 조합입니다' });
+    }
+    const firstRow = seen.get(compoundKey);
+    if (firstRow) {
+      errors.push({ field: '은행', message: `${firstRow}행과 중복된 (법인 × 은행) 조합입니다` });
+    } else {
+      seen.set(compoundKey, row.rowNumber);
+    }
+    return { ...row, valid: errors.length === 0, errors };
+  });
+}
+
 // 전체 검증
 export function validateRows(
   rows: ParsedRow[],
@@ -237,32 +343,11 @@ export function validateRows(
   const fields = fieldOverride ?? FIELDS_MAP[type];
   const checked = rows.map((row) => validateRow(row, fields, master, type));
 
-  if (type !== 'company') return checked;
+  if (type === 'bank') return applyBankDupCheck(checked, master);
 
-  const existingCodes = new Set(master.companies.map((company) => company.company_code));
-  const seenCodes = new Map<string, number>();
-  return checked.map((row) => {
-    const code = String(row.data['company_code'] ?? '').trim();
-    if (!code) return row;
-
-    const errors = [...row.errors];
-    if (existingCodes.has(code)) {
-      errors.push({ field: '법인코드', message: '이미 등록된 법인코드입니다' });
-    }
-
-    const firstRow = seenCodes.get(code);
-    if (firstRow) {
-      errors.push({ field: '법인코드', message: `${firstRow}행과 중복된 법인코드입니다` });
-    } else {
-      seenCodes.set(code, row.rowNumber);
-    }
-
-    return {
-      ...row,
-      valid: errors.length === 0,
-      errors,
-    };
-  });
+  const dupConfig = MASTER_DUP_CONFIG[type];
+  if (!dupConfig) return checked;
+  return applySingleKeyDupCheck(checked, dupConfig, master);
 }
 
 // 면장 검증 (2시트 분리)

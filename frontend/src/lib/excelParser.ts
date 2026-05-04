@@ -12,10 +12,12 @@ import {
   FIELDS_MAP, DECLARATION_FIELDS, DECLARATION_COST_FIELDS, TEMPLATE_LABEL,
 } from '@/types/excel';
 
-// excelTemplates.ts의 UNIFIED_TEMPLATE_ORDER와 동일한 순서. PO는 LC보다 먼저 처리되어야
-// LC.po_number 자연키 매핑이 안전하다.
+// 통합 업로드 — 마스터 → 거래 의존 순서. 같은 파일에 마스터/거래 시트가 섞여 있어도
+// 마스터가 먼저 등록돼야 거래의 FK 검증/매핑이 풀린다. 마스터끼리도 의존 순서:
+// 법인 → 제조사 → 품번 / 법인 → 은행. 거래는 PO → LC 순서가 LC.po_number 매핑에 안전.
 const UNIFIED_SECTION_ORDER: TemplateType[] = [
-  'company', 'order', 'outbound', 'sale', 'receipt',
+  'company', 'manufacturer', 'product', 'warehouse', 'bank', 'partner',
+  'order', 'outbound', 'sale', 'receipt',
   'purchase_order', 'lc',
   'inbound', 'declaration', 'expense',
 ];
