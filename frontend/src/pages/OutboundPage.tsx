@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
@@ -57,18 +57,25 @@ export default function OutboundPage() {
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
   const [partners, setPartners] = useState<Partner[]>([]);
 
-  const outboundFilters: { status?: string; usage_category?: string; manufacturer_id?: string } = {};
-  if (statusFilter) outboundFilters.status = statusFilter;
-  if (usageFilter) outboundFilters.usage_category = usageFilter;
-  if (mfgFilter) outboundFilters.manufacturer_id = mfgFilter;
+  // 칩 필터는 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
+  const { data: allOutbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundList();
+  const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleList();
 
-  const saleFilters: { customer_id?: string; month?: string; invoice_status?: string } = {};
-  if (customerFilter) saleFilters.customer_id = customerFilter;
-  if (monthFilter) saleFilters.month = monthFilter;
-  if (invoiceFilter) saleFilters.invoice_status = invoiceFilter;
+  const outbounds = useMemo(() => allOutbounds.filter((o) => {
+    if (statusFilter && o.status !== statusFilter) return false
+    if (usageFilter && o.usage_category !== usageFilter) return false
+    if (mfgFilter && o.manufacturer_id !== mfgFilter) return false
+    return true
+  }), [allOutbounds, statusFilter, usageFilter, mfgFilter]);
 
-  const { data: outbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundList(outboundFilters);
-  const { data: sales, loading: saleLoading, reload: reloadSales } = useSaleList(saleFilters);
+  const sales = useMemo(() => allSales.filter((s) => {
+    if (customerFilter && s.customer_id !== customerFilter) return false
+    const taxDate = s.tax_invoice_date ?? s.sale?.tax_invoice_date ?? null
+    if (monthFilter && (!taxDate || !taxDate.startsWith(monthFilter))) return false
+    if (invoiceFilter === 'issued' && !taxDate) return false
+    if (invoiceFilter === 'pending' && taxDate) return false
+    return true
+  }), [allSales, customerFilter, monthFilter, invoiceFilter]);
 
   useEffect(() => {
     loadManufacturers();
