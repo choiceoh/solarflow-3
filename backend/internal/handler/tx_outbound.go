@@ -26,6 +26,34 @@ const (
 	outboundMaxLimit     = 1000
 )
 
+// outboundListColumns — List 응답에 포함할 outbounds 컬럼 화이트리스트.
+// source_payload (외부 양식 원본 jsonb, 행당 KB 단위) 제외 — 상세 화면(GetByID/fetchOutboundByID) 에서는 그대로 * 사용.
+const outboundListColumns = "outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, " +
+	"warehouse_id, usage_category, order_id, site_name, site_address, spare_qty, " +
+	"group_trade, target_company_id, erp_outbound_no, status, memo, bl_id, " +
+	"tx_statement_ready, inspection_request_sent, approval_requested, tax_invoice_issued"
+
+// uniqueNonEmpty — 문자열 슬라이스에서 빈 값과 중복을 제거하고 입력 순서를 보존한다.
+// enrich 단계에서 IN (...) 필터에 들어갈 ID 모음을 만들 때 사용.
+func uniqueNonEmpty(values []string) []string {
+	if len(values) == 0 {
+		return values
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
 // outboundSortable — 정렬 가능 컬럼 화이트리스트 (SQL 인젝션 방어).
 // 컬럼명은 outbounds 테이블의 실제 컬럼.
 var outboundSortable = map[string]struct{}{
@@ -106,10 +134,13 @@ type outboundBLNumberRow struct {
 	BLNumber string `json:"bl_number"`
 }
 
-func (h *OutboundHandler) fetchBLNumberMap() map[string]string {
-	data, _, err := h.DB.From("bl_shipments").
-		Select("bl_id, bl_number", "exact", false).
-		Execute()
+// fetchBLNumberMap — bl_id → bl_number 매핑. blIDs 가 비면 전체 fetch (호환), 있으면 IN(...) 으로 좁힘.
+func (h *OutboundHandler) fetchBLNumberMap(blIDs []string) map[string]string {
+	q := h.DB.From("bl_shipments").Select("bl_id, bl_number", "exact", false)
+	if len(blIDs) > 0 {
+		q = q.In("bl_id", blIDs)
+	}
+	data, _, err := q.Execute()
 	if err != nil {
 		return map[string]string{}
 	}
@@ -134,7 +165,8 @@ func withBLNumbers(items []model.OutboundBLItem, blNumbers map[string]string) []
 	return items
 }
 
-// fetchBLItems — outbound_bl_items 조회 헬퍼
+// fetchBLItems — outbound_bl_items 조회 헬퍼 (단일 outbound 상세용).
+// 항목에서 모은 bl_id 만 fetchBLNumberMap 으로 넘겨 bl_shipments 전체 스캔 회피.
 func (h *OutboundHandler) fetchBLItems(outboundID string) []model.OutboundBLItem {
 	data, _, err := h.DB.From("outbound_bl_items").
 		Select("*", "exact", false).
@@ -147,12 +179,23 @@ func (h *OutboundHandler) fetchBLItems(outboundID string) []model.OutboundBLItem
 	if err := json.Unmarshal(data, &items); err != nil {
 		return nil
 	}
-	return withBLNumbers(items, h.fetchBLNumberMap())
+	blIDs := make([]string, 0, len(items))
+	for _, it := range items {
+		blIDs = append(blIDs, it.BLID)
+	}
+	blIDs = uniqueNonEmpty(blIDs)
+	return withBLNumbers(items, h.fetchBLNumberMap(blIDs))
 }
 
-func (h *OutboundHandler) fetchBLItemsByOutbound() map[string][]model.OutboundBLItem {
+// fetchBLItemsByOutbound — List 응답용 outbound_id → BL items 묶음.
+// outboundIDs 로 좁혀 outbound_bl_items / bl_shipments 전체 스캔(이전 동작) 을 피한다.
+func (h *OutboundHandler) fetchBLItemsByOutbound(outboundIDs []string) map[string][]model.OutboundBLItem {
+	if len(outboundIDs) == 0 {
+		return map[string][]model.OutboundBLItem{}
+	}
 	data, _, err := h.DB.From("outbound_bl_items").
 		Select("*", "exact", false).
+		In("outbound_id", outboundIDs).
 		Execute()
 	if err != nil {
 		return map[string][]model.OutboundBLItem{}
@@ -161,7 +204,12 @@ func (h *OutboundHandler) fetchBLItemsByOutbound() map[string][]model.OutboundBL
 	if err := json.Unmarshal(data, &items); err != nil {
 		return map[string][]model.OutboundBLItem{}
 	}
-	items = withBLNumbers(items, h.fetchBLNumberMap())
+	blIDs := make([]string, 0, len(items))
+	for _, it := range items {
+		blIDs = append(blIDs, it.BLID)
+	}
+	blIDs = uniqueNonEmpty(blIDs)
+	items = withBLNumbers(items, h.fetchBLNumberMap(blIDs))
 	result := make(map[string][]model.OutboundBLItem)
 	for _, item := range items {
 		result[item.OutboundID] = append(result[item.OutboundID], item)
@@ -306,48 +354,129 @@ func (h *OutboundHandler) enrichOutbounds(outbounds []model.Outbound) ([]model.O
 	if len(outbounds) == 0 {
 		return outbounds, nil
 	}
-	var products []outboundProductRow
-	var warehouses []outboundWarehouseRow
-	var companies []outboundCompanyRow
-	var orders []outboundOrderRow
-	var partners []outboundPartnerRow
-	var sales []model.Sale
 
-	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp, wattage_kw, manufacturer_id", "exact", false).Execute(); err != nil {
-		return nil, fmt.Errorf("products 조회 실패: %w", err)
-	} else if err := json.Unmarshal(data, &products); err != nil {
-		return nil, fmt.Errorf("products 디코딩 실패: %w", err)
+	// 배치에서 참조된 ID 들만 수집 — products/warehouses/companies/orders/partners/sales
+	// 각 테이블 전체 스캔(이전 동작) 대신 IN (...) 필터로 좁힌다.
+	productIDs := make([]string, 0, len(outbounds))
+	warehouseIDs := make([]string, 0, len(outbounds))
+	companyIDs := make([]string, 0, len(outbounds)*2)
+	orderIDs := make([]string, 0, len(outbounds))
+	outboundIDs := make([]string, 0, len(outbounds))
+	for _, o := range outbounds {
+		productIDs = append(productIDs, o.ProductID)
+		warehouseIDs = append(warehouseIDs, o.WarehouseID)
+		companyIDs = append(companyIDs, o.CompanyID)
+		if o.TargetCompanyID != nil {
+			companyIDs = append(companyIDs, *o.TargetCompanyID)
+		}
+		if o.OrderID != nil {
+			orderIDs = append(orderIDs, *o.OrderID)
+		}
+		outboundIDs = append(outboundIDs, o.OutboundID)
 	}
+	productIDs = uniqueNonEmpty(productIDs)
+	warehouseIDs = uniqueNonEmpty(warehouseIDs)
+	companyIDs = uniqueNonEmpty(companyIDs)
+	orderIDs = uniqueNonEmpty(orderIDs)
+	outboundIDs = uniqueNonEmpty(outboundIDs)
+
+	var products []outboundProductRow
+	if len(productIDs) > 0 {
+		if data, _, err := h.DB.From("products").
+			Select("product_id, product_name, product_code, spec_wp, wattage_kw, manufacturer_id", "exact", false).
+			In("product_id", productIDs).
+			Execute(); err != nil {
+			return nil, fmt.Errorf("products 조회 실패: %w", err)
+		} else if err := json.Unmarshal(data, &products); err != nil {
+			return nil, fmt.Errorf("products 디코딩 실패: %w", err)
+		}
+	}
+
+	manufacturerIDs := make([]string, 0, len(products))
+	for _, p := range products {
+		if p.ManufacturerID != nil {
+			manufacturerIDs = append(manufacturerIDs, *p.ManufacturerID)
+		}
+	}
+	manufacturerIDs = uniqueNonEmpty(manufacturerIDs)
+
 	var manufacturers []outboundManufacturerRow
-	if data, _, err := h.DB.From("manufacturers").Select("manufacturer_id, name_kr, short_name", "exact", false).Execute(); err != nil {
-		return nil, fmt.Errorf("manufacturers 조회 실패: %w", err)
-	} else if err := json.Unmarshal(data, &manufacturers); err != nil {
-		return nil, fmt.Errorf("manufacturers 디코딩 실패: %w", err)
+	if len(manufacturerIDs) > 0 {
+		if data, _, err := h.DB.From("manufacturers").
+			Select("manufacturer_id, name_kr, short_name", "exact", false).
+			In("manufacturer_id", manufacturerIDs).
+			Execute(); err != nil {
+			return nil, fmt.Errorf("manufacturers 조회 실패: %w", err)
+		} else if err := json.Unmarshal(data, &manufacturers); err != nil {
+			return nil, fmt.Errorf("manufacturers 디코딩 실패: %w", err)
+		}
 	}
-	if data, _, err := h.DB.From("warehouses").Select("warehouse_id, warehouse_name", "exact", false).Execute(); err != nil {
-		return nil, fmt.Errorf("warehouses 조회 실패: %w", err)
-	} else if err := json.Unmarshal(data, &warehouses); err != nil {
-		return nil, fmt.Errorf("warehouses 디코딩 실패: %w", err)
+
+	var warehouses []outboundWarehouseRow
+	if len(warehouseIDs) > 0 {
+		if data, _, err := h.DB.From("warehouses").
+			Select("warehouse_id, warehouse_name", "exact", false).
+			In("warehouse_id", warehouseIDs).
+			Execute(); err != nil {
+			return nil, fmt.Errorf("warehouses 조회 실패: %w", err)
+		} else if err := json.Unmarshal(data, &warehouses); err != nil {
+			return nil, fmt.Errorf("warehouses 디코딩 실패: %w", err)
+		}
 	}
-	if data, _, err := h.DB.From("companies").Select("company_id, company_name", "exact", false).Execute(); err != nil {
-		return nil, fmt.Errorf("companies 조회 실패: %w", err)
-	} else if err := json.Unmarshal(data, &companies); err != nil {
-		return nil, fmt.Errorf("companies 디코딩 실패: %w", err)
+
+	var companies []outboundCompanyRow
+	if len(companyIDs) > 0 {
+		if data, _, err := h.DB.From("companies").
+			Select("company_id, company_name", "exact", false).
+			In("company_id", companyIDs).
+			Execute(); err != nil {
+			return nil, fmt.Errorf("companies 조회 실패: %w", err)
+		} else if err := json.Unmarshal(data, &companies); err != nil {
+			return nil, fmt.Errorf("companies 디코딩 실패: %w", err)
+		}
 	}
-	if data, _, err := h.DB.From("orders").Select("order_id, order_number, customer_id, unit_price_wp", "exact", false).Execute(); err != nil {
-		return nil, fmt.Errorf("orders 조회 실패: %w", err)
-	} else if err := json.Unmarshal(data, &orders); err != nil {
-		return nil, fmt.Errorf("orders 디코딩 실패: %w", err)
+
+	var orders []outboundOrderRow
+	if len(orderIDs) > 0 {
+		if data, _, err := h.DB.From("orders").
+			Select("order_id, order_number, customer_id, unit_price_wp", "exact", false).
+			In("order_id", orderIDs).
+			Execute(); err != nil {
+			return nil, fmt.Errorf("orders 조회 실패: %w", err)
+		} else if err := json.Unmarshal(data, &orders); err != nil {
+			return nil, fmt.Errorf("orders 디코딩 실패: %w", err)
+		}
 	}
-	if data, _, err := h.DB.From("partners").Select("partner_id, partner_name", "exact", false).Execute(); err != nil {
-		return nil, fmt.Errorf("partners 조회 실패: %w", err)
-	} else if err := json.Unmarshal(data, &partners); err != nil {
-		return nil, fmt.Errorf("partners 디코딩 실패: %w", err)
+
+	customerIDs := make([]string, 0, len(orders))
+	for _, o := range orders {
+		customerIDs = append(customerIDs, o.CustomerID)
 	}
-	if data, _, err := h.DB.From("sales").Select("*", "exact", false).Neq("status", "cancelled").Execute(); err != nil {
-		return nil, fmt.Errorf("sales 조회 실패: %w", err)
-	} else if err := json.Unmarshal(data, &sales); err != nil {
-		return nil, fmt.Errorf("sales 디코딩 실패: %w", err)
+	customerIDs = uniqueNonEmpty(customerIDs)
+
+	var partners []outboundPartnerRow
+	if len(customerIDs) > 0 {
+		if data, _, err := h.DB.From("partners").
+			Select("partner_id, partner_name", "exact", false).
+			In("partner_id", customerIDs).
+			Execute(); err != nil {
+			return nil, fmt.Errorf("partners 조회 실패: %w", err)
+		} else if err := json.Unmarshal(data, &partners); err != nil {
+			return nil, fmt.Errorf("partners 디코딩 실패: %w", err)
+		}
+	}
+
+	var sales []model.Sale
+	if len(outboundIDs) > 0 {
+		if data, _, err := h.DB.From("sales").
+			Select("*", "exact", false).
+			Neq("status", "cancelled").
+			In("outbound_id", outboundIDs).
+			Execute(); err != nil {
+			return nil, fmt.Errorf("sales 조회 실패: %w", err)
+		} else if err := json.Unmarshal(data, &sales); err != nil {
+			return nil, fmt.Errorf("sales 디코딩 실패: %w", err)
+		}
 	}
 
 	productMap := make(map[string]outboundProductRow, len(products))
@@ -620,7 +749,8 @@ func (h *OutboundHandler) applyOutboundFilters(r *http.Request, query *postgrest
 //
 // 응답 헤더 X-Total-Count 로 필터 후 전체 건수 노출.
 func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("outbounds").Select("*", "exact", false)
+	// 응답에서 source_payload (외부 양식 원본 jsonb, 행당 KB 단위) 제외 — 상세 화면(GetByID/fetchOutboundByID) 에서는 그대로 *.
+	query := h.DB.From("outbounds").Select(outboundListColumns, "exact", false)
 	query, ok, err := h.applyOutboundFilters(r, query)
 	if err != nil {
 		log.Printf("[출고 목록 필터 처리 실패] %v", err)
@@ -659,7 +789,11 @@ func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "출고 참조 데이터 처리에 실패했습니다")
 		return
 	}
-	blItemsByOutbound := h.fetchBLItemsByOutbound()
+	outboundIDs := make([]string, 0, len(outbounds))
+	for _, o := range outbounds {
+		outboundIDs = append(outboundIDs, o.OutboundID)
+	}
+	blItemsByOutbound := h.fetchBLItemsByOutbound(outboundIDs)
 	for i := range outbounds {
 		outbounds[i].BLItems = blItemsByOutbound[outbounds[i].OutboundID]
 	}
