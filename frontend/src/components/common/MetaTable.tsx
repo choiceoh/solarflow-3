@@ -295,7 +295,11 @@ export function MetaTable<T>({
   return (
     <Table
       className={cn('text-xs', tableClassName)}
-      style={{ width: fillWidth ? '100%' : table.getTotalSize(), tableLayout: 'fixed' }}
+      style={
+        fillWidth
+          ? { width: '100%', minWidth: table.getTotalSize(), tableLayout: 'fixed' }
+          : { width: table.getTotalSize(), tableLayout: 'fixed' }
+      }
     >
       <TableHeader>
         {table.getHeaderGroups().map((hg) => (
