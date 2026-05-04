@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dialog';
 import { fetchWithAuth } from '@/lib/api';
 import { notify } from '@/lib/notify';
-import { cn } from '@/lib/utils';
 import type { PartnerAlias } from '@/types/aliases';
 import type { ImportResult, ParsedRow } from '@/types/excel';
 import {
@@ -47,9 +46,7 @@ interface SaleSeed {
 export default function SaleAutoRegisterDialog({
   open, outboundRows, importedOutboundIds, partners, onClose, onCompleted,
 }: Props) {
-  const [partnerAliases, setPartnerAliases] = useState<PartnerAlias[]>([]);
   const [seeds, setSeeds] = useState<SaleSeed[]>([]);
-  const [resolvedPartners, setResolvedPartners] = useState<PartnerLite[]>([]);
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -60,7 +57,6 @@ export default function SaleAutoRegisterDialog({
     (async () => {
       const aliases = await fetchPartnerAliases();
       if (cancelled) return;
-      setPartnerAliases(aliases);
       const built = buildSeeds(outboundRows, importedOutboundIds, partners, aliases);
       setSeeds(built);
     })();
