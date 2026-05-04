@@ -94,7 +94,7 @@ func resolveProviderModel(req assistantRequest) (string, string, int) {
 		provider = strings.ToLower(strings.TrimSpace(os.Getenv("ASSISTANT_PROVIDER")))
 	}
 	if provider == "" {
-		provider = "openai"
+		provider = "anthropic"
 	}
 
 	model := strings.TrimSpace(req.Model)
@@ -151,7 +151,8 @@ func (h *AssistantHandler) runAnthropicLoop(
 	}
 	baseURL := strings.TrimRight(os.Getenv("ANTHROPIC_BASE_URL"), "/")
 	if baseURL == "" {
-		baseURL = "https://api.anthropic.com"
+		// Z.AI 코딩 플랜 (Anthropic 호환 엔드포인트). 진짜 Anthropic 으로 가려면 ANTHROPIC_BASE_URL 명시.
+		baseURL = "https://api.z.ai/api/anthropic"
 	}
 	version := os.Getenv("ANTHROPIC_VERSION")
 	if version == "" {

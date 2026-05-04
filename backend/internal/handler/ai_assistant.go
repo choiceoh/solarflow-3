@@ -77,6 +77,7 @@ type assistantPageContext struct {
 }
 
 // defaultModelForProvider — provider별 모델 기본값.
+// anthropic 분기는 Z.AI 코딩 플랜 (api.z.ai/api/anthropic) 의 GLM-5.1 을 기본으로 한다.
 func defaultModelForProvider(provider string) string {
 	switch provider {
 	case "openai":
