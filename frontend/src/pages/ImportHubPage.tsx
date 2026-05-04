@@ -194,7 +194,7 @@ export default function ImportHubPage() {
         </TabsList>
 
         <TabsContent value="standard" className="mt-8">
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid gap-6 xl:grid-cols-2 items-start">
             {IMPORT_GROUPS.map((group) => (
               <section key={group.title} className="space-y-3">
                 <div className="eyebrow pt-1">{group.title}</div>
