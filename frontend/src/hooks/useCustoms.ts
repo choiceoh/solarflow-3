@@ -37,15 +37,19 @@ export function useCostDetailList(declarationId: string | null) {
 }
 
 // 부대비용 목록 조회
-export function useExpenseList(filters: { bl_id?: string; month?: string; expense_type?: string } = {}) {
+export function useExpenseList(
+  filters: { bl_id?: string; month?: string; expense_type?: string; start?: string; end?: string } = {},
+) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   return useListQuery<Expense>(
-    ['expenses', selectedCompanyId, filters.bl_id, filters.month, filters.expense_type],
+    ['expenses', selectedCompanyId, filters.bl_id, filters.month, filters.expense_type, filters.start, filters.end],
     () => {
       const params = companyParams(selectedCompanyId!);
       if (filters.bl_id) params.set('bl_id', filters.bl_id);
       if (filters.month) params.set('month', filters.month);
       if (filters.expense_type) params.set('expense_type', filters.expense_type);
+      if (filters.start) params.set('start', filters.start);
+      if (filters.end) params.set('end', filters.end);
       return fetchWithAuth<Expense[]>(`/api/v1/expenses?${params}`);
     },
     { enabled: !!selectedCompanyId },
