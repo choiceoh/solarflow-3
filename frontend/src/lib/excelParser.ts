@@ -1,5 +1,6 @@
 // 엑셀 파일 파싱 (Step 29A)
 // 비유: 서류 접수 창구 — 제출된 엑셀을 JSON으로 변환
+// 헤더 이름 매칭(D-병합로직) — 사용자가 컬럼을 추가/재배치해도 헤더 이름으로 필드 위치를 찾는다.
 // ExcelJS는 반드시 dynamic import (지적 1 반영)
 
 import type {
@@ -48,34 +49,72 @@ interface SheetCell { value: unknown }
 interface SheetRow { getCell(col: number): SheetCell }
 interface SheetLike { rowCount: number; getRow(r: number): SheetRow }
 
-// 시트를 ParsedRow[] 로 변환
+// 헤더 행에서 "라벨 → 컬럼인덱스" 맵 생성.
+// 라벨 끝의 `*` (필수 표시)와 양 끝 공백을 제거해 정규화한다.
+// 사용자가 컬럼 위치를 옮기거나, 자기 작업용 컬럼을 추가해도 이름만 일치하면 매칭된다.
+function buildHeaderMap(sheet: SheetLike): Map<string, number> {
+  const map = new Map<string, number>();
+  const headerRow = sheet.getRow(1);
+  // 컬럼 수 상한 — FieldDef가 가장 많은 양식이 ~30컬럼이므로 60이면 충분.
+  const MAX_COL_PROBE = 60;
+  for (let c = 1; c <= MAX_COL_PROBE; c++) {
+    const raw = headerRow.getCell(c).value;
+    const text = cellToString(raw).trim().replace(/\*$/, '').trim();
+    if (text && !map.has(text)) {
+      map.set(text, c);
+    }
+  }
+  return map;
+}
+
+// 시트를 ParsedRow[]로 변환 — 헤더 이름으로 필드별 컬럼을 해석.
 function parseSheet(sheet: SheetLike, fields: FieldDef[]): ParsedRow[] {
+  const headerMap = buildHeaderMap(sheet);
+
+  // 각 필드의 실제 컬럼 위치를 헤더 라벨로 해석한다.
+  const fieldCols = fields.map((f) => ({
+    field: f,
+    col: headerMap.get(f.label.trim()),
+  }));
+
+  const missingRequired = fieldCols
+    .filter((fc) => fc.field.required && fc.col === undefined)
+    .map((fc) => fc.field.label);
+  if (missingRequired.length > 0) {
+    throw new Error(`필수 헤더가 시트에 없습니다: ${missingRequired.join(', ')}`);
+  }
+
   const rows: ParsedRow[] = [];
   const rowCount = sheet.rowCount;
 
   for (let r = 2; r <= rowCount; r++) {
     const row = sheet.getRow(r);
-    // 빈 행 건너뛰기
-    const hasValue = fields.some((_, i) => {
-      const v = row.getCell(i + 1).value;
+    // 빈 행 건너뛰기 — 매칭된 컬럼만 본다 (해석 못한 필드는 false 처리).
+    const hasValue = fieldCols.some(({ col }) => {
+      if (col === undefined) return false;
+      const v = row.getCell(col).value;
       return v !== null && v !== undefined && String(v).trim() !== '';
     });
     if (!hasValue) continue;
 
     const data: Record<string, unknown> = {};
-    fields.forEach((f, i) => {
-      const raw = row.getCell(i + 1).value;
-      if (f.type === 'number') {
+    fieldCols.forEach(({ field, col }) => {
+      if (col === undefined) {
+        data[field.key] = undefined;
+        return;
+      }
+      const raw = row.getCell(col).value;
+      if (field.type === 'number') {
         const n = Number(raw);
-        data[f.key] = isNaN(n) ? raw : n;
-      } else if (f.type === 'date') {
+        data[field.key] = isNaN(n) ? raw : n;
+      } else if (field.type === 'date') {
         if (raw instanceof Date) {
-          data[f.key] = raw.toISOString().slice(0, 10);
+          data[field.key] = raw.toISOString().slice(0, 10);
         } else {
-          data[f.key] = cellToString(raw);
+          data[field.key] = cellToString(raw);
         }
       } else {
-        data[f.key] = cellToString(raw);
+        data[field.key] = cellToString(raw);
       }
     });
 

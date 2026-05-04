@@ -240,7 +240,7 @@ func (h *ExpenseHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
-// ExportHandler — 아마란스10 ERP 내보내기 (D-108 탑솔라 전용).
+// ExportHandler — 아마란스10 ERP 내보내기 (D-108 탑솔라 전용) + 통합 덤프.
 func (h *ExportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/export/amaranth", func(r chi.Router) {
 		r.Use(g.TopsolarOnly)
@@ -254,6 +254,8 @@ func (h *ExportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.With(g.Write).Post("/jobs/{id}/claim", h.ClaimUploadJob)
 		r.With(g.Write).Put("/jobs/{id}/status", h.UpdateUploadJobStatus)
 	})
+	// 전체 컬렉션 통합 덤프 — admin 전용, 테넌트 스코프 미적용 (모든 테넌트 데이터 통합).
+	r.With(g.AdminOnly).Get("/export/all", h.FullDataDump)
 }
 
 // ImportHandler — 엑셀 일괄 등록 7종 (모두 write).

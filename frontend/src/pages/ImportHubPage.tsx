@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { Download, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { Database, Download, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { MasterConsole } from '@/components/command/MasterConsole';
+import { useAuth } from '@/hooks/useAuth';
 import { useExcel } from '@/hooks/useExcel';
 import { notify } from '@/lib/notify';
 import type { TemplateType } from '@/types/excel';
@@ -38,7 +39,10 @@ const IMPORT_GROUPS: Array<{
 
 export default function ImportHubPage() {
   const { masterData, loading } = useExcel('sale');
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const [downloading, setDownloading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const handleUnifiedDownload = useCallback(async () => {
     if (!masterData) return;
@@ -53,6 +57,18 @@ export default function ImportHubPage() {
     }
   }, [masterData]);
 
+  const handleExportAll = useCallback(async () => {
+    setExporting(true);
+    try {
+      const { generateUnifiedExport } = await import('@/lib/excelExport');
+      await generateUnifiedExport();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : '전체 데이터 내보내기 실패');
+    } finally {
+      setExporting(false);
+    }
+  }, []);
+
   return (
     <MasterConsole
       eyebrow="IMPORT HUB"
@@ -61,16 +77,32 @@ export default function ImportHubPage() {
       tableTitle="입력 양식"
       tableSub="통합 양식 + 업무별 검증 업로드"
       actions={(
-        <Button
-          type="button"
-          size="sm"
-          className="h-8 gap-1.5"
-          disabled={!masterData || loading || downloading}
-          onClick={handleUnifiedDownload}
-        >
-          {downloading || loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-          통합 양식 다운로드
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 gap-1.5"
+            disabled={!masterData || loading || downloading}
+            onClick={handleUnifiedDownload}
+          >
+            {downloading || loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            통합 양식 다운로드
+          </Button>
+          {isAdmin && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+              disabled={exporting}
+              onClick={handleExportAll}
+              title="관리자 전용 — 모든 컬렉션의 거래 데이터를 한 파일로 내보냅니다"
+            >
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Database className="h-3.5 w-3.5" />}
+              전체 데이터 내보내기
+            </Button>
+          )}
+        </div>
       )}
       metrics={[
         { label: '통합 양식', value: '1', unit: '파일', sub: '8개 시트', tone: 'solar', spark: [1, 2, 3, 5, 8] },

@@ -50,6 +50,115 @@ func (h *ExportHandler) AmaranthSalesClosing(w http.ResponseWriter, r *http.Requ
 	response.RespondError(w, http.StatusNotImplemented, "아마란스 매출마감 내보내기는 D-067에 따라 실물 양식 확인 후 구현합니다")
 }
 
+// FullDataDump — GET /api/v1/export/all
+// 비유: 8개 거래·기준 컬렉션을 한 묶음 JSON으로 내려주는 관리자 전용 통합 덤프.
+// 권한: g.AdminOnly + 테넌트 스코프 분리.
+//   - baro 테넌트(D-108): company_code = "BR" 인 법인 데이터만
+//   - topsolar/cable 테넌트: company_code != "BR" 인 법인 데이터만
+//
+// 단일 DB · URL 분기 · 코드 레벨 마스킹 (D-108) 패턴을 그대로 적용한다.
+func (h *ExportHandler) FullDataDump(w http.ResponseWriter, r *http.Request) {
+	scope := middleware.GetTenantScope(r.Context())
+
+	companiesData, companyIDs, err := h.tenantScopedCompanies(scope)
+	if err != nil {
+		log.Printf("[전체 데이터 덤프] 법인 조회 실패: scope=%s err=%v", scope, err)
+		response.RespondError(w, http.StatusInternalServerError, "법인 조회에 실패했습니다")
+		return
+	}
+
+	dump := struct {
+		Companies    json.RawMessage `json:"companies"`
+		Orders       json.RawMessage `json:"orders"`
+		Outbounds    json.RawMessage `json:"outbounds"`
+		Sales        json.RawMessage `json:"sales"`
+		Receipts     json.RawMessage `json:"receipts"`
+		Bls          json.RawMessage `json:"bls"`
+		Declarations json.RawMessage `json:"declarations"`
+		Expenses     json.RawMessage `json:"expenses"`
+	}{
+		Companies: companiesData,
+	}
+
+	// 테넌트에 속한 법인이 0개면 거래 시트도 모두 빈 배열로 회신.
+	if len(companyIDs) == 0 {
+		empty := json.RawMessage("[]")
+		dump.Orders = empty
+		dump.Outbounds = empty
+		dump.Sales = empty
+		dump.Receipts = empty
+		dump.Bls = empty
+		dump.Declarations = empty
+		dump.Expenses = empty
+		response.RespondJSON(w, http.StatusOK, dump)
+		return
+	}
+
+	txTables := []struct {
+		label  string
+		table  string
+		target *json.RawMessage
+	}{
+		{"수주", "orders", &dump.Orders},
+		{"출고", "outbounds", &dump.Outbounds},
+		{"매출", "sales", &dump.Sales},
+		{"수금", "receipts", &dump.Receipts},
+		{"입고", "bl_shipments", &dump.Bls},
+		{"면장", "import_declarations", &dump.Declarations},
+		{"부대비용", "incidental_expenses", &dump.Expenses},
+	}
+
+	for _, t := range txTables {
+		data, _, err := h.DB.From(t.table).
+			Select("*", "exact", false).
+			In("company_id", companyIDs).
+			Execute()
+		if err != nil {
+			log.Printf("[전체 데이터 덤프] %s(%s) 조회 실패: scope=%s err=%v", t.label, t.table, scope, err)
+			response.RespondError(w, http.StatusInternalServerError, fmt.Sprintf("%s 조회에 실패했습니다", t.label))
+			return
+		}
+		if len(data) == 0 {
+			data = []byte("[]")
+		}
+		*t.target = json.RawMessage(data)
+	}
+
+	response.RespondJSON(w, http.StatusOK, dump)
+}
+
+// tenantScopedCompanies — 호출 사용자의 테넌트 스코프에 속한 법인 raw JSON과 ID 목록을 반환.
+// 비유: "이 사람 사원증으로 들어갈 수 있는 법인실의 명함첩만 모아준다."
+func (h *ExportHandler) tenantScopedCompanies(scope string) (json.RawMessage, []string, error) {
+	query := h.DB.From("companies").Select("*", "exact", false)
+	if scope == middleware.TenantScopeBaro {
+		query = query.Eq("company_code", "BR")
+	} else {
+		query = query.Neq("company_code", "BR")
+	}
+	data, _, err := query.Execute()
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(data) == 0 {
+		data = []byte("[]")
+	}
+
+	var rows []struct {
+		CompanyID string `json:"company_id"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, nil, err
+	}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.CompanyID != "" {
+			ids = append(ids, row.CompanyID)
+		}
+	}
+	return json.RawMessage(data), ids, nil
+}
+
 // DownloadRPAPackage — GET /api/v1/export/amaranth/rpa-package
 // 비유: 사용자가 npm을 만지지 않도록, 운영자가 준비한 Windows 자동화 ZIP에 서버 설정을 주입해 내려준다.
 func (h *ExportHandler) DownloadRPAPackage(w http.ResponseWriter, r *http.Request) {
