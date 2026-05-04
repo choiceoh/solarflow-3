@@ -25,6 +25,7 @@ import {
   Truck,
   Wallet,
   Wand2,
+  FlaskConical,
   type LucideIcon,
 } from 'lucide-react';
 import { detectTenantScope, type TenantScope } from '@/lib/tenantScope';
@@ -116,6 +117,10 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'baro-incoming', label: '입고예정', abbr: '입고', path: '/baro/incoming', icon: Ship, menu: 'baro_incoming', tenants: ['baro'] },
       // BARO 자체 구매 — 국내 타사/그룹내 매입 원가 이력
       { key: 'baro-purchase-history', label: '구매이력', abbr: '이력', path: '/baro/purchase-history', icon: ReceiptText, menu: 'baro_purchase_history', tenants: ['baro'] },
+      // 메타 인프라 v2 — 운영은 위 P/O·L/C 그대로 사용. v2는 메타 ListScreen + MetaDetail 인라인편집 비교용.
+      // RoleGuard(admin/operator)로 라우트 차단되어 일반 사용자가 클릭해도 페이지 접근 불가. isWip:true로 admin이 사이트 설정에서 숨길 수 있음.
+      { key: 'po-v2', label: '발주(메타v2)', abbr: 'P2', path: '/procurement/po-v2', icon: FlaskConical, menu: 'procurement', tenants: MODULE_TENANTS, isWip: true },
+      { key: 'lc-v2', label: 'L/C(메타v2)', abbr: 'L2', path: '/procurement/lc-v2', icon: FlaskConical, menu: 'lc', tenants: MODULE_TENANTS, isWip: true },
     ],
   },
   {

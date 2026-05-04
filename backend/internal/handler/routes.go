@@ -310,6 +310,9 @@ func (h *LCHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
+		// 메타 GUI inline 편집 진입점 — UpdateLCRequest 모든 필드 optional이라 partial 동작.
+		// h.Update 내부에서 auditEntityByRouteID로 변경 추적 (인라인 셀 단위 변경도 audit_log에 기록).
+		r.With(g.Write).Patch("/{id}", h.Update)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
 }
@@ -452,6 +455,9 @@ func (h *POHandler) RegisterRoutes(r chi.Router, g middleware.Gates, lineH *POLi
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
+		// 메타 GUI inline 편집 진입점 — UpdatePurchaseOrderRequest 모든 필드 optional이라 partial 동작.
+		// h.Update 내부에서 auditEntityByRouteID로 변경 추적 (인라인 셀 단위 변경도 audit_log에 기록).
+		r.With(g.Write).Patch("/{id}", h.Update)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 		r.Route("/{poId}/lines", func(r chi.Router) {
 			r.Get("/", lineH.ListByPO)

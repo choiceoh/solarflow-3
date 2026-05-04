@@ -46,7 +46,7 @@ import {
   type POStatus, type LCStatus,
   type PurchaseOrder, type LCRecord,
 } from '@/types/procurement';
-import { usePOList, useLCList } from '@/hooks/useProcurement';
+import { usePOList, useLCList, usePOLines } from '@/hooks/useProcurement';
 import StatusPill from '@/components/common/StatusPill';
 import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite } from '@/types/masters';
 import type {
@@ -755,6 +755,79 @@ export const toolbarExtras: Record<string, ToolbarExtra> = {
   },
 };
 
+// PO 라인 미니 테이블 — contentBlock 안에서 hook을 쓰려면 별 컴포넌트 필요.
+function POLinesContentBlock({ poId }: { poId: string }) {
+  const { data: lines, loading } = usePOLines(poId || null);
+  if (!poId) return null;
+  if (loading) {
+    return <p className="text-xs text-muted-foreground">라인 로드 중...</p>;
+  }
+  if (!lines || lines.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        등록된 라인이 없습니다 — /procurement에서 라인 추가 가능
+      </p>
+    );
+  }
+  const totalQty = lines.reduce((s, l) => s + (l.quantity ?? 0), 0);
+  const totalUsd = lines.reduce((s, l) => s + (l.total_amount_usd ?? 0), 0);
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full text-[12px]">
+        <thead className="bg-muted/50 text-muted-foreground">
+          <tr>
+            <th className="p-2 text-left">품번</th>
+            <th className="p-2 text-right">수량</th>
+            <th className="p-2 text-right">USD/panel</th>
+            <th className="p-2 text-right">합계(USD)</th>
+            <th className="p-2 text-center">구분</th>
+            <th className="p-2 text-center">유무상</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l) => (
+            <tr key={l.po_line_id} className="border-t">
+              <td className="p-2 font-medium">
+                {l.product_code ?? l.products?.product_code ?? '—'}
+              </td>
+              <td className="p-2 text-right font-mono tabular-nums">
+                {(l.quantity ?? 0).toLocaleString()}
+              </td>
+              <td className="p-2 text-right font-mono tabular-nums">
+                {l.unit_price_usd != null ? l.unit_price_usd.toFixed(2) : '—'}
+              </td>
+              <td className="p-2 text-right font-mono tabular-nums">
+                {l.total_amount_usd != null
+                  ? l.total_amount_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                  : '—'}
+              </td>
+              <td className="p-2 text-center text-muted-foreground">
+                {l.item_type === 'main' ? '본품' : l.item_type === 'spare' ? '스페어' : '—'}
+              </td>
+              <td className="p-2 text-center text-muted-foreground">
+                {l.payment_type === 'paid' ? '유상' : l.payment_type === 'free' ? '무상' : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="bg-muted/30">
+          <tr className="border-t font-medium">
+            <td className="p-2">합계 {lines.length}건</td>
+            <td className="p-2 text-right font-mono tabular-nums">
+              {totalQty.toLocaleString()}
+            </td>
+            <td className="p-2" />
+            <td className="p-2 text-right font-mono tabular-nums">
+              {totalUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            </td>
+            <td className="p-2" colSpan={2} />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 // ─── Content blocks (탭 콘텐츠 위에 끼워넣는 블록) ─────────────────────────
 export const contentBlocks: Record<string, ContentBlock> = {
   sale_summary_cards: ({ items }) => <SaleSummaryCards items={items as never} />,
@@ -803,6 +876,12 @@ export const contentBlocks: Record<string, ContentBlock> = {
     const ob = items[0] as Outbound;
     if (!ob.memo) return null;
     return <p className="text-sm whitespace-pre-wrap break-words">{ob.memo}</p>;
+  },
+  // 발주(PO) 상세 — 라인 미니 테이블. PO record에서 po_id로 usePOLines 호출.
+  // PODetailView가 도메인 화면이라 풍부하지만, 메타 상세에서도 quick read 가능하도록 헤더 + 수량 + 단가 표시.
+  po_lines_block: ({ items }) => {
+    const po = items[0] as PurchaseOrder;
+    return <POLinesContentBlock poId={po?.po_id ?? ''} />;
   },
   // Phase 4 (bank-meta): 은행 detail 의 "L/C 사용 현황" 탭 placeholder.
   // 향후 LCLimitSummaryCards / BankLimitTable 같은 banking 위젯과 연결.
@@ -1227,6 +1306,7 @@ export const formSubmitterMeta: RegistryMeta = {};
 export const computedFormulaMeta: RegistryMeta = {};
 export const formRefinementMeta: RegistryMeta = {};
 export const contentBlockMeta: RegistryMeta = {
+  po_lines_block: { label: 'PO 라인 미니 테이블', description: 'usePOLines로 라인 fetch + 품번/수량/단가/합계 표시' },
   sale_summary_cards: { label: '판매 요약 카드', description: '판매 통계 (건수/총액/마감률) 카드' },
   bl_status_badge: { label: 'BL 상태 뱃지', description: 'detail 헤더 — 입고 상태 표시' },
   bl_memo_block: { label: 'BL 메모 블록', description: 'detail 메모 섹션 — pre-wrap 텍스트' },
