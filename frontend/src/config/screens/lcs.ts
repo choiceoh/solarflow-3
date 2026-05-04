@@ -1,6 +1,6 @@
 // 신용장(LC) 목록 — 메타 ListScreen.
 // 신규 등록·라인 편집은 도메인 다이얼로그(/procurement → LCCreateDialog / LCLineEditDialog).
-// 듀얼 product GUI 메타 편집기에서 LC entity 인지·필터·status badge 노출.
+// 듀얼 product GUI 메타 편집기에서 LC entity 인지·필터·status 컬럼.
 
 import type { ListScreenConfig } from '@/templates/types';
 
@@ -17,13 +17,15 @@ const config: ListScreenConfig = {
     {
       key: 'status',
       label: '상태',
-      kind: 'enum',
+      type: 'select',
+      optionsFrom: 'enum',
       enumKey: 'LC_STATUS_LABEL',
     },
     {
       key: 'bank_id',
       label: '은행',
-      kind: 'master',
+      type: 'select',
+      optionsFrom: 'master',
       masterKey: 'banks.byCompany',
     },
   ],
@@ -43,7 +45,7 @@ const config: ListScreenConfig = {
     { key: 'amount_usd', label: '금액(USD)', align: 'right', className: 'tabular-nums', formatter: 'number' },
     { key: 'usance_days', label: '유산스(일)', align: 'right', className: 'tabular-nums', fallback: '—' },
     { key: 'maturity_date', label: '만기일', formatter: 'date' },
-    { key: 'status', label: '상태', formatter: 'enum', enumKey: 'LC_STATUS_LABEL' },
+    { key: 'status', label: '상태' },
   ],
   actions: [],
   emptyState: { message: '등록된 L/C가 없습니다 — /procurement에서 신규 등록하세요' },

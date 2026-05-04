@@ -1,6 +1,6 @@
 // 발주(PO) 목록 — 메타 ListScreen.
 // 신규 등록·수정은 도메인 다이얼로그(/procurement → POCreateDialog)에서 처리. 메타 폼 미지원 (라인 N개 동적 폼은 메타 인프라 범위 외).
-// 듀얼 product GUI 메타 편집기에서 PO entity로 인지·필터·검색·status badge 가능.
+// 듀얼 product GUI 메타 편집기에서 PO entity로 인지·필터·검색·status 컬럼 가능.
 
 import type { ListScreenConfig } from '@/templates/types';
 
@@ -17,19 +17,22 @@ const config: ListScreenConfig = {
     {
       key: 'status',
       label: '상태',
-      kind: 'enum',
+      type: 'select',
+      optionsFrom: 'enum',
       enumKey: 'PO_STATUS_LABEL',
     },
     {
       key: 'manufacturer_id',
       label: '제조사',
-      kind: 'master',
+      type: 'select',
+      optionsFrom: 'master',
       masterKey: 'manufacturers',
     },
     {
       key: 'contract_type',
       label: '계약유형',
-      kind: 'enum',
+      type: 'select',
+      optionsFrom: 'enum',
       enumKey: 'CONTRACT_TYPE_LABEL',
     },
   ],
@@ -44,11 +47,11 @@ const config: ListScreenConfig = {
   columns: [
     { key: 'po_number', label: '발주번호' },
     { key: 'manufacturer_name', label: '제조사', fallback: '—' },
-    { key: 'contract_type', label: '유형', formatter: 'enum', enumKey: 'CONTRACT_TYPE_LABEL' },
+    { key: 'contract_type', label: '유형' },
     { key: 'contract_date', label: '계약일', formatter: 'date' },
     { key: 'total_qty', label: '수량', align: 'right', className: 'tabular-nums', formatter: 'number' },
     { key: 'total_mw', label: 'MW', align: 'right', className: 'tabular-nums', formatter: 'number' },
-    { key: 'status', label: '상태', formatter: 'enum', enumKey: 'PO_STATUS_LABEL' },
+    { key: 'status', label: '상태' },
   ],
   actions: [],
   emptyState: { message: '등록된 PO가 없습니다 — /procurement에서 신규 등록하세요' },
