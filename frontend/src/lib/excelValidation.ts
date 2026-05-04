@@ -46,6 +46,11 @@ const NORMALIZED_VALUES: Record<string, Record<string, string>> = {
   fulfillment_source: buildNormalizer(FULFILLMENT_SOURCE_LABEL),
   group_trade: { Y: 'Y', N: 'N', y: 'Y', n: 'N' },
   erp_closed: { Y: 'Y', N: 'N', y: 'Y', n: 'N' },
+  // D-055: 출고 워크플로우 체크박스 4개 — 표준 양식 Y/N 입력
+  tx_statement_ready: { Y: 'Y', N: 'N', y: 'Y', n: 'N' },
+  inspection_request_sent: { Y: 'Y', N: 'N', y: 'Y', n: 'N' },
+  approval_requested: { Y: 'Y', N: 'N', y: 'Y', n: 'N' },
+  tax_invoice_issued: { Y: 'Y', N: 'N', y: 'Y', n: 'N' },
   // PO 계약유형 — 한글 라벨('스팟','프레임')과 코드값('spot','frame')을 모두 받는다.
   // CONTRACT_TYPES_ACTIVE만 허용 — 레거시(annual 등)는 신규 등록 차단.
   contract_type: Object.fromEntries(

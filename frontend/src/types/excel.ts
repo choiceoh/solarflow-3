@@ -108,6 +108,7 @@ export const INBOUND_FIELDS: FieldDef[] = [
 ];
 
 // 출고 필드
+// D-055: 워크플로우 체크박스 4개 + source_payload 추가 (외부 양식 변환 시 정보 손실 0).
 export const OUTBOUND_FIELDS: FieldDef[] = [
   { key: 'outbound_date', label: '출고일', required: true, type: 'date' },
   { key: 'company_code', label: '법인코드', required: true, type: 'string' },
@@ -123,6 +124,11 @@ export const OUTBOUND_FIELDS: FieldDef[] = [
   { key: 'target_company_code', label: '상대법인코드', required: false, type: 'string' },
   { key: 'erp_outbound_no', label: 'ERP출고번호', required: false, type: 'string' },
   { key: 'memo', label: '메모', required: false, type: 'string' },
+  // 워크플로우 4종 — 표준 양식에서는 Y/N 입력
+  { key: 'tx_statement_ready', label: '거래명세서(Y/N)', required: false, type: 'boolean' },
+  { key: 'inspection_request_sent', label: '인수검수요청서(Y/N)', required: false, type: 'boolean' },
+  { key: 'approval_requested', label: '결재요청(Y/N)', required: false, type: 'boolean' },
+  { key: 'tax_invoice_issued', label: '계산서발행(Y/N)', required: false, type: 'boolean' },
 ];
 
 // 매출 필드 (지적 1 반영: outbound_id 필수, 출고일/품번 제거 — outbound에서 자동 조회)
