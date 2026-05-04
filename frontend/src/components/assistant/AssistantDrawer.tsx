@@ -24,18 +24,18 @@ interface SessionDetail extends SessionSummary {
   messages: UIMessage[];
 }
 
-const DRAWER_WIDTH = 380;
+const POPUP_WIDTH = 380;
+const POPUP_HEIGHT = 640;
 
 /**
- * 화면 우측 슬라이드 drawer 안에 ChatBox 임베드.
- * "팝업" 의미에 맞게 가볍게 — 무거운 작업은 /assistant 풀 페이지에서.
+ * 우하단 floating 버튼에 매달린 popover. 풀드로어 아님 — 뒤 화면 그대로.
  *
  * 헤더 = 2줄:
  *   1줄: 🤖 어시스턴트 · 세션 상태 · [+ 새 대화] [X]
  *   2줄: 📍 {pageLabel} — AI 가 이 화면 인식 중 (라벨 추론 실패 시 생략)
  *
  * 세션:
- * - drawer 가 열릴 때 가장 최근 세션 자동 로드 — 풀 페이지와 동일 backend 세션 공유
+ * - popup 이 열릴 때 가장 최근 세션 자동 로드 — 풀 페이지와 동일 backend 세션 공유
  * - "+ 새 대화" 로 빈 세션. 다른 세션 점프는 풀 페이지에서 (팝업은 가볍게)
  * - mock 모드면 세션 비활성
  */
@@ -107,71 +107,66 @@ export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
   const sessionStatusLabel = loading ? '불러오는 중…' : currentSessionId ? '이전 대화 이어서' : '새 대화';
 
   return (
-    <>
-      <button
-        type="button"
-        aria-label="어시스턴트 닫기"
-        onClick={onClose}
-        className="fixed inset-0 z-[110] bg-black/20 backdrop-blur-[1px] transition-opacity"
-      />
-      <aside
-        role="dialog"
-        aria-label="AI 어시스턴트"
-        className="fixed top-0 right-0 z-[111] flex h-screen flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
-        style={{ width: DRAWER_WIDTH }}
-      >
-        <header className="flex shrink-0 flex-col gap-1 border-b border-slate-200 px-4 py-2.5 dark:border-slate-700">
-          <div className="flex min-w-0 items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <Bot className="h-5 w-5 shrink-0 text-[var(--sf-solar)]" aria-hidden />
-              <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">어시스턴트</h2>
-              <span className="truncate text-xs text-slate-400">{sessionStatusLabel}</span>
-            </div>
-            <div className="flex shrink-0 items-center gap-0.5">
-              <button
-                type="button"
-                onClick={startNew}
-                disabled={loading}
-                className="flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                title="새 대화 시작"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                새 대화
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                aria-label="닫기"
-                title="닫기 (Esc)"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+    <aside
+      role="dialog"
+      aria-label="AI 어시스턴트"
+      className="fixed bottom-5 right-5 z-[111] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+      style={{
+        width: POPUP_WIDTH,
+        height: `min(${POPUP_HEIGHT}px, calc(100vh - 40px))`,
+      }}
+    >
+      <header className="flex shrink-0 flex-col gap-1 border-b border-slate-200 px-4 py-2.5 dark:border-slate-700">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <Bot className="h-5 w-5 shrink-0 text-[var(--sf-solar)]" aria-hidden />
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">어시스턴트</h2>
+            <span className="truncate text-xs text-slate-400">{sessionStatusLabel}</span>
           </div>
-          {pageLabel && (
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-              <span aria-hidden>📍</span>
-              <span className="truncate">
-                <span className="font-medium text-slate-700 dark:text-slate-200">{pageLabel}</span>
-                <span className="ml-1.5 text-slate-400">— AI 가 이 화면 인식 중</span>
-              </span>
-            </div>
-          )}
-        </header>
-        <div className="flex min-h-0 flex-1 flex-col">
-          <ChatBox
-            key={chatKey}
-            initialMessages={initialMessages}
-            sessionId={currentSessionId}
-            sessionsEnabled={sessionsEnabled}
-            embedded
-            onSessionUpserted={(s, makeCurrent) => {
-              if (makeCurrent) setCurrentSessionId(s.id);
-            }}
-          />
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              onClick={startNew}
+              disabled={loading}
+              className="flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              title="새 대화 시작"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              새 대화
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              aria-label="닫기"
+              title="닫기 (Esc)"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-      </aside>
-    </>
+        {pageLabel && (
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+            <span aria-hidden>📍</span>
+            <span className="truncate">
+              <span className="font-medium text-slate-700 dark:text-slate-200">{pageLabel}</span>
+              <span className="ml-1.5 text-slate-400">— AI 가 이 화면 인식 중</span>
+            </span>
+          </div>
+        )}
+      </header>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ChatBox
+          key={chatKey}
+          initialMessages={initialMessages}
+          sessionId={currentSessionId}
+          sessionsEnabled={sessionsEnabled}
+          embedded
+          onSessionUpserted={(s, makeCurrent) => {
+            if (makeCurrent) setCurrentSessionId(s.id);
+          }}
+        />
+      </div>
+    </aside>
   );
 };
