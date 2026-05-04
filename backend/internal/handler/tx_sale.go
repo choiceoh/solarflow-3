@@ -213,7 +213,7 @@ func parseSaleSort(r *http.Request) (column string, ascending bool) {
 //
 // 응답 헤더 X-Total-Count.
 func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("sales").Select("*", "exact", false)
+	query := h.DB.From("sales").Select("sale_id,outbound_id,order_id,customer_id,quantity,capacity_kw,unit_price_wp,unit_price_ea,supply_amount,vat_amount,total_amount,tax_invoice_date,tax_invoice_email,erp_closed,erp_closed_date,status,memo,erp_sales_no,erp_line_no,currency,created_at,updated_at", "exact", false)
 	query, ok, err := h.applySaleFilters(r, query)
 	if err != nil {
 		log.Printf("[판매 목록 필터 처리 실패] %v", err)
@@ -354,28 +354,28 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	var products []saleProductRow
 	var partners []salePartnerRow
 
-	if data, _, err := h.DB.From("orders").Select("order_id, order_number, order_date, company_id, customer_id, product_id, quantity, capacity_kw, site_name", "exact", false).Execute(); err == nil {
+	if data, _, err := h.DB.From("orders").Select("order_id, order_number, order_date, company_id, customer_id, product_id, quantity, capacity_kw, site_name", "exact", false).Range(0, 99999, "").Execute(); err == nil {
 		if err := json.Unmarshal(data, &orders); err != nil {
 			log.Printf("[매출 enrich] orders 디코딩 실패 — 수주 정보 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] orders 조회 실패 — 수주 정보 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("outbounds").Select("outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status", "exact", false).Execute(); err == nil {
+	if data, _, err := h.DB.From("outbounds").Select("outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status", "exact", false).Range(0, 99999, "").Execute(); err == nil {
 		if err := json.Unmarshal(data, &outbounds); err != nil {
 			log.Printf("[매출 enrich] outbounds 디코딩 실패 — 출고 정보 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] outbounds 조회 실패 — 출고 정보 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp", "exact", false).Execute(); err == nil {
+	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp", "exact", false).Range(0, 99999, "").Execute(); err == nil {
 		if err := json.Unmarshal(data, &products); err != nil {
 			log.Printf("[매출 enrich] products 디코딩 실패 — 품목명/스펙 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] products 조회 실패 — 품목명/스펙 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("partners").Select("partner_id, partner_name", "exact", false).Execute(); err == nil {
+	if data, _, err := h.DB.From("partners").Select("partner_id, partner_name", "exact", false).Range(0, 99999, "").Execute(); err == nil {
 		if err := json.Unmarshal(data, &partners); err != nil {
 			log.Printf("[매출 enrich] partners 디코딩 실패 — 거래처명 비표시: %v", err)
 		}
