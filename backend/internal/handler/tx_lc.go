@@ -35,7 +35,7 @@ type lcStatusUpdate struct {
 // TODO: maturity_date 범위 필터 추가 (대시보드 "LC 만기 임박" 알림용)
 func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("lc_records").
-		Select("*, banks(bank_name), companies(company_name, company_code), purchase_orders(po_number)", "exact", false)
+		Select("*, banks(bank_name), companies(company_name, company_code), purchase_orders(po_number, manufacturer_id)", "exact", false)
 
 	// 비유: ?po_id=xxx — 특정 PO의 LC만 필터
 	if poID := r.URL.Query().Get("po_id"); poID != "" {
@@ -69,6 +69,17 @@ func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[LC 목록 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
 		return
+	}
+
+	// manufacturer_id는 lc_records 컬럼이 아니라 purchase_orders join 으로 따라오므로 fetch 후 필터.
+	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
+		filtered := records[:0]
+		for _, rec := range records {
+			if rec.PurchaseOrders != nil && rec.PurchaseOrders.ManufacturerID != nil && *rec.PurchaseOrders.ManufacturerID == mfgID {
+				filtered = append(filtered, rec)
+			}
+		}
+		records = filtered
 	}
 
 	response.RespondJSON(w, http.StatusOK, records)
