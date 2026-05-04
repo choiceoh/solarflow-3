@@ -57,6 +57,12 @@ func assistantToolCatalog() []assistantTool {
 		toolSearchDeclarations(),
 		// 메타 config — 화면/폼/상세 단건 조회 (admin only)
 		toolReadUIConfig(),
+		// 도메인 지식 — 한국 태양광 산업 일반 사전 (정적 마크다운 슬라이스)
+		toolGetSolarDomainKnowledge(),
+		// 도메인 지식 그래프 (graphify-style) — 키워드 검색 / 노드 설명 / 최단 경로
+		toolSolarQuery(),
+		toolSolarExplain(),
+		toolSolarPath(),
 	}
 }
 
