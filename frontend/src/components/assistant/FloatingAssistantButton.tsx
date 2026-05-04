@@ -9,8 +9,10 @@ import { AssistantDrawer } from './AssistantDrawer';
  * 단축키 ⌘. (Cmd+Period) — 빠른 호출.
  *
  * 권한: admin only — 일반 사용자에게는 /assistant 사이드바 메뉴로 충분.
+ *       (admin 의 진짜 use case = "현재 화면 보면서 메타 변경 요청")
  *
- * drawer open 상태는 store 에 lift.
+ * drawer open 상태는 store 에 lift — 인스펙터 ScopePanel 등 다른 컴포넌트가
+ * 외부에서 drawer 를 열 수 있도록.
  */
 export const FloatingAssistantButton = () => {
   const { role } = useAuth();

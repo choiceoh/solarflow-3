@@ -505,7 +505,7 @@ func (h *OutboundHandler) Create(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, code, created)
 }
 
-// createOutboundCore — Create 핸들러가 사용하는 핵심 로직.
+// createOutboundCore — Create 핸들러와 AI 도우미 ConfirmProposal이 공유하는 핵심 로직.
 // status 기본값/검증/재고 체크/트랜잭션 RPC/결과 조회까지 수행한다.
 // audit log 기록은 호출 측에서 (요청 컨텍스트가 필요하므로).
 // 반환: (생성된 출고, HTTP status code, 사용자용 메시지, error). err==nil이면 code는 201.
