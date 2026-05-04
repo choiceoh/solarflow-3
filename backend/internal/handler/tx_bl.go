@@ -2,15 +2,34 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
+
+const (
+	blDefaultLimit = 100
+	blMaxLimit     = 1000
+)
+
+var blSortable = map[string]struct{}{
+	"bl_number":      {},
+	"etd":            {},
+	"eta":            {},
+	"actual_arrival": {},
+	"status":         {},
+	"inbound_type":   {},
+	"created_at":     {},
+}
 
 // BLHandler — B/L(입고/선적) 관련 API를 처리하는 핸들러
 // 비유: "선적 서류 관리실" — 수입/국내/그룹 내 입고 서류를 관리
@@ -23,55 +42,73 @@ func NewBLHandler(db *supa.Client) *BLHandler {
 	return &BLHandler{DB: db}
 }
 
-// List — GET /api/v1/bls — B/L 목록 조회
-// 비유: 선적 서류 관리실에서 전체 입고 현황을 꺼내 보여주는 것
-// 주의: PostgREST 임베드(companies/manufacturers/warehouses)는 FK가 모호하면
-// (예: bl_shipments에 company_id + counterpart_company_id 동시 존재 → companies 양방향)
-// 단일 객체 대신 배열을 반환할 수 있어 unmarshal 실패의 원인이 됨. 임베드 제거하고 평탄 응답.
-// 화면에서 마스터 이름이 필요하면 별도 API(/companies, /manufacturers)로 클라이언트가 룩업.
-// TODO: eta 범위 필터 추가 (대시보드 "입항 예정" 알림용)
-func (h *BLHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("bl_shipments").Select("*", "exact", false)
+func sanitizeBLSearchTerm(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(",", " ", "(", " ", ")", " ", ".", " ", "*", " ", "\"", " ")
+	return strings.TrimSpace(replacer.Replace(q))
+}
 
-	// 입력 필터 조건을 디버그 로그에 기록
-	poID := r.URL.Query().Get("po_id")
-	lcID := r.URL.Query().Get("lc_id")
-	compID := r.URL.Query().Get("company_id")
-	mfgID := r.URL.Query().Get("manufacturer_id")
-	status := r.URL.Query().Get("status")
-	inboundType := r.URL.Query().Get("inbound_type")
-	log.Printf("[B/L 목록 조회 요청] po_id=%q lc_id=%q company_id=%q manufacturer_id=%q status=%q inbound_type=%q",
-		poID, lcID, compID, mfgID, status, inboundType)
-
-	if poID != "" {
+func (h *BLHandler) applyBLFilters(r *http.Request, query *postgrest.FilterBuilder) *postgrest.FilterBuilder {
+	if poID := r.URL.Query().Get("po_id"); poID != "" {
 		query = query.Eq("po_id", poID)
 	}
-
-	if lcID != "" {
+	if lcID := r.URL.Query().Get("lc_id"); lcID != "" {
 		query = query.Eq("lc_id", lcID)
 	}
-
-	// 비유: ?company_id=xxx — 특정 법인의 B/L만 필터 ("all"이면 전체)
-	if compID != "" && compID != "all" {
+	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
 		query = query.Eq("company_id", compID)
 	}
-
-	// 비유: ?manufacturer_id=xxx — 특정 제조사의 B/L만 필터
-	if mfgID != "" {
+	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
 		query = query.Eq("manufacturer_id", mfgID)
 	}
-
-	// 비유: ?status=shipping — 특정 상태의 B/L만 필터
-	if status != "" {
+	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
 	}
-
-	// 비유: ?inbound_type=import — 입고유형 필터
-	if inboundType != "" {
+	if inboundType := r.URL.Query().Get("inbound_type"); inboundType != "" {
 		query = query.Eq("inbound_type", inboundType)
 	}
+	if q := sanitizeBLSearchTerm(r.URL.Query().Get("q")); q != "" {
+		clauses := []string{
+			fmt.Sprintf("bl_number.ilike.*%s*", q),
+			fmt.Sprintf("invoice_number.ilike.*%s*", q),
+			fmt.Sprintf("declaration_number.ilike.*%s*", q),
+			fmt.Sprintf("port.ilike.*%s*", q),
+			fmt.Sprintf("forwarder.ilike.*%s*", q),
+		}
+		query = query.Or(strings.Join(clauses, ","), "")
+	}
+	return query
+}
 
-	data, _, err := query.Execute()
+func parseBLSort(r *http.Request) (column string, ascending bool) {
+	column = "eta"
+	ascending = false
+	if raw := r.URL.Query().Get("sort"); raw != "" {
+		if _, ok := blSortable[raw]; ok {
+			column = raw
+		}
+	}
+	if r.URL.Query().Get("order") == "asc" {
+		ascending = true
+	}
+	return column, ascending
+}
+
+// List — GET /api/v1/bls — B/L 목록 조회 (서버사이드 페이지·검색·정렬).
+func (h *BLHandler) List(w http.ResponseWriter, r *http.Request) {
+	query := h.DB.From("bl_shipments").Select("*", "exact", false)
+	query = h.applyBLFilters(r, query)
+
+	sortCol, asc := parseBLSort(r)
+	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
+
+	limit, offset := parseLimitOffset(r, blDefaultLimit, blMaxLimit)
+	query = query.Range(offset, offset+limit-1, "")
+
+	data, count, err := query.Execute()
 	if err != nil {
 		log.Printf("[B/L 목록 조회 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "B/L 목록 조회에 실패했습니다")
@@ -85,8 +122,43 @@ func (h *BLHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[B/L 목록 조회 결과] %d건 반환", len(shipments))
+	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, shipments)
+}
+
+// BLSummary — KPI 카드용 집계.
+type BLSummary struct {
+	Total          int64 `json:"total"`
+	ShippingCount  int64 `json:"shipping_count"`
+	ArrivedCount   int64 `json:"arrived_count"`
+	ClearedCount   int64 `json:"cleared_count"`
+	CancelledCount int64 `json:"cancelled_count"`
+}
+
+// Summary — GET /api/v1/bls/summary — status 별 카운트.
+func (h *BLHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	q := h.DB.From("bl_shipments").Select("bl_id", "exact", true)
+	q = h.applyBLFilters(r, q)
+	summary := BLSummary{}
+	if _, c, err := q.Range(0, 0, "").Execute(); err == nil {
+		summary.Total = c
+	}
+	for _, st := range []struct {
+		key    string
+		target *int64
+	}{
+		{"shipping", &summary.ShippingCount},
+		{"arrived", &summary.ArrivedCount},
+		{"cleared", &summary.ClearedCount},
+		{"cancelled", &summary.CancelledCount},
+	} {
+		sub := h.DB.From("bl_shipments").Select("bl_id", "exact", true)
+		sub = h.applyBLFilters(r, sub).Eq("status", st.key)
+		if _, c, err := sub.Range(0, 0, "").Execute(); err == nil {
+			*st.target = c
+		}
+	}
+	response.RespondJSON(w, http.StatusOK, summary)
 }
 
 // GetByID — GET /api/v1/bls/{id} — B/L 상세 조회 (라인아이템 포함)

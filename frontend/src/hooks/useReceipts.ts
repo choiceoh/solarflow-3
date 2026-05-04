@@ -1,4 +1,4 @@
-import { fetchWithAuth } from '@/lib/api';
+import { fetchAllPaginated } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { companyParams } from '@/lib/companyUtils';
 import { useListQuery } from '@/lib/queryHelpers';
@@ -16,7 +16,7 @@ export function useReceiptList(
       if (filters.month) params.set('month', filters.month);
       if (filters.start) params.set('start', filters.start);
       if (filters.end) params.set('end', filters.end);
-      return fetchWithAuth<Receipt[]>(`/api/v1/receipts?${params}`);
+      return fetchAllPaginated<Receipt>('/api/v1/receipts', params.toString());
     },
     { enabled: !!selectedCompanyId },
   );

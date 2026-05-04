@@ -1,4 +1,4 @@
-import { fetchWithAuth } from '@/lib/api';
+import { fetchAllPaginated, fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { companyParams } from '@/lib/companyUtils';
 import { useListQuery, useDetailQuery } from '@/lib/queryHelpers';
@@ -12,7 +12,7 @@ export function useDeclarationList(filters: { bl_id?: string; month?: string } =
     () => {
       const params = companyParams(selectedCompanyId!);
       if (filters.bl_id) params.set('bl_id', filters.bl_id);
-      return fetchWithAuth<Declaration[]>(`/api/v1/declarations?${params}`);
+      return fetchAllPaginated<Declaration>('/api/v1/declarations', params.toString());
     },
     { enabled: !!selectedCompanyId },
   );
@@ -50,7 +50,7 @@ export function useExpenseList(
       if (filters.expense_type) params.set('expense_type', filters.expense_type);
       if (filters.start) params.set('start', filters.start);
       if (filters.end) params.set('end', filters.end);
-      return fetchWithAuth<Expense[]>(`/api/v1/expenses?${params}`);
+      return fetchAllPaginated<Expense>('/api/v1/expenses', params.toString());
     },
     { enabled: !!selectedCompanyId },
   );

@@ -144,9 +144,15 @@ func (h *AuditLogHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
-	query = query.Order("created_at", &postgrest.OrderOpts{Ascending: false}).Limit(limit, "")
+	offset := 0
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+	query = query.Order("created_at", &postgrest.OrderOpts{Ascending: false}).Range(offset, offset+limit-1, "")
 
-	data, _, err := query.Execute()
+	data, count, err := query.Execute()
 	if err != nil {
 		log.Printf("[감사 로그 조회 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "감사 로그 조회에 실패했습니다")
@@ -160,6 +166,7 @@ func (h *AuditLogHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, logs)
 }
 

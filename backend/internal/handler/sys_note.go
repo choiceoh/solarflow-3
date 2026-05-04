@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
@@ -45,7 +46,8 @@ func (h *NoteHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("linked_id", lid)
 	}
 
-	data, _, err := query.Execute()
+	limit, offset := parseLimitOffset(r, 100, 1000)
+	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[메모 목록 조회 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "메모 목록 조회에 실패했습니다")
@@ -59,6 +61,7 @@ func (h *NoteHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, notes)
 }
 

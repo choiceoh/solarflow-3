@@ -4,9 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
-import { useOrderList } from '@/hooks/useOrders';
+import { useOrderListAll } from '@/hooks/useOrders';
 import { useReceiptList } from '@/hooks/useReceipts';
-import { useOutboundListAll, useSaleList } from '@/hooks/useOutbound';
+import { useOutboundListAll, useSaleListAll } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import SkeletonRows from '@/components/common/SkeletonRows';
@@ -169,7 +169,7 @@ export default function OrdersPage() {
   const [saleCustomerFilter, setSaleCustomerFilter] = useState('');
   const [saleDateRange, setSaleDateRange] = useState<DateRangeValue>(null);
   const [saleInvoiceFilter, setSaleInvoiceFilter] = useState('');
-  const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleList();
+  const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleListAll();
 
   const sales = useMemo(() => allSales.filter((s) => {
     if (saleCustomerFilter && s.customer_id !== saleCustomerFilter) return false
@@ -215,7 +215,7 @@ export default function OrdersPage() {
     receiptFilters.end = receiptDateRange.end;
   }
 
-  const { data: orders, loading: ordersLoading, reload: reloadOrders } = useOrderList(orderFilters);
+  const { data: orders, loading: ordersLoading, reload: reloadOrders } = useOrderListAll(orderFilters);
   const { data: receipts, loading: receiptsLoading } = useReceiptList(receiptFilters);
 
   const visibleOrders = useMemo(() => {

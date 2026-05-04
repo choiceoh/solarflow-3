@@ -140,6 +140,36 @@ export async function fetchWithAuth<T = unknown>(path: string, options?: Request
   return parseResponseBody<T>(res);
 }
 
+// fetchAllPaginated — server-side 페이지네이션 응답을 1000건씩 자동 청크 누적해 한 번에 반환.
+// Supabase Cloud db-max-rows=1000 cap 을 클라이언트 루프로 우회.
+// 옛 시그니처(전체 데이터 한 번에 받음) 를 유지하는 hook 들이 사용한다.
+//
+// 사용 예: fetchAllPaginated<Outbound>('/api/v1/outbounds', 'company_id=foo&status=active')
+// path 는 ? 없는 베이스 경로, baseQuery 는 ?` 없는 기존 쿼리스트링.
+const PAGINATION_CHUNK_SIZE = 1000;
+const PAGINATION_MAX_PAGES = 500;
+
+export async function fetchAllPaginated<T = unknown>(path: string, baseQuery: string = ''): Promise<T[]> {
+  const sep = baseQuery ? '&' : '';
+  const first = await fetchWithAuthMeta<T[]>(
+    `${path}?${baseQuery}${sep}limit=${PAGINATION_CHUNK_SIZE}&offset=0`,
+  );
+  const accumulated: T[] = [...first.data];
+  const total = first.totalCount;
+  if (total === null || accumulated.length >= total) return accumulated;
+  for (let page = 1; page < PAGINATION_MAX_PAGES; page++) {
+    const offset = page * PAGINATION_CHUNK_SIZE;
+    if (offset >= total) break;
+    const next = await fetchWithAuth<T[]>(
+      `${path}?${baseQuery}${sep}limit=${PAGINATION_CHUNK_SIZE}&offset=${offset}`,
+    );
+    if (next.length === 0) break;
+    accumulated.push(...next);
+    if (accumulated.length >= total) break;
+  }
+  return accumulated;
+}
+
 // fetchWithAuthMeta — fetchWithAuth + 응답 헤더(X-Total-Count 등) 같이 반환.
 // 청크 페이지네이션 누적용. dev mock 모드에서는 totalCount=null 로 떨어지고 호출 측이 length 로 fallback.
 export async function fetchWithAuthMeta<T = unknown>(
