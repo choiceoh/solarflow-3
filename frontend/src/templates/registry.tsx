@@ -47,7 +47,6 @@ import {
   type PurchaseOrder, type LCRecord,
 } from '@/types/procurement';
 import { usePOList, useLCList, usePOLines, useLCLines, useTTList } from '@/hooks/useProcurement';
-import { useBLList } from '@/hooks/useInbound';
 import StatusPill from '@/components/common/StatusPill';
 import AttachmentWidget from '@/components/common/AttachmentWidget';
 import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite } from '@/types/masters';
