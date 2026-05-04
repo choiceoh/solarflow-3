@@ -1,5 +1,5 @@
 import { useState, Fragment, useMemo, memo } from 'react';
-import { ChevronRight, ChevronDown, Plus, CheckCircle2, PauseCircle, PlayCircle, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, CheckCircle2, PauseCircle, PlayCircle, Trash2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/common/EmptyState';
 import SortableTH from '@/components/common/SortableTH';
@@ -7,6 +7,7 @@ import { moduleLabel } from '@/lib/utils';
 import { useSort } from '@/hooks/useSort';
 import type { InventoryAllocation } from './AllocationForm';
 import type { InventoryItem } from '@/types/inventory';
+import type { Product } from '@/types/masters';
 
 /* ─── 헬퍼 ─────────────────────────────────────── */
 
@@ -36,6 +37,8 @@ function allocCountLabel(mainCount: number, spareCount: number): string {
 interface Props {
   items: InventoryItem[];
   allocations: InventoryAllocation[];
+  /** D-064 PR 31: ERP safety_stock 미달 경고용 product 마스터 (선택). 미전달 시 경고 비표시. */
+  products?: Product[];
   onNewAlloc: (productId: string) => void;
   onEdit: (alloc: InventoryAllocation) => void;
   onConfirm: (alloc: InventoryAllocation) => void;
@@ -221,6 +224,7 @@ function AllocSubTable({
 function AvailInventoryTable({
   items,
   allocations,
+  products,
   onNewAlloc,
   onEdit,
   onConfirm,
@@ -229,6 +233,18 @@ function AvailInventoryTable({
   onDelete,
 }: Props) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  // D-064 PR 31: product_id → safety_stock(EA) 인덱스. ERP 마스터 동기화값.
+  const safetyByProduct = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!products) return map;
+    for (const p of products) {
+      if (p.safety_stock != null && p.safety_stock > 0) {
+        map.set(p.product_id, p.safety_stock);
+      }
+    }
+    return map;
+  }, [products]);
 
   const allocAggMap = useMemo(() => {
     const map = new Map<string, { saleKw: number; constKw: number }>();
@@ -326,12 +342,18 @@ function AvailInventoryTable({
             const saleKw = saleAllocs.reduce((s, a) => s + (a.capacity_kw ?? 0), 0);
             const constKw = constAllocs.reduce((s, a) => s + (a.capacity_kw ?? 0), 0);
 
+            // D-064 PR 31: 안전재고 미달 경고 — kW → EA 변환 후 비교
+            const safetyEA = safetyByProduct.get(item.product_id) ?? 0;
+            const securedEA = kwToEa(item.total_secured_kw, item.spec_wp);
+            const isBelowSafety = safetyEA > 0 && securedEA < safetyEA;
+            const safetyShortageEA = isBelowSafety ? safetyEA - securedEA : 0;
+
             return (
               <Fragment key={itemKey}>
                 {/* 품목 행 */}
                 <tr
                   key={itemKey}
-                  className="border-t hover:bg-muted/20 cursor-pointer transition-colors"
+                  className={`border-t hover:bg-muted/20 cursor-pointer transition-colors ${isBelowSafety ? 'bg-amber-50/60' : ''}`}
                   onClick={() => toggle(itemKey)}
                 >
                   {/* 토글 */}
@@ -357,6 +379,16 @@ function AvailInventoryTable({
                       {mainAllocs.length + spareAllocs.length > 0 && (
                         <span className="text-[11px] text-muted-foreground">
                           배정 {allocCountLabel(mainAllocs.length, spareAllocs.length)}
+                        </span>
+                      )}
+                      {/* D-064 PR 31: 안전재고 미달 경고 (ERP 마스터 동기화값 기준) */}
+                      {isBelowSafety && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+                          title={`안전재고 ${safetyEA.toLocaleString('ko-KR')} EA 미달 — 부족 ${safetyShortageEA.toLocaleString('ko-KR')} EA`}
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          안전재고 미달 ({safetyShortageEA.toLocaleString('ko-KR')} EA 부족)
                         </span>
                       )}
                     </div>
@@ -421,6 +453,17 @@ function AvailInventoryTable({
                           <span>실재고 <span className="font-mono tabular-nums text-foreground">{kwToEa(item.physical_kw, item.spec_wp).toLocaleString('ko-KR')} EA</span></span>
                           <span>미착품 <span className="font-mono tabular-nums text-foreground">{kwToEa(item.incoming_kw, item.spec_wp).toLocaleString('ko-KR')} EA</span></span>
                           <span>가용재고 <span className="font-mono tabular-nums" style={{ color: 'var(--sf-pos)' }}>{kwToEa(item.total_secured_kw, item.spec_wp).toLocaleString('ko-KR')} EA</span></span>
+                          {safetyEA > 0 && (
+                            <span>
+                              안전재고{' '}
+                              <span className={`font-mono tabular-nums ${isBelowSafety ? 'font-semibold text-amber-700' : 'text-foreground'}`}>
+                                {safetyEA.toLocaleString('ko-KR')} EA
+                              </span>
+                              {isBelowSafety && (
+                                <span className="ml-1 text-amber-700">— 부족 {safetyShortageEA.toLocaleString('ko-KR')} EA</span>
+                              )}
+                            </span>
+                          )}
                         </div>
 
                         {itemAllocs.length === 0 && (
