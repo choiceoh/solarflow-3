@@ -3,7 +3,7 @@
 // → "검증으로 진행" → 표준 검증 파이프라인.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, Plus, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, Globe, Loader2, Plus, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -40,12 +40,29 @@ interface ConvertedState {
   manufacturers: ManufacturerLite[];
 }
 
+interface SheetSource {
+  spreadsheet_id: string;
+  sheet_gid: number;
+}
+
+// 구글 시트 URL → spreadsheet_id, gid 추출.
+// 입력 예: https://docs.google.com/spreadsheets/d/{ID}/edit?gid={GID}#gid={GID}
+function parseGoogleSheetUrl(url: string): { id: string; gid: number } | null {
+  const idMatch = /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/.exec(url);
+  if (!idMatch) return null;
+  const gidMatch = /[#?&]gid=(\d+)/.exec(url);
+  return { id: idMatch[1], gid: gidMatch ? parseInt(gidMatch[1], 10) : 0 };
+}
+
 export default function ExternalFormatCard({ format, onImportComplete }: Props) {
   const excel = useExcel(format.targetType);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [converting, setConverting] = useState(false);
   const [converted, setConverted] = useState<ConvertedState | null>(null);
+  // D-059: 구글 시트 URL 변환 진입점
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [fetchingSheet, setFetchingSheet] = useState(false);
   // D-057: 출고 등록 완료 후 매출 자동 등록을 위해 변환 결과 보관
   const [pendingSaleSource, setPendingSaleSource] = useState<ConvertedState | null>(null);
   const [saleDialogOpen, setSaleDialogOpen] = useState(false);
@@ -67,7 +84,7 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
     }
   }, [excel.importResult, excel.preview, pendingSaleSource, format.targetType]);
 
-  const handleFile = useCallback(async (file: File) => {
+  const handleFile = useCallback(async (file: File, sheetSource?: SheetSource) => {
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
       notify.error('엑셀 파일(.xlsx, .xls)만 변환할 수 있습니다');
       return;
@@ -78,24 +95,24 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
     }
     setConverting(true);
     try {
-      // 마스터에서 변환에 필요한 슬림 형태만 추출
       const companies: CompanyLite[] = excel.masterData.companies.map((c) => ({
         company_id: c.company_id, company_code: c.company_code, company_name: c.company_name,
       }));
       const products: ProductLite[] = excel.masterData.products.map((p) => ({
         product_id: p.product_id, product_code: p.product_code, product_name: p.product_name,
       }));
-      // 제조사도 별도 fetch 필요 (excel.masterData.manufacturers 는 name_kr 만)
       const manufacturers: ManufacturerLite[] = excel.masterData.manufacturers.map((m) => ({
         manufacturer_id: m.manufacturer_id,
         name_kr: m.name_kr,
       }));
-      // alias 사전 fetch
       const [companyAliases, productAliases] = await Promise.all([
         fetchCompanyAliases(),
         fetchProductAliases(),
       ]);
-      const ctx: ResolveContext = { companies, products, companyAliases, productAliases };
+      const ctx: ResolveContext = {
+        companies, products, companyAliases, productAliases,
+        sourceMeta: sheetSource,  // D-059: 시트 출처면 dedup 키 첨부
+      };
       const result = await format.convert(file, ctx);
       setConverted({ fileName: file.name, result, ctx, manufacturers });
     } catch (e) {
@@ -111,6 +128,32 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
   }, [handleFile]);
+
+  // D-059: 구글 시트 URL → 백엔드 proxy 로 xlsx 다운로드 → File 만들어 변환 트리거
+  const handleSheetUrl = useCallback(async () => {
+    const parsed = parseGoogleSheetUrl(sheetUrl.trim());
+    if (!parsed) {
+      notify.error('유효한 구글 시트 URL이 아닙니다 (/spreadsheets/d/{ID}?gid={GID} 형식)');
+      return;
+    }
+    setFetchingSheet(true);
+    try {
+      const url = `/api/v1/external-format/google-sheet?spreadsheet_id=${encodeURIComponent(parsed.id)}&gid=${parsed.gid}`;
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) {
+        throw new Error(`시트 다운로드 실패 (${res.status})`);
+      }
+      const blob = await res.blob();
+      const file = new File([blob], `google-sheet-${parsed.id.slice(0, 8)}.xlsx`, {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      await handleFile(file, { spreadsheet_id: parsed.id, sheet_gid: parsed.gid });
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : '구글 시트 가져오기 실패');
+    } finally {
+      setFetchingSheet(false);
+    }
+  }, [sheetUrl, handleFile]);
 
   const proceedToValidation = useCallback(() => {
     if (!converted) return;
@@ -134,13 +177,12 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
 
   return (
     <>
+      <div className={cn(
+        'rounded-md border bg-[var(--surface)] transition',
+        dragOver ? 'border-primary ring-2 ring-primary ring-offset-2' : 'border-[var(--line)]',
+      )}>
       <div
-        className={cn(
-          'flex min-h-[68px] items-center gap-3 rounded-md border bg-[var(--surface)] px-3 py-2 transition',
-          dragOver
-            ? 'border-primary ring-2 ring-primary ring-offset-2'
-            : 'border-[var(--line)]',
-        )}
+        className="flex min-h-[68px] items-center gap-3 px-3 py-2"
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
@@ -177,6 +219,32 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
             e.target.value = '';
           }}
         />
+      </div>
+
+      {/* D-059: 구글 시트 URL 입력 — 백엔드 proxy 로 다운로드 후 같은 변환 흐름 */}
+      <div className="flex items-center gap-2 border-t border-[var(--line)] px-3 py-2 bg-[var(--bg-2)]">
+        <Globe className="h-3.5 w-3.5 text-[var(--ink-3)] shrink-0" />
+        <input
+          type="text"
+          value={sheetUrl}
+          onChange={(e) => setSheetUrl(e.target.value)}
+          placeholder="구글 시트 URL 붙여넣기 (공개 권한 필요)"
+          className="flex-1 bg-transparent text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-3)] focus:outline-none"
+          disabled={fetchingSheet || disabled}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSheetUrl(); }}
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1 text-[11px]"
+          disabled={!sheetUrl.trim() || fetchingSheet || disabled}
+          onClick={handleSheetUrl}
+        >
+          {fetchingSheet ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
+          {fetchingSheet ? '가져오는 중...' : '시트에서 가져오기'}
+        </Button>
+      </div>
       </div>
 
       {converted && (
