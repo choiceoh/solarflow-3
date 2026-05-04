@@ -88,6 +88,7 @@ GET     /api/v1/orders/
 GET     /api/v1/orders/{id}
 GET     /api/v1/outbounds/
 GET     /api/v1/outbounds/{id}
+GET     /api/v1/partner-aliases/
 GET     /api/v1/partner-prices/
 GET     /api/v1/partner-prices/lookup
 GET     /api/v1/partner-prices/{id}
@@ -201,6 +202,7 @@ POST    /api/v1/ocr/extract
 POST    /api/v1/orders/
 POST    /api/v1/outbounds/
 POST    /api/v1/partner-activities/
+POST    /api/v1/partner-aliases/
 POST    /api/v1/partner-prices/
 POST    /api/v1/partners/
 POST    /api/v1/pos/
