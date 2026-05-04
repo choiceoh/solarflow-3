@@ -109,6 +109,7 @@ func (h *BaroIncomingHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 func (h *BaroPurchaseHistoryHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/baro/purchase-history", func(r chi.Router) {
 		r.Use(g.Feature(feature.IDBaroPurchaseHistory))
+		r.With(middleware.RoleMiddleware("admin", "operator", "executive")).Get("/summary", h.Summary)
 		r.With(middleware.RoleMiddleware("admin", "operator", "executive")).Get("/", h.List)
 	})
 }
@@ -241,6 +242,7 @@ func (h *ExpenseHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/expenses", func(r chi.Router) {
 		r.Use(g.Feature(feature.IDTxExpense))
 		r.Get("/", h.List)
+		r.Get("/summary", h.Summary)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
@@ -314,6 +316,7 @@ func (h *LCHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/lcs", func(r chi.Router) {
 		r.Use(g.Feature(feature.IDTxLC))
 		r.Get("/", h.List)
+		r.Get("/summary", h.Summary)
 		r.Get("/{id}/lines", h.ListLines)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
@@ -465,6 +468,7 @@ func (h *PartnerPriceBookHandler) RegisterRoutes(r chi.Router, g middleware.Gate
 func (h *POHandler) RegisterRoutes(r chi.Router, g middleware.Gates, lineH *POLineHandler) {
 	r.Route("/pos", func(r chi.Router) {
 		r.Get("/", h.List)
+		r.Get("/summary", h.Summary)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
@@ -551,6 +555,7 @@ func (h *TTHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/tts", func(r chi.Router) {
 		r.Use(g.Feature(feature.IDTxTT))
 		r.Get("/", h.List)
+		r.Get("/summary", h.Summary)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)

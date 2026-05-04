@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/model"
@@ -24,20 +25,66 @@ func NewTTHandler(db *supa.Client) *TTHandler {
 	return &TTHandler{DB: db}
 }
 
-// List — GET /api/v1/tts — TT 목록 조회 (PO/제조사 정보 포함)
-// 비유: 송금 관리실에서 전체 송금 전표를 꺼내 보여주는 것
-func (h *TTHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("tt_remittances").
-		Select("*, purchase_orders(po_number, manufacturers(name_kr))", "exact", false)
+func (h *TTHandler) poIDsForTTCompany(companyID string) ([]string, error) {
+	rows, _, err := fetchAllSummaryRows[struct {
+		POID string `json:"po_id"`
+	}](func() *postgrest.FilterBuilder {
+		return h.DB.From("purchase_orders").
+			Select("po_id", "exact", false).
+			Eq("company_id", companyID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.POID)
+	}
+	return ids, nil
+}
 
+func (h *TTHandler) applyTTFilters(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
 	// 비유: ?po_id=xxx — 특정 PO의 송금만 필터
 	if poID := r.URL.Query().Get("po_id"); poID != "" {
 		query = query.Eq("po_id", poID)
 	}
 
+	// 비유: ?company_id=xxx — TT는 PO에 묶이므로 PO 후보로 법인 범위를 좁힌다.
+	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" && r.URL.Query().Get("po_id") == "" {
+		poIDs, err := h.poIDsForTTCompany(compID)
+		if err != nil {
+			return query, false, err
+		}
+		if len(poIDs) == 0 {
+			return query, false, nil
+		}
+		query = query.In("po_id", poIDs)
+	}
+
 	// 비유: ?status=completed — 특정 상태의 송금만 필터
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
+	}
+	return query, true, nil
+}
+
+// List — GET /api/v1/tts — TT 목록 조회 (PO/제조사 정보 포함)
+// 비유: 송금 관리실에서 전체 송금 전표를 꺼내 보여주는 것
+func (h *TTHandler) List(w http.ResponseWriter, r *http.Request) {
+	query := h.DB.From("tt_remittances").
+		Select("*, purchase_orders(po_number, manufacturers(name_kr))", "exact", false)
+	var ok bool
+	var err error
+	query, ok, err = h.applyTTFilters(r, query)
+	if err != nil {
+		log.Printf("[TT 목록 필터 처리 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "TT 목록 필터 처리에 실패했습니다")
+		return
+	}
+	if !ok {
+		w.Header().Set("X-Total-Count", "0")
+		response.RespondJSON(w, http.StatusOK, []model.TTWithRelations{})
+		return
 	}
 
 	limit, offset := parseLimitOffset(r, 100, 1000)
@@ -57,6 +104,81 @@ func (h *TTHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, remittances)
+}
+
+type ttSummaryRow struct {
+	TTID      string  `json:"tt_id"`
+	POID      string  `json:"po_id"`
+	RemitDate *string `json:"remit_date"`
+	AmountUSD float64 `json:"amount_usd"`
+	Status    string  `json:"status"`
+}
+
+type TTSummaryBoard struct {
+	Total              int64               `json:"total"`
+	CompletedCount     int64               `json:"completed_count"`
+	PlannedCount       int64               `json:"planned_count"`
+	CompletedAmountUSD float64             `json:"completed_amount_usd"`
+	POCount            int64               `json:"po_count"`
+	ByStatus           map[string]int64    `json:"by_status"`
+	MonthlyAmount      []summaryMonthPoint `json:"monthly_amount"`
+}
+
+// Summary — GET /api/v1/tts/summary — T/T KPI 카드용 전체 집계.
+func (h *TTHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	var applyErr error
+	empty := false
+	rows, total, err := fetchAllSummaryRows[ttSummaryRow](func() *postgrest.FilterBuilder {
+		q := h.DB.From("tt_remittances").
+			Select("tt_id,po_id,remit_date,amount_usd,status", "exact", false)
+		q, ok, err := h.applyTTFilters(r, q)
+		if err != nil {
+			applyErr = err
+			return q.Eq("tt_id", "__filter_error__")
+		}
+		if !ok || empty {
+			empty = true
+			return q.Eq("tt_id", "__empty__")
+		}
+		return q
+	})
+	if applyErr != nil {
+		log.Printf("[TT 요약 필터 처리 실패] %v", applyErr)
+		response.RespondError(w, http.StatusInternalServerError, "TT 요약 필터 처리에 실패했습니다")
+		return
+	}
+	if err != nil {
+		log.Printf("[TT 요약 조회 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "TT 요약 조회에 실패했습니다")
+		return
+	}
+
+	byStatus := map[string]int64{}
+	monthlyAmount := map[string]float64{}
+	poIDs := map[string]struct{}{}
+	summary := TTSummaryBoard{Total: total, ByStatus: byStatus}
+	if total == 0 {
+		summary.Total = int64(len(rows))
+	}
+	for _, row := range rows {
+		incrementCount(byStatus, row.Status)
+		if row.Status == "completed" {
+			summary.CompletedCount++
+			summary.CompletedAmountUSD += row.AmountUSD
+		}
+		if row.Status == "planned" {
+			summary.PlannedCount++
+		}
+		if row.POID != "" {
+			poIDs[row.POID] = struct{}{}
+		}
+		if month := dateMonth(row.RemitDate); month != "" && row.Status == "completed" {
+			monthlyAmount[month] += row.AmountUSD
+		}
+	}
+	summary.POCount = distinctCount(poIDs)
+	summary.MonthlyAmount = recentMonthAmounts(monthlyAmount, 6)
+	response.RespondJSON(w, http.StatusOK, summary)
 }
 
 // GetByID — GET /api/v1/tts/{id} — TT 상세 조회

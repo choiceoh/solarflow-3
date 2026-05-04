@@ -26,6 +26,13 @@ const (
 	outboundMaxLimit     = 1000
 )
 
+// outboundListColumns — List 응답에 포함할 outbounds 컬럼 화이트리스트.
+// source_payload (외부 양식 원본 jsonb, 행당 KB 단위) 제외 — 상세 화면(GetByID/fetchOutboundByID) 에서는 그대로 * 사용.
+const outboundListColumns = "outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, " +
+	"warehouse_id, usage_category, order_id, site_name, site_address, spare_qty, " +
+	"group_trade, target_company_id, erp_outbound_no, status, memo, bl_id, " +
+	"tx_statement_ready, inspection_request_sent, approval_requested, tax_invoice_issued"
+
 // outboundSortable — 정렬 가능 컬럼 화이트리스트 (SQL 인젝션 방어).
 // 컬럼명은 outbounds 테이블의 실제 컬럼.
 var outboundSortable = map[string]struct{}{

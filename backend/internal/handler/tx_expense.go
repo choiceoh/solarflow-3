@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/model"
@@ -24,12 +25,7 @@ func NewExpenseHandler(db *supa.Client) *ExpenseHandler {
 	return &ExpenseHandler{DB: db}
 }
 
-// List — GET /api/v1/expenses — 부대비용 목록 조회
-// 비유: 전표함에서 전체 부대비용을 꺼내 보여주는 것
-func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("incidental_expenses").
-		Select("*", "exact", false)
-
+func (h *ExpenseHandler) applyExpenseFilters(r *http.Request, query *postgrest.FilterBuilder) *postgrest.FilterBuilder {
 	// 비유: ?bl_id=xxx — 특정 B/L의 부대비용만 필터
 	if blID := r.URL.Query().Get("bl_id"); blID != "" {
 		query = query.Eq("bl_id", blID)
@@ -60,6 +56,15 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 	if expType := r.URL.Query().Get("expense_type"); expType != "" {
 		query = query.Eq("expense_type", expType)
 	}
+	return query
+}
+
+// List — GET /api/v1/expenses — 부대비용 목록 조회
+// 비유: 전표함에서 전체 부대비용을 꺼내 보여주는 것
+func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
+	query := h.DB.From("incidental_expenses").
+		Select("*", "exact", false)
+	query = h.applyExpenseFilters(r, query)
 
 	limit, offset := parseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
@@ -78,6 +83,77 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, expenses)
+}
+
+type expenseSummaryRow struct {
+	ExpenseID   string   `json:"expense_id"`
+	BLID        *string  `json:"bl_id"`
+	Month       *string  `json:"month"`
+	ExpenseType string   `json:"expense_type"`
+	Amount      float64  `json:"amount"`
+	Vat         *float64 `json:"vat"`
+	Total       float64  `json:"total"`
+}
+
+type ExpenseSummary struct {
+	Total              int64               `json:"total"`
+	TotalAmount        float64             `json:"total_amount"`
+	VatAmount          float64             `json:"vat_amount"`
+	LinkedCount        int64               `json:"linked_count"`
+	TypeCount          int64               `json:"type_count"`
+	AverageAmount      float64             `json:"average_amount"`
+	ByTypeAmount       map[string]float64  `json:"by_type_amount"`
+	MonthlyAmount      []summaryMonthPoint `json:"monthly_amount"`
+	MonthlyLinkedCount []summaryMonthPoint `json:"monthly_linked_count"`
+}
+
+// Summary — GET /api/v1/expenses/summary — 부대비용 KPI 카드용 전체 집계.
+func (h *ExpenseHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	rows, total, err := fetchAllSummaryRows[expenseSummaryRow](func() *postgrest.FilterBuilder {
+		q := h.DB.From("incidental_expenses").
+			Select("expense_id,bl_id,month,expense_type,amount,vat,total", "exact", false)
+		return h.applyExpenseFilters(r, q)
+	})
+	if err != nil {
+		log.Printf("[부대비용 요약 조회 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "부대비용 요약 조회에 실패했습니다")
+		return
+	}
+
+	byType := map[string]float64{}
+	monthlyAmount := map[string]float64{}
+	monthlyLinked := map[string]int64{}
+	typesSeen := map[string]struct{}{}
+	summary := ExpenseSummary{Total: total, ByTypeAmount: byType}
+	if total == 0 {
+		summary.Total = int64(len(rows))
+	}
+	for _, row := range rows {
+		summary.TotalAmount += row.Total
+		if row.Vat != nil {
+			summary.VatAmount += *row.Vat
+		}
+		if row.BLID != nil && *row.BLID != "" {
+			summary.LinkedCount++
+		}
+		if row.ExpenseType != "" {
+			typesSeen[row.ExpenseType] = struct{}{}
+			byType[row.ExpenseType] += row.Total
+		}
+		if row.Month != nil && *row.Month != "" {
+			monthlyAmount[*row.Month] += row.Total
+			if row.BLID != nil && *row.BLID != "" {
+				monthlyLinked[*row.Month]++
+			}
+		}
+	}
+	if summary.Total > 0 {
+		summary.AverageAmount = summary.TotalAmount / float64(summary.Total)
+	}
+	summary.TypeCount = distinctCount(typesSeen)
+	summary.MonthlyAmount = recentMonthAmounts(monthlyAmount, 6)
+	summary.MonthlyLinkedCount = recentMonthCounts(monthlyLinked, 6)
+	response.RespondJSON(w, http.StatusOK, summary)
 }
 
 // GetByID — GET /api/v1/expenses/{id} — 부대비용 상세 조회

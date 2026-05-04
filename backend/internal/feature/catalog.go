@@ -86,15 +86,15 @@ const (
 	IDMasterConstructionSite FeatureID = "master.construction_site"
 
 	// ---- tx.* (all tenants 공유) ----
-	IDTxOrder                 FeatureID = "tx.order"
-	IDTxOutbound              FeatureID = "tx.outbound"
-	IDTxSale                  FeatureID = "tx.sale"
-	IDTxReceipt               FeatureID = "tx.receipt"
-	IDTxReceiptMatch          FeatureID = "tx.receipt_match"
-	IDTxPO                    FeatureID = "tx.po"
-	IDTxBL                    FeatureID = "tx.bl"
-	IDTxInventoryAllocation   FeatureID = "tx.inventory_allocation"
-	IDTxModuleDemandForecast  FeatureID = "tx.module_demand_forecast"
+	IDTxOrder                FeatureID = "tx.order"
+	IDTxOutbound             FeatureID = "tx.outbound"
+	IDTxSale                 FeatureID = "tx.sale"
+	IDTxReceipt              FeatureID = "tx.receipt"
+	IDTxReceiptMatch         FeatureID = "tx.receipt_match"
+	IDTxPO                   FeatureID = "tx.po"
+	IDTxBL                   FeatureID = "tx.bl"
+	IDTxInventoryAllocation  FeatureID = "tx.inventory_allocation"
+	IDTxModuleDemandForecast FeatureID = "tx.module_demand_forecast"
 
 	// ---- tx.* (module 계열 = topsolar+cable, D-108/D-119) ----
 	IDTxCostDetail   FeatureID = "tx.cost_detail"
@@ -273,7 +273,7 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDTxPO, Name: "PO 발주", Description: "PO + 라인",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{
-			"/api/v1/pos/", "/api/v1/pos/{id}",
+			"/api/v1/pos/", "/api/v1/pos/summary", "/api/v1/pos/{id}",
 			"/api/v1/pos/{poId}/lines/", "/api/v1/pos/{poId}/lines/{id}",
 		},
 	},
@@ -310,12 +310,12 @@ var Catalog = map[FeatureID]Feature{
 	IDTxExpense: {
 		ID: IDTxExpense, Name: "부대비용", Description: "부대비용 (module 계열)",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/expenses/", "/api/v1/expenses/{id}"},
+		Paths: []string{"/api/v1/expenses/", "/api/v1/expenses/summary", "/api/v1/expenses/{id}"},
 	},
 	IDTxLC: {
 		ID: IDTxLC, Name: "L/C 신용장", Description: "L/C + 라인 (module 계열)",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/lcs/", "/api/v1/lcs/{id}", "/api/v1/lcs/{id}/lines"},
+		Paths: []string{"/api/v1/lcs/", "/api/v1/lcs/summary", "/api/v1/lcs/{id}", "/api/v1/lcs/{id}/lines"},
 	},
 	IDTxLCLimit: {
 		ID: IDTxLCLimit, Name: "LC 한도 변경 이력", Description: "LC 한도 (module 계열, DELETE 없음)",
@@ -330,7 +330,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxTT: {
 		ID: IDTxTT, Name: "T/T 계약금", Description: "T/T (module 계열)",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/tts/", "/api/v1/tts/{id}"},
+		Paths: []string{"/api/v1/tts/", "/api/v1/tts/summary", "/api/v1/tts/{id}"},
 	},
 
 	// ===== intercompany.* =====
@@ -375,7 +375,7 @@ var Catalog = map[FeatureID]Feature{
 	IDBaroPurchaseHistory: {
 		ID: IDBaroPurchaseHistory, Name: "BARO 자체 매입원가", Description: "BR 법인 원가 read-only (D-117)",
 		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantCompany,
-		Paths: []string{"/api/v1/baro/purchase-history/"},
+		Paths: []string{"/api/v1/baro/purchase-history/", "/api/v1/baro/purchase-history/summary"},
 	},
 	IDBaroCreditBoard: {
 		ID: IDBaroCreditBoard, Name: "BARO 미수금/한도 보드", Description: "Phase 3",
@@ -582,7 +582,7 @@ var Catalog = map[FeatureID]Feature{
 	},
 	IDSysExternalSync: {
 		ID: IDSysExternalSync, Name: "외부 동기화 소스",
-		Description: "외부 시트(구글 시트 등) 단방향 동기화 — 수동 + 1시간 cron (D-059)",
+		Description:    "외부 시트(구글 시트 등) 단방향 동기화 — 수동 + 1시간 cron (D-059)",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{
 			"/api/v1/external-sync-sources/",
