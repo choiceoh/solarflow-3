@@ -257,14 +257,24 @@ export function FilterButton({ items }: { items: FilterItem[] }) {
   const panelRef = useRef<HTMLDivElement>(null);
   // 패널 위치는 fixed 좌표로 계산 — 부모 .sf-card-controls 의 overflow:hidden 으로
   // 잘리는 것을 회피하기 위해 document.body 로 portal.
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
     const updatePos = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+      const PANEL_W = 280;
+      const MARGIN = 8;
+      // 우측 정렬 우선 (트리거 우측 = 패널 우측). 좌측으로 넘치면 좌측 정렬로 폴백.
+      let left = rect.right - PANEL_W;
+      if (left < MARGIN) left = rect.left;
+      // 우측 뷰포트 클램프
+      if (left + PANEL_W > window.innerWidth - MARGIN) {
+        left = window.innerWidth - PANEL_W - MARGIN;
+      }
+      if (left < MARGIN) left = MARGIN;
+      setPos({ top: rect.bottom + 6, left });
     };
     updatePos();
     const onDoc = (event: MouseEvent) => {
@@ -321,7 +331,7 @@ export function FilterButton({ items }: { items: FilterItem[] }) {
       </button>
       {open && pos ? createPortal(
         <div ref={panelRef} style={{
-          position: 'fixed', top: pos.top, right: pos.right, zIndex: 1000,
+          position: 'fixed', top: pos.top, left: pos.left, zIndex: 1000,
           width: 280, background: 'var(--surface)',
           border: '1px solid var(--line)', borderRadius: 6,
           boxShadow: '0 12px 32px rgba(28,25,23,0.12), 0 2px 6px rgba(28,25,23,0.06)',
