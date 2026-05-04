@@ -60,6 +60,7 @@ GET     /api/v1/engine/health
 GET     /api/v1/engine/ready
 GET     /api/v1/expenses/
 GET     /api/v1/expenses/{id}
+GET     /api/v1/export/all
 GET     /api/v1/export/amaranth/inbound
 GET     /api/v1/export/amaranth/jobs
 GET     /api/v1/export/amaranth/jobs/{id}/download

@@ -381,11 +381,11 @@ function addGuideSheet(workbook: WorkbookWritable, types: TemplateType[]): Sheet
 
   const guideRows = [
     ['필수값', '붉은색 헤더와 * 표시는 필수 입력입니다.', '빈 값이면 업로드 미리보기에서 오류가 납니다.', ''],
-    ['선택값', '셀에 목록 버튼이 보이면 코드표에서 선택합니다.', '코드표 시트 이름은 바꾸지 마세요.', ''],
+    ['선택값', '셀에 목록 버튼이 보이면 코드표에서 선택합니다.', '시트 이름은 바꾸지 마세요.', ''],
     ['날짜', '날짜는 YYYY-MM-DD 형식으로 입력합니다.', '예: 2026-05-03', '월 단위 비용은 YYYY-MM'],
     ['숫자', '수량, 금액, 단가는 숫자만 입력합니다.', '쉼표는 넣지 않아도 됩니다.', ''],
-    ['보호', '등록 시트의 2행부터 입력 구간만 수정할 수 있습니다.', '헤더, 코드표, 작성예시는 실수 방지를 위해 잠겨 있습니다.', ''],
-    ['업로드', '작성 후 Import Hub에 업로드하면 먼저 미리보기 검증을 거칩니다.', '오류 행은 내려받아 고친 뒤 다시 올릴 수 있습니다.', ''],
+    ['보호', '등록 시트의 헤더(1행)만 잠금. 데이터·코드표·안내는 자유롭게 편집 가능합니다.', '컬럼 순서를 바꾸거나 작업용 컬럼을 추가해도 헤더 이름으로 매칭합니다.', ''],
+    ['업로드', '업로드 시 헤더 이름으로 컬럼을 자동 매칭하고 미리보기 검증을 거칩니다.', '필수 헤더가 빠지면 명확한 오류로 안내합니다.', ''],
   ];
   guideRows.forEach((row, i) => {
     writeGuideRow(sheet, 4 + i, row);
@@ -591,11 +591,11 @@ export async function generateTemplate(
   const workbook = new ExcelJS.Workbook();
   const label = TEMPLATE_LABEL[type];
   setWorkbookMeta(workbook);
-  const guideSheet = addGuideSheet(workbook, [type]);
-  const exampleSheet = addExampleSheet(workbook, [type], masterData);
+  // 안내·예시·코드표는 잠그지 않는다 — 헤더 이름 매칭(excelParser.ts)으로 업로드가 견고해서
+  // 사용자가 자유롭게 수정해도 무방. 잠금은 데이터 시트 헤더 행에만 남긴다.
+  addGuideSheet(workbook, [type]);
+  addExampleSheet(workbook, [type], masterData);
   await addTemplateSheets(workbook, type, masterData);
-  await protectSheet(guideSheet);
-  await protectSheet(exampleSheet);
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -611,18 +611,207 @@ export async function generateUnifiedTemplate(
 
   const workbook = new ExcelJS.Workbook();
   setWorkbookMeta(workbook);
-  const guideSheet = addGuideSheet(workbook, UNIFIED_TEMPLATE_ORDER);
-  const exampleSheet = addExampleSheet(workbook, UNIFIED_TEMPLATE_ORDER, masterData);
+  // 안내·예시·코드표는 잠그지 않는다 — 헤더 이름 매칭으로 업로드가 견고하므로
+  // 사용자가 메모를 적거나 코드표를 확장해도 무방.
+  addGuideSheet(workbook, UNIFIED_TEMPLATE_ORDER);
+  addExampleSheet(workbook, UNIFIED_TEMPLATE_ORDER, masterData);
+  // 통합 코드표 — 16개 코드 컬럼을 한 시트에 모아 모든 데이터 시트가 공용 참조한다.
+  // (단일 다운로드 generateTemplate은 기존 per-type 코드표 유지)
+  const codeSheetName = '코드표';
+  const refs = addUnifiedCodeSheet(workbook, codeSheetName, masterData);
   for (const type of UNIFIED_TEMPLATE_ORDER) {
-    await addTemplateSheets(workbook, type, masterData, `코드표_${TEMPLATE_LABEL[type]}`);
+    await addUnifiedDataSheet(workbook, type, refs, codeSheetName);
   }
-  await protectSheet(guideSheet);
-  await protectSheet(exampleSheet);
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   saveAs(blob, `SolarFlow_통합입력양식_${today}.xlsx`);
+}
+
+// 통합 코드표 컬럼 참조 모음 — 모든 데이터 시트가 이 객체로 dropdown range를 잡는다.
+interface UnifiedCodeRefs {
+  company: CodeColumnRef;
+  manufacturer: CodeColumnRef;
+  product: CodeColumnRef;
+  customer: CodeColumnRef;
+  warehouse: CodeColumnRef;
+  outbound: CodeColumnRef;
+  currency: CodeColumnRef;
+  inboundType: CodeColumnRef;
+  usage: CodeColumnRef;
+  itemType: CodeColumnRef;
+  payType: CodeColumnRef;
+  yn: CodeColumnRef;
+  expenseType: CodeColumnRef;
+  receiptMethod: CodeColumnRef;
+  mgmtCategory: CodeColumnRef;
+  fulfillmentSource: CodeColumnRef;
+}
+
+// 통합 코드표 시트 1개 생성 — per-type 분할 대신 16개 컬럼을 한 시트에 모은다.
+// 마스터 데이터(법인·제조사·품번·거래처·창고·출고선택)가 먼저, 그 뒤 enum 코드.
+function addUnifiedCodeSheet(
+  workbook: WorkbookWritable,
+  sheetName: string,
+  masterData: MasterDataForExcel,
+): UnifiedCodeRefs {
+  const codeSheet = workbook.addWorksheet(sheetName);
+
+  const companyCodes = masterData.companies.map((c) => c.company_code);
+  const companyNames = masterData.companies.map((c) => c.company_name);
+  const mfgNames = masterData.manufacturers.map((m) => m.name_kr);
+  const productCodes = masterData.products.map((p) => p.product_code);
+  const productDescriptions = masterData.products.map((p) =>
+    [p.product_name, p.spec_wp ? `${p.spec_wp}Wp` : undefined].filter(Boolean).join(' / '),
+  );
+  const customerPartners = masterData.partners
+    .filter((p) => p.partner_type === 'customer' || p.partner_type === 'both');
+  const customerNames = customerPartners.map((p) => p.partner_name);
+  const customerDescriptions = customerPartners.map((p) => p.partner_type);
+  const warehouseCodes = masterData.warehouses.map((w) => w.warehouse_code);
+  const warehouseNames = masterData.warehouses.map((w) => w.warehouse_name);
+  const outboundLabels = (masterData.outbounds ?? []).map((o) =>
+    `${o.outbound_id} | ${o.outbound_date} | ${o.quantity}장 | ${o.site_name ?? ''}`,
+  );
+
+  let col = 1;
+  const company = writeCodeColumn(codeSheet, col, '법인코드', companyCodes, companyNames);
+  col = company.nextCol;
+  const manufacturer = writeCodeColumn(codeSheet, col, '제조사', mfgNames);
+  col = manufacturer.nextCol;
+  const product = writeCodeColumn(codeSheet, col, '품번코드', productCodes, productDescriptions);
+  col = product.nextCol;
+  const customer = writeCodeColumn(codeSheet, col, '거래처', customerNames, customerDescriptions);
+  col = customer.nextCol;
+  const warehouse = writeCodeColumn(codeSheet, col, '창고코드', warehouseCodes, warehouseNames);
+  col = warehouse.nextCol;
+  const outbound = writeCodeColumn(codeSheet, col, '출고 선택', outboundLabels);
+  col = outbound.nextCol;
+  const currency = writeCodeColumn(codeSheet, col, '통화', ['USD', 'KRW']);
+  col = currency.nextCol;
+  const inboundType = writeCodeColumn(
+    codeSheet, col, '입고유형',
+    Object.values(INBOUND_TYPE_LABEL), Object.keys(INBOUND_TYPE_LABEL),
+  );
+  col = inboundType.nextCol;
+  const usage = writeCodeColumn(
+    codeSheet, col, '용도',
+    Object.values(USAGE_CATEGORIES), Object.keys(USAGE_CATEGORIES),
+  );
+  col = usage.nextCol;
+  const itemType = writeCodeColumn(codeSheet, col, '본품/스페어', ['본품', '스페어'], ['main', 'spare']);
+  col = itemType.nextCol;
+  const payType = writeCodeColumn(codeSheet, col, '유상/무상', ['유상', '무상'], ['paid', 'free']);
+  col = payType.nextCol;
+  const yn = writeCodeColumn(codeSheet, col, 'Y/N', ['Y', 'N'], ['예', '아니오']);
+  col = yn.nextCol;
+  const expenseType = writeCodeColumn(
+    codeSheet, col, '비용유형',
+    Object.values(EXPENSE_TYPE_LABEL), Object.keys(EXPENSE_TYPE_LABEL),
+  );
+  col = expenseType.nextCol;
+  const receiptMethod = writeCodeColumn(
+    codeSheet, col, '접수방법',
+    Object.values(RECEIPT_METHOD_LABEL), Object.keys(RECEIPT_METHOD_LABEL),
+  );
+  col = receiptMethod.nextCol;
+  const mgmtCategory = writeCodeColumn(
+    codeSheet, col, '관리구분',
+    Object.values(MANAGEMENT_CATEGORY_LABEL), Object.keys(MANAGEMENT_CATEGORY_LABEL),
+  );
+  col = mgmtCategory.nextCol;
+  const fulfillmentSource = writeCodeColumn(
+    codeSheet, col, '충당소스',
+    Object.values(FULFILLMENT_SOURCE_LABEL), Object.keys(FULFILLMENT_SOURCE_LABEL),
+  );
+  col = fulfillmentSource.nextCol;
+
+  finishCodeSheet(codeSheet, col - 1);
+
+  return {
+    company, manufacturer, product, customer, warehouse, outbound,
+    currency, inboundType, usage, itemType, payType, yn,
+    expenseType, receiptMethod, mgmtCategory, fulfillmentSource,
+  };
+}
+
+// 통합 양식 전용 데이터 시트 — 코드표는 외부에서 참조 (시트별 코드표 생성 안 함).
+async function addUnifiedDataSheet(
+  workbook: WorkbookWritable,
+  type: TemplateType,
+  refs: UnifiedCodeRefs,
+  codeSheetName: string,
+): Promise<void> {
+  const codeRef = `'${codeSheetName}'`;
+  const label = TEMPLATE_LABEL[type];
+
+  if (type === 'company') {
+    const dataSheet = workbook.addWorksheet('법인등록');
+    styleHeaders(dataSheet, COMPANY_FIELDS);
+    await protectSheet(dataSheet);
+    return;
+  }
+
+  if (type === 'declaration') {
+    const declSheet = workbook.addWorksheet('면장등록');
+    const costSheet = workbook.addWorksheet('원가등록');
+    styleHeaders(declSheet, DECLARATION_FIELDS);
+    styleHeaders(costSheet, DECLARATION_COST_FIELDS);
+    setDropdownFromRef(declSheet, 'C', codeRef, refs.company, true);
+    setDropdownFromRef(costSheet, 'B', codeRef, refs.product, true);
+    await protectSheet(declSheet);
+    await protectSheet(costSheet);
+    return;
+  }
+
+  const fields = getFieldsForType(type);
+  const dataSheet = workbook.addWorksheet(`${label}등록`);
+  styleHeaders(dataSheet, fields);
+
+  switch (type) {
+    case 'inbound':
+      setDropdownFromRef(dataSheet, 'B', codeRef, refs.inboundType, true);
+      setDropdownFromRef(dataSheet, 'C', codeRef, refs.company, true);
+      setDropdownFromRef(dataSheet, 'D', codeRef, refs.manufacturer, true);
+      setDropdownFromRef(dataSheet, 'E', codeRef, refs.currency, true);
+      setDropdownFromRef(dataSheet, 'L', codeRef, refs.warehouse);
+      setDropdownFromRef(dataSheet, 'O', codeRef, refs.product, true);
+      setDropdownFromRef(dataSheet, 'Q', codeRef, refs.itemType, true);
+      setDropdownFromRef(dataSheet, 'R', codeRef, refs.payType, true);
+      setDropdownFromRef(dataSheet, 'V', codeRef, refs.usage, true);
+      break;
+    case 'outbound':
+      setDropdownFromRef(dataSheet, 'B', codeRef, refs.company, true);
+      setDropdownFromRef(dataSheet, 'C', codeRef, refs.product, true);
+      setDropdownFromRef(dataSheet, 'E', codeRef, refs.warehouse, true);
+      setDropdownFromRef(dataSheet, 'F', codeRef, refs.usage, true);
+      setDropdownFromRef(dataSheet, 'K', codeRef, refs.yn);
+      // 상대법인코드 — 법인코드와 동일 마스터 참조 (D-039 그룹내거래)
+      setDropdownFromRef(dataSheet, 'L', codeRef, refs.company);
+      break;
+    case 'sale':
+      setDropdownFromRef(dataSheet, 'A', codeRef, refs.outbound, true);
+      setDropdownFromRef(dataSheet, 'B', codeRef, refs.customer, true);
+      setDropdownFromRef(dataSheet, 'F', codeRef, refs.yn);
+      break;
+    case 'expense':
+      setDropdownFromRef(dataSheet, 'C', codeRef, refs.company, true);
+      setDropdownFromRef(dataSheet, 'D', codeRef, refs.expenseType, true);
+      break;
+    case 'order':
+      setDropdownFromRef(dataSheet, 'B', codeRef, refs.company, true);
+      setDropdownFromRef(dataSheet, 'C', codeRef, refs.customer, true);
+      setDropdownFromRef(dataSheet, 'E', codeRef, refs.receiptMethod, true);
+      setDropdownFromRef(dataSheet, 'F', codeRef, refs.mgmtCategory, true);
+      setDropdownFromRef(dataSheet, 'G', codeRef, refs.fulfillmentSource, true);
+      setDropdownFromRef(dataSheet, 'H', codeRef, refs.product, true);
+      break;
+    case 'receipt':
+      setDropdownFromRef(dataSheet, 'A', codeRef, refs.customer, true);
+      break;
+  }
+  await protectSheet(dataSheet);
 }
 
 async function addTemplateSheets(
@@ -691,7 +880,7 @@ async function addTemplateSheets(
     setDropdownFromRef(costSheet, 'B', codeRef, cProd, true);
     await protectSheet(declSheet);
     await protectSheet(costSheet);
-    await protectSheet(codeSheet);
+    // 코드표는 잠그지 않는다 (사용자 자유 편집 허용 — 헤더 이름 매칭으로 업로드는 안전)
   } else {
     // 일반 양식: 데이터시트 + 코드표
     const fields = getFieldsForType(type);
@@ -809,7 +998,7 @@ async function addTemplateSheets(
     }
     finishCodeSheet(codeSheet, col - 1);
     await protectSheet(dataSheet);
-    await protectSheet(codeSheet);
+    // 코드표는 잠그지 않는다 (헤더 이름 매칭으로 업로드 안전)
   }
 }
 
