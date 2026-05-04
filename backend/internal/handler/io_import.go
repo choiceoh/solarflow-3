@@ -490,6 +490,7 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 
 	var importErrors []model.ImportError
 	imported := 0
+	importedIDs := make([]string, 0, len(req.Rows))
 
 	for i, row := range req.Rows {
 		rowNum := i + 2
@@ -578,6 +579,8 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 		var createdOutbounds []model.Outbound
 		if json.Unmarshal(outData, &createdOutbounds) == nil && len(createdOutbounds) > 0 {
 			writeAuditLog(h.DB, r, "outbounds", createdOutbounds[0].OutboundID, "create", nil, auditRawFromValue(createdOutbounds[0]), "excel_import")
+			// D-057: 매출 자동 등록 후속 처리를 위해 등록된 outbound_id 수집.
+			importedIDs = append(importedIDs, createdOutbounds[0].OutboundID)
 		}
 
 		imported++
@@ -589,6 +592,7 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 		ErrorCount:    len(importErrors),
 		Errors:        importErrors,
 		Warnings:      []model.ImportWarning{},
+		ImportedIDs:   importedIDs,
 	}
 	if resp.Errors == nil {
 		resp.Errors = []model.ImportError{}

@@ -278,6 +278,9 @@ export interface ImportResult {
   warning_count: number;
   errors: ImportError[];
   warnings: ImportWarning[];
+  // D-057: 외부 양식 변환 후속 매출 자동 등록을 위해 출고 import 가 등록된
+  // outbound_id 목록을 응답에 포함. 다른 import 종류는 빈 배열 또는 undefined.
+  imported_ids?: string[];
 }
 
 // 통합 양식 업로드 — 한 파일에 모든 섹션이 같이 들어 있는 경우.
