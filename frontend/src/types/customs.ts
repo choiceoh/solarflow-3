@@ -14,6 +14,33 @@ export interface Declaration {
   customs_office?: string;
   port?: string;
   memo?: string;
+  // D-064 PR 28: ERP 면장 자료(50컬럼)에서 노출하는 통관/원가/유상무상/환율 컬럼
+  lc_no?: string;
+  invoice_no?: string;
+  supplier_name_en?: string;
+  supplier_name_kr?: string;
+  po_number?: string;
+  exchange_rate?: number;
+  contract_unit_price_usd_wp?: number;
+  contract_total_usd?: number;
+  contract_total_krw?: number;
+  cif_krw?: number;
+  incoterms?: string;
+  customs_rate?: number;
+  customs_amount?: number;
+  vat_amount?: number;
+  paid_qty?: number;
+  free_qty?: number;
+  free_ratio?: number;
+  paid_cif_krw?: number;
+  free_cif_krw?: number;
+  cost_unit_price_wp?: number;
+  cost_unit_price_ea?: number;
+  product_id?: string;
+  quantity?: number;
+  capacity_kw?: number;
+  erp_inbound_no?: string;
+  declaration_line_no?: string;
 }
 
 export interface DeclarationCost {
