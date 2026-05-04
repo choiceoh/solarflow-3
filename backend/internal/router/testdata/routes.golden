@@ -9,6 +9,7 @@ DELETE  /api/v1/construction-sites/{id}
 DELETE  /api/v1/cost-details/{id}
 DELETE  /api/v1/declarations/{id}
 DELETE  /api/v1/expenses/{id}
+DELETE  /api/v1/external-sync-sources/{id}
 DELETE  /api/v1/inventory/allocations/{id}
 DELETE  /api/v1/lcs/{id}
 DELETE  /api/v1/library-posts/{id}
@@ -68,6 +69,8 @@ GET     /api/v1/export/amaranth/jobs/{id}/download
 GET     /api/v1/export/amaranth/outbound
 GET     /api/v1/export/amaranth/rpa-package
 GET     /api/v1/export/amaranth/sales
+GET     /api/v1/external-format/google-sheet
+GET     /api/v1/external-sync-sources/
 GET     /api/v1/intercompany-requests/inbox
 GET     /api/v1/intercompany-requests/mine
 GET     /api/v1/inventory/allocations/
@@ -131,6 +134,7 @@ PATCH   /api/v1/companies/{id}
 PATCH   /api/v1/companies/{id}/status
 PATCH   /api/v1/construction-sites/{id}
 PATCH   /api/v1/construction-sites/{id}/status
+PATCH   /api/v1/external-sync-sources/{id}
 PATCH   /api/v1/intercompany-requests/{id}/cancel
 PATCH   /api/v1/intercompany-requests/{id}/fulfill
 PATCH   /api/v1/intercompany-requests/{id}/receive
@@ -178,6 +182,8 @@ POST    /api/v1/declarations/
 POST    /api/v1/expenses/
 POST    /api/v1/export/amaranth/jobs/{id}/claim
 POST    /api/v1/export/amaranth/outbound/jobs
+POST    /api/v1/external-sync-sources/
+POST    /api/v1/external-sync-sources/{id}/run
 POST    /api/v1/import/declarations
 POST    /api/v1/import/expenses
 POST    /api/v1/import/inbound
