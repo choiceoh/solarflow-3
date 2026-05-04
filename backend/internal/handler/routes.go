@@ -392,6 +392,7 @@ func (h *OCRHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 func (h *OrderHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/orders", func(r chi.Router) {
 		r.Get("/", h.List)
+		r.Get("/summary", h.Summary)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)

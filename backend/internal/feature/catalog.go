@@ -247,7 +247,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxOrder: {
 		ID: IDTxOrder, Name: "수주", Description: "수주 CRUD",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/orders/", "/api/v1/orders/{id}"},
+		Paths: []string{"/api/v1/orders/", "/api/v1/orders/summary", "/api/v1/orders/{id}"},
 	},
 	IDTxOutbound: {
 		ID: IDTxOutbound, Name: "출고", Description: "출고 CRUD",

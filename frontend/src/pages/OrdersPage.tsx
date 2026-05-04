@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
-import { useOrderList } from '@/hooks/useOrders';
+import { useOrderListAll } from '@/hooks/useOrders';
 import { useReceiptList } from '@/hooks/useReceipts';
 import { useOutboundListAll, useSaleListAll } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
@@ -209,7 +209,7 @@ export default function OrdersPage() {
   if (receiptCustomerFilter) receiptFilters.customer_id = receiptCustomerFilter;
   if (receiptMonthFilter) receiptFilters.month = receiptMonthFilter;
 
-  const { data: orders, loading: ordersLoading, reload: reloadOrders } = useOrderList(orderFilters);
+  const { data: orders, loading: ordersLoading, reload: reloadOrders } = useOrderListAll(orderFilters);
   const { data: receipts, loading: receiptsLoading } = useReceiptList(receiptFilters);
 
   const visibleOrders = useMemo(() => {

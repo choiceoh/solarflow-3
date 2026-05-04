@@ -89,6 +89,7 @@ GET     /api/v1/module-demand-forecasts/
 GET     /api/v1/notes/
 GET     /api/v1/ocr/health
 GET     /api/v1/orders/
+GET     /api/v1/orders/summary
 GET     /api/v1/orders/{id}
 GET     /api/v1/outbounds/
 GET     /api/v1/outbounds/summary
