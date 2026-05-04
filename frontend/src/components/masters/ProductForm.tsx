@@ -28,6 +28,9 @@ const schema = z.object({
   wafer_platform: z.string().optional(),
   cell_config: z.string().optional(),
   series_name: z.string().optional(),
+  module_efficiency: z.coerce.number().positive('양수만 가능합니다').max(100, '100 이하여야 합니다').optional().or(z.literal('')),
+  module_type: z.enum(['PERC', 'TOPCON', 'BC']).optional().or(z.literal('')),
+  module_grade: z.enum(['1', '2', '3', 'NA']).optional().or(z.literal('')),
   memo: z.string().optional(),
 });
 export type ProductFormData = z.infer<typeof schema>;
@@ -47,6 +50,9 @@ function buildDefaults(editData?: Product | null): ProductFormData {
       wafer_platform: editData.wafer_platform ?? '',
       cell_config: editData.cell_config ?? '',
       series_name: editData.series_name ?? '',
+      module_efficiency: editData.module_efficiency ?? '',
+      module_type: editData.module_type ?? '',
+      module_grade: editData.module_grade ?? '',
       memo: editData.memo ?? '',
     };
   }
@@ -55,7 +61,9 @@ function buildDefaults(editData?: Product | null): ProductFormData {
     spec_wp: '' as unknown as number, wattage_kw: '' as unknown as number,
     module_width_mm: '' as unknown as number, module_height_mm: '' as unknown as number,
     module_depth_mm: '', weight_kg: '',
-    wafer_platform: '', cell_config: '', series_name: '', memo: '',
+    wafer_platform: '', cell_config: '', series_name: '',
+    module_efficiency: '', module_type: '', module_grade: '',
+    memo: '',
   };
 }
 
@@ -63,6 +71,9 @@ function stripEmpty(data: ProductFormData): Record<string, unknown> {
   const payload: Record<string, unknown> = { ...data };
   if (data.module_depth_mm === '' || data.module_depth_mm === undefined) delete payload.module_depth_mm;
   if (data.weight_kg === '' || data.weight_kg === undefined) delete payload.weight_kg;
+  if (data.module_efficiency === '' || data.module_efficiency === undefined) delete payload.module_efficiency;
+  if (data.module_type === '' || data.module_type === undefined) delete payload.module_type;
+  if (data.module_grade === '' || data.module_grade === undefined) delete payload.module_grade;
   return payload;
 }
 
@@ -144,6 +155,41 @@ function ProductFields({ register, errors, watch, setValue, manufacturers }: Fie
         <div className="space-y-1.5">
           <Label>셀 구성</Label>
           <Input {...register('cell_config')} />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-1.5">
+          <Label>모듈 효율(%)</Label>
+          <Input type="number" step="0.01" placeholder="예: 22.50" {...register('module_efficiency')} />
+          {errors.module_efficiency && <p className="text-xs text-destructive">{errors.module_efficiency.message}</p>}
+        </div>
+        <div className="space-y-1.5">
+          <Label>모듈 종류</Label>
+          <Select value={watch('module_type') ?? ''} onValueChange={(v) => setValue('module_type', (v as 'PERC' | 'TOPCON' | 'BC') ?? '')}>
+            {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
+            <SelectTrigger><Txt text={watch('module_type') ?? ''} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="PERC">PERC</SelectItem>
+              <SelectItem value="TOPCON">TOPCON</SelectItem>
+              <SelectItem value="BC">BC</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>모듈 등급</Label>
+          <Select
+            value={watch('module_grade') ?? ''}
+            onValueChange={(v) => setValue('module_grade', (v as '1' | '2' | '3' | 'NA') ?? '')}
+          >
+            {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
+            <SelectTrigger><Txt text={watch('module_grade') === 'NA' ? '미해당' : watch('module_grade') ? `${watch('module_grade')}등급` : ''} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">1등급</SelectItem>
+              <SelectItem value="2">2등급</SelectItem>
+              <SelectItem value="3">3등급</SelectItem>
+              <SelectItem value="NA">미해당(NA)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
       <div className="space-y-1.5">
