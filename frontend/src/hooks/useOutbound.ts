@@ -5,6 +5,32 @@ import { companyParams } from '@/lib/companyUtils';
 import { useListQuery, useDetailQuery } from '@/lib/queryHelpers';
 import type { Outbound, SaleListItem } from '@/types/outbound';
 
+// 청크 누적 페이지네이션 — server mode 미도입 화면(예: OrdersPage 출고 탭)이
+// 옛 동작(전체 출고를 한 번에 받음) 을 유지하기 위한 호환 헬퍼.
+// Supabase db-max-rows=1000 제한을 offset 증가 청크로 우회한다.
+const OUTBOUND_CHUNK_SIZE = 1000;
+const OUTBOUND_MAX_PAGES = 500;
+
+async function fetchAllOutbounds(baseQuery: string): Promise<Outbound[]> {
+  const first = await fetchWithAuthMeta<Outbound[]>(
+    `/api/v1/outbounds?${baseQuery}&limit=${OUTBOUND_CHUNK_SIZE}&offset=0`,
+  );
+  const accumulated: Outbound[] = [...first.data];
+  const total = first.totalCount;
+  if (total === null || accumulated.length >= total) return accumulated;
+  for (let page = 1; page < OUTBOUND_MAX_PAGES; page++) {
+    const offset = page * OUTBOUND_CHUNK_SIZE;
+    if (offset >= total) break;
+    const next = await fetchWithAuth<Outbound[]>(
+      `/api/v1/outbounds?${baseQuery}&limit=${OUTBOUND_CHUNK_SIZE}&offset=${offset}`,
+    );
+    if (next.length === 0) break;
+    accumulated.push(...next);
+    if (accumulated.length >= total) break;
+  }
+  return accumulated;
+}
+
 export interface OutboundListParams {
   status?: string;
   usage_category?: string;
@@ -68,6 +94,26 @@ export function useOutboundList(params: OutboundListParams): OutboundListResult 
     error: q.error ? q.error.message : null,
     reload: async () => { await q.refetch(); },
   };
+}
+
+// useOutboundListAll — 호환 훅. 옛 시그니처(filters만 받고 전체 데이터를 한 번에 반환).
+// 새 화면은 useOutboundList(params) 를 쓰고, 아직 server mode 마이그레이션 안 된 화면이 사용한다.
+// 청크 누적이라 데이터 5만건 넘으면 무거워지니 점차 페이지네이션으로 이전 권장.
+export function useOutboundListAll(
+  filters: { status?: string; usage_category?: string; manufacturer_id?: string } = {},
+) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
+  return useListQuery<Outbound>(
+    ['outbounds-all', selectedCompanyId, filters.status, filters.usage_category, filters.manufacturer_id],
+    () => {
+      const params = companyParams(selectedCompanyId!);
+      if (filters.status) params.set('status', filters.status);
+      if (filters.usage_category) params.set('usage_category', filters.usage_category);
+      if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id);
+      return fetchAllOutbounds(params.toString());
+    },
+    { enabled: !!selectedCompanyId },
+  );
 }
 
 export interface OutboundSummary {
