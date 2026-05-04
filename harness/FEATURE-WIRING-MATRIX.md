@@ -151,6 +151,7 @@
 | `sys.system_settings` | 사이트 전역 설정 | ★ | global |
 | `sys.ui_config` | GUI 메타 편집기 | ★ | global |
 | `sys.user` | 사용자 (/me + admin 관리) | ★ | global |
+| `sys.external_sync` | 외부 동기화 소스 (D-059) | ★ | global |
 | `engine.health` | Rust 엔진 헬스 | ★ | global |
 
 ---

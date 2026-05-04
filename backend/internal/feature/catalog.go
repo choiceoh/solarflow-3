@@ -153,6 +153,7 @@ const (
 	IDSysSystemSettings FeatureID = "sys.system_settings"
 	IDSysUIConfig       FeatureID = "sys.ui_config"
 	IDSysUser           FeatureID = "sys.user"
+	IDSysExternalSync   FeatureID = "sys.external_sync" // D-059
 
 	// ---- engine.* ----
 	IDEngineHealth FeatureID = "engine.health"
@@ -570,6 +571,17 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/users/", "/api/v1/users/{id}",
 			"/api/v1/users/{id}/role", "/api/v1/users/{id}/active",
 			"/api/v1/users/{id}/password",
+		},
+	},
+	IDSysExternalSync: {
+		ID: IDSysExternalSync, Name: "외부 동기화 소스",
+		Description: "외부 시트(구글 시트 등) 단방향 동기화 — 수동 + 1시간 cron (D-059)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{
+			"/api/v1/external-sync-sources/",
+			"/api/v1/external-sync-sources/{id}",
+			"/api/v1/external-sync-sources/{id}/run",
+			"/api/v1/external-format/google-sheet",
 		},
 	},
 
