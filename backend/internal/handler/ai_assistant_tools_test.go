@@ -282,6 +282,101 @@ func TestAvailableAssistantTools_CableSharesImportToolsWithTopsolar(t *testing.T
 	}
 }
 
+// TestAvailableAssistantTools_BaroExclusiveTools — baro 사용자에게는 baro 전용 도구가 노출되고
+// 동일 도구가 module 계열에는 노출되지 않아야.
+func TestAvailableAssistantTools_BaroExclusiveTools(t *testing.T) {
+	baroTools := []string{
+		"list_baro_credit_board",
+		"list_baro_dispatch_routes",
+		"search_baro_partner_prices",
+		"lookup_baro_partner_price",
+		"search_baro_incoming",
+		"search_baro_purchase_history",
+	}
+
+	// baro operator → 도구 모두 노출.
+	{
+		ctx := ctxFor("operator", middleware.TenantScopeBaro)
+		names := toolNames(availableAssistantTools(ctx))
+		for _, must := range baroTools {
+			if !names[must] {
+				t.Errorf("baro operator 에게 baro 전용 도구 %q 가 누락됨", must)
+			}
+		}
+	}
+
+	// topsolar operator → baro 도구 catalog 에서 사라짐.
+	{
+		ctx := ctxFor("operator", middleware.TenantScopeTopsolar)
+		names := toolNames(availableAssistantTools(ctx))
+		for _, banned := range baroTools {
+			if names[banned] {
+				t.Errorf("topsolar operator 에게 baro 전용 도구 %q 가 catalog 에 노출됨", banned)
+			}
+		}
+	}
+}
+
+// TestAvailableAssistantTools_BaroRoleGate — baro 도구의 역할 게이트 일관성.
+// purchase_history 는 executive 까지 허용, 나머지 admin 비-인커밍 도구는 admin/operator 만.
+func TestAvailableAssistantTools_BaroRoleGate(t *testing.T) {
+	cases := []struct {
+		role   string
+		expect map[string]bool // tool name → 노출되어야 하는가
+	}{
+		{
+			role: "viewer",
+			expect: map[string]bool{
+				"list_baro_credit_board":       false,
+				"list_baro_dispatch_routes":    false,
+				"search_baro_partner_prices":   false,
+				"lookup_baro_partner_price":    false,
+				"search_baro_purchase_history": false,
+				"search_baro_incoming":         true, // 전직급 조회
+			},
+		},
+		{
+			role: "executive",
+			expect: map[string]bool{
+				"list_baro_credit_board":       false, // admin/operator 만
+				"list_baro_dispatch_routes":    false,
+				"search_baro_partner_prices":   false,
+				"lookup_baro_partner_price":    false,
+				"search_baro_purchase_history": true, // executive 도 조회
+				"search_baro_incoming":         true,
+			},
+		},
+		{
+			role: "operator",
+			expect: map[string]bool{
+				"list_baro_credit_board":       true,
+				"list_baro_dispatch_routes":    true,
+				"search_baro_partner_prices":   true,
+				"lookup_baro_partner_price":    true,
+				"search_baro_purchase_history": true,
+				"search_baro_incoming":         true,
+			},
+		},
+	}
+	for _, c := range cases {
+		ctx := ctxFor(c.role, middleware.TenantScopeBaro)
+		names := toolNames(availableAssistantTools(ctx))
+		for tool, want := range c.expect {
+			if names[tool] != want {
+				t.Errorf("baro %s: %q 노출=%v, 기대=%v", c.role, tool, names[tool], want)
+			}
+		}
+	}
+}
+
+func toolNames(tools []assistantTool) map[string]bool {
+	out := map[string]bool{}
+	for _, t := range tools {
+		out[t.name] = true
+	}
+	return out
+}
+
 // TestBuildSystemPrompt_BaroUsesBaroDomainBlock — baro 사용자는 baro 도메인 정본을 받아야.
 // module 의 P/O→L/C 흐름이 baro 프롬프트에 박히면 모델이 헛소리.
 func TestBuildSystemPrompt_BaroUsesBaroDomainBlock(t *testing.T) {
