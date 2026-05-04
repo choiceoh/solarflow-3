@@ -22,6 +22,8 @@ type Product struct {
 	SeriesName     *string  `json:"series_name"`
 	IsActive       bool     `json:"is_active"`
 	Memo           *string  `json:"memo"`
+	// D-063: ERP 시스템 내부 품번 코드 (예: M-JK0635-01). 우리 product_code (모델명) 와 별개.
+	ErpCode        *string  `json:"erp_code,omitempty"`
 }
 
 // ProductWithManufacturer — 제조사 정보를 포함한 품번 조회 결과
