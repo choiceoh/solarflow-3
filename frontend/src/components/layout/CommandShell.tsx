@@ -5,6 +5,7 @@ import {
   Box,
   Calculator,
   ClipboardList,
+  Database,
   FileSpreadsheet,
   FileSignature,
   History,
@@ -153,6 +154,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
     label: '도구',
     items: [
       { key: 'import-hub', label: '엑셀 입력', abbr: '입력', path: '/import', icon: FileSpreadsheet, menu: 'import_hub' },
+      { key: 'data', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters' },
       { key: 'library', label: '자료실', abbr: '자료', path: '/library', icon: LibraryBig, menu: 'library' },
       { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
       { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: MODULE_TENANTS, isWip: true },
