@@ -550,3 +550,305 @@ func TestGroupInboundRowsByBL_AllowedValuesValidation(t *testing.T) {
 		t.Errorf("inbound_type 에러 기대, 실제 errs=%v", errs)
 	}
 }
+
+// --- groupPORowsByPONumber ---
+
+// TestGroupPORowsByPONumber_Happy — 같은 po_number의 라인 N개가 한 그룹으로 묶이는지.
+func TestGroupPORowsByPONumber_Happy(t *testing.T) {
+	rows := []map[string]interface{}{
+		{
+			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
+			"contract_type": "spot", "contract_date": "2026-05-01",
+			"product_code": "M580", "quantity": 100, "unit_price_usd_wp": 0.09,
+			"item_type": "main", "payment_type": "paid",
+		},
+		{
+			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
+			"contract_type": "spot", "contract_date": "2026-05-01",
+			"product_code": "M600", "quantity": 50, "unit_price_usd_wp": 0.10,
+			"item_type": "spare", "payment_type": "free",
+		},
+		{
+			"po_number": "PO-2", "company_code": "TS", "manufacturer_name": "TWS",
+			"contract_type": "frame", "contract_date": "2026-05-02",
+			"product_code": "M580", "quantity": 200, "unit_price_usd_wp": 0.085,
+			"item_type": "main", "payment_type": "paid",
+		},
+	}
+	groups, order, errs, warns := groupPORowsByPONumber(rows)
+	if len(errs) > 0 {
+		t.Fatalf("에러 없음 기대, 실제: %v", errs)
+	}
+	if len(warns) > 0 {
+		t.Errorf("경고 없음 기대, 실제: %v", warns)
+	}
+	if len(order) != 2 || order[0] != "PO-1" || order[1] != "PO-2" {
+		t.Fatalf("order 기대=[PO-1, PO-2], 실제=%v", order)
+	}
+	if len(groups["PO-1"].LineRows) != 2 {
+		t.Errorf("PO-1 라인 2개 기대, 실제=%d", len(groups["PO-1"].LineRows))
+	}
+	if len(groups["PO-2"].LineRows) != 1 {
+		t.Errorf("PO-2 라인 1개 기대, 실제=%d", len(groups["PO-2"].LineRows))
+	}
+}
+
+// TestGroupPORowsByPONumber_ContractTypeAlias — '스팟'/'프레임' 한글 라벨이 코드값으로 정규화되는지.
+func TestGroupPORowsByPONumber_ContractTypeAlias(t *testing.T) {
+	rows := []map[string]interface{}{
+		{
+			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
+			"contract_type": "스팟", "contract_date": "2026-05-01",
+			"product_code": "M580", "quantity": 100, "unit_price_usd_wp": 0.09,
+			"item_type": "main", "payment_type": "paid",
+		},
+	}
+	groups, _, errs, _ := groupPORowsByPONumber(rows)
+	if len(errs) > 0 {
+		t.Fatalf("'스팟' alias 통과 기대, 에러: %v", errs)
+	}
+	if got := getString(groups["PO-1"].FirstRow, "contract_type"); got != "spot" {
+		t.Errorf("contract_type 'spot' 정규화 기대, 실제=%s", got)
+	}
+}
+
+// TestGroupPORowsByPONumber_HeaderInconsistencyWarning — 같은 PO 안 헤더가 다르면 경고 (첫 행 채택).
+func TestGroupPORowsByPONumber_HeaderInconsistencyWarning(t *testing.T) {
+	rows := []map[string]interface{}{
+		{
+			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
+			"contract_type": "spot", "contract_date": "2026-05-01",
+			"incoterms": "FOB",
+			"product_code": "M580", "quantity": 100, "unit_price_usd_wp": 0.09,
+			"item_type": "main", "payment_type": "paid",
+		},
+		{
+			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
+			"contract_type": "spot", "contract_date": "2026-05-01",
+			"incoterms": "CIF", // 첫 행과 다름
+			"product_code": "M600", "quantity": 50, "unit_price_usd_wp": 0.10,
+			"item_type": "main", "payment_type": "paid",
+		},
+	}
+	_, _, errs, warns := groupPORowsByPONumber(rows)
+	if len(errs) > 0 {
+		t.Fatalf("에러 없음 기대, 실제: %v", errs)
+	}
+	if len(warns) == 0 {
+		t.Fatal("incoterms 불일치 경고 기대")
+	}
+	hasIncotermsWarn := false
+	for _, w := range warns {
+		if w.Field == "incoterms" && strings.Contains(w.Message, "첫 행 값 사용") {
+			hasIncotermsWarn = true
+		}
+	}
+	if !hasIncotermsWarn {
+		t.Errorf("incoterms 경고 기대, 실제=%v", warns)
+	}
+}
+
+// TestGroupPORowsByPONumber_RejectsLegacyContractType — 레거시 contract_type(annual 등) 신규 등록 차단.
+func TestGroupPORowsByPONumber_RejectsLegacyContractType(t *testing.T) {
+	rows := []map[string]interface{}{
+		{
+			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
+			"contract_type": "annual", "contract_date": "2026-05-01",
+			"product_code": "M580", "quantity": 100, "unit_price_usd_wp": 0.09,
+			"item_type": "main", "payment_type": "paid",
+		},
+	}
+	_, _, errs, _ := groupPORowsByPONumber(rows)
+	if len(errs) == 0 {
+		t.Fatal("레거시 'annual' 차단 기대")
+	}
+	if errs[0].Field != "contract_type" {
+		t.Errorf("contract_type 에러 기대, 실제 field=%s", errs[0].Field)
+	}
+}
+
+// TestGroupPORowsByPONumber_MissingRequired — 필수 필드 누락 시 다건 에러.
+func TestGroupPORowsByPONumber_MissingRequired(t *testing.T) {
+	rows := []map[string]interface{}{
+		{}, // 모든 필수 누락
+	}
+	_, _, errs, _ := groupPORowsByPONumber(rows)
+	// 필수 10개 (po_number, company_code, manufacturer_name, contract_type, contract_date,
+	//          product_code, quantity, unit_price_usd_wp, item_type, payment_type)
+	if len(errs) < 10 {
+		t.Errorf("최소 10건 에러 기대, 실제=%d", len(errs))
+	}
+}
+
+// --- parsePOLineRow ---
+
+// TestParsePOLineRow_HappyAndConversion — USD/Wp × wattage_kw × 1000 = USD/panel 정확성.
+func TestParsePOLineRow_HappyAndConversion(t *testing.T) {
+	// 580Wp 패널 = wattage_kw 0.580. 0.09 USD/Wp × 580 = 52.2 USD/panel.
+	row := map[string]interface{}{
+		"quantity": 100, "unit_price_usd_wp": 0.09,
+		"item_type": "main", "payment_type": "paid",
+		"line_memo": "라인 메모",
+	}
+	req, errs := parsePOLineRow(7, row, "prod-1", 0.580)
+	if len(errs) > 0 {
+		t.Fatalf("통과 기대, 에러: %v", errs)
+	}
+	if req.ProductID != "prod-1" {
+		t.Errorf("ProductID 기대=prod-1 실제=%s", req.ProductID)
+	}
+	if req.Quantity != 100 {
+		t.Errorf("Quantity 기대=100 실제=%d", req.Quantity)
+	}
+	if req.UnitPriceUSD == nil || *req.UnitPriceUSD < 52.19 || *req.UnitPriceUSD > 52.21 {
+		t.Errorf("UnitPriceUSD 52.2 근방 기대, 실제=%v", req.UnitPriceUSD)
+	}
+	if req.TotalAmountUSD == nil || *req.TotalAmountUSD < 5219.99 || *req.TotalAmountUSD > 5220.01 {
+		t.Errorf("TotalAmountUSD 5220 근방 기대, 실제=%v", req.TotalAmountUSD)
+	}
+	if req.ItemType == nil || *req.ItemType != "main" {
+		t.Errorf("ItemType 'main' 기대, 실제=%v", req.ItemType)
+	}
+	if req.Memo == nil || *req.Memo != "라인 메모" {
+		t.Errorf("Memo '라인 메모' 기대, 실제=%v", req.Memo)
+	}
+}
+
+// TestParsePOLineRow_RejectsNonPositive — 수량/단가 0·음수 차단.
+func TestParsePOLineRow_RejectsNonPositive(t *testing.T) {
+	cases := []struct {
+		name      string
+		row       map[string]interface{}
+		wantField string
+	}{
+		{"quantity 0", map[string]interface{}{"quantity": 0, "unit_price_usd_wp": 0.09}, "quantity"},
+		{"quantity 음수", map[string]interface{}{"quantity": -1, "unit_price_usd_wp": 0.09}, "quantity"},
+		{"unit_price 0", map[string]interface{}{"quantity": 100, "unit_price_usd_wp": 0.0}, "unit_price_usd_wp"},
+		{"unit_price 음수", map[string]interface{}{"quantity": 100, "unit_price_usd_wp": -0.01}, "unit_price_usd_wp"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, errs := parsePOLineRow(7, c.row, "p", 0.580)
+			if len(errs) == 0 {
+				t.Fatalf("에러 기대(field=%s)", c.wantField)
+			}
+			if errs[0].Field != c.wantField {
+				t.Errorf("기대 field=%s, 실제=%s", c.wantField, errs[0].Field)
+			}
+		})
+	}
+}
+
+// --- parseLCRow ---
+
+// TestParseLCRow_Happy — 정상 입력 + status 'pending' 기본값.
+func TestParseLCRow_Happy(t *testing.T) {
+	row := map[string]interface{}{
+		"lc_number":  "M0123",
+		"open_date":  "2026-05-04",
+		"amount_usd": 250000.0,
+		"target_qty": 2500,
+		"usance_days": 90,
+		"usance_type": "BANKER'S USANCE",
+		"maturity_date": "2026-08-02",
+		"memo": "테스트",
+	}
+	req, errs := parseLCRow(7, row, "po-1", "bank-1", "co-1")
+	if len(errs) > 0 {
+		t.Fatalf("통과 기대, 에러: %v", errs)
+	}
+	if req.POID != "po-1" || req.BankID != "bank-1" || req.CompanyID != "co-1" {
+		t.Errorf("FK 매핑 실패: %+v", req)
+	}
+	if req.AmountUSD != 250000 {
+		t.Errorf("AmountUSD 250000 기대, 실제=%v", req.AmountUSD)
+	}
+	if req.UsanceType == nil || *req.UsanceType != "buyers" {
+		t.Errorf("UsanceType 'buyers' 정규화 기대, 실제=%v", req.UsanceType)
+	}
+	if req.Status != "pending" {
+		t.Errorf("Status 'pending' 기본 기대, 실제=%s", req.Status)
+	}
+	if req.LCNumber == nil || *req.LCNumber != "M0123" {
+		t.Errorf("LCNumber 'M0123' 기대, 실제=%v", req.LCNumber)
+	}
+}
+
+// TestParseLCRow_UsanceTypeNormalization — 다양한 라벨 → buyers/shippers/nil 정규화.
+func TestParseLCRow_UsanceTypeNormalization(t *testing.T) {
+	cases := []struct {
+		input    string
+		wantNil  bool
+		wantCode string
+	}{
+		{"BANKER'S USANCE", false, "buyers"},
+		{"BANKERS USANCE", false, "buyers"},
+		{"banker's usance", false, "buyers"},
+		{"SHIPPER'S USANCE", false, "shippers"},
+		{"shippers", false, "shippers"},
+		{"AT SIGHT", true, ""},
+		{"buyers", false, "buyers"},
+	}
+	for _, c := range cases {
+		t.Run(c.input, func(t *testing.T) {
+			row := map[string]interface{}{
+				"amount_usd":  250000.0,
+				"usance_type": c.input,
+			}
+			req, errs := parseLCRow(7, row, "po", "bank", "co")
+			if len(errs) > 0 {
+				t.Fatalf("통과 기대, 에러: %v", errs)
+			}
+			if c.wantNil {
+				if req.UsanceType != nil {
+					t.Errorf("nil 기대, 실제=*%s", *req.UsanceType)
+				}
+			} else {
+				if req.UsanceType == nil {
+					t.Fatalf("값 기대(%s), 실제=nil", c.wantCode)
+				}
+				if *req.UsanceType != c.wantCode {
+					t.Errorf("기대=%s, 실제=%s", c.wantCode, *req.UsanceType)
+				}
+			}
+		})
+	}
+}
+
+// TestParseLCRow_RejectsUnknownUsanceType — 알 수 없는 usance_type → 검증 실패.
+func TestParseLCRow_RejectsUnknownUsanceType(t *testing.T) {
+	row := map[string]interface{}{
+		"amount_usd":  250000.0,
+		"usance_type": "WEIRD_TYPE",
+	}
+	_, errs := parseLCRow(7, row, "po", "bank", "co")
+	if len(errs) == 0 {
+		t.Fatal("알 수 없는 usance_type 거부 기대")
+	}
+	if errs[0].Field != "usance_type" {
+		t.Errorf("usance_type 에러 기대, 실제=%s", errs[0].Field)
+	}
+}
+
+// TestParseLCRow_RejectsNonPositiveAmount — amount_usd 0/음수 차단.
+func TestParseLCRow_RejectsNonPositiveAmount(t *testing.T) {
+	cases := []struct {
+		name string
+		amt  interface{}
+	}{
+		{"0", 0.0},
+		{"음수", -100.0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			row := map[string]interface{}{"amount_usd": c.amt}
+			_, errs := parseLCRow(7, row, "po", "bank", "co")
+			if len(errs) == 0 {
+				t.Fatalf("amount_usd %v 거부 기대", c.amt)
+			}
+			if errs[0].Field != "amount_usd" {
+				t.Errorf("amount_usd 에러 기대, 실제=%s", errs[0].Field)
+			}
+		})
+	}
+}
