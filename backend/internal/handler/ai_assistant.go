@@ -66,9 +66,27 @@ func toolCallSignature(name string, args []byte) string {
 	return name + "|" + string(args)
 }
 
+// assistantMessage — 프론트가 보내는 한 turn.
+// parts 가 있으면 그 쪽이 우선 — 도구 호출 history 까지 보존하기 위함.
+// parts 없으면 content 를 단일 text part 로 본다 (레거시·디버깅 caller 호환).
 type assistantMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string                 `json:"role"`
+	Content string                 `json:"content,omitempty"`
+	Parts   []assistantMessagePart `json:"parts,omitempty"`
+}
+
+// assistantMessagePart — wire 포맷 part. 프론트 lib/assistantMessages.ts 의 BackendPart 와 1:1.
+//   - text:        본문 텍스트 (assistant 또는 user)
+//   - tool_call:   assistant 가 직전 turn 에서 호출한 도구 (tool_use 블록)
+//   - tool_result: 도구 결과 (user role 메시지로 첨부 — Anthropic 규약)
+type assistantMessagePart struct {
+	Type       string          `json:"type"`
+	Text       string          `json:"text,omitempty"`
+	ToolCallID string          `json:"tool_call_id,omitempty"`
+	ToolName   string          `json:"tool_name,omitempty"`
+	Input      json.RawMessage `json:"input,omitempty"`
+	Output     string          `json:"output,omitempty"`
+	IsError    bool            `json:"is_error,omitempty"`
 }
 
 // system 프롬프트는 서버가 JWT context로 구성하므로 클라이언트에서 받지 않는다 (변조 방지).
