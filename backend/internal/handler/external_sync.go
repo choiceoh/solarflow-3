@@ -549,6 +549,9 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 		}
 		_ = dateRaw
 
+		// Topsolar 시트 col 11("단가")은 장당 단가(₩/장). source_payload 에는 의미 맞는 키로 보존.
+		// 기존 키(unit_price_wp)는 잘못된 명명이지만 SaleAutoRegisterDialog 호환을 위해 둘 다 둔다.
+		rawUnitEa := parseTopsolarNumber(safeCell(row, 10))
 		sourcePayload := map[string]interface{}{
 			"source":           "google_sheet",
 			"spreadsheet_id":   src.SpreadsheetID,
@@ -560,7 +563,8 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			"site_name":        safeCell(row, 3),
 			"site_address":     safeCell(row, 4),
 			"order_number":     safeCell(row, 5),
-			"unit_price_wp":    parseTopsolarNumber(safeCell(row, 10)),
+			"unit_price_ea":    rawUnitEa,
+			"unit_price_wp":    rawUnitEa, // legacy 키 — 호환용 (실제로는 장당값)
 			"supply_amount":    parseTopsolarNumber(safeCell(row, 11)),
 			"vat_amount":       parseTopsolarNumber(safeCell(row, 12)),
 			"total_amount":     parseTopsolarNumber(safeCell(row, 13)),
@@ -602,8 +606,9 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			if id, ok := orders[normalizeCode(orderNumber)]; ok {
 				orderIDPtr = &id
 			} else {
-				unitPrice := parseTopsolarNumber(safeCell(row, 10))
-				newOrderID, regErr := h.autoRegisterOrder(orderNumber, companyID, customerID, productID, qty, unitPrice, capacityKW, dateISO, optStr(safeCell(row, 3)), optStr(safeCell(row, 4)))
+				// 시트 col 11 = 장당 단가. spec_wp 가 있으면 ₩/Wp 도 계산해 둘 다 저장.
+				specWP := pmeta.WattageKW * 1000
+				newOrderID, regErr := h.autoRegisterOrder(orderNumber, companyID, customerID, productID, qty, rawUnitEa, specWP, capacityKW, dateISO, optStr(safeCell(row, 3)), optStr(safeCell(row, 4)))
 				if regErr != nil {
 					log.Printf("[external sync] order 등록 실패 %s: %v", orderNumber, regErr)
 				} else {
@@ -884,7 +889,13 @@ func (h *ExternalSyncHandler) autoRegisterPartner(rawName string) (string, error
 
 // D-059 PR 14: 수주 자동 등록
 //   defaults — receipt_method=purchase_order, management_category=sale, fulfillment_source=stock
-func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customerID, productID string, qty int, unitPriceWp float64, capacityKW *float64, orderDate string, siteName, siteAddress *string) (string, error) {
+//   unitPriceEa: 장당 단가(원/장) — Topsolar 시트 col 11 원본값
+//   specWP    : 품번의 정격 출력(W). >0 이면 unit_price_wp = ea / specWP 계산해서 같이 저장.
+func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customerID, productID string, qty int, unitPriceEa, specWP float64, capacityKW *float64, orderDate string, siteName, siteAddress *string) (string, error) {
+	unitPriceWp := 0.0
+	if specWP > 0 {
+		unitPriceWp = unitPriceEa / specWP
+	}
 	body := map[string]interface{}{
 		"order_number":        orderNumber,
 		"company_id":          companyID,
@@ -892,6 +903,7 @@ func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customer
 		"product_id":          productID,
 		"quantity":            qty,
 		"unit_price_wp":       unitPriceWp,
+		"unit_price_ea":       unitPriceEa,
 		"order_date":          orderDate,
 		"receipt_method":      "purchase_order",
 		"management_category": "sale",
@@ -915,7 +927,7 @@ func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customer
 	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
 		return "", fmt.Errorf("등록 결과 확인 실패")
 	}
-	log.Printf("[external sync] order 자동 등록: %s (qty=%d, unit=%.0f)", orderNumber, qty, unitPriceWp)
+	log.Printf("[external sync] order 자동 등록: %s (qty=%d, ea=%.0f, wp=%.2f)", orderNumber, qty, unitPriceEa, unitPriceWp)
 	return rows[0].OrderID, nil
 }
 

@@ -157,6 +157,13 @@ func parseOrderRow(rowNum int, row map[string]interface{}, companyID, customerID
 		return model.CreateOrderRequest{}, []model.ImportError{*upErr}
 	}
 
+	// 장당 단가 자동 계산 — wp × spec_wp. wattageKW(kW) → spec_wp = wattageKW × 1000.
+	var unitPriceEaPtr *float64
+	if specWP := wattageKW * 1000; specWP > 0 {
+		ea := unitPriceWp * specWP
+		unitPriceEaPtr = &ea
+	}
+
 	req := model.CreateOrderRequest{
 		OrderNumber:        getStringPtr(row, "order_number"),
 		CompanyID:          companyID,
@@ -167,6 +174,7 @@ func parseOrderRow(rowNum int, row map[string]interface{}, companyID, customerID
 		Quantity:           qty,
 		CapacityKw:         &capacityKW,
 		UnitPriceWp:        unitPriceWp,
+		UnitPriceEa:        unitPriceEaPtr,
 		SiteName:           getStringPtr(row, "site_name"),
 		SiteAddress:        getStringPtr(row, "site_address"),
 		SiteContact:        getStringPtr(row, "site_contact"),

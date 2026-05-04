@@ -202,6 +202,15 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
                 onSave={saveOrderField}
               />
               <EditableDetailField
+                label="장당단가"
+                value={order.unit_price_ea}
+                display={order.unit_price_ea != null ? formatMaybeNumber(order.unit_price_ea, '원/장') : (order.unit_price_wp != null && order.spec_wp ? formatMaybeNumber(order.unit_price_wp * order.spec_wp, '원/장') : undefined)}
+                fieldKey="unit_price_ea"
+                editType="number"
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
+              <EditableDetailField
                 label="Wp단가"
                 value={order.unit_price_wp}
                 display={formatMaybeNumber(order.unit_price_wp, '원/Wp')}
@@ -297,6 +306,7 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
           <DetailFieldGrid cols={4}>
             <DetailField label="거래처" value={sale.customer_name ?? order.customer_name} span={2} />
             <DetailField label="수량" value={formatMaybeNumber(safeNumber(sale.quantity) ?? order.quantity)} />
+            <DetailField label="장당단가" value={formatMaybeNumber(sale.unit_price_ea, '원/장')} />
             <DetailField label="Wp단가" value={formatMaybeNumber(sale.unit_price_wp, '원/Wp')} />
             <DetailField label="공급가" value={formatMaybeNumber(sale.supply_amount, '원')} />
             <DetailField label="부가세" value={formatMaybeNumber(sale.vat_amount, '원')} />
