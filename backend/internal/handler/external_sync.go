@@ -19,6 +19,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -308,6 +309,41 @@ func (h *ExternalSyncHandler) recordSuccess(syncID string, imported, skipped int
 // dedup: 058 마이그레이션의 UNIQUE 인덱스가 (spreadsheet_id, sheet_row_index) 충돌을
 // 자동 처리 — INSERT 가 23505 면 idempotent skip.
 
+// D-059 PR 11: 자동 모드에서 신규 product 등록 시 prefix 룰로 manufacturer/wattage 추론.
+type productInferenceRule struct {
+	pattern    *regexp.Regexp
+	mfgKeyword string
+}
+
+var productRules = []productInferenceRule{
+	{regexp.MustCompile(`(?i)^TSM[\s-]*(\d{3})`), "Trina"},
+	{regexp.MustCompile(`(?i)^LR[78][\s-]*\d+H[YGSM]D[\s-]*(\d{3})`), "LONGi"},
+	{regexp.MustCompile(`(?i)^LR5[\s-]*\d+H[YGSM]D[\s-]*(\d{3})`), "LONGi"},
+	{regexp.MustCompile(`(?i)^JKM[\s-]*(\d{3})`), "Jinko"},
+	{regexp.MustCompile(`(?i)^RSM[\s-]*\d+[\s-]+(?:\d+[\s-]+)?(\d{3})`), "Risen"},
+	{regexp.MustCompile(`(?i)^Q[.\s-]*PEAK[\s-]*\w*[\s-]+(\d{3})`), "Hanwha"},
+	{regexp.MustCompile(`(?i)^HA[\s-]*(\d{3})`), ""},
+}
+
+func inferProductMeta(code string, mfgIndex map[string]string) (string, int) {
+	for _, r := range productRules {
+		if m := r.pattern.FindStringSubmatch(code); m != nil {
+			wattage := 0
+			if w, err := strconv.Atoi(m[1]); err == nil {
+				wattage = w
+			}
+			mfgID := ""
+			if r.mfgKeyword != "" {
+				if id, ok := mfgIndex[strings.ToLower(r.mfgKeyword)]; ok {
+					mfgID = id
+				}
+			}
+			return mfgID, wattage
+		}
+	}
+	return "", 0
+}
+
 var topsolarSellerMap = map[string]string{
 	"탑": "탑솔라", "탑솔라": "탑솔라",
 	"디원": "디원",
@@ -340,6 +376,11 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 	if err != nil {
 		return 0, 0, fmt.Errorf("warehouses fetch: %w", err)
 	}
+	mfgIndex, err := h.fetchManufacturerIndex()
+	if err != nil {
+		log.Printf("[external sync] manufacturer index 조회 실패: %v — 추론 없이 등록", err)
+		mfgIndex = map[string]string{}
+	}
 
 	imported := 0
 	skipped := 0
@@ -369,14 +410,25 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 		}
 		companyID, ok := companies[normalizeCorp(seller)]
 		if !ok {
-			skipped++
-			continue
+			newID, regErr := h.autoRegisterCompany(seller)
+			if regErr != nil {
+				log.Printf("[external sync] company 등록 실패 %s: %v", seller, regErr)
+				skipped++
+				continue
+			}
+			companyID = newID
+			companies[normalizeCorp(seller)] = newID
 		}
 		productID, ok := products[normalizeCode(productCode)]
 		if !ok {
-			// 자동 모드는 신규 product 등록 안 함 — SKIP
-			skipped++
-			continue
+			newID, regErr := h.autoRegisterProduct(productCode, mfgIndex)
+			if regErr != nil {
+				log.Printf("[external sync] product 등록 실패 %s: %v", productCode, regErr)
+				skipped++
+				continue
+			}
+			productID = newID
+			products[normalizeCode(productCode)] = newID
 		}
 		// 창고는 탑솔라 양식에 정보 없음 — 기본 창고 매핑은 마스터에 한 개만 있을 때 자동
 		warehouseID := ""
@@ -446,6 +498,126 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 		imported++
 	}
 	return imported, skipped, nil
+}
+
+
+// D-059 PR 11
+func (h *ExternalSyncHandler) fetchManufacturerIndex() (map[string]string, error) {
+	data, _, err := h.DB.From("manufacturers").Select("manufacturer_id,name_kr,name_en,short_name", "exact", false).Execute()
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ManufacturerID string  `json:"manufacturer_id"`
+		NameKR         string  `json:"name_kr"`
+		NameEN         *string `json:"name_en"`
+		ShortName      *string `json:"short_name"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	index := make(map[string]string, len(rows)*4)
+	put := func(k, id string) {
+		k = strings.ToLower(strings.TrimSpace(k))
+		if k == "" {
+			return
+		}
+		if _, exists := index[k]; !exists {
+			index[k] = id
+		}
+	}
+	for _, r := range rows {
+		put(r.NameKR, r.ManufacturerID)
+		if r.NameEN != nil {
+			put(*r.NameEN, r.ManufacturerID)
+			lower := strings.ToLower(*r.NameEN)
+			for _, kw := range []string{"trina", "longi", "jinko", "risen", "hanwha", "qcell"} {
+				if strings.Contains(lower, kw) {
+					put(kw, r.ManufacturerID)
+				}
+			}
+		}
+		if r.ShortName != nil {
+			put(*r.ShortName, r.ManufacturerID)
+		}
+	}
+	return index, nil
+}
+
+func (h *ExternalSyncHandler) autoRegisterProduct(rawCode string, mfgIndex map[string]string) (string, error) {
+	mfgID, wattageW := inferProductMeta(rawCode, mfgIndex)
+	code := rawCode
+	if len(code) > 30 {
+		code = code[:30]
+	}
+	name := rawCode
+	if len(name) > 100 {
+		name = name[:100]
+	}
+	body := map[string]interface{}{
+		"product_code": code,
+		"product_name": name,
+		"is_active":    true,
+	}
+	if mfgID != "" {
+		body["manufacturer_id"] = mfgID
+	}
+	if wattageW > 0 {
+		body["spec_wp"] = wattageW
+		body["wattage_kw"] = float64(wattageW) / 1000.0
+	}
+	data, _, err := h.DB.From("products").Insert(body, false, "", "", "").Execute()
+	if err != nil {
+		return "", err
+	}
+	var rows []model.Product
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
+		return "", fmt.Errorf("등록 결과 확인 실패")
+	}
+	log.Printf("[external sync] product 자동 등록: %s (mfg=%v, wattage=%dW)", rawCode, mfgID != "", wattageW)
+	return rows[0].ProductID, nil
+}
+
+func (h *ExternalSyncHandler) autoRegisterCompany(rawName string) (string, error) {
+	hash := uint32(0)
+	for _, r := range rawName {
+		hash = hash*31 + uint32(r)
+	}
+	cleanedName := rawName
+	if len(cleanedName) > 100 {
+		cleanedName = cleanedName[:100]
+	}
+	prefix := []rune{}
+	for _, r := range rawName {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || (r >= 0xAC00 && r <= 0xD7AF) {
+			prefix = append(prefix, r)
+			if len(prefix) >= 4 {
+				break
+			}
+		}
+	}
+	if len(prefix) == 0 {
+		prefix = []rune("AUTO")
+	}
+	code := string(prefix) + fmt.Sprintf("%06X", hash)[:6]
+	if len(code) > 10 {
+		code = code[:10]
+	}
+	body := map[string]interface{}{
+		"company_name": cleanedName,
+		"company_code": code,
+		"is_active":    true,
+	}
+	data, _, err := h.DB.From("companies").Insert(body, false, "", "", "").Execute()
+	if err != nil {
+		return "", err
+	}
+	var rows []model.Company
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
+		return "", fmt.Errorf("등록 결과 확인 실패")
+	}
+	log.Printf("[external sync] company 자동 등록: %s (code=%s)", rawName, code)
+	return rows[0].CompanyID, nil
 }
 
 // ──────────────── 변환 보조 ────────────────
