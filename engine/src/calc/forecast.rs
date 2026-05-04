@@ -21,7 +21,7 @@ pub fn calc_closing(opening: f64, incoming: f64, out_sale: f64, out_construction
 struct ProductRow {
     product_id: Uuid, product_code: String, product_name: String,
     manufacturer_name: String, spec_wp: i32,
-    module_width_mm: i32, module_height_mm: i32,
+    module_width_mm: Option<i32>, module_height_mm: Option<i32>,
 }
 
 #[derive(sqlx::FromRow)]

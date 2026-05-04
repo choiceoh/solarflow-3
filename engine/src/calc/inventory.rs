@@ -33,8 +33,8 @@ struct ProductInfo {
     product_name: String,
     manufacturer_name: String,
     spec_wp: i32,
-    module_width_mm: i32,
-    module_height_mm: i32,
+    module_width_mm: Option<i32>,
+    module_height_mm: Option<i32>,
 }
 
 /// (법인, 품번) 별 kW 집계 행
