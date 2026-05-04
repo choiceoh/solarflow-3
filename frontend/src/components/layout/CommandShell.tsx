@@ -172,6 +172,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/assistant': { title: 'AI', breadcrumb: '도구 / 채팅 어시스턴트' },
   '/settings': { title: '설정', breadcrumb: '시스템 / 설정' },
   '/settings/admin': { title: '관리자 설정', breadcrumb: '시스템 / 사용자 관리' },
+  '/settings/audit-logs': { title: '관리자 로그', breadcrumb: '시스템 / 운영 데이터 변경 기록' },
   '/settings/site': { title: '사이트 설정', breadcrumb: '시스템 / 전역 설정' },
   '/settings/personal': { title: '개인 설정', breadcrumb: '시스템 / 내 계정' },
   '/baro/incoming': { title: '입고예정', breadcrumb: '구매 / ETA와 공급예정' },
