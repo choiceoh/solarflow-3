@@ -22,6 +22,8 @@ export interface Outbound {
   product_id: string;
   product_name?: string;
   product_code?: string;
+  manufacturer_id?: string;
+  manufacturer_name?: string;
   spec_wp?: number;
   wattage_kw?: number;
   quantity: number;
