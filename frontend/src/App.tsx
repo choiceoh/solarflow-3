@@ -16,19 +16,6 @@ const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
 const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
 const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
 import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
-const OutboundV2Page = lazy(() => import('@/pages/OutboundV2Page'));
-const MetaFormDepsDemoPage = lazy(() => import('@/pages/MetaFormDepsDemoPage'));
-const MetaFeaturesDemoPage = lazy(() => import('@/pages/MetaFeaturesDemoPage'));
-const WizardDemoPage = lazy(() => import('@/pages/WizardDemoPage'));
-const PartnerV2Page = lazy(() => import('@/pages/PartnerV2Page'));
-const BanksV2Page = lazy(() => import('@/pages/BanksV2Page'));
-const WarehousesV2Page = lazy(() => import('@/pages/WarehousesV2Page'));
-const ManufacturersV2Page = lazy(() => import('@/pages/ManufacturersV2Page'));
-const ProductsV2Page = lazy(() => import('@/pages/ProductsV2Page'));
-const ConstructionSitesV2Page = lazy(() => import('@/pages/ConstructionSitesV2Page'));
-const PurchaseOrdersV2Page = lazy(() => import('@/pages/PurchaseOrdersV2Page'));
-const LCsV2Page = lazy(() => import('@/pages/LCsV2Page'));
-const UIConfigEditorPage = lazy(() => import('@/pages/UIConfigEditorPage'));
 const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
 const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
 const SalesAnalysisPage = lazy(() => import('@/pages/SalesAnalysisPage'));
@@ -124,25 +111,12 @@ export default function App() {
                 <Route path="/data/warehouses/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><WarehouseEditPage /></RoleGuard>} />
                 <Route path="/data/banks/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankNewPage /></RoleGuard>} />
                 <Route path="/data/banks/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankEditPage /></RoleGuard>} />
-                <Route path="/masters/partners-v2" element={<PartnerV2Page />} />
-                <Route path="/masters/banks-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><BanksV2Page /></RoleGuard>} />
-                <Route path="/masters/warehouses-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><WarehousesV2Page /></RoleGuard>} />
-                <Route path="/masters/manufacturers-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><ManufacturersV2Page /></RoleGuard>} />
-                <Route path="/masters/products-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><ProductsV2Page /></RoleGuard>} />
-                <Route path="/masters/construction-sites-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><ConstructionSitesV2Page /></RoleGuard>} />
                 <Route path="/masters/construction-sites" element={<ConstructionSitesPage />} />
                 <Route path="/inbound" element={<LegacyRedirect to="/procurement?tab=bl" />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
-                <Route path="/procurement/po-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><PurchaseOrdersV2Page /></RoleGuard>} />
-                <Route path="/procurement/lc-v2" element={<RoleGuard allowedRoles={['admin', 'operator']}><LCsV2Page /></RoleGuard>} />
                 <Route path="/purchase-history" element={<PurchaseHistoryErrorBoundary><PurchaseHistoryPage /></PurchaseHistoryErrorBoundary>} />
                 <Route path="/lc" element={<LegacyRedirect to="/procurement?tab=lc" />} />
                 <Route path="/outbound" element={<LegacyRedirect to="/orders?tab=outbound" />} />
-                <Route path="/outbound-v2" element={<OutboundV2Page />} />
-                <Route path="/meta-form-deps-demo" element={<MetaFormDepsDemoPage />} />
-                <Route path="/meta-features-demo" element={<MetaFeaturesDemoPage />} />
-                <Route path="/wizard-demo" element={<WizardDemoPage />} />
-                <Route path="/ui-config-editor" element={<RoleGuard allowedRoles={['admin']}><UIConfigEditorPage /></RoleGuard>} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/customs" element={<CustomsPage />} />
                 <Route path="/sales-analysis" element={<SalesAnalysisPage />} />

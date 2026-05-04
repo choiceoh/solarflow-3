@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dialog';
 import { fetchWithAuth } from '@/lib/api';
 import { notify } from '@/lib/notify';
-import { cn } from '@/lib/utils';
 import type { PartnerAlias } from '@/types/aliases';
 import type { ImportResult, ParsedRow } from '@/types/excel';
 import {
@@ -47,9 +46,7 @@ interface SaleSeed {
 export default function SaleAutoRegisterDialog({
   open, outboundRows, importedOutboundIds, partners, onClose, onCompleted,
 }: Props) {
-  const [partnerAliases, setPartnerAliases] = useState<PartnerAlias[]>([]);
   const [seeds, setSeeds] = useState<SaleSeed[]>([]);
-  const [resolvedPartners, setResolvedPartners] = useState<PartnerLite[]>([]);
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -60,7 +57,6 @@ export default function SaleAutoRegisterDialog({
     (async () => {
       const aliases = await fetchPartnerAliases();
       if (cancelled) return;
-      setPartnerAliases(aliases);
       const built = buildSeeds(outboundRows, importedOutboundIds, partners, aliases);
       setSeeds(built);
     })();
@@ -96,7 +92,6 @@ export default function SaleAutoRegisterDialog({
       let canonical: PartnerLite | null = candidate;
       if (!canonical) {
         canonical = await autoRegisterPartner(rawCustomer);
-        setResolvedPartners((prev) => [...prev, canonical!]);
       } else {
         await learnPartnerAlias(canonical.partner_id, rawCustomer);
       }
@@ -126,7 +121,6 @@ export default function SaleAutoRegisterDialog({
           notify.error(`${name} 자동 등록 실패: ${e instanceof Error ? e.message : ''}`);
         }
       }
-      setResolvedPartners((prev) => [...prev, ...created]);
       setSeeds((prev) => prev.map((s) => {
         if (s.match?.level !== 'none') return s;
         const found = created.find((c) => c.partner_name === s.rawCustomer);

@@ -135,15 +135,12 @@ PATCH   /api/v1/intercompany-requests/{id}/cancel
 PATCH   /api/v1/intercompany-requests/{id}/fulfill
 PATCH   /api/v1/intercompany-requests/{id}/receive
 PATCH   /api/v1/intercompany-requests/{id}/reject
-PATCH   /api/v1/lcs/{id}
 PATCH   /api/v1/library-posts/{id}
 PATCH   /api/v1/manufacturers/{id}
 PATCH   /api/v1/manufacturers/{id}/status
 PATCH   /api/v1/partner-activities/{id}/followup
 PATCH   /api/v1/partners/{id}
 PATCH   /api/v1/partners/{id}/status
-PATCH   /api/v1/pos/{id}
-PATCH   /api/v1/products/{id}
 PATCH   /api/v1/products/{id}/status
 PATCH   /api/v1/warehouses/{id}
 PATCH   /api/v1/warehouses/{id}/status

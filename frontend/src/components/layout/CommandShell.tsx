@@ -25,8 +25,6 @@ import {
   Tags,
   Truck,
   Wallet,
-  Wand2,
-  FlaskConical,
   type LucideIcon,
 } from 'lucide-react';
 import { detectTenantScope, type TenantScope } from '@/lib/tenantScope';
@@ -118,10 +116,6 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'baro-incoming', label: '입고예정', abbr: '입고', path: '/baro/incoming', icon: Ship, menu: 'baro_incoming', tenants: ['baro'] },
       // BARO 자체 구매 — 국내 타사/그룹내 매입 원가 이력
       { key: 'baro-purchase-history', label: '구매이력', abbr: '이력', path: '/baro/purchase-history', icon: ReceiptText, menu: 'baro_purchase_history', tenants: ['baro'] },
-      // 메타 인프라 v2 — 운영은 위 P/O·L/C 그대로 사용. v2는 메타 ListScreen + MetaDetail 인라인편집 비교용.
-      // RoleGuard(admin/operator)로 라우트 차단되어 일반 사용자가 클릭해도 페이지 접근 불가. isWip:true로 admin이 사이트 설정에서 숨길 수 있음.
-      { key: 'po-v2', label: '발주(메타v2)', abbr: 'P2', path: '/procurement/po-v2', icon: FlaskConical, menu: 'procurement', tenants: MODULE_TENANTS, isWip: true },
-      { key: 'lc-v2', label: 'L/C(메타v2)', abbr: 'L2', path: '/procurement/lc-v2', icon: FlaskConical, menu: 'lc', tenants: MODULE_TENANTS, isWip: true },
     ],
   },
   {
@@ -158,8 +152,6 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'library', label: '자료실', abbr: '자료', path: '/library', icon: LibraryBig, menu: 'library' },
       { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
       { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: MODULE_TENANTS, isWip: true },
-      // admin 전용 — 메타 config 시각 편집 (DB 영구 저장, 모든 사용자 영향)
-      { key: 'ui-editor', label: 'UI 편집기', abbr: 'UI', path: '/ui-config-editor', icon: Wand2, menu: 'ui_editor' },
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
     ],
   },
@@ -168,8 +160,6 @@ const NAV_GROUPS: CommandNavGroup[] = [
 const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/inventory': { title: '가용재고', breadcrumb: '재고 / 예약 가능 수량' },
   '/procurement': { title: 'P/O 발주', breadcrumb: '구매 / 발주 관리' },
-  '/procurement/po-v2': { title: '발주(PO) v2', breadcrumb: '구매 / 메타 발주 목록' },
-  '/procurement/lc-v2': { title: '신용장(L/C) v2', breadcrumb: '구매 / 메타 L/C 목록' },
   '/purchase-history': { title: '구매 이력', breadcrumb: '현황 / 계약 체인 통합 타임라인' },
   '/customs': { title: '면장/원가', breadcrumb: '입고 / 원가 계산' },
   '/orders': { title: '수주 관리', breadcrumb: '판매 / 수주 및 수금' },
@@ -186,7 +176,6 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/settings/personal': { title: '개인 설정', breadcrumb: '시스템 / 내 계정' },
   '/baro/incoming': { title: '입고예정', breadcrumb: '구매 / ETA와 공급예정' },
   '/baro/purchase-history': { title: '구매이력', breadcrumb: '구매 / 자체 매입 원가' },
-  '/ui-config-editor': { title: 'UI 편집기', breadcrumb: '도구 / 화면·폼 시각 편집 (admin)' },
 };
 
 function routeMeta(pathname: string, search: string) {

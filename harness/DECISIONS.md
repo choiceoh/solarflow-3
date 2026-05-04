@@ -780,4 +780,20 @@
   - `feature_coverage_test.go`: chi.Walk으로 비공개 라우트가 모두 catalog ID에 매핑됨을 확인.
   - `matrix_consistency_test.go`: 매트릭스 markdown ↔ catalog 일치.
   - 기존 `tenant_scope_test.go`/`router_test.go`의 BARO·cable·topsolar 차단/통과 케이스가 RequireFeature 마이그레이션 후에도 동일하게 통과(회귀 가드).
+- **날짜**: 2026-05-03
+
+## D-121: 메타 GUI 편집기·v2 페이지 라인 폐기, MetaDetail 부분만 도메인 화면 안에 잔존
+- **결정**: D-118 이후 두 번째로 시도한 메타 인프라 확장 라인을 **운영 표면에서 제거**한다. 구체적으로 `/ui-config-editor` 페이지·`UIConfigEditor/` 디렉터리, 13개 v2 페이지(`*V2Page.tsx`), 전체 `config/screens/`·`config/forms/` 디렉터리, 미사용 `config/details/*`, `MetaForm`/`ListScreen`/`TabbedListScreen`/`configOverride` 컴포넌트, `knownConfigs.ts`, 그리고 메타 인라인 편집용 backend 라우트(`PATCH /api/v1/{pos,lcs,products}/{id}`)를 모두 삭제한다.
+- **이유**: D-115("운영 데이터 생성은 Excel Import Hub로 단일화, 웹은 조회·분석 중심")와 D-118(런타임 인스펙터 제거) 정신을 일관되게 적용. 메타 v2 페이지는 메뉴에 노출되지 않아 운영자가 도달하지 못하고, `/ui-config-editor`도 admin이 사실상 사용하지 않는다. "신규 도메인 boilerplate 절감 / GUI 편집기 / AI 컨텍스트"라는 메타화 동력 중 GUI 편집기는 이번이 세 번째 폐기(런타임 인스펙터·tenant 포크 PoC 다음), 운영자는 `/data`·`/procurement`·`/orders` 도메인 페이지를 그대로 쓰므로 메타 v2 표면이 혼란만 늘렸다.
+- **운영 기준**:
+  - **유지하는 잔존물**: `templates/MetaDetail.tsx` + `templates/registry.tsx`(축소판) + `config/details/bl_shipment.ts` + `templates/sparkUtils.ts`. BLDetailView 가 `MetaDetailBody`를 임베드해 BL 입고 상세의 기본정보/선적/메모 섹션을 그리는 데 사용. 도메인 화면 안에서 메타 컴포넌트를 부분 활용하는 패턴은 허용.
+  - **신규 메타 도메인 추가 금지**: 새 ERP 도메인을 메타 ListScreen/Detail/Form 으로 표현하는 작업은 더 이상 하지 않는다. 도메인 페이지를 직접 작성한다.
+  - **`/ui-config-editor` 라우트·메뉴는 즉시 제거**한다. `MenuKey`의 `ui_editor` 항목, `CommandShell`의 `UI 편집기` 메뉴, `routes.golden`에 등록된 PATCH 라우트도 함께 정리.
+  - **페이지 라벨 단일 정본은 `lib/assistantChips.ts`의 `PAGE_CHIPS`** 로 둔다. `lib/pageContext.ts`의 `detectPageLabel`은 stub(`undefined` 반환)으로 축소하고, AssistantDrawer 는 PAGE_CHIPS만 참조하도록 정리.
+- **검증**:
+  - `rg`로 `from '@/templates/(MetaForm|ListScreen|TabbedListScreen|configOverride)'`, `from '@/config/(screens|forms|knownConfigs)'`, `UIConfigEditorPage` 참조가 0인지 확인.
+  - `go test ./internal/{handler,router}/` 통과 — `routes.golden`에 PATCH `/pos/{id}`, `/lcs/{id}`, `/products/{id}`가 없어야 한다.
+  - `npm run build`(CI) 가 tsc -b 통과.
+- **남는 메타화 작업물 중 보존되는 것**: 발주(PO)·신용장(LC) 입력 다이얼로그(`POCreateDialog`/`LCCreateDialog`/`LCLineEditDialog`), Excel 통합양식 PO/LC 시트, backend bulk import 핸들러(`/import/{purchase-orders,lcs}`), 파서 단위테스트, `shouldAutoInsertPriceHistory` 게이트 + `tx_po_test.go`. 이들은 D-115 정신(Excel Hub 단일화)과 도메인 게이트 회귀 방지에 정합적이라 유지.
+- **D-120 과의 관계**: D-120 의 "메타 편집기에 기능 배선 / 데이터 스코프 탭 추가는 별도 작업으로 분리" 후속 작업은 본 결정으로 자동 폐기된다. tenant feature 카탈로그/매트릭스 자체(D-120 본문)는 backend·markdown 으로 표현되며 GUI 편집기에 의존하지 않으므로 영향 없음.
 - **날짜**: 2026-05-04
