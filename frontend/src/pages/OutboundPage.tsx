@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import type { SortingState } from '@tanstack/react-table';
