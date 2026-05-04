@@ -485,7 +485,8 @@ func (h *ProductHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 // PublicHandler — 인증 외 read-only KPI/환율 (router에서 /api/v1/public 그룹 안에 마운트).
 func (h *PublicHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/login-stats", h.LoginStats)
-	r.Get("/fx/usdkrw", h.FXUsdKrw)
+	r.Get("/fx/{pair}", h.FXSpot)
+	r.Get("/fx/{pair}/timeseries", h.FXTimeseries)
 	r.Get("/metals/{symbol}", h.MetalPrice)
 	r.Get("/polysilicon", h.Polysilicon)
 	r.Get("/scfi", h.SCFI)

@@ -100,7 +100,8 @@ GET     /api/v1/price-histories/
 GET     /api/v1/price-histories/{id}
 GET     /api/v1/products/
 GET     /api/v1/products/{id}
-GET     /api/v1/public/fx/usdkrw
+GET     /api/v1/public/fx/{pair}
+GET     /api/v1/public/fx/{pair}/timeseries
 GET     /api/v1/public/login-stats
 GET     /api/v1/public/metals/{symbol}
 GET     /api/v1/public/polysilicon

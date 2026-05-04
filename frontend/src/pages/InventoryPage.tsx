@@ -30,6 +30,8 @@ import ForecastTable from '@/components/inventory/ForecastTable';
 import ModuleDemandForecastPanel from '@/components/inventory/ModuleDemandForecastPanel';
 import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
 import { flatSpark } from '@/templates/sparkUtils';
+import { useFxSpot } from '@/hooks/usePublicFx';
+import { useMetalSpot } from '@/hooks/usePublicMetal';
 import type { InventorySummary, ProductForecast } from '@/types/inventory';
 
 function formatAutoKw(kw: number): string {
@@ -120,6 +122,12 @@ export default function InventoryPage() {
   const [longTermFilter, setLongTermFilter] = useState<LongTermFilter>(() => getLongTermFilter(new URLSearchParams(location.search).get('long_term_status')));
   const [forecastScope, setForecastScope] = useState<ForecastScope>('current');
   const [forecastSearch, setForecastSearch] = useState('');
+
+  // 시장 시세 — 우측 레일에서 표시. 하나라도 실패해도 다른 항목은 표시.
+  const { data: usdKrw } = useFxSpot('usdkrw');
+  const { data: cnyKrw } = useFxSpot('cnykrw');
+  const { data: silver } = useMetalSpot('silver');
+  const { data: copper } = useMetalSpot('copper');
 
   // 가용재고 배정
   const [allocations, setAllocations] = useState<InventoryAllocation[]>([]);
@@ -755,21 +763,51 @@ export default function InventoryPage() {
       </div>
 
       <aside className="sf-inventory-rail dark-scroll">
-        <RailBlock title="시장 시세" count="14:42 KST">
+        <RailBlock title="시장 시세">
           {[
-            { label: 'USD/KRW', value: '1,773.4', delta: '+0.06%', up: true },
-            { label: 'CNY/KRW', value: '244.18', delta: '-0.12%', up: false },
-            { label: '은 가격', value: '$33.45', delta: '-0.82%', up: false },
-            { label: '구리 가격', value: '$4.28', delta: '+0.55%', up: true },
-          ].map((market) => (
-            <div key={market.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '5px 0', fontSize: 11.5 }}>
-              <span style={{ color: 'var(--ink-2)' }}>{market.label}</span>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
-                <span className="mono tnum" style={{ fontWeight: 500 }}>{market.value}</span>
-                <span className="mono tnum" style={{ fontSize: 10, color: market.up ? 'var(--pos)' : 'var(--neg)', minWidth: 50, textAlign: 'right' }}>{market.delta}</span>
+            usdKrw && {
+              label: 'USD/KRW',
+              value: usdKrw.rate.toLocaleString('en-US', { maximumFractionDigits: 1 }),
+              changePct: usdKrw.change_pct,
+            },
+            cnyKrw && {
+              label: 'CNY/KRW',
+              value: cnyKrw.rate.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+              changePct: cnyKrw.change_pct,
+            },
+            silver && {
+              label: '은 가격',
+              value: `$${silver.price_usd.toFixed(2)}`,
+              changeAbs: silver.change_usd,
+              prevPrice: silver.change_usd != null ? silver.price_usd - silver.change_usd : null,
+            },
+            copper && {
+              label: '구리 가격',
+              value: `$${copper.price_usd.toFixed(2)}`,
+              changeAbs: copper.change_usd,
+              prevPrice: copper.change_usd != null ? copper.price_usd - copper.change_usd : null,
+            },
+          ].filter((m): m is NonNullable<typeof m> => m != null).map((market) => {
+            const pct = 'changePct' in market
+              ? market.changePct
+              : ('changeAbs' in market && market.changeAbs != null && market.prevPrice && market.prevPrice > 0
+                  ? (market.changeAbs / market.prevPrice) * 100
+                  : null);
+            const up = pct != null && pct >= 0;
+            const deltaText = pct != null ? `${up ? '+' : ''}${pct.toFixed(2)}%` : '—';
+            return (
+              <div key={market.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '5px 0', fontSize: 11.5 }}>
+                <span style={{ color: 'var(--ink-2)' }}>{market.label}</span>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                  <span className="mono tnum" style={{ fontWeight: 500 }}>{market.value}</span>
+                  <span className="mono tnum" style={{ fontSize: 10, color: pct == null ? 'var(--ink-3)' : up ? 'var(--pos)' : 'var(--neg)', minWidth: 50, textAlign: 'right' }}>{deltaText}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+          {!usdKrw && !cnyKrw && !silver && !copper && (
+            <div className="text-xs text-[var(--ink-3)]">시세 로드 중…</div>
+          )}
         </RailBlock>
 
         <RailBlock title="운송 중 선적" count={incomingRailItems.length} accent="var(--solar-3)">
