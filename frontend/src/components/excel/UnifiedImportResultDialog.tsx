@@ -1,5 +1,5 @@
 // 통합 양식 등록 결과 다이얼로그.
-// 비유: 8섹션을 직렬 처리한 뒤 섹션별 성공/실패/스킵을 나열한다.
+// 비유: 모든 섹션을 직렬 처리한 뒤 섹션별 성공/실패/스킵을 나열한다.
 
 import { CheckCircle2, MinusCircle, X, XCircle } from 'lucide-react';
 import {

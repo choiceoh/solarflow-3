@@ -1,5 +1,5 @@
 // 통합 양식 업로드 미리보기 다이얼로그.
-// 비유: 통합 접수창 — 8섹션을 탭으로 펼쳐 보여주고 한 번에 등록한다.
+// 비유: 통합 접수창 — 모든 섹션을 탭으로 펼쳐 보여주고 한 번에 등록한다.
 // 부분 실패 허용: 섹션 단위로 직렬 등록, 실패 섹션은 결과창에서 안내.
 
 import { useMemo, useState } from 'react';
@@ -105,7 +105,7 @@ export default function UnifiedImportDialog({
               통합 양식 업로드 미리보기
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
-              {preview.fileName} · 8섹션 중 {totals.presentCount}개 시트 · 전체 {totals.total}건 (유효 {totals.valid} / 에러 {totals.error})
+              {preview.fileName} · {sections.length}섹션 중 {totals.presentCount}개 시트 · 전체 {totals.total}건 (유효 {totals.valid} / 에러 {totals.error})
             </p>
           </DialogHeader>
 

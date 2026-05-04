@@ -6,7 +6,6 @@ import UnifiedImportDialog from '@/components/excel/UnifiedImportDialog';
 import UnifiedImportResultDialog from '@/components/excel/UnifiedImportResultDialog';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { useAuth } from '@/hooks/useAuth';
-import { useExcel } from '@/hooks/useExcel';
 import { useUnifiedExcel } from '@/hooks/useUnifiedExcel';
 import { notify } from '@/lib/notify';
 import type { TemplateType } from '@/types/excel';
@@ -33,6 +32,8 @@ const IMPORT_GROUPS: Array<{
   {
     title: '구매/입고',
     items: [
+      { type: 'purchase_order', label: '발주(PO)', sub: '발주번호 · 제조사 · 계약유형 · 라인별 단가' },
+      { type: 'lc', label: '신용장(LC)', sub: 'L/C No. · 발주참조 · 은행 · 유산스 · 만기' },
       { type: 'inbound', label: '입고', sub: 'B/L · 품번 · 수량 · 창고 · 원가 기초' },
       { type: 'declaration', label: '면장/원가', sub: '면장번호 · B/L · 원가 라인' },
       { type: 'expense', label: '부대비용', sub: 'B/L 또는 월 · 비용 유형 · 금액' },
@@ -41,16 +42,17 @@ const IMPORT_GROUPS: Array<{
 ];
 
 export default function ImportHubPage() {
-  const { masterData, loading } = useExcel('sale');
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const [downloading, setDownloading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  // 통합 업로드 — 한 파일로 8섹션 동시 처리
+  // 통합 업로드 — 한 파일로 모든 섹션 동시 처리. PO/LC 코드표(은행·발주번호)도 이 훅이 채운다.
   const unified = useUnifiedExcel();
   const unifiedInputRef = useRef<HTMLInputElement>(null);
   const unifiedDisabled = !unified.masterData || unified.loading;
+  const masterData = unified.masterData;
+  const loading = unified.loading;
 
   const handleUnifiedDownload = useCallback(async () => {
     if (!masterData) return;
@@ -116,7 +118,7 @@ export default function ImportHubPage() {
             className="h-8 gap-1.5"
             disabled={unifiedDisabled}
             onClick={() => unifiedInputRef.current?.click()}
-            title="통합 양식 한 파일로 8섹션을 한 번에 업로드합니다"
+            title="통합 양식 한 파일로 모든 섹션을 한 번에 업로드합니다"
           >
             {unified.loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
             통합 양식 업로드
@@ -149,9 +151,9 @@ export default function ImportHubPage() {
         </div>
       )}
       metrics={[
-        { label: '통합 양식', value: '1', unit: '파일', sub: '8개 시트', tone: 'solar', spark: [1, 2, 3, 5, 8] },
-        { label: '업무 양식', value: '8', unit: '종', sub: '업로드 검증', tone: 'info' },
-        { label: '웹 입력', value: '0', unit: 'CTA', sub: '조회/분석 중심', tone: 'pos' },
+        { label: '통합 양식', value: '1', unit: '파일', sub: '10개 시트', tone: 'solar', spark: [1, 2, 3, 5, 8, 10] },
+        { label: '업무 양식', value: '10', unit: '종', sub: '업로드 검증', tone: 'info' },
+        { label: '웹 입력', value: 'PO/LC', unit: '신규', sub: '다이얼로그 등록', tone: 'pos' },
         { label: '연결 보정', value: '매칭', sub: '관계·상태 관리', tone: 'ink' },
       ]}
     >

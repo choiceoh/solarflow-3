@@ -1,5 +1,5 @@
-// 통합 양식 업로드 훅 — 한 파일에 8섹션이 들어 있는 통합 xlsx를 처리한다.
-// 비유: 통합 접수창 — 8개 양식별 창구를 통합한 단일 워크플로.
+// 통합 양식 업로드 훅 — 한 파일에 모든 섹션이 들어 있는 통합 xlsx를 처리한다.
+// 비유: 통합 접수창 — 양식별 창구를 통합한 단일 워크플로.
 // 부분 실패 허용: 한 섹션이 실패해도 다음 섹션은 계속 시도한다.
 
 import { useState, useEffect, useCallback } from 'react';
@@ -43,6 +43,8 @@ function endpointForType(type: TemplateType): string {
     case 'expense': return 'expenses';
     case 'order': return 'orders';
     case 'receipt': return 'receipts';
+    case 'purchase_order': return 'purchase-orders';
+    case 'lc': return 'lcs';
     default: return type;
   }
 }
@@ -148,14 +150,21 @@ export function useUnifiedExcel() {
     let cancelled = false;
     type ActiveRow = Record<string, unknown> & { is_active?: boolean };
     type OutboundRow = MasterDataForExcel['outbounds'] extends (infer U)[] | undefined ? U : never;
+    type BankRow = MasterDataForExcel['banks'] extends (infer U)[] | undefined ? U : never;
+    type POMasterRow = MasterDataForExcel['purchaseOrders'] extends (infer U)[] | undefined ? U : never;
     const fetches: Promise<ActiveRow[]>[] = [
       fetchWithAuth<ActiveRow[]>('/api/v1/manufacturers'),
       fetchWithAuth<ActiveRow[]>('/api/v1/products'),
       fetchWithAuth<ActiveRow[]>('/api/v1/partners'),
       fetchWithAuth<ActiveRow[]>('/api/v1/warehouses'),
       fetchWithAuth<ActiveRow[]>('/api/v1/outbounds?status=active'),
+      // PO/LC 양식의 은행·발주번호 코드표 — 실패하면 빈 배열로 떨어져 양식 다운로드는 가능.
+      fetchWithAuth<ActiveRow[]>('/api/v1/banks').catch(() => [] as ActiveRow[]),
+      fetchWithAuth<ActiveRow[]>('/api/v1/pos').catch(() => [] as ActiveRow[]),
     ];
-    Promise.all(fetches).then(([manufacturers, products, partners, warehouses, outbounds]) => {
+    Promise.all(fetches).then(([
+      manufacturers, products, partners, warehouses, outbounds, banks, pos,
+    ]) => {
       if (cancelled) return;
       setMasterData({
         companies,
@@ -164,6 +173,8 @@ export function useUnifiedExcel() {
         partners: partners.filter((p) => p.is_active) as MasterDataForExcel['partners'],
         warehouses: warehouses.filter((w) => w.is_active) as MasterDataForExcel['warehouses'],
         outbounds: (outbounds ?? []) as OutboundRow[],
+        banks: (banks.filter((b) => b.is_active !== false) ?? []) as BankRow[],
+        purchaseOrders: (pos ?? []) as POMasterRow[],
       });
     }).catch(() => {
       if (!cancelled) setError('마스터 데이터 로딩 실패');

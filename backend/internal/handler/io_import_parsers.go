@@ -11,6 +11,7 @@ package handler
 
 import (
 	"fmt"
+	"strings"
 
 	"solarflow-backend/internal/model"
 )
@@ -371,4 +372,224 @@ func groupInboundRowsByBL(rows []map[string]interface{}) (
 	}
 
 	return groups, order, errors, warnings
+}
+
+// --- 발주(PO)·신용장(LC) Import 파서 ---
+
+// 허용 contract_type — D-086 기준 spot/frame만 신규 등록 허용 (레거시는 차단).
+var allowedPOContractTypesForImport = map[string]bool{
+	"spot":  true,
+	"frame": true,
+}
+
+// 한국어 라벨 → 코드 정규화. 프론트가 라벨을 보내도 받아 처리한다.
+var poContractTypeAliases = map[string]string{
+	"spot":  "spot",
+	"frame": "frame",
+	"스팟":    "spot",
+	"프레임":   "frame",
+}
+
+// usance_type 라벨 정규화 — 모델 검증은 buyers/shippers만 허용.
+var lcUsanceTypeAliases = map[string]string{
+	"buyers":            "buyers",
+	"shippers":          "shippers",
+	"BANKER'S USANCE":   "buyers",
+	"BANKERS USANCE":    "buyers",
+	"BANKER":            "buyers",
+	"SHIPPER'S USANCE":  "shippers",
+	"SHIPPERS USANCE":   "shippers",
+	"SHIPPER":           "shippers",
+	"AT SIGHT":          "",
+	"":                  "",
+}
+
+// poImportGroup — 같은 po_number 자연키로 묶인 PO Import 행 그룹.
+// FirstRow의 헤더 정보(법인·제조사·계약유형·계약일·인코텀즈·결제조건)가 그룹 전체에 적용.
+type poImportGroup struct {
+	PONumber  string
+	FirstRow  map[string]interface{}
+	FirstIdx  int
+	LineRows  []map[string]interface{}
+	LineIdxes []int
+}
+
+// groupPORowsByPONumber — PO Import 행을 발주번호별로 그룹화하면서 검증 수행.
+// 각 행에 대해 필수값(po_number, company_code, manufacturer_name, contract_type, contract_date,
+// product_code, quantity, unit_price_usd_wp, item_type, payment_type)을 검사하고,
+// 같은 po_number 안에서 헤더값이 다르면 경고만 발생시키고 첫 행 값을 채택한다.
+func groupPORowsByPONumber(rows []map[string]interface{}) (
+	map[string]*poImportGroup, []string, []model.ImportError, []model.ImportWarning,
+) {
+	groups := map[string]*poImportGroup{}
+	order := []string{}
+	var errors []model.ImportError
+	var warnings []model.ImportWarning
+
+	for i, row := range rows {
+		rowNum := i + 2
+
+		errs := validateRequired(rowNum, row, []string{
+			"po_number", "company_code", "manufacturer_name",
+			"contract_type", "contract_date",
+			"product_code", "quantity", "unit_price_usd_wp",
+			"item_type", "payment_type",
+		})
+		if len(errs) > 0 {
+			errors = append(errors, errs...)
+			continue
+		}
+
+		// contract_type 정규화 + 허용값 검증
+		ctRaw := getString(row, "contract_type")
+		if ct, ok := poContractTypeAliases[ctRaw]; ok {
+			row["contract_type"] = ct
+		}
+		if !allowedPOContractTypesForImport[getString(row, "contract_type")] {
+			errors = append(errors, model.ImportError{
+				Row: rowNum, Field: "contract_type",
+				Message: fmt.Sprintf("%d행: contract_type은 spot/frame 중 하나여야 합니다", rowNum),
+			})
+			continue
+		}
+
+		// item_type / payment_type 허용값
+		allowedFailed := false
+		for _, av := range []struct {
+			val, field string
+			allowed    map[string]bool
+		}{
+			{getString(row, "item_type"), "item_type", allowedItemTypes},
+			{getString(row, "payment_type"), "payment_type", allowedPaymentTypes},
+		} {
+			if e := validateAllowedValues(rowNum, av.val, av.field, av.allowed); e != nil {
+				errors = append(errors, *e)
+				allowedFailed = true
+			}
+		}
+		if allowedFailed {
+			continue
+		}
+
+		poNum := getString(row, "po_number")
+		if _, exists := groups[poNum]; !exists {
+			groups[poNum] = &poImportGroup{PONumber: poNum, FirstRow: row, FirstIdx: rowNum}
+			order = append(order, poNum)
+		} else {
+			first := groups[poNum].FirstRow
+			// 같은 PO 안에서 헤더 일관성 — 다르면 경고하고 첫 행 값 채택.
+			for _, f := range []string{
+				"company_code", "manufacturer_name", "contract_type", "contract_date",
+				"incoterms", "payment_terms", "contract_period_start", "contract_period_end",
+			} {
+				firstVal := getString(first, f)
+				curVal := getString(row, f)
+				if curVal != "" && firstVal != "" && curVal != firstVal {
+					warnings = append(warnings, model.ImportWarning{
+						Row: rowNum, Field: f,
+						Message: fmt.Sprintf("PO 헤더(%s)가 첫 행과 다릅니다 (첫 행 값 사용)", f),
+					})
+				}
+			}
+		}
+
+		groups[poNum].LineRows = append(groups[poNum].LineRows, row)
+		groups[poNum].LineIdxes = append(groups[poNum].LineIdxes, rowNum)
+	}
+
+	return groups, order, errors, warnings
+}
+
+// parsePOLineRow — PO 라인 행을 CreatePOLineRequest로 변환.
+// USD/Wp 단가를 받아 USD per panel(unit_price_usd) + total_amount_usd 자동 계산.
+// productID·wattageKW는 호출 측이 미리 해석.
+func parsePOLineRow(rowNum int, row map[string]interface{}, productID string, wattageKW float64) (model.CreatePOLineRequest, []model.ImportError) {
+	qty, qErr := requireInt(rowNum, row, "quantity")
+	if qErr != nil {
+		return model.CreatePOLineRequest{}, []model.ImportError{*qErr}
+	}
+	if qty <= 0 {
+		return model.CreatePOLineRequest{}, []model.ImportError{{
+			Row: rowNum, Field: "quantity", Message: "quantity는 양수여야 합니다",
+		}}
+	}
+	unitPriceWp, upErr := requireFloat(rowNum, row, "unit_price_usd_wp")
+	if upErr != nil {
+		return model.CreatePOLineRequest{}, []model.ImportError{*upErr}
+	}
+	if unitPriceWp <= 0 {
+		return model.CreatePOLineRequest{}, []model.ImportError{{
+			Row: rowNum, Field: "unit_price_usd_wp", Message: "unit_price_usd_wp는 양수여야 합니다",
+		}}
+	}
+
+	// USD/Wp × Wp/panel = USD/panel. wattage_kw(kW/panel) × 1000 = Wp/panel.
+	unitPriceUsd := unitPriceWp * wattageKW * 1000.0
+	totalAmountUsd := unitPriceUsd * float64(qty)
+
+	itemType := getString(row, "item_type")
+	paymentType := getString(row, "payment_type")
+	req := model.CreatePOLineRequest{
+		ProductID:      productID,
+		Quantity:       qty,
+		UnitPriceUSD:   &unitPriceUsd,
+		TotalAmountUSD: &totalAmountUsd,
+		ItemType:       &itemType,
+		PaymentType:    &paymentType,
+		Memo:           getStringPtr(row, "line_memo"),
+	}
+	return req, nil
+}
+
+// parseLCRow — LC 행을 CreateLCRequest로 변환. po_id/bank_id/companyID는 호출 측이 해석.
+func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID string) (model.CreateLCRequest, []model.ImportError) {
+	amountUsd, aErr := requireFloat(rowNum, row, "amount_usd")
+	if aErr != nil {
+		return model.CreateLCRequest{}, []model.ImportError{*aErr}
+	}
+	if amountUsd <= 0 {
+		return model.CreateLCRequest{}, []model.ImportError{{
+			Row: rowNum, Field: "amount_usd", Message: "amount_usd는 양수여야 합니다",
+		}}
+	}
+
+	// usance_type — 라벨/코드 양쪽 받기. 빈 값이면 nil 유지.
+	var usanceType *string
+	if raw := getString(row, "usance_type"); raw != "" {
+		key := strings.ToUpper(strings.TrimSpace(raw))
+		if alias, ok := lcUsanceTypeAliases[key]; ok {
+			if alias != "" {
+				usanceType = &alias
+			}
+		} else if v, ok := lcUsanceTypeAliases[raw]; ok {
+			if v != "" {
+				usanceType = &v
+			}
+		} else {
+			// 알 수 없는 값은 검증 실패로.
+			return model.CreateLCRequest{}, []model.ImportError{{
+				Row: rowNum, Field: "usance_type",
+				Message: "usance_type은 BANKER'S USANCE / SHIPPER'S USANCE / AT SIGHT 중 하나여야 합니다",
+			}}
+		}
+	}
+
+	req := model.CreateLCRequest{
+		POID:         poID,
+		LCNumber:     getStringPtr(row, "lc_number"),
+		BankID:       bankID,
+		CompanyID:    companyID,
+		OpenDate:     getStringPtr(row, "open_date"),
+		AmountUSD:    amountUsd,
+		TargetQty:    getIntPtr(row, "target_qty"),
+		UsanceDays:   getIntPtr(row, "usance_days"),
+		UsanceType:   usanceType,
+		MaturityDate: getStringPtr(row, "maturity_date"),
+		Status:       "pending",
+		Memo:         getStringPtr(row, "memo"),
+	}
+	if msg := req.Validate(); msg != "" {
+		return req, []model.ImportError{{Row: rowNum, Field: "lc", Message: msg}}
+	}
+	return req, nil
 }

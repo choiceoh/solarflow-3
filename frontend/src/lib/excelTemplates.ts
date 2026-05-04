@@ -6,11 +6,12 @@ import type { TemplateType, MasterDataForExcel, FieldDef } from '@/types/excel';
 import {
   TEMPLATE_LABEL, COMPANY_FIELDS, INBOUND_FIELDS, OUTBOUND_FIELDS, SALE_FIELDS,
   DECLARATION_FIELDS, DECLARATION_COST_FIELDS, EXPENSE_FIELDS,
-  ORDER_FIELDS, RECEIPT_FIELDS,
+  ORDER_FIELDS, RECEIPT_FIELDS, PURCHASE_ORDER_FIELDS, LC_FIELDS,
 } from '@/types/excel';
 import { INBOUND_TYPE_LABEL, USAGE_CATEGORIES } from '@/types/inbound';
 import { EXPENSE_TYPE_LABEL } from '@/types/customs';
 import { RECEIPT_METHOD_LABEL, MANAGEMENT_CATEGORY_LABEL, FULFILLMENT_SOURCE_LABEL } from '@/types/orders';
+import { CONTRACT_TYPES_ACTIVE } from '@/types/procurement';
 
 // ExcelJS 워크시트의 최소 인터페이스 (셀/컬럼 setter)
 interface WritableCell {
@@ -51,12 +52,16 @@ interface WorkbookWritable {
   addWorksheet(name: string, options?: unknown): SheetWritable;
 }
 
+// 발주 → 신용장 → 입고(B/L) → 면장 → 부대비용 흐름. 같은 파일 안에서 PO 행이 LC보다 먼저 있어야
+// LC.po_number 자연키 매핑이 1차 시도에서 성공한다 (서버는 부분 실패 허용이라 순서가 강제는 아님).
 const UNIFIED_TEMPLATE_ORDER: TemplateType[] = [
   'company',
   'order',
   'outbound',
   'sale',
   'receipt',
+  'purchase_order',
+  'lc',
   'inbound',
   'declaration',
   'expense',
@@ -94,6 +99,8 @@ const POSITIVE_NUMBER_FIELDS = new Set([
   'cif_total_krw', 'fob_unit_usd', 'fob_total_usd', 'fob_wp_krw',
   'cif_unit_usd', 'cif_total_usd', 'tariff_amount', 'vat_amount',
   'vat', 'customs_fee', 'incidental_cost', 'deposit_rate', 'spare_qty',
+  // PO/LC
+  'amount_usd', 'target_qty', 'usance_days',
 ]);
 
 const FIELD_HELP: Record<string, string> = {
@@ -121,6 +128,19 @@ const FIELD_HELP: Record<string, string> = {
   receipt_method: '수주 접수 경로를 코드표에서 선택하세요.',
   management_category: '수주 관리구분을 코드표에서 선택하세요.',
   fulfillment_source: '실재고 또는 미착품 중 충당 기준을 선택하세요.',
+  // PO
+  po_number: '같은 발주번호로 여러 행을 입력하면 한 PO의 라인으로 묶입니다.',
+  contract_type: '스팟(spot) 또는 프레임(frame)을 선택하세요. 신규 PO는 두 유형만 허용됩니다.',
+  contract_period_start: '프레임 계약일 때 계약 시작일을 입력하세요. 스팟은 비워둡니다.',
+  contract_period_end: '프레임 계약일 때 계약 종료일을 입력하세요. 스팟은 비워둡니다.',
+  unit_price_usd_wp: 'USD/Wp 단위 단가입니다. 예: 0.09',
+  // LC
+  lc_number: '비워두면 시스템이 임시 번호를 부여합니다. 은행 발급 후 갱신하세요.',
+  bank_name: '코드표에 등록된 같은 법인의 은행을 선택하세요. 한도와 수수료가 함께 잡힙니다.',
+  amount_usd: 'L/C 개설금액을 USD로 입력하세요. 쉼표 없이 숫자만.',
+  target_qty: 'L/C 대상 수량(매)입니다. 분할 인수면 일부만 적습니다.',
+  usance_days: '유산스 일수입니다. AT SIGHT는 0 또는 비워둡니다.',
+  usance_type: 'BANKER’S USANCE / SHIPPER’S USANCE / AT SIGHT 등을 입력하세요.',
 };
 
 const TYPE_GUIDE: Record<TemplateType, string> = {
@@ -132,6 +152,8 @@ const TYPE_GUIDE: Record<TemplateType, string> = {
   inbound: 'B/L No.가 같은 행은 한 입고 건으로 묶입니다. 그룹 입고는 입고유형에서 그룹내구매를 고릅니다.',
   declaration: '면장등록의 면장번호와 원가등록의 면장번호(참조)가 같아야 원가가 연결됩니다.',
   expense: 'B/L No. 또는 월(YYYY-MM) 중 하나는 반드시 입력합니다.',
+  purchase_order: '발주번호가 같은 행은 한 PO의 라인으로 묶입니다. 헤더 정보(법인·제조사·계약유형·계약일)는 같은 그룹 안에서 동일해야 합니다.',
+  lc: '발주번호(참조)는 발주등록 시트의 발주번호와 일치해야 매핑됩니다. 라인 분할 인수는 별도 등록 화면에서 처리합니다.',
 };
 
 interface CodeColumnRef {
@@ -325,6 +347,13 @@ const DATA_WIDTH_OVERRIDE: Record<string, number> = {
   erp_outbound_no: 18,
   business_number: 16,
   order_number: 18,
+  po_number: 18,
+  lc_number: 18,
+  // PO/LC enum·코드
+  contract_type: 12,
+  usance_type: 18,
+  // 은행명 (조흥은행, 한국씨티은행 등)
+  bank_name: 18,
   // 이름·문자열
   company_name: 22,
   manufacturer_name: 22,
@@ -413,6 +442,10 @@ const FIELD_GROUPS: Record<TemplateType, number[]> = {
   expense: [4, 6],            // [B/L~비용유형] | [금액~부가세] | [거래처~메모]
   order: [4, 7, 10, 14],      // [발주~수주일] | [방법~소스] | [품번~Wp단가] | [현장] | [결제~메모]
   receipt: [3],               // [거래처~금액] | [계좌~메모]
+  // [PO헤더: 발주~계약일] | [조건: 인코텀즈~계약종료일] | [라인: 품번~유무상] | [메모]
+  purchase_order: [5, 9, 14],
+  // [LC식별: L/C No.~은행] | [개설/금액: 개설일~대상수량] | [유산스: 유산스일수~만기]
+  lc: [4, 7],
 };
 
 // 원가등록(declaration_cost)은 같은 type='declaration'을 공유하지만 별 시트라 따로.
@@ -669,6 +702,22 @@ function exampleValue(field: FieldDef, masterData: MasterDataForExcel, type?: Te
     delivery_due: '2026-06-10',
     receipt_date: '2026-05-20',
     bank_account: '국민 000000-00-000000',
+    // PO 예시
+    po_number: 'PO-2026-001',
+    contract_type: '스팟',
+    contract_date: '2026-05-03',
+    incoterms: 'FOB',
+    contract_period_start: '2026-05-03',
+    contract_period_end: '2026-12-31',
+    // LC 예시
+    lc_number: 'M0123456789',
+    bank_name: masterData.banks?.[0]?.bank_name ?? '은행명 선택',
+    open_date: '2026-05-04',
+    amount_usd: 250000,
+    target_qty: 2500,
+    usance_days: 90,
+    usance_type: "BANKER'S USANCE",
+    maturity_date: '2026-08-02',
   };
   return examples[field.key] ?? '';
 }
@@ -818,6 +867,10 @@ interface UnifiedCodeRefs {
   receiptMethod: CodeColumnRef;
   mgmtCategory: CodeColumnRef;
   fulfillmentSource: CodeColumnRef;
+  // PO/LC 추가 — 계약유형(spot/frame), 은행 마스터, 발주번호 자연키.
+  contractType: CodeColumnRef;
+  bank: CodeColumnRef;
+  purchaseOrder: CodeColumnRef;
 }
 
 // 통합 코드표 시트 1개 생성 — per-type 분할 대신 16개 컬럼을 한 시트에 모은다.
@@ -898,12 +951,34 @@ function addUnifiedCodeSheet(
   );
   col = fulfillmentSource.nextCol;
 
+  // PO/LC 추가 코드표.
+  const contractType = writeCodeColumn(
+    codeSheet, col, '계약유형',
+    CONTRACT_TYPES_ACTIVE.map((t) => t.label),
+    CONTRACT_TYPES_ACTIVE.map((t) => t.value),
+  );
+  col = contractType.nextCol;
+  // 은행은 모든 법인의 활성 은행을 한 컬럼에 모은다 — Excel dataValidation은 법인별 분기 어려우므로
+  // 이름 기반 매핑(서버에서 company_id+bank_name으로 조회)으로 단순화.
+  const bankNames = (masterData.banks ?? []).map((b) => b.bank_name);
+  const bank = writeCodeColumn(codeSheet, col, '은행명', bankNames);
+  col = bank.nextCol;
+  // PO 자연키. po_number가 있으면 그대로, 없으면 id 앞 8자.
+  const poList = masterData.purchaseOrders ?? [];
+  const poLabels = poList.map((p) => p.po_number ?? p.po_id.slice(0, 8));
+  const poDescriptions = poList.map((p) =>
+    [p.manufacturer_name, p.contract_date].filter(Boolean).join(' / '),
+  );
+  const purchaseOrder = writeCodeColumn(codeSheet, col, '발주번호', poLabels, poDescriptions);
+  col = purchaseOrder.nextCol;
+
   finishCodeSheet(codeSheet, col - 1);
 
   return {
     company, manufacturer, product, customer, warehouse, outbound,
     currency, inboundType, usage, itemType, payType, yn,
     expenseType, receiptMethod, mgmtCategory, fulfillmentSource,
+    contractType, bank, purchaseOrder,
   };
 }
 
@@ -981,6 +1056,21 @@ async function addUnifiedDataSheet(
       break;
     case 'receipt':
       setDropdownFromRef(dataSheet, 'A', codeRef, refs.customer, true);
+      break;
+    case 'purchase_order':
+      // 발주번호(A)는 사용자 입력 자연키라 dropdown 없음 — 같은 그룹 식별용.
+      setDropdownFromRef(dataSheet, 'B', codeRef, refs.company, true);
+      setDropdownFromRef(dataSheet, 'C', codeRef, refs.manufacturer, true);
+      setDropdownFromRef(dataSheet, 'D', codeRef, refs.contractType, true);
+      setDropdownFromRef(dataSheet, 'J', codeRef, refs.product, true);
+      setDropdownFromRef(dataSheet, 'M', codeRef, refs.itemType, true);
+      setDropdownFromRef(dataSheet, 'N', codeRef, refs.payType, true);
+      break;
+    case 'lc':
+      // L/C No.(A)는 비워둘 수 있으므로 dropdown 없음.
+      setDropdownFromRef(dataSheet, 'B', codeRef, refs.purchaseOrder, true);
+      setDropdownFromRef(dataSheet, 'C', codeRef, refs.company, true);
+      setDropdownFromRef(dataSheet, 'D', codeRef, refs.bank, true);
       break;
   }
   await protectSheet(dataSheet);
@@ -1167,6 +1257,49 @@ async function addTemplateSheets(
         setDropdownFromRef(dataSheet, 'A', codeRef, cCust, true);
         break;
       }
+      case 'purchase_order': {
+        const cCo = writeCodeColumn(codeSheet, col, '법인코드', companyCodes, companyNames);
+        col = cCo.nextCol;
+        const cMfg = writeCodeColumn(codeSheet, col, '제조사', mfgNames);
+        col = cMfg.nextCol;
+        const cContractType = writeCodeColumn(
+          codeSheet, col, '계약유형',
+          CONTRACT_TYPES_ACTIVE.map((t) => t.label),
+          CONTRACT_TYPES_ACTIVE.map((t) => t.value),
+        );
+        col = cContractType.nextCol;
+        const cProd = writeCodeColumn(codeSheet, col, '품번코드', productCodes, productDescriptions);
+        col = cProd.nextCol;
+        const cItemType = writeCodeColumn(codeSheet, col, '본품/스페어', ['본품', '스페어'], ['main', 'spare']);
+        col = cItemType.nextCol;
+        const cPayType = writeCodeColumn(codeSheet, col, '유상/무상', ['유상', '무상'], ['paid', 'free']);
+        col = cPayType.nextCol;
+        setDropdownFromRef(dataSheet, 'B', codeRef, cCo, true);
+        setDropdownFromRef(dataSheet, 'C', codeRef, cMfg, true);
+        setDropdownFromRef(dataSheet, 'D', codeRef, cContractType, true);
+        setDropdownFromRef(dataSheet, 'J', codeRef, cProd, true);
+        setDropdownFromRef(dataSheet, 'M', codeRef, cItemType, true);
+        setDropdownFromRef(dataSheet, 'N', codeRef, cPayType, true);
+        break;
+      }
+      case 'lc': {
+        const poList = masterData.purchaseOrders ?? [];
+        const poLabels = poList.map((p) => p.po_number ?? p.po_id.slice(0, 8));
+        const poDescriptions = poList.map((p) =>
+          [p.manufacturer_name, p.contract_date].filter(Boolean).join(' / '),
+        );
+        const cPo = writeCodeColumn(codeSheet, col, '발주번호', poLabels, poDescriptions);
+        col = cPo.nextCol;
+        const cCo = writeCodeColumn(codeSheet, col, '법인코드', companyCodes, companyNames);
+        col = cCo.nextCol;
+        const bankNames = (masterData.banks ?? []).map((b) => b.bank_name);
+        const cBank = writeCodeColumn(codeSheet, col, '은행명', bankNames);
+        col = cBank.nextCol;
+        setDropdownFromRef(dataSheet, 'B', codeRef, cPo, true);
+        setDropdownFromRef(dataSheet, 'C', codeRef, cCo, true);
+        setDropdownFromRef(dataSheet, 'D', codeRef, cBank, true);
+        break;
+      }
     }
     finishCodeSheet(codeSheet, col - 1);
     await protectSheet(dataSheet);
@@ -1184,6 +1317,8 @@ function getFieldsForType(type: TemplateType): FieldDef[] {
     case 'expense': return EXPENSE_FIELDS;
     case 'order': return ORDER_FIELDS;
     case 'receipt': return RECEIPT_FIELDS;
+    case 'purchase_order': return PURCHASE_ORDER_FIELDS;
+    case 'lc': return LC_FIELDS;
   }
 }
 
