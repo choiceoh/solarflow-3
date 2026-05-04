@@ -163,7 +163,7 @@ export default function AuditLogsPage() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <div className="space-y-2">
               <Label>대상</Label>
-              <Select value={entityType} onValueChange={setEntityType}>
+              <Select value={entityType} onValueChange={(v) => setEntityType(v ?? 'all')}>
                 <SelectTrigger>
                   <span className="truncate text-left text-sm" data-slot="select-value">
                     {entityLabel(entityType)}
@@ -180,7 +180,7 @@ export default function AuditLogsPage() {
             </div>
             <div className="space-y-2">
               <Label>구분</Label>
-              <Select value={action} onValueChange={setAction}>
+              <Select value={action} onValueChange={(v) => setAction(v ?? 'all')}>
                 <SelectTrigger>
                   <span className="truncate text-left text-sm" data-slot="select-value">
                     {ACTION_OPTIONS.find((opt) => opt.value === action)?.label ?? '전체 구분'}
