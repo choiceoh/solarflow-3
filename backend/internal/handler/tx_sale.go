@@ -2,17 +2,36 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
+
+const (
+	saleDefaultLimit = 100
+	saleMaxLimit     = 1000
+)
+
+// saleSortable — 정렬 화이트리스트. sales 테이블 컬럼만 허용.
+var saleSortable = map[string]struct{}{
+	"tax_invoice_date": {},
+	"supply_amount":    {},
+	"total_amount":     {},
+	"unit_price_wp":    {},
+	"customer_id":      {},
+	"status":           {},
+	"created_at":       {},
+}
 
 // SaleHandler — 판매(sales) 관련 API를 처리하는 핸들러
 // 비유: "판매 전표함" — 출고에 연결된 판매 금액, 세금계산서 정보를 관리
@@ -30,27 +49,84 @@ type saleStatusUpdate struct {
 	Status string `json:"status"`
 }
 
-// List — GET /api/v1/sales — 판매 목록 조회
-// 비유: 판매 전표함에서 전체 판매 내역을 꺼내 보여주는 것
-// TODO: 세금계산서 미발행 목록 필터 (tax_invoice_date IS NULL + outbound completed)
-func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("sales").
-		Select("*", "exact", false)
+// idsByCompany — sales 가 직접 company_id 가 없으므로 outbound/order 양쪽에서 ID 후보를 끌어온다.
+// (outbound_id IN ... OR order_id IN ...) 으로 회사별 매출만 필터하는 데 사용.
+func (h *SaleHandler) idsByCompany(companyID string) (outboundIDs []string, orderIDs []string, err error) {
+	if data, _, e := h.DB.From("outbounds").Select("outbound_id", "exact", false).Eq("company_id", companyID).Execute(); e == nil {
+		var rows []struct {
+			OutboundID string `json:"outbound_id"`
+		}
+		if jerr := json.Unmarshal(data, &rows); jerr == nil {
+			outboundIDs = make([]string, 0, len(rows))
+			for _, row := range rows {
+				outboundIDs = append(outboundIDs, row.OutboundID)
+			}
+		}
+	} else {
+		err = fmt.Errorf("outbounds 회사 필터 실패: %w", e)
+		return
+	}
+	if data, _, e := h.DB.From("orders").Select("order_id", "exact", false).Eq("company_id", companyID).Execute(); e == nil {
+		var rows []struct {
+			OrderID string `json:"order_id"`
+		}
+		if jerr := json.Unmarshal(data, &rows); jerr == nil {
+			orderIDs = make([]string, 0, len(rows))
+			for _, row := range rows {
+				orderIDs = append(orderIDs, row.OrderID)
+			}
+		}
+	} else {
+		err = fmt.Errorf("orders 회사 필터 실패: %w", e)
+		return
+	}
+	return
+}
 
-	// 비유: ?outbound_id=xxx — 특정 출고의 판매만 필터
+// customerIDsByQ — 거래처 이름으로 partner_id 후보 끌어옴. q 검색 시 customer_id IN 으로 결합.
+func (h *SaleHandler) customerIDsByQ(q string) ([]string, error) {
+	data, _, err := h.DB.From("partners").
+		Select("partner_id", "exact", false).
+		Ilike("partner_name", fmt.Sprintf("*%s*", q)).
+		Execute()
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		PartnerID string `json:"partner_id"`
+	}
+	if jerr := json.Unmarshal(data, &rows); jerr != nil {
+		return nil, jerr
+	}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.PartnerID)
+	}
+	return ids, nil
+}
+
+func sanitizeSaleSearchTerm(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(",", " ", "(", " ", ")", " ", ".", " ", "*", " ", "\"", " ")
+	return strings.TrimSpace(replacer.Replace(q))
+}
+
+// applySaleFilters — List/Summary 가 공유하는 필터 로직.
+// company_id/month/invoice_status/q 등 옛 클라이언트 필터를 모두 DB-level 로 처리.
+// 매칭이 0건이라 빈 결과가 확정되면 (false, nil) 반환.
+func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
 	if outID := r.URL.Query().Get("outbound_id"); outID != "" {
 		query = query.Eq("outbound_id", outID)
 	}
 	if orderID := r.URL.Query().Get("order_id"); orderID != "" {
 		query = query.Eq("order_id", orderID)
 	}
-
-	// 비유: ?customer_id=xxx — 특정 고객의 판매만 필터
 	if custID := r.URL.Query().Get("customer_id"); custID != "" {
 		query = query.Eq("customer_id", custID)
 	}
-
-	// 비유: ?erp_closed=true — ERP 마감 여부 필터
 	if erpClosed := r.URL.Query().Get("erp_closed"); erpClosed != "" {
 		query = query.Eq("erp_closed", erpClosed)
 	}
@@ -60,7 +136,95 @@ func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Neq("status", "cancelled")
 	}
 
-	data, _, err := query.Execute()
+	// month: tax_invoice_date.like.YYYY-MM-* (또는 YYYY-MM-%)
+	if month := r.URL.Query().Get("month"); month != "" {
+		query = query.Like("tax_invoice_date", month+"%")
+	}
+
+	// invoice_status: tax_invoice_date IS NULL / NOT NULL
+	switch r.URL.Query().Get("invoice_status") {
+	case "issued":
+		query = query.Not("tax_invoice_date", "is", "null")
+	case "pending":
+		query = query.Is("tax_invoice_date", "null")
+	}
+
+	// company_id: outbound_id IN (...) OR order_id IN (...)
+	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
+		outIDs, ordIDs, err := h.idsByCompany(compID)
+		if err != nil {
+			return query, false, err
+		}
+		if len(outIDs) == 0 && len(ordIDs) == 0 {
+			return query, false, nil
+		}
+		clauses := []string{}
+		if len(outIDs) > 0 {
+			clauses = append(clauses, fmt.Sprintf("outbound_id.in.(%s)", strings.Join(outIDs, ",")))
+		}
+		if len(ordIDs) > 0 {
+			clauses = append(clauses, fmt.Sprintf("order_id.in.(%s)", strings.Join(ordIDs, ",")))
+		}
+		query = query.Or(strings.Join(clauses, ","), "")
+	}
+
+	// q: 거래처 이름 매칭으로 customer_id IN (...). 매칭 0건이면 빈 결과 즉시 반환.
+	if q := sanitizeSaleSearchTerm(r.URL.Query().Get("q")); q != "" {
+		ids, err := h.customerIDsByQ(q)
+		if err != nil {
+			return query, false, fmt.Errorf("거래처 검색 실패: %w", err)
+		}
+		if len(ids) == 0 {
+			return query, false, nil
+		}
+		query = query.In("customer_id", ids)
+	}
+
+	return query, true, nil
+}
+
+func parseSaleSort(r *http.Request) (column string, ascending bool) {
+	column = "tax_invoice_date"
+	ascending = false
+	if raw := r.URL.Query().Get("sort"); raw != "" {
+		if _, ok := saleSortable[raw]; ok {
+			column = raw
+		}
+	}
+	if r.URL.Query().Get("order") == "asc" {
+		ascending = true
+	}
+	return column, ascending
+}
+
+// List — GET /api/v1/sales — 판매 목록 조회 (서버사이드 페이지·검색·정렬).
+// 쿼리 파라미터:
+//   - limit/offset (기본 100, 최대 1000), sort/order (화이트리스트), q (거래처 검색)
+//   - company_id/customer_id/outbound_id/order_id/erp_closed/status: 등치 필터
+//   - month: tax_invoice_date prefix 매칭, invoice_status: issued/pending
+//
+// 응답 헤더 X-Total-Count.
+func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
+	query := h.DB.From("sales").Select("*", "exact", false)
+	query, ok, err := h.applySaleFilters(r, query)
+	if err != nil {
+		log.Printf("[판매 목록 필터 처리 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "판매 목록 필터 처리에 실패했습니다")
+		return
+	}
+	if !ok {
+		w.Header().Set("X-Total-Count", "0")
+		response.RespondJSON(w, http.StatusOK, []model.SaleListItem{})
+		return
+	}
+
+	sortCol, asc := parseSaleSort(r)
+	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
+
+	limit, offset := parseLimitOffset(r, saleDefaultLimit, saleMaxLimit)
+	query = query.Range(offset, offset+limit-1, "")
+
+	data, count, err := query.Execute()
 	if err != nil {
 		log.Printf("[판매 목록 조회 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "판매 목록 조회에 실패했습니다")
@@ -75,31 +239,61 @@ func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items := h.enrichSales(sales)
-	companyID := r.URL.Query().Get("company_id")
-	month := r.URL.Query().Get("month")
-	invoiceStatus := r.URL.Query().Get("invoice_status")
-	statusFilter := r.URL.Query().Get("status")
-	filtered := make([]model.SaleListItem, 0, len(items))
-	for _, item := range items {
-		if statusFilter == "" && item.OutboundStatus != nil && *item.OutboundStatus != "active" {
-			continue
-		}
-		if companyID != "" && companyID != "all" && (item.CompanyID == nil || *item.CompanyID != companyID) {
-			continue
-		}
-		if month != "" && (item.Sale.TaxInvoiceDate == nil || !strings.HasPrefix(*item.Sale.TaxInvoiceDate, month)) {
-			continue
-		}
-		if invoiceStatus == "issued" && item.Sale.TaxInvoiceDate == nil {
-			continue
-		}
-		if invoiceStatus == "pending" && item.Sale.TaxInvoiceDate != nil {
-			continue
-		}
-		filtered = append(filtered, item)
+
+	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
+	response.RespondJSON(w, http.StatusOK, items)
+}
+
+// SaleSummary — 매출 KPI 카드 응답.
+type SaleSummary struct {
+	Total              int64   `json:"total"`
+	SaleAmountSum      float64 `json:"sale_amount_sum"`
+	InvoicePendingCount int64  `json:"invoice_pending_count"`
+}
+
+// Summary — GET /api/v1/sales/summary — 매출 KPI 집계 (List 와 동일 필터).
+func (h *SaleHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	query := h.DB.From("sales").Select("supply_amount, tax_invoice_date", "exact", false)
+	query, ok, err := h.applySaleFilters(r, query)
+	if err != nil {
+		log.Printf("[판매 요약 필터 처리 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "판매 요약 필터 처리에 실패했습니다")
+		return
+	}
+	if !ok {
+		response.RespondJSON(w, http.StatusOK, SaleSummary{})
+		return
 	}
 
-	response.RespondJSON(w, http.StatusOK, filtered)
+	// 한 번에 모두 받아 클라이언트(이 핸들러) 에서 합산. 매출 데이터는 보통 매출 단위가 출고 단위와 비슷해
+	// 최대 수만건 수준으로 충분히 메모리 처리 가능.
+	// 큰 운영규모로 가면 SQL aggregate(view 또는 RPC) 로 교체 권장.
+	data, count, err := query.Range(0, saleMaxLimit-1, "").Execute()
+	if err != nil {
+		log.Printf("[판매 요약 조회 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "판매 요약 조회에 실패했습니다")
+		return
+	}
+
+	var rows []struct {
+		SupplyAmount   *float64 `json:"supply_amount"`
+		TaxInvoiceDate *string  `json:"tax_invoice_date"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		log.Printf("[판매 요약 디코딩 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
+		return
+	}
+	summary := SaleSummary{Total: count}
+	for _, row := range rows {
+		if row.SupplyAmount != nil {
+			summary.SaleAmountSum += *row.SupplyAmount
+		}
+		if row.TaxInvoiceDate == nil {
+			summary.InvoicePendingCount++
+		}
+	}
+	response.RespondJSON(w, http.StatusOK, summary)
 }
 
 type saleOrderRow struct {

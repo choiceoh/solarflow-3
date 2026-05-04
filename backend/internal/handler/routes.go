@@ -534,6 +534,7 @@ func (h *ReceiptMatchHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 func (h *SaleHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/sales", func(r chi.Router) {
 		r.Get("/", h.List)
+		r.Get("/summary", h.Summary)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)

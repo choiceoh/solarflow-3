@@ -257,7 +257,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxSale: {
 		ID: IDTxSale, Name: "매출", Description: "매출 CRUD",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/sales/", "/api/v1/sales/{id}"},
+		Paths: []string{"/api/v1/sales/", "/api/v1/sales/summary", "/api/v1/sales/{id}"},
 	},
 	IDTxReceipt: {
 		ID: IDTxReceipt, Name: "수금", Description: "수금 CRUD",

@@ -166,17 +166,144 @@ export function useOutboundDetail(outboundId: string | null) {
   );
 }
 
-export function useSaleList(filters: { customer_id?: string; month?: string; invoice_status?: string } = {}) {
+export interface SaleListParams {
+  customer_id?: string;
+  month?: string;
+  invoice_status?: string;
+  q?: string;
+  sort?: string;
+  order?: 'asc' | 'desc';
+  pageIndex: number;
+  pageSize: number;
+}
+
+export interface SaleListResult {
+  items: SaleListItem[];
+  totalCount: number;
+  loading: boolean;
+  isFetching: boolean;
+  error: string | null;
+  reload: () => Promise<void>;
+}
+
+// useSaleList — 서버사이드 페이지·검색·정렬. Outbound 와 같은 패턴.
+export function useSaleList(params: SaleListParams): SaleListResult {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
+  const queryKey = [
+    'sales',
+    selectedCompanyId,
+    params.customer_id ?? '',
+    params.month ?? '',
+    params.invoice_status ?? '',
+    params.q ?? '',
+    params.sort ?? '',
+    params.order ?? '',
+    params.pageIndex,
+    params.pageSize,
+  ];
+  const q = useQuery<{ items: SaleListItem[]; totalCount: number }, Error>({
+    queryKey,
+    queryFn: async () => {
+      const search = companyParams(selectedCompanyId!);
+      if (params.customer_id) search.set('customer_id', params.customer_id);
+      if (params.month) search.set('month', params.month);
+      if (params.invoice_status) search.set('invoice_status', params.invoice_status);
+      if (params.q) search.set('q', params.q);
+      if (params.sort) search.set('sort', params.sort);
+      if (params.order) search.set('order', params.order);
+      search.set('limit', String(params.pageSize));
+      search.set('offset', String(params.pageIndex * params.pageSize));
+      const res = await fetchWithAuthMeta<SaleListItem[]>(`/api/v1/sales?${search}`);
+      return { items: res.data, totalCount: res.totalCount ?? res.data.length };
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  });
+  return {
+    items: q.data?.items ?? [],
+    totalCount: q.data?.totalCount ?? 0,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch(); },
+  };
+}
+
+// useSaleListAll — 호환 훅. 옛 시그니처(filters만 받고 전체 매출 청크 누적).
+// server mode 마이그레이션 안 된 화면(예: OrdersPage 매출 탭) 이 사용한다.
+const SALE_CHUNK_SIZE = 1000;
+const SALE_MAX_PAGES = 500;
+
+async function fetchAllSales(baseQuery: string): Promise<SaleListItem[]> {
+  const first = await fetchWithAuthMeta<SaleListItem[]>(
+    `/api/v1/sales?${baseQuery}&limit=${SALE_CHUNK_SIZE}&offset=0`,
+  );
+  const accumulated: SaleListItem[] = [...first.data];
+  const total = first.totalCount;
+  if (total === null || accumulated.length >= total) return accumulated;
+  for (let page = 1; page < SALE_MAX_PAGES; page++) {
+    const offset = page * SALE_CHUNK_SIZE;
+    if (offset >= total) break;
+    const next = await fetchWithAuth<SaleListItem[]>(
+      `/api/v1/sales?${baseQuery}&limit=${SALE_CHUNK_SIZE}&offset=${offset}`,
+    );
+    if (next.length === 0) break;
+    accumulated.push(...next);
+    if (accumulated.length >= total) break;
+  }
+  return accumulated;
+}
+
+export function useSaleListAll(
+  filters: { customer_id?: string; month?: string; invoice_status?: string } = {},
+) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   return useListQuery<SaleListItem>(
-    ['sales', selectedCompanyId, filters.customer_id, filters.month, filters.invoice_status],
+    ['sales-all', selectedCompanyId, filters.customer_id, filters.month, filters.invoice_status],
     () => {
       const params = companyParams(selectedCompanyId!);
       if (filters.customer_id) params.set('customer_id', filters.customer_id);
       if (filters.month) params.set('month', filters.month);
       if (filters.invoice_status) params.set('invoice_status', filters.invoice_status);
-      return fetchWithAuth<SaleListItem[]>(`/api/v1/sales?${params}`);
+      return fetchAllSales(params.toString());
     },
     { enabled: !!selectedCompanyId },
   );
+}
+
+export interface SaleSummary {
+  total: number;
+  sale_amount_sum: number;
+  invoice_pending_count: number;
+}
+
+export function useSaleSummary(params: Omit<SaleListParams, 'pageIndex' | 'pageSize' | 'sort' | 'order'>) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
+  const queryKey = [
+    'sales-summary',
+    selectedCompanyId,
+    params.customer_id ?? '',
+    params.month ?? '',
+    params.invoice_status ?? '',
+    params.q ?? '',
+  ];
+  const q = useQuery<SaleSummary, Error>({
+    queryKey,
+    queryFn: async () => {
+      const search = companyParams(selectedCompanyId!);
+      if (params.customer_id) search.set('customer_id', params.customer_id);
+      if (params.month) search.set('month', params.month);
+      if (params.invoice_status) search.set('invoice_status', params.invoice_status);
+      if (params.q) search.set('q', params.q);
+      return fetchWithAuth<SaleSummary>(`/api/v1/sales/summary?${search}`);
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  });
+  return {
+    summary: q.data ?? null,
+    loading: q.isLoading,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch(); },
+  };
 }

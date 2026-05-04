@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { DateInput } from '@/components/ui/date-input';
 import { useAppStore } from '@/stores/appStore';
-import { useOutboundList, useOutboundSummary, useSaleList } from '@/hooks/useOutbound';
+import { useOutboundList, useOutboundSummary, useSaleList, useSaleSummary } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { notify } from '@/lib/notify';
 import SkeletonRows from '@/components/common/SkeletonRows';
@@ -28,8 +28,9 @@ import {
 import type { Partner } from '@/types/masters';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 
-// 출고 테이블 기본 페이지 사이즈. 100 으로 잡으면 한 화면에 적당히 보이고 페이지 호출 횟수도 줄어든다.
+// 출고/매출 테이블 기본 페이지 사이즈. 100 으로 잡으면 한 화면에 적당히 보이고 페이지 호출 횟수도 줄어든다.
 const OUTBOUND_PAGE_SIZE = 100;
+const SALE_PAGE_SIZE = 100;
 // 검색어 입력 디바운스 — 타이핑 중 매 키스트로크마다 백엔드 호출하지 않게 350ms 지연.
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -107,16 +108,47 @@ export default function OutboundPage() {
     q: debouncedSearch || undefined,
   });
 
-  // 매출 탭은 Phase 2 범위 외 — 기존 클라이언트 필터 그대로 유지.
-  const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleList();
-  const sales = useMemo(() => allSales.filter((s) => {
-    if (customerFilter && s.customer_id !== customerFilter) return false
-    const taxDate = s.tax_invoice_date ?? s.sale?.tax_invoice_date ?? null
-    if (monthFilter && (!taxDate || !taxDate.startsWith(monthFilter))) return false
-    if (invoiceFilter === 'issued' && !taxDate) return false
-    if (invoiceFilter === 'pending' && taxDate) return false
-    return true
-  }), [allSales, customerFilter, monthFilter, invoiceFilter]);
+  // ─── 매출 — 서버사이드 페이지·검색·정렬 상태 ─────────────────────────
+  const [salePageIndex, setSalePageIndex] = useState(0);
+  const [salePageSize, setSalePageSize] = useState(SALE_PAGE_SIZE);
+  const [saleSorting, setSaleSorting] = useState<SortingState>([{ id: 'tax_invoice_date', desc: true }]);
+  const [debouncedSaleSearch, setDebouncedSaleSearch] = useState('');
+
+  useEffect(() => {
+    if (activeTab !== 'sales') return;
+    const t = setTimeout(() => setDebouncedSaleSearch(searchText.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchText, activeTab]);
+
+  useEffect(() => {
+    setSalePageIndex(0);
+  }, [customerFilter, monthFilter, invoiceFilter, debouncedSaleSearch]);
+
+  const saleSortKey = saleSorting[0]?.id;
+  const saleSortOrder: 'asc' | 'desc' = saleSorting[0]?.desc === false ? 'asc' : 'desc';
+
+  const {
+    items: sales,
+    totalCount: salesTotal,
+    loading: saleLoading,
+    reload: reloadSales,
+  } = useSaleList({
+    customer_id: customerFilter || undefined,
+    month: monthFilter || undefined,
+    invoice_status: invoiceFilter || undefined,
+    q: debouncedSaleSearch || undefined,
+    sort: saleSortKey || undefined,
+    order: saleSortKey ? saleSortOrder : undefined,
+    pageIndex: salePageIndex,
+    pageSize: salePageSize,
+  });
+
+  const { summary: saleSummary } = useSaleSummary({
+    customer_id: customerFilter || undefined,
+    month: monthFilter || undefined,
+    invoice_status: invoiceFilter || undefined,
+    q: debouncedSaleSearch || undefined,
+  });
 
   useEffect(() => {
     loadManufacturers();
@@ -182,9 +214,9 @@ export default function OutboundPage() {
   const cancelPendingCount = summary?.cancel_pending_count ?? 0;
   const outboundSaleTotal = summary?.sale_amount_sum ?? 0;
   const outboundPendingInvoiceCount = summary?.invoice_pending_count ?? 0;
-  // 매출 탭 KPI 는 클라이언트 합계 그대로.
-  const saleTotal = sales.reduce((sum, sale) => sum + (sale.supply_amount ?? sale.sale?.supply_amount ?? 0), 0);
-  const pendingInvoiceCount = sales.filter((sale) => !(sale.tax_invoice_date ?? sale.sale?.tax_invoice_date)).length;
+  // 매출 탭 KPI 는 서버 집계.
+  const saleTotal = saleSummary?.sale_amount_sum ?? 0;
+  const pendingInvoiceCount = saleSummary?.invoice_pending_count ?? 0;
   // 최근 출고는 첫 페이지 + outbound_date desc 기본 정렬일 때 자연스럽게 최근 4건.
   const recentOutbounds = pageIndex === 0 ? outbounds.slice(0, 4) : [];
 
@@ -257,7 +289,7 @@ export default function OutboundPage() {
       <FilterChips
         options={[
           { key: 'outbound', label: '출고 관리', count: totalOutbounds },
-          { key: 'sales', label: '매출 현황', count: sales.length },
+          { key: 'sales', label: '매출 현황', count: salesTotal },
         ]}
         value={activeTab}
         onChange={(value) => { setActiveTab(value as 'outbound' | 'sales'); setSearchText(''); setSelectedSaleIds(new Set()); }}
@@ -273,7 +305,7 @@ export default function OutboundPage() {
         title="출고/판매"
         description="출고 진행과 매출·계산서 상태를 같은 운영 화면에서 확인합니다."
         tableTitle={activeTab === 'outbound' ? '출고 관리' : '매출 현황'}
-        tableSub={activeTab === 'outbound' ? `${totalOutbounds.toLocaleString()}건 · ${statusLabel}` : `${sales.length.toLocaleString()}건 · ${invoiceLabel}`}
+        tableSub={activeTab === 'outbound' ? `${totalOutbounds.toLocaleString()}건 · ${statusLabel}` : `${salesTotal.toLocaleString()}건 · ${invoiceLabel}`}
         toolbar={outboundCardControls}
         metrics={activeTab === 'outbound' ? [
           { label: '출고 건수', value: totalOutbounds.toLocaleString(), sub: statusLabel, tone: 'solar', spark: [14, 18, 16, 23, totalOutbounds || 1] },
@@ -358,10 +390,20 @@ export default function OutboundPage() {
                 hidden={saleColVis.hidden}
                 pinning={saleColPin.pinning}
                 onPinningChange={saleColPin.setPinning}
-                globalFilter={searchText}
                 selectedIds={selectedSaleIds}
                 onSelectedIdsChange={setSelectedSaleIds}
                 isRowSelectable={isSalePending}
+                serverMode={{
+                  pageIndex: salePageIndex,
+                  pageSize: salePageSize,
+                  totalRowCount: salesTotal,
+                  onPageChange: ({ pageIndex: nextIdx, pageSize: nextSize }) => {
+                    setSalePageIndex(nextIdx);
+                    setSalePageSize(nextSize);
+                  },
+                  sorting: saleSorting,
+                  onSortingChange: setSaleSorting,
+                }}
               />
             </>
           )}

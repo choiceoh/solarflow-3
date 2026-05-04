@@ -120,6 +120,7 @@ GET     /api/v1/receipt-matches/
 GET     /api/v1/receipts/
 GET     /api/v1/receipts/{id}
 GET     /api/v1/sales/
+GET     /api/v1/sales/summary
 GET     /api/v1/sales/{id}
 GET     /api/v1/system-settings/{key}
 GET     /api/v1/tts/

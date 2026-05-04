@@ -6,7 +6,7 @@ import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
 import { useOrderList } from '@/hooks/useOrders';
 import { useReceiptList } from '@/hooks/useReceipts';
-import { useOutboundListAll, useSaleList } from '@/hooks/useOutbound';
+import { useOutboundListAll, useSaleListAll } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import SkeletonRows from '@/components/common/SkeletonRows';
@@ -169,7 +169,7 @@ export default function OrdersPage() {
   const [saleCustomerFilter, setSaleCustomerFilter] = useState('');
   const [saleMonthFilter, setSaleMonthFilter] = useState('');
   const [saleInvoiceFilter, setSaleInvoiceFilter] = useState('');
-  const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleList();
+  const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleListAll();
 
   const sales = useMemo(() => allSales.filter((s) => {
     if (saleCustomerFilter && s.customer_id !== saleCustomerFilter) return false
