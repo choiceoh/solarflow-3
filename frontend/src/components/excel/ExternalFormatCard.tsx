@@ -372,6 +372,11 @@ function ConvertResultDialog({ open, state, targetLabel, onClose, onProceed, onU
               자유 날짜 보정 {result.resolvedFromSection}건
             </span>
           )}
+          {result.filledFromAbove > 0 && (
+            <span className="rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-info-bg)', color: 'var(--sf-info)' }}>
+              메타 forward-fill {result.filledFromAbove}건
+            </span>
+          )}
           {ambiguousCompany.length + ambiguousProduct.length > 0 && (
             <span className="flex items-center gap-1 rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-warn-bg)', color: 'var(--sf-warn)' }}>
               <AlertTriangle className="h-3 w-3" />
