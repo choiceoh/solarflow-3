@@ -519,6 +519,65 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 		log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s ok", role, userID, p.Kind, id)
 		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "data": json.RawMessage(data)})
 
+	case "bulk_update_outbound":
+		var args bulkUpdateOutboundInput
+		if err := json.Unmarshal(p.Payload, &args); err != nil {
+			response.RespondError(w, http.StatusInternalServerError, "제안 페이로드 파싱 실패")
+			return
+		}
+		okCount := 0
+		failed := make([]map[string]any, 0)
+		for _, u := range args.Updates {
+			u.BLItems = nil
+			if msg := u.UpdateOutboundRequest.Validate(); msg != "" {
+				failed = append(failed, map[string]any{"outbound_id": u.OutboundID, "error": "검증 실패: " + msg})
+				continue
+			}
+			if _, _, err := h.db.From("outbounds").Update(u.UpdateOutboundRequest, "", "").Eq("outbound_id", u.OutboundID).Execute(); err != nil {
+				failed = append(failed, map[string]any{"outbound_id": u.OutboundID, "error": err.Error()})
+				continue
+			}
+			okCount++
+		}
+		log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s ok_count=%d failed_count=%d",
+			role, userID, p.Kind, id, okCount, len(failed))
+		response.RespondJSON(w, http.StatusOK, map[string]any{
+			"ok":           true,
+			"kind":         p.Kind,
+			"ok_count":     okCount,
+			"failed_count": len(failed),
+			"failed":       failed,
+		})
+
+	case "bulk_update_order":
+		var args bulkUpdateOrderInput
+		if err := json.Unmarshal(p.Payload, &args); err != nil {
+			response.RespondError(w, http.StatusInternalServerError, "제안 페이로드 파싱 실패")
+			return
+		}
+		okCount := 0
+		failed := make([]map[string]any, 0)
+		for _, u := range args.Updates {
+			if msg := u.UpdateOrderRequest.Validate(); msg != "" {
+				failed = append(failed, map[string]any{"order_id": u.OrderID, "error": "검증 실패: " + msg})
+				continue
+			}
+			if _, _, err := h.db.From("orders").Update(u.UpdateOrderRequest, "", "").Eq("order_id", u.OrderID).Execute(); err != nil {
+				failed = append(failed, map[string]any{"order_id": u.OrderID, "error": err.Error()})
+				continue
+			}
+			okCount++
+		}
+		log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s ok_count=%d failed_count=%d",
+			role, userID, p.Kind, id, okCount, len(failed))
+		response.RespondJSON(w, http.StatusOK, map[string]any{
+			"ok":           true,
+			"kind":         p.Kind,
+			"ok_count":     okCount,
+			"failed_count": len(failed),
+			"failed":       failed,
+		})
+
 	case "propose_ui_config_update":
 		// 메타 config 통째 교체. sys_ui_config.go Upsert 와 동일 정책.
 		var args struct {

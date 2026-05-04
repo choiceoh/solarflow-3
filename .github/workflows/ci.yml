@@ -68,10 +68,20 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.sum
+          cache: false
+      - name: Cache Go modules and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('backend/go.sum') }}-${{ hashFiles('backend/**/*.go') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ hashFiles('backend/go.sum') }}-
+            ${{ runner.os }}-go-
+      # go test -vet=all ./... 이 vet 과 비-test 패키지 컴파일을 모두 커버. go build 는 main 의 link 검증.
+      - run: go test -vet=all ./...
       - run: go build ./...
-      - run: go vet ./...
-      - run: go test ./...
 
   # 엔진 (Rust) — 빌드 시간이 길어 캐시 필수. release 빌드는 운영과 동일.
   engine:
