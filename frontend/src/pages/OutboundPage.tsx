@@ -19,7 +19,7 @@ import OutboundDetailView from '@/components/outbound/OutboundDetailView';
 import SaleListTable, { SALE_TABLE_ID, SALE_COLUMN_META } from '@/components/outbound/SaleListTable';
 import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
 import { MasterConsole } from '@/components/command/MasterConsole';
-import { FilterButton, FilterChips, RailBlock } from '@/components/command/MockupPrimitives';
+import { FilterButton, FilterChips, RailBlock, type DateRangeValue } from '@/components/command/MockupPrimitives';
 import type { SaleListItem } from '@/types/outbound';
 import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
@@ -56,7 +56,7 @@ export default function OutboundPage() {
   useEffect(() => { setSelectedOutbound(null); }, [_loc.key]);
 
   const [customerFilter, setCustomerFilter] = useState('');
-  const [monthFilter, setMonthFilter] = useState('');
+  const [saleDateRange, setSaleDateRange] = useState<DateRangeValue>(null);
   const [invoiceFilter, setInvoiceFilter] = useState('');
 
   const manufacturers = useAppStore((s) => s.manufacturers);
@@ -112,11 +112,14 @@ export default function OutboundPage() {
   const sales = useMemo(() => allSales.filter((s) => {
     if (customerFilter && s.customer_id !== customerFilter) return false
     const taxDate = s.tax_invoice_date ?? s.sale?.tax_invoice_date ?? null
-    if (monthFilter && (!taxDate || !taxDate.startsWith(monthFilter))) return false
+    if (saleDateRange) {
+      if (!taxDate) return false
+      if (taxDate < saleDateRange.start || taxDate > saleDateRange.end) return false
+    }
     if (invoiceFilter === 'issued' && !taxDate) return false
     if (invoiceFilter === 'pending' && taxDate) return false
     return true
-  }), [allSales, customerFilter, monthFilter, invoiceFilter]);
+  }), [allSales, customerFilter, saleDateRange, invoiceFilter]);
 
   useEffect(() => {
     loadManufacturers();
@@ -163,13 +166,6 @@ export default function OutboundPage() {
     setSelectedSaleIds(new Set());
     reloadSales();
   };
-
-  const months: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-  }
 
   // 필터 라벨 계산 (한글 표시 보장)
   const statusLabel = statusFilter ? (OUTBOUND_STATUS_LABEL[statusFilter as OutboundStatus] ?? statusFilter) : '전체 상태';
@@ -235,10 +231,10 @@ export default function OutboundPage() {
               options: partners.map((p) => ({ value: p.partner_id, label: p.partner_name })),
             },
             {
+              kind: 'date_range',
               label: '기간',
-              value: monthFilter,
-              onChange: setMonthFilter,
-              options: months.map((m) => ({ value: m, label: m })),
+              value: saleDateRange,
+              onChange: setSaleDateRange,
             },
             {
               label: '계산서',

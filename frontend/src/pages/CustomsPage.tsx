@@ -12,7 +12,7 @@ import ExchangeComparePanel from '@/components/customs/ExchangeComparePanel';
 import { EXPENSE_TYPE_LABEL, type ExpenseType } from '@/types/customs';
 import type { BLShipment } from '@/types/inbound';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
-import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
+import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, TileB, type DateRangeValue } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
 import { flatSpark, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
 
@@ -26,17 +26,20 @@ export default function CustomsPage() {
 
   // 탭 1: 부대비용
   const [expBlFilter, setExpBlFilter] = useState('');
-  const [expMonthFilter, setExpMonthFilter] = useState('');
+  const [expDateRange, setExpDateRange] = useState<DateRangeValue>(null);
   const [expTypeFilter, setExpTypeFilter] = useState('');
   const [activeTab, setActiveTab] = useState('expenses');
 
   // 마스터
   const [bls, setBls] = useState<BLShipment[]>([]);
 
-  const expFilters: { bl_id?: string; month?: string; expense_type?: string } = {};
+  const expFilters: { bl_id?: string; expense_type?: string; start?: string; end?: string } = {};
   if (expBlFilter) expFilters.bl_id = expBlFilter;
-  if (expMonthFilter) expFilters.month = expMonthFilter;
   if (expTypeFilter) expFilters.expense_type = expTypeFilter;
+  if (expDateRange) {
+    expFilters.start = expDateRange.start;
+    expFilters.end = expDateRange.end;
+  }
 
   const { data: expenses, loading: expLoading } = useExpenseList(expFilters);
   const expenseColVis = useColumnVisibility(EXPENSE_TABLE_ID, EXPENSE_COLUMN_META);
@@ -55,14 +58,6 @@ export default function CustomsPage() {
         <p className="text-muted-foreground">좌측 상단에서 법인을 선택해주세요</p>
       </div>
     );
-  }
-
-  // 월 목록 (최근 12개월)
-  const months: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
 
   const expenseTotal = expenses.reduce((sum, expense) => sum + (expense.total ?? expense.amount ?? 0), 0);
@@ -98,10 +93,10 @@ export default function CustomsPage() {
               options: bls.map((bl) => ({ value: bl.bl_id, label: bl.bl_number })),
             },
             {
+              kind: 'date_range',
               label: '기간',
-              value: expMonthFilter,
-              onChange: setExpMonthFilter,
-              options: months.map((m) => ({ value: m, label: m })),
+              value: expDateRange,
+              onChange: setExpDateRange,
             },
             {
               label: '유형',

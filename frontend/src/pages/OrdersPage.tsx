@@ -31,7 +31,7 @@ import { OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL, type OutboundStatus, type 
 import type { Partner, Manufacturer } from '@/types/masters';
 import type { InventoryResponse } from '@/types/inventory';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
-import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, Sparkline, TileB } from '@/components/command/MockupPrimitives';
+import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, Sparkline, TileB, type DateRangeValue } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
 import { flatSparkFromValue, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
 
@@ -167,22 +167,25 @@ export default function OrdersPage() {
 
   // 탭 3: 판매
   const [saleCustomerFilter, setSaleCustomerFilter] = useState('');
-  const [saleMonthFilter, setSaleMonthFilter] = useState('');
+  const [saleDateRange, setSaleDateRange] = useState<DateRangeValue>(null);
   const [saleInvoiceFilter, setSaleInvoiceFilter] = useState('');
   const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleList();
 
   const sales = useMemo(() => allSales.filter((s) => {
     if (saleCustomerFilter && s.customer_id !== saleCustomerFilter) return false
     const taxDate = s.tax_invoice_date ?? s.sale?.tax_invoice_date ?? null
-    if (saleMonthFilter && (!taxDate || !taxDate.startsWith(saleMonthFilter))) return false
+    if (saleDateRange) {
+      if (!taxDate) return false
+      if (taxDate < saleDateRange.start || taxDate > saleDateRange.end) return false
+    }
     if (saleInvoiceFilter === 'issued' && !taxDate) return false
     if (saleInvoiceFilter === 'pending' && taxDate) return false
     return true
-  }), [allSales, saleCustomerFilter, saleMonthFilter, saleInvoiceFilter]);
+  }), [allSales, saleCustomerFilter, saleDateRange, saleInvoiceFilter]);
 
   // 탭 4: 수금
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState('');
-  const [receiptMonthFilter, setReceiptMonthFilter] = useState('');
+  const [receiptDateRange, setReceiptDateRange] = useState<DateRangeValue>(null);
   const [orderActionError, setOrderActionError] = useState('');
   const [orderSourceHints, setOrderSourceHints] = useState<Record<string, FulfillmentSource>>({});
 
@@ -205,9 +208,12 @@ export default function OrdersPage() {
   if (orderCustomerFilter) orderFilters.customer_id = orderCustomerFilter;
   if (orderCategoryFilter) orderFilters.management_category = orderCategoryFilter;
 
-  const receiptFilters: { customer_id?: string; month?: string } = {};
+  const receiptFilters: { customer_id?: string; start?: string; end?: string } = {};
   if (receiptCustomerFilter) receiptFilters.customer_id = receiptCustomerFilter;
-  if (receiptMonthFilter) receiptFilters.month = receiptMonthFilter;
+  if (receiptDateRange) {
+    receiptFilters.start = receiptDateRange.start;
+    receiptFilters.end = receiptDateRange.end;
+  }
 
   const { data: orders, loading: ordersLoading, reload: reloadOrders } = useOrderList(orderFilters);
   const { data: receipts, loading: receiptsLoading } = useReceiptList(receiptFilters);
@@ -295,17 +301,6 @@ export default function OrdersPage() {
 
   // ⚠️ 모든 useMemo는 early return(아래 selectedCompanyId/selectedOrder 분기) 이전이어야 함 — Hook 순서 규칙
   const outboundsWithSales = outbounds;
-
-  // 월 목록 (최근 12개월) — 마운트 후 1회만 계산
-  const months = useMemo(() => {
-    const out: string[] = [];
-    const now = new Date();
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-    }
-    return out;
-  }, []);
 
   const ordersKw = useMemo(
     () => visibleOrders.reduce((sum, order) => sum + (order.capacity_kw ?? order.quantity * (order.wattage_kw ?? 0)), 0),
@@ -680,10 +675,10 @@ export default function OrdersPage() {
           </div>
           <FilterButton items={[
             {
+              kind: 'date_range',
               label: '기간',
-              value: saleMonthFilter,
-              onChange: setSaleMonthFilter,
-              options: months.map((m) => ({ value: m, label: m })),
+              value: saleDateRange,
+              onChange: setSaleDateRange,
             },
             {
               label: '계산서',
@@ -709,10 +704,10 @@ export default function OrdersPage() {
               options: partners.map((p) => ({ value: p.partner_id, label: p.partner_name })),
             },
             {
+              kind: 'date_range',
               label: '기간',
-              value: receiptMonthFilter,
-              onChange: setReceiptMonthFilter,
-              options: months.map((m) => ({ value: m, label: m })),
+              value: receiptDateRange,
+              onChange: setReceiptDateRange,
             },
           ]} />
           <ColumnVisibilityMenu tableId={RECEIPT_TABLE_ID} columns={RECEIPT_COLUMN_META} hidden={receiptColVis.hidden} setHidden={receiptColVis.setHidden} pinning={receiptColPin.pinning} pinLeft={receiptColPin.pinLeft} pinRight={receiptColPin.pinRight} unpin={receiptColPin.unpin} />

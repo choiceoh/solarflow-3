@@ -34,7 +34,12 @@ func (h *ReceiptHandler) List(w http.ResponseWriter, r *http.Request) {
 	if custID := r.URL.Query().Get("customer_id"); custID != "" {
 		query = query.Eq("customer_id", custID)
 	}
-	if month := r.URL.Query().Get("month"); month != "" {
+	// ?start=YYYY-MM-DD&end=YYYY-MM-DD — 날짜 범위 (포함). start 와 end 가 함께 지정되면 month 보다 우선.
+	start := r.URL.Query().Get("start")
+	end := r.URL.Query().Get("end")
+	if start != "" && end != "" {
+		query = query.Gte("receipt_date", start).Lte("receipt_date", end)
+	} else if month := r.URL.Query().Get("month"); month != "" {
 		query = query.Gte("receipt_date", month+"-01").Lt("receipt_date", nextMonthString(month))
 	}
 
