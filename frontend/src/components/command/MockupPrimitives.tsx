@@ -253,23 +253,43 @@ const isAllValue = (v: string) => !v || v === 'all';
 
 export function FilterButton({ items }: { items: FilterItem[] }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // 패널 위치는 fixed 좌표로 계산 — 부모 .sf-card-controls 의 overflow:hidden 으로
+  // 잘리는 것을 회피하기 위해 document.body 로 portal.
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    const updatePos = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    };
+    updatePos();
     const onDoc = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    window.addEventListener('resize', updatePos);
+    window.addEventListener('scroll', updatePos, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', updatePos);
+      window.removeEventListener('scroll', updatePos, true);
+    };
   }, [open]);
 
   const activeCount = items.filter((it) => !isAllValue(it.value)).length;
   const reset = () => items.forEach((it) => { if (!it.disabled && !isAllValue(it.value)) it.onChange(''); });
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <>
       <button
+        ref={triggerRef}
         onClick={() => setOpen((v) => !v)}
         type="button"
         style={{
@@ -299,9 +319,9 @@ export function FilterButton({ items }: { items: FilterItem[] }) {
           }}>{activeCount}</span>
         ) : null}
       </button>
-      {open ? (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30,
+      {open && pos ? createPortal(
+        <div ref={panelRef} style={{
+          position: 'fixed', top: pos.top, right: pos.right, zIndex: 1000,
           width: 280, background: 'var(--surface)',
           border: '1px solid var(--line)', borderRadius: 6,
           boxShadow: '0 12px 32px rgba(28,25,23,0.12), 0 2px 6px rgba(28,25,23,0.06)',
@@ -355,9 +375,10 @@ export function FilterButton({ items }: { items: FilterItem[] }) {
               }}
             >닫기</button>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
-    </div>
+    </>
   );
 }
 
