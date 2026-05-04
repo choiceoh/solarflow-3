@@ -66,6 +66,7 @@ function ReceiptListTable({ items, hidden, pinning, onPinningChange }: Props) {
       items={items}
       getRowKey={(r) => r.receipt_id}
       emptyMessage="등록된 수금이 없습니다"
+      pageSize={50}
     />
   );
 }
