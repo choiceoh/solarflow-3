@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef as TSColumnDef,
@@ -10,10 +11,20 @@ import {
   type ColumnOrderState,
   type FilterFn,
   type Column,
+  type PaginationState,
   type VisibilityState,
 } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import EmptyState from './EmptyState';
 import { cn } from '@/lib/utils';
 import { buildTableSummary, type TableSummaryMode } from '@/lib/tableSummary';
@@ -90,6 +101,10 @@ export interface MetaTableProps<T> {
   pinning?: SfColumnPinningState;
   /** 고정 상태 변경 콜백 — TanStack 의 onColumnPinningChange 시그니처. */
   onPinningChange?: (next: SfColumnPinningState) => void;
+  /** 페이지당 행 수 기본값. 미지정 시 페이지네이션 비활성. */
+  pageSize?: number;
+  /** 페이지 크기 선택지. 기본 [25, 50, 100]. */
+  pageSizeOptions?: number[];
 }
 
 function alignClass(align?: 'left' | 'right' | 'center'): string | undefined {
@@ -118,11 +133,19 @@ function getPinnedStyle<T>(column: Column<T>): CSSProperties | undefined {
   };
 }
 
+const DEFAULT_PAGE_SIZE_OPTIONS = [25, 50, 100];
+
 export function MetaTable<T>({
   tableId, columns, hidden, items, getRowKey, defaultSort, onRowClick,
   emptyMessage, emptyAction, footer, fillWidth, rowClassName, tableClassName, globalFilter,
   onFilteredRowCountChange, pinning, onPinningChange,
+  pageSize, pageSizeOptions,
 }: MetaTableProps<T>) {
+  const paginationEnabled = pageSize != null;
+  const [pagination, setPagination] = useState<PaginationState>(() => ({
+    pageIndex: 0,
+    pageSize: pageSize ?? 50,
+  }));
   // ─── 영속 hooks — tableId 없으면 빈 scope 로 비영속 동작 ──────────────────
   // 폭/정렬/순서는 MetaTable 이 보유. pinning 은 ColumnVisibilityMenu 와 공유 필요해
   // 페이지가 보유하고 prop 으로 받음.
@@ -208,6 +231,7 @@ export function MetaTable<T>({
       columnPinning: (pinning as ColumnPinningState | undefined) ?? { left: [], right: [] },
       columnOrder: resolvedOrder,
       globalFilter: globalFilter ?? '',
+      ...(paginationEnabled ? { pagination } : {}),
     },
     onColumnSizingChange: persistEnabled
       ? (updater) => widths.setSizing(updater as ColumnSizingState | ((prev: ColumnSizingState) => ColumnSizingState))
@@ -230,6 +254,8 @@ export function MetaTable<T>({
     onColumnOrderChange: persistEnabled
       ? (updater) => orderPersist.setOrder(updater as ColumnOrderState | ((prev: ColumnOrderState) => ColumnOrderState))
       : undefined,
+    onPaginationChange: paginationEnabled ? setPagination : undefined,
+    autoResetPageIndex: true,
     columnResizeMode: 'onChange',
     enableColumnResizing: persistEnabled,
     enableColumnPinning: pinningEnabled,
@@ -238,6 +264,7 @@ export function MetaTable<T>({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    ...(paginationEnabled ? { getPaginationRowModel: getPaginationRowModel() } : {}),
     getRowId: (row) => getRowKey(row),
   });
 
@@ -292,7 +319,20 @@ export function MetaTable<T>({
     });
   };
 
+  const sizeOptions = pageSizeOptions ?? DEFAULT_PAGE_SIZE_OPTIONS;
+  const currentPageIndex = pagination.pageIndex;
+  const totalPageCount = paginationEnabled ? table.getPageCount() : 1;
+  const showPagination = paginationEnabled && filteredRowCount > pagination.pageSize;
+  const pageRange = showPagination ? buildPageRange(currentPageIndex, totalPageCount) : [];
+  const rangeStart = paginationEnabled && filteredRowCount > 0
+    ? currentPageIndex * pagination.pageSize + 1
+    : 0;
+  const rangeEnd = paginationEnabled
+    ? Math.min((currentPageIndex + 1) * pagination.pageSize, filteredRowCount)
+    : filteredRowCount;
+
   return (
+    <Fragment>
     <Table
       className={cn('text-xs', tableClassName)}
       style={
@@ -436,7 +476,98 @@ export function MetaTable<T>({
         </TableFooter>
       )}
     </Table>
+    {paginationEnabled && filteredRowCount > 0 && (
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span className="tabular-nums">
+            {rangeStart.toLocaleString('ko-KR')}–{rangeEnd.toLocaleString('ko-KR')} / {filteredRowCount.toLocaleString('ko-KR')}건
+          </span>
+          <span className="text-[var(--line)]">·</span>
+          <label className="inline-flex items-center gap-1.5">
+            <span>페이지당</span>
+            <select
+              value={pagination.pageSize}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setPagination((prev) => ({ pageIndex: 0, pageSize: Number.isFinite(next) ? next : prev.pageSize }));
+              }}
+              className="h-7 rounded-md border border-input bg-background px-1.5 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/45"
+            >
+              {sizeOptions.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {showPagination && (
+          <Pagination className="mx-0 w-auto justify-end">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  text="이전"
+                  href="#"
+                  aria-disabled={!table.getCanPreviousPage()}
+                  className={!table.getCanPreviousPage() ? 'pointer-events-none opacity-40' : undefined}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (table.getCanPreviousPage()) table.previousPage();
+                  }}
+                />
+              </PaginationItem>
+              {pageRange.map((entry, idx) => (
+                <PaginationItem key={`${entry}-${idx}`}>
+                  {entry === 'ellipsis' ? (
+                    <PaginationEllipsis />
+                  ) : (
+                    <PaginationLink
+                      href="#"
+                      isActive={entry === currentPageIndex}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        table.setPageIndex(entry);
+                      }}
+                    >
+                      {entry + 1}
+                    </PaginationLink>
+                  )}
+                </PaginationItem>
+              ))}
+              <PaginationItem>
+                <PaginationNext
+                  text="다음"
+                  href="#"
+                  aria-disabled={!table.getCanNextPage()}
+                  className={!table.getCanNextPage() ? 'pointer-events-none opacity-40' : undefined}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (table.getCanNextPage()) table.nextPage();
+                  }}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
+      </div>
+    )}
+    </Fragment>
   );
+}
+
+function buildPageRange(current: number, total: number, neighbors = 1): (number | 'ellipsis')[] {
+  if (total <= 1) return [];
+  const range: (number | 'ellipsis')[] = [];
+  for (let i = 0; i < total; i++) {
+    if (
+      i === 0 ||
+      i === total - 1 ||
+      (i >= current - neighbors && i <= current + neighbors)
+    ) {
+      range.push(i);
+    } else if (range[range.length - 1] !== 'ellipsis') {
+      range.push('ellipsis');
+    }
+  }
+  return range;
 }
 
 export default MetaTable;
