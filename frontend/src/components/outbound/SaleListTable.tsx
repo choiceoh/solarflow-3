@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
+import MetaTable, { type ColumnDef, type MetaTableServerMode } from '@/components/common/MetaTable';
 import { formatDate, formatNumber, cn } from '@/lib/utils';
 import type { SaleListItem } from '@/types/outbound';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
@@ -18,6 +18,8 @@ interface Props {
   selectedIds?: Set<string>;
   onSelectedIdsChange?: (next: Set<string>) => void;
   isRowSelectable?: (item: SaleListItem) => boolean;
+  /** 서버사이드 페이지네이션·정렬 — 지정 시 클라이언트 pageSize 무시. */
+  serverMode?: MetaTableServerMode;
 }
 
 function buildColumns({
@@ -164,7 +166,7 @@ function buildColumns({
 export const SALE_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({}).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function SaleListTable({ items, hidden, pinning, onPinningChange, onInvoice, globalFilter, selectedIds, onSelectedIdsChange, isRowSelectable }: Props) {
+function SaleListTable({ items, hidden, pinning, onPinningChange, onInvoice, globalFilter, selectedIds, onSelectedIdsChange, isRowSelectable, serverMode }: Props) {
   return (
     <MetaTable
       tableId={SALE_TABLE_ID}
@@ -176,7 +178,8 @@ function SaleListTable({ items, hidden, pinning, onPinningChange, onInvoice, glo
       globalFilter={globalFilter}
       getRowKey={(item) => item.sale_id}
       emptyMessage="매출 데이터가 없습니다"
-      pageSize={50}
+      pageSize={serverMode ? undefined : 50}
+      serverMode={serverMode}
     />
   );
 }

@@ -2,14 +2,14 @@
 // 9가지 알림 계산, 5분 자동 갱신, 법인 변경 시 즉시 재조회
 
 import { useQuery } from '@tanstack/react-query';
-import { fetchWithAuth } from '@/lib/api';
-import { fetchCalc, companyQueryUrl } from '@/lib/companyUtils';
+import { fetchAllPaginated } from '@/lib/api';
+import { fetchCalc } from '@/lib/companyUtils';
 import type { InventoryResponse } from '@/types/inventory';
 import type { BLShipment } from '@/types/inbound';
 import type { Order } from '@/types/orders';
 import type { AlertItem } from '@/types/alerts';
 import type { LCLimitTimeline, LCMaturityAlert } from '@/types/banking';
-import type { Outbound } from '@/types/outbound';
+import type { Outbound, Sale } from '@/types/outbound';
 
 interface CustomerAnalysisAlertItem {
   customer_id?: string;
@@ -101,10 +101,10 @@ async function loadAlerts(companyId: string): Promise<AlertItem[]> {
     fetchCalc<LCLimitTimeline>(companyId, '/api/v1/calc/lc-limit-timeline', { months_ahead: 3 }, mergeTimeline),
     fetchCalc<CustomerAnalysis | LegacyCustomerAnalysis>(companyId, '/api/v1/calc/customer-analysis', {}, (rs) => mergeCustomer(rs as CustomerAnalysis[])),
     fetchCalc<InventoryResponse>(companyId, '/api/v1/calc/inventory', {}),
-    fetchWithAuth<BLShipment[]>(companyQueryUrl('/api/v1/bls', companyId)),
-    fetchWithAuth<Order[]>(companyQueryUrl('/api/v1/orders', companyId)),
-    fetchWithAuth<Outbound[]>(companyQueryUrl('/api/v1/outbounds', companyId)),
-    fetchWithAuth<Sale[]>(companyQueryUrl('/api/v1/sales', companyId)),
+    fetchAllPaginated<BLShipment>('/api/v1/bls', companyId ? `company_id=${companyId}` : ''),
+    fetchAllPaginated<Order>('/api/v1/orders', companyId ? `company_id=${companyId}` : ''),
+    fetchAllPaginated<Outbound>('/api/v1/outbounds', companyId ? `company_id=${companyId}` : ''),
+    fetchAllPaginated<Sale>('/api/v1/sales', companyId ? `company_id=${companyId}` : ''),
   ]);
 
   const [matResult, tlResult, custResult, invResult, blResult, orderResult, outResult, saleResult] = results;

@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -14,6 +16,23 @@ import (
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
+
+const (
+	orderDefaultLimit = 100
+	orderMaxLimit     = 1000
+)
+
+var orderSortable = map[string]struct{}{
+	"order_date":          {},
+	"order_number":        {},
+	"site_name":           {},
+	"quantity":            {},
+	"capacity_kw":         {},
+	"unit_price_wp":       {},
+	"status":              {},
+	"management_category": {},
+	"created_at":          {},
+}
 
 // OrderHandler — 수주(orders) 관련 API를 처리하는 핸들러
 // 비유: "수주 관리실" — 고객별 판매 주문서를 관리
@@ -26,44 +45,117 @@ func NewOrderHandler(db *supa.Client) *OrderHandler {
 	return &OrderHandler{DB: db}
 }
 
-// List — GET /api/v1/orders — 수주 목록 조회
-// 비유: 수주 관리실에서 전체 주문서를 꺼내 보여주는 것
-// TODO: delivery_due 범위 필터 추가 (대시보드 출고 예정 알림용)
-func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("orders").
-		Select("*", "exact", false)
+// idsByName — partners/products 이름 ilike 매칭으로 id 후보 끌어와 주문 q 검색에 사용.
+func (h *OrderHandler) idsByName(table, idCol, nameCol, q string) ([]string, error) {
+	data, _, err := h.DB.From(table).
+		Select(idCol, "exact", false).
+		Ilike(nameCol, "*"+q+"*").
+		Execute()
+	if err != nil {
+		return nil, err
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if v, ok := row[idCol].(string); ok {
+			ids = append(ids, v)
+		}
+	}
+	return ids, nil
+}
 
-	// 비유: ?company_id=xxx — 특정 법인의 수주만 필터
+func sanitizeOrderSearchTerm(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(",", " ", "(", " ", ")", " ", ".", " ", "*", " ", "\"", " ")
+	return strings.TrimSpace(replacer.Replace(q))
+}
+
+// applyOrderFilters — List/Summary 가 공유하는 필터 로직.
+func (h *OrderHandler) applyOrderFilters(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
 		query = query.Eq("company_id", compID)
 	}
-
-	// 비유: ?customer_id=xxx — 특정 고객의 수주만 필터
 	if custID := r.URL.Query().Get("customer_id"); custID != "" {
 		query = query.Eq("customer_id", custID)
 	}
-
-	// 비유: ?status=received — 특정 상태의 수주만 필터
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
 	}
-
-	// 비유: ?product_id=xxx — 특정 품번의 수주만 필터
 	if prodID := r.URL.Query().Get("product_id"); prodID != "" {
 		query = query.Eq("product_id", prodID)
 	}
-
-	// 비유: ?management_category=sale — 관리구분 필터
 	if mgmtCat := r.URL.Query().Get("management_category"); mgmtCat != "" {
 		query = query.Eq("management_category", mgmtCat)
 	}
-
-	// 비유: ?fulfillment_source=stock — 충당 소스 필터
 	if source := r.URL.Query().Get("fulfillment_source"); source != "" {
 		query = query.Eq("fulfillment_source", source)
 	}
 
-	data, _, err := query.Execute()
+	if q := sanitizeOrderSearchTerm(r.URL.Query().Get("q")); q != "" {
+		clauses := []string{
+			fmt.Sprintf("order_number.ilike.*%s*", q),
+			fmt.Sprintf("site_name.ilike.*%s*", q),
+		}
+		// 거래처 이름 → customer_id 후보
+		if ids, err := h.idsByName("partners", "partner_id", "partner_name", q); err == nil && len(ids) > 0 {
+			clauses = append(clauses, fmt.Sprintf("customer_id.in.(%s)", strings.Join(ids, ",")))
+		}
+		// 품번/품명 → product_id 후보
+		if ids, err := h.idsByName("products", "product_id", "product_code", q); err == nil && len(ids) > 0 {
+			clauses = append(clauses, fmt.Sprintf("product_id.in.(%s)", strings.Join(ids, ",")))
+		}
+		if ids, err := h.idsByName("products", "product_id", "product_name", q); err == nil && len(ids) > 0 {
+			clauses = append(clauses, fmt.Sprintf("product_id.in.(%s)", strings.Join(ids, ",")))
+		}
+		query = query.Or(strings.Join(clauses, ","), "")
+	}
+
+	return query, true, nil
+}
+
+func parseOrderSort(r *http.Request) (column string, ascending bool) {
+	column = "order_date"
+	ascending = false
+	if raw := r.URL.Query().Get("sort"); raw != "" {
+		if _, ok := orderSortable[raw]; ok {
+			column = raw
+		}
+	}
+	if r.URL.Query().Get("order") == "asc" {
+		ascending = true
+	}
+	return column, ascending
+}
+
+// List — GET /api/v1/orders — 수주 목록 조회 (서버사이드 페이지·검색·정렬).
+// q 검색 대상: order_number, site_name, 거래처(partner_name), 품번/품명(product_code/name).
+func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
+	query := h.DB.From("orders").Select("*", "exact", false)
+	query, ok, err := h.applyOrderFilters(r, query)
+	if err != nil {
+		log.Printf("[수주 목록 필터 처리 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "수주 목록 필터 처리에 실패했습니다")
+		return
+	}
+	if !ok {
+		w.Header().Set("X-Total-Count", "0")
+		response.RespondJSON(w, http.StatusOK, []model.Order{})
+		return
+	}
+
+	sortCol, asc := parseOrderSort(r)
+	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
+
+	limit, offset := parseLimitOffset(r, orderDefaultLimit, orderMaxLimit)
+	query = query.Range(offset, offset+limit-1, "")
+
+	data, count, err := query.Execute()
 	if err != nil {
 		log.Printf("[수주 목록 조회 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "수주 목록 조회에 실패했습니다")
@@ -78,7 +170,56 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	h.enrichOrders(orders)
 
+	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, orders)
+}
+
+// OrderSummary — 수주 KPI 카드 응답.
+type OrderSummary struct {
+	Total           int64 `json:"total"`
+	ReceivedCount   int64 `json:"received_count"`
+	PartialCount    int64 `json:"partial_count"`
+	CompletedCount  int64 `json:"completed_count"`
+	CancelledCount  int64 `json:"cancelled_count"`
+}
+
+// Summary — GET /api/v1/orders/summary — 수주 status 별 카운트 집계.
+func (h *OrderHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	totalQ := h.DB.From("orders").Select("order_id", "exact", true)
+	totalQ, ok, err := h.applyOrderFilters(r, totalQ)
+	if err != nil {
+		log.Printf("[수주 요약 필터 처리 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "수주 요약 필터 처리에 실패했습니다")
+		return
+	}
+	if !ok {
+		response.RespondJSON(w, http.StatusOK, OrderSummary{})
+		return
+	}
+	summary := OrderSummary{}
+	if _, count, err := totalQ.Range(0, 0, "").Execute(); err == nil {
+		summary.Total = count
+	}
+	for _, st := range []struct {
+		key    string
+		target *int64
+	}{
+		{"received", &summary.ReceivedCount},
+		{"partial", &summary.PartialCount},
+		{"completed", &summary.CompletedCount},
+		{"cancelled", &summary.CancelledCount},
+	} {
+		q := h.DB.From("orders").Select("order_id", "exact", true)
+		q, ok2, err := h.applyOrderFilters(r, q)
+		if err != nil || !ok2 {
+			continue
+		}
+		q = q.Eq("status", st.key)
+		if _, c, err := q.Range(0, 0, "").Execute(); err == nil {
+			*st.target = c
+		}
+	}
+	response.RespondJSON(w, http.StatusOK, summary)
 }
 
 // GetByID — GET /api/v1/orders/{id} — 수주 상세 조회

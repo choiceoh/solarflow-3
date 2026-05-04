@@ -247,7 +247,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxOrder: {
 		ID: IDTxOrder, Name: "수주", Description: "수주 CRUD",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/orders/", "/api/v1/orders/{id}"},
+		Paths: []string{"/api/v1/orders/", "/api/v1/orders/summary", "/api/v1/orders/{id}"},
 	},
 	IDTxOutbound: {
 		ID: IDTxOutbound, Name: "출고", Description: "출고 CRUD",
@@ -257,7 +257,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxSale: {
 		ID: IDTxSale, Name: "매출", Description: "매출 CRUD",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/sales/", "/api/v1/sales/{id}"},
+		Paths: []string{"/api/v1/sales/", "/api/v1/sales/summary", "/api/v1/sales/{id}"},
 	},
 	IDTxReceipt: {
 		ID: IDTxReceipt, Name: "수금", Description: "수금 CRUD",
@@ -281,7 +281,7 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDTxBL, Name: "B/L 입고", Description: "B/L + 라인",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{
-			"/api/v1/bls/", "/api/v1/bls/{id}",
+			"/api/v1/bls/", "/api/v1/bls/summary", "/api/v1/bls/{id}",
 			"/api/v1/bls/{blId}/lines/", "/api/v1/bls/{blId}/lines/{id}",
 		},
 	},

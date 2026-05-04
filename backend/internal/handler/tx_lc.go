@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
@@ -57,7 +58,8 @@ func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("status", status)
 	}
 
-	data, _, err := query.Execute()
+	limit, offset := parseLimitOffset(r, 100, 1000)
+	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[LC 목록 조회 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "LC 목록 조회에 실패했습니다")
@@ -72,6 +74,7 @@ func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// manufacturer_id는 lc_records 컬럼이 아니라 purchase_orders join 으로 따라오므로 fetch 후 필터.
+	// 주의: 페이지네이션과 호환 안 됨 — 페이지마다 결과 수 가변. 호환을 위해 호출자는 q+sort 검색 사용 권장.
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
 		filtered := records[:0]
 		for _, rec := range records {
@@ -82,6 +85,7 @@ func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
 		records = filtered
 	}
 
+	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, records)
 }
 

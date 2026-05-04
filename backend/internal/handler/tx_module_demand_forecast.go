@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
@@ -39,7 +40,8 @@ func (h *ModuleDemandForecastHandler) List(w http.ResponseWriter, r *http.Reques
 		q = q.Lte("demand_month", to)
 	}
 
-	data, _, err := q.Execute()
+	limit, offset := parseLimitOffset(r, 100, 1000)
+	data, count, err := q.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[모듈 수요 forecast 목록 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "모듈 수요 forecast 조회에 실패했습니다")
@@ -53,6 +55,7 @@ func (h *ModuleDemandForecastHandler) List(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, items)
 }
 
