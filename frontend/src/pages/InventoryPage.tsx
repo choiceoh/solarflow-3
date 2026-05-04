@@ -759,8 +759,8 @@ export default function InventoryPage() {
           {[
             { label: 'USD/KRW', value: '1,773.4', delta: '+0.06%', up: true },
             { label: 'CNY/KRW', value: '244.18', delta: '-0.12%', up: false },
-            { label: 'JKO 주가', value: '$28.84', delta: '-1.42%', up: false },
-            { label: '폴리실리콘', value: '34.20', delta: '+0.40%', up: true },
+            { label: '은 가격', value: '$33.45', delta: '-0.82%', up: false },
+            { label: '구리 가격', value: '$4.28', delta: '+0.55%', up: true },
           ].map((market) => (
             <div key={market.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '5px 0', fontSize: 11.5 }}>
               <span style={{ color: 'var(--ink-2)' }}>{market.label}</span>
