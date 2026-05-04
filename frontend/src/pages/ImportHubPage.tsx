@@ -1,10 +1,13 @@
-import { useCallback, useState } from 'react';
-import { Database, Download, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Database, Download, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
+import UnifiedImportDialog from '@/components/excel/UnifiedImportDialog';
+import UnifiedImportResultDialog from '@/components/excel/UnifiedImportResultDialog';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { useAuth } from '@/hooks/useAuth';
 import { useExcel } from '@/hooks/useExcel';
+import { useUnifiedExcel } from '@/hooks/useUnifiedExcel';
 import { notify } from '@/lib/notify';
 import type { TemplateType } from '@/types/excel';
 
@@ -44,6 +47,11 @@ export default function ImportHubPage() {
   const [downloading, setDownloading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // 통합 업로드 — 한 파일로 8섹션 동시 처리
+  const unified = useUnifiedExcel();
+  const unifiedInputRef = useRef<HTMLInputElement>(null);
+  const unifiedDisabled = !unified.masterData || unified.loading;
+
   const handleUnifiedDownload = useCallback(async () => {
     if (!masterData) return;
     setDownloading(true);
@@ -69,6 +77,19 @@ export default function ImportHubPage() {
     }
   }, []);
 
+  const handleUnifiedUploadPick = useCallback((file: File) => {
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      notify.error('엑셀 파일(.xlsx, .xls)만 업로드 가능합니다');
+      return;
+    }
+    unified.uploadFile(file);
+  }, [unified]);
+
+  // 통합 훅의 에러 상태를 토스트로 노출 — 다이얼로그 미오픈 상황에서도 보이도록.
+  useEffect(() => {
+    if (unified.error) notify.error(unified.error);
+  }, [unified.error]);
+
   return (
     <MasterConsole
       eyebrow="IMPORT HUB"
@@ -88,6 +109,29 @@ export default function ImportHubPage() {
             {downloading || loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             통합 양식 다운로드
           </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            disabled={unifiedDisabled}
+            onClick={() => unifiedInputRef.current?.click()}
+            title="통합 양식 한 파일로 8섹션을 한 번에 업로드합니다"
+          >
+            {unified.loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            통합 양식 업로드
+          </Button>
+          <input
+            ref={unifiedInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleUnifiedUploadPick(file);
+              e.target.value = '';
+            }}
+          />
           {isAdmin && (
             <Button
               type="button"
@@ -135,6 +179,18 @@ export default function ImportHubPage() {
           </section>
         ))}
       </div>
+
+      <UnifiedImportDialog
+        preview={unified.preview}
+        loading={unified.loading}
+        onClose={unified.clearPreview}
+        onSubmit={unified.submitAll}
+      />
+
+      <UnifiedImportResultDialog
+        result={unified.submitResult}
+        onClose={unified.clearSubmitResult}
+      />
     </MasterConsole>
   );
 }
