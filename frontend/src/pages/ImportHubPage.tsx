@@ -195,11 +195,6 @@ export default function ImportHubPage() {
 
         <TabsContent value="external" className="mt-4">
           <section className="space-y-3">
-            <div className="eyebrow">외부 양식 변환</div>
-            <p className="text-[12px] text-[var(--ink-3)]">
-              협력사·그룹사에서 받은 비표준 엑셀을 SolarFlow 표준 양식으로 자동 변환합니다.
-              변환 후 표준 검증 단계(법인·품번·창고 매칭)로 자동 연결됩니다.
-            </p>
             <div className="grid gap-2">
               {EXTERNAL_FORMATS.map((fmt) => (
                 <ExternalFormatCard key={fmt.id} format={fmt} />
