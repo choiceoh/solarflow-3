@@ -52,9 +52,11 @@
 |---|---|---|---|
 | `master.bank` | 은행 마스터 | ★ | global |
 | `master.company` | 법인 마스터 | ★ | global |
+| `master.company_alias` | 법인 별칭 | ★ | global |
 | `master.manufacturer` | 제조사 마스터 | ★ | global |
 | `master.partner` | 거래처 마스터 | ★ | global |
 | `master.product` | 품번 마스터 | ★ | global |
+| `master.product_alias` | 품번 별칭 | ★ | global |
 | `master.warehouse` | 창고 마스터 | ★ | global |
 | `master.construction_site` | 공사현장 마스터 | ★ | global |
 

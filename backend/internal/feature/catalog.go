@@ -76,9 +76,11 @@ const (
 	// ---- master.* (all tenants) ----
 	IDMasterBank             FeatureID = "master.bank"
 	IDMasterCompany          FeatureID = "master.company"
+	IDMasterCompanyAlias     FeatureID = "master.company_alias"
 	IDMasterManufacturer     FeatureID = "master.manufacturer"
 	IDMasterPartner          FeatureID = "master.partner"
 	IDMasterProduct          FeatureID = "master.product"
+	IDMasterProductAlias     FeatureID = "master.product_alias"
 	IDMasterWarehouse        FeatureID = "master.warehouse"
 	IDMasterConstructionSite FeatureID = "master.construction_site"
 
@@ -179,6 +181,11 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/companies/{id}/status",
 		},
 	},
+	IDMasterCompanyAlias: {
+		ID: IDMasterCompanyAlias, Name: "법인 별칭", Description: "법인명 별칭 매핑(외부 양식 변환기 매핑)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/company-aliases/"},
+	},
 	IDMasterManufacturer: {
 		ID: IDMasterManufacturer, Name: "제조사 마스터", Description: "제조사 마스터 CRUD",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
@@ -202,6 +209,11 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/products/", "/api/v1/products/{id}",
 			"/api/v1/products/{id}/status",
 		},
+	},
+	IDMasterProductAlias: {
+		ID: IDMasterProductAlias, Name: "품번 별칭", Description: "품번 별칭 매핑(외부 양식 변환기 매핑)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/product-aliases/"},
 	},
 	IDMasterWarehouse: {
 		ID: IDMasterWarehouse, Name: "창고 마스터", Description: "창고 마스터 CRUD",

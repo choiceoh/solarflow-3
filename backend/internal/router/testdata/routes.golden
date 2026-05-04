@@ -50,6 +50,7 @@ GET     /api/v1/bls/{blId}/lines/
 GET     /api/v1/bls/{id}
 GET     /api/v1/companies/
 GET     /api/v1/companies/{id}
+GET     /api/v1/company-aliases/
 GET     /api/v1/construction-sites/
 GET     /api/v1/construction-sites/{id}
 GET     /api/v1/cost-details/
@@ -98,6 +99,7 @@ GET     /api/v1/pos/{id}
 GET     /api/v1/pos/{poId}/lines/
 GET     /api/v1/price-histories/
 GET     /api/v1/price-histories/{id}
+GET     /api/v1/product-aliases/
 GET     /api/v1/products/
 GET     /api/v1/products/{id}
 GET     /api/v1/public/fx/{pair}
@@ -171,6 +173,7 @@ POST    /api/v1/calc/receipt-match-suggest
 POST    /api/v1/calc/search
 POST    /api/v1/calc/supply-forecast
 POST    /api/v1/companies/
+POST    /api/v1/company-aliases/
 POST    /api/v1/construction-sites/
 POST    /api/v1/cost-details/
 POST    /api/v1/declarations/
@@ -203,6 +206,7 @@ POST    /api/v1/partners/
 POST    /api/v1/pos/
 POST    /api/v1/pos/{poId}/lines/
 POST    /api/v1/price-histories/
+POST    /api/v1/product-aliases/
 POST    /api/v1/products/
 POST    /api/v1/public/assistant/chat
 POST    /api/v1/receipt-matches/
