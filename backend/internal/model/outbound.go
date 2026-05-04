@@ -25,6 +25,8 @@ type Outbound struct {
 	ProductID         string           `json:"product_id"`
 	ProductName       *string          `json:"product_name,omitempty"`
 	ProductCode       *string          `json:"product_code,omitempty"`
+	ManufacturerID    *string          `json:"manufacturer_id,omitempty"`
+	ManufacturerName  *string          `json:"manufacturer_name,omitempty"`
 	SpecWp            *float64         `json:"spec_wp,omitempty"`
 	WattageKw         *float64         `json:"wattage_kw,omitempty"`
 	Quantity          int              `json:"quantity"`
