@@ -9,7 +9,7 @@ import type { BLShipment } from '@/types/inbound';
 import type { Order } from '@/types/orders';
 import type { AlertItem } from '@/types/alerts';
 import type { LCLimitTimeline, LCMaturityAlert } from '@/types/banking';
-import type { Outbound, Sale } from '@/types/outbound';
+import type { Outbound } from '@/types/outbound';
 
 interface CustomerAnalysisAlertItem {
   customer_id?: string;
