@@ -47,12 +47,13 @@ export function useLCList(filters: { status?: string; bank_id?: string; po_id?: 
       if (filters.bank_id) params.set('bank_id', filters.bank_id);
       if (filters.po_id) params.set('po_id', filters.po_id);
       if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id);
-      const raw = await fetchWithAuth<Array<LCRecord & { banks?: { bank_name?: string }; companies?: { company_name?: string }; purchase_orders?: { po_number?: string } }>>(`/api/v1/lcs?${params}`);
+      const raw = await fetchWithAuth<Array<LCRecord & { banks?: { bank_name?: string }; companies?: { company_name?: string }; purchase_orders?: { po_number?: string; manufacturer_id?: string }; manufacturer_id?: string }>>(`/api/v1/lcs?${params}`);
       return raw.map((r) => ({
         ...r,
         bank_name: r.bank_name ?? r.banks?.bank_name,
         company_name: r.company_name ?? r.companies?.company_name,
         po_number: r.po_number ?? r.purchase_orders?.po_number,
+        manufacturer_id: r.manufacturer_id ?? r.purchase_orders?.manufacturer_id,
       }));
     },
     { enabled: !!selectedCompanyId },

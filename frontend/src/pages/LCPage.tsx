@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/stores/appStore';
 import { useLCList } from '@/hooks/useProcurement';
 import { useFxTimeseries } from '@/hooks/usePublicFx';
@@ -23,12 +23,15 @@ export default function LCPage() {
   const [selectedBL, setSelectedBL] = useState<string | null>(null);
   const [blsVersion, setBlsVersion] = useState(0);
 
-  const filters: Record<string, string> = {};
-  if (statusFilter) filters.status = statusFilter;
-  if (bankFilter) filters.bank_id = bankFilter;
-  const { data: lcs, loading, reload } = useLCList(filters);
+  // 칩 필터는 모두 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
+  const { data: lcs, loading, reload } = useLCList();
 
-  const filtered = companyFilter ? lcs.filter((l) => l.company_id === companyFilter) : lcs;
+  const filtered = useMemo(() => lcs.filter((l) => {
+    if (statusFilter && l.status !== statusFilter) return false
+    if (bankFilter && l.bank_id !== bankFilter) return false
+    if (companyFilter && l.company_id !== companyFilter) return false
+    return true
+  }), [lcs, statusFilter, bankFilter, companyFilter]);
 
   // ECOS 매매기준율 30일 — L/C 개설 시 시장 환율 추이 참고용 (실제 개설가는 거래은행 전신환매도율).
   const { data: fx } = useFxTimeseries('usdkrw', 30);

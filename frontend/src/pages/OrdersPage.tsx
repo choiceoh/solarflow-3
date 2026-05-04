@@ -155,21 +155,30 @@ export default function OrdersPage() {
   const saleColPin = useColumnPinning(SALE_TABLE_ID);
   const receiptColVis = useColumnVisibility(RECEIPT_TABLE_ID, RECEIPT_COLUMN_META);
   const receiptColPin = useColumnPinning(RECEIPT_TABLE_ID);
-  const obFilters: { status?: string; usage_category?: string; manufacturer_id?: string } = {};
-  if (obStatusFilter) obFilters.status = obStatusFilter;
-  if (obUsageFilter) obFilters.usage_category = obUsageFilter;
-  if (obMfgFilter) obFilters.manufacturer_id = obMfgFilter;
-  const { data: outbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundList(obFilters);
+  // 칩 필터는 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
+  const { data: allOutbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundList();
+
+  const outbounds = useMemo(() => allOutbounds.filter((o) => {
+    if (obStatusFilter && o.status !== obStatusFilter) return false
+    if (obUsageFilter && o.usage_category !== obUsageFilter) return false
+    if (obMfgFilter && o.manufacturer_id !== obMfgFilter) return false
+    return true
+  }), [allOutbounds, obStatusFilter, obUsageFilter, obMfgFilter]);
 
   // 탭 3: 판매
   const [saleCustomerFilter, setSaleCustomerFilter] = useState('');
   const [saleMonthFilter, setSaleMonthFilter] = useState('');
   const [saleInvoiceFilter, setSaleInvoiceFilter] = useState('');
-  const saleFilters: { customer_id?: string; month?: string; invoice_status?: string } = {};
-  if (saleCustomerFilter) saleFilters.customer_id = saleCustomerFilter;
-  if (saleMonthFilter) saleFilters.month = saleMonthFilter;
-  if (saleInvoiceFilter) saleFilters.invoice_status = saleInvoiceFilter;
-  const { data: sales, loading: saleLoading, reload: reloadSales } = useSaleList(saleFilters);
+  const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleList();
+
+  const sales = useMemo(() => allSales.filter((s) => {
+    if (saleCustomerFilter && s.customer_id !== saleCustomerFilter) return false
+    const taxDate = s.tax_invoice_date ?? s.sale?.tax_invoice_date ?? null
+    if (saleMonthFilter && (!taxDate || !taxDate.startsWith(saleMonthFilter))) return false
+    if (saleInvoiceFilter === 'issued' && !taxDate) return false
+    if (saleInvoiceFilter === 'pending' && taxDate) return false
+    return true
+  }), [allSales, saleCustomerFilter, saleMonthFilter, saleInvoiceFilter]);
 
   // 탭 4: 수금
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState('');
