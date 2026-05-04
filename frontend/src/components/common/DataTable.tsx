@@ -9,6 +9,13 @@ export interface Column<T> {
   label: string;
   sortable?: boolean;
   render?: (row: T) => ReactNode;
+  /** 헤더 셀 커스텀 렌더 — 모두선택 체크박스 등. 지정 시 label 대신 사용. */
+  headerCell?: () => ReactNode;
+  /** 기본 폭(px). 좁은 셀렉트 컬럼처럼 고정 폭이 필요할 때 사용. */
+  defaultWidth?: number;
+  resizable?: boolean;
+  reorderable?: boolean;
+  pinnable?: boolean;
   summary?: TableSummaryMode;
   summaryAccessor?: (row: T) => number | null | undefined;
   summaryFormatter?: (value: number, rows: T[]) => ReactNode;
@@ -72,7 +79,12 @@ export default function DataTable<T extends object>({
       key: col.key,
       label: col.label,
       cell: (row) => (col.render ? col.render(row) : String(getCellValue(row, col.key) ?? '—')),
+      headerCell: col.headerCell,
       sortAccessor: col.sortable ? (row) => getSortValue(row, col.key) : undefined,
+      defaultWidth: col.defaultWidth,
+      resizable: col.resizable,
+      reorderable: col.reorderable,
+      pinnable: col.pinnable,
       summary: col.summary,
       summaryAccessor: col.summaryAccessor,
       summaryFormatter: col.summaryFormatter,
