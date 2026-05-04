@@ -94,21 +94,21 @@ func (h *ExportHandler) FullDataDump(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	txTables := []struct {
+	// company_id 컬럼이 직접 있는 테이블만 .In("company_id", ...) 으로 처리.
+	// sales/receipts 는 company_id 가 없어 별도 경로로 매핑한다 (아래).
+	companyScoped := []struct {
 		label  string
 		table  string
 		target *json.RawMessage
 	}{
 		{"수주", "orders", &dump.Orders},
 		{"출고", "outbounds", &dump.Outbounds},
-		{"매출", "sales", &dump.Sales},
-		{"수금", "receipts", &dump.Receipts},
 		{"입고", "bl_shipments", &dump.Bls},
 		{"면장", "import_declarations", &dump.Declarations},
 		{"부대비용", "incidental_expenses", &dump.Expenses},
 	}
 
-	for _, t := range txTables {
+	for _, t := range companyScoped {
 		data, _, err := h.DB.From(t.table).
 			Select("*", "exact", false).
 			In("company_id", companyIDs).
@@ -124,7 +124,136 @@ func (h *ExportHandler) FullDataDump(w http.ResponseWriter, r *http.Request) {
 		*t.target = json.RawMessage(data)
 	}
 
+	// sales: company_id 없음 → 이 테넌트의 order_id / outbound_id 로 연결.
+	orderIDs, err := extractStringField(dump.Orders, "order_id")
+	if err != nil {
+		log.Printf("[전체 데이터 덤프] 수주 ID 추출 실패: scope=%s err=%v", scope, err)
+		response.RespondError(w, http.StatusInternalServerError, "매출 조회에 실패했습니다")
+		return
+	}
+	outboundIDs, err := extractStringField(dump.Outbounds, "outbound_id")
+	if err != nil {
+		log.Printf("[전체 데이터 덤프] 출고 ID 추출 실패: scope=%s err=%v", scope, err)
+		response.RespondError(w, http.StatusInternalServerError, "매출 조회에 실패했습니다")
+		return
+	}
+
+	salesData, err := h.fetchTenantSales(orderIDs, outboundIDs)
+	if err != nil {
+		log.Printf("[전체 데이터 덤프] 매출 조회 실패: scope=%s err=%v", scope, err)
+		response.RespondError(w, http.StatusInternalServerError, "매출 조회에 실패했습니다")
+		return
+	}
+	dump.Sales = salesData
+
+	// receipts: company_id 없음 → receipt_matches.outbound_id 경유로 receipt_id 모은 뒤 조회.
+	// orphan receipt(매칭 없는 입금건)는 테넌트 식별 불가 → 누락 (D-108 분리 우선).
+	receiptsData, err := h.fetchTenantReceipts(outboundIDs)
+	if err != nil {
+		log.Printf("[전체 데이터 덤프] 수금 조회 실패: scope=%s err=%v", scope, err)
+		response.RespondError(w, http.StatusInternalServerError, "수금 조회에 실패했습니다")
+		return
+	}
+	dump.Receipts = receiptsData
+
 	response.RespondJSON(w, http.StatusOK, dump)
+}
+
+// extractStringField — raw JSON 배열에서 지정한 필드 값(문자열)만 모아 중복 제거 후 반환.
+// 비유: 명함첩에서 회사 ID 도장만 골라 한 줄로 늘어놓는다.
+func extractStringField(raw json.RawMessage, key string) ([]string, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var rows []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(rows))
+	seen := make(map[string]struct{}, len(rows))
+	for _, row := range rows {
+		v, ok := row[key]
+		if !ok {
+			continue
+		}
+		var s string
+		if err := json.Unmarshal(v, &s); err != nil {
+			continue
+		}
+		if s == "" {
+			continue
+		}
+		if _, dup := seen[s]; dup {
+			continue
+		}
+		seen[s] = struct{}{}
+		ids = append(ids, s)
+	}
+	return ids, nil
+}
+
+// fetchTenantSales — sales 는 order_id 또는 outbound_id 로 테넌트 연결 (migration 026 이후).
+// 두 컬럼 중 어느 한쪽이라도 이 테넌트에 속하면 포함 — PostgREST or 필터로 합집합.
+func (h *ExportHandler) fetchTenantSales(orderIDs, outboundIDs []string) (json.RawMessage, error) {
+	if len(orderIDs) == 0 && len(outboundIDs) == 0 {
+		return json.RawMessage("[]"), nil
+	}
+
+	clauses := make([]string, 0, 2)
+	if len(orderIDs) > 0 {
+		clauses = append(clauses, "order_id.in.("+strings.Join(orderIDs, ",")+")")
+	}
+	if len(outboundIDs) > 0 {
+		clauses = append(clauses, "outbound_id.in.("+strings.Join(outboundIDs, ",")+")")
+	}
+
+	data, _, err := h.DB.From("sales").
+		Select("*", "exact", false).
+		Or(strings.Join(clauses, ","), "").
+		Execute()
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		data = []byte("[]")
+	}
+	return json.RawMessage(data), nil
+}
+
+// fetchTenantReceipts — receipts 는 company_id 가 없어 receipt_matches 경유로 우회.
+// 이 테넌트의 outbound 와 매칭된 수금만 포함; 매칭 없는 receipt(orphan)는 식별 불가로 제외.
+func (h *ExportHandler) fetchTenantReceipts(outboundIDs []string) (json.RawMessage, error) {
+	if len(outboundIDs) == 0 {
+		return json.RawMessage("[]"), nil
+	}
+
+	matchData, _, err := h.DB.From("receipt_matches").
+		Select("receipt_id", "exact", false).
+		In("outbound_id", outboundIDs).
+		Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	receiptIDs, err := extractStringField(matchData, "receipt_id")
+	if err != nil {
+		return nil, err
+	}
+	if len(receiptIDs) == 0 {
+		return json.RawMessage("[]"), nil
+	}
+
+	data, _, err := h.DB.From("receipts").
+		Select("*", "exact", false).
+		In("receipt_id", receiptIDs).
+		Execute()
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		data = []byte("[]")
+	}
+	return json.RawMessage(data), nil
 }
 
 // tenantScopedCompanies — 호출 사용자의 테넌트 스코프에 속한 법인 raw JSON과 ID 목록을 반환.
