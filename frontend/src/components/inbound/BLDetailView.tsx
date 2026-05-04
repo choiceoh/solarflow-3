@@ -166,11 +166,22 @@ export default function BLDetailView({ blId, onBack }: Props) {
 
         <TabsContent value="basic">
           <div className="space-y-4">
-            <MetaDetailBody config={blShipmentDetailConfig} data={{
-              ...bl,
-              // 공급사 짧은 이름 + 별도 lookup 보강
-              manufacturer_name: shortMfgName(manufacturerName || bl.manufacturer_name),
-            } as Record<string, unknown>} />
+            <MetaDetailBody
+              config={blShipmentDetailConfig}
+              data={{
+                ...bl,
+                // 공급사 짧은 이름 + 별도 lookup 보강
+                manufacturer_name: shortMfgName(manufacturerName || bl.manufacturer_name),
+              } as Record<string, unknown>}
+              onInlineSave={async (key, value) => {
+                await fetchWithAuth(`/api/v1/bls/${blId}`, {
+                  method: 'PUT',
+                  body: JSON.stringify({ [key]: value }),
+                });
+                notify.success('수정되었습니다');
+                reloadBL();
+              }}
+            />
 
             {lines.length > 0 && (() => {
               const totalQty = lines.reduce((s, l) => s + l.quantity, 0);
