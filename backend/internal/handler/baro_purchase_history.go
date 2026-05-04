@@ -88,20 +88,10 @@ type baroPurchaseWarehouseRow struct {
 	WarehouseName string `json:"warehouse_name"`
 }
 
-// List — GET /api/v1/baro/purchase-history — BARO 자체 매입 원가/구매이력
-func (h *BaroPurchaseHistoryHandler) List(w http.ResponseWriter, r *http.Request) {
-	baroCompany, ok := h.baroPurchaseCompany()
-	if !ok {
-		response.RespondJSON(w, http.StatusOK, []model.BaroPurchaseHistoryItem{})
-		return
-	}
-
-	limit := baroPurchaseLimit(r)
+func (h *BaroPurchaseHistoryHandler) baroPurchaseShipmentQuery(companyID string, r *http.Request) *postgrest.FilterBuilder {
 	q := h.DB.From("bl_shipments").
 		Select("bl_id, bl_number, po_id, company_id, manufacturer_id, inbound_type, currency, exchange_rate, etd, eta, actual_arrival, port, warehouse_id, status, payment_terms, incoterms, counterpart_company_id", "exact", false).
-		Eq("company_id", baroCompany.CompanyID).
-		Order("actual_arrival", &postgrest.OrderOpts{Ascending: false}).
-		Limit(limit, "")
+		Eq("company_id", companyID)
 	if status := r.URL.Query().Get("status"); status != "" {
 		q = q.Eq("status", status)
 	}
@@ -114,8 +104,24 @@ func (h *BaroPurchaseHistoryHandler) List(w http.ResponseWriter, r *http.Request
 	if to := r.URL.Query().Get("to"); to != "" {
 		q = q.Lte("actual_arrival", to)
 	}
+	return q
+}
 
-	shipData, _, err := q.Execute()
+// List — GET /api/v1/baro/purchase-history — BARO 자체 매입 원가/구매이력
+func (h *BaroPurchaseHistoryHandler) List(w http.ResponseWriter, r *http.Request) {
+	baroCompany, ok := h.baroPurchaseCompany()
+	if !ok {
+		response.RespondJSON(w, http.StatusOK, []model.BaroPurchaseHistoryItem{})
+		return
+	}
+
+	limit := baroPurchaseLimit(r)
+	offset := baroPurchaseOffset(r)
+	q := h.baroPurchaseShipmentQuery(baroCompany.CompanyID, r).
+		Order("actual_arrival", &postgrest.OrderOpts{Ascending: false}).
+		Range(offset, offset+limit-1, "")
+
+	shipData, count, err := q.Execute()
 	if err != nil {
 		log.Printf("[BARO 구매이력 B/L 조회 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "BARO 구매이력 조회에 실패했습니다")
@@ -230,7 +236,150 @@ func (h *BaroPurchaseHistoryHandler) List(w http.ResponseWriter, r *http.Request
 	sort.SliceStable(items, func(i, j int) bool {
 		return baroPurchaseDateSort(items[i].PurchaseDate) > baroPurchaseDateSort(items[j].PurchaseDate)
 	})
+	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, items)
+}
+
+type BaroPurchaseHistorySummary struct {
+	Total            int64            `json:"total"`
+	ShipmentCount    int64            `json:"shipment_count"`
+	TotalQuantity    int64            `json:"total_quantity"`
+	TotalCapacityKW  float64          `json:"total_capacity_kw"`
+	AverageKRWWp     *float64         `json:"average_krw_wp,omitempty"`
+	AverageUSDWp     *float64         `json:"average_usd_wp,omitempty"`
+	TotalAmountKRW   float64          `json:"total_amount_krw"`
+	TotalAmountUSD   float64          `json:"total_amount_usd"`
+	CostCoveredCount int64            `json:"cost_covered_count"`
+	ByInboundType    map[string]int64 `json:"by_inbound_type"`
+	ByStatus         map[string]int64 `json:"by_status"`
+}
+
+func baroPurchaseCostFilterMatches(line baroPurchaseLineRow, ship baroPurchaseShipmentRow, costFilter string) bool {
+	hasKRW := line.UnitPriceKRWWp != nil || baroPurchaseAmountKRW(line, ship.ExchangeRate) != nil
+	hasUSD := line.UnitPriceUSDWp != nil || baroPurchaseAmountUSD(line) != nil
+	hasAny := hasKRW || hasUSD
+	switch costFilter {
+	case "krw":
+		return hasKRW
+	case "usd":
+		return hasUSD
+	case "missing":
+		return !hasAny
+	default:
+		return true
+	}
+}
+
+func (h *BaroPurchaseHistoryHandler) baroPurchaseSummaryLines(blIDs []string) ([]baroPurchaseLineRow, error) {
+	lines := []baroPurchaseLineRow{}
+	for _, batch := range stringBatches(uniqueNonEmpty(blIDs), 200) {
+		data, _, err := h.DB.From("bl_line_items").
+			Select("bl_line_id, bl_id, product_id, quantity, capacity_kw, item_type, payment_type, invoice_amount_usd, unit_price_usd_wp, unit_price_krw_wp, usage_category", "exact", false).
+			In("bl_id", batch).
+			Execute()
+		if err != nil {
+			return nil, err
+		}
+		var chunk []baroPurchaseLineRow
+		if err := json.Unmarshal(data, &chunk); err != nil {
+			return nil, err
+		}
+		lines = append(lines, chunk...)
+	}
+	return lines, nil
+}
+
+// Summary — GET /api/v1/baro/purchase-history/summary — BARO 구매이력 KPI 전체 집계.
+func (h *BaroPurchaseHistoryHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	baroCompany, ok := h.baroPurchaseCompany()
+	if !ok {
+		response.RespondJSON(w, http.StatusOK, BaroPurchaseHistorySummary{
+			ByInboundType: map[string]int64{},
+			ByStatus:      map[string]int64{},
+		})
+		return
+	}
+	shipments, shipmentCount, err := fetchAllSummaryRows[baroPurchaseShipmentRow](func() *postgrest.FilterBuilder {
+		return h.baroPurchaseShipmentQuery(baroCompany.CompanyID, r).
+			Order("actual_arrival", &postgrest.OrderOpts{Ascending: false})
+	})
+	if err != nil {
+		log.Printf("[BARO 구매이력 요약 B/L 조회 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "BARO 구매이력 요약 조회에 실패했습니다")
+		return
+	}
+	if len(shipments) == 0 {
+		response.RespondJSON(w, http.StatusOK, BaroPurchaseHistorySummary{
+			ShipmentCount: shipmentCount,
+			ByInboundType: map[string]int64{},
+			ByStatus:      map[string]int64{},
+		})
+		return
+	}
+
+	blIDs := make([]string, 0, len(shipments))
+	shipByID := make(map[string]baroPurchaseShipmentRow, len(shipments))
+	for _, ship := range shipments {
+		blIDs = append(blIDs, ship.BLID)
+		shipByID[ship.BLID] = ship
+	}
+	lines, err := h.baroPurchaseSummaryLines(blIDs)
+	if err != nil {
+		log.Printf("[BARO 구매이력 요약 라인 조회 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "BARO 구매이력 요약 라인 조회에 실패했습니다")
+		return
+	}
+
+	byInboundType := map[string]int64{}
+	byStatus := map[string]int64{}
+	costFilter := r.URL.Query().Get("cost_filter")
+	summary := BaroPurchaseHistorySummary{
+		ShipmentCount: shipmentCount,
+		ByInboundType: byInboundType,
+		ByStatus:      byStatus,
+	}
+	if summary.ShipmentCount == 0 {
+		summary.ShipmentCount = int64(len(shipments))
+	}
+	var weightedKRW, weightedKRWCapacity float64
+	var weightedUSD, weightedUSDCapacity float64
+	for _, line := range lines {
+		ship, ok := shipByID[line.BLID]
+		if !ok || !baroPurchaseCostFilterMatches(line, ship, costFilter) {
+			continue
+		}
+		summary.Total++
+		summary.TotalQuantity += int64(line.Quantity)
+		summary.TotalCapacityKW += line.CapacityKW
+		incrementCount(byInboundType, ship.InboundType)
+		incrementCount(byStatus, ship.Status)
+		if line.UnitPriceKRWWp != nil && line.CapacityKW > 0 {
+			weightedKRW += *line.UnitPriceKRWWp * line.CapacityKW
+			weightedKRWCapacity += line.CapacityKW
+		}
+		if line.UnitPriceUSDWp != nil && line.CapacityKW > 0 {
+			weightedUSD += *line.UnitPriceUSDWp * line.CapacityKW
+			weightedUSDCapacity += line.CapacityKW
+		}
+		if amount := baroPurchaseAmountKRW(line, ship.ExchangeRate); amount != nil {
+			summary.TotalAmountKRW += *amount
+		}
+		if amount := baroPurchaseAmountUSD(line); amount != nil {
+			summary.TotalAmountUSD += *amount
+		}
+		if line.UnitPriceKRWWp != nil || line.UnitPriceUSDWp != nil || baroPurchaseAmountKRW(line, ship.ExchangeRate) != nil || baroPurchaseAmountUSD(line) != nil {
+			summary.CostCoveredCount++
+		}
+	}
+	if weightedKRWCapacity > 0 {
+		v := weightedKRW / weightedKRWCapacity
+		summary.AverageKRWWp = &v
+	}
+	if weightedUSDCapacity > 0 {
+		v := weightedUSD / weightedUSDCapacity
+		summary.AverageUSDWp = &v
+	}
+	response.RespondJSON(w, http.StatusOK, summary)
 }
 
 func baroPurchaseLimit(r *http.Request) int {
@@ -238,8 +387,16 @@ func baroPurchaseLimit(r *http.Request) int {
 	if err != nil || n <= 0 {
 		return 500
 	}
-	if n > 2000 {
-		return 2000
+	if n > 1000 {
+		return 1000
+	}
+	return n
+}
+
+func baroPurchaseOffset(r *http.Request) int {
+	n, err := strconv.Atoi(r.URL.Query().Get("offset"))
+	if err != nil || n < 0 {
+		return 0
 	}
 	return n
 }

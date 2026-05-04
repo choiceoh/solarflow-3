@@ -1,22 +1,28 @@
 // InsightShell — KPI 드릴다운 페이지 공통 레이아웃.
 // Header (뒤로가기 + 제목) → 24개월 트렌드 라인차트 → 차원별 breakdown 그리드.
 
-import { Link } from 'react-router-dom'
+import { Link } from "react-router-dom"
 import {
-  CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from 'recharts'
-import LoadingSpinner from '@/components/common/LoadingSpinner'
-import type { BreakdownRow, TrendPoint } from '@/lib/insights/aggregations'
-import { monthShort } from '@/lib/insights/aggregations'
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
+import LoadingSpinner from "@/components/common/LoadingSpinner"
+import type { BreakdownRow, TrendPoint } from "@/lib/insights/aggregations"
+import { monthShort } from "@/lib/insights/aggregations"
 
-type Tone = 'solar' | 'ink' | 'info' | 'warn' | 'pos'
+type Tone = "solar" | "ink" | "info" | "warn" | "pos"
 
 const TONE_COLOR: Record<Tone, string> = {
-  solar: 'var(--solar-2)',
-  ink: 'var(--ink-3)',
-  info: 'var(--info)',
-  warn: 'var(--warn)',
-  pos: 'var(--pos)',
+  solar: "var(--solar-2)",
+  ink: "var(--ink-3)",
+  info: "var(--info)",
+  warn: "var(--warn)",
+  pos: "var(--pos)",
 }
 
 export interface BreakdownPanel {
@@ -36,10 +42,10 @@ interface Props {
   backTo: string
   backLabel: string
   loading?: boolean
-  totalLabel?: string             // 헤더 우측 큰 숫자 라벨 (예: '24개월 누계')
-  totalValue?: string             // 포맷된 totalValue (예: '12,345')
+  totalLabel?: string // 헤더 우측 큰 숫자 라벨 (예: '24개월 누계')
+  totalValue?: string // 포맷된 totalValue (예: '12,345')
   trend: TrendPoint[]
-  trendValueLabel?: string        // tooltip 항목명 (예: '출고 건수')
+  trendValueLabel?: string // tooltip 항목명 (예: '출고 건수')
   formatTrend?: (v: number) => string
   breakdowns: BreakdownPanel[]
 }
@@ -48,14 +54,14 @@ export default function InsightShell({
   title,
   subtitle,
   unit,
-  tone = 'solar',
+  tone = "solar",
   backTo,
   backLabel,
   loading = false,
   totalLabel,
   totalValue,
   trend,
-  trendValueLabel = '값',
+  trendValueLabel = "값",
   formatTrend,
   breakdowns,
 }: Props) {
@@ -80,10 +86,14 @@ export default function InsightShell({
         {totalValue ? (
           <div className="text-right">
             {totalLabel ? (
-              <div className="text-[11px] text-[var(--ink-3)] mono uppercase tracking-wider">{totalLabel}</div>
+              <div className="text-[11px] text-[var(--ink-3)] mono uppercase tracking-wider">
+                {totalLabel}
+              </div>
             ) : null}
             <div className="flex items-baseline gap-1 justify-end mt-1">
-              <span className="bignum" style={{ fontSize: 28 }}>{totalValue}</span>
+              <span className="bignum" style={{ fontSize: 28 }}>
+                {totalValue}
+              </span>
               {unit ? <span className="mono text-[12px] text-[var(--ink-3)]">{unit}</span> : null}
             </div>
           </div>
@@ -102,13 +112,14 @@ export default function InsightShell({
             formatValue={formatNumber}
           />
           {breakdowns.length > 0 ? (
-            <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${Math.min(breakdowns.length, 3)}, minmax(0, 1fr))` }}>
+            <div
+              className="grid gap-4"
+              style={{
+                gridTemplateColumns: `repeat(${Math.min(breakdowns.length, 3)}, minmax(0, 1fr))`,
+              }}
+            >
               {breakdowns.map((panel) => (
-                <BreakdownCard
-                  key={panel.label}
-                  panel={panel}
-                  color={color}
-                />
+                <BreakdownCard key={panel.label} panel={panel} color={color} />
               ))}
             </div>
           ) : null}
@@ -137,7 +148,9 @@ function TrendCard({
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-[13px] font-semibold text-[var(--ink-1)]">월별 추이</div>
-          <div className="text-[11px] text-[var(--ink-3)] mono">최근 24개월 · 전년 동월 비교 가능</div>
+          <div className="text-[11px] text-[var(--ink-3)] mono">
+            최근 24개월 · 전년 동월 비교 가능
+          </div>
         </div>
       </div>
       {empty ? (
@@ -152,18 +165,28 @@ function TrendCard({
               <XAxis
                 dataKey="month"
                 tickFormatter={monthShort}
-                tick={{ fontSize: 10, fill: 'var(--ink-3)' }}
+                tick={{ fontSize: 10, fill: "var(--ink-3)" }}
                 interval={1}
               />
               <YAxis
-                tick={{ fontSize: 10, fill: 'var(--ink-3)' }}
+                tick={{ fontSize: 10, fill: "var(--ink-3)" }}
                 tickFormatter={(v: number) => formatValue(v)}
                 width={56}
               />
               <Tooltip
-                contentStyle={{ background: 'var(--bg-1)', border: '1px solid var(--line)', fontSize: 11 }}
-                labelFormatter={(label: string) => label}
-                formatter={(v: number) => [`${formatValue(v)}${unit ?? ''}`, valueLabel]}
+                contentStyle={{
+                  background: "var(--bg-1)",
+                  border: "1px solid var(--line)",
+                  fontSize: 11,
+                }}
+                labelFormatter={(label: unknown) => String(label ?? "")}
+                formatter={(v: unknown) => {
+                  const value = typeof v === "number" ? v : Number(v ?? 0)
+                  return [
+                    `${formatValue(Number.isFinite(value) ? value : 0)}${unit ?? ""}`,
+                    valueLabel,
+                  ]
+                }}
               />
               <Line
                 type="monotone"
@@ -182,13 +205,7 @@ function TrendCard({
   )
 }
 
-function BreakdownCard({
-  panel,
-  color,
-}: {
-  panel: BreakdownPanel
-  color: string
-}) {
+function BreakdownCard({ panel, color }: { panel: BreakdownPanel; color: string }) {
   const fmt = panel.formatValue ?? ((v: number) => v.toLocaleString())
   const max = panel.rows.length > 0 ? panel.rows[0]!.value : 0
   return (
@@ -199,7 +216,7 @@ function BreakdownCard({
       </div>
       {panel.rows.length === 0 ? (
         <div className="text-[12px] text-[var(--ink-3)] py-6 text-center">
-          {panel.emptyHint ?? '데이터 없음'}
+          {panel.emptyHint ?? "데이터 없음"}
         </div>
       ) : (
         <div className="space-y-2">
@@ -223,7 +240,9 @@ function BreakdownCard({
                 </div>
                 <div className="text-right text-[12px] mono font-semibold text-[var(--ink-1)] whitespace-nowrap">
                   {fmt(row.value)}
-                  {panel.unit ? <span className="text-[var(--ink-3)] ml-0.5">{panel.unit}</span> : null}
+                  {panel.unit ? (
+                    <span className="text-[var(--ink-3)] ml-0.5">{panel.unit}</span>
+                  ) : null}
                 </div>
               </div>
             )

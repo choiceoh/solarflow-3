@@ -46,6 +46,7 @@ GET     /api/v1/baro/dispatch-routes/{id}/outbounds
 GET     /api/v1/baro/incoming/
 GET     /api/v1/baro/orders/recent
 GET     /api/v1/baro/purchase-history/
+GET     /api/v1/baro/purchase-history/summary
 GET     /api/v1/bls/
 GET     /api/v1/bls/summary
 GET     /api/v1/bls/{blId}/lines/
@@ -62,6 +63,7 @@ GET     /api/v1/declarations/{id}
 GET     /api/v1/engine/health
 GET     /api/v1/engine/ready
 GET     /api/v1/expenses/
+GET     /api/v1/expenses/summary
 GET     /api/v1/expenses/{id}
 GET     /api/v1/export/all
 GET     /api/v1/export/amaranth/inbound
@@ -77,6 +79,7 @@ GET     /api/v1/intercompany-requests/mine
 GET     /api/v1/inventory/allocations/
 GET     /api/v1/inventory/allocations/{id}
 GET     /api/v1/lcs/
+GET     /api/v1/lcs/summary
 GET     /api/v1/lcs/{id}
 GET     /api/v1/lcs/{id}/lines
 GET     /api/v1/library-posts/
@@ -105,6 +108,7 @@ GET     /api/v1/partners/usage-counts
 GET     /api/v1/partners/{id}
 GET     /api/v1/partners/{id}/activities
 GET     /api/v1/pos/
+GET     /api/v1/pos/summary
 GET     /api/v1/pos/{id}
 GET     /api/v1/pos/{poId}/lines/
 GET     /api/v1/price-histories/
@@ -127,6 +131,7 @@ GET     /api/v1/sales/summary
 GET     /api/v1/sales/{id}
 GET     /api/v1/system-settings/{key}
 GET     /api/v1/tts/
+GET     /api/v1/tts/summary
 GET     /api/v1/tts/{id}
 GET     /api/v1/ui-configs/
 GET     /api/v1/ui-configs/{scope}/{config_id}

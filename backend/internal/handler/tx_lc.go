@@ -5,8 +5,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
@@ -31,13 +33,7 @@ type lcStatusUpdate struct {
 	Status string `json:"status"`
 }
 
-// List — GET /api/v1/lcs — LC 목록 조회 (은행/법인/PO 정보 포함)
-// 비유: LC 서류함에서 전체 개설 현황을 꺼내 보여주는 것
-// TODO: maturity_date 범위 필터 추가 (대시보드 "LC 만기 임박" 알림용)
-func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("lc_records").
-		Select("*, banks(bank_name), companies(company_name, company_code), purchase_orders(po_number, manufacturer_id)", "exact", false)
-
+func (h *LCHandler) applyLCFilters(r *http.Request, query *postgrest.FilterBuilder) *postgrest.FilterBuilder {
 	// 비유: ?po_id=xxx — 특정 PO의 LC만 필터
 	if poID := r.URL.Query().Get("po_id"); poID != "" {
 		query = query.Eq("po_id", poID)
@@ -57,6 +53,16 @@ func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
 	}
+	return query
+}
+
+// List — GET /api/v1/lcs — LC 목록 조회 (은행/법인/PO 정보 포함)
+// 비유: LC 서류함에서 전체 개설 현황을 꺼내 보여주는 것
+// TODO: maturity_date 범위 필터 추가 (대시보드 "LC 만기 임박" 알림용)
+func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
+	query := h.DB.From("lc_records").
+		Select("*, banks(bank_name), companies(company_name, company_code), purchase_orders(po_number, manufacturer_id)", "exact", false)
+	query = h.applyLCFilters(r, query)
 
 	limit, offset := parseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
@@ -87,6 +93,96 @@ func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, records)
+}
+
+type lcSummaryPORow struct {
+	ManufacturerID *string `json:"manufacturer_id"`
+}
+
+type lcSummaryRow struct {
+	LCID           string          `json:"lc_id"`
+	BankID         string          `json:"bank_id"`
+	Status         string          `json:"status"`
+	OpenDate       *string         `json:"open_date"`
+	AmountUSD      float64         `json:"amount_usd"`
+	MaturityDate   *string         `json:"maturity_date"`
+	PurchaseOrders *lcSummaryPORow `json:"purchase_orders"`
+}
+
+type LCSummary struct {
+	Total             int64               `json:"total"`
+	OpenedCount       int64               `json:"opened_count"`
+	MaturitySoonCount int64               `json:"maturity_soon_count"`
+	AmountUSD         float64             `json:"amount_usd"`
+	BankCount         int64               `json:"bank_count"`
+	ByStatus          map[string]int64    `json:"by_status"`
+	MonthlyAmount     []summaryMonthPoint `json:"monthly_amount"`
+}
+
+func lcDueWithin(date *string, days int) bool {
+	if date == nil || *date == "" {
+		return false
+	}
+	d, err := time.Parse("2006-01-02", (*date)[:min(len(*date), 10)])
+	if err != nil {
+		return false
+	}
+	today := time.Now()
+	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
+	diff := int(d.Sub(today).Hours() / 24)
+	return diff >= 0 && diff <= days
+}
+
+// Summary — GET /api/v1/lcs/summary — LC KPI 카드용 전체 집계.
+func (h *LCHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	rows, total, err := fetchAllSummaryRows[lcSummaryRow](func() *postgrest.FilterBuilder {
+		q := h.DB.From("lc_records").
+			Select("lc_id,bank_id,status,open_date,amount_usd,maturity_date,purchase_orders(manufacturer_id)", "exact", false)
+		return h.applyLCFilters(r, q)
+	})
+	if err != nil {
+		log.Printf("[LC 요약 조회 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "LC 요약 조회에 실패했습니다")
+		return
+	}
+
+	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
+		filtered := rows[:0]
+		for _, row := range rows {
+			if row.PurchaseOrders != nil && row.PurchaseOrders.ManufacturerID != nil && *row.PurchaseOrders.ManufacturerID == mfgID {
+				filtered = append(filtered, row)
+			}
+		}
+		rows = filtered
+		total = int64(len(rows))
+	}
+
+	byStatus := map[string]int64{}
+	monthlyAmount := map[string]float64{}
+	banks := map[string]struct{}{}
+	summary := LCSummary{Total: total, ByStatus: byStatus}
+	if total == 0 {
+		summary.Total = int64(len(rows))
+	}
+	for _, row := range rows {
+		incrementCount(byStatus, row.Status)
+		if row.Status == "opened" || row.Status == "docs_received" {
+			summary.OpenedCount++
+		}
+		if row.Status != "settled" && row.Status != "cancelled" && lcDueWithin(row.MaturityDate, 30) {
+			summary.MaturitySoonCount++
+		}
+		summary.AmountUSD += row.AmountUSD
+		if row.BankID != "" {
+			banks[row.BankID] = struct{}{}
+		}
+		if month := dateMonth(row.OpenDate); month != "" {
+			monthlyAmount[month] += row.AmountUSD
+		}
+	}
+	summary.BankCount = distinctCount(banks)
+	summary.MonthlyAmount = recentMonthAmounts(monthlyAmount, 6)
+	response.RespondJSON(w, http.StatusOK, summary)
 }
 
 // GetByID — GET /api/v1/lcs/{id} — LC 상세 조회 (은행 한도/수수료율 포함)

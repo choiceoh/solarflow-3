@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/model"
@@ -32,13 +33,7 @@ func NewPOHandler(db *supa.Client) *POHandler {
 	return &POHandler{DB: db}
 }
 
-// List — GET /api/v1/pos — 발주 목록 조회 (법인/제조사 정보 포함)
-// 비유: 계약 관리실에서 전체 계약서 목록을 꺼내 보여주는 것
-// PO 입고현황은 D-061 패턴에 따라 프론트에서 소규모 합산한다.
-func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
-	// purchase_orders_ext: manufacturer_name(name_kr alias) 포함 뷰
-	query := h.DB.From("purchase_orders_ext").Select("*", "exact", false)
-
+func (h *POHandler) applyPOFilters(r *http.Request, query *postgrest.FilterBuilder) *postgrest.FilterBuilder {
 	// 비유: ?company_id=xxx — 특정 법인의 계약만 필터
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
 		query = query.Eq("company_id", compID)
@@ -58,6 +53,16 @@ func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
 	if ct := r.URL.Query().Get("contract_type"); ct != "" {
 		query = query.Eq("contract_type", ct)
 	}
+	return query
+}
+
+// List — GET /api/v1/pos — 발주 목록 조회 (법인/제조사 정보 포함)
+// 비유: 계약 관리실에서 전체 계약서 목록을 꺼내 보여주는 것
+// PO 입고현황은 D-061 패턴에 따라 프론트에서 소규모 합산한다.
+func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
+	// purchase_orders_ext: manufacturer_name(name_kr alias) 포함 뷰
+	query := h.DB.From("purchase_orders_ext").Select("*", "exact", false)
+	query = h.applyPOFilters(r, query)
 
 	limit, offset := parseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
@@ -76,6 +81,69 @@ func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, orders)
+}
+
+type poSummaryRow struct {
+	POID         string   `json:"po_id"`
+	Status       string   `json:"status"`
+	ContractType string   `json:"contract_type"`
+	ContractDate *string  `json:"contract_date"`
+	TotalMW      *float64 `json:"total_mw"`
+}
+
+type POSummary struct {
+	Total          int64               `json:"total"`
+	ActiveCount    int64               `json:"active_count"`
+	ShippingCount  int64               `json:"shipping_count"`
+	TotalMW        float64             `json:"total_mw"`
+	ByStatus       map[string]int64    `json:"by_status"`
+	ByContractType map[string]int64    `json:"by_contract_type"`
+	MonthlyCount   []summaryMonthPoint `json:"monthly_count"`
+}
+
+// Summary — GET /api/v1/pos/summary — P/O KPI 카드용 전체 집계.
+// 비유: 계약서 원본을 전부 들고 오지 않고, 총권수·상태·MW 숫자만 계산해 주는 회계표.
+func (h *POHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	rows, total, err := fetchAllSummaryRows[poSummaryRow](func() *postgrest.FilterBuilder {
+		q := h.DB.From("purchase_orders_ext").
+			Select("po_id,status,contract_type,contract_date,total_mw", "exact", false)
+		return h.applyPOFilters(r, q)
+	})
+	if err != nil {
+		log.Printf("[발주 요약 조회 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "발주 요약 조회에 실패했습니다")
+		return
+	}
+
+	byStatus := map[string]int64{}
+	byContractType := map[string]int64{}
+	monthly := map[string]int64{}
+	summary := POSummary{
+		Total:          total,
+		ByStatus:       byStatus,
+		ByContractType: byContractType,
+	}
+	if total == 0 {
+		summary.Total = int64(len(rows))
+	}
+	for _, row := range rows {
+		incrementCount(byStatus, row.Status)
+		incrementCount(byContractType, row.ContractType)
+		if row.Status != "completed" && row.Status != "cancelled" {
+			summary.ActiveCount++
+		}
+		if row.Status == "shipping" || row.Status == "in_progress" {
+			summary.ShippingCount++
+		}
+		if row.TotalMW != nil {
+			summary.TotalMW += *row.TotalMW
+		}
+		if month := dateMonth(row.ContractDate); month != "" {
+			monthly[month]++
+		}
+	}
+	summary.MonthlyCount = recentMonthCounts(monthly, 6)
+	response.RespondJSON(w, http.StatusOK, summary)
 }
 
 // GetByID — GET /api/v1/pos/{id} — 발주 상세 조회 (라인아이템, LC, TT 포함)

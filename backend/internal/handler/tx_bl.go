@@ -129,10 +129,16 @@ func (h *BLHandler) List(w http.ResponseWriter, r *http.Request) {
 // BLSummary — KPI 카드용 집계.
 type BLSummary struct {
 	Total          int64 `json:"total"`
+	ActiveCount    int64 `json:"active_count"`
+	ScheduledCount int64 `json:"scheduled_count"`
 	ShippingCount  int64 `json:"shipping_count"`
 	ArrivedCount   int64 `json:"arrived_count"`
+	CustomsCount   int64 `json:"customs_count"`
+	CompletedCount int64 `json:"completed_count"`
+	ERPDoneCount   int64 `json:"erp_done_count"`
 	ClearedCount   int64 `json:"cleared_count"`
 	CancelledCount int64 `json:"cancelled_count"`
+	ImportCount    int64 `json:"import_count"`
 }
 
 // Summary — GET /api/v1/bls/summary — status 별 카운트.
@@ -147,8 +153,12 @@ func (h *BLHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		key    string
 		target *int64
 	}{
+		{"scheduled", &summary.ScheduledCount},
 		{"shipping", &summary.ShippingCount},
 		{"arrived", &summary.ArrivedCount},
+		{"customs", &summary.CustomsCount},
+		{"completed", &summary.CompletedCount},
+		{"erp_done", &summary.ERPDoneCount},
 		{"cleared", &summary.ClearedCount},
 		{"cancelled", &summary.CancelledCount},
 	} {
@@ -157,6 +167,12 @@ func (h *BLHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		if _, c, err := sub.Range(0, 0, "").Execute(); err == nil {
 			*st.target = c
 		}
+	}
+	summary.ActiveCount = summary.ScheduledCount + summary.ShippingCount + summary.ArrivedCount + summary.CustomsCount
+	importQ := h.DB.From("bl_shipments").Select("bl_id", "exact", true)
+	importQ = h.applyBLFilters(r, importQ).Eq("inbound_type", "import")
+	if _, c, err := importQ.Range(0, 0, "").Execute(); err == nil {
+		summary.ImportCount = c
 	}
 	response.RespondJSON(w, http.StatusOK, summary)
 }
