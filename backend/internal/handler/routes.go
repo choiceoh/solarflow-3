@@ -254,7 +254,8 @@ func (h *ExportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.With(g.Write).Post("/jobs/{id}/claim", h.ClaimUploadJob)
 		r.With(g.Write).Put("/jobs/{id}/status", h.UpdateUploadJobStatus)
 	})
-	// 전체 컬렉션 통합 덤프 — admin 전용, 테넌트 스코프 미적용 (모든 테넌트 데이터 통합).
+	// 전체 컬렉션 통합 덤프 — admin 전용, 테넌트 스코프 분리(D-108).
+	// baro: company_code=BR / topsolar·cable: 그 외. sales·receipts 는 outbound_id 경유.
 	r.With(g.AdminOnly).Get("/export/all", h.FullDataDump)
 }
 
