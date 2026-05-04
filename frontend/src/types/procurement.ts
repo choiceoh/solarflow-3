@@ -47,6 +47,7 @@ export interface LCRecord {
   lc_number?: string;
   po_id: string;
   po_number?: string;
+  manufacturer_id?: string;
   bank_id: string;
   bank_name?: string;
   company_id: string;
