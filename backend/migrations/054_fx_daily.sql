@@ -1,11 +1,10 @@
+-- @auto-apply: yes
 -- 054_fx_daily.sql
 -- 통화 페어별 일별 환율 누적 — LC 탭 USD/KRW 30일 sparkline + 재고 시장 시세 패널.
 -- pair: 'usdkrw' (1 USD = N KRW), 'cnykrw' (1 CNY = N KRW; backend가 KRW/CNY로 계산)
 -- 매 fetchFX 호출 시 today/yesterday UPSERT, 부팅 시 1회 30일 historical 백필.
 --
--- 적용:
---   psql $SUPABASE_DB_URL -f backend/migrations/054_fx_daily.sql
---   psql $SUPABASE_DB_URL -c "NOTIFY pgrst, 'reload schema';"
+-- 자동 적용 조건 만족: CREATE TABLE/INDEX IF NOT EXISTS, idempotent GRANT, 락 짧음, 데이터 손실 위험 없음.
 
 CREATE TABLE IF NOT EXISTS fx_daily (
   pair         text        NOT NULL,
