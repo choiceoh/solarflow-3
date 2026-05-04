@@ -154,7 +154,7 @@ export default function LCCreateDialog({ open, onClose, onCreated }: Props) {
             <Input value={lcNumber} onChange={(e) => setLcNumber(e.target.value)} placeholder="비워두면 임시 번호" />
           </Field>
           <Field label="발주(PO)" required>
-            <Select value={poId} onValueChange={setPoId}>
+            <Select value={poId} onValueChange={(v) => setPoId(v ?? '')}>
               <SelectTrigger><SelectValue placeholder="PO 선택" /></SelectTrigger>
               <SelectContent>
                 {pos.length === 0 && (
@@ -167,7 +167,7 @@ export default function LCCreateDialog({ open, onClose, onCreated }: Props) {
             </Select>
           </Field>
           <Field label="은행" required>
-            <Select value={bankId} onValueChange={setBankId}>
+            <Select value={bankId} onValueChange={(v) => setBankId(v ?? '')}>
               <SelectTrigger><SelectValue placeholder="은행 선택" /></SelectTrigger>
               <SelectContent>
                 {banks.length === 0 && (
@@ -192,7 +192,7 @@ export default function LCCreateDialog({ open, onClose, onCreated }: Props) {
             <Input type="number" value={usanceDays} onChange={(e) => setUsanceDays(e.target.value)} placeholder="0 = AT SIGHT" />
           </Field>
           <Field label="유산스 유형">
-            <Select value={usanceType} onValueChange={setUsanceType}>
+            <Select value={usanceType} onValueChange={(v) => setUsanceType(v ?? '')}>
               <SelectTrigger><SelectValue placeholder="유산스 유형 선택" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="buyers">BANKER&apos;S USANCE (buyers)</SelectItem>

@@ -229,7 +229,7 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
               <Input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="PO-2026-001" />
             </Field>
             <Field label="제조사" required>
-              <Select value={manufacturerId} onValueChange={setManufacturerId}>
+              <Select value={manufacturerId} onValueChange={(v) => setManufacturerId(v ?? '')}>
                 <SelectTrigger><SelectValue placeholder="제조사 선택" /></SelectTrigger>
                 <SelectContent>
                   {manufacturers.map((m) => (
@@ -289,7 +289,7 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
                   <div className="grid grid-cols-6 gap-2">
                     <div className="col-span-2">
                       <Field label="품번" required compact>
-                        <Select value={line.product_id} onValueChange={(v) => updateLine(line.key, { product_id: v })}>
+                        <Select value={line.product_id} onValueChange={(v) => updateLine(line.key, { product_id: v ?? '' })}>
                           <SelectTrigger><SelectValue placeholder="품번 선택" /></SelectTrigger>
                           <SelectContent>
                             {products.map((p) => (
