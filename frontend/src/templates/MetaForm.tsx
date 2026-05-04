@@ -332,10 +332,11 @@ interface MetaComboboxProps {
   readOnly: boolean;
   errorMsg?: string;
   placeholder?: string;
+  wrapperClass?: string;
 }
 
 function MetaCombobox({
-  labelText, value, onChange, source, context, fallbackOptions, readOnly, errorMsg, placeholder,
+  labelText, value, onChange, source, context, fallbackOptions, readOnly, errorMsg, placeholder, wrapperClass,
 }: MetaComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -403,7 +404,7 @@ function MetaCombobox({
   const display = resolvedLabel || (value ? value : '');
 
   return (
-    <div className="space-y-1.5" ref={wrapperRef}>
+    <div className={wrapperClass ?? 'space-y-1.5'} ref={wrapperRef}>
       <Label>{labelText}</Label>
       <div className="relative">
         <button
@@ -507,6 +508,51 @@ function MetaNumberFmtInput({ field, value, onChange, readOnly }: MetaNumberFmtI
       readOnly={readOnly}
     />
   );
+}
+
+// 입력 칸 가로폭 — field.width 우선, 없으면 type 별 기본값.
+// max-width 만 적용 → grid 셀이 더 좁으면 자연스럽게 그 폭에 맞춰 줄어듦 (좁은 다이얼로그/모바일).
+// 폭 의도: 데이터 길이가 짧은 type (date/number/switch) 은 좁게, 긴 type (textarea/address) 은 풀폭.
+const FIELD_WIDTH_CLASS: Record<NonNullable<FieldConfig['width']>, string> = {
+  xs: 'max-w-24',
+  sm: 'max-w-36',
+  md: 'max-w-56',
+  lg: 'max-w-80',
+  xl: 'max-w-md',
+  full: 'max-w-full',
+};
+
+function fieldWidthClass(field: FieldConfig): string {
+  if (field.width) return FIELD_WIDTH_CLASS[field.width];
+  switch (field.type) {
+    case 'switch':
+    case 'date':
+    case 'time':
+      return FIELD_WIDTH_CLASS.sm;
+    case 'datetime':
+    case 'currency_amount':
+      return FIELD_WIDTH_CLASS.md;
+    case 'number':
+      // 콤마/통화 포맷이면 자릿수 늘어남 → md, 일반 number 는 sm.
+      return field.numberFormat && field.numberFormat !== 'plain'
+        ? FIELD_WIDTH_CLASS.md
+        : FIELD_WIDTH_CLASS.sm;
+    case 'computed':
+      return FIELD_WIDTH_CLASS.md;
+    case 'text':
+    case 'select':
+    case 'date_range':
+      return FIELD_WIDTH_CLASS.lg;
+    case 'multiselect':
+    case 'file':
+    case 'textarea':
+    case 'rich_text':
+    case 'child_array':
+    case 'address':
+      return FIELD_WIDTH_CLASS.full;
+    default:
+      return FIELD_WIDTH_CLASS.lg;
+  }
 }
 
 // Phase 4 보강: visibleIf / readOnlyIf 공통 평가 — source 'field' (default) | 'context'
@@ -702,11 +748,16 @@ function FieldRender({ field, value, error, options, setValue, register, watched
   const readOnly = isReadOnly(field, role) || conditionalReadOnly || !!isMasked || guardDenied;
   const labelText = `${field.label}${field.required ? ' *' : ''}${readOnly && (field.editableByRoles || field.readOnlyIf) ? ' (읽기전용)' : ''}${isMasked ? ' (마스킹)' : ''}`;
 
+  // 입력 칸 가로폭 — 데이터 길이에 맞는 max-width. grid 셀이 더 좁으면 셀 폭이 우선.
+  const widthClass = fieldWidthClass(field);
+  const wrapperClass = `${widthClass} space-y-1.5`;
+  const inlineWrapperClass = `${widthClass} flex items-center gap-2`;
+
   // 메타 인프라 확장 (보안): 마스킹 시 ***로 대체 표시 (간단한 type 만 — text/number/textarea 등)
   // permissionGuard 거부 시도 동일 효과
   if ((isMasked || guardDenied) && (field.type === 'text' || field.type === 'number' || field.type === 'textarea' || field.type === 'rich_text')) {
     return (
-      <div className="space-y-1.5">
+      <div className={wrapperClass}>
         <Label>{labelText}</Label>
         <div className="h-8 rounded border border-input bg-muted/40 px-2 flex items-center text-xs text-muted-foreground font-mono">
           ●●●●●●
@@ -731,6 +782,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
           readOnly={readOnly}
           errorMsg={errorMsg}
           placeholder={field.placeholder}
+          wrapperClass={wrapperClass}
         />
       );
     }
@@ -738,7 +790,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
     const v = (value as string) ?? '';
     const display = labelMap[v] ?? '';
     return (
-      <div className="space-y-1.5">
+      <div className={wrapperClass}>
         <Label>{labelText}</Label>
         <Select value={v} onValueChange={(next) => setValue(field.key, next ?? '')} disabled={readOnly}>
           <SelectTrigger>
@@ -760,7 +812,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
 
   if (field.type === 'textarea') {
     return (
-      <div className="space-y-1.5">
+      <div className={wrapperClass}>
         <Label>{labelText}</Label>
         <Textarea
           {...register(field.key)}
@@ -776,7 +828,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
 
   if (field.type === 'switch') {
     return (
-      <div className="flex items-center gap-2">
+      <div className={inlineWrapperClass}>
         <Switch checked={!!value} onCheckedChange={(c: boolean) => setValue(field.key, c)} disabled={readOnly} />
         <Label>{labelText}</Label>
         {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
@@ -793,7 +845,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
       setValue(field.key, next);
     };
     return (
-      <div className="space-y-1.5">
+      <div className={wrapperClass}>
         <Label>{labelText}</Label>
         <div className="rounded-md border border-input p-2 space-y-1.5">
           {(options ?? []).length === 0 ? (
@@ -825,7 +877,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
       ? (Array.isArray(value) ? (value as File[]) : [])
       : (value instanceof File ? [value as File] : []);
     return (
-      <div className="space-y-1.5">
+      <div className={wrapperClass}>
         <Label>{labelText}</Label>
         <input
           type="file"
@@ -856,7 +908,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
       ? ''
       : (field.formatter ? applyFormatter(field.formatter, value) : String(value));
     return (
-      <div className="space-y-1.5">
+      <div className={wrapperClass}>
         <Label>{labelText}</Label>
         <Input value={display} readOnly className="bg-muted" placeholder="자동 계산" />
         {errorMsg ? <p className="text-xs text-destructive">{errorMsg}</p> : null}
@@ -872,7 +924,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
       { value: 'KRW', label: 'KRW' },
     ];
     return (
-      <div className="space-y-1.5">
+      <div className={wrapperClass}>
         <Label>{labelText}</Label>
         <div className="flex items-center gap-2">
           <select disabled={readOnly} value={v.currency ?? 'USD'}
@@ -902,7 +954,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
       });
     };
     return (
-      <div className="space-y-1.5">
+      <div className={wrapperClass}>
         <Label>{labelText}</Label>
         <div className="flex items-center gap-2">
           <input type="text" disabled={readOnly} value={v.postcode ?? ''}
@@ -928,7 +980,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
   if (field.type === 'rich_text') {
     const txt = (value ?? '') as string;
     return (
-      <div className="space-y-1.5">
+      <div className={wrapperClass}>
         <Label>{labelText}</Label>
         <textarea disabled={readOnly} value={txt}
           className="min-h-[100px] w-full rounded border border-input bg-background px-2 py-1 text-xs"
@@ -944,7 +996,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
   if (field.type === 'date_range') {
     const v = (value ?? { start: '', end: '' }) as { start?: string; end?: string };
     return (
-      <div className="space-y-1.5">
+      <div className={wrapperClass}>
         <Label>{labelText}</Label>
         <div className="flex items-center gap-2">
           <input type="date" value={v.start ?? ''} disabled={readOnly}
@@ -968,7 +1020,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
       return null;
     }
     return (
-      <div className="col-span-full space-y-1.5">
+      <div className={`col-span-full ${wrapperClass}`}>
         <Label>{labelText}</Label>
         <ChildArrayField
           field={field}
@@ -985,7 +1037,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
   // Phase 4 보강: number 타입에 numberFormat 이 지정되면 콤마 입력 사용
   if (field.type === 'text') {
     return (
-      <div className="space-y-1.5">
+      <div className={wrapperClass}>
         <Label>{labelText}</Label>
         <Input
           {...register(field.key)}
@@ -1001,7 +1053,7 @@ function FieldRender({ field, value, error, options, setValue, register, watched
 
   const useFmtNumber = field.type === 'number' && field.numberFormat && field.numberFormat !== 'plain';
   return (
-    <div className="space-y-1.5">
+    <div className={wrapperClass}>
       <Label>{labelText}</Label>
       {useFmtNumber ? (
         <MetaNumberFmtInput
