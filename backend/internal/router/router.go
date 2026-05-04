@@ -31,6 +31,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 	// SSE(text/event-stream) 와 첨부 다운로드는 자동 제외.
 	r.Use(chimw.Compress(5))
 	r.Use(middleware.RequestLog)
+	r.Use(middleware.Metrics)
 	r.Use(middleware.CORSMiddleware)
 	r.Get("/health", handler.HealthCheck)
 
