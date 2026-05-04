@@ -19,15 +19,26 @@ const (
 	keyObservability  contextKey = "observability"
 )
 
-// Observability — RequestLog 가 핸들러 종료 후 읽기 위한 mutable 홀더(D-122).
+// observabilityHolder — RequestLog 가 핸들러 종료 후 읽기 위한 mutable 홀더(D-122).
 // outer middleware 인 RequestLog 가 빈 홀더를 만들어 context 에 넣고, inner middleware
 // (auth) 가 채워 넣는다. context 는 functional 이라 child 가 parent 변수를 직접
 // 수정할 수 없으므로 pointer 의 mutable 필드로 우회한다.
 //
 // 모든 필드는 RequestLog 가 핸들러 종료 후 읽으므로, auth 가 채울 때 race 가
 // 없도록 mu 로 보호한다(SSE 같은 long-running 핸들러 + 동시 컨텍스트 변경 대비).
-type Observability struct {
+//
+// 내부 타입 — 외부에 노출되는 Observability 스냅샷과 분리해 sync.Mutex copy 경고를 피함.
+type observabilityHolder struct {
 	mu          sync.Mutex
+	userID      string
+	userRole    string
+	userEmail   string
+	tenantScope string
+}
+
+// Observability — 외부 호출자에게 반환하는 immutable 스냅샷.
+// Mutex 를 포함하지 않아 값 복사가 안전(go vet "copies lock value" 경고 없음).
+type Observability struct {
 	UserID      string
 	UserRole    string
 	UserEmail   string
@@ -37,35 +48,45 @@ type Observability struct {
 // SetObservability — 핸들러/auth 가 호출해 RequestLog 에 정보 전달.
 // pointer holder 가 context 에 없으면 no-op.
 func SetObservability(ctx context.Context, fn func(o *Observability)) {
-	o, ok := ctx.Value(keyObservability).(*Observability)
-	if !ok || o == nil {
+	h, ok := ctx.Value(keyObservability).(*observabilityHolder)
+	if !ok || h == nil {
 		return
 	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	fn(o)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	tmp := Observability{
+		UserID:      h.userID,
+		UserRole:    h.userRole,
+		UserEmail:   h.userEmail,
+		TenantScope: h.tenantScope,
+	}
+	fn(&tmp)
+	h.userID = tmp.UserID
+	h.userRole = tmp.UserRole
+	h.userEmail = tmp.UserEmail
+	h.tenantScope = tmp.TenantScope
 }
 
 // GetObservability — RequestLog 가 종료 시 호출. 없으면 빈 구조체.
 func GetObservability(ctx context.Context) Observability {
-	o, ok := ctx.Value(keyObservability).(*Observability)
-	if !ok || o == nil {
+	h, ok := ctx.Value(keyObservability).(*observabilityHolder)
+	if !ok || h == nil {
 		return Observability{}
 	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return Observability{
-		UserID:      o.UserID,
-		UserRole:    o.UserRole,
-		UserEmail:   o.UserEmail,
-		TenantScope: o.TenantScope,
+		UserID:      h.userID,
+		UserRole:    h.userRole,
+		UserEmail:   h.userEmail,
+		TenantScope: h.tenantScope,
 	}
 }
 
 // withObservability — RequestLog 진입 시 빈 홀더를 context 에 부착.
-func withObservability(ctx context.Context) (context.Context, *Observability) {
-	o := &Observability{}
-	return context.WithValue(ctx, keyObservability, o), o
+func withObservability(ctx context.Context) (context.Context, *observabilityHolder) {
+	h := &observabilityHolder{}
+	return context.WithValue(ctx, keyObservability, h), h
 }
 
 // 테넌트 스코프 상수 (D-108, D-119)
