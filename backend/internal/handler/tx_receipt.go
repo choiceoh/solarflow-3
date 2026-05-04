@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -38,7 +39,8 @@ func (h *ReceiptHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Gte("receipt_date", month+"-01").Lt("receipt_date", nextMonthString(month))
 	}
 
-	data, _, err := query.Execute()
+	limit, offset := parseLimitOffset(r, 100, 1000)
+	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[수금 목록 조회 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "수금 목록 조회에 실패했습니다")
@@ -53,6 +55,7 @@ func (h *ReceiptHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.enrichReceipts(receipts)
+	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, receipts)
 }
 
