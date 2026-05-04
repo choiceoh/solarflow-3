@@ -40,6 +40,10 @@ export interface Product {
   module_grade?: '1' | '2' | '3' | 'NA';  // 모듈 등급 — 한국 탄소인증제 (1/2/3/NA)
   memo?: string;
   is_active: boolean;
+  // D-064: ERP 자료에서 동기화. SolarFlow 자체 계산과 정합성 비교에 활용 (PR 19/20).
+  erp_code?: string;
+  safety_stock?: number | null;
+  available_stock?: number | null;
 }
 
 export interface Partner {
