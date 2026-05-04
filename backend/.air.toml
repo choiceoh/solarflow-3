@@ -1,0 +1,23 @@
+# air config — auto-reload Go backend on file save.
+# Install: go install github.com/air-verse/air@latest
+# Run via: backend/scripts/dev.ps1 (auto-detects air)
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/solarflow-go.exe ."
+bin = "./tmp/solarflow-go.exe"
+include_ext = ["go"]
+exclude_dir = ["tmp", "migrations", "scripts", "sql", "ai-context", "tasks"]
+exclude_regex = ["_test\\.go$"]
+delay = 500
+stop_on_error = true
+send_interrupt = true
+kill_delay = "2s"
+
+[log]
+time = false
+
+[misc]
+clean_on_exit = true
