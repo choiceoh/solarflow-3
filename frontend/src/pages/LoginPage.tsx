@@ -1,20 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { ExternalLink, Sun } from 'lucide-react';
+import { ArrowUpRight, Sun } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import LoginForm from '@/components/auth/LoginForm';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { isDevMockLoginAllowed } from '@/lib/devMockMode';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -23,8 +13,11 @@ interface LoginStats {
   reservations_pending: number | null;
   lc_active_count: number | null;
   lc_active_total_usd: number | null;
+  inbound_ships_today: number;
   work_queue: { time: string; tag: string; title: string; meta: string }[];
   pending_counts: Record<string, number>;
+  health: { db_ms: number; engine_ms: number } | null;
+  generated_at: string;
 }
 
 interface FXSnapshot {
@@ -55,6 +48,7 @@ const FALLBACK_KPI = {
   reservations_pending: 28,
   lc_active_count: 11,
   lc_active_total_usd: 8_420_000,
+  inbound_ships_today: 4,
 };
 const FALLBACK_FX = { rate: 1773.4, change_pct: 0.06 };
 const FALLBACK_SILVER = { price_usd: 28.84, change_usd: -1.42 };
@@ -66,6 +60,8 @@ const FALLBACK_PENDING_COUNTS: Record<string, number> = {
   만기: 5,
   그룹요청: 7,
 };
+const FALLBACK_HEALTH = { db_ms: 12.1, engine_ms: 3.2 };
+const FALLBACK_API_MS = 8.4;
 const FALLBACK_QUEUE: LoginStats['work_queue'] = [
   { time: '09:00', tag: '입항', title: 'COSCO SHANGHAI 042E', meta: '8,800장 · 5,456 kW · 인천 1창고' },
   { time: '11:30', tag: 'L/C 만기', title: 'LC-26-0405', meta: 'USD 1.84M · 하나은행 · 결재 대기' },
@@ -80,23 +76,42 @@ const FAMILY_SITES = [
 const fmt = new Intl.NumberFormat('en-US');
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 const todayKST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+const fmtKstHHmm = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '--:--';
+  return d.toLocaleTimeString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+};
+const fmtMs = (ms: number) => (ms >= 100 ? ms.toFixed(0) : ms.toFixed(1));
+
+declare const __LAST_MERGED_PR__: string;
+const versionLabel = __LAST_MERGED_PR__ ? `PR #${__LAST_MERGED_PR__}` : 'v3.0.0';
 
 export default function LoginPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const canUseDevMock = isDevMockLoginAllowed();
 
   const [stats, setStats] = useState<LoginStats | null>(null);
+  const [apiMs, setApiMs] = useState<number | null>(null);
   const [fx, setFx] = useState<FXSnapshot | null>(null);
   const [silver, setSilver] = useState<MetalSnapshot | null>(null);
   const [poly, setPoly] = useState<CommoditySnapshot | null>(null);
   const [scfi, setScfi] = useState<CommoditySnapshot | null>(null);
-  const [selectedFamilySite, setSelectedFamilySite] = useState('');
 
   useEffect(() => {
     let cancelled = false;
+    const t0 = performance.now();
     fetch(`${API_BASE_URL}/api/v1/public/login-stats`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((d: LoginStats) => { if (!cancelled) setStats(d); })
+      .then((d: LoginStats) => {
+        if (cancelled) return;
+        setStats(d);
+        setApiMs(performance.now() - t0);
+      })
       .catch((e) => console.warn('[LoginPage] stats fetch failed:', e));
     fetch(`${API_BASE_URL}/api/v1/public/fx/usdkrw`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
@@ -154,6 +169,10 @@ export default function LoginPage() {
     .filter(([, n]) => n > 0)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 2);
+  const apiLatencyMs = apiMs ?? FALLBACK_API_MS;
+  const dbLatencyMs = stats?.health?.db_ms ?? FALLBACK_HEALTH.db_ms;
+  const engineLatencyMs = stats?.health?.engine_ms ?? FALLBACK_HEALTH.engine_ms;
+  const lastSyncLabel = stats?.generated_at ? fmtKstHHmm(stats.generated_at) : '--:--';
 
   const kpi = [
     { label: '가용재고', value: inventoryMW.toFixed(2), unit: 'MW', detail: '오늘 기준' },
@@ -161,14 +180,6 @@ export default function LoginPage() {
     { label: 'L/C 사용', value: (lcTotalUSD / 1_000_000).toFixed(2), unit: 'M$', detail: `${lcCount}건` },
     { label: 'USD/KRW', value: fmt.format(Math.round(fxRate * 10) / 10), unit: '', detail: fxChange != null ? fmtPct(fxChange) : '실시간' },
   ];
-  const selectedFamilySiteInfo = FAMILY_SITES.find((site) => site.value === selectedFamilySite);
-  const handleOpenFamilySite = () => {
-    if (!selectedFamilySiteInfo) {
-      return;
-    }
-    window.open(selectedFamilySiteInfo.href, '_blank', 'noopener,noreferrer');
-  };
-
   return (
     <div className="sf-login-shell">
       <section className="sf-login-left">
@@ -215,41 +226,40 @@ export default function LoginPage() {
           <LoginForm />
           <div className="mt-5 flex items-center gap-2 rounded bg-[var(--sf-bg-2)] px-3 py-2">
             <span className="h-1.5 w-1.5 rounded-full bg-[var(--sf-pos)] shadow-[0_0_0_3px_rgb(44_122_62_/_0.15)]" />
-            <div className="sf-mono flex-1 text-[10.5px] text-[var(--sf-ink-2)]">API 8.4ms · DB 12.1ms · 엔진 3.2ms</div>
-            <span className="sf-mono text-[10px] text-[var(--sf-ink-4)]">Last sync 14:42</span>
+            <div className="sf-mono flex-1 text-[10.5px] text-[var(--sf-ink-2)]">
+              API {fmtMs(apiLatencyMs)}ms · DB {fmtMs(dbLatencyMs)}ms · 엔진 {fmtMs(engineLatencyMs)}ms
+            </div>
+            <span className="sf-mono text-[10px] text-[var(--sf-ink-4)]">Last sync {lastSyncLabel}</span>
           </div>
         </div>
 
         <div className="sf-login-footer">
           <div className="sf-family-site">
-            <Select value={selectedFamilySite} onValueChange={(value) => setSelectedFamilySite(value ?? '')}>
-              <SelectTrigger className="sf-family-site-trigger" aria-label="패밀리사이트 선택">
-                <SelectValue placeholder="패밀리사이트" />
-              </SelectTrigger>
-              <SelectContent side="top" align="start" alignItemWithTrigger={false}>
-                <SelectGroup>
-                  <SelectLabel>패밀리사이트</SelectLabel>
-                  {FAMILY_SITES.map((site) => (
-                    <SelectItem key={site.value} value={site.value}>
-                      {site.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="sf-family-site-button"
-              disabled={!selectedFamilySiteInfo}
-              onClick={handleOpenFamilySite}
-            >
-              <ExternalLink data-icon="inline-start" />
-              이동
-            </Button>
+            <div className="sf-eyebrow flex items-center gap-2 text-[var(--sf-ink-3)]">
+              <span className="h-px w-5 bg-[var(--sf-line-2)]" aria-hidden />
+              패밀리 사이트 · FAMILY SITES
+            </div>
+            <div className="sf-family-site-list">
+              {FAMILY_SITES.map((site) => (
+                <a
+                  key={site.value}
+                  href={site.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="sf-family-site-link"
+                >
+                  <span className="sf-family-site-link-body">
+                    <span className="sf-family-site-link-label">{site.label}</span>
+                    <span className="sf-mono sf-family-site-link-host">
+                      {new URL(site.href).host}
+                    </span>
+                  </span>
+                  <ArrowUpRight className="sf-family-site-link-icon" strokeWidth={2.2} aria-hidden />
+                </a>
+              ))}
+            </div>
           </div>
-          <div className="sf-mono text-[10px] text-[var(--sf-ink-4)]">v3.0.0 · command center</div>
+          <div className="sf-mono text-[10px] text-[var(--sf-ink-4)]">{versionLabel} · command center</div>
         </div>
       </section>
 

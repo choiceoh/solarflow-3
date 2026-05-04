@@ -115,6 +115,17 @@ const COLS_OPTIONS = [
   { value: '3', label: '3' },
 ];
 
+// 입력 칸 가로폭 — 미지정 시 type 별 기본 (date/number → sm, text/select → lg, textarea → full).
+// max-width 만 적용 → grid 셀이 더 좁으면 셀 폭이 우선.
+const WIDTH_OPTIONS = [
+  { value: 'xs', label: 'xs (~96px · 우편번호 등)' },
+  { value: 'sm', label: 'sm (~144px · 날짜/시간/짧은 숫자)' },
+  { value: 'md', label: 'md (~224px · 통화·콤마숫자)' },
+  { value: 'lg', label: 'lg (~320px · 일반 텍스트/select)' },
+  { value: 'xl', label: 'xl (~448px · 긴 텍스트)' },
+  { value: 'full', label: 'full (제한 없음 · textarea/주소)' },
+];
+
 const OPTIONS_FROM = [
   { value: 'enum', label: 'enum' },
   { value: 'master', label: 'master' },
@@ -982,12 +993,18 @@ function FieldRow({
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5"
           >
             {advancedOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            고급 (description / 검증 / readOnly / 조건부)
+            고급 (width / description / 검증 / readOnly / 조건부)
           </button>
         </div>
 
         {advancedOpen && (
           <>
+            <FieldSelect label="width (입력 칸 가로폭)" value={field.width ?? ''} allowEmpty options={WIDTH_OPTIONS}
+              onChange={(v) => onUpdate({
+                ...field,
+                width: (v || undefined) as FieldConfig['width'],
+              })} />
+            <div /> {/* spacer */}
             <FieldInput label="description (필드 아래 도움말)"
               value={field.description ?? ''}
               onChange={(v) => onUpdate({ ...field, description: v || undefined })} />

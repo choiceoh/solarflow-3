@@ -6,10 +6,16 @@
 import type {
   TemplateType, ParsedRow, FieldDef,
   ImportPreview, DeclarationImportPreview,
+  UnifiedImportPreview, UnifiedSection,
 } from '@/types/excel';
 import {
   FIELDS_MAP, DECLARATION_FIELDS, DECLARATION_COST_FIELDS, TEMPLATE_LABEL,
 } from '@/types/excel';
+
+const UNIFIED_SECTION_ORDER: TemplateType[] = [
+  'company', 'order', 'outbound', 'sale', 'receipt',
+  'inbound', 'declaration', 'expense',
+];
 
 // ExcelJS 셀 값 형태 (RichText/Formula 등)
 type RichTextRun = { text: string };
@@ -169,4 +175,63 @@ export async function parseExcelFile(
     errorRows: rows.filter((r) => !r.valid).length,
     rows,
   } satisfies ImportPreview;
+}
+
+// 통합 양식 파싱 — 한 파일에서 8개 섹션을 모두 읽는다.
+// 시트가 없는 섹션은 present:false, 헤더 누락 등 파싱 실패는 parseError로 보고한다.
+export async function parseUnifiedExcelFile(file: File): Promise<UnifiedImportPreview> {
+  const ExcelJS = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await file.arrayBuffer());
+
+  const sections: UnifiedSection[] = UNIFIED_SECTION_ORDER.map((type) => {
+    const label = TEMPLATE_LABEL[type];
+
+    if (type === 'declaration') {
+      const declSheet = workbook.getWorksheet('면장등록');
+      const costSheet = workbook.getWorksheet('원가등록');
+      if (!declSheet && !costSheet) {
+        return { type, label, present: false };
+      }
+      try {
+        const declarations = declSheet ? parseSheet(declSheet, DECLARATION_FIELDS) : [];
+        const costs = costSheet ? parseSheet(costSheet, DECLARATION_COST_FIELDS) : [];
+        return {
+          type, label, present: true,
+          declPreview: { fileName: file.name, declarations, costs },
+        };
+      } catch (e) {
+        return {
+          type, label, present: true,
+          parseError: e instanceof Error ? e.message : '파싱 실패',
+        };
+      }
+    }
+
+    const sheet = workbook.getWorksheet(`${label}등록`);
+    if (!sheet) {
+      return { type, label, present: false };
+    }
+    try {
+      const fields = FIELDS_MAP[type];
+      const rows = parseSheet(sheet, fields);
+      return {
+        type, label, present: true,
+        preview: {
+          fileName: file.name,
+          totalRows: rows.length,
+          validRows: rows.filter((r) => r.valid).length,
+          errorRows: rows.filter((r) => !r.valid).length,
+          rows,
+        },
+      };
+    } catch (e) {
+      return {
+        type, label, present: true,
+        parseError: e instanceof Error ? e.message : '파싱 실패',
+      };
+    }
+  });
+
+  return { fileName: file.name, sections };
 }

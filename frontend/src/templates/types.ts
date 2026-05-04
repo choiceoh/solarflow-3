@@ -247,6 +247,12 @@ export interface FieldConfig {
   // 동적 권한 — 컨텍스트 기반 권한 체크. 호출 시 false 반환하면 readOnly + 마스킹.
   // registry.permissionGuards[id] (Phase 5 follow-up)
   permissionGuardId?: string;
+
+  // 레이아웃: 입력 칸 가로폭 상한 — grid 셀 안에서 input 이 실제 데이터 길이에 맞게 좁아지도록.
+  // 미지정 시 type 별 기본값 적용 (date/time → sm, number → sm, text → lg, textarea → full 등).
+  // 항상 max-width 만 — grid 셀이 더 좁으면 셀 폭이 우선 (모바일/좁은 다이얼로그 호환).
+  // xs ~96px / sm ~144px / md ~224px / lg ~320px / xl ~448px / full = 제한 없음.
+  width?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
 
 export interface FormSection {

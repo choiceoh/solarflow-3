@@ -229,6 +229,36 @@ export interface ImportResult {
   warnings: ImportWarning[];
 }
 
+// 통합 양식 업로드 — 한 파일에 8섹션이 같이 들어 있는 경우.
+export interface UnifiedSection {
+  type: TemplateType;
+  label: string;
+  present: boolean;
+  parseError?: string;
+  preview?: ImportPreview;
+  declPreview?: DeclarationImportPreview;
+}
+
+export interface UnifiedImportPreview {
+  fileName: string;
+  sections: UnifiedSection[];
+}
+
+// 섹션별 등록 결과 — 부분 실패 정책: 한 섹션이 실패해도 다음 섹션은 계속 시도.
+export type UnifiedSubmitStatus = 'success' | 'failed' | 'skipped';
+
+export interface UnifiedSubmitOutcome {
+  type: TemplateType;
+  label: string;
+  status: UnifiedSubmitStatus;
+  result?: ImportResult;
+  error?: string;
+}
+
+export interface UnifiedSubmitResult {
+  outcomes: UnifiedSubmitOutcome[];
+}
+
 // 양식별 필드 맵
 export const FIELDS_MAP: Record<TemplateType, FieldDef[]> = {
   company: COMPANY_FIELDS,

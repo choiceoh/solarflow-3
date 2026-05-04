@@ -839,38 +839,103 @@ a:focus-visible,
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
 }
 
 .sf-family-site {
   display: flex;
-  width: min(100%, 318px);
-  align-items: center;
+  width: min(100%, 380px);
+  flex-direction: column;
   gap: 8px;
 }
 
-.sf-family-site-trigger {
-  flex: 1;
-  height: 34px;
-  min-width: 0;
-  border-color: var(--sf-line-2);
-  border-radius: 4px;
-  background: var(--sf-surface);
-  color: var(--sf-ink-2);
-  font-family: var(--sf-sans);
-  font-size: 11.5px;
-  font-weight: 700;
-  box-shadow: none;
+.sf-family-site-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
 }
 
-.sf-family-site-button {
-  height: 34px;
-  border-color: var(--sf-line-2);
+.sf-family-site-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  overflow: hidden;
+  border: 1px solid var(--sf-line-2);
   border-radius: 4px;
-  background: var(--sf-bg-1);
+  background: var(--sf-surface);
+  padding: 9px 11px;
   color: var(--sf-ink-2);
-  font-size: 11.5px;
-  font-weight: 800;
+  text-decoration: none;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.sf-family-site-link::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--sf-solar);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform 160ms ease;
+}
+
+.sf-family-site-link:hover {
+  border-color: var(--sf-line);
+  background: var(--sf-bg-2);
+  color: var(--sf-ink);
+}
+
+.sf-family-site-link:hover::before {
+  transform: scaleY(1);
+}
+
+.sf-family-site-link:focus-visible {
+  outline: none;
+  border-color: var(--sf-solar-2);
+  box-shadow: 0 0 0 3px rgb(245 184 0 / 0.18);
+}
+
+.sf-family-site-link-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sf-family-site-link-label {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.005em;
+}
+
+.sf-family-site-link-host {
+  font-size: 9.5px;
+  color: var(--sf-ink-4);
+  letter-spacing: 0.02em;
+  transition: color 140ms ease;
+}
+
+.sf-family-site-link:hover .sf-family-site-link-host {
+  color: var(--sf-ink-3);
+}
+
+.sf-family-site-link-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: var(--sf-ink-4);
+  transition: color 140ms ease, transform 160ms ease;
+}
+
+.sf-family-site-link:hover .sf-family-site-link-icon {
+  color: var(--sf-solar-3);
+  transform: translate(2px, -2px);
 }
 
 .sf-login-right {

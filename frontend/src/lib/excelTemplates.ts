@@ -208,6 +208,27 @@ function setDropdownFromRef(
 }
 
 // 코드표 시트에 목록 작성 → 시작 열 인덱스 반환
+// 값 배열 중 가장 긴 항목의 표시 폭 — Excel 폭 단위 기준 (한글 1자 ≈ 2).
+function maxValueWidth(values: string[]): number {
+  let max = 0;
+  for (const v of values) {
+    let w = 0;
+    for (const ch of String(v)) {
+      if (/[가-힣]/.test(ch)) w += 2;
+      else w += 1.1;
+    }
+    if (w > max) max = w;
+  }
+  return Math.ceil(max);
+}
+
+// 코드표 컬럼 폭 — 헤더 폭과 가장 긴 데이터 폭 중 큰 값. 60 폭 상한 (출고 선택처럼 합성 라벨 안전망).
+function codeColumnWidth(header: string, values: string[]): number {
+  const headerW = headerMinWidth(header);
+  const valueW = maxValueWidth(values);
+  return Math.min(60, Math.max(headerW, valueW + 3));
+}
+
 function writeCodeColumn(
   codeSheet: SheetWritable,
   colIndex: number,
@@ -229,7 +250,7 @@ function writeCodeColumn(
     emptyCell.value = '등록된 값 없음';
     emptyCell.font = { italic: true, color: { argb: 'FF94A3B8' } };
   }
-  codeSheet.getColumn(colIndex).width = Math.max(16, Math.min(36, header.length + 12));
+  codeSheet.getColumn(colIndex).width = codeColumnWidth(header, values);
 
   let nextCol = colIndex + 1;
   if (descriptions.length > 0) {
@@ -243,7 +264,7 @@ function writeCodeColumn(
     descriptions.forEach((desc, i) => {
       codeSheet.getCell(`${descColLetter}${i + 2}`).value = desc;
     });
-    codeSheet.getColumn(nextCol).width = 28;
+    codeSheet.getColumn(nextCol).width = codeColumnWidth(descHeader, descriptions);
     nextCol += 1;
   }
 
@@ -263,14 +284,93 @@ function finishCodeSheet(codeSheet: SheetWritable, lastCol: number) {
   codeSheet.getRow(1).height = 24;
 }
 
+// 헤더 라벨이 잘리지 않을 최소 폭. 한글은 영문 1자의 약 2배 폭이라 가중치를 다르게 둔다.
+// Excel 폭 단위는 기본 폰트의 '0' 글자 폭. 헤더는 굵게 표시되므로 padding 5를 더한다.
+function headerMinWidth(label: string): number {
+  let w = 0;
+  for (const ch of label) {
+    if (/[가-힣]/.test(ch)) w += 2;
+    else w += 1.1;
+  }
+  return Math.ceil(w + 5);
+}
+
+// 필드별 데이터 폭 override — 실제 들어가는 값의 길이를 기준으로 결정.
+// 헤더 라벨이 더 길면 그쪽이 우선이라 columnWidth에서 max로 합산한다.
+const DATA_WIDTH_OVERRIDE: Record<string, number> = {
+  // 식별자 — outbound_id는 "UUID(36) | 날짜(10) | 수량(7) | 현장명(~20)" 합성 라벨
+  outbound_id: 56,
+  // 코드/enum (짧은 값)
+  company_code: 10,
+  target_company_code: 12,
+  warehouse_code: 12,
+  currency: 8,
+  hs_code: 14,
+  group_trade: 10,
+  erp_closed: 10,
+  month: 12,
+  inbound_type: 14,
+  item_type: 14,
+  payment_type: 14,
+  usage_category: 14,
+  expense_type: 14,
+  receipt_method: 14,
+  management_category: 14,
+  fulfillment_source: 14,
+  // 식별 번호류
+  bl_number: 18,
+  product_code: 18,
+  declaration_number: 18,
+  invoice_number: 18,
+  erp_outbound_no: 18,
+  business_number: 16,
+  order_number: 18,
+  // 이름·문자열
+  company_name: 22,
+  manufacturer_name: 22,
+  customer_name: 22,
+  vendor: 18,
+  site_name: 22,
+  site_contact: 14,
+  site_phone: 14,
+  bank_account: 22,
+  forwarder: 18,
+  customs_office: 14,
+  port: 12,
+  payment_terms: 18,
+};
+
 function columnWidth(field: FieldDef): number {
-  if (field.key.includes('memo') || field.key.includes('address')) return 34;
-  if (field.key.includes('email')) return 30;
-  if (field.key.includes('outbound_id')) return 48;
-  if (field.key.includes('number') || field.key.includes('code')) return 20;
-  if (field.type === 'date') return 14;
-  if (field.type === 'number') return 16;
-  return Math.max(16, Math.min(26, field.label.length + 10));
+  const headerW = headerMinWidth(field.label);
+
+  const override = DATA_WIDTH_OVERRIDE[field.key];
+  if (override !== undefined) return Math.max(override, headerW);
+
+  // 자유 텍스트 — 메모/주소/이메일
+  if (field.key.includes('memo') || field.key.includes('address')) return Math.max(36, headerW);
+  if (field.key.includes('email')) return Math.max(28, headerW);
+
+  if (field.type === 'date') return Math.max(12, headerW);
+
+  if (field.type === 'number') {
+    const k = field.key;
+    // 환율 (xxxx.xx)
+    if (k === 'exchange_rate') return Math.max(12, headerW);
+    // 비율(%) — 100.00 정도
+    if (k.endsWith('_rate')) return Math.max(10, headerW);
+    // 수량 (12,345 정도)
+    if (k === 'quantity' || k.includes('qty')) return Math.max(12, headerW);
+    // 큰 합계 — 1,234,567,890 (13자) + 여유
+    if (k.includes('total') || k === 'amount' || k === 'cif_total_krw') return Math.max(18, headerW);
+    // 일반 금액 (부가세·통관비·관세 등)
+    if (k.includes('amount') || k === 'vat' || k === 'customs_fee' || k === 'incidental_cost') return Math.max(16, headerW);
+    // Wp 단가류 (1,234.56 정도)
+    if (k.includes('price') || k.includes('wp') || k.includes('unit')) return Math.max(14, headerW);
+    return Math.max(14, headerW);
+  }
+
+  // 기본 string fallback — 헤더 폭만 보장
+  return Math.max(14, headerW);
 }
 
 function columnFormat(field: FieldDef): string | undefined {
