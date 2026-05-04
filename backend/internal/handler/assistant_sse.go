@@ -147,7 +147,8 @@ func (s *dataStreamWriter) WriteToolOutputError(toolCallID, errorText string) er
 }
 
 // WriteDataPart — 임의 data part. type="data-<name>" 으로 emit.
-// 현재 read-only assistant 경로에서는 사용하지 않지만 UIMessage stream 호환을 위해 보존.
+// 쓰기 도구의 proposal 객체를 type="data-proposal" 로 흘려보냄.
+// 클라이언트는 message.parts 중 type==='data-proposal' 인 part 의 .data 로 수신.
 func (s *dataStreamWriter) WriteDataPart(name string, data any) error {
 	return s.writeChunk(map[string]any{
 		"type": "data-" + name,
