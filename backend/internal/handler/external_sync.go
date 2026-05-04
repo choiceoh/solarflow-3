@@ -344,6 +344,55 @@ func inferProductMeta(code string, mfgIndex map[string]string) (string, int) {
 	return "", 0
 }
 
+
+// D-059 PR 12: 자유 형식 날짜 보정.
+// 수동 모드(JS topsolarOutbound.ts) 와 동일 정책 — 섹션 마커 `탑솔라 (1월)` + 같은 섹션의
+// 정상 datetime 행에서 연도를 캐시해서 자유 표기 (예: `1/12 오후착`) → ISO 변환.
+// 시간 표기(`오후착`, `오전`, `9시착`)는 source_payload.date_raw 에 보존.
+type sectionDateContext struct {
+	sellerKey     string
+	monthNum      int
+	inferredYear  int
+}
+
+var freeDatePattern = regexp.MustCompile(`^(\d{1,2})/(\d{1,2})`)
+var sectionMarkerPattern = regexp.MustCompile(`^\s*(탑솔라|디원|화신이엔지)\s*\((\d{1,2})월\s*\)`)
+
+// parseSectionMarkerForDate — 섹션 마커에서 (seller, monthNum) 추출. 매치 안 되면 ("", 0).
+func parseSectionMarkerForDate(s string) (string, int) {
+	m := sectionMarkerPattern.FindStringSubmatch(s)
+	if m == nil {
+		return "", 0
+	}
+	n, _ := strconv.Atoi(m[2])
+	return m[1], n
+}
+
+// parseTopsolarDateWithContext — 섹션 컨텍스트로 자유 형식 날짜 보정.
+// 반환: (iso, rawText). iso 가 비면 보정 실패.
+func parseTopsolarDateWithContext(s string, ctx *sectionDateContext) (string, string) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", ""
+	}
+	// 1) ISO / 한국 표기 — 기존 로직
+	if iso := parseTopsolarDate(s); iso != "" {
+		return iso, s
+	}
+	// 2) 자유 형식 M/D — 섹션 컨텍스트로 연도 보정
+	if ctx != nil && ctx.inferredYear > 0 {
+		m := freeDatePattern.FindStringSubmatch(s)
+		if m != nil {
+			month, _ := strconv.Atoi(m[1])
+			day, _ := strconv.Atoi(m[2])
+			if month >= 1 && month <= 12 && day >= 1 && day <= 31 {
+				return fmt.Sprintf("%04d-%02d-%02d", ctx.inferredYear, month, day), s
+			}
+		}
+	}
+	return "", s
+}
+
 var topsolarSellerMap = map[string]string{
 	"탑": "탑솔라", "탑솔라": "탑솔라",
 	"디원": "디원",
@@ -382,16 +431,49 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 		mfgIndex = map[string]string{}
 	}
 
+	// D-059 PR 12 — 1차 패스: 섹션별 inferredYear 캐시 (자유 형식 날짜 보정용)
+	sectionCtx := map[string]*sectionDateContext{}
+	var scanSeller string
+	var scanMonth int
+	for _, row := range rows {
+		cell0 := safeCell(row, 0)
+		if s, mo := parseSectionMarkerForDate(cell0); s != "" {
+			scanSeller, scanMonth = s, mo
+			key := fmt.Sprintf("%s-%d", s, mo)
+			if _, ok := sectionCtx[key]; !ok {
+				sectionCtx[key] = &sectionDateContext{sellerKey: s, monthNum: mo}
+			}
+			continue
+		}
+		if scanSeller == "" || cell0 == "구분" || cell0 == "합 계" || cell0 == "합계" {
+			continue
+		}
+		rawDate := safeCell(row, 1)
+		if iso := parseTopsolarDate(rawDate); iso != "" && len(iso) >= 4 {
+			if year, err := strconv.Atoi(iso[:4]); err == nil {
+				key := fmt.Sprintf("%s-%d", scanSeller, scanMonth)
+				if ctx, ok := sectionCtx[key]; ok && ctx.inferredYear == 0 {
+					ctx.inferredYear = year
+				}
+			}
+		}
+	}
+
 	imported := 0
 	skipped := 0
 	currentSection := ""
+	var currentDateCtx *sectionDateContext
+	skipBy := map[string]int{}  // D-059 PR 12: SKIP 사유별 카운트
+	bump := func(k string) { skipBy[k]++; skipped++ }
 	for idx, row := range rows {
 		excelRowNum := idx + 1
 		gubun := safeCell(row, 0)
 
 		// 섹션 마커
-		if section := parseTopsolarSection(gubun); section != "" {
-			currentSection = section
+		if s, mo := parseSectionMarkerForDate(gubun); s != "" {
+			currentSection = s
+			key := fmt.Sprintf("%s-%d", s, mo)
+			currentDateCtx = sectionCtx[key]
 			continue
 		}
 		if gubun == "구분" || gubun == "합 계" || gubun == "합계" {
@@ -405,7 +487,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 
 		seller := normalizeTopsolarSeller(gubun, currentSection)
 		if seller == "" {
-			skipped++
+			bump("seller_unknown")
 			continue
 		}
 		companyID, ok := companies[normalizeCorp(seller)]
@@ -413,7 +495,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			newID, regErr := h.autoRegisterCompany(seller)
 			if regErr != nil {
 				log.Printf("[external sync] company 등록 실패 %s: %v", seller, regErr)
-				skipped++
+				bump("company_register_fail")
 				continue
 			}
 			companyID = newID
@@ -424,7 +506,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			newID, regErr := h.autoRegisterProduct(productCode, mfgIndex)
 			if regErr != nil {
 				log.Printf("[external sync] product 등록 실패 %s: %v", productCode, regErr)
-				skipped++
+				bump("product_register_fail")
 				continue
 			}
 			productID = newID
@@ -438,22 +520,22 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			warehouseID = pickDefaultWarehouse(warehouses)
 		}
 		if warehouseID == "" {
-			skipped++
+			bump("warehouse_missing")
 			continue
 		}
 
 		qty, err := strconv.Atoi(strings.ReplaceAll(qtyStr, ",", ""))
 		if err != nil || qty <= 0 {
-			skipped++
+			bump("qty_invalid")
 			continue
 		}
 
-		dateISO := parseTopsolarDate(safeCell(row, 1))
+		dateISO, dateRaw := parseTopsolarDateWithContext(safeCell(row, 1), currentDateCtx)
 		if dateISO == "" {
-			// 자동 모드는 자유 형식 날짜 보정 안 함 (수동 모드만) — SKIP
-			skipped++
+			bump("date_freeform")
 			continue
 		}
+		_ = dateRaw
 
 		sourcePayload := map[string]interface{}{
 			"source":           "google_sheet",
@@ -461,6 +543,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			"sheet_gid":        src.SheetGid,
 			"sheet_row_index":  excelRowNum,
 			"section":          currentSection,
+			"date_raw":         dateRaw,
 			"customer_name":    safeCell(row, 2),
 			"site_name":        safeCell(row, 3),
 			"site_address":     safeCell(row, 4),
@@ -487,15 +570,17 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 		_, _, err = h.DB.From("outbounds").Insert(req, false, "", "", "").Execute()
 		if err != nil {
 			if isUniqueViolation(err) {
-				// dedup index 충돌 — 이미 동기화된 행. idempotent skip.
-				skipped++
+				bump("dedup_already")
 				continue
 			}
-			skipped++
+			bump("outbound_insert_fail")
 			log.Printf("[external sync] outbound INSERT 실패 row=%d: %v", excelRowNum, err)
 			continue
 		}
 		imported++
+	}
+	if len(skipBy) > 0 {
+		log.Printf("[external sync] SKIP 사유별: %v", skipBy)
 	}
 	return imported, skipped, nil
 }
