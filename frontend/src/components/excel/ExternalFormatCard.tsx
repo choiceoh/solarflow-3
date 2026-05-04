@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import { fetchBlobWithAuth } from '@/lib/api';
 import { useExcel } from '@/hooks/useExcel';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
@@ -139,7 +140,7 @@ export default function ExternalFormatCard({ format, onImportComplete }: Props) 
     setFetchingSheet(true);
     try {
       const url = `/api/v1/external-format/google-sheet?spreadsheet_id=${encodeURIComponent(parsed.id)}&gid=${parsed.gid}`;
-      const res = await fetch(url, { credentials: 'include' });
+      const res = await fetchBlobWithAuth(url);
       if (!res.ok) {
         throw new Error(`시트 다운로드 실패 (${res.status})`);
       }
