@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-"""apply_migrations — backend/migrations/*.sql 중 미적용 + 헤더 게이트 통과한 것만 자동 적용.
+"""apply_migrations — backend/migrations/*.sql 중 미적용 파일을 자동 적용.
 
 호출처:
   - scripts/cron-deploy.sh (webhook/cron 후 자동)
   - 운영자 수동 실행: backend/.venv-ocr/bin/python scripts/apply_migrations.py
 
+자동 적용 결정 (3단계 fallthrough):
+  1. 첫 10줄에 `-- @auto-apply: yes` → 적용 (작성자가 명시적으로 허용)
+  2. 첫 10줄에 `-- @auto-apply: no`  → SKIP (작성자가 명시적으로 차단)
+  3. 헤더 없음 → 정적 분석:
+     - DROP TABLE/COLUMN/CONSTRAINT/INDEX/FUNCTION/TRIGGER/VIEW/SCHEMA/TYPE,
+       RENAME TO/COLUMN/CONSTRAINT, TRUNCATE, DELETE FROM 키워드가 본문에 있으면 SKIP
+     - 위 키워드가 없으면 idempotent 가정하고 적용 (CREATE TABLE/INDEX IF NOT EXISTS,
+       ADD COLUMN IF NOT EXISTS, GRANT, COMMENT 등이 일반적 케이스)
+
 규약:
   - 추적 테이블: public.schema_migrations (filename PK, applied_at)
-  - 자동 적용 게이트: 파일 첫 10줄 안에 `-- @auto-apply: yes` 헤더 있어야 함
-  - 헤더 없는 미적용 파일은 경고만 찍고 SKIP — 운영자 수동 적용 필요
   - 각 파일은 단일 트랜잭션 안에서 적용 (실패 시 자동 ROLLBACK)
   - 모든 자동 적용 끝난 후 NOTIFY pgrst 한 번 (PostgREST 스키마 캐시 갱신)
 
@@ -32,17 +39,52 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 MIG_DIR = REPO / "backend" / "migrations"
-HEADER_RE = re.compile(r"^\s*--\s*@auto-apply:\s*yes\b", re.IGNORECASE | re.MULTILINE)
+
+HEADER_YES_RE = re.compile(r"^\s*--\s*@auto-apply:\s*yes\b", re.IGNORECASE | re.MULTILINE)
+HEADER_NO_RE = re.compile(r"^\s*--\s*@auto-apply:\s*no\b", re.IGNORECASE | re.MULTILINE)
+
+# 헤더 없는 파일을 자동 적용에서 차단할 위험 키워드.
+# 데이터/스키마 손실 또는 비가역 변경 가능성이 있는 패턴만.
+DANGEROUS_RE = re.compile(
+    r"\b(?:"
+    r"DROP\s+(?:TABLE|COLUMN|CONSTRAINT|INDEX|FUNCTION|TRIGGER|VIEW|SCHEMA|TYPE|MATERIALIZED\s+VIEW)"
+    r"|RENAME\s+(?:TO|COLUMN|CONSTRAINT)"
+    r"|TRUNCATE"
+    r"|DELETE\s+FROM"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
 def log(msg: str) -> None:
     print(f"[{datetime.now().isoformat(timespec='seconds')}] {msg}", flush=True)
 
 
-def has_auto_apply_header(text: str) -> bool:
-    """파일 첫 10줄 안에 `-- @auto-apply: yes` 헤더가 있는지."""
+def strip_sql_line_comments(text: str) -> str:
+    """`-- 주석` 부분 제거 — 위험 키워드 검색 시 주석 안의 false positive 방지.
+    문자열 리터럴 안의 `--`는 마이그레이션에서 거의 없으므로 단순 line-by-line 제거로 충분."""
+    out = []
+    for line in text.splitlines():
+        idx = line.find("--")
+        if idx >= 0:
+            line = line[:idx]
+        out.append(line)
+    return "\n".join(out)
+
+
+def auto_apply_decision(text: str) -> tuple[bool, str]:
+    """파일 텍스트로부터 자동 적용 여부와 사유를 결정.
+    Returns (apply: bool, reason: str)."""
     head = "\n".join(text.splitlines()[:10])
-    return bool(HEADER_RE.search(head))
+    if HEADER_YES_RE.search(head):
+        return True, "헤더 @auto-apply: yes"
+    if HEADER_NO_RE.search(head):
+        return False, "헤더 @auto-apply: no"
+    body = strip_sql_line_comments(text)
+    m = DANGEROUS_RE.search(body)
+    if m:
+        return False, f"위험 키워드 감지 ({m.group(0).upper()}) — 헤더로 명시 적용 필요"
+    return True, "안전 키워드만 — 자동 추정 적용"
 
 
 def main() -> int:
@@ -96,12 +138,13 @@ def main() -> int:
             if name in applied:
                 continue
             text = f.read_text(encoding="utf-8")
-            if not has_auto_apply_header(text):
-                log(f"⚠️  SKIP {name} — `-- @auto-apply: yes` 헤더 없음 (수동 적용 필요)")
+            apply, reason = auto_apply_decision(text)
+            if not apply:
+                log(f"⚠️  SKIP {name} — {reason}")
                 skipped_count += 1
                 continue
 
-            log(f"  apply {name} ...")
+            log(f"  apply {name}  ({reason})")
             try:
                 with conn:
                     with conn.cursor() as cur:
@@ -129,7 +172,7 @@ def main() -> int:
                 log(f"⚠️  NOTIFY pgrst 실패 (적용은 완료됨): {e}")
 
         log(
-            f"완료 — 적용 {applied_count}, 게이트 SKIP {skipped_count}, "
+            f"완료 — 적용 {applied_count}, SKIP {skipped_count}, "
             f"기적용 {len(applied)}/{len(files)}"
         )
         return 0

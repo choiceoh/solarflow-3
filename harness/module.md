@@ -92,7 +92,7 @@ BARO와 **공유**:
 
 ## 운영 메모
 
-- **자동 배포**: main에 push되면 webhook(`api.topworks.ltd/__webhook/deploy`) → cron-deploy.sh가 Go/Rust 재빌드 + Cloudflare Pages가 프론트 자동 배포. 마이그레이션은 별도 수동 적용 (PRODUCTION.md).
+- **자동 배포**: main에 push되면 webhook(`api.topworks.ltd/__webhook/deploy`) → cron-deploy.sh가 Go/Rust 재빌드 + apply_migrations.py로 마이그레이션 자동 적용 (안전 추정 기본 / 위험 키워드 또는 `-- @auto-apply: no` 헤더 시 SKIP — 자세한 정책은 PRODUCTION.md) + Cloudflare Pages가 프론트 자동 배포.
 - **사이드바 「구매」 그룹 비중**: 수입 흐름(PO→LC→BL→면장)이 핵심 메뉴라 「구매」가 가장 무거움.
 - **외부 RPA 의존**: 아마란스 매출 업로드 등 일부 흐름은 외부 시스템(아마란스) 양식과 동기화돼 있어 변경 시 RPA 워커도 같이 검토 필요.
 
