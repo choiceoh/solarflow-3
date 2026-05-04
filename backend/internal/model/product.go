@@ -24,6 +24,9 @@ type Product struct {
 	Memo           *string  `json:"memo"`
 	// D-063: ERP 시스템 내부 품번 코드 (예: M-JK0635-01). 우리 product_code (모델명) 와 별개.
 	ErpCode        *string  `json:"erp_code,omitempty"`
+	// D-064: ERP 자료에서 동기화. SolarFlow 계산 결과와 다를 수 있어 정합성 비교에 활용.
+	SafetyStock    *int     `json:"safety_stock,omitempty"`
+	AvailableStock *int     `json:"available_stock,omitempty"`
 }
 
 // ProductWithManufacturer — 제조사 정보를 포함한 품번 조회 결과
