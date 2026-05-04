@@ -2,6 +2,12 @@
 // 라인(분할 인수) 편집은 별도(/procurement → LCLineEditDialog)에서 처리.
 
 import type { MetaDetailConfig } from '@/templates/types';
+import { LC_STATUS_LABEL } from '@/types/procurement';
+
+// 인라인 편집용 status 옵션 — 5종 모두 활성. 운영 흐름: pending → opened → docs_received → settled.
+const LC_STATUS_OPTIONS = (
+  ['pending', 'opened', 'docs_received', 'settled', 'cancelled'] as const
+).map((value) => ({ value, label: LC_STATUS_LABEL[value] }));
 
 const config: MetaDetailConfig = {
   id: 'lc_detail',
@@ -28,7 +34,15 @@ const config: MetaDetailConfig = {
           fallback: '—',
         },
         { key: 'po_id', label: '발주(PO) ID', span: 2 },
-        { key: 'status', label: '상태', formatter: 'enum', enumKey: 'LC_STATUS_LABEL' },
+        {
+          key: 'status',
+          label: '상태',
+          formatter: 'enum',
+          enumKey: 'LC_STATUS_LABEL',
+          inlineEditable: true,
+          inlineEditType: 'select',
+          inlineEditOptions: LC_STATUS_OPTIONS,
+        },
         {
           key: 'open_date',
           label: '개설일',
@@ -94,6 +108,9 @@ const config: MetaDetailConfig = {
       title: '첨부파일',
       contentBlock: { blockId: 'lc_attachments_block' },
     },
+  ],
+  rail: [
+    { blockId: 'lc_rail_summary' },
   ],
 };
 

@@ -239,23 +239,11 @@ export default function MetaDetail({ config: defaultConfig, id, onBack }: MetaDe
     window.location.reload();
   } : undefined;
 
-  return (
-    <div className="space-y-4">
-      <div className="sf-detail-header">
-        <button
-          type="button"
-          className="sf-detail-header-back"
-          onClick={onBack}
-          aria-label="목록으로"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <h2 className="flex-1 text-base font-semibold" style={{ letterSpacing: '-0.012em' }}>
-          {config.header.title}
-        </h2>
-        {renderBlock(config.header.actionsBlock, rec)}
-      </div>
+  // rail 미지정 시 기존 단일 컬럼 동작 유지. 지정 시 1fr/320px grid로 우측 카드 stack.
+  const hasRail = !!(config.rail && config.rail.length > 0);
 
+  const mainColumn = (
+    <>
       {/* 탭 네비 (있을 때) */}
       {visibleTabs.length > 0 && (
         <div className="flex gap-1 border-b">
@@ -292,6 +280,38 @@ export default function MetaDetail({ config: defaultConfig, id, onBack }: MetaDe
       {config.extraBlocks?.map((block, idx) => (
         <div key={idx}>{renderBlock(block, rec)}</div>
       ))}
+    </>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="sf-detail-header">
+        <button
+          type="button"
+          className="sf-detail-header-back"
+          onClick={onBack}
+          aria-label="목록으로"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <h2 className="flex-1 text-base font-semibold" style={{ letterSpacing: '-0.012em' }}>
+          {config.header.title}
+        </h2>
+        {renderBlock(config.header.actionsBlock, rec)}
+      </div>
+
+      {hasRail ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="min-w-0 space-y-4">{mainColumn}</div>
+          <aside className="space-y-3">
+            {config.rail!.map((block, idx) => (
+              <div key={idx}>{renderBlock(block, rec)}</div>
+            ))}
+          </aside>
+        </div>
+      ) : (
+        <div className="space-y-4">{mainColumn}</div>
+      )}
     </div>
   );
 }
