@@ -8,7 +8,9 @@ export type TemplateType =
   | 'declaration'
   | 'expense'
   | 'order'
-  | 'receipt';
+  | 'receipt'
+  | 'purchase_order'
+  | 'lc';
 
 export interface RowError {
   field: string;
@@ -43,6 +45,10 @@ export interface MasterDataForExcel {
   partners: { partner_id: string; partner_name: string; partner_type: string }[];
   warehouses: { warehouse_id: string; warehouse_code: string; warehouse_name: string }[];
   outbounds?: { outbound_id: string; outbound_date: string; product_id: string; quantity: number; site_name?: string }[];
+  // 발주(PO)·신용장(LC) 양식의 거래처(제조사 외)·은행 코드표용 — 각 법인별로 등록된 은행 한도.
+  banks?: { bank_id: string; bank_name: string; company_id: string }[];
+  // LC.po_number 드롭다운에서 사용할 PO 식별자 — 자연키(po_number)가 비면 첫 8자 id.
+  purchaseOrders?: { po_id: string; po_number?: string; manufacturer_name?: string; contract_date?: string }[];
 }
 
 // 양식별 한글 이름
@@ -55,6 +61,8 @@ export const TEMPLATE_LABEL: Record<TemplateType, string> = {
   expense: '부대비용',
   order: '수주',
   receipt: '수금',
+  purchase_order: '발주',
+  lc: '신용장',
 };
 
 // 양식별 필드 정의
@@ -207,6 +215,43 @@ export const RECEIPT_FIELDS: FieldDef[] = [
   { key: 'memo', label: '메모', required: false, type: 'string' },
 ];
 
+// 발주(PO) 필드 — 같은 po_number의 모든 행이 한 PO로 묶이고 각 행이 하나의 PO 라인.
+// 헤더 컬럼(법인·제조사·계약유형·계약일·인코텀즈·결제조건·계약기간·메모)은 같은 그룹 안에서 동일해야 한다.
+export const PURCHASE_ORDER_FIELDS: FieldDef[] = [
+  { key: 'po_number', label: '발주번호', required: true, type: 'string' },
+  { key: 'company_code', label: '법인코드', required: true, type: 'string' },
+  { key: 'manufacturer_name', label: '제조사명', required: true, type: 'string' },
+  { key: 'contract_type', label: '계약유형', required: true, type: 'string' },
+  { key: 'contract_date', label: '계약일', required: true, type: 'date' },
+  { key: 'incoterms', label: '인코텀즈', required: false, type: 'string' },
+  { key: 'payment_terms', label: '결제조건', required: false, type: 'string' },
+  { key: 'contract_period_start', label: '계약시작일', required: false, type: 'date' },
+  { key: 'contract_period_end', label: '계약종료일', required: false, type: 'date' },
+  { key: 'product_code', label: '품번코드', required: true, type: 'string' },
+  { key: 'quantity', label: '수량', required: true, type: 'number' },
+  { key: 'unit_price_usd_wp', label: 'USD/Wp단가', required: true, type: 'number' },
+  { key: 'item_type', label: '본품/스페어', required: true, type: 'string' },
+  { key: 'payment_type', label: '유상/무상', required: true, type: 'string' },
+  { key: 'line_memo', label: '라인메모', required: false, type: 'string' },
+  { key: 'memo', label: '메모', required: false, type: 'string' },
+];
+
+// 신용장(LC) 필드 — 1차는 헤더만. 라인(분할 인수)은 별도 다이얼로그에서.
+// po_number는 발주 양식에 등록된 자연키와 일치해야 서버에서 po_id로 매핑된다.
+export const LC_FIELDS: FieldDef[] = [
+  { key: 'lc_number', label: 'L/C No.', required: false, type: 'string' },
+  { key: 'po_number', label: '발주번호(참조)', required: true, type: 'string' },
+  { key: 'company_code', label: '법인코드', required: true, type: 'string' },
+  { key: 'bank_name', label: '은행명', required: true, type: 'string' },
+  { key: 'open_date', label: '개설일', required: false, type: 'date' },
+  { key: 'amount_usd', label: 'L/C금액(USD)', required: true, type: 'number' },
+  { key: 'target_qty', label: '대상수량', required: false, type: 'number' },
+  { key: 'usance_days', label: '유산스(일)', required: false, type: 'number' },
+  { key: 'usance_type', label: '유산스유형', required: false, type: 'string' },
+  { key: 'maturity_date', label: '만기일', required: false, type: 'date' },
+  { key: 'memo', label: '메모', required: false, type: 'string' },
+];
+
 // Import 결과 타입 (Go API 응답)
 export interface ImportError {
   row: number;
@@ -229,7 +274,7 @@ export interface ImportResult {
   warnings: ImportWarning[];
 }
 
-// 통합 양식 업로드 — 한 파일에 8섹션이 같이 들어 있는 경우.
+// 통합 양식 업로드 — 한 파일에 모든 섹션이 같이 들어 있는 경우.
 export interface UnifiedSection {
   type: TemplateType;
   label: string;
@@ -269,4 +314,6 @@ export const FIELDS_MAP: Record<TemplateType, FieldDef[]> = {
   expense: EXPENSE_FIELDS,
   order: ORDER_FIELDS,
   receipt: RECEIPT_FIELDS,
+  purchase_order: PURCHASE_ORDER_FIELDS,
+  lc: LC_FIELDS,
 };

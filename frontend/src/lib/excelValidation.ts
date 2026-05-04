@@ -10,6 +10,7 @@ import {
 import { INBOUND_TYPE_LABEL, USAGE_CATEGORIES } from '@/types/inbound';
 import { EXPENSE_TYPE_LABEL } from '@/types/customs';
 import { RECEIPT_METHOD_LABEL, MANAGEMENT_CATEGORY_LABEL, FULFILLMENT_SOURCE_LABEL } from '@/types/orders';
+import { CONTRACT_TYPES_ACTIVE } from '@/types/procurement';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_PATTERN = /^\d{4}-\d{2}$/;
@@ -45,6 +46,14 @@ const NORMALIZED_VALUES: Record<string, Record<string, string>> = {
   fulfillment_source: buildNormalizer(FULFILLMENT_SOURCE_LABEL),
   group_trade: { Y: 'Y', N: 'N', y: 'Y', n: 'N' },
   erp_closed: { Y: 'Y', N: 'N', y: 'Y', n: 'N' },
+  // PO 계약유형 — 한글 라벨('스팟','프레임')과 코드값('spot','frame')을 모두 받는다.
+  // CONTRACT_TYPES_ACTIVE만 허용 — 레거시(annual 등)는 신규 등록 차단.
+  contract_type: Object.fromEntries(
+    CONTRACT_TYPES_ACTIVE.flatMap((t) => [
+      [t.value, t.value],
+      [t.label, t.value],
+    ]),
+  ),
 };
 
 // 허용값 맵 (감리 규칙: map 방식, if-else 나열 금지)
@@ -67,6 +76,8 @@ const CODE_FIELD_MAP: Record<string, keyof MasterDataForExcel> = {
   customer_name: 'partners',
   warehouse_code: 'warehouses',
   target_company_code: 'companies',
+  // LC 양식 — 은행 마스터 존재 검증.
+  bank_name: 'banks',
 };
 
 // 양수 검증 대상 필드 (감리 규칙: 물리적으로 양수인 필드 <= 0 체크)
@@ -77,6 +88,8 @@ const POSITIVE_FIELDS: Record<string, boolean> = {
   cif_unit_usd: true, cif_total_usd: true, tariff_amount: true, vat_amount: true,
   vat: true, customs_fee: true, incidental_cost: true, deposit_rate: true,
   spare_qty: true,
+  // PO/LC 추가
+  amount_usd: true, target_qty: true, usance_days: true,
 };
 
 // 마스터 데이터에서 유효 코드 셋 생성
@@ -96,6 +109,7 @@ function buildCodeSet(master: MasterDataForExcel, key: keyof MasterDataForExcel)
     addIfString(item.partner_name);
     addIfString(item.warehouse_code);
     addIfString(item.warehouse_name);
+    addIfString(item.bank_name);
   }
   return set;
 }
@@ -129,7 +143,8 @@ function validateRow(
         const label = field.key === 'manufacturer_name' ? '제조사' :
           field.key === 'customer_name' ? '거래처' :
           field.key === 'product_code' ? '품번' :
-          field.key === 'warehouse_code' ? '창고' : '법인';
+          field.key === 'warehouse_code' ? '창고' :
+          field.key === 'bank_name' ? '은행' : '법인';
         errors.push({ field: field.label, message: `존재하지 않는 ${label}입니다` });
       }
     }

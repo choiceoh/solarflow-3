@@ -12,8 +12,11 @@ import {
   FIELDS_MAP, DECLARATION_FIELDS, DECLARATION_COST_FIELDS, TEMPLATE_LABEL,
 } from '@/types/excel';
 
+// excelTemplates.ts의 UNIFIED_TEMPLATE_ORDER와 동일한 순서. PO는 LC보다 먼저 처리되어야
+// LC.po_number 자연키 매핑이 안전하다.
 const UNIFIED_SECTION_ORDER: TemplateType[] = [
   'company', 'order', 'outbound', 'sale', 'receipt',
+  'purchase_order', 'lc',
   'inbound', 'declaration', 'expense',
 ];
 
@@ -177,7 +180,7 @@ export async function parseExcelFile(
   } satisfies ImportPreview;
 }
 
-// 통합 양식 파싱 — 한 파일에서 8개 섹션을 모두 읽는다.
+// 통합 양식 파싱 — 한 파일에서 모든 섹션을 읽는다.
 // 시트가 없는 섹션은 present:false, 헤더 누락 등 파싱 실패는 parseError로 보고한다.
 export async function parseUnifiedExcelFile(file: File): Promise<UnifiedImportPreview> {
   const ExcelJS = await import('exceljs');

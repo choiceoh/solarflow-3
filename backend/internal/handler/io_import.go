@@ -77,7 +77,7 @@ func validateAllowedValues(rowNum int, value string, field string, allowed map[s
 	return nil
 }
 
-// ImportHandler — 엑셀 Import 7종 API를 처리하는 핸들러
+// ImportHandler — 엑셀 Import 9종 API를 처리하는 핸들러
 // 비유: "일괄 등록 창구" — 엑셀에서 파싱된 행들을 DB에 일괄 INSERT
 type ImportHandler struct {
 	DB *supa.Client
@@ -994,6 +994,257 @@ func (h *ImportHandler) Orders(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("[수주 Import INSERT 실패] row=%d, err=%v", rowNum, err)
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "order", Message: "수주 등록 실패"})
+			continue
+		}
+
+		imported++
+	}
+
+	resp := model.ImportResponse{
+		Success:       len(importErrors) == 0,
+		ImportedCount: imported,
+		ErrorCount:    len(importErrors),
+		Errors:        importErrors,
+		Warnings:      []model.ImportWarning{},
+	}
+	if resp.Errors == nil {
+		resp.Errors = []model.ImportError{}
+	}
+
+	response.RespondJSON(w, http.StatusOK, resp)
+}
+
+// --- 8. Purchase Orders Import ---
+
+// PurchaseOrders — POST /api/v1/import/purchase-orders — 발주(PO) 일괄 등록
+// 비유: 엑셀에서 읽은 발주 계약을 한 번에 등록. 같은 po_number 그루핑으로 헤더 1건 + 라인 N건.
+func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
+	var req model.ImportRowsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[PO Import 요청 파싱 실패] %v", err)
+		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
+		return
+	}
+
+	if len(req.Rows) == 0 {
+		response.RespondError(w, http.StatusBadRequest, "등록할 행이 없습니다")
+		return
+	}
+
+	imported := 0
+
+	groups, groupOrder, importErrors, warnings := groupPORowsByPONumber(req.Rows)
+
+	for _, poNum := range groupOrder {
+		grp := groups[poNum]
+		first := grp.FirstRow
+		rowNum := grp.FirstIdx
+
+		companyID, err := h.resolveFK("companies", "company_code", getString(first, "company_code"), "company_id")
+		if err != nil {
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "company_code", Message: err.Error()})
+			continue
+		}
+		mfgID, err := h.resolveFK("manufacturers", "name_kr", getString(first, "manufacturer_name"), "manufacturer_id")
+		if err != nil {
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "manufacturer_name", Message: err.Error()})
+			continue
+		}
+
+		poNumPtr := poNum
+		poReq := model.CreatePurchaseOrderRequest{
+			PONumber:            &poNumPtr,
+			CompanyID:           companyID,
+			ManufacturerID:      mfgID,
+			ContractType:        getString(first, "contract_type"),
+			ContractDate:        getStringPtr(first, "contract_date"),
+			Incoterms:           getStringPtr(first, "incoterms"),
+			PaymentTerms:        getStringPtr(first, "payment_terms"),
+			ContractPeriodStart: getStringPtr(first, "contract_period_start"),
+			ContractPeriodEnd:   getStringPtr(first, "contract_period_end"),
+			Status:              "draft",
+			Memo:                getStringPtr(first, "memo"),
+		}
+
+		if msg := poReq.Validate(); msg != "" {
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "purchase_order", Message: msg})
+			continue
+		}
+
+		poData, _, err := h.DB.From("purchase_orders").
+			Insert(poReq, false, "", "", "").
+			Execute()
+		if err != nil {
+			log.Printf("[PO Import 헤더 INSERT 실패] po_number=%s, err=%v", poNum, err)
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "purchase_order", Message: "PO 등록 실패: " + err.Error()})
+			continue
+		}
+
+		var createdPOs []model.PurchaseOrder
+		if err := json.Unmarshal(poData, &createdPOs); err != nil || len(createdPOs) == 0 {
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "purchase_order", Message: "PO 등록 결과 확인 실패"})
+			continue
+		}
+		poID := createdPOs[0].POID
+
+		lineOK := true
+		for j, lineRow := range grp.LineRows {
+			lineRowNum := grp.LineIdxes[j]
+
+			productCode := getString(lineRow, "product_code")
+			productID, wattageKW, err := h.resolveProductWithWattage(productCode)
+			if err != nil {
+				importErrors = append(importErrors, model.ImportError{Row: lineRowNum, Field: "product_code", Message: err.Error()})
+				lineOK = false
+				continue
+			}
+
+			lineReq, parseErrs := parsePOLineRow(lineRowNum, lineRow, productID, wattageKW)
+			if len(parseErrs) > 0 {
+				importErrors = append(importErrors, parseErrs...)
+				lineOK = false
+				continue
+			}
+			lineReq.POID = poID
+
+			if msg := lineReq.Validate(); msg != "" {
+				importErrors = append(importErrors, model.ImportError{Row: lineRowNum, Field: "po_line_items", Message: msg})
+				lineOK = false
+				continue
+			}
+
+			_, _, err = h.DB.From("po_line_items").
+				Insert(lineReq, false, "", "", "").
+				Execute()
+			if err != nil {
+				log.Printf("[PO Import 라인 INSERT 실패] po_number=%s, row=%d, err=%v", poNum, lineRowNum, err)
+				importErrors = append(importErrors, model.ImportError{Row: lineRowNum, Field: "po_line_items", Message: "라인 등록 실패"})
+				lineOK = false
+				continue
+			}
+		}
+
+		if lineOK {
+			imported += len(grp.LineRows)
+		}
+	}
+
+	resp := model.ImportResponse{
+		Success:       len(importErrors) == 0,
+		ImportedCount: imported,
+		ErrorCount:    len(importErrors),
+		WarningCount:  len(warnings),
+		Errors:        importErrors,
+		Warnings:      warnings,
+	}
+	if resp.Errors == nil {
+		resp.Errors = []model.ImportError{}
+	}
+	if resp.Warnings == nil {
+		resp.Warnings = []model.ImportWarning{}
+	}
+
+	response.RespondJSON(w, http.StatusOK, resp)
+}
+
+// --- 9. LCs Import ---
+
+// LCs — POST /api/v1/import/lcs — 신용장(LC) 일괄 등록
+// 비유: 엑셀에서 읽은 LC 개설 신청서를 한 번에 등록. 라인(분할 인수)은 별도 화면.
+// po_number(자연키) → po_id 매핑, bank_name + company_id → bank_id 매핑.
+func (h *ImportHandler) LCs(w http.ResponseWriter, r *http.Request) {
+	var req model.ImportRowsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[LC Import 요청 파싱 실패] %v", err)
+		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
+		return
+	}
+
+	if len(req.Rows) == 0 {
+		response.RespondError(w, http.StatusBadRequest, "등록할 행이 없습니다")
+		return
+	}
+
+	var importErrors []model.ImportError
+	imported := 0
+
+	for i, row := range req.Rows {
+		rowNum := i + 2
+
+		if errs := validateRequired(rowNum, row, []string{
+			"po_number", "company_code", "bank_name", "amount_usd",
+		}); len(errs) > 0 {
+			importErrors = append(importErrors, errs...)
+			continue
+		}
+
+		companyID, err := h.resolveFK("companies", "company_code", getString(row, "company_code"), "company_id")
+		if err != nil {
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "company_code", Message: err.Error()})
+			continue
+		}
+
+		// PO 매핑 — po_number 자연키로 동일 법인 PO 검색.
+		poData, _, err := h.DB.From("purchase_orders").
+			Select("po_id", "exact", false).
+			Eq("po_number", getString(row, "po_number")).
+			Eq("company_id", companyID).
+			Execute()
+		if err != nil {
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "po_number", Message: "PO 조회 실패: " + err.Error()})
+			continue
+		}
+		var poRows []map[string]interface{}
+		if err := json.Unmarshal(poData, &poRows); err != nil || len(poRows) == 0 {
+			importErrors = append(importErrors, model.ImportError{
+				Row: rowNum, Field: "po_number",
+				Message: fmt.Sprintf("같은 법인의 발주번호 %s를 찾을 수 없습니다 (먼저 발주를 등록하세요)", getString(row, "po_number")),
+			})
+			continue
+		}
+		poID, ok := poRows[0]["po_id"].(string)
+		if !ok || poID == "" {
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "po_number", Message: "po_id 추출 실패"})
+			continue
+		}
+
+		// 은행 매핑 — bank_name + company_id (같은 법인의 은행 한도여야 함).
+		bankData, _, err := h.DB.From("banks").
+			Select("bank_id", "exact", false).
+			Eq("bank_name", getString(row, "bank_name")).
+			Eq("company_id", companyID).
+			Execute()
+		if err != nil {
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "bank_name", Message: "은행 조회 실패: " + err.Error()})
+			continue
+		}
+		var bankRows []map[string]interface{}
+		if err := json.Unmarshal(bankData, &bankRows); err != nil || len(bankRows) == 0 {
+			importErrors = append(importErrors, model.ImportError{
+				Row: rowNum, Field: "bank_name",
+				Message: fmt.Sprintf("같은 법인의 은행 %s가 등록되지 않았습니다", getString(row, "bank_name")),
+			})
+			continue
+		}
+		bankID, ok := bankRows[0]["bank_id"].(string)
+		if !ok || bankID == "" {
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "bank_name", Message: "bank_id 추출 실패"})
+			continue
+		}
+
+		lcReq, parseErrs := parseLCRow(rowNum, row, poID, bankID, companyID)
+		if len(parseErrs) > 0 {
+			importErrors = append(importErrors, parseErrs...)
+			continue
+		}
+
+		insertPayload := model.NewLCRecordInsert(lcReq)
+		_, _, err = h.DB.From("lc_records").
+			Insert(insertPayload, false, "", "", "").
+			Execute()
+		if err != nil {
+			log.Printf("[LC Import INSERT 실패] row=%d, err=%v", rowNum, err)
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "lc", Message: "LC 등록 실패: " + err.Error()})
 			continue
 		}
 

@@ -37,6 +37,10 @@ import {
   OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL,
   type OutboundStatus, type UsageCategory, type Outbound, type SaleListItem,
 } from '@/types/outbound';
+import {
+  PO_STATUS_LABEL, LC_STATUS_LABEL, CONTRACT_TYPE_LABEL,
+  type PurchaseOrder, type LCRecord,
+} from '@/types/procurement';
 import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite } from '@/types/masters';
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
@@ -873,6 +877,49 @@ export const masterSources: Record<string, MasterOptionSource> = {
         .map((p) => ({ value: p.partner_id, label: p.partner_name }));
     },
   },
+  // 듀얼 product: GUI 메타 편집기에서 PO/LC/은행을 picker로 참조할 수 있게.
+  // 어떤 화면 config가 발주번호 선택 dropdown을 요구할 때 사용한다.
+  purchase_orders: {
+    load: async () => {
+      const list = await fetchWithAuth<PurchaseOrder[]>('/api/v1/pos');
+      return list.map((po) => ({
+        value: po.po_id,
+        label: `${po.po_number ?? po.po_id.slice(0, 8)}${po.manufacturer_name ? ` · ${po.manufacturer_name}` : ''}`,
+      }));
+    },
+  },
+  // 법인 컨텍스트 의존 — context.company_id가 있으면 그 법인의 PO만, 없으면 전체.
+  'purchase_orders.byCompany': {
+    load: async (ctx) => {
+      const companyId = ctx?.company_id as string | undefined;
+      const path = companyId ? `/api/v1/pos?company_id=${companyId}` : '/api/v1/pos';
+      const list = await fetchWithAuth<PurchaseOrder[]>(path);
+      return list.map((po) => ({
+        value: po.po_id,
+        label: `${po.po_number ?? po.po_id.slice(0, 8)}${po.manufacturer_name ? ` · ${po.manufacturer_name}` : ''}`,
+      }));
+    },
+  },
+  lcs: {
+    load: async () => {
+      const list = await fetchWithAuth<LCRecord[]>('/api/v1/lcs');
+      return list.map((lc) => ({
+        value: lc.lc_id,
+        label: `${lc.lc_number ?? lc.lc_id.slice(0, 8)}${lc.bank_name ? ` · ${lc.bank_name}` : ''}`,
+      }));
+    },
+  },
+  // 은행은 법인 단위 한도라 company_id 컨텍스트 필수 — 없으면 전체 활성 은행.
+  'banks.byCompany': {
+    load: async (ctx) => {
+      const companyId = ctx?.company_id as string | undefined;
+      const path = companyId ? `/api/v1/banks?company_id=${companyId}` : '/api/v1/banks';
+      const list = await fetchWithAuth<Bank[]>(path);
+      return list
+        .filter((b) => b.is_active)
+        .map((b) => ({ value: b.bank_id, label: b.bank_name }));
+    },
+  },
 };
 
 // ─── Enum dictionaries ─────────────────────────────────────────────────────
@@ -885,6 +932,10 @@ export const enumDictionaries: Record<string, Record<string, string>> = {
   BL_STATUS_LABEL: BL_STATUS_LABEL as Record<string, string>,
   // Phase 4 (bank-meta): 은행 활성/비활성 (boolean → 한글 라벨)
   BANK_ACTIVE_LABEL: { true: '활성', false: '비활성' },
+  // 발주(PO) / 신용장(LC) — 듀얼 product GUI 메타 편집기에서 status 컬럼/필드 라벨용.
+  PO_STATUS_LABEL,
+  LC_STATUS_LABEL,
+  CONTRACT_TYPE_LABEL,
 };
 
 // ─── Phase 4 보강: Computed formulas (계산 필드용) ─────────────────────────
@@ -1160,6 +1211,22 @@ export const masterSourceMeta: RegistryMeta = {
   'partners.customer': {
     label: '거래처 (고객사)',
     description: 'partner_type=customer 또는 both 만 필터',
+  },
+  purchase_orders: {
+    label: '발주(PO) 전체',
+    description: '모든 PO — po_id 별 옵션, 라벨은 발주번호+제조사',
+  },
+  'purchase_orders.byCompany': {
+    label: '발주(PO) — 법인별',
+    description: 'context.company_id 있으면 그 법인 PO만',
+  },
+  lcs: {
+    label: '신용장(LC) 전체',
+    description: '모든 LC — lc_id 별 옵션, 라벨은 L/C No.+은행',
+  },
+  'banks.byCompany': {
+    label: '은행 — 법인별',
+    description: '활성 은행 — context.company_id로 필터 (한도 단위)',
   },
 };
 

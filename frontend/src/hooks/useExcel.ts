@@ -49,6 +49,8 @@ export function useExcel(type: TemplateType) {
     let cancelled = false;
     type ActiveRow = Record<string, unknown> & { is_active?: boolean };
     type OutboundRow = MasterDataForExcel['outbounds'] extends (infer U)[] | undefined ? U : never;
+    type BankRow = MasterDataForExcel['banks'] extends (infer U)[] | undefined ? U : never;
+    type POMasterRow = MasterDataForExcel['purchaseOrders'] extends (infer U)[] | undefined ? U : never;
     const fetches: Promise<ActiveRow[]>[] = [
       fetchWithAuth<ActiveRow[]>('/api/v1/manufacturers'),
       fetchWithAuth<ActiveRow[]>('/api/v1/products'),
@@ -59,8 +61,18 @@ export function useExcel(type: TemplateType) {
     if (type === 'sale') {
       fetches.push(fetchWithAuth<ActiveRow[]>('/api/v1/outbounds?status=active'));
     }
-    Promise.all(fetches).then(([manufacturers, products, partners, warehouses, outbounds]) => {
+    // LC 양식: 은행 + 발주번호 코드표 필요. PO 양식: 발주번호 자동 노출은 안 하지만 구조 일관성 유지.
+    const needsBanks = type === 'lc';
+    const needsPos = type === 'lc';
+    if (needsBanks) fetches.push(fetchWithAuth<ActiveRow[]>('/api/v1/banks').catch(() => [] as ActiveRow[]));
+    if (needsPos) fetches.push(fetchWithAuth<ActiveRow[]>('/api/v1/pos').catch(() => [] as ActiveRow[]));
+    Promise.all(fetches).then((results) => {
       if (cancelled) return;
+      const [manufacturers, products, partners, warehouses] = results;
+      let cursor = 4;
+      const outbounds = type === 'sale' ? results[cursor++] : undefined;
+      const banks = needsBanks ? results[cursor++] : undefined;
+      const pos = needsPos ? results[cursor++] : undefined;
       setMasterData({
         companies,
         manufacturers: manufacturers.filter((m) => m.is_active) as MasterDataForExcel['manufacturers'],
@@ -68,6 +80,8 @@ export function useExcel(type: TemplateType) {
         partners: partners.filter((p) => p.is_active) as MasterDataForExcel['partners'],
         warehouses: warehouses.filter((w) => w.is_active) as MasterDataForExcel['warehouses'],
         outbounds: (outbounds ?? []) as OutboundRow[],
+        banks: banks ? (banks.filter((b) => b.is_active !== false) as BankRow[]) : undefined,
+        purchaseOrders: pos as POMasterRow[] | undefined,
       });
     }).catch(() => {
       if (!cancelled) setError('마스터 데이터 로딩 실패');
@@ -199,7 +213,16 @@ export function useExcel(type: TemplateType) {
         return;
       }
 
-      const result = await fetchWithAuth<ImportResult>(`/api/v1/import/${type === 'sale' ? 'sales' : type === 'declaration' ? 'declarations' : type === 'expense' ? 'expenses' : type === 'order' ? 'orders' : type === 'receipt' ? 'receipts' : type}`, {
+      const endpoint =
+        type === 'sale' ? 'sales' :
+        type === 'declaration' ? 'declarations' :
+        type === 'expense' ? 'expenses' :
+        type === 'order' ? 'orders' :
+        type === 'receipt' ? 'receipts' :
+        type === 'purchase_order' ? 'purchase-orders' :
+        type === 'lc' ? 'lcs' :
+        type;
+      const result = await fetchWithAuth<ImportResult>(`/api/v1/import/${endpoint}`, {
         method: 'POST',
         body: JSON.stringify(body),
       });

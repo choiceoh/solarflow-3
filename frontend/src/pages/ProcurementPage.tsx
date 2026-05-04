@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { History } from 'lucide-react';
+import { History, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 
@@ -11,6 +11,8 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import POListTable from '@/components/procurement/POListTable';
 import PODetailView from '@/components/procurement/PODetailView';
+import POCreateDialog from '@/components/procurement/POCreateDialog';
+import LCCreateDialog from '@/components/procurement/LCCreateDialog';
 import LCListTable from '@/components/procurement/LCListTable';
 import TTListTable from '@/components/procurement/TTListTable';
 import DepositStatusPanel from '@/components/procurement/DepositStatusPanel';
@@ -140,6 +142,10 @@ export default function ProcurementPage() {
   const { data: bls, loading: blLoading, reload: reloadBL } = useBLList(blFilters);
 
   const [depositMfgFilter, setDepositMfgFilter] = useState('');
+
+  // PO/LC 신규 등록 다이얼로그.
+  const [poCreateOpen, setPoCreateOpen] = useState(false);
+  const [lcCreateOpen, setLcCreateOpen] = useState(false);
 
   // 우측 슬라이드 패널 — 드래그 리사이즈
   const [panelWidth, setPanelWidth] = useState(900);
@@ -306,6 +312,7 @@ export default function ProcurementPage() {
               options: CONTRACT_TYPES_ACTIVE.map(({ value, label }) => ({ value, label })),
             },
           ]} />
+          <Button size="xs" onClick={() => setPoCreateOpen(true)}><Plus className="mr-1 h-3 w-3" />PO 신규 등록</Button>
           <Button size="xs" variant="outline" onClick={() => navigate('/purchase-history')}><History className="mr-1 h-3 w-3" />구매 이력</Button>
         </>
       )}
@@ -331,6 +338,7 @@ export default function ProcurementPage() {
               options: manufacturers.map((m) => ({ value: m.manufacturer_id, label: m.name_kr })),
             },
           ]} />
+          <Button size="xs" onClick={() => setLcCreateOpen(true)}><Plus className="mr-1 h-3 w-3" />LC 신규 등록</Button>
         </>
       )}
       {activeTab === 'bl' && (
@@ -723,6 +731,17 @@ export default function ProcurementPage() {
           )}
         </div>
       </div>
+
+      <POCreateDialog
+        open={poCreateOpen}
+        onClose={() => setPoCreateOpen(false)}
+        onCreated={() => { reloadPO(); reloadPoList(); }}
+      />
+      <LCCreateDialog
+        open={lcCreateOpen}
+        onClose={() => setLcCreateOpen(false)}
+        onCreated={() => { reloadLC(); setLcAggVersion(v => v + 1); }}
+      />
     </div>
   );
 }

@@ -177,8 +177,10 @@ POST    /api/v1/export/amaranth/outbound/jobs
 POST    /api/v1/import/declarations
 POST    /api/v1/import/expenses
 POST    /api/v1/import/inbound
+POST    /api/v1/import/lcs
 POST    /api/v1/import/orders
 POST    /api/v1/import/outbound
+POST    /api/v1/import/purchase-orders
 POST    /api/v1/import/receipts
 POST    /api/v1/import/sales
 POST    /api/v1/intercompany-requests/
