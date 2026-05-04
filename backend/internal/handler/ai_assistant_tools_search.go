@@ -720,4 +720,60 @@ func toolSearchDeclarations() assistantTool {
 	}
 }
 
+// --- search_partner_activities ---
+
+type searchPartnerActivitiesInput struct {
+	PartnerID string `json:"partner_id"`
+	Kind      string `json:"kind,omitempty"`
+	OpenOnly  bool   `json:"open_followups_only,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
+}
+
+func toolSearchPartnerActivities() assistantTool {
+	return assistantTool{
+		name:        "search_partner_activities",
+		description: "거래처 활동 로그 (partner_activities) — 통화·방문·메일·메모 + 후속(follow-up) 추적. partner_id 필수 — search_partners 로 먼저 룩업. baro 의 채권 보드 (list_baro_credit_board) 와 짝 — 외상이 비정상이거나 미수가 길면 이 도구로 최근 접촉 이력 확인. 모든 테넌트 사용 가능.",
+		inputSchema: json.RawMessage(`{
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["partner_id"],
+			"properties": {
+				"partner_id":           {"type": "string", "description": "거래처 ID (UUID). 필수"},
+				"kind":                 {"type": "string", "description": "활동 유형 (call/visit/email/memo). 비우면 전체"},
+				"open_followups_only":  {"type": "boolean", "description": "true 면 후속 미처리(follow_up_required=true AND follow_up_done=false)만"},
+				"limit":                {"type": "integer", "description": "최대 결과 수, 기본 30, 최대 100"}
+			}
+		}`),
+		allow: func(ctx context.Context) bool { return middleware.GetUserID(ctx) != "" },
+		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
+			var args searchPartnerActivitiesInput
+			if err := json.Unmarshal(input, &args); err != nil {
+				return "", fmt.Errorf("입력 파싱 실패: %w", err)
+			}
+			args.PartnerID = strings.TrimSpace(args.PartnerID)
+			if args.PartnerID == "" {
+				return "", fmt.Errorf("partner_id 는 필수입니다 — search_partners 로 먼저 ID 를 조회하세요")
+			}
+			limit := clampLimit(args.Limit, 30, 100)
+			q := db.From("partner_activities").
+				Select("*", "exact", false).
+				Eq("partner_id", args.PartnerID)
+			if kind := strings.TrimSpace(args.Kind); kind != "" {
+				q = q.Eq("kind", kind)
+			}
+			if args.OpenOnly {
+				q = q.Eq("follow_up_required", "true").Eq("follow_up_done", "false")
+			}
+			data, _, err := q.
+				Order("created_at", &postgrest.OrderOpts{Ascending: false}).
+				Limit(limit, "").
+				Execute()
+			if err != nil {
+				return "", fmt.Errorf("활동 로그 조회 실패: %w", err)
+			}
+			return wrapToolResult(data, "활동 기록이 없습니다. partner_id 가 정확한지 확인하거나 영업이 아직 접촉 이력을 입력하지 않았을 수 있습니다.")
+		},
+	}
+}
+
 // ===== 수주·출고 update/delete =====

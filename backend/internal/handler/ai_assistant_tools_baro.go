@@ -324,6 +324,60 @@ func toolBaroPurchaseHistory() assistantTool {
 	}
 }
 
+// ─── list_baro_group_purchase_requests ────────────────────────────────────────
+
+type baroGroupPurchaseInput struct {
+	Status string `json:"status,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
+}
+
+func toolBaroGroupPurchaseRequests() assistantTool {
+	return assistantTool{
+		name:        "list_baro_group_purchase_requests",
+		description: "바로(주) 그룹 매입요청 (baro → topsolar 역구매) 목록. intercompany_requests where requester=BR. 상태(pending/shipped/received/rejected/cancelled) 필터 가능. created_at 내림차순. baro 자체가 보낸 요청만 보임 — topsolar 측 인박스에 들어간 요청도 포함되며 status 로 처리 진행 확인. admin/operator 만.",
+		allowScopes: []string{middleware.TenantScopeBaro},
+		inputSchema: json.RawMessage(`{
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"status": {"type": "string", "description": "요청 상태 (pending/shipped/received/rejected/cancelled). 비우면 전체"},
+				"limit":  {"type": "integer", "description": "최대 결과 수, 기본 30, 최대 100"}
+			}
+		}`),
+		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },
+		execute: func(ctx context.Context, db *supa.Client, input json.RawMessage) (string, error) {
+			var args baroGroupPurchaseInput
+			if len(input) > 0 {
+				if err := json.Unmarshal(input, &args); err != nil {
+					return "", fmt.Errorf("입력 파싱 실패: %w", err)
+				}
+			}
+			baroCompanyID, err := lookupBaroCompanyID(db)
+			if err != nil {
+				return "", err
+			}
+			if baroCompanyID == "" {
+				return wrapToolResult([]byte("[]"), "BR(바로) 법인 마스터 미등록 — 관리자에게 companies 테이블 확인 요청.")
+			}
+			limit := clampLimit(args.Limit, 30, 100)
+			q := db.From("intercompany_requests").
+				Select("*", "exact", false).
+				Eq("requester_company_id", baroCompanyID)
+			if status := strings.TrimSpace(args.Status); status != "" {
+				q = q.Eq("status", status)
+			}
+			data, _, err := q.
+				Order("created_at", &postgrest.OrderOpts{Ascending: false}).
+				Limit(limit, "").
+				Execute()
+			if err != nil {
+				return "", fmt.Errorf("그룹 매입요청 조회 실패: %w", err)
+			}
+			return wrapToolResult(data, "그룹 매입요청이 없습니다. status 필터를 빼거나 새 요청을 /baro/group-purchase 에서 작성하세요.")
+		},
+	}
+}
+
 // lookupBaroCompanyID — companies 테이블에서 company_code='BR' 행의 ID 단건 조회. baro 도구가 자체 매입 이력을
 // 스코프할 때 사용. 호출 빈도가 낮아 캐싱 안 함 (호출당 한 쿼리).
 func lookupBaroCompanyID(db *supa.Client) (string, error) {
