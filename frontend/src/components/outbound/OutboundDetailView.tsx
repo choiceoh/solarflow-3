@@ -12,6 +12,7 @@ import OutboundCancelFlow from './OutboundCancelFlow';
 import LinkedMemoWidget from '@/components/memo/LinkedMemoWidget';
 import OutboundTransportCostPanel from './OutboundTransportCostPanel';
 import OutboundWorkflowPanel from './OutboundWorkflowPanel';
+import OutboundFifoMatchesPanel from './OutboundFifoMatchesPanel';
 import { useOutboundDetail } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { notify } from '@/lib/notify';
@@ -285,6 +286,8 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
           </div>
         </DetailSection>
       )}
+
+      <OutboundFifoMatchesPanel outboundId={outboundId} />
 
       <LinkedMemoWidget linkedTable="outbounds" linkedId={outboundId} />
 
