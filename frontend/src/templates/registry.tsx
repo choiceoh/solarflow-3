@@ -23,6 +23,8 @@ import warehouseDetailConfig from '@/config/details/warehouses';
 import manufacturerDetailConfig from '@/config/details/manufacturers';
 import partnerDetailConfig from '@/config/details/partners';
 import constructionSiteDetailConfig from '@/config/details/construction_sites';
+import purchaseOrderDetailConfig from '@/config/details/purchase_orders';
+import lcDetailConfig from '@/config/details/lcs';
 import partnerFormConfig from '@/config/forms/partners';
 import bankFormConfig from '@/config/forms/banks';
 import warehouseFormConfig from '@/config/forms/warehouses';
@@ -38,10 +40,14 @@ import {
   type OutboundStatus, type UsageCategory, type Outbound, type SaleListItem,
 } from '@/types/outbound';
 import {
-  PO_STATUS_LABEL, LC_STATUS_LABEL, CONTRACT_TYPE_LABEL,
+  PO_STATUS_LABEL, PO_STATUS_COLOR,
+  LC_STATUS_LABEL, LC_STATUS_COLOR,
+  CONTRACT_TYPE_LABEL,
+  type POStatus, type LCStatus,
   type PurchaseOrder, type LCRecord,
 } from '@/types/procurement';
 import { usePOList, useLCList } from '@/hooks/useProcurement';
+import StatusPill from '@/components/common/StatusPill';
 import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite } from '@/types/masters';
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
@@ -148,6 +154,22 @@ export const cellRenderers: Record<string, CellRenderer> = {
     <span className="sf-pill ghost">{INBOUND_TYPE_LABEL[v as InboundType] ?? (v as string)}</span>
   ),
   inbound_status_badge: (v) => <InboundStatusBadge status={v as BLStatus} />,
+  // 발주(PO) 상태 — PO_STATUS_LABEL/COLOR 기반.
+  po_status_badge: (v) => {
+    const s = v as POStatus;
+    if (!s || !PO_STATUS_LABEL[s]) return <span className="text-muted-foreground">—</span>;
+    return <StatusPill label={PO_STATUS_LABEL[s]} colorClassName={PO_STATUS_COLOR[s]} />;
+  },
+  // 신용장(LC) 상태 — LC_STATUS_LABEL/COLOR 기반.
+  lc_status_badge: (v) => {
+    const s = v as LCStatus;
+    if (!s || !LC_STATUS_LABEL[s]) return <span className="text-muted-foreground">—</span>;
+    return <StatusPill label={LC_STATUS_LABEL[s]} colorClassName={LC_STATUS_COLOR[s]} />;
+  },
+  // 계약유형 — CONTRACT_TYPE_LABEL ('스팟' / '프레임' 등).
+  contract_type_pill: (v) => (
+    <span className="sf-pill ghost">{CONTRACT_TYPE_LABEL[v as keyof typeof CONTRACT_TYPE_LABEL] ?? (v as string) ?? '—'}</span>
+  ),
   // Inbound: aggregated 컬럼 (useBLListWithAgg 가 row 에 합쳐주는 _agg 필드 사용)
   bl_first_product: (_v, row) => {
     const r = row as BLShipment & { _agg?: { firstName?: string; firstCode?: string; extraCount?: number } };
@@ -369,6 +391,9 @@ export const detailDataHooks: Record<string, DetailDataHook> = {
   // Phase 4 마무리: companies / construction_sites detail 추가 — 모든 master 도메인 커버
   useCompanyDetail: (id) => useSimpleDetail<Record<string, unknown>>('/api/v1/companies/:id', id),
   useConstructionSiteDetail: (id) => useSimpleDetail<ConstructionSite>('/api/v1/construction-sites/:id', id),
+  // 발주(PO)·신용장(LC) 메타 상세 — 단순 GET /:id (PO 상세 라인은 별도 contentBlock에서 usePOLines로 fetch)
+  usePODetail: (id) => useSimpleDetail<PurchaseOrder>('/api/v1/pos/:id', id),
+  useLCDetail: (id) => useSimpleDetail<LCRecord>('/api/v1/lcs/:id', id),
 };
 
 // ─── Metric computers ──────────────────────────────────────────────────────
@@ -636,6 +661,9 @@ export const detailComponents: Record<string, DetailComponent> = {
   partner: ((props) => <MetaDetail config={partnerDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
   // Phase 4 마무리: 공사 현장 detail
   construction_site: ((props) => <MetaDetail config={constructionSiteDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  // 발주(PO)·신용장(LC) 메타 상세 — 라인·LC·TT 등 헤비 위젯은 /procurement에서.
+  purchase_order: ((props) => <MetaDetail config={purchaseOrderDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  lc: ((props) => <MetaDetail config={lcDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
 };
 
 // ─── Rail blocks ───────────────────────────────────────────────────────────
@@ -1181,6 +1209,10 @@ export const cellRendererMeta: RegistryMeta = {
   bl_po_link: { label: 'BL → PO 링크', description: '연결된 발주서로 이동' },
   bl_lc_link: { label: 'BL → L/C 링크', description: '연결된 L/C 로 이동' },
   bl_currency_label: { label: 'BL 통화', description: 'currency enum → 한글' },
+  // 발주(PO)·신용장(LC)
+  po_status_badge: { label: 'PO 상태 뱃지', description: 'PO_STATUS enum → 색상 뱃지' },
+  lc_status_badge: { label: 'LC 상태 뱃지', description: 'LC_STATUS enum → 색상 뱃지' },
+  contract_type_pill: { label: '계약유형 pill', description: 'CONTRACT_TYPE enum 라벨 (스팟/프레임 등)' },
 };
 export const formContentBlockMeta: RegistryMeta = {
   demo_status_widget: { label: '데모 상태 위젯', description: '메타 contentBlock 데모 — has_warranty 토글' },

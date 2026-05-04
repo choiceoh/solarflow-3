@@ -161,6 +161,8 @@ const NAV_GROUPS: CommandNavGroup[] = [
 const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/inventory': { title: '가용재고', breadcrumb: '재고 / 예약 가능 수량' },
   '/procurement': { title: 'P/O 발주', breadcrumb: '구매 / 발주 관리' },
+  '/procurement/po-v2': { title: '발주(PO) v2', breadcrumb: '구매 / 메타 발주 목록' },
+  '/procurement/lc-v2': { title: '신용장(L/C) v2', breadcrumb: '구매 / 메타 L/C 목록' },
   '/purchase-history': { title: '구매 이력', breadcrumb: '현황 / 계약 체인 통합 타임라인' },
   '/customs': { title: '면장/원가', breadcrumb: '입고 / 원가 계산' },
   '/orders': { title: '수주 관리', breadcrumb: '판매 / 수주 및 수금' },
