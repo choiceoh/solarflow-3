@@ -20,6 +20,12 @@ type Product struct {
 	WaferPlatform  *string  `json:"wafer_platform"`
 	CellConfig     *string  `json:"cell_config"`
 	SeriesName     *string  `json:"series_name"`
+	// 066: 모듈 효율(%) — 예: 22.50
+	ModuleEfficiency *float64 `json:"module_efficiency,omitempty"`
+	// 066: 모듈 셀 종류 — PERC / TOPCON / BC
+	ModuleType     *string  `json:"module_type,omitempty"`
+	// 066: 모듈 등급 — 한국 탄소인증제 등급(1/2/3)
+	ModuleGrade    *string  `json:"module_grade,omitempty"`
 	IsActive       bool     `json:"is_active"`
 	Memo           *string  `json:"memo"`
 	// D-063: ERP 시스템 내부 품번 코드 (예: M-JK0635-01). 우리 product_code (모델명) 와 별개.
@@ -59,6 +65,9 @@ type CreateProductRequest struct {
 	WaferPlatform  *string  `json:"wafer_platform"`
 	CellConfig     *string  `json:"cell_config"`
 	SeriesName     *string  `json:"series_name"`
+	ModuleEfficiency *float64 `json:"module_efficiency,omitempty"`
+	ModuleType     *string  `json:"module_type,omitempty"`
+	ModuleGrade    *string  `json:"module_grade,omitempty"`
 	Memo           *string  `json:"memo"`
 }
 
@@ -92,6 +101,23 @@ func (req *CreateProductRequest) Validate() string {
 	if req.ModuleHeightMM <= 0 {
 		return "module_height_mm는 양수여야 합니다"
 	}
+	if req.ModuleEfficiency != nil && (*req.ModuleEfficiency <= 0 || *req.ModuleEfficiency > 100) {
+		return "module_efficiency는 0보다 크고 100 이하여야 합니다"
+	}
+	if req.ModuleType != nil && *req.ModuleType != "" {
+		switch *req.ModuleType {
+		case "PERC", "TOPCON", "BC":
+		default:
+			return "module_type은 PERC, TOPCON, BC 중 하나여야 합니다"
+		}
+	}
+	if req.ModuleGrade != nil && *req.ModuleGrade != "" {
+		switch *req.ModuleGrade {
+		case "1", "2", "3", "NA":
+		default:
+			return "module_grade는 1, 2, 3, NA 중 하나여야 합니다"
+		}
+	}
 	return ""
 }
 
@@ -110,6 +136,9 @@ type UpdateProductRequest struct {
 	WaferPlatform  *string  `json:"wafer_platform,omitempty"`
 	CellConfig     *string  `json:"cell_config,omitempty"`
 	SeriesName     *string  `json:"series_name,omitempty"`
+	ModuleEfficiency *float64 `json:"module_efficiency,omitempty"`
+	ModuleType     *string  `json:"module_type,omitempty"`
+	ModuleGrade    *string  `json:"module_grade,omitempty"`
 	Memo           *string  `json:"memo,omitempty"`
 }
 
@@ -146,6 +175,23 @@ func (req *UpdateProductRequest) Validate() string {
 	}
 	if req.ModuleHeightMM != nil && *req.ModuleHeightMM <= 0 {
 		return "module_height_mm는 양수여야 합니다"
+	}
+	if req.ModuleEfficiency != nil && (*req.ModuleEfficiency <= 0 || *req.ModuleEfficiency > 100) {
+		return "module_efficiency는 0보다 크고 100 이하여야 합니다"
+	}
+	if req.ModuleType != nil && *req.ModuleType != "" {
+		switch *req.ModuleType {
+		case "PERC", "TOPCON", "BC":
+		default:
+			return "module_type은 PERC, TOPCON, BC 중 하나여야 합니다"
+		}
+	}
+	if req.ModuleGrade != nil && *req.ModuleGrade != "" {
+		switch *req.ModuleGrade {
+		case "1", "2", "3", "NA":
+		default:
+			return "module_grade는 1, 2, 3, NA 중 하나여야 합니다"
+		}
 	}
 	return ""
 }
