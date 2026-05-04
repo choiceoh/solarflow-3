@@ -252,7 +252,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxOutbound: {
 		ID: IDTxOutbound, Name: "출고", Description: "출고 CRUD",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/outbounds/", "/api/v1/outbounds/summary", "/api/v1/outbounds/{id}"},
+		Paths: []string{"/api/v1/outbounds/", "/api/v1/outbounds/summary", "/api/v1/outbounds/{id}", "/api/v1/outbounds/{id}/fifo-matches"},
 	},
 	IDTxSale: {
 		ID: IDTxSale, Name: "매출", Description: "매출 CRUD",
