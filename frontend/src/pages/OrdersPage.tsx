@@ -359,9 +359,10 @@ export default function OrdersPage() {
       : null;
     return { year, prev, currYear, prevMonth: prevMonthIdx + 1, yoyPct };
   }, [outboundsWithSales]);
-  // 최근 4주(이번 주 포함, 월요일 시작) 출고 capacity. 좌→우 = 과거→현재.
+  // 최근 12주(이번 주 포함, 월요일 시작) 출고 capacity. 좌→우 = 과거→현재.
   const weeklyOutbound = useMemo(() => {
-    const buckets = [0, 0, 0, 0];
+    const WEEKS = 12;
+    const buckets = Array<number>(WEEKS).fill(0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayDow = today.getDay();
@@ -369,6 +370,11 @@ export default function OrdersPage() {
     const thisWeekStart = new Date(today);
     thisWeekStart.setDate(today.getDate() - todayOffset);
     const weekMs = 7 * 24 * 60 * 60 * 1000;
+    const weekStarts: Date[] = Array.from({ length: WEEKS }, (_, i) => {
+      const d = new Date(thisWeekStart);
+      d.setDate(thisWeekStart.getDate() - (WEEKS - 1 - i) * 7);
+      return d;
+    });
     for (const outbound of outboundsWithSales) {
       if (!outbound.outbound_date) continue;
       const d = new Date(outbound.outbound_date);
@@ -379,9 +385,9 @@ export default function OrdersPage() {
       const itemWeekStart = new Date(d);
       itemWeekStart.setDate(d.getDate() - offset);
       const diff = Math.round((thisWeekStart.getTime() - itemWeekStart.getTime()) / weekMs);
-      if (diff >= 0 && diff < 4) buckets[3 - diff] += outbound.capacity_kw ?? 0;
+      if (diff >= 0 && diff < WEEKS) buckets[WEEKS - 1 - diff] += outbound.capacity_kw ?? 0;
     }
-    return { buckets, total: buckets.reduce((s, v) => s + v, 0), max: Math.max(...buckets) };
+    return { buckets, weekStarts, total: buckets.reduce((s, v) => s + v, 0), max: Math.max(...buckets) };
   }, [outboundsWithSales]);
   const invoicePending = useMemo(
     () => sales.filter(item => !item.tax_invoice_date).length,
@@ -821,15 +827,22 @@ export default function OrdersPage() {
               </RailBlock>
               <RailBlock title="주간 출고" last>
                 <div className="sf-mini-bars">
-                  {weeklyOutbound.buckets.map((value, index) => (
-                    <span
-                      key={index}
-                      style={{ height: `${weeklyOutbound.max > 0 ? (value / weeklyOutbound.max) * 100 : 0}%` }}
-                    />
-                  ))}
+                  {weeklyOutbound.buckets.map((value, index) => {
+                    const start = weeklyOutbound.weekStarts[index];
+                    const end = new Date(start);
+                    end.setDate(start.getDate() + 6);
+                    const fmt = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+                    return (
+                      <span
+                        key={index}
+                        title={`${fmt(start)} ~ ${fmt(end)} · ${fmtSalesMw(value)} MW`}
+                        style={{ height: `${weeklyOutbound.max > 0 ? (value / weeklyOutbound.max) * 100 : 0}%` }}
+                      />
+                    );
+                  })}
                 </div>
                 <div className="mono mt-2 text-center text-[10.5px] text-[var(--ink-3)]">
-                  합계 {fmtSalesMw(weeklyOutbound.total)} MW · 최근 4주
+                  합계 {fmtSalesMw(weeklyOutbound.total)} MW · 최근 12주
                 </div>
               </RailBlock>
             </>
