@@ -84,13 +84,9 @@ async function getSessionToken(): Promise<string | null> {
   return fallback;
 }
 
-// fetchWithAuth — Supabase 세션 토큰을 자동 첨부하는 fetch 래퍼
-// getSession()에 3초 타임아웃, 401 시 토큰 갱신 후 재시도
-export async function fetchWithAuth<T = unknown>(path: string, options?: RequestInit): Promise<T> {
-  if (isDevMockApiActive()) {
-    return mockFetchWithAuth<T>(path, options);
-  }
-
+// fetchWithAuthRaw — 인증·토큰갱신 처리만 하고 Response 객체 그대로 반환.
+// 헤더(X-Total-Count 등)까지 필요한 호출자가 사용한다. fetchWithAuth 내부에서도 재사용.
+async function fetchWithAuthRaw(path: string, options?: RequestInit): Promise<Response> {
   const token = await getSessionToken();
   const isFormData = options?.body instanceof FormData;
 
@@ -108,38 +104,33 @@ export async function fetchWithAuth<T = unknown>(path: string, options?: Request
     headers,
   });
 
-  if (res.status === 401) {
-    // 토큰 갱신 시도
-    const newToken = await refreshAccessToken();
+  if (res.status !== 401) return res;
 
-    if (newToken) {
-      // 갱신 성공 — 새 토큰으로 원래 요청 재시도
-      headers['Authorization'] = `Bearer ${newToken}`;
-      const retryRes = await fetch(`${API_BASE_URL}${path}`, {
-        ...options,
-        headers,
-      });
-
-      if (retryRes.ok) {
-        return parseResponseBody<T>(retryRes);
-      }
-
-      // 재시도도 401이면 로그아웃
-      if (retryRes.status === 401) {
-        await supabase.auth.signOut();
-        window.location.href = '/login';
-        throw new Error('인증이 만료되었습니다');
-      }
-
-      const retryError = await readErrorMessage(retryRes, '요청 실패');
-      throw new Error(retryError || `HTTP ${retryRes.status}`);
-    }
-
-    // 갱신 실패 — 로그아웃
-    await supabase.auth.signOut();
-    window.location.href = '/login';
-    throw new Error('인증이 만료되었습니다');
+  // 토큰 갱신 시도
+  const newToken = await refreshAccessToken();
+  if (newToken) {
+    headers['Authorization'] = `Bearer ${newToken}`;
+    const retryRes = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+    });
+    if (retryRes.status !== 401) return retryRes;
   }
+
+  // 401 — 로그아웃
+  await supabase.auth.signOut();
+  window.location.href = '/login';
+  throw new Error('인증이 만료되었습니다');
+}
+
+// fetchWithAuth — Supabase 세션 토큰을 자동 첨부하는 fetch 래퍼
+// getSession()에 3초 타임아웃, 401 시 토큰 갱신 후 재시도
+export async function fetchWithAuth<T = unknown>(path: string, options?: RequestInit): Promise<T> {
+  if (isDevMockApiActive()) {
+    return mockFetchWithAuth<T>(path, options);
+  }
+
+  const res = await fetchWithAuthRaw(path, options);
 
   if (!res.ok) {
     const error = await readErrorMessage(res, '요청 실패');
@@ -147,6 +138,31 @@ export async function fetchWithAuth<T = unknown>(path: string, options?: Request
   }
 
   return parseResponseBody<T>(res);
+}
+
+// fetchWithAuthMeta — fetchWithAuth + 응답 헤더(X-Total-Count 등) 같이 반환.
+// 청크 페이지네이션 누적용. dev mock 모드에서는 totalCount=null 로 떨어지고 호출 측이 length 로 fallback.
+export async function fetchWithAuthMeta<T = unknown>(
+  path: string,
+  options?: RequestInit,
+): Promise<{ data: T; totalCount: number | null }> {
+  if (isDevMockApiActive()) {
+    const data = await mockFetchWithAuth<T>(path, options);
+    return { data, totalCount: null };
+  }
+
+  const res = await fetchWithAuthRaw(path, options);
+
+  if (!res.ok) {
+    const error = await readErrorMessage(res, '요청 실패');
+    throw new Error(error || `HTTP ${res.status}`);
+  }
+
+  const data = await parseResponseBody<T>(res);
+  const raw = res.headers.get('X-Total-Count');
+  const parsed = raw === null ? null : Number(raw);
+  const totalCount = parsed !== null && Number.isFinite(parsed) ? parsed : null;
+  return { data, totalCount };
 }
 
 export async function fetchBlobWithAuth(path: string, options?: RequestInit): Promise<Response> {
