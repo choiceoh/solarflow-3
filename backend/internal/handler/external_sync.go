@@ -19,6 +19,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -308,6 +309,93 @@ func (h *ExternalSyncHandler) recordSuccess(syncID string, imported, skipped int
 // dedup: 058 마이그레이션의 UNIQUE 인덱스가 (spreadsheet_id, sheet_row_index) 충돌을
 // 자동 처리 — INSERT 가 23505 면 idempotent skip.
 
+// D-059 PR 11: 자동 모드에서 신규 product 등록 시 prefix 룰로 manufacturer/wattage 추론.
+type productInferenceRule struct {
+	pattern    *regexp.Regexp
+	mfgKeyword string
+}
+
+var productRules = []productInferenceRule{
+	{regexp.MustCompile(`(?i)^TSM[\s-]*(\d{3})`), "Trina"},
+	{regexp.MustCompile(`(?i)^LR[78][\s-]*\d+H[YGSM]D[\s-]*(\d{3})`), "LONGi"},
+	{regexp.MustCompile(`(?i)^LR5[\s-]*\d+H[YGSM]D[\s-]*(\d{3})`), "LONGi"},
+	{regexp.MustCompile(`(?i)^JKM[\s-]*(\d{3})`), "Jinko"},
+	{regexp.MustCompile(`(?i)^RSM[\s-]*\d+[\s-]+(?:\d+[\s-]+)?(\d{3})`), "Risen"},
+	{regexp.MustCompile(`(?i)^Q[.\s-]*PEAK[\s-]*\w*[\s-]+(\d{3})`), "Hanwha"},
+	{regexp.MustCompile(`(?i)^HA[\s-]*(\d{3})`), ""},
+	{regexp.MustCompile(`(?i)^HS[\s-]*(\d{3})`), "한솔"},
+	{regexp.MustCompile(`(?i)^JAM[\s-]*\d+D\d+[\s-]*(\d{3})`), "ja"},
+	{regexp.MustCompile(`(?i)^CS6W[\s-]*[A-Z]*[\s-]*(\d{3})`), "캐솔"},
+}
+
+func inferProductMeta(code string, mfgIndex map[string]string) (string, int) {
+	for _, r := range productRules {
+		if m := r.pattern.FindStringSubmatch(code); m != nil {
+			wattage := 0
+			if w, err := strconv.Atoi(m[1]); err == nil {
+				wattage = w
+			}
+			mfgID := ""
+			if r.mfgKeyword != "" {
+				if id, ok := mfgIndex[strings.ToLower(r.mfgKeyword)]; ok {
+					mfgID = id
+				}
+			}
+			return mfgID, wattage
+		}
+	}
+	return "", 0
+}
+
+
+// D-059 PR 12: 자유 형식 날짜 보정.
+// 수동 모드(JS topsolarOutbound.ts) 와 동일 정책 — 섹션 마커 `탑솔라 (1월)` + 같은 섹션의
+// 정상 datetime 행에서 연도를 캐시해서 자유 표기 (예: `1/12 오후착`) → ISO 변환.
+// 시간 표기(`오후착`, `오전`, `9시착`)는 source_payload.date_raw 에 보존.
+type sectionDateContext struct {
+	sellerKey     string
+	monthNum      int
+	inferredYear  int
+}
+
+var freeDatePattern = regexp.MustCompile(`^(\d{1,2})/(\d{1,2})`)
+var sectionMarkerPattern = regexp.MustCompile(`^\s*(탑솔라|디원|화신이엔지)\s*\((\d{1,2})월\s*\)`)
+
+// parseSectionMarkerForDate — 섹션 마커에서 (seller, monthNum) 추출. 매치 안 되면 ("", 0).
+func parseSectionMarkerForDate(s string) (string, int) {
+	m := sectionMarkerPattern.FindStringSubmatch(s)
+	if m == nil {
+		return "", 0
+	}
+	n, _ := strconv.Atoi(m[2])
+	return m[1], n
+}
+
+// parseTopsolarDateWithContext — 섹션 컨텍스트로 자유 형식 날짜 보정.
+// 반환: (iso, rawText). iso 가 비면 보정 실패.
+func parseTopsolarDateWithContext(s string, ctx *sectionDateContext) (string, string) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", ""
+	}
+	// 1) ISO / 한국 표기 — 기존 로직
+	if iso := parseTopsolarDate(s); iso != "" {
+		return iso, s
+	}
+	// 2) 자유 형식 M/D — 섹션 컨텍스트로 연도 보정
+	if ctx != nil && ctx.inferredYear > 0 {
+		m := freeDatePattern.FindStringSubmatch(s)
+		if m != nil {
+			month, _ := strconv.Atoi(m[1])
+			day, _ := strconv.Atoi(m[2])
+			if month >= 1 && month <= 12 && day >= 1 && day <= 31 {
+				return fmt.Sprintf("%04d-%02d-%02d", ctx.inferredYear, month, day), s
+			}
+		}
+	}
+	return "", s
+}
+
 var topsolarSellerMap = map[string]string{
 	"탑": "탑솔라", "탑솔라": "탑솔라",
 	"디원": "디원",
@@ -332,7 +420,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 	if err != nil {
 		return 0, 0, fmt.Errorf("companies fetch: %w", err)
 	}
-	products, err := h.fetchProductsByCode()
+	products, err := h.fetchProductsLookup()
 	if err != nil {
 		return 0, 0, fmt.Errorf("products fetch: %w", err)
 	}
@@ -340,17 +428,55 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 	if err != nil {
 		return 0, 0, fmt.Errorf("warehouses fetch: %w", err)
 	}
+	mfgIndex, err := h.fetchManufacturerIndex()
+	if err != nil {
+		log.Printf("[external sync] manufacturer index 조회 실패: %v — 추론 없이 등록", err)
+		mfgIndex = map[string]string{}
+	}
+
+	// D-059 PR 12 — 1차 패스: 섹션별 inferredYear 캐시 (자유 형식 날짜 보정용)
+	sectionCtx := map[string]*sectionDateContext{}
+	var scanSeller string
+	var scanMonth int
+	for _, row := range rows {
+		cell0 := safeCell(row, 0)
+		if s, mo := parseSectionMarkerForDate(cell0); s != "" {
+			scanSeller, scanMonth = s, mo
+			key := fmt.Sprintf("%s-%d", s, mo)
+			if _, ok := sectionCtx[key]; !ok {
+				sectionCtx[key] = &sectionDateContext{sellerKey: s, monthNum: mo}
+			}
+			continue
+		}
+		if scanSeller == "" || cell0 == "구분" || cell0 == "합 계" || cell0 == "합계" {
+			continue
+		}
+		rawDate := safeCell(row, 1)
+		if iso := parseTopsolarDate(rawDate); iso != "" && len(iso) >= 4 {
+			if year, err := strconv.Atoi(iso[:4]); err == nil {
+				key := fmt.Sprintf("%s-%d", scanSeller, scanMonth)
+				if ctx, ok := sectionCtx[key]; ok && ctx.inferredYear == 0 {
+					ctx.inferredYear = year
+				}
+			}
+		}
+	}
 
 	imported := 0
 	skipped := 0
 	currentSection := ""
+	var currentDateCtx *sectionDateContext
+	skipBy := map[string]int{}  // D-059 PR 12: SKIP 사유별 카운트
+	bump := func(k string) { skipBy[k]++; skipped++ }
 	for idx, row := range rows {
 		excelRowNum := idx + 1
 		gubun := safeCell(row, 0)
 
 		// 섹션 마커
-		if section := parseTopsolarSection(gubun); section != "" {
-			currentSection = section
+		if s, mo := parseSectionMarkerForDate(gubun); s != "" {
+			currentSection = s
+			key := fmt.Sprintf("%s-%d", s, mo)
+			currentDateCtx = sectionCtx[key]
 			continue
 		}
 		if gubun == "구분" || gubun == "합 계" || gubun == "합계" {
@@ -364,20 +490,32 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 
 		seller := normalizeTopsolarSeller(gubun, currentSection)
 		if seller == "" {
-			skipped++
+			bump("seller_unknown")
 			continue
 		}
 		companyID, ok := companies[normalizeCorp(seller)]
 		if !ok {
-			skipped++
-			continue
+			newID, regErr := h.autoRegisterCompany(seller)
+			if regErr != nil {
+				log.Printf("[external sync] company 등록 실패 %s: %v", seller, regErr)
+				bump("company_register_fail")
+				continue
+			}
+			companyID = newID
+			companies[normalizeCorp(seller)] = newID
 		}
-		productID, ok := products[normalizeCode(productCode)]
+		pmeta, ok := products[normalizeCode(productCode)]
 		if !ok {
-			// 자동 모드는 신규 product 등록 안 함 — SKIP
-			skipped++
-			continue
+			newID, wattage, regErr := h.autoRegisterProductWithWattage(productCode, mfgIndex)
+			if regErr != nil {
+				log.Printf("[external sync] product 등록 실패 %s: %v", productCode, regErr)
+				bump("product_register_fail")
+				continue
+			}
+			pmeta = productMeta{ID: newID, WattageKW: wattage}
+			products[normalizeCode(productCode)] = pmeta
 		}
+		productID := pmeta.ID
 		// 창고는 탑솔라 양식에 정보 없음 — 기본 창고 매핑은 마스터에 한 개만 있을 때 자동
 		warehouseID := ""
 		if src.DefaultWarehouseID != nil && *src.DefaultWarehouseID != "" {
@@ -386,22 +524,22 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			warehouseID = pickDefaultWarehouse(warehouses)
 		}
 		if warehouseID == "" {
-			skipped++
+			bump("warehouse_missing")
 			continue
 		}
 
 		qty, err := strconv.Atoi(strings.ReplaceAll(qtyStr, ",", ""))
 		if err != nil || qty <= 0 {
-			skipped++
+			bump("qty_invalid")
 			continue
 		}
 
-		dateISO := parseTopsolarDate(safeCell(row, 1))
+		dateISO, dateRaw := parseTopsolarDateWithContext(safeCell(row, 1), currentDateCtx)
 		if dateISO == "" {
-			// 자동 모드는 자유 형식 날짜 보정 안 함 (수동 모드만) — SKIP
-			skipped++
+			bump("date_freeform")
 			continue
 		}
+		_ = dateRaw
 
 		sourcePayload := map[string]interface{}{
 			"source":           "google_sheet",
@@ -409,6 +547,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			"sheet_gid":        src.SheetGid,
 			"sheet_row_index":  excelRowNum,
 			"section":          currentSection,
+			"date_raw":         dateRaw,
 			"customer_name":    safeCell(row, 2),
 			"site_name":        safeCell(row, 3),
 			"site_address":     safeCell(row, 4),
@@ -419,11 +558,17 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			"total_amount":     parseTopsolarNumber(safeCell(row, 13)),
 		}
 
+		var capacityKW *float64
+		if pmeta.WattageKW > 0 {
+			v := float64(qty) * pmeta.WattageKW
+			capacityKW = &v
+		}
 		req := model.CreateOutboundRequest{
 			OutboundDate:   dateISO,
 			CompanyID:      companyID,
 			ProductID:      productID,
 			Quantity:       qty,
+			CapacityKw:     capacityKW,
 			WarehouseID:    warehouseID,
 			UsageCategory:  "sale",
 			Status:         "active",
@@ -435,17 +580,177 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 		_, _, err = h.DB.From("outbounds").Insert(req, false, "", "", "").Execute()
 		if err != nil {
 			if isUniqueViolation(err) {
-				// dedup index 충돌 — 이미 동기화된 행. idempotent skip.
-				skipped++
+				bump("dedup_already")
 				continue
 			}
-			skipped++
+			bump("outbound_insert_fail")
 			log.Printf("[external sync] outbound INSERT 실패 row=%d: %v", excelRowNum, err)
 			continue
 		}
 		imported++
 	}
+	if len(skipBy) > 0 {
+		log.Printf("[external sync] SKIP 사유별: %v", skipBy)
+	}
 	return imported, skipped, nil
+}
+
+
+// D-059 PR 11
+func (h *ExternalSyncHandler) fetchManufacturerIndex() (map[string]string, error) {
+	data, _, err := h.DB.From("manufacturers").Select("manufacturer_id,name_kr,name_en,short_name", "exact", false).Execute()
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ManufacturerID string  `json:"manufacturer_id"`
+		NameKR         string  `json:"name_kr"`
+		NameEN         *string `json:"name_en"`
+		ShortName      *string `json:"short_name"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	index := make(map[string]string, len(rows)*4)
+	put := func(k, id string) {
+		k = strings.ToLower(strings.TrimSpace(k))
+		if k == "" {
+			return
+		}
+		if _, exists := index[k]; !exists {
+			index[k] = id
+		}
+	}
+	for _, r := range rows {
+		put(r.NameKR, r.ManufacturerID)
+		if r.NameEN != nil {
+			put(*r.NameEN, r.ManufacturerID)
+			lower := strings.ToLower(*r.NameEN)
+			for _, kw := range []string{"trina", "longi", "jinko", "risen", "hanwha", "qcell"} {
+				if strings.Contains(lower, kw) {
+					put(kw, r.ManufacturerID)
+				}
+			}
+		}
+		if r.ShortName != nil {
+			put(*r.ShortName, r.ManufacturerID)
+		}
+	}
+	return index, nil
+}
+
+func (h *ExternalSyncHandler) autoRegisterProduct(rawCode string, mfgIndex map[string]string) (string, error) {
+	mfgID, wattageW := inferProductMeta(rawCode, mfgIndex)
+	code := rawCode
+	if len(code) > 30 {
+		code = code[:30]
+	}
+	name := rawCode
+	if len(name) > 100 {
+		name = name[:100]
+	}
+	body := map[string]interface{}{
+		"product_code": code,
+		"product_name": name,
+		"is_active":    true,
+	}
+	if mfgID != "" {
+		body["manufacturer_id"] = mfgID
+	}
+	if wattageW > 0 {
+		body["spec_wp"] = wattageW
+		body["wattage_kw"] = float64(wattageW) / 1000.0
+	}
+	data, _, err := h.DB.From("products").Insert(body, false, "", "", "").Execute()
+	if err != nil {
+		return "", err
+	}
+	var rows []model.Product
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
+		return "", fmt.Errorf("등록 결과 확인 실패")
+	}
+	log.Printf("[external sync] product 자동 등록: %s (mfg=%v, wattage=%dW)", rawCode, mfgID != "", wattageW)
+	return rows[0].ProductID, nil
+}
+
+
+// D-059 PR 12: 신규 product 등록 + 추론한 wattage 반환 (capacity_kw 자동 계산용)
+func (h *ExternalSyncHandler) autoRegisterProductWithWattage(rawCode string, mfgIndex map[string]string) (string, float64, error) {
+	mfgID, wattageW := inferProductMeta(rawCode, mfgIndex)
+	code := rawCode
+	if len(code) > 30 {
+		code = code[:30]
+	}
+	name := rawCode
+	if len(name) > 100 {
+		name = name[:100]
+	}
+	body := map[string]interface{}{
+		"product_code": code,
+		"product_name": name,
+		"is_active":    true,
+	}
+	wattageKW := 0.0
+	if mfgID != "" {
+		body["manufacturer_id"] = mfgID
+	}
+	if wattageW > 0 {
+		body["spec_wp"] = wattageW
+		wattageKW = float64(wattageW) / 1000.0
+		body["wattage_kw"] = wattageKW
+	}
+	data, _, err := h.DB.From("products").Insert(body, false, "", "", "").Execute()
+	if err != nil {
+		return "", 0, err
+	}
+	var rows []model.Product
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
+		return "", 0, fmt.Errorf("등록 결과 확인 실패")
+	}
+	log.Printf("[external sync] product 자동 등록: %s (mfg=%v, wattage=%dW)", rawCode, mfgID != "", wattageW)
+	return rows[0].ProductID, wattageKW, nil
+}
+
+func (h *ExternalSyncHandler) autoRegisterCompany(rawName string) (string, error) {
+	hash := uint32(0)
+	for _, r := range rawName {
+		hash = hash*31 + uint32(r)
+	}
+	cleanedName := rawName
+	if len(cleanedName) > 100 {
+		cleanedName = cleanedName[:100]
+	}
+	prefix := []rune{}
+	for _, r := range rawName {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || (r >= 0xAC00 && r <= 0xD7AF) {
+			prefix = append(prefix, r)
+			if len(prefix) >= 4 {
+				break
+			}
+		}
+	}
+	if len(prefix) == 0 {
+		prefix = []rune("AUTO")
+	}
+	code := string(prefix) + fmt.Sprintf("%06X", hash)[:6]
+	if len(code) > 10 {
+		code = code[:10]
+	}
+	body := map[string]interface{}{
+		"company_name": cleanedName,
+		"company_code": code,
+		"is_active":    true,
+	}
+	data, _, err := h.DB.From("companies").Insert(body, false, "", "", "").Execute()
+	if err != nil {
+		return "", err
+	}
+	var rows []model.Company
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
+		return "", fmt.Errorf("등록 결과 확인 실패")
+	}
+	log.Printf("[external sync] company 자동 등록: %s (code=%s)", rawName, code)
+	return rows[0].CompanyID, nil
 }
 
 // ──────────────── 변환 보조 ────────────────
@@ -594,6 +899,60 @@ func (h *ExternalSyncHandler) fetchCompaniesByCode() (map[string]string, error) 
 			for _, a := range aliases {
 				if _, exists := out[a.AliasTextNormalized]; !exists {
 					out[a.AliasTextNormalized] = a.CanonicalCompanyID
+				}
+			}
+		}
+	}
+	delete(out, "")
+	return out, nil
+}
+
+
+// D-059 PR 12: product_code → (product_id, wattage_kw) 인덱스. capacity_kw 자동 계산용.
+type productMeta struct {
+	ID         string
+	WattageKW  float64
+}
+
+func (h *ExternalSyncHandler) fetchProductsLookup() (map[string]productMeta, error) {
+	data, _, err := h.DB.From("products").Select("product_id,product_code,wattage_kw", "exact", false).Execute()
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ProductID  string   `json:"product_id"`
+		ProductCode string  `json:"product_code"`
+		WattageKW  *float64 `json:"wattage_kw"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[string]productMeta, len(rows))
+	for _, p := range rows {
+		w := 0.0
+		if p.WattageKW != nil {
+			w = *p.WattageKW
+		}
+		out[normalizeCode(p.ProductCode)] = productMeta{ID: p.ProductID, WattageKW: w}
+	}
+	// alias 사전 머지
+	aliasData, _, err := h.DB.From("product_aliases").Select("canonical_product_id,alias_code_normalized", "exact", false).Execute()
+	if err == nil {
+		var aliases []model.ProductAlias
+		if json.Unmarshal(aliasData, &aliases) == nil {
+			// canonical_product_id → wattage_kw 룩업 보조 맵
+			wByID := make(map[string]float64, len(rows))
+			for _, p := range rows {
+				if p.WattageKW != nil {
+					wByID[p.ProductID] = *p.WattageKW
+				}
+			}
+			for _, a := range aliases {
+				if _, exists := out[a.AliasCodeNormalized]; !exists {
+					out[a.AliasCodeNormalized] = productMeta{
+						ID:        a.CanonicalProductID,
+						WattageKW: wByID[a.CanonicalProductID],
+					}
 				}
 			}
 		}
