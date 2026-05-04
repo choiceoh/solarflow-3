@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbrpc"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
@@ -204,4 +205,18 @@ func (h *PartnerHandler) ToggleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "ok"})
+}
+
+// UsageCounts — GET /api/v1/partners/usage-counts — 거래처별 참조 건수 집계
+// 비유: 명함첩 옆에 "이 거래처 — 매출 N건 · 입금 N건" 도장을 자동으로 찍어 돌려주는 것
+func (h *PartnerHandler) UsageCounts(w http.ResponseWriter, r *http.Request) {
+	body, err := dbrpc.Call(r.Context(), "sf_partner_usage_counts", map[string]interface{}{})
+	if err != nil {
+		log.Printf("[거래처 참조 건수 조회 실패] %v", err)
+		response.RespondError(w, dbrpc.StatusCode(err, http.StatusInternalServerError),
+			"거래처 참조 건수 조회에 실패했습니다")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(body)
 }
