@@ -422,9 +422,9 @@ export default function SalesAnalysisPage() {
               {/* D-064 PR 30: 원가 기준 토글 — fifo 정합치 / landed 추정 / cif 추정 */}
               <FilterChips
                 options={[
-                  { value: 'fifo', label: 'FIFO 정합' },
-                  { value: 'landed', label: 'Landed' },
-                  { value: 'cif', label: 'CIF' },
+                  { key: 'fifo', label: 'FIFO 정합' },
+                  { key: 'landed', label: 'Landed' },
+                  { key: 'cif', label: 'CIF' },
                 ]}
                 value={costBasis}
                 onChange={(value) => setCostBasis(value as CostBasis)}
