@@ -221,6 +221,7 @@ func (h *ExternalSyncHandler) StartHourlyWorker() {
 }
 
 func (h *ExternalSyncHandler) workerLoop() {
+	log.Printf("[external sync] worker 시작 — 부팅 직후 1회 + 매 1시간")
 	// 부팅 직후 한 번 + 매 1시간
 	h.runHourlyOnce()
 	ticker := time.NewTicker(1 * time.Hour)
@@ -236,20 +237,27 @@ func (h *ExternalSyncHandler) runHourlyOnce() {
 			log.Printf("[external sync worker panic] %v", rec)
 		}
 	}()
+	// PostgREST boolean 비교가 supabase-go .Eq 로 일관되지 않아 메모리 필터로 폴백 (안전).
 	data, _, err := h.DB.From("external_sync_sources").
 		Select("*", "exact", false).
-		Eq("enabled", "true").Eq("schedule", "hourly").
 		Execute()
 	if err != nil {
-		log.Printf("[external sync] enabled 시트 조회 실패: %v", err)
+		log.Printf("[external sync] 시트 조회 실패: %v", err)
 		return
 	}
-	var sources []model.ExternalSyncSource
-	if err := json.Unmarshal(data, &sources); err != nil {
+	var all []model.ExternalSyncSource
+	if err := json.Unmarshal(data, &all); err != nil {
 		log.Printf("[external sync] 응답 디코딩 실패: %v", err)
 		return
 	}
-	for _, s := range sources {
+	active := make([]model.ExternalSyncSource, 0, len(all))
+	for _, s := range all {
+		if s.Enabled && s.Schedule == "hourly" {
+			active = append(active, s)
+		}
+	}
+	log.Printf("[external sync] runHourlyOnce — 전체 %d / 활성 %d", len(all), len(active))
+	for _, s := range active {
 		h.runOne(s)
 	}
 }
