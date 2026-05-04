@@ -89,6 +89,8 @@ const config: ListScreenConfig = {
       },
     },
   ],
+  // 행 클릭 → 메타 상세 (config/details/products.ts) — bank/manufacturer 패턴 복제.
+  onRowClick: { kind: 'detail', detailId: 'product', idField: 'product_id' },
   emptyState: { message: '등록된 품번이 없습니다', actionId: 'create' },
   forms: [
     {

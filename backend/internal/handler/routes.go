@@ -486,6 +486,8 @@ func (h *ProductHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
+		// 메타 GUI inline 편집 진입점 — UpdateProductRequest 모든 필드 optional이라 partial 동작.
+		r.With(g.Write).Patch("/{id}", h.Update)
 		r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
