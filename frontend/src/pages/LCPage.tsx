@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '@/stores/appStore';
 import { useLCList } from '@/hooks/useProcurement';
+import { useFxTimeseries } from '@/hooks/usePublicFx';
 import { fetchWithAuth } from '@/lib/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import LCListTable from '@/components/procurement/LCListTable';
@@ -28,6 +29,13 @@ export default function LCPage() {
   const { data: lcs, loading, reload } = useLCList(filters);
 
   const filtered = companyFilter ? lcs.filter((l) => l.company_id === companyFilter) : lcs;
+
+  // ECOS 매매기준율 30일 — L/C 개설 시 시장 환율 추이 참고용 (실제 개설가는 거래은행 전신환매도율).
+  const { data: fx } = useFxTimeseries('usdkrw', 30);
+  const fxSeries = fx?.series.map((p) => p.rate) ?? [];
+  const fxLatest = fx?.latest ?? null;
+  const fxChangePct = fx?.change_pct ?? null;
+  const fxTone = fxChangePct == null ? 'var(--ink-3)' : fxChangePct >= 0 ? 'var(--neg)' : 'var(--pos)';
 
   useEffect(() => {
     fetchWithAuth<Company[]>('/api/v1/companies').then((list) => setCompanies(list.filter((c) => c.is_active))).catch(() => {});
@@ -111,6 +119,25 @@ export default function LCPage() {
         ]}
         rail={
           <>
+            <RailBlock
+              title="USD/KRW 30일"
+              accent={fxTone}
+              count={fxLatest != null ? `₩${fxLatest.toFixed(1)}` : '—'}
+            >
+              {fxSeries.length > 0 ? (
+                <Sparkline data={fxSeries} w={196} h={36} color={fxTone} area />
+              ) : (
+                <div className="text-[11px] text-[var(--ink-4)]">환율 데이터 로딩 중…</div>
+              )}
+              <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--ink-3)]">
+                <span>BOK 매매기준율</span>
+                {fxChangePct != null && (
+                  <span className="mono tnum" style={{ color: fxTone }}>
+                    {fxChangePct >= 0 ? '▲' : '▼'} {Math.abs(fxChangePct).toFixed(2)}%
+                  </span>
+                )}
+              </div>
+            </RailBlock>
             <RailBlock title="만기 순서" accent="var(--solar-3)" count={maturityRows.length}>
               <div className="space-y-2">
                 {maturityRows.map((lc) => (
