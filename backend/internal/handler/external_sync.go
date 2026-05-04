@@ -433,6 +433,14 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 		log.Printf("[external sync] manufacturer index 조회 실패: %v — 추론 없이 등록", err)
 		mfgIndex = map[string]string{}
 	}
+	orders, err := h.fetchOrdersByNumber()
+	if err != nil {
+		return 0, 0, fmt.Errorf("orders fetch: %w", err)
+	}
+	partners, err := h.fetchPartnerIndex()
+	if err != nil {
+		return 0, 0, fmt.Errorf("partners fetch: %w", err)
+	}
 
 	// D-059 PR 12 — 1차 패스: 섹션별 inferredYear 캐시 (자유 형식 날짜 보정용)
 	sectionCtx := map[string]*sectionDateContext{}
@@ -563,6 +571,47 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			v := float64(qty) * pmeta.WattageKW
 			capacityKW = &v
 		}
+
+		// D-059 PR 14: customer + order 자동 매핑/등록
+		rawCustomer := safeCell(row, 2)
+		var customerID string
+		if rawCustomer != "" {
+			if id, ok := partners[normalizeCorp(rawCustomer)]; ok {
+				customerID = id
+			} else {
+				newCustID, regErr := h.autoRegisterPartner(rawCustomer)
+				if regErr != nil {
+					log.Printf("[external sync] partner 등록 실패 %s: %v", rawCustomer, regErr)
+				} else {
+					customerID = newCustID
+					partners[normalizeCorp(rawCustomer)] = newCustID
+				}
+			}
+		}
+
+		var orderIDPtr *string
+		if customerID != "" {
+			orderNumber := safeCell(row, 5)
+			if orderNumber == "" {
+				short := src.SpreadsheetID
+				if len(short) > 8 {
+					short = short[:8]
+				}
+				orderNumber = fmt.Sprintf("AUTO-%s-%d", short, excelRowNum)
+			}
+			if id, ok := orders[normalizeCode(orderNumber)]; ok {
+				orderIDPtr = &id
+			} else {
+				unitPrice := parseTopsolarNumber(safeCell(row, 10))
+				newOrderID, regErr := h.autoRegisterOrder(orderNumber, companyID, customerID, productID, qty, unitPrice, capacityKW, dateISO, optStr(safeCell(row, 3)), optStr(safeCell(row, 4)))
+				if regErr != nil {
+					log.Printf("[external sync] order 등록 실패 %s: %v", orderNumber, regErr)
+				} else {
+					orderIDPtr = &newOrderID
+					orders[normalizeCode(orderNumber)] = newOrderID
+				}
+			}
+		}
 		req := model.CreateOutboundRequest{
 			OutboundDate:   dateISO,
 			CompanyID:      companyID,
@@ -572,6 +621,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			WarehouseID:    warehouseID,
 			UsageCategory:  "sale",
 			Status:         "active",
+			OrderID:        orderIDPtr,
 			SiteName:       optStr(safeCell(row, 3)),
 			SiteAddress:    optStr(safeCell(row, 4)),
 			SourcePayload:  sourcePayload,
@@ -751,6 +801,122 @@ func (h *ExternalSyncHandler) autoRegisterCompany(rawName string) (string, error
 	}
 	log.Printf("[external sync] company 자동 등록: %s (code=%s)", rawName, code)
 	return rows[0].CompanyID, nil
+}
+
+
+// D-059 PR 14: 수주(orders) 마스터 인덱스 — order_number 정규화 키 → order_id
+func (h *ExternalSyncHandler) fetchOrdersByNumber() (map[string]string, error) {
+	data, _, err := h.DB.From("orders").Select("order_id,order_number", "exact", false).Execute()
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		OrderID     string  `json:"order_id"`
+		OrderNumber *string `json:"order_number"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(rows))
+	for _, r := range rows {
+		if r.OrderNumber != nil && *r.OrderNumber != "" {
+			out[normalizeCode(*r.OrderNumber)] = r.OrderID
+		}
+	}
+	return out, nil
+}
+
+// D-059 PR 14: partner_id (customer) 인덱스 — 정규화된 거래처명 → partner_id (alias 사전 머지)
+func (h *ExternalSyncHandler) fetchPartnerIndex() (map[string]string, error) {
+	data, _, err := h.DB.From("partners").Select("partner_id,partner_name", "exact", false).Execute()
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		PartnerID   string `json:"partner_id"`
+		PartnerName string `json:"partner_name"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(rows)*2)
+	for _, r := range rows {
+		out[normalizeCorp(r.PartnerName)] = r.PartnerID
+	}
+	// alias 사전 머지
+	aliasData, _, err := h.DB.From("partner_aliases").Select("canonical_partner_id,alias_text_normalized", "exact", false).Execute()
+	if err == nil {
+		var aliases []model.PartnerAlias
+		if json.Unmarshal(aliasData, &aliases) == nil {
+			for _, a := range aliases {
+				if _, exists := out[a.AliasTextNormalized]; !exists {
+					out[a.AliasTextNormalized] = a.CanonicalPartnerID
+				}
+			}
+		}
+	}
+	delete(out, "")
+	return out, nil
+}
+
+// D-059 PR 14: 거래처(customer) 자동 등록
+func (h *ExternalSyncHandler) autoRegisterPartner(rawName string) (string, error) {
+	name := rawName
+	if len(name) > 100 {
+		name = name[:100]
+	}
+	body := map[string]interface{}{
+		"partner_name": name,
+		"partner_type": "customer",
+		"is_active":    true,
+	}
+	data, _, err := h.DB.From("partners").Insert(body, false, "", "", "").Execute()
+	if err != nil {
+		return "", err
+	}
+	var rows []model.Partner
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
+		return "", fmt.Errorf("등록 결과 확인 실패")
+	}
+	log.Printf("[external sync] partner 자동 등록: %s (customer)", rawName)
+	return rows[0].PartnerID, nil
+}
+
+// D-059 PR 14: 수주 자동 등록
+//   defaults — receipt_method=purchase_order, management_category=sale, fulfillment_source=stock
+func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customerID, productID string, qty int, unitPriceWp float64, capacityKW *float64, orderDate string, siteName, siteAddress *string) (string, error) {
+	body := map[string]interface{}{
+		"order_number":        orderNumber,
+		"company_id":          companyID,
+		"customer_id":         customerID,
+		"product_id":          productID,
+		"quantity":            qty,
+		"unit_price_wp":       unitPriceWp,
+		"order_date":          orderDate,
+		"receipt_method":      "purchase_order",
+		"management_category": "sale",
+		"fulfillment_source":  "stock",
+		"status":              "completed",
+	}
+	if capacityKW != nil {
+		body["capacity_kw"] = *capacityKW
+	}
+	if siteName != nil && *siteName != "" {
+		body["site_name"] = *siteName
+	}
+	if siteAddress != nil && *siteAddress != "" {
+		body["site_address"] = *siteAddress
+	}
+	data, _, err := h.DB.From("orders").Insert(body, false, "", "", "").Execute()
+	if err != nil {
+		return "", err
+	}
+	var rows []model.Order
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
+		return "", fmt.Errorf("등록 결과 확인 실패")
+	}
+	log.Printf("[external sync] order 자동 등록: %s (qty=%d, unit=%.0f)", orderNumber, qty, unitPriceWp)
+	return rows[0].OrderID, nil
 }
 
 // ──────────────── 변환 보조 ────────────────

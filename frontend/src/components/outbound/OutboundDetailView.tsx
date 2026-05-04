@@ -5,7 +5,7 @@ import { Separator } from '@/components/ui/separator';
 import { formatDate, formatNumber, formatKw } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
+import { DetailSection, DetailField, DetailFieldGrid, EditableDetailField } from '@/components/common/detail';
 import OutboundStatusBadge from './OutboundStatusBadge';
 import InvoiceStatusBadge from './InvoiceStatusBadge';
 import OutboundCancelFlow from './OutboundCancelFlow';
@@ -44,6 +44,31 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
     }
   };
 
+  // 출고 본체 부분 편집 — UpdateOutboundRequest 가 모든 필드를 optional 로 받으므로
+  // 변경된 단일 키만 PUT 으로 전송. 취소/취소대기 상태에서는 비활성.
+  const saveOutboundField = async (key: string, value: unknown) => {
+    await fetchWithAuth(`/api/v1/outbounds/${outboundId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ [key]: value }),
+    });
+    notify.success('수정되었습니다');
+    reload();
+  };
+
+  // 매출 부분 편집 — UpdateSaleRequest 가 모든 필드를 optional. PUT /api/v1/sales/{id}.
+  const saveSaleField = async (key: string, value: unknown) => {
+    if (!ob.sale) return;
+    await fetchWithAuth(`/api/v1/sales/${ob.sale.sale_id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ [key]: value }),
+    });
+    notify.success('수정되었습니다');
+    reload();
+  };
+
+  const usageOptions = (Object.entries(USAGE_CATEGORY_LABEL) as [string, string][])
+    .map(([value, label]) => ({ value, label }));
+
   return (
     <div className="space-y-4">
       <div className="sf-detail-header">
@@ -69,9 +94,33 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
         }
       >
             <DetailFieldGrid cols={4}>
-              <DetailField label="출고일" value={formatDate(ob.outbound_date)} />
-              <DetailField label="용도" value={USAGE_CATEGORY_LABEL[ob.usage_category] ?? ob.usage_category} />
-              <DetailField label="ERP 출고번호" value={ob.erp_outbound_no} />
+              <EditableDetailField
+                label="출고일"
+                value={ob.outbound_date}
+                display={formatDate(ob.outbound_date)}
+                fieldKey="outbound_date"
+                editType="date"
+                disabled={isCancelled}
+                onSave={saveOutboundField}
+              />
+              <EditableDetailField
+                label="용도"
+                value={ob.usage_category}
+                display={USAGE_CATEGORY_LABEL[ob.usage_category] ?? ob.usage_category}
+                fieldKey="usage_category"
+                editType="select"
+                options={usageOptions}
+                disabled={isCancelled}
+                onSave={saveOutboundField}
+              />
+              <EditableDetailField
+                label="ERP 출고번호"
+                value={ob.erp_outbound_no}
+                fieldKey="erp_outbound_no"
+                editType="text"
+                disabled={isCancelled}
+                onSave={saveOutboundField}
+              />
               <DetailField label="수주연결" value={ob.order_number} />
             </DetailFieldGrid>
       </DetailSection>
@@ -82,17 +131,48 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
               <DetailField label="제조사" value={ob.manufacturer_name} />
               <DetailField label="품명" value={ob.product_name} span={2} />
               <DetailField label="규격" value={ob.spec_wp ? `${ob.spec_wp}Wp` : undefined} />
-              <DetailField label="수량" value={formatNumber(ob.quantity)} />
+              <EditableDetailField
+                label="수량"
+                value={ob.quantity}
+                display={formatNumber(ob.quantity)}
+                fieldKey="quantity"
+                editType="number"
+                disabled={isCancelled}
+                onSave={saveOutboundField}
+              />
               <DetailField label="용량" value={formatKw(ob.capacity_kw)} />
-              <DetailField label="스페어" value={ob.spare_qty?.toString()} />
+              <EditableDetailField
+                label="스페어"
+                value={ob.spare_qty}
+                display={ob.spare_qty?.toString()}
+                fieldKey="spare_qty"
+                editType="number"
+                disabled={isCancelled}
+                onSave={saveOutboundField}
+              />
               <DetailField label="창고" value={ob.warehouse_name} />
             </DetailFieldGrid>
       </DetailSection>
 
       <DetailSection title="현장 · 연결">
             <DetailFieldGrid cols={4}>
-              <DetailField label="현장명" value={ob.site_name} />
-              <DetailField label="현장 주소" value={ob.site_address} span={3} />
+              <EditableDetailField
+                label="현장명"
+                value={ob.site_name}
+                fieldKey="site_name"
+                editType="text"
+                disabled={isCancelled}
+                onSave={saveOutboundField}
+              />
+              <EditableDetailField
+                label="현장 주소"
+                value={ob.site_address}
+                fieldKey="site_address"
+                editType="text"
+                disabled={isCancelled}
+                span={3}
+                onSave={saveOutboundField}
+              />
               {ob.group_trade && (
                 <>
                   <DetailField label="그룹거래" value="그룹내 거래" />
@@ -119,11 +199,20 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
         </DetailSection>
       )}
 
-      {ob.memo && (
-        <DetailSection title="메모">
-          <p className="text-sm whitespace-pre-wrap break-words">{ob.memo}</p>
-        </DetailSection>
-      )}
+      <DetailSection title="메모">
+        <DetailFieldGrid cols={1}>
+          <EditableDetailField
+            label="메모"
+            value={ob.memo}
+            display={ob.memo ? <span className="whitespace-pre-wrap break-words">{ob.memo}</span> : null}
+            fieldKey="memo"
+            editType="textarea"
+            disabled={isCancelled}
+            placeholder="메모 (Ctrl+Enter로 저장, Esc로 취소)"
+            onSave={saveOutboundField}
+          />
+        </DetailFieldGrid>
+      </DetailSection>
 
       {/* D-055: 외부 양식(탑솔라 그룹 등) 변환 시 보존된 워크플로우 4종 + 원본 행 */}
       <OutboundWorkflowPanel outbound={ob} onUpdated={reload} />
@@ -136,15 +225,57 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
         <DetailSection title="매출 정보">
           <DetailFieldGrid cols={4}>
             <DetailField label="거래처" value={ob.sale.customer_name} span={2} />
-            <DetailField label="Wp단가" value={ob.sale.unit_price_wp ? `${formatNumber(ob.sale.unit_price_wp)}원/Wp` : undefined} />
-            <DetailField label="EA단가" value={ob.sale.unit_price_ea ? `${formatNumber(ob.sale.unit_price_ea)}원` : undefined} />
+            <EditableDetailField
+              label="Wp단가"
+              value={ob.sale.unit_price_wp}
+              display={ob.sale.unit_price_wp ? `${formatNumber(ob.sale.unit_price_wp)}원/Wp` : undefined}
+              fieldKey="unit_price_wp"
+              editType="number"
+              disabled={isCancelled}
+              onSave={saveSaleField}
+            />
+            <EditableDetailField
+              label="EA단가"
+              value={ob.sale.unit_price_ea}
+              display={ob.sale.unit_price_ea ? `${formatNumber(ob.sale.unit_price_ea)}원` : undefined}
+              fieldKey="unit_price_ea"
+              editType="number"
+              disabled={isCancelled}
+              onSave={saveSaleField}
+            />
             <DetailField label="공급가" value={ob.sale.supply_amount ? `${formatNumber(ob.sale.supply_amount)}원` : undefined} />
             <DetailField label="부가세" value={ob.sale.vat_amount ? `${formatNumber(ob.sale.vat_amount)}원` : undefined} />
             <DetailField label="합계" value={ob.sale.total_amount ? `${formatNumber(ob.sale.total_amount)}원` : undefined} />
             <DetailField label="ERP 마감" value={ob.sale.erp_closed ? `마감 (${formatDate(ob.sale.erp_closed_date ?? '')})` : '미마감'} />
-            <DetailField label="계산서 발행일" value={ob.sale.tax_invoice_date ? formatDate(ob.sale.tax_invoice_date) : undefined} />
-            <DetailField label="계산서 이메일" value={ob.sale.tax_invoice_email} span={3} />
-            {ob.sale.memo && <DetailField label="메모" value={ob.sale.memo} span={4} />}
+            <EditableDetailField
+              label="계산서 발행일"
+              value={ob.sale.tax_invoice_date}
+              display={ob.sale.tax_invoice_date ? formatDate(ob.sale.tax_invoice_date) : undefined}
+              fieldKey="tax_invoice_date"
+              editType="date"
+              disabled={isCancelled}
+              onSave={saveSaleField}
+            />
+            <EditableDetailField
+              label="계산서 이메일"
+              value={ob.sale.tax_invoice_email}
+              fieldKey="tax_invoice_email"
+              editType="text"
+              disabled={isCancelled}
+              span={3}
+              onSave={saveSaleField}
+            />
+            <EditableDetailField
+              label="매출 메모"
+              value={ob.sale.memo}
+              display={ob.sale.memo ? <span className="whitespace-pre-wrap break-words">{ob.sale.memo}</span> : null}
+              fieldKey="memo"
+              editType="textarea"
+              disabled={isCancelled}
+              span={4}
+              placeholder="매출 메모 (Ctrl+Enter로 저장)"
+              onSave={saveSaleField}
+            />
           </DetailFieldGrid>
         </DetailSection>
       ) : (
