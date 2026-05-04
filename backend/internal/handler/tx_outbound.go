@@ -147,11 +147,18 @@ func (h *OutboundHandler) fetchBLItemsByOutbound() map[string][]model.OutboundBL
 }
 
 type outboundProductRow struct {
-	ProductID   string   `json:"product_id"`
-	ProductName string   `json:"product_name"`
-	ProductCode string   `json:"product_code"`
-	SpecWp      *float64 `json:"spec_wp"`
-	WattageKw   *float64 `json:"wattage_kw"`
+	ProductID      string   `json:"product_id"`
+	ProductName    string   `json:"product_name"`
+	ProductCode    string   `json:"product_code"`
+	SpecWp         *float64 `json:"spec_wp"`
+	WattageKw      *float64 `json:"wattage_kw"`
+	ManufacturerID *string  `json:"manufacturer_id"`
+}
+
+type outboundManufacturerRow struct {
+	ManufacturerID string  `json:"manufacturer_id"`
+	NameKR         string  `json:"name_kr"`
+	ShortName      *string `json:"short_name"`
 }
 
 type outboundWarehouseRow struct {
@@ -283,10 +290,16 @@ func (h *OutboundHandler) enrichOutbounds(outbounds []model.Outbound) ([]model.O
 	var partners []outboundPartnerRow
 	var sales []model.Sale
 
-	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp, wattage_kw", "exact", false).Execute(); err != nil {
+	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp, wattage_kw, manufacturer_id", "exact", false).Execute(); err != nil {
 		return nil, fmt.Errorf("products 조회 실패: %w", err)
 	} else if err := json.Unmarshal(data, &products); err != nil {
 		return nil, fmt.Errorf("products 디코딩 실패: %w", err)
+	}
+	var manufacturers []outboundManufacturerRow
+	if data, _, err := h.DB.From("manufacturers").Select("manufacturer_id, name_kr, short_name", "exact", false).Execute(); err != nil {
+		return nil, fmt.Errorf("manufacturers 조회 실패: %w", err)
+	} else if err := json.Unmarshal(data, &manufacturers); err != nil {
+		return nil, fmt.Errorf("manufacturers 디코딩 실패: %w", err)
 	}
 	if data, _, err := h.DB.From("warehouses").Select("warehouse_id, warehouse_name", "exact", false).Execute(); err != nil {
 		return nil, fmt.Errorf("warehouses 조회 실패: %w", err)
@@ -317,6 +330,10 @@ func (h *OutboundHandler) enrichOutbounds(outbounds []model.Outbound) ([]model.O
 	productMap := make(map[string]outboundProductRow, len(products))
 	for _, p := range products {
 		productMap[p.ProductID] = p
+	}
+	manufacturerMap := make(map[string]outboundManufacturerRow, len(manufacturers))
+	for _, m := range manufacturers {
+		manufacturerMap[m.ManufacturerID] = m
 	}
 	warehouseMap := make(map[string]outboundWarehouseRow, len(warehouses))
 	for _, w := range warehouses {
@@ -354,6 +371,16 @@ func (h *OutboundHandler) enrichOutbounds(outbounds []model.Outbound) ([]model.O
 			ob.ProductCode = &p.ProductCode
 			ob.SpecWp = p.SpecWp
 			ob.WattageKw = p.WattageKw
+			ob.ManufacturerID = p.ManufacturerID
+			if p.ManufacturerID != nil {
+				if m, ok := manufacturerMap[*p.ManufacturerID]; ok {
+					name := m.NameKR
+					if m.ShortName != nil && *m.ShortName != "" {
+						name = *m.ShortName
+					}
+					ob.ManufacturerName = &name
+				}
+			}
 		}
 		if w, ok := warehouseMap[ob.WarehouseID]; ok {
 			ob.WarehouseName = &w.WarehouseName

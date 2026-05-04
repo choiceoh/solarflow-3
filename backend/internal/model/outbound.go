@@ -25,6 +25,8 @@ type Outbound struct {
 	ProductID         string           `json:"product_id"`
 	ProductName       *string          `json:"product_name,omitempty"`
 	ProductCode       *string          `json:"product_code,omitempty"`
+	ManufacturerID    *string          `json:"manufacturer_id,omitempty"`
+	ManufacturerName  *string          `json:"manufacturer_name,omitempty"`
 	SpecWp            *float64         `json:"spec_wp,omitempty"`
 	WattageKw         *float64         `json:"wattage_kw,omitempty"`
 	Quantity          int              `json:"quantity"`
@@ -98,7 +100,7 @@ type CreateOutboundRequest struct {
 	ErpOutboundNo   *string               `json:"erp_outbound_no"`
 	Status          string                `json:"status"`
 	Memo            *string               `json:"memo"`
-	BLID            *string               `json:"bl_id"`
+	BLID            *string               `json:"bl_id,omitempty"`
 	// 워크플로우 상태 (D-055) — 탑솔라 그룹 체크박스 4개. 미지정 시 false.
 	TxStatementReady      *bool `json:"tx_statement_ready,omitempty"`
 	InspectionRequestSent *bool `json:"inspection_request_sent,omitempty"`

@@ -99,6 +99,7 @@ function buildColumns({
       ),
       sortAccessor: (item) => item.outbound_id ? 1 : 0,
     },
+    { key: 'manufacturer_name', label: '제조사', hideable: true, cell: (item) => item.manufacturer_name ?? '—', sortAccessor: (item) => item.manufacturer_name ?? '', globalFilterText: (item) => item.manufacturer_name ?? '' },
     { key: 'product_name', label: '품명', hideable: true, cell: (item) => item.product_name ?? '—', sortAccessor: (item) => item.product_name ?? '', globalFilterText: (item) => item.product_name ?? '' },
     { key: 'spec_wp', label: '규격', hideable: true, cell: (item) => item.spec_wp ? `${item.spec_wp}` : '—', sortAccessor: (item) => item.spec_wp ?? 0 },
     { key: 'quantity', label: '수량', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => formatNumber(item.quantity), sortAccessor: (item) => item.quantity },

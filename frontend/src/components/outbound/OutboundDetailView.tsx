@@ -79,6 +79,7 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
       <DetailSection title="제품 · 수량 · 창고">
             <DetailFieldGrid cols={4}>
               <DetailField label="품번" value={ob.product_code} />
+              <DetailField label="제조사" value={ob.manufacturer_name} />
               <DetailField label="품명" value={ob.product_name} span={2} />
               <DetailField label="규격" value={ob.spec_wp ? `${ob.spec_wp}Wp` : undefined} />
               <DetailField label="수량" value={formatNumber(ob.quantity)} />
