@@ -11,8 +11,16 @@ import productsScreen from '@/config/screens/products';
 import constructionSitesScreen from '@/config/screens/construction_sites';
 import purchaseOrdersScreen from '@/config/screens/purchase_orders';
 import lcsScreen from '@/config/screens/lcs';
+import inboundScreen from '@/config/screens/inbound';
+import bankDetail from '@/config/details/banks';
+import manufacturerDetail from '@/config/details/manufacturers';
+import warehouseDetail from '@/config/details/warehouses';
+import partnerDetail from '@/config/details/partners';
+import constructionSiteDetail from '@/config/details/construction_sites';
+import blShipmentDetail from '@/config/details/bl_shipment';
 import purchaseOrderDetail from '@/config/details/purchase_orders';
 import lcDetail from '@/config/details/lcs';
+import productDetail from '@/config/details/products';
 import partnerForm from '@/config/forms/partners';
 import bankForm from '@/config/forms/banks';
 import warehouseForm from '@/config/forms/warehouses';
@@ -42,8 +50,16 @@ export const KNOWN_CONFIGS: KnownConfig[] = [
   { kind: 'screen', id: 'construction_sites', label: '발전소 마스터', routeHint: '/masters/construction-sites-v2', default: constructionSitesScreen },
   { kind: 'screen', id: 'purchase_orders', label: '발주(PO) 목록', routeHint: '/procurement/po-v2', default: purchaseOrdersScreen },
   { kind: 'screen', id: 'lcs', label: '신용장(L/C) 목록', routeHint: '/procurement/lc-v2', default: lcsScreen },
+  { kind: 'screen', id: 'inbound', label: 'B/L 입고 (메타)', routeHint: '/procurement?tab=bl (메타 비교)', default: inboundScreen },
+  { kind: 'detail', id: 'bank_detail', label: '은행 상세', routeHint: '/masters/banks-v2 → 행 클릭', default: bankDetail },
+  { kind: 'detail', id: 'manufacturer_detail', label: '제조사 상세', routeHint: '/masters/manufacturers-v2 → 행 클릭', default: manufacturerDetail },
+  { kind: 'detail', id: 'warehouse_detail', label: '창고 상세', routeHint: '/masters/warehouses-v2 → 행 클릭', default: warehouseDetail },
+  { kind: 'detail', id: 'partner_detail', label: '거래처 상세', routeHint: '/masters/partners-v2 → 행 클릭', default: partnerDetail },
+  { kind: 'detail', id: 'construction_site_detail', label: '발전소 상세', routeHint: '/masters/construction-sites-v2 → 행 클릭', default: constructionSiteDetail },
+  { kind: 'detail', id: 'bl_shipment_detail', label: 'B/L 입고 상세', routeHint: '/procurement?tab=bl → 행 클릭', default: blShipmentDetail },
   { kind: 'detail', id: 'purchase_order_detail', label: '발주(PO) 상세', routeHint: '/procurement/po-v2 → 행 클릭', default: purchaseOrderDetail },
   { kind: 'detail', id: 'lc_detail', label: '신용장(L/C) 상세', routeHint: '/procurement/lc-v2 → 행 클릭', default: lcDetail },
+  { kind: 'detail', id: 'product_detail', label: '품번 상세', routeHint: '/masters/products-v2 → 행 클릭', default: productDetail },
   { kind: 'form', id: 'partner_form_v2', label: '거래처 폼', routeHint: '/masters/partners-v2 → 새로 등록', default: partnerForm },
   { kind: 'form', id: 'bank_form_v2', label: '은행 폼', routeHint: '/masters/banks-v2 → 새로 등록', default: bankForm },
   { kind: 'form', id: 'warehouse_form_v2', label: '창고 폼', routeHint: '/masters/warehouses-v2 → 새로 등록', default: warehouseForm },

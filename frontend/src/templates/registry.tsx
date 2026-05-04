@@ -23,6 +23,8 @@ import warehouseDetailConfig from '@/config/details/warehouses';
 import manufacturerDetailConfig from '@/config/details/manufacturers';
 import partnerDetailConfig from '@/config/details/partners';
 import constructionSiteDetailConfig from '@/config/details/construction_sites';
+import blShipmentDetailConfig from '@/config/details/bl_shipment';
+import productDetailConfig from '@/config/details/products';
 import purchaseOrderDetailConfig from '@/config/details/purchase_orders';
 import lcDetailConfig from '@/config/details/lcs';
 import partnerFormConfig from '@/config/forms/partners';
@@ -434,6 +436,8 @@ export const detailDataHooks: Record<string, DetailDataHook> = {
   // Phase 4 마무리: companies / construction_sites detail 추가 — 모든 master 도메인 커버
   useCompanyDetail: (id) => useSimpleDetail<Record<string, unknown>>('/api/v1/companies/:id', id),
   useConstructionSiteDetail: (id) => useSimpleDetail<ConstructionSite>('/api/v1/construction-sites/:id', id),
+  // 품번 상세 — bank/manufacturer 패턴 복제. PATCH는 partial update 지원.
+  useProductDetail: (id) => useSimpleDetail<Product>('/api/v1/products/:id', id),
   // 발주(PO)·신용장(LC) 메타 상세 — 단순 GET /:id (PO 상세 라인은 별도 contentBlock에서 usePOLines로 fetch)
   usePODetail: (id) => useSimpleDetail<PurchaseOrder>('/api/v1/pos/:id', id),
   useLCDetail: (id) => useSimpleDetail<LCRecord>('/api/v1/lcs/:id', id),
@@ -704,6 +708,10 @@ export const detailComponents: Record<string, DetailComponent> = {
   partner: ((props) => <MetaDetail config={partnerDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
   // Phase 4 마무리: 공사 현장 detail
   construction_site: ((props) => <MetaDetail config={constructionSiteDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  // 품번 master 상세 — bank/manufacturer 패턴 복제로 7번째 master 도메인 메타 풀 적용 완성.
+  product: ((props) => <MetaDetail config={productDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
+  // B/L 입고 메타 상세 — 도메인 'bl' (BLDetailView)와 별도. 메타 인프라 검증/UIConfigEditor용.
+  bl_shipment: ((props) => <MetaDetail config={blShipmentDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
   // 발주(PO)·신용장(LC) 메타 상세 — 라인·LC·TT 등 헤비 위젯은 /procurement에서.
   purchase_order: ((props) => <MetaDetail config={purchaseOrderDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
   lc: ((props) => <MetaDetail config={lcDetailConfig} id={props.id} onBack={props.onBack} />) as DetailComponent,
