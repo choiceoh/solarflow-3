@@ -281,7 +281,7 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDTxBL, Name: "B/L 입고", Description: "B/L + 라인",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{
-			"/api/v1/bls/", "/api/v1/bls/{id}",
+			"/api/v1/bls/", "/api/v1/bls/summary", "/api/v1/bls/{id}",
 			"/api/v1/bls/{blId}/lines/", "/api/v1/bls/{blId}/lines/{id}",
 		},
 	},

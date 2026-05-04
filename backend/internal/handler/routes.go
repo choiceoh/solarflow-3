@@ -117,6 +117,7 @@ func (h *BaroPurchaseHistoryHandler) RegisterRoutes(r chi.Router, g middleware.G
 func (h *BLHandler) RegisterRoutes(r chi.Router, g middleware.Gates, lineH *BLLineHandler) {
 	r.Route("/bls", func(r chi.Router) {
 		r.Get("/", h.List)
+		r.Get("/summary", h.Summary)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
