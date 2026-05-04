@@ -231,9 +231,17 @@ func TestLookupDocs_PathMatching(t *testing.T) {
 		{"/purchase-history", "P/O 발주", false},
 		{"/lc", "P/O 발주", false},
 		{"/banking", "은행", false},
-		{"/baro/price-book", "바로", false},
-		{"/baro/incoming", "바로", false},
-		{"/group-trade/baro-inbox", "바로", false},
+		// baro: 더 구체적 prefix 가 전용 도큐로
+		{"/baro/price-book", "단가표·매입이력", false},
+		{"/baro/purchase-history", "단가표·매입이력", false},
+		{"/baro/group-purchase", "그룹내 거래", false},
+		{"/baro/incoming", "그룹내 거래", false},
+		{"/baro/dispatch", "배차·채권", false},
+		{"/baro/credit-board", "배차·채권", false},
+		{"/baro/credit-board/123", "배차·채권", false},                  // 더 깊은 path 도 prefix 매칭
+		{"/baro/unknown-screen", "바로(주) 화면 — 개요", false},          // fallback 은 개요
+		{"/baro", "바로(주) 화면 — 개요", false},
+		{"/group-trade/baro-inbox", "그룹내 거래", false},
 		{"/masters/partners-v2", "마스터", false},
 		{"/data/manufacturers/new", "마스터", false},
 		{"/some/unknown/path", "", true}, // 매칭 없음 → 빈 문자열
