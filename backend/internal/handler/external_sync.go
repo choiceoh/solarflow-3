@@ -323,6 +323,9 @@ var productRules = []productInferenceRule{
 	{regexp.MustCompile(`(?i)^RSM[\s-]*\d+[\s-]+(?:\d+[\s-]+)?(\d{3})`), "Risen"},
 	{regexp.MustCompile(`(?i)^Q[.\s-]*PEAK[\s-]*\w*[\s-]+(\d{3})`), "Hanwha"},
 	{regexp.MustCompile(`(?i)^HA[\s-]*(\d{3})`), ""},
+	{regexp.MustCompile(`(?i)^HS[\s-]*(\d{3})`), "한솔"},
+	{regexp.MustCompile(`(?i)^JAM[\s-]*\d+D\d+[\s-]*(\d{3})`), "ja"},
+	{regexp.MustCompile(`(?i)^CS6W[\s-]*[A-Z]*[\s-]*(\d{3})`), "캐솔"},
 }
 
 func inferProductMeta(code string, mfgIndex map[string]string) (string, int) {
