@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -14,6 +15,14 @@ import (
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
+)
+
+// outboundDefaultLimit / outboundMaxLimit — Supabase Cloud PostgREST 가 강제하는
+// db-max-rows=1000 가드를 그대로 따라 단일 응답 최대 1000행으로 클램프한다.
+// 1000 초과는 프론트에서 offset 을 증가시키며 청크 호출로 누적한다.
+const (
+	outboundDefaultLimit = 1000
+	outboundMaxLimit     = 1000
 )
 
 var errOutboundNotFound = errors.New("outbound not found")
@@ -410,8 +419,51 @@ func (h *OutboundHandler) enrichOutbounds(outbounds []model.Outbound) ([]model.O
 	return outbounds, nil
 }
 
+// productIDsByManufacturer — manufacturer_id 로 products.product_id 리스트를 끌어옴.
+// outbounds.product_id IN (...) 형태로 DB-level 제조사 필터를 거는 데 사용한다.
+func (h *OutboundHandler) productIDsByManufacturer(manufacturerID string) ([]string, error) {
+	data, _, err := h.DB.From("products").
+		Select("product_id", "exact", false).
+		Eq("manufacturer_id", manufacturerID).
+		Execute()
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		ProductID string `json:"product_id"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.ProductID)
+	}
+	return ids, nil
+}
+
+// parseLimitOffset — ?limit, ?offset 파싱 + 클램프. 호환성 유지 위해 미지정 시 기본 1000.
+func parseLimitOffset(r *http.Request, defaultLimit, maxLimit int) (limit, offset int) {
+	limit = defaultLimit
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			limit = v
+		}
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v >= 0 {
+			offset = v
+		}
+	}
+	return limit, offset
+}
+
 // List — GET /api/v1/outbounds — 출고 목록 조회
-// 비유: 출고 관리실에서 전체 출고 전표를 꺼내 보여주는 것
+// 비유: 출고 관리실에서 출고 전표를 페이지 단위로 꺼내 보여주는 것
+// ?limit (기본·최대 1000), ?offset (기본 0) 으로 페이지네이션. 전체 건수는 X-Total-Count 헤더.
 func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("outbounds").
 		Select("*", "exact", false)
@@ -432,7 +484,27 @@ func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("status", status)
 	}
 
-	data, _, err := query.Execute()
+	// manufacturer_id 는 outbounds 컬럼이 아니므로 products → product_id IN (...) 으로 변환해 DB-level 적용.
+	// 페이지네이션이 정확히 동작하려면 enrichment 후 클라이언트 필터로는 안 됨 (페이지마다 결과 수 달라짐).
+	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
+		productIDs, err := h.productIDsByManufacturer(mfgID)
+		if err != nil {
+			log.Printf("[출고 목록 - 제조사 필터 product_id 조회 실패] %v", err)
+			response.RespondError(w, http.StatusInternalServerError, "제조사 필터 처리에 실패했습니다")
+			return
+		}
+		if len(productIDs) == 0 {
+			w.Header().Set("X-Total-Count", "0")
+			response.RespondJSON(w, http.StatusOK, []model.Outbound{})
+			return
+		}
+		query = query.In("product_id", productIDs)
+	}
+
+	limit, offset := parseLimitOffset(r, outboundDefaultLimit, outboundMaxLimit)
+	query = query.Range(offset, offset+limit-1, "")
+
+	data, count, err := query.Execute()
 	if err != nil {
 		log.Printf("[출고 목록 조회 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "출고 목록 조회에 실패했습니다")
@@ -452,20 +524,12 @@ func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "출고 참조 데이터 처리에 실패했습니다")
 		return
 	}
-	// manufacturer_id는 outbounds 컬럼이 아니라 products join 으로 채워지므로 enrichment 후 필터.
-	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
-		filtered := outbounds[:0]
-		for _, ob := range outbounds {
-			if ob.ManufacturerID != nil && *ob.ManufacturerID == mfgID {
-				filtered = append(filtered, ob)
-			}
-		}
-		outbounds = filtered
-	}
 	blItemsByOutbound := h.fetchBLItemsByOutbound()
 	for i := range outbounds {
 		outbounds[i].BLItems = blItemsByOutbound[outbounds[i].OutboundID]
 	}
+
+	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, outbounds)
 }
 
