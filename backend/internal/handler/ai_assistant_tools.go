@@ -47,6 +47,7 @@ func assistantToolCatalog() []assistantTool {
 		toolSearchConstructionSites(),
 		// 거래·관계
 		toolSearchPartners(),
+		toolSearchPartnerActivities(),
 		toolSearchPurchaseOrders(),
 		toolSearchOrders(),
 		toolSearchOutbound(),
@@ -62,6 +63,7 @@ func assistantToolCatalog() []assistantTool {
 		toolBaroPartnerPriceLookup(),
 		toolBaroIncoming(),
 		toolBaroPurchaseHistory(),
+		toolBaroGroupPurchaseRequests(),
 		// 메타 config — 화면/폼/상세 단건 조회 (admin only)
 		toolReadUIConfig(),
 	}

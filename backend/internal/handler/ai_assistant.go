@@ -261,11 +261,21 @@ var assistantTenantLabels = map[string]string{
 }
 
 // tenant 별 업무 컨텍스트 — 어느 흐름이 주력인지 모델이 알도록.
-// 라벨과 별개로 1~2줄 가이드만. 권한 영향 없음 — 응답 톤 hint.
+// 짧은 톤 hint + (baro 한정) 도구 사용 가이드. 권한 영향 없음 — 응답 톤·도구 선택 hint.
 var assistantTenantGuides = map[string]string{
 	"topsolar": "해외 공급사 P/O · L/C 개설 · B/L 입고 · 통관(면장) 흐름이 핵심. 수입 단가/마진/LC 만기 질문이 잦음.",
 	"cable":    "module 포크 — 케이블 라인 거래 분기. P/O · L/C · 통관 일부 도구가 노출됨. 흐름은 topsolar 와 유사.",
-	"baro":     "국내 도매·인바운드 중심. 단가표(price book)·배차·매입요청 질문이 주력. L/C·면장 도구는 노출되지 않음.",
+	"baro": `국내 도매·인바운드 중심. 단가표(price book)·배차·매입요청 질문이 주력. L/C·면장 도구는 노출되지 않음.
+
+[도구 사용 가이드 — 질문 유형별 우선 호출 도구]
+- "한도 초과 거래처?" / "30 일 이상 미수금?" / "채권 잔액?" → list_baro_credit_board (인자 없음)
+- "X 거래처 활동/접촉 이력?" / "이 미수금 왜 이렇게 길지?" → 먼저 search_partners 로 partner_id, 그다음 search_partner_activities (open_followups_only=true 면 미처리만)
+- "내일/이번 주 배차 현황?" / "X 차 미출고?" → list_baro_dispatch_routes (from/to 또는 status)
+- "X 거래처 Y 품번 오늘 단가?" → 먼저 search_partners·search_products 로 ID, 그다음 lookup_baro_partner_price (수주 prefill 정본)
+- "단가 인상 이력?" → search_baro_partner_prices (effective_from 내림차순)
+- "다음 주 입항 예정?" / "ETA?" → search_baro_incoming (금액 컬럼 없음 — 묻지 말고 안내)
+- "지난 분기 자체 매입 평균 단가?" → search_baro_purchase_history (BR 회사 자동 필터)
+- "탑솔라에 보낸 매입요청 처리 상황?" → list_baro_group_purchase_requests (status 로 진행 단계)`,
 }
 
 // 역할별 가시성 가이드. permissions.ts의 RolePermission과 일치해야 함.

@@ -292,6 +292,7 @@ func TestAvailableAssistantTools_BaroExclusiveTools(t *testing.T) {
 		"lookup_baro_partner_price",
 		"search_baro_incoming",
 		"search_baro_purchase_history",
+		"list_baro_group_purchase_requests",
 	}
 
 	// baro operator → 도구 모두 노출.
@@ -327,34 +328,37 @@ func TestAvailableAssistantTools_BaroRoleGate(t *testing.T) {
 		{
 			role: "viewer",
 			expect: map[string]bool{
-				"list_baro_credit_board":       false,
-				"list_baro_dispatch_routes":    false,
-				"search_baro_partner_prices":   false,
-				"lookup_baro_partner_price":    false,
-				"search_baro_purchase_history": false,
-				"search_baro_incoming":         true, // 전직급 조회
+				"list_baro_credit_board":            false,
+				"list_baro_dispatch_routes":         false,
+				"search_baro_partner_prices":        false,
+				"lookup_baro_partner_price":         false,
+				"search_baro_purchase_history":      false,
+				"list_baro_group_purchase_requests": false,
+				"search_baro_incoming":              true, // 전직급 조회
 			},
 		},
 		{
 			role: "executive",
 			expect: map[string]bool{
-				"list_baro_credit_board":       false, // admin/operator 만
-				"list_baro_dispatch_routes":    false,
-				"search_baro_partner_prices":   false,
-				"lookup_baro_partner_price":    false,
-				"search_baro_purchase_history": true, // executive 도 조회
-				"search_baro_incoming":         true,
+				"list_baro_credit_board":            false, // admin/operator 만
+				"list_baro_dispatch_routes":         false,
+				"search_baro_partner_prices":        false,
+				"lookup_baro_partner_price":         false,
+				"list_baro_group_purchase_requests": false,
+				"search_baro_purchase_history":      true, // executive 도 조회
+				"search_baro_incoming":              true,
 			},
 		},
 		{
 			role: "operator",
 			expect: map[string]bool{
-				"list_baro_credit_board":       true,
-				"list_baro_dispatch_routes":    true,
-				"search_baro_partner_prices":   true,
-				"lookup_baro_partner_price":    true,
-				"search_baro_purchase_history": true,
-				"search_baro_incoming":         true,
+				"list_baro_credit_board":            true,
+				"list_baro_dispatch_routes":         true,
+				"search_baro_partner_prices":        true,
+				"lookup_baro_partner_price":         true,
+				"search_baro_purchase_history":      true,
+				"search_baro_incoming":              true,
+				"list_baro_group_purchase_requests": true,
 			},
 		},
 	}
@@ -375,6 +379,55 @@ func toolNames(tools []assistantTool) map[string]bool {
 		out[t.name] = true
 	}
 	return out
+}
+
+// TestAvailableAssistantTools_PartnerActivitiesAllTenants — 활동 로그 도구는 모든 테넌트에 노출.
+// CRM 기능은 테넌트별로 다르게 잠그지 않음 — 인증된 사용자라면 partner_id 만 알면 호출.
+func TestAvailableAssistantTools_PartnerActivitiesAllTenants(t *testing.T) {
+	for _, tenant := range []string{
+		middleware.TenantScopeBaro,
+		middleware.TenantScopeTopsolar,
+		middleware.TenantScopeCable,
+	} {
+		ctx := ctxFor("viewer", tenant)
+		names := toolNames(availableAssistantTools(ctx))
+		if !names["search_partner_activities"] {
+			t.Errorf("%s viewer 에게 search_partner_activities 가 노출 안 됨 (모든 테넌트 공용이어야)", tenant)
+		}
+	}
+}
+
+// TestBuildSystemPrompt_BaroTenantGuideIncludesToolHints — baro 가이드가 새 도구 사용
+// 안내를 포함하는지. 모델이 질문 유형별로 어떤 도구를 우선 호출할지 학습하도록.
+func TestBuildSystemPrompt_BaroTenantGuideIncludesToolHints(t *testing.T) {
+	ctx := ctxFor("operator", middleware.TenantScopeBaro)
+	prompt := buildSystemPrompt(ctx, nil, nil)
+	for _, must := range []string{
+		"[도구 사용 가이드",
+		"list_baro_credit_board",
+		"search_partner_activities",
+		"lookup_baro_partner_price",
+		"list_baro_group_purchase_requests",
+	} {
+		if !strings.Contains(prompt, must) {
+			t.Errorf("baro tenant guide 에 %q 누락", must)
+		}
+	}
+}
+
+// TestBuildSystemPrompt_TopsolarTenantGuideHasNoBaroToolHints — module 사용자는 baro 도구 가이드를 받으면 안 됨.
+func TestBuildSystemPrompt_TopsolarTenantGuideHasNoBaroToolHints(t *testing.T) {
+	ctx := ctxFor("operator", middleware.TenantScopeTopsolar)
+	prompt := buildSystemPrompt(ctx, nil, nil)
+	for _, banned := range []string{
+		"list_baro_credit_board",
+		"lookup_baro_partner_price",
+		"list_baro_group_purchase_requests",
+	} {
+		if strings.Contains(prompt, banned) {
+			t.Errorf("topsolar 프롬프트에 baro 전용 도구 이름 %q 가 누설됨", banned)
+		}
+	}
 }
 
 // TestBuildSystemPrompt_BaroUsesBaroDomainBlock — baro 사용자는 baro 도메인 정본을 받아야.
