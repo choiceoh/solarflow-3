@@ -39,8 +39,8 @@ pub struct InventoryItem {
     pub product_name: String,
     pub manufacturer_name: String,
     pub spec_wp: i32,
-    pub module_width_mm: i32,
-    pub module_height_mm: i32,
+    pub module_width_mm: Option<i32>,
+    pub module_height_mm: Option<i32>,
     /// 물리적 재고 (입고완료 - 출고active)
     pub physical_kw: f64,
     /// 예약 (수주 중 sale/spare/maintenance/other + stock)

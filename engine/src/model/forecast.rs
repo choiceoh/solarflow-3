@@ -28,8 +28,8 @@ pub struct ProductForecast {
     pub product_name: String,
     pub manufacturer_name: String,
     pub spec_wp: i32,
-    pub module_width_mm: i32,
-    pub module_height_mm: i32,
+    pub module_width_mm: Option<i32>,
+    pub module_height_mm: Option<i32>,
     pub months: Vec<MonthForecast>,
     pub unscheduled: UnscheduledForecast,
 }
