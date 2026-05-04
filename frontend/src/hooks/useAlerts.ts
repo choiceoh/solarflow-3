@@ -2,7 +2,7 @@
 // 9가지 알림 계산, 5분 자동 갱신, 법인 변경 시 즉시 재조회
 
 import { useQuery } from '@tanstack/react-query';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchAllPaginated, fetchWithAuth } from '@/lib/api';
 import { fetchCalc, companyQueryUrl } from '@/lib/companyUtils';
 import type { InventoryResponse } from '@/types/inventory';
 import type { BLShipment } from '@/types/inbound';
@@ -88,10 +88,11 @@ async function loadAlerts(companyId: string): Promise<AlertItem[]> {
     fetchCalc<LCLimitTimeline>(companyId, '/api/v1/calc/lc-limit-timeline', { months_ahead: 3 }, mergeTimeline),
     fetchCalc<CustomerAnalysis | LegacyCustomerAnalysis>(companyId, '/api/v1/calc/customer-analysis', {}, (rs) => mergeCustomer(rs as CustomerAnalysis[])),
     fetchCalc<InventoryResponse>(companyId, '/api/v1/calc/inventory', {}),
-    fetchWithAuth<BLShipment[]>(companyQueryUrl('/api/v1/bls', companyId)),
-    fetchWithAuth<Order[]>(companyQueryUrl('/api/v1/orders', companyId)),
-    // 계산서 미발행 카운트는 서버 집계(/outbounds/summary)에서 받는다 — outbounds list 는 기본 100건 페이지네이션
-    // 이라 클라이언트에서 직접 세면 항상 ≤100 으로 캡됨. status=active 로 출고완료 분만 본다 (D-102).
+    fetchAllPaginated<BLShipment>('/api/v1/bls', companyId ? `company_id=${companyId}` : ''),
+    fetchAllPaginated<Order>('/api/v1/orders', companyId ? `company_id=${companyId}` : ''),
+    // 계산서 미발행 카운트는 서버 집계(/outbounds/summary)에서 받는다 — outbounds list 를 전체 페이징해서
+    // 클라이언트 카운트하면 outbound 가 많을수록 N round-trip 이라 대시보드 로딩이 느려짐. summary 는 한 번에 끝.
+    // status=active 로 출고완료 분만 본다 (D-102).
     fetchWithAuth<OutboundSummary>(companyQueryUrl('/api/v1/outbounds/summary?status=active', companyId)),
   ]);
 

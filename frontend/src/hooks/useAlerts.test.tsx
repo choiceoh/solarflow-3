@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { mockFetchWithAuth } from '@/test/mockApi';
+import { fetchAllPaginated } from '@/lib/api';
 import { useAlerts } from './useAlerts';
 
 function withQuery() {
@@ -14,6 +15,7 @@ function withQuery() {
 
 vi.mock('@/lib/api', () => ({
   fetchWithAuth: vi.fn(),
+  fetchAllPaginated: vi.fn(),
 }));
 
 function daysFromNow(days: number) {
@@ -61,23 +63,28 @@ describe('useAlerts', () => {
           calculated_at: new Date().toISOString(),
         };
       }
-      if (path === '/api/v1/bls?company_id=company-1') {
+      if (path === '/api/v1/outbounds/summary?status=active&company_id=company-1') {
+        // ob-1 (sale 있으나 tax_invoice_date 없음), ob-2 (sale 자체 없음) 둘 다 미발행으로 집계
+        return { total: 2, active_count: 2, cancel_pending_count: 0, cancelled_count: 0, sale_amount_sum: 0, invoice_pending_count: 2 };
+      }
+      throw new Error(`Unexpected fetchWithAuth call: ${path}`);
+    });
+
+    vi.mocked(fetchAllPaginated).mockImplementation((async (path: string, baseQuery: string = '') => {
+      const key = `${path}?${baseQuery}`;
+      if (key === '/api/v1/bls?company_id=company-1') {
         return [
           { bl_id: 'bl-1', bl_number: 'BL-1', company_id: 'company-1', manufacturer_id: 'm1', inbound_type: 'import', currency: 'USD', status: 'shipping', eta: daysFromNow(4) },
         ];
       }
-      if (path === '/api/v1/orders?company_id=company-1') {
+      if (key === '/api/v1/orders?company_id=company-1') {
         return [
           { order_id: 'o1', company_id: 'company-1', customer_id: 'c1', order_date: daysFromNow(0), receipt_method: 'email', management_category: 'sale', fulfillment_source: 'stock', product_id: 'p1', quantity: 10, unit_price_wp: 100, remaining_qty: 10, delivery_due: daysFromNow(5), status: 'received' },
           { order_id: 'o2', company_id: 'company-1', customer_id: 'c2', order_date: daysFromNow(0), receipt_method: 'email', management_category: 'sale', fulfillment_source: 'stock', product_id: 'p1', quantity: 10, unit_price_wp: 100, remaining_qty: 10, status: 'partial' },
         ];
       }
-      if (path === '/api/v1/outbounds/summary?status=active&company_id=company-1') {
-        // ob-1 (sale 있으나 tax_invoice_date 없음), ob-2 (sale 자체 없음) 둘 다 미발행으로 집계
-        return { total: 2, active_count: 2, cancel_pending_count: 0, cancelled_count: 0, sale_amount_sum: 0, invoice_pending_count: 2 };
-      }
-      throw new Error(`Unexpected API call: ${path}`);
-    });
+      throw new Error(`Unexpected fetchAllPaginated call: ${key}`);
+    }) as typeof fetchAllPaginated);
 
     const { result } = renderHook(() => useAlerts('company-1'), { wrapper: withQuery() });
 

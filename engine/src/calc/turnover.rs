@@ -26,8 +26,8 @@ struct ProductInfo {
     manufacturer_id: Uuid,
     manufacturer_name: String,
     spec_wp: i32,
-    module_width_mm: i32,
-    module_height_mm: i32,
+    module_width_mm: Option<i32>,
+    module_height_mm: Option<i32>,
 }
 
 #[derive(sqlx::FromRow)]

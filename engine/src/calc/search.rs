@@ -212,19 +212,22 @@ async fn search_compare(pool: &PgPool, pq: &ParsedQuery) -> Result<(Vec<SearchRe
     let mut warnings = Vec::new();
 
     #[derive(sqlx::FromRow)]
-    struct Row { product_id: Uuid, product_name: String, spec_wp: i32, module_width_mm: i32, module_height_mm: i32, manufacturer_name: String }
+    struct Row { product_id: Uuid, product_name: String, spec_wp: i32, module_width_mm: Option<i32>, module_height_mm: Option<i32>, manufacturer_name: String }
 
     let rows = sqlx::query_as::<_, Row>(
         "SELECT p.product_id, p.product_name, p.spec_wp, p.module_width_mm, p.module_height_mm, m.name_kr as manufacturer_name FROM products p JOIN manufacturers m ON p.manufacturer_id=m.manufacturer_id WHERE p.spec_wp=$1 AND p.is_active=true ORDER BY m.name_kr"
     ).bind(spec).fetch_all(pool).await?;
 
-    // 크기 비교 경고
+    // 크기 비교 경고 — 양쪽 모두 치수가 등록된 경우에만 비교 (한쪽 NULL 이면 판단 불가, 침묵)
     if let Some(base) = rows.first() {
-        for r in rows.iter().skip(1) {
-            if r.module_width_mm != base.module_width_mm || r.module_height_mm != base.module_height_mm {
-                warnings.push(format!("⚠ {} {}x{}mm vs {} {}x{}mm — 모듈 크기가 다릅니다. 구조물 호환 확인 필요.",
-                    base.manufacturer_name, base.module_width_mm, base.module_height_mm,
-                    r.manufacturer_name, r.module_width_mm, r.module_height_mm));
+        if let (Some(bw), Some(bh)) = (base.module_width_mm, base.module_height_mm) {
+            for r in rows.iter().skip(1) {
+                let (Some(rw), Some(rh)) = (r.module_width_mm, r.module_height_mm) else { continue };
+                if rw != bw || rh != bh {
+                    warnings.push(format!("⚠ {} {}x{}mm vs {} {}x{}mm — 모듈 크기가 다릅니다. 구조물 호환 확인 필요.",
+                        base.manufacturer_name, bw, bh,
+                        r.manufacturer_name, rw, rh));
+                }
             }
         }
     }
