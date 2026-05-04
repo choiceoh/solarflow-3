@@ -21,6 +21,10 @@ type Sale struct {
 	ErpClosedDate   *string  `json:"erp_closed_date"`
 	Status          string   `json:"status"`
 	Memo            *string  `json:"memo"`
+	// D-064 PR 22: ERP 매출 시트 backfill 식별/원자료 보존.
+	ErpSalesNo *string `json:"erp_sales_no,omitempty"`
+	ErpLineNo  *int    `json:"erp_line_no,omitempty"`
+	Currency   *string `json:"currency,omitempty"`
 }
 
 // SaleListItem — 매출 현황 화면용 응답
