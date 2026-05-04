@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft, ListPlus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn, formatDate, shortMfgName } from '@/lib/utils';
@@ -16,6 +16,7 @@ import AttachmentWidget from '@/components/common/AttachmentWidget';
 import GroupedMiniTable, { type GroupedMiniTableColumn } from '@/components/common/GroupedMiniTable';
 import ProgressMiniBar from '@/components/common/ProgressMiniBar';
 import StatusPill from '@/components/common/StatusPill';
+import LCLineEditDialog from './LCLineEditDialog';
 import { parseDeposit } from './depositStatus';
 import { fetchWithAuth } from '@/lib/api';
 import { usePOLines, useLCList, useTTList } from '@/hooks/useProcurement';
@@ -26,7 +27,7 @@ import { formatUSD, formatNumber } from '@/lib/utils';
 
 interface Props { po: PurchaseOrder; onBack: () => void; onReload: () => void; allPos?: PurchaseOrder[]; }
 
-function LCSubTable({ items }: { items: LCRecord[] }) {
+function LCSubTable({ items, onEditLines }: { items: LCRecord[]; onEditLines: (lc: LCRecord) => void }) {
   const totalUsd = items.reduce((s, l) => s + (l.amount_usd ?? 0), 0);
   const totalMw  = items.reduce((s, l) => s + (l.target_mw ?? 0), 0);
   const columns: GroupedMiniTableColumn<LCRecord>[] = [
@@ -83,6 +84,22 @@ function LCSubTable({ items }: { items: LCRecord[] }) {
         />
       ),
     },
+    {
+      key: 'actions',
+      label: '',
+      align: 'right',
+      render: (lc) => (
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          onClick={() => onEditLines(lc)}
+          title="LC가 인수할 PO 라인을 편집"
+        >
+          <ListPlus className="mr-1 h-3 w-3" />라인
+        </Button>
+      ),
+    },
   ];
 
   return (
@@ -96,7 +113,7 @@ function LCSubTable({ items }: { items: LCRecord[] }) {
           { content: `합계 ${items.length}건`, colSpan: 3, className: 'text-[10px] text-muted-foreground' },
           { content: formatUSD(totalUsd), align: 'right', className: 'font-mono font-medium tabular-nums' },
           { content: totalMw > 0 ? `${totalMw.toFixed(2)} MW` : '—', className: 'font-mono font-medium text-[10px]' },
-          { content: null, colSpan: 2 },
+          { content: null, colSpan: 3 },
         ] : undefined}
       />
       <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
@@ -195,7 +212,8 @@ export default function PODetailView({ po: initialPo, onBack, allPos = [] }: Pro
   const { data: lines, loading: linesLoading } = usePOLines(po.po_id);
   const poLineColVis = useColumnVisibility(PO_LINE_TABLE_ID, PO_LINE_COLUMN_META);
   const poLineColPin = useColumnPinning(PO_LINE_TABLE_ID);
-  const { data: lcs, loading: lcsLoading } = useLCList({ po_id: po.po_id });
+  const { data: lcs, loading: lcsLoading, reload: reloadLcs } = useLCList({ po_id: po.po_id });
+  const [lineEditLC, setLineEditLC] = useState<LCRecord | null>(null);
   const { data: tts, loading: ttsLoading } = useTTList({ po_id: po.po_id });
 
   // 4단계 MW 진행률용 BL 데이터 — 백엔드에 합산 엔드포인트 없어 프론트에서 합산
@@ -482,7 +500,7 @@ export default function PODetailView({ po: initialPo, onBack, allPos = [] }: Pro
         </TabsContent>
         <TabsContent value="lc">
           <div className="space-y-3">
-            {lcsLoading ? <LoadingSpinner /> : <LCSubTable items={lcs} />}
+            {lcsLoading ? <LoadingSpinner /> : <LCSubTable items={lcs} onEditLines={setLineEditLC} />}
           </div>
         </TabsContent>
         <TabsContent value="inbound"><POInboundProgress poId={po.po_id} poLines={lines} /></TabsContent>
@@ -496,6 +514,12 @@ export default function PODetailView({ po: initialPo, onBack, allPos = [] }: Pro
         description={deleteError || `PO "${po.po_number ?? po.po_id}"를 취소 처리하시겠습니까? 발주품목과 연결 이력은 삭제되지 않습니다.`}
         onConfirm={handleDeletePO}
         loading={deleting}
+      />
+      <LCLineEditDialog
+        open={lineEditLC !== null}
+        lc={lineEditLC}
+        onClose={() => setLineEditLC(null)}
+        onSaved={() => { reloadLcs(); }}
       />
     </div>
   );

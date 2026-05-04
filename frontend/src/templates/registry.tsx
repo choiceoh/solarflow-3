@@ -41,6 +41,7 @@ import {
   PO_STATUS_LABEL, LC_STATUS_LABEL, CONTRACT_TYPE_LABEL,
   type PurchaseOrder, type LCRecord,
 } from '@/types/procurement';
+import { usePOList, useLCList } from '@/hooks/useProcurement';
 import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite } from '@/types/masters';
 import type {
   CellRenderer, DataHook, DataHookResult, MetricComputer, ActionHandler,
@@ -285,6 +286,18 @@ export const dataHooks: Record<string, DataHook> = {
   useWarehouseList: () => adaptListHook(useSimpleList<Warehouse>('/api/v1/warehouses')),
   useManufacturerList: () => adaptListHook(useSimpleList<Manufacturer>('/api/v1/manufacturers')),
   useProductList: () => adaptListHook(useSimpleList<Product>('/api/v1/products')),
+  // 발주(PO)·신용장(LC) — 듀얼 product GUI 메타 편집기에서 ListScreen entity로 노출.
+  // requiresCompany=true 화면에서 사용 — selectedCompanyId가 useProcurement 내부에서 자동 적용.
+  usePOList: (f) => adaptListHook(usePOList({
+    status: (f.status as string) || undefined,
+    manufacturer_id: (f.manufacturer_id as string) || undefined,
+    contract_type: (f.contract_type as string) || undefined,
+  })),
+  useLCList: (f) => adaptListHook(useLCList({
+    status: (f.status as string) || undefined,
+    bank_id: (f.bank_id as string) || undefined,
+    po_id: (f.po_id as string) || undefined,
+  })),
   // Phase 4: 발전소 — selectedCompanyId 로 서버 필터 (requiresCompany=true)
   useConstructionSiteList: () => {
     const companyId = useAppStore((s) => s.selectedCompanyId);
@@ -419,6 +432,15 @@ export const metricComputers: Record<string, MetricComputer> = {
   'sum.site_capacity_mw': (items) => {
     const sum = (items as ConstructionSite[]).reduce((s, it) => s + (it.capacity_mw ?? 0), 0);
     return sum.toFixed(2);
+  },
+  // 발주(PO)·신용장(LC) — ListScreen 메트릭 컴퓨터.
+  'sum.po_total_mw': (items) => {
+    const sum = (items as PurchaseOrder[]).reduce((s, p) => s + (p.total_mw ?? 0), 0);
+    return sum.toFixed(2);
+  },
+  'sum.lc_amount_usd_million': (items) => {
+    const sum = (items as LCRecord[]).reduce((s, l) => s + (l.amount_usd ?? 0), 0);
+    return (sum / 1_000_000).toFixed(2);
   },
 };
 
