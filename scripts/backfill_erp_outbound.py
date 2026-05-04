@@ -22,6 +22,18 @@ import os, re, json, sys, datetime, openpyxl, psycopg2
 FILE = "/tmp/erp_data.xlsx"
 SHEET = "출고"
 
+# D-064: ERP 관리구분 → SolarFlow usage_category 매핑.
+# "상품판매" 외에는 매출이 아닌 자체 사용/공사/유지관리 등.
+ERP_MGMT_TO_USAGE = {
+    "상품판매":            "sale",
+    "상품판매(스페어)":      "sale_spare",
+    "공사사용":            "construction",
+    "공사사용(파손)":       "construction_damage",
+    "유지관리(발전소)":      "maintenance",
+    "폐기":               "disposal",
+    "기타":               "other",
+}
+
 # 컬럼 인덱스 (헤더 row 0 — 한 번 행)
 COLS = {
     "kind": 0, "out_date": 1, "out_no": 2, "applied": 3, "customer": 4,
@@ -165,8 +177,16 @@ for ridx, row in enumerate(rows[1:], start=2):  # 1행은 헤더
     }
     erp_payload = {k: v for k, v in erp_payload.items() if v not in (None, "", "nan")}
 
+    # D-064: 매칭/신규 공통 — ERP 관리구분 + 판매가 기반 usage_category 결정
+    if mgmt:
+        usage = ERP_MGMT_TO_USAGE.get(mgmt, "other")
+    elif (unit_price and unit_price > 0) or (total and total > 0) or (fx_total and fx_total > 0):
+        usage = "sale"
+    else:
+        usage = "other"
+
     if candidates:
-        # 매칭 — 첫 candidate 에 erp_outbound_no 채움 + source_payload merge
+        # 매칭 — 첫 candidate 에 erp_outbound_no 채움 + source_payload merge + usage_category 동기화
         # 다중 매칭: 첫 행만 처리. (분할출고 케이스는 ERP 가 같은 IS 번호일 가능성 — 그래도 첫 매칭만)
         oid, current_erp_no, current_pl = candidates[0]
         new_pl = dict(current_pl) if isinstance(current_pl, dict) else {}
@@ -177,12 +197,14 @@ for ridx, row in enumerate(rows[1:], start=2):  # 1행은 헤더
             # ERP 신뢰 정책: 더 최신 ERP 자료가 정식 → 덮어쓰기? 또는 둘 다 보존
             # 안전: 충돌 카운트 + source_payload 에 다른 erp_no 도 보존 (overwrite_history)
             new_pl.setdefault("erp_outbound_no_history", []).append(current_erp_no)
-            cur.execute("UPDATE outbounds SET erp_outbound_no = %s, source_payload = %s::jsonb WHERE outbound_id = %s",
-                        (erp_no, json.dumps(new_pl, ensure_ascii=False), oid))
+            cur.execute(
+                "UPDATE outbounds SET erp_outbound_no = %s, source_payload = %s::jsonb, usage_category = %s WHERE outbound_id = %s",
+                (erp_no, json.dumps(new_pl, ensure_ascii=False), usage, oid))
             matched_already += 1
         else:
-            cur.execute("UPDATE outbounds SET erp_outbound_no = %s, source_payload = %s::jsonb WHERE outbound_id = %s",
-                        (erp_no, json.dumps(new_pl, ensure_ascii=False), oid))
+            cur.execute(
+                "UPDATE outbounds SET erp_outbound_no = %s, source_payload = %s::jsonb, usage_category = %s WHERE outbound_id = %s",
+                (erp_no, json.dumps(new_pl, ensure_ascii=False), usage, oid))
             matched_filled += 1
     else:
         # 매칭 없음 — ERP 정식 자료 → 신규 outbound 등록
@@ -191,6 +213,7 @@ for ridx, row in enumerate(rows[1:], start=2):  # 1행은 헤더
         # warehouse: ERP 의 출고창고 매칭 시도, 없으면 default
         wh_id = default_wh
         cap_kw = (out_qty * wattage) if wattage > 0 else None
+        # usage_category: 위에서 이미 ERP 관리구분 + 판매가 기반으로 계산됨 (변수 usage)
         full_payload = dict(erp_payload)
         full_payload.update({
             "source": "erp_outbound_sheet",
@@ -202,9 +225,9 @@ for ridx, row in enumerate(rows[1:], start=2):  # 1행은 헤더
             INSERT INTO outbounds (
               outbound_date, company_id, product_id, quantity, capacity_kw,
               warehouse_id, usage_category, status, erp_outbound_no, source_payload, site_name
-            ) VALUES (%s, %s, %s, %s, %s, %s, 'sale', 'active', %s, %s::jsonb, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, 'active', %s, %s::jsonb, %s)
             RETURNING outbound_id
-            """, (out_date, comp_id, pid, out_qty, cap_kw, wh_id, erp_no,
+            """, (out_date, comp_id, pid, out_qty, cap_kw, wh_id, usage, erp_no,
                   json.dumps(full_payload, ensure_ascii=False), project[:100] if project else None))
             cur.fetchone()
             new_outbounds += 1
