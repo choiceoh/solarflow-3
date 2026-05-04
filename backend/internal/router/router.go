@@ -93,6 +93,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		handler.NewUIConfigHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewUserHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewWarehouseHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewAliasHandler(a.DB).RegisterRoutes(r, a.Gates)
 	})
 
 	// Rust 계산실 프록시 — engine 미사용 환경에서는 라우트 자체를 mount하지 않는다.

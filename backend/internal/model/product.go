@@ -4,6 +4,8 @@ import "unicode/utf8"
 
 // Product — 품번(모듈 규격) 정보를 담는 구조체
 // 비유: "모듈 규격 카탈로그 카드" — JKM635, TSM-720 같은 모듈의 상세 사양
+// D-056: DB 컬럼은 NULL 허용으로 완화됐지만 Go 모델은 호환성 유지를 위해 값 타입 유지.
+//        NULL 행은 JSON unmarshal 시 0/"" 으로 들어옴(자동 등록 행은 변환기가 추론값을 채워 INSERT 함).
 type Product struct {
 	ProductID      string   `json:"product_id"`
 	ProductCode    string   `json:"product_code"`
