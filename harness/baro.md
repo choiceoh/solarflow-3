@@ -77,7 +77,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 ## 변경 시 체크리스트
 
 새 BARO 전용 기능을 추가할 때:
-1. 백엔드 라우트에 `baroOnly` 미들웨어 적용 (D-108 패턴)
+1. **D-120 의무**: `backend/internal/feature/catalog.go` 에 entry 추가 (`DefaultTenants: feature.TenantSetBaroOnly`) + `harness/FEATURE-WIRING-MATRIX.md` 행 추가 + 라우트에 `r.Use(g.Feature(feature.IDXxx))` 적용 (셋 다 같은 PR에서). `baroOnly` legacy 가드 신규 사용 금지.
 2. 사이드바(`CommandShell.tsx`) 메뉴에 `tenants: ['baro']` 명시
 3. 거래처 상세 등 공유 화면에서 BARO 전용 UI는 `isBaroMode()`로 가드
 4. **DECISIONS.md에 D-NNN 추가** + 본 문서 「관련 결정」 섹션에 링크 1줄 추가

@@ -65,7 +65,8 @@ module과 **동일하게 노출**:
 ## 변경 시 체크리스트
 
 새 cable 전용 기능을 추가할 때:
-1. module과 계속 같은 표면이면 `MODULE_TENANTS` 또는 `topsolarOnly` legacy 가드에 포함되는지 확인
-2. cable만 독립 기능이면 사이드바 메뉴에 `tenants: ['cable']`로 한정하고, 백엔드도 별도 `RequireTenantScope("cable")` 가드 추가
-3. DECISIONS.md에 D-NNN 추가 + 본 문서 「관련 결정」 섹션에 링크 1줄 추가
-4. 사이드바 탭을 쓰는 운영 환경이면 사이트 설정의 `sidebar_tabs.cable` 분류도 확인
+1. **D-120 의무**: `backend/internal/feature/catalog.go` entry + `harness/FEATURE-WIRING-MATRIX.md` 행 + 라우트 `r.Use(g.Feature(feature.IDXxx))` (셋 다 같은 PR).
+2. module 과 같은 표면이면 카탈로그 entry 의 `DefaultTenants: feature.TenantSetModule` 사용. cable 만 독립이면 새 사전 정의 집합(예: `TenantSetCableOnly`)을 catalog.go 에 추가하거나 인라인 `[]string{"cable"}`.
+3. 사이드바 메뉴 `tenants` 도 카탈로그 default 와 일치시킨다.
+4. DECISIONS.md에 D-NNN 추가 + 본 문서 「관련 결정」 섹션에 링크 1줄 추가
+5. 사이드바 탭을 쓰는 운영 환경이면 사이트 설정의 `sidebar_tabs.cable` 분류도 확인
