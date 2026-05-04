@@ -271,13 +271,14 @@ export function ArrayEditor<T>({
 
 // ─── 공유 입력 컴포넌트 ───────────────────────────────────────────────────
 export function FieldInput({
-  label, value, onChange, mono, placeholder,
+  label, value, onChange, mono, placeholder, hint,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   mono?: boolean;
   placeholder?: string;
+  hint?: string;
 }) {
   return (
     <div className="space-y-1">
@@ -288,6 +289,7 @@ export function FieldInput({
         className={`h-7 text-xs ${mono ? 'font-mono' : ''}`}
         placeholder={placeholder}
       />
+      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }

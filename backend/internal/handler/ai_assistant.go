@@ -70,10 +70,33 @@ type assistantRequest struct {
 
 // assistantPageContext — 클라이언트가 현재 보고 있는 화면 정보. 서버가 system prompt 에 자동 주입.
 // 권한·도구 노출은 영향 안 받음 — 단순 hint.
+//
+// metaHints / docs 는 서버가 enrichPageContext 로 채우는 백엔드 enrichment 필드.
+// unexported → JSON 디코딩에서 자동으로 무시되어 클라이언트가 변조할 수 없음.
 type assistantPageContext struct {
 	Path     string `json:"path,omitempty"`
 	Scope    string `json:"scope,omitempty"`
 	ConfigID string `json:"config_id,omitempty"`
+
+	metaHints *assistantMetaHints
+	docs      string
+}
+
+// assistantMetaHints — 화면 메타에서 추출한 사용자/AI 도움말.
+// FieldConfig.description / .aiHint / MetaForm·MetaDetail.description / .aiHint 등을
+// AI 가 읽기 좋게 평탄화. ui_configs override 가 있으면 그것 기준, 없으면 빈 채로 둠.
+type assistantMetaHints struct {
+	Title       string              `json:"title,omitempty"`
+	Description string              `json:"description,omitempty"`
+	AIHint      string              `json:"ai_hint,omitempty"`
+	Fields      []assistantFieldHint `json:"fields,omitempty"`
+}
+
+type assistantFieldHint struct {
+	Key         string `json:"key"`
+	Label       string `json:"label,omitempty"`
+	Description string `json:"description,omitempty"`
+	AIHint      string `json:"ai_hint,omitempty"`
 }
 
 // defaultModelForProvider — provider별 모델 기본값.
@@ -365,6 +388,12 @@ func buildSystemPrompt(ctx context.Context, pageContext *assistantPageContext, t
 			b.WriteString("- 메타 config 미매핑 — 이 화면의 구조를 설명할 수는 있지만 변경은 AI가 수행하지 않습니다.\n")
 		}
 		b.WriteString("\n")
+		if hintsBlock := formatMetaHintsBlock(pageContext.metaHints); hintsBlock != "" {
+			b.WriteString(hintsBlock)
+		}
+		if pageContext.docs != "" {
+			fmt.Fprintf(&b, "[참고 문서 — %s 영역]\n%s\n\n", pageContext.Path, pageContext.docs)
+		}
 	}
 	b.WriteString(assistantDomainBlock)
 	fmt.Fprintf(&b, "\n[역할별 가이드 — %s]\n%s\n", roleLabel, roleGuide)

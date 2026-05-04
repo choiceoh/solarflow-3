@@ -321,6 +321,16 @@ function BasicTab({
         />
       </div>
 
+      <div className="space-y-1.5">
+        <Label className="text-xs">aiHint <span className="text-muted-foreground">(AI 어시스턴트 전용 — 사용자 안 보임)</span></Label>
+        <Textarea
+          value={value.page.aiHint ?? ''}
+          onChange={(e) => onChange({ ...value, page: { ...value.page, aiHint: e.target.value || undefined } })}
+          rows={2}
+          placeholder="예: 이 화면의 행은 단가 정보를 포함. 단가 질문은 manager 이상에만 답변할 것."
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <label className="flex items-center gap-2 text-xs cursor-pointer">
           <input

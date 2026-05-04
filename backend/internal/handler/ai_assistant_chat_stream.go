@@ -35,6 +35,7 @@ func (h *AssistantHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	provider, model, maxTokens := resolveProviderModel(req)
 	ctx := r.Context()
 	available := availableAssistantTools(ctx)
+	enrichPageContext(ctx, h.db, req.PageContext)
 	system := buildSystemPrompt(ctx, req.PageContext, available)
 
 	sse, err := newDataStreamWriter(w)

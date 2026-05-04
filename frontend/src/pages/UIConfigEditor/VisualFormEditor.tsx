@@ -328,6 +328,12 @@ function FieldPanel({
           value={field.description ?? ''}
           onChange={(v) => onChange({ ...field, description: v || undefined })}
         />
+        <FieldInput
+          label="aiHint (AI 어시스턴트 전용)"
+          value={field.aiHint ?? ''}
+          onChange={(v) => onChange({ ...field, aiHint: v || undefined })}
+          hint="사용자에게는 표시되지 않고 AI 시스템 프롬프트에만 주입. 내부 정책·운영 주의사항 등."
+        />
       </PanelGroup>
       <PanelEmpty message="key/label/type/검증/visibleIf 는 해당 필드 행에서 직접 편집" />
     </>
@@ -459,6 +465,17 @@ function BasicTab({ value, onChange }: { value: MetaFormConfig; onChange: (next:
             draftAutoSave (초안 자동저장)
           </label>
         </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">description (다이얼로그 부제 + AI 도움말 자동 주입)</Label>
+        <Input value={value.description ?? ''}
+          onChange={(e) => onChange({ ...value, description: e.target.value || undefined })} />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">aiHint (AI 어시스턴트 전용 — 사용자 안 보임)</Label>
+        <Input value={value.aiHint ?? ''}
+          onChange={(e) => onChange({ ...value, aiHint: e.target.value || undefined })}
+          placeholder="예: 이 폼의 행은 후속 PO/수주의 기본 키. is_active=false 면 신규 선택지에서 자동 제외." />
       </div>
     </div>
   );
@@ -1008,6 +1025,10 @@ function FieldRow({
             <FieldInput label="description (필드 아래 도움말)"
               value={field.description ?? ''}
               onChange={(v) => onUpdate({ ...field, description: v || undefined })} />
+            <FieldInput label="aiHint (AI 전용)"
+              value={field.aiHint ?? ''}
+              onChange={(v) => onUpdate({ ...field, aiHint: v || undefined })}
+              hint="사용자 안 보임 — AI 시스템 프롬프트에만 첨부" />
             <FieldInput label="defaultValue (string/number/boolean)"
               value={field.defaultValue == null ? '' : String(field.defaultValue)}
               onChange={(v) => {
