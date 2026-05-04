@@ -41,6 +41,8 @@ func (h *AssistantHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Get("/sessions/{id}", h.GetSession)
 		r.With(g.Write).Patch("/sessions/{id}", h.UpdateSession)
 		r.With(g.Write).Delete("/sessions/{id}", h.DeleteSession)
+		// 첫 턴 직후 fallback 모델로 제목 자동 요약 (실패 시 슬라이스 fallback)
+		r.With(g.Write).Post("/sessions/{id}/summarize-title", h.SummarizeTitle)
 		// alias of /api/v1/ocr/* — AI 통합 입구로도 노출
 		if h.ocrH != nil {
 			r.Get("/ocr/health", h.ocrH.Health)

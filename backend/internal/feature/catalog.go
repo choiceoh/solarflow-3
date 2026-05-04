@@ -516,6 +516,7 @@ var Catalog = map[FeatureID]Feature{
 		Paths: []string{
 			"/api/v1/assistant/chat",
 			"/api/v1/assistant/sessions", "/api/v1/assistant/sessions/{id}",
+			"/api/v1/assistant/sessions/{id}/summarize-title",
 			"/api/v1/assistant/ocr/health", "/api/v1/assistant/ocr/extract",
 			"/api/v1/assistant/match/receipts/auto",
 		},
