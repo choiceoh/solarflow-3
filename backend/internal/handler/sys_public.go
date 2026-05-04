@@ -635,15 +635,15 @@ func (h *PublicHandler) fetchInventoryFromEngine(companyIDs []string) (float64, 
 	return resp.Summary.TotalAvailableKW / 1000.0, nil
 }
 
-// fetchInboundShipsToday — 오늘(KST) eta_date인 BL 척수.
+// fetchInboundShipsToday — 오늘(KST) eta인 BL 척수.
 // 비유: "오늘자 입항 예정 선박 명부의 줄 수" — 로그인 화면 카피
 // "입항 N척" 표기에 사용. 작업 큐는 7일치라 카운트 용도로 못 씀.
 func (h *PublicHandler) fetchInboundShipsToday() (int, error) {
 	today := time.Now().Format("2006-01-02")
-	data, count, err := h.DB.From("bls").
-		Select("id", "exact", true).
-		Eq("eta_date", today).
-		In("status", []string{"in_transit", "arrived", "shipping"}).
+	data, count, err := h.DB.From("bl_shipments").
+		Select("bl_id", "exact", true).
+		Eq("eta", today).
+		In("status", []string{"shipping", "arrived"}).
 		Execute()
 	if err != nil {
 		return 0, err
@@ -783,37 +783,35 @@ func (h *PublicHandler) buildWorkQueue() []workItem {
 	weekAhead := now.AddDate(0, 0, 7).Format("2006-01-02")
 	today := now.Format("2006-01-02")
 
-	// 입항 예정 BL (eta_date <= +7일, status가 in_transit/arrived)
-	if data, _, err := h.DB.From("bls").
-		Select("eta_date,bl_number,status,vessel_name,total_quantity", "exact", false).
-		Lte("eta_date", weekAhead).
-		Gte("eta_date", today).
-		In("status", []string{"in_transit", "arrived", "shipping"}).
-		Order("eta_date", nil).
+	// 입항 예정 BL (eta <= +7일, status가 shipping/arrived)
+	// vessel_name/total_quantity 컬럼은 스키마에 없으므로 bl_number/port/forwarder로 대체.
+	if data, _, err := h.DB.From("bl_shipments").
+		Select("eta,bl_number,status,port,forwarder", "exact", false).
+		Lte("eta", weekAhead).
+		Gte("eta", today).
+		In("status", []string{"shipping", "arrived"}).
+		Order("eta", nil).
 		Limit(4, "").
 		Execute(); err == nil {
 		var rows []struct {
-			ETADate       string  `json:"eta_date"`
-			BLNumber      string  `json:"bl_number"`
-			VesselName    *string `json:"vessel_name"`
-			TotalQuantity *int    `json:"total_quantity"`
+			ETA       string  `json:"eta"`
+			BLNumber  string  `json:"bl_number"`
+			Port      *string `json:"port"`
+			Forwarder *string `json:"forwarder"`
 		}
 		if err := json.Unmarshal(data, &rows); err == nil {
 			for _, r := range rows {
-				vessel := ""
-				if r.VesselName != nil {
-					vessel = *r.VesselName
+				meta := r.BLNumber
+				if r.Port != nil && *r.Port != "" {
+					meta = fmt.Sprintf("%s · %s", r.BLNumber, *r.Port)
 				}
-				meta := ""
-				if r.TotalQuantity != nil {
-					meta = fmt.Sprintf("%d장 · %s", *r.TotalQuantity, r.BLNumber)
-				} else {
-					meta = r.BLNumber
+				if r.Forwarder != nil && *r.Forwarder != "" {
+					meta = fmt.Sprintf("%s · %s", meta, *r.Forwarder)
 				}
 				items = append(items, workItem{
-					Time:  fmtETA(r.ETADate),
+					Time:  fmtETA(r.ETA),
 					Tag:   "입항",
-					Title: vessel,
+					Title: r.BLNumber,
 					Meta:  meta,
 				})
 			}
