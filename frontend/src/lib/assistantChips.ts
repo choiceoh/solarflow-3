@@ -70,7 +70,7 @@ const PAGE_MAP: Record<string, PageEntry> = {
   '/customs': {
     label: '면장/원가',
     chips: [
-      { text: '면장 PDF OCR 내용 분석', icon: '📎' },
+      { text: '면장 PDF 첨부 → 등록', icon: '📎' },
       { text: '이 면장 원가 계산', icon: '🧮' },
     ],
   },

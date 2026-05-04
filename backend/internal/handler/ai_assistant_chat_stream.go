@@ -16,11 +16,10 @@ import (
 )
 
 // ChatStream — POST /api/v1/assistant/chat (v5 UI Message Stream).
-// 한 요청 = 한 SSE. 조회 도구 호출 루프가 한 SSE 안에서 다단계로 진행.
+// 한 요청 = 한 SSE. 도구 호출 루프(read 도구 즉시 실행 / propose 도구 stash) 가 한 SSE 안에서 다단계로 진행.
 //
 // F1 fallback: 첫 청크(=헤더) 송출 전까지만 fallback provider 로 재시도.
-//
-//	첫 청크 emit 후 실패 시 SSE 안에서 error 청크로 종료.
+//   첫 청크 emit 후 실패 시 SSE 안에서 error 청크로 종료.
 func (h *AssistantHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	var req assistantRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -37,6 +36,7 @@ func (h *AssistantHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	available := availableAssistantTools(ctx)
 	enrichPageContext(ctx, h.db, req.PageContext)
 	system := buildSystemPrompt(ctx, req.PageContext, available)
+	ctx, collector := withProposalCollector(ctx)
 
 	sse, err := newDataStreamWriter(w)
 	if err != nil {
@@ -48,7 +48,7 @@ func (h *AssistantHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	startedAt := time.Now()
 	log.Printf("[assistant stream] enter provider=%s model=%s msgs=%d maxTokens=%d", provider, model, len(req.Messages), maxTokens)
 
-	err = h.runStreamingChat(ctx, sse, provider, model, system, req.Messages, maxTokens)
+	err = h.runStreamingChat(ctx, sse, collector, provider, model, system, req.Messages, maxTokens)
 	elapsed := time.Since(startedAt)
 	if err == nil {
 		log.Printf("[assistant stream] ok provider=%s model=%s elapsed=%s", provider, model, elapsed)
@@ -64,7 +64,7 @@ func (h *AssistantHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 				fbModel = defaultModelForProvider(fbProvider)
 			}
 			log.Printf("[assistant stream] primary=%s 실패(%v) → fallback=%s", provider, err, fbProvider)
-			if fbErr := h.runStreamingChat(ctx, sse, fbProvider, fbModel, system, req.Messages, maxTokens); fbErr != nil {
+			if fbErr := h.runStreamingChat(ctx, sse, collector, fbProvider, fbModel, system, req.Messages, maxTokens); fbErr != nil {
 				log.Printf("[assistant stream] fallback=%s 실패: %v", fbProvider, fbErr)
 				h.failResponse(sse, w, fbErr)
 				return
@@ -121,19 +121,46 @@ func resolveProviderModel(req assistantRequest) (string, string, int) {
 func (h *AssistantHandler) runStreamingChat(
 	ctx context.Context,
 	sse *dataStreamWriter,
+	collector *proposalCollector,
 	provider, model, system string,
 	messages []assistantMessage,
 	maxTokens int,
 ) error {
 	available := availableAssistantTools(ctx)
+	toolKindByName := make(map[string]string, len(available))
+	for _, t := range available {
+		toolKindByName[t.name] = t.kind
+	}
 
 	switch provider {
 	case "anthropic":
-		return h.runAnthropicLoop(ctx, sse, model, system, messages, maxTokens, available)
+		return h.runAnthropicLoop(ctx, sse, collector, model, system, messages, maxTokens, available, toolKindByName)
 	case "openai":
-		return h.runOpenAILoop(ctx, sse, model, system, messages, maxTokens, available)
+		return h.runOpenAILoop(ctx, sse, collector, model, system, messages, maxTokens, available, toolKindByName)
 	default:
 		return fmt.Errorf("지원하지 않는 provider: %s", provider)
+	}
+}
+
+// emitProposalsSince — collector 의 새로 추가된 항목을 data part 로 emit.
+// before 길이 이후를 새 proposal 로 간주. 추가된 게 없으면 no-op.
+// 각 proposal 은 type="data-proposal" 청크 1개로 emit (id 마다 useChat 이 part 1개로 인식).
+func emitProposalsSince(sse *dataStreamWriter, collector *proposalCollector, before int) {
+	all := collector.snapshot()
+	if len(all) <= before {
+		return
+	}
+	for _, p := range all[before:] {
+		err := sse.WriteDataPart("proposal", map[string]any{
+			"id":      p.ID,
+			"kind":    p.Kind,
+			"summary": p.Summary,
+			"payload": p.Payload,
+		})
+		if err != nil {
+			log.Printf("[assistant stream] proposal data part 송출 실패: %v", err)
+			return
+		}
 	}
 }
 
@@ -141,10 +168,12 @@ func (h *AssistantHandler) runStreamingChat(
 func (h *AssistantHandler) runAnthropicLoop(
 	ctx context.Context,
 	sse *dataStreamWriter,
+	collector *proposalCollector,
 	model, system string,
 	messages []assistantMessage,
 	maxTokens int,
 	available []assistantTool,
+	toolKindByName map[string]string,
 ) error {
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 	if apiKey == "" {
@@ -246,17 +275,27 @@ func (h *AssistantHandler) runAnthropicLoop(
 
 		results := make([]anthropicContentBlock, 0, len(toolCalls))
 		for _, tc := range toolCalls {
-			_ = sse.WriteToolInputAvailable(tc.ID, tc.Name, tc.Input)
+			before := len(collector.snapshot())
+			kind := toolKindByName[tc.Name]
+			if kind == "read" {
+				_ = sse.WriteToolInputAvailable(tc.ID, tc.Name, tc.Input)
+			}
 			out, terr := dispatchAssistantTool(ctx, h.db, tc.Name, tc.Input)
 			if terr != nil {
-				_ = sse.WriteToolOutputError(tc.ID, terr.Error())
+				if kind == "read" {
+					_ = sse.WriteToolOutputError(tc.ID, terr.Error())
+				}
 				results = append(results, anthropicContentBlock{
 					Type: "tool_result", ToolUseID: tc.ID,
 					Content: terr.Error(), IsError: true,
 				})
 				continue
 			}
-			_ = sse.WriteToolOutputAvailable(tc.ID, json.RawMessage(asJSONOrQuoted(out)))
+			if kind == "read" {
+				_ = sse.WriteToolOutputAvailable(tc.ID, json.RawMessage(asJSONOrQuoted(out)))
+			} else {
+				emitProposalsSince(sse, collector, before)
+			}
 			results = append(results, anthropicContentBlock{
 				Type: "tool_result", ToolUseID: tc.ID,
 				Content: out,
@@ -274,10 +313,12 @@ func (h *AssistantHandler) runAnthropicLoop(
 func (h *AssistantHandler) runOpenAILoop(
 	ctx context.Context,
 	sse *dataStreamWriter,
+	collector *proposalCollector,
 	model, system string,
 	messages []assistantMessage,
 	maxTokens int,
 	available []assistantTool,
+	toolKindByName map[string]string,
 ) error {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	baseURL := strings.TrimRight(os.Getenv("OPENAI_BASE_URL"), "/")
@@ -375,17 +416,25 @@ func (h *AssistantHandler) runOpenAILoop(
 		prevToolSigs = curSigs
 
 		for _, tc := range toolCalls {
+			before := len(collector.snapshot())
+			kind := toolKindByName[tc.Function.Name]
 			args := json.RawMessage(tc.Function.Arguments)
 			if len(args) == 0 {
 				args = json.RawMessage("{}")
 			}
-			_ = sse.WriteToolInputAvailable(tc.ID, tc.Function.Name, args)
+			if kind == "read" {
+				_ = sse.WriteToolInputAvailable(tc.ID, tc.Function.Name, args)
+			}
 			out, terr := dispatchAssistantTool(ctx, h.db, tc.Function.Name, args)
 			if terr != nil {
-				_ = sse.WriteToolOutputError(tc.ID, terr.Error())
+				if kind == "read" {
+					_ = sse.WriteToolOutputError(tc.ID, terr.Error())
+				}
 				out = "ERROR: " + terr.Error()
-			} else {
+			} else if kind == "read" {
 				_ = sse.WriteToolOutputAvailable(tc.ID, json.RawMessage(asJSONOrQuoted(out)))
+			} else {
+				emitProposalsSince(sse, collector, before)
 			}
 			msgs = append(msgs, openaiMessage{
 				Role: "tool", ToolCallID: tc.ID, Content: out,

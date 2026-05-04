@@ -131,7 +131,7 @@ func toolSearchPurchaseOrders() assistantTool {
 	}
 }
 
-// --- orders 조회 ---
+// --- create_note (write — 사용자 확인 후 commit) ---
 
 type searchOrdersInput struct {
 	OrderNumber string `json:"order_number,omitempty"`
@@ -311,7 +311,7 @@ func toolSearchReceipts() assistantTool {
 	}
 }
 
-// --- products 조회 ---
+// --- create_partner (write — 사용자 확인 후 commit) ---
 
 type searchProductsInput struct {
 	Keyword        string `json:"keyword,omitempty"`
@@ -452,7 +452,7 @@ type searchWarehousesInput struct {
 func toolSearchWarehouses() assistantTool {
 	return assistantTool{
 		name:        "search_warehouses",
-		description: "창고(warehouses) 검색. 코드·이름·위치 부분일치. 창고 ID 확인용. 모든 역할 호출 가능.",
+		description: "창고(warehouses) 검색. 코드·이름·위치 부분일치. create_outbound의 warehouse_id 룩업용. 모든 역할 호출 가능.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
 			"additionalProperties": false,
@@ -777,3 +777,4 @@ func toolSearchPartnerActivities() assistantTool {
 }
 
 // ===== 수주·출고 update/delete =====
+
