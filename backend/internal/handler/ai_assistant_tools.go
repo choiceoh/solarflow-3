@@ -104,3 +104,34 @@ func clampLimit(v, def, max int) int {
 	}
 	return v
 }
+
+// wrapToolResult — 도구 결과를 {rows, count, hint?} JSON 으로 감싸 LLM 가독성을 높인다.
+// rowsJSON 은 PostgREST 가 반환한 JSON 배열을 그대로 받는다 (nil/빈 입력은 [] 로 정규화).
+// count=0 이면 emptyHint 를 hint 필드로 덧붙여, 모델이 빈 결과를 정확히 해석하고 다음 행동을 결정하도록 한다.
+// emptyHint 가 비어있으면 표준 안내문 사용.
+func wrapToolResult(rowsJSON []byte, emptyHint string) (string, error) {
+	// PostgREST 는 드물게 'null' (literal) 을 반환할 수 있어 [] 로 정규화 — 모델이 빈 배열과 구분하지 못해 추측하는 것을 차단.
+	if len(rowsJSON) == 0 || string(rowsJSON) == "null" {
+		rowsJSON = []byte("[]")
+	}
+	var rows []json.RawMessage
+	if err := json.Unmarshal(rowsJSON, &rows); err != nil {
+		return "", fmt.Errorf("도구 결과 파싱 실패: %w", err)
+	}
+	out := map[string]any{
+		"rows":  json.RawMessage(rowsJSON),
+		"count": len(rows),
+	}
+	if len(rows) == 0 {
+		hint := emptyHint
+		if hint == "" {
+			hint = "조건에 맞는 데이터가 없습니다. 필터를 완화하거나 다른 도구로 ID/코드를 먼저 확인하세요."
+		}
+		out["hint"] = hint
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}

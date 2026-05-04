@@ -26,12 +26,13 @@ type searchPartnersInput struct {
 func toolSearchPartners() assistantTool {
 	return assistantTool{
 		name:        "search_partners",
-		description: "거래처(partners) 검색. 이름 부분일치(ilike) 또는 거래처 유형으로 필터. 결과는 JSON 배열.",
+		description: "거래처(partners) 검색. 이름 부분일치 또는 유형(customer/supplier)으로 필터. 거래처 이름만 알 때 partner_id 룩업의 시작점 — search_orders/search_receipts 호출 전에 먼저 호출. 호출 결과는 {rows,count,hint?} 형태.",
 		inputSchema: json.RawMessage(`{
 			"type": "object",
+			"additionalProperties": false,
 			"properties": {
-				"keyword": {"type": "string", "description": "거래처 이름 부분일치"},
-				"partner_type": {"type": "string", "description": "거래처 유형(예: customer, supplier)"},
+				"keyword": {"type": "string", "description": "거래처 이름 부분일치 — 와일드카드/% 문자 직접 입력 금지(서버가 처리)"},
+				"partner_type": {"type": "string", "description": "거래처 유형(주요 값: customer, supplier)"},
 				"limit": {"type": "integer", "description": "최대 결과 수, 기본 20, 최대 50"}
 			}
 		}`),
@@ -59,7 +60,7 @@ func toolSearchPartners() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("거래처 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "거래처가 없습니다. keyword 를 더 짧은 부분 문자열로 줄이거나 partner_type 필터를 빼고 다시 시도하세요.")
 		},
 	}
 }
@@ -78,14 +79,15 @@ type searchPurchaseOrdersInput struct {
 func toolSearchPurchaseOrders() assistantTool {
 	return assistantTool{
 		name:        "search_purchase_orders",
-		description: "P/O(발주) 검색. PO 번호·제조사명·상태·계약일 범위로 필터. manager/viewer 역할은 호출 불가.",
+		description: "P/O(발주) 검색. PO 번호·제조사명·상태·계약일 범위로 필터. manager/viewer 역할은 호출 불가. 결과의 manufacturer_name 은 view 가 자동 제공 — 추가 search_manufacturers 불필요.",
 		inputSchema: json.RawMessage(`{
 			"type": "object",
+			"additionalProperties": false,
 			"properties": {
-				"po_number": {"type": "string", "description": "PO 번호 부분일치"},
-				"manufacturer_keyword": {"type": "string", "description": "제조사 이름(한국어) 부분일치"},
-				"status": {"type": "string", "description": "PO 상태"},
-				"date_from": {"type": "string", "description": "계약일 from(YYYY-MM-DD)"},
+				"po_number": {"type": "string", "description": "PO 번호 부분일치 — 와일드카드/% 직접 입력 금지"},
+				"manufacturer_keyword": {"type": "string", "description": "제조사 이름(한국어) 부분일치 — 와일드카드/% 직접 입력 금지"},
+				"status": {"type": "string", "description": "PO 상태(자유 문자열, 정확일치). 모르면 비워두고 결과로 가용 값 확인"},
+				"date_from": {"type": "string", "description": "계약일 from(YYYY-MM-DD). 단일일자면 date_from=date_to 동일값"},
 				"date_to": {"type": "string", "description": "계약일 to(YYYY-MM-DD)"},
 				"limit": {"type": "integer", "description": "최대 결과 수, 기본 20, 최대 50"}
 			}
@@ -123,7 +125,7 @@ func toolSearchPurchaseOrders() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("P/O 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 P/O 가 없습니다. 날짜 범위를 넓히거나 manufacturer_keyword 를 더 짧게 시도하세요.")
 		},
 	}
 }
@@ -141,12 +143,13 @@ type searchOrdersInput struct {
 func toolSearchOrders() assistantTool {
 	return assistantTool{
 		name:        "search_orders",
-		description: "수주(orders) 검색. 수주번호·고객 ID·주문일 범위로 필터. manager/viewer 역할은 호출 불가. 고객 이름이 필요하면 search_partners로 partner_id를 먼저 찾으세요.",
+		description: "수주(orders) 검색. 수주번호·고객 ID·주문일 범위로 필터. manager/viewer 역할은 호출 불가. 고객 이름만 알면 search_partners 로 partner_id 를 먼저 확보 — 추측한 customer_id 호출 금지. 결과 product_id/customer_id 는 UUID — 사람이 읽는 이름이 필요하면 search_products / search_partners 후속 호출.",
 		inputSchema: json.RawMessage(`{
 			"type": "object",
+			"additionalProperties": false,
 			"properties": {
-				"order_number": {"type": "string", "description": "수주번호 부분일치"},
-				"customer_id": {"type": "string", "description": "고객 partner_id 정확일치"},
+				"order_number": {"type": "string", "description": "수주번호 부분일치 — 와일드카드/% 직접 입력 금지"},
+				"customer_id": {"type": "string", "description": "고객 partner_id 정확일치(UUID). 모르면 search_partners 먼저"},
 				"date_from": {"type": "string", "description": "주문일 from(YYYY-MM-DD)"},
 				"date_to": {"type": "string", "description": "주문일 to(YYYY-MM-DD)"},
 				"limit": {"type": "integer", "description": "최대 결과 수, 기본 20, 최대 50"}
@@ -183,7 +186,7 @@ func toolSearchOrders() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("수주 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 수주가 없습니다. 날짜 범위를 넓히거나 customer_id 필터를 빼고 다시 시도하세요.")
 		},
 	}
 }
@@ -202,13 +205,14 @@ type searchOutboundInput struct {
 func toolSearchOutbound() assistantTool {
 	return assistantTool{
 		name:        "search_outbound",
-		description: "출고/판매(outbounds) 검색. 수주ID·품목ID·상태·출고일 범위로 필터. manager/viewer 역할은 호출 불가.",
+		description: "출고/판매(outbounds) 검색. 수주ID·품목ID·상태·출고일 범위로 필터. manager/viewer 역할은 호출 불가. order_id/product_id 는 UUID — 모르면 search_orders / search_products 로 먼저 확보. 결과 ID 들의 이름이 필요하면 후속 호출.",
 		inputSchema: json.RawMessage(`{
 			"type": "object",
+			"additionalProperties": false,
 			"properties": {
-				"order_id": {"type": "string", "description": "수주 ID 정확일치"},
-				"product_id": {"type": "string", "description": "품목 ID 정확일치"},
-				"status": {"type": "string", "description": "출고 상태"},
+				"order_id": {"type": "string", "description": "수주 ID 정확일치(UUID)"},
+				"product_id": {"type": "string", "description": "품목 ID 정확일치(UUID)"},
+				"status": {"type": "string", "description": "출고 상태(자유 문자열, 정확일치). 모르면 비워두고 결과로 가용 값 확인"},
 				"date_from": {"type": "string", "description": "출고일 from(YYYY-MM-DD)"},
 				"date_to": {"type": "string", "description": "출고일 to(YYYY-MM-DD)"},
 				"limit": {"type": "integer", "description": "최대 결과 수, 기본 20, 최대 50"}
@@ -248,7 +252,7 @@ func toolSearchOutbound() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("출고 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 출고 내역이 없습니다. 날짜 범위를 넓히거나 status·order_id 필터를 빼고 다시 시도하세요.")
 		},
 	}
 }
@@ -265,11 +269,12 @@ type searchReceiptsInput struct {
 func toolSearchReceipts() assistantTool {
 	return assistantTool{
 		name:        "search_receipts",
-		description: "수금(receipts) 검색. 거래처 ID·수금일 범위로 필터. 미수금 권한이 있는 admin/operator/executive 만 호출 가능.",
+		description: "수금(receipts) 검색. 거래처 ID·수금일 범위로 필터. 미수금 권한이 있는 admin/operator/executive 만 호출 가능. partner_id 모르면 search_partners 먼저 — 추측한 ID 호출 금지.",
 		inputSchema: json.RawMessage(`{
 			"type": "object",
+			"additionalProperties": false,
 			"properties": {
-				"partner_id": {"type": "string", "description": "거래처 partner_id 정확일치"},
+				"partner_id": {"type": "string", "description": "거래처 partner_id 정확일치(UUID)"},
 				"date_from": {"type": "string", "description": "수금일 from(YYYY-MM-DD)"},
 				"date_to": {"type": "string", "description": "수금일 to(YYYY-MM-DD)"},
 				"limit": {"type": "integer", "description": "최대 결과 수, 기본 20, 최대 50"}
@@ -300,7 +305,7 @@ func toolSearchReceipts() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("수금 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 수금 내역이 없습니다. 날짜 범위를 넓히거나 partner_id 필터를 빼고 다시 시도하세요.")
 		},
 	}
 }
@@ -316,12 +321,13 @@ type searchProductsInput struct {
 func toolSearchProducts() assistantTool {
 	return assistantTool{
 		name:        "search_products",
-		description: "품목(products) 검색. product_code/product_name 부분일치 또는 제조사 ID로 필터. ID·스펙 조회용 — 모든 역할 호출 가능.",
+		description: "품목(products) 검색. product_code/product_name 부분일치 또는 제조사 ID로 필터. ID·스펙 조회용 — 모든 역할 호출 가능. 제조사 이름만 알 때는 search_manufacturers 로 manufacturer_id 먼저 확보.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
+			"additionalProperties": false,
 			"properties":{
-				"keyword":{"type":"string","description":"product_code·product_name 부분일치"},
-				"manufacturer_id":{"type":"string","description":"제조사 ID 정확일치"},
+				"keyword":{"type":"string","description":"product_code·product_name 부분일치 — 와일드카드/% 직접 입력 금지"},
+				"manufacturer_id":{"type":"string","description":"제조사 ID 정확일치(UUID)"},
 				"limit":{"type":"integer","description":"기본 20, 최대 50"}
 			}
 		}`),
@@ -349,7 +355,7 @@ func toolSearchProducts() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("품목 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 품목이 없습니다. keyword 를 더 짧게 시도하거나 manufacturer_id 필터를 빼세요.")
 		},
 	}
 }
@@ -362,11 +368,12 @@ type searchManufacturersInput struct {
 func toolSearchManufacturers() assistantTool {
 	return assistantTool{
 		name:        "search_manufacturers",
-		description: "제조사(manufacturers) 검색. name_kr/name_en/short_name 부분일치. 모든 역할 호출 가능.",
+		description: "제조사(manufacturers) 검색. name_kr/name_en/short_name 부분일치. 모든 역할 호출 가능. manufacturer_id 룩업 시작점 — search_products/search_purchase_orders 호출 전에 사용.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
+			"additionalProperties": false,
 			"properties":{
-				"keyword":{"type":"string","description":"제조사 이름 부분일치(한국어/영어/약칭)"},
+				"keyword":{"type":"string","description":"제조사 이름 부분일치(한국어/영어/약칭) — 와일드카드/% 직접 입력 금지"},
 				"limit":{"type":"integer","description":"기본 20, 최대 50"}
 			}
 		}`),
@@ -391,7 +398,7 @@ func toolSearchManufacturers() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("제조사 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 제조사가 없습니다. keyword 를 더 짧게(2~3글자) 시도하세요.")
 		},
 	}
 }
@@ -404,11 +411,12 @@ type searchCompaniesInput struct {
 func toolSearchCompanies() assistantTool {
 	return assistantTool{
 		name:        "search_companies",
-		description: "법인(companies) 검색. company_name/company_code 부분일치. 모든 역할 호출 가능.",
+		description: "법인(companies) 검색. company_name/company_code 부분일치. 모든 역할 호출 가능. company_id 룩업 — search_construction_sites 등에서 필요.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
+			"additionalProperties": false,
 			"properties":{
-				"keyword":{"type":"string","description":"법인명/코드 부분일치"},
+				"keyword":{"type":"string","description":"법인명/코드 부분일치 — 와일드카드/% 직접 입력 금지"},
 				"limit":{"type":"integer","description":"기본 20, 최대 50"}
 			}
 		}`),
@@ -430,7 +438,7 @@ func toolSearchCompanies() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("법인 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 법인이 없습니다. keyword 를 더 짧게 시도하세요.")
 		},
 	}
 }
@@ -446,8 +454,9 @@ func toolSearchWarehouses() assistantTool {
 		description: "창고(warehouses) 검색. 코드·이름·위치 부분일치. 창고 ID 확인용. 모든 역할 호출 가능.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
+			"additionalProperties": false,
 			"properties":{
-				"keyword":{"type":"string","description":"warehouse_code/name/location 부분일치"},
+				"keyword":{"type":"string","description":"warehouse_code/name/location 부분일치 — 와일드카드/% 직접 입력 금지"},
 				"limit":{"type":"integer","description":"기본 20, 최대 50"}
 			}
 		}`),
@@ -469,7 +478,7 @@ func toolSearchWarehouses() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("창고 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 창고가 없습니다. keyword 를 더 짧게 시도하세요.")
 		},
 	}
 }
@@ -487,10 +496,11 @@ func toolSearchConstructionSites() assistantTool {
 		description: "발전소·시공현장(construction_sites) 검색. 이름·지명 부분일치, 법인·유형(own/epc) 필터. 수주의 site_id 룩업용. 모든 역할 호출 가능.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
+			"additionalProperties": false,
 			"properties":{
-				"keyword":{"type":"string","description":"name/location 부분일치"},
-				"company_id":{"type":"string","description":"법인 ID 정확일치"},
-				"site_type":{"type":"string","description":"own / epc"},
+				"keyword":{"type":"string","description":"name/location 부분일치 — 와일드카드/% 직접 입력 금지"},
+				"company_id":{"type":"string","description":"법인 ID 정확일치(UUID)"},
+				"site_type":{"type":"string","enum":["own","epc"],"description":"own=자가/관계사 발전소, epc=시공 외주 현장"},
 				"limit":{"type":"integer","description":"기본 20, 최대 50"}
 			}
 		}`),
@@ -518,7 +528,7 @@ func toolSearchConstructionSites() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("현장 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 현장이 없습니다. keyword/site_type/company_id 필터 중 하나를 빼고 다시 시도하세요.")
 		},
 	}
 }
@@ -537,13 +547,14 @@ type searchLCInput struct {
 func toolSearchLC() assistantTool {
 	return assistantTool{
 		name:        "search_lc",
-		description: "L/C(신용장, lc_records) 검색. LC번호·PO·은행·개설일 범위로 필터. module 계열 테넌트 admin/operator/executive 만 호출 가능.",
+		description: "L/C(신용장, lc_records) 검색. LC번호·PO·은행·개설일 범위로 필터. module 계열 테넌트(topsolar/cable) admin/operator/executive 만 호출 가능. baro 테넌트엔 노출 안 됨. po_id 모르면 search_purchase_orders 먼저.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
+			"additionalProperties": false,
 			"properties":{
-				"lc_number":{"type":"string","description":"LC 번호 부분일치"},
-				"po_id":{"type":"string","description":"PO ID 정확일치"},
-				"bank_id":{"type":"string","description":"은행 ID 정확일치"},
+				"lc_number":{"type":"string","description":"LC 번호 부분일치 — 와일드카드/% 직접 입력 금지"},
+				"po_id":{"type":"string","description":"PO ID 정확일치(UUID)"},
+				"bank_id":{"type":"string","description":"은행 ID 정확일치(UUID)"},
 				"date_from":{"type":"string","description":"개설일 from(YYYY-MM-DD)"},
 				"date_to":{"type":"string","description":"개설일 to(YYYY-MM-DD)"},
 				"limit":{"type":"integer","description":"기본 20, 최대 50"}
@@ -582,7 +593,7 @@ func toolSearchLC() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("LC 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 L/C 가 없습니다. 날짜 범위를 넓히거나 po_id/bank_id 필터를 빼고 다시 시도하세요.")
 		},
 	}
 }
@@ -599,13 +610,14 @@ type searchBLInput struct {
 func toolSearchBL() assistantTool {
 	return assistantTool{
 		name:        "search_bl",
-		description: "B/L 입고(bl_shipments) 검색. BL번호·PO·제조사·ETA 범위로 필터. admin/operator/executive 만 호출 가능.",
+		description: "B/L 입고(bl_shipments) 검색. BL번호·PO·제조사·ETA 범위로 필터. admin/operator/executive 만 호출 가능. po_id/manufacturer_id 모르면 각각 search_purchase_orders/search_manufacturers 먼저.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
+			"additionalProperties": false,
 			"properties":{
-				"bl_number":{"type":"string","description":"BL 번호 부분일치"},
-				"po_id":{"type":"string","description":"PO ID 정확일치"},
-				"manufacturer_id":{"type":"string","description":"제조사 ID 정확일치"},
+				"bl_number":{"type":"string","description":"BL 번호 부분일치 — 와일드카드/% 직접 입력 금지"},
+				"po_id":{"type":"string","description":"PO ID 정확일치(UUID)"},
+				"manufacturer_id":{"type":"string","description":"제조사 ID 정확일치(UUID)"},
 				"date_from":{"type":"string","description":"ETA from(YYYY-MM-DD)"},
 				"date_to":{"type":"string","description":"ETA to(YYYY-MM-DD)"},
 				"limit":{"type":"integer","description":"기본 20, 최대 50"}
@@ -641,7 +653,7 @@ func toolSearchBL() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("B/L 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 B/L 이 없습니다. ETA 날짜 범위를 넓히거나 po_id/manufacturer_id 필터를 빼고 다시 시도하세요.")
 		},
 	}
 }
@@ -657,12 +669,13 @@ type searchDeclarationsInput struct {
 func toolSearchDeclarations() assistantTool {
 	return assistantTool{
 		name:        "search_declarations",
-		description: "면장(declarations, 통관 신고필증) 검색. 신고번호·BL·신고일 범위로 필터. module 계열 테넌트 admin/operator/executive 만 호출 가능.",
+		description: "면장(declarations, 통관 신고필증) 검색. 신고번호·BL·신고일 범위로 필터. module 계열 테넌트(topsolar/cable) admin/operator/executive 만 호출 가능. baro 테넌트엔 노출 안 됨. bl_id 모르면 search_bl 먼저.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
+			"additionalProperties": false,
 			"properties":{
-				"declaration_number":{"type":"string","description":"신고번호 부분일치"},
-				"bl_id":{"type":"string","description":"BL ID 정확일치"},
+				"declaration_number":{"type":"string","description":"신고번호 부분일치 — 와일드카드/% 직접 입력 금지"},
+				"bl_id":{"type":"string","description":"BL ID 정확일치(UUID)"},
 				"date_from":{"type":"string","description":"신고일 from(YYYY-MM-DD)"},
 				"date_to":{"type":"string","description":"신고일 to(YYYY-MM-DD)"},
 				"limit":{"type":"integer","description":"기본 20, 최대 50"}
@@ -698,7 +711,7 @@ func toolSearchDeclarations() assistantTool {
 			if err != nil {
 				return "", fmt.Errorf("면장 조회 실패: %w", err)
 			}
-			return string(data), nil
+			return wrapToolResult(data, "조건에 맞는 면장이 없습니다. 날짜 범위를 넓히거나 bl_id 필터를 빼고 다시 시도하세요.")
 		},
 	}
 }

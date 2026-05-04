@@ -23,9 +23,10 @@ func toolReadUIConfig() assistantTool {
 		description: "운영자 GUI 메타 편집기의 ui_configs 테이블에서 화면/폼/상세 config 의 override 단건 조회. (scope, config_id) 한 쌍으로 단일 행. scope 는 'screen'|'form'|'detail'. override 가 없으면 빈 결과 — frontend 가 코드 default 로 폴백 중임을 의미.",
 		inputSchema: json.RawMessage(`{
 			"type": "object",
+			"additionalProperties": false,
 			"properties": {
 				"scope": {"type": "string", "enum": ["screen", "form", "detail"], "description": "메타 config 카테고리"},
-				"config_id": {"type": "string", "description": "config id (예: 'partners', 'partner_form_v2')"}
+				"config_id": {"type": "string", "description": "config id (예: 'partners', 'partner_form_v2'). 현재 화면의 config_id 가 시스템 프롬프트의 [현재 화면] 섹션에 있으면 그것을 사용"}
 			},
 			"required": ["scope", "config_id"]
 		}`),
