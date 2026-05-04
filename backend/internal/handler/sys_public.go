@@ -479,14 +479,17 @@ func (h *PublicHandler) httpGet(url string) ([]byte, error) {
 // === Login Stats ===
 
 type loginStats struct {
-	InventoryAvailableMW *float64    `json:"inventory_available_mw"`
-	ReservationsPending  *int        `json:"reservations_pending"`
-	LCActiveCount        *int        `json:"lc_active_count"`
-	LCActiveTotalUSD     *float64    `json:"lc_active_total_usd"`
-	InboundShipsToday    int         `json:"inbound_ships_today"`
-	WorkQueue            []workItem  `json:"work_queue"`
-	Health               *healthInfo `json:"health,omitempty"`
-	GeneratedAt          time.Time   `json:"generated_at"`
+	InventoryAvailableMW *float64       `json:"inventory_available_mw"`
+	ReservationsPending  *int           `json:"reservations_pending"`
+	LCActiveCount        *int           `json:"lc_active_count"`
+	LCActiveTotalUSD     *float64       `json:"lc_active_total_usd"`
+	InboundShipsToday    int            `json:"inbound_ships_today"`
+	WorkQueue            []workItem     `json:"work_queue"`
+	// PendingCounts — 로그인 화면 헤드라인용 카테고리별 처리 대기 건수.
+	// 키: "예약" / "출고" / "만기" / "그룹요청". 프론트가 desc 정렬하여 상위 2개 표시.
+	PendingCounts        map[string]int `json:"pending_counts"`
+	Health               *healthInfo    `json:"health,omitempty"`
+	GeneratedAt          time.Time      `json:"generated_at"`
 }
 
 type workItem struct {
@@ -514,7 +517,8 @@ func msSince(start time.Time) float64 {
 // 각 필드는 best-effort: 한 쿼리가 실패해도 다른 필드는 정상 반환.
 func (h *PublicHandler) LoginStats(w http.ResponseWriter, r *http.Request) {
 	stats := loginStats{
-		WorkQueue: []workItem{},
+		WorkQueue:     []workItem{},
+		PendingCounts: map[string]int{},
 	}
 
 	var dbMs, engineMs float64
@@ -539,6 +543,7 @@ func (h *PublicHandler) LoginStats(w http.ResponseWriter, r *http.Request) {
 	t = time.Now()
 	if n, err := h.fetchReservationsPending(); err == nil {
 		stats.ReservationsPending = &n
+		stats.PendingCounts["예약"] = n
 	} else {
 		log.Printf("[login-stats reservations] %v", err)
 	}
@@ -558,6 +563,30 @@ func (h *PublicHandler) LoginStats(w http.ResponseWriter, r *http.Request) {
 		stats.InboundShipsToday = n
 	} else {
 		log.Printf("[login-stats inbound] %v", err)
+	}
+	dbMs += msSince(t)
+
+	t = time.Now()
+	if n, err := h.fetchOutboundsScheduled(); err == nil {
+		stats.PendingCounts["출고"] = n
+	} else {
+		log.Printf("[login-stats outbounds] %v", err)
+	}
+	dbMs += msSince(t)
+
+	t = time.Now()
+	if n, err := h.fetchLCMaturingCount(); err == nil {
+		stats.PendingCounts["만기"] = n
+	} else {
+		log.Printf("[login-stats lc_maturing] %v", err)
+	}
+	dbMs += msSince(t)
+
+	t = time.Now()
+	if n, err := h.fetchIntercompanyPending(); err == nil {
+		stats.PendingCounts["그룹요청"] = n
+	} else {
+		log.Printf("[login-stats intercompany] %v", err)
 	}
 	dbMs += msSince(t)
 
@@ -686,6 +715,64 @@ func (h *PublicHandler) fetchActiveLCs() (int, float64, error) {
 		total += r.AmountUSD
 	}
 	return len(rows), total, nil
+}
+
+// fetchOutboundsScheduled — 오늘 이후 예정된 활성(status=active) 출고 건수.
+// 비유: "이번 주 출고 일정표에 적힌 줄 개수" — 취소/취소대기는 제외.
+func (h *PublicHandler) fetchOutboundsScheduled() (int, error) {
+	today := time.Now().Format("2006-01-02")
+	data, count, err := h.DB.From("outbounds").
+		Select("outbound_id", "exact", true).
+		Eq("status", "active").
+		Gte("outbound_date", today).
+		Execute()
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return int(count), nil
+	}
+	var rows []map[string]any
+	_ = json.Unmarshal(data, &rows)
+	return len(rows), nil
+}
+
+// fetchLCMaturingCount — 향후 7일 이내 만기 임박 L/C 건수 (closed/cancelled 제외).
+func (h *PublicHandler) fetchLCMaturingCount() (int, error) {
+	today := time.Now().Format("2006-01-02")
+	weekAhead := time.Now().AddDate(0, 0, 7).Format("2006-01-02")
+	data, count, err := h.DB.From("lc_records").
+		Select("lc_id", "exact", true).
+		Gte("maturity_date", today).
+		Lte("maturity_date", weekAhead).
+		Not("status", "in", "(closed,cancelled)").
+		Execute()
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return int(count), nil
+	}
+	var rows []map[string]any
+	_ = json.Unmarshal(data, &rows)
+	return len(rows), nil
+}
+
+// fetchIntercompanyPending — 처리 대기 중(status=pending) 그룹내 매입 요청 건수.
+func (h *PublicHandler) fetchIntercompanyPending() (int, error) {
+	data, count, err := h.DB.From("intercompany_requests").
+		Select("request_id", "exact", true).
+		Eq("status", "pending").
+		Execute()
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return int(count), nil
+	}
+	var rows []map[string]any
+	_ = json.Unmarshal(data, &rows)
+	return len(rows), nil
 }
 
 // buildWorkQueue — 향후 7일 이내 입항(BL) + LC 만기를 시간순 정렬, 상위 4건.

@@ -15,6 +15,7 @@ interface LoginStats {
   lc_active_total_usd: number | null;
   inbound_ships_today: number;
   work_queue: { time: string; tag: string; title: string; meta: string }[];
+  pending_counts: Record<string, number>;
   health: { db_ms: number; engine_ms: number } | null;
   generated_at: string;
 }
@@ -53,6 +54,12 @@ const FALLBACK_FX = { rate: 1773.4, change_pct: 0.06 };
 const FALLBACK_SILVER = { price_usd: 28.84, change_usd: -1.42 };
 const FALLBACK_POLYSILICON = { value: 34.20, change: 0.40 };
 const FALLBACK_SCFI = { value: 1284, change: -2.10 };
+const FALLBACK_PENDING_COUNTS: Record<string, number> = {
+  예약: 28,
+  출고: 12,
+  만기: 5,
+  그룹요청: 7,
+};
 const FALLBACK_HEALTH = { db_ms: 12.1, engine_ms: 3.2 };
 const FALLBACK_API_MS = 8.4;
 const FALLBACK_QUEUE: LoginStats['work_queue'] = [
@@ -145,7 +152,6 @@ export default function LoginPage() {
   const reservations = stats?.reservations_pending ?? FALLBACK_KPI.reservations_pending;
   const lcCount = stats?.lc_active_count ?? FALLBACK_KPI.lc_active_count;
   const lcTotalUSD = stats?.lc_active_total_usd ?? FALLBACK_KPI.lc_active_total_usd;
-  const inboundShipsToday = stats?.inbound_ships_today ?? FALLBACK_KPI.inbound_ships_today;
   const fxRate = fx?.rate ?? FALLBACK_FX.rate;
   const fxChange = fx?.change_pct ?? FALLBACK_FX.change_pct;
   const silverPrice = silver?.price_usd ?? FALLBACK_SILVER.price_usd;
@@ -155,6 +161,14 @@ export default function LoginPage() {
   const scfiValue = scfi?.value ?? FALLBACK_SCFI.value;
   const scfiChange = scfi?.change ?? FALLBACK_SCFI.change;
   const queue = stats?.work_queue?.length ? stats.work_queue : FALLBACK_QUEUE;
+  const pendingCounts =
+    stats?.pending_counts && Object.keys(stats.pending_counts).length
+      ? stats.pending_counts
+      : FALLBACK_PENDING_COUNTS;
+  const topPending = Object.entries(pendingCounts)
+    .filter(([, n]) => n > 0)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 2);
   const apiLatencyMs = apiMs ?? FALLBACK_API_MS;
   const dbLatencyMs = stats?.health?.db_ms ?? FALLBACK_HEALTH.db_ms;
   const engineLatencyMs = stats?.health?.engine_ms ?? FALLBACK_HEALTH.engine_ms;
@@ -185,9 +199,29 @@ export default function LoginPage() {
           <div className="sf-eyebrow text-[var(--sf-solar-3)]">로그인 · LOGIN</div>
           <h1 className="mt-2 text-[32px] font-extrabold leading-none text-[var(--sf-ink)]">다시 만나요.</h1>
           <p className="mt-2 mb-6 text-[13px] leading-6 text-[var(--sf-ink-3)]">
-            오늘 <strong className="font-bold text-[var(--sf-ink)]">예약 {reservations}건</strong>과{' '}
-            <strong className="font-bold text-[var(--sf-ink)]">입항 {inboundShipsToday}척</strong>이
-            처리를 기다리고 있어요.
+            {topPending.length === 0 ? (
+              <>오늘은 처리 대기 중인 작업이 없어요.</>
+            ) : topPending.length === 1 ? (
+              <>
+                오늘{' '}
+                <strong className="font-bold text-[var(--sf-ink)]">
+                  {topPending[0][0]} {topPending[0][1]}건
+                </strong>
+                이 처리를 기다리고 있어요.
+              </>
+            ) : (
+              <>
+                오늘{' '}
+                <strong className="font-bold text-[var(--sf-ink)]">
+                  {topPending[0][0]} {topPending[0][1]}건
+                </strong>
+                과{' '}
+                <strong className="font-bold text-[var(--sf-ink)]">
+                  {topPending[1][0]} {topPending[1][1]}건
+                </strong>
+                이 처리를 기다리고 있어요.
+              </>
+            )}
           </p>
           <LoginForm />
           <div className="mt-5 flex items-center gap-2 rounded bg-[var(--sf-bg-2)] px-3 py-2">
