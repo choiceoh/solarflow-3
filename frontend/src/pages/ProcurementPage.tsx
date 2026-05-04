@@ -120,6 +120,7 @@ export default function ProcurementPage() {
   const lcFilters: Record<string, string> = {};
   if (lcStatusFilter) lcFilters.status = lcStatusFilter;
   if (lcBankFilter) lcFilters.bank_id = lcBankFilter;
+  if (lcMfgFilter) lcFilters.manufacturer_id = lcMfgFilter;
   const { data: lcs, loading: lcLoading, reload: reloadLC } = useLCList(lcFilters);
 
   const [ttStatusFilter, setTtStatusFilter] = useState('');

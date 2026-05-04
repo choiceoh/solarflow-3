@@ -103,7 +103,15 @@ function buildColumns({
     { key: 'product_name', label: '품명', hideable: true, cell: (item) => item.product_name ?? '—', sortAccessor: (item) => item.product_name ?? '', globalFilterText: (item) => item.product_name ?? '' },
     { key: 'spec_wp', label: '규격', hideable: true, cell: (item) => item.spec_wp ? `${item.spec_wp}` : '—', sortAccessor: (item) => item.spec_wp ?? 0 },
     { key: 'quantity', label: '수량', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => formatNumber(item.quantity), sortAccessor: (item) => item.quantity },
-    { key: 'unit_price_wp', label: 'Wp단가', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => formatNumber(item.sale.unit_price_wp), sortAccessor: (item) => item.sale.unit_price_wp ?? 0 },
+    {
+      key: 'unit_price_ea', label: '단가(장)', hideable: true, align: 'right', className: 'tabular-nums',
+      cell: (item) => {
+        const ea = item.sale.unit_price_ea ?? (item.sale.unit_price_wp != null && item.spec_wp ? item.sale.unit_price_wp * item.spec_wp : null);
+        return ea != null ? formatNumber(ea) : '—';
+      },
+      sortAccessor: (item) => item.sale.unit_price_ea ?? (item.sale.unit_price_wp != null && item.spec_wp ? item.sale.unit_price_wp * item.spec_wp : 0),
+    },
+    { key: 'unit_price_wp', label: 'Wp단가', hideable: true, hiddenByDefault: true, align: 'right', className: 'tabular-nums', cell: (item) => item.sale.unit_price_wp != null ? item.sale.unit_price_wp.toFixed(1) : '—', sortAccessor: (item) => item.sale.unit_price_wp ?? 0 },
     { key: 'supply_amount', label: '공급가', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => item.sale.supply_amount ? formatNumber(item.sale.supply_amount) : '—', sortAccessor: (item) => item.sale.supply_amount ?? 0 },
     { key: 'vat_amount', label: '부가세', hideable: true, align: 'right', className: 'tabular-nums', cell: (item) => item.sale.vat_amount ? formatNumber(item.sale.vat_amount) : '—', sortAccessor: (item) => item.sale.vat_amount ?? 0 },
     {
@@ -168,6 +176,7 @@ function SaleListTable({ items, hidden, pinning, onPinningChange, onInvoice, glo
       globalFilter={globalFilter}
       getRowKey={(item) => item.sale_id}
       emptyMessage="매출 데이터가 없습니다"
+      pageSize={50}
     />
   );
 }
