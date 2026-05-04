@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
+import MetaTable, { type ColumnDef, type MetaTableServerMode } from '@/components/common/MetaTable';
 import OutboundStatusBadge from './OutboundStatusBadge';
 import { formatDate, formatNumber, formatKw, cn } from '@/lib/utils';
 import { USAGE_CATEGORY_LABEL, type Outbound } from '@/types/outbound';
@@ -15,6 +15,8 @@ interface Props {
   onPinningChange?: (next: ColumnPinningState) => void;
   onSelect: (item: Outbound) => void;
   globalFilter?: string;
+  /** 서버사이드 페이지네이션·정렬 — 지정 시 클라이언트 pageSize 무시. */
+  serverMode?: MetaTableServerMode;
 }
 
 function buildColumns(): ColumnDef<Outbound>[] {
@@ -57,7 +59,7 @@ function buildColumns(): ColumnDef<Outbound>[] {
 export const OUTBOUND_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns().map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function OutboundListTable({ items, hidden, pinning, onPinningChange, onSelect, globalFilter }: Props) {
+function OutboundListTable({ items, hidden, pinning, onPinningChange, onSelect, globalFilter, serverMode }: Props) {
   return (
     <MetaTable
       tableId={OUTBOUND_TABLE_ID}
@@ -75,7 +77,8 @@ function OutboundListTable({ items, hidden, pinning, onPinningChange, onSelect, 
         ob.status === 'cancelled' && 'bg-gray-50 text-muted-foreground line-through',
       )}
       emptyMessage="등록된 출고가 없습니다"
-      pageSize={50}
+      pageSize={serverMode ? undefined : 50}
+      serverMode={serverMode}
     />
   );
 }
