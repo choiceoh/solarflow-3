@@ -330,22 +330,34 @@ export default function OrdersPage() {
     const today = new Date();
     const currYear = today.getFullYear();
     const currMonth = today.getMonth();
-    const prevDate = new Date(currYear, currMonth - 1, 1);
-    const prevYear = prevDate.getFullYear();
-    const prevMonth = prevDate.getMonth();
-    let curr = 0;
+    const currDay = today.getDate();
+    const prevMonthDate = new Date(currYear, currMonth - 1, 1);
+    const prevMonthYear = prevMonthDate.getFullYear();
+    const prevMonthIdx = prevMonthDate.getMonth();
+    const lastYear = currYear - 1;
+    let year = 0;
     let prev = 0;
+    let lastYearSame = 0;
+    let lastYearHasAny = false;
     for (const outbound of outboundsWithSales) {
       if (!outbound.outbound_date) continue;
       const d = new Date(outbound.outbound_date);
       if (Number.isNaN(d.getTime())) continue;
       const y = d.getFullYear();
       const m = d.getMonth();
+      const day = d.getDate();
       const kw = outbound.capacity_kw ?? 0;
-      if (y === currYear && m === currMonth) curr += kw;
-      else if (y === prevYear && m === prevMonth) prev += kw;
+      if (y === currYear) year += kw;
+      if (y === prevMonthYear && m === prevMonthIdx) prev += kw;
+      if (y === lastYear) {
+        lastYearHasAny = true;
+        if (m < currMonth || (m === currMonth && day <= currDay)) lastYearSame += kw;
+      }
     }
-    return { curr, prev, currMonth: currMonth + 1, prevMonth: prevMonth + 1 };
+    const yoyPct = lastYearHasAny && lastYearSame > 0
+      ? ((year - lastYearSame) / lastYearSame) * 100
+      : null;
+    return { year, prev, currYear, prevMonth: prevMonthIdx + 1, yoyPct };
   }, [outboundsWithSales]);
   // 최근 4주(이번 주 포함, 월요일 시작) 출고 capacity. 좌→우 = 과거→현재.
   const weeklyOutbound = useMemo(() => {
@@ -479,6 +491,7 @@ export default function OrdersPage() {
     `${visibleOrders.length}건 · ${fmtSalesMw(ordersKw)} MW${orderWorkQueue ? ` · 전체 ${orders.length}건` : ''}`;
   // KPI sparkline 시계열 — 데이터 범위 기반 (최근 6개월 캡, sparkUtils 참고). 스냅샷은 JSX 폴백에서 평행선.
   const outboundCountSpark = monthlyCount(outboundsWithSales, (o) => o.outbound_date);
+  const outboundKwSpark = monthlyTrend(outboundsWithSales, (o) => o.outbound_date, (o) => o.capacity_kw ?? 0);
   const saleTotalSpark = monthlyTrend(sales, (s) => s.tax_invoice_date ?? s.outbound_date ?? null, (s) => s.total_amount ?? s.sale?.total_amount ?? 0);
   const receiptTotalSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.amount ?? 0);
   const receiptRemainingSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.remaining ?? 0);
@@ -488,8 +501,8 @@ export default function OrdersPage() {
     activeTab === 'outbound' ? [
       { lbl: '출고 전체', v: String(outboundsWithSales.length), u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar', spark: outboundCountSpark },
       { lbl: '계산서 연결', v: String(outboundsWithSales.filter(outbound => outbound.sale).length), u: '건', sub: '매출 전환됨', tone: 'info', spark: monthlyCount(outboundsWithSales.filter(o => o.sale), (o) => o.outbound_date) },
-      { lbl: '전월 출고 용량', v: fmtSalesMw(monthlyOutboundKw.prev), u: 'MW', sub: `${monthlyOutboundKw.prevMonth}월`, tone: 'ink' },
-      { lbl: '금월 출고 용량', v: fmtSalesMw(monthlyOutboundKw.curr), u: 'MW', sub: `${monthlyOutboundKw.currMonth}월`, tone: 'pos' },
+      { lbl: '전월 출고 용량', v: fmtSalesMw(monthlyOutboundKw.prev), u: 'MW', sub: `${monthlyOutboundKw.prevMonth}월 · 최근 6개월`, tone: 'ink', spark: outboundKwSpark },
+      { lbl: '금년 출고 용량', v: fmtSalesMw(monthlyOutboundKw.year), u: 'MW', sub: monthlyOutboundKw.yoyPct != null ? `${monthlyOutboundKw.currYear}년 누계 · 전년比 ${monthlyOutboundKw.yoyPct >= 0 ? '+' : ''}${monthlyOutboundKw.yoyPct.toFixed(1)}%` : `${monthlyOutboundKw.currYear}년 누계`, tone: 'pos' },
     ] :
     activeTab === 'sales' ? [
       { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${sales.length}건`, tone: 'solar', spark: saleTotalSpark },
