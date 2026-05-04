@@ -6,11 +6,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatDate, formatNumber, formatKw, moduleLabel } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
-import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
+import { DetailSection, DetailField, DetailFieldGrid, EditableDetailField } from '@/components/common/detail';
 import FulfillmentSourceBadge from './FulfillmentSourceBadge';
 import LinkedMemoWidget from '@/components/memo/LinkedMemoWidget';
 import { useOrderDetail, useOrderOutbounds } from '@/hooks/useOrders';
 import { fetchWithAuth } from '@/lib/api';
+import { notify } from '@/lib/notify';
 import {
   ORDER_STATUS_LABEL, ORDER_STATUS_COLOR, RECEIPT_METHOD_LABEL,
   MANAGEMENT_CATEGORY_LABEL,
@@ -40,7 +41,7 @@ function formatMaybeKw(value: unknown): string | undefined {
 }
 
 export default function OrderDetailView({ orderId, onBack }: Props) {
-  const { data: order, loading } = useOrderDetail(orderId);
+  const { data: order, loading, reload } = useOrderDetail(orderId);
   const { data: outbounds, loading: obLoading } = useOrderOutbounds(orderId);
   const [sales, setSales] = useState<Sale[]>([]);
 
@@ -83,6 +84,21 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
   const receiptMethodLabel = order.receipt_method ? (RECEIPT_METHOD_LABEL[order.receipt_method] ?? order.receipt_method) : undefined;
   const managementLabel = order.management_category ? (MANAGEMENT_CATEGORY_LABEL[order.management_category] ?? order.management_category) : undefined;
   const sale = salesRows[0];
+  const isCancelled = order.status === 'cancelled';
+
+  const saveOrderField = async (key: string, value: unknown) => {
+    await fetchWithAuth(`/api/v1/orders/${orderId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ [key]: value }),
+    });
+    notify.success('수정되었습니다');
+    reload();
+  };
+
+  const receiptOptions = (Object.entries(RECEIPT_METHOD_LABEL) as [string, string][])
+    .map(([value, label]) => ({ value, label }));
+  const managementOptions = (Object.entries(MANAGEMENT_CATEGORY_LABEL) as [string, string][])
+    .map(([value, label]) => ({ value, label }));
 
   const statusBadge = (
     <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', statusColor)}>
@@ -106,15 +122,56 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
         badges={statusBadge}
       >
             <DetailFieldGrid cols={4}>
-              <DetailField label="발주번호" value={order.order_number} />
-              <DetailField label="수주일" value={formatDate(order.order_date)} />
+              <EditableDetailField
+                label="발주번호"
+                value={order.order_number}
+                fieldKey="order_number"
+                editType="text"
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
+              <EditableDetailField
+                label="수주일"
+                value={order.order_date}
+                display={formatDate(order.order_date)}
+                fieldKey="order_date"
+                editType="date"
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
               <DetailField label="거래처" value={order.customer_name} span={2} />
-              <DetailField label="접수방법" value={receiptMethodLabel} />
-              <DetailField label="관리구분" value={managementLabel} />
+              <EditableDetailField
+                label="접수방법"
+                value={order.receipt_method}
+                display={receiptMethodLabel}
+                fieldKey="receipt_method"
+                editType="select"
+                options={receiptOptions}
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
+              <EditableDetailField
+                label="관리구분"
+                value={order.management_category}
+                display={managementLabel}
+                fieldKey="management_category"
+                editType="select"
+                options={managementOptions}
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
               <DetailField label="충당소스">
                 {order.fulfillment_source ? <FulfillmentSourceBadge source={order.fulfillment_source} /> : '—'}
               </DetailField>
-              <DetailField label="납기일" value={order.delivery_due ? formatDate(order.delivery_due) : undefined} />
+              <EditableDetailField
+                label="납기일"
+                value={order.delivery_due}
+                display={order.delivery_due ? formatDate(order.delivery_due) : undefined}
+                fieldKey="delivery_due"
+                editType="date"
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
             </DetailFieldGrid>
       </DetailSection>
 
@@ -124,35 +181,114 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
               <DetailField label="품번" value={order.product_code} />
               <DetailField label="규격" value={order.spec_wp ? `${order.spec_wp}Wp` : undefined} />
               <DetailField label="품명" value={order.product_name} span={4} />
-              <DetailField label="수량" value={formatMaybeNumber(order.quantity)} />
+              <EditableDetailField
+                label="수량"
+                value={order.quantity}
+                display={formatMaybeNumber(order.quantity)}
+                fieldKey="quantity"
+                editType="number"
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
               <DetailField label="잔량" value={formatMaybeNumber(remaining)} />
               <DetailField label="용량" value={formatMaybeKw(order.capacity_kw)} />
-              <DetailField label="스페어" value={formatMaybeNumber(order.spare_qty)} />
-              <DetailField label="Wp단가" value={formatMaybeNumber(order.unit_price_wp, '원/Wp')} />
+              <EditableDetailField
+                label="스페어"
+                value={order.spare_qty}
+                display={formatMaybeNumber(order.spare_qty)}
+                fieldKey="spare_qty"
+                editType="number"
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
+              <EditableDetailField
+                label="Wp단가"
+                value={order.unit_price_wp}
+                display={formatMaybeNumber(order.unit_price_wp, '원/Wp')}
+                fieldKey="unit_price_wp"
+                editType="number"
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
             </DetailFieldGrid>
       </DetailSection>
 
       <DetailSection title="현장">
             <DetailFieldGrid cols={4}>
-              <DetailField label="현장명" value={order.site_name} span={2} />
-              <DetailField label="현장 주소" value={order.site_address} span={2} />
-              <DetailField label="현장 담당" value={order.site_contact} />
-              <DetailField label="현장 전화" value={order.site_phone} />
+              <EditableDetailField
+                label="현장명"
+                value={order.site_name}
+                fieldKey="site_name"
+                editType="text"
+                disabled={isCancelled}
+                span={2}
+                onSave={saveOrderField}
+              />
+              <EditableDetailField
+                label="현장 주소"
+                value={order.site_address}
+                fieldKey="site_address"
+                editType="text"
+                disabled={isCancelled}
+                span={2}
+                onSave={saveOrderField}
+              />
+              <EditableDetailField
+                label="현장 담당"
+                value={order.site_contact}
+                fieldKey="site_contact"
+                editType="text"
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
+              <EditableDetailField
+                label="현장 전화"
+                value={order.site_phone}
+                fieldKey="site_phone"
+                editType="text"
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
             </DetailFieldGrid>
       </DetailSection>
 
       <DetailSection title="결제">
             <DetailFieldGrid cols={4}>
-              <DetailField label="결제조건" value={order.payment_terms} span={2} />
-              <DetailField label="현금/선수금율" value={formatMaybeNumber(order.deposit_rate, '%')} />
+              <EditableDetailField
+                label="결제조건"
+                value={order.payment_terms}
+                fieldKey="payment_terms"
+                editType="text"
+                disabled={isCancelled}
+                span={2}
+                onSave={saveOrderField}
+              />
+              <EditableDetailField
+                label="현금/선수금율"
+                value={order.deposit_rate}
+                display={formatMaybeNumber(order.deposit_rate, '%')}
+                fieldKey="deposit_rate"
+                editType="number"
+                disabled={isCancelled}
+                onSave={saveOrderField}
+              />
             </DetailFieldGrid>
       </DetailSection>
 
-      {order.memo && (
-        <DetailSection title="메모">
-          <p className="text-sm whitespace-pre-wrap break-words">{order.memo}</p>
-        </DetailSection>
-      )}
+      <DetailSection title="메모">
+        <DetailFieldGrid cols={1}>
+          <EditableDetailField
+            label="메모"
+            value={order.memo}
+            display={order.memo ? <span className="whitespace-pre-wrap break-words">{order.memo}</span> : null}
+            fieldKey="memo"
+            editType="textarea"
+            disabled={isCancelled}
+            placeholder="메모 (Ctrl+Enter로 저장, Esc로 취소)"
+            onSave={saveOrderField}
+          />
+        </DetailFieldGrid>
+      </DetailSection>
 
       <Separator />
 

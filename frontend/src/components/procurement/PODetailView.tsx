@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn, formatDate, shortMfgName } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
-import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
+import { DetailSection, DetailField, DetailFieldGrid, EditableDetailField } from '@/components/common/detail';
+import { notify } from '@/lib/notify';
 import POLineTable, { PO_LINE_TABLE_ID, PO_LINE_COLUMN_META } from './POLineTable';
 import { ColumnVisibilityMenu } from '@/components/common/ColumnVisibilityMenu';
 import { useColumnVisibility } from '@/lib/columnVisibility';
@@ -247,6 +248,21 @@ export default function PODetailView({ po: initialPo, onBack, allPos = [] }: Pro
     return () => { cancelled = true; };
   }, [po.po_id]);
 
+  const isCancelled = po.status === 'cancelled';
+
+  // 단일 필드 편집 — UpdatePurchaseOrderRequest 가 모든 필드 optional. PUT /api/v1/pos/{id}.
+  const savePOField = async (key: string, value: unknown) => {
+    const updated = await fetchWithAuth<PurchaseOrder>(`/api/v1/pos/${po.po_id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ [key]: value }),
+    });
+    notify.success('수정되었습니다');
+    setPo(updated);
+  };
+
+  const contractTypeOptions = (Object.entries(CONTRACT_TYPE_LABEL) as [string, string][])
+    .map(([value, label]) => ({ value, label }));
+
   // PO 취소 — 운영 이력 보존을 위해 실제 삭제 대신 cancelled로 전환
   const handleDeletePO = async () => {
     setDeleting(true);
@@ -296,11 +312,43 @@ export default function PODetailView({ po: initialPo, onBack, allPos = [] }: Pro
               title="기본 정보"
             >
               <DetailFieldGrid cols={4}>
-                <DetailField label="계약유형" value={CONTRACT_TYPE_LABEL[po.contract_type]} />
+                <EditableDetailField
+                  label="계약유형"
+                  value={po.contract_type}
+                  display={CONTRACT_TYPE_LABEL[po.contract_type]}
+                  fieldKey="contract_type"
+                  editType="select"
+                  options={contractTypeOptions}
+                  disabled={isCancelled}
+                  onSave={savePOField}
+                />
                 <DetailField label="제조사" value={shortMfgName(po.manufacturer_name)} />
-                <DetailField label="계약일" value={formatDate(po.contract_date ?? '')} />
-                <DetailField label="Incoterms" value={po.incoterms} />
-                <DetailField label="결제조건" value={po.payment_terms} span={2} />
+                <EditableDetailField
+                  label="계약일"
+                  value={po.contract_date}
+                  display={formatDate(po.contract_date ?? '')}
+                  fieldKey="contract_date"
+                  editType="date"
+                  disabled={isCancelled}
+                  onSave={savePOField}
+                />
+                <EditableDetailField
+                  label="Incoterms"
+                  value={po.incoterms}
+                  fieldKey="incoterms"
+                  editType="text"
+                  disabled={isCancelled}
+                  onSave={savePOField}
+                />
+                <EditableDetailField
+                  label="결제조건"
+                  value={po.payment_terms}
+                  fieldKey="payment_terms"
+                  editType="text"
+                  disabled={isCancelled}
+                  span={2}
+                  onSave={savePOField}
+                />
                 {po.total_qty != null && <DetailField label="총수량" value={formatNumber(po.total_qty)} />}
                 {po.total_mw != null && <DetailField label="총 MW" value={`${po.total_mw.toFixed(2)}MW`} />}
               </DetailFieldGrid>
@@ -336,12 +384,18 @@ export default function PODetailView({ po: initialPo, onBack, allPos = [] }: Pro
                   </div>
                 );
               })()}
-              {po.memo && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">메모</p>
-                  <p className="text-sm whitespace-pre-wrap break-words">{po.memo}</p>
-                </div>
-              )}
+              <DetailFieldGrid cols={1}>
+                <EditableDetailField
+                  label="메모"
+                  value={po.memo}
+                  display={po.memo ? <span className="whitespace-pre-wrap break-words">{po.memo}</span> : null}
+                  fieldKey="memo"
+                  editType="textarea"
+                  disabled={isCancelled}
+                  placeholder="메모 (Ctrl+Enter로 저장, Esc로 취소)"
+                  onSave={savePOField}
+                />
+              </DetailFieldGrid>
             </DetailSection>
 
             {/* T/T 납부현황 + LC 개설현황 요약 */}
