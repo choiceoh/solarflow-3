@@ -376,9 +376,47 @@ function columnWidth(field: FieldDef): number {
 function columnFormat(field: FieldDef): string | undefined {
   if (field.type === 'date') return 'yyyy-mm-dd';
   if (field.type !== 'number') return undefined;
-  if (field.key.includes('rate') || field.key.includes('price') || field.key.includes('wp')) return '#,##0.00';
+  const k = field.key;
+  // 비율(%) — 환율은 진짜 환율이지 % 아님.
+  if (k.endsWith('_rate') && k !== 'exchange_rate') return '0.0"%"';
+  if (k.includes('rate') || k.includes('price') || k.includes('wp') || k.includes('unit')) return '#,##0.00';
   return '#,##0';
 }
+
+// 컬럼별 데이터 정렬 — 숫자는 우측, 날짜는 가운데, 그 외 좌측. 자릿수 비교 가독성 향상.
+function columnHorizontalAlign(field: FieldDef): 'left' | 'center' | 'right' {
+  if (field.type === 'number') return 'right';
+  if (field.type === 'date') return 'center';
+  return 'left';
+}
+
+// 데이터 입력 영역 시각 표시 — 매우 옅은 ivory. 잠긴 헤더와 풀린 데이터 영역을 색으로 구분.
+const INPUT_CELL_FILL = {
+  type: 'pattern' as const,
+  pattern: 'solid' as const,
+  fgColor: { argb: 'FFFEFCE8' },
+};
+
+// 그룹 경계 보더 — 인접 그룹의 첫 컬럼 좌측에 굵은 줄을 그어 시야 분리.
+const GROUP_DIVIDER_BORDER = {
+  left: { style: 'medium' as const, color: { argb: 'FF94A3B8' } },
+};
+
+// 양식별 컬럼 그룹 경계 — 각 숫자는 "그룹의 마지막 컬럼 인덱스(1-base)".
+// 다음 컬럼(boundary+1)의 좌측에 굵은 보더가 그어진다. 빈 배열은 그룹 없음.
+const FIELD_GROUPS: Record<TemplateType, number[]> = {
+  company: [],
+  inbound: [],
+  outbound: [6, 10],          // [출고일~용도] | [수주~스페어] | [그룹~메모]
+  sale: [3, 5],               // [출고~Wp단가] | [세금~메일] | [ERP~메모]
+  declaration: [4, 6],        // [면장~신고일] | [입항~반출] | [HS~메모]
+  expense: [4, 6],            // [B/L~비용유형] | [금액~부가세] | [거래처~메모]
+  order: [4, 7, 10, 14],      // [발주~수주일] | [방법~소스] | [품번~Wp단가] | [현장] | [결제~메모]
+  receipt: [3],               // [거래처~금액] | [계좌~메모]
+};
+
+// 원가등록(declaration_cost)은 같은 type='declaration'을 공유하지만 별 시트라 따로.
+const DECL_COST_GROUPS = [4, 7, 10, 13]; // [면장참조~환율] | [FOB×3] | [CIF×3] | [관세×3] | [통관~메모]
 
 function fieldNote(field: FieldDef): string {
   const basics = [
@@ -412,21 +450,47 @@ function applyColumnInputHints(sheet: SheetWritable, fields: FieldDef[]) {
   });
 }
 
-function unlockEntryCells(sheet: SheetWritable, fields: FieldDef[]) {
+function unlockEntryCells(sheet: SheetWritable, fields: FieldDef[], groups: number[] = []) {
+  const boundaryStartCols = new Set(groups.map((b) => b + 1));
   for (let col = 1; col <= fields.length; col++) {
     const colLetter = columnLetter(col);
+    const isGroupStart = boundaryStartCols.has(col);
     for (let row = 2; row <= MAX_TEMPLATE_ROWS; row++) {
-      sheet.getCell(`${colLetter}${row}`).protection = { locked: false };
+      const cell = sheet.getCell(`${colLetter}${row}`);
+      cell.protection = { locked: false };
+      cell.fill = INPUT_CELL_FILL;
+      if (isGroupStart) cell.border = GROUP_DIVIDER_BORDER;
     }
   }
 }
 
+interface StyleHeadersOpts {
+  masterData?: MasterDataForExcel;
+  type?: TemplateType;
+  // 명시 그룹 — 미지정 시 type에서 FIELD_GROUPS로 lookup. declaration_cost처럼 별 시트는 명시.
+  groups?: number[];
+}
+
+// 헤더 셀의 hover note 생성 — 기본 hint + 구체 예시.
+function buildHeaderNote(field: FieldDef, masterData?: MasterDataForExcel, type?: TemplateType): string {
+  const note = fieldNote(field);
+  if (!masterData) return note;
+  const ex = exampleValue(field, masterData, type);
+  if (ex === '' || ex === null || ex === undefined) return note;
+  return `${note}\n예: ${ex}`;
+}
+
 // 헤더 스타일 설정
-function styleHeaders(sheet: SheetWritable, fields: FieldDef[]) {
-  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+function styleHeaders(sheet: SheetWritable, fields: FieldDef[], opts: StyleHeadersOpts = {}) {
+  // 첫 컬럼 freeze — 가로 스크롤 시 식별자(B/L No, 출고일 등)가 항상 보이도록.
+  sheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
   sheet.autoFilter = `A1:${columnLetter(fields.length)}1`;
   setTabColor(sheet, 'FF2563EB');
   sheet.getRow(1).height = 28;
+
+  const groups = opts.groups ?? (opts.type ? FIELD_GROUPS[opts.type] : []);
+  const groupStartCols = new Set(groups.map((b) => b + 1));
+
   fields.forEach((f, i) => {
     const cell = sheet.getCell(1, i + 1);
     cell.value = f.required ? `${f.label}*` : f.label;
@@ -435,18 +499,25 @@ function styleHeaders(sheet: SheetWritable, fields: FieldDef[]) {
       color: f.required ? { argb: 'FFB91C1C' } : { argb: 'FF334155' },
     };
     cell.fill = f.required ? REQUIRED_HEADER_FILL : OPTIONAL_HEADER_FILL;
-    cell.border = HEADER_BORDER;
+    // 그룹 시작 컬럼은 좌측 medium 보더로 시야 분리.
+    cell.border = groupStartCols.has(i + 1)
+      ? { ...HEADER_BORDER, ...GROUP_DIVIDER_BORDER }
+      : HEADER_BORDER;
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    cell.note = fieldNote(f);
+    cell.note = buildHeaderNote(f, opts.masterData, opts.type);
   });
   fields.forEach((field, i) => {
     const col = sheet.getColumn(i + 1);
     col.width = columnWidth(field);
     col.numFmt = columnFormat(field);
-    col.alignment = { vertical: 'middle', wrapText: false };
+    col.alignment = {
+      vertical: 'middle',
+      wrapText: false,
+      horizontal: columnHorizontalAlign(field),
+    };
   });
   applyColumnInputHints(sheet, fields);
-  unlockEntryCells(sheet, fields);
+  unlockEntryCells(sheet, fields, groups);
 }
 
 function writeGuideRow(sheet: SheetWritable, row: number, values: unknown[]) {
@@ -720,7 +791,7 @@ export async function generateUnifiedTemplate(
   const codeSheetName = '코드표';
   const refs = addUnifiedCodeSheet(workbook, codeSheetName, masterData);
   for (const type of UNIFIED_TEMPLATE_ORDER) {
-    await addUnifiedDataSheet(workbook, type, refs, codeSheetName);
+    await addUnifiedDataSheet(workbook, type, refs, codeSheetName, masterData);
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
@@ -842,13 +913,14 @@ async function addUnifiedDataSheet(
   type: TemplateType,
   refs: UnifiedCodeRefs,
   codeSheetName: string,
+  masterData: MasterDataForExcel,
 ): Promise<void> {
   const codeRef = `'${codeSheetName}'`;
   const label = TEMPLATE_LABEL[type];
 
   if (type === 'company') {
     const dataSheet = workbook.addWorksheet('법인등록');
-    styleHeaders(dataSheet, COMPANY_FIELDS);
+    styleHeaders(dataSheet, COMPANY_FIELDS, { masterData, type: 'company' });
     await protectSheet(dataSheet);
     return;
   }
@@ -856,8 +928,8 @@ async function addUnifiedDataSheet(
   if (type === 'declaration') {
     const declSheet = workbook.addWorksheet('면장등록');
     const costSheet = workbook.addWorksheet('원가등록');
-    styleHeaders(declSheet, DECLARATION_FIELDS);
-    styleHeaders(costSheet, DECLARATION_COST_FIELDS);
+    styleHeaders(declSheet, DECLARATION_FIELDS, { masterData, type: 'declaration' });
+    styleHeaders(costSheet, DECLARATION_COST_FIELDS, { masterData, type: 'declaration', groups: DECL_COST_GROUPS });
     setDropdownFromRef(declSheet, 'C', codeRef, refs.company, true);
     setDropdownFromRef(costSheet, 'B', codeRef, refs.product, true);
     await protectSheet(declSheet);
@@ -867,7 +939,7 @@ async function addUnifiedDataSheet(
 
   const fields = getFieldsForType(type);
   const dataSheet = workbook.addWorksheet(`${label}등록`);
-  styleHeaders(dataSheet, fields);
+  styleHeaders(dataSheet, fields, { masterData, type });
 
   switch (type) {
     case 'inbound':
@@ -952,7 +1024,7 @@ async function addTemplateSheets(
 
   if (type === 'company') {
     const dataSheet = workbook.addWorksheet('법인등록');
-    styleHeaders(dataSheet, COMPANY_FIELDS);
+    styleHeaders(dataSheet, COMPANY_FIELDS, { masterData, type: 'company' });
     await protectSheet(dataSheet);
     return;
   }
@@ -963,8 +1035,8 @@ async function addTemplateSheets(
     const costSheet = workbook.addWorksheet('원가등록');
     const codeSheet = workbook.addWorksheet(codeSheetName);
 
-    styleHeaders(declSheet, DECLARATION_FIELDS);
-    styleHeaders(costSheet, DECLARATION_COST_FIELDS);
+    styleHeaders(declSheet, DECLARATION_FIELDS, { masterData, type: 'declaration' });
+    styleHeaders(costSheet, DECLARATION_COST_FIELDS, { masterData, type: 'declaration', groups: DECL_COST_GROUPS });
 
     // 코드표
     let col = 1;
@@ -987,7 +1059,7 @@ async function addTemplateSheets(
     const dataSheet = workbook.addWorksheet(`${label}등록`);
     const codeSheet = workbook.addWorksheet(codeSheetName);
 
-    styleHeaders(dataSheet, fields);
+    styleHeaders(dataSheet, fields, { masterData, type });
 
     // 코드표 + 드롭다운 설정
     let col = 1;
