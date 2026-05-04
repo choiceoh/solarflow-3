@@ -35,6 +35,9 @@ export interface Product {
   wafer_platform?: string;
   cell_config?: string;
   series_name?: string;
+  module_efficiency?: number;        // 모듈 효율 (%)
+  module_type?: 'PERC' | 'TOPCON' | 'BC';
+  module_grade?: '1' | '2' | '3' | 'NA';  // 모듈 등급 — 한국 탄소인증제 (1/2/3/NA)
   memo?: string;
   is_active: boolean;
 }
