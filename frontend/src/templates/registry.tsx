@@ -46,7 +46,8 @@ import {
   type POStatus, type LCStatus,
   type PurchaseOrder, type LCRecord,
 } from '@/types/procurement';
-import { usePOList, useLCList, usePOLines, useLCLines } from '@/hooks/useProcurement';
+import { usePOList, useLCList, usePOLines, useLCLines, useTTList } from '@/hooks/useProcurement';
+import { useBLList } from '@/hooks/useInbound';
 import StatusPill from '@/components/common/StatusPill';
 import AttachmentWidget from '@/components/common/AttachmentWidget';
 import type { Partner, Bank, Warehouse, Manufacturer, Product, ConstructionSite } from '@/types/masters';
@@ -829,25 +830,160 @@ function POLinesContentBlock({ poId }: { poId: string }) {
   );
 }
 
+// PO 우측 RailBlock — TT 송금 합계 + B/L 입고 진행률.
+// useTTList는 po_id 필터, useBLList는 po_id 직접 필터가 없어 client-side 필터링.
+function PORailSummary({ poId }: { poId: string }) {
+  const { data: tts } = useTTList({ po_id: poId || undefined });
+  const { data: bls } = useBLList({});
+  if (!poId) return null;
+  const ttCompleted = tts.filter((t) => t.status === 'completed');
+  const ttCompletedUsd = ttCompleted.reduce((s, t) => s + (t.amount_usd ?? 0), 0);
+  const ttPlanned = tts.filter((t) => t.status === 'planned');
+  const ttPlannedUsd = ttPlanned.reduce((s, t) => s + (t.amount_usd ?? 0), 0);
+  const poBls = bls.filter((b) => b.po_id === poId);
+  const blCompleted = poBls.filter((b) => b.status === 'completed' || b.status === 'erp_done').length;
+  const blShipping = poBls.filter((b) => b.status === 'shipping' || b.status === 'arrived' || b.status === 'customs').length;
+  const blScheduled = poBls.filter((b) => b.status === 'scheduled').length;
+  const blTotal = poBls.length;
+  return (
+    <>
+      <div className="rounded-md border bg-card p-3 text-[12px]">
+        <div className="mb-2 text-[11px] font-semibold text-muted-foreground">T/T 송금</div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">완료</span>
+          <span className="font-mono tabular-nums">USD {ttCompletedUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">예정</span>
+          <span className="font-mono tabular-nums">USD {ttPlannedUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+        </div>
+        <div className="mt-1 text-[10.5px] text-muted-foreground">{tts.length}건 · 완료 {ttCompleted.length} / 예정 {ttPlanned.length}</div>
+      </div>
+      <div className="rounded-md border bg-card p-3 text-[12px]">
+        <div className="mb-2 text-[11px] font-semibold text-muted-foreground">B/L 입고 진행률</div>
+        {blTotal === 0 ? (
+          <p className="text-[11px] text-muted-foreground">연결된 B/L 없음</p>
+        ) : (
+          <>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">완료</span>
+              <span className="font-mono tabular-nums">{blCompleted} / {blTotal}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">운송중</span>
+              <span className="font-mono tabular-nums">{blShipping}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">예정</span>
+              <span className="font-mono tabular-nums">{blScheduled}</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${blTotal > 0 ? (blCompleted / blTotal) * 100 : 0}%` }}
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+// LC 우측 RailBlock — 모(母)PO 요약 (PO 메타 v2로 빠른 진입) + 자체 amount/만기.
+function LCRailSummary({ lc }: { lc: LCRecord | null }) {
+  if (!lc) return null;
+  const maturity = lc.maturity_date;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysToMaturity = (() => {
+    if (!maturity) return null;
+    const m = new Date(maturity);
+    if (Number.isNaN(m.getTime())) return null;
+    m.setHours(0, 0, 0, 0);
+    return Math.ceil((m.getTime() - today.getTime()) / 86_400_000);
+  })();
+  const poLink = lc.po_id ? `/procurement?po_id=${encodeURIComponent(lc.po_id)}` : null;
+  return (
+    <>
+      <div className="rounded-md border bg-card p-3 text-[12px]">
+        <div className="mb-2 text-[11px] font-semibold text-muted-foreground">금액 / 만기</div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">개설 금액</span>
+          <span className="font-mono tabular-nums">USD {(lc.amount_usd ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+        </div>
+        {daysToMaturity != null && (
+          <div className="mt-1 flex justify-between">
+            <span className="text-muted-foreground">만기까지</span>
+            <span className={`font-mono tabular-nums ${daysToMaturity < 0 ? 'text-destructive' : daysToMaturity <= 30 ? 'text-amber-600' : ''}`}>
+              {daysToMaturity < 0 ? `${Math.abs(daysToMaturity)}일 경과` : `${daysToMaturity}일`}
+            </span>
+          </div>
+        )}
+        {lc.usance_days != null && lc.usance_days > 0 && (
+          <div className="mt-1 text-[10.5px] text-muted-foreground">유산스 {lc.usance_days}일 ({lc.usance_type ?? '미지정'})</div>
+        )}
+      </div>
+      {poLink && (
+        <div className="rounded-md border bg-card p-3 text-[12px]">
+          <div className="mb-2 text-[11px] font-semibold text-muted-foreground">연결된 발주(PO)</div>
+          <a
+            href={poLink}
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 font-mono text-foreground hover:bg-muted"
+            title="PO 상세로 이동"
+          >
+            {lc.po_number ?? lc.po_id.slice(0, 8)} →
+          </a>
+        </div>
+      )}
+    </>
+  );
+}
+
 // LC 라인 미니 테이블 — PO 라인 패턴 대칭. 분할 인수 라인을 quick read.
-function LCLinesContentBlock({ lcId }: { lcId: string }) {
+// poId/poNumber로 헤더에 PO deep link (/procurement?po_id=…)를 함께 노출 — LC 라인이 묶인 원계약 빠른 진입.
+function LCLinesContentBlock({ lcId, poId, poNumber }: { lcId: string; poId?: string; poNumber?: string }) {
   const { data: lines, loading } = useLCLines(lcId || null);
   if (!lcId) return null;
+  const poLink = poId ? `/procurement?po_id=${encodeURIComponent(poId)}` : null;
+  const poLabel = poNumber ?? (poId ? poId.slice(0, 8) : null);
+  const header = poLink && poLabel ? (
+    <div className="mb-2 flex items-center gap-2 text-[11.5px] text-muted-foreground">
+      <span>이 LC가 묶인 발주:</span>
+      <a
+        href={poLink}
+        className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 font-mono text-foreground hover:bg-muted"
+        title="PO 상세로 이동"
+      >
+        {poLabel} →
+      </a>
+    </div>
+  ) : null;
   if (loading) {
-    return <p className="text-xs text-muted-foreground">라인 로드 중...</p>;
+    return (
+      <div>
+        {header}
+        <p className="text-xs text-muted-foreground">라인 로드 중...</p>
+      </div>
+    );
   }
   if (!lines || lines.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
-        등록된 라인이 없습니다 — /procurement에서 LC "라인" 버튼으로 추가
-      </p>
+      <div>
+        {header}
+        <p className="text-xs text-muted-foreground">
+          등록된 라인이 없습니다 — /procurement에서 LC "라인" 버튼으로 추가
+        </p>
+      </div>
     );
   }
   const totalQty = lines.reduce((s, l) => s + (l.quantity ?? 0), 0);
   const totalUsd = lines.reduce((s, l) => s + (l.amount_usd ?? 0), 0);
   const totalKw = lines.reduce((s, l) => s + (l.capacity_kw ?? 0), 0);
   return (
-    <div className="overflow-x-auto rounded-md border">
+    <div>
+      {header}
+      <div className="overflow-x-auto rounded-md border">
       <table className="w-full text-[12px]">
         <thead className="bg-muted/50 text-muted-foreground">
           <tr>
@@ -906,6 +1042,7 @@ function LCLinesContentBlock({ lcId }: { lcId: string }) {
           </tr>
         </tfoot>
       </table>
+      </div>
     </div>
   );
 }
@@ -966,9 +1103,16 @@ export const contentBlocks: Record<string, ContentBlock> = {
     return <POLinesContentBlock poId={po?.po_id ?? ''} />;
   },
   // 신용장(LC) 상세 — 라인(분할 인수) 미니 테이블. PO 패턴 대칭.
+  // poId/poNumber로 헤더에 deep link 표시 (LC가 묶인 원계약으로 진입).
   lc_lines_block: ({ items }) => {
     const lc = items[0] as LCRecord;
-    return <LCLinesContentBlock lcId={lc?.lc_id ?? ''} />;
+    return (
+      <LCLinesContentBlock
+        lcId={lc?.lc_id ?? ''}
+        poId={lc?.po_id}
+        poNumber={lc?.po_number}
+      />
+    );
   },
   // 발주(PO) 상세 — 첨부파일 위젯 (계약서 PDF 등). banks AttachmentWidget 패턴.
   po_attachments_block: ({ items }) => {
@@ -997,6 +1141,16 @@ export const contentBlocks: Record<string, ContentBlock> = {
         uploadLabel="LC 문서 업로드"
       />
     );
+  },
+  // PO 우측 사이드바 — TT 송금 합계 + B/L 입고 진행률.
+  po_rail_summary: ({ items }) => {
+    const po = items[0] as PurchaseOrder;
+    return <PORailSummary poId={po?.po_id ?? ''} />;
+  },
+  // LC 우측 사이드바 — 금액/만기/연결 PO deep link.
+  lc_rail_summary: ({ items }) => {
+    const lc = items[0] as LCRecord;
+    return <LCRailSummary lc={lc ?? null} />;
   },
   // Phase 4 (bank-meta): 은행 detail 의 "L/C 사용 현황" 탭 placeholder.
   // 향후 LCLimitSummaryCards / BankLimitTable 같은 banking 위젯과 연결.
@@ -1425,6 +1579,8 @@ export const contentBlockMeta: RegistryMeta = {
   lc_lines_block: { label: 'LC 라인 미니 테이블', description: 'useLCLines로 분할 인수 라인 fetch + 품번/수량/용량/금액 표시' },
   po_attachments_block: { label: 'PO 첨부파일', description: 'AttachmentWidget — purchase_orders / po_contract_pdf' },
   lc_attachments_block: { label: 'LC 첨부파일', description: 'AttachmentWidget — lc_records / lc_documents (PODetailView LC swift PDF와 분리)' },
+  po_rail_summary: { label: 'PO 우측 요약', description: 'TT 송금(완료/예정 USD) + B/L 입고 진행률 카드' },
+  lc_rail_summary: { label: 'LC 우측 요약', description: '금액/만기 D-day + 연결 PO deep link' },
   sale_summary_cards: { label: '판매 요약 카드', description: '판매 통계 (건수/총액/마감률) 카드' },
   bl_status_badge: { label: 'BL 상태 뱃지', description: 'detail 헤더 — 입고 상태 표시' },
   bl_memo_block: { label: 'BL 메모 블록', description: 'detail 메모 섹션 — pre-wrap 텍스트' },

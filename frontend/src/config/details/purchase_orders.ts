@@ -3,6 +3,13 @@
 // 본 메타 상세는 헤더값(계약일·인코텀즈·결제조건·메모) 등 인라인 편집에 집중.
 
 import type { MetaDetailConfig } from '@/templates/types';
+import { PO_STATUS_LABEL } from '@/types/procurement';
+
+// 인라인 편집용 status 옵션 — 레거시 'shipping'은 신규 전환 차단(읽기만 허용).
+// in_progress는 LC 1건 이상 개설 시 백엔드가 자동 전환하지만, 운영자가 강제 지정도 가능.
+const PO_STATUS_OPTIONS = (
+  ['draft', 'contracted', 'in_progress', 'completed', 'cancelled'] as const
+).map((value) => ({ value, label: PO_STATUS_LABEL[value] }));
 
 const config: MetaDetailConfig = {
   id: 'purchase_order_detail',
@@ -23,7 +30,15 @@ const config: MetaDetailConfig = {
       fields: [
         { key: 'po_number', label: '발주번호', span: 2 },
         { key: 'manufacturer_name', label: '제조사', fallback: '—' },
-        { key: 'status', label: '상태', formatter: 'enum', enumKey: 'PO_STATUS_LABEL' },
+        {
+          key: 'status',
+          label: '상태',
+          formatter: 'enum',
+          enumKey: 'PO_STATUS_LABEL',
+          inlineEditable: true,
+          inlineEditType: 'select',
+          inlineEditOptions: PO_STATUS_OPTIONS,
+        },
         {
           key: 'contract_type',
           label: '계약유형',
@@ -98,6 +113,9 @@ const config: MetaDetailConfig = {
       title: '첨부파일',
       contentBlock: { blockId: 'po_attachments_block' },
     },
+  ],
+  rail: [
+    { blockId: 'po_rail_summary' },
   ],
 };
 

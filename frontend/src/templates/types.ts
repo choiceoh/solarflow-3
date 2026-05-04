@@ -449,6 +449,9 @@ export interface MetaDetailConfig {
     endpoint?: string;              // PATCH endpoint (e.g. '/api/v1/bls/:id')
     idField?: string;               // 행 데이터에서 :id 로 쓸 필드
   };
+  // 우측 사이드바 — 레지스트리에 등록된 contentBlock 들을 카드처럼 stack.
+  // 미지정 시 단일 컬럼 (기존 동작). 지정 시 grid-cols-[1fr_320px] 레이아웃.
+  rail?: ContentBlockConfig[];
 }
 
 // ── 클라이언트 검색 (서버 필터와 별도)
