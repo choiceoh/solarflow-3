@@ -1,6 +1,6 @@
 // 메모 CRUD 훅 (Step 31)
 import { useState, useCallback } from 'react';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchAllPaginated, fetchWithAuth } from '@/lib/api';
 import { useListQuery } from '@/lib/queryHelpers';
 import type { Note } from '@/types/memo';
 
@@ -11,7 +11,7 @@ export function useNoteList(linkedTable?: string, linkedId?: string) {
       const params = new URLSearchParams();
       if (linkedTable) params.set('linked_table', linkedTable);
       if (linkedId) params.set('linked_id', linkedId);
-      const notes = await fetchWithAuth<Note[]>(`/api/v1/notes?${params}`);
+      const notes = await fetchAllPaginated<Note>('/api/v1/notes', params.toString());
       notes.sort((a, b) => b.created_at.localeCompare(a.created_at));
       return notes;
     },
