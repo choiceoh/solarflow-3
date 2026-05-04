@@ -348,34 +348,71 @@ type saleCalcSource struct {
 
 func ptrString(v string) *string { return &v }
 
+
+// fetchAllFromTable — Supabase Cloud db-max-rows=1000 제한을 우회해
+// 1000건씩 페이지네이션하며 전체 행을 수집한다.
+func fetchAllFromTable(db *supa.Client, table, columns string) ([]byte, error) {
+	const pageSize = 1000
+	var all json.RawMessage
+	for offset := 0; ; offset += pageSize {
+		data, _, err := db.From(table).Select(columns, "exact", false).
+			Range(offset, offset+pageSize-1, "").Execute()
+		if err != nil {
+			if offset == 0 {
+				return nil, err
+			}
+			break
+		}
+		if len(data) <= 2 { // empty array "[]"
+			break
+		}
+		if offset == 0 {
+			all = data
+		} else {
+			// strip closing ] from all, opening [ from data, join with comma
+			all = append(all[:len(all)-1], ',')
+			all = append(all, data[1:]...)
+		}
+		if len(data) < pageSize*50 { // rough heuristic: last page is smaller
+			// Check actual count
+			var arr []json.RawMessage
+			if json.Unmarshal(all, &arr) == nil && len(arr) < offset+pageSize {
+				break
+			}
+		}
+	}
+	return []byte(all), nil
+}
+
 func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	var orders []saleOrderRow
 	var outbounds []saleOutboundRow
 	var products []saleProductRow
 	var partners []salePartnerRow
 
-	if data, _, err := h.DB.From("orders").Select("order_id, order_number, order_date, company_id, customer_id, product_id, quantity, capacity_kw, site_name", "exact", false).Range(0, 99999, "").Execute(); err == nil {
+	if data, err := fetchAllFromTable(h.DB, "orders", "order_id, order_number, order_date, company_id, customer_id, product_id, quantity, capacity_kw, site_name"); err == nil {
 		if err := json.Unmarshal(data, &orders); err != nil {
 			log.Printf("[매출 enrich] orders 디코딩 실패 — 수주 정보 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] orders 조회 실패 — 수주 정보 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("outbounds").Select("outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status", "exact", false).Range(0, 99999, "").Execute(); err == nil {
+	if data, err := fetchAllFromTable(h.DB, "outbounds", "outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status"); err == nil {
+		log.Printf("[매출 enrich] outbounds fetched %d bytes", len(data))
 		if err := json.Unmarshal(data, &outbounds); err != nil {
 			log.Printf("[매출 enrich] outbounds 디코딩 실패 — 출고 정보 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] outbounds 조회 실패 — 출고 정보 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp", "exact", false).Range(0, 99999, "").Execute(); err == nil {
+	if data, err := fetchAllFromTable(h.DB, "products", "product_id, product_name, product_code, spec_wp"); err == nil {
 		if err := json.Unmarshal(data, &products); err != nil {
 			log.Printf("[매출 enrich] products 디코딩 실패 — 품목명/스펙 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] products 조회 실패 — 품목명/스펙 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("partners").Select("partner_id, partner_name", "exact", false).Range(0, 99999, "").Execute(); err == nil {
+	if data, err := fetchAllFromTable(h.DB, "partners", "partner_id, partner_name"); err == nil {
 		if err := json.Unmarshal(data, &partners); err != nil {
 			log.Printf("[매출 enrich] partners 디코딩 실패 — 거래처명 비표시: %v", err)
 		}
