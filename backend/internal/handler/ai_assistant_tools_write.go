@@ -549,29 +549,11 @@ type updateOrderToolInput struct {
 func toolUpdateOrder() assistantTool {
 	return assistantTool{
 		name:        "update_order",
-		description: "수주(orders) 수정. order_id 필수, 변경할 필드만 지정. 단가·수량·상태 등.",
+		description: "수주(orders) 수정. order_id 필수, 변경할 필드만 지정. 단가·수량·상태 등. 200건+ 일괄 수정은 bulk_update_order 사용.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
 			"additionalProperties":false,
-			"properties":{
-				"order_id":{"type":"string"},
-				"order_number":{"type":"string"},
-				"company_id":{"type":"string"},
-				"customer_id":{"type":"string"},
-				"order_date":{"type":"string"},
-				"receipt_method":{"type":"string"},
-				"product_id":{"type":"string"},
-				"quantity":{"type":"integer"},
-				"capacity_kw":{"type":"number"},
-				"unit_price_wp":{"type":"number"},
-				"site_id":{"type":"string"},
-				"site_name":{"type":"string"},
-				"payment_terms":{"type":"string"},
-				"deposit_rate":{"type":"number"},
-				"delivery_due":{"type":"string"},
-				"status":{"type":"string"},
-				"memo":{"type":"string"}
-			},
+			"properties":{` + orderUpdateProps + `},
 			"required":["order_id"]
 		}`),
 		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },
@@ -646,24 +628,11 @@ type updateOutboundToolInput struct {
 func toolUpdateOutbound() assistantTool {
 	return assistantTool{
 		name:        "update_outbound",
-		description: "출고(outbounds) 수정. outbound_id 필수, 변경할 필드만 지정. bl_items 라인 할당은 미지원.",
+		description: "출고(outbounds) 수정. outbound_id 필수, 변경할 필드만 지정. bl_items 라인 할당은 미지원. 200건+ 일괄 수정은 bulk_update_outbound 사용.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
 			"additionalProperties":false,
-			"properties":{
-				"outbound_id":{"type":"string"},
-				"outbound_date":{"type":"string"},
-				"company_id":{"type":"string"},
-				"product_id":{"type":"string"},
-				"quantity":{"type":"integer"},
-				"capacity_kw":{"type":"number"},
-				"warehouse_id":{"type":"string"},
-				"usage_category":{"type":"string"},
-				"order_id":{"type":"string"},
-				"site_name":{"type":"string"},
-				"status":{"type":"string"},
-				"memo":{"type":"string"}
-			},
+			"properties":{` + outboundUpdateProps + `},
 			"required":["outbound_id"]
 		}`),
 		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },

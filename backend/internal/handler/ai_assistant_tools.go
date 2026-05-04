@@ -98,6 +98,9 @@ func assistantToolCatalog() []assistantTool {
 		toolDeleteOutbound(),
 		toolCreateReceipt(),
 		toolCreateDeclaration(),
+		// 대량 수정 — 외부 시트 데이터로 빈 칸 채우기 등 200건+ 케이스
+		toolBulkUpdateOutbound(),
+		toolBulkUpdateOrder(),
 		// 메타 config — 화면/폼/상세 통째 교체 제안 (admin only)
 		toolProposeUIConfigUpdate(),
 	}
