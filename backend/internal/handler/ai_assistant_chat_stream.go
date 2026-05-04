@@ -189,23 +189,7 @@ func (h *AssistantHandler) runAnthropicLoop(
 		version = "2023-06-01"
 	}
 
-	msgs := make([]anthropicMessage, 0, len(messages))
-	for _, m := range messages {
-		if strings.TrimSpace(m.Content) == "" {
-			continue
-		}
-		role := m.Role
-		if role == "system" {
-			continue
-		}
-		if role != "user" && role != "assistant" {
-			role = "user"
-		}
-		msgs = append(msgs, anthropicMessage{
-			Role:    role,
-			Content: []anthropicContentBlock{{Type: "text", Text: m.Content}},
-		})
-	}
+	msgs := buildAnthropicSeed(messages)
 
 	tools := make([]anthropicTool, 0, len(available))
 	for _, t := range available {
@@ -330,23 +314,7 @@ func (h *AssistantHandler) runOpenAILoop(
 		return errors.New("OPENAI_API_KEY 미설정")
 	}
 
-	msgs := make([]openaiMessage, 0, len(messages)+1)
-	if strings.TrimSpace(system) != "" {
-		msgs = append(msgs, openaiMessage{Role: "system", Content: system})
-	}
-	for _, m := range messages {
-		if strings.TrimSpace(m.Content) == "" {
-			continue
-		}
-		role := m.Role
-		if role == "system" {
-			continue
-		}
-		if role != "user" && role != "assistant" {
-			role = "user"
-		}
-		msgs = append(msgs, openaiMessage{Role: role, Content: m.Content})
-	}
+	msgs := buildOpenAISeed(system, messages)
 
 	tools := make([]openaiTool, 0, len(available))
 	for _, t := range available {
@@ -445,6 +413,176 @@ func (h *AssistantHandler) runOpenAILoop(
 
 	log.Printf("[assistant stream] openai 도구 호출 반복 횟수 초과")
 	return sse.WriteFinish("stop")
+}
+
+// buildAnthropicSeed — 프론트 wire 메시지를 Anthropic content block 배열로 변환.
+//
+// parts 우선:
+//   - text       → {type:text}
+//   - tool_call  → {type:tool_use}    (assistant role 만)
+//   - tool_result→ {type:tool_result} (user role 만)
+//
+// parts 가 비었으면 content 를 단일 text 블록으로 (레거시 fallback).
+//
+// 마지막에 연속 동일 role 메시지를 한 메시지로 머지 — Anthropic 은 strict alternation 요구.
+// 프론트가 한 UIMessage 의 (text, tool_call, text) 를 step 단위로 쪼개 emit 할 때
+// 직전 user(tool_result) 와 다음 user(text) 가 붙어 들어와도 안전.
+func buildAnthropicSeed(messages []assistantMessage) []anthropicMessage {
+	out := make([]anthropicMessage, 0, len(messages))
+	for _, m := range messages {
+		role := m.Role
+		if role == "system" || (role != "user" && role != "assistant") {
+			continue
+		}
+
+		var blocks []anthropicContentBlock
+		if len(m.Parts) > 0 {
+			for _, p := range m.Parts {
+				switch p.Type {
+				case "text":
+					if strings.TrimSpace(p.Text) == "" {
+						continue
+					}
+					blocks = append(blocks, anthropicContentBlock{Type: "text", Text: p.Text})
+				case "tool_call":
+					if role != "assistant" {
+						continue
+					}
+					input := p.Input
+					if len(input) == 0 {
+						input = json.RawMessage("{}")
+					}
+					blocks = append(blocks, anthropicContentBlock{
+						Type:  "tool_use",
+						ID:    p.ToolCallID,
+						Name:  p.ToolName,
+						Input: input,
+					})
+				case "tool_result":
+					if role != "user" {
+						continue
+					}
+					content := p.Output
+					if content == "" {
+						content = "(빈 결과)"
+					}
+					blocks = append(blocks, anthropicContentBlock{
+						Type:      "tool_result",
+						ToolUseID: p.ToolCallID,
+						Content:   content,
+						IsError:   p.IsError,
+					})
+				}
+			}
+		} else if strings.TrimSpace(m.Content) != "" {
+			blocks = append(blocks, anthropicContentBlock{Type: "text", Text: m.Content})
+		}
+
+		if len(blocks) == 0 {
+			continue
+		}
+		if len(out) > 0 && out[len(out)-1].Role == role {
+			out[len(out)-1].Content = append(out[len(out)-1].Content, blocks...)
+			continue
+		}
+		out = append(out, anthropicMessage{Role: role, Content: blocks})
+	}
+	return out
+}
+
+// buildOpenAISeed — 프론트 wire 메시지를 OpenAI Chat Completions messages 배열로 변환.
+//
+// parts 우선:
+//   - assistant 의 text  → message.content
+//   - assistant 의 tool_call  → message.tool_calls[]
+//   - user 의 text  → message.content (별도 user 메시지)
+//   - user 의 tool_result  → role="tool" 메시지 (tool_call_id 매칭)
+//
+// parts 가 비었으면 content 를 단일 메시지로 (레거시 fallback).
+//
+// 한 wire 메시지에서 여러 OpenAI 메시지를 emit 할 수 있음:
+//   - assistant: text 와 tool_calls 는 한 메시지로 합침
+//   - user: text 는 user 메시지 1개 + tool_result N개 → role=tool 메시지 N개
+func buildOpenAISeed(system string, messages []assistantMessage) []openaiMessage {
+	out := make([]openaiMessage, 0, len(messages)+1)
+	if strings.TrimSpace(system) != "" {
+		out = append(out, openaiMessage{Role: "system", Content: system})
+	}
+	for _, m := range messages {
+		role := m.Role
+		if role == "system" || (role != "user" && role != "assistant") {
+			continue
+		}
+
+		if len(m.Parts) == 0 {
+			if strings.TrimSpace(m.Content) == "" {
+				continue
+			}
+			out = append(out, openaiMessage{Role: role, Content: m.Content})
+			continue
+		}
+
+		if role == "assistant" {
+			var textBuf strings.Builder
+			var toolCalls []openaiToolCall
+			for _, p := range m.Parts {
+				switch p.Type {
+				case "text":
+					textBuf.WriteString(p.Text)
+				case "tool_call":
+					input := p.Input
+					if len(input) == 0 {
+						input = json.RawMessage("{}")
+					}
+					toolCalls = append(toolCalls, openaiToolCall{
+						ID:   p.ToolCallID,
+						Type: "function",
+						Function: openaiToolCallFunc{
+							Name:      p.ToolName,
+							Arguments: string(input),
+						},
+					})
+				}
+			}
+			if textBuf.Len() == 0 && len(toolCalls) == 0 {
+				continue
+			}
+			am := openaiMessage{Role: "assistant", Content: textBuf.String()}
+			if len(toolCalls) > 0 {
+				am.ToolCalls = toolCalls
+			}
+			out = append(out, am)
+			continue
+		}
+
+		// role == "user"
+		// tool_result 는 OpenAI 에서 별도 role=tool 메시지 — assistant.tool_calls 직후에 와야 함.
+		// parts 순서대로 emit 하면 인접성 보장 (프론트가 (assistant tool_call) 직후 (user tool_result) 를 emit).
+		var textBuf strings.Builder
+		for _, p := range m.Parts {
+			switch p.Type {
+			case "text":
+				textBuf.WriteString(p.Text)
+			case "tool_result":
+				content := p.Output
+				if content == "" {
+					content = "(빈 결과)"
+				}
+				if p.IsError {
+					content = "ERROR: " + content
+				}
+				out = append(out, openaiMessage{
+					Role:       "tool",
+					ToolCallID: p.ToolCallID,
+					Content:    content,
+				})
+			}
+		}
+		if textBuf.Len() > 0 {
+			out = append(out, openaiMessage{Role: "user", Content: textBuf.String()})
+		}
+	}
+	return out
 }
 
 // signaturesEqual — 직전 턴과 이번 턴 시그니처가 정확히 같은지.
