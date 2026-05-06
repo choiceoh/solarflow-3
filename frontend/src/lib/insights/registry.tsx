@@ -41,6 +41,22 @@ import { SalesAnalysisSupplyInsight } from './metrics/SalesAnalysisSupplyInsight
 import { SalesAnalysisTotalInsight } from './metrics/SalesAnalysisTotalInsight'
 import { SalesAnalysisIssueRateInsight } from './metrics/SalesAnalysisIssueRateInsight'
 import { SalesAnalysisMarginRateInsight } from './metrics/SalesAnalysisMarginRateInsight'
+import { ProcurementPoActiveInsight } from './metrics/ProcurementPoActiveInsight'
+import { ProcurementLcLinkedInsight } from './metrics/ProcurementLcLinkedInsight'
+import { ProcurementShippingInsight } from './metrics/ProcurementShippingInsight'
+import { ProcurementContractTypesInsight } from './metrics/ProcurementContractTypesInsight'
+import { ProcurementLcTotalInsight } from './metrics/ProcurementLcTotalInsight'
+import { ProcurementLcAmountInsight } from './metrics/ProcurementLcAmountInsight'
+import { ProcurementLcMaturityInsight } from './metrics/ProcurementLcMaturityInsight'
+import { ProcurementLcBanksInsight } from './metrics/ProcurementLcBanksInsight'
+import { ProcurementTtTotalInsight } from './metrics/ProcurementTtTotalInsight'
+import { ProcurementTtCompletedInsight } from './metrics/ProcurementTtCompletedInsight'
+import { ProcurementTtPlannedInsight } from './metrics/ProcurementTtPlannedInsight'
+import { ProcurementTtPoLinkedInsight } from './metrics/ProcurementTtPoLinkedInsight'
+import { ProcurementBlTotalInsight } from './metrics/ProcurementBlTotalInsight'
+import { ProcurementBlShippingInsight } from './metrics/ProcurementBlShippingInsight'
+import { ProcurementBlCustomsInsight } from './metrics/ProcurementBlCustomsInsight'
+import { ProcurementBlImportInsight } from './metrics/ProcurementBlImportInsight'
 
 export interface InsightEntry {
   // KPI 타일이 보낼 식별자 (예: 'outbound.count') — URL 에 그대로 들어감.
@@ -225,6 +241,94 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'sales_analysis.margin_rate',
     shortLabel: '이익률',
     render: () => <SalesAnalysisMarginRateInsight />,
+  },
+
+  // Procurement PO 탭
+  'procurement.po_active': {
+    id: 'procurement.po_active',
+    shortLabel: '진행 P/O',
+    render: () => <ProcurementPoActiveInsight />,
+  },
+  'procurement.lc_linked': {
+    id: 'procurement.lc_linked',
+    shortLabel: 'L/C 연결',
+    render: () => <ProcurementLcLinkedInsight />,
+  },
+  'procurement.shipping': {
+    id: 'procurement.shipping',
+    shortLabel: '운송중',
+    render: () => <ProcurementShippingInsight />,
+  },
+  'procurement.contract_types': {
+    id: 'procurement.contract_types',
+    shortLabel: '계약 유형',
+    render: () => <ProcurementContractTypesInsight />,
+  },
+
+  // Procurement LC 탭
+  'procurement.lc_total': {
+    id: 'procurement.lc_total',
+    shortLabel: 'L/C 전체',
+    render: () => <ProcurementLcTotalInsight />,
+  },
+  'procurement.lc_amount': {
+    id: 'procurement.lc_amount',
+    shortLabel: 'L/C 개설 금액',
+    render: () => <ProcurementLcAmountInsight />,
+  },
+  'procurement.lc_maturity': {
+    id: 'procurement.lc_maturity',
+    shortLabel: 'L/C 만기 30일',
+    render: () => <ProcurementLcMaturityInsight />,
+  },
+  'procurement.lc_banks': {
+    id: 'procurement.lc_banks',
+    shortLabel: 'L/C 은행',
+    render: () => <ProcurementLcBanksInsight />,
+  },
+
+  // Procurement TT 탭
+  'procurement.tt_total': {
+    id: 'procurement.tt_total',
+    shortLabel: 'T/T 이력',
+    render: () => <ProcurementTtTotalInsight />,
+  },
+  'procurement.tt_completed': {
+    id: 'procurement.tt_completed',
+    shortLabel: 'T/T 완료 금액',
+    render: () => <ProcurementTtCompletedInsight />,
+  },
+  'procurement.tt_planned': {
+    id: 'procurement.tt_planned',
+    shortLabel: 'T/T 대기',
+    render: () => <ProcurementTtPlannedInsight />,
+  },
+  'procurement.tt_po_linked': {
+    id: 'procurement.tt_po_linked',
+    shortLabel: 'T/T PO 연결',
+    render: () => <ProcurementTtPoLinkedInsight />,
+  },
+
+  // Procurement BL 탭
+  'procurement.bl_total': {
+    id: 'procurement.bl_total',
+    shortLabel: 'B/L 전체',
+    render: () => <ProcurementBlTotalInsight />,
+  },
+  'procurement.bl_shipping': {
+    id: 'procurement.bl_shipping',
+    shortLabel: 'B/L 선적/입항',
+    render: () => <ProcurementBlShippingInsight />,
+  },
+  'procurement.bl_customs': {
+    id: 'procurement.bl_customs',
+    shortLabel: 'B/L 통관중',
+    render: () => <ProcurementBlCustomsInsight />,
+  },
+  'procurement.bl_import': {
+    id: 'procurement.bl_import',
+    shortLabel: 'B/L 해외직수입',
+    render: () => <ProcurementBlImportInsight />,
   },
 }
 

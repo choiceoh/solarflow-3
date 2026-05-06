@@ -30,31 +30,33 @@ type Sale struct {
 // SaleListItem — 매출 현황 화면용 응답
 // 비유: "계산서 카드" — 계산서 원본(sale)과 수주/출고 문맥을 한 줄에 같이 표시
 type SaleListItem struct {
-	SaleID         string   `json:"sale_id"`
-	OutboundID     *string  `json:"outbound_id,omitempty"`
-	OrderID        *string  `json:"order_id,omitempty"`
-	OutboundDate   *string  `json:"outbound_date,omitempty"`
-	OutboundStatus *string  `json:"outbound_status,omitempty"`
-	OrderDate      *string  `json:"order_date,omitempty"`
-	OrderNumber    *string  `json:"order_number,omitempty"`
-	CompanyID      *string  `json:"company_id,omitempty"`
-	CustomerID     string   `json:"customer_id"`
-	CustomerName   *string  `json:"customer_name,omitempty"`
-	ProductID      *string  `json:"product_id,omitempty"`
-	ProductName    *string  `json:"product_name,omitempty"`
-	ProductCode    *string  `json:"product_code,omitempty"`
-	SpecWp         *float64 `json:"spec_wp,omitempty"`
-	Quantity       int      `json:"quantity"`
-	CapacityKw     *float64 `json:"capacity_kw,omitempty"`
-	SiteName       *string  `json:"site_name,omitempty"`
-	UnitPriceWp    float64  `json:"unit_price_wp"`
-	UnitPriceEa    *float64 `json:"unit_price_ea,omitempty"`
-	SupplyAmount   *float64 `json:"supply_amount,omitempty"`
-	VatAmount      *float64 `json:"vat_amount,omitempty"`
-	TotalAmount    *float64 `json:"total_amount,omitempty"`
-	TaxInvoiceDate *string  `json:"tax_invoice_date,omitempty"`
-	Status         string   `json:"status"`
-	Sale           Sale     `json:"sale"`
+	SaleID           string   `json:"sale_id"`
+	OutboundID       *string  `json:"outbound_id,omitempty"`
+	OrderID          *string  `json:"order_id,omitempty"`
+	OutboundDate     *string  `json:"outbound_date,omitempty"`
+	OutboundStatus   *string  `json:"outbound_status,omitempty"`
+	OrderDate        *string  `json:"order_date,omitempty"`
+	OrderNumber      *string  `json:"order_number,omitempty"`
+	CompanyID        *string  `json:"company_id,omitempty"`
+	CustomerID       string   `json:"customer_id"`
+	CustomerName     *string  `json:"customer_name,omitempty"`
+	ProductID        *string  `json:"product_id,omitempty"`
+	ProductName      *string  `json:"product_name,omitempty"`
+	ProductCode      *string  `json:"product_code,omitempty"`
+	SpecWp           *float64 `json:"spec_wp,omitempty"`
+	ManufacturerID   *string  `json:"manufacturer_id,omitempty"`
+	ManufacturerName *string  `json:"manufacturer_name,omitempty"`
+	Quantity         int      `json:"quantity"`
+	CapacityKw       *float64 `json:"capacity_kw,omitempty"`
+	SiteName         *string  `json:"site_name,omitempty"`
+	UnitPriceWp      float64  `json:"unit_price_wp"`
+	UnitPriceEa      *float64 `json:"unit_price_ea,omitempty"`
+	SupplyAmount     *float64 `json:"supply_amount,omitempty"`
+	VatAmount        *float64 `json:"vat_amount,omitempty"`
+	TotalAmount      *float64 `json:"total_amount,omitempty"`
+	TaxInvoiceDate   *string  `json:"tax_invoice_date,omitempty"`
+	Status           string   `json:"status"`
+	Sale             Sale     `json:"sale"`
 }
 
 // CreateSaleRequest — 판매 등록 시 클라이언트가 보내는 데이터

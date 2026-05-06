@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import MetaTable, { type ColumnDef } from '@/components/common/MetaTable';
+import MetaTable, { type ColumnDef, type MetaTableServerMode } from '@/components/common/MetaTable';
 import FulfillmentSourceBadge from './FulfillmentSourceBadge';
 import OrderStatusBadge from './OrderStatusBadge';
 import { cn, formatDate, formatNumber, formatKw } from '@/lib/utils';
@@ -19,6 +19,7 @@ interface Props {
   onSelect: (item: Order) => void;
   onCancelToReservation?: (item: Order) => void;
   sourceOverrides?: Record<string, FulfillmentSource>;
+  serverMode?: MetaTableServerMode;
 }
 
 const EMPTY_OVERRIDES: Record<string, FulfillmentSource> = {};
@@ -96,7 +97,7 @@ function buildColumns({ onCancelToReservation, sourceOverrides }: BuildOpts): Co
 export const ORDER_COLUMN_META: ColumnVisibilityMeta[] =
   buildColumns({ sourceOverrides: EMPTY_OVERRIDES }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function OrderListTable({ items, hidden, pinning, onPinningChange, onSelect, onCancelToReservation, sourceOverrides = EMPTY_OVERRIDES }: Props) {
+function OrderListTable({ items, hidden, pinning, onPinningChange, onSelect, onCancelToReservation, sourceOverrides = EMPTY_OVERRIDES, serverMode }: Props) {
   return (
     <MetaTable
       tableId={ORDER_TABLE_ID}
@@ -109,7 +110,8 @@ function OrderListTable({ items, hidden, pinning, onPinningChange, onSelect, onC
       onRowClick={onSelect}
       rowClassName={(o) => cn('hover:bg-accent/50', o.status === 'cancelled' && 'bg-gray-50 text-muted-foreground line-through')}
       emptyMessage="등록된 수주가 없습니다"
-      pageSize={50}
+      pageSize={serverMode ? undefined : 50}
+      serverMode={serverMode}
     />
   );
 }

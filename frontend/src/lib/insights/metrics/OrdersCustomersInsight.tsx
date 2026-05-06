@@ -1,42 +1,32 @@
 // 거래처 (활성 고객 수) 드릴다운 — orders 탭 KPI '거래처' 의 월별 distinct 추이 + 차원별 분해.
+//
+// 서버 집계 마이그(C-1 orders) — trend 는 dashboard.trend24[i].distinct_customers, breakdown 은 by_customer/category.
 
 import { useMemo } from 'react'
-import { useOrderListAll } from '@/hooks/useOrders'
-import { MANAGEMENT_CATEGORY_LABEL } from '@/types/orders'
-import { breakdownBy, trend24Distinct } from '@/lib/insights/aggregations'
+import { useOrderDashboard } from '@/hooks/useOrders'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function OrdersCustomersInsight() {
-  const { data, loading } = useOrderListAll()
+  const { dashboard, loading } = useOrderDashboard()
 
-  // distinct customer count: 월별 / 누계 모두 distinct 키 기반.
-  const trend = useMemo(
-    () => trend24Distinct(data, (o) => o.order_date, (o) => o.customer_id),
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.distinct_customers })),
+    [dashboard],
   )
-  const totalDistinct = useMemo(
-    () => new Set(data.map((o) => o.customer_id).filter(Boolean)).size,
-    [data],
-  )
+  const totalDistinct = dashboard?.totals.customers_count ?? 0
 
-  // 거래처 자체가 차원이라 byCustomer 는 무의미 → 거래처별 발주 건수 (rank).
-  const byCustomerCount = useMemo(
-    () => breakdownBy(
-      data,
-      (o) => o.customer_id,
-      (o) => o.customer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [data],
+  const byCustomerCount: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_customer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byCategory = useMemo(
-    () => breakdownBy(
-      data,
-      (o) => o.management_category,
-      (o) => MANAGEMENT_CATEGORY_LABEL[o.management_category] ?? o.management_category,
-      () => 1,
-    ),
-    [data],
+  const byCategory: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_category ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (

@@ -74,6 +74,7 @@ type ProcurementMetric = {
   tone: "solar" | "ink" | "info" | "warn" | "pos"
   delta?: string
   spark?: number[]
+  metricId?: string
 }
 
 function fmtUsdM(value: number) {
@@ -407,6 +408,7 @@ export default function ProcurementPage() {
             sub: `사용중 ${lcOpenedCount}건`,
             tone: "solar" as const,
             spark: lcOpenSpark,
+            metricId: "procurement.lc_total",
           },
           {
             lbl: "개설 금액",
@@ -415,6 +417,7 @@ export default function ProcurementPage() {
             sub: "활성 필터 기준",
             tone: "warn" as const,
             spark: lcAmountSpark,
+            metricId: "procurement.lc_amount",
           },
           {
             lbl: "만기 30일",
@@ -422,6 +425,7 @@ export default function ProcurementPage() {
             u: "건",
             sub: lcMaturitySoon[0]?.lc_number ?? "긴급 만기 없음",
             tone: "info" as const,
+            metricId: "procurement.lc_maturity",
           },
           {
             lbl: "은행",
@@ -429,6 +433,7 @@ export default function ProcurementPage() {
             u: "곳",
             sub: "한도 사용처",
             tone: "ink" as const,
+            metricId: "procurement.lc_banks",
           },
         ]
       : activeTab === "bl"
@@ -440,6 +445,7 @@ export default function ProcurementPage() {
               sub: `진행 ${blActiveCount}건`,
               tone: "solar" as const,
               spark: blAllSpark,
+              metricId: "procurement.bl_total",
             },
             {
               lbl: "선적/입항",
@@ -451,6 +457,7 @@ export default function ProcurementPage() {
                 blRows.filter((b) => b.status === "shipping" || b.status === "arrived"),
                 blDateOf,
               ),
+              metricId: "procurement.bl_shipping",
             },
             {
               lbl: "통관중",
@@ -462,6 +469,7 @@ export default function ProcurementPage() {
                 blRows.filter((b) => b.status === "customs"),
                 blDateOf,
               ),
+              metricId: "procurement.bl_customs",
             },
             {
               lbl: "해외직수입",
@@ -476,6 +484,7 @@ export default function ProcurementPage() {
                 blRows.filter((bl) => bl.inbound_type === "import"),
                 blDateOf,
               ),
+              metricId: "procurement.bl_import",
             },
           ]
         : activeTab === "tt"
@@ -487,6 +496,7 @@ export default function ProcurementPage() {
                 sub: "계약금/잔금 송금",
                 tone: "solar" as const,
                 spark: ttSpark,
+                metricId: "procurement.tt_total",
               },
               {
                 lbl: "완료 금액",
@@ -495,6 +505,7 @@ export default function ProcurementPage() {
                 sub: "completed 기준",
                 tone: "pos" as const,
                 spark: ttAmountSpark,
+                metricId: "procurement.tt_completed",
               },
               {
                 lbl: "대기",
@@ -508,6 +519,7 @@ export default function ProcurementPage() {
                   tts.filter((t) => t.status === "planned"),
                   (t) => t.remit_date,
                 ),
+                metricId: "procurement.tt_planned",
               },
               {
                 lbl: "PO 연결",
@@ -515,6 +527,7 @@ export default function ProcurementPage() {
                 u: "건",
                 sub: "계약금 집계 대상",
                 tone: "ink" as const,
+                metricId: "procurement.tt_po_linked",
               },
             ]
           : [
@@ -525,6 +538,7 @@ export default function ProcurementPage() {
                 sub: `${fmtMw(poTotalMw)} MW · 전체 ${poTotalCount}건`,
                 tone: "solar" as const,
                 spark: poSpark,
+                metricId: "procurement.po_active",
               },
               {
                 lbl: "L/C 연결",
@@ -533,6 +547,7 @@ export default function ProcurementPage() {
                 sub: `USD ${fmtUsdM(lcTotalUsd)}M`,
                 tone: "info" as const,
                 spark: lcOpenSpark,
+                metricId: "procurement.lc_linked",
               },
               {
                 lbl: "운송중",
@@ -544,6 +559,7 @@ export default function ProcurementPage() {
                   poRows.filter((p) => p.status === "shipping" || p.status === "in_progress"),
                   (p) => p.contract_date,
                 ),
+                metricId: "procurement.shipping",
               },
               {
                 lbl: "계약 유형",
@@ -554,6 +570,7 @@ export default function ProcurementPage() {
                 u: "종",
                 sub: "spot/frame 관리",
                 tone: "pos" as const,
+                metricId: "procurement.contract_types",
               },
             ]
 
@@ -702,6 +719,7 @@ export default function ProcurementPage() {
                 tone={metric.tone}
                 delta={metric.delta}
                 spark={metric.spark ?? flatSparkFromValue(metric.v)}
+                metricId={metric.metricId}
               />
             ))}
           </div>
