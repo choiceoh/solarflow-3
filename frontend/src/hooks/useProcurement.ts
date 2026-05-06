@@ -1,3 +1,4 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { fetchAllPaginated, fetchWithAuth } from "@/lib/api"
 import { useAppStore } from "@/stores/appStore"
 import { companyParams } from "@/lib/companyUtils"
@@ -13,6 +14,82 @@ import type {
   LCSummary,
   TTSummary,
 } from "@/types/procurement"
+
+// PO 대시보드 — KPI + 24개월 trend + by_status/by_contract_type/by_manufacturer 를 서버 한 번에.
+// ProcurementPage PO 탭 + 3 PO Insight (Active/ContractTypes/Shipping) 가 사용.
+export type POScope = 'lifetime' | 'active' | 'shipping'
+
+export interface PODashboard {
+  totals: {
+    count: number
+    active_count: number
+    shipping_count: number
+    completed_count: number
+    cancelled_count: number
+    total_mw: number
+    active_mw: number
+    contract_types_count: number
+  }
+  trend24: {
+    month: string
+    count: number
+    active_count: number
+    shipping_count: number
+    total_mw: number
+    distinct_contract_types: number
+  }[]
+  status_scope: POScope
+  by_status: PODashboardBreakdownRow[]
+  by_contract_type: PODashboardBreakdownRow[]
+  by_manufacturer_top10: PODashboardBreakdownRow[]
+}
+
+export interface PODashboardBreakdownRow {
+  key: string
+  label: string
+  count: number
+  total_mw: number
+  share: number
+}
+
+export interface PODashboardFilters {
+  status?: string
+  manufacturer_id?: string
+  contract_type?: string
+  status_scope?: POScope
+}
+
+export function usePODashboard(filters: PODashboardFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const queryKey = [
+    'pos-dashboard',
+    selectedCompanyId,
+    filters.status ?? '',
+    filters.manufacturer_id ?? '',
+    filters.contract_type ?? '',
+    filters.status_scope ?? 'lifetime',
+  ]
+  const q = useQuery<PODashboard, Error>({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (filters.status) params.set('status', filters.status)
+      if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id)
+      if (filters.contract_type) params.set('contract_type', filters.contract_type)
+      if (filters.status_scope) params.set('status_scope', filters.status_scope)
+      return fetchWithAuth<PODashboard>(`/api/v1/pos/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
+}
 
 export function usePOList(
   filters: { status?: string; manufacturer_id?: string; contract_type?: string } = {},
