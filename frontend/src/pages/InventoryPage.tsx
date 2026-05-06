@@ -111,9 +111,6 @@ export default function InventoryPage() {
     const nextSearch = params.toString();
     navigate(`/inventory${nextSearch ? '?' + nextSearch : ''}`, { replace: true });
   }, [location.search, navigate]);
-  const handleCardClick = (tab: 'physical' | 'incoming' | 'avail') => {
-    handleTabChange(tab);
-  };
   const storeManufacturers = useAppStore((s) => s.manufacturers);
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
   const manufacturers = useMemo(() => sortManufacturers(storeManufacturers), [storeManufacturers]);
@@ -592,29 +589,33 @@ export default function InventoryPage() {
     <div className="sf-inventory-shell">
       <div className="sf-inventory-main">
         <div className="sf-command-kpis sf-inventory-kpis">
-          <button type="button" onClick={() => handleCardClick('avail')} className="text-left">
-            <TileB
-              lbl="가용"
-              v={totalSecured.value}
-              u={totalSecured.unit}
-              sub={`${inventoryStats?.productCount.toLocaleString('ko-KR') ?? '0'}개 품목`}
-              tone="solar"
-              spark={flatSpark(inventoryStats?.totalSecuredKw ?? 0)}
-            />
-          </button>
-          <button type="button" onClick={() => handleCardClick('physical')} className="text-left">
-            <TileB lbl="실재고" v={stockAvailable.value} u={stockAvailable.unit} sub="창고 보유 현재고" tone="ink" spark={flatSpark(inventoryStats?.stockAvailableKw ?? 0)} />
-          </button>
-          <button type="button" onClick={() => handleCardClick('incoming')} className="text-left">
-            <TileB
-              lbl="미착품"
-              v={incomingAvailable.value}
-              u={incomingAvailable.unit}
-              sub={`운송 중 ${incomingRailItems.length.toLocaleString('ko-KR')}건`}
-              tone="info"
-              spark={flatSpark(inventoryStats?.incomingAvailableKw ?? 0)}
-            />
-          </button>
+          <TileB
+            lbl="가용"
+            v={totalSecured.value}
+            u={totalSecured.unit}
+            sub={`${inventoryStats?.productCount.toLocaleString('ko-KR') ?? '0'}개 품목`}
+            tone="solar"
+            spark={flatSpark(inventoryStats?.totalSecuredKw ?? 0)}
+            metricId="inventory.total_secured"
+          />
+          <TileB
+            lbl="실재고"
+            v={stockAvailable.value}
+            u={stockAvailable.unit}
+            sub="창고 보유 현재고"
+            tone="ink"
+            spark={flatSpark(inventoryStats?.stockAvailableKw ?? 0)}
+            metricId="inventory.physical"
+          />
+          <TileB
+            lbl="미착품"
+            v={incomingAvailable.value}
+            u={incomingAvailable.unit}
+            sub={`운송 중 ${incomingRailItems.length.toLocaleString('ko-KR')}건`}
+            tone="info"
+            spark={flatSpark(inventoryStats?.incomingAvailableKw ?? 0)}
+            metricId="inventory.incoming"
+          />
           <TileB
             lbl="예약 차감"
             v={pendingKw.value}
@@ -622,6 +623,7 @@ export default function InventoryPage() {
             sub={`${allocationStats.pendingCount.toLocaleString('ko-KR')}건 · ${allocationStats.holdCount.toLocaleString('ko-KR')}건 보류`}
             tone="warn"
             spark={flatSpark(allocationStats.pendingKw)}
+            metricId="inventory.allocations"
           />
         </div>
 
