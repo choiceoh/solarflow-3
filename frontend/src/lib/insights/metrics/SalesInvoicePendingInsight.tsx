@@ -1,57 +1,61 @@
 // 계산서 미발행 (건) 드릴다운 — tax_invoice_date 가 없는 매출.
+//
+// 서버 집계 마이그(C-1 sales follow-up) — useSaleDashboard 사용.
+// trend 는 dashboard.pending_trend24 (outbound_date 기반), breakdown 은 invoice_pending_count desc.
 
 import { useMemo } from 'react'
-import { useSaleListAll } from '@/hooks/useOutbound'
-import type { SaleListItem } from '@/types/outbound'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useSaleDashboard } from '@/hooks/useOutbound'
 import InsightShell from '@/components/insights/InsightShell'
-
-// 미발행은 출고일자 기준 (발행일이 없으니).
-const outboundDate = (s: SaleListItem) => s.outbound_date ?? s.order_date ?? null
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function SalesInvoicePendingInsight() {
-  const { data, loading } = useSaleListAll()
+  const { dashboard, loading } = useSaleDashboard()
 
-  const pending = useMemo(
-    () => data.filter((s) => !(s.tax_invoice_date ?? s.sale?.tax_invoice_date)),
-    [data],
-  )
+  const totalPending = dashboard?.totals.invoice_pending_count ?? 0
 
-  const trend = useMemo(
-    () => trend24(pending, outboundDate),
-    [pending],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.pending_trend24 ?? []).map((p) => ({ month: p.month, value: p.pending_count })),
+    [dashboard],
   )
 
-  const byCustomer = useMemo(
-    () => breakdownBy(
-      pending,
-      (s) => s.customer_id,
-      (s) => s.customer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [pending],
-  )
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      pending,
-      (s) => s.manufacturer_id ?? null,
-      (s) => s.manufacturer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [pending],
-  )
+  // by_*_top10 은 sale_amount 기준 정렬이라 pending_count 기준으로 재정렬.
+  const byCustomer: BreakdownRow[] = useMemo(() => {
+    const rows = (dashboard?.by_customer_top10 ?? [])
+      .filter((r) => r.invoice_pending_count > 0)
+      .map((r) => ({
+        key: r.key,
+        label: r.label,
+        value: r.invoice_pending_count,
+        share: r.share,
+        count: r.count,
+      }))
+    return [...rows].sort((a, b) => b.value - a.value).slice(0, 10)
+  }, [dashboard])
+
+  const byManufacturer: BreakdownRow[] = useMemo(() => {
+    const rows = (dashboard?.by_manufacturer_top10 ?? [])
+      .filter((r) => r.invoice_pending_count > 0)
+      .map((r) => ({
+        key: r.key,
+        label: r.label,
+        value: r.invoice_pending_count,
+        share: r.share,
+        count: r.count,
+      }))
+    return [...rows].sort((a, b) => b.value - a.value).slice(0, 10)
+  }, [dashboard])
 
   return (
     <InsightShell
       title="계산서 미발행"
       subtitle="tax_invoice_date 가 비어있는 매출 — 출고월 기준 24개월 추이"
       unit="건"
-      tone={pending.length > 0 ? 'warn' : 'pos'}
+      tone={totalPending > 0 ? 'warn' : 'pos'}
       backTo="/orders?tab=sales"
       backLabel="판매 · 세금계산서로 돌아가기"
       loading={loading}
       totalLabel="미발행 합계"
-      totalValue={pending.length.toLocaleString()}
+      totalValue={totalPending.toLocaleString()}
       trend={trend}
       trendValueLabel="미발행 건수"
       breakdowns={[

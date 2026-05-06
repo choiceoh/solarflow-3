@@ -329,10 +329,17 @@ type saleOutboundRow struct {
 }
 
 type saleProductRow struct {
-	ProductID   string   `json:"product_id"`
-	ProductName string   `json:"product_name"`
-	ProductCode string   `json:"product_code"`
-	SpecWp      *float64 `json:"spec_wp"`
+	ProductID      string   `json:"product_id"`
+	ProductName    string   `json:"product_name"`
+	ProductCode    string   `json:"product_code"`
+	SpecWp         *float64 `json:"spec_wp"`
+	ManufacturerID *string  `json:"manufacturer_id"`
+}
+
+type saleManufacturerRow struct {
+	ManufacturerID string  `json:"manufacturer_id"`
+	NameKR         string  `json:"name_kr"`
+	ShortName      *string `json:"short_name"`
 }
 
 type salePartnerRow struct {
@@ -368,12 +375,20 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	} else {
 		log.Printf("[매출 enrich] outbounds 조회 실패 — 출고 정보 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp", "exact", false).Range(0, 99999, "").Execute(); err == nil {
+	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp, manufacturer_id", "exact", false).Range(0, 99999, "").Execute(); err == nil {
 		if err := json.Unmarshal(data, &products); err != nil {
 			log.Printf("[매출 enrich] products 디코딩 실패 — 품목명/스펙 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] products 조회 실패 — 품목명/스펙 비표시: %v", err)
+	}
+	var manufacturers []saleManufacturerRow
+	if data, _, err := h.DB.From("manufacturers").Select("manufacturer_id, name_kr, short_name", "exact", false).Range(0, 99999, "").Execute(); err == nil {
+		if err := json.Unmarshal(data, &manufacturers); err != nil {
+			log.Printf("[매출 enrich] manufacturers 디코딩 실패 — 제조사명 비표시: %v", err)
+		}
+	} else {
+		log.Printf("[매출 enrich] manufacturers 조회 실패 — 제조사명 비표시: %v", err)
 	}
 	if data, _, err := h.DB.From("partners").Select("partner_id, partner_name", "exact", false).Range(0, 99999, "").Execute(); err == nil {
 		if err := json.Unmarshal(data, &partners); err != nil {
@@ -394,6 +409,10 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	productMap := make(map[string]saleProductRow, len(products))
 	for _, p := range products {
 		productMap[p.ProductID] = p
+	}
+	manufacturerMap := make(map[string]saleManufacturerRow, len(manufacturers))
+	for _, m := range manufacturers {
+		manufacturerMap[m.ManufacturerID] = m
 	}
 	partnerMap := make(map[string]salePartnerRow, len(partners))
 	for _, p := range partners {
@@ -472,6 +491,16 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 				item.ProductName = ptrString(p.ProductName)
 				item.ProductCode = ptrString(p.ProductCode)
 				item.SpecWp = p.SpecWp
+				if p.ManufacturerID != nil && *p.ManufacturerID != "" {
+					item.ManufacturerID = p.ManufacturerID
+					if m, ok := manufacturerMap[*p.ManufacturerID]; ok {
+						name := m.NameKR
+						if m.ShortName != nil && *m.ShortName != "" {
+							name = *m.ShortName
+						}
+						item.ManufacturerName = &name
+					}
+				}
 			}
 		}
 		items = append(items, item)

@@ -1,52 +1,50 @@
 // 매출 평균 단가 (원/Wp) 드릴다운.
+//
+// 서버 집계 마이그(C-1 sales follow-up) — useSaleDashboard 사용.
+// 서버에서 by_*_top10 은 priced ≥ 3 일 때만 avg_unit_price_wp 를 채워준다 (작은 표본 노이즈 제거).
 
 import { useMemo } from 'react'
-import { useSaleListAll } from '@/hooks/useOutbound'
-import type { SaleListItem } from '@/types/outbound'
-import { breakdownAvg, trend24Average } from '@/lib/insights/aggregations'
+import { useSaleDashboard } from '@/hooks/useOutbound'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmt = (v: number) => v.toFixed(1)
-const saleDate = (s: SaleListItem) => s.tax_invoice_date ?? s.outbound_date ?? s.order_date ?? null
-const unitPriceWp = (s: SaleListItem) =>
-  s.unit_price_wp ?? (s.spec_wp ? (s.unit_price_ea ?? 0) / s.spec_wp : 0)
 
 export function SalesUnitPriceInsight() {
-  const { data, loading } = useSaleListAll()
+  const { dashboard, loading } = useSaleDashboard()
 
-  const priced = useMemo(
-    () => data.filter((s) => unitPriceWp(s) > 0),
-    [data],
+  const overallAvg = dashboard?.totals.avg_unit_price_wp ?? 0
+
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.avg_unit_price_wp })),
+    [dashboard],
   )
 
-  const trend = useMemo(
-    () => trend24Average(priced, saleDate, unitPriceWp),
-    [priced],
-  )
-  const overallAvg = priced.length > 0
-    ? priced.reduce((sum, s) => sum + unitPriceWp(s), 0) / priced.length
-    : 0
+  const byCustomer: BreakdownRow[] = useMemo(() => {
+    const rows = (dashboard?.by_customer_top10 ?? [])
+      .filter((r) => r.avg_unit_price_wp > 0)
+      .map((r) => ({
+        key: r.key,
+        label: r.label,
+        value: r.avg_unit_price_wp,
+        share: r.share,
+        count: r.count,
+      }))
+    return [...rows].sort((a, b) => b.value - a.value).slice(0, 10)
+  }, [dashboard])
 
-  const byCustomer = useMemo(
-    () => breakdownAvg(
-      priced,
-      (s) => s.customer_id,
-      (s) => s.customer_name ?? '미지정',
-      unitPriceWp,
-      3,
-    ).slice(0, 10),
-    [priced],
-  )
-  const byManufacturer = useMemo(
-    () => breakdownAvg(
-      priced,
-      (s) => s.manufacturer_id ?? null,
-      (s) => s.manufacturer_name ?? '미지정',
-      unitPriceWp,
-      3,
-    ).slice(0, 10),
-    [priced],
-  )
+  const byManufacturer: BreakdownRow[] = useMemo(() => {
+    const rows = (dashboard?.by_manufacturer_top10 ?? [])
+      .filter((r) => r.avg_unit_price_wp > 0)
+      .map((r) => ({
+        key: r.key,
+        label: r.label,
+        value: r.avg_unit_price_wp,
+        share: r.share,
+        count: r.count,
+      }))
+    return [...rows].sort((a, b) => b.value - a.value).slice(0, 10)
+  }, [dashboard])
 
   return (
     <InsightShell

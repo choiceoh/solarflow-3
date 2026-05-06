@@ -1,44 +1,49 @@
 // 매출처 (활성 거래처 수) 드릴다운 — sales 탭 KPI '거래처'.
+//
+// 서버 집계 마이그(C-1 sales follow-up) — useSaleDashboard 사용.
+// trend 는 dashboard.trend24[i].distinct_customers, breakdown 은 by_customer_top10.
 
 import { useMemo } from 'react'
-import { useSaleListAll } from '@/hooks/useOutbound'
-import type { SaleListItem } from '@/types/outbound'
-import { breakdownBy, trend24Distinct } from '@/lib/insights/aggregations'
+import { useSaleDashboard } from '@/hooks/useOutbound'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmtEok = (v: number) => (v / 100_000_000).toFixed(v >= 10_000_000_000 ? 1 : 2)
-const saleDate = (s: SaleListItem) => s.tax_invoice_date ?? s.outbound_date ?? s.order_date ?? null
-const totalAmount = (s: SaleListItem) => s.total_amount ?? s.sale?.total_amount ?? 0
 
 export function SalesCustomersInsight() {
-  const { data, loading } = useSaleListAll()
+  const { dashboard, loading } = useSaleDashboard()
 
-  const trend = useMemo(
-    () => trend24Distinct(data, saleDate, (s) => s.customer_id),
-    [data],
-  )
-  const totalDistinct = useMemo(
-    () => new Set(data.map((s) => s.customer_id).filter(Boolean)).size,
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.distinct_customers })),
+    [dashboard],
   )
 
-  const byCustomerAmount = useMemo(
-    () => breakdownBy(
-      data,
-      (s) => s.customer_id,
-      (s) => s.customer_name ?? '미지정',
-      totalAmount,
-    ).slice(0, 10),
-    [data],
+  const totalDistinct = dashboard?.totals.customers_count ?? 0
+
+  // 같은 by_customer_top10 데이터를 두 차원(매출액 / 건수) 으로 변환.
+  const byCustomerAmount: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_customer_top10 ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.sale_amount_sum,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
-  const byCustomerCount = useMemo(
-    () => breakdownBy(
-      data,
-      (s) => s.customer_id,
-      (s) => s.customer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [data],
+  // 건수 기준 정렬은 서버가 sale_amount_sum 으로 정렬했으니 재정렬.
+  const byCustomerCount: BreakdownRow[] = useMemo(
+    () => {
+      const rows = (dashboard?.by_customer_top10 ?? []).map((r) => ({
+        key: r.key,
+        label: r.label,
+        value: r.count,
+        share: r.share,
+        count: r.count,
+      }))
+      return [...rows].sort((a, b) => b.value - a.value)
+    },
+    [dashboard],
   )
 
   return (

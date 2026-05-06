@@ -26,10 +26,17 @@ const (
 )
 
 // SaleDashboard — /api/v1/sales/dashboard 응답.
+//
+// trend24: tax_invoice_date 우선, 없으면 outbound_date 로 binning. 매월 count, sale_amount_sum,
+// pending_count(미발행, 같은 binning), distinct_customers, avg_unit_price_wp.
+// pending_trend24: tax_invoice_date 가 비어있는 매출만 outbound_date 로 binning — SalesInvoicePendingInsight 화면용.
+// by_*_top10: count, sale_amount_sum, invoice_pending_count, avg_unit_price_wp(≥3 priced 일 때만 0 아님), share.
 type SaleDashboard struct {
-	Totals          SaleDashTotals       `json:"totals"`
-	Trend24         []SaleDashTrendPoint `json:"trend24"`
-	ByCustomerTop10 []SaleDashCustomerRow `json:"by_customer_top10"`
+	Totals              SaleDashTotals        `json:"totals"`
+	Trend24             []SaleDashTrendPoint  `json:"trend24"`
+	PendingTrend24      []SaleDashTrendPoint  `json:"pending_trend24"`
+	ByCustomerTop10     []SaleDashBreakdownRow `json:"by_customer_top10"`
+	ByManufacturerTop10 []SaleDashBreakdownRow `json:"by_manufacturer_top10"`
 }
 
 type SaleDashTotals struct {
@@ -43,22 +50,28 @@ type SaleDashTotals struct {
 	AvgUnitPriceWp      float64 `json:"avg_unit_price_wp"`      // 평균 unit_price_wp (원/Wp)
 }
 
-// SaleDashTrendPoint — 월별 시계열 한 점. 월 binning 은 tax_invoice_date 우선, 없으면 outbound_date.
-// pending_count 는 그 달의 미발행 건수 (그래프용).
+// SaleDashTrendPoint — 월별 시계열 한 점.
+// 기본 trend24 의 binning 은 tax_invoice_date 우선 → outbound_date.
+// pending_trend24 는 tax_invoice_date null 인 행만 outbound_date 로 binning.
 type SaleDashTrendPoint struct {
-	Month         string  `json:"month"`
-	Count         int     `json:"count"`
-	SaleAmountSum float64 `json:"sale_amount_sum"`
-	PendingCount  int     `json:"pending_count"`
+	Month             string  `json:"month"`
+	Count             int     `json:"count"`
+	SaleAmountSum     float64 `json:"sale_amount_sum"`
+	PendingCount      int     `json:"pending_count"`
+	DistinctCustomers int     `json:"distinct_customers"`
+	AvgUnitPriceWp    float64 `json:"avg_unit_price_wp"`
 }
 
-type SaleDashCustomerRow struct {
+// SaleDashBreakdownRow — 차원별 분해 (거래처/제조사). avg_unit_price_wp 는 priced(>0) 가
+// 3건 이상일 때만 의미값. share 는 count 기준 0..1.
+type SaleDashBreakdownRow struct {
 	Key                 string  `json:"key"`
 	Label               string  `json:"label"`
 	Count               int     `json:"count"`
 	SaleAmountSum       float64 `json:"sale_amount_sum"`
 	InvoicePendingCount int     `json:"invoice_pending_count"`
-	Share               float64 `json:"share"` // 0..1, count 기준
+	AvgUnitPriceWp      float64 `json:"avg_unit_price_wp"`
+	Share               float64 `json:"share"`
 }
 
 // Dashboard — GET /api/v1/sales/dashboard.
@@ -110,12 +123,16 @@ func (h *SaleHandler) fetchAllForSaleDashboard(r *http.Request) ([]model.Sale, e
 
 func computeSaleDashboard(items []model.SaleListItem) *SaleDashboard {
 	d := &SaleDashboard{
-		Trend24:         make([]SaleDashTrendPoint, 0, saleDashboardTrendMonths),
-		ByCustomerTop10: []SaleDashCustomerRow{},
+		Trend24:             make([]SaleDashTrendPoint, 0, saleDashboardTrendMonths),
+		PendingTrend24:      make([]SaleDashTrendPoint, 0, saleDashboardTrendMonths),
+		ByCustomerTop10:     []SaleDashBreakdownRow{},
+		ByManufacturerTop10: []SaleDashBreakdownRow{},
 	}
 	d.Totals = computeSaleDashTotals(items)
 	d.Trend24 = computeSaleDashTrend24(items)
-	d.ByCustomerTop10 = computeSaleDashByCustomer(items, saleDashboardTopN)
+	d.PendingTrend24 = computeSaleDashPendingTrend24(items)
+	d.ByCustomerTop10 = computeSaleDashBreakdown(items, saleDimCustomer, saleDashboardTopN)
+	d.ByManufacturerTop10 = computeSaleDashBreakdown(items, saleDimManufacturer, saleDashboardTopN)
 	return d
 }
 
@@ -197,6 +214,13 @@ func computeSaleDashTrend24(items []model.SaleListItem) []SaleDashTrendPoint {
 	for i, m := range labels {
 		out[i] = SaleDashTrendPoint{Month: m}
 	}
+	// distinct customer + avg unit_price 누적용 보조 버킷.
+	customers := make([]map[string]struct{}, saleDashboardTrendMonths)
+	priceSum := make([]float64, saleDashboardTrendMonths)
+	priceN := make([]int, saleDashboardTrendMonths)
+	for i := range customers {
+		customers[i] = make(map[string]struct{}, 4)
+	}
 	for _, s := range items {
 		m := monthOf(saleDateForBin(s))
 		if m == "" {
@@ -217,25 +241,104 @@ func computeSaleDashTrend24(items []model.SaleListItem) []SaleDashTrendPoint {
 		if !issued {
 			out[i].PendingCount++
 		}
+		if s.CustomerID != "" {
+			customers[i][s.CustomerID] = struct{}{}
+		}
+		uw := saleUnitPriceWp(s)
+		if uw > 0 {
+			priceSum[i] += uw
+			priceN[i]++
+		}
+	}
+	for i := range out {
+		out[i].DistinctCustomers = len(customers[i])
+		if priceN[i] > 0 {
+			out[i].AvgUnitPriceWp = priceSum[i] / float64(priceN[i])
+		}
 	}
 	return out
 }
 
-func computeSaleDashByCustomer(items []model.SaleListItem, top int) []SaleDashCustomerRow {
+// computeSaleDashPendingTrend24 — tax_invoice_date 가 비어있는 매출만 outbound_date 로 binning.
+// SalesInvoicePendingInsight 화면용 (outboundDate 기반 누적).
+func computeSaleDashPendingTrend24(items []model.SaleListItem) []SaleDashTrendPoint {
+	now := time.Now()
+	labels := make([]string, saleDashboardTrendMonths)
+	idx := make(map[string]int, saleDashboardTrendMonths)
+	for i := 0; i < saleDashboardTrendMonths; i++ {
+		t := now.AddDate(0, -(saleDashboardTrendMonths-1-i), 0)
+		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
+		labels[i] = key
+		idx[key] = i
+	}
+	out := make([]SaleDashTrendPoint, saleDashboardTrendMonths)
+	for i, m := range labels {
+		out[i] = SaleDashTrendPoint{Month: m}
+	}
+	for _, s := range items {
+		issued := (s.TaxInvoiceDate != nil && *s.TaxInvoiceDate != "") ||
+			(s.Sale.TaxInvoiceDate != nil && *s.Sale.TaxInvoiceDate != "")
+		if issued {
+			continue
+		}
+		// pending 은 outbound_date 우선, 없으면 order_date.
+		var date string
+		if s.OutboundDate != nil && *s.OutboundDate != "" {
+			date = *s.OutboundDate
+		} else if s.OrderDate != nil && *s.OrderDate != "" {
+			date = *s.OrderDate
+		}
+		m := monthOf(date)
+		if m == "" {
+			continue
+		}
+		i, ok := idx[m]
+		if !ok {
+			continue
+		}
+		out[i].Count++
+		out[i].PendingCount++
+	}
+	return out
+}
+
+type saleBreakdownDim int
+
+const (
+	saleDimCustomer saleBreakdownDim = iota
+	saleDimManufacturer
+)
+
+// computeSaleDashBreakdown — customer 또는 manufacturer 차원으로 분해. avg_unit_price_wp 는 priced(>0) ≥ 3 일 때만.
+// sale_amount_sum 내림차순 정렬 (top N 의미).
+func computeSaleDashBreakdown(items []model.SaleListItem, dim saleBreakdownDim, top int) []SaleDashBreakdownRow {
 	type acc struct {
 		label    string
 		count    int
 		amount   float64
 		pending  int
+		priceSum float64
+		priceN   int
 	}
 	m := make(map[string]*acc, 32)
 	totalCount := 0
 	for _, s := range items {
-		key := s.CustomerID
-		if key == "" {
-			key = "__unset__"
+		var key, label string
+		switch dim {
+		case saleDimCustomer:
+			key = s.CustomerID
+			if key == "" {
+				key = "__unset__"
+			}
+			label = strPtrOr(s.CustomerName, "미지정")
+		case saleDimManufacturer:
+			if s.ManufacturerID != nil && *s.ManufacturerID != "" {
+				key = *s.ManufacturerID
+			} else {
+				key = "__unset__"
+			}
+			label = strPtrOr(s.ManufacturerName, "미지정")
 		}
-		label := strPtrOr(s.CustomerName, "미지정")
 		a, ok := m[key]
 		if !ok {
 			a = &acc{label: label}
@@ -252,20 +355,30 @@ func computeSaleDashByCustomer(items []model.SaleListItem, top int) []SaleDashCu
 		if !issued {
 			a.pending++
 		}
+		uw := saleUnitPriceWp(s)
+		if uw > 0 {
+			a.priceSum += uw
+			a.priceN++
+		}
 		totalCount++
 	}
-	rows := make([]SaleDashCustomerRow, 0, len(m))
+	rows := make([]SaleDashBreakdownRow, 0, len(m))
 	for k, a := range m {
 		share := 0.0
 		if totalCount > 0 {
 			share = float64(a.count) / float64(totalCount)
 		}
-		rows = append(rows, SaleDashCustomerRow{
+		avg := 0.0
+		if a.priceN >= 3 {
+			avg = a.priceSum / float64(a.priceN)
+		}
+		rows = append(rows, SaleDashBreakdownRow{
 			Key:                 k,
 			Label:               a.label,
 			Count:               a.count,
 			SaleAmountSum:       a.amount,
 			InvoicePendingCount: a.pending,
+			AvgUnitPriceWp:      avg,
 			Share:               share,
 		})
 	}
