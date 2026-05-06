@@ -25,6 +25,22 @@ import { ReceiptsTotalInsight } from './metrics/ReceiptsTotalInsight'
 import { ReceiptsRemainingInsight } from './metrics/ReceiptsRemainingInsight'
 import { ReceiptsPartialMatchInsight } from './metrics/ReceiptsPartialMatchInsight'
 import { ReceiptsRecoveryRateInsight } from './metrics/ReceiptsRecoveryRateInsight'
+import { CustomsExpenseTotalInsight } from './metrics/CustomsExpenseTotalInsight'
+import { CustomsBlLinkedInsight } from './metrics/CustomsBlLinkedInsight'
+import { CustomsTypeCountInsight } from './metrics/CustomsTypeCountInsight'
+import { CustomsAvgExpenseInsight } from './metrics/CustomsAvgExpenseInsight'
+import { BankingTotalLimitInsight } from './metrics/BankingTotalLimitInsight'
+import { BankingUsedInsight } from './metrics/BankingUsedInsight'
+import { BankingAvailableInsight } from './metrics/BankingAvailableInsight'
+import { BankingMaturityAlertInsight } from './metrics/BankingMaturityAlertInsight'
+import { PurchaseChainsInsight } from './metrics/PurchaseChainsInsight'
+import { PurchaseVariantsInsight } from './metrics/PurchaseVariantsInsight'
+import { PurchasePriceChangesInsight } from './metrics/PurchasePriceChangesInsight'
+import { PurchaseRecentEventsInsight } from './metrics/PurchaseRecentEventsInsight'
+import { SalesAnalysisSupplyInsight } from './metrics/SalesAnalysisSupplyInsight'
+import { SalesAnalysisTotalInsight } from './metrics/SalesAnalysisTotalInsight'
+import { SalesAnalysisIssueRateInsight } from './metrics/SalesAnalysisIssueRateInsight'
+import { SalesAnalysisMarginRateInsight } from './metrics/SalesAnalysisMarginRateInsight'
 
 export interface InsightEntry {
   // KPI 타일이 보낼 식별자 (예: 'outbound.count') — URL 에 그대로 들어감.
@@ -121,6 +137,94 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'receipts.recovery_rate',
     shortLabel: '회수율',
     render: () => <ReceiptsRecoveryRateInsight />,
+  },
+
+  // Customs
+  'customs.expense_total': {
+    id: 'customs.expense_total',
+    shortLabel: '부대비용',
+    render: () => <CustomsExpenseTotalInsight />,
+  },
+  'customs.bl_linked': {
+    id: 'customs.bl_linked',
+    shortLabel: 'B/L 연결',
+    render: () => <CustomsBlLinkedInsight />,
+  },
+  'customs.type_count': {
+    id: 'customs.type_count',
+    shortLabel: '비용 유형',
+    render: () => <CustomsTypeCountInsight />,
+  },
+  'customs.avg_expense': {
+    id: 'customs.avg_expense',
+    shortLabel: '평균 비용',
+    render: () => <CustomsAvgExpenseInsight />,
+  },
+
+  // Banking
+  'banking.total_limit': {
+    id: 'banking.total_limit',
+    shortLabel: '총 한도',
+    render: () => <BankingTotalLimitInsight />,
+  },
+  'banking.used': {
+    id: 'banking.used',
+    shortLabel: '사용중',
+    render: () => <BankingUsedInsight />,
+  },
+  'banking.available': {
+    id: 'banking.available',
+    shortLabel: '가용',
+    render: () => <BankingAvailableInsight />,
+  },
+  'banking.maturity_alert': {
+    id: 'banking.maturity_alert',
+    shortLabel: '만기 알림',
+    render: () => <BankingMaturityAlertInsight />,
+  },
+
+  // Purchase History
+  'purchase.chains': {
+    id: 'purchase.chains',
+    shortLabel: '계약 체인',
+    render: () => <PurchaseChainsInsight />,
+  },
+  'purchase.variants': {
+    id: 'purchase.variants',
+    shortLabel: '변경계약',
+    render: () => <PurchaseVariantsInsight />,
+  },
+  'purchase.price_changes': {
+    id: 'purchase.price_changes',
+    shortLabel: '단가 변동',
+    render: () => <PurchasePriceChangesInsight />,
+  },
+  'purchase.recent_events': {
+    id: 'purchase.recent_events',
+    shortLabel: '최근 이벤트',
+    render: () => <PurchaseRecentEventsInsight />,
+  },
+
+  // Sales Analysis
+  'sales_analysis.supply_amount': {
+    id: 'sales_analysis.supply_amount',
+    shortLabel: '공급가 매출',
+    render: () => <SalesAnalysisSupplyInsight />,
+  },
+  'sales_analysis.total_amount': {
+    id: 'sales_analysis.total_amount',
+    shortLabel: '부가세 포함',
+    render: () => <SalesAnalysisTotalInsight />,
+  },
+  'sales_analysis.issue_rate': {
+    id: 'sales_analysis.issue_rate',
+    shortLabel: '계산서 발행률',
+    render: () => <SalesAnalysisIssueRateInsight />,
+  },
+  'sales_analysis.margin_rate': {
+    id: 'sales_analysis.margin_rate',
+    shortLabel: '이익률',
+    render: () => <SalesAnalysisMarginRateInsight />,
   },
 }
 
