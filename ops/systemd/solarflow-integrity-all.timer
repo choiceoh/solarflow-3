@@ -1,0 +1,11 @@
+[Unit]
+Description=SolarFlow integrity_cron ALL daily (D-064 PR 37)
+
+[Timer]
+# 매일 새벽 04:00 (KST) 전체 검증 — MED/LOW 추세 + baseline 갱신
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+Unit=solarflow-integrity-all.service
+
+[Install]
+WantedBy=timers.target
