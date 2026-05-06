@@ -1,40 +1,33 @@
 // B/L 통관중 (건) 드릴다운 — status=customs 면장 확인 필요.
+//
+// 서버 집계 마이그(C-1 procurement) — useBLDashboard(status_scope=customs).
 
 import { useMemo } from 'react'
-import { useBLList } from '@/hooks/useInbound'
-import type { BLShipment } from '@/types/inbound'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useBLDashboard } from '@/hooks/useInbound'
 import InsightShell from '@/components/insights/InsightShell'
-
-const blDate = (b: BLShipment) => b.actual_arrival ?? b.eta ?? b.etd ?? null
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function ProcurementBlCustomsInsight() {
-  const { data, loading } = useBLList()
+  const { dashboard, loading } = useBLDashboard({ status_scope: 'customs' })
 
-  const customs = useMemo(() => data.filter((b) => b.status === 'customs'), [data])
+  const totalCustoms = dashboard?.totals.customs_count ?? 0
 
-  const trend = useMemo(
-    () => trend24(customs, blDate),
-    [customs],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.customs_count })),
+    [dashboard],
   )
 
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      customs,
-      (b) => b.manufacturer_id,
-      (b) => b.manufacturer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [customs],
+  const byManufacturer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_manufacturer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byPort = useMemo(
-    () => breakdownBy(
-      customs,
-      (b) => b.port ?? null,
-      (b) => b.port ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [customs],
+  const byPort: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_port_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (
@@ -47,7 +40,7 @@ export function ProcurementBlCustomsInsight() {
       backLabel="B/L 로 돌아가기"
       loading={loading}
       totalLabel="통관 합계"
-      totalValue={customs.length.toLocaleString()}
+      totalValue={totalCustoms.toLocaleString()}
       trend={trend}
       trendValueLabel="통관 진입"
       breakdowns={[
