@@ -110,6 +110,7 @@ GET     /api/v1/partners/usage-counts
 GET     /api/v1/partners/{id}
 GET     /api/v1/partners/{id}/activities
 GET     /api/v1/pos/
+GET     /api/v1/pos/dashboard
 GET     /api/v1/pos/summary
 GET     /api/v1/pos/{id}
 GET     /api/v1/pos/{poId}/lines/

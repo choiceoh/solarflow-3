@@ -474,6 +474,8 @@ func (h *POHandler) RegisterRoutes(r chi.Router, g middleware.Gates, lineH *POLi
 	r.Route("/pos", func(r chi.Router) {
 		r.Get("/", h.List)
 		r.Get("/summary", h.Summary)
+		// 대시보드 집계 — KPI/trend24/by_status/by_contract_type/by_manufacturer. /{id} 보다 먼저.
+		r.Get("/dashboard", h.Dashboard)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)

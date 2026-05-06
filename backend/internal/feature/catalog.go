@@ -273,7 +273,7 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDTxPO, Name: "PO 발주", Description: "PO + 라인",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{
-			"/api/v1/pos/", "/api/v1/pos/summary", "/api/v1/pos/{id}",
+			"/api/v1/pos/", "/api/v1/pos/summary", "/api/v1/pos/dashboard", "/api/v1/pos/{id}",
 			"/api/v1/pos/{poId}/lines/", "/api/v1/pos/{poId}/lines/{id}",
 		},
 	},
