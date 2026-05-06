@@ -111,6 +111,10 @@ func (h *OrderHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 // tryRPCOrdersDashboard — orders_dashboard() RPC 호출.
 func (h *OrderHandler) tryRPCOrdersDashboard(r *http.Request) ([]byte, bool) {
 	q := r.URL.Query()
+	// 기간 필터는 현재 RPC 시그니처(migration 075)가 모르므로 fallback Go 경로 사용.
+	if q.Get("start") != "" || q.Get("end") != "" {
+		return nil, false
+	}
 	args := map[string]any{}
 	if v := q.Get("company_id"); v != "" && v != "all" {
 		args["p_company_id"] = v

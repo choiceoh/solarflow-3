@@ -108,6 +108,7 @@ export default function OrdersPage() {
   const [orderStatusFilter, setOrderStatusFilter] = useState('');
   const [orderCustomerFilter, setOrderCustomerFilter] = useState('');
   const [orderCategoryFilter, setOrderCategoryFilter] = useState('');
+  const [orderDateRange, setOrderDateRange] = useState<DateRangeValue>(null);
   const _loc = useLocation();
   const navigate = useNavigate();
   const [orderWorkQueue, setOrderWorkQueue] = useState<OrderWorkQueue>(() => getOrderWorkQueue(new URLSearchParams(_loc.search).get('alert')));
@@ -140,6 +141,7 @@ export default function OrdersPage() {
   const [obStatusFilter, setObStatusFilter] = useState('');
   const [obUsageFilter, setObUsageFilter] = useState('');
   const [obMfgFilter, setObMfgFilter] = useState('');
+  const [obDateRange, setObDateRange] = useState<DateRangeValue>(null);
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null);
   const outboundColVis = useColumnVisibility(OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META);
   const outboundColPin = useColumnPinning(OUTBOUND_TABLE_ID);
@@ -156,7 +158,7 @@ export default function OrdersPage() {
   const [obPageSize, setObPageSize] = useState(50);
   useEffect(() => {
     setObPageIndex(0);
-  }, [obStatusFilter, obUsageFilter, obMfgFilter]);
+  }, [obStatusFilter, obUsageFilter, obMfgFilter, obDateRange]);
 
   const {
     dashboard: outboundDash,
@@ -166,6 +168,8 @@ export default function OrdersPage() {
     status: obStatusFilter || undefined,
     usage_category: obUsageFilter || undefined,
     manufacturer_id: obMfgFilter || undefined,
+    start: obDateRange?.start || undefined,
+    end: obDateRange?.end || undefined,
   });
 
   const {
@@ -177,6 +181,8 @@ export default function OrdersPage() {
     status: obStatusFilter || undefined,
     usage_category: obUsageFilter || undefined,
     manufacturer_id: obMfgFilter || undefined,
+    start: obDateRange?.start || undefined,
+    end: obDateRange?.end || undefined,
     pageIndex: obPageIndex,
     pageSize: obPageSize,
   });
@@ -244,17 +250,21 @@ export default function OrdersPage() {
     }
   }, [_loc.search]);
 
-  const orderFilters: { status?: string; customer_id?: string; management_category?: string; work_queue?: 'delivery_soon' | 'no_site' } = {};
+  const orderFilters: { status?: string; customer_id?: string; management_category?: string; work_queue?: 'delivery_soon' | 'no_site'; start?: string; end?: string } = {};
   if (orderStatusFilter) orderFilters.status = orderStatusFilter;
   if (orderCustomerFilter) orderFilters.customer_id = orderCustomerFilter;
   if (orderCategoryFilter) orderFilters.management_category = orderCategoryFilter;
   if (orderWorkQueue) orderFilters.work_queue = orderWorkQueue;
+  if (orderDateRange) {
+    orderFilters.start = orderDateRange.start;
+    orderFilters.end = orderDateRange.end;
+  }
   // 페이지네이션 상태 (수주 탭).
   const [orderPageIndex, setOrderPageIndex] = useState(0);
   const [orderPageSize, setOrderPageSize] = useState(50);
   useEffect(() => {
     setOrderPageIndex(0);
-  }, [orderStatusFilter, orderCustomerFilter, orderCategoryFilter, orderWorkQueue]);
+  }, [orderStatusFilter, orderCustomerFilter, orderCategoryFilter, orderWorkQueue, orderDateRange]);
 
   const receiptFilters: { customer_id?: string; start?: string; end?: string } = {};
   if (receiptCustomerFilter) receiptFilters.customer_id = receiptCustomerFilter;
@@ -585,6 +595,12 @@ export default function OrdersPage() {
         <>
           <FilterButton items={[
             {
+              kind: 'date_range',
+              label: '기간',
+              value: orderDateRange,
+              onChange: setOrderDateRange,
+            },
+            {
               label: '상태',
               value: orderStatusFilter,
               onChange: setOrderStatusFilter,
@@ -619,6 +635,12 @@ export default function OrdersPage() {
       {activeTab === 'outbound' && !selectedOutbound && (
         <>
           <FilterButton items={[
+            {
+              kind: 'date_range',
+              label: '기간',
+              value: obDateRange,
+              onChange: setObDateRange,
+            },
             {
               label: '상태',
               value: obStatusFilter,
