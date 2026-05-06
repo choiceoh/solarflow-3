@@ -26,6 +26,7 @@ const SettingsIndexRedirect = lazy(() =>
   import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
 );
 const AdminSettingsPage = lazy(() => import('@/pages/settings/AdminSettingsPage'));
+const DBIntegrityPage = lazy(() => import('@/pages/admin/DBIntegrityPage'));
 const AuditLogsPage = lazy(() => import('@/pages/settings/AuditLogsPage'));
 const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
 const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
@@ -100,6 +101,7 @@ export default function App() {
                 <Route index element={<Navigate to="/inventory" replace />} />
                 <Route path="/dashboard" element={<Navigate to="/inventory" replace />} />
                 <Route path="/inventory" element={<InventoryPage />} />
+                <Route path="/admin/db-integrity" element={<RoleGuard allowedRoles={['admin', 'operator']}><DBIntegrityPage /></RoleGuard>} />
                 <Route path="/import" element={<RoleGuard allowedRoles={['admin', 'operator']}><ImportHubPage /></RoleGuard>} />
                 <Route path="/library" element={<LibraryPage />} />
                 <Route path="/data" element={<RoleGuard allowedRoles={['admin', 'operator']}><DataPage /></RoleGuard>} />
