@@ -346,8 +346,8 @@ export function useSaleList(params: SaleListParams): SaleListResult {
   };
 }
 
-// 매출 대시보드 — KPI + 24개월 trend + by_customer_top10 을 서버에서 한 번에 받는다.
-// OrdersPage 매출 탭이 사용. 응답 ~수 KB 라 fetchAllSales (수 MB) 를 대체 (C-1 sales).
+// 매출 대시보드 — KPI + 24개월 trend + by_customer/by_manufacturer top10 을 서버에서 한 번에 받는다.
+// OrdersPage 매출 탭 + 4 개 sales drilldown insights 가 사용. 응답 ~수 KB 라 fetchAllSales (수 MB) 를 대체.
 export interface SaleDashboard {
   totals: {
     count: number
@@ -359,18 +359,33 @@ export interface SaleDashboard {
     customers_count: number
     avg_unit_price_wp: number
   }
-  trend24: { month: string; count: number; sale_amount_sum: number; pending_count: number }[]
-  by_customer_top10: SaleDashboardCustomerRow[]
+  trend24: SaleDashboardTrendPoint[]
+  pending_trend24: SaleDashboardTrendPoint[]
+  by_customer_top10: SaleDashboardBreakdownRow[]
+  by_manufacturer_top10: SaleDashboardBreakdownRow[]
 }
 
-export interface SaleDashboardCustomerRow {
+export interface SaleDashboardTrendPoint {
+  month: string
+  count: number
+  sale_amount_sum: number
+  pending_count: number
+  distinct_customers: number
+  avg_unit_price_wp: number
+}
+
+export interface SaleDashboardBreakdownRow {
   key: string
   label: string
   count: number
   sale_amount_sum: number
   invoice_pending_count: number
+  avg_unit_price_wp: number  // 0 if priced count < 3
   share: number
 }
+
+// 호환 alias (이전 이름 유지) — OrdersPage 가 아직 by_customer 만 사용.
+export type SaleDashboardCustomerRow = SaleDashboardBreakdownRow
 
 export interface SaleDashboardFilters {
   customer_id?: string
