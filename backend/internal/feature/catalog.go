@@ -154,6 +154,7 @@ const (
 	IDSysUIConfig       FeatureID = "sys.ui_config"
 	IDSysUser           FeatureID = "sys.user"
 	IDSysExternalSync   FeatureID = "sys.external_sync" // D-059
+	IDSysDBIntegrity    FeatureID = "sys.db_integrity"  // D-064 PR 37
 
 	// ---- engine.* ----
 	IDEngineHealth FeatureID = "engine.health"
@@ -511,6 +512,11 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDIOExportAll, Name: "통합 데이터 덤프", Description: "admin 전용 전체 컬렉션 dump",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeTenantCompany,
 		Paths: []string{"/api/v1/export/all"},
+	},
+	IDSysDBIntegrity: {
+		ID: IDSysDBIntegrity, Name: "DB 정합성", Description: "운영자 전용 DB 정합성 검증 (D-064 PR 37)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/admin/db-integrity"},
 	},
 
 	// ===== ai.* =====

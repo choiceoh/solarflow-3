@@ -29,6 +29,7 @@ DELETE  /api/v1/sales/{id}
 DELETE  /api/v1/tts/{id}
 DELETE  /api/v1/ui-configs/{scope}/{config_id}
 DELETE  /api/v1/warehouses/{id}
+GET     /api/v1/admin/db-integrity
 GET     /api/v1/assistant/ocr/health
 GET     /api/v1/assistant/sessions
 GET     /api/v1/assistant/sessions/{id}
