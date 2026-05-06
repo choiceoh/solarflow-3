@@ -6,7 +6,7 @@ import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
 import { useOrderListAll } from '@/hooks/useOrders';
 import { useReceiptList } from '@/hooks/useReceipts';
-import { useOutboundList, useOutboundDashboard, useSaleListAll } from '@/hooks/useOutbound';
+import { useOutboundList, useOutboundDashboard, useSaleList, useSaleDashboard } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import SkeletonRows from '@/components/common/SkeletonRows';
@@ -197,19 +197,39 @@ export default function OrdersPage() {
   const [saleCustomerFilter, setSaleCustomerFilter] = useState('');
   const [saleDateRange, setSaleDateRange] = useState<DateRangeValue>(null);
   const [saleInvoiceFilter, setSaleInvoiceFilter] = useState('');
-  const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleListAll();
+  const [salePageIndex, setSalePageIndex] = useState(0);
+  const [salePageSize, setSalePageSize] = useState(50);
+  useEffect(() => {
+    setSalePageIndex(0);
+  }, [saleCustomerFilter, saleDateRange, saleInvoiceFilter]);
 
-  const sales = useMemo(() => allSales.filter((s) => {
-    if (saleCustomerFilter && s.customer_id !== saleCustomerFilter) return false
-    const taxDate = s.tax_invoice_date ?? s.sale?.tax_invoice_date ?? null
-    if (saleDateRange) {
-      if (!taxDate) return false
-      if (taxDate < saleDateRange.start || taxDate > saleDateRange.end) return false
-    }
-    if (saleInvoiceFilter === 'issued' && !taxDate) return false
-    if (saleInvoiceFilter === 'pending' && taxDate) return false
-    return true
-  }), [allSales, saleCustomerFilter, saleDateRange, saleInvoiceFilter]);
+  // C-1 sales — useSaleListAll 제거. KPI/sparkline/right-rail/SaleSummaryCards 는 useSaleDashboard,
+  // 표는 useSaleList(서버 페이지네이션). 칩 필터(customer/date/invoice_status) 도 server-side.
+  const saleFilters = {
+    customer_id: saleCustomerFilter || undefined,
+    start: saleDateRange?.start || undefined,
+    end: saleDateRange?.end || undefined,
+    invoice_status: saleInvoiceFilter || undefined,
+  };
+  const {
+    dashboard: saleDash,
+    loading: saleDashLoading,
+    reload: reloadSaleDash,
+  } = useSaleDashboard(saleFilters);
+  const {
+    items: sales,
+    totalCount: salesTotal,
+    loading: saleListLoading,
+    reload: reloadSaleList,
+  } = useSaleList({
+    ...saleFilters,
+    pageIndex: salePageIndex,
+    pageSize: salePageSize,
+  });
+  const saleLoading = saleDashLoading || saleListLoading;
+  const reloadSales = async () => {
+    await Promise.all([reloadSaleDash(), reloadSaleList()]);
+  };
 
   // 탭 4: 수금
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState('');
@@ -340,10 +360,10 @@ export default function OrdersPage() {
     [visibleOrders],
   );
   const outboundKw = outboundDash?.totals.kw_sum ?? 0;
-  const saleTotal = useMemo(
-    () => sales.reduce((sum, item) => sum + (item.total_amount ?? item.sale?.total_amount ?? 0), 0),
-    [sales],
-  );
+  const saleTotal = saleDash?.totals.sale_amount_sum ?? 0;
+  const salesTotalCount = saleDash?.totals.count ?? salesTotal;
+  const saleCustomersCount = saleDash?.totals.customers_count ?? 0;
+  const saleAvgUnitPriceWp = saleDash?.totals.avg_unit_price_wp ?? 0;
   const receiptTotal = useMemo(
     () => receipts.reduce((sum, receipt) => sum + (receipt.amount ?? 0), 0),
     [receipts],
@@ -440,10 +460,7 @@ export default function OrdersPage() {
     const max = buckets.length ? Math.max(...buckets) : 0;
     return { buckets, weekStarts, total, max };
   }, [outboundDash]);
-  const invoicePending = useMemo(
-    () => sales.filter(item => !item.tax_invoice_date).length,
-    [sales],
-  );
+  const invoicePending = saleDash?.totals.invoice_pending_count ?? 0;
 
   if (!selectedCompanyId) {
     return (
@@ -542,14 +559,15 @@ export default function OrdersPage() {
     '수주 관리';
   const pageSub =
     activeTab === 'outbound' ? `${outboundsTotalCount}건 · ${fmtSalesMw(outboundKw)} MW` :
-    activeTab === 'sales' ? `${sales.length}건 · ${fmtEok(saleTotal)}억` :
+    activeTab === 'sales' ? `${salesTotalCount}건 · ${fmtEok(saleTotal)}억` :
     activeTab === 'receipts' ? `${receipts.length}건 · 미정산 ${fmtEok(receiptRemaining)}억` :
     activeTab === 'matching' ? '입금과 매출채권 자동 추천' :
     `${visibleOrders.length}건 · ${fmtSalesMw(ordersKw)} MW${orderWorkQueue ? ` · 전체 ${orders.length}건` : ''}`;
   // KPI sparkline 시계열 — outbound 는 서버 trend24 마지막 6 개월. order/receipt/sale 는 client-side(미마이그).
   const outboundCountSpark = (outboundDash?.trend24 ?? []).slice(-6).map((p) => p.count);
   const outboundKwSpark = (outboundDash?.trend24 ?? []).slice(-6).map((p) => p.kw_sum);
-  const saleTotalSpark = monthlyTrend(sales, (s) => s.tax_invoice_date ?? s.outbound_date ?? null, (s) => s.total_amount ?? s.sale?.total_amount ?? 0);
+  const saleTotalSpark = (saleDash?.trend24 ?? []).slice(-6).map((p) => p.sale_amount_sum);
+  const saleInvoicePendingSpark = (saleDash?.trend24 ?? []).slice(-6).map((p) => p.pending_count);
   const receiptTotalSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.amount ?? 0);
   const receiptRemainingSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.remaining ?? 0);
   const activeOrderSpark = monthlyCount(activeOrders, (o) => o.order_date);
@@ -578,10 +596,10 @@ export default function OrdersPage() {
       { lbl: '금년 출고 용량', v: fmtSalesMw(monthlyOutboundKw.year), u: 'MW', sub: monthlyOutboundKw.yoyPct != null ? `${monthlyOutboundKw.currYear}년 누계 · 전년比 ${monthlyOutboundKw.yoyPct >= 0 ? '+' : ''}${monthlyOutboundKw.yoyPct.toFixed(1)}%` : `${monthlyOutboundKw.currYear}년 누계`, tone: 'pos', spark: monthlyOutboundKw.yoy3y, metricId: 'outbound.kw_year' },
     ] :
     activeTab === 'sales' ? [
-      { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${sales.length}건`, tone: 'solar', spark: saleTotalSpark, metricId: 'sales.total' },
-      { lbl: '계산서 미발행', v: String(invoicePending), u: '건', sub: '발행 대기', tone: invoicePending > 0 ? 'warn' : 'pos', spark: monthlyCount(sales.filter(s => !s.tax_invoice_date), (s) => s.outbound_date ?? null), metricId: 'sales.invoice_pending' },
-      { lbl: '거래처', v: String(new Set(sales.map(sale => sale.customer_id).filter(Boolean)).size), u: '곳', sub: '매출처 기준', tone: 'info', metricId: 'sales.customers' },
-      { lbl: '평균 단가', v: sales.length ? (sales.reduce((sum, sale) => sum + (sale.unit_price_wp ?? (sale.spec_wp ? (sale.unit_price_ea ?? 0) / sale.spec_wp : 0)), 0) / sales.length).toFixed(1) : '0.0', u: '원/Wp', sub: '필터 기준', tone: 'ink', metricId: 'sales.unit_price_wp' },
+      { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${salesTotalCount}건`, tone: 'solar', spark: saleTotalSpark, metricId: 'sales.total' },
+      { lbl: '계산서 미발행', v: String(invoicePending), u: '건', sub: '발행 대기', tone: invoicePending > 0 ? 'warn' : 'pos', spark: saleInvoicePendingSpark, metricId: 'sales.invoice_pending' },
+      { lbl: '거래처', v: String(saleCustomersCount), u: '곳', sub: '매출처 기준', tone: 'info', metricId: 'sales.customers' },
+      { lbl: '평균 단가', v: saleAvgUnitPriceWp.toFixed(1), u: '원/Wp', sub: '필터 기준', tone: 'ink', metricId: 'sales.unit_price_wp' },
     ] :
     activeTab === 'receipts' ? [
       { lbl: '입금 합계', v: fmtEok(receiptTotal), u: '억', sub: `${receipts.length}건`, tone: 'solar', spark: receiptTotalSpark, metricId: 'receipts.total' },
@@ -592,7 +610,7 @@ export default function OrdersPage() {
     activeTab === 'matching' ? [
       { lbl: '입금', v: String(receipts.length), u: '건', sub: '매칭 후보', tone: 'solar', spark: monthlyCount(receipts, (r) => r.receipt_date) },
       { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '대상 금액', tone: 'warn', spark: receiptRemainingSpark },
-      { lbl: '매출', v: String(sales.length), u: '건', sub: '후보 원장', tone: 'info', spark: monthlyCount(sales, (s) => s.outbound_date ?? null) },
+      { lbl: '매출', v: String(salesTotalCount), u: '건', sub: '후보 원장', tone: 'info', spark: (saleDash?.trend24 ?? []).slice(-6).map((p) => p.count) },
       { lbl: '거래처', v: String(partners.length), u: '곳', sub: '고객 마스터', tone: 'ink' },
     ] : [
       { lbl: '진행 수주', v: String(activeOrders.length), u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${orders.length}건`, tone: 'solar', spark: activeOrderSpark, metricId: 'orders.active' },
@@ -806,10 +824,33 @@ export default function OrdersPage() {
 
         {/* 탭 3: 판매 관리 */}
         <TabsContent value="sales" className="space-y-4 mt-4">
-          {saleLoading ? <SkeletonRows rows={8} /> : (
+          {saleLoading && sales.length === 0 ? <SkeletonRows rows={8} /> : (
             <>
-              <SaleSummaryCards items={sales} />
-              <SaleListTable items={sales} hidden={saleColVis.hidden} pinning={saleColPin.pinning} onPinningChange={saleColPin.setPinning} />
+              <SaleSummaryCards
+                items={sales}
+                summary={saleDash ? {
+                  totalSupply: saleDash.totals.supply_amount_sum,
+                  totalVat: saleDash.totals.vat_amount_sum,
+                  totalAmount: saleDash.totals.sale_amount_sum,
+                  count: saleDash.totals.count,
+                  issuedCount: saleDash.totals.invoice_issued_count,
+                } : undefined}
+              />
+              <SaleListTable
+                items={sales}
+                hidden={saleColVis.hidden}
+                pinning={saleColPin.pinning}
+                onPinningChange={saleColPin.setPinning}
+                serverMode={{
+                  pageIndex: salePageIndex,
+                  pageSize: salePageSize,
+                  totalRowCount: salesTotal,
+                  onPageChange: ({ pageIndex: nextIdx, pageSize: nextSize }) => {
+                    setSalePageIndex(nextIdx);
+                    setSalePageSize(nextSize);
+                  },
+                }}
+              />
             </>
           )}
         </TabsContent>
@@ -933,7 +974,7 @@ export default function OrdersPage() {
               </RailBlock>
               <RailBlock title="계산서 상태">
                 <div className="space-y-2 text-[11.5px] text-[var(--ink-2)]">
-                  <div className="flex justify-between"><span>발행 완료</span><span className="mono">{sales.length - invoicePending}</span></div>
+                  <div className="flex justify-between"><span>발행 완료</span><span className="mono">{saleDash?.totals.invoice_issued_count ?? 0}</span></div>
                   <div className="flex justify-between"><span>미발행</span><span className="mono text-[var(--warn)]">{invoicePending}</span></div>
                   <div className="flex justify-between"><span>매출 합계</span><span className="mono">{fmtEok(saleTotal)}억</span></div>
                 </div>
