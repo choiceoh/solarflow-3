@@ -76,7 +76,15 @@ type ReceiptDashBreakdownRow struct {
 
 // Dashboard — GET /api/v1/receipts/dashboard.
 // List 와 동일한 쿼리 파라미터 (customer_id, start, end, month, company_id).
+//
+// receipts_dashboard() RPC (migration 074) 우선. 미배포/실패 시 기존 chunked Go 경로 fallback.
 func (h *ReceiptHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	if dashJSON, ok := h.tryRPCReceiptsDashboard(r); ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(dashJSON)
+		return
+	}
 	receipts, err := h.fetchAllForReceiptDashboard(r)
 	if err != nil {
 		log.Printf("[수금 대시보드 데이터 수집 실패] %v", err)
@@ -86,6 +94,46 @@ func (h *ReceiptHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	h.enrichReceipts(receipts)
 	dash := computeReceiptDashboard(receipts)
 	response.RespondJSON(w, http.StatusOK, dash)
+}
+
+// tryRPCReceiptsDashboard — receipts_dashboard() RPC 호출.
+func (h *ReceiptHandler) tryRPCReceiptsDashboard(r *http.Request) ([]byte, bool) {
+	q := r.URL.Query()
+	args := map[string]any{}
+	if v := q.Get("company_id"); v != "" && v != "all" {
+		args["p_company_id"] = v
+	}
+	if v := q.Get("customer_id"); v != "" {
+		args["p_customer_id"] = v
+	}
+	if v := q.Get("month"); v != "" {
+		args["p_month"] = v
+	}
+	if v := q.Get("start"); v != "" {
+		args["p_start"] = v
+	}
+	if v := q.Get("end"); v != "" {
+		args["p_end"] = v
+	}
+	data, _, err := h.DB.From("rpc/receipts_dashboard").Insert(args, false, "", "", "").Execute()
+	if err != nil {
+		log.Printf("[수금 대시보드 RPC 실패 — fallback 사용] %v", err)
+		return nil, false
+	}
+	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
+		var arr []json.RawMessage
+		if data[0] == '[' && json.Unmarshal(data, &arr) == nil && len(arr) > 0 {
+			var wrap map[string]json.RawMessage
+			if json.Unmarshal(arr[0], &wrap) == nil {
+				if inner, ok := wrap["receipts_dashboard"]; ok {
+					return inner, true
+				}
+			}
+			return arr[0], true
+		}
+		return data, true
+	}
+	return nil, false
 }
 
 // applyReceiptFilters — List 의 인라인 필터를 재사용 가능한 형태로 추출.
