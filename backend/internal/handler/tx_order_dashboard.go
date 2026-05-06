@@ -87,7 +87,15 @@ type OrderDashBreakdownRow struct {
 // Dashboard — GET /api/v1/orders/dashboard.
 // applyOrderFilters 와 동일한 쿼리 파라미터 (status, customer_id, management_category, q, company_id).
 // 페이지·정렬은 무시.
+//
+// orders_dashboard() RPC (migration 075) 우선. 미배포/실패 시 기존 chunked Go 경로 fallback.
 func (h *OrderHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	if dashJSON, ok := h.tryRPCOrdersDashboard(r); ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(dashJSON)
+		return
+	}
 	orders, err := h.fetchAllForOrderDashboard(r)
 	if err != nil {
 		log.Printf("[수주 대시보드 데이터 수집 실패] %v", err)
@@ -98,6 +106,51 @@ func (h *OrderHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	scope := normalizeOrderScope(r.URL.Query().Get("status_scope"))
 	dash := computeOrderDashboard(orders, scope)
 	response.RespondJSON(w, http.StatusOK, dash)
+}
+
+// tryRPCOrdersDashboard — orders_dashboard() RPC 호출.
+func (h *OrderHandler) tryRPCOrdersDashboard(r *http.Request) ([]byte, bool) {
+	q := r.URL.Query()
+	args := map[string]any{}
+	if v := q.Get("company_id"); v != "" && v != "all" {
+		args["p_company_id"] = v
+	}
+	if v := q.Get("customer_id"); v != "" {
+		args["p_customer_id"] = v
+	}
+	if v := q.Get("status"); v != "" {
+		args["p_status"] = v
+	}
+	if v := q.Get("management_category"); v != "" {
+		args["p_management_category"] = v
+	}
+	if v := q.Get("work_queue"); v != "" {
+		args["p_work_queue"] = v
+	}
+	if v := q.Get("q"); v != "" {
+		args["p_q"] = v
+	}
+	args["p_status_scope"] = normalizeOrderScope(q.Get("status_scope"))
+
+	data, _, err := h.DB.From("rpc/orders_dashboard").Insert(args, false, "", "", "").Execute()
+	if err != nil {
+		log.Printf("[수주 대시보드 RPC 실패 — fallback 사용] %v", err)
+		return nil, false
+	}
+	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
+		var arr []json.RawMessage
+		if data[0] == '[' && json.Unmarshal(data, &arr) == nil && len(arr) > 0 {
+			var wrap map[string]json.RawMessage
+			if json.Unmarshal(arr[0], &wrap) == nil {
+				if inner, ok := wrap["orders_dashboard"]; ok {
+					return inner, true
+				}
+			}
+			return arr[0], true
+		}
+		return data, true
+	}
+	return nil, false
 }
 
 func normalizeOrderScope(raw string) string {
