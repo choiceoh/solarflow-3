@@ -1,0 +1,282 @@
+package handler
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"sort"
+	"time"
+
+	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/response"
+)
+
+// 매출 대시보드 집계 — OrdersPage 매출 탭 KPI/sparkline + SaleSummaryCards 의 client-side
+// aggregation 을 서버에서 한 번에 처리해 wire payload 를 KB 단위로 줄인다 (C-1 sales).
+//
+// 이전 동작: 프론트가 useSaleListAll 로 전 sales 청크 누적 fetch (수 MB) 후 합계/카운트/거래처/단가 계산.
+// 본 핸들러: List 와 동일한 필터 + 청크 누적 + enrichSales(outbound_date 채움) → 메모리 집계 → ~수 KB 응답.
+
+const (
+	saleDashboardChunkSize  = 1000
+	saleDashboardMaxChunks  = 50
+	saleDashboardTrendMonths = 24
+	saleDashboardTopN        = 10
+)
+
+// SaleDashboard — /api/v1/sales/dashboard 응답.
+type SaleDashboard struct {
+	Totals          SaleDashTotals       `json:"totals"`
+	Trend24         []SaleDashTrendPoint `json:"trend24"`
+	ByCustomerTop10 []SaleDashCustomerRow `json:"by_customer_top10"`
+}
+
+type SaleDashTotals struct {
+	Count               int     `json:"count"`
+	SaleAmountSum       float64 `json:"sale_amount_sum"`        // sum(total_amount)
+	SupplyAmountSum     float64 `json:"supply_amount_sum"`      // sum(supply_amount)
+	VatAmountSum        float64 `json:"vat_amount_sum"`         // sum(vat_amount)
+	InvoiceIssuedCount  int     `json:"invoice_issued_count"`   // tax_invoice_date 있는 건수
+	InvoicePendingCount int     `json:"invoice_pending_count"`  // tax_invoice_date 없는 건수
+	CustomersCount      int     `json:"customers_count"`        // distinct customer_id
+	AvgUnitPriceWp      float64 `json:"avg_unit_price_wp"`      // 평균 unit_price_wp (원/Wp)
+}
+
+// SaleDashTrendPoint — 월별 시계열 한 점. 월 binning 은 tax_invoice_date 우선, 없으면 outbound_date.
+// pending_count 는 그 달의 미발행 건수 (그래프용).
+type SaleDashTrendPoint struct {
+	Month         string  `json:"month"`
+	Count         int     `json:"count"`
+	SaleAmountSum float64 `json:"sale_amount_sum"`
+	PendingCount  int     `json:"pending_count"`
+}
+
+type SaleDashCustomerRow struct {
+	Key                 string  `json:"key"`
+	Label               string  `json:"label"`
+	Count               int     `json:"count"`
+	SaleAmountSum       float64 `json:"sale_amount_sum"`
+	InvoicePendingCount int     `json:"invoice_pending_count"`
+	Share               float64 `json:"share"` // 0..1, count 기준
+}
+
+// Dashboard — GET /api/v1/sales/dashboard.
+// applySaleFilters 와 동일한 쿼리 파라미터 (customer_id, month, start, end, invoice_status, q, company_id).
+// 페이지·정렬은 무시.
+func (h *SaleHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	sales, err := h.fetchAllForSaleDashboard(r)
+	if err != nil {
+		log.Printf("[매출 대시보드 데이터 수집 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "매출 대시보드 데이터 조회에 실패했습니다")
+		return
+	}
+	items := h.enrichSales(sales)
+	dash := computeSaleDashboard(items)
+	response.RespondJSON(w, http.StatusOK, dash)
+}
+
+// fetchAllForSaleDashboard — 필터 적용 후 1000 행 청크로 sales 전체를 끌어온다.
+func (h *SaleHandler) fetchAllForSaleDashboard(r *http.Request) ([]model.Sale, error) {
+	cols := "sale_id,outbound_id,order_id,customer_id,quantity,capacity_kw,unit_price_wp,unit_price_ea,supply_amount,vat_amount,total_amount,tax_invoice_date,tax_invoice_email,erp_closed,erp_closed_date,status,memo,erp_sales_no,erp_line_no,currency,created_at,updated_at"
+	all := make([]model.Sale, 0, saleDashboardChunkSize)
+	for chunk := 0; chunk < saleDashboardMaxChunks; chunk++ {
+		q := h.DB.From("sales").Select(cols, "exact", false)
+		q, ok, err := h.applySaleFilters(r, q)
+		if err != nil {
+			return nil, fmt.Errorf("필터 처리 실패: %w", err)
+		}
+		if !ok {
+			return all, nil
+		}
+		offset := chunk * saleDashboardChunkSize
+		q = q.Range(offset, offset+saleDashboardChunkSize-1, "")
+
+		data, _, err := q.Execute()
+		if err != nil {
+			return nil, fmt.Errorf("sales 청크 #%d 조회 실패: %w", chunk, err)
+		}
+		var batch []model.Sale
+		if err := json.Unmarshal(data, &batch); err != nil {
+			return nil, fmt.Errorf("sales 청크 #%d 디코딩 실패: %w", chunk, err)
+		}
+		all = append(all, batch...)
+		if len(batch) < saleDashboardChunkSize {
+			break
+		}
+	}
+	return all, nil
+}
+
+func computeSaleDashboard(items []model.SaleListItem) *SaleDashboard {
+	d := &SaleDashboard{
+		Trend24:         make([]SaleDashTrendPoint, 0, saleDashboardTrendMonths),
+		ByCustomerTop10: []SaleDashCustomerRow{},
+	}
+	d.Totals = computeSaleDashTotals(items)
+	d.Trend24 = computeSaleDashTrend24(items)
+	d.ByCustomerTop10 = computeSaleDashByCustomer(items, saleDashboardTopN)
+	return d
+}
+
+func computeSaleDashTotals(items []model.SaleListItem) SaleDashTotals {
+	t := SaleDashTotals{Count: len(items)}
+	customers := make(map[string]struct{}, 32)
+	unitPriceSum := 0.0
+	unitPriceN := 0
+	for _, s := range items {
+		if s.Sale.SupplyAmount != nil {
+			t.SupplyAmountSum += *s.Sale.SupplyAmount
+		}
+		if s.Sale.VatAmount != nil {
+			t.VatAmountSum += *s.Sale.VatAmount
+		}
+		if s.Sale.TotalAmount != nil {
+			t.SaleAmountSum += *s.Sale.TotalAmount
+		} else if s.TotalAmount != nil {
+			t.SaleAmountSum += *s.TotalAmount
+		}
+		if s.TaxInvoiceDate != nil && *s.TaxInvoiceDate != "" {
+			t.InvoiceIssuedCount++
+		} else if s.Sale.TaxInvoiceDate != nil && *s.Sale.TaxInvoiceDate != "" {
+			t.InvoiceIssuedCount++
+		} else {
+			t.InvoicePendingCount++
+		}
+		if s.CustomerID != "" {
+			customers[s.CustomerID] = struct{}{}
+		}
+		// unit_price_wp 평균 — 0/null 스킵해 노이즈 회피.
+		uw := saleUnitPriceWp(s)
+		if uw > 0 {
+			unitPriceSum += uw
+			unitPriceN++
+		}
+	}
+	t.CustomersCount = len(customers)
+	if unitPriceN > 0 {
+		t.AvgUnitPriceWp = unitPriceSum / float64(unitPriceN)
+	}
+	return t
+}
+
+// saleUnitPriceWp — SaleListItem.UnitPriceWp 우선, 없으면 unit_price_ea/spec_wp 로 derive.
+// 프론트와 동일한 fallback 로직 (OrdersPage avg 계산식).
+func saleUnitPriceWp(s model.SaleListItem) float64 {
+	if s.UnitPriceWp > 0 {
+		return s.UnitPriceWp
+	}
+	if s.SpecWp != nil && *s.SpecWp > 0 && s.UnitPriceEa != nil {
+		return *s.UnitPriceEa / *s.SpecWp
+	}
+	return 0
+}
+
+// saleDateForBin — 월별 binning 용. tax_invoice_date 우선, 없으면 outbound_date.
+func saleDateForBin(s model.SaleListItem) string {
+	if s.TaxInvoiceDate != nil && *s.TaxInvoiceDate != "" {
+		return *s.TaxInvoiceDate
+	}
+	if s.OutboundDate != nil && *s.OutboundDate != "" {
+		return *s.OutboundDate
+	}
+	return ""
+}
+
+func computeSaleDashTrend24(items []model.SaleListItem) []SaleDashTrendPoint {
+	now := time.Now()
+	labels := make([]string, saleDashboardTrendMonths)
+	idx := make(map[string]int, saleDashboardTrendMonths)
+	for i := 0; i < saleDashboardTrendMonths; i++ {
+		t := now.AddDate(0, -(saleDashboardTrendMonths-1-i), 0)
+		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
+		labels[i] = key
+		idx[key] = i
+	}
+	out := make([]SaleDashTrendPoint, saleDashboardTrendMonths)
+	for i, m := range labels {
+		out[i] = SaleDashTrendPoint{Month: m}
+	}
+	for _, s := range items {
+		m := monthOf(saleDateForBin(s))
+		if m == "" {
+			continue
+		}
+		i, ok := idx[m]
+		if !ok {
+			continue
+		}
+		out[i].Count++
+		if s.Sale.TotalAmount != nil {
+			out[i].SaleAmountSum += *s.Sale.TotalAmount
+		} else if s.TotalAmount != nil {
+			out[i].SaleAmountSum += *s.TotalAmount
+		}
+		issued := (s.TaxInvoiceDate != nil && *s.TaxInvoiceDate != "") ||
+			(s.Sale.TaxInvoiceDate != nil && *s.Sale.TaxInvoiceDate != "")
+		if !issued {
+			out[i].PendingCount++
+		}
+	}
+	return out
+}
+
+func computeSaleDashByCustomer(items []model.SaleListItem, top int) []SaleDashCustomerRow {
+	type acc struct {
+		label    string
+		count    int
+		amount   float64
+		pending  int
+	}
+	m := make(map[string]*acc, 32)
+	totalCount := 0
+	for _, s := range items {
+		key := s.CustomerID
+		if key == "" {
+			key = "__unset__"
+		}
+		label := strPtrOr(s.CustomerName, "미지정")
+		a, ok := m[key]
+		if !ok {
+			a = &acc{label: label}
+			m[key] = a
+		}
+		a.count++
+		if s.Sale.TotalAmount != nil {
+			a.amount += *s.Sale.TotalAmount
+		} else if s.TotalAmount != nil {
+			a.amount += *s.TotalAmount
+		}
+		issued := (s.TaxInvoiceDate != nil && *s.TaxInvoiceDate != "") ||
+			(s.Sale.TaxInvoiceDate != nil && *s.Sale.TaxInvoiceDate != "")
+		if !issued {
+			a.pending++
+		}
+		totalCount++
+	}
+	rows := make([]SaleDashCustomerRow, 0, len(m))
+	for k, a := range m {
+		share := 0.0
+		if totalCount > 0 {
+			share = float64(a.count) / float64(totalCount)
+		}
+		rows = append(rows, SaleDashCustomerRow{
+			Key:                 k,
+			Label:               a.label,
+			Count:               a.count,
+			SaleAmountSum:       a.amount,
+			InvoicePendingCount: a.pending,
+			Share:               share,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].SaleAmountSum != rows[j].SaleAmountSum {
+			return rows[i].SaleAmountSum > rows[j].SaleAmountSum
+		}
+		return rows[i].Count > rows[j].Count
+	})
+	if top > 0 && len(rows) > top {
+		return rows[:top]
+	}
+	return rows
+}
