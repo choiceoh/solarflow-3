@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import DataTable, { type Column } from '@/components/common/DataTable';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { fetchWithAuth } from '@/lib/api';
@@ -196,25 +197,21 @@ export default function MasterSection<T extends { is_active?: boolean }>({ confi
       reorderable: false,
       pinnable: false,
       headerCell: () => (
-        <input
-          type="checkbox"
+        <Checkbox
           aria-label="전체 선택"
           checked={allFilteredSelected}
-          ref={(el) => { if (el) el.indeterminate = someFilteredSelected; }}
-          onChange={(e) => toggleAllFiltered(e.target.checked)}
-          className="size-3.5 cursor-pointer"
+          indeterminate={someFilteredSelected}
+          onCheckedChange={toggleAllFiltered}
         />
       ),
       render: (row) => {
         const id = config.getId(row);
         return (
-          <input
-            type="checkbox"
+          <Checkbox
             aria-label="행 선택"
             checked={selectedIds.has(id)}
             onClick={(e) => e.stopPropagation()}
-            onChange={(e) => toggleOne(id, e.target.checked)}
-            className="size-3.5 cursor-pointer"
+            onCheckedChange={(c) => toggleOne(id, c)}
           />
         );
       },
