@@ -96,6 +96,7 @@ GET     /api/v1/orders/
 GET     /api/v1/orders/summary
 GET     /api/v1/orders/{id}
 GET     /api/v1/outbounds/
+GET     /api/v1/outbounds/dashboard
 GET     /api/v1/outbounds/summary
 GET     /api/v1/outbounds/{id}
 GET     /api/v1/outbounds/{id}/fifo-matches
