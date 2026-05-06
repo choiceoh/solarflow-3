@@ -1,99 +1,51 @@
 // 계산서 연결률 드릴다운 — 매출 대상 출고 중 sale 레코드가 연결된 비율.
 // 트렌드: 월별 연결률 (%) · 분해: 거래처/제조사/용도 별 연결률.
+//
+// 서버 집계 마이그(C-1) 후: useOutboundDashboard 의 sale_conversion 필드 사용.
 
 import { useMemo } from 'react'
-import { useOutboundListAll } from '@/hooks/useOutbound'
-import { USAGE_CATEGORY_LABEL } from '@/types/outbound'
-import type { Outbound } from '@/types/outbound'
-import { trend24 } from '@/lib/insights/aggregations'
-import type { BreakdownRow } from '@/lib/insights/aggregations'
+import { useOutboundDashboard } from '@/hooks/useOutbound'
+import type { BreakdownRow, TrendPoint } from '@/lib/insights/aggregations'
 import InsightShell from '@/components/insights/InsightShell'
 
-const isSaleEligible = (o: Outbound) => o.usage_category === 'sale' || o.usage_category === 'sale_spare'
 const fmtPct = (v: number) => v.toFixed(1)
 
-interface ConversionGroup {
-  key: string
-  label: string
-  total: number
-  linked: number
-}
-
-function groupConversion(
-  items: readonly Outbound[],
-  getKey: (o: Outbound) => string | null | undefined,
-  getLabel: (o: Outbound) => string,
-): BreakdownRow[] {
-  const map = new Map<string, ConversionGroup>()
-  let totalEligible = 0
-  for (const o of items) {
-    const key = getKey(o) || '__unset__'
-    const cur = map.get(key) ?? { key, label: getLabel(o), total: 0, linked: 0 }
-    cur.total += 1
-    if (o.sale) cur.linked += 1
-    map.set(key, cur)
-    totalEligible += 1
-  }
-  const rows: BreakdownRow[] = []
-  for (const [key, g] of map) {
-    const rate = g.total > 0 ? (g.linked / g.total) * 100 : 0
-    rows.push({
-      key,
-      label: g.label,
-      value: rate,
-      // share = 이 차원이 전체 매출대상에서 차지하는 가중치 — 비율(%) 메트릭이라 별도 의미.
-      share: totalEligible > 0 ? g.total / totalEligible : 0,
-      count: g.total,
-    })
-  }
-  // 매출 대상이 적은 차원은 노이즈 — 3건 이상만 보여준다.
-  return rows.filter((r) => r.count >= 3).sort((a, b) => b.value - a.value)
-}
-
 export function SaleConversionInsight() {
-  const { data, loading } = useOutboundListAll()
+  const { dashboard, loading } = useOutboundDashboard({ period: 'lifetime' })
 
-  const eligible = useMemo(() => data.filter(isSaleEligible), [data])
-  const linked = useMemo(() => eligible.filter((o) => o.sale), [eligible])
+  const sc = dashboard?.sale_conversion
 
   // 월별 연결률 = (그 달 linked) / (그 달 eligible) * 100
-  const trend = useMemo(() => {
-    const tot = trend24(eligible, (o) => o.outbound_date)
-    const lnk = trend24(linked, (o) => o.outbound_date)
-    return tot.map((p, i) => ({
+  const trend: TrendPoint[] = useMemo(() => {
+    if (!sc) return []
+    return sc.monthly.map((p) => ({
       month: p.month,
-      value: p.value > 0 ? Math.round(((lnk[i]?.value ?? 0) / p.value) * 1000) / 10 : 0,
+      value: p.eligible_count > 0
+        ? Math.round((p.linked_count / p.eligible_count) * 1000) / 10
+        : 0,
     }))
-  }, [eligible, linked])
+  }, [sc])
 
-  const totalRate = eligible.length > 0
-    ? Math.round((linked.length / eligible.length) * 1000) / 10
+  const totalRate = sc && sc.eligible_count > 0
+    ? Math.round((sc.linked_count / sc.eligible_count) * 1000) / 10
     : 0
 
-  const byCustomer = useMemo(
-    () => groupConversion(
-      eligible,
-      (o) => o.customer_id ?? null,
-      (o) => o.customer_name ?? '미지정',
-    ).slice(0, 10),
-    [eligible],
-  )
-  const byManufacturer = useMemo(
-    () => groupConversion(
-      eligible,
-      (o) => o.manufacturer_id ?? null,
-      (o) => o.manufacturer_name ?? '미지정',
-    ).slice(0, 10),
-    [eligible],
-  )
-  const byUsage = useMemo(
-    () => groupConversion(
-      eligible,
-      (o) => o.usage_category,
-      (o) => USAGE_CATEGORY_LABEL[o.usage_category] ?? o.usage_category,
-    ),
-    [eligible],
-  )
+  // 매출 대상이 적은 차원은 노이즈 — 3건 이상만 보여준다 (이전 동작 유지).
+  const toBreakdownRows = (rows: { key: string; label: string; eligible_count: number; linked_count: number; rate: number }[] | undefined): BreakdownRow[] =>
+    (rows ?? [])
+      .filter((r) => r.eligible_count >= 3)
+      .map((r) => ({
+        key: r.key,
+        label: r.label,
+        value: r.rate,
+        // share = 이 차원이 전체 매출대상에서 차지하는 가중치 — 비율(%) 메트릭이라 별도 의미.
+        share: sc && sc.eligible_count > 0 ? r.eligible_count / sc.eligible_count : 0,
+        count: r.eligible_count,
+      }))
+
+  const byCustomer = useMemo(() => toBreakdownRows(sc?.by_customer_top10), [sc])
+  const byManufacturer = useMemo(() => toBreakdownRows(sc?.by_manufacturer_top10), [sc])
+  const byUsage = useMemo(() => toBreakdownRows(sc?.by_usage), [sc])
 
   const tone: 'pos' | 'info' | 'warn' = totalRate >= 90 ? 'pos' : totalRate >= 60 ? 'info' : 'warn'
 
