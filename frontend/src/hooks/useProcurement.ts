@@ -1,3 +1,4 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { fetchAllPaginated, fetchWithAuth } from "@/lib/api"
 import { useAppStore } from "@/stores/appStore"
 import { companyParams } from "@/lib/companyUtils"
@@ -13,6 +14,82 @@ import type {
   LCSummary,
   TTSummary,
 } from "@/types/procurement"
+
+// PO 대시보드 — KPI + 24개월 trend + by_status/by_contract_type/by_manufacturer 를 서버 한 번에.
+// ProcurementPage PO 탭 + 3 PO Insight (Active/ContractTypes/Shipping) 가 사용.
+export type POScope = 'lifetime' | 'active' | 'shipping'
+
+export interface PODashboard {
+  totals: {
+    count: number
+    active_count: number
+    shipping_count: number
+    completed_count: number
+    cancelled_count: number
+    total_mw: number
+    active_mw: number
+    contract_types_count: number
+  }
+  trend24: {
+    month: string
+    count: number
+    active_count: number
+    shipping_count: number
+    total_mw: number
+    distinct_contract_types: number
+  }[]
+  status_scope: POScope
+  by_status: PODashboardBreakdownRow[]
+  by_contract_type: PODashboardBreakdownRow[]
+  by_manufacturer_top10: PODashboardBreakdownRow[]
+}
+
+export interface PODashboardBreakdownRow {
+  key: string
+  label: string
+  count: number
+  total_mw: number
+  share: number
+}
+
+export interface PODashboardFilters {
+  status?: string
+  manufacturer_id?: string
+  contract_type?: string
+  status_scope?: POScope
+}
+
+export function usePODashboard(filters: PODashboardFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const queryKey = [
+    'pos-dashboard',
+    selectedCompanyId,
+    filters.status ?? '',
+    filters.manufacturer_id ?? '',
+    filters.contract_type ?? '',
+    filters.status_scope ?? 'lifetime',
+  ]
+  const q = useQuery<PODashboard, Error>({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (filters.status) params.set('status', filters.status)
+      if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id)
+      if (filters.contract_type) params.set('contract_type', filters.contract_type)
+      if (filters.status_scope) params.set('status_scope', filters.status_scope)
+      return fetchWithAuth<PODashboard>(`/api/v1/pos/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
+}
 
 export function usePOList(
   filters: { status?: string; manufacturer_id?: string; contract_type?: string } = {},
@@ -69,6 +146,83 @@ export function useLCLines(lcId: string | null) {
     () => fetchWithAuth<LCLineItem[]>(`/api/v1/lcs/${lcId}/lines`),
     { enabled: !!lcId },
   )
+}
+
+// LC 대시보드 — KPI + 24개월 trend + by_status/by_bank/by_urgency 를 서버 한 번에.
+// ProcurementPage LC 탭 + 5 LC Insight (Total/Amount/Banks/Linked/Maturity) 가 사용.
+export type LCScope = 'lifetime' | 'active' | 'maturity_soon'
+
+export interface LCDashboard {
+  totals: {
+    count: number
+    active_count: number
+    opened_count: number
+    settled_count: number
+    cancelled_count: number
+    total_amount_usd: number
+    active_amount_usd: number
+    banks_count: number
+    maturity_soon_count: number
+    overdue_count: number
+  }
+  trend24: {
+    month: string
+    count: number
+    active_count: number
+    amount_usd: number
+    distinct_banks: number
+  }[]
+  status_scope: LCScope
+  by_status: LCDashboardBreakdownRow[]
+  by_bank_top10: LCDashboardBreakdownRow[]
+  by_urgency: LCDashboardBreakdownRow[]  // maturity_soon 일 때만 채워짐
+}
+
+export interface LCDashboardBreakdownRow {
+  key: string
+  label: string
+  count: number
+  amount_usd_sum: number
+  share: number
+}
+
+export interface LCDashboardFilters {
+  po_id?: string
+  bank_id?: string
+  status?: string
+  status_scope?: LCScope
+}
+
+export function useLCDashboard(filters: LCDashboardFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const queryKey = [
+    'lcs-dashboard',
+    selectedCompanyId,
+    filters.po_id ?? '',
+    filters.bank_id ?? '',
+    filters.status ?? '',
+    filters.status_scope ?? 'lifetime',
+  ]
+  const q = useQuery<LCDashboard, Error>({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (filters.po_id) params.set('po_id', filters.po_id)
+      if (filters.bank_id) params.set('bank_id', filters.bank_id)
+      if (filters.status) params.set('status', filters.status)
+      if (filters.status_scope) params.set('status_scope', filters.status_scope)
+      return fetchWithAuth<LCDashboard>(`/api/v1/lcs/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
 }
 
 export function useLCList(
@@ -139,6 +293,81 @@ export function useLCSummary(
 // API 응답 중첩 구조: purchase_orders.po_number, purchase_orders.manufacturers.name_kr
 type RawTT = TTRemittance & {
   purchase_orders?: { po_number?: string; manufacturers?: { name_kr?: string } }
+}
+
+// TT 대시보드 — KPI + 24개월 trend + by_status/by_manufacturer/by_bank/by_purpose/by_po 를 서버 한 번에.
+// ProcurementPage TT 탭 + 4 TT Insight 가 사용. 응답 ~수 KB.
+export type TTScope = 'lifetime' | 'completed' | 'planned'
+
+export interface TTDashboard {
+  totals: {
+    count: number
+    completed_count: number
+    planned_count: number
+    completed_amount_usd: number
+    planned_amount_usd: number
+    total_amount_usd: number
+    po_count: number
+  }
+  trend24: {
+    month: string
+    count: number
+    completed_count: number
+    planned_count: number
+    completed_amount_usd: number
+    planned_amount_usd: number
+    distinct_pos: number
+  }[]
+  status_scope: TTScope
+  by_status: TTDashboardBreakdownRow[]
+  by_manufacturer_top10: TTDashboardBreakdownRow[]
+  by_bank_top10: TTDashboardBreakdownRow[]
+  by_purpose_top10: TTDashboardBreakdownRow[]
+  by_po_top10: TTDashboardBreakdownRow[]
+}
+
+export interface TTDashboardBreakdownRow {
+  key: string
+  label: string
+  count: number
+  amount_usd_sum: number
+  share: number
+}
+
+export interface TTDashboardFilters {
+  status?: string
+  po_id?: string
+  status_scope?: TTScope
+}
+
+export function useTTDashboard(filters: TTDashboardFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const queryKey = [
+    'tts-dashboard',
+    selectedCompanyId,
+    filters.status ?? '',
+    filters.po_id ?? '',
+    filters.status_scope ?? 'lifetime',
+  ]
+  const q = useQuery<TTDashboard, Error>({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (filters.status) params.set('status', filters.status)
+      if (filters.po_id) params.set('po_id', filters.po_id)
+      if (filters.status_scope) params.set('status_scope', filters.status_scope)
+      return fetchWithAuth<TTDashboard>(`/api/v1/tts/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
 }
 
 export function useTTList(filters: { status?: string; po_id?: string } = {}) {

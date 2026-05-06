@@ -1,40 +1,32 @@
 // 계약 유형 (종) 드릴다운 — distinct contract_type 수 + 유형별 PO/MW 분포.
+//
+// 서버 집계 마이그(C-1 procurement) — usePODashboard 사용.
 
 import { useMemo } from 'react'
-import { usePOList } from '@/hooks/useProcurement'
-import { CONTRACT_TYPE_LABEL, type ContractType } from '@/types/procurement'
-import { breakdownBy, trend24Distinct } from '@/lib/insights/aggregations'
+import { usePODashboard } from '@/hooks/useProcurement'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function ProcurementContractTypesInsight() {
-  const { data, loading } = usePOList()
+  const { dashboard, loading } = usePODashboard()
 
-  const trend = useMemo(
-    () => trend24Distinct(data, (p) => p.contract_date ?? null, (p) => p.contract_type),
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.distinct_contract_types })),
+    [dashboard],
   )
-  const totalDistinct = useMemo(
-    () => new Set(data.map((p) => p.contract_type)).size,
-    [data],
-  )
+  const totalDistinct = dashboard?.totals.contract_types_count ?? 0
 
-  const byTypeCount = useMemo(
-    () => breakdownBy(
-      data,
-      (p) => p.contract_type,
-      (p) => CONTRACT_TYPE_LABEL[p.contract_type as ContractType] ?? p.contract_type,
-      () => 1,
-    ),
-    [data],
+  const byTypeCount: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_contract_type ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byTypeMw = useMemo(
-    () => breakdownBy(
-      data,
-      (p) => p.contract_type,
-      (p) => CONTRACT_TYPE_LABEL[p.contract_type as ContractType] ?? p.contract_type,
-      (p) => p.total_mw ?? 0,
-    ),
-    [data],
+  const byTypeMw: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_contract_type ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.total_mw, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (

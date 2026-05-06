@@ -1,41 +1,35 @@
 // T/T PO 연결 (건) 드릴다운 — distinct po_id 수 + PO별 송금 합계.
+//
+// 서버 집계 마이그(C-1 procurement) — useTTDashboard.
 
 import { useMemo } from 'react'
-import { useTTList } from '@/hooks/useProcurement'
-import { breakdownBy, trend24Distinct } from '@/lib/insights/aggregations'
+import { useTTDashboard } from '@/hooks/useProcurement'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmtUsdM = (v: number) => (v / 1_000_000).toFixed(v >= 10_000_000 ? 1 : 2)
 
 export function ProcurementTtPoLinkedInsight() {
-  const { data, loading } = useTTList()
+  const { dashboard, loading } = useTTDashboard()
 
-  const trend = useMemo(
-    () => trend24Distinct(data, (t) => t.remit_date ?? null, (t) => t.po_id),
-    [data],
-  )
-  const totalDistinct = useMemo(
-    () => new Set(data.map((t) => t.po_id)).size,
-    [data],
+  const totalDistinct = dashboard?.totals.po_count ?? 0
+
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.distinct_pos })),
+    [dashboard],
   )
 
-  const byPoCount = useMemo(
-    () => breakdownBy(
-      data,
-      (t) => t.po_id,
-      (t) => t.po_number ?? t.po_id.slice(0, 8),
-      () => 1,
-    ).slice(0, 10),
-    [data],
+  const byPoCount: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_po_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byPoAmount = useMemo(
-    () => breakdownBy(
-      data,
-      (t) => t.po_id,
-      (t) => t.po_number ?? t.po_id.slice(0, 8),
-      (t) => t.amount_usd ?? 0,
-    ).slice(0, 10),
-    [data],
+  const byPoAmount: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_po_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.amount_usd_sum, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (

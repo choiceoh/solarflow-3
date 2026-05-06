@@ -1,45 +1,39 @@
-// T/T 이력 (건) 드릴다운 — 모든 송금 (planned + completed). 상태/은행/제조사 분해.
+// T/T 이력 (건) 드릴다운 — 모든 송금 (planned + completed). 상태/제조사/용도 분해.
+//
+// 서버 집계 마이그(C-1 procurement) — useTTDashboard.
 
 import { useMemo } from 'react'
-import { useTTList } from '@/hooks/useProcurement'
-import { TT_STATUS_LABEL, type TTStatus } from '@/types/procurement'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useTTDashboard } from '@/hooks/useProcurement'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function ProcurementTtTotalInsight() {
-  const { data, loading } = useTTList()
+  const { dashboard, loading } = useTTDashboard()
 
-  const trend = useMemo(
-    () => trend24(data, (t) => t.remit_date ?? null),
-    [data],
+  const totalCount = dashboard?.totals.count ?? 0
+
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.count })),
+    [dashboard],
   )
 
-  const byStatus = useMemo(
-    () => breakdownBy(
-      data,
-      (t) => t.status,
-      (t) => TT_STATUS_LABEL[t.status as TTStatus] ?? t.status,
-      () => 1,
-    ),
-    [data],
+  const byStatus: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_status ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      data,
-      (t) => t.manufacturer_name ?? null,
-      (t) => t.manufacturer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [data],
+  const byManufacturer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_manufacturer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byPurpose = useMemo(
-    () => breakdownBy(
-      data,
-      (t) => t.purpose ?? null,
-      (t) => t.purpose ?? '용도 미지정',
-      () => 1,
-    ).slice(0, 10),
-    [data],
+  const byPurpose: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_purpose_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (
@@ -52,7 +46,7 @@ export function ProcurementTtTotalInsight() {
       backLabel="T/T 로 돌아가기"
       loading={loading}
       totalLabel="누계"
-      totalValue={data.length.toLocaleString()}
+      totalValue={totalCount.toLocaleString()}
       trend={trend}
       trendValueLabel="송금"
       breakdowns={[

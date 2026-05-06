@@ -1,36 +1,33 @@
 // L/C 전체 (건) 드릴다운 — 모든 L/C (status 무관). 상태별 + 은행별 분해.
+//
+// 서버 집계 마이그(C-1 procurement) — useLCDashboard.
 
 import { useMemo } from 'react'
-import { useLCList } from '@/hooks/useProcurement'
-import { LC_STATUS_LABEL, type LCStatus } from '@/types/procurement'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useLCDashboard } from '@/hooks/useProcurement'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function ProcurementLcTotalInsight() {
-  const { data, loading } = useLCList()
+  const { dashboard, loading } = useLCDashboard()
 
-  const trend = useMemo(
-    () => trend24(data, (l) => l.open_date ?? null),
-    [data],
+  const totalCount = dashboard?.totals.count ?? 0
+
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.count })),
+    [dashboard],
   )
 
-  const byStatus = useMemo(
-    () => breakdownBy(
-      data,
-      (l) => l.status,
-      (l) => LC_STATUS_LABEL[l.status as LCStatus] ?? l.status,
-      () => 1,
-    ),
-    [data],
+  const byStatus: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_status ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byBank = useMemo(
-    () => breakdownBy(
-      data,
-      (l) => l.bank_id,
-      (l) => l.bank_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [data],
+  const byBank: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_bank_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (
@@ -43,7 +40,7 @@ export function ProcurementLcTotalInsight() {
       backLabel="L/C 로 돌아가기"
       loading={loading}
       totalLabel="누계"
-      totalValue={data.length.toLocaleString()}
+      totalValue={totalCount.toLocaleString()}
       trend={trend}
       trendValueLabel="L/C 개설"
       breakdowns={[

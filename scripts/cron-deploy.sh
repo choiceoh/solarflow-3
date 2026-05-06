@@ -27,6 +27,10 @@
 #   - 마이그레이션 실패 → Go 재시작 보류 (4, apply_migrations.py 트랜잭션)
 #   - 빌드는 됐지만 런타임 panic → health 실패 → 자동 롤백 (6)
 #   - 그래도 안 되면 systemd가 service Restart=on-failure로 재시도
+#
+# Zero-downtime reload (D-123): Go 는 systemctl reload 가 ExecReload=kill -HUP $MAINPID
+# 를 통해 tableflip Upgrader 의 fork+exec 를 트리거. 자식이 listener fd 를 인계받아
+# 사용자 체감 다운타임 0 으로 새 바이너리 가동. reload 실패 시 restart 폴백.
 
 set -uo pipefail
 
@@ -186,6 +190,33 @@ restart_with_rollback() {
   return 1
 }
 
+# Zero-downtime reload (D-123): SIGHUP → tableflip Upgrader fork+exec → 자식이 listener fd 인계.
+# 호출: reload_or_restart <service-name> <bin-path> <bin-prev-path> <health-url>
+#
+# 동작:
+#   1) systemctl reload (ExecReload=/bin/kill -HUP $MAINPID 정의돼야 함)
+#   2) sleep 3 + health curl — 자식 인계는 보통 1~2초 안에 끝남
+#   3) reload 성공 + health 200 → 사용자 체감 다운타임 0 (이상적 경로)
+#   4) reload 자체 실패(ExecReload 미정의 등) 또는 health 실패 → restart_with_rollback 폴백
+#
+# 폴백이 필요한 경우:
+#   - unit 파일에 ExecReload 가 아직 없는 운영 박스 (배포 직후 1회)
+#   - 새 바이너리에 tableflip 호환 문제 (예: SIGHUP 미처리) — 부모가 그냥 죽고 systemd Restart=on-failure 가 살림. 이때 health 가 잠깐 빨갈 수 있어 폴백.
+reload_or_restart() {
+  local svc=$1 bin=$2 prev=$3 health=$4
+  if systemctl --user reload "$svc" 2>/dev/null; then
+    sleep 3
+    if curl -fsS -m 5 -o /dev/null "$health"; then
+      echo "[$(date -Iseconds)] $svc reload OK (zero-downtime, health 200)"
+      return 0
+    fi
+    echo "[$(date -Iseconds)] $svc reload 후 health 실패 — restart 폴백"
+  else
+    echo "[$(date -Iseconds)] $svc reload 미지원/실패 — restart 폴백"
+  fi
+  restart_with_rollback "$svc" "$bin" "$prev" "$health"
+}
+
 # Go 빌드 + 재시작 (이전 바이너리 백업 → 자동 롤백 가드 포함)
 GO_BIN="$GO_DIR/solarflow-go"
 GO_BIN_PREV="$GO_DIR/solarflow-go.prev"
@@ -193,10 +224,13 @@ GO_BIN_NEW="$GO_DIR/solarflow-go.new"
 if [[ $need_go -eq 1 && $mig_ok -eq 1 ]]; then
   echo "[$(date -Iseconds)] Go 빌드 시작 (-> solarflow-go.new)"
   if (cd "$GO_DIR" && go build -o solarflow-go.new . 2>&1); then
-    # 백업: 현재 운영 중인 바이너리를 .prev로, 새 빌드를 운영 자리로 원자적 swap
+    # 백업: 현재 운영 중인 바이너리를 .prev로, 새 빌드를 운영 자리로 원자적 swap.
+    # 이 시점부터 SIGHUP 을 받은 tableflip 의 fork+exec 는 새 바이너리를 실행.
     [[ -f "$GO_BIN" ]] && cp -f "$GO_BIN" "$GO_BIN_PREV"
     mv -f "$GO_BIN_NEW" "$GO_BIN"
-    restart_with_rollback solarflow-go.service "$GO_BIN" "$GO_BIN_PREV" http://localhost:8080/health
+    # reload(SIGHUP) → tableflip zero-downtime 인계가 정상 경로.
+    # ExecReload 미정의 / 새 바이너리 결함 등 비정상 상황은 restart_with_rollback 으로 폴백.
+    reload_or_restart solarflow-go.service "$GO_BIN" "$GO_BIN_PREV" http://localhost:8080/health
   else
     echo "[$(date -Iseconds)] Go 빌드 실패 — 기존 서비스 유지"
     rm -f "$GO_BIN_NEW"
@@ -208,6 +242,8 @@ fi
 # Rust 빌드 + 재시작
 # cargo는 빌드 결과를 in-place로 덮어쓰므로 (Go의 -o .new 패턴이 안 됨) 빌드 직전에 미리 백업.
 # cargo build는 실패 시 기존 바이너리를 건드리지 않으므로 pre-build 백업이 의미를 가진다.
+# 엔진은 tableflip 미적용이라 restart 경로 — 단, with_graceful_shutdown 으로 in-flight 계산은
+# 드레인되고, Go 의 EngineClient.doWithRetry 가 listener 단절(보통 1~2초) 을 가린다 (D-123).
 ENGINE_BIN="$ENGINE_DIR/target/release/solarflow-engine"
 ENGINE_BIN_PREV="$ENGINE_DIR/target/release/solarflow-engine.prev"
 if [[ $need_engine -eq 1 ]]; then
