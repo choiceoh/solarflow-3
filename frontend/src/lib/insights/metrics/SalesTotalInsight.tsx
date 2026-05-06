@@ -1,43 +1,44 @@
 // 매출 합계 (억) 드릴다운 — sales 탭 KPI '매출 합계'.
+//
+// 서버 집계 마이그(C-1 sales follow-up) — useSaleDashboard 사용.
 
 import { useMemo } from 'react'
-import { useSaleListAll } from '@/hooks/useOutbound'
-import type { SaleListItem } from '@/types/outbound'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useSaleDashboard } from '@/hooks/useOutbound'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmtEok = (v: number) => (v / 100_000_000).toFixed(v >= 10_000_000_000 ? 1 : 2)
 const fmtEokTick = (v: number) => (v / 100_000_000).toFixed(0)
-const saleDate = (s: SaleListItem) => s.tax_invoice_date ?? s.outbound_date ?? s.order_date ?? null
-const totalAmount = (s: SaleListItem) => s.total_amount ?? s.sale?.total_amount ?? 0
 
 export function SalesTotalInsight() {
-  const { data, loading } = useSaleListAll()
+  const { dashboard, loading } = useSaleDashboard()
 
-  const trend = useMemo(
-    () => trend24(data, saleDate, totalAmount),
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.sale_amount_sum })),
+    [dashboard],
   )
 
-  const totalSum = data.reduce((sum, s) => sum + totalAmount(s), 0)
+  const totalSum = dashboard?.totals.sale_amount_sum ?? 0
 
-  const byCustomer = useMemo(
-    () => breakdownBy(
-      data,
-      (s) => s.customer_id,
-      (s) => s.customer_name ?? '미지정',
-      totalAmount,
-    ).slice(0, 10),
-    [data],
+  const byCustomer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_customer_top10 ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.sale_amount_sum,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      data,
-      (s) => s.manufacturer_id ?? null,
-      (s) => s.manufacturer_name ?? '미지정',
-      totalAmount,
-    ).slice(0, 10),
-    [data],
+  const byManufacturer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_manufacturer_top10 ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.sale_amount_sum,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
 
   return (
