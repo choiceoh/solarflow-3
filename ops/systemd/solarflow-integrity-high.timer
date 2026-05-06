@@ -1,0 +1,12 @@
+[Unit]
+Description=SolarFlow integrity_cron HIGH every 30 min (D-064 PR 37)
+
+[Timer]
+# 30 분마다 실행 (HIGH severity 만 — 데이터 손실 즉시 감지)
+OnBootSec=2min
+OnUnitActiveSec=30min
+Persistent=true
+Unit=solarflow-integrity-high.service
+
+[Install]
+WantedBy=timers.target

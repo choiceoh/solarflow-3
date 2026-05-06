@@ -199,6 +199,7 @@ export default function MasterSection<T extends { is_active?: boolean }>({ confi
       headerCell: () => (
         <Checkbox
           aria-label="전체 선택"
+          className="size-[18px] border-2 border-gray-500"
           checked={allFilteredSelected}
           indeterminate={someFilteredSelected}
           onCheckedChange={toggleAllFiltered}
@@ -209,6 +210,7 @@ export default function MasterSection<T extends { is_active?: boolean }>({ confi
         return (
           <Checkbox
             aria-label="행 선택"
+            className="size-[18px] border-2 border-gray-500"
             checked={selectedIds.has(id)}
             onClick={(e) => e.stopPropagation()}
             onCheckedChange={(c) => toggleOne(id, c)}
