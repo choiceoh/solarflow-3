@@ -67,7 +67,15 @@ type PODashBreakdownRow struct {
 }
 
 // Dashboard — GET /api/v1/pos/dashboard.
+//
+// pos_dashboard() RPC (migration 077) 우선. 실패 시 chunked Go fallback.
 func (h *POHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	if dashJSON, ok := h.tryRPCPosDashboard(r); ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(dashJSON)
+		return
+	}
 	pos, err := h.fetchAllForPODashboard(r)
 	if err != nil {
 		log.Printf("[PO 대시보드 데이터 수집 실패] %v", err)
@@ -77,6 +85,43 @@ func (h *POHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	scope := normalizePOScope(r.URL.Query().Get("status_scope"))
 	dash := computePODashboard(pos, scope)
 	response.RespondJSON(w, http.StatusOK, dash)
+}
+
+func (h *POHandler) tryRPCPosDashboard(r *http.Request) ([]byte, bool) {
+	q := r.URL.Query()
+	args := map[string]any{}
+	if v := q.Get("company_id"); v != "" && v != "all" {
+		args["p_company_id"] = v
+	}
+	if v := q.Get("manufacturer_id"); v != "" {
+		args["p_manufacturer_id"] = v
+	}
+	if v := q.Get("status"); v != "" {
+		args["p_status"] = v
+	}
+	if v := q.Get("contract_type"); v != "" {
+		args["p_contract_type"] = v
+	}
+	args["p_status_scope"] = normalizePOScope(q.Get("status_scope"))
+	data, _, err := h.DB.From("rpc/pos_dashboard").Insert(args, false, "", "", "").Execute()
+	if err != nil {
+		log.Printf("[PO 대시보드 RPC 실패 — fallback 사용] %v", err)
+		return nil, false
+	}
+	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
+		var arr []json.RawMessage
+		if data[0] == '[' && json.Unmarshal(data, &arr) == nil && len(arr) > 0 {
+			var wrap map[string]json.RawMessage
+			if json.Unmarshal(arr[0], &wrap) == nil {
+				if inner, ok := wrap["pos_dashboard"]; ok {
+					return inner, true
+				}
+			}
+			return arr[0], true
+		}
+		return data, true
+	}
+	return nil, false
 }
 
 func normalizePOScope(raw string) string {
