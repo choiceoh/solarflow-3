@@ -51,7 +51,7 @@
 | `cloudflared-solarflow.service` | `~/.config/systemd/user/cloudflared-solarflow.service` | - | - | `~/.local/bin/cloudflared --config ~/.cloudflared/solarflow.yml tunnel run solarflow` |
 | `solarflow-webhook.service` | `~/.config/systemd/user/solarflow-webhook.service` | repo root | `.webhook.env` | `python3 scripts/webhook-deploy.py` (포트 9999) |
 
-의존성: `solarflow-go.service`는 `Requires=solarflow-engine.service` — 엔진 먼저 떠야 Go가 뜬다.
+의존성: `solarflow-go.service`는 `Wants=solarflow-engine.service` (D-123 약결합) — 엔진이 먼저 뜨면 좋지만 강제 아님. 엔진 재시작이 Go 재시작을 유발하지 않고, Go 의 EngineClient.doWithRetry 가 단절을 가린다. unit 파일 정본은 [`ops/systemd/`](../ops/systemd) 에 커밋돼 있다.
 
 기본 명령:
 ```bash
@@ -117,7 +117,9 @@ ingress:
 ```bash
 cd ~/공개/solarflow-3/backend
 go build -o solarflow-go .
-systemctl --user restart solarflow-go.service
+# Zero-downtime reload (D-123): tableflip Upgrader fork+exec → 자식이 listener fd 인계.
+# ExecReload 가 unit 에 정의돼 있어야 동작. 없으면 평이한 restart 로 폴백.
+systemctl --user reload-or-restart solarflow-go.service
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/health   # 200 확인
 ```
 
@@ -129,7 +131,7 @@ systemctl --user restart solarflow-engine.service
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/health   # 200 확인
 ```
 
-엔진 재시작 시 `solarflow-go.service`도 `Requires` 의존이 있어 같이 재시작될 수 있다. 필요 시 Go도 명시적으로 restart.
+엔진 재시작 시 Go 는 영향받지 않는다 (D-123 `Wants=` 약결합). 엔진은 `with_graceful_shutdown` 으로 in-flight 계산을 드레인하고, 그 사이 Go 의 EngineClient.doWithRetry 가 listener 단절을 가린다.
 
 ### 프론트엔드 변경
 이 박스에서는 빌드/재시작 불필요. main에 push되면 **Cloudflare Pages**가 자동 빌드·배포한다 (1~2분). 이 박스의 `frontend/dist/`는 운영 노출 경로가 아니다.
@@ -253,4 +255,5 @@ curl -s http://localhost:8080/api/v1/public/scfi           # SCFI (파일)
 2. **CLAUDE.md "macOS 프로덕션 워크스테이션" 표기는 옛 정보** — `launchctl`, `codesign`, `~/Library/LaunchAgents/` 모두 이 박스엔 무관. systemd user 모드로 통일.
 3. **`check_schema.sh`는 로컬 psql 가정** — Supabase 직접 검사가 필요하면 psycopg2로 같은 로직 포팅 (이전 진행 사례 있음).
 4. **포트 8081을 nohup으로 직접 띄우면 systemd unit이 무한 재시작 루프에 빠진다** — 디버깅 시 임시 실행은 systemd 유닛을 stop 후, 끝나면 다시 systemd로 인계.
-5. **engine `Requires=` 때문에 엔진이 죽으면 Go도 같이 재시작됨** — 엔진 단독 디버깅 시 Go 영향 인지.
+5. **(D-123 이전) engine `Requires=` 때문에 엔진이 죽으면 Go도 같이 재시작됨** — D-123 으로 `Wants=` 약결합으로 변경됐으므로 더 이상 해당 없음. unit 파일 미적용 운영 박스에는 여전히 적용되니 `ops/systemd/` 의 새 unit 으로 갱신 필요.
+6. **첫 배포 시 운영자 1회 작업 (D-123)** — `cp ops/systemd/{solarflow-go,solarflow-engine}.service ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user restart solarflow-{go,engine}.service`. 이후 배포는 `cron-deploy.sh` 가 reload 로 zero-downtime 인계.

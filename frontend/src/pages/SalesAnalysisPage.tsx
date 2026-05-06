@@ -453,10 +453,10 @@ export default function SalesAnalysisPage() {
       )}
 
       <div className="sf-command-kpis">
-        <TileB lbl="공급가 매출" v={(salesSummary.supply / 100000000).toFixed(2)} u="억" sub={`${formatNumber(salesSummary.count)}건`} tone="solar" spark={supplySpark} />
-        <TileB lbl="부가세 포함" v={(salesSummary.total / 100000000).toFixed(2)} u="억" sub="세금계산서 기준 합계" tone="ink" spark={totalSpark} />
-        <TileB lbl="계산서 발행률" v={String(salesSummary.issueRate)} u="%" sub={`${formatNumber(salesSummary.issued)}건 발행 / ${formatNumber(salesSummary.pending)}건 미발행`} tone="info" spark={issueRateSpark} />
-        <TileB lbl="이익률" v={margin.summary.overall_margin_rate.toFixed(1)} u="%" sub={`${formatKRW(margin.summary.total_margin_krw)} · 원가 ${coveredCostCount}/${margin.items.length}건`} tone="pos" spark={flatSpark(margin.summary.overall_margin_rate)} />
+        <TileB lbl="공급가 매출" v={(salesSummary.supply / 100000000).toFixed(2)} u="억" sub={`${formatNumber(salesSummary.count)}건`} tone="solar" spark={supplySpark} metricId="sales_analysis.supply_amount" />
+        <TileB lbl="부가세 포함" v={(salesSummary.total / 100000000).toFixed(2)} u="억" sub="세금계산서 기준 합계" tone="ink" spark={totalSpark} metricId="sales_analysis.total_amount" />
+        <TileB lbl="계산서 발행률" v={String(salesSummary.issueRate)} u="%" sub={`${formatNumber(salesSummary.issued)}건 발행 / ${formatNumber(salesSummary.pending)}건 미발행`} tone="info" spark={issueRateSpark} metricId="sales_analysis.issue_rate" />
+        <TileB lbl="이익률" v={margin.summary.overall_margin_rate.toFixed(1)} u="%" sub={`${formatKRW(margin.summary.total_margin_krw)} · 원가 ${coveredCostCount}/${margin.items.length}건`} tone="pos" spark={flatSpark(margin.summary.overall_margin_rate)} metricId="sales_analysis.margin_rate" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">

@@ -4,9 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
-import { useOrderListAll } from '@/hooks/useOrders';
-import { useReceiptList } from '@/hooks/useReceipts';
-import { useOutboundList, useOutboundDashboard, useSaleListAll } from '@/hooks/useOutbound';
+import { useOrderList, useOrderDashboard } from '@/hooks/useOrders';
+import { useReceiptList, useReceiptDashboard } from '@/hooks/useReceipts';
+import { useOutboundList, useOutboundDashboard, useSaleList, useSaleDashboard } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import SkeletonRows from '@/components/common/SkeletonRows';
@@ -33,7 +33,7 @@ import type { InventoryResponse } from '@/types/inventory';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, Sparkline, TileB, type DateRangeValue } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
-import { flatSparkFromValue, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
+import { flatSparkFromValue } from '@/templates/sparkUtils';
 
 class OrderDetailErrorBoundary extends Component<
   { children: ReactNode; onBack: () => void },
@@ -77,15 +77,8 @@ function getOrderWorkQueue(value: string | null): OrderWorkQueue {
   return value === 'delivery_soon' || value === 'no_site' ? value : '';
 }
 
-function isDeliveryDueSoon(order: Order, today: Date) {
-  if (order.status !== 'received' && order.status !== 'partial') return false;
-  if (!order.delivery_due || (order.remaining_qty ?? 0) <= 0) return false;
-  const due = new Date(order.delivery_due);
-  if (Number.isNaN(due.getTime())) return false;
-  due.setHours(0, 0, 0, 0);
-  const diff = Math.floor((due.getTime() - today.getTime()) / 86_400_000);
-  return diff >= 0 && diff <= 7;
-}
+// isDeliveryDueSoon — 이전엔 client-side work_queue 필터에 사용. 이제 서버 work_queue=delivery_soon 으로 대체.
+// 호출처 제거됨 (C-1 orders).
 
 type SalesMetric = {
   lbl: string;
@@ -197,19 +190,39 @@ export default function OrdersPage() {
   const [saleCustomerFilter, setSaleCustomerFilter] = useState('');
   const [saleDateRange, setSaleDateRange] = useState<DateRangeValue>(null);
   const [saleInvoiceFilter, setSaleInvoiceFilter] = useState('');
-  const { data: allSales, loading: saleLoading, reload: reloadSales } = useSaleListAll();
+  const [salePageIndex, setSalePageIndex] = useState(0);
+  const [salePageSize, setSalePageSize] = useState(50);
+  useEffect(() => {
+    setSalePageIndex(0);
+  }, [saleCustomerFilter, saleDateRange, saleInvoiceFilter]);
 
-  const sales = useMemo(() => allSales.filter((s) => {
-    if (saleCustomerFilter && s.customer_id !== saleCustomerFilter) return false
-    const taxDate = s.tax_invoice_date ?? s.sale?.tax_invoice_date ?? null
-    if (saleDateRange) {
-      if (!taxDate) return false
-      if (taxDate < saleDateRange.start || taxDate > saleDateRange.end) return false
-    }
-    if (saleInvoiceFilter === 'issued' && !taxDate) return false
-    if (saleInvoiceFilter === 'pending' && taxDate) return false
-    return true
-  }), [allSales, saleCustomerFilter, saleDateRange, saleInvoiceFilter]);
+  // C-1 sales — useSaleListAll 제거. KPI/sparkline/right-rail/SaleSummaryCards 는 useSaleDashboard,
+  // 표는 useSaleList(서버 페이지네이션). 칩 필터(customer/date/invoice_status) 도 server-side.
+  const saleFilters = {
+    customer_id: saleCustomerFilter || undefined,
+    start: saleDateRange?.start || undefined,
+    end: saleDateRange?.end || undefined,
+    invoice_status: saleInvoiceFilter || undefined,
+  };
+  const {
+    dashboard: saleDash,
+    loading: saleDashLoading,
+    reload: reloadSaleDash,
+  } = useSaleDashboard(saleFilters);
+  const {
+    items: sales,
+    totalCount: salesTotal,
+    loading: saleListLoading,
+    reload: reloadSaleList,
+  } = useSaleList({
+    ...saleFilters,
+    pageIndex: salePageIndex,
+    pageSize: salePageSize,
+  });
+  const saleLoading = saleDashLoading || saleListLoading;
+  const reloadSales = async () => {
+    await Promise.all([reloadSaleDash(), reloadSaleList()]);
+  };
 
   // 탭 4: 수금
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState('');
@@ -231,10 +244,17 @@ export default function OrdersPage() {
     }
   }, [_loc.search]);
 
-  const orderFilters: { status?: string; customer_id?: string; management_category?: string } = {};
+  const orderFilters: { status?: string; customer_id?: string; management_category?: string; work_queue?: 'delivery_soon' | 'no_site' } = {};
   if (orderStatusFilter) orderFilters.status = orderStatusFilter;
   if (orderCustomerFilter) orderFilters.customer_id = orderCustomerFilter;
   if (orderCategoryFilter) orderFilters.management_category = orderCategoryFilter;
+  if (orderWorkQueue) orderFilters.work_queue = orderWorkQueue;
+  // 페이지네이션 상태 (수주 탭).
+  const [orderPageIndex, setOrderPageIndex] = useState(0);
+  const [orderPageSize, setOrderPageSize] = useState(50);
+  useEffect(() => {
+    setOrderPageIndex(0);
+  }, [orderStatusFilter, orderCustomerFilter, orderCategoryFilter, orderWorkQueue]);
 
   const receiptFilters: { customer_id?: string; start?: string; end?: string } = {};
   if (receiptCustomerFilter) receiptFilters.customer_id = receiptCustomerFilter;
@@ -243,20 +263,33 @@ export default function OrdersPage() {
     receiptFilters.end = receiptDateRange.end;
   }
 
-  const { data: orders, loading: ordersLoading, reload: reloadOrders } = useOrderListAll(orderFilters);
+  // C-1 orders — useOrderListAll → useOrderDashboard(KPI/sparkline) + useOrderList(paginated table).
+  // work_queue 필터는 backend applyOrderFilters 가 server-side 로 처리.
+  const {
+    dashboard: orderDash,
+    loading: orderDashLoading,
+    reload: reloadOrderDash,
+  } = useOrderDashboard(orderFilters);
+  const {
+    items: orders,
+    totalCount: ordersTotal,
+    loading: orderListLoading,
+    reload: reloadOrderList,
+  } = useOrderList({
+    ...orderFilters,
+    pageIndex: orderPageIndex,
+    pageSize: orderPageSize,
+  });
+  const ordersLoading = orderDashLoading || orderListLoading;
+  const reloadOrders = async () => {
+    await Promise.all([reloadOrderDash(), reloadOrderList()]);
+  };
+  // C-1 receipts — KPI/sparkline 은 dashboard, 표/매칭 패널은 useReceiptList(필요시 후속 페이지네이션).
   const { data: receipts, loading: receiptsLoading } = useReceiptList(receiptFilters);
+  const { dashboard: receiptDash } = useReceiptDashboard(receiptFilters);
 
-  const visibleOrders = useMemo(() => {
-    if (!orderWorkQueue) return orders;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (orderWorkQueue === 'delivery_soon') {
-      return orders.filter((order) => isDeliveryDueSoon(order, today));
-    }
-    return orders.filter((order) =>
-      (order.status === 'received' || order.status === 'partial') && !order.site_id
-    );
-  }, [orderWorkQueue, orders]);
+  // visibleOrders 는 표 렌더링 한정 — server-side work_queue 가 적용된 현재 페이지.
+  const visibleOrders = orders;
 
   useEffect(() => {
     const incomingOrders = orders.filter((order) =>
@@ -331,82 +364,27 @@ export default function OrdersPage() {
   // 집계는 outboundDash 에서, 표 렌더링은 outbounds(현재 페이지) 로.
   const outboundsTotalCount = outboundDash?.totals.count ?? outboundsTotal;
 
-  const ordersKw = useMemo(
-    () => visibleOrders.reduce((sum, order) => sum + (order.capacity_kw ?? order.quantity * (order.wattage_kw ?? 0)), 0),
-    [visibleOrders],
-  );
-  const activeOrders = useMemo(
-    () => visibleOrders.filter(order => order.status !== 'completed' && order.status !== 'cancelled'),
-    [visibleOrders],
-  );
+  // C-1 orders — KPI/sparkline 은 dashboard 에서. 표 한정 visibleOrders 는 server-paginated 현재 페이지.
+  const ordersKw = orderDash?.totals.kw_sum ?? 0;
+  const ordersTotalCount = orderDash?.totals.count ?? ordersTotal;
+  const activeOrdersCount = orderDash?.totals.active_count ?? 0;
   const outboundKw = outboundDash?.totals.kw_sum ?? 0;
-  const saleTotal = useMemo(
-    () => sales.reduce((sum, item) => sum + (item.total_amount ?? item.sale?.total_amount ?? 0), 0),
-    [sales],
-  );
-  const receiptTotal = useMemo(
-    () => receipts.reduce((sum, receipt) => sum + (receipt.amount ?? 0), 0),
-    [receipts],
-  );
-  const receiptRemaining = useMemo(
-    () => receipts.reduce((sum, receipt) => sum + (receipt.remaining ?? 0), 0),
-    [receipts],
-  );
-  const customersCount = useMemo(
-    () => new Set(visibleOrders.map(order => order.customer_id).filter(Boolean)).size,
-    [visibleOrders],
-  );
+  const saleTotal = saleDash?.totals.sale_amount_sum ?? 0;
+  const salesTotalCount = saleDash?.totals.count ?? salesTotal;
+  const saleCustomersCount = saleDash?.totals.customers_count ?? 0;
+  const saleAvgUnitPriceWp = saleDash?.totals.avg_unit_price_wp ?? 0;
+  const receiptTotal = receiptDash?.totals.amount_sum ?? 0;
+  const receiptRemaining = receiptDash?.totals.remaining_sum ?? 0;
+  const receiptCount = receiptDash?.totals.count ?? receipts.length;
+  const receiptPartialMatchCount = receiptDash?.totals.partial_match_count ?? 0;
+  const receiptRecoveryRate = receiptDash?.totals.recovery_rate ?? 0;
+  const customersCount = orderDash?.totals.active_customers_count ?? 0;
   const recent30AvgUnitPriceWp = useMemo(() => {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const recent = orders.filter(order => {
-      const t = order.order_date ? new Date(order.order_date).getTime() : NaN;
-      return Number.isFinite(t) && t >= cutoff;
-    });
-    if (!recent.length) return null;
-    const sum = recent.reduce(
-      (acc, order) => acc + (order.unit_price_wp ?? (order.spec_wp ? (order.unit_price_ea ?? 0) / order.spec_wp : 0)),
-      0,
-    );
-    return { avg: sum / recent.length, count: recent.length };
-  }, [orders]);
-  const unitPriceWpMa15Spark = useMemo(() => {
-    const DAY_MS = 24 * 60 * 60 * 1000;
-    const WINDOW = 15;
-    const VISIBLE_DAYS = 180;
-    const totalDays = VISIBLE_DAYS + WINDOW - 1;
-    const today = new Date();
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const buckets: { sum: number; count: number }[] = Array.from({ length: totalDays }, () => ({ sum: 0, count: 0 }));
-    let any = false;
-    for (const order of orders) {
-      if (!order.order_date) continue;
-      const t = new Date(order.order_date).getTime();
-      if (!Number.isFinite(t)) continue;
-      const od = new Date(t);
-      const orderStart = new Date(od.getFullYear(), od.getMonth(), od.getDate()).getTime();
-      const diff = Math.round((todayStart - orderStart) / DAY_MS);
-      if (diff < 0 || diff >= totalDays) continue;
-      const idx = totalDays - 1 - diff;
-      const wp = order.unit_price_wp ?? (order.spec_wp ? (order.unit_price_ea ?? 0) / order.spec_wp : 0);
-      buckets[idx]!.sum += wp;
-      buckets[idx]!.count += 1;
-      any = true;
-    }
-    if (!any) return [];
-    const out: number[] = [];
-    let sum = 0;
-    let count = 0;
-    for (let i = 0; i < totalDays; i++) {
-      sum += buckets[i]!.sum;
-      count += buckets[i]!.count;
-      if (i - WINDOW >= 0) {
-        sum -= buckets[i - WINDOW]!.sum;
-        count -= buckets[i - WINDOW]!.count;
-      }
-      if (i >= WINDOW - 1) out.push(count > 0 ? sum / count : 0);
-    }
-    return out;
-  }, [orders]);
+    if (!orderDash || orderDash.totals.recent_30_count === 0) return null;
+    return { avg: orderDash.totals.recent_30_avg_unit_price_wp, count: orderDash.totals.recent_30_count };
+  }, [orderDash]);
+  // unit_price 15일 MA 180일 — 서버 dashboard.unit_price_ma15_180 사용 (이전 client-side 계산 대체).
+  const unitPriceWpMa15Spark = useMemo(() => orderDash?.unit_price_ma15_180 ?? [], [orderDash]);
   const monthlyOutboundKw = useMemo(() => {
     // 서버 집계 (outboundDash.yoy3y) 를 OrdersPage 가 기존에 쓰던 모양으로 변환.
     // prev = trend24 마지막에서 두 번째 (직전 달) kw_sum.
@@ -431,8 +409,7 @@ export default function OrdersPage() {
   // 최근 12주(이번 주 포함, 월요일 시작) 출고 capacity. 좌→우 = 과거→현재.
   // 서버 dashboard.weekly12 를 그대로 시각화에 맞게 변환.
   const weeklyOutbound = useMemo(() => {
-    const WEEKS = 12;
-    const empty = { buckets: Array<number>(WEEKS).fill(0), weekStarts: [] as Date[], total: 0, max: 0 };
+    const empty = { buckets: [] as number[], weekStarts: [] as Date[], total: 0, max: 0 };
     if (!outboundDash) return empty;
     const buckets = outboundDash.weekly12.map((p) => p.kw_sum);
     const weekStarts = outboundDash.weekly12.map((p) => new Date(p.week_start));
@@ -440,10 +417,7 @@ export default function OrdersPage() {
     const max = buckets.length ? Math.max(...buckets) : 0;
     return { buckets, weekStarts, total, max };
   }, [outboundDash]);
-  const invoicePending = useMemo(
-    () => sales.filter(item => !item.tax_invoice_date).length,
-    [sales],
-  );
+  const invoicePending = saleDash?.totals.invoice_pending_count ?? 0;
 
   if (!selectedCompanyId) {
     return (
@@ -542,17 +516,21 @@ export default function OrdersPage() {
     '수주 관리';
   const pageSub =
     activeTab === 'outbound' ? `${outboundsTotalCount}건 · ${fmtSalesMw(outboundKw)} MW` :
-    activeTab === 'sales' ? `${sales.length}건 · ${fmtEok(saleTotal)}억` :
-    activeTab === 'receipts' ? `${receipts.length}건 · 미정산 ${fmtEok(receiptRemaining)}억` :
+    activeTab === 'sales' ? `${salesTotalCount}건 · ${fmtEok(saleTotal)}억` :
+    activeTab === 'receipts' ? `${receiptCount}건 · 미정산 ${fmtEok(receiptRemaining)}억` :
     activeTab === 'matching' ? '입금과 매출채권 자동 추천' :
-    `${visibleOrders.length}건 · ${fmtSalesMw(ordersKw)} MW${orderWorkQueue ? ` · 전체 ${orders.length}건` : ''}`;
+    `${ordersTotalCount}건 · ${fmtSalesMw(ordersKw)} MW`;
   // KPI sparkline 시계열 — outbound 는 서버 trend24 마지막 6 개월. order/receipt/sale 는 client-side(미마이그).
   const outboundCountSpark = (outboundDash?.trend24 ?? []).slice(-6).map((p) => p.count);
   const outboundKwSpark = (outboundDash?.trend24 ?? []).slice(-6).map((p) => p.kw_sum);
-  const saleTotalSpark = monthlyTrend(sales, (s) => s.tax_invoice_date ?? s.outbound_date ?? null, (s) => s.total_amount ?? s.sale?.total_amount ?? 0);
-  const receiptTotalSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.amount ?? 0);
-  const receiptRemainingSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.remaining ?? 0);
-  const activeOrderSpark = monthlyCount(activeOrders, (o) => o.order_date);
+  const saleTotalSpark = (saleDash?.trend24 ?? []).slice(-6).map((p) => p.sale_amount_sum);
+  const saleInvoicePendingSpark = (saleDash?.trend24 ?? []).slice(-6).map((p) => p.pending_count);
+  const receiptTotalSpark = (receiptDash?.trend24 ?? []).slice(-6).map((p) => p.amount_sum);
+  const receiptRemainingSpark = (receiptDash?.trend24 ?? []).slice(-6).map((p) => p.remaining_sum);
+  const receiptPartialSpark = (receiptDash?.trend24 ?? []).slice(-6).map((p) => p.partial_count);
+  const receiptCountSpark = (receiptDash?.trend24 ?? []).slice(-6).map((p) => p.count);
+  const receiptRecoverySpark = (receiptDash?.trend24 ?? []).slice(-6).map((p) => p.recovery_rate);
+  const activeOrderSpark = (orderDash?.trend24 ?? []).slice(-6).map((p) => p.active_count);
 
   // 계산서 연결률 — D-064: 매출 대상(sale/sale_spare) 출고 중 sale 연결 비율.
   // 서버 sale_conversion 에서 직접 수신.
@@ -578,26 +556,26 @@ export default function OrdersPage() {
       { lbl: '금년 출고 용량', v: fmtSalesMw(monthlyOutboundKw.year), u: 'MW', sub: monthlyOutboundKw.yoyPct != null ? `${monthlyOutboundKw.currYear}년 누계 · 전년比 ${monthlyOutboundKw.yoyPct >= 0 ? '+' : ''}${monthlyOutboundKw.yoyPct.toFixed(1)}%` : `${monthlyOutboundKw.currYear}년 누계`, tone: 'pos', spark: monthlyOutboundKw.yoy3y, metricId: 'outbound.kw_year' },
     ] :
     activeTab === 'sales' ? [
-      { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${sales.length}건`, tone: 'solar', spark: saleTotalSpark, metricId: 'sales.total' },
-      { lbl: '계산서 미발행', v: String(invoicePending), u: '건', sub: '발행 대기', tone: invoicePending > 0 ? 'warn' : 'pos', spark: monthlyCount(sales.filter(s => !s.tax_invoice_date), (s) => s.outbound_date ?? null), metricId: 'sales.invoice_pending' },
-      { lbl: '거래처', v: String(new Set(sales.map(sale => sale.customer_id).filter(Boolean)).size), u: '곳', sub: '매출처 기준', tone: 'info', metricId: 'sales.customers' },
-      { lbl: '평균 단가', v: sales.length ? (sales.reduce((sum, sale) => sum + (sale.unit_price_wp ?? (sale.spec_wp ? (sale.unit_price_ea ?? 0) / sale.spec_wp : 0)), 0) / sales.length).toFixed(1) : '0.0', u: '원/Wp', sub: '필터 기준', tone: 'ink', metricId: 'sales.unit_price_wp' },
+      { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${salesTotalCount}건`, tone: 'solar', spark: saleTotalSpark, metricId: 'sales.total' },
+      { lbl: '계산서 미발행', v: String(invoicePending), u: '건', sub: '발행 대기', tone: invoicePending > 0 ? 'warn' : 'pos', spark: saleInvoicePendingSpark, metricId: 'sales.invoice_pending' },
+      { lbl: '거래처', v: String(saleCustomersCount), u: '곳', sub: '매출처 기준', tone: 'info', metricId: 'sales.customers' },
+      { lbl: '평균 단가', v: saleAvgUnitPriceWp.toFixed(1), u: '원/Wp', sub: '필터 기준', tone: 'ink', metricId: 'sales.unit_price_wp' },
     ] :
     activeTab === 'receipts' ? [
-      { lbl: '입금 합계', v: fmtEok(receiptTotal), u: '억', sub: `${receipts.length}건`, tone: 'solar', spark: receiptTotalSpark, metricId: 'receipts.total' },
+      { lbl: '입금 합계', v: fmtEok(receiptTotal), u: '억', sub: `${receiptCount}건`, tone: 'solar', spark: receiptTotalSpark, metricId: 'receipts.total' },
       { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '매칭 필요', tone: receiptRemaining > 0 ? 'warn' : 'pos', spark: receiptRemainingSpark, metricId: 'receipts.remaining' },
-      { lbl: '부분 매칭', v: String(receipts.filter(receipt => (receipt.matched_total ?? 0) > 0 && (receipt.remaining ?? 0) > 0).length), u: '건', sub: '추가 확인', tone: 'info', spark: monthlyCount(receipts.filter(r => (r.matched_total ?? 0) > 0 && (r.remaining ?? 0) > 0), (r) => r.receipt_date), metricId: 'receipts.partial_match' },
-      { lbl: '회수율', v: receiptTotal > 0 ? (((receiptTotal - receiptRemaining) / receiptTotal) * 100).toFixed(1) : '0.0', u: '%', sub: '입금 매칭 기준', tone: 'pos', spark: receiptTotalSpark.map((t, i) => (t > 0 ? Math.round(((t - receiptRemainingSpark[i]!) / t) * 100) : 0)), metricId: 'receipts.recovery_rate' },
+      { lbl: '부분 매칭', v: String(receiptPartialMatchCount), u: '건', sub: '추가 확인', tone: 'info', spark: receiptPartialSpark, metricId: 'receipts.partial_match' },
+      { lbl: '회수율', v: receiptRecoveryRate.toFixed(1), u: '%', sub: '입금 매칭 기준', tone: 'pos', spark: receiptRecoverySpark, metricId: 'receipts.recovery_rate' },
     ] :
     activeTab === 'matching' ? [
-      { lbl: '입금', v: String(receipts.length), u: '건', sub: '매칭 후보', tone: 'solar', spark: monthlyCount(receipts, (r) => r.receipt_date) },
+      { lbl: '입금', v: String(receiptCount), u: '건', sub: '매칭 후보', tone: 'solar', spark: receiptCountSpark },
       { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '대상 금액', tone: 'warn', spark: receiptRemainingSpark },
-      { lbl: '매출', v: String(sales.length), u: '건', sub: '후보 원장', tone: 'info', spark: monthlyCount(sales, (s) => s.outbound_date ?? null) },
+      { lbl: '매출', v: String(salesTotalCount), u: '건', sub: '후보 원장', tone: 'info', spark: (saleDash?.trend24 ?? []).slice(-6).map((p) => p.count) },
       { lbl: '거래처', v: String(partners.length), u: '곳', sub: '고객 마스터', tone: 'ink' },
     ] : [
-      { lbl: '진행 수주', v: String(activeOrders.length), u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${orders.length}건`, tone: 'solar', spark: activeOrderSpark, metricId: 'orders.active' },
+      { lbl: '진행 수주', v: String(activeOrdersCount), u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${ordersTotalCount}건`, tone: 'solar', spark: activeOrderSpark, metricId: 'orders.active' },
       { lbl: '거래처', v: String(customersCount), u: '곳', sub: '활성 고객', tone: 'info', metricId: 'orders.customers' },
-      { lbl: '분할출고', v: String(visibleOrders.filter(order => order.status === 'partial').length), u: '건', sub: '잔량 관리', tone: 'warn', spark: monthlyCount(visibleOrders.filter(o => o.status === 'partial'), (o) => o.order_date), metricId: 'orders.partial' },
+      { lbl: '분할출고', v: String(orderDash?.totals.partial_count ?? 0), u: '건', sub: '잔량 관리', tone: 'warn', spark: (orderDash?.trend24 ?? []).slice(-6).map((p) => p.partial_count), metricId: 'orders.partial' },
       { lbl: '평균 단가', v: recent30AvgUnitPriceWp ? recent30AvgUnitPriceWp.avg.toFixed(1) : '0.0', u: '원/Wp', sub: recent30AvgUnitPriceWp ? `최근 30일 · ${recent30AvgUnitPriceWp.count}건` : '최근 30일', tone: 'pos', spark: unitPriceWpMa15Spark, metricId: 'orders.unit_price_wp' },
     ];
 
@@ -755,7 +733,7 @@ export default function OrdersPage() {
 
         {/* 탭 1: 수주 관리 */}
         <TabsContent value="orders" className="space-y-4 mt-4">
-          {ordersLoading ? <SkeletonRows rows={8} /> : (
+          {ordersLoading && orders.length === 0 ? <SkeletonRows rows={8} /> : (
             <OrderListTable
               items={visibleOrders}
               hidden={orderColVis.hidden}
@@ -764,6 +742,15 @@ export default function OrdersPage() {
               onSelect={(o) => setSelectedOrder(o.order_id)}
               onCancelToReservation={handleCancelOrderToReservation}
               sourceOverrides={orderSourceHints}
+              serverMode={{
+                pageIndex: orderPageIndex,
+                pageSize: orderPageSize,
+                totalRowCount: ordersTotal,
+                onPageChange: ({ pageIndex: nextIdx, pageSize: nextSize }) => {
+                  setOrderPageIndex(nextIdx);
+                  setOrderPageSize(nextSize);
+                },
+              }}
             />
           )}
           {orderActionError && (
@@ -806,10 +793,33 @@ export default function OrdersPage() {
 
         {/* 탭 3: 판매 관리 */}
         <TabsContent value="sales" className="space-y-4 mt-4">
-          {saleLoading ? <SkeletonRows rows={8} /> : (
+          {saleLoading && sales.length === 0 ? <SkeletonRows rows={8} /> : (
             <>
-              <SaleSummaryCards items={sales} />
-              <SaleListTable items={sales} hidden={saleColVis.hidden} pinning={saleColPin.pinning} onPinningChange={saleColPin.setPinning} />
+              <SaleSummaryCards
+                items={sales}
+                summary={saleDash ? {
+                  totalSupply: saleDash.totals.supply_amount_sum,
+                  totalVat: saleDash.totals.vat_amount_sum,
+                  totalAmount: saleDash.totals.sale_amount_sum,
+                  count: saleDash.totals.count,
+                  issuedCount: saleDash.totals.invoice_issued_count,
+                } : undefined}
+              />
+              <SaleListTable
+                items={sales}
+                hidden={saleColVis.hidden}
+                pinning={saleColPin.pinning}
+                onPinningChange={saleColPin.setPinning}
+                serverMode={{
+                  pageIndex: salePageIndex,
+                  pageSize: salePageSize,
+                  totalRowCount: salesTotal,
+                  onPageChange: ({ pageIndex: nextIdx, pageSize: nextSize }) => {
+                    setSalePageIndex(nextIdx);
+                    setSalePageSize(nextSize);
+                  },
+                }}
+              />
             </>
           )}
         </TabsContent>
@@ -839,22 +849,21 @@ export default function OrdersPage() {
         <aside className="sf-procurement-rail card">
           {activeTab === 'orders' && (
             <>
-              <RailBlock title="수주 상태" count={`${activeOrders.length} active`}>
+              <RailBlock title="수주 상태" count={`${activeOrdersCount} active`}>
                 <BreakdownRows
                   items={(['received', 'partial', 'completed', 'cancelled'] as OrderStatus[]).map((status) => ({
                     key: status,
                     label: ORDER_STATUS_LABEL[status],
-                    count: visibleOrders.filter(order => order.status === status).length,
+                    count: status === 'received' ? (orderDash?.totals.received_count ?? 0)
+                      : status === 'partial' ? (orderDash?.totals.partial_count ?? 0)
+                      : status === 'completed' ? (orderDash?.totals.completed_count ?? 0)
+                      : (orderDash?.totals.cancelled_count ?? 0),
                   }))}
                 />
               </RailBlock>
               <RailBlock title="거래처 TOP" count="kW">
-                {Object.entries(visibleOrders.reduce<Record<string, number>>((acc, order) => {
-                  const key = order.customer_name || order.customer_id || '미지정';
-                  acc[key] = (acc[key] ?? 0) + (order.capacity_kw ?? 0);
-                  return acc;
-                }, {}))
-                  .sort((a, b) => b[1] - a[1])
+                {(orderDash?.by_customer_top10 ?? [])
+                  .map((row) => [row.label, row.kw_sum] as const)
                   .slice(0, 5)
                   .map(([customer, kw], index) => (
                     <div key={customer} className={`py-2 ${index ? 'border-t border-[var(--line)]' : ''}`}>
@@ -871,7 +880,7 @@ export default function OrdersPage() {
               <RailBlock title="단가 흐름" last>
                 <Sparkline data={[395, 398, 400, 402, 403, 405, 406, 407, 408, 409]} w={220} h={42} color="var(--solar-2)" area />
                 <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
-                  <span>평균 <span className="font-bold text-[var(--ink)]">{visibleOrders.length ? (visibleOrders.reduce((sum, order) => sum + (order.unit_price_wp ?? (order.spec_wp ? (order.unit_price_ea ?? 0) / order.spec_wp : 0)), 0) / visibleOrders.length).toFixed(1) : '0.0'}</span> 원/Wp</span>
+                  <span>평균 <span className="font-bold text-[var(--ink)]">{(orderDash?.totals.avg_unit_price_wp ?? 0).toFixed(1)}</span> 원/Wp</span>
                   <span className="font-bold text-[var(--pos)]">+1.2%</span>
                 </div>
               </RailBlock>
@@ -927,13 +936,13 @@ export default function OrdersPage() {
 
           {(activeTab === 'sales' || activeTab === 'receipts' || activeTab === 'matching') && (
             <>
-              <RailBlock title="채권 요약" count={`${receipts.length} receipts`}>
+              <RailBlock title="채권 요약" count={`${receiptCount} receipts`}>
                 <div className="bignum text-[26px] text-[var(--solar-3)]">{fmtEok(receiptRemaining)} <span className="mono text-xs text-[var(--ink-3)]">억</span></div>
                 <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">미정산 · 입금 합계 {fmtEok(receiptTotal)}억</div>
               </RailBlock>
               <RailBlock title="계산서 상태">
                 <div className="space-y-2 text-[11.5px] text-[var(--ink-2)]">
-                  <div className="flex justify-between"><span>발행 완료</span><span className="mono">{sales.length - invoicePending}</span></div>
+                  <div className="flex justify-between"><span>발행 완료</span><span className="mono">{saleDash?.totals.invoice_issued_count ?? 0}</span></div>
                   <div className="flex justify-between"><span>미발행</span><span className="mono text-[var(--warn)]">{invoicePending}</span></div>
                   <div className="flex justify-between"><span>매출 합계</span><span className="mono">{fmtEok(saleTotal)}억</span></div>
                 </div>

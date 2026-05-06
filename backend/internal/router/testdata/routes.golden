@@ -48,6 +48,7 @@ GET     /api/v1/baro/orders/recent
 GET     /api/v1/baro/purchase-history/
 GET     /api/v1/baro/purchase-history/summary
 GET     /api/v1/bls/
+GET     /api/v1/bls/dashboard
 GET     /api/v1/bls/summary
 GET     /api/v1/bls/{blId}/lines/
 GET     /api/v1/bls/{id}
@@ -79,6 +80,7 @@ GET     /api/v1/intercompany-requests/mine
 GET     /api/v1/inventory/allocations/
 GET     /api/v1/inventory/allocations/{id}
 GET     /api/v1/lcs/
+GET     /api/v1/lcs/dashboard
 GET     /api/v1/lcs/summary
 GET     /api/v1/lcs/{id}
 GET     /api/v1/lcs/{id}/lines
@@ -93,6 +95,7 @@ GET     /api/v1/module-demand-forecasts/
 GET     /api/v1/notes/
 GET     /api/v1/ocr/health
 GET     /api/v1/orders/
+GET     /api/v1/orders/dashboard
 GET     /api/v1/orders/summary
 GET     /api/v1/orders/{id}
 GET     /api/v1/outbounds/
@@ -109,6 +112,7 @@ GET     /api/v1/partners/usage-counts
 GET     /api/v1/partners/{id}
 GET     /api/v1/partners/{id}/activities
 GET     /api/v1/pos/
+GET     /api/v1/pos/dashboard
 GET     /api/v1/pos/summary
 GET     /api/v1/pos/{id}
 GET     /api/v1/pos/{poId}/lines/
@@ -126,12 +130,15 @@ GET     /api/v1/public/polysilicon
 GET     /api/v1/public/scfi
 GET     /api/v1/receipt-matches/
 GET     /api/v1/receipts/
+GET     /api/v1/receipts/dashboard
 GET     /api/v1/receipts/{id}
 GET     /api/v1/sales/
+GET     /api/v1/sales/dashboard
 GET     /api/v1/sales/summary
 GET     /api/v1/sales/{id}
 GET     /api/v1/system-settings/{key}
 GET     /api/v1/tts/
+GET     /api/v1/tts/dashboard
 GET     /api/v1/tts/summary
 GET     /api/v1/tts/{id}
 GET     /api/v1/ui-configs/

@@ -1,8 +1,83 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { fetchAllPaginated, fetchWithAuth } from "@/lib/api"
 import { useAppStore } from "@/stores/appStore"
 import { companyParams } from "@/lib/companyUtils"
 import { useListQuery, useDetailQuery } from "@/lib/queryHelpers"
 import type { BLSummary, BLShipment, BLLineItem } from "@/types/inbound"
+
+// BL 대시보드 — KPI + 24개월 trend + by_status/by_inbound_type/by_manufacturer/by_port/by_forwarder.
+// ProcurementPage BL 탭 + 4 BL Insight (Total/Import/Shipping/Customs) 가 사용.
+export type BLScope = 'lifetime' | 'import' | 'shipping' | 'customs'
+
+export interface BLDashboard {
+  totals: {
+    count: number
+    import_count: number
+    shipping_count: number
+    customs_count: number
+    completed_count: number
+    cif_amount_krw: number
+  }
+  trend24: {
+    month: string
+    count: number
+    import_count: number
+    shipping_count: number
+    customs_count: number
+  }[]
+  status_scope: BLScope
+  by_status: BLDashboardBreakdownRow[]
+  by_inbound_type: BLDashboardBreakdownRow[]
+  by_manufacturer_top10: BLDashboardBreakdownRow[]
+  by_port_top10: BLDashboardBreakdownRow[]
+  by_forwarder_top10: BLDashboardBreakdownRow[]
+}
+
+export interface BLDashboardBreakdownRow {
+  key: string
+  label: string
+  count: number
+  share: number
+}
+
+export interface BLDashboardFilters {
+  manufacturer_id?: string
+  status?: string
+  inbound_type?: string
+  status_scope?: BLScope
+}
+
+export function useBLDashboard(filters: BLDashboardFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const queryKey = [
+    'bls-dashboard',
+    selectedCompanyId,
+    filters.manufacturer_id ?? '',
+    filters.status ?? '',
+    filters.inbound_type ?? '',
+    filters.status_scope ?? 'lifetime',
+  ]
+  const q = useQuery<BLDashboard, Error>({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id)
+      if (filters.status) params.set('status', filters.status)
+      if (filters.inbound_type) params.set('inbound_type', filters.inbound_type)
+      if (filters.status_scope) params.set('status_scope', filters.status_scope)
+      return fetchWithAuth<BLDashboard>(`/api/v1/bls/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
+}
 
 export function useBLList(
   filters: { inbound_type?: string; status?: string; manufacturer_id?: string } = {},

@@ -329,10 +329,17 @@ type saleOutboundRow struct {
 }
 
 type saleProductRow struct {
-	ProductID   string   `json:"product_id"`
-	ProductName string   `json:"product_name"`
-	ProductCode string   `json:"product_code"`
-	SpecWp      *float64 `json:"spec_wp"`
+	ProductID      string   `json:"product_id"`
+	ProductName    string   `json:"product_name"`
+	ProductCode    string   `json:"product_code"`
+	SpecWp         *float64 `json:"spec_wp"`
+	ManufacturerID *string  `json:"manufacturer_id"`
+}
+
+type saleManufacturerRow struct {
+	ManufacturerID string  `json:"manufacturer_id"`
+	NameKR         string  `json:"name_kr"`
+	ShortName      *string `json:"short_name"`
 }
 
 type salePartnerRow struct {
@@ -354,28 +361,39 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	var products []saleProductRow
 	var partners []salePartnerRow
 
-	if data, _, err := h.DB.From("orders").Select("order_id, order_number, order_date, company_id, customer_id, product_id, quantity, capacity_kw, site_name", "exact", false).Range(0, 99999, "").Execute(); err == nil {
+	// 5 enrich 테이블 모두 fetchAllFromTable 헬퍼로 청크 페이지네이션 (D-064 PR 36).
+	// PostgREST db-max-rows=1000 cap 으로 단일 Range 호출 시 첫 1000행만 응답 →
+	// 1000 초과 테이블 (예: outbounds 2,229) 의 enrich 누락. 회귀 방지 위해 통일.
+	if data, err := fetchAllFromTable(h.DB, "orders", "order_id, order_number, order_date, company_id, customer_id, product_id, quantity, capacity_kw, site_name"); err == nil {
 		if err := json.Unmarshal(data, &orders); err != nil {
 			log.Printf("[매출 enrich] orders 디코딩 실패 — 수주 정보 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] orders 조회 실패 — 수주 정보 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("outbounds").Select("outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status", "exact", false).Range(0, 99999, "").Execute(); err == nil {
+	if data, err := fetchAllFromTable(h.DB, "outbounds", "outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status"); err == nil {
 		if err := json.Unmarshal(data, &outbounds); err != nil {
 			log.Printf("[매출 enrich] outbounds 디코딩 실패 — 출고 정보 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] outbounds 조회 실패 — 출고 정보 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp", "exact", false).Range(0, 99999, "").Execute(); err == nil {
+	if data, err := fetchAllFromTable(h.DB, "products", "product_id, product_name, product_code, spec_wp, manufacturer_id"); err == nil {
 		if err := json.Unmarshal(data, &products); err != nil {
 			log.Printf("[매출 enrich] products 디코딩 실패 — 품목명/스펙 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] products 조회 실패 — 품목명/스펙 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("partners").Select("partner_id, partner_name", "exact", false).Range(0, 99999, "").Execute(); err == nil {
+	var manufacturers []saleManufacturerRow
+	if data, err := fetchAllFromTable(h.DB, "manufacturers", "manufacturer_id, name_kr, short_name"); err == nil {
+		if err := json.Unmarshal(data, &manufacturers); err != nil {
+			log.Printf("[매출 enrich] manufacturers 디코딩 실패 — 제조사명 비표시: %v", err)
+		}
+	} else {
+		log.Printf("[매출 enrich] manufacturers 조회 실패 — 제조사명 비표시: %v", err)
+	}
+	if data, err := fetchAllFromTable(h.DB, "partners", "partner_id, partner_name"); err == nil {
 		if err := json.Unmarshal(data, &partners); err != nil {
 			log.Printf("[매출 enrich] partners 디코딩 실패 — 거래처명 비표시: %v", err)
 		}
@@ -394,6 +412,10 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	productMap := make(map[string]saleProductRow, len(products))
 	for _, p := range products {
 		productMap[p.ProductID] = p
+	}
+	manufacturerMap := make(map[string]saleManufacturerRow, len(manufacturers))
+	for _, m := range manufacturers {
+		manufacturerMap[m.ManufacturerID] = m
 	}
 	partnerMap := make(map[string]salePartnerRow, len(partners))
 	for _, p := range partners {
@@ -472,6 +494,16 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 				item.ProductName = ptrString(p.ProductName)
 				item.ProductCode = ptrString(p.ProductCode)
 				item.SpecWp = p.SpecWp
+				if p.ManufacturerID != nil && *p.ManufacturerID != "" {
+					item.ManufacturerID = p.ManufacturerID
+					if m, ok := manufacturerMap[*p.ManufacturerID]; ok {
+						name := m.NameKR
+						if m.ShortName != nil && *m.ShortName != "" {
+							name = *m.ShortName
+						}
+						item.ManufacturerName = &name
+					}
+				}
 			}
 		}
 		items = append(items, item)

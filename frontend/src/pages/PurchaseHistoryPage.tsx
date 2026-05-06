@@ -384,17 +384,17 @@ export default function PurchaseHistoryPage() {
   }
 
   const metrics = [
-    { lbl: '계약 체인', v: String(chains.length), u: '건', sub: `${chainsWithVariants}건은 변경계약 포함`, tone: 'solar' as const, spark: monthlyCount(chains, (c) => c.head.contract_date) },
-    { lbl: '변경계약', v: String(variantCount), u: '건', sub: '체인 내 추가 PO', tone: 'warn' as const, spark: monthlyCount(chains.flatMap((c) => c.pos.slice(1)), (p) => p.contract_date) },
-    { lbl: '단가 변동', v: String(phs.length), u: '건', sub: '제조사별 USD/Wp', tone: 'info' as const, spark: monthlyCount(phs, (p) => p.change_date) },
-    { lbl: '최근 이벤트', v: String(events.length), u: '건', sub: selectedChain ? '선택 체인 기준' : '전체 회사 최근', tone: 'ink' as const, spark: monthlyCount(events, (e) => e.date) },
+    { lbl: '계약 체인', v: String(chains.length), u: '건', sub: `${chainsWithVariants}건은 변경계약 포함`, tone: 'solar' as const, spark: monthlyCount(chains, (c) => c.head.contract_date), metricId: 'purchase.chains' },
+    { lbl: '변경계약', v: String(variantCount), u: '건', sub: '체인 내 추가 PO', tone: 'warn' as const, spark: monthlyCount(chains.flatMap((c) => c.pos.slice(1)), (p) => p.contract_date), metricId: 'purchase.variants' },
+    { lbl: '단가 변동', v: String(phs.length), u: '건', sub: '제조사별 USD/Wp', tone: 'info' as const, spark: monthlyCount(phs, (p) => p.change_date), metricId: 'purchase.price_changes' },
+    { lbl: '최근 이벤트', v: String(events.length), u: '건', sub: selectedChain ? '선택 체인 기준' : '전체 회사 최근', tone: 'ink' as const, spark: monthlyCount(events, (e) => e.date), metricId: 'purchase.recent_events' },
   ];
 
   return (
     <div className="sf-page sf-purchase-history-page min-h-[calc(100vh-5rem)]">
       <div className="sf-command-kpis">
         {metrics.map((m) => (
-          <TileB key={m.lbl} lbl={m.lbl} v={m.v} u={m.u} sub={m.sub} tone={m.tone} spark={m.spark ?? flatSparkFromValue(m.v)} />
+          <TileB key={m.lbl} lbl={m.lbl} v={m.v} u={m.u} sub={m.sub} tone={m.tone} spark={m.spark ?? flatSparkFromValue(m.v)} metricId={m.metricId} />
         ))}
       </div>
 

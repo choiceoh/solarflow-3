@@ -346,6 +346,92 @@ export function useSaleList(params: SaleListParams): SaleListResult {
   };
 }
 
+// 매출 대시보드 — KPI + 24개월 trend + by_customer/by_manufacturer top10 을 서버에서 한 번에 받는다.
+// OrdersPage 매출 탭 + 4 개 sales drilldown insights 가 사용. 응답 ~수 KB 라 fetchAllSales (수 MB) 를 대체.
+export interface SaleDashboard {
+  totals: {
+    count: number
+    sale_amount_sum: number
+    supply_amount_sum: number
+    vat_amount_sum: number
+    invoice_issued_count: number
+    invoice_pending_count: number
+    customers_count: number
+    avg_unit_price_wp: number
+  }
+  trend24: SaleDashboardTrendPoint[]
+  pending_trend24: SaleDashboardTrendPoint[]
+  by_customer_top10: SaleDashboardBreakdownRow[]
+  by_manufacturer_top10: SaleDashboardBreakdownRow[]
+}
+
+export interface SaleDashboardTrendPoint {
+  month: string
+  count: number
+  sale_amount_sum: number
+  pending_count: number
+  distinct_customers: number
+  avg_unit_price_wp: number
+}
+
+export interface SaleDashboardBreakdownRow {
+  key: string
+  label: string
+  count: number
+  sale_amount_sum: number
+  invoice_pending_count: number
+  avg_unit_price_wp: number  // 0 if priced count < 3
+  share: number
+}
+
+// 호환 alias (이전 이름 유지) — OrdersPage 가 아직 by_customer 만 사용.
+export type SaleDashboardCustomerRow = SaleDashboardBreakdownRow
+
+export interface SaleDashboardFilters {
+  customer_id?: string
+  month?: string
+  start?: string
+  end?: string
+  invoice_status?: string
+  q?: string
+}
+
+export function useSaleDashboard(filters: SaleDashboardFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const queryKey = [
+    'sales-dashboard',
+    selectedCompanyId,
+    filters.customer_id ?? '',
+    filters.month ?? '',
+    filters.start ?? '',
+    filters.end ?? '',
+    filters.invoice_status ?? '',
+    filters.q ?? '',
+  ]
+  const q = useQuery<SaleDashboard, Error>({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (filters.customer_id) params.set('customer_id', filters.customer_id)
+      if (filters.month) params.set('month', filters.month)
+      if (filters.start) params.set('start', filters.start)
+      if (filters.end) params.set('end', filters.end)
+      if (filters.invoice_status) params.set('invoice_status', filters.invoice_status)
+      if (filters.q) params.set('q', filters.q)
+      return fetchWithAuth<SaleDashboard>(`/api/v1/sales/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
+}
+
 // useSaleListAll — 호환 훅. 옛 시그니처(filters만 받고 전체 매출 청크 누적).
 // server mode 마이그레이션 안 된 화면(예: OrdersPage 매출 탭) 이 사용한다.
 const SALE_CHUNK_SIZE = 1000;
