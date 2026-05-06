@@ -262,7 +262,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxReceipt: {
 		ID: IDTxReceipt, Name: "수금", Description: "수금 CRUD",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/receipts/", "/api/v1/receipts/{id}"},
+		Paths: []string{"/api/v1/receipts/", "/api/v1/receipts/dashboard", "/api/v1/receipts/{id}"},
 	},
 	IDTxReceiptMatch: {
 		ID: IDTxReceiptMatch, Name: "수금/매출 매칭", Description: "매칭 + 자동 매칭",

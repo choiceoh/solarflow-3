@@ -5,7 +5,7 @@ import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
 import { useOrderList, useOrderDashboard } from '@/hooks/useOrders';
-import { useReceiptList } from '@/hooks/useReceipts';
+import { useReceiptList, useReceiptDashboard } from '@/hooks/useReceipts';
 import { useOutboundList, useOutboundDashboard, useSaleList, useSaleDashboard } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
@@ -33,7 +33,7 @@ import type { InventoryResponse } from '@/types/inventory';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
 import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, Sparkline, TileB, type DateRangeValue } from '@/components/command/MockupPrimitives';
 import { BreakdownRows } from '@/components/command/BreakdownRows';
-import { flatSparkFromValue, monthlyTrend, monthlyCount } from '@/templates/sparkUtils';
+import { flatSparkFromValue } from '@/templates/sparkUtils';
 
 class OrderDetailErrorBoundary extends Component<
   { children: ReactNode; onBack: () => void },
@@ -284,7 +284,9 @@ export default function OrdersPage() {
   const reloadOrders = async () => {
     await Promise.all([reloadOrderDash(), reloadOrderList()]);
   };
+  // C-1 receipts — KPI/sparkline 은 dashboard, 표/매칭 패널은 useReceiptList(필요시 후속 페이지네이션).
   const { data: receipts, loading: receiptsLoading } = useReceiptList(receiptFilters);
+  const { dashboard: receiptDash } = useReceiptDashboard(receiptFilters);
 
   // visibleOrders 는 표 렌더링 한정 — server-side work_queue 가 적용된 현재 페이지.
   const visibleOrders = orders;
@@ -371,14 +373,11 @@ export default function OrdersPage() {
   const salesTotalCount = saleDash?.totals.count ?? salesTotal;
   const saleCustomersCount = saleDash?.totals.customers_count ?? 0;
   const saleAvgUnitPriceWp = saleDash?.totals.avg_unit_price_wp ?? 0;
-  const receiptTotal = useMemo(
-    () => receipts.reduce((sum, receipt) => sum + (receipt.amount ?? 0), 0),
-    [receipts],
-  );
-  const receiptRemaining = useMemo(
-    () => receipts.reduce((sum, receipt) => sum + (receipt.remaining ?? 0), 0),
-    [receipts],
-  );
+  const receiptTotal = receiptDash?.totals.amount_sum ?? 0;
+  const receiptRemaining = receiptDash?.totals.remaining_sum ?? 0;
+  const receiptCount = receiptDash?.totals.count ?? receipts.length;
+  const receiptPartialMatchCount = receiptDash?.totals.partial_match_count ?? 0;
+  const receiptRecoveryRate = receiptDash?.totals.recovery_rate ?? 0;
   const customersCount = orderDash?.totals.active_customers_count ?? 0;
   const recent30AvgUnitPriceWp = useMemo(() => {
     if (!orderDash || orderDash.totals.recent_30_count === 0) return null;
@@ -518,7 +517,7 @@ export default function OrdersPage() {
   const pageSub =
     activeTab === 'outbound' ? `${outboundsTotalCount}건 · ${fmtSalesMw(outboundKw)} MW` :
     activeTab === 'sales' ? `${salesTotalCount}건 · ${fmtEok(saleTotal)}억` :
-    activeTab === 'receipts' ? `${receipts.length}건 · 미정산 ${fmtEok(receiptRemaining)}억` :
+    activeTab === 'receipts' ? `${receiptCount}건 · 미정산 ${fmtEok(receiptRemaining)}억` :
     activeTab === 'matching' ? '입금과 매출채권 자동 추천' :
     `${ordersTotalCount}건 · ${fmtSalesMw(ordersKw)} MW`;
   // KPI sparkline 시계열 — outbound 는 서버 trend24 마지막 6 개월. order/receipt/sale 는 client-side(미마이그).
@@ -526,8 +525,11 @@ export default function OrdersPage() {
   const outboundKwSpark = (outboundDash?.trend24 ?? []).slice(-6).map((p) => p.kw_sum);
   const saleTotalSpark = (saleDash?.trend24 ?? []).slice(-6).map((p) => p.sale_amount_sum);
   const saleInvoicePendingSpark = (saleDash?.trend24 ?? []).slice(-6).map((p) => p.pending_count);
-  const receiptTotalSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.amount ?? 0);
-  const receiptRemainingSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.remaining ?? 0);
+  const receiptTotalSpark = (receiptDash?.trend24 ?? []).slice(-6).map((p) => p.amount_sum);
+  const receiptRemainingSpark = (receiptDash?.trend24 ?? []).slice(-6).map((p) => p.remaining_sum);
+  const receiptPartialSpark = (receiptDash?.trend24 ?? []).slice(-6).map((p) => p.partial_count);
+  const receiptCountSpark = (receiptDash?.trend24 ?? []).slice(-6).map((p) => p.count);
+  const receiptRecoverySpark = (receiptDash?.trend24 ?? []).slice(-6).map((p) => p.recovery_rate);
   const activeOrderSpark = (orderDash?.trend24 ?? []).slice(-6).map((p) => p.active_count);
 
   // 계산서 연결률 — D-064: 매출 대상(sale/sale_spare) 출고 중 sale 연결 비율.
@@ -560,13 +562,13 @@ export default function OrdersPage() {
       { lbl: '평균 단가', v: saleAvgUnitPriceWp.toFixed(1), u: '원/Wp', sub: '필터 기준', tone: 'ink', metricId: 'sales.unit_price_wp' },
     ] :
     activeTab === 'receipts' ? [
-      { lbl: '입금 합계', v: fmtEok(receiptTotal), u: '억', sub: `${receipts.length}건`, tone: 'solar', spark: receiptTotalSpark, metricId: 'receipts.total' },
+      { lbl: '입금 합계', v: fmtEok(receiptTotal), u: '억', sub: `${receiptCount}건`, tone: 'solar', spark: receiptTotalSpark, metricId: 'receipts.total' },
       { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '매칭 필요', tone: receiptRemaining > 0 ? 'warn' : 'pos', spark: receiptRemainingSpark, metricId: 'receipts.remaining' },
-      { lbl: '부분 매칭', v: String(receipts.filter(receipt => (receipt.matched_total ?? 0) > 0 && (receipt.remaining ?? 0) > 0).length), u: '건', sub: '추가 확인', tone: 'info', spark: monthlyCount(receipts.filter(r => (r.matched_total ?? 0) > 0 && (r.remaining ?? 0) > 0), (r) => r.receipt_date), metricId: 'receipts.partial_match' },
-      { lbl: '회수율', v: receiptTotal > 0 ? (((receiptTotal - receiptRemaining) / receiptTotal) * 100).toFixed(1) : '0.0', u: '%', sub: '입금 매칭 기준', tone: 'pos', spark: receiptTotalSpark.map((t, i) => (t > 0 ? Math.round(((t - receiptRemainingSpark[i]!) / t) * 100) : 0)), metricId: 'receipts.recovery_rate' },
+      { lbl: '부분 매칭', v: String(receiptPartialMatchCount), u: '건', sub: '추가 확인', tone: 'info', spark: receiptPartialSpark, metricId: 'receipts.partial_match' },
+      { lbl: '회수율', v: receiptRecoveryRate.toFixed(1), u: '%', sub: '입금 매칭 기준', tone: 'pos', spark: receiptRecoverySpark, metricId: 'receipts.recovery_rate' },
     ] :
     activeTab === 'matching' ? [
-      { lbl: '입금', v: String(receipts.length), u: '건', sub: '매칭 후보', tone: 'solar', spark: monthlyCount(receipts, (r) => r.receipt_date) },
+      { lbl: '입금', v: String(receiptCount), u: '건', sub: '매칭 후보', tone: 'solar', spark: receiptCountSpark },
       { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '대상 금액', tone: 'warn', spark: receiptRemainingSpark },
       { lbl: '매출', v: String(salesTotalCount), u: '건', sub: '후보 원장', tone: 'info', spark: (saleDash?.trend24 ?? []).slice(-6).map((p) => p.count) },
       { lbl: '거래처', v: String(partners.length), u: '곳', sub: '고객 마스터', tone: 'ink' },
@@ -934,7 +936,7 @@ export default function OrdersPage() {
 
           {(activeTab === 'sales' || activeTab === 'receipts' || activeTab === 'matching') && (
             <>
-              <RailBlock title="채권 요약" count={`${receipts.length} receipts`}>
+              <RailBlock title="채권 요약" count={`${receiptCount} receipts`}>
                 <div className="bignum text-[26px] text-[var(--solar-3)]">{fmtEok(receiptRemaining)} <span className="mono text-xs text-[var(--ink-3)]">억</span></div>
                 <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">미정산 · 입금 합계 {fmtEok(receiptTotal)}억</div>
               </RailBlock>
