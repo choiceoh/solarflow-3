@@ -105,6 +105,97 @@ export function breakdownBy<T>(
   return rows
 }
 
+// 월별 distinct key 카운트 — '이 달에 발주한 거래처 수' 식 메트릭.
+export function trend24Distinct<T>(
+  items: readonly T[],
+  getDate: (item: T) => string | null | undefined,
+  getKey: (item: T) => string | null | undefined,
+): TrendPoint[] {
+  const start = monthsAgoLabel(TREND_MONTHS - 1)
+  const end = monthsAgoLabel(0)
+  const labels = monthLabels(start, end)
+  const idx = new Map(labels.map((l, i) => [l, i] as const))
+  const sets: Set<string>[] = labels.map(() => new Set())
+  for (const item of items) {
+    const m = dateToMonth(getDate(item))
+    if (!m) continue
+    const i = idx.get(m)
+    if (i === undefined) continue
+    const k = getKey(item)
+    if (k == null || k === '') continue
+    sets[i]!.add(k)
+  }
+  return labels.map((month, i) => ({ month, value: sets[i]!.size }))
+}
+
+// 월별 평균 — getValue 합계 / 개수. 비어있는 달은 0.
+export function trend24Average<T>(
+  items: readonly T[],
+  getDate: (item: T) => string | null | undefined,
+  getValue: (item: T) => number,
+): TrendPoint[] {
+  const start = monthsAgoLabel(TREND_MONTHS - 1)
+  const end = monthsAgoLabel(0)
+  const labels = monthLabels(start, end)
+  const idx = new Map(labels.map((l, i) => [l, i] as const))
+  const sums = labels.map(() => 0)
+  const counts = labels.map(() => 0)
+  for (const item of items) {
+    const m = dateToMonth(getDate(item))
+    if (!m) continue
+    const i = idx.get(m)
+    if (i === undefined) continue
+    const v = getValue(item)
+    if (!Number.isFinite(v)) continue
+    sums[i]! += v
+    counts[i]! += 1
+  }
+  return labels.map((month, i) => ({
+    month,
+    value: counts[i]! > 0 ? sums[i]! / counts[i]! : 0,
+  }))
+}
+
+// 차원별 평균 — group by getKey → 평균 getValue. 정렬은 평균 내림차순.
+// share = group count / total items count (가중치 의미). minCount 미만 그룹은 제외.
+export function breakdownAvg<T>(
+  items: readonly T[],
+  getKey: (item: T) => string | null | undefined,
+  getLabel: (item: T) => string | null | undefined,
+  getValue: (item: T) => number,
+  minCount = 1,
+): BreakdownRow[] {
+  const map = new Map<string, { label: string; sum: number; count: number }>()
+  let totalCount = 0
+  for (const item of items) {
+    const v = getValue(item)
+    if (!Number.isFinite(v)) continue
+    const key = getKey(item) || '__unset__'
+    const label = getLabel(item) || '미지정'
+    const cur = map.get(key)
+    if (cur) {
+      cur.sum += v
+      cur.count += 1
+    } else {
+      map.set(key, { label, sum: v, count: 1 })
+    }
+    totalCount += 1
+  }
+  const rows: BreakdownRow[] = []
+  for (const [key, g] of map) {
+    if (g.count < minCount) continue
+    rows.push({
+      key,
+      label: g.label,
+      value: g.count > 0 ? g.sum / g.count : 0,
+      share: totalCount > 0 ? g.count / totalCount : 0,
+      count: g.count,
+    })
+  }
+  rows.sort((a, b) => b.value - a.value)
+  return rows
+}
+
 // MM 라벨 ('1월' / '12월') — XAxis tick 용.
 export function monthShort(label: string): string {
   const m = label.split('-')[1]

@@ -13,6 +13,18 @@ import { OutboundCountInsight } from './metrics/OutboundCountInsight'
 import { OutboundKwInsight } from './metrics/OutboundKwInsight'
 import { OutboundKwYearInsight } from './metrics/OutboundKwYearInsight'
 import { SaleConversionInsight } from './metrics/SaleConversionInsight'
+import { OrdersActiveInsight } from './metrics/OrdersActiveInsight'
+import { OrdersCustomersInsight } from './metrics/OrdersCustomersInsight'
+import { OrdersPartialInsight } from './metrics/OrdersPartialInsight'
+import { OrdersUnitPriceInsight } from './metrics/OrdersUnitPriceInsight'
+import { SalesTotalInsight } from './metrics/SalesTotalInsight'
+import { SalesInvoicePendingInsight } from './metrics/SalesInvoicePendingInsight'
+import { SalesCustomersInsight } from './metrics/SalesCustomersInsight'
+import { SalesUnitPriceInsight } from './metrics/SalesUnitPriceInsight'
+import { ReceiptsTotalInsight } from './metrics/ReceiptsTotalInsight'
+import { ReceiptsRemainingInsight } from './metrics/ReceiptsRemainingInsight'
+import { ReceiptsPartialMatchInsight } from './metrics/ReceiptsPartialMatchInsight'
+import { ReceiptsRecoveryRateInsight } from './metrics/ReceiptsRecoveryRateInsight'
 
 export interface InsightEntry {
   // KPI 타일이 보낼 식별자 (예: 'outbound.count') — URL 에 그대로 들어감.
@@ -43,6 +55,72 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'outbound.sale_conversion',
     shortLabel: '계산서 연결률',
     render: () => <SaleConversionInsight />,
+  },
+
+  // Orders 탭
+  'orders.active': {
+    id: 'orders.active',
+    shortLabel: '진행 수주',
+    render: () => <OrdersActiveInsight />,
+  },
+  'orders.customers': {
+    id: 'orders.customers',
+    shortLabel: '거래처',
+    render: () => <OrdersCustomersInsight />,
+  },
+  'orders.partial': {
+    id: 'orders.partial',
+    shortLabel: '분할출고',
+    render: () => <OrdersPartialInsight />,
+  },
+  'orders.unit_price_wp': {
+    id: 'orders.unit_price_wp',
+    shortLabel: '평균 단가',
+    render: () => <OrdersUnitPriceInsight />,
+  },
+
+  // Sales 탭
+  'sales.total': {
+    id: 'sales.total',
+    shortLabel: '매출 합계',
+    render: () => <SalesTotalInsight />,
+  },
+  'sales.invoice_pending': {
+    id: 'sales.invoice_pending',
+    shortLabel: '계산서 미발행',
+    render: () => <SalesInvoicePendingInsight />,
+  },
+  'sales.customers': {
+    id: 'sales.customers',
+    shortLabel: '매출처',
+    render: () => <SalesCustomersInsight />,
+  },
+  'sales.unit_price_wp': {
+    id: 'sales.unit_price_wp',
+    shortLabel: '매출 평균 단가',
+    render: () => <SalesUnitPriceInsight />,
+  },
+
+  // Receipts 탭
+  'receipts.total': {
+    id: 'receipts.total',
+    shortLabel: '입금 합계',
+    render: () => <ReceiptsTotalInsight />,
+  },
+  'receipts.remaining': {
+    id: 'receipts.remaining',
+    shortLabel: '미정산',
+    render: () => <ReceiptsRemainingInsight />,
+  },
+  'receipts.partial_match': {
+    id: 'receipts.partial_match',
+    shortLabel: '부분 매칭',
+    render: () => <ReceiptsPartialMatchInsight />,
+  },
+  'receipts.recovery_rate': {
+    id: 'receipts.recovery_rate',
+    shortLabel: '회수율',
+    render: () => <ReceiptsRecoveryRateInsight />,
   },
 }
 
