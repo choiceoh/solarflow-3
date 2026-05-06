@@ -97,6 +97,25 @@ func (h *OrderHandler) applyOrderFilters(r *http.Request, query *postgrest.Filte
 		query = query.Eq("fulfillment_source", source)
 	}
 
+	// work_queue — OrdersPage 알림 딥링크용 사전정의 작업 큐.
+	//   delivery_soon: 납기 임박(받음/분할 중 잔량 > 0, 납기일 오늘 ~ +7일).
+	//   no_site:       현장 미지정(site_name 비어있음 + 미완료/미취소).
+	if wq := r.URL.Query().Get("work_queue"); wq != "" {
+		now := time.Now()
+		today := now.Format("2006-01-02")
+		switch wq {
+		case "delivery_soon":
+			soon := now.AddDate(0, 0, 7).Format("2006-01-02")
+			query = query.In("status", []string{"received", "partial"}).
+				Gt("remaining_qty", "0").
+				Gte("delivery_due", today).
+				Lte("delivery_due", soon)
+		case "no_site":
+			query = query.In("status", []string{"received", "partial"}).
+				Or("site_name.is.null,site_name.eq.", "")
+		}
+	}
+
 	if q := sanitizeOrderSearchTerm(r.URL.Query().Get("q")); q != "" {
 		clauses := []string{
 			fmt.Sprintf("order_number.ilike.*%s*", q),
