@@ -1,40 +1,36 @@
 // 개설 금액 (M$) 드릴다운 — L/C amount_usd 합계.
+//
+// 서버 집계 마이그(C-1 procurement) — useLCDashboard.
 
 import { useMemo } from 'react'
-import { useLCList } from '@/hooks/useProcurement'
-import { LC_STATUS_LABEL, type LCStatus } from '@/types/procurement'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useLCDashboard } from '@/hooks/useProcurement'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmtUsdM = (v: number) => (v / 1_000_000).toFixed(v >= 10_000_000 ? 1 : 2)
 const fmtUsdMTick = (v: number) => `${(v / 1_000_000).toFixed(0)}`
 
 export function ProcurementLcAmountInsight() {
-  const { data, loading } = useLCList()
+  const { dashboard, loading } = useLCDashboard()
 
-  const trend = useMemo(
-    () => trend24(data, (l) => l.open_date ?? null, (l) => l.amount_usd ?? 0),
-    [data],
-  )
-  const totalAmount = data.reduce((sum, l) => sum + (l.amount_usd ?? 0), 0)
+  const totalAmount = dashboard?.totals.total_amount_usd ?? 0
 
-  const byStatus = useMemo(
-    () => breakdownBy(
-      data,
-      (l) => l.status,
-      (l) => LC_STATUS_LABEL[l.status as LCStatus] ?? l.status,
-      (l) => l.amount_usd ?? 0,
-    ),
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.amount_usd })),
+    [dashboard],
   )
-  const byBank = useMemo(
-    () => breakdownBy(
-      data,
-      (l) => l.bank_id,
-      (l) => l.bank_name ?? '미지정',
-      (l) => l.amount_usd ?? 0,
-    ).slice(0, 10),
-    [data],
+
+  const byStatus: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_status ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.amount_usd_sum, share: r.share, count: r.count,
+    })),
+    [dashboard],
+  )
+  const byBank: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_bank_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.amount_usd_sum, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (

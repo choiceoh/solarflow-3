@@ -315,7 +315,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxLC: {
 		ID: IDTxLC, Name: "L/C 신용장", Description: "L/C + 라인 (module 계열)",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/lcs/", "/api/v1/lcs/summary", "/api/v1/lcs/{id}", "/api/v1/lcs/{id}/lines"},
+		Paths: []string{"/api/v1/lcs/", "/api/v1/lcs/summary", "/api/v1/lcs/dashboard", "/api/v1/lcs/{id}", "/api/v1/lcs/{id}/lines"},
 	},
 	IDTxLCLimit: {
 		ID: IDTxLCLimit, Name: "LC 한도 변경 이력", Description: "LC 한도 (module 계열, DELETE 없음)",

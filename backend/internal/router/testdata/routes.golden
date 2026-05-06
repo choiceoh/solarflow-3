@@ -79,6 +79,7 @@ GET     /api/v1/intercompany-requests/mine
 GET     /api/v1/inventory/allocations/
 GET     /api/v1/inventory/allocations/{id}
 GET     /api/v1/lcs/
+GET     /api/v1/lcs/dashboard
 GET     /api/v1/lcs/summary
 GET     /api/v1/lcs/{id}
 GET     /api/v1/lcs/{id}/lines
