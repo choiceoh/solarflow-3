@@ -568,9 +568,12 @@ export default function OrdersPage() {
       { lbl: '회수율', v: receiptRecoveryRate.toFixed(1), u: '%', sub: '입금 매칭 기준', tone: 'pos', spark: receiptRecoverySpark, metricId: 'receipts.recovery_rate' },
     ] :
     activeTab === 'matching' ? [
-      { lbl: '입금', v: String(receiptCount), u: '건', sub: '매칭 후보', tone: 'solar', spark: receiptCountSpark },
-      { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '대상 금액', tone: 'warn', spark: receiptRemainingSpark },
-      { lbl: '매출', v: String(salesTotalCount), u: '건', sub: '후보 원장', tone: 'info', spark: (saleDash?.trend24 ?? []).slice(-6).map((p) => p.count) },
+      // matching 탭의 KPI 는 receipts/sales 탭과 차원만 다른(count vs amount) 사실상 동일 데이터.
+      // 드릴다운은 같은 집합의 종합 분해라 metricId 를 receipts.*/sales.* 에 재사용한다.
+      // '거래처' 는 partner master 카운트라 의미 있는 분해가 없어 metricId 미부여 (정적 타일 유지).
+      { lbl: '입금', v: String(receiptCount), u: '건', sub: '매칭 후보', tone: 'solar', spark: receiptCountSpark, metricId: 'receipts.total' },
+      { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '대상 금액', tone: 'warn', spark: receiptRemainingSpark, metricId: 'receipts.remaining' },
+      { lbl: '매출', v: String(salesTotalCount), u: '건', sub: '후보 원장', tone: 'info', spark: (saleDash?.trend24 ?? []).slice(-6).map((p) => p.count), metricId: 'sales.total' },
       { lbl: '거래처', v: String(partners.length), u: '곳', sub: '고객 마스터', tone: 'ink' },
     ] : [
       { lbl: '진행 수주', v: String(activeOrdersCount), u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${ordersTotalCount}건`, tone: 'solar', spark: activeOrderSpark, metricId: 'orders.active' },
