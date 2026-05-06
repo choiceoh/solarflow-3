@@ -468,7 +468,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
                 </div>
               ))}
               {(status === 'submitted' || status === 'streaming') && messages.at(-1)?.role !== 'assistant' && (
-                <Bubble role="assistant" content="…" pulse />
+                <TypingIndicator />
               )}
             </div>
           )}
@@ -552,7 +552,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
             className="h-12 shrink-0 px-5 text-base"
           >
             <Send className="mr-1.5 h-5 w-5" />
-            {ocrBusy ? 'OCR 중…' : '전송'}
+            {ocrBusy ? 'OCR 중…' : status === 'submitted' || status === 'streaming' ? '응답 중…' : '전송'}
           </Button>
         </div>
         <div className="-mt-1 px-1 text-[11px] text-muted-foreground/70">
@@ -632,7 +632,25 @@ function ToolChip({ part }: { part: ToolUIPart }) {
   );
 }
 
-function Bubble({ role, content, pulse }: { role: UIMessage['role']; content: string; pulse?: boolean }) {
+function TypingIndicator() {
+  return (
+    <div className="flex gap-2.5" aria-live="polite" aria-label="AI 응답 작성 중">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+        <Bot className="h-4 w-4" />
+      </div>
+      <div className="flex items-center gap-2 rounded-lg border bg-background px-4 py-3 shadow-sm">
+        <span className="flex items-end gap-1">
+          <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60" />
+        </span>
+        <span className="text-sm text-muted-foreground">응답 작성 중</span>
+      </div>
+    </div>
+  );
+}
+
+function Bubble({ role, content }: { role: UIMessage['role']; content: string }) {
   const isUser = role === 'user';
   return (
     <div className={cn('flex gap-2.5', isUser ? 'flex-row-reverse' : 'flex-row')}>
@@ -648,7 +666,6 @@ function Bubble({ role, content, pulse }: { role: UIMessage['role']; content: st
         className={cn(
           'max-w-[80%] whitespace-pre-wrap rounded-lg px-4 py-3 text-base leading-relaxed shadow-sm',
           isUser ? 'bg-[var(--sf-solar)]/10' : 'bg-background border',
-          pulse && 'animate-pulse text-muted-foreground',
         )}
       >
         {content}

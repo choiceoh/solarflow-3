@@ -10,6 +10,8 @@ mod model;
 
 use config::Config;
 use tokio::net::TcpListener;
+#[cfg(unix)]
+use tokio::signal::unix::{signal, SignalKind};
 
 #[tokio::main]
 async fn main() {
@@ -46,7 +48,33 @@ async fn main() {
         .await
         .expect("서버 바인딩에 실패했습니다");
 
+    // graceful shutdown: SIGTERM/SIGINT 수신 시 새 요청 수락 중단 후 진행 중 요청 드레인.
+    // systemd 가 stop 할 때 in-flight 계산이 중간에 잘리지 않도록 함 (D-123).
     axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
         .await
         .expect("서버 실행에 실패했습니다");
+
+    tracing::info!("서버 graceful shutdown 완료");
+}
+
+/// SIGTERM(systemctl stop) 또는 SIGINT(ctrl-c) 둘 중 하나가 오면 future 가 완료된다.
+/// Axum 의 with_graceful_shutdown 에 전달되어 새 연결 수락을 멈추고
+/// 진행 중 요청이 끝나면 serve 가 반환된다.
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        let mut term = signal(SignalKind::terminate()).expect("SIGTERM 핸들러 등록 실패");
+        let mut intr = signal(SignalKind::interrupt()).expect("SIGINT 핸들러 등록 실패");
+        tokio::select! {
+            _ = term.recv() => tracing::info!("SIGTERM 수신 — graceful shutdown 시작"),
+            _ = intr.recv() => tracing::info!("SIGINT 수신 — graceful shutdown 시작"),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        // Windows 개발 환경 — Ctrl-C 만 처리
+        tokio::signal::ctrl_c().await.expect("Ctrl-C 핸들러 등록 실패");
+        tracing::info!("Ctrl-C 수신 — graceful shutdown 시작");
+    }
 }
