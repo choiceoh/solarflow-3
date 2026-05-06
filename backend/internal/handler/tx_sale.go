@@ -368,12 +368,29 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	} else {
 		log.Printf("[매출 enrich] orders 조회 실패 — 수주 정보 비표시: %v", err)
 	}
-	if data, _, err := h.DB.From("outbounds").Select("outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status", "exact", false).Range(0, 99999, "").Execute(); err == nil {
-		if err := json.Unmarshal(data, &outbounds); err != nil {
-			log.Printf("[매출 enrich] outbounds 디코딩 실패 — 출고 정보 비표시: %v", err)
+	// outbounds — 청크 페이지네이션 (PostgREST db-max-rows=1000 cap 우회).
+	// outbounds 가 1000 행 초과 시 단일 Range 호출은 첫 1000만 응답 → SaleListItem.outbound_date NULL 발생.
+	// 이게 SalesAnalysisPage 에서 "매출 날짜 없음" 으로 보였던 원인 (D-064 PR 36 fix).
+	const outboundChunkSize = 1000
+	const outboundMaxPages = 50 // 안전 가드 (총 50,000 행)
+	for page := 0; page < outboundMaxPages; page++ {
+		offset := page * outboundChunkSize
+		data, _, err := h.DB.From("outbounds").
+			Select("outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status", "exact", false).
+			Range(offset, offset+outboundChunkSize-1, "").Execute()
+		if err != nil {
+			log.Printf("[매출 enrich] outbounds 청크 조회 실패 offset=%d: %v", offset, err)
+			break
 		}
-	} else {
-		log.Printf("[매출 enrich] outbounds 조회 실패 — 출고 정보 비표시: %v", err)
+		var batch []saleOutboundRow
+		if err := json.Unmarshal(data, &batch); err != nil {
+			log.Printf("[매출 enrich] outbounds 청크 디코딩 실패 offset=%d: %v", offset, err)
+			break
+		}
+		outbounds = append(outbounds, batch...)
+		if len(batch) < outboundChunkSize {
+			break
+		}
 	}
 	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp, manufacturer_id", "exact", false).Range(0, 99999, "").Execute(); err == nil {
 		if err := json.Unmarshal(data, &products); err != nil {
