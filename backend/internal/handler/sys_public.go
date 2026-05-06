@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -272,6 +273,8 @@ func (h *PublicHandler) upsertFXDaily(pair, date string, rate float64) error {
 }
 
 // backfillFXDaily — 부팅 시 1회 비동기 실행. 페어당 ECOS 범위 호출 1회로 N일치 채움.
+// fx_daily 가 RLS ENABLE + INSERT policy 없는 환경 (anon key 로 차단되는 환경) 에서는
+// 첫 42501 만나는 즉시 단일 진단 로그 후 중단 — 100건 행단위 노이즈 회피.
 func (h *PublicHandler) backfillFXDaily(days int) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -284,6 +287,7 @@ func (h *PublicHandler) backfillFXDaily(days int) {
 	end := now.Format("20060102")
 
 	upserted := 0
+pairs:
 	for pair := range fxPairs {
 		points, err := h.fetchECOSRange(pair, start, end)
 		if err != nil {
@@ -292,6 +296,11 @@ func (h *PublicHandler) backfillFXDaily(days int) {
 		}
 		for _, p := range points {
 			if err := h.upsertFXDaily(pair, p.Date, p.Rate); err != nil {
+				if strings.Contains(err.Error(), "42501") {
+					log.Printf("[fx_daily backfill] RLS 차단 — fx_daily 에 INSERT policy 없음. " +
+						"운영자가 policy 추가하거나 backfill 을 service_role 로 돌릴 때까지 백필 skip.")
+					break pairs
+				}
 				log.Printf("[fx_daily backfill %s/%s upsert] %v", pair, p.Date, err)
 				continue
 			}
@@ -589,15 +598,16 @@ func (h *PublicHandler) fetchInboundShipsToday() (int, error) {
 }
 
 func (h *PublicHandler) fetchActiveCompanyIDs() ([]string, error) {
+	// companies 실제 컬럼: company_id (PK), is_active (boolean). 'id' / status='active' 는 옛 가정.
 	data, _, err := h.DB.From("companies").
-		Select("id", "exact", false).
-		Eq("status", "active").
+		Select("company_id", "exact", false).
+		Eq("is_active", "true").
 		Execute()
 	if err != nil {
 		return nil, err
 	}
 	var rows []struct {
-		ID string `json:"id"`
+		ID string `json:"company_id"`
 	}
 	if err := json.Unmarshal(data, &rows); err != nil {
 		return nil, err
