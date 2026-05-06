@@ -86,7 +86,15 @@ func (r lcDashRow) bankLabel() string {
 }
 
 // Dashboard — GET /api/v1/lcs/dashboard.
+//
+// lcs_dashboard() RPC (migration 078) 우선. 실패 시 fallback.
 func (h *LCHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	if dashJSON, ok := h.tryRPCLcsDashboard(r); ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(dashJSON)
+		return
+	}
 	rows, err := h.fetchAllForLCDashboard(r)
 	if err != nil {
 		log.Printf("[LC 대시보드 데이터 수집 실패] %v", err)
@@ -96,6 +104,43 @@ func (h *LCHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	scope := normalizeLCScope(r.URL.Query().Get("status_scope"))
 	dash := computeLCDashboard(rows, scope)
 	response.RespondJSON(w, http.StatusOK, dash)
+}
+
+func (h *LCHandler) tryRPCLcsDashboard(r *http.Request) ([]byte, bool) {
+	q := r.URL.Query()
+	args := map[string]any{}
+	if v := q.Get("company_id"); v != "" && v != "all" {
+		args["p_company_id"] = v
+	}
+	if v := q.Get("po_id"); v != "" {
+		args["p_po_id"] = v
+	}
+	if v := q.Get("bank_id"); v != "" {
+		args["p_bank_id"] = v
+	}
+	if v := q.Get("status"); v != "" {
+		args["p_status"] = v
+	}
+	args["p_status_scope"] = normalizeLCScope(q.Get("status_scope"))
+	data, _, err := h.DB.From("rpc/lcs_dashboard").Insert(args, false, "", "", "").Execute()
+	if err != nil {
+		log.Printf("[LC 대시보드 RPC 실패 — fallback 사용] %v", err)
+		return nil, false
+	}
+	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
+		var arr []json.RawMessage
+		if data[0] == '[' && json.Unmarshal(data, &arr) == nil && len(arr) > 0 {
+			var wrap map[string]json.RawMessage
+			if json.Unmarshal(arr[0], &wrap) == nil {
+				if inner, ok := wrap["lcs_dashboard"]; ok {
+					return inner, true
+				}
+			}
+			return arr[0], true
+		}
+		return data, true
+	}
+	return nil, false
 }
 
 func normalizeLCScope(raw string) string {
