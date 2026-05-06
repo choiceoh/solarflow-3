@@ -118,10 +118,10 @@ export default function BankingPage() {
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
           <div className="sf-command-kpis">
-            <TileB lbl="총 한도" v={fmtUsdM(totalLimit)} u="M$" sub={`${allLimitRows.length}개 은행`} tone="ink" spark={flatSpark(totalLimit / 1_000_000)} />
-            <TileB lbl="사용중" v={fmtUsdM(totalUsed)} u="M$" sub={`${totalUsageRate.toFixed(1)}% · 활성 L/C`} tone="warn" spark={flatSpark(totalUsed / 1_000_000)} />
-            <TileB lbl="가용" v={fmtUsdM(totalAvail)} u="M$" sub="추가 개설 가능" tone="solar" spark={flatSpark(totalAvail / 1_000_000)} />
-            <TileB lbl="만기 알림" v={String(alertRows.length)} u="건" sub="30일 이내" tone={alertRows.length > 0 ? 'info' : 'pos'} spark={flatSpark(alertRows.length)} />
+            <TileB lbl="총 한도" v={fmtUsdM(totalLimit)} u="M$" sub={`${allLimitRows.length}개 은행`} tone="ink" spark={flatSpark(totalLimit / 1_000_000)} metricId="banking.total_limit" />
+            <TileB lbl="사용중" v={fmtUsdM(totalUsed)} u="M$" sub={`${totalUsageRate.toFixed(1)}% · 활성 L/C`} tone="warn" spark={flatSpark(totalUsed / 1_000_000)} metricId="banking.used" />
+            <TileB lbl="가용" v={fmtUsdM(totalAvail)} u="M$" sub="추가 개설 가능" tone="solar" spark={flatSpark(totalAvail / 1_000_000)} metricId="banking.available" />
+            <TileB lbl="만기 알림" v={String(alertRows.length)} u="건" sub="30일 이내" tone={alertRows.length > 0 ? 'info' : 'pos'} spark={flatSpark(alertRows.length)} metricId="banking.maturity_alert" />
           </div>
 
           <CommandTopLine title={pageTitle} sub={pageSub} right={bankingCardControls} />

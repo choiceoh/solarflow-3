@@ -177,6 +177,7 @@ export default function CustomsPage() {
               sub={`${expenseCount}건 · VAT ${fmtEok(expenseVat)}억`}
               tone="solar"
               spark={totalSpark}
+              metricId="customs.expense_total"
             />
             <TileB
               lbl="B/L 연결"
@@ -185,6 +186,7 @@ export default function CustomsPage() {
               sub={`전체 ${blSummary?.total ?? bls.length}개 B/L`}
               tone="info"
               spark={linkedSpark}
+              metricId="customs.bl_linked"
             />
             <TileB
               lbl="비용 유형"
@@ -193,6 +195,7 @@ export default function CustomsPage() {
               sub="운송·통관·LC 수수료"
               tone="warn"
               spark={flatSpark(expenseSummary?.type_count ?? Object.keys(typeExpenseMap).length)}
+              metricId="customs.type_count"
             />
             <TileB
               lbl="평균 비용"
@@ -207,6 +210,7 @@ export default function CustomsPage() {
                 (expenseSummary?.average_amount ??
                   (expenses.length ? expenseTotal / expenses.length : 0)) / 1e8,
               )}
+              metricId="customs.avg_expense"
             />
           </div>
 
