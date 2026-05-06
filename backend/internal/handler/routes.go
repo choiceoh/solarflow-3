@@ -526,6 +526,8 @@ func (h *PublicHandler) RegisterRoutes(r chi.Router) {
 func (h *ReceiptHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/receipts", func(r chi.Router) {
 		r.Get("/", h.List)
+		// 대시보드 집계 — KPI / trend24 / by_customer / by_match_status. 정적 경로라 /{id} 보다 먼저.
+		r.Get("/dashboard", h.Dashboard)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)

@@ -1,54 +1,37 @@
 // 입금 합계 (억) 드릴다운 — receipts 탭 KPI '입금 합계'.
+//
+// 서버 집계 마이그(C-1 receipts) — useReceiptDashboard 사용.
 
 import { useMemo } from 'react'
-import { useReceiptList } from '@/hooks/useReceipts'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useReceiptDashboard } from '@/hooks/useReceipts'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmtEok = (v: number) => (v / 100_000_000).toFixed(v >= 10_000_000_000 ? 1 : 2)
 const fmtEokTick = (v: number) => (v / 100_000_000).toFixed(0)
 
 export function ReceiptsTotalInsight() {
-  const { data, loading } = useReceiptList()
+  const { dashboard, loading } = useReceiptDashboard()
 
-  const trend = useMemo(
-    () => trend24(data, (r) => r.receipt_date, (r) => r.amount ?? 0),
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.amount_sum })),
+    [dashboard],
   )
 
-  const totalSum = data.reduce((sum, r) => sum + (r.amount ?? 0), 0)
+  const totalSum = dashboard?.totals.amount_sum ?? 0
 
-  const byCustomer = useMemo(
-    () => breakdownBy(
-      data,
-      (r) => r.customer_id,
-      (r) => r.customer_name ?? '미지정',
-      (r) => r.amount ?? 0,
-    ).slice(0, 10),
-    [data],
+  const byCustomer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_customer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.amount_sum, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byMatchStatus = useMemo(() => {
-    const grouped = data.map((r) => {
-      const matched = r.matched_total ?? 0
-      const remaining = r.remaining ?? 0
-      let status: 'matched' | 'partial' | 'unmatched'
-      if (matched > 0 && remaining <= 0) status = 'matched'
-      else if (matched > 0 && remaining > 0) status = 'partial'
-      else status = 'unmatched'
-      return { ...r, _status: status }
-    })
-    const labels: Record<string, string> = {
-      matched: '완전 매칭',
-      partial: '부분 매칭',
-      unmatched: '미매칭',
-    }
-    return breakdownBy(
-      grouped,
-      (r) => r._status,
-      (r) => labels[r._status] ?? r._status,
-      (r) => r.amount ?? 0,
-    )
-  }, [data])
+  const byMatchStatus: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_match_status ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.amount_sum, share: r.share, count: r.count,
+    })),
+    [dashboard],
+  )
 
   return (
     <InsightShell

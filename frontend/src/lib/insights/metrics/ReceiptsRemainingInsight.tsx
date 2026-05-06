@@ -1,37 +1,34 @@
 // 미정산 (억) 드릴다운 — sum(receipt.remaining).
+//
+// 서버 집계 마이그(C-1 receipts) — useReceiptDashboard 사용.
 
 import { useMemo } from 'react'
-import { useReceiptList } from '@/hooks/useReceipts'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useReceiptDashboard } from '@/hooks/useReceipts'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmtEok = (v: number) => (v / 100_000_000).toFixed(v >= 10_000_000_000 ? 1 : 2)
 const fmtEokTick = (v: number) => (v / 100_000_000).toFixed(0)
 
 export function ReceiptsRemainingInsight() {
-  const { data, loading } = useReceiptList()
+  const { dashboard, loading } = useReceiptDashboard()
 
-  const outstanding = useMemo(
-    () => data.filter((r) => (r.remaining ?? 0) > 0),
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.remaining_sum })),
+    [dashboard],
   )
 
-  const trend = useMemo(
-    () => trend24(data, (r) => r.receipt_date, (r) => r.remaining ?? 0),
-    [data],
-  )
+  const totalRemaining = dashboard?.totals.remaining_sum ?? 0
 
-  const totalRemaining = outstanding.reduce((sum, r) => sum + (r.remaining ?? 0), 0)
-
-  const byCustomer = useMemo(
-    () => breakdownBy(
-      outstanding,
-      (r) => r.customer_id,
-      (r) => r.customer_name ?? '미지정',
-      (r) => r.remaining ?? 0,
-    ).slice(0, 10),
-    [outstanding],
-  )
+  // 미정산 분해 — by_customer_top10 의 remaining_sum 사용 (positive 만 표시).
+  const byCustomer: BreakdownRow[] = useMemo(() => {
+    const rows = (dashboard?.by_customer_top10 ?? [])
+      .filter((r) => r.remaining_sum > 0)
+      .map((r) => ({
+        key: r.key, label: r.label, value: r.remaining_sum, share: r.share, count: r.count,
+      }))
+    return [...rows].sort((a, b) => b.value - a.value).slice(0, 10)
+  }, [dashboard])
 
   return (
     <InsightShell
