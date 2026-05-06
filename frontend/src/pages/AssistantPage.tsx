@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
 import type { ToolUIPart, UIMessage } from 'ai';
-import { Bot, Check, ChevronDown, ChevronUp, FileText, Inbox, MessageSquarePlus, Paperclip, Search, Send, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronUp, Copy, FileText, Inbox, MessageSquarePlus, Paperclip, Search, Send, Square, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -257,7 +257,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     [apiPath],
   );
 
-  const { messages, sendMessage, status, error: chatError } = useChat({
+  const { messages, sendMessage, status, stop, error: chatError } = useChat({
     transport,
     messages: initialMessages,
     onFinish: ({ messages: msgs }) => {
@@ -289,7 +289,16 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     }
   };
 
+  // 자동 스크롤은 사용자가 하단 근처(120px 이내)에 있을 때만. 위로 스크롤해 과거를 읽는 중이면 방해 안 함.
+  const stickToBottomRef = useRef(true);
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceToBottom < 120;
+  };
   useEffect(() => {
+    if (!stickToBottomRef.current) return;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, status]);
 
@@ -342,6 +351,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
       }
       setInput('');
       setAttachments([]);
+      stickToBottomRef.current = true; // 새 질문 보내면 다시 하단 추적 모드로
       await sendMessage({ text: userContent });
     } catch (e) {
       setError(e instanceof Error ? e.message : '요청 실패');
@@ -442,7 +452,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           </header>
         )}
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
+        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
           {messagesWithProposals.length === 0 ? (
             <ChipEmpty chips={pageChips.chips} onPick={(t) => setInput(t)} />
           ) : (
@@ -547,15 +557,29 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
             >
               <Paperclip className="h-4 w-4" />
             </Button>
-            <Button
-              onClick={() => void send()}
-              disabled={busy || (!input.trim() && attachments.length === 0)}
-              size="sm"
-              className="pointer-events-auto h-8 px-3"
-            >
-              <Send className="mr-1 h-4 w-4" />
-              {ocrBusy ? 'OCR 중…' : status === 'submitted' || status === 'streaming' ? '응답 중…' : '전송'}
-            </Button>
+            {status === 'submitted' || status === 'streaming' ? (
+              <Button
+                type="button"
+                onClick={() => stop()}
+                size="sm"
+                variant="destructive"
+                className="pointer-events-auto h-8 px-3"
+                title="응답 중단"
+              >
+                <Square className="mr-1 h-3 w-3 fill-current" />
+                중단
+              </Button>
+            ) : (
+              <Button
+                onClick={() => void send()}
+                disabled={ocrBusy || (!input.trim() && attachments.length === 0)}
+                size="sm"
+                className="pointer-events-auto h-8 px-3"
+              >
+                <Send className="mr-1 h-4 w-4" />
+                {ocrBusy ? 'OCR 중…' : '전송'}
+              </Button>
+            )}
           </div>
         </div>
         <div className="-mt-1 px-1 text-[11px] text-muted-foreground/70">
@@ -655,8 +679,18 @@ function TypingIndicator() {
 
 function Bubble({ role, content }: { role: UIMessage['role']; content: string }) {
   const isUser = role === 'user';
+  const [copied, setCopied] = useState(false);
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // 클립보드 권한 거부 등은 무시 — 메시지 표면화 안 함
+    }
+  };
   return (
-    <div className={cn('flex gap-2.5', isUser ? 'flex-row-reverse' : 'flex-row')}>
+    <div className={cn('group/bubble flex gap-2.5', isUser ? 'flex-row-reverse' : 'flex-row')}>
       <div
         className={cn(
           'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
@@ -665,13 +699,29 @@ function Bubble({ role, content }: { role: UIMessage['role']; content: string })
       >
         {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
-      <div
-        className={cn(
-          'max-w-[80%] whitespace-pre-wrap rounded-lg px-4 py-3 text-base leading-relaxed shadow-sm',
-          isUser ? 'bg-[var(--sf-solar)]/10' : 'bg-background border',
+      <div className={cn('flex min-w-0 max-w-[80%] flex-col gap-1', isUser ? 'items-end' : 'items-start')}>
+        <div
+          className={cn(
+            'whitespace-pre-wrap rounded-2xl px-4 py-3 text-base leading-relaxed',
+            isUser ? 'bg-[var(--sf-solar)]/10 rounded-tr-sm' : 'bg-background rounded-tl-sm',
+          )}
+        >
+          {content}
+        </div>
+        {/* 호버 시 copy 버튼 — 빈 텍스트(자리표시) 인 경우 숨김 */}
+        {content.trim() && (
+          <button
+            type="button"
+            onClick={onCopy}
+            className={cn(
+              'flex h-6 items-center gap-1 rounded px-1.5 text-xs text-muted-foreground/70 opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/bubble:opacity-100 focus-visible:opacity-100',
+            )}
+            title="복사"
+          >
+            {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+            <span>{copied ? '복사됨' : '복사'}</span>
+          </button>
         )}
-      >
-        {content}
       </div>
     </div>
   );
@@ -789,6 +839,23 @@ function PendingPanel({
   );
 }
 
+// updated_at 기준으로 세션을 시간 버킷에 그룹핑. ChatGPT 식 "오늘/어제/지난 7일/지난 30일/이전".
+type SessionBucket = '오늘' | '어제' | '지난 7일' | '지난 30일' | '이전';
+const SESSION_BUCKETS: SessionBucket[] = ['오늘', '어제', '지난 7일', '지난 30일', '이전'];
+
+function bucketOf(updatedAt: string): SessionBucket {
+  const now = new Date();
+  const updated = new Date(updatedAt);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const updatedTime = updated.getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  if (updatedTime >= startOfToday) return '오늘';
+  if (updatedTime >= startOfToday - dayMs) return '어제';
+  if (updatedTime >= startOfToday - 7 * dayMs) return '지난 7일';
+  if (updatedTime >= startOfToday - 30 * dayMs) return '지난 30일';
+  return '이전';
+}
+
 function SessionsPanel({
   sessions,
   currentSessionId,
@@ -806,6 +873,17 @@ function SessionsPanel({
   onLoad: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
+  const grouped = useMemo(() => {
+    const map = new Map<SessionBucket, SessionSummary[]>();
+    for (const s of sessions) {
+      const b = bucketOf(s.updated_at);
+      const list = map.get(b) ?? [];
+      list.push(s);
+      map.set(b, list);
+    }
+    return map;
+  }, [sessions]);
+
   return (
     <section className="flex min-h-0 flex-1 flex-col border-b">
       <header className="flex items-center gap-2 border-b px-4 py-3">
@@ -828,34 +906,47 @@ function SessionsPanel({
             <div className="text-xs opacity-70">대화를 보내면 자동 저장됩니다.</div>
           </div>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            {sessions.map((s) => (
-              <div
-                key={s.id}
-                className={cn(
-                  'group flex items-center gap-1 rounded-md border bg-background px-2 py-1.5 text-sm shadow-sm transition-colors hover:border-[var(--sf-solar)]/40',
-                  s.id === currentSessionId && 'border-[var(--sf-solar)]/60 bg-[var(--sf-solar)]/5',
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => onLoad(s.id)}
-                  disabled={s.id === loadingId}
-                  className="min-w-0 flex-1 truncate text-left"
-                  title={s.title}
-                >
-                  <span className="truncate">{s.title || '새 대화'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDelete(s.id)}
-                  className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-destructive group-hover:opacity-100"
-                  title="삭제"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
+          <div className="flex flex-col gap-3">
+            {SESSION_BUCKETS.map((bucket) => {
+              const items = grouped.get(bucket);
+              if (!items || items.length === 0) return null;
+              return (
+                <div key={bucket} className="flex flex-col gap-1">
+                  <div className="px-1 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
+                    {bucket}
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    {items.map((s) => (
+                      <div
+                        key={s.id}
+                        className={cn(
+                          'group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted',
+                          s.id === currentSessionId && 'bg-[var(--sf-solar)]/10 text-foreground',
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => onLoad(s.id)}
+                          disabled={s.id === loadingId}
+                          className="min-w-0 flex-1 truncate text-left"
+                          title={s.title}
+                        >
+                          <span className="truncate">{s.title || '새 대화'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(s.id)}
+                          className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted-foreground/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+                          title="삭제"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -869,24 +960,29 @@ function SessionsPanel({
  */
 function ChipEmpty({ chips, onPick }: { chips: ChipDef[]; onPick: (text: string) => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-muted-foreground">
-      <Bot className="h-10 w-10 opacity-40" aria-hidden />
-      <div className="text-sm">무엇을 도와드릴까요?</div>
-      <div className="flex flex-wrap justify-center gap-1.5 px-2">
+    <div className="flex h-full flex-col items-center justify-center gap-6 px-6 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--sf-solar)]/10 text-[var(--sf-solar)]">
+        <Bot className="h-8 w-8" aria-hidden />
+      </div>
+      <div className="space-y-1.5">
+        <div className="text-lg font-semibold text-foreground">무엇을 도와드릴까요?</div>
+        <div className="text-sm text-muted-foreground">아래 예시로 시작하거나 직접 입력하세요</div>
+      </div>
+      <div className="flex max-w-2xl flex-wrap justify-center gap-2">
         {chips.map((c) => (
           <button
             key={c.text}
             type="button"
             onClick={() => onPick(c.text)}
-            className="rounded-full border border-slate-300 bg-background px-3 py-1.5 text-xs text-slate-700 shadow-sm transition-colors hover:border-[var(--sf-solar)]/60 hover:bg-[var(--sf-solar)]/5 hover:text-[var(--sf-solar)] dark:border-slate-700 dark:text-slate-200 dark:hover:bg-[var(--sf-solar)]/10"
+            className="group inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-2 text-sm text-muted-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-[var(--sf-solar)]/40 hover:bg-[var(--sf-solar)]/5 hover:text-foreground hover:shadow-md"
           >
-            {c.icon && <span className="mr-1">{c.icon}</span>}
-            {c.text}
+            {c.icon && <span className="text-base">{c.icon}</span>}
+            <span>{c.text}</span>
           </button>
         ))}
       </div>
-      <div className="px-4 text-[11px] opacity-60">
-        💡 클릭하면 입력창에 채워집니다 · 📎 PDF/이미지 첨부 시 OCR 자동 인식
+      <div className="text-xs text-muted-foreground/70">
+        클릭하면 입력창에 채워집니다 · PDF/이미지 첨부 시 OCR 자동 인식
       </div>
     </div>
   );
