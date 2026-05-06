@@ -1,50 +1,39 @@
 // 진행 수주 (건수) 드릴다운 — orders 탭 KPI '진행 수주' 의 24개월 추이 + 차원별 분해.
+//
+// 서버 집계 마이그(C-1 orders) — useOrderDashboard(status_scope=active) 로 active 만 분해.
 
 import { useMemo } from 'react'
-import { useOrderListAll } from '@/hooks/useOrders'
-import { ORDER_STATUS_LABEL, MANAGEMENT_CATEGORY_LABEL } from '@/types/orders'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useOrderDashboard } from '@/hooks/useOrders'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function OrdersActiveInsight() {
-  const { data, loading } = useOrderListAll()
+  const { dashboard, loading } = useOrderDashboard({ status_scope: 'active' })
 
-  // 진행 = 미완료/미취소.
-  const active = useMemo(
-    () => data.filter((o) => o.status !== 'completed' && o.status !== 'cancelled'),
-    [data],
+  const totalActive = dashboard?.totals.active_count ?? 0
+
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.active_count })),
+    [dashboard],
   )
 
-  const trend = useMemo(
-    () => trend24(active, (o) => o.order_date),
-    [active],
+  const byStatus: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_status ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byCustomer = useMemo(
-    () => breakdownBy(
-      active,
-      (o) => o.customer_id,
-      (o) => o.customer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [active],
+  const byCategory: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_category ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byStatus = useMemo(
-    () => breakdownBy(
-      active,
-      (o) => o.status,
-      (o) => ORDER_STATUS_LABEL[o.status] ?? o.status,
-      () => 1,
-    ),
-    [active],
-  )
-  const byCategory = useMemo(
-    () => breakdownBy(
-      active,
-      (o) => o.management_category,
-      (o) => MANAGEMENT_CATEGORY_LABEL[o.management_category] ?? o.management_category,
-      () => 1,
-    ),
-    [active],
+  const byCustomer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_customer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (
@@ -57,7 +46,7 @@ export function OrdersActiveInsight() {
       backLabel="수주 / 수금으로 돌아가기"
       loading={loading}
       totalLabel="진행 합계"
-      totalValue={active.length.toLocaleString()}
+      totalValue={totalActive.toLocaleString()}
       trend={trend}
       trendValueLabel="신규 수주"
       breakdowns={[

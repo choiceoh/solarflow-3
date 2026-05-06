@@ -11,6 +11,7 @@ export interface OrderListParams {
   customer_id?: string;
   management_category?: string;
   q?: string;
+  work_queue?: 'delivery_soon' | 'no_site';
   sort?: string;
   order?: 'asc' | 'desc';
   pageIndex: number;
@@ -36,6 +37,7 @@ export function useOrderList(params: OrderListParams): OrderListResult {
     params.customer_id ?? '',
     params.management_category ?? '',
     params.q ?? '',
+    params.work_queue ?? '',
     params.sort ?? '',
     params.order ?? '',
     params.pageIndex,
@@ -49,6 +51,7 @@ export function useOrderList(params: OrderListParams): OrderListResult {
       if (params.customer_id) search.set('customer_id', params.customer_id);
       if (params.management_category) search.set('management_category', params.management_category);
       if (params.q) search.set('q', params.q);
+      if (params.work_queue) search.set('work_queue', params.work_queue);
       if (params.sort) search.set('sort', params.sort);
       if (params.order) search.set('order', params.order);
       search.set('limit', String(params.pageSize));
@@ -91,6 +94,103 @@ async function fetchAllOrders(baseQuery: string): Promise<Order[]> {
     if (accumulated.length >= total) break;
   }
   return accumulated;
+}
+
+// 수주 대시보드 — KPI + 24개월 trend + breakdown(by status/customer/manufacturer/category) +
+// unit_price 15일 MA 180일 sparkline 을 서버에서 한 번에 받는다.
+// OrdersPage 수주 탭 + 4 Orders Insight 가 사용. 응답 ~수십 KB (UnitPriceMa15 180 floats 포함).
+//
+// status_scope: lifetime(기본) | active | partial — breakdowns 만 좁힘.
+// totals/trend24/unit_price_ma15_180 은 항상 전체.
+export type OrderDashboardScope = 'lifetime' | 'active' | 'partial'
+
+export interface OrderDashboard {
+  totals: {
+    count: number
+    active_count: number
+    received_count: number
+    partial_count: number
+    completed_count: number
+    cancelled_count: number
+    kw_sum: number
+    customers_count: number
+    active_customers_count: number
+    avg_unit_price_wp: number
+    recent_30_avg_unit_price_wp: number
+    recent_30_count: number
+    delivery_soon_count: number
+    no_site_count: number
+  }
+  trend24: OrderDashboardTrendPoint[]
+  unit_price_ma15_180: number[]
+  status_scope: OrderDashboardScope
+  by_status: OrderDashboardBreakdownRow[]
+  by_customer_top10: OrderDashboardBreakdownRow[]
+  by_manufacturer_top10: OrderDashboardBreakdownRow[]
+  by_category: OrderDashboardBreakdownRow[]
+}
+
+export interface OrderDashboardTrendPoint {
+  month: string
+  count: number
+  active_count: number
+  partial_count: number
+  distinct_customers: number
+  avg_unit_price_wp: number
+}
+
+export interface OrderDashboardBreakdownRow {
+  key: string
+  label: string
+  count: number
+  kw_sum: number
+  avg_unit_price_wp: number  // 0 if priced count < 3
+  share: number
+}
+
+export interface OrderDashboardFilters {
+  status?: string
+  customer_id?: string
+  management_category?: string
+  q?: string
+  work_queue?: 'delivery_soon' | 'no_site'
+  status_scope?: OrderDashboardScope
+}
+
+export function useOrderDashboard(filters: OrderDashboardFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const queryKey = [
+    'orders-dashboard',
+    selectedCompanyId,
+    filters.status ?? '',
+    filters.customer_id ?? '',
+    filters.management_category ?? '',
+    filters.q ?? '',
+    filters.work_queue ?? '',
+    filters.status_scope ?? 'lifetime',
+  ]
+  const q = useQuery<OrderDashboard, Error>({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (filters.status) params.set('status', filters.status)
+      if (filters.customer_id) params.set('customer_id', filters.customer_id)
+      if (filters.management_category) params.set('management_category', filters.management_category)
+      if (filters.q) params.set('q', filters.q)
+      if (filters.work_queue) params.set('work_queue', filters.work_queue)
+      if (filters.status_scope) params.set('status_scope', filters.status_scope)
+      return fetchWithAuth<OrderDashboard>(`/api/v1/orders/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
 }
 
 export function useOrderListAll(
