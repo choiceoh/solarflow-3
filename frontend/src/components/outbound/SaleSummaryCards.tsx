@@ -4,14 +4,23 @@ import type { SaleListItem } from '@/types/outbound';
 
 interface Props {
   items: SaleListItem[];
+  // 서버 집계로 받은 전체 합계 — 페이지네이션된 화면에서 items 가 현재 페이지만 담는 경우 사용.
+  // 미지정 시 items 기반으로 계산 (legacy / 작은 데이터셋용).
+  summary?: {
+    totalSupply: number;
+    totalVat: number;
+    totalAmount: number;
+    count: number;
+    issuedCount: number;
+  };
 }
 
-export default function SaleSummaryCards({ items }: Props) {
-  const totalSupply = items.reduce((sum, i) => sum + (i.sale.supply_amount ?? 0), 0);
-  const totalVat = items.reduce((sum, i) => sum + (i.sale.vat_amount ?? 0), 0);
-  const totalAmount = items.reduce((sum, i) => sum + (i.sale.total_amount ?? 0), 0);
-  const count = items.length;
-  const issuedCount = items.filter((i) => i.sale.tax_invoice_date).length;
+export default function SaleSummaryCards({ items, summary }: Props) {
+  const totalSupply = summary?.totalSupply ?? items.reduce((sum, i) => sum + (i.sale.supply_amount ?? 0), 0);
+  const totalVat = summary?.totalVat ?? items.reduce((sum, i) => sum + (i.sale.vat_amount ?? 0), 0);
+  const totalAmount = summary?.totalAmount ?? items.reduce((sum, i) => sum + (i.sale.total_amount ?? 0), 0);
+  const count = summary?.count ?? items.length;
+  const issuedCount = summary?.issuedCount ?? items.filter((i) => i.sale.tax_invoice_date).length;
   const issueRate = count > 0 ? Math.round((issuedCount / count) * 100) : 0;
 
   return (
