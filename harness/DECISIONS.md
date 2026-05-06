@@ -834,7 +834,9 @@
 - **결정**: 배포 1회당 사용자 체감 502 가 1~3초씩 발생하던 문제를 4-축 변경으로 제거.
   - **(1) Go backend: cloudflare/tableflip 도입** (`backend/internal/serve/serve_unix.go`).
     - `systemctl reload` → `ExecReload=/bin/kill -HUP $MAINPID` → tableflip Upgrader 의 fork+exec.
-    - 자식이 부모의 listener fd 를 SO_REUSEPORT 로 인계받아 즉시 accept. 부모는 새 연결 수락을 멈추고 진행 중 요청을 30s 한도로 드레인 후 종료.
+    - 자식이 부모의 listener fd 를 인계받아 즉시 accept. 부모는 새 연결 수락을 멈추고 진행 중 요청을 30s 한도로 드레인 후 종료.
+    - **systemd 호환** (운영 첫 적용에서 발견된 함정): unit 에 `Type=notify` + `NotifyAccess=all` 필수. tableflip 자식은 Ready() 직후 `daemon.SdNotify("READY=1\nMAINPID=<child>")` 를 보내 systemd 의 MainPID 를 자식으로 갱신시킨다. 이게 없으면 부모 종료 시 systemd 가 cgroup 전체 SIGTERM 을 보내 자식까지 죽고, 서비스가 5초 후 systemd Restart 로 재시작되며 사용자에게 다운타임이 노출된다.
+    - **메트릭 listener (127.0.0.1:9180) 도 같은 Upgrader 에 등록** — `serve.Run(Server{...}, Server{...})` 가변 인자로 main router + metrics router 를 모두 인수 받아 양쪽 fd 를 자식이 인계. 별도 listener 로 두면 자식이 9180 bind 시 부모와 충돌해 metrics 가 죽는다 (그 자체로는 fatal 아니지만 관측성 손실).
     - Windows 빌드(`serve_windows.go`) 는 평이한 `http.Server` + graceful shutdown — 개발 환경 전용이라 zero-downtime 미지원.
   - **(2) Rust engine: graceful shutdown** (`engine/src/main.rs`).
     - `axum::serve(...).with_graceful_shutdown(SIGTERM/SIGINT)` 로 in-flight 계산 드레인.
@@ -849,7 +851,8 @@
 - **운영 기준**:
   - **첫 배포 시 1회 수동 작업**: 운영 박스에서 `cp ops/systemd/{solarflow-go,solarflow-engine}.service ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user restart solarflow-{go,engine}.service`. 그 다음 배포부터 zero-downtime.
   - **Windows dev 영향 없음**: serve_windows.go 가 fallback. tableflip 빌드 태그로 차단.
-  - **메트릭 listener (127.0.0.1:9180) 는 graceful shutdown 비대상**: localhost 전용이라 짧은 단절은 다음 Prometheus scrape 에서 자동 복구.
+  - **메트릭 listener (127.0.0.1:9180)** 는 graceful shutdown + tableflip fd 인계 모두 적용 — main listener 와 동일 Upgrader 등록.
+  - **2026-05-06 운영 적용 검증** — 3 회 연속 reload, 매번 60 회 (총 180) HTTP /health 폭격 모두 200. PID 매 회 변경 (자식 인계 성공). cgroup SIGTERM 으로 인한 자식 사망 0 건.
 - **검증**:
   - `go build .` (windows + linux/arm64 cross), `go test ./internal/engine/` 통과.
   - `cargo check` 통과.
