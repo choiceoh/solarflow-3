@@ -12,6 +12,8 @@ export interface OrderListParams {
   management_category?: string;
   q?: string;
   work_queue?: 'delivery_soon' | 'no_site';
+  start?: string;
+  end?: string;
   sort?: string;
   order?: 'asc' | 'desc';
   pageIndex: number;
@@ -38,6 +40,8 @@ export function useOrderList(params: OrderListParams): OrderListResult {
     params.management_category ?? '',
     params.q ?? '',
     params.work_queue ?? '',
+    params.start ?? '',
+    params.end ?? '',
     params.sort ?? '',
     params.order ?? '',
     params.pageIndex,
@@ -52,6 +56,8 @@ export function useOrderList(params: OrderListParams): OrderListResult {
       if (params.management_category) search.set('management_category', params.management_category);
       if (params.q) search.set('q', params.q);
       if (params.work_queue) search.set('work_queue', params.work_queue);
+      if (params.start) search.set('start', params.start);
+      if (params.end) search.set('end', params.end);
       if (params.sort) search.set('sort', params.sort);
       if (params.order) search.set('order', params.order);
       search.set('limit', String(params.pageSize));
@@ -154,6 +160,8 @@ export interface OrderDashboardFilters {
   management_category?: string
   q?: string
   work_queue?: 'delivery_soon' | 'no_site'
+  start?: string
+  end?: string
   status_scope?: OrderDashboardScope
 }
 
@@ -167,6 +175,8 @@ export function useOrderDashboard(filters: OrderDashboardFilters = {}) {
     filters.management_category ?? '',
     filters.q ?? '',
     filters.work_queue ?? '',
+    filters.start ?? '',
+    filters.end ?? '',
     filters.status_scope ?? 'lifetime',
   ]
   const q = useQuery<OrderDashboard, Error>({
@@ -178,6 +188,8 @@ export function useOrderDashboard(filters: OrderDashboardFilters = {}) {
       if (filters.management_category) params.set('management_category', filters.management_category)
       if (filters.q) params.set('q', filters.q)
       if (filters.work_queue) params.set('work_queue', filters.work_queue)
+      if (filters.start) params.set('start', filters.start)
+      if (filters.end) params.set('end', filters.end)
       if (filters.status_scope) params.set('status_scope', filters.status_scope)
       return fetchWithAuth<OrderDashboard>(`/api/v1/orders/dashboard?${params}`)
     },

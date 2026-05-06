@@ -7,7 +7,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import LCListTable from '@/components/procurement/LCListTable';
 import BLDetailView from '@/components/inbound/BLDetailView';
 import { MasterConsole } from '@/components/command/MasterConsole';
-import { FilterButton, RailBlock, Sparkline } from '@/components/command/MockupPrimitives';
+import { FilterButton, RailBlock, Sparkline, type DateRangeValue } from '@/components/command/MockupPrimitives';
 import { LC_STATUS_LABEL, type LCRecord, type LCStatus } from '@/types/procurement';
 import type { Bank, Company } from '@/types/masters';
 
@@ -19,6 +19,7 @@ export default function LCPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [bankFilter, setBankFilter] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
+  const [dateRange, setDateRange] = useState<DateRangeValue>(null);
 
   const [selectedBL, setSelectedBL] = useState<string | null>(null);
   const [blsVersion, setBlsVersion] = useState(0);
@@ -30,8 +31,12 @@ export default function LCPage() {
     if (statusFilter && l.status !== statusFilter) return false
     if (bankFilter && l.bank_id !== bankFilter) return false
     if (companyFilter && l.company_id !== companyFilter) return false
+    if (dateRange) {
+      const d = l.open_date
+      if (!d || d < dateRange.start || d > dateRange.end) return false
+    }
     return true
-  }), [lcs, statusFilter, bankFilter, companyFilter]);
+  }), [lcs, statusFilter, bankFilter, companyFilter, dateRange]);
 
   // ECOS 매매기준율 30일 — L/C 개설 시 시장 환율 추이 참고용 (실제 개설가는 거래은행 전신환매도율).
   const { data: fx } = useFxTimeseries('usdkrw', 30);
@@ -93,6 +98,12 @@ export default function LCPage() {
         toolbar={
           <div className="sf-card-controls" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
             <FilterButton items={[
+              {
+                kind: 'date_range',
+                label: '기간',
+                value: dateRange,
+                onChange: setDateRange,
+              },
               {
                 label: '상태',
                 value: statusFilter,

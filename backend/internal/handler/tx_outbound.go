@@ -593,6 +593,13 @@ func (h *OutboundHandler) applyOutboundFilters(r *http.Request, query *postgrest
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
 	}
+	// 기간 필터 — outbound_date 기준 [start, end] inclusive.
+	if start := r.URL.Query().Get("start"); start != "" {
+		query = query.Gte("outbound_date", start)
+	}
+	if end := r.URL.Query().Get("end"); end != "" {
+		query = query.Lte("outbound_date", end)
+	}
 
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
 		productIDs, err := h.productIDsByManufacturer(mfgID)
