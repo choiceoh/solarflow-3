@@ -1,41 +1,35 @@
 // L/C 은행 (곳) 드릴다운 — distinct bank 수 + 은행별 LC 건수/금액.
+//
+// 서버 집계 마이그(C-1 procurement) — useLCDashboard.
 
 import { useMemo } from 'react'
-import { useLCList } from '@/hooks/useProcurement'
-import { breakdownBy, trend24Distinct } from '@/lib/insights/aggregations'
+import { useLCDashboard } from '@/hooks/useProcurement'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmtUsdM = (v: number) => (v / 1_000_000).toFixed(v >= 10_000_000 ? 1 : 2)
 
 export function ProcurementLcBanksInsight() {
-  const { data, loading } = useLCList()
+  const { dashboard, loading } = useLCDashboard()
 
-  const trend = useMemo(
-    () => trend24Distinct(data, (l) => l.open_date ?? null, (l) => l.bank_id),
-    [data],
-  )
-  const totalDistinct = useMemo(
-    () => new Set(data.map((l) => l.bank_id)).size,
-    [data],
+  const totalDistinct = dashboard?.totals.banks_count ?? 0
+
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.distinct_banks })),
+    [dashboard],
   )
 
-  const byBankCount = useMemo(
-    () => breakdownBy(
-      data,
-      (l) => l.bank_id,
-      (l) => l.bank_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [data],
+  const byBankCount: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_bank_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byBankAmount = useMemo(
-    () => breakdownBy(
-      data,
-      (l) => l.bank_id,
-      (l) => l.bank_name ?? '미지정',
-      (l) => l.amount_usd ?? 0,
-    ).slice(0, 10),
-    [data],
+  const byBankAmount: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_bank_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.amount_usd_sum, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (

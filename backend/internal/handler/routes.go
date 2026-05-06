@@ -317,6 +317,7 @@ func (h *LCHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Use(g.Feature(feature.IDTxLC))
 		r.Get("/", h.List)
 		r.Get("/summary", h.Summary)
+		r.Get("/dashboard", h.Dashboard)
 		r.Get("/{id}/lines", h.ListLines)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)

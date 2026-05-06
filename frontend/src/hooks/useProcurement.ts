@@ -148,6 +148,83 @@ export function useLCLines(lcId: string | null) {
   )
 }
 
+// LC 대시보드 — KPI + 24개월 trend + by_status/by_bank/by_urgency 를 서버 한 번에.
+// ProcurementPage LC 탭 + 5 LC Insight (Total/Amount/Banks/Linked/Maturity) 가 사용.
+export type LCScope = 'lifetime' | 'active' | 'maturity_soon'
+
+export interface LCDashboard {
+  totals: {
+    count: number
+    active_count: number
+    opened_count: number
+    settled_count: number
+    cancelled_count: number
+    total_amount_usd: number
+    active_amount_usd: number
+    banks_count: number
+    maturity_soon_count: number
+    overdue_count: number
+  }
+  trend24: {
+    month: string
+    count: number
+    active_count: number
+    amount_usd: number
+    distinct_banks: number
+  }[]
+  status_scope: LCScope
+  by_status: LCDashboardBreakdownRow[]
+  by_bank_top10: LCDashboardBreakdownRow[]
+  by_urgency: LCDashboardBreakdownRow[]  // maturity_soon 일 때만 채워짐
+}
+
+export interface LCDashboardBreakdownRow {
+  key: string
+  label: string
+  count: number
+  amount_usd_sum: number
+  share: number
+}
+
+export interface LCDashboardFilters {
+  po_id?: string
+  bank_id?: string
+  status?: string
+  status_scope?: LCScope
+}
+
+export function useLCDashboard(filters: LCDashboardFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const queryKey = [
+    'lcs-dashboard',
+    selectedCompanyId,
+    filters.po_id ?? '',
+    filters.bank_id ?? '',
+    filters.status ?? '',
+    filters.status_scope ?? 'lifetime',
+  ]
+  const q = useQuery<LCDashboard, Error>({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (filters.po_id) params.set('po_id', filters.po_id)
+      if (filters.bank_id) params.set('bank_id', filters.bank_id)
+      if (filters.status) params.set('status', filters.status)
+      if (filters.status_scope) params.set('status_scope', filters.status_scope)
+      return fetchWithAuth<LCDashboard>(`/api/v1/lcs/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
+}
+
 export function useLCList(
   filters: { status?: string; bank_id?: string; po_id?: string; manufacturer_id?: string } = {},
 ) {
