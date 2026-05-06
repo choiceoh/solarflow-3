@@ -130,7 +130,15 @@ type OutboundSaleConvBreakdownRow struct {
 // Dashboard — GET /api/v1/outbounds/dashboard.
 // applyOutboundFilters 와 동일한 쿼리 파라미터 (status, usage_category, manufacturer_id, q,
 // company_id 등) 를 받는다. 페이지·정렬은 무시.
+//
+// outbounds_dashboard() RPC (migration 076) 우선. 미배포/실패 시 chunked Go 경로 fallback.
 func (h *OutboundHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	if dashJSON, ok := h.tryRPCOutboundsDashboard(r); ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(dashJSON)
+		return
+	}
 	outbounds, err := h.fetchAllForDashboard(r)
 	if err != nil {
 		log.Printf("[출고 대시보드 데이터 수집 실패] %v", err)
@@ -156,6 +164,48 @@ func normalizePeriod(raw string) string {
 		return raw
 	}
 	return "lifetime"
+}
+
+// tryRPCOutboundsDashboard — outbounds_dashboard() RPC 호출.
+func (h *OutboundHandler) tryRPCOutboundsDashboard(r *http.Request) ([]byte, bool) {
+	q := r.URL.Query()
+	args := map[string]any{}
+	if v := q.Get("company_id"); v != "" && v != "all" {
+		args["p_company_id"] = v
+	}
+	if v := q.Get("status"); v != "" {
+		args["p_status"] = v
+	}
+	if v := q.Get("usage_category"); v != "" {
+		args["p_usage_category"] = v
+	}
+	if v := q.Get("manufacturer_id"); v != "" {
+		args["p_manufacturer_id"] = v
+	}
+	if v := q.Get("q"); v != "" {
+		args["p_q"] = v
+	}
+	args["p_period"] = normalizePeriod(q.Get("period"))
+
+	data, _, err := h.DB.From("rpc/outbounds_dashboard").Insert(args, false, "", "", "").Execute()
+	if err != nil {
+		log.Printf("[출고 대시보드 RPC 실패 — fallback 사용] %v", err)
+		return nil, false
+	}
+	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
+		var arr []json.RawMessage
+		if data[0] == '[' && json.Unmarshal(data, &arr) == nil && len(arr) > 0 {
+			var wrap map[string]json.RawMessage
+			if json.Unmarshal(arr[0], &wrap) == nil {
+				if inner, ok := wrap["outbounds_dashboard"]; ok {
+					return inner, true
+				}
+			}
+			return arr[0], true
+		}
+		return data, true
+	}
+	return nil, false
 }
 
 // fetchAllForDashboard — 필터 적용 후 1000 행 청크로 outbounds 전체를 끌어온다.
