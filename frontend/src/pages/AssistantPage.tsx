@@ -513,7 +513,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           </div>
         )}
 
-        <div className="flex items-end gap-2">
+        <div className="flex items-stretch gap-2">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -539,7 +539,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
             type="button"
             variant="outline"
             size="icon"
-            className="h-12 w-12 shrink-0"
+            className="w-12 shrink-0 h-auto"
             onClick={() => fileInputRef.current?.click()}
             disabled={busy}
             title="파일 첨부 (PDF/이미지, OCR 추출)"
@@ -549,7 +549,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           <Button
             onClick={() => void send()}
             disabled={busy || (!input.trim() && attachments.length === 0)}
-            className="h-12 shrink-0 px-5 text-base"
+            className="shrink-0 h-auto px-5 text-base"
           >
             <Send className="mr-1.5 h-5 w-5" />
             {ocrBusy ? 'OCR 중…' : status === 'submitted' || status === 'streaming' ? '응답 중…' : '전송'}
