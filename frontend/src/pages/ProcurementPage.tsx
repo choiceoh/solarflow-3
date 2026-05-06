@@ -51,7 +51,15 @@ import {
   RailBlock,
   Sparkline,
   TileB,
+  type DateRangeValue,
 } from "@/components/command/MockupPrimitives"
+
+// 기간 필터 — start/end 사이에 date 가 포함되는지 (양끝 포함, 빈 값은 통과).
+const inDateRange = (date: string | undefined | null, range: DateRangeValue) => {
+  if (!range) return true
+  if (!date) return false
+  return date >= range.start && date <= range.end
+}
 import { BreakdownRows } from "@/components/command/BreakdownRows"
 import { flatSparkFromValue, monthlyTrend, monthlyCount } from "@/templates/sparkUtils"
 
@@ -118,6 +126,7 @@ export default function ProcurementPage() {
   const [poStatusFilter, setPoStatusFilter] = useState("")
   const [poMfgFilter, setPoMfgFilter] = useState("")
   const [poTypeFilter, setPoTypeFilter] = useState("")
+  const [poDateRange, setPoDateRange] = useState<DateRangeValue>(null)
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null)
   // R1-1: 사이드바 "발주/결제" 클릭 시 슬라이드 패널 닫기
   useEffect(() => {
@@ -149,15 +158,17 @@ export default function ProcurementPage() {
         if (poStatusFilter && p.status !== poStatusFilter) return false
         if (poMfgFilter && p.manufacturer_id !== poMfgFilter) return false
         if (poTypeFilter && p.contract_type !== poTypeFilter) return false
+        if (!inDateRange(p.contract_date, poDateRange)) return false
         return true
       }),
-    [allPos, poStatusFilter, poMfgFilter, poTypeFilter],
+    [allPos, poStatusFilter, poMfgFilter, poTypeFilter, poDateRange],
   )
 
   const [lcAggVersion, setLcAggVersion] = useState(0)
   const [lcStatusFilter, setLcStatusFilter] = useState("")
   const [lcBankFilter, setLcBankFilter] = useState("")
   const [lcMfgFilter, setLcMfgFilter] = useState("")
+  const [lcDateRange, setLcDateRange] = useState<DateRangeValue>(null)
   const { data: allLcs, loading: lcLoading, reload: reloadLC } = useLCList()
   const { data: lcSummary } = useLCSummary({
     status: lcStatusFilter || undefined,
@@ -171,13 +182,15 @@ export default function ProcurementPage() {
         if (lcBankFilter && l.bank_id !== lcBankFilter) return false
         // manufacturer_id 는 useLCList 가 PO join 에서 매핑해 채움.
         if (lcMfgFilter && l.manufacturer_id !== lcMfgFilter) return false
+        if (!inDateRange(l.open_date, lcDateRange)) return false
         return true
       }),
-    [allLcs, lcStatusFilter, lcBankFilter, lcMfgFilter],
+    [allLcs, lcStatusFilter, lcBankFilter, lcMfgFilter, lcDateRange],
   )
 
   const [ttStatusFilter, setTtStatusFilter] = useState("")
   const [ttPoFilter, setTtPoFilter] = useState("")
+  const [ttDateRange, setTtDateRange] = useState<DateRangeValue>(null)
   const { data: allTts, loading: ttLoading } = useTTList()
   const { data: ttSummary } = useTTSummary({
     status: ttStatusFilter || undefined,
@@ -188,15 +201,17 @@ export default function ProcurementPage() {
       allTts.filter((t) => {
         if (ttStatusFilter && t.status !== ttStatusFilter) return false
         if (ttPoFilter && t.po_id !== ttPoFilter) return false
+        if (!inDateRange(t.remit_date, ttDateRange)) return false
         return true
       }),
-    [allTts, ttStatusFilter, ttPoFilter],
+    [allTts, ttStatusFilter, ttPoFilter, ttDateRange],
   )
 
   // BL 탭
   const [blTypeFilter, setBlTypeFilter] = useState("")
   const [blStatusFilter, setBlStatusFilter] = useState("")
   const [blMfgFilter, setBlMfgFilter] = useState("")
+  const [blDateRange, setBlDateRange] = useState<DateRangeValue>(null)
   const [selectedBL, setSelectedBL] = useState<string | null>(null)
   const [blsVersion, setBlsVersion] = useState(0)
   const { data: allBls, loading: blLoading, reload: reloadBL } = useBLList()
@@ -211,9 +226,10 @@ export default function ProcurementPage() {
         if (blTypeFilter && b.inbound_type !== blTypeFilter) return false
         if (blStatusFilter && b.status !== blStatusFilter) return false
         if (blMfgFilter && b.manufacturer_id !== blMfgFilter) return false
+        if (!inDateRange(b.eta, blDateRange)) return false
         return true
       }),
-    [allBls, blTypeFilter, blStatusFilter, blMfgFilter],
+    [allBls, blTypeFilter, blStatusFilter, blMfgFilter, blDateRange],
   )
 
   const [depositMfgFilter, setDepositMfgFilter] = useState("")
@@ -584,6 +600,12 @@ export default function ProcurementPage() {
           <FilterButton
             items={[
               {
+                kind: "date_range",
+                label: "기간",
+                value: poDateRange,
+                onChange: setPoDateRange,
+              },
+              {
                 label: "상태",
                 value: poStatusFilter,
                 onChange: setPoStatusFilter,
@@ -620,6 +642,12 @@ export default function ProcurementPage() {
           <FilterButton
             items={[
               {
+                kind: "date_range",
+                label: "기간",
+                value: lcDateRange,
+                onChange: setLcDateRange,
+              },
+              {
                 label: "상태",
                 value: lcStatusFilter,
                 onChange: setLcStatusFilter,
@@ -651,6 +679,12 @@ export default function ProcurementPage() {
         <>
           <FilterButton
             items={[
+              {
+                kind: "date_range",
+                label: "기간",
+                value: blDateRange,
+                onChange: setBlDateRange,
+              },
               {
                 label: "입고 구분",
                 value: blTypeFilter,
@@ -792,6 +826,12 @@ export default function ProcurementPage() {
                       <div className="flex-1" />
                       <FilterButton
                         items={[
+                          {
+                            kind: "date_range",
+                            label: "기간",
+                            value: ttDateRange,
+                            onChange: setTtDateRange,
+                          },
                           {
                             label: "상태",
                             value: ttStatusFilter,

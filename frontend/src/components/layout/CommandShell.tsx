@@ -152,6 +152,8 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'library', label: '자료실', abbr: '자료', path: '/library', icon: LibraryBig, menu: 'library' },
       { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
       { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: MODULE_TENANTS, isWip: true },
+      // D-064 PR 37: 운영자 전용 DB 정합성 검증 + 로컬 AI 분석. RoleGuard 로 admin/operator 만 접근.
+      { key: 'db-integrity', label: 'DB 정합성', abbr: '정합', path: '/admin/db-integrity', icon: ShieldAlert, menu: 'settings' },
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
     ],
   },
@@ -172,6 +174,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/assistant': { title: 'AI', breadcrumb: '도구 / 채팅 어시스턴트' },
   '/settings': { title: '설정', breadcrumb: '시스템 / 설정' },
   '/settings/admin': { title: '관리자 설정', breadcrumb: '시스템 / 사용자 관리' },
+  '/admin/db-integrity': { title: 'DB 정합성', breadcrumb: '운영 / 데이터 정합성 검증' },
   '/settings/audit-logs': { title: '관리자 로그', breadcrumb: '시스템 / 운영 데이터 변경 기록' },
   '/settings/site': { title: '사이트 설정', breadcrumb: '시스템 / 전역 설정' },
   '/settings/personal': { title: '개인 설정', breadcrumb: '시스템 / 내 계정' },

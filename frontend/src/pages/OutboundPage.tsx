@@ -40,6 +40,7 @@ export default function OutboundPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [usageFilter, setUsageFilter] = useState('');
   const [mfgFilter, setMfgFilter] = useState('');
+  const [obDateRange, setObDateRange] = useState<DateRangeValue>(null);
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null);
   const outboundColVis = useColumnVisibility(OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META);
   const outboundColPin = useColumnPinning(OUTBOUND_TABLE_ID);
@@ -80,7 +81,7 @@ export default function OutboundPage() {
   // 필터/검색 변경 시 페이지를 0 으로 리셋 — autoResetPageIndex 가 server 모드에서 비활성이라 직접 처리.
   useEffect(() => {
     setPageIndex(0);
-  }, [statusFilter, usageFilter, mfgFilter, debouncedSearch]);
+  }, [statusFilter, usageFilter, mfgFilter, obDateRange, debouncedSearch]);
 
   const sortKey = sorting[0]?.id;
   const sortOrder: 'asc' | 'desc' = sorting[0]?.desc === false ? 'asc' : 'desc';
@@ -95,6 +96,8 @@ export default function OutboundPage() {
     usage_category: usageFilter || undefined,
     manufacturer_id: mfgFilter || undefined,
     q: debouncedSearch || undefined,
+    start: obDateRange?.start || undefined,
+    end: obDateRange?.end || undefined,
     sort: sortKey || undefined,
     order: sortKey ? sortOrder : undefined,
     pageIndex,
@@ -106,6 +109,8 @@ export default function OutboundPage() {
     usage_category: usageFilter || undefined,
     manufacturer_id: mfgFilter || undefined,
     q: debouncedSearch || undefined,
+    start: obDateRange?.start || undefined,
+    end: obDateRange?.end || undefined,
   });
 
   // ─── 매출 — 서버사이드 페이지·검색·정렬 상태 ─────────────────────────
@@ -233,6 +238,12 @@ export default function OutboundPage() {
       {activeTab === 'outbound' ? (
         <>
           <FilterButton items={[
+            {
+              kind: 'date_range',
+              label: '기간',
+              value: obDateRange,
+              onChange: setObDateRange,
+            },
             {
               label: '상태',
               value: statusFilter,

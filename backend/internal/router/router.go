@@ -70,6 +70,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		handler.NewConstructionSiteHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewCostDetailHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewCreditBoardHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewDBIntegrityHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewDeclarationHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewDispatchRouteHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewExpenseHandler(a.DB).RegisterRoutes(r, a.Gates)

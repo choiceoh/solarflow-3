@@ -37,6 +37,8 @@ export interface OutboundListParams {
   usage_category?: string;
   manufacturer_id?: string;
   q?: string;
+  start?: string;
+  end?: string;
   sort?: string;
   order?: 'asc' | 'desc';
   pageIndex: number;
@@ -64,6 +66,8 @@ export function useOutboundList(params: OutboundListParams): OutboundListResult 
     params.usage_category ?? '',
     params.manufacturer_id ?? '',
     params.q ?? '',
+    params.start ?? '',
+    params.end ?? '',
     params.sort ?? '',
     params.order ?? '',
     params.pageIndex,
@@ -77,6 +81,8 @@ export function useOutboundList(params: OutboundListParams): OutboundListResult 
       if (params.usage_category) search.set('usage_category', params.usage_category);
       if (params.manufacturer_id) search.set('manufacturer_id', params.manufacturer_id);
       if (params.q) search.set('q', params.q);
+      if (params.start) search.set('start', params.start);
+      if (params.end) search.set('end', params.end);
       if (params.sort) search.set('sort', params.sort);
       if (params.order) search.set('order', params.order);
       search.set('limit', String(params.pageSize));
@@ -160,6 +166,8 @@ export interface OutboundDashboardFilters {
   usage_category?: string
   manufacturer_id?: string
   q?: string
+  start?: string
+  end?: string
   period?: OutboundDashboardPeriod
 }
 
@@ -172,6 +180,8 @@ export function useOutboundDashboard(filters: OutboundDashboardFilters = {}) {
     filters.usage_category ?? '',
     filters.manufacturer_id ?? '',
     filters.q ?? '',
+    filters.start ?? '',
+    filters.end ?? '',
     filters.period ?? 'lifetime',
   ]
   const q = useQuery<OutboundDashboard, Error>({
@@ -182,6 +192,8 @@ export function useOutboundDashboard(filters: OutboundDashboardFilters = {}) {
       if (filters.usage_category) params.set('usage_category', filters.usage_category)
       if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id)
       if (filters.q) params.set('q', filters.q)
+      if (filters.start) params.set('start', filters.start)
+      if (filters.end) params.set('end', filters.end)
       if (filters.period) params.set('period', filters.period)
       return fetchWithAuth<OutboundDashboard>(`/api/v1/outbounds/dashboard?${params}`)
     },
@@ -237,6 +249,8 @@ export function useOutboundSummary(params: Omit<OutboundListParams, 'pageIndex' 
     params.usage_category ?? '',
     params.manufacturer_id ?? '',
     params.q ?? '',
+    params.start ?? '',
+    params.end ?? '',
   ];
   const q = useQuery<OutboundSummary, Error>({
     queryKey,
@@ -246,6 +260,8 @@ export function useOutboundSummary(params: Omit<OutboundListParams, 'pageIndex' 
       if (params.usage_category) search.set('usage_category', params.usage_category);
       if (params.manufacturer_id) search.set('manufacturer_id', params.manufacturer_id);
       if (params.q) search.set('q', params.q);
+      if (params.start) search.set('start', params.start);
+      if (params.end) search.set('end', params.end);
       return fetchWithAuth<OutboundSummary>(`/api/v1/outbounds/summary?${search}`);
     },
     enabled: !!selectedCompanyId,

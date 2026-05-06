@@ -152,6 +152,7 @@
 | `sys.ui_config` | GUI 메타 편집기 | ★ | global |
 | `sys.user` | 사용자 (/me + admin 관리) | ★ | global |
 | `sys.external_sync` | 외부 동기화 소스 (D-059) | ★ | global |
+| `sys.db_integrity` | DB 정합성 검증 + AI 분석 (D-064 PR 37) | ★ | global |
 | `engine.health` | Rust 엔진 헬스 | ★ | global |
 
 ---
