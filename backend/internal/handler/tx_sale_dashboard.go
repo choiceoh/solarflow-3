@@ -77,7 +77,17 @@ type SaleDashBreakdownRow struct {
 // Dashboard — GET /api/v1/sales/dashboard.
 // applySaleFilters 와 동일한 쿼리 파라미터 (customer_id, month, start, end, invoice_status, q, company_id).
 // 페이지·정렬은 무시.
+//
+// 우선 sales_dashboard() RPC (migration 073) 호출 — DB-side GROUP BY 1 round-trip.
+// RPC 가 미배포 (404 PGRST202) 또는 실패 시 기존 chunked Go-side 집계 경로로 fallback.
 func (h *SaleHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	if dashJSON, ok := h.tryRPCSalesDashboard(r); ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(dashJSON)
+		return
+	}
+	// Fallback: chunked fetch + Go aggregation
 	sales, err := h.fetchAllForSaleDashboard(r)
 	if err != nil {
 		log.Printf("[매출 대시보드 데이터 수집 실패] %v", err)
@@ -87,6 +97,77 @@ func (h *SaleHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	items := h.enrichSales(sales)
 	dash := computeSaleDashboard(items)
 	response.RespondJSON(w, http.StatusOK, dash)
+}
+
+// tryRPCSalesDashboard — sales_dashboard() RPC 호출 시도. 성공하면 jsonb 바이트 반환.
+// 실패 시 (RPC 미배포, DB 오류) false 반환 → 호출자가 fallback 경로 사용.
+//
+// PostgREST RPC 호출은 codebase 기존 패턴 (From("rpc/"+name).Insert(body)) 사용.
+func (h *SaleHandler) tryRPCSalesDashboard(r *http.Request) ([]byte, bool) {
+	q := r.URL.Query()
+	args := map[string]any{}
+	if v := q.Get("company_id"); v != "" && v != "all" {
+		args["p_company_id"] = v
+	}
+	if v := q.Get("customer_id"); v != "" {
+		args["p_customer_id"] = v
+	}
+	if v := q.Get("outbound_id"); v != "" {
+		args["p_outbound_id"] = v
+	}
+	if v := q.Get("order_id"); v != "" {
+		args["p_order_id"] = v
+	}
+	if v := q.Get("status"); v != "" {
+		args["p_status"] = v
+	}
+	if v := q.Get("month"); v != "" {
+		args["p_month"] = v
+	}
+	if v := q.Get("start"); v != "" {
+		args["p_start"] = v
+	}
+	if v := q.Get("end"); v != "" {
+		args["p_end"] = v
+	}
+	if v := q.Get("invoice_status"); v != "" {
+		args["p_invoice_status"] = v
+	}
+	if v := q.Get("q"); v != "" {
+		args["p_q"] = v
+	}
+
+	// PostgREST RPC POST /rpc/sales_dashboard. Insert payload 가 함수 인자 (named).
+	// "" return preference — 함수 RETURNS jsonb 면 array-wrapped jsonb 가 돌아옴.
+	data, _, err := h.DB.From("rpc/sales_dashboard").Insert(args, false, "", "", "").Execute()
+	if err != nil {
+		// 일반 실패 시나리오:
+		//   - PGRST202 (RPC 미발견) — migration 073 미적용
+		//   - 권한 (GRANT EXECUTE 누락)
+		//   - SQL 런타임 오류
+		// 어떤 경우든 fallback 으로 넘긴다. 운영 적용 후엔 이 경로 0 회로 수렴해야 함.
+		log.Printf("[매출 대시보드 RPC 실패 — fallback 사용] %v", err)
+		return nil, false
+	}
+	// PostgREST 가 RETURNING jsonb 함수 결과를 단일 객체 또는 [obj] 배열로 줄 수 있음.
+	// scalar 함수 호출은 single-row table 결과로 와서 [{ "sales_dashboard": {...} }] 형태일 수도.
+	// 단일 jsonb 가 그대로 오는 정상 케이스를 우선, 이외 케이스는 unmarshal 시도.
+	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
+		// 배열로 감싸진 경우 첫 요소만 추출.
+		var arr []json.RawMessage
+		if data[0] == '[' && json.Unmarshal(data, &arr) == nil && len(arr) > 0 {
+			// arr[0] 가 단순 jsonb 면 그대로, { "sales_dashboard": {...} } 형태면 키 추출.
+			var wrap map[string]json.RawMessage
+			if json.Unmarshal(arr[0], &wrap) == nil {
+				if inner, ok := wrap["sales_dashboard"]; ok {
+					return inner, true
+				}
+			}
+			return arr[0], true
+		}
+		return data, true
+	}
+	return nil, false
 }
 
 // fetchAllForSaleDashboard — 필터 적용 후 1000 행 청크로 sales 전체를 끌어온다.
