@@ -1,51 +1,40 @@
 // 운송중 P/O (건) 드릴다운 — status=shipping|in_progress.
+//
+// 서버 집계 마이그(C-1 procurement) — usePODashboard(status_scope=shipping).
 
 import { useMemo } from 'react'
-import { usePOList } from '@/hooks/useProcurement'
-import { CONTRACT_TYPE_LABEL, type ContractType } from '@/types/procurement'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { usePODashboard } from '@/hooks/useProcurement'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function ProcurementShippingInsight() {
-  const { data, loading } = usePOList()
+  const { dashboard, loading } = usePODashboard({ status_scope: 'shipping' })
 
-  const shipping = useMemo(
-    () => data.filter((p) => p.status === 'shipping' || p.status === 'in_progress'),
-    [data],
-  )
+  const totalShipping = dashboard?.totals.shipping_count ?? 0
 
-  const trend = useMemo(
-    () => trend24(shipping, (p) => p.contract_date ?? null),
-    [shipping],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.shipping_count })),
+    [dashboard],
   )
 
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      shipping,
-      (p) => p.manufacturer_id,
-      (p) => p.manufacturer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [shipping],
+  const byManufacturer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_manufacturer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byContractType = useMemo(
-    () => breakdownBy(
-      shipping,
-      (p) => p.contract_type,
-      (p) => CONTRACT_TYPE_LABEL[p.contract_type as ContractType] ?? p.contract_type,
-      () => 1,
-    ),
-    [shipping],
+  const byContractType: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_contract_type ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byMw = useMemo(
-    () => breakdownBy(
-      shipping,
-      (p) => p.manufacturer_id,
-      (p) => p.manufacturer_name ?? '미지정',
-      (p) => p.total_mw ?? 0,
-    ).slice(0, 10),
-    [shipping],
-  )
+  const byMw: BreakdownRow[] = useMemo(() => {
+    const rows = (dashboard?.by_manufacturer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.total_mw, share: r.share, count: r.count,
+    }))
+    return [...rows].sort((a, b) => b.value - a.value).slice(0, 10)
+  }, [dashboard])
 
   return (
     <InsightShell
@@ -57,7 +46,7 @@ export function ProcurementShippingInsight() {
       backLabel="구매로 돌아가기"
       loading={loading}
       totalLabel="운송 합계"
-      totalValue={shipping.length.toLocaleString()}
+      totalValue={totalShipping.toLocaleString()}
       trend={trend}
       trendValueLabel="신규 운송"
       breakdowns={[

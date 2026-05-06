@@ -1,43 +1,35 @@
 // L/C 연결 (건) 드릴다운 — PO 탭 KPI 'L/C 연결' (= LC 가 개설된 PO 수).
+//
+// 서버 집계 마이그(C-1 procurement) — useLCDashboard(status_scope=active).
 
 import { useMemo } from 'react'
-import { useLCList } from '@/hooks/useProcurement'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useLCDashboard } from '@/hooks/useProcurement'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmtUsdM = (v: number) => (v / 1_000_000).toFixed(v >= 10_000_000 ? 1 : 2)
 
 export function ProcurementLcLinkedInsight() {
-  const { data, loading } = useLCList()
+  const { dashboard, loading } = useLCDashboard({ status_scope: 'active' })
 
-  // 'L/C 연결' = 활성 LC (cancelled 제외) 의 PO 연결.
-  const active = useMemo(
-    () => data.filter((l) => l.status !== 'cancelled'),
-    [data],
+  const activeCount = dashboard?.totals.active_count ?? 0
+
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.active_count })),
+    [dashboard],
   )
 
-  const trend = useMemo(
-    () => trend24(active, (l) => l.open_date ?? null),
-    [active],
+  const byBank: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_bank_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-
-  const byBank = useMemo(
-    () => breakdownBy(
-      active,
-      (l) => l.bank_id,
-      (l) => l.bank_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [active],
-  )
-  const byBankAmount = useMemo(
-    () => breakdownBy(
-      active,
-      (l) => l.bank_id,
-      (l) => l.bank_name ?? '미지정',
-      (l) => l.amount_usd ?? 0,
-    ).slice(0, 10),
-    [active],
+  const byBankAmount: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_bank_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.amount_usd_sum, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (
@@ -50,7 +42,7 @@ export function ProcurementLcLinkedInsight() {
       backLabel="구매로 돌아가기"
       loading={loading}
       totalLabel="활성 합계"
-      totalValue={active.length.toLocaleString()}
+      totalValue={activeCount.toLocaleString()}
       trend={trend}
       trendValueLabel="L/C 개설"
       breakdowns={[

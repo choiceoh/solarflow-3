@@ -1,50 +1,39 @@
 // B/L 해외직수입 (건) 드릴다운 — inbound_type=import. OCR 자동입력 대상.
+//
+// 서버 집계 마이그(C-1 procurement) — useBLDashboard(status_scope=import).
 
 import { useMemo } from 'react'
-import { useBLList } from '@/hooks/useInbound'
-import { BL_STATUS_LABEL, type BLStatus } from '@/types/inbound'
-import type { BLShipment } from '@/types/inbound'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useBLDashboard } from '@/hooks/useInbound'
 import InsightShell from '@/components/insights/InsightShell'
-
-const blDate = (b: BLShipment) => b.actual_arrival ?? b.eta ?? b.etd ?? null
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function ProcurementBlImportInsight() {
-  const { data, loading } = useBLList()
+  const { dashboard, loading } = useBLDashboard({ status_scope: 'import' })
 
-  const imports = useMemo(() => data.filter((b) => b.inbound_type === 'import'), [data])
+  const totalImport = dashboard?.totals.import_count ?? 0
 
-  const trend = useMemo(
-    () => trend24(imports, blDate),
-    [imports],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.import_count })),
+    [dashboard],
   )
 
-  const byStatus = useMemo(
-    () => breakdownBy(
-      imports,
-      (b) => b.status,
-      (b) => BL_STATUS_LABEL[b.status as BLStatus] ?? b.status,
-      () => 1,
-    ),
-    [imports],
+  const byStatus: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_status ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      imports,
-      (b) => b.manufacturer_id,
-      (b) => b.manufacturer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [imports],
+  const byManufacturer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_manufacturer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byPort = useMemo(
-    () => breakdownBy(
-      imports,
-      (b) => b.port ?? null,
-      (b) => b.port ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [imports],
+  const byPort: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_port_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (
@@ -57,7 +46,7 @@ export function ProcurementBlImportInsight() {
       backLabel="B/L 로 돌아가기"
       loading={loading}
       totalLabel="누계"
-      totalValue={imports.length.toLocaleString()}
+      totalValue={totalImport.toLocaleString()}
       trend={trend}
       trendValueLabel="해외직수입"
       breakdowns={[

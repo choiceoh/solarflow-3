@@ -1,50 +1,42 @@
 // T/T 완료 금액 (M$) 드릴다운 — status=completed amount_usd 합.
+//
+// 서버 집계 마이그(C-1 procurement) — useTTDashboard(status_scope=completed).
 
 import { useMemo } from 'react'
-import { useTTList } from '@/hooks/useProcurement'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useTTDashboard } from '@/hooks/useProcurement'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmtUsdM = (v: number) => (v / 1_000_000).toFixed(v >= 10_000_000 ? 1 : 2)
 const fmtUsdMTick = (v: number) => `${(v / 1_000_000).toFixed(0)}`
 
 export function ProcurementTtCompletedInsight() {
-  const { data, loading } = useTTList()
+  const { dashboard, loading } = useTTDashboard({ status_scope: 'completed' })
 
-  const completed = useMemo(() => data.filter((t) => t.status === 'completed'), [data])
+  const totalCompleted = dashboard?.totals.completed_amount_usd ?? 0
 
-  const trend = useMemo(
-    () => trend24(completed, (t) => t.remit_date ?? null, (t) => t.amount_usd ?? 0),
-    [completed],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.completed_amount_usd })),
+    [dashboard],
   )
-  const totalCompleted = completed.reduce((sum, t) => sum + (t.amount_usd ?? 0), 0)
 
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      completed,
-      (t) => t.manufacturer_name ?? null,
-      (t) => t.manufacturer_name ?? '미지정',
-      (t) => t.amount_usd ?? 0,
-    ).slice(0, 10),
-    [completed],
+  const byManufacturer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_manufacturer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.amount_usd_sum, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byBank = useMemo(
-    () => breakdownBy(
-      completed,
-      (t) => t.bank_name ?? null,
-      (t) => t.bank_name ?? '미지정',
-      (t) => t.amount_usd ?? 0,
-    ).slice(0, 10),
-    [completed],
+  const byBank: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_bank_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.amount_usd_sum, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byPurpose = useMemo(
-    () => breakdownBy(
-      completed,
-      (t) => t.purpose ?? null,
-      (t) => t.purpose ?? '용도 미지정',
-      (t) => t.amount_usd ?? 0,
-    ).slice(0, 10),
-    [completed],
+  const byPurpose: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_purpose_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.amount_usd_sum, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (

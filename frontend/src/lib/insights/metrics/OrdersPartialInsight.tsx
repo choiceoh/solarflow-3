@@ -1,46 +1,39 @@
 // 분할출고 (status=partial) 드릴다운 — 잔량 관리 대상 수주.
+//
+// 서버 집계 마이그(C-1 orders) — useOrderDashboard(status_scope=partial) 로 partial 만 분해.
 
 import { useMemo } from 'react'
-import { useOrderListAll } from '@/hooks/useOrders'
-import { MANAGEMENT_CATEGORY_LABEL } from '@/types/orders'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useOrderDashboard } from '@/hooks/useOrders'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function OrdersPartialInsight() {
-  const { data, loading } = useOrderListAll()
+  const { dashboard, loading } = useOrderDashboard({ status_scope: 'partial' })
 
-  const partial = useMemo(() => data.filter((o) => o.status === 'partial'), [data])
+  const totalPartial = dashboard?.totals.partial_count ?? 0
 
-  const trend = useMemo(
-    () => trend24(partial, (o) => o.order_date),
-    [partial],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.partial_count })),
+    [dashboard],
   )
-  const byCustomer = useMemo(
-    () => breakdownBy(
-      partial,
-      (o) => o.customer_id,
-      (o) => o.customer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [partial],
+
+  const byCategory: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_category ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byCategory = useMemo(
-    () => breakdownBy(
-      partial,
-      (o) => o.management_category,
-      (o) => MANAGEMENT_CATEGORY_LABEL[o.management_category] ?? o.management_category,
-      () => 1,
-    ),
-    [partial],
+  const byCustomer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_customer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      partial,
-      (o) => o.manufacturer_name ?? null,
-      (o) => o.manufacturer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [partial],
+  const byManufacturer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_manufacturer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (
@@ -53,7 +46,7 @@ export function OrdersPartialInsight() {
       backLabel="수주 / 수금으로 돌아가기"
       loading={loading}
       totalLabel="분할 합계"
-      totalValue={partial.length.toLocaleString()}
+      totalValue={totalPartial.toLocaleString()}
       trend={trend}
       trendValueLabel="신규 분할"
       breakdowns={[

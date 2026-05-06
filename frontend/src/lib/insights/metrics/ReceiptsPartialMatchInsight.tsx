@@ -1,33 +1,31 @@
 // 부분 매칭 (건) 드릴다운 — matched_total > 0 AND remaining > 0.
+//
+// 서버 집계 마이그(C-1 receipts) — useReceiptDashboard 사용.
 
 import { useMemo } from 'react'
-import { useReceiptList } from '@/hooks/useReceipts'
-import type { Receipt } from '@/types/orders'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useReceiptDashboard } from '@/hooks/useReceipts'
 import InsightShell from '@/components/insights/InsightShell'
-
-const isPartial = (r: Receipt) =>
-  (r.matched_total ?? 0) > 0 && (r.remaining ?? 0) > 0
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function ReceiptsPartialMatchInsight() {
-  const { data, loading } = useReceiptList()
+  const { dashboard, loading } = useReceiptDashboard()
 
-  const partial = useMemo(() => data.filter(isPartial), [data])
+  const totalPartial = dashboard?.totals.partial_match_count ?? 0
 
-  const trend = useMemo(
-    () => trend24(partial, (r) => r.receipt_date),
-    [partial],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.partial_count })),
+    [dashboard],
   )
 
-  const byCustomer = useMemo(
-    () => breakdownBy(
-      partial,
-      (r) => r.customer_id,
-      (r) => r.customer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [partial],
-  )
+  // 거래처 분해 — by_customer_top10 의 partial_match_count 기준 재정렬.
+  const byCustomer: BreakdownRow[] = useMemo(() => {
+    const rows = (dashboard?.by_customer_top10 ?? [])
+      .filter((r) => r.partial_match_count > 0)
+      .map((r) => ({
+        key: r.key, label: r.label, value: r.partial_match_count, share: r.share, count: r.count,
+      }))
+    return [...rows].sort((a, b) => b.value - a.value).slice(0, 10)
+  }, [dashboard])
 
   return (
     <InsightShell
@@ -39,7 +37,7 @@ export function ReceiptsPartialMatchInsight() {
       backLabel="수금 관리로 돌아가기"
       loading={loading}
       totalLabel="부분 매칭"
-      totalValue={partial.length.toLocaleString()}
+      totalValue={totalPartial.toLocaleString()}
       trend={trend}
       trendValueLabel="부분 매칭 건"
       breakdowns={[

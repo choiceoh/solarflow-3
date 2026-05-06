@@ -247,7 +247,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxOrder: {
 		ID: IDTxOrder, Name: "수주", Description: "수주 CRUD",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/orders/", "/api/v1/orders/summary", "/api/v1/orders/{id}"},
+		Paths: []string{"/api/v1/orders/", "/api/v1/orders/summary", "/api/v1/orders/dashboard", "/api/v1/orders/{id}"},
 	},
 	IDTxOutbound: {
 		ID: IDTxOutbound, Name: "출고", Description: "출고 CRUD",
@@ -262,7 +262,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxReceipt: {
 		ID: IDTxReceipt, Name: "수금", Description: "수금 CRUD",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/receipts/", "/api/v1/receipts/{id}"},
+		Paths: []string{"/api/v1/receipts/", "/api/v1/receipts/dashboard", "/api/v1/receipts/{id}"},
 	},
 	IDTxReceiptMatch: {
 		ID: IDTxReceiptMatch, Name: "수금/매출 매칭", Description: "매칭 + 자동 매칭",
@@ -273,7 +273,7 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDTxPO, Name: "PO 발주", Description: "PO + 라인",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{
-			"/api/v1/pos/", "/api/v1/pos/summary", "/api/v1/pos/{id}",
+			"/api/v1/pos/", "/api/v1/pos/summary", "/api/v1/pos/dashboard", "/api/v1/pos/{id}",
 			"/api/v1/pos/{poId}/lines/", "/api/v1/pos/{poId}/lines/{id}",
 		},
 	},
@@ -281,7 +281,7 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDTxBL, Name: "B/L 입고", Description: "B/L + 라인",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{
-			"/api/v1/bls/", "/api/v1/bls/summary", "/api/v1/bls/{id}",
+			"/api/v1/bls/", "/api/v1/bls/summary", "/api/v1/bls/dashboard", "/api/v1/bls/{id}",
 			"/api/v1/bls/{blId}/lines/", "/api/v1/bls/{blId}/lines/{id}",
 		},
 	},
@@ -315,7 +315,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxLC: {
 		ID: IDTxLC, Name: "L/C 신용장", Description: "L/C + 라인 (module 계열)",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/lcs/", "/api/v1/lcs/summary", "/api/v1/lcs/{id}", "/api/v1/lcs/{id}/lines"},
+		Paths: []string{"/api/v1/lcs/", "/api/v1/lcs/summary", "/api/v1/lcs/dashboard", "/api/v1/lcs/{id}", "/api/v1/lcs/{id}/lines"},
 	},
 	IDTxLCLimit: {
 		ID: IDTxLCLimit, Name: "LC 한도 변경 이력", Description: "LC 한도 (module 계열, DELETE 없음)",
@@ -330,7 +330,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxTT: {
 		ID: IDTxTT, Name: "T/T 계약금", Description: "T/T (module 계열)",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/tts/", "/api/v1/tts/summary", "/api/v1/tts/{id}"},
+		Paths: []string{"/api/v1/tts/", "/api/v1/tts/summary", "/api/v1/tts/dashboard", "/api/v1/tts/{id}"},
 	},
 
 	// ===== intercompany.* =====

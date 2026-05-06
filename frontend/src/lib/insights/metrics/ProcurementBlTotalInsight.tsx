@@ -1,48 +1,39 @@
 // B/L 전체 (건) 드릴다운 — 모든 B/L. 상태/제조사/입고유형 분해.
+//
+// 서버 집계 마이그(C-1 procurement) — useBLDashboard.
 
 import { useMemo } from 'react'
-import { useBLList } from '@/hooks/useInbound'
-import { BL_STATUS_LABEL, INBOUND_TYPE_LABEL, type BLStatus, type InboundType } from '@/types/inbound'
-import type { BLShipment } from '@/types/inbound'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useBLDashboard } from '@/hooks/useInbound'
 import InsightShell from '@/components/insights/InsightShell'
-
-const blDate = (b: BLShipment) => b.actual_arrival ?? b.eta ?? b.etd ?? null
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function ProcurementBlTotalInsight() {
-  const { data, loading } = useBLList()
+  const { dashboard, loading } = useBLDashboard()
 
-  const trend = useMemo(
-    () => trend24(data, blDate),
-    [data],
+  const totalCount = dashboard?.totals.count ?? 0
+
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.count })),
+    [dashboard],
   )
 
-  const byStatus = useMemo(
-    () => breakdownBy(
-      data,
-      (b) => b.status,
-      (b) => BL_STATUS_LABEL[b.status as BLStatus] ?? b.status,
-      () => 1,
-    ),
-    [data],
+  const byStatus: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_status ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byInboundType = useMemo(
-    () => breakdownBy(
-      data,
-      (b) => b.inbound_type,
-      (b) => INBOUND_TYPE_LABEL[b.inbound_type as InboundType] ?? b.inbound_type,
-      () => 1,
-    ),
-    [data],
+  const byInboundType: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_inbound_type ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      data,
-      (b) => b.manufacturer_id,
-      (b) => b.manufacturer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [data],
+  const byManufacturer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_manufacturer_top10 ?? []).map((r) => ({
+      key: r.key, label: r.label, value: r.count, share: r.share, count: r.count,
+    })),
+    [dashboard],
   )
 
   return (
@@ -55,7 +46,7 @@ export function ProcurementBlTotalInsight() {
       backLabel="B/L 로 돌아가기"
       loading={loading}
       totalLabel="누계"
-      totalValue={data.length.toLocaleString()}
+      totalValue={totalCount.toLocaleString()}
       trend={trend}
       trendValueLabel="B/L 등록"
       breakdowns={[
