@@ -7,7 +7,13 @@ After=network-online.target solarflow-engine.service
 Wants=network-online.target solarflow-engine.service
 
 [Service]
-Type=simple
+# Type=notify + NotifyAccess=all: tableflip 자식이 SIGHUP 인계 후 sd_notify
+# (READY=1 + MAINPID=<child>) 를 보낸다. systemd 는 이걸 받아 MainPID 를 자식으로 갱신.
+# NotifyAccess=all 없으면 자식(현재 MainPID 아님)의 sd_notify 가 거부되고
+# 부모 종료 시 cgroup 전체 SIGTERM 으로 자식까지 죽는다.
+Type=notify
+NotifyAccess=all
+
 WorkingDirectory=/home/choiceoh/공개/solarflow-3/backend
 EnvironmentFile=/home/choiceoh/공개/solarflow-3/backend/.env
 ExecStart=/home/choiceoh/공개/solarflow-3/backend/solarflow-go

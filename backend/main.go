@@ -6,7 +6,6 @@ package main
 
 import (
 	"log/slog"
-	"net/http"
 	"os"
 
 	"github.com/go-chi/chi/v5"
@@ -34,20 +33,17 @@ func main() {
 	// 동일 핸들러 인스턴스를 router 가 또 하나 생성하지만 sync.Once 가 다중 시작을 막는다.
 	handler.NewExternalSyncHandler(a.DB).StartHourlyWorker()
 
-	// Prometheus 메트릭 노출 — 127.0.0.1:9180/metrics. 외부 노출은 cloudflared ingress 에서
+	// Prometheus 메트릭 라우터 — 127.0.0.1:9180/metrics. 외부 노출은 cloudflared ingress 에서
 	// 의도적으로 차단(api.topworks.ltd 는 8080 만 매핑). 본 listener 는 로컬 Prometheus 에이전트 전용.
-	// 메트릭 listener 는 graceful shutdown / tableflip 에 포함하지 않는다 — localhost 전용이고
-	// 짧은 단절은 Prometheus 가 다음 scrape 에서 자동 복구.
-	go func() {
-		mr := chi.NewRouter()
-		mr.Handle("/metrics", promhttp.Handler())
-		if err := http.ListenAndServe("127.0.0.1:9180", mr); err != nil {
-			slog.Error("metrics 서버 시작 실패", "error", err)
-		}
-	}()
+	// serve.Run 의 두 번째 listener 로 등록하여 tableflip 이 fd 인계까지 처리하도록 한다 (D-123).
+	metricsRouter := chi.NewRouter()
+	metricsRouter.Handle("/metrics", promhttp.Handler())
 
-	addr := "0.0.0.0:" + cfg.Port
-	if err := serve.Run(addr, router.New(a)); err != nil {
+	mainAddr := "0.0.0.0:" + cfg.Port
+	if err := serve.Run(
+		serve.Server{Name: "main", Addr: mainAddr, Handler: router.New(a)},
+		serve.Server{Name: "metrics", Addr: "127.0.0.1:9180", Handler: metricsRouter},
+	); err != nil {
 		slog.Error("서버 비정상 종료", "error", err)
 		os.Exit(1)
 	}

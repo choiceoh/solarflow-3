@@ -8,25 +8,46 @@ package serve
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 )
 
 const shutdownTimeout = 30 * time.Second
 
-// Run — addr 에 listener 를 띄우고 SIGINT/SIGTERM 시 graceful shutdown.
-func Run(addr string, handler http.Handler) error {
-	server := &http.Server{Addr: addr, Handler: handler}
-	go func() {
-		slog.Info("SolarFlow 3.0 서버 시작 (windows dev mode)", "addr", addr, "pid", os.Getpid())
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("http.ListenAndServe 비정상 종료", "error", err)
+// Server — Run 에 등록할 단일 listener 정의 (serve_unix.go 와 동일 시그니처).
+type Server struct {
+	Addr    string
+	Handler http.Handler
+	Name    string
+}
+
+// Run — servers 의 모든 listener 를 띄우고 SIGINT/SIGTERM 시 모두 graceful shutdown.
+func Run(servers ...Server) error {
+	if len(servers) == 0 {
+		return fmt.Errorf("serve.Run: 등록할 server 가 없음")
+	}
+
+	httpServers := make([]*http.Server, 0, len(servers))
+	for _, s := range servers {
+		name := s.Name
+		if name == "" {
+			name = s.Addr
 		}
-	}()
+		srv := &http.Server{Addr: s.Addr, Handler: s.Handler}
+		httpServers = append(httpServers, srv)
+		slog.Info("listener 시작 (windows dev)", "name", name, "addr", s.Addr, "pid", os.Getpid())
+		go func(srv *http.Server, label string) {
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.Error("http.ListenAndServe 비정상 종료", "name", label, "error", err)
+			}
+		}(srv, name)
+	}
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
@@ -35,10 +56,18 @@ func Run(addr string, handler http.Handler) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
-		slog.Error("graceful shutdown 실패", "error", err)
-		return err
+
+	var wg sync.WaitGroup
+	for _, srv := range httpServers {
+		wg.Add(1)
+		go func(srv *http.Server) {
+			defer wg.Done()
+			if err := srv.Shutdown(ctx); err != nil {
+				slog.Error("graceful shutdown 실패", "error", err)
+			}
+		}(srv)
 	}
+	wg.Wait()
 	slog.Info("서버 graceful shutdown 완료")
 	return nil
 }
