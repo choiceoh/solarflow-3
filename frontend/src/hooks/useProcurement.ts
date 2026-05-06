@@ -218,6 +218,81 @@ type RawTT = TTRemittance & {
   purchase_orders?: { po_number?: string; manufacturers?: { name_kr?: string } }
 }
 
+// TT 대시보드 — KPI + 24개월 trend + by_status/by_manufacturer/by_bank/by_purpose/by_po 를 서버 한 번에.
+// ProcurementPage TT 탭 + 4 TT Insight 가 사용. 응답 ~수 KB.
+export type TTScope = 'lifetime' | 'completed' | 'planned'
+
+export interface TTDashboard {
+  totals: {
+    count: number
+    completed_count: number
+    planned_count: number
+    completed_amount_usd: number
+    planned_amount_usd: number
+    total_amount_usd: number
+    po_count: number
+  }
+  trend24: {
+    month: string
+    count: number
+    completed_count: number
+    planned_count: number
+    completed_amount_usd: number
+    planned_amount_usd: number
+    distinct_pos: number
+  }[]
+  status_scope: TTScope
+  by_status: TTDashboardBreakdownRow[]
+  by_manufacturer_top10: TTDashboardBreakdownRow[]
+  by_bank_top10: TTDashboardBreakdownRow[]
+  by_purpose_top10: TTDashboardBreakdownRow[]
+  by_po_top10: TTDashboardBreakdownRow[]
+}
+
+export interface TTDashboardBreakdownRow {
+  key: string
+  label: string
+  count: number
+  amount_usd_sum: number
+  share: number
+}
+
+export interface TTDashboardFilters {
+  status?: string
+  po_id?: string
+  status_scope?: TTScope
+}
+
+export function useTTDashboard(filters: TTDashboardFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const queryKey = [
+    'tts-dashboard',
+    selectedCompanyId,
+    filters.status ?? '',
+    filters.po_id ?? '',
+    filters.status_scope ?? 'lifetime',
+  ]
+  const q = useQuery<TTDashboard, Error>({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (filters.status) params.set('status', filters.status)
+      if (filters.po_id) params.set('po_id', filters.po_id)
+      if (filters.status_scope) params.set('status_scope', filters.status_scope)
+      return fetchWithAuth<TTDashboard>(`/api/v1/tts/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
+}
+
 export function useTTList(filters: { status?: string; po_id?: string } = {}) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
 

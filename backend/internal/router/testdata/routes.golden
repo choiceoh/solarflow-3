@@ -136,6 +136,7 @@ GET     /api/v1/sales/summary
 GET     /api/v1/sales/{id}
 GET     /api/v1/system-settings/{key}
 GET     /api/v1/tts/
+GET     /api/v1/tts/dashboard
 GET     /api/v1/tts/summary
 GET     /api/v1/tts/{id}
 GET     /api/v1/ui-configs/

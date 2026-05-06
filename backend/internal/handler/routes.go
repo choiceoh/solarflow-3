@@ -567,6 +567,7 @@ func (h *TTHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Use(g.Feature(feature.IDTxTT))
 		r.Get("/", h.List)
 		r.Get("/summary", h.Summary)
+		r.Get("/dashboard", h.Dashboard)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)

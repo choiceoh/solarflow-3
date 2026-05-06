@@ -330,7 +330,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxTT: {
 		ID: IDTxTT, Name: "T/T 계약금", Description: "T/T (module 계열)",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/tts/", "/api/v1/tts/summary", "/api/v1/tts/{id}"},
+		Paths: []string{"/api/v1/tts/", "/api/v1/tts/summary", "/api/v1/tts/dashboard", "/api/v1/tts/{id}"},
 	},
 
 	// ===== intercompany.* =====
