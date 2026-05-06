@@ -6,7 +6,7 @@ import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
 import { useOrderListAll } from '@/hooks/useOrders';
 import { useReceiptList } from '@/hooks/useReceipts';
-import { useOutboundListAll, useSaleListAll } from '@/hooks/useOutbound';
+import { useOutboundList, useOutboundDashboard, useSaleListAll } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import SkeletonRows from '@/components/common/SkeletonRows';
@@ -156,15 +156,42 @@ export default function OrdersPage() {
   const saleColPin = useColumnPinning(SALE_TABLE_ID);
   const receiptColVis = useColumnVisibility(RECEIPT_TABLE_ID, RECEIPT_COLUMN_META);
   const receiptColPin = useColumnPinning(RECEIPT_TABLE_ID);
-  // 칩 필터는 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
-  const { data: allOutbounds, loading: obLoading, reload: reloadOutbounds } = useOutboundListAll();
+  // 칩 필터를 server-side 로 위임 — KPI/sparkline/rail/breakdown 은 useOutboundDashboard,
+  // 표는 useOutboundList(페이지네이션) 로 받는다. 이전엔 useOutboundListAll 로 모든 outbounds 를
+  // fetch (수 MB) 후 client-side filter/aggregation 했다 (D-OutboundDashboardC1).
+  const [obPageIndex, setObPageIndex] = useState(0);
+  const [obPageSize, setObPageSize] = useState(50);
+  useEffect(() => {
+    setObPageIndex(0);
+  }, [obStatusFilter, obUsageFilter, obMfgFilter]);
 
-  const outbounds = useMemo(() => allOutbounds.filter((o) => {
-    if (obStatusFilter && o.status !== obStatusFilter) return false
-    if (obUsageFilter && o.usage_category !== obUsageFilter) return false
-    if (obMfgFilter && o.manufacturer_id !== obMfgFilter) return false
-    return true
-  }), [allOutbounds, obStatusFilter, obUsageFilter, obMfgFilter]);
+  const {
+    dashboard: outboundDash,
+    loading: obDashLoading,
+    reload: reloadOutboundDash,
+  } = useOutboundDashboard({
+    status: obStatusFilter || undefined,
+    usage_category: obUsageFilter || undefined,
+    manufacturer_id: obMfgFilter || undefined,
+  });
+
+  const {
+    items: outbounds,
+    totalCount: outboundsTotal,
+    loading: obListLoading,
+    reload: reloadOutboundList,
+  } = useOutboundList({
+    status: obStatusFilter || undefined,
+    usage_category: obUsageFilter || undefined,
+    manufacturer_id: obMfgFilter || undefined,
+    pageIndex: obPageIndex,
+    pageSize: obPageSize,
+  });
+
+  const obLoading = obDashLoading || obListLoading;
+  const reloadOutbounds = async () => {
+    await Promise.all([reloadOutboundDash(), reloadOutboundList()]);
+  };
 
   // 탭 3: 판매
   const [saleCustomerFilter, setSaleCustomerFilter] = useState('');
@@ -301,7 +328,8 @@ export default function OrdersPage() {
   }, []);
 
   // ⚠️ 모든 useMemo는 early return(아래 selectedCompanyId/selectedOrder 분기) 이전이어야 함 — Hook 순서 규칙
-  const outboundsWithSales = outbounds;
+  // 집계는 outboundDash 에서, 표 렌더링은 outbounds(현재 페이지) 로.
+  const outboundsTotalCount = outboundDash?.totals.count ?? outboundsTotal;
 
   const ordersKw = useMemo(
     () => visibleOrders.reduce((sum, order) => sum + (order.capacity_kw ?? order.quantity * (order.wattage_kw ?? 0)), 0),
@@ -311,10 +339,7 @@ export default function OrdersPage() {
     () => visibleOrders.filter(order => order.status !== 'completed' && order.status !== 'cancelled'),
     [visibleOrders],
   );
-  const outboundKw = useMemo(
-    () => outboundsWithSales.reduce((sum, outbound) => sum + (outbound.capacity_kw ?? 0), 0),
-    [outboundsWithSales],
-  );
+  const outboundKw = outboundDash?.totals.kw_sum ?? 0;
   const saleTotal = useMemo(
     () => sales.reduce((sum, item) => sum + (item.total_amount ?? item.sale?.total_amount ?? 0), 0),
     [sales],
@@ -383,77 +408,38 @@ export default function OrdersPage() {
     return out;
   }, [orders]);
   const monthlyOutboundKw = useMemo(() => {
+    // 서버 집계 (outboundDash.yoy3y) 를 OrdersPage 가 기존에 쓰던 모양으로 변환.
+    // prev = trend24 마지막에서 두 번째 (직전 달) kw_sum.
     const today = new Date();
     const currYear = today.getFullYear();
     const currMonth = today.getMonth();
-    const currDay = today.getDate();
     const prevMonthDate = new Date(currYear, currMonth - 1, 1);
-    const prevMonthYear = prevMonthDate.getFullYear();
     const prevMonthIdx = prevMonthDate.getMonth();
-    const lastYear = currYear - 1;
-    const twoYearsAgo = currYear - 2;
-    let year = 0;
-    let prev = 0;
-    let lastYearSame = 0;
-    let lastYearHasAny = false;
-    // 최근 3년 전년동기 월별 capacity (Jan → 현재월), 좌→우 = (Y-2) … (Y-1) … Y 순차 배치.
-    const monthsThisYear = currMonth + 1;
-    const yoy3y = Array<number>(monthsThisYear * 3).fill(0);
-    for (const outbound of outboundsWithSales) {
-      if (!outbound.outbound_date) continue;
-      const d = new Date(outbound.outbound_date);
-      if (Number.isNaN(d.getTime())) continue;
-      const y = d.getFullYear();
-      const m = d.getMonth();
-      const day = d.getDate();
-      const kw = outbound.capacity_kw ?? 0;
-      if (y === currYear) year += kw;
-      if (y === prevMonthYear && m === prevMonthIdx) prev += kw;
-      if (y === lastYear) {
-        lastYearHasAny = true;
-        if (m < currMonth || (m === currMonth && day <= currDay)) lastYearSame += kw;
-      }
-      if (m <= currMonth) {
-        if (y === twoYearsAgo) yoy3y[m] += kw;
-        else if (y === lastYear) yoy3y[monthsThisYear + m] += kw;
-        else if (y === currYear) yoy3y[monthsThisYear * 2 + m] += kw;
-      }
+    if (!outboundDash) {
+      return { year: 0, prev: 0, currYear, prevMonth: prevMonthIdx + 1, yoyPct: null as number | null, yoy3y: [] as number[] };
     }
-    const yoyPct = lastYearHasAny && lastYearSame > 0
-      ? ((year - lastYearSame) / lastYearSame) * 100
-      : null;
-    return { year, prev, currYear, prevMonth: prevMonthIdx + 1, yoyPct, yoy3y };
-  }, [outboundsWithSales]);
+    const yoy = outboundDash.yoy3y;
+    const yoy3y: number[] = [];
+    for (let i = 0; i < yoy.months_this_year; i++) yoy3y.push(yoy.two_years_ago[i] ?? 0);
+    for (let i = 0; i < yoy.months_this_year; i++) yoy3y.push(yoy.last_year[i] ?? 0);
+    for (let i = 0; i < yoy.months_this_year; i++) yoy3y.push(yoy.current_year[i] ?? 0);
+    const year = yoy.current_year.reduce((s, v) => s + v, 0);
+    const trend = outboundDash.trend24;
+    const prev = trend.length >= 2 ? trend[trend.length - 2]!.kw_sum : 0;
+    return { year, prev, currYear, prevMonth: prevMonthIdx + 1, yoyPct: yoy.yoy_pct, yoy3y };
+  }, [outboundDash]);
   // 최근 12주(이번 주 포함, 월요일 시작) 출고 capacity. 좌→우 = 과거→현재.
+  // 서버 dashboard.weekly12 를 그대로 시각화에 맞게 변환.
   const weeklyOutbound = useMemo(() => {
     const WEEKS = 12;
-    const buckets = Array<number>(WEEKS).fill(0);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayDow = today.getDay();
-    const todayOffset = todayDow === 0 ? 6 : todayDow - 1;
-    const thisWeekStart = new Date(today);
-    thisWeekStart.setDate(today.getDate() - todayOffset);
-    const weekMs = 7 * 24 * 60 * 60 * 1000;
-    const weekStarts: Date[] = Array.from({ length: WEEKS }, (_, i) => {
-      const d = new Date(thisWeekStart);
-      d.setDate(thisWeekStart.getDate() - (WEEKS - 1 - i) * 7);
-      return d;
-    });
-    for (const outbound of outboundsWithSales) {
-      if (!outbound.outbound_date) continue;
-      const d = new Date(outbound.outbound_date);
-      if (Number.isNaN(d.getTime())) continue;
-      d.setHours(0, 0, 0, 0);
-      const dow = d.getDay();
-      const offset = dow === 0 ? 6 : dow - 1;
-      const itemWeekStart = new Date(d);
-      itemWeekStart.setDate(d.getDate() - offset);
-      const diff = Math.round((thisWeekStart.getTime() - itemWeekStart.getTime()) / weekMs);
-      if (diff >= 0 && diff < WEEKS) buckets[WEEKS - 1 - diff] += outbound.capacity_kw ?? 0;
-    }
-    return { buckets, weekStarts, total: buckets.reduce((s, v) => s + v, 0), max: Math.max(...buckets) };
-  }, [outboundsWithSales]);
+    const empty = { buckets: Array<number>(WEEKS).fill(0), weekStarts: [] as Date[], total: 0, max: 0 };
+    if (!outboundDash) return empty;
+    const buckets = outboundDash.weekly12.map((p) => p.kw_sum);
+    const weekStarts = outboundDash.weekly12.map((p) => new Date(p.week_start));
+    const total = buckets.reduce((s, v) => s + v, 0);
+    const max = buckets.length ? Math.max(...buckets) : 0;
+    return { buckets, weekStarts, total, max };
+  }, [outboundDash]);
   const invoicePending = useMemo(
     () => sales.filter(item => !item.tax_invoice_date).length,
     [sales],
@@ -555,42 +541,39 @@ export default function OrdersPage() {
     activeTab === 'matching' ? '수금 매칭' :
     '수주 관리';
   const pageSub =
-    activeTab === 'outbound' ? `${outboundsWithSales.length}건 · ${fmtSalesMw(outboundKw)} MW` :
+    activeTab === 'outbound' ? `${outboundsTotalCount}건 · ${fmtSalesMw(outboundKw)} MW` :
     activeTab === 'sales' ? `${sales.length}건 · ${fmtEok(saleTotal)}억` :
     activeTab === 'receipts' ? `${receipts.length}건 · 미정산 ${fmtEok(receiptRemaining)}억` :
     activeTab === 'matching' ? '입금과 매출채권 자동 추천' :
     `${visibleOrders.length}건 · ${fmtSalesMw(ordersKw)} MW${orderWorkQueue ? ` · 전체 ${orders.length}건` : ''}`;
-  // KPI sparkline 시계열 — 데이터 범위 기반 (최근 6개월 캡, sparkUtils 참고). 스냅샷은 JSX 폴백에서 평행선.
-  const outboundCountSpark = monthlyCount(outboundsWithSales, (o) => o.outbound_date);
-  const outboundKwSpark = monthlyTrend(outboundsWithSales, (o) => o.outbound_date, (o) => o.capacity_kw ?? 0);
+  // KPI sparkline 시계열 — outbound 는 서버 trend24 마지막 6 개월. order/receipt/sale 는 client-side(미마이그).
+  const outboundCountSpark = (outboundDash?.trend24 ?? []).slice(-6).map((p) => p.count);
+  const outboundKwSpark = (outboundDash?.trend24 ?? []).slice(-6).map((p) => p.kw_sum);
   const saleTotalSpark = monthlyTrend(sales, (s) => s.tax_invoice_date ?? s.outbound_date ?? null, (s) => s.total_amount ?? s.sale?.total_amount ?? 0);
   const receiptTotalSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.amount ?? 0);
   const receiptRemainingSpark = monthlyTrend(receipts, (r) => r.receipt_date, (r) => r.remaining ?? 0);
   const activeOrderSpark = monthlyCount(activeOrders, (o) => o.order_date);
 
-  // 계산서 연결률 — D-064: ERP 관리구분 기반 분모 정정
-  // 자체현장분/공사사용/유지관리/폐기 등 비매출 출고는 분모에서 제외해 실제 매출 누락만 보임
-  const saleEligibleOutbounds = outboundsWithSales.filter(
-    (o) => o.usage_category === 'sale' || o.usage_category === 'sale_spare',
-  );
-  const saleLinkedOutbounds = saleEligibleOutbounds.filter((o) => o.sale);
-  const saleConversionDenom = saleEligibleOutbounds.length || outboundsWithSales.length;
+  // 계산서 연결률 — D-064: 매출 대상(sale/sale_spare) 출고 중 sale 연결 비율.
+  // 서버 sale_conversion 에서 직접 수신.
+  const saleConvServer = outboundDash?.sale_conversion;
+  const saleEligibleCount = saleConvServer?.eligible_count ?? 0;
+  const saleLinkedCount = saleConvServer?.linked_count ?? 0;
+  const saleConversionDenom = saleEligibleCount || (outboundDash?.totals.count ?? 0);
   const saleConversionRate =
     saleConversionDenom > 0
-      ? Math.round((saleLinkedOutbounds.length / saleConversionDenom) * 1000) / 10
+      ? Math.round((saleLinkedCount / saleConversionDenom) * 1000) / 10
       : 0;
-  const saleEligibleSpark = monthlyCount(saleEligibleOutbounds, (o) => o.outbound_date);
-  const saleLinkedSpark = monthlyCount(saleLinkedOutbounds, (o) => o.outbound_date);
-  const saleConversionSpark = saleEligibleSpark.map((t, i) =>
-    t > 0 ? Math.round(((saleLinkedSpark[i] ?? 0) / t) * 100) : 0,
+  const saleConversionSpark = (saleConvServer?.monthly ?? []).slice(-6).map((p) =>
+    p.eligible_count > 0 ? Math.round((p.linked_count / p.eligible_count) * 100) : 0,
   );
   const saleConversionTone: SalesMetric['tone'] =
     saleConversionRate >= 90 ? 'pos' : saleConversionRate >= 60 ? 'info' : 'warn';
 
   const metrics: SalesMetric[] =
     activeTab === 'outbound' ? [
-      { lbl: '출고 전체', v: String(outboundsWithSales.length), u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar', spark: outboundCountSpark, metricId: 'outbound.count' },
-      { lbl: '계산서 연결률', v: saleConversionRate.toFixed(1), u: '%', sub: `${saleLinkedOutbounds.length.toLocaleString()} / ${saleConversionDenom.toLocaleString()}건 매출대상`, tone: saleConversionTone, spark: saleConversionSpark, metricId: 'outbound.sale_conversion' },
+      { lbl: '출고 전체', v: String(outboundsTotalCount), u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar', spark: outboundCountSpark, metricId: 'outbound.count' },
+      { lbl: '계산서 연결률', v: saleConversionRate.toFixed(1), u: '%', sub: `${saleLinkedCount.toLocaleString()} / ${saleConversionDenom.toLocaleString()}건 매출대상`, tone: saleConversionTone, spark: saleConversionSpark, metricId: 'outbound.sale_conversion' },
       { lbl: '전월 출고 용량', v: fmtSalesMw(monthlyOutboundKw.prev), u: 'MW', sub: `${monthlyOutboundKw.prevMonth}월 · 최근 6개월`, tone: 'ink', spark: outboundKwSpark, metricId: 'outbound.kw_prev_month' },
       { lbl: '금년 출고 용량', v: fmtSalesMw(monthlyOutboundKw.year), u: 'MW', sub: monthlyOutboundKw.yoyPct != null ? `${monthlyOutboundKw.currYear}년 누계 · 전년比 ${monthlyOutboundKw.yoyPct >= 0 ? '+' : ''}${monthlyOutboundKw.yoyPct.toFixed(1)}%` : `${monthlyOutboundKw.currYear}년 누계`, tone: 'pos', spark: monthlyOutboundKw.yoy3y, metricId: 'outbound.kw_year' },
     ] :
@@ -799,13 +782,22 @@ export default function OrdersPage() {
             />
           ) : (
             <>
-              {obLoading ? <SkeletonRows rows={8} /> : (
+              {obLoading && outbounds.length === 0 ? <SkeletonRows rows={8} /> : (
                 <OutboundListTable
-                  items={outboundsWithSales}
+                  items={outbounds}
                   hidden={outboundColVis.hidden}
                   pinning={outboundColPin.pinning}
                   onPinningChange={outboundColPin.setPinning}
                   onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
+                  serverMode={{
+                    pageIndex: obPageIndex,
+                    pageSize: obPageSize,
+                    totalRowCount: outboundsTotal,
+                    onPageChange: ({ pageIndex: nextIdx, pageSize: nextSize }) => {
+                      setObPageIndex(nextIdx);
+                      setObPageSize(nextSize);
+                    },
+                  }}
                 />
               )}
             </>
@@ -888,25 +880,25 @@ export default function OrdersPage() {
 
           {activeTab === 'outbound' && (
             <>
-              <RailBlock title="출고 상태" count={`${outboundsWithSales.length} rows`}>
+              <RailBlock title="출고 상태" count={`${outboundsTotalCount} rows`}>
                 <BreakdownRows
                   items={(['active', 'cancel_pending', 'cancelled'] as OutboundStatus[]).map((status) => ({
                     key: status,
                     label: OUTBOUND_STATUS_LABEL[status],
-                    count: outboundsWithSales.filter(outbound => outbound.status === status).length,
+                    count: status === 'active'
+                      ? (outboundDash?.totals.active_count ?? 0)
+                      : status === 'cancel_pending'
+                        ? (outboundDash?.totals.cancel_pending_count ?? 0)
+                        : (outboundDash?.totals.cancelled_count ?? 0),
                   }))}
                 />
               </RailBlock>
               <RailBlock title="출고 용도" count="건">
                 <BreakdownRows
-                  items={Object.entries(outboundsWithSales.reduce<Record<string, number>>((acc, outbound) => {
-                    const key = USAGE_CATEGORY_LABEL[outbound.usage_category] ?? outbound.usage_category;
-                    acc[key] = (acc[key] ?? 0) + 1;
-                    return acc;
-                  }, {})).slice(0, 5).map(([label, count]) => ({
-                    key: label,
-                    label,
-                    count,
+                  items={(outboundDash?.by_usage ?? []).slice(0, 5).map((row) => ({
+                    key: row.key,
+                    label: row.label,
+                    count: row.count,
                   }))}
                 />
               </RailBlock>

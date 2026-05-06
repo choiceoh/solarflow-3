@@ -97,6 +97,106 @@ export function useOutboundList(params: OutboundListParams): OutboundListResult 
   };
 }
 
+// 출고 대시보드 — KPI + 24개월 trend + breakdown 을 서버에서 한 번에 받는다.
+// OrdersPage outbound 탭 + 4 개 Insight (OutboundCount/Kw/KwYear/SaleConversion) 가 사용.
+// 응답 ~수 KB 라 fetchAllOutbounds (수 MB) 를 대체.
+//
+// period (기본 lifetime) 으로 by_usage / by_manufacturer_top10 / by_customer_top10
+// 의 범위를 prev_month / year 로 좁힌다. trend24 와 totals 는 항상 전체.
+export type OutboundDashboardPeriod = 'lifetime' | 'prev_month' | 'year'
+
+export interface OutboundDashboard {
+  totals: {
+    count: number
+    kw_sum: number
+    active_count: number
+    cancel_pending_count: number
+    cancelled_count: number
+    sale_amount_sum: number
+    invoice_pending_count: number
+  }
+  trend24: { month: string; count: number; kw_sum: number }[]
+  weekly12: { week_start: string; count: number; kw_sum: number }[]
+  yoy3y: {
+    months_this_year: number
+    two_years_ago: number[]
+    last_year: number[]
+    current_year: number[]
+    last_year_same: number
+    yoy_pct: number | null
+  }
+  period: OutboundDashboardPeriod
+  by_usage: OutboundDashboardBreakdownRow[]
+  by_manufacturer_top10: OutboundDashboardBreakdownRow[]
+  by_customer_top10: OutboundDashboardBreakdownRow[]
+  sale_conversion: {
+    eligible_count: number
+    linked_count: number
+    monthly: { month: string; eligible_count: number; linked_count: number }[]
+    by_usage: OutboundSaleConvBreakdownRow[]
+    by_manufacturer_top10: OutboundSaleConvBreakdownRow[]
+    by_customer_top10: OutboundSaleConvBreakdownRow[]
+  }
+}
+
+export interface OutboundDashboardBreakdownRow {
+  key: string
+  label: string
+  count: number
+  kw_sum: number
+  share: number
+}
+
+export interface OutboundSaleConvBreakdownRow {
+  key: string
+  label: string
+  eligible_count: number
+  linked_count: number
+  rate: number  // 0..100
+}
+
+export interface OutboundDashboardFilters {
+  status?: string
+  usage_category?: string
+  manufacturer_id?: string
+  q?: string
+  period?: OutboundDashboardPeriod
+}
+
+export function useOutboundDashboard(filters: OutboundDashboardFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const queryKey = [
+    'outbounds-dashboard',
+    selectedCompanyId,
+    filters.status ?? '',
+    filters.usage_category ?? '',
+    filters.manufacturer_id ?? '',
+    filters.q ?? '',
+    filters.period ?? 'lifetime',
+  ]
+  const q = useQuery<OutboundDashboard, Error>({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (filters.status) params.set('status', filters.status)
+      if (filters.usage_category) params.set('usage_category', filters.usage_category)
+      if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id)
+      if (filters.q) params.set('q', filters.q)
+      if (filters.period) params.set('period', filters.period)
+      return fetchWithAuth<OutboundDashboard>(`/api/v1/outbounds/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
+}
+
 // useOutboundListAll — 호환 훅. 옛 시그니처(filters만 받고 전체 데이터를 한 번에 반환).
 // 새 화면은 useOutboundList(params) 를 쓰고, 아직 server mode 마이그레이션 안 된 화면이 사용한다.
 // 청크 누적이라 데이터 5만건 넘으면 무거워지니 점차 페이지네이션으로 이전 권장.

@@ -414,6 +414,9 @@ func (h *OutboundHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/outbounds", func(r chi.Router) {
 		r.Get("/", h.List)
 		r.Get("/summary", h.Summary)
+		// 대시보드 집계 — KPI / trend24 / breakdown / sale conversion 한 번에.
+		// 정적 경로라 /{id} 보다 먼저 등록.
+		r.Get("/dashboard", h.Dashboard)
 		r.Get("/{id}", h.GetByID)
 		// D-064 PR 29: ERP FIFO 매칭(입고 LOT ↔ 출고) 라인 + 합계
 		r.Get("/{id}/fifo-matches", h.FifoMatches)

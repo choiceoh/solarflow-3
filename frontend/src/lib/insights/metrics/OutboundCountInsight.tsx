@@ -1,44 +1,53 @@
 // 출고 전체 (건수) 드릴다운 — OrdersPage outbound 탭 KPI '출고 전체' 의 상세 분해.
+//
+// 서버 집계 마이그(C-1) 후: useOutboundDashboard (period=lifetime) 로 trend + breakdown 수신.
+// 이전엔 useOutboundListAll 로 전체 출고를 끌어와 client-side aggregation 했으나,
+// 응답이 수 MB 라 wire/CPU 비용 컸음.
 
 import { useMemo } from 'react'
-import { useOutboundListAll } from '@/hooks/useOutbound'
-import { USAGE_CATEGORY_LABEL } from '@/types/outbound'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useOutboundDashboard } from '@/hooks/useOutbound'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 export function OutboundCountInsight() {
-  const { data, loading } = useOutboundListAll()
+  const { dashboard, loading } = useOutboundDashboard({ period: 'lifetime' })
 
-  const trend = useMemo(
-    () => trend24(data, (o) => o.outbound_date),
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.count })),
+    [dashboard],
   )
-  const byUsage = useMemo(
-    () => breakdownBy(
-      data,
-      (o) => o.usage_category,
-      (o) => USAGE_CATEGORY_LABEL[o.usage_category] ?? o.usage_category,
-      () => 1,
-    ),
-    [data],
+
+  const total = dashboard?.totals.count ?? 0
+
+  const byUsage: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_usage ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.count,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
-  const byCustomer = useMemo(
-    () => breakdownBy(
-      data,
-      (o) => o.customer_id ?? null,
-      (o) => o.customer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [data],
+  const byCustomer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_customer_top10 ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.count,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      data,
-      (o) => o.manufacturer_id ?? null,
-      (o) => o.manufacturer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [data],
+  const byManufacturer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_manufacturer_top10 ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.count,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
 
   return (
@@ -51,7 +60,7 @@ export function OutboundCountInsight() {
       backLabel="출고 / 판매로 돌아가기"
       loading={loading}
       totalLabel="누계"
-      totalValue={data.length.toLocaleString()}
+      totalValue={total.toLocaleString()}
       trend={trend}
       trendValueLabel="출고 건수"
       breakdowns={[

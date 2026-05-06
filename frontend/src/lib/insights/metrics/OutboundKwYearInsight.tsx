@@ -1,55 +1,56 @@
 // 금년 출고 용량 (MW) 드릴다운 — 금년 누계 기준 분해 + 24개월 추이.
+//
+// 서버 집계 마이그(C-1) 후: useOutboundDashboard (period=year) — breakdown 이 올해로 좁혀진다.
 
 import { useMemo } from 'react'
-import { useOutboundListAll } from '@/hooks/useOutbound'
-import { USAGE_CATEGORY_LABEL } from '@/types/outbound'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useOutboundDashboard } from '@/hooks/useOutbound'
 import InsightShell from '@/components/insights/InsightShell'
+import type { TrendPoint, BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmtMW = (kw: number) => (kw / 1000).toFixed(kw >= 100_000 ? 1 : 2)
 const fmtMWTick = (kw: number) => `${(kw / 1000).toFixed(0)}`
 
 export function OutboundKwYearInsight() {
-  const { data, loading } = useOutboundListAll()
+  const { dashboard, loading } = useOutboundDashboard({ period: 'year' })
 
-  const trend = useMemo(
-    () => trend24(data, (o) => o.outbound_date, (o) => o.capacity_kw ?? 0),
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.kw_sum })),
+    [dashboard],
   )
 
-  const yearItems = useMemo(() => {
-    const yr = String(new Date().getFullYear())
-    return data.filter((o) => (o.outbound_date ?? '').slice(0, 4) === yr)
-  }, [data])
+  const totalYearKw = useMemo(() => {
+    return (dashboard?.by_usage ?? []).reduce((sum, r) => sum + r.kw_sum, 0)
+  }, [dashboard])
 
-  const totalYearKw = yearItems.reduce((sum, o) => sum + (o.capacity_kw ?? 0), 0)
-
-  const byUsage = useMemo(
-    () => breakdownBy(
-      yearItems,
-      (o) => o.usage_category,
-      (o) => USAGE_CATEGORY_LABEL[o.usage_category] ?? o.usage_category,
-      (o) => o.capacity_kw ?? 0,
-    ),
-    [yearItems],
+  const byUsage: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_usage ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.kw_sum,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
-  const byCustomer = useMemo(
-    () => breakdownBy(
-      yearItems,
-      (o) => o.customer_id ?? null,
-      (o) => o.customer_name ?? '미지정',
-      (o) => o.capacity_kw ?? 0,
-    ).slice(0, 10),
-    [yearItems],
+  const byCustomer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_customer_top10 ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.kw_sum,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      yearItems,
-      (o) => o.manufacturer_id ?? null,
-      (o) => o.manufacturer_name ?? '미지정',
-      (o) => o.capacity_kw ?? 0,
-    ).slice(0, 10),
-    [yearItems],
+  const byManufacturer: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_manufacturer_top10 ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.kw_sum,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
 
   return (
