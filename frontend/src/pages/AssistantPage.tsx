@@ -513,7 +513,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           </div>
         )}
 
-        <div className="flex items-stretch gap-2">
+        <div className="relative">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -524,7 +524,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
                 : '질문을 입력하세요…'
             }
             rows={embedded ? 3 : 5}
-            className="flex-1 resize-none text-base leading-relaxed md:text-base"
+            className="w-full resize-none pb-12 text-base leading-relaxed md:text-base"
             disabled={busy}
           />
           <Input
@@ -535,25 +535,28 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
             onChange={onPickFiles}
             className="hidden"
           />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="w-12 shrink-0 h-auto"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={busy}
-            title="파일 첨부 (PDF/이미지, OCR 추출)"
-          >
-            <Paperclip className="h-5 w-5" />
-          </Button>
-          <Button
-            onClick={() => void send()}
-            disabled={busy || (!input.trim() && attachments.length === 0)}
-            className="shrink-0 h-auto px-5 text-base"
-          >
-            <Send className="mr-1.5 h-5 w-5" />
-            {ocrBusy ? 'OCR 중…' : status === 'submitted' || status === 'streaming' ? '응답 중…' : '전송'}
-          </Button>
+          <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="pointer-events-auto h-8 w-8"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={busy}
+              title="파일 첨부 (PDF/이미지, OCR 추출)"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
+            <Button
+              onClick={() => void send()}
+              disabled={busy || (!input.trim() && attachments.length === 0)}
+              size="sm"
+              className="pointer-events-auto h-8 px-3"
+            >
+              <Send className="mr-1 h-4 w-4" />
+              {ocrBusy ? 'OCR 중…' : status === 'submitted' || status === 'streaming' ? '응답 중…' : '전송'}
+            </Button>
+          </div>
         </div>
         <div className="-mt-1 px-1 text-[11px] text-muted-foreground/70">
           Enter 전송 · Shift+Enter 줄바꿈
