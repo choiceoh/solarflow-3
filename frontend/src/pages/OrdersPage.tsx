@@ -451,8 +451,7 @@ export default function OrdersPage() {
   // 최근 12주(이번 주 포함, 월요일 시작) 출고 capacity. 좌→우 = 과거→현재.
   // 서버 dashboard.weekly12 를 그대로 시각화에 맞게 변환.
   const weeklyOutbound = useMemo(() => {
-    const WEEKS = 12;
-    const empty = { buckets: Array<number>(WEEKS).fill(0), weekStarts: [] as Date[], total: 0, max: 0 };
+    const empty = { buckets: [] as number[], weekStarts: [] as Date[], total: 0, max: 0 };
     if (!outboundDash) return empty;
     const buckets = outboundDash.weekly12.map((p) => p.kw_sum);
     const weekStarts = outboundDash.weekly12.map((p) => new Date(p.week_start));
