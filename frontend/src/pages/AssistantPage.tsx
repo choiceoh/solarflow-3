@@ -6,6 +6,7 @@ import { Bot, Check, ChevronDown, ChevronUp, Copy, FileText, Inbox, MessageSquar
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { MessageMarkdown } from '@/components/assistant/MessageMarkdown';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
 import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
@@ -702,11 +703,13 @@ function Bubble({ role, content }: { role: UIMessage['role']; content: string })
       <div className={cn('flex min-w-0 max-w-[80%] flex-col gap-1', isUser ? 'items-end' : 'items-start')}>
         <div
           className={cn(
-            'whitespace-pre-wrap rounded-2xl px-4 py-3 text-base leading-relaxed',
-            isUser ? 'bg-[var(--sf-solar)]/10 rounded-tr-sm' : 'bg-background rounded-tl-sm',
+            'rounded-2xl px-4 py-3 text-base leading-relaxed',
+            isUser
+              ? 'whitespace-pre-wrap rounded-tr-sm bg-[var(--sf-solar)]/10'
+              : 'rounded-tl-sm bg-background',
           )}
         >
-          {content}
+          {isUser ? content : <MessageMarkdown content={content} />}
         </div>
         {/* 호버 시 copy 버튼 — 빈 텍스트(자리표시) 인 경우 숨김 */}
         {content.trim() && (
