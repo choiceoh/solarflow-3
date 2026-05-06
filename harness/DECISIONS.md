@@ -828,3 +828,35 @@
   - staging 스택(별도 PR): `scripts/staging-up.sh` 실행 후 `staging.topworks.ltd/health` 200 + DB row count 가 prod 대비 ±N% 이내.
   - replay 하네스(별도 PR): Phase 0 검증으로 1일치 트래픽 리플레이 시 unexpected diff = 0.
 - **날짜**: 2026-05-04
+
+## D-123: 배포 다운타임 제거 — Go tableflip + Engine graceful shutdown + 재시도 + Wants 약결합
+
+- **결정**: 배포 1회당 사용자 체감 502 가 1~3초씩 발생하던 문제를 4-축 변경으로 제거.
+  - **(1) Go backend: cloudflare/tableflip 도입** (`backend/internal/serve/serve_unix.go`).
+    - `systemctl reload` → `ExecReload=/bin/kill -HUP $MAINPID` → tableflip Upgrader 의 fork+exec.
+    - 자식이 부모의 listener fd 를 SO_REUSEPORT 로 인계받아 즉시 accept. 부모는 새 연결 수락을 멈추고 진행 중 요청을 30s 한도로 드레인 후 종료.
+    - Windows 빌드(`serve_windows.go`) 는 평이한 `http.Server` + graceful shutdown — 개발 환경 전용이라 zero-downtime 미지원.
+  - **(2) Rust engine: graceful shutdown** (`engine/src/main.rs`).
+    - `axum::serve(...).with_graceful_shutdown(SIGTERM/SIGINT)` 로 in-flight 계산 드레인.
+    - 엔진은 tableflip 미적용 — 사용자 직접 노출이 아니라 Go 가 호출하는 사내 서비스이고, Go 측 retry 로 단절 흡수가 충분.
+  - **(3) Go EngineClient: transient 재시도** (`backend/internal/engine/client.go`).
+    - `doWithRetry` — 3 시도, backoff 0/100/300ms (누적 ~400ms). dial 오류 / "connection refused" / 502·503·504 만 재시도. 500 (앱 에러) 은 재시도 안 함.
+    - 안전성: Rust 핸들러는 모두 read-only 계산이라 POST 재시도 부작용 없음.
+  - **(4) systemd Go ↔ Engine 약결합** (`ops/systemd/solarflow-go.service`).
+    - `Requires=solarflow-engine.service` → `Wants=`. 엔진 재시작이 Go 재시작을 유발하지 않음. Go 는 살아있고 retry 가 단절을 가린다.
+  - **배포 흐름**: `cron-deploy.sh` 가 새 Go 바이너리를 `.new → mv` 원자 swap 후 `systemctl --user reload solarflow-go.service` → ExecReload → SIGHUP → tableflip 인계. reload 실패 / 새 health 실패 시 `restart_with_rollback` 로 폴백 (마이그레이션 첫 회차 / 새 바이너리 결함 등 비정상 케이스 대비).
+- **이유**: 기존 `systemctl restart` 는 stop→start 로 1~3초 listener 단절 → cloudflared 가 502 반환. `Requires=` 때문에 엔진만 바뀌어도 Go 가 같이 재시작 → 사용자 입장에선 다운타임이 두 번. 변경 4축의 합은 *부분 실패 허용* 설계 — tableflip 이 안 되어도 retry 가, retry 가 부족해도 graceful shutdown 이, 그래도 안 되면 restart 폴백이 동작.
+- **운영 기준**:
+  - **첫 배포 시 1회 수동 작업**: 운영 박스에서 `cp ops/systemd/{solarflow-go,solarflow-engine}.service ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user restart solarflow-{go,engine}.service`. 그 다음 배포부터 zero-downtime.
+  - **Windows dev 영향 없음**: serve_windows.go 가 fallback. tableflip 빌드 태그로 차단.
+  - **메트릭 listener (127.0.0.1:9180) 는 graceful shutdown 비대상**: localhost 전용이라 짧은 단절은 다음 Prometheus scrape 에서 자동 복구.
+- **검증**:
+  - `go build .` (windows + linux/arm64 cross), `go test ./internal/engine/` 통과.
+  - `cargo check` 통과.
+  - 운영 적용 후: 배포 직후 cloudflared 메트릭에서 5xx burst 가 더 이상 나타나지 않는지 확인. `journalctl --user -u solarflow-go` 에 "SIGHUP 수신 — graceful upgrade 시작" + "자식 프로세스 인계 완료 — 부모 드레인 시작" 로그가 한 쌍으로 찍히면 정상.
+- **트레이드오프**:
+  - tableflip 은 fork+exec 모델로 Linux/macOS 전용. Windows 는 dev 만이라 영향 없음.
+  - retry 는 누적 ~400ms 까지 Go 응답 지연을 늘릴 수 있다. 정상 경로에서는 0 (첫 시도 성공).
+  - 첫 배포 시 운영자 수동 작업 1회 필요 (unit 파일 복사 + daemon-reload).
+- **날짜**: 2026-05-06
+

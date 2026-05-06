@@ -3,9 +3,11 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -39,28 +41,104 @@ func NewEngineClient(baseURL string) *EngineClient {
 	}
 }
 
+// retryBackoff — doWithRetry 의 시도별 사전 대기 시간.
+// 길이 N = 총 N번 시도. 첫 시도는 즉시, 나머지는 backoff 후 재시도.
+// 누적 ~400ms 추가 — Rust 엔진 graceful restart 의 listener 단절 창(보통 0~1초) 을
+// 가리는 게 목적. POST 라도 retry 안전한 이유: 엔진 핸들러는 모두 read-only 계산.
+var retryBackoff = []time.Duration{0, 100 * time.Millisecond, 300 * time.Millisecond}
+
+// transientErr — 서버에 도달조차 못 한 dial 오류 / 연결 리셋만 true.
+// 응답을 받기 시작한 뒤 끊긴 경우는 핸들러가 부분 실행했을 수 있으므로 재시도하지 않는다.
+func transientErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	var nopErr *net.OpError
+	if errors.As(err, &nopErr) && nopErr.Op == "dial" {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "no such host")
+}
+
+// retriableStatus — 5xx 중 재시도 가능한 코드. 게이트웨이/오버로드/타임아웃만.
+// 500 (앱 에러) 은 재시도해도 같은 결과이므로 제외.
+func retriableStatus(s int) bool {
+	return s == http.StatusBadGateway ||
+		s == http.StatusServiceUnavailable ||
+		s == http.StatusGatewayTimeout
+}
+
+// doWithRetry — transient 실패에 대해 짧은 backoff 으로 자동 재시도.
+// body 가 nil 이면 GET, 아니면 POST application/json. 성공 시 (응답 바이트, status, nil).
+// 모든 시도 실패 시 마지막 오류 또는 5xx 응답을 그대로 반환.
+func (c *EngineClient) doWithRetry(method, url string, body []byte) ([]byte, int, error) {
+	var lastErr error
+	var lastBody []byte
+	var lastStatus int
+	for attempt, wait := range retryBackoff {
+		if wait > 0 {
+			time.Sleep(wait)
+		}
+		var bodyReader io.Reader
+		if body != nil {
+			bodyReader = bytes.NewReader(body)
+		}
+		req, err := http.NewRequest(method, url, bodyReader)
+		if err != nil {
+			return nil, 0, err
+		}
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			lastErr = err
+			lastBody = nil
+			lastStatus = 0
+			if transientErr(err) && attempt < len(retryBackoff)-1 {
+				log.Printf("[엔진 transient 오류 — 재시도 %d/%d] url=%s err=%v", attempt+1, len(retryBackoff)-1, url, err)
+				continue
+			}
+			return nil, 0, err
+		}
+		respBody, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			return nil, resp.StatusCode, readErr
+		}
+		if retriableStatus(resp.StatusCode) && attempt < len(retryBackoff)-1 {
+			log.Printf("[엔진 5xx — 재시도 %d/%d] url=%s status=%d", attempt+1, len(retryBackoff)-1, url, resp.StatusCode)
+			lastErr = nil
+			lastBody = respBody
+			lastStatus = resp.StatusCode
+			continue
+		}
+		return respBody, resp.StatusCode, nil
+	}
+	if lastErr != nil {
+		return nil, lastStatus, lastErr
+	}
+	return lastBody, lastStatus, nil
+}
+
 // CheckHealth — Rust 엔진 상태 확인 (/health/ready 호출)
 // 비유: "계산실 전화해서 설비 정상인지 확인하는 것"
 func (c *EngineClient) CheckHealth() (HealthResponse, error) {
 	url := c.BaseURL + "/health/ready"
 	var result HealthResponse
 
-	resp, err := c.HTTPClient.Get(url)
+	body, status, err := c.doWithRetry(http.MethodGet, url, nil)
 	if err != nil {
 		log.Printf("[Rust 엔진 헬스체크 실패] url=%s, err=%v", url, err)
 		return result, fmt.Errorf("Rust 엔진 연결 실패: %w", err)
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("[Rust 엔진 헬스체크 응답 읽기 실패] %v", err)
-		return result, fmt.Errorf("Rust 엔진 응답 읽기 실패: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("[Rust 엔진 헬스체크 비정상] status=%d, body=%s", resp.StatusCode, string(body))
-		return result, fmt.Errorf("Rust 엔진 비정상 상태: %d", resp.StatusCode)
+	if status != http.StatusOK {
+		log.Printf("[Rust 엔진 헬스체크 비정상] status=%d, body=%s", status, string(body))
+		return result, fmt.Errorf("Rust 엔진 비정상 상태: %d", status)
 	}
 
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -74,9 +152,8 @@ func (c *EngineClient) CheckHealth() (HealthResponse, error) {
 // CallCalc — Rust 계산엔진에 계산 요청을 보냄
 // 비유: "계산실에 계산 요청서를 보내고 결과를 받아오는 것"
 //
-// 참고: Rust 엔진은 fly.io auto_stop으로 꺼져 있을 수 있음.
-// 첫 요청 시 콜드 스타트 1~3초 지연 가능. 타임아웃 10초로 충분.
-// 재시도 로직은 필요 시 추가 (현재 불필요).
+// 엔진 graceful restart / 일시적 502·503 에 대해 doWithRetry 가 짧은 backoff 으로 자동 재시도.
+// Rust 핸들러는 모두 read-only 계산이라 재시도가 안전하다.
 func (c *EngineClient) CallCalc(path string, reqBody interface{}) ([]byte, error) {
 	url := c.BaseURL + "/api/calc/" + path
 
@@ -86,29 +163,15 @@ func (c *EngineClient) CallCalc(path string, reqBody interface{}) ([]byte, error
 		return nil, fmt.Errorf("요청 데이터 직렬화 실패: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(jsonData))
-	if err != nil {
-		log.Printf("[Rust 엔진 요청 생성 실패] path=%s, err=%v", path, err)
-		return nil, fmt.Errorf("요청 생성 실패: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.HTTPClient.Do(req)
+	body, status, err := c.doWithRetry(http.MethodPost, url, jsonData)
 	if err != nil {
 		log.Printf("[Rust 엔진 호출 실패] path=%s, err=%v", path, err)
 		return nil, fmt.Errorf("Rust 엔진 호출 실패: %w", err)
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("[Rust 엔진 응답 읽기 실패] path=%s, err=%v", path, err)
-		return nil, fmt.Errorf("Rust 엔진 응답 읽기 실패: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("[Rust 엔진 계산 실패] path=%s, status=%d, body=%s", path, resp.StatusCode, string(body))
-		return nil, fmt.Errorf("Rust 엔진 계산 실패: status=%d, body=%s", resp.StatusCode, string(body))
+	if status != http.StatusOK {
+		log.Printf("[Rust 엔진 계산 실패] path=%s, status=%d, body=%s", path, status, string(body))
+		return nil, fmt.Errorf("Rust 엔진 계산 실패: status=%d, body=%s", status, string(body))
 	}
 
 	return body, nil
@@ -121,27 +184,13 @@ func (c *EngineClient) CallCalc(path string, reqBody interface{}) ([]byte, error
 func (c *EngineClient) CallCalcRaw(path string, body []byte) ([]byte, int, error) {
 	url := c.BaseURL + "/api/calc/" + path
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		log.Printf("[Rust 프록시 요청 생성 실패] path=%s, err=%v", path, err)
-		return nil, 0, fmt.Errorf("프록시 요청 생성 실패: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.HTTPClient.Do(req)
+	respBody, status, err := c.doWithRetry(http.MethodPost, url, body)
 	if err != nil {
 		log.Printf("[Rust 프록시 호출 실패] path=%s, err=%v", path, err)
 		return nil, 0, fmt.Errorf("Rust 엔진 호출 실패: %w", err)
 	}
-	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("[Rust 프록시 응답 읽기 실패] path=%s, err=%v", path, err)
-		return nil, 0, fmt.Errorf("Rust 엔진 응답 읽기 실패: %w", err)
-	}
-
-	return respBody, resp.StatusCode, nil
+	return respBody, status, nil
 }
 
 // CallCalcRawGet — Rust 계산엔진에 GET 요청 전달 (health, ready 등)
@@ -149,20 +198,13 @@ func (c *EngineClient) CallCalcRaw(path string, body []byte) ([]byte, int, error
 func (c *EngineClient) CallCalcRawGet(path string) ([]byte, int, error) {
 	url := c.BaseURL + path
 
-	resp, err := c.HTTPClient.Get(url)
+	body, status, err := c.doWithRetry(http.MethodGet, url, nil)
 	if err != nil {
 		log.Printf("[Rust 프록시 GET 실패] path=%s, err=%v", path, err)
 		return nil, 0, fmt.Errorf("Rust 엔진 호출 실패: %w", err)
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("[Rust 프록시 GET 응답 읽기 실패] path=%s, err=%v", path, err)
-		return nil, 0, fmt.Errorf("Rust 엔진 응답 읽기 실패: %w", err)
-	}
-
-	return body, resp.StatusCode, nil
+	return body, status, nil
 }
 
 // inventoryRequest — Rust 재고 집계 요청 구조체

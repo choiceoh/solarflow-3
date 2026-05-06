@@ -1,0 +1,24 @@
+[Unit]
+Description=SolarFlow Rust Engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/choiceoh/공개/solarflow-3/engine
+EnvironmentFile=/home/choiceoh/공개/solarflow-3/engine/.env
+ExecStart=/home/choiceoh/공개/solarflow-3/engine/target/release/solarflow-engine
+
+# Graceful shutdown (D-123): SIGTERM → axum::with_graceful_shutdown →
+# 새 요청 수락 중단 + 진행 중 계산 드레인. systemd 가 stop 할 때
+# in-flight 계산이 중간에 잘리지 않도록 한다.
+KillSignal=SIGTERM
+TimeoutStopSec=35
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

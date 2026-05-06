@@ -1,0 +1,29 @@
+[Unit]
+Description=SolarFlow Go Backend
+# Wants 로 약결합: 엔진이 죽거나 재시작돼도 Go 는 살아남는다 (D-123).
+# Go 의 EngineClient.doWithRetry 가 짧은 단절을 가린다.
+# After 는 부팅 순서만 정의 — 엔진이 먼저 떠 있으면 좋지만 강제는 아님.
+After=network-online.target solarflow-engine.service
+Wants=network-online.target solarflow-engine.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/choiceoh/공개/solarflow-3/backend
+EnvironmentFile=/home/choiceoh/공개/solarflow-3/backend/.env
+ExecStart=/home/choiceoh/공개/solarflow-3/backend/solarflow-go
+
+# Zero-downtime reload (D-123): SIGHUP → tableflip Upgrader fork+exec.
+# 자식이 부모의 listener fd 를 인계받아 즉시 accept 시작. 사용자 체감 다운타임 0.
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Graceful shutdown: SIGTERM → 새 요청 수락 중단 + 진행 중 요청 30s 드레인.
+KillSignal=SIGTERM
+TimeoutStopSec=35
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

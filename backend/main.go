@@ -1,9 +1,10 @@
 // SolarFlow 3.0 백엔드 진입점.
-// 모든 의존성 부트스트랩은 internal/app.New로 위임 — main은 cfg 로드와 ListenAndServe만.
+// 모든 의존성 부트스트랩은 internal/app.New 로 위임 — main 은 cfg 로드와 서버 구동만.
+// 실제 listener/graceful shutdown 은 internal/serve 가 담당 (Linux 는 tableflip,
+// Windows 는 평이한 http.Server). 자세한 배포 흐름은 D-123 참조.
 package main
 
 import (
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"solarflow-backend/internal/handler"
 	"solarflow-backend/internal/logger"
 	"solarflow-backend/internal/router"
+	"solarflow-backend/internal/serve"
 )
 
 func main() {
@@ -34,6 +36,8 @@ func main() {
 
 	// Prometheus 메트릭 노출 — 127.0.0.1:9180/metrics. 외부 노출은 cloudflared ingress 에서
 	// 의도적으로 차단(api.topworks.ltd 는 8080 만 매핑). 본 listener 는 로컬 Prometheus 에이전트 전용.
+	// 메트릭 listener 는 graceful shutdown / tableflip 에 포함하지 않는다 — localhost 전용이고
+	// 짧은 단절은 Prometheus 가 다음 scrape 에서 자동 복구.
 	go func() {
 		mr := chi.NewRouter()
 		mr.Handle("/metrics", promhttp.Handler())
@@ -43,8 +47,8 @@ func main() {
 	}()
 
 	addr := "0.0.0.0:" + cfg.Port
-	slog.Info("SolarFlow 3.0 서버 시작", "addr", addr)
-	if err := http.ListenAndServe(addr, router.New(a)); err != nil {
-		log.Fatal(err)
+	if err := serve.Run(addr, router.New(a)); err != nil {
+		slog.Error("서버 비정상 종료", "error", err)
+		os.Exit(1)
 	}
 }
