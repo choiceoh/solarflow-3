@@ -57,6 +57,10 @@ import { ProcurementBlTotalInsight } from './metrics/ProcurementBlTotalInsight'
 import { ProcurementBlShippingInsight } from './metrics/ProcurementBlShippingInsight'
 import { ProcurementBlCustomsInsight } from './metrics/ProcurementBlCustomsInsight'
 import { ProcurementBlImportInsight } from './metrics/ProcurementBlImportInsight'
+import { InventoryTotalSecuredInsight } from './metrics/InventoryTotalSecuredInsight'
+import { InventoryPhysicalInsight } from './metrics/InventoryPhysicalInsight'
+import { InventoryIncomingInsight } from './metrics/InventoryIncomingInsight'
+import { InventoryAllocationsInsight } from './metrics/InventoryAllocationsInsight'
 
 export interface InsightEntry {
   // KPI 타일이 보낼 식별자 (예: 'outbound.count') — URL 에 그대로 들어감.
@@ -329,6 +333,28 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'procurement.bl_import',
     shortLabel: 'B/L 해외직수입',
     render: () => <ProcurementBlImportInsight />,
+  },
+
+  // Inventory
+  'inventory.total_secured': {
+    id: 'inventory.total_secured',
+    shortLabel: '가용 재고',
+    render: () => <InventoryTotalSecuredInsight />,
+  },
+  'inventory.physical': {
+    id: 'inventory.physical',
+    shortLabel: '실재고',
+    render: () => <InventoryPhysicalInsight />,
+  },
+  'inventory.incoming': {
+    id: 'inventory.incoming',
+    shortLabel: '미착품',
+    render: () => <InventoryIncomingInsight />,
+  },
+  'inventory.allocations': {
+    id: 'inventory.allocations',
+    shortLabel: '예약 차감',
+    render: () => <InventoryAllocationsInsight />,
   },
 }
 
