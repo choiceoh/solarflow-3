@@ -19,3 +19,11 @@ thiserror = "2"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
+
+# 운영 빌드 최적화. 빌드 시간 1.5-2배 trade-off, 핫패스 5-15% 향상.
+# lto=thin: 크레이트 경계 인라이닝, codegen-units=1: 단일 단위로 옵티마이즈,
+# strip: 디버그 심볼 제거 (panic 백트레이스는 RUST_BACKTRACE=full 로 여전히 가능).
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

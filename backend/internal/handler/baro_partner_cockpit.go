@@ -119,11 +119,12 @@ func (h *BaroPartnerCockpitHandler) Get(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 2~4. 나머지 패널은 부분 실패 허용 (실패 시 nil/[]). 로그만 남긴다.
+	// 2~5. 나머지 패널은 부분 실패 허용 (실패 시 nil/[]). 로그만 남긴다.
 	credit := h.fetchCredit(r.Context(), partnerID)
 	recentSales := h.fetchRecentSales(partnerID)
 	openFollowups := h.fetchOpenFollowups(partnerID)
 	recentActivities := h.fetchRecentActivities(partnerID)
+	quoteReady := h.fetchQuoteReady(partnerID)
 
 	resp := CockpitResponse{
 		Partner:          partner,
@@ -131,7 +132,7 @@ func (h *BaroPartnerCockpitHandler) Get(w http.ResponseWriter, r *http.Request) 
 		RecentSales:      recentSales,
 		OpenFollowups:    openFollowups,
 		RecentActivities: recentActivities,
-		QuoteReadySKUs:   []CockpitQuoteReadyRow{},
+		QuoteReadySKUs:   quoteReady,
 		IncomingMatches:  []CockpitIncomingMatch{},
 	}
 	response.RespondJSON(w, http.StatusOK, resp)
@@ -247,6 +248,75 @@ func (h *BaroPartnerCockpitHandler) fetchOpenFollowups(partnerID string) []model
 		return []model.PartnerActivity{}
 	}
 	return rows
+}
+
+// fetchQuoteReady — 이 거래처에 등록된 partner_price_book 의 유효 단가 행을 견적 가능 SKU 로 변환.
+//
+// PR2 (D-126) 에서 도입. cockpit panel 의 stub 빈 배열을 실제 데이터로 채운다.
+//   - partner_price_book 에서 partner_id 일치 + (effective_to is null OR effective_to >= today) 인 행만
+//   - 각 행에 product 정보를 PostgREST embed 로 join (product_name, spec_wp, available_stock)
+//   - unit_price_krw = unit_price_wp × spec_wp (per panel KRW)
+//   - margin_pct 는 PR2.5 (BARO 평균 매입원가 통합) 에서 채운다 — 현 단계는 null
+//   - 최대 30 SKU. 견적 빌더에서 더 필요하면 partner-prices 직접 호출.
+func (h *BaroPartnerCockpitHandler) fetchQuoteReady(partnerID string) []CockpitQuoteReadyRow {
+	today := time.Now().Format("2006-01-02")
+	data, _, err := h.DB.From("partner_price_book").
+		Select("price_id,product_id,unit_price_wp,effective_from,effective_to,product:products(product_id,product_name,product_code,spec_wp,available_stock)", "exact", false).
+		Eq("partner_id", partnerID).
+		Lte("effective_from", today).
+		Or("effective_to.is.null,effective_to.gte."+today, "").
+		Order("effective_from", &postgrest.OrderOpts{Ascending: false, NullsFirst: false}).
+		Limit(30, "").
+		Execute()
+	if err != nil {
+		log.Printf("[cockpit quote-ready 실패] partner=%s, err=%v", partnerID, err)
+		return []CockpitQuoteReadyRow{}
+	}
+
+	// PostgREST embed 결과 — product 가 nullable 객체로 들어옴
+	var rows []struct {
+		PriceID     string  `json:"price_id"`
+		ProductID   string  `json:"product_id"`
+		UnitPriceWp float64 `json:"unit_price_wp"`
+		Product     *struct {
+			ProductID      string `json:"product_id"`
+			ProductName    string `json:"product_name"`
+			ProductCode    string `json:"product_code"`
+			SpecWP         int    `json:"spec_wp"`
+			AvailableStock *int   `json:"available_stock"`
+		} `json:"product"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		log.Printf("[cockpit quote-ready 디코딩 실패] %v", err)
+		return []CockpitQuoteReadyRow{}
+	}
+
+	out := make([]CockpitQuoteReadyRow, 0, len(rows))
+	for _, row := range rows {
+		var name string
+		var specWP int
+		availableQty := 0
+		if row.Product != nil {
+			name = row.Product.ProductName
+			if name == "" {
+				name = row.Product.ProductCode
+			}
+			specWP = row.Product.SpecWP
+			if row.Product.AvailableStock != nil {
+				availableQty = *row.Product.AvailableStock
+			}
+		}
+		// unit_price_wp 가 W 단위 KRW 단가. 패널 1장 가격 = unit_price_wp × spec_wp
+		unitPriceKrw := row.UnitPriceWp * float64(specWP)
+		out = append(out, CockpitQuoteReadyRow{
+			ProductID:    row.ProductID,
+			ProductName:  name,
+			AvailableQty: availableQty,
+			UnitPriceKrw: unitPriceKrw,
+			MarginPct:    nil, // PR2.5 에서 매입원가 통합 후 계산
+		})
+	}
+	return out
 }
 
 // fetchRecentActivities — 이 거래처 최근 활동 10건 (timeline 미니).

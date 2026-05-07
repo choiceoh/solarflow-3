@@ -33,9 +33,13 @@ type AssistantHandler struct {
 }
 
 // NewAssistantHandler — 기본 생성자 (public/auth 공통). alias 라우트가 필요한 경우 WithAlias로 의존성을 주입한다.
+//
+// PR 44: httpClient timeout 90s → 300s. 가격예측 AI 지표 갱신처럼 evidence 큰
+// 비스트리밍 LLM 호출이 90초 초과해 자주 fail. ctx 가 더 짧으면 ctx 가 우선이라
+// 일반 chat (60-90s) 영향 없음.
 func NewAssistantHandler(db *supa.Client) *AssistantHandler {
 	return &AssistantHandler{
-		httpClient: &http.Client{Timeout: 90 * time.Second},
+		httpClient: &http.Client{Timeout: 300 * time.Second},
 		db:         db,
 	}
 }
