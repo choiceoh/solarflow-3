@@ -103,6 +103,8 @@ const (
 	IDTxInventoryAllocation  FeatureID = "tx.inventory_allocation"
 	IDTxModuleDemandForecast FeatureID = "tx.module_demand_forecast"
 	IDTxPickingList          FeatureID = "tx.picking_list"
+	IDTxReceivingLog         FeatureID = "tx.receiving_log"
+	IDTxCycleCount           FeatureID = "tx.cycle_count"
 
 	// ---- tx.* (module 계열 = topsolar+cable, D-108/D-119) ----
 	IDTxCostDetail     FeatureID = "tx.cost_detail"
@@ -327,6 +329,22 @@ var Catalog = map[FeatureID]Feature{
 		Paths: []string{
 			"/api/v1/picking-lists/", "/api/v1/picking-lists/{id}",
 			"/api/v1/picking-lists/{id}/items/{item_id}",
+		},
+	},
+	IDTxReceivingLog: {
+		ID: IDTxReceivingLog, Name: "WMS 입고 검수 로그",
+		Description:    "BL 라인/intercompany 입고 검수 + 수량 차이 추적 (D-141 WMS Phase 3)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/receiving-logs/", "/api/v1/receiving-logs/{id}"},
+	},
+	IDTxCycleCount: {
+		ID: IDTxCycleCount, Name: "WMS 정기 재고실사",
+		Description:    "위치 단위 cycle counting + 정확도 추적 (D-142 WMS Phase 4)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{
+			"/api/v1/cycle-counts/", "/api/v1/cycle-counts/{id}",
+			"/api/v1/cycle-counts/{id}/complete",
+			"/api/v1/cycle-counts/{id}/items/{item_id}",
 		},
 	},
 

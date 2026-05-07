@@ -1097,3 +1097,54 @@
   - 모든 테넌트 토큰 통과 (tx.* 도메인).
 - **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/086_picking_lists.sql` + PostgREST schema reload.
 - **날짜**: 2026-05-07
+
+## D-141: WMS Phase 3 — 입고 검수 로그 (모든 테넌트 공유)
+- **결정**: 트럭 도착 → 검수자 → 수량/규격 확인 → 위치 배정 + 차이 추적. **module 계열(BL 라인) + BARO(intercompany_request) 양쪽 동일 패턴** 을 단일 테이블 `receiving_logs` 에 통합 (`source_type` 으로 분기).
+- **마이그 087** (`backend/migrations/087_receiving_log.sql`):
+  - `receiving_logs` (receiving_id, source_type CHECK bl_line/intercompany/manual, bl_line_id/intercompany_request_id 둘 중 하나, warehouse_id FK, product+snapshot, quantity_expected/received + GENERATED variance, location_id+snapshot, receiver_user_id, received_at, variance_reason CHECK 6종, variance_note, photo_attachment_ids uuid[], notes).
+  - 인덱스 5종 (source partial, intercompany partial, warehouse, receiver+received_at desc, variance_only partial).
+- **endpoint** (`tx.receiving_log` feature_id, 모든 테넌트):
+  - `GET /api/v1/receiving-logs?source_type=&warehouse_id=&variance_only=true`
+  - `GET /{id}` / `POST` / `DELETE` (admin only 권장 — 회계 증빙)
+- **차이 사유 분류**: `shortage` / `overage` / `damaged` / `wrong_product` / `wrong_spec` / `other`.
+- **사진 첨부**: `photo_attachment_ids` (Postgres uuid[]) — 기존 `/api/v1/attachments/` 와 link.
+- **사용 시나리오**:
+  - 입고 시 검수자가 모바일/태블릿으로 BL 라인 또는 intercompany 요청 선택 → 실수량 입력 → 차이 발생 시 사유+사진
+  - 영업·회계 가 `?variance_only=true` 로 차이 발생 건만 일별 점검
+  - 회계 마감 시 검수 로그 vs 매입 인보이스 대조
+- **PR8.6b 분리**:
+  - BL 라인 핸들러에서 검수 로그 자동 생성 호출 (입고 처리 시).
+  - intercompany_request `receive` 액션에서 자동 호출.
+- **이유**: 현재 입고는 BL 라인 status 변경만 추적 — 차이 사유·검수자·사진 부재. 클레임 발생 시 증빙 어려움. 통합 receiving_logs 로 양 흐름 동일 점검 + 회계 증빙 + AI 이상 탐지(향후) 기반.
+- **운영 기준**: 모든 테넌트 공유 (tx.* 도메인). 차이 발생 시 variance_reason 강제 (handler 검증).
+- **검증**: `go test ./internal/{feature,router,handler}` 통과 — coverage_test 일치, matrix consistency.
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/087_receiving_log.sql` + PostgREST reload.
+- **날짜**: 2026-05-07
+
+## D-142: WMS Phase 4 — Cycle Counting (정기 재고실사, 모든 테넌트 공유)
+- **결정**: 분기/월 단위 정기 재고실사 + 위치 단위 차이 추적 + 정확도 보드. `cycle_counts` 세션 + `cycle_count_items` 라인 구조.
+- **마이그 088** (`backend/migrations/088_cycle_counts.sql`):
+  - `cycle_counts` (cycle_count_id, warehouse_id FK, scheduled_date, status CHECK, started_at, completed_at, total_locations, matched_locations, variance_locations, accuracy_pct, created_by, notes).
+  - `cycle_count_items` (item_id, cycle_count_id FK CASCADE, location_id+snapshot, product_id+snapshot 3종, expected_qty, counted_qty nullable, GENERATED variance_qty, variance_reason CHECK 5종, counted_by, counted_at, photo_attachment_ids uuid[]).
+  - 인덱스 5종.
+- **endpoint** (`tx.cycle_count`):
+  - `GET /api/v1/cycle-counts?status=&warehouse_id=`
+  - `GET /{id}` (헤더 + 라인 합본)
+  - `POST` 세션 생성
+  - `POST /{id}/complete` 세션 종료 + 정확도 자동 집계
+  - `PATCH /{id}/items/{item_id}` 라인 counted_qty + variance 입력
+- **차이 사유**: `shrinkage` (도난/유실) / `damage` (파손) / `wrong_location` (위치 오류) / `system_error` (시스템 오류) / `other`.
+- **정확도 자동 집계**: `Complete` 호출 시 라인 집계 → matched/variance/accuracy_pct 헤더 갱신.
+- **사용 시나리오**:
+  - 분기 시작 시 admin 이 세션 생성 → PR8.7b 가 inventory_allocations 스냅샷 자동 → 라인 일괄 생성
+  - 작업자 모바일에서 본인 큐(`?status=in_progress`) 열고 라인별 실측 입력
+  - 차이 발생 라인은 사진 + 사유
+  - 세션 종료 시 정확도 % 자동 집계 → 영업/회계 보고
+- **PR8.7b/c 분리**:
+  - PR8.7b — `cycle_counts.{id}/seed` endpoint: inventory_allocations 자동 스냅샷 → cycle_count_items 일괄 생성.
+  - PR8.7c — completed 세션의 variance 라인을 inventory_allocations 자동 보정 (admin 결재 후).
+- **이유**: BARO 1000억 매출 환경에서 SKU 50종 × 분기 1회 점검 = 분기 200~300건 점검. 현재는 엑셀 파일로 수동 관리 — 차이 추적·증빙 부실. 시스템화로 정확도 추세 + 도난/파손 패턴 분석 가능.
+- **운영 기준**: 모든 테넌트 공유. 정확도 90% 이하 시 영업·회계 알림 (PR8.7d).
+- **검증**: `go test` 통과 — coverage_test 일치.
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/088_cycle_counts.sql` + PostgREST reload.
+- **날짜**: 2026-05-07

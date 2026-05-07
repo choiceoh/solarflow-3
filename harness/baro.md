@@ -67,6 +67,8 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - **[D-131](DECISIONS.md#d-131)** — BARO 출하 알림 메시지 빌더. 외부 발송 API 0, 카톡 붙여넣기용 텍스트 3종(상차/출발/도착) 자동 생성. 자동 발송·드라이버 PWA는 PR7.5
 - **[D-139](DECISIONS.md#d-139)** — WMS Phase 1 창고 내 위치(Bin) 관리. 모든 테넌트 공유 마스터. PR8.5(피킹 리스트)/PR8.6(입고 검수)/PR8.7(재고실사)로 단계 확장.
 - **[D-140](DECISIONS.md#d-140)** — WMS Phase 2 위치별 재고 + 자동 피킹 명세. inventory_allocations.location_id + picking_lists/items + status 머신. 출고 자동 호출은 PR8.5b, 작업자 모바일 UI는 PR8.5c.
+- **[D-141](DECISIONS.md#d-141)** — WMS Phase 3 입고 검수 로그 + 차이 추적. receiving_logs (BL/intercompany 통합) + 사진 첨부 + variance_reason 6종. 자동 호출은 PR8.6b.
+- **[D-142](DECISIONS.md#d-142)** — WMS Phase 4 정기 재고실사 (Cycle Counting). cycle_counts/items + 정확도 자동 집계. 자동 seed/보정은 PR8.7b/c.
 
 ## BARO 전용 백엔드 엔드포인트 (`baroOnly` 미들웨어)
 

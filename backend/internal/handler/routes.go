@@ -208,6 +208,29 @@ func (h *BLHandler) RegisterRoutes(r chi.Router, g middleware.Gates, lineH *BLLi
 	})
 }
 
+// CycleCountHandler — D-142 WMS Phase 4 정기 재고실사.
+func (h *CycleCountHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/cycle-counts", func(r chi.Router) {
+		r.Use(g.Feature(feature.IDTxCycleCount))
+		r.Get("/", h.List)
+		r.Get("/{id}", h.GetByID)
+		r.With(g.Write).Post("/", h.Create)
+		r.With(g.Write).Post("/{id}/complete", h.Complete)
+		r.With(g.Write).Patch("/{id}/items/{item_id}", h.UpdateItem)
+	})
+}
+
+// ReceivingLogHandler — D-141 WMS Phase 3 입고 검수 로그.
+func (h *ReceivingLogHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/receiving-logs", func(r chi.Router) {
+		r.Use(g.Feature(feature.IDTxReceivingLog))
+		r.Get("/", h.List)
+		r.Get("/{id}", h.GetByID)
+		r.With(g.Write).Post("/", h.Create)
+		r.With(g.Write).Delete("/{id}", h.Delete)
+	})
+}
+
 // PickingListHandler — D-140 WMS Phase 2 피킹 명세 CRUD + picked 토글.
 // 출고 1건당 위치별 수량 명세 + 작업자 picked 추적.
 func (h *PickingListHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
