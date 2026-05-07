@@ -201,6 +201,12 @@ export default function PriceForecastPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!runs.some((run) => run.status === 'running')) return;
+    const timer = window.setTimeout(() => void load(), 5000);
+    return () => window.clearTimeout(timer);
+  }, [runs, load]);
+
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {

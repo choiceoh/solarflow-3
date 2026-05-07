@@ -51,15 +51,35 @@ async function parseResponseBody<T>(res: Response): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+function normalizeErrorText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function looksLikeHTMLError(text: string): boolean {
+  const lower = text.trimStart().slice(0, 500).toLowerCase();
+  return lower.startsWith('<!doctype html') || lower.startsWith('<html') || lower.includes('<title>');
+}
+
+function statusFallback(res: Response, fallback: string): string {
+  const code = res.status > 0 ? `HTTP ${res.status}` : '네트워크 오류';
+  return `${fallback} (${code})`;
+}
+
 async function readErrorMessage(res: Response, fallback: string): Promise<string> {
   try {
     const parsed = await parseResponseBody<{ message?: string } | string>(res);
-    if (typeof parsed === 'string' && parsed.trim()) return parsed;
+    if (typeof parsed === 'string' && parsed.trim()) {
+      const text = normalizeErrorText(parsed);
+      if (looksLikeHTMLError(text)) {
+        return `서버 연결이 일시적으로 실패했습니다. 잠시 후 다시 시도해주세요. (HTTP ${res.status})`;
+      }
+      return text.length > 300 ? `${text.slice(0, 300)}…` : text;
+    }
     if (parsed && typeof parsed === 'object' && parsed.message) return parsed.message;
   } catch {
     // 에러 응답 본문이 깨져 있어도 원래 HTTP 상태는 유지한다.
   }
-  return fallback;
+  return statusFallback(res, fallback);
 }
 
 async function getSessionToken(): Promise<string | null> {

@@ -258,6 +258,12 @@ func (h *PriceBenchmarkHandler) AIRefresh(w http.ResponseWriter, r *http.Request
 func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources []benchmarkSource, provider, llmModel string, maxTokens int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			msg := fmt.Sprintf("AI 수집 작업 중 예기치 못한 오류: %v", recovered)
+			h.finishRun(runID, "failed", 0, 0, &msg, []string{msg}, nil, nil)
+		}
+	}()
 
 	// PR 41: 병렬 분산 + 취합 — source 별 shard 로 분리 호출.
 	// 이전 단일 LLM 호출은 모든 source 의 evidence 를 한번에 던져 컨텍스트 초과 빈발.
