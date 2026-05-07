@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Ban, ClipboardList, DollarSign, FileEdit, FileSignature, FilterX, History, Landmark, Search, Send, Ship } from 'lucide-react';
 
@@ -348,6 +349,8 @@ export default function PurchaseHistoryPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  // 필터/제조사/기간 변경 시 체인 list 가 자연스럽게 reorder 되도록 자동 애니메이션.
+  const [chainsParent] = useAutoAnimate<HTMLUListElement>();
   // chainParam은 외부 URL 조작 방지를 위해 형식 검증 — 허용 외 값은 무시 (= 미선택 상태로 간주)
   const rawChainParam = searchParams.get('chain') ?? '';
   const chainParam = isValidChainParam(rawChainParam) ? rawChainParam : '';
@@ -591,7 +594,7 @@ export default function PurchaseHistoryPage() {
               <div className="text-xs">{chains.length === 0 ? 'PO가 없습니다' : '검색 결과 없음'}</div>
             </div>
           ) : (
-            <ul className="sf-ph-chain-list" role="listbox" aria-label="계약 체인 목록">
+            <ul ref={chainsParent} className="sf-ph-chain-list" role="listbox" aria-label="계약 체인 목록">
               {filteredChains.map((chain) => {
                 const isActive = chain.chain_id === chainParam;
                 const variantN = chain.pos.length - 1;
