@@ -388,7 +388,7 @@ var Catalog = map[FeatureID]Feature{
 		Paths: []string{"/api/v1/limit-changes/"},
 	},
 	IDTxPriceBenchmark: {
-		ID: IDTxPriceBenchmark, Name: "가격예측 벤치마크", Description: "외부 태양광 시세·입찰·ASP 벤치마크 + AI 수집",
+		ID: IDTxPriceBenchmark, Name: "가격예측 벤치마크", Description: "외부 태양광 시세·입찰·원가 floor 벤치마크 + AI 수집",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
 		Paths: []string{"/api/v1/price-benchmarks/", "/api/v1/price-benchmarks/{id}", "/api/v1/price-benchmarks/runs", "/api/v1/price-benchmarks/runs/{id}", "/api/v1/price-benchmarks/our-prices", "/api/v1/price-benchmarks/ai-refresh"},
 	},

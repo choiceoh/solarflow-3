@@ -11,8 +11,38 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-150 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장) |
+| DECISIONS | D-001~D-151 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-07 세션 — 가격예측 1차/2차 개선 + Tier-1 ASP 제외
+
+### 완료
+- 가격예측 상단을 `외부 벤치마크` / `우리 거래가` / `예측 · 전략`으로 분리
+- 차트 프리셋, 상세 필터, 가상 스크롤 관측값 목록, CSV 내보내기, AI 수집 중복 실행 방지, source별 수집 상태 badge 추가
+- 최신 main의 AI source 선택 chip과 관측값 선택 삭제 기능을 함께 유지
+- 백엔드 AI 저장 정책 강화
+  - 허용된 source_key, metric_key, market_region, basis, currency만 저장
+  - D-146 중국·유럽 제한과 함께 Tier-1 ASP / InfoLink cell·wafer 저장 차단
+- Tier-1 ASP 제거(D-151)
+  - `tier1_asp` source 와 `manufacturer_asp` metric 을 프론트 source 목록, dev mock source list, 백엔드 AI source 목록/프롬프트/whitelist 에서 제거
+  - 기존 과거 DB 행은 삭제하지 않고 신규 수동/AI 저장만 차단
+
+### 검증
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go test ./internal/handler -run TestValidateBenchmarkCatalogPolicy` 성공
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 ProcurementPage hook dependency 경고 4건 출력
+- `git diff --check` 성공
+- `graphify update .` 성공
+
+### 알려진 제한
+- `cd frontend && npm run test`는 Vitest worker 시작 timeout으로 테스트 파일 실행 전 실패. 이전 가격예측 작업 때와 같은 환경성 worker 응답 timeout.
+- 정식 가격전망 계산은 아직 Rust API가 아니라 화면 파생 카드 수준. 재고·환율·입고예정·forward curve를 조합하는 다음 단계에서 Rust 계산엔진으로 이전 필요.
+- 현재 실행 환경에 `codesign`, `launchctl`이 없어 macOS launchd 재부트스트랩은 수행하지 못함.
 
 ---
 
@@ -377,7 +407,7 @@
 ### 완료
 - module 계열 좌측 사이드바 `현황` 그룹에 `가격예측` 메뉴 추가 (`/price-forecast`)
 - `price_benchmarks`, `price_benchmark_runs` 마이그레이션 추가
-  - OPIS CMM/forward/DDP, InfoLink, TrendForce, PVinsights, 중국 국영 입찰, CPIA floor, Tier-1 ASP를 공통 시계열 구조로 저장
+  - OPIS CMM/forward/유럽 DDP, InfoLink, TrendForce, PVinsights, 중국 국영 입찰, CPIA floor를 공통 시계열 구조로 저장
   - 동일 source/metric/date/region/basis/currency 관측점은 중복 누적 대신 최신 수집값으로 갱신
   - AI 수집 버튼 1회 실행 로그(provider/model/source_keys/inserted/skipped/warnings/evidence/raw_response) 보존
 - `GET/POST /api/v1/price-benchmarks`, `GET /runs`, `POST /ai-refresh` API 추가

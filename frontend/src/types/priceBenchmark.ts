@@ -40,6 +40,7 @@ export interface PriceBenchmarkRun {
   skipped_count: number
   error_message?: string | null
   warnings?: string[]
+  evidence?: unknown[]
 }
 
 export interface PriceBenchmarkAIRefreshResult {

@@ -970,7 +970,7 @@ function priceBenchmarkRuns(): MockRow[] {
   ];
 }
 
-const SOURCE_KEYS = ['opis', 'infolink', 'trendforce', 'pvinsights', 'china_tender', 'cpia_floor', 'tier1_asp'];
+const SOURCE_KEYS = ['opis', 'infolink', 'trendforce', 'pvinsights', 'china_tender', 'cpia_floor'];
 
 function moduleDemandForecasts(): MockRow[] {
   return [
