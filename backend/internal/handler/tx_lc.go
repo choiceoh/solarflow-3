@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,6 +17,25 @@ import (
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
+
+// lcSortable — server-side 정렬 허용 컬럼 (BL 패턴과 동일).
+var lcSortable = map[string]struct{}{
+	"lc_number":     {},
+	"open_date":     {},
+	"maturity_date": {},
+	"amount_usd":    {},
+	"status":        {},
+	"created_at":    {},
+}
+
+func sanitizeLCSearchTerm(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(",", " ", "(", " ", ")", " ", ".", " ", "*", " ", "\"", " ")
+	return strings.TrimSpace(replacer.Replace(q))
+}
 
 // LCHandler — LC(신용장) 관련 API를 처리하는 핸들러
 // 비유: "LC 서류함" — 각 PO에 연결된 LC 개설/결제 서류를 관리
@@ -53,7 +74,29 @@ func (h *LCHandler) applyLCFilters(r *http.Request, query *postgrest.FilterBuild
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
 	}
+	// 검색 — lc_number/memo ilike. bank/po 의 join 필드는 PostgREST or 절에 못 넣어 제외.
+	if q := sanitizeLCSearchTerm(r.URL.Query().Get("q")); q != "" {
+		clauses := []string{
+			fmt.Sprintf("lc_number.ilike.*%s*", q),
+			fmt.Sprintf("memo.ilike.*%s*", q),
+		}
+		query = query.Or(strings.Join(clauses, ","), "")
+	}
 	return query
+}
+
+func parseLCSort(r *http.Request) (column string, ascending bool) {
+	column = "open_date"
+	ascending = false
+	if raw := r.URL.Query().Get("sort"); raw != "" {
+		if _, ok := lcSortable[raw]; ok {
+			column = raw
+		}
+	}
+	if r.URL.Query().Get("order") == "asc" {
+		ascending = true
+	}
+	return column, ascending
 }
 
 // List — GET /api/v1/lcs — LC 목록 조회 (은행/법인/PO 정보 포함)
@@ -63,6 +106,9 @@ func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("lc_records").
 		Select("*, banks(bank_name), companies(company_name, company_code), purchase_orders(po_number, manufacturer_id)", "exact", false)
 	query = h.applyLCFilters(r, query)
+
+	sortCol, asc := parseLCSort(r)
+	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
 	limit, offset := parseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
