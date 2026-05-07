@@ -29,7 +29,7 @@ export const BARO_DOMAIN_PACK: Pack = {
   description: '영업 홈·CRM·견적·배차·미수·RFM 등 BARO 측 모든 화면 (D-108)',
   navItems: [
     // 홈
-    { key: 'baro-home', label: '영업 홈', abbr: '홈', path: '/baro/home', icon: Home, menu: 'baro_home', group: 'home', tenants: ['baro'] },
+    { key: 'baro-home', label: '영업 홈', abbr: '홈', path: '/baro/home', icon: Home, menu: 'baro_home', group: 'home', feature: 'baro.home' },
     // 구매 (BARO 측)
     { key: 'baro-purchase', label: '그룹내 매입', abbr: '매입', path: '/baro/group-purchase', icon: PackagePlus, menu: 'baro_group_purchase', group: '구매', feature: 'intercompany.request.baro' },
     { key: 'baro-incoming', label: '입고예정', abbr: '입고', path: '/baro/incoming', icon: Ship, menu: 'baro_incoming', group: '구매', feature: 'baro.incoming' },
@@ -37,10 +37,10 @@ export const BARO_DOMAIN_PACK: Pack = {
     // 판매 / CRM
     { key: 'crm-inbox', label: '내 미처리 문의', abbr: '문의', path: '/crm/inbox', icon: Inbox, menu: 'crm_inbox', group: '판매', feature: 'crm.partner_activity' },
     { key: 'baro-cockpit', label: '거래처 360', abbr: '360', path: '/baro/cockpit', icon: Users, menu: 'baro_cockpit', group: '판매', feature: 'baro.partner_cockpit' },
-    // D-126/130/131 — 카탈로그 미정의 → tenants fallback
-    { key: 'baro-quote', label: '견적 빌더', abbr: '견적', path: '/baro/quote/new', icon: Calculator, menu: 'baro_quote', group: '판매', tenants: ['baro'] },
-    { key: 'baro-inverter', label: '인버터 가이드', abbr: '인버', path: '/baro/inverter-guide', icon: Zap, menu: 'baro_inverter', group: '판매', tenants: ['baro'] },
-    { key: 'baro-shipment', label: '출하 알림', abbr: '알림', path: '/baro/shipment-notice', icon: Bell, menu: 'baro_shipment', group: '판매', tenants: ['baro'] },
+    // PR-8: 카탈로그 보강 후 feature 매핑 — D-126/130/131 모두 frontend-only 였으나 카탈로그 등재.
+    { key: 'baro-quote', label: '견적 빌더', abbr: '견적', path: '/baro/quote/new', icon: Calculator, menu: 'baro_quote', group: '판매', feature: 'baro.quote' },
+    { key: 'baro-inverter', label: '인버터 가이드', abbr: '인버', path: '/baro/inverter-guide', icon: Zap, menu: 'baro_inverter', group: '판매', feature: 'baro.inverter' },
+    { key: 'baro-shipment', label: '출하 알림', abbr: '알림', path: '/baro/shipment-notice', icon: Bell, menu: 'baro_shipment', group: '판매', feature: 'baro.shipment_notice' },
     { key: 'baro-price-book', label: '거래처 단가표', abbr: '단가', path: '/baro/price-book', icon: Tags, menu: 'baro_price_book', group: '판매', feature: 'baro.price_book' },
     { key: 'baro-dispatch', label: '배차/일정', abbr: '배차', path: '/baro/dispatch', icon: Truck, menu: 'baro_dispatch', group: '판매', feature: 'baro.dispatch' },
     // 현황
