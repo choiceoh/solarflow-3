@@ -514,9 +514,9 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 			response.RespondError(w, http.StatusBadRequest, msg)
 			return
 		}
-		data, _, err := h.db.From("declarations").Insert(args, false, "", "", "").Execute()
+		data, _, err := h.db.From("import_declarations").Insert(args, false, "", "", "").Execute()
 		if err != nil {
-			log.Printf("[assistant write/confirm] declarations insert 실패 id=%s err=%v", id, err)
+			log.Printf("[assistant write/confirm] import_declarations insert 실패 id=%s err=%v", id, err)
 			response.RespondError(w, http.StatusInternalServerError, "면장 등록에 실패했습니다")
 			return
 		}

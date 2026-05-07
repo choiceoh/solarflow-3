@@ -8,6 +8,7 @@ import { useBLList } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
 import { buildChains, diffAuditFields, eventDeepLink, isValidChainParam, sanitizeAuditLogs, type Chain, type EventKind, type SafeAuditLog } from '@/lib/purchaseHistory';
 import { CardB, FilterButton, FilterChips, TileB, type DateRangeValue } from '@/components/command/MockupPrimitives';
+import EmptyState from '@/components/common/EmptyState';
 import { monthlyCount, flatSparkFromValue } from '@/templates/sparkUtils';
 import { CONTRACT_TYPE_LABEL, LC_STATUS_LABEL, PO_STATUS_LABEL } from '@/types/procurement';
 import type { PurchaseOrder, PriceHistory, LCRecord, TTRemittance } from '@/types/procurement';

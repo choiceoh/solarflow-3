@@ -23,7 +23,7 @@ import blShipmentDetailConfig from '@/config/details/bl_shipment';
 import type { Manufacturer } from '@/types/masters';
 import type { BLLineItem, BLShipment } from '@/types/inbound';
 import type { DocumentFile } from '@/types/documentFile';
-import BLExpensesTab from './BLExpensesTab';
+import BLCustomsCostTab from './BLCustomsCostTab';
 import BLOutboundTrackingTab from './BLOutboundTrackingTab';
 
 interface Props {
@@ -344,7 +344,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
           <TabsTrigger value="basic">기본정보</TabsTrigger>
           <TabsTrigger value="documents">서류</TabsTrigger>
           <TabsTrigger value="lines">입고품목</TabsTrigger>
-          <TabsTrigger value="customs">부대비용</TabsTrigger>
+          <TabsTrigger value="customs">면장/원가</TabsTrigger>
           <TabsTrigger value="outbound">출고추적</TabsTrigger>
         </TabsList>
 
@@ -524,7 +524,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
         </TabsContent>
 
         <TabsContent value="customs">
-          <BLExpensesTab blId={blId} lines={lines} />
+          <BLCustomsCostTab bl={bl} lines={lines} />
         </TabsContent>
 
         <TabsContent value="outbound">
