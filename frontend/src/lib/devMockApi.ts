@@ -4,6 +4,7 @@ type MockRow = Record<string, unknown>;
 type CompanyScoped = MockRow & { company_id?: string };
 
 const nowIso = '2026-05-01T00:00:00.000Z';
+const deletedPriceBenchmarkIds = new Set<string>();
 
 const companies = [
   { company_id: 'company-topsolar', company_name: '탑솔라', company_code: 'TOP', business_number: '123-81-45678', is_active: true },
@@ -475,17 +476,25 @@ function marginAnalysisResponse() {
       total_revenue_krw: revenue,
       total_cost_krw: cost,
       total_margin_krw: revenue - cost,
+      cost_covered_revenue_krw: revenue,
+      cost_missing_revenue_krw: 0,
       sale_count: 1,
     };
   });
+  const totalRevenue = items.reduce((sum, item) => sum + item.total_revenue_krw, 0);
+  const totalCost = items.reduce((sum, item) => sum + Number(item.total_cost_krw ?? 0), 0);
+  const totalMargin = items.reduce((sum, item) => sum + Number(item.total_margin_krw ?? 0), 0);
   return {
     items,
     summary: {
       total_sold_kw: items.reduce((sum, item) => sum + item.total_sold_kw, 0),
-      total_revenue_krw: items.reduce((sum, item) => sum + item.total_revenue_krw, 0),
-      total_cost_krw: items.reduce((sum, item) => sum + Number(item.total_cost_krw ?? 0), 0),
-      total_margin_krw: items.reduce((sum, item) => sum + Number(item.total_margin_krw ?? 0), 0),
+      total_revenue_krw: totalRevenue,
+      total_cost_krw: totalCost,
+      total_margin_krw: totalMargin,
       overall_margin_rate: 12,
+      cost_covered_revenue_krw: totalRevenue,
+      cost_missing_revenue_krw: 0,
+      cost_coverage_rate: totalRevenue > 0 ? 100 : 0,
       cost_basis: 'landed',
     },
   };
@@ -613,6 +622,13 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
       warnings: [],
       items: item ? [item] : [],
     } as T);
+  }
+
+  if (url.pathname.startsWith('/api/v1/price-benchmarks/') && method === 'DELETE') {
+    const id = endpointId(url.pathname, 'price-benchmarks');
+    if (!id || id === 'runs') throw new Error('목업 가격 벤치마크 항목을 찾을 수 없습니다');
+    deletedPriceBenchmarkIds.add(id);
+    return clone({ status: 'deleted' } as T);
   }
 
   if (method !== 'GET' && !url.pathname.startsWith('/api/v1/calc') && url.pathname !== '/api/v1/ocr/extract') {
@@ -836,7 +852,7 @@ function priceBenchmarks(): MockRow[] {
       created_at: nowIso,
       updated_at: nowIso,
     },
-  ]);
+  ]).filter((row) => !deletedPriceBenchmarkIds.has(String(row.benchmark_id)));
 }
 
 function priceBenchmarkRuns(): MockRow[] {

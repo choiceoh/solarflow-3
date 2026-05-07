@@ -292,6 +292,27 @@ func (h *PriceBenchmarkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusCreated, created[0])
 }
 
+// Delete — DELETE /api/v1/price-benchmarks/{id}
+// 비유: 신뢰하기 어려운 시세 점 하나를 가격 예측 그래프에서 지우는 것. 실행 로그는 감사 기록으로 남긴다.
+func (h *PriceBenchmarkHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.RespondError(w, http.StatusBadRequest, "benchmark_id가 누락됐습니다")
+		return
+	}
+
+	_, _, err := h.DB.From("price_benchmarks").
+		Delete("", "").
+		Eq("benchmark_id", id).
+		Execute()
+	if err != nil {
+		log.Printf("[가격 벤치마크 삭제 실패] id=%s err=%v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "가격 벤치마크 삭제에 실패했습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, model.StatusResponse{Status: "deleted"})
+}
+
 // AIRefresh — POST /api/v1/price-benchmarks/ai-refresh
 func (h *PriceBenchmarkHandler) AIRefresh(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())

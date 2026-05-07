@@ -1,6 +1,5 @@
 /// 마진/이익률 분석 + 거래처 분석 + 단가 추이
 /// 비유: "경영분석실" — 판매 수익성, 거래처 건전성, 단가 변동을 분석
-
 use chrono::{NaiveDate, Utc};
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -12,15 +11,37 @@ use crate::model::margin::*;
 
 /// 마진율 계산
 pub fn calc_margin_rate(sale_wp: f64, cost_wp: f64) -> f64 {
-    if sale_wp <= 0.0 { return 0.0; }
+    if sale_wp <= 0.0 {
+        return 0.0;
+    }
     ((sale_wp - cost_wp) / sale_wp * 10000.0).round() / 100.0
+}
+
+/// 원가 연결률 계산
+pub fn calc_cost_coverage_rate(total_revenue: f64, cost_covered_revenue: f64) -> f64 {
+    if total_revenue <= 0.0 {
+        return 0.0;
+    }
+    (cost_covered_revenue / total_revenue * 10000.0).round() / 100.0
+}
+
+/// 원가 연결 매출 기준 전체 이익률 계산
+pub fn calc_covered_margin_rate(cost_covered_revenue: f64, total_cost: f64) -> f64 {
+    if cost_covered_revenue <= 0.0 {
+        return 0.0;
+    }
+    ((cost_covered_revenue - total_cost) / cost_covered_revenue * 10000.0).round() / 100.0
 }
 
 /// 미수금 status 판별
 pub fn outstanding_status(days: i64) -> String {
-    if days <= 30 { "normal".to_string() }
-    else if days <= 60 { "warning".to_string() }
-    else { "overdue".to_string() }
+    if days <= 30 {
+        "normal".to_string()
+    } else if days <= 60 {
+        "warning".to_string()
+    } else {
+        "overdue".to_string()
+    }
 }
 
 // === SQL 행 타입 ===
@@ -63,7 +84,6 @@ struct CustomerCollectedRow {
 #[derive(sqlx::FromRow)]
 struct OutstandingRow {
     customer_id: Uuid,
-    remaining: Option<f64>,
     days_elapsed: Option<i32>,
 }
 
@@ -103,7 +123,10 @@ struct SaleTrendRow {
 
 // === API 1: 마진 분석 ===
 
-pub async fn calculate_margin(pool: &PgPool, req: &MarginAnalysisRequest) -> Result<MarginAnalysisResponse, sqlx::Error> {
+pub async fn calculate_margin(
+    pool: &PgPool,
+    req: &MarginAnalysisRequest,
+) -> Result<MarginAnalysisResponse, sqlx::Error> {
     let company_id = req.company_id.unwrap();
     let date_from: Option<NaiveDate> = req.date_from.as_ref().and_then(|s| s.parse().ok());
     let date_to: Option<NaiveDate> = req.date_to.as_ref().and_then(|s| s.parse().ok());
@@ -134,9 +157,13 @@ pub async fn calculate_margin(pool: &PgPool, req: &MarginAnalysisRequest) -> Res
         ORDER BY m.name_kr, p.module_width_mm, p.module_height_mm, p.spec_wp
         "#,
     )
-    .bind(company_id).bind(req.manufacturer_id).bind(req.product_id)
-    .bind(date_from).bind(date_to)
-    .fetch_all(pool).await?;
+    .bind(company_id)
+    .bind(req.manufacturer_id)
+    .bind(req.product_id)
+    .bind(date_from)
+    .bind(date_to)
+    .fetch_all(pool)
+    .await?;
 
     // 원가 조회 (cost_basis에 따라)
     // D-064 PR 30: 'fifo' — ERP fifo_matches (PR 26) 직접 사용. 가장 정확.
@@ -148,6 +175,7 @@ pub async fn calculate_margin(pool: &PgPool, req: &MarginAnalysisRequest) -> Res
 
     let mut items: Vec<MarginItem> = Vec::new();
     let mut sum_revenue = 0.0;
+    let mut sum_cost_covered_revenue = 0.0;
     let mut sum_cost = 0.0;
     let mut sum_kw = 0.0;
 
@@ -165,37 +193,71 @@ pub async fn calculate_margin(pool: &PgPool, req: &MarginAnalysisRequest) -> Res
                 let mr = calc_margin_rate(avg_sale, c);
                 let tc = c * total_wp;
                 let tm = revenue - tc;
-                (Some(round2(mw)), Some(mr), Some(round2(tc)), Some(round2(tm)))
+                (
+                    Some(round2(mw)),
+                    Some(mr),
+                    Some(round2(tc)),
+                    Some(round2(tm)),
+                )
             }
             None => (None, None, None, None),
         };
 
         sum_revenue += revenue;
-        if let Some(tc) = total_cost { sum_cost += tc; }
+        if let Some(tc) = total_cost {
+            sum_cost += tc;
+            sum_cost_covered_revenue += revenue;
+        }
         sum_kw += kw;
 
         items.push(MarginItem {
             manufacturer_name: s.manufacturer_name.clone(),
             product_code: s.product_code.clone(),
             product_name: s.product_name.clone(),
-            spec_wp: s.spec_wp, module_width_mm: s.module_width_mm, module_height_mm: s.module_height_mm,
-            total_sold_qty: qty, total_sold_kw: round2(kw),
+            spec_wp: s.spec_wp,
+            module_width_mm: s.module_width_mm,
+            module_height_mm: s.module_height_mm,
+            total_sold_qty: qty,
+            total_sold_kw: round2(kw),
             avg_sale_price_wp: round2(avg_sale),
-            avg_cost_wp: avg_cost.map(round2), margin_wp, margin_rate,
-            total_revenue_krw: round2(revenue), total_cost_krw: total_cost, total_margin_krw: total_margin,
-            cost_basis: req.cost_basis.clone(), sale_count: s.sale_count.unwrap_or(0),
+            avg_cost_wp: avg_cost.map(round2),
+            margin_wp,
+            margin_rate,
+            total_revenue_krw: round2(revenue),
+            total_cost_krw: total_cost,
+            total_margin_krw: total_margin,
+            cost_covered_revenue_krw: if total_cost.is_some() {
+                round2(revenue)
+            } else {
+                0.0
+            },
+            cost_missing_revenue_krw: if total_cost.is_some() {
+                0.0
+            } else {
+                round2(revenue)
+            },
+            cost_basis: req.cost_basis.clone(),
+            sale_count: s.sale_count.unwrap_or(0),
         });
     }
 
-    let total_margin = sum_revenue - sum_cost;
-    let overall_rate = if sum_revenue > 0.0 { (total_margin / sum_revenue * 10000.0).round() / 100.0 } else { 0.0 };
+    let total_margin = sum_cost_covered_revenue - sum_cost;
+    let overall_rate = calc_covered_margin_rate(sum_cost_covered_revenue, sum_cost);
+    let missing_revenue = (sum_revenue - sum_cost_covered_revenue).max(0.0);
+    let coverage_rate = calc_cost_coverage_rate(sum_revenue, sum_cost_covered_revenue);
 
     Ok(MarginAnalysisResponse {
         items,
         summary: MarginSummary {
-            total_sold_kw: round2(sum_kw), total_revenue_krw: round2(sum_revenue),
-            total_cost_krw: round2(sum_cost), total_margin_krw: round2(total_margin),
-            overall_margin_rate: overall_rate, cost_basis: req.cost_basis.clone(),
+            total_sold_kw: round2(sum_kw),
+            total_revenue_krw: round2(sum_revenue),
+            total_cost_krw: round2(sum_cost),
+            total_margin_krw: round2(total_margin),
+            overall_margin_rate: overall_rate,
+            cost_covered_revenue_krw: round2(sum_cost_covered_revenue),
+            cost_missing_revenue_krw: round2(missing_revenue),
+            cost_coverage_rate: coverage_rate,
+            cost_basis: req.cost_basis.clone(),
         },
         calculated_at: Utc::now(),
     })
@@ -203,7 +265,10 @@ pub async fn calculate_margin(pool: &PgPool, req: &MarginAnalysisRequest) -> Res
 
 // === API 2: 거래처 분석 ===
 
-pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> Result<CustomerAnalysisResponse, sqlx::Error> {
+pub async fn analyze_customers(
+    pool: &PgPool,
+    req: &CustomerAnalysisRequest,
+) -> Result<CustomerAnalysisResponse, sqlx::Error> {
     let company_id = req.company_id.unwrap();
     let date_from: Option<NaiveDate> = req.date_from.as_ref().and_then(|s| s.parse().ok());
     let date_to: Option<NaiveDate> = req.date_to.as_ref().and_then(|s| s.parse().ok());
@@ -222,34 +287,54 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
         GROUP BY s.customer_id, ptr.partner_name
         "#,
     )
-    .bind(company_id).bind(req.customer_id).bind(date_from).bind(date_to)
-    .fetch_all(pool).await?;
+    .bind(company_id)
+    .bind(req.customer_id)
+    .bind(date_from)
+    .bind(date_to)
+    .fetch_all(pool)
+    .await?;
 
     let collected_rows = sqlx::query_as::<_, CustomerCollectedRow>(
         r#"
-        SELECT r.customer_id, COALESCE(SUM(rm.matched_amount), 0)::float8 as total_collected
-        FROM receipts r JOIN receipt_matches rm ON r.receipt_id = rm.receipt_id
-        WHERE ($1::uuid IS NULL OR r.customer_id = $1)
-        GROUP BY r.customer_id
+        SELECT s.customer_id, COALESCE(SUM(rm.matched_amount), 0)::float8 as total_collected
+        FROM sales s
+        JOIN outbounds o ON s.outbound_id = o.outbound_id
+        JOIN receipt_matches rm ON rm.outbound_id = o.outbound_id
+        WHERE o.company_id = $1 AND o.status = 'active'
+          AND COALESCE(s.status, 'active') <> 'cancelled'
+          AND ($2::uuid IS NULL OR s.customer_id = $2)
+          AND ($3::date IS NULL OR o.outbound_date >= $3)
+          AND ($4::date IS NULL OR o.outbound_date <= $4)
+        GROUP BY s.customer_id
         "#,
     )
-    .bind(req.customer_id).fetch_all(pool).await?;
+    .bind(company_id)
+    .bind(req.customer_id)
+    .bind(date_from)
+    .bind(date_to)
+    .fetch_all(pool)
+    .await?;
 
-    let collected_map: HashMap<Uuid, f64> = collected_rows.into_iter()
-        .map(|r| (r.customer_id, r.total_collected.unwrap_or(0.0))).collect();
+    let collected_map: HashMap<Uuid, f64> = collected_rows
+        .into_iter()
+        .map(|r| (r.customer_id, r.total_collected.unwrap_or(0.0)))
+        .collect();
 
     let outstanding_rows = sqlx::query_as::<_, OutstandingRow>(
         r#"
         SELECT s.customer_id,
-               (s.total_amount - COALESCE((SELECT SUM(rm2.matched_amount) FROM receipt_matches rm2 WHERE rm2.outbound_id = o.outbound_id), 0))::float8 as remaining,
                (CURRENT_DATE - o.outbound_date)::int as days_elapsed
         FROM sales s JOIN outbounds o ON s.outbound_id = o.outbound_id
         WHERE o.company_id = $1 AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          AND ($2::uuid IS NULL OR s.customer_id = $2)
+          AND ($3::date IS NULL OR o.outbound_date >= $3)
+          AND ($4::date IS NULL OR o.outbound_date <= $4)
           AND s.total_amount > COALESCE((SELECT SUM(rm3.matched_amount) FROM receipt_matches rm3 WHERE rm3.outbound_id = o.outbound_id), 0)
         "#,
     )
-    .bind(company_id).fetch_all(pool).await?;
+    .bind(company_id).bind(req.customer_id).bind(date_from).bind(date_to)
+    .fetch_all(pool).await?;
 
     // 거래처별 미수금 집계
     let mut outstanding_map: HashMap<Uuid, (i64, i64)> = HashMap::new(); // (count, max_days)
@@ -262,17 +347,47 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
     let deposit_rows = sqlx::query_as::<_, CustomerDepositRow>(
         "SELECT ord.customer_id, AVG(ord.deposit_rate)::float8 as avg_deposit_rate FROM orders ord WHERE ord.company_id = $1 AND ord.deposit_rate IS NOT NULL GROUP BY ord.customer_id"
     ).bind(company_id).fetch_all(pool).await?;
-    let deposit_map: HashMap<Uuid, f64> = deposit_rows.into_iter()
-        .filter_map(|r| r.avg_deposit_rate.map(|d| (r.customer_id, round2(d)))).collect();
+    let deposit_map: HashMap<Uuid, f64> = deposit_rows
+        .into_iter()
+        .filter_map(|r| r.avg_deposit_rate.map(|d| (r.customer_id, round2(d))))
+        .collect();
 
     // === 거래처별 이익 계산 ===
     // 원가 기준: req.cost_basis ("landed" 기본 | "cif")
     // 방법: 제품별 평균 원가(avg_wp_krw)를 미리 계산한 뒤,
     //       각 매출을 (수량 × spec_wp × avg_wp_krw) = 매출원가로 변환.
     //       원가 이력이 있는 매출분만 커버. 없는 제품은 이익 계산 제외.
-    let cost_col = if req.cost_basis == "cif" { "cd.cif_wp_krw" } else { "cd.landed_wp_krw" };
-    let margin_sql = format!(
+    let margin_sql = if req.cost_basis == "fifo" {
         r#"
+        WITH fifo_cost AS (
+            SELECT fm.outbound_id, SUM(fm.cost_amount)::float8 AS cost_covered
+            FROM fifo_matches fm
+            JOIN outbounds o ON fm.outbound_id = o.outbound_id
+            WHERE o.company_id = $1
+              AND fm.cost_amount IS NOT NULL
+            GROUP BY fm.outbound_id
+        )
+        SELECT s.customer_id,
+               SUM(CASE WHEN fc.cost_covered IS NOT NULL THEN s.supply_amount ELSE 0 END)::float8 AS revenue_covered,
+               SUM(COALESCE(fc.cost_covered, 0))::float8 AS cost_covered
+        FROM sales s
+        JOIN outbounds o ON s.outbound_id = o.outbound_id
+        LEFT JOIN fifo_cost fc ON fc.outbound_id = o.outbound_id
+        WHERE o.company_id = $1 AND o.status = 'active'
+          AND COALESCE(s.status, 'active') <> 'cancelled'
+          AND ($2::uuid IS NULL OR s.customer_id = $2)
+          AND ($3::date IS NULL OR o.outbound_date >= $3)
+          AND ($4::date IS NULL OR o.outbound_date <= $4)
+        GROUP BY s.customer_id
+        "#.to_string()
+    } else {
+        let cost_col = if req.cost_basis == "cif" {
+            "cd.cif_wp_krw"
+        } else {
+            "cd.landed_wp_krw"
+        };
+        format!(
+            r#"
         WITH cd_cost AS (
             SELECT cd.product_id,
                    SUM({cost_col} * cd.quantity)::float8 / NULLIF(SUM(cd.quantity), 0) AS avg_wp_krw
@@ -297,8 +412,8 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
         cost_avg AS (
             SELECT COALESCE(cd.product_id, bl.product_id) AS product_id,
                    COALESCE(cd.avg_wp_krw, bl.avg_wp_krw) AS avg_wp_krw
-            FROM bl_cost bl
-            LEFT JOIN cd_cost cd ON bl.product_id = cd.product_id
+            FROM cd_cost cd
+            FULL OUTER JOIN bl_cost bl ON bl.product_id = cd.product_id
         )
         SELECT s.customer_id,
                SUM(CASE WHEN ca.avg_wp_krw IS NOT NULL THEN s.supply_amount ELSE 0 END)::float8 AS revenue_covered,
@@ -316,12 +431,26 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
           AND ($4::date IS NULL OR o.outbound_date <= $4)
         GROUP BY s.customer_id
         "#
-    );
+        )
+    };
     let margin_rows = sqlx::query_as::<_, CustomerCostAggRow>(&margin_sql)
-        .bind(company_id).bind(req.customer_id).bind(date_from).bind(date_to)
-        .fetch_all(pool).await?;
-    let margin_map: HashMap<Uuid, (f64, f64)> = margin_rows.into_iter()
-        .map(|r| (r.customer_id, (r.revenue_covered.unwrap_or(0.0), r.cost_covered.unwrap_or(0.0))))
+        .bind(company_id)
+        .bind(req.customer_id)
+        .bind(date_from)
+        .bind(date_to)
+        .fetch_all(pool)
+        .await?;
+    let margin_map: HashMap<Uuid, (f64, f64)> = margin_rows
+        .into_iter()
+        .map(|r| {
+            (
+                r.customer_id,
+                (
+                    r.revenue_covered.unwrap_or(0.0),
+                    r.cost_covered.unwrap_or(0.0),
+                ),
+            )
+        })
         .collect();
 
     let mut items: Vec<CustomerItem> = Vec::new();
@@ -353,10 +482,14 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
         sum_collected += total_collected;
 
         items.push(CustomerItem {
-            customer_id: s.customer_id, customer_name: s.partner_name.clone(),
-            total_sales_krw: round2(total_sales), total_collected_krw: round2(total_collected),
-            outstanding_krw: round2(outstanding.max(0.0)), outstanding_count: out_count,
-            oldest_outstanding_days: oldest_days, avg_payment_days: None,
+            customer_id: s.customer_id,
+            customer_name: s.partner_name.clone(),
+            total_sales_krw: round2(total_sales),
+            total_collected_krw: round2(total_collected),
+            outstanding_krw: round2(outstanding.max(0.0)),
+            outstanding_count: out_count,
+            oldest_outstanding_days: oldest_days,
+            avg_payment_days: None,
             avg_margin_rate: margin_rate,
             total_margin_krw: margin_krw,
             avg_deposit_rate: deposit_map.get(&s.customer_id).copied(),
@@ -366,12 +499,15 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
 
     let overall_margin_rate = if sum_revenue_covered > 0.0 {
         (sum_margin / sum_revenue_covered * 10000.0).round() / 100.0
-    } else { 0.0 };
+    } else {
+        0.0
+    };
 
     Ok(CustomerAnalysisResponse {
         items,
         summary: CustomerSummary {
-            total_sales_krw: round2(sum_sales), total_collected_krw: round2(sum_collected),
+            total_sales_krw: round2(sum_sales),
+            total_collected_krw: round2(sum_collected),
             total_outstanding_krw: round2((sum_sales - sum_collected).max(0.0)),
             total_margin_krw: round2(sum_margin),
             overall_margin_rate,
@@ -382,7 +518,10 @@ pub async fn analyze_customers(pool: &PgPool, req: &CustomerAnalysisRequest) -> 
 
 // === API 3: 단가 추이 ===
 
-pub async fn calculate_price_trend(pool: &PgPool, req: &PriceTrendRequest) -> Result<PriceTrendResponse, sqlx::Error> {
+pub async fn calculate_price_trend(
+    pool: &PgPool,
+    req: &PriceTrendRequest,
+) -> Result<PriceTrendResponse, sqlx::Error> {
     let company_id = req.company_id.unwrap();
     let period_type = &req.period;
 
@@ -432,8 +571,12 @@ pub async fn calculate_price_trend(pool: &PgPool, req: &PriceTrendRequest) -> Re
     .fetch_all(pool).await?;
 
     // 판매 단가 맵: (product_id, period) -> avg_sale_wp
-    let sale_map: HashMap<(Uuid, String), f64> = sale_rows.into_iter()
-        .filter_map(|r| r.period.map(|p| ((r.product_id, p), r.avg_sale_wp.unwrap_or(0.0))))
+    let sale_map: HashMap<(Uuid, String), f64> = sale_rows
+        .into_iter()
+        .filter_map(|r| {
+            r.period
+                .map(|p| ((r.product_id, p), r.avg_sale_wp.unwrap_or(0.0)))
+        })
         .collect();
 
     // 품번별 그룹화
@@ -444,7 +587,12 @@ pub async fn calculate_price_trend(pool: &PgPool, req: &PriceTrendRequest) -> Re
         let sale_wp = sale_map.get(&(r.product_id, period.clone())).copied();
 
         let entry = product_map.entry(r.product_id).or_insert_with(|| {
-            (r.manufacturer_name.clone(), r.product_name.clone(), r.spec_wp, Vec::new())
+            (
+                r.manufacturer_name.clone(),
+                r.product_name.clone(),
+                r.spec_wp,
+                Vec::new(),
+            )
         });
 
         entry.3.push(TrendDataPoint {
@@ -457,13 +605,20 @@ pub async fn calculate_price_trend(pool: &PgPool, req: &PriceTrendRequest) -> Re
         });
     }
 
-    let trends: Vec<TrendProduct> = product_map.into_values()
+    let trends: Vec<TrendProduct> = product_map
+        .into_values()
         .map(|(mfg, name, wp, pts)| TrendProduct {
-            manufacturer_name: mfg, product_name: name, spec_wp: wp, data_points: pts,
+            manufacturer_name: mfg,
+            product_name: name,
+            spec_wp: wp,
+            data_points: pts,
         })
         .collect();
 
-    Ok(PriceTrendResponse { trends, calculated_at: Utc::now() })
+    Ok(PriceTrendResponse {
+        trends,
+        calculated_at: Utc::now(),
+    })
 }
 
 // === 헬퍼 ===
@@ -471,7 +626,11 @@ pub async fn calculate_price_trend(pool: &PgPool, req: &PriceTrendRequest) -> Re
 /// D-064 PR 30: ERP fifo_matches 기반 품번별 가중평균 원가(₩/Wp).
 /// FIFO 매칭이 실제 입고 LOT ↔ 출고 배분 결과라 cost_details/BL 추정치보다 정확.
 /// allocated_qty × spec_wp 로 분모, cost_amount 합으로 분자.
-async fn fetch_cost_avg_fifo(pool: &PgPool, company_id: Uuid, product_id: Option<Uuid>) -> Result<HashMap<Uuid, f64>, sqlx::Error> {
+async fn fetch_cost_avg_fifo(
+    pool: &PgPool,
+    company_id: Uuid,
+    product_id: Option<Uuid>,
+) -> Result<HashMap<Uuid, f64>, sqlx::Error> {
     let sql = r#"
     SELECT fm.product_id,
            CASE WHEN SUM(fm.allocated_qty * p.spec_wp) > 0
@@ -487,13 +646,27 @@ async fn fetch_cost_avg_fifo(pool: &PgPool, company_id: Uuid, product_id: Option
     GROUP BY fm.product_id
     "#;
     let rows = sqlx::query_as::<_, CostAvgRow>(sql)
-        .bind(company_id).bind(product_id)
-        .fetch_all(pool).await?;
-    Ok(rows.into_iter().filter_map(|r| r.avg_wp.map(|v| (r.product_id, v))).collect())
+        .bind(company_id)
+        .bind(product_id)
+        .fetch_all(pool)
+        .await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| r.avg_wp.map(|v| (r.product_id, v)))
+        .collect())
 }
 
-async fn fetch_cost_avg(pool: &PgPool, company_id: Uuid, product_id: Option<Uuid>, basis: &str) -> Result<HashMap<Uuid, f64>, sqlx::Error> {
-    let col = if basis == "landed" { "cd.landed_wp_krw" } else { "cd.cif_wp_krw" };
+async fn fetch_cost_avg(
+    pool: &PgPool,
+    company_id: Uuid,
+    product_id: Option<Uuid>,
+    basis: &str,
+) -> Result<HashMap<Uuid, f64>, sqlx::Error> {
+    let col = if basis == "landed" {
+        "cd.landed_wp_krw"
+    } else {
+        "cd.cif_wp_krw"
+    };
     // D-031: FIFO 건별 원가 매칭 전까지 품번별 입고 수량 가중평균 원가를 사용한다.
     // 1순위: 수입면장 기반 원가 (cost_details — 관세/부대비용 포함 확정원가)
     let sql = format!(
@@ -531,14 +704,21 @@ async fn fetch_cost_avg(pool: &PgPool, company_id: Uuid, product_id: Option<Uuid
         )
         SELECT COALESCE(cd.product_id, bl.product_id) AS product_id,
                COALESCE(cd.avg_wp, bl.avg_wp) AS avg_wp
-        FROM bl_cost bl
-        LEFT JOIN cd_cost cd ON bl.product_id = cd.product_id
+        FROM cd_cost cd
+        FULL OUTER JOIN bl_cost bl ON bl.product_id = cd.product_id
         "#
     );
     let rows = sqlx::query_as::<_, CostAvgRow>(&sql)
-        .bind(company_id).bind(product_id)
-        .fetch_all(pool).await?;
-    Ok(rows.into_iter().filter_map(|r| r.avg_wp.map(|v| (r.product_id, v))).collect())
+        .bind(company_id)
+        .bind(product_id)
+        .fetch_all(pool)
+        .await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| r.avg_wp.map(|v| (r.product_id, v)))
+        .collect())
 }
 
-fn round2(v: f64) -> f64 { (v * 100.0).round() / 100.0 }
+fn round2(v: f64) -> f64 {
+    (v * 100.0).round() / 100.0
+}

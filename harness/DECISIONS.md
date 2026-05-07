@@ -1148,3 +1148,22 @@
 - **검증**: `go test` 통과 — coverage_test 일치.
 - **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/088_cycle_counts.sql` + PostgREST reload.
 - **날짜**: 2026-05-07
+
+## D-143: 가격예측 AI 수집 관측값은 선택 삭제 가능, 실행 로그는 보존
+- **결정**: `/price-forecast` 하단 관측값 목록에서 사용자가 개별 가격 벤치마크를 선택해 삭제할 수 있게 한다. 서버는 `DELETE /api/v1/price-benchmarks/{id}` 로 `price_benchmarks` 행만 삭제한다.
+- **이유**: AI 수집은 evidence 기반으로 제한해도 공개 페이지 요약, 유료 리포트 미리보기, 검색 결과 조각의 품질 차이 때문에 신뢰도 낮은 관측값이 섞일 수 있다. 실무 구매 협상 기준선에 쓰는 화면이라, 운영자가 낮은 confidence·근거 부족 행을 즉시 제거할 수 있어야 한다.
+- **감사 기준**: `price_benchmark_runs` 는 삭제하지 않는다. 어떤 provider/model/source_keys 로 수집했고 warnings/skipped/raw_response 가 무엇이었는지는 재수집 품질 점검용 기록이므로 보존한다.
+- **날짜**: 2026-05-07
+
+## D-144: 매출 분석 이익률은 원가 연결 매출 기준으로 계산한다
+
+- **결정**: `/api/v1/calc/margin-analysis`의 `summary.total_margin_krw`와 `summary.overall_margin_rate`는 원가가 연결된 매출분만 기준으로 계산한다. 전체 공급가 매출은 `total_revenue_krw`에 유지하고, 원가가 연결된 공급가는 `cost_covered_revenue_krw`, 아직 원가가 없어 제외한 공급가는 `cost_missing_revenue_krw`, 연결률은 `cost_coverage_rate`로 별도 노출한다.
+- **이유**: 원가가 없는 품목의 매출을 0원 원가처럼 총이익에 섞으면 경영진 화면에서 이익이 과대 표시된다. 매출 규모와 이익 신뢰도를 분리해야 "얼마 팔았는가"와 "그중 얼마가 계산 가능한 이익인가"를 동시에 판단할 수 있다.
+- **운영 기준**:
+  - 매출 분석 화면은 `공급가 매출`, `계산 이익`, `이익률`, `미수금`, `계산서 미발행`, `원가 미연결`을 분리 표시한다.
+  - 거래처 분석의 수금/미수 집계는 선택 법인과 조회 기간의 출고/매출 범위에 맞춘다. 다른 법인·기간 수금액을 같은 거래처라는 이유로 섞지 않는다.
+  - 계산엔진 호출 실패는 빈 0원 데이터로 조용히 대체하지 않고 화면 경고로 드러낸다.
+- **검증**:
+  - Rust `test_margin_summary_uses_cost_covered_revenue`로 원가 연결 매출 기준 이익률/연결률을 고정한다.
+  - 프론트엔드 빌드에서 확장 응답 스키마(`cost_*`)와 mock 응답 호환을 확인한다.
+- **날짜**: 2026-05-07
