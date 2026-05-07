@@ -772,14 +772,14 @@ function priceHistories(): MockRow[] {
 
 function priceBenchmarks(): MockRow[] {
   const base = [
-    ['2025-11-15', 0.104, 0.118, 0.132, 0.129],
-    ['2025-12-15', 0.101, 0.116, 0.130, 0.126],
-    ['2026-01-15', 0.098, 0.114, 0.128, 0.123],
-    ['2026-02-15', 0.096, 0.112, 0.126, 0.121],
-    ['2026-03-15', 0.094, 0.111, 0.124, 0.119],
-    ['2026-04-15', 0.093, 0.110, 0.123, 0.118],
+    ['2025-11-15', 0.104, 0.132, 0.129],
+    ['2025-12-15', 0.101, 0.130, 0.126],
+    ['2026-01-15', 0.098, 0.128, 0.123],
+    ['2026-02-15', 0.096, 0.126, 0.121],
+    ['2026-03-15', 0.094, 0.124, 0.119],
+    ['2026-04-15', 0.093, 0.123, 0.118],
   ] as const;
-  return base.flatMap(([date, cmm, ddpUs, ddpEu, tender], index) => [
+  return base.flatMap(([date, cmm, ddpEu, tender], index) => [
     {
       benchmark_id: `pb-opis-cmm-${index}`,
       run_id: 'pbr-mock-1',
@@ -799,27 +799,6 @@ function priceBenchmarks(): MockRow[] {
       confidence: 0.82,
       source_url: 'https://www.opisnet.com/product/solar-weekly/',
       raw_excerpt: 'Dev mock CMM observation',
-      created_at: nowIso,
-      updated_at: nowIso,
-    },
-    {
-      benchmark_id: `pb-opis-ddp-us-${index}`,
-      run_id: 'pbr-mock-1',
-      source_key: 'opis',
-      source_name: 'OPIS Solar Weekly',
-      metric_key: 'ddp_us',
-      metric_label: 'DDP US',
-      value_date: date,
-      period_label: 'weekly',
-      market_region: 'ddp_us',
-      basis: 'ddp',
-      currency: 'USD',
-      price_usd_w: ddpUs,
-      cargo_min_mw: 5,
-      cargo_max_mw: 25,
-      confidence: 0.78,
-      source_url: 'https://www.opisnet.com/product/solar-weekly/',
-      raw_excerpt: 'Dev mock DDP US observation',
       created_at: nowIso,
       updated_at: nowIso,
     },

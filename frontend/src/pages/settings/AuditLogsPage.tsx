@@ -1,5 +1,6 @@
 // 관리자 로그 — 운영 데이터(P/O·L/C·B/L·수주·출고 등) 변경 감사 기록 (admin 전용)
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { fetchWithAuth } from '@/lib/api';
 import { usePermission } from '@/hooks/usePermission';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -227,67 +228,126 @@ export default function AuditLogsPage() {
           ) : !loading && logs.length === 0 ? (
             <div className="p-8 text-center text-lg text-muted-foreground">조회 결과가 없습니다</div>
           ) : (
-            <div className="divide-y">
-              {logs.map((log) => {
-                const meta = ACTION_BADGE[log.action] ?? { label: log.action, cls: 'bg-gray-100 text-gray-600' };
-                const isExpanded = expandedId === log.audit_id;
-                const hasDetail = Boolean(log.old_data) || Boolean(log.new_data);
-                return (
-                  <div key={log.audit_id} className="px-7 py-5">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedId(isExpanded ? null : log.audit_id)}
-                      className="flex w-full items-start gap-4 text-left"
-                      disabled={!hasDetail}
-                      aria-expanded={isExpanded}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`shrink-0 rounded px-2.5 py-0.5 text-sm font-medium ${meta.cls}`}>
-                            {meta.label}
-                          </span>
-                          <span className="text-base font-medium">{entityLabel(log.entity_type)}</span>
-                          <span className="font-mono text-sm text-muted-foreground">{log.entity_id}</span>
-                        </div>
-                        <p className="mt-1.5 text-sm text-muted-foreground">
-                          <span>{formatDateTime(log.created_at)}</span>
-                          {log.user_email ? <span> · {log.user_email}</span> : null}
-                          {log.request_method && log.request_path ? (
-                            <span className="font-mono"> · {log.request_method} {log.request_path}</span>
-                          ) : null}
-                        </p>
-                        {log.note ? <p className="mt-1 text-sm">{log.note}</p> : null}
-                      </div>
-                      {hasDetail ? (
-                        <span className="shrink-0 text-sm text-muted-foreground">{isExpanded ? '닫기' : '상세'}</span>
-                      ) : null}
-                    </button>
-                    {isExpanded && hasDetail ? (
-                      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                        {log.old_data ? (
-                          <div className="rounded border bg-muted/30 p-4">
-                            <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">이전</p>
-                            <pre className="overflow-x-auto whitespace-pre-wrap break-all text-xs font-mono">
-                              {JSON.stringify(log.old_data, null, 2)}
-                            </pre>
-                          </div>
-                        ) : null}
-                        {log.new_data ? (
-                          <div className="rounded border bg-muted/30 p-4">
-                            <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">변경 후</p>
-                            <pre className="overflow-x-auto whitespace-pre-wrap break-all text-xs font-mono">
-                              {JSON.stringify(log.new_data, null, 2)}
-                            </pre>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
+            <VirtualizedAuditList
+              logs={logs}
+              expandedId={expandedId}
+              onToggleExpand={(id) => setExpandedId((prev) => (prev === id ? null : id))}
+            />
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 가상 스크롤 audit 리스트 — 페이지 limit 500건 + expanded row 의 dynamic height
+ * 까지 measureElement 로 측정하며 보이는 row 만 렌더. Admin 전용 페이지라
+ * regression 영향 좁고, sticky 헤더 위 wrapper 에 max-height 부여로 레이아웃은
+ * 최소 변경. data-index 로 virtualizer 가 각 row 측정 (expand 시 자동 재배치).
+ */
+function VirtualizedAuditList({
+  logs,
+  expandedId,
+  onToggleExpand,
+}: {
+  logs: AuditLog[];
+  expandedId: string | null;
+  onToggleExpand: (id: string) => void;
+}) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: logs.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 96,
+    overscan: 8,
+    getItemKey: (index) => logs[index]?.audit_id ?? index,
+  });
+
+  return (
+    <div
+      ref={parentRef}
+      className="divide-y overflow-auto"
+      style={{ maxHeight: 'calc(100vh - 280px)', contain: 'strict' }}
+    >
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {virtualizer.getVirtualItems().map((vRow) => {
+          const log = logs[vRow.index];
+          if (!log) return null;
+          const meta = ACTION_BADGE[log.action] ?? { label: log.action, cls: 'bg-gray-100 text-gray-600' };
+          const isExpanded = expandedId === log.audit_id;
+          const hasDetail = Boolean(log.old_data) || Boolean(log.new_data);
+          return (
+            <div
+              key={vRow.key}
+              data-index={vRow.index}
+              ref={virtualizer.measureElement}
+              className="border-b px-7 py-5"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${vRow.start}px)`,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => onToggleExpand(log.audit_id)}
+                className="flex w-full items-start gap-4 text-left"
+                disabled={!hasDetail}
+                aria-expanded={isExpanded}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`shrink-0 rounded px-2.5 py-0.5 text-sm font-medium ${meta.cls}`}>
+                      {meta.label}
+                    </span>
+                    <span className="text-base font-medium">{entityLabel(log.entity_type)}</span>
+                    <span className="font-mono text-sm text-muted-foreground">{log.entity_id}</span>
+                  </div>
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    <span>{formatDateTime(log.created_at)}</span>
+                    {log.user_email ? <span> · {log.user_email}</span> : null}
+                    {log.request_method && log.request_path ? (
+                      <span className="font-mono"> · {log.request_method} {log.request_path}</span>
+                    ) : null}
+                  </p>
+                  {log.note ? <p className="mt-1 text-sm">{log.note}</p> : null}
+                </div>
+                {hasDetail ? (
+                  <span className="shrink-0 text-sm text-muted-foreground">{isExpanded ? '닫기' : '상세'}</span>
+                ) : null}
+              </button>
+              {isExpanded && hasDetail ? (
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {log.old_data ? (
+                    <div className="rounded border bg-muted/30 p-4">
+                      <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">이전</p>
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-all text-xs font-mono">
+                        {JSON.stringify(log.old_data, null, 2)}
+                      </pre>
+                    </div>
+                  ) : null}
+                  {log.new_data ? (
+                    <div className="rounded border bg-muted/30 p-4">
+                      <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">변경 후</p>
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-all text-xs font-mono">
+                        {JSON.stringify(log.new_data, null, 2)}
+                      </pre>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -36,8 +36,11 @@ func TestBuildBenchmarkExistingContextMissingFocus(t *testing.T) {
 		}
 	}
 
-	if !hasMissingFocus(ctx.MissingFocus, "opis", "ddp_us") {
-		t.Fatalf("없는 OPIS DDP US 지표가 missing_focus에 없습니다")
+	if hasMissingFocus(ctx.MissingFocus, "opis", "ddp_us") {
+		t.Fatalf("중국/유럽 제외 대상인 OPIS DDP US 지표가 missing_focus에 들어갔습니다")
+	}
+	if !hasMissingFocus(ctx.MissingFocus, "opis", "ddp_europe") {
+		t.Fatalf("없는 OPIS DDP Europe 지표가 missing_focus에 없습니다")
 	}
 	if !hasMissingFocus(ctx.MissingFocus, "infolink", "module_centralized") {
 		t.Fatalf("없는 InfoLink module_centralized 지표가 missing_focus에 없습니다")
@@ -73,7 +76,10 @@ func TestBuildBenchmarkExtractionMessagesDedupPolicy(t *testing.T) {
 	if !strings.Contains(user, "opis|cmm_fob_china_topcon_600w|2026-05-01|fob_china|spot|USD") {
 		t.Fatalf("user prompt에 기존 관측키가 누락됐습니다\n%s", user)
 	}
-	if !strings.Contains(user, "\"metric_key\": \"ddp_us\"") {
+	if strings.Contains(user, "\"metric_key\": \"ddp_us\"") {
+		t.Fatalf("user prompt에 제외 대상 미국 DDP 지표가 들어갔습니다\n%s", user)
+	}
+	if !strings.Contains(user, "\"metric_key\": \"ddp_europe\"") {
 		t.Fatalf("user prompt에 결측 지표가 누락됐습니다\n%s", user)
 	}
 }

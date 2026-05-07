@@ -72,18 +72,18 @@ func (s benchmarkSource) homepageURLs() []string {
 
 var benchmarkSources = []benchmarkSource{
 	// 주간 발행 시세지 — tbs:qdr:w 로 최근 1주 결과만 (오래된 캐시 페이지 제외).
-	{Key: "opis", Name: "OPIS Solar Weekly", Homepage: "https://www.opisnet.com/product/solar-weekly/", HomepageFallbacks: []string{"https://www.opisnet.com/product-category/renewables/", "https://www.opisnet.com/"}, Query: "OPIS Solar Weekly Chinese Module Marker CMM FOB China TOPCon 600W forward curve DDP US Europe", Endpoint: "search", TimeWindow: "week"},
+	{Key: "opis", Name: "OPIS Solar Weekly", Homepage: "https://www.opisnet.com/product/solar-weekly/", HomepageFallbacks: []string{"https://www.opisnet.com/product-category/renewables/", "https://www.opisnet.com/"}, Query: "OPIS Solar Weekly Chinese Module Marker CMM FOB China TOPCon 600W forward curve DDP Europe", Endpoint: "search", TimeWindow: "week"},
 	// InfoLink — module/polysilicon 만 사용. cell, wafer 는 정확도 이슈로 제외.
-	{Key: "infolink", Name: "InfoLink Consulting", Homepage: "https://www.infolink-group.com/energy-article/solar-topic-price", HomepageFallbacks: []string{"https://www.infolink-group.com/solar/", "https://www.infolink-group.com/"}, Query: "InfoLink Consulting weekly solar module polysilicon price centralized distributed project module price", Endpoint: "search", TimeWindow: "week"},
-	{Key: "trendforce", Name: "TrendForce EnergyTrend", Homepage: "https://www.energytrend.com/pricequotes.html", HomepageFallbacks: []string{"https://www.energytrend.com/solar/", "https://www.energytrend.com/"}, Query: "TrendForce EnergyTrend weekly solar module price China export price monthly tender analysis", Endpoint: "search", TimeWindow: "week"},
+	{Key: "infolink", Name: "InfoLink Consulting", Homepage: "https://www.infolink-group.com/energy-article/solar-topic-price", HomepageFallbacks: []string{"https://www.infolink-group.com/solar/", "https://www.infolink-group.com/"}, Query: "InfoLink Consulting weekly solar module polysilicon price China centralized distributed project module price", Endpoint: "search", TimeWindow: "week"},
+	{Key: "trendforce", Name: "TrendForce EnergyTrend", Homepage: "https://www.energytrend.com/pricequotes.html", HomepageFallbacks: []string{"https://www.energytrend.com/solar/", "https://www.energytrend.com/"}, Query: "TrendForce EnergyTrend weekly solar module price China export Europe price monthly tender analysis", Endpoint: "search", TimeWindow: "week"},
 	// 일간 발행 — tbs:qdr:d.
-	{Key: "pvinsights", Name: "PVinsights", Homepage: "https://pvinsights.com/", Query: "PVinsights daily solar module price poly silicon wafer cell price", Endpoint: "search", TimeWindow: "day"},
+	{Key: "pvinsights", Name: "PVinsights", Homepage: "https://pvinsights.com/", Query: "PVinsights daily solar module price China Europe module price", Endpoint: "search", TimeWindow: "day"},
 	// 중국 입찰 뉴스 — /news 엔드포인트 + 1개월. 입찰 결과는 뉴스성이 강함.
 	{Key: "china_tender", Name: "중국 국영 대량 입찰", Homepage: "https://guangfu.bjx.com.cn/", HomepageFallbacks: []string{"https://news.bjx.com.cn/zt/guangfu/"}, Query: "北极星 太阳能 光伏 组件 集采 中标 价格 华能 华电 国家能源 国家电投 中国电建 TOPCon", Endpoint: "news", TimeWindow: "month"},
 	// CPIA 정책·가이던스 — 발표 빈도가 낮으므로 1개월.
 	{Key: "cpia_floor", Name: "CPIA 최저원가 가이던스", Homepage: "https://www.chinapv.org.cn/", Query: "中国光伏行业协会 CPIA 光伏组件 最低成本 价格 指引", Endpoint: "search", TimeWindow: "month"},
 	// Tier-1 ASP — 분기 IR 자료. site: 로 IR 도메인 한정 + 3개월(분기).
-	{Key: "tier1_asp", Name: "Tier-1 제조사 ASP", Homepage: "https://ir.jinkosolar.com/", HomepageFallbacks: []string{"https://ir.longi.com/", "https://ir.trinasolar.com/"}, Query: "Jinko Longi Trina JA Solar Tongwei quarterly module ASP dollar per watt", Endpoint: "search", TimeWindow: "month", Site: "ir.jinkosolar.com OR ir.longi.com OR ir.trinasolar.com OR jasolar.com OR tongwei.com"},
+	{Key: "tier1_asp", Name: "Tier-1 제조사 ASP", Homepage: "https://ir.jinkosolar.com/", HomepageFallbacks: []string{"https://ir.longi.com/", "https://ir.trinasolar.com/"}, Query: "Jinko Longi Trina JA Solar Tongwei quarterly module ASP China export Europe module price dollar per watt", Endpoint: "search", TimeWindow: "month", Site: "ir.jinkosolar.com OR ir.longi.com OR ir.trinasolar.com OR jasolar.com OR tongwei.com"},
 }
 
 type benchmarkEvidenceItem struct {
@@ -155,7 +155,6 @@ var benchmarkTargetMatrix = map[string][]benchmarkMetricTarget{
 		{MetricKey: "forward_q2", MetricLabel: "Forward Q+2", MarketRegion: "fob_china", Basis: "forward", PreferredCurrency: "USD", SearchHint: "OPIS Solar Weekly forward curve Q+2 module"},
 		{MetricKey: "forward_q3", MetricLabel: "Forward Q+3", MarketRegion: "fob_china", Basis: "forward", PreferredCurrency: "USD", SearchHint: "OPIS Solar Weekly forward curve Q+3 module"},
 		{MetricKey: "forward_q4", MetricLabel: "Forward Q+4", MarketRegion: "fob_china", Basis: "forward", PreferredCurrency: "USD", SearchHint: "OPIS Solar Weekly forward curve Q+4 module"},
-		{MetricKey: "ddp_us", MetricLabel: "DDP US", MarketRegion: "ddp_us", Basis: "ddp", PreferredCurrency: "USD", SearchHint: "OPIS Solar Weekly DDP US module price"},
 		{MetricKey: "ddp_europe", MetricLabel: "DDP Europe", MarketRegion: "ddp_europe", Basis: "ddp", PreferredCurrency: "USD", SearchHint: "OPIS Solar Weekly DDP Europe module price"},
 	},
 	"infolink": {
@@ -167,26 +166,21 @@ var benchmarkTargetMatrix = map[string][]benchmarkMetricTarget{
 		{MetricKey: "china_domestic", MetricLabel: "중국 국내가", MarketRegion: "china_domestic", Basis: "spot", PreferredCurrency: "CNY", SearchHint: "TrendForce EnergyTrend China domestic solar module price"},
 		{MetricKey: "china_export", MetricLabel: "중국 수출가", MarketRegion: "china_export", Basis: "spot", PreferredCurrency: "USD", SearchHint: "TrendForce EnergyTrend China export solar module price"},
 	},
-	"pvinsights": {
-		{MetricKey: "polysilicon", MetricLabel: "Polysilicon", MarketRegion: "global", Basis: "spot", PreferredCurrency: "USD", SearchHint: "PVinsights polysilicon spot price"},
-		{MetricKey: "cell", MetricLabel: "Cell", MarketRegion: "global", Basis: "spot", PreferredCurrency: "USD", SearchHint: "PVinsights solar cell spot price"},
-		{MetricKey: "wafer", MetricLabel: "Wafer", MarketRegion: "global", Basis: "spot", PreferredCurrency: "USD", SearchHint: "PVinsights wafer spot price"},
-	},
+	"pvinsights": {},
 	"china_tender": {
 		{MetricKey: "china_state_tender", MetricLabel: "중국 국영 입찰가", MarketRegion: "china_domestic", Basis: "tender", PreferredCurrency: "CNY", SearchHint: "央企 国企 光伏组件 集采 中标 单价 TOPCon"},
 	},
 	"cpia_floor": {
 		{MetricKey: "cpia_cost_floor", MetricLabel: "CPIA cost floor", MarketRegion: "china_domestic", Basis: "floor", PreferredCurrency: "CNY", SearchHint: "CPIA 光伏组件 最低成本 价格 指引"},
 	},
-	"tier1_asp": {
-		{MetricKey: "manufacturer_asp", MetricLabel: "Tier-1 ASP", MarketRegion: "manufacturer", Basis: "asp", PreferredCurrency: "USD", SearchHint: "Jinko LONGi Trina JA Solar Tongwei module ASP dollar per watt quarterly"},
-	},
+	"tier1_asp": {},
 }
 
 // List — GET /api/v1/price-benchmarks
 func (h *PriceBenchmarkHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("price_benchmarks").
 		Select("*", "exact", false).
+		In("market_region", model.PriceBenchmarkAllowedMarketRegions()).
 		Order("value_date", &postgrest.OrderOpts{Ascending: false}).
 		Order("created_at", &postgrest.OrderOpts{Ascending: false})
 
@@ -198,6 +192,11 @@ func (h *PriceBenchmarkHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("metric_key", metric)
 	}
 	if region := q.Get("market_region"); region != "" && region != "all" {
+		if !model.IsPriceBenchmarkMarketRegionAllowed(region) {
+			w.Header().Set("X-Total-Count", "0")
+			response.RespondJSON(w, http.StatusOK, []model.PriceBenchmark{})
+			return
+		}
 		query = query.Eq("market_region", region)
 	}
 	if basis := q.Get("basis"); basis != "" && basis != "all" {
@@ -617,6 +616,7 @@ func (h *PriceBenchmarkHandler) fetchExistingBenchmarkContext(ctx context.Contex
 	}
 	query := h.DB.From("price_benchmarks").
 		Select("source_key,source_name,metric_key,metric_label,value_date,market_region,basis,currency,price_usd_w,price_cny_w,price_krw_w,quarter_label,project_segment,technology,source_url", "exact", false).
+		In("market_region", model.PriceBenchmarkAllowedMarketRegions()).
 		Order("value_date", &postgrest.OrderOpts{Ascending: false}).
 		Range(0, 799, "")
 	if len(sourceKeys) > 0 {
@@ -1076,6 +1076,9 @@ missing_focus 밖의 값은 evidence에 가격·날짜·단위가 모두 명확�
 출력은 JSON 객체 하나만 반환하세요. Markdown, 설명문, 코드블록은 금지입니다.
 
 소스별 추출 제약:
+- 수집 대상 지역은 중국/유럽만입니다. market_region 은 fob_china, china_domestic, china_export, ddp_europe 중 하나만 허용합니다.
+- ddp_us, usa, north_america, india, global, manufacturer 등 중국/유럽 밖 가격은 evidence 에 가격이 있어도 points 에 넣지 말고 warnings 에 제외 이유만 남기세요.
+- forward 가격은 중국 FOB 또는 유럽 DDP 근거가 명시된 경우에만 추출하세요.
 - InfoLink: module_centralized / module_distributed / polysilicon 만 추출. cell, wafer 는 evidence 에 가격이 있어도 절대 추출하지 마세요.
 형식:
 {
@@ -1083,12 +1086,12 @@ missing_focus 밖의 값은 evidence에 가격·날짜·단위가 모두 명확�
     {
       "source_key": "opis|infolink|trendforce|pvinsights|china_tender|cpia_floor|tier1_asp",
       "source_name": "표시명",
-      "metric_key": "cmm_fob_china_topcon_600w|forward_q1|forward_q2|forward_q3|forward_q4|ddp_us|ddp_europe|module_centralized|module_distributed|cell|wafer|polysilicon|china_domestic|china_export|china_state_tender|cpia_cost_floor|manufacturer_asp",
+      "metric_key": "cmm_fob_china_topcon_600w|forward_q1|forward_q2|forward_q3|forward_q4|ddp_europe|module_centralized|module_distributed|polysilicon|china_domestic|china_export|china_state_tender|cpia_cost_floor",
       "metric_label": "운영자가 보는 짧은 라벨",
       "value_date": "YYYY-MM-DD",
       "period_label": "weekly|daily|monthly|Q+1 등",
-      "market_region": "fob_china|ddp_us|ddp_europe|china_domestic|china_export|global|manufacturer",
-      "basis": "fob|ddp|spot|forward|tender|floor|asp",
+      "market_region": "fob_china|ddp_europe|china_domestic|china_export",
+      "basis": "fob|ddp|spot|forward|tender|floor",
       "currency": "USD|CNY|KRW",
       "price_usd_w": 0.000001 이상 숫자 또는 null,
       "price_cny_w": 0.000001 이상 숫자 또는 null,
@@ -1113,7 +1116,7 @@ missing_focus 밖의 값은 evidence에 가격·날짜·단위가 모두 명확�
 		"existing_context": existing,
 		"evidence":         evidence,
 	}, "", "  ")
-	user := "다음 evidence 에서 가격 관측값을 추출하되, 이미 가진 정보는 재수집하지 말고 existing_context.missing_focus 의 결측 지표와 latest_by_slot 이후의 최신 관측값을 우선하세요.\n" + string(payload)
+	user := "다음 evidence 에서 중국/유럽 가격 관측값만 추출하세요. 이미 가진 정보는 재수집하지 말고 existing_context.missing_focus 의 결측 지표와 latest_by_slot 이후의 최신 관측값을 우선하세요. 미국·기타 지역 가격은 points 에 넣지 말고 warnings 에 제외 이유만 남기세요.\n" + string(payload)
 	return system, user
 }
 
@@ -1164,6 +1167,11 @@ func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, po
 		}
 		if point.MetricLabel == "" {
 			point.MetricLabel = point.MetricKey
+		}
+		if !model.IsPriceBenchmarkMarketRegionAllowed(point.MarketRegion) {
+			log.Printf("[가격 벤치마크 AI point skip] market_region=%s 는 중국/유럽 수집 대상이 아님", point.MarketRegion)
+			skipped++
+			continue
 		}
 		// AI 가 시스템 프롬프트의 InfoLink 제외 지시를 무시해도 여기서 차단.
 		if point.SourceKey == "infolink" && (point.MetricKey == "cell" || point.MetricKey == "wafer") {
