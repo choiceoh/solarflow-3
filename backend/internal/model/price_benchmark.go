@@ -13,6 +13,38 @@ const (
 	PriceBenchmarkExcerptMaxRunes = 1200
 )
 
+var priceBenchmarkAllowedMarketRegions = []string{
+	"fob_china",
+	"china_domestic",
+	"china_export",
+	"ddp_europe",
+}
+
+var priceBenchmarkAllowedMarketRegionSet = map[string]bool{
+	"fob_china":      true,
+	"china_domestic": true,
+	"china_export":   true,
+	"ddp_europe":     true,
+}
+
+var priceBenchmarkBlockedMetricSet = map[string]bool{
+	"ddp_us": true,
+}
+
+// PriceBenchmarkAllowedMarketRegions — 가격예측 수집 허용 지역 목록.
+// 비유: 장부에 찍어도 되는 시장 이름표만 복사해 건넨다.
+func PriceBenchmarkAllowedMarketRegions() []string {
+	out := make([]string, len(priceBenchmarkAllowedMarketRegions))
+	copy(out, priceBenchmarkAllowedMarketRegions)
+	return out
+}
+
+// IsPriceBenchmarkMarketRegionAllowed — 중국/유럽 가격인지 확인한다.
+// 비유: 미국처럼 눈금이 다른 가격표가 섞이지 않게 입구에서 확인한다.
+func IsPriceBenchmarkMarketRegionAllowed(region string) bool {
+	return priceBenchmarkAllowedMarketRegionSet[normalizeKey(region)]
+}
+
 // PriceBenchmark — 외부 태양광 가격 벤치마크의 한 시점 관측값.
 // 비유: 여러 시세지를 같은 눈금자의 점 하나로 옮겨 찍은 기록.
 type PriceBenchmark struct {
@@ -133,6 +165,9 @@ func (req *CreatePriceBenchmarkRequest) Validate() string {
 	if utf8.RuneCountInString(req.MetricKey) > PriceBenchmarkKeyMaxRunes {
 		return "metric_key는 80자를 초과할 수 없습니다"
 	}
+	if priceBenchmarkBlockedMetricSet[req.MetricKey] {
+		return "metric_key ddp_us는 가격예측 수집 대상에서 제외됩니다"
+	}
 	if req.MetricLabel == "" {
 		return "metric_label은 필수 항목입니다"
 	}
@@ -144,6 +179,9 @@ func (req *CreatePriceBenchmarkRequest) Validate() string {
 	}
 	if req.MarketRegion == "" {
 		return "market_region은 필수 항목입니다"
+	}
+	if !IsPriceBenchmarkMarketRegionAllowed(req.MarketRegion) {
+		return "market_region은 중국/유럽 가격(fob_china, china_domestic, china_export, ddp_europe)만 허용됩니다"
 	}
 	if req.Basis == "" {
 		return "basis는 필수 항목입니다"
