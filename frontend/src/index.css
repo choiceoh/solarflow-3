@@ -1010,6 +1010,100 @@ a:focus-visible,
   line-height: 1;
 }
 
+/* 로그인 페이지 진입 fade-in — 좌측은 가벼운 페이드, 우측은 살짝 슬라이드. */
+.sf-login-shell {
+  animation: sf-login-fade 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes sf-login-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 비밀번호 보기 토글 — 우측 끝에 배치되는 ghost 버튼. */
+.sf-login-password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sf-ink-4);
+  transform: translateY(-50%);
+  transition: background var(--sf-dur-mid) var(--sf-ease-out),
+              color var(--sf-dur-mid) var(--sf-ease-out);
+}
+.sf-login-password-toggle:hover {
+  background: var(--sf-bg-2);
+  color: var(--sf-ink-2);
+}
+
+/* 시세 ticker 마퀴 — overflow hidden 컨테이너 안에서 우→좌 무한 흐름. */
+.sf-ticker-wrap {
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid rgb(255 255 255 / 0.10);
+  padding-top: 12px;
+  mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 48px), transparent 100%);
+}
+.sf-ticker-track {
+  display: inline-flex;
+  gap: 32px;
+  white-space: nowrap;
+  animation: sf-ticker-slide 30s linear infinite;
+}
+.sf-ticker-track > * {
+  flex-shrink: 0;
+}
+@keyframes sf-ticker-slide {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.sf-login-shell:hover .sf-ticker-track,
+.sf-ticker-wrap:focus-within .sf-ticker-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-login-shell,
+  .sf-ticker-track {
+    animation: none !important;
+  }
+}
+
+/* 반응형 — 1024px 이하에선 우측 다크 패널을 아래로 스택 (모바일 split 깨짐 방지). */
+@media (max-width: 1024px) {
+  .sf-login-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+  .sf-login-left {
+    padding: 32px 28px;
+  }
+  .sf-login-right {
+    padding: 28px;
+  }
+}
+
+/* 더 작은 화면 (모바일) — 우측 다크 패널은 KPI 4개만 보여주고 큐는 숨김. */
+@media (max-width: 720px) {
+  .sf-login-left {
+    padding: 24px 18px;
+  }
+  .sf-dark-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sf-login-right {
+    padding: 20px 18px;
+  }
+  .sf-login-right .sf-command-queue-mobile-hide {
+    display: none;
+  }
+}
+
 .sf-command-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
