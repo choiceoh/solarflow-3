@@ -12,6 +12,7 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbrpc"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
@@ -75,6 +76,14 @@ func (h *POHandler) applyPOFilters(r *http.Request, query *postgrest.FilterBuild
 	// 비유: ?contract_type=spot — 계약 유형(spot/annual_frame/half_year_frame) 필터
 	if ct := r.URL.Query().Get("contract_type"); ct != "" {
 		query = query.Eq("contract_type", ct)
+	}
+	switch r.URL.Query().Get("quick_filter") {
+	case "active_only":
+		query = query.Not("status", "in", "(completed,cancelled)")
+	case "missing_number":
+		query = query.Is("po_number", "null")
+	case "changed_contract":
+		query = query.Not("parent_po_id", "is", "null")
 	}
 	// 기간 — contract_date 범위 (양끝 포함, ISO date YYYY-MM-DD).
 	// frontend ProcurementPage 의 date_range filter 서버 위임 (이전엔 page 안 client filter).
@@ -318,30 +327,67 @@ func (h *POHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
-
-	data, _, err := h.DB.From("purchase_orders").
-		Insert(req, false, "", "", "").
-		Execute()
-	if err != nil {
-		log.Printf("[발주 등록 실패] req=%+v err=%v", req, err)
-		response.RespondError(w, http.StatusInternalServerError, "발주 등록에 실패했습니다")
+	if msg := validateNestedPOLines(req.LineItems); msg != "" {
+		response.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	var created []model.PurchaseOrder
+	// 비유: 계약서 본문과 품목 명세표를 같은 봉투에 넣어 DB 함수로 접수한다.
+	data, err := dbrpc.Call(r.Context(), "sf_create_purchase_order_with_lines", model.CreatePurchaseOrderWithLinesRPCRequest{
+		PO:    model.NewPurchaseOrderInsert(req),
+		Lines: req.LineItems,
+	})
+	if err != nil {
+		log.Printf("[발주 등록 실패] req=%+v err=%v", req, err)
+		response.RespondError(w, dbrpc.StatusCode(err, http.StatusInternalServerError), "발주 등록에 실패했습니다")
+		return
+	}
+
+	var created model.PurchaseOrder
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[발주 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
 		return
 	}
 
-	if len(created) == 0 {
+	if created.POID == "" {
 		response.RespondError(w, http.StatusInternalServerError, "발주 등록 결과를 확인할 수 없습니다")
 		return
 	}
 
-	writeAuditLog(h.DB, r, "purchase_orders", created[0].POID, "create", nil, auditRawFromValue(created[0]), "")
-	response.RespondJSON(w, http.StatusCreated, created[0])
+	writeAuditLog(h.DB, r, "purchase_orders", created.POID, "create", nil, auditRawFromValue(struct {
+		PO    model.PurchaseOrder         `json:"po"`
+		Lines []model.CreatePOLineRequest `json:"lines,omitempty"`
+	}{PO: created, Lines: req.LineItems}), "")
+	response.RespondJSON(w, http.StatusCreated, created)
+}
+
+func validateNestedPOLines(lines []model.CreatePOLineRequest) string {
+	for i, line := range lines {
+		n := i + 1
+		if line.ProductID == "" {
+			return strconv.Itoa(n) + "번 라인의 product_id는 필수 항목입니다"
+		}
+		if line.Quantity <= 0 {
+			return strconv.Itoa(n) + "번 라인의 quantity는 양수여야 합니다"
+		}
+		if line.UnitPriceUSD != nil && *line.UnitPriceUSD <= 0 {
+			return strconv.Itoa(n) + "번 라인의 unit_price_usd는 양수여야 합니다"
+		}
+		if line.UnitPriceUSDWp != nil && *line.UnitPriceUSDWp <= 0 {
+			return strconv.Itoa(n) + "번 라인의 unit_price_usd_wp는 양수여야 합니다"
+		}
+		if line.TotalAmountUSD != nil && *line.TotalAmountUSD <= 0 {
+			return strconv.Itoa(n) + "번 라인의 total_amount_usd는 양수여야 합니다"
+		}
+		if line.ItemType != nil && !allowedItemTypes[*line.ItemType] {
+			return strconv.Itoa(n) + "번 라인의 item_type은 main/spare 중 하나여야 합니다"
+		}
+		if line.PaymentType != nil && !allowedPaymentTypes[*line.PaymentType] {
+			return strconv.Itoa(n) + "번 라인의 payment_type은 paid/free 중 하나여야 합니다"
+		}
+	}
+	return ""
 }
 
 // Update — PUT /api/v1/pos/{id} — 발주 수정
@@ -437,7 +483,7 @@ func shouldAutoInsertPriceHistory(reqStatus *string, prevStatus string) bool {
 func (h *POHandler) autoInsertPriceHistory(poID string, po model.PurchaseOrder) {
 	// 발주품목 조회
 	linesData, _, err := h.DB.From("po_line_items").
-		Select("*", "exact", false).
+		Select("*, products(spec_wp)", "exact", false).
 		Eq("po_id", poID).
 		Execute()
 	if err != nil {
@@ -445,8 +491,12 @@ func (h *POHandler) autoInsertPriceHistory(poID string, po model.PurchaseOrder) 
 		return
 	}
 	var lines []struct {
-		ProductID    string   `json:"product_id"`
-		UnitPriceUSD *float64 `json:"unit_price_usd"`
+		ProductID      string   `json:"product_id"`
+		UnitPriceUSD   *float64 `json:"unit_price_usd"`
+		UnitPriceUSDWp *float64 `json:"unit_price_usd_wp"`
+		Products       *struct {
+			SpecWP *float64 `json:"spec_wp"`
+		} `json:"products"`
 	}
 	if err := json.Unmarshal(linesData, &lines); err != nil {
 		log.Printf("[단가이력 자동등록: 발주품목 디코딩 실패] %v", err)
@@ -467,7 +517,8 @@ func (h *POHandler) autoInsertPriceHistory(poID string, po model.PurchaseOrder) 
 	reason := reasonStr
 
 	for _, l := range lines {
-		if l.UnitPriceUSD == nil || *l.UnitPriceUSD <= 0 {
+		newPrice, ok := priceHistoryUSDWp(l.UnitPriceUSD, l.UnitPriceUSDWp, productSpecWP(l.Products))
+		if !ok {
 			continue
 		}
 		// 동일 (product_id, related_po_id) 이미 존재하면 skip (idempotency)
@@ -496,7 +547,7 @@ func (h *POHandler) autoInsertPriceHistory(poID string, po model.PurchaseOrder) 
 			ManufacturerID: po.ManufacturerID,
 			CompanyID:      po.CompanyID,
 			ChangeDate:     *changeDate,
-			NewPrice:       *l.UnitPriceUSD,
+			NewPrice:       newPrice,
 			Reason:         &reason,
 			RelatedPOID:    &poID,
 		}
@@ -506,6 +557,25 @@ func (h *POHandler) autoInsertPriceHistory(poID string, po model.PurchaseOrder) 
 		}
 	}
 	log.Printf("[단가이력 자동등록 완료] po_id=%s lines=%d", poID, len(lines))
+}
+
+func productSpecWP(product *struct {
+	SpecWP *float64 `json:"spec_wp"`
+}) *float64 {
+	if product == nil {
+		return nil
+	}
+	return product.SpecWP
+}
+
+func priceHistoryUSDWp(unitPriceUSD, unitPriceUSDWp, specWP *float64) (float64, bool) {
+	if unitPriceUSDWp != nil && *unitPriceUSDWp > 0 {
+		return *unitPriceUSDWp, true
+	}
+	if unitPriceUSD != nil && *unitPriceUSD > 0 && specWP != nil && *specWP > 0 {
+		return *unitPriceUSD / *specWP, true
+	}
+	return 0, false
 }
 
 // Delete — DELETE /api/v1/pos/{id} — 발주 취소 처리
