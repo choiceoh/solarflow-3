@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
 import type { ToolUIPart, UIMessage } from 'ai';
-import { Bot, Check, ChevronDown, ChevronUp, Copy, FileText, Inbox, MessageSquarePlus, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronUp, Copy, FileText, Inbox, MessageSquarePlus, PanelRightClose, PanelRightOpen, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
 import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
+import { notify } from '@/lib/notify';
 import { detectPageContext } from '@/lib/pageContext';
 import { getPageChips, type ChipDef } from '@/lib/assistantChips';
 import {
@@ -175,27 +176,56 @@ export default function AssistantPage() {
 
   return (
     <div className="flex h-full min-h-0">
-      <ChatBox
-        key={chatKey}
-        initialMessages={initialMessages}
-        sessionId={currentSessionId}
-        sessionsEnabled={sessionsEnabled}
-        onSessionUpserted={(s, makeCurrent) => {
-          upsertSession(s);
-          if (makeCurrent) setCurrentSessionId(s.id);
-        }}
-        sessionsSlot={
-          <SessionsPanel
-            sessions={sessions}
-            currentSessionId={currentSessionId}
-            loadingId={sessionLoadingId}
-            enabled={sessionsEnabled}
-            onNew={newSession}
-            onLoad={loadSession}
-            onDelete={deleteSession}
-          />
-        }
-      />
+      {sessionLoadingId ? (
+        <SessionSkeleton />
+      ) : (
+        <ChatBox
+          key={chatKey}
+          initialMessages={initialMessages}
+          sessionId={currentSessionId}
+          sessionsEnabled={sessionsEnabled}
+          onSessionUpserted={(s, makeCurrent) => {
+            upsertSession(s);
+            if (makeCurrent) setCurrentSessionId(s.id);
+          }}
+          sessionsSlot={
+            <SessionsPanel
+              sessions={sessions}
+              currentSessionId={currentSessionId}
+              loadingId={sessionLoadingId}
+              enabled={sessionsEnabled}
+              onNew={newSession}
+              onLoad={loadSession}
+              onDelete={deleteSession}
+            />
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function SessionSkeleton() {
+  return (
+    <div className="flex w-full animate-pulse flex-col gap-4 p-4">
+      <div className="h-6 w-48 rounded bg-muted/60" />
+      <div className="flex-1 space-y-4 rounded-md border bg-muted/20 p-4">
+        <div className="flex justify-end">
+          <div className="h-12 w-1/3 rounded-2xl bg-[var(--sf-solar)]/10" />
+        </div>
+        <div className="flex justify-start">
+          <div className="h-9 w-9 shrink-0 rounded-full bg-muted/60" />
+          <div className="ml-2.5 h-20 w-2/3 rounded-2xl bg-muted/60" />
+        </div>
+        <div className="flex justify-end">
+          <div className="h-10 w-1/4 rounded-2xl bg-[var(--sf-solar)]/10" />
+        </div>
+        <div className="flex justify-start">
+          <div className="h-9 w-9 shrink-0 rounded-full bg-muted/60" />
+          <div className="ml-2.5 h-32 w-3/4 rounded-2xl bg-muted/60" />
+        </div>
+      </div>
+      <div className="h-32 rounded-md border bg-muted/30" />
     </div>
   );
 }
@@ -223,10 +253,17 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
   const [attachments, setAttachments] = useState<File[]>([]);
   const [parseAsCustoms, setParseAsCustoms] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // 마운트 시 textarea auto-focus (drawer 임베드 모드 제외 — 다른 화면 작업 방해)
+  useEffect(() => {
+    if (embedded) return;
+    inputRef.current?.focus();
+  }, [embedded]);
 
   // mock 모드에선 인증 우회 public 라우트 (Caddy 가 같은 SSE 인코딩으로 응답).
   const apiPath = isDevMockApiActive() ? '/api/v1/public/assistant/chat' : '/api/v1/assistant/chat';
@@ -326,7 +363,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     const valid: File[] = [];
     for (const f of picked) {
       if (f.size > OCR_MAX_BYTES) {
-        setError(`${f.name}: 20MB 초과로 첨부 불가`);
+        notify.error(`${f.name}: 20MB 초과로 첨부 불가`);
         continue;
       }
       valid.push(f);
@@ -353,7 +390,6 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
   const send = async () => {
     const text = input.trim();
     if ((!text && attachments.length === 0) || busy) return;
-    setError(null);
 
     let userContent = text;
     try {
@@ -371,9 +407,11 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
       setInput('');
       setAttachments([]);
       stickToBottomRef.current = true; // 새 질문 보내면 다시 하단 추적 모드로
+      // 전송 직후 textarea 다시 포커스 — 연속 입력 흐름 유지
+      window.setTimeout(() => inputRef.current?.focus(), 0);
       await sendMessage({ text: userContent });
     } catch (e) {
-      setError(e instanceof Error ? e.message : '요청 실패');
+      notify.error(e instanceof Error ? e.message : '요청 실패');
     }
   };
 
@@ -455,7 +493,10 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     window.setTimeout(() => setHighlightedKey((v) => (v === msgId ? null : v)), 1500);
   };
 
-  const liveError = error ?? (chatError ? chatError.message : null);
+  // chatError 가 새로 발생하면 토스트로 사용자에게 알림 (인라인 박스 → 토스트로 P4 에서 일원화)
+  useEffect(() => {
+    if (chatError) notify.error(chatError.message);
+  }, [chatError]);
 
   const pageChips = getPageChips(location.pathname);
 
@@ -468,6 +509,22 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
               <Bot className="h-6 w-6 text-[var(--sf-solar)]" />
               <h2 className="text-lg font-semibold">업무 도우미</h2>
             </div>
+            {!embedded && sessionsSlot && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarCollapsed((v) => !v)}
+                className="ml-auto h-8 px-2 text-xs"
+                title={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
+              >
+                {sidebarCollapsed ? (
+                  <PanelRightOpen className="h-4 w-4" />
+                ) : (
+                  <PanelRightClose className="h-4 w-4" />
+                )}
+              </Button>
+            )}
           </header>
         )}
 
@@ -522,31 +579,15 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           )}
         </div>
 
-        {liveError && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive">
-            {liveError}
-          </div>
-        )}
-
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-1.5 rounded-md border bg-muted/30 p-2">
             {attachments.map((f, i) => (
-              <div
+              <AttachmentChip
                 key={`${f.name}-${i}`}
-                className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs"
-              >
-                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="max-w-[180px] truncate">{f.name}</span>
-                <span className="text-muted-foreground">{(f.size / 1024).toFixed(0)}KB</span>
-                <button
-                  type="button"
-                  onClick={() => removeAttachment(i)}
-                  className="ml-0.5 rounded p-0.5 hover:bg-muted"
-                  disabled={busy}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
+                file={f}
+                disabled={busy}
+                onRemove={() => removeAttachment(i)}
+              />
             ))}
             <label className="flex cursor-pointer select-none items-center gap-1 px-2 text-xs text-muted-foreground">
               <input
@@ -563,6 +604,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
 
         <div className="relative">
           <Textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
@@ -571,8 +613,11 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
                 ? '첨부 파일과 함께 보낼 질문 (예: "이 면장 등록해줘")'
                 : '질문을 입력하세요…'
             }
-            rows={embedded ? 3 : 5}
-            className="w-full resize-none pb-12 text-base leading-relaxed md:text-base"
+            rows={1}
+            className={cn(
+              'w-full resize-none pb-12 text-base leading-relaxed md:text-base',
+              embedded ? 'min-h-20 max-h-48' : 'min-h-32 max-h-60',
+            )}
             disabled={busy}
           />
           <Input
@@ -628,10 +673,12 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
       {embedded ? (
         <PendingFooter pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
       ) : (
-        <aside className="hidden w-[340px] shrink-0 flex-col border-l bg-muted/10 lg:flex">
-          {sessionsSlot}
-          <PendingPanel pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
-        </aside>
+        !sidebarCollapsed && (
+          <aside className="hidden w-[340px] shrink-0 flex-col border-l bg-muted/10 lg:flex">
+            {sessionsSlot}
+            <PendingPanel pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
+          </aside>
+        )
       )}
     </>
   );
@@ -649,6 +696,56 @@ interface MessagePartsProps {
 
 // MessageParts — 한 메시지의 parts 를 순서대로 렌더링.
 // text → Bubble (텍스트 박스), tool-* → ToolChip (회색 칩), data-proposal 은 상위에서 ProposalCard 로 처리하므로 무시.
+// 첨부 파일 칩 — 이미지면 썸네일, 그 외(PDF/일반파일)는 아이콘.
+function AttachmentChip({
+  file,
+  disabled,
+  onRemove,
+}: {
+  file: File;
+  disabled?: boolean;
+  onRemove: () => void;
+}) {
+  const isImage = file.type.startsWith('image/');
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isImage) return;
+    const url = URL.createObjectURL(file);
+    setThumbUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file, isImage]);
+
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs',
+        isImage && 'pl-1',
+      )}
+    >
+      {isImage && thumbUrl ? (
+        <img
+          src={thumbUrl}
+          alt={file.name}
+          className="h-9 w-9 rounded object-cover"
+        />
+      ) : (
+        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+      )}
+      <span className="max-w-[180px] truncate">{file.name}</span>
+      <span className="text-muted-foreground">{(file.size / 1024).toFixed(0)}KB</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="ml-0.5 rounded p-0.5 hover:bg-muted"
+        disabled={disabled}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
 function MessageParts({
   message,
   isStreaming,
