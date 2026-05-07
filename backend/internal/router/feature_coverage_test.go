@@ -119,10 +119,12 @@ func TestFeatureCoverage(t *testing.T) {
 
 // TestCatalogPathsAreReal — 카탈로그의 모든 entry 가 최소 1개 path 를 갖고, /api/v1 prefix 규약 준수.
 // catalog package 의 단위 테스트와 중복되지만 router 트리 컨텍스트에서도 한 번 더 가드.
+//
+// PR-8: FrontendOnly=true 인 entry 는 backend 라우트가 없으므로 Paths 가 비어 있어도 OK.
 func TestCatalogPathsAreReal(t *testing.T) {
 	for id, f := range feature.Catalog {
-		if len(f.Paths) == 0 {
-			t.Errorf("Feature %q Paths 가 비어있음", id)
+		if len(f.Paths) == 0 && !f.FrontendOnly {
+			t.Errorf("Feature %q Paths 가 비어있음 (FrontendOnly 도 아님)", id)
 		}
 	}
 }
