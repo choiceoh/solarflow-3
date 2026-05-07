@@ -93,6 +93,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		partnerActH.RegisterRoutes(r, a.Gates)
 		handler.NewPartnerPriceBookHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewPOHandler(a.DB).RegisterRoutes(r, a.Gates, handler.NewPOLineHandler(a.DB))
+		handler.NewPriceBenchmarkHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewPriceHistoryHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewProductHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewReceiptHandler(a.DB).RegisterRoutes(r, a.Gates)

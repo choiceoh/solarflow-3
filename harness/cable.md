@@ -29,6 +29,7 @@ module과 **동일하게 노출**:
 - L/C 한도 (`/banking`)
 - 매출 분석 (`/sales-analysis`)
 - 구매 이력 (`/purchase-history`)
+- 가격예측 (`/price-forecast`)
 - 엑셀 입력 (`/import`), 마스터 (`/data`), AI 도우미 (`/assistant`), 설정 (`/settings`), 결재안 (`/approval`)
 
 **노출되지 않는 것** (BARO 전용):
@@ -39,6 +40,7 @@ module과 **동일하게 노출**:
 - **[D-119](DECISIONS.md#d-119)** — `cable.topworks.ltd`는 module의 단순 별칭이 아니라 독립 `cable` 테넌트다. 초기 메뉴와 수입/금융/원가 API 접근은 module 계열과 동일하게 허용한다.
 - **[D-108](DECISIONS.md#d-108)** — BARO가 module 계열의 수입원가/금융 정보를 보지 못하게 막는 1단계 격리 원칙.
 - **[D-112](DECISIONS.md#d-112)** — 사이드바 탭은 테넌트별 `sidebar_tabs.{tenant}` 데이터로 독립 편집한다.
+- **[D-124](DECISIONS.md#d-124)** — 가격예측은 module 계열 전용 외부 벤치마크 장부 + 버튼형 AI 수집으로 둔다.
 
 ## module 계열 백엔드 엔드포인트 (`topsolarOnly` legacy 미들웨어)
 
@@ -51,6 +53,7 @@ module과 **동일하게 노출**:
 | `/api/v1/lcs/*`, `/api/v1/tts/*` | L/C, T/T 계약금 |
 | `/api/v1/expenses/*` | 부대비용 |
 | `/api/v1/price-histories/*` | 단가 이력 |
+| `/api/v1/price-benchmarks/*` | 가격예측 외부 벤치마크 + AI 수집 로그 |
 | `/api/v1/limit-changes/*` | LC 한도 변동 |
 | `/api/v1/export/amaranth/*` | 아마란스 RPA 연동 |
 | Rust calc 프록시 | landed-cost, exchange-compare, lc-fee, lc-limit-timeline, lc-maturity-alert, margin-analysis, price-trend |

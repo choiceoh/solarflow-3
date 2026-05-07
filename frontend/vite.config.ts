@@ -12,7 +12,7 @@ function lastMergedPrNumber(): string {
     const subject = execFileSync(
       'git',
       ['log', '--grep=^Merge pull request', '-n', '1', '--pretty=%s'],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 2000 },
     )
     const match = subject.match(/#(\d+)/)
     return match ? match[1] : ''

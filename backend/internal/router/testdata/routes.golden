@@ -117,6 +117,8 @@ GET     /api/v1/pos/dashboard
 GET     /api/v1/pos/summary
 GET     /api/v1/pos/{id}
 GET     /api/v1/pos/{poId}/lines/
+GET     /api/v1/price-benchmarks/
+GET     /api/v1/price-benchmarks/runs
 GET     /api/v1/price-histories/
 GET     /api/v1/price-histories/{id}
 GET     /api/v1/product-aliases/
@@ -236,6 +238,8 @@ POST    /api/v1/partner-prices/
 POST    /api/v1/partners/
 POST    /api/v1/pos/
 POST    /api/v1/pos/{poId}/lines/
+POST    /api/v1/price-benchmarks/
+POST    /api/v1/price-benchmarks/ai-refresh
 POST    /api/v1/price-histories/
 POST    /api/v1/product-aliases/
 POST    /api/v1/products/

@@ -97,13 +97,14 @@ const (
 	IDTxModuleDemandForecast FeatureID = "tx.module_demand_forecast"
 
 	// ---- tx.* (module 계열 = topsolar+cable, D-108/D-119) ----
-	IDTxCostDetail   FeatureID = "tx.cost_detail"
-	IDTxDeclaration  FeatureID = "tx.declaration"
-	IDTxExpense      FeatureID = "tx.expense"
-	IDTxLC           FeatureID = "tx.lc"
-	IDTxLCLimit      FeatureID = "tx.lc_limit"
-	IDTxPriceHistory FeatureID = "tx.price_history"
-	IDTxTT           FeatureID = "tx.tt"
+	IDTxCostDetail     FeatureID = "tx.cost_detail"
+	IDTxDeclaration    FeatureID = "tx.declaration"
+	IDTxExpense        FeatureID = "tx.expense"
+	IDTxLC             FeatureID = "tx.lc"
+	IDTxLCLimit        FeatureID = "tx.lc_limit"
+	IDTxPriceBenchmark FeatureID = "tx.price_benchmark"
+	IDTxPriceHistory   FeatureID = "tx.price_history"
+	IDTxTT             FeatureID = "tx.tt"
 
 	// ---- intercompany.* (양방향) ----
 	IDIntercompanyRequestBaro  FeatureID = "intercompany.request.baro"  // BARO 측 입력 액션
@@ -322,6 +323,11 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDTxLCLimit, Name: "LC 한도 변경 이력", Description: "LC 한도 (module 계열, DELETE 없음)",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
 		Paths: []string{"/api/v1/limit-changes/"},
+	},
+	IDTxPriceBenchmark: {
+		ID: IDTxPriceBenchmark, Name: "가격예측 벤치마크", Description: "외부 태양광 시세·입찰·ASP 벤치마크 + AI 수집",
+		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/price-benchmarks/", "/api/v1/price-benchmarks/runs", "/api/v1/price-benchmarks/ai-refresh"},
 	},
 	IDTxPriceHistory: {
 		ID: IDTxPriceHistory, Name: "수입 단가 이력", Description: "단가 이력 (module 계열)",

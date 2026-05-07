@@ -30,6 +30,7 @@ BARO와 **공유**:
 - 바로 매입요청 inbox (`/group-trade/baro-inbox`) — BARO가 보낸 그룹내 매입 요청 처리
 - L/C 한도 (`/banking`) — 은행별 한도/만기
 - 매출 분석 (`/sales-analysis`) — 마진·이익률 (원가 기반)
+- 가격예측 (`/price-forecast`) — 외부 시세·forward·중국 입찰·CPIA floor·Tier-1 ASP 벤치마크
 - 결재안 (`/approval`) — D-173 PR #173로 BARO에서는 제거되어 탑솔라 전용
 
 **노출되지 않는 것** (BARO 전용 — D-108로 차단):
@@ -74,6 +75,7 @@ BARO와 **공유**:
 **테넌트 분리 자체**
 - [D-108](DECISIONS.md#d-108) — 바로(주) 분리 정의. 탑솔라 입장에선 "원가/금융 정보가 BARO 토큰으로 새지 않게 막는 가드 목록"이 핵심.
 - [D-119](DECISIONS.md#d-119) — `cable.topworks.ltd`를 module 기능 표면에서 포크한 독립 `cable` 테넌트로 추가.
+- [D-124](DECISIONS.md#d-124) — 가격예측은 module 계열 전용 외부 벤치마크 장부 + 버튼형 AI 수집으로 둔다.
 
 ## module 계열 백엔드 엔드포인트 (`topsolarOnly` legacy 미들웨어)
 
@@ -86,6 +88,7 @@ BARO와 **공유**:
 | `/api/v1/lcs/*`, `/api/v1/tts/*` | L/C, T/T 계약금 |
 | `/api/v1/expenses/*` | 부대비용 |
 | `/api/v1/price-histories/*` | 단가 이력 |
+| `/api/v1/price-benchmarks/*` | 가격예측 외부 벤치마크 + AI 수집 로그 |
 | `/api/v1/limit-changes/*` | LC 한도 변동 |
 | `/api/v1/export/amaranth/*` | 아마란스 RPA 연동 |
 | Rust calc 프록시 | landed-cost, exchange-compare, lc-fee, lc-limit-timeline, lc-maturity-alert, margin-analysis, price-trend |

@@ -15,6 +15,7 @@ const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
 const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
 const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
+const PriceForecastPage = lazy(() => import('@/pages/PriceForecastPage'));
 import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
 const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
 const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
@@ -119,6 +120,7 @@ export default function App() {
                 <Route path="/inbound" element={<LegacyRedirect to="/procurement?tab=bl" />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
                 <Route path="/purchase-history" element={<PurchaseHistoryErrorBoundary><PurchaseHistoryPage /></PurchaseHistoryErrorBoundary>} />
+                <Route path="/price-forecast" element={<RoleGuard allowedRoles={['admin', 'operator', 'executive']}><PriceForecastPage /></RoleGuard>} />
                 <Route path="/lc" element={<LegacyRedirect to="/procurement?tab=lc" />} />
                 <Route path="/outbound" element={<LegacyRedirect to="/orders?tab=outbound" />} />
                 <Route path="/orders" element={<OrdersPage />} />
