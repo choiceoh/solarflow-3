@@ -936,3 +936,80 @@
   - 수동 검증: BARO 토큰으로 `/baro/home` 진입 시 카드 4개 + 패널 3개 표시. 각 카드/리스트 항목 클릭 → 해당 도메인 페이지로 이동 (cockpit/credit-board/incoming).
 - **날짜**: 2026-05-07
 
+## D-128: BARO 거래처 RFM 보드 — Go 메모리 집계 + 단순 임계값 분류
+- **결정**: BARO 영업이 200거래처를 한 화면에 우선순위 정렬할 수 있도록 거래처 RFM(Recency / Frequency / Monetary) 보드를 도입한다. 신규 endpoint `GET /api/v1/baro/rfm/` (feature_id `baro.rfm`). SQL GROUP BY 함수 신설 회피 — 활성 customer/both 거래처 전체 + 직전 12개월 sales 행을 가져와 Go 메모리에서 customer_id 기준 집계.
+  - **분류 6종**:
+    - `champion`: 최근 30일 + 5건+ + 1억+ 매출 (핵심)
+    - `loyal`: 최근 60일 + 3건+ (단골)
+    - `new`: 최근 30일 + 2건 이하 (관계 형성)
+    - `at_risk`: 90일+ 미주문 + 5천만+ 매출 이력 (재활성화 큐)
+    - `lost`: 그 외 침체
+    - `inactive`: 12개월 매출 0건 (휴면)
+  - **데이터 규모**: BARO 매출 1000억 ÷ 평균 ~3억/건 = 연 ~330건. Go 메모리 집계 비용 미미. 향후 매출 폭증 시 별도 RPC 함수(`baro_rfm_aggregate`) 도입 검토.
+  - **부분 실패 허용**: sales 조회 실패 시 partner-only 응답 (모두 inactive) 으로 fallback — 보드 전체가 흰 배경으로 죽지 않음.
+  - **재활성화 큐 강조**: `at_risk` 세그먼트는 별도 알림 배너로 노출 — 한동안 미주문이지만 매출 이력 큰 곳 = 콜백 1순위.
+  - **frontend**: `/baro/rfm` 페이지. 6 세그먼트 탭 + 정렬(매출/최근성/빈도) + 표. 행 클릭 → cockpit. 사이드바 「현황」 그룹.
+- **PR4.5 분리** (별도 D-NNN):
+  - 동적 분위수(quartile) 기반 분류 — 거래처 분포에 따라 임계값 자동 조정 (현재는 1000억 매출 컨텍스트 하드코딩).
+  - 본인 담당 거래처 필터 — `partners.owner_user_id = me` (현재 전체 노출).
+  - 자동 재활성화 액션 — `at_risk` 거래처 대상 1-click 카톡/SMS (PR3.5 발송 채널 통합 후).
+  - 세그먼트 태그 수동 라벨 (`partners.segment_tag` 컬럼 추가 마이그레이션, 리셀러/시공/대형).
+- **이유**: D-125(cockpit) 가 *한 거래처*, D-127(영업 홈) 이 *내 오늘 할 일* 이라면 RFM 은 *내 거래처 200곳의 우선순위*. 영업 6명이 분담 거래처를 분기/월 단위로 재정렬할 때 필요. 매출 1000억 규모에서 at_risk 거래처 1곳 재활성화 = 평균 3천만~1억 효과라 ROI 큼.
+- **운영 기준**:
+  - feature catalog `baro.rfm` + FEATURE-WIRING-MATRIX 행 + `r.Use(g.Feature(IDBaroRFM))` + DECISIONS 동시 갱신 (D-120 의무).
+  - sanitized 패스스루 — partners 마스터 + sales 직접 컬럼만 사용. 면장/원가/L/C 차단 그대로 (D-108).
+  - 응답이 200곳 + sales 12개월 raw — 응답 크기 측정 후 캐시/페이지네이션 검토.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/baro/rfm/` catalog↔chi 일치, matrix_consistency_test 가 `baro.rfm` markdown 일치 검증.
+  - 라우터 가드: module/cable 토큰으로 `/api/v1/baro/rfm/` 호출 시 403, baro 토큰 통과.
+  - 프론트엔드 `npm run build` 통과.
+- **날짜**: 2026-05-07
+
+## D-129: BARO 자체 매출 요약 (Sales Summary) — Phase 1 매출만, 마진은 PR5.5
+- **결정**: BARO 영업이 자기 법인 매출을 다양한 cut 으로 분석할 수 있도록 신규 endpoint `GET /api/v1/baro/sales-summary?months=N` (feature_id `baro.sales_summary`, BARO 전용) 도입. module 계열 `/sales-analysis` 는 매입원가·면장·landed cost 기반 마진을 다뤄 BARO 차단(D-108)이라 별도 BARO 라인.
+  - **4 cut 합본 응답** (한 라운드트립):
+    - `by_owner`: 영업담당자별 매출/건수/거래처수 (partners.owner_user_id 기반)
+    - `by_partner_type`: customer / both / supplier 유형별
+    - `by_month`: YYYY-MM 월별 추이
+    - `top_partners`: 매출 상위 20곳
+  - **집계 방식**: SQL GROUP BY 함수 신설 회피 — partners + sales 직접 쿼리 후 Go 메모리 집계 (D-128 RFM 과 동일 패턴).
+  - **응답 마스킹**: cost / margin 필드 0 — 매출액(`total_amount`)과 건수만. 마진은 PR5.5 에서 `baro_purchase_history` 평균 매입원가 통합 후 도입.
+  - **frontend 페이지**: `/baro/sales-summary` (RoleGuard `admin/operator/executive`). 6/12/24개월 토글. CSS 막대 차트(recharts 미사용 — 번들 크기 ↓). Top 거래처 행 클릭 → cockpit.
+  - **사이드바**: 「현황」 그룹에 "매출 요약" 추가.
+- **PR5.5 분리** (별도 D-NNN):
+  - **마진 표시** (`gross_margin_pct`, `gross_margin_krw`): `baro_purchase_history` 평균 매입원가와 매출 결합. 단순 평균이 아닌 BR 법인 한정 + sale 시점 기준 가까운 매입가 매칭 로직 필요.
+  - **한도 초과 출고 차단 hold flag**: 출고/수주 생성 시 `outstanding_krw + amount > credit_limit_krw` 또는 `oldest_unpaid_days >= 60` 면 hold 플래그 + 결재 강제. backend 변경 큼 (outbound/order 핸들러 수정 + DB 컬럼 추가 가능).
+  - **SKU 별 매출**: 현 sales 테이블에 product_id 직접 컬럼 없음. outbound → bl_line join 필요해 Phase 2 분리.
+- **이유**: BARO 매출 1000억 규모에서 영업담당자별 / 채널별 / 월별 cut 이 부재하면 누가 어디서 얼마 매출을 내는지 불투명. module 의 sales-analysis 는 마진 베이스라 BARO 가 못 쓰고, 매출만 다루는 BARO 전용 라인이 필요. RFM(D-128) 이 *거래처 분류* 라면 본 보드는 *시간/조직/유형 cut*.
+- **운영 기준**:
+  - feature catalog `baro.sales_summary` (DataScope `tenant_company` — BR 법인 sales 만 사용한다는 의미적 표지) + matrix + RequireFeature(IDBaroSalesSummary) + DECISIONS 동시 갱신 (D-120 의무).
+  - 응답이 partners + sales raw 합본 — 응답 크기 측정 후 캐시/페이지네이션 검토 (현재 1000억 ÷ 3억 = 연 ~330건이라 작음).
+  - PR5.5 마진 도입 시 응답 shape 호환 유지 — frontend 변경 없이 `gross_margin_pct` 등 nullable 필드만 추가.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/baro/sales-summary/` catalog↔chi 일치, matrix_consistency_test 가 `baro.sales_summary` markdown 일치 검증.
+  - 라우터 가드: module/cable 토큰으로 호출 시 403, baro 토큰 통과.
+  - 프론트엔드 `npm run build` 통과.
+- **날짜**: 2026-05-07
+
+## D-130: BARO 인버터 호환 가이드 Phase 1 — frontend-only 정적 카탈로그 + 용량 매칭
+- **결정**: BARO 영업이 시공업체에 모듈+인버터 묶음 견적을 만들 때 "이 모듈 N장에 적합한 인버터?" 를 30초 안에 답할 수 있도록 정적 인버터 카탈로그 페이지 (`/baro/inverter-guide`) 도입한다. PR6 Phase 1 — **신규 backend 0**, **DB 마이그레이션 0**, **외부 API 0**.
+  - **카탈로그**: Sungrow / Huawei / GoodWe 주력 모델 10종 (5kW 주거 ~ 110kW 발전소). 페이지 컴포넌트 안에 `INVERTER_CATALOG` 배열로 하드코딩.
+  - **용량 매칭 계산기**: 모듈 수량 × spec_wp 입력 → 총 kW 계산 → 오버사이징 1.0~1.3 비율 안에 들어오는 인버터 추천 카드.
+  - **검색·필터**: 제조사/모델 검색 + 용도(주거/상업/발전소) 필터.
+  - **사이드바**: 「판매」 그룹에 "인버터 가이드" (BARO 전용).
+- **PR6.5 분리** (별도 D-NNN, 신규 backend 필요):
+  - **products.product_kind 컬럼**: `module` / `inverter` / `package` 분류 마이그레이션. 기존 행은 모두 `module` 로 backfill.
+  - **인버터 SKU 정식 등록**: `product_kind='inverter'` + `rated_power_kw`/`mppt_channels`/`max_input_voltage` 등 인버터 전용 nullable 컬럼. 마스터 CRUD UI.
+  - **패키지 SKU**: 모듈+인버터 자주 나가는 조합 1-row SKU. `baro_packages` 테이블 또는 product_kind=`package` + 구성품 child rows.
+  - **QuoteBuilder 통합**: 모듈 라인 추가 시 자동으로 적합한 인버터 후보 1줄 옵션 제시.
+  - **호환 매칭 정밀화**: 현 단계는 단순 kW 비율 1.0~1.3. PR6.5 에서 MPPT 채널 수 + 모듈 직렬 전압 범위 + 단상/3상 매칭 로직.
+- **이유**: BARO 매출의 모듈+인버터 묶음 비중이 높은데 영업이 인버터 사양을 외워야 하는 상황. 정식 SKU 등록(마이그레이션 동반)을 기다리지 않고 "오늘부터 쓸 수 있는 가이드" 를 먼저 띄워 매일 견적 작성에 활용. PR6.5 가 들어오면 본 페이지의 정적 카탈로그를 DB 카탈로그로 자연 대체.
+- **운영 기준**:
+  - 신규 라우트 0 → D-120 catalog/matrix 갱신 불필요.
+  - 카탈로그 데이터 추가/수정은 컴포넌트 파일 직접 수정 (PR6.5 까지 한정 — 그 후 admin UI).
+  - 단가/재고는 가이드에 표기 안 함 — PR6.5 에서 SKU 마스터 + 거래처 단가표 통합 후.
+- **검증**:
+  - 프론트엔드 `npm run build` (tsc -b) 통과.
+  - 수동 검증: BARO 토큰으로 `/baro/inverter-guide` 진입 시 카탈로그 10종 표시 + "30장 × 635W = 19.05kW" 입력 시 GW10K-DT 등 추천 카드 표시.
+- **날짜**: 2026-05-07
+
