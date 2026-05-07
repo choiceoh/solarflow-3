@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-119 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-144 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -63,6 +63,35 @@
 
 ### 운영 반영 메모
 - 현재 실행 환경에 `codesign`, `launchctl`이 없어 macOS launchd 재부트스트랩은 수행하지 못함
+
+---
+
+## 2026-05-07 세션 — 매출 분석 이익 신뢰도 개선
+
+### 완료
+- Rust `margin-analysis` 요약 산식을 원가 연결 매출 기준으로 보정
+  - `total_margin_krw`/`overall_margin_rate`가 원가 미연결 매출을 0원 원가처럼 포함하지 않도록 수정
+  - `cost_covered_revenue_krw`, `cost_missing_revenue_krw`, `cost_coverage_rate` 응답 필드 추가
+- Rust `customer-analysis`의 수금/미수 집계를 선택 법인·기간·거래처 범위에 맞춰 정렬
+  - 다른 법인/기간의 수금액이 같은 거래처라는 이유로 섞이는 회귀 차단
+  - `fifo` 원가 기준 선택 시 거래처 이익도 FIFO 매칭 원가를 우선 사용
+- 프론트엔드 `/sales-analysis` 화면 개선
+  - KPI를 공급가 매출, 계산 이익, 이익률, 미수금, 계산서 미발행, 원가 미연결로 재배치
+  - 계산엔진 부분 실패 시 0원처럼 숨기지 않고 경고 표시
+  - 품목별 이익 표에 전체/원가 없음/저마진/적자 필터 추가
+  - 우측 레일을 목표 달성률 대신 이익 신뢰도(원가 연결률)로 변경
+- dev mock API와 이익률 insight 드릴다운 타입 동기화
+- D-144 결정 기록 추가
+
+### 검증
+- `cd backend && go test ./... && go vet ./...` 성공
+- `cd engine && cargo test` 성공 — 기존 dead_code warning 3건 유지
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline warning 67건 출력
+- `cd frontend && npm run test`는 Vitest worker 시작 타임아웃으로 전체 완료 실패
+  - 단독 재실행에서도 일부 테스트(4 files / 36 tests)는 통과했으나 나머지 worker가 뜨지 못함
+- `http://127.0.0.1:5179/sales-analysis` 개발 서버 200 응답 확인
+- PR 리베이스 후 최신 `origin/main` 기준 `cd frontend && npm run build` 재확인은 실패 — `src/App.tsx`, `CommandShell.tsx`, `BLListTable.tsx` 등 main 측 TypeScript/import 오류 다수
 
 ---
 

@@ -476,17 +476,25 @@ function marginAnalysisResponse() {
       total_revenue_krw: revenue,
       total_cost_krw: cost,
       total_margin_krw: revenue - cost,
+      cost_covered_revenue_krw: revenue,
+      cost_missing_revenue_krw: 0,
       sale_count: 1,
     };
   });
+  const totalRevenue = items.reduce((sum, item) => sum + item.total_revenue_krw, 0);
+  const totalCost = items.reduce((sum, item) => sum + Number(item.total_cost_krw ?? 0), 0);
+  const totalMargin = items.reduce((sum, item) => sum + Number(item.total_margin_krw ?? 0), 0);
   return {
     items,
     summary: {
       total_sold_kw: items.reduce((sum, item) => sum + item.total_sold_kw, 0),
-      total_revenue_krw: items.reduce((sum, item) => sum + item.total_revenue_krw, 0),
-      total_cost_krw: items.reduce((sum, item) => sum + Number(item.total_cost_krw ?? 0), 0),
-      total_margin_krw: items.reduce((sum, item) => sum + Number(item.total_margin_krw ?? 0), 0),
+      total_revenue_krw: totalRevenue,
+      total_cost_krw: totalCost,
+      total_margin_krw: totalMargin,
       overall_margin_rate: 12,
+      cost_covered_revenue_krw: totalRevenue,
+      cost_missing_revenue_krw: 0,
+      cost_coverage_rate: totalRevenue > 0 ? 100 : 0,
       cost_basis: 'landed',
     },
   };
