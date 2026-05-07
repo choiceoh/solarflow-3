@@ -59,6 +59,7 @@
 | `master.product` | 품번 마스터 | ★ | global |
 | `master.product_alias` | 품번 별칭 | ★ | global |
 | `master.warehouse` | 창고 마스터 | ★ | global |
+| `master.warehouse_location` | 창고 위치(Bin) 마스터 (D-139 WMS Phase 1) | ★ | global |
 | `master.construction_site` | 공사현장 마스터 | ★ | global |
 
 ### tx.* (거래 — all tenants)
