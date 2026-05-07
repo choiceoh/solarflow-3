@@ -3,6 +3,8 @@ package middleware
 import (
 	"context"
 	"sync"
+
+	"solarflow-backend/internal/tenant"
 )
 
 // contextKey — context에 저장할 키의 타입
@@ -90,22 +92,25 @@ func withObservability(ctx context.Context) (context.Context, *observabilityHold
 }
 
 // 테넌트 스코프 상수 (D-108, D-119)
-// module/cable/baro가 같은 코드/DB를 공유하되, 사용자별로 어느 앱에 속하는지 구분
+// module/cable/baro가 같은 코드/DB를 공유하되, 사용자별로 어느 앱에 속하는지 구분.
+//
+// 단일 정본은 internal/tenant.Registry 다 — 여기 상수는 호출 측 호환을 위한 alias.
+// 새 테넌트 추가 시 여기를 건드리지 말고 internal/tenant/registry.go 만 갱신.
 const (
-	TenantScopeTopsolar = "topsolar"
-	TenantScopeCable    = "cable"
-	TenantScopeBaro     = "baro"
+	TenantScopeTopsolar = string(tenant.IDTopsolar)
+	TenantScopeCable    = string(tenant.IDCable)
+	TenantScopeBaro     = string(tenant.IDBaro)
 )
 
 // SetUserContext — 인증된 사용자 정보를 context에 저장
 // 비유: 보안 게이트를 통과한 사람에게 사원증을 발급하는 것
-// tenantScope이 빈 문자열이면 topsolar로 본다(D-108 호환).
+// tenantScope이 빈 문자열이면 registry default(=topsolar)로 본다(D-108 호환).
 //
 // D-122: outer RequestLog 가 부착해둔 Observability 홀더가 있으면 같이 채워
 // 핸들러 종료 후 로그에 tenant/user 정보가 들어가게 한다.
 func SetUserContext(ctx context.Context, userID, role, email, tenantScope string, allowedModules []string) context.Context {
 	if tenantScope == "" {
-		tenantScope = TenantScopeTopsolar
+		tenantScope = string(tenant.Default())
 	}
 	ctx = context.WithValue(ctx, keyUserID, userID)
 	ctx = context.WithValue(ctx, keyUserRole, role)
@@ -163,11 +168,11 @@ func GetAllowedModules(ctx context.Context) []string {
 
 // GetTenantScope — context에서 사용자 테넌트 스코프를 꺼냄(D-108)
 // 비유: 사원증에서 "어느 회사 소속" 표식을 읽는 것
-// 값이 비어 있으면 topsolar로 간주해 기존 사용자가 격리에 막히지 않게 한다.
+// 값이 비어 있으면 registry default(=topsolar)로 간주해 기존 사용자가 격리에 막히지 않게 한다.
 func GetTenantScope(ctx context.Context) string {
 	val, ok := ctx.Value(keyTenantScope).(string)
 	if !ok || val == "" {
-		return TenantScopeTopsolar
+		return string(tenant.Default())
 	}
 	return val
 }
