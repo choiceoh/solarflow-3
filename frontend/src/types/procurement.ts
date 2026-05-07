@@ -24,6 +24,8 @@ export interface PurchaseOrder {
   manufacturer_id: string
   manufacturer_name?: string
   first_spec_wp?: number // purchase_orders_ext 뷰: 첫 번째 유상 라인 spec_wp (드롭다운용)
+  first_product_name?: string // 084 뷰: POListTable 행 첫 라인 표시 (N+1 제거)
+  first_product_code?: string
   contract_type: ContractType
   contract_date?: string
   incoterms?: string
@@ -35,6 +37,16 @@ export interface PurchaseOrder {
   status: POStatus
   memo?: string
   parent_po_id?: string
+  // 084 view aggregates — POListTable 의 N+1 (lines/lcs/tts fetch) 대체.
+  line_count?: number
+  line_total_usd?: number
+  line_total_wp?: number
+  line_extra_count?: number
+  lc_count?: number
+  lc_total_usd?: number
+  lc_total_mw?: number
+  tt_count?: number
+  tt_completed_usd?: number
 }
 
 export interface POLineItem {

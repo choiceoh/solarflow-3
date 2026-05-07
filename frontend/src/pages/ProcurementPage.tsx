@@ -7,8 +7,9 @@ import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { useAppStore } from "@/stores/appStore"
 import {
   usePOList,
-  useLCList,
-  useTTList,
+  usePOListPaged,
+  useLCListPaged,
+  useTTListPaged,
   usePOSummary,
   useLCSummary,
   useTTSummary,
@@ -34,7 +35,8 @@ import {
 } from "@/types/procurement"
 import type { PurchaseOrder, POStatus, LCStatus, TTStatus } from "@/types/procurement"
 import type { Manufacturer, Bank } from "@/types/masters"
-import { useBLList, useBLSummary } from "@/hooks/useInbound"
+import { useBLListPaged, useBLSummary } from "@/hooks/useInbound"
+import PaginationBar from "@/components/common/PaginationBar"
 import { useFxTimeseries } from "@/hooks/usePublicFx"
 import BLListTable from "@/components/inbound/BLListTable"
 import BLDetailView from "@/components/inbound/BLDetailView"
@@ -128,6 +130,10 @@ export default function ProcurementPage() {
   const [poMfgFilter, setPoMfgFilter] = useState("")
   const [poTypeFilter, setPoTypeFilter] = useState("")
   const [poDateRange, setPoDateRange] = useState<DateRangeValue>(null)
+  const [poPage, setPoPage] = useState(1)
+  const [poPageSize, setPoPageSize] = useState(100)
+  // 필터 변경 시 page 1 로 리셋.
+  useEffect(() => { setPoPage(1) }, [poStatusFilter, poMfgFilter, poTypeFilter, poDateRange])
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null)
   // R1-1: 사이드바 "발주/결제" 클릭 시 슬라이드 패널 닫기
   useEffect(() => {
@@ -147,23 +153,29 @@ export default function ProcurementPage() {
     const target = poList.find((p) => p.po_id === targetId)
     if (target) setSelectedPO(target)
   }, [location.search, poList])
-  // 칩 필터는 모두 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
-  const { data: allPos, loading: poLoading, error: poError, reload: reloadPO } = usePOList()
+  // 서버 페이지네이션 — status/mfg/contract_type 은 server query, date_range 만 page 안 client filter.
+  // 활성 탭만 fetch (lazy).
+  const { items: pagedPos, total: poTotal, loading: poLoading, error: poError, reload: reloadPO } = usePOListPaged({
+    status: poStatusFilter || undefined,
+    manufacturer_id: poMfgFilter || undefined,
+    contract_type: poTypeFilter || undefined,
+    page: poPage,
+    pageSize: poPageSize,
+    enabled: activeTab === 'po',
+  })
   const { data: poSummary } = usePOSummary({
     status: poStatusFilter || undefined,
     manufacturer_id: poMfgFilter || undefined,
     contract_type: poTypeFilter || undefined,
   })
+  // date_range 만 client-side. backend date 필터 추가는 follow-up.
   const pos = useMemo(
     () =>
-      allPos.filter((p) => {
-        if (poStatusFilter && p.status !== poStatusFilter) return false
-        if (poMfgFilter && p.manufacturer_id !== poMfgFilter) return false
-        if (poTypeFilter && p.contract_type !== poTypeFilter) return false
+      pagedPos.filter((p) => {
         if (!inDateRange(p.contract_date, poDateRange)) return false
         return true
       }),
-    [allPos, poStatusFilter, poMfgFilter, poTypeFilter, poDateRange],
+    [pagedPos, poDateRange],
   )
 
   const [lcAggVersion, setLcAggVersion] = useState(0)
@@ -171,42 +183,56 @@ export default function ProcurementPage() {
   const [lcBankFilter, setLcBankFilter] = useState("")
   const [lcMfgFilter, setLcMfgFilter] = useState("")
   const [lcDateRange, setLcDateRange] = useState<DateRangeValue>(null)
-  const { data: allLcs, loading: lcLoading, error: lcError, reload: reloadLC } = useLCList()
+  const [lcPage, setLcPage] = useState(1)
+  const [lcPageSize, setLcPageSize] = useState(100)
+  useEffect(() => { setLcPage(1) }, [lcStatusFilter, lcBankFilter, lcMfgFilter, lcDateRange])
+  const { items: pagedLcs, total: lcTotal, loading: lcLoading, error: lcError, reload: reloadLC } = useLCListPaged({
+    status: lcStatusFilter || undefined,
+    bank_id: lcBankFilter || undefined,
+    manufacturer_id: lcMfgFilter || undefined,
+    page: lcPage,
+    pageSize: lcPageSize,
+    enabled: activeTab === 'lc',
+  })
   const { data: lcSummary } = useLCSummary({
     status: lcStatusFilter || undefined,
     bank_id: lcBankFilter || undefined,
     manufacturer_id: lcMfgFilter || undefined,
   })
+  // date_range 만 client-side (manufacturer_id 는 backend 가 page 안에서 post-fetch 필터).
   const lcs = useMemo(
     () =>
-      allLcs.filter((l) => {
-        if (lcStatusFilter && l.status !== lcStatusFilter) return false
-        if (lcBankFilter && l.bank_id !== lcBankFilter) return false
-        // manufacturer_id 는 useLCList 가 PO join 에서 매핑해 채움.
-        if (lcMfgFilter && l.manufacturer_id !== lcMfgFilter) return false
+      pagedLcs.filter((l) => {
         if (!inDateRange(l.open_date, lcDateRange)) return false
         return true
       }),
-    [allLcs, lcStatusFilter, lcBankFilter, lcMfgFilter, lcDateRange],
+    [pagedLcs, lcDateRange],
   )
 
   const [ttStatusFilter, setTtStatusFilter] = useState("")
   const [ttPoFilter, setTtPoFilter] = useState("")
   const [ttDateRange, setTtDateRange] = useState<DateRangeValue>(null)
-  const { data: allTts, loading: ttLoading } = useTTList()
+  const [ttPage, setTtPage] = useState(1)
+  const [ttPageSize, setTtPageSize] = useState(100)
+  useEffect(() => { setTtPage(1) }, [ttStatusFilter, ttPoFilter, ttDateRange])
+  const { items: pagedTts, total: ttTotal, loading: ttLoading } = useTTListPaged({
+    status: ttStatusFilter || undefined,
+    po_id: ttPoFilter || undefined,
+    page: ttPage,
+    pageSize: ttPageSize,
+    enabled: activeTab === 'tt',
+  })
   const { data: ttSummary } = useTTSummary({
     status: ttStatusFilter || undefined,
     po_id: ttPoFilter || undefined,
   })
   const tts = useMemo(
     () =>
-      allTts.filter((t) => {
-        if (ttStatusFilter && t.status !== ttStatusFilter) return false
-        if (ttPoFilter && t.po_id !== ttPoFilter) return false
+      pagedTts.filter((t) => {
         if (!inDateRange(t.remit_date, ttDateRange)) return false
         return true
       }),
-    [allTts, ttStatusFilter, ttPoFilter, ttDateRange],
+    [pagedTts, ttDateRange],
   )
 
   // BL 탭
@@ -216,7 +242,17 @@ export default function ProcurementPage() {
   const [blDateRange, setBlDateRange] = useState<DateRangeValue>(null)
   const [selectedBL, setSelectedBL] = useState<string | null>(null)
   const [blsVersion, setBlsVersion] = useState(0)
-  const { data: allBls, loading: blLoading, reload: reloadBL } = useBLList()
+  const [blPage, setBlPage] = useState(1)
+  const [blPageSize, setBlPageSize] = useState(100)
+  useEffect(() => { setBlPage(1) }, [blTypeFilter, blStatusFilter, blMfgFilter, blDateRange])
+  const { items: pagedBls, total: blTotal, loading: blLoading, reload: reloadBL } = useBLListPaged({
+    inbound_type: blTypeFilter || undefined,
+    status: blStatusFilter || undefined,
+    manufacturer_id: blMfgFilter || undefined,
+    page: blPage,
+    pageSize: blPageSize,
+    enabled: activeTab === 'bl',
+  })
   const { data: blSummary } = useBLSummary({
     inbound_type: blTypeFilter || undefined,
     status: blStatusFilter || undefined,
@@ -224,14 +260,11 @@ export default function ProcurementPage() {
   })
   const bls = useMemo(
     () =>
-      allBls.filter((b) => {
-        if (blTypeFilter && b.inbound_type !== blTypeFilter) return false
-        if (blStatusFilter && b.status !== blStatusFilter) return false
-        if (blMfgFilter && b.manufacturer_id !== blMfgFilter) return false
+      pagedBls.filter((b) => {
         if (!inDateRange(b.eta, blDateRange)) return false
         return true
       }),
-    [allBls, blTypeFilter, blStatusFilter, blMfgFilter, blDateRange],
+    [pagedBls, blDateRange],
   )
 
   const [depositMfgFilter, setDepositMfgFilter] = useState("")
@@ -777,12 +810,21 @@ export default function ProcurementPage() {
                   ) : poLoading ? (
                     <SkeletonRows rows={8} />
                   ) : (
-                    <POListTable
-                      items={poRows}
-                      onDetail={setSelectedPO}
-                      onSelectBL={setSelectedBL}
-                      aggVersion={lcAggVersion}
-                    />
+                    <>
+                      <POListTable
+                        items={poRows}
+                        onDetail={setSelectedPO}
+                        onSelectBL={setSelectedBL}
+                        aggVersion={lcAggVersion}
+                      />
+                      <PaginationBar
+                        page={poPage}
+                        pageSize={poPageSize}
+                        total={poTotal}
+                        onPageChange={setPoPage}
+                        onPageSizeChange={(s) => { setPoPageSize(s); setPoPage(1) }}
+                      />
+                    </>
                   )}
                 </TabsContent>
 
@@ -798,12 +840,21 @@ export default function ProcurementPage() {
                   ) : lcLoading ? (
                     <SkeletonRows rows={8} />
                   ) : (
-                    <LCListTable
-                      items={lcRows}
-                      onSettle={handleSettleLC}
-                      onSelectBL={setSelectedBL}
-                      blsVersion={blsVersion}
-                    />
+                    <>
+                      <LCListTable
+                        items={lcRows}
+                        onSettle={handleSettleLC}
+                        onSelectBL={setSelectedBL}
+                        blsVersion={blsVersion}
+                      />
+                      <PaginationBar
+                        page={lcPage}
+                        pageSize={lcPageSize}
+                        total={lcTotal}
+                        onPageChange={setLcPage}
+                        onPageSizeChange={(s) => { setLcPageSize(s); setLcPage(1) }}
+                      />
+                    </>
                   )}
                 </TabsContent>
 
@@ -870,7 +921,18 @@ export default function ProcurementPage() {
                         ]}
                       />
                     </div>
-                    {ttLoading ? <LoadingSpinner /> : <TTListTable items={tts} />}
+                    {ttLoading ? <LoadingSpinner /> : (
+                      <>
+                        <TTListTable items={tts} />
+                        <PaginationBar
+                          page={ttPage}
+                          pageSize={ttPageSize}
+                          total={ttTotal}
+                          onPageChange={setTtPage}
+                          onPageSizeChange={(s) => { setTtPageSize(s); setTtPage(1) }}
+                        />
+                      </>
+                    )}
                   </div>
                 </TabsContent>
 
@@ -878,7 +940,16 @@ export default function ProcurementPage() {
                   {blLoading ? (
                     <SkeletonRows rows={8} />
                   ) : (
-                    <BLListTable items={blRows} onSelect={(bl) => setSelectedBL(bl.bl_id)} />
+                    <>
+                      <BLListTable items={blRows} onSelect={(bl) => setSelectedBL(bl.bl_id)} />
+                      <PaginationBar
+                        page={blPage}
+                        pageSize={blPageSize}
+                        total={blTotal}
+                        onPageChange={setBlPage}
+                        onPageSizeChange={(s) => { setBlPageSize(s); setBlPage(1) }}
+                      />
+                    </>
                   )}
                 </TabsContent>
               </Tabs>
