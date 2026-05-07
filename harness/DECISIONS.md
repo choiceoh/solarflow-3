@@ -665,7 +665,7 @@
   - **체인 식별자**: `parent_po_id`가 null인 원계약 PO의 `po_id`가 chain_id. URL은 `/purchase-history?chain={chain_id}`.
   - **체인 그룹핑 안전선**: `findChainHeadId` (frontend/src/lib/purchaseHistory.ts)에 cycle 방문 추적 + 32 깊이 cap. DB 무결성 깨져도 페이지가 무한루프 안 함.
   - **사이드바 진입**: `현황` 그룹, module 계열(`MODULE_TENANTS = ['topsolar', 'cable']`), `menu: 'purchase_history'` 신규 키 — admin/operator/executive 모두 접근(executive도 구매 이력 read-only 조회 필요).
-  - **딥링크**: PO 관련 이벤트는 `/procurement?po_id={po_id}` → ProcurementPage가 query 받아 PODetailView 자동 펼침. LC/BL/TT는 탭 단위까지 (`?tab=lc` 등) — 향후 별건 작업으로 LC/BL/TT 자동 선택 추가 가능.
+  - **딥링크**: PO 관련 이벤트는 `/procurement?po_id={po_id}` → ProcurementPage가 query 받아 PODetailView 자동 펼침. LC/B/L/T/T 이벤트는 `/procurement?tab=lc&lc_id={lc_id}`, `/procurement?tab=bl&bl_id={bl_id}`, `/procurement?tab=tt&tt_id={tt_id}`처럼 실제 대상 ID까지 전달한다. LC는 해당 행을 펼치고, B/L은 상세 화면을 열며, T/T는 해당 행을 강조 표시한다.
   - **수동 단가이력 표시**: `related_po_id`가 null인 PriceHistory는 (a) 체인 뷰: 제조사 일치하면 컨텍스트로 노출, (b) 회사 전체 뷰: `[PO 미연결]` 라벨로 별도 노출.
   - **audit diff 표시**: `purchase_orders` audit `update`만 처리 — `old_data`/`new_data` 객체 비교, `updated_at`/`created_at`/`po_id`/`company_id` 메타 필드 스킵, 한국어 라벨(`status` → `상태` 등) 적용.
 - **검증**:
@@ -1034,4 +1034,3 @@
   - 프론트엔드 `npm run build` (tsc -b) 통과.
   - 수동 검증: BARO 토큰으로 `/baro/shipment-notice` 진입 시 폼 + 3 메시지 카드 표시. 빈 필드는 메시지에서 자동 생략. 복사 버튼 클릭 시 "복사됨" 피드백.
 - **날짜**: 2026-05-07
-

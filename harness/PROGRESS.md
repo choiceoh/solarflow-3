@@ -16,6 +16,26 @@
 
 ---
 
+## 2026-05-07 세션 — module 구매이력 UX + 정밀 딥링크 개선
+
+### 완료
+- module/cable `/purchase-history` 계약 체인 리스트에 현재 상태, 계약유형, MW, 연결 이벤트 수(LC/B/L/T/T)를 추가해 체인 선택 전 정보 밀도 보강
+- 우측 타임라인에 이벤트 종류별 필터 칩, 기간 필터 연동, 월별 그룹 헤더, 선택 체인 요약 패널 추가
+- 단가 이벤트는 `related_po_id`가 있으면 PO 상세로 연결하고, PO 미연결 단가 이력은 기존처럼 read-only 표시 유지
+- LC/B/L/T/T 이벤트 딥링크를 탭 단위에서 대상 ID 단위로 확장
+  - LC: `/procurement?tab=lc&lc_id=...` 진입 시 해당 LC 행 펼침 + 강조
+  - B/L: `/procurement?tab=bl&bl_id=...` 진입 시 B/L 상세 화면 오픈
+  - T/T: `/procurement?tab=tt&tt_id=...` 진입 시 해당 송금 행 강조
+- D-113 딥링크 운영 기준 문구를 실제 구현 상태에 맞게 갱신
+
+### 검증
+- `cd frontend && npm ci` 성공 — 이 worktree 로컬 의존성 복원
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건과 plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — main rebase 후 기존 baseline 경고 4건 출력
+- `cd frontend && npm run test -- purchaseHistory` 및 직접 `vitest run src/lib/purchaseHistory.test.ts --pool=threads --maxWorkers=1 --no-fileParallelism`는 Vitest worker start timeout으로 실패 — 테스트 파일 실행 전 worker가 60초 내 응답하지 못한 환경성 실패
+
+---
+
 ## 2026-05-07 세션 — 가격예측 벤치마크 + AI 수집 화면
 
 ### 완료
