@@ -89,6 +89,7 @@ const (
 	IDMasterProduct          FeatureID = "master.product"
 	IDMasterProductAlias     FeatureID = "master.product_alias"
 	IDMasterWarehouse        FeatureID = "master.warehouse"
+	IDMasterWarehouseLocation FeatureID = "master.warehouse_location"
 	IDMasterConstructionSite FeatureID = "master.construction_site"
 
 	// ---- tx.* (all tenants 공유) ----
@@ -250,6 +251,12 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/warehouses/{id}/status",
 			"/api/v1/warehouses/usage-counts",
 		},
+	},
+	IDMasterWarehouseLocation: {
+		ID: IDMasterWarehouseLocation, Name: "창고 위치(Bin) 마스터",
+		Description:    "창고 내 Zone/Aisle/Rack/Bin 4단계 위치 (D-139 WMS Phase 1)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/warehouse-locations/", "/api/v1/warehouse-locations/{id}"},
 	},
 	IDMasterConstructionSite: {
 		ID: IDMasterConstructionSite, Name: "공사현장 마스터", Description: "자체/EPC 공사 현장",

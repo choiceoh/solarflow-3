@@ -208,6 +208,19 @@ func (h *BLHandler) RegisterRoutes(r chi.Router, g middleware.Gates, lineH *BLLi
 	})
 }
 
+// WarehouseLocationHandler — D-139 WMS Phase 1 창고 위치 CRUD (모든 테넌트 공유).
+func (h *WarehouseLocationHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/warehouse-locations", func(r chi.Router) {
+		r.Use(g.Feature(feature.IDMasterWarehouseLocation))
+		r.Get("/", h.List)
+		r.Get("/{id}", h.GetByID)
+		r.With(g.Write).Post("/", h.Create)
+		r.With(g.Write).Put("/{id}", h.Update)
+		r.With(g.Write).Patch("/{id}", h.Update)
+		r.With(g.Write).Delete("/{id}", h.Delete)
+	})
+}
+
 // CalcProxyHandler — Rust 계산실 프록시. router.New에서 HasEngine() 분기 후 직접 호출한다.
 // authMW는 router 외부에서 주입 — calc/engine은 별도 r.Route 트리이므로 여기서 Use 처리.
 // D-120: 각 계산은 feature 카탈로그 기반 게이트(g.Feature)로 분리한다.

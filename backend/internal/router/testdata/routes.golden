@@ -29,6 +29,7 @@ DELETE  /api/v1/receipts/{id}
 DELETE  /api/v1/sales/{id}
 DELETE  /api/v1/tts/{id}
 DELETE  /api/v1/ui-configs/{scope}/{config_id}
+DELETE  /api/v1/warehouse-locations/{id}
 DELETE  /api/v1/warehouses/{id}
 GET     /api/v1/admin/db-integrity
 GET     /api/v1/admin/feature-wiring/
@@ -163,6 +164,8 @@ GET     /api/v1/ui-configs/
 GET     /api/v1/ui-configs/{scope}/{config_id}
 GET     /api/v1/users/
 GET     /api/v1/users/me
+GET     /api/v1/warehouse-locations/
+GET     /api/v1/warehouse-locations/{id}
 GET     /api/v1/warehouses/
 GET     /api/v1/warehouses/usage-counts
 GET     /api/v1/warehouses/{id}
@@ -186,6 +189,7 @@ PATCH   /api/v1/partner-activities/{id}/followup
 PATCH   /api/v1/partners/{id}
 PATCH   /api/v1/partners/{id}/status
 PATCH   /api/v1/products/{id}/status
+PATCH   /api/v1/warehouse-locations/{id}
 PATCH   /api/v1/warehouses/{id}
 PATCH   /api/v1/warehouses/{id}/status
 POST    /api/v1/admin/db-integrity/refresh
@@ -269,6 +273,7 @@ POST    /api/v1/receipts/
 POST    /api/v1/sales/
 POST    /api/v1/tts/
 POST    /api/v1/users/
+POST    /api/v1/warehouse-locations/
 POST    /api/v1/warehouses/
 PUT     /api/v1/banks/{id}
 PUT     /api/v1/baro/dispatch-routes/{id}
@@ -308,4 +313,5 @@ PUT     /api/v1/users/{id}
 PUT     /api/v1/users/{id}/active
 PUT     /api/v1/users/{id}/password
 PUT     /api/v1/users/{id}/role
+PUT     /api/v1/warehouse-locations/{id}
 PUT     /api/v1/warehouses/{id}
