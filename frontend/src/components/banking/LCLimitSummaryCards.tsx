@@ -1,6 +1,7 @@
 import { DollarSign, CreditCard, Wallet, TrendingUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatUSD } from '@/lib/utils';
+import { NumberTween } from '@/components/common/NumberTween';
 import type { BankSummary } from '@/types/banking';
 
 interface Props {
@@ -17,17 +18,17 @@ export default function LCLimitSummaryCards({ bankSummaries }: Props) {
   const usageColor = usageRate >= 90 ? 'text-red-600' : usageRate >= 70 ? 'text-yellow-600' : 'text-green-600';
   const usageBarColor = usageRate >= 90 ? 'bg-red-500' : usageRate >= 70 ? 'bg-yellow-500' : 'bg-green-500';
 
-  const cards = [
-    { label: '총한도', value: formatUSD(totalLimit), icon: DollarSign, color: 'text-blue-600 bg-blue-50' },
-    { label: '개설잔액', value: formatUSD(totalUsed), icon: CreditCard, color: 'text-orange-600 bg-orange-50' },
-    { label: '가용한도', value: formatUSD(totalAvailable), icon: Wallet, color: 'text-green-600 bg-green-50' },
-    { label: '사용률', value: `${usageRate.toFixed(1)}%`, icon: TrendingUp, color: `${usageColor} bg-gray-50` },
+  const cards: { label: string; numericValue: number; format: (n: number) => string; icon: typeof DollarSign; color: string }[] = [
+    { label: '총한도', numericValue: totalLimit, format: formatUSD, icon: DollarSign, color: 'text-blue-600 bg-blue-50' },
+    { label: '개설잔액', numericValue: totalUsed, format: formatUSD, icon: CreditCard, color: 'text-orange-600 bg-orange-50' },
+    { label: '가용한도', numericValue: totalAvailable, format: formatUSD, icon: Wallet, color: 'text-green-600 bg-green-50' },
+    { label: '사용률', numericValue: usageRate, format: (n) => `${n.toFixed(1)}%`, icon: TrendingUp, color: `${usageColor} bg-gray-50` },
   ];
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {cards.map(({ label, value, icon: Icon, color }) => (
+        {cards.map(({ label, numericValue, format, icon: Icon, color }) => (
           <Card key={label}>
             <CardContent className="flex items-center gap-3 pt-4 pb-4">
               <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>
@@ -35,7 +36,9 @@ export default function LCLimitSummaryCards({ bankSummaries }: Props) {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="text-lg font-semibold">{value}</p>
+                <p className="text-lg font-semibold">
+                  <NumberTween value={numericValue} format={format} />
+                </p>
               </div>
             </CardContent>
           </Card>
