@@ -9,10 +9,12 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  { to: '/settings/site',        label: '사이트 설정',  adminOnly: true },
-  { to: '/settings/admin',       label: '관리자 설정',  adminOnly: true },
-  { to: '/settings/audit-logs',  label: '관리자 로그',  adminOnly: true },
-  { to: '/settings/personal',    label: '개인 설정',    adminOnly: false },
+  { to: '/settings/site',            label: '사이트 설정',  adminOnly: true },
+  { to: '/settings/admin',           label: '관리자 설정',  adminOnly: true },
+  { to: '/settings/audit-logs',      label: '관리자 로그',  adminOnly: true },
+  // PR-5a: 테넌트 × pack 활성 매트릭스 (read-only). 토글은 PR-5b 후속.
+  { to: '/settings/feature-wiring',  label: '기능 매트릭스', adminOnly: true },
+  { to: '/settings/personal',        label: '개인 설정',    adminOnly: false },
 ];
 
 export default function SettingsLayout() {
