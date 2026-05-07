@@ -5,6 +5,7 @@ import { LayoutGrid, Trash2, Plus } from 'lucide-react';
 import { detectTenantScope } from '@/lib/tenantScope';
 import { listAllMenusForTenant } from '@/components/layout/CommandShell';
 import { useSidebarTabs, type SidebarTab, type SidebarTabsConfig } from '@/hooks/useSidebarTabs';
+import { useAuthStore } from '@/stores/authStore';
 
 function emptyConfig(): SidebarTabsConfig {
   return { default_tab: '', tabs: [] };
@@ -27,7 +28,13 @@ export default function SidebarTabsCard() {
     setDraft(config ?? emptyConfig());
   }, [config]);
 
-  const allMenus = useMemo(() => listAllMenusForTenant(tenant), [tenant]);
+  // PR-3b: 서버가 내려준 enabled_features 가 가시성 정본. 미응답 시 tenants 배열 fallback.
+  const enabledFeatures = useAuthStore((s) => s.user?.enabled_features);
+  const enabledSet = useMemo(
+    () => (enabledFeatures ? new Set(enabledFeatures) : undefined),
+    [enabledFeatures],
+  );
+  const allMenus = useMemo(() => listAllMenusForTenant(tenant, enabledSet), [tenant, enabledSet]);
   const isDirty = JSON.stringify(draft) !== JSON.stringify(config ?? emptyConfig());
 
   // 분류되지 않은 메뉴 = "all" 탭이 없는 경우만 의미. all 탭이 있으면 자동 노출되므로 표시 불필요.
