@@ -36,6 +36,36 @@
 
 ---
 
+## 2026-05-07 세션 — 가격예측 AI 관측값 선택 삭제
+
+### 완료
+- `/price-forecast` 하단 AI 수집 관측값 표에 개별/전체 선택 체크박스와 신뢰도 컬럼 추가
+- 선택한 관측값을 삭제하는 `DELETE /api/v1/price-benchmarks/{id}` API 추가
+- 삭제 시 `price_benchmarks` 행만 제거하고 `price_benchmark_runs` 실행 로그는 감사 기록으로 보존
+- dev mock API에서도 삭제 후 관측값 목록에서 빠지도록 반영
+- D-143 결정 기록 및 설계 정본 동기화
+
+### 검증
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공 — routes.golden 갱신
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go build -o solarflow-go .` 성공
+- `cd frontend && npm ci` 성공
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 68건 출력
+- `cd frontend && npm run test` 실패 — Vitest worker 시작 timeout으로 테스트 파일 실행 전 8건 unhandled error
+- `git diff --check` 성공
+- `graphify update .` 성공 — 4308 nodes / 6718 edges / 400 communities
+- rebase 후 최신 `origin/main` 기준 `cd frontend && npm run build` 실패 — `src/App.tsx`, `CommandShell.tsx`, `BLListTable.tsx` 등 기존 main 측 TypeScript/import 오류 다수
+- rebase 후 최신 `origin/main` 기준 `cd frontend && npm run lint` 실패 — `src/App.tsx` unused lazy imports, `package.json` duplicate keys 등 기존 main 측 오류
+- rebase 후 최신 `origin/main` 기준 `cd backend && go test ./...` 실패 — `baro.callback_recommend` catalog↔chi 불일치 및 route snapshot drift 등 기존 main 측 오류
+
+### 운영 반영 메모
+- 현재 실행 환경에 `codesign`, `launchctl`이 없어 macOS launchd 재부트스트랩은 수행하지 못함
+
+---
+
 ## 2026-05-07 세션 — 가격예측 벤치마크 + AI 수집 화면
 
 ### 완료

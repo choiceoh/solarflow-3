@@ -6,6 +6,12 @@ type ToggleStatusRequest struct {
 	IsActive *bool `json:"is_active"`
 }
 
+// StatusResponse — 단순 처리 결과 응답의 공통 구조체.
+// 비유: 작업이 끝난 뒤 "완료" 도장만 찍어 돌려주는 종이
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
 // Validate — 토글 요청의 입력값을 검증
 // 비유: 도장을 찍기 전에 "활동중인지 휴면인지" 선택했는지 확인
 func (req *ToggleStatusRequest) Validate() string {

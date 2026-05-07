@@ -4,6 +4,7 @@ type MockRow = Record<string, unknown>;
 type CompanyScoped = MockRow & { company_id?: string };
 
 const nowIso = '2026-05-01T00:00:00.000Z';
+const deletedPriceBenchmarkIds = new Set<string>();
 
 const companies = [
   { company_id: 'company-topsolar', company_name: '탑솔라', company_code: 'TOP', business_number: '123-81-45678', is_active: true },
@@ -615,6 +616,13 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     } as T);
   }
 
+  if (url.pathname.startsWith('/api/v1/price-benchmarks/') && method === 'DELETE') {
+    const id = endpointId(url.pathname, 'price-benchmarks');
+    if (!id || id === 'runs') throw new Error('목업 가격 벤치마크 항목을 찾을 수 없습니다');
+    deletedPriceBenchmarkIds.add(id);
+    return clone({ status: 'deleted' } as T);
+  }
+
   if (method !== 'GET' && !url.pathname.startsWith('/api/v1/calc') && url.pathname !== '/api/v1/ocr/extract') {
     return writeRoute<T>(url);
   }
@@ -836,7 +844,7 @@ function priceBenchmarks(): MockRow[] {
       created_at: nowIso,
       updated_at: nowIso,
     },
-  ]);
+  ]).filter((row) => !deletedPriceBenchmarkIds.has(String(row.benchmark_id)));
 }
 
 function priceBenchmarkRuns(): MockRow[] {
