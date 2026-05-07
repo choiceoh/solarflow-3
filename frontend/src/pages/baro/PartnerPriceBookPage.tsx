@@ -88,13 +88,17 @@ export default function PartnerPriceBookPage() {
 
   const partnerNameById = useMemo(() => {
     const m = new Map<string, string>();
-    partners.forEach((p) => m.set(p.partner_id, p.partner_name));
+    partners.forEach((p) => {
+      m.set(p.partner_id, p.partner_name);
+    });
     return m;
   }, [partners]);
 
   const productInfoById = useMemo(() => {
     const mfgById = new Map<string, Manufacturer>();
-    manufacturers.forEach((m) => mfgById.set(m.manufacturer_id, m));
+    manufacturers.forEach((m) => {
+      mfgById.set(m.manufacturer_id, m);
+    });
     const m = new Map<string, { code: string; name: string; mfg: string }>();
     products.forEach((p) => {
       const mfg = mfgById.get(p.manufacturer_id);

@@ -131,6 +131,7 @@ export default function ProcurementPage() {
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null)
   // R1-1: 사이드바 "발주/결제" 클릭 시 슬라이드 패널 닫기
   useEffect(() => {
+    void location.key
     setSelectedPO(null)
   }, [location.key])
   useEffect(() => {
@@ -271,7 +272,7 @@ export default function ProcurementPage() {
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [selectedPO]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedPO, reloadPO, reloadPoList])
 
   useEffect(() => {
     fetchWithAuth<Manufacturer[]>("/api/v1/manufacturers")

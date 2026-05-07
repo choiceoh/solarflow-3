@@ -111,11 +111,11 @@ function LCListTable({ items, onSettle, onSelectBL, blsVersion }: Props) {
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.map((lc) => lc.lc_id).join(',')]);
+  }, [items]);
 
   /* BL 드릴다운: 확장된 LC 변경 또는 버전 변경 시 재조회 */
   useEffect(() => {
+    void blsVersion;
     if (!expandedLCId) { setExpandedBLs(null); setBlMwMap({}); return; }
     let cancelled = false;
     setExpandedBLs(null); setBlMwMap({});

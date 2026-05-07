@@ -634,7 +634,7 @@ export default function AllocationForm({
     if (!selectedItem) return 0;
     if (qtyMode === 'ea') return parseInt(qtyRaw, 10) || 0;
     const val = parseFloat(qtyRaw);
-    if (isNaN(val) || val <= 0) return 0;
+    if (Number.isNaN(val) || val <= 0) return 0;
     if (qtyMode === 'kw') return Math.round((val * 1_000) / selectedItem.spec_wp);
     return Math.round((val * 1_000_000) / selectedItem.spec_wp);   // mw
   }, [qtyMode, qtyRaw, selectedItem]);
@@ -705,8 +705,8 @@ export default function AllocationForm({
       site_name:               resolvedSiteName,
       site_id:                 isConstruction ? (selectedSiteId || undefined) : undefined,
       notes:                   notesWithOrderNo,
-      expected_price_per_wp:   !isNaN(parsedPrice) && parsedPrice > 0 ? parsedPrice : undefined,
-      free_spare_qty:          !isNaN(parsedSpare) && parsedSpare > 0 ? parsedSpare : 0,
+      expected_price_per_wp:   !Number.isNaN(parsedPrice) && parsedPrice > 0 ? parsedPrice : undefined,
+      free_spare_qty:          !Number.isNaN(parsedSpare) && parsedSpare > 0 ? parsedSpare : 0,
       bl_id:                   selectedBlId || undefined,
     };
 
@@ -725,7 +725,7 @@ export default function AllocationForm({
           }),
         });
 
-        const spareEa = !isNaN(parsedSpare) && parsedSpare > 0 ? parsedSpare : 0;
+        const spareEa = !Number.isNaN(parsedSpare) && parsedSpare > 0 ? parsedSpare : 0;
         const spareNotes = '[무상스페어]' + (base.notes ? ' ' + base.notes : '');
 
         if (spareEa > 0) {
@@ -797,7 +797,7 @@ export default function AllocationForm({
           });
         }
         /* 무상스페어 자동 생성 */
-        if (!isNaN(parsedSpare) && parsedSpare > 0) {
+        if (!Number.isNaN(parsedSpare) && parsedSpare > 0) {
           await fetchWithAuth('/api/v1/inventory/allocations', {
             method: 'POST',
             body: JSON.stringify({
@@ -1220,7 +1220,7 @@ export default function AllocationForm({
                   />
                 </div>
                 {/* 자동 계산: 총 예상 금액 */}
-                {selectedItem && inputEa > 0 && expectedPrice && !isNaN(parseFloat(expectedPrice)) && parseFloat(expectedPrice) > 0 && (
+                {selectedItem && inputEa > 0 && expectedPrice && !Number.isNaN(parseFloat(expectedPrice)) && parseFloat(expectedPrice) > 0 && (
                   <div className="h-9 flex items-center rounded-md border bg-muted px-3 text-xs whitespace-nowrap font-medium">
                     ₩{(inputEa * selectedItem.spec_wp * parseFloat(expectedPrice)).toLocaleString('ko-KR')}
                   </div>
