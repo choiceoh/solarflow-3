@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
-import type { OutstandingItem, MatchSuggestion, ReceiptMatch } from '@/types/orders';
+import type { OutstandingItem, MatchSuggestion, ReceiptMatch, AIMatchSuggestion } from '@/types/orders';
 
 interface OutstandingListResponse {
   outstanding_items: (Omit<OutstandingItem, 'matched_amount'> & { collected_amount: number })[];
@@ -69,6 +69,37 @@ export function useMatchSuggest() {
   const clear = useCallback(() => setSuggestion(null), []);
 
   return { suggestion, loading, suggest, clear };
+}
+
+export function useAIMatchSuggest() {
+  const [suggestion, setSuggestion] = useState<AIMatchSuggestion | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
+
+  const suggest = useCallback(async (receiptId: string) => {
+    if (!selectedCompanyId || !receiptId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fetchWithAuth<AIMatchSuggestion>('/api/v1/receipt-matches/ai-suggest', {
+        method: 'POST',
+        body: JSON.stringify({ company_id: selectedCompanyId, receipt_id: receiptId }),
+      });
+      setSuggestion(result);
+    } catch (e) {
+      setSuggestion(null);
+      setError(e instanceof Error ? e.message : 'AI 추천에 실패했습니다');
+    }
+    setLoading(false);
+  }, [selectedCompanyId]);
+
+  const clear = useCallback(() => {
+    setSuggestion(null);
+    setError(null);
+  }, []);
+
+  return { suggestion, loading, error, suggest, clear };
 }
 
 export function useMatchHistory(receiptId: string | null) {

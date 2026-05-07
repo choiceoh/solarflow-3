@@ -303,7 +303,10 @@ var Catalog = map[FeatureID]Feature{
 	IDTxReceiptMatch: {
 		ID: IDTxReceiptMatch, Name: "수금/매출 매칭", Description: "매칭 + 자동 매칭",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/receipt-matches/", "/api/v1/receipt-matches/{id}", "/api/v1/receipt-matches/auto"},
+		Paths: []string{
+			"/api/v1/receipt-matches/", "/api/v1/receipt-matches/{id}",
+			"/api/v1/receipt-matches/bulk", "/api/v1/receipt-matches/auto", "/api/v1/receipt-matches/ai-suggest",
+		},
 	},
 	IDTxPO: {
 		ID: IDTxPO, Name: "PO 발주", Description: "PO + 라인",

@@ -696,6 +696,38 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     } as T);
   }
 
+  if (url.pathname === '/api/v1/receipt-matches/bulk' && method === 'POST') {
+    const rows = Array.isArray(body.matches) ? body.matches : [];
+    return clone(rows.map((row, index) => ({
+      match_id: `mock-match-${Date.now()}-${index}`,
+      receipt_id: body.receipt_id,
+      outbound_id: row.outbound_id,
+      sale_id: row.sale_id,
+      matched_amount: row.matched_amount,
+    })) as T);
+  }
+
+  if (url.pathname === '/api/v1/receipt-matches/ai-suggest' && method === 'POST') {
+    return clone({
+      receipt_id: body.receipt_id ?? 'rcp-2604-green',
+      provider: 'mock',
+      model: 'dev-mock',
+      summary: '거래처와 입금액 기준으로 가장 가능성이 높은 미수금 1건을 제안했습니다.',
+      candidates: [{
+        outbound_id: 'ob-2604-017-1',
+        outbound_date: '2026-04-27',
+        site_name: '해남 농촌태양광',
+        product_name: 'JAS-DH580 PERC bifacial',
+        outstanding_amount: 558632800,
+        match_amount: 558632800,
+        confidence: 0.86,
+        reason: '같은 거래처의 장기 미수금이며 단독 후보로 남아 있습니다.',
+      }],
+      total_suggested: 558632800,
+      difference: Math.max(0, Number(body.amount ?? 0) - 558632800),
+    } as T);
+  }
+
   if (url.pathname.startsWith('/api/v1/price-benchmarks/') && method === 'DELETE') {
     const id = endpointId(url.pathname, 'price-benchmarks');
     if (!id || id === 'runs') throw new Error('목업 가격 벤치마크 항목을 찾을 수 없습니다');
