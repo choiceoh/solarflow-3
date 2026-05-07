@@ -11,8 +11,61 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-144 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-145 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화 추가) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-07 세션 — 테넌트 모듈화 5 PR 시리즈 (D-145)
+
+### 완료
+새 도메인 (`gx10.topworks.ltd` 같은 4번째 테넌트) 추가 비용을 **코드 1줄 + 마이그 1개 + admin UI 토글** 로 압축. 7개 PR 으로 분해 — 각 단계 회귀 위험 ↓.
+
+- **PR-1** ([#574](https://github.com/choiceoh/solarflow/pull/574)) — `backend/internal/tenant/registry.go` 단일 정본
+  - 테넌트 ID/HostPatterns regex/Group/DisplayName 정의
+  - `feature.TenantSetXxx`, `middleware.TenantScopeXxx` 가 registry 에서 파생
+  - `IDsInGroup`, `Detect(host)`, `Default()`, `Known(s)` 헬퍼 + 11 단위 테스트 (PoC 4번째 테넌트 시연 포함)
+- **PR-2** ([#577](https://github.com/choiceoh/solarflow/pull/577)) — `/me` 응답에 `tenant_id` / `tenant_display_name` / `enabled_features[]`
+  - `UserHandler` 시그니처에 `*feature.Resolver` 주입
+  - 4 단위 테스트 (topsolar/cable/baro/nil-resolver)
+- **PR-3a** ([#583](https://github.com/choiceoh/solarflow/pull/583)) — `frontend/src/lib/navigation/manifest.tsx` 신설
+  - 50+ Route + 25+ sidebar item 을 한 정본으로 통합 (App.tsx -88줄, CommandShell.tsx -123줄)
+  - `RouteSpec` (children/wrap/roles 지원), `CommandNavItem`, helpers (`listWipMenus`, `listAllMenusForTenant`)
+- **PR-3b** ([#589](https://github.com/choiceoh/solarflow/pull/589)) — sidebar 가시성을 `enabled_features` 기반으로 전환
+  - 26개 NAV item 에 backend `feature` 매핑 (`tx.po`, `baro.incoming`, `intercompany.request.inbox` 등)
+  - `isItemVisible()` 단일 함수 — feature 우선, undefined enabled_features 면 tenants 배열 fallback (옛 응답 호환)
+  - 5개 미매핑 항목 (baro-home/quote/inverter/shipment/approval) 만 `tenants:` fallback 유지 — 후속 PR 에서 카탈로그 보강
+  - 8 단위 테스트 (manifest.test.ts)
+- **PR-4** ([#592](https://github.com/choiceoh/solarflow/pull/592)) — `frontend/src/lib/navigation/packs/` 디렉토리
+  - 도메인별 3 pack: `erp-core` (모든 테넌트 공통), `module-finance` (수입/금융), `baro-domain` (영업/CRM)
+  - `ALL_PACKS`, `buildNavGroups(packs)` — manifest 가 합쳐 `NAV_GROUPS` 생성
+  - `MODULE_TENANTS` 를 `tenantScope.ts` 로 옮겨 packs ↔ manifest 값 순환 dep 회피
+  - 8 단위 테스트 (packs.test.ts — pack 간 key 충돌, NAV_GROUPS 동등성)
+- **PR-5a** ([#601](https://github.com/choiceoh/solarflow/pull/601)) — admin 매트릭스 read-only
+  - `GET /api/v1/admin/feature-wiring/` — `{ tenants[], features[{enabled[tenant]→bool, default_tenants[]}] }` 반환
+  - `/settings/feature-wiring` 페이지 — pack 별 grouping + "기타 (pack 미매핑)" 섹션
+  - `RoleGuard(admin)`, feature gate 무관 (`unrestrictedAllowlist`)
+  - 3 단위 테스트
+- **PR-5b** ([#604](https://github.com/choiceoh/solarflow/pull/604)) — 토글 + DB 영속화
+  - `PUT /api/v1/admin/feature-wiring/{tenant}/{feature}` — `tenant_features` upsert + `feature_wiring_audit` insert(best-effort) + `resolver.SetOverride`
+  - `app.go` startup 에 `tenant_features` 행 로드 → `resolver.SetOverride` 일괄 → 재시작 후 유지
+  - 마이그 `055_feature_wiring.sql` (기존) 그대로 사용, 신규 마이그 불필요
+  - frontend 매트릭스: 셀 클릭 토글 (optimistic + rollback) + pack 헤더 일괄 ✓/— 버튼 (all/partial/none 표시)
+  - 6 단위 테스트 (validateSetEnabled 4 case + DB nil 503 + unknown tenant 404)
+- **side fix** ([commit 30c115d](https://github.com/choiceoh/solarflow/commit/30c115d)) — main 의 PR-603 (view-transitions) 머지에서 `BaroCallbackRecommendHandler` 등록이 누락된 D-120 coverage_test 실패를 PR-5b 안에서 같이 처리
+
+### 결정
+- [D-145](DECISIONS.md#d-145) — 테넌트 모듈화 5 PR 시리즈 정본화. 새 도메인 추가 절차 규정 + 핵심 invariant (가시성 정본은 backend → /me → frontend 한 방향) 못박음.
+
+### 검증
+- 각 PR 별 `go test ./...` ✓ / `go build ./...` ✓ / `go vet ./...` ✓
+- frontend `npm run build` ✓ / `npm run test` ✓ (최종 10 files / 83 tests, manifest+packs 16 case 추가) / `npm run lint` exit 0
+- 모든 PR 머지됨 — main 에 반영 완료
+
+### 운영 반영 메모
+- 마이그 `055_feature_wiring.sql` 은 D-120 시점에 이미 적용된 상태 — 추가 DB 작업 없음
+- admin 이 `/settings/feature-wiring` 에서 토글하면 `tenant_features` 에 즉시 upsert + audit 행
+- tenant 추가 시 `tenant_features.tenant_check`, `tenant_data_scopes.tenant_check`, `user_profiles.tenant_scope` 의 CHECK 제약 갱신 마이그 필요
 
 ---
 
