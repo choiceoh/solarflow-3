@@ -41,6 +41,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - 매출 요약 (`/baro/sales-summary`) — D-129 영업담당자/유형/월/Top거래처 4 cut
 - 인버터 가이드 (`/baro/inverter-guide`) — D-130 정적 카탈로그 10종 + 용량 매칭 계산기
 - 출하 알림 (`/baro/shipment-notice`) — D-131 카톡 메시지 빌더 (상차/출발/도착 3종 자동 생성)
+- 콜백 추천 (`/baro/callback-recommend`) — D-133 owner 별 활성 거래처(30일+ 미주문) + 입고예정 컨텍스트
 
 **노출되지 않는 것** (module 계열 전용 — D-108/D-119로 차단):
 - P/O 발주, L/C 개설, B/L 입고, 면장/원가
@@ -65,6 +66,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - **[D-130](DECISIONS.md#d-130)** — BARO 인버터 호환 가이드 Phase 1. frontend-only 정적 카탈로그 10종 + 용량 매칭 계산기. 정식 SKU 등록·견적 통합은 PR6.5
 - **[D-131](DECISIONS.md#d-131)** — BARO 출하 알림 메시지 빌더. 외부 발송 API 0, 카톡 붙여넣기용 텍스트 3종(상차/출발/도착) 자동 생성. 자동 발송·드라이버 PWA는 PR7.5
 - **[D-132](DECISIONS.md#d-132)** — RFM 동적 분위수 분류 + 본인 담당 필터 (PR4.5). `?classify=quartile&mine=true` query param. segment_tag 수동 라벨은 PR4.6
+- **[D-133](DECISIONS.md#d-133)** — BARO 자동 콜백 추천 엔진 (PR3.5). owner 별 활성 거래처(30일+ 미주문) + 입고예정 SKU 컨텍스트 합본. SKU-level 정밀 매칭은 PR3.6
 
 ## BARO 전용 백엔드 엔드포인트 (`baroOnly` 미들웨어)
 
@@ -84,6 +86,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 | `/api/v1/baro/partner-cockpit/{partner_id}` | 거래처 360 cockpit (신용·최근매출·CRM 합본) | D-125 |
 | `/api/v1/baro/rfm/` | 거래처 RFM 보드 (12개월 매출 집계 + 세그먼트 분류) | D-128 |
 | `/api/v1/baro/sales-summary/` | BARO 자체 매출 요약 (4 cut: 담당자/유형/월/Top) | D-129 |
+| `/api/v1/baro/callback-recommend/` | 자동 콜백 추천 (owner 별 활성 거래처 + 입고예정 합본) | D-133 |
 
 ## 운영 메모
 

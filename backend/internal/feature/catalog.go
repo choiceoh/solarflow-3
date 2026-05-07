@@ -120,6 +120,7 @@ const (
 	IDCRMPartnerActivity FeatureID = "crm.partner_activity"
 
 	// ---- baro.* (BARO 전용) ----
+	IDBaroCallbackRecommend FeatureID = "baro.callback_recommend"
 	IDBaroIncoming        FeatureID = "baro.incoming"
 	IDBaroPurchaseHistory FeatureID = "baro.purchase_history"
 	IDBaroCreditBoard     FeatureID = "baro.credit_board"
@@ -387,6 +388,12 @@ var Catalog = map[FeatureID]Feature{
 	},
 
 	// ===== baro.* =====
+	IDBaroCallbackRecommend: {
+		ID: IDBaroCallbackRecommend, Name: "BARO 자동 콜백 추천 엔진",
+		Description:    "owner 별 활성 거래처(30일+ 미주문) + 입고예정 SKU 컨텍스트 합본 (D-133)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{"/api/v1/baro/callback-recommend/"},
+	},
 	IDBaroIncoming: {
 		ID: IDBaroIncoming, Name: "BARO 입고예정", Description: "ETA·수량 read-only sanitized (D-116)",
 		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeColumnMasked,

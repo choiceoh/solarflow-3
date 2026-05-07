@@ -4,6 +4,14 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  Inbox,
+  PackagePlus,
+  Phone,
+  ReceiptText,
+  ScrollText,
+  Settings,
+  ShieldAlert,
+  Ship,
   Sun,
 } from 'lucide-react';
 import { NAV_GROUPS, isItemVisible } from '@/lib/navigation/manifest';
@@ -33,12 +41,128 @@ function readCollapsedFromStorage(): boolean {
 }
 import type { AlertItem } from '@/types/alerts';
 
-// NAV_GROUPS / MODULE_TENANTS / listWipMenus / listAllMenusForTenant /
-// SidebarMenuRegistryItem / CommandNavItem / CommandNavGroup 는 PR-3a 에서
-// `@/lib/navigation/manifest` 로 이동했다. 외부에서 import 하던 listWipMenus 와
-// listAllMenusForTenant 는 같은 이름으로 re-export 해 호출 측 호환을 유지한다.
-export type { SidebarMenuRegistryItem } from '@/lib/navigation/manifest';
-export { listWipMenus, listAllMenusForTenant } from '@/lib/navigation/manifest';
+interface CommandNavItem {
+  key: string;
+  label: string;
+  /** 사이드바 접힘 상태에서 아이콘 대신 노출할 2자 축약 (P/O, L/C 등 라틴은 2영문, 한글은 2자) */
+  abbr: string;
+  path: string;
+  icon: LucideIcon;
+  menu: MenuKey;
+  count?: number;
+  /** D-108: 표시 허용 테넌트. 미지정이면 모든 테넌트 공통. */
+  tenants?: TenantScope[];
+  /** 운영 검증 미완 — 사이트 설정 > 메뉴 가시성에서 admin이 끌 수 있는 대상 표시 */
+  isWip?: boolean;
+}
+
+export interface SidebarMenuRegistryItem {
+  key: string;
+  label: string;
+}
+
+/** 사이트 설정 > 메뉴 가시성 카드가 토글 후보로 노출하는 항목 (NAV_GROUPS 평탄화 + isWip 필터) */
+export function listWipMenus(): SidebarMenuRegistryItem[] {
+  return NAV_GROUPS.flatMap((g) => g.items)
+    .filter((i) => i.isWip)
+    .map((i) => ({ key: i.key, label: i.label }));
+}
+
+/** D-112 사이드바 탭 카드가 메뉴 매핑 후보로 노출하는 항목 (현재 테넌트의 모든 NAV 메뉴) */
+export function listAllMenusForTenant(tenant: TenantScope): SidebarMenuRegistryItem[] {
+  return NAV_GROUPS.flatMap((g) => g.items)
+    .filter((i) => !i.tenants || i.tenants.includes(tenant))
+    .map((i) => ({ key: i.key, label: i.label }));
+}
+
+interface CommandNavGroup {
+  label?: string;
+  items: CommandNavItem[];
+}
+
+const MODULE_TENANTS: TenantScope[] = ['topsolar', 'cable'];
+
+const NAV_GROUPS: CommandNavGroup[] = [
+  {
+    items: [
+      // D-127: BARO 영업 일일 홈 — BARO 진입 시 첫 화면
+      { key: 'baro-home', label: '영업 홈', abbr: '홈', path: '/baro/home', icon: Home, menu: 'baro_home', tenants: ['baro'] },
+      { key: 'inventory', label: '가용재고', abbr: '재고', path: '/inventory', icon: Box, menu: 'inventory' },
+    ],
+  },
+  {
+    label: '구매',
+    items: [
+      // D-108/D-119: module 계열 수입 흐름 — 바로(주)에는 노출하지 않음
+      { key: 'po', label: 'P/O 발주', abbr: 'PO', path: '/procurement', icon: ClipboardList, menu: 'procurement', tenants: MODULE_TENANTS },
+      { key: 'lc', label: 'L/C 개설', abbr: 'LC', path: '/procurement?tab=lc', icon: Landmark, menu: 'lc', tenants: MODULE_TENANTS },
+      { key: 'bl', label: 'B/L 입고', abbr: 'BL', path: '/procurement?tab=bl', icon: Ship, menu: 'inbound', tenants: MODULE_TENANTS },
+      { key: 'customs', label: '면장/원가', abbr: '면장', path: '/customs', icon: Calculator, menu: 'inbound', tenants: MODULE_TENANTS },
+      // BARO Phase 2: module 계열 측 — 바로(주)가 보낸 매입 요청 처리 inbox
+      { key: 'baro-inbox', label: '그룹 요청', abbr: '그룹', path: '/group-trade/baro-inbox', icon: Inbox, menu: 'baro_inbox', tenants: MODULE_TENANTS },
+      // BARO Phase 2: 바로(주) 측 — 탑솔라로부터 매입할 모듈을 등록
+      { key: 'baro-purchase', label: '그룹내 매입', abbr: '매입', path: '/baro/group-purchase', icon: PackagePlus, menu: 'baro_group_purchase', tenants: ['baro'] },
+      // BARO 영업용 — 가격·환율 없이 공급예정 ETA만 확인
+      { key: 'baro-incoming', label: '입고예정', abbr: '입고', path: '/baro/incoming', icon: Ship, menu: 'baro_incoming', tenants: ['baro'] },
+      // BARO 자체 구매 — 국내 타사/그룹내 매입 원가 이력
+      { key: 'baro-purchase-history', label: '구매이력', abbr: '이력', path: '/baro/purchase-history', icon: ReceiptText, menu: 'baro_purchase_history', tenants: ['baro'] },
+    ],
+  },
+  {
+    label: '판매',
+    items: [
+      { key: 'orders', label: '수주 관리', abbr: '수주', path: '/orders', icon: ScrollText, menu: 'orders' },
+      { key: 'outbound', label: '출고/판매', abbr: '출고', path: '/orders?tab=outbound', icon: Truck, menu: 'outbound' },
+      { key: 'receipts', label: '수금 관리', abbr: '수금', path: '/orders?tab=receipts', icon: Wallet, menu: 'receipts' },
+      // CRM 1차: 인바운드 후속 — 바로(주) 전용 (탑솔라는 인바운드 비중이 적어 미사용)
+      { key: 'crm-inbox', label: '내 미처리 문의', abbr: '문의', path: '/crm/inbox', icon: Inbox, menu: 'crm_inbox', tenants: ['baro'] },
+      // D-125: 거래처 360 cockpit — 인바운드 응대 한 화면 (BARO 전용)
+      { key: 'baro-cockpit', label: '거래처 360', abbr: '360', path: '/baro/cockpit', icon: Users, menu: 'baro_cockpit', tenants: ['baro'] },
+      // D-126: 통합 견적 빌더 (BARO 전용)
+      { key: 'baro-quote', label: '견적 빌더', abbr: '견적', path: '/baro/quote/new', icon: Calculator, menu: 'baro_quote', tenants: ['baro'] },
+      // D-130: 인버터 호환 가이드 (BARO 전용 — 모듈+인버터 묶음 견적 보조)
+      { key: 'baro-inverter', label: '인버터 가이드', abbr: '인버', path: '/baro/inverter-guide', icon: Zap, menu: 'baro_inverter', tenants: ['baro'] },
+      // D-131: 출하 알림 메시지 빌더 (BARO 전용 — 카톡 붙여넣기용 텍스트 자동 생성)
+      { key: 'baro-shipment', label: '출하 알림', abbr: '알림', path: '/baro/shipment-notice', icon: Bell, menu: 'baro_shipment', tenants: ['baro'] },
+      // D-133: 자동 콜백 추천 엔진 (BARO 전용 — owner 별 활성 거래처 + 입고예정 컨텍스트)
+      { key: 'baro-callback', label: '콜백 추천', abbr: '콜백', path: '/baro/callback-recommend', icon: Phone, menu: 'baro_callback', tenants: ['baro'] },
+      // BARO Phase 1: 거래처별 단가표 (BARO 전용)
+      { key: 'baro-price-book', label: '거래처 단가표', abbr: '단가', path: '/baro/price-book', icon: Tags, menu: 'baro_price_book', tenants: ['baro'] },
+      // BARO Phase 4: 배차/일정 보드 (BARO 전용)
+      { key: 'baro-dispatch', label: '배차/일정', abbr: '배차', path: '/baro/dispatch', icon: Truck, menu: 'baro_dispatch', tenants: ['baro'] },
+    ],
+  },
+  {
+    label: '현황',
+    items: [
+      // D-108/D-119: LC 한도/매출 분석은 module 계열 전용 (원가 기반)
+      { key: 'banking', label: 'L/C 한도', abbr: '한도', path: '/banking', icon: Landmark, menu: 'banking', tenants: MODULE_TENANTS },
+      { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs', tenants: MODULE_TENANTS },
+      // 구매 이력: PO/단가/변경계약 read-only 통합 타임라인 (module 계열 수입 흐름 전용, executive 포함)
+      { key: 'purchase-history', label: '구매 이력', abbr: '이력', path: '/purchase-history', icon: History, menu: 'purchase_history', tenants: MODULE_TENANTS },
+      { key: 'price-forecast', label: '가격예측', abbr: '가격', path: '/price-forecast', icon: TrendingUp, menu: 'price_forecast', tenants: MODULE_TENANTS },
+      // BARO Phase 3: 거래처별 미수금/한도 보드 (BARO 전용)
+      { key: 'baro-credit', label: '미수금/한도', abbr: '미수', path: '/baro/credit-board', icon: ShieldAlert, menu: 'baro_credit', tenants: ['baro'] },
+      // D-128: 거래처 RFM/세그먼트 보드 (BARO 전용)
+      { key: 'baro-rfm', label: '거래처 RFM', abbr: 'RFM', path: '/baro/rfm', icon: Trophy, menu: 'baro_rfm', tenants: ['baro'] },
+      // D-129: BARO 자체 매출 요약 (BARO 전용 — module sales-analysis 차단 우회)
+      { key: 'baro-sales-summary', label: '매출 요약', abbr: '매출', path: '/baro/sales-summary', icon: BarChart3, menu: 'baro_sales_summary', tenants: ['baro'] },
+    ],
+  },
+  {
+    label: '도구',
+    items: [
+      { key: 'import-hub', label: '엑셀 입력', abbr: '입력', path: '/import', icon: FileSpreadsheet, menu: 'import_hub' },
+      { key: 'data', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters' },
+      { key: 'library', label: '자료실', abbr: '자료', path: '/library', icon: LibraryBig, menu: 'library' },
+      { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
+      { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: MODULE_TENANTS, isWip: true },
+      // D-064 PR 37: 운영자 전용 DB 정합성 검증 + 로컬 AI 분석. RoleGuard 로 admin/operator 만 접근.
+      { key: 'db-integrity', label: 'DB 정합성', abbr: '정합', path: '/admin/db-integrity', icon: ShieldAlert, menu: 'settings' },
+      { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
+    ],
+  },
+];
 
 const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/inventory': { title: '가용재고', breadcrumb: '재고 / 예약 가능 수량' },
@@ -69,6 +193,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/baro/sales-summary': { title: 'BARO 매출 요약', breadcrumb: '현황 / 영업담당자·유형·월별 매출' },
   '/baro/inverter-guide': { title: '인버터 가이드', breadcrumb: '판매 / 인버터 호환 카탈로그' },
   '/baro/shipment-notice': { title: '출하 알림', breadcrumb: '판매 / 카톡 메시지 빌더' },
+  '/baro/callback-recommend': { title: '콜백 추천', breadcrumb: '판매 / owner 별 활성 거래처' },
 };
 
 function routeMeta(pathname: string, search: string) {

@@ -100,6 +100,15 @@ func (h *BankHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Get("/banking/dashboard", h.BankingDashboard)
 }
 
+// BaroCallbackRecommendHandler — D-133 자동 콜백 추천 엔진 (BARO 전용, PR3.5).
+// owner 별 활성 거래처(30일+ 미주문) + 입고예정 SKU 컨텍스트 합본.
+func (h *BaroCallbackRecommendHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/baro/callback-recommend", func(r chi.Router) {
+		r.Use(g.Feature(feature.IDBaroCallbackRecommend))
+		r.Get("/", h.Get)
+	})
+}
+
 // BaroIncomingHandler — BARO 전용 입고예정/ETA 보드 (가격·환율 제외).
 func (h *BaroIncomingHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/baro/incoming", func(r chi.Router) {
