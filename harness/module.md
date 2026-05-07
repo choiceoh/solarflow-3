@@ -30,7 +30,7 @@ BARO와 **공유**:
 - 바로 매입요청 inbox (`/group-trade/baro-inbox`) — BARO가 보낸 그룹내 매입 요청 처리
 - L/C 한도 (`/banking`) — 은행별 한도/만기
 - 매출 분석 (`/sales-analysis`) — 마진·이익률 (원가 기반)
-- 가격예측 (`/price-forecast`) — 외부 시세·forward·중국 입찰·CPIA floor·Tier-1 ASP 벤치마크
+- 가격예측 (`/price-forecast`) — 중국·유럽 외부 시세·forward·중국 입찰·CPIA floor·Tier-1 ASP 벤치마크
 - 결재안 (`/approval`) — D-173 PR #173로 BARO에서는 제거되어 탑솔라 전용
 
 **노출되지 않는 것** (BARO 전용 — D-108로 차단):
@@ -77,6 +77,7 @@ BARO와 **공유**:
 - [D-119](DECISIONS.md#d-119) — `cable.topworks.ltd`를 module 기능 표면에서 포크한 독립 `cable` 테넌트로 추가.
 - [D-124](DECISIONS.md#d-124) — 가격예측은 module 계열 전용 외부 벤치마크 장부 + 버튼형 AI 수집으로 둔다.
 - [D-145](DECISIONS.md#d-145) — 테넌트 모듈화 5 PR 시리즈. 새 도메인 추가 비용을 코드 1줄 + 마이그 1개 + admin UI 토글로 압축 (`internal/tenant/registry.go` 단일 정본, frontend `packs/` 분리, admin 매트릭스 화면).
+- [D-146](DECISIONS.md#d-146) — 가격예측 수집 시장은 중국·유럽으로 제한한다.
 
 ## module 계열 백엔드 엔드포인트 (`topsolarOnly` legacy 미들웨어)
 
