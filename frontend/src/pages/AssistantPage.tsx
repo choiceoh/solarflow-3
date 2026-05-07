@@ -15,6 +15,7 @@ import {
 import { MessageMarkdown } from '@/components/assistant/MessageMarkdown';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
 import { notify } from '@/lib/notify';
@@ -640,7 +641,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           </div>
         )}
         {!embedded && (
-          <header className="flex flex-wrap items-center gap-3 border-b pb-3">
+          <header className="sf-assistant-header flex flex-wrap items-center gap-3 pb-3">
             <div className="flex items-center gap-2">
               <Bot className="h-6 w-6 text-[var(--sf-solar)]" />
               <h2 className="text-lg font-semibold">업무 도우미</h2>
@@ -680,7 +681,8 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
                     key={message.id}
                     id={`assistant-msg-${message.id}`}
                     className={cn(
-                      'sf-msg-enter flex flex-col gap-2 rounded-md transition-colors',
+                      'sf-msg-enter -mx-2 flex flex-col gap-2 rounded-md px-2 py-1 transition-colors',
+                      'hover:bg-muted/30',
                       highlightedKey === message.id && 'bg-[var(--sf-solar)]/10 ring-2 ring-[var(--sf-solar)]/40',
                     )}
                   >
@@ -716,7 +718,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
         </div>
 
         {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 rounded-md border bg-muted/30 p-2">
+          <div className="-mb-1 flex flex-wrap gap-1.5 rounded-t-md border-x border-t bg-muted/30 px-2 py-1.5">
             {attachments.map((f, i) => (
               <AttachmentChip
                 key={`${f.name}-${i}`}
@@ -738,7 +740,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           </div>
         )}
 
-        <div className="relative">
+        <div className={cn('relative', attachments.length > 0 && 'sf-attached-input')}>
           <Textarea
             ref={inputRef}
             value={input}
@@ -833,6 +835,16 @@ interface MessagePartsProps {
 
 // MessageParts — 한 메시지의 parts 를 순서대로 렌더링.
 // text → Bubble (텍스트 박스), tool-* → ToolChip (회색 칩), data-proposal 은 상위에서 ProposalCard 로 처리하므로 무시.
+// 사용자 아바타 — 이름 첫 글자(한글/영문 모두). 이름 없으면 이메일 첫 글자, 그것도 없으면 User 아이콘.
+function UserAvatarInitial() {
+  const { user } = useAuth();
+  const name = user?.name?.trim() || '';
+  const email = user?.email?.trim() || '';
+  const initial = (name || email).charAt(0).toUpperCase();
+  if (!initial) return <User className="h-4 w-4" />;
+  return <span className="text-sm font-semibold leading-none">{initial}</span>;
+}
+
 // 첨부 파일 칩 — 이미지면 썸네일, 그 외(PDF/일반파일)는 아이콘.
 function AttachmentChip({
   file,
@@ -1056,11 +1068,13 @@ function Bubble({
       <div
         className={cn(
           'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-          isUser ? 'bg-[var(--sf-solar)]/20 text-[var(--sf-solar)]' : 'bg-muted text-foreground',
+          isUser
+            ? 'bg-[var(--sf-solar)]/20 text-[var(--sf-solar)]'
+            : 'sf-bot-avatar text-[var(--sf-solar)]',
           !isUser && isStreaming && 'sf-avatar-ring-pulse',
         )}
       >
-        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+        {isUser ? <UserAvatarInitial /> : <Bot className="h-4 w-4" />}
       </div>
       <div
         className={cn(
@@ -1370,8 +1384,11 @@ function SessionsPanel({
               if (!items || items.length === 0) return null;
               return (
                 <div key={bucket} className="flex flex-col gap-1">
-                  <div className="px-1 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
-                    {bucket}
+                  <div className="flex items-center gap-1.5 px-1 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
+                    <span>{bucket}</span>
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-mono normal-case tracking-normal text-muted-foreground">
+                      {items.length}
+                    </span>
                   </div>
                   <div className="flex flex-col gap-0.5">
                     {items.map((s) => {
@@ -1445,8 +1462,8 @@ function SessionsPanel({
  */
 function ChipEmpty({ chips, onPick }: { chips: ChipDef[]; onPick: (text: string) => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 px-6 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--sf-solar)]/10 text-[var(--sf-solar)]">
+    <div className="sf-empty-glow flex h-full flex-col items-center justify-center gap-6 px-6 text-center">
+      <div className="sf-bot-avatar flex h-16 w-16 items-center justify-center rounded-full text-[var(--sf-solar)]">
         <Bot className="h-8 w-8" aria-hidden />
       </div>
       <div className="space-y-1.5">

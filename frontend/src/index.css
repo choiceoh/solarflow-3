@@ -2413,6 +2413,103 @@ textarea::placeholder {
   scrollbar-color: rgb(0 0 0 / 0.15) transparent;
 }
 
+/* AI 어시스턴트 — 메시지 첫 등장 시 슬라이드인 페이드. */
+.sf-msg-enter {
+  animation: sf-msg-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes sf-msg-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* AI 어시스턴트 — 스트리밍 중 봇 아바타 ring pulse. 캐럿보다 강한 시각 신호. */
+.sf-avatar-ring-pulse {
+  position: relative;
+}
+.sf-avatar-ring-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 2px solid var(--sf-solar);
+  opacity: 0;
+  animation: sf-ring-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes sf-ring-pulse {
+  0% { transform: scale(0.95); opacity: 0.6; }
+  70% { transform: scale(1.15); opacity: 0; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+
+/* 사용자가 모션 줄이기 환경설정 — 모든 어시스턴트 애니메이션 비활성. */
+@media (prefers-reduced-motion: reduce) {
+  .sf-stream-fade,
+  .sf-msg-enter,
+  .sf-avatar-ring-pulse::before {
+    animation: none !important;
+  }
+  .sf-avatar-ring-pulse::before {
+    display: none;
+  }
+}
+
+/* 어시스턴트 — 헤더 하단 그라디언트 디바이더. 옅은 솔라 톤이 살짝 깔리고 끝으로 갈수록 fade. */
+.sf-assistant-header {
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(
+      to right,
+      transparent 0%,
+      var(--sf-solar) 18%,
+      rgb(0 0 0 / 0.1) 60%,
+      transparent 100%
+    )
+    1;
+}
+
+/* 어시스턴트 — 첨부 영역 바로 아래 textarea: 상단 라운드 제거하고 첨부 영역과 시각적으로 한 덩어리로. */
+.sf-attached-input textarea {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* 어시스턴트 — 빈 상태 미세 솔라 글로우 (radial). 차분한 깊이감. */
+.sf-empty-glow {
+  background: radial-gradient(
+    ellipse at center top,
+    color-mix(in oklab, var(--sf-solar) 8%, transparent) 0%,
+    transparent 60%
+  );
+}
+
+/* 어시스턴트 — 봇 아바타 옅은 솔라 그라디언트 ring. */
+.sf-bot-avatar {
+  background: linear-gradient(135deg,
+    color-mix(in oklab, var(--sf-solar) 14%, transparent) 0%,
+    color-mix(in oklab, var(--sf-solar) 4%, transparent) 100%
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--sf-solar) 20%, transparent);
+}
+
+/* 어시스턴트 — 사이드바 얇은 스크롤바. */
+.sf-thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(0 0 0 / 0.15);
+  border-radius: 3px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(0 0 0 / 0.28);
+}
+.sf-thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 0.15) transparent;
+}
+
 /* 톤 칩 — Bloomberg-density 상태 표시 */
 .sf-pill {
   display: inline-flex;
