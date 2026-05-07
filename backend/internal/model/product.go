@@ -33,6 +33,15 @@ type Product struct {
 	// D-064: ERP 자료에서 동기화. SolarFlow 계산 결과와 다를 수 있어 정합성 비교에 활용.
 	SafetyStock    *int     `json:"safety_stock,omitempty"`
 	AvailableStock *int     `json:"available_stock,omitempty"`
+	// D-134 (PR6.5): SKU 분류 + 인버터 전용 필드. 마이그 084 적용 후 사용 가능.
+	// 마이그 미적용 환경에서도 NULL 호환 — pointer + omitempty.
+	ProductKind   *string  `json:"product_kind,omitempty"`    // 'module' | 'inverter' | 'package'
+	RatedPowerKW  *float64 `json:"rated_power_kw,omitempty"`  // 인버터 정격 출력
+	MaxInputKW    *float64 `json:"max_input_kw,omitempty"`    // 인버터 최대 입력
+	MPPTChannels  *int     `json:"mppt_channels,omitempty"`   // 인버터 MPPT 채널 수
+	VoltageMinV   *int     `json:"voltage_min_v,omitempty"`   // 인버터 MPPT 전압 하한
+	VoltageMaxV   *int     `json:"voltage_max_v,omitempty"`   // 인버터 MPPT 전압 상한
+	Phase         *string  `json:"phase,omitempty"`           // '1P' | '3P' (인버터)
 }
 
 // ProductWithManufacturer — 제조사 정보를 포함한 품번 조회 결과

@@ -94,10 +94,6 @@ export function OrderCombobox({
     }
   }, [open]);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [search]);
-
   function handleSelect(orderId: string) {
     onChange(orderId);
     setOpen(false);
@@ -184,7 +180,10 @@ export function OrderCombobox({
             <input
               ref={searchRef}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setActiveIndex(0);
+              }}
               placeholder="주문번호/품명/거래처/현장 검색"
               className="flex-1 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
             />

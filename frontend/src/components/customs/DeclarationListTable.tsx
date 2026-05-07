@@ -12,7 +12,6 @@ interface Props {
   pinning?: ColumnPinningState;
   onPinningChange?: (next: ColumnPinningState) => void;
   onSelect: (d: Declaration) => void;
-  onNew: () => void;
 }
 
 // D-064 PR 28: ERP 면장 자료(50컬럼) 중 분석에 유용한 17개 신규 컬럼 노출.

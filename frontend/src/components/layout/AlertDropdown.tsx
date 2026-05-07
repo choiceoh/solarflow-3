@@ -47,13 +47,13 @@ export default function AlertDropdown({ alerts, onClose }: Props) {
     >
       <div className="flex items-center justify-between border-b px-3 py-2.5" style={{ borderColor: 'var(--sf-line)' }}>
         <span className="sf-eyebrow">알림</span>
-        <span className="sf-mono text-[10.5px] font-semibold" style={{ color: visible.length > 0 ? 'var(--sf-solar-3)' : 'var(--sf-ink-4)' }}>
+        <span className={`sf-mono text-[10.5px] font-semibold ${visible.length > 0 ? 'sf-text-solar' : 'sf-text-ink-4'}`}>
           {visible.length}
         </span>
       </div>
 
       {visible.length === 0 ? (
-        <div className="px-3 py-8 text-center text-xs" style={{ color: 'var(--sf-ink-3)' }}>알림이 없습니다</div>
+        <div className="sf-text-ink-3 px-3 py-8 text-center text-xs">알림이 없습니다</div>
       ) : (
         <div className="py-1">
           {visible.map((alert) => (
@@ -69,9 +69,9 @@ export default function AlertDropdown({ alerts, onClose }: Props) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className={SEVERITY_PILL[alert.severity]}>{SEVERITY_LABEL[alert.severity]}</span>
-                  <p className="truncate text-xs font-semibold" style={{ color: 'var(--sf-ink)' }}>{alert.title}</p>
+                  <p className="sf-text-ink truncate text-xs font-semibold">{alert.title}</p>
                 </div>
-                <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug" style={{ color: 'var(--sf-ink-3)' }}>
+                <p className="sf-text-ink-3 mt-0.5 line-clamp-2 text-[11px] leading-snug">
                   {alert.description}
                 </p>
               </div>

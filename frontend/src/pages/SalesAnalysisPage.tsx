@@ -33,6 +33,8 @@ interface MarginItem {
   total_revenue_krw: number;
   total_cost_krw?: number | null;
   total_margin_krw?: number | null;
+  cost_covered_revenue_krw?: number;
+  cost_missing_revenue_krw?: number;
   sale_count: number;
 }
 
@@ -44,6 +46,9 @@ interface MarginAnalysis {
     total_cost_krw: number;
     total_margin_krw: number;
     overall_margin_rate: number;
+    cost_covered_revenue_krw?: number;
+    cost_missing_revenue_krw?: number;
+    cost_coverage_rate?: number;
     cost_basis: string;
   };
 }
@@ -51,17 +56,23 @@ interface MarginAnalysis {
 interface PageState {
   loading: boolean;
   error: string | null;
+  warnings: string[];
   sales: SaleListItem[];
   margin: MarginAnalysis | null;
   customers: CustomerAnalysis | null;
 }
 
 type PeriodFilter = 'all' | 'last3' | 'year' | 'custom';
+type MarginFilter = 'all' | 'missing_cost' | 'low_margin' | 'negative_margin';
 // D-064 PR 30: 마진 분석 원가 기준 토글.
 // fifo: ERP fifo_matches (PR 26) 직접 사용 — 가장 정확. 매칭된 출고만 cover.
 // landed: 면장 + 부대비용 합산 (관세/부가세 포함 확정원가 추정).
 // cif: 면장 CIF 만 (관세 전).
 type CostBasis = 'fifo' | 'landed' | 'cif';
+
+function saleListItemDate(item: SaleListItem) {
+  return item.outbound_date ?? item.order_date ?? null;
+}
 
 const emptyMargin: MarginAnalysis = {
   items: [],
@@ -71,6 +82,9 @@ const emptyMargin: MarginAnalysis = {
     total_cost_krw: 0,
     total_margin_krw: 0,
     overall_margin_rate: 0,
+    cost_covered_revenue_krw: 0,
+    cost_missing_revenue_krw: 0,
+    cost_coverage_rate: 0,
     cost_basis: 'landed',
   },
 };
@@ -103,8 +117,12 @@ function mergeMargin(results: MarginAnalysis[]): MarginAnalysis {
       const totalQty = prev.total_sold_qty + item.total_sold_qty;
       const totalRevenue = prev.total_revenue_krw + item.total_revenue_krw;
       const totalCost = (prev.total_cost_krw ?? 0) + (item.total_cost_krw ?? 0);
-      const hasCost = prev.total_cost_krw != null || item.total_cost_krw != null;
-      const totalMargin = hasCost ? totalRevenue - totalCost : null;
+      const prevCoveredRevenue = prev.cost_covered_revenue_krw ?? (prev.total_cost_krw != null ? prev.total_revenue_krw : 0);
+      const itemCoveredRevenue = item.cost_covered_revenue_krw ?? (item.total_cost_krw != null ? item.total_revenue_krw : 0);
+      const costCoveredRevenue = prevCoveredRevenue + itemCoveredRevenue;
+      const costMissingRevenue = Math.max(0, totalRevenue - costCoveredRevenue);
+      const hasCost = costCoveredRevenue > 0;
+      const totalMargin = hasCost ? costCoveredRevenue - totalCost : null;
       const totalWp = totalQty * item.spec_wp;
       map.set(key, {
         ...prev,
@@ -112,11 +130,13 @@ function mergeMargin(results: MarginAnalysis[]): MarginAnalysis {
         total_sold_kw: prev.total_sold_kw + item.total_sold_kw,
         avg_sale_price_wp: totalWp > 0 ? round2(totalRevenue / totalWp) : 0,
         avg_cost_wp: hasCost && totalWp > 0 ? round2(totalCost / totalWp) : null,
-        margin_wp: hasCost && totalWp > 0 ? round2((totalRevenue - totalCost) / totalWp) : null,
-        margin_rate: totalRevenue > 0 && hasCost ? round2(((totalRevenue - totalCost) / totalRevenue) * 100) : null,
+        margin_wp: hasCost && totalWp > 0 ? round2((costCoveredRevenue - totalCost) / totalWp) : null,
+        margin_rate: costCoveredRevenue > 0 && hasCost ? round2(((costCoveredRevenue - totalCost) / costCoveredRevenue) * 100) : null,
         total_revenue_krw: totalRevenue,
         total_cost_krw: hasCost ? totalCost : null,
         total_margin_krw: totalMargin,
+        cost_covered_revenue_krw: round2(costCoveredRevenue),
+        cost_missing_revenue_krw: round2(costMissingRevenue),
         sale_count: prev.sale_count + item.sale_count,
       });
     }
@@ -124,7 +144,9 @@ function mergeMargin(results: MarginAnalysis[]): MarginAnalysis {
   const items = Array.from(map.values()).sort((a, b) => b.total_revenue_krw - a.total_revenue_krw);
   const totalRevenue = items.reduce((sum, item) => sum + item.total_revenue_krw, 0);
   const totalCost = items.reduce((sum, item) => sum + (item.total_cost_krw ?? 0), 0);
-  const totalMargin = totalRevenue - totalCost;
+  const costCoveredRevenue = items.reduce((sum, item) => sum + (item.cost_covered_revenue_krw ?? (item.total_cost_krw != null ? item.total_revenue_krw : 0)), 0);
+  const costMissingRevenue = items.reduce((sum, item) => sum + (item.cost_missing_revenue_krw ?? (item.total_cost_krw == null ? item.total_revenue_krw : 0)), 0);
+  const totalMargin = costCoveredRevenue - totalCost;
   return {
     items,
     summary: {
@@ -132,7 +154,10 @@ function mergeMargin(results: MarginAnalysis[]): MarginAnalysis {
       total_revenue_krw: round2(totalRevenue),
       total_cost_krw: round2(totalCost),
       total_margin_krw: round2(totalMargin),
-      overall_margin_rate: totalRevenue > 0 ? round2((totalMargin / totalRevenue) * 100) : 0,
+      overall_margin_rate: costCoveredRevenue > 0 ? round2((totalMargin / costCoveredRevenue) * 100) : 0,
+      cost_covered_revenue_krw: round2(costCoveredRevenue),
+      cost_missing_revenue_krw: round2(costMissingRevenue),
+      cost_coverage_rate: totalRevenue > 0 ? round2((costCoveredRevenue / totalRevenue) * 100) : 0,
       cost_basis: results[0]?.summary.cost_basis ?? 'landed',
     },
   };
@@ -224,6 +249,7 @@ export default function SalesAnalysisPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
   // D-064 PR 30: 원가 기준 토글 — 기본 fifo (가장 정확). cost_details 만 있는 환경은 landed 로 폴백.
   const [costBasis, setCostBasis] = useState<CostBasis>('fifo');
+  const [marginFilter, setMarginFilter] = useState<MarginFilter>('all');
   const manufacturers = useAppStore((s) => s.manufacturers);
   const products = useAppStore((s) => s.products);
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
@@ -231,6 +257,7 @@ export default function SalesAnalysisPage() {
   const [state, setState] = useState<PageState>({
     loading: true,
     error: null,
+    warnings: [],
     sales: [],
     margin: null,
     customers: null,
@@ -251,10 +278,10 @@ export default function SalesAnalysisPage() {
 
   const load = useCallback(async () => {
     if (!selectedCompanyId) {
-      setState({ loading: false, error: null, sales: [], margin: null, customers: null });
+      setState({ loading: false, error: null, warnings: [], sales: [], margin: null, customers: null });
       return;
     }
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+    setState((prev) => ({ ...prev, loading: true, error: null, warnings: [] }));
     try {
       const calcFilterBody = {
         cost_basis: costBasis,
@@ -267,7 +294,7 @@ export default function SalesAnalysisPage() {
       if (baseQueryFromUrl) salesQueryParts.push(baseQueryFromUrl);
       if (customerFilter) salesQueryParts.push(`customer_id=${customerFilter}`);
       const salesQuery = salesQueryParts.join('&');
-      const [sales, margin, customers] = await Promise.all([
+      const [sales, marginResult, customerResult] = await Promise.all([
         fetchAllPaginated<SaleListItem>('/api/v1/sales', salesQuery),
         fetchCalc<MarginAnalysis>(
           selectedCompanyId,
@@ -277,7 +304,12 @@ export default function SalesAnalysisPage() {
             ...(manufacturerFilter ? { manufacturer_id: manufacturerFilter } : {}),
           },
           mergeMargin,
-        ).catch(() => emptyMargin),
+        )
+          .then((data) => ({ data, warning: null as string | null }))
+          .catch(() => ({
+            data: emptyMargin,
+            warning: '이익 계산 엔진 응답을 받지 못했습니다. 매출 집계만 표시합니다.',
+          })),
         fetchCalc<CustomerAnalysis>(
           selectedCompanyId,
           '/api/v1/calc/customer-analysis',
@@ -286,13 +318,26 @@ export default function SalesAnalysisPage() {
             ...(customerFilter ? { customer_id: customerFilter } : {}),
           },
           mergeCustomers,
-        ).catch(() => emptyCustomers),
+        )
+          .then((data) => ({ data, warning: null as string | null }))
+          .catch(() => ({
+            data: emptyCustomers,
+            warning: '거래처/수금 분석 엔진 응답을 받지 못했습니다. 미수금과 거래처 표시는 제외됩니다.',
+          })),
       ]);
-      setState({ loading: false, error: null, sales, margin, customers });
+      setState({
+        loading: false,
+        error: null,
+        warnings: [marginResult.warning, customerResult.warning].filter((w): w is string => Boolean(w)),
+        sales,
+        margin: marginResult.data,
+        customers: customerResult.data,
+      });
     } catch (err) {
       setState((prev) => ({
         ...prev,
         loading: false,
+        warnings: [],
         error: err instanceof Error ? err.message : '매출/이익 분석 데이터를 불러오지 못했습니다',
       }));
     }
@@ -343,26 +388,53 @@ export default function SalesAnalysisPage() {
   }, [filteredSales]);
 
   // KPI sparkline — 최근 8개월 실제 매출/세금 흐름.
-  const saleDate = (item: SaleListItem) => item.outbound_date ?? item.order_date ?? null;
   const supplySpark = useMemo(
-    () => monthlyTrend(filteredSales, saleDate, (i) => i.sale.supply_amount ?? 0),
-    [filteredSales],
-  );
-  const totalSpark = useMemo(
-    () => monthlyTrend(filteredSales, saleDate, (i) => i.sale.total_amount ?? 0),
+    () => monthlyTrend(filteredSales, saleListItemDate, (i) => i.sale.supply_amount ?? 0),
     [filteredSales],
   );
   const issueRateSpark = useMemo(() => {
     // total 과 issued 가 같은 데이터 범위(filteredSales 의 minMonth)를 공유하도록
     // 동일 items 위에서 conditional getValue 로 계산 — 부분집합으로 분리하면 길이가 어긋남.
-    const totalByMonth = monthlyTrend(filteredSales, saleDate, () => 1);
-    const issuedByMonth = monthlyTrend(filteredSales, saleDate, (i) => (i.sale.tax_invoice_date ? 1 : 0));
+    const totalByMonth = monthlyTrend(filteredSales, saleListItemDate, () => 1);
+    const issuedByMonth = monthlyTrend(filteredSales, saleListItemDate, (i) => (i.sale.tax_invoice_date ? 1 : 0));
     return totalByMonth.map((t, i) => (t > 0 ? Math.round((issuedByMonth[i]! / t) * 100) : 0));
   }, [filteredSales]);
 
   const margin = state.margin ?? emptyMargin;
   const customers = state.customers ?? emptyCustomers;
   const coveredCostCount = margin.items.filter((item) => item.avg_cost_wp != null).length;
+  const costMissingItemCount = margin.items.length - coveredCostCount;
+  const costCoveredRevenue = margin.summary.cost_covered_revenue_krw
+    ?? margin.items.reduce((sum, item) => sum + (item.cost_covered_revenue_krw ?? (item.total_cost_krw != null ? item.total_revenue_krw : 0)), 0);
+  const costMissingRevenue = margin.summary.cost_missing_revenue_krw
+    ?? margin.items.reduce((sum, item) => sum + (item.cost_missing_revenue_krw ?? (item.total_cost_krw == null ? item.total_revenue_krw : 0)), 0);
+  const costCoverageRate = margin.summary.cost_coverage_rate
+    ?? (margin.summary.total_revenue_krw > 0 ? round2((costCoveredRevenue / margin.summary.total_revenue_krw) * 100) : 0);
+  const shownMarginItems = useMemo(() => {
+    if (marginFilter === 'missing_cost') {
+      return margin.items.filter((item) => item.avg_cost_wp == null || item.total_cost_krw == null);
+    }
+    if (marginFilter === 'low_margin') {
+      return margin.items.filter((item) => item.margin_rate != null && item.margin_rate < 8);
+    }
+    if (marginFilter === 'negative_margin') {
+      return margin.items.filter((item) => item.margin_rate != null && item.margin_rate < 0);
+    }
+    return margin.items;
+  }, [margin.items, marginFilter]);
+  const shownMarginCoveredCount = shownMarginItems.filter((item) => item.avg_cost_wp != null).length;
+  const shownMarginTotals = useMemo(() => {
+    const totalRevenue = shownMarginItems.reduce((sum, item) => sum + item.total_revenue_krw, 0);
+    const totalCost = shownMarginItems.reduce((sum, item) => sum + (item.total_cost_krw ?? 0), 0);
+    const coveredRevenue = shownMarginItems.reduce((sum, item) => sum + (item.cost_covered_revenue_krw ?? (item.total_cost_krw != null ? item.total_revenue_krw : 0)), 0);
+    const totalMargin = coveredRevenue - totalCost;
+    return {
+      qty: shownMarginItems.reduce((sum, item) => sum + item.total_sold_qty, 0),
+      revenue: totalRevenue,
+      margin: totalMargin,
+      rate: coveredRevenue > 0 ? round2((totalMargin / coveredRevenue) * 100) : 0,
+    };
+  }, [shownMarginItems]);
   const manufacturerLabel = manufacturerFilter
     ? (manufacturers.find((m) => m.manufacturer_id === manufacturerFilter)?.short_name
       ?? manufacturers.find((m) => m.manufacturer_id === manufacturerFilter)?.name_kr
@@ -380,6 +452,12 @@ export default function SalesAnalysisPage() {
     { key: 'last3', label: '최근 3개월' },
     { key: 'year', label: '올해' },
     { key: 'custom', label: '직접 지정' },
+  ];
+  const marginFilterOptions = [
+    { key: 'all', label: '전체' },
+    { key: 'missing_cost', label: '원가 없음' },
+    { key: 'low_margin', label: '저마진' },
+    { key: 'negative_margin', label: '적자' },
   ];
   const topCustomer = customers.items[0];
   const shownCustomers = customers.items.slice(0, 8);
@@ -451,12 +529,19 @@ export default function SalesAnalysisPage() {
           {state.error}
         </div>
       )}
+      {state.warnings.length > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          {state.warnings.map((warning) => <div key={warning}>{warning}</div>)}
+        </div>
+      )}
 
       <div className="sf-command-kpis">
         <TileB lbl="공급가 매출" v={(salesSummary.supply / 100000000).toFixed(2)} u="억" sub={`${formatNumber(salesSummary.count)}건`} tone="solar" spark={supplySpark} metricId="sales_analysis.supply_amount" />
-        <TileB lbl="부가세 포함" v={(salesSummary.total / 100000000).toFixed(2)} u="억" sub="세금계산서 기준 합계" tone="ink" spark={totalSpark} metricId="sales_analysis.total_amount" />
-        <TileB lbl="계산서 발행률" v={String(salesSummary.issueRate)} u="%" sub={`${formatNumber(salesSummary.issued)}건 발행 / ${formatNumber(salesSummary.pending)}건 미발행`} tone="info" spark={issueRateSpark} metricId="sales_analysis.issue_rate" />
-        <TileB lbl="이익률" v={margin.summary.overall_margin_rate.toFixed(1)} u="%" sub={`${formatKRW(margin.summary.total_margin_krw)} · 원가 ${coveredCostCount}/${margin.items.length}건`} tone="pos" spark={flatSpark(margin.summary.overall_margin_rate)} metricId="sales_analysis.margin_rate" />
+        <TileB lbl="계산 이익" v={(margin.summary.total_margin_krw / 100000000).toFixed(2)} u="억" sub={`${formatKRW(costCoveredRevenue)} 기준`} tone={margin.summary.total_margin_krw >= 0 ? 'pos' : 'neg'} spark={flatSpark(Math.abs(margin.summary.total_margin_krw))} metricId="sales_analysis.margin_rate" />
+        <TileB lbl="이익률" v={margin.summary.overall_margin_rate.toFixed(1)} u="%" sub={`원가 연결률 ${costCoverageRate.toFixed(0)}%`} tone={margin.summary.overall_margin_rate >= 8 ? 'pos' : 'warn'} spark={flatSpark(margin.summary.overall_margin_rate)} metricId="sales_analysis.margin_rate" />
+        <TileB lbl="미수금" v={(customers.summary.total_outstanding_krw / 100000000).toFixed(2)} u="억" sub={`수금 ${formatKRW(customers.summary.total_collected_krw)}`} tone={customers.summary.total_outstanding_krw > 0 ? 'warn' : 'pos'} metricId="receipts.remaining" />
+        <TileB lbl="계산서 미발행" v={String(salesSummary.pending)} u="건" sub={`${formatNumber(salesSummary.issued)}건 발행 · ${salesSummary.issueRate}%`} tone={salesSummary.pending > 0 ? 'warn' : 'info'} spark={issueRateSpark} metricId="sales_analysis.issue_rate" />
+        <TileB lbl="원가 미연결" v={(costMissingRevenue / 100000000).toFixed(2)} u="억" sub={`${formatNumber(costMissingItemCount)}개 품목`} tone={costMissingRevenue > 0 ? 'warn' : 'pos'} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -514,7 +599,11 @@ export default function SalesAnalysisPage() {
         </CardB>
       </div>
 
-      <CardB title="품목별 이익 분석" sub="판매가 · 원가 · 이익/Wp">
+      <CardB
+        title="품목별 이익 분석"
+        sub="판매가 · 원가 · 이익/Wp"
+        right={<FilterChips options={marginFilterOptions} value={marginFilter} onChange={(value) => setMarginFilter(value as MarginFilter)} />}
+      >
           <Table>
             <TableHeader>
               <TableRow>
@@ -531,7 +620,7 @@ export default function SalesAnalysisPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {margin.items.map((item) => {
+              {shownMarginItems.map((item) => {
                 const costCovered = item.avg_cost_wp != null && item.total_cost_krw != null;
                 return (
                 <TableRow key={`${item.manufacturer_name}-${item.product_code}-${item.spec_wp}`} className={!costCovered ? 'bg-yellow-50/40' : undefined}>
@@ -557,23 +646,23 @@ export default function SalesAnalysisPage() {
                 </TableRow>
                 );
               })}
-              {margin.items.length === 0 && (
+              {shownMarginItems.length === 0 && (
                 <TableRow><TableCell colSpan={10} className="py-8 text-center text-xs text-muted-foreground">이익 분석 데이터가 없습니다</TableCell></TableRow>
               )}
             </TableBody>
-            {margin.items.length > 0 && (
+            {shownMarginItems.length > 0 && (
               <TableFooter>
                 <TableRow>
                   <TableCell className="text-xs font-medium">합계</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{margin.items.length.toLocaleString('ko-KR')}건</TableCell>
-                  <TableCell className="text-right text-xs font-medium">{formatNumber(margin.items.reduce((sum, item) => sum + item.total_sold_qty, 0))}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{shownMarginItems.length.toLocaleString('ko-KR')}건</TableCell>
+                  <TableCell className="text-right text-xs font-medium">{formatNumber(shownMarginTotals.qty)}</TableCell>
                   <TableCell />
-                  <TableCell className="text-xs text-muted-foreground">원가 연결 {coveredCostCount.toLocaleString('ko-KR')}건</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">원가 연결 {shownMarginCoveredCount.toLocaleString('ko-KR')}건</TableCell>
                   <TableCell />
                   <TableCell />
-                  <TableCell className="text-right text-xs font-medium">{margin.summary.overall_margin_rate.toFixed(1)}%</TableCell>
-                  <TableCell className="text-right text-xs font-medium">{formatKRW(margin.summary.total_revenue_krw)}</TableCell>
-                  <TableCell className="text-right text-xs font-medium">{formatKRW(margin.summary.total_margin_krw)}</TableCell>
+                  <TableCell className="text-right text-xs font-medium">{shownMarginTotals.rate.toFixed(1)}%</TableCell>
+                  <TableCell className="text-right text-xs font-medium">{formatKRW(shownMarginTotals.revenue)}</TableCell>
+                  <TableCell className="text-right text-xs font-medium">{formatKRW(shownMarginTotals.margin)}</TableCell>
                 </TableRow>
               </TableFooter>
             )}
@@ -582,11 +671,11 @@ export default function SalesAnalysisPage() {
         </section>
 
         <aside className="sf-procurement-rail card">
-          <RailBlock title="목표 달성률" count={period === 'all' ? '전체' : period}>
+          <RailBlock title="이익 신뢰도" count={`${costCoverageRate.toFixed(0)}%`}>
             <div className="bignum text-[30px] text-[var(--solar-3)]">{margin.summary.overall_margin_rate.toFixed(1)}<span className="mono text-sm text-[var(--ink-3)]">%</span></div>
-            <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">총이익 {formatKRW(margin.summary.total_margin_krw)} · 매출 {formatKRW(salesSummary.supply)}</div>
+            <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">계산 이익 {formatKRW(margin.summary.total_margin_krw)} · 미연결 {formatKRW(costMissingRevenue)}</div>
             <div className="mt-3 h-2 overflow-hidden rounded bg-[var(--bg-2)]">
-              <div className="h-full bg-[var(--solar-2)]" style={{ width: `${Math.min(100, margin.summary.overall_margin_rate * 5)}%` }} />
+              <div className="h-full bg-[var(--solar-2)]" style={{ width: `${Math.min(100, costCoverageRate)}%` }} />
             </div>
           </RailBlock>
           <RailBlock title="상위 거래처" count="매출">

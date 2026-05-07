@@ -128,7 +128,7 @@ export function extractProposals(message: UIMessage): ProposalData[] {
   for (const part of message.parts) {
     if (part.type !== 'data-proposal') continue;
     const data = (part as { type: 'data-proposal'; data: ProposalData }).data;
-    if (data && data.id) seen.set(data.id, data);
+    if (data?.id) seen.set(data.id, data);
   }
   return Array.from(seen.values());
 }

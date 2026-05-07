@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
-import { fetchAllPaginated, fetchWithAuth } from "@/lib/api"
+import { fetchAllPaginated, fetchWithAuth, fetchWithAuthMeta } from "@/lib/api"
 import { useAppStore } from "@/stores/appStore"
 import { companyParams } from "@/lib/companyUtils"
 import { useListQuery, useDetailQuery } from "@/lib/queryHelpers"
@@ -139,6 +139,89 @@ export function useBLList(
     },
     { enabled: !!selectedCompanyId },
   )
+}
+
+// useBLListPaged — server-side pagination/sort/q. ProcurementPage BL 탭이 사용.
+// enrichment (po_number/lc_number) 는 page 단위로 작은 IN 조회로 처리 — 기존 useBLList 의
+// 전체 PO/LC fetchAll 패턴 회피.
+export interface BLListPagedFilters {
+  inbound_type?: string
+  status?: string
+  manufacturer_id?: string
+  eta_from?: string
+  eta_to?: string
+  q?: string
+  sort?: string
+  order?: "asc" | "desc"
+  page?: number
+  pageSize?: number
+  enabled?: boolean
+}
+
+export function useBLListPaged(filters: BLListPagedFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const {
+    inbound_type, status, manufacturer_id, eta_from, eta_to, q,
+    sort, order, page = 1, pageSize = 100, enabled = true,
+  } = filters
+  const queryKey = [
+    "bls-paged", selectedCompanyId, inbound_type ?? "", status ?? "", manufacturer_id ?? "",
+    eta_from ?? "", eta_to ?? "",
+    q ?? "", sort ?? "", order ?? "", page, pageSize,
+  ]
+  const result = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (inbound_type) params.set("inbound_type", inbound_type)
+      if (status) params.set("status", status)
+      if (manufacturer_id) params.set("manufacturer_id", manufacturer_id)
+      if (eta_from) params.set("eta_from", eta_from)
+      if (eta_to) params.set("eta_to", eta_to)
+      if (q) params.set("q", q)
+      if (sort) params.set("sort", sort)
+      if (order) params.set("order", order)
+      params.set("limit", String(pageSize))
+      params.set("offset", String((page - 1) * pageSize))
+      const meta = await fetchWithAuthMeta<BLShipment[]>(`/api/v1/bls?${params}`)
+      // page 단위 enrichment — unique po_id/lc_id 만 IN 조회.
+      const list = meta.data
+      const poIds = Array.from(new Set(list.map((b) => b.po_id).filter((x): x is string => !!x && !list.find((l) => l.po_id === x)?.po_number)))
+      const lcIds = Array.from(new Set(list.map((b) => b.lc_id).filter((x): x is string => !!x && !list.find((l) => l.lc_id === x)?.lc_number)))
+      let poMap: Record<string, string> = {}
+      let lcMap: Record<string, string> = {}
+      if (poIds.length > 0) {
+        try {
+          const inList = `(${poIds.join(",")})`
+          const pos = await fetchWithAuth<{ po_id: string; po_number?: string }[]>(`/api/v1/pos?po_id=in.${encodeURIComponent(inList)}&limit=${poIds.length}`)
+          poMap = Object.fromEntries(pos.map((p) => [p.po_id, p.po_number ?? ""]))
+        } catch { /* skip */ }
+      }
+      if (lcIds.length > 0) {
+        try {
+          const inList = `(${lcIds.join(",")})`
+          const lcs = await fetchWithAuth<{ lc_id: string; lc_number?: string }[]>(`/api/v1/lcs?lc_id=in.${encodeURIComponent(inList)}&limit=${lcIds.length}`)
+          lcMap = Object.fromEntries(lcs.map((l) => [l.lc_id, l.lc_number ?? ""]))
+        } catch { /* skip */ }
+      }
+      const enriched = list.map((b) => ({
+        ...b,
+        po_number: b.po_number ?? (b.po_id ? poMap[b.po_id] : undefined),
+        lc_number: b.lc_number ?? (b.lc_id ? lcMap[b.lc_id] : undefined),
+      }))
+      return { data: enriched, totalCount: meta.totalCount }
+    },
+    enabled: enabled && !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    items: result.data?.data ?? [],
+    total: result.data?.totalCount ?? 0,
+    loading: result.isLoading,
+    isFetching: result.isFetching,
+    error: result.error ? (result.error as Error).message : null,
+    reload: async () => { await result.refetch() },
+  }
 }
 
 export function useBLSummary(

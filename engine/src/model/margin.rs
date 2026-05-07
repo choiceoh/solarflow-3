@@ -1,5 +1,4 @@
 /// 마진/이익률 + 거래처 분석 + 단가 추이 모델
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -16,7 +15,9 @@ pub struct MarginAnalysisRequest {
     #[serde(default = "default_cost_basis")]
     pub cost_basis: String,
 }
-fn default_cost_basis() -> String { "cif".to_string() }
+fn default_cost_basis() -> String {
+    "cif".to_string()
+}
 
 #[derive(Debug, Serialize)]
 pub struct MarginAnalysisResponse {
@@ -42,6 +43,8 @@ pub struct MarginItem {
     pub total_revenue_krw: f64,
     pub total_cost_krw: Option<f64>,
     pub total_margin_krw: Option<f64>,
+    pub cost_covered_revenue_krw: f64,
+    pub cost_missing_revenue_krw: f64,
     pub cost_basis: String,
     pub sale_count: i64,
 }
@@ -49,10 +52,20 @@ pub struct MarginItem {
 #[derive(Debug, Serialize)]
 pub struct MarginSummary {
     pub total_sold_kw: f64,
+    /// 전체 매출 공급가. 원가가 아직 연결되지 않은 매출도 포함한다.
     pub total_revenue_krw: f64,
+    /// 원가가 연결된 매출분의 원가 합계.
     pub total_cost_krw: f64,
+    /// 원가가 연결된 매출분에서만 계산한 이익.
     pub total_margin_krw: f64,
+    /// 원가가 연결된 매출분 기준 이익률.
     pub overall_margin_rate: f64,
+    /// 원가가 연결되어 이익 계산에 포함된 공급가.
+    pub cost_covered_revenue_krw: f64,
+    /// 원가가 아직 없어 이익 계산에서 제외한 공급가.
+    pub cost_missing_revenue_krw: f64,
+    /// 전체 공급가 중 원가가 연결된 공급가 비율.
+    pub cost_coverage_rate: f64,
     pub cost_basis: String,
 }
 
@@ -67,7 +80,9 @@ pub struct CustomerAnalysisRequest {
     #[serde(default = "default_customer_cost_basis")]
     pub cost_basis: String,
 }
-fn default_customer_cost_basis() -> String { "landed".to_string() }
+fn default_customer_cost_basis() -> String {
+    "landed".to_string()
+}
 
 #[derive(Debug, Serialize)]
 pub struct CustomerAnalysisResponse {
@@ -115,7 +130,9 @@ pub struct PriceTrendRequest {
     #[serde(default = "default_period")]
     pub period: String,
 }
-fn default_period() -> String { "quarterly".to_string() }
+fn default_period() -> String {
+    "quarterly".to_string()
+}
 
 #[derive(Debug, Serialize)]
 pub struct PriceTrendResponse {

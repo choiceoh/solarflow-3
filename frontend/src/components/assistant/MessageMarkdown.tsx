@@ -1,9 +1,12 @@
 import { useRef, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeKatex from 'rehype-katex';
 import { Check, Copy } from 'lucide-react';
 import 'highlight.js/styles/github.css';
+import 'katex/dist/katex.min.css';
 import { cn } from '@/lib/utils';
 
 function CodeBlock({
@@ -73,10 +76,14 @@ const components: Components = {
         </CodeBlock>
       );
     }
-    // inline 코드
+    // inline 코드 — 차분한 슬레이트 톤. 본문 가독성 안 깨도록 배경 옅게.
     return (
       <code
-        className={cn('rounded bg-muted px-1 py-0.5 font-mono text-[0.9em]', className)}
+        className={cn(
+          'rounded border border-slate-200/60 bg-slate-100/80 px-1.5 py-0.5 font-mono text-[0.88em] text-slate-800',
+          'dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-200',
+          className,
+        )}
         {...props}
       >
         {children}
@@ -123,8 +130,8 @@ export function MessageMarkdown({ content }: { content: string }) {
   return (
     <div className="break-words">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeHighlight, rehypeKatex]}
         components={components}
       >
         {content}

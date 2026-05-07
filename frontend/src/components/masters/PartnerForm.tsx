@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import FormField from '@/components/common/FormField';
 import type { Partner } from '@/types/masters';
 
 const PARTNER_TYPE_LABEL: Record<string, string> = { supplier: '공급사', customer: '고객사', both: '공급+고객' };
@@ -49,13 +49,10 @@ interface FieldsProps {
 function PartnerFields({ register, errors, watch, setValue }: FieldsProps) {
   return (
     <>
-      <div className="space-y-1.5">
-        <Label>거래처명 *</Label>
+      <FormField label="거래처명" required error={errors.partner_name?.message}>
         <Input {...register('partner_name')} />
-        {errors.partner_name && <p className="text-xs text-destructive">{errors.partner_name.message}</p>}
-      </div>
-      <div className="space-y-1.5">
-        <Label>유형 *</Label>
+      </FormField>
+      <FormField label="유형" required error={errors.partner_type?.message}>
         {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
         <Select value={watch('partner_type') ?? ''} onValueChange={(v) => setValue('partner_type', v ?? '')}>
           <SelectTrigger><Txt text={PARTNER_TYPE_LABEL[watch('partner_type') ?? ''] ?? ''} /></SelectTrigger>
@@ -65,16 +62,15 @@ function PartnerFields({ register, errors, watch, setValue }: FieldsProps) {
             <SelectItem value="both">공급+고객</SelectItem>
           </SelectContent>
         </Select>
-        {errors.partner_type && <p className="text-xs text-destructive">{errors.partner_type.message}</p>}
-      </div>
+      </FormField>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5"><Label>ERP코드</Label><Input {...register('erp_code')} /></div>
-        <div className="space-y-1.5"><Label>결제조건</Label><Input {...register('payment_terms')} /></div>
+        <FormField label="ERP코드"><Input {...register('erp_code')} /></FormField>
+        <FormField label="결제조건"><Input {...register('payment_terms')} /></FormField>
       </div>
-      <div className="space-y-1.5"><Label>담당자</Label><Input {...register('contact_name')} /></div>
+      <FormField label="담당자"><Input {...register('contact_name')} /></FormField>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5"><Label>연락처</Label><Input {...register('contact_phone')} /></div>
-        <div className="space-y-1.5"><Label>이메일</Label><Input {...register('contact_email')} /></div>
+        <FormField label="연락처"><Input {...register('contact_phone')} /></FormField>
+        <FormField label="이메일"><Input {...register('contact_email')} /></FormField>
       </div>
     </>
   );

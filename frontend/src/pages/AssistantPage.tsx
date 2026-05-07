@@ -2,15 +2,23 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
 import type { ToolUIPart, UIMessage } from 'ai';
-import { Bot, Check, ChevronDown, ChevronUp, Copy, FileText, Inbox, MessageSquarePlus, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronUp, Copy, Download, FileText, Inbox, Loader2, MessageSquarePlus, MoreHorizontal, PanelRightClose, PanelRightOpen, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { MessageMarkdown } from '@/components/assistant/MessageMarkdown';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
+import { notify } from '@/lib/notify';
 import { detectPageContext } from '@/lib/pageContext';
 import { getPageChips, type ChipDef } from '@/lib/assistantChips';
 import {
@@ -87,6 +95,30 @@ function buildOCRBlock(results: OCRResult[]): string {
     blocks.push(`${head}\n${body}`);
   }
   return blocks.join('\n\n');
+}
+
+// 세션 → markdown 변환. 사용자/AI 메시지를 헤더 + 본문 형태로 직렬화.
+// proposals/tool 호출 같은 비텍스트 part 는 [도구 호출] 라벨로 요약해서 컨텍스트 유지.
+function sessionToMarkdown(detail: SessionDetail): string {
+  const lines: string[] = [];
+  lines.push(`# ${detail.title || '대화'}`, '');
+  lines.push(`*세션 ID:* \`${detail.id}\``);
+  lines.push(`*업데이트:* ${detail.updated_at}`, '');
+  lines.push('---', '');
+  for (const m of detail.messages ?? []) {
+    const role = m.role === 'user' ? '## 👤 사용자' : m.role === 'assistant' ? '## 🤖 AI' : `## ${m.role}`;
+    lines.push(role, '');
+    const text = extractText(m).trim();
+    if (text) lines.push(text);
+    for (const part of m.parts ?? []) {
+      if (isToolUIPart(part)) {
+        const tool = String(getToolName(part));
+        lines.push('', `> *[도구] ${tool}*`);
+      }
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
 }
 
 function buildSessionTitle(messages: UIMessage[]): string {
@@ -173,29 +205,80 @@ export default function AssistantPage() {
     }
   };
 
+  const exportSession = async (id: string) => {
+    try {
+      const detail = await fetchWithAuth<SessionDetail>(`/api/v1/assistant/sessions/${id}`);
+      const md = sessionToMarkdown(detail);
+      const safeTitle = (detail.title || '대화')
+        .replace(/[\\/:*?"<>|]/g, '_')
+        .slice(0, 60);
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeTitle}-${detail.id.slice(0, 8)}.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : '내보내기 실패');
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0">
-      <ChatBox
-        key={chatKey}
-        initialMessages={initialMessages}
-        sessionId={currentSessionId}
-        sessionsEnabled={sessionsEnabled}
-        onSessionUpserted={(s, makeCurrent) => {
-          upsertSession(s);
-          if (makeCurrent) setCurrentSessionId(s.id);
-        }}
-        sessionsSlot={
-          <SessionsPanel
-            sessions={sessions}
-            currentSessionId={currentSessionId}
-            loadingId={sessionLoadingId}
-            enabled={sessionsEnabled}
-            onNew={newSession}
-            onLoad={loadSession}
-            onDelete={deleteSession}
-          />
-        }
-      />
+      {sessionLoadingId ? (
+        <SessionSkeleton />
+      ) : (
+        <ChatBox
+          key={chatKey}
+          initialMessages={initialMessages}
+          sessionId={currentSessionId}
+          sessionsEnabled={sessionsEnabled}
+          onSessionUpserted={(s, makeCurrent) => {
+            upsertSession(s);
+            if (makeCurrent) setCurrentSessionId(s.id);
+          }}
+          sessionsSlot={
+            <SessionsPanel
+              sessions={sessions}
+              currentSessionId={currentSessionId}
+              loadingId={sessionLoadingId}
+              enabled={sessionsEnabled}
+              onNew={newSession}
+              onLoad={loadSession}
+              onDelete={deleteSession}
+              onExport={exportSession}
+            />
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function SessionSkeleton() {
+  return (
+    <div className="flex w-full animate-pulse flex-col gap-4 p-4">
+      <div className="h-6 w-48 rounded bg-muted/60" />
+      <div className="flex-1 space-y-4 rounded-md border bg-muted/20 p-4">
+        <div className="flex justify-end">
+          <div className="h-12 w-1/3 rounded-2xl bg-[var(--sf-solar)]/10" />
+        </div>
+        <div className="flex justify-start">
+          <div className="h-9 w-9 shrink-0 rounded-full bg-muted/60" />
+          <div className="ml-2.5 h-20 w-2/3 rounded-2xl bg-muted/60" />
+        </div>
+        <div className="flex justify-end">
+          <div className="h-10 w-1/4 rounded-2xl bg-[var(--sf-solar)]/10" />
+        </div>
+        <div className="flex justify-start">
+          <div className="h-9 w-9 shrink-0 rounded-full bg-muted/60" />
+          <div className="ml-2.5 h-32 w-3/4 rounded-2xl bg-muted/60" />
+        </div>
+      </div>
+      <div className="h-32 rounded-md border bg-muted/30" />
     </div>
   );
 }
@@ -223,10 +306,17 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
   const [attachments, setAttachments] = useState<File[]>([]);
   const [parseAsCustoms, setParseAsCustoms] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // 마운트 시 textarea auto-focus (drawer 임베드 모드 제외 — 다른 화면 작업 방해)
+  useEffect(() => {
+    if (embedded) return;
+    inputRef.current?.focus();
+  }, [embedded]);
 
   // mock 모드에선 인증 우회 public 라우트 (Caddy 가 같은 SSE 인코딩으로 응답).
   const apiPath = isDevMockApiActive() ? '/api/v1/public/assistant/chat' : '/api/v1/assistant/chat';
@@ -317,22 +407,90 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     stickToBottomRef.current = distanceToBottom < 120;
   };
   useEffect(() => {
+    void messages;
+    void status;
     if (!stickToBottomRef.current) return;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, status]);
 
-  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const picked = Array.from(e.target.files ?? []);
+  const ACCEPTED_MIMES = useMemo(() => new Set(OCR_ACCEPT.split(',').map((s) => s.trim())), []);
+
+  // 공통 파일 처리 — 클릭/드롭/붙여넣기 모두 통과. 타입·크기 검증 + 토스트.
+  const addFiles = (files: File[]) => {
     const valid: File[] = [];
-    for (const f of picked) {
+    for (const f of files) {
       if (f.size > OCR_MAX_BYTES) {
-        setError(`${f.name}: 20MB 초과로 첨부 불가`);
+        notify.error(`${f.name}: 20MB 초과로 첨부 불가`);
+        continue;
+      }
+      // MIME 타입 미지정(예: 일부 클립보드 페이스트) 은 image 로 시작하면 허용.
+      const mime = f.type || (f.name.match(/\.(png|jpe?g|webp|gif|pdf)$/i) ? `image/${f.name.split('.').pop()?.toLowerCase()}` : '');
+      if (mime && !ACCEPTED_MIMES.has(mime) && !mime.startsWith('image/')) {
+        notify.error(`${f.name}: 지원하지 않는 형식 (PDF/이미지만 가능)`);
         continue;
       }
       valid.push(f);
     }
-    setAttachments((prev) => [...prev, ...valid]);
+    if (valid.length > 0) setAttachments((prev) => [...prev, ...valid]);
+  };
+
+  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addFiles(Array.from(e.target.files ?? []));
     e.target.value = '';
+  };
+
+  // 드래그 카운터 — 자식 요소 enter/leave 가 dragover 이벤트를 흩어놓아 한 번 들어오면 N번 leave 발생.
+  // counter 로 감싸 0 이 되어야 실제 leave.
+  const dragCounterRef = useRef(0);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const onDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragCounterRef.current++;
+    setIsDragOver(true);
+  };
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current--;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragOver(false);
+    }
+  };
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length > 0) addFiles(files);
+  };
+
+  // 클립보드 붙여넣기 — 이미지 데이터 항목이 있으면 첨부 큐에 추가.
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind !== 'file') continue;
+      if (!item.type.startsWith('image/')) continue;
+      const f = item.getAsFile();
+      if (!f) continue;
+      // 클립보드 이미지는 종종 'image.png' 같은 generic 이름. timestamp 로 고유성 부여.
+      const ext = item.type.split('/')[1] || 'png';
+      const renamed = new File([f], `paste-${Date.now()}.${ext}`, { type: item.type });
+      imageFiles.push(renamed);
+    }
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      addFiles(imageFiles);
+      notify.success(`이미지 ${imageFiles.length}장 첨부됨`);
+    }
   };
 
   const removeAttachment = (idx: number) => setAttachments((prev) => prev.filter((_, i) => i !== idx));
@@ -353,7 +511,6 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
   const send = async () => {
     const text = input.trim();
     if ((!text && attachments.length === 0) || busy) return;
-    setError(null);
 
     let userContent = text;
     try {
@@ -371,9 +528,11 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
       setInput('');
       setAttachments([]);
       stickToBottomRef.current = true; // 새 질문 보내면 다시 하단 추적 모드로
+      // 전송 직후 textarea 다시 포커스 — 연속 입력 흐름 유지
+      window.setTimeout(() => inputRef.current?.focus(), 0);
       await sendMessage({ text: userContent });
     } catch (e) {
-      setError(e instanceof Error ? e.message : '요청 실패');
+      notify.error(e instanceof Error ? e.message : '요청 실패');
     }
   };
 
@@ -455,23 +614,58 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     window.setTimeout(() => setHighlightedKey((v) => (v === msgId ? null : v)), 1500);
   };
 
-  const liveError = error ?? (chatError ? chatError.message : null);
+  // chatError 가 새로 발생하면 토스트로 사용자에게 알림 (인라인 박스 → 토스트로 P4 에서 일원화)
+  useEffect(() => {
+    if (chatError) notify.error(chatError.message);
+  }, [chatError]);
 
   const pageChips = getPageChips(location.pathname);
 
   return (
     <>
-      <div className={cn('flex min-w-0 flex-1 flex-col gap-3', embedded ? 'p-3' : 'p-4')}>
+      <div
+        className={cn(
+          'relative flex min-w-0 flex-1 flex-col gap-3',
+          embedded ? 'p-3' : 'p-4',
+        )}
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        {isDragOver && (
+          <div className="pointer-events-none absolute inset-2 z-50 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--sf-solar)] bg-[var(--sf-solar)]/10 backdrop-blur-sm">
+            <Paperclip className="h-10 w-10 text-[var(--sf-solar)]" />
+            <div className="text-base font-semibold text-foreground">파일을 놓아주세요</div>
+            <div className="text-sm text-muted-foreground">PDF / 이미지 (최대 20MB)</div>
+          </div>
+        )}
         {!embedded && (
-          <header className="flex flex-wrap items-center gap-3 border-b pb-3">
+          <header className="sf-assistant-header flex flex-wrap items-center gap-3 pb-3">
             <div className="flex items-center gap-2">
               <Bot className="h-6 w-6 text-[var(--sf-solar)]" />
               <h2 className="text-lg font-semibold">업무 도우미</h2>
             </div>
+            {!embedded && sessionsSlot && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarCollapsed((v) => !v)}
+                className="ml-auto h-8 px-2 text-xs"
+                title={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
+              >
+                {sidebarCollapsed ? (
+                  <PanelRightOpen className="h-4 w-4" />
+                ) : (
+                  <PanelRightClose className="h-4 w-4" />
+                )}
+              </Button>
+            )}
           </header>
         )}
 
-        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
+        <div ref={scrollRef} onScroll={onScroll} className="sf-thin-scrollbar flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
           {messagesWithProposals.length === 0 ? (
             <ChipEmpty chips={pageChips.chips} onPick={(t) => setInput(t)} />
           ) : (
@@ -487,7 +681,8 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
                     key={message.id}
                     id={`assistant-msg-${message.id}`}
                     className={cn(
-                      'flex flex-col gap-2 rounded-md transition-colors',
+                      'sf-msg-enter -mx-2 flex flex-col gap-2 rounded-md px-2 py-1 transition-colors',
+                      'hover:bg-muted/30',
                       highlightedKey === message.id && 'bg-[var(--sf-solar)]/10 ring-2 ring-[var(--sf-solar)]/40',
                     )}
                   >
@@ -522,31 +717,15 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           )}
         </div>
 
-        {liveError && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive">
-            {liveError}
-          </div>
-        )}
-
         {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 rounded-md border bg-muted/30 p-2">
+          <div className="-mb-1 flex flex-wrap gap-1.5 rounded-t-md border-x border-t bg-muted/30 px-2 py-1.5">
             {attachments.map((f, i) => (
-              <div
+              <AttachmentChip
                 key={`${f.name}-${i}`}
-                className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs"
-              >
-                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="max-w-[180px] truncate">{f.name}</span>
-                <span className="text-muted-foreground">{(f.size / 1024).toFixed(0)}KB</span>
-                <button
-                  type="button"
-                  onClick={() => removeAttachment(i)}
-                  className="ml-0.5 rounded p-0.5 hover:bg-muted"
-                  disabled={busy}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
+                file={f}
+                disabled={busy}
+                onRemove={() => removeAttachment(i)}
+              />
             ))}
             <label className="flex cursor-pointer select-none items-center gap-1 px-2 text-xs text-muted-foreground">
               <input
@@ -561,18 +740,23 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           </div>
         )}
 
-        <div className="relative">
+        <div className={cn('relative', attachments.length > 0 && 'sf-attached-input')}>
           <Textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
             placeholder={
               attachments.length > 0
                 ? '첨부 파일과 함께 보낼 질문 (예: "이 면장 등록해줘")'
                 : '질문을 입력하세요…'
             }
-            rows={embedded ? 3 : 5}
-            className="w-full resize-none pb-12 text-base leading-relaxed md:text-base"
+            rows={1}
+            className={cn(
+              'w-full resize-none pb-12 text-base leading-relaxed md:text-base',
+              embedded ? 'min-h-20 max-h-48' : 'min-h-32 max-h-60',
+            )}
             disabled={busy}
           />
           <Input
@@ -584,39 +768,38 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
             className="hidden"
           />
           <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between gap-2">
-            <Button
+            <button
               type="button"
-              variant="ghost"
-              size="icon"
-              className="pointer-events-auto h-8 w-8"
               onClick={() => fileInputRef.current?.click()}
               disabled={busy}
               title="파일 첨부 (PDF/이미지, OCR 추출)"
+              className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
             >
-              <Paperclip className="h-4 w-4" />
-            </Button>
+              {ocrBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+            </button>
             {status === 'submitted' || status === 'streaming' ? (
-              <Button
+              <button
                 type="button"
                 onClick={() => stop()}
-                size="sm"
-                variant="destructive"
-                className="pointer-events-auto h-8 px-3"
                 title="응답 중단"
+                className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/90"
               >
-                <Square className="mr-1 h-3 w-3 fill-current" />
-                중단
-              </Button>
+                <Square className="h-3.5 w-3.5 fill-current" />
+              </button>
             ) : (
-              <Button
+              <button
+                type="button"
                 onClick={() => void send()}
                 disabled={ocrBusy || (!input.trim() && attachments.length === 0)}
-                size="sm"
-                className="pointer-events-auto h-8 px-3"
+                title={ocrBusy ? 'OCR 추출 중…' : '전송 (Enter)'}
+                className={cn(
+                  'pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-sm transition-all',
+                  'bg-[var(--sf-solar)] text-white hover:bg-[var(--sf-solar-2)]',
+                  'disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none',
+                )}
               >
-                <Send className="mr-1 h-4 w-4" />
-                {ocrBusy ? 'OCR 중…' : '전송'}
-              </Button>
+                <Send className="h-4 w-4" />
+              </button>
             )}
           </div>
         </div>
@@ -628,10 +811,12 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
       {embedded ? (
         <PendingFooter pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
       ) : (
-        <aside className="hidden w-[340px] shrink-0 flex-col border-l bg-muted/10 lg:flex">
-          {sessionsSlot}
-          <PendingPanel pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
-        </aside>
+        !sidebarCollapsed && (
+          <aside className="hidden w-[340px] shrink-0 flex-col border-l bg-muted/10 lg:flex">
+            {sessionsSlot}
+            <PendingPanel pending={pendingItems} onConfirm={onConfirm} onReject={onReject} onSelect={scrollToMessage} />
+          </aside>
+        )
       )}
     </>
   );
@@ -649,6 +834,66 @@ interface MessagePartsProps {
 
 // MessageParts — 한 메시지의 parts 를 순서대로 렌더링.
 // text → Bubble (텍스트 박스), tool-* → ToolChip (회색 칩), data-proposal 은 상위에서 ProposalCard 로 처리하므로 무시.
+// 사용자 아바타 — 이름 첫 글자(한글/영문 모두). 이름 없으면 이메일 첫 글자, 그것도 없으면 User 아이콘.
+function UserAvatarInitial() {
+  const { user } = useAuth();
+  const name = user?.name?.trim() || '';
+  const email = user?.email?.trim() || '';
+  const initial = (name || email).charAt(0).toUpperCase();
+  if (!initial) return <User className="h-4 w-4" />;
+  return <span className="text-sm font-semibold leading-none">{initial}</span>;
+}
+
+// 첨부 파일 칩 — 이미지면 썸네일, 그 외(PDF/일반파일)는 아이콘.
+function AttachmentChip({
+  file,
+  disabled,
+  onRemove,
+}: {
+  file: File;
+  disabled?: boolean;
+  onRemove: () => void;
+}) {
+  const isImage = file.type.startsWith('image/');
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isImage) return;
+    const url = URL.createObjectURL(file);
+    setThumbUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file, isImage]);
+
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs',
+        isImage && 'pl-1',
+      )}
+    >
+      {isImage && thumbUrl ? (
+        <img
+          src={thumbUrl}
+          alt={file.name}
+          className="h-9 w-9 rounded object-cover"
+        />
+      ) : (
+        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+      )}
+      <span className="max-w-[180px] truncate">{file.name}</span>
+      <span className="text-muted-foreground">{(file.size / 1024).toFixed(0)}KB</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="ml-0.5 rounded p-0.5 hover:bg-muted"
+        disabled={disabled}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
 function MessageParts({
   message,
   isStreaming,
@@ -684,7 +929,6 @@ function MessageParts({
     }
     if (isToolUIPart(part)) {
       nodes.push(<ToolChip key={i} part={part} />);
-      continue;
     }
     // data-proposal / step-start 등은 상위에서 처리하거나 무시.
   }
@@ -823,10 +1067,13 @@ function Bubble({
       <div
         className={cn(
           'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-          isUser ? 'bg-[var(--sf-solar)]/20 text-[var(--sf-solar)]' : 'bg-muted text-foreground',
+          isUser
+            ? 'bg-[var(--sf-solar)]/20 text-[var(--sf-solar)]'
+            : 'sf-bot-avatar text-[var(--sf-solar)]',
+          !isUser && isStreaming && 'sf-avatar-ring-pulse',
         )}
       >
-        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+        {isUser ? <UserAvatarInitial /> : <Bot className="h-4 w-4" />}
       </div>
       <div
         className={cn(
@@ -982,7 +1229,7 @@ function PendingPanel({
           {pending.length}건
         </span>
       </header>
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="sf-thin-scrollbar flex-1 overflow-y-auto p-3">
         {pending.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
             <Inbox className="h-7 w-7 opacity-30" />
@@ -1057,6 +1304,7 @@ function SessionsPanel({
   onNew,
   onLoad,
   onDelete,
+  onExport,
 }: {
   sessions: SessionSummary[];
   currentSessionId: string | null;
@@ -1065,6 +1313,7 @@ function SessionsPanel({
   onNew: () => void;
   onLoad: (id: string) => void;
   onDelete: (id: string) => void;
+  onExport?: (id: string) => void;
 }) {
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => {
@@ -1109,7 +1358,7 @@ function SessionsPanel({
           </div>
         </div>
       )}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="sf-thin-scrollbar flex-1 overflow-y-auto p-3">
         {!enabled ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
             <div>목업 모드</div>
@@ -1134,37 +1383,67 @@ function SessionsPanel({
               if (!items || items.length === 0) return null;
               return (
                 <div key={bucket} className="flex flex-col gap-1">
-                  <div className="px-1 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
-                    {bucket}
+                  <div className="flex items-center gap-1.5 px-1 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
+                    <span>{bucket}</span>
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-mono normal-case tracking-normal text-muted-foreground">
+                      {items.length}
+                    </span>
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    {items.map((s) => (
-                      <div
-                        key={s.id}
-                        className={cn(
-                          'group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted',
-                          s.id === currentSessionId && 'bg-[var(--sf-solar)]/10 text-foreground',
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => onLoad(s.id)}
-                          disabled={s.id === loadingId}
-                          className="min-w-0 flex-1 truncate text-left"
-                          title={s.title}
+                    {items.map((s) => {
+                      const isActive = s.id === currentSessionId;
+                      return (
+                        <div
+                          key={s.id}
+                          className={cn(
+                            'group relative flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted',
+                            isActive && 'bg-[var(--sf-solar)]/10 text-foreground',
+                          )}
                         >
-                          <span className="truncate">{s.title || '새 대화'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(s.id)}
-                          className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted-foreground/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
-                          title="삭제"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                          {isActive && (
+                            <span
+                              aria-hidden
+                              className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[var(--sf-solar)]"
+                            />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => onLoad(s.id)}
+                            disabled={s.id === loadingId}
+                            className={cn(
+                              'min-w-0 flex-1 truncate text-left',
+                              isActive && 'pl-1.5 font-medium',
+                            )}
+                            title={s.title}
+                          >
+                            <span className="truncate">{s.title || '새 대화'}</span>
+                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted-foreground/10 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 data-[popup-open]:opacity-100"
+                              title="작업 메뉴"
+                            >
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              {onExport && (
+                                <DropdownMenuItem onClick={() => onExport(s.id)}>
+                                  <Download className="mr-2 h-3.5 w-3.5" />
+                                  <span>Markdown 내보내기</span>
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onClick={() => onDelete(s.id)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                <span>삭제</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -1182,8 +1461,8 @@ function SessionsPanel({
  */
 function ChipEmpty({ chips, onPick }: { chips: ChipDef[]; onPick: (text: string) => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 px-6 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--sf-solar)]/10 text-[var(--sf-solar)]">
+    <div className="sf-empty-glow flex h-full flex-col items-center justify-center gap-6 px-6 text-center">
+      <div className="sf-bot-avatar flex h-16 w-16 items-center justify-center rounded-full text-[var(--sf-solar)]">
         <Bot className="h-8 w-8" aria-hidden />
       </div>
       <div className="space-y-1.5">

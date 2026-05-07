@@ -79,10 +79,6 @@ export function BLCombobox({
     }
   }, [open]);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [search]);
-
   function handleSelect(blId: string) {
     onChange(blId);
     setOpen(false);
@@ -170,7 +166,10 @@ export function BLCombobox({
             <input
               ref={searchRef}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setActiveIndex(0);
+              }}
               placeholder="BL번호/제조사/항구/포워더/상태 검색"
               className="flex-1 text-xs outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
             />

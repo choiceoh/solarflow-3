@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Users, Phone, ShieldAlert, ScrollText, Inbox, RefreshCw, Search } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Users, Phone, ShieldAlert, ScrollText, Inbox, RefreshCw, Search, Calculator } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -153,6 +153,7 @@ function PartnerPicker({ onPick }: { onPick: (p: Partner) => void }) {
 // ---------- Cockpit ----------
 
 function CockpitView({ partnerId, onClear }: { partnerId: string; onClear: () => void }) {
+  const navigate = useNavigate();
   const [data, setData] = useState<CockpitResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -195,7 +196,7 @@ function CockpitView({ partnerId, onClear }: { partnerId: string; onClear: () =>
     );
   }
 
-  const { partner, credit, recent_sales, open_followups, recent_activities } = data;
+  const { partner, credit, recent_sales, open_followups, recent_activities, quote_ready_skus } = data;
 
   return (
     <div className="flex h-full w-full flex-col gap-3 p-3.5">
@@ -217,6 +218,14 @@ function CockpitView({ partnerId, onClear }: { partnerId: string; onClear: () =>
         <div className="flex items-center gap-1.5">
           <Button size="sm" variant="ghost" onClick={onClear}>
             거래처 변경
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate(`/baro/quote/new?partner_id=${encodeURIComponent(partner.partner_id)}`)}
+          >
+            <Calculator className="mr-1 h-3.5 w-3.5" />
+            이 거래처 견적
           </Button>
           <Button size="sm" variant="outline" onClick={() => void load()}>
             <RefreshCw className="mr-1 h-3.5 w-3.5" />
@@ -368,10 +377,44 @@ function CockpitView({ partnerId, onClear }: { partnerId: string; onClear: () =>
         </section>
       </div>
 
-      {/* PR2 stub 안내 — quote_ready_skus / incoming_matches */}
-      <p className="text-[10px] text-muted-foreground">
-        견적 가능 SKU·입고예정 매칭 패널은 후속 PR(통합 견적 빌더)에서 채워집니다.
-      </p>
+      {/* 견적 가능 SKU — D-126 PR2: partner_price_book 기반 prefill */}
+      <section className="rounded-md border bg-card p-3">
+        <div className="mb-2 flex items-center gap-1.5">
+          <Calculator className="h-3.5 w-3.5 text-primary" />
+          <h2 className="text-sm font-semibold">견적 가능 SKU</h2>
+          <Badge variant="outline" className="ml-auto text-[10px]">
+            {quote_ready_skus.length}개 단가 등록
+          </Badge>
+        </div>
+        {quote_ready_skus.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            이 거래처의 단가표가 비어 있습니다 — 마스터 &gt; 거래처 단가표에서 등록하세요.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {quote_ready_skus.slice(0, 12).map((s) => (
+              <Link
+                key={s.product_id}
+                to={`/baro/quote/new?partner_id=${encodeURIComponent(partner.partner_id)}`}
+                className="group rounded border bg-muted/20 px-2.5 py-2 text-xs transition hover:border-primary"
+                title="견적 빌더로 이동"
+              >
+                <div className="truncate font-medium group-hover:text-primary">
+                  {s.product_name}
+                </div>
+                <div className="mt-0.5 flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span>재고 {s.available_qty}</span>
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {Math.round(s.unit_price_krw).toLocaleString('ko-KR')}원
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* incoming_matches 패널은 후속 PR(BL 라인 sanitized 통합) 에서 채움 */}
     </div>
   );
 }

@@ -1,0 +1,18 @@
+{
+  "name": "바로(주) 배송 안내",
+  "short_name": "바로 배송",
+  "description": "바로(주) 출하 알림 + 차주 도착 안내 (D-137 PR7.5)",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0ea5e9",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Bot, CalendarClock, CheckCircle2, RefreshCw, Search, TrendingUp } from 'lucide-react';
+import { Bot, CalendarClock, CheckCircle2, RefreshCw, Search, Trash2, TrendingUp } from 'lucide-react';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -27,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { fetchWithAuth } from '@/lib/api';
 import { formatDate, formatNumber } from '@/lib/utils';
 import { formatError, notify } from '@/lib/notify';
+import { confirmDialog } from '@/lib/dialogs';
 import type {
   PriceBenchmark,
   PriceBenchmarkAIRefreshResult,
@@ -131,6 +132,11 @@ function formatUnitPrice(value: number | null | undefined, unit: UnitKey): strin
   return `${symbol}${value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 4 })}/W`;
 }
 
+function formatConfidence(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return `${Math.round(Number(value) * 100)}%`;
+}
+
 function monthStart(months: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() - months);
@@ -167,9 +173,11 @@ export default function PriceForecastPage() {
   const [ourPrices, setOurPrices] = useState<OurPricesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [query, setQuery] = useState('');
   const [unit, setUnit] = useState<UnitKey>('usd');
   const [horizon, setHorizon] = useState<HorizonKey>('18m');
+  const [selectedBenchmarkIds, setSelectedBenchmarkIds] = useState<Set<string>>(() => new Set());
   const [selectedSources, setSelectedSources] = useState<Set<string>>(
     () => new Set(SOURCE_OPTIONS.map((source) => source.key)),
   );
@@ -201,6 +209,12 @@ export default function PriceForecastPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!runs.some((run) => run.status === 'running')) return;
+    const timer = window.setTimeout(() => void load(), 5000);
+    return () => window.clearTimeout(timer);
+  }, [runs, load]);
+
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
@@ -220,6 +234,17 @@ export default function PriceForecastPage() {
       return q.split(/\s+/).every((token) => haystack.includes(token));
     });
   }, [query, rows, selectedSources, unit]);
+
+  const visibleRows = useMemo(() => filteredRows.slice(0, 18), [filteredRows]);
+
+  useEffect(() => {
+    setSelectedBenchmarkIds((prev) => {
+      if (prev.size === 0) return prev;
+      const allowed = new Set(filteredRows.map((row) => row.benchmark_id));
+      const next = new Set(Array.from(prev).filter((id) => allowed.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filteredRows]);
 
   const { chartData, series } = useMemo(() => {
     const pointByDate = new Map<string, Record<string, string | number>>();
@@ -333,6 +358,60 @@ export default function PriceForecastPage() {
   const latestTender = latestByMetric.get('china_state_tender');
   const forwardCount = filteredRows.filter((row) => row.basis === 'forward').length;
   const sourceCount = new Set(filteredRows.map((row) => row.source_key)).size;
+  const visibleBenchmarkIds = useMemo(() => visibleRows.map((row) => row.benchmark_id), [visibleRows]);
+  const allVisibleSelected = visibleBenchmarkIds.length > 0
+    && visibleBenchmarkIds.every((id) => selectedBenchmarkIds.has(id));
+
+  const toggleBenchmarkSelection = (benchmarkID: string) => {
+    setSelectedBenchmarkIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(benchmarkID)) next.delete(benchmarkID);
+      else next.add(benchmarkID);
+      return next;
+    });
+  };
+
+  const toggleVisibleSelection = () => {
+    setSelectedBenchmarkIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        for (const id of visibleBenchmarkIds) next.delete(id);
+      } else {
+        for (const id of visibleBenchmarkIds) next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const deleteSelectedBenchmarks = async () => {
+    const ids = Array.from(selectedBenchmarkIds);
+    if (ids.length === 0) return;
+
+    const ok = await confirmDialog({
+      title: '관측값 삭제',
+      description: `선택한 AI 수집 관측값 ${ids.length.toLocaleString('ko-KR')}건을 삭제합니다. 삭제 후 차트와 하단 목록에서 제외되고, 수집 로그는 그대로 보존됩니다.`,
+      confirmLabel: '삭제',
+      variant: 'destructive',
+    });
+    if (!ok) return;
+
+    const idSet = new Set(ids);
+    setDeleting(true);
+    try {
+      await Promise.all(ids.map((id) => (
+        fetchWithAuth(`/api/v1/price-benchmarks/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      )));
+      setRows((prev) => prev.filter((row) => !idSet.has(row.benchmark_id)));
+      setSelectedBenchmarkIds(new Set());
+      notify.success(`${ids.length.toLocaleString('ko-KR')}건 삭제했습니다`);
+      await load();
+    } catch (err) {
+      notify.error(formatError(err));
+      await load();
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const triggerAIRefresh = async () => {
     setRefreshing(true);
@@ -377,7 +456,7 @@ export default function PriceForecastPage() {
         if (run.status !== 'running') {
           return run;
         }
-      } catch (err) {
+      } catch {
         // 일시적 fetch 실패는 무시 — 계속 폴링
       }
     }
@@ -552,20 +631,58 @@ export default function PriceForecastPage() {
 
         <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="overflow-hidden rounded-md border border-[var(--line)] bg-[var(--surface)]">
+            <div className="flex min-h-10 flex-wrap items-center gap-2 border-b border-[var(--line)] px-3 py-2">
+              <div>
+                <div className="sf-eyebrow">AI 수집 관측값</div>
+                <div className="text-[11px] text-muted-foreground">
+                  {selectedBenchmarkIds.size > 0
+                    ? `${selectedBenchmarkIds.size.toLocaleString('ko-KR')}건 선택됨`
+                    : `${visibleRows.length.toLocaleString('ko-KR')}건 표시 중`}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="ml-auto"
+                disabled={deleting || refreshing || selectedBenchmarkIds.size === 0}
+                onClick={() => void deleteSelectedBenchmarks()}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {deleting ? '삭제 중' : '선택 삭제'}
+              </Button>
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-9">
+                    <Checkbox
+                      aria-label="현재 목록 전체 선택"
+                      checked={allVisibleSelected}
+                      disabled={visibleBenchmarkIds.length === 0 || deleting}
+                      onCheckedChange={toggleVisibleSelection}
+                    />
+                  </TableHead>
                   <TableHead>일자</TableHead>
                   <TableHead>소스</TableHead>
                   <TableHead>지표</TableHead>
                   <TableHead>지역·조건</TableHead>
                   <TableHead className="text-right">가격</TableHead>
+                  <TableHead>신뢰도</TableHead>
                   <TableHead>근거</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRows.slice(0, 18).map((row) => (
+                {visibleRows.map((row) => (
                   <TableRow key={row.benchmark_id}>
+                    <TableCell>
+                      <Checkbox
+                        aria-label={`${row.source_name} ${row.metric_label} 선택`}
+                        checked={selectedBenchmarkIds.has(row.benchmark_id)}
+                        disabled={deleting}
+                        onCheckedChange={() => toggleBenchmarkSelection(row.benchmark_id)}
+                      />
+                    </TableCell>
                     <TableCell className="whitespace-nowrap text-xs tabular-nums">{formatDate(row.value_date)}</TableCell>
                     <TableCell className="text-xs font-medium">{row.source_name}</TableCell>
                     <TableCell className="text-xs">
@@ -581,6 +698,11 @@ export default function PriceForecastPage() {
                     <TableCell className="text-right text-xs font-semibold tabular-nums">
                       {formatUnitPrice(priceValue(row, unit), unit)}
                     </TableCell>
+                    <TableCell className="text-xs">
+                      <Badge variant={row.confidence != null && row.confidence < 0.7 ? 'destructive' : 'outline'} className="text-[10px]">
+                        {formatConfidence(row.confidence)}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="max-w-[260px] text-xs text-muted-foreground">
                       {row.source_url ? (
                         <a href={row.source_url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
@@ -594,7 +716,7 @@ export default function PriceForecastPage() {
                 ))}
                 {filteredRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
                       관측값이 없습니다
                     </TableCell>
                   </TableRow>

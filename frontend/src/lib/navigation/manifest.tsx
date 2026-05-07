@@ -1,0 +1,274 @@
+// frontend/src/lib/navigation/manifest.tsx — 라우트 + 사이드바 단일 정본
+//
+// 같은 코드/DB 를 호스트네임으로 분기해 여러 앱(module/cable/baro/...)을 운영한다.
+// 라우트(`<Route>` 트리) + 사이드바(`NAV_GROUPS`) 가 흩어지면 새 도메인을 붙일 때
+// sync 가 안 맞아 위험 — 이 모듈이 양쪽의 정본.
+//
+// 이력:
+//   - PR-3a: ROUTES + NAV_GROUPS 를 이 파일에 통합
+//   - PR-3b: NAV item 가시성을 서버 enabled_features 정본으로 전환
+//   - PR-4 : NAV_GROUPS 를 packs/ 디렉토리 (erp-core / module-finance / baro-domain)
+//            로 split. 이 파일은 ROUTES + 합친 NAV_GROUPS 만 export.
+import { lazy, type ComponentType, type LazyExoticComponent, type ReactElement } from 'react';
+import type { LucideIcon } from 'lucide-react';
+
+import type { MenuKey, Role } from '@/config/permissions';
+import type { TenantScope } from '@/lib/tenantScope';
+// PR-4: NAV_GROUPS 는 pack 들의 nav items 를 합쳐 만든다. 순환 import 회피를 위해
+// packs/ 가 manifest 에서 type 만 가져오게 했으므로 여기서 값 import 가능.
+import { ALL_PACKS, buildNavGroups } from './packs';
+
+// === Lazy components ===
+//
+// App.tsx 의 인라인 lazy import 들을 그대로 옮긴다. PurchaseHistoryErrorBoundary 처럼
+// `wrap` 으로 감싸야 하는 케이스는 RouteSpec 의 wrap 함수로 처리.
+const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
+const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
+const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
+const PriceForecastPage = lazy(() => import('@/pages/PriceForecastPage'));
+const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
+const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
+const SalesAnalysisPage = lazy(() => import('@/pages/SalesAnalysisPage'));
+const BankingPage = lazy(() => import('@/pages/BankingPage'));
+const ApprovalPage = lazy(() => import('@/pages/ApprovalPage'));
+const SettingsLayout = lazy(() => import('@/pages/settings/SettingsLayout'));
+const SettingsIndexRedirect = lazy(() =>
+  import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
+);
+const AdminSettingsPage = lazy(() => import('@/pages/settings/AdminSettingsPage'));
+const DBIntegrityPage = lazy(() => import('@/pages/admin/DBIntegrityPage'));
+const AuditLogsPage = lazy(() => import('@/pages/settings/AuditLogsPage'));
+const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
+const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
+const FeatureMatrixPage = lazy(() => import('@/pages/settings/FeatureMatrixPage'));
+const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
+const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
+const DataPage = lazy(() => import('@/pages/DataPage'));
+const ImportHubPage = lazy(() => import('@/pages/ImportHubPage'));
+const LibraryPage = lazy(() => import('@/pages/LibraryPage'));
+const ManufacturerNewPage = lazy(() => import('@/pages/data/ManufacturerNewPage'));
+const ManufacturerEditPage = lazy(() => import('@/pages/data/ManufacturerEditPage'));
+const ProductNewPage = lazy(() => import('@/pages/data/ProductNewPage'));
+const ProductEditPage = lazy(() => import('@/pages/data/ProductEditPage'));
+const PartnerNewPage = lazy(() => import('@/pages/data/PartnerNewPage'));
+const PartnerEditPage = lazy(() => import('@/pages/data/PartnerEditPage'));
+const WarehouseNewPage = lazy(() => import('@/pages/data/WarehouseNewPage'));
+const WarehouseEditPage = lazy(() => import('@/pages/data/WarehouseEditPage'));
+const BankNewPage = lazy(() => import('@/pages/data/BankNewPage'));
+const BankEditPage = lazy(() => import('@/pages/data/BankEditPage'));
+const PartnerPriceBookPage = lazy(() => import('@/pages/baro/PartnerPriceBookPage'));
+const PartnerCockpitPage = lazy(() => import('@/pages/baro/PartnerCockpitPage'));
+const QuoteBuilderPage = lazy(() => import('@/pages/baro/QuoteBuilderPage'));
+const SalesHomePage = lazy(() => import('@/pages/baro/SalesHomePage'));
+const RFMBoardPage = lazy(() => import('@/pages/baro/RFMBoardPage'));
+const SalesSummaryPage = lazy(() => import('@/pages/baro/SalesSummaryPage'));
+const InverterGuidePage = lazy(() => import('@/pages/baro/InverterGuidePage'));
+const ShipmentNoticePage = lazy(() => import('@/pages/baro/ShipmentNoticePage'));
+const IncomingBoardPage = lazy(() => import('@/pages/baro/IncomingBoardPage'));
+const BaroPurchaseHistoryPage = lazy(() => import('@/pages/baro/BaroPurchaseHistoryPage'));
+const GroupPurchaseRequestPage = lazy(() => import('@/pages/baro/GroupPurchaseRequestPage'));
+const BaroRequestInboxPage = lazy(() => import('@/pages/group-trade/BaroRequestInboxPage'));
+const CreditBoardPage = lazy(() => import('@/pages/baro/CreditBoardPage'));
+const DispatchBoardPage = lazy(() => import('@/pages/baro/DispatchBoardPage'));
+const CRMInboxPage = lazy(() => import('@/pages/CRMInboxPage'));
+const InsightsPage = lazy(() => import('@/pages/InsightsPage'));
+
+// === Route spec ===
+
+/**
+ * 라우트 한 항목.
+ *
+ * 일반 라우트는 path/element 만 채우면 된다.
+ * - roles: RoleGuard 로 감싸기
+ * - wrap: ErrorBoundary 같은 wrapper 감싸기 (children 받아 ReactElement 반환)
+ * - children: settings 같은 nested layout — index 또는 path 한 개씩 받음
+ */
+export type RouteSpec = {
+  path: string;
+  element: LazyExoticComponent<ComponentType<unknown>>;
+  roles?: Role[];
+  wrap?: (children: ReactElement) => ReactElement;
+  children?: NestedRouteSpec[];
+};
+
+export type NestedRouteSpec = {
+  /** path 또는 index 중 하나만 — react-router 의 두 양태에 매핑. */
+  path?: string;
+  index?: boolean;
+  element: LazyExoticComponent<ComponentType<unknown>>;
+  roles?: Role[];
+};
+
+// PurchaseHistoryErrorBoundary 는 lazy 가 아니라 named export 라 직접 import.
+import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
+
+/**
+ * ROUTES — App.tsx 가 자동 렌더하는 라우트 목록.
+ *
+ * 비-목표:
+ *   - login, AppLayout 외곽, ProtectedRoute, "*" → /login redirect 같은 wrapper 라우트는
+ *     이 목록에 안 넣고 App.tsx 에 인라인 유지 (구조적 라우트라 manifest 가 다루기 어려움).
+ *   - LegacyRedirect (/inbound, /lc, /outbound) 는 App.tsx 에 인라인 유지.
+ *   - / index, /dashboard redirect 도 인라인.
+ */
+export const ROUTES: RouteSpec[] = [
+  { path: '/inventory', element: InventoryPage },
+  { path: '/admin/db-integrity', element: DBIntegrityPage, roles: ['admin', 'operator'] },
+  { path: '/import', element: ImportHubPage, roles: ['admin', 'operator'] },
+  { path: '/library', element: LibraryPage },
+  { path: '/data', element: DataPage, roles: ['admin', 'operator'] },
+  { path: '/data/manufacturers/new', element: ManufacturerNewPage, roles: ['admin', 'operator'] },
+  { path: '/data/manufacturers/:id/edit', element: ManufacturerEditPage, roles: ['admin', 'operator'] },
+  { path: '/data/products/new', element: ProductNewPage, roles: ['admin', 'operator'] },
+  { path: '/data/products/:id/edit', element: ProductEditPage, roles: ['admin', 'operator'] },
+  { path: '/data/partners/new', element: PartnerNewPage, roles: ['admin', 'operator'] },
+  { path: '/data/partners/:id/edit', element: PartnerEditPage, roles: ['admin', 'operator'] },
+  { path: '/data/warehouses/new', element: WarehouseNewPage, roles: ['admin', 'operator'] },
+  { path: '/data/warehouses/:id/edit', element: WarehouseEditPage, roles: ['admin', 'operator'] },
+  { path: '/data/banks/new', element: BankNewPage, roles: ['admin', 'operator'] },
+  { path: '/data/banks/:id/edit', element: BankEditPage, roles: ['admin', 'operator'] },
+  { path: '/masters/construction-sites', element: ConstructionSitesPage },
+  { path: '/procurement', element: ProcurementPage },
+  {
+    path: '/purchase-history',
+    element: PurchaseHistoryPage,
+    wrap: (c) => <PurchaseHistoryErrorBoundary>{c}</PurchaseHistoryErrorBoundary>,
+  },
+  { path: '/price-forecast', element: PriceForecastPage, roles: ['admin', 'operator', 'executive'] },
+  { path: '/orders', element: OrdersPage },
+  { path: '/customs', element: CustomsPage },
+  { path: '/sales-analysis', element: SalesAnalysisPage },
+  { path: '/banking', element: BankingPage },
+  { path: '/insights/:metric', element: InsightsPage },
+  { path: '/baro/price-book', element: PartnerPriceBookPage, roles: ['admin', 'operator'] },
+  { path: '/baro/cockpit', element: PartnerCockpitPage },
+  { path: '/baro/quote/new', element: QuoteBuilderPage, roles: ['admin', 'operator'] },
+  { path: '/baro/home', element: SalesHomePage },
+  { path: '/baro/rfm', element: RFMBoardPage },
+  { path: '/baro/sales-summary', element: SalesSummaryPage, roles: ['admin', 'operator', 'executive'] },
+  { path: '/baro/inverter-guide', element: InverterGuidePage },
+  { path: '/baro/shipment-notice', element: ShipmentNoticePage },
+  { path: '/baro/incoming', element: IncomingBoardPage },
+  { path: '/baro/purchase-history', element: BaroPurchaseHistoryPage, roles: ['admin', 'operator', 'executive'] },
+  { path: '/baro/group-purchase', element: GroupPurchaseRequestPage, roles: ['admin', 'operator'] },
+  { path: '/group-trade/baro-inbox', element: BaroRequestInboxPage, roles: ['admin', 'operator'] },
+  { path: '/baro/credit-board', element: CreditBoardPage },
+  { path: '/baro/dispatch', element: DispatchBoardPage, roles: ['admin', 'operator'] },
+  { path: '/crm/inbox', element: CRMInboxPage },
+  { path: '/approval', element: ApprovalPage },
+  { path: '/assistant', element: AssistantPage },
+  {
+    path: '/settings',
+    element: SettingsLayout,
+    children: [
+      { index: true, element: SettingsIndexRedirect },
+      { path: 'admin', element: AdminSettingsPage, roles: ['admin'] },
+      { path: 'audit-logs', element: AuditLogsPage, roles: ['admin'] },
+      { path: 'site', element: SitePlaceholderPage, roles: ['admin'] },
+      { path: 'feature-wiring', element: FeatureMatrixPage, roles: ['admin'] },
+      { path: 'personal', element: PersonalSettingsPage },
+    ],
+  },
+];
+
+// === Sidebar nav ===
+
+export interface CommandNavItem {
+  key: string;
+  label: string;
+  /** 사이드바 접힘 상태에서 아이콘 대신 노출할 2자 축약 (P/O, L/C 등 라틴은 2영문, 한글은 2자) */
+  abbr: string;
+  path: string;
+  icon: LucideIcon;
+  menu: MenuKey;
+  count?: number;
+  /**
+   * PR-3b: 가시성 정본은 서버 `/me` 의 `enabled_features` (D-120 카탈로그 기반).
+   *
+   * - feature 가 채워져 있으면: `enabled_features` 가 그 ID 를 포함할 때만 노출
+   * - feature 가 비어 있으면: tenants 배열로 fallback (단순 프론트 페이지 / 카탈로그 미정의)
+   *
+   * 두 필드는 mutually exclusive 가 아니다 — feature 를 우선 평가하고 안 매칭이면
+   * tenants 로 fallback 하지 않는다(서버가 false 라고 판단했으면 false).
+   */
+  feature?: string;
+  /** D-108: 표시 허용 테넌트. feature 미지정 항목의 fallback 으로만 사용. */
+  tenants?: TenantScope[];
+  /** 운영 검증 미완 — 사이트 설정 > 메뉴 가시성에서 admin이 끌 수 있는 대상 표시 */
+  isWip?: boolean;
+}
+
+export interface CommandNavGroup {
+  label?: string;
+  items: CommandNavItem[];
+}
+
+export interface SidebarMenuRegistryItem {
+  key: string;
+  label: string;
+}
+
+/**
+ * MODULE_TENANTS — D-108/D-119 module 계열 = topsolar + cable.
+ *
+ * 정본은 lib/tenantScope.ts (PR-4 의 packs/ 분리 후 circular dep 회피).
+ * 외부 호출자 호환을 위해 manifest 에서도 같은 이름으로 re-export.
+ */
+export { MODULE_TENANTS } from '@/lib/tenantScope';
+
+/**
+ * NAV_GROUPS — sidebar 구성. 그룹 순서 = 사이드바 위→아래 표시 순서.
+ *
+ * PR-4: 인라인 정의 대신 packs/ 디렉토리의 pack 들 (erp-core / module-finance /
+ * baro-domain) 을 합쳐 빌드한다. 각 pack 의 NAV item 이 group 필드를 가지므로
+ * buildNavGroups 가 그룹별로 재구성한다.
+ *
+ * 가시성:
+ *   - feature 채움 → 서버 `enabled_features` 정본 사용 (PR-3b)
+ *   - feature 비어 있고 tenants 만 있음 → 백엔드 카탈로그 미정의 페이지 fallback
+ *   - 둘 다 없음 → 모든 테넌트 공통
+ */
+export const NAV_GROUPS: CommandNavGroup[] = buildNavGroups(ALL_PACKS);
+
+/**
+ * isItemVisible — sidebar 항목의 가시성 판단 단일 정본 (PR-3b).
+ *
+ * - feature 가 있으면: enabledFeatures 가 그 ID 를 포함할 때만 visible
+ * - feature 가 비어 있으면: tenants 배열 fallback (단순 프론트 페이지 / 카탈로그 미정의)
+ *
+ * enabledFeatures 가 undefined(서버 응답에 필드 없음 — 옛 백엔드 호환) 면
+ * fallback 으로 tenants 배열을 본다. PR-2 이후 운영 백엔드는 항상 채워 보낸다.
+ */
+export function isItemVisible(item: CommandNavItem, currentTenant: TenantScope, enabledFeatures: ReadonlySet<string> | undefined): boolean {
+  if (item.feature) {
+    if (!enabledFeatures) {
+      // 옛 응답 호환 — feature 정의는 있지만 서버가 enabled_features 를 안 보낸 경우.
+      // tenants 배열이 동시에 있으면 그걸 쓰고, 둘 다 없으면 보임.
+      return !item.tenants || item.tenants.includes(currentTenant);
+    }
+    return enabledFeatures.has(item.feature);
+  }
+  return !item.tenants || item.tenants.includes(currentTenant);
+}
+
+/** 사이트 설정 > 메뉴 가시성 카드가 토글 후보로 노출하는 항목 (NAV_GROUPS 평탄화 + isWip 필터) */
+export function listWipMenus(): SidebarMenuRegistryItem[] {
+  return NAV_GROUPS.flatMap((g) => g.items)
+    .filter((i) => i.isWip)
+    .map((i) => ({ key: i.key, label: i.label }));
+}
+
+/**
+ * D-112 사이드바 탭 카드가 메뉴 매핑 후보로 노출하는 항목.
+ *
+ * PR-3b: enabled_features 알면 그걸로 필터, 모르면 tenants 배열 fallback.
+ * 호출 측이 enabledFeatures 를 안 넘기면 tenants 배열로만 — 옛 호출자 호환.
+ */
+export function listAllMenusForTenant(
+  tenant: TenantScope,
+  enabledFeatures?: ReadonlySet<string>,
+): SidebarMenuRegistryItem[] {
+  return NAV_GROUPS.flatMap((g) => g.items)
+    .filter((i) => isItemVisible(i, tenant, enabledFeatures))
+    .map((i) => ({ key: i.key, label: i.label }));
+}

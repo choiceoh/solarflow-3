@@ -665,7 +665,7 @@
   - **체인 식별자**: `parent_po_id`가 null인 원계약 PO의 `po_id`가 chain_id. URL은 `/purchase-history?chain={chain_id}`.
   - **체인 그룹핑 안전선**: `findChainHeadId` (frontend/src/lib/purchaseHistory.ts)에 cycle 방문 추적 + 32 깊이 cap. DB 무결성 깨져도 페이지가 무한루프 안 함.
   - **사이드바 진입**: `현황` 그룹, module 계열(`MODULE_TENANTS = ['topsolar', 'cable']`), `menu: 'purchase_history'` 신규 키 — admin/operator/executive 모두 접근(executive도 구매 이력 read-only 조회 필요).
-  - **딥링크**: PO 관련 이벤트는 `/procurement?po_id={po_id}` → ProcurementPage가 query 받아 PODetailView 자동 펼침. LC/BL/TT는 탭 단위까지 (`?tab=lc` 등) — 향후 별건 작업으로 LC/BL/TT 자동 선택 추가 가능.
+  - **딥링크**: PO 관련 이벤트는 `/procurement?po_id={po_id}` → ProcurementPage가 query 받아 PODetailView 자동 펼침. LC/B/L/T/T 이벤트는 `/procurement?tab=lc&lc_id={lc_id}`, `/procurement?tab=bl&bl_id={bl_id}`, `/procurement?tab=tt&tt_id={tt_id}`처럼 실제 대상 ID까지 전달한다. LC는 해당 행을 펼치고, B/L은 상세 화면을 열며, T/T는 해당 행을 강조 표시한다.
   - **수동 단가이력 표시**: `related_po_id`가 null인 PriceHistory는 (a) 체인 뷰: 제조사 일치하면 컨텍스트로 노출, (b) 회사 전체 뷰: `[PO 미연결]` 라벨로 별도 노출.
   - **audit diff 표시**: `purchase_orders` audit `update`만 처리 — `old_data`/`new_data` 객체 비교, `updated_at`/`created_at`/`po_id`/`company_id` 메타 필드 스킵, 한국어 라벨(`status` → `상태` 등) 적용.
 - **검증**:
@@ -867,7 +867,7 @@
 
 - **결정**: `/price-forecast` 메뉴와 `/api/v1/price-benchmarks/*` API를 module 계열(`topsolar`, `cable`) 전용으로 추가한다. BARO에는 원가·구매 협상 카드가 될 수 있는 외부 시세/입찰/ASP 벤치마크를 노출하지 않는다.
 - **데이터 모델**: `price_benchmarks`는 source(OPIS, InfoLink, TrendForce, PVinsights, 중국 국영 입찰, CPIA floor, Tier-1 ASP), metric, value_date, market_region, basis, USD/CNY/KRW per W 가격, cargo size, forward quarter, project segment, technology, 근거 URL/excerpt를 저장한다. `price_benchmark_runs`는 버튼 1회 수집 로그(provider/model/source_keys/inserted/skipped/warnings/evidence/raw_response)를 남긴다.
-- **수집 방식**: 운영자가 화면에서 `AI 지표 갱신`을 누르면 백엔드가 기존 Assistant 설정(`ASSISTANT_*`, `ANTHROPIC_*` 또는 `OPENAI_*`)을 재사용해 증거 텍스트에서 가격 관측값만 구조화한다. `TAVILY_API_KEY`가 있으면 검색 evidence를 보강하고, 없으면 공개 URL 직접 조회와 LLM 추출만 수행한다. evidence에 명시되지 않은 가격은 저장하지 않는다.
+- **수집 방식**: 운영자가 화면에서 `AI 지표 갱신`을 누르면 백엔드는 `price_benchmark_runs`에 `running` 로그를 만들고 즉시 응답한 뒤 백그라운드에서 기존 Assistant 설정(`ASSISTANT_*`, `ANTHROPIC_*` 또는 `OPENAI_*`)을 재사용해 증거 텍스트에서 가격 관측값만 구조화한다. `TAVILY_API_KEY`가 있으면 검색 evidence를 보강하고, 없으면 공개 URL 직접 조회와 LLM 추출만 수행한다. evidence에 명시되지 않은 가격은 저장하지 않는다.
 - **UI 기준**: x축은 관측일, y축은 선택 단위(USD/W, CNY/W, KRW/W) 가격이다. OPIS CMM/forward/DDP, InfoLink centralized/distributed, TrendForce 중국 국내가/수출가, PVinsights 보조 시세, 중국 국영 입찰, CPIA floor, Tier-1 ASP를 같은 화면에서 source 필터로 비교한다.
 - **운영 한계**: 유료 리포트 로그인/구독 본문은 서버가 별도 세션을 보유하지 않으면 수집하지 못한다. 이 경우 run warning으로 남기고 저장 가능한 공개 근거만 기록한다.
 - **날짜**: 2026-05-07
@@ -891,7 +891,284 @@
   - 프론트엔드 `npm run build` (tsc -b) 통과.
 - **날짜**: 2026-05-06
 
-## D-126: 수금 매칭 — 결정적 자동 매칭과 AI 검토를 분리하고 확정은 bulk 검증으로 처리
+## D-126: BARO 통합 견적 빌더 Phase 1 — DB 마이그레이션 없이 cockpit stub + LocalStorage draft + 브라우저 PDF
+- **결정**: BARO 영업의 견적 작성 워크플로우를 위한 첫 단계로, **신규 DB 테이블 없이** 기존 `partner_price_book` + `products` 데이터를 활용한 frontend 견적 빌더 (`/baro/quote/new`) 와 cockpit `quote_ready_skus` 패널 실데이터 채움을 도입한다.
+  - **신규 backend 라우트 없음**: D-125 cockpit 의 stub `quote_ready_skus` 를 `partner_price_book` join 으로 채우는 방식 (`fetchQuoteReady` 추가). 기존 `IDBaroPartnerCockpit` feature 안에서 응답 shape 변경 없이 데이터만 추가 — D-120 카탈로그/매트릭스 갱신 불필요.
+  - **frontend 페이지**: `/baro/quote/new?partner_id=X` 단일 라우트. 거래처 picker (partner_id 없을 때) → builder (있을 때). 좌측 라인 편집 + 우측 SKU picker (단가표 prefill, 수량·단가 수동 조정 가능). 합계 + VAT 10% 자동 계산.
+  - **저장 모델**: 견적 draft 는 brower LocalStorage 에 `baro.quote-draft.<partner_id>` 키로 1슬롯 자동 저장. 새로고침/탭 전환 후 복원. **DB 저장은 PR2.5 로 분리** — 회신 추적 / 다중 견적 이력 / 발송 로그가 필요한 시점에 `baro_quotes` + `baro_quote_lines` 마이그레이션과 함께 도입.
+  - **PDF 발송**: `window.print()` + 인쇄용 CSS (`print:hidden`, `print:border-none`). 브라우저의 "PDF 로 저장" 옵션 활용 — 외부 라이브러리 (jspdf, html2canvas) 의존 0. **카톡/SMS 발송은 PR2.5** — 외부 API (Aligo/KakaoTalk Notification Talk) 키 발급 필요.
+  - **마진 표시 보류**: cockpit `quote_ready_skus.margin_pct` 는 null 로 둔다. 마진 정확 계산은 BARO 평균 매입원가 (`baro_purchase_history`) 와 결합 필요해 PR2.5 로 분리 (`fetchQuoteReady` 에 cost lookup 추가).
+  - **cockpit 진입 동선**: cockpit 헤더의 "이 거래처 견적" 버튼 + `quote_ready_skus` 카드 클릭 → `/baro/quote/new?partner_id=X` 진입 (단가표 자동 prefill).
+- **이유**: 견적 워크플로우 전체를 한 PR 에 담으면 (DB 마이그레이션 + 외부 API + UI) 머지가 늦어지고 회귀 리스크 큼. 최소 가치 단위로 잘라서 영업이 "한 거래처 + 단가표 prefill + 인쇄/PDF" 만으로도 매일 사용 가능하게 한다. 일평균 견적 작성 시간 (수기 ~5분/건 × 영업 6명 × 5건/일 = 150분/일) 의 70% 단축이 목표.
+- **운영 기준**:
+  - 신규 backend 라우트 0 — 기존 cockpit handler 의 `fetchQuoteReady` 만 stub→실데이터.
+  - LocalStorage 키 네임스페이스: `baro.quote-draft.*`. 파일럿 후 다른 BARO 기능과 충돌 시 prefix 변경.
+  - 인쇄 스타일은 Tailwind `print:` modifier 만 사용 — 별도 print stylesheet 파일 추가 금지(번들 크기 ↓).
+  - PR2.5 도입 시 응답 shape (`CockpitQuoteReadyRow.margin_pct`) 와 LocalStorage 키 네이밍은 호환 유지 — frontend 갱신 없이 DB 저장 옵션이 추가되도록 설계.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` 통과 — D-125 와 같은 회귀 가드.
+  - 프론트엔드 `npm run build` (tsc -b) 통과.
+  - 수동 검증: BARO 토큰으로 `/baro/cockpit?partner_id=X` 진입 시 quote_ready_skus 패널이 단가표 등록된 SKU 만큼 카드 표시 + 클릭 시 `/baro/quote/new` 로 이동 + 인쇄 미리보기에서 picker/버튼 숨김.
+- **날짜**: 2026-05-07
+
+## D-127: BARO 영업 일일 홈 Phase 1 — 신규 backend 0, frontend 합성 대시보드
+- **결정**: BARO 영업 6명의 출근 첫 화면을 위한 일일 홈 페이지 `/baro/home` 을 도입한다. **신규 backend 라우트 0** — 기존 sanitized API 3종(`/api/v1/me/open-followups`, `/api/v1/baro/credit-board`, `/api/v1/baro/incoming`)을 frontend 에서 `Promise.all` 로 합성하고 in-memory 필터로 4개 카드(요약 stat) + 3개 패널(오늘 후속 / 한도 위험 / 신규 입고)을 그린다.
+  - **카드 4종 (요약 stat)**:
+    - 오늘의 후속: `follow_up_due <= today` 인 미처리 건수
+    - 이후 예정 후속: `follow_up_due > today` 인 미처리 건수
+    - 한도/연체 위험: `oldest_unpaid_days >= 60` 또는 `utilization_pct >= 100` 인 거래처 수
+    - 신규 입고예정: `status ∈ {scheduled, shipping, arrived}` 건수 + 최단 ETA
+  - **패널 3종 (실제 액션 진입)**:
+    - 오늘 답변할 후속 — 카드 클릭 → `/baro/cockpit?partner_id=X`
+    - 한도/연체 위험 거래처 — 카드 클릭 → cockpit
+    - 신규 입고 안내 — `/baro/incoming` 진입 + PR3.5 자동 콜백 추천 placeholder
+  - **PR3.5 분리** (별도 D-NNN, 신규 backend 필요):
+    - 자동 콜백 추천: 신규 입고 SKU × 직전 12개월 본인 거래처 매입 이력 매칭 → "이 입고를 알려야 할 거래처 N곳" + 1-click 일괄 발송
+    - 본인 담당 거래처 필터: `partners.owner_user_id = me` 와 credit_board RPC 응답 join (현재는 owner 미반영, 모든 위험 거래처 노출)
+    - 견적 회신 대기 카운트 (D-126 PR2.5 의 `baro_quotes` 테이블 도입 후)
+- **이유**: D-125(cockpit) / D-126(견적 빌더)이 *한 거래처* 작업 화면을 다듬은 반면 영업의 *하루 단위* 우선순위 정렬 화면이 부재. 6명이 200거래처를 분담하는 환경에서 출근 후 30초 안에 "오늘 누구에게 답변, 누구의 미수금 push, 어떤 입고 안내" 가 보이지 않으면 우선순위가 표류한다. 일평균 일정 정리 ~30분/명 × 6명 = 일 3시간을 통째로 절약.
+- **운영 기준**:
+  - 신규 backend 라우트 0 — D-120 catalog/matrix 갱신 불필요. 모든 데이터는 기존 sanitized 경로.
+  - PR3.5 에서 backend 합본 endpoint (`/api/v1/baro/sales-home`) 도입 시 응답 shape 은 frontend 가 기대하는 형태로 호환 유지.
+  - "오늘" 의 정의는 client local timezone 기준 (KST 운영). 미래 multi-region 도입 시 server-side timezone 명시 필요.
+- **검증**:
+  - 프론트엔드 `npm run build` (tsc -b) 통과 — 신규 페이지 / 사이드바 / permissions 키 / route 추가만으로 회귀 가드.
+  - 수동 검증: BARO 토큰으로 `/baro/home` 진입 시 카드 4개 + 패널 3개 표시. 각 카드/리스트 항목 클릭 → 해당 도메인 페이지로 이동 (cockpit/credit-board/incoming).
+- **날짜**: 2026-05-07
+
+## D-128: BARO 거래처 RFM 보드 — Go 메모리 집계 + 단순 임계값 분류
+- **결정**: BARO 영업이 200거래처를 한 화면에 우선순위 정렬할 수 있도록 거래처 RFM(Recency / Frequency / Monetary) 보드를 도입한다. 신규 endpoint `GET /api/v1/baro/rfm/` (feature_id `baro.rfm`). SQL GROUP BY 함수 신설 회피 — 활성 customer/both 거래처 전체 + 직전 12개월 sales 행을 가져와 Go 메모리에서 customer_id 기준 집계.
+  - **분류 6종**:
+    - `champion`: 최근 30일 + 5건+ + 1억+ 매출 (핵심)
+    - `loyal`: 최근 60일 + 3건+ (단골)
+    - `new`: 최근 30일 + 2건 이하 (관계 형성)
+    - `at_risk`: 90일+ 미주문 + 5천만+ 매출 이력 (재활성화 큐)
+    - `lost`: 그 외 침체
+    - `inactive`: 12개월 매출 0건 (휴면)
+  - **데이터 규모**: BARO 매출 1000억 ÷ 평균 ~3억/건 = 연 ~330건. Go 메모리 집계 비용 미미. 향후 매출 폭증 시 별도 RPC 함수(`baro_rfm_aggregate`) 도입 검토.
+  - **부분 실패 허용**: sales 조회 실패 시 partner-only 응답 (모두 inactive) 으로 fallback — 보드 전체가 흰 배경으로 죽지 않음.
+  - **재활성화 큐 강조**: `at_risk` 세그먼트는 별도 알림 배너로 노출 — 한동안 미주문이지만 매출 이력 큰 곳 = 콜백 1순위.
+  - **frontend**: `/baro/rfm` 페이지. 6 세그먼트 탭 + 정렬(매출/최근성/빈도) + 표. 행 클릭 → cockpit. 사이드바 「현황」 그룹.
+- **PR4.5 분리** (별도 D-NNN):
+  - 동적 분위수(quartile) 기반 분류 — 거래처 분포에 따라 임계값 자동 조정 (현재는 1000억 매출 컨텍스트 하드코딩).
+  - 본인 담당 거래처 필터 — `partners.owner_user_id = me` (현재 전체 노출).
+  - 자동 재활성화 액션 — `at_risk` 거래처 대상 1-click 카톡/SMS (PR3.5 발송 채널 통합 후).
+  - 세그먼트 태그 수동 라벨 (`partners.segment_tag` 컬럼 추가 마이그레이션, 리셀러/시공/대형).
+- **이유**: D-125(cockpit) 가 *한 거래처*, D-127(영업 홈) 이 *내 오늘 할 일* 이라면 RFM 은 *내 거래처 200곳의 우선순위*. 영업 6명이 분담 거래처를 분기/월 단위로 재정렬할 때 필요. 매출 1000억 규모에서 at_risk 거래처 1곳 재활성화 = 평균 3천만~1억 효과라 ROI 큼.
+- **운영 기준**:
+  - feature catalog `baro.rfm` + FEATURE-WIRING-MATRIX 행 + `r.Use(g.Feature(IDBaroRFM))` + DECISIONS 동시 갱신 (D-120 의무).
+  - sanitized 패스스루 — partners 마스터 + sales 직접 컬럼만 사용. 면장/원가/L/C 차단 그대로 (D-108).
+  - 응답이 200곳 + sales 12개월 raw — 응답 크기 측정 후 캐시/페이지네이션 검토.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/baro/rfm/` catalog↔chi 일치, matrix_consistency_test 가 `baro.rfm` markdown 일치 검증.
+  - 라우터 가드: module/cable 토큰으로 `/api/v1/baro/rfm/` 호출 시 403, baro 토큰 통과.
+  - 프론트엔드 `npm run build` 통과.
+- **날짜**: 2026-05-07
+
+## D-129: BARO 자체 매출 요약 (Sales Summary) — Phase 1 매출만, 마진은 PR5.5
+- **결정**: BARO 영업이 자기 법인 매출을 다양한 cut 으로 분석할 수 있도록 신규 endpoint `GET /api/v1/baro/sales-summary?months=N` (feature_id `baro.sales_summary`, BARO 전용) 도입. module 계열 `/sales-analysis` 는 매입원가·면장·landed cost 기반 마진을 다뤄 BARO 차단(D-108)이라 별도 BARO 라인.
+  - **4 cut 합본 응답** (한 라운드트립):
+    - `by_owner`: 영업담당자별 매출/건수/거래처수 (partners.owner_user_id 기반)
+    - `by_partner_type`: customer / both / supplier 유형별
+    - `by_month`: YYYY-MM 월별 추이
+    - `top_partners`: 매출 상위 20곳
+  - **집계 방식**: SQL GROUP BY 함수 신설 회피 — partners + sales 직접 쿼리 후 Go 메모리 집계 (D-128 RFM 과 동일 패턴).
+  - **응답 마스킹**: cost / margin 필드 0 — 매출액(`total_amount`)과 건수만. 마진은 PR5.5 에서 `baro_purchase_history` 평균 매입원가 통합 후 도입.
+  - **frontend 페이지**: `/baro/sales-summary` (RoleGuard `admin/operator/executive`). 6/12/24개월 토글. CSS 막대 차트(recharts 미사용 — 번들 크기 ↓). Top 거래처 행 클릭 → cockpit.
+  - **사이드바**: 「현황」 그룹에 "매출 요약" 추가.
+- **PR5.5 분리** (별도 D-NNN):
+  - **마진 표시** (`gross_margin_pct`, `gross_margin_krw`): `baro_purchase_history` 평균 매입원가와 매출 결합. 단순 평균이 아닌 BR 법인 한정 + sale 시점 기준 가까운 매입가 매칭 로직 필요.
+  - **한도 초과 출고 차단 hold flag**: 출고/수주 생성 시 `outstanding_krw + amount > credit_limit_krw` 또는 `oldest_unpaid_days >= 60` 면 hold 플래그 + 결재 강제. backend 변경 큼 (outbound/order 핸들러 수정 + DB 컬럼 추가 가능).
+  - **SKU 별 매출**: 현 sales 테이블에 product_id 직접 컬럼 없음. outbound → bl_line join 필요해 Phase 2 분리.
+- **이유**: BARO 매출 1000억 규모에서 영업담당자별 / 채널별 / 월별 cut 이 부재하면 누가 어디서 얼마 매출을 내는지 불투명. module 의 sales-analysis 는 마진 베이스라 BARO 가 못 쓰고, 매출만 다루는 BARO 전용 라인이 필요. RFM(D-128) 이 *거래처 분류* 라면 본 보드는 *시간/조직/유형 cut*.
+- **운영 기준**:
+  - feature catalog `baro.sales_summary` (DataScope `tenant_company` — BR 법인 sales 만 사용한다는 의미적 표지) + matrix + RequireFeature(IDBaroSalesSummary) + DECISIONS 동시 갱신 (D-120 의무).
+  - 응답이 partners + sales raw 합본 — 응답 크기 측정 후 캐시/페이지네이션 검토 (현재 1000억 ÷ 3억 = 연 ~330건이라 작음).
+  - PR5.5 마진 도입 시 응답 shape 호환 유지 — frontend 변경 없이 `gross_margin_pct` 등 nullable 필드만 추가.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/baro/sales-summary/` catalog↔chi 일치, matrix_consistency_test 가 `baro.sales_summary` markdown 일치 검증.
+  - 라우터 가드: module/cable 토큰으로 호출 시 403, baro 토큰 통과.
+  - 프론트엔드 `npm run build` 통과.
+- **날짜**: 2026-05-07
+
+## D-130: BARO 인버터 호환 가이드 Phase 1 — frontend-only 정적 카탈로그 + 용량 매칭
+- **결정**: BARO 영업이 시공업체에 모듈+인버터 묶음 견적을 만들 때 "이 모듈 N장에 적합한 인버터?" 를 30초 안에 답할 수 있도록 정적 인버터 카탈로그 페이지 (`/baro/inverter-guide`) 도입한다. PR6 Phase 1 — **신규 backend 0**, **DB 마이그레이션 0**, **외부 API 0**.
+  - **카탈로그**: Sungrow / Huawei / GoodWe 주력 모델 10종 (5kW 주거 ~ 110kW 발전소). 페이지 컴포넌트 안에 `INVERTER_CATALOG` 배열로 하드코딩.
+  - **용량 매칭 계산기**: 모듈 수량 × spec_wp 입력 → 총 kW 계산 → 오버사이징 1.0~1.3 비율 안에 들어오는 인버터 추천 카드.
+  - **검색·필터**: 제조사/모델 검색 + 용도(주거/상업/발전소) 필터.
+  - **사이드바**: 「판매」 그룹에 "인버터 가이드" (BARO 전용).
+- **PR6.5 분리** (별도 D-NNN, 신규 backend 필요):
+  - **products.product_kind 컬럼**: `module` / `inverter` / `package` 분류 마이그레이션. 기존 행은 모두 `module` 로 backfill.
+  - **인버터 SKU 정식 등록**: `product_kind='inverter'` + `rated_power_kw`/`mppt_channels`/`max_input_voltage` 등 인버터 전용 nullable 컬럼. 마스터 CRUD UI.
+  - **패키지 SKU**: 모듈+인버터 자주 나가는 조합 1-row SKU. `baro_packages` 테이블 또는 product_kind=`package` + 구성품 child rows.
+  - **QuoteBuilder 통합**: 모듈 라인 추가 시 자동으로 적합한 인버터 후보 1줄 옵션 제시.
+  - **호환 매칭 정밀화**: 현 단계는 단순 kW 비율 1.0~1.3. PR6.5 에서 MPPT 채널 수 + 모듈 직렬 전압 범위 + 단상/3상 매칭 로직.
+- **이유**: BARO 매출의 모듈+인버터 묶음 비중이 높은데 영업이 인버터 사양을 외워야 하는 상황. 정식 SKU 등록(마이그레이션 동반)을 기다리지 않고 "오늘부터 쓸 수 있는 가이드" 를 먼저 띄워 매일 견적 작성에 활용. PR6.5 가 들어오면 본 페이지의 정적 카탈로그를 DB 카탈로그로 자연 대체.
+- **운영 기준**:
+  - 신규 라우트 0 → D-120 catalog/matrix 갱신 불필요.
+  - 카탈로그 데이터 추가/수정은 컴포넌트 파일 직접 수정 (PR6.5 까지 한정 — 그 후 admin UI).
+  - 단가/재고는 가이드에 표기 안 함 — PR6.5 에서 SKU 마스터 + 거래처 단가표 통합 후.
+- **검증**:
+  - 프론트엔드 `npm run build` (tsc -b) 통과.
+  - 수동 검증: BARO 토큰으로 `/baro/inverter-guide` 진입 시 카탈로그 10종 표시 + "30장 × 635W = 19.05kW" 입력 시 GW10K-DT 등 추천 카드 표시.
+- **날짜**: 2026-05-07
+
+## D-131: BARO 출하 알림 메시지 빌더 — frontend-only 카톡 붙여넣기용 텍스트 생성
+- **결정**: BARO 영업이 매일 시공업체에 보내는 출하 안내 카톡(상차 완료 / 출발 / 도착 예정 3 시점)의 메시지 텍스트를 form 입력 → 자동 생성 → 클립보드 복사 → 영업이 직접 카톡에 붙여넣기 하는 frontend-only 페이지(`/baro/shipment-notice`) 도입. PR7 Phase 1 — **신규 backend 0**, **외부 API 0**, **모바일 흐름 0**.
+  - **입력 폼**: 거래처명·현장명·도착예정·모델·수량·차량번호·차주명·차주연락처·메모.
+  - **메시지 3종**: `상차 완료` / `출발` / `도착 예정` — `buildMessage(stage, form)` 함수가 빈 필드는 자동 생략하면서 자연스러운 한국어 메시지 조립.
+  - **클립보드 복사**: `navigator.clipboard.writeText` + 2초 "복사됨" 피드백.
+  - **사이드바**: 「판매」 그룹에 "출하 알림" (BARO 전용).
+- **PR7.5 분리** (별도 D-NNN, 외부 API 키 + 모바일 흐름 + 신규 backend 필요):
+  - **카톡 자동 발송**: KakaoTalk Notification Talk API 통합 (사업자 전용, 키 발급 필요). 템플릿 등록 + 친구 동의 + 발송 로그.
+  - **SMS fallback**: Aligo / Solapi (카톡 미설치/미수신 시).
+  - **배차 보드 연동**: `/baro/dispatch` 의 dispatch_route 한 행 선택 → form 자동 prefill.
+  - **드라이버 PWA**: 별도 모바일 친화 페이지 — 상차 사진 / 도착 사진 / 미배달 사유 업로드. 인증 흐름 단순화 필요(차주는 정직원 아님 → 임시 토큰 또는 link-based access).
+  - **발송 추적**: `baro_shipment_notices` 테이블 (sent_at / channel / recipient_phone / read_at).
+- **이유**: 영업이 카톡에서 매일 작성하는 메시지를 빈 화면에서 시작하는 게 5분/건 부담. 폼 입력 30초 + 복사 후 카톡 붙여넣기 → 메시지 1건당 4분 절약 × 일 10건 × 영업 6명 = 일 4시간 절약. 외부 API 통합은 키 발급·승인 절차가 길어 PR7.5 로 분리.
+- **운영 기준**:
+  - 신규 라우트 0 → D-120 catalog/matrix 갱신 불필요.
+  - 메시지 템플릿은 컴포넌트 안 `buildMessage` 함수에 하드코딩 (PR7.5 까지 한정 — 그 후 admin UI 에서 템플릿 편집).
+  - 폼 데이터는 LocalStorage 도 미저장 (휘발성). PR7.5 dispatch 보드 연동 시 prefill 가능.
+- **검증**:
+  - 프론트엔드 `npm run build` (tsc -b) 통과.
+  - 수동 검증: BARO 토큰으로 `/baro/shipment-notice` 진입 시 폼 + 3 메시지 카드 표시. 빈 필드는 메시지에서 자동 생략. 복사 버튼 클릭 시 "복사됨" 피드백.
+- **날짜**: 2026-05-07
+
+
+## D-139: WMS Phase 1 — 창고 내 위치(Bin/Location) 관리 (모든 테넌트 공유)
+- **결정**: 기존 `warehouses` 마스터(창고 단위) 위에 `warehouse_locations` (Bin 단위) 신규 도입. Zone > Aisle > Rack > Bin 4단계 계층, 단계 일부 생략 가능 (작은 창고는 Zone-Bin 만).
+- **마이그 085** (`backend/migrations/085_warehouse_locations.sql`): `warehouse_locations` 테이블 — `warehouse_id` FK + 4단계 nullable + `location_code` (warehouse 내 UNIQUE) + capacity_qty/weight_capacity_kg + location_type CHECK (storage/staging/receiving/shipping/damaged/reserved) + is_active. 인덱스 3종 (warehouse_id 전체 / active_only / zone).
+- **endpoint** (`master.warehouse_location` feature_id, 모든 테넌트 공유):
+  - GET `/api/v1/warehouse-locations?warehouse_id=&active_only=true`, `/{id}`
+  - POST/PUT/PATCH/DELETE 표준 CRUD
+- **사용 시나리오**:
+  - 영업이 출고 시 "A존-3랙-Bin12 에서 30장" 위치 추적 (PR8.5 자동 피킹 리스트 후)
+  - 입고 시 패널 적재 위치 배정 (PR8.6 receiving log 후)
+  - 재고실사 cycle counting 시 위치 단위 점검 (PR8.7)
+- **PR8.5/PR8.6/PR8.7 분리** (별도 D-NNN, 마이그 동반):
+  - PR8.5 — `inventory_allocations.location_id` 추가 + 자동 피킹 리스트 (출고 1건당 위치별 수량). BARO 특화.
+  - PR8.6 — `bl_line_receiving_log` (module 측) + `intercompany_receiving_log` (BARO 측) 입고 검수 + 수량 차이 추적.
+  - PR8.7 — `cycle_counts` 정기 실사 + 정확도 추적.
+- **이유**: BARO 가 50+ SKU × 창고 1~2개 운영 시 차주 적재 시 위치 안내가 현재 직접 통화 의존. 위치 마스터 + Bin 표찰 인쇄만으로도 가치 큼. 후속 PR8.5 가 자동 피킹 리스트로 본 가치 폭발.
+- **운영 기준**:
+  - 모든 테넌트 공유 — BARO 만이 아닌 module 계열도 사용 가능.
+  - 마이그 미적용 환경에서는 POST 응답 500 + "마이그 085 미적용" 메시지.
+  - is_active=false 가 soft delete (재고 배정에 사용 중인 위치 hard delete 시 FK 제약 발동).
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/warehouse-locations/*` catalog 일치, matrix_consistency 가 `master.warehouse_location` markdown 일치 검증.
+  - 라우터 가드: 모든 테넌트 통과 (master.* 도메인).
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/085_warehouse_locations.sql` + PostgREST schema reload.
+- **날짜**: 2026-05-07
+
+## D-140: WMS Phase 2 — 위치별 재고 + 자동 피킹 명세 (모든 테넌트 공유)
+- **결정**: D-139 위치 마스터 위에 (1) `inventory_allocations.location_id` 컬럼 추가 + (2) `picking_lists` / `picking_list_items` 테이블 신규 + (3) PickingListHandler CRUD + picked 토글. **신규 backend 1 endpoint 묶음** (`tx.picking_list` feature_id, 모든 테넌트 공유).
+- **마이그 086** (`backend/migrations/086_picking_lists.sql`):
+  - `inventory_allocations.location_id uuid REFERENCES warehouse_locations(location_id)` (nullable, FK).
+  - `picking_lists` (picking_list_id, outbound_id, dispatch_route_id, warehouse_id FK, partner_id+snapshot, status CHECK pending/in_progress/completed/cancelled, picker_user_id FK auth.users, created_at/by, started_at, completed_at, notes).
+  - `picking_list_items` (item_id, picking_list_id FK CASCADE, line_no, product_id+snapshot 3종, location_id+snapshot, quantity_planned/picked, is_picked, picked_at/by, variance_note).
+  - 인덱스 5종 (outbound, status partial, picker, list 전체, unpicked partial).
+- **endpoint** (`tx.picking_list`):
+  - `GET /api/v1/picking-lists?status=pending&warehouse_id=&mine=true` — 작업자 본인 큐
+  - `GET /api/v1/picking-lists/{id}` — 헤더 + 라인 합본
+  - `POST /api/v1/picking-lists` — 헤더 + 라인 묶음 등록 (수동 또는 출고에서 자동 호출 가능)
+  - `PATCH /api/v1/picking-lists/{id}` — 헤더 status / picker / notes (status='in_progress' 시 started_at 자동, 'completed' 시 completed_at 자동)
+  - `PATCH /api/v1/picking-lists/{id}/items/{item_id}` — 라인 picked 토글 + quantity_picked + variance_note (is_picked=true 시 picked_at/by 자동)
+  - `DELETE /api/v1/picking-lists/{id}` — hard (status='cancelled' soft delete 권장)
+- **사용 시나리오**:
+  - 영업 수주 → 출고 생성 → 시스템이 가용재고의 `location_id` 기반 자동 피킹 명세 작성
+  - 창고 작업자 모바일/태블릿에서 본인 큐(`?mine=true`) 열기 → status='in_progress' 토글 → 라인별 picked 체크
+  - 차이 발생 시 quantity_picked 입력 + variance_note (실재고 부족 / 파손 / 위치 오류) → 영업·회계 알림
+- **snapshot 컬럼 정책**: product_code/name/spec_wp/location_code 모두 picking 시점 보존 — products 마스터 / warehouse_locations 변경에도 명세 원본 불변. 인쇄 라벨에 사용.
+- **PR8.5b 분리** (별도 D-NNN, outbound 핸들러 변경):
+  - 출고 생성 시 자동 피킹 명세 생성 — outbound→bl_line→inventory_allocation join 으로 위치 추출 + POST /picking-lists 자동 호출.
+  - 명시적 enforcement 까지 가는 게 큰 작업이라 분리. PR8.5 단계는 수동 POST 만 안전 동작.
+- **PR8.5c 분리** (frontend):
+  - `/baro/picking` 페이지 — 작업자 큐 (mine=true) + status 토글 + 라인 picked 토글 (모바일 친화 UI).
+  - 인쇄 라벨 (Bin 표찰 + 라인 명세) 별도 PR.
+- **이유**: D-139 위치 마스터 만으로는 영업·작업자 워크플로우 미통합 — picking 명세가 진짜 가치. BARO 50+ SKU × 출고 일 10건 환경에서 작업자 1인당 일 30분 절약 가능 (위치 헤매기 X). 시공업체 클레임 (수량 부족) 시 picking 로그가 증빙.
+- **운영 기준**:
+  - 모든 테넌트 공유 — BARO 만이 아닌 module 계열도 사용 가능.
+  - 마이그 086 미적용 시 POST 응답 500 + 안내 메시지.
+  - status 머신 강제: pending → in_progress → completed (또는 pending → cancelled).
+  - is_picked=true 가 picked_at/by 자동 기록 (작업자 토큰 기반).
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/picking-lists/*` catalog 일치, matrix_consistency 검증.
+  - 모든 테넌트 토큰 통과 (tx.* 도메인).
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/086_picking_lists.sql` + PostgREST schema reload.
+- **날짜**: 2026-05-07
+
+## D-141: WMS Phase 3 — 입고 검수 로그 (모든 테넌트 공유)
+- **결정**: 트럭 도착 → 검수자 → 수량/규격 확인 → 위치 배정 + 차이 추적. **module 계열(BL 라인) + BARO(intercompany_request) 양쪽 동일 패턴** 을 단일 테이블 `receiving_logs` 에 통합 (`source_type` 으로 분기).
+- **마이그 087** (`backend/migrations/087_receiving_log.sql`):
+  - `receiving_logs` (receiving_id, source_type CHECK bl_line/intercompany/manual, bl_line_id/intercompany_request_id 둘 중 하나, warehouse_id FK, product+snapshot, quantity_expected/received + GENERATED variance, location_id+snapshot, receiver_user_id, received_at, variance_reason CHECK 6종, variance_note, photo_attachment_ids uuid[], notes).
+  - 인덱스 5종 (source partial, intercompany partial, warehouse, receiver+received_at desc, variance_only partial).
+- **endpoint** (`tx.receiving_log` feature_id, 모든 테넌트):
+  - `GET /api/v1/receiving-logs?source_type=&warehouse_id=&variance_only=true`
+  - `GET /{id}` / `POST` / `DELETE` (admin only 권장 — 회계 증빙)
+- **차이 사유 분류**: `shortage` / `overage` / `damaged` / `wrong_product` / `wrong_spec` / `other`.
+- **사진 첨부**: `photo_attachment_ids` (Postgres uuid[]) — 기존 `/api/v1/attachments/` 와 link.
+- **사용 시나리오**:
+  - 입고 시 검수자가 모바일/태블릿으로 BL 라인 또는 intercompany 요청 선택 → 실수량 입력 → 차이 발생 시 사유+사진
+  - 영업·회계 가 `?variance_only=true` 로 차이 발생 건만 일별 점검
+  - 회계 마감 시 검수 로그 vs 매입 인보이스 대조
+- **PR8.6b 분리**:
+  - BL 라인 핸들러에서 검수 로그 자동 생성 호출 (입고 처리 시).
+  - intercompany_request `receive` 액션에서 자동 호출.
+- **이유**: 현재 입고는 BL 라인 status 변경만 추적 — 차이 사유·검수자·사진 부재. 클레임 발생 시 증빙 어려움. 통합 receiving_logs 로 양 흐름 동일 점검 + 회계 증빙 + AI 이상 탐지(향후) 기반.
+- **운영 기준**: 모든 테넌트 공유 (tx.* 도메인). 차이 발생 시 variance_reason 강제 (handler 검증).
+- **검증**: `go test ./internal/{feature,router,handler}` 통과 — coverage_test 일치, matrix consistency.
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/087_receiving_log.sql` + PostgREST reload.
+- **날짜**: 2026-05-07
+
+## D-142: WMS Phase 4 — Cycle Counting (정기 재고실사, 모든 테넌트 공유)
+- **결정**: 분기/월 단위 정기 재고실사 + 위치 단위 차이 추적 + 정확도 보드. `cycle_counts` 세션 + `cycle_count_items` 라인 구조.
+- **마이그 088** (`backend/migrations/088_cycle_counts.sql`):
+  - `cycle_counts` (cycle_count_id, warehouse_id FK, scheduled_date, status CHECK, started_at, completed_at, total_locations, matched_locations, variance_locations, accuracy_pct, created_by, notes).
+  - `cycle_count_items` (item_id, cycle_count_id FK CASCADE, location_id+snapshot, product_id+snapshot 3종, expected_qty, counted_qty nullable, GENERATED variance_qty, variance_reason CHECK 5종, counted_by, counted_at, photo_attachment_ids uuid[]).
+  - 인덱스 5종.
+- **endpoint** (`tx.cycle_count`):
+  - `GET /api/v1/cycle-counts?status=&warehouse_id=`
+  - `GET /{id}` (헤더 + 라인 합본)
+  - `POST` 세션 생성
+  - `POST /{id}/complete` 세션 종료 + 정확도 자동 집계
+  - `PATCH /{id}/items/{item_id}` 라인 counted_qty + variance 입력
+- **차이 사유**: `shrinkage` (도난/유실) / `damage` (파손) / `wrong_location` (위치 오류) / `system_error` (시스템 오류) / `other`.
+- **정확도 자동 집계**: `Complete` 호출 시 라인 집계 → matched/variance/accuracy_pct 헤더 갱신.
+- **사용 시나리오**:
+  - 분기 시작 시 admin 이 세션 생성 → PR8.7b 가 inventory_allocations 스냅샷 자동 → 라인 일괄 생성
+  - 작업자 모바일에서 본인 큐(`?status=in_progress`) 열고 라인별 실측 입력
+  - 차이 발생 라인은 사진 + 사유
+  - 세션 종료 시 정확도 % 자동 집계 → 영업/회계 보고
+- **PR8.7b/c 분리**:
+  - PR8.7b — `cycle_counts.{id}/seed` endpoint: inventory_allocations 자동 스냅샷 → cycle_count_items 일괄 생성.
+  - PR8.7c — completed 세션의 variance 라인을 inventory_allocations 자동 보정 (admin 결재 후).
+- **이유**: BARO 1000억 매출 환경에서 SKU 50종 × 분기 1회 점검 = 분기 200~300건 점검. 현재는 엑셀 파일로 수동 관리 — 차이 추적·증빙 부실. 시스템화로 정확도 추세 + 도난/파손 패턴 분석 가능.
+- **운영 기준**: 모든 테넌트 공유. 정확도 90% 이하 시 영업·회계 알림 (PR8.7d).
+- **검증**: `go test` 통과 — coverage_test 일치.
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/088_cycle_counts.sql` + PostgREST reload.
+- **날짜**: 2026-05-07
+
+## D-143: 가격예측 AI 수집 관측값은 선택 삭제 가능, 실행 로그는 보존
+- **결정**: `/price-forecast` 하단 관측값 목록에서 사용자가 개별 가격 벤치마크를 선택해 삭제할 수 있게 한다. 서버는 `DELETE /api/v1/price-benchmarks/{id}` 로 `price_benchmarks` 행만 삭제한다.
+- **이유**: AI 수집은 evidence 기반으로 제한해도 공개 페이지 요약, 유료 리포트 미리보기, 검색 결과 조각의 품질 차이 때문에 신뢰도 낮은 관측값이 섞일 수 있다. 실무 구매 협상 기준선에 쓰는 화면이라, 운영자가 낮은 confidence·근거 부족 행을 즉시 제거할 수 있어야 한다.
+- **감사 기준**: `price_benchmark_runs` 는 삭제하지 않는다. 어떤 provider/model/source_keys 로 수집했고 warnings/skipped/raw_response 가 무엇이었는지는 재수집 품질 점검용 기록이므로 보존한다.
+- **날짜**: 2026-05-07
+
+## D-144: 매출 분석 이익률은 원가 연결 매출 기준으로 계산한다
+
+- **결정**: `/api/v1/calc/margin-analysis`의 `summary.total_margin_krw`와 `summary.overall_margin_rate`는 원가가 연결된 매출분만 기준으로 계산한다. 전체 공급가 매출은 `total_revenue_krw`에 유지하고, 원가가 연결된 공급가는 `cost_covered_revenue_krw`, 아직 원가가 없어 제외한 공급가는 `cost_missing_revenue_krw`, 연결률은 `cost_coverage_rate`로 별도 노출한다.
+- **이유**: 원가가 없는 품목의 매출을 0원 원가처럼 총이익에 섞으면 경영진 화면에서 이익이 과대 표시된다. 매출 규모와 이익 신뢰도를 분리해야 "얼마 팔았는가"와 "그중 얼마가 계산 가능한 이익인가"를 동시에 판단할 수 있다.
+- **운영 기준**:
+  - 매출 분석 화면은 `공급가 매출`, `계산 이익`, `이익률`, `미수금`, `계산서 미발행`, `원가 미연결`을 분리 표시한다.
+  - 거래처 분석의 수금/미수 집계는 선택 법인과 조회 기간의 출고/매출 범위에 맞춘다. 다른 법인·기간 수금액을 같은 거래처라는 이유로 섞지 않는다.
+  - 계산엔진 호출 실패는 빈 0원 데이터로 조용히 대체하지 않고 화면 경고로 드러낸다.
+- **검증**:
+  - Rust `test_margin_summary_uses_cost_covered_revenue`로 원가 연결 매출 기준 이익률/연결률을 고정한다.
+  - 프론트엔드 빌드에서 확장 응답 스키마(`cost_*`)와 mock 응답 호환을 확인한다.
+- **날짜**: 2026-05-07
+
+## D-145: 수금 매칭 — 결정적 자동 매칭과 AI 검토를 분리하고 확정은 bulk 검증으로 처리
 
 - **결정**: 수금 관리의 매칭 흐름을 세 단계로 정리한다.
   - **정확 일치 자동 매칭**: 기존 Rust outstanding 계산을 이용해 미수금 전액과 입금 잔액이 정확히 맞는 건만 추천/자동 처리한다. 이 경로는 결정적 계산으로 유지한다.
@@ -910,6 +1187,5 @@
 - **검증**:
   - `go test ./internal/feature ./internal/router ./internal/handler` 통과.
   - `go test ./...` 및 `go vet ./...` 통과.
-  - 프론트엔드 `npm run build` 통과.
-  - `npm run test` 는 Vitest worker 시작 timeout 으로 테스트 본문 진입 전 실패. `npx vitest run --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=dot` 도 150초 제한에서 시작 대기 후 timeout.
+  - 프론트엔드 `npm ci`, `npm run build`, `npm run test`, `npm run lint` 통과. lint 는 최신 main 기준 ProcurementPage pagination reset hook 경고 4건 유지.
 - **날짜**: 2026-05-07

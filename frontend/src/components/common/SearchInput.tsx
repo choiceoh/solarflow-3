@@ -27,10 +27,7 @@ export default function SearchInput({ placeholder = '검색...', onChange }: Sea
 
   return (
     <div className="relative w-64">
-      <Search
-        className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
-        style={{ color: 'var(--sf-ink-4)' }}
-      />
+      <Search className="sf-text-ink-4 pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
       <Input
         placeholder={placeholder}
         value={value}
@@ -42,10 +39,7 @@ export default function SearchInput({ placeholder = '검색...', onChange }: Sea
           type="button"
           aria-label="검색어 지우기"
           onClick={() => setValue('')}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 transition-colors"
-          style={{ color: 'var(--sf-ink-4)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--sf-ink)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--sf-ink-4)'; }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
         >
           <X className="h-3.5 w-3.5" />
         </button>

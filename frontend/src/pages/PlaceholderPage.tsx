@@ -17,17 +17,14 @@ export default function PlaceholderPage({ title, stepNumber }: PlaceholderPagePr
           maxWidth: '360px',
         }}
       >
-        <div
-          className="flex h-12 w-12 items-center justify-center rounded-full"
-          style={{ background: 'var(--sf-solar-bg)', color: 'var(--sf-solar-3)' }}
-        >
+        <div className="sf-tone-solar flex h-12 w-12 items-center justify-center rounded-full">
           <Construction className="h-5 w-5" strokeWidth={1.6} />
         </div>
-        <div className="sf-eyebrow" style={{ color: 'var(--sf-solar-3)' }}>WORK IN PROGRESS</div>
-        <h2 className="text-base font-semibold" style={{ color: 'var(--sf-ink)', letterSpacing: '-0.012em' }}>
+        <div className="sf-eyebrow sf-text-solar">WORK IN PROGRESS</div>
+        <h2 className="sf-text-ink text-base font-semibold" style={{ letterSpacing: '-0.012em' }}>
           {title}
         </h2>
-        <p className="sf-mono text-[11px]" style={{ color: 'var(--sf-ink-3)' }}>
+        <p className="sf-mono sf-text-ink-3 text-[11px]">
           Step {stepNumber}에서 구현 예정
         </p>
       </div>

@@ -1,10 +1,15 @@
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { useAppStore } from "@/stores/appStore"
-import { useExpenseList, useExpenseSummary } from "@/hooks/useCustoms"
+import { useDeclarationList, useExpenseList, useExpenseSummary } from "@/hooks/useCustoms"
 import { useBLSummary } from "@/hooks/useInbound"
 import { fetchWithAuth } from "@/lib/api"
 import SkeletonRows from "@/components/common/SkeletonRows"
+import DeclarationListTable, {
+  DECLARATION_TABLE_ID,
+  DECLARATION_COLUMN_META,
+} from "@/components/customs/DeclarationListTable"
 import ExpenseListTable, {
   EXPENSE_TABLE_ID,
   EXPENSE_COLUMN_META,
@@ -35,12 +40,14 @@ function fmtEok(value: number) {
 
 export default function CustomsPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const navigate = useNavigate()
 
-  // 탭 1: 부대비용
+  // 탭 1: 면장, 탭 2: 부대비용
+  const [declBlFilter, setDeclBlFilter] = useState("")
   const [expBlFilter, setExpBlFilter] = useState("")
   const [expDateRange, setExpDateRange] = useState<DateRangeValue>(null)
   const [expTypeFilter, setExpTypeFilter] = useState("")
-  const [activeTab, setActiveTab] = useState("expenses")
+  const [activeTab, setActiveTab] = useState("declarations")
 
   // 마스터
   const [bls, setBls] = useState<BLShipment[]>([])
@@ -52,10 +59,15 @@ export default function CustomsPage() {
     expFilters.start = expDateRange.start
     expFilters.end = expDateRange.end
   }
+  const declFilters: { bl_id?: string } = {}
+  if (declBlFilter) declFilters.bl_id = declBlFilter
 
+  const { data: declarations, loading: declLoading } = useDeclarationList(declFilters)
   const { data: expenses, loading: expLoading } = useExpenseList(expFilters)
   const { data: expenseSummary } = useExpenseSummary(expFilters)
   const { data: blSummary } = useBLSummary()
+  const declColVis = useColumnVisibility(DECLARATION_TABLE_ID, DECLARATION_COLUMN_META)
+  const declColPin = useColumnPinning(DECLARATION_TABLE_ID)
   const expenseColVis = useColumnVisibility(EXPENSE_TABLE_ID, EXPENSE_COLUMN_META)
   const expenseColPin = useColumnPinning(EXPENSE_TABLE_ID)
 
@@ -83,7 +95,11 @@ export default function CustomsPage() {
     expenseSummary?.vat_amount ?? expenses.reduce((sum, expense) => sum + (expense.vat ?? 0), 0)
   const linkedExpenseCount =
     expenseSummary?.linked_count ?? expenses.filter((expense) => expense.bl_id).length
+  const costedDeclarationCount = declarations.filter((decl) => (
+    decl.cost_unit_price_wp != null || decl.cif_krw != null
+  )).length
   // KPI sparkline — Expense.month 기반 월별 집계 (없는 항목은 무시 → 평행선 대체).
+  const declSpark = monthlyCount(declarations, (decl) => decl.declaration_date ?? null)
   const expenseDate = (e: (typeof expenses)[number]) => e.month ?? null
   const totalSpark = monthlyTrend(expenses, expenseDate, (e) => e.total ?? e.amount ?? 0)
   const linkedSpark = monthlyCount(
@@ -106,8 +122,9 @@ export default function CustomsPage() {
         const key = EXPENSE_TYPE_LABEL[expense.expense_type as ExpenseType] ?? expense.expense_type
         acc[key] = (acc[key] ?? 0) + (expense.total ?? expense.amount ?? 0)
         return acc
-      }, {})
+  }, {})
   const customsTabOptions = [
+    { key: "declarations", label: "면장", count: declarations.length },
     { key: "expenses", label: "부대비용", count: expenseCount },
     { key: "exchange", label: "환율 비교" },
   ]
@@ -116,7 +133,31 @@ export default function CustomsPage() {
       className="sf-card-controls"
       style={{ flex: 1, minWidth: 0, justifyContent: "flex-start" }}
     >
-      {activeTab === "expenses" ? (
+      {activeTab === "declarations" ? (
+        <>
+          <FilterButton
+            items={[
+              {
+                label: "B/L",
+                value: declBlFilter,
+                onChange: setDeclBlFilter,
+                options: bls.map((bl) => ({ value: bl.bl_id, label: bl.bl_number })),
+              },
+            ]}
+          />
+          <ColumnVisibilityMenu
+            tableId={DECLARATION_TABLE_ID}
+            columns={DECLARATION_COLUMN_META}
+            hidden={declColVis.hidden}
+            setHidden={declColVis.setHidden}
+            pinning={declColPin.pinning}
+            pinLeft={declColPin.pinLeft}
+            pinRight={declColPin.pinRight}
+            unpin={declColPin.unpin}
+          />
+          <ExcelToolbar type="declaration" />
+        </>
+      ) : activeTab === "expenses" ? (
         <>
           <FilterButton
             items={[
@@ -159,11 +200,14 @@ export default function CustomsPage() {
       <FilterChips options={customsTabOptions} value={activeTab} onChange={setActiveTab} />
     </div>
   )
-  const pageTitle = activeTab === "exchange" ? "환율 비교" : "부대비용"
+  const pageTitle =
+    activeTab === "exchange" ? "환율 비교" : activeTab === "expenses" ? "부대비용" : "면장/원가"
   const pageSub =
     activeTab === "exchange"
       ? "계약 환율과 최신 환율 영향 비교"
-      : `${expenseCount}건 · ${fmtEok(expenseTotal)}억`
+      : activeTab === "expenses"
+        ? `${expenseCount}건 · ${fmtEok(expenseTotal)}억`
+        : `${declarations.length}건 · 원가 ${costedDeclarationCount}건`
 
   return (
     <>
@@ -171,17 +215,29 @@ export default function CustomsPage() {
         <section className="sf-customs-main">
           <div className="sf-command-kpis sf-customs-kpis">
             <TileB
+              lbl="면장"
+              v={String(declarations.length)}
+              u="건"
+              sub={`원가 ${costedDeclarationCount}건`}
+              tone="solar"
+              spark={declSpark}
+            />
+            <TileB
               lbl="부대비용"
               v={fmtEok(expenseTotal)}
+              numericValue={expenseTotal}
+              formatter={fmtEok}
               u="억"
               sub={`${expenseCount}건 · VAT ${fmtEok(expenseVat)}억`}
-              tone="solar"
+              tone="ink"
               spark={totalSpark}
               metricId="customs.expense_total"
             />
             <TileB
               lbl="B/L 연결"
               v={String(linkedExpenseCount)}
+              numericValue={linkedExpenseCount}
+              formatter={(n) => String(Math.round(n))}
               u="건"
               sub={`전체 ${blSummary?.total ?? bls.length}개 B/L`}
               tone="info"
@@ -191,6 +247,8 @@ export default function CustomsPage() {
             <TileB
               lbl="비용 유형"
               v={String(expenseSummary?.type_count ?? Object.keys(typeExpenseMap).length)}
+              numericValue={expenseSummary?.type_count ?? Object.keys(typeExpenseMap).length}
+              formatter={(n) => String(Math.round(n))}
               u="종"
               sub="운송·통관·LC 수수료"
               tone="warn"
@@ -203,6 +261,9 @@ export default function CustomsPage() {
                 expenseSummary?.average_amount ??
                   (expenses.length ? expenseTotal / expenses.length : 0),
               )}
+              numericValue={expenseSummary?.average_amount ??
+                (expenses.length ? expenseTotal / expenses.length : 0)}
+              formatter={fmtEok}
               u="억"
               sub="건당 평균"
               tone="ink"
@@ -219,7 +280,22 @@ export default function CustomsPage() {
           <CardB title={pageTitle} sub={pageSub} right={customsCardControls} headerless>
             <div className="sf-command-tab-body">
               <Tabs value={activeTab} onValueChange={setActiveTab}>
-                {/* 탭 1: 부대비용 */}
+                {/* 탭 1: 면장 */}
+                <TabsContent value="declarations" className="mt-0 space-y-3">
+                  {declLoading ? (
+                    <SkeletonRows rows={6} />
+                  ) : (
+                    <DeclarationListTable
+                      items={declarations}
+                      hidden={declColVis.hidden}
+                      pinning={declColPin.pinning}
+                      onPinningChange={declColPin.setPinning}
+                      onSelect={(decl) => navigate(`/procurement?tab=bl&bl_id=${decl.bl_id}`)}
+                    />
+                  )}
+                </TabsContent>
+
+                {/* 탭 2: 부대비용 */}
                 <TabsContent value="expenses" className="mt-0 space-y-3">
                   {expLoading ? (
                     <SkeletonRows rows={6} />

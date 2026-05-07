@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	postgrest "github.com/supabase-community/postgrest-go"
@@ -14,10 +16,31 @@ import (
 	"solarflow-backend/internal/response"
 )
 
+// poSortable — server-side 정렬 허용 컬럼 (BL 패턴과 동일).
+// purchase_orders_ext 뷰의 컬럼만 허용 — 사용자가 임의 컬럼명 보내도 무시.
+var poSortable = map[string]struct{}{
+	"po_number":     {},
+	"contract_date": {},
+	"contract_type": {},
+	"status":        {},
+	"total_mw":      {},
+	"total_qty":     {},
+	"created_at":    {},
+}
+
 // POHandler — 발주/계약(purchase_orders) 관련 API를 처리하는 핸들러
 // 비유: "발주 계약 관리실" — 제조사별 계약서를 관리하는 방
 type POHandler struct {
 	DB *supa.Client
+}
+
+func sanitizePOSearchTerm(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(",", " ", "(", " ", ")", " ", ".", " ", "*", " ", "\"", " ")
+	return strings.TrimSpace(replacer.Replace(q))
 }
 
 type deletePurchaseOrderRPCRequest struct {
@@ -53,7 +76,39 @@ func (h *POHandler) applyPOFilters(r *http.Request, query *postgrest.FilterBuild
 	if ct := r.URL.Query().Get("contract_type"); ct != "" {
 		query = query.Eq("contract_type", ct)
 	}
+	// 기간 — contract_date 범위 (양끝 포함, ISO date YYYY-MM-DD).
+	// frontend ProcurementPage 의 date_range filter 서버 위임 (이전엔 page 안 client filter).
+	if from := r.URL.Query().Get("contract_date_from"); from != "" {
+		query = query.Gte("contract_date", from)
+	}
+	if to := r.URL.Query().Get("contract_date_to"); to != "" {
+		query = query.Lte("contract_date", to)
+	}
+	// 검색 — po_number/manufacturer_name/payment_terms/memo ilike. parent_po_id 와 같은 구조 필드는 제외.
+	if q := sanitizePOSearchTerm(r.URL.Query().Get("q")); q != "" {
+		clauses := []string{
+			fmt.Sprintf("po_number.ilike.*%s*", q),
+			fmt.Sprintf("manufacturer_name.ilike.*%s*", q),
+			fmt.Sprintf("payment_terms.ilike.*%s*", q),
+			fmt.Sprintf("memo.ilike.*%s*", q),
+		}
+		query = query.Or(strings.Join(clauses, ","), "")
+	}
 	return query
+}
+
+func parsePOSort(r *http.Request) (column string, ascending bool) {
+	column = "contract_date"
+	ascending = false
+	if raw := r.URL.Query().Get("sort"); raw != "" {
+		if _, ok := poSortable[raw]; ok {
+			column = raw
+		}
+	}
+	if r.URL.Query().Get("order") == "asc" {
+		ascending = true
+	}
+	return column, ascending
 }
 
 // List — GET /api/v1/pos — 발주 목록 조회 (법인/제조사 정보 포함)
@@ -63,6 +118,9 @@ func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
 	// purchase_orders_ext: manufacturer_name(name_kr alias) 포함 뷰
 	query := h.DB.From("purchase_orders_ext").Select("*", "exact", false)
 	query = h.applyPOFilters(r, query)
+
+	sortCol, asc := parsePOSort(r)
+	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
 	limit, offset := parseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()

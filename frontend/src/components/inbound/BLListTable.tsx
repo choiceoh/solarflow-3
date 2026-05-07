@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { AlertTriangle, CalendarClock } from 'lucide-react';
 import { formatDate, moduleLabel } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
 import SortableTH from '@/components/common/SortableTH';
@@ -11,17 +12,71 @@ import { useSort } from '@/hooks/useSort';
 
 interface BLAgg {
   firstLine?: { name: string; spec: string; specWp?: number };
+  lineCount: number;
   extraCount: number;
   avgCentsPerWp: number;
   totalMw: number;
 }
 
+type WorkChipTone = 'info' | 'warn' | 'danger';
+
+interface WorkChip {
+  label: string;
+  tone: WorkChipTone;
+}
+
+const DONE_STATUSES = new Set<BLShipment['status']>(['completed', 'erp_done']);
+
+function daysUntil(date?: string) {
+  if (!date) return null;
+  const target = new Date(date);
+  if (Number.isNaN(target.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
+}
+
+function dueText(date?: string) {
+  const d = daysUntil(date);
+  if (d == null) return 'ETA 미정';
+  if (d < 0) return `ETA ${Math.abs(d)}일 지연`;
+  if (d === 0) return 'ETA 오늘';
+  return `ETA D-${d}`;
+}
+
+function workChipClass(tone: WorkChipTone) {
+  if (tone === 'danger') return 'border-red-200 bg-red-50 text-red-700';
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50 text-amber-700';
+  return 'border-blue-200 bg-blue-50 text-blue-700';
+}
+
+function buildWorkChips(bl: BLShipment, a?: BLAgg): WorkChip[] {
+  const chips: WorkChip[] = [];
+  const d = daysUntil(bl.eta);
+  if (!DONE_STATUSES.has(bl.status) && d != null) {
+    if (d < 0) chips.push({ label: 'ETA 지연', tone: 'danger' });
+    else if (d <= 7) chips.push({ label: 'ETA 임박', tone: 'warn' });
+  }
+  if (a && a.lineCount === 0) chips.push({ label: '품목 없음', tone: 'warn' });
+  if (bl.inbound_type === 'import' && bl.status === 'customs' && !bl.declaration_number && !bl.cif_amount_krw) {
+    chips.push({ label: '면장 확인', tone: 'warn' });
+  }
+  if (bl.status === 'completed' && bl.erp_registered !== true) {
+    chips.push({ label: 'ERP 미등록', tone: 'info' });
+  }
+  return chips;
+}
+
 interface Props {
   items: BLShipment[];
   onSelect: (bl: BLShipment) => void;
+  sortField?: string | null;
+  sortDirection?: 'asc' | 'desc' | null;
+  onSort?: (field: string) => void;
 }
 
-export default function BLListTable({ items, onSelect }: Props) {
+export default function BLListTable({ items, onSelect, sortField, sortDirection, onSort }: Props) {
   const companies = useAppStore((s) => s.companies);
   const companyMap = Object.fromEntries(companies.map((c) => [c.company_id, c.company_name]));
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
@@ -55,6 +110,7 @@ export default function BLListTable({ items, onSelect }: Props) {
                 spec: first.product_code ?? first.products?.product_code ?? '—',
                 specWp: first.products?.spec_wp,
               } : undefined,
+              lineCount: lines?.length ?? 0,
               extraCount: Math.max(0, (lines?.length ?? 0) - 1),
               avgCentsPerWp,
               totalMw,
@@ -65,9 +121,11 @@ export default function BLListTable({ items, onSelect }: Props) {
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.map((bl) => bl.bl_id).join(',')]);
+  }, [items]);
 
+  const controlled = onSort != null
+    ? { sortField: sortField ?? null, sortDirection: sortDirection ?? null, onSort }
+    : undefined
   const { sorted, headerProps } = useSort<BLShipment>(items, (b, f) => {
     switch (f) {
       case 'bl_number': return b.bl_number ?? '';
@@ -76,26 +134,55 @@ export default function BLListTable({ items, onSelect }: Props) {
       case 'etd': return b.etd ?? '';
       default: return null;
     }
-  });
+  }, controlled);
+
+  const totalMw = sorted.reduce((sum, bl) => sum + (agg[bl.bl_id]?.totalMw ?? 0), 0);
+  const queueSummary = useMemo(() => {
+    const rows = sorted.map((bl) => ({ bl, chips: buildWorkChips(bl, agg[bl.bl_id]) }));
+    return {
+      attention: rows.filter((row) => row.chips.some((chip) => chip.tone === 'danger' || chip.tone === 'warn')).length,
+      etaSoon: rows.filter((row) => {
+        const d = daysUntil(row.bl.eta);
+        return !DONE_STATUSES.has(row.bl.status) && d != null && d >= 0 && d <= 7;
+      }).length,
+      erpPending: rows.filter((row) => row.bl.status === 'completed' && row.bl.erp_registered !== true).length,
+    };
+  }, [sorted, agg]);
 
   if (items.length === 0) return <EmptyState message="등록된 입고 건이 없습니다" />;
 
-  const totalMw = sorted.reduce((sum, bl) => sum + (agg[bl.bl_id]?.totalMw ?? 0), 0);
-
   return (
-    <div className="rounded-md border overflow-x-auto">
-        <table className="w-full min-w-[800px] text-xs">
+    <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div className="rounded-md border bg-card px-3 py-2">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">처리 필요</div>
+          <div className="mt-1 text-base font-semibold tabular-nums">{queueSummary.attention.toLocaleString('ko-KR')}건</div>
+        </div>
+        <div className="rounded-md border bg-card px-3 py-2">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">ETA 7일 내</div>
+          <div className="mt-1 text-base font-semibold tabular-nums">{queueSummary.etaSoon.toLocaleString('ko-KR')}건</div>
+        </div>
+        <div className="rounded-md border bg-card px-3 py-2">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">ERP 미등록</div>
+          <div className="mt-1 text-base font-semibold tabular-nums">{queueSummary.erpPending.toLocaleString('ko-KR')}건</div>
+        </div>
+      </div>
+
+      <div className="rounded-md border overflow-x-auto">
+        <table className="w-full min-w-[960px] text-xs">
           <thead>
             <tr className="bg-muted/50 border-b">
               <SortableTH {...headerProps('bl_number')} className="p-3 font-medium text-muted-foreground">B/L 정보</SortableTH>
               <SortableTH {...headerProps('manufacturer')} className="p-3 font-medium text-muted-foreground">품목</SortableTH>
               <SortableTH {...headerProps('inbound_type')} className="p-3 font-medium text-muted-foreground">구분 / 현황</SortableTH>
               <SortableTH {...headerProps('etd')} className="p-3 font-medium text-muted-foreground">선적 일정</SortableTH>
+              <th className="p-3 text-left font-medium text-muted-foreground">작업</th>
             </tr>
           </thead>
           <tbody>
             {sorted.map((bl) => {
               const a = agg[bl.bl_id];
+              const chips = buildWorkChips(bl, a);
               return (
                 <tr key={bl.bl_id} className="border-t hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => onSelect(bl)}>
                   {/* B/L 정보 */}
@@ -166,6 +253,31 @@ export default function BLListTable({ items, onSelect }: Props) {
                       </div>
                     </div>
                   </td>
+
+                  {/* 작업 */}
+                  <td className="p-3 align-top min-w-[190px]">
+                    <div className="mb-2 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      <span>{dueText(bl.eta)}</span>
+                    </div>
+                    {chips.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {chips.map((chip) => (
+                          <span
+                            key={chip.label}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${workChipClass(chip.tone)}`}
+                          >
+                            {chip.tone === 'danger' || chip.tone === 'warn' ? <AlertTriangle className="h-3 w-3" /> : null}
+                            {chip.label}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="inline-flex rounded-full border border-muted bg-muted/30 px-2 py-0.5 text-[10px] text-muted-foreground">
+                        정상
+                      </span>
+                    )}
+                  </td>
                 </tr>
               );
             })}
@@ -180,9 +292,11 @@ export default function BLListTable({ items, onSelect }: Props) {
               <td className="p-3 font-mono font-medium tabular-nums">{totalMw > 0 ? `${totalMw.toFixed(2)} MW` : '—'}</td>
               <td />
               <td />
+              <td />
             </tr>
           </tfoot>
         </table>
+      </div>
     </div>
   );
 }
