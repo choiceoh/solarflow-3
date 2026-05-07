@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Bot } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppStore } from '@/stores/appStore';
 import { AssistantDrawer } from './AssistantDrawer';
@@ -16,11 +17,14 @@ import { AssistantDrawer } from './AssistantDrawer';
  */
 export const FloatingAssistantButton = () => {
   const { role } = useAuth();
+  const location = useLocation();
   const open = useAppStore((s) => s.assistantDrawerOpen);
   const setOpen = useAppStore((s) => s.setAssistantDrawerOpen);
+  // /assistant 풀 페이지에는 이미 어시스턴트 본체가 있어서 floating 버튼은 중복.
+  const onAssistantPage = location.pathname === '/assistant';
 
   useEffect(() => {
-    if (role !== 'admin') return;
+    if (role !== 'admin' || onAssistantPage) return;
     const onKey = (e: KeyboardEvent) => {
       const isMod = e.metaKey || e.ctrlKey;
       if (!isMod || e.key !== '.') return;
@@ -29,9 +33,9 @@ export const FloatingAssistantButton = () => {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [role, setOpen]);
+  }, [role, onAssistantPage, setOpen]);
 
-  if (role !== 'admin') return null;
+  if (role !== 'admin' || onAssistantPage) return null;
 
   return (
     <>
