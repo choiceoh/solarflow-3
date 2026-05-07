@@ -1,70 +1,31 @@
 // 최근 이벤트 (건) 드릴다운 — PO/PH/LC/BL/TT 발생 이벤트의 월별 + 종류별 분해.
+//
+// 서버 집계 (purchase_dashboard RPC) — totals.event_count + trend24.event_count + by_kind.
 
 import { useMemo } from 'react'
-import { usePOList, usePriceHistoryList, useLCList, useTTList } from '@/hooks/useProcurement'
-import { useBLList } from '@/hooks/useInbound'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { usePurchaseDashboard } from '@/hooks/useProcurement'
 import InsightShell from '@/components/insights/InsightShell'
-
-interface EventRow {
-  kind: 'po' | 'variant' | 'price' | 'lc_open' | 'lc_settle' | 'bl' | 'tt'
-  date: string | null
-}
-
-const KIND_LABEL: Record<EventRow['kind'], string> = {
-  po: 'PO 생성',
-  variant: '변경계약',
-  price: '단가 변동',
-  lc_open: 'LC 개설',
-  lc_settle: 'LC 결제',
-  bl: 'B/L 등록',
-  tt: 'T/T 송금',
-}
+import type { BreakdownRow, TrendPoint } from '@/lib/insights/aggregations'
 
 export function PurchaseRecentEventsInsight() {
-  const { data: pos, loading: posLoading } = usePOList()
-  const { data: phs, loading: phsLoading } = usePriceHistoryList()
-  const { data: lcs, loading: lcsLoading } = useLCList()
-  const { data: bls, loading: blsLoading } = useBLList()
-  const { data: tts, loading: ttsLoading } = useTTList()
+  const { dashboard, loading } = usePurchaseDashboard()
+  const totalEvents = dashboard?.totals.event_count ?? 0
 
-  const events = useMemo<EventRow[]>(() => {
-    const rows: EventRow[] = []
-    for (const po of pos) {
-      rows.push({ kind: po.parent_po_id ? 'variant' : 'po', date: po.contract_date ?? null })
-    }
-    for (const ph of phs) {
-      rows.push({ kind: 'price', date: ph.change_date })
-    }
-    for (const lc of lcs) {
-      if (lc.open_date) rows.push({ kind: 'lc_open', date: lc.open_date })
-      if (lc.settlement_date) rows.push({ kind: 'lc_settle', date: lc.settlement_date })
-    }
-    for (const bl of bls) {
-      rows.push({ kind: 'bl', date: bl.actual_arrival ?? bl.eta ?? bl.etd ?? null })
-    }
-    for (const tt of tts) {
-      rows.push({ kind: 'tt', date: tt.remit_date ?? null })
-    }
-    return rows
-  }, [pos, phs, lcs, bls, tts])
-
-  const trend = useMemo(
-    () => trend24(events, (e) => e.date),
-    [events],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.event_count })),
+    [dashboard],
   )
 
-  const byKind = useMemo(
-    () => breakdownBy(
-      events,
-      (e) => e.kind,
-      (e) => KIND_LABEL[e.kind],
-      () => 1,
-    ),
-    [events],
+  const byKind: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_kind ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.count,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
-
-  const loading = posLoading || phsLoading || lcsLoading || blsLoading || ttsLoading
 
   return (
     <InsightShell
@@ -76,7 +37,7 @@ export function PurchaseRecentEventsInsight() {
       backLabel="구매 이력으로 돌아가기"
       loading={loading}
       totalLabel="이벤트 합계"
-      totalValue={events.length.toLocaleString()}
+      totalValue={totalEvents.toLocaleString()}
       trend={trend}
       trendValueLabel="이벤트"
       breakdowns={[

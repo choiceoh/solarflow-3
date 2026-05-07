@@ -1,49 +1,56 @@
 // 부대비용 합계 (억) 드릴다운 — CustomsPage 부대비용 탭 KPI '부대비용'.
+//
+// 서버 집계 (customs_dashboard RPC) — 4개 Customs insight 모두 한 번에 수신.
 
 import { useMemo } from 'react'
-import { useExpenseList } from '@/hooks/useCustoms'
+import { useCustomsDashboard } from '@/hooks/useCustoms'
 import { EXPENSE_TYPE_LABEL, type ExpenseType } from '@/types/customs'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
 import InsightShell from '@/components/insights/InsightShell'
+import type { BreakdownRow, TrendPoint } from '@/lib/insights/aggregations'
 
 const fmtEok = (v: number) => (v / 100_000_000).toFixed(v >= 10_000_000_000 ? 1 : 2)
 const fmtEokTick = (v: number) => (v / 100_000_000).toFixed(0)
 
 export function CustomsExpenseTotalInsight() {
-  const { data, loading } = useExpenseList()
+  const { dashboard, loading } = useCustomsDashboard()
+  const totalSum = dashboard?.totals.sum_amount ?? 0
 
-  const trend = useMemo(
-    () => trend24(data, (e) => e.month ?? null, (e) => e.total ?? e.amount ?? 0),
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.sum_amount })),
+    [dashboard],
   )
-  const totalSum = data.reduce((sum, e) => sum + (e.total ?? e.amount ?? 0), 0)
 
-  const byType = useMemo(
-    () => breakdownBy(
-      data,
-      (e) => e.expense_type,
-      (e) => EXPENSE_TYPE_LABEL[e.expense_type as ExpenseType] ?? e.expense_type,
-      (e) => e.total ?? e.amount ?? 0,
-    ),
-    [data],
+  const byType: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_type ?? []).map((r) => ({
+      key: r.key,
+      label: EXPENSE_TYPE_LABEL[r.label as ExpenseType] ?? r.label,
+      value: r.sum_amount,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
-  const byBl = useMemo(
-    () => breakdownBy(
-      data,
-      (e) => e.bl_id ?? null,
-      (e) => e.bl_number ?? '미연결',
-      (e) => e.total ?? e.amount ?? 0,
-    ).slice(0, 10),
-    [data],
+
+  const byBl: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_bl_top10 ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.sum_amount,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
-  const byVendor = useMemo(
-    () => breakdownBy(
-      data,
-      (e) => e.vendor ?? null,
-      (e) => e.vendor ?? '미지정',
-      (e) => e.total ?? e.amount ?? 0,
-    ).slice(0, 10),
-    [data],
+
+  const byVendor: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_vendor_top10 ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.sum_amount,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
 
   return (

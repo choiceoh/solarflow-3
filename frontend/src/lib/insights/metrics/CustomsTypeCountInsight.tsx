@@ -1,42 +1,46 @@
 // 비용 유형 (종) 드릴다운 — distinct expense_type 추이 + 유형별 건수/합계.
+//
+// 서버 집계 (customs_dashboard RPC) — totals.distinct_type_count + trend24.distinct_types.
 
 import { useMemo } from 'react'
-import { useExpenseList } from '@/hooks/useCustoms'
+import { useCustomsDashboard } from '@/hooks/useCustoms'
 import { EXPENSE_TYPE_LABEL, type ExpenseType } from '@/types/customs'
-import { breakdownBy, trend24Distinct } from '@/lib/insights/aggregations'
 import InsightShell from '@/components/insights/InsightShell'
+import type { BreakdownRow, TrendPoint } from '@/lib/insights/aggregations'
 
 const fmtEok = (v: number) => (v / 100_000_000).toFixed(v >= 10_000_000_000 ? 1 : 2)
 
 export function CustomsTypeCountInsight() {
-  const { data, loading } = useExpenseList()
+  const { dashboard, loading } = useCustomsDashboard()
+  const totalDistinct = dashboard?.totals.distinct_type_count ?? 0
 
-  const trend = useMemo(
-    () => trend24Distinct(data, (e) => e.month ?? null, (e) => e.expense_type),
-    [data],
-  )
-  const totalDistinct = useMemo(
-    () => new Set(data.map((e) => e.expense_type)).size,
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.distinct_types })),
+    [dashboard],
   )
 
-  const byTypeAmount = useMemo(
-    () => breakdownBy(
-      data,
-      (e) => e.expense_type,
-      (e) => EXPENSE_TYPE_LABEL[e.expense_type as ExpenseType] ?? e.expense_type,
-      (e) => e.total ?? e.amount ?? 0,
-    ),
-    [data],
+  const byTypeAmount: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_type ?? []).map((r) => ({
+      key: r.key,
+      label: EXPENSE_TYPE_LABEL[r.label as ExpenseType] ?? r.label,
+      value: r.sum_amount,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
-  const byTypeCount = useMemo(
-    () => breakdownBy(
-      data,
-      (e) => e.expense_type,
-      (e) => EXPENSE_TYPE_LABEL[e.expense_type as ExpenseType] ?? e.expense_type,
-      () => 1,
-    ),
-    [data],
+
+  const byTypeCount: BreakdownRow[] = useMemo(
+    () => [...(dashboard?.by_type ?? [])]
+      .sort((a, b) => b.count - a.count)
+      .map((r) => ({
+        key: r.key,
+        label: EXPENSE_TYPE_LABEL[r.label as ExpenseType] ?? r.label,
+        value: r.count,
+        share: r.share,
+        count: r.count,
+      })),
+    [dashboard],
   )
 
   return (

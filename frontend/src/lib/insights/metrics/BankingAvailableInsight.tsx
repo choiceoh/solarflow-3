@@ -1,39 +1,49 @@
 // 가용 한도 (M$) 드릴다운 — 추가 개설 가능액. 스냅샷 메트릭이라 trend 는 비움.
+//
+// 서버 집계 (banking_dashboard RPC).
 
 import { useMemo } from 'react'
-import { useAllBankLimitGroups } from '@/hooks/useBanking'
-import { breakdownBy } from '@/lib/insights/aggregations'
+import { useBankingDashboard } from '@/hooks/useBanking'
 import InsightShell from '@/components/insights/InsightShell'
+import type { BreakdownRow } from '@/lib/insights/aggregations'
 
 const fmtUsdM = (v: number) => (v / 1_000_000).toFixed(v >= 10_000_000 ? 1 : 2)
 
 export function BankingAvailableInsight() {
-  const { groups, loading } = useAllBankLimitGroups()
+  const { dashboard, loading } = useBankingDashboard()
 
-  const allRows = groups.flatMap((g) => g.rows.map((r) => ({ ...r, company_id: g.company_id, company_name: g.company_name })))
-  const totalAvail = allRows.reduce((s, r) => s + r.available, 0)
+  const totalAvail = dashboard?.totals.total_available_usd ?? 0
 
-  const byBank = useMemo(
-    () => breakdownBy(
-      allRows.filter((r) => r.available > 0),
-      (r) => r.bank_id ?? r.bank_name,
-      (r) => r.bank_name,
-      (r) => r.available,
-    ).slice(0, 10),
-    [allRows],
-  )
-  const byCompany = useMemo(
-    () => breakdownBy(
-      allRows.filter((r) => r.available > 0),
-      (r) => r.company_id,
-      (r) => r.company_name,
-      (r) => r.available,
-    ),
-    [allRows],
-  )
-  // 사용률 위험순 — 사용률 높은 은행이 가용 부족 (잔여 한도 부족 위험).
-  const byUsageRate = useMemo(() => {
-    return [...allRows]
+  const byBank: BreakdownRow[] = useMemo(() => {
+    const rows = (dashboard?.by_bank ?? []).filter((r) => r.available > 0)
+    const total = rows.reduce((s, r) => s + r.available, 0)
+    return [...rows]
+      .sort((a, b) => b.available - a.available)
+      .slice(0, 10)
+      .map((r) => ({
+        key: r.bank_id ?? r.bank_name,
+        label: r.bank_name,
+        value: r.available,
+        share: total > 0 ? r.available / total : 0,
+        count: 1,
+      }))
+  }, [dashboard])
+
+  const byCompany: BreakdownRow[] = useMemo(() => {
+    const rows = (dashboard?.by_company ?? []).filter((c) => c.available_usd > 0)
+    const total = rows.reduce((s, r) => s + r.available_usd, 0)
+    return rows.map((c) => ({
+      key: c.key,
+      label: c.label,
+      value: c.available_usd,
+      share: total > 0 ? c.available_usd / total : 0,
+      count: c.bank_count,
+    }))
+  }, [dashboard])
+
+  // 사용률 위험순 — usage_rate 높은 은행이 잔여 한도 부족 위험.
+  const byUsageRate: BreakdownRow[] = useMemo(() => {
+    return [...(dashboard?.by_bank ?? [])]
       .filter((r) => r.lc_limit_usd > 0)
       .sort((a, b) => b.usage_rate - a.usage_rate)
       .slice(0, 10)
@@ -44,7 +54,7 @@ export function BankingAvailableInsight() {
         share: r.lc_limit_usd > 0 ? r.used / r.lc_limit_usd : 0,
         count: 1,
       }))
-  }, [allRows])
+  }, [dashboard])
 
   return (
     <InsightShell

@@ -1,42 +1,46 @@
 // 계약 체인 (건) 드릴다운 — head PO 만 카운트. 제조사별 + 변경 포함 여부 분해.
+//
+// 서버 집계 (purchase_dashboard RPC) — totals.chain_count + trend24.chain_count + chains_breakdown.
 
 import { useMemo } from 'react'
-import { usePOList } from '@/hooks/useProcurement'
-import { buildChains } from '@/lib/purchaseHistory'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { usePurchaseDashboard } from '@/hooks/useProcurement'
 import InsightShell from '@/components/insights/InsightShell'
+import type { BreakdownRow, TrendPoint } from '@/lib/insights/aggregations'
 
 export function PurchaseChainsInsight() {
-  const { data: pos, loading } = usePOList()
+  const { dashboard, loading } = usePurchaseDashboard()
+  const totalChains = dashboard?.totals.chain_count ?? 0
 
-  const chains = useMemo(() => buildChains(pos), [pos])
-
-  // head PO contract_date 월별.
-  const trend = useMemo(
-    () => trend24(chains, (c) => c.head.contract_date ?? null),
-    [chains],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.chain_count })),
+    [dashboard],
   )
 
-  const byManufacturer = useMemo(
-    () => breakdownBy(
-      chains,
-      (c) => c.manufacturer_id,
-      (c) => c.manufacturer_name ?? '미지정',
-      () => 1,
-    ).slice(0, 10),
-    [chains],
+  const byVariantStatus: BreakdownRow[] = useMemo(
+    () => (dashboard?.chains_breakdown ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.count,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
 
-  // 변경 포함 vs 단일 체인.
-  const byVariantStatus = useMemo(() => {
-    const withVariants = chains.filter((c) => c.pos.length > 1).length
-    const single = chains.length - withVariants
-    const total = chains.length
-    return [
-      { key: 'with_variants', label: '변경계약 포함', value: withVariants, share: total > 0 ? withVariants / total : 0, count: withVariants },
-      { key: 'single', label: '단일 체인', value: single, share: total > 0 ? single / total : 0, count: single },
-    ]
-  }, [chains])
+  const byManufacturer: BreakdownRow[] = useMemo(
+    () => [...(dashboard?.by_manufacturer_top10 ?? [])]
+      .filter((r) => r.chain_count > 0)
+      .sort((a, b) => b.chain_count - a.chain_count)
+      .slice(0, 10)
+      .map((r) => ({
+        key: r.key,
+        label: r.label,
+        value: r.chain_count,
+        share: totalChains > 0 ? r.chain_count / totalChains : 0,
+        count: r.chain_count,
+      })),
+    [dashboard, totalChains],
+  )
 
   return (
     <InsightShell
@@ -48,7 +52,7 @@ export function PurchaseChainsInsight() {
       backLabel="구매 이력으로 돌아가기"
       loading={loading}
       totalLabel="체인 합계"
-      totalValue={chains.length.toLocaleString()}
+      totalValue={totalChains.toLocaleString()}
       trend={trend}
       trendValueLabel="신규 체인"
       breakdowns={[
