@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -212,35 +213,98 @@ func (h *PriceBenchmarkHandler) AIRefresh(w http.ResponseWriter, r *http.Request
 	ctx, cancel := context.WithTimeout(r.Context(), 85*time.Second)
 	defer cancel()
 
-	evidence, warnings := h.collectBenchmarkEvidence(ctx, sources)
-	raw, err := h.extractBenchmarksWithAI(ctx, provider, llmModel, maxTokens, evidence)
-	if err != nil {
-		msg := err.Error()
-		warnings = append(warnings, msg)
-		h.finishRun(runID, "failed", 0, 0, &msg, warnings, evidence, nil)
+	// PR 41: 병렬 분산 + 취합 — source 별 shard 로 분리 호출.
+	// 이전 단일 LLM 호출은 모든 source 의 evidence 를 한번에 던져 컨텍스트 초과 빈발.
+	// 각 source 를 독립 LLM 호출로 (동시 4 cap), 결과 취합 후 단일 응답.
+	type sourceShard struct {
+		src      benchmarkSource
+		evidence []benchmarkEvidenceItem
+		warnings []string
+		raw      string
+		output   *priceBenchmarkAIOutput
+		err      error
+	}
+
+	shards := make([]sourceShard, len(sources))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4) // 동시 4 — vLLM/Z.AI 부하 한계
+	for i, src := range sources {
+		wg.Add(1)
+		go func(i int, src benchmarkSource) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			shards[i].src = src
+			ev, w := h.collectBenchmarkEvidence(ctx, []benchmarkSource{src})
+			shards[i].evidence = ev
+			shards[i].warnings = w
+			if len(ev) == 0 {
+				shards[i].warnings = append(shards[i].warnings, fmt.Sprintf("%s: evidence 0 — AI 호출 skip", src.Key))
+				return
+			}
+			raw, err := h.extractBenchmarksWithAI(ctx, provider, llmModel, maxTokens, ev)
+			shards[i].raw = raw
+			if err != nil {
+				shards[i].err = err
+				return
+			}
+			out, perr := parsePriceBenchmarkAIOutput(raw)
+			if perr != nil {
+				shards[i].err = perr
+				return
+			}
+			shards[i].output = &out
+		}(i, src)
+	}
+	wg.Wait()
+
+	// 취합
+	var allEvidence []benchmarkEvidenceItem
+	var allWarnings []string
+	var allPoints []model.CreatePriceBenchmarkRequest
+	var combinedRaw strings.Builder
+	successCount := 0
+	for _, sh := range shards {
+		allEvidence = append(allEvidence, sh.evidence...)
+		allWarnings = append(allWarnings, sh.warnings...)
+		if sh.err != nil {
+			allWarnings = append(allWarnings, fmt.Sprintf("%s 추출 실패: %v", sh.src.Key, sh.err))
+			continue
+		}
+		if sh.output != nil {
+			successCount++
+			allPoints = append(allPoints, sh.output.Points...)
+			allWarnings = append(allWarnings, sh.output.Warnings...)
+		}
+		if sh.raw != "" {
+			combinedRaw.WriteString("=== ")
+			combinedRaw.WriteString(sh.src.Key)
+			combinedRaw.WriteString(" ===\n")
+			combinedRaw.WriteString(sh.raw)
+			combinedRaw.WriteString("\n\n")
+		}
+	}
+
+	rawStr := combinedRaw.String()
+	if successCount == 0 && len(allPoints) == 0 {
+		msg := "모든 source 추출 실패"
+		allWarnings = append(allWarnings, msg)
+		h.finishRun(runID, "failed", 0, 0, &msg, allWarnings, allEvidence, &rawStr)
 		response.RespondError(w, http.StatusBadGateway, "AI 가격 벤치마크 수집에 실패했습니다: "+msg)
 		return
 	}
 
-	output, err := parsePriceBenchmarkAIOutput(raw)
-	if err != nil {
-		msg := err.Error()
-		warnings = append(warnings, msg)
-		h.finishRun(runID, "failed", 0, 0, &msg, warnings, evidence, &raw)
-		response.RespondError(w, http.StatusBadGateway, "AI 응답을 가격 데이터로 해석하지 못했습니다: "+msg)
-		return
-	}
-	warnings = append(warnings, output.Warnings...)
-
-	inserted, skipped, rows := h.insertAIBenchmarkPoints(runID, userID, output.Points)
+	inserted, skipped, rows := h.insertAIBenchmarkPoints(runID, userID, allPoints)
 	status := "completed"
 	if inserted == 0 {
 		status = "partial"
-		warnings = append(warnings, "저장 가능한 가격 관측값이 없습니다")
-	} else if skipped > 0 || len(warnings) > 0 {
+		allWarnings = append(allWarnings, "저장 가능한 가격 관측값이 없습니다")
+	} else if skipped > 0 || len(allWarnings) > 0 {
 		status = "partial"
 	}
-	h.finishRun(runID, status, inserted, skipped, nil, warnings, evidence, &raw)
+	h.finishRun(runID, status, inserted, skipped, nil, allWarnings, allEvidence, &rawStr)
+	warnings := allWarnings // 응답 호환
+	_ = warnings
 
 	response.RespondJSON(w, http.StatusOK, map[string]any{
 		"run_id":         runID,
