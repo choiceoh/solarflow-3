@@ -173,6 +173,8 @@ export default function CustomsPage() {
             <TileB
               lbl="부대비용"
               v={fmtEok(expenseTotal)}
+              numericValue={expenseTotal}
+              formatter={fmtEok}
               u="억"
               sub={`${expenseCount}건 · VAT ${fmtEok(expenseVat)}억`}
               tone="solar"
@@ -182,6 +184,8 @@ export default function CustomsPage() {
             <TileB
               lbl="B/L 연결"
               v={String(linkedExpenseCount)}
+              numericValue={linkedExpenseCount}
+              formatter={(n) => String(Math.round(n))}
               u="건"
               sub={`전체 ${blSummary?.total ?? bls.length}개 B/L`}
               tone="info"
@@ -191,6 +195,8 @@ export default function CustomsPage() {
             <TileB
               lbl="비용 유형"
               v={String(expenseSummary?.type_count ?? Object.keys(typeExpenseMap).length)}
+              numericValue={expenseSummary?.type_count ?? Object.keys(typeExpenseMap).length}
+              formatter={(n) => String(Math.round(n))}
               u="종"
               sub="운송·통관·LC 수수료"
               tone="warn"
@@ -203,6 +209,9 @@ export default function CustomsPage() {
                 expenseSummary?.average_amount ??
                   (expenses.length ? expenseTotal / expenses.length : 0),
               )}
+              numericValue={expenseSummary?.average_amount ??
+                (expenses.length ? expenseTotal / expenses.length : 0)}
+              formatter={fmtEok}
               u="억"
               sub="건당 평균"
               tone="ink"
