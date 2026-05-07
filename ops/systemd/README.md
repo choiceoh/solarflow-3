@@ -10,9 +10,16 @@
 cd ~/공개/solarflow-3
 cp ops/systemd/solarflow-go.service     ~/.config/systemd/user/
 cp ops/systemd/solarflow-engine.service ~/.config/systemd/user/
+for svc in solarflow-go.service solarflow-engine.service cloudflared-solarflow.service solarflow-webhook.service; do
+  mkdir -p ~/.config/systemd/user/$svc.d
+  cp ops/systemd/stability.conf ~/.config/systemd/user/$svc.d/stability.conf
+done
+sudo mkdir -p /etc/systemd/journald.conf.d
+sudo cp ops/systemd/90-solarflow-journald-limits.conf /etc/systemd/journald.conf.d/
 
 # 2. systemd 에 변경사항 알림 + 재시작 1회 (다음부터는 SIGHUP 으로 zero-downtime)
 systemctl --user daemon-reload
+sudo systemctl reload-or-restart systemd-journald.service
 systemctl --user restart solarflow-go.service solarflow-engine.service
 
 # 3. 검증
@@ -27,6 +34,8 @@ systemctl --user show -p ExecReload --value solarflow-go.service
 | Go ↔ Engine | `Requires=solarflow-engine.service` (엔진 죽으면 Go 도 같이 죽음) | `Wants=` 로 약결합. Go 의 EngineClient 가 retry 로 단절 흡수 |
 | Reload | 없음 (`systemctl restart` 만) | `ExecReload=/bin/kill -HUP $MAINPID` → tableflip zero-downtime |
 | Shutdown | SIGKILL (default) | `KillSignal=SIGTERM` + `TimeoutStopSec=35` → graceful drain |
+| Restart storm | 제한 없음 | 5분에 5회까지만 재시작, `RestartSec=10` |
+| Journal growth | 기본값 의존 | system journal 1GB, runtime journal 256MB 상한 |
 
 ## 배포 흐름
 

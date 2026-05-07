@@ -5,6 +5,8 @@ Description=SolarFlow Go Backend
 # After 는 부팅 순서만 정의 — 엔진이 먼저 떠 있으면 좋지만 강제는 아님.
 After=network-online.target solarflow-engine.service
 Wants=network-online.target solarflow-engine.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 # Type=notify + NotifyAccess=all: tableflip 자식이 SIGHUP 인계 후 sd_notify
@@ -27,7 +29,7 @@ KillSignal=SIGTERM
 TimeoutStopSec=35
 
 Restart=on-failure
-RestartSec=5
+RestartSec=10
 StandardOutput=journal
 StandardError=journal
 
