@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { isItemVisible, NAV_GROUPS, type CommandNavItem } from './manifest';
 
 // 가짜 NAV item 빌더 — 테스트 전용.

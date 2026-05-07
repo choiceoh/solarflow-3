@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { ALL_PACKS, buildNavGroups, ERP_CORE_PACK, MODULE_FINANCE_PACK, BARO_DOMAIN_PACK } from './index';
 import { NAV_GROUPS } from '@/lib/navigation/manifest';
 
