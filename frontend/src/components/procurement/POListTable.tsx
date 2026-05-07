@@ -1,4 +1,4 @@
-import { useEffect, useState, Fragment, memo } from 'react';
+import { useMemo, useState, Fragment, memo } from 'react';
 import { ChevronDown, ChevronRight, FilePenLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDate, formatUSD, moduleLabel, shortMfgName } from '@/lib/utils';
@@ -12,7 +12,7 @@ import { useSort } from '@/hooks/useSort';
 import {
   PO_STATUS_LABEL, PO_STATUS_COLOR, CONTRACT_TYPE_LABEL,
   LC_STATUS_LABEL, LC_STATUS_COLOR,
-  type PurchaseOrder, type POLineItem, type LCRecord, type TTRemittance,
+  type PurchaseOrder, type LCRecord,
 } from '@/types/procurement';
 import type { BLShipment, BLLineItem } from '@/types/inbound';
 
@@ -102,68 +102,63 @@ function ProgressRow({
   );
 }
 
-function POListTable({ items, onDetail, onSelectBL, aggVersion, sortField, sortDirection, onSort }: Props) {
+function POListTable({ items, onDetail, onSelectBL, aggVersion: _aggVersion, sortField, sortDirection, onSort }: Props) {
   const companies = useAppStore((s) => s.companies);
   const companyMap = Object.fromEntries(companies.map((c) => [c.company_id, c.company_name]));
-  const [agg, setAgg] = useState<Record<string, Agg>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [blDetail, setBlDetail] = useState<Record<string, BLDetail>>({});
+  // 펼침 시에만 fetch — 펼치기 전엔 빈 배열, lcUsd/lcMw 등 합계는 view 컬럼 (po.lc_total_usd 등) 사용.
+  const [lcsByPO, setLcsByPO] = useState<Record<string, LCRecord[]>>({});
 
-  // ── 초기 집계: lines + lcs + tts fetch ──
-  useEffect(() => {
-    void aggVersion;
-    let cancelled = false;
-    if (items.length === 0) { setAgg({}); return; }
-    (async () => {
-      const result: Record<string, Agg> = {};
-      await Promise.all(items.map(async (po) => {
-        try {
-          const [lines, rawLcs, tts] = await Promise.all([
-            fetchWithAuth<POLineItem[]>(`/api/v1/pos/${po.po_id}/lines`).catch(() => [] as POLineItem[]),
-            fetchWithAuth<Array<LCRecord & { banks?: { bank_name?: string }; purchase_orders?: { po_number?: string } }>>(
-              `/api/v1/lcs?po_id=${po.po_id}`
-            ).catch(() => []),
-            fetchWithAuth<TTRemittance[]>(`/api/v1/tts?po_id=${po.po_id}`).catch(() => [] as TTRemittance[]),
-          ]);
-          // LC 중첩 flatten
-          const lcs: LCRecord[] = (rawLcs ?? []).map(r => ({
-            ...r,
-            bank_name: r.bank_name ?? r.banks?.bank_name,
-            po_number: r.po_number ?? r.purchase_orders?.po_number,
-          }));
-          const totalUsd  = (lines ?? []).reduce((s, l) => s + (l.total_amount_usd ?? 0), 0);
-          const ttUsd     = (tts ?? []).filter(t => t.status === 'completed').reduce((s, t) => s + t.amount_usd, 0);
-          const ttCount   = (tts ?? []).length;
-          const lcUsd     = lcs.reduce((s, l) => s + l.amount_usd, 0);
-          const lcMw      = lcs.reduce((s, l) => s + (l.target_mw ?? 0), 0);
-          const totalWp   = (lines ?? []).reduce((s, l) => s + (l.quantity ?? 0) * (l.products?.spec_wp ?? l.spec_wp ?? 0), 0);
-          const first     = (lines ?? [])[0];
-          result[po.po_id] = {
-            totalUsd, ttUsd, ttCount, lcUsd, lcRemainUsd: totalUsd - lcUsd, lcMw,
-            avgCentsPerWp: totalWp > 0 ? (totalUsd / totalWp) * 100 : 0,
-            totalMw: totalWp / 1_000_000,
-            firstLine: first ? {
-              name: first.products?.product_name ?? first.product_name ?? '—',
-              spec: first.products?.product_code ?? first.product_code ?? '—',
-              specWp: first.products?.spec_wp ?? first.spec_wp,
-            } : undefined,
-            extraCount: Math.max(0, new Set((lines ?? []).map((l) => l.product_id).filter(Boolean)).size - 1),
-            lcs,
-          };
-        } catch { /* skip */ }
-      }));
-      if (!cancelled) setAgg(result);
-    })();
-    return () => { cancelled = true; };
-  }, [items, aggVersion]);
+  // ── 행별 집계: 084 view aggregate 컬럼에서 직접 derive (N+1 lines/lcs/tts fetch 제거) ──
+  const agg = useMemo<Record<string, Agg>>(() => {
+    const result: Record<string, Agg> = {};
+    for (const po of items) {
+      const totalUsd = po.line_total_usd ?? 0;
+      const ttUsd = po.tt_completed_usd ?? 0;
+      const ttCount = po.tt_count ?? 0;
+      const lcUsd = po.lc_total_usd ?? 0;
+      const lcMw = po.lc_total_mw ?? 0;
+      const totalWp = po.line_total_wp ?? 0;
+      result[po.po_id] = {
+        totalUsd, ttUsd, ttCount, lcUsd, lcRemainUsd: totalUsd - lcUsd, lcMw,
+        avgCentsPerWp: totalWp > 0 ? (totalUsd / totalWp) * 100 : 0,
+        totalMw: totalWp / 1_000_000,
+        firstLine: po.first_product_name || po.first_product_code ? {
+          name: po.first_product_name ?? '—',
+          spec: po.first_product_code ?? '—',
+          specWp: po.first_spec_wp,
+        } : undefined,
+        extraCount: po.line_extra_count ?? 0,
+        lcs: lcsByPO[po.po_id] ?? [],
+      };
+    }
+    return result;
+  }, [items, lcsByPO]);
 
-  // ── 행 펼침 시 BL lazy-load ──
-  async function loadBL(poId: string) {
-    if (blDetail[poId]) return; // 이미 로드됨
-    setBlDetail(prev => ({ ...prev, [poId]: { loading: true, bls: [], shippingMw: 0, inboundMw: 0, blMwMap: {} } }));
+  // ── 행 펼침 시 lazy-load: BL detail + LC 목록 ──
+  async function loadExpanded(poId: string) {
+    // 이미 로드된 경우 skip.
+    if (blDetail[poId] && lcsByPO[poId] != null) return;
+    if (!blDetail[poId]) {
+      setBlDetail(prev => ({ ...prev, [poId]: { loading: true, bls: [], shippingMw: 0, inboundMw: 0, blMwMap: {} } }));
+    }
     try {
-      const blList = await fetchWithAuth<BLShipment[]>(`/api/v1/bls?po_id=${poId}`).catch(() => [] as BLShipment[]);
-      // 각 BL의 라인 capacity_kw 합계
+      const [blList, rawLcs] = await Promise.all([
+        fetchWithAuth<BLShipment[]>(`/api/v1/bls?po_id=${poId}`).catch(() => [] as BLShipment[]),
+        fetchWithAuth<Array<LCRecord & { banks?: { bank_name?: string }; purchase_orders?: { po_number?: string } }>>(
+          `/api/v1/lcs?po_id=${poId}`,
+        ).catch(() => []),
+      ]);
+      // LC 중첩 flatten — 펼침 표시용.
+      const lcs: LCRecord[] = (rawLcs ?? []).map(r => ({
+        ...r,
+        bank_name: r.bank_name ?? r.banks?.bank_name,
+        po_number: r.po_number ?? r.purchase_orders?.po_number,
+      }));
+      setLcsByPO(prev => ({ ...prev, [poId]: lcs }));
+
+      // 각 BL의 라인 capacity_kw 합계.
       const lineMap: Record<string, BLLineItem[]> = {};
       await Promise.all((blList ?? []).map(async bl => {
         try { lineMap[bl.bl_id] = await fetchWithAuth<BLLineItem[]>(`/api/v1/bls/${bl.bl_id}/lines`); }
@@ -174,7 +169,6 @@ function POListTable({ items, onDetail, onSelectBL, aggVersion, sortField, sortD
       let shippingMw = 0, inboundMw = 0;
       const blMwMap: Record<string, number> = {};
       for (const bl of blList ?? []) {
-        // capacity_kw는 라인 전체 kW (EA당 아님)
         const mw = (lineMap[bl.bl_id] ?? []).reduce((s, l) => s + (l.capacity_kw ?? 0), 0) / 1000;
         blMwMap[bl.bl_id] = mw;
         if (shipStatuses.has(bl.status)) shippingMw += mw;
@@ -183,13 +177,14 @@ function POListTable({ items, onDetail, onSelectBL, aggVersion, sortField, sortD
       setBlDetail(prev => ({ ...prev, [poId]: { loading: false, bls: blList ?? [], shippingMw, inboundMw, blMwMap } }));
     } catch {
       setBlDetail(prev => ({ ...prev, [poId]: { loading: false, bls: [], shippingMw: 0, inboundMw: 0, blMwMap: {} } }));
+      setLcsByPO(prev => ({ ...prev, [poId]: [] }));
     }
   }
 
   function toggle(id: string) {
     setExpanded(prev => {
       const s = new Set(prev);
-      if (s.has(id)) { s.delete(id); } else { s.add(id); loadBL(id); }
+      if (s.has(id)) { s.delete(id); } else { s.add(id); loadExpanded(id); }
       return s;
     });
   }

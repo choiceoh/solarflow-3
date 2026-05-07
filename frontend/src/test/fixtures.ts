@@ -113,6 +113,19 @@ export const testPo = {
   incoterms: 'CIF',
   payment_terms: '계약금 5% T/T + L/C Usance 90',
   status: 'contracted' as const,
+  // 084 view aggregate — POListTable 가 N+1 fetch 대신 직접 사용.
+  line_count: 1,
+  line_total_usd: 100000,
+  line_total_wp: 2000 * (testProduct.spec_wp ?? 0),
+  line_extra_count: 0,
+  lc_count: 1,
+  lc_total_usd: 60000,
+  lc_total_mw: 0,
+  tt_count: 1,
+  tt_completed_usd: 0,
+  first_product_name: testProduct.product_name,
+  first_product_code: testProduct.product_code,
+  first_spec_wp: testProduct.spec_wp,
 };
 
 export const testPoLine = {

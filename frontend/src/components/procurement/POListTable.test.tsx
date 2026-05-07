@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { testBl, testBlLine, testLc, testPo, testPoLine, testTt } from '@/test/fixtures';
+import { testBl, testBlLine, testLc, testPo } from '@/test/fixtures';
 import { callsFor, mockFetchWithAuth, resetAppStore, seedCompanyStore } from '@/test/mockApi';
 import POListTable from './POListTable';
 
@@ -10,10 +10,10 @@ vi.mock('@/lib/api', () => ({
 }));
 
 function mockPOListApi() {
+  // testPo 자체에 view aggregate (line_total_usd 등) 가 있어 행 표시는 fetch 없이 즉시.
+  // 펼침 시에만 LC + BL + BL-line lazy fetch.
   mockFetchWithAuth((path) => {
-    if (path === `/api/v1/pos/${testPo.po_id}/lines`) return [testPoLine];
     if (path === `/api/v1/lcs?po_id=${testPo.po_id}`) return [testLc];
-    if (path === `/api/v1/tts?po_id=${testPo.po_id}`) return [testTt];
     if (path === `/api/v1/bls?po_id=${testPo.po_id}`) return [{ ...testBl, po_id: testPo.po_id, lc_id: testLc.lc_id }];
     if (path === `/api/v1/bls/${testBl.bl_id}/lines`) return [testBlLine];
     throw new Error(`Unexpected API call: ${path}`);
