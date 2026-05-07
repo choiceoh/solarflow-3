@@ -50,6 +50,7 @@ GET     /api/v1/baro/orders/recent
 GET     /api/v1/baro/partner-cockpit/{partner_id}
 GET     /api/v1/baro/purchase-history/
 GET     /api/v1/baro/purchase-history/summary
+GET     /api/v1/baro/rfm/
 GET     /api/v1/bls/
 GET     /api/v1/bls/dashboard
 GET     /api/v1/bls/summary

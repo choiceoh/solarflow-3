@@ -936,3 +936,32 @@
   - 수동 검증: BARO 토큰으로 `/baro/home` 진입 시 카드 4개 + 패널 3개 표시. 각 카드/리스트 항목 클릭 → 해당 도메인 페이지로 이동 (cockpit/credit-board/incoming).
 - **날짜**: 2026-05-07
 
+## D-128: BARO 거래처 RFM 보드 — Go 메모리 집계 + 단순 임계값 분류
+- **결정**: BARO 영업이 200거래처를 한 화면에 우선순위 정렬할 수 있도록 거래처 RFM(Recency / Frequency / Monetary) 보드를 도입한다. 신규 endpoint `GET /api/v1/baro/rfm/` (feature_id `baro.rfm`). SQL GROUP BY 함수 신설 회피 — 활성 customer/both 거래처 전체 + 직전 12개월 sales 행을 가져와 Go 메모리에서 customer_id 기준 집계.
+  - **분류 6종**:
+    - `champion`: 최근 30일 + 5건+ + 1억+ 매출 (핵심)
+    - `loyal`: 최근 60일 + 3건+ (단골)
+    - `new`: 최근 30일 + 2건 이하 (관계 형성)
+    - `at_risk`: 90일+ 미주문 + 5천만+ 매출 이력 (재활성화 큐)
+    - `lost`: 그 외 침체
+    - `inactive`: 12개월 매출 0건 (휴면)
+  - **데이터 규모**: BARO 매출 1000억 ÷ 평균 ~3억/건 = 연 ~330건. Go 메모리 집계 비용 미미. 향후 매출 폭증 시 별도 RPC 함수(`baro_rfm_aggregate`) 도입 검토.
+  - **부분 실패 허용**: sales 조회 실패 시 partner-only 응답 (모두 inactive) 으로 fallback — 보드 전체가 흰 배경으로 죽지 않음.
+  - **재활성화 큐 강조**: `at_risk` 세그먼트는 별도 알림 배너로 노출 — 한동안 미주문이지만 매출 이력 큰 곳 = 콜백 1순위.
+  - **frontend**: `/baro/rfm` 페이지. 6 세그먼트 탭 + 정렬(매출/최근성/빈도) + 표. 행 클릭 → cockpit. 사이드바 「현황」 그룹.
+- **PR4.5 분리** (별도 D-NNN):
+  - 동적 분위수(quartile) 기반 분류 — 거래처 분포에 따라 임계값 자동 조정 (현재는 1000억 매출 컨텍스트 하드코딩).
+  - 본인 담당 거래처 필터 — `partners.owner_user_id = me` (현재 전체 노출).
+  - 자동 재활성화 액션 — `at_risk` 거래처 대상 1-click 카톡/SMS (PR3.5 발송 채널 통합 후).
+  - 세그먼트 태그 수동 라벨 (`partners.segment_tag` 컬럼 추가 마이그레이션, 리셀러/시공/대형).
+- **이유**: D-125(cockpit) 가 *한 거래처*, D-127(영업 홈) 이 *내 오늘 할 일* 이라면 RFM 은 *내 거래처 200곳의 우선순위*. 영업 6명이 분담 거래처를 분기/월 단위로 재정렬할 때 필요. 매출 1000억 규모에서 at_risk 거래처 1곳 재활성화 = 평균 3천만~1억 효과라 ROI 큼.
+- **운영 기준**:
+  - feature catalog `baro.rfm` + FEATURE-WIRING-MATRIX 행 + `r.Use(g.Feature(IDBaroRFM))` + DECISIONS 동시 갱신 (D-120 의무).
+  - sanitized 패스스루 — partners 마스터 + sales 직접 컬럼만 사용. 면장/원가/L/C 차단 그대로 (D-108).
+  - 응답이 200곳 + sales 12개월 raw — 응답 크기 측정 후 캐시/페이지네이션 검토.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/baro/rfm/` catalog↔chi 일치, matrix_consistency_test 가 `baro.rfm` markdown 일치 검증.
+  - 라우터 가드: module/cable 토큰으로 `/api/v1/baro/rfm/` 호출 시 403, baro 토큰 통과.
+  - 프론트엔드 `npm run build` 통과.
+- **날짜**: 2026-05-07
+

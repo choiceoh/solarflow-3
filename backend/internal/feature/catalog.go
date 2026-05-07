@@ -121,6 +121,7 @@ const (
 	IDBaroOrders          FeatureID = "baro.orders"
 	IDBaroPriceBook       FeatureID = "baro.price_book"
 	IDBaroPartnerCockpit  FeatureID = "baro.partner_cockpit"
+	IDBaroRFM             FeatureID = "baro.rfm"
 
 	// ---- calc.* (Rust 계산 프록시) ----
 	IDCalcInventory          FeatureID = "calc.inventory"
@@ -426,6 +427,12 @@ var Catalog = map[FeatureID]Feature{
 		Description:    "거래처 한 명 신용/최근매출/CRM 미처리·활동 합본 (D-125)",
 		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
 		Paths: []string{"/api/v1/baro/partner-cockpit/{partner_id}"},
+	},
+	IDBaroRFM: {
+		ID: IDBaroRFM, Name: "BARO 거래처 RFM 보드",
+		Description:    "활성 거래처 12개월 매출 집계 + 세그먼트 분류 (D-128)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{"/api/v1/baro/rfm/"},
 	},
 
 	// ===== calc.* =====

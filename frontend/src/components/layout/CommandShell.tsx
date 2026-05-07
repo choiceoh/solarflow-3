@@ -25,6 +25,7 @@ import {
   Home,
   Tags,
   TrendingUp,
+  Trophy,
   Truck,
   Users,
   Wallet,
@@ -152,6 +153,8 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'price-forecast', label: '가격예측', abbr: '가격', path: '/price-forecast', icon: TrendingUp, menu: 'price_forecast', tenants: MODULE_TENANTS },
       // BARO Phase 3: 거래처별 미수금/한도 보드 (BARO 전용)
       { key: 'baro-credit', label: '미수금/한도', abbr: '미수', path: '/baro/credit-board', icon: ShieldAlert, menu: 'baro_credit', tenants: ['baro'] },
+      // D-128: 거래처 RFM/세그먼트 보드 (BARO 전용)
+      { key: 'baro-rfm', label: '거래처 RFM', abbr: 'RFM', path: '/baro/rfm', icon: Trophy, menu: 'baro_rfm', tenants: ['baro'] },
     ],
   },
   {
@@ -194,6 +197,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/baro/cockpit': { title: '거래처 360', breadcrumb: '판매 / 인바운드 응대 cockpit' },
   '/baro/quote/new': { title: '견적 빌더', breadcrumb: '판매 / 통합 견적 작성' },
   '/baro/home': { title: '영업 홈', breadcrumb: 'BARO / 일일 영업 보드' },
+  '/baro/rfm': { title: '거래처 RFM', breadcrumb: '현황 / 12개월 매출 분류' },
 };
 
 function routeMeta(pathname: string, search: string) {
