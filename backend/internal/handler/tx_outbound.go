@@ -538,14 +538,13 @@ func sanitizeSearchTerm(q string) string {
 }
 
 // applyOutboundSearch — ?q 검색어를 outbound 쿼리에 적용한다.
-// outbounds 직접 컬럼(site_name, erp_outbound_no, target_company_name) 은 ilike OR 로,
-// 자식 테이블(products/orders/warehouses) 의 컬럼은 먼저 ID 리스트를 끌어와 IN 으로 결합한다.
+// outbounds 직접 컬럼(site_name, erp_outbound_no) 은 ilike OR 로,
+// 자식 테이블(products/orders/warehouses/companies) 의 컬럼은 먼저 ID 리스트를 끌어와 IN 으로 결합한다.
 // 매칭되는 컬럼이 하나도 없으면 false 를 반환하고 빈 응답을 보내야 한다.
 func (h *OutboundHandler) applyOutboundSearch(query *postgrest.FilterBuilder, q string) (*postgrest.FilterBuilder, bool, error) {
 	clauses := []string{
 		fmt.Sprintf("site_name.ilike.*%s*", q),
 		fmt.Sprintf("erp_outbound_no.ilike.*%s*", q),
-		fmt.Sprintf("target_company_name.ilike.*%s*", q),
 	}
 
 	productIDs, err := h.idsBySearch("products", "product_id", []string{"product_code", "product_name"}, q)
@@ -570,6 +569,14 @@ func (h *OutboundHandler) applyOutboundSearch(query *postgrest.FilterBuilder, q 
 	}
 	if len(warehouseIDs) > 0 {
 		clauses = append(clauses, fmt.Sprintf("warehouse_id.in.(%s)", strings.Join(warehouseIDs, ",")))
+	}
+
+	targetCompanyIDs, err := h.idsBySearch("companies", "company_id", []string{"company_name", "company_code"}, q)
+	if err != nil {
+		return query, false, fmt.Errorf("companies 검색 실패: %w", err)
+	}
+	if len(targetCompanyIDs) > 0 {
+		clauses = append(clauses, fmt.Sprintf("target_company_id.in.(%s)", strings.Join(targetCompanyIDs, ",")))
 	}
 
 	return query.Or(strings.Join(clauses, ","), ""), true, nil
@@ -630,7 +637,7 @@ func (h *OutboundHandler) applyOutboundFilters(r *http.Request, query *postgrest
 // 쿼리 파라미터:
 //   - limit/offset: 페이지네이션 (기본 100, 최대 1000)
 //   - sort/order:   화이트리스트 컬럼 정렬 (기본 outbound_date desc)
-//   - q:            site_name/erp_outbound_no/target_company_name 및 product/order/warehouse 이름 검색
+//   - q:            site_name/erp_outbound_no 및 product/order/warehouse/상대법인 이름 검색
 //   - company_id/warehouse_id/usage_category/order_id/status/manufacturer_id: 등치 필터
 //
 // 응답 헤더 X-Total-Count 로 필터 후 전체 건수 노출.
@@ -686,12 +693,12 @@ func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 // OutboundSummary — KPI 카드용 집계 응답.
 // 매출 합계와 계산서 미발행 건수는 sales 테이블에서 outbound 단위로 조인 집계한다.
 type OutboundSummary struct {
-	Total              int64   `json:"total"`
-	ActiveCount        int64   `json:"active_count"`
-	CancelPendingCount int64   `json:"cancel_pending_count"`
-	CancelledCount     int64   `json:"cancelled_count"`
-	SaleAmountSum      float64 `json:"sale_amount_sum"`
-	InvoicePendingCount int64  `json:"invoice_pending_count"`
+	Total               int64   `json:"total"`
+	ActiveCount         int64   `json:"active_count"`
+	CancelPendingCount  int64   `json:"cancel_pending_count"`
+	CancelledCount      int64   `json:"cancelled_count"`
+	SaleAmountSum       float64 `json:"sale_amount_sum"`
+	InvoicePendingCount int64   `json:"invoice_pending_count"`
 }
 
 // Summary — GET /api/v1/outbounds/summary — KPI 카드용 집계.
