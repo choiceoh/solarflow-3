@@ -1035,31 +1035,6 @@
   - 수동 검증: BARO 토큰으로 `/baro/shipment-notice` 진입 시 폼 + 3 메시지 카드 표시. 빈 필드는 메시지에서 자동 생략. 복사 버튼 클릭 시 "복사됨" 피드백.
 - **날짜**: 2026-05-07
 
-## D-132: RFM 동적 분위수 분류 + 본인 담당 필터 (PR4.5)
-- **결정**: D-128 RFM 보드의 한계 두 가지를 query param 으로 보강:
-  - **분류 모드 토글** `?classify=quartile`: 활성 거래처 분포의 R/F/M Q1·Q3 분위수 자동 계산 → 임계값으로 사용. 1000억 매출 컨텍스트 하드코딩이 아닌 분포 기반이라 매출 규모 달라져도 자동 적응. default 는 D-128 의 hardcoded threshold (호환성 유지).
-  - **본인 담당 필터** `?mine=true` 또는 `?owner_user_id=<uuid>`: `partners.owner_user_id` 기반 필터. 영업 6명이 본인 담당 거래처만 정렬할 때 사용.
-- **분류 정의 (quartile mode)**:
-  - `champion`: R≤Q1 (최근) + F≥Q3 (자주) + M≥Q3 (큰매출) — 분포 상위.
-  - `loyal`: (R≤Q1 OR F≥Q3) + M≥Q1 — 한 측면이라도 상위 + 매출 이력 있음.
-  - `new`: R≤Q1 + F≤Q1 — 거래 시작 단계.
-  - `at_risk`: R≥Q3 (오래됨) + M≥Q1 (매출 이력) — 재활성화 후보.
-  - `lost` / `inactive`: 그 외 / 12개월 매출 0건.
-- **API 동작 변경 0**: 응답 shape 동일 (segment 값만 분류 결과 반영). 기존 frontend 호출 무영향.
-- **frontend 변경**: `/baro/rfm` 페이지 헤더에 "분류 [고정/분위수]" 토글 + "내 거래처만" 토글. URL query 로 backend 에 전달.
-- **PR4.6 분리** (별도 D-NNN, DB 마이그레이션 필요):
-  - `partners.segment_tag` 컬럼 추가 — `reseller` / `installer` / `major` 수동 라벨. partners 마스터 편집 페이지에서 admin 이 설정.
-  - RFM 응답에 `segment_tag` 포함 → 보드에서 RFM 자동 세그먼트 + 수동 segment_tag 두 차원 cross-cut 가능.
-- **이유**: D-128 의 hardcoded 임계값(`1억`, `5천만`)이 BARO 1000억 매출 한정이라 매출 분포가 달라지면 분류가 무너짐. 분위수 기반은 거래처 수가 늘거나 매출 분포가 변해도 항상 합리적. 본인 담당 필터는 영업 워크플로우의 핵심 — 6명 모두에게 같은 200곳 보드는 노이즈.
-- **운영 기준**:
-  - 신규 라우트 0 (기존 `/api/v1/baro/rfm/` 에 query param 추가만) → D-120 catalog/matrix 갱신 불필요.
-  - quartile 분류 정의는 `classifyRFMQuartile` 함수에 명시. 임계값 정의 변경 시 본 결정문도 동시 갱신 (백워드 비호환 가능).
-  - 본인 담당 필터의 owner 매핑이 미설정인 거래처는 `?mine=true` 시 자동 제외 — partners.owner_user_id 마이그레이션 보강 후 정밀화.
-- **검증**:
-  - `go test ./internal/feature ./internal/router ./internal/handler` — 회귀 가드 (응답 shape 동일하므로 기존 테스트 그대로 통과해야 함).
-  - 프론트엔드 `npm run build` 통과.
-  - 수동 검증: 분류 토글 전환 시 같은 거래처가 다른 segment 로 분류될 수 있음 (분포 기반). "내 거래처만" 토글 시 행 수 감소.
-- **날짜**: 2026-05-07
 
 ## D-139: WMS Phase 1 — 창고 내 위치(Bin/Location) 관리 (모든 테넌트 공유)
 - **결정**: 기존 `warehouses` 마스터(창고 단위) 위에 `warehouse_locations` (Bin 단위) 신규 도입. Zone > Aisle > Rack > Bin 4단계 계층, 단계 일부 생략 가능 (작은 창고는 Zone-Bin 만).
@@ -1084,4 +1059,41 @@
   - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/warehouse-locations/*` catalog 일치, matrix_consistency 가 `master.warehouse_location` markdown 일치 검증.
   - 라우터 가드: 모든 테넌트 통과 (master.* 도메인).
 - **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/085_warehouse_locations.sql` + PostgREST schema reload.
+- **날짜**: 2026-05-07
+
+## D-140: WMS Phase 2 — 위치별 재고 + 자동 피킹 명세 (모든 테넌트 공유)
+- **결정**: D-139 위치 마스터 위에 (1) `inventory_allocations.location_id` 컬럼 추가 + (2) `picking_lists` / `picking_list_items` 테이블 신규 + (3) PickingListHandler CRUD + picked 토글. **신규 backend 1 endpoint 묶음** (`tx.picking_list` feature_id, 모든 테넌트 공유).
+- **마이그 086** (`backend/migrations/086_picking_lists.sql`):
+  - `inventory_allocations.location_id uuid REFERENCES warehouse_locations(location_id)` (nullable, FK).
+  - `picking_lists` (picking_list_id, outbound_id, dispatch_route_id, warehouse_id FK, partner_id+snapshot, status CHECK pending/in_progress/completed/cancelled, picker_user_id FK auth.users, created_at/by, started_at, completed_at, notes).
+  - `picking_list_items` (item_id, picking_list_id FK CASCADE, line_no, product_id+snapshot 3종, location_id+snapshot, quantity_planned/picked, is_picked, picked_at/by, variance_note).
+  - 인덱스 5종 (outbound, status partial, picker, list 전체, unpicked partial).
+- **endpoint** (`tx.picking_list`):
+  - `GET /api/v1/picking-lists?status=pending&warehouse_id=&mine=true` — 작업자 본인 큐
+  - `GET /api/v1/picking-lists/{id}` — 헤더 + 라인 합본
+  - `POST /api/v1/picking-lists` — 헤더 + 라인 묶음 등록 (수동 또는 출고에서 자동 호출 가능)
+  - `PATCH /api/v1/picking-lists/{id}` — 헤더 status / picker / notes (status='in_progress' 시 started_at 자동, 'completed' 시 completed_at 자동)
+  - `PATCH /api/v1/picking-lists/{id}/items/{item_id}` — 라인 picked 토글 + quantity_picked + variance_note (is_picked=true 시 picked_at/by 자동)
+  - `DELETE /api/v1/picking-lists/{id}` — hard (status='cancelled' soft delete 권장)
+- **사용 시나리오**:
+  - 영업 수주 → 출고 생성 → 시스템이 가용재고의 `location_id` 기반 자동 피킹 명세 작성
+  - 창고 작업자 모바일/태블릿에서 본인 큐(`?mine=true`) 열기 → status='in_progress' 토글 → 라인별 picked 체크
+  - 차이 발생 시 quantity_picked 입력 + variance_note (실재고 부족 / 파손 / 위치 오류) → 영업·회계 알림
+- **snapshot 컬럼 정책**: product_code/name/spec_wp/location_code 모두 picking 시점 보존 — products 마스터 / warehouse_locations 변경에도 명세 원본 불변. 인쇄 라벨에 사용.
+- **PR8.5b 분리** (별도 D-NNN, outbound 핸들러 변경):
+  - 출고 생성 시 자동 피킹 명세 생성 — outbound→bl_line→inventory_allocation join 으로 위치 추출 + POST /picking-lists 자동 호출.
+  - 명시적 enforcement 까지 가는 게 큰 작업이라 분리. PR8.5 단계는 수동 POST 만 안전 동작.
+- **PR8.5c 분리** (frontend):
+  - `/baro/picking` 페이지 — 작업자 큐 (mine=true) + status 토글 + 라인 picked 토글 (모바일 친화 UI).
+  - 인쇄 라벨 (Bin 표찰 + 라인 명세) 별도 PR.
+- **이유**: D-139 위치 마스터 만으로는 영업·작업자 워크플로우 미통합 — picking 명세가 진짜 가치. BARO 50+ SKU × 출고 일 10건 환경에서 작업자 1인당 일 30분 절약 가능 (위치 헤매기 X). 시공업체 클레임 (수량 부족) 시 picking 로그가 증빙.
+- **운영 기준**:
+  - 모든 테넌트 공유 — BARO 만이 아닌 module 계열도 사용 가능.
+  - 마이그 086 미적용 시 POST 응답 500 + 안내 메시지.
+  - status 머신 강제: pending → in_progress → completed (또는 pending → cancelled).
+  - is_picked=true 가 picked_at/by 자동 기록 (작업자 토큰 기반).
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/picking-lists/*` catalog 일치, matrix_consistency 검증.
+  - 모든 테넌트 토큰 통과 (tx.* 도메인).
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/086_picking_lists.sql` + PostgREST schema reload.
 - **날짜**: 2026-05-07
