@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	supa "github.com/supabase-community/supabase-go"
+
 	"solarflow-backend/internal/response"
 )
 
@@ -31,7 +33,7 @@ func (h *AssistantHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, model, maxTokens := resolveProviderModel(req)
+	provider, model, maxTokens := resolveProviderModelDB(req, h.db)
 	ctx := r.Context()
 	available := availableAssistantTools(ctx)
 	enrichPageContext(ctx, h.db, req.PageContext)
@@ -57,9 +59,13 @@ func (h *AssistantHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 
 	// F1 fallback — 헤더 전이고, 클라이언트가 provider pin 안 했고, 인프라성 에러일 때만.
 	if !sse.HasWrittenHeader() && !clientPinned && shouldFallback(err) {
-		fbProvider := strings.ToLower(strings.TrimSpace(os.Getenv("ASSISTANT_FALLBACK_PROVIDER")))
+		// PR 40: DB (system_settings) 우선 → env 폴백
+		fbProvider, fbModel := resolveFallbackProvider(h.db)
+		if fbProvider == "" {
+			fbProvider = strings.ToLower(strings.TrimSpace(os.Getenv("ASSISTANT_FALLBACK_PROVIDER")))
+			fbModel = strings.TrimSpace(os.Getenv("ASSISTANT_FALLBACK_MODEL"))
+		}
 		if fbProvider != "" && fbProvider != provider {
-			fbModel := strings.TrimSpace(os.Getenv("ASSISTANT_FALLBACK_MODEL"))
 			if fbModel == "" {
 				fbModel = defaultModelForProvider(fbProvider)
 			}
@@ -87,7 +93,47 @@ func (h *AssistantHandler) failResponse(sse *dataStreamWriter, w http.ResponseWr
 	_ = sse.WriteError(err.Error())
 }
 
-// resolveProviderModel — 환경변수 + 요청 body 에서 provider/model/maxTokens 결정.
+// resolveProviderModelDB — DB (system_settings) → env → default 순서로 provider/model 결정.
+// PR 40: 관리자 GUI 에서 변경 가능 (system_settings.assistant.providers).
+func resolveProviderModelDB(req assistantRequest, db *supa.Client) (string, string, int) {
+	// 클라이언트 pin 우선 (디버깅용)
+	provider := strings.ToLower(strings.TrimSpace(req.Provider))
+	model := strings.TrimSpace(req.Model)
+	if provider == "" {
+		// DB 의 primary 우선
+		dbProv, dbModel := resolvePrimaryProvider(db)
+		if dbProv != "" {
+			provider = dbProv
+			if model == "" {
+				model = dbModel
+			}
+		}
+	}
+	if provider == "" {
+		provider = strings.ToLower(strings.TrimSpace(os.Getenv("ASSISTANT_PROVIDER")))
+	}
+	if provider == "" {
+		provider = "anthropic"
+	}
+	if model == "" {
+		model = strings.TrimSpace(os.Getenv("ASSISTANT_MODEL"))
+	}
+	if model == "" || !modelMatchesProvider(provider, model) {
+		model = defaultModelForProvider(provider)
+	}
+
+	maxTokens := req.MaxTokens
+	if maxTokens <= 0 {
+		if v, _ := strconv.Atoi(os.Getenv("ASSISTANT_MAX_TOKENS")); v > 0 {
+			maxTokens = v
+		} else {
+			maxTokens = 2048
+		}
+	}
+	return provider, model, maxTokens
+}
+
+// resolveProviderModel — 환경변수 + 요청 body 에서 provider/model/maxTokens 결정. (legacy, summarize 등에서 사용)
 // P3: 클라이언트 UI 가 provider/model 을 안 보내는 게 정상. body 값은 디버깅용 backdoor 로 보존.
 func resolveProviderModel(req assistantRequest) (string, string, int) {
 	provider := strings.ToLower(strings.TrimSpace(req.Provider))
