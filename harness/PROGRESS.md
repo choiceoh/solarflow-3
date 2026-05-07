@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-149 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장) |
+| DECISIONS | D-001~D-150 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -343,31 +343,32 @@
 
 ---
 
-## 2026-05-07 세션 — 가격예측 수집 지역 중국·유럽 제한
+## 2026-05-07 세션 — 매출 분석 원인 분해 깊이 확장
 
 ### 완료
-- 가격예측 벤치마크 저장 가능 지역을 `fob_china`, `china_domestic`, `china_export`, `ddp_europe`로 제한
-- AI 수집 prompt/search query에서 미국 DDP 기본 수집 의도를 제거하고, 중국/유럽 밖 가격은 warning만 남기도록 지시
-- Go 모델 검증과 AI 저장 직전 guard에서 `ddp_us`, `global`, `manufacturer` 등 비대상 지역 차단
-- `GET /api/v1/price-benchmarks` 목록도 허용 지역만 반환하도록 방어 필터 추가
-- `089_price_benchmarks_china_europe_only.sql` 추가
-  - 기존 `ddp_us` 또는 허용 지역 밖 행 삭제
-  - DB check constraint로 허용 지역과 `metric_key <> 'ddp_us'` 강제
-- 프론트엔드 가격예측 화면/목업 데이터에서 미국 DDP 샘플과 라벨 제거
-- D-146 결정 기록 및 module/cable/설계 정본 동기화
+- Rust `margin-analysis` 요청 모델에 `customer_id` 필터를 추가해 거래처 선택 시 매출 KPI와 이익 KPI 범위를 일치
+- `/sales-analysis`에 이익 원인 분해 카드 추가
+  - 평균 이익률 대비 낮은 품목의 이익 누수 규모 표시
+  - 원가 미연결 품목과 제외 매출을 별도 우선순위로 표시
+- 거래처 위험 우선순위 카드 추가
+  - 미수금, 최장 경과일, 저마진을 복합 점수로 정렬
+- 제조사별 기여도 카드 추가
+  - 매출 비중, 이익률, 원가 공백률, 출고 kW를 제조사별로 비교
+- 원장 대사 체크 추가
+  - 매출원장 ↔ 이익엔진 공급가 차이, 계산서 미발행, 원가 미연결, 수금 미회수를 정상/주의/위험으로 표시
+- 우측 레일에 우선 조치 큐 추가
+- dev mock API에 거래처/제조사 필터 반영 및 원가 미연결 샘플 추가
+- D-150 결정 기록 추가
 
 ### 검증
-- `cd backend && go test ./internal/model` 성공
-- `cd backend && go test ./internal/handler ./internal/router ./internal/feature` 성공
-- `cd backend && go build ./...` 성공
-- `cd backend && go vet ./...` 성공
-- `cd backend && go test ./...` 성공
-- `cd frontend && npm ci` 성공 — 로컬 의존성 복원, 기존 npm audit moderate 2건 출력
-- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
-- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 68건 출력
-- `cd frontend && npm run test` 실패 — Vitest fork worker 시작 타임아웃(`Timeout waiting for worker to respond`), 단일 파일/threads 재시도도 worker가 응답하지 않아 코드 테스트까지 진입하지 못함
+- `cd engine && cargo test` 성공 — 기존 dead_code warning 3건 유지
+- `cd frontend && bun install --frozen-lockfile` 성공 — `bun.lock` 기준 의존성 복원
+- `cd frontend && bun run build` 성공 — 기존 plugin timing warning 출력
+- `cd frontend && bun test` 성공 — 10 files / 87 tests (81 pass, 6 skip)
+- `cd frontend && bun run lint` 종료코드 0 — 기존 `ProcurementPage.tsx` hook dependency warning 4건 유지
+- `rustfmt --check --edition 2021 engine/src/model/margin.rs engine/src/calc/margin.rs engine/tests/margin_test.rs` 성공
 - `git diff --check` 성공
-- `graphify update .` 성공 — 4315 nodes / 6733 edges / 396 communities
+- `graphify update .` 성공 — 4784 nodes / 7665 edges / 402 communities
 
 ---
 
