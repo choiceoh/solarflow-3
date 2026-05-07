@@ -126,6 +126,15 @@ func (h *BaroPurchaseHistoryHandler) RegisterRoutes(r chi.Router, g middleware.G
 	})
 }
 
+// BaroRFMHandler — D-128 거래처 RFM/세그먼트 보드 (BARO 전용).
+// 활성 customer/both 거래처 전체 + 직전 12개월 매출 집계 + 단순 임계값 분류.
+func (h *BaroRFMHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/baro/rfm", func(r chi.Router) {
+		r.Use(g.Feature(feature.IDBaroRFM))
+		r.Get("/", h.Get)
+	})
+}
+
 // BLHandler — 선하증권 + 중첩 라인. 자식 BLLineHandler를 인자로 받아 부모 안에서 마운트한다.
 func (h *BLHandler) RegisterRoutes(r chi.Router, g middleware.Gates, lineH *BLLineHandler) {
 	r.Route("/bls", func(r chi.Router) {

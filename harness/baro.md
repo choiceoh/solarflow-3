@@ -37,6 +37,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - 거래처 360 (`/baro/cockpit`) — D-125 인바운드 응대 한 화면 cockpit
 - 견적 빌더 (`/baro/quote/new`) — D-126 단가표 prefill + LocalStorage draft + 브라우저 PDF
 - 영업 홈 (`/baro/home`) — D-127 일일 영업 대시보드 (오늘 후속·한도 위험·신규 입고)
+- 거래처 RFM (`/baro/rfm`) — D-128 12개월 매출 집계 + 세그먼트 분류 + 재활성화 큐
 
 **노출되지 않는 것** (module 계열 전용 — D-108/D-119로 차단):
 - P/O 발주, L/C 개설, B/L 입고, 면장/원가
@@ -56,6 +57,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - **[D-125](DECISIONS.md#d-125)** — BARO 거래처 360 cockpit. 인바운드 응대 화면을 위해 신용/최근매출/CRM 합본 endpoint 도입(sanitized 패스스루)
 - **[D-126](DECISIONS.md#d-126)** — BARO 통합 견적 빌더 Phase 1. DB 마이그레이션 없이 cockpit stub 채움 + LocalStorage draft + 브라우저 PDF
 - **[D-127](DECISIONS.md#d-127)** — BARO 영업 일일 홈 Phase 1. 신규 backend 0 — 기존 sanitized API 3종 frontend 합성
+- **[D-128](DECISIONS.md#d-128)** — BARO 거래처 RFM 보드. 12개월 매출 Go 메모리 집계 + 단순 임계값 분류 (PR4.5: 동적 분위수)
 
 ## BARO 전용 백엔드 엔드포인트 (`baroOnly` 미들웨어)
 
@@ -73,6 +75,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 | `/api/v1/partner-activities/*` | 활동 등록·후속 토글 | CRM 1차 (D-109) |
 | `/api/v1/me/open-followups` | 내 미처리 문의함 | CRM 1차 (D-109) |
 | `/api/v1/baro/partner-cockpit/{partner_id}` | 거래처 360 cockpit (신용·최근매출·CRM 합본) | D-125 |
+| `/api/v1/baro/rfm/` | 거래처 RFM 보드 (12개월 매출 집계 + 세그먼트 분류) | D-128 |
 
 ## 운영 메모
 
