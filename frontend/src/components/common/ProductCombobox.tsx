@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDownIcon, CheckIcon, SearchIcon } from 'lucide-react';
 import { cn, moduleLabel, shortMfgName } from '@/lib/utils';
 import type { Product } from '@/types/masters';
@@ -37,6 +38,7 @@ export function ProductCombobox({
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const selected = products.find((p) => p.product_id === value);
   const filtered = useMemo(() => {
@@ -44,6 +46,20 @@ export function ProductCombobox({
     if (!q) return products;
     return products.filter((p) => productKeywords(p).includes(q));
   }, [products, search]);
+
+  // 가상 스크롤 — 1000+ 제품에서도 부드럽게. 키보드 nav 와 호환되도록
+  // activeIndex 변경 시 scrollToIndex 로 viewport 안 보장.
+  const virtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => 32,
+    overscan: 8,
+    getItemKey: (index) => filtered[index]?.product_id ?? index,
+  });
+  useEffect(() => {
+    if (!open || filtered.length === 0) return;
+    virtualizer.scrollToIndex(activeIndex, { align: 'auto' });
+  }, [activeIndex, open, filtered.length, virtualizer]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -148,28 +164,35 @@ export function ProductCombobox({
               className="flex-1 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
             />
           </div>
-          <div className="max-h-60 overflow-y-auto">
+          <div ref={listRef} className="max-h-60 overflow-y-auto" style={{ contain: 'strict' }}>
             {filtered.length === 0 ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">결과 없음</div>
             ) : (
-              filtered.map((p, index) => (
-                <button
-                  key={p.product_id}
-                  type="button"
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => handleSelect(p.product_id)}
-                  className={cn(
-                    'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm text-left hover:bg-accent hover:text-accent-foreground transition-colors',
-                    activeIndex === index && 'bg-accent text-accent-foreground',
-                    value === p.product_id && 'bg-accent/40',
-                  )}
-                >
-                  <span className="size-3.5 shrink-0 flex items-center justify-center">
-                    {value === p.product_id && <CheckIcon className="size-3.5" />}
-                  </span>
-                  <span className="flex-1 truncate">{productLabel(p)}</span>
-                </button>
-              ))
+              <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+                {virtualizer.getVirtualItems().map((vRow) => {
+                  const p = filtered[vRow.index];
+                  if (!p) return null;
+                  return (
+                    <button
+                      key={vRow.key}
+                      type="button"
+                      onMouseEnter={() => setActiveIndex(vRow.index)}
+                      onClick={() => handleSelect(p.product_id)}
+                      className={cn(
+                        'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm text-left hover:bg-accent hover:text-accent-foreground transition-colors',
+                        activeIndex === vRow.index && 'bg-accent text-accent-foreground',
+                        value === p.product_id && 'bg-accent/40',
+                      )}
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${vRow.start}px)`, height: `${vRow.size}px` }}
+                    >
+                      <span className="size-3.5 shrink-0 flex items-center justify-center">
+                        {value === p.product_id && <CheckIcon className="size-3.5" />}
+                      </span>
+                      <span className="flex-1 truncate">{productLabel(p)}</span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
