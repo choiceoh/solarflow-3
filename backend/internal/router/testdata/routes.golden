@@ -24,6 +24,7 @@ DELETE  /api/v1/partners/{id}
 DELETE  /api/v1/picking-lists/{id}
 DELETE  /api/v1/pos/{id}
 DELETE  /api/v1/pos/{poId}/lines/{id}
+DELETE  /api/v1/price-benchmarks/{id}
 DELETE  /api/v1/products/{id}
 DELETE  /api/v1/receipt-matches/{id}
 DELETE  /api/v1/receipts/{id}
