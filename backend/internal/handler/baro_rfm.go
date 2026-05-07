@@ -9,6 +9,7 @@ import (
 
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
@@ -48,11 +49,22 @@ type RFMRow struct {
 
 // Get — GET /api/v1/baro/rfm
 //
+// Query params (PR4.5 추가):
+//   - mine=true            : 본인 담당 거래처(partners.owner_user_id = me) 만 반환
+//   - owner_user_id=<uuid> : 특정 영업담당자 거래처만 반환
+//   - classify=quartile    : 동적 분위수(Q1/Q2/Q3) 기반 분류 (default: hardcoded threshold)
+//
 // 활성 customer/both 거래처 전체 + 직전 12개월 매출 집계 + 세그먼트 분류.
-// 전체 거래처를 한 응답에 담는다 (200곳 규모) — 거래처별 프론트 필터·정렬을 위해.
 func (h *BaroRFMHandler) Get(w http.ResponseWriter, r *http.Request) {
 	today := time.Now()
 	twelveMonthsAgo := today.AddDate(0, -12, 0).Format("2006-01-02")
+
+	// PR4.5: query param 파싱
+	useQuartile := r.URL.Query().Get("classify") == "quartile"
+	ownerFilter := r.URL.Query().Get("owner_user_id")
+	if r.URL.Query().Get("mine") == "true" {
+		ownerFilter = middleware.GetUserID(r.Context())
+	}
 
 	// 1. 활성 고객 거래처 전체
 	partnerData, _, err := h.DB.From("partners").
@@ -115,9 +127,15 @@ func (h *BaroRFMHandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 4. partner × agg 결합 + 분류
+	// 4. partner × agg 결합 + owner 필터 적용
 	rows := make([]RFMRow, 0, len(partners))
 	for _, p := range partners {
+		// owner 필터 — 본인 담당 거래처 또는 특정 owner 만 반환
+		if ownerFilter != "" {
+			if p.OwnerUserID == nil || *p.OwnerUserID != ownerFilter {
+				continue
+			}
+		}
 		row := RFMRow{
 			PartnerID:   p.PartnerID,
 			PartnerName: p.PartnerName,
@@ -139,8 +157,19 @@ func (h *BaroRFMHandler) Get(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		row.Segment = classifyRFM(row)
 		rows = append(rows, row)
+	}
+
+	// 5. 분류 — 임계값 기반 (default) 또는 동적 분위수 기반 (PR4.5)
+	if useQuartile {
+		thresholds := computeRFMQuartiles(rows)
+		for i := range rows {
+			rows[i].Segment = classifyRFMQuartile(rows[i], thresholds)
+		}
+	} else {
+		for i := range rows {
+			rows[i].Segment = classifyRFM(rows[i])
+		}
 	}
 
 	// 매출 큰 순 정렬 — 영업이 가장 자주 보는 정렬
@@ -150,9 +179,97 @@ func (h *BaroRFMHandler) Get(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, rows)
 }
 
-// classifyRFM — 단순 임계값 기반 분류. PR4.5 에서 동적 분위수(quartile) 기반으로 개선 예정.
+// rfmQuartiles — 동적 분위수 임계값 (PR4.5 D-132).
 //
-// 임계값 (1000억 매출 / 200거래처 컨텍스트):
+// 거래처 분포에서 amount/recency/count 의 Q1/Q3 를 계산해 분류 기준에 사용.
+// 1000억 매출이 아닌 다른 컨텍스트로 옮겨도 자동 적응 — 임계값 하드코딩 회피.
+type rfmQuartiles struct {
+	amountQ1, amountQ3 float64
+	daysQ1, daysQ3     int
+	countQ1, countQ3   int
+}
+
+// computeRFMQuartiles — sale_amount > 0 인 활성 거래처만 대상으로 분위수 계산.
+// inactive(거래 0건) 거래처는 분위수 계산에서 제외 — 분포를 왜곡하지 않게.
+func computeRFMQuartiles(rows []RFMRow) rfmQuartiles {
+	var amounts []float64
+	var days []int
+	var counts []int
+	for _, r := range rows {
+		if r.SaleCount12mo == 0 {
+			continue
+		}
+		amounts = append(amounts, r.SaleAmount12moKrw)
+		counts = append(counts, r.SaleCount12mo)
+		if r.DaysSinceLastSale != nil {
+			days = append(days, *r.DaysSinceLastSale)
+		}
+	}
+	sort.Float64s(amounts)
+	sort.Ints(days)
+	sort.Ints(counts)
+
+	q := func(slice []int, p float64) int {
+		if len(slice) == 0 {
+			return 0
+		}
+		idx := int(float64(len(slice)-1) * p)
+		return slice[idx]
+	}
+	qf := func(slice []float64, p float64) float64 {
+		if len(slice) == 0 {
+			return 0
+		}
+		idx := int(float64(len(slice)-1) * p)
+		return slice[idx]
+	}
+	return rfmQuartiles{
+		amountQ1: qf(amounts, 0.25),
+		amountQ3: qf(amounts, 0.75),
+		daysQ1:   q(days, 0.25),
+		daysQ3:   q(days, 0.75),
+		countQ1:  q(counts, 0.25),
+		countQ3:  q(counts, 0.75),
+	}
+}
+
+// classifyRFMQuartile — 분위수 기반 분류 (PR4.5).
+//
+// 분포 기반 정의:
+//   - champion : 최근(R≤Q1 days) + 자주(F≥Q3 count) + 큰매출(M≥Q3 amount)
+//   - loyal    : 최근 또는 자주 + Q1 이상 매출
+//   - new      : 최근 R≤Q1 + F≤Q1 (이제 막 거래)
+//   - at_risk  : R≥Q3 days(오래됨) + M≥Q1 amount(매출 이력은 있음 — 재활성화 후보)
+//   - lost     : 그 외 침체
+//   - inactive : 12개월 매출 0건
+func classifyRFMQuartile(r RFMRow, q rfmQuartiles) string {
+	if r.SaleCount12mo == 0 {
+		return "inactive"
+	}
+	days := 999
+	if r.DaysSinceLastSale != nil {
+		days = *r.DaysSinceLastSale
+	}
+	switch {
+	case days <= q.daysQ1 && r.SaleCount12mo >= q.countQ3 && r.SaleAmount12moKrw >= q.amountQ3:
+		return "champion"
+	case (days <= q.daysQ1 || r.SaleCount12mo >= q.countQ3) && r.SaleAmount12moKrw >= q.amountQ1:
+		return "loyal"
+	case days <= q.daysQ1 && r.SaleCount12mo <= q.countQ1:
+		return "new"
+	case days >= q.daysQ3 && r.SaleAmount12moKrw >= q.amountQ1:
+		return "at_risk"
+	default:
+		return "lost"
+	}
+}
+
+// classifyRFM — 단순 임계값 기반 분류 (default, D-128).
+//
+// 1000억 매출 / 200거래처 컨텍스트에 튜닝된 하드코딩 임계값.
+// PR4.5(D-132) 의 quartile 기반 분류와 함께 사용 — `?classify=quartile` query param 으로 전환.
+//
+// 임계값:
 //   - champion : 최근 30일 + 5건+ + 1억+
 //   - loyal    : 최근 60일 + 3건+
 //   - new      : 최근 30일 + 2건 이하 (거래 시작 단계)

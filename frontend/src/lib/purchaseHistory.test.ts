@@ -164,15 +164,19 @@ describe('eventDeepLink', () => {
 
   it('routes LC events to the lc tab', () => {
     expect(eventDeepLink({ kind: 'lc_open' })).toBe('/procurement?tab=lc');
-    expect(eventDeepLink({ kind: 'lc_settle' })).toBe('/procurement?tab=lc');
+    expect(eventDeepLink({ kind: 'lc_settle', lc_id: 'LC1' })).toBe('/procurement?tab=lc&lc_id=LC1');
   });
 
   it('routes BL/TT events to their respective tabs', () => {
-    expect(eventDeepLink({ kind: 'bl_event' })).toBe('/procurement?tab=bl');
-    expect(eventDeepLink({ kind: 'tt_send' })).toBe('/procurement?tab=tt');
+    expect(eventDeepLink({ kind: 'bl_event', bl_id: 'BL1' })).toBe('/procurement?tab=bl&bl_id=BL1');
+    expect(eventDeepLink({ kind: 'tt_send', tt_id: 'TT1' })).toBe('/procurement?tab=tt&tt_id=TT1');
   });
 
-  it('returns null for price_change (no operating page since manual editing was retired)', () => {
+  it('links price_change to PO when related_po_id exists', () => {
+    expect(eventDeepLink({ kind: 'price_change', po_id: 'P1' })).toBe('/procurement?po_id=P1');
+  });
+
+  it('returns null for orphan price_change', () => {
     expect(eventDeepLink({ kind: 'price_change' })).toBeNull();
   });
 });

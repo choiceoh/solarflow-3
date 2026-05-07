@@ -665,7 +665,7 @@
   - **체인 식별자**: `parent_po_id`가 null인 원계약 PO의 `po_id`가 chain_id. URL은 `/purchase-history?chain={chain_id}`.
   - **체인 그룹핑 안전선**: `findChainHeadId` (frontend/src/lib/purchaseHistory.ts)에 cycle 방문 추적 + 32 깊이 cap. DB 무결성 깨져도 페이지가 무한루프 안 함.
   - **사이드바 진입**: `현황` 그룹, module 계열(`MODULE_TENANTS = ['topsolar', 'cable']`), `menu: 'purchase_history'` 신규 키 — admin/operator/executive 모두 접근(executive도 구매 이력 read-only 조회 필요).
-  - **딥링크**: PO 관련 이벤트는 `/procurement?po_id={po_id}` → ProcurementPage가 query 받아 PODetailView 자동 펼침. LC/BL/TT는 탭 단위까지 (`?tab=lc` 등) — 향후 별건 작업으로 LC/BL/TT 자동 선택 추가 가능.
+  - **딥링크**: PO 관련 이벤트는 `/procurement?po_id={po_id}` → ProcurementPage가 query 받아 PODetailView 자동 펼침. LC/B/L/T/T 이벤트는 `/procurement?tab=lc&lc_id={lc_id}`, `/procurement?tab=bl&bl_id={bl_id}`, `/procurement?tab=tt&tt_id={tt_id}`처럼 실제 대상 ID까지 전달한다. LC는 해당 행을 펼치고, B/L은 상세 화면을 열며, T/T는 해당 행을 강조 표시한다.
   - **수동 단가이력 표시**: `related_po_id`가 null인 PriceHistory는 (a) 체인 뷰: 제조사 일치하면 컨텍스트로 노출, (b) 회사 전체 뷰: `[PO 미연결]` 라벨로 별도 노출.
   - **audit diff 표시**: `purchase_orders` audit `update`만 처리 — `old_data`/`new_data` 객체 비교, `updated_at`/`created_at`/`po_id`/`company_id` 메타 필드 스킵, 한국어 라벨(`status` → `상태` 등) 적용.
 - **검증**:
@@ -1035,3 +1035,116 @@
   - 수동 검증: BARO 토큰으로 `/baro/shipment-notice` 진입 시 폼 + 3 메시지 카드 표시. 빈 필드는 메시지에서 자동 생략. 복사 버튼 클릭 시 "복사됨" 피드백.
 - **날짜**: 2026-05-07
 
+
+## D-139: WMS Phase 1 — 창고 내 위치(Bin/Location) 관리 (모든 테넌트 공유)
+- **결정**: 기존 `warehouses` 마스터(창고 단위) 위에 `warehouse_locations` (Bin 단위) 신규 도입. Zone > Aisle > Rack > Bin 4단계 계층, 단계 일부 생략 가능 (작은 창고는 Zone-Bin 만).
+- **마이그 085** (`backend/migrations/085_warehouse_locations.sql`): `warehouse_locations` 테이블 — `warehouse_id` FK + 4단계 nullable + `location_code` (warehouse 내 UNIQUE) + capacity_qty/weight_capacity_kg + location_type CHECK (storage/staging/receiving/shipping/damaged/reserved) + is_active. 인덱스 3종 (warehouse_id 전체 / active_only / zone).
+- **endpoint** (`master.warehouse_location` feature_id, 모든 테넌트 공유):
+  - GET `/api/v1/warehouse-locations?warehouse_id=&active_only=true`, `/{id}`
+  - POST/PUT/PATCH/DELETE 표준 CRUD
+- **사용 시나리오**:
+  - 영업이 출고 시 "A존-3랙-Bin12 에서 30장" 위치 추적 (PR8.5 자동 피킹 리스트 후)
+  - 입고 시 패널 적재 위치 배정 (PR8.6 receiving log 후)
+  - 재고실사 cycle counting 시 위치 단위 점검 (PR8.7)
+- **PR8.5/PR8.6/PR8.7 분리** (별도 D-NNN, 마이그 동반):
+  - PR8.5 — `inventory_allocations.location_id` 추가 + 자동 피킹 리스트 (출고 1건당 위치별 수량). BARO 특화.
+  - PR8.6 — `bl_line_receiving_log` (module 측) + `intercompany_receiving_log` (BARO 측) 입고 검수 + 수량 차이 추적.
+  - PR8.7 — `cycle_counts` 정기 실사 + 정확도 추적.
+- **이유**: BARO 가 50+ SKU × 창고 1~2개 운영 시 차주 적재 시 위치 안내가 현재 직접 통화 의존. 위치 마스터 + Bin 표찰 인쇄만으로도 가치 큼. 후속 PR8.5 가 자동 피킹 리스트로 본 가치 폭발.
+- **운영 기준**:
+  - 모든 테넌트 공유 — BARO 만이 아닌 module 계열도 사용 가능.
+  - 마이그 미적용 환경에서는 POST 응답 500 + "마이그 085 미적용" 메시지.
+  - is_active=false 가 soft delete (재고 배정에 사용 중인 위치 hard delete 시 FK 제약 발동).
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/warehouse-locations/*` catalog 일치, matrix_consistency 가 `master.warehouse_location` markdown 일치 검증.
+  - 라우터 가드: 모든 테넌트 통과 (master.* 도메인).
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/085_warehouse_locations.sql` + PostgREST schema reload.
+- **날짜**: 2026-05-07
+
+## D-140: WMS Phase 2 — 위치별 재고 + 자동 피킹 명세 (모든 테넌트 공유)
+- **결정**: D-139 위치 마스터 위에 (1) `inventory_allocations.location_id` 컬럼 추가 + (2) `picking_lists` / `picking_list_items` 테이블 신규 + (3) PickingListHandler CRUD + picked 토글. **신규 backend 1 endpoint 묶음** (`tx.picking_list` feature_id, 모든 테넌트 공유).
+- **마이그 086** (`backend/migrations/086_picking_lists.sql`):
+  - `inventory_allocations.location_id uuid REFERENCES warehouse_locations(location_id)` (nullable, FK).
+  - `picking_lists` (picking_list_id, outbound_id, dispatch_route_id, warehouse_id FK, partner_id+snapshot, status CHECK pending/in_progress/completed/cancelled, picker_user_id FK auth.users, created_at/by, started_at, completed_at, notes).
+  - `picking_list_items` (item_id, picking_list_id FK CASCADE, line_no, product_id+snapshot 3종, location_id+snapshot, quantity_planned/picked, is_picked, picked_at/by, variance_note).
+  - 인덱스 5종 (outbound, status partial, picker, list 전체, unpicked partial).
+- **endpoint** (`tx.picking_list`):
+  - `GET /api/v1/picking-lists?status=pending&warehouse_id=&mine=true` — 작업자 본인 큐
+  - `GET /api/v1/picking-lists/{id}` — 헤더 + 라인 합본
+  - `POST /api/v1/picking-lists` — 헤더 + 라인 묶음 등록 (수동 또는 출고에서 자동 호출 가능)
+  - `PATCH /api/v1/picking-lists/{id}` — 헤더 status / picker / notes (status='in_progress' 시 started_at 자동, 'completed' 시 completed_at 자동)
+  - `PATCH /api/v1/picking-lists/{id}/items/{item_id}` — 라인 picked 토글 + quantity_picked + variance_note (is_picked=true 시 picked_at/by 자동)
+  - `DELETE /api/v1/picking-lists/{id}` — hard (status='cancelled' soft delete 권장)
+- **사용 시나리오**:
+  - 영업 수주 → 출고 생성 → 시스템이 가용재고의 `location_id` 기반 자동 피킹 명세 작성
+  - 창고 작업자 모바일/태블릿에서 본인 큐(`?mine=true`) 열기 → status='in_progress' 토글 → 라인별 picked 체크
+  - 차이 발생 시 quantity_picked 입력 + variance_note (실재고 부족 / 파손 / 위치 오류) → 영업·회계 알림
+- **snapshot 컬럼 정책**: product_code/name/spec_wp/location_code 모두 picking 시점 보존 — products 마스터 / warehouse_locations 변경에도 명세 원본 불변. 인쇄 라벨에 사용.
+- **PR8.5b 분리** (별도 D-NNN, outbound 핸들러 변경):
+  - 출고 생성 시 자동 피킹 명세 생성 — outbound→bl_line→inventory_allocation join 으로 위치 추출 + POST /picking-lists 자동 호출.
+  - 명시적 enforcement 까지 가는 게 큰 작업이라 분리. PR8.5 단계는 수동 POST 만 안전 동작.
+- **PR8.5c 분리** (frontend):
+  - `/baro/picking` 페이지 — 작업자 큐 (mine=true) + status 토글 + 라인 picked 토글 (모바일 친화 UI).
+  - 인쇄 라벨 (Bin 표찰 + 라인 명세) 별도 PR.
+- **이유**: D-139 위치 마스터 만으로는 영업·작업자 워크플로우 미통합 — picking 명세가 진짜 가치. BARO 50+ SKU × 출고 일 10건 환경에서 작업자 1인당 일 30분 절약 가능 (위치 헤매기 X). 시공업체 클레임 (수량 부족) 시 picking 로그가 증빙.
+- **운영 기준**:
+  - 모든 테넌트 공유 — BARO 만이 아닌 module 계열도 사용 가능.
+  - 마이그 086 미적용 시 POST 응답 500 + 안내 메시지.
+  - status 머신 강제: pending → in_progress → completed (또는 pending → cancelled).
+  - is_picked=true 가 picked_at/by 자동 기록 (작업자 토큰 기반).
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/picking-lists/*` catalog 일치, matrix_consistency 검증.
+  - 모든 테넌트 토큰 통과 (tx.* 도메인).
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/086_picking_lists.sql` + PostgREST schema reload.
+- **날짜**: 2026-05-07
+
+## D-141: WMS Phase 3 — 입고 검수 로그 (모든 테넌트 공유)
+- **결정**: 트럭 도착 → 검수자 → 수량/규격 확인 → 위치 배정 + 차이 추적. **module 계열(BL 라인) + BARO(intercompany_request) 양쪽 동일 패턴** 을 단일 테이블 `receiving_logs` 에 통합 (`source_type` 으로 분기).
+- **마이그 087** (`backend/migrations/087_receiving_log.sql`):
+  - `receiving_logs` (receiving_id, source_type CHECK bl_line/intercompany/manual, bl_line_id/intercompany_request_id 둘 중 하나, warehouse_id FK, product+snapshot, quantity_expected/received + GENERATED variance, location_id+snapshot, receiver_user_id, received_at, variance_reason CHECK 6종, variance_note, photo_attachment_ids uuid[], notes).
+  - 인덱스 5종 (source partial, intercompany partial, warehouse, receiver+received_at desc, variance_only partial).
+- **endpoint** (`tx.receiving_log` feature_id, 모든 테넌트):
+  - `GET /api/v1/receiving-logs?source_type=&warehouse_id=&variance_only=true`
+  - `GET /{id}` / `POST` / `DELETE` (admin only 권장 — 회계 증빙)
+- **차이 사유 분류**: `shortage` / `overage` / `damaged` / `wrong_product` / `wrong_spec` / `other`.
+- **사진 첨부**: `photo_attachment_ids` (Postgres uuid[]) — 기존 `/api/v1/attachments/` 와 link.
+- **사용 시나리오**:
+  - 입고 시 검수자가 모바일/태블릿으로 BL 라인 또는 intercompany 요청 선택 → 실수량 입력 → 차이 발생 시 사유+사진
+  - 영업·회계 가 `?variance_only=true` 로 차이 발생 건만 일별 점검
+  - 회계 마감 시 검수 로그 vs 매입 인보이스 대조
+- **PR8.6b 분리**:
+  - BL 라인 핸들러에서 검수 로그 자동 생성 호출 (입고 처리 시).
+  - intercompany_request `receive` 액션에서 자동 호출.
+- **이유**: 현재 입고는 BL 라인 status 변경만 추적 — 차이 사유·검수자·사진 부재. 클레임 발생 시 증빙 어려움. 통합 receiving_logs 로 양 흐름 동일 점검 + 회계 증빙 + AI 이상 탐지(향후) 기반.
+- **운영 기준**: 모든 테넌트 공유 (tx.* 도메인). 차이 발생 시 variance_reason 강제 (handler 검증).
+- **검증**: `go test ./internal/{feature,router,handler}` 통과 — coverage_test 일치, matrix consistency.
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/087_receiving_log.sql` + PostgREST reload.
+- **날짜**: 2026-05-07
+
+## D-142: WMS Phase 4 — Cycle Counting (정기 재고실사, 모든 테넌트 공유)
+- **결정**: 분기/월 단위 정기 재고실사 + 위치 단위 차이 추적 + 정확도 보드. `cycle_counts` 세션 + `cycle_count_items` 라인 구조.
+- **마이그 088** (`backend/migrations/088_cycle_counts.sql`):
+  - `cycle_counts` (cycle_count_id, warehouse_id FK, scheduled_date, status CHECK, started_at, completed_at, total_locations, matched_locations, variance_locations, accuracy_pct, created_by, notes).
+  - `cycle_count_items` (item_id, cycle_count_id FK CASCADE, location_id+snapshot, product_id+snapshot 3종, expected_qty, counted_qty nullable, GENERATED variance_qty, variance_reason CHECK 5종, counted_by, counted_at, photo_attachment_ids uuid[]).
+  - 인덱스 5종.
+- **endpoint** (`tx.cycle_count`):
+  - `GET /api/v1/cycle-counts?status=&warehouse_id=`
+  - `GET /{id}` (헤더 + 라인 합본)
+  - `POST` 세션 생성
+  - `POST /{id}/complete` 세션 종료 + 정확도 자동 집계
+  - `PATCH /{id}/items/{item_id}` 라인 counted_qty + variance 입력
+- **차이 사유**: `shrinkage` (도난/유실) / `damage` (파손) / `wrong_location` (위치 오류) / `system_error` (시스템 오류) / `other`.
+- **정확도 자동 집계**: `Complete` 호출 시 라인 집계 → matched/variance/accuracy_pct 헤더 갱신.
+- **사용 시나리오**:
+  - 분기 시작 시 admin 이 세션 생성 → PR8.7b 가 inventory_allocations 스냅샷 자동 → 라인 일괄 생성
+  - 작업자 모바일에서 본인 큐(`?status=in_progress`) 열고 라인별 실측 입력
+  - 차이 발생 라인은 사진 + 사유
+  - 세션 종료 시 정확도 % 자동 집계 → 영업/회계 보고
+- **PR8.7b/c 분리**:
+  - PR8.7b — `cycle_counts.{id}/seed` endpoint: inventory_allocations 자동 스냅샷 → cycle_count_items 일괄 생성.
+  - PR8.7c — completed 세션의 variance 라인을 inventory_allocations 자동 보정 (admin 결재 후).
+- **이유**: BARO 1000억 매출 환경에서 SKU 50종 × 분기 1회 점검 = 분기 200~300건 점검. 현재는 엑셀 파일로 수동 관리 — 차이 추적·증빙 부실. 시스템화로 정확도 추세 + 도난/파손 패턴 분석 가능.
+- **운영 기준**: 모든 테넌트 공유. 정확도 90% 이하 시 영업·회계 알림 (PR8.7d).
+- **검증**: `go test` 통과 — coverage_test 일치.
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/088_cycle_counts.sql` + PostgREST reload.
+- **날짜**: 2026-05-07

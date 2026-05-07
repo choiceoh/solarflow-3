@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Trash2, Upload } from 'lucide-react';
+import { useCallback, useState, useEffect, useRef } from 'react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, Clock3, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -21,6 +21,8 @@ import { notify } from '@/lib/notify';
 import { MetaDetailBody } from '@/templates/MetaDetail';
 import blShipmentDetailConfig from '@/config/details/bl_shipment';
 import type { Manufacturer } from '@/types/masters';
+import type { BLLineItem, BLShipment } from '@/types/inbound';
+import type { DocumentFile } from '@/types/documentFile';
 import BLExpensesTab from './BLExpensesTab';
 import BLOutboundTrackingTab from './BLOutboundTrackingTab';
 
@@ -37,6 +39,23 @@ const BL_DOCUMENT_ATTACHMENTS = [
 ] as const;
 
 type BLDocumentFileType = typeof BL_DOCUMENT_ATTACHMENTS[number]['fileType'];
+
+type StageTone = 'done' | 'current' | 'warn' | 'pending' | 'muted';
+
+interface ProgressStage {
+  key: string;
+  label: string;
+  detail: string;
+  tone: StageTone;
+}
+
+interface ReadinessCheck {
+  key: string;
+  label: string;
+  detail: string;
+  ok: boolean;
+  required: boolean;
+}
 
 function classifyBLDocument(name: string): BLDocumentFileType | null {
   const lower = name.toLowerCase();
@@ -56,6 +75,152 @@ function classifyBLDocument(name: string): BLDocumentFileType | null {
   return null;
 }
 
+function isStatusAtLeast(bl: BLShipment, target: BLShipment['status']) {
+  const order: BLShipment['status'][] = ['scheduled', 'shipping', 'arrived', 'customs', 'completed', 'erp_done'];
+  return order.indexOf(bl.status) >= order.indexOf(target);
+}
+
+function hasDocument(files: DocumentFile[], fileType: BLDocumentFileType) {
+  return files.some((file) => file.file_type === fileType);
+}
+
+function buildProgressStages(bl: BLShipment, lines: BLLineItem[], files: DocumentFile[]): ProgressStage[] {
+  const isImport = bl.inbound_type === 'import';
+  const hasCustomsDoc = hasDocument(files, 'customs_declaration_pdf');
+  const hasTradeDocs = hasDocument(files, 'bill_of_lading_pdf') && hasDocument(files, 'commercial_invoice_pdf');
+  const hasCustomsValue = !!bl.declaration_number || !!bl.cif_amount_krw || !!bl.exchange_rate || hasCustomsDoc;
+
+  return [
+    {
+      key: 'po',
+      label: 'P/O',
+      detail: bl.po_number ?? (bl.po_id ? '연결됨' : '미연결'),
+      tone: bl.po_id ? 'done' : 'warn',
+    },
+    {
+      key: 'lc',
+      label: 'L/C',
+      detail: isImport ? (bl.lc_number ?? (bl.lc_id ? '연결됨' : '미연결')) : '대상 아님',
+      tone: !isImport ? 'muted' : bl.lc_id ? 'done' : 'warn',
+    },
+    {
+      key: 'bl',
+      label: 'B/L',
+      detail: lines.length > 0 ? `${lines.length.toLocaleString('ko-KR')}개 품목` : '품목 없음',
+      tone: lines.length > 0 && hasTradeDocs ? 'done' : lines.length > 0 ? 'current' : 'warn',
+    },
+    {
+      key: 'arrival',
+      label: '입항',
+      detail: bl.actual_arrival ?? bl.eta ?? '일정 미정',
+      tone: bl.actual_arrival ? 'done' : isStatusAtLeast(bl, 'arrived') ? 'current' : 'pending',
+    },
+    {
+      key: 'customs',
+      label: '면장',
+      detail: isImport ? (hasCustomsValue ? '확인됨' : '확인 필요') : '대상 아님',
+      tone: !isImport ? 'muted' : hasCustomsValue ? 'done' : isStatusAtLeast(bl, 'customs') ? 'warn' : 'pending',
+    },
+    {
+      key: 'stock',
+      label: '입고',
+      detail: isStatusAtLeast(bl, 'completed') ? '재고 반영' : '진행중',
+      tone: isStatusAtLeast(bl, 'completed') ? 'done' : 'pending',
+    },
+    {
+      key: 'erp',
+      label: 'ERP',
+      detail: bl.status === 'erp_done' || bl.erp_registered ? '등록완료' : '미등록',
+      tone: bl.status === 'erp_done' || bl.erp_registered ? 'done' : isStatusAtLeast(bl, 'completed') ? 'current' : 'pending',
+    },
+  ];
+}
+
+function buildReadinessChecks(bl: BLShipment, lines: BLLineItem[], files: DocumentFile[]): ReadinessCheck[] {
+  const isImport = bl.inbound_type === 'import';
+  return [
+    {
+      key: 'po',
+      label: 'P/O 연결',
+      detail: bl.po_number ?? (bl.po_id ? '연결됨' : '미연결'),
+      ok: !!bl.po_id,
+      required: true,
+    },
+    {
+      key: 'lines',
+      label: '입고품목',
+      detail: lines.length > 0 ? `${lines.length.toLocaleString('ko-KR')}건` : '품목 없음',
+      ok: lines.length > 0,
+      required: true,
+    },
+    {
+      key: 'warehouse',
+      label: '입고창고',
+      detail: bl.warehouse_name ?? (bl.warehouse_id ? '지정됨' : '미지정'),
+      ok: !!bl.warehouse_id,
+      required: true,
+    },
+    {
+      key: 'lc',
+      label: 'L/C 연결',
+      detail: !isImport ? '대상 아님' : bl.lc_number ?? (bl.lc_id ? '연결됨' : '미연결'),
+      ok: !isImport || !!bl.lc_id,
+      required: isImport,
+    },
+    {
+      key: 'exchange_rate',
+      label: '면장환율',
+      detail: !isImport ? '대상 아님' : bl.exchange_rate ? `${bl.exchange_rate.toLocaleString('ko-KR')}` : '미입력',
+      ok: !isImport || !!bl.exchange_rate,
+      required: isImport,
+    },
+    {
+      key: 'documents',
+      label: '필수 서류',
+      detail: !isImport
+        ? '대상 아님'
+        : `${['bill_of_lading_pdf', 'commercial_invoice_pdf', 'packing_list_pdf', 'customs_declaration_pdf']
+            .filter((fileType) => hasDocument(files, fileType as BLDocumentFileType)).length}/4`,
+      ok: !isImport || (
+        hasDocument(files, 'bill_of_lading_pdf') &&
+        hasDocument(files, 'commercial_invoice_pdf') &&
+        hasDocument(files, 'packing_list_pdf') &&
+        hasDocument(files, 'customs_declaration_pdf')
+      ),
+      required: isImport,
+    },
+    {
+      key: 'erp',
+      label: '아마란스',
+      detail: bl.status === 'erp_done' || bl.erp_registered ? '등록완료' : '미등록',
+      ok: bl.status === 'erp_done' || bl.erp_registered === true,
+      required: false,
+    },
+  ];
+}
+
+function stageClass(tone: StageTone) {
+  switch (tone) {
+    case 'done':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    case 'current':
+      return 'border-blue-200 bg-blue-50 text-blue-700';
+    case 'warn':
+      return 'border-amber-200 bg-amber-50 text-amber-700';
+    case 'muted':
+      return 'border-muted bg-muted/30 text-muted-foreground';
+    default:
+      return 'border-border bg-card text-muted-foreground';
+  }
+}
+
+function stageIcon(tone: StageTone) {
+  if (tone === 'done') return <CheckCircle2 className="h-3.5 w-3.5" />;
+  if (tone === 'warn') return <AlertTriangle className="h-3.5 w-3.5" />;
+  if (tone === 'current') return <Clock3 className="h-3.5 w-3.5" />;
+  return <Circle className="h-3.5 w-3.5" />;
+}
+
 export default function BLDetailView({ blId, onBack }: Props) {
   const { data: bl, loading: blLoading, reload: reloadBL } = useBLDetail(blId);
   const { data: lines, loading: linesLoading } = useBLLines(blId);
@@ -68,6 +233,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
   const [documentReloadKey, setDocumentReloadKey] = useState(0);
   const [documentSetUploading, setDocumentSetUploading] = useState(false);
   const [documentSetError, setDocumentSetError] = useState('');
+  const [documentFiles, setDocumentFiles] = useState<DocumentFile[]>([]);
 
   // 평탄 응답에는 공급사명이 포함되지 않으므로 별도 조회
   useEffect(() => {
@@ -84,9 +250,26 @@ export default function BLDetailView({ blId, onBack }: Props) {
     return () => { cancelled = true; };
   }, [bl?.manufacturer_id, bl?.manufacturer_name]);
 
+  const loadDocuments = useCallback(async () => {
+    const params = new URLSearchParams({ entity_type: 'bl_shipments', entity_id: blId });
+    try {
+      const files = await fetchWithAuth<DocumentFile[]>(`/api/v1/attachments?${params}`);
+      setDocumentFiles(files ?? []);
+    } catch {
+      setDocumentFiles([]);
+    }
+  }, [blId]);
+
+  useEffect(() => {
+    void loadDocuments();
+  }, [loadDocuments]);
+
   if (blLoading || !bl) return <LoadingSpinner />;
 
   const isImport = bl.inbound_type === 'import';
+  const progressStages = buildProgressStages(bl, lines, documentFiles);
+  const readinessChecks = buildReadinessChecks(bl, lines, documentFiles);
+  const requiredIssues = readinessChecks.filter((check) => check.required && !check.ok);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -131,6 +314,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
         form.append('file', item.file);
         await fetchWithAuth('/api/v1/attachments', { method: 'POST', body: form });
       }
+      await loadDocuments();
       setDocumentReloadKey((key) => key + 1);
     } catch (err) {
       setDocumentSetError(err instanceof Error ? err.message : '서류 세트 업로드에 실패했습니다');
@@ -166,6 +350,51 @@ export default function BLDetailView({ blId, onBack }: Props) {
 
         <TabsContent value="basic">
           <div className="space-y-4">
+            <DetailSection title="진행 흐름">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
+                {progressStages.map((stage) => (
+                  <div
+                    key={stage.key}
+                    className={`min-h-[72px] rounded-md border px-3 py-2 ${stageClass(stage.tone)}`}
+                  >
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                      {stageIcon(stage.tone)}
+                      <span>{stage.label}</span>
+                    </div>
+                    <div className="mt-2 truncate text-[11px] tabular-nums">{stage.detail}</div>
+                  </div>
+                ))}
+              </div>
+            </DetailSection>
+
+            <DetailSection title="입고완료 체크">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {readinessChecks.map((check) => (
+                  <div
+                    key={check.key}
+                    className={`rounded-md border px-3 py-2 ${check.ok ? 'border-emerald-200 bg-emerald-50/60' : check.required ? 'border-amber-200 bg-amber-50/70' : 'border-muted bg-muted/30'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[11px] font-medium text-foreground">{check.label}</div>
+                      {check.ok ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      ) : check.required ? (
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                      ) : (
+                        <Circle className="h-3.5 w-3.5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="mt-1 truncate text-[11px] text-muted-foreground">{check.detail}</div>
+                  </div>
+                ))}
+              </div>
+              {requiredIssues.length > 0 ? (
+                <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                  {requiredIssues.map((check) => check.label).join(', ')} 확인 후 입고완료 전환
+                </div>
+              ) : null}
+            </DetailSection>
+
             <MetaDetailBody
               config={blShipmentDetailConfig}
               data={{

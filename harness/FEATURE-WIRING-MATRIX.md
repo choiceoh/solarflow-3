@@ -59,6 +59,7 @@
 | `master.product` | 품번 마스터 | ★ | global |
 | `master.product_alias` | 품번 별칭 | ★ | global |
 | `master.warehouse` | 창고 마스터 | ★ | global |
+| `master.warehouse_location` | 창고 위치(Bin) 마스터 (D-139 WMS Phase 1) | ★ | global |
 | `master.construction_site` | 공사현장 마스터 | ★ | global |
 
 ### tx.* (거래 — all tenants)
@@ -74,6 +75,9 @@
 | `tx.bl` | B/L 입고 (+ lines) | ★ | global |
 | `tx.inventory_allocation` | 가용재고 배정 | ★ | global |
 | `tx.module_demand_forecast` | 수요 forecast | ★ | global |
+| `tx.picking_list` | WMS 피킹 명세 (D-140 WMS Phase 2) | ★ | global |
+| `tx.receiving_log` | WMS 입고 검수 로그 (D-141 WMS Phase 3) | ★ | global |
+| `tx.cycle_count` | WMS 정기 재고실사 (D-142 WMS Phase 4) | ★ | global |
 
 ### tx.* (거래 — module 계열, D-108/D-119)
 
@@ -105,6 +109,7 @@
 
 | feature_id | 이름 | Default | 데이터 스코프 | 비고 |
 |---|---|---|---|---|
+| `baro.callback_recommend` | BARO 자동 콜백 추천 엔진 | B | tenant_owned | D-133 |
 | `baro.incoming` | BARO 입고예정 | B | column_masked | D-116 sanitized |
 | `baro.purchase_history` | BARO 자체 매입원가 (BR 법인) | B | tenant_company | D-117 |
 | `baro.credit_board` | BARO 미수금/한도 보드 | B | tenant_company | Phase 3 |
@@ -114,6 +119,9 @@
 | `baro.partner_cockpit` | BARO 거래처 360 cockpit | B | tenant_owned | D-125 |
 | `baro.rfm` | BARO 거래처 RFM 보드 | B | tenant_owned | D-128 |
 | `baro.sales_summary` | BARO 자체 매출 요약 | B | tenant_company | D-129 |
+| `baro.quote` | BARO 견적 DB 저장 + 발송 | B | tenant_owned | D-135 PR2.5b |
+| `baro.credit_check` | BARO 한도 사전 체크 | B | tenant_company | D-136 PR5.5b |
+| `baro.shipment_notice` | BARO 출하 알림 발송 + 드라이버 PWA 토큰 | B | tenant_owned | D-137 PR7.5 |
 
 ### calc.* (Rust 계산엔진 프록시)
 

@@ -1451,6 +1451,24 @@ a:focus-visible,
   font-size: 11px;
   color: var(--ink-2);
 }
+.sf-ph-chain-row .sf-ph-chain-meta,
+.sf-ph-chain-row .sf-ph-chain-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.sf-ph-chain-row .sf-ph-chain-meta span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-ph-chain-row .sf-ph-chain-foot {
+  justify-content: space-between;
+}
 .sf-ph-chain-row .sf-ph-chain-date {
   font-size: 10px;
   color: var(--ink-3);
@@ -1483,7 +1501,95 @@ a:focus-visible,
 .sf-ph-timeline {
   list-style: none;
   margin: 0;
-  padding: 8px 0;
+  padding: 0;
+}
+.sf-ph-timeline-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.sf-ph-timeline-toolbar .tabs {
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 1px;
+}
+.sf-ph-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sf-ph-reset-btn:hover {
+  background: var(--bg-2);
+}
+.sf-ph-reset-btn svg {
+  width: 12px;
+  height: 12px;
+}
+.sf-ph-chain-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  border-bottom: 1px solid var(--line);
+  background: var(--line);
+}
+.sf-ph-chain-summary > div {
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--bg);
+}
+.sf-ph-summary-value {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-ph-summary-sub {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 1100px) {
+  .sf-ph-chain-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.sf-ph-timeline-groups {
+  padding: 0;
+}
+.sf-ph-month-divider {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 92%, var(--solar-2));
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 700;
 }
 .sf-ph-timeline > li {
   border-bottom: 1px solid var(--line);
@@ -1537,6 +1643,25 @@ a:focus-visible,
   font-size: 13px;
   font-weight: 600;
   color: var(--ink);
+  min-width: 0;
+}
+.sf-ph-event-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.sf-ph-event-kind {
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 10px;
+  color: var(--ink-3);
+  background: var(--bg);
 }
 .sf-ph-event-date {
   font-size: 10.5px;
@@ -2353,6 +2478,163 @@ textarea::placeholder {
   to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
+/* AI 어시스턴트 — 메시지 첫 등장 시 슬라이드인 페이드. */
+.sf-msg-enter {
+  animation: sf-msg-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes sf-msg-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* AI 어시스턴트 — 스트리밍 중 봇 아바타 ring pulse. 캐럿보다 강한 시각 신호. */
+.sf-avatar-ring-pulse {
+  position: relative;
+}
+.sf-avatar-ring-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 2px solid var(--sf-solar);
+  opacity: 0;
+  animation: sf-ring-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes sf-ring-pulse {
+  0% { transform: scale(0.95); opacity: 0.6; }
+  70% { transform: scale(1.15); opacity: 0; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+
+/* 사용자가 모션 줄이기 환경설정 — 모든 어시스턴트 애니메이션 비활성. */
+@media (prefers-reduced-motion: reduce) {
+  .sf-stream-fade,
+  .sf-msg-enter,
+  .sf-avatar-ring-pulse::before {
+    animation: none !important;
+  }
+  .sf-avatar-ring-pulse::before {
+    display: none;
+  }
+}
+
+/* 어시스턴트 — 사이드바 얇은 스크롤바. */
+.sf-thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(0 0 0 / 0.15);
+  border-radius: 3px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(0 0 0 / 0.28);
+}
+.sf-thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 0.15) transparent;
+}
+
+/* AI 어시스턴트 — 메시지 첫 등장 시 슬라이드인 페이드. */
+.sf-msg-enter {
+  animation: sf-msg-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes sf-msg-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* AI 어시스턴트 — 스트리밍 중 봇 아바타 ring pulse. 캐럿보다 강한 시각 신호. */
+.sf-avatar-ring-pulse {
+  position: relative;
+}
+.sf-avatar-ring-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 2px solid var(--sf-solar);
+  opacity: 0;
+  animation: sf-ring-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes sf-ring-pulse {
+  0% { transform: scale(0.95); opacity: 0.6; }
+  70% { transform: scale(1.15); opacity: 0; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+
+/* 사용자가 모션 줄이기 환경설정 — 모든 어시스턴트 애니메이션 비활성. */
+@media (prefers-reduced-motion: reduce) {
+  .sf-stream-fade,
+  .sf-msg-enter,
+  .sf-avatar-ring-pulse::before {
+    animation: none !important;
+  }
+  .sf-avatar-ring-pulse::before {
+    display: none;
+  }
+}
+
+/* 어시스턴트 — 헤더 하단 그라디언트 디바이더. 옅은 솔라 톤이 살짝 깔리고 끝으로 갈수록 fade. */
+.sf-assistant-header {
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(
+      to right,
+      transparent 0%,
+      var(--sf-solar) 18%,
+      rgb(0 0 0 / 0.1) 60%,
+      transparent 100%
+    )
+    1;
+}
+
+/* 어시스턴트 — 첨부 영역 바로 아래 textarea: 상단 라운드 제거하고 첨부 영역과 시각적으로 한 덩어리로. */
+.sf-attached-input textarea {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* 어시스턴트 — 빈 상태 미세 솔라 글로우 (radial). 차분한 깊이감. */
+.sf-empty-glow {
+  background: radial-gradient(
+    ellipse at center top,
+    color-mix(in oklab, var(--sf-solar) 8%, transparent) 0%,
+    transparent 60%
+  );
+}
+
+/* 어시스턴트 — 봇 아바타 옅은 솔라 그라디언트 ring. */
+.sf-bot-avatar {
+  background: linear-gradient(135deg,
+    color-mix(in oklab, var(--sf-solar) 14%, transparent) 0%,
+    color-mix(in oklab, var(--sf-solar) 4%, transparent) 100%
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--sf-solar) 20%, transparent);
+}
+
+/* 어시스턴트 — 사이드바 얇은 스크롤바. */
+.sf-thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(0 0 0 / 0.15);
+  border-radius: 3px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(0 0 0 / 0.28);
+}
+.sf-thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 0.15) transparent;
+}
+
 /* 톤 칩 — Bloomberg-density 상태 표시 */
 .sf-pill {
   display: inline-flex;
@@ -2713,6 +2995,28 @@ textarea::placeholder {
 }
 
 /* ============================================================
+   View Transitions API — 라우트 변경 시 cross-fade + morph
+   ============================================================
+   react-router-dom v7 의 NavLink/Link 에 viewTransition prop 가 활성화되면
+   document.startViewTransition() 으로 자동 래핑된다. CSS 로 기본 cross-fade
+   곡선을 다듬고, 페이지 타이틀에 view-transition-name 을 부여해 라우트 간
+   동일 정체성으로 morph. 미지원 브라우저에서는 자동 fallback. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 280ms;
+  animation-timing-function: var(--sf-ease-out);
+}
+
+.sf-vt-page-title {
+  view-transition-name: sf-page-title;
+}
+::view-transition-old(sf-page-title),
+::view-transition-new(sf-page-title) {
+  animation-duration: 320ms;
+  animation-timing-function: var(--sf-ease-out);
+}
+
+/* ============================================================
    Accessibility — prefers-reduced-motion
    ============================================================
    운동 감각 민감 사용자(전정 장애·편두통·멀미 등)를 위해 모든
@@ -2747,5 +3051,12 @@ textarea::placeholder {
   .sf-dropzone[data-active="true"],
   .sf-dropzone-page[data-active="true"] {
     animation: none;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-old(sf-page-title),
+  ::view-transition-new(sf-page-title) {
+    animation-duration: 0.01ms !important;
   }
 }

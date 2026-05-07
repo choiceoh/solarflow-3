@@ -48,12 +48,20 @@ export default function RFMBoardPage() {
   const [error, setError] = useState('');
   const [activeSegment, setActiveSegment] = useState<RFMSegment | 'all'>('all');
   const [sortBy, setSortBy] = useState<'amount' | 'recency' | 'frequency'>('amount');
+  // PR4.5 (D-132): 분류 모드 + 본인 담당 필터
+  const [classifyMode, setClassifyMode] = useState<'threshold' | 'quartile'>('threshold');
+  const [mineOnly, setMineOnly] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await fetchWithAuth<RFMRow[]>('/api/v1/baro/rfm/');
+      const params = new URLSearchParams();
+      if (classifyMode === 'quartile') params.set('classify', 'quartile');
+      if (mineOnly) params.set('mine', 'true');
+      const qs = params.toString();
+      const url = qs ? `/api/v1/baro/rfm/?${qs}` : '/api/v1/baro/rfm/';
+      const data = await fetchWithAuth<RFMRow[]>(url);
       setRows(data ?? []);
     } catch (e) {
       console.error('[RFM 보드 로드 실패]', e);
@@ -61,7 +69,7 @@ export default function RFMBoardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [classifyMode, mineOnly]);
 
   useEffect(() => {
     void load();
@@ -121,18 +129,44 @@ export default function RFMBoardPage() {
   return (
     <div className="flex h-full w-full flex-col gap-3 p-3.5">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Trophy className="h-4 w-4 text-primary" />
           <h1 className="text-base font-semibold">거래처 RFM 보드</h1>
           <span className="text-xs text-muted-foreground">
-            12개월 매출 기반 분류 — 활성 거래처 {rows.length}곳.
+            12개월 매출 기반 분류 — {rows.length}곳{mineOnly ? ' (본인 담당)' : ''}.
           </span>
         </div>
-        <Button size="sm" variant="outline" onClick={() => void load()}>
-          <RefreshCw className="mr-1 h-3.5 w-3.5" />
-          새로 고침
-        </Button>
+        <div className="flex items-center gap-1.5">
+          {/* PR4.5: 분류 모드 토글 */}
+          <div className="flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px]">
+            <span className="text-muted-foreground">분류</span>
+            {(['threshold', 'quartile'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setClassifyMode(m)}
+                data-active={classifyMode === m}
+                className="rounded px-1.5 py-0.5 data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
+              >
+                {m === 'threshold' ? '고정' : '분위수'}
+              </button>
+            ))}
+          </div>
+          {/* PR4.5: 본인 담당 필터 */}
+          <button
+            type="button"
+            onClick={() => setMineOnly((v) => !v)}
+            data-active={mineOnly}
+            className="rounded border px-2 py-0.5 text-[11px] data-[active=true]:border-primary data-[active=true]:bg-primary/10"
+          >
+            내 거래처만
+          </button>
+          <Button size="sm" variant="outline" onClick={() => void load()}>
+            <RefreshCw className="mr-1 h-3.5 w-3.5" />
+            새로 고침
+          </Button>
+        </div>
       </div>
 
       {/* 재활성화 큐 알림 */}

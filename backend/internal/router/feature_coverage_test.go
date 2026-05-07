@@ -29,6 +29,8 @@ var unrestrictedAllowlist = map[string]bool{
 	"/health": true,
 	// 짧은 만료 토큰 PDF 열람 — 별도 토큰 가드
 	"/api/v1/attachments/{id}/file": true,
+	// D-137 PR7.5: 드라이버 PWA token-based access (외부 차주, 인증 미적용)
+	"/api/v1/baro/driver/{token}": true,
 	// /api/v1/public/* — 인증 미적용 그룹
 	"/api/v1/public/login-stats":          true,
 	"/api/v1/public/fx/{pair}":            true,

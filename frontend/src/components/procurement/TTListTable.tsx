@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { formatDate, formatUSD, formatNumber, shortMfgName } from '@/lib/utils';
+import { cn, formatDate, formatUSD, formatNumber, shortMfgName } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
 import GroupedMiniTable, { type GroupedMiniTableColumn } from '@/components/common/GroupedMiniTable';
 import StatusPill from '@/components/common/StatusPill';
@@ -7,9 +7,10 @@ import { TT_STATUS_LABEL, TT_STATUS_COLOR, type TTRemittance } from '@/types/pro
 
 interface Props {
   items: TTRemittance[];
+  focusTTId?: string | null;
 }
 
-function TTListTable({ items }: Props) {
+function TTListTable({ items, focusTTId }: Props) {
   if (items.length === 0) return <EmptyState message="등록된 TT가 없습니다" />;
 
   const columns: GroupedMiniTableColumn<TTRemittance>[] = [
@@ -92,7 +93,10 @@ function TTListTable({ items }: Props) {
       emptyMessage="등록된 TT가 없습니다"
       minWidthClassName="min-w-[1000px]"
       tableClassName="text-xs"
-      rowClassName="hover:bg-muted/20 transition-colors group"
+      rowClassName={(tt) => cn(
+        'hover:bg-muted/20 transition-colors group',
+        focusTTId === tt.tt_id && 'bg-amber-50/70 ring-1 ring-amber-300',
+      )}
     />
   );
 }

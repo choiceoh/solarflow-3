@@ -41,6 +41,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - 매출 요약 (`/baro/sales-summary`) — D-129 영업담당자/유형/월/Top거래처 4 cut
 - 인버터 가이드 (`/baro/inverter-guide`) — D-130 정적 카탈로그 10종 + 용량 매칭 계산기
 - 출하 알림 (`/baro/shipment-notice`) — D-131 카톡 메시지 빌더 (상차/출발/도착 3종 자동 생성)
+- 콜백 추천 (`/baro/callback-recommend`) — D-133 owner 별 활성 거래처(30일+ 미주문) + 입고예정 컨텍스트
 
 **노출되지 않는 것** (module 계열 전용 — D-108/D-119로 차단):
 - P/O 발주, L/C 개설, B/L 입고, 면장/원가
@@ -64,6 +65,10 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - **[D-129](DECISIONS.md#d-129)** — BARO 자체 매출 요약. 4 cut(담당자/유형/월/Top거래처) 합본 endpoint. 마진은 PR5.5(매입원가 통합)
 - **[D-130](DECISIONS.md#d-130)** — BARO 인버터 호환 가이드 Phase 1. frontend-only 정적 카탈로그 10종 + 용량 매칭 계산기. 정식 SKU 등록·견적 통합은 PR6.5
 - **[D-131](DECISIONS.md#d-131)** — BARO 출하 알림 메시지 빌더. 외부 발송 API 0, 카톡 붙여넣기용 텍스트 3종(상차/출발/도착) 자동 생성. 자동 발송·드라이버 PWA는 PR7.5
+- **[D-139](DECISIONS.md#d-139)** — WMS Phase 1 창고 내 위치(Bin) 관리. 모든 테넌트 공유 마스터. PR8.5(피킹 리스트)/PR8.6(입고 검수)/PR8.7(재고실사)로 단계 확장.
+- **[D-140](DECISIONS.md#d-140)** — WMS Phase 2 위치별 재고 + 자동 피킹 명세. inventory_allocations.location_id + picking_lists/items + status 머신. 출고 자동 호출은 PR8.5b, 작업자 모바일 UI는 PR8.5c.
+- **[D-141](DECISIONS.md#d-141)** — WMS Phase 3 입고 검수 로그 + 차이 추적. receiving_logs (BL/intercompany 통합) + 사진 첨부 + variance_reason 6종. 자동 호출은 PR8.6b.
+- **[D-142](DECISIONS.md#d-142)** — WMS Phase 4 정기 재고실사 (Cycle Counting). cycle_counts/items + 정확도 자동 집계. 자동 seed/보정은 PR8.7b/c.
 
 ## BARO 전용 백엔드 엔드포인트 (`baroOnly` 미들웨어)
 
@@ -83,6 +88,10 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 | `/api/v1/baro/partner-cockpit/{partner_id}` | 거래처 360 cockpit (신용·최근매출·CRM 합본) | D-125 |
 | `/api/v1/baro/rfm/` | 거래처 RFM 보드 (12개월 매출 집계 + 세그먼트 분류) | D-128 |
 | `/api/v1/baro/sales-summary/` | BARO 자체 매출 요약 (4 cut: 담당자/유형/월/Top) | D-129 |
+| `/api/v1/baro/quotes/*` | 견적 DB CRUD + 발송 (D-135 PR2.5b) | D-138 |
+| `/api/v1/baro/credit-check/` | 한도 사전 체크 (D-136 PR5.5b) | D-138 |
+| `/api/v1/baro/shipment-notices/` | 출하 알림 발송 + 추적 (D-137 PR7.5) | D-138 |
+| `/api/v1/baro/driver/{token}` | 드라이버 PWA token-based access (인증 미적용, 24h) | D-138 |
 
 ## 운영 메모
 
