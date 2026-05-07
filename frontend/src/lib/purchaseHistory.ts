@@ -16,28 +16,38 @@ export type EventKind =
 export interface TimelineEventLike {
   kind: EventKind;
   po_id?: string;
+  lc_id?: string;
+  bl_id?: string;
+  tt_id?: string;
+}
+
+function procurementUrl(params: Array<[string, string | undefined]>): string {
+  const query = params
+    .filter(([, value]) => !!value)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value as string)}`)
+    .join('&');
+  return query ? `/procurement?${query}` : '/procurement';
 }
 
 // 이벤트 클릭 시 운영 페이지로 점프할 URL.
 // PO 관련은 ?po_id=...로 PODetailView 자동 펼침. 그 외는 탭 단위.
-// price_change는 운영 진입점 없음 (Q9=Z 결정대로 단가 편집 폐기) → null 반환 = 비활성.
-// po_id는 encodeURIComponent로 감싸 URL 깨짐·인젝션 방지.
+// price_change는 related PO가 있을 때만 해당 PO 상세로 이동한다.
 export function eventDeepLink(evt: TimelineEventLike): string | null {
   switch (evt.kind) {
     case 'po_create':
     case 'variant_create':
     case 'po_update':
     case 'po_cancel':
-      return evt.po_id ? `/procurement?po_id=${encodeURIComponent(evt.po_id)}` : '/procurement';
+      return procurementUrl([['po_id', evt.po_id]]);
     case 'lc_open':
     case 'lc_settle':
-      return '/procurement?tab=lc';
+      return procurementUrl([['tab', 'lc'], ['lc_id', evt.lc_id]]);
     case 'bl_event':
-      return '/procurement?tab=bl';
+      return procurementUrl([['tab', 'bl'], ['bl_id', evt.bl_id]]);
     case 'tt_send':
-      return '/procurement?tab=tt';
+      return procurementUrl([['tab', 'tt'], ['tt_id', evt.tt_id]]);
     case 'price_change':
-      return null;
+      return evt.po_id ? procurementUrl([['po_id', evt.po_id]]) : null;
   }
 }
 

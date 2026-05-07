@@ -54,9 +54,10 @@ interface Props {
   onSettle?: (lc: LCRecord, repaymentDate: string) => Promise<void>;
   onSelectBL?: (blId: string) => void;
   blsVersion?: number;
+  focusLCId?: string | null;
 }
 
-function LCListTable({ items, onSettle, onSelectBL, blsVersion }: Props) {
+function LCListTable({ items, onSettle, onSelectBL, blsVersion, focusLCId }: Props) {
   // 렌더 중 Date.now() 호출은 react-hooks/purity 위반 → useState lazy init으로 1회만 캡처
   const [now] = useState(() => Date.now());
   const [agg, setAgg] = useState<Record<string, LCAgg>>({});
@@ -137,6 +138,13 @@ function LCListTable({ items, onSettle, onSelectBL, blsVersion }: Props) {
   // blsVersion은 외부에서 BL 생성 시 증가 → 재조회 트리거
   }, [expandedLCId, blsVersion]);
 
+  useEffect(() => {
+    if (!focusLCId) return;
+    if (items.some((lc) => lc.lc_id === focusLCId)) {
+      setExpandedLCId(focusLCId);
+    }
+  }, [focusLCId, items]);
+
   const toggleExpand = (lc: LCRecord) => {
     setExpandedLCId(prev => prev === lc.lc_id ? null : lc.lc_id);
   };
@@ -200,6 +208,7 @@ function LCListTable({ items, onSettle, onSelectBL, blsVersion }: Props) {
               const poOpenRate = a?.totalMw ? progressPercent(lcTargetMw, a.totalMw) : 0;
               const isRepaid = lc.repaid === true;
               const isExpanded = expandedLCId === lc.lc_id;
+              const isFocused = focusLCId === lc.lc_id;
               return (
                 <Fragment key={lc.lc_id}>
                   {/* LC 행 */}
@@ -209,6 +218,7 @@ function LCListTable({ items, onSettle, onSelectBL, blsVersion }: Props) {
                       'border-t hover:bg-muted/20 transition-colors cursor-pointer',
                       isRepaid && 'opacity-60',
                       isExpanded && 'bg-muted/10',
+                      isFocused && 'bg-amber-50/70 ring-1 ring-amber-300',
                     )}
                     onClick={() => toggleExpand(lc)}
                   >
