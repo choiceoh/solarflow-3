@@ -14,64 +14,71 @@ import type { LucideIcon } from 'lucide-react';
 
 import type { MenuKey, Role } from '@/config/permissions';
 import type { TenantScope } from '@/lib/tenantScope';
-// PR-4: NAV_GROUPS 는 pack 들의 nav items 를 합쳐 만든다. 순환 import 회피를 위해
-// packs/ 가 manifest 에서 type 만 가져오게 했으므로 여기서 값 import 가능.
-import { ALL_PACKS, buildNavGroups } from './packs';
+// PR-4: NAV_GROUPS 는 pack 들의 nav items 를 합쳐 만든다.
+// PR-7: packs/ 가 lib/navigation 에서 frontend/src/packs 로 승격 — pack 디렉토리가
+// 자기 페이지 코드(pages/) 도 가짐. 순환 import 회피를 위해 packs/ 가 manifest 에서
+// type 만 가져오게 한 invariant 유지.
+import { ALL_PACKS, buildNavGroups } from '@/packs';
 
 // === Lazy components ===
 //
-// App.tsx 의 인라인 lazy import 들을 그대로 옮긴다. PurchaseHistoryErrorBoundary 처럼
-// `wrap` 으로 감싸야 하는 케이스는 RouteSpec 의 wrap 함수로 처리.
-const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
-const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
-const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
-const PriceForecastPage = lazy(() => import('@/pages/PriceForecastPage'));
-const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
-const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
-const SalesAnalysisPage = lazy(() => import('@/pages/SalesAnalysisPage'));
-const BankingPage = lazy(() => import('@/pages/BankingPage'));
-const ApprovalPage = lazy(() => import('@/pages/ApprovalPage'));
+// PR-7 / PR-11: 페이지 코드는 packs/<id>/pages/ 디렉토리 안에 있다.
+// erp-core (모든 테넌트 공통), module-finance (수입/금융), baro-domain (BARO).
+// settings/* 는 시스템 공통이라 packs 외부 유지.
+const InventoryPage = lazy(() => import('@/packs/erp-core/pages/InventoryPage'));
+const OrdersPage = lazy(() => import('@/packs/erp-core/pages/OrdersPage'));
+const DataPage = lazy(() => import('@/packs/erp-core/pages/DataPage'));
+const LibraryPage = lazy(() => import('@/packs/erp-core/pages/LibraryPage'));
+const ImportHubPage = lazy(() => import('@/packs/erp-core/pages/ImportHubPage'));
+const AssistantPage = lazy(() => import('@/packs/erp-core/pages/AssistantPage'));
+const InsightsPage = lazy(() => import('@/packs/erp-core/pages/InsightsPage'));
+const ConstructionSitesPage = lazy(() => import('@/packs/erp-core/pages/masters/ConstructionSitesPage'));
+const DBIntegrityPage = lazy(() => import('@/packs/erp-core/pages/admin/DBIntegrityPage'));
+const ManufacturerNewPage = lazy(() => import('@/packs/erp-core/pages/data/ManufacturerNewPage'));
+const ManufacturerEditPage = lazy(() => import('@/packs/erp-core/pages/data/ManufacturerEditPage'));
+const ProductNewPage = lazy(() => import('@/packs/erp-core/pages/data/ProductNewPage'));
+const ProductEditPage = lazy(() => import('@/packs/erp-core/pages/data/ProductEditPage'));
+const PartnerNewPage = lazy(() => import('@/packs/erp-core/pages/data/PartnerNewPage'));
+const PartnerEditPage = lazy(() => import('@/packs/erp-core/pages/data/PartnerEditPage'));
+const WarehouseNewPage = lazy(() => import('@/packs/erp-core/pages/data/WarehouseNewPage'));
+const WarehouseEditPage = lazy(() => import('@/packs/erp-core/pages/data/WarehouseEditPage'));
+const BankNewPage = lazy(() => import('@/packs/erp-core/pages/data/BankNewPage'));
+const BankEditPage = lazy(() => import('@/packs/erp-core/pages/data/BankEditPage'));
+
+const ProcurementPage = lazy(() => import('@/packs/module-finance/pages/ProcurementPage'));
+const CustomsPage = lazy(() => import('@/packs/module-finance/pages/CustomsPage'));
+const SalesAnalysisPage = lazy(() => import('@/packs/module-finance/pages/SalesAnalysisPage'));
+const BankingPage = lazy(() => import('@/packs/module-finance/pages/BankingPage'));
+const PriceForecastPage = lazy(() => import('@/packs/module-finance/pages/PriceForecastPage'));
+const PurchaseHistoryPage = lazy(() => import('@/packs/module-finance/pages/PurchaseHistoryPage'));
+const ApprovalPage = lazy(() => import('@/packs/module-finance/pages/ApprovalPage'));
+
+// settings/* 는 시스템 공통이라 그대로.
 const SettingsLayout = lazy(() => import('@/pages/settings/SettingsLayout'));
 const SettingsIndexRedirect = lazy(() =>
   import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
 );
 const AdminSettingsPage = lazy(() => import('@/pages/settings/AdminSettingsPage'));
-const DBIntegrityPage = lazy(() => import('@/pages/admin/DBIntegrityPage'));
 const AuditLogsPage = lazy(() => import('@/pages/settings/AuditLogsPage'));
 const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
 const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
 const FeatureMatrixPage = lazy(() => import('@/pages/settings/FeatureMatrixPage'));
-const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
-const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
-const DataPage = lazy(() => import('@/pages/DataPage'));
-const ImportHubPage = lazy(() => import('@/pages/ImportHubPage'));
-const LibraryPage = lazy(() => import('@/pages/LibraryPage'));
-const ManufacturerNewPage = lazy(() => import('@/pages/data/ManufacturerNewPage'));
-const ManufacturerEditPage = lazy(() => import('@/pages/data/ManufacturerEditPage'));
-const ProductNewPage = lazy(() => import('@/pages/data/ProductNewPage'));
-const ProductEditPage = lazy(() => import('@/pages/data/ProductEditPage'));
-const PartnerNewPage = lazy(() => import('@/pages/data/PartnerNewPage'));
-const PartnerEditPage = lazy(() => import('@/pages/data/PartnerEditPage'));
-const WarehouseNewPage = lazy(() => import('@/pages/data/WarehouseNewPage'));
-const WarehouseEditPage = lazy(() => import('@/pages/data/WarehouseEditPage'));
-const BankNewPage = lazy(() => import('@/pages/data/BankNewPage'));
-const BankEditPage = lazy(() => import('@/pages/data/BankEditPage'));
-const PartnerPriceBookPage = lazy(() => import('@/pages/baro/PartnerPriceBookPage'));
-const PartnerCockpitPage = lazy(() => import('@/pages/baro/PartnerCockpitPage'));
-const QuoteBuilderPage = lazy(() => import('@/pages/baro/QuoteBuilderPage'));
-const SalesHomePage = lazy(() => import('@/pages/baro/SalesHomePage'));
-const RFMBoardPage = lazy(() => import('@/pages/baro/RFMBoardPage'));
-const SalesSummaryPage = lazy(() => import('@/pages/baro/SalesSummaryPage'));
-const InverterGuidePage = lazy(() => import('@/pages/baro/InverterGuidePage'));
-const ShipmentNoticePage = lazy(() => import('@/pages/baro/ShipmentNoticePage'));
-const IncomingBoardPage = lazy(() => import('@/pages/baro/IncomingBoardPage'));
-const BaroPurchaseHistoryPage = lazy(() => import('@/pages/baro/BaroPurchaseHistoryPage'));
-const GroupPurchaseRequestPage = lazy(() => import('@/pages/baro/GroupPurchaseRequestPage'));
-const BaroRequestInboxPage = lazy(() => import('@/pages/group-trade/BaroRequestInboxPage'));
-const CreditBoardPage = lazy(() => import('@/pages/baro/CreditBoardPage'));
-const DispatchBoardPage = lazy(() => import('@/pages/baro/DispatchBoardPage'));
-const CRMInboxPage = lazy(() => import('@/pages/CRMInboxPage'));
-const InsightsPage = lazy(() => import('@/pages/InsightsPage'));
+const PartnerPriceBookPage = lazy(() => import('@/packs/baro-domain/pages/PartnerPriceBookPage'));
+const PartnerCockpitPage = lazy(() => import('@/packs/baro-domain/pages/PartnerCockpitPage'));
+const QuoteBuilderPage = lazy(() => import('@/packs/baro-domain/pages/QuoteBuilderPage'));
+const SalesHomePage = lazy(() => import('@/packs/baro-domain/pages/SalesHomePage'));
+const RFMBoardPage = lazy(() => import('@/packs/baro-domain/pages/RFMBoardPage'));
+const SalesSummaryPage = lazy(() => import('@/packs/baro-domain/pages/SalesSummaryPage'));
+const InverterGuidePage = lazy(() => import('@/packs/baro-domain/pages/InverterGuidePage'));
+const ShipmentNoticePage = lazy(() => import('@/packs/baro-domain/pages/ShipmentNoticePage'));
+const IncomingBoardPage = lazy(() => import('@/packs/baro-domain/pages/IncomingBoardPage'));
+const BaroPurchaseHistoryPage = lazy(() => import('@/packs/baro-domain/pages/BaroPurchaseHistoryPage'));
+const GroupPurchaseRequestPage = lazy(() => import('@/packs/baro-domain/pages/GroupPurchaseRequestPage'));
+const CallbackRecommendPage = lazy(() => import('@/packs/baro-domain/pages/CallbackRecommendPage'));
+const BaroRequestInboxPage = lazy(() => import('@/packs/baro-domain/pages/BaroRequestInboxPage'));
+const CreditBoardPage = lazy(() => import('@/packs/baro-domain/pages/CreditBoardPage'));
+const DispatchBoardPage = lazy(() => import('@/packs/baro-domain/pages/DispatchBoardPage'));
+const CRMInboxPage = lazy(() => import('@/packs/baro-domain/pages/CRMInboxPage'));
 
 // === Route spec ===
 
@@ -100,7 +107,7 @@ export type NestedRouteSpec = {
 };
 
 // PurchaseHistoryErrorBoundary 는 lazy 가 아니라 named export 라 직접 import.
-import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
+import { PurchaseHistoryErrorBoundary } from '@/packs/module-finance/pages/PurchaseHistoryErrorBoundary';
 
 /**
  * ROUTES — App.tsx 가 자동 렌더하는 라우트 목록.
@@ -151,6 +158,7 @@ export const ROUTES: RouteSpec[] = [
   { path: '/baro/incoming', element: IncomingBoardPage },
   { path: '/baro/purchase-history', element: BaroPurchaseHistoryPage, roles: ['admin', 'operator', 'executive'] },
   { path: '/baro/group-purchase', element: GroupPurchaseRequestPage, roles: ['admin', 'operator'] },
+  { path: '/baro/callback-recommend', element: CallbackRecommendPage },
   { path: '/group-trade/baro-inbox', element: BaroRequestInboxPage, roles: ['admin', 'operator'] },
   { path: '/baro/credit-board', element: CreditBoardPage },
   { path: '/baro/dispatch', element: DispatchBoardPage, roles: ['admin', 'operator'] },

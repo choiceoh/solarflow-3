@@ -29,10 +29,12 @@ func TestCatalog_IDsAreUniqueAndDoted(t *testing.T) {
 
 // TestCatalog_PathsNonEmpty — 모든 feature 는 최소 한 개 chi 라우트 패턴을 소유한다.
 // (계산 프록시 등 단일 라우트도 한 개)
+//
+// PR-8: FrontendOnly=true 면 backend 라우트 없이 sidebar 가시성만 결정 — Paths 비어 있어도 OK.
 func TestCatalog_PathsNonEmpty(t *testing.T) {
 	for id, f := range Catalog {
-		if len(f.Paths) == 0 {
-			t.Errorf("Feature %q 에 Paths 가 비어있음 — 카탈로그 = chi 트리 매핑이 깨진다", id)
+		if len(f.Paths) == 0 && !f.FrontendOnly {
+			t.Errorf("Feature %q 에 Paths 가 비어있음 (FrontendOnly 도 아님) — 카탈로그 = chi 트리 매핑이 깨진다", id)
 		}
 		for _, p := range f.Paths {
 			if !strings.HasPrefix(p, "/api/v1/") {

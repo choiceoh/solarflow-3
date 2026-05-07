@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-145 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-147 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수금 AI 매칭) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -34,7 +34,7 @@
   - AI는 DB에 직접 쓰지 않고, 사용자가 후보를 확인한 뒤 bulk 확정
   - 현재 UI 구조에 맞춰 미수 전액 후보만 자동 선택하고 부분 매칭 후보는 제외
 - dev mock API에 bulk 매칭과 AI 후보 응답 추가
-- D-145 결정 기록 추가
+- D-147 결정 기록 추가
 
 ### 검증
 - `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공 — routes.golden 갱신
@@ -47,7 +47,86 @@
 - `cd frontend && npm run test` 성공 — 10 files / 84 tests
 - `cd frontend && npm run lint` 종료코드 0 — 최신 main 기준 ProcurementPage pagination reset hook 경고 4건 출력
 - `git diff --check` 성공
-- `graphify update .` 성공 — 4674 nodes / 7461 edges / 401 communities
+- `graphify update .` 성공 — 4691 nodes / 7496 edges / 403 communities
+
+---
+
+## 2026-05-07 세션 — 테넌트 모듈화 5 PR 시리즈 (D-145)
+
+### 완료
+새 도메인 (`gx10.topworks.ltd` 같은 4번째 테넌트) 추가 비용을 **코드 1줄 + 마이그 1개 + admin UI 토글** 로 압축. 7개 PR 으로 분해 — 각 단계 회귀 위험 ↓.
+
+- **PR-1** ([#574](https://github.com/choiceoh/solarflow/pull/574)) — `backend/internal/tenant/registry.go` 단일 정본
+  - 테넌트 ID/HostPatterns regex/Group/DisplayName 정의
+  - `feature.TenantSetXxx`, `middleware.TenantScopeXxx` 가 registry 에서 파생
+  - `IDsInGroup`, `Detect(host)`, `Default()`, `Known(s)` 헬퍼 + 11 단위 테스트 (PoC 4번째 테넌트 시연 포함)
+- **PR-2** ([#577](https://github.com/choiceoh/solarflow/pull/577)) — `/me` 응답에 `tenant_id` / `tenant_display_name` / `enabled_features[]`
+  - `UserHandler` 시그니처에 `*feature.Resolver` 주입
+  - 4 단위 테스트 (topsolar/cable/baro/nil-resolver)
+- **PR-3a** ([#583](https://github.com/choiceoh/solarflow/pull/583)) — `frontend/src/lib/navigation/manifest.tsx` 신설
+  - 50+ Route + 25+ sidebar item 을 한 정본으로 통합 (App.tsx -88줄, CommandShell.tsx -123줄)
+  - `RouteSpec` (children/wrap/roles 지원), `CommandNavItem`, helpers (`listWipMenus`, `listAllMenusForTenant`)
+- **PR-3b** ([#589](https://github.com/choiceoh/solarflow/pull/589)) — sidebar 가시성을 `enabled_features` 기반으로 전환
+  - 26개 NAV item 에 backend `feature` 매핑 (`tx.po`, `baro.incoming`, `intercompany.request.inbox` 등)
+  - `isItemVisible()` 단일 함수 — feature 우선, undefined enabled_features 면 tenants 배열 fallback (옛 응답 호환)
+  - 5개 미매핑 항목 (baro-home/quote/inverter/shipment/approval) 만 `tenants:` fallback 유지 — 후속 PR 에서 카탈로그 보강
+  - 8 단위 테스트 (manifest.test.ts)
+- **PR-4** ([#592](https://github.com/choiceoh/solarflow/pull/592)) — `frontend/src/lib/navigation/packs/` 디렉토리
+  - 도메인별 3 pack: `erp-core` (모든 테넌트 공통), `module-finance` (수입/금융), `baro-domain` (영업/CRM)
+  - `ALL_PACKS`, `buildNavGroups(packs)` — manifest 가 합쳐 `NAV_GROUPS` 생성
+  - `MODULE_TENANTS` 를 `tenantScope.ts` 로 옮겨 packs ↔ manifest 값 순환 dep 회피
+  - 8 단위 테스트 (packs.test.ts — pack 간 key 충돌, NAV_GROUPS 동등성)
+- **PR-5a** ([#601](https://github.com/choiceoh/solarflow/pull/601)) — admin 매트릭스 read-only
+  - `GET /api/v1/admin/feature-wiring/` — `{ tenants[], features[{enabled[tenant]→bool, default_tenants[]}] }` 반환
+  - `/settings/feature-wiring` 페이지 — pack 별 grouping + "기타 (pack 미매핑)" 섹션
+  - `RoleGuard(admin)`, feature gate 무관 (`unrestrictedAllowlist`)
+  - 3 단위 테스트
+- **PR-5b** ([#604](https://github.com/choiceoh/solarflow/pull/604)) — 토글 + DB 영속화
+  - `PUT /api/v1/admin/feature-wiring/{tenant}/{feature}` — `tenant_features` upsert + `feature_wiring_audit` insert(best-effort) + `resolver.SetOverride`
+  - `app.go` startup 에 `tenant_features` 행 로드 → `resolver.SetOverride` 일괄 → 재시작 후 유지
+  - 마이그 `055_feature_wiring.sql` (기존) 그대로 사용, 신규 마이그 불필요
+  - frontend 매트릭스: 셀 클릭 토글 (optimistic + rollback) + pack 헤더 일괄 ✓/— 버튼 (all/partial/none 표시)
+  - 6 단위 테스트 (validateSetEnabled 4 case + DB nil 503 + unknown tenant 404)
+- **side fix** ([commit 30c115d](https://github.com/choiceoh/solarflow/commit/30c115d)) — main 의 PR-603 (view-transitions) 머지에서 `BaroCallbackRecommendHandler` 등록이 누락된 D-120 coverage_test 실패를 PR-5b 안에서 같이 처리
+
+### 결정
+- [D-145](DECISIONS.md#d-145) — 테넌트 모듈화 5 PR 시리즈 정본화. 새 도메인 추가 절차 규정 + 핵심 invariant (가시성 정본은 backend → /me → frontend 한 방향) 못박음.
+
+### 검증
+- 각 PR 별 `go test ./...` ✓ / `go build ./...` ✓ / `go vet ./...` ✓
+- frontend `npm run build` ✓ / `npm run test` ✓ (최종 10 files / 83 tests, manifest+packs 16 case 추가) / `npm run lint` exit 0
+- 모든 PR 머지됨 — main 에 반영 완료
+
+### 운영 반영 메모
+- 마이그 `055_feature_wiring.sql` 은 D-120 시점에 이미 적용된 상태 — 추가 DB 작업 없음
+- admin 이 `/settings/feature-wiring` 에서 토글하면 `tenant_features` 에 즉시 upsert + audit 행
+- tenant 추가 시 `tenant_features.tenant_check`, `tenant_data_scopes.tenant_check`, `user_profiles.tenant_scope` 의 CHECK 제약 갱신 마이그 필요
+
+---
+
+## 2026-05-07 세션 — 가격예측 수집 지역 중국·유럽 제한
+
+### 완료
+- 가격예측 벤치마크 저장 가능 지역을 `fob_china`, `china_domestic`, `china_export`, `ddp_europe`로 제한
+- AI 수집 prompt/search query에서 미국 DDP 기본 수집 의도를 제거하고, 중국/유럽 밖 가격은 warning만 남기도록 지시
+- Go 모델 검증과 AI 저장 직전 guard에서 `ddp_us`, `global`, `manufacturer` 등 비대상 지역 차단
+- `GET /api/v1/price-benchmarks` 목록도 허용 지역만 반환하도록 방어 필터 추가
+- `089_price_benchmarks_china_europe_only.sql` 추가
+  - 기존 `ddp_us` 또는 허용 지역 밖 행 삭제
+  - DB check constraint로 허용 지역과 `metric_key <> 'ddp_us'` 강제
+- 프론트엔드 가격예측 화면/목업 데이터에서 미국 DDP 샘플과 라벨 제거
+- D-146 결정 기록 및 module/cable/설계 정본 동기화
+
+### 검증
+- `cd backend && go test ./internal/model` 성공
+- `cd backend && go test ./internal/handler ./internal/router ./internal/feature` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd frontend && npm ci` 성공
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 종료코드 0
+- `git diff --check` 성공
 
 ---
 
@@ -173,6 +252,34 @@
   - 단독 재실행에서도 일부 테스트(4 files / 36 tests)는 통과했으나 나머지 worker가 뜨지 못함
 - `http://127.0.0.1:5179/sales-analysis` 개발 서버 200 응답 확인
 - PR 리베이스 후 최신 `origin/main` 기준 `cd frontend && npm run build` 재확인은 실패 — `src/App.tsx`, `CommandShell.tsx`, `BLListTable.tsx` 등 main 측 TypeScript/import 오류 다수
+
+---
+
+## 2026-05-07 세션 — 가격예측 수집 지역 중국·유럽 제한
+
+### 완료
+- 가격예측 벤치마크 저장 가능 지역을 `fob_china`, `china_domestic`, `china_export`, `ddp_europe`로 제한
+- AI 수집 prompt/search query에서 미국 DDP 기본 수집 의도를 제거하고, 중국/유럽 밖 가격은 warning만 남기도록 지시
+- Go 모델 검증과 AI 저장 직전 guard에서 `ddp_us`, `global`, `manufacturer` 등 비대상 지역 차단
+- `GET /api/v1/price-benchmarks` 목록도 허용 지역만 반환하도록 방어 필터 추가
+- `089_price_benchmarks_china_europe_only.sql` 추가
+  - 기존 `ddp_us` 또는 허용 지역 밖 행 삭제
+  - DB check constraint로 허용 지역과 `metric_key <> 'ddp_us'` 강제
+- 프론트엔드 가격예측 화면/목업 데이터에서 미국 DDP 샘플과 라벨 제거
+- D-145 결정 기록 및 module/cable/설계 정본 동기화
+
+### 검증
+- `cd backend && go test ./internal/model` 성공
+- `cd backend && go test ./internal/handler ./internal/router ./internal/feature` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd frontend && npm ci` 성공 — 로컬 의존성 복원, 기존 npm audit moderate 2건 출력
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 68건 출력
+- `cd frontend && npm run test` 실패 — Vitest fork worker 시작 타임아웃(`Timeout waiting for worker to respond`), 단일 파일/threads 재시도도 worker가 응답하지 않아 코드 테스트까지 진입하지 못함
+- `git diff --check` 성공
+- `graphify update .` 성공 — 4315 nodes / 6733 edges / 396 communities
 
 ---
 
