@@ -8,8 +8,8 @@
 //   - 라우트 spec(`ROUTES`)과 sidebar 구성(`NAV_GROUPS`) 을 이 파일에 모은다.
 //   - 가시성 로직(tenants 인라인 배열) 은 기존 그대로 보존 — 회귀 위험 ↓.
 //
-// PR-3b(후속): NAV_GROUPS 의 `tenants:` 배열을 `feature.enabled_features` 기준으로
-// 전환해 서버/UI sync 를 자동 보장한다.
+// PR-3b(후속): feature.enabled_features 는 capability 정본, `tenants:` 는 도메인 표면 정본으로
+// 함께 사용한다. 둘 다 있는 항목은 둘 다 통과해야 보인다.
 import { lazy, type ComponentType, type LazyExoticComponent, type ReactElement } from 'react';
 import {
   BarChart3,
@@ -210,14 +210,15 @@ export interface CommandNavItem {
   /**
    * PR-3b: 가시성 정본은 서버 `/me` 의 `enabled_features` (D-120 카탈로그 기반).
    *
+   * - tenants 가 있으면: 현재 호스트 테넌트가 포함될 때만 노출
    * - feature 가 채워져 있으면: `enabled_features` 가 그 ID 를 포함할 때만 노출
-   * - feature 가 비어 있으면: tenants 배열로 fallback (단순 프론트 페이지 / 카탈로그 미정의)
+   * - feature 가 비어 있으면: tenants 배열만으로 판단 (단순 프론트 페이지 / 카탈로그 미정의)
    *
-   * 두 필드는 mutually exclusive 가 아니다 — feature 를 우선 평가하고 안 매칭이면
-   * tenants 로 fallback 하지 않는다(서버가 false 라고 판단했으면 false).
+   * 두 필드는 mutually exclusive 가 아니다 — feature 는 capability, tenants 는 도메인 UI
+   * 표면이므로 둘 다 있으면 AND 조건이다.
    */
   feature?: string;
-  /** D-108: 표시 허용 테넌트. feature 미지정 항목의 fallback 으로만 사용. */
+  /** D-108: 표시 허용 테넌트. feature 가 있어도 도메인 표면 가드로 함께 사용한다. */
   tenants?: TenantScope[];
   /** 운영 검증 미완 — 사이트 설정 > 메뉴 가시성에서 admin이 끌 수 있는 대상 표시 */
   isWip?: boolean;
@@ -233,15 +234,16 @@ export interface SidebarMenuRegistryItem {
   label: string;
 }
 
-/** D-108/D-119: module 계열 = topsolar + cable. PR-3b 에서 feature 기반으로 대체 예정. */
+/** D-108/D-119: module 계열 = topsolar + cable. */
 export const MODULE_TENANTS: TenantScope[] = ['topsolar', 'cable'];
 
 /**
  * NAV_GROUPS — sidebar 구성. 그룹 순서 = 사이드바 위→아래 표시 순서.
  *
  * 가시성:
+ *   - tenants 채움 → 현재 호스트 테넌트 가드
  *   - feature 채움 → 서버 `enabled_features` 정본 사용 (PR-3b)
- *   - feature 비어 있고 tenants 만 있음 → 백엔드 카탈로그 미정의 페이지 fallback
+ *   - feature 비어 있고 tenants 만 있음 → 백엔드 카탈로그 미정의 페이지
  *   - 둘 다 없음 → 모든 테넌트 공통
  */
 export const NAV_GROUPS: CommandNavGroup[] = [
@@ -255,14 +257,14 @@ export const NAV_GROUPS: CommandNavGroup[] = [
   {
     label: '구매',
     items: [
-      { key: 'po', label: 'P/O 발주', abbr: 'PO', path: '/procurement', icon: ClipboardList, menu: 'procurement', feature: 'tx.po' },
-      { key: 'lc', label: 'L/C 개설', abbr: 'LC', path: '/procurement?tab=lc', icon: Landmark, menu: 'lc', feature: 'tx.lc' },
-      { key: 'bl', label: 'B/L 입고', abbr: 'BL', path: '/procurement?tab=bl', icon: Ship, menu: 'inbound', feature: 'tx.bl' },
-      { key: 'customs', label: '면장/원가', abbr: '면장', path: '/customs', icon: Calculator, menu: 'inbound', feature: 'tx.declaration' },
-      { key: 'baro-inbox', label: '그룹 요청', abbr: '그룹', path: '/group-trade/baro-inbox', icon: Inbox, menu: 'baro_inbox', feature: 'intercompany.request.inbox' },
-      { key: 'baro-purchase', label: '그룹내 매입', abbr: '매입', path: '/baro/group-purchase', icon: PackagePlus, menu: 'baro_group_purchase', feature: 'intercompany.request.baro' },
-      { key: 'baro-incoming', label: '입고예정', abbr: '입고', path: '/baro/incoming', icon: Ship, menu: 'baro_incoming', feature: 'baro.incoming' },
-      { key: 'baro-purchase-history', label: '구매이력', abbr: '이력', path: '/baro/purchase-history', icon: ReceiptText, menu: 'baro_purchase_history', feature: 'baro.purchase_history' },
+      { key: 'po', label: 'P/O 발주', abbr: 'PO', path: '/procurement', icon: ClipboardList, menu: 'procurement', feature: 'tx.po', tenants: MODULE_TENANTS },
+      { key: 'lc', label: 'L/C 개설', abbr: 'LC', path: '/procurement?tab=lc', icon: Landmark, menu: 'lc', feature: 'tx.lc', tenants: MODULE_TENANTS },
+      { key: 'bl', label: 'B/L 입고', abbr: 'BL', path: '/procurement?tab=bl', icon: Ship, menu: 'inbound', feature: 'tx.bl', tenants: MODULE_TENANTS },
+      { key: 'customs', label: '면장/원가', abbr: '면장', path: '/customs', icon: Calculator, menu: 'inbound', feature: 'tx.declaration', tenants: MODULE_TENANTS },
+      { key: 'baro-inbox', label: '그룹 요청', abbr: '그룹', path: '/group-trade/baro-inbox', icon: Inbox, menu: 'baro_inbox', feature: 'intercompany.request.inbox', tenants: MODULE_TENANTS },
+      { key: 'baro-purchase', label: '그룹내 매입', abbr: '매입', path: '/baro/group-purchase', icon: PackagePlus, menu: 'baro_group_purchase', feature: 'intercompany.request.baro', tenants: ['baro'] },
+      { key: 'baro-incoming', label: '입고예정', abbr: '입고', path: '/baro/incoming', icon: Ship, menu: 'baro_incoming', feature: 'baro.incoming', tenants: ['baro'] },
+      { key: 'baro-purchase-history', label: '구매이력', abbr: '이력', path: '/baro/purchase-history', icon: ReceiptText, menu: 'baro_purchase_history', feature: 'baro.purchase_history', tenants: ['baro'] },
     ],
   },
   {
@@ -271,34 +273,34 @@ export const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'orders', label: '수주 관리', abbr: '수주', path: '/orders', icon: ScrollText, menu: 'orders', feature: 'tx.order' },
       { key: 'outbound', label: '출고/판매', abbr: '출고', path: '/orders?tab=outbound', icon: Truck, menu: 'outbound', feature: 'tx.outbound' },
       { key: 'receipts', label: '수금 관리', abbr: '수금', path: '/orders?tab=receipts', icon: Wallet, menu: 'receipts', feature: 'tx.receipt' },
-      { key: 'crm-inbox', label: '내 미처리 문의', abbr: '문의', path: '/crm/inbox', icon: Inbox, menu: 'crm_inbox', feature: 'crm.partner_activity' },
-      { key: 'baro-cockpit', label: '거래처 360', abbr: '360', path: '/baro/cockpit', icon: Users, menu: 'baro_cockpit', feature: 'baro.partner_cockpit' },
+      { key: 'crm-inbox', label: '내 미처리 문의', abbr: '문의', path: '/crm/inbox', icon: Inbox, menu: 'crm_inbox', feature: 'crm.partner_activity', tenants: ['baro'] },
+      { key: 'baro-cockpit', label: '거래처 360', abbr: '360', path: '/baro/cockpit', icon: Users, menu: 'baro_cockpit', feature: 'baro.partner_cockpit', tenants: ['baro'] },
       // D-126: 통합 견적 빌더 — 카탈로그 미정의 — tenants fallback.
       { key: 'baro-quote', label: '견적 빌더', abbr: '견적', path: '/baro/quote/new', icon: Calculator, menu: 'baro_quote', tenants: ['baro'] },
       // D-130: 인버터 호환 가이드 — 카탈로그 미정의 — tenants fallback.
       { key: 'baro-inverter', label: '인버터 가이드', abbr: '인버', path: '/baro/inverter-guide', icon: Zap, menu: 'baro_inverter', tenants: ['baro'] },
       // D-131: 출하 알림 메시지 빌더 — 카탈로그 미정의 — tenants fallback.
       { key: 'baro-shipment', label: '출하 알림', abbr: '알림', path: '/baro/shipment-notice', icon: Bell, menu: 'baro_shipment', tenants: ['baro'] },
-      { key: 'baro-price-book', label: '거래처 단가표', abbr: '단가', path: '/baro/price-book', icon: Tags, menu: 'baro_price_book', feature: 'baro.price_book' },
-      { key: 'baro-dispatch', label: '배차/일정', abbr: '배차', path: '/baro/dispatch', icon: Truck, menu: 'baro_dispatch', feature: 'baro.dispatch' },
+      { key: 'baro-price-book', label: '거래처 단가표', abbr: '단가', path: '/baro/price-book', icon: Tags, menu: 'baro_price_book', feature: 'baro.price_book', tenants: ['baro'] },
+      { key: 'baro-dispatch', label: '배차/일정', abbr: '배차', path: '/baro/dispatch', icon: Truck, menu: 'baro_dispatch', feature: 'baro.dispatch', tenants: ['baro'] },
     ],
   },
   {
     label: '현황',
     items: [
-      { key: 'banking', label: 'L/C 한도', abbr: '한도', path: '/banking', icon: Landmark, menu: 'banking', feature: 'master.bank' },
-      { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs', feature: 'calc.margin_analysis' },
-      { key: 'purchase-history', label: '구매 이력', abbr: '이력', path: '/purchase-history', icon: History, menu: 'purchase_history', feature: 'tx.price_history' },
-      { key: 'price-forecast', label: '가격예측', abbr: '가격', path: '/price-forecast', icon: TrendingUp, menu: 'price_forecast', feature: 'tx.price_benchmark' },
-      { key: 'baro-credit', label: '미수금/한도', abbr: '미수', path: '/baro/credit-board', icon: ShieldAlert, menu: 'baro_credit', feature: 'baro.credit_board' },
-      { key: 'baro-rfm', label: '거래처 RFM', abbr: 'RFM', path: '/baro/rfm', icon: Trophy, menu: 'baro_rfm', feature: 'baro.rfm' },
-      { key: 'baro-sales-summary', label: '매출 요약', abbr: '매출', path: '/baro/sales-summary', icon: BarChart3, menu: 'baro_sales_summary', feature: 'baro.sales_summary' },
+      { key: 'banking', label: 'L/C 한도', abbr: '한도', path: '/banking', icon: Landmark, menu: 'banking', feature: 'master.bank', tenants: MODULE_TENANTS },
+      { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs', feature: 'calc.margin_analysis', tenants: MODULE_TENANTS },
+      { key: 'purchase-history', label: '구매 이력', abbr: '이력', path: '/purchase-history', icon: History, menu: 'purchase_history', feature: 'tx.price_history', tenants: MODULE_TENANTS },
+      { key: 'price-forecast', label: '가격예측', abbr: '가격', path: '/price-forecast', icon: TrendingUp, menu: 'price_forecast', feature: 'tx.price_benchmark', tenants: MODULE_TENANTS },
+      { key: 'baro-credit', label: '미수금/한도', abbr: '미수', path: '/baro/credit-board', icon: ShieldAlert, menu: 'baro_credit', feature: 'baro.credit_board', tenants: ['baro'] },
+      { key: 'baro-rfm', label: '거래처 RFM', abbr: 'RFM', path: '/baro/rfm', icon: Trophy, menu: 'baro_rfm', feature: 'baro.rfm', tenants: ['baro'] },
+      { key: 'baro-sales-summary', label: '매출 요약', abbr: '매출', path: '/baro/sales-summary', icon: BarChart3, menu: 'baro_sales_summary', feature: 'baro.sales_summary', tenants: ['baro'] },
     ],
   },
   {
     label: '도구',
     items: [
-      { key: 'import-hub', label: '엑셀 입력', abbr: '입력', path: '/import', icon: FileSpreadsheet, menu: 'import_hub', feature: 'io.import' },
+      { key: 'import-hub', label: '엑셀 입력', abbr: '입력', path: '/import', icon: FileSpreadsheet, menu: 'import_hub', feature: 'io.import', tenants: MODULE_TENANTS },
       { key: 'data', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters' },
       { key: 'library', label: '자료실', abbr: '자료', path: '/library', icon: LibraryBig, menu: 'library', feature: 'sys.library_post' },
       { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant', feature: 'ai.assistant' },
@@ -313,22 +315,26 @@ export const NAV_GROUPS: CommandNavGroup[] = [
 /**
  * isItemVisible — sidebar 항목의 가시성 판단 단일 정본 (PR-3b).
  *
+ * - tenants 가 있으면: 현재 호스트 테넌트가 포함될 때만 visible
  * - feature 가 있으면: enabledFeatures 가 그 ID 를 포함할 때만 visible
- * - feature 가 비어 있으면: tenants 배열 fallback (단순 프론트 페이지 / 카탈로그 미정의)
+ * - feature 가 비어 있으면: tenants 배열만으로 판단 (단순 프론트 페이지 / 카탈로그 미정의)
  *
- * enabledFeatures 가 undefined(서버 응답에 필드 없음 — 옛 백엔드 호환) 면
- * fallback 으로 tenants 배열을 본다. PR-2 이후 운영 백엔드는 항상 채워 보낸다.
+ * enabledFeatures 가 undefined(서버 응답에 필드 없음 — 옛 백엔드 호환) 면 feature 는 통과시키되,
+ * tenants 도메인 가드는 그대로 적용한다. PR-2 이후 운영 백엔드는 항상 채워 보낸다.
  */
 export function isItemVisible(item: CommandNavItem, currentTenant: TenantScope, enabledFeatures: ReadonlySet<string> | undefined): boolean {
+  if (item.tenants && !item.tenants.includes(currentTenant)) {
+    return false;
+  }
   if (item.feature) {
     if (!enabledFeatures) {
       // 옛 응답 호환 — feature 정의는 있지만 서버가 enabled_features 를 안 보낸 경우.
-      // tenants 배열이 동시에 있으면 그걸 쓰고, 둘 다 없으면 보임.
-      return !item.tenants || item.tenants.includes(currentTenant);
+      // tenant 가드는 위에서 이미 통과했다. 별도 도메인 제한이 없으면 레거시처럼 보인다.
+      return true;
     }
     return enabledFeatures.has(item.feature);
   }
-  return !item.tenants || item.tenants.includes(currentTenant);
+  return true;
 }
 
 /** 사이트 설정 > 메뉴 가시성 카드가 토글 후보로 노출하는 항목 (NAV_GROUPS 평탄화 + isWip 필터) */
@@ -341,8 +347,8 @@ export function listWipMenus(): SidebarMenuRegistryItem[] {
 /**
  * D-112 사이드바 탭 카드가 메뉴 매핑 후보로 노출하는 항목.
  *
- * PR-3b: enabled_features 알면 그걸로 필터, 모르면 tenants 배열 fallback.
- * 호출 측이 enabledFeatures 를 안 넘기면 tenants 배열로만 — 옛 호출자 호환.
+ * PR-3b: enabled_features 알면 feature+tenant 로 필터, 모르면 tenants 도메인 가드만 적용.
+ * 호출 측이 enabledFeatures 를 안 넘겨도 tenant 전용 메뉴는 다른 도메인에 새지 않는다.
  */
 export function listAllMenusForTenant(
   tenant: TenantScope,
