@@ -11,6 +11,15 @@
 
 export type TenantScope = 'topsolar' | 'cable' | 'baro';
 
+/**
+ * MODULE_TENANTS — module 계열 = topsolar + cable (D-119).
+ *
+ * navigation/packs/module-finance 와 manifest 가 모두 참조하므로 circular dep
+ * 회피를 위해 tenantScope 에 정의. PR-4 이전엔 manifest 안에 있었지만 packs/
+ * 분리 후 packs → manifest → packs 의 값 순환을 끊으려고 옮겼다.
+ */
+export const MODULE_TENANTS: TenantScope[] = ['topsolar', 'cable'];
+
 const CABLE_HOST_PATTERNS: Array<RegExp | string> = [
   /^cable\./i,
   /^cable-/i,

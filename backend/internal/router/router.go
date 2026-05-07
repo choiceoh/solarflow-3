@@ -78,7 +78,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		handler.NewDispatchRouteHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewExpenseHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewExportHandler(a.DB).RegisterRoutes(r, a.Gates)
-		handler.NewImportHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewImportHandler(a.DB, a.Eng).RegisterRoutes(r, a.Gates)
 		handler.NewIntercompanyRequestHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewInventoryAllocationHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewLCHandler(a.DB).RegisterRoutes(r, a.Gates)
