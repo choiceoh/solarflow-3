@@ -1,18 +1,12 @@
 # SolarFlow 3.0 — Claude Code 작업 안내
 
-## ⚡ 듀얼 product 관점 (모든 작업의 전제)
+## ⚡ Product 관점
 
-이 프로젝트는 **두 개의 product 를 동시에 개발**한다:
-1. **ERP 시스템** (도메인 — 무역/재고/회계 등 SolarFlow 그 자체)
-2. **GUI 메타 편집기** (인프라 — Webflow / Figma / Builder.io 부류의 화면 편집 도구)
+이 프로젝트는 **ERP 시스템** (무역/재고/회계 등 SolarFlow 그 자체) 한 product 다.
 
-`frontend/src/templates/{MetaForm,MetaDetail,ListScreen}.tsx` + `frontend/src/pages/UIConfigEditor/*` 가 두 번째 product. 이쪽 작업은 ERP 도메인 작업과 **동등한 수준의 product polish 기준** 으로 다룬다 — "내부 도구" 정도로 취급하지 않는다.
-
-판단 기준:
-- 새 메타 인프라 기능을 추가하면 GUI 편집기에도 픽커가 있어야 함 (반쪽 GUI 금지)
-- admin 이 docs 봐야 알 수 있는 키 (registry id 등) 는 무조건 combobox / dropdown 으로
-- 편집기 UX 는 runtime UI 와 mimicry — 사용자가 보는 결과를 그대로 편집창으로 (WYSIWYG)
-- "곧 도메인 작업 들어가야 하니 편집기는 나중에" 라는 우선순위 절대 금지
+> **이력**: 초기에는 "GUI 메타 편집기" 가 두 번째 product 로 같이 개발됐으나 **D-120 결정으로 제거됐다.** `templates/MetaForm`, `pages/UIConfigEditor`, v2 페이지 모두 삭제됐고, 잔존물은 `frontend/src/templates/MetaDetail.tsx` + `templates/registry.tsx` 뿐 — BLDetailView 한 곳만 사용하는 평범한 detail 컴포넌트로 강등됐다. 새 도메인 추가 시 GUI 로 form/detail 화면을 정의하는 메커니즘은 없으므로 정상적인 React 페이지로 구현한다.
+>
+> **새 도메인 추가 절차**는 [D-145](harness/DECISIONS.md#d-145) 의 "테넌트 모듈화" 패턴을 따른다 — `tenant.Registry` 객체 1개 + `packs/<id>/{nav.ts, pages/}` 디렉토리 + DB CHECK 마이그 + admin 매트릭스 (`/settings/feature-wiring`) 토글.
 
 ## 읽기 순서
 이 프로젝트에서 작업하기 전에 아래 순서로 읽으세요:
