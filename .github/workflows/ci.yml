@@ -115,10 +115,13 @@ jobs:
           wait $TEST_PID
 
   # 엔진 (Rust) — 빌드 시간이 길어 캐시 필수. release 빌드는 운영과 동일.
+  # spark4tb self-hosted runner 사용: arch 패리티(aarch64=운영과 동일) + 영구 디스크
+  # 캐시. spark4tb 가 offline 일 경우 timeout-minutes 로 빠르게 실패 → 본인이 인지.
   engine:
     needs: changes
     if: needs.changes.outputs.engine == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ARM64, spark4tb]
+    timeout-minutes: 30
     defaults: { run: { working-directory: engine } }
     steps:
       - uses: actions/checkout@v4

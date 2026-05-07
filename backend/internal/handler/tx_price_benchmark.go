@@ -12,8 +12,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
@@ -114,6 +116,31 @@ func (h *PriceBenchmarkHandler) List(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, rows)
 }
 
+// GetRun — GET /api/v1/price-benchmarks/runs/{id}
+// PR 43: 비동기 AIRefresh 의 진행 상황 폴링용. status='running'/'completed'/'partial'/'failed'.
+func (h *PriceBenchmarkHandler) GetRun(w http.ResponseWriter, r *http.Request) {
+	runID := chi.URLParam(r, "id")
+	if runID == "" {
+		response.RespondError(w, http.StatusBadRequest, "run_id가 누락됐습니다")
+		return
+	}
+	data, _, err := h.DB.From("price_benchmark_runs").
+		Select("*", "exact", false).
+		Eq("run_id", runID).
+		Execute()
+	if err != nil {
+		log.Printf("[가격 벤치마크 단건 조회 실패] runID=%s err=%v", runID, err)
+		response.RespondError(w, http.StatusInternalServerError, "수집 로그 조회 실패")
+		return
+	}
+	var runs []model.PriceBenchmarkRun
+	if err := json.Unmarshal(data, &runs); err != nil || len(runs) == 0 {
+		response.RespondError(w, http.StatusNotFound, "수집 로그를 찾을 수 없습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, runs[0])
+}
+
 // ListRuns — GET /api/v1/price-benchmarks/runs
 func (h *PriceBenchmarkHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parseLimitOffset(r, 20, 100)
@@ -210,47 +237,119 @@ func (h *PriceBenchmarkHandler) AIRefresh(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 85*time.Second)
-	defer cancel()
-
-	evidence, warnings := h.collectBenchmarkEvidence(ctx, sources)
-	raw, err := h.extractBenchmarksWithAI(ctx, provider, llmModel, maxTokens, evidence)
-	if err != nil {
-		msg := err.Error()
-		warnings = append(warnings, msg)
-		h.finishRun(runID, "failed", 0, 0, &msg, warnings, evidence, nil)
-		response.RespondError(w, http.StatusBadGateway, "AI 가격 벤치마크 수집에 실패했습니다: "+msg)
-		return
-	}
-
-	output, err := parsePriceBenchmarkAIOutput(raw)
-	if err != nil {
-		msg := err.Error()
-		warnings = append(warnings, msg)
-		h.finishRun(runID, "failed", 0, 0, &msg, warnings, evidence, &raw)
-		response.RespondError(w, http.StatusBadGateway, "AI 응답을 가격 데이터로 해석하지 못했습니다: "+msg)
-		return
-	}
-	warnings = append(warnings, output.Warnings...)
-
-	inserted, skipped, rows := h.insertAIBenchmarkPoints(runID, userID, output.Points)
-	status := "completed"
-	if inserted == 0 {
-		status = "partial"
-		warnings = append(warnings, "저장 가능한 가격 관측값이 없습니다")
-	} else if skipped > 0 || len(warnings) > 0 {
-		status = "partial"
-	}
-	h.finishRun(runID, status, inserted, skipped, nil, warnings, evidence, &raw)
+	// PR 43: 비동기 패턴 — 즉시 run_id 반환, goroutine 백그라운드 작업.
+	// 이전 동기 호출은 client/backend 85s timeout 에 자주 fail.
+	// frontend 가 GET /runs/{id} 폴링으로 진행 상황 확인.
+	go h.runAIRefreshAsync(runID, userID, sources, provider, llmModel, maxTokens)
 
 	response.RespondJSON(w, http.StatusOK, map[string]any{
 		"run_id":         runID,
-		"status":         status,
-		"inserted_count": inserted,
-		"skipped_count":  skipped,
-		"warnings":       warnings,
-		"items":          rows,
+		"status":         "running",
+		"inserted_count": 0,
+		"skipped_count":  0,
+		"warnings":       []string{},
+		"items":          []any{},
 	})
+}
+
+// runAIRefreshAsync — AIRefresh 의 실제 작업을 백그라운드 goroutine 에서 실행.
+// req.Context 와 분리된 context.Background 사용 — client 가 끊어도 계속 진행.
+// 자체 timeout 10분 (큰 LLM 호출 + 4 source 병렬 여유).
+func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources []benchmarkSource, provider, llmModel string, maxTokens int) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	// PR 41: 병렬 분산 + 취합 — source 별 shard 로 분리 호출.
+	// 이전 단일 LLM 호출은 모든 source 의 evidence 를 한번에 던져 컨텍스트 초과 빈발.
+	// 각 source 를 독립 LLM 호출로 (동시 4 cap), 결과 취합 후 finishRun 으로 마감.
+	type sourceShard struct {
+		src      benchmarkSource
+		evidence []benchmarkEvidenceItem
+		warnings []string
+		raw      string
+		output   *priceBenchmarkAIOutput
+		err      error
+	}
+
+	shards := make([]sourceShard, len(sources))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4) // 동시 4 — vLLM/Z.AI 부하 한계
+	for i, src := range sources {
+		wg.Add(1)
+		go func(i int, src benchmarkSource) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			shards[i].src = src
+			ev, w := h.collectBenchmarkEvidence(ctx, []benchmarkSource{src})
+			shards[i].evidence = ev
+			shards[i].warnings = w
+			if len(ev) == 0 {
+				shards[i].warnings = append(shards[i].warnings, fmt.Sprintf("%s: evidence 0 — AI 호출 skip", src.Key))
+				return
+			}
+			raw, err := h.extractBenchmarksWithAI(ctx, provider, llmModel, maxTokens, ev)
+			shards[i].raw = raw
+			if err != nil {
+				shards[i].err = err
+				return
+			}
+			out, perr := parsePriceBenchmarkAIOutput(raw)
+			if perr != nil {
+				shards[i].err = perr
+				return
+			}
+			shards[i].output = &out
+		}(i, src)
+	}
+	wg.Wait()
+
+	// 취합
+	var allEvidence []benchmarkEvidenceItem
+	var allWarnings []string
+	var allPoints []model.CreatePriceBenchmarkRequest
+	var combinedRaw strings.Builder
+	successCount := 0
+	for _, sh := range shards {
+		allEvidence = append(allEvidence, sh.evidence...)
+		allWarnings = append(allWarnings, sh.warnings...)
+		if sh.err != nil {
+			allWarnings = append(allWarnings, fmt.Sprintf("%s 추출 실패: %v", sh.src.Key, sh.err))
+			continue
+		}
+		if sh.output != nil {
+			successCount++
+			allPoints = append(allPoints, sh.output.Points...)
+			allWarnings = append(allWarnings, sh.output.Warnings...)
+		}
+		if sh.raw != "" {
+			combinedRaw.WriteString("=== ")
+			combinedRaw.WriteString(sh.src.Key)
+			combinedRaw.WriteString(" ===\n")
+			combinedRaw.WriteString(sh.raw)
+			combinedRaw.WriteString("\n\n")
+		}
+	}
+
+	rawStr := combinedRaw.String()
+	if successCount == 0 && len(allPoints) == 0 {
+		msg := "모든 source 추출 실패"
+		allWarnings = append(allWarnings, msg)
+		h.finishRun(runID, "failed", 0, 0, &msg, allWarnings, allEvidence, &rawStr)
+		log.Printf("[ai-refresh async] run=%s FAILED — 모든 source 실패", runID)
+		return
+	}
+
+	inserted, skipped, _ := h.insertAIBenchmarkPoints(runID, userID, allPoints)
+	status := "completed"
+	if inserted == 0 {
+		status = "partial"
+		allWarnings = append(allWarnings, "저장 가능한 가격 관측값이 없습니다")
+	} else if skipped > 0 || len(allWarnings) > 0 {
+		status = "partial"
+	}
+	h.finishRun(runID, status, inserted, skipped, nil, allWarnings, allEvidence, &rawStr)
+	log.Printf("[ai-refresh async] run=%s %s — inserted=%d skipped=%d warnings=%d", runID, status, inserted, skipped, len(allWarnings))
 }
 
 func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, sources []benchmarkSource) ([]benchmarkEvidenceItem, []string) {

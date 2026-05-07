@@ -105,6 +105,15 @@ func (h *BaroIncomingHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
+// BaroPartnerCockpitHandler — 거래처 360 (Partner Cockpit), BARO 전용 (D-125).
+// 한 거래처의 신용/최근 매출/CRM 미처리·활동을 한 응답으로 합쳐 인바운드 응대 화면.
+func (h *BaroPartnerCockpitHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/baro/partner-cockpit", func(r chi.Router) {
+		r.Use(g.Feature(feature.IDBaroPartnerCockpit))
+		r.Get("/{partner_id}", h.Get)
+	})
+}
+
 // BaroPurchaseHistoryHandler — BARO 자체 매입 원가/구매이력 (BR 법인만).
 func (h *BaroPurchaseHistoryHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/baro/purchase-history", func(r chi.Router) {
@@ -508,6 +517,9 @@ func (h *PriceBenchmarkHandler) RegisterRoutes(r chi.Router, g middleware.Gates)
 		r.Use(g.Feature(feature.IDTxPriceBenchmark))
 		r.Get("/", h.List)
 		r.Get("/runs", h.ListRuns)
+		r.Get("/runs/{id}", h.GetRun) // PR 43: 비동기 ai-refresh 폴링
+		// PR 42: 우리 구매가 + 평균 판매가 시계열 — 가격예측 차트에 추가 시리즈로 표시
+		r.Get("/our-prices", h.OurPrices)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Post("/ai-refresh", h.AIRefresh)
 	})

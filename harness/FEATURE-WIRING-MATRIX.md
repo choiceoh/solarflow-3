@@ -111,6 +111,7 @@
 | `baro.dispatch` | BARO 배차/일정 | B | tenant_owned | Phase 4 |
 | `baro.orders` | BARO 빠른 재발주 | B | tenant_company | |
 | `baro.price_book` | BARO 거래처별 단가표 | B | tenant_owned | Phase 1 |
+| `baro.partner_cockpit` | BARO 거래처 360 cockpit | B | tenant_owned | D-125 |
 
 ### calc.* (Rust 계산엔진 프록시)
 

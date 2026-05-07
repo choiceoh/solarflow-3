@@ -120,6 +120,7 @@ const (
 	IDBaroDispatch        FeatureID = "baro.dispatch"
 	IDBaroOrders          FeatureID = "baro.orders"
 	IDBaroPriceBook       FeatureID = "baro.price_book"
+	IDBaroPartnerCockpit  FeatureID = "baro.partner_cockpit"
 
 	// ---- calc.* (Rust 계산 프록시) ----
 	IDCalcInventory          FeatureID = "calc.inventory"
@@ -327,7 +328,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxPriceBenchmark: {
 		ID: IDTxPriceBenchmark, Name: "가격예측 벤치마크", Description: "외부 태양광 시세·입찰·ASP 벤치마크 + AI 수집",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/price-benchmarks/", "/api/v1/price-benchmarks/runs", "/api/v1/price-benchmarks/ai-refresh"},
+		Paths: []string{"/api/v1/price-benchmarks/", "/api/v1/price-benchmarks/runs", "/api/v1/price-benchmarks/runs/{id}", "/api/v1/price-benchmarks/our-prices", "/api/v1/price-benchmarks/ai-refresh"},
 	},
 	IDTxPriceHistory: {
 		ID: IDTxPriceHistory, Name: "수입 단가 이력", Description: "단가 이력 (module 계열)",
@@ -415,6 +416,12 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/partner-prices/", "/api/v1/partner-prices/{id}",
 			"/api/v1/partner-prices/lookup",
 		},
+	},
+	IDBaroPartnerCockpit: {
+		ID: IDBaroPartnerCockpit, Name: "BARO 거래처 360 cockpit",
+		Description:    "거래처 한 명 신용/최근매출/CRM 미처리·활동 합본 (D-125)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{"/api/v1/baro/partner-cockpit/{partner_id}"},
 	},
 
 	// ===== calc.* =====

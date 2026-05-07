@@ -871,3 +871,23 @@
 - **UI 기준**: x축은 관측일, y축은 선택 단위(USD/W, CNY/W, KRW/W) 가격이다. OPIS CMM/forward/DDP, InfoLink centralized/distributed, TrendForce 중국 국내가/수출가, PVinsights 보조 시세, 중국 국영 입찰, CPIA floor, Tier-1 ASP를 같은 화면에서 source 필터로 비교한다.
 - **운영 한계**: 유료 리포트 로그인/구독 본문은 서버가 별도 세션을 보유하지 않으면 수집하지 못한다. 이 경우 run warning으로 남기고 저장 가능한 공개 근거만 기록한다.
 - **날짜**: 2026-05-07
+
+## D-125: BARO 거래처 360 (Partner Cockpit) — sanitized 데이터 소스 합본 endpoint
+- **결정**: BARO 인바운드 응대 화면을 위해 **한 거래처의 신용/최근 매출/CRM 미처리·활동을 한 응답으로 합치는** 전용 endpoint `GET /api/v1/baro/partner-cockpit/{partner_id}` 를 도입한다 (feature_id `baro.partner_cockpit`, BARO 전용).
+  - **합본 동기**: 인바운드 통화 1건당 영업이 4~5개 화면(미수금 보드, 거래처 상세, CRM inbox, 단가표, 입고예정)을 ALT-TAB 으로 도는 게 현재 워크플로우. 200거래처 / 영업 6명 / 1인당 매출 ~167억 규모에서 응대 30초 이내가 매출 직결. 합친 endpoint 로 라운드트립을 5회→1회로 줄여 LCP 개선.
+  - **sanitized 패스스루**: 신규 endpoint 가 새 데이터 행/컬럼을 노출하지 않는다. 모두 기존 sanitized 경로(`partners`, `baro_credit_board` RPC, `sales` direct, `partner_activities`) 를 BARO 토큰으로 호출한 결과의 합본. D-108/D-117 격리(BARO 는 BR 법인 데이터만, module 계열 면장/원가/L/C 차단)는 그대로 유지.
+  - **부분 실패 허용**: 4개 sub-fetch (partner / credit / recent_sales / crm) 중 partner 단건 조회만 실패 시 즉시 404/500 반환. 나머지는 실패 시 nil/빈 배열 + 로그만 남기고 응답에는 가용한 패널만 채운다 — "한 패널 RPC 가 깨져도 영업 응대 화면 전체가 죽지 않게."
+  - **stub 패널 2종**: `quote_ready_skus` (모듈+인버터 묶음 견적 + 마진), `incoming_matches` (직전 12개월 매입 SKU 중 입고예정인 것) 는 PR2(통합 견적 빌더) 및 후속 PR 에서 채운다. PR1 응답에서는 항상 빈 배열 — 프론트엔드 타입을 미리 고정해 후속 PR 에서 응답 shape 변경 없이 데이터만 채울 수 있게.
+  - **거래처 진입 UX**: 사이드바 메뉴 `/baro/cockpit` (partner_id 없음) 진입 시 페이지가 거래처 검색/최근 본 거래처 picker 를 보여주고, 선택 시 URL 에 `?partner_id=` 가 붙어 cockpit 패널을 그린다. 별도 picker 라우트는 두지 않음.
+- **이유**: D-109 (CRM 1차) 가 활동 로그·미처리함을 도입했지만 응대 시 신용/최근매출과 합쳐 보는 UX 가 빠져 있었다. 별도 라운드트립 5개 vs 합본 1개의 차이는 통화 응대 1건당 1~2초 (Cloudflare 터널 RTT × 5). 1인당 일평균 통화 30건 × 영업 6명 = 일 180건이라 누적이 크다. 또한 "한 패널 깨지면 화면 전체 흰 배경" 회귀가 인바운드 매출에 직격이라 부분 실패 허용 설계가 필요.
+- **운영 기준**:
+  - 신규 라우트는 D-120 절차대로: catalog.go entry + FEATURE-WIRING-MATRIX.md 행 + `r.Use(g.Feature(IDBaroPartnerCockpit))` + DECISIONS 결정 동시 갱신.
+  - sanitized 데이터 소스만 사용 — partners/sales/partner_activities 의 직접 컬럼 + baro_credit_board RPC. BL 라인·면장·원가·L/C·price_histories 는 호출 금지(D-108/D-117 그대로).
+  - PR2(통합 견적 빌더) 가 stub 패널을 채울 때 응답 shape 변경 없이 추가 — 프론트엔드 타입 호환 유지.
+  - 응답이 200곳 × 4 RPC 라 캐시 도입 검토는 후속 작업(p95 측정 후 결정).
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` 통과 — coverage_test 가 `/api/v1/baro/partner-cockpit/{partner_id}` 의 catalog ↔ chi 일치, matrix_consistency_test 가 `baro.partner_cockpit` 의 catalog ↔ markdown 일치를 검증.
+  - 핸들러 테스트(`baro_partner_cockpit_test.go`): module/cable 토큰 호출 시 403, baro 토큰 + 미존재 partner_id 호출 시 404.
+  - 프론트엔드 `npm run build` (tsc -b) 통과.
+- **날짜**: 2026-05-06
+

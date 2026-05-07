@@ -25,6 +25,7 @@ import {
   Tags,
   TrendingUp,
   Truck,
+  Users,
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
@@ -127,6 +128,8 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'receipts', label: '수금 관리', abbr: '수금', path: '/orders?tab=receipts', icon: Wallet, menu: 'receipts' },
       // CRM 1차: 인바운드 후속 — 바로(주) 전용 (탑솔라는 인바운드 비중이 적어 미사용)
       { key: 'crm-inbox', label: '내 미처리 문의', abbr: '문의', path: '/crm/inbox', icon: Inbox, menu: 'crm_inbox', tenants: ['baro'] },
+      // D-125: 거래처 360 cockpit — 인바운드 응대 한 화면 (BARO 전용)
+      { key: 'baro-cockpit', label: '거래처 360', abbr: '360', path: '/baro/cockpit', icon: Users, menu: 'baro_cockpit', tenants: ['baro'] },
       // BARO Phase 1: 거래처별 단가표 (BARO 전용)
       { key: 'baro-price-book', label: '거래처 단가표', abbr: '단가', path: '/baro/price-book', icon: Tags, menu: 'baro_price_book', tenants: ['baro'] },
       // BARO Phase 4: 배차/일정 보드 (BARO 전용)
@@ -183,6 +186,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/settings/personal': { title: '개인 설정', breadcrumb: '시스템 / 내 계정' },
   '/baro/incoming': { title: '입고예정', breadcrumb: '구매 / ETA와 공급예정' },
   '/baro/purchase-history': { title: '구매이력', breadcrumb: '구매 / 자체 매입 원가' },
+  '/baro/cockpit': { title: '거래처 360', breadcrumb: '판매 / 인바운드 응대 cockpit' },
 };
 
 function routeMeta(pathname: string, search: string) {
