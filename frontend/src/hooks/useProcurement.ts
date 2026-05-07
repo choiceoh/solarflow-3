@@ -161,12 +161,14 @@ export function usePOList(
   )
 }
 
-// usePOListPaged — server-side pagination/sort/q. ProcurementPage PO 탭이 사용.
+// usePOListPaged — server-side pagination/sort/q + contract_date 범위. ProcurementPage PO 탭이 사용.
 // 기존 usePOList 는 다른 화면 (PurchaseHistoryPage 등) 호환을 위해 유지.
 export interface POListPagedFilters {
   status?: string
   manufacturer_id?: string
   contract_type?: string
+  contract_date_from?: string  // YYYY-MM-DD (양끝 포함)
+  contract_date_to?: string
   q?: string
   sort?: string
   order?: "asc" | "desc"
@@ -178,11 +180,12 @@ export interface POListPagedFilters {
 export function usePOListPaged(filters: POListPagedFilters = {}) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
   const {
-    status, manufacturer_id, contract_type, q,
+    status, manufacturer_id, contract_type, contract_date_from, contract_date_to, q,
     sort, order, page = 1, pageSize = 100, enabled = true,
   } = filters
   const queryKey = [
     "pos-paged", selectedCompanyId, status ?? "", manufacturer_id ?? "", contract_type ?? "",
+    contract_date_from ?? "", contract_date_to ?? "",
     q ?? "", sort ?? "", order ?? "", page, pageSize,
   ]
   const result = useQuery({
@@ -192,6 +195,8 @@ export function usePOListPaged(filters: POListPagedFilters = {}) {
       if (status) params.set("status", status)
       if (manufacturer_id) params.set("manufacturer_id", manufacturer_id)
       if (contract_type) params.set("contract_type", contract_type)
+      if (contract_date_from) params.set("contract_date_from", contract_date_from)
+      if (contract_date_to) params.set("contract_date_to", contract_date_to)
       if (q) params.set("q", q)
       if (sort) params.set("sort", sort)
       if (order) params.set("order", order)
@@ -376,6 +381,8 @@ export interface LCListPagedFilters {
   bank_id?: string
   po_id?: string
   manufacturer_id?: string
+  open_date_from?: string
+  open_date_to?: string
   q?: string
   sort?: string
   order?: "asc" | "desc"
@@ -387,12 +394,13 @@ export interface LCListPagedFilters {
 export function useLCListPaged(filters: LCListPagedFilters = {}) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
   const {
-    status, bank_id, po_id, manufacturer_id, q,
+    status, bank_id, po_id, manufacturer_id, open_date_from, open_date_to, q,
     sort, order, page = 1, pageSize = 100, enabled = true,
   } = filters
   const queryKey = [
     "lcs-paged", selectedCompanyId, status ?? "", bank_id ?? "", po_id ?? "",
-    manufacturer_id ?? "", q ?? "", sort ?? "", order ?? "", page, pageSize,
+    manufacturer_id ?? "", open_date_from ?? "", open_date_to ?? "",
+    q ?? "", sort ?? "", order ?? "", page, pageSize,
   ]
   const result = useQuery({
     queryKey,
@@ -402,6 +410,8 @@ export function useLCListPaged(filters: LCListPagedFilters = {}) {
       if (bank_id) params.set("bank_id", bank_id)
       if (po_id) params.set("po_id", po_id)
       if (manufacturer_id) params.set("manufacturer_id", manufacturer_id)
+      if (open_date_from) params.set("open_date_from", open_date_from)
+      if (open_date_to) params.set("open_date_to", open_date_to)
       if (q) params.set("q", q)
       if (sort) params.set("sort", sort)
       if (order) params.set("order", order)
@@ -560,10 +570,12 @@ export function useTTList(filters: { status?: string; po_id?: string } = {}) {
   )
 }
 
-// useTTListPaged — server-side pagination/sort/q. ProcurementPage TT 탭이 사용.
+// useTTListPaged — server-side pagination/sort/q + remit_date 범위. ProcurementPage TT 탭이 사용.
 export interface TTListPagedFilters {
   status?: string
   po_id?: string
+  remit_date_from?: string
+  remit_date_to?: string
   q?: string
   sort?: string
   order?: "asc" | "desc"
@@ -575,10 +587,12 @@ export interface TTListPagedFilters {
 export function useTTListPaged(filters: TTListPagedFilters = {}) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
   const {
-    status, po_id, q, sort, order, page = 1, pageSize = 100, enabled = true,
+    status, po_id, remit_date_from, remit_date_to, q,
+    sort, order, page = 1, pageSize = 100, enabled = true,
   } = filters
   const queryKey = [
     "tts-paged", selectedCompanyId, status ?? "", po_id ?? "",
+    remit_date_from ?? "", remit_date_to ?? "",
     q ?? "", sort ?? "", order ?? "", page, pageSize,
   ]
   const result = useQuery({
@@ -587,6 +601,8 @@ export function useTTListPaged(filters: TTListPagedFilters = {}) {
       const params = companyParams(selectedCompanyId!)
       if (status) params.set("status", status)
       if (po_id) params.set("po_id", po_id)
+      if (remit_date_from) params.set("remit_date_from", remit_date_from)
+      if (remit_date_to) params.set("remit_date_to", remit_date_to)
       if (q) params.set("q", q)
       if (sort) params.set("sort", sort)
       if (order) params.set("order", order)
