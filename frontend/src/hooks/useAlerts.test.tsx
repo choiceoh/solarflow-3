@@ -2,7 +2,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, mock, type Mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { mockFetchWithAuth } from '@/test/mockApi';
+import { clearFetchWithAuthMock, mockFetchWithAuth } from '@/test/mockApi';
 import { fetchAllPaginated } from '@/lib/api';
 import { useAlerts } from './useAlerts';
 
@@ -27,7 +27,8 @@ function daysFromNow(days: number) {
 
 describe('useAlerts', () => {
   afterEach(() => {
-    /* per-file isolation */;
+    clearFetchWithAuthMock();
+    (fetchAllPaginated as unknown as Mock<typeof fetchAllPaginated>).mockClear();
   });
 
   it('builds operational alerts from the current API response shapes', async () => {
