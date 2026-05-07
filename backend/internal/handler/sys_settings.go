@@ -100,5 +100,10 @@ func (h *SystemSettingsHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// PR 40: AI provider 설정 변경 시 캐시 invalidate (즉시 반영).
+	if key == "assistant.providers" {
+		invalidateAssistantProvidersCache()
+	}
+
 	response.RespondJSON(w, http.StatusOK, statusOKResponse{Status: "ok"})
 }
