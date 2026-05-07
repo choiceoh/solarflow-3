@@ -30,8 +30,7 @@ function renderTable(props: Partial<ComponentProps<typeof POListTable>> = {}) {
   );
 }
 
-// TODO(P10): bun test mock.module hoist 이슈 — dynamic import 패턴으로 마이그레이션 필요
-describe.skip('POListTable', () => {
+describe('POListTable', () => {
   afterEach(() => {
     /* clearAllMocks not needed in bun test - per-file isolation */;
     resetAppStore();

@@ -25,8 +25,7 @@ function daysFromNow(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-// TODO(P10): bun test mock.module hoist 이슈 — dynamic import 패턴으로 마이그레이션 필요
-describe.skip('useAlerts', () => {
+describe('useAlerts', () => {
   afterEach(() => {
     /* per-file isolation */;
   });

@@ -1,10 +1,6 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
-
-// Bun test 는 기본적으로 DOM 이 없으므로 happy-dom 글로벌 등록.
-// register() 는 idempotent — 중복 호출돼도 안전.
-if (typeof window === 'undefined') {
-  GlobalRegistrator.register();
-}
+// happy-dom 글로벌 등록은 dom-setup.ts 가 처리 (이 파일보다 먼저 preload 됨).
+// 분리 이유: testing-library 가 import 시점에 document 캡처해서 stale 참조가
+// 생기는 이슈 — happy-dom 이 register 된 후 testing-library 가 import 돼야 함.
 
 // VITE_* env 는 vite plugin 이 주입하는데 bun test 는 vite 안 통해 그대로 빈 값.
 // supabase.ts 같은 모듈이 import 시점에 검증 throw 하므로 dummy 주입 필요.

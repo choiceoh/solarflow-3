@@ -6,8 +6,10 @@
 auto = "fallback"
 
 [test]
-# 컴포넌트 테스트는 DOM 필요. happy-dom 을 setup.ts 에서 글로벌 등록.
-preload = ["./src/test/setup.ts"]
+# 컴포넌트 테스트는 DOM 필요. preload 순서가 중요 —
+# dom-setup 이 happy-dom 을 글로벌 등록한 후에 setup 이 testing-library import.
+# (testing-library 가 import 시점에 document 를 capture 하므로 register 가 먼저여야 함)
+preload = ["./src/test/dom-setup.ts", "./src/test/setup.ts"]
 # e2e/는 Playwright 전용 — bun test 가 picking up 안 하게.
 # pattern 으로 제외하거나 root 를 src 로 한정. 후자가 명확.
 root = "./src"
