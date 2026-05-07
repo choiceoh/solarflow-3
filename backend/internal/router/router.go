@@ -67,6 +67,9 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		attachH.RegisterRoutes(r, a.Gates)
 		handler.NewAuditLogHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBankHandler(a.DB).RegisterRoutes(r, a.Gates)
+		// PR-5b 머지 시 fix: PR-603 (view-transitions) 머지 누락 — catalog 에는 baro.callback_recommend
+		// 가 등록됐지만 router 등록이 빠져 D-120 coverage_test 가 실패하던 것을 같이 처리.
+		handler.NewBaroCallbackRecommendHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBaroCreditCheckHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBaroIncomingHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBaroPartnerCockpitHandler(a.DB).RegisterRoutes(r, a.Gates)
