@@ -35,7 +35,11 @@ func New(cfg *config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Println("✅ Supabase 연결 성공")
+	if cfg.SupabaseAnonKey != "" && cfg.SupabaseKey != cfg.SupabaseAnonKey {
+		log.Println("✅ Supabase 연결 성공 (service_role)")
+	} else {
+		log.Println("✅ Supabase 연결 성공 (anon — RLS 적용)")
+	}
 
 	var eng *engine.EngineClient
 	if engineURL := os.Getenv("ENGINE_URL"); engineURL != "" {
