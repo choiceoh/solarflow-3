@@ -100,20 +100,21 @@ var validPOStatuses = map[string]bool{
 // CreatePurchaseOrderRequest — 발주 등록 시 클라이언트가 보내는 데이터
 // 비유: "발주 계약 신청서" — 법인, 제조사, 계약 유형을 필수 기재
 type CreatePurchaseOrderRequest struct {
-	PONumber            *string  `json:"po_number"`
-	CompanyID           string   `json:"company_id"`
-	ManufacturerID      string   `json:"manufacturer_id"`
-	ContractType        string   `json:"contract_type"`
-	ContractDate        *string  `json:"contract_date"`
-	Incoterms           *string  `json:"incoterms"`
-	PaymentTerms        *string  `json:"payment_terms"`
-	TotalQty            *int     `json:"total_qty"`
-	TotalMW             *float64 `json:"total_mw"`
-	ContractPeriodStart *string  `json:"contract_period_start"`
-	ContractPeriodEnd   *string  `json:"contract_period_end"`
-	Status              string   `json:"status"`
-	Memo                *string  `json:"memo"`
-	ParentPOID          *string  `json:"parent_po_id,omitempty"`
+	PONumber            *string               `json:"po_number"`
+	CompanyID           string                `json:"company_id"`
+	ManufacturerID      string                `json:"manufacturer_id"`
+	ContractType        string                `json:"contract_type"`
+	ContractDate        *string               `json:"contract_date"`
+	Incoterms           *string               `json:"incoterms"`
+	PaymentTerms        *string               `json:"payment_terms"`
+	TotalQty            *int                  `json:"total_qty"`
+	TotalMW             *float64              `json:"total_mw"`
+	ContractPeriodStart *string               `json:"contract_period_start"`
+	ContractPeriodEnd   *string               `json:"contract_period_end"`
+	Status              string                `json:"status"`
+	Memo                *string               `json:"memo"`
+	ParentPOID          *string               `json:"parent_po_id,omitempty"`
+	LineItems           []CreatePOLineRequest `json:"line_items,omitempty"`
 }
 
 // Validate — 발주 등록 요청의 입력값을 검증
@@ -147,6 +148,51 @@ func (req *CreatePurchaseOrderRequest) Validate() string {
 		return "total_mw는 양수여야 합니다"
 	}
 	return ""
+}
+
+// PurchaseOrderInsert — DB 함수에 넘길 PO 본문 payload
+// 비유: 품목 명세표를 떼어낸 계약서 본문만 담는 봉투
+type PurchaseOrderInsert struct {
+	PONumber            *string  `json:"po_number,omitempty"`
+	CompanyID           string   `json:"company_id"`
+	ManufacturerID      string   `json:"manufacturer_id"`
+	ContractType        string   `json:"contract_type"`
+	ContractDate        *string  `json:"contract_date,omitempty"`
+	Incoterms           *string  `json:"incoterms,omitempty"`
+	PaymentTerms        *string  `json:"payment_terms,omitempty"`
+	TotalQty            *int     `json:"total_qty,omitempty"`
+	TotalMW             *float64 `json:"total_mw,omitempty"`
+	ContractPeriodStart *string  `json:"contract_period_start,omitempty"`
+	ContractPeriodEnd   *string  `json:"contract_period_end,omitempty"`
+	Status              string   `json:"status"`
+	Memo                *string  `json:"memo,omitempty"`
+	ParentPOID          *string  `json:"parent_po_id,omitempty"`
+}
+
+func NewPurchaseOrderInsert(req CreatePurchaseOrderRequest) PurchaseOrderInsert {
+	return PurchaseOrderInsert{
+		PONumber:            req.PONumber,
+		CompanyID:           req.CompanyID,
+		ManufacturerID:      req.ManufacturerID,
+		ContractType:        req.ContractType,
+		ContractDate:        req.ContractDate,
+		Incoterms:           req.Incoterms,
+		PaymentTerms:        req.PaymentTerms,
+		TotalQty:            req.TotalQty,
+		TotalMW:             req.TotalMW,
+		ContractPeriodStart: req.ContractPeriodStart,
+		ContractPeriodEnd:   req.ContractPeriodEnd,
+		Status:              req.Status,
+		Memo:                req.Memo,
+		ParentPOID:          req.ParentPOID,
+	}
+}
+
+// CreatePurchaseOrderWithLinesRPCRequest — PO 본문과 라인을 같은 DB 트랜잭션으로 저장하는 payload
+// 비유: 계약서 본문과 품목 명세표를 한 봉투에 넣어 접수한다.
+type CreatePurchaseOrderWithLinesRPCRequest struct {
+	PO    PurchaseOrderInsert   `json:"p_po"`
+	Lines []CreatePOLineRequest `json:"p_lines"`
 }
 
 // UpdatePurchaseOrderRequest — 발주 수정 시 클라이언트가 보내는 데이터

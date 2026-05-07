@@ -1244,3 +1244,22 @@
   - `go test ./...` 및 `go vet ./...` 통과.
   - 프론트엔드 `npm ci`, `npm run build`, `npm run test`, `npm run lint` 통과.
 - **날짜**: 2026-05-07
+
+## D-149: PO 직접입력은 유지하되 헤더+라인 저장은 원자화한다
+
+- **결정**: D-115의 Excel Import Hub 중심 원칙은 유지하지만, PO는 건수가 많지 않고 계약 확인 과정에서 운영자가 직접 입력·보정하는 가치가 커서 `/procurement`의 PO 직접입력 다이얼로그를 보존한다. 대신 PO 생성은 웹 직접입력과 Excel Import 모두 `sf_create_purchase_order_with_lines` DB 함수 1회 호출로 통일해 헤더만 저장되고 라인이 실패하는 반쪽 PO를 막는다.
+- **데이터 기준**:
+  - `purchase_orders_ext.total_qty/total_mw`는 `po_line_items + products.spec_wp` 집계를 우선 사용하고, 라인이 없을 때만 기존 `purchase_orders` 저장값을 fallback으로 본다.
+  - PO 라인의 `unit_price_usd_wp`를 명시 저장한다. 없을 경우 DB 함수와 프론트 표시는 `unit_price_usd / spec_wp`로 역산한다.
+  - 계약 확정 시 자동 단가이력은 `USD/장`이 아니라 `USD/Wp`를 기록한다. `unit_price_usd_wp`가 있으면 우선 사용하고, 없으면 품번 규격으로 역산한다.
+- **UI 기준**:
+  - PO 신규 등록 버튼은 유지한다.
+  - PO번호는 NULL 허용 정책에 맞춰 직접입력에서 비워둘 수 있다.
+  - 목록 필터에 `완료 제외`, `번호 미부여`, `변경계약` 빠른 조건을 추가한다.
+  - 상세 화면에는 `draft → contracted` 계약 확정 버튼을 두고, 이 전환이 단가이력 자동 생성의 정식 트리거다.
+- **이유**: PO 입력량은 작지만 계약 단위의 시작점이라 운영자가 화면에서 바로 보정하는 흐름이 필요하다. 반면 기존 구현은 헤더 POST 후 라인 POST가 직렬로 이어져 네트워크/검증 오류 시 데이터 정합성이 깨질 수 있었다. 직접입력을 보존하면서도 저장 단위를 트랜잭션으로 묶는 것이 운영성과 안전성의 균형점이다.
+- **검증**:
+  - `go build ./...`, `go vet ./...`, `go test ./...` 통과.
+  - `bun install --frozen-lockfile`, `bun run build`, `bun run lint` 통과.
+  - `bun run test` 통과.
+- **날짜**: 2026-05-07
