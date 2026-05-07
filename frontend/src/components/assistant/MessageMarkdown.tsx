@@ -1,9 +1,12 @@
 import { useRef, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeKatex from 'rehype-katex';
 import { Check, Copy } from 'lucide-react';
 import 'highlight.js/styles/github.css';
+import 'katex/dist/katex.min.css';
 import { cn } from '@/lib/utils';
 
 function CodeBlock({
@@ -123,8 +126,8 @@ export function MessageMarkdown({ content }: { content: string }) {
   return (
     <div className="break-words">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeHighlight, rehypeKatex]}
         components={components}
       >
         {content}
