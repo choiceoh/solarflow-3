@@ -48,8 +48,12 @@ REPO=/home/choiceoh/공개/solarflow-3
 LOCK=/tmp/solarflow-cron-deploy.lock
 GO_DIR="$REPO/backend"
 ENGINE_DIR="$REPO/engine"
-PY_BIN="$REPO/backend/.venv-ocr/bin/python"   # psycopg2 가 들어 있는 venv
-APPLY_MIG="$REPO/scripts/apply_migrations.py"
+PY_BIN="$REPO/backend/.venv-ocr/bin/python"   # psycopg2 가 들어 있는 venv (legacy fallback)
+APPLY_MIG_PY="$REPO/scripts/apply_migrations.py"
+APPLY_MIG_TS="$REPO/scripts/apply_migrations.ts"
+BUN_BIN="$HOME/.bun/bin/bun"                  # Bun 1.2+ — Bun.SQL 로 PostgreSQL 직결
+# 호환성을 위해 .py 변수도 유지 (외부 도구가 참조할 수 있음)
+APPLY_MIG="$APPLY_MIG_PY"
 
 # 동시 실행 방지 (이전 실행이 빌드 중이면 skip)
 exec 9>"$LOCK"
@@ -132,16 +136,27 @@ if [[ $has_migration -eq 1 ]]; then
   for m in "${migrations[@]}"; do
     echo "    $m"
   done
-  if [[ -x "$PY_BIN" && -f "$APPLY_MIG" ]]; then
-    # backend/.env 의 SUPABASE_DB_URL 을 환경에 주입
-    if [[ -f "$REPO/backend/.env" ]]; then
-      set -a
-      # shellcheck disable=SC1091
-      source "$REPO/backend/.env"
-      set +a
+  # backend/.env 의 SUPABASE_DB_URL 을 환경에 주입 (TS/PY 둘 다 동일 env 사용)
+  if [[ -f "$REPO/backend/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$REPO/backend/.env"
+    set +a
+  fi
+
+  # TS 우선 (Bun runtime + Bun.SQL — venv 의존 없음). 없거나 깨지면 PY fallback.
+  if [[ -x "$BUN_BIN" && -f "$APPLY_MIG_TS" ]]; then
+    echo "[$(date -Iseconds)] apply_migrations.ts 실행 (bun)"
+    if "$BUN_BIN" "$APPLY_MIG_TS"; then
+      echo "[$(date -Iseconds)] 마이그레이션 적용 완료"
+    else
+      rc=$?
+      echo "[$(date -Iseconds)] ❌ apply_migrations.ts 실패 (exit=$rc) — Go 재시작 보류"
+      mig_ok=0
     fi
-    echo "[$(date -Iseconds)] apply_migrations.py 실행"
-    if "$PY_BIN" "$APPLY_MIG"; then
+  elif [[ -x "$PY_BIN" && -f "$APPLY_MIG_PY" ]]; then
+    echo "[$(date -Iseconds)] apply_migrations.py 실행 (legacy fallback — bun 미설치 시)"
+    if "$PY_BIN" "$APPLY_MIG_PY"; then
       echo "[$(date -Iseconds)] 마이그레이션 적용 완료"
     else
       rc=$?
@@ -149,7 +164,7 @@ if [[ $has_migration -eq 1 ]]; then
       mig_ok=0
     fi
   else
-    echo "[$(date -Iseconds)] ⚠️  apply_migrations.py 또는 venv python 없음 — 수동 적용 필요"
+    echo "[$(date -Iseconds)] ⚠️  apply_migrations 실행기 없음 (bun/venv-python 모두 미설치) — 수동 적용 필요"
   fi
 fi
 
