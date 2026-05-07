@@ -35,13 +35,13 @@ import type {
 } from '@/types/priceBenchmark';
 
 const SOURCE_OPTIONS = [
-  { key: 'opis', label: 'OPIS', sub: 'CMM · Forward · DDP' },
-  { key: 'infolink', label: 'InfoLink', sub: '모듈·셀·웨이퍼' },
+  { key: 'opis', label: 'OPIS', sub: 'CMM · Forward · EU DDP' },
+  { key: 'infolink', label: 'InfoLink', sub: '모듈·폴리실리콘' },
   { key: 'trendforce', label: 'TrendForce', sub: '주간가·입찰' },
-  { key: 'pvinsights', label: 'PVinsights', sub: '일일 보조' },
+  { key: 'pvinsights', label: 'PVinsights', sub: '중국·유럽 보조' },
   { key: 'china_tender', label: '중국 입찰', sub: '국영 GW급' },
   { key: 'cpia_floor', label: 'CPIA', sub: '원가 floor' },
-  { key: 'tier1_asp', label: 'Tier-1 ASP', sub: '분기 실적' },
+  { key: 'tier1_asp', label: 'Tier-1 ASP', sub: '중국·유럽 근거만' },
 ];
 
 const METRIC_LABELS: Record<string, string> = {
@@ -50,7 +50,6 @@ const METRIC_LABELS: Record<string, string> = {
   forward_q2: 'Forward Q+2',
   forward_q3: 'Forward Q+3',
   forward_q4: 'Forward Q+4',
-  ddp_us: 'DDP US',
   ddp_europe: 'DDP Europe',
   module_centralized: 'Centralized',
   module_distributed: 'Distributed',
@@ -477,7 +476,7 @@ export default function PriceForecastPage() {
     <MasterConsole
       eyebrow="PRICE FORECAST"
       title="가격예측"
-      description="외부 시세·입찰·원가 floor·제조사 ASP를 같은 시계열로 비교합니다."
+      description="중국·유럽 시세·입찰·원가 floor·제조사 ASP를 같은 시계열로 비교합니다."
       tableTitle="가격 벤치마크"
       tableSub={`${filteredRows.length.toLocaleString('ko-KR')}개 관측값 · ${series.length.toLocaleString('ko-KR')}개 라인`}
       actions={(
