@@ -21,6 +21,7 @@ DELETE  /api/v1/orders/{id}
 DELETE  /api/v1/outbounds/{id}
 DELETE  /api/v1/partner-prices/{id}
 DELETE  /api/v1/partners/{id}
+DELETE  /api/v1/picking-lists/{id}
 DELETE  /api/v1/pos/{id}
 DELETE  /api/v1/pos/{poId}/lines/{id}
 DELETE  /api/v1/products/{id}
@@ -125,6 +126,8 @@ GET     /api/v1/partners/
 GET     /api/v1/partners/usage-counts
 GET     /api/v1/partners/{id}
 GET     /api/v1/partners/{id}/activities
+GET     /api/v1/picking-lists/
+GET     /api/v1/picking-lists/{id}
 GET     /api/v1/pos/
 GET     /api/v1/pos/dashboard
 GET     /api/v1/pos/summary
@@ -188,6 +191,8 @@ PATCH   /api/v1/manufacturers/{id}/status
 PATCH   /api/v1/partner-activities/{id}/followup
 PATCH   /api/v1/partners/{id}
 PATCH   /api/v1/partners/{id}/status
+PATCH   /api/v1/picking-lists/{id}
+PATCH   /api/v1/picking-lists/{id}/items/{item_id}
 PATCH   /api/v1/products/{id}/status
 PATCH   /api/v1/warehouse-locations/{id}
 PATCH   /api/v1/warehouses/{id}
@@ -259,6 +264,7 @@ POST    /api/v1/partner-activities/
 POST    /api/v1/partner-aliases/
 POST    /api/v1/partner-prices/
 POST    /api/v1/partners/
+POST    /api/v1/picking-lists/
 POST    /api/v1/pos/
 POST    /api/v1/pos/{poId}/lines/
 POST    /api/v1/price-benchmarks/

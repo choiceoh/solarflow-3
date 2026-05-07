@@ -102,6 +102,7 @@ const (
 	IDTxBL                   FeatureID = "tx.bl"
 	IDTxInventoryAllocation  FeatureID = "tx.inventory_allocation"
 	IDTxModuleDemandForecast FeatureID = "tx.module_demand_forecast"
+	IDTxPickingList          FeatureID = "tx.picking_list"
 
 	// ---- tx.* (module 계열 = topsolar+cable, D-108/D-119) ----
 	IDTxCostDetail     FeatureID = "tx.cost_detail"
@@ -318,6 +319,15 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDTxModuleDemandForecast, Name: "수요 forecast", Description: "자체 공사/보정 수요",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{"/api/v1/module-demand-forecasts/", "/api/v1/module-demand-forecasts/{id}"},
+	},
+	IDTxPickingList: {
+		ID: IDTxPickingList, Name: "WMS 피킹 명세",
+		Description:    "출고 1건당 위치별 수량 명세 + picked 토글 (D-140 WMS Phase 2)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{
+			"/api/v1/picking-lists/", "/api/v1/picking-lists/{id}",
+			"/api/v1/picking-lists/{id}/items/{item_id}",
+		},
 	},
 
 	// ===== tx.* (module = topsolar+cable, D-108/D-119) =====

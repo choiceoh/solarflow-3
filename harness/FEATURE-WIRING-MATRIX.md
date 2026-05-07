@@ -75,6 +75,7 @@
 | `tx.bl` | B/L 입고 (+ lines) | ★ | global |
 | `tx.inventory_allocation` | 가용재고 배정 | ★ | global |
 | `tx.module_demand_forecast` | 수요 forecast | ★ | global |
+| `tx.picking_list` | WMS 피킹 명세 (D-140 WMS Phase 2) | ★ | global |
 
 ### tx.* (거래 — module 계열, D-108/D-119)
 
