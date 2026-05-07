@@ -151,6 +151,41 @@ export function formatMW(n: number | null | undefined): string {
   return Number.isFinite(value) ? `${(value / 1000).toFixed(1)}MW` : '—';
 }
 
+/**
+ * 용량 표시 단위만 결정 — KPI tweening 중 단위 점프 방지를 위해 *최종값 기준*
+ * 으로 단위 잠금. tween 보간 중에도 같은 단위로 표시.
+ */
+export type CapacityUnitTag = 'kw' | 'mw' | 'auto';
+export function detectCapacityUnit(kw: number | null | undefined, prefsOverride?: UserPreferences): CapacityUnitTag {
+  const prefs = prefsOverride ?? getCurrentPreferences();
+  const unit = prefs.capacity_unit;
+  if (unit === 'kw') return 'kw';
+  if (unit === 'mw') {
+    const v = Number(kw);
+    if (!Number.isFinite(v) || Math.abs(v) / 1000 < 0.1) return 'kw';
+    return 'mw';
+  }
+  return 'auto';
+}
+
+/** value 부분만 (단위 미포함). NumberTween 의 formatter 로 사용. */
+export function formatKwValueOnly(kw: number, unit: CapacityUnitTag): string {
+  if (!Number.isFinite(kw)) return '—';
+  if (unit === 'kw') return Math.round(kw).toLocaleString('ko-KR');
+  if (unit === 'mw') return (kw / 1000).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  // auto 모드는 "X.XMW (X,XXXkW)" 통째로 — TileB.u 는 빈 문자열, value 가 unit 포함.
+  const mw = (kw / 1000).toFixed(1);
+  const kwStr = Math.round(kw).toLocaleString('ko-KR');
+  return `${mw}MW (${kwStr}kW)`;
+}
+
+/** TileB.u 에 표시할 단위 라벨. auto 모드는 value 가 단위 포함하므로 ''. */
+export function formatKwUnitOnly(unit: CapacityUnitTag): string {
+  if (unit === 'kw') return 'kW';
+  if (unit === 'mw') return 'MW';
+  return '';
+}
+
 export function formatSize(w: number, h: number): string {
   return `${w} x ${h} mm`;
 }
