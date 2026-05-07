@@ -10,6 +10,6 @@ echo "SolarFlow frontend apply"
 echo "frontend: ${FRONTEND_DIR}"
 
 cd "${FRONTEND_DIR}"
-npm run build
+bun run build
 
 echo "Frontend dist build completed."
