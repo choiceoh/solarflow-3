@@ -26,6 +26,7 @@ module과 **동일하게 노출**:
 - 면장/원가 (`/customs`)
 - 바로 매입요청 inbox (`/group-trade/baro-inbox`)
 - 수주 관리 (`/orders`), 출고/판매 (`/orders?tab=outbound`), 수금 관리 (`/orders?tab=receipts`)
+- WMS — 창고 위치 (`/wms/locations`), 피킹 작업 (`/wms/picking`), 입고 검수 (`/wms/receiving`), 재고실사 (`/wms/cycle-count`) — D-139~142
 - L/C 한도 (`/banking`)
 - 매출 분석 (`/sales-analysis`)
 - 구매 이력 (`/purchase-history`)
@@ -43,6 +44,12 @@ module과 **동일하게 노출**:
 - **[D-124](DECISIONS.md#d-124)** — 가격예측은 module 계열 전용 외부 벤치마크 장부 + 버튼형 AI 수집으로 둔다.
 - **[D-145](DECISIONS.md#d-145)** — 테넌트 모듈화 5 PR 시리즈. cable 추가가 D-119 시점에 226+ 군데 손대야 했던 것을 이제 `tenant.Registry` 1줄 + 마이그 1개 + admin 매트릭스 토글로 압축. cable 의 sidebar 항목은 `packs/module-finance` (수입/금융) + `packs/erp-core` (공통) 묶음으로 결정.
 - **[D-146](DECISIONS.md#d-146)** — 가격예측 수집 시장은 중국·유럽으로 제한한다.
+
+**WMS (모든 테넌트 공유)**
+- **[D-139](DECISIONS.md#d-139)** — WMS Phase 1 창고 내 위치(Bin) 마스터.
+- **[D-140](DECISIONS.md#d-140)** — WMS Phase 2 위치별 재고 + 자동 피킹 명세.
+- **[D-141](DECISIONS.md#d-141)** — WMS Phase 3 입고 검수 로그.
+- **[D-142](DECISIONS.md#d-142)** — WMS Phase 4 정기 재고실사 (Cycle Counting).
 
 ## module 계열 백엔드 엔드포인트 (`topsolarOnly` legacy 미들웨어)
 
