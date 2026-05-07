@@ -1148,3 +1148,9 @@
 - **검증**: `go test` 통과 — coverage_test 일치.
 - **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/088_cycle_counts.sql` + PostgREST reload.
 - **날짜**: 2026-05-07
+
+## D-143: 가격예측 AI 수집 관측값은 선택 삭제 가능, 실행 로그는 보존
+- **결정**: `/price-forecast` 하단 관측값 목록에서 사용자가 개별 가격 벤치마크를 선택해 삭제할 수 있게 한다. 서버는 `DELETE /api/v1/price-benchmarks/{id}` 로 `price_benchmarks` 행만 삭제한다.
+- **이유**: AI 수집은 evidence 기반으로 제한해도 공개 페이지 요약, 유료 리포트 미리보기, 검색 결과 조각의 품질 차이 때문에 신뢰도 낮은 관측값이 섞일 수 있다. 실무 구매 협상 기준선에 쓰는 화면이라, 운영자가 낮은 confidence·근거 부족 행을 즉시 제거할 수 있어야 한다.
+- **감사 기준**: `price_benchmark_runs` 는 삭제하지 않는다. 어떤 provider/model/source_keys 로 수집했고 warnings/skipped/raw_response 가 무엇이었는지는 재수집 품질 점검용 기록이므로 보존한다.
+- **날짜**: 2026-05-07
