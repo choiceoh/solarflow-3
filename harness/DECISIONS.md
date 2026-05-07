@@ -911,3 +911,28 @@
   - 수동 검증: BARO 토큰으로 `/baro/cockpit?partner_id=X` 진입 시 quote_ready_skus 패널이 단가표 등록된 SKU 만큼 카드 표시 + 클릭 시 `/baro/quote/new` 로 이동 + 인쇄 미리보기에서 picker/버튼 숨김.
 - **날짜**: 2026-05-07
 
+## D-127: BARO 영업 일일 홈 Phase 1 — 신규 backend 0, frontend 합성 대시보드
+- **결정**: BARO 영업 6명의 출근 첫 화면을 위한 일일 홈 페이지 `/baro/home` 을 도입한다. **신규 backend 라우트 0** — 기존 sanitized API 3종(`/api/v1/me/open-followups`, `/api/v1/baro/credit-board`, `/api/v1/baro/incoming`)을 frontend 에서 `Promise.all` 로 합성하고 in-memory 필터로 4개 카드(요약 stat) + 3개 패널(오늘 후속 / 한도 위험 / 신규 입고)을 그린다.
+  - **카드 4종 (요약 stat)**:
+    - 오늘의 후속: `follow_up_due <= today` 인 미처리 건수
+    - 이후 예정 후속: `follow_up_due > today` 인 미처리 건수
+    - 한도/연체 위험: `oldest_unpaid_days >= 60` 또는 `utilization_pct >= 100` 인 거래처 수
+    - 신규 입고예정: `status ∈ {scheduled, shipping, arrived}` 건수 + 최단 ETA
+  - **패널 3종 (실제 액션 진입)**:
+    - 오늘 답변할 후속 — 카드 클릭 → `/baro/cockpit?partner_id=X`
+    - 한도/연체 위험 거래처 — 카드 클릭 → cockpit
+    - 신규 입고 안내 — `/baro/incoming` 진입 + PR3.5 자동 콜백 추천 placeholder
+  - **PR3.5 분리** (별도 D-NNN, 신규 backend 필요):
+    - 자동 콜백 추천: 신규 입고 SKU × 직전 12개월 본인 거래처 매입 이력 매칭 → "이 입고를 알려야 할 거래처 N곳" + 1-click 일괄 발송
+    - 본인 담당 거래처 필터: `partners.owner_user_id = me` 와 credit_board RPC 응답 join (현재는 owner 미반영, 모든 위험 거래처 노출)
+    - 견적 회신 대기 카운트 (D-126 PR2.5 의 `baro_quotes` 테이블 도입 후)
+- **이유**: D-125(cockpit) / D-126(견적 빌더)이 *한 거래처* 작업 화면을 다듬은 반면 영업의 *하루 단위* 우선순위 정렬 화면이 부재. 6명이 200거래처를 분담하는 환경에서 출근 후 30초 안에 "오늘 누구에게 답변, 누구의 미수금 push, 어떤 입고 안내" 가 보이지 않으면 우선순위가 표류한다. 일평균 일정 정리 ~30분/명 × 6명 = 일 3시간을 통째로 절약.
+- **운영 기준**:
+  - 신규 backend 라우트 0 — D-120 catalog/matrix 갱신 불필요. 모든 데이터는 기존 sanitized 경로.
+  - PR3.5 에서 backend 합본 endpoint (`/api/v1/baro/sales-home`) 도입 시 응답 shape 은 frontend 가 기대하는 형태로 호환 유지.
+  - "오늘" 의 정의는 client local timezone 기준 (KST 운영). 미래 multi-region 도입 시 server-side timezone 명시 필요.
+- **검증**:
+  - 프론트엔드 `npm run build` (tsc -b) 통과 — 신규 페이지 / 사이드바 / permissions 키 / route 추가만으로 회귀 가드.
+  - 수동 검증: BARO 토큰으로 `/baro/home` 진입 시 카드 4개 + 패널 3개 표시. 각 카드/리스트 항목 클릭 → 해당 도메인 페이지로 이동 (cockpit/credit-board/incoming).
+- **날짜**: 2026-05-07
+

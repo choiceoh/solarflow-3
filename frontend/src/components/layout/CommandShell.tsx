@@ -22,6 +22,7 @@ import {
   ShieldAlert,
   Ship,
   Sun,
+  Home,
   Tags,
   TrendingUp,
   Truck,
@@ -99,6 +100,8 @@ const MODULE_TENANTS: TenantScope[] = ['topsolar', 'cable'];
 const NAV_GROUPS: CommandNavGroup[] = [
   {
     items: [
+      // D-127: BARO 영업 일일 홈 — BARO 진입 시 첫 화면
+      { key: 'baro-home', label: '영업 홈', abbr: '홈', path: '/baro/home', icon: Home, menu: 'baro_home', tenants: ['baro'] },
       { key: 'inventory', label: '가용재고', abbr: '재고', path: '/inventory', icon: Box, menu: 'inventory' },
     ],
   },
@@ -190,6 +193,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/baro/purchase-history': { title: '구매이력', breadcrumb: '구매 / 자체 매입 원가' },
   '/baro/cockpit': { title: '거래처 360', breadcrumb: '판매 / 인바운드 응대 cockpit' },
   '/baro/quote/new': { title: '견적 빌더', breadcrumb: '판매 / 통합 견적 작성' },
+  '/baro/home': { title: '영업 홈', breadcrumb: 'BARO / 일일 영업 보드' },
 };
 
 function routeMeta(pathname: string, search: string) {
