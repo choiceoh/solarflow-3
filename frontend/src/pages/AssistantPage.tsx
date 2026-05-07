@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
 import type { ToolUIPart, UIMessage } from 'ai';
-import { Bot, Check, ChevronDown, ChevronUp, Copy, Download, FileText, Inbox, MessageSquarePlus, PanelRightClose, PanelRightOpen, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronUp, Copy, Download, FileText, Inbox, MessageSquarePlus, MoreHorizontal, PanelRightClose, PanelRightOpen, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -1384,28 +1384,50 @@ function SessionsPanel({
                             isActive && 'bg-[var(--sf-solar)]/10 text-foreground',
                           )}
                         >
-                          <span className="truncate">{s.title || '새 대화'}</span>
-                        </button>
-                        {onExport && (
+                          {isActive && (
+                            <span
+                              aria-hidden
+                              className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[var(--sf-solar)]"
+                            />
+                          )}
                           <button
                             type="button"
-                            onClick={() => onExport(s.id)}
-                            className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted-foreground/10 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-                            title="Markdown 내보내기"
+                            onClick={() => onLoad(s.id)}
+                            disabled={s.id === loadingId}
+                            className={cn(
+                              'min-w-0 flex-1 truncate text-left',
+                              isActive && 'pl-1.5 font-medium',
+                            )}
+                            title={s.title}
                           >
-                            <Download className="h-3.5 w-3.5" />
+                            <span className="truncate">{s.title || '새 대화'}</span>
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => onDelete(s.id)}
-                          className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted-foreground/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
-                          title="삭제"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted-foreground/10 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 data-[popup-open]:opacity-100"
+                              title="작업 메뉴"
+                            >
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              {onExport && (
+                                <DropdownMenuItem onClick={() => onExport(s.id)}>
+                                  <Download className="mr-2 h-3.5 w-3.5" />
+                                  <span>Markdown 내보내기</span>
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onClick={() => onDelete(s.id)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                <span>삭제</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
