@@ -98,6 +98,8 @@ export default function CustomsPage() {
   const costedDeclarationCount = declarations.filter((decl) => (
     decl.cost_unit_price_wp != null || decl.cif_krw != null
   )).length
+  const totalCapacityWp = declarations.reduce((sum, decl) => sum + (decl.capacity_kw ?? 0) * 1000, 0)
+  const avgExpensePerWp = totalCapacityWp > 0 ? expenseTotal / totalCapacityWp : 0
   // KPI sparkline — Expense.month 기반 월별 집계 (없는 항목은 무시 → 평행선 대체).
   const declSpark = monthlyCount(declarations, (decl) => decl.declaration_date ?? null)
   const expenseDate = (e: (typeof expenses)[number]) => e.month ?? null
@@ -245,32 +247,14 @@ export default function CustomsPage() {
               metricId="customs.bl_linked"
             />
             <TileB
-              lbl="비용 유형"
-              v={String(expenseSummary?.type_count ?? Object.keys(typeExpenseMap).length)}
-              numericValue={expenseSummary?.type_count ?? Object.keys(typeExpenseMap).length}
-              formatter={(n) => String(Math.round(n))}
-              u="종"
-              sub="운송·통관·LC 수수료"
-              tone="warn"
-              spark={flatSpark(expenseSummary?.type_count ?? Object.keys(typeExpenseMap).length)}
-              metricId="customs.type_count"
-            />
-            <TileB
               lbl="평균 비용"
-              v={fmtEok(
-                expenseSummary?.average_amount ??
-                  (expenses.length ? expenseTotal / expenses.length : 0),
-              )}
-              numericValue={expenseSummary?.average_amount ??
-                (expenses.length ? expenseTotal / expenses.length : 0)}
-              formatter={fmtEok}
-              u="억"
-              sub="건당 평균"
+              v={avgExpensePerWp.toFixed(2)}
+              numericValue={avgExpensePerWp}
+              formatter={(n) => n.toFixed(2)}
+              u="원/Wp"
+              sub="Wp당 평균"
               tone="ink"
-              spark={flatSpark(
-                (expenseSummary?.average_amount ??
-                  (expenses.length ? expenseTotal / expenses.length : 0)) / 1e8,
-              )}
+              spark={flatSpark(avgExpensePerWp)}
               metricId="customs.avg_expense"
             />
           </div>
