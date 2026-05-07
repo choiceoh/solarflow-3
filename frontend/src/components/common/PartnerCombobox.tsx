@@ -68,10 +68,6 @@ export function PartnerCombobox({
   }, [open]);
 
   useEffect(() => {
-    setActiveIndex(0);
-  }, [search, creating]);
-
-  useEffect(() => {
     if (optionCount === 0) {
       setActiveIndex(0);
       return;
@@ -94,6 +90,7 @@ export function PartnerCombobox({
       setOpen(false);
       setSearch('');
       setCreating(false);
+      setActiveIndex(0);
       return;
     }
     if (creating || optionCount === 0) return;
@@ -123,6 +120,7 @@ export function PartnerCombobox({
       }
       if (hasCreateAction) {
         setCreating(true);
+        setActiveIndex(0);
         setNewName(search.trim());
         setCreateError('');
       }
@@ -181,6 +179,7 @@ export function PartnerCombobox({
             setOpen(false);
             setSearch('');
             setCreating(false);
+            setActiveIndex(0);
           }
         }}
         aria-expanded={open}
@@ -207,7 +206,10 @@ export function PartnerCombobox({
             <input
               ref={searchRef}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setActiveIndex(0);
+              }}
               placeholder="검색..."
               className="flex-1 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
             />
@@ -257,11 +259,12 @@ export function PartnerCombobox({
             <button
               type="button"
               onMouseEnter={() => setActiveIndex(filtered.length + allOptionOffset)}
-              onClick={() => {
-                setCreating(true);
-                setNewName(search.trim());
-                setCreateError('');
-              }}
+                onClick={() => {
+                  setCreating(true);
+                  setActiveIndex(0);
+                  setNewName(search.trim());
+                  setCreateError('');
+                }}
               className={cn(
                 'flex w-full items-center gap-2 border-t px-2.5 py-2 text-sm text-primary transition-colors hover:bg-accent',
                 activeIndex === filtered.length + allOptionOffset && 'bg-accent',
@@ -306,7 +309,12 @@ export function PartnerCombobox({
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setCreating(false); setNewName(''); setCreateError(''); }}
+                  onClick={() => {
+                    setCreating(false);
+                    setActiveIndex(0);
+                    setNewName('');
+                    setCreateError('');
+                  }}
                   className="rounded border border-input px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
                 >
                   취소

@@ -1,0 +1,51 @@
+name: Enable auto-merge on PR open
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh pr merge ${{ github.event.pull_request.number }} --auto --merge --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  refresh-behind-prs:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update BEHIND PRs with auto-merge enabled
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          # GitHub recomputes mergeStateStatus async after a push to main.
+          # We do two passes (+30s, +60s) so PRs that flip to BEHIND after
+          # the first scan are still caught in the same workflow run.
+          for pass in 1 2; do
+            sleep 30
+            mapfile -t prs < <(gh pr list --repo "$REPO" --base main --state open \
+              --json number,isDraft,autoMergeRequest,mergeStateStatus \
+              --jq '.[] | select(.isDraft == false and .autoMergeRequest != null and .mergeStateStatus == "BEHIND") | .number')
+            if [ ${#prs[@]} -eq 0 ]; then
+              echo "Pass $pass: no BEHIND PRs."
+              continue
+            fi
+            echo "Pass $pass: updating ${#prs[@]} BEHIND PR(s): ${prs[*]}"
+            for pr in "${prs[@]}"; do
+              if gh api -X PUT "repos/$REPO/pulls/$pr/update-branch" --silent; then
+                echo "Updated PR #$pr"
+              else
+                echo "::warning::Failed to update PR #$pr (likely conflicts)"
+              fi
+            done
+          done

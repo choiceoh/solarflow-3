@@ -9,8 +9,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import FormField from '@/components/common/FormField';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -150,10 +150,10 @@ export default function LCCreateDialog({ open, onClose, onCreated }: Props) {
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="L/C No.">
+          <FormField size="dense" label="L/C No.">
             <Input value={lcNumber} onChange={(e) => setLcNumber(e.target.value)} placeholder="비워두면 임시 번호" />
-          </Field>
-          <Field label="발주(PO)" required>
+          </FormField>
+          <FormField size="dense" label="발주(PO)" required>
             <Select value={poId} onValueChange={(v) => setPoId(v ?? '')}>
               <SelectTrigger><SelectValue placeholder="PO 선택" /></SelectTrigger>
               <SelectContent>
@@ -165,8 +165,8 @@ export default function LCCreateDialog({ open, onClose, onCreated }: Props) {
                 ))}
               </SelectContent>
             </Select>
-          </Field>
-          <Field label="은행" required>
+          </FormField>
+          <FormField size="dense" label="은행" required>
             <Select value={bankId} onValueChange={(v) => setBankId(v ?? '')}>
               <SelectTrigger><SelectValue placeholder="은행 선택" /></SelectTrigger>
               <SelectContent>
@@ -178,20 +178,20 @@ export default function LCCreateDialog({ open, onClose, onCreated }: Props) {
                 ))}
               </SelectContent>
             </Select>
-          </Field>
-          <Field label="개설일">
+          </FormField>
+          <FormField size="dense" label="개설일">
             <Input type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} />
-          </Field>
-          <Field label="L/C 금액 (USD)" required>
+          </FormField>
+          <FormField size="dense" label="L/C 금액 (USD)" required>
             <Input type="number" step="0.01" value={amountUsd} onChange={(e) => setAmountUsd(e.target.value)} placeholder="0" />
-          </Field>
-          <Field label="대상 수량 (매)">
+          </FormField>
+          <FormField size="dense" label="대상 수량 (매)">
             <Input type="number" value={targetQty} onChange={(e) => setTargetQty(e.target.value)} placeholder="0" />
-          </Field>
-          <Field label="유산스 (일)">
+          </FormField>
+          <FormField size="dense" label="유산스 (일)">
             <Input type="number" value={usanceDays} onChange={(e) => setUsanceDays(e.target.value)} placeholder="0 = AT SIGHT" />
-          </Field>
-          <Field label="유산스 유형">
+          </FormField>
+          <FormField size="dense" label="유산스 유형">
             <Select value={usanceType} onValueChange={(v) => setUsanceType(v ?? '')}>
               <SelectTrigger><SelectValue placeholder="유산스 유형 선택" /></SelectTrigger>
               <SelectContent>
@@ -199,9 +199,9 @@ export default function LCCreateDialog({ open, onClose, onCreated }: Props) {
                 <SelectItem value="shippers">SHIPPER&apos;S USANCE (shippers)</SelectItem>
               </SelectContent>
             </Select>
-          </Field>
+          </FormField>
           <div className="col-span-2">
-            <Field label="만기일">
+            <FormField size="dense" label="만기일">
               <div className="flex items-center gap-2">
                 <Input type="date" value={maturityDate} onChange={(e) => setMaturityDate(e.target.value)} />
                 {computedMaturity && computedMaturity !== maturityDate && (
@@ -210,12 +210,12 @@ export default function LCCreateDialog({ open, onClose, onCreated }: Props) {
                   </Button>
                 )}
               </div>
-            </Field>
+            </FormField>
           </div>
           <div className="col-span-2">
-            <Field label="메모">
+            <FormField size="dense" label="메모">
               <Textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={2} placeholder="LC 메모" />
-            </Field>
+            </FormField>
           </div>
         </div>
 
@@ -231,19 +231,3 @@ export default function LCCreateDialog({ open, onClose, onCreated }: Props) {
   );
 }
 
-function Field({
-  label, required, children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <Label className="text-[12px]">
-        {label}{required && <span className="text-destructive"> *</span>}
-      </Label>
-      {children}
-    </div>
-  );
-}

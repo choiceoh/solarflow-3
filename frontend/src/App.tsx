@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, type ReactElement } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
@@ -10,52 +10,10 @@ import RoleGuard from '@/components/auth/RoleGuard';
 import AppLayout from '@/components/layout/AppLayout';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import MobileBlock from '@/components/common/MobileBlock';
+import { ROUTES, type NestedRouteSpec, type RouteSpec } from '@/lib/navigation/manifest';
 
+// 인라인 유지: login 은 인증 외곽 라우트라 manifest 가 아닌 외곽 트리에 둔다.
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
-const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
-const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
-const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
-const PriceForecastPage = lazy(() => import('@/pages/PriceForecastPage'));
-import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
-const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
-const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
-const SalesAnalysisPage = lazy(() => import('@/pages/SalesAnalysisPage'));
-const BankingPage = lazy(() => import('@/pages/BankingPage'));
-const ApprovalPage = lazy(() => import('@/pages/ApprovalPage'));
-const SettingsLayout = lazy(() => import('@/pages/settings/SettingsLayout'));
-const SettingsIndexRedirect = lazy(() =>
-  import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
-);
-const AdminSettingsPage = lazy(() => import('@/pages/settings/AdminSettingsPage'));
-const DBIntegrityPage = lazy(() => import('@/pages/admin/DBIntegrityPage'));
-const AuditLogsPage = lazy(() => import('@/pages/settings/AuditLogsPage'));
-const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
-const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
-const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
-const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
-const DataPage = lazy(() => import('@/pages/DataPage'));
-const ImportHubPage = lazy(() => import('@/pages/ImportHubPage'));
-const LibraryPage = lazy(() => import('@/pages/LibraryPage'));
-const ManufacturerNewPage = lazy(() => import('@/pages/data/ManufacturerNewPage'));
-const ManufacturerEditPage = lazy(() => import('@/pages/data/ManufacturerEditPage'));
-const ProductNewPage = lazy(() => import('@/pages/data/ProductNewPage'));
-const ProductEditPage = lazy(() => import('@/pages/data/ProductEditPage'));
-const PartnerNewPage = lazy(() => import('@/pages/data/PartnerNewPage'));
-const PartnerEditPage = lazy(() => import('@/pages/data/PartnerEditPage'));
-const WarehouseNewPage = lazy(() => import('@/pages/data/WarehouseNewPage'));
-const WarehouseEditPage = lazy(() => import('@/pages/data/WarehouseEditPage'));
-const BankNewPage = lazy(() => import('@/pages/data/BankNewPage'));
-const BankEditPage = lazy(() => import('@/pages/data/BankEditPage'));
-const PartnerPriceBookPage = lazy(() => import('@/pages/baro/PartnerPriceBookPage'));
-const PartnerCockpitPage = lazy(() => import('@/pages/baro/PartnerCockpitPage'));
-const IncomingBoardPage = lazy(() => import('@/pages/baro/IncomingBoardPage'));
-const BaroPurchaseHistoryPage = lazy(() => import('@/pages/baro/BaroPurchaseHistoryPage'));
-const GroupPurchaseRequestPage = lazy(() => import('@/pages/baro/GroupPurchaseRequestPage'));
-const BaroRequestInboxPage = lazy(() => import('@/pages/group-trade/BaroRequestInboxPage'));
-const CreditBoardPage = lazy(() => import('@/pages/baro/CreditBoardPage'));
-const DispatchBoardPage = lazy(() => import('@/pages/baro/DispatchBoardPage'));
-const CRMInboxPage = lazy(() => import('@/pages/CRMInboxPage'));
-const InsightsPage = lazy(() => import('@/pages/InsightsPage'));
 
 function Fallback() {
   return <LoadingSpinner className="h-screen" />;
@@ -74,6 +32,30 @@ function LegacyRedirect({ to }: { to: string }) {
 
   const next = params.toString();
   return <Navigate to={`${pathname}${next ? `?${next}` : ''}`} replace />;
+}
+
+function renderElement(spec: RouteSpec | NestedRouteSpec): ReactElement {
+  const Comp = spec.element;
+  let el: ReactElement = <Comp />;
+  if ('wrap' in spec && spec.wrap) el = spec.wrap(el);
+  if (spec.roles) el = <RoleGuard allowedRoles={spec.roles}>{el}</RoleGuard>;
+  return el;
+}
+
+function renderRoute(spec: RouteSpec) {
+  const element = renderElement(spec);
+  if (!spec.children) {
+    return <Route key={spec.path} path={spec.path} element={element} />;
+  }
+  return (
+    <Route key={spec.path} path={spec.path} element={element}>
+      {spec.children.map((child) => {
+        const childEl = renderElement(child);
+        if (child.index) return <Route key="__index" index element={childEl} />;
+        return <Route key={child.path} path={child.path} element={childEl} />;
+      })}
+    </Route>
+  );
 }
 
 export default function App() {
@@ -102,51 +84,10 @@ export default function App() {
               <Route element={<AppLayout />}>
                 <Route index element={<Navigate to="/inventory" replace />} />
                 <Route path="/dashboard" element={<Navigate to="/inventory" replace />} />
-                <Route path="/inventory" element={<InventoryPage />} />
-                <Route path="/admin/db-integrity" element={<RoleGuard allowedRoles={['admin', 'operator']}><DBIntegrityPage /></RoleGuard>} />
-                <Route path="/import" element={<RoleGuard allowedRoles={['admin', 'operator']}><ImportHubPage /></RoleGuard>} />
-                <Route path="/library" element={<LibraryPage />} />
-                <Route path="/data" element={<RoleGuard allowedRoles={['admin', 'operator']}><DataPage /></RoleGuard>} />
-                <Route path="/data/manufacturers/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><ManufacturerNewPage /></RoleGuard>} />
-                <Route path="/data/manufacturers/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><ManufacturerEditPage /></RoleGuard>} />
-                <Route path="/data/products/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><ProductNewPage /></RoleGuard>} />
-                <Route path="/data/products/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><ProductEditPage /></RoleGuard>} />
-                <Route path="/data/partners/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><PartnerNewPage /></RoleGuard>} />
-                <Route path="/data/partners/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><PartnerEditPage /></RoleGuard>} />
-                <Route path="/data/warehouses/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><WarehouseNewPage /></RoleGuard>} />
-                <Route path="/data/warehouses/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><WarehouseEditPage /></RoleGuard>} />
-                <Route path="/data/banks/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankNewPage /></RoleGuard>} />
-                <Route path="/data/banks/:id/edit" element={<RoleGuard allowedRoles={['admin', 'operator']}><BankEditPage /></RoleGuard>} />
-                <Route path="/masters/construction-sites" element={<ConstructionSitesPage />} />
+                {ROUTES.map(renderRoute)}
                 <Route path="/inbound" element={<LegacyRedirect to="/procurement?tab=bl" />} />
-                <Route path="/procurement" element={<ProcurementPage />} />
-                <Route path="/purchase-history" element={<PurchaseHistoryErrorBoundary><PurchaseHistoryPage /></PurchaseHistoryErrorBoundary>} />
-                <Route path="/price-forecast" element={<RoleGuard allowedRoles={['admin', 'operator', 'executive']}><PriceForecastPage /></RoleGuard>} />
                 <Route path="/lc" element={<LegacyRedirect to="/procurement?tab=lc" />} />
                 <Route path="/outbound" element={<LegacyRedirect to="/orders?tab=outbound" />} />
-                <Route path="/orders" element={<OrdersPage />} />
-                <Route path="/customs" element={<CustomsPage />} />
-                <Route path="/sales-analysis" element={<SalesAnalysisPage />} />
-                <Route path="/banking" element={<BankingPage />} />
-                <Route path="/insights/:metric" element={<InsightsPage />} />
-                <Route path="/baro/price-book" element={<RoleGuard allowedRoles={['admin', 'operator']}><PartnerPriceBookPage /></RoleGuard>} />
-                <Route path="/baro/cockpit" element={<PartnerCockpitPage />} />
-                <Route path="/baro/incoming" element={<IncomingBoardPage />} />
-                <Route path="/baro/purchase-history" element={<RoleGuard allowedRoles={['admin', 'operator', 'executive']}><BaroPurchaseHistoryPage /></RoleGuard>} />
-                <Route path="/baro/group-purchase" element={<RoleGuard allowedRoles={['admin', 'operator']}><GroupPurchaseRequestPage /></RoleGuard>} />
-                <Route path="/group-trade/baro-inbox" element={<RoleGuard allowedRoles={['admin', 'operator']}><BaroRequestInboxPage /></RoleGuard>} />
-                <Route path="/baro/credit-board" element={<CreditBoardPage />} />
-                <Route path="/baro/dispatch" element={<RoleGuard allowedRoles={['admin', 'operator']}><DispatchBoardPage /></RoleGuard>} />
-                <Route path="/crm/inbox" element={<CRMInboxPage />} />
-                <Route path="/approval" element={<ApprovalPage />} />
-                <Route path="/assistant" element={<AssistantPage />} />
-                <Route path="/settings" element={<SettingsLayout />}>
-                  <Route index element={<SettingsIndexRedirect />} />
-                  <Route path="admin" element={<RoleGuard allowedRoles={['admin']}><AdminSettingsPage /></RoleGuard>} />
-                  <Route path="audit-logs" element={<RoleGuard allowedRoles={['admin']}><AuditLogsPage /></RoleGuard>} />
-                  <Route path="site" element={<RoleGuard allowedRoles={['admin']}><SitePlaceholderPage /></RoleGuard>} />
-                  <Route path="personal" element={<PersonalSettingsPage />} />
-                </Route>
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

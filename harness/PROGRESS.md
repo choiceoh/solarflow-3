@@ -54,6 +54,10 @@
 - 프론트엔드 가격예측 화면 추가
   - x축 관측일, y축 가격(USD/W, CNY/W, KRW/W) Recharts 라인 차트
   - source 필터, 기간/단위/검색, 관측값 테이블, AI 수집 로그
+- AI 지표 갱신 안정화
+  - `/ai-refresh`가 Cloudflare/Pages 장기 요청 502에 걸리지 않도록 `running` 로그 생성 후 즉시 응답
+  - 실제 evidence 수집·LLM 추출·저장은 서버 백그라운드에서 수행하고 프론트는 실행중 로그를 5초 간격으로 갱신
+  - Cloudflare/상위 AI API의 HTML 오류 페이지는 사용자에게 짧은 한국어 오류로 표시
 - dev mock API에 가격예측 샘플 관측값과 AI 수집 응답 추가
 - D-124 결정 기록 및 module/cable/baro 인덱스 문서 동기화
 
@@ -68,6 +72,13 @@
 - `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
 - `cd frontend && npm run test` 성공 — 8 files / 67 tests
 - `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 65건 출력
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd frontend && npm ci` 성공 — 이 worktree에 누락된 로컬 의존성 복원
+- `cd frontend && npm run test` 성공 — 8 files / 67 tests
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 65건 출력
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
 - `http://127.0.0.1:5176/price-forecast` 목업 로그인 브라우저 smoke 성공 — 차트 SVG 5개, sidebar 메뉴, AI 수집 버튼, 테이블 18행 렌더
 - `git diff --check` 성공
 - `graphify update .` 성공 — 4217 nodes / 7832 edges / 338 communities

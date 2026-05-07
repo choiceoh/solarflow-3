@@ -3,7 +3,7 @@
 // 데이터 섹션(필드 그리드)을 메타로 그리고, 워크플로우·편집·외부 패널은 contentBlock 슬롯에 위임한다.
 
 import { useState, useEffect, type ReactNode } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Pencil } from 'lucide-react';
 import { DetailSection, DetailField, DetailFieldGrid } from '@/components/common/detail';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { fetchWithAuth } from '@/lib/api';
@@ -28,7 +28,13 @@ function applyFormatter(field: DetailFieldConfig, raw: unknown): string {
       const dict = enumDictionaries[field.enumKey];
       return dict?.[String(raw)] ?? String(raw);
     }
-    default: return String(raw);
+    case undefined: return String(raw);
+    // 새 DetailFormatter 추가 시 _exhaust 가 컴파일 에러 → 위에 case 추가 강제.
+    default: {
+      const _exhaust: never = field.formatter;
+      void _exhaust;
+      return String(raw);
+    }
   }
 }
 
@@ -117,39 +123,67 @@ function InlineEditField({ field, data, onSave }: {
 
   if (!editing) {
     return (
-      <button type="button" className="text-left hover:bg-muted/40 rounded px-1 -mx-1 cursor-pointer text-sm" onClick={() => setEditing(true)} title="클릭하여 편집">
-        {renderFieldValue(field, data) ?? <span className="text-muted-foreground italic">—</span>}
-        <span className="ml-1 text-xs opacity-30">✏️</span>
+      <button
+        type="button"
+        className="group flex items-center gap-1.5 -mx-1 rounded px-1 text-left text-sm hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+        onClick={() => setEditing(true)}
+        title="클릭하여 편집"
+        aria-label={`${field.label} 편집`}
+      >
+        <span className="min-w-0 flex-1 truncate">
+          {renderFieldValue(field, data) ?? <span className="italic text-muted-foreground">—</span>}
+        </span>
+        <Pencil
+          className="h-3 w-3 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/70 group-focus-visible:text-muted-foreground/70"
+          aria-hidden="true"
+        />
       </button>
     );
   }
+  // editType=select 인데 옵션이 비면 select 가 무의미 → text input fallback
+  const useSelectFallback = editType === 'select' && (field.inlineEditOptions ?? []).length === 0;
+  if (useSelectFallback) {
+    console.warn('[MetaDetail] inlineEditOptions empty for select field', field.key);
+  }
   return (
     <div className="flex items-center gap-1.5">
-      {editType === 'select' ? (
+      {editType === 'select' && !useSelectFallback ? (
         <select
           autoFocus
           className="h-7 flex-1 rounded border border-input bg-background px-2 text-xs"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
+          aria-label={field.label}
         >
+          <option value="">— 선택 —</option>
           {(field.inlineEditOptions ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       ) : (
         <input
           autoFocus
-          type={editType}
+          type={useSelectFallback ? 'text' : editType}
           className="h-7 flex-1 rounded border border-input bg-background px-2 text-xs"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
+          aria-label={field.label}
           onKeyDown={(e) => {
             if (e.key === 'Enter') { e.preventDefault(); commit(); }
             else if (e.key === 'Escape') { setDraft(String(initial ?? '')); setEditing(false); }
           }}
         />
       )}
-      {saving && <span className="text-xs text-muted-foreground">저장 중...</span>}
+      {saving && (
+        <span className="flex items-center gap-1 text-xs text-muted-foreground" role="status" aria-live="polite">
+          <span
+            className="inline-block h-3 w-3 animate-spin rounded-full border"
+            style={{ borderColor: 'var(--sf-line-2)', borderTopColor: 'var(--sf-solar)' }}
+            aria-hidden="true"
+          />
+          저장 중...
+        </span>
+      )}
     </div>
   );
 }
