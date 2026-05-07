@@ -1,5 +1,7 @@
-import { Inbox, type LucideIcon } from 'lucide-react';
+import { Inbox, AlertTriangle, AlertCircle, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+
+export type EmptyStateTone = 'default' | 'warn' | 'error';
 
 interface EmptyStateProps {
   message?: string;
@@ -7,7 +9,21 @@ interface EmptyStateProps {
   actionLabel?: string;
   onAction?: () => void;
   icon?: LucideIcon;
+  /** 시각 톤 — error 는 적색, warn 은 황색. 기본은 차분한 회색. */
+  tone?: EmptyStateTone;
 }
+
+const ICON_BY_TONE: Record<EmptyStateTone, LucideIcon> = {
+  default: Inbox,
+  warn: AlertTriangle,
+  error: AlertCircle,
+};
+
+const ICON_TONE_CLASS: Record<EmptyStateTone, string> = {
+  default: 'sf-tone-muted',
+  warn: 'sf-tone-warn',
+  error: 'sf-tone-neg',
+};
 
 // 빈 상태 — mockup의 차분한 well + 미세 hierarchy 패턴
 export default function EmptyState({
@@ -15,21 +31,23 @@ export default function EmptyState({
   description,
   actionLabel,
   onAction,
-  icon: Icon = Inbox,
+  icon,
+  tone = 'default',
 }: EmptyStateProps) {
+  const Icon = icon ?? ICON_BY_TONE[tone];
   return (
-    <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center" role={tone === 'error' ? 'alert' : undefined}>
       <div
-        className="mb-1 flex h-11 w-11 items-center justify-center rounded-full"
-        style={{ background: 'var(--sf-bg-2)', color: 'var(--sf-ink-4)' }}
+        className={`mb-1 flex h-11 w-11 items-center justify-center rounded-full ${ICON_TONE_CLASS[tone]}`}
+        aria-hidden="true"
       >
         <Icon className="h-5 w-5" strokeWidth={1.5} />
       </div>
-      <p className="text-sm font-medium" style={{ color: 'var(--sf-ink-2)' }}>
+      <p className="sf-text-ink-2 text-sm font-medium">
         {message}
       </p>
       {description && (
-        <p className="max-w-xs text-xs leading-relaxed" style={{ color: 'var(--sf-ink-3)' }}>
+        <p className="sf-text-ink-3 max-w-xs text-xs leading-relaxed">
           {description}
         </p>
       )}

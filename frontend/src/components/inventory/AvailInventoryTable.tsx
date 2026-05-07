@@ -452,7 +452,7 @@ function AvailInventoryTable({
                         <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-muted-foreground">
                           <span>실재고 <span className="font-mono tabular-nums text-foreground">{kwToEa(item.physical_kw, item.spec_wp).toLocaleString('ko-KR')} EA</span></span>
                           <span>미착품 <span className="font-mono tabular-nums text-foreground">{kwToEa(item.incoming_kw, item.spec_wp).toLocaleString('ko-KR')} EA</span></span>
-                          <span>가용재고 <span className="font-mono tabular-nums" style={{ color: 'var(--sf-pos)' }}>{kwToEa(item.total_secured_kw, item.spec_wp).toLocaleString('ko-KR')} EA</span></span>
+                          <span>가용재고 <span className="sf-text-pos font-mono tabular-nums">{kwToEa(item.total_secured_kw, item.spec_wp).toLocaleString('ko-KR')} EA</span></span>
                           {safetyEA > 0 && (
                             <span>
                               안전재고{' '}
@@ -524,7 +524,7 @@ function AvailInventoryTable({
                 합계 · {sorted.length.toLocaleString('ko-KR')}건
               </span>
             </td>
-            <td className="text-right tabular-nums font-medium" style={{ color: 'var(--sf-pos)' }}>{fmtKw(totals.totalSecured)}</td>
+            <td className="sf-text-pos text-right tabular-nums font-medium">{fmtKw(totals.totalSecured)}</td>
             <td className="text-right tabular-nums font-medium">{fmtKw(totals.sale)}</td>
             <td className="text-right tabular-nums font-medium">{fmtKw(totals.construction)}</td>
             <td className="text-right tabular-nums font-medium">{fmtKw(totals.physical)}</td>

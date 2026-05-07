@@ -9,8 +9,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import FormField from '@/components/common/FormField';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -225,10 +225,10 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
 
         <div className="space-y-4">
           <section className="grid grid-cols-2 gap-3">
-            <Field label="발주번호" required>
+            <FormField size="dense" label="발주번호" required>
               <Input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="PO-2026-001" />
-            </Field>
-            <Field label="제조사" required>
+            </FormField>
+            <FormField size="dense" label="제조사" required>
               <Select value={manufacturerId} onValueChange={(v) => setManufacturerId(v ?? '')}>
                 <SelectTrigger><SelectValue placeholder="제조사 선택" /></SelectTrigger>
                 <SelectContent>
@@ -237,8 +237,8 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
                   ))}
                 </SelectContent>
               </Select>
-            </Field>
-            <Field label="계약유형" required>
+            </FormField>
+            <FormField size="dense" label="계약유형" required>
               <Select value={contractType} onValueChange={(v) => setContractType(v as ContractType)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -247,20 +247,20 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
                   ))}
                 </SelectContent>
               </Select>
-            </Field>
-            <Field label="계약일" required>
+            </FormField>
+            <FormField size="dense" label="계약일" required>
               <Input type="date" value={contractDate} onChange={(e) => setContractDate(e.target.value)} />
-            </Field>
-            <Field label="인코텀즈"><Input value={incoterms} onChange={(e) => setIncoterms(e.target.value)} placeholder="FOB / CIF" /></Field>
-            <Field label="결제조건"><Input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="L/C at sight 등" /></Field>
+            </FormField>
+            <FormField size="dense" label="인코텀즈"><Input value={incoterms} onChange={(e) => setIncoterms(e.target.value)} placeholder="FOB / CIF" /></FormField>
+            <FormField size="dense" label="결제조건"><Input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="L/C at sight 등" /></FormField>
             {contractType === 'frame' && (
               <>
-                <Field label="계약 시작일" required>
+                <FormField size="dense" label="계약 시작일" required>
                   <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
-                </Field>
-                <Field label="계약 종료일" required>
+                </FormField>
+                <FormField size="dense" label="계약 종료일" required>
                   <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
-                </Field>
+                </FormField>
               </>
             )}
           </section>
@@ -288,7 +288,7 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
                   </div>
                   <div className="grid grid-cols-6 gap-2">
                     <div className="col-span-2">
-                      <Field label="품번" required compact>
+                      <FormField size="compact" label="품번" required>
                         <Select value={line.product_id} onValueChange={(v) => updateLine(line.key, { product_id: v ?? '' })}>
                           <SelectTrigger><SelectValue placeholder="품번 선택" /></SelectTrigger>
                           <SelectContent>
@@ -299,17 +299,17 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
                             ))}
                           </SelectContent>
                         </Select>
-                      </Field>
+                      </FormField>
                     </div>
-                    <Field label="수량" required compact>
+                    <FormField size="compact" label="수량" required>
                       <Input
                         type="number"
                         value={line.quantity}
                         onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
                         placeholder="0"
                       />
-                    </Field>
-                    <Field label="USD/Wp" required compact>
+                    </FormField>
+                    <FormField size="compact" label="USD/Wp" required>
                       <Input
                         type="number"
                         step="0.001"
@@ -317,8 +317,8 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
                         onChange={(e) => updateLine(line.key, { unit_price_usd_wp: e.target.value })}
                         placeholder="0.090"
                       />
-                    </Field>
-                    <Field label="구분" compact>
+                    </FormField>
+                    <FormField size="compact" label="구분">
                       <Select value={line.item_type} onValueChange={(v) => updateLine(line.key, { item_type: v as 'main' | 'spare' })}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -326,8 +326,8 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
                           <SelectItem value="spare">스페어</SelectItem>
                         </SelectContent>
                       </Select>
-                    </Field>
-                    <Field label="유무상" compact>
+                    </FormField>
+                    <FormField size="compact" label="유무상">
                       <Select value={line.payment_type} onValueChange={(v) => updateLine(line.key, { payment_type: v as 'paid' | 'free' })}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -335,7 +335,7 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
                           <SelectItem value="free">무상</SelectItem>
                         </SelectContent>
                       </Select>
-                    </Field>
+                    </FormField>
                   </div>
                   <div className="mt-2">
                     <Input
@@ -350,9 +350,9 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
             </div>
           </section>
 
-          <Field label="메모">
+          <FormField size="dense" label="메모">
             <Textarea value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="발주 메모" rows={2} />
-          </Field>
+          </FormField>
         </div>
 
         <DialogFooter>
@@ -367,20 +367,3 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
   );
 }
 
-function Field({
-  label, required, compact, children,
-}: {
-  label: string;
-  required?: boolean;
-  compact?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <Label className={compact ? 'text-[11px]' : 'text-[12px]'}>
-        {label}{required && <span className="text-destructive"> *</span>}
-      </Label>
-      {children}
-    </div>
-  );
-}
