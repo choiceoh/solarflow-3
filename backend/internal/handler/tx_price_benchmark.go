@@ -255,8 +255,16 @@ func (h *PriceBenchmarkHandler) AIRefresh(w http.ResponseWriter, r *http.Request
 // req.Context 와 분리된 context.Background 사용 — client 가 끊어도 계속 진행.
 // 자체 timeout 10분 (큰 LLM 호출 + 4 source 병렬 여유).
 func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources []benchmarkSource, provider, llmModel string, maxTokens int) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[ai-refresh async] run=%s PANIC: %v", runID, r)
+			msg := fmt.Sprintf("panic: %v", r)
+			h.finishRun(runID, "failed", 0, 0, &msg, nil, nil, nil)
+		}
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+	log.Printf("[ai-refresh async] run=%s start sources=%d provider=%s", runID, len(sources), provider)
 
 	// PR 41: 병렬 분산 + 취합 — source 별 shard 로 분리 호출.
 	// 이전 단일 LLM 호출은 모든 source 의 evidence 를 한번에 던져 컨텍스트 초과 빈발.
@@ -277,28 +285,42 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 		wg.Add(1)
 		go func(i int, src benchmarkSource) {
 			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					shards[i].err = fmt.Errorf("panic: %v", r)
+					log.Printf("[ai-refresh async] src=%s PANIC: %v", src.Key, r)
+				}
+			}()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			shards[i].src = src
-			ev, w := h.collectBenchmarkEvidence(ctx, []benchmarkSource{src})
+			// PR 44: source 별 명시적 timeout 4분 (vLLM 응답 1~2분 정상 + 여유).
+			srcCtx, srcCancel := context.WithTimeout(ctx, 4*time.Minute)
+			defer srcCancel()
+			ev, w := h.collectBenchmarkEvidence(srcCtx, []benchmarkSource{src})
 			shards[i].evidence = ev
 			shards[i].warnings = w
 			if len(ev) == 0 {
 				shards[i].warnings = append(shards[i].warnings, fmt.Sprintf("%s: evidence 0 — AI 호출 skip", src.Key))
+				log.Printf("[ai-refresh async] src=%s evidence 0", src.Key)
 				return
 			}
-			raw, err := h.extractBenchmarksWithAI(ctx, provider, llmModel, maxTokens, ev)
+			log.Printf("[ai-refresh async] src=%s evidence=%d, LLM 호출 시작", src.Key, len(ev))
+			raw, err := h.extractBenchmarksWithAI(srcCtx, provider, llmModel, maxTokens, ev)
 			shards[i].raw = raw
 			if err != nil {
 				shards[i].err = err
+				log.Printf("[ai-refresh async] src=%s LLM 실패: %v", src.Key, err)
 				return
 			}
 			out, perr := parsePriceBenchmarkAIOutput(raw)
 			if perr != nil {
 				shards[i].err = perr
+				log.Printf("[ai-refresh async] src=%s parse 실패: %v", src.Key, perr)
 				return
 			}
 			shards[i].output = &out
+			log.Printf("[ai-refresh async] src=%s ok points=%d", src.Key, len(out.Points))
 		}(i, src)
 	}
 	wg.Wait()
@@ -381,7 +403,7 @@ func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, so
 				SourceName: src.Name,
 				Title:      result.Title,
 				URL:        result.URL,
-				Content:    truncate(result.Content, 1800),
+				Content:    truncate(result.Content, 900), // PR 44: vLLM 응답 시간 단축 위해 축소
 			})
 		}
 	}
