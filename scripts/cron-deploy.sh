@@ -225,9 +225,11 @@ GO_BIN_PREV="$GO_DIR/solarflow-go.prev"
 GO_BIN_NEW="$GO_DIR/solarflow-go.new"
 if [[ $need_go -eq 1 && $mig_ok -eq 1 ]]; then
   echo "[$(date -Iseconds)] Go 빌드 시작 (-> solarflow-go.new)"
-  # GOARM64=v9.0,sve2: Grace ARM (Neoverse V2) 의 ARMv9 + SVE2 명령 활성화. Go 1.23+.
+  # GOARM64=v9.0,lse,crypto: Grace ARM (Neoverse V2) 의 ARMv9 baseline + LSE atomic + crypto.
+  # Go 의 GOARM64 는 ,lse 와 ,crypto 만 토큰으로 받는다 (sve2 같은 런타임 feature 는 불가) —
+  # v9.0,sve2 로 적으면 Go 1.26+ 가 invalid 로 거부해 빌드 실패.
   # 운영 호스트(gx10) 와 spark4tb(콜드 스탠바이) 모두 Grace 라 안전.
-  if (cd "$GO_DIR" && GOARM64=v9.0,sve2 go build -o solarflow-go.new . 2>&1); then
+  if (cd "$GO_DIR" && GOARM64=v9.0,lse,crypto go build -o solarflow-go.new . 2>&1); then
     # 백업: 현재 운영 중인 바이너리를 .prev로, 새 빌드를 운영 자리로 원자적 swap.
     # 이 시점부터 SIGHUP 을 받은 tableflip 의 fork+exec 는 새 바이너리를 실행.
     [[ -f "$GO_BIN" ]] && cp -f "$GO_BIN" "$GO_BIN_PREV"
