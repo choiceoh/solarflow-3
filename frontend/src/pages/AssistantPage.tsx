@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
 import type { ToolUIPart, UIMessage } from 'ai';
-import { Bot, Check, ChevronDown, ChevronUp, Copy, Download, FileText, Inbox, MessageSquarePlus, MoreHorizontal, PanelRightClose, PanelRightOpen, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronUp, Copy, Download, FileText, Inbox, Loader2, MessageSquarePlus, MoreHorizontal, PanelRightClose, PanelRightOpen, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -768,39 +768,38 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
             className="hidden"
           />
           <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between gap-2">
-            <Button
+            <button
               type="button"
-              variant="ghost"
-              size="icon"
-              className="pointer-events-auto h-8 w-8"
               onClick={() => fileInputRef.current?.click()}
               disabled={busy}
               title="파일 첨부 (PDF/이미지, OCR 추출)"
+              className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
             >
-              <Paperclip className="h-4 w-4" />
-            </Button>
+              {ocrBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+            </button>
             {status === 'submitted' || status === 'streaming' ? (
-              <Button
+              <button
                 type="button"
                 onClick={() => stop()}
-                size="sm"
-                variant="destructive"
-                className="pointer-events-auto h-8 px-3"
                 title="응답 중단"
+                className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/90"
               >
-                <Square className="mr-1 h-3 w-3 fill-current" />
-                중단
-              </Button>
+                <Square className="h-3.5 w-3.5 fill-current" />
+              </button>
             ) : (
-              <Button
+              <button
+                type="button"
                 onClick={() => void send()}
                 disabled={ocrBusy || (!input.trim() && attachments.length === 0)}
-                size="sm"
-                className="pointer-events-auto h-8 px-3"
+                title={ocrBusy ? 'OCR 추출 중…' : '전송 (Enter)'}
+                className={cn(
+                  'pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-sm transition-all',
+                  'bg-[var(--sf-solar)] text-white hover:bg-[var(--sf-solar-2)]',
+                  'disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none',
+                )}
               >
-                <Send className="mr-1 h-4 w-4" />
-                {ocrBusy ? 'OCR 중…' : '전송'}
-              </Button>
+                <Send className="h-4 w-4" />
+              </button>
             )}
           </div>
         </div>
