@@ -90,7 +90,9 @@ func parseExpenseRow(rowNum int, row map[string]interface{}, companyID string, b
 }
 
 // parseOutboundRow — 출고 행 파싱. FK는 호출 측이 미리 해석:
-//   companyID, productID, warehouseID (필수), wattageKW, orderID/targetCompanyID (선택)
+//
+//	companyID, productID, warehouseID (필수), wattageKW, orderID/targetCompanyID (선택)
+//
 // usage_category·group_trade 허용값은 호출 측이 검증.
 // D-055: 워크플로우 체크박스 4개(tx_statement_ready/inspection_request_sent/approval_requested/tax_invoice_issued)
 // + source_payload(JSONB) 도 함께 흘려보낸다.
@@ -131,7 +133,9 @@ func parseOutboundRow(rowNum int, row map[string]interface{}, companyID, product
 }
 
 // parseOrderRow — 수주 행 파싱. FK는 호출 측이 미리 해석:
-//   companyID, customerID, productID, wattageKW
+//
+//	companyID, customerID, productID, wattageKW
+//
 // receipt_method/management_category/fulfillment_source 허용값 + quantity·unit_price_wp 양수 검증 포함.
 func parseOrderRow(rowNum int, row map[string]interface{}, companyID, customerID, productID string, wattageKW float64) (model.CreateOrderRequest, []model.ImportError) {
 	for _, av := range []struct {
@@ -407,16 +411,16 @@ var poContractTypeAliases = map[string]string{
 
 // usance_type 라벨 정규화 — 모델 검증은 buyers/shippers만 허용.
 var lcUsanceTypeAliases = map[string]string{
-	"buyers":            "buyers",
-	"shippers":          "shippers",
-	"BANKER'S USANCE":   "buyers",
-	"BANKERS USANCE":    "buyers",
-	"BANKER":            "buyers",
-	"SHIPPER'S USANCE":  "shippers",
-	"SHIPPERS USANCE":   "shippers",
-	"SHIPPER":           "shippers",
-	"AT SIGHT":          "",
-	"":                  "",
+	"buyers":           "buyers",
+	"shippers":         "shippers",
+	"BANKER'S USANCE":  "buyers",
+	"BANKERS USANCE":   "buyers",
+	"BANKER":           "buyers",
+	"SHIPPER'S USANCE": "shippers",
+	"SHIPPERS USANCE":  "shippers",
+	"SHIPPER":          "shippers",
+	"AT SIGHT":         "",
+	"":                 "",
 }
 
 // poImportGroup — 같은 po_number 자연키로 묶인 PO Import 행 그룹.
@@ -548,6 +552,7 @@ func parsePOLineRow(rowNum int, row map[string]interface{}, productID string, wa
 		ProductID:      productID,
 		Quantity:       qty,
 		UnitPriceUSD:   &unitPriceUsd,
+		UnitPriceUSDWp: &unitPriceWp,
 		TotalAmountUSD: &totalAmountUsd,
 		ItemType:       &itemType,
 		PaymentType:    &paymentType,

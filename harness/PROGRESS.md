@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-148 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토) |
+| DECISIONS | D-001~D-149 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -195,6 +195,46 @@
 
 ### 알려진 제한
 - 초기 검증에서는 Vitest worker bootstrap timeout이 있었으나, 최신 `main` 의존성 lock 동기화와 재설치 후 PR 전 재검증에서 프론트 단위테스트가 통과했다.
+---
+
+## 2026-05-07 세션 — P/O 발주 직접입력 안정화
+
+### 완료
+- P/O 직접입력은 유지하되 헤더+라인 저장을 DB 함수 `sf_create_purchase_order_with_lines` 1회 호출로 통일
+  - 웹 다이얼로그와 Excel Import 모두 같은 트랜잭션 저장 경로 사용
+  - 라인 실패 시 헤더만 남는 반쪽 PO 방지
+- `purchase_orders_ext`의 `total_qty`, `total_mw`를 라인아이템 집계 우선으로 변경
+- PO 라인 `unit_price_usd_wp` 저장/표시 경로 보강
+- 계약 확정 시 자동 단가이력이 `USD/Wp` 기준으로 기록되도록 수정
+- PO 직접입력에서 발주번호 NULL 허용
+- P/O 목록 빠른 조건 필터 추가
+  - 완료 제외
+  - 번호 미부여
+  - 변경계약
+- PO 상세에 `계약 확정` 버튼 추가 (`draft → contracted`, 단가이력 자동 생성 트리거)
+- PR 보호 체크 통과를 위해 최신 main 프론트 baseline 보강
+  - lockfile 동기화
+  - navigation manifest/CommandShell 중복 정리
+  - B/L·L/C 딥링크 보조 함수 누락 복구
+  - T/T 서버 페이지네이션 UI 연결
+- 최신 main 리베이스 중 겹친 App/PurchaseHistory 중복 import를 정리하고 충돌 해소
+- 최신 main의 Bun 전환에 맞춰 `package-lock.json` 제거를 수용하고 앱 빌드에서 테스트 파일 제외
+- D-149 결정 기록 추가
+
+### 검증
+- `cd backend && go test ./internal/handler -run 'TestShouldAutoInsertPriceHistory|TestPriceHistoryUSDWp|TestParsePOLineRow|TestGroupPORowsByPONumber'` 성공
+- `cd backend && go test ./internal/handler ./internal/model ./internal/router ./internal/feature` 성공
+- `cd backend && go build ./... && go vet ./... && go test ./...` 성공
+- `cd frontend && bun install --frozen-lockfile` 성공
+- `cd frontend && bun run build` 성공 — plugin timing warning 출력
+- `cd frontend && bun run lint` 종료코드 0 — 페이지네이션 reset hook 관련 warning 4건 출력
+- `cd frontend && bun run test` 성공 — 87 tests / 81 pass / 6 skip
+- `git diff --check` 성공
+- `graphify update .` 성공 — 4770 nodes / 7652 edges / 398 communities
+
+### 운영 적용 필요
+- 운영 DB에 `089_purchase_order_with_lines_rpc.sql` 적용 후 PostgREST schema reload
+- Go 운영 바이너리 재빌드·codesign·launchd bootstrap
 
 ---
 
@@ -314,7 +354,7 @@
   - 기존 `ddp_us` 또는 허용 지역 밖 행 삭제
   - DB check constraint로 허용 지역과 `metric_key <> 'ddp_us'` 강제
 - 프론트엔드 가격예측 화면/목업 데이터에서 미국 DDP 샘플과 라벨 제거
-- D-145 결정 기록 및 module/cable/설계 정본 동기화
+- D-146 결정 기록 및 module/cable/설계 정본 동기화
 
 ### 검증
 - `cd backend && go test ./internal/model` 성공

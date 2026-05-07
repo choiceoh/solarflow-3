@@ -155,13 +155,14 @@ export default function ProcurementPage() {
   const [poStatusFilter, setPoStatusFilter] = useState("")
   const [poMfgFilter, setPoMfgFilter] = useState("")
   const [poTypeFilter, setPoTypeFilter] = useState("")
+  const [poRiskFilter, setPoRiskFilter] = useState("")
   const [poDateRange, setPoDateRange] = useState<DateRangeValue>(null)
   const [poPage, setPoPage] = useState(1)
   const [poPageSize, setPoPageSize] = useState(100)
   // server sort — backend default (contract_date desc) 와 동일하게 시작.
   const poSort = useServerSort('contract_date', 'desc', () => setPoPage(1))
   // 필터 변경 시 page 1 로 리셋.
-  useEffect(() => { setPoPage(1) }, [poStatusFilter, poMfgFilter, poTypeFilter, poDateRange])
+  useEffect(() => { setPoPage(1) }, [poStatusFilter, poMfgFilter, poTypeFilter, poRiskFilter, poDateRange])
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null)
   // R1-1: 사이드바 "발주/결제" 클릭 시 슬라이드 패널 닫기
   useEffect(() => {
@@ -189,6 +190,7 @@ export default function ProcurementPage() {
     contract_type: poTypeFilter || undefined,
     contract_date_from: poDateRange?.start,
     contract_date_to: poDateRange?.end,
+    quick_filter: poRiskFilter || undefined,
     sort: poSort.queryParams.sort,
     order: poSort.queryParams.order,
     page: poPage,
@@ -199,6 +201,7 @@ export default function ProcurementPage() {
     status: poStatusFilter || undefined,
     manufacturer_id: poMfgFilter || undefined,
     contract_type: poTypeFilter || undefined,
+    quick_filter: poRiskFilter || undefined,
   })
 
   const [lcAggVersion, setLcAggVersion] = useState(0)
@@ -784,6 +787,16 @@ export default function ProcurementPage() {
                 value: poTypeFilter,
                 onChange: setPoTypeFilter,
                 options: CONTRACT_TYPES_ACTIVE.map(({ value, label }) => ({ value, label })),
+              },
+              {
+                label: "빠른 조건",
+                value: poRiskFilter,
+                onChange: setPoRiskFilter,
+                options: [
+                  { value: "active_only", label: "완료 제외" },
+                  { value: "missing_number", label: "번호 미부여" },
+                  { value: "changed_contract", label: "변경계약" },
+                ],
               },
             ]}
           />

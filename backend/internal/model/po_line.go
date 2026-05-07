@@ -3,16 +3,16 @@ package model
 // POLineItem — 발주 라인아이템(품목 명세) 구조체
 // 비유: "발주 품목 명세서" — 계약서에 붙는 개별 품목(규격, 수량, 단가) 정보
 type POLineItem struct {
-	POLineID      string   `json:"po_line_id"`
-	POID          string   `json:"po_id"`
-	ProductID     string   `json:"product_id"`
-	Quantity      int      `json:"quantity"`
-	UnitPriceUSD  *float64 `json:"unit_price_usd"`
+	POLineID       string   `json:"po_line_id"`
+	POID           string   `json:"po_id"`
+	ProductID      string   `json:"product_id"`
+	Quantity       int      `json:"quantity"`
+	UnitPriceUSD   *float64 `json:"unit_price_usd"`
 	UnitPriceUSDWp *float64 `json:"unit_price_usd_wp,omitempty"` // D-087: PO 자동채움용 ($/Wp)
 	TotalAmountUSD *float64 `json:"total_amount_usd"`
-	ItemType      *string  `json:"item_type,omitempty"`    // D-087: 본품/스페어 (선택)
-	PaymentType   *string  `json:"payment_type,omitempty"` // D-087: 유상/무상 (선택)
-	Memo          *string  `json:"memo"`
+	ItemType       *string  `json:"item_type,omitempty"`    // D-087: 본품/스페어 (선택)
+	PaymentType    *string  `json:"payment_type,omitempty"` // D-087: 유상/무상 (선택)
+	Memo           *string  `json:"memo"`
 }
 
 // POLineWithProduct — 품번 정보를 포함한 라인아이템 조회 결과
@@ -24,24 +24,25 @@ type POLineWithProduct struct {
 
 // ProductSummaryForPOLine — 라인아이템 조회 시 함께 반환되는 품번 요약 정보
 type ProductSummaryForPOLine struct {
-	ProductCode   string `json:"product_code"`
-	ProductName   string `json:"product_name"`
-	SpecWP        int    `json:"spec_wp"`
-	ModuleWidthMM int    `json:"module_width_mm"`
-	ModuleHeightMM int   `json:"module_height_mm"`
+	ProductCode    string `json:"product_code"`
+	ProductName    string `json:"product_name"`
+	SpecWP         int    `json:"spec_wp"`
+	ModuleWidthMM  int    `json:"module_width_mm"`
+	ModuleHeightMM int    `json:"module_height_mm"`
 }
 
 // CreatePOLineRequest — 라인아이템 등록 시 클라이언트가 보내는 데이터
 // 비유: "품목 추가 신청서" — 어떤 PO에, 어떤 품번을, 몇 장 넣을지 기재
 type CreatePOLineRequest struct {
-	POID          string   `json:"po_id"`
-	ProductID     string   `json:"product_id"`
-	Quantity      int      `json:"quantity"`
-	UnitPriceUSD  *float64 `json:"unit_price_usd"`
+	POID           string   `json:"po_id"`
+	ProductID      string   `json:"product_id"`
+	Quantity       int      `json:"quantity"`
+	UnitPriceUSD   *float64 `json:"unit_price_usd"`
+	UnitPriceUSDWp *float64 `json:"unit_price_usd_wp,omitempty"`
 	TotalAmountUSD *float64 `json:"total_amount_usd"`
-	ItemType      *string  `json:"item_type,omitempty"`    // "main" | "spare"
-	PaymentType   *string  `json:"payment_type,omitempty"` // "paid" | "free"
-	Memo          *string  `json:"memo"`
+	ItemType       *string  `json:"item_type,omitempty"`    // "main" | "spare"
+	PaymentType    *string  `json:"payment_type,omitempty"` // "paid" | "free"
+	Memo           *string  `json:"memo"`
 }
 
 // Validate — 라인아이템 등록 요청의 입력값을 검증
@@ -65,6 +66,7 @@ type UpdatePOLineRequest struct {
 	ProductID      *string  `json:"product_id,omitempty"`
 	Quantity       *int     `json:"quantity,omitempty"`
 	UnitPriceUSD   *float64 `json:"unit_price_usd,omitempty"`
+	UnitPriceUSDWp *float64 `json:"unit_price_usd_wp,omitempty"`
 	TotalAmountUSD *float64 `json:"total_amount_usd,omitempty"`
 	ItemType       *string  `json:"item_type,omitempty"`
 	PaymentType    *string  `json:"payment_type,omitempty"`
