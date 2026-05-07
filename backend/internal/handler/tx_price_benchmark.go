@@ -281,14 +281,19 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 	// PR 41: 병렬 분산 + 취합 — source 별 shard 로 분리 호출.
 	// 이전 단일 LLM 호출은 모든 source 의 evidence 를 한번에 던져 컨텍스트 초과 빈발.
 	// 각 source 를 독립 LLM 호출로 (동시 4 cap), 결과 취합 후 finishRun 으로 마감.
+	// PR 47: shard 에 sourceDiagnostic 부착 + evidence hash 동일 시 LLM skip.
 	type sourceShard struct {
-		src      benchmarkSource
-		evidence []benchmarkEvidenceItem
-		warnings []string
-		raw      string
-		output   *priceBenchmarkAIOutput
-		err      error
+		src        benchmarkSource
+		evidence   []benchmarkEvidenceItem
+		warnings   []string
+		raw        string
+		output     *priceBenchmarkAIOutput
+		err        error
+		diagnostic sourceDiagnostic // PR 47
 	}
+
+	// PR 47: 직전 run 의 source 별 evidence hash 로드 (무변동 skip 용).
+	lastHashes := h.loadLastEvidenceHashes(ctx)
 
 	shards := make([]sourceShard, len(sources))
 	var wg sync.WaitGroup
@@ -312,40 +317,101 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 			ev, w := h.collectBenchmarkEvidence(srcCtx, []benchmarkSource{src})
 			shards[i].evidence = ev
 			shards[i].warnings = w
+
+			// PR 47: 진단 — homepage / search 단계 결과 기록.
+			diag := sourceDiagnostic{EvidenceCount: len(ev)}
+			homepageBytes := 0
+			searchResults := 0
+			homepageStatus := "no_homepage"
+			if src.Homepage != "" {
+				homepageStatus = "both_failed"
+				for _, e := range ev {
+					if strings.Contains(e.Title, "homepage") {
+						homepageBytes = len(e.Content)
+						if strings.Contains(e.Title, "scrape") {
+							homepageStatus = "scrape_ok"
+						} else {
+							homepageStatus = "raw_fallback_ok"
+						}
+						break
+					}
+				}
+			}
+			for _, e := range ev {
+				if !strings.Contains(e.Title, "homepage") {
+					searchResults++
+				}
+			}
+			diag.HomepageStatus = homepageStatus
+			diag.HomepageBytes = homepageBytes
+			diag.SearchResults = searchResults
+			diag.EvidenceHash = hashEvidence(ev)
+
 			if len(ev) == 0 {
 				shards[i].warnings = append(shards[i].warnings, fmt.Sprintf("%s: evidence 0 — AI 호출 skip", src.Key))
 				log.Printf("[ai-refresh async] src=%s evidence 0", src.Key)
+				diag.SkipReason = "evidence_empty"
+				diag.LLMParseStatus = "skipped_unchanged" // 의미상 skip
+				shards[i].diagnostic = diag
 				return
 			}
+
+			// PR 47: evidence hash 동일 → LLM skip.
+			if prev, ok := lastHashes[src.Key]; ok && prev == diag.EvidenceHash {
+				log.Printf("[ai-refresh async] src=%s evidence 무변동 (hash=%s) — LLM skip", src.Key, diag.EvidenceHash[:8])
+				shards[i].warnings = append(shards[i].warnings, fmt.Sprintf("%s: evidence 무변동 — 직전 가격 유지 (LLM skip)", src.Key))
+				diag.SkipReason = "evidence_unchanged"
+				diag.LLMParseStatus = "skipped_unchanged"
+				shards[i].diagnostic = diag
+				return
+			}
+
 			log.Printf("[ai-refresh async] src=%s evidence=%d, LLM 호출 시작", src.Key, len(ev))
 			raw, err := h.extractBenchmarksWithAI(srcCtx, provider, llmModel, maxTokens, ev)
 			shards[i].raw = raw
+			diag.LLMRawLength = len(raw)
 			if err != nil {
 				shards[i].err = err
+				diag.LLMParseStatus = "llm_error"
+				shards[i].diagnostic = diag
 				log.Printf("[ai-refresh async] src=%s LLM 실패: %v", src.Key, err)
 				return
 			}
 			out, perr := parsePriceBenchmarkAIOutput(raw)
 			if perr != nil {
 				shards[i].err = perr
+				if strings.Contains(perr.Error(), "JSON 객체") {
+					diag.LLMParseStatus = "json_not_found"
+				} else {
+					diag.LLMParseStatus = "unmarshal_err"
+				}
+				shards[i].diagnostic = diag
 				log.Printf("[ai-refresh async] src=%s parse 실패: %v", src.Key, perr)
 				return
 			}
 			shards[i].output = &out
+			diag.LLMParseStatus = "ok"
+			diag.PointsExtracted = len(out.Points)
+			shards[i].diagnostic = diag
 			log.Printf("[ai-refresh async] src=%s ok points=%d", src.Key, len(out.Points))
 		}(i, src)
 	}
 	wg.Wait()
 
 	// 취합
+	// PR 47: evidence_hashes / diagnostics 도 함께 누적.
 	var allEvidence []benchmarkEvidenceItem
 	var allWarnings []string
 	var allPoints []model.CreatePriceBenchmarkRequest
 	var combinedRaw strings.Builder
+	evidenceHashes := map[string]string{}
+	diagnostics := map[string]sourceDiagnostic{}
 	successCount := 0
 	for _, sh := range shards {
 		allEvidence = append(allEvidence, sh.evidence...)
 		allWarnings = append(allWarnings, sh.warnings...)
+		evidenceHashes[sh.src.Key] = sh.diagnostic.EvidenceHash
+		diagnostics[sh.src.Key] = sh.diagnostic
 		if sh.err != nil {
 			allWarnings = append(allWarnings, fmt.Sprintf("%s 추출 실패: %v", sh.src.Key, sh.err))
 			continue
@@ -366,12 +432,43 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 
 	rawStr := combinedRaw.String()
 	if successCount == 0 && len(allPoints) == 0 {
-		msg := "모든 source 추출 실패"
-		allWarnings = append(allWarnings, msg)
-		h.finishRun(runID, "failed", 0, 0, &msg, allWarnings, allEvidence, &rawStr)
-		log.Printf("[ai-refresh async] run=%s FAILED — 모든 source 실패", runID)
+		// PR 47: 모든 skip 인 경우 (무변동만) 는 '실패' 가 아닌 'completed' 처리.
+		anyUnchanged := false
+		for _, d := range diagnostics {
+			if d.SkipReason == "evidence_unchanged" {
+				anyUnchanged = true
+				break
+			}
+		}
+		if !anyUnchanged {
+			msg := "모든 source 추출 실패"
+			allWarnings = append(allWarnings, msg)
+			h.finishRunWithDiagnostics(runID, "failed", 0, 0, &msg, allWarnings, allEvidence, &rawStr, evidenceHashes, diagnostics, nil)
+			log.Printf("[ai-refresh async] run=%s FAILED — 모든 source 실패", runID)
+			return
+		}
+		log.Printf("[ai-refresh async] run=%s 모든 source evidence 무변동 — 갱신 0 (정상)", runID)
+		allWarnings = append(allWarnings, "모든 source 무변동: 직전 가격 유지")
+		h.finishRunWithDiagnostics(runID, "completed", 0, 0, nil, allWarnings, allEvidence, &rawStr, evidenceHashes, diagnostics, nil)
 		return
 	}
+
+	// PR 47: spike alert (DB upsert 전 비교).
+	spikeWarnings := h.detectPriceSpikes(allPoints)
+	allWarnings = append(allWarnings, spikeWarnings...)
+
+	// PR 47: AI 가격정합성 검토 (역사 가격과 비교, 의심 point 식별).
+	// 실패해도 run 자체는 계속 — sanity_review 만 nil 로.
+	var sanityReview *sanityReviewResult
+	reviewCtx, reviewCancel := context.WithTimeout(ctx, 90*time.Second)
+	if review, err := h.reviewPriceSanity(reviewCtx, provider, llmModel, maxTokens, allPoints); err == nil && review != nil {
+		sanityReview = review
+		allWarnings = append(allWarnings, formatSanityWarnings(review)...)
+		log.Printf("[ai-refresh async] run=%s 정합성 검토: checked=%d suspect=%d", runID, review.Checked, len(review.Suspect))
+	} else if err != nil {
+		log.Printf("[ai-refresh async] run=%s 정합성 검토 실패 (무시): %v", runID, err)
+	}
+	reviewCancel()
 
 	inserted, skipped, _ := h.insertAIBenchmarkPoints(runID, userID, allPoints)
 	status := "completed"
@@ -381,7 +478,7 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 	} else if skipped > 0 || len(allWarnings) > 0 {
 		status = "partial"
 	}
-	h.finishRun(runID, status, inserted, skipped, nil, allWarnings, allEvidence, &rawStr)
+	h.finishRunWithDiagnostics(runID, status, inserted, skipped, nil, allWarnings, allEvidence, &rawStr, evidenceHashes, diagnostics, sanityReview)
 	log.Printf("[ai-refresh async] run=%s %s — inserted=%d skipped=%d warnings=%d", runID, status, inserted, skipped, len(allWarnings))
 }
 
@@ -715,6 +812,22 @@ func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, po
 }
 
 func (h *PriceBenchmarkHandler) finishRun(runID, status string, inserted, skipped int, errMsg *string, warnings []string, evidence []benchmarkEvidenceItem, raw *string) {
+	h.finishRunWithDiagnostics(runID, status, inserted, skipped, errMsg, warnings, evidence, raw, nil, nil, nil)
+}
+
+// finishRunWithDiagnostics — PR 47. evidence_hashes / diagnostics / sanity_review 컬럼 함께 기록.
+// 인자 nil 이면 해당 컬럼 미갱신.
+func (h *PriceBenchmarkHandler) finishRunWithDiagnostics(
+	runID, status string,
+	inserted, skipped int,
+	errMsg *string,
+	warnings []string,
+	evidence []benchmarkEvidenceItem,
+	raw *string,
+	evidenceHashes map[string]string,
+	diagnostics map[string]sourceDiagnostic,
+	sanityReview *sanityReviewResult,
+) {
 	finished := time.Now().UTC().Format(time.RFC3339)
 	payload := map[string]any{
 		"status":         status,
@@ -729,6 +842,15 @@ func (h *PriceBenchmarkHandler) finishRun(runID, status string, inserted, skippe
 	}
 	if raw != nil {
 		payload["raw_response"] = truncate(*raw, 12000)
+	}
+	if evidenceHashes != nil {
+		payload["evidence_hashes"] = evidenceHashes
+	}
+	if diagnostics != nil {
+		payload["diagnostics"] = diagnostics
+	}
+	if sanityReview != nil {
+		payload["sanity_review"] = sanityReview
 	}
 	if _, _, err := h.DB.From("price_benchmark_runs").Update(payload, "", "").Eq("run_id", runID).Execute(); err != nil {
 		log.Printf("[가격 벤치마크 수집 로그 갱신 실패] run_id=%s err=%v", runID, err)
