@@ -113,6 +113,7 @@
 | `baro.price_book` | BARO 거래처별 단가표 | B | tenant_owned | Phase 1 |
 | `baro.partner_cockpit` | BARO 거래처 360 cockpit | B | tenant_owned | D-125 |
 | `baro.rfm` | BARO 거래처 RFM 보드 | B | tenant_owned | D-128 |
+| `baro.sales_summary` | BARO 자체 매출 요약 | B | tenant_company | D-129 |
 
 ### calc.* (Rust 계산엔진 프록시)
 

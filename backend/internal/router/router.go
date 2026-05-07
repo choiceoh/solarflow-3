@@ -67,6 +67,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		handler.NewBaroPartnerCockpitHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBaroPurchaseHistoryHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBaroRFMHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewBaroSalesSummaryHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBLHandler(a.DB).RegisterRoutes(r, a.Gates, handler.NewBLLineHandler(a.DB))
 		handler.NewCompanyHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewConstructionSiteHandler(a.DB).RegisterRoutes(r, a.Gates)
