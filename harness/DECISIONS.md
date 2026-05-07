@@ -1035,53 +1035,49 @@
   - 수동 검증: BARO 토큰으로 `/baro/shipment-notice` 진입 시 폼 + 3 메시지 카드 표시. 빈 필드는 메시지에서 자동 생략. 복사 버튼 클릭 시 "복사됨" 피드백.
 - **날짜**: 2026-05-07
 
-## D-132: RFM 동적 분위수 분류 + 본인 담당 필터 (PR4.5)
-- **결정**: D-128 RFM 보드의 한계 두 가지를 query param 으로 보강:
-  - **분류 모드 토글** `?classify=quartile`: 활성 거래처 분포의 R/F/M Q1·Q3 분위수 자동 계산 → 임계값으로 사용. 1000억 매출 컨텍스트 하드코딩이 아닌 분포 기반이라 매출 규모 달라져도 자동 적응. default 는 D-128 의 hardcoded threshold (호환성 유지).
-  - **본인 담당 필터** `?mine=true` 또는 `?owner_user_id=<uuid>`: `partners.owner_user_id` 기반 필터. 영업 6명이 본인 담당 거래처만 정렬할 때 사용.
-- **분류 정의 (quartile mode)**:
-  - `champion`: R≤Q1 (최근) + F≥Q3 (자주) + M≥Q3 (큰매출) — 분포 상위.
-  - `loyal`: (R≤Q1 OR F≥Q3) + M≥Q1 — 한 측면이라도 상위 + 매출 이력 있음.
-  - `new`: R≤Q1 + F≤Q1 — 거래 시작 단계.
-  - `at_risk`: R≥Q3 (오래됨) + M≥Q1 (매출 이력) — 재활성화 후보.
-  - `lost` / `inactive`: 그 외 / 12개월 매출 0건.
-- **API 동작 변경 0**: 응답 shape 동일 (segment 값만 분류 결과 반영). 기존 frontend 호출 무영향.
-- **frontend 변경**: `/baro/rfm` 페이지 헤더에 "분류 [고정/분위수]" 토글 + "내 거래처만" 토글. URL query 로 backend 에 전달.
-- **PR4.6 분리** (별도 D-NNN, DB 마이그레이션 필요):
-  - `partners.segment_tag` 컬럼 추가 — `reseller` / `installer` / `major` 수동 라벨. partners 마스터 편집 페이지에서 admin 이 설정.
-  - RFM 응답에 `segment_tag` 포함 → 보드에서 RFM 자동 세그먼트 + 수동 segment_tag 두 차원 cross-cut 가능.
-- **이유**: D-128 의 hardcoded 임계값(`1억`, `5천만`)이 BARO 1000억 매출 한정이라 매출 분포가 달라지면 분류가 무너짐. 분위수 기반은 거래처 수가 늘거나 매출 분포가 변해도 항상 합리적. 본인 담당 필터는 영업 워크플로우의 핵심 — 6명 모두에게 같은 200곳 보드는 노이즈.
-- **운영 기준**:
-  - 신규 라우트 0 (기존 `/api/v1/baro/rfm/` 에 query param 추가만) → D-120 catalog/matrix 갱신 불필요.
-  - quartile 분류 정의는 `classifyRFMQuartile` 함수에 명시. 임계값 정의 변경 시 본 결정문도 동시 갱신 (백워드 비호환 가능).
-  - 본인 담당 필터의 owner 매핑이 미설정인 거래처는 `?mine=true` 시 자동 제외 — partners.owner_user_id 마이그레이션 보강 후 정밀화.
-- **검증**:
-  - `go test ./internal/feature ./internal/router ./internal/handler` — 회귀 가드 (응답 shape 동일하므로 기존 테스트 그대로 통과해야 함).
-  - 프론트엔드 `npm run build` 통과.
-  - 수동 검증: 분류 토글 전환 시 같은 거래처가 다른 segment 로 분류될 수 있음 (분포 기반). "내 거래처만" 토글 시 행 수 감소.
+## D-134: BARO Phase 2.5 인프라 묶음 — 마이그 084 + 4 후속 PR DB 골격
+- **결정**: PR2.5/PR5.5/PR6.5/PR7.5 가 의존하는 모든 DB 변경을 단일 마이그 `backend/migrations/084_baro_phase2_5_scaffold.sql` 에 모아 한 번에 적용.
+- **D-134 자체 (PR6.5 = product_kind)**: `products` 테이블에 SKU 분류 + 인버터 전용 nullable 컬럼.
+  - `product_kind text NOT NULL DEFAULT 'module'` (CHECK: `module|inverter|package`)
+  - `rated_power_kw`, `max_input_kw`, `mppt_channels`, `voltage_min_v`, `voltage_max_v`, `phase` 모두 nullable
+  - `product_package_items` 신규 테이블 — 패키지 SKU 구성품 매핑
+  - 기존 `products` 행은 모두 `product_kind='module'` 로 backfill (DEFAULT)
+- **모델 / 핸들러 변경**: `model.Product` 에 7 필드 추가 (모두 pointer + omitempty) — 마이그 미적용 환경에서도 NULL 무시. 기존 ProductHandler CRUD 가 신규 필드 자동 acceptance. 인버터 마스터 CRUD UI / 패키지 SKU 편집 UI 는 PR6.6 분리.
+- **D-130 정적 카탈로그 마이그레이션**: 마이그 적용 후 `/baro/inverter-guide` 의 INVERTER_CATALOG → DB `WHERE product_kind='inverter'` 자연 대체 (PR6.6).
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/084_baro_phase2_5_scaffold.sql` + PostgREST schema reload. 적용 전까지 model 의 새 필드는 NULL.
 - **날짜**: 2026-05-07
 
-## D-133: BARO 자동 콜백 추천 엔진 — owner 별 활성 거래처 + 입고예정 컨텍스트 (PR3.5)
-- **결정**: 영업이 출근 후 5분 안에 "오늘 누구에게 카톡 보낼지" 정렬할 수 있도록 신규 endpoint `GET /api/v1/baro/callback-recommend` (feature_id `baro.callback_recommend`, BARO 전용) 도입.
-  - **추천 정책 (PR3.5 단순 버전)**:
-    - 직전 6개월 매출 활성 + 마지막 매출 30일+ 경과 거래처 = 다음 발주 시점 가까움
-    - `days >= 90` → 재활성화 후보, `60 <= days < 90` → 다음 발주 주기 도래, `30 <= days < 60` → 정기 콜백 후보
-    - owner 별 그룹 + 미거래일 큰 순 정렬 (오래된 거 먼저)
-  - **입고예정 SKU 컨텍스트**: 현재 진행 중(scheduled/shipping/arrived)인 BL 라인 20건 + ETA + 수량 같이 노출 — "이 입고를 알려야 할 거래처" 트리거.
-  - **owner 필터**: `?mine=true` (본인 담당) 또는 `?owner_user_id=<uuid>` (특정 영업).
-  - **frontend**: `/baro/callback-recommend` 페이지. owner 별 패널 + 거래처 행 클릭 → cockpit, "알림" 버튼 → /baro/shipment-notice 이동.
-- **PR3.6 분리** (별도 D-NNN):
-  - **SKU-level 정밀 매칭**: 이 거래처가 직전에 산 모듈 ↔ 이번 입고 SKU 동일 매칭. sales → outbound → bl_line → product 다단계 join 필요해 별도 RPC 함수 신설 후 통합.
-  - **자동 일괄 발송 큐**: PR7.5 카톡 API 통합 후, 추천 거래처 다중 선택 → 1-click 카톡 발송.
-  - **추천 정책 ML**: 거래처별 평균 발주 주기 학습 → 정확한 "다음 발주 예상일" 추정. 단순 30/60/90일 임계값 대체.
-- **이유**: D-127(영업 일일 홈) 이 stub 으로 둔 "신규 입고 안내 추천" 패널을 실데이터로 채우는 구체화. 6명 영업이 200거래처를 분담하는 환경에서 "어느 거래처가 콜백 시점 도래" 가 사람 메모에만 있어 누락 빈번. 매출 1000억 규모에서 콜백 1건당 평균 발주 가능성 30% × 평균 거래액 3천만 = 1000만 기대치, 일 10건 추천 시 일 1억.
-- **운영 기준**:
-  - sanitized 패스스루 — partners + sales 직접 컬럼 + bl_line 입고 sanitized. 면장/원가/L/C 차단 그대로.
-  - 추천 정책 임계값(30/60/90 일)은 핸들러 코드에 명시. 변경 시 본 결정문 동시 갱신.
-  - 응답이 partners 200곳 + sales 6mo + incoming 20건 — 응답 크기 측정 후 캐시 검토 (현재 1회 응대 분이라 작음).
-- **검증**:
-  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/baro/callback-recommend/` catalog↔chi 일치, matrix_consistency_test 가 `baro.callback_recommend` markdown 일치 검증.
-  - 라우터 가드: module/cable 토큰으로 호출 시 403, baro 토큰 통과.
-  - 프론트엔드 `npm run build` 통과.
+## D-135: BARO 통합 견적 빌더 Phase 2 — DB 저장 + 발송 추적 + 마진 (PR2.5 인프라)
+- **결정**: D-126 LocalStorage draft 를 DB persistent 견적으로 승격 + 발송 채널 추상화 + 회신 추적. **본 PR 은 스키마만 — 핸들러·UI·외부 API 통합은 PR2.5b/c/d 분리**.
+- **DB 스키마 (마이그 084)**:
+  - `baro_quotes` (quote_id, partner_id, created_by, status, valid_until, sent_at, sent_channel, sent_to, replied_at, reply_note, subtotal/vat/total_krw, estimated_cost/margin_pct).
+  - `baro_quote_lines` (line_id, quote_id, line_no, product_id + snapshot, quantity, unit_price_krw, line_total_krw GENERATED).
+  - status 머신: `draft → sent → replied → won/lost/expired`.
+  - snapshot 컬럼 (product_code/name/spec_wp): 견적 시점 보존 — product 마스터 변경 시 견적 원본 불변.
+- **PR2.5b 분리**: backend `BaroQuotesHandler` (CRUD), `/baro/quotes` + frontend QuoteBuilder save/load 통합. feature_id `baro.quote`.
+- **PR2.5c 분리**: 외부 발송 채널 (KakaoTalk Notification Talk + Aligo SMS API 키 발급 후) — `BaroQuoteSendHandler`. Phase 1 은 `manual_copy` channel 만.
+- **회신 추적**: 거래처 카톡 답변 시 영업이 "응답 수신" 클릭 → replied_at + reply_note. 자동 webhook 인식은 PR2.6.
+- **마진**: PR5.5 매입원가 통합 후 견적 저장 시 자동 계산. Phase 1 NULL.
+- **날짜**: 2026-05-07
+
+## D-136: BARO 한도 hold flag + 매입원가 마진 (PR5.5 인프라)
+- **결정**: D-129 sales-summary 마진 표시 + 신규 출고/수주 차단 hold flag 의 DB 골격. **본 PR 은 스키마만 — 차단 enforcement·마진 계산은 PR5.5b/c 분리**.
+- **DB 스키마 (마이그 084)**:
+  - `baro_credit_holds` (hold_id, partner_id, triggered_at, trigger_reason, outstanding/limit/oldest_unpaid, released_at/by/note, blocked_outbound/order_id).
+  - released_at IS NULL → 활성 hold. 영업이 결재 받고 해제 시 채움.
+- **PR5.5b 분리 (outbound/order 핸들러)**: 출고/수주 생성 시 `baro_credit_board` RPC 결과 조회 → outstanding + amount > limit 또는 aging >= 60d → `baro_credit_holds` insert + 응답 hold flag. frontend OrderCreate / OutboundCreate 에서 hold flag 받으면 결재 강제.
+- **PR5.5c 분리 (마진 통합)**: `sales_summary` 응답에 `estimated_margin_pct` — 12개월 매출 vs `baro_purchase_history` 매입원가 합 단순 비율. SKU-level 정밀 마진은 PR5.5d (sales→outbound→bl_line→product join 필요).
+- **신규 endpoint** (PR5.5b): `GET /api/v1/baro/credit-check?partner_id=X&amount=Y` (status: `ok|warn_aging|over_limit`). feature_id `baro.credit_check`.
+- **날짜**: 2026-05-07
+
+## D-137: BARO 출하 알림 자동화 + 드라이버 PWA (PR7.5 인프라)
+- **결정**: D-131 카톡 메시지 빌더의 "수동 복사" 를 외부 API 자동 발송 + 드라이버 PWA 사진 업로드로 확장. **본 PR 은 추적 테이블·드라이버 토큰 스키마만 — 외부 API·PWA 본체는 PR7.5b/c/d 분리**.
+- **DB 스키마 (마이그 084)**:
+  - `baro_shipment_notices` (notice_id, partner_id, outbound_id, dispatch_route_id, stage, channel, recipient_phone/name, message_body, sent_at/by, delivery_status, external_message_id, driver_photo_url, driver_signature_url, delivery_note, delivered_at).
+  - `baro_driver_tokens` (token, notice_id, expires_at 24h, used_at, driver_phone) — PWA simplified auth.
+- **PR7.5b (KakaoTalk Notification Talk API)**: 사업자 키 발급 절차 (사용자 측) — KakaoTalk Friend API 또는 Notification Talk. 템플릿 등록 + 친구 동의 검증. `BaroShipmentSendHandler` — D-131 메시지 빌더 결과를 카톡 API 호출 + baro_shipment_notices row 기록.
+- **PR7.5c (SMS Aligo/Solapi fallback)**: 카톡 미수신 거래처용 fallback. 키 발급 별도. delivery_status='failed' 카톡 자동 재시도.
+- **PR7.5d (드라이버 PWA)**: `/d/<token>` 라우트 — 인증 없이 token 기반 access (24h 만료). manifest.json + Service Worker 최소 — "홈 추가" 가능하면 OK. 페이지: 상차 사진 / 도착 사진 / 미배달 사유. 카메라 input mobile-first. 업로드는 기존 `/api/v1/attachments/` 활용 + driver_photo_url 에 attachment_id 저장.
+- **이유**: D-131 영업측 5분→30초 단축, PR7.5 는 거래처측 알림 신뢰도 + 차주측 도착 추적. 시공업체에 "도착 사진 + 차주 사인" 자동 전달 시 클레임률 감소.
 - **날짜**: 2026-05-07
 
