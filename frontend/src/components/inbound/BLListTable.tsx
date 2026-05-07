@@ -19,9 +19,12 @@ interface BLAgg {
 interface Props {
   items: BLShipment[];
   onSelect: (bl: BLShipment) => void;
+  sortField?: string | null;
+  sortDirection?: 'asc' | 'desc' | null;
+  onSort?: (field: string) => void;
 }
 
-export default function BLListTable({ items, onSelect }: Props) {
+export default function BLListTable({ items, onSelect, sortField, sortDirection, onSort }: Props) {
   const companies = useAppStore((s) => s.companies);
   const companyMap = Object.fromEntries(companies.map((c) => [c.company_id, c.company_name]));
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
@@ -67,6 +70,9 @@ export default function BLListTable({ items, onSelect }: Props) {
     return () => { cancelled = true; };
   }, [items]);
 
+  const controlled = onSort != null
+    ? { sortField: sortField ?? null, sortDirection: sortDirection ?? null, onSort }
+    : undefined
   const { sorted, headerProps } = useSort<BLShipment>(items, (b, f) => {
     switch (f) {
       case 'bl_number': return b.bl_number ?? '';
@@ -75,7 +81,7 @@ export default function BLListTable({ items, onSelect }: Props) {
       case 'etd': return b.etd ?? '';
       default: return null;
     }
-  });
+  }, controlled);
 
   if (items.length === 0) return <EmptyState message="등록된 입고 건이 없습니다" />;
 
