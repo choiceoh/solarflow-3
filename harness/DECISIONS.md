@@ -1035,3 +1035,29 @@
   - 수동 검증: BARO 토큰으로 `/baro/shipment-notice` 진입 시 폼 + 3 메시지 카드 표시. 빈 필드는 메시지에서 자동 생략. 복사 버튼 클릭 시 "복사됨" 피드백.
 - **날짜**: 2026-05-07
 
+## D-132: RFM 동적 분위수 분류 + 본인 담당 필터 (PR4.5)
+- **결정**: D-128 RFM 보드의 한계 두 가지를 query param 으로 보강:
+  - **분류 모드 토글** `?classify=quartile`: 활성 거래처 분포의 R/F/M Q1·Q3 분위수 자동 계산 → 임계값으로 사용. 1000억 매출 컨텍스트 하드코딩이 아닌 분포 기반이라 매출 규모 달라져도 자동 적응. default 는 D-128 의 hardcoded threshold (호환성 유지).
+  - **본인 담당 필터** `?mine=true` 또는 `?owner_user_id=<uuid>`: `partners.owner_user_id` 기반 필터. 영업 6명이 본인 담당 거래처만 정렬할 때 사용.
+- **분류 정의 (quartile mode)**:
+  - `champion`: R≤Q1 (최근) + F≥Q3 (자주) + M≥Q3 (큰매출) — 분포 상위.
+  - `loyal`: (R≤Q1 OR F≥Q3) + M≥Q1 — 한 측면이라도 상위 + 매출 이력 있음.
+  - `new`: R≤Q1 + F≤Q1 — 거래 시작 단계.
+  - `at_risk`: R≥Q3 (오래됨) + M≥Q1 (매출 이력) — 재활성화 후보.
+  - `lost` / `inactive`: 그 외 / 12개월 매출 0건.
+- **API 동작 변경 0**: 응답 shape 동일 (segment 값만 분류 결과 반영). 기존 frontend 호출 무영향.
+- **frontend 변경**: `/baro/rfm` 페이지 헤더에 "분류 [고정/분위수]" 토글 + "내 거래처만" 토글. URL query 로 backend 에 전달.
+- **PR4.6 분리** (별도 D-NNN, DB 마이그레이션 필요):
+  - `partners.segment_tag` 컬럼 추가 — `reseller` / `installer` / `major` 수동 라벨. partners 마스터 편집 페이지에서 admin 이 설정.
+  - RFM 응답에 `segment_tag` 포함 → 보드에서 RFM 자동 세그먼트 + 수동 segment_tag 두 차원 cross-cut 가능.
+- **이유**: D-128 의 hardcoded 임계값(`1억`, `5천만`)이 BARO 1000억 매출 한정이라 매출 분포가 달라지면 분류가 무너짐. 분위수 기반은 거래처 수가 늘거나 매출 분포가 변해도 항상 합리적. 본인 담당 필터는 영업 워크플로우의 핵심 — 6명 모두에게 같은 200곳 보드는 노이즈.
+- **운영 기준**:
+  - 신규 라우트 0 (기존 `/api/v1/baro/rfm/` 에 query param 추가만) → D-120 catalog/matrix 갱신 불필요.
+  - quartile 분류 정의는 `classifyRFMQuartile` 함수에 명시. 임계값 정의 변경 시 본 결정문도 동시 갱신 (백워드 비호환 가능).
+  - 본인 담당 필터의 owner 매핑이 미설정인 거래처는 `?mine=true` 시 자동 제외 — partners.owner_user_id 마이그레이션 보강 후 정밀화.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — 회귀 가드 (응답 shape 동일하므로 기존 테스트 그대로 통과해야 함).
+  - 프론트엔드 `npm run build` 통과.
+  - 수동 검증: 분류 토글 전환 시 같은 거래처가 다른 segment 로 분류될 수 있음 (분포 기반). "내 거래처만" 토글 시 행 수 감소.
+- **날짜**: 2026-05-07
+
