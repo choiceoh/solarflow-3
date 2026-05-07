@@ -10,7 +10,23 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Bot, CalendarClock, CheckCircle2, RefreshCw, Search, Trash2, TrendingUp } from 'lucide-react';
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  AlertTriangle,
+  Bot,
+  CalendarClock,
+  CheckCircle2,
+  Download,
+  DollarSign,
+  Layers,
+  Minus,
+  RefreshCw,
+  Search,
+  Target,
+  TrendingUp,
+  Trash2,
+} from 'lucide-react';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -36,12 +52,11 @@ import type {
 
 const SOURCE_OPTIONS = [
   { key: 'opis', label: 'OPIS', sub: 'CMM · Forward · DDP' },
-  { key: 'infolink', label: 'InfoLink', sub: '모듈·셀·웨이퍼' },
+  { key: 'infolink', label: 'InfoLink', sub: '모듈·폴리실리콘' },
   { key: 'trendforce', label: 'TrendForce', sub: '주간가·입찰' },
   { key: 'pvinsights', label: 'PVinsights', sub: '일일 보조' },
   { key: 'china_tender', label: '중국 입찰', sub: '국영 GW급' },
   { key: 'cpia_floor', label: 'CPIA', sub: '원가 floor' },
-  { key: 'tier1_asp', label: 'Tier-1 ASP', sub: '분기 실적' },
 ];
 
 const METRIC_LABELS: Record<string, string> = {
@@ -61,7 +76,6 @@ const METRIC_LABELS: Record<string, string> = {
   china_export: '중국 수출가',
   china_state_tender: '국영 입찰가',
   cpia_cost_floor: 'CPIA Floor',
-  manufacturer_asp: 'Tier-1 ASP',
 };
 
 const UNIT_OPTIONS = [
@@ -76,6 +90,15 @@ const HORIZON_OPTIONS = [
   { key: '18m', label: '18개월', months: 18 },
   { key: '36m', label: '36개월', months: 36 },
 ] as const;
+
+const CHART_PRESETS = [
+  { key: 'core', label: '핵심 지표', icon: Target },
+  { key: 'our', label: '우리 거래가', icon: DollarSign },
+  { key: 'basis', label: 'FOB · DDP · 입찰', icon: Layers },
+] as const;
+
+const ALL_FILTER = 'all';
+const ROWS_PER_PAGE = 18;
 
 const LINE_COLORS = [
   '#0f766e',
@@ -92,14 +115,39 @@ const LINE_COLORS = [
 
 type UnitKey = (typeof UNIT_OPTIONS)[number]['key'];
 type HorizonKey = (typeof HORIZON_OPTIONS)[number]['key'];
+type ChartPresetKey = (typeof CHART_PRESETS)[number]['key'];
+type ChartPoint = Record<string, string | number>;
 
 interface SeriesDef {
   key: string;
   label: string;
   sourceKey: string;
   metricKey: string;
+  marketRegion: string;
+  basis: string;
   latestDate: string;
   latestValue: number;
+}
+
+interface SeriesInsight {
+  latestDate: string;
+  latestValue: number;
+  previousDate: string | null;
+  previousValue: number | null;
+  delta: number | null;
+  deltaPct: number | null;
+}
+
+interface LatestOwnPrice {
+  date: string;
+  value: number;
+  count: number;
+}
+
+interface RunSourceHealth {
+  key: string;
+  label: string;
+  status: 'ok' | 'warning' | 'failed' | 'running';
 }
 
 // PR 42: 우리 구매가 + 평균 판매가 시리즈
@@ -132,11 +180,6 @@ function formatUnitPrice(value: number | null | undefined, unit: UnitKey): strin
   return `${symbol}${value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 4 })}/W`;
 }
 
-function formatConfidence(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return '—';
-  return `${Math.round(Number(value) * 100)}%`;
-}
-
 function monthStart(months: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() - months);
@@ -167,6 +210,182 @@ function statusVariant(status: PriceBenchmarkRun['status']): 'default' | 'second
   return 'outline';
 }
 
+function seriesMatchesPreset(item: SeriesDef, preset: ChartPresetKey) {
+  if (preset === 'core') {
+    return (
+      item.key === 'our_purchase' ||
+      [
+        'cmm_fob_china_topcon_600w',
+        'china_state_tender',
+        'cpia_cost_floor',
+      ].includes(item.metricKey)
+    );
+  }
+  if (preset === 'our') {
+    return item.sourceKey === 'our' || ['cmm_fob_china_topcon_600w', 'china_state_tender'].includes(item.metricKey);
+  }
+  return item.sourceKey !== 'our' && ['fob', 'ddp', 'tender'].includes(item.basis);
+}
+
+function valueFromPoint(point: ChartPoint, key: string): number | null {
+  const value = point[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function buildSeriesInsight(points: ChartPoint[], key: string): SeriesInsight | null {
+  const values = points
+    .map((point) => {
+      const value = valueFromPoint(point, key);
+      return value == null ? null : { date: String(point.date), value };
+    })
+    .filter((point): point is { date: string; value: number } => point != null);
+  if (values.length === 0) return null;
+  const latest = values[values.length - 1];
+  const previous = values.length >= 2 ? values[values.length - 2] : null;
+  const delta = previous ? latest.value - previous.value : null;
+  const deltaPct = previous && previous.value !== 0 ? (delta! / previous.value) * 100 : null;
+  return {
+    latestDate: latest.date,
+    latestValue: latest.value,
+    previousDate: previous?.date ?? null,
+    previousValue: previous?.value ?? null,
+    delta,
+    deltaPct,
+  };
+}
+
+function formatDeltaPct(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return '—';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(1)}%`;
+}
+
+function directionTone(value: number | null | undefined): 'up' | 'down' | 'flat' {
+  if (value == null || !Number.isFinite(value) || Math.abs(value) < 1.5) return 'flat';
+  return value > 0 ? 'up' : 'down';
+}
+
+function latestOwnPurchase(data: OurPricesResponse | null, unit: UnitKey): LatestOwnPrice | null {
+  if (!data || unit === 'cny') return null;
+  let latest: LatestOwnPrice | null = null;
+  for (const item of data.purchases) {
+    const value = unit === 'usd' ? item.avg_usd_wp : item.avg_krw_wp;
+    if (value <= 0) continue;
+    const date = `${item.month}-15`;
+    if (!latest || date > latest.date) {
+      latest = { date, value, count: item.count };
+    }
+  }
+  return latest;
+}
+
+function latestOwnSale(data: OurPricesResponse | null, unit: UnitKey): LatestOwnPrice | null {
+  if (!data || unit !== 'krw') return null;
+  let latest: LatestOwnPrice | null = null;
+  for (const item of data.sales) {
+    if (item.avg_krw_wp <= 0) continue;
+    const date = `${item.month}-15`;
+    if (!latest || date > latest.date) {
+      latest = { date, value: item.avg_krw_wp, count: item.count };
+    }
+  }
+  return latest;
+}
+
+function latestBenchmarkByMetric(rows: PriceBenchmark[], metricKey: string, unit: UnitKey): PriceBenchmark | null {
+  let latest: PriceBenchmark | null = null;
+  for (const row of rows) {
+    if (row.metric_key !== metricKey || priceValue(row, unit) == null) continue;
+    if (!latest || row.value_date > latest.value_date) latest = row;
+  }
+  return latest;
+}
+
+function latestTwoBenchmarkValues(rows: PriceBenchmark[], metricKey: string, unit: UnitKey): { latest: number; previous: number | null } | null {
+  const values = rows
+    .filter((row) => row.metric_key === metricKey)
+    .map((row) => {
+      const value = priceValue(row, unit);
+      return value == null ? null : { date: row.value_date, value };
+    })
+    .filter((point): point is { date: string; value: number } => point != null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (values.length === 0) return null;
+  const latest = values[values.length - 1];
+  const previous = values.length >= 2 ? values[values.length - 2] : null;
+  return { latest: latest.value, previous: previous?.value ?? null };
+}
+
+function uniqueOptions(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b));
+}
+
+function parseRunStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+function parseRunWarnings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === 'string' ? item : JSON.stringify(item)))
+    .filter((item) => item && item !== 'null');
+}
+
+function parseEvidenceSourceKeys(value: unknown): Set<string> {
+  const keys = new Set<string>();
+  if (!Array.isArray(value)) return keys;
+  for (const item of value) {
+    if (item && typeof item === 'object' && 'source_key' in item) {
+      const key = String((item as { source_key?: unknown }).source_key ?? '').trim();
+      if (key) keys.add(key);
+    }
+  }
+  return keys;
+}
+
+function runSourceHealth(run: PriceBenchmarkRun): RunSourceHealth[] {
+  const sourceKeys = parseRunStringArray(run.source_keys);
+  const warnings = parseRunWarnings(run.warnings);
+  const evidenceKeys = parseEvidenceSourceKeys(run.evidence);
+  const keys = sourceKeys.length > 0 ? sourceKeys : SOURCE_OPTIONS.map((source) => source.key);
+  return keys.map((key) => {
+    const source = SOURCE_OPTIONS.find((item) => item.key === key);
+    const label = source?.label ?? key;
+    const sourceWarnings = warnings.filter((warning) => (
+      warning.toLowerCase().includes(key.toLowerCase()) || warning.includes(label)
+    ));
+    if (run.status === 'running') return { key, label, status: 'running' };
+    if (run.status === 'failed') return { key, label, status: 'failed' };
+    if (sourceWarnings.some((warning) => /실패|fail|error|evidence 0|skip/i.test(warning))) {
+      return { key, label, status: 'warning' };
+    }
+    if (run.status === 'partial' && !evidenceKeys.has(key)) {
+      return { key, label, status: 'warning' };
+    }
+    return { key, label, status: 'ok' };
+  });
+}
+
+function runHealthVariant(status: RunSourceHealth['status']): 'default' | 'secondary' | 'outline' | 'destructive' {
+  if (status === 'failed') return 'destructive';
+  if (status === 'warning') return 'secondary';
+  if (status === 'running') return 'outline';
+  return 'default';
+}
+
+function runHealthLabel(status: RunSourceHealth['status']) {
+  if (status === 'failed') return '실패';
+  if (status === 'warning') return '확인';
+  if (status === 'running') return '진행';
+  return '정상';
+}
+
+function csvCell(value: unknown): string {
+  const text = value == null ? '' : String(value);
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
 export default function PriceForecastPage() {
   const [rows, setRows] = useState<PriceBenchmark[]>([]);
   const [runs, setRuns] = useState<PriceBenchmarkRun[]>([]);
@@ -177,6 +396,13 @@ export default function PriceForecastPage() {
   const [query, setQuery] = useState('');
   const [unit, setUnit] = useState<UnitKey>('usd');
   const [horizon, setHorizon] = useState<HorizonKey>('18m');
+  const [chartPreset, setChartPreset] = useState<ChartPresetKey>('core');
+  const [selectedSeriesKey, setSelectedSeriesKey] = useState<string | null>(null);
+  const [basisFilter, setBasisFilter] = useState(ALL_FILTER);
+  const [regionFilter, setRegionFilter] = useState(ALL_FILTER);
+  const [technologyFilter, setTechnologyFilter] = useState(ALL_FILTER);
+  const [quarterFilter, setQuarterFilter] = useState(ALL_FILTER);
+  const [tablePage, setTablePage] = useState(0);
   const [selectedBenchmarkIds, setSelectedBenchmarkIds] = useState<Set<string>>(() => new Set());
   const [selectedSources, setSelectedSources] = useState<Set<string>>(
     () => new Set(SOURCE_OPTIONS.map((source) => source.key)),
@@ -209,17 +435,15 @@ export default function PriceForecastPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!runs.some((run) => run.status === 'running')) return;
-    const timer = window.setTimeout(() => void load(), 5000);
-    return () => window.clearTimeout(timer);
-  }, [runs, load]);
-
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
       if (!selectedSources.has(row.source_key)) return false;
       if (priceValue(row, unit) == null) return false;
+      if (basisFilter !== ALL_FILTER && row.basis !== basisFilter) return false;
+      if (regionFilter !== ALL_FILTER && row.market_region !== regionFilter) return false;
+      if (technologyFilter !== ALL_FILTER && (row.technology ?? '') !== technologyFilter) return false;
+      if (quarterFilter !== ALL_FILTER && (row.quarter_label ?? row.period_label ?? '') !== quarterFilter) return false;
       if (!q) return true;
       const haystack = [
         row.source_name,
@@ -233,18 +457,34 @@ export default function PriceForecastPage() {
       ].join(' ').toLowerCase();
       return q.split(/\s+/).every((token) => haystack.includes(token));
     });
-  }, [query, rows, selectedSources, unit]);
+  }, [basisFilter, query, quarterFilter, regionFilter, rows, selectedSources, technologyFilter, unit]);
 
-  const visibleRows = useMemo(() => filteredRows.slice(0, 18), [filteredRows]);
+  const selectedSourceRows = useMemo(
+    () => rows.filter((row) => selectedSources.has(row.source_key)),
+    [rows, selectedSources],
+  );
+
+  const filterOptions = useMemo(() => {
+    const scopedRows = rows.filter((row) => selectedSources.has(row.source_key) && priceValue(row, unit) != null);
+    return {
+      basis: uniqueOptions(scopedRows.map((row) => row.basis)),
+      regions: uniqueOptions(scopedRows.map((row) => row.market_region)),
+      technologies: uniqueOptions(scopedRows.map((row) => row.technology)),
+      quarters: uniqueOptions(scopedRows.map((row) => row.quarter_label ?? row.period_label)),
+    };
+  }, [rows, selectedSources, unit]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 필터 변경 시 표 페이지를 첫 페이지로 되돌린다.
+  useEffect(() => {
+    setTablePage(0);
+  }, [basisFilter, horizon, query, quarterFilter, regionFilter, selectedSources, technologyFilter, unit]);
 
   useEffect(() => {
-    setSelectedBenchmarkIds((prev) => {
-      if (prev.size === 0) return prev;
-      const allowed = new Set(filteredRows.map((row) => row.benchmark_id));
-      const next = new Set(Array.from(prev).filter((id) => allowed.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [filteredRows]);
+    if (basisFilter !== ALL_FILTER && !filterOptions.basis.includes(basisFilter)) setBasisFilter(ALL_FILTER);
+    if (regionFilter !== ALL_FILTER && !filterOptions.regions.includes(regionFilter)) setRegionFilter(ALL_FILTER);
+    if (technologyFilter !== ALL_FILTER && !filterOptions.technologies.includes(technologyFilter)) setTechnologyFilter(ALL_FILTER);
+    if (quarterFilter !== ALL_FILTER && !filterOptions.quarters.includes(quarterFilter)) setQuarterFilter(ALL_FILTER);
+  }, [basisFilter, filterOptions, quarterFilter, regionFilter, technologyFilter]);
 
   const { chartData, series } = useMemo(() => {
     const pointByDate = new Map<string, Record<string, string | number>>();
@@ -263,6 +503,8 @@ export default function PriceForecastPage() {
         label: shortSeriesLabel(row),
         sourceKey: row.source_key,
         metricKey: row.metric_key,
+        marketRegion: row.market_region,
+        basis: row.basis,
         latestDate: date,
         latestValue: value,
       });
@@ -299,6 +541,8 @@ export default function PriceForecastPage() {
           label: '우리 구매계약가',
           sourceKey: 'our',
           metricKey: 'our_purchase',
+          marketRegion: 'internal',
+          basis: 'transaction',
           latestDate: purchaseLatestDate,
           latestValue: purchaseLatestValue,
         });
@@ -324,16 +568,17 @@ export default function PriceForecastPage() {
           label: '우리 평균 판매가',
           sourceKey: 'our',
           metricKey: 'our_sale',
+          marketRegion: 'internal',
+          basis: 'transaction',
           latestDate: saleLatestDate,
           latestValue: saleLatestValue,
         });
       }
     }
 
-    // 우리 시리즈는 항상 상위 표시 + 그 외 외부 시리즈는 latest 기준 10개
-    const allDefs = Array.from(defs.values());
-    const ourDefs = allDefs.filter((d) => d.sourceKey === 'our');
-    const externalDefs = allDefs
+    const presetDefs = Array.from(defs.values()).filter((item) => seriesMatchesPreset(item, chartPreset));
+    const ourDefs = presetDefs.filter((d) => d.sourceKey === 'our');
+    const externalDefs = presetDefs
       .filter((d) => d.sourceKey !== 'our')
       .sort((a, b) => b.latestDate.localeCompare(a.latestDate))
       .slice(0, 10);
@@ -341,7 +586,7 @@ export default function PriceForecastPage() {
       chartData: Array.from(pointByDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date))),
       series: [...ourDefs, ...externalDefs],
     };
-  }, [filteredRows, unit, ourPrices]);
+  }, [filteredRows, unit, ourPrices, chartPreset]);
 
   const latestByMetric = useMemo(() => {
     const latest = new Map<string, PriceBenchmark>();
@@ -353,14 +598,86 @@ export default function PriceForecastPage() {
     return latest;
   }, [filteredRows]);
 
+  const selectedSeries = series.find((item) => item.key === selectedSeriesKey) ?? series[0] ?? null;
+  const selectedSeriesInsight = selectedSeries ? buildSeriesInsight(chartData, selectedSeries.key) : null;
+  const ownPurchase = latestOwnPurchase(ourPrices, unit);
+  const ownSale = latestOwnSale(ourPrices, unit);
+  const latestCmmForUnit = latestBenchmarkByMetric(selectedSourceRows, 'cmm_fob_china_topcon_600w', unit);
+  const latestTenderForUnit = latestBenchmarkByMetric(selectedSourceRows, 'china_state_tender', unit);
+  const latestFloorForUnit = latestBenchmarkByMetric(selectedSourceRows, 'cpia_cost_floor', unit);
+  const ownPurchaseUSD = latestOwnPurchase(ourPrices, 'usd');
+  const latestCmmUSD = latestBenchmarkByMetric(selectedSourceRows, 'cmm_fob_china_topcon_600w', 'usd');
+  const latestFloorUSD = latestBenchmarkByMetric(selectedSourceRows, 'cpia_cost_floor', 'usd');
+  const cmmTrendUSD = latestTwoBenchmarkValues(selectedSourceRows, 'cmm_fob_china_topcon_600w', 'usd');
+  const cmmTrendPct = cmmTrendUSD?.previous ? ((cmmTrendUSD.latest - cmmTrendUSD.previous) / cmmTrendUSD.previous) * 100 : null;
+  const purchaseVsCmmPct = ownPurchaseUSD && latestCmmUSD && priceValue(latestCmmUSD, 'usd')
+    ? ((ownPurchaseUSD.value - priceValue(latestCmmUSD, 'usd')!) / priceValue(latestCmmUSD, 'usd')!) * 100
+    : null;
+  const cmmVsFloorPct = latestCmmUSD && latestFloorUSD && priceValue(latestCmmUSD, 'usd') && priceValue(latestFloorUSD, 'usd')
+    ? ((priceValue(latestCmmUSD, 'usd')! - priceValue(latestFloorUSD, 'usd')!) / priceValue(latestCmmUSD, 'usd')!) * 100
+    : null;
+  const cmmTrend = directionTone(cmmTrendPct);
+  const oneMonthView = cmmTrend === 'up' ? '상승' : cmmTrend === 'down' ? '하락' : '보합';
+  const threeMonthView = cmmVsFloorPct != null && cmmVsFloorPct < 4 ? '하방 제한' : oneMonthView;
+  const strategyLabel = (() => {
+    if (!latestCmmUSD) return '관측 보강';
+    if (cmmTrend === 'up' && (purchaseVsCmmPct == null || purchaseVsCmmPct <= 2)) return '즉시 협상';
+    if (cmmTrend === 'down' && purchaseVsCmmPct != null && purchaseVsCmmPct > 2) return '분할 매입';
+    if (cmmVsFloorPct != null && cmmVsFloorPct < 4) return '관망 제한';
+    return '조건부 관망';
+  })();
+  const strategyNote = (() => {
+    if (!latestCmmUSD) return 'CMM 관측값이 들어오면 판단 정확도가 올라갑니다';
+    if (strategyLabel === '즉시 협상') return '상승 흐름 대비 현재 계약가를 빠르게 잠그는 쪽이 유리합니다';
+    if (strategyLabel === '분할 매입') return '시장가 대비 계약가가 높아 단가 확인 후 나눠 잡는 편이 낫습니다';
+    if (strategyLabel === '관망 제한') return '원가 floor와 가까워 추가 하락 여지가 제한적입니다';
+    return '추가 입찰가와 forward 확인 후 계약 시점을 정하는 편이 안정적입니다';
+  })();
+
   const runLatest = runs[0] ?? null;
   const latestCmm = latestByMetric.get('cmm_fob_china_topcon_600w');
   const latestTender = latestByMetric.get('china_state_tender');
   const forwardCount = filteredRows.filter((row) => row.basis === 'forward').length;
   const sourceCount = new Set(filteredRows.map((row) => row.source_key)).size;
-  const visibleBenchmarkIds = useMemo(() => visibleRows.map((row) => row.benchmark_id), [visibleRows]);
+  const hasRunningRun = runs.some((run) => run.status === 'running');
+  const totalTablePages = Math.max(1, Math.ceil(filteredRows.length / ROWS_PER_PAGE));
+  const safeTablePage = Math.min(tablePage, totalTablePages - 1);
+  const tableStart = safeTablePage * ROWS_PER_PAGE;
+  const tableRows = filteredRows.slice(tableStart, tableStart + ROWS_PER_PAGE);
+  const tableRangeStart = filteredRows.length === 0 ? 0 : tableStart + 1;
+  const tableRangeEnd = Math.min(tableStart + ROWS_PER_PAGE, filteredRows.length);
+  const visibleBenchmarkIds = tableRows.map((row) => row.benchmark_id);
   const allVisibleSelected = visibleBenchmarkIds.length > 0
     && visibleBenchmarkIds.every((id) => selectedBenchmarkIds.has(id));
+
+  const downloadCSV = () => {
+    const header = ['일자', '소스', '지표', '지역', '조건', '통화', 'USD/W', 'CNY/W', 'KRW/W', '기술', '구간', '근거 URL', '근거'];
+    const lines = filteredRows.map((row) => [
+      row.value_date,
+      row.source_name,
+      METRIC_LABELS[row.metric_key] ?? row.metric_label,
+      row.market_region,
+      row.basis,
+      row.currency,
+      row.price_usd_w ?? '',
+      row.price_cny_w ?? '',
+      row.price_krw_w ?? '',
+      row.technology ?? '',
+      row.quarter_label ?? row.period_label ?? '',
+      row.source_url ?? '',
+      row.raw_excerpt ?? '',
+    ].map(csvCell).join(','));
+    const csv = `\uFEFF${header.map(csvCell).join(',')}\n${lines.join('\n')}`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `price_benchmarks_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const toggleBenchmarkSelection = (benchmarkID: string) => {
     setSelectedBenchmarkIds((prev) => {
@@ -414,6 +731,10 @@ export default function PriceForecastPage() {
   };
 
   const triggerAIRefresh = async () => {
+    if (hasRunningRun || refreshing) {
+      notify.warning('이미 실행 중인 AI 수집이 있습니다');
+      return;
+    }
     setRefreshing(true);
     try {
       // PR 43: 비동기 — POST 즉시 run_id 받고 폴링 시작
@@ -477,7 +798,7 @@ export default function PriceForecastPage() {
     <MasterConsole
       eyebrow="PRICE FORECAST"
       title="가격예측"
-      description="외부 시세·입찰·원가 floor·제조사 ASP를 같은 시계열로 비교합니다."
+      description="외부 벤치마크, 우리 거래가, 구매 전략을 한 화면에서 비교합니다."
       tableTitle="가격 벤치마크"
       tableSub={`${filteredRows.length.toLocaleString('ko-KR')}개 관측값 · ${series.length.toLocaleString('ko-KR')}개 라인`}
       actions={(
@@ -486,9 +807,9 @@ export default function PriceForecastPage() {
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             새로고침
           </Button>
-          <Button size="sm" onClick={() => void triggerAIRefresh()} disabled={refreshing || selectedSources.size === 0}>
-            <Bot className={`h-3.5 w-3.5 ${refreshing ? 'animate-pulse' : ''}`} />
-            AI 지표 갱신
+          <Button size="sm" onClick={() => void triggerAIRefresh()} disabled={refreshing || hasRunningRun || selectedSources.size === 0}>
+            <Bot className={`h-3.5 w-3.5 ${refreshing || hasRunningRun ? 'animate-pulse' : ''}`} />
+            {hasRunningRun ? 'AI 수집 중' : 'AI 지표 갱신'}
           </Button>
         </div>
       )}
@@ -550,19 +871,167 @@ export default function PriceForecastPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={basisFilter} onValueChange={(value) => setBasisFilter(value ?? ALL_FILTER)}>
+            <SelectTrigger size="sm" className="w-[104px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_FILTER}>조건 전체</SelectItem>
+              {filterOptions.basis.map((item) => (
+                <SelectItem key={item} value={item}>{item}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={regionFilter} onValueChange={(value) => setRegionFilter(value ?? ALL_FILTER)}>
+            <SelectTrigger size="sm" className="w-[128px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_FILTER}>지역 전체</SelectItem>
+              {filterOptions.regions.map((item) => (
+                <SelectItem key={item} value={item}>{item.replaceAll('_', ' ')}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={technologyFilter} onValueChange={(value) => setTechnologyFilter(value ?? ALL_FILTER)}>
+            <SelectTrigger size="sm" className="w-[136px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_FILTER}>기술 전체</SelectItem>
+              {filterOptions.technologies.map((item) => (
+                <SelectItem key={item} value={item}>{item}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={quarterFilter} onValueChange={(value) => setQuarterFilter(value ?? ALL_FILTER)}>
+            <SelectTrigger size="sm" className="w-[104px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_FILTER}>기간 전체</SelectItem>
+              {filterOptions.quarters.map((item) => (
+                <SelectItem key={item} value={item}>{item}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={downloadCSV} disabled={filteredRows.length === 0}>
+            <Download className="h-3.5 w-3.5" />
+            CSV
+          </Button>
+          {selectedBenchmarkIds.size > 0 ? (
+            <Badge variant="outline" className="text-[10px]">
+              {selectedBenchmarkIds.size.toLocaleString('ko-KR')}건 선택
+            </Badge>
+          ) : null}
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={deleting || refreshing || selectedBenchmarkIds.size === 0}
+            onClick={() => void deleteSelectedBenchmarks()}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            삭제
+          </Button>
         </div>
       )}
     >
       <div className="space-y-4 p-3">
+        <section className="grid gap-3 xl:grid-cols-3">
+          <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <Target className="h-3.5 w-3.5 text-[var(--ink-3)]" />
+              <div className="sf-eyebrow">외부 벤치마크</div>
+            </div>
+            <div className="text-lg font-semibold tabular-nums">
+              {formatUnitPrice(latestCmmForUnit ? priceValue(latestCmmForUnit, unit) : null, unit)}
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              {latestCmmForUnit ? `CMM · ${formatDate(latestCmmForUnit.value_date)}` : 'CMM 관측값 없음'}
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+              <div className="rounded border border-[var(--line)] px-2 py-1">
+                <div className="text-muted-foreground">입찰가</div>
+                <div className="font-semibold tabular-nums">
+                  {formatUnitPrice(latestTenderForUnit ? priceValue(latestTenderForUnit, unit) : null, unit)}
+                </div>
+              </div>
+              <div className="rounded border border-[var(--line)] px-2 py-1">
+                <div className="text-muted-foreground">Floor</div>
+                <div className="font-semibold tabular-nums">
+                  {formatUnitPrice(latestFloorForUnit ? priceValue(latestFloorForUnit, unit) : null, unit)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <DollarSign className="h-3.5 w-3.5 text-[var(--ink-3)]" />
+              <div className="sf-eyebrow">우리 거래가</div>
+            </div>
+            <div className="text-lg font-semibold tabular-nums">
+              {formatUnitPrice(ownPurchase?.value ?? null, unit)}
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              {ownPurchase ? `구매계약 ${ownPurchase.count}건 · ${formatDate(ownPurchase.date)}` : unit === 'cny' ? 'CNY 환산 미지원' : '구매계약 평균 없음'}
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2 rounded border border-[var(--line)] px-2 py-1 text-[11px]">
+              <span className="text-muted-foreground">평균 판매가</span>
+              <span className="font-semibold tabular-nums">{formatUnitPrice(ownSale?.value ?? null, unit)}</span>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <TrendingUp className="h-3.5 w-3.5 text-[var(--ink-3)]" />
+              <div className="sf-eyebrow">예측 · 전략</div>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-lg font-semibold">{strategyLabel}</span>
+              <span className="text-xs text-muted-foreground">1개월 {oneMonthView} · 3개월 {threeMonthView}</span>
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">{strategyNote}</div>
+          </div>
+        </section>
+
         <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
           <div className="min-h-[380px] rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="sf-eyebrow">차트 프리셋</div>
+                <div className="text-[11px] text-muted-foreground">
+                  {CHART_PRESETS.find((item) => item.key === chartPreset)?.label}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {CHART_PRESETS.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Button
+                      key={item.key}
+                      type="button"
+                      variant={chartPreset === item.key ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => {
+                        setChartPreset(item.key);
+                        setSelectedSeriesKey(null);
+                      }}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {item.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
             {chartData.length === 0 || series.length === 0 ? (
-              <div className="flex h-[340px] flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+              <div className="flex h-[300px] flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
                 <TrendingUp className="h-8 w-8 text-[var(--ink-4)]" />
                 <div>표시할 가격 관측값이 없습니다</div>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={340}>
+              <ResponsiveContainer width="100%" height={310}>
                 <LineChart data={chartData} margin={{ top: 12, right: 18, left: 8, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} />
@@ -585,6 +1054,7 @@ export default function PriceForecastPage() {
                   {series.map((item, index) => {
                     const isOur = item.sourceKey === 'our';
                     const ourColor = item.key === 'our_purchase' ? '#0ea5e9' : '#16a34a';
+                    const isSelected = selectedSeries?.key === item.key;
                     return (
                       <Line
                         key={item.key}
@@ -592,10 +1062,12 @@ export default function PriceForecastPage() {
                         dataKey={item.key}
                         name={item.label}
                         stroke={isOur ? ourColor : LINE_COLORS[index % LINE_COLORS.length]}
-                        strokeWidth={isOur ? 2.6 : 1.8}
+                        strokeWidth={isSelected ? 3 : isOur ? 2.6 : 1.8}
+                        opacity={selectedSeries && !isSelected ? 0.45 : 1}
                         dot={{ r: isOur ? 3 : 2 }}
                         activeDot={{ r: isOur ? 5 : 4 }}
                         connectNulls
+                        onClick={() => setSelectedSeriesKey(item.key)}
                       />
                     );
                   })}
@@ -626,38 +1098,50 @@ export default function PriceForecastPage() {
                 </label>
               ))}
             </div>
+            <div className="mt-3 border-t border-[var(--line)] pt-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="sf-eyebrow">선택 라인</div>
+                {selectedSeriesInsight ? (
+                  <Badge variant="outline" className="text-[10px]">
+                    {formatDate(selectedSeriesInsight.latestDate)}
+                  </Badge>
+                ) : null}
+              </div>
+              {selectedSeries && selectedSeriesInsight ? (
+                <div className="space-y-2 text-xs">
+                  <div className="font-semibold leading-5 text-[var(--ink)]">{selectedSeries.label}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">최근값</span>
+                    <span className="font-semibold tabular-nums">{formatUnitPrice(selectedSeriesInsight.latestValue, unit)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">직전 대비</span>
+                    <span className="inline-flex items-center gap-1 font-semibold tabular-nums">
+                      {directionTone(selectedSeriesInsight.deltaPct) === 'up' ? <ArrowUpRight className="h-3 w-3 text-red-600" /> : null}
+                      {directionTone(selectedSeriesInsight.deltaPct) === 'down' ? <ArrowDownRight className="h-3 w-3 text-blue-600" /> : null}
+                      {directionTone(selectedSeriesInsight.deltaPct) === 'flat' ? <Minus className="h-3 w-3 text-muted-foreground" /> : null}
+                      {formatDeltaPct(selectedSeriesInsight.deltaPct)}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {selectedSeries.sourceKey === 'our' ? '내부 거래 평균' : `${selectedSeries.marketRegion.replaceAll('_', ' ')} · ${selectedSeries.basis}`}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-4 text-center text-sm text-muted-foreground">라인 없음</div>
+              )}
+            </div>
           </aside>
         </section>
 
         <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="overflow-hidden rounded-md border border-[var(--line)] bg-[var(--surface)]">
-            <div className="flex min-h-10 flex-wrap items-center gap-2 border-b border-[var(--line)] px-3 py-2">
-              <div>
-                <div className="sf-eyebrow">AI 수집 관측값</div>
-                <div className="text-[11px] text-muted-foreground">
-                  {selectedBenchmarkIds.size > 0
-                    ? `${selectedBenchmarkIds.size.toLocaleString('ko-KR')}건 선택됨`
-                    : `${visibleRows.length.toLocaleString('ko-KR')}건 표시 중`}
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="ml-auto"
-                disabled={deleting || refreshing || selectedBenchmarkIds.size === 0}
-                onClick={() => void deleteSelectedBenchmarks()}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                {deleting ? '삭제 중' : '선택 삭제'}
-              </Button>
-            </div>
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-9">
                     <Checkbox
-                      aria-label="현재 목록 전체 선택"
+                      aria-label="현재 페이지 전체 선택"
                       checked={allVisibleSelected}
                       disabled={visibleBenchmarkIds.length === 0 || deleting}
                       onCheckedChange={toggleVisibleSelection}
@@ -673,9 +1157,13 @@ export default function PriceForecastPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visibleRows.map((row) => (
-                  <TableRow key={row.benchmark_id}>
-                    <TableCell>
+                {tableRows.map((row) => (
+                  <TableRow
+                    key={row.benchmark_id}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedSeriesKey(seriesKey(row))}
+                  >
+                    <TableCell onClick={(event) => event.stopPropagation()}>
                       <Checkbox
                         aria-label={`${row.source_name} ${row.metric_label} 선택`}
                         checked={selectedBenchmarkIds.has(row.benchmark_id)}
@@ -698,10 +1186,8 @@ export default function PriceForecastPage() {
                     <TableCell className="text-right text-xs font-semibold tabular-nums">
                       {formatUnitPrice(priceValue(row, unit), unit)}
                     </TableCell>
-                    <TableCell className="text-xs">
-                      <Badge variant={row.confidence != null && row.confidence < 0.7 ? 'destructive' : 'outline'} className="text-[10px]">
-                        {formatConfidence(row.confidence)}
-                      </Badge>
+                    <TableCell className="text-xs tabular-nums">
+                      {row.confidence != null ? `${Math.round(row.confidence * 100)}%` : '—'}
                     </TableCell>
                     <TableCell className="max-w-[260px] text-xs text-muted-foreground">
                       {row.source_url ? (
@@ -723,6 +1209,32 @@ export default function PriceForecastPage() {
                 ) : null}
               </TableBody>
             </Table>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--line)] px-3 py-2 text-xs text-muted-foreground">
+              <span>
+                {tableRangeStart.toLocaleString('ko-KR')}-{tableRangeEnd.toLocaleString('ko-KR')} / {filteredRows.length.toLocaleString('ko-KR')}개
+              </span>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTablePage((page) => Math.max(0, page - 1))}
+                  disabled={safeTablePage === 0}
+                >
+                  이전
+                </Button>
+                <Badge variant="outline" className="text-[10px]">
+                  {safeTablePage + 1} / {totalTablePages}
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTablePage((page) => Math.min(totalTablePages - 1, page + 1))}
+                  disabled={safeTablePage >= totalTablePages - 1}
+                >
+                  다음
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
@@ -731,24 +1243,44 @@ export default function PriceForecastPage() {
               <div className="sf-eyebrow">AI 수집 로그</div>
             </div>
             <div className="space-y-2">
-              {runs.map((run) => (
-                <div key={run.run_id} className="rounded border border-[var(--line)] px-2.5 py-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={statusVariant(run.status)} className="text-[10px]">
-                      {statusLabel(run.status)}
-                    </Badge>
-                    <span className="font-semibold tabular-nums">{formatDate(run.started_at)}</span>
-                    <span className="ml-auto text-[11px] text-muted-foreground">{run.provider ?? 'ai'} · {run.model ?? 'model'}</span>
+              {runs.map((run) => {
+                const health = runSourceHealth(run);
+                const warningCount = parseRunWarnings(run.warnings).length;
+                return (
+                  <div key={run.run_id} className="rounded border border-[var(--line)] px-2.5 py-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={statusVariant(run.status)} className="text-[10px]">
+                        {statusLabel(run.status)}
+                      </Badge>
+                      <span className="font-semibold tabular-nums">{formatDate(run.started_at)}</span>
+                      <span className="ml-auto text-[11px] text-muted-foreground">{run.provider ?? 'ai'} · {run.model ?? 'model'}</span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span>{run.inserted_count.toLocaleString('ko-KR')}건 저장 · {run.skipped_count.toLocaleString('ko-KR')}건 제외</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {health.slice(0, 5).map((item) => (
+                        <Badge key={item.key} variant={runHealthVariant(item.status)} className="text-[10px]">
+                          {item.label} · {runHealthLabel(item.status)}
+                        </Badge>
+                      ))}
+                      {health.length > 5 ? (
+                        <Badge variant="outline" className="text-[10px]">+{health.length - 5}</Badge>
+                      ) : null}
+                    </div>
+                    {warningCount > 0 ? (
+                      <div className="mt-1 flex items-center gap-1 text-[11px] text-amber-700">
+                        <AlertTriangle className="h-3 w-3" />
+                        <span>warning {warningCount.toLocaleString('ko-KR')}건</span>
+                      </div>
+                    ) : null}
+                    {run.error_message ? (
+                      <div className="mt-1 text-[11px] text-destructive">{run.error_message}</div>
+                    ) : null}
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <CheckCircle2 className="h-3 w-3" />
-                    <span>{run.inserted_count.toLocaleString('ko-KR')}건 저장 · {run.skipped_count.toLocaleString('ko-KR')}건 제외</span>
-                  </div>
-                  {run.error_message ? (
-                    <div className="mt-1 text-[11px] text-destructive">{run.error_message}</div>
-                  ) : null}
-                </div>
-              ))}
+                );
+              })}
               {runs.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">수집 로그가 없습니다</div>
               ) : null}

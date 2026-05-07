@@ -77,6 +77,41 @@ func TestBuildBenchmarkExtractionMessagesDedupPolicy(t *testing.T) {
 	}
 }
 
+func TestValidateBenchmarkCatalogPolicy(t *testing.T) {
+	base := model.CreatePriceBenchmarkRequest{
+		SourceKey:    "opis",
+		MetricKey:    "cmm_fob_china_topcon_600w",
+		MarketRegion: "fob_china",
+		Basis:        "fob",
+		Currency:     "USD",
+	}
+	if msg := validateBenchmarkCatalogPolicy(base); msg != "" {
+		t.Fatalf("valid benchmark rejected: %s", msg)
+	}
+
+	unknownMetric := base
+	unknownMetric.MetricKey = "made_up_metric"
+	if msg := validateBenchmarkCatalogPolicy(unknownMetric); msg == "" {
+		t.Fatal("unknown metric should be rejected")
+	}
+
+	tier1ASP := base
+	tier1ASP.SourceKey = "tier1_asp"
+	tier1ASP.MetricKey = "manufacturer_asp"
+	tier1ASP.MarketRegion = "manufacturer"
+	tier1ASP.Basis = "asp"
+	if msg := validateBenchmarkCatalogPolicy(tier1ASP); msg == "" {
+		t.Fatal("Tier-1 ASP should be rejected")
+	}
+
+	infolinkCell := base
+	infolinkCell.SourceKey = "infolink"
+	infolinkCell.MetricKey = "cell"
+	if msg := validateBenchmarkCatalogPolicy(infolinkCell); msg == "" {
+		t.Fatal("InfoLink cell metric should be rejected")
+	}
+}
+
 func hasMissingFocus(items []benchmarkMissingFocus, sourceKey, metricKey string) bool {
 	for _, item := range items {
 		if item.SourceKey == sourceKey && item.MetricKey == metricKey {
