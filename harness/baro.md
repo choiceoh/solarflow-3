@@ -66,6 +66,10 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - **[D-130](DECISIONS.md#d-130)** — BARO 인버터 호환 가이드 Phase 1. frontend-only 정적 카탈로그 10종 + 용량 매칭 계산기. 정식 SKU 등록·견적 통합은 PR6.5
 - **[D-131](DECISIONS.md#d-131)** — BARO 출하 알림 메시지 빌더. 외부 발송 API 0, 카톡 붙여넣기용 텍스트 3종(상차/출발/도착) 자동 생성. 자동 발송·드라이버 PWA는 PR7.5
 - **[D-132](DECISIONS.md#d-132)** — RFM 동적 분위수 분류 + 본인 담당 필터 (PR4.5). `?classify=quartile&mine=true` query param. segment_tag 수동 라벨은 PR4.6
+- **[D-134](DECISIONS.md#d-134)** — BARO Phase 2.5 인프라 묶음 마이그(084) + product_kind 컬럼. PR6.5 product 분류 + 인버터 전용 컬럼.
+- **[D-135](DECISIONS.md#d-135)** — BARO 견적 DB 저장 스키마 (PR2.5 인프라). `baro_quotes` + `baro_quote_lines` + status 머신. 핸들러·발송 채널은 PR2.5b/c.
+- **[D-136](DECISIONS.md#d-136)** — BARO 한도 hold flag 스키마 (PR5.5 인프라). `baro_credit_holds`. 출고/수주 차단 enforcement 는 PR5.5b. 마진 통합은 PR5.5c.
+- **[D-137](DECISIONS.md#d-137)** — BARO 출하 알림 추적 + 드라이버 PWA 토큰 스키마 (PR7.5 인프라). `baro_shipment_notices` + `baro_driver_tokens`. 카톡/SMS API·PWA 본체는 PR7.5b/c/d.
 - **[D-139](DECISIONS.md#d-139)** — WMS Phase 1 창고 내 위치(Bin) 관리. 모든 테넌트 공유 마스터. PR8.5(피킹 리스트)/PR8.6(입고 검수)/PR8.7(재고실사)로 단계 확장.
 
 ## BARO 전용 백엔드 엔드포인트 (`baroOnly` 미들웨어)

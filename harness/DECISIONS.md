@@ -1085,3 +1085,49 @@
   - 라우터 가드: 모든 테넌트 통과 (master.* 도메인).
 - **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/085_warehouse_locations.sql` + PostgREST schema reload.
 - **날짜**: 2026-05-07
+
+## D-134: BARO Phase 2.5 인프라 묶음 — 마이그 084 + 4 후속 PR DB 골격
+- **결정**: PR2.5/PR5.5/PR6.5/PR7.5 가 의존하는 모든 DB 변경을 단일 마이그 `backend/migrations/084_baro_phase2_5_scaffold.sql` 에 모아 한 번에 적용.
+- **D-134 자체 (PR6.5 = product_kind)**: `products` 테이블에 SKU 분류 + 인버터 전용 nullable 컬럼.
+  - `product_kind text NOT NULL DEFAULT 'module'` (CHECK: `module|inverter|package`)
+  - `rated_power_kw`, `max_input_kw`, `mppt_channels`, `voltage_min_v`, `voltage_max_v`, `phase` 모두 nullable
+  - `product_package_items` 신규 테이블 — 패키지 SKU 구성품 매핑
+  - 기존 `products` 행은 모두 `product_kind='module'` 로 backfill (DEFAULT)
+- **모델 / 핸들러 변경**: `model.Product` 에 7 필드 추가 (모두 pointer + omitempty) — 마이그 미적용 환경에서도 NULL 무시. 기존 ProductHandler CRUD 가 신규 필드 자동 acceptance. 인버터 마스터 CRUD UI / 패키지 SKU 편집 UI 는 PR6.6 분리.
+- **D-130 정적 카탈로그 마이그레이션**: 마이그 적용 후 `/baro/inverter-guide` 의 INVERTER_CATALOG → DB `WHERE product_kind='inverter'` 자연 대체 (PR6.6).
+- **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/084_baro_phase2_5_scaffold.sql` + PostgREST schema reload. 적용 전까지 model 의 새 필드는 NULL.
+- **날짜**: 2026-05-07
+
+## D-135: BARO 통합 견적 빌더 Phase 2 — DB 저장 + 발송 추적 + 마진 (PR2.5 인프라)
+- **결정**: D-126 LocalStorage draft 를 DB persistent 견적으로 승격 + 발송 채널 추상화 + 회신 추적. **본 PR 은 스키마만 — 핸들러·UI·외부 API 통합은 PR2.5b/c/d 분리**.
+- **DB 스키마 (마이그 084)**:
+  - `baro_quotes` (quote_id, partner_id, created_by, status, valid_until, sent_at, sent_channel, sent_to, replied_at, reply_note, subtotal/vat/total_krw, estimated_cost/margin_pct).
+  - `baro_quote_lines` (line_id, quote_id, line_no, product_id + snapshot, quantity, unit_price_krw, line_total_krw GENERATED).
+  - status 머신: `draft → sent → replied → won/lost/expired`.
+  - snapshot 컬럼 (product_code/name/spec_wp): 견적 시점 보존 — product 마스터 변경 시 견적 원본 불변.
+- **PR2.5b 분리**: backend `BaroQuotesHandler` (CRUD), `/baro/quotes` + frontend QuoteBuilder save/load 통합. feature_id `baro.quote`.
+- **PR2.5c 분리**: 외부 발송 채널 (KakaoTalk Notification Talk + Aligo SMS API 키 발급 후) — `BaroQuoteSendHandler`. Phase 1 은 `manual_copy` channel 만.
+- **회신 추적**: 거래처 카톡 답변 시 영업이 "응답 수신" 클릭 → replied_at + reply_note. 자동 webhook 인식은 PR2.6.
+- **마진**: PR5.5 매입원가 통합 후 견적 저장 시 자동 계산. Phase 1 NULL.
+- **날짜**: 2026-05-07
+
+## D-136: BARO 한도 hold flag + 매입원가 마진 (PR5.5 인프라)
+- **결정**: D-129 sales-summary 마진 표시 + 신규 출고/수주 차단 hold flag 의 DB 골격. **본 PR 은 스키마만 — 차단 enforcement·마진 계산은 PR5.5b/c 분리**.
+- **DB 스키마 (마이그 084)**:
+  - `baro_credit_holds` (hold_id, partner_id, triggered_at, trigger_reason, outstanding/limit/oldest_unpaid, released_at/by/note, blocked_outbound/order_id).
+  - released_at IS NULL → 활성 hold. 영업이 결재 받고 해제 시 채움.
+- **PR5.5b 분리 (outbound/order 핸들러)**: 출고/수주 생성 시 `baro_credit_board` RPC 결과 조회 → outstanding + amount > limit 또는 aging >= 60d → `baro_credit_holds` insert + 응답 hold flag. frontend OrderCreate / OutboundCreate 에서 hold flag 받으면 결재 강제.
+- **PR5.5c 분리 (마진 통합)**: `sales_summary` 응답에 `estimated_margin_pct` — 12개월 매출 vs `baro_purchase_history` 매입원가 합 단순 비율. SKU-level 정밀 마진은 PR5.5d (sales→outbound→bl_line→product join 필요).
+- **신규 endpoint** (PR5.5b): `GET /api/v1/baro/credit-check?partner_id=X&amount=Y` (status: `ok|warn_aging|over_limit`). feature_id `baro.credit_check`.
+- **날짜**: 2026-05-07
+
+## D-137: BARO 출하 알림 자동화 + 드라이버 PWA (PR7.5 인프라)
+- **결정**: D-131 카톡 메시지 빌더의 "수동 복사" 를 외부 API 자동 발송 + 드라이버 PWA 사진 업로드로 확장. **본 PR 은 추적 테이블·드라이버 토큰 스키마만 — 외부 API·PWA 본체는 PR7.5b/c/d 분리**.
+- **DB 스키마 (마이그 084)**:
+  - `baro_shipment_notices` (notice_id, partner_id, outbound_id, dispatch_route_id, stage, channel, recipient_phone/name, message_body, sent_at/by, delivery_status, external_message_id, driver_photo_url, driver_signature_url, delivery_note, delivered_at).
+  - `baro_driver_tokens` (token, notice_id, expires_at 24h, used_at, driver_phone) — PWA simplified auth.
+- **PR7.5b (KakaoTalk Notification Talk API)**: 사업자 키 발급 절차 (사용자 측) — KakaoTalk Friend API 또는 Notification Talk. 템플릿 등록 + 친구 동의 검증. `BaroShipmentSendHandler` — D-131 메시지 빌더 결과를 카톡 API 호출 + baro_shipment_notices row 기록.
+- **PR7.5c (SMS Aligo/Solapi fallback)**: 카톡 미수신 거래처용 fallback. 키 발급 별도. delivery_status='failed' 카톡 자동 재시도.
+- **PR7.5d (드라이버 PWA)**: `/d/<token>` 라우트 — 인증 없이 token 기반 access (24h 만료). manifest.json + Service Worker 최소 — "홈 추가" 가능하면 OK. 페이지: 상차 사진 / 도착 사진 / 미배달 사유. 카메라 input mobile-first. 업로드는 기존 `/api/v1/attachments/` 활용 + driver_photo_url 에 attachment_id 저장.
+- **이유**: D-131 영업측 5분→30초 단축, PR7.5 는 거래처측 알림 신뢰도 + 차주측 도착 추적. 시공업체에 "도착 사진 + 차주 사인" 자동 전달 시 클레임률 감소.
+- **날짜**: 2026-05-07
