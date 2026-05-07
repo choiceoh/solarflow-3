@@ -10,13 +10,15 @@
 //   - PR-4 : NAV_GROUPS 를 packs/ 디렉토리 (erp-core / module-finance / baro-domain)
 //            로 split. 이 파일은 ROUTES + 합친 NAV_GROUPS 만 export.
 import { lazy, type ComponentType, type LazyExoticComponent, type ReactElement } from 'react';
-import { type LucideIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 import type { MenuKey, Role } from '@/config/permissions';
 import type { TenantScope } from '@/lib/tenantScope';
-// PR-4: NAV_GROUPS 는 pack 들의 nav items 를 합쳐 만든다. 순환 import 회피를 위해
-// packs/ 가 manifest 에서 type 만 가져오게 했으므로 여기서 값 import 가능.
-import { ALL_PACKS, buildNavGroups } from './packs';
+// PR-4: NAV_GROUPS 는 pack 들의 nav items 를 합쳐 만든다.
+// PR-7: packs/ 가 lib/navigation 에서 frontend/src/packs 로 승격 — pack 디렉토리가
+// 자기 페이지 코드(pages/) 도 가짐. 순환 import 회피를 위해 packs/ 가 manifest 에서
+// type 만 가져오게 한 invariant 유지.
+import { ALL_PACKS, buildNavGroups } from '@/packs';
 
 // === Lazy components ===
 //
@@ -56,21 +58,22 @@ const WarehouseNewPage = lazy(() => import('@/pages/data/WarehouseNewPage'));
 const WarehouseEditPage = lazy(() => import('@/pages/data/WarehouseEditPage'));
 const BankNewPage = lazy(() => import('@/pages/data/BankNewPage'));
 const BankEditPage = lazy(() => import('@/pages/data/BankEditPage'));
-const PartnerPriceBookPage = lazy(() => import('@/pages/baro/PartnerPriceBookPage'));
-const PartnerCockpitPage = lazy(() => import('@/pages/baro/PartnerCockpitPage'));
-const QuoteBuilderPage = lazy(() => import('@/pages/baro/QuoteBuilderPage'));
-const SalesHomePage = lazy(() => import('@/pages/baro/SalesHomePage'));
-const RFMBoardPage = lazy(() => import('@/pages/baro/RFMBoardPage'));
-const SalesSummaryPage = lazy(() => import('@/pages/baro/SalesSummaryPage'));
-const InverterGuidePage = lazy(() => import('@/pages/baro/InverterGuidePage'));
-const ShipmentNoticePage = lazy(() => import('@/pages/baro/ShipmentNoticePage'));
-const IncomingBoardPage = lazy(() => import('@/pages/baro/IncomingBoardPage'));
-const BaroPurchaseHistoryPage = lazy(() => import('@/pages/baro/BaroPurchaseHistoryPage'));
-const GroupPurchaseRequestPage = lazy(() => import('@/pages/baro/GroupPurchaseRequestPage'));
-const BaroRequestInboxPage = lazy(() => import('@/pages/group-trade/BaroRequestInboxPage'));
-const CreditBoardPage = lazy(() => import('@/pages/baro/CreditBoardPage'));
-const DispatchBoardPage = lazy(() => import('@/pages/baro/DispatchBoardPage'));
-const CRMInboxPage = lazy(() => import('@/pages/CRMInboxPage'));
+const PartnerPriceBookPage = lazy(() => import('@/packs/baro-domain/pages/PartnerPriceBookPage'));
+const PartnerCockpitPage = lazy(() => import('@/packs/baro-domain/pages/PartnerCockpitPage'));
+const QuoteBuilderPage = lazy(() => import('@/packs/baro-domain/pages/QuoteBuilderPage'));
+const SalesHomePage = lazy(() => import('@/packs/baro-domain/pages/SalesHomePage'));
+const RFMBoardPage = lazy(() => import('@/packs/baro-domain/pages/RFMBoardPage'));
+const SalesSummaryPage = lazy(() => import('@/packs/baro-domain/pages/SalesSummaryPage'));
+const InverterGuidePage = lazy(() => import('@/packs/baro-domain/pages/InverterGuidePage'));
+const ShipmentNoticePage = lazy(() => import('@/packs/baro-domain/pages/ShipmentNoticePage'));
+const IncomingBoardPage = lazy(() => import('@/packs/baro-domain/pages/IncomingBoardPage'));
+const BaroPurchaseHistoryPage = lazy(() => import('@/packs/baro-domain/pages/BaroPurchaseHistoryPage'));
+const GroupPurchaseRequestPage = lazy(() => import('@/packs/baro-domain/pages/GroupPurchaseRequestPage'));
+const CallbackRecommendPage = lazy(() => import('@/packs/baro-domain/pages/CallbackRecommendPage'));
+const BaroRequestInboxPage = lazy(() => import('@/packs/baro-domain/pages/BaroRequestInboxPage'));
+const CreditBoardPage = lazy(() => import('@/packs/baro-domain/pages/CreditBoardPage'));
+const DispatchBoardPage = lazy(() => import('@/packs/baro-domain/pages/DispatchBoardPage'));
+const CRMInboxPage = lazy(() => import('@/packs/baro-domain/pages/CRMInboxPage'));
 const InsightsPage = lazy(() => import('@/pages/InsightsPage'));
 
 // === Route spec ===
@@ -151,6 +154,7 @@ export const ROUTES: RouteSpec[] = [
   { path: '/baro/incoming', element: IncomingBoardPage },
   { path: '/baro/purchase-history', element: BaroPurchaseHistoryPage, roles: ['admin', 'operator', 'executive'] },
   { path: '/baro/group-purchase', element: GroupPurchaseRequestPage, roles: ['admin', 'operator'] },
+  { path: '/baro/callback-recommend', element: CallbackRecommendPage },
   { path: '/group-trade/baro-inbox', element: BaroRequestInboxPage, roles: ['admin', 'operator'] },
   { path: '/baro/credit-board', element: CreditBoardPage },
   { path: '/baro/dispatch', element: DispatchBoardPage, roles: ['admin', 'operator'] },

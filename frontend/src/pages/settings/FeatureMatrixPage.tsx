@@ -12,8 +12,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Layers } from 'lucide-react';
 
 import { fetchWithAuth } from '@/lib/api';
-import { ALL_PACKS } from '@/lib/navigation/packs';
-import type { Pack } from '@/lib/navigation/packs';
+import { ALL_PACKS } from '@/packs';
+import type { Pack } from '@/packs';
 
 interface AdminTenantSummary {
   id: string;
@@ -127,7 +127,9 @@ export default function FeatureMatrixPage() {
       const features = ids
         .map((id) => byID.get(id))
         .filter((f): f is AdminFeatureSummary => Boolean(f));
-      features.forEach((f) => used.add(f.id));
+      features.forEach((f) => {
+        used.add(f.id);
+      });
       return { pack, features };
     });
     const orphans = data.features.filter((f) => !used.has(f.id));

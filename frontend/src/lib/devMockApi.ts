@@ -572,7 +572,19 @@ function calcRoute<T>(url: URL, body: MockRow): T {
     case '/api/v1/calc/lc-fee':
       return clone({ opening_fee: 2024000, acceptance_fee: 3480000, total_fee: 5504000, total_fee_krw: 5504000, fee_note: '목업 수수료 계산' } as T);
     case '/api/v1/calc/landed-cost':
-      return clone({ declaration_id: body.declaration_id ?? 'dec-1204-04', items: costDetails, summary: { landed_total_krw: 934700000, landed_wp_krw: 171.31 }, calculated_at: nowIso } as T);
+      return clone({
+        items: costDetails.map((cost) => ({
+          ...cost,
+          declaration_number: declarations.find((decl) => decl.declaration_id === cost.declaration_id)?.declaration_number ?? 'IL-25-1204-04',
+          manufacturer_name: '진코솔라',
+          allocated_expenses: { customs_fee: 1100000, transport: 4100000 },
+          total_expense_krw: 5200000,
+          expense_per_wp_krw: 0.95,
+          margin_vs_cif_krw: Number(cost.landed_wp_krw ?? 0) - Number(cost.cif_wp_krw ?? 0),
+        })),
+        saved: Boolean(body.save),
+        calculated_at: nowIso,
+      } as T);
     default:
       return clone({ items: [], calculated_at: nowIso } as T);
   }

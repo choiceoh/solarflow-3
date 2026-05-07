@@ -230,6 +230,13 @@ export default function ProcurementPage() {
   const [blMfgFilter, setBlMfgFilter] = useState("")
   const [blDateRange, setBlDateRange] = useState<DateRangeValue>(null)
   const [selectedBL, setSelectedBL] = useState<string | null>(null)
+  useEffect(() => {
+    const targetId = new URLSearchParams(location.search).get("bl_id")
+    if (!targetId) return
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(targetId)) return
+    setActiveTab("bl")
+    setSelectedBL(targetId)
+  }, [location.search])
   const [blsVersion, setBlsVersion] = useState(0)
   const [blPage, setBlPage] = useState(1)
   const [blPageSize, setBlPageSize] = useState(100)
@@ -914,9 +921,7 @@ export default function ProcurementPage() {
                         ]}
                       />
                     </div>
-                    {ttLoading ? (
-                      <LoadingSpinner />
-                    ) : (
+                    {ttLoading ? <LoadingSpinner /> : (
                       <>
                         <TTListTable items={tts} focusTTId={focusTTId} />
                         <PaginationBar
