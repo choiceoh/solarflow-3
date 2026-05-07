@@ -162,7 +162,7 @@ function ProviderSection({
       <div className="space-y-2">
         <div>
           <Label className="text-xs">Provider</Label>
-          <Select value={config.provider} onValueChange={onProviderChange}>
+          <Select value={config.provider} onValueChange={(v) => v !== null && onProviderChange(v)}>
             <SelectTrigger className="mt-1 h-8 text-xs">
               <span className="truncate">{PROVIDER_OPTIONS.find((p) => p.value === config.provider)?.label ?? config.provider}</span>
             </SelectTrigger>
