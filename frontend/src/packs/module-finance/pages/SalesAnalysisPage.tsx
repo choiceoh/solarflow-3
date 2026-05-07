@@ -64,6 +64,7 @@ interface PageState {
 
 type PeriodFilter = 'all' | 'last3' | 'year' | 'custom';
 type MarginFilter = 'all' | 'missing_cost' | 'low_margin' | 'negative_margin';
+type ReconciliationLevel = 'good' | 'watch' | 'risk';
 // D-064 PR 30: 마진 분석 원가 기준 토글.
 // fifo: ERP fifo_matches (PR 26) 직접 사용 — 가장 정확. 매칭된 출고만 cover.
 // landed: 면장 + 부대비용 합산 (관세/부가세 포함 확정원가 추정).
@@ -239,6 +240,21 @@ function withinRange(date: string | undefined, dateFrom?: string, dateTo?: strin
   return true;
 }
 
+function pct(numerator: number, denominator: number): number {
+  if (denominator <= 0) return 0;
+  return round2((numerator / denominator) * 100);
+}
+
+function moneyDelta(a: number, b: number): number {
+  return Math.abs(Math.round(a - b));
+}
+
+function levelTone(level: ReconciliationLevel): string {
+  if (level === 'good') return 'bg-green-100 text-green-700';
+  if (level === 'watch') return 'bg-amber-100 text-amber-700';
+  return 'bg-red-100 text-red-700';
+}
+
 export default function SalesAnalysisPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [period, setPeriod] = useState<PeriodFilter>('all');
@@ -302,6 +318,7 @@ export default function SalesAnalysisPage() {
           {
             ...calcFilterBody,
             ...(manufacturerFilter ? { manufacturer_id: manufacturerFilter } : {}),
+            ...(customerFilter ? { customer_id: customerFilter } : {}),
           },
           mergeMargin,
         )
@@ -435,6 +452,200 @@ export default function SalesAnalysisPage() {
       rate: coveredRevenue > 0 ? round2((totalMargin / coveredRevenue) * 100) : 0,
     };
   }, [shownMarginItems]);
+  const pendingInvoiceSales = useMemo(() => filteredSales.filter((item) => !item.sale.tax_invoice_date), [filteredSales]);
+  const pendingInvoiceRevenue = useMemo(
+    () => pendingInvoiceSales.reduce((sum, item) => sum + (item.sale.supply_amount ?? 0), 0),
+    [pendingInvoiceSales],
+  );
+  const missingCostRows = useMemo(() => {
+    return margin.items
+      .map((item) => ({
+        item,
+        missingRevenue: item.cost_missing_revenue_krw ?? (item.total_cost_krw == null ? item.total_revenue_krw : 0),
+      }))
+      .filter((row) => row.missingRevenue > 0)
+      .sort((a, b) => b.missingRevenue - a.missingRevenue)
+      .slice(0, 5);
+  }, [margin.items]);
+  const marginDragRows = useMemo(() => {
+    const portfolioRate = margin.summary.overall_margin_rate;
+    return margin.items
+      .map((item) => {
+        const coveredRevenue = item.cost_covered_revenue_krw ?? (item.total_cost_krw != null ? item.total_revenue_krw : 0);
+        const rate = item.margin_rate;
+        const dragKrw = rate != null && coveredRevenue > 0 && rate < portfolioRate
+          ? coveredRevenue * ((portfolioRate - rate) / 100)
+          : 0;
+        return { item, coveredRevenue, dragKrw: round2(dragKrw) };
+      })
+      .filter((row) => row.dragKrw > 0 || (row.item.total_margin_krw ?? 0) < 0)
+      .sort((a, b) => b.dragKrw - a.dragKrw)
+      .slice(0, 5);
+  }, [margin.items, margin.summary.overall_margin_rate]);
+  const manufacturerDeepRows = useMemo(() => {
+    const map = new Map<string, {
+      manufacturer: string;
+      revenue: number;
+      coveredRevenue: number;
+      missingRevenue: number;
+      cost: number;
+      margin: number;
+      kw: number;
+      saleCount: number;
+    }>();
+    for (const item of margin.items) {
+      const key = item.manufacturer_name || '제조사 없음';
+      const prev = map.get(key) ?? {
+        manufacturer: key,
+        revenue: 0,
+        coveredRevenue: 0,
+        missingRevenue: 0,
+        cost: 0,
+        margin: 0,
+        kw: 0,
+        saleCount: 0,
+      };
+      const coveredRevenue = item.cost_covered_revenue_krw ?? (item.total_cost_krw != null ? item.total_revenue_krw : 0);
+      const missingRevenue = item.cost_missing_revenue_krw ?? (item.total_cost_krw == null ? item.total_revenue_krw : 0);
+      const cost = item.total_cost_krw ?? 0;
+      map.set(key, {
+        ...prev,
+        revenue: prev.revenue + item.total_revenue_krw,
+        coveredRevenue: prev.coveredRevenue + coveredRevenue,
+        missingRevenue: prev.missingRevenue + missingRevenue,
+        cost: prev.cost + cost,
+        margin: prev.margin + (coveredRevenue - cost),
+        kw: prev.kw + item.total_sold_kw,
+        saleCount: prev.saleCount + item.sale_count,
+      });
+    }
+    return Array.from(map.values())
+      .map((row) => ({
+        ...row,
+        marginRate: row.coveredRevenue > 0 ? round2((row.margin / row.coveredRevenue) * 100) : null,
+        revenueShare: pct(row.revenue, margin.summary.total_revenue_krw),
+        missingRate: pct(row.missingRevenue, row.revenue),
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 6);
+  }, [margin.items, margin.summary.total_revenue_krw]);
+  const customerRiskRows = useMemo(() => {
+    return customers.items
+      .map((item) => {
+        const marginRate = item.avg_margin_rate ?? 0;
+        const overdueBoost = Math.min(2, item.oldest_outstanding_days / 60);
+        const marginPenalty = item.avg_margin_rate == null ? 0 : Math.max(0, 8 - marginRate) * item.total_sales_krw * 0.01;
+        const score = item.outstanding_krw * (1 + overdueBoost) + marginPenalty;
+        const signal = item.oldest_outstanding_days >= 60
+          ? '연체'
+          : item.outstanding_krw > 0
+            ? '미수'
+            : item.avg_margin_rate != null && item.avg_margin_rate < 8
+              ? '저마진'
+              : '정상';
+        return { item, score, signal };
+      })
+      .filter((row) => row.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+  }, [customers.items]);
+  const reconciliationRows = useMemo(() => {
+    const engineDelta = moneyDelta(salesSummary.supply, margin.summary.total_revenue_krw);
+    const engineDeltaRate = pct(engineDelta, Math.max(salesSummary.supply, margin.summary.total_revenue_krw));
+    const missingCostRate = pct(costMissingRevenue, margin.summary.total_revenue_krw);
+    const outstandingRate = pct(customers.summary.total_outstanding_krw, customers.summary.total_sales_krw);
+    return [
+      {
+        name: '매출원장 ↔ 이익엔진',
+        value: formatKRW(engineDelta),
+        sub: `${engineDeltaRate.toFixed(2)}% 차이`,
+        level: engineDeltaRate < 0.1 ? 'good' as const : engineDeltaRate < 1 ? 'watch' as const : 'risk' as const,
+      },
+      {
+        name: '세금계산서 미발행',
+        value: `${pendingInvoiceSales.length.toLocaleString('ko-KR')}건`,
+        sub: formatKRW(pendingInvoiceRevenue),
+        level: pendingInvoiceRevenue === 0 ? 'good' as const : 'watch' as const,
+      },
+      {
+        name: '원가 미연결',
+        value: formatKRW(costMissingRevenue),
+        sub: `${missingCostRate.toFixed(1)}%`,
+        level: missingCostRate === 0 ? 'good' as const : missingCostRate < 5 ? 'watch' as const : 'risk' as const,
+      },
+      {
+        name: '수금 미회수',
+        value: formatKRW(customers.summary.total_outstanding_krw),
+        sub: `${outstandingRate.toFixed(1)}%`,
+        level: outstandingRate === 0 ? 'good' as const : outstandingRate < 15 ? 'watch' as const : 'risk' as const,
+      },
+    ];
+  }, [
+    costMissingRevenue,
+    customers.summary.total_outstanding_krw,
+    customers.summary.total_sales_krw,
+    margin.summary.total_revenue_krw,
+    pendingInvoiceRevenue,
+    pendingInvoiceSales.length,
+    salesSummary.supply,
+  ]);
+  const actionQueue = useMemo(() => {
+    const actions: { title: string; value: string; detail: string }[] = [];
+    const topMissing = missingCostRows[0];
+    if (topMissing) {
+      actions.push({
+        title: '원가 연결',
+        value: formatKRW(topMissing.missingRevenue),
+        detail: `${topMissing.item.product_code} 원가부터 연결`,
+      });
+    }
+    const topDrag = marginDragRows[0];
+    if (topDrag) {
+      actions.push({
+        title: '저마진 방어',
+        value: formatKRW(topDrag.dragKrw),
+        detail: `${topDrag.item.product_code} 평균 대비 이익 누수`,
+      });
+    }
+    const topCustomerRisk = customerRiskRows[0];
+    if (topCustomerRisk) {
+      actions.push({
+        title: '수금 우선',
+        value: formatKRW(topCustomerRisk.item.outstanding_krw),
+        detail: `${topCustomerRisk.item.customer_name} · ${topCustomerRisk.signal}`,
+      });
+    }
+    if (pendingInvoiceRevenue > 0) {
+      actions.push({
+        title: '계산서 발행',
+        value: `${pendingInvoiceSales.length.toLocaleString('ko-KR')}건`,
+        detail: `${formatKRW(pendingInvoiceRevenue)} 공급가 미발행`,
+      });
+    }
+    if (actions.length === 0) {
+      actions.push({ title: '정상 범위', value: '대기', detail: '큰 이익 누수 신호 없음' });
+    }
+    return actions.slice(0, 4);
+  }, [customerRiskRows, marginDragRows, missingCostRows, pendingInvoiceRevenue, pendingInvoiceSales.length]);
+  const causeRows = useMemo(() => {
+    const rows = marginDragRows.slice(0, 3).map((row) => ({
+      key: `drag-${row.item.product_code}-${row.item.spec_wp}`,
+      kind: '저마진',
+      target: row.item.product_code,
+      value: formatKRW(row.dragKrw),
+      basis: `${row.item.margin_rate?.toFixed(1) ?? '—'}% · 평균 ${margin.summary.overall_margin_rate.toFixed(1)}%`,
+    }));
+    for (const row of missingCostRows.slice(0, 3)) {
+      rows.push({
+        key: `missing-${row.item.product_code}-${row.item.spec_wp}`,
+        kind: '원가 없음',
+        target: row.item.product_code,
+        value: formatKRW(row.missingRevenue),
+        basis: '이익률 계산 제외',
+      });
+    }
+    return rows.slice(0, 6);
+  }, [margin.summary.overall_margin_rate, marginDragRows, missingCostRows]);
   const manufacturerLabel = manufacturerFilter
     ? (manufacturers.find((m) => m.manufacturer_id === manufacturerFilter)?.short_name
       ?? manufacturers.find((m) => m.manufacturer_id === manufacturerFilter)?.name_kr
@@ -603,6 +814,117 @@ export default function SalesAnalysisPage() {
         />
       </div>
 
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+        <CardB title="이익 원인 분해" sub="저마진 · 원가 공백 우선순위">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>구분</TableHead>
+                <TableHead>대상</TableHead>
+                <TableHead className="text-right">규모</TableHead>
+                <TableHead className="text-right">근거</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {causeRows.map((row) => (
+                <TableRow key={row.key}>
+                  <TableCell className="text-xs">
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${row.kind === '원가 없음' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{row.kind}</span>
+                  </TableCell>
+                  <TableCell className="text-xs font-medium">{row.target}</TableCell>
+                  <TableCell className="text-right text-xs font-medium">{row.value}</TableCell>
+                  <TableCell className="text-right text-xs text-muted-foreground">{row.basis}</TableCell>
+                </TableRow>
+              ))}
+              {causeRows.length === 0 && (
+                <TableRow><TableCell colSpan={4} className="py-8 text-center text-xs text-muted-foreground">큰 이익 누수 신호가 없습니다</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardB>
+
+        <CardB title="거래처 위험 우선순위" sub="미수 · 연체 · 저마진 복합 점수">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>거래처</TableHead>
+                <TableHead>신호</TableHead>
+                <TableHead className="text-right">미수</TableHead>
+                <TableHead className="text-right">이익률</TableHead>
+                <TableHead className="text-right">최장</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {customerRiskRows.map(({ item, signal }) => (
+                <TableRow key={item.customer_id}>
+                  <TableCell className="text-xs font-medium">{item.customer_name}</TableCell>
+                  <TableCell className="text-xs">
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${signal === '연체' ? 'bg-red-100 text-red-700' : signal === '정상' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{signal}</span>
+                  </TableCell>
+                  <TableCell className="text-right text-xs font-medium">{formatKRW(item.outstanding_krw)}</TableCell>
+                  <TableCell className="text-right text-xs">{item.avg_margin_rate != null ? `${item.avg_margin_rate.toFixed(1)}%` : '—'}</TableCell>
+                  <TableCell className="text-right text-xs">{item.oldest_outstanding_days}일</TableCell>
+                </TableRow>
+              ))}
+              {customerRiskRows.length === 0 && (
+                <TableRow><TableCell colSpan={5} className="py-8 text-center text-xs text-muted-foreground">우선 대응할 거래처 위험이 없습니다</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardB>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <CardB title="제조사별 기여도" sub="매출 비중 · 이익률 · 원가 공백">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>제조사</TableHead>
+                <TableHead className="text-right">매출</TableHead>
+                <TableHead className="text-right">비중</TableHead>
+                <TableHead className="text-right">이익률</TableHead>
+                <TableHead className="text-right">원가공백</TableHead>
+                <TableHead className="text-right">출고</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {manufacturerDeepRows.map((row) => (
+                <TableRow key={row.manufacturer}>
+                  <TableCell className="text-xs font-medium">{row.manufacturer}</TableCell>
+                  <TableCell className="text-right text-xs">{formatKRW(row.revenue)}</TableCell>
+                  <TableCell className="text-right text-xs">{row.revenueShare.toFixed(1)}%</TableCell>
+                  <TableCell className="text-right text-xs font-medium">{row.marginRate != null ? `${row.marginRate.toFixed(1)}%` : '—'}</TableCell>
+                  <TableCell className="text-right text-xs">{row.missingRate.toFixed(1)}%</TableCell>
+                  <TableCell className="text-right text-xs">{row.kw.toFixed(1)}kW</TableCell>
+                </TableRow>
+              ))}
+              {manufacturerDeepRows.length === 0 && (
+                <TableRow><TableCell colSpan={6} className="py-8 text-center text-xs text-muted-foreground">제조사별 분석 데이터가 없습니다</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardB>
+
+        <CardB title="원장 대사 체크" sub="매출 · 세금계산서 · 원가 · 수금">
+          <div className="divide-y divide-[var(--line)]">
+            {reconciliationRows.map((row) => (
+              <div key={row.name} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-medium text-[var(--ink)]">{row.name}</div>
+                  <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">{row.sub}</div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="mono text-xs font-semibold">{row.value}</span>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${levelTone(row.level)}`}>
+                    {row.level === 'good' ? '정상' : row.level === 'watch' ? '주의' : '위험'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardB>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <CardB title="월별 매출" sub="공급가 · 부가세 포함" padded>
             {monthly.length === 0 ? (
@@ -735,6 +1057,19 @@ export default function SalesAnalysisPage() {
             <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">계산 이익 {formatKRW(margin.summary.total_margin_krw)} · 미연결 {formatKRW(costMissingRevenue)}</div>
             <div className="mt-3 h-2 overflow-hidden rounded bg-[var(--bg-2)]">
               <div className="h-full bg-[var(--solar-2)]" style={{ width: `${Math.min(100, costCoverageRate)}%` }} />
+            </div>
+          </RailBlock>
+          <RailBlock title="우선 조치" count={`${actionQueue.length}`}>
+            <div className="space-y-2">
+              {actionQueue.map((action, index) => (
+                <div key={`${action.title}-${index}`} className={index ? 'border-t border-[var(--line)] pt-2' : ''}>
+                  <div className="flex justify-between gap-2 text-[11.5px]">
+                    <span className="font-medium text-[var(--ink)]">{action.title}</span>
+                    <span className="mono text-[var(--ink-2)]">{action.value}</span>
+                  </div>
+                  <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">{action.detail}</div>
+                </div>
+              ))}
             </div>
           </RailBlock>
           <RailBlock title="상위 거래처" count="매출">
