@@ -388,6 +388,7 @@ export default function CommandShell() {
                       data-active={active}
                       data-tooltip={item.label}
                       title={sidebarCollapsed ? item.label : undefined}
+                      viewTransition
                     >
                       {sidebarCollapsed ? (
                         <span className="sf-nav-abbr">{item.abbr}</span>
@@ -426,7 +427,7 @@ export default function CommandShell() {
       <section className="sf-main-shell">
         <header className="sf-topbar">
           <div className="sf-topbar-title">
-            <h1>{meta.title}</h1>
+            <h1 className="sf-vt-page-title">{meta.title}</h1>
             <div id="sf-command-title-slot" className="sf-topbar-command-title" />
           </div>
 
@@ -442,6 +443,7 @@ export default function CommandShell() {
             {canAccessMenu(r, 'import_hub') && (
               <Link
                 to="/import"
+                viewTransition
                 className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 text-xs font-semibold text-[var(--ink)] transition hover:bg-[var(--bg-2)]"
               >
                 <FileSpreadsheet className="h-3.5 w-3.5 text-[var(--ink-3)]" />
