@@ -119,7 +119,9 @@ export default function GroupPurchaseRequestPage() {
 
   const productInfoById = useMemo(() => {
     const mfgMap = new Map<string, Manufacturer>();
-    manufacturers.forEach((m) => mfgMap.set(m.manufacturer_id, m));
+    manufacturers.forEach((m) => {
+      mfgMap.set(m.manufacturer_id, m);
+    });
     const m = new Map<string, { code: string; name: string; mfg: string }>();
     products.forEach((p) => {
       const mfg = mfgMap.get(p.manufacturer_id);

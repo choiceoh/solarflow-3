@@ -15,20 +15,26 @@
 // 단계 (1)~(3) 중 하나라도 빠지면 coverage_test 또는 matrix_consistency_test 가 잡는다.
 package feature
 
+import "solarflow-backend/internal/tenant"
+
 // FeatureID — 카탈로그에 등록된 feature 식별자.
 // 자유 문자열 게이트 호출(g.Feature("foo"))을 막기 위해 별도 타입을 둔다.
 type FeatureID string
 
-// 사전 정의 테넌트 집합 — 한 곳에서만 변경하면 카탈로그 전체에 반영된다.
+// 사전 정의 테넌트 집합 — tenant Registry 에서 파생되어 한 곳에서만 변경하면
+// 카탈로그 전체에 반영된다 (D-120 후속, internal/tenant 도입).
+//
+// 기존 코드 호환을 위해 var 형태와 []string 타입을 그대로 유지한다 — 카탈로그가
+// 컴파일 타임에 한 번만 평가되므로 init 시점에 registry 가 채워준다.
 var (
 	// TenantSetAll — 모든 테넌트가 공유하는 공통 기능에 부여한다.
-	TenantSetAll = []string{"topsolar", "cable", "baro"}
+	TenantSetAll = tenant.IDsInGroupAsStrings(tenant.GroupAll)
 	// TenantSetModule — module 계열(D-119) = topsolar + cable. 수입/금융/원가 영역.
-	TenantSetModule = []string{"topsolar", "cable"}
+	TenantSetModule = tenant.IDsInGroupAsStrings(tenant.GroupModule)
 	// TenantSetTopsolarOnly — 탑솔라 단독. 아마란스 RPA 등 외부 시스템 연동이 후보.
-	TenantSetTopsolarOnly = []string{"topsolar"}
+	TenantSetTopsolarOnly = []string{string(tenant.IDTopsolar)}
 	// TenantSetBaroOnly — 바로(주) 전용(D-108).
-	TenantSetBaroOnly = []string{"baro"}
+	TenantSetBaroOnly = []string{string(tenant.IDBaro)}
 )
 
 // DataScopeKind — 데이터 배선 힌트(D-120).
@@ -121,6 +127,8 @@ const (
 	IDBaroOrders          FeatureID = "baro.orders"
 	IDBaroPriceBook       FeatureID = "baro.price_book"
 	IDBaroPartnerCockpit  FeatureID = "baro.partner_cockpit"
+	IDBaroRFM             FeatureID = "baro.rfm"
+	IDBaroSalesSummary    FeatureID = "baro.sales_summary"
 
 	// ---- calc.* (Rust 계산 프록시) ----
 	IDCalcInventory          FeatureID = "calc.inventory"
@@ -426,6 +434,18 @@ var Catalog = map[FeatureID]Feature{
 		Description:    "거래처 한 명 신용/최근매출/CRM 미처리·활동 합본 (D-125)",
 		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
 		Paths: []string{"/api/v1/baro/partner-cockpit/{partner_id}"},
+	},
+	IDBaroRFM: {
+		ID: IDBaroRFM, Name: "BARO 거래처 RFM 보드",
+		Description:    "활성 거래처 12개월 매출 집계 + 세그먼트 분류 (D-128)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{"/api/v1/baro/rfm/"},
+	},
+	IDBaroSalesSummary: {
+		ID: IDBaroSalesSummary, Name: "BARO 자체 매출 요약",
+		Description:    "영업담당자/거래처타입/월/거래처 4 cut 매출 집계 (D-129)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantCompany,
+		Paths: []string{"/api/v1/baro/sales-summary/"},
 	},
 
 	// ===== calc.* =====

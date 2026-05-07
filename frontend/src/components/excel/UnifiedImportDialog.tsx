@@ -131,7 +131,7 @@ export default function UnifiedImportDialog({
                       <span className="text-[11px] text-muted-foreground">없음</span>
                     )}
                     {s.parseError && (
-                      <span className="text-[11px]" style={{ color: 'var(--sf-neg)' }}>오류</span>
+                      <span className="sf-text-neg text-[11px]">오류</span>
                     )}
                   </TabsTrigger>
                 );
@@ -216,7 +216,7 @@ function SectionPanel({ section, filter, onFilter }: PanelProps) {
     return (
       <div className="rounded-md border p-4" style={{ borderColor: 'var(--sf-neg-2)' }}>
         <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4" style={{ color: 'var(--sf-neg)' }} />
+          <AlertTriangle className="sf-text-neg h-4 w-4" />
           <p className="text-sm font-medium">{section.label} 파싱 실패</p>
         </div>
         <p className="mt-1.5 text-xs text-muted-foreground">{section.parseError}</p>
@@ -244,11 +244,11 @@ function SectionPanel({ section, filter, onFilter }: PanelProps) {
           <TabsList>
             <TabsTrigger value="declarations">
               면장 ({declValid}/{section.declPreview.declarations.length})
-              {declError > 0 && <span style={{ color: 'var(--sf-neg)' }}> · 에러 {declError}</span>}
+              {declError > 0 && <span className="sf-text-neg"> · 에러 {declError}</span>}
             </TabsTrigger>
             <TabsTrigger value="costs">
               원가 ({costValid}/{section.declPreview.costs.length})
-              {costError > 0 && <span style={{ color: 'var(--sf-neg)' }}> · 에러 {costError}</span>}
+              {costError > 0 && <span className="sf-text-neg"> · 에러 {costError}</span>}
             </TabsTrigger>
           </TabsList>
           <TabsContent value="declarations" className="flex-1 overflow-auto mt-2">
@@ -304,12 +304,12 @@ function SectionMeta({ valid, total, filter, onFilter }: MetaProps) {
   const error = total - valid;
   return (
     <div className="flex items-center gap-2 text-xs">
-      <CheckCircle2 className="h-3.5 w-3.5" style={{ color: 'var(--sf-pos)' }} />
+      <CheckCircle2 className="sf-text-pos h-3.5 w-3.5" />
       <span className="font-medium">{total}건</span>
       <span className="text-muted-foreground">유효</span>
-      <span style={{ color: 'var(--sf-pos)' }}>{valid}</span>
+      <span className="sf-text-pos">{valid}</span>
       <span className="text-muted-foreground">에러</span>
-      <span style={{ color: 'var(--sf-neg)' }}>{error}</span>
+      <span className="sf-text-neg">{error}</span>
       <div className="ml-auto flex gap-1">
         <FilterChip current={filter} mode="all" label="전체" onClick={onFilter} />
         <FilterChip current={filter} mode="valid" label="유효" onClick={onFilter} />

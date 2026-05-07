@@ -178,7 +178,10 @@ export default function InventoryPage() {
   }, [selectedCompanyId]);
 
   // location.key가 바뀔 때마다 (다른 메뉴→재고로 돌아올 때) 배정 목록 갱신
-  useEffect(() => { fetchAllocations(); }, [fetchAllocations, location.key]);
+  useEffect(() => {
+    void location.key;
+    fetchAllocations();
+  }, [fetchAllocations, location.key]);
 
   // URL → 상태 동기화
   useEffect(() => {
@@ -377,18 +380,23 @@ export default function InventoryPage() {
 
   // 제조사 변경 시 규격 필터 초기화 — 사용자 입력(mfgFilter) → 의존 상태 동기화
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setWpFilter(''); }, [mfgFilter]);
+  useEffect(() => {
+    void mfgFilter;
+    setWpFilter('');
+  }, [mfgFilter]);
 
   // product_id → { product_code, product_name, spec_wp, manufacturer_name } 맵 (배정 테이블 표시용)
   // rawInv는 필터 미적용 전체 목록이므로 항상 전체 품목 포함
   const productMap = useMemo(() => {
     const m = new Map<string, { product_code: string; product_name: string; spec_wp: number; manufacturer_name: string }>();
-    rawInv?.items.forEach((it) => m.set(it.product_id, {
-      product_code:      it.product_code,
-      product_name:      it.product_name,
-      spec_wp:           it.spec_wp,
-      manufacturer_name: it.manufacturer_name,
-    }));
+    rawInv?.items.forEach((it) => {
+      m.set(it.product_id, {
+        product_code:      it.product_code,
+        product_name:      it.product_name,
+        spec_wp:           it.spec_wp,
+        manufacturer_name: it.manufacturer_name,
+      });
+    });
     return m;
   }, [rawInv]);
 

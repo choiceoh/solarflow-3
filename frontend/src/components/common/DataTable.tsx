@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { TableSummaryMode } from '@/lib/tableSummary';
+import EmptyState from './EmptyState';
 import MetaTable, { type ColumnDef } from './MetaTable';
 import SearchInput from './SearchInput';
 
@@ -25,6 +26,10 @@ interface DataTableProps<T extends object> {
   columns: Column<T>[];
   data: T[];
   loading: boolean;
+  /** 데이터 로드 실패 메시지. 비어있지 않으면 loading/data 보다 우선해서 error EmptyState 렌더. */
+  error?: string | null;
+  /** 실패 시 재시도 버튼 핸들러 — error 와 함께 지정해야 노출. */
+  onRetry?: () => void;
   searchable?: boolean;
   searchPlaceholder?: string;
   onSearch?: (query: string) => void;
@@ -57,6 +62,8 @@ export default function DataTable<T extends object>({
   columns,
   data,
   loading,
+  error,
+  onRetry,
   searchable,
   searchPlaceholder,
   onSearch,
@@ -113,7 +120,15 @@ export default function DataTable<T extends object>({
         <SearchInput placeholder={searchPlaceholder} onChange={onSearch} />
       )}
       <div className="rounded-md border">
-        {loading ? (
+        {error ? (
+          <EmptyState
+            tone="error"
+            message="데이터를 불러오지 못했습니다"
+            description={error}
+            actionLabel={onRetry ? '다시 시도' : undefined}
+            onAction={onRetry}
+          />
+        ) : loading ? (
           <Table>
             <TableHeader>
               <TableRow>

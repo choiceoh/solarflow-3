@@ -2,6 +2,7 @@ import { ArrowUp, ArrowDown } from 'lucide-react';
 import {
   Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import EmptyState from '@/components/common/EmptyState';
 import { formatUSD, formatDate } from '@/lib/utils';
 import type { LimitChange } from '@/types/banking';
 
@@ -11,7 +12,7 @@ interface Props {
 
 export default function LimitChangeTable({ items }: Props) {
   if (items.length === 0) {
-    return <p className="py-6 text-center text-sm" style={{ color: 'var(--sf-ink-3)' }}>한도 변경 이력이 없습니다</p>;
+    return <EmptyState message="한도 변경 이력이 없습니다" />;
   }
 
   const totalDiff = items.reduce((sum, c) => sum + c.new_limit - c.previous_limit, 0);
@@ -41,10 +42,7 @@ export default function LimitChangeTable({ items }: Props) {
               <TableCell className="text-sm text-right">{formatUSD(c.previous_limit)}</TableCell>
               <TableCell className="text-sm text-right">{formatUSD(c.new_limit)}</TableCell>
               <TableCell className="text-right text-sm tabular-nums">
-                <span
-                  className="inline-flex items-center gap-0.5 font-semibold"
-                  style={{ color: isIncrease ? 'var(--sf-pos)' : 'var(--sf-neg)' }}
-                >
+                <span className={`inline-flex items-center gap-0.5 font-semibold ${isIncrease ? 'sf-text-pos' : 'sf-text-neg'}`}>
                   {isIncrease ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
                   {formatUSD(Math.abs(diff))}
                 </span>
@@ -61,10 +59,7 @@ export default function LimitChangeTable({ items }: Props) {
           <TableCell />
           <TableCell />
           <TableCell className="text-right text-sm tabular-nums">
-            <span
-              className="inline-flex items-center gap-0.5 font-medium"
-              style={{ color: isTotalIncrease ? 'var(--sf-pos)' : isTotalDecrease ? 'var(--sf-neg)' : 'var(--sf-ink)' }}
-            >
+            <span className={`inline-flex items-center gap-0.5 font-medium ${isTotalIncrease ? 'sf-text-pos' : isTotalDecrease ? 'sf-text-neg' : 'sf-text-ink'}`}>
               {isTotalIncrease ? <ArrowUp className="h-3.5 w-3.5" /> : isTotalDecrease ? <ArrowDown className="h-3.5 w-3.5" /> : null}
               {formatUSD(Math.abs(totalDiff))}
             </span>

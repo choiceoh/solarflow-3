@@ -26,13 +26,13 @@ export default function LCFeeDetail({ fee }: Props) {
           </span>
         </div>
         <div className="flex flex-col gap-0.5">
-          <span className="sf-eyebrow" style={{ color: 'var(--sf-solar-3)' }}>합계</span>
-          <span className="sf-mono text-[13px] font-bold tabular-nums" style={{ color: 'var(--sf-solar-3)' }}>
+          <span className="sf-eyebrow sf-text-solar">합계</span>
+          <span className="sf-mono sf-text-solar text-[13px] font-bold tabular-nums">
             {formatKRW(fee.total_fee)}
           </span>
         </div>
       </div>
-      <p className="sf-mono mt-2 text-[10px]" style={{ color: 'var(--sf-ink-3)' }}>
+      <p className="sf-mono sf-text-ink-3 mt-2 text-[10px]">
         {fee.fee_note || '예상 금액 · 실제 청구와 차이 가능'}
       </p>
     </div>

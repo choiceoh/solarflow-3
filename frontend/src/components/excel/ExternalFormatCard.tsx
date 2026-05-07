@@ -526,33 +526,33 @@ function ConvertResultDialog({ open, state, targetLabel, onClose, onProceed, onU
         </DialogHeader>
 
         <div className="flex flex-wrap gap-2 text-xs">
-          <span className="rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-pos-bg)', color: 'var(--sf-pos)' }}>
+          <span className="sf-tone-pos rounded px-2 py-1 font-medium">
             변환 {result.rows.length}행
           </span>
           {result.resolvedFromSection > 0 && (
-            <span className="rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-info-bg)', color: 'var(--sf-info)' }}>
+            <span className="sf-tone-info rounded px-2 py-1 font-medium">
               자유 날짜 보정 {result.resolvedFromSection}건
             </span>
           )}
           {result.filledFromAbove > 0 && (
-            <span className="rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-info-bg)', color: 'var(--sf-info)' }}>
+            <span className="sf-tone-info rounded px-2 py-1 font-medium">
               메타 forward-fill {result.filledFromAbove}건
             </span>
           )}
           {ambiguousCompany.length + ambiguousProduct.length > 0 && (
-            <span className="flex items-center gap-1 rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-warn-bg)', color: 'var(--sf-warn)' }}>
+            <span className="sf-tone-warn flex items-center gap-1 rounded px-2 py-1 font-medium">
               <AlertTriangle className="h-3 w-3" />
               유사 후보 확인 {ambiguousCompany.length + ambiguousProduct.length}건
             </span>
           )}
           {newCompany.length + newProduct.length > 0 && (
-            <span className="flex items-center gap-1 rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-info-bg)', color: 'var(--sf-info)' }}>
+            <span className="sf-tone-info flex items-center gap-1 rounded px-2 py-1 font-medium">
               <Plus className="h-3 w-3" />
               신규 등록 대기 {newCompany.length + newProduct.length}건
             </span>
           )}
           {result.warnings.length > 0 && (
-            <span className="rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-warn-bg)', color: 'var(--sf-warn)' }}>
+            <span className="sf-tone-warn rounded px-2 py-1 font-medium">
               누락 행 {result.warnings.length}건
             </span>
           )}
@@ -561,7 +561,7 @@ function ConvertResultDialog({ open, state, targetLabel, onClose, onProceed, onU
         <div className="flex-1 overflow-y-auto space-y-3">
           {ambiguousCompany.length === 0 && ambiguousProduct.length === 0
               && newCompany.length === 0 && newProduct.length === 0 && (
-            <div className="rounded border border-[var(--line)] bg-[var(--sf-pos-bg)] p-3 text-[12px]" style={{ color: 'var(--sf-pos)' }}>
+            <div className="sf-tone-pos rounded border border-[var(--line)] p-3 text-[12px]">
               <CheckCircle2 className="mr-1.5 inline h-4 w-4" />
               모든 행이 자동 매핑되었습니다. 다음 단계의 표준 검증으로 진행하세요.
             </div>

@@ -3,6 +3,8 @@ name: Enable auto-merge on PR open
 on:
   pull_request:
     types: [opened, reopened, ready_for_review]
+  push:
+    branches: [main]
 
 permissions:
   contents: write
@@ -10,9 +12,34 @@ permissions:
 
 jobs:
   enable:
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - run: gh pr merge ${{ github.event.pull_request.number }} --auto --merge --repo ${{ github.repository }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  refresh-behind-prs:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update BEHIND PRs with auto-merge enabled
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          mapfile -t prs < <(gh pr list --repo "$REPO" --base main --state open \
+            --json number,isDraft,autoMergeRequest,mergeStateStatus \
+            --jq '.[] | select(.isDraft == false and .autoMergeRequest != null and .mergeStateStatus == "BEHIND") | .number')
+          if [ ${#prs[@]} -eq 0 ]; then
+            echo "No BEHIND PRs with auto-merge enabled."
+            exit 0
+          fi
+          echo "Updating ${#prs[@]} BEHIND PR(s): ${prs[*]}"
+          for pr in "${prs[@]}"; do
+            if gh api -X PUT "repos/$REPO/pulls/$pr/update-branch" --silent; then
+              echo "Updated PR #$pr"
+            else
+              echo "::warning::Failed to update PR #$pr (likely conflicts)"
+            fi
+          done

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -45,15 +45,14 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
   const { data: outbounds, loading: obLoading } = useOrderOutbounds(orderId);
   const [sales, setSales] = useState<Sale[]>([]);
 
-  const loadSales = async () => {
+  const loadSales = useCallback(async () => {
     const list = await fetchWithAuth<Array<{ sale?: Sale } & Sale>>(`/api/v1/sales?order_id=${orderId}`);
     setSales(list.map((item) => item.sale ?? item));
-  };
+  }, [orderId]);
 
   useEffect(() => {
     loadSales().catch(() => setSales([]));
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- loadSales는 매 렌더 재생성되는 내부 헬퍼
-  }, [orderId]);
+  }, [loadSales]);
 
   if (loading) return <LoadingSpinner />;
   if (!order) {

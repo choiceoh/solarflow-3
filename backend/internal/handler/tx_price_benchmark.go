@@ -39,22 +39,33 @@ func NewPriceBenchmarkHandler(db *supa.Client) *PriceBenchmarkHandler {
 	}
 }
 
+// benchmarkSource — PR 46: Endpoint/TimeWindow/Site 추가하여 source 별로 검색 분기.
+// Endpoint: "search"(기본) | "news" | "scholar". TimeWindow: "day"|"week"|"month"|"year"|"".
+// Site: site: 연산자 (e.g. "ir.jinkosolar.com OR ir.longi.com").
 type benchmarkSource struct {
-	Key      string
-	Name     string
-	Homepage string
-	Query    string
+	Key        string
+	Name       string
+	Homepage   string
+	Query      string
+	Endpoint   string // PR 46: search|news|scholar (기본 search)
+	TimeWindow string // PR 46: day|week|month|year (기본 "")
+	Site       string // PR 46: site: 연산자 (선택)
 }
 
 var benchmarkSources = []benchmarkSource{
-	{Key: "opis", Name: "OPIS Solar Weekly", Homepage: "https://www.opisnet.com/product/solar-weekly/", Query: "OPIS Solar Weekly Chinese Module Marker CMM FOB China TOPCon 600W forward curve DDP US Europe"},
+	// 주간 발행 시세지 — tbs:qdr:w 로 최근 1주 결과만 (오래된 캐시 페이지 제외).
+	{Key: "opis", Name: "OPIS Solar Weekly", Homepage: "https://www.opisnet.com/product/solar-weekly/", Query: "OPIS Solar Weekly Chinese Module Marker CMM FOB China TOPCon 600W forward curve DDP US Europe", Endpoint: "search", TimeWindow: "week"},
 	// InfoLink — module/polysilicon 만 사용. cell, wafer 는 정확도 이슈로 제외.
-	{Key: "infolink", Name: "InfoLink Consulting", Homepage: "https://www.infolink-group.com/energy-article/solar-topic-price", Query: "InfoLink Consulting weekly solar module polysilicon price centralized distributed project module price"},
-	{Key: "trendforce", Name: "TrendForce EnergyTrend", Homepage: "https://www.energytrend.com/pricequotes.html", Query: "TrendForce EnergyTrend weekly solar module price China export price monthly tender analysis"},
-	{Key: "pvinsights", Name: "PVinsights", Homepage: "https://pvinsights.com/", Query: "PVinsights daily solar module price poly silicon wafer cell price"},
-	{Key: "china_tender", Name: "중국 국영 대량 입찰", Homepage: "https://guangfu.bjx.com.cn/", Query: "北极星 太阳能 光伏 组件 集采 中标 价格 华能 华电 国家能源 国家电投 中国电建 TOPCon"},
-	{Key: "cpia_floor", Name: "CPIA 최저원가 가이던스", Homepage: "https://www.chinapv.org.cn/", Query: "中国光伏行业协会 CPIA 光伏组件 最低成本 价格 指引"},
-	{Key: "tier1_asp", Name: "Tier-1 제조사 ASP", Homepage: "https://ir.jinkosolar.com/", Query: "Jinko Longi Trina JA Solar Tongwei quarterly module ASP dollar per watt"},
+	{Key: "infolink", Name: "InfoLink Consulting", Homepage: "https://www.infolink-group.com/energy-article/solar-topic-price", Query: "InfoLink Consulting weekly solar module polysilicon price centralized distributed project module price", Endpoint: "search", TimeWindow: "week"},
+	{Key: "trendforce", Name: "TrendForce EnergyTrend", Homepage: "https://www.energytrend.com/pricequotes.html", Query: "TrendForce EnergyTrend weekly solar module price China export price monthly tender analysis", Endpoint: "search", TimeWindow: "week"},
+	// 일간 발행 — tbs:qdr:d.
+	{Key: "pvinsights", Name: "PVinsights", Homepage: "https://pvinsights.com/", Query: "PVinsights daily solar module price poly silicon wafer cell price", Endpoint: "search", TimeWindow: "day"},
+	// 중국 입찰 뉴스 — /news 엔드포인트 + 1개월. 입찰 결과는 뉴스성이 강함.
+	{Key: "china_tender", Name: "중국 국영 대량 입찰", Homepage: "https://guangfu.bjx.com.cn/", Query: "北极星 太阳能 光伏 组件 集采 中标 价格 华能 华电 国家能源 国家电投 中国电建 TOPCon", Endpoint: "news", TimeWindow: "month"},
+	// CPIA 정책·가이던스 — 발표 빈도가 낮으므로 1개월.
+	{Key: "cpia_floor", Name: "CPIA 최저원가 가이던스", Homepage: "https://www.chinapv.org.cn/", Query: "中国光伏行业协会 CPIA 光伏组件 最低成本 价格 指引", Endpoint: "search", TimeWindow: "month"},
+	// Tier-1 ASP — 분기 IR 자료. site: 로 IR 도메인 한정 + 3개월(분기).
+	{Key: "tier1_asp", Name: "Tier-1 제조사 ASP", Homepage: "https://ir.jinkosolar.com/", Query: "Jinko Longi Trina JA Solar Tongwei quarterly module ASP dollar per watt", Endpoint: "search", TimeWindow: "month", Site: "ir.jinkosolar.com OR ir.longi.com OR ir.trinasolar.com OR jasolar.com OR tongwei.com"},
 }
 
 type benchmarkEvidenceItem struct {
@@ -256,8 +267,16 @@ func (h *PriceBenchmarkHandler) AIRefresh(w http.ResponseWriter, r *http.Request
 // req.Context 와 분리된 context.Background 사용 — client 가 끊어도 계속 진행.
 // 자체 timeout 10분 (큰 LLM 호출 + 4 source 병렬 여유).
 func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources []benchmarkSource, provider, llmModel string, maxTokens int) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[ai-refresh async] run=%s PANIC: %v", runID, r)
+			msg := fmt.Sprintf("panic: %v", r)
+			h.finishRun(runID, "failed", 0, 0, &msg, nil, nil, nil)
+		}
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+	log.Printf("[ai-refresh async] run=%s start sources=%d provider=%s", runID, len(sources), provider)
 
 	// PR 41: 병렬 분산 + 취합 — source 별 shard 로 분리 호출.
 	// 이전 단일 LLM 호출은 모든 source 의 evidence 를 한번에 던져 컨텍스트 초과 빈발.
@@ -278,28 +297,42 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 		wg.Add(1)
 		go func(i int, src benchmarkSource) {
 			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					shards[i].err = fmt.Errorf("panic: %v", r)
+					log.Printf("[ai-refresh async] src=%s PANIC: %v", src.Key, r)
+				}
+			}()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			shards[i].src = src
-			ev, w := h.collectBenchmarkEvidence(ctx, []benchmarkSource{src})
+			// PR 44: source 별 명시적 timeout 4분 (vLLM 응답 1~2분 정상 + 여유).
+			srcCtx, srcCancel := context.WithTimeout(ctx, 4*time.Minute)
+			defer srcCancel()
+			ev, w := h.collectBenchmarkEvidence(srcCtx, []benchmarkSource{src})
 			shards[i].evidence = ev
 			shards[i].warnings = w
 			if len(ev) == 0 {
 				shards[i].warnings = append(shards[i].warnings, fmt.Sprintf("%s: evidence 0 — AI 호출 skip", src.Key))
+				log.Printf("[ai-refresh async] src=%s evidence 0", src.Key)
 				return
 			}
-			raw, err := h.extractBenchmarksWithAI(ctx, provider, llmModel, maxTokens, ev)
+			log.Printf("[ai-refresh async] src=%s evidence=%d, LLM 호출 시작", src.Key, len(ev))
+			raw, err := h.extractBenchmarksWithAI(srcCtx, provider, llmModel, maxTokens, ev)
 			shards[i].raw = raw
 			if err != nil {
 				shards[i].err = err
+				log.Printf("[ai-refresh async] src=%s LLM 실패: %v", src.Key, err)
 				return
 			}
 			out, perr := parsePriceBenchmarkAIOutput(raw)
 			if perr != nil {
 				shards[i].err = perr
+				log.Printf("[ai-refresh async] src=%s parse 실패: %v", src.Key, perr)
 				return
 			}
 			shards[i].output = &out
+			log.Printf("[ai-refresh async] src=%s ok points=%d", src.Key, len(out.Points))
 		}(i, src)
 	}
 	wg.Wait()
@@ -355,23 +388,29 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, sources []benchmarkSource) ([]benchmarkEvidenceItem, []string) {
 	var evidence []benchmarkEvidenceItem
 	var warnings []string
-	tavilyKey := strings.TrimSpace(os.Getenv("TAVILY_API_KEY"))
-	if tavilyKey == "" {
-		warnings = append(warnings, "TAVILY_API_KEY 미설정: 공개 URL 직접 조회와 AI 추출만 사용했습니다")
+	// PR 45: Tavily → Serper 전환
+	serperKey := strings.TrimSpace(os.Getenv("SERPER_API_KEY"))
+	if serperKey == "" {
+		warnings = append(warnings, "SERPER_API_KEY 미설정: 공개 URL 직접 조회와 AI 추출만 사용했습니다")
 	}
 
 	for _, src := range sources {
 		if src.Homepage != "" {
-			if item, err := h.fetchHomepageEvidence(ctx, src); err == nil {
+			// PR 46: Serper scrape 우선 (정제된 markdown), 실패 시 raw HTTP fallback.
+			if item, err := h.fetchHomepageViaSerperScrape(ctx, serperKey, src); err == nil {
 				evidence = append(evidence, item)
+			} else if item, err2 := h.fetchHomepageEvidence(ctx, src); err2 == nil {
+				evidence = append(evidence, item)
+				warnings = append(warnings, fmt.Sprintf("%s scrape 실패→raw fallback: %v", src.Name, err))
 			} else {
-				warnings = append(warnings, fmt.Sprintf("%s 홈페이지 조회 실패: %v", src.Name, err))
+				warnings = append(warnings, fmt.Sprintf("%s 홈페이지 조회 실패: scrape=%v / raw=%v", src.Name, err, err2))
 			}
 		}
-		if tavilyKey == "" {
+		if serperKey == "" {
 			continue
 		}
-		results, err := h.searchTavily(ctx, tavilyKey, src.Query, 4)
+		// PR 46: source 별 endpoint/tbs/site 분기.
+		results, err := h.searchSerperForSource(ctx, serperKey, src, 4)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("%s 웹 검색 실패: %v", src.Name, err))
 			continue
@@ -382,7 +421,7 @@ func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, so
 				SourceName: src.Name,
 				Title:      result.Title,
 				URL:        result.URL,
-				Content:    truncate(result.Content, 1800),
+				Content:    truncate(result.Content, 900), // PR 44: vLLM 응답 시간 단축 위해 축소
 			})
 		}
 	}
@@ -427,18 +466,31 @@ func (h *PriceBenchmarkHandler) fetchHomepageEvidence(ctx context.Context, src b
 	}, nil
 }
 
-func (h *PriceBenchmarkHandler) searchTavily(ctx context.Context, apiKey, query string, maxResults int) ([]tavilyResultItem, error) {
-	body, _ := json.Marshal(map[string]any{
-		"api_key":      apiKey,
-		"query":        query,
-		"max_results":  clampLimit(maxResults, 3, 6),
-		"search_depth": "basic",
-	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.tavily.com/search", bytes.NewReader(body))
+// searchSerperForSource — PR 46: source 별 endpoint(/search|/news|/scholar)·tbs·site 분기 호출.
+// /news 응답은 news[] 배열이므로 별도 파싱 분기.
+func (h *PriceBenchmarkHandler) searchSerperForSource(ctx context.Context, apiKey string, src benchmarkSource, maxResults int) ([]webSearchResultItem, error) {
+	endpoint := src.Endpoint
+	if endpoint == "" {
+		endpoint = "search"
+	}
+	url := "https://google.serper.dev/" + endpoint
+	q := buildSerperQuery(src.Query, src.Site, "", "", "")
+	reqBody := map[string]any{
+		"q":   q,
+		"num": clampLimit(maxResults, 3, 6),
+		"gl":  "kr",
+		"hl":  "ko",
+	}
+	if tbs := timeWindowToTBS(src.TimeWindow); tbs != "" {
+		reqBody["tbs"] = tbs
+	}
+	body, _ := json.Marshal(reqBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-KEY", apiKey)
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -448,11 +500,99 @@ func (h *PriceBenchmarkHandler) searchTavily(ctx context.Context, apiKey, query 
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
 	}
-	var parsed tavilyResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&parsed); err != nil {
+	rawBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
 		return nil, err
 	}
-	return parsed.Results, nil
+	// /news 응답은 news[] 배열, /search·/scholar 는 organic[].
+	if endpoint == "news" {
+		var parsed struct {
+			News []struct {
+				Title   string `json:"title"`
+				Link    string `json:"link"`
+				Snippet string `json:"snippet"`
+				Date    string `json:"date"`
+				Source  string `json:"source"`
+			} `json:"news"`
+		}
+		if err := json.Unmarshal(rawBody, &parsed); err != nil {
+			return nil, err
+		}
+		out := make([]webSearchResultItem, 0, len(parsed.News))
+		for _, n := range parsed.News {
+			out = append(out, webSearchResultItem{
+				Title:   n.Title,
+				URL:     n.Link,
+				Content: strings.TrimSpace(n.Snippet + " (" + n.Source + " · " + n.Date + ")"),
+				Score:   1.0,
+				Date:    n.Date,
+			})
+		}
+		return out, nil
+	}
+	var parsed serperResponse
+	if err := json.Unmarshal(rawBody, &parsed); err != nil {
+		return nil, err
+	}
+	out := make([]webSearchResultItem, 0, len(parsed.Organic))
+	for _, o := range parsed.Organic {
+		out = append(out, webSearchResultItem{
+			Title:   o.Title,
+			URL:     o.Link,
+			Content: o.Snippet,
+			Score:   1.0,
+		})
+	}
+	return out, nil
+}
+
+// fetchHomepageViaSerperScrape — PR 46. scrape.serper.dev 로 외부 페이지 본문을
+// markdown 으로 추출. raw HTML 24KB 잘라먹기 대신 정제된 본문 → vLLM 토큰 효율 ↑.
+// SERPER_API_KEY 부재 시 즉시 에러 (호출부에서 fallback 으로 raw GET 시도).
+func (h *PriceBenchmarkHandler) fetchHomepageViaSerperScrape(ctx context.Context, apiKey string, src benchmarkSource) (benchmarkEvidenceItem, error) {
+	if apiKey == "" {
+		return benchmarkEvidenceItem{}, fmt.Errorf("SERPER_API_KEY 미설정")
+	}
+	body, _ := json.Marshal(map[string]any{
+		"url":             src.Homepage,
+		"includeMarkdown": true,
+	})
+	scrapeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(scrapeCtx, http.MethodPost, "https://scrape.serper.dev", bytes.NewReader(body))
+	if err != nil {
+		return benchmarkEvidenceItem{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-KEY", apiKey)
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		return benchmarkEvidenceItem{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return benchmarkEvidenceItem{}, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+	}
+	var parsed serperScrapeResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&parsed); err != nil {
+		return benchmarkEvidenceItem{}, err
+	}
+	// markdown 우선, 없으면 text. truncate 2400 (raw HTML 보다 정보 밀도가 높아 동일 cap 으로 충분).
+	content := parsed.Markdown
+	if content == "" {
+		content = parsed.Text
+	}
+	if content == "" {
+		return benchmarkEvidenceItem{}, fmt.Errorf("scrape 결과 본문 비어있음")
+	}
+	return benchmarkEvidenceItem{
+		SourceKey:  src.Key,
+		SourceName: src.Name,
+		Title:      src.Name + " homepage (scrape)",
+		URL:        src.Homepage,
+		Content:    truncate(content, 2400),
+	}, nil
 }
 
 func (h *PriceBenchmarkHandler) extractBenchmarksWithAI(ctx context.Context, provider, llmModel string, maxTokens int, evidence []benchmarkEvidenceItem) (string, error) {
