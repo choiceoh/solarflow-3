@@ -104,11 +104,11 @@ run_engine_checks() {
 }
 
 run_frontend_checks() {
-  require_cmd npm
+  require_cmd bun
   if [[ "${SKIP_FRONTEND:-0}" == "1" ]]; then
     skip_step "Frontend build" "SKIP_FRONTEND=1"
   else
-    run_step "Frontend build" bash -lc "cd '${ROOT_DIR}/frontend' && npm run build"
+    run_step "Frontend build" bash -lc "cd '${ROOT_DIR}/frontend' && bun run build"
   fi
 }
 
@@ -160,7 +160,7 @@ for file in "${CHANGED_FILES[@]}"; do
     engine/*|Cargo.toml|Cargo.lock)
       NEED_ENGINE=1
       ;;
-    frontend/*|package.json|package-lock.json|vite.config.*|tsconfig*.json|components.json)
+    frontend/*|package.json|bun.lock|vite.config.*|tsconfig*.json|components.json)
       NEED_FRONTEND=1
       ;;
     scripts/*.sh|*.sh|backend/scripts/*.sh|engine/scripts/*.sh)
