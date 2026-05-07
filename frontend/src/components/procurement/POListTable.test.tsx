@@ -2,7 +2,7 @@ import type { ComponentProps } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { testBl, testBlLine, testLc, testPo, testPoLine, testTt } from '@/test/fixtures';
-import { callsFor, mockFetchWithAuth, resetAppStore, seedCompanyStore } from '@/test/mockApi';
+import { callsFor, clearFetchWithAuthMock, mockFetchWithAuth, resetAppStore, seedCompanyStore } from '@/test/mockApi';
 import POListTable from './POListTable';
 
 mock.module('@/lib/api', () => ({
@@ -32,7 +32,7 @@ function renderTable(props: Partial<ComponentProps<typeof POListTable>> = {}) {
 
 describe('POListTable', () => {
   afterEach(() => {
-    /* clearAllMocks not needed in bun test - per-file isolation */;
+    clearFetchWithAuthMock();
     resetAppStore();
   });
 
