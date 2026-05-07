@@ -1,6 +1,6 @@
 # SolarFlow 진행 상황
 
-## 현재 상태 요약 (최종 업데이트: 2026-05-03)
+## 현재 상태 요약 (최종 업데이트: 2026-05-07)
 
 | 항목 | 상태 |
 |------|------|
@@ -13,6 +13,30 @@
 | Rust 테스트 | 75개 PASS |
 | DECISIONS | D-001~D-119 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-07 세션 — 출고/판매 안정화 1차
+
+### 완료
+- 출고 검색에서 응답 enrich 전용 필드인 `target_company_name`을 DB 컬럼처럼 참조하던 조건 제거
+  - 상대법인 검색은 `companies.company_name/company_code` 후보를 먼저 찾고 `outbounds.target_company_id IN (...)`으로 연결
+- 출고 Excel Import가 `outbounds` 직접 INSERT로 재고 검증과 RPC 트랜잭션을 우회하던 경로 수정
+  - `ImportHandler`에 Rust Engine 의존성을 주입
+  - 출고 Import도 `OutboundHandler.createOutboundCore`를 재사용해 Rust 재고 검증 + `sf_create_outbound` RPC + 감사로그 경로를 통과
+- 매출 기간 필터 기준 보강
+  - 세금계산서 발행 건은 `tax_invoice_date`, 미발행 건은 연결된 `outbound_date` 또는 `order_date`를 기준일로 사용
+  - 계산서 미발행 매출이 기간 필터에서 사라지는 회귀를 방지
+- 회귀 가드 추가
+  - 출고 검색의 enrich 전용 컬럼 참조 금지
+  - 출고 Import의 직접 INSERT 금지
+  - 매출 기준일 필터 pure 함수 테스트
+
+### 검증
+- `cd backend && go test ./internal/handler` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
 
 ---
 
