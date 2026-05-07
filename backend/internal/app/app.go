@@ -3,6 +3,7 @@
 package app
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 
@@ -10,6 +11,7 @@ import (
 
 	"solarflow-backend/internal/config"
 	"solarflow-backend/internal/engine"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/ocr"
 )
@@ -44,13 +46,48 @@ func New(cfg *config.Config) (*App, error) {
 		log.Println("ℹ️  ENGINE_URL 미설정 — Rust 엔진 미사용")
 	}
 
+	// PR-5b: tenant_features 테이블에서 (tenant, feature_id) override 를 startup 에 한 번 로드.
+	// 실패해도 carchaned default 카탈로그로 동작 — 운영 정지 막음.
+	resolver := feature.NewResolver(nil)
+	if loaded, err := loadFeatureOverrides(db, resolver); err != nil {
+		log.Printf("⚠️  tenant_features override 로딩 실패 — catalog default 만 사용: %v", err)
+	} else if loaded > 0 {
+		log.Printf("✅ tenant_features override %d건 로드", loaded)
+	}
+
 	return &App{
 		DB:    db,
 		Eng:   eng,
 		OCR:   ocr.NewFromEnv(),
 		Cfg:   cfg,
-		Gates: middleware.NewGates(),
+		Gates: middleware.NewGatesWithResolver(resolver),
 	}, nil
+}
+
+// loadFeatureOverrides — tenant_features 테이블의 모든 행을 resolver 에 적용.
+//
+// PR-5b: admin 이 매트릭스 화면에서 토글한 (tenant, feature_id) override 가 server 재시작
+// 후에도 유지되도록 startup 에 한 번 로드한다. PUT 핸들러는 이후 in-memory 캐시를 직접
+// 갱신하므로 여기는 startup 한정.
+func loadFeatureOverrides(db *supa.Client, resolver *feature.Resolver) (int, error) {
+	data, _, err := db.From("tenant_features").
+		Select("tenant,feature_id,enabled", "exact", false).
+		Execute()
+	if err != nil {
+		return 0, err
+	}
+	var rows []struct {
+		Tenant    string `json:"tenant"`
+		FeatureID string `json:"feature_id"`
+		Enabled   bool   `json:"enabled"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return 0, err
+	}
+	for _, row := range rows {
+		resolver.SetOverride(row.Tenant, feature.FeatureID(row.FeatureID), row.Enabled)
+	}
+	return len(rows), nil
 }
 
 // HasEngine — Rust 계산 엔진 사용 가능 여부 (calc/engine 라우트 mount 분기에 사용)

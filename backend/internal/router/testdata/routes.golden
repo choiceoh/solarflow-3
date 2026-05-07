@@ -290,6 +290,7 @@ POST    /api/v1/tts/
 POST    /api/v1/users/
 POST    /api/v1/warehouse-locations/
 POST    /api/v1/warehouses/
+PUT     /api/v1/admin/feature-wiring/{tenantID}/{featureID}
 PUT     /api/v1/banks/{id}
 PUT     /api/v1/baro/dispatch-routes/{id}
 PUT     /api/v1/baro/quotes/{id}
