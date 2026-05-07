@@ -3,7 +3,9 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::Router;
 use serde_json::json;
+use solarflow_engine::model::margin::MarginAnalysisRequest;
 use tower::ServiceExt;
+use uuid::Uuid;
 
 fn test_router() -> Router {
     Router::new()
@@ -138,6 +140,20 @@ async fn test_margin_default_cost_basis() {
         .unwrap();
     let j: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(j["summary"]["cost_basis"], "cif");
+}
+
+#[test]
+fn test_margin_request_accepts_customer_filter() {
+    let customer_id = Uuid::new_v4();
+    let req: MarginAnalysisRequest = serde_json::from_value(json!({
+        "company_id": Uuid::new_v4(),
+        "customer_id": customer_id,
+        "cost_basis": "fifo"
+    }))
+    .unwrap();
+
+    assert_eq!(req.customer_id, Some(customer_id));
+    assert_eq!(req.cost_basis, "fifo");
 }
 
 #[tokio::test]

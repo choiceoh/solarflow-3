@@ -9,6 +9,7 @@ use uuid::Uuid;
 pub struct MarginAnalysisRequest {
     pub company_id: Option<Uuid>,
     pub manufacturer_id: Option<Uuid>,
+    pub customer_id: Option<Uuid>,
     pub product_id: Option<Uuid>,
     pub date_from: Option<String>,
     pub date_to: Option<String>,
