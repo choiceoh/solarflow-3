@@ -376,9 +376,10 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, sources []benchmarkSource) ([]benchmarkEvidenceItem, []string) {
 	var evidence []benchmarkEvidenceItem
 	var warnings []string
-	tavilyKey := strings.TrimSpace(os.Getenv("TAVILY_API_KEY"))
-	if tavilyKey == "" {
-		warnings = append(warnings, "TAVILY_API_KEY 미설정: 공개 URL 직접 조회와 AI 추출만 사용했습니다")
+	// PR 45: Tavily → Serper 전환
+	serperKey := strings.TrimSpace(os.Getenv("SERPER_API_KEY"))
+	if serperKey == "" {
+		warnings = append(warnings, "SERPER_API_KEY 미설정: 공개 URL 직접 조회와 AI 추출만 사용했습니다")
 	}
 
 	for _, src := range sources {
@@ -389,10 +390,10 @@ func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, so
 				warnings = append(warnings, fmt.Sprintf("%s 홈페이지 조회 실패: %v", src.Name, err))
 			}
 		}
-		if tavilyKey == "" {
+		if serperKey == "" {
 			continue
 		}
-		results, err := h.searchTavily(ctx, tavilyKey, src.Query, 4)
+		results, err := h.searchSerper(ctx, serperKey, src.Query, 4)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("%s 웹 검색 실패: %v", src.Name, err))
 			continue
@@ -448,18 +449,21 @@ func (h *PriceBenchmarkHandler) fetchHomepageEvidence(ctx context.Context, src b
 	}, nil
 }
 
-func (h *PriceBenchmarkHandler) searchTavily(ctx context.Context, apiKey, query string, maxResults int) ([]tavilyResultItem, error) {
+// searchSerper — Serper API (Google 검색) 호출. PR 45: Tavily 대체.
+// 응답을 webSearchResultItem (기존 Tavily 호환) shape 으로 변환하여 downstream 호환 유지.
+func (h *PriceBenchmarkHandler) searchSerper(ctx context.Context, apiKey, query string, maxResults int) ([]webSearchResultItem, error) {
 	body, _ := json.Marshal(map[string]any{
-		"api_key":      apiKey,
-		"query":        query,
-		"max_results":  clampLimit(maxResults, 3, 6),
-		"search_depth": "basic",
+		"q":   query,
+		"num": clampLimit(maxResults, 3, 6),
+		"gl":  "kr",
+		"hl":  "ko",
 	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.tavily.com/search", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://google.serper.dev/search", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-KEY", apiKey)
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -469,11 +473,20 @@ func (h *PriceBenchmarkHandler) searchTavily(ctx context.Context, apiKey, query 
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
 	}
-	var parsed tavilyResponse
+	var parsed serperResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&parsed); err != nil {
 		return nil, err
 	}
-	return parsed.Results, nil
+	out := make([]webSearchResultItem, 0, len(parsed.Organic))
+	for _, o := range parsed.Organic {
+		out = append(out, webSearchResultItem{
+			Title:   o.Title,
+			URL:     o.Link,
+			Content: o.Snippet,
+			Score:   1.0,
+		})
+	}
+	return out, nil
 }
 
 func (h *PriceBenchmarkHandler) extractBenchmarksWithAI(ctx context.Context, provider, llmModel string, maxTokens int, evidence []benchmarkEvidenceItem) (string, error) {
