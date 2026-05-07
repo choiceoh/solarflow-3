@@ -19,6 +19,7 @@ import {
   Wallet,
 } from 'lucide-react';
 
+import { MODULE_TENANTS } from '@/lib/tenantScope';
 import type { Pack } from '../types';
 
 export const ERP_CORE_PACK: Pack = {
@@ -35,7 +36,7 @@ export const ERP_CORE_PACK: Pack = {
     { key: 'wms-receiving', label: '입고 검수', abbr: '검수', path: '/wms/receiving', icon: ClipboardCheck, menu: 'wms_receiving', group: '구매', feature: 'tx.receiving_log' },
     { key: 'wms-cycle-count', label: '재고실사', abbr: '실사', path: '/wms/cycle-count', icon: Target, menu: 'wms_cycle_count', group: '현황', feature: 'tx.cycle_count' },
     // 도구
-    { key: 'import-hub', label: '엑셀 입력', abbr: '입력', path: '/import', icon: FileSpreadsheet, menu: 'import_hub', group: '도구', feature: 'io.import' },
+    { key: 'import-hub', label: '엑셀 입력', abbr: '입력', path: '/import', icon: FileSpreadsheet, menu: 'import_hub', group: '도구', feature: 'io.import', tenants: MODULE_TENANTS },
     { key: 'data', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters', group: '도구' },
     { key: 'wms-locations', label: '창고 위치', abbr: '위치', path: '/wms/locations', icon: MapPin, menu: 'wms_locations', group: '도구', feature: 'master.warehouse_location' },
     { key: 'library', label: '자료실', abbr: '자료', path: '/library', icon: LibraryBig, menu: 'library', group: '도구', feature: 'sys.library_post' },

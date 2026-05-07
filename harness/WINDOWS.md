@@ -104,8 +104,8 @@ cargo run --release      # release (운영과 동일, 느림)
 
 ```powershell
 cd frontend
-npm install   # 최초 1회
-npm run dev -- --port 5174
+bun install   # 최초 1회
+bun run dev -- --port 5174
 ```
 
 브라우저: http://localhost:5174
@@ -143,7 +143,7 @@ cd backend
 ## 트러블슈팅
 
 **증상: 프론트엔드 흰 화면, 콘솔에 `VITE_SUPABASE_URL ... 설정되지 않았습니다`**
-→ `frontend/.env` 작성 후 `npm run dev` 재시작. 빌드 모드(`npm run build`)는 빌드 시점 env가 박혀들어가므로 재빌드 필요.
+→ `frontend/.env` 작성 후 `bun run dev` 재시작. 빌드 모드(`bun run build`)는 빌드 시점 env가 박혀들어가므로 재빌드 필요.
 
 **증상: 백엔드가 즉시 종료**
 → `backend/.env` 누락. `go run .`은 working directory의 `.env`를 읽는다. `cd backend` 상태인지 확인.

@@ -62,6 +62,11 @@ type Feature struct {
 	DefaultTenants []string      // 기본 enabled 테넌트 집합. DB override 가 없으면 이게 강제된다.
 	DefaultScope   DataScopeKind // 데이터 스코프 힌트(이번 PR 에서 enforcement 없음)
 	Paths          []string      // chi 라우트 패턴. coverage_test 가 이 목록 ↔ 실제 chi 트리 일치를 검증한다.
+	// FrontendOnly — true 면 backend 라우트 없이 프론트 페이지만 있는 feature.
+	// PR-8 도입: D-126/127/130/131 같은 frontend-only 화면들이 sidebar 가시성을
+	// `enabled_features` 정본으로 결정할 수 있도록 카탈로그에 등재한다.
+	// gates 에는 영향 없고, Paths 는 비어 있어도 됨 — TestCatalogPathsAreReal 가 예외 처리.
+	FrontendOnly bool
 }
 
 // 카탈로그 ID 상수 — 라우트 정의에서 자유 문자열 대신 이 상수를 쓴다.
@@ -115,6 +120,7 @@ const (
 	IDTxPriceBenchmark FeatureID = "tx.price_benchmark"
 	IDTxPriceHistory   FeatureID = "tx.price_history"
 	IDTxTT             FeatureID = "tx.tt"
+	IDTxApproval       FeatureID = "tx.approval" // PR-8: frontend-only 결재안 빌더 (module 계열)
 
 	// ---- intercompany.* (양방향) ----
 	IDIntercompanyRequestBaro  FeatureID = "intercompany.request.baro"  // BARO 측 입력 액션
@@ -134,6 +140,8 @@ const (
 	IDBaroPartnerCockpit  FeatureID = "baro.partner_cockpit"
 	IDBaroRFM             FeatureID = "baro.rfm"
 	IDBaroSalesSummary    FeatureID = "baro.sales_summary"
+	IDBaroHome            FeatureID = "baro.home"            // PR-8: D-127 frontend-only 영업 일일 홈
+	IDBaroInverter        FeatureID = "baro.inverter"        // PR-8: D-130 frontend-only 인버터 호환 가이드
 	IDBaroQuote           FeatureID = "baro.quote"
 	IDBaroCreditCheck     FeatureID = "baro.credit_check"
 	IDBaroShipmentNotice  FeatureID = "baro.shipment_notice"
@@ -294,7 +302,10 @@ var Catalog = map[FeatureID]Feature{
 	IDTxReceiptMatch: {
 		ID: IDTxReceiptMatch, Name: "수금/매출 매칭", Description: "매칭 + 자동 매칭",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/receipt-matches/", "/api/v1/receipt-matches/{id}", "/api/v1/receipt-matches/auto"},
+		Paths: []string{
+			"/api/v1/receipt-matches/", "/api/v1/receipt-matches/{id}",
+			"/api/v1/receipt-matches/bulk", "/api/v1/receipt-matches/auto", "/api/v1/receipt-matches/ai-suggest",
+		},
 	},
 	IDTxPO: {
 		ID: IDTxPO, Name: "PO 발주", Description: "PO + 라인",
@@ -391,6 +402,12 @@ var Catalog = map[FeatureID]Feature{
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
 		Paths: []string{"/api/v1/tts/", "/api/v1/tts/summary", "/api/v1/tts/dashboard", "/api/v1/tts/{id}"},
 	},
+	// PR-8: frontend-only 결재안 빌더 — backend 라우트 0, sidebar 가시성만 카탈로그가 정한다.
+	IDTxApproval: {
+		ID: IDTxApproval, Name: "결재안 빌더", Description: "frontend-only 결재안 텍스트 빌더 (module 계열, isWip)",
+		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
+		FrontendOnly: true,
+	},
 
 	// ===== intercompany.* =====
 	IDIntercompanyRequestBaro: {
@@ -436,6 +453,18 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDBaroIncoming, Name: "BARO 입고예정", Description: "ETA·수량 read-only sanitized (D-116)",
 		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeColumnMasked,
 		Paths: []string{"/api/v1/baro/incoming/"},
+	},
+	// PR-8: D-127 frontend-only 영업 일일 홈 — backend 라우트 0, sidebar 가시성만 카탈로그가 정한다.
+	IDBaroHome: {
+		ID: IDBaroHome, Name: "BARO 영업 일일 홈", Description: "frontend-only 일일 영업 대시보드 (D-127)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		FrontendOnly: true,
+	},
+	// PR-8: D-130 frontend-only 인버터 호환 가이드 — 정적 카탈로그 + 용량 매칭 계산기.
+	IDBaroInverter: {
+		ID: IDBaroInverter, Name: "BARO 인버터 호환 가이드", Description: "frontend-only 정적 카탈로그 10종 + 용량 매칭 (D-130)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		FrontendOnly: true,
 	},
 	IDBaroPurchaseHistory: {
 		ID: IDBaroPurchaseHistory, Name: "BARO 자체 매입원가", Description: "BR 법인 원가 read-only (D-117)",

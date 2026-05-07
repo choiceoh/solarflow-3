@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { motion, LayoutGroup } from 'motion/react';
 
 import { NumberTween } from '@/components/common/NumberTween';
 
@@ -256,26 +257,39 @@ export function FilterChips({
   value: string;
   onChange?: (value: string) => void;
 }) {
+  // useId 로 LayoutGroup 마다 고유 id 부여 → 같은 페이지에 여러 FilterChips 가
+  // 있어도 서로의 active indicator 가 섞이지 않음.
+  const groupId = useId();
   return (
-    <div className="tabs" style={{ border: 'none' }}>
-      {options.map((o) => {
-        const active = value === o.key;
-        return (
-          <button
-            key={o.key}
-            className={`tab${active ? ' active' : ''}`}
-            onClick={() => onChange?.(o.key)}
-            style={{ padding: 'var(--sf-filter-chip-padding, 5px 10px)' }}
-            type="button"
-          >
-            {o.label}
-            {o.count != null ? (
-              <span className="mono" style={{ fontSize: 10, color: 'inherit', marginLeft: 5 }}>{o.count}</span>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
+    <LayoutGroup id={groupId}>
+      <div className="tabs sf-filter-chips" style={{ border: 'none' }}>
+        {options.map((o) => {
+          const active = value === o.key;
+          return (
+            <button
+              key={o.key}
+              className={`tab${active ? ' active' : ''}`}
+              onClick={() => onChange?.(o.key)}
+              style={{ padding: 'var(--sf-filter-chip-padding, 5px 10px)', position: 'relative' }}
+              type="button"
+            >
+              {active && (
+                <motion.span
+                  layoutId="sf-filter-chip-active"
+                  className="sf-filter-chip-indicator"
+                  transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.8 }}
+                  aria-hidden
+                />
+              )}
+              <span style={{ position: 'relative', zIndex: 1 }}>{o.label}</span>
+              {o.count != null ? (
+                <span className="mono" style={{ position: 'relative', zIndex: 1, fontSize: 10, color: 'inherit', marginLeft: 5 }}>{o.count}</span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </LayoutGroup>
   );
 }
 

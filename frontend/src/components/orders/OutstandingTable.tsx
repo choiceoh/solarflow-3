@@ -48,6 +48,7 @@ function OutstandingTable({ items, selectedIds, onToggle }: Props) {
               <TableCell>
                 <Checkbox
                   checked={selectedIds.has(item.outbound_id)}
+                  onClick={(event) => event.stopPropagation()}
                   onCheckedChange={() => onToggle(item.outbound_id)}
                 />
               </TableCell>

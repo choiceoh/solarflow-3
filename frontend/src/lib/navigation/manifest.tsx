@@ -22,42 +22,47 @@ import { ALL_PACKS, buildNavGroups } from '@/packs';
 
 // === Lazy components ===
 //
-// App.tsx 의 인라인 lazy import 들을 그대로 옮긴다. PurchaseHistoryErrorBoundary 처럼
-// `wrap` 으로 감싸야 하는 케이스는 RouteSpec 의 wrap 함수로 처리.
-const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
-const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
-const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
-const PriceForecastPage = lazy(() => import('@/pages/PriceForecastPage'));
-const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
-const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
-const SalesAnalysisPage = lazy(() => import('@/pages/SalesAnalysisPage'));
-const BankingPage = lazy(() => import('@/pages/BankingPage'));
-const ApprovalPage = lazy(() => import('@/pages/ApprovalPage'));
-const SettingsLayout = lazy(() => import('@/pages/settings/SettingsLayout'));
+// PR-7 / PR-11: 페이지 코드는 packs/<id>/pages/ 디렉토리 안에 있다.
+// erp-core (모든 테넌트 공통), module-finance (수입/금융), baro-domain (BARO).
+// settings/* 는 시스템 공통이라 packs 외부 유지.
+const InventoryPage = lazy(() => import('@/packs/erp-core/pages/InventoryPage'));
+const OrdersPage = lazy(() => import('@/packs/erp-core/pages/OrdersPage'));
+const DataPage = lazy(() => import('@/packs/erp-core/pages/DataPage'));
+const LibraryPage = lazy(() => import('@/packs/erp-core/pages/LibraryPage'));
+const ImportHubPage = lazy(() => import('@/packs/erp-core/pages/ImportHubPage'));
+const AssistantPage = lazy(() => import('@/packs/erp-core/pages/AssistantPage'));
+const InsightsPage = lazy(() => import('@/packs/erp-core/pages/InsightsPage'));
+const ConstructionSitesPage = lazy(() => import('@/packs/erp-core/pages/masters/ConstructionSitesPage'));
+const DBIntegrityPage = lazy(() => import('@/packs/erp-core/pages/admin/DBIntegrityPage'));
+const ManufacturerNewPage = lazy(() => import('@/packs/erp-core/pages/data/ManufacturerNewPage'));
+const ManufacturerEditPage = lazy(() => import('@/packs/erp-core/pages/data/ManufacturerEditPage'));
+const ProductNewPage = lazy(() => import('@/packs/erp-core/pages/data/ProductNewPage'));
+const ProductEditPage = lazy(() => import('@/packs/erp-core/pages/data/ProductEditPage'));
+const PartnerNewPage = lazy(() => import('@/packs/erp-core/pages/data/PartnerNewPage'));
+const PartnerEditPage = lazy(() => import('@/packs/erp-core/pages/data/PartnerEditPage'));
+const WarehouseNewPage = lazy(() => import('@/packs/erp-core/pages/data/WarehouseNewPage'));
+const WarehouseEditPage = lazy(() => import('@/packs/erp-core/pages/data/WarehouseEditPage'));
+const BankNewPage = lazy(() => import('@/packs/erp-core/pages/data/BankNewPage'));
+const BankEditPage = lazy(() => import('@/packs/erp-core/pages/data/BankEditPage'));
+
+const ProcurementPage = lazy(() => import('@/packs/module-finance/pages/ProcurementPage'));
+const CustomsPage = lazy(() => import('@/packs/module-finance/pages/CustomsPage'));
+const SalesAnalysisPage = lazy(() => import('@/packs/module-finance/pages/SalesAnalysisPage'));
+const BankingPage = lazy(() => import('@/packs/module-finance/pages/BankingPage'));
+const PriceForecastPage = lazy(() => import('@/packs/module-finance/pages/PriceForecastPage'));
+const PurchaseHistoryPage = lazy(() => import('@/packs/module-finance/pages/PurchaseHistoryPage'));
+const ApprovalPage = lazy(() => import('@/packs/module-finance/pages/ApprovalPage'));
+
+// settings/* 는 시스템 공통이라 그대로.
+const SettingsLayout = lazy(() => import('@/packs/erp-core/pages/settings/SettingsLayout'));
 const SettingsIndexRedirect = lazy(() =>
-  import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
+  import('@/packs/erp-core/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
 );
-const AdminSettingsPage = lazy(() => import('@/pages/settings/AdminSettingsPage'));
-const DBIntegrityPage = lazy(() => import('@/pages/admin/DBIntegrityPage'));
-const AuditLogsPage = lazy(() => import('@/pages/settings/AuditLogsPage'));
-const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
-const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
-const FeatureMatrixPage = lazy(() => import('@/pages/settings/FeatureMatrixPage'));
-const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
-const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
-const DataPage = lazy(() => import('@/pages/DataPage'));
-const ImportHubPage = lazy(() => import('@/pages/ImportHubPage'));
-const LibraryPage = lazy(() => import('@/pages/LibraryPage'));
-const ManufacturerNewPage = lazy(() => import('@/pages/data/ManufacturerNewPage'));
-const ManufacturerEditPage = lazy(() => import('@/pages/data/ManufacturerEditPage'));
-const ProductNewPage = lazy(() => import('@/pages/data/ProductNewPage'));
-const ProductEditPage = lazy(() => import('@/pages/data/ProductEditPage'));
-const PartnerNewPage = lazy(() => import('@/pages/data/PartnerNewPage'));
-const PartnerEditPage = lazy(() => import('@/pages/data/PartnerEditPage'));
-const WarehouseNewPage = lazy(() => import('@/pages/data/WarehouseNewPage'));
-const WarehouseEditPage = lazy(() => import('@/pages/data/WarehouseEditPage'));
-const BankNewPage = lazy(() => import('@/pages/data/BankNewPage'));
-const BankEditPage = lazy(() => import('@/pages/data/BankEditPage'));
+const AdminSettingsPage = lazy(() => import('@/packs/erp-core/pages/settings/AdminSettingsPage'));
+const AuditLogsPage = lazy(() => import('@/packs/erp-core/pages/settings/AuditLogsPage'));
+const PersonalSettingsPage = lazy(() => import('@/packs/erp-core/pages/settings/PersonalSettingsPage'));
+const SitePlaceholderPage = lazy(() => import('@/packs/erp-core/pages/settings/SitePlaceholderPage'));
+const FeatureMatrixPage = lazy(() => import('@/packs/erp-core/pages/settings/FeatureMatrixPage'));
 const PartnerPriceBookPage = lazy(() => import('@/packs/baro-domain/pages/PartnerPriceBookPage'));
 const PartnerCockpitPage = lazy(() => import('@/packs/baro-domain/pages/PartnerCockpitPage'));
 const QuoteBuilderPage = lazy(() => import('@/packs/baro-domain/pages/QuoteBuilderPage'));
@@ -74,12 +79,11 @@ const BaroRequestInboxPage = lazy(() => import('@/packs/baro-domain/pages/BaroRe
 const CreditBoardPage = lazy(() => import('@/packs/baro-domain/pages/CreditBoardPage'));
 const DispatchBoardPage = lazy(() => import('@/packs/baro-domain/pages/DispatchBoardPage'));
 const CRMInboxPage = lazy(() => import('@/packs/baro-domain/pages/CRMInboxPage'));
-const InsightsPage = lazy(() => import('@/pages/InsightsPage'));
 // WMS — 모든 테넌트 공유 (D-139~142). 폴리싱 PR.
-const WarehouseLocationsPage = lazy(() => import('@/pages/wms/WarehouseLocationsPage'));
-const PickingWorkPage = lazy(() => import('@/pages/wms/PickingWorkPage'));
-const ReceivingLogPage = lazy(() => import('@/pages/wms/ReceivingLogPage'));
-const CycleCountPage = lazy(() => import('@/pages/wms/CycleCountPage'));
+const WarehouseLocationsPage = lazy(() => import('@/packs/erp-core/pages/wms/WarehouseLocationsPage'));
+const PickingWorkPage = lazy(() => import('@/packs/erp-core/pages/wms/PickingWorkPage'));
+const ReceivingLogPage = lazy(() => import('@/packs/erp-core/pages/wms/ReceivingLogPage'));
+const CycleCountPage = lazy(() => import('@/packs/erp-core/pages/wms/CycleCountPage'));
 
 // === Route spec ===
 
@@ -108,7 +112,7 @@ export type NestedRouteSpec = {
 };
 
 // PurchaseHistoryErrorBoundary 는 lazy 가 아니라 named export 라 직접 import.
-import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
+import { PurchaseHistoryErrorBoundary } from '@/packs/module-finance/pages/PurchaseHistoryErrorBoundary';
 
 /**
  * ROUTES — App.tsx 가 자동 렌더하는 라우트 목록.
@@ -247,22 +251,26 @@ export const NAV_GROUPS: CommandNavGroup[] = buildNavGroups(ALL_PACKS);
 /**
  * isItemVisible — sidebar 항목의 가시성 판단 단일 정본 (PR-3b).
  *
+ * - tenants 가 있으면: 현재 호스트 테넌트가 포함될 때만 visible
  * - feature 가 있으면: enabledFeatures 가 그 ID 를 포함할 때만 visible
- * - feature 가 비어 있으면: tenants 배열 fallback (단순 프론트 페이지 / 카탈로그 미정의)
+ * - feature 가 비어 있으면: tenants 배열만으로 판단 (단순 프론트 페이지 / 카탈로그 미정의)
  *
- * enabledFeatures 가 undefined(서버 응답에 필드 없음 — 옛 백엔드 호환) 면
- * fallback 으로 tenants 배열을 본다. PR-2 이후 운영 백엔드는 항상 채워 보낸다.
+ * enabledFeatures 가 undefined(서버 응답에 필드 없음 — 옛 백엔드 호환) 면 feature 는 통과시키되,
+ * tenants 도메인 가드는 그대로 적용한다. PR-2 이후 운영 백엔드는 항상 채워 보낸다.
  */
 export function isItemVisible(item: CommandNavItem, currentTenant: TenantScope, enabledFeatures: ReadonlySet<string> | undefined): boolean {
+  if (item.tenants && !item.tenants.includes(currentTenant)) {
+    return false;
+  }
   if (item.feature) {
     if (!enabledFeatures) {
       // 옛 응답 호환 — feature 정의는 있지만 서버가 enabled_features 를 안 보낸 경우.
-      // tenants 배열이 동시에 있으면 그걸 쓰고, 둘 다 없으면 보임.
-      return !item.tenants || item.tenants.includes(currentTenant);
+      // tenant 가드는 위에서 이미 통과했다. 별도 도메인 제한이 없으면 레거시처럼 보인다.
+      return true;
     }
     return enabledFeatures.has(item.feature);
   }
-  return !item.tenants || item.tenants.includes(currentTenant);
+  return true;
 }
 
 /** 사이트 설정 > 메뉴 가시성 카드가 토글 후보로 노출하는 항목 (NAV_GROUPS 평탄화 + isWip 필터) */

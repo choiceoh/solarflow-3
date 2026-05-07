@@ -56,7 +56,7 @@ export default function AutoMatchSection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // /api/v1/assistant/match/receipts/auto: AI 통합 네임스페이스 (기존 /api/v1/receipt-matches/auto alias).
+  // /api/v1/assistant/match/receipts/auto: 기존 alias 유지. 실제 처리는 Rust 결정론 추천 기반.
   const callAuto = async (dryRun: boolean): Promise<AutoMatchResponse> => {
     return fetchWithAuth<AutoMatchResponse>('/api/v1/assistant/match/receipts/auto', {
       method: 'POST',
@@ -109,7 +109,7 @@ export default function AutoMatchSection() {
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-1.5 text-sm">
             <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            AI 일괄 매칭
+            정확 일치 자동 매칭
           </CardTitle>
           {!preview && (
             <Button size="sm" variant="outline" onClick={runPreview} disabled={busy}>

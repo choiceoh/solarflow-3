@@ -134,6 +134,25 @@ const blLines = [
   { bl_line_id: 'bll-br-jko-n580', bl_id: 'bl-br-jko-260421', product_id: 'prd-jko-n580', po_line_id: 'pol-br-jko-n580', product_name: 'JKO-N580 N-type TOPCon', product_code: 'JKO-N580', quantity: 1200, capacity_kw: 696, item_type: 'main', payment_type: 'paid', unit_price_krw_wp: 374, usage_category: 'sale' },
 ];
 
+function blsWithAggregates() {
+  return bls.map((bl) => {
+    const lines = blLines.filter((line) => line.bl_id === bl.bl_id);
+    const totalCapacityKW = lines.reduce((sum, line) => sum + Number(line.capacity_kw ?? 0), 0);
+    const totalInvoiceUSD = lines.reduce((sum, line) => sum + Number((line as MockRow).invoice_amount_usd ?? 0), 0);
+    const first = lines[0];
+    const firstProduct = first ? products.find((product) => product.product_id === first.product_id) : undefined;
+    return {
+      ...bl,
+      line_count: lines.length,
+      total_mw: totalCapacityKW / 1000,
+      avg_cents_per_wp: totalCapacityKW > 0 ? (totalInvoiceUSD / (totalCapacityKW * 1000)) * 100 : 0,
+      first_product_code: first?.product_code,
+      first_product_name: first?.product_name,
+      first_spec_wp: firstProduct?.spec_wp,
+    };
+  });
+}
+
 const constructionSites = [
   { site_id: 'site-yeonggwang', company_id: 'company-topsolar', name: '영광 갈동 태양광', location: '전남 영광군 갈동리', site_type: 'own', capacity_mw: 4.8, started_at: '2026-03-10', notes: '자체 공사 목업 현장', is_active: true, created_at: nowIso, updated_at: nowIso },
   { site_id: 'site-dangjin', company_id: 'company-topsolar', name: '당진 물류센터 지붕', location: '충남 당진시', site_type: 'epc', capacity_mw: 2.2, started_at: '2026-04-01', notes: 'EPC 현장', is_active: true, created_at: nowIso, updated_at: nowIso },
@@ -636,6 +655,38 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     } as T);
   }
 
+  if (url.pathname === '/api/v1/receipt-matches/bulk' && method === 'POST') {
+    const rows = Array.isArray(body.matches) ? body.matches : [];
+    return clone(rows.map((row, index) => ({
+      match_id: `mock-match-${Date.now()}-${index}`,
+      receipt_id: body.receipt_id,
+      outbound_id: row.outbound_id,
+      sale_id: row.sale_id,
+      matched_amount: row.matched_amount,
+    })) as T);
+  }
+
+  if (url.pathname === '/api/v1/receipt-matches/ai-suggest' && method === 'POST') {
+    return clone({
+      receipt_id: body.receipt_id ?? 'rcp-2604-green',
+      provider: 'mock',
+      model: 'dev-mock',
+      summary: '거래처와 입금액 기준으로 가장 가능성이 높은 미수금 1건을 제안했습니다.',
+      candidates: [{
+        outbound_id: 'ob-2604-017-1',
+        outbound_date: '2026-04-27',
+        site_name: '해남 농촌태양광',
+        product_name: 'JAS-DH580 PERC bifacial',
+        outstanding_amount: 558632800,
+        match_amount: 558632800,
+        confidence: 0.86,
+        reason: '같은 거래처의 장기 미수금이며 단독 후보로 남아 있습니다.',
+      }],
+      total_suggested: 558632800,
+      difference: Math.max(0, Number(body.amount ?? 0) - 558632800),
+    } as T);
+  }
+
   if (url.pathname.startsWith('/api/v1/price-benchmarks/') && method === 'DELETE') {
     const id = endpointId(url.pathname, 'price-benchmarks');
     if (!id || id === 'runs') throw new Error('목업 가격 벤치마크 항목을 찾을 수 없습니다');
@@ -713,7 +764,7 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     '/api/v1/price-histories': { rows: priceHistories(), idKey: 'price_history_id', collection: 'price-histories' },
     '/api/v1/price-benchmarks': { rows: priceBenchmarks(), idKey: 'benchmark_id', collection: 'price-benchmarks' },
     '/api/v1/price-benchmarks/runs': { rows: priceBenchmarkRuns(), idKey: 'run_id', collection: 'price-benchmarks/runs' },
-    '/api/v1/bls': { rows: bls, idKey: 'bl_id', collection: 'bls' },
+    '/api/v1/bls': { rows: blsWithAggregates(), idKey: 'bl_id', collection: 'bls' },
     '/api/v1/inventory/allocations': { rows: allocations, idKey: 'alloc_id', collection: 'inventory/allocations' },
     '/api/v1/orders': { rows: orders, idKey: 'order_id', collection: 'orders' },
     '/api/v1/outbounds': { rows: outbounds.map((outbound) => ({ ...outbound, sale: sales.find((sale) => sale.outbound_id === outbound.outbound_id) })), idKey: 'outbound_id', collection: 'outbounds' },
@@ -772,14 +823,14 @@ function priceHistories(): MockRow[] {
 
 function priceBenchmarks(): MockRow[] {
   const base = [
-    ['2025-11-15', 0.104, 0.118, 0.132, 0.129],
-    ['2025-12-15', 0.101, 0.116, 0.130, 0.126],
-    ['2026-01-15', 0.098, 0.114, 0.128, 0.123],
-    ['2026-02-15', 0.096, 0.112, 0.126, 0.121],
-    ['2026-03-15', 0.094, 0.111, 0.124, 0.119],
-    ['2026-04-15', 0.093, 0.110, 0.123, 0.118],
+    ['2025-11-15', 0.104, 0.132, 0.129],
+    ['2025-12-15', 0.101, 0.130, 0.126],
+    ['2026-01-15', 0.098, 0.128, 0.123],
+    ['2026-02-15', 0.096, 0.126, 0.121],
+    ['2026-03-15', 0.094, 0.124, 0.119],
+    ['2026-04-15', 0.093, 0.123, 0.118],
   ] as const;
-  return base.flatMap(([date, cmm, ddpUs, ddpEu, tender], index) => [
+  return base.flatMap(([date, cmm, ddpEu, tender], index) => [
     {
       benchmark_id: `pb-opis-cmm-${index}`,
       run_id: 'pbr-mock-1',
@@ -799,27 +850,6 @@ function priceBenchmarks(): MockRow[] {
       confidence: 0.82,
       source_url: 'https://www.opisnet.com/product/solar-weekly/',
       raw_excerpt: 'Dev mock CMM observation',
-      created_at: nowIso,
-      updated_at: nowIso,
-    },
-    {
-      benchmark_id: `pb-opis-ddp-us-${index}`,
-      run_id: 'pbr-mock-1',
-      source_key: 'opis',
-      source_name: 'OPIS Solar Weekly',
-      metric_key: 'ddp_us',
-      metric_label: 'DDP US',
-      value_date: date,
-      period_label: 'weekly',
-      market_region: 'ddp_us',
-      basis: 'ddp',
-      currency: 'USD',
-      price_usd_w: ddpUs,
-      cargo_min_mw: 5,
-      cargo_max_mw: 25,
-      confidence: 0.78,
-      source_url: 'https://www.opisnet.com/product/solar-weekly/',
-      raw_excerpt: 'Dev mock DDP US observation',
       created_at: nowIso,
       updated_at: nowIso,
     },

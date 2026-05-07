@@ -1167,7 +1167,6 @@
   - 프론트엔드 빌드에서 확장 응답 스키마(`cost_*`)와 mock 응답 호환을 확인한다.
 - **날짜**: 2026-05-07
 
-
 ## D-145: 테넌트 모듈화 — Registry + feature pack + admin 매트릭스 (5 PR 시리즈)
 - **결정**: 새 도메인 (예: `gx10.topworks.ltd`) 을 추가할 때 코드 곳곳에 흩어진 `'topsolar'/'cable'/'baro'` 리터럴·host regex·`tenants:` 인라인 배열을 일일이 갱신할 필요 없도록, 테넌트 정의·feature 가시성·sidebar 구성 전 영역의 **단일 정본**을 도입한다. 5 PR 시리즈로 분해해 회귀 위험 ↓ + 각 단계 독립 검증.
 - **PR 시리즈**:
@@ -1197,4 +1196,37 @@
   - frontend: `npm run test` 10 files / 83 tests (manifest.test.ts, packs.test.ts 신설로 +16 case). `npm run build` / `npm run lint` 통과.
   - 회귀: PR-1~4 행동 변화 없음 (sidebar / route / 가시성 모두 동일). PR-5a/5b 만 admin UI 신규.
 - **관련**: D-108 (BARO 분리), D-119 (cable 분리), D-120 (feature 카탈로그), D-122 (Observability)
+
+## D-146: 가격예측 수집 시장은 중국·유럽으로 제한한다
+- **결정**: 가격예측 벤치마크의 저장 가능 `market_region` 을 `fob_china`, `china_domestic`, `china_export`, `ddp_europe` 로 제한한다. `ddp_us`, `global`, `manufacturer` 등 미국·기타 지역 가격은 AI 수집, 수동 등록, 목록 응답, 기존 데이터 정리에서 제외한다.
+- **이유**: 미국 등 비중국/비유럽 시장은 관세·물류·재고·현지 유통 구조 때문에 가격대가 크게 달라, 같은 차트와 예측 입력에 섞이면 구매 협상 기준선이 왜곡된다. SolarFlow의 module 계열 구매 판단에는 중국 FOB/내수·수출 및 유럽 DDP가 더 직접적인 비교 기준이다.
+- **운영 기준**:
+  - AI prompt 는 중국·유럽 근거만 points 로 반환하고, 제외된 미국·기타 지역 가격은 warnings 에 남긴다.
+  - Go 모델 검증은 허용 지역 allowlist 로 fail-closed 한다. AI 가 프롬프트를 어겨도 저장 직전 `Validate()` 와 handler guard 에서 차단한다.
+  - 기존 `price_benchmarks` 의 `ddp_us` 또는 허용 지역 밖 행은 `089_price_benchmarks_china_europe_only.sql` 로 삭제한다.
+- **검증**:
+  - `go test ./internal/model` 로 허용 지역 통과, `ddp_us`/`global` 차단을 검증한다.
+  - 프론트엔드 dev mock 에서 미국 DDP 샘플을 제거해 `/price-forecast` 목업 차트도 중국·유럽만 표시한다.
+- **날짜**: 2026-05-07
+
+## D-148: 수금 매칭 — 결정적 자동 매칭과 AI 검토를 분리하고 확정은 bulk 검증으로 처리
+
+- **결정**: 수금 관리의 매칭 흐름을 세 단계로 정리한다.
+  - **정확 일치 자동 매칭**: 기존 Rust outstanding 계산을 이용해 미수금 전액과 입금 잔액이 정확히 맞는 건만 추천/자동 처리한다. 이 경로는 결정적 계산으로 유지한다.
+  - **AI 검토**: `POST /api/v1/receipt-matches/ai-suggest` 는 기존 Assistant provider 설정을 재사용해 입금 메모/거래처/일자/금액과 미수 목록을 비교하고 후보와 이유를 반환한다. 단, AI는 DB에 쓰지 않는다.
+  - **사용자 확정**: 화면에서 후보를 확인한 뒤 `POST /api/v1/receipt-matches/bulk` 로 여러 매칭을 한 번에 확정한다.
+- **안전 기준**:
+  - receipt 기준으로 기존 매칭액 + 신규 매칭액이 입금액을 초과하면 거부한다.
+  - outbound/sale 기준으로 기존 매칭액 + 신규 매칭액이 매출 총액을 초과하면 거부한다.
+  - AI 후보는 현재 UI가 행 단위 선택을 쓰는 동안 **미수 전액 후보만** 채택한다. 부분 매칭은 별도 금액 입력 UX가 생기기 전까지 AI 응답에서 제외한다.
+  - AI confidence/reason/summary 는 의사결정 보조 정보이며 원장 반영 근거는 사용자의 확정 액션이다.
+- **이유**: 수금 매칭은 과매칭이 발생하면 미수금/입금잔액 장부가 동시에 틀어지는 영역이다. LLM을 바로 write 경로에 연결하면 설명 불가능한 오분개 위험이 커지므로, AI는 "찾아주는 눈"으로 두고 장부 변경은 기존 권한/검증/감사 로그가 걸린 write API에서만 수행한다.
+- **운영 기준**:
+  - `tx.receipt_match` feature 아래 `/receipt-matches`, `/receipt-matches/auto`, `/receipt-matches/bulk`, `/receipt-matches/ai-suggest` 를 같은 가드로 묶는다.
+  - AI provider key 미설정 시 화면은 안내 toast 를 띄우고 수동/정확 일치 매칭은 계속 사용 가능해야 한다.
+  - 후속으로 부분 매칭 UX를 추가할 때는 AI 후보 schema 에 partial flag/amount reason 을 확장하고 bulk 확정 전에 사용자가 금액을 명시 편집하게 한다.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` 통과.
+  - `go test ./...` 및 `go vet ./...` 통과.
+  - 프론트엔드 `npm ci`, `npm run build`, `npm run test`, `npm run lint` 통과.
 - **날짜**: 2026-05-07

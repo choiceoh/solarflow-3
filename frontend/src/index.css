@@ -2468,6 +2468,23 @@ textarea::placeholder {
   transform: rotate(180deg);
 }
 
+/* FilterChips 의 active 인디케이터 — motion 의 layoutId 가 한 chip 에서 다른
+   chip 으로 spring 슬라이드. mockup 의 .tab.active border-bottom underline 을
+   motion span 으로 대체 (FilterChips 한정 — 다른 .tabs 사용처는 무영향). */
+.sf-filter-chips .tab.active {
+  border-bottom-color: transparent;
+}
+.sf-filter-chip-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: var(--sf-ink);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
 /* AI 어시스턴트 — 스트리밍 중 새 토큰 페이드인. 가독성을 위해 시작 opacity
    는 0.4 로 두어 깜빡임 최소화, 미세 translateY 로 흐름감 추가. */
 .sf-stream-fade {
