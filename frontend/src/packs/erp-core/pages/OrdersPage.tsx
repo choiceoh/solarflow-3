@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
-import { useOrderList, useOrderDashboard } from '@/hooks/useOrders';
+import { useOrderList, useOrderDashboard, useOrderFulfillmentRisk } from '@/hooks/useOrders';
 import { useReceiptList, useReceiptDashboard } from '@/hooks/useReceipts';
 import { useOutboundList, useOutboundDashboard, useSaleList, useSaleDashboard } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
@@ -319,6 +319,13 @@ export default function OrdersPage() {
 
   // visibleOrders 는 표 렌더링 한정 — server-side work_queue 가 적용된 현재 페이지.
   const visibleOrders = orders;
+  const visibleActiveOrderIds = useMemo(
+    () => visibleOrders
+      .filter((order) => (order.status === 'received' || order.status === 'partial') && (order.remaining_qty ?? order.quantity) > 0)
+      .map((order) => order.order_id),
+    [visibleOrders],
+  );
+  const { riskByOrder: orderRiskByOrder } = useOrderFulfillmentRisk(visibleActiveOrderIds);
 
   useEffect(() => {
     const incomingOrders = orders.filter((order) =>
@@ -800,6 +807,7 @@ export default function OrdersPage() {
               onSelect={(o) => setSelectedOrder(o.order_id)}
               onCancelToReservation={handleCancelOrderToReservation}
               sourceOverrides={orderSourceHints}
+              riskByOrder={orderRiskByOrder}
               serverMode={{
                 pageIndex: orderPageIndex,
                 pageSize: orderPageSize,

@@ -147,20 +147,21 @@ const (
 	IDBaroShipmentNotice  FeatureID = "baro.shipment_notice"
 
 	// ---- calc.* (Rust 계산 프록시) ----
-	IDCalcInventory          FeatureID = "calc.inventory"
-	IDCalcLandedCost         FeatureID = "calc.landed_cost"
-	IDCalcExchangeCompare    FeatureID = "calc.exchange_compare"
-	IDCalcLCFee              FeatureID = "calc.lc_fee"
-	IDCalcLCLimitTimeline    FeatureID = "calc.lc_limit_timeline"
-	IDCalcLCMaturityAlert    FeatureID = "calc.lc_maturity_alert"
-	IDCalcMarginAnalysis     FeatureID = "calc.margin_analysis"
-	IDCalcCustomerAnalysis   FeatureID = "calc.customer_analysis"
-	IDCalcPriceTrend         FeatureID = "calc.price_trend"
-	IDCalcSupplyForecast     FeatureID = "calc.supply_forecast"
-	IDCalcOutstandingList    FeatureID = "calc.outstanding_list"
-	IDCalcReceiptMatchSugges FeatureID = "calc.receipt_match_suggest"
-	IDCalcSearch             FeatureID = "calc.search"
-	IDCalcInventoryTurnover  FeatureID = "calc.inventory_turnover"
+	IDCalcInventory            FeatureID = "calc.inventory"
+	IDCalcLandedCost           FeatureID = "calc.landed_cost"
+	IDCalcExchangeCompare      FeatureID = "calc.exchange_compare"
+	IDCalcLCFee                FeatureID = "calc.lc_fee"
+	IDCalcLCLimitTimeline      FeatureID = "calc.lc_limit_timeline"
+	IDCalcLCMaturityAlert      FeatureID = "calc.lc_maturity_alert"
+	IDCalcMarginAnalysis       FeatureID = "calc.margin_analysis"
+	IDCalcCustomerAnalysis     FeatureID = "calc.customer_analysis"
+	IDCalcPriceTrend           FeatureID = "calc.price_trend"
+	IDCalcSupplyForecast       FeatureID = "calc.supply_forecast"
+	IDCalcOrderFulfillmentRisk FeatureID = "calc.order_fulfillment_risk"
+	IDCalcOutstandingList      FeatureID = "calc.outstanding_list"
+	IDCalcReceiptMatchSugges   FeatureID = "calc.receipt_match_suggest"
+	IDCalcSearch               FeatureID = "calc.search"
+	IDCalcInventoryTurnover    FeatureID = "calc.inventory_turnover"
 
 	// ---- io.* ----
 	IDIOImport         FeatureID = "io.import"
@@ -593,6 +594,11 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDCalcSupplyForecast, Name: "수급 전망", Description: "Rust 엔진 — 모든 테넌트",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{"/api/v1/calc/supply-forecast"},
+	},
+	IDCalcOrderFulfillmentRisk: {
+		ID: IDCalcOrderFulfillmentRisk, Name: "수주 충당 위험도", Description: "Rust 엔진 — 모든 테넌트",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/calc/order-fulfillment-risk"},
 	},
 	IDCalcOutstandingList: {
 		ID: IDCalcOutstandingList, Name: "미수금 리스트", Description: "Rust 엔진 — 모든 테넌트",
