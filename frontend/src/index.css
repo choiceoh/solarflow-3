@@ -2995,6 +2995,28 @@ textarea::placeholder {
 }
 
 /* ============================================================
+   View Transitions API — 라우트 변경 시 cross-fade + morph
+   ============================================================
+   react-router-dom v7 의 NavLink/Link 에 viewTransition prop 가 활성화되면
+   document.startViewTransition() 으로 자동 래핑된다. CSS 로 기본 cross-fade
+   곡선을 다듬고, 페이지 타이틀에 view-transition-name 을 부여해 라우트 간
+   동일 정체성으로 morph. 미지원 브라우저에서는 자동 fallback. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 280ms;
+  animation-timing-function: var(--sf-ease-out);
+}
+
+.sf-vt-page-title {
+  view-transition-name: sf-page-title;
+}
+::view-transition-old(sf-page-title),
+::view-transition-new(sf-page-title) {
+  animation-duration: 320ms;
+  animation-timing-function: var(--sf-ease-out);
+}
+
+/* ============================================================
    Accessibility — prefers-reduced-motion
    ============================================================
    운동 감각 민감 사용자(전정 장애·편두통·멀미 등)를 위해 모든
@@ -3029,5 +3051,12 @@ textarea::placeholder {
   .sf-dropzone[data-active="true"],
   .sf-dropzone-page[data-active="true"] {
     animation: none;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-old(sf-page-title),
+  ::view-transition-new(sf-page-title) {
+    animation-duration: 0.01ms !important;
   }
 }
