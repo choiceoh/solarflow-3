@@ -59,6 +59,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
 
+		handler.NewAdminFeatureWiringHandler(a.Gates.FeatureGate.Resolver()).RegisterRoutes(r, a.Gates)
 		handler.NewAssistantHandler(a.DB).WithAlias(ocrH, matchH).WithWriters(outboundH).RegisterRoutes(r, a.Gates)
 		attachH.RegisterRoutes(r, a.Gates)
 		handler.NewAuditLogHandler(a.DB).RegisterRoutes(r, a.Gates)
