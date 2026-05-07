@@ -6,7 +6,7 @@
 
 > **이력**: 초기에는 "GUI 메타 편집기" 가 두 번째 product 로 같이 개발됐으나 **D-120 결정으로 제거됐다.** `templates/MetaForm`, `pages/UIConfigEditor`, v2 페이지 모두 삭제됐고, 잔존물은 `frontend/src/templates/MetaDetail.tsx` + `templates/registry.tsx` 뿐 — BLDetailView 한 곳만 사용하는 평범한 detail 컴포넌트로 강등됐다. 새 도메인 추가 시 GUI 로 form/detail 화면을 정의하는 메커니즘은 없으므로 정상적인 React 페이지로 구현한다.
 >
-> **새 도메인 추가 절차**는 [D-145](harness/DECISIONS.md#d-145) 의 "테넌트 모듈화" 패턴을 따른다 — `tenant.Registry` 객체 1개 + `packs/<id>/{nav.ts, pages/}` 디렉토리 + DB CHECK 마이그 + admin 매트릭스 (`/settings/feature-wiring`) 토글.
+> **새 도메인 추가 절차**는 [D-145](harness/DECISIONS.md#d-145) 의 "테넌트 모듈화" 패턴을 따른다 — `tenant.Registry` 객체 1개 + `packs/<id>/{nav.ts, pages/}` 디렉토리 + DB CHECK 마이그 + admin 매트릭스 (`/settings/feature-wiring`) 토글. **단계별 절차**는 [harness/NEW-TENANT-GUIDE.md](harness/NEW-TENANT-GUIDE.md) 참조.
 
 ## 읽기 순서
 이 프로젝트에서 작업하기 전에 아래 순서로 읽으세요:
@@ -24,6 +24,8 @@
 - harness/baro.md — `baro.topworks.ltd` (바로(주), 국내 도매·인바운드 위주)
 
 양 테넌트에 공통으로 영향 가는 작업은 통합판 + DECISIONS를 그대로 참조.
+
+**새 도메인 추가가 필요할 때**: [harness/NEW-TENANT-GUIDE.md](harness/NEW-TENANT-GUIDE.md) — registry 1줄 + 마이그 1개 + `packs/<id>/` + admin UI 토글의 단계별 가이드.
 
 ## 프로젝트 구조
 - backend/ — Go API 게이트웨이 (chi v5, 포트 8080, launchd `com.solarflow.go`)
