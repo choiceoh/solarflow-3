@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ALL_PACKS, buildNavGroups, ERP_CORE_PACK, MODULE_FINANCE_PACK, BARO_DOMAIN_PACK } from './index';
-import { NAV_GROUPS } from '../manifest';
+import { NAV_GROUPS } from '@/lib/navigation/manifest';
 
 describe('ALL_PACKS — 정합성', () => {
   it('정의된 pack 3개', () => {

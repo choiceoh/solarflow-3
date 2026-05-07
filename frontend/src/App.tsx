@@ -14,38 +14,9 @@ import { ROUTES, type NestedRouteSpec, type RouteSpec } from '@/lib/navigation/m
 
 // 인라인 유지: login 은 인증 외곽 라우트라 manifest 가 아닌 외곽 트리에 둔다.
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
-const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
-const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
-const SalesAnalysisPage = lazy(() => import('@/pages/SalesAnalysisPage'));
-const BankingPage = lazy(() => import('@/pages/BankingPage'));
-const ApprovalPage = lazy(() => import('@/pages/ApprovalPage'));
-const SettingsLayout = lazy(() => import('@/pages/settings/SettingsLayout'));
-const SettingsIndexRedirect = lazy(() =>
-  import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
-);
-const AdminSettingsPage = lazy(() => import('@/pages/settings/AdminSettingsPage'));
-const AuditLogsPage = lazy(() => import('@/pages/settings/AuditLogsPage'));
-const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
-const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
-const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
-const PartnerPriceBookPage = lazy(() => import('@/pages/baro/PartnerPriceBookPage'));
-const PartnerCockpitPage = lazy(() => import('@/pages/baro/PartnerCockpitPage'));
-const QuoteBuilderPage = lazy(() => import('@/pages/baro/QuoteBuilderPage'));
-const SalesHomePage = lazy(() => import('@/pages/baro/SalesHomePage'));
-const RFMBoardPage = lazy(() => import('@/pages/baro/RFMBoardPage'));
-const SalesSummaryPage = lazy(() => import('@/pages/baro/SalesSummaryPage'));
-const InverterGuidePage = lazy(() => import('@/pages/baro/InverterGuidePage'));
-const ShipmentNoticePage = lazy(() => import('@/pages/baro/ShipmentNoticePage'));
-const DriverPWAPage = lazy(() => import('@/pages/baro/DriverPWAPage'));
-const CallbackRecommendPage = lazy(() => import('@/pages/baro/CallbackRecommendPage'));
-const IncomingBoardPage = lazy(() => import('@/pages/baro/IncomingBoardPage'));
-const BaroPurchaseHistoryPage = lazy(() => import('@/pages/baro/BaroPurchaseHistoryPage'));
-const GroupPurchaseRequestPage = lazy(() => import('@/pages/baro/GroupPurchaseRequestPage'));
-const BaroRequestInboxPage = lazy(() => import('@/pages/group-trade/BaroRequestInboxPage'));
-const CreditBoardPage = lazy(() => import('@/pages/baro/CreditBoardPage'));
-const DispatchBoardPage = lazy(() => import('@/pages/baro/DispatchBoardPage'));
-const CRMInboxPage = lazy(() => import('@/pages/CRMInboxPage'));
-const InsightsPage = lazy(() => import('@/pages/InsightsPage'));
+// PR-7.5 / D-137: 드라이버 PWA — token-based access, 인증 미적용. baro-domain pack 의
+// 페이지지만 라우트는 ProtectedRoute 외부에 둔다 (외부 차주 진입).
+const DriverPWAPage = lazy(() => import('@/packs/baro-domain/pages/DriverPWAPage'));
 
 function Fallback() {
   return <LoadingSpinner className="h-screen" />;
@@ -112,7 +83,6 @@ export default function App() {
         <Suspense fallback={<Fallback />}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
-            {/* D-137 PR7.5: 드라이버 PWA — token-based access, 인증 미적용 */}
             <Route path="/d/:token" element={<DriverPWAPage />} />
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
@@ -122,36 +92,6 @@ export default function App() {
                 <Route path="/inbound" element={<LegacyRedirect to="/procurement?tab=bl" />} />
                 <Route path="/lc" element={<LegacyRedirect to="/procurement?tab=lc" />} />
                 <Route path="/outbound" element={<LegacyRedirect to="/orders?tab=outbound" />} />
-                <Route path="/orders" element={<OrdersPage />} />
-                <Route path="/customs" element={<CustomsPage />} />
-                <Route path="/sales-analysis" element={<SalesAnalysisPage />} />
-                <Route path="/banking" element={<BankingPage />} />
-                <Route path="/insights/:metric" element={<InsightsPage />} />
-                <Route path="/baro/price-book" element={<RoleGuard allowedRoles={['admin', 'operator']}><PartnerPriceBookPage /></RoleGuard>} />
-                <Route path="/baro/cockpit" element={<PartnerCockpitPage />} />
-                <Route path="/baro/quote/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><QuoteBuilderPage /></RoleGuard>} />
-                <Route path="/baro/home" element={<SalesHomePage />} />
-                <Route path="/baro/rfm" element={<RFMBoardPage />} />
-                <Route path="/baro/sales-summary" element={<RoleGuard allowedRoles={['admin', 'operator', 'executive']}><SalesSummaryPage /></RoleGuard>} />
-                <Route path="/baro/inverter-guide" element={<InverterGuidePage />} />
-                <Route path="/baro/shipment-notice" element={<ShipmentNoticePage />} />
-                <Route path="/baro/callback-recommend" element={<CallbackRecommendPage />} />
-                <Route path="/baro/incoming" element={<IncomingBoardPage />} />
-                <Route path="/baro/purchase-history" element={<RoleGuard allowedRoles={['admin', 'operator', 'executive']}><BaroPurchaseHistoryPage /></RoleGuard>} />
-                <Route path="/baro/group-purchase" element={<RoleGuard allowedRoles={['admin', 'operator']}><GroupPurchaseRequestPage /></RoleGuard>} />
-                <Route path="/group-trade/baro-inbox" element={<RoleGuard allowedRoles={['admin', 'operator']}><BaroRequestInboxPage /></RoleGuard>} />
-                <Route path="/baro/credit-board" element={<CreditBoardPage />} />
-                <Route path="/baro/dispatch" element={<RoleGuard allowedRoles={['admin', 'operator']}><DispatchBoardPage /></RoleGuard>} />
-                <Route path="/crm/inbox" element={<CRMInboxPage />} />
-                <Route path="/approval" element={<ApprovalPage />} />
-                <Route path="/assistant" element={<AssistantPage />} />
-                <Route path="/settings" element={<SettingsLayout />}>
-                  <Route index element={<SettingsIndexRedirect />} />
-                  <Route path="admin" element={<RoleGuard allowedRoles={['admin']}><AdminSettingsPage /></RoleGuard>} />
-                  <Route path="audit-logs" element={<RoleGuard allowedRoles={['admin']}><AuditLogsPage /></RoleGuard>} />
-                  <Route path="site" element={<RoleGuard allowedRoles={['admin']}><SitePlaceholderPage /></RoleGuard>} />
-                  <Route path="personal" element={<PersonalSettingsPage />} />
-                </Route>
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
