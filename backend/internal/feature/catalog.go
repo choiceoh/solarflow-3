@@ -130,6 +130,9 @@ const (
 	IDBaroPartnerCockpit  FeatureID = "baro.partner_cockpit"
 	IDBaroRFM             FeatureID = "baro.rfm"
 	IDBaroSalesSummary    FeatureID = "baro.sales_summary"
+	IDBaroQuote           FeatureID = "baro.quote"
+	IDBaroCreditCheck     FeatureID = "baro.credit_check"
+	IDBaroShipmentNotice  FeatureID = "baro.shipment_notice"
 
 	// ---- calc.* (Rust 계산 프록시) ----
 	IDCalcInventory          FeatureID = "calc.inventory"
@@ -453,6 +456,27 @@ var Catalog = map[FeatureID]Feature{
 		Description:    "영업담당자/거래처타입/월/거래처 4 cut 매출 집계 (D-129)",
 		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantCompany,
 		Paths: []string{"/api/v1/baro/sales-summary/"},
+	},
+	IDBaroQuote: {
+		ID: IDBaroQuote, Name: "BARO 견적 DB 저장",
+		Description:    "baro_quotes CRUD + 발송 추적 (D-135 PR2.5b)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{
+			"/api/v1/baro/quotes/", "/api/v1/baro/quotes/{id}",
+			"/api/v1/baro/quotes/{id}/send",
+		},
+	},
+	IDBaroCreditCheck: {
+		ID: IDBaroCreditCheck, Name: "BARO 한도 사전 체크",
+		Description:    "출고/수주 전 신용 조회 (D-136 PR5.5b)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantCompany,
+		Paths: []string{"/api/v1/baro/credit-check/"},
+	},
+	IDBaroShipmentNotice: {
+		ID: IDBaroShipmentNotice, Name: "BARO 출하 알림 발송",
+		Description:    "발송 추적 + 드라이버 PWA 토큰 (D-137 PR7.5). 외부 발송은 환경변수 stub.",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{"/api/v1/baro/shipment-notices/"},
 	},
 
 	// ===== calc.* =====

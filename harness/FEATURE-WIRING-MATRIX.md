@@ -115,6 +115,9 @@
 | `baro.partner_cockpit` | BARO 거래처 360 cockpit | B | tenant_owned | D-125 |
 | `baro.rfm` | BARO 거래처 RFM 보드 | B | tenant_owned | D-128 |
 | `baro.sales_summary` | BARO 자체 매출 요약 | B | tenant_company | D-129 |
+| `baro.quote` | BARO 견적 DB 저장 + 발송 | B | tenant_owned | D-135 PR2.5b |
+| `baro.credit_check` | BARO 한도 사전 체크 | B | tenant_company | D-136 PR5.5b |
+| `baro.shipment_notice` | BARO 출하 알림 발송 + 드라이버 PWA 토큰 | B | tenant_owned | D-137 PR7.5 |
 
 ### calc.* (Rust 계산엔진 프록시)
 

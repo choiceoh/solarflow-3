@@ -2,6 +2,7 @@ DELETE  /api/v1/assistant/sessions/{id}
 DELETE  /api/v1/attachments/{id}
 DELETE  /api/v1/banks/{id}
 DELETE  /api/v1/baro/dispatch-routes/{id}
+DELETE  /api/v1/baro/quotes/{id}
 DELETE  /api/v1/bls/{blId}/lines/{id}
 DELETE  /api/v1/bls/{id}
 DELETE  /api/v1/companies/{id}
@@ -44,14 +45,18 @@ GET     /api/v1/banks/
 GET     /api/v1/banks/{id}
 GET     /api/v1/baro/callback-recommend/
 GET     /api/v1/baro/credit-board/
+GET     /api/v1/baro/credit-check/
 GET     /api/v1/baro/dispatch-routes/
 GET     /api/v1/baro/dispatch-routes/{id}
 GET     /api/v1/baro/dispatch-routes/{id}/outbounds
+GET     /api/v1/baro/driver/{token}
 GET     /api/v1/baro/incoming/
 GET     /api/v1/baro/orders/recent
 GET     /api/v1/baro/partner-cockpit/{partner_id}
 GET     /api/v1/baro/purchase-history/
 GET     /api/v1/baro/purchase-history/summary
+GET     /api/v1/baro/quotes/
+GET     /api/v1/baro/quotes/{id}
 GET     /api/v1/baro/rfm/
 GET     /api/v1/baro/sales-summary/
 GET     /api/v1/bls/
@@ -197,6 +202,9 @@ POST    /api/v1/baro/dispatch-routes/
 POST    /api/v1/baro/dispatch-routes/unassign
 POST    /api/v1/baro/dispatch-routes/{id}/assign
 POST    /api/v1/baro/orders/{id}/clone
+POST    /api/v1/baro/quotes/
+POST    /api/v1/baro/quotes/{id}/send
+POST    /api/v1/baro/shipment-notices/
 POST    /api/v1/bls/
 POST    /api/v1/bls/{blId}/lines/
 POST    /api/v1/calc/customer-analysis
@@ -264,6 +272,7 @@ POST    /api/v1/users/
 POST    /api/v1/warehouses/
 PUT     /api/v1/banks/{id}
 PUT     /api/v1/baro/dispatch-routes/{id}
+PUT     /api/v1/baro/quotes/{id}
 PUT     /api/v1/bls/{blId}/lines/{id}
 PUT     /api/v1/bls/{id}
 PUT     /api/v1/companies/{id}

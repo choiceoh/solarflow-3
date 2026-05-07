@@ -1081,3 +1081,33 @@
 - **이유**: D-131 영업측 5분→30초 단축, PR7.5 는 거래처측 알림 신뢰도 + 차주측 도착 추적. 시공업체에 "도착 사진 + 차주 사인" 자동 전달 시 클레임률 감소.
 - **날짜**: 2026-05-07
 
+## D-138: BARO Phase 2.5b 본체 묶음 — 견적 DB + 한도 체크 + 마진 추정 + 드라이버 PWA
+- **결정**: D-134 인프라 마이그(084) 위에 4개 후속 PR 의 핸들러·UI 본체를 한 묶음 PR 로 묶어 ship.
+  - **PR2.5b 견적 DB 저장**: `BaroQuotesHandler` (CRUD + send) + `feature.IDBaroQuote` + `/baro/quotes/*` 라우트. QuoteBuilder 에 "서버 저장" 버튼 추가. 외부 발송(kakao/sms) 은 환경변수 stub — `KAKAO_NOTIFY_API_KEY` / `ALIGO_API_KEY` 미설정 시 501 + 안내 응답.
+  - **PR5.5b 한도 사전 체크**: `BaroCreditCheckHandler` + `feature.IDBaroCreditCheck` + `/baro/credit-check?partner_id=&amount=`. 응답 status: `ok|warn_aging|over_limit`. 출고/수주 차단 enforcement 는 OutboundHandler 변경 필요 — PR5.5b' 분리(별도 D-NNN).
+  - **PR5.5c estimated_margin 통합**: `sales-summary?include_margin=true` query param 추가. `baro_purchase_history` 매입원가 합 vs 매출 단순 비율. 응답에 `estimated_cost_krw` / `estimated_margin_krw` / `estimated_margin_pct` nullable 필드. SKU-level 정밀 마진은 PR5.5d.
+  - **PR7.5d 드라이버 PWA**: `BaroShipmentSendHandler` + 환경변수 stub + `feature.IDBaroShipmentNotice` + `/baro/shipment-notices/`. 드라이버 token-based access — 인증 미적용 `/api/v1/baro/driver/{token}` (RegisterPublicRoutes) + frontend `/d/:token` 라우트 + DriverPWAPage. `manifest.json` + `<link rel=manifest>` + theme-color meta. 사진 실제 업로드 (attachments 통합) 는 PR7.5e.
+- **외부 API 의존성 명시**:
+  - `KAKAO_NOTIFY_API_KEY` (KakaoTalk Notification Talk 사업자 키) — 미설정 시 카톡 채널 501.
+  - `ALIGO_API_KEY` (Aligo SMS 키) — 미설정 시 SMS 채널 501.
+  - `BARO_PUBLIC_HOST` (드라이버 PWA URL 빌드용, 기본 `baro.topworks.ltd`).
+  - 키 발급 후 운영자가 systemd EnvironmentFile 또는 `~/.config/solarflow/env` 에 추가 → `solarflow-go` 재시작.
+- **frontend 변경**:
+  - QuoteBuilder: "서버 저장" 버튼 + saveResult 배너 (성공/실패 5초 표시).
+  - `/d/:token` 신규 페이지 — 인증 외부, 모바일 친화 layout, 카메라 input + 메모.
+  - manifest.json 신규 — "홈 추가" 가능.
+- **거버넌스**: feature catalog 3개 ID 추가 (`baro.quote`, `baro.credit_check`, `baro.shipment_notice`) + matrix + guard test + routes.golden 갱신 + DECISIONS 동시.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 신규 라우트 catalog 일치, matrix_consistency 가 markdown 일치 검증.
+  - 라우터 가드: module/cable 토큰 시 403, baro 토큰 통과. `/api/v1/baro/driver/{token}` 만 인증 외 (allowlist 추가).
+  - `npx tsc -b` / `vite build` / `biome lint` 통과.
+  - 마이그 084 미적용 환경에서: 견적 저장 시 500 + "마이그 084 적용 필요" 메시지 (DriverPWAPage 도 동일).
+- **남은 후속 PR (외부 API 키 또는 추가 작업 필요)**:
+  - PR2.5c / PR7.5b: KakaoTalk Notification Talk 통합 (사업자 등록 + 템플릿 승인 + 친구 동의 검증)
+  - PR2.5c / PR7.5c: Aligo/Solapi SMS 통합 (키 발급)
+  - PR5.5b': outbound/order 핸들러 한도 차단 enforcement (큰 변경)
+  - PR5.5d: sales-summary by_sku cut (sales→outbound→bl_line→product join)
+  - PR6.6: 인버터 마스터 CRUD UI + /baro/inverter-guide DB 카탈로그 마이그
+  - PR7.5e: 드라이버 PWA 사진 실제 업로드 (attachments 통합)
+- **날짜**: 2026-05-07
+

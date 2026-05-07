@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Calculator, Plus, Trash2, Save, Printer, RefreshCw, Search } from 'lucide-react';
+// Save imported above — used for both LocalStorage hint and server-save button
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -348,6 +349,49 @@ function Builder({ partnerId, onClear }: { partnerId: string; onClear: () => voi
     return { subtotal, vat, grand, totalQty, totalKw };
   }, [lines]);
 
+  // PR2.5b (D-135): 서버 DB 저장 상태
+  const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const saveToServer = async () => {
+    if (lines.length === 0) return;
+    setSaving(true);
+    setSaveResult(null);
+    try {
+      const body = {
+        partner_id: partnerId,
+        valid_until: validUntil || null,
+        notes: notes || null,
+        lines: lines.map((l) => ({
+          product_id: l.product_id || null,
+          product_code: l.product_code || null,
+          product_name: l.product_name || null,
+          spec_wp: l.spec_wp || null,
+          quantity: l.quantity,
+          unit_price_krw: l.unit_price_krw,
+        })),
+      };
+      const resp = await fetchWithAuth<{ quote_id: string }>('/api/v1/baro/quotes/', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      setSaveResult({ ok: true, message: `서버에 저장됐습니다 — ${resp.quote_id.slice(0, 8)}...` });
+      clearDraft(partnerId);
+    } catch (e) {
+      console.error('[견적 저장 실패]', e);
+      setSaveResult({
+        ok: false,
+        message:
+          e instanceof Error
+            ? `저장 실패: ${e.message} (마이그 084 적용 필요할 수 있음)`
+            : '저장 실패',
+      });
+    } finally {
+      setSaving(false);
+      window.setTimeout(() => setSaveResult(null), 5000);
+    }
+  };
+
   // 초기화 — 두 번 클릭 패턴(첫 클릭: armed=true, 두 번째: 실제 비움). 5초 후 자동 disarm.
   const [resetArmed, setResetArmed] = useState(false);
   useEffect(() => {
@@ -412,8 +456,28 @@ function Builder({ partnerId, onClear }: { partnerId: string; onClear: () => voi
           <Button size="sm" variant="outline" onClick={() => window.print()}>
             <Printer className="mr-1 h-3.5 w-3.5" /> 인쇄/PDF
           </Button>
+          {/* PR2.5b (D-135): 서버 DB 저장 */}
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => void saveToServer()}
+            disabled={saving || lines.length === 0}
+          >
+            <Save className="mr-1 h-3.5 w-3.5" />
+            {saving ? '저장 중...' : '서버 저장'}
+          </Button>
         </div>
       </div>
+
+      {saveResult && (
+        <div
+          className={`rounded border px-3 py-1.5 text-xs print:hidden ${
+            saveResult.ok ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'
+          }`}
+        >
+          {saveResult.message}
+        </div>
+      )}
 
       {/* 메인 2단 — 좌:라인편집, 우:SKU picker */}
       <div className="grid flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[2fr_1fr] print:grid-cols-1">

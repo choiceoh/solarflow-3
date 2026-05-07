@@ -69,6 +69,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - **[D-135](DECISIONS.md#d-135)** — BARO 견적 DB 저장 스키마 (PR2.5 인프라). `baro_quotes` + `baro_quote_lines` + status 머신. 핸들러·발송 채널은 PR2.5b/c.
 - **[D-136](DECISIONS.md#d-136)** — BARO 한도 hold flag 스키마 (PR5.5 인프라). `baro_credit_holds`. 출고/수주 차단 enforcement 는 PR5.5b. 마진 통합은 PR5.5c.
 - **[D-137](DECISIONS.md#d-137)** — BARO 출하 알림 추적 + 드라이버 PWA 토큰 스키마 (PR7.5 인프라). `baro_shipment_notices` + `baro_driver_tokens`. 카톡/SMS API·PWA 본체는 PR7.5b/c/d.
+- **[D-138](DECISIONS.md#d-138)** — Phase 2.5b 본체 묶음 (견적 CRUD + credit-check + estimated_margin + 드라이버 PWA). 외부 API 는 환경변수 stub. 카톡/SMS 사업자 키 발급 시점에 PR2.5c/PR7.5b 활성화.
 
 ## BARO 전용 백엔드 엔드포인트 (`baroOnly` 미들웨어)
 
@@ -88,7 +89,10 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 | `/api/v1/baro/partner-cockpit/{partner_id}` | 거래처 360 cockpit (신용·최근매출·CRM 합본) | D-125 |
 | `/api/v1/baro/rfm/` | 거래처 RFM 보드 (12개월 매출 집계 + 세그먼트 분류) | D-128 |
 | `/api/v1/baro/sales-summary/` | BARO 자체 매출 요약 (4 cut: 담당자/유형/월/Top) | D-129 |
-| `/api/v1/baro/callback-recommend/` | 자동 콜백 추천 (owner 별 활성 거래처 + 입고예정 합본) | D-133 |
+| `/api/v1/baro/quotes/*` | 견적 DB CRUD + 발송 (D-135 PR2.5b) | D-138 |
+| `/api/v1/baro/credit-check/` | 한도 사전 체크 (D-136 PR5.5b) | D-138 |
+| `/api/v1/baro/shipment-notices/` | 출하 알림 발송 + 추적 (D-137 PR7.5) | D-138 |
+| `/api/v1/baro/driver/{token}` | 드라이버 PWA token-based access (인증 미적용, 24h) | D-138 |
 
 ## 운영 메모
 
