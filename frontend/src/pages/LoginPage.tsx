@@ -148,7 +148,7 @@ function useCountUp(target: number, durationMs = 800): number {
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / durationMs);
       // ease-out cubic
-      const eased = 1 - Math.pow(1 - t, 3);
+      const eased = 1 - (1 - t) ** 3;
       setValue(target * eased);
       if (t < 1) raf = requestAnimationFrame(tick);
     };
@@ -217,22 +217,6 @@ export default function LoginPage() {
     return () => { cancelled = true; };
   }, []);
 
-  if (isLoading && !canUseDevMock) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3" style={{ background: 'var(--sf-bg)' }}>
-        <span className="sf-solar-mark" aria-hidden>
-          <Sun strokeWidth={2.4} />
-        </span>
-        <LoadingSpinner />
-        <p className="sf-mono sf-text-ink-3 text-[11px]">SolarFlow 시작 중…</p>
-      </div>
-    );
-  }
-
-  if (isAuthenticated) {
-    return <Navigate to="/" replace />;
-  }
-
   const inventoryMW = stats?.inventory_available_mw ?? FALLBACK_KPI.inventory_available_mw;
   const reservations = stats?.reservations_pending ?? FALLBACK_KPI.reservations_pending;
   const lcCount = stats?.lc_active_count ?? FALLBACK_KPI.lc_active_count;
@@ -273,6 +257,23 @@ export default function LoginPage() {
   ];
 
   const relativeSync = useRelativeTime(stats?.generated_at);
+
+  if (isLoading && !canUseDevMock) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-3" style={{ background: 'var(--sf-bg)' }}>
+        <span className="sf-solar-mark" aria-hidden>
+          <Sun strokeWidth={2.4} />
+        </span>
+        <LoadingSpinner />
+        <p className="sf-mono sf-text-ink-3 text-[11px]">SolarFlow 시작 중…</p>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <div className="sf-login-shell">
       <section className="sf-login-left">

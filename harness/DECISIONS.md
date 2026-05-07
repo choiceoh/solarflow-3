@@ -865,10 +865,10 @@
 
 ## D-124: 가격예측은 module 계열 전용 외부 벤치마크 장부 + 버튼형 AI 수집으로 둔다
 
-- **결정**: `/price-forecast` 메뉴와 `/api/v1/price-benchmarks/*` API를 module 계열(`topsolar`, `cable`) 전용으로 추가한다. BARO에는 원가·구매 협상 카드가 될 수 있는 외부 시세/입찰/ASP 벤치마크를 노출하지 않는다.
-- **데이터 모델**: `price_benchmarks`는 source(OPIS, InfoLink, TrendForce, PVinsights, 중국 국영 입찰, CPIA floor, Tier-1 ASP), metric, value_date, market_region, basis, USD/CNY/KRW per W 가격, cargo size, forward quarter, project segment, technology, 근거 URL/excerpt를 저장한다. `price_benchmark_runs`는 버튼 1회 수집 로그(provider/model/source_keys/inserted/skipped/warnings/evidence/raw_response)를 남긴다.
+- **결정**: `/price-forecast` 메뉴와 `/api/v1/price-benchmarks/*` API를 module 계열(`topsolar`, `cable`) 전용으로 추가한다. BARO에는 원가·구매 협상 카드가 될 수 있는 외부 시세/입찰 벤치마크를 노출하지 않는다.
+- **데이터 모델**: `price_benchmarks`는 source(OPIS, InfoLink, TrendForce, PVinsights, 중국 국영 입찰, CPIA floor), metric, value_date, market_region, basis, USD/CNY/KRW per W 가격, cargo size, forward quarter, project segment, technology, 근거 URL/excerpt를 저장한다. `price_benchmark_runs`는 버튼 1회 수집 로그(provider/model/source_keys/inserted/skipped/warnings/evidence/raw_response)를 남긴다. Tier-1 ASP는 D-151에 따라 제외한다.
 - **수집 방식**: 운영자가 화면에서 `AI 지표 갱신`을 누르면 백엔드는 `price_benchmark_runs`에 `running` 로그를 만들고 즉시 응답한 뒤 백그라운드에서 기존 Assistant 설정(`ASSISTANT_*`, `ANTHROPIC_*` 또는 `OPENAI_*`)을 재사용해 증거 텍스트에서 가격 관측값만 구조화한다. `TAVILY_API_KEY`가 있으면 검색 evidence를 보강하고, 없으면 공개 URL 직접 조회와 LLM 추출만 수행한다. evidence에 명시되지 않은 가격은 저장하지 않는다.
-- **UI 기준**: x축은 관측일, y축은 선택 단위(USD/W, CNY/W, KRW/W) 가격이다. OPIS CMM/forward/DDP, InfoLink centralized/distributed, TrendForce 중국 국내가/수출가, PVinsights 보조 시세, 중국 국영 입찰, CPIA floor, Tier-1 ASP를 같은 화면에서 source 필터로 비교한다.
+- **UI 기준**: x축은 관측일, y축은 선택 단위(USD/W, CNY/W, KRW/W) 가격이다. OPIS CMM/forward/유럽 DDP, InfoLink centralized/distributed, TrendForce 중국 국내가/수출가, PVinsights 보조 시세, 중국 국영 입찰, CPIA floor를 같은 화면에서 source 필터로 비교한다.
 - **운영 한계**: 유료 리포트 로그인/구독 본문은 서버가 별도 세션을 보유하지 않으면 수집하지 못한다. 이 경우 run warning으로 남기고 저장 가능한 공개 근거만 기록한다.
 - **날짜**: 2026-05-07
 
@@ -1275,4 +1275,17 @@
 - **검증**:
   - Rust 요청 모델 테스트로 `margin-analysis`의 `customer_id` 필터 수용을 고정한다.
   - dev mock API도 `customer_id`/`manufacturer_id` 필터와 원가 미연결 샘플을 반영한다.
+- **날짜**: 2026-05-07
+
+## D-151: Tier-1 ASP는 가격예측 수집·표시·저장 대상에서 제외한다
+
+- **결정**: `tier1_asp` source 와 `manufacturer_asp` metric 은 `/price-forecast`의 수집 대상에서 제거한다. 프론트엔드 source 필터, dev mock source list, 백엔드 AI evidence source 목록, AI JSON schema enum, 서버 whitelist 에서 모두 제외한다.
+- **이유**: 제조사 분기 실적 기반 ASP는 공개 근거의 시점·제품군·지역·판매 믹스가 SolarFlow 구매 협상 단가와 직접 비교되기 어렵다. OPIS CMM/forward/유럽 DDP, InfoLink module, TrendForce, PVinsights, 중국 입찰, CPIA floor 중심으로 유지해 화면의 신뢰도와 해석 가능성을 높인다.
+- **운영 기준**:
+  - 기존 DB에 남아 있을 수 있는 과거 `tier1_asp` 관측값은 이번 결정만으로 삭제하지 않는다. 단, UI 기본 source 목록에서 제외되어 표시되지 않고, 신규 수동/AI 저장은 서버 whitelist 에서 차단한다.
+  - `source_key=tier1_asp`, `metric_key=manufacturer_asp`, `market_region=manufacturer`, `basis=asp` 는 신규 저장 정책에서 허용하지 않는다.
+  - 향후 제조사 IR 기반 데이터를 다시 쓰려면 별도 D-NNN으로 제품군/지역/기간 보정 기준과 수동 검증 workflow 를 먼저 정의한다.
+- **검증**:
+  - `TestValidateBenchmarkCatalogPolicy` 에서 Tier-1 ASP 차단을 검증한다.
+  - 프론트엔드 build 로 source 목록 제거와 타입 일치를 확인한다.
 - **날짜**: 2026-05-07

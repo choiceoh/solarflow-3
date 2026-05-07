@@ -82,8 +82,34 @@ var benchmarkSources = []benchmarkSource{
 	{Key: "china_tender", Name: "중국 국영 대량 입찰", Homepage: "https://guangfu.bjx.com.cn/", HomepageFallbacks: []string{"https://news.bjx.com.cn/zt/guangfu/"}, Query: "北极星 太阳能 光伏 组件 集采 中标 价格 华能 华电 国家能源 国家电投 中国电建 TOPCon", Endpoint: "news", TimeWindow: "month"},
 	// CPIA 정책·가이던스 — 발표 빈도가 낮으므로 1개월.
 	{Key: "cpia_floor", Name: "CPIA 최저원가 가이던스", Homepage: "https://www.chinapv.org.cn/", Query: "中国光伏行业协会 CPIA 光伏组件 最低成本 价格 指引", Endpoint: "search", TimeWindow: "month"},
-	// Tier-1 ASP — 분기 IR 자료. site: 로 IR 도메인 한정 + 3개월(분기).
-	{Key: "tier1_asp", Name: "Tier-1 제조사 ASP", Homepage: "https://ir.jinkosolar.com/", HomepageFallbacks: []string{"https://ir.longi.com/", "https://ir.trinasolar.com/"}, Query: "Jinko Longi Trina JA Solar Tongwei quarterly module ASP China export Europe module price dollar per watt", Endpoint: "search", TimeWindow: "month", Site: "ir.jinkosolar.com OR ir.longi.com OR ir.trinasolar.com OR jasolar.com OR tongwei.com"},
+}
+
+var allowedBenchmarkSources = map[string]bool{
+	"opis": true, "infolink": true, "trendforce": true, "pvinsights": true, "china_tender": true, "cpia_floor": true,
+}
+
+var allowedBenchmarkMetrics = map[string]bool{
+	"cmm_fob_china_topcon_600w": true,
+	"forward_q1":                true,
+	"forward_q2":                true,
+	"forward_q3":                true,
+	"forward_q4":                true,
+	"ddp_europe":                true,
+	"module_centralized":        true,
+	"module_distributed":        true,
+	"polysilicon":               true,
+	"china_domestic":            true,
+	"china_export":              true,
+	"china_state_tender":        true,
+	"cpia_cost_floor":           true,
+}
+
+var allowedBenchmarkBasis = map[string]bool{
+	"fob": true, "ddp": true, "spot": true, "forward": true, "tender": true, "floor": true,
+}
+
+var allowedBenchmarkCurrencies = map[string]bool{
+	"USD": true, "CNY": true, "KRW": true,
 }
 
 type benchmarkEvidenceItem struct {
@@ -173,7 +199,6 @@ var benchmarkTargetMatrix = map[string][]benchmarkMetricTarget{
 	"cpia_floor": {
 		{MetricKey: "cpia_cost_floor", MetricLabel: "CPIA cost floor", MarketRegion: "china_domestic", Basis: "floor", PreferredCurrency: "CNY", SearchHint: "CPIA 光伏组件 最低成本 价格 指引"},
 	},
-	"tier1_asp": {},
 }
 
 // List — GET /api/v1/price-benchmarks
@@ -288,6 +313,10 @@ func (h *PriceBenchmarkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		req.CreatedBy = &userID
 	}
 	if msg := req.Validate(); msg != "" {
+		response.RespondError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if msg := validateBenchmarkCatalogPolicy(req); msg != "" {
 		response.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -1084,7 +1113,7 @@ missing_focus 밖의 값은 evidence에 가격·날짜·단위가 모두 명확�
 {
   "points": [
     {
-      "source_key": "opis|infolink|trendforce|pvinsights|china_tender|cpia_floor|tier1_asp",
+      "source_key": "opis|infolink|trendforce|pvinsights|china_tender|cpia_floor",
       "source_name": "표시명",
       "metric_key": "cmm_fob_china_topcon_600w|forward_q1|forward_q2|forward_q3|forward_q4|ddp_europe|module_centralized|module_distributed|polysilicon|china_domestic|china_export|china_state_tender|cpia_cost_floor",
       "metric_label": "운영자가 보는 짧은 라벨",
@@ -1154,6 +1183,28 @@ func parsePriceBenchmarkAIOutput(raw string) (priceBenchmarkAIOutput, error) {
 	return out, nil
 }
 
+func validateBenchmarkCatalogPolicy(point model.CreatePriceBenchmarkRequest) string {
+	if !allowedBenchmarkSources[point.SourceKey] {
+		return "허용되지 않은 source_key입니다: " + point.SourceKey
+	}
+	if !allowedBenchmarkMetrics[point.MetricKey] {
+		return "허용되지 않은 metric_key입니다: " + point.MetricKey
+	}
+	if !model.IsPriceBenchmarkMarketRegionAllowed(point.MarketRegion) {
+		return "허용되지 않은 market_region입니다: " + point.MarketRegion
+	}
+	if !allowedBenchmarkBasis[point.Basis] {
+		return "허용되지 않은 basis입니다: " + point.Basis
+	}
+	if !allowedBenchmarkCurrencies[point.Currency] {
+		return "허용되지 않은 currency입니다: " + point.Currency
+	}
+	if point.SourceKey == "infolink" && (point.MetricKey == "cell" || point.MetricKey == "wafer") {
+		return "InfoLink cell/wafer 지표는 수집 대상이 아닙니다"
+	}
+	return ""
+}
+
 func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, points []model.CreatePriceBenchmarkRequest, existing benchmarkExistingContext) (int, int, []model.PriceBenchmark) {
 	inserted := 0
 	skipped := 0
@@ -1185,6 +1236,11 @@ func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, po
 			continue
 		}
 		if msg := point.Validate(); msg != "" {
+			log.Printf("[가격 벤치마크 AI point skip] %s", msg)
+			skipped++
+			continue
+		}
+		if msg := validateBenchmarkCatalogPolicy(point); msg != "" {
 			log.Printf("[가격 벤치마크 AI point skip] %s", msg)
 			skipped++
 			continue
