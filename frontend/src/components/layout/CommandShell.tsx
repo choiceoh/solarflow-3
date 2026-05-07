@@ -6,7 +6,7 @@ import {
   PanelLeftOpen,
   Sun,
 } from 'lucide-react';
-import { NAV_GROUPS } from '@/lib/navigation/manifest';
+import { NAV_GROUPS, isItemVisible } from '@/lib/navigation/manifest';
 import { detectTenantScope } from '@/lib/tenantScope';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import AlertBell from '@/components/layout/AlertBell';
@@ -120,8 +120,15 @@ export default function CommandShell() {
   const { roleLabel } = usePermission();
   const { hidden: hiddenMenus } = useMenuVisibility();
   const r = role as Role | null;
-  // D-108/D-119: 호스트네임으로 tenant 모드 결정 — 메뉴 가시성 분기에만 사용 (보안 경계는 백엔드 RequireTenantScope)
+  // D-108/D-119: 호스트네임으로 tenant 모드 결정 — feature 미정의 항목 fallback / UI 분기 (회사 스위처 등) 에 사용.
+  // 보안 경계는 백엔드 RequireTenantScope, sidebar 가시성 정본은 user.enabled_features (PR-3b).
   const currentTenant = detectTenantScope();
+  // PR-3b: 서버가 내려준 활성 feature 집합을 매번 set 으로 만들어 검사. user 가 없거나 옛 응답이면
+  // undefined — isItemVisible 이 tenants 배열 fallback 으로 동작.
+  const enabledFeatures = useMemo<ReadonlySet<string> | undefined>(
+    () => (user?.enabled_features ? new Set(user.enabled_features) : undefined),
+    [user?.enabled_features],
+  );
   // D-112: admin이 정의한 사이드바 탭 — config 미존재면 탭 비활성 (현재 사이드바 그대로)
   const { config: tabsConfig } = useSidebarTabs(currentTenant);
   const { persona, setPersona } = useUserPersona();
@@ -235,7 +242,7 @@ export default function CommandShell() {
             const visibleItems = group.items.filter(
               (item) =>
                 canAccessMenu(r, item.menu) &&
-                (!item.tenants || item.tenants.includes(currentTenant)) &&
+                isItemVisible(item, currentTenant, enabledFeatures) &&
                 !hiddenMenus.has(item.key) &&
                 // D-112: 활성 탭이 있으면 그 탭의 menus 화이트리스트, "all"이면 통과
                 (!activeTab || activeTab.menus === 'all' || activeTab.menus.includes(item.key)),
