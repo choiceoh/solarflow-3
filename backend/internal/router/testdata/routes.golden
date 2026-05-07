@@ -204,6 +204,7 @@ POST    /api/v1/calc/lc-fee
 POST    /api/v1/calc/lc-limit-timeline
 POST    /api/v1/calc/lc-maturity-alert
 POST    /api/v1/calc/margin-analysis
+POST    /api/v1/calc/order-fulfillment-risk
 POST    /api/v1/calc/outstanding-list
 POST    /api/v1/calc/price-trend
 POST    /api/v1/calc/receipt-match-suggest

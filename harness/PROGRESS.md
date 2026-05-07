@@ -16,6 +16,37 @@
 
 ---
 
+## 2026-05-07 세션 — 수주 충당 위험도 배지
+
+### 완료
+- Rust 계산엔진에 `POST /api/calc/order-fulfillment-risk` 추가
+  - 현재고 충당 수주는 완료입고 - active 출고 - 현재고 예약 풀 기준
+  - 미착품 충당 수주는 운송/통관 B/L + B/L 없는 opened L/C 잔여량 - 미착품 예약 풀 기준
+  - active 수주로 전환된 예약은 `inventory_allocations`에서 중복 차감하지 않음
+  - 같은 법인·품번·충당소스 안에서 `received/partial` 수주 잔량을 수주일/ID 순서로 차감해 `available/shortage/check` 판정
+- Go 프록시 `POST /api/v1/calc/order-fulfillment-risk` 추가
+  - feature id `calc.order_fulfillment_risk`
+  - feature catalog, wiring matrix, route snapshot 동기화
+- 수주 목록에 `충당 위험` 컬럼 추가
+  - `충당 가능`, `부족`, `확인 필요` 배지 표시
+  - tooltip에 필요 kW, 배정 전 가용 kW, 부족 kW 표시
+  - 현재 페이지의 active 수주 ID만 요청하되 Rust는 전체 active 수주를 기준으로 순차 배정
+- dev mock API에 충당 위험도 샘플 응답 추가
+- D-128 결정 기록 및 설계 정본 동기화
+
+### 검증
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공 — routes.golden 갱신
+- `cd backend && go build ./... && go vet ./... && go test ./...` 성공
+- `cd engine && cargo build && cargo test` 성공 — 기존 dead_code warning 4건 유지
+- `cd frontend && npm ci` 성공 — npm audit moderate 2건 출력
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning + plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline warning 68건 출력
+- `cd frontend && npm run test` 및 `npx vitest run --pool=threads --maxWorkers=1` 실패 — Vitest worker startup timeout (`Timeout waiting for worker to respond`)으로 테스트 파일 로딩 전 종료
+- `git diff --check` 성공
+- `graphify update .` 성공 — 4335 nodes / 6769 edges / 398 communities
+
+---
+
 ## 2026-05-07 세션 — 가격예측 벤치마크 + AI 수집 화면
 
 ### 완료

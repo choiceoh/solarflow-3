@@ -936,3 +936,16 @@
   - 수동 검증: BARO 토큰으로 `/baro/home` 진입 시 카드 4개 + 패널 3개 표시. 각 카드/리스트 항목 클릭 → 해당 도메인 페이지로 이동 (cockpit/credit-board/incoming).
 - **날짜**: 2026-05-07
 
+## D-128: 수주 충당 위험도는 Rust 계산엔진에서 현재고/미착품 풀을 순차 배정해 표시한다
+- **결정**: 수주 목록에 `충당 가능/부족/확인 필요` 배지를 추가하고, 판정은 신규 Rust 계산 API `/api/v1/calc/order-fulfillment-risk`가 담당한다. 프론트엔드는 현재 페이지의 active 수주 ID만 요청하지만, Rust는 같은 법인·품번의 전체 `received/partial` 수주를 수주일 순서로 배정해 현재 페이지 수주만 응답한다.
+- **계산 기준**:
+  - `fulfillment_source='stock'`: 완료 입고(`completed/erp_done`) - active 출고 - 현재고 예약(`inventory_allocations.source_type='stock'`)을 공급 풀로 둔다.
+  - `fulfillment_source='incoming'`: 운송/통관 중 B/L + B/L 없는 opened L/C 잔여량 - 미착품 예약(`inventory_allocations.source_type='incoming'`)을 공급 풀로 둔다.
+  - active 수주(`received/partial`)로 전환되어 `inventory_allocations.order_id`가 연결된 예약은 별도 예약 차감에서 제외한다. 같은 수주 잔량은 아래 순차 배정 단계에서 한 번만 차감된다.
+  - 각 수주의 필요량은 `remaining_qty × products.wattage_kw`로 계산하고, 같은 법인·품번·충당소스 안에서 수주일/ID 순서로 앞 수주부터 공급 풀을 차감한다.
+- **이유**: 단순히 품번별 가용재고를 현재 행 수량과 비교하면 이미 모든 수주 예약이 차감된 값이라 개별 수주 위험도가 왜곡된다. 수주별 위험도는 입고, 출고, 예약, 미착품, 수주 잔량을 함께 봐야 하므로 Go 화면/API가 아니라 Rust 계산엔진의 책임이다.
+- **운영 기준**:
+  - 신규 feature id는 `calc.order_fulfillment_risk`, DefaultTenants는 모든 테넌트다. 수주/가용재고는 BARO와 module 계열이 공유하는 운영 표면이므로 원가·금융 격리 대상이 아니다.
+  - 완료/취소 수주는 계산 응답에서 제외하고, 화면에는 배지를 표시하지 않는다.
+  - `부족` 배지는 선택한 충당소스 기준의 부족이다. 실재고가 부족해도 미착품이 충분한 경우에는 사용자가 수주의 `fulfillment_source`를 `incoming`으로 보정해야 한다.
+- **날짜**: 2026-05-07
