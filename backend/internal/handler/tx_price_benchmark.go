@@ -48,7 +48,8 @@ type benchmarkSource struct {
 
 var benchmarkSources = []benchmarkSource{
 	{Key: "opis", Name: "OPIS Solar Weekly", Homepage: "https://www.opisnet.com/product/solar-weekly/", Query: "OPIS Solar Weekly Chinese Module Marker CMM FOB China TOPCon 600W forward curve DDP US Europe"},
-	{Key: "infolink", Name: "InfoLink Consulting", Homepage: "https://www.infolink-group.com/energy-article/solar-topic-price", Query: "InfoLink Consulting weekly solar module cell wafer polysilicon price centralized distributed project module price"},
+	// InfoLink — module/polysilicon 만 사용. cell, wafer 는 정확도 이슈로 제외.
+	{Key: "infolink", Name: "InfoLink Consulting", Homepage: "https://www.infolink-group.com/energy-article/solar-topic-price", Query: "InfoLink Consulting weekly solar module polysilicon price centralized distributed project module price"},
 	{Key: "trendforce", Name: "TrendForce EnergyTrend", Homepage: "https://www.energytrend.com/pricequotes.html", Query: "TrendForce EnergyTrend weekly solar module price China export price monthly tender analysis"},
 	{Key: "pvinsights", Name: "PVinsights", Homepage: "https://pvinsights.com/", Query: "PVinsights daily solar module price poly silicon wafer cell price"},
 	{Key: "china_tender", Name: "중국 국영 대량 입찰", Homepage: "https://guangfu.bjx.com.cn/", Query: "北极星 太阳能 光伏 组件 集采 中标 价格 华能 华电 国家能源 国家电投 中国电建 TOPCon"},
@@ -458,6 +459,9 @@ func (h *PriceBenchmarkHandler) extractBenchmarksWithAI(ctx context.Context, pro
 	system := `당신은 SolarFlow 가격예측용 태양광 모듈 가격 벤치마크 추출기입니다.
 반드시 제공된 evidence 안에 명시된 가격만 추출하세요. 추정, 보간, 상식, 오래된 기억으로 값을 만들면 안 됩니다.
 출력은 JSON 객체 하나만 반환하세요. Markdown, 설명문, 코드블록은 금지입니다.
+
+소스별 추출 제약:
+- InfoLink: module_centralized / module_distributed / polysilicon 만 추출. cell, wafer 는 evidence 에 가격이 있어도 절대 추출하지 마세요.
 형식:
 {
   "points": [
@@ -539,6 +543,12 @@ func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, po
 		}
 		if point.MetricLabel == "" {
 			point.MetricLabel = point.MetricKey
+		}
+		// AI 가 시스템 프롬프트의 InfoLink 제외 지시를 무시해도 여기서 차단.
+		if point.SourceKey == "infolink" && (point.MetricKey == "cell" || point.MetricKey == "wafer") {
+			log.Printf("[가격 벤치마크 AI point skip] InfoLink %s 는 정책상 제외", point.MetricKey)
+			skipped++
+			continue
 		}
 		if msg := point.Validate(); msg != "" {
 			log.Printf("[가격 벤치마크 AI point skip] %s", msg)

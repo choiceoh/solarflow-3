@@ -1,49 +1,52 @@
 // 사용중 (M$) 드릴다운 — 은행별 / 법인별 실행금액 + 활성 LC 개설 추이.
+//
+// 서버 집계 (banking_dashboard RPC).
 
 import { useMemo } from 'react'
-import { useAllBankLimitGroups } from '@/hooks/useBanking'
-import { useLCList } from '@/hooks/useProcurement'
-import { breakdownBy, trend24 } from '@/lib/insights/aggregations'
+import { useBankingDashboard } from '@/hooks/useBanking'
 import InsightShell from '@/components/insights/InsightShell'
+import type { BreakdownRow, TrendPoint } from '@/lib/insights/aggregations'
 
 const fmtUsdM = (v: number) => (v / 1_000_000).toFixed(v >= 10_000_000 ? 1 : 2)
 const fmtUsdMTick = (v: number) => `${(v / 1_000_000).toFixed(0)}`
 
 export function BankingUsedInsight() {
-  const { groups, loading: groupsLoading } = useAllBankLimitGroups()
-  const { data: lcs, loading: lcsLoading } = useLCList()
+  const { dashboard, loading } = useBankingDashboard()
 
-  // 활성 LC (status != settled, !repaid) 의 open_date 월별 합계.
-  const activeLcs = useMemo(
-    () => lcs.filter((l) => l.status !== 'settled' && !l.repaid),
-    [lcs],
-  )
-  const trend = useMemo(
-    () => trend24(activeLcs, (l) => l.open_date ?? null, (l) => l.amount_usd ?? 0),
-    [activeLcs],
+  const totalUsed = dashboard?.totals.total_used_usd ?? 0
+
+  // LC 개설액 trend — banking_dashboard.trend24[i].lc_open_usd
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.lc_open_usd })),
+    [dashboard],
   )
 
-  const allRows = groups.flatMap((g) => g.rows.map((r) => ({ ...r, company_id: g.company_id, company_name: g.company_name })))
-  const totalUsed = allRows.reduce((s, r) => s + r.used, 0)
+  const byBank: BreakdownRow[] = useMemo(() => {
+    const rows = (dashboard?.by_bank ?? []).filter((r) => r.used > 0)
+    const total = rows.reduce((s, r) => s + r.used, 0)
+    return [...rows]
+      .sort((a, b) => b.used - a.used)
+      .slice(0, 10)
+      .map((r) => ({
+        key: r.bank_id ?? r.bank_name,
+        label: r.bank_name,
+        value: r.used,
+        share: total > 0 ? r.used / total : 0,
+        count: 1,
+      }))
+  }, [dashboard])
 
-  const byBank = useMemo(
-    () => breakdownBy(
-      allRows.filter((r) => r.used > 0),
-      (r) => r.bank_id ?? r.bank_name,
-      (r) => r.bank_name,
-      (r) => r.used,
-    ).slice(0, 10),
-    [allRows],
-  )
-  const byCompany = useMemo(
-    () => breakdownBy(
-      allRows.filter((r) => r.used > 0),
-      (r) => r.company_id,
-      (r) => r.company_name,
-      (r) => r.used,
-    ),
-    [allRows],
-  )
+  const byCompany: BreakdownRow[] = useMemo(() => {
+    const rows = (dashboard?.by_company ?? []).filter((c) => c.used_usd > 0)
+    const total = rows.reduce((s, r) => s + r.used_usd, 0)
+    return rows.map((c) => ({
+      key: c.key,
+      label: c.label,
+      value: c.used_usd,
+      share: total > 0 ? c.used_usd / total : 0,
+      count: c.bank_count,
+    }))
+  }, [dashboard])
 
   return (
     <InsightShell
@@ -53,7 +56,7 @@ export function BankingUsedInsight() {
       tone="warn"
       backTo="/banking"
       backLabel="L/C 한도 현황으로 돌아가기"
-      loading={groupsLoading || lcsLoading}
+      loading={loading}
       totalLabel="현재 사용중"
       totalValue={fmtUsdM(totalUsed)}
       trend={trend}
