@@ -221,7 +221,9 @@ function buildRecentEvents(chains: Chain[], src: EventSources, limit: number): T
   const allPoIds = new Set<string>();
   for (const chain of chains) {
     const poIds = new Set(chain.pos.map((p) => p.po_id));
-    poIds.forEach((id) => allPoIds.add(id));
+    poIds.forEach((id) => {
+      allPoIds.add(id);
+    });
     for (const po of chain.pos) events.push(...poEvents(po, chain));
     events.push(...priceEvents(src.phs, poIds, chain.chain_id, chain.manufacturer_id));
     events.push(...lcEvents(src.lcs, poIds, chain.chain_id));

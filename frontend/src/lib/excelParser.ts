@@ -117,7 +117,7 @@ function parseSheet(sheet: SheetLike, fields: FieldDef[]): ParsedRow[] {
       const raw = row.getCell(col).value;
       if (field.type === 'number') {
         const n = Number(raw);
-        data[field.key] = isNaN(n) ? raw : n;
+        data[field.key] = Number.isNaN(n) ? raw : n;
       } else if (field.type === 'date') {
         if (raw instanceof Date) {
           data[field.key] = raw.toISOString().slice(0, 10);

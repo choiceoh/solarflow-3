@@ -317,6 +317,8 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     stickToBottomRef.current = distanceToBottom < 120;
   };
   useEffect(() => {
+    void messages;
+    void status;
     if (!stickToBottomRef.current) return;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, status]);
@@ -684,7 +686,6 @@ function MessageParts({
     }
     if (isToolUIPart(part)) {
       nodes.push(<ToolChip key={i} part={part} />);
-      continue;
     }
     // data-proposal / step-start 등은 상위에서 처리하거나 무시.
   }

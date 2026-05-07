@@ -90,7 +90,7 @@ export function resolveManufacturerId(
   for (const m of manufacturers) {
     const fields = [m.name_kr, m.name_en ?? '', m.short_name ?? ''];
     for (const f of fields) {
-      if (f && f.toLowerCase().includes(k)) return m.manufacturer_id;
+      if (f?.toLowerCase().includes(k)) return m.manufacturer_id;
     }
   }
   return null;

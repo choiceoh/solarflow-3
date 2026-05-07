@@ -1,7 +1,7 @@
 // AI 어시스턴트 Provider 설정 카드 (D-064 PR 40).
 // 운영자가 primary/fallback provider+model 을 GUI 로 변경.
 // system_settings 의 'assistant.providers' key 에 저장.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Bot, Save, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -41,7 +41,7 @@ export default function AssistantProvidersCard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/v1/system-settings/assistant.providers', {
@@ -56,16 +56,16 @@ export default function AssistantProvidersCard() {
       const v = (await res.json()) as AssistantProvidersValue;
       if (v.primary) setPrimary({ provider: v.primary.provider || 'openai', model: v.primary.model || '' });
       if (v.fallback) setFallback({ provider: v.fallback.provider || 'anthropic', model: v.fallback.model || '' });
-    } catch (e) {
+    } catch {
       // 미설정 또는 에러 — 기본값 유지
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   const save = async () => {
     setSaving(true);
