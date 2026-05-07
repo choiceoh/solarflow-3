@@ -16,6 +16,52 @@
 
 ---
 
+## 2026-05-07 세션 — 면장/원가 섹션 개선
+
+### 완료
+- 면장 저장소 참조를 `import_declarations`로 통일
+  - Excel 면장 Import, Assistant 면장 제안 확정, Assistant 면장 검색, 아마란스 Export CIF 맵 조회가 실제 테이블을 보도록 정리
+- B/L 상세의 `부대비용` 탭을 `면장/원가` 탭으로 확장
+  - 면장정보, 원가라인, 부대비용, Landed Cost 순서로 통관 후 원가 확정 흐름 배치
+  - Rust `landed-cost` 프록시를 이용한 `미리보기(save=false)`와 `저장(save=true)` 버튼 추가
+  - Landed Cost 결과에서 CIF/Wp, 관세, VAT, 배분비용, Landed/Wp, CIF 대비 차이를 표로 표시
+- 부대비용 요약의 VAT 처리 정리
+  - VAT 제외 `원가반영 비용`과 VAT 포함 `지급합계`를 분리해 설계 정본의 “VAT 원가 불포함” 기준 반영
+- `/customs` 화면을 면장/원가 현황 중심으로 보강
+  - 면장 탭을 첫 화면으로 추가하고 면장 KPI/컬럼 설정/엑셀 양식 진입 연결
+  - 면장 행 클릭 시 `/procurement?tab=bl&bl_id=...`로 이동해 해당 B/L 상세를 바로 열도록 딥링크 추가
+- dev mock Landed Cost 응답을 실제 Rust 응답 구조(`items`, `saved`, `allocated_expenses`)에 맞춰 보정
+- PR 준비 중 최신 `main` 빌드 회귀 보정
+  - App 라우트/manifest 전환 과정에서 남은 중복 lazy 선언과 누락된 BARO 콜백 추천 라우트 import 정리
+  - CommandShell 사이드바 메뉴는 manifest 정본(`NAV_GROUPS`, `isItemVisible`)을 쓰도록 중복 로컬 정의 제거
+  - B/L 목록 작업 chip helper, L/C 딥링크 focus prop, T/T 페이지네이션, 구매이력 EmptyState import 보강
+  - `package.json` 중복 키와 `package-lock.json` 의존성 동기화 문제 보정
+
+### 검증
+- `cd backend && go test ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd frontend && npm ci` 성공 — 누락된 로컬 의존성 복원
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 66건 출력
+- `git diff --check` 성공
+- `graphify update .` 최종 성공 — 4630 nodes / 7390 edges / 400 communities
+- `cd frontend && npm run test` 실패 — 테스트 파일 실행 전 Vitest worker bootstrap timeout 8건
+- `cd frontend && npx vitest run --pool=threads --maxWorkers=1 --no-file-parallelism` 실패 — 동일한 worker bootstrap timeout
+- PR 전 최신 `main` 재검증
+  - `cd frontend && npm install --package-lock-only --ignore-scripts --no-audit --no-fund` 성공
+  - `cd frontend && npm ci` 성공 — lock 동기화 후 의존성 재설치
+  - `cd frontend && npm run build` 성공 — plugin timing warning 출력
+  - `cd frontend && npm run test` 성공 — 10 files / 84 tests
+  - `cd frontend && npm run lint` 종료코드 0 — 페이지네이션 reset hook 관련 경고 4건 출력
+  - `git diff --check` 성공
+  - 최종 리베이스 후 `go test ./...`, `go build ./...`, `go vet ./...`, `npm run build`, `npm run test`, `npm run lint`, `graphify update .` 재확인 성공
+
+### 알려진 제한
+- 초기 검증에서는 Vitest worker bootstrap timeout이 있었으나, 최신 `main` 의존성 lock 동기화와 재설치 후 PR 전 재검증에서 프론트 단위테스트가 통과했다.
+
+---
+
 ## 2026-05-07 세션 — module 구매이력 UX + 정밀 딥링크 개선
 
 ### 완료

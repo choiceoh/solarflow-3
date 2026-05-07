@@ -143,6 +143,37 @@ export interface ExchangeCompareResult {
   calculated_at: string
 }
 
+export interface LandedCostItem {
+  cost_id: string
+  declaration_id: string
+  declaration_number: string
+  product_id: string
+  product_code?: string
+  product_name?: string
+  manufacturer_name?: string
+  quantity: number
+  capacity_kw?: number
+  exchange_rate?: number
+  fob_unit_usd?: number
+  fob_wp_krw?: number
+  cif_wp_krw?: number
+  tariff_rate?: number
+  tariff_amount?: number
+  vat_amount?: number
+  allocated_expenses?: Record<string, number>
+  total_expense_krw?: number
+  expense_per_wp_krw?: number
+  landed_total_krw?: number
+  landed_wp_krw?: number
+  margin_vs_cif_krw?: number
+}
+
+export interface LandedCostResult {
+  items: LandedCostItem[]
+  saved?: boolean
+  calculated_at: string
+}
+
 export const EXPENSE_TYPE_LABEL: Record<ExpenseType, string> = {
   dock_charge: "부두발생비용",
   shuttle: "셔틀및부대비용",

@@ -127,7 +127,9 @@ export default function FeatureMatrixPage() {
       const features = ids
         .map((id) => byID.get(id))
         .filter((f): f is AdminFeatureSummary => Boolean(f));
-      features.forEach((f) => used.add(f.id));
+      features.forEach((f) => {
+        used.add(f.id);
+      });
       return { pack, features };
     });
     const orphans = data.features.filter((f) => !used.has(f.id));

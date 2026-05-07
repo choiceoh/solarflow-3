@@ -10,7 +10,7 @@
 //   - PR-4 : NAV_GROUPS 를 packs/ 디렉토리 (erp-core / module-finance / baro-domain)
 //            로 split. 이 파일은 ROUTES + 합친 NAV_GROUPS 만 export.
 import { lazy, type ComponentType, type LazyExoticComponent, type ReactElement } from 'react';
-import { type LucideIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 import type { MenuKey, Role } from '@/config/permissions';
 import type { TenantScope } from '@/lib/tenantScope';

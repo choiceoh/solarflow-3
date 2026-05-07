@@ -754,7 +754,7 @@ func (h *ImportHandler) Declarations(w http.ResponseWriter, r *http.Request) {
 	// 면장번호 → declaration_id 매핑 맵
 	declIDMap := make(map[string]string)
 
-	// 단계 1: declarations INSERT
+	// 단계 1: import_declarations INSERT
 	for i, row := range req.Declarations {
 		rowNum := i + 2
 
@@ -787,7 +787,7 @@ func (h *ImportHandler) Declarations(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		declData, _, err := h.DB.From("declarations").
+		declData, _, err := h.DB.From("import_declarations").
 			Insert(declReq, false, "", "", "").
 			Execute()
 		if err != nil {
