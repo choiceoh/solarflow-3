@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { isItemVisible, NAV_GROUPS, type CommandNavItem } from './manifest';
 
 // 가짜 NAV item 빌더 — 테스트 전용.
@@ -18,9 +18,14 @@ describe('isItemVisible — feature 매핑된 항목', () => {
     expect(isItemVisible(item, 'topsolar', new Set(['tx.po', 'tx.lc']))).toBe(true);
   });
 
-  it('enabled_features 에 없으면 안 보임 — tenants 가 같이 있어도 무시', () => {
+  it('enabled_features 에 없으면 안 보임', () => {
     const item = makeItem({ feature: 'tx.po', tenants: ['topsolar'] });
     expect(isItemVisible(item, 'topsolar', new Set(['tx.lc']))).toBe(false);
+  });
+
+  it('tenants 가 현재 테넌트 미포함이면 feature 가 있어도 안 보임', () => {
+    const item = makeItem({ feature: 'baro.incoming', tenants: ['baro'] });
+    expect(isItemVisible(item, 'topsolar', new Set(['baro.incoming']))).toBe(false);
   });
 
   it('enabled_features 가 undefined 면 tenants 배열로 fallback (옛 응답 호환)', () => {
@@ -67,5 +72,42 @@ describe('NAV_GROUPS — 매핑 무결성', () => {
     expect(allFeatures).toContain('tx.po');
     expect(allFeatures).toContain('baro.incoming');
     expect(allFeatures).toContain('intercompany.request.inbox');
+  });
+
+  it('module 도메인은 enabled_features 가 과하게 와도 BARO 전용 메뉴를 숨김', () => {
+    const allFeatures = new Set(
+      NAV_GROUPS.flatMap((g) => g.items)
+        .map((i) => i.feature)
+        .filter((feature): feature is string => Boolean(feature)),
+    );
+    const visible = NAV_GROUPS.flatMap((g) => g.items)
+      .filter((item) => isItemVisible(item, 'topsolar', allFeatures));
+    const paths = visible.map((item) => item.path);
+
+    expect(paths.some((path) => path.startsWith('/baro/'))).toBe(false);
+    expect(paths).not.toContain('/crm/inbox');
+  });
+
+  it('BARO 도메인은 module 전용 메뉴를 숨김', () => {
+    const allFeatures = new Set(
+      NAV_GROUPS.flatMap((g) => g.items)
+        .map((i) => i.feature)
+        .filter((feature): feature is string => Boolean(feature)),
+    );
+    const visible = NAV_GROUPS.flatMap((g) => g.items)
+      .filter((item) => isItemVisible(item, 'baro', allFeatures));
+    const paths = visible.map((item) => item.path);
+
+    expect(paths).not.toContain('/procurement');
+    expect(paths).not.toContain('/procurement?tab=lc');
+    expect(paths).not.toContain('/procurement?tab=bl');
+    expect(paths).not.toContain('/customs');
+    expect(paths).not.toContain('/group-trade/baro-inbox');
+    expect(paths).not.toContain('/banking');
+    expect(paths).not.toContain('/sales-analysis');
+    expect(paths).not.toContain('/purchase-history');
+    expect(paths).not.toContain('/price-forecast');
+    expect(paths).not.toContain('/import');
+    expect(paths).not.toContain('/approval');
   });
 });

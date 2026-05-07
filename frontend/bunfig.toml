@@ -1,0 +1,13 @@
+# Bun 설정 — install 정책 + test 환경
+
+[install]
+# peer deps 자동 설치 — vitest/jest 식 ergonomics 유지.
+# 일부 React 라이브러리가 peer 누락 시 strict mode 로 깨지는 걸 방지.
+auto = "fallback"
+
+[test]
+# 컴포넌트 테스트는 DOM 필요. happy-dom 을 setup.ts 에서 글로벌 등록.
+preload = ["./src/test/setup.ts"]
+# e2e/는 Playwright 전용 — bun test 가 picking up 안 하게.
+# pattern 으로 제외하거나 root 를 src 로 한정. 후자가 명확.
+root = "./src"

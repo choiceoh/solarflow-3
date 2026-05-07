@@ -3,9 +3,10 @@ import { Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import MetaTable, { type ColumnDef, type MetaTableServerMode } from '@/components/common/MetaTable';
 import FulfillmentSourceBadge from './FulfillmentSourceBadge';
+import OrderFulfillmentRiskBadge from './OrderFulfillmentRiskBadge';
 import OrderStatusBadge from './OrderStatusBadge';
 import { cn, formatDate, formatNumber, formatKw } from '@/lib/utils';
-import { MANAGEMENT_CATEGORY_LABEL, type FulfillmentSource, type Order } from '@/types/orders';
+import { MANAGEMENT_CATEGORY_LABEL, type FulfillmentSource, type Order, type OrderFulfillmentRiskItem } from '@/types/orders';
 import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
 import type { ColumnPinningState } from '@/lib/columnPinning';
 
@@ -19,6 +20,7 @@ interface Props {
   onSelect: (item: Order) => void;
   onCancelToReservation?: (item: Order) => void;
   sourceOverrides?: Record<string, FulfillmentSource>;
+  riskByOrder?: Record<string, OrderFulfillmentRiskItem>;
   serverMode?: MetaTableServerMode;
 }
 
@@ -27,9 +29,10 @@ const EMPTY_OVERRIDES: Record<string, FulfillmentSource> = {};
 interface BuildOpts {
   onCancelToReservation?: (item: Order) => void;
   sourceOverrides: Record<string, FulfillmentSource>;
+  riskByOrder: Record<string, OrderFulfillmentRiskItem>;
 }
 
-function buildColumns({ onCancelToReservation, sourceOverrides }: BuildOpts): ColumnDef<Order>[] {
+function buildColumns({ onCancelToReservation, sourceOverrides, riskByOrder }: BuildOpts): ColumnDef<Order>[] {
   const columns: ColumnDef<Order>[] = [
     { key: 'order_date', label: '수주일', cell: (o) => formatDate(o.order_date), sortAccessor: (o) => o.order_date ?? '' },
     { key: 'customer_name', label: '거래처', hideable: true, cell: (o) => o.customer_name ?? '—', sortAccessor: (o) => o.customer_name ?? '' },
@@ -55,6 +58,7 @@ function buildColumns({ onCancelToReservation, sourceOverrides }: BuildOpts): Co
     { key: 'order_number', label: '수주번호', hideable: true, className: 'font-mono', cell: (o) => o.order_number ?? '—', sortAccessor: (o) => o.order_number ?? '' },
     { key: 'management_category', label: '구분', hideable: true, cell: (o) => MANAGEMENT_CATEGORY_LABEL[o.management_category] ?? o.management_category, sortAccessor: (o) => MANAGEMENT_CATEGORY_LABEL[o.management_category] ?? o.management_category },
     { key: 'fulfillment_source', label: '충당', hideable: true, cell: (o) => <FulfillmentSourceBadge source={sourceOverrides[o.order_id] ?? o.fulfillment_source} />, sortAccessor: (o) => sourceOverrides[o.order_id] ?? o.fulfillment_source ?? '' },
+    { key: 'fulfillment_risk', label: '충당 위험', hideable: true, cell: (o) => <OrderFulfillmentRiskBadge risk={riskByOrder[o.order_id]} />, sortAccessor: (o) => riskByOrder[o.order_id]?.risk ?? '' },
     {
       key: 'unit_price_ea', label: '단가(장)', hideable: true, align: 'right', className: 'tabular-nums font-mono',
       cell: (o) => {
@@ -95,13 +99,13 @@ function buildColumns({ onCancelToReservation, sourceOverrides }: BuildOpts): Co
 }
 
 export const ORDER_COLUMN_META: ColumnVisibilityMeta[] =
-  buildColumns({ sourceOverrides: EMPTY_OVERRIDES }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
+  buildColumns({ sourceOverrides: EMPTY_OVERRIDES, riskByOrder: {} }).map(({ key, label, hideable, hiddenByDefault }) => ({ key, label, hideable, hiddenByDefault }));
 
-function OrderListTable({ items, hidden, pinning, onPinningChange, onSelect, onCancelToReservation, sourceOverrides = EMPTY_OVERRIDES, serverMode }: Props) {
+function OrderListTable({ items, hidden, pinning, onPinningChange, onSelect, onCancelToReservation, sourceOverrides = EMPTY_OVERRIDES, riskByOrder = {}, serverMode }: Props) {
   return (
     <MetaTable
       tableId={ORDER_TABLE_ID}
-      columns={buildColumns({ onCancelToReservation, sourceOverrides })}
+      columns={buildColumns({ onCancelToReservation, sourceOverrides, riskByOrder })}
       hidden={hidden}
       pinning={pinning}
       onPinningChange={onPinningChange}

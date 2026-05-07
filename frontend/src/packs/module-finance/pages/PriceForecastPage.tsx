@@ -177,7 +177,13 @@ export default function PriceForecastPage() {
   const [unit, setUnit] = useState<UnitKey>('usd');
   const [horizon, setHorizon] = useState<HorizonKey>('18m');
   const [selectedBenchmarkIds, setSelectedBenchmarkIds] = useState<Set<string>>(() => new Set());
+  // selectedSources — 차트/표 표시 필터 (사이드바 "표시 필터" 체크박스).
   const [selectedSources, setSelectedSources] = useState<Set<string>>(
+    () => new Set(SOURCE_OPTIONS.map((source) => source.key)),
+  );
+  // aiSources — AI 수집 대상 (헤더 chip toggle). 표시 필터와 독립적.
+  // 기본값은 모두 선택. OPIS 가 죽었을 때 OPIS 만 빼고 돌리거나, 한 source 만 빠르게 갱신할 때 사용.
+  const [aiSources, setAiSources] = useState<Set<string>>(
     () => new Set(SOURCE_OPTIONS.map((source) => source.key)),
   );
 
@@ -418,7 +424,7 @@ export default function PriceForecastPage() {
       // PR 43: 비동기 — POST 즉시 run_id 받고 폴링 시작
       const result = await fetchWithAuth<PriceBenchmarkAIRefreshResult>('/api/v1/price-benchmarks/ai-refresh', {
         method: 'POST',
-        body: JSON.stringify({ source_keys: Array.from(selectedSources) }),
+        body: JSON.stringify({ source_keys: Array.from(aiSources) }),
       });
 
       // running 이면 폴링 (3초 간격, 최대 15분)
@@ -472,6 +478,24 @@ export default function PriceForecastPage() {
     });
   };
 
+  // toggleAiSource — chip toggle 클릭. 모두 해제는 허용 (버튼이 비활성).
+  const toggleAiSource = (key: string) => {
+    setAiSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const setAllAiSources = (selectAll: boolean) => {
+    if (selectAll) {
+      setAiSources(new Set(SOURCE_OPTIONS.map((source) => source.key)));
+    } else {
+      setAiSources(new Set());
+    }
+  };
+
   return (
     <MasterConsole
       eyebrow="PRICE FORECAST"
@@ -480,12 +504,44 @@ export default function PriceForecastPage() {
       tableTitle="가격 벤치마크"
       tableSub={`${filteredRows.length.toLocaleString('ko-KR')}개 관측값 · ${series.length.toLocaleString('ko-KR')}개 라인`}
       actions={(
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div
+            role="group"
+            aria-label="AI 수집 대상 source"
+            className="flex flex-wrap items-center gap-1 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1"
+          >
+            <span className="text-[10px] uppercase tracking-wider text-[var(--ink-4)]">수집 대상</span>
+            {SOURCE_OPTIONS.map((source) => {
+              const active = aiSources.has(source.key);
+              return (
+                <button
+                  key={source.key}
+                  type="button"
+                  onClick={() => toggleAiSource(source.key)}
+                  aria-pressed={active}
+                  className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
+                    active
+                      ? 'border-[var(--ink)] bg-[var(--ink)] text-[var(--surface)]'
+                      : 'border-[var(--line)] bg-transparent text-[var(--ink-3)] hover:border-[var(--ink-3)]'
+                  }`}
+                >
+                  {source.label}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setAllAiSources(aiSources.size !== SOURCE_OPTIONS.length)}
+              className="ml-1 text-[10px] text-[var(--ink-4)] underline-offset-2 hover:underline"
+            >
+              {aiSources.size === SOURCE_OPTIONS.length ? '전체 해제' : '전체 선택'}
+            </button>
+          </div>
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading || refreshing}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             새로고침
           </Button>
-          <Button size="sm" onClick={() => void triggerAIRefresh()} disabled={refreshing || selectedSources.size === 0}>
+          <Button size="sm" onClick={() => void triggerAIRefresh()} disabled={refreshing || aiSources.size === 0}>
             <Bot className={`h-3.5 w-3.5 ${refreshing ? 'animate-pulse' : ''}`} />
             AI 지표 갱신
           </Button>
@@ -605,8 +661,11 @@ export default function PriceForecastPage() {
 
           <aside className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
             <div className="mb-2 flex items-center justify-between">
-              <div className="sf-eyebrow">수집 소스</div>
+              <div className="sf-eyebrow">표시 필터</div>
               <Badge variant="outline" className="text-[10px]">{sourceCount}개 표시</Badge>
+            </div>
+            <div className="mb-2 text-[10px] leading-4 text-[var(--ink-4)]">
+              차트·표에 보이는 source. AI 수집 대상은 상단 chip 으로 따로 선택합니다.
             </div>
             <div className="space-y-2">
               {SOURCE_OPTIONS.map((source) => (

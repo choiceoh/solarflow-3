@@ -20,6 +20,7 @@ SolarFlow의 **원본 도메인** — D-108로 BARO가 분리되기 전까지는
 BARO와 **공유**:
 - 가용재고 (`/inventory`)
 - 수주 관리 (`/orders`), 출고/판매 (`/orders?tab=outbound`), 수금 관리 (`/orders?tab=receipts`)
+- WMS — 창고 위치 (`/wms/locations`), 피킹 작업 (`/wms/picking`), 입고 검수 (`/wms/receiving`), 재고실사 (`/wms/cycle-count`) — D-139~142
 - 마스터 (`/data`), AI 도우미 (`/assistant`), 설정 (`/settings`)
 
 **module 계열 전용** (`topsolar` + `cable`, BARO에는 미노출):
@@ -78,6 +79,12 @@ BARO와 **공유**:
 - [D-124](DECISIONS.md#d-124) — 가격예측은 module 계열 전용 외부 벤치마크 장부 + 버튼형 AI 수집으로 둔다.
 - [D-145](DECISIONS.md#d-145) — 테넌트 모듈화 5 PR 시리즈. 새 도메인 추가 비용을 코드 1줄 + 마이그 1개 + admin UI 토글로 압축 (`internal/tenant/registry.go` 단일 정본, frontend `packs/` 분리, admin 매트릭스 화면).
 - [D-146](DECISIONS.md#d-146) — 가격예측 수집 시장은 중국·유럽으로 제한한다.
+
+**WMS (모든 테넌트 공유)**
+- [D-139](DECISIONS.md#d-139) — 창고 내 위치(Bin) 마스터. Zone > Aisle > Rack > Bin 4단계.
+- [D-140](DECISIONS.md#d-140) — 위치별 재고 + 자동 피킹 명세 (`picking_lists` + status 머신).
+- [D-141](DECISIONS.md#d-141) — 입고 검수 로그 (`receiving_logs`). BL 라인 / intercompany / manual 통합.
+- [D-142](DECISIONS.md#d-142) — 정기 재고실사 (Cycle Counting). 정확도 자동 집계.
 
 ## module 계열 백엔드 엔드포인트 (`topsolarOnly` legacy 미들웨어)
 

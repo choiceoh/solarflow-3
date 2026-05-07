@@ -24,6 +24,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - 수주 관리 (`/orders`)
 - 출고/판매 (`/orders?tab=outbound`)
 - 수금 관리 (`/orders?tab=receipts`)
+- WMS — 창고 위치 (`/wms/locations`), 피킹 작업 (`/wms/picking`), 입고 검수 (`/wms/receiving`), 재고실사 (`/wms/cycle-count`) — D-139~142
 - 마스터 (`/data`), AI 도우미 (`/assistant`), 설정 (`/settings`)
 
 **BARO 전용**:
