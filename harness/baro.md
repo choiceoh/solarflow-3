@@ -39,6 +39,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - 영업 홈 (`/baro/home`) — D-127 일일 영업 대시보드 (오늘 후속·한도 위험·신규 입고)
 - 거래처 RFM (`/baro/rfm`) — D-128 12개월 매출 집계 + 세그먼트 분류 + 재활성화 큐
 - 매출 요약 (`/baro/sales-summary`) — D-129 영업담당자/유형/월/Top거래처 4 cut
+- 인버터 가이드 (`/baro/inverter-guide`) — D-130 정적 카탈로그 10종 + 용량 매칭 계산기
 
 **노출되지 않는 것** (module 계열 전용 — D-108/D-119로 차단):
 - P/O 발주, L/C 개설, B/L 입고, 면장/원가
@@ -60,6 +61,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - **[D-127](DECISIONS.md#d-127)** — BARO 영업 일일 홈 Phase 1. 신규 backend 0 — 기존 sanitized API 3종 frontend 합성
 - **[D-128](DECISIONS.md#d-128)** — BARO 거래처 RFM 보드. 12개월 매출 Go 메모리 집계 + 단순 임계값 분류 (PR4.5: 동적 분위수)
 - **[D-129](DECISIONS.md#d-129)** — BARO 자체 매출 요약. 4 cut(담당자/유형/월/Top거래처) 합본 endpoint. 마진은 PR5.5(매입원가 통합)
+- **[D-130](DECISIONS.md#d-130)** — BARO 인버터 호환 가이드 Phase 1. frontend-only 정적 카탈로그 10종 + 용량 매칭 계산기. 정식 SKU 등록·견적 통합은 PR6.5
 
 ## BARO 전용 백엔드 엔드포인트 (`baroOnly` 미들웨어)
 

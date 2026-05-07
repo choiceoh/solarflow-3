@@ -29,6 +29,7 @@ import {
   Truck,
   Users,
   Wallet,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { detectTenantScope, type TenantScope } from '@/lib/tenantScope';
@@ -136,6 +137,8 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'baro-cockpit', label: '거래처 360', abbr: '360', path: '/baro/cockpit', icon: Users, menu: 'baro_cockpit', tenants: ['baro'] },
       // D-126: 통합 견적 빌더 (BARO 전용)
       { key: 'baro-quote', label: '견적 빌더', abbr: '견적', path: '/baro/quote/new', icon: Calculator, menu: 'baro_quote', tenants: ['baro'] },
+      // D-130: 인버터 호환 가이드 (BARO 전용 — 모듈+인버터 묶음 견적 보조)
+      { key: 'baro-inverter', label: '인버터 가이드', abbr: '인버', path: '/baro/inverter-guide', icon: Zap, menu: 'baro_inverter', tenants: ['baro'] },
       // BARO Phase 1: 거래처별 단가표 (BARO 전용)
       { key: 'baro-price-book', label: '거래처 단가표', abbr: '단가', path: '/baro/price-book', icon: Tags, menu: 'baro_price_book', tenants: ['baro'] },
       // BARO Phase 4: 배차/일정 보드 (BARO 전용)
@@ -201,6 +204,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/baro/home': { title: '영업 홈', breadcrumb: 'BARO / 일일 영업 보드' },
   '/baro/rfm': { title: '거래처 RFM', breadcrumb: '현황 / 12개월 매출 분류' },
   '/baro/sales-summary': { title: 'BARO 매출 요약', breadcrumb: '현황 / 영업담당자·유형·월별 매출' },
+  '/baro/inverter-guide': { title: '인버터 가이드', breadcrumb: '판매 / 인버터 호환 카탈로그' },
 };
 
 function routeMeta(pathname: string, search: string) {

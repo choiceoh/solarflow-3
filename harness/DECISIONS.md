@@ -991,3 +991,25 @@
   - 프론트엔드 `npm run build` 통과.
 - **날짜**: 2026-05-07
 
+## D-130: BARO 인버터 호환 가이드 Phase 1 — frontend-only 정적 카탈로그 + 용량 매칭
+- **결정**: BARO 영업이 시공업체에 모듈+인버터 묶음 견적을 만들 때 "이 모듈 N장에 적합한 인버터?" 를 30초 안에 답할 수 있도록 정적 인버터 카탈로그 페이지 (`/baro/inverter-guide`) 도입한다. PR6 Phase 1 — **신규 backend 0**, **DB 마이그레이션 0**, **외부 API 0**.
+  - **카탈로그**: Sungrow / Huawei / GoodWe 주력 모델 10종 (5kW 주거 ~ 110kW 발전소). 페이지 컴포넌트 안에 `INVERTER_CATALOG` 배열로 하드코딩.
+  - **용량 매칭 계산기**: 모듈 수량 × spec_wp 입력 → 총 kW 계산 → 오버사이징 1.0~1.3 비율 안에 들어오는 인버터 추천 카드.
+  - **검색·필터**: 제조사/모델 검색 + 용도(주거/상업/발전소) 필터.
+  - **사이드바**: 「판매」 그룹에 "인버터 가이드" (BARO 전용).
+- **PR6.5 분리** (별도 D-NNN, 신규 backend 필요):
+  - **products.product_kind 컬럼**: `module` / `inverter` / `package` 분류 마이그레이션. 기존 행은 모두 `module` 로 backfill.
+  - **인버터 SKU 정식 등록**: `product_kind='inverter'` + `rated_power_kw`/`mppt_channels`/`max_input_voltage` 등 인버터 전용 nullable 컬럼. 마스터 CRUD UI.
+  - **패키지 SKU**: 모듈+인버터 자주 나가는 조합 1-row SKU. `baro_packages` 테이블 또는 product_kind=`package` + 구성품 child rows.
+  - **QuoteBuilder 통합**: 모듈 라인 추가 시 자동으로 적합한 인버터 후보 1줄 옵션 제시.
+  - **호환 매칭 정밀화**: 현 단계는 단순 kW 비율 1.0~1.3. PR6.5 에서 MPPT 채널 수 + 모듈 직렬 전압 범위 + 단상/3상 매칭 로직.
+- **이유**: BARO 매출의 모듈+인버터 묶음 비중이 높은데 영업이 인버터 사양을 외워야 하는 상황. 정식 SKU 등록(마이그레이션 동반)을 기다리지 않고 "오늘부터 쓸 수 있는 가이드" 를 먼저 띄워 매일 견적 작성에 활용. PR6.5 가 들어오면 본 페이지의 정적 카탈로그를 DB 카탈로그로 자연 대체.
+- **운영 기준**:
+  - 신규 라우트 0 → D-120 catalog/matrix 갱신 불필요.
+  - 카탈로그 데이터 추가/수정은 컴포넌트 파일 직접 수정 (PR6.5 까지 한정 — 그 후 admin UI).
+  - 단가/재고는 가이드에 표기 안 함 — PR6.5 에서 SKU 마스터 + 거래처 단가표 통합 후.
+- **검증**:
+  - 프론트엔드 `npm run build` (tsc -b) 통과.
+  - 수동 검증: BARO 토큰으로 `/baro/inverter-guide` 진입 시 카탈로그 10종 표시 + "30장 × 635W = 19.05kW" 입력 시 GW10K-DT 등 추천 카드 표시.
+- **날짜**: 2026-05-07
+
