@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import providerSrc from './AppProviders.tsx?raw';
 import mainSrc from '../main.tsx?raw';
 
