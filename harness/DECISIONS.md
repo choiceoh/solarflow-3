@@ -1013,3 +1013,25 @@
   - 수동 검증: BARO 토큰으로 `/baro/inverter-guide` 진입 시 카탈로그 10종 표시 + "30장 × 635W = 19.05kW" 입력 시 GW10K-DT 등 추천 카드 표시.
 - **날짜**: 2026-05-07
 
+## D-131: BARO 출하 알림 메시지 빌더 — frontend-only 카톡 붙여넣기용 텍스트 생성
+- **결정**: BARO 영업이 매일 시공업체에 보내는 출하 안내 카톡(상차 완료 / 출발 / 도착 예정 3 시점)의 메시지 텍스트를 form 입력 → 자동 생성 → 클립보드 복사 → 영업이 직접 카톡에 붙여넣기 하는 frontend-only 페이지(`/baro/shipment-notice`) 도입. PR7 Phase 1 — **신규 backend 0**, **외부 API 0**, **모바일 흐름 0**.
+  - **입력 폼**: 거래처명·현장명·도착예정·모델·수량·차량번호·차주명·차주연락처·메모.
+  - **메시지 3종**: `상차 완료` / `출발` / `도착 예정` — `buildMessage(stage, form)` 함수가 빈 필드는 자동 생략하면서 자연스러운 한국어 메시지 조립.
+  - **클립보드 복사**: `navigator.clipboard.writeText` + 2초 "복사됨" 피드백.
+  - **사이드바**: 「판매」 그룹에 "출하 알림" (BARO 전용).
+- **PR7.5 분리** (별도 D-NNN, 외부 API 키 + 모바일 흐름 + 신규 backend 필요):
+  - **카톡 자동 발송**: KakaoTalk Notification Talk API 통합 (사업자 전용, 키 발급 필요). 템플릿 등록 + 친구 동의 + 발송 로그.
+  - **SMS fallback**: Aligo / Solapi (카톡 미설치/미수신 시).
+  - **배차 보드 연동**: `/baro/dispatch` 의 dispatch_route 한 행 선택 → form 자동 prefill.
+  - **드라이버 PWA**: 별도 모바일 친화 페이지 — 상차 사진 / 도착 사진 / 미배달 사유 업로드. 인증 흐름 단순화 필요(차주는 정직원 아님 → 임시 토큰 또는 link-based access).
+  - **발송 추적**: `baro_shipment_notices` 테이블 (sent_at / channel / recipient_phone / read_at).
+- **이유**: 영업이 카톡에서 매일 작성하는 메시지를 빈 화면에서 시작하는 게 5분/건 부담. 폼 입력 30초 + 복사 후 카톡 붙여넣기 → 메시지 1건당 4분 절약 × 일 10건 × 영업 6명 = 일 4시간 절약. 외부 API 통합은 키 발급·승인 절차가 길어 PR7.5 로 분리.
+- **운영 기준**:
+  - 신규 라우트 0 → D-120 catalog/matrix 갱신 불필요.
+  - 메시지 템플릿은 컴포넌트 안 `buildMessage` 함수에 하드코딩 (PR7.5 까지 한정 — 그 후 admin UI 에서 템플릿 편집).
+  - 폼 데이터는 LocalStorage 도 미저장 (휘발성). PR7.5 dispatch 보드 연동 시 prefill 가능.
+- **검증**:
+  - 프론트엔드 `npm run build` (tsc -b) 통과.
+  - 수동 검증: BARO 토큰으로 `/baro/shipment-notice` 진입 시 폼 + 3 메시지 카드 표시. 빈 필드는 메시지에서 자동 생략. 복사 버튼 클릭 시 "복사됨" 피드백.
+- **날짜**: 2026-05-07
+
