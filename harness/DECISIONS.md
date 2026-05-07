@@ -891,3 +891,48 @@
   - 프론트엔드 `npm run build` (tsc -b) 통과.
 - **날짜**: 2026-05-06
 
+## D-126: BARO 통합 견적 빌더 Phase 1 — DB 마이그레이션 없이 cockpit stub + LocalStorage draft + 브라우저 PDF
+- **결정**: BARO 영업의 견적 작성 워크플로우를 위한 첫 단계로, **신규 DB 테이블 없이** 기존 `partner_price_book` + `products` 데이터를 활용한 frontend 견적 빌더 (`/baro/quote/new`) 와 cockpit `quote_ready_skus` 패널 실데이터 채움을 도입한다.
+  - **신규 backend 라우트 없음**: D-125 cockpit 의 stub `quote_ready_skus` 를 `partner_price_book` join 으로 채우는 방식 (`fetchQuoteReady` 추가). 기존 `IDBaroPartnerCockpit` feature 안에서 응답 shape 변경 없이 데이터만 추가 — D-120 카탈로그/매트릭스 갱신 불필요.
+  - **frontend 페이지**: `/baro/quote/new?partner_id=X` 단일 라우트. 거래처 picker (partner_id 없을 때) → builder (있을 때). 좌측 라인 편집 + 우측 SKU picker (단가표 prefill, 수량·단가 수동 조정 가능). 합계 + VAT 10% 자동 계산.
+  - **저장 모델**: 견적 draft 는 brower LocalStorage 에 `baro.quote-draft.<partner_id>` 키로 1슬롯 자동 저장. 새로고침/탭 전환 후 복원. **DB 저장은 PR2.5 로 분리** — 회신 추적 / 다중 견적 이력 / 발송 로그가 필요한 시점에 `baro_quotes` + `baro_quote_lines` 마이그레이션과 함께 도입.
+  - **PDF 발송**: `window.print()` + 인쇄용 CSS (`print:hidden`, `print:border-none`). 브라우저의 "PDF 로 저장" 옵션 활용 — 외부 라이브러리 (jspdf, html2canvas) 의존 0. **카톡/SMS 발송은 PR2.5** — 외부 API (Aligo/KakaoTalk Notification Talk) 키 발급 필요.
+  - **마진 표시 보류**: cockpit `quote_ready_skus.margin_pct` 는 null 로 둔다. 마진 정확 계산은 BARO 평균 매입원가 (`baro_purchase_history`) 와 결합 필요해 PR2.5 로 분리 (`fetchQuoteReady` 에 cost lookup 추가).
+  - **cockpit 진입 동선**: cockpit 헤더의 "이 거래처 견적" 버튼 + `quote_ready_skus` 카드 클릭 → `/baro/quote/new?partner_id=X` 진입 (단가표 자동 prefill).
+- **이유**: 견적 워크플로우 전체를 한 PR 에 담으면 (DB 마이그레이션 + 외부 API + UI) 머지가 늦어지고 회귀 리스크 큼. 최소 가치 단위로 잘라서 영업이 "한 거래처 + 단가표 prefill + 인쇄/PDF" 만으로도 매일 사용 가능하게 한다. 일평균 견적 작성 시간 (수기 ~5분/건 × 영업 6명 × 5건/일 = 150분/일) 의 70% 단축이 목표.
+- **운영 기준**:
+  - 신규 backend 라우트 0 — 기존 cockpit handler 의 `fetchQuoteReady` 만 stub→실데이터.
+  - LocalStorage 키 네임스페이스: `baro.quote-draft.*`. 파일럿 후 다른 BARO 기능과 충돌 시 prefix 변경.
+  - 인쇄 스타일은 Tailwind `print:` modifier 만 사용 — 별도 print stylesheet 파일 추가 금지(번들 크기 ↓).
+  - PR2.5 도입 시 응답 shape (`CockpitQuoteReadyRow.margin_pct`) 와 LocalStorage 키 네이밍은 호환 유지 — frontend 갱신 없이 DB 저장 옵션이 추가되도록 설계.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` 통과 — D-125 와 같은 회귀 가드.
+  - 프론트엔드 `npm run build` (tsc -b) 통과.
+  - 수동 검증: BARO 토큰으로 `/baro/cockpit?partner_id=X` 진입 시 quote_ready_skus 패널이 단가표 등록된 SKU 만큼 카드 표시 + 클릭 시 `/baro/quote/new` 로 이동 + 인쇄 미리보기에서 picker/버튼 숨김.
+- **날짜**: 2026-05-07
+
+## D-127: BARO 영업 일일 홈 Phase 1 — 신규 backend 0, frontend 합성 대시보드
+- **결정**: BARO 영업 6명의 출근 첫 화면을 위한 일일 홈 페이지 `/baro/home` 을 도입한다. **신규 backend 라우트 0** — 기존 sanitized API 3종(`/api/v1/me/open-followups`, `/api/v1/baro/credit-board`, `/api/v1/baro/incoming`)을 frontend 에서 `Promise.all` 로 합성하고 in-memory 필터로 4개 카드(요약 stat) + 3개 패널(오늘 후속 / 한도 위험 / 신규 입고)을 그린다.
+  - **카드 4종 (요약 stat)**:
+    - 오늘의 후속: `follow_up_due <= today` 인 미처리 건수
+    - 이후 예정 후속: `follow_up_due > today` 인 미처리 건수
+    - 한도/연체 위험: `oldest_unpaid_days >= 60` 또는 `utilization_pct >= 100` 인 거래처 수
+    - 신규 입고예정: `status ∈ {scheduled, shipping, arrived}` 건수 + 최단 ETA
+  - **패널 3종 (실제 액션 진입)**:
+    - 오늘 답변할 후속 — 카드 클릭 → `/baro/cockpit?partner_id=X`
+    - 한도/연체 위험 거래처 — 카드 클릭 → cockpit
+    - 신규 입고 안내 — `/baro/incoming` 진입 + PR3.5 자동 콜백 추천 placeholder
+  - **PR3.5 분리** (별도 D-NNN, 신규 backend 필요):
+    - 자동 콜백 추천: 신규 입고 SKU × 직전 12개월 본인 거래처 매입 이력 매칭 → "이 입고를 알려야 할 거래처 N곳" + 1-click 일괄 발송
+    - 본인 담당 거래처 필터: `partners.owner_user_id = me` 와 credit_board RPC 응답 join (현재는 owner 미반영, 모든 위험 거래처 노출)
+    - 견적 회신 대기 카운트 (D-126 PR2.5 의 `baro_quotes` 테이블 도입 후)
+- **이유**: D-125(cockpit) / D-126(견적 빌더)이 *한 거래처* 작업 화면을 다듬은 반면 영업의 *하루 단위* 우선순위 정렬 화면이 부재. 6명이 200거래처를 분담하는 환경에서 출근 후 30초 안에 "오늘 누구에게 답변, 누구의 미수금 push, 어떤 입고 안내" 가 보이지 않으면 우선순위가 표류한다. 일평균 일정 정리 ~30분/명 × 6명 = 일 3시간을 통째로 절약.
+- **운영 기준**:
+  - 신규 backend 라우트 0 — D-120 catalog/matrix 갱신 불필요. 모든 데이터는 기존 sanitized 경로.
+  - PR3.5 에서 backend 합본 endpoint (`/api/v1/baro/sales-home`) 도입 시 응답 shape 은 frontend 가 기대하는 형태로 호환 유지.
+  - "오늘" 의 정의는 client local timezone 기준 (KST 운영). 미래 multi-region 도입 시 server-side timezone 명시 필요.
+- **검증**:
+  - 프론트엔드 `npm run build` (tsc -b) 통과 — 신규 페이지 / 사이드바 / permissions 키 / route 추가만으로 회귀 가드.
+  - 수동 검증: BARO 토큰으로 `/baro/home` 진입 시 카드 4개 + 패널 3개 표시. 각 카드/리스트 항목 클릭 → 해당 도메인 페이지로 이동 (cockpit/credit-board/incoming).
+- **날짜**: 2026-05-07
+
