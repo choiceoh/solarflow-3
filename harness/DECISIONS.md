@@ -965,3 +965,29 @@
   - 프론트엔드 `npm run build` 통과.
 - **날짜**: 2026-05-07
 
+## D-129: BARO 자체 매출 요약 (Sales Summary) — Phase 1 매출만, 마진은 PR5.5
+- **결정**: BARO 영업이 자기 법인 매출을 다양한 cut 으로 분석할 수 있도록 신규 endpoint `GET /api/v1/baro/sales-summary?months=N` (feature_id `baro.sales_summary`, BARO 전용) 도입. module 계열 `/sales-analysis` 는 매입원가·면장·landed cost 기반 마진을 다뤄 BARO 차단(D-108)이라 별도 BARO 라인.
+  - **4 cut 합본 응답** (한 라운드트립):
+    - `by_owner`: 영업담당자별 매출/건수/거래처수 (partners.owner_user_id 기반)
+    - `by_partner_type`: customer / both / supplier 유형별
+    - `by_month`: YYYY-MM 월별 추이
+    - `top_partners`: 매출 상위 20곳
+  - **집계 방식**: SQL GROUP BY 함수 신설 회피 — partners + sales 직접 쿼리 후 Go 메모리 집계 (D-128 RFM 과 동일 패턴).
+  - **응답 마스킹**: cost / margin 필드 0 — 매출액(`total_amount`)과 건수만. 마진은 PR5.5 에서 `baro_purchase_history` 평균 매입원가 통합 후 도입.
+  - **frontend 페이지**: `/baro/sales-summary` (RoleGuard `admin/operator/executive`). 6/12/24개월 토글. CSS 막대 차트(recharts 미사용 — 번들 크기 ↓). Top 거래처 행 클릭 → cockpit.
+  - **사이드바**: 「현황」 그룹에 "매출 요약" 추가.
+- **PR5.5 분리** (별도 D-NNN):
+  - **마진 표시** (`gross_margin_pct`, `gross_margin_krw`): `baro_purchase_history` 평균 매입원가와 매출 결합. 단순 평균이 아닌 BR 법인 한정 + sale 시점 기준 가까운 매입가 매칭 로직 필요.
+  - **한도 초과 출고 차단 hold flag**: 출고/수주 생성 시 `outstanding_krw + amount > credit_limit_krw` 또는 `oldest_unpaid_days >= 60` 면 hold 플래그 + 결재 강제. backend 변경 큼 (outbound/order 핸들러 수정 + DB 컬럼 추가 가능).
+  - **SKU 별 매출**: 현 sales 테이블에 product_id 직접 컬럼 없음. outbound → bl_line join 필요해 Phase 2 분리.
+- **이유**: BARO 매출 1000억 규모에서 영업담당자별 / 채널별 / 월별 cut 이 부재하면 누가 어디서 얼마 매출을 내는지 불투명. module 의 sales-analysis 는 마진 베이스라 BARO 가 못 쓰고, 매출만 다루는 BARO 전용 라인이 필요. RFM(D-128) 이 *거래처 분류* 라면 본 보드는 *시간/조직/유형 cut*.
+- **운영 기준**:
+  - feature catalog `baro.sales_summary` (DataScope `tenant_company` — BR 법인 sales 만 사용한다는 의미적 표지) + matrix + RequireFeature(IDBaroSalesSummary) + DECISIONS 동시 갱신 (D-120 의무).
+  - 응답이 partners + sales raw 합본 — 응답 크기 측정 후 캐시/페이지네이션 검토 (현재 1000억 ÷ 3억 = 연 ~330건이라 작음).
+  - PR5.5 마진 도입 시 응답 shape 호환 유지 — frontend 변경 없이 `gross_margin_pct` 등 nullable 필드만 추가.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/baro/sales-summary/` catalog↔chi 일치, matrix_consistency_test 가 `baro.sales_summary` markdown 일치 검증.
+  - 라우터 가드: module/cable 토큰으로 호출 시 403, baro 토큰 통과.
+  - 프론트엔드 `npm run build` 통과.
+- **날짜**: 2026-05-07
+

@@ -155,6 +155,8 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'baro-credit', label: '미수금/한도', abbr: '미수', path: '/baro/credit-board', icon: ShieldAlert, menu: 'baro_credit', tenants: ['baro'] },
       // D-128: 거래처 RFM/세그먼트 보드 (BARO 전용)
       { key: 'baro-rfm', label: '거래처 RFM', abbr: 'RFM', path: '/baro/rfm', icon: Trophy, menu: 'baro_rfm', tenants: ['baro'] },
+      // D-129: BARO 자체 매출 요약 (BARO 전용 — module sales-analysis 차단 우회)
+      { key: 'baro-sales-summary', label: '매출 요약', abbr: '매출', path: '/baro/sales-summary', icon: BarChart3, menu: 'baro_sales_summary', tenants: ['baro'] },
     ],
   },
   {
@@ -198,6 +200,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/baro/quote/new': { title: '견적 빌더', breadcrumb: '판매 / 통합 견적 작성' },
   '/baro/home': { title: '영업 홈', breadcrumb: 'BARO / 일일 영업 보드' },
   '/baro/rfm': { title: '거래처 RFM', breadcrumb: '현황 / 12개월 매출 분류' },
+  '/baro/sales-summary': { title: 'BARO 매출 요약', breadcrumb: '현황 / 영업담당자·유형·월별 매출' },
 };
 
 function routeMeta(pathname: string, search: string) {
