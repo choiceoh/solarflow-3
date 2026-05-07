@@ -79,6 +79,11 @@ const BaroRequestInboxPage = lazy(() => import('@/packs/baro-domain/pages/BaroRe
 const CreditBoardPage = lazy(() => import('@/packs/baro-domain/pages/CreditBoardPage'));
 const DispatchBoardPage = lazy(() => import('@/packs/baro-domain/pages/DispatchBoardPage'));
 const CRMInboxPage = lazy(() => import('@/packs/baro-domain/pages/CRMInboxPage'));
+// WMS — 모든 테넌트 공유 (D-139~142). 폴리싱 PR.
+const WarehouseLocationsPage = lazy(() => import('@/packs/erp-core/pages/wms/WarehouseLocationsPage'));
+const PickingWorkPage = lazy(() => import('@/packs/erp-core/pages/wms/PickingWorkPage'));
+const ReceivingLogPage = lazy(() => import('@/packs/erp-core/pages/wms/ReceivingLogPage'));
+const CycleCountPage = lazy(() => import('@/packs/erp-core/pages/wms/CycleCountPage'));
 
 // === Route spec ===
 
@@ -165,6 +170,11 @@ export const ROUTES: RouteSpec[] = [
   { path: '/crm/inbox', element: CRMInboxPage },
   { path: '/approval', element: ApprovalPage },
   { path: '/assistant', element: AssistantPage },
+  // WMS — 모든 테넌트 공유 (D-139~142)
+  { path: '/wms/locations', element: WarehouseLocationsPage, roles: ['admin', 'operator'] },
+  { path: '/wms/picking', element: PickingWorkPage, roles: ['admin', 'operator'] },
+  { path: '/wms/receiving', element: ReceivingLogPage, roles: ['admin', 'operator'] },
+  { path: '/wms/cycle-count', element: CycleCountPage, roles: ['admin', 'operator', 'executive'] },
   {
     path: '/settings',
     element: SettingsLayout,
