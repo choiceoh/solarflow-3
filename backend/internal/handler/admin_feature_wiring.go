@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
@@ -16,25 +15,27 @@ import (
 	"solarflow-backend/internal/tenant"
 )
 
-// AdminFeatureWiringHandler — 테넌트 × feature 매트릭스 read + 토글 (PR-5a/5b).
+// AdminFeatureWiringHandler — 테넌트 × feature 매트릭스 read + 토글 (PR-5a/5b/9).
 //
 // PR-5a: GetMatrix (read-only) — resolver default + in-memory override 반영.
 // PR-5b: SetEnabled (PUT) — DB 에 (tenant, feature) override 저장 + audit 행 + resolver
 //        in-memory 캐시 갱신. 운영 startup 시 DB 에서 한 번 로드해 둔다 (app 패키지).
+// PR-9 : DB 호출을 feature.WiringStore 인터페이스 뒤로 분리 — handler 의 비즈니스
+//        로직(검증/audit/응답) 을 supa.Client 없이 단위 테스트 가능.
 type AdminFeatureWiringHandler struct {
-	DB       *supa.Client
+	Store    feature.WiringStore
 	Resolver *feature.Resolver
 }
 
 // NewAdminFeatureWiringHandler — handler 생성자.
 //
-// db nil 이면 PUT 경로가 503 으로 막힌다 (테스트/PoC 용 read-only 만 쓸 때 허용).
+// store nil 이면 PUT 경로가 503 으로 막힌다 (테스트/PoC 용 read-only 만 쓸 때 허용).
 // resolver nil 이면 catalog default 만 사용하는 새 resolver 를 만든다.
-func NewAdminFeatureWiringHandler(db *supa.Client, resolver *feature.Resolver) *AdminFeatureWiringHandler {
+func NewAdminFeatureWiringHandler(store feature.WiringStore, resolver *feature.Resolver) *AdminFeatureWiringHandler {
 	if resolver == nil {
 		resolver = feature.NewResolver(nil)
 	}
-	return &AdminFeatureWiringHandler{DB: db, Resolver: resolver}
+	return &AdminFeatureWiringHandler{Store: store, Resolver: resolver}
 }
 
 // AdminTenantSummary — 매트릭스 응답의 테넌트 메타 항목.
@@ -141,9 +142,9 @@ func (h *AdminFeatureWiringHandler) validateSetEnabled(tenantID, featureID strin
 // 동작:
 //  1. tenant_id / feature_id 검증 — registry / catalog 에 있어야 함
 //  2. before 값 캡처 (audit 용)
-//  3. tenant_features upsert
-//  4. feature_wiring_audit 행 추가 (실패해도 main 흐름 막지 않음)
-//  5. resolver in-memory cache 갱신
+//  3. Store.UpsertOverride — tenant_features 에 행 upsert
+//  4. Store.InsertAudit — feature_wiring_audit 행 추가 (실패해도 main 흐름 막지 않음)
+//  5. Resolver in-memory cache 갱신
 //  6. 갱신된 상태 응답
 func (h *AdminFeatureWiringHandler) SetEnabled(w http.ResponseWriter, r *http.Request) {
 	tenantID := chi.URLParam(r, "tenantID")
@@ -160,46 +161,33 @@ func (h *AdminFeatureWiringHandler) SetEnabled(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if h.DB == nil {
-		response.RespondError(w, http.StatusServiceUnavailable, "DB 미연결 — 토글 사용 불가")
+	if h.Store == nil {
+		response.RespondError(w, http.StatusServiceUnavailable, "WiringStore 미연결 — 토글 사용 불가")
 		return
 	}
 
-	actor := middleware.GetUserEmail(r.Context())
+	ctx := r.Context()
+	actor := middleware.GetUserEmail(ctx)
 	now := time.Now().UTC()
-	beforeEnabled := h.Resolver.IsEnabled(tenantID, feature.FeatureID(featureID))
+	fid := feature.FeatureID(featureID)
+	beforeEnabled := h.Resolver.IsEnabled(tenantID, fid)
 
-	upsertPayload := map[string]any{
-		"tenant":     tenantID,
-		"feature_id": featureID,
-		"enabled":    req.Enabled,
-		"note":       nullableString(req.Note),
-		"updated_by": nullableString(actor),
-		"updated_at": now.Format(time.RFC3339Nano),
-	}
-	if _, _, err := h.DB.From("tenant_features").
-		Upsert(upsertPayload, "tenant,feature_id", "", "exact").
-		Execute(); err != nil {
+	if err := h.Store.UpsertOverride(ctx, feature.OverrideRow{
+		Tenant: tenantID, FeatureID: fid, Enabled: req.Enabled,
+		Note: req.Note, UpdatedBy: actor, UpdatedAt: now,
+	}); err != nil {
 		response.RespondError(w, http.StatusInternalServerError, "tenant_features 저장 실패")
 		return
 	}
 
 	// audit 는 best-effort — 실패해도 본 작업은 성공으로 본다.
-	auditPayload := map[string]any{
-		"actor":        nullableString(actor),
-		"axis":         "feature",
-		"tenant":       tenantID,
-		"feature_id":   featureID,
-		"before_value": map[string]bool{"enabled": beforeEnabled},
-		"after_value":  map[string]bool{"enabled": req.Enabled},
-		"note":         nullableString(req.Note),
-	}
-	_, _, _ = h.DB.From("feature_wiring_audit").
-		Insert(auditPayload, false, "", "", "exact").
-		Execute()
+	_ = h.Store.InsertAudit(ctx, feature.AuditEntry{
+		Actor: actor, Tenant: tenantID, FeatureID: fid,
+		BeforeValue: beforeEnabled, AfterValue: req.Enabled, Note: req.Note,
+	})
 
 	// in-memory cache 갱신 — 다음 IsEnabled 호출부터 새 값 반영.
-	h.Resolver.SetOverride(tenantID, feature.FeatureID(featureID), req.Enabled)
+	h.Resolver.SetOverride(tenantID, fid, req.Enabled)
 
 	response.RespondJSON(w, http.StatusOK, SetEnabledResponse{
 		Tenant:    tenantID,
@@ -208,15 +196,6 @@ func (h *AdminFeatureWiringHandler) SetEnabled(w http.ResponseWriter, r *http.Re
 		UpdatedAt: now.Format(time.RFC3339),
 		UpdatedBy: actor,
 	})
-}
-
-// nullableString — 빈 문자열을 null 로 보내 PostgREST 가 NULL 컬럼을 그대로 두게 한다.
-// 빈 문자열을 그대로 보내면 text 컬럼에 빈 문자열이 들어가 audit 로그 가독성이 떨어진다.
-func nullableString(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }
 
 // RegisterRoutes — /api/v1/admin/feature-wiring 등록 (admin 전용).
