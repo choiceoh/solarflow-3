@@ -150,8 +150,9 @@ pub async fn calculate_margin(
           AND COALESCE(s.status, 'active') <> 'cancelled'
           AND ($2::uuid IS NULL OR p.manufacturer_id = $2)
           AND ($3::uuid IS NULL OR o.product_id = $3)
-          AND ($4::date IS NULL OR o.outbound_date >= $4)
-          AND ($5::date IS NULL OR o.outbound_date <= $5)
+          AND ($4::uuid IS NULL OR s.customer_id = $4)
+          AND ($5::date IS NULL OR o.outbound_date >= $5)
+          AND ($6::date IS NULL OR o.outbound_date <= $6)
         GROUP BY o.product_id, p.product_code, p.product_name, p.spec_wp,
                  p.module_width_mm, p.module_height_mm, m.name_kr
         ORDER BY m.name_kr, p.module_width_mm, p.module_height_mm, p.spec_wp
@@ -160,6 +161,7 @@ pub async fn calculate_margin(
     .bind(company_id)
     .bind(req.manufacturer_id)
     .bind(req.product_id)
+    .bind(req.customer_id)
     .bind(date_from)
     .bind(date_to)
     .fetch_all(pool)
