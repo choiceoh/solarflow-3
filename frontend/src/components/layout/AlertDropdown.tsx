@@ -1,5 +1,6 @@
 // 알림 드롭다운 목록 (Step 31)
 import { useNavigate } from 'react-router-dom';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import type { AlertItem } from '@/types/alerts';
 
@@ -35,6 +36,8 @@ const SEVERITY_LABEL: Record<string, string> = {
 export default function AlertDropdown({ alerts, onClose }: Props) {
   const navigate = useNavigate();
   const visible = alerts.filter((a) => a.count > 0);
+  // 알림 추가/제거 시 부드러운 mount/unmount.
+  const [listParent] = useAutoAnimate<HTMLDivElement>();
 
   return (
     <div
@@ -55,7 +58,7 @@ export default function AlertDropdown({ alerts, onClose }: Props) {
       {visible.length === 0 ? (
         <div className="sf-text-ink-3 px-3 py-8 text-center text-xs">알림이 없습니다</div>
       ) : (
-        <div className="py-1">
+        <div ref={listParent} className="py-1">
           {visible.map((alert) => (
             <button
               key={alert.id}
