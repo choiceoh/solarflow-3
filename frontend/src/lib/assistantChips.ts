@@ -99,10 +99,14 @@ export interface PageChipsResult {
 
 // /assistant 풀 페이지 — 화면 컨텍스트 없는 환경 (page_context 비전송)
 //   → "이 화면" 류 chip 대신 글로벌 작업용 chip set 으로 대체.
+//   조회·분석·알림·OCR 4개 카테고리 골고루, 거래처명 하드코드 없음.
 const ASSISTANT_PAGE_CHIPS: ChipDef[] = [
-  { text: '거래처 한화 검색', icon: '🔍' },
-  { text: '최근 PO 5건 보여줘', icon: '📋' },
-  { text: '면장 PDF 첨부해서 OCR', icon: '📎' },
+  { text: '이번 주 신규 수주 보여줘', icon: '📋' },
+  { text: '최근 30일 단가 변동 요약', icon: '📈' },
+  { text: '재고 부족 품목 (안전재고 미달)', icon: '⚠️' },
+  { text: '30일 이상 미수금 거래처', icon: '💸' },
+  { text: '도착 예정 B/L 일정', icon: '🚢' },
+  { text: '면장 PDF 첨부 후 자동 등록 검토', icon: '📎' },
 ];
 
 export function getPageChips(pathname: string): PageChipsResult {
