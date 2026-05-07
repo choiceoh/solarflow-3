@@ -34,7 +34,7 @@ echo "root: ${ROOT_DIR}"
 
 require_cmd go
 require_cmd cargo
-require_cmd npm
+require_cmd bun
 
 run_step "Go build" bash -lc "cd '${ROOT_DIR}/backend' && go build ./..."
 run_step "Go vet" bash -lc "cd '${ROOT_DIR}/backend' && go vet ./..."
@@ -78,7 +78,7 @@ fi
 if [[ "${SKIP_FRONTEND:-0}" == "1" ]]; then
   skip_step "Frontend build" "SKIP_FRONTEND=1"
 else
-  run_step "Frontend build" bash -lc "cd '${ROOT_DIR}/frontend' && npm run build"
+  run_step "Frontend build" bash -lc "cd '${ROOT_DIR}/frontend' && bun run build"
 fi
 
 if [[ "${RUN_GRAPHIFY:-0}" == "1" ]]; then
