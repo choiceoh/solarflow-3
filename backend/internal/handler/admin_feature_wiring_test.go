@@ -199,3 +199,111 @@ func TestSetEnabled_UnknownTenant_Returns404(t *testing.T) {
 		t.Fatalf("기대 404, 실제 %d", rec.Code)
 	}
 }
+
+// === PR-9: WiringStore fake 활용 happy path 테스트 ===
+//
+// PR-5b 까지는 SetEnabled 의 DB 호출 부분이 단위 테스트 불가능했으나, PR-9 의
+// Store 인터페이스 분리 후 fake 구현으로 비즈니스 로직 (audit / resolver 갱신 / 응답 모양)
+// 을 supabase 없이 검증한다.
+
+// fakeWiringStore — feature.WiringStore 의 in-memory 테스트용 구현.
+type fakeWiringStore struct {
+	upsertCalls []feature.OverrideRow
+	auditCalls  []feature.AuditEntry
+	upsertErr   error
+	auditErr    error
+}
+
+func (f *fakeWiringStore) UpsertOverride(_ context.Context, o feature.OverrideRow) error {
+	f.upsertCalls = append(f.upsertCalls, o)
+	return f.upsertErr
+}
+func (f *fakeWiringStore) InsertAudit(_ context.Context, e feature.AuditEntry) error {
+	f.auditCalls = append(f.auditCalls, e)
+	return f.auditErr
+}
+func (f *fakeWiringStore) LoadOverrides(_ context.Context) ([]feature.OverrideRow, error) {
+	return nil, nil
+}
+
+func setEnabledRequest_t(t *testing.T, h *AdminFeatureWiringHandler, tenantID, featureID, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/feature-wiring/"+tenantID+"/"+featureID, strings.NewReader(body))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("tenantID", tenantID)
+	rctx.URLParams.Add("featureID", featureID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rec := httptest.NewRecorder()
+	h.SetEnabled(rec, req)
+	return rec
+}
+
+// TestSetEnabled_HappyPath — store upsert + audit insert + resolver 갱신 모두 일어난다.
+func TestSetEnabled_HappyPath(t *testing.T) {
+	store := &fakeWiringStore{}
+	res := feature.NewResolver(nil)
+	h := NewAdminFeatureWiringHandler(store, res)
+
+	rec := setEnabledRequest_t(t, h, "baro", string(feature.IDTxLC), `{"enabled":true,"note":"compliance ok"}`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("기대 200, 실제 %d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(store.upsertCalls) != 1 {
+		t.Fatalf("upsert 1번 호출 기대, 실제 %d", len(store.upsertCalls))
+	}
+	got := store.upsertCalls[0]
+	if got.Tenant != "baro" || got.FeatureID != feature.IDTxLC || !got.Enabled || got.Note != "compliance ok" {
+		t.Errorf("upsert payload mismatch: %+v", got)
+	}
+	if len(store.auditCalls) != 1 {
+		t.Fatalf("audit 1번 호출 기대, 실제 %d", len(store.auditCalls))
+	}
+	a := store.auditCalls[0]
+	// before: baro 는 tx.lc 에서 default 비활성 (module 전용)
+	if a.BeforeValue != false || a.AfterValue != true {
+		t.Errorf("audit before/after mismatch: %+v", a)
+	}
+	// resolver 갱신 — 다음 IsEnabled 호출에 반영
+	if !res.IsEnabled("baro", feature.IDTxLC) {
+		t.Errorf("resolver in-memory 캐시 갱신 실패")
+	}
+}
+
+// TestSetEnabled_StoreError_Returns500 — Store.UpsertOverride 가 실패하면 500.
+func TestSetEnabled_StoreError_Returns500(t *testing.T) {
+	store := &fakeWiringStore{upsertErr: errBoom}
+	h := NewAdminFeatureWiringHandler(store, feature.NewResolver(nil))
+
+	rec := setEnabledRequest_t(t, h, "baro", string(feature.IDTxLC), `{"enabled":true}`)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("기대 500, 실제 %d", rec.Code)
+	}
+	// 실패 시 audit 도, resolver 갱신도 안 됨 — invariant.
+	if len(store.auditCalls) != 0 {
+		t.Errorf("upsert 실패 후 audit 호출되면 안 됨: %d 건", len(store.auditCalls))
+	}
+}
+
+// TestSetEnabled_AuditFailure_StillReturns200 — audit insert 실패는 best-effort, 응답 200.
+func TestSetEnabled_AuditFailure_StillReturns200(t *testing.T) {
+	store := &fakeWiringStore{auditErr: errBoom}
+	res := feature.NewResolver(nil)
+	h := NewAdminFeatureWiringHandler(store, res)
+
+	rec := setEnabledRequest_t(t, h, "baro", string(feature.IDTxLC), `{"enabled":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("audit 실패에도 200 기대, 실제 %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !res.IsEnabled("baro", feature.IDTxLC) {
+		t.Errorf("audit 실패와 무관하게 resolver 는 갱신되어야 함")
+	}
+}
+
+var errBoom = newSentinelErr("boom")
+
+func newSentinelErr(s string) error { return &sentinelErr{s: s} }
+
+type sentinelErr struct{ s string }
+
+func (e *sentinelErr) Error() string { return e.s }
