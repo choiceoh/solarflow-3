@@ -18,6 +18,61 @@ interface BLAgg {
   totalMw: number;
 }
 
+type WorkChipTone = 'danger' | 'warn' | 'info';
+
+interface WorkChip {
+  label: string;
+  tone: WorkChipTone;
+}
+
+const DONE_STATUSES = new Set<BLShipment['status']>(['completed', 'erp_done']);
+
+function daysUntil(date?: string): number | null {
+  if (!date) return null;
+  const at = new Date(date);
+  if (Number.isNaN(at.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  at.setHours(0, 0, 0, 0);
+  return Math.ceil((at.getTime() - today.getTime()) / 86_400_000);
+}
+
+function dueText(date?: string): string {
+  const d = daysUntil(date);
+  if (d == null) return 'ETA 미정';
+  if (d < 0) return `ETA ${Math.abs(d)}일 지연`;
+  if (d === 0) return 'ETA 오늘';
+  return `ETA D-${d}`;
+}
+
+function workChipClass(tone: WorkChipTone): string {
+  if (tone === 'danger') return 'border-red-200 bg-red-50 text-red-700';
+  if (tone === 'warn') return 'border-amber-200 bg-amber-50 text-amber-700';
+  return 'border-sky-200 bg-sky-50 text-sky-700';
+}
+
+function buildWorkChips(bl: BLShipment, agg?: BLAgg): WorkChip[] {
+  const chips: WorkChip[] = [];
+  const d = daysUntil(bl.eta);
+
+  if (!DONE_STATUSES.has(bl.status)) {
+    if (d == null) chips.push({ label: 'ETA 미정', tone: 'warn' });
+    else if (d < 0) chips.push({ label: `${Math.abs(d)}일 지연`, tone: 'danger' });
+    else if (d <= 7) chips.push({ label: `D-${d}`, tone: 'warn' });
+  }
+  if (agg && agg.lineCount === 0) {
+    chips.push({ label: '라인 없음', tone: 'warn' });
+  }
+  if (bl.status === 'completed' && bl.erp_registered !== true) {
+    chips.push({ label: 'ERP 미등록', tone: 'warn' });
+  }
+  if (bl.inbound_type !== 'import' && !DONE_STATUSES.has(bl.status)) {
+    chips.push({ label: '입고 대기', tone: 'info' });
+  }
+
+  return chips;
+}
+
 interface Props {
   items: BLShipment[];
   onSelect: (bl: BLShipment) => void;

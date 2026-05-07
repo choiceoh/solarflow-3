@@ -835,6 +835,7 @@ export default function ProcurementPage() {
                         onSettle={handleSettleLC}
                         onSelectBL={setSelectedBL}
                         blsVersion={blsVersion}
+                        focusLCId={focusLCId}
                         sortField={lcSort.sortField}
                         sortDirection={lcSort.sortDirection}
                         onSort={lcSort.onSort}
@@ -913,7 +914,20 @@ export default function ProcurementPage() {
                         ]}
                       />
                     </div>
-                    {ttLoading ? <LoadingSpinner /> : <TTListTable items={tts} focusTTId={focusTTId} />}
+                    {ttLoading ? (
+                      <LoadingSpinner />
+                    ) : (
+                      <>
+                        <TTListTable items={tts} focusTTId={focusTTId} />
+                        <PaginationBar
+                          page={ttPage}
+                          pageSize={ttPageSize}
+                          total={ttTotal}
+                          onPageChange={setTtPage}
+                          onPageSizeChange={(s) => { setTtPageSize(s); setTtPage(1) }}
+                        />
+                      </>
+                    )}
                   </div>
                 </TabsContent>
 

@@ -1167,3 +1167,15 @@
   - Rust `test_margin_summary_uses_cost_covered_revenue`로 원가 연결 매출 기준 이익률/연결률을 고정한다.
   - 프론트엔드 빌드에서 확장 응답 스키마(`cost_*`)와 mock 응답 호환을 확인한다.
 - **날짜**: 2026-05-07
+
+## D-145: 가격예측 수집 시장은 중국·유럽으로 제한한다
+- **결정**: 가격예측 벤치마크의 저장 가능 `market_region` 을 `fob_china`, `china_domestic`, `china_export`, `ddp_europe` 로 제한한다. `ddp_us`, `global`, `manufacturer` 등 미국·기타 지역 가격은 AI 수집, 수동 등록, 목록 응답, 기존 데이터 정리에서 제외한다.
+- **이유**: 미국 등 비중국/비유럽 시장은 관세·물류·재고·현지 유통 구조 때문에 가격대가 크게 달라, 같은 차트와 예측 입력에 섞이면 구매 협상 기준선이 왜곡된다. SolarFlow의 module 계열 구매 판단에는 중국 FOB/내수·수출 및 유럽 DDP가 더 직접적인 비교 기준이다.
+- **운영 기준**:
+  - AI prompt 는 중국·유럽 근거만 points 로 반환하고, 제외된 미국·기타 지역 가격은 warnings 에 남긴다.
+  - Go 모델 검증은 허용 지역 allowlist 로 fail-closed 한다. AI 가 프롬프트를 어겨도 저장 직전 `Validate()` 와 handler guard 에서 차단한다.
+  - 기존 `price_benchmarks` 의 `ddp_us` 또는 허용 지역 밖 행은 `089_price_benchmarks_china_europe_only.sql` 로 삭제한다.
+- **검증**:
+  - `go test ./internal/model` 로 허용 지역 통과, `ddp_us`/`global` 차단을 검증한다.
+  - 프론트엔드 dev mock 에서 미국 DDP 샘플을 제거해 `/price-forecast` 목업 차트도 중국·유럽만 표시한다.
+- **날짜**: 2026-05-07

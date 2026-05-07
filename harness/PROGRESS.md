@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-144 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-145 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -92,6 +92,34 @@
   - 단독 재실행에서도 일부 테스트(4 files / 36 tests)는 통과했으나 나머지 worker가 뜨지 못함
 - `http://127.0.0.1:5179/sales-analysis` 개발 서버 200 응답 확인
 - PR 리베이스 후 최신 `origin/main` 기준 `cd frontend && npm run build` 재확인은 실패 — `src/App.tsx`, `CommandShell.tsx`, `BLListTable.tsx` 등 main 측 TypeScript/import 오류 다수
+
+---
+
+## 2026-05-07 세션 — 가격예측 수집 지역 중국·유럽 제한
+
+### 완료
+- 가격예측 벤치마크 저장 가능 지역을 `fob_china`, `china_domestic`, `china_export`, `ddp_europe`로 제한
+- AI 수집 prompt/search query에서 미국 DDP 기본 수집 의도를 제거하고, 중국/유럽 밖 가격은 warning만 남기도록 지시
+- Go 모델 검증과 AI 저장 직전 guard에서 `ddp_us`, `global`, `manufacturer` 등 비대상 지역 차단
+- `GET /api/v1/price-benchmarks` 목록도 허용 지역만 반환하도록 방어 필터 추가
+- `089_price_benchmarks_china_europe_only.sql` 추가
+  - 기존 `ddp_us` 또는 허용 지역 밖 행 삭제
+  - DB check constraint로 허용 지역과 `metric_key <> 'ddp_us'` 강제
+- 프론트엔드 가격예측 화면/목업 데이터에서 미국 DDP 샘플과 라벨 제거
+- D-145 결정 기록 및 module/cable/설계 정본 동기화
+
+### 검증
+- `cd backend && go test ./internal/model` 성공
+- `cd backend && go test ./internal/handler ./internal/router ./internal/feature` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd frontend && npm ci` 성공 — 로컬 의존성 복원, 기존 npm audit moderate 2건 출력
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 68건 출력
+- `cd frontend && npm run test` 실패 — Vitest fork worker 시작 타임아웃(`Timeout waiting for worker to respond`), 단일 파일/threads 재시도도 worker가 응답하지 않아 코드 테스트까지 진입하지 못함
+- `git diff --check` 성공
+- `graphify update .` 성공 — 4315 nodes / 6733 edges / 396 communities
 
 ---
 

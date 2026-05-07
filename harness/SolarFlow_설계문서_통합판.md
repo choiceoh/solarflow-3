@@ -696,16 +696,16 @@ PO 화면에서 바로 표시:
 
 #### 가격예측 벤치마크 (module 계열 전용)
 
-외부 시세지·입찰·제조사 ASP를 같은 시계열로 저장해 구매 협상 기준선으로 사용한다.
+외부 시세지·입찰·제조사 ASP를 같은 시계열로 저장해 구매 협상 기준선으로 사용한다. 수집 대상 시장은 중국·유럽으로 제한한다. 미국·기타 지역 가격은 가격대가 달라 전체 예측 기준선을 왜곡하므로 저장하지 않는다(D-145).
 
 | 필드 | 타입 | 필수 | 설명 |
 |------|------|------|------|
 | benchmark_id | UUID | ✅ | PK |
 | run_id | UUID | | AI 수집 실행 로그 |
 | source_key | VARCHAR | ✅ | opis / infolink / trendforce / pvinsights / china_tender / cpia_floor / tier1_asp |
-| metric_key | VARCHAR | ✅ | CMM, forward Q+1~Q+4, DDP US/EU, centralized/distributed, 입찰, floor, ASP 등 |
+| metric_key | VARCHAR | ✅ | CMM, forward Q+1~Q+4, DDP Europe, centralized/distributed, 입찰, floor, ASP 등 |
 | value_date | DATE | ✅ | 관측일 |
-| market_region | VARCHAR | ✅ | fob_china / ddp_us / ddp_europe / china_domestic / china_export / global |
+| market_region | VARCHAR | ✅ | fob_china / ddp_europe / china_domestic / china_export |
 | basis | VARCHAR | ✅ | spot / forward / ddp / tender / floor / asp |
 | price_usd_w | DECIMAL | | USD/W 가격 |
 | price_cny_w | DECIMAL | | CNY/W 가격 |
@@ -713,7 +713,7 @@ PO 화면에서 바로 표시:
 | cargo_min_mw / cargo_max_mw | DECIMAL | | OPIS 기준 5~25MW 등 cargo size |
 | source_url / raw_excerpt | TEXT | | 근거 URL과 짧은 원문 근거 |
 
-수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. 요청은 실행 로그를 만든 뒤 `running` 상태로 즉시 응답하고, 서버 백그라운드 작업이 완료/부분완료/실패 상태를 run에 기록한다. AI는 evidence에 명시된 가격만 저장하며, 유료 로그인 한계는 run warning으로 남긴다(D-124).
+수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. 요청은 실행 로그를 만든 뒤 `running` 상태로 즉시 응답하고, 서버 백그라운드 작업이 완료/부분완료/실패 상태를 run에 기록한다. AI는 evidence에 명시된 가격 중 중국·유럽 대상 가격만 저장하며, 유료 로그인 한계와 미국·기타 지역 제외 사유는 run warning으로 남긴다(D-124, D-145).
 신뢰도가 낮거나 근거가 약한 개별 관측값은 `/api/v1/price-benchmarks/{id}` 삭제로 차트와 목록에서 제거하되, 수집 실행 로그는 감사 기록으로 보존한다(D-143).
 
 #### 운영 수요 계획 (module_demand_forecasts)

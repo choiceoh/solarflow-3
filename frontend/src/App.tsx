@@ -14,11 +14,6 @@ import { ROUTES, type NestedRouteSpec, type RouteSpec } from '@/lib/navigation/m
 
 // 인라인 유지: login 은 인증 외곽 라우트라 manifest 가 아닌 외곽 트리에 둔다.
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
-const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
-const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
-const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
-const PriceForecastPage = lazy(() => import('@/pages/PriceForecastPage'));
-import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
 const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
 const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
 const SalesAnalysisPage = lazy(() => import('@/pages/SalesAnalysisPage'));
@@ -29,25 +24,10 @@ const SettingsIndexRedirect = lazy(() =>
   import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
 );
 const AdminSettingsPage = lazy(() => import('@/pages/settings/AdminSettingsPage'));
-const DBIntegrityPage = lazy(() => import('@/pages/admin/DBIntegrityPage'));
 const AuditLogsPage = lazy(() => import('@/pages/settings/AuditLogsPage'));
 const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
 const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
 const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
-const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
-const DataPage = lazy(() => import('@/pages/DataPage'));
-const ImportHubPage = lazy(() => import('@/pages/ImportHubPage'));
-const LibraryPage = lazy(() => import('@/pages/LibraryPage'));
-const ManufacturerNewPage = lazy(() => import('@/pages/data/ManufacturerNewPage'));
-const ManufacturerEditPage = lazy(() => import('@/pages/data/ManufacturerEditPage'));
-const ProductNewPage = lazy(() => import('@/pages/data/ProductNewPage'));
-const ProductEditPage = lazy(() => import('@/pages/data/ProductEditPage'));
-const PartnerNewPage = lazy(() => import('@/pages/data/PartnerNewPage'));
-const PartnerEditPage = lazy(() => import('@/pages/data/PartnerEditPage'));
-const WarehouseNewPage = lazy(() => import('@/pages/data/WarehouseNewPage'));
-const WarehouseEditPage = lazy(() => import('@/pages/data/WarehouseEditPage'));
-const BankNewPage = lazy(() => import('@/pages/data/BankNewPage'));
-const BankEditPage = lazy(() => import('@/pages/data/BankEditPage'));
 const PartnerPriceBookPage = lazy(() => import('@/pages/baro/PartnerPriceBookPage'));
 const PartnerCockpitPage = lazy(() => import('@/pages/baro/PartnerCockpitPage'));
 const QuoteBuilderPage = lazy(() => import('@/pages/baro/QuoteBuilderPage'));
@@ -56,6 +36,7 @@ const RFMBoardPage = lazy(() => import('@/pages/baro/RFMBoardPage'));
 const SalesSummaryPage = lazy(() => import('@/pages/baro/SalesSummaryPage'));
 const InverterGuidePage = lazy(() => import('@/pages/baro/InverterGuidePage'));
 const ShipmentNoticePage = lazy(() => import('@/pages/baro/ShipmentNoticePage'));
+const CallbackRecommendPage = lazy(() => import('@/pages/baro/CallbackRecommendPage'));
 const DriverPWAPage = lazy(() => import('@/pages/baro/DriverPWAPage'));
 const IncomingBoardPage = lazy(() => import('@/pages/baro/IncomingBoardPage'));
 const BaroPurchaseHistoryPage = lazy(() => import('@/pages/baro/BaroPurchaseHistoryPage'));
