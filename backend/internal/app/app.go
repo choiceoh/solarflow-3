@@ -3,7 +3,7 @@
 package app
 
 import (
-	"encoding/json"
+	"context"
 	"log"
 	"os"
 
@@ -23,6 +23,9 @@ type App struct {
 	OCR   *ocr.Client
 	Cfg   *config.Config
 	Gates middleware.Gates
+	// WiringStore — D-120 feature override 영속화 (PR-9). 운영에서는 SupabaseWiringStore.
+	// nil 이면 PUT 핸들러가 503 으로 막힘.
+	WiringStore feature.WiringStore
 }
 
 // New — App 부트스트랩. cfg를 받아 Supabase·Rust 엔진·OCR·Gates를 모두 초기화한다.
@@ -46,46 +49,42 @@ func New(cfg *config.Config) (*App, error) {
 		log.Println("ℹ️  ENGINE_URL 미설정 — Rust 엔진 미사용")
 	}
 
-	// PR-5b: tenant_features 테이블에서 (tenant, feature_id) override 를 startup 에 한 번 로드.
-	// 실패해도 carchaned default 카탈로그로 동작 — 운영 정지 막음.
+	// PR-9: WiringStore (PR-5b 의 인라인 DB 호출을 인터페이스 뒤로) 인스턴스 생성.
+	wiringStore := feature.NewSupabaseWiringStore(db)
+
+	// PR-5b/9: tenant_features 테이블에서 (tenant, feature_id) override 를 startup 에 한 번 로드.
+	// 실패해도 catalog default 로 동작 — 운영 정지 막음.
 	resolver := feature.NewResolver(nil)
-	if loaded, err := loadFeatureOverrides(db, resolver); err != nil {
+	if loaded, err := loadFeatureOverrides(wiringStore, resolver); err != nil {
 		log.Printf("⚠️  tenant_features override 로딩 실패 — catalog default 만 사용: %v", err)
 	} else if loaded > 0 {
 		log.Printf("✅ tenant_features override %d건 로드", loaded)
 	}
 
 	return &App{
-		DB:    db,
-		Eng:   eng,
-		OCR:   ocr.NewFromEnv(),
-		Cfg:   cfg,
-		Gates: middleware.NewGatesWithResolver(resolver),
+		DB:          db,
+		Eng:         eng,
+		OCR:         ocr.NewFromEnv(),
+		Cfg:         cfg,
+		Gates:       middleware.NewGatesWithResolver(resolver),
+		WiringStore: wiringStore,
 	}, nil
 }
 
-// loadFeatureOverrides — tenant_features 테이블의 모든 행을 resolver 에 적용.
+// loadFeatureOverrides — Store 가 들고 있는 tenant_features 행을 resolver 에 일괄 적용.
 //
-// PR-5b: admin 이 매트릭스 화면에서 토글한 (tenant, feature_id) override 가 server 재시작
-// 후에도 유지되도록 startup 에 한 번 로드한다. PUT 핸들러는 이후 in-memory 캐시를 직접
-// 갱신하므로 여기는 startup 한정.
-func loadFeatureOverrides(db *supa.Client, resolver *feature.Resolver) (int, error) {
-	data, _, err := db.From("tenant_features").
-		Select("tenant,feature_id,enabled", "exact", false).
-		Execute()
+// PR-5b: admin 이 매트릭스 화면에서 토글한 override 가 재시작 후에도 유지되도록.
+// PR-9 : DB 호출 자체를 WiringStore 뒤로 옮겨 단위 테스트 가능하게.
+func loadFeatureOverrides(store feature.WiringStore, resolver *feature.Resolver) (int, error) {
+	if store == nil {
+		return 0, nil
+	}
+	rows, err := store.LoadOverrides(context.Background())
 	if err != nil {
 		return 0, err
 	}
-	var rows []struct {
-		Tenant    string `json:"tenant"`
-		FeatureID string `json:"feature_id"`
-		Enabled   bool   `json:"enabled"`
-	}
-	if err := json.Unmarshal(data, &rows); err != nil {
-		return 0, err
-	}
 	for _, row := range rows {
-		resolver.SetOverride(row.Tenant, feature.FeatureID(row.FeatureID), row.Enabled)
+		resolver.SetOverride(row.Tenant, row.FeatureID, row.Enabled)
 	}
 	return len(rows), nil
 }
