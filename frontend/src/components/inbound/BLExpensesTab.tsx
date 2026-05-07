@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -48,7 +48,7 @@ export default function BLExpensesTab({ blId, lines }: Props) {
     [lines],
   );
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const list = await fetchWithAuth<Expense[]>(`/api/v1/expenses?bl_id=${blId}`);
@@ -72,9 +72,9 @@ export default function BLExpensesTab({ blId, lines }: Props) {
       // ignore
     }
     setLoading(false);
-  };
+  }, [blId]);
 
-  useEffect(() => { load(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [blId]);
+  useEffect(() => { load(); }, [load]);
 
   const totalAmount = useMemo(() => {
     return EXPENSE_TYPES_ACTIVE.reduce((s, t) => {

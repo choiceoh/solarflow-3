@@ -122,7 +122,7 @@ export function useLCDemand() {
     if (!snapshot.timeline?.monthly_projection) return [];
     return snapshot.timeline.monthly_projection.map((mp) => {
       const demand = demandByPO
-        .filter((d) => d.lc_due_date && d.lc_due_date.startsWith(mp.month))
+        .filter((d) => d.lc_due_date?.startsWith(mp.month))
         .reduce((s, d) => s + d.lc_needed_usd, 0);
 
       const shortage = mp.projected_available - demand;

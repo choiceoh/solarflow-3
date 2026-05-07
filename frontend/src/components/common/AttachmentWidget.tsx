@@ -52,18 +52,18 @@ export default function AttachmentWidget({
   const [preview, setPreview] = useState<{ url: string; file: DocumentFile } | null>(null);
   const [accessLinks, setAccessLinks] = useState<Record<string, PreparedAttachmentLinks>>({});
 
-  const accessUrl = async (file: DocumentFile, disposition: 'inline' | 'attachment') => {
+  const accessUrl = useCallback(async (file: DocumentFile, disposition: 'inline' | 'attachment') => {
     const params = new URLSearchParams({ disposition });
     const result = await fetchWithAuth<AttachmentAccess>(`/api/v1/attachments/${file.file_id}/access?${params}`);
     return result.url;
-  };
+  }, []);
 
-  const toBrowserUrl = (url: string) => {
+  const toBrowserUrl = useCallback((url: string) => {
     if (!url) return '';
     return new URL(url, window.location.origin).toString();
-  };
+  }, []);
 
-  const prepareAccessLinks = async (file: DocumentFile) => {
+  const prepareAccessLinks = useCallback(async (file: DocumentFile) => {
     const [inlineUrl, attachmentUrl] = await Promise.all([
       accessUrl(file, 'inline'),
       accessUrl(file, 'attachment'),
@@ -74,9 +74,9 @@ export default function AttachmentWidget({
     };
     setAccessLinks((prev) => ({ ...prev, [file.file_id]: links }));
     return links;
-  };
+  }, [accessUrl, toBrowserUrl]);
 
-  const primeAccessLinks = async (targetFiles: DocumentFile[]) => {
+  const primeAccessLinks = useCallback(async (targetFiles: DocumentFile[]) => {
     await Promise.all(targetFiles.map(async (file) => {
       try {
         await prepareAccessLinks(file);
@@ -84,7 +84,7 @@ export default function AttachmentWidget({
         // 개별 링크 준비 실패는 사용자가 해당 파일을 열 때 에러로 다시 표시합니다.
       }
     }));
-  };
+  }, [prepareAccessLinks]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,12 +105,10 @@ export default function AttachmentWidget({
     } finally {
       setLoading(false);
     }
-  // primeAccessLinks는 컴포넌트 내부에서 매 렌더 재생성되지만 부수효과(링크 캐싱)만 수행하므로
-  // 의존성 배열에 넣으면 무한 루프가 발생합니다. 의도적으로 제외합니다.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityType, entityId, fileType]);
+  }, [entityType, entityId, fileType, primeAccessLinks]);
 
   useEffect(() => {
+    void reloadKey;
     load();
   }, [load, reloadKey]);
 

@@ -48,7 +48,9 @@ function collectKeys(rows: unknown[]): string[] {
   const set = new Set<string>();
   for (const row of rows) {
     if (row && typeof row === 'object') {
-      Object.keys(row).forEach((k) => set.add(k));
+      Object.keys(row).forEach((k) => {
+        set.add(k);
+      });
     }
   }
   return Array.from(set);

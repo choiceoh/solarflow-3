@@ -63,6 +63,10 @@ type PeriodFilter = 'all' | 'last3' | 'year' | 'custom';
 // cif: 면장 CIF 만 (관세 전).
 type CostBasis = 'fifo' | 'landed' | 'cif';
 
+function saleListItemDate(item: SaleListItem) {
+  return item.outbound_date ?? item.order_date ?? null;
+}
+
 const emptyMargin: MarginAnalysis = {
   items: [],
   summary: {
@@ -343,20 +347,19 @@ export default function SalesAnalysisPage() {
   }, [filteredSales]);
 
   // KPI sparkline — 최근 8개월 실제 매출/세금 흐름.
-  const saleDate = (item: SaleListItem) => item.outbound_date ?? item.order_date ?? null;
   const supplySpark = useMemo(
-    () => monthlyTrend(filteredSales, saleDate, (i) => i.sale.supply_amount ?? 0),
+    () => monthlyTrend(filteredSales, saleListItemDate, (i) => i.sale.supply_amount ?? 0),
     [filteredSales],
   );
   const totalSpark = useMemo(
-    () => monthlyTrend(filteredSales, saleDate, (i) => i.sale.total_amount ?? 0),
+    () => monthlyTrend(filteredSales, saleListItemDate, (i) => i.sale.total_amount ?? 0),
     [filteredSales],
   );
   const issueRateSpark = useMemo(() => {
     // total 과 issued 가 같은 데이터 범위(filteredSales 의 minMonth)를 공유하도록
     // 동일 items 위에서 conditional getValue 로 계산 — 부분집합으로 분리하면 길이가 어긋남.
-    const totalByMonth = monthlyTrend(filteredSales, saleDate, () => 1);
-    const issuedByMonth = monthlyTrend(filteredSales, saleDate, (i) => (i.sale.tax_invoice_date ? 1 : 0));
+    const totalByMonth = monthlyTrend(filteredSales, saleListItemDate, () => 1);
+    const issuedByMonth = monthlyTrend(filteredSales, saleListItemDate, (i) => (i.sale.tax_invoice_date ? 1 : 0));
     return totalByMonth.map((t, i) => (t > 0 ? Math.round((issuedByMonth[i]! / t) * 100) : 0));
   }, [filteredSales]);
 

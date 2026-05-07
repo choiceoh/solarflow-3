@@ -97,7 +97,9 @@ function AllocSubTable({
       (s) => !claimedIds.has(s.alloc_id) &&
         (s.group_id && main.group_id ? s.group_id === main.group_id : s.customer_name === main.customer_name),
     );
-    spares.forEach((s) => claimedIds.add(s.alloc_id));
+    spares.forEach((s) => {
+      claimedIds.add(s.alloc_id);
+    });
     return { main, spares };
   });
   const standalone = spareAllocs.filter((s) => !claimedIds.has(s.alloc_id));
