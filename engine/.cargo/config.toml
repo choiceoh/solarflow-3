@@ -1,0 +1,5 @@
+# 운영 호스트(gx10) + 콜드 스탠바이(spark4tb) 모두 NVIDIA GB10 (Grace = Neoverse V2 microarch).
+# target-cpu=neoverse-v2 로 SVE2/BF16 등 ARMv9 명령 활성. 다른 aarch64 에서는 SIGILL.
+# CI(GitHub self-hosted)도 spark4tb 라 동일 — 빌드 결과 운영과 일치.
+[target.aarch64-unknown-linux-gnu]
+rustflags = ["-C", "target-cpu=neoverse-v2"]
