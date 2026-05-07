@@ -2,11 +2,10 @@
 /**
  * apply_migrations.ts — backend/migrations/*.sql 중 미적용 파일을 자동 적용.
  *
- * apply_migrations.py 의 TS 포팅. Bun runtime + Bun.SQL 사용 → Python venv 의존 제거.
- * 동작은 .py 와 1:1 동등. dual-run 검증 후 cron-deploy 가 .ts 를 호출하도록 swap 예정.
+ * Bun runtime + Bun.SQL — psycopg2/Python venv 의존 없음.
  *
  * 호출처:
- *   - scripts/cron-deploy.sh (webhook/cron 후 자동) — 향후 .ts 로 swap
+ *   - scripts/cron-deploy.sh (webhook/cron 후 자동)
  *   - 운영자 수동 실행: bun scripts/apply_migrations.ts
  *
  * 자동 적용 결정 (3단계 fallthrough):
