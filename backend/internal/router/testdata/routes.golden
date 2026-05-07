@@ -27,6 +27,7 @@ DELETE  /api/v1/pos/{poId}/lines/{id}
 DELETE  /api/v1/products/{id}
 DELETE  /api/v1/receipt-matches/{id}
 DELETE  /api/v1/receipts/{id}
+DELETE  /api/v1/receiving-logs/{id}
 DELETE  /api/v1/sales/{id}
 DELETE  /api/v1/tts/{id}
 DELETE  /api/v1/ui-configs/{scope}/{config_id}
@@ -74,6 +75,8 @@ GET     /api/v1/construction-sites/{id}
 GET     /api/v1/cost-details/
 GET     /api/v1/cost-details/{id}
 GET     /api/v1/customs/dashboard
+GET     /api/v1/cycle-counts/
+GET     /api/v1/cycle-counts/{id}
 GET     /api/v1/declarations/
 GET     /api/v1/declarations/{id}
 GET     /api/v1/engine/health
@@ -154,6 +157,8 @@ GET     /api/v1/receipt-matches/
 GET     /api/v1/receipts/
 GET     /api/v1/receipts/dashboard
 GET     /api/v1/receipts/{id}
+GET     /api/v1/receiving-logs/
+GET     /api/v1/receiving-logs/{id}
 GET     /api/v1/sales/
 GET     /api/v1/sales/dashboard
 GET     /api/v1/sales/summary
@@ -180,6 +185,7 @@ PATCH   /api/v1/companies/{id}
 PATCH   /api/v1/companies/{id}/status
 PATCH   /api/v1/construction-sites/{id}
 PATCH   /api/v1/construction-sites/{id}/status
+PATCH   /api/v1/cycle-counts/{id}/items/{item_id}
 PATCH   /api/v1/external-sync-sources/{id}
 PATCH   /api/v1/intercompany-requests/{id}/cancel
 PATCH   /api/v1/intercompany-requests/{id}/fulfill
@@ -234,6 +240,8 @@ POST    /api/v1/companies/
 POST    /api/v1/company-aliases/
 POST    /api/v1/construction-sites/
 POST    /api/v1/cost-details/
+POST    /api/v1/cycle-counts/
+POST    /api/v1/cycle-counts/{id}/complete
 POST    /api/v1/declarations/
 POST    /api/v1/expenses/
 POST    /api/v1/export/amaranth/jobs/{id}/claim
@@ -276,6 +284,7 @@ POST    /api/v1/public/assistant/chat
 POST    /api/v1/receipt-matches/
 POST    /api/v1/receipt-matches/auto
 POST    /api/v1/receipts/
+POST    /api/v1/receiving-logs/
 POST    /api/v1/sales/
 POST    /api/v1/tts/
 POST    /api/v1/users/
