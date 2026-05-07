@@ -1,0 +1,14 @@
+[Unit]
+Description=SolarFlow integrity_cron HIGH severity (D-064 PR 37)
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/solarflow/integrity.env
+WorkingDirectory=%h/공개/solarflow-3
+ExecStart=%h/공개/solarflow-3/backend/.venv-ocr/bin/python3 %h/공개/solarflow-3/scripts/integrity_cron.py --severity high
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

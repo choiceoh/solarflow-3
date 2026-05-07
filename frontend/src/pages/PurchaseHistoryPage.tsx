@@ -7,7 +7,7 @@ import { usePOList, usePriceHistoryList, useLCList, useTTList } from '@/hooks/us
 import { useBLList } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
 import { buildChains, diffAuditFields, eventDeepLink, isValidChainParam, sanitizeAuditLogs, type Chain, type EventKind, type SafeAuditLog } from '@/lib/purchaseHistory';
-import { CardB, FilterButton, TileB } from '@/components/command/MockupPrimitives';
+import { CardB, FilterButton, TileB, type DateRangeValue } from '@/components/command/MockupPrimitives';
 import { monthlyCount, flatSparkFromValue } from '@/templates/sparkUtils';
 import { CONTRACT_TYPE_LABEL, LC_STATUS_LABEL, PO_STATUS_LABEL } from '@/types/procurement';
 import type { PurchaseOrder, PriceHistory, LCRecord, TTRemittance } from '@/types/procurement';
@@ -289,6 +289,7 @@ export default function PurchaseHistoryPage() {
   const chainParam = isValidChainParam(rawChainParam) ? rawChainParam : '';
 
   const [mfgFilter, setMfgFilter] = useState('');
+  const [dateRange, setDateRange] = useState<DateRangeValue>(null);
   const [search, setSearch] = useState('');
   const manufacturers = useAppStore((s) => s.manufacturers);
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
@@ -335,6 +336,12 @@ export default function PurchaseHistoryPage() {
   const filteredChains = useMemo(() => {
     let result = chains;
     if (mfgFilter) result = result.filter((c) => c.manufacturer_id === mfgFilter);
+    if (dateRange) {
+      result = result.filter((c) => {
+        const d = c.head.contract_date;
+        return !!d && d >= dateRange.start && d <= dateRange.end;
+      });
+    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter((c) => {
@@ -344,7 +351,7 @@ export default function PurchaseHistoryPage() {
       });
     }
     return result;
-  }, [chains, mfgFilter, search]);
+  }, [chains, mfgFilter, dateRange, search]);
 
   const selectedChain = useMemo(
     () => (chainParam ? chains.find((c) => c.chain_id === chainParam) ?? null : null),
@@ -406,6 +413,12 @@ export default function PurchaseHistoryPage() {
           right={
             <FilterButton
               items={[
+                {
+                  kind: 'date_range',
+                  label: '기간',
+                  value: dateRange,
+                  onChange: setDateRange,
+                },
                 {
                   label: '제조사',
                   value: mfgFilter,

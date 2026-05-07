@@ -502,6 +502,17 @@ func (h *PriceHistoryHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
+// PriceBenchmarkHandler — 가격예측용 외부 시세 벤치마크 + AI 수집 로그.
+func (h *PriceBenchmarkHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/price-benchmarks", func(r chi.Router) {
+		r.Use(g.Feature(feature.IDTxPriceBenchmark))
+		r.Get("/", h.List)
+		r.Get("/runs", h.ListRuns)
+		r.With(g.Write).Post("/", h.Create)
+		r.With(g.Write).Post("/ai-refresh", h.AIRefresh)
+	})
+}
+
 // ProductHandler — 품번 마스터 CRUD.
 func (h *ProductHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/products", func(r chi.Router) {

@@ -603,6 +603,18 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     } as T);
   }
 
+  if (url.pathname === '/api/v1/price-benchmarks/ai-refresh' && method === 'POST') {
+    const item = priceBenchmarks()[0];
+    return clone({
+      run_id: `pbr-${Date.now()}`,
+      status: 'completed',
+      inserted_count: 1,
+      skipped_count: 0,
+      warnings: [],
+      items: item ? [item] : [],
+    } as T);
+  }
+
   if (method !== 'GET' && !url.pathname.startsWith('/api/v1/calc') && url.pathname !== '/api/v1/ocr/extract') {
     return writeRoute<T>(url);
   }
@@ -671,6 +683,8 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     '/api/v1/lcs': { rows: lcs, idKey: 'lc_id', collection: 'lcs' },
     '/api/v1/tts': { rows: tts, idKey: 'tt_id', collection: 'tts' },
     '/api/v1/price-histories': { rows: priceHistories(), idKey: 'price_history_id', collection: 'price-histories' },
+    '/api/v1/price-benchmarks': { rows: priceBenchmarks(), idKey: 'benchmark_id', collection: 'price-benchmarks' },
+    '/api/v1/price-benchmarks/runs': { rows: priceBenchmarkRuns(), idKey: 'run_id', collection: 'price-benchmarks/runs' },
     '/api/v1/bls': { rows: bls, idKey: 'bl_id', collection: 'bls' },
     '/api/v1/inventory/allocations': { rows: allocations, idKey: 'alloc_id', collection: 'inventory/allocations' },
     '/api/v1/orders': { rows: orders, idKey: 'order_id', collection: 'orders' },
@@ -727,6 +741,123 @@ function priceHistories(): MockRow[] {
     related_po_id: purchaseOrders[productIndex % purchaseOrders.length]?.po_id,
   })));
 }
+
+function priceBenchmarks(): MockRow[] {
+  const base = [
+    ['2025-11-15', 0.104, 0.118, 0.132, 0.129],
+    ['2025-12-15', 0.101, 0.116, 0.130, 0.126],
+    ['2026-01-15', 0.098, 0.114, 0.128, 0.123],
+    ['2026-02-15', 0.096, 0.112, 0.126, 0.121],
+    ['2026-03-15', 0.094, 0.111, 0.124, 0.119],
+    ['2026-04-15', 0.093, 0.110, 0.123, 0.118],
+  ] as const;
+  return base.flatMap(([date, cmm, ddpUs, ddpEu, tender], index) => [
+    {
+      benchmark_id: `pb-opis-cmm-${index}`,
+      run_id: 'pbr-mock-1',
+      source_key: 'opis',
+      source_name: 'OPIS Solar Weekly',
+      metric_key: 'cmm_fob_china_topcon_600w',
+      metric_label: 'CMM FOB China TOPCon >=600W',
+      value_date: date,
+      period_label: 'weekly',
+      market_region: 'fob_china',
+      basis: 'spot',
+      currency: 'USD',
+      price_usd_w: cmm,
+      cargo_min_mw: 5,
+      cargo_max_mw: 25,
+      technology: 'TOPCon >=600W',
+      confidence: 0.82,
+      source_url: 'https://www.opisnet.com/product/solar-weekly/',
+      raw_excerpt: 'Dev mock CMM observation',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+    {
+      benchmark_id: `pb-opis-ddp-us-${index}`,
+      run_id: 'pbr-mock-1',
+      source_key: 'opis',
+      source_name: 'OPIS Solar Weekly',
+      metric_key: 'ddp_us',
+      metric_label: 'DDP US',
+      value_date: date,
+      period_label: 'weekly',
+      market_region: 'ddp_us',
+      basis: 'ddp',
+      currency: 'USD',
+      price_usd_w: ddpUs,
+      cargo_min_mw: 5,
+      cargo_max_mw: 25,
+      confidence: 0.78,
+      source_url: 'https://www.opisnet.com/product/solar-weekly/',
+      raw_excerpt: 'Dev mock DDP US observation',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+    {
+      benchmark_id: `pb-opis-ddp-eu-${index}`,
+      run_id: 'pbr-mock-1',
+      source_key: 'opis',
+      source_name: 'OPIS Solar Weekly',
+      metric_key: 'ddp_europe',
+      metric_label: 'DDP Europe',
+      value_date: date,
+      period_label: 'weekly',
+      market_region: 'ddp_europe',
+      basis: 'ddp',
+      currency: 'USD',
+      price_usd_w: ddpEu,
+      cargo_min_mw: 5,
+      cargo_max_mw: 25,
+      confidence: 0.78,
+      source_url: 'https://www.opisnet.com/product/solar-weekly/',
+      raw_excerpt: 'Dev mock DDP Europe observation',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+    {
+      benchmark_id: `pb-tender-${index}`,
+      run_id: 'pbr-mock-1',
+      source_key: 'china_tender',
+      source_name: '중국 국영 대량 입찰',
+      metric_key: 'china_state_tender',
+      metric_label: '국영 centralized procurement 낙찰가',
+      value_date: date,
+      period_label: 'monthly',
+      market_region: 'china_domestic',
+      basis: 'tender',
+      currency: 'USD',
+      price_usd_w: tender,
+      project_segment: 'centralized',
+      confidence: 0.72,
+      source_url: 'https://guangfu.bjx.com.cn/',
+      raw_excerpt: 'Dev mock centralized procurement result',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+  ]);
+}
+
+function priceBenchmarkRuns(): MockRow[] {
+  return [
+    {
+      run_id: 'pbr-mock-1',
+      status: 'completed',
+      provider: 'dev',
+      model: 'mock',
+      source_keys: SOURCE_KEYS,
+      requested_by: 'dev-mock-user',
+      started_at: nowIso,
+      finished_at: nowIso,
+      inserted_count: priceBenchmarks().length,
+      skipped_count: 0,
+      warnings: [],
+    },
+  ];
+}
+
+const SOURCE_KEYS = ['opis', 'infolink', 'trendforce', 'pvinsights', 'china_tender', 'cpia_floor', 'tier1_asp'];
 
 function moduleDemandForecasts(): MockRow[] {
   return [

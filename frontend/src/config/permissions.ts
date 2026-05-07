@@ -33,6 +33,7 @@ export type MenuKey =
   | 'banking'       // LC 한도/만기
   | 'customs'       // 매출/이익 분석
   | 'purchase_history' // 구매 이력 read-only 통합 타임라인 (현황 그룹)
+  | 'price_forecast' // 가격예측 벤치마크
   | 'import_hub'    // 엑셀 입력 허브
   | 'library'       // 자료실
   | 'masters'       // 마스터 관리
@@ -81,7 +82,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
-            'banking','customs','purchase_history','import_hub','library','masters','approval','assistant','crm_inbox',
+            'banking','customs','purchase_history','price_forecast','import_hub','library','masters','approval','assistant','crm_inbox',
             'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_incoming','baro_purchase_history','baro_inbox',
             'settings'],
     features: {
@@ -96,7 +97,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   executive: {
-    menus: ['inventory','orders','outbound','receipts','banking','customs','purchase_history','library','assistant','crm_inbox',
+    menus: ['inventory','orders','outbound','receipts','banking','customs','purchase_history','price_forecast','library','assistant','crm_inbox',
             'baro_credit','baro_incoming','baro_purchase_history','settings'],
     features: {
       canEdit: false,

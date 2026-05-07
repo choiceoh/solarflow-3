@@ -15,6 +15,7 @@ const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const InventoryPage = lazy(() => import('@/pages/InventoryPage'));
 const ProcurementPage = lazy(() => import('@/pages/ProcurementPage'));
 const PurchaseHistoryPage = lazy(() => import('@/pages/PurchaseHistoryPage'));
+const PriceForecastPage = lazy(() => import('@/pages/PriceForecastPage'));
 import { PurchaseHistoryErrorBoundary } from '@/pages/PurchaseHistoryErrorBoundary';
 const OrdersPage = lazy(() => import('@/pages/OrdersPage'));
 const CustomsPage = lazy(() => import('@/pages/CustomsPage'));
@@ -26,6 +27,7 @@ const SettingsIndexRedirect = lazy(() =>
   import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
 );
 const AdminSettingsPage = lazy(() => import('@/pages/settings/AdminSettingsPage'));
+const DBIntegrityPage = lazy(() => import('@/pages/admin/DBIntegrityPage'));
 const AuditLogsPage = lazy(() => import('@/pages/settings/AuditLogsPage'));
 const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
 const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
@@ -100,6 +102,7 @@ export default function App() {
                 <Route index element={<Navigate to="/inventory" replace />} />
                 <Route path="/dashboard" element={<Navigate to="/inventory" replace />} />
                 <Route path="/inventory" element={<InventoryPage />} />
+                <Route path="/admin/db-integrity" element={<RoleGuard allowedRoles={['admin', 'operator']}><DBIntegrityPage /></RoleGuard>} />
                 <Route path="/import" element={<RoleGuard allowedRoles={['admin', 'operator']}><ImportHubPage /></RoleGuard>} />
                 <Route path="/library" element={<LibraryPage />} />
                 <Route path="/data" element={<RoleGuard allowedRoles={['admin', 'operator']}><DataPage /></RoleGuard>} />
@@ -117,6 +120,7 @@ export default function App() {
                 <Route path="/inbound" element={<LegacyRedirect to="/procurement?tab=bl" />} />
                 <Route path="/procurement" element={<ProcurementPage />} />
                 <Route path="/purchase-history" element={<PurchaseHistoryErrorBoundary><PurchaseHistoryPage /></PurchaseHistoryErrorBoundary>} />
+                <Route path="/price-forecast" element={<RoleGuard allowedRoles={['admin', 'operator', 'executive']}><PriceForecastPage /></RoleGuard>} />
                 <Route path="/lc" element={<LegacyRedirect to="/procurement?tab=lc" />} />
                 <Route path="/outbound" element={<LegacyRedirect to="/orders?tab=outbound" />} />
                 <Route path="/orders" element={<OrdersPage />} />

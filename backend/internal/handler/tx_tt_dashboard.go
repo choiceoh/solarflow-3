@@ -97,7 +97,15 @@ func (r ttDashRow) manufacturerName() string {
 }
 
 // Dashboard — GET /api/v1/tts/dashboard.
+//
+// tts_dashboard() RPC (migration 079) 우선. 실패 시 fallback.
 func (h *TTHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	if dashJSON, ok := h.tryRPCTtsDashboard(r); ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(dashJSON)
+		return
+	}
 	rows, err := h.fetchAllForTTDashboard(r)
 	if err != nil {
 		log.Printf("[TT 대시보드 데이터 수집 실패] %v", err)
@@ -107,6 +115,40 @@ func (h *TTHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	scope := normalizeTTScope(r.URL.Query().Get("status_scope"))
 	dash := computeTTDashboard(rows, scope)
 	response.RespondJSON(w, http.StatusOK, dash)
+}
+
+func (h *TTHandler) tryRPCTtsDashboard(r *http.Request) ([]byte, bool) {
+	q := r.URL.Query()
+	args := map[string]any{}
+	if v := q.Get("company_id"); v != "" && v != "all" {
+		args["p_company_id"] = v
+	}
+	if v := q.Get("status"); v != "" {
+		args["p_status"] = v
+	}
+	if v := q.Get("po_id"); v != "" {
+		args["p_po_id"] = v
+	}
+	args["p_status_scope"] = normalizeTTScope(q.Get("status_scope"))
+	data, _, err := h.DB.From("rpc/tts_dashboard").Insert(args, false, "", "", "").Execute()
+	if err != nil {
+		log.Printf("[TT 대시보드 RPC 실패 — fallback 사용] %v", err)
+		return nil, false
+	}
+	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
+		var arr []json.RawMessage
+		if data[0] == '[' && json.Unmarshal(data, &arr) == nil && len(arr) > 0 {
+			var wrap map[string]json.RawMessage
+			if json.Unmarshal(arr[0], &wrap) == nil {
+				if inner, ok := wrap["tts_dashboard"]; ok {
+					return inner, true
+				}
+			}
+			return arr[0], true
+		}
+		return data, true
+	}
+	return nil, false
 }
 
 func normalizeTTScope(raw string) string {

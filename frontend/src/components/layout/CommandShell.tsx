@@ -23,6 +23,7 @@ import {
   Ship,
   Sun,
   Tags,
+  TrendingUp,
   Truck,
   Wallet,
   type LucideIcon,
@@ -140,6 +141,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs', tenants: MODULE_TENANTS },
       // 구매 이력: PO/단가/변경계약 read-only 통합 타임라인 (module 계열 수입 흐름 전용, executive 포함)
       { key: 'purchase-history', label: '구매 이력', abbr: '이력', path: '/purchase-history', icon: History, menu: 'purchase_history', tenants: MODULE_TENANTS },
+      { key: 'price-forecast', label: '가격예측', abbr: '가격', path: '/price-forecast', icon: TrendingUp, menu: 'price_forecast', tenants: MODULE_TENANTS },
       // BARO Phase 3: 거래처별 미수금/한도 보드 (BARO 전용)
       { key: 'baro-credit', label: '미수금/한도', abbr: '미수', path: '/baro/credit-board', icon: ShieldAlert, menu: 'baro_credit', tenants: ['baro'] },
     ],
@@ -152,6 +154,8 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'library', label: '자료실', abbr: '자료', path: '/library', icon: LibraryBig, menu: 'library' },
       { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant' },
       { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', tenants: MODULE_TENANTS, isWip: true },
+      // D-064 PR 37: 운영자 전용 DB 정합성 검증 + 로컬 AI 분석. RoleGuard 로 admin/operator 만 접근.
+      { key: 'db-integrity', label: 'DB 정합성', abbr: '정합', path: '/admin/db-integrity', icon: ShieldAlert, menu: 'settings' },
       { key: 'settings', label: '설정', abbr: '설정', path: '/settings', icon: Settings, menu: 'settings' },
     ],
   },
@@ -165,6 +169,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/orders': { title: '수주 관리', breadcrumb: '판매 / 수주 및 수금' },
   '/banking': { title: 'L/C 한도', breadcrumb: '현황 / 은행 한도' },
   '/sales-analysis': { title: '매출 분석', breadcrumb: '현황 / 매출과 이익' },
+  '/price-forecast': { title: '가격예측', breadcrumb: '현황 / 외부 가격 벤치마크' },
   '/crm/inbox': { title: '내 미처리 문의', breadcrumb: '판매 / 후속 답변 대기' },
   '/import': { title: '엑셀 입력', breadcrumb: '도구 / 일괄 가져오기' },
   '/library': { title: '자료실', breadcrumb: '도구 / 업무 자료' },
@@ -172,6 +177,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/assistant': { title: 'AI', breadcrumb: '도구 / 채팅 어시스턴트' },
   '/settings': { title: '설정', breadcrumb: '시스템 / 설정' },
   '/settings/admin': { title: '관리자 설정', breadcrumb: '시스템 / 사용자 관리' },
+  '/admin/db-integrity': { title: 'DB 정합성', breadcrumb: '운영 / 데이터 정합성 검증' },
   '/settings/audit-logs': { title: '관리자 로그', breadcrumb: '시스템 / 운영 데이터 변경 기록' },
   '/settings/site': { title: '사이트 설정', breadcrumb: '시스템 / 전역 설정' },
   '/settings/personal': { title: '개인 설정', breadcrumb: '시스템 / 내 계정' },
