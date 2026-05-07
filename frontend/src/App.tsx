@@ -57,6 +57,7 @@ const SalesSummaryPage = lazy(() => import('@/pages/baro/SalesSummaryPage'));
 const InverterGuidePage = lazy(() => import('@/pages/baro/InverterGuidePage'));
 const ShipmentNoticePage = lazy(() => import('@/pages/baro/ShipmentNoticePage'));
 const DriverPWAPage = lazy(() => import('@/pages/baro/DriverPWAPage'));
+const CallbackRecommendPage = lazy(() => import('@/pages/baro/CallbackRecommendPage'));
 const IncomingBoardPage = lazy(() => import('@/pages/baro/IncomingBoardPage'));
 const BaroPurchaseHistoryPage = lazy(() => import('@/pages/baro/BaroPurchaseHistoryPage'));
 const GroupPurchaseRequestPage = lazy(() => import('@/pages/baro/GroupPurchaseRequestPage'));

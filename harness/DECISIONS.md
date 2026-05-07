@@ -1148,3 +1148,27 @@
 - **검증**: `go test` 통과 — coverage_test 일치.
 - **⚠️ 적용 절차**: `psql -d solarflow -f backend/migrations/088_cycle_counts.sql` + PostgREST reload.
 - **날짜**: 2026-05-07
+
+## D-133: BARO 자동 콜백 추천 엔진 — owner 별 활성 거래처 + 입고예정 컨텍스트 (PR3.5)
+- **결정**: 영업이 출근 후 5분 안에 "오늘 누구에게 카톡 보낼지" 정렬할 수 있도록 신규 endpoint `GET /api/v1/baro/callback-recommend` (feature_id `baro.callback_recommend`, BARO 전용) 도입.
+  - **추천 정책 (PR3.5 단순 버전)**:
+    - 직전 6개월 매출 활성 + 마지막 매출 30일+ 경과 거래처 = 다음 발주 시점 가까움
+    - `days >= 90` → 재활성화 후보, `60 <= days < 90` → 다음 발주 주기 도래, `30 <= days < 60` → 정기 콜백 후보
+    - owner 별 그룹 + 미거래일 큰 순 정렬 (오래된 거 먼저)
+  - **입고예정 SKU 컨텍스트**: 현재 진행 중(scheduled/shipping/arrived)인 BL 라인 20건 + ETA + 수량 같이 노출 — "이 입고를 알려야 할 거래처" 트리거.
+  - **owner 필터**: `?mine=true` (본인 담당) 또는 `?owner_user_id=<uuid>` (특정 영업).
+  - **frontend**: `/baro/callback-recommend` 페이지. owner 별 패널 + 거래처 행 클릭 → cockpit, "알림" 버튼 → /baro/shipment-notice 이동.
+- **PR3.6 분리** (별도 D-NNN):
+  - **SKU-level 정밀 매칭**: 이 거래처가 직전에 산 모듈 ↔ 이번 입고 SKU 동일 매칭. sales → outbound → bl_line → product 다단계 join 필요해 별도 RPC 함수 신설 후 통합.
+  - **자동 일괄 발송 큐**: PR7.5 카톡 API 통합 후, 추천 거래처 다중 선택 → 1-click 카톡 발송.
+  - **추천 정책 ML**: 거래처별 평균 발주 주기 학습 → 정확한 "다음 발주 예상일" 추정. 단순 30/60/90일 임계값 대체.
+- **이유**: D-127(영업 일일 홈) 이 stub 으로 둔 "신규 입고 안내 추천" 패널을 실데이터로 채우는 구체화. 6명 영업이 200거래처를 분담하는 환경에서 "어느 거래처가 콜백 시점 도래" 가 사람 메모에만 있어 누락 빈번. 매출 1000억 규모에서 콜백 1건당 평균 발주 가능성 30% × 평균 거래액 3천만 = 1000만 기대치, 일 10건 추천 시 일 1억.
+- **운영 기준**:
+  - sanitized 패스스루 — partners + sales 직접 컬럼 + bl_line 입고 sanitized. 면장/원가/L/C 차단 그대로.
+  - 추천 정책 임계값(30/60/90 일)은 핸들러 코드에 명시. 변경 시 본 결정문 동시 갱신.
+  - 응답이 partners 200곳 + sales 6mo + incoming 20건 — 응답 크기 측정 후 캐시 검토 (현재 1회 응대 분이라 작음).
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/baro/callback-recommend/` catalog↔chi 일치, matrix_consistency_test 가 `baro.callback_recommend` markdown 일치 검증.
+  - 라우터 가드: module/cable 토큰으로 호출 시 403, baro 토큰 통과.
+  - 프론트엔드 `npm run build` 통과.
+- **날짜**: 2026-05-07
