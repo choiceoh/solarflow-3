@@ -49,6 +49,7 @@ export type MenuKey =
   | 'baro_incoming'         // BARO: 입고예정/ETA 보드
   | 'baro_purchase_history' // BARO: 자체 구매이력/원가 read-only
   | 'baro_cockpit'          // BARO: 거래처 360 cockpit (D-125)
+  | 'baro_quote'            // BARO: 통합 견적 빌더 (D-126)
   | 'baro_inbox';           // 탑솔라: 바로 매입요청 inbox
 
 /** 기능 권한 키 */
@@ -84,7 +85,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
             'banking','customs','purchase_history','price_forecast','import_hub','library','masters','approval','assistant','crm_inbox',
-            'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_incoming','baro_purchase_history','baro_cockpit','baro_inbox',
+            'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_incoming','baro_purchase_history','baro_cockpit','baro_quote','baro_inbox',
             'settings'],
     features: {
       canEdit: true,

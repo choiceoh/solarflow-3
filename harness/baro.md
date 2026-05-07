@@ -35,6 +35,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - 미수금/한도 (`/baro/credit-board`) — Phase 3
 - 내 미처리 문의 (`/crm/inbox`) — CRM 1차
 - 거래처 360 (`/baro/cockpit`) — D-125 인바운드 응대 한 화면 cockpit
+- 견적 빌더 (`/baro/quote/new`) — D-126 단가표 prefill + LocalStorage draft + 브라우저 PDF
 
 **노출되지 않는 것** (module 계열 전용 — D-108/D-119로 차단):
 - P/O 발주, L/C 개설, B/L 입고, 면장/원가
@@ -52,6 +53,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - **[D-117](DECISIONS.md#d-117)** — BARO 자체 구매이력은 BR 법인 원가만 별도 노출
 - **[D-124](DECISIONS.md#d-124)** — 가격예측은 module 계열 전용이라 BARO에는 노출하지 않는다.
 - **[D-125](DECISIONS.md#d-125)** — BARO 거래처 360 cockpit. 인바운드 응대 화면을 위해 신용/최근매출/CRM 합본 endpoint 도입(sanitized 패스스루)
+- **[D-126](DECISIONS.md#d-126)** — BARO 통합 견적 빌더 Phase 1. DB 마이그레이션 없이 cockpit stub 채움 + LocalStorage draft + 브라우저 PDF
 
 ## BARO 전용 백엔드 엔드포인트 (`baroOnly` 미들웨어)
 
