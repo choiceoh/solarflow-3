@@ -9,13 +9,16 @@ import (
 	"net/http"
 	"net/mail"
 	"os"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/response"
+	"solarflow-backend/internal/tenant"
 
 	supa "github.com/supabase-community/supabase-go"
 )
@@ -23,6 +26,10 @@ import (
 // UserProfileResponse — /api/v1/users/me 응답 구조체
 // 비유: "내 인사카드" — 로그인한 사용자의 프로필 정보
 // 컬럼명은 실제 DB 기준 (D-055 참조)
+//
+// TenantID/TenantDisplayName/EnabledFeatures 는 GetMe 가 채워주는 derived 필드
+// (DB 컬럼이 아니라 registry/resolver 에서 계산). 다른 곳에서 UserProfileResponse 를
+// 직접 unmarshal 할 때는 비어 있을 수 있다.
 type UserProfileResponse struct {
 	UserID      string                 `json:"user_id"`
 	Email       string                 `json:"email"`
@@ -34,16 +41,30 @@ type UserProfileResponse struct {
 	IsActive    bool                   `json:"is_active"`
 	Persona     *string                `json:"persona"` // D-112: 사이드바 탭 key. NULL이면 default_tab fallback
 	Preferences map[string]interface{} `json:"preferences"`
+	// TenantID — 사용자가 속한 테넌트(앱 도메인) ID. context 의 tenant_scope 그대로.
+	TenantID string `json:"tenant_id,omitempty"`
+	// TenantDisplayName — registry 의 사람-읽는 이름. UI 헤더 등에 표시.
+	TenantDisplayName string `json:"tenant_display_name,omitempty"`
+	// EnabledFeatures — 이 테넌트가 사용할 수 있는 feature_id 정렬 목록.
+	// 프론트가 sidebar/메뉴 가시성을 결정하는 정본 (D-120 후속, PR-3 에서 소비).
+	EnabledFeatures []string `json:"enabled_features,omitempty"`
 }
 
 // UserHandler — 사용자 관련 핸들러
 type UserHandler struct {
-	DB *supa.Client
+	DB       *supa.Client
+	Resolver *feature.Resolver
 }
 
 // NewUserHandler — UserHandler 생성자
-func NewUserHandler(db *supa.Client) *UserHandler {
-	return &UserHandler{DB: db}
+//
+// resolver 는 /me 응답의 enabled_features 계산에 사용. nil 이면 카탈로그 기본만 쓰는
+// 새 resolver 를 만들어 둔다(테스트 호환).
+func NewUserHandler(db *supa.Client, resolver *feature.Resolver) *UserHandler {
+	if resolver == nil {
+		resolver = feature.NewResolver(nil)
+	}
+	return &UserHandler{DB: db, Resolver: resolver}
 }
 
 // GetMe — 현재 로그인한 사용자의 프로필 조회
@@ -56,6 +77,7 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email := middleware.GetUserEmail(r.Context())
+	tenantID := middleware.GetTenantScope(r.Context())
 
 	data, _, err := h.DB.From("user_profiles").
 		Select("user_id, email, name, role, department, phone, avatar_url, is_active, persona, preferences", "exact", false).
@@ -103,11 +125,31 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("[users/me] auto-provision 완료: id=%s, email=%s", userID, email)
+		h.fillTenantInfo(&created[0], tenantID)
 		response.RespondJSON(w, http.StatusOK, created[0])
 		return
 	}
 
+	h.fillTenantInfo(&profiles[0], tenantID)
 	response.RespondJSON(w, http.StatusOK, profiles[0])
+}
+
+// fillTenantInfo — 응답 객체에 derived 필드(tenant_id, display name, enabled_features) 를 채운다.
+//
+// PR-3 에서 프론트가 enabled_features 만 보고 sidebar/route 가시성을 결정한다.
+// FeatureID 가 정렬되어 내려가야 캐시/diff 가 안정적이라 매번 sort.
+func (h *UserHandler) fillTenantInfo(p *UserProfileResponse, tenantID string) {
+	p.TenantID = tenantID
+	if t, ok := tenant.Get(tenant.ID(tenantID)); ok {
+		p.TenantDisplayName = t.DisplayName
+	}
+	ids := h.Resolver.EnabledFeatures(tenantID)
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = string(id)
+	}
+	sort.Strings(out)
+	p.EnabledFeatures = out
 }
 
 // validRoles — 허용된 역할 목록
