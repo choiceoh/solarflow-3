@@ -15,6 +15,7 @@ import {
   Wallet,
 } from 'lucide-react';
 
+import { MODULE_TENANTS } from '@/lib/tenantScope';
 import type { Pack } from '../types';
 
 export const ERP_CORE_PACK: Pack = {
@@ -26,7 +27,7 @@ export const ERP_CORE_PACK: Pack = {
     { key: 'orders', label: '수주 관리', abbr: '수주', path: '/orders', icon: ScrollText, menu: 'orders', group: '판매', feature: 'tx.order' },
     { key: 'outbound', label: '출고/판매', abbr: '출고', path: '/orders?tab=outbound', icon: Truck, menu: 'outbound', group: '판매', feature: 'tx.outbound' },
     { key: 'receipts', label: '수금 관리', abbr: '수금', path: '/orders?tab=receipts', icon: Wallet, menu: 'receipts', group: '판매', feature: 'tx.receipt' },
-    { key: 'import-hub', label: '엑셀 입력', abbr: '입력', path: '/import', icon: FileSpreadsheet, menu: 'import_hub', group: '도구', feature: 'io.import' },
+    { key: 'import-hub', label: '엑셀 입력', abbr: '입력', path: '/import', icon: FileSpreadsheet, menu: 'import_hub', group: '도구', feature: 'io.import', tenants: MODULE_TENANTS },
     { key: 'data', label: '마스터', abbr: '기준', path: '/data', icon: Database, menu: 'masters', group: '도구' },
     { key: 'library', label: '자료실', abbr: '자료', path: '/library', icon: LibraryBig, menu: 'library', group: '도구', feature: 'sys.library_post' },
     { key: 'assistant', label: 'AI', abbr: 'AI', path: '/assistant', icon: Bot, menu: 'assistant', group: '도구', feature: 'ai.assistant' },
