@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { detectTenantScope } from './tenantScope';
 
 // D-108: 호스트네임으로 BARO 모드를 결정한다.

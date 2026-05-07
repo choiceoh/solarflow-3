@@ -1,5 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { formatNumber } from '@/lib/utils';
+import { NumberTween } from '@/components/common/NumberTween';
 import type { SaleListItem } from '@/types/outbound';
 
 interface Props {
@@ -28,27 +29,35 @@ export default function SaleSummaryCards({ items, summary }: Props) {
       <Card>
         <CardContent className="pt-4 pb-3">
           <p className="text-[10px] text-muted-foreground">매출 합계 (공급가)</p>
-          <p className="text-lg font-bold">{formatNumber(totalSupply)}원</p>
+          <p className="text-lg font-bold">
+            <NumberTween value={totalSupply} format={formatNumber} />원
+          </p>
           <p className="text-[10px] text-muted-foreground">부가세 포함: {formatNumber(totalAmount)}원</p>
         </CardContent>
       </Card>
       <Card>
         <CardContent className="pt-4 pb-3">
           <p className="text-[10px] text-muted-foreground">매출 건수</p>
-          <p className="text-lg font-bold">{count}건</p>
+          <p className="text-lg font-bold">
+            <NumberTween value={count} format={(n) => String(Math.round(n))} />건
+          </p>
         </CardContent>
       </Card>
       <Card>
         <CardContent className="pt-4 pb-3">
           <p className="text-[10px] text-muted-foreground">계산서 발행률</p>
-          <p className="text-lg font-bold">{issueRate}%</p>
+          <p className="text-lg font-bold">
+            <NumberTween value={issueRate} format={(n) => String(Math.round(n))} />%
+          </p>
           <p className="text-[10px] text-muted-foreground">{issuedCount}/{count}건</p>
         </CardContent>
       </Card>
       <Card>
         <CardContent className="pt-4 pb-3">
           <p className="text-[10px] text-muted-foreground">부가세 합계</p>
-          <p className="text-lg font-bold">{formatNumber(totalVat)}원</p>
+          <p className="text-lg font-bold">
+            <NumberTween value={totalVat} format={formatNumber} />원
+          </p>
         </CardContent>
       </Card>
     </div>

@@ -124,6 +124,11 @@ func (h *CalcProxyHandler) SupplyForecast(w http.ResponseWriter, r *http.Request
 	h.proxyPost(w, r, "supply-forecast")
 }
 
+// OrderFulfillmentRisk — 수주 충당 위험도 프록시
+func (h *CalcProxyHandler) OrderFulfillmentRisk(w http.ResponseWriter, r *http.Request) {
+	h.proxyPost(w, r, "order-fulfillment-risk")
+}
+
 // OutstandingList — 미수금 목록 프록시
 func (h *CalcProxyHandler) OutstandingList(w http.ResponseWriter, r *http.Request) {
 	h.proxyPost(w, r, "outstanding-list")

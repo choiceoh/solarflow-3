@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { useAppStore } from '@/stores/appStore';
-import { useOrderList, useOrderDashboard } from '@/hooks/useOrders';
+import { useOrderList, useOrderDashboard, useOrderFulfillmentRisk } from '@/hooks/useOrders';
 import { useReceiptList, useReceiptDashboard } from '@/hooks/useReceipts';
 import { useOutboundList, useOutboundDashboard, useSaleList, useSaleDashboard } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
@@ -25,7 +25,7 @@ import SaleSummaryCards from '@/components/outbound/SaleSummaryCards';
 import type { InventoryAllocation } from '@/components/inventory/AllocationForm';
 import {
   ORDER_STATUS_LABEL, MANAGEMENT_CATEGORY_LABEL,
-  type FulfillmentSource, type Order, type OrderStatus, type ManagementCategory,
+  type FulfillmentSource, type Order, type OrderStatus, type ManagementCategory, type Receipt,
 } from '@/types/orders';
 import { OUTBOUND_STATUS_LABEL, USAGE_CATEGORY_LABEL, type OutboundStatus, type UsageCategory } from '@/types/outbound';
 import type { Partner, Manufacturer } from '@/types/masters';
@@ -72,9 +72,17 @@ const SALES_TAB_OPTIONS = [
 ];
 const SALES_TABS = new Set(SALES_TAB_OPTIONS.map((tab) => tab.key));
 type OrderWorkQueue = '' | 'delivery_soon' | 'no_site';
+type ReceiptMatchFilter = '' | 'matched' | 'partial' | 'unmatched';
 
 function getOrderWorkQueue(value: string | null): OrderWorkQueue {
   return value === 'delivery_soon' || value === 'no_site' ? value : '';
+}
+
+function getReceiptMatchFilter(receipt: Receipt): Exclude<ReceiptMatchFilter, ''> {
+  const matched = receipt.matched_total ?? 0;
+  if (matched >= receipt.amount) return 'matched';
+  if (matched > 0) return 'partial';
+  return 'unmatched';
 }
 
 // isDeliveryDueSoon — 이전엔 client-side work_queue 필터에 사용. 이제 서버 work_queue=delivery_soon 으로 대체.
@@ -237,6 +245,7 @@ export default function OrdersPage() {
   // 탭 4: 수금
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState('');
   const [receiptDateRange, setReceiptDateRange] = useState<DateRangeValue>(null);
+  const [receiptMatchFilter, setReceiptMatchFilter] = useState<ReceiptMatchFilter>('');
   const [orderActionError, setOrderActionError] = useState('');
   const [orderSourceHints, setOrderSourceHints] = useState<Record<string, FulfillmentSource>>({});
 
@@ -303,9 +312,20 @@ export default function OrdersPage() {
   // C-1 receipts — KPI/sparkline 은 dashboard, 표/매칭 패널은 useReceiptList(필요시 후속 페이지네이션).
   const { data: receipts, loading: receiptsLoading } = useReceiptList(receiptFilters);
   const { dashboard: receiptDash } = useReceiptDashboard(receiptFilters);
+  const visibleReceipts = useMemo(() => {
+    if (!receiptMatchFilter) return receipts;
+    return receipts.filter((receipt) => getReceiptMatchFilter(receipt) === receiptMatchFilter);
+  }, [receipts, receiptMatchFilter]);
 
   // visibleOrders 는 표 렌더링 한정 — server-side work_queue 가 적용된 현재 페이지.
   const visibleOrders = orders;
+  const visibleActiveOrderIds = useMemo(
+    () => visibleOrders
+      .filter((order) => (order.status === 'received' || order.status === 'partial') && (order.remaining_qty ?? order.quantity) > 0)
+      .map((order) => order.order_id),
+    [visibleOrders],
+  );
+  const { riskByOrder: orderRiskByOrder } = useOrderFulfillmentRisk(visibleActiveOrderIds);
 
   useEffect(() => {
     const incomingOrders = orders.filter((order) =>
@@ -524,6 +544,10 @@ export default function OrdersPage() {
     }
   };
 
+  const handleStartReceiptMatch = (receipt: Receipt) => {
+    navigate(`/orders?tab=matching&receipt_id=${receipt.receipt_id}`);
+  };
+
   const pageTitle =
     activeTab === 'outbound' ? '출고 / 판매' :
     activeTab === 'sales' ? '판매 · 세금계산서' :
@@ -721,6 +745,16 @@ export default function OrdersPage() {
               value: receiptDateRange,
               onChange: setReceiptDateRange,
             },
+            {
+              label: '매칭',
+              value: receiptMatchFilter,
+              onChange: (value) => setReceiptMatchFilter(value as ReceiptMatchFilter),
+              options: [
+                { value: 'unmatched', label: '미매칭' },
+                { value: 'partial', label: '부분 매칭' },
+                { value: 'matched', label: '완전 매칭' },
+              ],
+            },
           ]} />
           <ColumnVisibilityMenu tableId={RECEIPT_TABLE_ID} columns={RECEIPT_COLUMN_META} hidden={receiptColVis.hidden} setHidden={receiptColVis.setHidden} pinning={receiptColPin.pinning} pinLeft={receiptColPin.pinLeft} pinRight={receiptColPin.pinRight} unpin={receiptColPin.unpin} />
           <ExcelToolbar type="receipt" />
@@ -773,6 +807,7 @@ export default function OrdersPage() {
               onSelect={(o) => setSelectedOrder(o.order_id)}
               onCancelToReservation={handleCancelOrderToReservation}
               sourceOverrides={orderSourceHints}
+              riskByOrder={orderRiskByOrder}
               serverMode={{
                 pageIndex: orderPageIndex,
                 pageSize: orderPageSize,
@@ -859,10 +894,11 @@ export default function OrdersPage() {
         <TabsContent value="receipts" className="space-y-4 mt-4">
           {receiptsLoading ? <SkeletonRows rows={8} /> : (
             <ReceiptListTable
-              items={receipts}
+              items={visibleReceipts}
               hidden={receiptColVis.hidden}
               pinning={receiptColPin.pinning}
               onPinningChange={receiptColPin.setPinning}
+              onStartMatch={handleStartReceiptMatch}
             />
           )}
         </TabsContent>

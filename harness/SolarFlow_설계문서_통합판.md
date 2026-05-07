@@ -560,6 +560,7 @@ PO 화면에서 바로 표시:
 
 - management_category: sale/construction/spare/repowering/maintenance/other (D-015)
 - fulfillment_source: stock/incoming — 미착품 충당 수주 구분 (D-015)
+- 충당 위험도: 수주 목록은 Rust 계산엔진의 `/api/v1/calc/order-fulfillment-risk` 결과로 `충당 가능/부족/확인 필요` 배지를 표시한다. 계산은 `fulfillment_source=stock`이면 실제 현재고 풀, `incoming`이면 미착품 풀을 기준으로 같은 법인·품번 수주를 수주일 순서로 차감해 판정한다.
 
 분할출고: 1 수주 → N 출고 (잔량 자동 계산)
 
@@ -654,6 +655,7 @@ PO 화면에서 바로 표시:
 - 미착품예약 = fulfillment_source=incoming 수주잔량
 - 가용미착품 = 미착품 - 미착품예약
 - 총확보량 = 가용재고 + 가용미착품
+- 수주별 충당 위험도 = 현재고/미착품 공급 풀에서 재고 예약(`inventory_allocations`)을 먼저 제외한 뒤, `received/partial` 수주 잔량을 수주일 순서로 배정해 각 수주가 선택한 충당 소스로 커버되는지 판정한다. 단, active 수주로 전환되어 `order_id`가 연결된 예약은 수주 잔량 단계에서 한 번만 차감한다. 이 계산은 여러 테이블 조합이므로 Rust 계산엔진 담당이다.
 
 재고 정렬: 제조사 → 모듈크기(mm) → 출력(Wp)
 

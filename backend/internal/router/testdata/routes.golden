@@ -232,6 +232,7 @@ POST    /api/v1/calc/lc-fee
 POST    /api/v1/calc/lc-limit-timeline
 POST    /api/v1/calc/lc-maturity-alert
 POST    /api/v1/calc/margin-analysis
+POST    /api/v1/calc/order-fulfillment-risk
 POST    /api/v1/calc/outstanding-list
 POST    /api/v1/calc/price-trend
 POST    /api/v1/calc/receipt-match-suggest
@@ -283,7 +284,9 @@ POST    /api/v1/product-aliases/
 POST    /api/v1/products/
 POST    /api/v1/public/assistant/chat
 POST    /api/v1/receipt-matches/
+POST    /api/v1/receipt-matches/ai-suggest
 POST    /api/v1/receipt-matches/auto
+POST    /api/v1/receipt-matches/bulk
 POST    /api/v1/receipts/
 POST    /api/v1/receiving-logs/
 POST    /api/v1/sales/

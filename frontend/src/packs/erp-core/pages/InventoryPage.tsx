@@ -18,7 +18,7 @@ import { useInventory } from '@/hooks/useInventory';
 import { useForecast } from '@/hooks/useForecast';
 import { fetchWithAuth } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
-import { shortMfgName } from '@/lib/utils';
+import { detectCapacityUnit, formatKwUnitOnly, formatKwValueOnly, shortMfgName } from '@/lib/utils';
 import { manufacturerRankByName, sortManufacturers } from '@/lib/manufacturerPriority';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SkeletonRows from '@/components/common/SkeletonRows';
@@ -524,13 +524,6 @@ export default function InventoryPage() {
     .sort((a, b) => b.incoming_kw - a.incoming_kw)
     .slice(0, 4);
   const recentRailAllocs = visibleAllocs.slice(0, 6);
-  const metricParts = (kw: number) => {
-    const text = formatAutoKw(kw);
-    const index = text.lastIndexOf(' ');
-    return index > 0 ? { value: text.slice(0, index), unit: text.slice(index + 1) } : { value: text, unit: '' };
-  };
-
-
   if (!selectedCompanyId) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -539,10 +532,19 @@ export default function InventoryPage() {
     );
   }
 
-  const totalSecured = metricParts(inventoryStats?.totalSecuredKw ?? 0);
-  const stockAvailable = metricParts(inventoryStats?.stockAvailableKw ?? 0);
-  const incomingAvailable = metricParts(inventoryStats?.incomingAvailableKw ?? 0);
-  const pendingKw = metricParts(allocationStats.pendingKw);
+  const totalSecuredKwRaw = inventoryStats?.totalSecuredKw ?? 0;
+  const stockAvailableKwRaw = inventoryStats?.stockAvailableKw ?? 0;
+  const incomingAvailableKwRaw = inventoryStats?.incomingAvailableKw ?? 0;
+  const pendingKwRaw = allocationStats.pendingKw;
+  // 최종값 기준으로 단위 잠금 — tween 보간 중 단위 점프 방지.
+  const totalSecuredUnit = detectCapacityUnit(totalSecuredKwRaw);
+  const stockAvailableUnit = detectCapacityUnit(stockAvailableKwRaw);
+  const incomingAvailableUnit = detectCapacityUnit(incomingAvailableKwRaw);
+  const pendingUnit = detectCapacityUnit(pendingKwRaw);
+  const totalSecured = { value: formatKwValueOnly(totalSecuredKwRaw, totalSecuredUnit), unit: formatKwUnitOnly(totalSecuredUnit) };
+  const stockAvailable = { value: formatKwValueOnly(stockAvailableKwRaw, stockAvailableUnit), unit: formatKwUnitOnly(stockAvailableUnit) };
+  const incomingAvailable = { value: formatKwValueOnly(incomingAvailableKwRaw, incomingAvailableUnit), unit: formatKwUnitOnly(incomingAvailableUnit) };
+  const pendingKw = { value: formatKwValueOnly(pendingKwRaw, pendingUnit), unit: formatKwUnitOnly(pendingUnit) };
   const inventoryCardControls = (
     <div className="sf-card-controls" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
       <FilterButton items={[
@@ -600,37 +602,45 @@ export default function InventoryPage() {
           <TileB
             lbl="가용"
             v={totalSecured.value}
+            numericValue={totalSecuredKwRaw}
+            formatter={(n) => formatKwValueOnly(n, totalSecuredUnit)}
             u={totalSecured.unit}
             sub={`${inventoryStats?.productCount.toLocaleString('ko-KR') ?? '0'}개 품목`}
             tone="solar"
-            spark={flatSpark(inventoryStats?.totalSecuredKw ?? 0)}
+            spark={flatSpark(totalSecuredKwRaw)}
             metricId="inventory.total_secured"
           />
           <TileB
             lbl="실재고"
             v={stockAvailable.value}
+            numericValue={stockAvailableKwRaw}
+            formatter={(n) => formatKwValueOnly(n, stockAvailableUnit)}
             u={stockAvailable.unit}
             sub="창고 보유 현재고"
             tone="ink"
-            spark={flatSpark(inventoryStats?.stockAvailableKw ?? 0)}
+            spark={flatSpark(stockAvailableKwRaw)}
             metricId="inventory.physical"
           />
           <TileB
             lbl="미착품"
             v={incomingAvailable.value}
+            numericValue={incomingAvailableKwRaw}
+            formatter={(n) => formatKwValueOnly(n, incomingAvailableUnit)}
             u={incomingAvailable.unit}
             sub={`운송 중 ${incomingRailItems.length.toLocaleString('ko-KR')}건`}
             tone="info"
-            spark={flatSpark(inventoryStats?.incomingAvailableKw ?? 0)}
+            spark={flatSpark(incomingAvailableKwRaw)}
             metricId="inventory.incoming"
           />
           <TileB
             lbl="예약 차감"
             v={pendingKw.value}
+            numericValue={pendingKwRaw}
+            formatter={(n) => formatKwValueOnly(n, pendingUnit)}
             u={pendingKw.unit}
             sub={`${allocationStats.pendingCount.toLocaleString('ko-KR')}건 · ${allocationStats.holdCount.toLocaleString('ko-KR')}건 보류`}
             tone="warn"
-            spark={flatSpark(allocationStats.pendingKw)}
+            spark={flatSpark(pendingKwRaw)}
             metricId="inventory.allocations"
           />
         </div>

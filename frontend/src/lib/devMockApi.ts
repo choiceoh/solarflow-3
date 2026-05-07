@@ -562,10 +562,51 @@ function writeRoute<T>(url: URL): T {
   return clone({ [idKey]: `mock-${collection}-${Date.now()}`, status: 'mock_saved', mock: true } as T);
 }
 
+function orderFulfillmentRiskResponse(body: MockRow) {
+  const requested = new Set(Array.isArray(body.order_ids) ? body.order_ids.map(String) : []);
+  const items = orders
+    .filter((order) => (order.status === 'received' || order.status === 'partial') && (requested.size === 0 || requested.has(order.order_id)))
+    .map((order, index) => {
+      const needKw = order.remaining_qty * (order.wattage_kw ?? 0);
+      const risk = index % 5 === 1 ? 'shortage' : index % 7 === 2 ? 'check' : 'available';
+      const availableBefore = risk === 'shortage' ? Math.max(0, needKw - 120) : needKw + 300;
+      const shortage = risk === 'shortage' ? Math.max(0, needKw - availableBefore) : 0;
+      return {
+        order_id: order.order_id,
+        company_id: order.company_id,
+        product_id: order.product_id,
+        fulfillment_source: order.fulfillment_source,
+        risk,
+        remaining_qty: order.remaining_qty,
+        need_kw: needKw,
+        available_before_kw: availableBefore,
+        available_after_kw: Math.max(0, availableBefore - needKw),
+        shortage_kw: shortage,
+        reason: risk === 'available'
+          ? '선택한 충당 소스로 수주 잔량을 충당할 수 있습니다'
+          : risk === 'shortage'
+            ? `선택한 충당 소스가 ${shortage.toFixed(1)} kW 부족합니다`
+            : '잔량, 품번, 충당 소스 정보를 확인하세요',
+      };
+    });
+  return {
+    items,
+    summary: {
+      total_count: items.length,
+      available_count: items.filter((item) => item.risk === 'available').length,
+      shortage_count: items.filter((item) => item.risk === 'shortage').length,
+      check_count: items.filter((item) => item.risk === 'check').length,
+    },
+    calculated_at: nowIso,
+  };
+}
+
 function calcRoute<T>(url: URL, body: MockRow): T {
   switch (url.pathname) {
     case '/api/v1/calc/inventory':
       return clone(inventoryResponse() as T);
+    case '/api/v1/calc/order-fulfillment-risk':
+      return clone(orderFulfillmentRiskResponse(body) as T);
     case '/api/v1/calc/customer-analysis':
       return clone(customerAnalysisResponse() as T);
     case '/api/v1/calc/lc-limit-timeline':
@@ -652,6 +693,38 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
       skipped_count: 0,
       warnings: [],
       items: item ? [item] : [],
+    } as T);
+  }
+
+  if (url.pathname === '/api/v1/receipt-matches/bulk' && method === 'POST') {
+    const rows = Array.isArray(body.matches) ? body.matches : [];
+    return clone(rows.map((row, index) => ({
+      match_id: `mock-match-${Date.now()}-${index}`,
+      receipt_id: body.receipt_id,
+      outbound_id: row.outbound_id,
+      sale_id: row.sale_id,
+      matched_amount: row.matched_amount,
+    })) as T);
+  }
+
+  if (url.pathname === '/api/v1/receipt-matches/ai-suggest' && method === 'POST') {
+    return clone({
+      receipt_id: body.receipt_id ?? 'rcp-2604-green',
+      provider: 'mock',
+      model: 'dev-mock',
+      summary: '거래처와 입금액 기준으로 가장 가능성이 높은 미수금 1건을 제안했습니다.',
+      candidates: [{
+        outbound_id: 'ob-2604-017-1',
+        outbound_date: '2026-04-27',
+        site_name: '해남 농촌태양광',
+        product_name: 'JAS-DH580 PERC bifacial',
+        outstanding_amount: 558632800,
+        match_amount: 558632800,
+        confidence: 0.86,
+        reason: '같은 거래처의 장기 미수금이며 단독 후보로 남아 있습니다.',
+      }],
+      total_suggested: 558632800,
+      difference: Math.max(0, Number(body.amount ?? 0) - 558632800),
     } as T);
   }
 

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Package, Truck, Shield } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatMW } from '@/lib/utils';
+import { NumberTween } from '@/components/common/NumberTween';
 import type { InventorySummary, InventoryItem } from '@/types/inventory';
 
 interface Props {
@@ -59,7 +60,7 @@ export default function InventorySummaryCards({ summary, items, onCardClick }: P
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground">실재고</p>
             <p className="text-lg font-semibold leading-tight tabular-nums">
-              {formatMW(summary.total_physical_kw)}
+              <NumberTween value={summary.total_physical_kw} format={formatMW} />
             </p>
             <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
               {Math.round(summary.total_physical_kw).toLocaleString('ko-KR')}kW
@@ -100,7 +101,7 @@ export default function InventorySummaryCards({ summary, items, onCardClick }: P
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground">미착품</p>
             <p className="text-lg font-semibold leading-tight tabular-nums">
-              {formatMW(summary.total_incoming_kw)}
+              <NumberTween value={summary.total_incoming_kw} format={formatMW} />
             </p>
             <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
               {Math.round(summary.total_incoming_kw).toLocaleString('ko-KR')}kW
@@ -133,7 +134,7 @@ export default function InventorySummaryCards({ summary, items, onCardClick }: P
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground">가용재고</p>
             <p className="text-lg font-semibold leading-tight tabular-nums text-green-700">
-              {formatMW(summary.total_secured_kw)}
+              <NumberTween value={summary.total_secured_kw} format={formatMW} />
             </p>
             <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
               {Math.round(summary.total_secured_kw).toLocaleString('ko-KR')}kW

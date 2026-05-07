@@ -11,8 +11,65 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-146 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한) |
+| DECISIONS | D-001~D-148 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-07 세션 — 수주 충당 위험도 배지 (D-147)
+
+### 완료
+- Rust 계산엔진에 `POST /api/calc/order-fulfillment-risk` 추가
+  - 현재고 충당 수주는 완료입고 - active 출고 - 현재고 예약 풀 기준
+  - 미착품 충당 수주는 운송/통관 B/L + B/L 없는 opened L/C 잔여량 - 미착품 예약 풀 기준
+  - active 수주로 전환된 예약은 `inventory_allocations`에서 중복 차감하지 않음
+  - 같은 법인·품번·충당소스 안에서 `received/partial` 수주 잔량을 수주일/ID 순서로 차감해 `available/shortage/check` 판정
+- Go 프록시 `POST /api/v1/calc/order-fulfillment-risk` 추가
+  - feature id `calc.order_fulfillment_risk`
+  - feature catalog, wiring matrix, route snapshot 동기화
+- 수주 목록에 `충당 위험` 컬럼 추가
+  - `충당 가능`, `부족`, `확인 필요` 배지 표시
+  - tooltip에 필요 kW, 배정 전 가용 kW, 부족 kW 표시
+  - 현재 페이지의 active 수주 ID만 요청하되 Rust는 전체 active 수주를 기준으로 순차 배정
+- dev mock API에 충당 위험도 샘플 응답 추가
+- D-147 결정 기록 및 설계 정본 동기화
+
+### 검증
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공 — routes.golden 갱신
+- `cd backend && go build ./... && go vet ./... && go test ./...` 성공
+- `cd engine && cargo build && cargo test` 성공
+- `cd frontend && npm ci` 성공
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 종료코드 0
+- `git diff --check` 성공
+
+---
+
+## 2026-05-07 세션 — 수금 관리 매칭 UX + AI 검토 후보 (D-148)
+
+### 완료
+- 수금 관리 탭에 매칭 상태 필터 추가
+  - 미매칭 / 부분 매칭 / 완전 매칭으로 입금 목록을 빠르게 좁힘
+  - 입금 행에서 바로 매칭 화면으로 이동하는 `매칭` 액션 추가
+- 매칭 화면 진입 개선
+  - URL `receipt_id` 쿼리로 특정 입금이 자동 선택되도록 연결
+  - 입금 선택 변경 시 자동 추천/AI 후보/선택 상태 정리
+- 확정 처리 개선
+  - 여러 매칭을 `POST /api/v1/receipt-matches/bulk` 로 한 번에 저장
+  - 서버에서 입금액 초과 매칭과 매출액 초과 매칭을 공통 검증
+  - 기존 단건 생성/정확 일치 자동 매칭에도 동일 과매칭 방지 검증 적용
+- AI 매칭 검토 기능 추가
+  - `POST /api/v1/receipt-matches/ai-suggest` 가 기존 Assistant provider 설정을 재사용해 후보/신뢰도/사유/요약 반환
+  - AI는 DB에 직접 쓰지 않고, 사용자가 후보를 확인한 뒤 bulk 확정
+  - 현재 UI 구조에 맞춰 미수 전액 후보만 자동 선택하고 부분 매칭 후보는 제외
+- dev mock API에 bulk 매칭과 AI 후보 응답 추가
+- D-148 결정 기록 추가
+
+### 검증
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공
+- `cd backend && go test ./internal/feature ./internal/router ./internal/handler` 성공
+- `cd backend && go test ./...` / `go build ./...` / `go vet ./...` 성공
+- `cd frontend && npm run build` / `npm run lint` / `npm run test` 통과
 
 ---
 

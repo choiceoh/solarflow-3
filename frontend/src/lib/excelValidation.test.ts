@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { validateRows } from '@/lib/excelValidation';
 import type { MasterDataForExcel, ParsedRow } from '@/types/excel';
 

@@ -276,6 +276,7 @@ func (h *CalcProxyHandler) RegisterRoutes(root chi.Router, g middleware.Gates, a
 		r.With(g.Feature(feature.IDCalcCustomerAnalysis)).Post("/customer-analysis", h.CustomerAnalysis)
 		r.With(g.Feature(feature.IDCalcPriceTrend)).Post("/price-trend", h.PriceTrend)
 		r.With(g.Feature(feature.IDCalcSupplyForecast)).Post("/supply-forecast", h.SupplyForecast)
+		r.With(g.Feature(feature.IDCalcOrderFulfillmentRisk)).Post("/order-fulfillment-risk", h.OrderFulfillmentRisk)
 		r.With(g.Feature(feature.IDCalcOutstandingList)).Post("/outstanding-list", h.OutstandingList)
 		r.With(g.Feature(feature.IDCalcReceiptMatchSugges)).Post("/receipt-match-suggest", h.ReceiptMatchSuggest)
 		r.With(g.Feature(feature.IDCalcSearch)).Post("/search", h.Search)
@@ -687,8 +688,11 @@ func (h *ReceiptHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 // ReceiptMatchHandler — 수금/매출 매칭 + 일괄 자동 매칭.
 func (h *ReceiptMatchHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/receipt-matches", func(r chi.Router) {
+		r.Use(g.Feature(feature.IDTxReceiptMatch))
 		r.Get("/", h.List)
 		r.With(g.Write).Post("/", h.Create)
+		r.With(g.Write).Post("/bulk", h.BulkCreate)
+		r.Post("/ai-suggest", h.AISuggest)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 		r.With(g.Write).Post("/auto", h.AutoMatch)
 	})

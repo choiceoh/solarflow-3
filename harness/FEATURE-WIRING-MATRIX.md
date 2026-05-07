@@ -140,6 +140,7 @@
 | `calc.customer_analysis` | 거래처 분석 | ★ | global |
 | `calc.price_trend` | 단가 추이 | M | global |
 | `calc.supply_forecast` | 수급 전망 | ★ | global |
+| `calc.order_fulfillment_risk` | 수주 충당 위험도 | ★ | global |
 | `calc.outstanding_list` | 미수금 리스트 | ★ | global |
 | `calc.receipt_match_suggest` | 수금 매칭 추천 | ★ | global |
 | `calc.search` | 전역 검색 | ★ | global |
