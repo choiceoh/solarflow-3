@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,8 @@ export default function BankingPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(() => getBankingTab(location.search));
+  // selectedCompanyId 필터 변경 시 법인별 카드 reorder 부드럽게.
+  const [groupsParent] = useAutoAnimate<HTMLDivElement>();
 
   useEffect(() => {
     setActiveTab(getBankingTab(location.search));
@@ -136,9 +139,9 @@ export default function BankingPage() {
               <Tabs value={activeTab} onValueChange={handleTabChange}>
 
         {/* 탭 1: LC 한도 현황 — 법인별 그룹 */}
-        <TabsContent value="limits" className="space-y-6">
+        <TabsContent value="limits">
           {groupsLoading ? <SkeletonRows rows={6} /> : (
-            <>
+            <div ref={groupsParent} className="space-y-6">
               {/* 법인별 섹션 */}
               {visibleGroups.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-6">등록된 은행 정보가 없습니다</p>
@@ -165,7 +168,7 @@ export default function BankingPage() {
                   );
                 })
               )}
-            </>
+            </div>
           )}
         </TabsContent>
 
