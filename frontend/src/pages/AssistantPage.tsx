@@ -2,10 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
 import type { ToolUIPart, UIMessage } from 'ai';
-import { Bot, Check, ChevronDown, ChevronUp, Copy, Download, FileText, Inbox, MessageSquarePlus, PanelRightClose, PanelRightOpen, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronUp, Copy, Download, FileText, Inbox, MessageSquarePlus, MoreHorizontal, PanelRightClose, PanelRightOpen, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { MessageMarkdown } from '@/components/assistant/MessageMarkdown';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
@@ -658,7 +664,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           </header>
         )}
 
-        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
+        <div ref={scrollRef} onScroll={onScroll} className="sf-thin-scrollbar flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
           {messagesWithProposals.length === 0 ? (
             <ChipEmpty chips={pageChips.chips} onPick={(t) => setInput(t)} />
           ) : (
@@ -674,7 +680,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
                     key={message.id}
                     id={`assistant-msg-${message.id}`}
                     className={cn(
-                      'flex flex-col gap-2 rounded-md transition-colors',
+                      'sf-msg-enter flex flex-col gap-2 rounded-md transition-colors',
                       highlightedKey === message.id && 'bg-[var(--sf-solar)]/10 ring-2 ring-[var(--sf-solar)]/40',
                     )}
                   >
@@ -1051,6 +1057,7 @@ function Bubble({
         className={cn(
           'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
           isUser ? 'bg-[var(--sf-solar)]/20 text-[var(--sf-solar)]' : 'bg-muted text-foreground',
+          !isUser && isStreaming && 'sf-avatar-ring-pulse',
         )}
       >
         {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
@@ -1209,7 +1216,7 @@ function PendingPanel({
           {pending.length}건
         </span>
       </header>
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="sf-thin-scrollbar flex-1 overflow-y-auto p-3">
         {pending.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
             <Inbox className="h-7 w-7 opacity-30" />
@@ -1338,7 +1345,7 @@ function SessionsPanel({
           </div>
         </div>
       )}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="sf-thin-scrollbar flex-1 overflow-y-auto p-3">
         {!enabled ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
             <div>목업 모드</div>
@@ -1367,43 +1374,60 @@ function SessionsPanel({
                     {bucket}
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    {items.map((s) => (
-                      <div
-                        key={s.id}
-                        className={cn(
-                          'group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted',
-                          s.id === currentSessionId && 'bg-[var(--sf-solar)]/10 text-foreground',
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => onLoad(s.id)}
-                          disabled={s.id === loadingId}
-                          className="min-w-0 flex-1 truncate text-left"
-                          title={s.title}
+                    {items.map((s) => {
+                      const isActive = s.id === currentSessionId;
+                      return (
+                        <div
+                          key={s.id}
+                          className={cn(
+                            'group relative flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted',
+                            isActive && 'bg-[var(--sf-solar)]/10 text-foreground',
+                          )}
                         >
-                          <span className="truncate">{s.title || '새 대화'}</span>
-                        </button>
-                        {onExport && (
+                          {isActive && (
+                            <span
+                              aria-hidden
+                              className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[var(--sf-solar)]"
+                            />
+                          )}
                           <button
                             type="button"
-                            onClick={() => onExport(s.id)}
-                            className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted-foreground/10 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-                            title="Markdown 내보내기"
+                            onClick={() => onLoad(s.id)}
+                            disabled={s.id === loadingId}
+                            className={cn(
+                              'min-w-0 flex-1 truncate text-left',
+                              isActive && 'pl-1.5 font-medium',
+                            )}
+                            title={s.title}
                           >
-                            <Download className="h-3.5 w-3.5" />
+                            <span className="truncate">{s.title || '새 대화'}</span>
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => onDelete(s.id)}
-                          className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted-foreground/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
-                          title="삭제"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted-foreground/10 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 data-[popup-open]:opacity-100"
+                              title="작업 메뉴"
+                            >
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              {onExport && (
+                                <DropdownMenuItem onClick={() => onExport(s.id)}>
+                                  <Download className="mr-2 h-3.5 w-3.5" />
+                                  <span>Markdown 내보내기</span>
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onClick={() => onDelete(s.id)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                <span>삭제</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );

@@ -2353,6 +2353,66 @@ textarea::placeholder {
   to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
+/* AI 어시스턴트 — 메시지 첫 등장 시 슬라이드인 페이드. */
+.sf-msg-enter {
+  animation: sf-msg-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes sf-msg-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* AI 어시스턴트 — 스트리밍 중 봇 아바타 ring pulse. 캐럿보다 강한 시각 신호. */
+.sf-avatar-ring-pulse {
+  position: relative;
+}
+.sf-avatar-ring-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 2px solid var(--sf-solar);
+  opacity: 0;
+  animation: sf-ring-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes sf-ring-pulse {
+  0% { transform: scale(0.95); opacity: 0.6; }
+  70% { transform: scale(1.15); opacity: 0; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+
+/* 사용자가 모션 줄이기 환경설정 — 모든 어시스턴트 애니메이션 비활성. */
+@media (prefers-reduced-motion: reduce) {
+  .sf-stream-fade,
+  .sf-msg-enter,
+  .sf-avatar-ring-pulse::before {
+    animation: none !important;
+  }
+  .sf-avatar-ring-pulse::before {
+    display: none;
+  }
+}
+
+/* 어시스턴트 — 사이드바 얇은 스크롤바. */
+.sf-thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(0 0 0 / 0.15);
+  border-radius: 3px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(0 0 0 / 0.28);
+}
+.sf-thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 0.15) transparent;
+}
+
 /* 톤 칩 — Bloomberg-density 상태 표시 */
 .sf-pill {
   display: inline-flex;
