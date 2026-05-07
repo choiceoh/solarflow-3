@@ -134,6 +134,25 @@ const blLines = [
   { bl_line_id: 'bll-br-jko-n580', bl_id: 'bl-br-jko-260421', product_id: 'prd-jko-n580', po_line_id: 'pol-br-jko-n580', product_name: 'JKO-N580 N-type TOPCon', product_code: 'JKO-N580', quantity: 1200, capacity_kw: 696, item_type: 'main', payment_type: 'paid', unit_price_krw_wp: 374, usage_category: 'sale' },
 ];
 
+function blsWithAggregates() {
+  return bls.map((bl) => {
+    const lines = blLines.filter((line) => line.bl_id === bl.bl_id);
+    const totalCapacityKW = lines.reduce((sum, line) => sum + Number(line.capacity_kw ?? 0), 0);
+    const totalInvoiceUSD = lines.reduce((sum, line) => sum + Number((line as MockRow).invoice_amount_usd ?? 0), 0);
+    const first = lines[0];
+    const firstProduct = first ? products.find((product) => product.product_id === first.product_id) : undefined;
+    return {
+      ...bl,
+      line_count: lines.length,
+      total_mw: totalCapacityKW / 1000,
+      avg_cents_per_wp: totalCapacityKW > 0 ? (totalInvoiceUSD / (totalCapacityKW * 1000)) * 100 : 0,
+      first_product_code: first?.product_code,
+      first_product_name: first?.product_name,
+      first_spec_wp: firstProduct?.spec_wp,
+    };
+  });
+}
+
 const constructionSites = [
   { site_id: 'site-yeonggwang', company_id: 'company-topsolar', name: '영광 갈동 태양광', location: '전남 영광군 갈동리', site_type: 'own', capacity_mw: 4.8, started_at: '2026-03-10', notes: '자체 공사 목업 현장', is_active: true, created_at: nowIso, updated_at: nowIso },
   { site_id: 'site-dangjin', company_id: 'company-topsolar', name: '당진 물류센터 지붕', location: '충남 당진시', site_type: 'epc', capacity_mw: 2.2, started_at: '2026-04-01', notes: 'EPC 현장', is_active: true, created_at: nowIso, updated_at: nowIso },
@@ -713,7 +732,7 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     '/api/v1/price-histories': { rows: priceHistories(), idKey: 'price_history_id', collection: 'price-histories' },
     '/api/v1/price-benchmarks': { rows: priceBenchmarks(), idKey: 'benchmark_id', collection: 'price-benchmarks' },
     '/api/v1/price-benchmarks/runs': { rows: priceBenchmarkRuns(), idKey: 'run_id', collection: 'price-benchmarks/runs' },
-    '/api/v1/bls': { rows: bls, idKey: 'bl_id', collection: 'bls' },
+    '/api/v1/bls': { rows: blsWithAggregates(), idKey: 'bl_id', collection: 'bls' },
     '/api/v1/inventory/allocations': { rows: allocations, idKey: 'alloc_id', collection: 'inventory/allocations' },
     '/api/v1/orders': { rows: orders, idKey: 'order_id', collection: 'orders' },
     '/api/v1/outbounds': { rows: outbounds.map((outbound) => ({ ...outbound, sale: sales.find((sale) => sale.outbound_id === outbound.outbound_id) })), idKey: 'outbound_id', collection: 'outbounds' },

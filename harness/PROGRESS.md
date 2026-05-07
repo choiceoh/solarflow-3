@@ -141,6 +141,32 @@
 
 ---
 
+## 2026-05-07 세션 — B/L 목록 집계 서버화
+
+### 완료
+- `GET /api/v1/bls` 목록 응답에 라인 품목 요약 필드 추가
+  - `line_count`, `total_mw`, `avg_cents_per_wp`, `first_product_code`, `first_product_name`, `first_spec_wp`
+  - 현재 페이지의 B/L ID를 모아 `bl_line_items`를 한 번만 조회하고 서버에서 품목 수/MW/평균 ¢/Wp/대표 품목을 집계
+- B/L 목록 표에서 B/L별 `/lines` 추가 호출을 제거하고 목록 응답의 집계값만 사용하도록 전환
+- 목록 작업칩 보조 함수(`ETA 임박/지연`, `ERP 등록 필요`, `품목 없음`)를 복구하고, 라인 수가 실제로 0으로 내려온 경우에만 `품목 없음` 표시
+- `domestic_foreign` 입고 유형을 프론트 타입/라벨/상태 매핑에 반영
+- dev mock `/api/v1/bls`도 서버 응답과 같은 집계 필드를 내려주도록 동기화
+
+### 검증
+- `cd backend && go test ./internal/handler -run 'Test(ComputeBLListAggregates|AttachBLListAggregates)'` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd frontend && npx biome lint src/components/inbound/BLListTable.tsx src/types/inbound.ts src/lib/devMockApi.ts` 성공
+- 최신 `main` 리베이스 후 `cd frontend && npm ci` 성공 — lock 기준 의존성 재설치
+- 최신 `main` 리베이스 후 `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run test` 성공 — 10개 파일 / 84개 테스트
+- `cd frontend && npm run lint` 종료코드 0 — 페이지네이션 reset hook 관련 경고 4건 출력
+- `git diff --check` 성공
+- `graphify update .` 성공 — AST 그래프 갱신
+
+---
+
 ## 2026-05-07 세션 — module 구매이력 UX + 정밀 딥링크 개선
 
 ### 완료
