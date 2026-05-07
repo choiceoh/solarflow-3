@@ -101,6 +101,24 @@ interface SeriesDef {
   latestValue: number;
 }
 
+// PR 42: 우리 구매가 + 평균 판매가 시리즈
+interface OurPricesPurchase {
+  month: string;
+  count: number;
+  avg_usd_wp: number;
+  avg_krw_wp: number;
+}
+interface OurPricesSale {
+  month: string;
+  count: number;
+  avg_krw_wp: number;
+}
+interface OurPricesResponse {
+  purchases: OurPricesPurchase[];
+  sales: OurPricesSale[];
+  generated_at: string;
+}
+
 function priceValue(row: PriceBenchmark, unit: UnitKey): number | null {
   const value = unit === 'usd' ? row.price_usd_w : unit === 'cny' ? row.price_cny_w : row.price_krw_w;
   return value != null && Number.isFinite(value) ? Number(value) : null;
@@ -146,6 +164,7 @@ function statusVariant(status: PriceBenchmarkRun['status']): 'default' | 'second
 export default function PriceForecastPage() {
   const [rows, setRows] = useState<PriceBenchmark[]>([]);
   const [runs, setRuns] = useState<PriceBenchmarkRun[]>([]);
+  const [ourPrices, setOurPrices] = useState<OurPricesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
@@ -161,12 +180,14 @@ export default function PriceForecastPage() {
     setLoading(true);
     try {
       const from = monthStart(selectedHorizon.months);
-      const [loadedRows, loadedRuns] = await Promise.all([
+      const [loadedRows, loadedRuns, loadedOur] = await Promise.all([
         fetchWithAuth<PriceBenchmark[]>(`/api/v1/price-benchmarks?limit=3000&from=${from}`),
         fetchWithAuth<PriceBenchmarkRun[]>('/api/v1/price-benchmarks/runs?limit=8'),
+        fetchWithAuth<OurPricesResponse>(`/api/v1/price-benchmarks/our-prices?from=${from}`).catch(() => null),
       ]);
       setRows(loadedRows);
       setRuns(loadedRuns);
+      setOurPrices(loadedOur);
     } catch (err) {
       notify.error(formatError(err));
       setRows([]);
@@ -221,11 +242,81 @@ export default function PriceForecastPage() {
         latestValue: value,
       });
     }
+
+    // PR 42: 우리 구매가/판매가 시리즈 추가 (월별 평균, 단가 단위에 맞춰)
+    if (ourPrices) {
+      const purchaseValueOf = (p: OurPricesPurchase): number | null => {
+        if (unit === 'usd') return p.avg_usd_wp > 0 ? p.avg_usd_wp : null;
+        if (unit === 'krw') return p.avg_krw_wp > 0 ? p.avg_krw_wp : null;
+        return null; // CNY 미지원
+      };
+      const saleValueOf = (s: OurPricesSale): number | null => (
+        unit === 'krw' && s.avg_krw_wp > 0 ? s.avg_krw_wp : null
+      );
+
+      let purchaseLatestDate = '';
+      let purchaseLatestValue = 0;
+      for (const p of ourPrices.purchases) {
+        const v = purchaseValueOf(p);
+        if (v == null) continue;
+        const date = `${p.month}-15`; // 월 중앙 표시
+        const item = pointByDate.get(date) ?? { date };
+        item['our_purchase'] = v;
+        pointByDate.set(date, item);
+        if (date > purchaseLatestDate) {
+          purchaseLatestDate = date;
+          purchaseLatestValue = v;
+        }
+      }
+      if (purchaseLatestDate) {
+        defs.set('our_purchase', {
+          key: 'our_purchase',
+          label: '우리 구매계약가',
+          sourceKey: 'our',
+          metricKey: 'our_purchase',
+          latestDate: purchaseLatestDate,
+          latestValue: purchaseLatestValue,
+        });
+      }
+
+      let saleLatestDate = '';
+      let saleLatestValue = 0;
+      for (const s of ourPrices.sales) {
+        const v = saleValueOf(s);
+        if (v == null) continue;
+        const date = `${s.month}-15`;
+        const item = pointByDate.get(date) ?? { date };
+        item['our_sale'] = v;
+        pointByDate.set(date, item);
+        if (date > saleLatestDate) {
+          saleLatestDate = date;
+          saleLatestValue = v;
+        }
+      }
+      if (saleLatestDate) {
+        defs.set('our_sale', {
+          key: 'our_sale',
+          label: '우리 평균 판매가',
+          sourceKey: 'our',
+          metricKey: 'our_sale',
+          latestDate: saleLatestDate,
+          latestValue: saleLatestValue,
+        });
+      }
+    }
+
+    // 우리 시리즈는 항상 상위 표시 + 그 외 외부 시리즈는 latest 기준 10개
+    const allDefs = Array.from(defs.values());
+    const ourDefs = allDefs.filter((d) => d.sourceKey === 'our');
+    const externalDefs = allDefs
+      .filter((d) => d.sourceKey !== 'our')
+      .sort((a, b) => b.latestDate.localeCompare(a.latestDate))
+      .slice(0, 10);
     return {
-      chartData: Array.from(pointByDate.values()),
-      series: Array.from(defs.values()).sort((a, b) => b.latestDate.localeCompare(a.latestDate)).slice(0, 10),
+      chartData: Array.from(pointByDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date))),
+      series: [...ourDefs, ...externalDefs],
     };
-  }, [filteredRows, unit]);
+  }, [filteredRows, unit, ourPrices]);
 
   const latestByMetric = useMemo(() => {
     const latest = new Map<string, PriceBenchmark>();
@@ -380,19 +471,23 @@ export default function PriceForecastPage() {
                   />
                   <Legend verticalAlign="bottom" height={36} />
                   {unit === 'usd' ? <ReferenceLine y={0.1} stroke="#78716c" strokeDasharray="4 4" /> : null}
-                  {series.map((item, index) => (
-                    <Line
-                      key={item.key}
-                      type="monotone"
-                      dataKey={item.key}
-                      name={item.label}
-                      stroke={LINE_COLORS[index % LINE_COLORS.length]}
-                      strokeWidth={1.8}
-                      dot={{ r: 2 }}
-                      activeDot={{ r: 4 }}
-                      connectNulls
-                    />
-                  ))}
+                  {series.map((item, index) => {
+                    const isOur = item.sourceKey === 'our';
+                    const ourColor = item.key === 'our_purchase' ? '#0ea5e9' : '#16a34a';
+                    return (
+                      <Line
+                        key={item.key}
+                        type="monotone"
+                        dataKey={item.key}
+                        name={item.label}
+                        stroke={isOur ? ourColor : LINE_COLORS[index % LINE_COLORS.length]}
+                        strokeWidth={isOur ? 2.6 : 1.8}
+                        dot={{ r: isOur ? 3 : 2 }}
+                        activeDot={{ r: isOur ? 5 : 4 }}
+                        connectNulls
+                      />
+                    );
+                  })}
                 </LineChart>
               </ResponsiveContainer>
             )}
