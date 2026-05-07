@@ -91,10 +91,10 @@ export default function ImportResultDialog({ result, onClose }: Props) {
           )}
 
           {/* 요약 */}
-          <p className="sf-mono text-center text-[11px]" style={{ color: 'var(--sf-ink-3)' }}>
-            <span className="tabular-nums" style={{ color: 'var(--sf-pos)' }}>{imported_count}</span>건 등록 ·{' '}
-            <span className="tabular-nums" style={{ color: 'var(--sf-neg)' }}>{error_count}</span>건 에러 ·{' '}
-            <span className="tabular-nums" style={{ color: 'var(--sf-warn)' }}>{warning_count}</span>건 경고
+          <p className="sf-mono sf-text-ink-3 text-center text-[11px]">
+            <span className="sf-text-pos tabular-nums">{imported_count}</span>건 등록 ·{' '}
+            <span className="sf-text-neg tabular-nums">{error_count}</span>건 에러 ·{' '}
+            <span className="sf-text-warn tabular-nums">{warning_count}</span>건 경고
           </p>
         </div>
 

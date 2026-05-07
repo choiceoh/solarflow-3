@@ -63,10 +63,6 @@ export function ProductCombobox({
     }
   }, [open]);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [search]);
-
   function handleSelect(productId: string) {
     onChange(productId);
     setOpen(false);
@@ -144,7 +140,10 @@ export function ProductCombobox({
             <input
               ref={searchRef}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setActiveIndex(0);
+              }}
               placeholder="품번/품명/제조사/규격 검색"
               className="flex-1 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
             />

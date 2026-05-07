@@ -231,6 +231,8 @@ func TestGuardMatrix(t *testing.T) {
 		{"GET", "/api/v1/baro/incoming/", g(guardSet{baroOnly: true})},
 		{"GET", "/api/v1/baro/partner-cockpit/test-id", g(guardSet{baroOnly: true})},
 		{"GET", "/api/v1/baro/purchase-history/", g(guardSet{baroOnly: true})},
+		{"GET", "/api/v1/baro/rfm/", g(guardSet{baroOnly: true})},
+		{"GET", "/api/v1/baro/sales-summary/", g(guardSet{baroOnly: true})},
 		{"GET", "/api/v1/baro/credit-board/", g(guardSet{baroOnly: true})},
 		{"GET", "/api/v1/baro/dispatch-routes/", g(guardSet{baroOnly: true})},
 		{"POST", "/api/v1/baro/dispatch-routes/", g(guardSet{baroOnly: true, write: true})},

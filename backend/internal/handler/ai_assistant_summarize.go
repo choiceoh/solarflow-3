@@ -136,6 +136,18 @@ func extractFirstUserText(raw json.RawMessage) string {
 	return ""
 }
 
+func summarizeUpstreamErrorBody(raw string) string {
+	body := strings.TrimSpace(raw)
+	if body == "" {
+		return "빈 응답"
+	}
+	lower := strings.ToLower(body)
+	if strings.HasPrefix(lower, "<!doctype html") || strings.HasPrefix(lower, "<html") || strings.Contains(lower, "<title>") {
+		return "상위 AI API가 HTML 오류 페이지를 반환했습니다"
+	}
+	return truncate(body, 200)
+}
+
 // callAnthropicOnce — 한 턴 비스트리밍 Anthropic 호출. 도구 없음, system + user 1개.
 func (h *AssistantHandler) callAnthropicOnce(ctx context.Context, model, system, user string, maxTokens int) (string, error) {
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
@@ -177,7 +189,7 @@ func (h *AssistantHandler) callAnthropicOnce(ctx context.Context, model, system,
 	defer res.Body.Close()
 	if res.StatusCode >= 400 {
 		raw, _ := io.ReadAll(res.Body)
-		return "", fmt.Errorf("Anthropic %d: %s", res.StatusCode, truncate(string(raw), 200))
+		return "", fmt.Errorf("Anthropic %d: %s", res.StatusCode, summarizeUpstreamErrorBody(string(raw)))
 	}
 
 	var parsed struct {
@@ -233,7 +245,7 @@ func (h *AssistantHandler) callOpenAIOnce(ctx context.Context, model, system, us
 	defer res.Body.Close()
 	if res.StatusCode >= 400 {
 		raw, _ := io.ReadAll(res.Body)
-		return "", fmt.Errorf("OpenAI %d: %s", res.StatusCode, truncate(string(raw), 200))
+		return "", fmt.Errorf("OpenAI %d: %s", res.StatusCode, summarizeUpstreamErrorBody(string(raw)))
 	}
 
 	var parsed struct {
