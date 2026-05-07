@@ -965,3 +965,73 @@
   - 프론트엔드 `npm run build` 통과.
 - **날짜**: 2026-05-07
 
+## D-129: BARO 자체 매출 요약 (Sales Summary) — Phase 1 매출만, 마진은 PR5.5
+- **결정**: BARO 영업이 자기 법인 매출을 다양한 cut 으로 분석할 수 있도록 신규 endpoint `GET /api/v1/baro/sales-summary?months=N` (feature_id `baro.sales_summary`, BARO 전용) 도입. module 계열 `/sales-analysis` 는 매입원가·면장·landed cost 기반 마진을 다뤄 BARO 차단(D-108)이라 별도 BARO 라인.
+  - **4 cut 합본 응답** (한 라운드트립):
+    - `by_owner`: 영업담당자별 매출/건수/거래처수 (partners.owner_user_id 기반)
+    - `by_partner_type`: customer / both / supplier 유형별
+    - `by_month`: YYYY-MM 월별 추이
+    - `top_partners`: 매출 상위 20곳
+  - **집계 방식**: SQL GROUP BY 함수 신설 회피 — partners + sales 직접 쿼리 후 Go 메모리 집계 (D-128 RFM 과 동일 패턴).
+  - **응답 마스킹**: cost / margin 필드 0 — 매출액(`total_amount`)과 건수만. 마진은 PR5.5 에서 `baro_purchase_history` 평균 매입원가 통합 후 도입.
+  - **frontend 페이지**: `/baro/sales-summary` (RoleGuard `admin/operator/executive`). 6/12/24개월 토글. CSS 막대 차트(recharts 미사용 — 번들 크기 ↓). Top 거래처 행 클릭 → cockpit.
+  - **사이드바**: 「현황」 그룹에 "매출 요약" 추가.
+- **PR5.5 분리** (별도 D-NNN):
+  - **마진 표시** (`gross_margin_pct`, `gross_margin_krw`): `baro_purchase_history` 평균 매입원가와 매출 결합. 단순 평균이 아닌 BR 법인 한정 + sale 시점 기준 가까운 매입가 매칭 로직 필요.
+  - **한도 초과 출고 차단 hold flag**: 출고/수주 생성 시 `outstanding_krw + amount > credit_limit_krw` 또는 `oldest_unpaid_days >= 60` 면 hold 플래그 + 결재 강제. backend 변경 큼 (outbound/order 핸들러 수정 + DB 컬럼 추가 가능).
+  - **SKU 별 매출**: 현 sales 테이블에 product_id 직접 컬럼 없음. outbound → bl_line join 필요해 Phase 2 분리.
+- **이유**: BARO 매출 1000억 규모에서 영업담당자별 / 채널별 / 월별 cut 이 부재하면 누가 어디서 얼마 매출을 내는지 불투명. module 의 sales-analysis 는 마진 베이스라 BARO 가 못 쓰고, 매출만 다루는 BARO 전용 라인이 필요. RFM(D-128) 이 *거래처 분류* 라면 본 보드는 *시간/조직/유형 cut*.
+- **운영 기준**:
+  - feature catalog `baro.sales_summary` (DataScope `tenant_company` — BR 법인 sales 만 사용한다는 의미적 표지) + matrix + RequireFeature(IDBaroSalesSummary) + DECISIONS 동시 갱신 (D-120 의무).
+  - 응답이 partners + sales raw 합본 — 응답 크기 측정 후 캐시/페이지네이션 검토 (현재 1000억 ÷ 3억 = 연 ~330건이라 작음).
+  - PR5.5 마진 도입 시 응답 shape 호환 유지 — frontend 변경 없이 `gross_margin_pct` 등 nullable 필드만 추가.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` — coverage_test 가 `/api/v1/baro/sales-summary/` catalog↔chi 일치, matrix_consistency_test 가 `baro.sales_summary` markdown 일치 검증.
+  - 라우터 가드: module/cable 토큰으로 호출 시 403, baro 토큰 통과.
+  - 프론트엔드 `npm run build` 통과.
+- **날짜**: 2026-05-07
+
+## D-130: BARO 인버터 호환 가이드 Phase 1 — frontend-only 정적 카탈로그 + 용량 매칭
+- **결정**: BARO 영업이 시공업체에 모듈+인버터 묶음 견적을 만들 때 "이 모듈 N장에 적합한 인버터?" 를 30초 안에 답할 수 있도록 정적 인버터 카탈로그 페이지 (`/baro/inverter-guide`) 도입한다. PR6 Phase 1 — **신규 backend 0**, **DB 마이그레이션 0**, **외부 API 0**.
+  - **카탈로그**: Sungrow / Huawei / GoodWe 주력 모델 10종 (5kW 주거 ~ 110kW 발전소). 페이지 컴포넌트 안에 `INVERTER_CATALOG` 배열로 하드코딩.
+  - **용량 매칭 계산기**: 모듈 수량 × spec_wp 입력 → 총 kW 계산 → 오버사이징 1.0~1.3 비율 안에 들어오는 인버터 추천 카드.
+  - **검색·필터**: 제조사/모델 검색 + 용도(주거/상업/발전소) 필터.
+  - **사이드바**: 「판매」 그룹에 "인버터 가이드" (BARO 전용).
+- **PR6.5 분리** (별도 D-NNN, 신규 backend 필요):
+  - **products.product_kind 컬럼**: `module` / `inverter` / `package` 분류 마이그레이션. 기존 행은 모두 `module` 로 backfill.
+  - **인버터 SKU 정식 등록**: `product_kind='inverter'` + `rated_power_kw`/`mppt_channels`/`max_input_voltage` 등 인버터 전용 nullable 컬럼. 마스터 CRUD UI.
+  - **패키지 SKU**: 모듈+인버터 자주 나가는 조합 1-row SKU. `baro_packages` 테이블 또는 product_kind=`package` + 구성품 child rows.
+  - **QuoteBuilder 통합**: 모듈 라인 추가 시 자동으로 적합한 인버터 후보 1줄 옵션 제시.
+  - **호환 매칭 정밀화**: 현 단계는 단순 kW 비율 1.0~1.3. PR6.5 에서 MPPT 채널 수 + 모듈 직렬 전압 범위 + 단상/3상 매칭 로직.
+- **이유**: BARO 매출의 모듈+인버터 묶음 비중이 높은데 영업이 인버터 사양을 외워야 하는 상황. 정식 SKU 등록(마이그레이션 동반)을 기다리지 않고 "오늘부터 쓸 수 있는 가이드" 를 먼저 띄워 매일 견적 작성에 활용. PR6.5 가 들어오면 본 페이지의 정적 카탈로그를 DB 카탈로그로 자연 대체.
+- **운영 기준**:
+  - 신규 라우트 0 → D-120 catalog/matrix 갱신 불필요.
+  - 카탈로그 데이터 추가/수정은 컴포넌트 파일 직접 수정 (PR6.5 까지 한정 — 그 후 admin UI).
+  - 단가/재고는 가이드에 표기 안 함 — PR6.5 에서 SKU 마스터 + 거래처 단가표 통합 후.
+- **검증**:
+  - 프론트엔드 `npm run build` (tsc -b) 통과.
+  - 수동 검증: BARO 토큰으로 `/baro/inverter-guide` 진입 시 카탈로그 10종 표시 + "30장 × 635W = 19.05kW" 입력 시 GW10K-DT 등 추천 카드 표시.
+- **날짜**: 2026-05-07
+
+## D-131: BARO 출하 알림 메시지 빌더 — frontend-only 카톡 붙여넣기용 텍스트 생성
+- **결정**: BARO 영업이 매일 시공업체에 보내는 출하 안내 카톡(상차 완료 / 출발 / 도착 예정 3 시점)의 메시지 텍스트를 form 입력 → 자동 생성 → 클립보드 복사 → 영업이 직접 카톡에 붙여넣기 하는 frontend-only 페이지(`/baro/shipment-notice`) 도입. PR7 Phase 1 — **신규 backend 0**, **외부 API 0**, **모바일 흐름 0**.
+  - **입력 폼**: 거래처명·현장명·도착예정·모델·수량·차량번호·차주명·차주연락처·메모.
+  - **메시지 3종**: `상차 완료` / `출발` / `도착 예정` — `buildMessage(stage, form)` 함수가 빈 필드는 자동 생략하면서 자연스러운 한국어 메시지 조립.
+  - **클립보드 복사**: `navigator.clipboard.writeText` + 2초 "복사됨" 피드백.
+  - **사이드바**: 「판매」 그룹에 "출하 알림" (BARO 전용).
+- **PR7.5 분리** (별도 D-NNN, 외부 API 키 + 모바일 흐름 + 신규 backend 필요):
+  - **카톡 자동 발송**: KakaoTalk Notification Talk API 통합 (사업자 전용, 키 발급 필요). 템플릿 등록 + 친구 동의 + 발송 로그.
+  - **SMS fallback**: Aligo / Solapi (카톡 미설치/미수신 시).
+  - **배차 보드 연동**: `/baro/dispatch` 의 dispatch_route 한 행 선택 → form 자동 prefill.
+  - **드라이버 PWA**: 별도 모바일 친화 페이지 — 상차 사진 / 도착 사진 / 미배달 사유 업로드. 인증 흐름 단순화 필요(차주는 정직원 아님 → 임시 토큰 또는 link-based access).
+  - **발송 추적**: `baro_shipment_notices` 테이블 (sent_at / channel / recipient_phone / read_at).
+- **이유**: 영업이 카톡에서 매일 작성하는 메시지를 빈 화면에서 시작하는 게 5분/건 부담. 폼 입력 30초 + 복사 후 카톡 붙여넣기 → 메시지 1건당 4분 절약 × 일 10건 × 영업 6명 = 일 4시간 절약. 외부 API 통합은 키 발급·승인 절차가 길어 PR7.5 로 분리.
+- **운영 기준**:
+  - 신규 라우트 0 → D-120 catalog/matrix 갱신 불필요.
+  - 메시지 템플릿은 컴포넌트 안 `buildMessage` 함수에 하드코딩 (PR7.5 까지 한정 — 그 후 admin UI 에서 템플릿 편집).
+  - 폼 데이터는 LocalStorage 도 미저장 (휘발성). PR7.5 dispatch 보드 연동 시 prefill 가능.
+- **검증**:
+  - 프론트엔드 `npm run build` (tsc -b) 통과.
+  - 수동 검증: BARO 토큰으로 `/baro/shipment-notice` 진입 시 폼 + 3 메시지 카드 표시. 빈 필드는 메시지에서 자동 생략. 복사 버튼 클릭 시 "복사됨" 피드백.
+- **날짜**: 2026-05-07
+

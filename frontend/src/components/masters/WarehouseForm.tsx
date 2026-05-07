@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import FormField from '@/components/common/FormField';
 import type { Warehouse } from '@/types/masters';
 
 const WH_TYPE_LABEL: Record<string, string> = { port: '항구', factory: '공장', vendor: '업체' };
@@ -46,19 +46,14 @@ function WarehouseFields({ register, errors, watch, setValue }: FieldsProps) {
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>창고코드 * (4자)</Label>
+        <FormField label="창고코드 (4자)" required error={errors.warehouse_code?.message}>
           <Input maxLength={4} {...register('warehouse_code')} />
-          {errors.warehouse_code && <p className="text-xs text-destructive">{errors.warehouse_code.message}</p>}
-        </div>
-        <div className="space-y-1.5">
-          <Label>창고명 *</Label>
+        </FormField>
+        <FormField label="창고명" required error={errors.warehouse_name?.message}>
           <Input {...register('warehouse_name')} />
-          {errors.warehouse_name && <p className="text-xs text-destructive">{errors.warehouse_name.message}</p>}
-        </div>
+        </FormField>
       </div>
-      <div className="space-y-1.5">
-        <Label>유형 *</Label>
+      <FormField label="유형" required error={errors.warehouse_type?.message}>
         {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
         <Select value={watch('warehouse_type') ?? ''} onValueChange={(v) => setValue('warehouse_type', v ?? '')}>
           <SelectTrigger><Txt text={WH_TYPE_LABEL[watch('warehouse_type') ?? ''] ?? ''} /></SelectTrigger>
@@ -68,19 +63,14 @@ function WarehouseFields({ register, errors, watch, setValue }: FieldsProps) {
             <SelectItem value="vendor">업체</SelectItem>
           </SelectContent>
         </Select>
-        {errors.warehouse_type && <p className="text-xs text-destructive">{errors.warehouse_type.message}</p>}
-      </div>
+      </FormField>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>장소코드 * (4자)</Label>
+        <FormField label="장소코드 (4자)" required error={errors.location_code?.message}>
           <Input maxLength={4} {...register('location_code')} />
-          {errors.location_code && <p className="text-xs text-destructive">{errors.location_code.message}</p>}
-        </div>
-        <div className="space-y-1.5">
-          <Label>장소명 *</Label>
+        </FormField>
+        <FormField label="장소명" required error={errors.location_name?.message}>
           <Input {...register('location_name')} />
-          {errors.location_name && <p className="text-xs text-destructive">{errors.location_name.message}</p>}
-        </div>
+        </FormField>
       </div>
     </>
   );

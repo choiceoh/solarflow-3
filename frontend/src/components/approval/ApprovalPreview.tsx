@@ -42,8 +42,8 @@ export default function ApprovalPreview({ text, originalText, onTextChange }: Pr
           <span className="sf-eyebrow">결재안 미리보기</span>
           {text !== originalText && (
             <span
-              className="rounded px-1.5 py-0.5 text-[9.5px] font-bold sf-mono"
-              style={{ background: 'var(--sf-warn-bg)', color: 'var(--sf-warn)', letterSpacing: '0.04em' }}
+              className="sf-tone-warn sf-mono rounded px-1.5 py-0.5 text-[9.5px] font-bold"
+              style={{ letterSpacing: '0.04em' }}
             >
               EDITED
             </span>
@@ -69,7 +69,7 @@ export default function ApprovalPreview({ text, originalText, onTextChange }: Pr
         value={text}
         onChange={(e) => onTextChange(e.target.value)}
       />
-      <p className="sf-mono text-[10.5px]" style={{ color: 'var(--sf-ink-3)' }}>
+      <p className="sf-mono sf-text-ink-3 text-[10.5px]">
         텍스트를 직접 수정할 수 있습니다. [원본] 버튼으로 되돌리기 가능.
       </p>
     </div>

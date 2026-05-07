@@ -5,10 +5,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/date-input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import FormField from '@/components/common/FormField';
 import { useAppStore } from '@/stores/appStore';
 import type { Bank } from '@/types/masters';
 
@@ -72,8 +72,7 @@ function BankFields({ register, errors, watch, setValue }: FieldsProps) {
   const companies = useAppStore((s) => s.companies);
   return (
     <>
-      <div className="space-y-1.5">
-        <Label>법인 *</Label>
+      <FormField label="법인" required error={errors.company_id?.message}>
         <Select value={watch('company_id') ?? ''} onValueChange={(v) => setValue('company_id', v ?? '')}>
           {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
           <SelectTrigger><Txt text={companies.find(c => c.company_id === watch('company_id'))?.company_name ?? ''} /></SelectTrigger>
@@ -83,46 +82,35 @@ function BankFields({ register, errors, watch, setValue }: FieldsProps) {
             ))}
           </SelectContent>
         </Select>
-        {errors.company_id && <p className="text-xs text-destructive">{errors.company_id.message}</p>}
-      </div>
-      <div className="space-y-1.5">
-        <Label>은행명 *</Label>
+      </FormField>
+      <FormField label="은행명" required error={errors.bank_name?.message}>
         <Input {...register('bank_name')} />
-        {errors.bank_name && <p className="text-xs text-destructive">{errors.bank_name.message}</p>}
-      </div>
-      <div className="space-y-1.5">
-        <Label>LC 한도(USD) *</Label>
+      </FormField>
+      <FormField label="LC 한도(USD)" required error={errors.lc_limit_usd?.message}>
         <Input type="number" step="0.01" {...register('lc_limit_usd')} />
-        {errors.lc_limit_usd && <p className="text-xs text-destructive">{errors.lc_limit_usd.message}</p>}
-      </div>
+      </FormField>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>승인일</Label>
+        <FormField label="승인일">
           <DateInput value={watch('limit_approve_date') ?? ''} onChange={(v) => setValue('limit_approve_date', v, { shouldDirty: true })} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>승인기한</Label>
+        </FormField>
+        <FormField label="승인기한">
           <DateInput value={watch('limit_expiry_date') ?? ''} onChange={(v) => setValue('limit_expiry_date', v, { shouldDirty: true })} />
-        </div>
+        </FormField>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>개설수수료율(%)</Label>
+        <FormField label="개설수수료율(%)">
           <Input type="number" step="0.01" {...register('opening_fee_rate')} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>인수수수료율(%)</Label>
+        </FormField>
+        <FormField label="인수수수료율(%)">
           <Input type="number" step="0.01" {...register('acceptance_fee_rate')} />
-        </div>
+        </FormField>
       </div>
-      <div className="space-y-1.5">
-        <Label>수수료 계산방식</Label>
+      <FormField label="수수료 계산방식">
         <Input {...register('fee_calc_method')} />
-      </div>
-      <div className="space-y-1.5">
-        <Label>메모</Label>
+      </FormField>
+      <FormField label="메모">
         <Textarea {...register('memo')} rows={2} />
-      </div>
+      </FormField>
     </>
   );
 }

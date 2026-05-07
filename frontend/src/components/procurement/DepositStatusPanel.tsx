@@ -127,15 +127,18 @@ export default function DepositStatusPanel({ pos, tts }: DepositStatusPanelProps
   const [linesMap, setLinesMap] = useState<Record<string, POLineItem[]>>({});
   const leafKey = leafPOs.map(p => p.po_id).join(',');
   useEffect(() => {
-    if (leafPOs.length === 0) return;
+    if (!leafKey) {
+      setLinesMap({});
+      return;
+    }
+    const leafIds = leafKey.split(',');
     Promise.all(
-      leafPOs.map(p =>
-        fetchWithAuth<POLineItem[]>(`/api/v1/pos/${p.po_id}/lines`)
-          .then(lines => [p.po_id, lines] as const)
-          .catch(() => [p.po_id, [] as POLineItem[]] as const)
+      leafIds.map(poId =>
+        fetchWithAuth<POLineItem[]>(`/api/v1/pos/${poId}/lines`)
+          .then(lines => [poId, lines] as const)
+          .catch(() => [poId, [] as POLineItem[]] as const)
       )
     ).then(results => setLinesMap(Object.fromEntries(results)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leafKey]);
 
   /* 행 펼침 상태 */

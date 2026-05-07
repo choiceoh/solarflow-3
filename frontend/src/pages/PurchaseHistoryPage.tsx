@@ -8,6 +8,7 @@ import { useBLList } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
 import { buildChains, diffAuditFields, eventDeepLink, isValidChainParam, sanitizeAuditLogs, type Chain, type EventKind, type SafeAuditLog } from '@/lib/purchaseHistory';
 import { CardB, FilterButton, TileB, type DateRangeValue } from '@/components/command/MockupPrimitives';
+import EmptyState from '@/components/common/EmptyState';
 import { monthlyCount, flatSparkFromValue } from '@/templates/sparkUtils';
 import { CONTRACT_TYPE_LABEL, LC_STATUS_LABEL, PO_STATUS_LABEL } from '@/types/procurement';
 import type { PurchaseOrder, PriceHistory, LCRecord, TTRemittance } from '@/types/procurement';
@@ -220,7 +221,9 @@ function buildRecentEvents(chains: Chain[], src: EventSources, limit: number): T
   const allPoIds = new Set<string>();
   for (const chain of chains) {
     const poIds = new Set(chain.pos.map((p) => p.po_id));
-    poIds.forEach((id) => allPoIds.add(id));
+    poIds.forEach((id) => {
+      allPoIds.add(id);
+    });
     for (const po of chain.pos) events.push(...poEvents(po, chain));
     events.push(...priceEvents(src.phs, poIds, chain.chain_id, chain.manufacturer_id));
     events.push(...lcEvents(src.lcs, poIds, chain.chain_id));
@@ -294,11 +297,11 @@ export default function PurchaseHistoryPage() {
   const manufacturers = useAppStore((s) => s.manufacturers);
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
 
-  const { data: pos, loading: posLoading } = usePOList({});
-  const { data: phs, loading: phsLoading } = usePriceHistoryList({});
-  const { data: lcs, loading: lcsLoading } = useLCList({});
-  const { data: bls, loading: blsLoading } = useBLList({});
-  const { data: tts, loading: ttsLoading } = useTTList({});
+  const { data: pos, loading: posLoading, error: posError, reload: reloadPOs } = usePOList({});
+  const { data: phs, loading: phsLoading, error: phsError, reload: reloadPHs } = usePriceHistoryList({});
+  const { data: lcs, loading: lcsLoading, error: lcsError, reload: reloadLCs } = useLCList({});
+  const { data: bls, loading: blsLoading, error: blsError, reload: reloadBLs } = useBLList({});
+  const { data: tts, loading: ttsLoading, error: ttsError, reload: reloadTTs } = useTTList({});
 
   const [audits, setAudits] = useState<SafeAuditLog[]>([]);
   const [auditsLoading, setAuditsLoading] = useState(false);
@@ -372,6 +375,11 @@ export default function PurchaseHistoryPage() {
   const chainsWithVariants = useMemo(() => chains.filter((c) => c.pos.length > 1).length, [chains]);
 
   const loading = posLoading || phsLoading || lcsLoading || blsLoading || ttsLoading || auditsLoading;
+  // 5개 훅 중 하나라도 실패하면 메인 컨텐츠 대신 에러 EmptyState. reloadAll 은 모두 재시도.
+  const loadError = posError ?? phsError ?? lcsError ?? blsError ?? ttsError;
+  const reloadAll = async () => {
+    await Promise.all([reloadPOs(), reloadPHs(), reloadLCs(), reloadBLs(), reloadTTs()]);
+  };
 
   const handleSelectChain = (chainId: string | null) => {
     if (!chainId) {
@@ -441,7 +449,15 @@ export default function PurchaseHistoryPage() {
               />
             </div>
           </div>
-          {loading ? (
+          {loadError ? (
+            <EmptyState
+              tone="error"
+              message="구매 이력을 불러오지 못했습니다"
+              description={loadError}
+              actionLabel="다시 시도"
+              onAction={reloadAll}
+            />
+          ) : loading ? (
             <div aria-label="계약 체인 로딩 중">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="sf-ph-skeleton-row" />
@@ -503,7 +519,15 @@ export default function PurchaseHistoryPage() {
             )
           }
         >
-          {loading ? (
+          {loadError ? (
+            <EmptyState
+              tone="error"
+              message="구매 이력을 불러오지 못했습니다"
+              description={loadError}
+              actionLabel="다시 시도"
+              onAction={reloadAll}
+            />
+          ) : loading ? (
             <div aria-label="타임라인 로딩 중">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="sf-ph-skeleton-row" />

@@ -179,17 +179,17 @@ export default function SaleAutoRegisterDialog({
         </DialogHeader>
 
         <div className="flex flex-wrap gap-2 text-xs">
-          <span className="rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-info-bg)', color: 'var(--sf-info)' }}>
+          <span className="sf-tone-info rounded px-2 py-1 font-medium">
             매출 정보 {seedsWithPrice}/{seeds.length}건
           </span>
           {fuzzyByRaw.size > 0 && (
-            <span className="flex items-center gap-1 rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-warn-bg)', color: 'var(--sf-warn)' }}>
+            <span className="sf-tone-warn flex items-center gap-1 rounded px-2 py-1 font-medium">
               <AlertTriangle className="h-3 w-3" />
               거래처 유사 후보 {fuzzyByRaw.size}건
             </span>
           )}
           {newPartnerNames.length > 0 && (
-            <span className="flex items-center gap-1 rounded px-2 py-1 font-medium" style={{ background: 'var(--sf-info-bg)', color: 'var(--sf-info)' }}>
+            <span className="sf-tone-info flex items-center gap-1 rounded px-2 py-1 font-medium">
               <Plus className="h-3 w-3" />
               신규 거래처 {newPartnerNames.length}건
             </span>
@@ -198,7 +198,7 @@ export default function SaleAutoRegisterDialog({
 
         <div className="flex-1 overflow-y-auto space-y-3">
           {totalActions === 0 && seedsValid.length > 0 && (
-            <div className="rounded border border-[var(--line)] bg-[var(--sf-pos-bg)] p-3 text-[12px]" style={{ color: 'var(--sf-pos)' }}>
+            <div className="sf-tone-pos rounded border border-[var(--line)] p-3 text-[12px]">
               <CheckCircle2 className="mr-1.5 inline h-4 w-4" />
               모든 거래처가 매핑되었습니다. 매출 일괄 등록을 진행하세요.
             </div>
