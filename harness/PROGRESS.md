@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-151 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외) |
+| DECISIONS | D-001~D-152 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -179,6 +179,32 @@
 - `cd frontend && npm run build` 성공
 - `cd frontend && npm run lint` 종료코드 0
 - `git diff --check` 성공
+
+---
+
+## 2026-05-07 세션 — module 구매이력 감사 렌즈 보강 (D-152)
+
+### 완료
+- `/purchase-history` 선택 체인에 감사 렌즈 패널 추가
+  - PO 감사로그 건수, 변경 필드 수, 변경 주체 수, 최근 감사일, 연결 원천 행 수 요약
+  - 감사 이벤트는 변경 전/후 값을 필드 단위로 펼쳐 보여주도록 구조화
+- 기존 PO/단가/L/C/B/L/T/T 이벤트를 해석해 점검 포인트 추가
+  - PO 미연결 단가, 미결제 L/C, 예정 T/T, 진행 중 B/L, 금융 이력 부재, B/L 이력 부재, 90일 이상 무변동 계약 표시
+  - 체인 리스트에도 감사 건수와 점검 항목 수를 표시해 선택 전 우선순위 판단 가능
+- 타임라인 운영성 보강
+  - 이벤트 검색: 제목, 설명, 원천 테이블/ID, 변경 주체, 변경 전후 값까지 검색
+  - CSV 내보내기: 현재 필터가 적용된 이벤트를 `date/event_kind/source/actor/po_id/chain_id` 포함 형식으로 저장
+- 각 이벤트에 원천 테이블과 원천 ID short label 표시
+- 최신 `main`의 D-150/D-151 결정과 충돌하지 않도록 구매이력 결정을 D-152로 재번호 부여
+- D-152 결정 기록 추가
+
+### 검증
+- 현재 작업 환경에 전역 `bun`이 없어 `~/.bun/bin/bun` v1.3.13 설치 후 `cd frontend && ~/.bun/bin/bun install --frozen-lockfile` 성공
+- `cd frontend && ~/.bun/bin/bun test purchaseHistory` 성공 — 1 file / 32 tests
+- `cd frontend && ~/.bun/bin/bun run build` 성공 — plugin timing warning 출력
+- `cd frontend && ~/.bun/bin/bun run lint` 종료코드 0 — 기존 ProcurementPage 페이지네이션 reset hook 경고 4건 + Bun 타입 선언 suppression 경고 1건 출력
+- `git diff --check` 성공
+- `graphify update .` 성공 — 4820 nodes / 7717 edges / 403 communities
 
 ---
 
