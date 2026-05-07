@@ -111,6 +111,27 @@ function daysUntil(date?: string) {
   return Math.ceil((at.getTime() - today.getTime()) / 86_400_000)
 }
 
+// 월요일 시작 ISO week. 현지 시간대 기준.
+function weekStartOf(d: Date): Date {
+  const r = new Date(d)
+  const day = r.getDay()
+  const offset = day === 0 ? -6 : 1 - day
+  r.setDate(r.getDate() + offset)
+  r.setHours(0, 0, 0, 0)
+  return r
+}
+
+function recentWeekStartKeys(count: number): string[] {
+  const base = weekStartOf(new Date())
+  const out: string[] = []
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(base)
+    d.setDate(d.getDate() - i * 7)
+    out.push(d.toISOString().slice(0, 10))
+  }
+  return out
+}
+
 export default function ProcurementPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
   const location = useLocation()
@@ -317,8 +338,10 @@ export default function ProcurementPage() {
     }
   }, [selectedCompanyId])
 
-  // USD/KRW 30일 시계열 — LC 탭 우측 레일. 다른 탭에서는 fetch 생략.
-  const { data: fx } = useFxTimeseries("usdkrw", 30, activeTab === "lc")
+  // USD/KRW 시계열 — LC 탭 우측 레일(30일) + PO 탭 JKO 12주 단가 변환(90일).
+  const fxDays = activeTab === "po" ? 90 : 30
+  const fxEnabled = activeTab === "lc" || activeTab === "po"
+  const { data: fx } = useFxTimeseries("usdkrw", fxDays, fxEnabled)
 
   // ⚠️ 모든 useMemo는 early return(아래 selectedCompanyId 분기) 이전이어야 함 — Hook 순서 규칙
   const poRows = useMemo(
@@ -385,6 +408,82 @@ export default function ProcurementPage() {
     ttSummary?.completed_amount_usd ??
     tts.filter((tt) => tt.status === "completed").reduce((sum, tt) => sum + (tt.amount_usd ?? 0), 0)
   const ttTotalCount = ttSummary?.total ?? tts.length
+
+  // JKO · 12주 단가 — poList(공급사 필터 없는 전체 PO)에서 JKO 매뉴팩처러 발주만 추려
+  // 주차별 가중 USD/Wp → 해당 주 환율로 KRW/Wp 환산. 포워드/백워드 fill 적용.
+  const jkoMfg = useMemo(
+    () =>
+      manufacturers.find((m) => {
+        const s = (m.short_name ?? "").trim().toUpperCase()
+        if (s === "JKO") return true
+        const en = (m.name_en ?? "").toLowerCase()
+        return en.includes("jinko")
+      }),
+    [manufacturers],
+  )
+  const jkoTrend = useMemo(() => {
+    if (!jkoMfg || !fx || fx.series.length === 0) return null
+    const weekKeys = recentWeekStartKeys(12)
+    const earliest = weekKeys[0]
+
+    const aggMap = new Map<string, { usdSum: number; weight: number }>()
+    for (const k of weekKeys) aggMap.set(k, { usdSum: 0, weight: 0 })
+
+    for (const po of poList) {
+      if (po.manufacturer_id !== jkoMfg.manufacturer_id) continue
+      if (!po.contract_date) continue
+      const usd = po.line_total_usd ?? 0
+      const wp = po.line_total_wp ?? 0
+      if (usd <= 0 || wp <= 0) continue
+      const dt = new Date(po.contract_date)
+      if (Number.isNaN(dt.getTime())) continue
+      const key = weekStartOf(dt).toISOString().slice(0, 10)
+      if (key < earliest) continue
+      const a = aggMap.get(key)
+      if (!a) continue
+      a.usdSum += usd
+      a.weight += wp
+    }
+
+    const fxByDate = new Map(fx.series.map((p) => [p.date, p.rate] as const))
+    const latestFx = fx.latest ?? fx.series[fx.series.length - 1]?.rate ?? null
+    const fxAt = (dateStr: string): number => {
+      const d = new Date(dateStr)
+      for (let i = 0; i < 14; i++) {
+        const t = new Date(d)
+        t.setDate(t.getDate() - i)
+        const r = fxByDate.get(t.toISOString().slice(0, 10))
+        if (r) return r
+      }
+      return latestFx ?? 1365
+    }
+
+    const raw: (number | null)[] = weekKeys.map((k) => {
+      const a = aggMap.get(k)!
+      if (a.weight === 0) return null
+      const usdWp = a.usdSum / a.weight
+      return usdWp * fxAt(k)
+    })
+    if (!raw.some((v) => v != null)) return null
+
+    let prev: number | null = null
+    const ff: (number | null)[] = raw.map((v) => {
+      if (v != null) prev = v
+      return prev
+    })
+    let next: number | null = null
+    const filled = new Array<number>(ff.length).fill(0)
+    for (let i = ff.length - 1; i >= 0; i--) {
+      if (ff[i] != null) next = ff[i]
+      filled[i] = next ?? 0
+    }
+    if (filled.every((v) => v === 0)) return null
+
+    const current = filled[filled.length - 1]
+    const first = filled.find((v) => v > 0) ?? 0
+    const deltaPct = first > 0 ? ((current - first) / first) * 100 : 0
+    return { data: filled, current, deltaPct }
+  }, [poList, jkoMfg, fx])
 
   if (!selectedCompanyId) {
     return (
@@ -1073,19 +1172,36 @@ export default function ProcurementPage() {
                 ))}
               </RailBlock>
               <RailBlock title="JKO · 12주 단가" last>
-                <Sparkline
-                  data={[418, 416, 412, 408, 406, 402, 400, 398, 394, 392, 388, 384]}
-                  w={220}
-                  h={42}
-                  color="var(--solar-2)"
-                  area
-                />
-                <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
-                  <span>
-                    현재 <span className="font-bold text-[var(--ink)]">384</span> KRW/Wp
-                  </span>
-                  <span className="font-bold text-[var(--neg)]">-8.1%</span>
-                </div>
+                {jkoTrend ? (
+                  <>
+                    <Sparkline
+                      data={jkoTrend.data}
+                      w={220}
+                      h={42}
+                      color="var(--solar-2)"
+                      area
+                    />
+                    <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
+                      <span>
+                        현재{" "}
+                        <span className="font-bold text-[var(--ink)]">
+                          {fxNumberFmt.format(Math.round(jkoTrend.current))}
+                        </span>{" "}
+                        KRW/Wp
+                      </span>
+                      <span
+                        className={`font-bold ${jkoTrend.deltaPct >= 0 ? "text-[var(--pos)]" : "text-[var(--neg)]"}`}
+                      >
+                        {jkoTrend.deltaPct >= 0 ? "+" : ""}
+                        {jkoTrend.deltaPct.toFixed(1)}%
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-[var(--ink-3)]">
+                    JKO 12주 단가 데이터 없음
+                  </div>
+                )}
               </RailBlock>
             </>
           )}
