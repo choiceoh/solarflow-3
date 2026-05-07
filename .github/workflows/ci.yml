@@ -55,7 +55,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
+      # --prefer-offline: 캐시 hit 시 네트워크 스킵. --no-audit/--no-fund: 부수 단계 스킵.
+      - run: npm ci --prefer-offline --no-audit --no-fund
       # vite/tsc 의 incremental 산출물(.vite, .tmp/*.tsbuildinfo)을 캐시.
       # github.sha 키는 항상 미스 → restore-keys 로 직전 캐시 복원하는 incremental 패턴.
       - name: Cache vite + tsc incrementals
@@ -103,8 +104,15 @@ jobs:
             ${{ runner.os }}-go-${{ hashFiles('backend/go.sum') }}-
             ${{ runner.os }}-go-
       # go test -vet=all ./... 이 vet 과 비-test 패키지 컴파일을 모두 커버. go build 는 main 의 link 검증.
-      - run: go test -vet=all ./...
-      - run: go build ./...
+      # 둘은 독립이라 병렬 실행. frontend job 의 tsc/vite 병렬 패턴과 동일.
+      - name: Test + build (parallel)
+        shell: bash
+        run: |
+          set -e
+          go test -vet=all ./... &
+          TEST_PID=$!
+          go build ./...
+          wait $TEST_PID
 
   # 엔진 (Rust) — 빌드 시간이 길어 캐시 필수. release 빌드는 운영과 동일.
   engine:
@@ -118,5 +126,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
       - run: cargo build --release
-      - run: cargo test --release
+      # 테스트는 debug + nextest 로 — release 옵티마이즈는 정확성 검증에 불필요하고
+      # 컴파일이 2-3배 느림. nextest 는 cargo test 대비 병렬성이 좋아 30-60% 빠름.
+      # 운영 산출물 검증은 위 cargo build --release 가 담당. 도큐테스트 없음.
+      - run: cargo nextest run
