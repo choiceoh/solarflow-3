@@ -12,8 +12,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Layers } from 'lucide-react';
 
 import { fetchWithAuth } from '@/lib/api';
-import { ALL_PACKS } from '@/lib/navigation/packs';
-import type { Pack } from '@/lib/navigation/packs';
+import { ALL_PACKS } from '@/packs';
+import type { Pack } from '@/packs';
 
 interface AdminTenantSummary {
   id: string;

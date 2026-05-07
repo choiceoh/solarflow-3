@@ -1,14 +1,16 @@
-// frontend/src/lib/navigation/packs/index.ts — pack 들의 단일 진입점 (PR-4)
+// frontend/src/packs/index.ts — pack 들의 단일 진입점 (PR-4 / PR-7)
 //
 // 새 pack 을 추가할 때:
-//   1. packs/<id>.ts 신설
+//   1. packs/<id>/{nav.ts, pages/} 신설
 //   2. ALL_PACKS 에 import + 추가
 //   3. types.ts 의 PackID union 에 ID 추가
+//
+// PR-7 부터 pack 디렉토리 자체가 자기 페이지 코드 (pages/) 도 포함.
 
-import type { CommandNavGroup, CommandNavItem } from '../manifest';
-import { ERP_CORE_PACK } from './erp-core';
-import { MODULE_FINANCE_PACK } from './module-finance';
-import { BARO_DOMAIN_PACK } from './baro-domain';
+import type { CommandNavGroup, CommandNavItem } from '@/lib/navigation/manifest';
+import { ERP_CORE_PACK } from './erp-core/nav';
+import { MODULE_FINANCE_PACK } from './module-finance/nav';
+import { BARO_DOMAIN_PACK } from './baro-domain/nav';
 import type { NavGroupKey, Pack } from './types';
 
 export { ERP_CORE_PACK, MODULE_FINANCE_PACK, BARO_DOMAIN_PACK };

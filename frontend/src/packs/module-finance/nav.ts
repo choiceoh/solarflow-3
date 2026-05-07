@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 import { MODULE_TENANTS } from '@/lib/tenantScope';
-import type { Pack } from './types';
+import type { Pack } from '../types';
 
 export const MODULE_FINANCE_PACK: Pack = {
   id: 'module-finance',
