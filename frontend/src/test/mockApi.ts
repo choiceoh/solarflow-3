@@ -25,7 +25,9 @@ export function seedCompanyStore(selectedCompanyId = testCompany.company_id) {
 }
 
 export function mockFetchWithAuth(resolver: (path: string, options?: RequestInit) => unknown) {
-  (fetchWithAuth as unknown as MockedFetchWithAuth).mockImplementation(((path, options) =>
+  // resolver 가 sync 값을 반환해도 async 래퍼로 감싸서 항상 Promise 반환.
+  // (실제 fetchWithAuth 가 Promise<T> 인데 sync return 으로 .then 호출이 깨지는 이슈 방지)
+  (fetchWithAuth as unknown as MockedFetchWithAuth).mockImplementation((async (path, options) =>
     resolver(path, options)) as typeof fetchWithAuth);
 }
 
