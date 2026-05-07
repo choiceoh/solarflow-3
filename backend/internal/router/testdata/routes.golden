@@ -42,6 +42,7 @@ GET     /api/v1/audit-logs/
 GET     /api/v1/banking/dashboard
 GET     /api/v1/banks/
 GET     /api/v1/banks/{id}
+GET     /api/v1/baro/callback-recommend/
 GET     /api/v1/baro/credit-board/
 GET     /api/v1/baro/dispatch-routes/
 GET     /api/v1/baro/dispatch-routes/{id}
