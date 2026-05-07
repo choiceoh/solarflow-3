@@ -256,14 +256,16 @@ func (h *PriceBenchmarkHandler) AIRefresh(w http.ResponseWriter, r *http.Request
 // req.Context 와 분리된 context.Background 사용 — client 가 끊어도 계속 진행.
 // 자체 timeout 10분 (큰 LLM 호출 + 4 source 병렬 여유).
 func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources []benchmarkSource, provider, llmModel string, maxTokens int) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
 	defer func() {
-		if recovered := recover(); recovered != nil {
-			msg := fmt.Sprintf("AI 수집 작업 중 예기치 못한 오류: %v", recovered)
-			h.finishRun(runID, "failed", 0, 0, &msg, []string{msg}, nil, nil)
+		if r := recover(); r != nil {
+			log.Printf("[ai-refresh async] run=%s PANIC: %v", runID, r)
+			msg := fmt.Sprintf("panic: %v", r)
+			h.finishRun(runID, "failed", 0, 0, &msg, nil, nil, nil)
 		}
 	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	log.Printf("[ai-refresh async] run=%s start sources=%d provider=%s", runID, len(sources), provider)
 
 	// PR 41: 병렬 분산 + 취합 — source 별 shard 로 분리 호출.
 	// 이전 단일 LLM 호출은 모든 source 의 evidence 를 한번에 던져 컨텍스트 초과 빈발.
@@ -284,28 +286,42 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 		wg.Add(1)
 		go func(i int, src benchmarkSource) {
 			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					shards[i].err = fmt.Errorf("panic: %v", r)
+					log.Printf("[ai-refresh async] src=%s PANIC: %v", src.Key, r)
+				}
+			}()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			shards[i].src = src
-			ev, w := h.collectBenchmarkEvidence(ctx, []benchmarkSource{src})
+			// PR 44: source 별 명시적 timeout 4분 (vLLM 응답 1~2분 정상 + 여유).
+			srcCtx, srcCancel := context.WithTimeout(ctx, 4*time.Minute)
+			defer srcCancel()
+			ev, w := h.collectBenchmarkEvidence(srcCtx, []benchmarkSource{src})
 			shards[i].evidence = ev
 			shards[i].warnings = w
 			if len(ev) == 0 {
 				shards[i].warnings = append(shards[i].warnings, fmt.Sprintf("%s: evidence 0 — AI 호출 skip", src.Key))
+				log.Printf("[ai-refresh async] src=%s evidence 0", src.Key)
 				return
 			}
-			raw, err := h.extractBenchmarksWithAI(ctx, provider, llmModel, maxTokens, ev)
+			log.Printf("[ai-refresh async] src=%s evidence=%d, LLM 호출 시작", src.Key, len(ev))
+			raw, err := h.extractBenchmarksWithAI(srcCtx, provider, llmModel, maxTokens, ev)
 			shards[i].raw = raw
 			if err != nil {
 				shards[i].err = err
+				log.Printf("[ai-refresh async] src=%s LLM 실패: %v", src.Key, err)
 				return
 			}
 			out, perr := parsePriceBenchmarkAIOutput(raw)
 			if perr != nil {
 				shards[i].err = perr
+				log.Printf("[ai-refresh async] src=%s parse 실패: %v", src.Key, perr)
 				return
 			}
 			shards[i].output = &out
+			log.Printf("[ai-refresh async] src=%s ok points=%d", src.Key, len(out.Points))
 		}(i, src)
 	}
 	wg.Wait()
@@ -361,9 +377,10 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, sources []benchmarkSource) ([]benchmarkEvidenceItem, []string) {
 	var evidence []benchmarkEvidenceItem
 	var warnings []string
-	tavilyKey := strings.TrimSpace(os.Getenv("TAVILY_API_KEY"))
-	if tavilyKey == "" {
-		warnings = append(warnings, "TAVILY_API_KEY 미설정: 공개 URL 직접 조회와 AI 추출만 사용했습니다")
+	// PR 45: Tavily → Serper 전환
+	serperKey := strings.TrimSpace(os.Getenv("SERPER_API_KEY"))
+	if serperKey == "" {
+		warnings = append(warnings, "SERPER_API_KEY 미설정: 공개 URL 직접 조회와 AI 추출만 사용했습니다")
 	}
 
 	for _, src := range sources {
@@ -374,10 +391,10 @@ func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, so
 				warnings = append(warnings, fmt.Sprintf("%s 홈페이지 조회 실패: %v", src.Name, err))
 			}
 		}
-		if tavilyKey == "" {
+		if serperKey == "" {
 			continue
 		}
-		results, err := h.searchTavily(ctx, tavilyKey, src.Query, 4)
+		results, err := h.searchSerper(ctx, serperKey, src.Query, 4)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("%s 웹 검색 실패: %v", src.Name, err))
 			continue
@@ -388,7 +405,7 @@ func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, so
 				SourceName: src.Name,
 				Title:      result.Title,
 				URL:        result.URL,
-				Content:    truncate(result.Content, 1800),
+				Content:    truncate(result.Content, 900), // PR 44: vLLM 응답 시간 단축 위해 축소
 			})
 		}
 	}
@@ -433,18 +450,21 @@ func (h *PriceBenchmarkHandler) fetchHomepageEvidence(ctx context.Context, src b
 	}, nil
 }
 
-func (h *PriceBenchmarkHandler) searchTavily(ctx context.Context, apiKey, query string, maxResults int) ([]tavilyResultItem, error) {
+// searchSerper — Serper API (Google 검색) 호출. PR 45: Tavily 대체.
+// 응답을 webSearchResultItem (기존 Tavily 호환) shape 으로 변환하여 downstream 호환 유지.
+func (h *PriceBenchmarkHandler) searchSerper(ctx context.Context, apiKey, query string, maxResults int) ([]webSearchResultItem, error) {
 	body, _ := json.Marshal(map[string]any{
-		"api_key":      apiKey,
-		"query":        query,
-		"max_results":  clampLimit(maxResults, 3, 6),
-		"search_depth": "basic",
+		"q":   query,
+		"num": clampLimit(maxResults, 3, 6),
+		"gl":  "kr",
+		"hl":  "ko",
 	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.tavily.com/search", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://google.serper.dev/search", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-KEY", apiKey)
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -454,11 +474,20 @@ func (h *PriceBenchmarkHandler) searchTavily(ctx context.Context, apiKey, query 
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
 	}
-	var parsed tavilyResponse
+	var parsed serperResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&parsed); err != nil {
 		return nil, err
 	}
-	return parsed.Results, nil
+	out := make([]webSearchResultItem, 0, len(parsed.Organic))
+	for _, o := range parsed.Organic {
+		out = append(out, webSearchResultItem{
+			Title:   o.Title,
+			URL:     o.Link,
+			Content: o.Snippet,
+			Score:   1.0,
+		})
+	}
+	return out, nil
 }
 
 func (h *PriceBenchmarkHandler) extractBenchmarksWithAI(ctx context.Context, provider, llmModel string, maxTokens int, evidence []benchmarkEvidenceItem) (string, error) {

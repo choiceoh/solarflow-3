@@ -2,8 +2,9 @@ package handler
 
 // AI assistant — 외부 웹 검색·fetch 도구.
 //
-// web_search: Tavily API 호출 (TAVILY_API_KEY 환경변수). 사내 데이터(거래처/PO 등)는
+// web_search: Serper API 호출 (SERPER_API_KEY 환경변수). 사내 데이터(거래처/PO 등)는
 //   다른 search_* 도구로 조회 — 본 도구는 외부 시세·뉴스·규제·외부 회사 정보용.
+//   PR 45: Tavily → Serper 전환. Google 검색 결과 직접.
 // fetch_url: 임의 URL fetch. SSRF 방지를 위해 hostname → IP 해석 후 internal/loopback/
 //   link-local IP 는 차단. 응답 1MB / 15s 제한. Google Sheets /edit URL 은 자동으로
 //   /export?format=csv 로 변환하여 link-share public 시트 조회 지원.
@@ -24,29 +25,46 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 )
 
-// --- web_search (Tavily) ---
+// --- web_search (Serper / Google) ---
+// PR 45: Tavily → Serper 전환. Google 검색 결과 직접.
 
 type webSearchInput struct {
 	Query      string `json:"query"`
 	MaxResults int    `json:"max_results,omitempty"`
 }
 
-type tavilyResultItem struct {
+// serperOrganicItem — Serper API 의 organic 결과.
+type serperOrganicItem struct {
+	Title   string `json:"title"`
+	Link    string `json:"link"`
+	Snippet string `json:"snippet"`
+}
+
+type serperResponse struct {
+	Organic   []serperOrganicItem `json:"organic"`
+	AnswerBox *struct {
+		Answer  string `json:"answer"`
+		Snippet string `json:"snippet"`
+	} `json:"answerBox,omitempty"`
+	KnowledgeGraph *struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+	} `json:"knowledgeGraph,omitempty"`
+}
+
+// webSearchResultItem — 외부 노출 형태 (기존 Tavily 호환 유지).
+// 다른 모듈 (가격예측 등) 이 같은 shape 를 기대하므로 변경 없이 유지.
+type webSearchResultItem struct {
 	Title   string  `json:"title"`
 	URL     string  `json:"url"`
 	Content string  `json:"content"`
 	Score   float64 `json:"score"`
 }
 
-type tavilyResponse struct {
-	Answer  string             `json:"answer"`
-	Results []tavilyResultItem `json:"results"`
-}
-
 func toolWebSearch() assistantTool {
 	return assistantTool{
 		name:        "web_search",
-		description: "외부 웹 검색 (Tavily). 사내 데이터(거래처/수주/PO/면장 등)는 본 도구가 아닌 search_* 도구로 조회하세요. 본 도구는 시세·시장 동향·뉴스·규제 변경·외부 회사 정보 등 사내 DB 에 없는 정보용. 한국어 검색어 정상 작동. 결과 형식: {query, answer, results:[{title,url,content,score}], count}.",
+		description: "외부 웹 검색 (Serper / Google). 사내 데이터(거래처/수주/PO/면장 등)는 본 도구가 아닌 search_* 도구로 조회하세요. 본 도구는 시세·시장 동향·뉴스·규제 변경·외부 회사 정보 등 사내 DB 에 없는 정보용. 한국어 검색어 정상 작동. 결과 형식: {query, answer, results:[{title,url,content,score}], count}.",
 		inputSchema: json.RawMessage(`{
 			"type": "object",
 			"additionalProperties": false,
@@ -66,44 +84,64 @@ func toolWebSearch() assistantTool {
 			if args.Query == "" {
 				return "", fmt.Errorf("query 는 필수입니다")
 			}
-			apiKey := strings.TrimSpace(os.Getenv("TAVILY_API_KEY"))
+			apiKey := strings.TrimSpace(os.Getenv("SERPER_API_KEY"))
 			if apiKey == "" {
-				return "", fmt.Errorf("웹 검색 미설정 (TAVILY_API_KEY 부재). 운영자에게 문의하세요.")
+				return "", fmt.Errorf("웹 검색 미설정 (SERPER_API_KEY 부재). 운영자에게 문의하세요.")
 			}
 			body, _ := json.Marshal(map[string]any{
-				"api_key":      apiKey,
-				"query":        args.Query,
-				"max_results":  clampLimit(args.MaxResults, 5, 10),
-				"search_depth": "basic",
+				"q":   args.Query,
+				"num": clampLimit(args.MaxResults, 5, 10),
+				"gl":  "kr",
+				"hl":  "ko",
 			})
-			httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.tavily.com/search", bytes.NewReader(body))
+			httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://google.serper.dev/search", bytes.NewReader(body))
 			if err != nil {
 				return "", fmt.Errorf("요청 생성 실패: %w", err)
 			}
 			httpReq.Header.Set("Content-Type", "application/json")
+			httpReq.Header.Set("X-API-KEY", apiKey)
 			client := &http.Client{Timeout: 15 * time.Second}
 			resp, err := client.Do(httpReq)
 			if err != nil {
-				return "", fmt.Errorf("Tavily 호출 실패: %w", err)
+				return "", fmt.Errorf("Serper 호출 실패: %w", err)
 			}
 			defer resp.Body.Close()
 			if resp.StatusCode/100 != 2 {
 				msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-				return "", fmt.Errorf("Tavily HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+				return "", fmt.Errorf("Serper HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
 			}
 			raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 			if err != nil {
-				return "", fmt.Errorf("Tavily 응답 읽기 실패: %w", err)
+				return "", fmt.Errorf("Serper 응답 읽기 실패: %w", err)
 			}
-			var parsed tavilyResponse
+			var parsed serperResponse
 			if err := json.Unmarshal(raw, &parsed); err != nil {
-				return "", fmt.Errorf("Tavily 응답 파싱 실패: %w", err)
+				return "", fmt.Errorf("Serper 응답 파싱 실패: %w", err)
+			}
+			answer := ""
+			if parsed.AnswerBox != nil {
+				if parsed.AnswerBox.Answer != "" {
+					answer = parsed.AnswerBox.Answer
+				} else {
+					answer = parsed.AnswerBox.Snippet
+				}
+			} else if parsed.KnowledgeGraph != nil && parsed.KnowledgeGraph.Description != "" {
+				answer = parsed.KnowledgeGraph.Description
+			}
+			results := make([]webSearchResultItem, 0, len(parsed.Organic))
+			for _, o := range parsed.Organic {
+				results = append(results, webSearchResultItem{
+					Title:   o.Title,
+					URL:     o.Link,
+					Content: o.Snippet,
+					Score:   0,
+				})
 			}
 			out := map[string]any{
 				"query":   args.Query,
-				"answer":  parsed.Answer,
-				"results": parsed.Results,
-				"count":   len(parsed.Results),
+				"answer":  answer,
+				"results": results,
+				"count":   len(results),
 			}
 			b, _ := json.Marshal(out)
 			return string(b), nil
