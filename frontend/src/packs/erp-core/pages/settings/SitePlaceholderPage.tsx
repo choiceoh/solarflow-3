@@ -7,7 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { listWipMenus } from '@/components/layout/CommandShell';
 import { useMenuVisibility } from '@/hooks/useMenuVisibility';
-import SidebarTabsCard from '@/pages/settings/SidebarTabsCard';
+import SidebarTabsCard from './SidebarTabsCard';
 
 interface PlannedItem {
   icon: LucideIcon;
