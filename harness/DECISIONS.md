@@ -1035,7 +1035,6 @@
   - 수동 검증: BARO 토큰으로 `/baro/shipment-notice` 진입 시 폼 + 3 메시지 카드 표시. 빈 필드는 메시지에서 자동 생략. 복사 버튼 클릭 시 "복사됨" 피드백.
 - **날짜**: 2026-05-07
 
-
 ## D-139: WMS Phase 1 — 창고 내 위치(Bin/Location) 관리 (모든 테넌트 공유)
 - **결정**: 기존 `warehouses` 마스터(창고 단위) 위에 `warehouse_locations` (Bin 단위) 신규 도입. Zone > Aisle > Rack > Bin 4단계 계층, 단계 일부 생략 가능 (작은 창고는 Zone-Bin 만).
 - **마이그 085** (`backend/migrations/085_warehouse_locations.sql`): `warehouse_locations` 테이블 — `warehouse_id` FK + 4단계 nullable + `location_code` (warehouse 내 UNIQUE) + capacity_qty/weight_capacity_kg + location_type CHECK (storage/staging/receiving/shipping/damaged/reserved) + is_active. 인덱스 3종 (warehouse_id 전체 / active_only / zone).
@@ -1168,7 +1167,49 @@
   - 프론트엔드 빌드에서 확장 응답 스키마(`cost_*`)와 mock 응답 호환을 확인한다.
 - **날짜**: 2026-05-07
 
-## D-145: 수금 매칭 — 결정적 자동 매칭과 AI 검토를 분리하고 확정은 bulk 검증으로 처리
+## D-145: 테넌트 모듈화 — Registry + feature pack + admin 매트릭스 (5 PR 시리즈)
+- **결정**: 새 도메인 (예: `gx10.topworks.ltd`) 을 추가할 때 코드 곳곳에 흩어진 `'topsolar'/'cable'/'baro'` 리터럴·host regex·`tenants:` 인라인 배열을 일일이 갱신할 필요 없도록, 테넌트 정의·feature 가시성·sidebar 구성 전 영역의 **단일 정본**을 도입한다. 5 PR 시리즈로 분해해 회귀 위험 ↓ + 각 단계 독립 검증.
+- **PR 시리즈**:
+  - **PR-1** ([#574](https://github.com/choiceoh/solarflow/pull/574)) — `backend/internal/tenant/registry.go` 단일 정본. 테넌트 ID/HostPatterns/Group/DisplayName 정의. `feature.TenantSetXxx`, `middleware.TenantScopeXxx` 가 registry 에서 파생. `feature.IDsInGroup(GroupModule)` → `["topsolar","cable"]` 같은 식으로 그룹 필요 시 한 곳에서 변경.
+  - **PR-2** ([#577](https://github.com/choiceoh/solarflow/pull/577)) — `/api/v1/users/me` 응답에 `tenant_id` / `tenant_display_name` / `enabled_features[]` 추가. 프론트가 sidebar/route 가시성을 결정하는 정본. resolver.EnabledFeatures(tenant) 호출.
+  - **PR-3a** ([#583](https://github.com/choiceoh/solarflow/pull/583)) — `frontend/src/lib/navigation/manifest.tsx` 신설. App.tsx 의 lazy import + Route 트리, CommandShell 의 NAV_GROUPS·헬퍼들이 흩어져 있던 것을 단일 정본으로 통합.
+  - **PR-3b** ([#589](https://github.com/choiceoh/solarflow/pull/589)) — sidebar 항목 가시성을 `enabled_features` 기반으로 전환. 26개 NAV item 에 backend `feature` 매핑 (예: `tx.po`, `baro.incoming`). `isItemVisible()` 단일 정본 함수. 백엔드 카탈로그 미정의 5개 (baro-home/quote/inverter/shipment/approval) 만 `tenants:` 배열 fallback.
+  - **PR-4** ([#592](https://github.com/choiceoh/solarflow/pull/592)) — `frontend/src/lib/navigation/packs/` 디렉토리. 도메인별 3 pack 분리: `erp-core` (모든 테넌트 공통), `module-finance` (수입/금융), `baro-domain` (영업/CRM). `manifest.tsx` 가 `buildNavGroups(ALL_PACKS)` 로 합쳐 빌드.
+  - **PR-5a** ([#601](https://github.com/choiceoh/solarflow/pull/601)) — admin 페이지 `/settings/feature-wiring` (read-only 매트릭스). `GET /api/v1/admin/feature-wiring/` 핸들러. ALL_PACKS 별로 grouping 된 view + "기타 (pack 미매핑)" 섹션.
+  - **PR-5b** ([#604](https://github.com/choiceoh/solarflow/pull/604)) — 셀 클릭 토글 + pack 헤더 일괄 토글 + DB 영속화. `PUT /api/v1/admin/feature-wiring/{tenant}/{feature}` → `tenant_features` upsert + `feature_wiring_audit` insert(best-effort) + resolver in-memory 갱신. `app.go` 가 startup 에 `tenant_features` 행 로드해 재시작 후에도 유지.
+- **새 도메인 추가 절차** (예: `gx10`):
+  1. `backend/internal/tenant/registry.go` 의 `defaultRegistry.tenants` 에 `Tenant` 객체 1개 추가 (ID, HostPatterns regex, Display, Groups)
+  2. DB 마이그레이션으로 `user_profiles.tenant_scope` CHECK + `tenant_features.tenant_check` + `tenant_data_scopes.tenant_check` 갱신
+  3. admin 매트릭스 화면 (`/settings/feature-wiring`) 에서 그 테넌트가 어떤 features 를 켤지 토글
+  - 코드 다른 곳 안 건드림. 사이드바 / 라우트 / 가시성 자동 적용.
+- **핵심 invariant**:
+  - 가시성 정본은 backend `feature.Catalog` + `tenant_features` override → `/me.enabled_features` → frontend `isItemVisible()`. 한 방향 흐름.
+  - frontend `pack` 은 admin UI 그룹화 + 코드 정리용 — backend 모름. backend 는 `feature_id` 단위로만 동작.
+  - 미매핑 5개 NAV item 은 backend 카탈로그 보강 후 feature 매핑으로 전환 (후속 PR-6/7).
+- **이유**: D-108(BARO 분리) + D-119(cable 분리) 시점에는 테넌트 3개로 인라인이 견딜 만했지만, 4번째 도메인 추가 시 frontend 226+ 군데 + backend 226+ 군데를 건드려야 했다. registry + manifest + pack 으로 **테넌트 추가 비용을 코드 1줄 + 마이그 1개 + UI 토글로 압축**.
+- **운영 기준**:
+  - `tenant_features` 행이 비어 있으면 catalog default 만 적용 (D-120 호환).
+  - `enabled_features` 가 비어 있는 옛 응답 호환을 위해 `isItemVisible` 이 tenants 배열 fallback 유지 (운영 백엔드는 PR-2 이후 항상 채워 보냄).
+  - `MODULE_TENANTS` 는 `lib/tenantScope.ts` 에 정의 (PR-4 의 packs/ 분리 후 circular dep 회피).
+- **검증**:
+  - backend: `go test ./internal/tenant/`, `./internal/handler/`, `./internal/router/...` 모두 통과. router snapshot/coverage/matrix/catalog 테스트가 새 admin 라우트 + registry 일치 검증.
+  - frontend: `npm run test` 10 files / 83 tests (manifest.test.ts, packs.test.ts 신설로 +16 case). `npm run build` / `npm run lint` 통과.
+  - 회귀: PR-1~4 행동 변화 없음 (sidebar / route / 가시성 모두 동일). PR-5a/5b 만 admin UI 신규.
+- **관련**: D-108 (BARO 분리), D-119 (cable 분리), D-120 (feature 카탈로그), D-122 (Observability)
+
+## D-146: 가격예측 수집 시장은 중국·유럽으로 제한한다
+- **결정**: 가격예측 벤치마크의 저장 가능 `market_region` 을 `fob_china`, `china_domestic`, `china_export`, `ddp_europe` 로 제한한다. `ddp_us`, `global`, `manufacturer` 등 미국·기타 지역 가격은 AI 수집, 수동 등록, 목록 응답, 기존 데이터 정리에서 제외한다.
+- **이유**: 미국 등 비중국/비유럽 시장은 관세·물류·재고·현지 유통 구조 때문에 가격대가 크게 달라, 같은 차트와 예측 입력에 섞이면 구매 협상 기준선이 왜곡된다. SolarFlow의 module 계열 구매 판단에는 중국 FOB/내수·수출 및 유럽 DDP가 더 직접적인 비교 기준이다.
+- **운영 기준**:
+  - AI prompt 는 중국·유럽 근거만 points 로 반환하고, 제외된 미국·기타 지역 가격은 warnings 에 남긴다.
+  - Go 모델 검증은 허용 지역 allowlist 로 fail-closed 한다. AI 가 프롬프트를 어겨도 저장 직전 `Validate()` 와 handler guard 에서 차단한다.
+  - 기존 `price_benchmarks` 의 `ddp_us` 또는 허용 지역 밖 행은 `089_price_benchmarks_china_europe_only.sql` 로 삭제한다.
+- **검증**:
+  - `go test ./internal/model` 로 허용 지역 통과, `ddp_us`/`global` 차단을 검증한다.
+  - 프론트엔드 dev mock 에서 미국 DDP 샘플을 제거해 `/price-forecast` 목업 차트도 중국·유럽만 표시한다.
+- **날짜**: 2026-05-07
+
+## D-148: 수금 매칭 — 결정적 자동 매칭과 AI 검토를 분리하고 확정은 bulk 검증으로 처리
 
 - **결정**: 수금 관리의 매칭 흐름을 세 단계로 정리한다.
   - **정확 일치 자동 매칭**: 기존 Rust outstanding 계산을 이용해 미수금 전액과 입금 잔액이 정확히 맞는 건만 추천/자동 처리한다. 이 경로는 결정적 계산으로 유지한다.
@@ -1187,5 +1228,5 @@
 - **검증**:
   - `go test ./internal/feature ./internal/router ./internal/handler` 통과.
   - `go test ./...` 및 `go vet ./...` 통과.
-  - 프론트엔드 `npm ci`, `npm run build`, `npm run test`, `npm run lint` 통과. lint 는 최신 main 기준 ProcurementPage pagination reset hook 경고 4건 유지.
+  - 프론트엔드 `npm ci`, `npm run build`, `npm run test`, `npm run lint` 통과.
 - **날짜**: 2026-05-07

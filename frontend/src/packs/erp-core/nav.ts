@@ -15,7 +15,7 @@ import {
   Wallet,
 } from 'lucide-react';
 
-import type { Pack } from './types';
+import type { Pack } from '../types';
 
 export const ERP_CORE_PACK: Pack = {
   id: 'erp-core',
