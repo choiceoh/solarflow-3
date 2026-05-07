@@ -37,6 +37,7 @@ import type { PurchaseOrder, POStatus, LCStatus, TTStatus } from "@/types/procur
 import type { Manufacturer, Bank } from "@/types/masters"
 import { useBLListPaged, useBLSummary } from "@/hooks/useInbound"
 import PaginationBar from "@/components/common/PaginationBar"
+import { useServerSort } from "@/hooks/useServerSort"
 import { useFxTimeseries } from "@/hooks/usePublicFx"
 import BLListTable from "@/components/inbound/BLListTable"
 import BLDetailView from "@/components/inbound/BLDetailView"
@@ -133,6 +134,8 @@ export default function ProcurementPage() {
   const [poDateRange, setPoDateRange] = useState<DateRangeValue>(null)
   const [poPage, setPoPage] = useState(1)
   const [poPageSize, setPoPageSize] = useState(100)
+  // server sort — backend default (contract_date desc) 와 동일하게 시작.
+  const poSort = useServerSort('contract_date', 'desc', () => setPoPage(1))
   // 필터 변경 시 page 1 로 리셋.
   useEffect(() => { setPoPage(1) }, [poStatusFilter, poMfgFilter, poTypeFilter, poDateRange])
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null)
@@ -162,6 +165,8 @@ export default function ProcurementPage() {
     contract_type: poTypeFilter || undefined,
     contract_date_from: poDateRange?.start,
     contract_date_to: poDateRange?.end,
+    sort: poSort.queryParams.sort,
+    order: poSort.queryParams.order,
     page: poPage,
     pageSize: poPageSize,
     enabled: activeTab === 'po',
@@ -179,6 +184,7 @@ export default function ProcurementPage() {
   const [lcDateRange, setLcDateRange] = useState<DateRangeValue>(null)
   const [lcPage, setLcPage] = useState(1)
   const [lcPageSize, setLcPageSize] = useState(100)
+  const lcSort = useServerSort('open_date', 'desc', () => setLcPage(1))
   useEffect(() => { setLcPage(1) }, [lcStatusFilter, lcBankFilter, lcMfgFilter, lcDateRange])
   const { items: lcs, total: lcTotal, loading: lcLoading, error: lcError, reload: reloadLC } = useLCListPaged({
     status: lcStatusFilter || undefined,
@@ -186,6 +192,8 @@ export default function ProcurementPage() {
     manufacturer_id: lcMfgFilter || undefined,
     open_date_from: lcDateRange?.start,
     open_date_to: lcDateRange?.end,
+    sort: lcSort.queryParams.sort,
+    order: lcSort.queryParams.order,
     page: lcPage,
     pageSize: lcPageSize,
     enabled: activeTab === 'lc',
@@ -225,6 +233,7 @@ export default function ProcurementPage() {
   const [blsVersion, setBlsVersion] = useState(0)
   const [blPage, setBlPage] = useState(1)
   const [blPageSize, setBlPageSize] = useState(100)
+  const blSort = useServerSort('eta', 'desc', () => setBlPage(1))
   useEffect(() => { setBlPage(1) }, [blTypeFilter, blStatusFilter, blMfgFilter, blDateRange])
   const { items: bls, total: blTotal, loading: blLoading, reload: reloadBL } = useBLListPaged({
     inbound_type: blTypeFilter || undefined,
@@ -232,6 +241,8 @@ export default function ProcurementPage() {
     manufacturer_id: blMfgFilter || undefined,
     eta_from: blDateRange?.start,
     eta_to: blDateRange?.end,
+    sort: blSort.queryParams.sort,
+    order: blSort.queryParams.order,
     page: blPage,
     pageSize: blPageSize,
     enabled: activeTab === 'bl',
@@ -791,6 +802,9 @@ export default function ProcurementPage() {
                         onDetail={setSelectedPO}
                         onSelectBL={setSelectedBL}
                         aggVersion={lcAggVersion}
+                        sortField={poSort.sortField}
+                        sortDirection={poSort.sortDirection}
+                        onSort={poSort.onSort}
                       />
                       <PaginationBar
                         page={poPage}
@@ -815,13 +829,24 @@ export default function ProcurementPage() {
                   ) : lcLoading ? (
                     <SkeletonRows rows={8} />
                   ) : (
-                    <LCListTable
-                      items={lcRows}
-                      onSettle={handleSettleLC}
-                      onSelectBL={setSelectedBL}
-                      blsVersion={blsVersion}
-                      focusLCId={focusLCId}
-                    />
+                    <>
+                      <LCListTable
+                        items={lcRows}
+                        onSettle={handleSettleLC}
+                        onSelectBL={setSelectedBL}
+                        blsVersion={blsVersion}
+                        sortField={lcSort.sortField}
+                        sortDirection={lcSort.sortDirection}
+                        onSort={lcSort.onSort}
+                      />
+                      <PaginationBar
+                        page={lcPage}
+                        pageSize={lcPageSize}
+                        total={lcTotal}
+                        onPageChange={setLcPage}
+                        onPageSizeChange={(s) => { setLcPageSize(s); setLcPage(1) }}
+                      />
+                    </>
                   )}
                 </TabsContent>
 
@@ -897,7 +922,13 @@ export default function ProcurementPage() {
                     <SkeletonRows rows={8} />
                   ) : (
                     <>
-                      <BLListTable items={blRows} onSelect={(bl) => setSelectedBL(bl.bl_id)} />
+                      <BLListTable
+                        items={blRows}
+                        onSelect={(bl) => setSelectedBL(bl.bl_id)}
+                        sortField={blSort.sortField}
+                        sortDirection={blSort.sortDirection}
+                        onSort={blSort.onSort}
+                      />
                       <PaginationBar
                         page={blPage}
                         pageSize={blPageSize}

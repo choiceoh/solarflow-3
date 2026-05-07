@@ -46,10 +46,12 @@ export function useServerSort(
   return {
     sortField: state.field,
     sortDirection: state.direction,
+    /** ListTable 의 controlled-mode useSort 에 그대로 넘기는 toggle 함수. */
+    onSort: toggle,
     headerProps,
     /** API query 에 그대로 전달할 sort/order 값. */
-    queryParams: state.field
-      ? { sort: state.field, order: state.direction === 'asc' ? 'asc' : 'desc' }
-      : ({} as { sort?: string; order?: 'asc' | 'desc' }),
+    queryParams: (state.field
+      ? { sort: state.field, order: (state.direction === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc' }
+      : {}) as { sort?: string; order?: 'asc' | 'desc' },
   }
 }
