@@ -86,6 +86,27 @@ export interface MatchSuggestion {
   difference: number;
 }
 
+export interface AIMatchCandidate {
+  outbound_id: string;
+  outbound_date?: string;
+  site_name?: string;
+  product_name: string;
+  outstanding_amount: number;
+  match_amount: number;
+  confidence: number;
+  reason: string;
+}
+
+export interface AIMatchSuggestion {
+  receipt_id: string;
+  provider?: string;
+  model?: string;
+  summary: string;
+  candidates: AIMatchCandidate[];
+  total_suggested: number;
+  difference: number;
+}
+
 // 상태 Badge
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   received: '접수',

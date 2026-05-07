@@ -2,13 +2,13 @@ import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/utils';
 
 interface Props {
-  receiptAmount: number;
+  availableAmount: number;
   selectedTotal: number;
 }
 
-// 비유: 차액 = 입금액 - 선택 합계. 양수=선수금(돈이 남음), 음수=부족(매칭 불가), 0=정확 일치
-export default function MatchDifferenceDisplay({ receiptAmount, selectedTotal }: Props) {
-  const diff = receiptAmount - selectedTotal;
+// 비유: 차액 = 매칭 가능액 - 선택 합계. 양수=선수금(돈이 남음), 음수=부족(매칭 불가), 0=정확 일치
+export default function MatchDifferenceDisplay({ availableAmount, selectedTotal }: Props) {
+  const diff = availableAmount - selectedTotal;
 
   let label: string;
   let colorClass: string;
@@ -27,8 +27,8 @@ export default function MatchDifferenceDisplay({ receiptAmount, selectedTotal }:
   return (
     <div className={cn('rounded-md border p-3 text-xs space-y-1', colorClass)}>
       <div className="flex justify-between">
-        <span>입금액</span>
-        <span className="font-medium">{formatNumber(receiptAmount)}원</span>
+        <span>매칭 가능액</span>
+        <span className="font-medium">{formatNumber(availableAmount)}원</span>
       </div>
       <div className="flex justify-between">
         <span>선택 합계</span>

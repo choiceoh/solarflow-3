@@ -1,6 +1,6 @@
 # SolarFlow 진행 상황
 
-## 현재 상태 요약 (최종 업데이트: 2026-05-03)
+## 현재 상태 요약 (최종 업데이트: 2026-05-07)
 
 | 항목 | 상태 |
 |------|------|
@@ -11,8 +11,44 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-119 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-126 (D-080/D-081 번호 공백) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-07 세션 — 수금 관리 매칭 UX + AI 검토 후보
+
+### 완료
+- 수금 관리 탭에 매칭 상태 필터 추가
+  - 미매칭 / 부분 매칭 / 완전 매칭으로 입금 목록을 빠르게 좁힘
+  - 입금 행에서 바로 매칭 화면으로 이동하는 `매칭` 액션 추가
+- 매칭 화면 진입 개선
+  - URL `receipt_id` 쿼리로 특정 입금이 자동 선택되도록 연결
+  - 입금 선택 변경 시 자동 추천/AI 후보/선택 상태 정리
+- 확정 처리 개선
+  - 여러 매칭을 `POST /api/v1/receipt-matches/bulk` 로 한 번에 저장
+  - 서버에서 입금액 초과 매칭과 매출액 초과 매칭을 공통 검증
+  - 기존 단건 생성/정확 일치 자동 매칭에도 동일 과매칭 방지 검증 적용
+- AI 매칭 검토 기능 추가
+  - `POST /api/v1/receipt-matches/ai-suggest` 가 기존 Assistant provider 설정을 재사용해 후보/신뢰도/사유/요약 반환
+  - AI는 DB에 직접 쓰지 않고, 사용자가 후보를 확인한 뒤 bulk 확정
+  - 현재 UI 구조에 맞춰 미수 전액 후보만 자동 선택하고 부분 매칭 후보는 제외
+- dev mock API에 bulk 매칭과 AI 후보 응답 추가
+- D-126 결정 기록 추가
+
+### 검증
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공 — routes.golden 갱신
+- `cd backend && go test ./internal/feature ./internal/router ./internal/handler` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd frontend && npm ci` 성공
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건과 plugin timing warning 유지
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline warning 출력
+- `cd frontend && npm run test` 실패 — Vitest worker 시작 timeout 으로 테스트 본문 진입 전 종료
+- `cd frontend && npx vitest run --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=dot` 실패 — 150초 제한에서 시작 대기 후 timeout
+- `git diff --check` 성공
+- `graphify update .` 성공 — 4334 nodes / 6765 edges / 396 communities
 
 ---
 
