@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -74,6 +75,60 @@ func TestBuildBenchmarkExtractionMessagesDedupPolicy(t *testing.T) {
 	}
 	if !strings.Contains(user, "\"metric_key\": \"ddp_us\"") {
 		t.Fatalf("user prompt에 결측 지표가 누락됐습니다\n%s", user)
+	}
+}
+
+func TestBenchmarkSourceHomepageURLs(t *testing.T) {
+	src := benchmarkSource{
+		Homepage:          "https://www.opisnet.com/product/solar-weekly/",
+		HomepageFallbacks: []string{"", "https://www.opisnet.com/", "  "},
+	}
+	urls := src.homepageURLs()
+	if len(urls) != 2 {
+		t.Fatalf("빈 fallback 은 제거돼야 합니다, got=%v", urls)
+	}
+	if urls[0] != "https://www.opisnet.com/product/solar-weekly/" {
+		t.Fatalf("primary URL 이 첫 자리에 와야 합니다, got=%s", urls[0])
+	}
+	if urls[1] != "https://www.opisnet.com/" {
+		t.Fatalf("fallback URL 순서가 맞지 않습니다, got=%s", urls[1])
+	}
+
+	empty := benchmarkSource{Homepage: "  "}
+	if got := empty.homepageURLs(); got != nil {
+		t.Fatalf("Homepage 비면 nil 이어야 합니다, got=%v", got)
+	}
+}
+
+func TestSummarizeHomepageFailureSameStatus(t *testing.T) {
+	attempts := []homepageAttempt{
+		{url: "https://a.test/", method: "scrape", err: errors.New("HTTP 404: not found")},
+		{url: "https://a.test/", method: "raw", err: errors.New("HTTP 404")},
+		{url: "https://a.test/fallback", method: "scrape", err: errors.New("HTTP 404")},
+		{url: "https://a.test/fallback", method: "raw", err: errors.New("HTTP 404")},
+	}
+	out := summarizeHomepageFailure("OPIS Solar Weekly", attempts, true)
+	for _, want := range []string{"OPIS Solar Weekly", "URL 2개", "HTTP 404×4", "웹 검색으로 대체"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("warning 에 %q 누락: %q", want, out)
+		}
+	}
+	if strings.Count(out, "HTTP 404") != 1 {
+		t.Fatalf("동일 status 는 한 번만 등장해야 합니다: %q", out)
+	}
+}
+
+func TestSummarizeHomepageFailureMixedStatus(t *testing.T) {
+	attempts := []homepageAttempt{
+		{url: "https://a.test/", method: "scrape", err: errors.New("HTTP 404")},
+		{url: "https://a.test/", method: "raw", err: errors.New("dial tcp: i/o timeout")},
+	}
+	out := summarizeHomepageFailure("InfoLink Consulting", attempts, false)
+	if !strings.Contains(out, "HTTP 404") || !strings.Contains(out, "dial tcp") {
+		t.Fatalf("서로 다른 error 가 모두 노출돼야 합니다: %q", out)
+	}
+	if strings.Contains(out, "웹 검색으로 대체") {
+		t.Fatalf("searchFallback=false 면 안내 문구가 없어야 합니다: %q", out)
 	}
 }
 
