@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDownIcon, CheckIcon, SearchIcon, PlusIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchWithAuth } from '@/lib/api';
@@ -38,6 +39,7 @@ export function PartnerCombobox({
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const selected = partners.find((p) => p.partner_id === value);
   const filtered = search
@@ -46,6 +48,24 @@ export function PartnerCombobox({
   const hasCreateAction = creatable && !creating;
   const allOptionOffset = includeAllOption ? 1 : 0;
   const optionCount = filtered.length + allOptionOffset + (hasCreateAction ? 1 : 0);
+
+  // 가상 스크롤 — 1000+ 거래처에서도 부드럽게. allOption / creatable 은 wrapper
+  // 안 일반 자식으로 두고 filtered.map 부분만 가상화. activeIndex 변경 시
+  // partnerIndex 매핑해서 scrollToIndex (allOption 영역 0 / creatable 영역은 scroll 안 함).
+  const virtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => 32,
+    overscan: 8,
+    getItemKey: (index) => filtered[index]?.partner_id ?? index,
+  });
+  useEffect(() => {
+    if (!open || filtered.length === 0) return;
+    const partnerIndex = activeIndex - allOptionOffset;
+    if (partnerIndex >= 0 && partnerIndex < filtered.length) {
+      virtualizer.scrollToIndex(partnerIndex, { align: 'auto' });
+    }
+  }, [activeIndex, open, filtered.length, virtualizer, allOptionOffset]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -214,7 +234,7 @@ export function PartnerCombobox({
               className="flex-1 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
             />
           </div>
-          <div className="max-h-52 overflow-y-auto">
+          <div ref={listRef} className="max-h-52 overflow-y-auto" style={{ contain: 'strict' }}>
             {includeAllOption && (
               <button
                 type="button"
@@ -235,24 +255,32 @@ export function PartnerCombobox({
             {filtered.length === 0 ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">결과 없음</div>
             ) : (
-              filtered.map((p, index) => (
-                <button
-                  key={p.partner_id}
-                  type="button"
-                  onMouseEnter={() => setActiveIndex(index + allOptionOffset)}
-                  onClick={() => handleSelect(p.partner_id)}
-                  className={cn(
-                    'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm text-left hover:bg-accent hover:text-accent-foreground transition-colors',
-                    activeIndex === index + allOptionOffset && 'bg-accent text-accent-foreground',
-                    value === p.partner_id && 'bg-accent/40',
-                  )}
-                >
-                  <span className="size-3.5 shrink-0 flex items-center justify-center">
-                    {value === p.partner_id && <CheckIcon className="size-3.5" />}
-                  </span>
-                  <span className="flex-1 truncate">{p.partner_name}</span>
-                </button>
-              ))
+              <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+                {virtualizer.getVirtualItems().map((vRow) => {
+                  const p = filtered[vRow.index];
+                  if (!p) return null;
+                  const idx = vRow.index + allOptionOffset;
+                  return (
+                    <button
+                      key={vRow.key}
+                      type="button"
+                      onMouseEnter={() => setActiveIndex(idx)}
+                      onClick={() => handleSelect(p.partner_id)}
+                      className={cn(
+                        'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm text-left hover:bg-accent hover:text-accent-foreground transition-colors',
+                        activeIndex === idx && 'bg-accent text-accent-foreground',
+                        value === p.partner_id && 'bg-accent/40',
+                      )}
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${vRow.start}px)`, height: `${vRow.size}px` }}
+                    >
+                      <span className="size-3.5 shrink-0 flex items-center justify-center">
+                        {value === p.partner_id && <CheckIcon className="size-3.5" />}
+                      </span>
+                      <span className="flex-1 truncate">{p.partner_name}</span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
           {creatable && !creating && (
