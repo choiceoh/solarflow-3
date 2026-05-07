@@ -29,7 +29,7 @@ export const BARO_DOMAIN_PACK: Pack = {
   description: '영업 홈·CRM·견적·배차·미수·RFM 등 BARO 측 모든 화면 (D-108)',
   navItems: [
     // 홈
-    { key: 'baro-home', label: '영업 홈', abbr: '홈', path: '/baro/home', icon: Home, menu: 'baro_home', group: 'home', feature: 'baro.home' },
+    { key: 'baro-home', label: '영업 홈', abbr: '홈', path: '/baro/home', icon: Home, menu: 'baro_home', group: 'home', feature: 'baro.home', tenants: ['baro'] },
     // 구매 (BARO 측)
     { key: 'baro-purchase', label: '그룹내 매입', abbr: '매입', path: '/baro/group-purchase', icon: PackagePlus, menu: 'baro_group_purchase', group: '구매', feature: 'intercompany.request.baro', tenants: ['baro'] },
     { key: 'baro-incoming', label: '입고예정', abbr: '입고', path: '/baro/incoming', icon: Ship, menu: 'baro_incoming', group: '구매', feature: 'baro.incoming', tenants: ['baro'] },
