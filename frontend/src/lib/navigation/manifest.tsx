@@ -54,15 +54,15 @@ const PurchaseHistoryPage = lazy(() => import('@/packs/module-finance/pages/Purc
 const ApprovalPage = lazy(() => import('@/packs/module-finance/pages/ApprovalPage'));
 
 // settings/* 는 시스템 공통이라 그대로.
-const SettingsLayout = lazy(() => import('@/pages/settings/SettingsLayout'));
+const SettingsLayout = lazy(() => import('@/packs/erp-core/pages/settings/SettingsLayout'));
 const SettingsIndexRedirect = lazy(() =>
-  import('@/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
+  import('@/packs/erp-core/pages/settings/SettingsLayout').then((m) => ({ default: m.SettingsIndexRedirect })),
 );
-const AdminSettingsPage = lazy(() => import('@/pages/settings/AdminSettingsPage'));
-const AuditLogsPage = lazy(() => import('@/pages/settings/AuditLogsPage'));
-const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
-const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
-const FeatureMatrixPage = lazy(() => import('@/pages/settings/FeatureMatrixPage'));
+const AdminSettingsPage = lazy(() => import('@/packs/erp-core/pages/settings/AdminSettingsPage'));
+const AuditLogsPage = lazy(() => import('@/packs/erp-core/pages/settings/AuditLogsPage'));
+const PersonalSettingsPage = lazy(() => import('@/packs/erp-core/pages/settings/PersonalSettingsPage'));
+const SitePlaceholderPage = lazy(() => import('@/packs/erp-core/pages/settings/SitePlaceholderPage'));
+const FeatureMatrixPage = lazy(() => import('@/packs/erp-core/pages/settings/FeatureMatrixPage'));
 const PartnerPriceBookPage = lazy(() => import('@/packs/baro-domain/pages/PartnerPriceBookPage'));
 const PartnerCockpitPage = lazy(() => import('@/packs/baro-domain/pages/PartnerCockpitPage'));
 const QuoteBuilderPage = lazy(() => import('@/packs/baro-domain/pages/QuoteBuilderPage'));
