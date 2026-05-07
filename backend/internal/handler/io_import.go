@@ -11,6 +11,7 @@ import (
 
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbrpc"
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
@@ -1093,23 +1094,8 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		poData, _, err := h.DB.From("purchase_orders").
-			Insert(poReq, false, "", "", "").
-			Execute()
-		if err != nil {
-			log.Printf("[PO Import 헤더 INSERT 실패] po_number=%s, err=%v", poNum, err)
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "purchase_order", Message: "PO 등록 실패: " + err.Error()})
-			continue
-		}
-
-		var createdPOs []model.PurchaseOrder
-		if err := json.Unmarshal(poData, &createdPOs); err != nil || len(createdPOs) == 0 {
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "purchase_order", Message: "PO 등록 결과 확인 실패"})
-			continue
-		}
-		poID := createdPOs[0].POID
-
 		lineOK := true
+		lineReqs := make([]model.CreatePOLineRequest, 0, len(grp.LineRows))
 		for j, lineRow := range grp.LineRows {
 			lineRowNum := grp.LineIdxes[j]
 
@@ -1127,23 +1113,32 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 				lineOK = false
 				continue
 			}
-			lineReq.POID = poID
 
-			if msg := lineReq.Validate(); msg != "" {
-				importErrors = append(importErrors, model.ImportError{Row: lineRowNum, Field: "po_line_items", Message: msg})
+			if nestedMsg := validateNestedPOLines([]model.CreatePOLineRequest{lineReq}); nestedMsg != "" {
+				importErrors = append(importErrors, model.ImportError{Row: lineRowNum, Field: "po_line_items", Message: nestedMsg})
 				lineOK = false
 				continue
 			}
+			lineReqs = append(lineReqs, lineReq)
+		}
 
-			_, _, err = h.DB.From("po_line_items").
-				Insert(lineReq, false, "", "", "").
-				Execute()
-			if err != nil {
-				log.Printf("[PO Import 라인 INSERT 실패] po_number=%s, row=%d, err=%v", poNum, lineRowNum, err)
-				importErrors = append(importErrors, model.ImportError{Row: lineRowNum, Field: "po_line_items", Message: "라인 등록 실패"})
-				lineOK = false
-				continue
-			}
+		if !lineOK {
+			continue
+		}
+
+		createdPOData, err := dbrpc.Call(r.Context(), "sf_create_purchase_order_with_lines", model.CreatePurchaseOrderWithLinesRPCRequest{
+			PO:    model.NewPurchaseOrderInsert(poReq),
+			Lines: lineReqs,
+		})
+		if err != nil {
+			log.Printf("[PO Import 트랜잭션 INSERT 실패] po_number=%s, err=%v", poNum, err)
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "purchase_order", Message: "PO 등록 실패: " + err.Error()})
+			continue
+		}
+		var createdPO model.PurchaseOrder
+		if err := json.Unmarshal(createdPOData, &createdPO); err != nil || createdPO.POID == "" {
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "purchase_order", Message: "PO 등록 결과 확인 실패"})
+			continue
 		}
 
 		if lineOK {

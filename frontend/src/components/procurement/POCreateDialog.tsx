@@ -1,6 +1,6 @@
 // 발주(PO) 신규 등록 다이얼로그.
 // 비유: 발주서 한 장 — 헤더(법인·제조사·계약) + 라인(품번·수량·단가)을 한 화면에서 받는다.
-// 라인 추가/삭제로 N건을 한 PO에 묶는다. 등록 시 헤더 POST → 라인 POST × N 직렬 처리.
+// 라인 추가/삭제로 N건을 한 PO에 묶는다. 등록 시 헤더+라인을 한 번에 POST하여 부분 저장을 막는다.
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
@@ -19,7 +19,7 @@ import { fetchWithAuth } from '@/lib/api';
 import { notify } from '@/lib/notify';
 import { useAppStore } from '@/stores/appStore';
 import { CONTRACT_TYPES_ACTIVE } from '@/types/procurement';
-import type { ContractType, PurchaseOrder, POLineItem } from '@/types/procurement';
+import type { ContractType, PurchaseOrder } from '@/types/procurement';
 import type { Manufacturer } from '@/types/masters';
 
 interface ProductLite {
@@ -134,7 +134,6 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
   // 등록 전 검증 — 메시지로만 막고, 인라인 표시는 1차 범위 외.
   function validate(): string | null {
     if (!selectedCompanyId) return '좌측 상단에서 법인을 먼저 선택해주세요';
-    if (!poNumber.trim()) return '발주번호를 입력해주세요';
     if (!manufacturerId) return '제조사를 선택해주세요';
     if (!contractDate) return '계약일을 입력해주세요';
     if (contractType === 'frame' && (!periodStart || !periodEnd)) {
@@ -158,7 +157,7 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
     setSubmitting(true);
     try {
       const headerPayload = {
-        po_number: poNumber.trim(),
+        po_number: poNumber.trim() || undefined,
         company_id: selectedCompanyId,
         manufacturer_id: manufacturerId,
         contract_type: contractType,
@@ -169,44 +168,31 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
         contract_period_end: contractType === 'frame' ? periodEnd : undefined,
         memo: memo.trim() || undefined,
         status: 'draft' as const,
-      };
-      const created = await fetchWithAuth<PurchaseOrder>('/api/v1/pos', {
-        method: 'POST',
-        body: JSON.stringify(headerPayload),
-      });
-
-      const lineErrors: string[] = [];
-      for (const l of lines) {
-        try {
-          // CreatePOLineRequest는 unit_price_usd(USD/panel)만 받음 — USD/Wp × spec_wp로 변환.
+        line_items: lines.map((l) => {
           const product = productById.get(l.product_id);
           const specWp = product?.spec_wp ?? 0;
           const wp = Number(l.unit_price_usd_wp);
           const qty = Number(l.quantity);
           const unitPriceUsd = specWp > 0 ? wp * specWp : 0;
           const totalAmountUsd = unitPriceUsd * qty;
-          await fetchWithAuth<POLineItem>(`/api/v1/pos/${created.po_id}/lines`, {
-            method: 'POST',
-            body: JSON.stringify({
-              product_id: l.product_id,
-              quantity: qty,
-              unit_price_usd: unitPriceUsd,
-              total_amount_usd: totalAmountUsd,
-              item_type: l.item_type,
-              payment_type: l.payment_type,
-              memo: l.memo.trim() || undefined,
-            }),
-          });
-        } catch (e) {
-          lineErrors.push(e instanceof Error ? e.message : '라인 등록 실패');
-        }
-      }
+          return {
+            product_id: l.product_id,
+            quantity: qty,
+            unit_price_usd: specWp > 0 ? unitPriceUsd : undefined,
+            unit_price_usd_wp: wp,
+            total_amount_usd: specWp > 0 ? totalAmountUsd : undefined,
+            item_type: l.item_type,
+            payment_type: l.payment_type,
+            memo: l.memo.trim() || undefined,
+          };
+        }),
+      };
+      const created = await fetchWithAuth<PurchaseOrder>('/api/v1/pos', {
+        method: 'POST',
+        body: JSON.stringify(headerPayload),
+      });
 
-      if (lineErrors.length > 0) {
-        notify.error(`PO는 등록됐지만 라인 ${lineErrors.length}개 실패: ${lineErrors[0]}`);
-      } else {
-        notify.success(`PO ${created.po_number ?? created.po_id.slice(0, 8)} 등록 완료`);
-      }
+      notify.success(`PO ${created.po_number ?? created.po_id.slice(0, 8)} 등록 완료`);
       onCreated(created);
       onClose();
     } catch (e) {
@@ -228,8 +214,8 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
 
         <div className="space-y-4">
           <section className="grid grid-cols-2 gap-3">
-            <FormField size="dense" label="발주번호" required>
-              <Input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="PO-2026-001" />
+            <FormField size="dense" label="발주번호">
+              <Input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="확인 전이면 비워둠" />
             </FormField>
             <FormField size="dense" label="제조사" required>
               <Select value={manufacturerId} onValueChange={(v) => setManufacturerId(v ?? '')}>
@@ -369,4 +355,3 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
     </Dialog>
   );
 }
-

@@ -21,6 +21,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useSidebarTabs } from '@/hooks/useSidebarTabs';
 import { useUserPersona } from '@/hooks/useUserPersona';
 import { useAppStore } from '@/stores/appStore';
+import type { AlertItem } from '@/types/alerts';
 import { useEffect, useMemo, useState } from 'react';
 
 const SIDEBAR_COLLAPSED_KEY = 'sf.sidebar.collapsed';
@@ -32,7 +33,6 @@ function readCollapsedFromStorage(): boolean {
     return false;
   }
 }
-import type { AlertItem } from '@/types/alerts';
 
 const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/inventory': { title: '가용재고', breadcrumb: '재고 / 예약 가능 수량' },
