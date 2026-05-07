@@ -40,3 +40,10 @@ export function callsFor(path: string) {
     ([calledPath]) => calledPath === path,
   );
 }
+
+// bun test 는 같은 file 안의 it 사이에 mock.calls 가 누적됨 — afterEach 에서 호출.
+// (vitest 의 vi.clearAllMocks() 자리. 명시적으로 fetchWithAuth 만 clear 하므로
+// 다른 mock 은 각 테스트 파일이 직접 처리.)
+export function clearFetchWithAuthMock() {
+  (fetchWithAuth as unknown as MockedFetchWithAuth).mockClear();
+}
