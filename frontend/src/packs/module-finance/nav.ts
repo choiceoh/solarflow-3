@@ -32,7 +32,7 @@ export const MODULE_FINANCE_PACK: Pack = {
     { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs', group: '현황', feature: 'calc.margin_analysis', tenants: MODULE_TENANTS },
     { key: 'purchase-history', label: '구매 이력', abbr: '이력', path: '/purchase-history', icon: History, menu: 'purchase_history', group: '현황', feature: 'tx.price_history', tenants: MODULE_TENANTS },
     { key: 'price-forecast', label: '가격예측', abbr: '가격', path: '/price-forecast', icon: TrendingUp, menu: 'price_forecast', group: '현황', feature: 'tx.price_benchmark', tenants: MODULE_TENANTS },
-    // 결재안 — 카탈로그 미정의 — tenants fallback (module 계열만).
-    { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', group: '도구', tenants: MODULE_TENANTS, isWip: true },
+    // PR-8: 카탈로그 등재 (tx.approval, FrontendOnly) + module 계열 tenant 가드.
+    { key: 'approval', label: '결재안', abbr: '결재', path: '/approval', icon: FileSignature, menu: 'approval', group: '도구', feature: 'tx.approval', tenants: MODULE_TENANTS, isWip: true },
   ],
 };

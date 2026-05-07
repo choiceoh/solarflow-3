@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Bot, Plus, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import type { UIMessage } from 'ai';
-import { ChatBox } from '@/pages/AssistantPage';
+import { ChatBox } from '@/packs/erp-core/pages/AssistantPage';
 import { fetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
 import { detectPageLabel } from '@/lib/pageContext';
