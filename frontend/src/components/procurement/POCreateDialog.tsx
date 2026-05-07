@@ -3,6 +3,7 @@
 // 라인 추가/삭제로 N건을 한 PO에 묶는다. 등록 시 헤더 POST → 라인 POST × N 직렬 처리.
 
 import { useEffect, useMemo, useState } from 'react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -62,6 +63,8 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [products, setProducts] = useState<ProductLite[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  // 라인 추가/삭제 시 자식 mount/unmount 자동 애니메이션 (smooth list reorder).
+  const [linesParent] = useAutoAnimate<HTMLDivElement>();
 
   // 헤더
   const [poNumber, setPoNumber] = useState('');
@@ -272,7 +275,7 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
                 <Plus className="mr-1 h-3 w-3" />라인 추가
               </Button>
             </div>
-            <div className="space-y-2">
+            <div ref={linesParent} className="space-y-2">
               {lines.map((line, idx) => (
                 <div key={line.key} className="rounded-md border border-[var(--line)] p-2.5">
                   <div className="mb-2 flex items-center justify-between">

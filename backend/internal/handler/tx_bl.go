@@ -104,6 +104,97 @@ func parseBLSort(r *http.Request) (column string, ascending bool) {
 	return column, ascending
 }
 
+type blListAggregate struct {
+	LineCount        int
+	TotalCapacityKW  float64
+	TotalInvoiceUSD  float64
+	AvgCentsPerWP    float64
+	FirstProductCode *string
+	FirstProductName *string
+	FirstSpecWP      *int
+}
+
+func computeBLListAggregates(lines []model.BLLineWithProduct) map[string]blListAggregate {
+	aggregates := make(map[string]blListAggregate)
+	for _, line := range lines {
+		agg := aggregates[line.BLID]
+		agg.LineCount++
+		agg.TotalCapacityKW += line.CapacityKW
+		if line.InvoiceAmountUSD != nil {
+			agg.TotalInvoiceUSD += *line.InvoiceAmountUSD
+		}
+		if agg.FirstProductCode == nil && line.Products != nil {
+			productCode := line.Products.ProductCode
+			productName := line.Products.ProductName
+			specWP := line.Products.SpecWP
+			agg.FirstProductCode = &productCode
+			agg.FirstProductName = &productName
+			agg.FirstSpecWP = &specWP
+		}
+		aggregates[line.BLID] = agg
+	}
+	for blID, agg := range aggregates {
+		if agg.TotalCapacityKW > 0 {
+			agg.AvgCentsPerWP = (agg.TotalInvoiceUSD / (agg.TotalCapacityKW * 1000)) * 100
+		}
+		aggregates[blID] = agg
+	}
+	return aggregates
+}
+
+func attachBLListAggregates(shipments []model.BLShipment, aggregates map[string]blListAggregate) []model.BLShipment {
+	for i := range shipments {
+		agg, ok := aggregates[shipments[i].BLID]
+		if !ok {
+			continue
+		}
+		shipments[i].LineCount = agg.LineCount
+		shipments[i].TotalMW = agg.TotalCapacityKW / 1000
+		shipments[i].AvgCentsPerWP = agg.AvgCentsPerWP
+		shipments[i].FirstProductCode = agg.FirstProductCode
+		shipments[i].FirstProductName = agg.FirstProductName
+		shipments[i].FirstSpecWP = agg.FirstSpecWP
+	}
+	return shipments
+}
+
+func (h *BLHandler) loadBLListAggregates(shipments []model.BLShipment) (map[string]blListAggregate, error) {
+	if len(shipments) == 0 {
+		return map[string]blListAggregate{}, nil
+	}
+
+	seen := make(map[string]struct{}, len(shipments))
+	blIDs := make([]string, 0, len(shipments))
+	for _, shipment := range shipments {
+		if shipment.BLID == "" {
+			continue
+		}
+		if _, ok := seen[shipment.BLID]; ok {
+			continue
+		}
+		seen[shipment.BLID] = struct{}{}
+		blIDs = append(blIDs, shipment.BLID)
+	}
+	if len(blIDs) == 0 {
+		return map[string]blListAggregate{}, nil
+	}
+
+	lineData, _, err := h.DB.From("bl_line_items").
+		Select("bl_line_id, bl_id, capacity_kw, invoice_amount_usd, products(product_code, product_name, spec_wp)", "exact", false).
+		In("bl_id", blIDs).
+		Order("bl_line_id", &postgrest.OrderOpts{Ascending: true}).
+		Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	var lines []model.BLLineWithProduct
+	if err := json.Unmarshal(lineData, &lines); err != nil {
+		return nil, err
+	}
+	return computeBLListAggregates(lines), nil
+}
+
 // List — GET /api/v1/bls — B/L 목록 조회 (서버사이드 페이지·검색·정렬).
 func (h *BLHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("bl_shipments").Select("*", "exact", false)
@@ -128,6 +219,14 @@ func (h *BLHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
 		return
 	}
+
+	aggregates, err := h.loadBLListAggregates(shipments)
+	if err != nil {
+		log.Printf("[B/L 목록 품목 요약 조회 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "B/L 품목 요약 조회에 실패했습니다")
+		return
+	}
+	shipments = attachBLListAggregates(shipments, aggregates)
 
 	w.Header().Set("X-Total-Count", strconv.FormatInt(count, 10))
 	response.RespondJSON(w, http.StatusOK, shipments)

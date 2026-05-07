@@ -29,6 +29,12 @@ type BLShipment struct {
 	CounterpartCompanyID *string  `json:"counterpart_company_id"`
 	DeclarationNumber    *string  `json:"declaration_number"`
 	CIFAmountKRW         *int64   `json:"cif_amount_krw,omitempty"` // 면장 CIF 원화금액 (부가세·무상분 과세 제외)
+	LineCount            int      `json:"line_count"`               // 목록 전용: 라인아이템 수
+	TotalMW              float64  `json:"total_mw"`                 // 목록 전용: 라인아이템 capacity_kw 합계 / 1000
+	AvgCentsPerWP        float64  `json:"avg_cents_per_wp"`         // 목록 전용: invoice_amount_usd / 총 Wp * 100
+	FirstProductCode     *string  `json:"first_product_code,omitempty"`
+	FirstProductName     *string  `json:"first_product_name,omitempty"`
+	FirstSpecWP          *int     `json:"first_spec_wp,omitempty"`
 }
 
 // BLWithRelations — 법인/제조사/창고 정보를 포함한 B/L 목록 조회 결과
