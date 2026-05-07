@@ -37,7 +37,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 
 **노출되지 않는 것** (module 계열 전용 — D-108/D-119로 차단):
 - P/O 발주, L/C 개설, B/L 입고, 면장/원가
-- L/C 한도, 매출 분석
+- L/C 한도, 매출 분석, 가격예측
 - 결재안 (D-173 PR #173로 BARO에서 제거)
 - 바로 매입요청 inbox (이건 탑솔라 측에서 바로 요청을 받는 화면)
 
@@ -49,6 +49,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 - **[D-039](DECISIONS.md#d-039)** — 그룹내거래(탑솔라↔바로) 양방향. 탑솔라 출고 = 바로 입고 자동 생성, 입고단가는 탑솔라 판매단가로 잠금.
 - **[D-116](DECISIONS.md#d-116)** — BARO 입고예정은 전용 sanitized API로 ETA·수량만 노출
 - **[D-117](DECISIONS.md#d-117)** — BARO 자체 구매이력은 BR 법인 원가만 별도 노출
+- **[D-124](DECISIONS.md#d-124)** — 가격예측은 module 계열 전용이라 BARO에는 노출하지 않는다.
 
 ## BARO 전용 백엔드 엔드포인트 (`baroOnly` 미들웨어)
 

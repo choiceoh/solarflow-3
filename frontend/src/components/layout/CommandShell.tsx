@@ -23,6 +23,7 @@ import {
   Ship,
   Sun,
   Tags,
+  TrendingUp,
   Truck,
   Wallet,
   type LucideIcon,
@@ -140,6 +141,7 @@ const NAV_GROUPS: CommandNavGroup[] = [
       { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs', tenants: MODULE_TENANTS },
       // 구매 이력: PO/단가/변경계약 read-only 통합 타임라인 (module 계열 수입 흐름 전용, executive 포함)
       { key: 'purchase-history', label: '구매 이력', abbr: '이력', path: '/purchase-history', icon: History, menu: 'purchase_history', tenants: MODULE_TENANTS },
+      { key: 'price-forecast', label: '가격예측', abbr: '가격', path: '/price-forecast', icon: TrendingUp, menu: 'price_forecast', tenants: MODULE_TENANTS },
       // BARO Phase 3: 거래처별 미수금/한도 보드 (BARO 전용)
       { key: 'baro-credit', label: '미수금/한도', abbr: '미수', path: '/baro/credit-board', icon: ShieldAlert, menu: 'baro_credit', tenants: ['baro'] },
     ],
@@ -167,6 +169,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/orders': { title: '수주 관리', breadcrumb: '판매 / 수주 및 수금' },
   '/banking': { title: 'L/C 한도', breadcrumb: '현황 / 은행 한도' },
   '/sales-analysis': { title: '매출 분석', breadcrumb: '현황 / 매출과 이익' },
+  '/price-forecast': { title: '가격예측', breadcrumb: '현황 / 외부 가격 벤치마크' },
   '/crm/inbox': { title: '내 미처리 문의', breadcrumb: '판매 / 후속 답변 대기' },
   '/import': { title: '엑셀 입력', breadcrumb: '도구 / 일괄 가져오기' },
   '/library': { title: '자료실', breadcrumb: '도구 / 업무 자료' },

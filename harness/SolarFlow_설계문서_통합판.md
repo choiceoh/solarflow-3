@@ -694,6 +694,27 @@ PO 화면에서 바로 표시:
 4. 월별 매출/마진
 5. 재고 회전율
 
+#### 가격예측 벤치마크 (module 계열 전용)
+
+외부 시세지·입찰·제조사 ASP를 같은 시계열로 저장해 구매 협상 기준선으로 사용한다.
+
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| benchmark_id | UUID | ✅ | PK |
+| run_id | UUID | | AI 수집 실행 로그 |
+| source_key | VARCHAR | ✅ | opis / infolink / trendforce / pvinsights / china_tender / cpia_floor / tier1_asp |
+| metric_key | VARCHAR | ✅ | CMM, forward Q+1~Q+4, DDP US/EU, centralized/distributed, 입찰, floor, ASP 등 |
+| value_date | DATE | ✅ | 관측일 |
+| market_region | VARCHAR | ✅ | fob_china / ddp_us / ddp_europe / china_domestic / china_export / global |
+| basis | VARCHAR | ✅ | spot / forward / ddp / tender / floor / asp |
+| price_usd_w | DECIMAL | | USD/W 가격 |
+| price_cny_w | DECIMAL | | CNY/W 가격 |
+| price_krw_w | DECIMAL | | KRW/W 가격 |
+| cargo_min_mw / cargo_max_mw | DECIMAL | | OPIS 기준 5~25MW 등 cargo size |
+| source_url / raw_excerpt | TEXT | | 근거 URL과 짧은 원문 근거 |
+
+수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. AI는 evidence에 명시된 가격만 저장하며, 유료 로그인 한계는 run warning으로 남긴다(D-124).
+
 #### 운영 수요 계획 (module_demand_forecasts)
 수주/출고 전 단계의 공사 예정 또는 유통 보정 수요를 월별·규격별로 수동 입력한다.
 

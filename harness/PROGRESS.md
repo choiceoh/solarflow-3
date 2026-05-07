@@ -16,6 +16,40 @@
 
 ---
 
+## 2026-05-07 세션 — 가격예측 벤치마크 + AI 수집 화면
+
+### 완료
+- module 계열 좌측 사이드바 `현황` 그룹에 `가격예측` 메뉴 추가 (`/price-forecast`)
+- `price_benchmarks`, `price_benchmark_runs` 마이그레이션 추가
+  - OPIS CMM/forward/DDP, InfoLink, TrendForce, PVinsights, 중국 국영 입찰, CPIA floor, Tier-1 ASP를 공통 시계열 구조로 저장
+  - 동일 source/metric/date/region/basis/currency 관측점은 중복 누적 대신 최신 수집값으로 갱신
+  - AI 수집 버튼 1회 실행 로그(provider/model/source_keys/inserted/skipped/warnings/evidence/raw_response) 보존
+- `GET/POST /api/v1/price-benchmarks`, `GET /runs`, `POST /ai-refresh` API 추가
+  - feature `tx.price_benchmark`로 module 계열(`topsolar`, `cable`) 전용 게이트 적용
+  - 기존 Assistant AI 설정과 선택적 `TAVILY_API_KEY`를 재사용해 evidence 기반 가격 관측값만 저장
+- 프론트엔드 가격예측 화면 추가
+  - x축 관측일, y축 가격(USD/W, CNY/W, KRW/W) Recharts 라인 차트
+  - source 필터, 기간/단위/검색, 관측값 테이블, AI 수집 로그
+- dev mock API에 가격예측 샘플 관측값과 AI 수집 응답 추가
+- D-124 결정 기록 및 module/cable/baro 인덱스 문서 동기화
+
+### 검증
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공 — routes.golden 갱신
+- `cd backend && go test ./internal/feature ./internal/router` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd frontend && npm install --package-lock-only --ignore-scripts --no-audit --no-fund` 성공 — 기존 lock 누락 패키지 보정
+- `cd frontend && npm ci` 성공
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
+- `cd frontend && npm run test` 성공 — 8 files / 67 tests
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 65건 출력
+- `http://127.0.0.1:5176/price-forecast` 목업 로그인 브라우저 smoke 성공 — 차트 SVG 5개, sidebar 메뉴, AI 수집 버튼, 테이블 18행 렌더
+- `git diff --check` 성공
+- `graphify update .` 성공 — 4217 nodes / 7832 edges / 338 communities
+
+---
+
 ## 2026-05-03 세션 — 자료실 게시글/첨부 업로드 전환
 
 ### 완료
