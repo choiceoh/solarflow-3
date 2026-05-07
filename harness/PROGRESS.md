@@ -11,12 +11,12 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-147 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수금 AI 매칭) |
+| DECISIONS | D-001~D-148 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-148 수금 매칭 AI 검토) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
 
-## 2026-05-07 세션 — 수금 관리 매칭 UX + AI 검토 후보
+## 2026-05-07 세션 — 수금 관리 매칭 UX + AI 검토 후보 (D-148)
 
 ### 완료
 - 수금 관리 탭에 매칭 상태 필터 추가
@@ -34,7 +34,7 @@
   - AI는 DB에 직접 쓰지 않고, 사용자가 후보를 확인한 뒤 bulk 확정
   - 현재 UI 구조에 맞춰 미수 전액 후보만 자동 선택하고 부분 매칭 후보는 제외
 - dev mock API에 bulk 매칭과 AI 후보 응답 추가
-- D-147 결정 기록 추가
+- D-148 결정 기록 추가
 
 ### 검증
 - `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공 — routes.golden 갱신
@@ -45,9 +45,9 @@
 - `cd frontend && npm ci` 성공
 - `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건과 plugin timing warning 유지
 - `cd frontend && npm run test` 성공 — 10 files / 84 tests
-- `cd frontend && npm run lint` 종료코드 0 — 최신 main 기준 ProcurementPage pagination reset hook 경고 4건 출력
+- `cd frontend && npm run lint` 종료코드 0 — 최신 main 기준 module-finance ProcurementPage pagination reset hook 경고 4건 출력
 - `git diff --check` 성공
-- `graphify update .` 성공 — 4691 nodes / 7496 edges / 403 communities
+- `graphify update .` 성공 — 4713 nodes / 7540 edges / 399 communities
 
 ---
 
@@ -173,6 +173,32 @@
 
 ### 알려진 제한
 - 초기 검증에서는 Vitest worker bootstrap timeout이 있었으나, 최신 `main` 의존성 lock 동기화와 재설치 후 PR 전 재검증에서 프론트 단위테스트가 통과했다.
+
+---
+
+## 2026-05-07 세션 — B/L 목록 집계 서버화
+
+### 완료
+- `GET /api/v1/bls` 목록 응답에 라인 품목 요약 필드 추가
+  - `line_count`, `total_mw`, `avg_cents_per_wp`, `first_product_code`, `first_product_name`, `first_spec_wp`
+  - 현재 페이지의 B/L ID를 모아 `bl_line_items`를 한 번만 조회하고 서버에서 품목 수/MW/평균 ¢/Wp/대표 품목을 집계
+- B/L 목록 표에서 B/L별 `/lines` 추가 호출을 제거하고 목록 응답의 집계값만 사용하도록 전환
+- 목록 작업칩 보조 함수(`ETA 임박/지연`, `ERP 등록 필요`, `품목 없음`)를 복구하고, 라인 수가 실제로 0으로 내려온 경우에만 `품목 없음` 표시
+- `domestic_foreign` 입고 유형을 프론트 타입/라벨/상태 매핑에 반영
+- dev mock `/api/v1/bls`도 서버 응답과 같은 집계 필드를 내려주도록 동기화
+
+### 검증
+- `cd backend && go test ./internal/handler -run 'Test(ComputeBLListAggregates|AttachBLListAggregates)'` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd frontend && npx biome lint src/components/inbound/BLListTable.tsx src/types/inbound.ts src/lib/devMockApi.ts` 성공
+- 최신 `main` 리베이스 후 `cd frontend && npm ci` 성공 — lock 기준 의존성 재설치
+- 최신 `main` 리베이스 후 `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run test` 성공 — 10개 파일 / 84개 테스트
+- `cd frontend && npm run lint` 종료코드 0 — 페이지네이션 reset hook 관련 경고 4건 출력
+- `git diff --check` 성공
+- `graphify update .` 성공 — AST 그래프 갱신
 
 ---
 

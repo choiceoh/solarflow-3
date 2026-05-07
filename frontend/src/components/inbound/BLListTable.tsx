@@ -4,68 +4,25 @@ import { formatDate, moduleLabel } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
 import SortableTH from '@/components/common/SortableTH';
 import InboundStatusBadge from './InboundStatusBadge';
-import { INBOUND_TYPE_LABEL, type BLShipment, type BLLineItem } from '@/types/inbound';
+import { INBOUND_TYPE_LABEL, type BLShipment } from '@/types/inbound';
 import type { Manufacturer } from '@/types/masters';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { useSort } from '@/hooks/useSort';
 
+type WorkChipTone = 'danger' | 'warn' | 'info' | 'muted';
+
 interface BLAgg {
   firstLine?: { name: string; spec: string; specWp?: number };
-  lineCount: number;
+  lineCount?: number;
   extraCount: number;
   avgCentsPerWp: number;
   totalMw: number;
 }
 
-type WorkChipTone = 'info' | 'warn' | 'danger';
-
 interface WorkChip {
   label: string;
   tone: WorkChipTone;
-}
-
-const DONE_STATUSES = new Set<BLShipment['status']>(['completed', 'erp_done']);
-
-function daysUntil(date?: string) {
-  if (!date) return null;
-  const target = new Date(date);
-  if (Number.isNaN(target.getTime())) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  target.setHours(0, 0, 0, 0);
-  return Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
-}
-
-function dueText(date?: string) {
-  const d = daysUntil(date);
-  if (d == null) return 'ETA 미정';
-  if (d < 0) return `ETA ${Math.abs(d)}일 지연`;
-  if (d === 0) return 'ETA 오늘';
-  return `ETA D-${d}`;
-}
-
-function workChipClass(tone: WorkChipTone) {
-  if (tone === 'danger') return 'border-red-200 bg-red-50 text-red-700';
-  if (tone === 'warn') return 'border-amber-200 bg-amber-50 text-amber-700';
-  return 'border-blue-200 bg-blue-50 text-blue-700';
-}
-
-function buildWorkChips(bl: BLShipment, a?: BLAgg): WorkChip[] {
-  const chips: WorkChip[] = [];
-  const d = daysUntil(bl.eta);
-  if (!DONE_STATUSES.has(bl.status) && d != null) {
-    if (d < 0) chips.push({ label: 'ETA 지연', tone: 'danger' });
-    else if (d <= 7) chips.push({ label: 'ETA 임박', tone: 'warn' });
-  }
-  if (a && a.lineCount === 0) chips.push({ label: '품목 없음', tone: 'warn' });
-  if (bl.inbound_type === 'import' && bl.status === 'customs' && !bl.declaration_number && !bl.cif_amount_krw) {
-    chips.push({ label: '면장 확인', tone: 'warn' });
-  }
-  if (bl.status === 'completed' && bl.erp_registered !== true) {
-    chips.push({ label: 'ERP 미등록', tone: 'info' });
-  }
-  return chips;
 }
 
 interface Props {
@@ -76,12 +33,99 @@ interface Props {
   onSort?: (field: string) => void;
 }
 
+const DONE_STATUSES = new Set<BLShipment['status']>(['completed', 'erp_done']);
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function daysUntil(date?: string): number | null {
+  if (!date) return null;
+  const due = new Date(`${date.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(due.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((due.getTime() - today.getTime()) / MS_PER_DAY);
+}
+
+function dueText(date?: string): string {
+  const days = daysUntil(date);
+  if (days == null) return 'ETA 미정';
+  if (days < 0) return `ETA ${Math.abs(days)}일 지연`;
+  if (days === 0) return 'ETA 오늘';
+  return `ETA D-${days}`;
+}
+
+function workChipClass(tone: WorkChipTone): string {
+  switch (tone) {
+    case 'danger':
+      return 'border-red-200 bg-red-50 text-red-700';
+    case 'warn':
+      return 'border-amber-200 bg-amber-50 text-amber-700';
+    case 'info':
+      return 'border-sky-200 bg-sky-50 text-sky-700';
+    default:
+      return 'border-muted bg-muted/30 text-muted-foreground';
+  }
+}
+
+function aggFromBL(bl: BLShipment): BLAgg {
+  const lineCount = typeof bl.line_count === 'number' ? bl.line_count : undefined;
+  const productCode = bl.first_product_code ?? '';
+  const productName = bl.first_product_name ?? '';
+  return {
+    firstLine: productCode || productName
+      ? {
+          name: productName || '—',
+          spec: productCode || '—',
+          specWp: bl.first_spec_wp,
+        }
+      : undefined,
+    lineCount,
+    extraCount: lineCount == null ? 0 : Math.max(0, lineCount - 1),
+    avgCentsPerWp: Number(bl.avg_cents_per_wp ?? 0),
+    totalMw: Number(bl.total_mw ?? 0),
+  };
+}
+
+function buildWorkChips(bl: BLShipment, agg?: BLAgg): WorkChip[] {
+  const chips: WorkChip[] = [];
+  const days = daysUntil(bl.eta);
+  const isDone = DONE_STATUSES.has(bl.status);
+
+  if (agg?.lineCount === 0) {
+    chips.push({ label: '품목 없음', tone: 'danger' });
+  }
+  if (!isDone) {
+    if (days == null) {
+      chips.push({ label: 'ETA 미정', tone: 'warn' });
+    } else if (days < 0) {
+      chips.push({ label: `ETA ${Math.abs(days)}일 지연`, tone: 'danger' });
+    } else if (days <= 7) {
+      chips.push({ label: 'ETA 임박', tone: 'warn' });
+    }
+  }
+  if (bl.status === 'arrived') {
+    chips.push({ label: '입고 확인', tone: 'info' });
+  }
+  if (bl.status === 'customs') {
+    chips.push({ label: '통관 처리', tone: 'info' });
+  }
+  if (bl.inbound_type === 'import' && bl.status === 'customs' && !bl.declaration_number && !bl.cif_amount_krw) {
+    chips.push({ label: '면장 확인', tone: 'warn' });
+  }
+  if (bl.status === 'completed' && bl.erp_registered !== true) {
+    chips.push({ label: 'ERP 미등록', tone: 'warn' });
+  }
+
+  return chips;
+}
+
 export default function BLListTable({ items, onSelect, sortField, sortDirection, onSort }: Props) {
   const companies = useAppStore((s) => s.companies);
   const companyMap = Object.fromEntries(companies.map((c) => [c.company_id, c.company_name]));
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const mfgMap = Object.fromEntries(manufacturers.map((m) => [m.manufacturer_id, m.name_kr]));
-  const [agg, setAgg] = useState<Record<string, BLAgg>>({});
+  const agg = useMemo<Record<string, BLAgg>>(() => (
+    Object.fromEntries(items.map((bl) => [bl.bl_id, aggFromBL(bl)]))
+  ), [items]);
 
   // 제조사 목록 1회 로드 (manufacturer_id → name_kr 룩업용)
   useEffect(() => {
@@ -90,42 +134,9 @@ export default function BLListTable({ items, onSelect, sortField, sortDirection,
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (items.length === 0) { setAgg({}); return; }
-    (async () => {
-      try {
-        const result: Record<string, BLAgg> = {};
-        await Promise.all(items.map(async (bl) => {
-          try {
-            const lines = await fetchWithAuth<BLLineItem[]>(`/api/v1/bls/${bl.bl_id}/lines`).catch(() => [] as BLLineItem[]);
-            const totalInvoice = (lines ?? []).reduce((s, l) => s + (l.invoice_amount_usd ?? 0), 0);
-            const totalWp = (lines ?? []).reduce((s, l) => s + (l.capacity_kw ?? 0) * 1000, 0);
-            const avgCentsPerWp = totalWp > 0 ? (totalInvoice / totalWp) * 100 : 0;
-            const totalMw = (lines ?? []).reduce((s, l) => s + (l.capacity_kw ?? 0), 0) / 1000;
-            const first = (lines ?? [])[0];
-            result[bl.bl_id] = {
-              firstLine: first ? {
-                name: first.product_name ?? first.products?.product_name ?? '—',
-                spec: first.product_code ?? first.products?.product_code ?? '—',
-                specWp: first.products?.spec_wp,
-              } : undefined,
-              lineCount: lines?.length ?? 0,
-              extraCount: Math.max(0, (lines?.length ?? 0) - 1),
-              avgCentsPerWp,
-              totalMw,
-            };
-          } catch { /* skip */ }
-        }));
-        if (!cancelled) setAgg(result);
-      } catch { /* ignore */ }
-    })();
-    return () => { cancelled = true; };
-  }, [items]);
-
   const controlled = onSort != null
     ? { sortField: sortField ?? null, sortDirection: sortDirection ?? null, onSort }
-    : undefined
+    : undefined;
   const { sorted, headerProps } = useSort<BLShipment>(items, (b, f) => {
     switch (f) {
       case 'bl_number': return b.bl_number ?? '';

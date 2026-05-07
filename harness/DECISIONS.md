@@ -1209,7 +1209,7 @@
   - 프론트엔드 dev mock 에서 미국 DDP 샘플을 제거해 `/price-forecast` 목업 차트도 중국·유럽만 표시한다.
 - **날짜**: 2026-05-07
 
-## D-147: 수금 매칭 — 결정적 자동 매칭과 AI 검토를 분리하고 확정은 bulk 검증으로 처리
+## D-148: 수금 매칭 — 결정적 자동 매칭과 AI 검토를 분리하고 확정은 bulk 검증으로 처리
 
 - **결정**: 수금 관리의 매칭 흐름을 세 단계로 정리한다.
   - **정확 일치 자동 매칭**: 기존 Rust outstanding 계산을 이용해 미수금 전액과 입금 잔액이 정확히 맞는 건만 추천/자동 처리한다. 이 경로는 결정적 계산으로 유지한다.
@@ -1228,5 +1228,5 @@
 - **검증**:
   - `go test ./internal/feature ./internal/router ./internal/handler` 통과.
   - `go test ./...` 및 `go vet ./...` 통과.
-  - 프론트엔드 `npm ci`, `npm run build`, `npm run test`, `npm run lint` 통과. lint 는 최신 main 기준 ProcurementPage pagination reset hook 경고 4건 유지.
+  - 프론트엔드 `npm ci`, `npm run build`, `npm run test`, `npm run lint` 통과. lint 는 최신 main 기준 module-finance ProcurementPage pagination reset hook 경고 4건 유지.
 - **날짜**: 2026-05-07
