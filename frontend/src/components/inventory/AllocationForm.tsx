@@ -1124,7 +1124,7 @@ export default function AllocationForm({
             /* 공사 현장 선택 모드 */
             <div className="space-y-1.5">
               <Label>
-                공사 현장 <span className="text-destructive">*</span>
+                공사 현장 <span className="text-destructive" aria-label="필수">*</span>
               </Label>
               <SiteCombobox
                 sites={sites}
@@ -1145,7 +1145,7 @@ export default function AllocationForm({
               {purpose === 'sale' ? (
                 <>
                   <div className="space-y-1.5">
-                    <Label>거래처명 <span className="text-destructive">*</span></Label>
+                    <Label>거래처명 <span className="text-destructive" aria-label="필수">*</span></Label>
                     <PartnerCombobox
                       partners={partners}
                       value={customerPartnerId}

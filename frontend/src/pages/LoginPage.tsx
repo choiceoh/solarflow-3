@@ -139,7 +139,7 @@ export default function LoginPage() {
           <Sun strokeWidth={2.4} />
         </span>
         <LoadingSpinner />
-        <p className="sf-mono text-[11px]" style={{ color: 'var(--sf-ink-3)' }}>SolarFlow 시작 중…</p>
+        <p className="sf-mono sf-text-ink-3 text-[11px]">SolarFlow 시작 중…</p>
       </div>
     );
   }

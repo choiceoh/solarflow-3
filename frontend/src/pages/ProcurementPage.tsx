@@ -16,6 +16,7 @@ import {
 import { fetchWithAuth } from "@/lib/api"
 import LoadingSpinner from "@/components/common/LoadingSpinner"
 import SkeletonRows from "@/components/common/SkeletonRows"
+import EmptyState from "@/components/common/EmptyState"
 import POListTable from "@/components/procurement/POListTable"
 import PODetailView from "@/components/procurement/PODetailView"
 import POCreateDialog from "@/components/procurement/POCreateDialog"
@@ -146,7 +147,7 @@ export default function ProcurementPage() {
     if (target) setSelectedPO(target)
   }, [location.search, poList])
   // 칩 필터는 모두 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
-  const { data: allPos, loading: poLoading, reload: reloadPO } = usePOList()
+  const { data: allPos, loading: poLoading, error: poError, reload: reloadPO } = usePOList()
   const { data: poSummary } = usePOSummary({
     status: poStatusFilter || undefined,
     manufacturer_id: poMfgFilter || undefined,
@@ -169,7 +170,7 @@ export default function ProcurementPage() {
   const [lcBankFilter, setLcBankFilter] = useState("")
   const [lcMfgFilter, setLcMfgFilter] = useState("")
   const [lcDateRange, setLcDateRange] = useState<DateRangeValue>(null)
-  const { data: allLcs, loading: lcLoading, reload: reloadLC } = useLCList()
+  const { data: allLcs, loading: lcLoading, error: lcError, reload: reloadLC } = useLCList()
   const { data: lcSummary } = useLCSummary({
     status: lcStatusFilter || undefined,
     bank_id: lcBankFilter || undefined,
@@ -764,7 +765,15 @@ export default function ProcurementPage() {
             <div className="sf-command-tab-body">
               <Tabs value={activeTab} onValueChange={handleTabChange}>
                 <TabsContent value="po">
-                  {poLoading ? (
+                  {poError ? (
+                    <EmptyState
+                      tone="error"
+                      message="PO 목록을 불러오지 못했습니다"
+                      description={poError}
+                      actionLabel="다시 시도"
+                      onAction={reloadPO}
+                    />
+                  ) : poLoading ? (
                     <SkeletonRows rows={8} />
                   ) : (
                     <POListTable
@@ -777,7 +786,15 @@ export default function ProcurementPage() {
                 </TabsContent>
 
                 <TabsContent value="lc">
-                  {lcLoading ? (
+                  {lcError ? (
+                    <EmptyState
+                      tone="error"
+                      message="LC 목록을 불러오지 못했습니다"
+                      description={lcError}
+                      actionLabel="다시 시도"
+                      onAction={reloadLC}
+                    />
+                  ) : lcLoading ? (
                     <SkeletonRows rows={8} />
                   ) : (
                     <LCListTable

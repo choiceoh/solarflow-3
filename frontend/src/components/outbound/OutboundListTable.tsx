@@ -37,7 +37,7 @@ function buildColumns(): ColumnDef<Outbound>[] {
       cell: (ob) => ob.group_trade ? (
         <span className="inline-flex items-center gap-1.5">
           <span className="sf-pill info">그룹</span>
-          <span className="text-[10px]" style={{ color: 'var(--sf-ink-3)' }}>{ob.target_company_name}</span>
+          <span className="sf-text-ink-3 text-[10px]">{ob.target_company_name}</span>
         </span>
       ) : '—',
       sortAccessor: (ob) => ob.group_trade ? 1 : 0,

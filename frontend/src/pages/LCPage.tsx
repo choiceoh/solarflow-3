@@ -4,6 +4,7 @@ import { useLCList } from '@/hooks/useProcurement';
 import { useFxTimeseries } from '@/hooks/usePublicFx';
 import { fetchWithAuth } from '@/lib/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import EmptyState from '@/components/common/EmptyState';
 import LCListTable from '@/components/procurement/LCListTable';
 import BLDetailView from '@/components/inbound/BLDetailView';
 import { MasterConsole } from '@/components/command/MasterConsole';
@@ -25,7 +26,7 @@ export default function LCPage() {
   const [blsVersion, setBlsVersion] = useState(0);
 
   // 칩 필터는 모두 클라이언트 사이드 — 서버 재요청 없이 즉시 반응.
-  const { data: lcs, loading, reload } = useLCList();
+  const { data: lcs, loading, error, reload } = useLCList();
 
   const filtered = useMemo(() => lcs.filter((l) => {
     if (statusFilter && l.status !== statusFilter) return false
@@ -169,7 +170,15 @@ export default function LCPage() {
           </>
         }
       >
-        {loading ? <LoadingSpinner /> : (
+        {error ? (
+          <EmptyState
+            tone="error"
+            message="LC 목록을 불러오지 못했습니다"
+            description={error}
+            actionLabel="다시 시도"
+            onAction={reload}
+          />
+        ) : loading ? <LoadingSpinner /> : (
           <LCListTable
             items={filtered}
             onSettle={handleSettleLC}

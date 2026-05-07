@@ -60,9 +60,9 @@ export default function UnifiedImportResultDialog({ result, onClose }: Props) {
 
 function OutcomeRow({ outcome }: { outcome: UnifiedSubmitOutcome }) {
   const icon = outcome.status === 'success'
-    ? <CheckCircle2 className="h-4 w-4" style={{ color: 'var(--sf-pos)' }} />
+    ? <CheckCircle2 className="sf-text-pos h-4 w-4" />
     : outcome.status === 'failed'
-      ? <XCircle className="h-4 w-4" style={{ color: 'var(--sf-neg)' }} />
+      ? <XCircle className="sf-text-neg h-4 w-4" />
       : <MinusCircle className="h-4 w-4 text-muted-foreground" />;
 
   const detail = (() => {
