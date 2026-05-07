@@ -45,21 +45,25 @@ type PriceBenchmark struct {
 }
 
 // PriceBenchmarkRun — 버튼 1회 실행 단위의 수집 로그.
+// PR 47: EvidenceHashes / Diagnostics / SanityReview 추가 (정합성 검토용).
 type PriceBenchmarkRun struct {
-	RunID         string  `json:"run_id"`
-	Status        string  `json:"status"`
-	Provider      *string `json:"provider"`
-	Model         *string `json:"model"`
-	SourceKeys    any     `json:"source_keys"`
-	RequestedBy   *string `json:"requested_by"`
-	StartedAt     string  `json:"started_at"`
-	FinishedAt    *string `json:"finished_at"`
-	InsertedCount int     `json:"inserted_count"`
-	SkippedCount  int     `json:"skipped_count"`
-	ErrorMessage  *string `json:"error_message"`
-	Warnings      any     `json:"warnings"`
-	Evidence      any     `json:"evidence"`
-	RawResponse   *string `json:"raw_response"`
+	RunID          string  `json:"run_id"`
+	Status         string  `json:"status"`
+	Provider       *string `json:"provider"`
+	Model          *string `json:"model"`
+	SourceKeys     any     `json:"source_keys"`
+	RequestedBy    *string `json:"requested_by"`
+	StartedAt      string  `json:"started_at"`
+	FinishedAt     *string `json:"finished_at"`
+	InsertedCount  int     `json:"inserted_count"`
+	SkippedCount   int     `json:"skipped_count"`
+	ErrorMessage   *string `json:"error_message"`
+	Warnings       any     `json:"warnings"`
+	Evidence       any     `json:"evidence"`
+	RawResponse    *string `json:"raw_response"`
+	EvidenceHashes any     `json:"evidence_hashes,omitempty"` // PR 47
+	Diagnostics    any     `json:"diagnostics,omitempty"`     // PR 47
+	SanityReview   any     `json:"sanity_review,omitempty"`   // PR 47
 }
 
 // CreatePriceBenchmarkRequest — 수동 또는 AI 수집 후 저장할 벤치마크 입력.
