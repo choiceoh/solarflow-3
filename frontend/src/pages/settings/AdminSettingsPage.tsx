@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { MasterConsole } from '@/components/command/MasterConsole';
+import AssistantProvidersCard from '@/components/settings/AssistantProvidersCard';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -317,6 +318,9 @@ export default function AdminSettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* AI Provider 설정 (D-064 PR 40) */}
+      <AssistantProvidersCard />
 
       {/* 사용자 목록 */}
       <div className="rounded-lg border bg-card overflow-hidden">
