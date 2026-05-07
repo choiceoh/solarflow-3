@@ -13,7 +13,7 @@
 - Go 규칙: `backend/scripts/lint_rules.sh` advisory 실행
 - Go Request 구조체와 DB 컬럼 동기화: `backend/scripts/check_schema.sh`
 - Rust: cargo test
-- Frontend: npm run build
+- Frontend: bun run build
 
 선택 옵션:
 

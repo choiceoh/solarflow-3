@@ -11,6 +11,7 @@ use crate::calc::landed_cost::{calculate_landed_cost, compare_exchange_rates};
 use crate::calc::lc_schedule::{calculate_lc_fees, calculate_limit_timeline, get_maturity_alerts};
 use crate::calc::margin::{calculate_margin, analyze_customers, calculate_price_trend};
 use crate::calc::forecast::calculate_forecast;
+use crate::calc::order_risk::calculate_order_fulfillment_risk;
 use crate::calc::receipt_match::{get_outstanding_list, suggest_receipt_match};
 use crate::calc::search::search;
 use crate::calc::turnover::calculate_turnover;
@@ -19,6 +20,7 @@ use crate::model::landed_cost::{ExchangeCompareRequest, LandedCostRequest};
 use crate::model::lc_schedule::{LcFeeRequest, LcLimitTimelineRequest, LcMaturityAlertRequest};
 use crate::model::margin::{MarginAnalysisRequest, CustomerAnalysisRequest, PriceTrendRequest};
 use crate::model::forecast::SupplyForecastRequest;
+use crate::model::order_risk::OrderFulfillmentRiskRequest;
 use crate::model::receipt_match::{OutstandingListRequest, ReceiptMatchSuggestRequest};
 use crate::model::search::SearchRequest;
 use crate::model::turnover::TurnoverRequest;
@@ -177,6 +179,18 @@ pub async fn supply_forecast_handler(State(pool): State<PgPool>, Json(req): Json
     match calculate_forecast(&pool, &req).await {
         Ok(r) => (StatusCode::OK, Json(serde_json::to_value(r).unwrap_or(json!({"error": "직렬화 실패"})))),
         Err(e) => { tracing::error!("수급 전망 실패: {}", e); (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("수급 전망 실패: {}", e)}))) }
+    }
+}
+
+/// POST /api/calc/order-fulfillment-risk — 수주 충당 위험도 핸들러
+pub async fn order_fulfillment_risk_handler(State(pool): State<PgPool>, Json(req): Json<OrderFulfillmentRiskRequest>) -> (StatusCode, Json<Value>) {
+    let has_ids = req.company_ids.as_ref().is_some_and(|v| !v.is_empty());
+    if req.company_id.is_none() && !has_ids {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "company_id 또는 company_ids 중 하나는 필수입니다"})));
+    }
+    match calculate_order_fulfillment_risk(&pool, &req).await {
+        Ok(r) => (StatusCode::OK, Json(serde_json::to_value(r).unwrap_or(json!({"error": "직렬화 실패"})))),
+        Err(e) => { tracing::error!("수주 충당 위험도 계산 실패: {}", e); (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("수주 충당 위험도 계산 실패: {}", e)}))) }
     }
 }
 

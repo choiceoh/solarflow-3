@@ -40,6 +40,7 @@ pub fn create_router(pool: PgPool) -> Router {
         .route("/api/calc/customer-analysis", axum::routing::post(calc::customer_analysis_handler))
         .route("/api/calc/price-trend", axum::routing::post(calc::price_trend_handler))
         .route("/api/calc/supply-forecast", axum::routing::post(calc::supply_forecast_handler))
+        .route("/api/calc/order-fulfillment-risk", axum::routing::post(calc::order_fulfillment_risk_handler))
         .route("/api/calc/outstanding-list", axum::routing::post(calc::outstanding_list_handler))
         .route("/api/calc/receipt-match-suggest", axum::routing::post(calc::receipt_match_suggest_handler))
         .route("/api/calc/search", axum::routing::post(calc::search_handler))

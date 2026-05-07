@@ -4,7 +4,7 @@
 # 각각 새 PowerShell 창에서 실행:
 #   1. backend  (포트 8080) — backend/scripts/dev.ps1
 #   2. engine   (포트 8081) — engine/scripts/dev.ps1
-#   3. frontend (포트 5174) — npm run dev
+#   3. frontend (포트 5174) — bun run dev
 #
 # Ctrl+C 는 각 창에서 개별. 전체 종료는 창 닫기.
 # 사전 요구: backend/.env, engine/.env, frontend/.env, frontend/node_modules.
@@ -28,7 +28,7 @@ $ok = $true
 $ok = (Test-File 'backend/.env' 'see harness/WINDOWS.md (backend/.env section)') -and $ok
 $ok = (Test-File 'engine/.env' 'see harness/WINDOWS.md (engine envs)') -and $ok
 $ok = (Test-File 'frontend/.env' 'see harness/WINDOWS.md (frontend/.env section)') -and $ok
-$ok = (Test-File 'frontend/node_modules' "run 'cd frontend; npm install' first") -and $ok
+$ok = (Test-File 'frontend/node_modules' "run 'cd frontend; bun install' first") -and $ok
 
 if (-not $ok) {
     Write-Host "fix the above before running dev-all.ps1" -ForegroundColor Red
@@ -41,6 +41,6 @@ Write-Host "starting 3 terminals (backend / engine / frontend)..." -ForegroundCo
 
 Start-Process $shell -ArgumentList '-NoExit', '-Command', "Set-Location '$repoRoot\backend'; .\scripts\dev.ps1"
 Start-Process $shell -ArgumentList '-NoExit', '-Command', "Set-Location '$repoRoot\engine'; .\scripts\dev.ps1"
-Start-Process $shell -ArgumentList '-NoExit', '-Command', "Set-Location '$repoRoot\frontend'; npm run dev -- --port 5174"
+Start-Process $shell -ArgumentList '-NoExit', '-Command', "Set-Location '$repoRoot\frontend'; bun run dev -- --port 5174"
 
 Write-Host "all three started. browser: http://localhost:5174" -ForegroundColor Green

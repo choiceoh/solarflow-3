@@ -4,6 +4,7 @@ export type OrderStatus = 'received' | 'partial' | 'completed' | 'cancelled';
 export type ReceiptMethod = 'purchase_order' | 'phone' | 'email' | 'other';
 export type ManagementCategory = 'sale' | 'construction' | 'spare' | 'repowering' | 'maintenance' | 'other';
 export type FulfillmentSource = 'stock' | 'incoming';
+export type OrderFulfillmentRisk = 'available' | 'shortage' | 'check';
 
 export interface Order {
   order_id: string;
@@ -40,6 +41,31 @@ export interface Order {
   status: OrderStatus;
   memo?: string;
   bl_id?: string;
+}
+
+export interface OrderFulfillmentRiskItem {
+  order_id: string;
+  company_id: string;
+  product_id: string;
+  fulfillment_source: FulfillmentSource | string;
+  risk: OrderFulfillmentRisk;
+  remaining_qty: number;
+  need_kw: number;
+  available_before_kw: number;
+  available_after_kw: number;
+  shortage_kw: number;
+  reason: string;
+}
+
+export interface OrderFulfillmentRiskResponse {
+  items: OrderFulfillmentRiskItem[];
+  summary: {
+    total_count: number;
+    available_count: number;
+    shortage_count: number;
+    check_count: number;
+  };
+  calculated_at: string;
 }
 
 export interface Receipt {
@@ -146,4 +172,16 @@ export const FULFILLMENT_SOURCE_LABEL: Record<FulfillmentSource, string> = {
 export const FULFILLMENT_SOURCE_COLOR: Record<FulfillmentSource, string> = {
   stock: 'bg-green-100 text-green-700',
   incoming: 'bg-yellow-100 text-yellow-700',
+};
+
+export const ORDER_FULFILLMENT_RISK_LABEL: Record<OrderFulfillmentRisk, string> = {
+  available: '충당 가능',
+  shortage: '부족',
+  check: '확인 필요',
+};
+
+export const ORDER_FULFILLMENT_RISK_COLOR: Record<OrderFulfillmentRisk, string> = {
+  available: 'bg-emerald-100 text-emerald-700',
+  shortage: 'bg-red-100 text-red-700',
+  check: 'bg-slate-100 text-slate-600',
 };

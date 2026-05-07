@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { formatKRW, formatKw, formatCapacity } from './utils';
 import type { UserPreferences } from '@/types/models';
 

@@ -562,10 +562,51 @@ function writeRoute<T>(url: URL): T {
   return clone({ [idKey]: `mock-${collection}-${Date.now()}`, status: 'mock_saved', mock: true } as T);
 }
 
+function orderFulfillmentRiskResponse(body: MockRow) {
+  const requested = new Set(Array.isArray(body.order_ids) ? body.order_ids.map(String) : []);
+  const items = orders
+    .filter((order) => (order.status === 'received' || order.status === 'partial') && (requested.size === 0 || requested.has(order.order_id)))
+    .map((order, index) => {
+      const needKw = order.remaining_qty * (order.wattage_kw ?? 0);
+      const risk = index % 5 === 1 ? 'shortage' : index % 7 === 2 ? 'check' : 'available';
+      const availableBefore = risk === 'shortage' ? Math.max(0, needKw - 120) : needKw + 300;
+      const shortage = risk === 'shortage' ? Math.max(0, needKw - availableBefore) : 0;
+      return {
+        order_id: order.order_id,
+        company_id: order.company_id,
+        product_id: order.product_id,
+        fulfillment_source: order.fulfillment_source,
+        risk,
+        remaining_qty: order.remaining_qty,
+        need_kw: needKw,
+        available_before_kw: availableBefore,
+        available_after_kw: Math.max(0, availableBefore - needKw),
+        shortage_kw: shortage,
+        reason: risk === 'available'
+          ? '선택한 충당 소스로 수주 잔량을 충당할 수 있습니다'
+          : risk === 'shortage'
+            ? `선택한 충당 소스가 ${shortage.toFixed(1)} kW 부족합니다`
+            : '잔량, 품번, 충당 소스 정보를 확인하세요',
+      };
+    });
+  return {
+    items,
+    summary: {
+      total_count: items.length,
+      available_count: items.filter((item) => item.risk === 'available').length,
+      shortage_count: items.filter((item) => item.risk === 'shortage').length,
+      check_count: items.filter((item) => item.risk === 'check').length,
+    },
+    calculated_at: nowIso,
+  };
+}
+
 function calcRoute<T>(url: URL, body: MockRow): T {
   switch (url.pathname) {
     case '/api/v1/calc/inventory':
       return clone(inventoryResponse() as T);
+    case '/api/v1/calc/order-fulfillment-risk':
+      return clone(orderFulfillmentRiskResponse(body) as T);
     case '/api/v1/calc/customer-analysis':
       return clone(customerAnalysisResponse() as T);
     case '/api/v1/calc/lc-limit-timeline':

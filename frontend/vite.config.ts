@@ -1,6 +1,6 @@
 import path from 'path'
 import { execFileSync } from 'node:child_process'
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -65,13 +65,4 @@ export default defineConfig({
       }
     }
   },
-  test: {
-    environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
-    css: false,
-    pool: 'vmThreads',
-    maxWorkers: 2,
-    // e2e/는 Playwright 전용 — vitest가 picking up 하지 않게 제외
-    exclude: ['node_modules', 'dist', 'e2e/**'],
-  }
 })

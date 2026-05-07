@@ -79,6 +79,11 @@ const BaroRequestInboxPage = lazy(() => import('@/packs/baro-domain/pages/BaroRe
 const CreditBoardPage = lazy(() => import('@/packs/baro-domain/pages/CreditBoardPage'));
 const DispatchBoardPage = lazy(() => import('@/packs/baro-domain/pages/DispatchBoardPage'));
 const CRMInboxPage = lazy(() => import('@/packs/baro-domain/pages/CRMInboxPage'));
+// WMS — 모든 테넌트 공유 (D-139~142). 폴리싱 PR.
+const WarehouseLocationsPage = lazy(() => import('@/packs/erp-core/pages/wms/WarehouseLocationsPage'));
+const PickingWorkPage = lazy(() => import('@/packs/erp-core/pages/wms/PickingWorkPage'));
+const ReceivingLogPage = lazy(() => import('@/packs/erp-core/pages/wms/ReceivingLogPage'));
+const CycleCountPage = lazy(() => import('@/packs/erp-core/pages/wms/CycleCountPage'));
 
 // === Route spec ===
 
@@ -165,6 +170,11 @@ export const ROUTES: RouteSpec[] = [
   { path: '/crm/inbox', element: CRMInboxPage },
   { path: '/approval', element: ApprovalPage },
   { path: '/assistant', element: AssistantPage },
+  // WMS — 모든 테넌트 공유 (D-139~142)
+  { path: '/wms/locations', element: WarehouseLocationsPage, roles: ['admin', 'operator'] },
+  { path: '/wms/picking', element: PickingWorkPage, roles: ['admin', 'operator'] },
+  { path: '/wms/receiving', element: ReceivingLogPage, roles: ['admin', 'operator'] },
+  { path: '/wms/cycle-count', element: CycleCountPage, roles: ['admin', 'operator', 'executive'] },
   {
     path: '/settings',
     element: SettingsLayout,
@@ -241,22 +251,26 @@ export const NAV_GROUPS: CommandNavGroup[] = buildNavGroups(ALL_PACKS);
 /**
  * isItemVisible — sidebar 항목의 가시성 판단 단일 정본 (PR-3b).
  *
+ * - tenants 가 있으면: 현재 호스트 테넌트가 포함될 때만 visible
  * - feature 가 있으면: enabledFeatures 가 그 ID 를 포함할 때만 visible
- * - feature 가 비어 있으면: tenants 배열 fallback (단순 프론트 페이지 / 카탈로그 미정의)
+ * - feature 가 비어 있으면: tenants 배열만으로 판단 (단순 프론트 페이지 / 카탈로그 미정의)
  *
- * enabledFeatures 가 undefined(서버 응답에 필드 없음 — 옛 백엔드 호환) 면
- * fallback 으로 tenants 배열을 본다. PR-2 이후 운영 백엔드는 항상 채워 보낸다.
+ * enabledFeatures 가 undefined(서버 응답에 필드 없음 — 옛 백엔드 호환) 면 feature 는 통과시키되,
+ * tenants 도메인 가드는 그대로 적용한다. PR-2 이후 운영 백엔드는 항상 채워 보낸다.
  */
 export function isItemVisible(item: CommandNavItem, currentTenant: TenantScope, enabledFeatures: ReadonlySet<string> | undefined): boolean {
+  if (item.tenants && !item.tenants.includes(currentTenant)) {
+    return false;
+  }
   if (item.feature) {
     if (!enabledFeatures) {
       // 옛 응답 호환 — feature 정의는 있지만 서버가 enabled_features 를 안 보낸 경우.
-      // tenants 배열이 동시에 있으면 그걸 쓰고, 둘 다 없으면 보임.
-      return !item.tenants || item.tenants.includes(currentTenant);
+      // tenant 가드는 위에서 이미 통과했다. 별도 도메인 제한이 없으면 레거시처럼 보인다.
+      return true;
     }
     return enabledFeatures.has(item.feature);
   }
-  return !item.tenants || item.tenants.includes(currentTenant);
+  return true;
 }
 
 /** 사이트 설정 > 메뉴 가시성 카드가 토글 후보로 노출하는 항목 (NAV_GROUPS 평탄화 + isWip 필터) */

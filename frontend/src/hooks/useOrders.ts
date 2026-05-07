@@ -1,9 +1,9 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { fetchWithAuth, fetchWithAuthMeta } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
-import { companyParams } from '@/lib/companyUtils';
+import { companyParams, fetchCalc } from '@/lib/companyUtils';
 import { useListQuery, useDetailQuery } from '@/lib/queryHelpers';
-import type { Order } from '@/types/orders';
+import type { Order, OrderFulfillmentRiskItem, OrderFulfillmentRiskResponse } from '@/types/orders';
 import type { Outbound } from '@/types/outbound';
 
 export interface OrderListParams {
@@ -198,6 +198,33 @@ export function useOrderDashboard(filters: OrderDashboardFilters = {}) {
   })
   return {
     dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
+}
+
+export function useOrderFulfillmentRisk(orderIds: string[]) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const ids = orderIds.filter(Boolean)
+  const queryKey = ['order-fulfillment-risk', selectedCompanyId, ids.join(',')]
+  const q = useQuery<OrderFulfillmentRiskResponse, Error>({
+    queryKey,
+    queryFn: async () => fetchCalc<OrderFulfillmentRiskResponse>(
+      selectedCompanyId!,
+      '/api/v1/calc/order-fulfillment-risk',
+      { order_ids: ids },
+    ),
+    enabled: !!selectedCompanyId && ids.length > 0,
+    placeholderData: keepPreviousData,
+  })
+  const items = q.data?.items ?? []
+  const riskByOrder = Object.fromEntries(items.map((item) => [item.order_id, item])) as Record<string, OrderFulfillmentRiskItem>
+  return {
+    items,
+    riskByOrder,
+    summary: q.data?.summary ?? null,
     loading: q.isLoading,
     isFetching: q.isFetching,
     error: q.error ? q.error.message : null,
