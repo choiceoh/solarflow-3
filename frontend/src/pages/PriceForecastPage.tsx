@@ -383,7 +383,7 @@ export default function PriceForecastPage() {
         if (run.status !== 'running') {
           return run;
         }
-      } catch (err) {
+      } catch {
         // 일시적 fetch 실패는 무시 — 계속 폴링
       }
     }

@@ -65,8 +65,7 @@ export default function BLListTable({ items, onSelect }: Props) {
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.map((bl) => bl.bl_id).join(',')]);
+  }, [items]);
 
   const { sorted, headerProps } = useSort<BLShipment>(items, (b, f) => {
     switch (f) {

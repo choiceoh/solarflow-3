@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Sparkles, RefreshCw, Database, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
@@ -54,7 +54,7 @@ export default function DBIntegrityPage() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -65,11 +65,11 @@ export default function DBIntegrityPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   // 로컬 AI 로 결과 분석 — assistant chat API SSE 스트림 사용.
   const analyzeWithAI = async () => {

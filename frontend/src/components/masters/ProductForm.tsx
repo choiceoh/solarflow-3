@@ -4,10 +4,10 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import FormField from '@/components/common/FormField';
 import { fetchWithAuth } from '@/lib/api';
 import type { Product, Manufacturer } from '@/types/masters';
 
@@ -89,19 +89,14 @@ function ProductFields({ register, errors, watch, setValue, manufacturers }: Fie
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>품번코드 *</Label>
+        <FormField label="품번코드" required error={errors.product_code?.message}>
           <Input {...register('product_code')} />
-          {errors.product_code && <p className="text-xs text-destructive">{errors.product_code.message}</p>}
-        </div>
-        <div className="space-y-1.5">
-          <Label>품명 *</Label>
+        </FormField>
+        <FormField label="품명" required error={errors.product_name?.message}>
           <Input {...register('product_name')} />
-          {errors.product_name && <p className="text-xs text-destructive">{errors.product_name.message}</p>}
-        </div>
+        </FormField>
       </div>
-      <div className="space-y-1.5">
-        <Label>제조사 *</Label>
+      <FormField label="제조사" required error={errors.manufacturer_id?.message}>
         <Select value={watch('manufacturer_id') ?? ''} onValueChange={(v) => setValue('manufacturer_id', v ?? '')}>
           {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
           <SelectTrigger><Txt text={manufacturers.find(m => m.manufacturer_id === watch('manufacturer_id'))?.name_kr ?? ''} /></SelectTrigger>
@@ -111,60 +106,44 @@ function ProductFields({ register, errors, watch, setValue, manufacturers }: Fie
             ))}
           </SelectContent>
         </Select>
-        {errors.manufacturer_id && <p className="text-xs text-destructive">{errors.manufacturer_id.message}</p>}
-      </div>
+      </FormField>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>규격(Wp) *</Label>
+        <FormField label="규격(Wp)" required error={errors.spec_wp?.message}>
           <Input type="number" {...register('spec_wp')} />
-          {errors.spec_wp && <p className="text-xs text-destructive">{errors.spec_wp.message}</p>}
-        </div>
-        <div className="space-y-1.5">
-          <Label>용량(kW) *</Label>
+        </FormField>
+        <FormField label="용량(kW)" required error={errors.wattage_kw?.message}>
           <Input type="number" step="0.001" {...register('wattage_kw')} />
-          {errors.wattage_kw && <p className="text-xs text-destructive">{errors.wattage_kw.message}</p>}
-        </div>
+        </FormField>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>가로(mm) *</Label>
+        <FormField label="가로(mm)" required error={errors.module_width_mm?.message}>
           <Input type="number" {...register('module_width_mm')} />
-          {errors.module_width_mm && <p className="text-xs text-destructive">{errors.module_width_mm.message}</p>}
-        </div>
-        <div className="space-y-1.5">
-          <Label>세로(mm) *</Label>
+        </FormField>
+        <FormField label="세로(mm)" required error={errors.module_height_mm?.message}>
           <Input type="number" {...register('module_height_mm')} />
-          {errors.module_height_mm && <p className="text-xs text-destructive">{errors.module_height_mm.message}</p>}
-        </div>
+        </FormField>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>두께(mm)</Label>
+        <FormField label="두께(mm)">
           <Input type="number" {...register('module_depth_mm')} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>무게(kg)</Label>
+        </FormField>
+        <FormField label="무게(kg)">
           <Input type="number" step="0.1" {...register('weight_kg')} />
-        </div>
+        </FormField>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>웨이퍼 플랫폼</Label>
+        <FormField label="웨이퍼 플랫폼">
           <Input {...register('wafer_platform')} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>셀 구성</Label>
+        </FormField>
+        <FormField label="셀 구성">
           <Input {...register('cell_config')} />
-        </div>
+        </FormField>
       </div>
       <div className="grid grid-cols-3 gap-3">
-        <div className="space-y-1.5">
-          <Label>모듈 효율(%)</Label>
+        <FormField label="모듈 효율(%)" error={errors.module_efficiency?.message}>
           <Input type="number" step="0.01" placeholder="예: 22.50" {...register('module_efficiency')} />
-          {errors.module_efficiency && <p className="text-xs text-destructive">{errors.module_efficiency.message}</p>}
-        </div>
-        <div className="space-y-1.5">
-          <Label>모듈 종류</Label>
+        </FormField>
+        <FormField label="모듈 종류">
           <Select value={watch('module_type') ?? ''} onValueChange={(v) => setValue('module_type', (v as 'PERC' | 'TOPCON' | 'BC') ?? '')}>
             {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
             <SelectTrigger><Txt text={watch('module_type') ?? ''} /></SelectTrigger>
@@ -174,9 +153,8 @@ function ProductFields({ register, errors, watch, setValue, manufacturers }: Fie
               <SelectItem value="BC">BC</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>모듈 등급</Label>
+        </FormField>
+        <FormField label="모듈 등급">
           <Select
             value={watch('module_grade') ?? ''}
             onValueChange={(v) => setValue('module_grade', (v as '1' | '2' | '3' | 'NA') ?? '')}
@@ -190,16 +168,14 @@ function ProductFields({ register, errors, watch, setValue, manufacturers }: Fie
               <SelectItem value="NA">미해당(NA)</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </FormField>
       </div>
-      <div className="space-y-1.5">
-        <Label>시리즈명</Label>
+      <FormField label="시리즈명">
         <Input {...register('series_name')} />
-      </div>
-      <div className="space-y-1.5">
-        <Label>메모</Label>
+      </FormField>
+      <FormField label="메모">
         <Textarea {...register('memo')} rows={2} />
-      </div>
+      </FormField>
     </>
   );
 }

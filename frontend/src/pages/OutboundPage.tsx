@@ -55,7 +55,10 @@ export default function OutboundPage() {
   const _loc = useLocation();
   // R1-1: 사이드바 "출고/판매" 클릭 시 목록 복귀 — URL → 상태 동기화
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setSelectedOutbound(null); }, [_loc.key]);
+  useEffect(() => {
+    void _loc.key;
+    setSelectedOutbound(null);
+  }, [_loc.key]);
 
   const [customerFilter, setCustomerFilter] = useState('');
   const [saleDateRange, setSaleDateRange] = useState<DateRangeValue>(null);
@@ -79,9 +82,11 @@ export default function OutboundPage() {
   }, [searchText, activeTab]);
 
   // 필터/검색 변경 시 페이지를 0 으로 리셋 — autoResetPageIndex 가 server 모드에서 비활성이라 직접 처리.
+  const outboundPageResetKey = `${statusFilter}|${usageFilter}|${mfgFilter}|${obDateRange?.start ?? ''}|${obDateRange?.end ?? ''}|${debouncedSearch}`;
   useEffect(() => {
+    void outboundPageResetKey;
     setPageIndex(0);
-  }, [statusFilter, usageFilter, mfgFilter, obDateRange, debouncedSearch]);
+  }, [outboundPageResetKey]);
 
   const sortKey = sorting[0]?.id;
   const sortOrder: 'asc' | 'desc' = sorting[0]?.desc === false ? 'asc' : 'desc';
@@ -127,9 +132,11 @@ export default function OutboundPage() {
     return () => clearTimeout(t);
   }, [searchText, activeTab]);
 
+  const salePageResetKey = `${customerFilter}|${saleDateRange?.start ?? ''}|${saleDateRange?.end ?? ''}|${invoiceFilter}|${debouncedSaleSearch}`;
   useEffect(() => {
+    void salePageResetKey;
     setSalePageIndex(0);
-  }, [customerFilter, saleDateRange, invoiceFilter, debouncedSaleSearch]);
+  }, [salePageResetKey]);
 
   const saleSortKey = saleSorting[0]?.id;
   const saleSortOrder: 'asc' | 'desc' = saleSorting[0]?.desc === false ? 'asc' : 'desc';

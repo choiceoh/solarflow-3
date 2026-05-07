@@ -30,7 +30,9 @@ export function useColumnReorderMode(scopeId: string) {
     if (!scopeId) return;
     if ((state.get(scopeId) ?? false) === next) return;
     state.set(scopeId, next);
-    listeners.get(scopeId)?.forEach((fn) => fn());
+    listeners.get(scopeId)?.forEach((fn) => {
+      fn();
+    });
   }, [scopeId]);
 
   return { enabled, setEnabled };
