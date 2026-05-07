@@ -106,6 +106,7 @@ function POListTable({ items, onDetail, onSelectBL, aggVersion }: Props) {
 
   // ── 초기 집계: lines + lcs + tts fetch ──
   useEffect(() => {
+    void aggVersion;
     let cancelled = false;
     if (items.length === 0) { setAgg({}); return; }
     (async () => {
@@ -149,8 +150,7 @@ function POListTable({ items, onDetail, onSelectBL, aggVersion }: Props) {
       if (!cancelled) setAgg(result);
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.map(p => p.po_id).join(','), aggVersion]);
+  }, [items, aggVersion]);
 
   // ── 행 펼침 시 BL lazy-load ──
   async function loadBL(poId: string) {

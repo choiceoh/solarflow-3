@@ -16,8 +16,7 @@ interface Props {
 function ForecastCell({ value, insufficient }: { value: number; insufficient?: boolean }) {
   return (
     <TableCell
-      className="whitespace-nowrap text-right tabular-nums"
-      style={insufficient ? { background: 'var(--sf-neg-bg)', color: 'var(--sf-neg)', fontWeight: 600 } : undefined}
+      className={`whitespace-nowrap text-right tabular-nums ${insufficient ? 'sf-tone-neg font-semibold' : ''}`}
     >
       {insufficient && <AlertTriangle className="mr-0.5 inline h-3 w-3" />}
       {formatKw(value)}
@@ -63,13 +62,10 @@ function ProductForecastBlock({
         </button>
         <div className="flex shrink-0 items-center gap-2">
           <div className="text-right text-[11px] leading-tight">
-            <div className="sf-mono font-semibold tabular-nums" style={{ color: 'var(--sf-pos)' }}>
+            <div className="sf-mono sf-text-pos font-semibold tabular-nums">
               현재 가용 {formatKw(currentAvailable)}
             </div>
-            <div
-              className="sf-mono tabular-nums"
-              style={{ color: minAvailable < 0 ? 'var(--sf-neg)' : 'var(--sf-ink-3)', fontWeight: minAvailable < 0 ? 600 : 400 }}
-            >
+            <div className={`sf-mono tabular-nums ${minAvailable < 0 ? 'sf-text-neg font-semibold' : 'sf-text-ink-3'}`}>
               6개월 최저 {formatKw(minAvailable)}
             </div>
           </div>
@@ -115,7 +111,7 @@ function ProductForecastBlock({
                     <ForecastCell value={m.closing_kw} insufficient={m.insufficient} />
                     <TableCell className="text-right tabular-nums">{formatKw(m.reserved_kw)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatKw(m.allocated_kw)}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums" style={{ color: 'var(--sf-pos)' }}>{formatKw(m.available_kw)}</TableCell>
+                    <TableCell className="sf-text-pos text-right font-semibold tabular-nums">{formatKw(m.available_kw)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -129,7 +125,7 @@ function ProductForecastBlock({
                   <TableCell className="text-right tabular-nums">{lastMonth ? formatKw(lastMonth.closing_kw) : '—'}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">{formatKw(totals.reserved)}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">{formatKw(totals.allocated)}</TableCell>
-                  <TableCell className="text-right font-medium tabular-nums" style={{ color: 'var(--sf-pos)' }}>
+                  <TableCell className="sf-text-pos text-right font-medium tabular-nums">
                     {lastMonth ? formatKw(lastMonth.available_kw) : '—'}
                   </TableCell>
                 </TableRow>
@@ -146,24 +142,24 @@ function ProductForecastBlock({
               <div className="grid grid-cols-3 gap-3 text-xs">
                 {product.unscheduled.incoming_kw > 0 && (
                   <div className="flex flex-col gap-0.5">
-                    <span className="sf-eyebrow" style={{ color: 'var(--sf-info)' }}>입고</span>
-                    <span className="sf-mono font-semibold tabular-nums" style={{ color: 'var(--sf-ink)' }}>
+                    <span className="sf-eyebrow sf-text-info">입고</span>
+                    <span className="sf-mono sf-text-ink font-semibold tabular-nums">
                       {formatKw(product.unscheduled.incoming_kw)}
                     </span>
                   </div>
                 )}
                 {product.unscheduled.sale_kw > 0 && (
                   <div className="flex flex-col gap-0.5">
-                    <span className="sf-eyebrow" style={{ color: 'var(--sf-warn)' }}>판매</span>
-                    <span className="sf-mono font-semibold tabular-nums" style={{ color: 'var(--sf-ink)' }}>
+                    <span className="sf-eyebrow sf-text-warn">판매</span>
+                    <span className="sf-mono sf-text-ink font-semibold tabular-nums">
                       {formatKw(product.unscheduled.sale_kw)}
                     </span>
                   </div>
                 )}
                 {product.unscheduled.construction_kw > 0 && (
                   <div className="flex flex-col gap-0.5">
-                    <span className="sf-eyebrow" style={{ color: 'var(--sf-pos)' }}>공사</span>
-                    <span className="sf-mono font-semibold tabular-nums" style={{ color: 'var(--sf-ink)' }}>
+                    <span className="sf-eyebrow sf-text-pos">공사</span>
+                    <span className="sf-mono sf-text-ink font-semibold tabular-nums">
                       {formatKw(product.unscheduled.construction_kw)}
                     </span>
                   </div>

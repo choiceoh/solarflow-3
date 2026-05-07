@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import FormField from '@/components/common/FormField';
 import type { Manufacturer } from '@/types/masters';
 
 function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: string }) {
@@ -46,32 +46,29 @@ interface FieldsProps {
 function ManufacturerFields({ register, errors, watch, setValue }: FieldsProps) {
   return (
     <>
-      <div className="space-y-1.5">
-        <Label>제조사명(한) *</Label>
+      <FormField label="제조사명(한)" required error={errors.name_kr?.message}>
         <Input {...register('name_kr')} />
-        {errors.name_kr && <p className="text-xs text-destructive">{errors.name_kr.message}</p>}
-      </div>
-      <div className="space-y-1.5">
-        <Label>제조사명(영)</Label>
+      </FormField>
+      <FormField label="제조사명(영)">
         <Input {...register('name_en')} />
-      </div>
-      <div className="space-y-1.5">
-        <Label>약칭 <span className="text-muted-foreground font-normal text-xs">(화면 표시용 · 예: 진코, 론지, 트리나)</span></Label>
+      </FormField>
+      <FormField
+        label={<>약칭 <span className="text-muted-foreground font-normal text-xs">(화면 표시용 · 예: 진코, 론지, 트리나)</span></>}
+        error={errors.short_name?.message}
+      >
         <Input {...register('short_name')} placeholder="예: 진코" maxLength={20} />
-        {errors.short_name && <p className="text-xs text-destructive">{errors.short_name.message}</p>}
-      </div>
-      <div className="space-y-1.5">
-        <Label>표시순위 * <span className="text-muted-foreground font-normal text-xs">(낮을수록 드롭다운 위에 표시)</span></Label>
+      </FormField>
+      <FormField
+        label={<>표시순위 <span className="text-muted-foreground font-normal text-xs">(낮을수록 드롭다운 위에 표시)</span></>}
+        required
+        error={errors.priority_rank?.message}
+      >
         <Input type="number" min={1} {...register('priority_rank', { valueAsNumber: true })} placeholder="예: 10" />
-        {errors.priority_rank && <p className="text-xs text-destructive">{errors.priority_rank.message}</p>}
-      </div>
-      <div className="space-y-1.5">
-        <Label>국가 *</Label>
+      </FormField>
+      <FormField label="국가" required error={errors.country?.message}>
         <Input {...register('country')} />
-        {errors.country && <p className="text-xs text-destructive">{errors.country.message}</p>}
-      </div>
-      <div className="space-y-1.5">
-        <Label>국내/해외 *</Label>
+      </FormField>
+      <FormField label="국내/해외" required error={errors.domestic_foreign?.message}>
         {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
         <Select value={watch('domestic_foreign') ?? ''} onValueChange={(v) => setValue('domestic_foreign', v ?? '')}>
           <SelectTrigger><Txt text={watch('domestic_foreign') ?? ''} /></SelectTrigger>
@@ -80,8 +77,7 @@ function ManufacturerFields({ register, errors, watch, setValue }: FieldsProps) 
             <SelectItem value="해외">해외</SelectItem>
           </SelectContent>
         </Select>
-        {errors.domestic_foreign && <p className="text-xs text-destructive">{errors.domestic_foreign.message}</p>}
-      </div>
+      </FormField>
     </>
   );
 }

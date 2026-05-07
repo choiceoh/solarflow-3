@@ -89,7 +89,10 @@ export default function EditableDetailField({
           title="클릭하여 편집"
         >
           <span className="text-sm break-words min-w-0 flex-1">{displayNode}</span>
-          <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-foreground" />
+          <Pencil
+            className="h-3 w-3 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-foreground"
+            aria-hidden="true"
+          />
         </button>
       </DetailField>
     );
@@ -151,22 +154,33 @@ export default function EditableDetailField({
           type="button"
           onClick={commit}
           disabled={saving}
-          className="inline-flex h-7 w-7 items-center justify-center rounded border border-input bg-background text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+          aria-label="저장"
+          className="inline-flex h-7 w-7 items-center justify-center rounded border border-input bg-background text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
           title="저장 (Enter)"
         >
-          <Check className="h-3.5 w-3.5" />
+          <Check className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={cancel}
           disabled={saving}
-          className="inline-flex h-7 w-7 items-center justify-center rounded border border-input bg-background text-muted-foreground hover:bg-muted disabled:opacity-50"
+          aria-label="취소"
+          className="inline-flex h-7 w-7 items-center justify-center rounded border border-input bg-background text-muted-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
           title="취소 (Esc)"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </div>
-      {saving && <p className="mt-1 text-[11px] text-muted-foreground">저장 중...</p>}
+      {saving && (
+        <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground" role="status" aria-live="polite">
+          <span
+            className="inline-block h-3 w-3 animate-spin rounded-full border"
+            style={{ borderColor: 'var(--sf-line-2)', borderTopColor: 'var(--sf-solar)' }}
+            aria-hidden="true"
+          />
+          저장 중...
+        </p>
+      )}
     </DetailField>
   );
 }
