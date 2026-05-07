@@ -18,6 +18,12 @@ interface Props {
 function pCode(l: POLineItem): string { return l.product_code ?? l.products?.product_code ?? '—'; }
 function pName(l: POLineItem): string { return l.product_name ?? l.products?.product_name ?? '—'; }
 function pSpec(l: POLineItem): number | undefined { return l.spec_wp ?? l.products?.spec_wp; }
+function unitPriceCents(l: POLineItem): number | null {
+  const spec = pSpec(l);
+  if (l.unit_price_usd_wp != null) return l.unit_price_usd_wp * 100;
+  if (l.unit_price_usd != null && spec) return (l.unit_price_usd / spec) * 100;
+  return null;
+}
 
 interface BuildOpts {
   manufacturerName?: string;
@@ -40,14 +46,10 @@ function buildColumns({ manufacturerName }: BuildOpts): ColumnDef<POLineItem>[] 
     {
       key: 'unit_price', label: '단가(¢/Wp)', hideable: true, align: 'right',
       cell: (l) => {
-        const spec = pSpec(l);
-        const cents = (l.unit_price_usd != null && spec) ? (l.unit_price_usd / spec) * 100 : null;
+        const cents = unitPriceCents(l);
         return cents != null ? `${cents.toFixed(2)}¢` : '—';
       },
-      sortAccessor: (l) => {
-        const spec = pSpec(l);
-        return (l.unit_price_usd != null && spec) ? (l.unit_price_usd / spec) * 100 : 0;
-      },
+      sortAccessor: (l) => unitPriceCents(l) ?? 0,
     },
     { key: 'total_usd', label: '총액(USD)', hideable: true, align: 'right', className: 'font-medium', cell: (l) => l.total_amount_usd != null ? formatUSD(l.total_amount_usd) : '—', sortAccessor: (l) => l.total_amount_usd ?? 0 },
   ];

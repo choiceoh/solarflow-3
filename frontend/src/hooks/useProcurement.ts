@@ -167,6 +167,7 @@ export interface POListPagedFilters {
   status?: string
   manufacturer_id?: string
   contract_type?: string
+  quick_filter?: string
   contract_date_from?: string  // YYYY-MM-DD (양끝 포함)
   contract_date_to?: string
   q?: string
@@ -180,12 +181,12 @@ export interface POListPagedFilters {
 export function usePOListPaged(filters: POListPagedFilters = {}) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
   const {
-    status, manufacturer_id, contract_type, contract_date_from, contract_date_to, q,
+    status, manufacturer_id, contract_type, quick_filter, contract_date_from, contract_date_to, q,
     sort, order, page = 1, pageSize = 100, enabled = true,
   } = filters
   const queryKey = [
     "pos-paged", selectedCompanyId, status ?? "", manufacturer_id ?? "", contract_type ?? "",
-    contract_date_from ?? "", contract_date_to ?? "",
+    quick_filter ?? "", contract_date_from ?? "", contract_date_to ?? "",
     q ?? "", sort ?? "", order ?? "", page, pageSize,
   ]
   const result = useQuery({
@@ -195,6 +196,7 @@ export function usePOListPaged(filters: POListPagedFilters = {}) {
       if (status) params.set("status", status)
       if (manufacturer_id) params.set("manufacturer_id", manufacturer_id)
       if (contract_type) params.set("contract_type", contract_type)
+      if (quick_filter) params.set("quick_filter", quick_filter)
       if (contract_date_from) params.set("contract_date_from", contract_date_from)
       if (contract_date_to) params.set("contract_date_to", contract_date_to)
       if (q) params.set("q", q)
@@ -218,7 +220,7 @@ export function usePOListPaged(filters: POListPagedFilters = {}) {
 }
 
 export function usePOSummary(
-  filters: { status?: string; manufacturer_id?: string; contract_type?: string } = {},
+  filters: { status?: string; manufacturer_id?: string; contract_type?: string; quick_filter?: string } = {},
 ) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
   return useDetailQuery<POSummary>(
@@ -228,12 +230,14 @@ export function usePOSummary(
       filters.status,
       filters.manufacturer_id,
       filters.contract_type,
+      filters.quick_filter,
     ],
     () => {
       const params = companyParams(selectedCompanyId!)
       if (filters.status) params.set("status", filters.status)
       if (filters.manufacturer_id) params.set("manufacturer_id", filters.manufacturer_id)
       if (filters.contract_type) params.set("contract_type", filters.contract_type)
+      if (filters.quick_filter) params.set("quick_filter", filters.quick_filter)
       return fetchWithAuth<POSummary>(`/api/v1/pos/summary?${params}`)
     },
     { enabled: !!selectedCompanyId },

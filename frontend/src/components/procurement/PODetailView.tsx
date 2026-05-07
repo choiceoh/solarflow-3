@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ListPlus, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ListPlus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn, formatDate, shortMfgName } from '@/lib/utils';
@@ -201,7 +201,7 @@ function TTSubTable({ items, poLines }: { items: TTRemittance[]; poLines: POLine
   );
 }
 
-export default function PODetailView({ po: initialPo, onBack, allPos = [] }: Props) {
+export default function PODetailView({ po: initialPo, onBack, onReload, allPos = [] }: Props) {
   // 로컬 PO 미러 — 저장 후 서버 fresh로 갱신 (parent prop은 stale일 수 있음)
   const [po, setPo] = useState<PurchaseOrder>(initialPo);
   // 부모 selectedPO 변경 시(다른 PO 선택 등) 동기화
@@ -258,6 +258,7 @@ export default function PODetailView({ po: initialPo, onBack, allPos = [] }: Pro
     });
     notify.success('수정되었습니다');
     setPo(updated);
+    onReload();
   };
 
   const contractTypeOptions = (Object.entries(CONTRACT_TYPE_LABEL) as [string, string][])
@@ -288,6 +289,11 @@ export default function PODetailView({ po: initialPo, onBack, allPos = [] }: Pro
           PO <span className="sf-mono">{po.po_number || '—'}</span>
         </h2>
         <StatusPill label={PO_STATUS_LABEL[po.status]} colorClassName={PO_STATUS_COLOR[po.status]} className="px-2" />
+        {po.status === 'draft' && (
+          <Button variant="outline" size="sm" onClick={() => savePOField('status', 'contracted')}>
+            <CheckCircle2 className="mr-1 h-3.5 w-3.5" />계약 확정
+          </Button>
+        )}
         {po.status !== 'cancelled' && (
           <Button variant="outline" size="sm" className="text-destructive hover:text-destructive"
             onClick={() => { setDeleteError(''); setDeleteOpen(true); }}>
