@@ -7,6 +7,7 @@ import {
   Sun,
 } from 'lucide-react';
 import { NAV_GROUPS, isItemVisible } from '@/lib/navigation/manifest';
+export { listAllMenusForTenant, listWipMenus } from '@/lib/navigation/manifest';
 import { detectTenantScope } from '@/lib/tenantScope';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import AlertBell from '@/components/layout/AlertBell';
@@ -32,13 +33,6 @@ function readCollapsedFromStorage(): boolean {
   }
 }
 import type { AlertItem } from '@/types/alerts';
-
-// NAV_GROUPS / MODULE_TENANTS / listWipMenus / listAllMenusForTenant /
-// SidebarMenuRegistryItem / CommandNavItem / CommandNavGroup 는 PR-3a 에서
-// `@/lib/navigation/manifest` 로 이동했다. 외부에서 import 하던 listWipMenus 와
-// listAllMenusForTenant 는 같은 이름으로 re-export 해 호출 측 호환을 유지한다.
-export type { SidebarMenuRegistryItem } from '@/lib/navigation/manifest';
-export { listWipMenus, listAllMenusForTenant } from '@/lib/navigation/manifest';
 
 const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/inventory': { title: '가용재고', breadcrumb: '재고 / 예약 가능 수량' },
@@ -69,6 +63,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   '/baro/sales-summary': { title: 'BARO 매출 요약', breadcrumb: '현황 / 영업담당자·유형·월별 매출' },
   '/baro/inverter-guide': { title: '인버터 가이드', breadcrumb: '판매 / 인버터 호환 카탈로그' },
   '/baro/shipment-notice': { title: '출하 알림', breadcrumb: '판매 / 카톡 메시지 빌더' },
+  '/baro/callback-recommend': { title: '콜백 추천', breadcrumb: '판매 / owner 별 활성 거래처' },
 };
 
 function routeMeta(pathname: string, search: string) {
@@ -263,6 +258,7 @@ export default function CommandShell() {
                       data-active={active}
                       data-tooltip={item.label}
                       title={sidebarCollapsed ? item.label : undefined}
+                      viewTransition
                     >
                       {sidebarCollapsed ? (
                         <span className="sf-nav-abbr">{item.abbr}</span>
@@ -301,7 +297,7 @@ export default function CommandShell() {
       <section className="sf-main-shell">
         <header className="sf-topbar">
           <div className="sf-topbar-title">
-            <h1>{meta.title}</h1>
+            <h1 className="sf-vt-page-title">{meta.title}</h1>
             <div id="sf-command-title-slot" className="sf-topbar-command-title" />
           </div>
 
@@ -317,6 +313,7 @@ export default function CommandShell() {
             {canAccessMenu(r, 'import_hub') && (
               <Link
                 to="/import"
+                viewTransition
                 className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 text-xs font-semibold text-[var(--ink)] transition hover:bg-[var(--bg-2)]"
               >
                 <FileSpreadsheet className="h-3.5 w-3.5 text-[var(--ink-3)]" />

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
+import { NumberTween } from '@/components/common/NumberTween';
+
 type Tone = 'solar' | 'ink' | 'info' | 'warn' | 'pos' | 'neg';
 
 export function Sparkline({
@@ -57,6 +59,8 @@ export function Bars({ data, w = 80, h = 24, color = 'var(--solar)' }: { data?: 
 export function TileB({
   lbl,
   v,
+  numericValue,
+  formatter,
   u,
   sub,
   tone = 'ink',
@@ -66,6 +70,10 @@ export function TileB({
 }: {
   lbl: string;
   v: string;
+  // numericValue + formatter 가 둘 다 주어지면 NumberTween 으로 보간 렌더.
+  // 둘 중 하나라도 없으면 기존 v 문자열 그대로 (backwards compat).
+  numericValue?: number;
+  formatter?: (n: number) => string;
   u?: string;
   sub?: string;
   tone?: Tone;
@@ -113,7 +121,11 @@ export function TileB({
         ) : null}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 8 }}>
-        <span className="bignum" style={{ fontSize: 26 }}>{v}</span>
+        <span className="bignum" style={{ fontSize: 26 }}>
+          {numericValue !== undefined && formatter
+            ? <NumberTween value={numericValue} format={formatter} />
+            : v}
+        </span>
         {u ? <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', fontWeight: 500 }}>{u}</span> : null}
       </div>
       <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 3, paddingRight: spark ? 72 : 0 }}>

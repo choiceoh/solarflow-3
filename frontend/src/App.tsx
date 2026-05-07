@@ -14,6 +14,9 @@ import { ROUTES, type NestedRouteSpec, type RouteSpec } from '@/lib/navigation/m
 
 // 인라인 유지: login 은 인증 외곽 라우트라 manifest 가 아닌 외곽 트리에 둔다.
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
+// PR-7.5 / D-137: 드라이버 PWA — token-based access, 인증 미적용. baro-domain pack 의
+// 페이지지만 라우트는 ProtectedRoute 외부에 둔다 (외부 차주 진입).
+const DriverPWAPage = lazy(() => import('@/packs/baro-domain/pages/DriverPWAPage'));
 
 function Fallback() {
   return <LoadingSpinner className="h-screen" />;
@@ -80,6 +83,7 @@ export default function App() {
         <Suspense fallback={<Fallback />}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/d/:token" element={<DriverPWAPage />} />
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
                 <Route index element={<Navigate to="/inventory" replace />} />

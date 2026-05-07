@@ -89,6 +89,7 @@ const (
 	IDMasterProduct          FeatureID = "master.product"
 	IDMasterProductAlias     FeatureID = "master.product_alias"
 	IDMasterWarehouse        FeatureID = "master.warehouse"
+	IDMasterWarehouseLocation FeatureID = "master.warehouse_location"
 	IDMasterConstructionSite FeatureID = "master.construction_site"
 
 	// ---- tx.* (all tenants 공유) ----
@@ -101,6 +102,9 @@ const (
 	IDTxBL                   FeatureID = "tx.bl"
 	IDTxInventoryAllocation  FeatureID = "tx.inventory_allocation"
 	IDTxModuleDemandForecast FeatureID = "tx.module_demand_forecast"
+	IDTxPickingList          FeatureID = "tx.picking_list"
+	IDTxReceivingLog         FeatureID = "tx.receiving_log"
+	IDTxCycleCount           FeatureID = "tx.cycle_count"
 
 	// ---- tx.* (module 계열 = topsolar+cable, D-108/D-119) ----
 	IDTxCostDetail     FeatureID = "tx.cost_detail"
@@ -120,6 +124,7 @@ const (
 	IDCRMPartnerActivity FeatureID = "crm.partner_activity"
 
 	// ---- baro.* (BARO 전용) ----
+	IDBaroCallbackRecommend FeatureID = "baro.callback_recommend"
 	IDBaroIncoming        FeatureID = "baro.incoming"
 	IDBaroPurchaseHistory FeatureID = "baro.purchase_history"
 	IDBaroCreditBoard     FeatureID = "baro.credit_board"
@@ -129,6 +134,9 @@ const (
 	IDBaroPartnerCockpit  FeatureID = "baro.partner_cockpit"
 	IDBaroRFM             FeatureID = "baro.rfm"
 	IDBaroSalesSummary    FeatureID = "baro.sales_summary"
+	IDBaroQuote           FeatureID = "baro.quote"
+	IDBaroCreditCheck     FeatureID = "baro.credit_check"
+	IDBaroShipmentNotice  FeatureID = "baro.shipment_notice"
 
 	// ---- calc.* (Rust 계산 프록시) ----
 	IDCalcInventory          FeatureID = "calc.inventory"
@@ -247,6 +255,12 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/warehouses/usage-counts",
 		},
 	},
+	IDMasterWarehouseLocation: {
+		ID: IDMasterWarehouseLocation, Name: "창고 위치(Bin) 마스터",
+		Description:    "창고 내 Zone/Aisle/Rack/Bin 4단계 위치 (D-139 WMS Phase 1)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/warehouse-locations/", "/api/v1/warehouse-locations/{id}"},
+	},
 	IDMasterConstructionSite: {
 		ID: IDMasterConstructionSite, Name: "공사현장 마스터", Description: "자체/EPC 공사 현장",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
@@ -308,6 +322,31 @@ var Catalog = map[FeatureID]Feature{
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{"/api/v1/module-demand-forecasts/", "/api/v1/module-demand-forecasts/{id}"},
 	},
+	IDTxPickingList: {
+		ID: IDTxPickingList, Name: "WMS 피킹 명세",
+		Description:    "출고 1건당 위치별 수량 명세 + picked 토글 (D-140 WMS Phase 2)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{
+			"/api/v1/picking-lists/", "/api/v1/picking-lists/{id}",
+			"/api/v1/picking-lists/{id}/items/{item_id}",
+		},
+	},
+	IDTxReceivingLog: {
+		ID: IDTxReceivingLog, Name: "WMS 입고 검수 로그",
+		Description:    "BL 라인/intercompany 입고 검수 + 수량 차이 추적 (D-141 WMS Phase 3)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/receiving-logs/", "/api/v1/receiving-logs/{id}"},
+	},
+	IDTxCycleCount: {
+		ID: IDTxCycleCount, Name: "WMS 정기 재고실사",
+		Description:    "위치 단위 cycle counting + 정확도 추적 (D-142 WMS Phase 4)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{
+			"/api/v1/cycle-counts/", "/api/v1/cycle-counts/{id}",
+			"/api/v1/cycle-counts/{id}/complete",
+			"/api/v1/cycle-counts/{id}/items/{item_id}",
+		},
+	},
 
 	// ===== tx.* (module = topsolar+cable, D-108/D-119) =====
 	IDTxCostDetail: {
@@ -339,7 +378,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxPriceBenchmark: {
 		ID: IDTxPriceBenchmark, Name: "가격예측 벤치마크", Description: "외부 태양광 시세·입찰·ASP 벤치마크 + AI 수집",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/price-benchmarks/", "/api/v1/price-benchmarks/runs", "/api/v1/price-benchmarks/runs/{id}", "/api/v1/price-benchmarks/our-prices", "/api/v1/price-benchmarks/ai-refresh"},
+		Paths: []string{"/api/v1/price-benchmarks/", "/api/v1/price-benchmarks/{id}", "/api/v1/price-benchmarks/runs", "/api/v1/price-benchmarks/runs/{id}", "/api/v1/price-benchmarks/our-prices", "/api/v1/price-benchmarks/ai-refresh"},
 	},
 	IDTxPriceHistory: {
 		ID: IDTxPriceHistory, Name: "수입 단가 이력", Description: "단가 이력 (module 계열)",
@@ -387,6 +426,12 @@ var Catalog = map[FeatureID]Feature{
 	},
 
 	// ===== baro.* =====
+	IDBaroCallbackRecommend: {
+		ID: IDBaroCallbackRecommend, Name: "BARO 자동 콜백 추천 엔진",
+		Description:    "owner 별 활성 거래처(30일+ 미주문) + 입고예정 SKU 컨텍스트 합본 (D-133)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{"/api/v1/baro/callback-recommend/"},
+	},
 	IDBaroIncoming: {
 		ID: IDBaroIncoming, Name: "BARO 입고예정", Description: "ETA·수량 read-only sanitized (D-116)",
 		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeColumnMasked,
@@ -446,6 +491,27 @@ var Catalog = map[FeatureID]Feature{
 		Description:    "영업담당자/거래처타입/월/거래처 4 cut 매출 집계 (D-129)",
 		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantCompany,
 		Paths: []string{"/api/v1/baro/sales-summary/"},
+	},
+	IDBaroQuote: {
+		ID: IDBaroQuote, Name: "BARO 견적 DB 저장",
+		Description:    "baro_quotes CRUD + 발송 추적 (D-135 PR2.5b)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{
+			"/api/v1/baro/quotes/", "/api/v1/baro/quotes/{id}",
+			"/api/v1/baro/quotes/{id}/send",
+		},
+	},
+	IDBaroCreditCheck: {
+		ID: IDBaroCreditCheck, Name: "BARO 한도 사전 체크",
+		Description:    "출고/수주 전 신용 조회 (D-136 PR5.5b)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantCompany,
+		Paths: []string{"/api/v1/baro/credit-check/"},
+	},
+	IDBaroShipmentNotice: {
+		ID: IDBaroShipmentNotice, Name: "BARO 출하 알림 발송",
+		Description:    "발송 추적 + 드라이버 PWA 토큰 (D-137 PR7.5). 외부 발송은 환경변수 stub.",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{"/api/v1/baro/shipment-notices/"},
 	},
 
 	// ===== calc.* =====

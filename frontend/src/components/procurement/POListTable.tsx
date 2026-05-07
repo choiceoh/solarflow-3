@@ -33,6 +33,11 @@ interface Props {
   onDetail: (po: PurchaseOrder) => void;
   onSelectBL?: (blId: string) => void;
   aggVersion?: number;
+  // server-mode 정렬: ProcurementPage 의 useServerSort 결과를 그대로 전달.
+  // 미지정 시 기존 client-side useSort 동작 유지 (LCPage 등 다른 호출 호환).
+  sortField?: string | null;
+  sortDirection?: 'asc' | 'desc' | null;
+  onSort?: (field: string) => void;
 }
 
 // 행별 집계 (초기 fetch)
@@ -97,7 +102,7 @@ function ProgressRow({
   );
 }
 
-function POListTable({ items, onDetail, onSelectBL, aggVersion }: Props) {
+function POListTable({ items, onDetail, onSelectBL, aggVersion, sortField, sortDirection, onSort }: Props) {
   const companies = useAppStore((s) => s.companies);
   const companyMap = Object.fromEntries(companies.map((c) => [c.company_id, c.company_name]));
   const [agg, setAgg] = useState<Record<string, Agg>>({});
@@ -189,6 +194,9 @@ function POListTable({ items, onDetail, onSelectBL, aggVersion }: Props) {
     });
   }
 
+  const controlled = onSort != null
+    ? { sortField: sortField ?? null, sortDirection: sortDirection ?? null, onSort }
+    : undefined
   const { sorted, headerProps } = useSort<PurchaseOrder>(items, (po, f) => {
     const a = agg[po.po_id];
     switch (f) {
@@ -200,7 +208,7 @@ function POListTable({ items, onDetail, onSelectBL, aggVersion }: Props) {
       case 'status': return po.status;
       default: return null;
     }
-  });
+  }, controlled);
 
   if (items.length === 0) return <EmptyState message="등록된 PO가 없습니다" />;
 

@@ -29,14 +29,20 @@ var unrestrictedAllowlist = map[string]bool{
 	"/health": true,
 	// 짧은 만료 토큰 PDF 열람 — 별도 토큰 가드
 	"/api/v1/attachments/{id}/file": true,
+	// D-137 PR7.5: 드라이버 PWA token-based access (외부 차주, 인증 미적용)
+	"/api/v1/baro/driver/{token}": true,
 	// /api/v1/public/* — 인증 미적용 그룹
-	"/api/v1/public/login-stats":             true,
-	"/api/v1/public/fx/{pair}":               true,
-	"/api/v1/public/fx/{pair}/timeseries":    true,
-	"/api/v1/public/metals/{symbol}":         true,
-	"/api/v1/public/polysilicon":             true,
-	"/api/v1/public/scfi":                    true,
-	"/api/v1/public/assistant/chat":          true,
+	"/api/v1/public/login-stats":          true,
+	"/api/v1/public/fx/{pair}":            true,
+	"/api/v1/public/fx/{pair}/timeseries": true,
+	"/api/v1/public/metals/{symbol}":      true,
+	"/api/v1/public/polysilicon":          true,
+	"/api/v1/public/scfi":                 true,
+	"/api/v1/public/assistant/chat":       true,
+	// PR-5a/5b: admin feature 매트릭스 — RoleGuard(admin) 만 사용, feature gate 무관.
+	// (admin 자기 자신을 토글 매트릭스에서 보는 화면이라 게이트 두지 않는다.)
+	"/api/v1/admin/feature-wiring/":                       true,
+	"/api/v1/admin/feature-wiring/{tenantID}/{featureID}": true,
 }
 
 // TestFeatureCoverage — chi 트리의 모든 라우트가 카탈로그 또는 unrestrictedAllowlist 에 정확히 한 번씩 등장하는가.

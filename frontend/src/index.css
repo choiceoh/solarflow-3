@@ -74,7 +74,13 @@ body {
   color: var(--sf-ink);
 }
 
-/* 솔라 포커스 링 — shadcn이 자체 ring을 갖지 않는 요소에만 (a, role=button div, tabindex). button/input은 shadcn이 처리 */
+/* 솔라 포커스 링 — shadcn이 자체 ring을 갖지 않는 요소에만 (a, role=button div, tabindex). button/input은 shadcn이 처리.
+   링이 즉시 튀어나오지 않고 부드럽게 페이드인 — focus 가 자연스럽게 흐르듯 들어옴. */
+a,
+[role="button"]:not(button),
+[tabindex]:not(input, select, textarea, button) {
+  transition: box-shadow var(--sf-dur-fast) var(--sf-ease-out);
+}
 a:focus-visible,
 [role="button"]:not(button):focus-visible,
 [tabindex]:not(input, select, textarea, button):focus-visible {
@@ -237,10 +243,29 @@ a:focus-visible,
   font-weight: 500;
 }
 
-/* 페이지 전체 드롭존 — 파일 드래그 시 페이지에 옅은 솔라 링 */
+/* 페이지 전체 드롭존 — 파일 드래그 시 페이지에 옅은 솔라 링.
+   드래그 진행 중 펄스로 "지금 드롭 가능" 살아있는 시각 피드백. */
 .sf-dropzone-page[data-active="true"] {
-  box-shadow: inset 0 0 0 2px var(--sf-solar-2),
-              inset 0 0 0 4px var(--sf-solar-bg-2);
+  animation: sf-dropzone-page-pulse 1.6s var(--sf-ease-soft) infinite;
+}
+@keyframes sf-dropzone-page-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 0 2px var(--sf-solar-2),
+                inset 0 0 0 4px var(--sf-solar-bg-2);
+  }
+  50% {
+    box-shadow: inset 0 0 0 2px var(--sf-solar),
+                inset 0 0 0 8px var(--sf-solar-bg);
+  }
+}
+
+/* 카드형 드롭존 — 활성 상태에서 미세 솔라 글로우 펄스 */
+.sf-dropzone[data-active="true"] {
+  animation: sf-dropzone-card-pulse 1.6s var(--sf-ease-soft) infinite;
+}
+@keyframes sf-dropzone-card-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(245 184 0 / 0); }
+  50%      { box-shadow: 0 0 0 6px rgb(245 184 0 / 0.16); }
 }
 
 /* 토글 버튼 — 다크 사이드바 안에 어우러지는 ghost icon */
@@ -339,7 +364,9 @@ a:focus-visible,
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background var(--sf-dur-fast) var(--sf-ease-out),
+              color var(--sf-dur-fast) var(--sf-ease-out),
+              border-color var(--sf-dur-fast) var(--sf-ease-out);
 }
 
 .sf-sidebar-tab:hover {
@@ -397,7 +424,8 @@ a:focus-visible,
   color: var(--sf-dark-ink-2);
   font-size: 12.5px;
   font-weight: 500;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background var(--sf-dur-fast) var(--sf-ease-out),
+              color var(--sf-dur-fast) var(--sf-ease-out);
 }
 
 .sf-nav-link:hover {
@@ -868,7 +896,11 @@ a:focus-visible,
   padding: 9px 11px;
   color: var(--sf-ink-2);
   text-decoration: none;
-  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+  transition: border-color var(--sf-dur-mid) var(--sf-ease-out),
+              background var(--sf-dur-mid) var(--sf-ease-out),
+              color var(--sf-dur-mid) var(--sf-ease-out),
+              transform var(--sf-dur-mid) var(--sf-ease-out),
+              box-shadow var(--sf-dur-mid) var(--sf-ease-out);
 }
 
 .sf-family-site-link::before {
@@ -881,13 +913,15 @@ a:focus-visible,
   background: var(--sf-solar);
   transform: scaleY(0);
   transform-origin: center;
-  transition: transform 160ms ease;
+  transition: transform var(--sf-dur-mid) var(--sf-ease-spring);
 }
 
 .sf-family-site-link:hover {
   border-color: var(--sf-line);
   background: var(--sf-bg-2);
   color: var(--sf-ink);
+  transform: translateY(-1px);
+  box-shadow: var(--sf-shadow-2);
 }
 
 .sf-family-site-link:hover::before {
@@ -918,7 +952,7 @@ a:focus-visible,
   font-size: 9.5px;
   color: var(--sf-ink-4);
   letter-spacing: 0.02em;
-  transition: color 140ms ease;
+  transition: color var(--sf-dur-mid) var(--sf-ease-out);
 }
 
 .sf-family-site-link:hover .sf-family-site-link-host {
@@ -930,12 +964,13 @@ a:focus-visible,
   height: 13px;
   flex-shrink: 0;
   color: var(--sf-ink-4);
-  transition: color 140ms ease, transform 160ms ease;
+  transition: color var(--sf-dur-mid) var(--sf-ease-out),
+              transform var(--sf-dur-mid) var(--sf-ease-spring);
 }
 
 .sf-family-site-link:hover .sf-family-site-link-icon {
   color: var(--sf-solar-3);
-  transform: translate(2px, -2px);
+  transform: translate(3px, -3px);
 }
 
 .sf-login-right {
@@ -1416,6 +1451,24 @@ a:focus-visible,
   font-size: 11px;
   color: var(--ink-2);
 }
+.sf-ph-chain-row .sf-ph-chain-meta,
+.sf-ph-chain-row .sf-ph-chain-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.sf-ph-chain-row .sf-ph-chain-meta span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-ph-chain-row .sf-ph-chain-foot {
+  justify-content: space-between;
+}
 .sf-ph-chain-row .sf-ph-chain-date {
   font-size: 10px;
   color: var(--ink-3);
@@ -1448,7 +1501,95 @@ a:focus-visible,
 .sf-ph-timeline {
   list-style: none;
   margin: 0;
-  padding: 8px 0;
+  padding: 0;
+}
+.sf-ph-timeline-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.sf-ph-timeline-toolbar .tabs {
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 1px;
+}
+.sf-ph-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sf-ph-reset-btn:hover {
+  background: var(--bg-2);
+}
+.sf-ph-reset-btn svg {
+  width: 12px;
+  height: 12px;
+}
+.sf-ph-chain-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  border-bottom: 1px solid var(--line);
+  background: var(--line);
+}
+.sf-ph-chain-summary > div {
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--bg);
+}
+.sf-ph-summary-value {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-ph-summary-sub {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 1100px) {
+  .sf-ph-chain-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.sf-ph-timeline-groups {
+  padding: 0;
+}
+.sf-ph-month-divider {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 92%, var(--solar-2));
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 700;
 }
 .sf-ph-timeline > li {
   border-bottom: 1px solid var(--line);
@@ -1502,6 +1643,25 @@ a:focus-visible,
   font-size: 13px;
   font-weight: 600;
   color: var(--ink);
+  min-width: 0;
+}
+.sf-ph-event-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.sf-ph-event-kind {
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 10px;
+  color: var(--ink-3);
+  background: var(--bg);
 }
 .sf-ph-event-date {
   font-size: 10.5px;
@@ -1751,20 +1911,22 @@ a:focus-visible,
   padding: 16px;
 }
 
-/* shadcn Button — radius/letter-spacing/active 트랜스폼 (height는 보존) */
+/* shadcn Button — radius/letter-spacing/active 트랜스폼 (height는 보존).
+   active 는 instant duration 으로 즉각 응답, 복귀는 spring 으로 살짝 통통. */
 .sf-page [data-slot="button"],
 .sf-command-surface [data-slot="button"] {
   border-radius: 4px;
   letter-spacing: -0.005em;
-  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              color 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              transform 100ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background var(--sf-dur-mid) var(--sf-ease-out),
+              border-color var(--sf-dur-mid) var(--sf-ease-out),
+              color var(--sf-dur-mid) var(--sf-ease-out),
+              box-shadow var(--sf-dur-mid) var(--sf-ease-out),
+              transform var(--sf-dur-fast) var(--sf-ease-spring);
 }
 .sf-page [data-slot="button"]:active,
 .sf-command-surface [data-slot="button"]:active {
-  transform: translateY(0.5px);
+  transform: translate3d(0, 1px, 0);
+  transition-duration: var(--sf-dur-instant);
 }
 
 /* 폼 그룹 — Label + Input 묶음 일관 간격. Dialog/페이지 폼 모두 자동 적용 */
@@ -1812,6 +1974,7 @@ a:focus-visible,
 }
 .sf-page [data-slot="tabs-trigger"]:not(.sf-tab-panel *),
 .sf-command-surface [data-slot="tabs-trigger"]:not(.sf-tab-panel *) {
+  position: relative;
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
@@ -1823,8 +1986,26 @@ a:focus-visible,
   font-weight: 500;
   color: var(--sf-ink-3);
   box-shadow: none;
-  transition: color 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: color var(--sf-dur-mid) var(--sf-ease-out);
+}
+/* 슬라이딩 underline — 활성 시 가운데에서 좌우로 펼쳐짐. transform:scaleX 라 GPU layer.
+   bottom: -1px 로 tabs-list 의 1px border 위에 정확히 정렬.
+   tabs.tsx 가 ::after 를 opacity 로 토글하므로 여기서 opacity 1 로 고정,
+   scaleX 만으로 인디케이터를 제어 (variant 무관 일관 underline 패턴). */
+.sf-page [data-slot="tabs-trigger"]:not(.sf-tab-panel *)::after,
+.sf-command-surface [data-slot="tabs-trigger"]:not(.sf-tab-panel *)::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--sf-ink);
+  opacity: 1;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--sf-dur-slow) var(--sf-ease-out);
+  pointer-events: none;
 }
 .sf-page [data-slot="tabs-trigger"]:not(.sf-tab-panel *):hover,
 .sf-command-surface [data-slot="tabs-trigger"]:not(.sf-tab-panel *):hover {
@@ -1834,9 +2015,12 @@ a:focus-visible,
 .sf-command-surface [data-slot="tabs-trigger"]:not(.sf-tab-panel *)[data-active] {
   background: transparent;
   color: var(--sf-ink);
-  border-bottom-color: var(--sf-ink);
   font-weight: 600;
   box-shadow: none;
+}
+.sf-page [data-slot="tabs-trigger"]:not(.sf-tab-panel *)[data-active]::after,
+.sf-command-surface [data-slot="tabs-trigger"]:not(.sf-tab-panel *)[data-active]::after {
+  transform: scaleX(1);
 }
 
 /* Input·Textarea placeholder — mockup 톤. 글로벌 적용 (Dialog 내부 폼 포함) */
@@ -2130,13 +2314,20 @@ textarea::placeholder {
   stroke-dasharray: 2 2;
 }
 
-/* 페이지 전환 fade-in — 라우트 변경 시 미세하게 부드러운 진입감 */
+/* 페이지 전환 fade-in — 라우트 변경 시 자연스러운 진입감.
+   nth-child stagger 로 상위 4개 자식이 미세하게 시차 등장 (5번째부터 동시) —
+   카드/테이블 깊은 페이지에서도 마지막 요소가 너무 늦게 보이지 않도록 cap. */
 .sf-page-scroll > * {
-  animation: sf-page-fade-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: sf-page-fade-in 280ms var(--sf-ease-out) both;
 }
+.sf-page-scroll > *:nth-child(1) { animation-delay: 0ms; }
+.sf-page-scroll > *:nth-child(2) { animation-delay: 30ms; }
+.sf-page-scroll > *:nth-child(3) { animation-delay: 60ms; }
+.sf-page-scroll > *:nth-child(4) { animation-delay: 90ms; }
+.sf-page-scroll > *:nth-child(n+5) { animation-delay: 110ms; }
 @keyframes sf-page-fade-in {
-  from { opacity: 0; transform: translateY(2px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 /* 스크롤 시 페이지 상단 그림자 — 헤더 분리감 강화 */
@@ -2192,7 +2383,26 @@ textarea::placeholder {
   background: var(--sf-surface);
 }
 
-/* Input·Textarea 포커스 — 솔라 보더 + soft glow */
+/* Input·Textarea 포커스 — 솔라 보더 + soft glow.
+   border-color/box-shadow 가 즉시 튀지 않고 부드럽게 들어와 흐름이 자연스럽다. */
+.sf-page input[type="text"],
+.sf-page input[type="number"],
+.sf-page input[type="email"],
+.sf-page input[type="search"],
+.sf-page input[type="date"],
+.sf-page input[type="password"],
+.sf-page input[type="tel"],
+.sf-page textarea,
+.sf-command-surface input[type="text"],
+.sf-command-surface input[type="number"],
+.sf-command-surface input[type="email"],
+.sf-command-surface input[type="search"],
+.sf-command-surface input[type="date"],
+.sf-command-surface textarea {
+  transition: border-color var(--sf-dur-fast) var(--sf-ease-out),
+              box-shadow var(--sf-dur-fast) var(--sf-ease-out),
+              background var(--sf-dur-fast) var(--sf-ease-out);
+}
 .sf-page input[type="text"]:focus,
 .sf-page input[type="number"]:focus,
 .sf-page input[type="email"]:focus,
@@ -2218,10 +2428,12 @@ textarea::placeholder {
               color 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* 스켈레톤 shimmer — 로딩 상태 LoadingSpinner 대체용 */
+/* 스켈레톤 shimmer — 로딩 상태 LoadingSpinner 대체용.
+   5-stop gradient 로 좀 더 자연스러운 빛 흐름 + solar 톤 살짝 섞음
+   (브랜드 일치). will-change 로 합성 layer 분리 — 스크롤 중 jank 방지. */
 .sf-skeleton {
   position: relative;
-  background: var(--sf-bg-2);
+  background: linear-gradient(90deg, var(--sf-bg-2) 0%, var(--sf-bg-3) 50%, var(--sf-bg-2) 100%);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -2229,21 +2441,198 @@ textarea::placeholder {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 0.55) 50%, transparent 100%);
-  animation: sf-skeleton-shimmer 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.2) 30%,
+    rgb(255 250 232 / 0.7) 50%,
+    rgb(255 255 255 / 0.2) 70%,
+    transparent 100%
+  );
+  animation: sf-skeleton-shimmer 1.6s var(--sf-ease-soft) infinite;
+  will-change: transform;
 }
 @keyframes sf-skeleton-shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% { transform: translate3d(-100%, 0, 0); }
+  100% { transform: translate3d(100%, 0, 0); }
 }
 
-/* AI 어시스턴트 — 스트리밍 중 새 토큰 페이드인. transition-opacity 가 매 리렌더마다 자연스럽게 부드럽게 함. */
+/* base UI Select trigger chevron — popup 열림 시 180° 회전.
+   trigger 의 마지막 svg 만 회전 (leading icon 이 있어도 chevron 만). */
+[data-slot="select-trigger"] > svg:last-child,
+[data-slot="select-trigger"] > [data-slot="select-icon"] > svg {
+  transition: transform var(--sf-dur-mid) var(--sf-ease-out);
+}
+[data-slot="select-trigger"][data-popup-open] > svg:last-child,
+[data-slot="select-trigger"][data-popup-open] > [data-slot="select-icon"] > svg {
+  transform: rotate(180deg);
+}
+
+/* AI 어시스턴트 — 스트리밍 중 새 토큰 페이드인. 가독성을 위해 시작 opacity
+   는 0.4 로 두어 깜빡임 최소화, 미세 translateY 로 흐름감 추가. */
 .sf-stream-fade {
-  animation: sf-stream-fade-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: sf-stream-fade-in 240ms var(--sf-ease-out) both;
 }
 @keyframes sf-stream-fade-in {
-  from { opacity: 0.7; }
-  to { opacity: 1; }
+  from { opacity: 0.4; transform: translate3d(0, 1px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* AI 어시스턴트 — 메시지 첫 등장 시 슬라이드인 페이드. */
+.sf-msg-enter {
+  animation: sf-msg-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes sf-msg-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* AI 어시스턴트 — 스트리밍 중 봇 아바타 ring pulse. 캐럿보다 강한 시각 신호. */
+.sf-avatar-ring-pulse {
+  position: relative;
+}
+.sf-avatar-ring-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 2px solid var(--sf-solar);
+  opacity: 0;
+  animation: sf-ring-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes sf-ring-pulse {
+  0% { transform: scale(0.95); opacity: 0.6; }
+  70% { transform: scale(1.15); opacity: 0; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+
+/* 사용자가 모션 줄이기 환경설정 — 모든 어시스턴트 애니메이션 비활성. */
+@media (prefers-reduced-motion: reduce) {
+  .sf-stream-fade,
+  .sf-msg-enter,
+  .sf-avatar-ring-pulse::before {
+    animation: none !important;
+  }
+  .sf-avatar-ring-pulse::before {
+    display: none;
+  }
+}
+
+/* 어시스턴트 — 사이드바 얇은 스크롤바. */
+.sf-thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(0 0 0 / 0.15);
+  border-radius: 3px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(0 0 0 / 0.28);
+}
+.sf-thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 0.15) transparent;
+}
+
+/* AI 어시스턴트 — 메시지 첫 등장 시 슬라이드인 페이드. */
+.sf-msg-enter {
+  animation: sf-msg-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes sf-msg-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* AI 어시스턴트 — 스트리밍 중 봇 아바타 ring pulse. 캐럿보다 강한 시각 신호. */
+.sf-avatar-ring-pulse {
+  position: relative;
+}
+.sf-avatar-ring-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 2px solid var(--sf-solar);
+  opacity: 0;
+  animation: sf-ring-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes sf-ring-pulse {
+  0% { transform: scale(0.95); opacity: 0.6; }
+  70% { transform: scale(1.15); opacity: 0; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+
+/* 사용자가 모션 줄이기 환경설정 — 모든 어시스턴트 애니메이션 비활성. */
+@media (prefers-reduced-motion: reduce) {
+  .sf-stream-fade,
+  .sf-msg-enter,
+  .sf-avatar-ring-pulse::before {
+    animation: none !important;
+  }
+  .sf-avatar-ring-pulse::before {
+    display: none;
+  }
+}
+
+/* 어시스턴트 — 헤더 하단 그라디언트 디바이더. 옅은 솔라 톤이 살짝 깔리고 끝으로 갈수록 fade. */
+.sf-assistant-header {
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(
+      to right,
+      transparent 0%,
+      var(--sf-solar) 18%,
+      rgb(0 0 0 / 0.1) 60%,
+      transparent 100%
+    )
+    1;
+}
+
+/* 어시스턴트 — 첨부 영역 바로 아래 textarea: 상단 라운드 제거하고 첨부 영역과 시각적으로 한 덩어리로. */
+.sf-attached-input textarea {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* 어시스턴트 — 빈 상태 미세 솔라 글로우 (radial). 차분한 깊이감. */
+.sf-empty-glow {
+  background: radial-gradient(
+    ellipse at center top,
+    color-mix(in oklab, var(--sf-solar) 8%, transparent) 0%,
+    transparent 60%
+  );
+}
+
+/* 어시스턴트 — 봇 아바타 옅은 솔라 그라디언트 ring. */
+.sf-bot-avatar {
+  background: linear-gradient(135deg,
+    color-mix(in oklab, var(--sf-solar) 14%, transparent) 0%,
+    color-mix(in oklab, var(--sf-solar) 4%, transparent) 100%
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--sf-solar) 20%, transparent);
+}
+
+/* 어시스턴트 — 사이드바 얇은 스크롤바. */
+.sf-thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(0 0 0 / 0.15);
+  border-radius: 3px;
+}
+.sf-thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(0 0 0 / 0.28);
+}
+.sf-thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 0.15) transparent;
 }
 
 /* 톤 칩 — Bloomberg-density 상태 표시 */
@@ -2298,18 +2687,24 @@ textarea::placeholder {
   flex-shrink: 0;
 }
 
-/* 카드 호버 리프트 — 클릭 가능한 카드에 opt-in */
+/* 카드 호버 리프트 — 클릭 가능한 카드에 opt-in.
+   hover 시 -1px lift 로 클릭 가능성 시각 단서, active 시 즉시 0px 로 복귀해
+   "눌림"감 명확. shadow 가 함께 깊어지면서 z 깊이 변화를 표현. */
 .sf-card-hover {
-  transition: box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translate3d(0, 0, 0);
+  transition: box-shadow var(--sf-dur-mid) var(--sf-ease-out),
+              border-color var(--sf-dur-mid) var(--sf-ease-out),
+              transform var(--sf-dur-mid) var(--sf-ease-spring);
+  will-change: transform;
 }
 .sf-card-hover:hover {
-  box-shadow: var(--sf-shadow-3);
+  box-shadow: var(--sf-shadow-4);
   border-color: var(--sf-line-2);
+  transform: translate3d(0, -1px, 0);
 }
 .sf-card-hover:active {
-  transform: translateY(0.5px);
+  transform: translate3d(0, 0.5px, 0);
+  transition-duration: var(--sf-dur-instant);
 }
 
 @media (max-width: 1180px) {
@@ -2596,5 +2991,72 @@ textarea::placeholder {
 
   .sf-kpi-card strong {
     font-size: 21px;
+  }
+}
+
+/* ============================================================
+   View Transitions API — 라우트 변경 시 cross-fade + morph
+   ============================================================
+   react-router-dom v7 의 NavLink/Link 에 viewTransition prop 가 활성화되면
+   document.startViewTransition() 으로 자동 래핑된다. CSS 로 기본 cross-fade
+   곡선을 다듬고, 페이지 타이틀에 view-transition-name 을 부여해 라우트 간
+   동일 정체성으로 morph. 미지원 브라우저에서는 자동 fallback. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 280ms;
+  animation-timing-function: var(--sf-ease-out);
+}
+
+.sf-vt-page-title {
+  view-transition-name: sf-page-title;
+}
+::view-transition-old(sf-page-title),
+::view-transition-new(sf-page-title) {
+  animation-duration: 320ms;
+  animation-timing-function: var(--sf-ease-out);
+}
+
+/* ============================================================
+   Accessibility — prefers-reduced-motion
+   ============================================================
+   운동 감각 민감 사용자(전정 장애·편두통·멀미 등)를 위해 모든
+   non-essential 애니메이션을 거의 정지에 가깝게 축소. transition/
+   animation 을 0 으로 두면 일부 컴포넌트가 final state 로 점프하다
+   상태 미반영 버그를 일으킬 수 있어, 0.01ms 로 최소 prep 만 남김.
+   shimmer/spin 같은 무한 애니메이션은 1 회로 종료. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .sf-page-scroll > *,
+  .sf-page-scroll > *:nth-child(1),
+  .sf-page-scroll > *:nth-child(2),
+  .sf-page-scroll > *:nth-child(3),
+  .sf-page-scroll > *:nth-child(4),
+  .sf-page-scroll > *:nth-child(n+5) {
+    animation: none;
+  }
+
+  .sf-skeleton::after {
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .sf-dropzone[data-active="true"],
+  .sf-dropzone-page[data-active="true"] {
+    animation: none;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-old(sf-page-title),
+  ::view-transition-new(sf-page-title) {
+    animation-duration: 0.01ms !important;
   }
 }

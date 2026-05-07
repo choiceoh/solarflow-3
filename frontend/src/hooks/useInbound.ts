@@ -148,6 +148,8 @@ export interface BLListPagedFilters {
   inbound_type?: string
   status?: string
   manufacturer_id?: string
+  eta_from?: string
+  eta_to?: string
   q?: string
   sort?: string
   order?: "asc" | "desc"
@@ -159,11 +161,12 @@ export interface BLListPagedFilters {
 export function useBLListPaged(filters: BLListPagedFilters = {}) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
   const {
-    inbound_type, status, manufacturer_id, q,
+    inbound_type, status, manufacturer_id, eta_from, eta_to, q,
     sort, order, page = 1, pageSize = 100, enabled = true,
   } = filters
   const queryKey = [
     "bls-paged", selectedCompanyId, inbound_type ?? "", status ?? "", manufacturer_id ?? "",
+    eta_from ?? "", eta_to ?? "",
     q ?? "", sort ?? "", order ?? "", page, pageSize,
   ]
   const result = useQuery({
@@ -173,6 +176,8 @@ export function useBLListPaged(filters: BLListPagedFilters = {}) {
       if (inbound_type) params.set("inbound_type", inbound_type)
       if (status) params.set("status", status)
       if (manufacturer_id) params.set("manufacturer_id", manufacturer_id)
+      if (eta_from) params.set("eta_from", eta_from)
+      if (eta_to) params.set("eta_to", eta_to)
       if (q) params.set("q", q)
       if (sort) params.set("sort", sort)
       if (order) params.set("order", order)

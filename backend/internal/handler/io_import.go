@@ -11,6 +11,7 @@ import (
 
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
@@ -80,12 +81,17 @@ func validateAllowedValues(rowNum int, value string, field string, allowed map[s
 // ImportHandler — 엑셀 Import 9종 API를 처리하는 핸들러
 // 비유: "일괄 등록 창구" — 엑셀에서 파싱된 행들을 DB에 일괄 INSERT
 type ImportHandler struct {
-	DB *supa.Client
+	DB     *supa.Client
+	Engine *engine.EngineClient
 }
 
 // NewImportHandler — ImportHandler 생성자
-func NewImportHandler(db *supa.Client) *ImportHandler {
-	return &ImportHandler{DB: db}
+func NewImportHandler(db *supa.Client, engineClient ...*engine.EngineClient) *ImportHandler {
+	var ec *engine.EngineClient
+	if len(engineClient) > 0 {
+		ec = engineClient[0]
+	}
+	return &ImportHandler{DB: db, Engine: ec}
 }
 
 // --- 공통 헬퍼 ---
@@ -491,6 +497,7 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 	var importErrors []model.ImportError
 	imported := 0
 	importedIDs := make([]string, 0, len(req.Rows))
+	outboundH := NewOutboundHandler(h.DB, h.Engine)
 
 	for i, row := range req.Rows {
 		rowNum := i + 2
@@ -568,20 +575,18 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		outData, _, err := h.DB.From("outbounds").
-			Insert(outReq, false, "", "", "").
-			Execute()
+		createdOutbound, _, errMsg, err := outboundH.createOutboundCore(outReq)
 		if err != nil {
 			log.Printf("[출고 Import INSERT 실패] row=%d, err=%v", rowNum, err)
-			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "outbound", Message: "출고 등록 실패"})
+			if errMsg == "" {
+				errMsg = "출고 등록 실패"
+			}
+			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "outbound", Message: errMsg})
 			continue
 		}
-		var createdOutbounds []model.Outbound
-		if json.Unmarshal(outData, &createdOutbounds) == nil && len(createdOutbounds) > 0 {
-			writeAuditLog(h.DB, r, "outbounds", createdOutbounds[0].OutboundID, "create", nil, auditRawFromValue(createdOutbounds[0]), "excel_import")
-			// D-057: 매출 자동 등록 후속 처리를 위해 등록된 outbound_id 수집.
-			importedIDs = append(importedIDs, createdOutbounds[0].OutboundID)
-		}
+		writeAuditLog(h.DB, r, "outbounds", createdOutbound.OutboundID, "create", nil, auditRawFromValue(createdOutbound), "excel_import")
+		// D-057: 매출 자동 등록 후속 처리를 위해 등록된 outbound_id 수집.
+		importedIDs = append(importedIDs, createdOutbound.OutboundID)
 
 		imported++
 	}
@@ -749,7 +754,7 @@ func (h *ImportHandler) Declarations(w http.ResponseWriter, r *http.Request) {
 	// 면장번호 → declaration_id 매핑 맵
 	declIDMap := make(map[string]string)
 
-	// 단계 1: declarations INSERT
+	// 단계 1: import_declarations INSERT
 	for i, row := range req.Declarations {
 		rowNum := i + 2
 
@@ -782,7 +787,7 @@ func (h *ImportHandler) Declarations(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		declData, _, err := h.DB.From("declarations").
+		declData, _, err := h.DB.From("import_declarations").
 			Insert(declReq, false, "", "", "").
 			Execute()
 		if err != nil {

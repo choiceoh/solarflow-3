@@ -697,7 +697,7 @@ func toolSearchDeclarations() assistantTool {
 				}
 			}
 			limit := clampLimit(args.Limit, 20, 50)
-			q := db.From("declarations").Select("*", "exact", false)
+			q := db.From("import_declarations").Select("*", "exact", false)
 			if v := strings.TrimSpace(args.DeclarationNumber); v != "" {
 				q = q.Ilike("declaration_number", "%"+v+"%")
 			}
@@ -777,4 +777,3 @@ func toolSearchPartnerActivities() assistantTool {
 }
 
 // ===== 수주·출고 update/delete =====
-

@@ -1,13 +1,13 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Ban, ClipboardList, DollarSign, FileEdit, FileSignature, History, Landmark, Search, Send, Ship } from 'lucide-react';
+import { Ban, ClipboardList, DollarSign, FileEdit, FileSignature, FilterX, History, Landmark, Search, Send, Ship } from 'lucide-react';
 
 import { useAppStore } from '@/stores/appStore';
 import { usePOList, usePriceHistoryList, useLCList, useTTList } from '@/hooks/useProcurement';
 import { useBLList } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
 import { buildChains, diffAuditFields, eventDeepLink, isValidChainParam, sanitizeAuditLogs, type Chain, type EventKind, type SafeAuditLog } from '@/lib/purchaseHistory';
-import { CardB, FilterButton, TileB, type DateRangeValue } from '@/components/command/MockupPrimitives';
+import { CardB, FilterButton, FilterChips, TileB, type DateRangeValue } from '@/components/command/MockupPrimitives';
 import EmptyState from '@/components/common/EmptyState';
 import { monthlyCount, flatSparkFromValue } from '@/templates/sparkUtils';
 import { CONTRACT_TYPE_LABEL, LC_STATUS_LABEL, PO_STATUS_LABEL } from '@/types/procurement';
@@ -21,10 +21,66 @@ interface TimelineEvent {
   date: string; // YYYY-MM-DD
   chain_id: string;
   po_id?: string;
+  lc_id?: string;
+  bl_id?: string;
+  tt_id?: string;
   // Display payload
   title: string;
   subtitle?: string;
   detail?: string;
+}
+
+type EventFilter = 'all' | EventKind;
+
+const EVENT_KIND_LABEL: Record<EventKind, string> = {
+  po_create: 'PO 생성',
+  variant_create: '변경계약',
+  price_change: '단가',
+  po_update: 'PO 변경',
+  po_cancel: '취소',
+  lc_open: 'L/C 개설',
+  lc_settle: 'L/C 결제',
+  bl_event: 'B/L',
+  tt_send: 'T/T',
+};
+
+const EVENT_KIND_OPTIONS: EventKind[] = [
+  'po_create',
+  'variant_create',
+  'price_change',
+  'po_update',
+  'lc_open',
+  'lc_settle',
+  'bl_event',
+  'tt_send',
+  'po_cancel',
+];
+
+function inDateRange(date: string | undefined | null, range: DateRangeValue): boolean {
+  if (!range) return true;
+  if (!date) return false;
+  return date >= range.start && date <= range.end;
+}
+
+function latestPO(chain: Chain): PurchaseOrder {
+  return chain.pos[chain.pos.length - 1] ?? chain.head;
+}
+
+function fmtMw(value?: number): string {
+  if (!Number.isFinite(value ?? 0) || !value || value <= 0) return '0.00 MW';
+  return `${value.toLocaleString('ko-KR', { minimumFractionDigits: value >= 100 ? 1 : 2, maximumFractionDigits: value >= 100 ? 1 : 2 })} MW`;
+}
+
+function formatMonthLabel(month: string): string {
+  if (!/^\d{4}-\d{2}$/.test(month)) return '날짜 미지정';
+  const [year, m] = month.split('-');
+  return `${year}년 ${Number(m)}월`;
+}
+
+function countByKind(events: TimelineEvent[]): Record<EventKind, number> {
+  const out = Object.fromEntries(EVENT_KIND_OPTIONS.map((kind) => [kind, 0])) as Record<EventKind, number>;
+  for (const evt of events) out[evt.kind] = (out[evt.kind] ?? 0) + 1;
+  return out;
 }
 
 function poEvents(po: PurchaseOrder, chain: Chain): TimelineEvent[] {
@@ -79,6 +135,7 @@ function priceEvents(phs: PriceHistory[], poIds: Set<string>, chainId: string, m
         kind: 'price_change' as const,
         date: ph.change_date,
         chain_id: chainId,
+        po_id: ph.related_po_id ?? undefined,
         title: `단가 ${isManual ? '수동 등록' : '등록'} — ${product}`,
         subtitle: `${arrow} USD/Wp${ph.reason ? ` · ${ph.reason}` : ''}${isManual ? ' · [PO 미연결]' : ''}`,
         detail: ph.memo,
@@ -99,6 +156,7 @@ function lcEvents(lcs: LCRecord[], poIds: Set<string>, chainId: string): Timelin
         date: lc.open_date,
         chain_id: chainId,
         po_id: lc.po_id,
+        lc_id: lc.lc_id,
         title: `L/C 개설 — ${lcLabel}`,
         subtitle: [lc.bank_name ?? '은행 미지정', amountLabel, LC_STATUS_LABEL[lc.status]].filter(Boolean).join(' · '),
       });
@@ -111,6 +169,7 @@ function lcEvents(lcs: LCRecord[], poIds: Set<string>, chainId: string): Timelin
         date: settleDate,
         chain_id: chainId,
         po_id: lc.po_id,
+        lc_id: lc.lc_id,
         title: `L/C 결제 — ${lcLabel}`,
         subtitle: [lc.bank_name, amountLabel].filter(Boolean).join(' · '),
       });
@@ -132,6 +191,7 @@ function blEvents(bls: BLShipment[], poIds: Set<string>, chainId: string): Timel
       date,
       chain_id: chainId,
       po_id: bl.po_id,
+      bl_id: bl.bl_id,
       title: `B/L ${BL_STATUS_LABEL[bl.status] ?? bl.status} — ${bl.bl_number}`,
       subtitle: [portLabel, bl.forwarder].filter(Boolean).join(' · ') || undefined,
       detail: bl.warehouse_name ? `창고: ${bl.warehouse_name}` : undefined,
@@ -152,6 +212,7 @@ function ttEvents(tts: TTRemittance[], poIds: Set<string>, chainId: string): Tim
         date: tt.remit_date as string,
         chain_id: chainId,
         po_id: tt.po_id,
+        tt_id: tt.tt_id,
         title: `T/T 송금 — ${amount || tt.tt_id.slice(0, 8)}`,
         subtitle: [purpose, tt.bank_name, tt.status === 'planned' ? '예정' : '완료'].filter(Boolean).join(' · ') || undefined,
       };
@@ -294,6 +355,7 @@ export default function PurchaseHistoryPage() {
   const [mfgFilter, setMfgFilter] = useState('');
   const [dateRange, setDateRange] = useState<DateRangeValue>(null);
   const [search, setSearch] = useState('');
+  const [eventFilter, setEventFilter] = useState<EventFilter>('all');
   const manufacturers = useAppStore((s) => s.manufacturers);
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
 
@@ -341,16 +403,21 @@ export default function PurchaseHistoryPage() {
     if (mfgFilter) result = result.filter((c) => c.manufacturer_id === mfgFilter);
     if (dateRange) {
       result = result.filter((c) => {
-        const d = c.head.contract_date;
-        return !!d && d >= dateRange.start && d <= dateRange.end;
+        return c.pos.some((p) => inDateRange(p.contract_date, dateRange));
       });
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter((c) => {
-        const headLabel = (c.head.po_number ?? c.head.po_id).toLowerCase();
+        const poLabels = c.pos.map((p) => [
+          p.po_number ?? p.po_id,
+          PO_STATUS_LABEL[p.status],
+          CONTRACT_TYPE_LABEL[p.contract_type],
+          p.payment_terms ?? '',
+          p.incoterms ?? '',
+        ].join(' ')).join(' ');
         const mfg = (c.manufacturer_name ?? '').toLowerCase();
-        return headLabel.includes(q) || mfg.includes(q);
+        return poLabels.toLowerCase().includes(q) || mfg.includes(q);
       });
     }
     return result;
@@ -366,10 +433,64 @@ export default function PurchaseHistoryPage() {
     [phs, lcs, bls, tts, audits],
   );
 
-  const events = useMemo(() => {
+  const rawEvents = useMemo(() => {
     if (selectedChain) return buildChainEvents(selectedChain, sources);
-    return buildRecentEvents(filteredChains, sources, RECENT_LIMIT);
+    return buildRecentEvents(filteredChains, sources, 10_000);
   }, [selectedChain, filteredChains, sources]);
+
+  const dateScopedEvents = useMemo(
+    () => rawEvents.filter((evt) => inDateRange(evt.date, dateRange)),
+    [rawEvents, dateRange],
+  );
+
+  const eventKindCounts = useMemo(() => countByKind(dateScopedEvents), [dateScopedEvents]);
+
+  const eventFilterOptions = useMemo(
+    () => [
+      { key: 'all', label: '전체', count: dateScopedEvents.length },
+      ...EVENT_KIND_OPTIONS
+        .filter((kind) => eventKindCounts[kind] > 0)
+        .map((kind) => ({ key: kind, label: EVENT_KIND_LABEL[kind], count: eventKindCounts[kind] })),
+    ],
+    [dateScopedEvents.length, eventKindCounts],
+  );
+
+  const events = useMemo(
+    () => {
+      const filtered = dateScopedEvents.filter((evt) => eventFilter === 'all' || evt.kind === eventFilter);
+      return selectedChain ? filtered : filtered.slice(0, RECENT_LIMIT);
+    },
+    [dateScopedEvents, eventFilter, selectedChain],
+  );
+
+  const eventGroups = useMemo(() => {
+    const groups: { key: string; label: string; events: TimelineEvent[] }[] = [];
+    for (const evt of events) {
+      const key = evt.date ? evt.date.slice(0, 7) : '__unset__';
+      let group = groups.find((g) => g.key === key);
+      if (!group) {
+        group = { key, label: formatMonthLabel(key), events: [] };
+        groups.push(group);
+      }
+      group.events.push(evt);
+    }
+    return groups;
+  }, [events]);
+
+  const chainStats = useMemo(() => {
+    const out = new Map<string, { eventCount: number; latestEventDate?: string; lcCount: number; blCount: number; ttCount: number }>();
+    for (const chain of chains) {
+      const chainEvents = buildChainEvents(chain, sources);
+      out.set(chain.chain_id, {
+        eventCount: chainEvents.length,
+        latestEventDate: chainEvents[0]?.date,
+        lcCount: chainEvents.filter((evt) => evt.kind === 'lc_open' || evt.kind === 'lc_settle').length,
+        blCount: chainEvents.filter((evt) => evt.kind === 'bl_event').length,
+        ttCount: chainEvents.filter((evt) => evt.kind === 'tt_send').length,
+      });
+    }
+    return out;
+  }, [chains, sources]);
 
   const variantCount = useMemo(() => chains.reduce((sum, c) => sum + (c.pos.length - 1), 0), [chains]);
   const chainsWithVariants = useMemo(() => chains.filter((c) => c.pos.length > 1).length, [chains]);
@@ -474,6 +595,8 @@ export default function PurchaseHistoryPage() {
                 const isActive = chain.chain_id === chainParam;
                 const variantN = chain.pos.length - 1;
                 const headLabel = chain.head.po_number ?? chain.head.po_id.slice(0, 8);
+                const current = latestPO(chain);
+                const stat = chainStats.get(chain.chain_id);
                 return (
                   <li key={chain.chain_id} role="option" aria-selected={isActive}>
                     <button
@@ -492,7 +615,17 @@ export default function PurchaseHistoryPage() {
                         )}
                       </div>
                       <div className="sf-ph-chain-mfg">{chain.manufacturer_name ?? '제조사 미지정'}</div>
-                      <div className="mono sf-ph-chain-date">최근 {chain.latest_contract_date ?? '—'}</div>
+                      <div className="sf-ph-chain-meta">
+                        <span>{PO_STATUS_LABEL[current.status]}</span>
+                        <span>{CONTRACT_TYPE_LABEL[current.contract_type]}</span>
+                        <span>{fmtMw(current.total_mw)}</span>
+                      </div>
+                      <div className="sf-ph-chain-foot">
+                        <span className="mono">최근 {stat?.latestEventDate ?? chain.latest_contract_date ?? '—'}</span>
+                        <span className="mono">
+                          이벤트 {stat?.eventCount ?? 0} · LC {stat?.lcCount ?? 0} · BL {stat?.blCount ?? 0} · TT {stat?.ttCount ?? 0}
+                        </span>
+                      </div>
                     </button>
                   </li>
                 );
@@ -505,8 +638,8 @@ export default function PurchaseHistoryPage() {
         <CardB
           title={selectedChain ? `${selectedChain.head.po_number ?? selectedChain.chain_id.slice(0, 8)} 타임라인` : '회사 전체 최근 활동'}
           sub={selectedChain
-            ? `${events.length}건 이벤트 · ${selectedChain.manufacturer_name ?? '제조사 미지정'}`
-            : `최근 ${events.length}건 (전 체인)`}
+            ? `${events.length} / ${rawEvents.length}건 이벤트 · ${selectedChain.manufacturer_name ?? '제조사 미지정'}`
+            : `최근 ${events.length} / ${rawEvents.length}건 (전 체인)`}
           right={
             selectedChain && (
               <button
@@ -519,15 +652,59 @@ export default function PurchaseHistoryPage() {
             )
           }
         >
-          {loadError ? (
-            <EmptyState
-              tone="error"
-              message="구매 이력을 불러오지 못했습니다"
-              description={loadError}
-              actionLabel="다시 시도"
-              onAction={reloadAll}
+          <div className="sf-ph-timeline-toolbar">
+            <FilterChips
+              options={eventFilterOptions}
+              value={eventFilter}
+              onChange={(value) => setEventFilter(value as EventFilter)}
             />
-          ) : loading ? (
+            {(eventFilter !== 'all' || dateRange) && (
+              <button
+                type="button"
+                className="sf-ph-reset-btn"
+                onClick={() => {
+                  setEventFilter('all');
+                  setDateRange(null);
+                }}
+              >
+                <FilterX aria-hidden="true" />
+                필터 해제
+              </button>
+            )}
+          </div>
+          {selectedChain && (
+            <div className="sf-ph-chain-summary">
+              {(() => {
+                const current = latestPO(selectedChain);
+                const stat = chainStats.get(selectedChain.chain_id);
+                return (
+                  <>
+                    <div>
+                      <div className="eyebrow">현재 계약</div>
+                      <div className="sf-ph-summary-value">{current.po_number ?? current.po_id.slice(0, 8)}</div>
+                      <div className="sf-ph-summary-sub">{PO_STATUS_LABEL[current.status]} · {CONTRACT_TYPE_LABEL[current.contract_type]}</div>
+                    </div>
+                    <div>
+                      <div className="eyebrow">계약 규모</div>
+                      <div className="sf-ph-summary-value">{fmtMw(current.total_mw)}</div>
+                      <div className="sf-ph-summary-sub">{(current.total_qty ?? 0).toLocaleString('ko-KR')}장</div>
+                    </div>
+                    <div>
+                      <div className="eyebrow">연결 이력</div>
+                      <div className="sf-ph-summary-value">{stat?.eventCount ?? 0}건</div>
+                      <div className="sf-ph-summary-sub">LC {stat?.lcCount ?? 0} · BL {stat?.blCount ?? 0} · TT {stat?.ttCount ?? 0}</div>
+                    </div>
+                    <div>
+                      <div className="eyebrow">최근 이벤트</div>
+                      <div className="sf-ph-summary-value">{stat?.latestEventDate ?? '—'}</div>
+                      <div className="sf-ph-summary-sub">{selectedChain.manufacturer_name ?? '제조사 미지정'}</div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+          {loading ? (
             <div aria-label="타임라인 로딩 중">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="sf-ph-skeleton-row" />
@@ -539,40 +716,53 @@ export default function PurchaseHistoryPage() {
               <div className="text-xs">표시할 이벤트가 없습니다</div>
             </div>
           ) : (
-            <ol className="sf-ph-timeline" aria-label="구매 이력 이벤트">
-              {events.map((evt) => {
-                const link = eventDeepLink(evt);
-                const Tag = link ? 'button' : 'div';
-                const tagProps = link
-                  ? { type: 'button' as const, onClick: () => navigate(link), 'aria-label': `${evt.title}, ${evt.date}, ${link}로 이동` }
-                  : { 'aria-label': `${evt.title}, ${evt.date}` };
-                return (
-                  <li key={evt.id}>
-                    <Tag
-                      {...tagProps}
-                      className="sf-ph-event-row"
-                      data-link={link != null}
-                      title={link ? `${link}로 이동` : undefined}
-                    >
-                      <div
-                        className="sf-ph-event-icon"
-                        style={{ border: `1.5px solid ${eventTone(evt.kind)}`, color: eventTone(evt.kind) }}
-                      >
-                        {eventIcon(evt.kind)}
-                      </div>
-                      <div className="sf-ph-event-body">
-                        <div className="sf-ph-event-title-row">
-                          <div className="sf-ph-event-title">{evt.title}</div>
-                          <div className="mono sf-ph-event-date">{evt.date}</div>
-                        </div>
-                        {evt.subtitle && <div className="sf-ph-event-subtitle">{evt.subtitle}</div>}
-                        {evt.detail && <div className="sf-ph-event-detail">{evt.detail}</div>}
-                      </div>
-                    </Tag>
-                  </li>
-                );
-              })}
-            </ol>
+            <div className="sf-ph-timeline-groups" aria-label="구매 이력 이벤트">
+              {eventGroups.map((group) => (
+                <section key={group.key} className="sf-ph-month-group">
+                  <div className="sf-ph-month-divider">
+                    <span>{group.label}</span>
+                    <span className="mono">{group.events.length}건</span>
+                  </div>
+                  <ol className="sf-ph-timeline">
+                    {group.events.map((evt) => {
+                      const link = eventDeepLink(evt);
+                      const Tag = link ? 'button' : 'div';
+                      const tagProps = link
+                        ? { type: 'button' as const, onClick: () => navigate(link), 'aria-label': `${evt.title}, ${evt.date}, ${link}로 이동` }
+                        : { 'aria-label': `${evt.title}, ${evt.date}` };
+                      return (
+                        <li key={evt.id}>
+                          <Tag
+                            {...tagProps}
+                            className="sf-ph-event-row"
+                            data-link={link != null}
+                            title={link ? `${link}로 이동` : undefined}
+                          >
+                            <div
+                              className="sf-ph-event-icon"
+                              style={{ border: `1.5px solid ${eventTone(evt.kind)}`, color: eventTone(evt.kind) }}
+                            >
+                              {eventIcon(evt.kind)}
+                            </div>
+                            <div className="sf-ph-event-body">
+                              <div className="sf-ph-event-title-row">
+                                <div className="sf-ph-event-title">{evt.title}</div>
+                                <div className="sf-ph-event-side">
+                                  <span className="sf-ph-event-kind">{EVENT_KIND_LABEL[evt.kind]}</span>
+                                  <span className="mono sf-ph-event-date">{evt.date}</span>
+                                </div>
+                              </div>
+                              {evt.subtitle && <div className="sf-ph-event-subtitle">{evt.subtitle}</div>}
+                              {evt.detail && <div className="sf-ph-event-detail">{evt.detail}</div>}
+                            </div>
+                          </Tag>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </section>
+              ))}
+            </div>
           )}
         </CardB>
       </div>
