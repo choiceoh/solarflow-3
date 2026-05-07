@@ -74,6 +74,13 @@ func (h *LCHandler) applyLCFilters(r *http.Request, query *postgrest.FilterBuild
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
 	}
+	// 기간 — open_date 범위 (양끝 포함). frontend ProcurementPage date_range 서버 위임.
+	if from := r.URL.Query().Get("open_date_from"); from != "" {
+		query = query.Gte("open_date", from)
+	}
+	if to := r.URL.Query().Get("open_date_to"); to != "" {
+		query = query.Lte("open_date", to)
+	}
 	// 검색 — lc_number/memo ilike. bank/po 의 join 필드는 PostgREST or 절에 못 넣어 제외.
 	if q := sanitizeLCSearchTerm(r.URL.Query().Get("q")); q != "" {
 		clauses := []string{

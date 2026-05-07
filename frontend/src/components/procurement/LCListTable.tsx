@@ -54,10 +54,12 @@ interface Props {
   onSettle?: (lc: LCRecord, repaymentDate: string) => Promise<void>;
   onSelectBL?: (blId: string) => void;
   blsVersion?: number;
-  focusLCId?: string | null;
+  sortField?: string | null;
+  sortDirection?: 'asc' | 'desc' | null;
+  onSort?: (field: string) => void;
 }
 
-function LCListTable({ items, onSettle, onSelectBL, blsVersion, focusLCId }: Props) {
+function LCListTable({ items, onSettle, onSelectBL, blsVersion, sortField, sortDirection, onSort }: Props) {
   // 렌더 중 Date.now() 호출은 react-hooks/purity 위반 → useState lazy init으로 1회만 캡처
   const [now] = useState(() => Date.now());
   const [agg, setAgg] = useState<Record<string, LCAgg>>({});
@@ -162,6 +164,9 @@ function LCListTable({ items, onSettle, onSelectBL, blsVersion, focusLCId }: Pro
     }
   };
 
+  const controlled = onSort != null
+    ? { sortField: sortField ?? null, sortDirection: sortDirection ?? null, onSort }
+    : undefined
   const { sorted, headerProps } = useSort<LCRecord>(items, (lc, f) => {
     switch (f) {
       case 'lc_number': return lc.lc_number ?? '';
@@ -171,7 +176,7 @@ function LCListTable({ items, onSettle, onSelectBL, blsVersion, focusLCId }: Pro
       case 'status': return lc.status;
       default: return null;
     }
-  });
+  }, controlled);
 
   if (items.length === 0) return <EmptyState message="등록된 LC가 없습니다" />;
 
