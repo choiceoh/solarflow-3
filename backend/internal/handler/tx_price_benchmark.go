@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -79,6 +80,90 @@ type benchmarkEvidenceItem struct {
 type priceBenchmarkAIOutput struct {
 	Points   []model.CreatePriceBenchmarkRequest `json:"points"`
 	Warnings []string                            `json:"warnings"`
+}
+
+type benchmarkMetricTarget struct {
+	MetricKey         string `json:"metric_key"`
+	MetricLabel       string `json:"metric_label"`
+	MarketRegion      string `json:"market_region"`
+	Basis             string `json:"basis"`
+	PreferredCurrency string `json:"preferred_currency,omitempty"`
+	SearchHint        string `json:"search_hint"`
+}
+
+type benchmarkExistingContext struct {
+	ExistingObservationKeys []string                           `json:"existing_observation_keys"`
+	LatestBySlot            []benchmarkExistingSlot            `json:"latest_by_slot"`
+	MissingFocus            []benchmarkMissingFocus            `json:"missing_focus"`
+	RefreshPolicy           []string                           `json:"refresh_policy"`
+	keySet                  map[string]bool                    `json:"-"`
+	latestBySource          map[string]string                  `json:"-"`
+	missingBySource         map[string][]benchmarkMissingFocus `json:"-"`
+}
+
+type benchmarkExistingSlot struct {
+	SourceKey      string   `json:"source_key"`
+	SourceName     string   `json:"source_name"`
+	MetricKey      string   `json:"metric_key"`
+	MetricLabel    string   `json:"metric_label"`
+	LatestDate     string   `json:"latest_date"`
+	MarketRegion   string   `json:"market_region"`
+	Basis          string   `json:"basis"`
+	Currency       string   `json:"currency"`
+	PriceUSDW      *float64 `json:"price_usd_w,omitempty"`
+	PriceCNYW      *float64 `json:"price_cny_w,omitempty"`
+	PriceKRWW      *float64 `json:"price_krw_w,omitempty"`
+	QuarterLabel   *string  `json:"quarter_label,omitempty"`
+	ProjectSegment *string  `json:"project_segment,omitempty"`
+	Technology     *string  `json:"technology,omitempty"`
+	SourceURL      *string  `json:"source_url,omitempty"`
+}
+
+type benchmarkMissingFocus struct {
+	SourceKey         string `json:"source_key"`
+	SourceName        string `json:"source_name"`
+	MetricKey         string `json:"metric_key"`
+	MetricLabel       string `json:"metric_label"`
+	MarketRegion      string `json:"market_region"`
+	Basis             string `json:"basis"`
+	PreferredCurrency string `json:"preferred_currency,omitempty"`
+	SearchHint        string `json:"search_hint"`
+	Reason            string `json:"reason"`
+}
+
+var benchmarkTargetMatrix = map[string][]benchmarkMetricTarget{
+	"opis": {
+		{MetricKey: "cmm_fob_china_topcon_600w", MetricLabel: "CMM FOB China TOPCon >=600W", MarketRegion: "fob_china", Basis: "spot", PreferredCurrency: "USD", SearchHint: "Chinese Module Marker CMM FOB China TOPCon 600W"},
+		{MetricKey: "forward_q1", MetricLabel: "Forward Q+1", MarketRegion: "fob_china", Basis: "forward", PreferredCurrency: "USD", SearchHint: "OPIS Solar Weekly forward curve Q+1 module"},
+		{MetricKey: "forward_q2", MetricLabel: "Forward Q+2", MarketRegion: "fob_china", Basis: "forward", PreferredCurrency: "USD", SearchHint: "OPIS Solar Weekly forward curve Q+2 module"},
+		{MetricKey: "forward_q3", MetricLabel: "Forward Q+3", MarketRegion: "fob_china", Basis: "forward", PreferredCurrency: "USD", SearchHint: "OPIS Solar Weekly forward curve Q+3 module"},
+		{MetricKey: "forward_q4", MetricLabel: "Forward Q+4", MarketRegion: "fob_china", Basis: "forward", PreferredCurrency: "USD", SearchHint: "OPIS Solar Weekly forward curve Q+4 module"},
+		{MetricKey: "ddp_us", MetricLabel: "DDP US", MarketRegion: "ddp_us", Basis: "ddp", PreferredCurrency: "USD", SearchHint: "OPIS Solar Weekly DDP US module price"},
+		{MetricKey: "ddp_europe", MetricLabel: "DDP Europe", MarketRegion: "ddp_europe", Basis: "ddp", PreferredCurrency: "USD", SearchHint: "OPIS Solar Weekly DDP Europe module price"},
+	},
+	"infolink": {
+		{MetricKey: "module_centralized", MetricLabel: "Centralized module", MarketRegion: "china_domestic", Basis: "spot", PreferredCurrency: "CNY", SearchHint: "InfoLink centralized project module price"},
+		{MetricKey: "module_distributed", MetricLabel: "Distributed module", MarketRegion: "china_domestic", Basis: "spot", PreferredCurrency: "CNY", SearchHint: "InfoLink distributed project module price"},
+		{MetricKey: "polysilicon", MetricLabel: "Polysilicon", MarketRegion: "china_domestic", Basis: "spot", PreferredCurrency: "CNY", SearchHint: "InfoLink polysilicon price"},
+	},
+	"trendforce": {
+		{MetricKey: "china_domestic", MetricLabel: "중국 국내가", MarketRegion: "china_domestic", Basis: "spot", PreferredCurrency: "CNY", SearchHint: "TrendForce EnergyTrend China domestic solar module price"},
+		{MetricKey: "china_export", MetricLabel: "중국 수출가", MarketRegion: "china_export", Basis: "spot", PreferredCurrency: "USD", SearchHint: "TrendForce EnergyTrend China export solar module price"},
+	},
+	"pvinsights": {
+		{MetricKey: "polysilicon", MetricLabel: "Polysilicon", MarketRegion: "global", Basis: "spot", PreferredCurrency: "USD", SearchHint: "PVinsights polysilicon spot price"},
+		{MetricKey: "cell", MetricLabel: "Cell", MarketRegion: "global", Basis: "spot", PreferredCurrency: "USD", SearchHint: "PVinsights solar cell spot price"},
+		{MetricKey: "wafer", MetricLabel: "Wafer", MarketRegion: "global", Basis: "spot", PreferredCurrency: "USD", SearchHint: "PVinsights wafer spot price"},
+	},
+	"china_tender": {
+		{MetricKey: "china_state_tender", MetricLabel: "중국 국영 입찰가", MarketRegion: "china_domestic", Basis: "tender", PreferredCurrency: "CNY", SearchHint: "央企 国企 光伏组件 集采 中标 单价 TOPCon"},
+	},
+	"cpia_floor": {
+		{MetricKey: "cpia_cost_floor", MetricLabel: "CPIA cost floor", MarketRegion: "china_domestic", Basis: "floor", PreferredCurrency: "CNY", SearchHint: "CPIA 光伏组件 最低成本 价格 指引"},
+	},
+	"tier1_asp": {
+		{MetricKey: "manufacturer_asp", MetricLabel: "Tier-1 ASP", MarketRegion: "manufacturer", Basis: "asp", PreferredCurrency: "USD", SearchHint: "Jinko LONGi Trina JA Solar Tongwei module ASP dollar per watt quarterly"},
+	},
 }
 
 // List — GET /api/v1/price-benchmarks
@@ -278,6 +363,8 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 	defer cancel()
 	log.Printf("[ai-refresh async] run=%s start sources=%d provider=%s", runID, len(sources), provider)
 
+	existingContext, existingWarnings := h.fetchExistingBenchmarkContext(ctx, sources)
+
 	// PR 41: 병렬 분산 + 취합 — source 별 shard 로 분리 호출.
 	// 이전 단일 LLM 호출은 모든 source 의 evidence 를 한번에 던져 컨텍스트 초과 빈발.
 	// 각 source 를 독립 LLM 호출로 (동시 4 cap), 결과 취합 후 finishRun 으로 마감.
@@ -314,7 +401,8 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 			// PR 44: source 별 명시적 timeout 4분 (vLLM 응답 1~2분 정상 + 여유).
 			srcCtx, srcCancel := context.WithTimeout(ctx, 4*time.Minute)
 			defer srcCancel()
-			ev, w := h.collectBenchmarkEvidence(srcCtx, []benchmarkSource{src})
+			sourceContext := existingContext.forSource(src.Key)
+			ev, w := h.collectBenchmarkEvidence(srcCtx, []benchmarkSource{src}, sourceContext)
 			shards[i].evidence = ev
 			shards[i].warnings = w
 
@@ -367,7 +455,7 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 			}
 
 			log.Printf("[ai-refresh async] src=%s evidence=%d, LLM 호출 시작", src.Key, len(ev))
-			raw, err := h.extractBenchmarksWithAI(srcCtx, provider, llmModel, maxTokens, ev)
+			raw, err := h.extractBenchmarksWithAI(srcCtx, provider, llmModel, maxTokens, ev, sourceContext)
 			shards[i].raw = raw
 			diag.LLMRawLength = len(raw)
 			if err != nil {
@@ -407,6 +495,7 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 	evidenceHashes := map[string]string{}
 	diagnostics := map[string]sourceDiagnostic{}
 	successCount := 0
+	allWarnings = append(allWarnings, existingWarnings...)
 	for _, sh := range shards {
 		allEvidence = append(allEvidence, sh.evidence...)
 		allWarnings = append(allWarnings, sh.warnings...)
@@ -470,7 +559,7 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 	}
 	reviewCancel()
 
-	inserted, skipped, _ := h.insertAIBenchmarkPoints(runID, userID, allPoints)
+	inserted, skipped, _ := h.insertAIBenchmarkPoints(runID, userID, allPoints, existingContext)
 	status := "completed"
 	if inserted == 0 {
 		status = "partial"
@@ -482,7 +571,168 @@ func (h *PriceBenchmarkHandler) runAIRefreshAsync(runID, userID string, sources 
 	log.Printf("[ai-refresh async] run=%s %s — inserted=%d skipped=%d warnings=%d", runID, status, inserted, skipped, len(allWarnings))
 }
 
-func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, sources []benchmarkSource) ([]benchmarkEvidenceItem, []string) {
+func (h *PriceBenchmarkHandler) fetchExistingBenchmarkContext(ctx context.Context, sources []benchmarkSource) (benchmarkExistingContext, []string) {
+	_ = ctx
+	sourceKeys := make([]string, 0, len(sources))
+	for _, src := range sources {
+		sourceKeys = append(sourceKeys, src.Key)
+	}
+	query := h.DB.From("price_benchmarks").
+		Select("source_key,source_name,metric_key,metric_label,value_date,market_region,basis,currency,price_usd_w,price_cny_w,price_krw_w,quarter_label,project_segment,technology,source_url", "exact", false).
+		Order("value_date", &postgrest.OrderOpts{Ascending: false}).
+		Range(0, 799, "")
+	if len(sourceKeys) > 0 {
+		query = query.In("source_key", sourceKeys)
+	}
+	data, _, err := query.Execute()
+	if err != nil {
+		return buildBenchmarkExistingContext(sources, nil), []string{fmt.Sprintf("기존 가격 벤치마크 조회 실패: %v", err)}
+	}
+	var rows []model.PriceBenchmark
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return buildBenchmarkExistingContext(sources, nil), []string{fmt.Sprintf("기존 가격 벤치마크 디코딩 실패: %v", err)}
+	}
+	return buildBenchmarkExistingContext(sources, rows), nil
+}
+
+func buildBenchmarkExistingContext(sources []benchmarkSource, rows []model.PriceBenchmark) benchmarkExistingContext {
+	out := benchmarkExistingContext{
+		RefreshPolicy: []string{
+			"existing_observation_keys 와 동일한 source_key|metric_key|value_date|market_region|basis|currency 관측값은 다시 출력하지 않는다",
+			"latest_by_slot 에 있는 지표는 evidence 의 value_date 가 latest_date 보다 최신일 때만 출력한다",
+			"missing_focus 에 있는 source/metric/market_region/basis 조합을 먼저 찾고, 근거가 없으면 warnings 에 이유를 남긴다",
+		},
+		keySet:          map[string]bool{},
+		latestBySource:  map[string]string{},
+		missingBySource: map[string][]benchmarkMissingFocus{},
+	}
+	sourceNames := map[string]string{}
+	for _, src := range sources {
+		sourceNames[src.Key] = src.Name
+	}
+
+	latestBySlot := map[string]benchmarkExistingSlot{}
+	targetPresent := map[string]bool{}
+	for _, row := range rows {
+		key := benchmarkObservationKey(row.SourceKey, row.MetricKey, row.ValueDate, row.MarketRegion, row.Basis, row.Currency)
+		if key != "" && !out.keySet[key] {
+			out.keySet[key] = true
+			out.ExistingObservationKeys = append(out.ExistingObservationKeys, key)
+		}
+		slotKey := benchmarkSlotKey(row.SourceKey, row.MetricKey, row.MarketRegion, row.Basis)
+		if slotKey == "" {
+			continue
+		}
+		targetPresent[slotKey] = true
+		if row.SourceName != "" {
+			sourceNames[row.SourceKey] = row.SourceName
+		}
+		if row.ValueDate > out.latestBySource[row.SourceKey] {
+			out.latestBySource[row.SourceKey] = row.ValueDate
+		}
+		prev, ok := latestBySlot[slotKey]
+		if !ok || row.ValueDate > prev.LatestDate {
+			latestBySlot[slotKey] = benchmarkExistingSlot{
+				SourceKey:      row.SourceKey,
+				SourceName:     firstNonEmpty(row.SourceName, sourceNames[row.SourceKey], benchmarkSourceName(row.SourceKey)),
+				MetricKey:      row.MetricKey,
+				MetricLabel:    firstNonEmpty(row.MetricLabel, row.MetricKey),
+				LatestDate:     row.ValueDate,
+				MarketRegion:   row.MarketRegion,
+				Basis:          row.Basis,
+				Currency:       row.Currency,
+				PriceUSDW:      row.PriceUSDW,
+				PriceCNYW:      row.PriceCNYW,
+				PriceKRWW:      row.PriceKRWW,
+				QuarterLabel:   row.QuarterLabel,
+				ProjectSegment: row.ProjectSegment,
+				Technology:     row.Technology,
+				SourceURL:      row.SourceURL,
+			}
+		}
+	}
+
+	sort.Strings(out.ExistingObservationKeys)
+	for _, slot := range latestBySlot {
+		out.LatestBySlot = append(out.LatestBySlot, slot)
+	}
+	sort.Slice(out.LatestBySlot, func(i, j int) bool {
+		a := out.LatestBySlot[i]
+		b := out.LatestBySlot[j]
+		if a.SourceKey != b.SourceKey {
+			return a.SourceKey < b.SourceKey
+		}
+		if a.MetricKey != b.MetricKey {
+			return a.MetricKey < b.MetricKey
+		}
+		return a.LatestDate > b.LatestDate
+	})
+
+	for _, src := range sources {
+		targets := benchmarkTargetMatrix[src.Key]
+		for _, target := range targets {
+			slotKey := benchmarkSlotKey(src.Key, target.MetricKey, target.MarketRegion, target.Basis)
+			if targetPresent[slotKey] {
+				continue
+			}
+			missing := benchmarkMissingFocus{
+				SourceKey:         src.Key,
+				SourceName:        firstNonEmpty(sourceNames[src.Key], src.Name),
+				MetricKey:         target.MetricKey,
+				MetricLabel:       target.MetricLabel,
+				MarketRegion:      target.MarketRegion,
+				Basis:             target.Basis,
+				PreferredCurrency: target.PreferredCurrency,
+				SearchHint:        target.SearchHint,
+				Reason:            "현재 DB에 해당 source/metric/region/basis 관측값이 없음",
+			}
+			out.MissingFocus = append(out.MissingFocus, missing)
+			out.missingBySource[src.Key] = append(out.missingBySource[src.Key], missing)
+		}
+	}
+
+	return out
+}
+
+func (c benchmarkExistingContext) forSource(sourceKey string) benchmarkExistingContext {
+	sourceKey = benchmarkNormalizeKey(sourceKey)
+	out := benchmarkExistingContext{
+		RefreshPolicy:   append([]string(nil), c.RefreshPolicy...),
+		keySet:          map[string]bool{},
+		latestBySource:  map[string]string{},
+		missingBySource: map[string][]benchmarkMissingFocus{},
+	}
+	for _, key := range c.ExistingObservationKeys {
+		if strings.HasPrefix(key, sourceKey+"|") {
+			out.ExistingObservationKeys = append(out.ExistingObservationKeys, key)
+			out.keySet[key] = true
+		}
+	}
+	for _, slot := range c.LatestBySlot {
+		if slot.SourceKey == sourceKey {
+			out.LatestBySlot = append(out.LatestBySlot, slot)
+		}
+	}
+	for _, missing := range c.MissingFocus {
+		if missing.SourceKey == sourceKey {
+			out.MissingFocus = append(out.MissingFocus, missing)
+			out.missingBySource[sourceKey] = append(out.missingBySource[sourceKey], missing)
+		}
+	}
+	if latest := c.latestBySource[sourceKey]; latest != "" {
+		out.latestBySource[sourceKey] = latest
+	}
+	return out
+}
+
+func (c benchmarkExistingContext) hasObservation(sourceKey, metricKey, valueDate, marketRegion, basis, currency string) bool {
+	if c.keySet == nil {
+		return false
+	}
+	return c.keySet[benchmarkObservationKey(sourceKey, metricKey, valueDate, marketRegion, basis, currency)]
+}
+
+func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, sources []benchmarkSource, existing benchmarkExistingContext) ([]benchmarkEvidenceItem, []string) {
 	var evidence []benchmarkEvidenceItem
 	var warnings []string
 	// PR 45: Tavily → Serper 전환
@@ -507,7 +757,9 @@ func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, so
 			continue
 		}
 		// PR 46: source 별 endpoint/tbs/site 분기.
-		results, err := h.searchSerperForSource(ctx, serperKey, src, 4)
+		// 결측 슬롯이 있으면 source query 에 missing focus 힌트를 붙여 없는 지표를 먼저 찾는다.
+		searchSrc := benchmarkSourceWithMissingFocus(src, existing)
+		results, err := h.searchSerperForSource(ctx, serperKey, searchSrc, 6)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("%s 웹 검색 실패: %v", src.Name, err))
 			continue
@@ -692,9 +944,13 @@ func (h *PriceBenchmarkHandler) fetchHomepageViaSerperScrape(ctx context.Context
 	}, nil
 }
 
-func (h *PriceBenchmarkHandler) extractBenchmarksWithAI(ctx context.Context, provider, llmModel string, maxTokens int, evidence []benchmarkEvidenceItem) (string, error) {
+func buildBenchmarkExtractionMessages(evidence []benchmarkEvidenceItem, existing benchmarkExistingContext) (string, string) {
 	system := `당신은 SolarFlow 가격예측용 태양광 모듈 가격 벤치마크 추출기입니다.
 반드시 제공된 evidence 안에 명시된 가격만 추출하세요. 추정, 보간, 상식, 오래된 기억으로 값을 만들면 안 됩니다.
+이미 DB에 있는 관측값은 다시 수집하지 않습니다. existing_context.existing_observation_keys 와 동일한 source_key|metric_key|value_date|market_region|basis|currency 키는 evidence 에 보여도 points 에 넣지 마세요.
+latest_by_slot 에 있는 기존 지표는 evidence 의 value_date 가 latest_date 보다 최신일 때만 추출하세요. 같은 날짜의 보강·재요약은 금지입니다.
+missing_focus 는 현재 SolarFlow에 없는 source/metric/market_region/basis 조합입니다. 이 항목을 가장 먼저 샅샅이 확인하고, 찾지 못한 항목은 warnings 에 구체적으로 남기세요.
+missing_focus 밖의 값은 evidence에 가격·날짜·단위가 모두 명확하고 기존 키와 중복되지 않을 때만 보조로 추출하세요.
 출력은 JSON 객체 하나만 반환하세요. Markdown, 설명문, 코드블록은 금지입니다.
 
 소스별 추출 제약:
@@ -730,11 +986,17 @@ func (h *PriceBenchmarkHandler) extractBenchmarksWithAI(ctx context.Context, pro
 }`
 
 	payload, _ := json.MarshalIndent(map[string]any{
-		"today":    time.Now().Format("2006-01-02"),
-		"sources":  benchmarkSources,
-		"evidence": evidence,
+		"today":            time.Now().Format("2006-01-02"),
+		"sources":          benchmarkSourcesForEvidence(evidence),
+		"existing_context": existing,
+		"evidence":         evidence,
 	}, "", "  ")
-	user := "다음 evidence 에서 OPIS CMM/forward/DDP, InfoLink, TrendForce, PVinsights, 중국 국영 입찰, CPIA floor, Tier-1 ASP 가격 관측값을 추출해 JSON으로 반환하세요.\n" + string(payload)
+	user := "다음 evidence 에서 가격 관측값을 추출하되, 이미 가진 정보는 재수집하지 말고 existing_context.missing_focus 의 결측 지표와 latest_by_slot 이후의 최신 관측값을 우선하세요.\n" + string(payload)
+	return system, user
+}
+
+func (h *PriceBenchmarkHandler) extractBenchmarksWithAI(ctx context.Context, provider, llmModel string, maxTokens int, evidence []benchmarkEvidenceItem, existing benchmarkExistingContext) (string, error) {
+	system, user := buildBenchmarkExtractionMessages(evidence, existing)
 
 	assistant := NewAssistantHandler(h.DB)
 	switch provider {
@@ -767,7 +1029,7 @@ func parsePriceBenchmarkAIOutput(raw string) (priceBenchmarkAIOutput, error) {
 	return out, nil
 }
 
-func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, points []model.CreatePriceBenchmarkRequest) (int, int, []model.PriceBenchmark) {
+func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, points []model.CreatePriceBenchmarkRequest, existing benchmarkExistingContext) (int, int, []model.PriceBenchmark) {
 	inserted := 0
 	skipped := 0
 	var createdRows []model.PriceBenchmark
@@ -784,6 +1046,11 @@ func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, po
 		// AI 가 시스템 프롬프트의 InfoLink 제외 지시를 무시해도 여기서 차단.
 		if point.SourceKey == "infolink" && (point.MetricKey == "cell" || point.MetricKey == "wafer") {
 			log.Printf("[가격 벤치마크 AI point skip] InfoLink %s 는 정책상 제외", point.MetricKey)
+			skipped++
+			continue
+		}
+		if existing.hasObservation(point.SourceKey, point.MetricKey, point.ValueDate, point.MarketRegion, point.Basis, point.Currency) {
+			log.Printf("[가격 벤치마크 AI point skip] 기존 관측값 재수집 제외: %s", benchmarkObservationKey(point.SourceKey, point.MetricKey, point.ValueDate, point.MarketRegion, point.Basis, point.Currency))
 			skipped++
 			continue
 		}
@@ -884,4 +1151,103 @@ func benchmarkSourceName(sourceKey string) string {
 		}
 	}
 	return sourceKey
+}
+
+func benchmarkSourcesForEvidence(evidence []benchmarkEvidenceItem) []benchmarkSource {
+	seen := map[string]bool{}
+	var out []benchmarkSource
+	for _, item := range evidence {
+		key := benchmarkNormalizeKey(item.SourceKey)
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		src := benchmarkSourceByKey(key)
+		if src.Key == "" {
+			src = benchmarkSource{Key: key, Name: firstNonEmpty(item.SourceName, benchmarkSourceName(key))}
+		}
+		out = append(out, src)
+	}
+	if len(out) == 0 {
+		return benchmarkSources
+	}
+	return out
+}
+
+func benchmarkSourceByKey(sourceKey string) benchmarkSource {
+	for _, src := range benchmarkSources {
+		if src.Key == sourceKey {
+			return src
+		}
+	}
+	return benchmarkSource{}
+}
+
+func benchmarkSourceWithMissingFocus(src benchmarkSource, existing benchmarkExistingContext) benchmarkSource {
+	missing := existing.missingBySource[src.Key]
+	if len(missing) == 0 {
+		if latest := existing.latestBySource[src.Key]; latest != "" {
+			src.Query = src.Query + " latest updated after " + latest
+		}
+		return src
+	}
+	hints := make([]string, 0, len(missing))
+	for _, item := range missing {
+		hints = append(hints, item.SearchHint)
+	}
+	src.Query = src.Query + " missing metrics focus " + strings.Join(hints, " OR ")
+	if latest := existing.latestBySource[src.Key]; latest != "" {
+		src.Query += " latest updated after " + latest
+	} else {
+		src.Query += " latest current price"
+	}
+	return src
+}
+
+func benchmarkObservationKey(sourceKey, metricKey, valueDate, marketRegion, basis, currency string) string {
+	parts := []string{
+		benchmarkNormalizeKey(sourceKey),
+		benchmarkNormalizeKey(metricKey),
+		strings.TrimSpace(valueDate),
+		benchmarkNormalizeKey(marketRegion),
+		benchmarkNormalizeKey(basis),
+		strings.ToUpper(strings.TrimSpace(currency)),
+	}
+	for _, part := range parts {
+		if part == "" {
+			return ""
+		}
+	}
+	return strings.Join(parts, "|")
+}
+
+func benchmarkSlotKey(sourceKey, metricKey, marketRegion, basis string) string {
+	parts := []string{
+		benchmarkNormalizeKey(sourceKey),
+		benchmarkNormalizeKey(metricKey),
+		benchmarkNormalizeKey(marketRegion),
+		benchmarkNormalizeKey(basis),
+	}
+	for _, part := range parts {
+		if part == "" {
+			return ""
+		}
+	}
+	return strings.Join(parts, "|")
+}
+
+func benchmarkNormalizeKey(value string) string {
+	v := strings.ToLower(strings.TrimSpace(value))
+	v = strings.ReplaceAll(v, " ", "_")
+	v = strings.ReplaceAll(v, "-", "_")
+	return v
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
