@@ -31,6 +31,9 @@ type PublicHandler struct {
 
 	fxMu    sync.Mutex
 	fxCache map[string]*fxSnapshot // pair → snapshot (usdkrw, cnykrw)
+	// fxRefreshMu prevents concurrent login-page clients from all doing the
+	// same slow ECOS refresh when the cache expires.
+	fxRefreshMu sync.Mutex
 
 	metalMu     sync.Mutex
 	metalCache  map[string]*metalSnapshot
@@ -38,6 +41,16 @@ type PublicHandler struct {
 	metalSource string
 
 	commoditiesPath string
+
+	loginStatsMu        sync.Mutex
+	loginStatsCache     *loginStats
+	loginStatsFetchedAt time.Time
+	loginStatsRefreshMu sync.Mutex
+
+	loginInventoryMu        sync.Mutex
+	loginInventoryMW        *float64
+	loginInventoryFetchedAt time.Time
+	loginInventoryRefreshMu sync.Mutex
 }
 
 // NewPublicHandler — PublicHandler 생성자.
@@ -57,6 +70,8 @@ func NewPublicHandler(db *supa.Client, engineClient *engine.EngineClient) *Publi
 	// 부팅 시 fx_daily 50일 백필 — ECOS 범위 호출이라 페어당 1회 (총 2회).
 	// 비동기로 startup 지연 회피, 실패해도 무시.
 	go h.backfillFXDaily(50)
+	h.refreshLoginStatsAsync()
+	h.startLoginInventorySnapshotWorker()
 	return h
 }
 
@@ -90,8 +105,9 @@ const ecosFXSource = "ecos.bok.or.kr"
 const ecosFXStatCode = "731Y001"
 
 // 페어 → ECOS 항목 코드 (731Y001 통계 안에서 통화 구분).
-//   0000001 = 원/미국달러(매매기준율)
-//   0000053 = 원/위안(매매기준율)
+//
+//	0000001 = 원/미국달러(매매기준율)
+//	0000053 = 원/위안(매매기준율)
 var fxPairs = map[string]string{
 	"usdkrw": "0000001",
 	"cnykrw": "0000053",
@@ -104,8 +120,8 @@ type fxSnapshot struct {
 	FetchedAt time.Time `json:"fetched_at"`
 }
 
-// 5분 캐시 — ECOS는 일별 발표라 더 길게도 가능하지만 spot 경로 일관성 유지.
-const fxTTL = 5 * time.Minute
+// 6시간 캐시 — ECOS는 일별 발표라 로그인 화면에서 매번 새로 조회할 필요가 없다.
+const fxTTL = 6 * time.Hour
 
 // ECOS 응답 row — TIME 은 YYYYMMDD, DATA_VALUE 는 환율 문자열.
 type ecosFXRow struct {
@@ -187,6 +203,19 @@ func (h *PublicHandler) FXSpot(w http.ResponseWriter, r *http.Request) {
 	}
 	h.fxMu.Unlock()
 
+	h.fxRefreshMu.Lock()
+	defer h.fxRefreshMu.Unlock()
+
+	// 다른 요청이 방금 갱신했을 수 있으므로 refresh lock 안에서 한 번 더 확인.
+	h.fxMu.Lock()
+	if cached, hit := h.fxCache[pair]; hit && time.Since(cached.FetchedAt) < fxTTL {
+		snap := *cached
+		h.fxMu.Unlock()
+		response.RespondJSON(w, http.StatusOK, snap)
+		return
+	}
+	h.fxMu.Unlock()
+
 	if err := h.refreshFXAll(); err != nil {
 		log.Printf("[FX 조회 실패] %v", err)
 		// 캐시 stale 라도 있으면 응답.
@@ -234,9 +263,6 @@ func (h *PublicHandler) refreshFXAll() error {
 		if len(points) == 0 {
 			continue
 		}
-		for _, p := range points {
-			_ = h.upsertFXDaily(pair, p.Date, p.Rate)
-		}
 		latest := points[len(points)-1]
 		var changePct *float64
 		if len(points) >= 2 {
@@ -255,6 +281,14 @@ func (h *PublicHandler) refreshFXAll() error {
 		h.fxMu.Lock()
 		h.fxCache[pair] = &snap
 		h.fxMu.Unlock()
+
+		// LoginPage 응답 지연에 DB upsert를 섞지 않는다. 시계열 보강은 best-effort.
+		pointsForUpsert := append([]fxPoint(nil), points...)
+		go func(pair string, points []fxPoint) {
+			for _, p := range points {
+				_ = h.upsertFXDaily(pair, p.Date, p.Rate)
+			}
+		}(pair, pointsForUpsert)
 	}
 	return firstErr
 }
@@ -420,17 +454,17 @@ func (h *PublicHandler) httpGet(url string) ([]byte, error) {
 // === Login Stats ===
 
 type loginStats struct {
-	InventoryAvailableMW *float64       `json:"inventory_available_mw"`
-	ReservationsPending  *int           `json:"reservations_pending"`
-	LCActiveCount        *int           `json:"lc_active_count"`
-	LCActiveTotalUSD     *float64       `json:"lc_active_total_usd"`
-	InboundShipsToday    int            `json:"inbound_ships_today"`
-	WorkQueue            []workItem     `json:"work_queue"`
+	InventoryAvailableMW *float64   `json:"inventory_available_mw"`
+	ReservationsPending  *int       `json:"reservations_pending"`
+	LCActiveCount        *int       `json:"lc_active_count"`
+	LCActiveTotalUSD     *float64   `json:"lc_active_total_usd"`
+	InboundShipsToday    int        `json:"inbound_ships_today"`
+	WorkQueue            []workItem `json:"work_queue"`
 	// PendingCounts — 로그인 화면 헤드라인용 카테고리별 처리 대기 건수.
 	// 키: "예약" / "출고" / "만기" / "그룹요청". 프론트가 desc 정렬하여 상위 2개 표시.
-	PendingCounts        map[string]int `json:"pending_counts"`
-	Health               *healthInfo    `json:"health,omitempty"`
-	GeneratedAt          time.Time      `json:"generated_at"`
+	PendingCounts map[string]int `json:"pending_counts"`
+	Health        *healthInfo    `json:"health,omitempty"`
+	GeneratedAt   time.Time      `json:"generated_at"`
 }
 
 type workItem struct {
@@ -448,6 +482,9 @@ type healthInfo struct {
 	EngineMs float64 `json:"engine_ms"`
 }
 
+const loginStatsTTL = 30 * time.Minute
+const loginInventorySnapshotInterval = 30 * time.Minute
+
 // msSince — time.Since를 ms(소수 1자리) float로 환산.
 func msSince(start time.Time) float64 {
 	return float64(time.Since(start).Microseconds()) / 1000.0
@@ -457,91 +494,296 @@ func msSince(start time.Time) float64 {
 // 비유: "건물 로비의 오늘자 요약 안내판" — 로그인 전 화면 KPI 4종.
 // 각 필드는 best-effort: 한 쿼리가 실패해도 다른 필드는 정상 반환.
 func (h *PublicHandler) LoginStats(w http.ResponseWriter, r *http.Request) {
+	if cached, ok := h.cachedLoginStats(); ok {
+		response.RespondJSON(w, http.StatusOK, *cached)
+		return
+	}
+
+	if cached, ok := h.cachedLoginStatsAny(); ok {
+		h.refreshLoginStatsAsync()
+		response.RespondJSON(w, http.StatusOK, *cached)
+		return
+	}
+
+	stats := h.refreshLoginStatsBlocking()
+	response.RespondJSON(w, http.StatusOK, stats)
+}
+
+func (h *PublicHandler) refreshLoginStatsAsync() {
+	if !h.loginStatsRefreshMu.TryLock() {
+		return
+	}
+	go func() {
+		defer h.loginStatsRefreshMu.Unlock()
+		if _, ok := h.cachedLoginStats(); ok {
+			return
+		}
+		stats := h.buildLoginStats()
+		h.storeLoginStats(stats)
+	}()
+}
+
+func (h *PublicHandler) refreshLoginStatsBlocking() loginStats {
+	h.loginStatsRefreshMu.Lock()
+	defer h.loginStatsRefreshMu.Unlock()
+	if cached, ok := h.cachedLoginStats(); ok {
+		return *cached
+	}
+	stats := h.buildLoginStats()
+	h.storeLoginStats(stats)
+	return stats
+}
+
+func (h *PublicHandler) buildLoginStats() loginStats {
 	stats := loginStats{
 		WorkQueue:     []workItem{},
 		PendingCounts: map[string]int{},
 	}
 
 	var dbMs, engineMs float64
-
-	// 인벤토리: 회사 ID 조회(DB) + 엔진 호출(Rust). 분리해서 각각 측정.
-	t := time.Now()
-	companyIDs, idsErr := h.fetchActiveCompanyIDs()
-	dbMs += msSince(t)
-	if idsErr != nil {
-		log.Printf("[login-stats companies] %v", idsErr)
-	} else if len(companyIDs) > 0 && h.Engine != nil {
-		t = time.Now()
-		mw, err := h.fetchInventoryFromEngine(companyIDs)
-		engineMs += msSince(t)
-		if err == nil {
-			stats.InventoryAvailableMW = &mw
-		} else {
-			log.Printf("[login-stats inventory] %v", err)
+	var mu sync.Mutex
+	recordDBMs := func(label string, start time.Time) {
+		ms := msSince(start)
+		if ms >= 300 {
+			log.Printf("[login-stats slow] task=%s duration_ms=%.1f", label, ms)
 		}
+		mu.Lock()
+		if ms > dbMs {
+			dbMs = ms
+		}
+		mu.Unlock()
 	}
 
-	t = time.Now()
-	if n, err := h.fetchReservationsPending(); err == nil {
+	// 로그인 전 화면은 공개 안내판이므로 무거운 Rust 재고 집계를 기다리지 않는다.
+	// 재고 숫자는 프론트의 보수적 fallback으로 표시하고, 실제 재고는 로그인 후 화면에서 조회한다.
+	if mw, ok := h.cachedLoginInventorySnapshot(); ok {
+		stats.InventoryAvailableMW = &mw
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(7)
+	go func() {
+		defer wg.Done()
+		t := time.Now()
+		n, err := h.fetchReservationsPending()
+		recordDBMs("reservations", t)
+		if err != nil {
+			log.Printf("[login-stats reservations] %v", err)
+			return
+		}
+		mu.Lock()
 		stats.ReservationsPending = &n
 		stats.PendingCounts["예약"] = n
-	} else {
-		log.Printf("[login-stats reservations] %v", err)
-	}
-	dbMs += msSince(t)
-
-	t = time.Now()
-	if cnt, total, err := h.fetchActiveLCs(); err == nil {
+		mu.Unlock()
+	}()
+	go func() {
+		defer wg.Done()
+		t := time.Now()
+		cnt, total, err := h.fetchActiveLCs()
+		recordDBMs("lcs", t)
+		if err != nil {
+			log.Printf("[login-stats lcs] %v", err)
+			return
+		}
+		mu.Lock()
 		stats.LCActiveCount = &cnt
 		stats.LCActiveTotalUSD = &total
-	} else {
-		log.Printf("[login-stats lcs] %v", err)
-	}
-	dbMs += msSince(t)
-
-	t = time.Now()
-	if n, err := h.fetchInboundShipsToday(); err == nil {
+		mu.Unlock()
+	}()
+	go func() {
+		defer wg.Done()
+		t := time.Now()
+		n, err := h.fetchInboundShipsToday()
+		recordDBMs("inbound", t)
+		if err != nil {
+			log.Printf("[login-stats inbound] %v", err)
+			return
+		}
+		mu.Lock()
 		stats.InboundShipsToday = n
-	} else {
-		log.Printf("[login-stats inbound] %v", err)
-	}
-	dbMs += msSince(t)
-
-	t = time.Now()
-	if n, err := h.fetchOutboundsScheduled(); err == nil {
+		mu.Unlock()
+	}()
+	go func() {
+		defer wg.Done()
+		t := time.Now()
+		n, err := h.fetchOutboundsScheduled()
+		recordDBMs("outbounds", t)
+		if err != nil {
+			log.Printf("[login-stats outbounds] %v", err)
+			return
+		}
+		mu.Lock()
 		stats.PendingCounts["출고"] = n
-	} else {
-		log.Printf("[login-stats outbounds] %v", err)
-	}
-	dbMs += msSince(t)
-
-	t = time.Now()
-	if n, err := h.fetchLCMaturingCount(); err == nil {
+		mu.Unlock()
+	}()
+	go func() {
+		defer wg.Done()
+		t := time.Now()
+		n, err := h.fetchLCMaturingCount()
+		recordDBMs("lc_maturing", t)
+		if err != nil {
+			log.Printf("[login-stats lc_maturing] %v", err)
+			return
+		}
+		mu.Lock()
 		stats.PendingCounts["만기"] = n
-	} else {
-		log.Printf("[login-stats lc_maturing] %v", err)
-	}
-	dbMs += msSince(t)
-
-	t = time.Now()
-	if n, err := h.fetchIntercompanyPending(); err == nil {
+		mu.Unlock()
+	}()
+	go func() {
+		defer wg.Done()
+		t := time.Now()
+		n, err := h.fetchIntercompanyPending()
+		recordDBMs("intercompany", t)
+		if err != nil {
+			log.Printf("[login-stats intercompany] %v", err)
+			return
+		}
+		mu.Lock()
 		stats.PendingCounts["그룹요청"] = n
-	} else {
-		log.Printf("[login-stats intercompany] %v", err)
-	}
-	dbMs += msSince(t)
+		mu.Unlock()
+	}()
+	go func() {
+		defer wg.Done()
+		t := time.Now()
+		queue := h.buildWorkQueue()
+		recordDBMs("work_queue", t)
+		mu.Lock()
+		stats.WorkQueue = queue
+		mu.Unlock()
+	}()
 
-	t = time.Now()
-	stats.WorkQueue = h.buildWorkQueue()
-	dbMs += msSince(t)
+	wg.Wait()
 
 	stats.Health = &healthInfo{
 		DBms:     roundMs(dbMs),
 		EngineMs: roundMs(engineMs),
 	}
 	stats.GeneratedAt = time.Now().UTC()
+	return stats
+}
 
-	response.RespondJSON(w, http.StatusOK, stats)
+func (h *PublicHandler) cachedLoginStats() (*loginStats, bool) {
+	h.loginStatsMu.Lock()
+	defer h.loginStatsMu.Unlock()
+	if h.loginStatsCache == nil || time.Since(h.loginStatsFetchedAt) >= loginStatsTTL {
+		return nil, false
+	}
+	snap := cloneCachedLoginStats(*h.loginStatsCache)
+	h.applyLoginInventorySnapshot(&snap)
+	return &snap, true
+}
+
+func (h *PublicHandler) cachedLoginStatsAny() (*loginStats, bool) {
+	h.loginStatsMu.Lock()
+	defer h.loginStatsMu.Unlock()
+	if h.loginStatsCache == nil {
+		return nil, false
+	}
+	snap := cloneCachedLoginStats(*h.loginStatsCache)
+	h.applyLoginInventorySnapshot(&snap)
+	return &snap, true
+}
+
+func (h *PublicHandler) storeLoginStats(stats loginStats) {
+	h.loginStatsMu.Lock()
+	defer h.loginStatsMu.Unlock()
+	snap := cloneLoginStats(stats)
+	h.loginStatsCache = &snap
+	h.loginStatsFetchedAt = time.Now()
+}
+
+func cloneLoginStats(stats loginStats) loginStats {
+	out := stats
+	if stats.WorkQueue != nil {
+		out.WorkQueue = append([]workItem(nil), stats.WorkQueue...)
+	}
+	if stats.PendingCounts != nil {
+		out.PendingCounts = make(map[string]int, len(stats.PendingCounts))
+		for k, v := range stats.PendingCounts {
+			out.PendingCounts[k] = v
+		}
+	}
+	return out
+}
+
+func cloneCachedLoginStats(stats loginStats) loginStats {
+	out := cloneLoginStats(stats)
+	// Cached/stale responses do not wait on DB or engine in the request path.
+	// The background refresh cost stays visible in logs via [login-stats slow].
+	out.Health = &healthInfo{}
+	return out
+}
+
+func (h *PublicHandler) startLoginInventorySnapshotWorker() {
+	if h.DB == nil || h.Engine == nil {
+		return
+	}
+	h.refreshLoginInventorySnapshotAsync()
+	go func() {
+		ticker := time.NewTicker(loginInventorySnapshotInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			h.refreshLoginInventorySnapshotAsync()
+		}
+	}()
+}
+
+func (h *PublicHandler) refreshLoginInventorySnapshotAsync() {
+	if h.DB == nil || h.Engine == nil {
+		return
+	}
+	if !h.loginInventoryRefreshMu.TryLock() {
+		return
+	}
+	go func() {
+		defer h.loginInventoryRefreshMu.Unlock()
+		t := time.Now()
+		mw, err := h.buildLoginInventorySnapshot()
+		if err != nil {
+			log.Printf("[login-inventory snapshot] %v", err)
+			return
+		}
+		h.storeLoginInventorySnapshot(mw)
+		log.Printf("[login-inventory snapshot] available_mw=%.2f duration_ms=%.1f", mw, msSince(t))
+	}()
+}
+
+func (h *PublicHandler) buildLoginInventorySnapshot() (float64, error) {
+	companyIDs, err := h.fetchActiveCompanyIDs()
+	if err != nil {
+		return 0, fmt.Errorf("companies: %w", err)
+	}
+	mw, err := h.fetchInventoryFromEngine(companyIDs)
+	if err != nil {
+		return 0, err
+	}
+	if mw > -0.005 && mw < 0.005 {
+		mw = 0
+	}
+	return mw, nil
+}
+
+func (h *PublicHandler) storeLoginInventorySnapshot(mw float64) {
+	h.loginInventoryMu.Lock()
+	defer h.loginInventoryMu.Unlock()
+	snap := mw
+	h.loginInventoryMW = &snap
+	h.loginInventoryFetchedAt = time.Now()
+}
+
+func (h *PublicHandler) cachedLoginInventorySnapshot() (float64, bool) {
+	h.loginInventoryMu.Lock()
+	defer h.loginInventoryMu.Unlock()
+	if h.loginInventoryMW == nil {
+		return 0, false
+	}
+	return *h.loginInventoryMW, true
+}
+
+func (h *PublicHandler) applyLoginInventorySnapshot(stats *loginStats) {
+	if mw, ok := h.cachedLoginInventorySnapshot(); ok {
+		stats.InventoryAvailableMW = &mw
+	}
 }
 
 // roundMs — 0.1ms 단위로 반올림. 라이브 라인 표시용.
@@ -622,7 +864,7 @@ func (h *PublicHandler) fetchActiveCompanyIDs() ([]string, error) {
 // fetchReservationsPending — inventory_allocations 중 status=pending(또는 reserved) 건수.
 func (h *PublicHandler) fetchReservationsPending() (int, error) {
 	data, count, err := h.DB.From("inventory_allocations").
-		Select("id", "exact", true).
+		Select("alloc_id", "exact", true).
 		In("status", []string{"pending", "reserved"}).
 		Execute()
 	if err != nil {

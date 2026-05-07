@@ -51,7 +51,7 @@
 | `cloudflared-solarflow.service` | `~/.config/systemd/user/cloudflared-solarflow.service` | - | - | `~/.local/bin/cloudflared --config ~/.cloudflared/solarflow.yml tunnel run solarflow` |
 | `solarflow-webhook.service` | `~/.config/systemd/user/solarflow-webhook.service` | repo root | `.webhook.env` | `python3 scripts/webhook-deploy.py` (포트 9999) |
 
-의존성: `solarflow-go.service`는 `Wants=solarflow-engine.service` (D-123 약결합) — 엔진이 먼저 뜨면 좋지만 강제 아님. 엔진 재시작이 Go 재시작을 유발하지 않고, Go 의 EngineClient.doWithRetry 가 단절을 가린다. unit 파일 정본은 [`ops/systemd/`](../ops/systemd) 에 커밋돼 있다.
+의존성: `solarflow-go.service`는 `Wants=solarflow-engine.service` (D-123 약결합) — 엔진이 먼저 뜨면 좋지만 강제 아님. 엔진 재시작이 Go 재시작을 유발하지 않고, Go 의 EngineClient.doWithRetry 가 단절을 가린다. unit 파일 정본은 [`ops/systemd/`](../ops/systemd) 에 커밋돼 있다. 운영 박스에는 모든 SolarFlow user service에 `ops/systemd/stability.conf` drop-in을 적용해 5분에 5회까지만 재시작하고, journald는 `ops/systemd/90-solarflow-journald-limits.conf`로 system 1GB / runtime 256MB 상한을 둔다.
 
 기본 명령:
 ```bash
@@ -234,6 +234,8 @@ curl -sI https://api.topworks.ltd/health | head -1
 
 # 서비스 상태
 systemctl --user status solarflow-{go,engine}.service cloudflared-solarflow.service --no-pager
+systemctl --user show solarflow-go.service -p RestartUSec -p StartLimitIntervalUSec -p StartLimitBurst --no-pager
+journalctl --disk-usage
 
 # 로그 (실시간)
 journalctl --user -u solarflow-go.service -f
