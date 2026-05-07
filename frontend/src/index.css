@@ -339,7 +339,9 @@ a:focus-visible,
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background var(--sf-dur-fast) var(--sf-ease-out),
+              color var(--sf-dur-fast) var(--sf-ease-out),
+              border-color var(--sf-dur-fast) var(--sf-ease-out);
 }
 
 .sf-sidebar-tab:hover {
@@ -397,7 +399,8 @@ a:focus-visible,
   color: var(--sf-dark-ink-2);
   font-size: 12.5px;
   font-weight: 500;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background var(--sf-dur-fast) var(--sf-ease-out),
+              color var(--sf-dur-fast) var(--sf-ease-out);
 }
 
 .sf-nav-link:hover {
@@ -868,7 +871,11 @@ a:focus-visible,
   padding: 9px 11px;
   color: var(--sf-ink-2);
   text-decoration: none;
-  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+  transition: border-color var(--sf-dur-mid) var(--sf-ease-out),
+              background var(--sf-dur-mid) var(--sf-ease-out),
+              color var(--sf-dur-mid) var(--sf-ease-out),
+              transform var(--sf-dur-mid) var(--sf-ease-out),
+              box-shadow var(--sf-dur-mid) var(--sf-ease-out);
 }
 
 .sf-family-site-link::before {
@@ -881,13 +888,15 @@ a:focus-visible,
   background: var(--sf-solar);
   transform: scaleY(0);
   transform-origin: center;
-  transition: transform 160ms ease;
+  transition: transform var(--sf-dur-mid) var(--sf-ease-spring);
 }
 
 .sf-family-site-link:hover {
   border-color: var(--sf-line);
   background: var(--sf-bg-2);
   color: var(--sf-ink);
+  transform: translateY(-1px);
+  box-shadow: var(--sf-shadow-2);
 }
 
 .sf-family-site-link:hover::before {
@@ -918,7 +927,7 @@ a:focus-visible,
   font-size: 9.5px;
   color: var(--sf-ink-4);
   letter-spacing: 0.02em;
-  transition: color 140ms ease;
+  transition: color var(--sf-dur-mid) var(--sf-ease-out);
 }
 
 .sf-family-site-link:hover .sf-family-site-link-host {
@@ -930,12 +939,13 @@ a:focus-visible,
   height: 13px;
   flex-shrink: 0;
   color: var(--sf-ink-4);
-  transition: color 140ms ease, transform 160ms ease;
+  transition: color var(--sf-dur-mid) var(--sf-ease-out),
+              transform var(--sf-dur-mid) var(--sf-ease-spring);
 }
 
 .sf-family-site-link:hover .sf-family-site-link-icon {
   color: var(--sf-solar-3);
-  transform: translate(2px, -2px);
+  transform: translate(3px, -3px);
 }
 
 .sf-login-right {
@@ -1751,20 +1761,22 @@ a:focus-visible,
   padding: 16px;
 }
 
-/* shadcn Button — radius/letter-spacing/active 트랜스폼 (height는 보존) */
+/* shadcn Button — radius/letter-spacing/active 트랜스폼 (height는 보존).
+   active 는 instant duration 으로 즉각 응답, 복귀는 spring 으로 살짝 통통. */
 .sf-page [data-slot="button"],
 .sf-command-surface [data-slot="button"] {
   border-radius: 4px;
   letter-spacing: -0.005em;
-  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              color 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              transform 100ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background var(--sf-dur-mid) var(--sf-ease-out),
+              border-color var(--sf-dur-mid) var(--sf-ease-out),
+              color var(--sf-dur-mid) var(--sf-ease-out),
+              box-shadow var(--sf-dur-mid) var(--sf-ease-out),
+              transform var(--sf-dur-fast) var(--sf-ease-spring);
 }
 .sf-page [data-slot="button"]:active,
 .sf-command-surface [data-slot="button"]:active {
-  transform: translateY(0.5px);
+  transform: translate3d(0, 1px, 0);
+  transition-duration: var(--sf-dur-instant);
 }
 
 /* 폼 그룹 — Label + Input 묶음 일관 간격. Dialog/페이지 폼 모두 자동 적용 */
@@ -2130,13 +2142,20 @@ textarea::placeholder {
   stroke-dasharray: 2 2;
 }
 
-/* 페이지 전환 fade-in — 라우트 변경 시 미세하게 부드러운 진입감 */
+/* 페이지 전환 fade-in — 라우트 변경 시 자연스러운 진입감.
+   nth-child stagger 로 상위 4개 자식이 미세하게 시차 등장 (5번째부터 동시) —
+   카드/테이블 깊은 페이지에서도 마지막 요소가 너무 늦게 보이지 않도록 cap. */
 .sf-page-scroll > * {
-  animation: sf-page-fade-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: sf-page-fade-in 280ms var(--sf-ease-out) both;
 }
+.sf-page-scroll > *:nth-child(1) { animation-delay: 0ms; }
+.sf-page-scroll > *:nth-child(2) { animation-delay: 30ms; }
+.sf-page-scroll > *:nth-child(3) { animation-delay: 60ms; }
+.sf-page-scroll > *:nth-child(4) { animation-delay: 90ms; }
+.sf-page-scroll > *:nth-child(n+5) { animation-delay: 110ms; }
 @keyframes sf-page-fade-in {
-  from { opacity: 0; transform: translateY(2px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 /* 스크롤 시 페이지 상단 그림자 — 헤더 분리감 강화 */
@@ -2218,10 +2237,12 @@ textarea::placeholder {
               color 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* 스켈레톤 shimmer — 로딩 상태 LoadingSpinner 대체용 */
+/* 스켈레톤 shimmer — 로딩 상태 LoadingSpinner 대체용.
+   5-stop gradient 로 좀 더 자연스러운 빛 흐름 + solar 톤 살짝 섞음
+   (브랜드 일치). will-change 로 합성 layer 분리 — 스크롤 중 jank 방지. */
 .sf-skeleton {
   position: relative;
-  background: var(--sf-bg-2);
+  background: linear-gradient(90deg, var(--sf-bg-2) 0%, var(--sf-bg-3) 50%, var(--sf-bg-2) 100%);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -2229,21 +2250,30 @@ textarea::placeholder {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 0.55) 50%, transparent 100%);
-  animation: sf-skeleton-shimmer 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.2) 30%,
+    rgb(255 250 232 / 0.7) 50%,
+    rgb(255 255 255 / 0.2) 70%,
+    transparent 100%
+  );
+  animation: sf-skeleton-shimmer 1.6s var(--sf-ease-soft) infinite;
+  will-change: transform;
 }
 @keyframes sf-skeleton-shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% { transform: translate3d(-100%, 0, 0); }
+  100% { transform: translate3d(100%, 0, 0); }
 }
 
-/* AI 어시스턴트 — 스트리밍 중 새 토큰 페이드인. transition-opacity 가 매 리렌더마다 자연스럽게 부드럽게 함. */
+/* AI 어시스턴트 — 스트리밍 중 새 토큰 페이드인. 가독성을 위해 시작 opacity
+   는 0.4 로 두어 깜빡임 최소화, 미세 translateY 로 흐름감 추가. */
 .sf-stream-fade {
-  animation: sf-stream-fade-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: sf-stream-fade-in 240ms var(--sf-ease-out) both;
 }
 @keyframes sf-stream-fade-in {
-  from { opacity: 0.7; }
-  to { opacity: 1; }
+  from { opacity: 0.4; transform: translate3d(0, 1px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 /* 톤 칩 — Bloomberg-density 상태 표시 */
@@ -2298,18 +2328,24 @@ textarea::placeholder {
   flex-shrink: 0;
 }
 
-/* 카드 호버 리프트 — 클릭 가능한 카드에 opt-in */
+/* 카드 호버 리프트 — 클릭 가능한 카드에 opt-in.
+   hover 시 -1px lift 로 클릭 가능성 시각 단서, active 시 즉시 0px 로 복귀해
+   "눌림"감 명확. shadow 가 함께 깊어지면서 z 깊이 변화를 표현. */
 .sf-card-hover {
-  transition: box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translate3d(0, 0, 0);
+  transition: box-shadow var(--sf-dur-mid) var(--sf-ease-out),
+              border-color var(--sf-dur-mid) var(--sf-ease-out),
+              transform var(--sf-dur-mid) var(--sf-ease-spring);
+  will-change: transform;
 }
 .sf-card-hover:hover {
-  box-shadow: var(--sf-shadow-3);
+  box-shadow: var(--sf-shadow-4);
   border-color: var(--sf-line-2);
+  transform: translate3d(0, -1px, 0);
 }
 .sf-card-hover:active {
-  transform: translateY(0.5px);
+  transform: translate3d(0, 0.5px, 0);
+  transition-duration: var(--sf-dur-instant);
 }
 
 @media (max-width: 1180px) {
@@ -2596,5 +2632,38 @@ textarea::placeholder {
 
   .sf-kpi-card strong {
     font-size: 21px;
+  }
+}
+
+/* ============================================================
+   Accessibility — prefers-reduced-motion
+   ============================================================
+   운동 감각 민감 사용자(전정 장애·편두통·멀미 등)를 위해 모든
+   non-essential 애니메이션을 거의 정지에 가깝게 축소. transition/
+   animation 을 0 으로 두면 일부 컴포넌트가 final state 로 점프하다
+   상태 미반영 버그를 일으킬 수 있어, 0.01ms 로 최소 prep 만 남김.
+   shimmer/spin 같은 무한 애니메이션은 1 회로 종료. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .sf-page-scroll > *,
+  .sf-page-scroll > *:nth-child(1),
+  .sf-page-scroll > *:nth-child(2),
+  .sf-page-scroll > *:nth-child(3),
+  .sf-page-scroll > *:nth-child(4),
+  .sf-page-scroll > *:nth-child(n+5) {
+    animation: none;
+  }
+
+  .sf-skeleton::after {
+    animation: none;
+    opacity: 0.5;
   }
 }
