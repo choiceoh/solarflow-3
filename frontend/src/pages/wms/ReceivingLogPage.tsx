@@ -182,7 +182,7 @@ export default function ReceivingLogPage() {
           <span className="truncate text-xs text-muted-foreground">D-141 — BL/그룹내/수동 통합</span>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={warehouseId} onValueChange={setWarehouseId}>
+          <Select value={warehouseId} onValueChange={(v) => setWarehouseId(v ?? '')}>
             <SelectTrigger className="h-8 w-44 text-xs">
               <span>{warehouses.find((w) => w.warehouse_id === warehouseId)?.name ?? '전체 창고'}</span>
             </SelectTrigger>
@@ -224,7 +224,7 @@ export default function ReceivingLogPage() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div>
               <label className="text-[10px] text-muted-foreground">유형</label>
-              <Select value={form.source_type} onValueChange={(v) => setForm((f) => ({ ...f, source_type: v as ReceivingLog['source_type'] }))}>
+              <Select value={form.source_type} onValueChange={(v) => setForm((f) => ({ ...f, source_type: (v ?? 'manual') as ReceivingLog['source_type'] }))}>
                 <SelectTrigger className="h-8 text-xs">
                   <span>{SOURCE_LABEL[form.source_type]}</span>
                 </SelectTrigger>
@@ -237,7 +237,7 @@ export default function ReceivingLogPage() {
             </div>
             <div className="col-span-2">
               <label className="text-[10px] text-muted-foreground">창고</label>
-              <Select value={form.warehouse_id} onValueChange={(v) => setForm((f) => ({ ...f, warehouse_id: v }))}>
+              <Select value={form.warehouse_id} onValueChange={(v) => setForm((f) => ({ ...f, warehouse_id: v ?? '' }))}>
                 <SelectTrigger className="h-8 text-xs">
                   <span>{warehouses.find((w) => w.warehouse_id === form.warehouse_id)?.name ?? '선택'}</span>
                 </SelectTrigger>
@@ -272,7 +272,7 @@ export default function ReceivingLogPage() {
             </div>
             <div>
               <label className="text-[10px] text-muted-foreground">차이 사유</label>
-              <Select value={form.variance_reason} onValueChange={(v) => setForm((f) => ({ ...f, variance_reason: v }))}>
+              <Select value={form.variance_reason} onValueChange={(v) => setForm((f) => ({ ...f, variance_reason: v ?? '' }))}>
                 <SelectTrigger className="h-8 text-xs">
                   <span>{REASON_LABEL[form.variance_reason] ?? '선택 안함'}</span>
                 </SelectTrigger>

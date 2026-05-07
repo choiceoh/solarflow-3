@@ -315,7 +315,7 @@ export default function CycleCountPage() {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div>
               <label className="text-[10px] text-muted-foreground">창고</label>
-              <Select value={newWarehouse} onValueChange={setNewWarehouse}>
+              <Select value={newWarehouse} onValueChange={(v) => setNewWarehouse(v ?? '')}>
                 <SelectTrigger className="h-8 text-xs">
                   <span>{warehouses.find((w) => w.warehouse_id === newWarehouse)?.name ?? '선택'}</span>
                 </SelectTrigger>
@@ -447,7 +447,7 @@ function CycleLineCard({ item, disabled, onSave }: LineCardProps) {
             value={qty}
             onChange={(e) => setQty(e.target.value)}
           />
-          <Select value={reason} onValueChange={setReason}>
+          <Select value={reason} onValueChange={(v) => setReason(v ?? '')}>
             <SelectTrigger className="h-7 w-32 text-xs">
               <span>{REASON_LABEL[reason] ?? '사유 선택'}</span>
             </SelectTrigger>

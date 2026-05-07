@@ -200,7 +200,7 @@ export default function WarehouseLocationsPage() {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={warehouseId} onValueChange={setWarehouseId}>
+          <Select value={warehouseId} onValueChange={(v) => setWarehouseId(v ?? '')}>
             <SelectTrigger className="h-8 w-48 text-xs">
               <span>{warehouses.find((w) => w.warehouse_id === warehouseId)?.name ?? '창고 선택'}</span>
             </SelectTrigger>
@@ -246,7 +246,7 @@ export default function WarehouseLocationsPage() {
               <label className="text-[10px] text-muted-foreground">창고</label>
               <Select
                 value={form.warehouse_id || warehouseId}
-                onValueChange={(v) => setForm((f) => ({ ...f, warehouse_id: v }))}
+                onValueChange={(v) => setForm((f) => ({ ...f, warehouse_id: v ?? '' }))}
               >
                 <SelectTrigger className="h-8 text-xs">
                   <span>
@@ -291,7 +291,7 @@ export default function WarehouseLocationsPage() {
               <label className="text-[10px] text-muted-foreground">유형</label>
               <Select
                 value={form.location_type}
-                onValueChange={(v) => setForm((f) => ({ ...f, location_type: v }))}
+                onValueChange={(v) => setForm((f) => ({ ...f, location_type: v ?? 'storage' }))}
               >
                 <SelectTrigger className="h-8 text-xs">
                   <span>{TYPE_LABEL[form.location_type] ?? form.location_type}</span>
