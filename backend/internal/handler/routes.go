@@ -508,6 +508,7 @@ func (h *PriceBenchmarkHandler) RegisterRoutes(r chi.Router, g middleware.Gates)
 		r.Use(g.Feature(feature.IDTxPriceBenchmark))
 		r.Get("/", h.List)
 		r.Get("/runs", h.ListRuns)
+		r.Get("/runs/{id}", h.GetRun) // PR 43: 비동기 ai-refresh 폴링
 		// PR 42: 우리 구매가 + 평균 판매가 시계열 — 가격예측 차트에 추가 시리즈로 표시
 		r.Get("/our-prices", h.OurPrices)
 		r.With(g.Write).Post("/", h.Create)
