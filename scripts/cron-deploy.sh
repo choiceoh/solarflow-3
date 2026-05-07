@@ -6,7 +6,7 @@
 #   1) git pull --ff-only origin main
 #   2) HEAD 차이 없으면 즉시 종료
 #   3) 차이 있으면 변경된 파일을 분류:
-#      backend/migrations/*.sql        → apply_migrations.py 호출 (헤더 게이트)
+#      backend/migrations/*.sql        → apply_migrations.ts 호출 (Bun.SQL, 헤더 게이트)
 #      backend/(non-migration)         → Go 빌드 + solarflow-go 재시작
 #      engine/(src|Cargo.{toml,lock})  → Rust 빌드 + solarflow-engine 재시작
 #      frontend/*                      → 무시 (Cloudflare Pages 자동 배포)
@@ -24,7 +24,7 @@
 #
 # 운영 안전선 (만일을 위한 다중 가드):
 #   - 빌드 실패 → 재시작 생략 (5)
-#   - 마이그레이션 실패 → Go 재시작 보류 (4, apply_migrations.py 트랜잭션)
+#   - 마이그레이션 실패 → Go 재시작 보류 (4, apply_migrations.ts 트랜잭션)
 #   - 빌드는 됐지만 런타임 panic → health 실패 → 자동 롤백 (6)
 #   - 그래도 안 되면 systemd가 service Restart=on-failure로 재시도
 #
@@ -48,12 +48,8 @@ REPO=/home/choiceoh/공개/solarflow-3
 LOCK=/tmp/solarflow-cron-deploy.lock
 GO_DIR="$REPO/backend"
 ENGINE_DIR="$REPO/engine"
-PY_BIN="$REPO/backend/.venv-ocr/bin/python"   # psycopg2 가 들어 있는 venv (legacy fallback)
-APPLY_MIG_PY="$REPO/scripts/apply_migrations.py"
 APPLY_MIG_TS="$REPO/scripts/apply_migrations.ts"
 BUN_BIN="$HOME/.bun/bin/bun"                  # Bun 1.2+ — Bun.SQL 로 PostgreSQL 직결
-# 호환성을 위해 .py 변수도 유지 (외부 도구가 참조할 수 있음)
-APPLY_MIG="$APPLY_MIG_PY"
 
 # 동시 실행 방지 (이전 실행이 빌드 중이면 skip)
 exec 9>"$LOCK"
@@ -136,7 +132,7 @@ if [[ $has_migration -eq 1 ]]; then
   for m in "${migrations[@]}"; do
     echo "    $m"
   done
-  # backend/.env 의 SUPABASE_DB_URL 을 환경에 주입 (TS/PY 둘 다 동일 env 사용)
+  # backend/.env 의 SUPABASE_DB_URL 을 환경에 주입
   if [[ -f "$REPO/backend/.env" ]]; then
     set -a
     # shellcheck disable=SC1091
@@ -144,7 +140,6 @@ if [[ $has_migration -eq 1 ]]; then
     set +a
   fi
 
-  # TS 우선 (Bun runtime + Bun.SQL — venv 의존 없음). 없거나 깨지면 PY fallback.
   if [[ -x "$BUN_BIN" && -f "$APPLY_MIG_TS" ]]; then
     echo "[$(date -Iseconds)] apply_migrations.ts 실행 (bun)"
     if "$BUN_BIN" "$APPLY_MIG_TS"; then
@@ -154,17 +149,9 @@ if [[ $has_migration -eq 1 ]]; then
       echo "[$(date -Iseconds)] ❌ apply_migrations.ts 실패 (exit=$rc) — Go 재시작 보류"
       mig_ok=0
     fi
-  elif [[ -x "$PY_BIN" && -f "$APPLY_MIG_PY" ]]; then
-    echo "[$(date -Iseconds)] apply_migrations.py 실행 (legacy fallback — bun 미설치 시)"
-    if "$PY_BIN" "$APPLY_MIG_PY"; then
-      echo "[$(date -Iseconds)] 마이그레이션 적용 완료"
-    else
-      rc=$?
-      echo "[$(date -Iseconds)] ❌ apply_migrations.py 실패 (exit=$rc) — Go 재시작 보류"
-      mig_ok=0
-    fi
   else
-    echo "[$(date -Iseconds)] ⚠️  apply_migrations 실행기 없음 (bun/venv-python 모두 미설치) — 수동 적용 필요"
+    echo "[$(date -Iseconds)] ❌ bun 미설치 또는 apply_migrations.ts 누락 — 수동 적용 필요"
+    mig_ok=0
   fi
 fi
 
@@ -275,6 +262,6 @@ if [[ $need_engine -eq 1 ]]; then
   fi
 fi
 
-# (마이그레이션은 위 분기에서 이미 처리됨 — apply_migrations.py 헤더 게이트)
+# (마이그레이션은 위 분기에서 이미 처리됨 — apply_migrations.ts 헤더 게이트)
 
 exit 0
