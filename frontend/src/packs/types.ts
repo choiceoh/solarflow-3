@@ -1,12 +1,15 @@
-// frontend/src/lib/navigation/packs/types.ts — Pack 메타 정의 (PR-4)
+// frontend/src/packs/types.ts — Pack 메타 정의 (PR-4 / PR-7)
 //
-// Pack — 한 테넌트가 활성화하면 같이 켜지는 NAV 항목 묶음.
+// Pack — 한 테넌트가 활성화하면 같이 켜지는 NAV 항목 묶음 + (PR-7 부터) 페이지 코드.
 // 운영 의도:
 //   - 새 도메인 (예: gx10) 을 추가할 때 admin 이 "어떤 pack 들 활성?" 으로 결정
 //   - module 수입 흐름이 필요 없는 도메인은 module-finance pack 만 끄면 sidebar 가 적절히 줄어듦
 //   - PR-5 admin UI 가 이 메타를 읽어 테넌트별 토글 매트릭스를 보임
+//
+// PR-7: pack 디렉토리가 자기 페이지 코드 (pages/) 도 가짐 — pack = nav + pages + types + api.
+//       baro-domain 만 self-contained 화 시작; erp-core/module-finance pages 는 후속 PR.
 
-import type { CommandNavItem } from '../manifest';
+import type { CommandNavItem } from '@/lib/navigation/manifest';
 
 export type PackID = 'erp-core' | 'module-finance' | 'baro-domain';
 

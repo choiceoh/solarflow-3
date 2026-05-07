@@ -21,7 +21,7 @@ import {
   Zap,
 } from 'lucide-react';
 
-import type { Pack } from './types';
+import type { Pack } from '../types';
 
 export const BARO_DOMAIN_PACK: Pack = {
   id: 'baro-domain',
@@ -47,5 +47,7 @@ export const BARO_DOMAIN_PACK: Pack = {
     { key: 'baro-credit', label: '미수금/한도', abbr: '미수', path: '/baro/credit-board', icon: ShieldAlert, menu: 'baro_credit', group: '현황', feature: 'baro.credit_board' },
     { key: 'baro-rfm', label: '거래처 RFM', abbr: 'RFM', path: '/baro/rfm', icon: Trophy, menu: 'baro_rfm', group: '현황', feature: 'baro.rfm' },
     { key: 'baro-sales-summary', label: '매출 요약', abbr: '매출', path: '/baro/sales-summary', icon: BarChart3, menu: 'baro_sales_summary', group: '현황', feature: 'baro.sales_summary' },
+    // D-133: 자동 콜백 추천 엔진 (BARO 전용)
+    { key: 'baro-callback', label: '콜백 추천', abbr: '콜백', path: '/baro/callback-recommend', icon: Inbox, menu: 'baro_callback', group: '판매', feature: 'baro.callback_recommend' },
   ],
 };
