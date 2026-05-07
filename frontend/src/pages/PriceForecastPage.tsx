@@ -337,19 +337,51 @@ export default function PriceForecastPage() {
   const triggerAIRefresh = async () => {
     setRefreshing(true);
     try {
+      // PR 43: 비동기 — POST 즉시 run_id 받고 폴링 시작
       const result = await fetchWithAuth<PriceBenchmarkAIRefreshResult>('/api/v1/price-benchmarks/ai-refresh', {
         method: 'POST',
         body: JSON.stringify({ source_keys: Array.from(selectedSources) }),
       });
-      const msg = `AI 수집 ${result.inserted_count.toLocaleString('ko-KR')}건 저장`;
-      if (result.status === 'completed') notify.success(msg);
-      else notify.warning(`${msg} · ${result.warnings.slice(0, 1).join('') || '일부 확인 필요'}`);
+
+      // running 이면 폴링 (3초 간격, 최대 15분)
+      if (result.status === 'running' && result.run_id) {
+        notify.info('AI 수집 시작 — 진행 상황 추적 중…');
+        const pollResult = await pollAIRefreshRun(result.run_id);
+        const msg = `AI 수집 ${pollResult.inserted_count.toLocaleString('ko-KR')}건 저장`;
+        if (pollResult.status === 'completed') notify.success(msg);
+        else if (pollResult.status === 'failed') notify.error(`AI 수집 실패: ${pollResult.error_message ?? '알 수 없음'}`);
+        else notify.warning(`${msg} · ${(pollResult.warnings ?? []).slice(0, 1).join('') || '일부 확인 필요'}`);
+      } else {
+        // 옛 동기 응답 호환 (운영 backend 가 아직 옛 버전)
+        const msg = `AI 수집 ${result.inserted_count.toLocaleString('ko-KR')}건 저장`;
+        if (result.status === 'completed') notify.success(msg);
+        else notify.warning(`${msg} · ${result.warnings.slice(0, 1).join('') || '일부 확인 필요'}`);
+      }
       await load();
     } catch (err) {
       notify.error(formatError(err));
     } finally {
       setRefreshing(false);
     }
+  };
+
+  // PR 43: run_id 폴링 — status 가 running 이 아닐 때까지 3초마다 GET.
+  // 최대 15분 (300번) — 그 이후엔 timeout 으로 실패.
+  const pollAIRefreshRun = async (runID: string): Promise<PriceBenchmarkRun> => {
+    const POLL_INTERVAL_MS = 3000;
+    const MAX_ATTEMPTS = 300; // 15분
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      try {
+        const run = await fetchWithAuth<PriceBenchmarkRun>(`/api/v1/price-benchmarks/runs/${runID}`);
+        if (run.status !== 'running') {
+          return run;
+        }
+      } catch (err) {
+        // 일시적 fetch 실패는 무시 — 계속 폴링
+      }
+    }
+    throw new Error('AI 수집 시간 초과 (15분)');
   };
 
   const toggleSource = (key: string) => {
