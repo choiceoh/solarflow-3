@@ -208,20 +208,6 @@ func (h *BLHandler) RegisterRoutes(r chi.Router, g middleware.Gates, lineH *BLLi
 	})
 }
 
-// PickingListHandler — D-140 WMS Phase 2 피킹 명세 CRUD + picked 토글.
-// 출고 1건당 위치별 수량 명세 + 작업자 picked 추적.
-func (h *PickingListHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
-	r.Route("/picking-lists", func(r chi.Router) {
-		r.Use(g.Feature(feature.IDTxPickingList))
-		r.Get("/", h.List)
-		r.Get("/{id}", h.GetByID)
-		r.With(g.Write).Post("/", h.Create)
-		r.With(g.Write).Patch("/{id}", h.UpdateHeader)
-		r.With(g.Write).Patch("/{id}/items/{item_id}", h.UpdateItem)
-		r.With(g.Write).Delete("/{id}", h.Delete)
-	})
-}
-
 // WarehouseLocationHandler — D-139 WMS Phase 1 창고 위치 CRUD (모든 테넌트 공유).
 func (h *WarehouseLocationHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/warehouse-locations", func(r chi.Router) {
