@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, Lock, Mail } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { isDevMockLoginAllowed } from '@/lib/devMockMode';
 import { getAuthSessionPersistence } from '@/lib/supabase';
@@ -9,6 +9,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const REMEMBERED_EMAIL_KEY = 'solarflow-remembered-email';
+
+// Supabase Auth 영문 에러 메시지를 한글로 매핑.
+// 매핑 안 되는 메시지는 원문 유지 (디버깅용 fallback).
+function localizeAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login credentials') || m.includes('invalid email or password')) {
+    return '이메일 또는 비밀번호가 올바르지 않습니다';
+  }
+  if (m.includes('email not confirmed')) {
+    return '이메일 인증이 완료되지 않았습니다 (관리자에게 문의)';
+  }
+  if (m.includes('user not found')) {
+    return '등록되지 않은 사용자입니다';
+  }
+  if (m.includes('too many requests') || m.includes('rate limit')) {
+    return '시도가 너무 잦습니다. 잠시 후 다시 시도해주세요';
+  }
+  if (m.includes('network') || m.includes('fetch')) {
+    return '네트워크 연결을 확인해주세요';
+  }
+  return message;
+}
 
 function readRememberedEmail(): string {
   try {
@@ -44,6 +66,7 @@ export default function LoginForm() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMockSubmitting, setIsMockSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,8 +83,8 @@ export default function LoginForm() {
         clearRememberedEmail();
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : '로그인에 실패했습니다';
-      setError(message);
+      const raw = err instanceof Error ? err.message : '로그인에 실패했습니다';
+      setError(localizeAuthError(raw));
     } finally {
       setIsSubmitting(false);
     }
@@ -73,8 +96,8 @@ export default function LoginForm() {
     try {
       await loginWithDevMock();
     } catch (err) {
-      const message = err instanceof Error ? err.message : '목업 로그인에 실패했습니다';
-      setError(message);
+      const raw = err instanceof Error ? err.message : '목업 로그인에 실패했습니다';
+      setError(localizeAuthError(raw));
     } finally {
       setIsMockSubmitting(false);
     }
@@ -104,12 +127,22 @@ export default function LoginForm() {
           <Lock className="sf-field-icon h-3.5 w-3.5" />
           <Input
             id="password"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="current-password"
+            className="pr-10"
           />
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => setShowPassword((v) => !v)}
+            className="sf-login-password-toggle"
+            aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
+          >
+            {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          </button>
         </div>
       </div>
 
