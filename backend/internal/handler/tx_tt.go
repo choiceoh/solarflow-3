@@ -86,6 +86,13 @@ func (h *TTHandler) applyTTFilters(r *http.Request, query *postgrest.FilterBuild
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
 	}
+	// 기간 — remit_date 범위. frontend ProcurementPage date_range 서버 위임.
+	if from := r.URL.Query().Get("remit_date_from"); from != "" {
+		query = query.Gte("remit_date", from)
+	}
+	if to := r.URL.Query().Get("remit_date_to"); to != "" {
+		query = query.Lte("remit_date", to)
+	}
 	// 검색 — purpose/bank_name/memo ilike. PO 의 join 필드는 or 절 미지원.
 	if q := sanitizeTTSearchTerm(r.URL.Query().Get("q")); q != "" {
 		clauses := []string{

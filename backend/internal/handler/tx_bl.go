@@ -70,6 +70,13 @@ func (h *BLHandler) applyBLFilters(r *http.Request, query *postgrest.FilterBuild
 	if inboundType := r.URL.Query().Get("inbound_type"); inboundType != "" {
 		query = query.Eq("inbound_type", inboundType)
 	}
+	// 기간 — eta 범위 (frontend ProcurementPage BL 탭이 eta 기준 필터). actual_arrival/etd 가 별도 필요하면 추가.
+	if from := r.URL.Query().Get("eta_from"); from != "" {
+		query = query.Gte("eta", from)
+	}
+	if to := r.URL.Query().Get("eta_to"); to != "" {
+		query = query.Lte("eta", to)
+	}
 	if q := sanitizeBLSearchTerm(r.URL.Query().Get("q")); q != "" {
 		clauses := []string{
 			fmt.Sprintf("bl_number.ilike.*%s*", q),

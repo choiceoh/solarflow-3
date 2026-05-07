@@ -76,6 +76,14 @@ func (h *POHandler) applyPOFilters(r *http.Request, query *postgrest.FilterBuild
 	if ct := r.URL.Query().Get("contract_type"); ct != "" {
 		query = query.Eq("contract_type", ct)
 	}
+	// 기간 — contract_date 범위 (양끝 포함, ISO date YYYY-MM-DD).
+	// frontend ProcurementPage 의 date_range filter 서버 위임 (이전엔 page 안 client filter).
+	if from := r.URL.Query().Get("contract_date_from"); from != "" {
+		query = query.Gte("contract_date", from)
+	}
+	if to := r.URL.Query().Get("contract_date_to"); to != "" {
+		query = query.Lte("contract_date", to)
+	}
 	// 검색 — po_number/manufacturer_name/payment_terms/memo ilike. parent_po_id 와 같은 구조 필드는 제외.
 	if q := sanitizePOSearchTerm(r.URL.Query().Get("q")); q != "" {
 		clauses := []string{
