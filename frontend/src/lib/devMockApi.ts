@@ -475,12 +475,24 @@ function turnoverResponse() {
   };
 }
 
-function marginAnalysisResponse() {
-  const items = saleListItems.map((item) => {
+function marginAnalysisResponse(body: MockRow = {}) {
+  const customerId = typeof body.customer_id === 'string' ? body.customer_id : '';
+  const manufacturerId = typeof body.manufacturer_id === 'string' ? body.manufacturer_id : '';
+  const rows = saleListItems.filter((item) => {
+    if (customerId && item.customer_id !== customerId) return false;
+    if (manufacturerId) {
+      const product = products.find((p) => p.product_id === item.product_id);
+      if (product?.manufacturer_id !== manufacturerId) return false;
+    }
+    return true;
+  });
+  const items = rows.map((item) => {
     const quantity = Number(item.quantity ?? 0);
     const specWp = Number(item.spec_wp ?? 0);
     const revenue = Number(item.sale.supply_amount ?? 0);
-    const cost = revenue * 0.88;
+    const isMissingCost = item.product_code === 'JAS-DH580';
+    const marginRate = item.product_code === 'LON-X600' ? 13.4 : 6.8;
+    const cost = revenue * (1 - marginRate / 100);
     return {
       manufacturer_name: String(item.product_code ?? '').split('-')[0],
       product_code: item.product_code,
@@ -489,20 +501,22 @@ function marginAnalysisResponse() {
       total_sold_qty: quantity,
       total_sold_kw: Number(item.capacity_kw ?? 0),
       avg_sale_price_wp: item.unit_price_wp,
-      avg_cost_wp: Math.round(Number(item.unit_price_wp ?? 0) * 0.88),
-      margin_wp: Math.round(Number(item.unit_price_wp ?? 0) * 0.12),
-      margin_rate: 12,
+      avg_cost_wp: isMissingCost ? null : Math.round(Number(item.unit_price_wp ?? 0) * (1 - marginRate / 100)),
+      margin_wp: isMissingCost ? null : Math.round(Number(item.unit_price_wp ?? 0) * (marginRate / 100)),
+      margin_rate: isMissingCost ? null : marginRate,
       total_revenue_krw: revenue,
-      total_cost_krw: cost,
-      total_margin_krw: revenue - cost,
-      cost_covered_revenue_krw: revenue,
-      cost_missing_revenue_krw: 0,
+      total_cost_krw: isMissingCost ? null : cost,
+      total_margin_krw: isMissingCost ? null : revenue - cost,
+      cost_covered_revenue_krw: isMissingCost ? 0 : revenue,
+      cost_missing_revenue_krw: isMissingCost ? revenue : 0,
       sale_count: 1,
     };
   });
   const totalRevenue = items.reduce((sum, item) => sum + item.total_revenue_krw, 0);
   const totalCost = items.reduce((sum, item) => sum + Number(item.total_cost_krw ?? 0), 0);
   const totalMargin = items.reduce((sum, item) => sum + Number(item.total_margin_krw ?? 0), 0);
+  const coveredRevenue = items.reduce((sum, item) => sum + item.cost_covered_revenue_krw, 0);
+  const missingRevenue = items.reduce((sum, item) => sum + item.cost_missing_revenue_krw, 0);
   return {
     items,
     summary: {
@@ -510,10 +524,10 @@ function marginAnalysisResponse() {
       total_revenue_krw: totalRevenue,
       total_cost_krw: totalCost,
       total_margin_krw: totalMargin,
-      overall_margin_rate: 12,
-      cost_covered_revenue_krw: totalRevenue,
-      cost_missing_revenue_krw: 0,
-      cost_coverage_rate: totalRevenue > 0 ? 100 : 0,
+      overall_margin_rate: coveredRevenue > 0 ? Math.round((totalMargin / coveredRevenue) * 10000) / 100 : 0,
+      cost_covered_revenue_krw: coveredRevenue,
+      cost_missing_revenue_krw: missingRevenue,
+      cost_coverage_rate: totalRevenue > 0 ? Math.round((coveredRevenue / totalRevenue) * 10000) / 100 : 0,
       cost_basis: 'landed',
     },
   };
@@ -620,7 +634,7 @@ function calcRoute<T>(url: URL, body: MockRow): T {
     case '/api/v1/calc/inventory-turnover':
       return clone(turnoverResponse() as T);
     case '/api/v1/calc/margin-analysis':
-      return clone(marginAnalysisResponse() as T);
+      return clone(marginAnalysisResponse(body) as T);
     case '/api/v1/calc/search':
       return clone(searchResponse(body) as T);
     case '/api/v1/calc/exchange-compare':
