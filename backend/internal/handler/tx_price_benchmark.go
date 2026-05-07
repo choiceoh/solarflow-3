@@ -43,30 +43,47 @@ func NewPriceBenchmarkHandler(db *supa.Client) *PriceBenchmarkHandler {
 // benchmarkSource — PR 46: Endpoint/TimeWindow/Site 추가하여 source 별로 검색 분기.
 // Endpoint: "search"(기본) | "news" | "scholar". TimeWindow: "day"|"week"|"month"|"year"|"".
 // Site: site: 연산자 (e.g. "ir.jinkosolar.com OR ir.longi.com").
+// HomepageFallbacks: 1차 Homepage 가 404/실패할 때 차례로 시도할 백업 URL.
+// 시세지가 사이트 개편으로 path 만 바꿔도 다음 분기까지 evidence 가 끊기지 않게 함.
 type benchmarkSource struct {
-	Key        string
-	Name       string
-	Homepage   string
-	Query      string
-	Endpoint   string // PR 46: search|news|scholar (기본 search)
-	TimeWindow string // PR 46: day|week|month|year (기본 "")
-	Site       string // PR 46: site: 연산자 (선택)
+	Key               string
+	Name              string
+	Homepage          string
+	HomepageFallbacks []string
+	Query             string
+	Endpoint          string // PR 46: search|news|scholar (기본 search)
+	TimeWindow        string // PR 46: day|week|month|year (기본 "")
+	Site              string // PR 46: site: 연산자 (선택)
+}
+
+// homepageURLs — Homepage + HomepageFallbacks 를 시도 순서대로 반환 (빈 문자열 제거).
+func (s benchmarkSource) homepageURLs() []string {
+	if strings.TrimSpace(s.Homepage) == "" {
+		return nil
+	}
+	out := []string{s.Homepage}
+	for _, u := range s.HomepageFallbacks {
+		if strings.TrimSpace(u) != "" {
+			out = append(out, u)
+		}
+	}
+	return out
 }
 
 var benchmarkSources = []benchmarkSource{
 	// 주간 발행 시세지 — tbs:qdr:w 로 최근 1주 결과만 (오래된 캐시 페이지 제외).
-	{Key: "opis", Name: "OPIS Solar Weekly", Homepage: "https://www.opisnet.com/product/solar-weekly/", Query: "OPIS Solar Weekly Chinese Module Marker CMM FOB China TOPCon 600W forward curve DDP Europe", Endpoint: "search", TimeWindow: "week"},
+	{Key: "opis", Name: "OPIS Solar Weekly", Homepage: "https://www.opisnet.com/product/solar-weekly/", HomepageFallbacks: []string{"https://www.opisnet.com/product-category/renewables/", "https://www.opisnet.com/"}, Query: "OPIS Solar Weekly Chinese Module Marker CMM FOB China TOPCon 600W forward curve DDP Europe", Endpoint: "search", TimeWindow: "week"},
 	// InfoLink — module/polysilicon 만 사용. cell, wafer 는 정확도 이슈로 제외.
-	{Key: "infolink", Name: "InfoLink Consulting", Homepage: "https://www.infolink-group.com/energy-article/solar-topic-price", Query: "InfoLink Consulting weekly solar module polysilicon price China centralized distributed project module price", Endpoint: "search", TimeWindow: "week"},
-	{Key: "trendforce", Name: "TrendForce EnergyTrend", Homepage: "https://www.energytrend.com/pricequotes.html", Query: "TrendForce EnergyTrend weekly solar module price China export Europe price monthly tender analysis", Endpoint: "search", TimeWindow: "week"},
+	{Key: "infolink", Name: "InfoLink Consulting", Homepage: "https://www.infolink-group.com/energy-article/solar-topic-price", HomepageFallbacks: []string{"https://www.infolink-group.com/solar/", "https://www.infolink-group.com/"}, Query: "InfoLink Consulting weekly solar module polysilicon price China centralized distributed project module price", Endpoint: "search", TimeWindow: "week"},
+	{Key: "trendforce", Name: "TrendForce EnergyTrend", Homepage: "https://www.energytrend.com/pricequotes.html", HomepageFallbacks: []string{"https://www.energytrend.com/solar/", "https://www.energytrend.com/"}, Query: "TrendForce EnergyTrend weekly solar module price China export Europe price monthly tender analysis", Endpoint: "search", TimeWindow: "week"},
 	// 일간 발행 — tbs:qdr:d.
 	{Key: "pvinsights", Name: "PVinsights", Homepage: "https://pvinsights.com/", Query: "PVinsights daily solar module price China Europe module price", Endpoint: "search", TimeWindow: "day"},
 	// 중국 입찰 뉴스 — /news 엔드포인트 + 1개월. 입찰 결과는 뉴스성이 강함.
-	{Key: "china_tender", Name: "중국 국영 대량 입찰", Homepage: "https://guangfu.bjx.com.cn/", Query: "北极星 太阳能 光伏 组件 集采 中标 价格 华能 华电 国家能源 国家电投 中国电建 TOPCon", Endpoint: "news", TimeWindow: "month"},
+	{Key: "china_tender", Name: "중국 국영 대량 입찰", Homepage: "https://guangfu.bjx.com.cn/", HomepageFallbacks: []string{"https://news.bjx.com.cn/zt/guangfu/"}, Query: "北极星 太阳能 光伏 组件 集采 中标 价格 华能 华电 国家能源 国家电投 中国电建 TOPCon", Endpoint: "news", TimeWindow: "month"},
 	// CPIA 정책·가이던스 — 발표 빈도가 낮으므로 1개월.
 	{Key: "cpia_floor", Name: "CPIA 최저원가 가이던스", Homepage: "https://www.chinapv.org.cn/", Query: "中国光伏行业协会 CPIA 光伏组件 最低成本 价格 指引", Endpoint: "search", TimeWindow: "month"},
 	// Tier-1 ASP — 분기 IR 자료. site: 로 IR 도메인 한정 + 3개월(분기).
-	{Key: "tier1_asp", Name: "Tier-1 제조사 ASP", Homepage: "https://ir.jinkosolar.com/", Query: "Jinko Longi Trina JA Solar Tongwei quarterly module ASP China export Europe module price dollar per watt", Endpoint: "search", TimeWindow: "month", Site: "ir.jinkosolar.com OR ir.longi.com OR ir.trinasolar.com OR jasolar.com OR tongwei.com"},
+	{Key: "tier1_asp", Name: "Tier-1 제조사 ASP", Homepage: "https://ir.jinkosolar.com/", HomepageFallbacks: []string{"https://ir.longi.com/", "https://ir.trinasolar.com/"}, Query: "Jinko Longi Trina JA Solar Tongwei quarterly module ASP China export Europe module price dollar per watt", Endpoint: "search", TimeWindow: "month", Site: "ir.jinkosolar.com OR ir.longi.com OR ir.trinasolar.com OR jasolar.com OR tongwei.com"},
 }
 
 type benchmarkEvidenceItem struct {
@@ -763,15 +780,15 @@ func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, so
 	}
 
 	for _, src := range sources {
-		if src.Homepage != "" {
-			// PR 46: Serper scrape 우선 (정제된 markdown), 실패 시 raw HTTP fallback.
-			if item, err := h.fetchHomepageViaSerperScrape(ctx, serperKey, src); err == nil {
+		if urls := src.homepageURLs(); len(urls) > 0 {
+			// PR 48: 1차 Homepage + HomepageFallbacks 를 순서대로 시도.
+			// 각 URL 마다 Serper scrape (정제된 markdown) → raw HTTP 순서. 첫 성공에서 종료.
+			// 모두 실패하면 attempt 들을 status code 별로 묶어 한 줄 warning + 웹 검색 fallback 안내.
+			item, attempts, ok := h.tryFetchHomepage(ctx, serperKey, src, urls)
+			if ok {
 				evidence = append(evidence, item)
-			} else if item, err2 := h.fetchHomepageEvidence(ctx, src); err2 == nil {
-				evidence = append(evidence, item)
-				warnings = append(warnings, fmt.Sprintf("%s scrape 실패→raw fallback: %v", src.Name, err))
 			} else {
-				warnings = append(warnings, fmt.Sprintf("%s 홈페이지 조회 실패: scrape=%v / raw=%v", src.Name, err, err2))
+				warnings = append(warnings, summarizeHomepageFailure(src.Name, attempts, serperKey != ""))
 			}
 		}
 		if serperKey == "" {
@@ -800,6 +817,90 @@ func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, so
 		warnings = append(warnings, "수집 증거 텍스트가 없습니다. 유료 리포트 로그인/검색 키 설정을 확인하세요")
 	}
 	return evidence, warnings
+}
+
+// homepageAttempt — 한 번의 fetch 시도 결과. 모두 실패했을 때 warning 한 줄로 요약하기 위한 재료.
+type homepageAttempt struct {
+	url    string
+	method string // "scrape" | "raw"
+	err    error
+}
+
+// tryFetchHomepage — urls 를 순서대로 (각 URL 에 대해 scrape → raw) 시도하고, 첫 성공에서 evidence 반환.
+// 모두 실패하면 attempts 와 ok=false 반환. 호출부에서 attempts 를 summarizeHomepageFailure 로 한 줄 warning 화.
+func (h *PriceBenchmarkHandler) tryFetchHomepage(ctx context.Context, apiKey string, src benchmarkSource, urls []string) (benchmarkEvidenceItem, []homepageAttempt, bool) {
+	var attempts []homepageAttempt
+	for _, u := range urls {
+		variant := src
+		variant.Homepage = u
+		if item, err := h.fetchHomepageViaSerperScrape(ctx, apiKey, variant); err == nil {
+			return item, attempts, true
+		} else {
+			attempts = append(attempts, homepageAttempt{url: u, method: "scrape", err: err})
+		}
+		if item, err := h.fetchHomepageEvidence(ctx, variant); err == nil {
+			return item, attempts, true
+		} else {
+			attempts = append(attempts, homepageAttempt{url: u, method: "raw", err: err})
+		}
+	}
+	return benchmarkEvidenceItem{}, attempts, false
+}
+
+// summarizeHomepageFailure — 여러 URL × (scrape/raw) 시도 결과를 한 줄 warning 으로 압축.
+// 같은 status code (예: HTTP 404) 끼리는 "HTTP 404×4" 처럼 카운트만 표기.
+// searchFallback=true 면 "웹 검색으로 대체" 안내를 덧붙여 운영자가 fatal 인지 헷갈리지 않도록.
+func summarizeHomepageFailure(srcName string, attempts []homepageAttempt, searchFallback bool) string {
+	if len(attempts) == 0 {
+		return fmt.Sprintf("%s 홈페이지 조회 실패", srcName)
+	}
+	buckets := map[string]int{}
+	var keys []string
+	for _, a := range attempts {
+		k := normalizeHomepageError(a.err)
+		if _, ok := buckets[k]; !ok {
+			keys = append(keys, k)
+		}
+		buckets[k]++
+	}
+	sort.Strings(keys)
+	var parts []string
+	for _, k := range keys {
+		if buckets[k] > 1 {
+			parts = append(parts, fmt.Sprintf("%s×%d", k, buckets[k]))
+		} else {
+			parts = append(parts, k)
+		}
+	}
+	urlCount := uniqueURLCount(attempts)
+	summary := fmt.Sprintf("%s 홈페이지 조회 실패 (URL %d개·%s)", srcName, urlCount, strings.Join(parts, ", "))
+	if searchFallback {
+		summary += " — 웹 검색으로 대체"
+	}
+	return summary
+}
+
+// normalizeHomepageError — error 를 bucket key 로 정규화. "HTTP 404: ..." → "HTTP 404".
+func normalizeHomepageError(err error) string {
+	msg := err.Error()
+	if strings.HasPrefix(msg, "HTTP ") {
+		if i := strings.IndexByte(msg, ':'); i > 0 {
+			return strings.TrimSpace(msg[:i])
+		}
+	}
+	if len(msg) > 80 {
+		return msg[:80] + "…"
+	}
+	return msg
+}
+
+// uniqueURLCount — attempts 에 등장한 distinct URL 수 (scrape/raw 같은 URL 은 1로 셈).
+func uniqueURLCount(attempts []homepageAttempt) int {
+	seen := map[string]bool{}
+	for _, a := range attempts {
+		seen[a.url] = true
+	}
+	return len(seen)
 }
 
 func (h *PriceBenchmarkHandler) fetchHomepageEvidence(ctx context.Context, src benchmarkSource) (benchmarkEvidenceItem, error) {
