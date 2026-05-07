@@ -88,8 +88,93 @@ const fmtKstHHmm = (iso: string) => {
 };
 const fmtMs = (ms: number) => (ms >= 100 ? ms.toFixed(0) : ms.toFixed(1));
 
+function TickerRow({
+  silverPrice,
+  silverChange,
+  polyValue,
+  polyChange,
+  scfiValue,
+  scfiChange,
+}: {
+  silverPrice: number;
+  silverChange: number;
+  polyValue: number;
+  polyChange: number;
+  scfiValue: number;
+  scfiChange: number;
+}) {
+  return (
+    <span className="inline-flex items-center gap-8">
+      <span>
+        은 <span className="text-[var(--sf-dark-ink)]">${silverPrice.toFixed(2)}</span>
+        <span className={`ml-1 ${silverChange >= 0 ? 'text-[#92e0a4]' : 'text-[#e09a8b]'}`}>
+          {silverChange >= 0 ? '+' : ''}{silverChange.toFixed(2)}
+        </span>
+      </span>
+      <span>
+        폴리실리콘 <span className="text-[var(--sf-dark-ink)]">{polyValue.toFixed(2)}</span>
+        <span className={`ml-1 ${polyChange >= 0 ? 'text-[#92e0a4]' : 'text-[#e09a8b]'}`}>
+          {polyChange >= 0 ? '+' : ''}{polyChange.toFixed(2)}
+        </span>
+      </span>
+      <span>
+        SCFI <span className="text-[var(--sf-dark-ink)]">{fmt.format(Math.round(scfiValue))}</span>
+        <span className={`ml-1 ${scfiChange >= 0 ? 'text-[#92e0a4]' : 'text-[#e09a8b]'}`}>
+          {scfiChange >= 0 ? '+' : ''}{scfiChange.toFixed(2)}
+        </span>
+      </span>
+    </span>
+  );
+}
+
 declare const __LAST_MERGED_PR__: string;
 const versionLabel = __LAST_MERGED_PR__ ? `PR #${__LAST_MERGED_PR__}` : 'v3.0.0';
+
+// 0 → target 으로 800ms 동안 ease-out 카운트업. prefers-reduced-motion 환경에선 즉시 표시.
+function useCountUp(target: number, durationMs = 800): number {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setValue(target);
+      return;
+    }
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || !Number.isFinite(target)) {
+      setValue(target);
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(target * eased);
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, durationMs]);
+  return value;
+}
+
+// "방금", "12초 전", "3분 전" 형태의 상대 시간. 60초 미만은 매 5초 갱신.
+function useRelativeTime(iso: string | undefined): string {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(id);
+  }, []);
+  if (!iso) return '--';
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return '--';
+  const diff = Math.max(0, now - t);
+  if (diff < 5_000) return '방금';
+  if (diff < 60_000) return `${Math.floor(diff / 1000)}초 전`;
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분 전`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}시간 전`;
+  return `${Math.floor(diff / 86_400_000)}일 전`;
+}
 
 export default function LoginPage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -174,12 +259,20 @@ export default function LoginPage() {
   const engineLatencyMs = stats?.health?.engine_ms ?? FALLBACK_HEALTH.engine_ms;
   const lastSyncLabel = stats?.generated_at ? fmtKstHHmm(stats.generated_at) : '--:--';
 
+  // KPI 카운트업 — 페이지 진입 시 0 → target 800ms.
+  const animInventoryMW = useCountUp(inventoryMW);
+  const animReservations = useCountUp(reservations);
+  const animLcTotalM = useCountUp(lcTotalUSD / 1_000_000);
+  const animFxRate = useCountUp(fxRate);
+
   const kpi = [
-    { label: '가용재고', value: inventoryMW.toFixed(2), unit: 'MW', detail: '오늘 기준' },
-    { label: '예약 대기', value: String(reservations), unit: '건', detail: '미배정 포함' },
-    { label: 'L/C 사용', value: (lcTotalUSD / 1_000_000).toFixed(2), unit: 'M$', detail: `${lcCount}건` },
-    { label: 'USD/KRW', value: fmt.format(Math.round(fxRate * 10) / 10), unit: '', detail: fxChange != null ? fmtPct(fxChange) : '실시간' },
+    { label: '가용재고', value: animInventoryMW.toFixed(2), unit: 'MW', detail: '오늘 기준' },
+    { label: '예약 대기', value: String(Math.round(animReservations)), unit: '건', detail: '미배정 포함' },
+    { label: 'L/C 사용', value: animLcTotalM.toFixed(2), unit: 'M$', detail: `${lcCount}건` },
+    { label: 'USD/KRW', value: fmt.format(Math.round(animFxRate * 10) / 10), unit: '', detail: fxChange != null ? fmtPct(fxChange) : '실시간' },
   ];
+
+  const relativeSync = useRelativeTime(stats?.generated_at);
   return (
     <div className="sf-login-shell">
       <section className="sf-login-left">
@@ -229,7 +322,9 @@ export default function LoginPage() {
             <div className="sf-mono flex-1 text-[10.5px] text-[var(--sf-ink-2)]">
               API {fmtMs(apiLatencyMs)}ms · DB {fmtMs(dbLatencyMs)}ms · 엔진 {fmtMs(engineLatencyMs)}ms
             </div>
-            <span className="sf-mono text-[10px] text-[var(--sf-ink-4)]">Last sync {lastSyncLabel}</span>
+            <span className="sf-mono text-[10px] text-[var(--sf-ink-4)]" title={`Last sync ${lastSyncLabel} KST`}>
+              Last sync {relativeSync}
+            </span>
           </div>
         </div>
 
@@ -285,7 +380,7 @@ export default function LoginPage() {
           ))}
         </div>
 
-        <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="sf-command-queue-mobile-hide relative flex min-h-0 flex-1 flex-col">
           <div className="sf-eyebrow mb-2 text-[var(--sf-dark-ink-3)]">오늘의 작업 큐 · {queue.length}건</div>
           <div className="min-h-0 flex-1">
             {queue.map(({ time, tag, title, meta }) => (
@@ -306,20 +401,13 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="sf-mono border-t border-white/10 pt-3 text-[10px] text-[var(--sf-dark-ink-3)]">
-          은 <span className="text-[var(--sf-dark-ink)]">${silverPrice.toFixed(2)}</span>
-          <span className={`ml-1 ${silverChange >= 0 ? 'text-[#92e0a4]' : 'text-[#e09a8b]'}`}>
-            {silverChange >= 0 ? '+' : ''}{silverChange.toFixed(2)}
-          </span>
-          <span className="mx-2 text-white/15">│</span>
-          폴리실리콘 <span className="text-[var(--sf-dark-ink)]">{polyValue.toFixed(2)}</span>
-          <span className={`ml-1 ${polyChange >= 0 ? 'text-[#92e0a4]' : 'text-[#e09a8b]'}`}>
-            {polyChange >= 0 ? '+' : ''}{polyChange.toFixed(2)}
-          </span>
-          <span className="mx-2 text-white/15">│</span>
-          SCFI <span className="text-[var(--sf-dark-ink)]">{fmt.format(Math.round(scfiValue))}</span>
-          <span className={`ml-1 ${scfiChange >= 0 ? 'text-[#92e0a4]' : 'text-[#e09a8b]'}`}>
-            {scfiChange >= 0 ? '+' : ''}{scfiChange.toFixed(2)}
+        <div className="sf-ticker-wrap sf-mono text-[10px] text-[var(--sf-dark-ink-3)]">
+          <div className="sf-ticker-track" aria-hidden>
+            <TickerRow silverPrice={silverPrice} silverChange={silverChange} polyValue={polyValue} polyChange={polyChange} scfiValue={scfiValue} scfiChange={scfiChange} />
+            <TickerRow silverPrice={silverPrice} silverChange={silverChange} polyValue={polyValue} polyChange={polyChange} scfiValue={scfiValue} scfiChange={scfiChange} />
+          </div>
+          <span className="sr-only">
+            은 ${silverPrice.toFixed(2)} · 폴리실리콘 {polyValue.toFixed(2)} · SCFI {fmt.format(Math.round(scfiValue))}
           </span>
         </div>
       </section>
