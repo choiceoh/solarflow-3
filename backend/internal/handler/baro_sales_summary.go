@@ -41,6 +41,11 @@ type SalesSummaryResponse struct {
 	ByPartnerType   []SalesSummaryByType     `json:"by_partner_type"`
 	ByMonth         []SalesSummaryByMonth    `json:"by_month"`
 	TopPartners     []SalesSummaryByPartner  `json:"top_partners"`
+	// PR5.5c (D-136): BR 법인 평균 매입원가 vs 매출 단순 비교 추정.
+	// SKU-level 정밀 매칭은 PR5.5d (sales→outbound→bl_line→product join 필요).
+	EstimatedCostKrw    *float64 `json:"estimated_cost_krw,omitempty"`
+	EstimatedMarginKrw  *float64 `json:"estimated_margin_krw,omitempty"`
+	EstimatedMarginPct  *float64 `json:"estimated_margin_pct,omitempty"`
 }
 
 type SalesSummaryByOwner struct {
@@ -252,6 +257,36 @@ func (h *BaroSalesSummaryHandler) Get(w http.ResponseWriter, r *http.Request) {
 		ByPartnerType:  typeRows,
 		ByMonth:        monthRows,
 		TopPartners:    partnerRows,
+	}
+
+	// PR5.5c (D-136): 추정 마진 — BR 법인 매입원가 합계로 단순 추정.
+	// `?include_margin=true` 일 때만 계산 (기본은 응답 크기 유지).
+	if r.URL.Query().Get("include_margin") == "true" {
+		costData, _, cerr := h.DB.From("baro_purchase_history").
+			Select("amount_krw,history_date", "exact", false).
+			Gte("history_date", startDate).
+			Execute()
+		if cerr == nil {
+			var costRows []struct {
+				AmountKrw   *float64 `json:"amount_krw"`
+				HistoryDate *string  `json:"history_date"`
+			}
+			if err := json.Unmarshal(costData, &costRows); err == nil {
+				totalCost := 0.0
+				for _, c := range costRows {
+					if c.AmountKrw != nil {
+						totalCost += *c.AmountKrw
+					}
+				}
+				if totalCost > 0 && totalAmount > 0 {
+					margin := totalAmount - totalCost
+					marginPct := (margin / totalAmount) * 100
+					resp.EstimatedCostKrw = &totalCost
+					resp.EstimatedMarginKrw = &margin
+					resp.EstimatedMarginPct = &marginPct
+				}
+			}
+		}
 	}
 	response.RespondJSON(w, http.StatusOK, resp)
 }

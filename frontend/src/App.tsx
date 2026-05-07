@@ -56,7 +56,7 @@ const RFMBoardPage = lazy(() => import('@/pages/baro/RFMBoardPage'));
 const SalesSummaryPage = lazy(() => import('@/pages/baro/SalesSummaryPage'));
 const InverterGuidePage = lazy(() => import('@/pages/baro/InverterGuidePage'));
 const ShipmentNoticePage = lazy(() => import('@/pages/baro/ShipmentNoticePage'));
-const CallbackRecommendPage = lazy(() => import('@/pages/baro/CallbackRecommendPage'));
+const DriverPWAPage = lazy(() => import('@/pages/baro/DriverPWAPage'));
 const IncomingBoardPage = lazy(() => import('@/pages/baro/IncomingBoardPage'));
 const BaroPurchaseHistoryPage = lazy(() => import('@/pages/baro/BaroPurchaseHistoryPage'));
 const GroupPurchaseRequestPage = lazy(() => import('@/pages/baro/GroupPurchaseRequestPage'));
@@ -131,6 +131,8 @@ export default function App() {
         <Suspense fallback={<Fallback />}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            {/* D-137 PR7.5: 드라이버 PWA — token-based access, 인증 미적용 */}
+            <Route path="/d/:token" element={<DriverPWAPage />} />
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
                 <Route index element={<Navigate to="/inventory" replace />} />
