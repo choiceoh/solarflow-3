@@ -1167,7 +1167,6 @@
   - 프론트엔드 빌드에서 확장 응답 스키마(`cost_*`)와 mock 응답 호환을 확인한다.
 - **날짜**: 2026-05-07
 
-
 ## D-145: 테넌트 모듈화 — Registry + feature pack + admin 매트릭스 (5 PR 시리즈)
 - **결정**: 새 도메인 (예: `gx10.topworks.ltd`) 을 추가할 때 코드 곳곳에 흩어진 `'topsolar'/'cable'/'baro'` 리터럴·host regex·`tenants:` 인라인 배열을 일일이 갱신할 필요 없도록, 테넌트 정의·feature 가시성·sidebar 구성 전 영역의 **단일 정본**을 도입한다. 5 PR 시리즈로 분해해 회귀 위험 ↓ + 각 단계 독립 검증.
 - **PR 시리즈**:
@@ -1197,6 +1196,18 @@
   - frontend: `npm run test` 10 files / 83 tests (manifest.test.ts, packs.test.ts 신설로 +16 case). `npm run build` / `npm run lint` 통과.
   - 회귀: PR-1~4 행동 변화 없음 (sidebar / route / 가시성 모두 동일). PR-5a/5b 만 admin UI 신규.
 - **관련**: D-108 (BARO 분리), D-119 (cable 분리), D-120 (feature 카탈로그), D-122 (Observability)
+
+## D-146: 가격예측 수집 시장은 중국·유럽으로 제한한다
+- **결정**: 가격예측 벤치마크의 저장 가능 `market_region` 을 `fob_china`, `china_domestic`, `china_export`, `ddp_europe` 로 제한한다. `ddp_us`, `global`, `manufacturer` 등 미국·기타 지역 가격은 AI 수집, 수동 등록, 목록 응답, 기존 데이터 정리에서 제외한다.
+- **이유**: 미국 등 비중국/비유럽 시장은 관세·물류·재고·현지 유통 구조 때문에 가격대가 크게 달라, 같은 차트와 예측 입력에 섞이면 구매 협상 기준선이 왜곡된다. SolarFlow의 module 계열 구매 판단에는 중국 FOB/내수·수출 및 유럽 DDP가 더 직접적인 비교 기준이다.
+- **운영 기준**:
+  - AI prompt 는 중국·유럽 근거만 points 로 반환하고, 제외된 미국·기타 지역 가격은 warnings 에 남긴다.
+  - Go 모델 검증은 허용 지역 allowlist 로 fail-closed 한다. AI 가 프롬프트를 어겨도 저장 직전 `Validate()` 와 handler guard 에서 차단한다.
+  - 기존 `price_benchmarks` 의 `ddp_us` 또는 허용 지역 밖 행은 `089_price_benchmarks_china_europe_only.sql` 로 삭제한다.
+- **검증**:
+  - `go test ./internal/model` 로 허용 지역 통과, `ddp_us`/`global` 차단을 검증한다.
+  - 프론트엔드 dev mock 에서 미국 DDP 샘플을 제거해 `/price-forecast` 목업 차트도 중국·유럽만 표시한다.
+- **날짜**: 2026-05-07
 
 ## D-147: 수주 충당 위험도는 Rust 계산엔진에서 현재고/미착품 풀을 순차 배정해 표시한다
 - **결정**: 수주 목록에 `충당 가능/부족/확인 필요` 배지를 추가하고, 판정은 신규 Rust 계산 API `/api/v1/calc/order-fulfillment-risk`가 담당한다. 프론트엔드는 현재 페이지의 active 수주 ID만 요청하지만, Rust는 같은 법인·품번의 전체 `received/partial` 수주를 수주일 순서로 배정해 현재 페이지 수주만 응답한다.
