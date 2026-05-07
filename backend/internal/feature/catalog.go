@@ -120,6 +120,7 @@ const (
 	IDBaroDispatch        FeatureID = "baro.dispatch"
 	IDBaroOrders          FeatureID = "baro.orders"
 	IDBaroPriceBook       FeatureID = "baro.price_book"
+	IDBaroPartnerCockpit  FeatureID = "baro.partner_cockpit"
 
 	// ---- calc.* (Rust 계산 프록시) ----
 	IDCalcInventory          FeatureID = "calc.inventory"
@@ -415,6 +416,12 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/partner-prices/", "/api/v1/partner-prices/{id}",
 			"/api/v1/partner-prices/lookup",
 		},
+	},
+	IDBaroPartnerCockpit: {
+		ID: IDBaroPartnerCockpit, Name: "BARO 거래처 360 cockpit",
+		Description:    "거래처 한 명 신용/최근매출/CRM 미처리·활동 합본 (D-125)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{"/api/v1/baro/partner-cockpit/{partner_id}"},
 	},
 
 	// ===== calc.* =====
