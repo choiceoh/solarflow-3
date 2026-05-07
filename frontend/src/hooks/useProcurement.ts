@@ -15,6 +15,58 @@ import type {
   TTSummary,
 } from "@/types/procurement"
 
+// PurchaseHistoryPage 4개 insight (Chains/Variants/PriceChanges/RecentEvents) 의 SQL 집계.
+// PO + price_histories + LC + BL + TT 한 번에 SQL round-trip.
+export interface PurchaseDashboard {
+  totals: {
+    chain_count: number
+    variant_count: number
+    price_change_count: number
+    event_count: number
+    chains_with_variants_count: number
+  }
+  trend24: {
+    month: string
+    chain_count: number
+    variant_count: number
+    price_change_count: number
+    event_count: number
+  }[]
+  by_kind: { key: string; label: string; count: number; share: number }[]
+  chains_breakdown: { key: string; label: string; count: number; share: number }[]
+  by_manufacturer_top10: {
+    key: string
+    label: string
+    chain_count: number
+    variant_count: number
+    price_change_count: number
+    total_count: number
+  }[]
+  by_product_top10: { key: string; label: string; count: number; share: number }[]
+  by_reason_top10: { key: string; label: string; count: number; share: number }[]
+  by_head_po_top10: { key: string; label: string; count: number; share: number }[]
+}
+
+export function usePurchaseDashboard() {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const q = useQuery<PurchaseDashboard, Error>({
+    queryKey: ["purchase-dashboard", selectedCompanyId],
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      return fetchWithAuth<PurchaseDashboard>(`/api/v1/purchase/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
+}
+
 // PO 대시보드 — KPI + 24개월 trend + by_status/by_contract_type/by_manufacturer 를 서버 한 번에.
 // ProcurementPage PO 탭 + 3 PO Insight (Active/ContractTypes/Shipping) 가 사용.
 export type POScope = 'lifetime' | 'active' | 'shipping'

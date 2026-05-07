@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
-import { fetchCalc, companyQueryUrl } from '@/lib/companyUtils';
+import { fetchCalc, companyParams, companyQueryUrl } from '@/lib/companyUtils';
 import { useListQuery, useDetailQuery } from '@/lib/queryHelpers';
 import type { LimitChange, LCLimitTimeline, LCMaturityAlert, LCFeeCalc, BankLimitRow } from '@/types/banking';
 import type { Bank } from '@/types/masters';
@@ -12,6 +13,61 @@ export interface BankLimitGroup {
   company_id: string;
   company_name: string;
   rows: BankLimitRow[];
+}
+
+// BankingPage 4개 insight (TotalLimit/Used/Available/MaturityAlert) 의 SQL 집계.
+// banks + lc_records + limit_changes 한 번에 SQL round-trip.
+export interface BankingDashboard {
+  totals: {
+    bank_count: number;
+    company_count: number;
+    total_limit_usd: number;
+    total_used_usd: number;
+    total_available_usd: number;
+  };
+  trend24: {
+    month: string;
+    limit_delta_usd: number;
+    lc_open_usd: number;
+    lc_open_count: number;
+  }[];
+  by_bank: (BankLimitRow & {
+    company_id: string;
+    company_name: string;
+  })[];
+  by_company: {
+    key: string;
+    label: string;
+    bank_count: number;
+    limit_usd: number;
+    used_usd: number;
+    available_usd: number;
+  }[];
+  maturity: {
+    total_count: number;
+    by_urgency: { key: string; label: string; count: number; amount_usd_sum: number; share: number }[];
+    by_bank_top10: { key: string; label: string; count: number; amount_usd_sum: number; share: number }[];
+  };
+}
+
+export function useBankingDashboard() {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
+  const q = useQuery<BankingDashboard, Error>({
+    queryKey: ['banking-dashboard', selectedCompanyId],
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!);
+      return fetchWithAuth<BankingDashboard>(`/api/v1/banking/dashboard?${params}`);
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  });
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch(); },
+  };
 }
 
 /**

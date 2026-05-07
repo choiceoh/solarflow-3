@@ -1,53 +1,58 @@
 // 평균 비용 (억) 드릴다운 — 건당 평균 + 유형별/B/L별/거래처별 평균.
+//
+// 서버 집계 (customs_dashboard RPC) — by_*_avg_top10 (count >= 3 필터링) 사용.
 
 import { useMemo } from 'react'
-import { useExpenseList } from '@/hooks/useCustoms'
+import { useCustomsDashboard } from '@/hooks/useCustoms'
 import { EXPENSE_TYPE_LABEL, type ExpenseType } from '@/types/customs'
-import { breakdownAvg, trend24Average } from '@/lib/insights/aggregations'
 import InsightShell from '@/components/insights/InsightShell'
+import type { BreakdownRow, TrendPoint } from '@/lib/insights/aggregations'
 
 const fmtEok = (v: number) => (v / 100_000_000).toFixed(v >= 10_000_000_000 ? 1 : 2)
 const fmtEokTick = (v: number) => (v / 100_000_000).toFixed(0)
 
 export function CustomsAvgExpenseInsight() {
-  const { data, loading } = useExpenseList()
+  const { dashboard, loading } = useCustomsDashboard()
+  const overallAvg = dashboard?.totals.avg_amount ?? 0
 
-  const trend = useMemo(
-    () => trend24Average(data, (e) => e.month ?? null, (e) => e.total ?? e.amount ?? 0),
-    [data],
+  const trend: TrendPoint[] = useMemo(
+    () => (dashboard?.trend24 ?? []).map((p) => ({ month: p.month, value: p.avg_amount })),
+    [dashboard],
   )
-  const overallAvg = data.length > 0
-    ? data.reduce((sum, e) => sum + (e.total ?? e.amount ?? 0), 0) / data.length
-    : 0
 
-  const byType = useMemo(
-    () => breakdownAvg(
-      data,
-      (e) => e.expense_type,
-      (e) => EXPENSE_TYPE_LABEL[e.expense_type as ExpenseType] ?? e.expense_type,
-      (e) => e.total ?? e.amount ?? 0,
-    ),
-    [data],
+  const byType: BreakdownRow[] = useMemo(
+    () => [...(dashboard?.by_type ?? [])]
+      .sort((a, b) => b.avg_amount - a.avg_amount)
+      .map((r) => ({
+        key: r.key,
+        label: EXPENSE_TYPE_LABEL[r.label as ExpenseType] ?? r.label,
+        value: r.avg_amount,
+        share: r.share,
+        count: r.count,
+      })),
+    [dashboard],
   )
-  const byBl = useMemo(
-    () => breakdownAvg(
-      data,
-      (e) => e.bl_id ?? null,
-      (e) => e.bl_number ?? '미연결',
-      (e) => e.total ?? e.amount ?? 0,
-      3,
-    ).slice(0, 10),
-    [data],
+
+  const byBl: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_bl_avg_top10 ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.avg_amount,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
-  const byVendor = useMemo(
-    () => breakdownAvg(
-      data,
-      (e) => e.vendor ?? null,
-      (e) => e.vendor ?? '미지정',
-      (e) => e.total ?? e.amount ?? 0,
-      3,
-    ).slice(0, 10),
-    [data],
+
+  const byVendor: BreakdownRow[] = useMemo(
+    () => (dashboard?.by_vendor_avg_top10 ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      value: r.avg_amount,
+      share: r.share,
+      count: r.count,
+    })),
+    [dashboard],
   )
 
   return (

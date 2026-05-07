@@ -38,6 +38,7 @@ GET     /api/v1/attachments/{id}/access
 GET     /api/v1/attachments/{id}/download
 GET     /api/v1/attachments/{id}/file
 GET     /api/v1/audit-logs/
+GET     /api/v1/banking/dashboard
 GET     /api/v1/banks/
 GET     /api/v1/banks/{id}
 GET     /api/v1/baro/credit-board/
@@ -46,6 +47,7 @@ GET     /api/v1/baro/dispatch-routes/{id}
 GET     /api/v1/baro/dispatch-routes/{id}/outbounds
 GET     /api/v1/baro/incoming/
 GET     /api/v1/baro/orders/recent
+GET     /api/v1/baro/partner-cockpit/{partner_id}
 GET     /api/v1/baro/purchase-history/
 GET     /api/v1/baro/purchase-history/summary
 GET     /api/v1/bls/
@@ -60,6 +62,7 @@ GET     /api/v1/construction-sites/
 GET     /api/v1/construction-sites/{id}
 GET     /api/v1/cost-details/
 GET     /api/v1/cost-details/{id}
+GET     /api/v1/customs/dashboard
 GET     /api/v1/declarations/
 GET     /api/v1/declarations/{id}
 GET     /api/v1/engine/health
@@ -133,6 +136,7 @@ GET     /api/v1/public/login-stats
 GET     /api/v1/public/metals/{symbol}
 GET     /api/v1/public/polysilicon
 GET     /api/v1/public/scfi
+GET     /api/v1/purchase/dashboard
 GET     /api/v1/receipt-matches/
 GET     /api/v1/receipts/
 GET     /api/v1/receipts/dashboard
