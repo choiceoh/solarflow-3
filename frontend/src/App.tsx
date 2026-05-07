@@ -51,6 +51,9 @@ const PartnerCockpitPage = lazy(() => import('@/pages/baro/PartnerCockpitPage'))
 const QuoteBuilderPage = lazy(() => import('@/pages/baro/QuoteBuilderPage'));
 const SalesHomePage = lazy(() => import('@/pages/baro/SalesHomePage'));
 const RFMBoardPage = lazy(() => import('@/pages/baro/RFMBoardPage'));
+const SalesSummaryPage = lazy(() => import('@/pages/baro/SalesSummaryPage'));
+const InverterGuidePage = lazy(() => import('@/pages/baro/InverterGuidePage'));
+const ShipmentNoticePage = lazy(() => import('@/pages/baro/ShipmentNoticePage'));
 const IncomingBoardPage = lazy(() => import('@/pages/baro/IncomingBoardPage'));
 const BaroPurchaseHistoryPage = lazy(() => import('@/pages/baro/BaroPurchaseHistoryPage'));
 const GroupPurchaseRequestPage = lazy(() => import('@/pages/baro/GroupPurchaseRequestPage'));
@@ -137,6 +140,9 @@ export default function App() {
                 <Route path="/baro/quote/new" element={<RoleGuard allowedRoles={['admin', 'operator']}><QuoteBuilderPage /></RoleGuard>} />
                 <Route path="/baro/home" element={<SalesHomePage />} />
                 <Route path="/baro/rfm" element={<RFMBoardPage />} />
+                <Route path="/baro/sales-summary" element={<RoleGuard allowedRoles={['admin', 'operator', 'executive']}><SalesSummaryPage /></RoleGuard>} />
+                <Route path="/baro/inverter-guide" element={<InverterGuidePage />} />
+                <Route path="/baro/shipment-notice" element={<ShipmentNoticePage />} />
                 <Route path="/baro/incoming" element={<IncomingBoardPage />} />
                 <Route path="/baro/purchase-history" element={<RoleGuard allowedRoles={['admin', 'operator', 'executive']}><BaroPurchaseHistoryPage /></RoleGuard>} />
                 <Route path="/baro/group-purchase" element={<RoleGuard allowedRoles={['admin', 'operator']}><GroupPurchaseRequestPage /></RoleGuard>} />

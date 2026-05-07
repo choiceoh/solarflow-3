@@ -52,6 +52,9 @@ export type MenuKey =
   | 'baro_quote'            // BARO: 통합 견적 빌더 (D-126)
   | 'baro_home'             // BARO: 영업 일일 홈 (D-127)
   | 'baro_rfm'              // BARO: 거래처 RFM 보드 (D-128)
+  | 'baro_sales_summary'    // BARO: 자체 매출 요약 (D-129)
+  | 'baro_inverter'         // BARO: 인버터 호환 가이드 (D-130)
+  | 'baro_shipment'         // BARO: 출하 알림 메시지 빌더 (D-131)
   | 'baro_inbox';           // 탑솔라: 바로 매입요청 inbox
 
 /** 기능 권한 키 */
@@ -87,7 +90,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
             'banking','customs','purchase_history','price_forecast','import_hub','library','masters','approval','assistant','crm_inbox',
-            'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_incoming','baro_purchase_history','baro_cockpit','baro_quote','baro_home','baro_rfm','baro_inbox',
+            'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_incoming','baro_purchase_history','baro_cockpit','baro_quote','baro_home','baro_rfm','baro_sales_summary','baro_inverter','baro_shipment','baro_inbox',
             'settings'],
     features: {
       canEdit: true,
@@ -102,7 +105,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   executive: {
     menus: ['inventory','orders','outbound','receipts','banking','customs','purchase_history','price_forecast','library','assistant','crm_inbox',
-            'baro_credit','baro_incoming','baro_purchase_history','baro_cockpit','baro_home','baro_rfm','settings'],
+            'baro_credit','baro_incoming','baro_purchase_history','baro_cockpit','baro_home','baro_rfm','baro_sales_summary','baro_inverter','settings'],
     features: {
       canEdit: false,
       showPrice: true,

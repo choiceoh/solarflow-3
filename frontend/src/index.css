@@ -2269,6 +2269,26 @@ textarea::placeholder {
 .sf-pill.ink   { background: var(--sf-ink); color: #fff; }
 .sf-pill.ghost { background: var(--sf-bg-2); color: var(--sf-ink-3); border: 1px solid var(--sf-line-2); font-weight: 500; }
 
+/* 의미 색상 유틸 — 인라인 style={{ color: 'var(--sf-pos)' }} 대신 사용
+   하드코딩 hex 금지. 새 의미가 필요하면 tokens.css 에 토큰 먼저 추가. */
+.sf-text-pos    { color: var(--sf-pos); }
+.sf-text-neg    { color: var(--sf-neg); }
+.sf-text-warn   { color: var(--sf-warn); }
+.sf-text-info   { color: var(--sf-info); }
+.sf-text-solar  { color: var(--sf-solar-3); }
+.sf-text-ink    { color: var(--sf-ink); }
+.sf-text-ink-2  { color: var(--sf-ink-2); }
+.sf-text-ink-3  { color: var(--sf-ink-3); }
+.sf-text-ink-4  { color: var(--sf-ink-4); }
+
+/* tone — 배경+글씨 페어. 작은 배지/플래그/아이콘 박스에 사용. */
+.sf-tone-pos   { background: var(--sf-pos-bg);   color: var(--sf-pos); }
+.sf-tone-neg   { background: var(--sf-neg-bg);   color: var(--sf-neg); }
+.sf-tone-warn  { background: var(--sf-warn-bg);  color: var(--sf-warn); }
+.sf-tone-info  { background: var(--sf-info-bg);  color: var(--sf-info); }
+.sf-tone-solar { background: var(--sf-solar-bg); color: var(--sf-solar-3); }
+.sf-tone-muted { background: var(--sf-bg-2);     color: var(--sf-ink-2); }
+
 /* 상태 dot */
 .sf-dot {
   display: inline-block;
