@@ -16,50 +16,23 @@
 
 ---
 
-## 2026-05-07 세션 — 출고/판매 안정화 1차
+## 2026-05-07 세션 — module 구매이력 UX + 정밀 딥링크 개선
 
 ### 완료
-- 출고 검색에서 응답 enrich 전용 필드인 `target_company_name`을 DB 컬럼처럼 참조하던 조건 제거
-  - 상대법인 검색은 `companies.company_name/company_code` 후보를 먼저 찾고 `outbounds.target_company_id IN (...)`으로 연결
-- 출고 Excel Import가 `outbounds` 직접 INSERT로 재고 검증과 RPC 트랜잭션을 우회하던 경로 수정
-  - `ImportHandler`에 Rust Engine 의존성을 주입
-  - 출고 Import도 `OutboundHandler.createOutboundCore`를 재사용해 Rust 재고 검증 + `sf_create_outbound` RPC + 감사로그 경로를 통과
-- 매출 기간 필터 기준 보강
-  - 세금계산서 발행 건은 `tax_invoice_date`, 미발행 건은 연결된 `outbound_date` 또는 `order_date`를 기준일로 사용
-  - 계산서 미발행 매출이 기간 필터에서 사라지는 회귀를 방지
-- 회귀 가드 추가
-  - 출고 검색의 enrich 전용 컬럼 참조 금지
-  - 출고 Import의 직접 INSERT 금지
-  - 매출 기준일 필터 pure 함수 테스트
+- module/cable `/purchase-history` 계약 체인 리스트에 현재 상태, 계약유형, MW, 연결 이벤트 수(LC/B/L/T/T)를 추가해 체인 선택 전 정보 밀도 보강
+- 우측 타임라인에 이벤트 종류별 필터 칩, 기간 필터 연동, 월별 그룹 헤더, 선택 체인 요약 패널 추가
+- 단가 이벤트는 `related_po_id`가 있으면 PO 상세로 연결하고, PO 미연결 단가 이력은 기존처럼 read-only 표시 유지
+- LC/B/L/T/T 이벤트 딥링크를 탭 단위에서 대상 ID 단위로 확장
+  - LC: `/procurement?tab=lc&lc_id=...` 진입 시 해당 LC 행 펼침 + 강조
+  - B/L: `/procurement?tab=bl&bl_id=...` 진입 시 B/L 상세 화면 오픈
+  - T/T: `/procurement?tab=tt&tt_id=...` 진입 시 해당 송금 행 강조
+- D-113 딥링크 운영 기준 문구를 실제 구현 상태에 맞게 갱신
 
 ### 검증
-- `cd backend && go test ./internal/handler` 성공
-- `cd backend && go test ./...` 성공
-- `cd backend && go vet ./...` 성공
-- `cd backend && go build ./...` 성공
-
----
-
-## 2026-05-07 세션 — B/L 입고 작업큐 개선
-
-### 완료
-- B/L 목록을 단순 표에서 운영 작업큐로 보강
-  - 처리 필요, ETA 7일 내, ERP 미등록 요약 카드 추가
-  - ETA 지연/임박, PO·LC 미연결, 입고품목 없음, 면장 확인, 환율 없음, ERP 미등록 경고 칩 표시
-- B/L 상세 기본정보 상단에 진행 흐름 타임라인 추가
-  - P/O → L/C → B/L → 입항 → 면장 → 입고 → ERP 단계별 상태 표시
-  - 해외직수입이 아닌 항목은 L/C·면장 단계를 대상 아님으로 분리
-- B/L 상세에 입고완료 전 체크 패널 추가
-  - P/O, 입고품목, 입고창고, L/C, 면장환율, 필수 서류, 아마란스 상태를 한 화면에서 확인
-  - B/L 서류 세트 업로드 후 체크 패널도 즉시 갱신
-- B/L 상태 변경 드롭다운을 D-083 흐름에 맞춰 다음 단계만 선택 가능하게 제한
-- Vitest worker timeout 회피를 위해 테스트 풀을 `vmThreads`로 고정하고, 원문 문자열만 확인하는 AppProviders 회귀 가드는 node 환경에서 실행하도록 조정
-
-### 검증
-- `cd frontend && npm ci` 성공 — 워크트리 의존성 복원
-- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 및 plugin timing warning 유지
-- `cd frontend && npm run test` 성공 — 8 files / 67 tests
-- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 65건 출력
+- `cd frontend && npm ci` 성공 — 이 worktree 로컬 의존성 복원
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건과 plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 68건 출력
+- `cd frontend && npm run test -- purchaseHistory` 및 직접 `vitest run src/lib/purchaseHistory.test.ts --pool=threads --maxWorkers=1 --no-fileParallelism`는 Vitest worker start timeout으로 실패 — 테스트 파일 실행 전 worker가 60초 내 응답하지 못한 환경성 실패
 
 ---
 

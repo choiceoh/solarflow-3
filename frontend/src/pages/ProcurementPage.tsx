@@ -67,6 +67,11 @@ import { BreakdownRows } from "@/components/command/BreakdownRows"
 import { flatSparkFromValue, monthlyTrend, monthlyCount } from "@/templates/sparkUtils"
 
 const PROCUREMENT_TABS = new Set(["po", "tt", "lc", "bl"])
+const PROCUREMENT_DETAIL_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+
+function safeDetailId(value: string | null): string | null {
+  return value && PROCUREMENT_DETAIL_ID_RE.test(value) ? value : null
+}
 
 const fxNumberFmt = new Intl.NumberFormat("en-US")
 
@@ -114,6 +119,8 @@ export default function ProcurementPage() {
   const navigate = useNavigate()
   const initialTab = new URLSearchParams(location.search).get("tab") ?? "po"
   const [activeTab, setActiveTab] = useState(PROCUREMENT_TABS.has(initialTab) ? initialTab : "po")
+  const focusLCId = safeDetailId(new URLSearchParams(location.search).get("lc_id"))
+  const focusTTId = safeDetailId(new URLSearchParams(location.search).get("tt_id"))
 
   // 단가 탭은 /purchase-history로 통합 — query param ?tab=price 진입 시 새 페이지로 리다이렉트
   useEffect(() => {
@@ -149,7 +156,7 @@ export default function ProcurementPage() {
   useEffect(() => {
     const targetId = new URLSearchParams(location.search).get("po_id")
     if (!targetId || poList.length === 0) return
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(targetId)) return
+    if (!safeDetailId(targetId)) return
     const target = poList.find((p) => p.po_id === targetId)
     if (target) setSelectedPO(target)
   }, [location.search, poList])
@@ -266,6 +273,12 @@ export default function ProcurementPage() {
       }),
     [pagedBls, blDateRange],
   )
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const targetId = safeDetailId(params.get("bl_id"))
+    if (!targetId || params.get("tab") !== "bl") return
+    setSelectedBL(targetId)
+  }, [location.search])
 
   const [depositMfgFilter, setDepositMfgFilter] = useState("")
 
@@ -840,21 +853,13 @@ export default function ProcurementPage() {
                   ) : lcLoading ? (
                     <SkeletonRows rows={8} />
                   ) : (
-                    <>
-                      <LCListTable
-                        items={lcRows}
-                        onSettle={handleSettleLC}
-                        onSelectBL={setSelectedBL}
-                        blsVersion={blsVersion}
-                      />
-                      <PaginationBar
-                        page={lcPage}
-                        pageSize={lcPageSize}
-                        total={lcTotal}
-                        onPageChange={setLcPage}
-                        onPageSizeChange={(s) => { setLcPageSize(s); setLcPage(1) }}
-                      />
-                    </>
+                    <LCListTable
+                      items={lcRows}
+                      onSettle={handleSettleLC}
+                      onSelectBL={setSelectedBL}
+                      blsVersion={blsVersion}
+                      focusLCId={focusLCId}
+                    />
                   )}
                 </TabsContent>
 
@@ -921,18 +926,7 @@ export default function ProcurementPage() {
                         ]}
                       />
                     </div>
-                    {ttLoading ? <LoadingSpinner /> : (
-                      <>
-                        <TTListTable items={tts} />
-                        <PaginationBar
-                          page={ttPage}
-                          pageSize={ttPageSize}
-                          total={ttTotal}
-                          onPageChange={setTtPage}
-                          onPageSizeChange={(s) => { setTtPageSize(s); setTtPage(1) }}
-                        />
-                      </>
-                    )}
+                    {ttLoading ? <LoadingSpinner /> : <TTListTable items={tts} focusTTId={focusTTId} />}
                   </div>
                 </TabsContent>
 
