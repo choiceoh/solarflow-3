@@ -283,7 +283,9 @@ POST    /api/v1/product-aliases/
 POST    /api/v1/products/
 POST    /api/v1/public/assistant/chat
 POST    /api/v1/receipt-matches/
+POST    /api/v1/receipt-matches/ai-suggest
 POST    /api/v1/receipt-matches/auto
+POST    /api/v1/receipt-matches/bulk
 POST    /api/v1/receipts/
 POST    /api/v1/receiving-logs/
 POST    /api/v1/sales/
