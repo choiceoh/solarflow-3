@@ -51,10 +51,20 @@ function CodeBlock({
   );
 }
 
+// react-markdown 의 Components 타입은 자식 컴포넌트별 props 가 광범위(union of HTML element props
+// + extra fields). strict tsconfig 에서 destructuring 시 implicit any 가 잡혀 빌드가 깨진다.
+// 각 핸들러에 RMProps 타입을 명시해 contextual inference 우회.
+type RMProps = {
+  children?: React.ReactNode;
+  className?: string;
+  href?: string;
+  node?: unknown;
+};
+
 const components: Components = {
   // pre 는 패스스루 — 실제 코드블록 렌더링은 code 핸들러에서 (CodeBlock 이 자체 pre 를 가짐).
-  pre: ({ children }) => <>{children}</>,
-  code: ({ className, children, ...props }) => {
+  pre: ({ children }: RMProps) => <>{children}</>,
+  code: ({ className, children, ...props }: RMProps) => {
     const match = /language-(\w+)/.exec(className || '');
     if (match) {
       return (
@@ -73,7 +83,7 @@ const components: Components = {
       </code>
     );
   },
-  a: ({ href, children }) => (
+  a: ({ href, children }: RMProps) => (
     <a
       href={href}
       target="_blank"
@@ -83,30 +93,30 @@ const components: Components = {
       {children}
     </a>
   ),
-  ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
-  ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
-  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-  table: ({ children }) => (
+  ul: ({ children }: RMProps) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+  ol: ({ children }: RMProps) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+  li: ({ children }: RMProps) => <li className="leading-relaxed">{children}</li>,
+  table: ({ children }: RMProps) => (
     <div className="my-2 overflow-x-auto">
       <table className="min-w-full border-collapse text-sm">{children}</table>
     </div>
   ),
-  th: ({ children }) => (
+  th: ({ children }: RMProps) => (
     <th className="border-b-2 border-border px-2 py-1 text-left font-semibold">{children}</th>
   ),
-  td: ({ children }) => <td className="border-b border-border/40 px-2 py-1 align-top">{children}</td>,
-  blockquote: ({ children }) => (
+  td: ({ children }: RMProps) => <td className="border-b border-border/40 px-2 py-1 align-top">{children}</td>,
+  blockquote: ({ children }: RMProps) => (
     <blockquote className="my-2 border-l-2 border-border pl-3 text-muted-foreground">
       {children}
     </blockquote>
   ),
-  h1: ({ children }) => <h1 className="mt-3 mb-2 text-lg font-bold">{children}</h1>,
-  h2: ({ children }) => <h2 className="mt-3 mb-2 text-base font-bold">{children}</h2>,
-  h3: ({ children }) => <h3 className="mt-2 mb-1 text-sm font-bold">{children}</h3>,
+  h1: ({ children }: RMProps) => <h1 className="mt-3 mb-2 text-lg font-bold">{children}</h1>,
+  h2: ({ children }: RMProps) => <h2 className="mt-3 mb-2 text-base font-bold">{children}</h2>,
+  h3: ({ children }: RMProps) => <h3 className="mt-2 mb-1 text-sm font-bold">{children}</h3>,
   hr: () => <hr className="my-3 border-border" />,
-  p: ({ children }) => <p className="leading-relaxed [&:not(:first-child)]:mt-2">{children}</p>,
-  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-  em: ({ children }) => <em className="italic">{children}</em>,
+  p: ({ children }: RMProps) => <p className="leading-relaxed [&:not(:first-child)]:mt-2">{children}</p>,
+  strong: ({ children }: RMProps) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }: RMProps) => <em className="italic">{children}</em>,
 };
 
 export function MessageMarkdown({ content }: { content: string }) {

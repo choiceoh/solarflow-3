@@ -105,6 +105,15 @@ func (h *BaroIncomingHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
+// BaroPartnerCockpitHandler — 거래처 360 (Partner Cockpit), BARO 전용 (D-125).
+// 한 거래처의 신용/최근 매출/CRM 미처리·활동을 한 응답으로 합쳐 인바운드 응대 화면.
+func (h *BaroPartnerCockpitHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/baro/partner-cockpit", func(r chi.Router) {
+		r.Use(g.Feature(feature.IDBaroPartnerCockpit))
+		r.Get("/{partner_id}", h.Get)
+	})
+}
+
 // BaroPurchaseHistoryHandler — BARO 자체 매입 원가/구매이력 (BR 법인만).
 func (h *BaroPurchaseHistoryHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/baro/purchase-history", func(r chi.Router) {
