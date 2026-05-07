@@ -1,11 +1,15 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/tenant"
@@ -13,7 +17,7 @@ import (
 
 // TestGetMatrix_TenantsAndDefaults — 응답에 모든 테넌트 + default catalog 가 그대로 반영된다.
 func TestGetMatrix_TenantsAndDefaults(t *testing.T) {
-	h := NewAdminFeatureWiringHandler(feature.NewResolver(nil))
+	h := NewAdminFeatureWiringHandler(nil, feature.NewResolver(nil))
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/feature-wiring/", nil)
 	rec := httptest.NewRecorder()
 
@@ -57,7 +61,7 @@ func TestGetMatrix_TenantsAndDefaults(t *testing.T) {
 
 // TestGetMatrix_DefaultEnablement — catalog default 가 실제 enabled 맵에 반영된다.
 func TestGetMatrix_DefaultEnablement(t *testing.T) {
-	h := NewAdminFeatureWiringHandler(feature.NewResolver(nil))
+	h := NewAdminFeatureWiringHandler(nil, feature.NewResolver(nil))
 	rec := httptest.NewRecorder()
 	h.GetMatrix(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -106,7 +110,7 @@ func TestGetMatrix_DefaultEnablement(t *testing.T) {
 func TestGetMatrix_OverrideReflected(t *testing.T) {
 	res := feature.NewResolver(nil)
 	res.SetOverride("baro", feature.IDTxLC, true)
-	h := NewAdminFeatureWiringHandler(res)
+	h := NewAdminFeatureWiringHandler(nil, res)
 
 	rec := httptest.NewRecorder()
 	h.GetMatrix(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -131,4 +135,67 @@ func findFeature(features []AdminFeatureSummary, id string) *AdminFeatureSummary
 		}
 	}
 	return nil
+}
+
+// TestValidateSetEnabled_Cases — PR-5b: PUT 핸들러 검증 함수의 4가지 분기.
+func TestValidateSetEnabled_Cases(t *testing.T) {
+	h := NewAdminFeatureWiringHandler(nil, feature.NewResolver(nil))
+	cases := []struct {
+		name      string
+		tenant    string
+		feature   string
+		wantError error
+	}{
+		{name: "valid", tenant: string(tenant.IDTopsolar), feature: string(feature.IDTxLC), wantError: nil},
+		{name: "unknown tenant", tenant: "gx10", feature: string(feature.IDTxLC), wantError: errUnknownTenant},
+		{name: "unknown feature", tenant: string(tenant.IDBaro), feature: "tx.fake", wantError: errUnknownFeature},
+		{name: "blank tenant", tenant: "", feature: string(feature.IDTxLC), wantError: errUnknownTenant},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := h.validateSetEnabled(tc.tenant, tc.feature)
+			if err != tc.wantError {
+				t.Fatalf("기대 %v, 실제 %v", tc.wantError, err)
+			}
+		})
+	}
+}
+
+// TestSetEnabled_NoDB_Returns503 — DB 가 nil 이면 PUT 가 503 으로 막힌다.
+func TestSetEnabled_NoDB_Returns503(t *testing.T) {
+	h := NewAdminFeatureWiringHandler(nil, feature.NewResolver(nil))
+
+	body := strings.NewReader(`{"enabled":true}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/feature-wiring/baro/tx.lc", body)
+	// chi URLParam 은 라우터를 통과해야 채워지지만, 검증을 통과한 후 DB nil 가드만 확인하므로
+	// chi.RouteContext 에 직접 채운다.
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("tenantID", "baro")
+	rctx.URLParams.Add("featureID", "tx.lc")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rec := httptest.NewRecorder()
+
+	h.SetEnabled(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("기대 503, 실제 %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestSetEnabled_UnknownTenant_Returns404 — 미등록 tenant 면 DB 호출 전에 404.
+func TestSetEnabled_UnknownTenant_Returns404(t *testing.T) {
+	h := NewAdminFeatureWiringHandler(nil, feature.NewResolver(nil))
+
+	body := strings.NewReader(`{"enabled":true}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/feature-wiring/gx10/tx.lc", body)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("tenantID", "gx10")
+	rctx.URLParams.Add("featureID", "tx.lc")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rec := httptest.NewRecorder()
+
+	h.SetEnabled(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("기대 404, 실제 %d", rec.Code)
+	}
 }
