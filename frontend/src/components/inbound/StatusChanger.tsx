@@ -31,17 +31,24 @@ export default function StatusChanger({ blId, currentStatus, inboundType, onChan
 
   // D-083: 입고유형에 따라 상태 드롭다운 항목 필터링. 현재 상태가 기본 표시.
   const allowed = STATUS_BY_TYPE[inboundType] ?? STATUS_BY_TYPE.import;
+  const currentIndex = allowed.indexOf(currentStatus);
+  const nextStatus = currentIndex >= 0 ? allowed[currentIndex + 1] : null;
 
   return (
     <>
-      <Select value={currentStatus} onValueChange={(v) => { if (v && v !== currentStatus) setTarget(v as BLStatus); }}>
+      <Select
+        value={currentStatus}
+        disabled={!nextStatus}
+        onValueChange={(v) => { if (v && v !== currentStatus) setTarget(v as BLStatus); }}
+      >
         <SelectTrigger className="h-7 w-28 text-xs">
           <span className="flex flex-1 text-left truncate" data-slot="select-value">{statusLabel(inboundType, currentStatus)}</span>
         </SelectTrigger>
         <SelectContent>
-          {allowed.map(s => (
-            <SelectItem key={s} value={s}>{statusLabel(inboundType, s)}</SelectItem>
-          ))}
+          <SelectItem value={currentStatus} disabled>{statusLabel(inboundType, currentStatus)}</SelectItem>
+          {nextStatus ? (
+            <SelectItem value={nextStatus}>{statusLabel(inboundType, nextStatus)}</SelectItem>
+          ) : null}
         </SelectContent>
       </Select>
       <ConfirmDialog

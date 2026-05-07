@@ -40,6 +40,29 @@
 
 ---
 
+## 2026-05-07 세션 — B/L 입고 작업큐 개선
+
+### 완료
+- B/L 목록을 단순 표에서 운영 작업큐로 보강
+  - 처리 필요, ETA 7일 내, ERP 미등록 요약 카드 추가
+  - ETA 지연/임박, PO·LC 미연결, 입고품목 없음, 면장 확인, 환율 없음, ERP 미등록 경고 칩 표시
+- B/L 상세 기본정보 상단에 진행 흐름 타임라인 추가
+  - P/O → L/C → B/L → 입항 → 면장 → 입고 → ERP 단계별 상태 표시
+  - 해외직수입이 아닌 항목은 L/C·면장 단계를 대상 아님으로 분리
+- B/L 상세에 입고완료 전 체크 패널 추가
+  - P/O, 입고품목, 입고창고, L/C, 면장환율, 필수 서류, 아마란스 상태를 한 화면에서 확인
+  - B/L 서류 세트 업로드 후 체크 패널도 즉시 갱신
+- B/L 상태 변경 드롭다운을 D-083 흐름에 맞춰 다음 단계만 선택 가능하게 제한
+- Vitest worker timeout 회피를 위해 테스트 풀을 `vmThreads`로 고정하고, 원문 문자열만 확인하는 AppProviders 회귀 가드는 node 환경에서 실행하도록 조정
+
+### 검증
+- `cd frontend && npm ci` 성공 — 워크트리 의존성 복원
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 및 plugin timing warning 유지
+- `cd frontend && npm run test` 성공 — 8 files / 67 tests
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 65건 출력
+
+---
+
 ## 2026-05-07 세션 — 가격예측 벤치마크 + AI 수집 화면
 
 ### 완료

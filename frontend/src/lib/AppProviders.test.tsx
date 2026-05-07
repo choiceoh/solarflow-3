@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import providerSrc from './AppProviders.tsx?raw';
 import mainSrc from '../main.tsx?raw';
