@@ -187,20 +187,41 @@ function formatDiffValue(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// audit_logs.old_data/new_data를 비교하여 변경 필드만 "field: old → new" 문자열 배열로 반환.
-export function diffAuditFields(oldData: unknown, newData: unknown): string[] {
+export interface AuditDiffItem {
+  field: string;
+  label: string;
+  before: string;
+  after: string;
+  text: string;
+}
+
+// audit_logs.old_data/new_data를 비교하여 변경 필드만 구조화해서 반환.
+export function diffAuditFieldItems(oldData: unknown, newData: unknown): AuditDiffItem[] {
   if (!oldData || !newData || typeof oldData !== 'object' || typeof newData !== 'object') return [];
   const oldObj = oldData as Record<string, unknown>;
   const newObj = newData as Record<string, unknown>;
   const keys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)]);
-  const diffs: string[] = [];
+  const diffs: AuditDiffItem[] = [];
   for (const k of keys) {
     if (AUDIT_DIFF_SKIP_FIELDS.has(k)) continue;
     const before = oldObj[k];
     const after = newObj[k];
     if (JSON.stringify(before) === JSON.stringify(after)) continue;
     const label = AUDIT_DIFF_FIELD_LABEL[k] ?? k;
-    diffs.push(`${label}: ${formatDiffValue(before)} → ${formatDiffValue(after)}`);
+    const beforeText = formatDiffValue(before);
+    const afterText = formatDiffValue(after);
+    diffs.push({
+      field: k,
+      label,
+      before: beforeText,
+      after: afterText,
+      text: `${label}: ${beforeText} → ${afterText}`,
+    });
   }
   return diffs;
+}
+
+// audit_logs.old_data/new_data를 비교하여 변경 필드만 "field: old → new" 문자열 배열로 반환.
+export function diffAuditFields(oldData: unknown, newData: unknown): string[] {
+  return diffAuditFieldItems(oldData, newData).map((item) => item.text);
 }

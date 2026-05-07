@@ -1,13 +1,13 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Ban, ClipboardList, DollarSign, FileEdit, FileSignature, FilterX, History, Landmark, Search, Send, Ship } from 'lucide-react';
+import { AlertTriangle, Ban, CheckCircle2, ClipboardList, DollarSign, Download, FileEdit, FileSignature, FilterX, History, Landmark, Search, Send, ShieldCheck, Ship } from 'lucide-react';
 
 import { useAppStore } from '@/stores/appStore';
 import { usePOList, usePriceHistoryList, useLCList, useTTList } from '@/hooks/useProcurement';
 import { useBLList } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
-import { buildChains, diffAuditFields, eventDeepLink, isValidChainParam, sanitizeAuditLogs, type Chain, type EventKind, type SafeAuditLog } from '@/lib/purchaseHistory';
+import { buildChains, diffAuditFieldItems, eventDeepLink, isValidChainParam, sanitizeAuditLogs, type AuditDiffItem, type Chain, type EventKind, type SafeAuditLog } from '@/lib/purchaseHistory';
 import EmptyState from '@/components/common/EmptyState';
 import { CardB, FilterButton, FilterChips, TileB, type DateRangeValue } from '@/components/command/MockupPrimitives';
 import { monthlyCount, flatSparkFromValue } from '@/templates/sparkUtils';
@@ -29,9 +29,16 @@ interface TimelineEvent {
   title: string;
   subtitle?: string;
   detail?: string;
+  sourceLabel: string;
+  sourceTable: string;
+  sourceId: string;
+  actor?: string;
+  diffs?: AuditDiffItem[];
+  statusLabel?: string;
 }
 
 type EventFilter = 'all' | EventKind;
+type WatchTone = 'ok' | 'info' | 'warn' | 'danger';
 
 const EVENT_KIND_LABEL: Record<EventKind, string> = {
   po_create: 'PO 생성',
@@ -84,6 +91,210 @@ function countByKind(events: TimelineEvent[]): Record<EventKind, number> {
   return out;
 }
 
+function shortId(id: string | undefined | null): string {
+  return id ? id.slice(0, 8) : '—';
+}
+
+function daysSince(date: string | undefined): number | null {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const d = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  const diff = Date.now() - d.getTime();
+  return Math.max(0, Math.floor(diff / 86_400_000));
+}
+
+function csvCell(value: unknown): string {
+  const s = String(value ?? '').replace(/\r?\n/g, ' ').trim();
+  return /[",]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function safeFilePart(value: string | undefined): string {
+  const safe = (value ?? 'recent').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
+  return safe || 'recent';
+}
+
+function buildTimelineCsv(events: TimelineEvent[]): string {
+  const rows = [
+    ['date', 'event_kind', 'title', 'subtitle', 'detail', 'source_table', 'source_id', 'actor', 'po_id', 'chain_id'],
+    ...events.map((evt) => [
+      evt.date,
+      EVENT_KIND_LABEL[evt.kind],
+      evt.title,
+      evt.subtitle ?? '',
+      [evt.detail, ...(evt.diffs?.map((d) => d.text) ?? [])].filter(Boolean).join(' / '),
+      evt.sourceTable,
+      evt.sourceId,
+      evt.actor ?? '',
+      evt.po_id ?? '',
+      evt.chain_id,
+    ]),
+  ];
+  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+}
+
+function downloadTimelineCsv(events: TimelineEvent[], selectedChain: Chain | null) {
+  if (events.length === 0 || typeof document === 'undefined') return;
+  const csv = buildTimelineCsv(events);
+  const label = safeFilePart(selectedChain?.head.po_number ?? selectedChain?.chain_id.slice(0, 8));
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `purchase-history-${label}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function eventSearchText(evt: TimelineEvent): string {
+  return [
+    evt.date,
+    EVENT_KIND_LABEL[evt.kind],
+    evt.title,
+    evt.subtitle ?? '',
+    evt.detail ?? '',
+    evt.sourceLabel,
+    evt.sourceTable,
+    evt.sourceId,
+    evt.actor ?? '',
+    evt.statusLabel ?? '',
+    evt.diffs?.map((d) => d.text).join(' ') ?? '',
+  ].join(' ').toLowerCase();
+}
+
+interface ChainWatchItem {
+  tone: WatchTone;
+  title: string;
+  detail: string;
+}
+
+interface ChainAuditProfile {
+  auditCount: number;
+  diffCount: number;
+  actorCount: number;
+  lastAuditDate?: string;
+  lastActor?: string;
+  manualPriceCount: number;
+  sourceRowCount: number;
+  watchItems: ChainWatchItem[];
+  warningCount: number;
+}
+
+function auditActor(a: SafeAuditLog): string {
+  return a.user_email ?? a.user_id ?? '시스템';
+}
+
+function buildChainAuditProfile(chain: Chain, src: EventSources, events: TimelineEvent[]): ChainAuditProfile {
+  const poIds = new Set(chain.pos.map((p) => p.po_id));
+  const current = latestPO(chain);
+  const chainAudits = src.audits
+    .filter((a) => a.entity_type === 'purchase_orders' && poIds.has(a.entity_id))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const diffCount = chainAudits.reduce((sum, a) => sum + diffAuditFieldItems(a.old_data, a.new_data).length, 0);
+  const actors = new Set(chainAudits.map(auditActor).filter(Boolean));
+  const manualPriceCount = src.phs.filter((ph) => !ph.related_po_id && ph.manufacturer_id === chain.manufacturer_id).length;
+  const linkedLCs = src.lcs.filter((lc) => poIds.has(lc.po_id));
+  const linkedBLs = src.bls.filter((bl) => bl.po_id && poIds.has(bl.po_id));
+  const linkedTTs = src.tts.filter((tt) => poIds.has(tt.po_id));
+  const openLCs = linkedLCs.filter((lc) => lc.status !== 'settled' && lc.status !== 'cancelled' && !lc.repaid);
+  const plannedTTs = linkedTTs.filter((tt) => tt.status === 'planned');
+  const activeBLs = linkedBLs.filter((bl) => bl.status !== 'completed' && bl.status !== 'erp_done');
+  const latestEventDate = events[0]?.date;
+  const quietDays = daysSince(latestEventDate);
+  const watchItems: ChainWatchItem[] = [];
+
+  if (current.status === 'cancelled') {
+    watchItems.push({
+      tone: 'danger',
+      title: '취소 이력 보존',
+      detail: '실제 삭제가 아니라 soft cancel 상태와 감사로그로 남아 있습니다.',
+    });
+  }
+  if (chain.pos.length > 1) {
+    watchItems.push({
+      tone: 'info',
+      title: `변경계약 ${chain.pos.length - 1}건`,
+      detail: '원계약부터 최신 변경계약까지 같은 체인에서 이어 봅니다.',
+    });
+  }
+  if (chainAudits.length > 0) {
+    watchItems.push({
+      tone: 'info',
+      title: `PO 변경 감사 ${chainAudits.length}건`,
+      detail: `${actors.size || 1}개 주체가 ${diffCount}개 필드를 변경했습니다.`,
+    });
+  }
+  if (manualPriceCount > 0) {
+    watchItems.push({
+      tone: 'warn',
+      title: `PO 미연결 단가 ${manualPriceCount}건`,
+      detail: '제조사 기준 컨텍스트입니다. 계약 단가로 확정하려면 관련 PO 연결 여부를 확인해야 합니다.',
+    });
+  }
+  if (openLCs.length > 0) {
+    watchItems.push({
+      tone: 'warn',
+      title: `미결제 L/C ${openLCs.length}건`,
+      detail: '개설 후 결제 또는 상환 완료 표시가 아직 없습니다.',
+    });
+  }
+  if (plannedTTs.length > 0) {
+    watchItems.push({
+      tone: 'warn',
+      title: `예정 T/T ${plannedTTs.length}건`,
+      detail: '송금 예정 상태가 남아 있습니다.',
+    });
+  }
+  if (activeBLs.length > 0) {
+    watchItems.push({
+      tone: 'warn',
+      title: `진행 중 B/L ${activeBLs.length}건`,
+      detail: '입고 완료 또는 ERP 등록 전 상태가 있습니다.',
+    });
+  }
+  if (linkedLCs.length === 0 && linkedTTs.length === 0 && current.status !== 'draft') {
+    watchItems.push({
+      tone: 'warn',
+      title: '금융 이력 없음',
+      detail: '계약 이후 L/C 또는 T/T 연결이 아직 없습니다.',
+    });
+  }
+  if (linkedBLs.length === 0 && current.status !== 'draft' && current.status !== 'cancelled') {
+    watchItems.push({
+      tone: 'info',
+      title: 'B/L 이력 없음',
+      detail: '선적 전 계약이면 정상입니다. 선적 이후라면 B/L 연결을 확인하세요.',
+    });
+  }
+  if (quietDays != null && quietDays >= 90 && current.status !== 'completed' && current.status !== 'cancelled') {
+    watchItems.push({
+      tone: 'warn',
+      title: `${quietDays}일 무변동`,
+      detail: '최근 이벤트가 90일 이상 없습니다. 진행 상태가 최신인지 확인하세요.',
+    });
+  }
+  if (watchItems.length === 0) {
+    watchItems.push({
+      tone: 'ok',
+      title: '점검 포인트 없음',
+      detail: '현재 화면에 들어온 이력 기준으로 즉시 확인할 항목이 없습니다.',
+    });
+  }
+
+  return {
+    auditCount: chainAudits.length,
+    diffCount,
+    actorCount: actors.size,
+    lastAuditDate: chainAudits[0]?.created_at.slice(0, 10),
+    lastActor: chainAudits[0] ? auditActor(chainAudits[0]) : undefined,
+    manualPriceCount,
+    sourceRowCount: new Set(events.map((evt) => `${evt.sourceTable}:${evt.sourceId}`)).size,
+    watchItems,
+    warningCount: watchItems.filter((item) => item.tone === 'warn' || item.tone === 'danger').length,
+  };
+}
+
 function poEvents(po: PurchaseOrder, chain: Chain): TimelineEvent[] {
   const events: TimelineEvent[] = [];
   const date = po.contract_date ?? '';
@@ -101,6 +312,10 @@ function poEvents(po: PurchaseOrder, chain: Chain): TimelineEvent[] {
       title: `PO 생성 — ${poLabel}`,
       subtitle: [typeLabel, mwLabel, PO_STATUS_LABEL[po.status]].filter(Boolean).join(' · '),
       detail: po.payment_terms ?? po.incoterms,
+      sourceLabel: 'PO',
+      sourceTable: 'purchase_orders',
+      sourceId: po.po_id,
+      statusLabel: PO_STATUS_LABEL[po.status],
     });
   } else {
     const parentLabel = chain.pos.find((p) => p.po_id === po.parent_po_id)?.po_number ?? po.parent_po_id.slice(0, 8);
@@ -113,6 +328,10 @@ function poEvents(po: PurchaseOrder, chain: Chain): TimelineEvent[] {
       title: `변경계약 등록 — ${poLabel}`,
       subtitle: `원계약 ${parentLabel}${mwLabel ? ` · ${mwLabel}` : ''}`,
       detail: po.payment_terms ?? po.incoterms,
+      sourceLabel: 'PO',
+      sourceTable: 'purchase_orders',
+      sourceId: po.po_id,
+      statusLabel: PO_STATUS_LABEL[po.status],
     });
   }
   return events;
@@ -140,6 +359,9 @@ function priceEvents(phs: PriceHistory[], poIds: Set<string>, chainId: string, m
         title: `단가 ${isManual ? '수동 등록' : '등록'} — ${product}`,
         subtitle: `${arrow} USD/Wp${ph.reason ? ` · ${ph.reason}` : ''}${isManual ? ' · [PO 미연결]' : ''}`,
         detail: ph.memo,
+        sourceLabel: '단가',
+        sourceTable: 'price_histories',
+        sourceId: ph.price_history_id,
       };
     });
 }
@@ -160,6 +382,10 @@ function lcEvents(lcs: LCRecord[], poIds: Set<string>, chainId: string): Timelin
         lc_id: lc.lc_id,
         title: `L/C 개설 — ${lcLabel}`,
         subtitle: [lc.bank_name ?? '은행 미지정', amountLabel, LC_STATUS_LABEL[lc.status]].filter(Boolean).join(' · '),
+        sourceLabel: 'L/C',
+        sourceTable: 'lc_records',
+        sourceId: lc.lc_id,
+        statusLabel: LC_STATUS_LABEL[lc.status],
       });
     }
     const settleDate = lc.repayment_date ?? lc.settlement_date;
@@ -173,6 +399,10 @@ function lcEvents(lcs: LCRecord[], poIds: Set<string>, chainId: string): Timelin
         lc_id: lc.lc_id,
         title: `L/C 결제 — ${lcLabel}`,
         subtitle: [lc.bank_name, amountLabel].filter(Boolean).join(' · '),
+        sourceLabel: 'L/C',
+        sourceTable: 'lc_records',
+        sourceId: lc.lc_id,
+        statusLabel: LC_STATUS_LABEL[lc.status],
       });
     }
   }
@@ -196,6 +426,10 @@ function blEvents(bls: BLShipment[], poIds: Set<string>, chainId: string): Timel
       title: `B/L ${BL_STATUS_LABEL[bl.status] ?? bl.status} — ${bl.bl_number}`,
       subtitle: [portLabel, bl.forwarder].filter(Boolean).join(' · ') || undefined,
       detail: bl.warehouse_name ? `창고: ${bl.warehouse_name}` : undefined,
+      sourceLabel: 'B/L',
+      sourceTable: 'bl_shipments',
+      sourceId: bl.bl_id,
+      statusLabel: BL_STATUS_LABEL[bl.status] ?? bl.status,
     });
   }
   return events;
@@ -216,6 +450,10 @@ function ttEvents(tts: TTRemittance[], poIds: Set<string>, chainId: string): Tim
         tt_id: tt.tt_id,
         title: `T/T 송금 — ${amount || tt.tt_id.slice(0, 8)}`,
         subtitle: [purpose, tt.bank_name, tt.status === 'planned' ? '예정' : '완료'].filter(Boolean).join(' · ') || undefined,
+        sourceLabel: 'T/T',
+        sourceTable: 'tt_remittances',
+        sourceId: tt.tt_id,
+        statusLabel: tt.status === 'planned' ? '예정' : '완료',
       };
     });
 }
@@ -237,10 +475,14 @@ function auditEvents(audits: SafeAuditLog[], poIds: Set<string>, chainId: string
         po_id: a.entity_id,
         title: 'PO 취소 (soft cancel)',
         subtitle: user,
+        sourceLabel: '감사',
+        sourceTable: 'audit_logs',
+        sourceId: a.audit_id,
+        actor: user,
       });
       continue;
     }
-    const diffs = diffAuditFields(a.old_data, a.new_data);
+    const diffs = diffAuditFieldItems(a.old_data, a.new_data);
     events.push({
       id: `audit-${a.audit_id}`,
       kind: 'po_update',
@@ -249,7 +491,12 @@ function auditEvents(audits: SafeAuditLog[], poIds: Set<string>, chainId: string
       po_id: a.entity_id,
       title: diffs.length > 0 ? `PO 변경 — ${diffs.length}개 필드` : 'PO 필드 변경',
       subtitle: user,
-      detail: diffs.length > 0 ? diffs.slice(0, 3).join(' · ') + (diffs.length > 3 ? ` 외 ${diffs.length - 3}건` : '') : undefined,
+      detail: diffs.length > 0 ? diffs.slice(0, 3).map((d) => d.text).join(' · ') + (diffs.length > 3 ? ` 외 ${diffs.length - 3}건` : '') : undefined,
+      sourceLabel: '감사',
+      sourceTable: 'audit_logs',
+      sourceId: a.audit_id,
+      actor: user,
+      diffs,
     });
   }
   return events;
@@ -309,6 +556,9 @@ function buildRecentEvents(chains: Chain[], src: EventSources, limit: number): T
       title: `단가 수동 등록 — ${product}`,
       subtitle: `${arrow} USD/Wp · [PO 미연결]`,
       detail: ph.memo,
+      sourceLabel: '단가',
+      sourceTable: 'price_histories',
+      sourceId: ph.price_history_id,
     });
   }
   events.sort((a, b) => b.date.localeCompare(a.date));
@@ -358,6 +608,7 @@ export default function PurchaseHistoryPage() {
   const [mfgFilter, setMfgFilter] = useState('');
   const [dateRange, setDateRange] = useState<DateRangeValue>(null);
   const [search, setSearch] = useState('');
+  const [eventSearch, setEventSearch] = useState('');
   const [eventFilter, setEventFilter] = useState<EventFilter>('all');
   const manufacturers = useAppStore((s) => s.manufacturers);
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
@@ -460,10 +711,15 @@ export default function PurchaseHistoryPage() {
 
   const events = useMemo(
     () => {
-      const filtered = dateScopedEvents.filter((evt) => eventFilter === 'all' || evt.kind === eventFilter);
+      const q = eventSearch.trim().toLowerCase();
+      const filtered = dateScopedEvents.filter((evt) => {
+        if (eventFilter !== 'all' && evt.kind !== eventFilter) return false;
+        if (!q) return true;
+        return eventSearchText(evt).includes(q);
+      });
       return selectedChain ? filtered : filtered.slice(0, RECENT_LIMIT);
     },
-    [dateScopedEvents, eventFilter, selectedChain],
+    [dateScopedEvents, eventFilter, eventSearch, selectedChain],
   );
 
   const eventGroups = useMemo(() => {
@@ -481,19 +737,27 @@ export default function PurchaseHistoryPage() {
   }, [events]);
 
   const chainStats = useMemo(() => {
-    const out = new Map<string, { eventCount: number; latestEventDate?: string; lcCount: number; blCount: number; ttCount: number }>();
+    const out = new Map<string, { eventCount: number; latestEventDate?: string; lcCount: number; blCount: number; ttCount: number; auditCount: number; watchCount: number }>();
     for (const chain of chains) {
       const chainEvents = buildChainEvents(chain, sources);
+      const profile = buildChainAuditProfile(chain, sources, chainEvents);
       out.set(chain.chain_id, {
         eventCount: chainEvents.length,
         latestEventDate: chainEvents[0]?.date,
         lcCount: chainEvents.filter((evt) => evt.kind === 'lc_open' || evt.kind === 'lc_settle').length,
         blCount: chainEvents.filter((evt) => evt.kind === 'bl_event').length,
         ttCount: chainEvents.filter((evt) => evt.kind === 'tt_send').length,
+        auditCount: profile.auditCount,
+        watchCount: profile.warningCount,
       });
     }
     return out;
   }, [chains, sources]);
+
+  const selectedProfile = useMemo(
+    () => (selectedChain ? buildChainAuditProfile(selectedChain, sources, rawEvents) : null),
+    [selectedChain, sources, rawEvents],
+  );
 
   const variantCount = useMemo(() => chains.reduce((sum, c) => sum + (c.pos.length - 1), 0), [chains]);
   const chainsWithVariants = useMemo(() => chains.filter((c) => c.pos.length > 1).length, [chains]);
@@ -630,6 +894,14 @@ export default function PurchaseHistoryPage() {
                           이벤트 {stat?.eventCount ?? 0} · LC {stat?.lcCount ?? 0} · BL {stat?.blCount ?? 0} · TT {stat?.ttCount ?? 0}
                         </span>
                       </div>
+                      <div className="sf-ph-chain-audit-row">
+                        <span className="mono">감사 {stat?.auditCount ?? 0}</span>
+                        {stat && stat.watchCount > 0 ? (
+                          <span className="sf-ph-chain-watch-badge">점검 {stat.watchCount}</span>
+                        ) : (
+                          <span className="sf-ph-chain-ok-badge">이상 없음</span>
+                        )}
+                      </div>
                     </button>
                   </li>
                 );
@@ -662,13 +934,35 @@ export default function PurchaseHistoryPage() {
               value={eventFilter}
               onChange={(value) => setEventFilter(value as EventFilter)}
             />
-            {(eventFilter !== 'all' || dateRange) && (
+            <div className="sf-ph-timeline-actions">
+              <div className="sf-ph-event-search">
+                <Search aria-hidden="true" />
+                <input
+                  type="text"
+                  value={eventSearch}
+                  onChange={(e) => setEventSearch(e.target.value)}
+                  placeholder="이벤트 검색"
+                  aria-label="타임라인 이벤트 검색"
+                />
+              </div>
+              <button
+                type="button"
+                className="sf-ph-export-btn"
+                onClick={() => downloadTimelineCsv(events, selectedChain)}
+                disabled={events.length === 0}
+              >
+                <Download aria-hidden="true" />
+                CSV
+              </button>
+            </div>
+            {(eventFilter !== 'all' || dateRange || eventSearch.trim()) && (
               <button
                 type="button"
                 className="sf-ph-reset-btn"
                 onClick={() => {
                   setEventFilter('all');
                   setDateRange(null);
+                  setEventSearch('');
                 }}
               >
                 <FilterX aria-hidden="true" />
@@ -706,6 +1000,45 @@ export default function PurchaseHistoryPage() {
                   </>
                 );
               })()}
+            </div>
+          )}
+          {selectedChain && selectedProfile && (
+            <div className="sf-ph-audit-panel">
+              <div className="sf-ph-audit-metrics">
+                <div>
+                  <div className="eyebrow">감사 로그</div>
+                  <div className="sf-ph-audit-value">{selectedProfile.auditCount}건</div>
+                  <div className="sf-ph-audit-sub">변경 필드 {selectedProfile.diffCount}개</div>
+                </div>
+                <div>
+                  <div className="eyebrow">변경 주체</div>
+                  <div className="sf-ph-audit-value">{selectedProfile.actorCount || 0}</div>
+                  <div className="sf-ph-audit-sub">{selectedProfile.lastActor ?? '기록 없음'}</div>
+                </div>
+                <div>
+                  <div className="eyebrow">원천 행</div>
+                  <div className="sf-ph-audit-value">{selectedProfile.sourceRowCount}개</div>
+                  <div className="sf-ph-audit-sub">최근 감사 {selectedProfile.lastAuditDate ?? '—'}</div>
+                </div>
+                <div>
+                  <div className="eyebrow">점검</div>
+                  <div className="sf-ph-audit-value">{selectedProfile.warningCount}건</div>
+                  <div className="sf-ph-audit-sub">주의·확인 항목</div>
+                </div>
+              </div>
+              <div className="sf-ph-watch-list" aria-label="구매 이력 점검 포인트">
+                {selectedProfile.watchItems.map((item) => (
+                  <div key={`${item.tone}-${item.title}`} className="sf-ph-watch-item" data-tone={item.tone}>
+                    <div className="sf-ph-watch-icon">
+                      {item.tone === 'ok' ? <CheckCircle2 aria-hidden="true" /> : item.tone === 'info' ? <ShieldCheck aria-hidden="true" /> : <AlertTriangle aria-hidden="true" />}
+                    </div>
+                    <div>
+                      <div className="sf-ph-watch-title">{item.title}</div>
+                      <div className="sf-ph-watch-detail">{item.detail}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           {loading ? (
@@ -758,6 +1091,27 @@ export default function PurchaseHistoryPage() {
                               </div>
                               {evt.subtitle && <div className="sf-ph-event-subtitle">{evt.subtitle}</div>}
                               {evt.detail && <div className="sf-ph-event-detail">{evt.detail}</div>}
+                              <div className="sf-ph-event-trace">
+                                <span title={evt.sourceTable}>{evt.sourceLabel}</span>
+                                <span className="mono">{shortId(evt.sourceId)}</span>
+                                {evt.actor && <span>{evt.actor}</span>}
+                                {evt.statusLabel && <span>{evt.statusLabel}</span>}
+                              </div>
+                              {evt.diffs && evt.diffs.length > 0 && (
+                                <div className="sf-ph-event-diffs" aria-label="변경 전후 값">
+                                  {evt.diffs.slice(0, 6).map((diff) => (
+                                    <div key={diff.field} className="sf-ph-event-diff">
+                                      <span>{diff.label}</span>
+                                      <span className="mono">{diff.before}</span>
+                                      <span aria-hidden="true">→</span>
+                                      <span className="mono">{diff.after}</span>
+                                    </div>
+                                  ))}
+                                  {evt.diffs.length > 6 && (
+                                    <div className="sf-ph-event-diff-more">외 {evt.diffs.length - 6}개 필드</div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </Tag>
                         </li>

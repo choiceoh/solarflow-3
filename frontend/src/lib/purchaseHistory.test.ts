@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   buildChains,
+  diffAuditFieldItems,
   diffAuditFields,
   eventDeepLink,
   findChainHeadId,
@@ -147,6 +148,31 @@ describe('diffAuditFields', () => {
     const diffs = diffAuditFields({ memo: '' }, { memo: longStr });
     expect(diffs[0]).toContain('…');
     expect(diffs[0]).not.toContain(longStr);
+  });
+});
+
+describe('diffAuditFieldItems', () => {
+  it('keeps structured before/after values for audit detail rendering', () => {
+    const items = diffAuditFieldItems(
+      { status: 'draft', payment_terms: '30/70' },
+      { status: 'contracted', payment_terms: '50/50' },
+    );
+    expect(items).toEqual([
+      {
+        field: 'status',
+        label: '상태',
+        before: 'draft',
+        after: 'contracted',
+        text: '상태: draft → contracted',
+      },
+      {
+        field: 'payment_terms',
+        label: '결제조건',
+        before: '30/70',
+        after: '50/50',
+        text: '결제조건: 30/70 → 50/50',
+      },
+    ]);
   });
 });
 
