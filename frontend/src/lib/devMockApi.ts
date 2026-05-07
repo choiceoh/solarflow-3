@@ -4,6 +4,7 @@ type MockRow = Record<string, unknown>;
 type CompanyScoped = MockRow & { company_id?: string };
 
 const nowIso = '2026-05-01T00:00:00.000Z';
+const deletedPriceBenchmarkIds = new Set<string>();
 
 const companies = [
   { company_id: 'company-topsolar', company_name: '탑솔라', company_code: 'TOP', business_number: '123-81-45678', is_active: true },
@@ -475,17 +476,25 @@ function marginAnalysisResponse() {
       total_revenue_krw: revenue,
       total_cost_krw: cost,
       total_margin_krw: revenue - cost,
+      cost_covered_revenue_krw: revenue,
+      cost_missing_revenue_krw: 0,
       sale_count: 1,
     };
   });
+  const totalRevenue = items.reduce((sum, item) => sum + item.total_revenue_krw, 0);
+  const totalCost = items.reduce((sum, item) => sum + Number(item.total_cost_krw ?? 0), 0);
+  const totalMargin = items.reduce((sum, item) => sum + Number(item.total_margin_krw ?? 0), 0);
   return {
     items,
     summary: {
       total_sold_kw: items.reduce((sum, item) => sum + item.total_sold_kw, 0),
-      total_revenue_krw: items.reduce((sum, item) => sum + item.total_revenue_krw, 0),
-      total_cost_krw: items.reduce((sum, item) => sum + Number(item.total_cost_krw ?? 0), 0),
-      total_margin_krw: items.reduce((sum, item) => sum + Number(item.total_margin_krw ?? 0), 0),
+      total_revenue_krw: totalRevenue,
+      total_cost_krw: totalCost,
+      total_margin_krw: totalMargin,
       overall_margin_rate: 12,
+      cost_covered_revenue_krw: totalRevenue,
+      cost_missing_revenue_krw: 0,
+      cost_coverage_rate: totalRevenue > 0 ? 100 : 0,
       cost_basis: 'landed',
     },
   };
@@ -604,7 +613,19 @@ function calcRoute<T>(url: URL, body: MockRow): T {
     case '/api/v1/calc/lc-fee':
       return clone({ opening_fee: 2024000, acceptance_fee: 3480000, total_fee: 5504000, total_fee_krw: 5504000, fee_note: '목업 수수료 계산' } as T);
     case '/api/v1/calc/landed-cost':
-      return clone({ declaration_id: body.declaration_id ?? 'dec-1204-04', items: costDetails, summary: { landed_total_krw: 934700000, landed_wp_krw: 171.31 }, calculated_at: nowIso } as T);
+      return clone({
+        items: costDetails.map((cost) => ({
+          ...cost,
+          declaration_number: declarations.find((decl) => decl.declaration_id === cost.declaration_id)?.declaration_number ?? 'IL-25-1204-04',
+          manufacturer_name: '진코솔라',
+          allocated_expenses: { customs_fee: 1100000, transport: 4100000 },
+          total_expense_krw: 5200000,
+          expense_per_wp_krw: 0.95,
+          margin_vs_cif_krw: Number(cost.landed_wp_krw ?? 0) - Number(cost.cif_wp_krw ?? 0),
+        })),
+        saved: Boolean(body.save),
+        calculated_at: nowIso,
+      } as T);
     default:
       return clone({ items: [], calculated_at: nowIso } as T);
   }
@@ -654,6 +675,13 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
       warnings: [],
       items: item ? [item] : [],
     } as T);
+  }
+
+  if (url.pathname.startsWith('/api/v1/price-benchmarks/') && method === 'DELETE') {
+    const id = endpointId(url.pathname, 'price-benchmarks');
+    if (!id || id === 'runs') throw new Error('목업 가격 벤치마크 항목을 찾을 수 없습니다');
+    deletedPriceBenchmarkIds.add(id);
+    return clone({ status: 'deleted' } as T);
   }
 
   if (method !== 'GET' && !url.pathname.startsWith('/api/v1/calc') && url.pathname !== '/api/v1/ocr/extract') {
@@ -877,7 +905,7 @@ function priceBenchmarks(): MockRow[] {
       created_at: nowIso,
       updated_at: nowIso,
     },
-  ]);
+  ]).filter((row) => !deletedPriceBenchmarkIds.has(String(row.benchmark_id)));
 }
 
 function priceBenchmarkRuns(): MockRow[] {

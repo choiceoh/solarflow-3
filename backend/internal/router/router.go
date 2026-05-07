@@ -50,6 +50,9 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 
 	// 인증 외 라우트
 	attachH.RegisterPublicRoutes(r)
+	// D-137 PR7.5: 드라이버 PWA token-based access (외부 차주, 인증 미적용).
+	driverH := handler.NewBaroShipmentSendHandler(a.DB)
+	driverH.RegisterPublicRoutes(r)
 	r.Route("/api/v1/public", func(r chi.Router) {
 		publicH.RegisterRoutes(r)
 		r.Post("/assistant/chat", publicAssistantH.ChatStream)
@@ -59,13 +62,23 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
 
+		handler.NewAdminFeatureWiringHandler(a.DB, a.Gates.FeatureGate.Resolver()).RegisterRoutes(r, a.Gates)
 		handler.NewAssistantHandler(a.DB).WithAlias(ocrH, matchH).WithWriters(outboundH).RegisterRoutes(r, a.Gates)
 		attachH.RegisterRoutes(r, a.Gates)
 		handler.NewAuditLogHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBankHandler(a.DB).RegisterRoutes(r, a.Gates)
+		// PR-5b 머지 시 fix: PR-603 (view-transitions) 머지 누락 — catalog 에는 baro.callback_recommend
+		// 가 등록됐지만 router 등록이 빠져 D-120 coverage_test 가 실패하던 것을 같이 처리.
+		handler.NewBaroCallbackRecommendHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewBaroCreditCheckHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBaroIncomingHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBaroPartnerCockpitHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBaroPurchaseHistoryHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewBaroQuotesHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewBaroRFMHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewBaroSalesSummaryHandler(a.DB).RegisterRoutes(r, a.Gates)
+		baroShipH := handler.NewBaroShipmentSendHandler(a.DB)
+		baroShipH.RegisterRoutes(r, a.Gates)
 		handler.NewBLHandler(a.DB).RegisterRoutes(r, a.Gates, handler.NewBLLineHandler(a.DB))
 		handler.NewCompanyHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewConstructionSiteHandler(a.DB).RegisterRoutes(r, a.Gates)
@@ -76,7 +89,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		handler.NewDispatchRouteHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewExpenseHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewExportHandler(a.DB).RegisterRoutes(r, a.Gates)
-		handler.NewImportHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewImportHandler(a.DB, a.Eng).RegisterRoutes(r, a.Gates)
 		handler.NewIntercompanyRequestHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewInventoryAllocationHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewLCHandler(a.DB).RegisterRoutes(r, a.Gates)
@@ -102,8 +115,12 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		handler.NewSystemSettingsHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewTTHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewUIConfigHandler(a.DB).RegisterRoutes(r, a.Gates)
-		handler.NewUserHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewUserHandler(a.DB, a.Gates.FeatureGate.Resolver()).RegisterRoutes(r, a.Gates)
+		handler.NewCycleCountHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewPickingListHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewReceivingLogHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewWarehouseHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewWarehouseLocationHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewAliasHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewExternalSyncHandler(a.DB).RegisterRoutes(r, a.Gates)
 	})

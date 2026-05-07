@@ -1,6 +1,6 @@
 # SolarFlow 진행 상황
 
-## 현재 상태 요약 (최종 업데이트: 2026-05-03)
+## 현재 상태 요약 (최종 업데이트: 2026-05-07)
 
 | 항목 | 상태 |
 |------|------|
@@ -11,12 +11,12 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-119 (D-080/D-081 번호 공백) |
+| DECISIONS | D-001~D-147 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-147 수주 충당 위험도 추가) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
 
-## 2026-05-07 세션 — 수주 충당 위험도 배지
+## 2026-05-07 세션 — 수주 충당 위험도 배지 (D-147)
 
 ### 완료
 - Rust 계산엔진에 `POST /api/calc/order-fulfillment-risk` 추가
@@ -32,18 +32,194 @@
   - tooltip에 필요 kW, 배정 전 가용 kW, 부족 kW 표시
   - 현재 페이지의 active 수주 ID만 요청하되 Rust는 전체 active 수주를 기준으로 순차 배정
 - dev mock API에 충당 위험도 샘플 응답 추가
-- D-128 결정 기록 및 설계 정본 동기화
+- D-147 결정 기록 및 설계 정본 동기화
 
 ### 검증
 - `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공 — routes.golden 갱신
 - `cd backend && go build ./... && go vet ./... && go test ./...` 성공
-- `cd engine && cargo build && cargo test` 성공 — 기존 dead_code warning 4건 유지
-- `cd frontend && npm ci` 성공 — npm audit moderate 2건 출력
-- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning + plugin timing warning 출력
-- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline warning 68건 출력
-- `cd frontend && npm run test` 및 `npx vitest run --pool=threads --maxWorkers=1` 실패 — Vitest worker startup timeout (`Timeout waiting for worker to respond`)으로 테스트 파일 로딩 전 종료
+- `cd engine && cargo build && cargo test` 성공
+- `cd frontend && npm ci` 성공
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 종료코드 0
 - `git diff --check` 성공
-- `graphify update .` 성공 — 4335 nodes / 6769 edges / 398 communities
+
+---
+
+## 2026-05-07 세션 — 테넌트 모듈화 5 PR 시리즈 (D-145)
+
+### 완료
+새 도메인 (`gx10.topworks.ltd` 같은 4번째 테넌트) 추가 비용을 **코드 1줄 + 마이그 1개 + admin UI 토글** 로 압축. 7개 PR 으로 분해 — 각 단계 회귀 위험 ↓.
+
+- **PR-1** ([#574](https://github.com/choiceoh/solarflow/pull/574)) — `backend/internal/tenant/registry.go` 단일 정본
+  - 테넌트 ID/HostPatterns regex/Group/DisplayName 정의
+  - `feature.TenantSetXxx`, `middleware.TenantScopeXxx` 가 registry 에서 파생
+  - `IDsInGroup`, `Detect(host)`, `Default()`, `Known(s)` 헬퍼 + 11 단위 테스트 (PoC 4번째 테넌트 시연 포함)
+- **PR-2** ([#577](https://github.com/choiceoh/solarflow/pull/577)) — `/me` 응답에 `tenant_id` / `tenant_display_name` / `enabled_features[]`
+  - `UserHandler` 시그니처에 `*feature.Resolver` 주입
+  - 4 단위 테스트 (topsolar/cable/baro/nil-resolver)
+- **PR-3a** ([#583](https://github.com/choiceoh/solarflow/pull/583)) — `frontend/src/lib/navigation/manifest.tsx` 신설
+  - 50+ Route + 25+ sidebar item 을 한 정본으로 통합 (App.tsx -88줄, CommandShell.tsx -123줄)
+  - `RouteSpec` (children/wrap/roles 지원), `CommandNavItem`, helpers (`listWipMenus`, `listAllMenusForTenant`)
+- **PR-3b** ([#589](https://github.com/choiceoh/solarflow/pull/589)) — sidebar 가시성을 `enabled_features` 기반으로 전환
+  - 26개 NAV item 에 backend `feature` 매핑 (`tx.po`, `baro.incoming`, `intercompany.request.inbox` 등)
+  - `isItemVisible()` 단일 함수 — feature 우선, undefined enabled_features 면 tenants 배열 fallback (옛 응답 호환)
+  - 5개 미매핑 항목 (baro-home/quote/inverter/shipment/approval) 만 `tenants:` fallback 유지 — 후속 PR 에서 카탈로그 보강
+  - 8 단위 테스트 (manifest.test.ts)
+- **PR-4** ([#592](https://github.com/choiceoh/solarflow/pull/592)) — `frontend/src/lib/navigation/packs/` 디렉토리
+  - 도메인별 3 pack: `erp-core` (모든 테넌트 공통), `module-finance` (수입/금융), `baro-domain` (영업/CRM)
+  - `ALL_PACKS`, `buildNavGroups(packs)` — manifest 가 합쳐 `NAV_GROUPS` 생성
+  - `MODULE_TENANTS` 를 `tenantScope.ts` 로 옮겨 packs ↔ manifest 값 순환 dep 회피
+  - 8 단위 테스트 (packs.test.ts — pack 간 key 충돌, NAV_GROUPS 동등성)
+- **PR-5a** ([#601](https://github.com/choiceoh/solarflow/pull/601)) — admin 매트릭스 read-only
+  - `GET /api/v1/admin/feature-wiring/` — `{ tenants[], features[{enabled[tenant]→bool, default_tenants[]}] }` 반환
+  - `/settings/feature-wiring` 페이지 — pack 별 grouping + "기타 (pack 미매핑)" 섹션
+  - `RoleGuard(admin)`, feature gate 무관 (`unrestrictedAllowlist`)
+  - 3 단위 테스트
+- **PR-5b** ([#604](https://github.com/choiceoh/solarflow/pull/604)) — 토글 + DB 영속화
+  - `PUT /api/v1/admin/feature-wiring/{tenant}/{feature}` — `tenant_features` upsert + `feature_wiring_audit` insert(best-effort) + `resolver.SetOverride`
+  - `app.go` startup 에 `tenant_features` 행 로드 → `resolver.SetOverride` 일괄 → 재시작 후 유지
+  - 마이그 `055_feature_wiring.sql` (기존) 그대로 사용, 신규 마이그 불필요
+  - frontend 매트릭스: 셀 클릭 토글 (optimistic + rollback) + pack 헤더 일괄 ✓/— 버튼 (all/partial/none 표시)
+  - 6 단위 테스트 (validateSetEnabled 4 case + DB nil 503 + unknown tenant 404)
+- **side fix** ([commit 30c115d](https://github.com/choiceoh/solarflow/commit/30c115d)) — main 의 PR-603 (view-transitions) 머지에서 `BaroCallbackRecommendHandler` 등록이 누락된 D-120 coverage_test 실패를 PR-5b 안에서 같이 처리
+
+### 결정
+- [D-145](DECISIONS.md#d-145) — 테넌트 모듈화 5 PR 시리즈 정본화. 새 도메인 추가 절차 규정 + 핵심 invariant (가시성 정본은 backend → /me → frontend 한 방향) 못박음.
+
+### 검증
+- 각 PR 별 `go test ./...` ✓ / `go build ./...` ✓ / `go vet ./...` ✓
+- frontend `npm run build` ✓ / `npm run test` ✓ (최종 10 files / 83 tests, manifest+packs 16 case 추가) / `npm run lint` exit 0
+- 모든 PR 머지됨 — main 에 반영 완료
+
+### 운영 반영 메모
+- 마이그 `055_feature_wiring.sql` 은 D-120 시점에 이미 적용된 상태 — 추가 DB 작업 없음
+- admin 이 `/settings/feature-wiring` 에서 토글하면 `tenant_features` 에 즉시 upsert + audit 행
+- tenant 추가 시 `tenant_features.tenant_check`, `tenant_data_scopes.tenant_check`, `user_profiles.tenant_scope` 의 CHECK 제약 갱신 마이그 필요
+
+---
+
+## 2026-05-07 세션 — 면장/원가 섹션 개선
+
+### 완료
+- 면장 저장소 참조를 `import_declarations`로 통일
+  - Excel 면장 Import, Assistant 면장 제안 확정, Assistant 면장 검색, 아마란스 Export CIF 맵 조회가 실제 테이블을 보도록 정리
+- B/L 상세의 `부대비용` 탭을 `면장/원가` 탭으로 확장
+  - 면장정보, 원가라인, 부대비용, Landed Cost 순서로 통관 후 원가 확정 흐름 배치
+  - Rust `landed-cost` 프록시를 이용한 `미리보기(save=false)`와 `저장(save=true)` 버튼 추가
+  - Landed Cost 결과에서 CIF/Wp, 관세, VAT, 배분비용, Landed/Wp, CIF 대비 차이를 표로 표시
+- 부대비용 요약의 VAT 처리 정리
+  - VAT 제외 `원가반영 비용`과 VAT 포함 `지급합계`를 분리해 설계 정본의 “VAT 원가 불포함” 기준 반영
+- `/customs` 화면을 면장/원가 현황 중심으로 보강
+  - 면장 탭을 첫 화면으로 추가하고 면장 KPI/컬럼 설정/엑셀 양식 진입 연결
+  - 면장 행 클릭 시 `/procurement?tab=bl&bl_id=...`로 이동해 해당 B/L 상세를 바로 열도록 딥링크 추가
+- dev mock Landed Cost 응답을 실제 Rust 응답 구조(`items`, `saved`, `allocated_expenses`)에 맞춰 보정
+- PR 준비 중 최신 `main` 빌드 회귀 보정
+  - App 라우트/manifest 전환 과정에서 남은 중복 lazy 선언과 누락된 BARO 콜백 추천 라우트 import 정리
+  - CommandShell 사이드바 메뉴는 manifest 정본(`NAV_GROUPS`, `isItemVisible`)을 쓰도록 중복 로컬 정의 제거
+  - B/L 목록 작업 chip helper, L/C 딥링크 focus prop, T/T 페이지네이션, 구매이력 EmptyState import 보강
+  - `package.json` 중복 키와 `package-lock.json` 의존성 동기화 문제 보정
+
+### 검증
+- `cd backend && go test ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd frontend && npm ci` 성공 — 누락된 로컬 의존성 복원
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 66건 출력
+- `git diff --check` 성공
+- `graphify update .` 최종 성공 — 4630 nodes / 7390 edges / 400 communities
+- `cd frontend && npm run test` 실패 — 테스트 파일 실행 전 Vitest worker bootstrap timeout 8건
+- `cd frontend && npx vitest run --pool=threads --maxWorkers=1 --no-file-parallelism` 실패 — 동일한 worker bootstrap timeout
+- PR 전 최신 `main` 재검증
+  - `cd frontend && npm install --package-lock-only --ignore-scripts --no-audit --no-fund` 성공
+  - `cd frontend && npm ci` 성공 — lock 동기화 후 의존성 재설치
+  - `cd frontend && npm run build` 성공 — plugin timing warning 출력
+  - `cd frontend && npm run test` 성공 — 10 files / 84 tests
+  - `cd frontend && npm run lint` 종료코드 0 — 페이지네이션 reset hook 관련 경고 4건 출력
+  - `git diff --check` 성공
+  - 최종 리베이스 후 `go test ./...`, `go build ./...`, `go vet ./...`, `npm run build`, `npm run test`, `npm run lint`, `graphify update .` 재확인 성공
+
+### 알려진 제한
+- 초기 검증에서는 Vitest worker bootstrap timeout이 있었으나, 최신 `main` 의존성 lock 동기화와 재설치 후 PR 전 재검증에서 프론트 단위테스트가 통과했다.
+
+---
+
+## 2026-05-07 세션 — module 구매이력 UX + 정밀 딥링크 개선
+
+### 완료
+- module/cable `/purchase-history` 계약 체인 리스트에 현재 상태, 계약유형, MW, 연결 이벤트 수(LC/B/L/T/T)를 추가해 체인 선택 전 정보 밀도 보강
+- 우측 타임라인에 이벤트 종류별 필터 칩, 기간 필터 연동, 월별 그룹 헤더, 선택 체인 요약 패널 추가
+- 단가 이벤트는 `related_po_id`가 있으면 PO 상세로 연결하고, PO 미연결 단가 이력은 기존처럼 read-only 표시 유지
+- LC/B/L/T/T 이벤트 딥링크를 탭 단위에서 대상 ID 단위로 확장
+  - LC: `/procurement?tab=lc&lc_id=...` 진입 시 해당 LC 행 펼침 + 강조
+  - B/L: `/procurement?tab=bl&bl_id=...` 진입 시 B/L 상세 화면 오픈
+  - T/T: `/procurement?tab=tt&tt_id=...` 진입 시 해당 송금 행 강조
+- D-113 딥링크 운영 기준 문구를 실제 구현 상태에 맞게 갱신
+
+### 검증
+- `cd frontend && npm ci` 성공 — 이 worktree 로컬 의존성 복원
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건과 plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 68건 출력
+- `cd frontend && npm run test -- purchaseHistory` 및 직접 `vitest run src/lib/purchaseHistory.test.ts --pool=threads --maxWorkers=1 --no-fileParallelism`는 Vitest worker start timeout으로 실패 — 테스트 파일 실행 전 worker가 60초 내 응답하지 못한 환경성 실패
+
+---
+
+## 2026-05-07 세션 — 가격예측 AI 관측값 선택 삭제
+
+### 완료
+- `/price-forecast` 하단 AI 수집 관측값 표에 개별/전체 선택 체크박스와 신뢰도 컬럼 추가
+- 선택한 관측값을 삭제하는 `DELETE /api/v1/price-benchmarks/{id}` API 추가
+- 삭제 시 `price_benchmarks` 행만 제거하고 `price_benchmark_runs` 실행 로그는 감사 기록으로 보존
+- dev mock API에서도 삭제 후 관측값 목록에서 빠지도록 반영
+- D-143 결정 기록 및 설계 정본 동기화
+
+### 검증
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공 — routes.golden 갱신
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go build -o solarflow-go .` 성공
+- `cd frontend && npm ci` 성공
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 68건 출력
+- `cd frontend && npm run test` 실패 — Vitest worker 시작 timeout으로 테스트 파일 실행 전 8건 unhandled error
+- `git diff --check` 성공
+- `graphify update .` 성공 — 4308 nodes / 6718 edges / 400 communities
+- rebase 후 최신 `origin/main` 기준 `cd frontend && npm run build` 실패 — `src/App.tsx`, `CommandShell.tsx`, `BLListTable.tsx` 등 기존 main 측 TypeScript/import 오류 다수
+- rebase 후 최신 `origin/main` 기준 `cd frontend && npm run lint` 실패 — `src/App.tsx` unused lazy imports, `package.json` duplicate keys 등 기존 main 측 오류
+- rebase 후 최신 `origin/main` 기준 `cd backend && go test ./...` 실패 — `baro.callback_recommend` catalog↔chi 불일치 및 route snapshot drift 등 기존 main 측 오류
+
+### 운영 반영 메모
+- 현재 실행 환경에 `codesign`, `launchctl`이 없어 macOS launchd 재부트스트랩은 수행하지 못함
+
+---
+
+## 2026-05-07 세션 — 매출 분석 이익 신뢰도 개선
+
+### 완료
+- Rust `margin-analysis` 요약 산식을 원가 연결 매출 기준으로 보정
+  - `total_margin_krw`/`overall_margin_rate`가 원가 미연결 매출을 0원 원가처럼 포함하지 않도록 수정
+  - `cost_covered_revenue_krw`, `cost_missing_revenue_krw`, `cost_coverage_rate` 응답 필드 추가
+- Rust `customer-analysis`의 수금/미수 집계를 선택 법인·기간·거래처 범위에 맞춰 정렬
+  - 다른 법인/기간의 수금액이 같은 거래처라는 이유로 섞이는 회귀 차단
+  - `fifo` 원가 기준 선택 시 거래처 이익도 FIFO 매칭 원가를 우선 사용
+- 프론트엔드 `/sales-analysis` 화면 개선
+  - KPI를 공급가 매출, 계산 이익, 이익률, 미수금, 계산서 미발행, 원가 미연결로 재배치
+  - 계산엔진 부분 실패 시 0원처럼 숨기지 않고 경고 표시
+  - 품목별 이익 표에 전체/원가 없음/저마진/적자 필터 추가
+  - 우측 레일을 목표 달성률 대신 이익 신뢰도(원가 연결률)로 변경
+- dev mock API와 이익률 insight 드릴다운 타입 동기화
+- D-144 결정 기록 추가
+
+### 검증
+- `cd backend && go test ./... && go vet ./...` 성공
+- `cd engine && cargo test` 성공 — 기존 dead_code warning 3건 유지
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline warning 67건 출력
+- `cd frontend && npm run test`는 Vitest worker 시작 타임아웃으로 전체 완료 실패
+  - 단독 재실행에서도 일부 테스트(4 files / 36 tests)는 통과했으나 나머지 worker가 뜨지 못함
+- `http://127.0.0.1:5179/sales-analysis` 개발 서버 200 응답 확인
+- PR 리베이스 후 최신 `origin/main` 기준 `cd frontend && npm run build` 재확인은 실패 — `src/App.tsx`, `CommandShell.tsx`, `BLListTable.tsx` 등 main 측 TypeScript/import 오류 다수
 
 ---
 
@@ -57,10 +233,16 @@
   - AI 수집 버튼 1회 실행 로그(provider/model/source_keys/inserted/skipped/warnings/evidence/raw_response) 보존
 - `GET/POST /api/v1/price-benchmarks`, `GET /runs`, `POST /ai-refresh` API 추가
   - feature `tx.price_benchmark`로 module 계열(`topsolar`, `cable`) 전용 게이트 적용
-  - 기존 Assistant AI 설정과 선택적 `TAVILY_API_KEY`를 재사용해 evidence 기반 가격 관측값만 저장
+  - 기존 Assistant AI 설정과 선택적 `SERPER_API_KEY`를 재사용해 evidence 기반 가격 관측값만 저장
 - 프론트엔드 가격예측 화면 추가
   - x축 관측일, y축 가격(USD/W, CNY/W, KRW/W) Recharts 라인 차트
   - source 필터, 기간/단위/검색, 관측값 테이블, AI 수집 로그
+- AI 지표 갱신 안정화
+  - `/ai-refresh`가 Cloudflare/Pages 장기 요청 502에 걸리지 않도록 `running` 로그 생성 후 즉시 응답
+  - 실제 evidence 수집·LLM 추출·저장은 서버 백그라운드에서 수행하고 프론트는 실행중 로그를 5초 간격으로 갱신
+  - Cloudflare/상위 AI API의 HTML 오류 페이지는 사용자에게 짧은 한국어 오류로 표시
+  - 기존 관측키/latest coverage를 프롬프트에 넣고 `missing_focus` 결측 슬롯을 우선 탐색하도록 개선 — 이미 있는 source/metric/date/region/basis/currency 관측값은 LLM 출력과 저장 단계에서 재수집 제외
+  - 가격예측/Assistant 웹 검색 evidence 보강을 Serper(`SERPER_API_KEY`, `google.serper.dev/search`) 기준으로 정리
 - dev mock API에 가격예측 샘플 관측값과 AI 수집 응답 추가
 - D-124 결정 기록 및 module/cable/baro 인덱스 문서 동기화
 
@@ -75,9 +257,24 @@
 - `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
 - `cd frontend && npm run test` 성공 — 8 files / 67 tests
 - `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 65건 출력
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go test ./internal/handler -run 'TestBuildBenchmark'` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go test ./internal/handler -run 'TestBuildBenchmark'` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go test ./...` 성공
+- `cd frontend && npm ci` 성공 — 이 worktree에 누락된 로컬 의존성 복원
+- `cd frontend && npm run test` 성공 — 8 files / 67 tests
+- `cd frontend && npm run lint` 종료코드 0 — 기존 baseline 경고 65건 출력
+- `cd frontend && npm run build` 성공 — 기존 AssistantPage dynamic import warning 1건 유지, plugin timing warning 출력
 - `http://127.0.0.1:5176/price-forecast` 목업 로그인 브라우저 smoke 성공 — 차트 SVG 5개, sidebar 메뉴, AI 수집 버튼, 테이블 18행 렌더
 - `git diff --check` 성공
-- `graphify update .` 성공 — 4217 nodes / 7832 edges / 338 communities
+- `graphify update .` 성공 — 4450 nodes / 7064 edges / 398 communities
 
 ---
 

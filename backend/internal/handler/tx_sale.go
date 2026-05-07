@@ -114,6 +114,95 @@ func sanitizeSaleSearchTerm(q string) string {
 	return strings.TrimSpace(replacer.Replace(q))
 }
 
+type saleBusinessDateRow struct {
+	SaleID         string  `json:"sale_id"`
+	TaxInvoiceDate *string `json:"tax_invoice_date"`
+	OutboundID     *string `json:"outbound_id"`
+	OrderID        *string `json:"order_id"`
+}
+
+type saleDateOutboundRow struct {
+	OutboundID   string `json:"outbound_id"`
+	OutboundDate string `json:"outbound_date"`
+}
+
+type saleDateOrderRow struct {
+	OrderID   string `json:"order_id"`
+	OrderDate string `json:"order_date"`
+}
+
+func saleBusinessDateMatches(dateValue, month, start, end string) bool {
+	if dateValue == "" {
+		return false
+	}
+	if month != "" && !strings.HasPrefix(dateValue, month) {
+		return false
+	}
+	if start != "" && dateValue < start {
+		return false
+	}
+	if end != "" && dateValue > end {
+		return false
+	}
+	return true
+}
+
+// saleIDsByBusinessDate — 매출 기간 필터 후보 sale_id를 구한다.
+// 비유: 계산서가 있으면 계산서일, 아직 없으면 출고일/수주일을 기준일로 삼아
+// "미발행 매출"도 월말 마감 큐에서 사라지지 않게 한다.
+func (h *SaleHandler) saleIDsByBusinessDate(month, start, end string) ([]string, error) {
+	salesData, err := fetchAllFromTable(h.DB, "sales", "sale_id, tax_invoice_date, outbound_id, order_id")
+	if err != nil {
+		return nil, err
+	}
+	var sales []saleBusinessDateRow
+	if err := json.Unmarshal(salesData, &sales); err != nil {
+		return nil, err
+	}
+
+	outboundData, err := fetchAllFromTable(h.DB, "outbounds", "outbound_id, outbound_date")
+	if err != nil {
+		return nil, err
+	}
+	var outbounds []saleDateOutboundRow
+	if err := json.Unmarshal(outboundData, &outbounds); err != nil {
+		return nil, err
+	}
+	outboundDateByID := make(map[string]string, len(outbounds))
+	for _, row := range outbounds {
+		outboundDateByID[row.OutboundID] = row.OutboundDate
+	}
+
+	orderData, err := fetchAllFromTable(h.DB, "orders", "order_id, order_date")
+	if err != nil {
+		return nil, err
+	}
+	var orders []saleDateOrderRow
+	if err := json.Unmarshal(orderData, &orders); err != nil {
+		return nil, err
+	}
+	orderDateByID := make(map[string]string, len(orders))
+	for _, row := range orders {
+		orderDateByID[row.OrderID] = row.OrderDate
+	}
+
+	ids := make([]string, 0, len(sales))
+	for _, sale := range sales {
+		dateValue := ""
+		if sale.TaxInvoiceDate != nil && *sale.TaxInvoiceDate != "" {
+			dateValue = *sale.TaxInvoiceDate
+		} else if sale.OutboundID != nil {
+			dateValue = outboundDateByID[*sale.OutboundID]
+		} else if sale.OrderID != nil {
+			dateValue = orderDateByID[*sale.OrderID]
+		}
+		if saleBusinessDateMatches(dateValue, month, start, end) {
+			ids = append(ids, sale.SaleID)
+		}
+	}
+	return ids, nil
+}
+
 // applySaleFilters — List/Summary 가 공유하는 필터 로직.
 // company_id/month/invoice_status/q 등 옛 클라이언트 필터를 모두 DB-level 로 처리.
 // 매칭이 0건이라 빈 결과가 확정되면 (false, nil) 반환.
@@ -136,17 +225,18 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 		query = query.Neq("status", "cancelled")
 	}
 
-	// month: tax_invoice_date.like.YYYY-MM-* (또는 YYYY-MM-%)
-	if month := r.URL.Query().Get("month"); month != "" {
-		query = query.Like("tax_invoice_date", month+"%")
-	}
-
-	// start/end: tax_invoice_date 범위. start+end 가 함께 지정되면 month 보다 우선해서 적용된다 (둘 다 적용해도 OK).
-	if start := r.URL.Query().Get("start"); start != "" {
-		query = query.Gte("tax_invoice_date", start)
-	}
-	if end := r.URL.Query().Get("end"); end != "" {
-		query = query.Lte("tax_invoice_date", end)
+	month := r.URL.Query().Get("month")
+	start := r.URL.Query().Get("start")
+	end := r.URL.Query().Get("end")
+	if month != "" || start != "" || end != "" {
+		ids, err := h.saleIDsByBusinessDate(month, start, end)
+		if err != nil {
+			return query, false, fmt.Errorf("매출 기준일 필터 실패: %w", err)
+		}
+		if len(ids) == 0 {
+			return query, false, nil
+		}
+		query = query.In("sale_id", ids)
 	}
 
 	// invoice_status: tax_invoice_date IS NULL / NOT NULL
@@ -254,9 +344,9 @@ func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // SaleSummary — 매출 KPI 카드 응답.
 type SaleSummary struct {
-	Total              int64   `json:"total"`
-	SaleAmountSum      float64 `json:"sale_amount_sum"`
-	InvoicePendingCount int64  `json:"invoice_pending_count"`
+	Total               int64   `json:"total"`
+	SaleAmountSum       float64 `json:"sale_amount_sum"`
+	InvoicePendingCount int64   `json:"invoice_pending_count"`
 }
 
 // Summary — GET /api/v1/sales/summary — 매출 KPI 집계 (List 와 동일 필터).

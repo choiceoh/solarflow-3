@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
-import { fetchAllPaginated, fetchWithAuth } from "@/lib/api"
+import { fetchAllPaginated, fetchWithAuth, fetchWithAuthMeta } from "@/lib/api"
 import { useAppStore } from "@/stores/appStore"
 import { companyParams } from "@/lib/companyUtils"
 import { useDetailQuery, useListQuery } from "@/lib/queryHelpers"
@@ -161,6 +161,62 @@ export function usePOList(
   )
 }
 
+// usePOListPaged — server-side pagination/sort/q + contract_date 범위. ProcurementPage PO 탭이 사용.
+// 기존 usePOList 는 다른 화면 (PurchaseHistoryPage 등) 호환을 위해 유지.
+export interface POListPagedFilters {
+  status?: string
+  manufacturer_id?: string
+  contract_type?: string
+  contract_date_from?: string  // YYYY-MM-DD (양끝 포함)
+  contract_date_to?: string
+  q?: string
+  sort?: string
+  order?: "asc" | "desc"
+  page?: number      // 1-based
+  pageSize?: number
+  enabled?: boolean
+}
+
+export function usePOListPaged(filters: POListPagedFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const {
+    status, manufacturer_id, contract_type, contract_date_from, contract_date_to, q,
+    sort, order, page = 1, pageSize = 100, enabled = true,
+  } = filters
+  const queryKey = [
+    "pos-paged", selectedCompanyId, status ?? "", manufacturer_id ?? "", contract_type ?? "",
+    contract_date_from ?? "", contract_date_to ?? "",
+    q ?? "", sort ?? "", order ?? "", page, pageSize,
+  ]
+  const result = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (status) params.set("status", status)
+      if (manufacturer_id) params.set("manufacturer_id", manufacturer_id)
+      if (contract_type) params.set("contract_type", contract_type)
+      if (contract_date_from) params.set("contract_date_from", contract_date_from)
+      if (contract_date_to) params.set("contract_date_to", contract_date_to)
+      if (q) params.set("q", q)
+      if (sort) params.set("sort", sort)
+      if (order) params.set("order", order)
+      params.set("limit", String(pageSize))
+      params.set("offset", String((page - 1) * pageSize))
+      return fetchWithAuthMeta<PurchaseOrder[]>(`/api/v1/pos?${params}`)
+    },
+    enabled: enabled && !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    items: result.data?.data ?? [],
+    total: result.data?.totalCount ?? 0,
+    loading: result.isLoading,
+    isFetching: result.isFetching,
+    error: result.error ? (result.error as Error).message : null,
+    reload: async () => { await result.refetch() },
+  }
+}
+
 export function usePOSummary(
   filters: { status?: string; manufacturer_id?: string; contract_type?: string } = {},
 ) {
@@ -317,6 +373,77 @@ export function useLCList(
   )
 }
 
+// useLCListPaged — server-side pagination/sort/q. ProcurementPage LC 탭이 사용.
+// 주의: backend 가 manufacturer_id 필터 시 페이지 결과가 가변 (post-fetch 필터링) 이라
+// total 이 부정확. ProcurementPage 는 manufacturer_id 사용 시 client-side 필터 fallback.
+export interface LCListPagedFilters {
+  status?: string
+  bank_id?: string
+  po_id?: string
+  manufacturer_id?: string
+  open_date_from?: string
+  open_date_to?: string
+  q?: string
+  sort?: string
+  order?: "asc" | "desc"
+  page?: number
+  pageSize?: number
+  enabled?: boolean
+}
+
+export function useLCListPaged(filters: LCListPagedFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const {
+    status, bank_id, po_id, manufacturer_id, open_date_from, open_date_to, q,
+    sort, order, page = 1, pageSize = 100, enabled = true,
+  } = filters
+  const queryKey = [
+    "lcs-paged", selectedCompanyId, status ?? "", bank_id ?? "", po_id ?? "",
+    manufacturer_id ?? "", open_date_from ?? "", open_date_to ?? "",
+    q ?? "", sort ?? "", order ?? "", page, pageSize,
+  ]
+  const result = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (status) params.set("status", status)
+      if (bank_id) params.set("bank_id", bank_id)
+      if (po_id) params.set("po_id", po_id)
+      if (manufacturer_id) params.set("manufacturer_id", manufacturer_id)
+      if (open_date_from) params.set("open_date_from", open_date_from)
+      if (open_date_to) params.set("open_date_to", open_date_to)
+      if (q) params.set("q", q)
+      if (sort) params.set("sort", sort)
+      if (order) params.set("order", order)
+      params.set("limit", String(pageSize))
+      params.set("offset", String((page - 1) * pageSize))
+      const meta = await fetchWithAuthMeta<Array<LCRecord & {
+        banks?: { bank_name?: string }
+        companies?: { company_name?: string }
+        purchase_orders?: { po_number?: string; manufacturer_id?: string }
+      }>>(`/api/v1/lcs?${params}`)
+      const items = meta.data.map((r) => ({
+        ...r,
+        bank_name: r.bank_name ?? r.banks?.bank_name,
+        company_name: r.company_name ?? r.companies?.company_name,
+        po_number: r.po_number ?? r.purchase_orders?.po_number,
+        manufacturer_id: r.manufacturer_id ?? r.purchase_orders?.manufacturer_id,
+      })) as LCRecord[]
+      return { data: items, totalCount: meta.totalCount }
+    },
+    enabled: enabled && !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    items: result.data?.data ?? [],
+    total: result.data?.totalCount ?? 0,
+    loading: result.isLoading,
+    isFetching: result.isFetching,
+    error: result.error ? (result.error as Error).message : null,
+    reload: async () => { await result.refetch() },
+  }
+}
+
 export function useLCSummary(
   filters: { status?: string; bank_id?: string; po_id?: string; manufacturer_id?: string } = {},
 ) {
@@ -441,6 +568,66 @@ export function useTTList(filters: { status?: string; po_id?: string } = {}) {
     },
     { enabled: !!selectedCompanyId },
   )
+}
+
+// useTTListPaged — server-side pagination/sort/q + remit_date 범위. ProcurementPage TT 탭이 사용.
+export interface TTListPagedFilters {
+  status?: string
+  po_id?: string
+  remit_date_from?: string
+  remit_date_to?: string
+  q?: string
+  sort?: string
+  order?: "asc" | "desc"
+  page?: number
+  pageSize?: number
+  enabled?: boolean
+}
+
+export function useTTListPaged(filters: TTListPagedFilters = {}) {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const {
+    status, po_id, remit_date_from, remit_date_to, q,
+    sort, order, page = 1, pageSize = 100, enabled = true,
+  } = filters
+  const queryKey = [
+    "tts-paged", selectedCompanyId, status ?? "", po_id ?? "",
+    remit_date_from ?? "", remit_date_to ?? "",
+    q ?? "", sort ?? "", order ?? "", page, pageSize,
+  ]
+  const result = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      if (status) params.set("status", status)
+      if (po_id) params.set("po_id", po_id)
+      if (remit_date_from) params.set("remit_date_from", remit_date_from)
+      if (remit_date_to) params.set("remit_date_to", remit_date_to)
+      if (q) params.set("q", q)
+      if (sort) params.set("sort", sort)
+      if (order) params.set("order", order)
+      params.set("limit", String(pageSize))
+      params.set("offset", String((page - 1) * pageSize))
+      const meta = await fetchWithAuthMeta<RawTT[]>(`/api/v1/tts?${params}`)
+      const items = meta.data.map((r) => ({
+        ...r,
+        po_number: r.po_number ?? r.purchase_orders?.po_number ?? undefined,
+        manufacturer_name:
+          r.manufacturer_name ?? r.purchase_orders?.manufacturers?.name_kr ?? undefined,
+      })) as TTRemittance[]
+      return { data: items, totalCount: meta.totalCount }
+    },
+    enabled: enabled && !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    items: result.data?.data ?? [],
+    total: result.data?.totalCount ?? 0,
+    loading: result.isLoading,
+    isFetching: result.isFetching,
+    error: result.error ? (result.error as Error).message : null,
+    reload: async () => { await result.refetch() },
+  }
 }
 
 export function useTTSummary(filters: { status?: string; po_id?: string } = {}) {

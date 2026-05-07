@@ -79,6 +79,7 @@ func assistantToolCatalog() []assistantTool {
 		toolSolarPath(),
 		// 외부 웹 (admin/operator/executive 한정)
 		toolWebSearch(),
+		toolWebScrape(), // PR 46: Serper scrape — 외부 페이지 본문 markdown 추출
 		toolFetchURL(),
 	}
 	proposes := []assistantTool{

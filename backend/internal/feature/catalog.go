@@ -15,20 +15,26 @@
 // 단계 (1)~(3) 중 하나라도 빠지면 coverage_test 또는 matrix_consistency_test 가 잡는다.
 package feature
 
+import "solarflow-backend/internal/tenant"
+
 // FeatureID — 카탈로그에 등록된 feature 식별자.
 // 자유 문자열 게이트 호출(g.Feature("foo"))을 막기 위해 별도 타입을 둔다.
 type FeatureID string
 
-// 사전 정의 테넌트 집합 — 한 곳에서만 변경하면 카탈로그 전체에 반영된다.
+// 사전 정의 테넌트 집합 — tenant Registry 에서 파생되어 한 곳에서만 변경하면
+// 카탈로그 전체에 반영된다 (D-120 후속, internal/tenant 도입).
+//
+// 기존 코드 호환을 위해 var 형태와 []string 타입을 그대로 유지한다 — 카탈로그가
+// 컴파일 타임에 한 번만 평가되므로 init 시점에 registry 가 채워준다.
 var (
 	// TenantSetAll — 모든 테넌트가 공유하는 공통 기능에 부여한다.
-	TenantSetAll = []string{"topsolar", "cable", "baro"}
+	TenantSetAll = tenant.IDsInGroupAsStrings(tenant.GroupAll)
 	// TenantSetModule — module 계열(D-119) = topsolar + cable. 수입/금융/원가 영역.
-	TenantSetModule = []string{"topsolar", "cable"}
+	TenantSetModule = tenant.IDsInGroupAsStrings(tenant.GroupModule)
 	// TenantSetTopsolarOnly — 탑솔라 단독. 아마란스 RPA 등 외부 시스템 연동이 후보.
-	TenantSetTopsolarOnly = []string{"topsolar"}
+	TenantSetTopsolarOnly = []string{string(tenant.IDTopsolar)}
 	// TenantSetBaroOnly — 바로(주) 전용(D-108).
-	TenantSetBaroOnly = []string{"baro"}
+	TenantSetBaroOnly = []string{string(tenant.IDBaro)}
 )
 
 // DataScopeKind — 데이터 배선 힌트(D-120).
@@ -83,6 +89,7 @@ const (
 	IDMasterProduct          FeatureID = "master.product"
 	IDMasterProductAlias     FeatureID = "master.product_alias"
 	IDMasterWarehouse        FeatureID = "master.warehouse"
+	IDMasterWarehouseLocation FeatureID = "master.warehouse_location"
 	IDMasterConstructionSite FeatureID = "master.construction_site"
 
 	// ---- tx.* (all tenants 공유) ----
@@ -95,6 +102,9 @@ const (
 	IDTxBL                   FeatureID = "tx.bl"
 	IDTxInventoryAllocation  FeatureID = "tx.inventory_allocation"
 	IDTxModuleDemandForecast FeatureID = "tx.module_demand_forecast"
+	IDTxPickingList          FeatureID = "tx.picking_list"
+	IDTxReceivingLog         FeatureID = "tx.receiving_log"
+	IDTxCycleCount           FeatureID = "tx.cycle_count"
 
 	// ---- tx.* (module 계열 = topsolar+cable, D-108/D-119) ----
 	IDTxCostDetail     FeatureID = "tx.cost_detail"
@@ -114,6 +124,7 @@ const (
 	IDCRMPartnerActivity FeatureID = "crm.partner_activity"
 
 	// ---- baro.* (BARO 전용) ----
+	IDBaroCallbackRecommend FeatureID = "baro.callback_recommend"
 	IDBaroIncoming        FeatureID = "baro.incoming"
 	IDBaroPurchaseHistory FeatureID = "baro.purchase_history"
 	IDBaroCreditBoard     FeatureID = "baro.credit_board"
@@ -121,6 +132,11 @@ const (
 	IDBaroOrders          FeatureID = "baro.orders"
 	IDBaroPriceBook       FeatureID = "baro.price_book"
 	IDBaroPartnerCockpit  FeatureID = "baro.partner_cockpit"
+	IDBaroRFM             FeatureID = "baro.rfm"
+	IDBaroSalesSummary    FeatureID = "baro.sales_summary"
+	IDBaroQuote           FeatureID = "baro.quote"
+	IDBaroCreditCheck     FeatureID = "baro.credit_check"
+	IDBaroShipmentNotice  FeatureID = "baro.shipment_notice"
 
 	// ---- calc.* (Rust 계산 프록시) ----
 	IDCalcInventory            FeatureID = "calc.inventory"
@@ -240,6 +256,12 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/warehouses/usage-counts",
 		},
 	},
+	IDMasterWarehouseLocation: {
+		ID: IDMasterWarehouseLocation, Name: "창고 위치(Bin) 마스터",
+		Description:    "창고 내 Zone/Aisle/Rack/Bin 4단계 위치 (D-139 WMS Phase 1)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/warehouse-locations/", "/api/v1/warehouse-locations/{id}"},
+	},
 	IDMasterConstructionSite: {
 		ID: IDMasterConstructionSite, Name: "공사현장 마스터", Description: "자체/EPC 공사 현장",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
@@ -301,6 +323,31 @@ var Catalog = map[FeatureID]Feature{
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{"/api/v1/module-demand-forecasts/", "/api/v1/module-demand-forecasts/{id}"},
 	},
+	IDTxPickingList: {
+		ID: IDTxPickingList, Name: "WMS 피킹 명세",
+		Description:    "출고 1건당 위치별 수량 명세 + picked 토글 (D-140 WMS Phase 2)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{
+			"/api/v1/picking-lists/", "/api/v1/picking-lists/{id}",
+			"/api/v1/picking-lists/{id}/items/{item_id}",
+		},
+	},
+	IDTxReceivingLog: {
+		ID: IDTxReceivingLog, Name: "WMS 입고 검수 로그",
+		Description:    "BL 라인/intercompany 입고 검수 + 수량 차이 추적 (D-141 WMS Phase 3)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/receiving-logs/", "/api/v1/receiving-logs/{id}"},
+	},
+	IDTxCycleCount: {
+		ID: IDTxCycleCount, Name: "WMS 정기 재고실사",
+		Description:    "위치 단위 cycle counting + 정확도 추적 (D-142 WMS Phase 4)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{
+			"/api/v1/cycle-counts/", "/api/v1/cycle-counts/{id}",
+			"/api/v1/cycle-counts/{id}/complete",
+			"/api/v1/cycle-counts/{id}/items/{item_id}",
+		},
+	},
 
 	// ===== tx.* (module = topsolar+cable, D-108/D-119) =====
 	IDTxCostDetail: {
@@ -332,7 +379,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxPriceBenchmark: {
 		ID: IDTxPriceBenchmark, Name: "가격예측 벤치마크", Description: "외부 태양광 시세·입찰·ASP 벤치마크 + AI 수집",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/price-benchmarks/", "/api/v1/price-benchmarks/runs", "/api/v1/price-benchmarks/runs/{id}", "/api/v1/price-benchmarks/our-prices", "/api/v1/price-benchmarks/ai-refresh"},
+		Paths: []string{"/api/v1/price-benchmarks/", "/api/v1/price-benchmarks/{id}", "/api/v1/price-benchmarks/runs", "/api/v1/price-benchmarks/runs/{id}", "/api/v1/price-benchmarks/our-prices", "/api/v1/price-benchmarks/ai-refresh"},
 	},
 	IDTxPriceHistory: {
 		ID: IDTxPriceHistory, Name: "수입 단가 이력", Description: "단가 이력 (module 계열)",
@@ -380,6 +427,12 @@ var Catalog = map[FeatureID]Feature{
 	},
 
 	// ===== baro.* =====
+	IDBaroCallbackRecommend: {
+		ID: IDBaroCallbackRecommend, Name: "BARO 자동 콜백 추천 엔진",
+		Description:    "owner 별 활성 거래처(30일+ 미주문) + 입고예정 SKU 컨텍스트 합본 (D-133)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{"/api/v1/baro/callback-recommend/"},
+	},
 	IDBaroIncoming: {
 		ID: IDBaroIncoming, Name: "BARO 입고예정", Description: "ETA·수량 read-only sanitized (D-116)",
 		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeColumnMasked,
@@ -427,6 +480,39 @@ var Catalog = map[FeatureID]Feature{
 		Description:    "거래처 한 명 신용/최근매출/CRM 미처리·활동 합본 (D-125)",
 		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
 		Paths: []string{"/api/v1/baro/partner-cockpit/{partner_id}"},
+	},
+	IDBaroRFM: {
+		ID: IDBaroRFM, Name: "BARO 거래처 RFM 보드",
+		Description:    "활성 거래처 12개월 매출 집계 + 세그먼트 분류 (D-128)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{"/api/v1/baro/rfm/"},
+	},
+	IDBaroSalesSummary: {
+		ID: IDBaroSalesSummary, Name: "BARO 자체 매출 요약",
+		Description:    "영업담당자/거래처타입/월/거래처 4 cut 매출 집계 (D-129)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantCompany,
+		Paths: []string{"/api/v1/baro/sales-summary/"},
+	},
+	IDBaroQuote: {
+		ID: IDBaroQuote, Name: "BARO 견적 DB 저장",
+		Description:    "baro_quotes CRUD + 발송 추적 (D-135 PR2.5b)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{
+			"/api/v1/baro/quotes/", "/api/v1/baro/quotes/{id}",
+			"/api/v1/baro/quotes/{id}/send",
+		},
+	},
+	IDBaroCreditCheck: {
+		ID: IDBaroCreditCheck, Name: "BARO 한도 사전 체크",
+		Description:    "출고/수주 전 신용 조회 (D-136 PR5.5b)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantCompany,
+		Paths: []string{"/api/v1/baro/credit-check/"},
+	},
+	IDBaroShipmentNotice: {
+		ID: IDBaroShipmentNotice, Name: "BARO 출하 알림 발송",
+		Description:    "발송 추적 + 드라이버 PWA 토큰 (D-137 PR7.5). 외부 발송은 환경변수 stub.",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{"/api/v1/baro/shipment-notices/"},
 	},
 
 	// ===== calc.* =====

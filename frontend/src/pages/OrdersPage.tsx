@@ -156,9 +156,11 @@ export default function OrdersPage() {
   // fetch (수 MB) 후 client-side filter/aggregation 했다 (D-OutboundDashboardC1).
   const [obPageIndex, setObPageIndex] = useState(0);
   const [obPageSize, setObPageSize] = useState(50);
+  const obPageResetKey = `${obStatusFilter}|${obUsageFilter}|${obMfgFilter}|${obDateRange?.start ?? ''}|${obDateRange?.end ?? ''}`;
   useEffect(() => {
+    void obPageResetKey;
     setObPageIndex(0);
-  }, [obStatusFilter, obUsageFilter, obMfgFilter, obDateRange]);
+  }, [obPageResetKey]);
 
   const {
     dashboard: outboundDash,
@@ -198,9 +200,11 @@ export default function OrdersPage() {
   const [saleInvoiceFilter, setSaleInvoiceFilter] = useState('');
   const [salePageIndex, setSalePageIndex] = useState(0);
   const [salePageSize, setSalePageSize] = useState(50);
+  const salePageResetKey = `${saleCustomerFilter}|${saleDateRange?.start ?? ''}|${saleDateRange?.end ?? ''}|${saleInvoiceFilter}`;
   useEffect(() => {
+    void salePageResetKey;
     setSalePageIndex(0);
-  }, [saleCustomerFilter, saleDateRange, saleInvoiceFilter]);
+  }, [salePageResetKey]);
 
   // C-1 sales — useSaleListAll 제거. KPI/sparkline/right-rail/SaleSummaryCards 는 useSaleDashboard,
   // 표는 useSaleList(서버 페이지네이션). 칩 필터(customer/date/invoice_status) 도 server-side.
@@ -262,9 +266,11 @@ export default function OrdersPage() {
   // 페이지네이션 상태 (수주 탭).
   const [orderPageIndex, setOrderPageIndex] = useState(0);
   const [orderPageSize, setOrderPageSize] = useState(50);
+  const orderPageResetKey = `${orderStatusFilter}|${orderCustomerFilter}|${orderCategoryFilter}|${orderWorkQueue}|${orderDateRange?.start ?? ''}|${orderDateRange?.end ?? ''}`;
   useEffect(() => {
+    void orderPageResetKey;
     setOrderPageIndex(0);
-  }, [orderStatusFilter, orderCustomerFilter, orderCategoryFilter, orderWorkQueue, orderDateRange]);
+  }, [orderPageResetKey]);
 
   const receiptFilters: { customer_id?: string; start?: string; end?: string } = {};
   if (receiptCustomerFilter) receiptFilters.customer_id = receiptCustomerFilter;

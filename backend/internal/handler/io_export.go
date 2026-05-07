@@ -1776,8 +1776,8 @@ func (h *ExportHandler) loadCIFMap(blIDs []string) (map[string]float64, error) {
 		return make(map[string]float64), nil
 	}
 
-	// declarations에서 bl_id 기반 조회 → cost_details
-	declData, _, err := h.DB.From("declarations").
+	// import_declarations에서 bl_id 기반 조회 → cost_details
+	declData, _, err := h.DB.From("import_declarations").
 		Select("declaration_id", "exact", false).
 		In("bl_id", blIDs).
 		Execute()

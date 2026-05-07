@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -48,7 +48,7 @@ export default function BLExpensesTab({ blId, lines }: Props) {
     [lines],
   );
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const list = await fetchWithAuth<Expense[]>(`/api/v1/expenses?bl_id=${blId}`);
@@ -72,20 +72,28 @@ export default function BLExpensesTab({ blId, lines }: Props) {
       // ignore
     }
     setLoading(false);
-  };
+  }, [blId]);
 
-  useEffect(() => { load(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [blId]);
+  useEffect(() => { void load(); }, [load]);
 
-  const totalAmount = useMemo(() => {
+  const costAmount = useMemo(() => {
     return EXPENSE_TYPES_ACTIVE.reduce((s, t) => {
       const r = rows[t.value];
       const a = parseFloat(r.amount) || 0;
-      const v = parseFloat(r.vat) || 0;
-      return s + a + v;
+      return s + a;
     }, 0);
   }, [rows]);
 
-  const wpUnit = totalWp > 0 ? totalAmount / totalWp : 0;
+  const vatAmount = useMemo(() => {
+    return EXPENSE_TYPES_ACTIVE.reduce((s, t) => {
+      const r = rows[t.value];
+      const v = parseFloat(r.vat) || 0;
+      return s + v;
+    }, 0);
+  }, [rows]);
+
+  const paymentAmount = costAmount + vatAmount;
+  const wpUnit = totalWp > 0 ? costAmount / totalWp : 0;
 
   const setField = (type: ExpenseType, field: keyof RowState, value: string) => {
     setRows((prev) => ({ ...prev, [type]: { ...prev[type], [field]: value, error: undefined } }));
@@ -252,10 +260,14 @@ export default function BLExpensesTab({ blId, lines }: Props) {
           <CardTitle className="text-sm">자동 계산</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
             <div>
-              <p className="text-[10px] text-muted-foreground">총 부대비용 (VAT 포함)</p>
-              <p className="font-semibold">{totalAmount.toLocaleString('ko-KR')} 원</p>
+              <p className="text-[10px] text-muted-foreground">원가반영 비용</p>
+              <p className="font-semibold">{costAmount.toLocaleString('ko-KR')} 원</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">VAT</p>
+              <p className="font-semibold">{vatAmount.toLocaleString('ko-KR')} 원</p>
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground">이 BL 총 용량</p>
@@ -268,6 +280,7 @@ export default function BLExpensesTab({ blId, lines }: Props) {
               <p className="font-semibold text-primary">
                 {wpUnit > 0 ? `${wpUnit.toFixed(2)} 원/Wp` : '—'}
               </p>
+              <p className="mt-1 text-[10px] text-muted-foreground">지급합계 {paymentAmount.toLocaleString('ko-KR')}원</p>
             </div>
           </div>
         </CardContent>

@@ -67,11 +67,6 @@ export default function SearchableSelect({
   }, [open]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 검색어 변경 시 활성 인덱스 초기화 (search 동기화)
-    setActiveIndex(0);
-  }, [search]);
-
-  useEffect(() => {
     if (filtered.length === 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- 필터링 결과 비었을 때 인덱스 0으로 (filtered.length 동기화)
       setActiveIndex(0);
@@ -153,7 +148,10 @@ export default function SearchableSelect({
             <input
               ref={searchRef}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setActiveIndex(0);
+              }}
               placeholder={searchPlaceholder}
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />

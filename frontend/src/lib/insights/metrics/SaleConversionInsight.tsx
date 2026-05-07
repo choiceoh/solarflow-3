@@ -3,7 +3,7 @@
 //
 // 서버 집계 마이그(C-1) 후: useOutboundDashboard 의 sale_conversion 필드 사용.
 
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useOutboundDashboard } from '@/hooks/useOutbound'
 import type { BreakdownRow, TrendPoint } from '@/lib/insights/aggregations'
 import InsightShell from '@/components/insights/InsightShell'
@@ -31,7 +31,7 @@ export function SaleConversionInsight() {
     : 0
 
   // 매출 대상이 적은 차원은 노이즈 — 3건 이상만 보여준다 (이전 동작 유지).
-  const toBreakdownRows = (rows: { key: string; label: string; eligible_count: number; linked_count: number; rate: number }[] | undefined): BreakdownRow[] =>
+  const toBreakdownRows = useCallback((rows: { key: string; label: string; eligible_count: number; linked_count: number; rate: number }[] | undefined): BreakdownRow[] =>
     (rows ?? [])
       .filter((r) => r.eligible_count >= 3)
       .map((r) => ({
@@ -41,11 +41,11 @@ export function SaleConversionInsight() {
         // share = 이 차원이 전체 매출대상에서 차지하는 가중치 — 비율(%) 메트릭이라 별도 의미.
         share: sc && sc.eligible_count > 0 ? r.eligible_count / sc.eligible_count : 0,
         count: r.eligible_count,
-      }))
+      })), [sc])
 
-  const byCustomer = useMemo(() => toBreakdownRows(sc?.by_customer_top10), [sc])
-  const byManufacturer = useMemo(() => toBreakdownRows(sc?.by_manufacturer_top10), [sc])
-  const byUsage = useMemo(() => toBreakdownRows(sc?.by_usage), [sc])
+  const byCustomer = useMemo(() => toBreakdownRows(sc?.by_customer_top10), [sc?.by_customer_top10, toBreakdownRows])
+  const byManufacturer = useMemo(() => toBreakdownRows(sc?.by_manufacturer_top10), [sc?.by_manufacturer_top10, toBreakdownRows])
+  const byUsage = useMemo(() => toBreakdownRows(sc?.by_usage), [sc?.by_usage, toBreakdownRows])
 
   const tone: 'pos' | 'info' | 'warn' = totalRate >= 90 ? 'pos' : totalRate >= 60 ? 'info' : 'warn'
 

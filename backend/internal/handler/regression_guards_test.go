@@ -103,7 +103,9 @@ func TestEnrichFunctionsUseHelper(t *testing.T) {
 // ============================================================
 // G4. Range(0, 999) (정확히 999 개) 차단 — off-by-one 의도 인지 검증
 // 회귀 패턴: 실수로 999 적었는데 1000행 cap 으로 정상 동작하는 것처럼 보이지만
-//   실제로는 990 개만 응답되어 누락. 명시적 cap 의도면 PostgRESTMaxRows 상수 사용.
+//
+//	실제로는 990 개만 응답되어 누락. 명시적 cap 의도면 PostgRESTMaxRows 상수 사용.
+//
 // ============================================================
 func TestNoMagicNumberInRange(t *testing.T) {
 	// .Range(N, M) 에서 M = 999 또는 1000 같은 magic number 검출 (cap 의도면 상수 써야)
@@ -116,4 +118,36 @@ func TestNoMagicNumberInRange(t *testing.T) {
 				f, lineNo, m[1])
 		}
 	})
+}
+
+// ============================================================
+// G5. 출고 검색은 enrich 전용 필드를 DB 컬럼처럼 참조하지 않는다.
+// 회귀 패턴: target_company_name 은 응답 enrich 필드라 outbounds 컬럼이 아님.
+// ============================================================
+func TestOutboundSearchDoesNotUseEnrichedOnlyColumn(t *testing.T) {
+	body, err := os.ReadFile("tx_outbound.go")
+	if err != nil {
+		t.Fatalf("read tx_outbound.go: %v", err)
+	}
+	if strings.Contains(string(body), "target_company_name.ilike") {
+		t.Fatal("출고 검색에서 target_company_name.ilike 사용 금지: companies 검색 후 target_company_id.in(...) 로 연결해야 합니다")
+	}
+}
+
+// ============================================================
+// G6. 출고 Import 는 일반 출고 생성 코어를 재사용한다.
+// 회귀 패턴: 엑셀 출고가 outbounds 직접 INSERT 로 Rust 재고 검증/RPC 트랜잭션을 우회.
+// ============================================================
+func TestOutboundImportUsesTransactionalCreateCore(t *testing.T) {
+	body, err := os.ReadFile("io_import.go")
+	if err != nil {
+		t.Fatalf("read io_import.go: %v", err)
+	}
+	content := string(body)
+	if strings.Contains(content, "Insert(outReq") {
+		t.Fatal("출고 Import 에서 outReq 직접 Insert 금지: createOutboundCore(outReq) 를 사용해야 합니다")
+	}
+	if !strings.Contains(content, "createOutboundCore(outReq)") {
+		t.Fatal("출고 Import 는 createOutboundCore(outReq) 를 호출해야 합니다")
+	}
 }

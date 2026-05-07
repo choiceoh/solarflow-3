@@ -16,6 +16,8 @@ interface MarginItem {
   total_revenue_krw: number
   total_cost_krw?: number | null
   total_margin_krw?: number | null
+  cost_covered_revenue_krw?: number
+  cost_missing_revenue_krw?: number
   margin_rate?: number | null
   sale_count: number
 }
@@ -27,6 +29,9 @@ interface MarginAnalysisResponse {
     total_cost_krw: number
     total_margin_krw: number
     overall_margin_rate: number
+    cost_covered_revenue_krw?: number
+    cost_missing_revenue_krw?: number
+    cost_coverage_rate?: number
     cost_basis: string
   }
 }
@@ -52,17 +57,20 @@ export function SalesAnalysisMarginRateInsight() {
   const items = data?.items ?? []
   const totalRate = data?.summary.overall_margin_rate ?? 0
 
-  // 제조사별 가중 평균 마진율 = sum(margin_krw) / sum(revenue_krw) * 100.
+  // 제조사별 가중 평균 마진율 = 원가 연결 매출의 sum(margin_krw) / sum(revenue_krw) * 100.
   const byManufacturer = useMemo<BreakdownRow[]>(() => {
     const map = new Map<string, { revenue: number; margin: number; count: number }>()
     for (const it of items) {
       const cur = map.get(it.manufacturer_name) ?? { revenue: 0, margin: 0, count: 0 }
-      cur.revenue += it.total_revenue_krw
-      cur.margin += it.total_margin_krw ?? 0
-      cur.count += it.sale_count
+      if (it.total_cost_krw != null && it.total_margin_krw != null) {
+        cur.revenue += it.cost_covered_revenue_krw ?? it.total_revenue_krw
+        cur.margin += it.total_margin_krw
+        cur.count += it.sale_count
+      }
       map.set(it.manufacturer_name, cur)
     }
     return Array.from(map.entries())
+      .filter(([, g]) => g.revenue > 0)
       .map(([k, g]) => ({
         key: k,
         label: k,

@@ -715,7 +715,8 @@ PO 화면에서 바로 표시:
 | cargo_min_mw / cargo_max_mw | DECIMAL | | OPIS 기준 5~25MW 등 cargo size |
 | source_url / raw_excerpt | TEXT | | 근거 URL과 짧은 원문 근거 |
 
-수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. AI는 evidence에 명시된 가격만 저장하며, 유료 로그인 한계는 run warning으로 남긴다(D-124).
+수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. 요청은 실행 로그를 만든 뒤 `running` 상태로 즉시 응답하고, 서버 백그라운드 작업이 완료/부분완료/실패 상태를 run에 기록한다. AI는 evidence에 명시된 가격만 저장하며, 유료 로그인 한계는 run warning으로 남긴다(D-124).
+신뢰도가 낮거나 근거가 약한 개별 관측값은 `/api/v1/price-benchmarks/{id}` 삭제로 차트와 목록에서 제거하되, 수집 실행 로그는 감사 기록으로 보존한다(D-143).
 
 #### 운영 수요 계획 (module_demand_forecasts)
 수주/출고 전 단계의 공사 예정 또는 유통 보정 수요를 월별·규격별로 수동 입력한다.

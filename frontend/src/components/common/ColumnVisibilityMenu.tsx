@@ -111,7 +111,9 @@ export function ColumnVisibilityMenu({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onSelect={() => {
-                [...pinning!.left, ...pinning!.right].forEach((id) => unpin!(id));
+                [...pinning!.left, ...pinning!.right].forEach((id) => {
+                  unpin!(id);
+                });
               }}
               className="text-xs text-muted-foreground"
             >

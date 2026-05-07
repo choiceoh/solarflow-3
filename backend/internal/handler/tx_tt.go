@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	postgrest "github.com/supabase-community/postgrest-go"
@@ -13,6 +15,25 @@ import (
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
+
+// ttSortable — server-side 정렬 허용 컬럼 (BL 패턴과 동일).
+var ttSortable = map[string]struct{}{
+	"remit_date": {},
+	"amount_usd": {},
+	"status":     {},
+	"purpose":    {},
+	"bank_name":  {},
+	"created_at": {},
+}
+
+func sanitizeTTSearchTerm(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(",", " ", "(", " ", ")", " ", ".", " ", "*", " ", "\"", " ")
+	return strings.TrimSpace(replacer.Replace(q))
+}
 
 // TTHandler — TT(전신송금) 관련 API를 처리하는 핸들러
 // 비유: "TT 송금 관리실" — 각 PO에 연결된 선급금/잔금 송금 내역을 관리
@@ -65,7 +86,37 @@ func (h *TTHandler) applyTTFilters(r *http.Request, query *postgrest.FilterBuild
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
 	}
+	// 기간 — remit_date 범위. frontend ProcurementPage date_range 서버 위임.
+	if from := r.URL.Query().Get("remit_date_from"); from != "" {
+		query = query.Gte("remit_date", from)
+	}
+	if to := r.URL.Query().Get("remit_date_to"); to != "" {
+		query = query.Lte("remit_date", to)
+	}
+	// 검색 — purpose/bank_name/memo ilike. PO 의 join 필드는 or 절 미지원.
+	if q := sanitizeTTSearchTerm(r.URL.Query().Get("q")); q != "" {
+		clauses := []string{
+			fmt.Sprintf("purpose.ilike.*%s*", q),
+			fmt.Sprintf("bank_name.ilike.*%s*", q),
+			fmt.Sprintf("memo.ilike.*%s*", q),
+		}
+		query = query.Or(strings.Join(clauses, ","), "")
+	}
 	return query, true, nil
+}
+
+func parseTTSort(r *http.Request) (column string, ascending bool) {
+	column = "remit_date"
+	ascending = false
+	if raw := r.URL.Query().Get("sort"); raw != "" {
+		if _, ok := ttSortable[raw]; ok {
+			column = raw
+		}
+	}
+	if r.URL.Query().Get("order") == "asc" {
+		ascending = true
+	}
+	return column, ascending
 }
 
 // List — GET /api/v1/tts — TT 목록 조회 (PO/제조사 정보 포함)
@@ -86,6 +137,9 @@ func (h *TTHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.RespondJSON(w, http.StatusOK, []model.TTWithRelations{})
 		return
 	}
+
+	sortCol, asc := parseTTSort(r)
+	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
 	limit, offset := parseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
