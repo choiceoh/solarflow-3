@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   CartesianGrid,
   Legend,
@@ -240,7 +241,10 @@ export default function PriceForecastPage() {
     });
   }, [query, rows, selectedSources, unit]);
 
-  const visibleRows = useMemo(() => filteredRows.slice(0, 18), [filteredRows]);
+  // 18 limit 제거 — 전체 filteredRows (~3000) 를 가상 스크롤로 표시.
+  // 헤더 "모두 선택" 도 보이는 18 만이 아닌 전체 필터 결과 기준이 되어 사용자
+  // 멘탈 모델과 일치한다.
+  const visibleRows = filteredRows;
 
   useEffect(() => {
     setSelectedBenchmarkIds((prev) => {
@@ -695,7 +699,7 @@ export default function PriceForecastPage() {
                 <div className="text-[11px] text-muted-foreground">
                   {selectedBenchmarkIds.size > 0
                     ? `${selectedBenchmarkIds.size.toLocaleString('ko-KR')}건 선택됨`
-                    : `${visibleRows.length.toLocaleString('ko-KR')}건 표시 중`}
+                    : `${visibleRows.length.toLocaleString('ko-KR')}건`}
                 </div>
               </div>
               <Button
@@ -710,29 +714,140 @@ export default function PriceForecastPage() {
                 {deleting ? '삭제 중' : '선택 삭제'}
               </Button>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-9">
-                    <Checkbox
-                      aria-label="현재 목록 전체 선택"
-                      checked={allVisibleSelected}
-                      disabled={visibleBenchmarkIds.length === 0 || deleting}
-                      onCheckedChange={toggleVisibleSelection}
-                    />
-                  </TableHead>
-                  <TableHead>일자</TableHead>
-                  <TableHead>소스</TableHead>
-                  <TableHead>지표</TableHead>
-                  <TableHead>지역·조건</TableHead>
-                  <TableHead className="text-right">가격</TableHead>
-                  <TableHead>신뢰도</TableHead>
-                  <TableHead>근거</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleRows.map((row) => (
-                  <TableRow key={row.benchmark_id}>
+            <BenchmarkVirtualTable
+              visibleRows={visibleRows}
+              filteredRows={filteredRows}
+              selectedBenchmarkIds={selectedBenchmarkIds}
+              visibleBenchmarkIds={visibleBenchmarkIds}
+              allVisibleSelected={allVisibleSelected}
+              deleting={deleting}
+              unit={unit}
+              toggleVisibleSelection={toggleVisibleSelection}
+              toggleBenchmarkSelection={toggleBenchmarkSelection}
+            />
+          </div>
+
+          <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <CalendarClock className="h-3.5 w-3.5 text-[var(--ink-3)]" />
+              <div className="sf-eyebrow">AI 수집 로그</div>
+            </div>
+            <div className="space-y-2">
+              {runs.map((run) => (
+                <div key={run.run_id} className="rounded border border-[var(--line)] px-2.5 py-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={statusVariant(run.status)} className="text-[10px]">
+                      {statusLabel(run.status)}
+                    </Badge>
+                    <span className="font-semibold tabular-nums">{formatDate(run.started_at)}</span>
+                    <span className="ml-auto text-[11px] text-muted-foreground">{run.provider ?? 'ai'} · {run.model ?? 'model'}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>{run.inserted_count.toLocaleString('ko-KR')}건 저장 · {run.skipped_count.toLocaleString('ko-KR')}건 제외</span>
+                  </div>
+                  {run.error_message ? (
+                    <div className="mt-1 text-[11px] text-destructive">{run.error_message}</div>
+                  ) : null}
+                </div>
+              ))}
+              {runs.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">수집 로그가 없습니다</div>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      </div>
+    </MasterConsole>
+  );
+}
+
+/**
+ * 가상 스크롤 벤치마크 관측값 테이블 — 3000건까지 스크롤 부드럽게.
+ * tbody 의 padding spacer 패턴 (보이는 row 위/아래 빈 tr 로 공간 확보, 보이는
+ * row 만 실제 렌더). table layout 변경 없이 col 정렬 보존.
+ */
+function BenchmarkVirtualTable({
+  visibleRows,
+  filteredRows,
+  selectedBenchmarkIds,
+  visibleBenchmarkIds,
+  allVisibleSelected,
+  deleting,
+  unit,
+  toggleVisibleSelection,
+  toggleBenchmarkSelection,
+}: {
+  visibleRows: PriceBenchmark[];
+  filteredRows: PriceBenchmark[];
+  selectedBenchmarkIds: Set<string>;
+  visibleBenchmarkIds: string[];
+  allVisibleSelected: boolean;
+  deleting: boolean;
+  unit: UnitKey;
+  toggleVisibleSelection: (next?: boolean) => void;
+  toggleBenchmarkSelection: (id: string) => void;
+}) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: visibleRows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 56,
+    overscan: 10,
+    getItemKey: (index) => visibleRows[index]?.benchmark_id ?? index,
+  });
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0]!.start : 0;
+  const paddingBottom = virtualItems.length > 0
+    ? totalSize - virtualItems[virtualItems.length - 1]!.end
+    : 0;
+
+  return (
+    <div
+      ref={parentRef}
+      className="overflow-auto"
+      style={{ maxHeight: 'min(60vh, 720px)', contain: 'strict' }}
+    >
+      <Table>
+        <TableHeader className="sticky top-0 z-10 bg-[var(--surface)]">
+          <TableRow>
+            <TableHead className="w-9">
+              <Checkbox
+                aria-label="현재 목록 전체 선택"
+                checked={allVisibleSelected}
+                disabled={visibleBenchmarkIds.length === 0 || deleting}
+                onCheckedChange={toggleVisibleSelection}
+              />
+            </TableHead>
+            <TableHead>일자</TableHead>
+            <TableHead>소스</TableHead>
+            <TableHead>지표</TableHead>
+            <TableHead>지역·조건</TableHead>
+            <TableHead className="text-right">가격</TableHead>
+            <TableHead>신뢰도</TableHead>
+            <TableHead>근거</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filteredRows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                관측값이 없습니다
+              </TableCell>
+            </TableRow>
+          ) : (
+            <>
+              {paddingTop > 0 ? (
+                <tr aria-hidden style={{ height: paddingTop }}>
+                  <td colSpan={8} />
+                </tr>
+              ) : null}
+              {virtualItems.map((vRow) => {
+                const row = visibleRows[vRow.index];
+                if (!row) return null;
+                return (
+                  <TableRow key={vRow.key} data-index={vRow.index}>
                     <TableCell>
                       <Checkbox
                         aria-label={`${row.source_name} ${row.metric_label} 선택`}
@@ -771,49 +886,17 @@ export default function PriceForecastPage() {
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
-                {filteredRows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
-                      관측값이 없습니다
-                    </TableCell>
-                  </TableRow>
-                ) : null}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
-            <div className="mb-2 flex items-center gap-2">
-              <CalendarClock className="h-3.5 w-3.5 text-[var(--ink-3)]" />
-              <div className="sf-eyebrow">AI 수집 로그</div>
-            </div>
-            <div className="space-y-2">
-              {runs.map((run) => (
-                <div key={run.run_id} className="rounded border border-[var(--line)] px-2.5 py-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={statusVariant(run.status)} className="text-[10px]">
-                      {statusLabel(run.status)}
-                    </Badge>
-                    <span className="font-semibold tabular-nums">{formatDate(run.started_at)}</span>
-                    <span className="ml-auto text-[11px] text-muted-foreground">{run.provider ?? 'ai'} · {run.model ?? 'model'}</span>
-                  </div>
-                  <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <CheckCircle2 className="h-3 w-3" />
-                    <span>{run.inserted_count.toLocaleString('ko-KR')}건 저장 · {run.skipped_count.toLocaleString('ko-KR')}건 제외</span>
-                  </div>
-                  {run.error_message ? (
-                    <div className="mt-1 text-[11px] text-destructive">{run.error_message}</div>
-                  ) : null}
-                </div>
-              ))}
-              {runs.length === 0 ? (
-                <div className="py-6 text-center text-sm text-muted-foreground">수집 로그가 없습니다</div>
+                );
+              })}
+              {paddingBottom > 0 ? (
+                <tr aria-hidden style={{ height: paddingBottom }}>
+                  <td colSpan={8} />
+                </tr>
               ) : null}
-            </div>
-          </div>
-        </section>
-      </div>
-    </MasterConsole>
+            </>
+          )}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
