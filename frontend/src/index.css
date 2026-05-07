@@ -2237,6 +2237,15 @@ textarea::placeholder {
   100% { transform: translateX(100%); }
 }
 
+/* AI 어시스턴트 — 스트리밍 중 새 토큰 페이드인. transition-opacity 가 매 리렌더마다 자연스럽게 부드럽게 함. */
+.sf-stream-fade {
+  animation: sf-stream-fade-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes sf-stream-fade-in {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+
 /* 톤 칩 — Bloomberg-density 상태 표시 */
 .sf-pill {
   display: inline-flex;

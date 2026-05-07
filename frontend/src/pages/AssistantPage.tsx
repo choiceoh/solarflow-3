@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
 import type { ToolUIPart, UIMessage } from 'ai';
-import { Bot, Check, ChevronDown, ChevronUp, Copy, FileText, Inbox, MessageSquarePlus, Paperclip, Search, Send, Square, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronUp, Copy, FileText, Inbox, MessageSquarePlus, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -258,13 +258,31 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     [apiPath],
   );
 
-  const { messages, sendMessage, status, stop, error: chatError } = useChat({
+  const { messages, sendMessage, setMessages, status, stop, regenerate, error: chatError } = useChat({
     transport,
     messages: initialMessages,
     onFinish: ({ messages: msgs }) => {
       void persistMessages(msgs);
     },
   });
+
+  // 사용자 메시지 편집 — 한 번에 한 개만 편집 모드.
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+
+  const handleSubmitEdit = async (messageId: string, newText: string) => {
+    const idx = messages.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    setEditingMessageId(null);
+    setMessages(messages.slice(0, idx));
+    stickToBottomRef.current = true;
+    await sendMessage({ text: newText });
+  };
+
+  const handleRegenerate = async () => {
+    if (status === 'submitted' || status === 'streaming') return;
+    stickToBottomRef.current = true;
+    await regenerate();
+  };
 
   const persistMessages = async (msgs: UIMessage[]) => {
     if (!sessionsEnabled || msgs.length === 0) return;
@@ -458,26 +476,45 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
             <ChipEmpty chips={pageChips.chips} onPick={(t) => setInput(t)} />
           ) : (
             <div className="flex flex-col gap-3">
-              {messagesWithProposals.map(({ message, proposals }) => (
-                <div
-                  key={message.id}
-                  id={`assistant-msg-${message.id}`}
-                  className={cn(
-                    'flex flex-col gap-2 rounded-md transition-colors',
-                    highlightedKey === message.id && 'bg-[var(--sf-solar)]/10 ring-2 ring-[var(--sf-solar)]/40',
-                  )}
-                >
-                  <MessageParts message={message} />
-                  {proposals.map((p) => (
-                    <ProposalCard
-                      key={p.id}
-                      proposal={p}
-                      onConfirm={(override) => onConfirm(p, override)}
-                      onReject={() => onReject(p)}
+              {messagesWithProposals.map(({ message, proposals }, idx) => {
+                const isLast = idx === messagesWithProposals.length - 1;
+                const isLastAssistant = isLast && message.role === 'assistant';
+                const isStreamingThis =
+                  isLastAssistant && (status === 'submitted' || status === 'streaming');
+                const canRegenerate = isLastAssistant && status !== 'submitted' && status !== 'streaming';
+                return (
+                  <div
+                    key={message.id}
+                    id={`assistant-msg-${message.id}`}
+                    className={cn(
+                      'flex flex-col gap-2 rounded-md transition-colors',
+                      highlightedKey === message.id && 'bg-[var(--sf-solar)]/10 ring-2 ring-[var(--sf-solar)]/40',
+                    )}
+                  >
+                    <MessageParts
+                      message={message}
+                      isStreaming={isStreamingThis}
+                      isEditing={editingMessageId === message.id}
+                      onStartEdit={
+                        message.role === 'user' && !editingMessageId
+                          ? () => setEditingMessageId(message.id)
+                          : undefined
+                      }
+                      onCancelEdit={() => setEditingMessageId(null)}
+                      onSubmitEdit={(newText) => void handleSubmitEdit(message.id, newText)}
+                      onRegenerate={canRegenerate ? handleRegenerate : undefined}
                     />
-                  ))}
-                </div>
-              ))}
+                    {proposals.map((p) => (
+                      <ProposalCard
+                        key={p.id}
+                        proposal={p}
+                        onConfirm={(override) => onConfirm(p, override)}
+                        onReject={() => onReject(p)}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
               {(status === 'submitted' || status === 'streaming') && messages.at(-1)?.role !== 'assistant' && (
                 <TypingIndicator />
               )}
@@ -600,15 +637,49 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
   );
 }
 
+interface MessagePartsProps {
+  message: UIMessage;
+  isStreaming?: boolean;
+  isEditing?: boolean;
+  onStartEdit?: () => void;
+  onCancelEdit?: () => void;
+  onSubmitEdit?: (newText: string) => void;
+  onRegenerate?: () => void;
+}
+
 // MessageParts — 한 메시지의 parts 를 순서대로 렌더링.
 // text → Bubble (텍스트 박스), tool-* → ToolChip (회색 칩), data-proposal 은 상위에서 ProposalCard 로 처리하므로 무시.
-function MessageParts({ message }: { message: UIMessage }) {
+function MessageParts({
+  message,
+  isStreaming,
+  isEditing,
+  onStartEdit,
+  onCancelEdit,
+  onSubmitEdit,
+  onRegenerate,
+}: MessagePartsProps) {
+  // 텍스트 part 는 첫 번째 것만 액션을 붙임 (다중 텍스트 part 인 경우 첫 거품에만 호버 액션).
+  let textIdx = -1;
   const nodes: React.ReactNode[] = [];
   for (let i = 0; i < message.parts.length; i++) {
     const part = message.parts[i];
     if (part.type === 'text') {
       if (!part.text.trim()) continue;
-      nodes.push(<Bubble key={i} role={message.role} content={part.text} />);
+      const isFirstText = textIdx === -1;
+      textIdx = i;
+      nodes.push(
+        <Bubble
+          key={i}
+          role={message.role}
+          content={part.text}
+          isStreaming={isFirstText && isStreaming}
+          isEditing={isFirstText && isEditing}
+          onStartEdit={isFirstText ? onStartEdit : undefined}
+          onCancelEdit={isFirstText ? onCancelEdit : undefined}
+          onSubmitEdit={isFirstText ? onSubmitEdit : undefined}
+          onRegenerate={isFirstText ? onRegenerate : undefined}
+        />,
+      );
       continue;
     }
     if (isToolUIPart(part)) {
@@ -619,7 +690,15 @@ function MessageParts({ message }: { message: UIMessage }) {
   }
   // 메시지에 text 가 하나도 없고 tool 만 있는 경우(드물게 발생) 빈 메시지 방지 — 폴백 텍스트 박스.
   if (nodes.length === 0 && message.role === 'assistant') {
-    nodes.push(<Bubble key="fallback" role={message.role} content={extractText(message)} />);
+    nodes.push(
+      <Bubble
+        key="fallback"
+        role={message.role}
+        content={extractText(message)}
+        isStreaming={isStreaming}
+        onRegenerate={onRegenerate}
+      />,
+    );
   }
   return <>{nodes}</>;
 }
@@ -678,9 +757,36 @@ function TypingIndicator() {
   );
 }
 
-function Bubble({ role, content }: { role: UIMessage['role']; content: string }) {
+interface BubbleProps {
+  role: UIMessage['role'];
+  content: string;
+  isStreaming?: boolean;
+  isEditing?: boolean;
+  onStartEdit?: () => void;
+  onCancelEdit?: () => void;
+  onSubmitEdit?: (newText: string) => void;
+  onRegenerate?: () => void;
+}
+
+function Bubble({
+  role,
+  content,
+  isStreaming,
+  isEditing,
+  onStartEdit,
+  onCancelEdit,
+  onSubmitEdit,
+  onRegenerate,
+}: BubbleProps) {
   const isUser = role === 'user';
   const [copied, setCopied] = useState(false);
+  const [editText, setEditText] = useState(content);
+
+  // 편집 모드 진입할 때마다 textarea 를 현재 content 로 동기화.
+  useEffect(() => {
+    if (isEditing) setEditText(content);
+  }, [isEditing, content]);
+
   const onCopy = async () => {
     try {
       await navigator.clipboard.writeText(content);
@@ -690,6 +796,28 @@ function Bubble({ role, content }: { role: UIMessage['role']; content: string })
       // 클립보드 권한 거부 등은 무시 — 메시지 표면화 안 함
     }
   };
+
+  const submitEdit = () => {
+    const next = editText.trim();
+    if (!next || next === content.trim()) {
+      onCancelEdit?.();
+      return;
+    }
+    onSubmitEdit?.(next);
+  };
+
+  const onEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onCancelEdit?.();
+      return;
+    }
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      submitEdit();
+    }
+  };
+
   return (
     <div className={cn('group/bubble flex gap-2.5', isUser ? 'flex-row-reverse' : 'flex-row')}>
       <div
@@ -700,30 +828,92 @@ function Bubble({ role, content }: { role: UIMessage['role']; content: string })
       >
         {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
-      <div className={cn('flex min-w-0 max-w-[80%] flex-col gap-1', isUser ? 'items-end' : 'items-start')}>
-        <div
-          className={cn(
-            'rounded-2xl px-4 py-3 text-base leading-relaxed',
-            isUser
-              ? 'whitespace-pre-wrap rounded-tr-sm bg-[var(--sf-solar)]/10'
-              : 'rounded-tl-sm bg-background',
-          )}
-        >
-          {isUser ? content : <MessageMarkdown content={content} />}
-        </div>
-        {/* 호버 시 copy 버튼 — 빈 텍스트(자리표시) 인 경우 숨김 */}
-        {content.trim() && (
-          <button
-            type="button"
-            onClick={onCopy}
+      <div
+        className={cn(
+          'flex min-w-0 max-w-[80%] flex-col gap-1',
+          isUser ? 'items-end' : 'items-start',
+          isEditing && 'w-full max-w-[80%]',
+        )}
+      >
+        {isEditing ? (
+          <div className="w-full rounded-2xl rounded-tr-sm bg-[var(--sf-solar)]/10 p-2">
+            <Textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onKeyDown={onEditKeyDown}
+              rows={Math.min(8, Math.max(2, content.split('\n').length + 1))}
+              className="w-full resize-none bg-background text-base leading-relaxed md:text-base"
+              autoFocus
+            />
+            <div className="mt-2 flex items-center justify-end gap-2 text-xs">
+              <span className="mr-auto text-muted-foreground/70">⌘+Enter 저장 · Esc 취소</span>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={onCancelEdit}>
+                취소
+              </Button>
+              <Button size="sm" className="h-7 px-3 text-xs" onClick={submitEdit}>
+                <Check className="mr-1 h-3 w-3" />저장 후 다시 보내기
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div
             className={cn(
-              'flex h-6 items-center gap-1 rounded px-1.5 text-xs text-muted-foreground/70 opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/bubble:opacity-100 focus-visible:opacity-100',
+              'rounded-2xl px-4 py-3 text-base leading-relaxed transition-opacity',
+              isUser
+                ? 'whitespace-pre-wrap rounded-tr-sm bg-[var(--sf-solar)]/10'
+                : 'rounded-tl-sm bg-background',
+              isStreaming && 'sf-stream-fade',
             )}
-            title="복사"
           >
-            {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-            <span>{copied ? '복사됨' : '복사'}</span>
-          </button>
+            {isUser ? content : <MessageMarkdown content={content} />}
+            {isStreaming && (
+              <span
+                className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse bg-foreground/60"
+                aria-hidden
+              />
+            )}
+          </div>
+        )}
+
+        {/* 호버 액션 줄: 복사 / (사용자) 편집 / (마지막 어시스턴트) 재생성 */}
+        {!isEditing && content.trim() && (
+          <div
+            className={cn(
+              'flex h-6 items-center gap-1 text-xs text-muted-foreground/70 opacity-0 transition-opacity group-hover/bubble:opacity-100 focus-within:opacity-100',
+            )}
+          >
+            <button
+              type="button"
+              onClick={onCopy}
+              className="flex items-center gap-1 rounded px-1.5 hover:bg-muted hover:text-foreground"
+              title="복사"
+            >
+              {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+              <span>{copied ? '복사됨' : '복사'}</span>
+            </button>
+            {onStartEdit && (
+              <button
+                type="button"
+                onClick={onStartEdit}
+                className="flex items-center gap-1 rounded px-1.5 hover:bg-muted hover:text-foreground"
+                title="편집해서 다시 보내기"
+              >
+                <Pencil className="h-3 w-3" />
+                <span>편집</span>
+              </button>
+            )}
+            {onRegenerate && (
+              <button
+                type="button"
+                onClick={onRegenerate}
+                className="flex items-center gap-1 rounded px-1.5 hover:bg-muted hover:text-foreground"
+                title="다시 생성"
+              >
+                <RotateCcw className="h-3 w-3" />
+                <span>다시 생성</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -876,16 +1066,22 @@ function SessionsPanel({
   onLoad: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter((s) => (s.title || '').toLowerCase().includes(q));
+  }, [sessions, query]);
   const grouped = useMemo(() => {
     const map = new Map<SessionBucket, SessionSummary[]>();
-    for (const s of sessions) {
+    for (const s of filtered) {
       const b = bucketOf(s.updated_at);
       const list = map.get(b) ?? [];
       list.push(s);
       map.set(b, list);
     }
     return map;
-  }, [sessions]);
+  }, [filtered]);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col border-b">
@@ -896,6 +1092,23 @@ function SessionsPanel({
           + 새 대화
         </Button>
       </header>
+      {enabled && sessions.length > 0 && (
+        <div className="border-b px-3 py-2">
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60"
+              aria-hidden
+            />
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="대화 제목 검색…"
+              className="h-8 pl-7 text-sm"
+            />
+          </div>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto p-3">
         {!enabled ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
@@ -907,6 +1120,12 @@ function SessionsPanel({
             <MessageSquarePlus className="h-7 w-7 opacity-30" />
             <div>저장된 대화가 없습니다.</div>
             <div className="text-xs opacity-70">대화를 보내면 자동 저장됩니다.</div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+            <Search className="h-7 w-7 opacity-30" />
+            <div>일치하는 대화가 없습니다.</div>
+            <div className="text-xs opacity-70">"{query}" 와 일치하는 제목 없음</div>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
