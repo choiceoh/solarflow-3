@@ -91,6 +91,7 @@
 | `tx.price_benchmark` | 가격예측 벤치마크 | M | global |
 | `tx.price_history` | 수입 단가 이력 | M | global |
 | `tx.tt` | T/T 계약금 | M | global |
+| `tx.approval` | 결재안 빌더 (frontend-only) | M | global | PR-8 (D-145 후속) — backend 라우트 없이 sidebar 가시성만 |
 
 ### intercompany.* (그룹내 매입 — 양방향)
 
@@ -122,6 +123,8 @@
 | `baro.quote` | BARO 견적 DB 저장 + 발송 | B | tenant_owned | D-135 PR2.5b |
 | `baro.credit_check` | BARO 한도 사전 체크 | B | tenant_company | D-136 PR5.5b |
 | `baro.shipment_notice` | BARO 출하 알림 발송 + 드라이버 PWA 토큰 | B | tenant_owned | D-137 PR7.5 |
+| `baro.home` | BARO 영업 일일 홈 (frontend-only) | B | tenant_owned | D-127 / PR-8 |
+| `baro.inverter` | BARO 인버터 호환 가이드 (frontend-only) | B | tenant_owned | D-130 / PR-8 |
 
 ### calc.* (Rust 계산엔진 프록시)
 
