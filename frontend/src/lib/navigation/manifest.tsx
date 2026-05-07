@@ -40,6 +40,7 @@ const DBIntegrityPage = lazy(() => import('@/pages/admin/DBIntegrityPage'));
 const AuditLogsPage = lazy(() => import('@/pages/settings/AuditLogsPage'));
 const PersonalSettingsPage = lazy(() => import('@/pages/settings/PersonalSettingsPage'));
 const SitePlaceholderPage = lazy(() => import('@/pages/settings/SitePlaceholderPage'));
+const FeatureMatrixPage = lazy(() => import('@/pages/settings/FeatureMatrixPage'));
 const AssistantPage = lazy(() => import('@/pages/AssistantPage'));
 const ConstructionSitesPage = lazy(() => import('@/pages/masters/ConstructionSitesPage'));
 const DataPage = lazy(() => import('@/pages/DataPage'));
@@ -164,6 +165,7 @@ export const ROUTES: RouteSpec[] = [
       { path: 'admin', element: AdminSettingsPage, roles: ['admin'] },
       { path: 'audit-logs', element: AuditLogsPage, roles: ['admin'] },
       { path: 'site', element: SitePlaceholderPage, roles: ['admin'] },
+      { path: 'feature-wiring', element: FeatureMatrixPage, roles: ['admin'] },
       { path: 'personal', element: PersonalSettingsPage },
     ],
   },
