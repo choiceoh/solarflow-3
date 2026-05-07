@@ -95,6 +95,9 @@ func (h *BankHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
+	// BankingPage 4개 insight 의 client-side 집계를 SQL 한 round-trip 으로 대체.
+	// banks + lc_records + limit_changes 합본이라 /banks 가 아닌 별도 prefix.
+	r.Get("/banking/dashboard", h.BankingDashboard)
 }
 
 // BaroIncomingHandler — BARO 전용 입고예정/ETA 보드 (가격·환율 제외).
@@ -258,6 +261,8 @@ func (h *ExpenseHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.With(g.Write).Put("/{id}", h.Update)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
+	// CustomsPage 4개 insight (TypeCount/AvgExpense/BlLinked/ExpenseTotal) 의 client-side 집계 대체.
+	r.With(g.Feature(feature.IDTxExpense)).Get("/customs/dashboard", h.CustomsDashboard)
 }
 
 // ExportHandler — 아마란스10 ERP 내보내기 (D-120: feature.IDIOExportAmaranth) + 통합 덤프.
@@ -509,6 +514,9 @@ func (h *PriceHistoryHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Put("/{id}", h.Update)
 	})
+	// PurchaseHistoryPage 4개 insight (Chains/Variants/PriceChanges/RecentEvents) 의 client-side
+	// 집계를 SQL 한 round-trip 으로 대체. PO + price_histories + LC + BL + TT 합본이라 별도 prefix.
+	r.With(g.Feature(feature.IDTxPriceHistory)).Get("/purchase/dashboard", h.PurchaseDashboard)
 }
 
 // PriceBenchmarkHandler — 가격예측용 외부 시세 벤치마크 + AI 수집 로그.

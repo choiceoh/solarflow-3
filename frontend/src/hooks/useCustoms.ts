@@ -1,8 +1,62 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { fetchAllPaginated, fetchWithAuth } from "@/lib/api"
 import { useAppStore } from "@/stores/appStore"
 import { companyParams } from "@/lib/companyUtils"
 import { useListQuery, useDetailQuery } from "@/lib/queryHelpers"
 import type { Declaration, DeclarationCost, Expense, ExpenseSummary } from "@/types/customs"
+
+// CustomsPage 4개 insight (TypeCount/AvgExpense/BlLinked/ExpenseTotal) 의 SQL 집계.
+export interface CustomsDashboardBreakdownRow {
+  key: string
+  label: string
+  count: number
+  sum_amount: number
+  avg_amount: number
+  share: number
+}
+
+export interface CustomsDashboard {
+  totals: {
+    count: number
+    sum_amount: number
+    avg_amount: number
+    distinct_type_count: number
+    bl_linked_count: number
+  }
+  trend24: {
+    month: string
+    count: number
+    sum_amount: number
+    bl_linked_count: number
+    distinct_types: number
+    avg_amount: number
+  }[]
+  by_type: CustomsDashboardBreakdownRow[]
+  by_bl_top10: CustomsDashboardBreakdownRow[]
+  by_bl_avg_top10: CustomsDashboardBreakdownRow[]
+  by_vendor_top10: CustomsDashboardBreakdownRow[]
+  by_vendor_avg_top10: CustomsDashboardBreakdownRow[]
+}
+
+export function useCustomsDashboard() {
+  const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
+  const q = useQuery<CustomsDashboard, Error>({
+    queryKey: ["customs-dashboard", selectedCompanyId],
+    queryFn: async () => {
+      const params = companyParams(selectedCompanyId!)
+      return fetchWithAuth<CustomsDashboard>(`/api/v1/customs/dashboard?${params}`)
+    },
+    enabled: !!selectedCompanyId,
+    placeholderData: keepPreviousData,
+  })
+  return {
+    dashboard: q.data ?? null,
+    loading: q.isLoading,
+    isFetching: q.isFetching,
+    error: q.error ? q.error.message : null,
+    reload: async () => { await q.refetch() },
+  }
+}
 
 // 면장 목록 조회
 export function useDeclarationList(filters: { bl_id?: string; month?: string } = {}) {
