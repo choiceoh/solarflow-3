@@ -1,10 +1,11 @@
-export type InboundType = "import" | "domestic" | "group"
+export type InboundType = "import" | "domestic" | "domestic_foreign" | "group"
 export type BLStatus = "scheduled" | "shipping" | "arrived" | "customs" | "completed" | "erp_done"
 
 /* D-083: 국내/그룹은 DB에 scheduled→completed만 사용. 화면 표시는 "입고중/입고완료"로. */
 export const STATUS_BY_TYPE: Record<InboundType, BLStatus[]> = {
   import: ["scheduled", "shipping", "arrived", "customs", "completed", "erp_done"],
   domestic: ["scheduled", "completed"],
+  domestic_foreign: ["scheduled", "completed"],
   group: ["scheduled", "completed"],
 }
 
@@ -18,6 +19,7 @@ export const STATUS_LABEL_BY_TYPE: Record<InboundType, Record<string, string>> =
     erp_done: "ERP등록",
   },
   domestic: { scheduled: "입고중", completed: "입고완료" },
+  domestic_foreign: { scheduled: "입고중", completed: "입고완료" },
   group: { scheduled: "입고중", completed: "입고완료" },
 }
 
@@ -54,6 +56,12 @@ export interface BLShipment {
   counterpart_company_id?: string
   declaration_number?: string
   cif_amount_krw?: number // 면장 CIF 원화금액 (부가세·무상분 과세 제외)
+  line_count?: number
+  total_mw?: number
+  avg_cents_per_wp?: number
+  first_product_code?: string
+  first_product_name?: string
+  first_spec_wp?: number
 }
 
 export interface BLSummary {
@@ -97,6 +105,7 @@ export interface BLLineItem {
 export const INBOUND_TYPE_LABEL: Record<InboundType, string> = {
   import: "해외직수입",
   domestic: "국내구매",
+  domestic_foreign: "국내유통사",
   group: "그룹내구매",
 }
 
