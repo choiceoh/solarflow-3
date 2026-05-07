@@ -208,9 +208,9 @@ export default function ProcurementPage() {
   const [ttPoFilter, setTtPoFilter] = useState("")
   const [ttDateRange, setTtDateRange] = useState<DateRangeValue>(null)
   const [ttPage, setTtPage] = useState(1)
-  const [ttPageSize, setTtPageSize] = useState(100)
+  const ttPageSize = 100
   useEffect(() => { setTtPage(1) }, [ttStatusFilter, ttPoFilter, ttDateRange])
-  const { items: tts, total: ttTotal, loading: ttLoading } = useTTListPaged({
+  const { items: tts, loading: ttLoading } = useTTListPaged({
     status: ttStatusFilter || undefined,
     po_id: ttPoFilter || undefined,
     remit_date_from: ttDateRange?.start,
@@ -835,6 +835,7 @@ export default function ProcurementPage() {
                         onSettle={handleSettleLC}
                         onSelectBL={setSelectedBL}
                         blsVersion={blsVersion}
+                        focusLCId={focusLCId}
                         sortField={lcSort.sortField}
                         sortDirection={lcSort.sortDirection}
                         onSort={lcSort.onSort}

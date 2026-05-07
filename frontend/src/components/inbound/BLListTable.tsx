@@ -26,6 +26,59 @@ interface Props {
   onSort?: (field: string) => void;
 }
 
+const DONE_STATUSES = new Set(['completed', 'erp_done']);
+
+function daysUntil(date?: string) {
+  if (!date) return null;
+  const at = new Date(`${date.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(at.getTime())) return null;
+  const today = new Date();
+  const base = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.ceil((at.getTime() - base.getTime()) / 86_400_000);
+}
+
+function dueText(date?: string) {
+  const d = daysUntil(date);
+  if (d == null) return '일정 미정';
+  if (d < 0) return `${Math.abs(d)}일 지연`;
+  if (d === 0) return '오늘 ETA';
+  return `D-${d}`;
+}
+
+type WorkChipTone = 'danger' | 'warn' | 'info' | 'muted';
+
+function workChipClass(tone: WorkChipTone) {
+  switch (tone) {
+    case 'danger':
+      return 'border-red-200 bg-red-50 text-red-700';
+    case 'warn':
+      return 'border-amber-200 bg-amber-50 text-amber-700';
+    case 'info':
+      return 'border-blue-200 bg-blue-50 text-blue-700';
+    default:
+      return 'border-muted bg-muted/40 text-muted-foreground';
+  }
+}
+
+function buildWorkChips(bl: BLShipment, agg?: BLAgg) {
+  const chips: { label: string; tone: WorkChipTone }[] = [];
+  const etaDiff = daysUntil(bl.eta);
+  const done = DONE_STATUSES.has(bl.status);
+
+  if (agg && agg.lineCount === 0) chips.push({ label: '품목 없음', tone: 'danger' });
+  if (bl.inbound_type === 'import' && !bl.po_id) chips.push({ label: 'PO 미연결', tone: 'warn' });
+  if (bl.inbound_type === 'import' && !bl.lc_id) chips.push({ label: 'LC 미연결', tone: 'warn' });
+  if (bl.inbound_type === 'import' && done && !bl.exchange_rate) chips.push({ label: '환율 없음', tone: 'danger' });
+  if (bl.status === 'customs' && !bl.declaration_number && !bl.cif_amount_krw) {
+    chips.push({ label: '면장 확인', tone: 'warn' });
+  }
+  if (bl.status === 'completed' && bl.erp_registered !== true) chips.push({ label: 'ERP 미등록', tone: 'info' });
+  if (!done && etaDiff != null && etaDiff < 0) chips.push({ label: `ETA ${Math.abs(etaDiff)}일 지남`, tone: 'danger' });
+  if (!done && etaDiff != null && etaDiff >= 0 && etaDiff <= 7) chips.push({ label: 'ETA 7일 내', tone: 'info' });
+
+  return chips.slice(0, 4);
+}
+
 export default function BLListTable({ items, onSelect, sortField, sortDirection, onSort }: Props) {
   const companies = useAppStore((s) => s.companies);
   const companyMap = Object.fromEntries(companies.map((c) => [c.company_id, c.company_name]));

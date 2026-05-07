@@ -54,12 +54,14 @@ interface Props {
   onSettle?: (lc: LCRecord, repaymentDate: string) => Promise<void>;
   onSelectBL?: (blId: string) => void;
   blsVersion?: number;
+  /** ?lc_id=… deeplink — 매칭 LC 행을 자동 펼치고 시각 강조 */
+  focusLCId?: string | null;
   sortField?: string | null;
   sortDirection?: 'asc' | 'desc' | null;
   onSort?: (field: string) => void;
 }
 
-function LCListTable({ items, onSettle, onSelectBL, blsVersion, sortField, sortDirection, onSort }: Props) {
+function LCListTable({ items, onSettle, onSelectBL, blsVersion, focusLCId, sortField, sortDirection, onSort }: Props) {
   // 렌더 중 Date.now() 호출은 react-hooks/purity 위반 → useState lazy init으로 1회만 캡처
   const [now] = useState(() => Date.now());
   const [agg, setAgg] = useState<Record<string, LCAgg>>({});

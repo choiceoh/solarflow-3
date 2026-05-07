@@ -74,6 +74,19 @@ export interface DeclarationCost {
   memo?: string
 }
 
+/** /api/v1/calc/landed-cost 응답 — DeclarationCost 항목들 + 부대비용 합계 (line 별). */
+export interface LandedCostResultItem extends DeclarationCost {
+  total_expense_krw?: number
+  declaration_number?: string
+  margin_vs_cif_krw?: number
+}
+
+export interface LandedCostResult {
+  items: LandedCostResultItem[]
+  total_landed_krw?: number
+  total_expense_krw?: number
+}
+
 export type ExpenseType =
   | "dock_charge"
   | "shuttle"

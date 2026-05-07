@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Ban, ClipboardList, DollarSign, FileEdit, FileSignature, FilterX, History, Landmark, Search, Send, Ship } from 'lucide-react';
 
 import { useAppStore } from '@/stores/appStore';
+import EmptyState from '@/components/common/EmptyState';
 import { usePOList, usePriceHistoryList, useLCList, useTTList } from '@/hooks/useProcurement';
 import { useBLList } from '@/hooks/useInbound';
 import { fetchWithAuth } from '@/lib/api';
