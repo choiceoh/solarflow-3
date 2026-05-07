@@ -91,6 +91,9 @@ function getReceiptMatchFilter(receipt: Receipt): Exclude<ReceiptMatchFilter, ''
 type SalesMetric = {
   lbl: string;
   v: string;
+  /** NumberTween 보간을 위한 raw 숫자 값. formatter 와 함께 주어지면 카운트업 표시. */
+  numericValue?: number;
+  formatter?: (n: number) => string;
   u?: string;
   sub?: string;
   tone: 'solar' | 'ink' | 'info' | 'warn' | 'pos';
@@ -581,38 +584,43 @@ export default function OrdersPage() {
   const saleConversionTone: SalesMetric['tone'] =
     saleConversionRate >= 90 ? 'pos' : saleConversionRate >= 60 ? 'info' : 'warn';
 
+  // NumberTween 용 formatter 헬퍼 — 정수 카운트 / 1자리 소수 / 억원 표시.
+  const fmtCount = (n: number) => String(Math.round(n));
+  const fmtFixed1 = (n: number) => n.toFixed(1);
+  const ordersKwRecent = recent30AvgUnitPriceWp?.avg ?? 0;
+  const partialCountRaw = orderDash?.totals.partial_count ?? 0;
   const metrics: SalesMetric[] =
     activeTab === 'outbound' ? [
-      { lbl: '출고 전체', v: String(outboundsTotalCount), u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar', spark: outboundCountSpark, metricId: 'outbound.count' },
-      { lbl: '계산서 연결률', v: saleConversionRate.toFixed(1), u: '%', sub: `${saleLinkedCount.toLocaleString()} / ${saleConversionDenom.toLocaleString()}건 매출대상`, tone: saleConversionTone, spark: saleConversionSpark, metricId: 'outbound.sale_conversion' },
-      { lbl: '전월 출고 용량', v: fmtSalesMw(monthlyOutboundKw.prev), u: 'MW', sub: `${monthlyOutboundKw.prevMonth}월 · 최근 6개월`, tone: 'ink', spark: outboundKwSpark, metricId: 'outbound.kw_prev_month' },
-      { lbl: '금년 출고 용량', v: fmtSalesMw(monthlyOutboundKw.year), u: 'MW', sub: monthlyOutboundKw.yoyPct != null ? `${monthlyOutboundKw.currYear}년 누계 · 전년比 ${monthlyOutboundKw.yoyPct >= 0 ? '+' : ''}${monthlyOutboundKw.yoyPct.toFixed(1)}%` : `${monthlyOutboundKw.currYear}년 누계`, tone: 'pos', spark: monthlyOutboundKw.yoy3y, metricId: 'outbound.kw_year' },
+      { lbl: '출고 전체', v: String(outboundsTotalCount), numericValue: outboundsTotalCount, formatter: fmtCount, u: '건', sub: `${fmtSalesMw(outboundKw)} MW`, tone: 'solar', spark: outboundCountSpark, metricId: 'outbound.count' },
+      { lbl: '계산서 연결률', v: saleConversionRate.toFixed(1), numericValue: saleConversionRate, formatter: fmtFixed1, u: '%', sub: `${saleLinkedCount.toLocaleString()} / ${saleConversionDenom.toLocaleString()}건 매출대상`, tone: saleConversionTone, spark: saleConversionSpark, metricId: 'outbound.sale_conversion' },
+      { lbl: '전월 출고 용량', v: fmtSalesMw(monthlyOutboundKw.prev), numericValue: monthlyOutboundKw.prev, formatter: fmtSalesMw, u: 'MW', sub: `${monthlyOutboundKw.prevMonth}월 · 최근 6개월`, tone: 'ink', spark: outboundKwSpark, metricId: 'outbound.kw_prev_month' },
+      { lbl: '금년 출고 용량', v: fmtSalesMw(monthlyOutboundKw.year), numericValue: monthlyOutboundKw.year, formatter: fmtSalesMw, u: 'MW', sub: monthlyOutboundKw.yoyPct != null ? `${monthlyOutboundKw.currYear}년 누계 · 전년比 ${monthlyOutboundKw.yoyPct >= 0 ? '+' : ''}${monthlyOutboundKw.yoyPct.toFixed(1)}%` : `${monthlyOutboundKw.currYear}년 누계`, tone: 'pos', spark: monthlyOutboundKw.yoy3y, metricId: 'outbound.kw_year' },
     ] :
     activeTab === 'sales' ? [
-      { lbl: '매출 합계', v: fmtEok(saleTotal), u: '억', sub: `${salesTotalCount}건`, tone: 'solar', spark: saleTotalSpark, metricId: 'sales.total' },
-      { lbl: '계산서 미발행', v: String(invoicePending), u: '건', sub: '발행 대기', tone: invoicePending > 0 ? 'warn' : 'pos', spark: saleInvoicePendingSpark, metricId: 'sales.invoice_pending' },
-      { lbl: '거래처', v: String(saleCustomersCount), u: '곳', sub: '매출처 기준', tone: 'info', metricId: 'sales.customers' },
-      { lbl: '평균 단가', v: saleAvgUnitPriceWp.toFixed(1), u: '원/Wp', sub: '필터 기준', tone: 'ink', metricId: 'sales.unit_price_wp' },
+      { lbl: '매출 합계', v: fmtEok(saleTotal), numericValue: saleTotal, formatter: fmtEok, u: '억', sub: `${salesTotalCount}건`, tone: 'solar', spark: saleTotalSpark, metricId: 'sales.total' },
+      { lbl: '계산서 미발행', v: String(invoicePending), numericValue: invoicePending, formatter: fmtCount, u: '건', sub: '발행 대기', tone: invoicePending > 0 ? 'warn' : 'pos', spark: saleInvoicePendingSpark, metricId: 'sales.invoice_pending' },
+      { lbl: '거래처', v: String(saleCustomersCount), numericValue: saleCustomersCount, formatter: fmtCount, u: '곳', sub: '매출처 기준', tone: 'info', metricId: 'sales.customers' },
+      { lbl: '평균 단가', v: saleAvgUnitPriceWp.toFixed(1), numericValue: saleAvgUnitPriceWp, formatter: fmtFixed1, u: '원/Wp', sub: '필터 기준', tone: 'ink', metricId: 'sales.unit_price_wp' },
     ] :
     activeTab === 'receipts' ? [
-      { lbl: '입금 합계', v: fmtEok(receiptTotal), u: '억', sub: `${receiptCount}건`, tone: 'solar', spark: receiptTotalSpark, metricId: 'receipts.total' },
-      { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '매칭 필요', tone: receiptRemaining > 0 ? 'warn' : 'pos', spark: receiptRemainingSpark, metricId: 'receipts.remaining' },
-      { lbl: '부분 매칭', v: String(receiptPartialMatchCount), u: '건', sub: '추가 확인', tone: 'info', spark: receiptPartialSpark, metricId: 'receipts.partial_match' },
-      { lbl: '회수율', v: receiptRecoveryRate.toFixed(1), u: '%', sub: '입금 매칭 기준', tone: 'pos', spark: receiptRecoverySpark, metricId: 'receipts.recovery_rate' },
+      { lbl: '입금 합계', v: fmtEok(receiptTotal), numericValue: receiptTotal, formatter: fmtEok, u: '억', sub: `${receiptCount}건`, tone: 'solar', spark: receiptTotalSpark, metricId: 'receipts.total' },
+      { lbl: '미정산', v: fmtEok(receiptRemaining), numericValue: receiptRemaining, formatter: fmtEok, u: '억', sub: '매칭 필요', tone: receiptRemaining > 0 ? 'warn' : 'pos', spark: receiptRemainingSpark, metricId: 'receipts.remaining' },
+      { lbl: '부분 매칭', v: String(receiptPartialMatchCount), numericValue: receiptPartialMatchCount, formatter: fmtCount, u: '건', sub: '추가 확인', tone: 'info', spark: receiptPartialSpark, metricId: 'receipts.partial_match' },
+      { lbl: '회수율', v: receiptRecoveryRate.toFixed(1), numericValue: receiptRecoveryRate, formatter: fmtFixed1, u: '%', sub: '입금 매칭 기준', tone: 'pos', spark: receiptRecoverySpark, metricId: 'receipts.recovery_rate' },
     ] :
     activeTab === 'matching' ? [
       // matching 탭의 KPI 는 receipts/sales 탭과 차원만 다른(count vs amount) 사실상 동일 데이터.
       // 드릴다운은 같은 집합의 종합 분해라 metricId 를 receipts.*/sales.* 에 재사용한다.
       // '거래처' 는 partner master 카운트라 의미 있는 분해가 없어 metricId 미부여 (정적 타일 유지).
-      { lbl: '입금', v: String(receiptCount), u: '건', sub: '매칭 후보', tone: 'solar', spark: receiptCountSpark, metricId: 'receipts.total' },
-      { lbl: '미정산', v: fmtEok(receiptRemaining), u: '억', sub: '대상 금액', tone: 'warn', spark: receiptRemainingSpark, metricId: 'receipts.remaining' },
-      { lbl: '매출', v: String(salesTotalCount), u: '건', sub: '후보 원장', tone: 'info', spark: (saleDash?.trend24 ?? []).slice(-6).map((p) => p.count), metricId: 'sales.total' },
-      { lbl: '거래처', v: String(partners.length), u: '곳', sub: '고객 마스터', tone: 'ink' },
+      { lbl: '입금', v: String(receiptCount), numericValue: receiptCount, formatter: fmtCount, u: '건', sub: '매칭 후보', tone: 'solar', spark: receiptCountSpark, metricId: 'receipts.total' },
+      { lbl: '미정산', v: fmtEok(receiptRemaining), numericValue: receiptRemaining, formatter: fmtEok, u: '억', sub: '대상 금액', tone: 'warn', spark: receiptRemainingSpark, metricId: 'receipts.remaining' },
+      { lbl: '매출', v: String(salesTotalCount), numericValue: salesTotalCount, formatter: fmtCount, u: '건', sub: '후보 원장', tone: 'info', spark: (saleDash?.trend24 ?? []).slice(-6).map((p) => p.count), metricId: 'sales.total' },
+      { lbl: '거래처', v: String(partners.length), numericValue: partners.length, formatter: fmtCount, u: '곳', sub: '고객 마스터', tone: 'ink' },
     ] : [
-      { lbl: '진행 수주', v: String(activeOrdersCount), u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${ordersTotalCount}건`, tone: 'solar', spark: activeOrderSpark, metricId: 'orders.active' },
-      { lbl: '거래처', v: String(customersCount), u: '곳', sub: '활성 고객', tone: 'info', metricId: 'orders.customers' },
-      { lbl: '분할출고', v: String(orderDash?.totals.partial_count ?? 0), u: '건', sub: '잔량 관리', tone: 'warn', spark: (orderDash?.trend24 ?? []).slice(-6).map((p) => p.partial_count), metricId: 'orders.partial' },
-      { lbl: '평균 단가', v: recent30AvgUnitPriceWp ? recent30AvgUnitPriceWp.avg.toFixed(1) : '0.0', u: '원/Wp', sub: recent30AvgUnitPriceWp ? `최근 30일 · ${recent30AvgUnitPriceWp.count}건` : '최근 30일', tone: 'pos', spark: unitPriceWpMa15Spark, metricId: 'orders.unit_price_wp' },
+      { lbl: '진행 수주', v: String(activeOrdersCount), numericValue: activeOrdersCount, formatter: fmtCount, u: '건', sub: `${fmtSalesMw(ordersKw)} MW · 전체 ${ordersTotalCount}건`, tone: 'solar', spark: activeOrderSpark, metricId: 'orders.active' },
+      { lbl: '거래처', v: String(customersCount), numericValue: customersCount, formatter: fmtCount, u: '곳', sub: '활성 고객', tone: 'info', metricId: 'orders.customers' },
+      { lbl: '분할출고', v: String(partialCountRaw), numericValue: partialCountRaw, formatter: fmtCount, u: '건', sub: '잔량 관리', tone: 'warn', spark: (orderDash?.trend24 ?? []).slice(-6).map((p) => p.partial_count), metricId: 'orders.partial' },
+      { lbl: '평균 단가', v: recent30AvgUnitPriceWp ? recent30AvgUnitPriceWp.avg.toFixed(1) : '0.0', numericValue: ordersKwRecent, formatter: fmtFixed1, u: '원/Wp', sub: recent30AvgUnitPriceWp ? `최근 30일 · ${recent30AvgUnitPriceWp.count}건` : '최근 30일', tone: 'pos', spark: unitPriceWpMa15Spark, metricId: 'orders.unit_price_wp' },
     ];
 
   const ordersCardControls = (
@@ -768,6 +776,8 @@ export default function OrdersPage() {
                 key={metric.lbl}
                 lbl={metric.lbl}
                 v={metric.v}
+                numericValue={metric.numericValue}
+                formatter={metric.formatter}
                 u={metric.u}
                 sub={metric.sub}
                 tone={metric.tone}

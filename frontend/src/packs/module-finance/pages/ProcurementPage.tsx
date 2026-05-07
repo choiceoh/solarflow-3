@@ -80,6 +80,9 @@ const PROC_TAB_OPTIONS = [
 type ProcurementMetric = {
   lbl: string
   v: string
+  /** NumberTween 보간을 위한 raw 숫자 값. formatter 와 함께 주어지면 카운트업. */
+  numericValue?: number
+  formatter?: (n: number) => string
   u?: string
   sub?: string
   tone: "solar" | "ink" | "info" | "warn" | "pos"
@@ -442,12 +445,20 @@ export default function ProcurementPage() {
   )
   const poSpark = monthlyCount(poRows, (p) => p.contract_date)
 
+  const fmtCount = (n: number) => String(Math.round(n));
+  const lcBanksCount = lcSummary?.bank_count ?? new Set(lcRows.map((lc) => lc.bank_id)).size;
+  const blImportCount = blSummary?.import_count ?? blRows.filter((bl) => bl.inbound_type === "import").length;
+  const ttPlannedCount = ttSummary?.planned_count ?? tts.filter((tt) => tt.status === "planned").length;
+  const ttPoCount = ttSummary?.po_count ?? new Set(tts.map((tt) => tt.po_id)).size;
+  const contractTypesCount = Object.keys(poSummary?.by_contract_type ?? {}).length || new Set(poRows.map((po) => po.contract_type)).size;
   const metrics: ProcurementMetric[] =
     activeTab === "lc"
       ? [
           {
             lbl: "L/C 전체",
             v: String(lcTotalCount),
+            numericValue: lcTotalCount,
+            formatter: fmtCount,
             u: "건",
             sub: `사용중 ${lcOpenedCount}건`,
             tone: "solar" as const,
@@ -457,6 +468,8 @@ export default function ProcurementPage() {
           {
             lbl: "개설 금액",
             v: fmtUsdM(lcTotalUsd),
+            numericValue: lcTotalUsd,
+            formatter: fmtUsdM,
             u: "M$",
             sub: "활성 필터 기준",
             tone: "warn" as const,
@@ -466,6 +479,8 @@ export default function ProcurementPage() {
           {
             lbl: "만기 30일",
             v: String(lcMaturitySoonCount),
+            numericValue: lcMaturitySoonCount,
+            formatter: fmtCount,
             u: "건",
             sub: lcMaturitySoon[0]?.lc_number ?? "긴급 만기 없음",
             tone: "info" as const,
@@ -473,7 +488,9 @@ export default function ProcurementPage() {
           },
           {
             lbl: "은행",
-            v: String(lcSummary?.bank_count ?? new Set(lcRows.map((lc) => lc.bank_id)).size),
+            v: String(lcBanksCount),
+            numericValue: lcBanksCount,
+            formatter: fmtCount,
             u: "곳",
             sub: "한도 사용처",
             tone: "ink" as const,
@@ -485,6 +502,8 @@ export default function ProcurementPage() {
             {
               lbl: "B/L 전체",
               v: String(blTotalCount),
+              numericValue: blTotalCount,
+              formatter: fmtCount,
               u: "건",
               sub: `진행 ${blActiveCount}건`,
               tone: "solar" as const,
@@ -494,6 +513,8 @@ export default function ProcurementPage() {
             {
               lbl: "선적/입항",
               v: String(blShippingCount),
+              numericValue: blShippingCount,
+              formatter: fmtCount,
               u: "건",
               sub: "해상 운송 구간",
               tone: "info" as const,
@@ -506,6 +527,8 @@ export default function ProcurementPage() {
             {
               lbl: "통관중",
               v: String(blCustomsCount),
+              numericValue: blCustomsCount,
+              formatter: fmtCount,
               u: "건",
               sub: "면장 확인 필요",
               tone: "warn" as const,
@@ -517,10 +540,9 @@ export default function ProcurementPage() {
             },
             {
               lbl: "해외직수입",
-              v: String(
-                blSummary?.import_count ??
-                  blRows.filter((bl) => bl.inbound_type === "import").length,
-              ),
+              v: String(blImportCount),
+              numericValue: blImportCount,
+              formatter: fmtCount,
               u: "건",
               sub: "OCR 자동입력 대상",
               tone: "pos" as const,
@@ -536,6 +558,8 @@ export default function ProcurementPage() {
               {
                 lbl: "T/T 이력",
                 v: String(ttTotalCount),
+                numericValue: ttTotalCount,
+                formatter: fmtCount,
                 u: "건",
                 sub: "계약금/잔금 송금",
                 tone: "solar" as const,
@@ -545,6 +569,8 @@ export default function ProcurementPage() {
               {
                 lbl: "완료 금액",
                 v: fmtUsdM(ttCompletedUsd),
+                numericValue: ttCompletedUsd,
+                formatter: fmtUsdM,
                 u: "M$",
                 sub: "completed 기준",
                 tone: "pos" as const,
@@ -553,9 +579,9 @@ export default function ProcurementPage() {
               },
               {
                 lbl: "대기",
-                v: String(
-                  ttSummary?.planned_count ?? tts.filter((tt) => tt.status === "planned").length,
-                ),
+                v: String(ttPlannedCount),
+                numericValue: ttPlannedCount,
+                formatter: fmtCount,
                 u: "건",
                 sub: "송금 예정",
                 tone: "warn" as const,
@@ -567,7 +593,9 @@ export default function ProcurementPage() {
               },
               {
                 lbl: "PO 연결",
-                v: String(ttSummary?.po_count ?? new Set(tts.map((tt) => tt.po_id)).size),
+                v: String(ttPoCount),
+                numericValue: ttPoCount,
+                formatter: fmtCount,
                 u: "건",
                 sub: "계약금 집계 대상",
                 tone: "ink" as const,
@@ -578,6 +606,8 @@ export default function ProcurementPage() {
               {
                 lbl: "진행 P/O",
                 v: String(poActiveCount),
+                numericValue: poActiveCount,
+                formatter: fmtCount,
                 u: "건",
                 sub: `${fmtMw(poTotalMw)} MW · 전체 ${poTotalCount}건`,
                 tone: "solar" as const,
@@ -587,6 +617,8 @@ export default function ProcurementPage() {
               {
                 lbl: "L/C 연결",
                 v: String(lcOpenedCount),
+                numericValue: lcOpenedCount,
+                formatter: fmtCount,
                 u: "건",
                 sub: `USD ${fmtUsdM(lcTotalUsd)}M`,
                 tone: "info" as const,
@@ -596,6 +628,8 @@ export default function ProcurementPage() {
               {
                 lbl: "운송중",
                 v: String(poShippingCount),
+                numericValue: poShippingCount,
+                formatter: fmtCount,
                 u: "건",
                 sub: "입고 전환 대기",
                 tone: "warn" as const,
@@ -607,10 +641,9 @@ export default function ProcurementPage() {
               },
               {
                 lbl: "계약 유형",
-                v: String(
-                  Object.keys(poSummary?.by_contract_type ?? {}).length ||
-                    new Set(poRows.map((po) => po.contract_type)).size,
-                ),
+                v: String(contractTypesCount),
+                numericValue: contractTypesCount,
+                formatter: fmtCount,
                 u: "종",
                 sub: "spot/frame 관리",
                 tone: "pos" as const,
@@ -776,6 +809,8 @@ export default function ProcurementPage() {
                 key={metric.lbl}
                 lbl={metric.lbl}
                 v={metric.v}
+                numericValue={metric.numericValue}
+                formatter={metric.formatter}
                 u={metric.u}
                 sub={metric.sub}
                 tone={metric.tone}
