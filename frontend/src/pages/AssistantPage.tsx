@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
 import type { ToolUIPart, UIMessage } from 'ai';
-import { Bot, Check, ChevronDown, ChevronUp, Copy, FileText, Inbox, MessageSquarePlus, PanelRightClose, PanelRightOpen, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronUp, Copy, Download, FileText, Inbox, MessageSquarePlus, PanelRightClose, PanelRightOpen, Paperclip, Pencil, RotateCcw, Search, Send, Square, Trash2, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -90,6 +90,30 @@ function buildOCRBlock(results: OCRResult[]): string {
   return blocks.join('\n\n');
 }
 
+// 세션 → markdown 변환. 사용자/AI 메시지를 헤더 + 본문 형태로 직렬화.
+// proposals/tool 호출 같은 비텍스트 part 는 [도구 호출] 라벨로 요약해서 컨텍스트 유지.
+function sessionToMarkdown(detail: SessionDetail): string {
+  const lines: string[] = [];
+  lines.push(`# ${detail.title || '대화'}`, '');
+  lines.push(`*세션 ID:* \`${detail.id}\``);
+  lines.push(`*업데이트:* ${detail.updated_at}`, '');
+  lines.push('---', '');
+  for (const m of detail.messages ?? []) {
+    const role = m.role === 'user' ? '## 👤 사용자' : m.role === 'assistant' ? '## 🤖 AI' : `## ${m.role}`;
+    lines.push(role, '');
+    const text = extractText(m).trim();
+    if (text) lines.push(text);
+    for (const part of m.parts ?? []) {
+      if (isToolUIPart(part)) {
+        const tool = String(getToolName(part));
+        lines.push('', `> *[도구] ${tool}*`);
+      }
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
 function buildSessionTitle(messages: UIMessage[]): string {
   const firstUser = messages.find((m) => m.role === 'user');
   const text = firstUser ? extractText(firstUser).trim() : '';
@@ -174,6 +198,27 @@ export default function AssistantPage() {
     }
   };
 
+  const exportSession = async (id: string) => {
+    try {
+      const detail = await fetchWithAuth<SessionDetail>(`/api/v1/assistant/sessions/${id}`);
+      const md = sessionToMarkdown(detail);
+      const safeTitle = (detail.title || '대화')
+        .replace(/[\\/:*?"<>|]/g, '_')
+        .slice(0, 60);
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeTitle}-${detail.id.slice(0, 8)}.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : '내보내기 실패');
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0">
       {sessionLoadingId ? (
@@ -197,6 +242,7 @@ export default function AssistantPage() {
               onNew={newSession}
               onLoad={loadSession}
               onDelete={deleteSession}
+              onExport={exportSession}
             />
           }
         />
@@ -360,18 +406,84 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, status]);
 
-  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const picked = Array.from(e.target.files ?? []);
+  const ACCEPTED_MIMES = useMemo(() => new Set(OCR_ACCEPT.split(',').map((s) => s.trim())), []);
+
+  // 공통 파일 처리 — 클릭/드롭/붙여넣기 모두 통과. 타입·크기 검증 + 토스트.
+  const addFiles = (files: File[]) => {
     const valid: File[] = [];
-    for (const f of picked) {
+    for (const f of files) {
       if (f.size > OCR_MAX_BYTES) {
         notify.error(`${f.name}: 20MB 초과로 첨부 불가`);
         continue;
       }
+      // MIME 타입 미지정(예: 일부 클립보드 페이스트) 은 image 로 시작하면 허용.
+      const mime = f.type || (f.name.match(/\.(png|jpe?g|webp|gif|pdf)$/i) ? `image/${f.name.split('.').pop()?.toLowerCase()}` : '');
+      if (mime && !ACCEPTED_MIMES.has(mime) && !mime.startsWith('image/')) {
+        notify.error(`${f.name}: 지원하지 않는 형식 (PDF/이미지만 가능)`);
+        continue;
+      }
       valid.push(f);
     }
-    setAttachments((prev) => [...prev, ...valid]);
+    if (valid.length > 0) setAttachments((prev) => [...prev, ...valid]);
+  };
+
+  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addFiles(Array.from(e.target.files ?? []));
     e.target.value = '';
+  };
+
+  // 드래그 카운터 — 자식 요소 enter/leave 가 dragover 이벤트를 흩어놓아 한 번 들어오면 N번 leave 발생.
+  // counter 로 감싸 0 이 되어야 실제 leave.
+  const dragCounterRef = useRef(0);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const onDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragCounterRef.current++;
+    setIsDragOver(true);
+  };
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current--;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragOver(false);
+    }
+  };
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length > 0) addFiles(files);
+  };
+
+  // 클립보드 붙여넣기 — 이미지 데이터 항목이 있으면 첨부 큐에 추가.
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind !== 'file') continue;
+      if (!item.type.startsWith('image/')) continue;
+      const f = item.getAsFile();
+      if (!f) continue;
+      // 클립보드 이미지는 종종 'image.png' 같은 generic 이름. timestamp 로 고유성 부여.
+      const ext = item.type.split('/')[1] || 'png';
+      const renamed = new File([f], `paste-${Date.now()}.${ext}`, { type: item.type });
+      imageFiles.push(renamed);
+    }
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      addFiles(imageFiles);
+      notify.success(`이미지 ${imageFiles.length}장 첨부됨`);
+    }
   };
 
   const removeAttachment = (idx: number) => setAttachments((prev) => prev.filter((_, i) => i !== idx));
@@ -504,7 +616,23 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
 
   return (
     <>
-      <div className={cn('flex min-w-0 flex-1 flex-col gap-3', embedded ? 'p-3' : 'p-4')}>
+      <div
+        className={cn(
+          'relative flex min-w-0 flex-1 flex-col gap-3',
+          embedded ? 'p-3' : 'p-4',
+        )}
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        {isDragOver && (
+          <div className="pointer-events-none absolute inset-2 z-50 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--sf-solar)] bg-[var(--sf-solar)]/10 backdrop-blur-sm">
+            <Paperclip className="h-10 w-10 text-[var(--sf-solar)]" />
+            <div className="text-base font-semibold text-foreground">파일을 놓아주세요</div>
+            <div className="text-sm text-muted-foreground">PDF / 이미지 (최대 20MB)</div>
+          </div>
+        )}
         {!embedded && (
           <header className="flex flex-wrap items-center gap-3 border-b pb-3">
             <div className="flex items-center gap-2">
@@ -610,6 +738,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
             placeholder={
               attachments.length > 0
                 ? '첨부 파일과 함께 보낼 질문 (예: "이 면장 등록해줘")'
@@ -1155,6 +1284,7 @@ function SessionsPanel({
   onNew,
   onLoad,
   onDelete,
+  onExport,
 }: {
   sessions: SessionSummary[];
   currentSessionId: string | null;
@@ -1163,6 +1293,7 @@ function SessionsPanel({
   onNew: () => void;
   onLoad: (id: string) => void;
   onDelete: (id: string) => void;
+  onExport?: (id: string) => void;
 }) {
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => {
@@ -1253,6 +1384,16 @@ function SessionsPanel({
                         >
                           <span className="truncate">{s.title || '새 대화'}</span>
                         </button>
+                        {onExport && (
+                          <button
+                            type="button"
+                            onClick={() => onExport(s.id)}
+                            className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted-foreground/10 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                            title="Markdown 내보내기"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => onDelete(s.id)}
