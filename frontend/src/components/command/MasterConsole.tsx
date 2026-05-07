@@ -4,6 +4,9 @@ import { CardB, CommandTopLine, RailBlock, TileB } from './MockupPrimitives';
 export interface MasterConsoleMetric {
   label: string;
   value: string;
+  /** NumberTween 보간을 위한 raw 숫자 값. formatter 와 함께 주어지면 카운트업. */
+  numericValue?: number;
+  formatter?: (n: number) => string;
   unit?: string;
   sub?: string;
   tone?: 'solar' | 'ink' | 'info' | 'warn' | 'pos';
@@ -59,6 +62,8 @@ export function MasterConsole({
                 key={metric.label}
                 lbl={metric.label}
                 v={metric.value}
+                numericValue={metric.numericValue}
+                formatter={metric.formatter}
                 u={metric.unit}
                 sub={metric.sub}
                 tone={metric.tone}
