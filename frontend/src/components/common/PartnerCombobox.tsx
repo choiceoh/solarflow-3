@@ -45,6 +45,7 @@ export function PartnerCombobox({
   const filtered = search
     ? partners.filter((p) => p.partner_name.toLowerCase().includes(search.toLowerCase()))
     : partners;
+  const shouldVirtualize = filtered.length > 80;
   const hasCreateAction = creatable && !creating;
   const allOptionOffset = includeAllOption ? 1 : 0;
   const optionCount = filtered.length + allOptionOffset + (hasCreateAction ? 1 : 0);
@@ -254,7 +255,7 @@ export function PartnerCombobox({
             )}
             {filtered.length === 0 ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">결과 없음</div>
-            ) : (
+            ) : shouldVirtualize ? (
               <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
                 {virtualizer.getVirtualItems().map((vRow) => {
                   const p = filtered[vRow.index];
@@ -281,6 +282,28 @@ export function PartnerCombobox({
                   );
                 })}
               </div>
+            ) : (
+              filtered.map((p, index) => {
+                const idx = index + allOptionOffset;
+                return (
+                  <button
+                    key={p.partner_id}
+                    type="button"
+                    onMouseEnter={() => setActiveIndex(idx)}
+                    onClick={() => handleSelect(p.partner_id)}
+                    className={cn(
+                      'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm text-left hover:bg-accent hover:text-accent-foreground transition-colors',
+                      activeIndex === idx && 'bg-accent text-accent-foreground',
+                      value === p.partner_id && 'bg-accent/40',
+                    )}
+                  >
+                    <span className="size-3.5 shrink-0 flex items-center justify-center">
+                      {value === p.partner_id && <CheckIcon className="size-3.5" />}
+                    </span>
+                    <span className="flex-1 truncate">{p.partner_name}</span>
+                  </button>
+                );
+              })
             )}
           </div>
           {creatable && !creating && (
