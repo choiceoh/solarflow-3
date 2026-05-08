@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { motion, LayoutGroup } from 'motion/react';
+import { motion, LayoutGroup, useReducedMotion } from 'motion/react';
 
 import { NumberTween } from '@/components/common/NumberTween';
 
@@ -260,6 +260,12 @@ export function FilterChips({
   // useId 로 LayoutGroup 마다 고유 id 부여 → 같은 페이지에 여러 FilterChips 가
   // 있어도 서로의 active indicator 가 섞이지 않음.
   const groupId = useId();
+  // OS "동작 줄이기" 활성 시 spring 전이 → 즉시 점프 (CSS prefers-reduced-motion
+  // 과 일관성 유지).
+  const reduceMotion = useReducedMotion();
+  const indicatorTransition = reduceMotion
+    ? { duration: 0 }
+    : { type: 'spring' as const, stiffness: 380, damping: 32, mass: 0.8 };
   return (
     <LayoutGroup id={groupId}>
       <div className="tabs sf-filter-chips" style={{ border: 'none' }}>
@@ -277,7 +283,7 @@ export function FilterChips({
                 <motion.span
                   layoutId="sf-filter-chip-active"
                   className="sf-filter-chip-indicator"
-                  transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.8 }}
+                  transition={indicatorTransition}
                   aria-hidden
                 />
               )}

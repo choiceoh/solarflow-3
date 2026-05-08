@@ -131,7 +131,7 @@ a:focus-visible,
   background: var(--sf-bg-2);
   color: var(--sf-ink);
   font-family: var(--sf-sans);
-  transition: grid-template-columns 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: grid-template-columns var(--sf-dur-slow) var(--sf-ease-out);
 }
 
 /* 사이드바 collapsed 상태 — 토글 버튼으로 사용자가 수동 접음. 56px 아이콘 폭 */
@@ -194,7 +194,7 @@ a:focus-visible,
   pointer-events: none;
   opacity: 0;
   box-shadow: var(--sf-shadow-2);
-  transition: opacity 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity var(--sf-dur-fast) var(--sf-ease-out);
   z-index: 100;
 }
 .sf-shell[data-sidebar-collapsed="true"] .sf-nav-link:hover::after {
@@ -214,9 +214,9 @@ a:focus-visible,
   border-color: var(--sf-line-2);
   background: var(--sf-bg);
   color: var(--sf-ink-2);
-  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              background 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: border-color var(--sf-dur-mid) var(--sf-ease-out),
+              background var(--sf-dur-mid) var(--sf-ease-out),
+              color var(--sf-dur-mid) var(--sf-ease-out);
 }
 .sf-dropzone[data-active="true"] {
   border-color: var(--sf-solar-2);
@@ -226,8 +226,8 @@ a:focus-visible,
 .sf-dropzone-icon {
   border-color: var(--sf-line-2);
   color: var(--sf-ink-3);
-  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
-              color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: border-color var(--sf-dur-mid) var(--sf-ease-out),
+              color var(--sf-dur-mid) var(--sf-ease-out);
 }
 .sf-dropzone[data-active="true"] .sf-dropzone-icon {
   border-color: var(--sf-solar-2);
@@ -236,7 +236,7 @@ a:focus-visible,
 }
 .sf-dropzone-sub {
   color: var(--sf-ink-3);
-  transition: color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: color var(--sf-dur-mid) var(--sf-ease-out);
 }
 .sf-dropzone[data-active="true"] .sf-dropzone-sub {
   color: var(--sf-solar-3);
@@ -282,8 +282,8 @@ a:focus-visible,
   border: 0;
   color: var(--sf-dark-ink-3);
   cursor: pointer;
-  transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1),
-              color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background var(--sf-dur-fast) var(--sf-ease-out),
+              color var(--sf-dur-fast) var(--sf-ease-out);
 }
 .sf-sidebar-toggle svg {
   height: 16px;
@@ -459,7 +459,7 @@ a:focus-visible,
   gap: 8px;
   border-top: 1px solid var(--sf-dark-line);
   padding: 8px 10px;
-  transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background var(--sf-dur-fast) var(--sf-ease-out);
 }
 .sf-sidebar-user:hover {
   background: rgb(255 255 255 / 0.03);
@@ -479,7 +479,7 @@ a:focus-visible,
   color: var(--sf-dark);
   font-size: 12px;
   font-weight: 800;
-  transition: box-shadow 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: box-shadow var(--sf-dur-fast) var(--sf-ease-out);
 }
 
 .sf-main-shell {
@@ -1344,7 +1344,7 @@ a:focus-visible,
   touch-action: none;
   z-index: 1;
   background: transparent;
-  transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background var(--sf-dur-fast) var(--sf-ease-out);
 }
 .sf-col-resizer:hover {
   background: rgb(245 184 0 / 0.35);
@@ -2398,8 +2398,8 @@ textarea::placeholder {
   padding: 2px;
   border-radius: 3px;
   cursor: pointer;
-  transition: color 120ms cubic-bezier(0.22, 1, 0.36, 1),
-              background 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: color var(--sf-dur-fast) var(--sf-ease-out),
+              background var(--sf-dur-fast) var(--sf-ease-out);
 }
 .sf-banner-close:hover {
   background: rgb(20 17 12 / 0.06);
@@ -2477,7 +2477,7 @@ textarea::placeholder {
   border: 1px solid var(--sf-line-2);
   color: var(--sf-ink-3);
   cursor: pointer;
-  transition: all 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: all var(--sf-dur-fast) var(--sf-ease-out);
 }
 .sf-detail-header-back:hover {
   border-color: var(--sf-ink-3);
@@ -2702,7 +2702,7 @@ textarea::placeholder {
 .sf-page table tbody tr,
 .sf-command-surface [data-slot="table-row"],
 .sf-command-surface table tbody tr {
-  transition: background 100ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background var(--sf-dur-fast) var(--sf-ease-out);
 }
 .sf-page table tbody tr.selected td,
 .sf-command-surface table tbody tr.selected td,
@@ -2762,8 +2762,8 @@ textarea::placeholder {
 
 /* 사이드바 네비링크 — easing 통일 */
 .sf-nav-link {
-  transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1),
-              color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background var(--sf-dur-fast) var(--sf-ease-out),
+              color var(--sf-dur-fast) var(--sf-ease-out);
 }
 
 /* 스켈레톤 shimmer — 로딩 상태 LoadingSpinner 대체용.
@@ -2835,7 +2835,7 @@ textarea::placeholder {
 
 /* AI 어시스턴트 — 메시지 첫 등장 시 슬라이드인 페이드. */
 .sf-msg-enter {
-  animation: sf-msg-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: sf-msg-enter 220ms var(--sf-ease-out);
 }
 @keyframes sf-msg-enter {
   from { opacity: 0; transform: translateY(8px); }
@@ -2895,7 +2895,7 @@ textarea::placeholder {
 
 /* AI 어시스턴트 — 메시지 첫 등장 시 슬라이드인 페이드. */
 .sf-msg-enter {
-  animation: sf-msg-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: sf-msg-enter 220ms var(--sf-ease-out);
 }
 @keyframes sf-msg-enter {
   from { opacity: 0; transform: translateY(8px); }
