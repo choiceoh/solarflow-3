@@ -1082,6 +1082,7 @@
 - **PR8.5b 분리** (별도 D-NNN, outbound 핸들러 변경):
   - 출고 생성 시 자동 피킹 명세 생성 — outbound→bl_line→inventory_allocation join 으로 위치 추출 + POST /picking-lists 자동 호출.
   - 명시적 enforcement 까지 가는 게 큰 작업이라 분리. PR8.5 단계는 수동 POST 만 안전 동작.
+- **D-154 반영**: 출고 생성 시 피킹 명세 자동 생성과 기존 출고 보정 endpoint 를 구현했다. 위치는 `inventory_movements.location_code` 최신 잔량을 우선 사용하고, `inventory_allocations.location_id` 를 fallback 으로 사용한다.
 - **PR8.5c 분리** (frontend):
   - `/baro/picking` 페이지 — 작업자 큐 (mine=true) + status 토글 + 라인 picked 토글 (모바일 친화 UI).
   - 인쇄 라벨 (Bin 표찰 + 라인 명세) 별도 PR.
@@ -1114,6 +1115,7 @@
 - **PR8.6b 분리**:
   - BL 라인 핸들러에서 검수 로그 자동 생성 호출 (입고 처리 시).
   - intercompany_request `receive` 액션에서 자동 호출.
+- **D-154 반영**: B/L 이 `completed` 또는 `erp_done` 으로 전환될 때 BL 라인별 `receiving_logs` 를 idempotent 하게 자동 생성한다. 그룹내 매입 요청도 `received` 입고확인 시 `source_type='intercompany'` 검수 로그를 자동 생성한다. 검수 로그 PATCH 로 위치·실수량·차이 사유·사진/메모 보정을 지원한다.
 - **이유**: 현재 입고는 BL 라인 status 변경만 추적 — 차이 사유·검수자·사진 부재. 클레임 발생 시 증빙 어려움. 통합 receiving_logs 로 양 흐름 동일 점검 + 회계 증빙 + AI 이상 탐지(향후) 기반.
 - **운영 기준**: 모든 테넌트 공유 (tx.* 도메인). 차이 발생 시 variance_reason 강제 (handler 검증).
 - **검증**: `go test ./internal/{feature,router,handler}` 통과 — coverage_test 일치, matrix consistency.
@@ -1142,6 +1144,7 @@
 - **PR8.7b/c 분리**:
   - PR8.7b — `cycle_counts.{id}/seed` endpoint: inventory_allocations 자동 스냅샷 → cycle_count_items 일괄 생성.
   - PR8.7c — completed 세션의 variance 라인을 inventory_allocations 자동 보정 (admin 결재 후).
+- **D-154 반영**: `PATCH /cycle-counts/{id}` 로 실사 시작/상태 변경을 지원하고, `POST /cycle-counts/{id}/seed` 로 위치별 시스템 재고를 자동 스냅샷한다. seed 는 `inventory_movements.location_code` 최신 잔량을 우선 사용하고, 위치 배정된 `inventory_allocations` 합산을 fallback 으로 사용한다.
 - **이유**: BARO 1000억 매출 환경에서 SKU 50종 × 분기 1회 점검 = 분기 200~300건 점검. 현재는 엑셀 파일로 수동 관리 — 차이 추적·증빙 부실. 시스템화로 정확도 추세 + 도난/파손 패턴 분석 가능.
 - **운영 기준**: 모든 테넌트 공유. 정확도 90% 이하 시 영업·회계 알림 (PR8.7d).
 - **검증**: `go test` 통과 — coverage_test 일치.
@@ -1326,4 +1329,33 @@
   - tenant registry host 감지와 feature resolver에서 `study.learning` 단독 노출을 테스트한다.
   - router coverage/matrix consistency로 `/api/v1/study/*` 라우트와 `study.learning` 매트릭스를 고정한다.
   - frontend tenantScope/manifest 테스트로 `study.topworks.ltd` 감지와 ERP 메뉴 미노출을 고정한다.
+- **날짜**: 2026-05-08
+
+## D-154: WMS는 수동 관리 화면이 아니라 출고·입고·실사 자동화 축으로 동작한다
+
+- **결정**: D-139~D-142의 WMS 테이블과 화면을 실제 운영 workflow 에 연결한다. 출고 생성은 피킹 명세를 자동 생성하고, B/L 입고완료 전환은 검수 로그를 자동 생성하며, 실사 세션은 위치별 시스템 재고를 seed 해서 즉시 카운팅 가능한 상태로 만든다.
+- **피킹 자동화**:
+  - active 출고 생성 후 `ensurePickingListForOutbound` 를 호출한다. 기존 명세가 있으면 중복 생성하지 않는다.
+  - 위치별 계획은 `inventory_movements` 의 최신 `ending_qty` + `location_code` 를 우선 사용한다. 위치 마스터와 매칭되면 `location_id` 를 함께 저장한다.
+  - 수불 위치 자료가 부족하면 `inventory_allocations.location_id` 로 fallback 하고, 그래도 없으면 무위치 단일 라인을 생성해 출고 자체는 막지 않는다.
+  - 기존 출고 보정용 `POST /api/v1/picking-lists/from-outbound/{outbound_id}` 를 제공한다.
+- **입고 검수 자동화**:
+  - B/L 상태가 `completed` 또는 `erp_done` 으로 전환될 때 BL 라인별 `receiving_logs` 를 자동 생성한다.
+  - `source_type='bl_line'` + `bl_line_id` 기준으로 idempotent 하게 확인해 재저장/상태 재전환 시 중복 로그를 만들지 않는다.
+  - 그룹내 매입 요청은 `PATCH /api/v1/intercompany-requests/{id}/receive` 입고확인 시 `source_type='intercompany'` + `intercompany_request_id` 기준으로 검수 로그를 자동 생성한다.
+  - 검수 로그는 `PATCH /api/v1/receiving-logs/{id}` 로 위치, 실수량, 차이 사유, 사진, 메모를 나중에 보정할 수 있다.
+- **실사 자동화**:
+  - `PATCH /api/v1/cycle-counts/{id}` 로 pending → in_progress, completed, cancelled 상태 변경을 지원한다.
+  - `POST /api/v1/cycle-counts/{id}/seed` 는 활성 위치를 기준으로 실사 라인을 만든다. 기본은 최신 수불 위치 잔량이고, 부족하면 위치 배정 재고를 합산한다.
+  - 기존 라인이 있는 세션은 기본적으로 보호하고, 운영자가 명시적으로 `replace=true` 를 줄 때만 재생성한다.
+- **UI 기준**:
+  - `/wms/picking` 은 누락 출고 ID를 입력해 피킹 명세를 역생성할 수 있다.
+  - `/wms/receiving` 은 소스 ID 필수 입력과 위치 선택을 강제해 저장 실패/무위치 검수 로그를 줄인다.
+  - `/wms/cycle-count` 는 빈 세션에서 “자동 라인 생성” 후 바로 “실사 시작” 할 수 있어야 한다.
+- **남은 경계**:
+  - 위치별 수불 자료가 없는 과거 이관 재고는 자동 피킹/실사에서 무위치 fallback 으로 남을 수 있다. 이 경우 위치 마스터와 초기 location allocation 보정이 먼저 필요하다.
+  - 실사 차이의 재고 보정은 별도 결재/감사 workflow 가 필요하므로 이번 결정에서 자동 반영하지 않는다.
+- **검증**:
+  - `go test ./internal/feature ./internal/router ./internal/handler` 로 feature catalog, route snapshot, handler compile 경로를 확인한다.
+  - frontend 는 `bun run build` 로 WMS 화면 타입과 번들 생성을 확인한다.
 - **날짜**: 2026-05-08

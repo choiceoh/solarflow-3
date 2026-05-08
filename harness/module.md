@@ -20,7 +20,7 @@ SolarFlow의 **원본 도메인** — D-108로 BARO가 분리되기 전까지는
 BARO와 **공유**:
 - 가용재고 (`/inventory`)
 - 수주 관리 (`/orders`), 출고/판매 (`/orders?tab=outbound`), 수금 관리 (`/orders?tab=receipts`)
-- WMS — 창고 위치 (`/wms/locations`), 피킹 작업 (`/wms/picking`), 입고 검수 (`/wms/receiving`), 재고실사 (`/wms/cycle-count`) — D-139~142
+- WMS — 창고 위치 (`/wms/locations`), 피킹 작업 (`/wms/picking`), 입고 검수 (`/wms/receiving`), 재고실사 (`/wms/cycle-count`) — D-139~142 + D-154 자동화 축
 - 마스터 (`/data`), AI 도우미 (`/assistant`), 설정 (`/settings`)
 
 **module 계열 전용** (`topsolar` + `cable`, BARO에는 미노출):
@@ -86,6 +86,7 @@ BARO와 **공유**:
 - [D-140](DECISIONS.md#d-140) — 위치별 재고 + 자동 피킹 명세 (`picking_lists` + status 머신).
 - [D-141](DECISIONS.md#d-141) — 입고 검수 로그 (`receiving_logs`). BL 라인 / intercompany / manual 통합.
 - [D-142](DECISIONS.md#d-142) — 정기 재고실사 (Cycle Counting). 정확도 자동 집계.
+- [D-154](DECISIONS.md#d-154) — 출고 피킹 명세 자동 생성, B/L·그룹내 매입 검수 로그 자동 생성, 실사 라인 자동 seed.
 
 ## module 계열 백엔드 엔드포인트 (`topsolarOnly` legacy 미들웨어)
 

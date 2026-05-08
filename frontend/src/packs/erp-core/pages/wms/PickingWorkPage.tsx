@@ -72,6 +72,8 @@ export default function PickingWorkPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [statusFilter, setStatusFilter] = useState<PickingList['status'] | ''>('');
   const [mineOnly, setMineOnly] = useState(true);
+  const [outboundSeedId, setOutboundSeedId] = useState('');
+  const [seedMsg, setSeedMsg] = useState('');
   const [error, setError] = useState('');
 
   const loadList = useCallback(async () => {
@@ -154,6 +156,27 @@ export default function PickingWorkPage() {
       if (selectedId) void loadDetail(selectedId);
     } catch (e) {
       console.error('[차이 입력 실패]', e);
+    }
+  };
+
+  const handleCreateFromOutbound = async () => {
+    const id = outboundSeedId.trim();
+    if (!id) {
+      setSeedMsg('출고 ID를 입력하세요');
+      return;
+    }
+    try {
+      const created = await fetchWithAuth<PickingList>(`/api/v1/picking-lists/from-outbound/${id}`, {
+        method: 'POST',
+      });
+      setSeedMsg('피킹 명세 생성 완료');
+      setOutboundSeedId('');
+      setSelectedId(created.picking_list_id);
+      void loadList();
+    } catch (e) {
+      setSeedMsg(e instanceof Error ? e.message : '피킹 명세 생성 실패');
+    } finally {
+      setTimeout(() => setSeedMsg(''), 5000);
     }
   };
 
@@ -258,6 +281,20 @@ export default function PickingWorkPage() {
             새로 고침
           </Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card px-3 py-2">
+        <span className="text-[11px] text-muted-foreground">누락 명세 생성</span>
+        <Input
+          className="h-8 w-72 text-xs"
+          placeholder="출고 ID"
+          value={outboundSeedId}
+          onChange={(e) => setOutboundSeedId(e.target.value)}
+        />
+        <Button size="sm" variant="outline" onClick={() => void handleCreateFromOutbound()}>
+          출고에서 생성
+        </Button>
+        {seedMsg && <span className="text-[11px] text-muted-foreground">{seedMsg}</span>}
       </div>
 
       <div className="flex-1 overflow-auto">

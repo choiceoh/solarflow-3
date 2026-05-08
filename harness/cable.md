@@ -26,7 +26,7 @@ module과 **동일하게 노출**:
 - 면장/원가 (`/customs`)
 - 바로 매입요청 inbox (`/group-trade/baro-inbox`)
 - 수주 관리 (`/orders`), 출고/판매 (`/orders?tab=outbound`), 수금 관리 (`/orders?tab=receipts`)
-- WMS — 창고 위치 (`/wms/locations`), 피킹 작업 (`/wms/picking`), 입고 검수 (`/wms/receiving`), 재고실사 (`/wms/cycle-count`) — D-139~142
+- WMS — 창고 위치 (`/wms/locations`), 피킹 작업 (`/wms/picking`), 입고 검수 (`/wms/receiving`), 재고실사 (`/wms/cycle-count`) — D-139~142 + D-154 자동화 축
 - L/C 한도 (`/banking`)
 - 매출 분석 (`/sales-analysis`)
 - 구매 이력 (`/purchase-history`)
@@ -50,6 +50,7 @@ module과 **동일하게 노출**:
 - **[D-140](DECISIONS.md#d-140)** — WMS Phase 2 위치별 재고 + 자동 피킹 명세.
 - **[D-141](DECISIONS.md#d-141)** — WMS Phase 3 입고 검수 로그.
 - **[D-142](DECISIONS.md#d-142)** — WMS Phase 4 정기 재고실사 (Cycle Counting).
+- **[D-154](DECISIONS.md#d-154)** — WMS 자동화 축. 출고 피킹 명세 자동 생성, B/L·그룹내 매입 검수 로그 자동 생성, 실사 라인 자동 seed.
 
 ## module 계열 백엔드 엔드포인트 (`topsolarOnly` legacy 미들웨어)
 

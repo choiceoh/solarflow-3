@@ -22,6 +22,13 @@ interface Warehouse {
   name: string;
 }
 
+interface WarehouseLocation {
+  location_id: string;
+  location_code: string;
+  location_type: string;
+  is_active: boolean;
+}
+
 interface ReceivingLog {
   receiving_id: string;
   source_type: 'bl_line' | 'intercompany' | 'manual';
@@ -61,11 +68,14 @@ const REASON_LABEL: Record<string, string> = Object.fromEntries(
 
 interface FormState {
   source_type: ReceivingLog['source_type'];
+  bl_line_id: string;
+  intercompany_request_id: string;
   warehouse_id: string;
   product_code_snapshot: string;
   product_name_snapshot: string;
   quantity_expected: string;
   quantity_received: string;
+  location_id: string;
   location_code_snapshot: string;
   variance_reason: string;
   variance_note: string;
@@ -74,11 +84,14 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   source_type: 'manual',
+  bl_line_id: '',
+  intercompany_request_id: '',
   warehouse_id: '',
   product_code_snapshot: '',
   product_name_snapshot: '',
   quantity_expected: '',
   quantity_received: '',
+  location_id: '',
   location_code_snapshot: '',
   variance_reason: '',
   variance_note: '',
@@ -87,6 +100,7 @@ const EMPTY_FORM: FormState = {
 
 export default function ReceivingLogPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [locations, setLocations] = useState<WarehouseLocation[]>([]);
   const [rows, setRows] = useState<ReceivingLog[]>([]);
   const [warehouseId, setWarehouseId] = useState('');
   const [varianceOnly, setVarianceOnly] = useState(false);
@@ -103,6 +117,22 @@ export default function ReceivingLogPage() {
       setWarehouses(list ?? []);
     } catch (e) {
       console.error('[창고 로드 실패]', e);
+    }
+  }, []);
+
+  const loadLocations = useCallback(async (warehouseID: string) => {
+    if (!warehouseID) {
+      setLocations([]);
+      return;
+    }
+    try {
+      const list = await fetchWithAuth<WarehouseLocation[]>(
+        `/api/v1/warehouse-locations/?warehouse_id=${warehouseID}&active_only=true`,
+      );
+      setLocations(list ?? []);
+    } catch (e) {
+      console.error('[창고 위치 로드 실패]', e);
+      setLocations([]);
     }
   }, []);
 
@@ -127,10 +157,19 @@ export default function ReceivingLogPage() {
   }, [warehouseId, varianceOnly]);
 
   useEffect(() => { void loadWarehouses(); }, [loadWarehouses]);
+  useEffect(() => { void loadLocations(form.warehouse_id); }, [form.warehouse_id, loadLocations]);
   useEffect(() => { void load(); }, [load]);
 
   const handleSave = async () => {
     if (!form.warehouse_id) { setSaveMsg('창고를 선택하세요'); return; }
+    if (form.source_type === 'bl_line' && !form.bl_line_id.trim()) {
+      setSaveMsg('B/L 라인 ID를 입력하세요');
+      return;
+    }
+    if (form.source_type === 'intercompany' && !form.intercompany_request_id.trim()) {
+      setSaveMsg('그룹내 요청 ID를 입력하세요');
+      return;
+    }
     const expected = Number(form.quantity_expected);
     const received = Number(form.quantity_received);
     if (!Number.isFinite(expected) || !Number.isFinite(received)) {
@@ -150,8 +189,13 @@ export default function ReceivingLogPage() {
         quantity_expected: expected,
         quantity_received: received,
       };
+      if (form.source_type === 'bl_line' && form.bl_line_id.trim()) body.bl_line_id = form.bl_line_id.trim();
+      if (form.source_type === 'intercompany' && form.intercompany_request_id.trim()) {
+        body.intercompany_request_id = form.intercompany_request_id.trim();
+      }
       if (form.product_code_snapshot.trim()) body.product_code_snapshot = form.product_code_snapshot.trim();
       if (form.product_name_snapshot.trim()) body.product_name_snapshot = form.product_name_snapshot.trim();
+      if (form.location_id) body.location_id = form.location_id;
       if (form.location_code_snapshot.trim()) body.location_code_snapshot = form.location_code_snapshot.trim();
       if (form.variance_reason) body.variance_reason = form.variance_reason;
       if (form.variance_note.trim()) body.variance_note = form.variance_note.trim();
@@ -235,9 +279,28 @@ export default function ReceivingLogPage() {
                 </SelectContent>
               </Select>
             </div>
+            {form.source_type !== 'manual' && (
+              <div className="col-span-2">
+                <label className="text-[10px] text-muted-foreground">
+                  {form.source_type === 'bl_line' ? 'B/L 라인 ID' : '그룹내 요청 ID'}
+                </label>
+                <Input
+                  className="h-8 text-xs"
+                  value={form.source_type === 'bl_line' ? form.bl_line_id : form.intercompany_request_id}
+                  onChange={(e) => setForm((f) => f.source_type === 'bl_line'
+                    ? { ...f, bl_line_id: e.target.value }
+                    : { ...f, intercompany_request_id: e.target.value })}
+                />
+              </div>
+            )}
             <div className="col-span-2">
               <label className="text-[10px] text-muted-foreground">창고</label>
-              <Select value={form.warehouse_id} onValueChange={(v) => setForm((f) => ({ ...f, warehouse_id: v ?? '' }))}>
+              <Select value={form.warehouse_id} onValueChange={(v) => setForm((f) => ({
+                ...f,
+                warehouse_id: v ?? '',
+                location_id: '',
+                location_code_snapshot: '',
+              }))}>
                 <SelectTrigger className="h-8 text-xs">
                   <span>{warehouses.find((w) => w.warehouse_id === form.warehouse_id)?.name ?? '선택'}</span>
                 </SelectTrigger>
@@ -252,7 +315,26 @@ export default function ReceivingLogPage() {
             </div>
             <div>
               <label className="text-[10px] text-muted-foreground">위치 코드</label>
-              <Input className="h-8 text-xs" value={form.location_code_snapshot} onChange={(e) => setForm((f) => ({ ...f, location_code_snapshot: e.target.value }))} />
+              <Select value={form.location_id} onValueChange={(v) => {
+                const loc = locations.find((item) => item.location_id === v);
+                setForm((f) => ({
+                  ...f,
+                  location_id: v ?? '',
+                  location_code_snapshot: loc?.location_code ?? '',
+                }));
+              }}>
+                <SelectTrigger className="h-8 text-xs">
+                  <span>{form.location_code_snapshot || '미지정'}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="" className="text-xs">미지정</SelectItem>
+                  {locations.map((loc) => (
+                    <SelectItem key={loc.location_id} value={loc.location_id} className="text-xs">
+                      {loc.location_code} · {loc.location_type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="text-[10px] text-muted-foreground">품번</label>

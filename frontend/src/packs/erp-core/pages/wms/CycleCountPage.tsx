@@ -179,6 +179,21 @@ export default function CycleCountPage() {
     }
   };
 
+  const handleSeed = async (id: string, replace = false) => {
+    try {
+      const qs = replace ? '?replace=true' : '';
+      const res = await fetchWithAuth<{ inserted: number; source: string }>(`/api/v1/cycle-counts/${id}/seed${qs}`, {
+        method: 'POST',
+      });
+      setSaveMsg(`실사 라인 ${res.inserted.toLocaleString('ko-KR')}건 생성 (${res.source})`);
+      void loadDetail(id);
+      void load();
+    } catch (e) {
+      setSaveMsg(e instanceof Error ? e.message : '자동 라인 생성 실패');
+      setTimeout(() => setSaveMsg(''), 5000);
+    }
+  };
+
   const handleItemUpdate = async (
     itemId: string,
     cycleCountId: string,
@@ -235,12 +250,17 @@ export default function CycleCountPage() {
             </Button>
           )}
           {session.status === 'pending' && (
-            <Button size="sm" onClick={() => void fetchWithAuth(
-              `/api/v1/cycle-counts/${session.cycle_count_id}`,
-              { method: 'PATCH', body: JSON.stringify({ status: 'in_progress' }) },
-            ).then(() => loadDetail(session.cycle_count_id))}>
-              실사 시작
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => void handleSeed(session.cycle_count_id, detail.items.length > 0)}>
+                자동 라인 생성
+              </Button>
+              <Button size="sm" onClick={() => void fetchWithAuth(
+                `/api/v1/cycle-counts/${session.cycle_count_id}`,
+                { method: 'PATCH', body: JSON.stringify({ status: 'in_progress' }) },
+              ).then(() => { loadDetail(session.cycle_count_id); void load(); })}>
+                실사 시작
+              </Button>
+            </div>
           )}
         </div>
 
@@ -249,12 +269,17 @@ export default function CycleCountPage() {
             {session.notes}
           </div>
         )}
+        {saveMsg && (
+          <div className="rounded border bg-card px-3 py-1 text-xs text-muted-foreground">{saveMsg}</div>
+        )}
 
         <div className="flex-1 overflow-auto">
           {detail.items.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-1 text-xs text-muted-foreground">
               <span>라인이 없습니다.</span>
-              <span>PR8.7b (자동 seed) 미배포 환경에서는 수동으로 라인을 추가해야 합니다.</span>
+              <Button size="sm" variant="outline" className="mt-2" onClick={() => void handleSeed(session.cycle_count_id)}>
+                현재 위치 재고로 라인 생성
+              </Button>
             </div>
           ) : (
             <div className="space-y-2">

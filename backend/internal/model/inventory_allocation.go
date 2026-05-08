@@ -25,6 +25,7 @@ type InventoryAllocation struct {
 	SiteID             *string  `json:"site_id,omitempty"`
 	BLID               *string  `json:"bl_id,omitempty"`     // 원가 추적용 BL 연결
 	BLNumber           *string  `json:"bl_number,omitempty"` // 조회용 (JOIN 없이 표시)
+	LocationID         *string  `json:"location_id,omitempty"`
 	CreatedAt          string   `json:"created_at"`
 	UpdatedAt          string   `json:"updated_at"`
 }
@@ -58,6 +59,7 @@ type CreateInventoryAllocationRequest struct {
 	Status             string   `json:"status,omitempty"`
 	OutboundID         *string  `json:"outbound_id,omitempty"`
 	OrderID            *string  `json:"order_id,omitempty"`
+	LocationID         *string  `json:"location_id,omitempty"`
 }
 
 func (req *CreateInventoryAllocationRequest) Validate() string {
@@ -100,6 +102,7 @@ type UpdateInventoryAllocationRequest struct {
 	OutboundID         *string  `json:"outbound_id,omitempty"`
 	OrderID            *string  `json:"order_id,omitempty"`
 	BLID               *string  `json:"bl_id,omitempty"`
+	LocationID         *string  `json:"location_id,omitempty"`
 }
 
 func (req *UpdateInventoryAllocationRequest) Validate() string {

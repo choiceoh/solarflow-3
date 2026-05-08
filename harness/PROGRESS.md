@@ -1,17 +1,17 @@
 # SolarFlow 진행 상황
 
-## 현재 상태 요약 (최종 업데이트: 2026-05-07)
+## 현재 상태 요약 (최종 업데이트: 2026-05-08)
 
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | study 학습 페이지 1차 UI + 진도/과제 도메인 설계, Excel Import Hub 중심 운영 입력 전환 마무리 + PO/LC/T/T import 스펙·서버 검증 추가 + PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 리허설 |
+| 다음 작업 | study 학습 페이지 1차 UI + 진도/과제 도메인 설계, WMS 위치 배정 초기 데이터 보정 + 실사 차이 보정 결재 흐름, Excel Import Hub 운영 입력 전환 마무리 |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-153 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트) |
+| DECISIONS | D-001~D-154 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -52,6 +52,55 @@
 - `cd frontend && bun run lint` 종료코드 0 — 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
 - `git diff --check` 성공
 - `graphify update .` 성공
+
+---
+
+## 2026-05-08 세션 — WMS 자동화 깊이 보강 (D-154)
+
+### 완료
+- 출고 생성 후 WMS 피킹 명세 자동 생성
+  - 기존 명세가 있으면 중복 생성하지 않음
+  - 최신 `inventory_movements.location_code` 잔량을 우선 사용하고, 위치 배정된 `inventory_allocations.location_id` 를 fallback 으로 사용
+  - 위치 자료가 부족한 과거/이관 출고는 무위치 단일 라인으로라도 명세를 만들어 작업 큐 누락을 방지
+- 기존 출고 보정용 API 추가
+  - `POST /api/v1/picking-lists/from-outbound/{outbound_id}`
+  - `/wms/picking` 에서 누락 출고 ID로 명세 역생성 가능
+- B/L 입고완료 전환 시 검수 로그 자동 생성
+  - `completed` / `erp_done` 전환에 반응
+  - BL 라인별 `receiving_logs` 를 `source_type='bl_line'` + `bl_line_id` 기준으로 idempotent 생성
+  - 검수 로그 PATCH 로 위치, 실수량, 차이 사유, 사진/메모 보정 가능
+- 그룹내 매입 입고확인 시 검수 로그 자동 생성
+  - `PATCH /api/v1/intercompany-requests/{id}/receive` 후 `source_type='intercompany'` 로그 생성
+  - 연결 출고의 `warehouse_id` 를 기준 창고로 사용하고, 위치는 검수 화면에서 후속 배정
+  - `intercompany_request_id` 기준 idempotent 생성으로 중복 로그 방지
+- 입고 검수 화면 보강
+  - BL/intercompany 소스 ID 필수 검증
+  - 선택 창고의 활성 위치를 불러와 위치 선택 + location_code snapshot 저장
+- 재고실사 자동 seed 추가
+  - `PATCH /api/v1/cycle-counts/{id}` 로 세션 시작/상태 변경 지원
+  - `POST /api/v1/cycle-counts/{id}/seed` 로 위치별 시스템 재고 라인 자동 생성
+  - 기존 라인이 있는 세션은 기본 보호, `replace=true` 명시 시에만 재생성
+  - `/wms/cycle-count` 에 빈 세션 자동 라인 생성 버튼 추가
+- feature catalog / route snapshot / D-154 결정 기록 동기화
+
+### 검증
+- `cd backend && go test ./internal/handler -run 'TestNonExistent'` 성공
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공
+- `cd backend && go test ./internal/feature ./internal/router ./internal/handler` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd frontend && bun install` 성공
+- `cd frontend && bun run build` 성공
+- `cd frontend && bun run test` 성공 — AllocationForm 테스트 격리/작은 거래처 목록 렌더링 보정 포함
+- `cd frontend && bun run lint` 종료코드 0 — 기존 ProcurementPage hook dependency 경고 4건 + bun-test.d.ts suppression 경고 1건 출력
+- `git diff --check` 성공
+- `graphify update .` 성공
+
+### 알려진 제한
+- 위치별 수불 또는 위치 배정 데이터가 없는 과거 이관 재고는 자동 피킹/실사에서 무위치 fallback 으로 남을 수 있음. 초기 location allocation 보정이 필요.
+- 실사 차이의 실제 재고 보정은 결재/감사 workflow 가 필요해 이번 세션에서 자동 반영하지 않음.
+- AllocationForm/POListTable 테스트는 통과하지만 기존 React `act(...)` 경고가 출력됨. 실패 원인이던 가상 스크롤 미렌더링은 보정 완료.
 
 ---
 
