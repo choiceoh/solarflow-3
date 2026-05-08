@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'bun:test';
-import { ALL_PACKS, buildNavGroups, ERP_CORE_PACK, MODULE_FINANCE_PACK, BARO_DOMAIN_PACK } from './index';
+import { ALL_PACKS, buildNavGroups, ERP_CORE_PACK, MODULE_FINANCE_PACK, BARO_DOMAIN_PACK, STUDY_DOMAIN_PACK } from './index';
 import { NAV_GROUPS } from '@/lib/navigation/manifest';
 
 describe('ALL_PACKS — 정합성', () => {
-  it('정의된 pack 3개', () => {
-    expect(ALL_PACKS).toHaveLength(3);
+  it('정의된 pack 4개', () => {
+    expect(ALL_PACKS).toHaveLength(4);
     expect(ALL_PACKS).toContain(ERP_CORE_PACK);
     expect(ALL_PACKS).toContain(MODULE_FINANCE_PACK);
     expect(ALL_PACKS).toContain(BARO_DOMAIN_PACK);
+    expect(ALL_PACKS).toContain(STUDY_DOMAIN_PACK);
   });
 
   it('각 pack 은 비어 있지 않은 navItems 를 가진다', () => {
@@ -71,7 +72,7 @@ describe('buildNavGroups — 사이드바 그룹 구성', () => {
 
   it('회귀 sanity — 핵심 메뉴 키들이 사이드바에 존재', () => {
     const keys = new Set(NAV_GROUPS.flatMap((g) => g.items.map((i) => i.key)));
-    for (const expected of ['inventory', 'orders', 'po', 'lc', 'baro-home', 'baro-rfm', 'settings']) {
+    for (const expected of ['inventory', 'orders', 'po', 'lc', 'baro-home', 'baro-rfm', 'study-learning', 'settings']) {
       expect(keys).toContain(expected);
     }
   });

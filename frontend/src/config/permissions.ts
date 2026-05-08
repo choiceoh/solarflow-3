@@ -57,6 +57,7 @@ export type MenuKey =
   | 'baro_shipment'         // BARO: 출하 알림 메시지 빌더 (D-131)
   | 'baro_callback'         // BARO: 자동 콜백 추천 엔진 (D-133)
   | 'baro_inbox'            // 탑솔라: 바로 매입요청 inbox
+  | 'study_learning'        // TopWorks Study: 신입 교육 플랜
   // WMS — 모든 테넌트 공유 (D-139~142)
   | 'wms_locations'         // 창고 위치(Bin) 마스터 (D-139)
   | 'wms_picking'           // 피킹 명세 / 작업자 큐 (D-140)
@@ -97,6 +98,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
             'banking','customs','purchase_history','price_forecast','import_hub','library','masters','approval','assistant','crm_inbox',
             'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_incoming','baro_purchase_history','baro_cockpit','baro_quote','baro_home','baro_rfm','baro_sales_summary','baro_inverter','baro_shipment','baro_callback','baro_inbox',
+            'study_learning',
             'wms_locations','wms_picking','wms_receiving','wms_cycle_count',
             'settings'],
     features: {
@@ -113,6 +115,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   executive: {
     menus: ['inventory','orders','outbound','receipts','banking','customs','purchase_history','price_forecast','library','assistant','crm_inbox',
             'baro_credit','baro_incoming','baro_purchase_history','baro_cockpit','baro_home','baro_rfm','baro_sales_summary','baro_inverter',
+            'study_learning',
             'wms_cycle_count',
             'settings'],
     features: {
@@ -127,7 +130,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   manager: {
-    menus: ['inventory','library','baro_incoming','assistant','settings'],
+    menus: ['inventory','library','baro_incoming','assistant','study_learning','settings'],
     features: {
       canEdit: false,
       showPrice: false,          // 단가·재고금액 차단 (역산 방지)
@@ -140,7 +143,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
     },
   },
   viewer: {
-    menus: ['inventory','library','baro_incoming','settings'],
+    menus: ['inventory','library','baro_incoming','study_learning','settings'],
     features: {
       canEdit: false,
       showPrice: false,

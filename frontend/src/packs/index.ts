@@ -11,9 +11,10 @@ import type { CommandNavGroup, CommandNavItem } from '@/lib/navigation/manifest'
 import { ERP_CORE_PACK } from './erp-core/nav';
 import { MODULE_FINANCE_PACK } from './module-finance/nav';
 import { BARO_DOMAIN_PACK } from './baro-domain/nav';
+import { STUDY_DOMAIN_PACK } from './study-domain/nav';
 import type { NavGroupKey, Pack } from './types';
 
-export { ERP_CORE_PACK, MODULE_FINANCE_PACK, BARO_DOMAIN_PACK };
+export { ERP_CORE_PACK, MODULE_FINANCE_PACK, BARO_DOMAIN_PACK, STUDY_DOMAIN_PACK };
 export type { Pack, PackID, PackNavItem, NavGroupKey } from './types';
 
 /**
@@ -25,6 +26,7 @@ export const ALL_PACKS: readonly Pack[] = [
   ERP_CORE_PACK,
   MODULE_FINANCE_PACK,
   BARO_DOMAIN_PACK,
+  STUDY_DOMAIN_PACK,
 ];
 
 // === Sidebar group 빌더 ===

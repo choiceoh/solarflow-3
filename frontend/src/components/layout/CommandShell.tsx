@@ -146,7 +146,9 @@ export default function CommandShell() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(readCollapsedFromStorage);
 
-  useEffect(() => { loadCompanies(); }, [loadCompanies]);
+  useEffect(() => {
+    if (currentTenant !== 'study') loadCompanies();
+  }, [currentTenant, loadCompanies]);
 
   const toggleSidebar = () => {
     setSidebarCollapsed((prev) => {

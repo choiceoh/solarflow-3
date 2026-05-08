@@ -79,6 +79,7 @@ const BaroRequestInboxPage = lazy(() => import('@/packs/baro-domain/pages/BaroRe
 const CreditBoardPage = lazy(() => import('@/packs/baro-domain/pages/CreditBoardPage'));
 const DispatchBoardPage = lazy(() => import('@/packs/baro-domain/pages/DispatchBoardPage'));
 const CRMInboxPage = lazy(() => import('@/packs/baro-domain/pages/CRMInboxPage'));
+const StudyLearningPage = lazy(() => import('@/packs/study-domain/pages/StudyLearningPage'));
 // WMS — 모든 테넌트 공유 (D-139~142). 폴리싱 PR.
 const WarehouseLocationsPage = lazy(() => import('@/packs/erp-core/pages/wms/WarehouseLocationsPage'));
 const PickingWorkPage = lazy(() => import('@/packs/erp-core/pages/wms/PickingWorkPage'));
@@ -168,6 +169,7 @@ export const ROUTES: RouteSpec[] = [
   { path: '/baro/credit-board', element: CreditBoardPage },
   { path: '/baro/dispatch', element: DispatchBoardPage, roles: ['admin', 'operator'] },
   { path: '/crm/inbox', element: CRMInboxPage },
+  { path: '/study/learning', element: StudyLearningPage },
   { path: '/approval', element: ApprovalPage },
   { path: '/assistant', element: AssistantPage },
   // WMS — 모든 테넌트 공유 (D-139~142)
