@@ -1,40 +1,52 @@
-import { ArrowLeftRight, Columns, Pin, PinOff } from 'lucide-react';
+import { ArrowLeftRight, Columns, Pin, PinOff } from "lucide-react"
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem, DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
-import type { ColumnVisibilityMeta } from '@/lib/columnVisibility';
-import type { ColumnPinningState } from '@/lib/columnPinning';
-import { useColumnReorderMode } from '@/lib/columnReorderMode';
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu"
+import type { ColumnVisibilityMeta } from "@/lib/columnVisibility"
+import type { ColumnPinningState } from "@/lib/columnPinning"
+import { useColumnReorderMode } from "@/lib/columnReorderMode"
 
 export interface ColumnVisibilityMenuProps {
-  columns: ColumnVisibilityMeta[];
-  hidden: Set<string>;
-  setHidden: (next: Set<string>) => void;
+  columns: ColumnVisibilityMeta[]
+  hidden: Set<string>
+  setHidden: (next: Set<string>) => void
   /** 영속 가능한 컬럼 고정 — 미지정 시 pin UI 숨김 */
-  pinning?: ColumnPinningState;
-  pinLeft?: (columnId: string) => void;
-  pinRight?: (columnId: string) => void;
-  unpin?: (columnId: string) => void;
+  pinning?: ColumnPinningState
+  pinLeft?: (columnId: string) => void
+  pinRight?: (columnId: string) => void
+  unpin?: (columnId: string) => void
   /** MetaTable 의 tableId — 지정 시 "컬럼 순서 변경" 토글 노출. */
-  tableId?: string;
+  tableId?: string
 }
 
 export function ColumnVisibilityMenu({
-  columns, hidden, setHidden, pinning, pinLeft, pinRight, unpin, tableId,
+  columns,
+  hidden,
+  setHidden,
+  pinning,
+  pinLeft,
+  pinRight,
+  unpin,
+  tableId,
 }: ColumnVisibilityMenuProps) {
-  const hideable = columns.filter((c) => c.hideable);
-  const pinningEnabled = !!(pinning && pinLeft && pinRight && unpin);
-  const reorderMode = useColumnReorderMode(tableId ?? '');
-  if (hideable.length === 0 && !pinningEnabled && !tableId) return null;
+  const hideable = columns.filter((c) => c.hideable)
+  const pinningEnabled = !!(pinning && pinLeft && pinRight && unpin)
+  const reorderMode = useColumnReorderMode(tableId ?? "")
+  if (hideable.length === 0 && !pinningEnabled && !tableId) return null
 
-  const isPinnedLeft = (key: string) => pinning?.left.includes(key) ?? false;
-  const isPinnedRight = (key: string) => pinning?.right.includes(key) ?? false;
+  const isPinnedLeft = (key: string) => pinning?.left.includes(key) ?? false
+  const isPinnedRight = (key: string) => pinning?.right.includes(key) ?? false
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="sf-toolbar-trigger">
-        <Columns style={{ width: 12, height: 12, color: 'var(--ink-3)' }} />
+        <Columns style={{ width: 12, height: 12, color: "var(--ink-3)" }} />
         <span>컬럼</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
@@ -58,18 +70,19 @@ export function ColumnVisibilityMenu({
           </>
         )}
         {hideable.map((c) => {
-          const visible = !hidden.has(c.key);
-          const left = isPinnedLeft(c.key);
-          const right = isPinnedRight(c.key);
+          const visible = !hidden.has(c.key)
+          const left = isPinnedLeft(c.key)
+          const right = isPinnedRight(c.key)
           return (
             <div key={c.key} className="flex items-center gap-1 px-1">
               <DropdownMenuCheckboxItem
                 className="flex-1"
                 checked={visible}
                 onCheckedChange={(checked) => {
-                  const next = new Set(hidden);
-                  if (checked) next.delete(c.key); else next.add(c.key);
-                  setHidden(next);
+                  const next = new Set(hidden)
+                  if (checked) next.delete(c.key)
+                  else next.add(c.key)
+                  setHidden(next)
                 }}
                 onSelect={(e) => e.preventDefault()}
               >
@@ -79,51 +92,64 @@ export function ColumnVisibilityMenu({
                 <>
                   <button
                     type="button"
-                    title={left ? '왼쪽 고정 해제' : '왼쪽 고정'}
-                    aria-label={left ? '왼쪽 고정 해제' : '왼쪽 고정'}
+                    title={left ? "왼쪽 고정 해제" : "왼쪽 고정"}
+                    aria-label={left ? "왼쪽 고정 해제" : "왼쪽 고정"}
                     className={
-                      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors ' +
-                      (left ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'text-muted-foreground hover:bg-muted')
+                      "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors " +
+                      (left
+                        ? "sf-tone-warn hover:brightness-95"
+                        : "text-muted-foreground hover:bg-muted")
                     }
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); left ? unpin!(c.key) : pinLeft!(c.key); }}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      left ? unpin!(c.key) : pinLeft!(c.key)
+                    }}
                   >
                     <Pin className="h-3 w-3 -rotate-90" />
                   </button>
                   <button
                     type="button"
-                    title={right ? '오른쪽 고정 해제' : '오른쪽 고정'}
-                    aria-label={right ? '오른쪽 고정 해제' : '오른쪽 고정'}
+                    title={right ? "오른쪽 고정 해제" : "오른쪽 고정"}
+                    aria-label={right ? "오른쪽 고정 해제" : "오른쪽 고정"}
                     className={
-                      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors ' +
-                      (right ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'text-muted-foreground hover:bg-muted')
+                      "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors " +
+                      (right
+                        ? "sf-tone-warn hover:brightness-95"
+                        : "text-muted-foreground hover:bg-muted")
                     }
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); right ? unpin!(c.key) : pinRight!(c.key); }}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      right ? unpin!(c.key) : pinRight!(c.key)
+                    }}
                   >
                     <Pin className="h-3 w-3 rotate-90" />
                   </button>
                 </>
               )}
             </div>
-          );
+          )
         })}
         {pinningEnabled && (pinning!.left.length > 0 || pinning!.right.length > 0) && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onSelect={() => {
-                [...pinning!.left, ...pinning!.right].forEach((id) => {
-                  unpin!(id);
-                });
+                ;[...pinning!.left, ...pinning!.right].forEach((id) => {
+                  unpin!(id)
+                })
               }}
               className="text-xs text-muted-foreground"
             >
-              <PinOff className="mr-2 h-3 w-3" />모든 고정 해제
+              <PinOff className="mr-2 h-3 w-3" />
+              모든 고정 해제
             </DropdownMenuItem>
           </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
+  )
 }
 
-export default ColumnVisibilityMenu;
+export default ColumnVisibilityMenu

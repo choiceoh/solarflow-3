@@ -191,12 +191,12 @@ export const PO_STATUS_LABEL: Record<POStatus, string> = {
   shipping: "선적중(레거시)",
 }
 export const PO_STATUS_COLOR: Record<POStatus, string> = {
-  draft: "bg-gray-100 text-gray-700",
-  contracted: "bg-blue-100 text-blue-700",
-  in_progress: "bg-yellow-100 text-yellow-700",
-  completed: "bg-green-100 text-green-700",
-  cancelled: "bg-red-100 text-red-700",
-  shipping: "bg-yellow-100 text-yellow-700",
+  draft: "sf-tone-muted",
+  contracted: "sf-tone-info",
+  in_progress: "sf-tone-warn",
+  completed: "sf-tone-pos",
+  cancelled: "sf-tone-neg",
+  shipping: "sf-tone-warn",
 }
 export const CONTRACT_TYPE_LABEL: Record<ContractType, string> = {
   spot: "스팟",
@@ -220,14 +220,14 @@ export const LC_STATUS_LABEL: Record<LCStatus, string> = {
   cancelled: "취소",
 }
 export const LC_STATUS_COLOR: Record<LCStatus, string> = {
-  pending: "bg-gray-100 text-gray-700",
-  opened: "bg-blue-100 text-blue-700",
-  docs_received: "bg-yellow-100 text-yellow-700",
-  settled: "bg-green-100 text-green-700",
-  cancelled: "bg-red-100 text-red-700",
+  pending: "sf-tone-muted",
+  opened: "sf-tone-info",
+  docs_received: "sf-tone-warn",
+  settled: "sf-tone-pos",
+  cancelled: "sf-tone-neg",
 }
 export const TT_STATUS_LABEL: Record<TTStatus, string> = { planned: "예정", completed: "완료" }
 export const TT_STATUS_COLOR: Record<TTStatus, string> = {
-  planned: "bg-gray-100 text-gray-700",
-  completed: "bg-green-100 text-green-700",
+  planned: "sf-tone-muted",
+  completed: "sf-tone-pos",
 }

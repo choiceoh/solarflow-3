@@ -1413,10 +1413,14 @@ a:focus-visible,
 /* MetaTable 컬럼 고정 — 좌/우 sticky. inline style 로 left/right 픽셀이 들어오고
    여기선 box-shadow 로 sticky 경계를 표시. */
 .sf-col-pinned-left {
-  box-shadow: 1px 0 0 0 var(--sf-line, rgb(0 0 0 / 0.08));
+  box-shadow:
+    1px 0 0 0 var(--sf-line-2, rgb(0 0 0 / 0.08)),
+    10px 0 14px -14px rgb(60 40 10 / 0.32);
 }
 .sf-col-pinned-right {
-  box-shadow: -1px 0 0 0 var(--sf-line, rgb(0 0 0 / 0.08));
+  box-shadow:
+    -1px 0 0 0 var(--sf-line-2, rgb(0 0 0 / 0.08)),
+    -10px 0 14px -14px rgb(60 40 10 / 0.32);
 }
 
 /* 헤더 드래그 드롭 대상 — 옅은 솔라 좌측 라인으로 삽입 위치 표시 */
@@ -2133,6 +2137,112 @@ a:focus-visible,
   vertical-align: middle;
 }
 
+.sf-meta-table {
+  --sf-table-hover: color-mix(in srgb, var(--sf-solar-bg) 30%, var(--sf-surface));
+  --sf-table-selected: color-mix(in srgb, var(--sf-solar-bg) 62%, var(--sf-surface));
+  min-width: 0;
+}
+
+.sf-meta-table [data-slot="table-container"] {
+  border-radius: 6px;
+  background: var(--sf-surface);
+  scrollbar-width: thin;
+  scrollbar-color: var(--sf-line-3) transparent;
+}
+
+.sf-meta-table [data-slot="table"] {
+  color: var(--sf-ink-2);
+}
+
+.sf-meta-table [data-slot="table-head"] {
+  height: 38px;
+  vertical-align: middle;
+}
+
+.sf-meta-table [data-slot="table-cell"] {
+  height: 42px;
+  line-height: 1.35;
+}
+
+.sf-meta-table [data-slot="table-head"],
+.sf-meta-table [data-slot="table-cell"] {
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.sf-meta-table [data-align="right"] {
+  font-family: var(--sf-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum', 'zero', 'ss01';
+}
+
+.sf-meta-table [data-align="right"] .sf-meta-table-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sf-meta-table-text {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.sf-meta-table-sort {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  border-radius: 4px;
+  padding: 1px 2px;
+  color: inherit;
+  font: inherit;
+  line-height: 1.15;
+  text-align: inherit;
+  user-select: none;
+  transition: color var(--sf-dur-fast) var(--sf-ease-out),
+              background var(--sf-dur-fast) var(--sf-ease-out);
+}
+
+.sf-meta-table-sort:hover {
+  background: var(--sf-bg-2);
+  color: var(--sf-ink);
+}
+
+.sf-meta-table-sort-icon {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  color: var(--sf-ink-4);
+}
+
+.sf-meta-table [data-sorted] {
+  color: var(--sf-ink);
+}
+
+.sf-meta-table [data-sorted] .sf-meta-table-sort-icon {
+  color: var(--sf-solar-3);
+}
+
+.sf-meta-table [data-pinned] {
+  background: var(--sf-surface);
+}
+
+.sf-meta-table-loading [data-slot="table-row"]:hover td {
+  background: transparent;
+}
+
+.sf-meta-table-loading .sf-skeleton {
+  border-radius: 3px;
+}
+
 .sf-page [data-slot="table-row"]:hover,
 .sf-page table tbody tr:hover td,
 .sf-command-surface [data-slot="table-row"]:hover,
@@ -2761,12 +2871,34 @@ textarea::placeholder {
 .sf-command-surface table tbody tr {
   transition: background var(--sf-dur-fast) var(--sf-ease-out);
 }
+.sf-meta-table [data-slot="table-row"][data-clickable="true"]:hover td,
+.sf-meta-table [data-slot="table-row"]:hover td {
+  background: var(--sf-table-hover);
+}
+.sf-meta-table [data-slot="table-row"][data-clickable="true"]:hover [data-pinned],
+.sf-meta-table [data-slot="table-row"]:hover [data-pinned] {
+  background: var(--sf-table-hover);
+}
 .sf-page table tbody tr.selected td,
 .sf-command-surface table tbody tr.selected td,
 .sf-page [data-slot="table-row"][data-state="selected"] td,
 .sf-command-surface [data-slot="table-row"][data-state="selected"] td {
-  background: var(--sf-solar-bg);
+  background: var(--sf-table-selected, var(--sf-solar-bg));
   box-shadow: inset 2px 0 0 var(--sf-solar-2);
+}
+
+.sf-meta-table [data-slot="table-row"][data-state="selected"] [data-pinned],
+.sf-meta-table table tbody tr.selected [data-pinned] {
+  background: var(--sf-table-selected);
+}
+
+.sf-meta-table [data-slot="table-footer"] {
+  color: var(--sf-ink-3);
+}
+
+.sf-meta-table [data-slot="table-footer"] td {
+  border-top: 1px solid var(--sf-line-2);
+  background: color-mix(in srgb, var(--sf-bg) 65%, var(--sf-surface));
 }
 
 /* shadcn Card chrome — border/shadow/radius만 mockup 토큰으로 (font/padding은 건드리지 않음 — 레이아웃 보존) */
@@ -3089,6 +3221,20 @@ textarea::placeholder {
 .sf-tone-info  { background: var(--sf-info-bg);  color: var(--sf-info); }
 .sf-tone-solar { background: var(--sf-solar-bg); color: var(--sf-solar-3); }
 .sf-tone-muted { background: var(--sf-bg-2);     color: var(--sf-ink-2); }
+
+.sf-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  min-height: 20px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
 
 /* 상태 dot */
 .sf-dot {

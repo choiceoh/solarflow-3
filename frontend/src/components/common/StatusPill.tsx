@@ -1,24 +1,42 @@
-import type { ReactNode } from 'react';
-import { cn } from '@/lib/utils';
+import type { ReactNode } from "react"
+import { cn } from "@/lib/utils"
+
+export type StatusPillTone = "neutral" | "info" | "positive" | "warning" | "negative" | "solar"
 
 interface StatusPillProps {
-  label: ReactNode;
-  colorClassName?: string;
-  className?: string;
-  title?: string;
+  label: ReactNode
+  tone?: StatusPillTone
+  /**
+   * Legacy escape hatch while domain status maps migrate to tone.
+   * Prefer tone or sf-tone-* classes for new code.
+   */
+  colorClassName?: string
+  className?: string
+  title?: string
 }
 
-export default function StatusPill({ label, colorClassName, className, title }: StatusPillProps) {
+const TONE_CLASS: Record<StatusPillTone, string> = {
+  neutral: "sf-tone-muted",
+  info: "sf-tone-info",
+  positive: "sf-tone-pos",
+  warning: "sf-tone-warn",
+  negative: "sf-tone-neg",
+  solar: "sf-tone-solar",
+}
+
+export default function StatusPill({
+  label,
+  tone = "neutral",
+  colorClassName,
+  className,
+  title,
+}: StatusPillProps) {
   return (
     <span
       title={title}
-      className={cn(
-        'inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap',
-        colorClassName ?? 'bg-muted text-muted-foreground',
-        className,
-      )}
+      className={cn("sf-status-pill", colorClassName ?? TONE_CLASS[tone], className)}
     >
       {label}
     </span>
-  );
+  )
 }
