@@ -1,33 +1,41 @@
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle } from 'lucide-react';
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertTriangle } from "lucide-react"
 import {
-  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import { formatUSD } from '@/lib/utils';
-import type { LCDemandMonthly } from '@/types/banking';
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { formatUSD } from "@/lib/utils"
+import type { LCDemandMonthly } from "@/types/banking"
 
 interface Props {
-  items: LCDemandMonthly[];
+  items: LCDemandMonthly[]
 }
 
 function StatusBadge({ status }: { status: string }) {
-  if (status === 'shortage') {
-    return <Badge className="bg-red-100 text-red-700 border-red-300">부족</Badge>;
+  if (status === "shortage") {
+    return <Badge className="sf-tone-neg border-transparent">부족</Badge>
   }
-  if (status === 'caution') {
-    return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300">주의</Badge>;
+  if (status === "caution") {
+    return <Badge className="sf-tone-warn border-transparent">주의</Badge>
   }
-  return <Badge className="bg-green-100 text-green-700 border-green-300">충분</Badge>;
+  return <Badge className="sf-tone-pos border-transparent">충분</Badge>
 }
 
 export default function LCDemandMonthlyTable({ items }: Props) {
   if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-6">월별 예측 데이터가 없습니다</p>;
+    return (
+      <p className="text-sm text-muted-foreground text-center py-6">월별 예측 데이터가 없습니다</p>
+    )
   }
 
   // 부족한 월 경고 메시지
-  const shortageMonths = items.filter((m) => m.status === 'shortage');
+  const shortageMonths = items.filter((m) => m.status === "shortage")
   const totals = items.reduce(
     (acc, m) => ({
       demand: acc.demand + m.lc_demand_usd,
@@ -35,8 +43,8 @@ export default function LCDemandMonthlyTable({ items }: Props) {
       shortage: acc.shortage + m.shortage_usd,
     }),
     { demand: 0, recovery: 0, shortage: 0 },
-  );
-  const lastProjected = items.at(-1)?.projected_available_usd ?? 0;
+  )
+  const lastProjected = items.at(-1)?.projected_available_usd ?? 0
 
   return (
     <div className="space-y-3">
@@ -53,19 +61,31 @@ export default function LCDemandMonthlyTable({ items }: Props) {
         </TableHeader>
         <TableBody>
           {items.map((m) => {
-            const shortageColor = m.shortage_usd < 0 ? 'text-red-600 font-medium' : m.status === 'caution' ? 'text-yellow-600' : 'text-green-600';
+            const shortageColor =
+              m.shortage_usd < 0
+                ? "text-red-600 font-medium"
+                : m.status === "caution"
+                  ? "text-yellow-600"
+                  : "text-green-600"
             return (
               <TableRow key={m.month}>
                 <TableCell className="text-sm font-medium">{m.month}</TableCell>
                 <TableCell className="text-sm text-right">{formatUSD(m.lc_demand_usd)}</TableCell>
-                <TableCell className="text-sm text-right">{formatUSD(m.limit_recovery_usd)}</TableCell>
-                <TableCell className="text-sm text-right">{formatUSD(m.projected_available_usd)}</TableCell>
-                <TableCell className={`text-sm text-right ${shortageColor}`}>
-                  {m.shortage_usd >= 0 ? '+' : ''}{formatUSD(m.shortage_usd)}
+                <TableCell className="text-sm text-right">
+                  {formatUSD(m.limit_recovery_usd)}
                 </TableCell>
-                <TableCell><StatusBadge status={m.status} /></TableCell>
+                <TableCell className="text-sm text-right">
+                  {formatUSD(m.projected_available_usd)}
+                </TableCell>
+                <TableCell className={`text-sm text-right ${shortageColor}`}>
+                  {m.shortage_usd >= 0 ? "+" : ""}
+                  {formatUSD(m.shortage_usd)}
+                </TableCell>
+                <TableCell>
+                  <StatusBadge status={m.status} />
+                </TableCell>
               </TableRow>
-            );
+            )
           })}
         </TableBody>
         <TableFooter>
@@ -75,9 +95,12 @@ export default function LCDemandMonthlyTable({ items }: Props) {
             <TableCell className="text-right font-medium">{formatUSD(totals.recovery)}</TableCell>
             <TableCell className="text-right font-medium">{formatUSD(lastProjected)}</TableCell>
             <TableCell className="text-right font-medium">
-              {totals.shortage >= 0 ? '+' : ''}{formatUSD(totals.shortage)}
+              {totals.shortage >= 0 ? "+" : ""}
+              {formatUSD(totals.shortage)}
             </TableCell>
-            <TableCell className="text-xs text-muted-foreground">{items.length.toLocaleString('ko-KR')}개월</TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+              {items.length.toLocaleString("ko-KR")}개월
+            </TableCell>
           </TableRow>
         </TableFooter>
       </Table>
@@ -87,11 +110,13 @@ export default function LCDemandMonthlyTable({ items }: Props) {
         <Alert key={m.month} variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="text-xs">
-            <strong>{m.month}</strong> LC 수요 {formatUSD(m.lc_demand_usd)}, 가용한도 {formatUSD(m.projected_available_usd)} — {formatUSD(Math.abs(m.shortage_usd))} 부족.
-            <br />대응: (1) 은행 한도 증액 (2) 선적 일정 조정 (3) T/T 비율 상향
+            <strong>{m.month}</strong> LC 수요 {formatUSD(m.lc_demand_usd)}, 가용한도{" "}
+            {formatUSD(m.projected_available_usd)} — {formatUSD(Math.abs(m.shortage_usd))} 부족.
+            <br />
+            대응: (1) 은행 한도 증액 (2) 선적 일정 조정 (3) T/T 비율 상향
           </AlertDescription>
         </Alert>
       ))}
     </div>
-  );
+  )
 }

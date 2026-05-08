@@ -104,6 +104,45 @@
 
 ---
 
+## 2026-05-08 세션 — 공통 테이블 폴리싱
+
+### 완료
+- `MetaTable` / `DataTable` 공통 표 표면 정리
+  - 헤더/셀 밀도, 정렬 버튼, hover/selected 행, sticky pinned column 경계, footer summary 스타일을 `sf-meta-table` 토큰으로 통합
+  - 문자열/숫자 기본 셀에 2줄 클램프와 tooltip 기반 overflow 대응 추가
+  - 서버 모드 테이블은 백엔드 정렬 가능한 컬럼만 정렬 버튼을 노출하도록 제한
+- 수주/출고/판매 서버 페이지네이션 표에 실제 정렬 상태 연결
+  - `useServerSort`가 TanStack `sorting/onSortingChange`도 제공
+  - OrdersPage 수주/출고/판매 탭에서 sort/order 쿼리와 표 정렬 aria 상태가 동기화됨
+- 상태 배지 표면 정리
+  - `StatusPill`에 `neutral/info/positive/warning/negative/solar` tone 추가
+  - 수주/출고/입고/구매 주요 상태 map을 `sf-tone-*`로 통일
+- 후속 배지 토큰 정리
+  - 재고 배정/미착, 구매 계약금/T/T/PO 라인, 출고 FIFO, 금융 L/C 수요, 매출 분석의 남은 hard-coded 상태 배지를 `sf-status-pill` / `sf-tone-*` 계열로 정리
+  - 검색 잔여 색상 클래스는 진행률 bar, action hover, 작은 상태 dot처럼 배지 표면이 아닌 곳만 남김
+  - 브라우저 QA 중 발견한 `IncomingTable`, `LCMaturityTable`, Banking rail의 중복/누락 React key 경고를 함께 정리
+
+### 검증
+- `cd frontend && bun run lint` 종료코드 0 — 기존 ProcurementPage hook dependency 경고 4건 + 기존 test d.ts unused suppression 경고 1건 출력
+- `cd frontend && bun run build` 성공
+- `cd frontend && bun test src/components/procurement/POListTable.test.tsx` 성공 — 기존 act 경고 2건 출력
+- 브라우저 목업 모드에서 `/orders` 수주 표 렌더 확인
+  - `.sf-meta-table` 1개, `.sf-status-pill` 15개 렌더
+  - 서버 정렬 가능 헤더만 버튼으로 노출되고, `수량` 헤더 2회 토글 시 `aria-sort="ascending"` 확인
+- 브라우저 목업 모드에서 `/inventory?tab=incoming`, `/procurement?tab=tt`, `/banking?tab=demand`, `/sales-analysis` 렌더 확인
+  - `/procurement?tab=tt`: `.sf-status-pill` 2개, `.sf-tone-*` 2개, 빈 화면/오버레이 없음
+  - `/banking?tab=demand`: `.sf-tone-*` 8개, table 2개, 빈 화면/오버레이 없음
+  - `/sales-analysis`: `.sf-status-pill` 5개, `.sf-tone-*` 9개, table 5개, 빈 화면/오버레이 없음
+- key 경고 수정 후 `/inventory?tab=incoming`, `/procurement?tab=tt`, `/banking?tab=demand`, `/sales-analysis` 재렌더 확인
+  - 4개 화면 모두 빈 화면/오버레이 없음
+  - dev console 재확인에서 React key 경고 재발 없음
+- `git diff --check` 성공
+
+### 알려진 제한
+- 목업 dev 서버에서는 공개 환율/원자재 spot fetch 경고가 남음. 외부 public 데이터 fetch 실패 경고이며 이번 배지/표 변경과 직접 관련된 렌더 오류는 아님.
+
+---
+
 ## 2026-05-07 세션 — 가격예측 1차/2차 개선 + Tier-1 ASP 제외
 
 ### 완료
