@@ -51,3 +51,33 @@ func TestValidateIntercompanyTransition(t *testing.T) {
 		})
 	}
 }
+
+func TestIntercompanyReceivingLogInsert(t *testing.T) {
+	code := "TSM-580"
+	name := "Vertex N"
+	row := wmsIntercompanyRequestRow{
+		RequestID: "req-1",
+		ProductID: "prod-1",
+		Quantity:  12,
+	}
+	insert := intercompanyReceivingLogInsert(row, "wh-1", wmsProductSnapshot{
+		ProductCode: &code,
+		ProductName: &name,
+	}, "user-1")
+
+	assertEqual := func(key string, want any) {
+		t.Helper()
+		if got := insert[key]; got != want {
+			t.Fatalf("%s mismatch: got %v, want %v", key, got, want)
+		}
+	}
+	assertEqual("source_type", "intercompany")
+	assertEqual("intercompany_request_id", "req-1")
+	assertEqual("warehouse_id", "wh-1")
+	assertEqual("product_id", "prod-1")
+	assertEqual("quantity_expected", 12)
+	assertEqual("quantity_received", 12)
+	assertEqual("receiver_user_id", "user-1")
+	assertEqual("product_code_snapshot", "TSM-580")
+	assertEqual("product_name_snapshot", "Vertex N")
+}

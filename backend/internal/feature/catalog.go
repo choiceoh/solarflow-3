@@ -346,6 +346,7 @@ var Catalog = map[FeatureID]Feature{
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{
 			"/api/v1/picking-lists/", "/api/v1/picking-lists/{id}",
+			"/api/v1/picking-lists/from-outbound/{outbound_id}",
 			"/api/v1/picking-lists/{id}/items/{item_id}",
 		},
 	},
@@ -361,6 +362,7 @@ var Catalog = map[FeatureID]Feature{
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{
 			"/api/v1/cycle-counts/", "/api/v1/cycle-counts/{id}",
+			"/api/v1/cycle-counts/{id}/seed",
 			"/api/v1/cycle-counts/{id}/complete",
 			"/api/v1/cycle-counts/{id}/items/{item_id}",
 		},

@@ -139,8 +139,8 @@ func (h *IntercompanyRequestHandler) Cancel(w http.ResponseWriter, r *http.Reque
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	updateBody := map[string]interface{}{
-		"status":        "cancelled",
-		"cancelled_at":  now,
+		"status":       "cancelled",
+		"cancelled_at": now,
 	}
 	_, _, err := h.DB.From("intercompany_requests").
 		Update(updateBody, "", "").
@@ -242,14 +242,19 @@ func (h *IntercompanyRequestHandler) Receive(w http.ResponseWriter, r *http.Requ
 		response.RespondError(w, http.StatusInternalServerError, "입고 확인에 실패했습니다")
 		return
 	}
+	if err := h.ensureReceivingLogForIntercompanyRequest(id, middleware.GetUserID(r.Context())); err != nil {
+		log.Printf("[WMS 그룹내 입고 검수 로그 자동 생성 실패] request_id=%s err=%v", id, err)
+	}
 	response.RespondJSON(w, http.StatusOK, map[string]string{"status": "received"})
 }
 
 // 그룹내 매입요청 상태 머신 (D-039 + D-108 BARO Phase 2):
-//   pending → cancelled  (BARO: 본인 요청 취소)
-//   pending → rejected   (탑솔라: 거부)
-//   pending → shipped    (탑솔라: 출고 연결 — Fulfill)
-//   shipped → received   (BARO: 입고 확인)
+//
+//	pending → cancelled  (BARO: 본인 요청 취소)
+//	pending → rejected   (탑솔라: 거부)
+//	pending → shipped    (탑솔라: 출고 연결 — Fulfill)
+//	shipped → received   (BARO: 입고 확인)
+//
 // 그 외 모든 전이는 409 (잘못된 상태에서 호출).
 var intercompanyAllowedTransitions = map[string][]string{
 	"pending": {"cancelled", "rejected", "shipped"},

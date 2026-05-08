@@ -877,6 +877,9 @@ func (h *OutboundHandler) createOutboundCore(req model.CreateOutboundRequest) (m
 		log.Printf("[출고 등록 결과 조회 실패] outbound_id=%s err=%v", outboundID, err)
 		return model.Outbound{}, http.StatusInternalServerError, "출고 등록 결과를 확인할 수 없습니다", err
 	}
+	if err := h.ensurePickingListForOutbound(created); err != nil {
+		log.Printf("[WMS 피킹 자동 생성 실패] outbound_id=%s err=%v", outboundID, err)
+	}
 	return created, http.StatusCreated, "", nil
 }
 

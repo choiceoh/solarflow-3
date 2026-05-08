@@ -569,6 +569,11 @@ func (h *BLHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if len(updated) > 0 && updated[0].POID != nil && *updated[0].POID != "" {
 		h.syncPOStatus(*updated[0].POID)
 	}
+	if len(updated) > 0 && req.Status != nil && (*req.Status == "completed" || *req.Status == "erp_done") {
+		if err := h.ensureReceivingLogsForBL(updated[0]); err != nil {
+			log.Printf("[WMS 입고 검수 로그 자동 생성 실패] bl_id=%s err=%v", updated[0].BLID, err)
+		}
+	}
 
 	if len(updated) == 0 {
 		response.RespondError(w, http.StatusNotFound, "수정할 B/L을 찾을 수 없습니다")

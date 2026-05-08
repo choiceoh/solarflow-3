@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import {
   testAllocation,
@@ -39,6 +39,7 @@ async function selectPartner() {
 
 describe('AllocationForm', () => {
   afterEach(() => {
+    cleanup();
     clearFetchWithAuthMock();
     resetAppStore();
   });

@@ -193,6 +193,7 @@ PATCH   /api/v1/companies/{id}
 PATCH   /api/v1/companies/{id}/status
 PATCH   /api/v1/construction-sites/{id}
 PATCH   /api/v1/construction-sites/{id}/status
+PATCH   /api/v1/cycle-counts/{id}
 PATCH   /api/v1/cycle-counts/{id}/items/{item_id}
 PATCH   /api/v1/external-sync-sources/{id}
 PATCH   /api/v1/intercompany-requests/{id}/cancel
@@ -208,6 +209,7 @@ PATCH   /api/v1/partners/{id}/status
 PATCH   /api/v1/picking-lists/{id}
 PATCH   /api/v1/picking-lists/{id}/items/{item_id}
 PATCH   /api/v1/products/{id}/status
+PATCH   /api/v1/receiving-logs/{id}
 PATCH   /api/v1/study/domains/{id}
 PATCH   /api/v1/study/plans/{id}
 PATCH   /api/v1/study/plans/{id}/steps/{step_id}
@@ -254,6 +256,7 @@ POST    /api/v1/construction-sites/
 POST    /api/v1/cost-details/
 POST    /api/v1/cycle-counts/
 POST    /api/v1/cycle-counts/{id}/complete
+POST    /api/v1/cycle-counts/{id}/seed
 POST    /api/v1/declarations/
 POST    /api/v1/expenses/
 POST    /api/v1/export/amaranth/jobs/{id}/claim
@@ -285,6 +288,7 @@ POST    /api/v1/partner-aliases/
 POST    /api/v1/partner-prices/
 POST    /api/v1/partners/
 POST    /api/v1/picking-lists/
+POST    /api/v1/picking-lists/from-outbound/{outbound_id}
 POST    /api/v1/pos/
 POST    /api/v1/pos/{poId}/lines/
 POST    /api/v1/price-benchmarks/
