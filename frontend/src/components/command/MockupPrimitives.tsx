@@ -85,6 +85,8 @@ export function TileB({
   metricId?: string;
 }) {
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
+  const layoutTransition = reduceMotion ? { duration: 0 } : sfMotion.spring;
   const color =
     tone === 'solar' ? 'var(--solar-2)' :
     tone === 'pos' ? 'var(--pos)' :
@@ -112,7 +114,7 @@ export function TileB({
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
       aria-label={clickable ? `${lbl} 상세 보기` : undefined}
-      transition={sfMotion.spring}
+      transition={layoutTransition}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span className="dot" style={{ background: color }} />
@@ -161,12 +163,14 @@ export function CardB({
   flex?: boolean;
   headerless?: boolean;
 }) {
+  const reduceMotion = useReducedMotion();
+  const layoutTransition = reduceMotion ? { duration: 0 } : sfMotion.spring;
   return (
     <motion.div
       layout
       className="card sf-motion-card"
       style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, flex: flex ? 1 : undefined }}
-      transition={sfMotion.spring}
+      transition={layoutTransition}
     >
       {!headerless ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0, minHeight: 44 }}>
