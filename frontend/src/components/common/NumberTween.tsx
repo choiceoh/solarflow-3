@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { animate, useMotionValue, useTransform, motion, useReducedMotion } from 'motion/react'
+import { sfMotion } from '@/lib/motion'
 
 type Props = {
   value: number
@@ -33,7 +34,7 @@ export function NumberTween({ value, format, duration = 0.9 }: Props) {
     }
     const controls = animate(mv, value, {
       duration,
-      ease: [0.22, 1, 0.36, 1],
+      ease: sfMotion.easeOut,
     })
     return () => controls.stop()
   }, [value, duration, reduce, mv])

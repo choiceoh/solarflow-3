@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, LayoutGroup, useReducedMotion } from 'motion/react';
 
 import { NumberTween } from '@/components/common/NumberTween';
+import { sfMotion } from '@/lib/motion';
 
 type Tone = 'solar' | 'ink' | 'info' | 'warn' | 'pos' | 'neg';
 
@@ -102,14 +103,16 @@ export function TileB({
       }
     : undefined;
   return (
-    <div
-      className="card hover"
+    <motion.div
+      layout
+      className="card hover sf-motion-kpi-tile"
       style={{ padding: '12px 14px 14px', minWidth: 0, position: 'relative', overflow: 'hidden', height: '100%', cursor: clickable ? 'pointer' : undefined }}
       onClick={onActivate}
       onKeyDown={onKey}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
       aria-label={clickable ? `${lbl} 상세 보기` : undefined}
+      transition={sfMotion.spring}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span className="dot" style={{ background: color }} />
@@ -137,7 +140,7 @@ export function TileB({
           <Sparkline data={spark} w={64} h={20} color={color} area />
         </div>
       ) : null}
-    </div>
+    </motion.div>
   );
 }
 
@@ -159,7 +162,12 @@ export function CardB({
   headerless?: boolean;
 }) {
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, flex: flex ? 1 : undefined }}>
+    <motion.div
+      layout
+      className="card sf-motion-card"
+      style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, flex: flex ? 1 : undefined }}
+      transition={sfMotion.spring}
+    >
       {!headerless ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0, minHeight: 44 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 220, flexShrink: 0 }}>
@@ -174,7 +182,7 @@ export function CardB({
       <div style={{ padding: padded ? 14 : 0, minHeight: 0, flex: 1, overflow: 'auto' }}>
         {children}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -265,7 +273,7 @@ export function FilterChips({
   const reduceMotion = useReducedMotion();
   const indicatorTransition = reduceMotion
     ? { duration: 0 }
-    : { type: 'spring' as const, stiffness: 380, damping: 32, mass: 0.8 };
+    : sfMotion.spring;
   return (
     <LayoutGroup id={groupId}>
       <div className="tabs sf-filter-chips" style={{ border: 'none' }}>

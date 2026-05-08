@@ -389,7 +389,7 @@ export function MetaTable<T>({
   return (
     <Fragment>
     <Table
-      className={cn('text-xs', tableClassName)}
+      className={cn('text-xs sf-motion-table', tableClassName)}
       style={
         fillWidth
           ? { width: '100%', minWidth: table.getTotalSize(), tableLayout: 'fixed' }

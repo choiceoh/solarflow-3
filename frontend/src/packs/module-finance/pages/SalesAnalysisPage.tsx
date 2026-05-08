@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import {
   Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -266,6 +267,11 @@ export default function SalesAnalysisPage() {
   // D-064 PR 30: 원가 기준 토글 — 기본 fifo (가장 정확). cost_details 만 있는 환경은 landed 로 폴백.
   const [costBasis, setCostBasis] = useState<CostBasis>('fifo');
   const [marginFilter, setMarginFilter] = useState<MarginFilter>('all');
+  const [causeRowsParent] = useAutoAnimate<HTMLTableSectionElement>();
+  const [customerRiskParent] = useAutoAnimate<HTMLTableSectionElement>();
+  const [manufacturerRowsParent] = useAutoAnimate<HTMLTableSectionElement>();
+  const [customerRowsParent] = useAutoAnimate<HTMLTableSectionElement>();
+  const [marginRowsParent] = useAutoAnimate<HTMLTableSectionElement>();
   const manufacturers = useAppStore((s) => s.manufacturers);
   const products = useAppStore((s) => s.products);
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
@@ -816,7 +822,7 @@ export default function SalesAnalysisPage() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         <CardB title="이익 원인 분해" sub="저마진 · 원가 공백 우선순위">
-          <Table>
+          <Table className="sf-motion-table">
             <TableHeader>
               <TableRow>
                 <TableHead>구분</TableHead>
@@ -825,7 +831,7 @@ export default function SalesAnalysisPage() {
                 <TableHead className="text-right">근거</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody ref={causeRowsParent}>
               {causeRows.map((row) => (
                 <TableRow key={row.key}>
                   <TableCell className="text-xs">
@@ -844,7 +850,7 @@ export default function SalesAnalysisPage() {
         </CardB>
 
         <CardB title="거래처 위험 우선순위" sub="미수 · 연체 · 저마진 복합 점수">
-          <Table>
+          <Table className="sf-motion-table">
             <TableHeader>
               <TableRow>
                 <TableHead>거래처</TableHead>
@@ -854,7 +860,7 @@ export default function SalesAnalysisPage() {
                 <TableHead className="text-right">최장</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody ref={customerRiskParent}>
               {customerRiskRows.map(({ item, signal }) => (
                 <TableRow key={item.customer_id}>
                   <TableCell className="text-xs font-medium">{item.customer_name}</TableCell>
@@ -876,7 +882,7 @@ export default function SalesAnalysisPage() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <CardB title="제조사별 기여도" sub="매출 비중 · 이익률 · 원가 공백">
-          <Table>
+          <Table className="sf-motion-table">
             <TableHeader>
               <TableRow>
                 <TableHead>제조사</TableHead>
@@ -887,7 +893,7 @@ export default function SalesAnalysisPage() {
                 <TableHead className="text-right">출고</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody ref={manufacturerRowsParent}>
               {manufacturerDeepRows.map((row) => (
                 <TableRow key={row.manufacturer}>
                   <TableCell className="text-xs font-medium">{row.manufacturer}</TableCell>
@@ -936,15 +942,15 @@ export default function SalesAnalysisPage() {
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v / 100000000)}억`} />
                   <Tooltip formatter={(value, name) => [formatKRW(Number(value)), name === 'revenue' ? '공급가' : '부가세 포함']} />
-                  <Bar dataKey="revenue" fill="#2563eb" name="공급가" />
-                  <Bar dataKey="total" fill="#16a34a" name="부가세 포함" />
+                  <Bar dataKey="revenue" fill="#2563eb" name="공급가" isAnimationActive animationDuration={360} animationEasing="ease-out" />
+                  <Bar dataKey="total" fill="#16a34a" name="부가세 포함" isAnimationActive animationDuration={360} animationEasing="ease-out" />
                 </BarChart>
               </ResponsiveContainer>
             )}
         </CardB>
 
         <CardB title="거래처별 청구/미수" sub="상위 8개 거래처" padded>
-            <Table>
+            <Table className="sf-motion-table">
               <TableHeader>
                 <TableRow>
                   <TableHead>거래처</TableHead>
@@ -953,7 +959,7 @@ export default function SalesAnalysisPage() {
                   <TableHead className="text-right">이익률</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody ref={customerRowsParent}>
                 {shownCustomers.map((item) => (
                   <TableRow key={item.customer_id}>
                     <TableCell className="text-xs font-medium">{item.customer_name}</TableCell>
@@ -985,7 +991,7 @@ export default function SalesAnalysisPage() {
         sub="판매가 · 원가 · 이익/Wp"
         right={<FilterChips options={marginFilterOptions} value={marginFilter} onChange={(value) => setMarginFilter(value as MarginFilter)} />}
       >
-          <Table>
+          <Table className="sf-motion-table">
             <TableHeader>
               <TableRow>
                 <TableHead>모듈</TableHead>
@@ -1000,7 +1006,7 @@ export default function SalesAnalysisPage() {
                 <TableHead className="text-right">이익</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody ref={marginRowsParent}>
               {shownMarginItems.map((item) => {
                 const costCovered = item.avg_cost_wp != null && item.total_cost_krw != null;
                 return (
