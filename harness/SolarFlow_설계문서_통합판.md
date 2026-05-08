@@ -38,9 +38,10 @@
 
 ### 1.4 테넌트 구성 (D-108, D-119)
 - 탑솔라(주) + 디원 + 화신이엔지 + 바로(주)와 `cable` 분기를 **단일 DB · 단일 코드베이스**로 운영한다.
-- **URL 분기**: module 사용자는 `module.topworks.ltd`/`solarflow3.com`(또는 Tailscale/localhost), cable 사용자는 `cable.topworks.ltd`, 바로 사용자는 `baro.topworks.ltd`로 접속한다. 같은 `dist/`를 세 호스트에서 서빙하고, 프론트가 `window.location.hostname`을 보고 사이드바/메뉴 분기를 결정한다.
-- **테넌트 스코프**: `user_profiles.tenant_scope`(`topsolar`/`cable`/`baro`)을 사용자별로 못박는다. 백엔드는 `RequireTenantScope` 미들웨어로 **수입원가/면장/LC/T/T/한도 변경/단가 이력/부대비용/landed-cost·lc-fee·lc-limit-timeline·lc-maturity-alert·exchange-compare·margin-analysis·price-trend** 응답을 module 계열(`topsolar` + `cable`) 사용자에게만 허용하고, 바로 토큰으로 호출되면 403을 반환한다. 그 외 공유 엔드포인트(가용재고/PO/B/L/출고/수주/매출/수금/마스터)는 같은 계열사 데이터로 공유한다.
+- **URL 분기**: module 사용자는 `module.topworks.ltd`/`solarflow3.com`(또는 Tailscale/localhost), cable 사용자는 `cable.topworks.ltd`, 바로 사용자는 `baro.topworks.ltd`, 학습 사용자는 `study.topworks.ltd`로 접속한다. 같은 `dist/`를 네 호스트에서 서빙하고, 프론트가 `window.location.hostname`을 보고 사이드바/메뉴 분기를 결정한다.
+- **테넌트 스코프**: `user_profiles.tenant_scope`(`topsolar`/`cable`/`baro`/`study`)을 사용자별로 못박는다. 백엔드는 `RequireTenantScope` 미들웨어로 **수입원가/면장/LC/T/T/한도 변경/단가 이력/부대비용/landed-cost·lc-fee·lc-limit-timeline·lc-maturity-alert·exchange-compare·margin-analysis·price-trend** 응답을 module 계열(`topsolar` + `cable`) 사용자에게만 허용하고, 바로 토큰으로 호출되면 403을 반환한다. `study`는 신입 교육 전용 테넌트로 ERP 운영 API를 상속하지 않고 `/api/v1/study/*` 학습 도메인과 `/api/v1/users/me*`만 허용한다. 그 외 공유 엔드포인트(가용재고/PO/B/L/출고/수주/매출/수금/마스터)는 ERP 운영 테넌트(`topsolar`/`cable`/`baro`)에서만 공유한다.
 - **cable 분기**: `cable.topworks.ltd`는 `module.topworks.ltd`의 기능 표면을 포크한 별도 테넌트다. 사이드바 탭 설정은 `sidebar_tabs.cable`로 독립 저장한다.
+- **study 분기**: `study.topworks.ltd`는 신입사원 학습용 교육 테넌트다. 첫 단계는 화면보다 `study_learning_domains` / `study_learning_plans` / `study_learning_plan_steps` 계약을 먼저 고정하고, 이후 학습 페이지와 진도/과제 기능을 붙인다.
 - **격리 범위**: 격리는 "바로가 module 계열의 수입원가/금융정보를 못 보게" 하는 1단계 블록이다. 같은 그룹 계열사이므로 거래/재고 행 단위 격리는 추가하지 않는다.
 
 ### 1.5 핵심 원칙

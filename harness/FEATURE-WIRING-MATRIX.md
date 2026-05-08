@@ -38,7 +38,8 @@
 | `T` | topsolar 단독 |
 | `C` | cable 단독 |
 | `B` | baro 단독 |
-| `★` | 모든 테넌트 |
+| `S` | study 단독 |
+| `★` | ERP 운영 테넌트 전체 (`topsolar` + `cable` + `baro`) |
 
 ---
 
@@ -46,7 +47,7 @@
 
 각 행은 카탈로그 entry 1개 = feature 1개. `Default` 칼럼이 카탈로그 코드의 `DefaultTenants`, 그 외는 `tenant_features` DB override.
 
-### master.* (마스터 CRUD — 모든 테넌트 공유)
+### master.* (마스터 CRUD — ERP 운영 테넌트 공유)
 
 | feature_id | 이름 | Default | 데이터 스코프 |
 |---|---|---|---|
@@ -62,7 +63,7 @@
 | `master.warehouse_location` | 창고 위치(Bin) 마스터 (D-139 WMS Phase 1) | ★ | global |
 | `master.construction_site` | 공사현장 마스터 | ★ | global |
 
-### tx.* (거래 — all tenants)
+### tx.* (거래 — ERP 운영 테넌트 공유)
 
 | feature_id | 이름 | Default | 데이터 스코프 |
 |---|---|---|---|
@@ -170,6 +171,12 @@
 | `sys.external_sync` | 외부 동기화 소스 (D-059) | ★ | global |
 | `sys.db_integrity` | DB 정합성 검증 + AI 분석 (D-064 PR 37) | ★ | global |
 | `engine.health` | Rust 엔진 헬스 | ★ | global |
+
+### study.* (교육 — study.topworks.ltd)
+
+| feature_id | 이름 | Default | 데이터 스코프 |
+|---|---|---|---|
+| `study.learning` | 신입 교육 학습 도메인 | S | tenant_owned |
 
 ---
 

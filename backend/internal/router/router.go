@@ -61,6 +61,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 	// 인증 라우트 — 알파벳 순서로 정렬 (PR 충돌 ↓, 신규 도메인은 자기 자리에 1줄 추가)
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
+		r.Use(middleware.StudyTenantFence)
 
 		handler.NewAdminFeatureWiringHandler(a.WiringStore, a.Gates.FeatureGate.Resolver()).RegisterRoutes(r, a.Gates)
 		handler.NewAssistantHandler(a.DB).WithAlias(ocrH, matchH).WithWriters(outboundH).RegisterRoutes(r, a.Gates)
@@ -112,6 +113,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		handler.NewProductHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewReceiptHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewSaleHandler(a.DB).RegisterRoutes(r, a.Gates)
+		handler.NewStudyLearningHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewSystemSettingsHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewTTHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewUIConfigHandler(a.DB).RegisterRoutes(r, a.Gates)
