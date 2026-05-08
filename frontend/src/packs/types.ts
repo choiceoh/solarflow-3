@@ -11,7 +11,7 @@
 
 import type { CommandNavItem } from '@/lib/navigation/manifest';
 
-export type PackID = 'erp-core' | 'module-finance' | 'baro-domain';
+export type PackID = 'erp-core' | 'module-finance' | 'baro-domain' | 'study-domain';
 
 /**
  * NavGroupKey — 사이드바 그룹 정렬 키.

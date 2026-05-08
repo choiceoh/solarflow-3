@@ -11,6 +11,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import MobileBlock from '@/components/common/MobileBlock';
 import { ROUTES, type NestedRouteSpec, type RouteSpec } from '@/lib/navigation/manifest';
+import { detectTenantScope } from '@/lib/tenantScope';
 
 // 인라인 유지: login 은 인증 외곽 라우트라 manifest 가 아닌 외곽 트리에 둔다.
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
@@ -61,6 +62,10 @@ function renderRoute(spec: RouteSpec) {
   );
 }
 
+function DefaultRedirect() {
+  return <Navigate to={detectTenantScope() === 'study' ? '/study/learning' : '/inventory'} replace />;
+}
+
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize);
   const userPreferences = useAuthStore((s) => s.user?.preferences);
@@ -86,8 +91,8 @@ export default function App() {
             <Route path="/d/:token" element={<DriverPWAPage />} />
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                <Route index element={<Navigate to="/inventory" replace />} />
-                <Route path="/dashboard" element={<Navigate to="/inventory" replace />} />
+                <Route index element={<DefaultRedirect />} />
+                <Route path="/dashboard" element={<DefaultRedirect />} />
                 {ROUTES.map(renderRoute)}
                 <Route path="/inbound" element={<LegacyRedirect to="/procurement?tab=bl" />} />
                 <Route path="/lc" element={<LegacyRedirect to="/procurement?tab=lc" />} />

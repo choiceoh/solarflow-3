@@ -72,6 +72,7 @@ describe('NAV_GROUPS — 매핑 무결성', () => {
     expect(allFeatures).toContain('tx.po');
     expect(allFeatures).toContain('baro.incoming');
     expect(allFeatures).toContain('intercompany.request.inbox');
+    expect(allFeatures).toContain('study.learning');
   });
 
   it('module 도메인은 enabled_features 가 과하게 와도 BARO 전용 메뉴를 숨김', () => {
@@ -111,9 +112,9 @@ describe('NAV_GROUPS — 매핑 무결성', () => {
     expect(paths).not.toContain('/approval');
   });
 
-  it('study 도메인은 페이지가 생기기 전 ERP 메뉴를 노출하지 않음', () => {
+  it('study 도메인은 학습 메뉴만 노출하고 ERP 메뉴를 숨김', () => {
     const visible = NAV_GROUPS.flatMap((g) => g.items)
       .filter((item) => isItemVisible(item, 'study', new Set(['study.learning'])));
-    expect(visible).toHaveLength(0);
+    expect(visible.map((item) => item.path)).toEqual(['/study/learning']);
   });
 });

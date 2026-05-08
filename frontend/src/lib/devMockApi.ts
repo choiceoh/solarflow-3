@@ -264,6 +264,179 @@ const libraryPosts = [
   },
 ];
 
+const studyDomains = [
+  {
+    domain_id: '00000000-0000-4000-8000-000000000101',
+    tenant_scope: 'study',
+    domain_key: 'company_basics',
+    title: '회사 기본',
+    summary: 'TopWorks 조직, 보안, 협업 방식, 업무 커뮤니케이션 기준을 먼저 익힙니다.',
+    owner_role: '인사/총무',
+    display_order: 10,
+    status: 'active',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+  {
+    domain_id: '00000000-0000-4000-8000-000000000102',
+    tenant_scope: 'study',
+    domain_key: 'solarflow_basics',
+    title: 'SolarFlow 기본',
+    summary: '재고, 수주, 출고, 구매 이력처럼 SolarFlow가 다루는 핵심 업무 흐름을 이해합니다.',
+    owner_role: '운영팀',
+    display_order: 20,
+    status: 'active',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+  {
+    domain_id: '00000000-0000-4000-8000-000000000103',
+    tenant_scope: 'study',
+    domain_key: 'import_finance',
+    title: '수입/금융',
+    summary: 'P/O, L/C, B/L, 면장, 원가 구조와 각 단계의 책임자를 학습합니다.',
+    owner_role: '수입/재무',
+    display_order: 30,
+    status: 'active',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+  {
+    domain_id: '00000000-0000-4000-8000-000000000104',
+    tenant_scope: 'study',
+    domain_key: 'sales_ops',
+    title: '영업 운영',
+    summary: '고객 응대, 견적, 재고 예약, 출하 알림, 미수금 확인의 연결 구조를 익힙니다.',
+    owner_role: '영업관리',
+    display_order: 40,
+    status: 'active',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+];
+
+const studyPlans = [
+  {
+    plan_id: '00000000-0000-4000-8000-000000000201',
+    tenant_scope: 'study',
+    plan_key: 'new_employee_10_day',
+    title: '신입사원 10일 온보딩',
+    audience: '신규 입사자 공통',
+    objective: '회사 기본 규칙부터 SolarFlow 핵심 업무 흐름까지 10일 안에 독립 학습이 가능한 수준으로 정리합니다.',
+    duration_days: 10,
+    status: 'active',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+];
+
+const studySteps = [
+  {
+    step_id: '00000000-0000-4000-8000-000000000301',
+    plan_id: '00000000-0000-4000-8000-000000000201',
+    domain_id: '00000000-0000-4000-8000-000000000101',
+    line_no: 1,
+    title: '조직과 일하는 방식',
+    description: '조직도, 부서별 역할, 보고 라인, 협업 채널, 업무 요청 기본 형식을 확인합니다.',
+    expected_minutes: 45,
+    required: true,
+    assessment_kind: 'checklist',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+  {
+    step_id: '00000000-0000-4000-8000-000000000302',
+    plan_id: '00000000-0000-4000-8000-000000000201',
+    domain_id: '00000000-0000-4000-8000-000000000101',
+    line_no: 2,
+    title: '보안과 계정 사용',
+    description: '계정 관리, 자료 반출 기준, 고객 정보 취급, 시스템 접속 시 주의사항을 숙지합니다.',
+    expected_minutes: 40,
+    required: true,
+    assessment_kind: 'quiz',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+  {
+    step_id: '00000000-0000-4000-8000-000000000303',
+    plan_id: '00000000-0000-4000-8000-000000000201',
+    domain_id: '00000000-0000-4000-8000-000000000102',
+    line_no: 3,
+    title: 'SolarFlow 화면 구조',
+    description: '도메인별 메뉴, 회사 선택, 권한별 가시성, 자료실과 마스터 메뉴의 역할을 훑습니다.',
+    expected_minutes: 60,
+    required: true,
+    assessment_kind: 'checklist',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+  {
+    step_id: '00000000-0000-4000-8000-000000000304',
+    plan_id: '00000000-0000-4000-8000-000000000201',
+    domain_id: '00000000-0000-4000-8000-000000000102',
+    line_no: 4,
+    title: '재고에서 수주까지',
+    description: '가용재고, 예약, 수주 등록, 출고, 수금으로 이어지는 기본 업무 흐름을 사례로 확인합니다.',
+    expected_minutes: 75,
+    required: true,
+    assessment_kind: 'manager_review',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+  {
+    step_id: '00000000-0000-4000-8000-000000000305',
+    plan_id: '00000000-0000-4000-8000-000000000201',
+    domain_id: '00000000-0000-4000-8000-000000000103',
+    line_no: 5,
+    title: 'P/O와 L/C 기초',
+    description: '해외 모듈 구매 계약, 신용장 개설, 은행 한도, 만기 알림의 의미를 정리합니다.',
+    expected_minutes: 70,
+    required: true,
+    assessment_kind: 'quiz',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+  {
+    step_id: '00000000-0000-4000-8000-000000000306',
+    plan_id: '00000000-0000-4000-8000-000000000201',
+    domain_id: '00000000-0000-4000-8000-000000000103',
+    line_no: 6,
+    title: 'B/L, 면장, 원가',
+    description: '선적, 입항, 통관, 원가 계산 화면이 어떤 기준 데이터와 연결되는지 확인합니다.',
+    expected_minutes: 70,
+    required: true,
+    assessment_kind: 'submission',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+  {
+    step_id: '00000000-0000-4000-8000-000000000307',
+    plan_id: '00000000-0000-4000-8000-000000000201',
+    domain_id: '00000000-0000-4000-8000-000000000104',
+    line_no: 7,
+    title: '고객 응대와 출하 알림',
+    description: '거래처 문의, 견적 작성, 출하 알림 메시지, 콜백 후속 흐름을 역할별로 살펴봅니다.',
+    expected_minutes: 55,
+    required: true,
+    assessment_kind: 'checklist',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+  {
+    step_id: '00000000-0000-4000-8000-000000000308',
+    plan_id: '00000000-0000-4000-8000-000000000201',
+    domain_id: '00000000-0000-4000-8000-000000000104',
+    line_no: 8,
+    title: '10일 리뷰',
+    description: '담당자와 함께 학습 체크리스트를 검토하고 다음 30일 실무 목표를 정합니다.',
+    expected_minutes: 45,
+    required: true,
+    assessment_kind: 'manager_review',
+    created_at: nowIso,
+    updated_at: nowIso,
+  },
+];
+
 const attachmentFiles = [
   {
     file_id: 'file-lib-ops-guide-pdf',
@@ -791,6 +964,21 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
   }
   if (url.pathname === '/api/v1/baro/purchase-history') {
     return clone(baroPurchaseHistoryRows(url) as T);
+  }
+  if (url.pathname === '/api/v1/study/plans') {
+    return clone(filterRows(studyPlans, url, body) as T);
+  }
+  if (url.pathname.startsWith('/api/v1/study/plans/')) {
+    const planId = endpointId(url.pathname, 'study/plans');
+    const plan = studyPlans.find((item) => item.plan_id === planId);
+    if (!plan) throw new Error('목업 학습 플랜을 찾을 수 없습니다');
+    return clone({
+      ...plan,
+      steps: studySteps.filter((step) => step.plan_id === plan.plan_id).sort((a, b) => a.line_no - b.line_no),
+    } as T);
+  }
+  if (url.pathname === '/api/v1/study/domains') {
+    return clone(filterRows(studyDomains, url, body) as T);
   }
   if (url.pathname.startsWith('/api/v1/lcs/') && url.pathname.endsWith('/lines')) {
     const lcId = endpointId(url.pathname, 'lcs');
