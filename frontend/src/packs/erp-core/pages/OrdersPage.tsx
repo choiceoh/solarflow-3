@@ -65,6 +65,7 @@ import {
   Sparkline,
   TileB,
   type DateRangeValue,
+  type KwRangeValue,
 } from "@/components/command/MockupPrimitives"
 import { BreakdownRows } from "@/components/command/BreakdownRows"
 import { flatSparkFromValue } from "@/templates/sparkUtils"
@@ -160,6 +161,7 @@ export default function OrdersPage() {
   const [orderCustomerFilter, setOrderCustomerFilter] = useState("")
   const [orderCategoryFilter, setOrderCategoryFilter] = useState("")
   const [orderDateRange, setOrderDateRange] = useState<DateRangeValue>(null)
+  const [orderKwRange, setOrderKwRange] = useState<KwRangeValue>(null)
   const _loc = useLocation()
   const navigate = useNavigate()
   const [orderWorkQueue, setOrderWorkQueue] = useState<OrderWorkQueue>(() =>
@@ -199,6 +201,7 @@ export default function OrdersPage() {
   const [obUsageFilter, setObUsageFilter] = useState("")
   const [obMfgFilter, setObMfgFilter] = useState("")
   const [obDateRange, setObDateRange] = useState<DateRangeValue>(null)
+  const [obKwRange, setObKwRange] = useState<KwRangeValue>(null)
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null)
   const outboundColVis = useColumnVisibility(OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META)
   const outboundColPin = useColumnPinning(OUTBOUND_TABLE_ID)
@@ -214,7 +217,7 @@ export default function OrdersPage() {
   const [obPageIndex, setObPageIndex] = useState(0)
   const [obPageSize, setObPageSize] = useState(50)
   const obSort = useServerSort("outbound_date", "desc", () => setObPageIndex(0))
-  const obPageResetKey = `${obStatusFilter}|${obUsageFilter}|${obMfgFilter}|${obDateRange?.start ?? ""}|${obDateRange?.end ?? ""}`
+  const obPageResetKey = `${obStatusFilter}|${obUsageFilter}|${obMfgFilter}|${obDateRange?.start ?? ""}|${obDateRange?.end ?? ""}|${obKwRange?.min ?? ""}|${obKwRange?.max ?? ""}`
   useEffect(() => {
     void obPageResetKey
     setObPageIndex(0)
@@ -230,6 +233,8 @@ export default function OrdersPage() {
     manufacturer_id: obMfgFilter || undefined,
     start: obDateRange?.start || undefined,
     end: obDateRange?.end || undefined,
+    min_kw: obKwRange?.min ?? undefined,
+    max_kw: obKwRange?.max ?? undefined,
   })
 
   const {
@@ -243,6 +248,8 @@ export default function OrdersPage() {
     manufacturer_id: obMfgFilter || undefined,
     start: obDateRange?.start || undefined,
     end: obDateRange?.end || undefined,
+    min_kw: obKwRange?.min ?? undefined,
+    max_kw: obKwRange?.max ?? undefined,
     sort: obSort.queryParams.sort,
     order: obSort.queryParams.order,
     pageIndex: obPageIndex,
@@ -325,6 +332,8 @@ export default function OrdersPage() {
     work_queue?: "delivery_soon" | "no_site"
     start?: string
     end?: string
+    min_kw?: number
+    max_kw?: number
   } = {}
   if (orderStatusFilter) orderFilters.status = orderStatusFilter
   if (orderCustomerFilter) orderFilters.customer_id = orderCustomerFilter
@@ -334,11 +343,15 @@ export default function OrdersPage() {
     orderFilters.start = orderDateRange.start
     orderFilters.end = orderDateRange.end
   }
+  if (orderKwRange) {
+    if (orderKwRange.min !== null) orderFilters.min_kw = orderKwRange.min
+    if (orderKwRange.max !== null) orderFilters.max_kw = orderKwRange.max
+  }
   // 페이지네이션 상태 (수주 탭).
   const [orderPageIndex, setOrderPageIndex] = useState(0)
   const [orderPageSize, setOrderPageSize] = useState(50)
   const orderSort = useServerSort("order_date", "desc", () => setOrderPageIndex(0))
-  const orderPageResetKey = `${orderStatusFilter}|${orderCustomerFilter}|${orderCategoryFilter}|${orderWorkQueue}|${orderDateRange?.start ?? ""}|${orderDateRange?.end ?? ""}`
+  const orderPageResetKey = `${orderStatusFilter}|${orderCustomerFilter}|${orderCategoryFilter}|${orderWorkQueue}|${orderDateRange?.start ?? ""}|${orderDateRange?.end ?? ""}|${orderKwRange?.min ?? ""}|${orderKwRange?.max ?? ""}`
   useEffect(() => {
     void orderPageResetKey
     setOrderPageIndex(0)
@@ -950,6 +963,12 @@ export default function OrdersPage() {
                 onChange: setOrderDateRange,
               },
               {
+                kind: "kw_range",
+                label: "용량",
+                value: orderKwRange,
+                onChange: setOrderKwRange,
+              },
+              {
                 label: "상태",
                 value: orderStatusFilter,
                 onChange: setOrderStatusFilter,
@@ -1004,6 +1023,12 @@ export default function OrdersPage() {
                 label: "기간",
                 value: obDateRange,
                 onChange: setObDateRange,
+              },
+              {
+                kind: "kw_range",
+                label: "용량",
+                value: obKwRange,
+                onChange: setObKwRange,
               },
               {
                 label: "상태",

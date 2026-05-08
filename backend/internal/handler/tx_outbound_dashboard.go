@@ -169,6 +169,10 @@ func normalizePeriod(raw string) string {
 // tryRPCOutboundsDashboard — outbounds_dashboard() RPC 호출.
 func (h *OutboundHandler) tryRPCOutboundsDashboard(r *http.Request) ([]byte, bool) {
 	q := r.URL.Query()
+	// 용량(kW) 필터는 현재 RPC 시그니처(migration 076)가 모르므로 fallback Go 경로 사용.
+	if q.Get("min_kw") != "" || q.Get("max_kw") != "" {
+		return nil, false
+	}
 	args := map[string]any{}
 	if v := q.Get("company_id"); v != "" && v != "all" {
 		args["p_company_id"] = v

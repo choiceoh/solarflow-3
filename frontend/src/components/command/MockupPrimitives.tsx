@@ -313,6 +313,8 @@ export function FilterChips({
 
 export type DateRangeValue = { start: string; end: string } | null;
 
+export type KwRangeValue = { min: number | null; max: number | null } | null;
+
 export type FilterItem =
   | {
       kind?: 'select';
@@ -330,16 +332,30 @@ export type FilterItem =
       // 빠른 선택 프리셋 (이번 달, 지난 달, 최근 7일 등). 미지정 시 기본 프리셋 사용.
       presets?: { label: string; range: () => { start: string; end: string } }[];
       disabled?: boolean;
+    }
+  | {
+      kind: 'kw_range';
+      label: string;
+      value: KwRangeValue;
+      onChange: (next: KwRangeValue) => void;
+      // 프리셋 미지정 시 기본 프리셋(10kW/100kW/1MW 구간) 사용.
+      presets?: { label: string; range: { min: number | null; max: number | null } }[];
+      disabled?: boolean;
     };
 
 const isAllValue = (v: string) => !v || v === 'all';
 
-const isItemActive = (it: FilterItem) =>
-  it.kind === 'date_range' ? it.value !== null : !isAllValue(it.value);
+const isItemActive = (it: FilterItem) => {
+  if (it.kind === 'date_range') return it.value !== null;
+  if (it.kind === 'kw_range') return it.value !== null && (it.value.min !== null || it.value.max !== null);
+  return !isAllValue(it.value);
+};
 
 const resetItem = (it: FilterItem) => {
   if (it.disabled) return;
   if (it.kind === 'date_range') {
+    if (it.value !== null) it.onChange(null);
+  } else if (it.kind === 'kw_range') {
     if (it.value !== null) it.onChange(null);
   } else if (!isAllValue(it.value)) {
     it.onChange('');
@@ -400,6 +416,14 @@ const defaultDateRangePresets: NonNullable<Extract<FilterItem, { kind: 'date_ran
       return { start: ymd(start), end: ymd(end) };
     },
   },
+];
+
+// 용량(kW) 기본 프리셋. 태양광 도매 도메인에 맞춘 4단계.
+const defaultKwRangePresets: NonNullable<Extract<FilterItem, { kind: 'kw_range' }>['presets']> = [
+  { label: '10kW 이하', range: { min: null, max: 10 } },
+  { label: '10–100kW', range: { min: 10, max: 100 } },
+  { label: '100kW–1MW', range: { min: 100, max: 1000 } },
+  { label: '1MW 이상', range: { min: 1000, max: null } },
 ];
 
 export function FilterButton({ items }: { items: FilterItem[] }) {
@@ -508,6 +532,8 @@ export function FilterButton({ items }: { items: FilterItem[] }) {
                 <div style={{ fontSize: 11.5, color: 'var(--ink-2)', fontWeight: 600, marginBottom: 6, letterSpacing: '-0.005em' }}>{it.label}</div>
                 {it.kind === 'date_range' ? (
                   <DateRangePicker item={it} />
+                ) : it.kind === 'kw_range' ? (
+                  <KwRangePicker item={it} />
                 ) : (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                     <FilterChip label="전체" active={isAllValue(it.value)} disabled={it.disabled} onClick={() => it.onChange('')} />
@@ -646,6 +672,90 @@ function DateRangePicker({ item }: { item: Extract<FilterItem, { kind: 'date_ran
           }}
           style={inputStyle}
         />
+      </div>
+    </div>
+  );
+}
+
+function KwRangePicker({ item }: { item: Extract<FilterItem, { kind: 'kw_range' }> }) {
+  const presets = item.presets ?? defaultKwRangePresets;
+  const minVal = item.value?.min ?? null;
+  const maxVal = item.value?.max ?? null;
+  const matchedPreset = item.value
+    ? presets.find((p) => p.range.min === item.value!.min && p.range.max === item.value!.max)
+    : null;
+
+  // min > max 가 들어오면 swap. 둘 다 null 이면 전체로 리셋.
+  const commit = (next: { min: number | null; max: number | null }) => {
+    if (item.disabled) return;
+    if (next.min === null && next.max === null) {
+      item.onChange(null);
+      return;
+    }
+    if (next.min !== null && next.max !== null && next.min > next.max) {
+      item.onChange({ min: next.max, max: next.min });
+      return;
+    }
+    item.onChange(next);
+  };
+
+  const parseNum = (s: string): number | null => {
+    if (s === '') return null;
+    const n = Number(s);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+
+  const inputStyle = {
+    flex: 1,
+    minWidth: 0,
+    padding: '4px 6px',
+    border: '1px solid var(--line)',
+    borderRadius: 3,
+    fontFamily: 'inherit',
+    fontSize: 11,
+    color: 'var(--ink)',
+    background: 'var(--surface)',
+  } as const;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        <FilterChip label="전체" active={item.value === null} disabled={item.disabled} onClick={() => item.onChange(null)} />
+        {presets.map((p) => (
+          <FilterChip
+            key={p.label}
+            label={p.label}
+            active={matchedPreset?.label === p.label}
+            disabled={item.disabled}
+            onClick={() => commit(p.range)}
+          />
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step="any"
+          placeholder="최소"
+          value={minVal ?? ''}
+          disabled={item.disabled}
+          onChange={(e) => commit({ min: parseNum(e.target.value), max: maxVal })}
+          style={inputStyle}
+        />
+        <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>~</span>
+        <input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step="any"
+          placeholder="최대"
+          value={maxVal ?? ''}
+          disabled={item.disabled}
+          onChange={(e) => commit({ min: minVal, max: parseNum(e.target.value) })}
+          style={inputStyle}
+        />
+        <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>kW</span>
       </div>
     </div>
   );
