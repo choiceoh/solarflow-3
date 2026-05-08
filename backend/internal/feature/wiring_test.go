@@ -64,10 +64,10 @@ func TestResolver_DefaultTenants(t *testing.T) {
 	r := NewResolver(nil)
 
 	cases := []struct {
-		name    string
-		tenant  string
-		id      FeatureID
-		wantOK  bool
+		name   string
+		tenant string
+		id     FeatureID
+		wantOK bool
 	}{
 		{"topsolar 가 module 계열 기능 통과", "topsolar", IDTxLC, true},
 		{"cable 도 module 계열 기능 통과", "cable", IDTxLC, true},
@@ -75,8 +75,11 @@ func TestResolver_DefaultTenants(t *testing.T) {
 		{"baro 만 baro 전용 기능 통과", "baro", IDBaroIncoming, true},
 		{"topsolar 는 baro 전용 기능 차단", "topsolar", IDBaroIncoming, false},
 		{"cable 도 baro 전용 기능 차단", "cable", IDBaroIncoming, false},
-		{"all-tenant 기능은 모든 테넌트 통과 (topsolar)", "topsolar", IDMasterBank, true},
-		{"all-tenant 기능은 모든 테넌트 통과 (baro)", "baro", IDMasterBank, true},
+		{"ERP 공통 기능은 topsolar 통과", "topsolar", IDMasterBank, true},
+		{"ERP 공통 기능은 baro 통과", "baro", IDMasterBank, true},
+		{"study 는 ERP 공통 기능을 상속하지 않음", "study", IDMasterBank, false},
+		{"study 는 학습 기능만 통과", "study", IDStudyLearning, true},
+		{"baro 는 study 기능 차단", "baro", IDStudyLearning, false},
 		{"미정의 tenant 는 차단", "unknown_tenant", IDMasterBank, false},
 	}
 	for _, tc := range cases {

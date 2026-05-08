@@ -16,16 +16,18 @@ func TestDefault_Topsolar(t *testing.T) {
 // TestDetect_HostPatterns — 기존 frontend tenantScope.ts 와 동일한 분기 결과.
 func TestDetect_HostPatterns(t *testing.T) {
 	cases := map[string]ID{
-		"module.topworks.ltd":   IDTopsolar,
+		"module.topworks.ltd":    IDTopsolar,
 		"module-staging.example": IDTopsolar,
-		"solarflow3.com":        IDTopsolar,
-		"localhost":             IDTopsolar,
-		"127.0.0.1":             IDTopsolar,
-		"cable.topworks.ltd":    IDCable,
-		"cable-dev.example":     IDCable,
-		"baro.topworks.ltd":     IDBaro,
-		"baro-stage.example":    IDBaro,
-		"unknown.example.com":   IDTopsolar, // 매치 없으면 default
+		"solarflow3.com":         IDTopsolar,
+		"localhost":              IDTopsolar,
+		"127.0.0.1":              IDTopsolar,
+		"cable.topworks.ltd":     IDCable,
+		"cable-dev.example":      IDCable,
+		"baro.topworks.ltd":      IDBaro,
+		"baro-stage.example":     IDBaro,
+		"study.topworks.ltd":     IDStudy,
+		"study-stage.example":    IDStudy,
+		"unknown.example.com":    IDTopsolar, // 매치 없으면 default
 	}
 	for host, want := range cases {
 		if got := Detect(host); got != want {
@@ -41,7 +43,7 @@ func TestDetect_CaseInsensitive(t *testing.T) {
 	}
 }
 
-// TestIDsInGroup_All — 모든 테넌트가 GroupAll 에 속한다.
+// TestIDsInGroup_All — ERP 운영 테넌트만 GroupAll 에 속한다.
 func TestIDsInGroup_All(t *testing.T) {
 	got := IDsInGroup(GroupAll)
 	want := []ID{IDBaro, IDCable, IDTopsolar} // 알파벳 정렬
@@ -71,7 +73,7 @@ func TestIDsInGroupAsStrings(t *testing.T) {
 // TestAllIDs_StableOrder — 정의 순서대로 반환되어 정렬에 의존하지 않음.
 func TestAllIDs_StableOrder(t *testing.T) {
 	got := AllIDs()
-	want := []ID{IDTopsolar, IDCable, IDBaro}
+	want := []ID{IDTopsolar, IDCable, IDBaro, IDStudy}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("기대 %v, 실제 %v", want, got)
 	}
@@ -84,6 +86,18 @@ func TestKnown(t *testing.T) {
 	}
 	if Known("gx10") {
 		t.Errorf("미등록 gx10 은 Known 이면 안 됨")
+	}
+	if !Known("study") {
+		t.Errorf("study 는 Known 이어야 함")
+	}
+}
+
+// TestIDsInGroup_Study — study 는 ERP 공통 GroupAll 을 상속하지 않는 별도 학습 테넌트.
+func TestIDsInGroup_Study(t *testing.T) {
+	got := IDsInGroup(GroupStudy)
+	want := []ID{IDStudy}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("기대 %v, 실제 %v", want, got)
 	}
 }
 
