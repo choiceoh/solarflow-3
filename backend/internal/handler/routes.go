@@ -726,6 +726,35 @@ func (h *TTHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	})
 }
 
+// StudyLearningHandler — study.topworks.ltd 신입 교육 도메인.
+func (h *StudyLearningHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/study", func(r chi.Router) {
+		r.Use(g.Feature(feature.IDStudyLearning))
+		r.Route("/domains", func(r chi.Router) {
+			r.Get("/", h.ListDomains)
+			r.With(g.Write).Post("/", h.CreateDomain)
+			r.Get("/{id}", h.GetDomain)
+			r.With(g.Write).Put("/{id}", h.UpdateDomain)
+			r.With(g.Write).Patch("/{id}", h.UpdateDomain)
+			r.With(g.Write).Delete("/{id}", h.DeleteDomain)
+		})
+		r.Route("/plans", func(r chi.Router) {
+			r.Get("/", h.ListPlans)
+			r.With(g.Write).Post("/", h.CreatePlan)
+			r.Get("/{id}", h.GetPlan)
+			r.With(g.Write).Put("/{id}", h.UpdatePlan)
+			r.With(g.Write).Patch("/{id}", h.UpdatePlan)
+			r.With(g.Write).Delete("/{id}", h.DeletePlan)
+			r.Route("/{id}/steps", func(r chi.Router) {
+				r.With(g.Write).Post("/", h.CreateStep)
+				r.With(g.Write).Put("/{step_id}", h.UpdateStep)
+				r.With(g.Write).Patch("/{step_id}", h.UpdateStep)
+				r.With(g.Write).Delete("/{step_id}", h.DeleteStep)
+			})
+		})
+	})
+}
+
 // SystemSettingsHandler — 사이트 단위 전역 설정 (메뉴 가시성·공지 배너 등). 읽기는 인증, 쓰기는 admin.
 func (h *SystemSettingsHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/system-settings", func(r chi.Router) {

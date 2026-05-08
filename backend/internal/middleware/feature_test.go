@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/tenant"
 )
 
 // TestFeatureGate_AllowsDefaultTenants — catalog default 가 그대로 통과되는지.
@@ -56,6 +57,36 @@ func TestFeatureGate_BaroOnlyFeature(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.tenant, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/api/v1/baro/incoming/", nil)
+			req = req.WithContext(SetUserContext(req.Context(), "u1", "operator", "u1@solarflow.local", tc.tenant, nil))
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			if w.Code != tc.wantCode {
+				t.Errorf("tenant=%s 기대 %d, 실제 %d", tc.tenant, tc.wantCode, w.Code)
+			}
+		})
+	}
+}
+
+// TestFeatureGate_StudyOnlyFeature — study 학습 기능은 ERP 테넌트로 노출되지 않는다.
+func TestFeatureGate_StudyOnlyFeature(t *testing.T) {
+	gate := NewFeatureGate(nil)
+	mw := gate.Require(feature.IDStudyLearning)
+	h := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	cases := []struct {
+		tenant   string
+		wantCode int
+	}{
+		{string(tenant.IDStudy), http.StatusOK},
+		{TenantScopeTopsolar, http.StatusForbidden},
+		{TenantScopeCable, http.StatusForbidden},
+		{TenantScopeBaro, http.StatusForbidden},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tenant, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/api/v1/study/domains/", nil)
 			req = req.WithContext(SetUserContext(req.Context(), "u1", "operator", "u1@solarflow.local", tc.tenant, nil))
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, req)

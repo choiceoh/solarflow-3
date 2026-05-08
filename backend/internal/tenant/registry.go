@@ -34,6 +34,7 @@ const (
 	IDTopsolar ID = "topsolar"
 	IDCable    ID = "cable"
 	IDBaro     ID = "baro"
+	IDStudy    ID = "study"
 )
 
 // Group — 여러 테넌트를 묶은 논리 그룹.
@@ -43,10 +44,13 @@ const (
 type Group string
 
 const (
-	// GroupAll — 모든 테넌트 공통 (마스터, 가용재고, 수주/출고/수금 등).
+	// GroupAll — ERP 운영 테넌트 공통 (마스터, 가용재고, 수주/출고/수금 등).
+	// study 같은 비-ERP 테넌트는 이 그룹에 넣지 않는다.
 	GroupAll Group = "all"
 	// GroupModule — module 계열 (topsolar + cable). 수입/금융/원가 표면 (D-119).
 	GroupModule Group = "module"
+	// GroupStudy — 신입 교육 전용 테넌트. ERP 운영 표면을 상속하지 않는다.
+	GroupStudy Group = "study"
 )
 
 // Tenant — 한 테넌트 정의.
@@ -84,6 +88,12 @@ var defaultRegistry = &Registry{
 			DisplayName:  "바로(주)",
 			HostPatterns: []string{`^baro\.`, `^baro-`},
 			Groups:       []Group{GroupAll},
+		},
+		{
+			ID:           IDStudy,
+			DisplayName:  "TopWorks Study",
+			HostPatterns: []string{`^study\.`, `^study-`},
+			Groups:       []Group{GroupStudy},
 		},
 	},
 }

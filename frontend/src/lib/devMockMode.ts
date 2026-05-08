@@ -6,9 +6,11 @@ const DEV_MOCK_LOGIN_KEY = 'solarflow-dev-mock-login';
 const DEV_MOCK_USER_ID_TOPSOLAR = '00000000-0000-4000-8000-000000000019';
 const DEV_MOCK_USER_ID_CABLE = '00000000-0000-4000-8000-000000000021';
 const DEV_MOCK_USER_ID_BARO = '00000000-0000-4000-8000-000000000020';
+const DEV_MOCK_USER_ID_STUDY = '00000000-0000-4000-8000-000000000022';
 const DEV_MOCK_EMAIL_TOPSOLAR = 'mock@solarflow.local';
 const DEV_MOCK_EMAIL_CABLE = 'mock@cable.local';
 const DEV_MOCK_EMAIL_BARO = 'mock@baro.local';
+const DEV_MOCK_EMAIL_STUDY = 'mock@study.local';
 
 function readStorageFlag(key: string): boolean {
   try {
@@ -88,8 +90,25 @@ const DEV_MOCK_PROFILE_CABLE: UserProfile = {
   preferences: null,
 };
 
+const DEV_MOCK_PROFILE_STUDY: UserProfile = {
+  user_id: DEV_MOCK_USER_ID_STUDY,
+  email: DEV_MOCK_EMAIL_STUDY,
+  name: '학습 목업 사용자',
+  role: 'viewer',
+  department: '신입 온보딩',
+  phone: null,
+  avatar_url: null,
+  is_active: true,
+  persona: null,
+  preferences: null,
+  tenant_id: 'study',
+  tenant_display_name: 'TopWorks Study',
+  enabled_features: ['study.learning'],
+};
+
 export function getDevMockProfile(): UserProfile {
   const tenant = detectTenantScope();
+  if (tenant === 'study') return DEV_MOCK_PROFILE_STUDY;
   if (tenant === 'baro') return DEV_MOCK_PROFILE_BARO;
   if (tenant === 'cable') return DEV_MOCK_PROFILE_CABLE;
   return DEV_MOCK_PROFILE_TOPSOLAR;

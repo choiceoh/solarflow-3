@@ -3,6 +3,14 @@ import { detectTenantScope } from './tenantScope';
 
 // D-108: 호스트네임으로 BARO 모드를 결정한다.
 describe('detectTenantScope', () => {
+  it('study.topworks.ltd는 study로 분기', () => {
+    expect(detectTenantScope('study.topworks.ltd')).toBe('study');
+  });
+
+  it('study-stage 같은 변종 호스트도 study로 분기', () => {
+    expect(detectTenantScope('study-stage.topworks.ltd')).toBe('study');
+  });
+
   it('baro.topworks.ltd는 baro로 분기', () => {
     expect(detectTenantScope('baro.topworks.ltd')).toBe('baro');
   });

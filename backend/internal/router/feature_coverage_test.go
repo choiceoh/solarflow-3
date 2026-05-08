@@ -132,8 +132,8 @@ func TestCatalogPathsAreReal(t *testing.T) {
 // TestMatrixConsistency — harness/FEATURE-WIRING-MATRIX.md ↔ catalog.go 의 ID 집합 일치.
 //
 // 검증:
-//  - 매트릭스 표 행에 백틱으로 감싼 모든 feature_id 는 카탈로그에 존재해야 한다(미정의 ID 게재 금지)
-//  - 카탈로그의 모든 ID 는 매트릭스에 한 번 이상 등장해야 한다(빠진 ID 없음)
+//   - 매트릭스 표 행에 백틱으로 감싼 모든 feature_id 는 카탈로그에 존재해야 한다(미정의 ID 게재 금지)
+//   - 카탈로그의 모든 ID 는 매트릭스에 한 번 이상 등장해야 한다(빠진 ID 없음)
 //
 // 매트릭스를 갱신하지 않고 카탈로그만 변경한 PR (혹은 그 반대) 은 이 테스트가 잡는다.
 func TestMatrixConsistency(t *testing.T) {
@@ -147,7 +147,7 @@ func TestMatrixConsistency(t *testing.T) {
 	// markdown 의 백틱 패턴 — `domain.action[.qualifier]` 형태만 채집.
 	// 도메인 prefix 화이트리스트로 좁혀 `*_test.go`, `*.md`, `Foo.Bar` 등 파일명/타입명 오인을 방지.
 	// 신규 도메인이 추가되면(신규 카탈로그 grouping) 이 정규식의 OR 목록에도 추가한다.
-	idPattern := regexp.MustCompile("`((?:master|tx|calc|baro|intercompany|crm|io|ai|sys|engine)\\.[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)?)`")
+	idPattern := regexp.MustCompile("`((?:master|tx|calc|baro|intercompany|crm|io|ai|sys|study|engine)\\.[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)?)`")
 	mentioned := map[string]bool{}
 	for _, m := range idPattern.FindAllStringSubmatch(body, -1) {
 		mentioned[m[1]] = true
