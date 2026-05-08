@@ -14,6 +14,8 @@ export interface OrderListParams {
   work_queue?: 'delivery_soon' | 'no_site';
   start?: string;
   end?: string;
+  min_kw?: number;
+  max_kw?: number;
   sort?: string;
   order?: 'asc' | 'desc';
   pageIndex: number;
@@ -42,6 +44,8 @@ export function useOrderList(params: OrderListParams): OrderListResult {
     params.work_queue ?? '',
     params.start ?? '',
     params.end ?? '',
+    params.min_kw ?? '',
+    params.max_kw ?? '',
     params.sort ?? '',
     params.order ?? '',
     params.pageIndex,
@@ -58,6 +62,8 @@ export function useOrderList(params: OrderListParams): OrderListResult {
       if (params.work_queue) search.set('work_queue', params.work_queue);
       if (params.start) search.set('start', params.start);
       if (params.end) search.set('end', params.end);
+      if (params.min_kw !== undefined) search.set('min_kw', String(params.min_kw));
+      if (params.max_kw !== undefined) search.set('max_kw', String(params.max_kw));
       if (params.sort) search.set('sort', params.sort);
       if (params.order) search.set('order', params.order);
       search.set('limit', String(params.pageSize));
@@ -162,6 +168,8 @@ export interface OrderDashboardFilters {
   work_queue?: 'delivery_soon' | 'no_site'
   start?: string
   end?: string
+  min_kw?: number
+  max_kw?: number
   status_scope?: OrderDashboardScope
 }
 
@@ -177,6 +185,8 @@ export function useOrderDashboard(filters: OrderDashboardFilters = {}) {
     filters.work_queue ?? '',
     filters.start ?? '',
     filters.end ?? '',
+    filters.min_kw ?? '',
+    filters.max_kw ?? '',
     filters.status_scope ?? 'lifetime',
   ]
   const q = useQuery<OrderDashboard, Error>({
@@ -190,6 +200,8 @@ export function useOrderDashboard(filters: OrderDashboardFilters = {}) {
       if (filters.work_queue) params.set('work_queue', filters.work_queue)
       if (filters.start) params.set('start', filters.start)
       if (filters.end) params.set('end', filters.end)
+      if (filters.min_kw !== undefined) params.set('min_kw', String(filters.min_kw))
+      if (filters.max_kw !== undefined) params.set('max_kw', String(filters.max_kw))
       if (filters.status_scope) params.set('status_scope', filters.status_scope)
       return fetchWithAuth<OrderDashboard>(`/api/v1/orders/dashboard?${params}`)
     },

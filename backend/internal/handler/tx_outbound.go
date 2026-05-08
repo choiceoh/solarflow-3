@@ -607,6 +607,17 @@ func (h *OutboundHandler) applyOutboundFilters(r *http.Request, query *postgrest
 	if end := r.URL.Query().Get("end"); end != "" {
 		query = query.Lte("outbound_date", end)
 	}
+	// 용량(kW) 범위 — outbounds.capacity_kw 기준 [min_kw, max_kw] inclusive.
+	if minKw := r.URL.Query().Get("min_kw"); minKw != "" {
+		if _, err := strconv.ParseFloat(minKw, 64); err == nil {
+			query = query.Gte("capacity_kw", minKw)
+		}
+	}
+	if maxKw := r.URL.Query().Get("max_kw"); maxKw != "" {
+		if _, err := strconv.ParseFloat(maxKw, 64); err == nil {
+			query = query.Lte("capacity_kw", maxKw)
+		}
+	}
 
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
 		productIDs, err := h.productIDsByManufacturer(mfgID)

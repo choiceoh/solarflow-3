@@ -103,6 +103,18 @@ func (h *OrderHandler) applyOrderFilters(r *http.Request, query *postgrest.Filte
 	if end := r.URL.Query().Get("end"); end != "" {
 		query = query.Lte("order_date", end)
 	}
+	// 용량(kW) 범위 — orders.capacity_kw 기준 [min_kw, max_kw] inclusive.
+	// 잘못된 숫자 문자열은 PostgREST 가 400 으로 거부하므로 상위 5xx 노이즈를 막기 위해 사전 검증.
+	if minKw := r.URL.Query().Get("min_kw"); minKw != "" {
+		if _, err := strconv.ParseFloat(minKw, 64); err == nil {
+			query = query.Gte("capacity_kw", minKw)
+		}
+	}
+	if maxKw := r.URL.Query().Get("max_kw"); maxKw != "" {
+		if _, err := strconv.ParseFloat(maxKw, 64); err == nil {
+			query = query.Lte("capacity_kw", maxKw)
+		}
+	}
 
 	// work_queue — OrdersPage 알림 딥링크용 사전정의 작업 큐.
 	//   delivery_soon: 납기 임박(받음/분할 중 잔량 > 0, 납기일 오늘 ~ +7일).

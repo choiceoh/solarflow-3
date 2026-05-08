@@ -39,6 +39,8 @@ export interface OutboundListParams {
   q?: string;
   start?: string;
   end?: string;
+  min_kw?: number;
+  max_kw?: number;
   sort?: string;
   order?: 'asc' | 'desc';
   pageIndex: number;
@@ -68,6 +70,8 @@ export function useOutboundList(params: OutboundListParams): OutboundListResult 
     params.q ?? '',
     params.start ?? '',
     params.end ?? '',
+    params.min_kw ?? '',
+    params.max_kw ?? '',
     params.sort ?? '',
     params.order ?? '',
     params.pageIndex,
@@ -83,6 +87,8 @@ export function useOutboundList(params: OutboundListParams): OutboundListResult 
       if (params.q) search.set('q', params.q);
       if (params.start) search.set('start', params.start);
       if (params.end) search.set('end', params.end);
+      if (params.min_kw !== undefined) search.set('min_kw', String(params.min_kw));
+      if (params.max_kw !== undefined) search.set('max_kw', String(params.max_kw));
       if (params.sort) search.set('sort', params.sort);
       if (params.order) search.set('order', params.order);
       search.set('limit', String(params.pageSize));
@@ -168,6 +174,8 @@ export interface OutboundDashboardFilters {
   q?: string
   start?: string
   end?: string
+  min_kw?: number
+  max_kw?: number
   period?: OutboundDashboardPeriod
 }
 
@@ -182,6 +190,8 @@ export function useOutboundDashboard(filters: OutboundDashboardFilters = {}) {
     filters.q ?? '',
     filters.start ?? '',
     filters.end ?? '',
+    filters.min_kw ?? '',
+    filters.max_kw ?? '',
     filters.period ?? 'lifetime',
   ]
   const q = useQuery<OutboundDashboard, Error>({
@@ -194,6 +204,8 @@ export function useOutboundDashboard(filters: OutboundDashboardFilters = {}) {
       if (filters.q) params.set('q', filters.q)
       if (filters.start) params.set('start', filters.start)
       if (filters.end) params.set('end', filters.end)
+      if (filters.min_kw !== undefined) params.set('min_kw', String(filters.min_kw))
+      if (filters.max_kw !== undefined) params.set('max_kw', String(filters.max_kw))
       if (filters.period) params.set('period', filters.period)
       return fetchWithAuth<OutboundDashboard>(`/api/v1/outbounds/dashboard?${params}`)
     },
