@@ -437,6 +437,7 @@ a:focus-visible,
   background: var(--sf-solar);
   color: var(--sf-dark);
   font-weight: 700;
+  view-transition-name: sf-active-nav;
 }
 
 .sf-nav-badge {
@@ -627,6 +628,62 @@ a:focus-visible,
   flex-direction: column;
   gap: 12px;
   padding: 14px;
+}
+
+/* Motion foundation — 업무 화면용 미세 전환. 값/목록 변화가 눈에 잡히되,
+   행 높이와 테이블 레이아웃은 흔들지 않는다. */
+.sf-motion-card,
+.sf-command-kpis > *,
+.sf-motion-list > *,
+.sf-motion-table tbody > [data-slot="table-row"] {
+  animation: sf-motion-rise var(--sf-dur-slow) var(--sf-ease-out) both;
+}
+.sf-command-kpis > *:nth-child(1),
+.sf-motion-list > *:nth-child(1),
+.sf-motion-table tbody > [data-slot="table-row"]:nth-child(1) { animation-delay: 0ms; }
+.sf-command-kpis > *:nth-child(2),
+.sf-motion-list > *:nth-child(2),
+.sf-motion-table tbody > [data-slot="table-row"]:nth-child(2) { animation-delay: 18ms; }
+.sf-command-kpis > *:nth-child(3),
+.sf-motion-list > *:nth-child(3),
+.sf-motion-table tbody > [data-slot="table-row"]:nth-child(3) { animation-delay: 36ms; }
+.sf-command-kpis > *:nth-child(4),
+.sf-motion-list > *:nth-child(4),
+.sf-motion-table tbody > [data-slot="table-row"]:nth-child(4) { animation-delay: 54ms; }
+.sf-command-kpis > *:nth-child(n+5),
+.sf-motion-list > *:nth-child(n+5),
+.sf-motion-table tbody > [data-slot="table-row"]:nth-child(n+5) { animation-delay: 72ms; }
+
+.sf-motion-kpi-tile {
+  will-change: transform;
+}
+.sf-motion-kpi-tile:hover {
+  transform: translate3d(0, -1px, 0);
+}
+.sf-motion-table tbody > [data-slot="table-row"] {
+  transition: background var(--sf-dur-fast) var(--sf-ease-out),
+              box-shadow var(--sf-dur-fast) var(--sf-ease-out);
+}
+.sf-motion-table tbody > [data-slot="table-row"][data-active="true"],
+.sf-motion-table tbody > [data-slot="table-row"][data-selected="true"] {
+  background: var(--sf-solar-bg);
+  box-shadow: inset 2px 0 0 var(--sf-solar-2);
+}
+.sf-motion-list [data-selected="true"] {
+  border-color: color-mix(in srgb, var(--sf-solar-2) 48%, var(--sf-line));
+  background: var(--sf-solar-bg);
+  box-shadow: inset 2px 0 0 var(--sf-solar-2);
+}
+.sf-motion-live {
+  animation: sf-motion-live var(--sf-dur-slow) var(--sf-ease-out) both;
+}
+@keyframes sf-motion-rise {
+  from { opacity: 0; transform: translate3d(0, 5px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes sf-motion-live {
+  0% { box-shadow: 0 0 0 0 rgb(245 184 0 / 0.28); }
+  100% { box-shadow: 0 0 0 6px rgb(245 184 0 / 0); }
 }
 
 .sf-page-header {
@@ -3370,6 +3427,11 @@ textarea::placeholder {
   animation-duration: 320ms;
   animation-timing-function: var(--sf-ease-out);
 }
+::view-transition-old(sf-active-nav),
+::view-transition-new(sf-active-nav) {
+  animation-duration: 260ms;
+  animation-timing-function: var(--sf-ease-out);
+}
 
 /* ============================================================
    Accessibility — prefers-reduced-motion
@@ -3394,7 +3456,12 @@ textarea::placeholder {
   .sf-page-scroll > *:nth-child(2),
   .sf-page-scroll > *:nth-child(3),
   .sf-page-scroll > *:nth-child(4),
-  .sf-page-scroll > *:nth-child(n+5) {
+  .sf-page-scroll > *:nth-child(n+5),
+  .sf-motion-card,
+  .sf-command-kpis > *,
+  .sf-motion-list > *,
+  .sf-motion-table tbody > [data-slot="table-row"],
+  .sf-motion-live {
     animation: none;
   }
 
@@ -3411,7 +3478,9 @@ textarea::placeholder {
   ::view-transition-old(root),
   ::view-transition-new(root),
   ::view-transition-old(sf-page-title),
-  ::view-transition-new(sf-page-title) {
+  ::view-transition-new(sf-page-title),
+  ::view-transition-old(sf-active-nav),
+  ::view-transition-new(sf-active-nav) {
     animation-duration: 0.01ms !important;
   }
 }

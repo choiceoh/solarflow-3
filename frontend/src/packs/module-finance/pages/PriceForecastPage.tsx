@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   CartesianGrid,
@@ -416,6 +417,8 @@ export default function PriceForecastPage() {
   const [aiSources, setAiSources] = useState<Set<string>>(
     () => new Set(SOURCE_OPTIONS.map((source) => source.key)),
   );
+  const [sourceListParent] = useAutoAnimate<HTMLDivElement>();
+  const [runLogParent] = useAutoAnimate<HTMLDivElement>();
 
   const selectedHorizon = HORIZON_OPTIONS.find((item) => item.key === horizon) ?? HORIZON_OPTIONS[2];
 
@@ -1132,6 +1135,9 @@ export default function PriceForecastPage() {
                         dot={{ r: isOur ? 3 : 2 }}
                         activeDot={{ r: isOur ? 5 : 4 }}
                         connectNulls
+                        isAnimationActive
+                        animationDuration={360}
+                        animationEasing="ease-out"
                         onClick={() => setSelectedSeriesKey(item.key)}
                       />
                     );
@@ -1149,11 +1155,12 @@ export default function PriceForecastPage() {
             <div className="mb-2 text-[10px] leading-4 text-[var(--ink-4)]">
               차트·표에 보이는 source. AI 수집 대상은 상단 chip 으로 따로 선택합니다.
             </div>
-            <div className="space-y-2">
+            <div ref={sourceListParent} className="sf-motion-list space-y-2">
               {SOURCE_OPTIONS.map((source) => (
                 <label
                   key={source.key}
-                  className="flex cursor-pointer items-center gap-2 rounded border border-[var(--line)] px-2 py-2 text-xs"
+                  className="flex cursor-pointer items-center gap-2 rounded border border-[var(--line)] px-2 py-2 text-xs transition-[border-color,background,box-shadow] duration-150"
+                  data-selected={selectedSources.has(source.key)}
                 >
                   <Checkbox
                     checked={selectedSources.has(source.key)}
@@ -1243,7 +1250,7 @@ export default function PriceForecastPage() {
               <CalendarClock className="h-3.5 w-3.5 text-[var(--ink-3)]" />
               <div className="sf-eyebrow">AI 수집 로그</div>
             </div>
-            <div className="space-y-2">
+            <div ref={runLogParent} className="sf-motion-list space-y-2">
               {runs.map((run) => {
                 const health = runSourceHealth(run);
                 const warningCount = parseRunWarnings(run.warnings).length;
@@ -1340,7 +1347,7 @@ function BenchmarkVirtualTable({
       className="overflow-auto"
       style={{ maxHeight: 'min(60vh, 720px)', contain: 'strict' }}
     >
-      <Table>
+      <Table className="sf-motion-table">
         <TableHeader className="sticky top-0 z-10 bg-[var(--surface)]">
           <TableRow>
             <TableHead className="w-9">
@@ -1381,6 +1388,7 @@ function BenchmarkVirtualTable({
                   <TableRow
                     key={vRow.key}
                     data-index={vRow.index}
+                    data-active={selectedBenchmarkIds.has(row.benchmark_id) ? 'true' : undefined}
                     className="cursor-pointer"
                     onClick={() => onSelectSeries(seriesKey(row))}
                   >

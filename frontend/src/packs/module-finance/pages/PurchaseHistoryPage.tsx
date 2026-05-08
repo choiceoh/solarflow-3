@@ -610,6 +610,8 @@ export default function PurchaseHistoryPage() {
   const [search, setSearch] = useState('');
   const [eventSearch, setEventSearch] = useState('');
   const [eventFilter, setEventFilter] = useState<EventFilter>('all');
+  const [timelineGroupsParent] = useAutoAnimate<HTMLDivElement>();
+  const [watchListParent] = useAutoAnimate<HTMLDivElement>();
   const manufacturers = useAppStore((s) => s.manufacturers);
   const loadManufacturers = useAppStore((s) => s.loadManufacturers);
 
@@ -858,7 +860,7 @@ export default function PurchaseHistoryPage() {
               <div className="text-xs">{chains.length === 0 ? 'PO가 없습니다' : '검색 결과 없음'}</div>
             </div>
           ) : (
-            <ul ref={chainsParent} className="sf-ph-chain-list" role="listbox" aria-label="계약 체인 목록">
+            <ul ref={chainsParent} className="sf-ph-chain-list sf-motion-list" role="listbox" aria-label="계약 체인 목록">
               {filteredChains.map((chain) => {
                 const isActive = chain.chain_id === chainParam;
                 const variantN = chain.pos.length - 1;
@@ -1026,7 +1028,7 @@ export default function PurchaseHistoryPage() {
                   <div className="sf-ph-audit-sub">주의·확인 항목</div>
                 </div>
               </div>
-              <div className="sf-ph-watch-list" aria-label="구매 이력 점검 포인트">
+              <div ref={watchListParent} className="sf-ph-watch-list sf-motion-list" aria-label="구매 이력 점검 포인트">
                 {selectedProfile.watchItems.map((item) => (
                   <div key={`${item.tone}-${item.title}`} className="sf-ph-watch-item" data-tone={item.tone}>
                     <div className="sf-ph-watch-icon">
@@ -1053,14 +1055,14 @@ export default function PurchaseHistoryPage() {
               <div className="text-xs">표시할 이벤트가 없습니다</div>
             </div>
           ) : (
-            <div className="sf-ph-timeline-groups" aria-label="구매 이력 이벤트">
+            <div ref={timelineGroupsParent} className="sf-ph-timeline-groups sf-motion-list" aria-label="구매 이력 이벤트">
               {eventGroups.map((group) => (
                 <section key={group.key} className="sf-ph-month-group">
                   <div className="sf-ph-month-divider">
                     <span>{group.label}</span>
                     <span className="mono">{group.events.length}건</span>
                   </div>
-                  <ol className="sf-ph-timeline">
+                  <ol className="sf-ph-timeline sf-motion-list">
                     {group.events.map((evt) => {
                       const link = eventDeepLink(evt);
                       const Tag = link ? 'button' : 'div';
