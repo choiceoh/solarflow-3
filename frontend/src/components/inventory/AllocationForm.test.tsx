@@ -32,7 +32,9 @@ function mockAllocationApi({ withBls = true } = {}) {
 
 async function selectPartner() {
   fireEvent.click(await screen.findByText('거래처 검색'));
-  fireEvent.click(await screen.findByText(testPartner.partner_name));
+  const searchInput = await screen.findByPlaceholderText('검색...');
+  fireEvent.keyDown(searchInput, { key: 'Enter' });
+  await screen.findByText(testPartner.partner_name);
 }
 
 describe('AllocationForm', () => {
