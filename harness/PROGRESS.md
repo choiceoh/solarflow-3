@@ -5,14 +5,53 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | Excel Import Hub 중심 운영 입력 전환 마무리 + PO/LC/T/T import 스펙·서버 검증 추가 + PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 리허설 |
+| 다음 작업 | study 학습 페이지 1차 UI + 진도/과제 도메인 설계, Excel Import Hub 중심 운영 입력 전환 마무리 + PO/LC/T/T import 스펙·서버 검증 추가 + PR19 구매/판매/금융 화면 데스크톱 정밀 비교 + 아마란스 RPA 리허설 |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-152 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈) |
+| DECISIONS | D-001~D-153 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-08 세션 — study.topworks.ltd 신입 교육 도메인 1차
+
+### 완료
+- `study.topworks.ltd`를 독립 `study` 테넌트로 registry/프론트 host 감지에 추가
+- `study`는 ERP 운영 `TenantSetAll`을 상속하지 않도록 분리
+- `StudyTenantFence` 추가
+  - `study` 테넌트는 `/api/v1/study/*`, `/api/v1/users/me*` 외 인증 API 호출을 403 처리
+- 학습 도메인 DB/API 1차
+  - `study_learning_domains` — 학습 분야
+  - `study_learning_plans` — 온보딩 플랜
+  - `study_learning_plan_steps` — 플랜 단계
+  - `GET/POST/PUT/PATCH/DELETE /api/v1/study/domains/*`
+  - `GET/POST/PUT/PATCH/DELETE /api/v1/study/plans/*`
+  - `POST/PUT/PATCH/DELETE /api/v1/study/plans/{id}/steps/*`
+- 기본 seed
+  - `new_employee_10_day` 신입사원 10일 온보딩
+  - 회사·보안, SolarFlow 업무 지도, 수입·통관, BARO 영업, 데이터 품질, 제품·현장 기초 6개 domain
+- D-153 결정 기록, `harness/study.md`, feature wiring matrix, 설계 정본, 운영 CORS 문서 동기화
+- 프론트는 아직 페이지를 만들지 않고, study host에서 ERP 메뉴가 보이지 않도록 가드만 추가
+
+### 다음
+- `study-domain` pack과 학습 목록/플랜 상세 페이지 제작
+- `study_learning_assignments` 기반 trainee별 진도/과제 도메인 추가
+- 운영 적용 시 Cloudflare Pages custom domain + `CORS_ORIGINS` + `user_profiles.tenant_scope='study'` 프로비저닝
+
+### 검증
+- `cd backend && go test ./internal/model ./internal/tenant ./internal/feature ./internal/middleware ./internal/handler ./internal/router` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd frontend && bun install --frozen-lockfile` 성공
+- `cd frontend && bun test src/lib/tenantScope.test.ts src/lib/navigation/manifest.test.ts src/packs/packs.test.ts` 성공
+- `cd frontend && bun run build` 성공
+- `cd frontend && bun run lint` 종료코드 0 — 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
+- `git diff --check` 성공
+- `graphify update .` 성공
 
 ---
 

@@ -65,6 +65,23 @@ func TestFillTenantInfo_Cable(t *testing.T) {
 	}
 }
 
+// TestFillTenantInfo_Study — study 는 학습 feature 만 받고 ERP 공통 기능은 상속하지 않는다.
+func TestFillTenantInfo_Study(t *testing.T) {
+	h := NewUserHandler(nil, feature.NewResolver(nil))
+	resp := &UserProfileResponse{}
+	h.fillTenantInfo(resp, string(tenant.IDStudy))
+
+	if resp.TenantID != "study" {
+		t.Fatalf("TenantID 기대 study, 실제=%q", resp.TenantID)
+	}
+	if !contains(resp.EnabledFeatures, string(feature.IDStudyLearning)) {
+		t.Errorf("study 는 study.learning 을 가져야 함")
+	}
+	if contains(resp.EnabledFeatures, string(feature.IDTxOrder)) {
+		t.Errorf("study 는 ERP 수주 기능을 상속하면 안 됨")
+	}
+}
+
 // TestFillTenantInfo_NilResolver — Resolver 가 nil 로 들어와도 NewUserHandler 가 default 로 채운다.
 func TestFillTenantInfo_NilResolver(t *testing.T) {
 	h := NewUserHandler(nil, nil)

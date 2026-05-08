@@ -27,7 +27,8 @@ type FeatureID string
 // 기존 코드 호환을 위해 var 형태와 []string 타입을 그대로 유지한다 — 카탈로그가
 // 컴파일 타임에 한 번만 평가되므로 init 시점에 registry 가 채워준다.
 var (
-	// TenantSetAll — 모든 테넌트가 공유하는 공통 기능에 부여한다.
+	// TenantSetAll — ERP 운영 테넌트가 공유하는 공통 기능에 부여한다.
+	// study 같은 비-ERP 도메인은 별도 집합을 써야 ERP API 를 상속하지 않는다.
 	TenantSetAll = tenant.IDsInGroupAsStrings(tenant.GroupAll)
 	// TenantSetModule — module 계열(D-119) = topsolar + cable. 수입/금융/원가 영역.
 	TenantSetModule = tenant.IDsInGroupAsStrings(tenant.GroupModule)
@@ -35,6 +36,8 @@ var (
 	TenantSetTopsolarOnly = []string{string(tenant.IDTopsolar)}
 	// TenantSetBaroOnly — 바로(주) 전용(D-108).
 	TenantSetBaroOnly = []string{string(tenant.IDBaro)}
+	// TenantSetStudyOnly — 신입 학습 포털 전용.
+	TenantSetStudyOnly = []string{string(tenant.IDStudy)}
 )
 
 // DataScopeKind — 데이터 배선 힌트(D-120).
@@ -85,17 +88,17 @@ type Feature struct {
 //   - engine.*     : Rust 엔진 헬스
 const (
 	// ---- master.* (all tenants) ----
-	IDMasterBank             FeatureID = "master.bank"
-	IDMasterCompany          FeatureID = "master.company"
-	IDMasterCompanyAlias     FeatureID = "master.company_alias"
-	IDMasterManufacturer     FeatureID = "master.manufacturer"
-	IDMasterPartner          FeatureID = "master.partner"
-	IDMasterPartnerAlias     FeatureID = "master.partner_alias"
-	IDMasterProduct          FeatureID = "master.product"
-	IDMasterProductAlias     FeatureID = "master.product_alias"
-	IDMasterWarehouse        FeatureID = "master.warehouse"
+	IDMasterBank              FeatureID = "master.bank"
+	IDMasterCompany           FeatureID = "master.company"
+	IDMasterCompanyAlias      FeatureID = "master.company_alias"
+	IDMasterManufacturer      FeatureID = "master.manufacturer"
+	IDMasterPartner           FeatureID = "master.partner"
+	IDMasterPartnerAlias      FeatureID = "master.partner_alias"
+	IDMasterProduct           FeatureID = "master.product"
+	IDMasterProductAlias      FeatureID = "master.product_alias"
+	IDMasterWarehouse         FeatureID = "master.warehouse"
 	IDMasterWarehouseLocation FeatureID = "master.warehouse_location"
-	IDMasterConstructionSite FeatureID = "master.construction_site"
+	IDMasterConstructionSite  FeatureID = "master.construction_site"
 
 	// ---- tx.* (all tenants 공유) ----
 	IDTxOrder                FeatureID = "tx.order"
@@ -131,20 +134,20 @@ const (
 
 	// ---- baro.* (BARO 전용) ----
 	IDBaroCallbackRecommend FeatureID = "baro.callback_recommend"
-	IDBaroIncoming        FeatureID = "baro.incoming"
-	IDBaroPurchaseHistory FeatureID = "baro.purchase_history"
-	IDBaroCreditBoard     FeatureID = "baro.credit_board"
-	IDBaroDispatch        FeatureID = "baro.dispatch"
-	IDBaroOrders          FeatureID = "baro.orders"
-	IDBaroPriceBook       FeatureID = "baro.price_book"
-	IDBaroPartnerCockpit  FeatureID = "baro.partner_cockpit"
-	IDBaroRFM             FeatureID = "baro.rfm"
-	IDBaroSalesSummary    FeatureID = "baro.sales_summary"
-	IDBaroHome            FeatureID = "baro.home"            // PR-8: D-127 frontend-only 영업 일일 홈
-	IDBaroInverter        FeatureID = "baro.inverter"        // PR-8: D-130 frontend-only 인버터 호환 가이드
-	IDBaroQuote           FeatureID = "baro.quote"
-	IDBaroCreditCheck     FeatureID = "baro.credit_check"
-	IDBaroShipmentNotice  FeatureID = "baro.shipment_notice"
+	IDBaroIncoming          FeatureID = "baro.incoming"
+	IDBaroPurchaseHistory   FeatureID = "baro.purchase_history"
+	IDBaroCreditBoard       FeatureID = "baro.credit_board"
+	IDBaroDispatch          FeatureID = "baro.dispatch"
+	IDBaroOrders            FeatureID = "baro.orders"
+	IDBaroPriceBook         FeatureID = "baro.price_book"
+	IDBaroPartnerCockpit    FeatureID = "baro.partner_cockpit"
+	IDBaroRFM               FeatureID = "baro.rfm"
+	IDBaroSalesSummary      FeatureID = "baro.sales_summary"
+	IDBaroHome              FeatureID = "baro.home"     // PR-8: D-127 frontend-only 영업 일일 홈
+	IDBaroInverter          FeatureID = "baro.inverter" // PR-8: D-130 frontend-only 인버터 호환 가이드
+	IDBaroQuote             FeatureID = "baro.quote"
+	IDBaroCreditCheck       FeatureID = "baro.credit_check"
+	IDBaroShipmentNotice    FeatureID = "baro.shipment_notice"
 
 	// ---- calc.* (Rust 계산 프록시) ----
 	IDCalcInventory            FeatureID = "calc.inventory"
@@ -182,6 +185,9 @@ const (
 	IDSysUser           FeatureID = "sys.user"
 	IDSysExternalSync   FeatureID = "sys.external_sync" // D-059
 	IDSysDBIntegrity    FeatureID = "sys.db_integrity"  // D-064 PR 37
+
+	// ---- study.* ----
+	IDStudyLearning FeatureID = "study.learning"
 
 	// ---- engine.* ----
 	IDEngineHealth FeatureID = "engine.health"
@@ -733,6 +739,18 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/external-sync-sources/{id}",
 			"/api/v1/external-sync-sources/{id}/run",
 			"/api/v1/external-format/google-sheet",
+		},
+	},
+
+	// ===== study.* =====
+	IDStudyLearning: {
+		ID: IDStudyLearning, Name: "신입 교육 학습 도메인",
+		Description:    "study.topworks.ltd 전용 학습 분야/온보딩 플랜/단계 API",
+		DefaultTenants: TenantSetStudyOnly, DefaultScope: DataScopeTenantOwned,
+		Paths: []string{
+			"/api/v1/study/domains/", "/api/v1/study/domains/{id}",
+			"/api/v1/study/plans/", "/api/v1/study/plans/{id}",
+			"/api/v1/study/plans/{id}/steps/", "/api/v1/study/plans/{id}/steps/{step_id}",
 		},
 	},
 

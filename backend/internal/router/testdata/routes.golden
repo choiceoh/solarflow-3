@@ -30,6 +30,9 @@ DELETE  /api/v1/receipt-matches/{id}
 DELETE  /api/v1/receipts/{id}
 DELETE  /api/v1/receiving-logs/{id}
 DELETE  /api/v1/sales/{id}
+DELETE  /api/v1/study/domains/{id}
+DELETE  /api/v1/study/plans/{id}
+DELETE  /api/v1/study/plans/{id}/steps/{step_id}
 DELETE  /api/v1/tts/{id}
 DELETE  /api/v1/ui-configs/{scope}/{config_id}
 DELETE  /api/v1/warehouse-locations/{id}
@@ -164,6 +167,10 @@ GET     /api/v1/sales/
 GET     /api/v1/sales/dashboard
 GET     /api/v1/sales/summary
 GET     /api/v1/sales/{id}
+GET     /api/v1/study/domains/
+GET     /api/v1/study/domains/{id}
+GET     /api/v1/study/plans/
+GET     /api/v1/study/plans/{id}
 GET     /api/v1/system-settings/{key}
 GET     /api/v1/tts/
 GET     /api/v1/tts/dashboard
@@ -201,6 +208,9 @@ PATCH   /api/v1/partners/{id}/status
 PATCH   /api/v1/picking-lists/{id}
 PATCH   /api/v1/picking-lists/{id}/items/{item_id}
 PATCH   /api/v1/products/{id}/status
+PATCH   /api/v1/study/domains/{id}
+PATCH   /api/v1/study/plans/{id}
+PATCH   /api/v1/study/plans/{id}/steps/{step_id}
 PATCH   /api/v1/warehouse-locations/{id}
 PATCH   /api/v1/warehouses/{id}
 PATCH   /api/v1/warehouses/{id}/status
@@ -290,6 +300,9 @@ POST    /api/v1/receipt-matches/bulk
 POST    /api/v1/receipts/
 POST    /api/v1/receiving-logs/
 POST    /api/v1/sales/
+POST    /api/v1/study/domains/
+POST    /api/v1/study/plans/
+POST    /api/v1/study/plans/{id}/steps/
 POST    /api/v1/tts/
 POST    /api/v1/users/
 POST    /api/v1/warehouse-locations/
@@ -322,6 +335,9 @@ PUT     /api/v1/price-histories/{id}
 PUT     /api/v1/products/{id}
 PUT     /api/v1/receipts/{id}
 PUT     /api/v1/sales/{id}
+PUT     /api/v1/study/domains/{id}
+PUT     /api/v1/study/plans/{id}
+PUT     /api/v1/study/plans/{id}/steps/{step_id}
 PUT     /api/v1/system-settings/{key}
 PUT     /api/v1/tts/{id}
 PUT     /api/v1/ui-configs/{scope}/{config_id}

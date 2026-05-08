@@ -4,12 +4,13 @@
 //   - 탑솔라:    module.topworks.ltd / solarflow3.com / 100.123.70.19:5173 / localhost
 //   - 케이블:    cable.topworks.ltd
 //   - 바로(주):  baro.topworks.ltd
+//   - 학습:      study.topworks.ltd
 //
 // 이 모듈은 window.location.hostname을 보고 테넌트 모드를 결정한다.
 // 백엔드는 user_profiles.tenant_scope으로 격리를 강제하므로,
 // 이 함수는 UI 노출 제어용이지 보안 경계가 아니다(보안은 서버에서 RequireTenantScope).
 
-export type TenantScope = 'topsolar' | 'cable' | 'baro';
+export type TenantScope = 'topsolar' | 'cable' | 'baro' | 'study';
 
 /**
  * MODULE_TENANTS — module 계열 = topsolar + cable (D-119).
@@ -19,6 +20,7 @@ export type TenantScope = 'topsolar' | 'cable' | 'baro';
  * 분리 후 packs → manifest → packs 의 값 순환을 끊으려고 옮겼다.
  */
 export const MODULE_TENANTS: TenantScope[] = ['topsolar', 'cable'];
+export const ERP_TENANTS: TenantScope[] = ['topsolar', 'cable', 'baro'];
 
 const CABLE_HOST_PATTERNS: Array<RegExp | string> = [
   /^cable\./i,
@@ -30,7 +32,20 @@ const BARO_HOST_PATTERNS: Array<RegExp | string> = [
   /^baro-/i,
 ];
 
+const STUDY_HOST_PATTERNS: Array<RegExp | string> = [
+  /^study\./i,
+  /^study-/i,
+];
+
 export function detectTenantScope(hostname: string = window.location.hostname): TenantScope {
+  for (const pattern of STUDY_HOST_PATTERNS) {
+    if (typeof pattern === 'string') {
+      if (hostname === pattern) return 'study';
+    } else if (pattern.test(hostname)) {
+      return 'study';
+    }
+  }
+
   for (const pattern of CABLE_HOST_PATTERNS) {
     if (typeof pattern === 'string') {
       if (hostname === pattern) return 'cable';

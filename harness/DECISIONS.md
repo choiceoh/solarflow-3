@@ -1303,3 +1303,27 @@
   - CSV 내보내기는 현재 화면 필터가 적용된 이벤트만 포함한다.
   - 원천 행 표시는 `purchase_orders`, `price_histories`, `lc_records`, `bl_shipments`, `tt_remittances`, `audit_logs` 기준이다.
 - **날짜**: 2026-05-07
+
+## D-153: `study.topworks.ltd`는 신입 교육 전용 테넌트로 분리한다
+
+- **결정**: `study.topworks.ltd`를 `user_profiles.tenant_scope='study'`를 갖는 독립 학습 테넌트로 추가한다. 첫 단계는 페이지가 아니라 학습 도메인 계약이다.
+  - 테넌트 registry에 `study`와 host pattern `^study\.` / `^study-`를 추가한다.
+  - `study`는 ERP 운영 테넌트가 아니므로 `TenantSetAll`(ERP 공통 기능)을 상속하지 않는다.
+  - 신규 feature id는 `study.learning`이며 DefaultTenants는 `study` 단독이다.
+  - 서버 `StudyTenantFence`가 `study` 테넌트의 `/api/v1/study/*`, `/api/v1/users/me*` 외 인증 API 호출을 403으로 막는다.
+- **학습 도메인 스키마**:
+  - `study_learning_domains`: 학습 분야(domain). 회사·보안, SolarFlow 업무 지도, 수입·통관, BARO 영업, 데이터 품질, 제품·현장 기초 등.
+  - `study_learning_plans`: 온보딩 플랜 헤더. 대상, 목표, 기간, 상태.
+  - `study_learning_plan_steps`: 플랜 단계. 분야, 순서, 설명, 예상 시간, 필수 여부, 평가 방식.
+  - 기본 seed로 `new_employee_10_day` 신입사원 10일 온보딩 플랜과 6개 학습 분야, 8개 단계를 넣는다.
+- **이유**: 신입 교육 사이트는 재고·수주·금융을 직접 운영하는 ERP 화면이 아니라, 업무 지식을 안전하게 익히는 학습 포털이다. 기존 `GroupAll`을 그대로 상속하면 화면이 없더라도 API/메뉴 표면이 과하게 열리므로, 학습 feature만 허용하는 별도 테넌트로 둔다.
+- **운영 기준**:
+  - 운영 `backend/.env`의 `CORS_ORIGINS`에 `https://study.topworks.ltd`를 추가한다.
+  - Cloudflare Pages 프로젝트 `topworks-module-git`에 `study.topworks.ltd` custom domain을 연결한다.
+  - 신입 계정은 `user_profiles.tenant_scope='study'`로 지정한다. 자동 프로비저닝 정책은 기존 호환상 topsolar 기본값을 유지한다.
+  - 학습 페이지는 후속 PR에서 별도 `study-domain` pack으로 추가하고, 그 전에는 study host에서 ERP 메뉴를 노출하지 않는다.
+- **검증**:
+  - tenant registry host 감지와 feature resolver에서 `study.learning` 단독 노출을 테스트한다.
+  - router coverage/matrix consistency로 `/api/v1/study/*` 라우트와 `study.learning` 매트릭스를 고정한다.
+  - frontend tenantScope/manifest 테스트로 `study.topworks.ltd` 감지와 ERP 메뉴 미노출을 고정한다.
+- **날짜**: 2026-05-08
