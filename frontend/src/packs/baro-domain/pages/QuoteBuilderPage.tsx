@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useSearchParams } from 'react-router-dom';
 import { Calculator, Plus, Trash2, Save, Printer, RefreshCw, Search } from 'lucide-react';
 // Save imported above — used for both LocalStorage hint and server-save button
@@ -214,6 +215,8 @@ function Builder({ partnerId, onClear }: { partnerId: string; onClear: () => voi
   });
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<QuoteLine[]>([]);
+  // 라인 추가/삭제 시 자식 mount/unmount 자동 애니메이션 — tbody 단위로.
+  const [linesParent] = useAutoAnimate<HTMLTableSectionElement>();
 
   // 라인 추가 picker
   const [pickerQuery, setPickerQuery] = useState('');
@@ -517,7 +520,7 @@ function Builder({ partnerId, onClear }: { partnerId: string; onClear: () => voi
                   <th className="w-6 py-1 print:hidden" />
                 </tr>
               </thead>
-              <tbody>
+              <tbody ref={linesParent}>
                 {lines.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-6 text-center text-muted-foreground">
