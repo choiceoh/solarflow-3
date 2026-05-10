@@ -202,7 +202,7 @@ func (h *OutboundHandler) ensureExistingPickingListUsable(outboundID string) (bo
 	return false, nil
 }
 
-func (h *OutboundHandler) pickingListItemCount(pickingListID string) (int, error) {
+func (h *OutboundHandler) pickingListItemCount(pickingListID string) (int64, error) {
 	_, count, err := h.DB.From("picking_list_items").
 		Select("item_id", "exact", true).
 		Eq("picking_list_id", pickingListID).
