@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-155 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T) |
+| DECISIONS | D-001~D-156 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -41,6 +41,27 @@
 
 ### 알려진 제한
 - PO 통화 컬럼은 운영 양식/검증 기준으로 먼저 고정했으며, 현재 PO 저장은 기존 라인 금액 USD/Wp 계산 흐름을 유지한다.
+
+---
+
+## 2026-05-11 세션 — 매출 분석 대사 드릴다운 + 원가 미연결 사유 분류 (D-156)
+
+### 완료
+- `/sales-analysis` 원장 대사 체크를 클릭형 드릴다운 보드로 전환
+  - 매출원장↔이익엔진 차이, 세금계산서 미발행, 원가 미연결, 수금 미회수를 각각 선택해 후보 행 확인 가능
+  - 직접 의심 가능한 원장 차이 후보가 없으면 상위 매출 행을 검토 대상으로 표시
+- 원가 미연결 사유 분류 추가
+  - FIFO 매칭 없음, Landed 원가 미확정, CIF 기준원가 미확정, 품목 마스터 불일치, 출고 연결 누락, 원가 확정 대기로 분류
+  - 사유별 미연결 매출 규모와 품목별 조치 링크를 같은 패널에 표시
+- 계산서 미발행/수금 미회수 상세에도 거래처·출고 확인 링크를 연결
+- D-156 결정 기록 추가
+
+### 검증
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `cd frontend && npm test` 실패 — 현재 작업 환경에 `bun` 실행 파일이 없어 테스트 스크립트가 시작되지 않음
+- `git diff --check` 성공
+- `graphify update .` 성공
 
 ---
 
