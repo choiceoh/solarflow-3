@@ -23,6 +23,11 @@ export default function AIMatchSuggestionPanel({ suggestion }: Props) {
                     <span className="ml-1 text-violet-700/80 dark:text-violet-200/80">
                       {Math.round(candidate.confidence * 100)}%
                     </span>
+                    {candidate.is_partial && (
+                      <span className="ml-1 rounded-sm bg-violet-100 px-1 py-0.5 text-[10px] font-medium text-violet-800 dark:bg-violet-900/40 dark:text-violet-100">
+                        부분
+                      </span>
+                    )}
                   </span>
                   <span className="shrink-0 font-semibold">{formatNumber(candidate.match_amount)}원</span>
                 </div>
