@@ -151,3 +151,34 @@ func TestOutboundImportUsesTransactionalCreateCore(t *testing.T) {
 		t.Fatal("출고 Import 는 createOutboundCore(outReq) 를 호출해야 합니다")
 	}
 }
+
+// ============================================================
+// G7. 피킹 명세는 헤더만 남는 부분 성공 상태를 만들지 않는다.
+// 회귀 패턴: 헤더 INSERT 성공 후 라인 INSERT 실패를 206 PartialContent 로 반환하거나,
+// 자동 생성 재시도가 헤더 존재만 보고 라인 없는 명세를 정상으로 간주.
+// ============================================================
+func TestPickingListCreationDoesNotPersistHeaderOnlySuccess(t *testing.T) {
+	body, err := os.ReadFile("wms_picking_list.go")
+	if err != nil {
+		t.Fatalf("read wms_picking_list.go: %v", err)
+	}
+	content := string(body)
+	if strings.Contains(content, "StatusPartialContent") {
+		t.Fatal("피킹 명세 생성은 헤더만 저장된 206 부분 성공을 반환하면 안 됩니다")
+	}
+	if !strings.Contains(content, "deletePickingListHeader(listID)") {
+		t.Fatal("피킹 라인 INSERT 실패 시 생성된 헤더를 정리해야 합니다")
+	}
+
+	autoBody, err := os.ReadFile("wms_automation.go")
+	if err != nil {
+		t.Fatalf("read wms_automation.go: %v", err)
+	}
+	autoContent := string(autoBody)
+	if !strings.Contains(autoContent, "ensureExistingPickingListUsable(ob.OutboundID)") {
+		t.Fatal("출고 피킹 자동 생성은 기존 헤더의 라인 존재 여부를 확인해야 합니다")
+	}
+	if !strings.Contains(autoContent, "pickingListItemCount(row.PickingListID)") {
+		t.Fatal("출고 피킹 자동 생성은 헤더 존재가 아니라 라인 존재로 idempotency 를 판단해야 합니다")
+	}
+}

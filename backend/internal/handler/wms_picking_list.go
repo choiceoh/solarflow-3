@@ -176,11 +176,22 @@ func (h *PickingListHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if _, _, ierr := h.DB.From("picking_list_items").
 		Insert(itemRows, false, "", "", "").Execute(); ierr != nil {
 		log.Printf("[picking 라인 등록 실패] list=%s err=%v", listID, ierr)
-		response.RespondError(w, http.StatusPartialContent,
-			"헤더는 저장됐으나 라인 저장 실패: "+ierr.Error())
+		if cleanupErr := h.deletePickingListHeader(listID); cleanupErr != nil {
+			log.Printf("[picking 라인 실패 후 헤더 정리 실패] list=%s err=%v", listID, cleanupErr)
+		}
+		response.RespondError(w, http.StatusInternalServerError,
+			"피킹 명세 라인 저장 실패: "+ierr.Error())
 		return
 	}
 	response.RespondJSON(w, http.StatusCreated, created[0])
+}
+
+func (h *PickingListHandler) deletePickingListHeader(listID string) error {
+	_, _, err := h.DB.From("picking_lists").
+		Delete("", "").
+		Eq("picking_list_id", listID).
+		Execute()
+	return err
 }
 
 // UpdateHeader — PATCH /api/v1/picking-lists/{id}

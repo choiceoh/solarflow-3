@@ -69,6 +69,10 @@ type wmsPickingPlanItem struct {
 	QuantityPlanned int
 }
 
+type wmsPickingListHeader struct {
+	PickingListID string `json:"picking_list_id"`
+}
+
 func specWPFromProduct(p wmsProductSnapshot) *int {
 	if p.SpecWP == nil {
 		return nil
@@ -82,17 +86,12 @@ func (h *OutboundHandler) ensurePickingListForOutbound(ob model.Outbound) error 
 		return nil
 	}
 
-	data, count, err := h.DB.From("picking_lists").
-		Select("picking_list_id", "exact", true).
-		Eq("outbound_id", ob.OutboundID).
-		Range(0, 0, "").
-		Execute()
-	_ = data
-	if err == nil && count > 0 {
-		return nil
-	}
+	hasUsableList, err := h.ensureExistingPickingListUsable(ob.OutboundID)
 	if err != nil {
-		return fmt.Errorf("기존 피킹 명세 확인 실패: %w", err)
+		return err
+	}
+	if hasUsableList {
+		return nil
 	}
 
 	plan, err := h.buildPickingPlan(ob)
@@ -134,6 +133,9 @@ func (h *OutboundHandler) ensurePickingListForOutbound(ob model.Outbound) error 
 	}
 	var created []model.PickingList
 	if err := json.Unmarshal(hdrData, &created); err != nil || len(created) == 0 {
+		if _, cleanupErr := h.ensureExistingPickingListUsable(ob.OutboundID); cleanupErr != nil {
+			log.Printf("[WMS 피킹 자동 생성] 헤더 응답 실패 후 빈 헤더 정리 실패 outbound=%s err=%v", ob.OutboundID, cleanupErr)
+		}
 		return fmt.Errorf("피킹 명세 헤더 응답 처리 실패")
 	}
 
@@ -164,9 +166,57 @@ func (h *OutboundHandler) ensurePickingListForOutbound(ob model.Outbound) error 
 	}
 	if _, _, err := h.DB.From("picking_list_items").
 		Insert(rows, false, "", "", "").Execute(); err != nil {
+		if cleanupErr := h.deletePickingListHeader(created[0].PickingListID); cleanupErr != nil {
+			log.Printf("[WMS 피킹 자동 생성] 라인 실패 후 헤더 정리 실패 list=%s err=%v", created[0].PickingListID, cleanupErr)
+		}
 		return fmt.Errorf("피킹 명세 라인 자동 생성 실패: %w", err)
 	}
 	return nil
+}
+
+func (h *OutboundHandler) ensureExistingPickingListUsable(outboundID string) (bool, error) {
+	data, _, err := h.DB.From("picking_lists").
+		Select("picking_list_id", "exact", false).
+		Eq("outbound_id", outboundID).
+		Execute()
+	if err != nil {
+		return false, fmt.Errorf("기존 피킹 명세 확인 실패: %w", err)
+	}
+	var existing []wmsPickingListHeader
+	if err := json.Unmarshal(data, &existing); err != nil {
+		return false, fmt.Errorf("기존 피킹 명세 응답 처리 실패: %w", err)
+	}
+	for _, row := range existing {
+		itemCount, err := h.pickingListItemCount(row.PickingListID)
+		if err != nil {
+			return false, fmt.Errorf("기존 피킹 명세 라인 확인 실패: %w", err)
+		}
+		if itemCount > 0 {
+			return true, nil
+		}
+		// 비유: 라인 없는 작업지시서는 창고에 뿌리면 안 되므로 찢고 다시 만든다.
+		if err := h.deletePickingListHeader(row.PickingListID); err != nil {
+			return false, fmt.Errorf("빈 피킹 명세 헤더 정리 실패: %w", err)
+		}
+	}
+	return false, nil
+}
+
+func (h *OutboundHandler) pickingListItemCount(pickingListID string) (int64, error) {
+	_, count, err := h.DB.From("picking_list_items").
+		Select("item_id", "exact", true).
+		Eq("picking_list_id", pickingListID).
+		Range(0, 0, "").
+		Execute()
+	return count, err
+}
+
+func (h *OutboundHandler) deletePickingListHeader(pickingListID string) error {
+	_, _, err := h.DB.From("picking_lists").
+		Delete("", "").
+		Eq("picking_list_id", pickingListID).
+		Execute()
+	return err
 }
 
 func (h *OutboundHandler) buildPickingPlan(ob model.Outbound) ([]wmsPickingPlanItem, error) {
