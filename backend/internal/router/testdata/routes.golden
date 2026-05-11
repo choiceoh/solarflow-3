@@ -208,6 +208,7 @@ PATCH   /api/v1/partners/{id}
 PATCH   /api/v1/partners/{id}/status
 PATCH   /api/v1/picking-lists/{id}
 PATCH   /api/v1/picking-lists/{id}/items/{item_id}
+PATCH   /api/v1/price-benchmarks/{id}/review-status
 PATCH   /api/v1/products/{id}/status
 PATCH   /api/v1/receiving-logs/{id}
 PATCH   /api/v1/study/domains/{id}

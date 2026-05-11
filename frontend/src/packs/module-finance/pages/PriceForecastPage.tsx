@@ -24,10 +24,12 @@ import {
   Layers,
   Minus,
   RefreshCw,
+  RotateCcw,
   Search,
   Target,
   TrendingUp,
   Trash2,
+  XCircle,
 } from 'lucide-react';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { Button } from '@/components/ui/button';
@@ -49,6 +51,7 @@ import { confirmDialog } from '@/lib/dialogs';
 import type {
   PriceBenchmark,
   PriceBenchmarkAIRefreshResult,
+  PriceBenchmarkReviewStatus,
   PriceBenchmarkRun,
   PriceForecastScenario,
   PriceForecastSourceQuality,
@@ -103,6 +106,15 @@ const CHART_PRESETS = [
 ] as const;
 
 const ALL_FILTER = 'all';
+const REVIEW_ACTIVE_FILTER = 'active';
+
+const REVIEW_FILTER_OPTIONS = [
+  { key: REVIEW_ACTIVE_FILTER, label: '검토 대상' },
+  { key: 'candidate', label: '후보' },
+  { key: 'accepted', label: '채택' },
+  { key: 'rejected', label: '제외' },
+  { key: ALL_FILTER, label: '전체' },
+] as const;
 
 const LINE_COLORS = [
   '#0f766e',
@@ -120,6 +132,7 @@ const LINE_COLORS = [
 type UnitKey = (typeof UNIT_OPTIONS)[number]['key'];
 type HorizonKey = (typeof HORIZON_OPTIONS)[number]['key'];
 type ChartPresetKey = (typeof CHART_PRESETS)[number]['key'];
+type ReviewFilterKey = (typeof REVIEW_FILTER_OPTIONS)[number]['key'];
 type ChartPoint = Record<string, string | number>;
 
 interface SeriesDef {
@@ -187,6 +200,30 @@ function formatUnitPrice(value: number | null | undefined, unit: UnitKey): strin
 function formatConfidence(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—';
   return `${Math.round(Number(value) * 100)}%`;
+}
+
+function benchmarkReviewStatus(row: PriceBenchmark): PriceBenchmarkReviewStatus {
+  if (row.review_status === 'accepted' || row.review_status === 'rejected') return row.review_status;
+  return 'candidate';
+}
+
+function reviewStatusLabel(status: PriceBenchmarkReviewStatus): string {
+  if (status === 'accepted') return '채택';
+  if (status === 'rejected') return '제외';
+  return '후보';
+}
+
+function reviewStatusVariant(status: PriceBenchmarkReviewStatus): 'default' | 'secondary' | 'outline' | 'destructive' {
+  if (status === 'accepted') return 'default';
+  if (status === 'rejected') return 'secondary';
+  return 'outline';
+}
+
+function reviewMatchesFilter(row: PriceBenchmark, filter: ReviewFilterKey): boolean {
+  const status = benchmarkReviewStatus(row);
+  if (filter === REVIEW_ACTIVE_FILTER) return status !== 'rejected';
+  if (filter === ALL_FILTER) return true;
+  return status === filter;
 }
 
 function monthStart(months: number): string {
@@ -435,6 +472,7 @@ export default function PriceForecastPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [query, setQuery] = useState('');
   const [unit, setUnit] = useState<UnitKey>('usd');
   const [horizon, setHorizon] = useState<HorizonKey>('18m');
@@ -444,6 +482,7 @@ export default function PriceForecastPage() {
   const [regionFilter, setRegionFilter] = useState(ALL_FILTER);
   const [technologyFilter, setTechnologyFilter] = useState(ALL_FILTER);
   const [quarterFilter, setQuarterFilter] = useState(ALL_FILTER);
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilterKey>(REVIEW_ACTIVE_FILTER);
   const [selectedBenchmarkIds, setSelectedBenchmarkIds] = useState<Set<string>>(() => new Set());
   // selectedSources — 차트/표 표시 필터 (사이드바 "표시 필터" 체크박스).
   const [selectedSources, setSelectedSources] = useState<Set<string>>(
@@ -494,6 +533,7 @@ export default function PriceForecastPage() {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
       if (!selectedSources.has(row.source_key)) return false;
+      if (!reviewMatchesFilter(row, reviewFilter)) return false;
       if (priceValue(row, unit) == null) return false;
       if (basisFilter !== ALL_FILTER && row.basis !== basisFilter) return false;
       if (regionFilter !== ALL_FILTER && row.market_region !== regionFilter) return false;
@@ -512,22 +552,31 @@ export default function PriceForecastPage() {
       ].join(' ').toLowerCase();
       return q.split(/\s+/).every((token) => haystack.includes(token));
     });
-  }, [basisFilter, query, quarterFilter, regionFilter, rows, selectedSources, technologyFilter, unit]);
+  }, [basisFilter, query, quarterFilter, regionFilter, reviewFilter, rows, selectedSources, technologyFilter, unit]);
 
   const selectedSourceRows = useMemo(
-    () => rows.filter((row) => selectedSources.has(row.source_key)),
+    () => rows.filter((row) => selectedSources.has(row.source_key) && benchmarkReviewStatus(row) !== 'rejected'),
     [rows, selectedSources],
   );
 
+  const reviewCounts = useMemo(() => rows.reduce<Record<PriceBenchmarkReviewStatus, number>>((acc, row) => {
+    acc[benchmarkReviewStatus(row)] += 1;
+    return acc;
+  }, { candidate: 0, accepted: 0, rejected: 0 }), [rows]);
+
   const filterOptions = useMemo(() => {
-    const scopedRows = rows.filter((row) => selectedSources.has(row.source_key) && priceValue(row, unit) != null);
+    const scopedRows = rows.filter((row) => (
+      selectedSources.has(row.source_key)
+      && reviewMatchesFilter(row, reviewFilter)
+      && priceValue(row, unit) != null
+    ));
     return {
       basis: uniqueOptions(scopedRows.map((row) => row.basis)),
       regions: uniqueOptions(scopedRows.map((row) => row.market_region)),
       technologies: uniqueOptions(scopedRows.map((row) => row.technology)),
       quarters: uniqueOptions(scopedRows.map((row) => row.quarter_label ?? row.period_label)),
     };
-  }, [rows, selectedSources, unit]);
+  }, [reviewFilter, rows, selectedSources, unit]);
 
   const visibleRows = filteredRows;
 
@@ -851,6 +900,33 @@ export default function PriceForecastPage() {
     }
   };
 
+  const updateBenchmarkReviewStatus = async (ids: string[], status: PriceBenchmarkReviewStatus) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const previousRows = rows;
+    setReviewing(true);
+    setRows((prev) => prev.map((row) => (
+      idSet.has(row.benchmark_id) ? { ...row, review_status: status } : row
+    )));
+    try {
+      await Promise.all(ids.map((id) => fetchWithAuth(
+        `/api/v1/price-benchmarks/${encodeURIComponent(id)}/review-status`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ review_status: status }),
+        },
+      )));
+      setSelectedBenchmarkIds(new Set());
+      notify.success(`${ids.length.toLocaleString('ko-KR')}건 ${reviewStatusLabel(status)} 처리했습니다`);
+    } catch (err) {
+      setRows(previousRows);
+      notify.error(formatError(err));
+      await load();
+    } finally {
+      setReviewing(false);
+    }
+  };
+
   const triggerAIRefresh = async () => {
     if (hasRunningRun || refreshing) {
       notify.warning('이미 실행 중인 AI 수집이 있습니다');
@@ -939,7 +1015,7 @@ export default function PriceForecastPage() {
       title="가격예측"
       description="중국·유럽 외부 벤치마크, 우리 거래가, 구매 전략을 한 화면에서 비교합니다."
       tableTitle="가격 벤치마크"
-      tableSub={`${filteredRows.length.toLocaleString('ko-KR')}개 관측값 · ${series.length.toLocaleString('ko-KR')}개 라인`}
+      tableSub={`${filteredRows.length.toLocaleString('ko-KR')}개 관측값 · 채택 ${reviewCounts.accepted.toLocaleString('ko-KR')}건 · 제외 ${reviewCounts.rejected.toLocaleString('ko-KR')}건`}
       actions={(
         <div className="flex flex-wrap items-center justify-end gap-2">
           <div
@@ -1032,6 +1108,16 @@ export default function PriceForecastPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={reviewFilter} onValueChange={(value) => setReviewFilter(value as ReviewFilterKey)}>
+            <SelectTrigger size="sm" className="w-[112px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REVIEW_FILTER_OPTIONS.map((item) => (
+                <SelectItem key={item.key} value={item.key}>{item.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={horizon} onValueChange={(value) => setHorizon(value as HorizonKey)}>
             <SelectTrigger size="sm" className="w-[92px]">
               <SelectValue />
@@ -1096,9 +1182,27 @@ export default function PriceForecastPage() {
             </Badge>
           ) : null}
           <Button
+            variant="outline"
+            size="sm"
+            disabled={reviewing || refreshing || selectedBenchmarkIds.size === 0}
+            onClick={() => void updateBenchmarkReviewStatus(Array.from(selectedBenchmarkIds), 'accepted')}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            채택
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={reviewing || refreshing || selectedBenchmarkIds.size === 0}
+            onClick={() => void updateBenchmarkReviewStatus(Array.from(selectedBenchmarkIds), 'rejected')}
+          >
+            <XCircle className="h-3.5 w-3.5" />
+            제외
+          </Button>
+          <Button
             variant="destructive"
             size="sm"
-            disabled={deleting || refreshing || selectedBenchmarkIds.size === 0}
+            disabled={deleting || reviewing || refreshing || selectedBenchmarkIds.size === 0}
             onClick={() => void deleteSelectedBenchmarks()}
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -1415,7 +1519,7 @@ export default function PriceForecastPage() {
                 variant="destructive"
                 size="sm"
                 className="ml-auto"
-                disabled={deleting || refreshing || selectedBenchmarkIds.size === 0}
+                disabled={deleting || reviewing || refreshing || selectedBenchmarkIds.size === 0}
                 onClick={() => void deleteSelectedBenchmarks()}
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -1428,9 +1532,11 @@ export default function PriceForecastPage() {
               visibleBenchmarkIds={visibleBenchmarkIds}
               allVisibleSelected={allVisibleSelected}
               deleting={deleting}
+              reviewing={reviewing}
               unit={unit}
               toggleVisibleSelection={toggleVisibleSelection}
               toggleBenchmarkSelection={toggleBenchmarkSelection}
+              onReviewStatusChange={(ids, status) => void updateBenchmarkReviewStatus(ids, status)}
               onSelectSeries={setSelectedSeriesKey}
             />
           </div>
@@ -1501,9 +1607,11 @@ function BenchmarkVirtualTable({
   visibleBenchmarkIds,
   allVisibleSelected,
   deleting,
+  reviewing,
   unit,
   toggleVisibleSelection,
   toggleBenchmarkSelection,
+  onReviewStatusChange,
   onSelectSeries,
 }: {
   visibleRows: PriceBenchmark[];
@@ -1511,9 +1619,11 @@ function BenchmarkVirtualTable({
   visibleBenchmarkIds: string[];
   allVisibleSelected: boolean;
   deleting: boolean;
+  reviewing: boolean;
   unit: UnitKey;
   toggleVisibleSelection: (next?: boolean) => void;
   toggleBenchmarkSelection: (id: string) => void;
+  onReviewStatusChange: (ids: string[], status: PriceBenchmarkReviewStatus) => void;
   onSelectSeries: (seriesKey: string) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -1554,13 +1664,15 @@ function BenchmarkVirtualTable({
             <TableHead>지역·조건</TableHead>
             <TableHead className="text-right">가격</TableHead>
             <TableHead>신뢰도</TableHead>
+            <TableHead>채택</TableHead>
             <TableHead>근거</TableHead>
+            <TableHead className="w-[132px] text-right">처리</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {visibleRows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+              <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
                 관측값이 없습니다
               </TableCell>
             </TableRow>
@@ -1568,12 +1680,13 @@ function BenchmarkVirtualTable({
             <>
               {paddingTop > 0 ? (
                 <tr aria-hidden style={{ height: paddingTop }}>
-                  <td colSpan={8} />
+                  <td colSpan={10} />
                 </tr>
               ) : null}
               {virtualItems.map((vRow) => {
                 const row = visibleRows[vRow.index];
                 if (!row) return null;
+                const status = benchmarkReviewStatus(row);
                 return (
                   <TableRow
                     key={vRow.key}
@@ -1610,6 +1723,11 @@ function BenchmarkVirtualTable({
                         {formatConfidence(row.confidence)}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-xs">
+                      <Badge variant={reviewStatusVariant(status)} className="text-[10px]">
+                        {reviewStatusLabel(status)}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="max-w-[260px] text-xs text-muted-foreground">
                       {row.source_url ? (
                         <a href={row.source_url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
@@ -1619,12 +1737,54 @@ function BenchmarkVirtualTable({
                         row.raw_excerpt?.slice(0, 70) ?? '—'
                       )}
                     </TableCell>
+                    <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                      <div className="flex justify-end gap-1">
+                        {status !== 'accepted' ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-[11px]"
+                            disabled={reviewing || deleting}
+                            onClick={() => onReviewStatusChange([row.benchmark_id], 'accepted')}
+                          >
+                            <CheckCircle2 className="h-3 w-3" />
+                            채택
+                          </Button>
+                        ) : null}
+                        {status !== 'rejected' ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-[11px]"
+                            disabled={reviewing || deleting}
+                            onClick={() => onReviewStatusChange([row.benchmark_id], 'rejected')}
+                          >
+                            <XCircle className="h-3 w-3" />
+                            제외
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-[11px]"
+                            disabled={reviewing || deleting}
+                            onClick={() => onReviewStatusChange([row.benchmark_id], 'candidate')}
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            후보
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 );
               })}
               {paddingBottom > 0 ? (
                 <tr aria-hidden style={{ height: paddingBottom }}>
-                  <td colSpan={8} />
+                  <td colSpan={10} />
                 </tr>
               ) : null}
             </>

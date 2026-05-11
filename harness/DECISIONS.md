@@ -1451,3 +1451,18 @@
   - Rust 단위 테스트로 ETA 지연, 납기 내, 납기 누락, ETA 순차 배정을 고정한다.
   - frontend build 로 상세 근거 패널 타입과 렌더링 경로를 확인한다.
 - **날짜**: 2026-05-11
+
+## D-161: 가격예측 관측값은 삭제 전에 후보/채택/제외 검토 상태를 거친다
+
+- **결정**: `price_benchmarks`에 `review_status`를 추가하고 기본값을 `candidate`로 둔다. 운영자는 `/price-forecast`에서 관측값을 `accepted`(구매 판단 기준선 채택), `rejected`(기본 차트·판단에서 제외), `candidate`(재검토 후보)로 전환할 수 있다. 서버는 `PATCH /api/v1/price-benchmarks/{id}/review-status`로 상태만 갱신한다.
+- **이유**: D-143의 선택 삭제는 신뢰도 낮은 관측값을 즉시 정리할 수 있게 했지만, 실무에서는 “아직 애매함”, “이번 협상 기준으로 채택”, “차트에서는 빼되 나중에 감사 확인”이 분리되어야 한다. AI 수집 로그는 보존하면서 관측값 자체를 남겨두면 재수집 품질 점검과 구매 판단 근거가 동시에 남는다.
+- **운영 기준**:
+  - AI/수동 신규 관측값은 `candidate`로 시작한다.
+  - 기본 화면은 `candidate` + `accepted`만 보여주고, `rejected`는 필터로 확인한다.
+  - 삭제는 중복·오염 데이터가 확정된 경우에만 사용한다. 삭제해도 `price_benchmark_runs` 감사 로그는 보존한다.
+  - `review_status` 허용값은 DB CHECK와 Go validation에서 `candidate/accepted/rejected`로 fail-closed 한다.
+- **검증**:
+  - `go test ./internal/model ./internal/router ./internal/feature` 로 상태 validation, route snapshot, feature catalog 일치를 확인한다.
+  - `go test ./internal/handler` 로 핸들러 compile 경로를 확인한다.
+  - `bun run lock:check`, `bun install --frozen-lockfile`, `bun run build` 로 프론트 타입/빌드와 의존성 lock 검증을 확인한다.
+- **날짜**: 2026-05-11

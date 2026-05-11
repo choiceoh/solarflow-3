@@ -5,6 +5,7 @@ type CompanyScoped = MockRow & { company_id?: string };
 
 const nowIso = '2026-05-01T00:00:00.000Z';
 const deletedPriceBenchmarkIds = new Set<string>();
+const priceBenchmarkReviewStatuses = new Map<string, string>();
 
 const companies = [
   { company_id: 'company-topsolar', company_name: '탑솔라', company_code: 'TOP', business_number: '123-81-45678', is_active: true },
@@ -987,6 +988,16 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     } as T);
   }
 
+  if (url.pathname.startsWith('/api/v1/price-benchmarks/') && url.pathname.endsWith('/review-status') && method === 'PATCH') {
+    const id = endpointId(url.pathname, 'price-benchmarks');
+    const status = typeof body.review_status === 'string' ? body.review_status : '';
+    if (!id || !['candidate', 'accepted', 'rejected'].includes(status)) {
+      throw new Error('목업 가격 벤치마크 검토 상태를 변경할 수 없습니다');
+    }
+    priceBenchmarkReviewStatuses.set(id, status);
+    return clone({ status: 'ok' } as T);
+  }
+
   if (url.pathname === '/api/v1/receipt-matches/bulk' && method === 'POST') {
     const rows = Array.isArray(body.matches) ? body.matches : [];
     const matches = rows.map((row, index) => ({
@@ -1202,6 +1213,7 @@ function priceBenchmarks(): MockRow[] {
       cargo_max_mw: 25,
       technology: 'TOPCon >=600W',
       confidence: 0.82,
+      review_status: index >= 4 ? 'accepted' : 'candidate',
       source_url: 'https://www.opisnet.com/product/solar-weekly/',
       raw_excerpt: 'Dev mock CMM observation',
       created_at: nowIso,
@@ -1263,6 +1275,7 @@ function priceBenchmarks(): MockRow[] {
       cargo_min_mw: 5,
       cargo_max_mw: 25,
       confidence: 0.78,
+      review_status: 'candidate',
       source_url: 'https://www.opisnet.com/product/solar-weekly/',
       raw_excerpt: 'Dev mock DDP Europe observation',
       created_at: nowIso,
@@ -1302,12 +1315,18 @@ function priceBenchmarks(): MockRow[] {
       price_usd_w: tender,
       project_segment: 'centralized',
       confidence: 0.72,
+      review_status: index === 0 ? 'rejected' : 'candidate',
       source_url: 'https://guangfu.bjx.com.cn/',
       raw_excerpt: 'Dev mock centralized procurement result',
       created_at: nowIso,
       updated_at: nowIso,
     },
-  ]).filter((row) => !deletedPriceBenchmarkIds.has(String(row.benchmark_id)));
+  ])
+    .map((row) => ({
+      ...row,
+      review_status: priceBenchmarkReviewStatuses.get(String(row.benchmark_id)) ?? row.review_status ?? 'candidate',
+    }))
+    .filter((row) => !deletedPriceBenchmarkIds.has(String(row.benchmark_id)));
 }
 
 function priceBenchmarkRuns(): MockRow[] {

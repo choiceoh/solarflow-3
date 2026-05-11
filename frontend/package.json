@@ -11,6 +11,7 @@
     "format": "biome format --write .",
     "check": "biome check --write .",
     "ci": "biome ci .",
+    "lock:check": "bun install --lockfile-only && git diff --exit-code -- bun.lock",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "test:e2e": "playwright test",
