@@ -52,6 +52,10 @@ type wmsAllocationRow struct {
 	OrderID    *string `json:"order_id,omitempty"`
 }
 
+type wmsPickingListRow struct {
+	PickingListID string `json:"picking_list_id"`
+}
+
 type wmsIntercompanyRequestRow struct {
 	RequestID  string  `json:"request_id"`
 	ProductID  string  `json:"product_id"`
@@ -83,16 +87,25 @@ func (h *OutboundHandler) ensurePickingListForOutbound(ob model.Outbound) error 
 	}
 
 	data, count, err := h.DB.From("picking_lists").
-		Select("picking_list_id", "exact", true).
+		Select("picking_list_id", "exact", false).
 		Eq("outbound_id", ob.OutboundID).
 		Range(0, 0, "").
 		Execute()
-	_ = data
-	if err == nil && count > 0 {
-		return nil
-	}
 	if err != nil {
 		return fmt.Errorf("기존 피킹 명세 확인 실패: %w", err)
+	}
+	var existing []wmsPickingListRow
+	if count > 0 {
+		if err := json.Unmarshal(data, &existing); err != nil || len(existing) == 0 || existing[0].PickingListID == "" {
+			return fmt.Errorf("기존 피킹 명세 응답 처리 실패")
+		}
+		hasItems, err := h.pickingListHasItems(existing[0].PickingListID)
+		if err != nil {
+			return err
+		}
+		if hasItems {
+			return nil
+		}
 	}
 
 	plan, err := h.buildPickingPlan(ob)
@@ -127,20 +140,26 @@ func (h *OutboundHandler) ensurePickingListForOutbound(ob model.Outbound) error 
 		hdrInsert["partner_id"] = *ob.CustomerID
 	}
 
-	hdrData, _, err := h.DB.From("picking_lists").
-		Insert(hdrInsert, false, "", "", "").Execute()
-	if err != nil {
-		return fmt.Errorf("피킹 명세 헤더 자동 생성 실패: %w", err)
-	}
-	var created []model.PickingList
-	if err := json.Unmarshal(hdrData, &created); err != nil || len(created) == 0 {
-		return fmt.Errorf("피킹 명세 헤더 응답 처리 실패")
+	pickingListID := ""
+	if len(existing) > 0 {
+		pickingListID = existing[0].PickingListID
+	} else {
+		hdrData, _, err := h.DB.From("picking_lists").
+			Insert(hdrInsert, false, "", "", "").Execute()
+		if err != nil {
+			return fmt.Errorf("피킹 명세 헤더 자동 생성 실패: %w", err)
+		}
+		var created []model.PickingList
+		if err := json.Unmarshal(hdrData, &created); err != nil || len(created) == 0 {
+			return fmt.Errorf("피킹 명세 헤더 응답 처리 실패")
+		}
+		pickingListID = created[0].PickingListID
 	}
 
 	rows := make([]map[string]any, 0, len(plan))
 	for i, item := range plan {
 		row := map[string]any{
-			"picking_list_id":  created[0].PickingListID,
+			"picking_list_id":  pickingListID,
 			"line_no":          i + 1,
 			"product_id":       item.ProductID,
 			"quantity_planned": item.QuantityPlanned,
@@ -167,6 +186,18 @@ func (h *OutboundHandler) ensurePickingListForOutbound(ob model.Outbound) error 
 		return fmt.Errorf("피킹 명세 라인 자동 생성 실패: %w", err)
 	}
 	return nil
+}
+
+func (h *OutboundHandler) pickingListHasItems(pickingListID string) (bool, error) {
+	_, count, err := h.DB.From("picking_list_items").
+		Select("item_id", "exact", true).
+		Eq("picking_list_id", pickingListID).
+		Range(0, 0, "").
+		Execute()
+	if err != nil {
+		return false, fmt.Errorf("기존 피킹 명세 라인 확인 실패: %w", err)
+	}
+	return count > 0, nil
 }
 
 func (h *OutboundHandler) buildPickingPlan(ob model.Outbound) ([]wmsPickingPlanItem, error) {
