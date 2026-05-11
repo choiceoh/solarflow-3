@@ -2,6 +2,22 @@
 
 반복 검증과 로컬 서비스 반영 시간을 줄이기 위한 루트 스크립트입니다.
 
+## 작업트리 자동 준비
+
+```bash
+./scripts/setup_worktree.sh
+```
+
+Codex Local Environment 의 setup script 는 `.codex/setup.sh`를 통해 이 스크립트를 실행합니다.
+새 worktree에서 아래 항목을 idempotent 하게 준비합니다.
+
+- `frontend/package.json`의 `packageManager`에 맞는 Bun 설치
+- `frontend/bun.lock` 기준 프론트 의존성 설치
+- `graphify-out/GRAPH_REPORT.md`가 없으면 graphify 인덱스 생성
+- Go/Rust toolchain 누락 여부 안내
+
+`SKIP_GRAPHIFY_SETUP=1`로 graphify 생성을 건너뛸 수 있고, 검증 스크립트에서 bootstrap 자체를 건너뛰려면 `SKIP_WORKTREE_SETUP=1`을 사용합니다.
+
 ## 전체 검증
 
 ```bash
@@ -18,6 +34,7 @@
 선택 옵션:
 
 ```bash
+SKIP_WORKTREE_SETUP=1 ./scripts/verify_all.sh
 SKIP_SCHEMA=1 ./scripts/verify_all.sh
 SKIP_GO_TEST=1 SKIP_RUST_TEST=1 ./scripts/verify_all.sh
 STRICT_RULES=1 ./scripts/verify_all.sh
@@ -37,7 +54,7 @@ RUN_GRAPHIFY=1 ./scripts/verify_all.sh
 
 - `backend/` 변경: Go build/vet/test + backend lint + schema check
 - `engine/` 변경: Rust test
-- `frontend/` 변경: frontend build
+- `frontend/` 코드/설정 변경: frontend build (`frontend/*.md` 문서는 제외)
 - `scripts/*.sh` 변경: shell syntax check
 - 알 수 없는 코드 경로 변경: `verify_all.sh`로 자동 전환
 
@@ -46,6 +63,7 @@ RUN_GRAPHIFY=1 ./scripts/verify_all.sh
 선택 옵션:
 
 ```bash
+SKIP_WORKTREE_SETUP=1 ./scripts/verify_changed.sh
 VERIFY_BASE=origin/main ./scripts/verify_changed.sh
 FORCE_ALL=1 ./scripts/verify_changed.sh
 STRICT_RULES=1 ./scripts/verify_changed.sh

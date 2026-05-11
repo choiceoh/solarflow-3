@@ -13,16 +13,17 @@ React + Vite + TypeScript + Tailwind 기반 SolarFlow 업무 화면입니다.
 ## 주요 실행 명령
 
 ```bash
-npm install
-npm run dev
-npm run build
-npm run lint     # Biome 린트만
-npm run format   # Biome 포맷만 (--write)
-npm run check    # 린트 + 포맷 동시 (--write)
+bun install --frozen-lockfile
+bun run dev
+bun run build
+bun run lint     # Biome 린트만
+bun run format   # Biome 포맷만 (--write)
+bun run check    # 린트 + 포맷 동시 (--write)
 ```
 
 > 린트/포맷은 [Biome](https://biomejs.dev) 사용 (ESLint + ts-eslint에서 이관, ~10–30배 빠름).
-> 설정: `biome.json`. CI에서는 `npm run ci` (Biome `ci` 모드, write 안 함).
+> 설정: `biome.json`. CI에서는 `bun run ci` (Biome `ci` 모드, write 안 함).
+> 새 Codex worktree는 루트의 `.codex/setup.sh`가 `scripts/setup_worktree.sh`를 호출해 Bun과 의존성을 자동 준비합니다.
 
 ## 환경변수
 
@@ -40,7 +41,7 @@ Mac mini 운영 환경에서는 Caddy가 `frontend/dist/`를 정적 서빙합니
 
 ```bash
 cd ~/solarflow-3/frontend
-npm run build
+bun run build
 ```
 
-개발 중에는 `npm run dev`를 사용할 수 있지만, 운영 반영 기준은 `npm run build`입니다.
+개발 중에는 `bun run dev`를 사용할 수 있지만, 운영 반영 기준은 `bun run build`입니다.

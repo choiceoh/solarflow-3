@@ -193,6 +193,35 @@
 
 ---
 
+## 2026-05-11 세션 — worktree 자동 bootstrap
+
+### 완료
+- Codex Local Environment setup 진입점 추가
+  - `.codex/setup.sh`가 `scripts/setup_worktree.sh`를 실행하도록 구성
+  - 새 worktree에서 Bun 버전을 `frontend/package.json`의 `packageManager` 기준으로 설치
+  - `frontend/bun.lock` 기준 의존성을 자동 설치하고 stamp로 재실행 비용을 줄임
+  - `graphify-out/GRAPH_REPORT.md`가 없으면 graphify 인덱스를 자동 생성
+- 검증 스크립트 보강
+  - `scripts/verify_all.sh`, `scripts/verify_changed.sh` 시작 시 worktree setup을 먼저 수행
+  - `frontend/*.md` 문서 변경은 frontend build 대상에서 제외
+  - `SKIP_WORKTREE_SETUP=1`, `SKIP_GRAPHIFY_SETUP=1` 우회 옵션 추가
+- 문서 정리
+  - `scripts/README.md`에 작업트리 자동 준비 절차 기록
+  - `frontend/README.md` 실행 명령을 Bun 기준으로 갱신
+
+### 검증
+- `./scripts/setup_worktree.sh` 성공
+  - Bun 1.3.13 확인
+  - `frontend/bun.lock` 기준 의존성 설치 성공
+  - `graphify update .` 자동 실행 성공 — 5112 nodes / 8288 edges / 413 communities
+- `./scripts/verify_changed.sh` 성공
+  - worktree setup 재실행은 stamp/graphify 존재 확인 후 즉시 통과
+  - shell syntax check 성공
+  - 문서만 바뀐 `frontend/README.md`는 frontend build 대상에서 제외됨
+- `cd frontend && bun run build` 성공 — 최초 과잉 검증 규칙에서 실행됨, 이후 문서 변경 build 제외로 보정
+
+---
+
 ## 2026-05-11 세션 — 가격예측 신뢰도/채택 플로우 + CI lock 안정화
 
 ### 완료

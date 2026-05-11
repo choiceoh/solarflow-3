@@ -29,6 +29,20 @@ require_cmd() {
   fi
 }
 
+run_worktree_setup() {
+  if [[ "${SKIP_WORKTREE_SETUP:-0}" == "1" ]]; then
+    skip_step "Worktree setup" "SKIP_WORKTREE_SETUP=1"
+    return
+  fi
+
+  if [[ -x "${ROOT_DIR}/scripts/setup_worktree.sh" ]]; then
+    run_step "Worktree setup" "${ROOT_DIR}/scripts/setup_worktree.sh"
+    export PATH="${HOME}/.bun/bin:${HOME}/.local/bin:${PATH}"
+  else
+    skip_step "Worktree setup" "scripts/setup_worktree.sh not found"
+  fi
+}
+
 default_base() {
   if [[ -n "${VERIFY_BASE:-}" ]]; then
     echo "${VERIFY_BASE}"
@@ -136,6 +150,8 @@ echo "SolarFlow changed-file verification"
 echo "root: ${ROOT_DIR}"
 echo "base: ${BASE_REF}"
 
+run_worktree_setup
+
 if [[ ${#CHANGED_FILES[@]} -eq 0 ]]; then
   echo ""
   echo "No changed files detected."
@@ -160,11 +176,18 @@ for file in "${CHANGED_FILES[@]}"; do
     engine/*|Cargo.toml|Cargo.lock)
       NEED_ENGINE=1
       ;;
+    frontend/*.md)
+      ;;
     frontend/*|package.json|bun.lock|vite.config.*|tsconfig*.json|components.json)
       NEED_FRONTEND=1
       ;;
     scripts/*.sh|*.sh|backend/scripts/*.sh|engine/scripts/*.sh)
       SHELL_FILES+=("${file}")
+      ;;
+    .codex/*.sh)
+      SHELL_FILES+=("${file}")
+      ;;
+    .codex/*)
       ;;
     harness/*|*.md|AGENTS.md|CLAUDE.md|*.conf|*.sql|local-Caddyfile)
       ;;
