@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { validateRows } from '@/lib/excelValidation';
+import { EXCEL_TEMPLATE_VERSION, assertExcelTemplateMeta } from '@/lib/excelTemplateMeta';
 import type { MasterDataForExcel, ParsedRow } from '@/types/excel';
 
 const masterData: MasterDataForExcel = {
@@ -129,5 +130,46 @@ describe('validateRows', () => {
     ], 'tt', masterData);
     expect(tt.valid).toBe(true);
     expect(tt.data.status).toBe('completed');
+  });
+
+  it('존재하지 않는 마스터 값에는 alias 후보를 같이 보여준다', () => {
+    const [validated] = validateRows([
+      row({
+        bl_number: 'BL-ALIAS',
+        inbound_type: '해외직수입',
+        company_code: 'TS',
+        manufacturer_name: '진코',
+        currency: 'USD',
+        product_code: 'JKM590',
+        quantity: 10,
+        item_type: '본품',
+        payment_type: '유상',
+        usage_category: '상품판매',
+      }),
+    ], 'inbound', masterData);
+
+    expect(validated.valid).toBe(false);
+    expect(validated.errors).toContainEqual({
+      field: '제조사명',
+      message: '존재하지 않는 제조사입니다. alias 후보: 진코솔라',
+    });
+    expect(validated.errors).toContainEqual({
+      field: '품번코드',
+      message: '존재하지 않는 품번입니다. alias 후보: JKM-590',
+    });
+  });
+
+  it('양식 메타 버전과 종류를 고정한다', () => {
+    expect(() => assertExcelTemplateMeta(null, ['single'], ['inbound'])).toThrow('양식 버전 정보가 없습니다');
+    expect(() => assertExcelTemplateMeta({
+      version: 'old',
+      kind: 'single',
+      types: ['inbound'],
+    }, ['single'], ['inbound'])).toThrow('지원하지 않는 양식 버전입니다');
+    expect(() => assertExcelTemplateMeta({
+      version: EXCEL_TEMPLATE_VERSION,
+      kind: 'rehearsal_sample',
+      types: ['purchase_order', 'lc', 'tt'],
+    }, ['unified_transaction', 'rehearsal_sample'], ['purchase_order'])).not.toThrow();
   });
 });

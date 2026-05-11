@@ -157,6 +157,98 @@ function buildCodeSet(master: MasterDataForExcel, key: keyof MasterDataForExcel)
   return set;
 }
 
+function normalizeMatchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/주식회사|\(주\)|㈜|co\.?|ltd\.?|inc\.?|solar|솔라/g, '')
+    .replace(/[^a-z0-9가-힣]/g, '')
+    .trim();
+}
+
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  const cur = Array.from({ length: b.length + 1 }, () => 0);
+  for (let i = 1; i <= a.length; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(
+        cur[j - 1] + 1,
+        prev[j] + 1,
+        prev[j - 1] + cost,
+      );
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = cur[j];
+  }
+  return prev[b.length];
+}
+
+function masterCandidateValues(master: MasterDataForExcel, key: keyof MasterDataForExcel): string[] {
+  const items = (master[key] ?? []) as Array<Record<string, unknown>>;
+  const values: string[] = [];
+  const add = (v: unknown) => {
+    if (typeof v === 'string' && v.trim() !== '') values.push(v.trim());
+  };
+  for (const item of items) {
+    if (key === 'companies') {
+      add(item.company_code);
+      add(item.company_name);
+    } else if (key === 'manufacturers') {
+      add(item.name_kr);
+    } else if (key === 'products') {
+      add(item.product_code);
+      add(item.product_name);
+    } else if (key === 'partners') {
+      add(item.partner_name);
+    } else if (key === 'warehouses') {
+      add(item.warehouse_code);
+      add(item.warehouse_name);
+    } else if (key === 'banks') {
+      add(item.bank_name);
+    }
+  }
+  return Array.from(new Set(values));
+}
+
+function suggestMasterCandidates(
+  value: string,
+  candidates: string[],
+  limit = 3,
+): string[] {
+  const needle = normalizeMatchText(value);
+  if (needle.length < 2) return [];
+  return candidates
+    .map((candidate) => {
+      const normalized = normalizeMatchText(candidate);
+      if (normalized.length < 2) return { candidate, score: 0 };
+      if (normalized === needle) return { candidate, score: 1 };
+      if (normalized.includes(needle) || needle.includes(normalized)) {
+        return { candidate, score: 0.92 };
+      }
+      const dist = editDistance(needle, normalized);
+      const score = 1 - dist / Math.max(needle.length, normalized.length);
+      return { candidate, score };
+    })
+    .filter((item) => item.score >= 0.55)
+    .sort((a, b) => b.score - a.score || a.candidate.localeCompare(b.candidate, 'ko'))
+    .slice(0, limit)
+    .map((item) => item.candidate);
+}
+
+function missingMasterMessage(
+  label: string,
+  value: string,
+  master: MasterDataForExcel,
+  masterKey: keyof MasterDataForExcel,
+): string {
+  const candidates = suggestMasterCandidates(value, masterCandidateValues(master, masterKey));
+  if (candidates.length === 0) return `존재하지 않는 ${label}입니다`;
+  return `존재하지 않는 ${label}입니다. alias 후보: ${candidates.join(', ')}`;
+}
+
 // 단일 행 검증
 function validateRow(
   row: ParsedRow,
@@ -188,7 +280,10 @@ function validateRow(
           field.key === 'product_code' ? '품번' :
           field.key === 'warehouse_code' ? '창고' :
           field.key === 'bank_name' ? '은행' : '법인';
-        errors.push({ field: field.label, message: `존재하지 않는 ${label}입니다` });
+        errors.push({
+          field: field.label,
+          message: missingMasterMessage(label, strVal, master, masterKey),
+        });
       }
     }
 
