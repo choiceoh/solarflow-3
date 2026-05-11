@@ -5,22 +5,18 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | 가격예측 채택 상태 Rust 전략 반영, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
-| 다음 작업 | 가격예측 AI 수집 운영 재실행으로 source별 evidence 증가 확인, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
+| 다음 작업 | 가격예측 AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
-| Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-159 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 모듈 제품군/변종 분류) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-164 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력, D-163 KPI 활성 항목 설정, D-164 migration 반영 확인) |
-| DECISIONS | D-001~D-164 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력, D-163 KPI 활성 항목 설정, D-164 가격예측 다중 검색 플랜) |
+| DECISIONS | D-001~D-166 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력, D-163 KPI 활성 항목 설정, D-164 가격예측 다중 검색 플랜, D-165 모듈 제품군/변종 분류, D-166 migration 반영 확인) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
 
-## 2026-05-11 세션 — 운영 DB migration 반영 확인 플로우 (D-170)
+## 2026-05-11 세션 — 운영 DB migration 반영 확인 플로우 (D-166)
 
 ### 완료
 - `scripts/verify_migration.ts` 추가
@@ -32,18 +28,21 @@
   - 확인 실패 시 Go 재시작 보류
   - 변경된 migration 파일별로 적용 이력 확인
 - `scripts/README.md`, `harness/PRODUCTION.md`, `harness/module.md` 운영 문서 동기화
-- D-164 결정 기록 추가
+- D-166 결정 기록 추가
 
 ### 검증
 - `bun scripts/verify_migration.ts --help` 성공
 - `bun build scripts/verify_migration.ts --target=bun --outfile=/tmp/verify_migration.js` 성공
 - `bash -n scripts/cron-deploy.sh` 성공
 - `git diff --check` 성공
-- `graphify update .` 성공 — 5138 nodes / 8421 edges / 417 communities
+- `graphify update .` 성공 — 5157 nodes / 8459 edges / 412 communities
 
 ### 알려진 제한
 - 현재 worktree 에서는 운영 DB 환경변수를 사용하지 않아 실제 DB/PostgREST 확인은 실행하지 않았다. 운영 서버에서는 `backend/.env` 또는 환경변수의 `SUPABASE_DB_URL`, `SUPABASE_URL`, `SUPABASE_KEY` 기준으로 실행된다.
-## 2026-05-11 세션 — 모듈 제품군/변종 분류 정식화 (D-159)
+
+---
+
+## 2026-05-11 세션 — 모듈 제품군/변종 분류 정식화 (D-165)
 
 ### 완료
 - 품번 마스터에 제품군/변종 분류 필드 정식 추가
@@ -54,7 +53,7 @@
 - 품번 마스터 등록/수정 화면과 목록에 제품군 정보를 노출
 - Excel Import Hub 품번 양식/통합 마스터 양식에 제품군/변종 필드 추가
 - Go 모델 검증에 제품군 문자열 길이와 `product_variant_kind` allowlist 추가
-- 설계 정본과 D-159 결정 기록 동기화
+- 설계 정본과 D-165 결정 기록 동기화
 
 ### 운영 기준
 - 품번은 거래 SKU로 유지하고 PO/B/L/재고/원가/매출 계산은 계속 `product_id` 기준으로 처리한다.
@@ -74,6 +73,9 @@
 ### 알려진 제한
 - 현재 WSL 실행 환경에 로컬 PostgreSQL/PostgREST/launchctl 이 없어 `psql -d solarflow -f backend/migrations/091_module_product_family_fields.sql`, PostgREST 캐시 갱신, `backend/scripts/check_schema.sh`는 운영 DB에 적용하지 못했다.
 - 현재 실행 환경에 `bun` 명령이 없어 `npm test -- --run src/lib/excelValidation.test.ts`는 시작하지 못했다.
+
+---
+
 ## 2026-05-11 세션 — 가격예측 AI 수집률 보강 (D-164)
 
 ### 완료
