@@ -1,4 +1,4 @@
-import { Component, useState, useEffect, useMemo, type ReactNode } from "react"
+import { Component, useState, useEffect, useMemo, useRef, type ReactNode } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
@@ -53,6 +53,7 @@ import {
 import {
   OUTBOUND_STATUS_LABEL,
   USAGE_CATEGORY_LABEL,
+  type SaleListItem,
   type OutboundStatus,
   type UsageCategory,
 } from "@/types/outbound"
@@ -74,6 +75,7 @@ import {
   type KwRangeValue,
 } from "@/components/command/MockupPrimitives"
 import { BreakdownRows } from "@/components/command/BreakdownRows"
+import { KpiStrip } from "@/components/command/KpiStrip"
 import { flatSparkFromValue } from "@/templates/sparkUtils"
 
 class OrderDetailErrorBoundary extends Component<
@@ -122,6 +124,7 @@ type OrderWorkQueue = "" | "delivery_soon" | "no_site"
 type OutboundWorkQueue = "" | "sale_unregistered"
 type ReceiptMatchFilter = "" | "matched" | "partial" | "unmatched"
 type SaleErpClosedFilter = "" | "true" | "false"
+type SaleBulkActionMode = "invoice" | "erp_close"
 
 function getOrderWorkQueue(value: string | null): OrderWorkQueue {
   return value === "delivery_soon" || value === "no_site" ? value : ""
@@ -165,6 +168,26 @@ function todayLocalDate() {
   const now = new Date()
   const tzOffsetMs = now.getTimezoneOffset() * 60_000
   return new Date(now.getTime() - tzOffsetMs).toISOString().slice(0, 10)
+}
+
+function getSaleBulkActionMode(invoiceFilter: string, erpClosedFilter: SaleErpClosedFilter): SaleBulkActionMode {
+  return invoiceFilter === "issued" && erpClosedFilter === "false" ? "erp_close" : "invoice"
+}
+
+function isSaleSelectableForBulk(item: SaleListItem, mode: SaleBulkActionMode) {
+  if (mode === "erp_close") return !!item.sale.tax_invoice_date && !item.sale.erp_closed
+  return !item.sale.tax_invoice_date
+}
+
+function sharedInvoiceEmail(items: SaleListItem[]) {
+  const emails = Array.from(
+    new Set(
+      items
+        .map((item) => item.sale.tax_invoice_email?.trim())
+        .filter((email): email is string => !!email),
+    ),
+  )
+  return emails.length === 1 ? emails[0] : ""
 }
 
 export default function OrdersPage() {
@@ -289,6 +312,7 @@ export default function OrdersPage() {
   const [bulkInvoiceErpClose, setBulkInvoiceErpClose] = useState(false)
   const [bulkInvoiceSaving, setBulkInvoiceSaving] = useState(false)
   const [bulkInvoiceError, setBulkInvoiceError] = useState("")
+  const autoSelectedSaleQueueKey = useRef("")
   const [salePageIndex, setSalePageIndex] = useState(0)
   const [salePageSize, setSalePageSize] = useState(50)
   const saleSort = useServerSort("tax_invoice_date", "desc", () => {
@@ -332,13 +356,53 @@ export default function OrdersPage() {
     customer_id: saleCustomerFilter || undefined,
     start: saleDateRange?.start || undefined,
     end: saleDateRange?.end || undefined,
-    invoice_status: saleInvoiceFilter || undefined,
+    invoice_status: "issued",
     erp_closed: "false",
   })
   const saleLoading = saleDashLoading || saleListLoading
+  const saleBulkActionMode = getSaleBulkActionMode(saleInvoiceFilter, saleErpClosedFilter)
   const reloadSales = async () => {
     await Promise.all([reloadSaleDash(), reloadSaleList()])
   }
+
+  useEffect(() => {
+    const queueMode =
+      saleInvoiceFilter === "pending"
+        ? "invoice"
+        : saleBulkActionMode === "erp_close"
+          ? "erp_close"
+          : ""
+    if (activeTab !== "sales" || saleLoading || !queueMode) {
+      return
+    }
+
+    const visibleKey = sales.map((sale) => sale.sale_id).join(",")
+    const nextKey = `${queueMode}|${salePageIndex}|${salePageSize}|${salesTotal}|${visibleKey}`
+    if (autoSelectedSaleQueueKey.current === nextKey) return
+    autoSelectedSaleQueueKey.current = nextKey
+
+    const selectable = sales.filter((sale) => isSaleSelectableForBulk(sale, queueMode))
+    setSelectedSaleIds(new Set(selectable.map((sale) => sale.sale_id)))
+    setBulkInvoiceError("")
+    if (queueMode === "erp_close") {
+      setBulkInvoiceDate(selectable[0]?.sale.tax_invoice_date ?? todayLocalDate())
+      setBulkInvoiceEmail("")
+      setBulkInvoiceErpClose(true)
+    } else {
+      setBulkInvoiceDate(todayLocalDate())
+      setBulkInvoiceEmail(sharedInvoiceEmail(selectable))
+      setBulkInvoiceErpClose(false)
+    }
+  }, [
+    activeTab,
+    saleBulkActionMode,
+    saleInvoiceFilter,
+    saleLoading,
+    salePageIndex,
+    salePageSize,
+    sales,
+    salesTotal,
+  ])
 
   // 탭 4: 수금
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState("")
@@ -710,14 +774,22 @@ export default function OrdersPage() {
   }
 
   const openInvoicePendingQueue = () => {
+    autoSelectedSaleQueueKey.current = ""
     setSaleInvoiceFilter("pending")
     setSaleErpClosedFilter("")
+    setSelectedSaleIds(new Set())
+    setBulkInvoiceDate(todayLocalDate())
+    setBulkInvoiceErpClose(false)
     navigate("/orders?tab=sales", { replace: true })
   }
 
   const openErpOpenQueue = () => {
-    setSaleInvoiceFilter("")
+    autoSelectedSaleQueueKey.current = ""
+    setSaleInvoiceFilter("issued")
     setSaleErpClosedFilter("false")
+    setSelectedSaleIds(new Set())
+    setBulkInvoiceDate(todayLocalDate())
+    setBulkInvoiceErpClose(true)
     navigate("/orders?tab=sales", { replace: true })
   }
 
@@ -730,6 +802,29 @@ export default function OrdersPage() {
     }
 
     const selectedRows = sales.filter((sale) => selectedSaleIds.has(sale.sale_id))
+    if (saleBulkActionMode === "erp_close") {
+      setBulkInvoiceSaving(true)
+      setBulkInvoiceError("")
+      try {
+        await Promise.all(
+          Array.from(selectedSaleIds).map((saleId) =>
+            fetchWithAuth(`/api/v1/sales/${saleId}`, {
+              method: "PUT",
+              body: JSON.stringify({ erp_closed: true, erp_closed_date: date }),
+            }),
+          ),
+        )
+        notify.success(`ERP ${selectedSaleIds.size}건을 마감했습니다`)
+        setSelectedSaleIds(new Set())
+        await reloadSales()
+      } catch (err) {
+        setBulkInvoiceError(err instanceof Error ? err.message : "ERP 마감 처리에 실패했습니다")
+      } finally {
+        setBulkInvoiceSaving(false)
+      }
+      return
+    }
+
     const email = bulkInvoiceEmail.trim()
     const salePayload: Record<string, unknown> = { tax_invoice_date: date }
     if (email) salePayload.tax_invoice_email = email
@@ -1322,8 +1417,8 @@ export default function OrdersPage() {
     <div className="sf-page sf-sales-page">
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
-          <div className="sf-command-kpis">
-            {metrics.map((metric) => (
+          <KpiStrip metrics={metrics} scopeId={`orders.${activeTab}`}>
+            {(metric) => (
               <TileB
                 key={metric.lbl}
                 lbl={metric.lbl}
@@ -1337,8 +1432,8 @@ export default function OrdersPage() {
                 spark={metric.spark ?? flatSparkFromValue(metric.v)}
                 metricId={metric.metricId}
               />
-            ))}
-          </div>
+            )}
+          </KpiStrip>
 
           <CommandTopLine title={pageTitle} sub={pageSub} right={ordersCardControls} />
 
@@ -1440,28 +1535,40 @@ export default function OrdersPage() {
                       />
                       {selectedSaleIds.size > 0 && (
                         <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
-                          <div className="grid gap-3 lg:grid-cols-[160px_minmax(180px,1fr)_160px_auto] lg:items-end">
+                          <div
+                            className={
+                              saleBulkActionMode === "erp_close"
+                                ? "grid gap-3 lg:grid-cols-[160px_auto] lg:items-end"
+                                : "grid gap-3 lg:grid-cols-[160px_minmax(180px,1fr)_160px_auto] lg:items-end"
+                            }
+                          >
                             <div>
-                              <Label className="mb-1.5 text-xs">계산서일</Label>
+                              <Label className="mb-1.5 text-xs">
+                                {saleBulkActionMode === "erp_close" ? "ERP 마감일" : "계산서일"}
+                              </Label>
                               <DateInput value={bulkInvoiceDate} onChange={setBulkInvoiceDate} />
                             </div>
-                            <div>
-                              <Label className="mb-1.5 text-xs">계산서 이메일</Label>
-                              <Input
-                                value={bulkInvoiceEmail}
-                                onChange={(event) => setBulkInvoiceEmail(event.target.value)}
-                                placeholder="선택 입력"
-                              />
-                            </div>
-                            <label className="flex h-8 items-center gap-2 text-xs text-[var(--ink-2)]">
-                              <input
-                                type="checkbox"
-                                checked={bulkInvoiceErpClose}
-                                onChange={(event) => setBulkInvoiceErpClose(event.target.checked)}
-                                className="size-3.5"
-                              />
-                              ERP까지 마감
-                            </label>
+                            {saleBulkActionMode === "invoice" && (
+                              <>
+                                <div>
+                                  <Label className="mb-1.5 text-xs">계산서 이메일</Label>
+                                  <Input
+                                    value={bulkInvoiceEmail}
+                                    onChange={(event) => setBulkInvoiceEmail(event.target.value)}
+                                    placeholder="선택 입력"
+                                  />
+                                </div>
+                                <label className="flex h-8 items-center gap-2 text-xs text-[var(--ink-2)]">
+                                  <input
+                                    type="checkbox"
+                                    checked={bulkInvoiceErpClose}
+                                    onChange={(event) => setBulkInvoiceErpClose(event.target.checked)}
+                                    className="size-3.5"
+                                  />
+                                  ERP까지 마감
+                                </label>
+                              </>
+                            )}
                             <Button
                               type="button"
                               size="sm"
@@ -1474,7 +1581,9 @@ export default function OrdersPage() {
                               ) : (
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                               )}
-                              선택 {selectedSaleIds.size}건 처리
+                              {saleBulkActionMode === "erp_close"
+                                ? `ERP ${selectedSaleIds.size}건 마감`
+                                : `선택 ${selectedSaleIds.size}건 처리`}
                             </Button>
                           </div>
                           {bulkInvoiceError && (
@@ -1489,12 +1598,12 @@ export default function OrdersPage() {
                         onPinningChange={saleColPin.setPinning}
                         selectedIds={selectedSaleIds}
                         onSelectedIdsChange={setSelectedSaleIds}
-                        isRowSelectable={(item) => !item.sale.tax_invoice_date}
+                        isRowSelectable={(item) => isSaleSelectableForBulk(item, saleBulkActionMode)}
                         onInvoice={(item) => {
                           setSelectedSaleIds(new Set([item.sale_id]))
                           setBulkInvoiceDate(item.sale.tax_invoice_date ?? todayLocalDate())
                           setBulkInvoiceEmail(item.sale.tax_invoice_email ?? "")
-                          setBulkInvoiceErpClose(!!item.sale.erp_closed)
+                          setBulkInvoiceErpClose(saleBulkActionMode === "erp_close" || !!item.sale.erp_closed)
                           setBulkInvoiceError("")
                         }}
                         serverMode={{

@@ -39,7 +39,7 @@
 ### 1.4 테넌트 구성 (D-108, D-119)
 - 탑솔라(주) + 디원 + 화신이엔지 + 바로(주)와 `cable` 분기를 **단일 DB · 단일 코드베이스**로 운영한다.
 - **URL 분기**: module 사용자는 `module.topworks.ltd`/`solarflow3.com`(또는 Tailscale/localhost), cable 사용자는 `cable.topworks.ltd`, 바로 사용자는 `baro.topworks.ltd`, 학습 사용자는 `study.topworks.ltd`로 접속한다. 같은 `dist/`를 네 호스트에서 서빙하고, 프론트가 `window.location.hostname`을 보고 사이드바/메뉴 분기를 결정한다.
-- **테넌트 스코프**: `user_profiles.tenant_scope`(`topsolar`/`cable`/`baro`/`study`)을 사용자별로 못박는다. 백엔드는 `RequireTenantScope` 미들웨어로 **수입원가/면장/LC/T/T/한도 변경/단가 이력/부대비용/landed-cost·lc-fee·lc-limit-timeline·lc-maturity-alert·exchange-compare·margin-analysis·price-trend** 응답을 module 계열(`topsolar` + `cable`) 사용자에게만 허용하고, 바로 토큰으로 호출되면 403을 반환한다. `study`는 신입 교육 전용 테넌트로 ERP 운영 API를 상속하지 않고 `/api/v1/study/*` 학습 도메인과 `/api/v1/users/me*`만 허용한다. 그 외 공유 엔드포인트(가용재고/PO/B/L/출고/수주/매출/수금/마스터)는 ERP 운영 테넌트(`topsolar`/`cable`/`baro`)에서만 공유한다.
+- **테넌트 스코프**: `user_profiles.tenant_scope`(`topsolar`/`cable`/`baro`/`study`)을 사용자별로 못박는다. 백엔드는 `RequireTenantScope` 미들웨어로 **수입원가/면장/LC/T/T/한도 변경/단가 이력/부대비용/landed-cost·lc-fee·lc-limit-timeline·lc-maturity-alert·exchange-compare·margin-analysis·price-trend·price-forecast-strategy** 응답을 module 계열(`topsolar` + `cable`) 사용자에게만 허용하고, 바로 토큰으로 호출되면 403을 반환한다. `study`는 신입 교육 전용 테넌트로 ERP 운영 API를 상속하지 않고 `/api/v1/study/*` 학습 도메인과 `/api/v1/users/me*`만 허용한다. 그 외 공유 엔드포인트(가용재고/PO/B/L/출고/수주/매출/수금/마스터)는 ERP 운영 테넌트(`topsolar`/`cable`/`baro`)에서만 공유한다.
 - **cable 분기**: `cable.topworks.ltd`는 `module.topworks.ltd`의 기능 표면을 포크한 별도 테넌트다. 사이드바 탭 설정은 `sidebar_tabs.cable`로 독립 저장한다.
 - **study 분기**: `study.topworks.ltd`는 신입사원 학습용 교육 테넌트다. 첫 단계는 화면보다 `study_learning_domains` / `study_learning_plans` / `study_learning_plan_steps` 계약을 먼저 고정하고, 이후 학습 페이지와 진도/과제 기능을 붙인다.
 - **격리 범위**: 격리는 "바로가 module 계열의 수입원가/금융정보를 못 보게" 하는 1단계 블록이다. 같은 그룹 계열사이므로 거래/재고 행 단위 격리는 추가하지 않는다.
@@ -97,7 +97,7 @@ PostgreSQL (운영: 로컬 PostgreSQL + PostgREST, 인증: Supabase Auth)
 - DB 연결: `SUPABASE_DB_URL` 환경변수로 PostgreSQL 직접 연결, sqlx 풀 5개
 - 인증: 불필요 (Go가 게이트웨이, Rust는 내부 전용)
 
-### Rust API 엔드포인트 (16개)
+### Rust API 엔드포인트 (18개)
 | 엔드포인트 | 기능 |
 |-----------|------|
 | /health | 서버 생존 확인 |
@@ -111,7 +111,9 @@ PostgreSQL (운영: 로컬 PostgreSQL + PostgREST, 인증: Supabase Auth)
 | /api/calc/margin-analysis | 마진/이익률 분석 |
 | /api/calc/customer-analysis | 거래처 분석 |
 | /api/calc/price-trend | 단가 추이 |
+| /api/calc/price-forecast-strategy | 가격예측 전략 |
 | /api/calc/supply-forecast | 월별 수급 전망 |
+| /api/calc/order-fulfillment-risk | 수주 충당 위험도 |
 | /api/calc/outstanding-list | 미수금 목록 |
 | /api/calc/receipt-match-suggest | 수금 매칭 추천 |
 | /api/calc/search | 자연어 검색 |
@@ -408,6 +410,11 @@ PO 화면에서 바로 표시:
 - 헤더 조건과 라인아이템은 원계약 값을 기본값으로 복사하되, PO번호는 실무 확인 전 비워둘 수 있다.
 - 새 변경계약이 `contracted`로 확정되면 단가이력은 "계약변경" 사유로 자동 기록된다.
 
+#### PO 라인 빠른 입력
+- PO 직접입력은 유지하되, 엑셀/메모장에서 복사한 `품번 수량 USD/Wp` 라인은 오류와 모호성이 없을 때 자동 반영한다.
+- 헤더 행은 건너뛰고, 본품/스페어·유상/무상·메모 선택 컬럼이 있으면 라인 값으로 함께 반영한다.
+- 품번 후보가 여러 개이거나 수량·단가가 유효하지 않으면 자동 반영하지 않고, 사용자가 확인 후 수정하도록 입력값을 보존한다.
+
 ---
 
 ### 4.3 입고 모듈
@@ -575,7 +582,7 @@ PO 화면에서 바로 표시:
 
 - management_category: sale/construction/spare/repowering/maintenance/other (D-015)
 - fulfillment_source: stock/incoming — 미착품 충당 수주 구분 (D-015)
-- 충당 위험도: 수주 목록은 Rust 계산엔진의 `/api/v1/calc/order-fulfillment-risk` 결과로 `충당 가능/부족/확인 필요` 배지를 표시한다. 계산은 `fulfillment_source=stock`이면 실제 현재고 풀, `incoming`이면 미착품 풀을 기준으로 같은 법인·품번 수주를 수주일 순서로 차감해 판정한다.
+- 충당 위험도: 수주 목록은 Rust 계산엔진의 `/api/v1/calc/order-fulfillment-risk` 결과로 `충당 가능/부족/확인 필요` 배지를 표시한다. 계산은 `fulfillment_source=stock`이면 실제 현재고 풀, `incoming`이면 미착품 풀을 기준으로 같은 법인·품번 수주를 수주일 순서로 차감해 판정한다. 수주 상세는 같은 응답의 배정 순번, 배정 전/후 가용량, 부족량, 풀 구성, 납기 대비 미착 ETA 근거를 표시한다.
 
 분할출고: 1 수주 → N 출고 (잔량 자동 계산)
 
@@ -670,7 +677,7 @@ PO 화면에서 바로 표시:
 - 미착품예약 = fulfillment_source=incoming 수주잔량
 - 가용미착품 = 미착품 - 미착품예약
 - 총확보량 = 가용재고 + 가용미착품
-- 수주별 충당 위험도 = 현재고/미착품 공급 풀에서 재고 예약(`inventory_allocations`)을 먼저 제외한 뒤, `received/partial` 수주 잔량을 수주일 순서로 배정해 각 수주가 선택한 충당 소스로 커버되는지 판정한다. 단, active 수주로 전환되어 `order_id`가 연결된 예약은 수주 잔량 단계에서 한 번만 차감한다. 이 계산은 여러 테이블 조합이므로 Rust 계산엔진 담당이다.
+- 수주별 충당 위험도 = 현재고/미착품 공급 풀에서 재고 예약(`inventory_allocations`)을 먼저 제외한 뒤, `received/partial` 수주 잔량을 수주일 순서로 배정해 각 수주가 선택한 충당 소스로 커버되는지 판정한다. 단, active 수주로 전환되어 `order_id`가 연결된 예약은 수주 잔량 단계에서 한 번만 차감한다. `fulfillment_source='incoming'` 수주는 B/L ETA(없으면 actual_arrival/ETD fallback)와 B/L 없는 opened L/C의 ETA 미확정 물량을 함께 배정해 납기일보다 늦거나 ETA/납기 중 하나가 없으면 `확인 필요`로 본다. 이 계산은 여러 테이블 조합이므로 Rust 계산엔진 담당이다.
 
 재고 정렬: 제조사 → 모듈크기(mm) → 출력(Wp)
 
@@ -735,10 +742,14 @@ PO 화면에서 바로 표시:
 | price_cny_w | DECIMAL | | CNY/W 가격 |
 | price_krw_w | DECIMAL | | KRW/W 가격 |
 | cargo_min_mw / cargo_max_mw | DECIMAL | | OPIS 기준 5~25MW 등 cargo size |
+| confidence | DECIMAL | | 근거 추출 신뢰도(0~1) |
+| review_status | VARCHAR | ✅ | candidate / accepted / rejected |
 | source_url / raw_excerpt | TEXT | | 근거 URL과 짧은 원문 근거 |
 
-수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. 요청은 실행 로그를 만든 뒤 `running` 상태로 즉시 응답하고, 서버 백그라운드 작업이 완료/부분완료/실패 상태를 run에 기록한다. AI는 evidence에 명시된 가격 중 중국·유럽 대상 가격만 저장하며, 유료 로그인 한계와 미국·기타 지역 제외 사유는 run warning으로 남긴다(D-124, D-146, D-151).
-신뢰도가 낮거나 근거가 약한 개별 관측값은 `/api/v1/price-benchmarks/{id}` 삭제로 차트와 목록에서 제거하되, 수집 실행 로그는 감사 기록으로 보존한다(D-143).
+수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. 요청은 실행 로그를 만든 뒤 `running` 상태로 즉시 응답하고, 서버 백그라운드 작업이 완료/부분완료/실패 상태를 run에 기록한다. 서버는 source별 홈페이지 직접 조회와 Serper 검색을 함께 사용하되, 기본 검색어 1회에 의존하지 않고 결측 metric별 검색어, source별 대체 검색어, 완화된 기간 필터를 순차 적용해 evidence 후보를 넓힌다. 검색 결과 상위 URL은 Serper scrape로 본문 evidence를 보강한다. AI는 evidence에 명시된 가격 중 중국·유럽 대상 가격만 저장하며, 유료 로그인 한계와 미국·기타 지역 제외 사유는 run warning으로 남긴다(D-124, D-146, D-151, D-164).
+개별 관측값은 기본 `candidate` 로 저장하고, 운영자가 `/api/v1/price-benchmarks/{id}/review-status` 로 `accepted` 또는 `rejected` 처리한다. 제외된 관측값은 기본 차트·판단에서 빠지지만 감사 확인을 위해 목록 필터에서 다시 볼 수 있다. 잘못 수집된 중복/오염 데이터는 `/api/v1/price-benchmarks/{id}` 삭제로 제거하되, 수집 실행 로그는 보존한다(D-143, D-161).
+
+구매 전략과 1/3/6개월 전망 시나리오는 `/api/v1/calc/price-forecast-strategy`가 Rust 계산엔진에서 산출한다. 프론트엔드는 외부 관측값, 우리 최근 구매가, 수집 run 경고를 요청 본문으로 보내고, Rust는 CMM/forward/중국 입찰/CPIA floor를 USD/W 기준으로 조합해 action, 전망 범위, source 품질 점수를 반환한다. AI는 관측값 수집 보조로만 사용하고 최종 전망 판단은 설명 가능한 Rust 계산 결과를 정본으로 삼는다(D-159).
 
 #### 운영 수요 계획 (module_demand_forecasts)
 수주/출고 전 단계의 공사 예정 또는 유통 보정 수요를 월별·규격별로 수동 입력한다.
@@ -783,6 +794,9 @@ LC 한도 현황 화면: 법인별→은행별 한도/개설잔액/가용한도/
 
 #### 관리자 대시보드
 재고 중심 (실재고 vs 가용, 예약/배정 드릴다운), 오늘의 알림, 미착품+입고예정, 수주잔량, 미수금 상세, 검색창
+
+#### KPI 표시 설정
+KPI 타일은 사용자별로 화면/탭 단위 활성 항목을 설정할 수 있다. 설정값은 `user_profiles.preferences.kpi_hidden`에 `{ scope: [kpi_key...] }` 형태로 저장하며, 최소 1개 KPI는 항상 표시한다. 사이트 공통 KPI 정의는 코드/설계 정본을 유지하고, 사용자 설정은 표시 여부만 제어한다.
 
 #### 알림 트리거 조건
 

@@ -150,21 +150,22 @@ const (
 	IDBaroShipmentNotice    FeatureID = "baro.shipment_notice"
 
 	// ---- calc.* (Rust 계산 프록시) ----
-	IDCalcInventory            FeatureID = "calc.inventory"
-	IDCalcLandedCost           FeatureID = "calc.landed_cost"
-	IDCalcExchangeCompare      FeatureID = "calc.exchange_compare"
-	IDCalcLCFee                FeatureID = "calc.lc_fee"
-	IDCalcLCLimitTimeline      FeatureID = "calc.lc_limit_timeline"
-	IDCalcLCMaturityAlert      FeatureID = "calc.lc_maturity_alert"
-	IDCalcMarginAnalysis       FeatureID = "calc.margin_analysis"
-	IDCalcCustomerAnalysis     FeatureID = "calc.customer_analysis"
-	IDCalcPriceTrend           FeatureID = "calc.price_trend"
-	IDCalcSupplyForecast       FeatureID = "calc.supply_forecast"
-	IDCalcOrderFulfillmentRisk FeatureID = "calc.order_fulfillment_risk"
-	IDCalcOutstandingList      FeatureID = "calc.outstanding_list"
-	IDCalcReceiptMatchSugges   FeatureID = "calc.receipt_match_suggest"
-	IDCalcSearch               FeatureID = "calc.search"
-	IDCalcInventoryTurnover    FeatureID = "calc.inventory_turnover"
+	IDCalcInventory             FeatureID = "calc.inventory"
+	IDCalcLandedCost            FeatureID = "calc.landed_cost"
+	IDCalcExchangeCompare       FeatureID = "calc.exchange_compare"
+	IDCalcLCFee                 FeatureID = "calc.lc_fee"
+	IDCalcLCLimitTimeline       FeatureID = "calc.lc_limit_timeline"
+	IDCalcLCMaturityAlert       FeatureID = "calc.lc_maturity_alert"
+	IDCalcMarginAnalysis        FeatureID = "calc.margin_analysis"
+	IDCalcCustomerAnalysis      FeatureID = "calc.customer_analysis"
+	IDCalcPriceTrend            FeatureID = "calc.price_trend"
+	IDCalcPriceForecastStrategy FeatureID = "calc.price_forecast_strategy"
+	IDCalcSupplyForecast        FeatureID = "calc.supply_forecast"
+	IDCalcOrderFulfillmentRisk  FeatureID = "calc.order_fulfillment_risk"
+	IDCalcOutstandingList       FeatureID = "calc.outstanding_list"
+	IDCalcReceiptMatchSugges    FeatureID = "calc.receipt_match_suggest"
+	IDCalcSearch                FeatureID = "calc.search"
+	IDCalcInventoryTurnover     FeatureID = "calc.inventory_turnover"
 
 	// ---- io.* ----
 	IDIOImport         FeatureID = "io.import"
@@ -398,7 +399,7 @@ var Catalog = map[FeatureID]Feature{
 	IDTxPriceBenchmark: {
 		ID: IDTxPriceBenchmark, Name: "가격예측 벤치마크", Description: "외부 태양광 시세·입찰·원가 floor 벤치마크 + AI 수집",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/price-benchmarks/", "/api/v1/price-benchmarks/{id}", "/api/v1/price-benchmarks/runs", "/api/v1/price-benchmarks/runs/{id}", "/api/v1/price-benchmarks/our-prices", "/api/v1/price-benchmarks/ai-refresh"},
+		Paths: []string{"/api/v1/price-benchmarks/", "/api/v1/price-benchmarks/{id}", "/api/v1/price-benchmarks/{id}/review-status", "/api/v1/price-benchmarks/runs", "/api/v1/price-benchmarks/runs/{id}", "/api/v1/price-benchmarks/our-prices", "/api/v1/price-benchmarks/ai-refresh"},
 	},
 	IDTxPriceHistory: {
 		ID: IDTxPriceHistory, Name: "수입 단가 이력", Description: "단가 이력 (module 계열)",
@@ -597,6 +598,11 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDCalcPriceTrend, Name: "단가 추이", Description: "Rust 엔진 — module 계열",
 		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
 		Paths: []string{"/api/v1/calc/price-trend"},
+	},
+	IDCalcPriceForecastStrategy: {
+		ID: IDCalcPriceForecastStrategy, Name: "가격예측 전략", Description: "Rust 엔진 — module 계열",
+		DefaultTenants: TenantSetModule, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/calc/price-forecast-strategy"},
 	},
 	IDCalcSupplyForecast: {
 		ID: IDCalcSupplyForecast, Name: "수급 전망", Description: "Rust 엔진 — 모든 테넌트",

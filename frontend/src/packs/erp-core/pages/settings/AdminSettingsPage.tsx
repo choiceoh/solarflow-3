@@ -277,6 +277,7 @@ export default function AdminSettingsPage() {
         description="사용자 계정, 역할, 활성 상태, 임시 비밀번호 발급을 관리합니다."
         tableTitle="사용자 권한 관리"
         tableSub={`${users.length.toLocaleString()}명 · ${activeUsers.toLocaleString()}명 활성`}
+        kpiScope="admin-settings"
         actions={
           <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5" />

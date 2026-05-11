@@ -34,10 +34,12 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [saleFormOpen, setSaleFormOpen] = useState(false);
+  const [autoOpenedSaleFormFor, setAutoOpenedSaleFormFor] = useState('');
   const [saleCustomerId, setSaleCustomerId] = useState('');
   const [saleUnitPriceWp, setSaleUnitPriceWp] = useState('');
   const [saleTaxInvoiceDate, setSaleTaxInvoiceDate] = useState('');
   const [saleTaxInvoiceEmail, setSaleTaxInvoiceEmail] = useState('');
+  const [saleTaxInvoiceEmailTouched, setSaleTaxInvoiceEmailTouched] = useState(false);
   const [saleCreateError, setSaleCreateError] = useState('');
   const [saleCreating, setSaleCreating] = useState(false);
 
@@ -53,8 +55,23 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
     setSaleUnitPriceWp(ob.unit_price_wp != null ? String(ob.unit_price_wp) : '');
     setSaleTaxInvoiceDate(ob.sale?.tax_invoice_date ?? '');
     setSaleTaxInvoiceEmail(ob.sale?.tax_invoice_email ?? '');
+    setSaleTaxInvoiceEmailTouched(false);
     setSaleCreateError('');
   }, [ob]);
+
+  useEffect(() => {
+    if (!ob || ob.sale || ob.status === 'cancelled') return;
+    if (ob.usage_category !== 'sale' && ob.usage_category !== 'sale_spare') return;
+    if (autoOpenedSaleFormFor === ob.outbound_id) return;
+    setSaleFormOpen(true);
+    setAutoOpenedSaleFormFor(ob.outbound_id);
+  }, [ob, autoOpenedSaleFormFor]);
+
+  useEffect(() => {
+    if (saleTaxInvoiceEmailTouched || saleTaxInvoiceEmail.trim() || !saleCustomerId) return;
+    const email = partners.find((partner) => partner.partner_id === saleCustomerId)?.contact_email?.trim();
+    if (email) setSaleTaxInvoiceEmail(email);
+  }, [partners, saleCustomerId, saleTaxInvoiceEmail, saleTaxInvoiceEmailTouched]);
 
   if (loading || !ob) return <LoadingSpinner />;
 
@@ -139,6 +156,13 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
     } finally {
       setSaleCreating(false);
     }
+  };
+
+  const handleSaleCustomerChange = (customerId: string) => {
+    setSaleCustomerId(customerId);
+    if (saleTaxInvoiceEmailTouched) return;
+    const email = partners.find((partner) => partner.partner_id === customerId)?.contact_email?.trim() ?? '';
+    setSaleTaxInvoiceEmail(email);
   };
 
   const usageOptions = (Object.entries(USAGE_CATEGORY_LABEL) as [string, string][])
@@ -371,7 +395,7 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
                   <PartnerCombobox
                     partners={partners}
                     value={saleCustomerId}
-                    onChange={setSaleCustomerId}
+                    onChange={handleSaleCustomerChange}
                     placeholder="거래처 선택"
                     error={!saleCustomerId && !!saleCreateError}
                   />
@@ -395,7 +419,10 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
                   <Label className="mb-1.5 text-xs">계산서 이메일</Label>
                   <Input
                     value={saleTaxInvoiceEmail}
-                    onChange={(event) => setSaleTaxInvoiceEmail(event.target.value)}
+                    onChange={(event) => {
+                      setSaleTaxInvoiceEmailTouched(true);
+                      setSaleTaxInvoiceEmail(event.target.value);
+                    }}
                     placeholder="선택 입력"
                   />
                 </div>

@@ -22,6 +22,7 @@ import type { SaleListItem } from "@/types/outbound"
 import type { CustomerAnalysis, CustomerItem } from "@/types/analysis"
 import type { Partner, Product } from "@/types/masters"
 import { CardB, FilterChips, RailBlock, TileB } from "@/components/command/MockupPrimitives"
+import { KpiStrip } from "@/components/command/KpiStrip"
 import { flatSpark, monthlyTrend } from "@/templates/sparkUtils"
 
 interface MarginItem {
@@ -1166,71 +1167,91 @@ export default function SalesAnalysisPage() {
 
           {/* NumberTween formatter — '억' 단위 (krw 원본을 억으로 나눠 .toFixed(2)). */}
           {/* 모든 KPI 가 동일 패턴이라 inline closure 로 처리. */}
-          <div className="sf-command-kpis">
-            <TileB
-              lbl="공급가 매출"
-              v={(salesSummary.supply / 100000000).toFixed(2)}
-              numericValue={salesSummary.supply}
-              formatter={(n) => (n / 100000000).toFixed(2)}
-              u="억"
-              sub={`${formatNumber(salesSummary.count)}건`}
-              tone="solar"
-              spark={supplySpark}
-              metricId="sales_analysis.supply_amount"
-            />
-            <TileB
-              lbl="계산 이익"
-              v={(margin.summary.total_margin_krw / 100000000).toFixed(2)}
-              numericValue={margin.summary.total_margin_krw}
-              formatter={(n) => (n / 100000000).toFixed(2)}
-              u="억"
-              sub={`${formatKRW(costCoveredRevenue)} 기준`}
-              tone={margin.summary.total_margin_krw >= 0 ? "pos" : "neg"}
-              spark={flatSpark(Math.abs(margin.summary.total_margin_krw))}
-              metricId="sales_analysis.margin_rate"
-            />
-            <TileB
-              lbl="이익률"
-              v={margin.summary.overall_margin_rate.toFixed(1)}
-              numericValue={margin.summary.overall_margin_rate}
-              formatter={(n) => n.toFixed(1)}
-              u="%"
-              sub={`원가 연결률 ${costCoverageRate.toFixed(0)}%`}
-              tone={margin.summary.overall_margin_rate >= 8 ? "pos" : "warn"}
-              spark={flatSpark(margin.summary.overall_margin_rate)}
-              metricId="sales_analysis.margin_rate"
-            />
-            <TileB
-              lbl="미수금"
-              v={(customers.summary.total_outstanding_krw / 100000000).toFixed(2)}
-              numericValue={customers.summary.total_outstanding_krw}
-              formatter={(n) => (n / 100000000).toFixed(2)}
-              u="억"
-              sub={`수금 ${formatKRW(customers.summary.total_collected_krw)}`}
-              tone={customers.summary.total_outstanding_krw > 0 ? "warn" : "pos"}
-              metricId="receipts.remaining"
-            />
-            <TileB
-              lbl="계산서 미발행"
-              v={String(salesSummary.pending)}
-              numericValue={salesSummary.pending}
-              formatter={(n) => String(Math.round(n))}
-              u="건"
-              sub={`${formatNumber(salesSummary.issued)}건 발행 · ${salesSummary.issueRate}%`}
-              tone={salesSummary.pending > 0 ? "warn" : "info"}
-              spark={issueRateSpark}
-              metricId="sales_analysis.issue_rate"
-            />
-            <TileB
-              lbl="원가 미연결"
-              v={(costMissingRevenue / 100000000).toFixed(2)}
-              numericValue={costMissingRevenue}
-              formatter={(n) => (n / 100000000).toFixed(2)}
-              u="억"
-              sub={`${formatNumber(costMissingItemCount)}개 품목`}
-              tone={costMissingRevenue > 0 ? "warn" : "pos"}
-            />
-          </div>
+          <KpiStrip
+            scopeId="sales-analysis"
+            metrics={[
+              {
+                lbl: "공급가 매출",
+                v: (salesSummary.supply / 100000000).toFixed(2),
+                numericValue: salesSummary.supply,
+                formatter: (n: number) => (n / 100000000).toFixed(2),
+                u: "억",
+                sub: `${formatNumber(salesSummary.count)}건`,
+                tone: "solar" as const,
+                spark: supplySpark,
+                metricId: "sales_analysis.supply_amount",
+              },
+              {
+                key: "sales_analysis.margin_profit",
+                lbl: "계산 이익",
+                v: (margin.summary.total_margin_krw / 100000000).toFixed(2),
+                numericValue: margin.summary.total_margin_krw,
+                formatter: (n: number) => (n / 100000000).toFixed(2),
+                u: "억",
+                sub: `${formatKRW(costCoveredRevenue)} 기준`,
+                tone: margin.summary.total_margin_krw >= 0 ? ("pos" as const) : ("neg" as const),
+                spark: flatSpark(Math.abs(margin.summary.total_margin_krw)),
+                metricId: "sales_analysis.margin_rate",
+              },
+              {
+                lbl: "이익률",
+                v: margin.summary.overall_margin_rate.toFixed(1),
+                numericValue: margin.summary.overall_margin_rate,
+                formatter: (n: number) => n.toFixed(1),
+                u: "%",
+                sub: `원가 연결률 ${costCoverageRate.toFixed(0)}%`,
+                tone: margin.summary.overall_margin_rate >= 8 ? ("pos" as const) : ("warn" as const),
+                spark: flatSpark(margin.summary.overall_margin_rate),
+                metricId: "sales_analysis.margin_rate",
+              },
+              {
+                lbl: "미수금",
+                v: (customers.summary.total_outstanding_krw / 100000000).toFixed(2),
+                numericValue: customers.summary.total_outstanding_krw,
+                formatter: (n: number) => (n / 100000000).toFixed(2),
+                u: "억",
+                sub: `수금 ${formatKRW(customers.summary.total_collected_krw)}`,
+                tone: customers.summary.total_outstanding_krw > 0 ? ("warn" as const) : ("pos" as const),
+                metricId: "receipts.remaining",
+              },
+              {
+                lbl: "계산서 미발행",
+                v: String(salesSummary.pending),
+                numericValue: salesSummary.pending,
+                formatter: (n: number) => String(Math.round(n)),
+                u: "건",
+                sub: `${formatNumber(salesSummary.issued)}건 발행 · ${salesSummary.issueRate}%`,
+                tone: salesSummary.pending > 0 ? ("warn" as const) : ("info" as const),
+                spark: issueRateSpark,
+                metricId: "sales_analysis.issue_rate",
+              },
+              {
+                key: "sales_analysis.cost_missing",
+                lbl: "원가 미연결",
+                v: (costMissingRevenue / 100000000).toFixed(2),
+                numericValue: costMissingRevenue,
+                formatter: (n: number) => (n / 100000000).toFixed(2),
+                u: "억",
+                sub: `${formatNumber(costMissingItemCount)}개 품목`,
+                tone: costMissingRevenue > 0 ? ("warn" as const) : ("pos" as const),
+              },
+            ]}
+          >
+            {(metric) => (
+              <TileB
+                key={metric.lbl}
+                lbl={metric.lbl}
+                v={metric.v}
+                numericValue={metric.numericValue}
+                formatter={metric.formatter}
+                u={metric.u}
+                sub={metric.sub}
+                tone={metric.tone}
+                spark={metric.spark}
+                metricId={metric.metricId}
+              />
+            )}
+          </KpiStrip>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
             <CardB title="이익 원인 분해" sub="저마진 · 원가 공백 우선순위">
