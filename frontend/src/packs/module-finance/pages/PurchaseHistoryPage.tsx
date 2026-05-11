@@ -10,6 +10,7 @@ import { fetchWithAuth } from '@/lib/api';
 import { buildChains, diffAuditFieldItems, eventDeepLink, isValidChainParam, sanitizeAuditLogs, type AuditDiffItem, type Chain, type EventKind, type SafeAuditLog } from '@/lib/purchaseHistory';
 import EmptyState from '@/components/common/EmptyState';
 import { CardB, FilterButton, FilterChips, TileB, type DateRangeValue } from '@/components/command/MockupPrimitives';
+import { KpiStrip } from '@/components/command/KpiStrip';
 import { monthlyCount, flatSparkFromValue } from '@/templates/sparkUtils';
 import { CONTRACT_TYPE_LABEL, LC_STATUS_LABEL, PO_STATUS_LABEL } from '@/types/procurement';
 import type { PurchaseOrder, PriceHistory, LCRecord, TTRemittance } from '@/types/procurement';
@@ -798,11 +799,11 @@ export default function PurchaseHistoryPage() {
 
   return (
     <div className="sf-page sf-purchase-history-page min-h-[calc(100vh-5rem)]">
-      <div className="sf-command-kpis">
-        {metrics.map((m) => (
+      <KpiStrip metrics={metrics} scopeId="purchase-history">
+        {(m) => (
           <TileB key={m.lbl} lbl={m.lbl} v={m.v} numericValue={m.numericValue} formatter={m.formatter} u={m.u} sub={m.sub} tone={m.tone} spark={m.spark ?? flatSparkFromValue(m.v)} metricId={m.metricId} />
-        ))}
-      </div>
+        )}
+      </KpiStrip>
 
       <div className="sf-purchase-history-grid">
         {/* 좌측: 계약 체인 리스트 */}

@@ -1167,6 +1167,20 @@ a:focus-visible,
   gap: 8px;
 }
 
+.sf-kpi-strip {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sf-kpi-strip-toolbar {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .sf-command-topline {
   display: flex;
   min-width: 0;

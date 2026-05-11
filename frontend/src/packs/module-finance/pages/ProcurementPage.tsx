@@ -59,6 +59,7 @@ import {
 } from "@/components/command/MockupPrimitives"
 
 import { BreakdownRows } from "@/components/command/BreakdownRows"
+import { KpiStrip } from "@/components/command/KpiStrip"
 import { flatSparkFromValue, monthlyTrend, monthlyCount } from "@/templates/sparkUtils"
 
 const PROCUREMENT_TABS = new Set(["po", "tt", "lc", "bl"])
@@ -915,8 +916,8 @@ export default function ProcurementPage() {
 
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
-          <div className="sf-command-kpis">
-            {metrics.map((metric) => (
+          <KpiStrip metrics={metrics} scopeId={`procurement.${activeTab}`}>
+            {(metric) => (
               <TileB
                 key={metric.lbl}
                 lbl={metric.lbl}
@@ -930,8 +931,8 @@ export default function ProcurementPage() {
                 spark={metric.spark ?? flatSparkFromValue(metric.v)}
                 metricId={metric.metricId}
               />
-            ))}
-          </div>
+            )}
+          </KpiStrip>
 
           <CommandTopLine title={pageTitle} sub={pageSub} right={procurementCardControls} />
 

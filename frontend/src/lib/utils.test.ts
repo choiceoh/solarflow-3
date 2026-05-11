@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { formatKRW, formatKw, formatCapacity } from './utils';
 import type { UserPreferences } from '@/types/models';
 
-const auto: UserPreferences = { amount_unit: 'auto', capacity_unit: 'auto', show_ea: true };
+const auto: UserPreferences = { amount_unit: 'auto', capacity_unit: 'auto', show_ea: true, kpi_hidden: {} };
 const won: UserPreferences = { ...auto, amount_unit: 'won' };
 const thousand: UserPreferences = { ...auto, amount_unit: 'thousand' };
 const manwon: UserPreferences = { ...auto, amount_unit: 'manwon' };

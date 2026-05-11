@@ -1016,6 +1016,7 @@ export default function PriceForecastPage() {
       description="중국·유럽 외부 벤치마크, 우리 거래가, 구매 전략을 한 화면에서 비교합니다."
       tableTitle="가격 벤치마크"
       tableSub={`${filteredRows.length.toLocaleString('ko-KR')}개 관측값 · 채택 ${reviewCounts.accepted.toLocaleString('ko-KR')}건 · 제외 ${reviewCounts.rejected.toLocaleString('ko-KR')}건`}
+      kpiScope="price-forecast"
       actions={(
         <div className="flex flex-wrap items-center justify-end gap-2">
           <div

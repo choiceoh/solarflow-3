@@ -75,6 +75,7 @@ import {
   type KwRangeValue,
 } from "@/components/command/MockupPrimitives"
 import { BreakdownRows } from "@/components/command/BreakdownRows"
+import { KpiStrip } from "@/components/command/KpiStrip"
 import { flatSparkFromValue } from "@/templates/sparkUtils"
 
 class OrderDetailErrorBoundary extends Component<
@@ -1416,8 +1417,8 @@ export default function OrdersPage() {
     <div className="sf-page sf-sales-page">
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
-          <div className="sf-command-kpis">
-            {metrics.map((metric) => (
+          <KpiStrip metrics={metrics} scopeId={`orders.${activeTab}`}>
+            {(metric) => (
               <TileB
                 key={metric.lbl}
                 lbl={metric.lbl}
@@ -1431,8 +1432,8 @@ export default function OrdersPage() {
                 spark={metric.spark ?? flatSparkFromValue(metric.v)}
                 metricId={metric.metricId}
               />
-            ))}
-          </div>
+            )}
+          </KpiStrip>
 
           <CommandTopLine title={pageTitle} sub={pageSub} right={ordersCardControls} />
 

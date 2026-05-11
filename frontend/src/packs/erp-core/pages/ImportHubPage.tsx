@@ -118,6 +118,7 @@ export default function ImportHubPage() {
       description="운영 데이터 생성은 엑셀 양식 업로드로 처리합니다."
       tableTitle="입력 양식"
       tableSub="통합 양식 + 업무별 검증 업로드"
+      kpiScope="import-hub"
       actions={(
         <div className="flex items-center gap-2">
           <Button
