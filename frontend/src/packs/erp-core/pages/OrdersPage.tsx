@@ -15,9 +15,11 @@ import {
 } from "@/hooks/useOutbound"
 import { useServerSort } from "@/hooks/useServerSort"
 import { CheckCircle2, Loader2 } from "lucide-react"
-import { fetchWithAuth } from "@/lib/api"
+import { fetchWithAuth, fetchWithAuthMeta } from "@/lib/api"
 import { confirmDialog } from "@/lib/dialogs"
-import { notify } from "@/lib/notify"
+import { companyParams } from "@/lib/companyUtils"
+import { formatError, notify } from "@/lib/notify"
+import { formatKw, formatNumber } from "@/lib/utils"
 import SkeletonRows from "@/components/common/SkeletonRows"
 import OrderListTable, {
   ORDER_TABLE_ID,
@@ -33,6 +35,7 @@ import AutoMatchSection from "@/components/orders/AutoMatchSection"
 import OutboundListTable, {
   OUTBOUND_TABLE_ID,
   OUTBOUND_COLUMN_META,
+  type OutboundAutomationStatus,
 } from "@/components/outbound/OutboundListTable"
 import { ColumnVisibilityMenu } from "@/components/common/ColumnVisibilityMenu"
 import { useColumnVisibility } from "@/lib/columnVisibility"
@@ -53,6 +56,7 @@ import {
 import {
   OUTBOUND_STATUS_LABEL,
   USAGE_CATEGORY_LABEL,
+  type Outbound,
   type SaleListItem,
   type OutboundStatus,
   type UsageCategory,
@@ -125,6 +129,41 @@ type OutboundWorkQueue = "" | "sale_unregistered"
 type ReceiptMatchFilter = "" | "matched" | "partial" | "unmatched"
 type SaleErpClosedFilter = "" | "true" | "false"
 type SaleBulkActionMode = "invoice" | "erp_close"
+const BULK_SALE_PREVIEW_PAGE_SIZE = 1000
+const BULK_SALE_PREVIEW_MAX_PAGES = 500
+const BULK_SALE_CREATE_BATCH_SIZE = 8
+
+type BulkSaleBlockReason =
+  | "이미 매출 있음"
+  | "정상 출고 아님"
+  | "판매 용도 아님"
+  | "거래처 없음"
+  | "Wp단가 없음"
+  | "수량 없음"
+  | "규격 없음"
+
+interface BulkSaleCreatePlan {
+  ready: Outbound[]
+  blocked: Array<{ outbound: Outbound; reason: BulkSaleBlockReason }>
+  reasonCounts: Array<{ reason: BulkSaleBlockReason; count: number }>
+  quantity: number
+  capacityKw: number
+  supplyAmount: number
+  vatAmount: number
+  totalAmount: number
+}
+
+interface BulkSalePreviewFilters {
+  status?: string
+  usageCategory?: string
+  manufacturerId?: string
+  start?: string
+  end?: string
+  minKw?: number
+  maxKw?: number
+  sort?: string
+  order?: "asc" | "desc"
+}
 
 function getOrderWorkQueue(value: string | null): OrderWorkQueue {
   return value === "delivery_soon" || value === "no_site" ? value : ""
@@ -190,6 +229,127 @@ function sharedInvoiceEmail(items: SaleListItem[]) {
   return emails.length === 1 ? emails[0] : ""
 }
 
+function getBulkSaleBlockReason(ob: Outbound): BulkSaleBlockReason | null {
+  if (ob.sale) return "이미 매출 있음"
+  if (ob.status !== "active") return "정상 출고 아님"
+  if (ob.usage_category !== "sale" && ob.usage_category !== "sale_spare") return "판매 용도 아님"
+  if (!ob.customer_id) return "거래처 없음"
+  if (!Number.isFinite(ob.unit_price_wp ?? 0) || (ob.unit_price_wp ?? 0) <= 0) return "Wp단가 없음"
+  if (!Number.isFinite(ob.quantity) || ob.quantity <= 0) return "수량 없음"
+  if (!Number.isFinite(ob.spec_wp ?? 0) || (ob.spec_wp ?? 0) <= 0) return "규격 없음"
+  return null
+}
+
+function estimateSaleAmount(ob: Outbound) {
+  const unitPriceEa = Math.round((ob.unit_price_wp ?? 0) * (ob.spec_wp ?? 0))
+  const supplyAmount = Math.round(unitPriceEa * ob.quantity)
+  const vatAmount = Math.round(supplyAmount * 0.1)
+  return { supplyAmount, vatAmount, totalAmount: supplyAmount + vatAmount }
+}
+
+function buildBulkSaleCreatePlan(items: Outbound[]): BulkSaleCreatePlan {
+  const ready: Outbound[] = []
+  const blocked: BulkSaleCreatePlan["blocked"] = []
+  const reasonMap = new Map<BulkSaleBlockReason, number>()
+  let quantity = 0
+  let capacityKw = 0
+  let supplyAmount = 0
+  let vatAmount = 0
+  let totalAmount = 0
+
+  for (const outbound of items) {
+    const reason = getBulkSaleBlockReason(outbound)
+    if (reason) {
+      blocked.push({ outbound, reason })
+      reasonMap.set(reason, (reasonMap.get(reason) ?? 0) + 1)
+      continue
+    }
+    ready.push(outbound)
+    quantity += outbound.quantity
+    capacityKw += outbound.capacity_kw ?? 0
+    const estimate = estimateSaleAmount(outbound)
+    supplyAmount += estimate.supplyAmount
+    vatAmount += estimate.vatAmount
+    totalAmount += estimate.totalAmount
+  }
+
+  const reasonCounts = Array.from(reasonMap.entries()).map(([reason, count]) => ({ reason, count }))
+  return { ready, blocked, reasonCounts, quantity, capacityKw, supplyAmount, vatAmount, totalAmount }
+}
+
+function getOutboundAutomationStatus(ob: Outbound): OutboundAutomationStatus {
+  const reason = getBulkSaleBlockReason(ob)
+  if (!reason) return { label: "생성 가능", tone: "pos" }
+  return { label: "제외", reason, tone: reason === "이미 매출 있음" ? "ghost" : "warn" }
+}
+
+function buildBulkSalePreviewQuery(companyId: string | null, filters: BulkSalePreviewFilters) {
+  const params = companyParams(companyId)
+  params.set("work_queue", "sale_unregistered")
+  if (filters.status) params.set("status", filters.status)
+  if (filters.usageCategory) params.set("usage_category", filters.usageCategory)
+  if (filters.manufacturerId) params.set("manufacturer_id", filters.manufacturerId)
+  if (filters.start) params.set("start", filters.start)
+  if (filters.end) params.set("end", filters.end)
+  if (filters.minKw !== undefined) params.set("min_kw", String(filters.minKw))
+  if (filters.maxKw !== undefined) params.set("max_kw", String(filters.maxKw))
+  if (filters.sort) params.set("sort", filters.sort)
+  if (filters.order) params.set("order", filters.order)
+  return params
+}
+
+async function fetchBulkSalePreviewOutbounds(
+  companyId: string | null,
+  filters: BulkSalePreviewFilters,
+): Promise<Outbound[]> {
+  const fetchPage = (offset: number) => {
+    const params = buildBulkSalePreviewQuery(companyId, filters)
+    params.set("limit", String(BULK_SALE_PREVIEW_PAGE_SIZE))
+    params.set("offset", String(offset))
+    return fetchWithAuthMeta<Outbound[]>(`/api/v1/outbounds?${params}`)
+  }
+
+  const first = await fetchPage(0)
+  const items = [...first.data]
+  const total = first.totalCount
+  if (total !== null && items.length >= total) return items
+
+  for (let page = 1; page < BULK_SALE_PREVIEW_MAX_PAGES; page += 1) {
+    const offset = page * BULK_SALE_PREVIEW_PAGE_SIZE
+    if (total !== null && offset >= total) break
+    const next = await fetchPage(offset)
+    items.push(...next.data)
+    if (next.data.length < BULK_SALE_PREVIEW_PAGE_SIZE) break
+    if (next.totalCount !== null && items.length >= next.totalCount) break
+  }
+  return items
+}
+
+async function createSalesInBatches(targets: Outbound[]) {
+  const results: PromiseSettledResult<unknown>[] = []
+  for (let i = 0; i < targets.length; i += BULK_SALE_CREATE_BATCH_SIZE) {
+    const batch = targets.slice(i, i + BULK_SALE_CREATE_BATCH_SIZE)
+    const settled = await Promise.allSettled(
+      batch.map((ob) =>
+        fetchWithAuth("/api/v1/sales", {
+          method: "POST",
+          body: JSON.stringify({
+            outbound_id: ob.outbound_id,
+            order_id: ob.order_id,
+            customer_id: ob.customer_id,
+            quantity: ob.quantity,
+            capacity_kw: ob.capacity_kw,
+            unit_price_wp: ob.unit_price_wp,
+            erp_closed: false,
+          }),
+        }),
+      ),
+    )
+    results.push(...settled)
+  }
+  return results
+}
+
 export default function OrdersPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
 
@@ -240,6 +400,11 @@ export default function OrdersPage() {
   const [obDateRange, setObDateRange] = useState<DateRangeValue>(null)
   const [obKwRange, setObKwRange] = useState<KwRangeValue>(null)
   const [obWorkQueueFilter, setObWorkQueueFilter] = useState<OutboundWorkQueue>("")
+  const [bulkSalePreviewItems, setBulkSalePreviewItems] = useState<Outbound[]>([])
+  const [bulkSalePreviewLoading, setBulkSalePreviewLoading] = useState(false)
+  const [bulkSalePreviewError, setBulkSalePreviewError] = useState("")
+  const [bulkSaleCreating, setBulkSaleCreating] = useState(false)
+  const [bulkSaleCreateError, setBulkSaleCreateError] = useState("")
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null)
   const outboundColVis = useColumnVisibility(OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META)
   const outboundColPin = useColumnPinning(OUTBOUND_TABLE_ID)
@@ -297,6 +462,69 @@ export default function OrdersPage() {
   })
 
   const obLoading = obDashLoading || obListLoading
+  const bulkSalePreviewFilters = useMemo<BulkSalePreviewFilters>(
+    () => ({
+      status: obStatusFilter || undefined,
+      usageCategory: obUsageFilter || undefined,
+      manufacturerId: obMfgFilter || undefined,
+      start: obDateRange?.start || undefined,
+      end: obDateRange?.end || undefined,
+      minKw: obKwRange?.min ?? undefined,
+      maxKw: obKwRange?.max ?? undefined,
+      sort: obSort.queryParams.sort,
+      order: obSort.queryParams.order,
+    }),
+    [
+      obStatusFilter,
+      obUsageFilter,
+      obMfgFilter,
+      obDateRange?.start,
+      obDateRange?.end,
+      obKwRange?.min,
+      obKwRange?.max,
+      obSort.queryParams.sort,
+      obSort.queryParams.order,
+    ],
+  )
+  const showBulkSaleCreatePanel =
+    activeTab === "outbound" && obWorkQueueFilter === "sale_unregistered" && !selectedOutbound
+  const bulkSaleCreatePlan = useMemo(
+    () => buildBulkSaleCreatePlan(bulkSalePreviewItems),
+    [bulkSalePreviewItems],
+  )
+  useEffect(() => {
+    let cancelled = false
+    if (!showBulkSaleCreatePanel || !selectedCompanyId) {
+      setBulkSalePreviewItems([])
+      setBulkSalePreviewLoading(false)
+      setBulkSalePreviewError("")
+      setBulkSaleCreateError("")
+      return () => {
+        cancelled = true
+      }
+    }
+
+    setBulkSalePreviewLoading(true)
+    setBulkSalePreviewError("")
+    setBulkSaleCreateError("")
+    fetchBulkSalePreviewOutbounds(selectedCompanyId, bulkSalePreviewFilters)
+      .then((items) => {
+        if (!cancelled) setBulkSalePreviewItems(items)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setBulkSalePreviewItems([])
+        setBulkSalePreviewError(formatError(error))
+      })
+      .finally(() => {
+        if (!cancelled) setBulkSalePreviewLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [bulkSalePreviewFilters, selectedCompanyId, showBulkSaleCreatePanel])
+
   const reloadOutbounds = async () => {
     await Promise.all([reloadOutboundDash(), reloadOutboundList()])
   }
@@ -771,6 +999,40 @@ export default function OrdersPage() {
     setSelectedOutbound(null)
     handleOutboundQueueChange("sale_unregistered")
     navigate("/orders?tab=outbound", { replace: true })
+  }
+
+  const handleBulkCreateSales = async () => {
+    const targets = bulkSaleCreatePlan.ready
+    if (targets.length === 0 || bulkSaleCreating || bulkSalePreviewLoading || bulkSalePreviewError) return
+
+    setBulkSaleCreating(true)
+    setBulkSaleCreateError("")
+    try {
+      const results = await createSalesInBatches(targets)
+      const successCount = results.filter((result) => result.status === "fulfilled").length
+      const failures = results.filter(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      )
+      const failedCount = failures.length
+      const firstFailure = failures[0] ? ` · ${formatError(failures[0].reason)}` : ""
+
+      if (failedCount > 0) {
+        const message = `매출 ${successCount}건 생성, ${failedCount}건 실패${firstFailure}`
+        setBulkSaleCreateError(message)
+        if (successCount === 0) {
+          notify.error(message)
+          return
+        }
+        notify.warning(message)
+      } else {
+        notify.success(`매출 ${successCount}건을 생성했습니다`)
+      }
+
+      await Promise.all([reloadOutbounds(), reloadSales()])
+      openInvoicePendingQueue()
+    } finally {
+      setBulkSaleCreating(false)
+    }
   }
 
   const openInvoicePendingQueue = () => {
@@ -1487,6 +1749,80 @@ export default function OrdersPage() {
                     />
                   ) : (
                     <>
+                      {showBulkSaleCreatePanel && (
+                        <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
+                          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto] lg:items-center">
+                            <div>
+                              <div className="text-sm font-semibold text-[var(--ink)]">매출 자동 생성 미리보기</div>
+                              <div className="mt-1 text-xs text-[var(--ink-2)]">
+                                {bulkSalePreviewLoading
+                                  ? `조건 전체 대상 확인 중 · ${outboundsTotal}건`
+                                  : `조건 전체 생성 예정 ${bulkSaleCreatePlan.ready.length}건 · 제외 ${bulkSaleCreatePlan.blocked.length}건 · 처리 후 계산서 미발행으로 이동`}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-4 gap-3 text-right text-xs">
+                              <div>
+                                <div className="text-[var(--ink-3)]">수량</div>
+                                <div className="mono font-semibold">
+                                  {bulkSalePreviewLoading ? "—" : formatNumber(bulkSaleCreatePlan.quantity)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[var(--ink-3)]">용량</div>
+                                <div className="mono font-semibold">
+                                  {bulkSalePreviewLoading ? "—" : formatKw(bulkSaleCreatePlan.capacityKw)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[var(--ink-3)]">공급가</div>
+                                <div className="mono font-semibold">
+                                  {bulkSalePreviewLoading ? "—" : formatNumber(bulkSaleCreatePlan.supplyAmount)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[var(--ink-3)]">합계</div>
+                                <div className="mono font-semibold">
+                                  {bulkSalePreviewLoading ? "—" : formatNumber(bulkSaleCreatePlan.totalAmount)}
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-8 gap-1.5"
+                              disabled={
+                                bulkSalePreviewLoading ||
+                                !!bulkSalePreviewError ||
+                                bulkSaleCreating ||
+                                bulkSaleCreatePlan.ready.length === 0
+                              }
+                              onClick={handleBulkCreateSales}
+                            >
+                              {bulkSaleCreating || bulkSalePreviewLoading ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              )}
+                              {bulkSalePreviewLoading ? "대상 확인 중" : `매출 ${bulkSaleCreatePlan.ready.length}건 생성`}
+                            </Button>
+                          </div>
+                          {!bulkSalePreviewLoading && bulkSaleCreatePlan.reasonCounts.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {bulkSaleCreatePlan.reasonCounts.map((item) => (
+                                <span key={item.reason} className="sf-pill warn">
+                                  {item.reason} {item.count}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {bulkSalePreviewError && (
+                            <div className="mt-2 text-xs text-destructive">{bulkSalePreviewError}</div>
+                          )}
+                          {bulkSaleCreateError && (
+                            <div className="mt-2 text-xs text-destructive">{bulkSaleCreateError}</div>
+                          )}
+                        </div>
+                      )}
                       {obLoading && outbounds.length === 0 ? (
                         <SkeletonRows rows={8} />
                       ) : (
@@ -1496,6 +1832,7 @@ export default function OrdersPage() {
                           pinning={outboundColPin.pinning}
                           onPinningChange={outboundColPin.setPinning}
                           onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
+                          automationStatus={showBulkSaleCreatePanel ? getOutboundAutomationStatus : undefined}
                           serverMode={{
                             pageIndex: obPageIndex,
                             pageSize: obPageSize,

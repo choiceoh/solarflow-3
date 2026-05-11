@@ -94,6 +94,31 @@
 
 ---
 
+## 2026-05-11 세션 — 매출 미등록 큐 일괄 자동 생성
+
+### 완료
+- 매출 미등록 출고 큐에 `매출 자동 생성 미리보기` 패널 추가
+- 현재 필터 조건 전체를 1000건 단위로 다시 확인해 생성 가능/제외 건수를 집계
+- 자동 생성 제외 사유 표시
+  - 이미 매출 있음, 정상 출고 아님, 판매 용도 아님, 거래처 없음, Wp단가 없음, 수량 없음, 규격 없음
+- 출고 목록에 `자동매출` 상태 컬럼 추가
+  - 생성 가능 건은 `생성 가능`, 제외 건은 `제외`와 사유를 표시
+- 생성 가능 출고를 8건씩 묶어 `/api/v1/sales`로 일괄 생성
+  - 일부 실패가 있어도 성공 가능한 건은 계속 처리
+  - 실패 요약은 토스트와 패널에 표시
+- 생성 성공 후 출고/매출 데이터를 새로고침하고 `계산서 미발행` 큐로 자동 이동
+
+### 검증
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `cd frontend && npm run build` 성공
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5111 nodes / 8309 edges / 411 communities (`graph.html`은 노드 수 초과로 생략)
+
+---
+
 ## 2026-05-11 세션 — 가격예측 신뢰도/채택 플로우 + CI lock 안정화
 
 ### 완료

@@ -16,19 +16,26 @@ const OUTBOUND_SERVER_SORTABLE_COLUMNS = new Set([
   "status",
 ])
 
+export interface OutboundAutomationStatus {
+  label: string
+  reason?: string
+  tone: "pos" | "warn" | "ghost"
+}
+
 interface Props {
   items: Outbound[]
   hidden: Set<string>
   pinning?: ColumnPinningState
   onPinningChange?: (next: ColumnPinningState) => void
   onSelect: (item: Outbound) => void
+  automationStatus?: (item: Outbound) => OutboundAutomationStatus | null
   globalFilter?: string
   /** 서버사이드 페이지네이션·정렬 — 지정 시 클라이언트 pageSize 무시. */
   serverMode?: MetaTableServerMode
 }
 
-function buildColumns(): ColumnDef<Outbound>[] {
-  return [
+function buildColumns(automationStatus?: (item: Outbound) => OutboundAutomationStatus | null): ColumnDef<Outbound>[] {
+  const cols: ColumnDef<Outbound>[] = [
     {
       key: "outbound_date",
       label: "출고일",
@@ -149,13 +156,36 @@ function buildColumns(): ColumnDef<Outbound>[] {
         ),
       sortAccessor: (ob) => ob.sale?.tax_invoice_date ?? (ob.sale ? "0" : ""),
     },
+  ]
+
+  if (automationStatus) {
+    cols.push({
+      key: "sale_automation",
+      label: "자동매출",
+      hideable: true,
+      cell: (ob) => {
+        const status = automationStatus(ob)
+        if (!status) return "—"
+        return (
+          <span className={`sf-pill ${status.tone}`} title={status.reason}>
+            {status.label}
+          </span>
+        )
+      },
+      sortAccessor: (ob) => automationStatus(ob)?.label ?? "",
+    })
+  }
+
+  cols.push(
     {
       key: "status",
       label: "상태",
       cell: (ob) => <OutboundStatusBadge status={ob.status} />,
       sortAccessor: (ob) => ob.status,
     },
-  ]
+  )
+
+  return cols
 }
 
 export const OUTBOUND_COLUMN_META: ColumnVisibilityMeta[] = buildColumns().map(
@@ -168,6 +198,7 @@ function OutboundListTable({
   pinning,
   onPinningChange,
   onSelect,
+  automationStatus,
   globalFilter,
   serverMode,
 }: Props) {
@@ -178,7 +209,7 @@ function OutboundListTable({
   return (
     <MetaTable
       tableId={OUTBOUND_TABLE_ID}
-      columns={buildColumns()}
+      columns={buildColumns(automationStatus)}
       hidden={hidden}
       pinning={pinning}
       onPinningChange={onPinningChange}
