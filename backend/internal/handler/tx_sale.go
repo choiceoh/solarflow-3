@@ -491,6 +491,7 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	var outbounds []saleOutboundRow
 	var products []saleProductRow
 	var partners []salePartnerRow
+	var receiptMatches []receiptMatchTargetAmountRow
 
 	// 5 enrich 테이블 모두 fetchAllFromTable 헬퍼로 청크 페이지네이션 (D-064 PR 36).
 	// PostgREST db-max-rows=1000 cap 으로 단일 Range 호출 시 첫 1000행만 응답 →
@@ -531,6 +532,13 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	} else {
 		log.Printf("[매출 enrich] partners 조회 실패 — 거래처명 비표시: %v", err)
 	}
+	if data, err := fetchAllFromTable(h.DB, "receipt_matches", "outbound_id, sale_id, matched_amount"); err == nil {
+		if err := json.Unmarshal(data, &receiptMatches); err != nil {
+			log.Printf("[매출 enrich] receipt_matches 디코딩 실패 — 수금상태 미표시: %v", err)
+		}
+	} else {
+		log.Printf("[매출 enrich] receipt_matches 조회 실패 — 수금상태 미표시: %v", err)
+	}
 
 	orderMap := make(map[string]saleOrderRow, len(orders))
 	for _, o := range orders {
@@ -552,24 +560,58 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	for _, p := range partners {
 		partnerMap[p.PartnerID] = p
 	}
+	collectedBySaleID := make(map[string]float64)
+	collectedByOutboundID := make(map[string]float64)
+	for _, match := range receiptMatches {
+		if match.SaleID != nil && *match.SaleID != "" {
+			collectedBySaleID[*match.SaleID] += match.MatchedAmount
+			continue
+		}
+		if match.OutboundID != nil && *match.OutboundID != "" {
+			collectedByOutboundID[*match.OutboundID] += match.MatchedAmount
+		}
+	}
 
 	items := make([]model.SaleListItem, 0, len(sales))
 	for _, sale := range sales {
+		collectedAmount := collectedBySaleID[sale.SaleID]
+		if sale.OutboundID != nil && *sale.OutboundID != "" {
+			collectedAmount += collectedByOutboundID[*sale.OutboundID]
+		}
+		outstandingAmount := 0.0
+		receiptStatus := "unknown"
+		if sale.TotalAmount != nil && *sale.TotalAmount > 0 {
+			outstandingAmount = *sale.TotalAmount - collectedAmount
+			if outstandingAmount < 0 {
+				outstandingAmount = 0
+			}
+			switch {
+			case outstandingAmount <= receiptMatchAmountEpsilon:
+				receiptStatus = "paid"
+			case collectedAmount > receiptMatchAmountEpsilon:
+				receiptStatus = "partial"
+			default:
+				receiptStatus = "unpaid"
+			}
+		}
 		item := model.SaleListItem{
-			SaleID:         sale.SaleID,
-			OutboundID:     sale.OutboundID,
-			OrderID:        sale.OrderID,
-			CustomerID:     sale.CustomerID,
-			Quantity:       0,
-			CapacityKw:     sale.CapacityKw,
-			UnitPriceWp:    sale.UnitPriceWp,
-			UnitPriceEa:    sale.UnitPriceEa,
-			SupplyAmount:   sale.SupplyAmount,
-			VatAmount:      sale.VatAmount,
-			TotalAmount:    sale.TotalAmount,
-			TaxInvoiceDate: sale.TaxInvoiceDate,
-			Status:         sale.Status,
-			Sale:           sale,
+			SaleID:            sale.SaleID,
+			OutboundID:        sale.OutboundID,
+			OrderID:           sale.OrderID,
+			CustomerID:        sale.CustomerID,
+			Quantity:          0,
+			CapacityKw:        sale.CapacityKw,
+			UnitPriceWp:       sale.UnitPriceWp,
+			UnitPriceEa:       sale.UnitPriceEa,
+			SupplyAmount:      sale.SupplyAmount,
+			VatAmount:         sale.VatAmount,
+			TotalAmount:       sale.TotalAmount,
+			CollectedAmount:   collectedAmount,
+			OutstandingAmount: outstandingAmount,
+			ReceiptStatus:     receiptStatus,
+			TaxInvoiceDate:    sale.TaxInvoiceDate,
+			Status:            sale.Status,
+			Sale:              sale,
 		}
 		if sale.Quantity != nil {
 			item.Quantity = *sale.Quantity

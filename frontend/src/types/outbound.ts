@@ -2,6 +2,7 @@
 
 export type OutboundStatus = "active" | "cancel_pending" | "cancelled"
 export type SaleStatus = "active" | "cancelled"
+export type SaleReceiptStatus = "unknown" | "unpaid" | "partial" | "paid"
 export type UsageCategory =
   | "sale"
   | "sale_spare"
@@ -114,6 +115,9 @@ export interface SaleListItem {
   supply_amount?: number
   vat_amount?: number
   total_amount?: number
+  collected_amount?: number
+  outstanding_amount?: number
+  receipt_status?: SaleReceiptStatus
   tax_invoice_date?: string
   status?: SaleStatus
   sale: Sale

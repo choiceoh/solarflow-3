@@ -211,11 +211,36 @@ const sales = [
   { sale_id: 'sale-2604-017-1', outbound_id: 'ob-2604-017-1', order_id: 'ord-2604-017', customer_id: 'ptn-hanbit', customer_name: '한빛에너지', quantity: 2200, capacity_kw: 1276, unit_price_wp: 398, unit_price_ea: 230840, supply_amount: 507848000, vat_amount: 50784800, total_amount: 558632800, status: 'active' },
 ];
 
-const saleListItems = sales.map((sale) => {
-  const outbound = outbounds.find((item) => item.outbound_id === sale.outbound_id);
-  const order = orders.find((item) => item.order_id === sale.order_id);
-  return { ...sale, outbound_date: outbound?.outbound_date, order_date: order?.order_date, order_number: order?.order_number, company_id: outbound?.company_id, product_id: outbound?.product_id, product_name: outbound?.product_name, product_code: outbound?.product_code, spec_wp: outbound?.spec_wp, site_name: outbound?.site_name, sale };
-});
+function saleListRows() {
+  return sales.map((sale) => {
+    const outbound = outbounds.find((item) => item.outbound_id === sale.outbound_id);
+    const order = orders.find((item) => item.order_id === sale.order_id);
+    const collected = receiptMatches.reduce((sum, match) => {
+      if (match.sale_id === sale.sale_id) return sum + Number(match.matched_amount ?? 0);
+      if (!match.sale_id && match.outbound_id === sale.outbound_id) return sum + Number(match.matched_amount ?? 0);
+      return sum;
+    }, 0);
+    const total = Number(sale.total_amount ?? 0);
+    const outstanding = Math.max(0, total - collected);
+    const receiptStatus = total <= 0 ? 'unknown' : outstanding <= 0 ? 'paid' : collected > 0 ? 'partial' : 'unpaid';
+    return {
+      ...sale,
+      outbound_date: outbound?.outbound_date,
+      order_date: order?.order_date,
+      order_number: order?.order_number,
+      company_id: outbound?.company_id,
+      product_id: outbound?.product_id,
+      product_name: outbound?.product_name,
+      product_code: outbound?.product_code,
+      spec_wp: outbound?.spec_wp,
+      site_name: outbound?.site_name,
+      collected_amount: collected,
+      outstanding_amount: outstanding,
+      receipt_status: receiptStatus,
+      sale,
+    };
+  });
+}
 
 const receipts = [
   { receipt_id: 'rcp-2604-018', customer_id: 'ptn-solarnet', customer_name: '솔라넷(주)', receipt_date: '2026-04-30', amount: 106656000, bank_account: '하나 123-456', memo: '목업 수금', matched_total: 106656000, remaining: 0 },
@@ -653,7 +678,7 @@ function turnoverResponse() {
 function marginAnalysisResponse(body: MockRow = {}) {
   const customerId = typeof body.customer_id === 'string' ? body.customer_id : '';
   const manufacturerId = typeof body.manufacturer_id === 'string' ? body.manufacturer_id : '';
-  const rows = saleListItems.filter((item) => {
+  const rows = saleListRows().filter((item) => {
     if (customerId && item.customer_id !== customerId) return false;
     if (manufacturerId) {
       const product = products.find((p) => p.product_id === item.product_id);
@@ -1020,6 +1045,46 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     return clone(row as T);
   }
 
+  if (url.pathname === '/api/v1/receipt-matches/complete' && method === 'POST') {
+    const sale = sales.find((item) =>
+      (body.sale_id && item.sale_id === body.sale_id) ||
+      (body.outbound_id && item.outbound_id === body.outbound_id)
+    );
+    if (!sale) throw new Error('목업 매출을 찾을 수 없습니다');
+    const item = saleListRows().find((row) => row.sale_id === sale.sale_id);
+    const outstanding = Math.max(0, Number(item?.outstanding_amount ?? sale.total_amount ?? 0));
+    if (outstanding <= 0) throw new Error('이미 수금 완료된 매출입니다');
+    const receipt = {
+      receipt_id: `mock-receipt-${Date.now()}`,
+      customer_id: sale.customer_id,
+      customer_name: sale.customer_name,
+      receipt_date: String(body.receipt_date ?? new Date().toISOString().slice(0, 10)),
+      amount: outstanding,
+      bank_account: typeof body.bank_account === 'string' ? body.bank_account : undefined,
+      memo: typeof body.memo === 'string' ? body.memo : '출고/판매 화면 수금완료',
+      matched_total: outstanding,
+      remaining: 0,
+    };
+    const match = {
+      match_id: `mock-match-${Date.now()}`,
+      receipt_id: receipt.receipt_id,
+      outbound_id: sale.outbound_id,
+      sale_id: sale.sale_id,
+      matched_amount: outstanding,
+      outbound_date: item?.outbound_date,
+      site_name: item?.site_name,
+      product_name: item?.product_name,
+    };
+    receipts.push(receipt as (typeof receipts)[number]);
+    receiptMatches.push(match as (typeof receiptMatches)[number]);
+    return clone({
+      receipt,
+      match,
+      matched_amount: outstanding,
+      outstanding_before: outstanding,
+    } as T);
+  }
+
   if (url.pathname.startsWith('/api/v1/price-benchmarks/') && url.pathname.endsWith('/review-status') && method === 'PATCH') {
     const id = endpointId(url.pathname, 'price-benchmarks');
     const status = typeof body.review_status === 'string' ? body.review_status : '';
@@ -1165,7 +1230,7 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     '/api/v1/inventory/allocations': { rows: allocations, idKey: 'alloc_id', collection: 'inventory/allocations' },
     '/api/v1/orders': { rows: orders, idKey: 'order_id', collection: 'orders' },
     '/api/v1/outbounds': { rows: outbounds.map((outbound) => ({ ...outbound, sale: sales.find((sale) => sale.outbound_id === outbound.outbound_id) })), idKey: 'outbound_id', collection: 'outbounds' },
-    '/api/v1/sales': { rows: saleListItems, idKey: 'sale_id', collection: 'sales' },
+    '/api/v1/sales': { rows: saleListRows(), idKey: 'sale_id', collection: 'sales' },
     '/api/v1/receipts': { rows: receipts, idKey: 'receipt_id', collection: 'receipts' },
     '/api/v1/receipt-matches': { rows: receiptMatches, idKey: 'match_id', collection: 'receipt-matches' },
     '/api/v1/declarations': { rows: declarations, idKey: 'declaration_id', collection: 'declarations' },

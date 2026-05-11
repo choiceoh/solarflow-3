@@ -119,6 +119,13 @@ export interface ReceiptMatch {
   matched_amount: number
 }
 
+export interface CompleteReceiptMatchResponse {
+  receipt: Receipt
+  match: ReceiptMatch
+  matched_amount: number
+  outstanding_before: number
+}
+
 export interface OutstandingItem {
   outbound_id: string
   outbound_date?: string
