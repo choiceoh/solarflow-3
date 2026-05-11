@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-162 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력) |
+| DECISIONS | D-001~D-163 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력, D-163 KPI 활성 항목 설정) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -123,6 +123,30 @@
 - `cd frontend && bun run test` 성공 — 11 files / 98 tests (기존 act warning 출력)
 - `git diff --check` 성공
 - `graphify update .` 성공 — 5103 nodes / 8293 edges / 415 communities (`graph.html`은 노드 수 초과로 생략)
+
+---
+
+## 2026-05-11 세션 — KPI 활성 항목 사용자 설정
+
+### 완료
+- KPI 타일 표시 여부를 사용자별로 설정 가능하게 공통화
+  - `user_profiles.preferences.kpi_hidden`에 화면/탭 scope별 숨김 KPI key 저장
+  - KPI 그리드 상단에 공통 `KPI` 설정 메뉴 추가
+  - 최소 1개 KPI는 항상 표시되도록 보호
+- 주요 KPI 화면에 연결
+  - 재고, 구매/입고, 수주/출고/판매/수금, 은행/LC, 통관/부대비용, 매출 분석, 구매 이력
+  - MasterConsole 기반 가격예측, 결재안, 엑셀 입력, 자료실, 관리자 설정, 공사 현장
+- 설계 정본과 D-163 결정 기록 동기화
+
+### 검증
+- `cd frontend && npm install --no-package-lock` 성공 — 로컬 의존성 설치, lockfile 미생성
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5112 nodes / 8288 edges / 413 communities
+
+### 알려진 제한
+- 이 워크트리에는 `bun` 실행 파일이 없어 `bun run test`는 실행하지 못함. 빌드는 `npm run build`로 검증.
 
 ---
 

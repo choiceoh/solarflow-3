@@ -367,6 +367,7 @@ export default function ConstructionSitesPage() {
         description={companyName ? `${companyName} 현장과 공급 이력을 연결합니다.` : '법인 선택 후 현장, 용량, 공급 이력을 관리합니다.'}
         tableTitle="현장 목록"
         tableSub={`${sites.length.toLocaleString()}개 · ${typeFilter === 'all' ? '전체' : typeFilter.toUpperCase()}`}
+        kpiScope="construction-sites"
         actions={
           <Button
             size="sm"

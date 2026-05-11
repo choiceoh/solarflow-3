@@ -29,6 +29,7 @@ import IncomingTable from '@/components/inventory/IncomingTable';
 import ForecastTable from '@/components/inventory/ForecastTable';
 import ModuleDemandForecastPanel from '@/components/inventory/ModuleDemandForecastPanel';
 import { CardB, CommandTopLine, FilterButton, FilterChips, RailBlock, TileB } from '@/components/command/MockupPrimitives';
+import { KpiStrip } from '@/components/command/KpiStrip';
 import { flatSpark } from '@/templates/sparkUtils';
 import { useFxSpot } from '@/hooks/usePublicFx';
 import { useMetalSpot } from '@/hooks/usePublicMetal';
@@ -594,56 +595,72 @@ export default function InventoryPage() {
     activeTab === 'incoming' ? 'L/C · B/L 예정분' :
     activeTab === 'forecast' ? `표시 ${forecastProducts.length.toLocaleString('ko-KR')}건 · 현재 관련 ${activeForecastProductCount.toLocaleString('ko-KR')}건` :
     '제조사 × 품번 · 단위 MW';
+  const inventoryMetrics = [
+    {
+      lbl: '가용',
+      v: totalSecured.value,
+      numericValue: totalSecuredKwRaw,
+      formatter: (n: number) => formatKwValueOnly(n, totalSecuredUnit),
+      u: totalSecured.unit,
+      sub: `${inventoryStats?.productCount.toLocaleString('ko-KR') ?? '0'}개 품목`,
+      tone: 'solar' as const,
+      spark: flatSpark(totalSecuredKwRaw),
+      metricId: 'inventory.total_secured',
+    },
+    {
+      lbl: '실재고',
+      v: stockAvailable.value,
+      numericValue: stockAvailableKwRaw,
+      formatter: (n: number) => formatKwValueOnly(n, stockAvailableUnit),
+      u: stockAvailable.unit,
+      sub: '창고 보유 현재고',
+      tone: 'ink' as const,
+      spark: flatSpark(stockAvailableKwRaw),
+      metricId: 'inventory.physical',
+    },
+    {
+      lbl: '미착품',
+      v: incomingAvailable.value,
+      numericValue: incomingAvailableKwRaw,
+      formatter: (n: number) => formatKwValueOnly(n, incomingAvailableUnit),
+      u: incomingAvailable.unit,
+      sub: `운송 중 ${incomingRailItems.length.toLocaleString('ko-KR')}건`,
+      tone: 'info' as const,
+      spark: flatSpark(incomingAvailableKwRaw),
+      metricId: 'inventory.incoming',
+    },
+    {
+      lbl: '예약 차감',
+      v: pendingKw.value,
+      numericValue: pendingKwRaw,
+      formatter: (n: number) => formatKwValueOnly(n, pendingUnit),
+      u: pendingKw.unit,
+      sub: `${allocationStats.pendingCount.toLocaleString('ko-KR')}건 · ${allocationStats.holdCount.toLocaleString('ko-KR')}건 보류`,
+      tone: 'warn' as const,
+      spark: flatSpark(pendingKwRaw),
+      metricId: 'inventory.allocations',
+    },
+  ];
 
   return (
     <div className="sf-inventory-shell">
       <div className="sf-inventory-main">
-        <div className="sf-command-kpis sf-inventory-kpis">
-          <TileB
-            lbl="가용"
-            v={totalSecured.value}
-            numericValue={totalSecuredKwRaw}
-            formatter={(n) => formatKwValueOnly(n, totalSecuredUnit)}
-            u={totalSecured.unit}
-            sub={`${inventoryStats?.productCount.toLocaleString('ko-KR') ?? '0'}개 품목`}
-            tone="solar"
-            spark={flatSpark(totalSecuredKwRaw)}
-            metricId="inventory.total_secured"
-          />
-          <TileB
-            lbl="실재고"
-            v={stockAvailable.value}
-            numericValue={stockAvailableKwRaw}
-            formatter={(n) => formatKwValueOnly(n, stockAvailableUnit)}
-            u={stockAvailable.unit}
-            sub="창고 보유 현재고"
-            tone="ink"
-            spark={flatSpark(stockAvailableKwRaw)}
-            metricId="inventory.physical"
-          />
-          <TileB
-            lbl="미착품"
-            v={incomingAvailable.value}
-            numericValue={incomingAvailableKwRaw}
-            formatter={(n) => formatKwValueOnly(n, incomingAvailableUnit)}
-            u={incomingAvailable.unit}
-            sub={`운송 중 ${incomingRailItems.length.toLocaleString('ko-KR')}건`}
-            tone="info"
-            spark={flatSpark(incomingAvailableKwRaw)}
-            metricId="inventory.incoming"
-          />
-          <TileB
-            lbl="예약 차감"
-            v={pendingKw.value}
-            numericValue={pendingKwRaw}
-            formatter={(n) => formatKwValueOnly(n, pendingUnit)}
-            u={pendingKw.unit}
-            sub={`${allocationStats.pendingCount.toLocaleString('ko-KR')}건 · ${allocationStats.holdCount.toLocaleString('ko-KR')}건 보류`}
-            tone="warn"
-            spark={flatSpark(pendingKwRaw)}
-            metricId="inventory.allocations"
-          />
-        </div>
+        <KpiStrip metrics={inventoryMetrics} scopeId="inventory" gridClassName="sf-inventory-kpis">
+          {(metric) => (
+            <TileB
+              key={metric.lbl}
+              lbl={metric.lbl}
+              v={metric.v}
+              numericValue={metric.numericValue}
+              formatter={metric.formatter}
+              u={metric.u}
+              sub={metric.sub}
+              tone={metric.tone}
+              spark={metric.spark}
+              metricId={metric.metricId}
+            />
+          )}
+        </KpiStrip>
 
         <CommandTopLine title={inventoryTitle} sub={inventorySub} right={inventoryCardControls} />
 
