@@ -50,3 +50,19 @@ func TestPriceBenchmarkValidate_BlocksGlobalRegion(t *testing.T) {
 		t.Fatalf("global region 차단 에러 기대, got: %s", msg)
 	}
 }
+
+func TestPriceBenchmarkReviewStatusRequestValidate(t *testing.T) {
+	for _, status := range []string{"candidate", "accepted", "rejected", " Accepted "} {
+		req := UpdatePriceBenchmarkReviewStatusRequest{ReviewStatus: status}
+		req.Normalize()
+		if msg := req.Validate(); msg != "" {
+			t.Fatalf("허용 상태 %q 는 통과해야 합니다, got: %s", status, msg)
+		}
+	}
+
+	req := UpdatePriceBenchmarkReviewStatusRequest{ReviewStatus: "archived"}
+	req.Normalize()
+	if msg := req.Validate(); !strings.Contains(msg, "review_status") {
+		t.Fatalf("알 수 없는 review_status 차단 에러 기대, got: %s", msg)
+	}
+}

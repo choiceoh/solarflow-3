@@ -5,14 +5,55 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | Excel Import Hub 실데이터 샘플 리허설 + PO 변경계약/라인 진행률 운영 검증 + study 학습 페이지 1차 UI |
+| 다음 작업 | 가격예측 채택 상태 운영 반영 확인, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-160 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA) |
+| DECISIONS | D-001~D-161 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-11 세션 — 가격예측 신뢰도/채택 플로우 + CI lock 안정화
+
+### 완료
+- 가격예측 관측값 검토 상태 추가
+  - `price_benchmarks.review_status` 마이그레이션 추가 (`candidate` / `accepted` / `rejected`)
+  - 기본값은 `candidate`, DB CHECK + Go validation 으로 허용값 고정
+  - `PATCH /api/v1/price-benchmarks/{id}/review-status` 추가
+  - feature catalog / route snapshot 동기화
+- `/price-forecast` 화면 보강
+  - 채택 상태 필터 추가 (`검토 대상`, `후보`, `채택`, `제외`, `전체`)
+  - 기본 화면은 `rejected`를 제외하고 `candidate + accepted`를 표시
+  - 표에서 행별 `채택` / `제외` / `후보` 전환 지원
+  - 선택 행 일괄 `채택` / `제외` 지원
+  - 삭제는 기존처럼 실제 제거용으로 유지
+- dev mock API 보강
+  - 목업 관측값에 review_status 추가
+  - PATCH 상태 변경을 세션 중 기억하도록 처리
+- CI/의존성 lock 안정화
+  - `frontend`에 `lock:check` 스크립트 추가
+  - CI frontend job에서 `bun install --lockfile-only` 후 `bun.lock` diff 를 빌드 전에 검사
+  - vite/tsc incremental cache key에 `package.json + bun.lock` 모두 반영
+- 설계 정본 / D-161 결정 기록 동기화
+
+### 검증
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공
+- `cd backend && go test ./internal/model ./internal/router ./internal/feature` 성공
+- `cd backend && go test ./internal/handler` 성공
+- `cd backend && go test ./...` 성공
+- `cd frontend && npx --yes bun@1.3.13 run lock:check` 성공
+- `cd frontend && npx --yes bun@1.3.13 install --frozen-lockfile` 성공
+- `cd frontend && npx --yes bun@1.3.13 run build` 성공
+- `cd frontend && npx --yes bun@1.3.13 run test` 성공 — 기존 AllocationForm/POListTable React `act(...)` 경고 출력
+- `git diff --check` 성공
+- `graphify update .` 성공
+
+### 알려진 제한
+- 이 worktree 환경에서는 로컬 PostgreSQL socket 이 없어 `psql -d solarflow -f backend/migrations/091_price_benchmark_review_status.sql` 적용이 실패했다. 운영/로컬 DB 적용 시 migration 적용 후 PostgREST schema cache reload 와 `backend/scripts/check_schema.sh` 확인이 필요하다.
+- `backend/scripts/check_schema.sh` 는 현재 연결 환경에서 기준 테이블들이 없다고 보고해 실패했다. 실제 운영 DB에 migration 적용 후 재실행해야 한다.
 
 ---
 

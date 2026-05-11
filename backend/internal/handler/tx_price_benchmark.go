@@ -358,6 +358,37 @@ func (h *PriceBenchmarkHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, model.StatusResponse{Status: "deleted"})
 }
 
+// UpdateReviewStatus — PATCH /api/v1/price-benchmarks/{id}/review-status
+// 비유: 가격 점을 후보/채택/제외 칸으로 옮겨 차트 기준선을 다듬는다.
+func (h *PriceBenchmarkHandler) UpdateReviewStatus(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.RespondError(w, http.StatusBadRequest, "benchmark_id가 누락됐습니다")
+		return
+	}
+	var req model.UpdatePriceBenchmarkReviewStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
+		return
+	}
+	req.Normalize()
+	if msg := req.Validate(); msg != "" {
+		response.RespondError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	_, _, err := h.DB.From("price_benchmarks").
+		Update(map[string]string{"review_status": req.ReviewStatus}, "", "").
+		Eq("benchmark_id", id).
+		Execute()
+	if err != nil {
+		log.Printf("[가격 벤치마크 검토 상태 변경 실패] id=%s status=%s err=%v", id, req.ReviewStatus, err)
+		response.RespondError(w, http.StatusInternalServerError, "가격 벤치마크 검토 상태 변경에 실패했습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, model.StatusResponse{Status: "ok"})
+}
+
 // AIRefresh — POST /api/v1/price-benchmarks/ai-refresh
 func (h *PriceBenchmarkHandler) AIRefresh(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())

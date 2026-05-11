@@ -1,3 +1,5 @@
+export type PriceBenchmarkReviewStatus = 'candidate' | 'accepted' | 'rejected'
+
 export interface PriceBenchmark {
   benchmark_id: string
   run_id?: string | null
@@ -19,6 +21,7 @@ export interface PriceBenchmark {
   project_segment?: string | null
   technology?: string | null
   confidence?: number | null
+  review_status?: PriceBenchmarkReviewStatus | null
   source_url?: string | null
   raw_excerpt?: string | null
   notes?: string | null

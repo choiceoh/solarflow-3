@@ -13,6 +13,12 @@ const (
 	PriceBenchmarkExcerptMaxRunes = 1200
 )
 
+const (
+	PriceBenchmarkReviewCandidate = "candidate"
+	PriceBenchmarkReviewAccepted  = "accepted"
+	PriceBenchmarkReviewRejected  = "rejected"
+)
+
 var priceBenchmarkAllowedMarketRegions = []string{
 	"fob_china",
 	"china_domestic",
@@ -31,6 +37,12 @@ var priceBenchmarkBlockedMetricSet = map[string]bool{
 	"ddp_us": true,
 }
 
+var priceBenchmarkAllowedReviewStatusSet = map[string]bool{
+	PriceBenchmarkReviewCandidate: true,
+	PriceBenchmarkReviewAccepted:  true,
+	PriceBenchmarkReviewRejected:  true,
+}
+
 // PriceBenchmarkAllowedMarketRegions — 가격예측 수집 허용 지역 목록.
 // 비유: 장부에 찍어도 되는 시장 이름표만 복사해 건넨다.
 func PriceBenchmarkAllowedMarketRegions() []string {
@@ -43,6 +55,11 @@ func PriceBenchmarkAllowedMarketRegions() []string {
 // 비유: 미국처럼 눈금이 다른 가격표가 섞이지 않게 입구에서 확인한다.
 func IsPriceBenchmarkMarketRegionAllowed(region string) bool {
 	return priceBenchmarkAllowedMarketRegionSet[normalizeKey(region)]
+}
+
+// IsPriceBenchmarkReviewStatusAllowed — 운영자가 고를 수 있는 검토 상태인지 확인한다.
+func IsPriceBenchmarkReviewStatusAllowed(status string) bool {
+	return priceBenchmarkAllowedReviewStatusSet[normalizeKey(status)]
 }
 
 // PriceBenchmark — 외부 태양광 가격 벤치마크의 한 시점 관측값.
@@ -68,6 +85,7 @@ type PriceBenchmark struct {
 	ProjectSegment *string  `json:"project_segment"`
 	Technology     *string  `json:"technology"`
 	Confidence     *float64 `json:"confidence"`
+	ReviewStatus   string   `json:"review_status"`
 	SourceURL      *string  `json:"source_url"`
 	RawExcerpt     *string  `json:"raw_excerpt"`
 	Notes          *string  `json:"notes"`
@@ -221,6 +239,25 @@ func (req *CreatePriceBenchmarkRequest) Validate() string {
 // PriceBenchmarkAIRefreshRequest — 가격예측 화면의 "AI 지표 갱신" 요청.
 type PriceBenchmarkAIRefreshRequest struct {
 	SourceKeys []string `json:"source_keys,omitempty"`
+}
+
+// UpdatePriceBenchmarkReviewStatusRequest — 관측값을 구매 판단 기준선으로 채택/제외한다.
+type UpdatePriceBenchmarkReviewStatusRequest struct {
+	ReviewStatus string `json:"review_status"`
+}
+
+func (req *UpdatePriceBenchmarkReviewStatusRequest) Normalize() {
+	req.ReviewStatus = normalizeKey(req.ReviewStatus)
+}
+
+func (req *UpdatePriceBenchmarkReviewStatusRequest) Validate() string {
+	if req.ReviewStatus == "" {
+		return "review_status는 필수 항목입니다"
+	}
+	if !IsPriceBenchmarkReviewStatusAllowed(req.ReviewStatus) {
+		return "review_status는 candidate, accepted, rejected 중 하나여야 합니다"
+	}
+	return ""
 }
 
 func normalizeKey(value string) string {

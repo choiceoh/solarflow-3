@@ -650,6 +650,7 @@ func (h *PriceBenchmarkHandler) RegisterRoutes(r chi.Router, g middleware.Gates)
 		r.Get("/our-prices", h.OurPrices)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Post("/ai-refresh", h.AIRefresh)
+		r.With(g.Write).Patch("/{id}/review-status", h.UpdateReviewStatus)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
 }
