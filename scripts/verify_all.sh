@@ -29,8 +29,24 @@ require_cmd() {
   fi
 }
 
+run_worktree_setup() {
+  if [[ "${SKIP_WORKTREE_SETUP:-0}" == "1" ]]; then
+    skip_step "Worktree setup" "SKIP_WORKTREE_SETUP=1"
+    return
+  fi
+
+  if [[ -x "${ROOT_DIR}/scripts/setup_worktree.sh" ]]; then
+    run_step "Worktree setup" "${ROOT_DIR}/scripts/setup_worktree.sh"
+    export PATH="${HOME}/.bun/bin:${HOME}/.local/bin:${PATH}"
+  else
+    skip_step "Worktree setup" "scripts/setup_worktree.sh not found"
+  fi
+}
+
 echo "SolarFlow full verification"
 echo "root: ${ROOT_DIR}"
+
+run_worktree_setup
 
 require_cmd go
 require_cmd cargo
