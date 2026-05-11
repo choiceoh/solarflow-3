@@ -16,6 +16,21 @@
 
 ---
 
+## 2026-05-11 세션 — 매출 분석 우측 패널 이익 신뢰도 표시 분리
+
+### 완료
+- `/sales-analysis` 우측 패널의 `이익 신뢰도` 블록에서 큰 숫자를 이익률이 아니라 원가 연결률로 변경
+- 계산 이익률은 같은 블록 안의 별도 보조 행으로 라벨을 붙여 분리 표시
+- 이익 신뢰도(원가 연결률)와 이익률이 같은 지표처럼 보이던 오해 요소 제거
+
+### 검증
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5233 nodes / 8637 edges / 410 communities (`graph.html`은 노드 수 초과로 생략)
+
+---
+
 ## 2026-05-11 세션 — 출고/판매 원클릭 수금완료 (D-20260511-180114)
 
 ### 완료
