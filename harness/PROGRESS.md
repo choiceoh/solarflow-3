@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-157 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강) |
+| DECISIONS | D-001~D-158 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -114,6 +114,31 @@
 - `cd frontend && bun run test` 성공 — 10 files / 93 tests (기존 act warning 출력)
 - `git diff --check` 성공
 - `graphify update .` 성공 — 4994 nodes / 8090 edges / 408 communities
+
+---
+
+## 2026-05-11 세션 — 수금 부분 매칭 + 잔액 처리 흐름
+
+### 완료
+- 수금 매칭 화면에서 선택한 미수금 행마다 `매칭금액`을 직접 입력 가능
+- 자동 추천/AI 검토 후보의 금액을 행별 입력칸에 반영
+- 선택 합계가 입금 가능액보다 작을 때 선수금 이월 / 다음 정산 이월 / 환불·정산 검토 중 하나를 선택하는 전용 흐름 추가
+- bulk 매칭 API에 `balance_disposition`, `balance_note` 메타데이터를 추가하고, 잔액이 남는데 처리 선택이 없으면 400 처리
+- AI 수금 검토 sanitizer가 안전한 부분 후보(`0 < match_amount <= outstanding_amount`)를 허용하고 `is_partial`을 응답
+- 설계 정본과 D-158 결정 기록 동기화
+
+### 검증
+- `cd backend && go test ./internal/model ./internal/handler` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건 유지
+- `git diff --check` 성공
+- `graphify update .` 성공
+
+### 알려진 제한
+- 현재 실행 환경에 `bun` 명령이 없어 `bun run build/test`는 직접 실행하지 못했고, 프론트 검증은 동일 소스의 `npm run build`/`npm run lint`로 수행.
 
 ---
 

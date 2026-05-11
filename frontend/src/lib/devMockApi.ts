@@ -885,13 +885,19 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
 
   if (url.pathname === '/api/v1/receipt-matches/bulk' && method === 'POST') {
     const rows = Array.isArray(body.matches) ? body.matches : [];
-    return clone(rows.map((row, index) => ({
+    const matches = rows.map((row, index) => ({
       match_id: `mock-match-${Date.now()}-${index}`,
       receipt_id: body.receipt_id,
       outbound_id: row.outbound_id,
       sale_id: row.sale_id,
       matched_amount: row.matched_amount,
-    })) as T);
+    }));
+    return clone({
+      matches,
+      balance_amount: 0,
+      balance_disposition: body.balance_disposition,
+      balance_note: body.balance_note,
+    } as T);
   }
 
   if (url.pathname === '/api/v1/receipt-matches/ai-suggest' && method === 'POST') {
@@ -907,6 +913,7 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
         product_name: 'JAS-DH580 PERC bifacial',
         outstanding_amount: 558632800,
         match_amount: 558632800,
+        is_partial: false,
         confidence: 0.86,
         reason: '같은 거래처의 장기 미수금이며 단독 후보로 남아 있습니다.',
       }],

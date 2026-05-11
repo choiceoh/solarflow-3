@@ -227,7 +227,8 @@ func buildReceiptMatchAIPrompt(receipt model.Receipt, items []model.OutstandingI
 		Outstanding: make([]receiptMatchAIPromptOutstanding, 0, len(items)),
 		Rules: []string{
 			"candidates는 outstanding 목록의 outbound_id만 사용할 것",
-			"match_amount는 해당 후보의 outstanding_amount 전체 금액과 같아야 함",
+			"match_amount는 0보다 크고 해당 후보의 outstanding_amount를 초과하면 안 됨",
+			"부분 금액은 입금 잔액과 현장/메모 근거가 맞을 때만 제안할 것",
 			"후보 합계는 receipt.remaining을 초과하면 안 됨",
 			"확실하지 않으면 candidates를 빈 배열로 반환할 것",
 			"응답은 설명문 없이 JSON 객체만 반환할 것",
@@ -250,7 +251,7 @@ func buildReceiptMatchAIPrompt(receipt model.Receipt, items []model.OutstandingI
 		return "", "", err
 	}
 	system := `너는 SolarFlow의 수금 매칭 검토 AI다. 같은 거래처의 입금과 미수금 후보를 보고 사람이 확정할 수 있는 후보만 고른다.
-금액 초과, 거래처 불일치, 목록에 없는 outbound_id, 부분금액 추측은 금지한다.
+금액 초과, 거래처 불일치, 목록에 없는 outbound_id, 근거 없는 부분금액 추측은 금지한다.
 반드시 다음 JSON 스키마만 반환한다:
 {"summary":"짧은 한국어 요약","candidates":[{"outbound_id":"...","match_amount":123,"confidence":0.0,"reason":"짧은 이유"}]}`
 	return system, string(payload), nil
@@ -308,10 +309,10 @@ func sanitizeReceiptMatchAIResponse(
 		if !ok || seen[cand.OutboundID] || item.OutstandingAmount <= 0 {
 			continue
 		}
-		if math.Abs(cand.MatchAmount-item.OutstandingAmount) > 1.0 {
+		if cand.MatchAmount <= 0 || cand.MatchAmount > item.OutstandingAmount+receiptMatchAmountEpsilon {
 			continue
 		}
-		if total+item.OutstandingAmount > remaining+receiptMatchAmountEpsilon {
+		if total+cand.MatchAmount > remaining+receiptMatchAmountEpsilon {
 			continue
 		}
 		confidence := cand.Confidence
@@ -325,18 +326,20 @@ func sanitizeReceiptMatchAIResponse(
 		if reason == "" {
 			reason = "AI가 입금액과 미수금 조건을 근거로 후보로 판단했습니다."
 		}
+		isPartial := math.Abs(cand.MatchAmount-item.OutstandingAmount) > 1.0
 		candidates = append(candidates, model.ReceiptMatchAICandidate{
 			OutboundID:        item.OutboundID,
 			OutboundDate:      item.OutboundDate,
 			SiteName:          item.SiteName,
 			ProductName:       item.ProductName,
 			OutstandingAmount: item.OutstandingAmount,
-			MatchAmount:       item.OutstandingAmount,
+			MatchAmount:       cand.MatchAmount,
+			IsPartial:         isPartial,
 			Confidence:        confidence,
 			Reason:            reason,
 		})
 		seen[cand.OutboundID] = true
-		total += item.OutstandingAmount
+		total += cand.MatchAmount
 	}
 
 	summary := strings.TrimSpace(raw.Summary)

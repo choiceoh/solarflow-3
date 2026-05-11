@@ -2,6 +2,7 @@
 
 export type OrderStatus = "received" | "partial" | "completed" | "cancelled"
 export type ReceiptMethod = "purchase_order" | "phone" | "email" | "other"
+export type ReceiptBalanceDisposition = "advance" | "next_settlement" | "refund_review"
 export type ManagementCategory =
   | "sale"
   | "construction"
@@ -125,6 +126,7 @@ export interface AIMatchCandidate {
   product_name: string
   outstanding_amount: number
   match_amount: number
+  is_partial?: boolean
   confidence: number
   reason: string
 }
@@ -159,6 +161,12 @@ export const RECEIPT_METHOD_LABEL: Record<ReceiptMethod, string> = {
   phone: "유선",
   email: "이메일",
   other: "기타",
+}
+
+export const RECEIPT_BALANCE_DISPOSITION_LABEL: Record<ReceiptBalanceDisposition, string> = {
+  advance: "선수금 이월",
+  next_settlement: "다음 정산 이월",
+  refund_review: "환불/정산 검토",
 }
 
 export const MANAGEMENT_CATEGORY_LABEL: Record<ManagementCategory, string> = {
