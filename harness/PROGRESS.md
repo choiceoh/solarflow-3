@@ -12,7 +12,41 @@
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
 | DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-175240 Import Hub 운영 리허설 안전장치) |
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-080/D-081/D-132~D-138 번호 공백 유지) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-11 세션 — KPI 표시 메뉴 위치 정리
+
+### 완료
+- 공통 KPI 표시 메뉴를 KPI 그리드 위 별도 줄에서 화면 우상단 액션 영역으로 이동
+- KPI가 있는 화면에서는 `KPI` 메뉴가 `엑셀 입력` 버튼 옆에 표시되도록 shell slot + portal 구조로 정리
+- shell slot이 없는 테스트/독립 렌더 환경에서는 기존처럼 KPI 그리드 위에 fallback 표시
+- 설계 정본과 D-163 결정 기록의 표시 위치 기준 동기화
+
+### 검증
+- `cd frontend && npm install --no-package-lock` 성공 — 로컬 의존성 설치, lockfile 미생성
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
+- `cd frontend && npm run test` 성공 — 98 tests, 기존 AllocationForm/POListTable React `act(...)` 경고 출력
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5113 nodes / 8289 edges / 410 communities
+## 2026-05-11 세션 — 가격예측 AI 관측값 표 표시 복구
+
+### 완료
+- `/price-forecast` 하단 `AI 수집 관측값` 표가 접히는 문제 수정
+  - 가상 스크롤 컨테이너의 `contain: strict`를 `contain: content`로 완화
+  - 높이가 고정되지 않은 컨테이너에서 브라우저가 표 내용을 크기 계산에서 제외해 항목이 안 보일 수 있던 조건 제거
+
+### 검증
+- `cd frontend && npx --yes bun@1.3.13 install --frozen-lockfile` 성공
+- `cd frontend && npx --yes bun@1.3.13 run build` 성공
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5168 nodes / 8470 edges / 411 communities (`graph.html`은 노드 수 초과로 생략)
+
+### 알려진 제한
+- Playwright 화면 확인은 현재 환경에 Chromium 실행 라이브러리 `libnspr4`가 없어 브라우저 시작 전 실패했다.
 
 ---
 
@@ -54,6 +88,7 @@
 ---
 
 ## 2026-05-11 세션 — 운영 DB migration 반영 확인 플로우 (D-20260511-174700)
+## 2026-05-11 세션 — 운영 DB migration 반영 확인 플로우 (D-166)
 
 ### 완료
 - `scripts/verify_migration.ts` 추가

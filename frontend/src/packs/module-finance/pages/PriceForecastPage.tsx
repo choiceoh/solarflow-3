@@ -1646,7 +1646,7 @@ function BenchmarkVirtualTable({
     <div
       ref={parentRef}
       className="overflow-auto"
-      style={{ maxHeight: 'min(60vh, 720px)', contain: 'strict' }}
+      style={{ maxHeight: 'min(60vh, 720px)', contain: 'content' }}
     >
       <Table className="sf-motion-table">
         <TableHeader className="sticky top-0 z-10 bg-[var(--surface)]">
