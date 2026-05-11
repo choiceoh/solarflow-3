@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료) |
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-080/D-081/D-132~D-138 번호 공백 유지) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -229,6 +229,28 @@
 
 ### 알려진 제한
 - 실제 수집률 증가는 운영 환경의 `SERPER_API_KEY`, source 사이트 응답, 유료 리포트 접근 가능 여부에 좌우된다. 운영에서 AI 수집을 다시 실행해 run evidence/diagnostics를 확인해야 한다.
+
+---
+
+## 2026-05-11 세션 — 매출 분석 브리지/리포트/대체원가 (D-20260511-174821)
+
+### 완료
+- `/sales-analysis`에 대체원가 기준 마진 추가
+  - 원가 미연결 품목에 제조사 평균 / 전체 평균 / 목표마진 역산 기준 원가를 적용
+  - 잠정 이익률 KPI와 품목별 대체원가 표를 추가
+- 이익률 변동 브리지 추가
+  - 최근월과 이전월을 비교해 판매가 효과, 원가 효과, 제품 믹스, 원가 연결률, 총 이익률 변동을 표시
+  - 월별 매출 행을 품번·규격 기준으로 마진 품목에 연결하고, 실제 원가가 없으면 대체원가를 적용
+- 월간 경영 리포트 CSV 내보내기 추가
+  - 화면 필터 범위의 월별 매출/이익/이익률, 계산서 발행 상태, 원가 연결률, 브리지, 대체원가 품목을 포함
+- D-20260511-174821 결정 기록 추가
+
+### 검증
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `cd frontend && npx --yes bun@1.3.13 run test` 성공 — 기존 AllocationForm/POListTable React `act(...)` 경고 출력
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5233 nodes / 8637 edges / 410 communities (`graph.html`은 노드 수 초과로 생략)
 
 ---
 

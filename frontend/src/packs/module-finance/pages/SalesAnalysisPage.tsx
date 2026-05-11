@@ -72,6 +72,7 @@ type PeriodFilter = "all" | "last3" | "year" | "custom"
 type MarginFilter = "all" | "missing_cost" | "low_margin" | "negative_margin"
 type ReconciliationLevel = "good" | "watch" | "risk"
 type ReconciliationKey = "engine_delta" | "pending_invoice" | "missing_cost" | "outstanding"
+type AlternativeCostBasis = "manufacturer_avg" | "portfolio_avg" | "target_margin"
 type MissingCostReasonKey =
   | "fifo_missing"
   | "landed_missing"
@@ -116,6 +117,61 @@ interface ReconciliationRow {
   sub: string
   level: ReconciliationLevel
   count: number
+}
+
+interface AlternativeMarginRow {
+  item: MarginItem
+  missingRevenue: number
+  missingWp: number
+  altCostWp: number
+  altCostKrw: number
+  altCostLabel: string
+  adjustedCost: number
+  adjustedMargin: number
+  adjustedMarginRate: number
+  reasonLabel?: string
+}
+
+interface AlternativeMarginSummary {
+  adjustedMargin: number
+  adjustedMarginRate: number
+  estimatedCost: number
+  estimatedRows: number
+  adjustedCost: number
+}
+
+interface MonthlyManagementRow {
+  month: string
+  revenue: number
+  total: number
+  count: number
+  issued: number
+  pending: number
+  qtyWp: number
+  cost: number
+  margin: number
+  marginRate: number
+  avgSaleWp: number
+  avgCostWp: number
+  costCoveredRevenue: number
+  costMissingRevenue: number
+  costCoverageRate: number
+  mixRate: number
+}
+
+interface BridgeRow {
+  key: string
+  label: string
+  pp: number
+  valueKrw: number
+  detail: string
+  level: ReconciliationLevel
+}
+
+const alternativeCostLabels: Record<AlternativeCostBasis, string> = {
+  manufacturer_avg: "제조사 평균",
+  portfolio_avg: "전체 평균",
+  target_margin: "목표마진 역산",
 }
 
 const missingCostReasonCatalog: Record<MissingCostReasonKey, MissingCostReason> = {
@@ -384,8 +440,20 @@ function saleStatus(item: SaleListItem): string | undefined {
   return item.sale.status ?? item.status
 }
 
+function saleQuantity(item: SaleListItem): number {
+  return item.sale.quantity ?? item.quantity ?? 0
+}
+
 function productKey(productCode?: string | null, specWp?: number | null): string {
   return `${(productCode ?? "").trim().toUpperCase()}|${specWp ?? 0}`
+}
+
+function marginItemKey(item: MarginItem): string {
+  return productKey(item.product_code, item.spec_wp)
+}
+
+function saleProductKey(item: SaleListItem, product?: Product): string {
+  return productKey(item.product_code ?? product?.product_code, item.spec_wp ?? product?.spec_wp)
 }
 
 function compactDate(date?: string | null): string {
@@ -455,6 +523,136 @@ function classifyMissingCostReason(
   return missingCostReasonCatalog.cost_finalization_pending
 }
 
+function safeDivide(numerator: number, denominator: number): number {
+  return denominator > 0 ? numerator / denominator : 0
+}
+
+function csvCell(value: string | number | null | undefined): string {
+  const raw = value == null ? "" : String(value)
+  return `"${raw.replace(/"/g, '""')}"`
+}
+
+function safeFilePart(value: string | undefined): string {
+  return (value || "all").replace(/[^\w가-힣.-]+/g, "_").slice(0, 48)
+}
+
+function downloadCsv(filename: string, rows: (string | number | null | undefined)[][]) {
+  if (typeof document === "undefined" || rows.length === 0) return
+  const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n")
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+function buildMonthlyReportRows({
+  periodLabel,
+  costBasis,
+  alternativeCostLabel,
+  monthlyRows,
+  bridgeRows,
+  alternativeRows,
+  salesSummary,
+  margin,
+  customers,
+  costCoverageRate,
+  costMissingRevenue,
+  adjustedSummary,
+}: {
+  periodLabel: string
+  costBasis: CostBasis
+  alternativeCostLabel: string
+  monthlyRows: MonthlyManagementRow[]
+  bridgeRows: BridgeRow[]
+  alternativeRows: AlternativeMarginRow[]
+  salesSummary: { supply: number; total: number; count: number; issued: number; pending: number }
+  margin: MarginAnalysis
+  customers: CustomerAnalysis
+  costCoverageRate: number
+  costMissingRevenue: number
+  adjustedSummary: AlternativeMarginSummary
+}): (string | number | null | undefined)[][] {
+  const rows: (string | number | null | undefined)[][] = [
+    ["월간 경영 리포트"],
+    ["기간", periodLabel],
+    ["원가 기준", costBasis.toUpperCase()],
+    ["대체원가 기준", alternativeCostLabel],
+    [],
+    ["요약"],
+    ["공급가 매출", salesSummary.supply],
+    ["부가세 포함 매출", salesSummary.total],
+    ["계산 이익", margin.summary.total_margin_krw],
+    ["계산 이익률", `${margin.summary.overall_margin_rate.toFixed(1)}%`],
+    ["잠정 이익", Math.round(adjustedSummary.adjustedMargin)],
+    ["잠정 이익률", `${adjustedSummary.adjustedMarginRate.toFixed(1)}%`],
+    ["원가 연결률", `${costCoverageRate.toFixed(1)}%`],
+    ["원가 미연결 매출", costMissingRevenue],
+    ["계산서 미발행", salesSummary.pending],
+    ["미수금", customers.summary.total_outstanding_krw],
+    [],
+    ["월별 매출/이익/이익률"],
+    [
+      "월",
+      "공급가",
+      "부가세포함",
+      "매출건수",
+      "발행건수",
+      "미발행건수",
+      "잠정이익",
+      "잠정이익률",
+      "원가연결률",
+      "평균판매가/Wp",
+      "평균원가/Wp",
+    ],
+  ]
+  for (const row of monthlyRows) {
+    rows.push([
+      row.month,
+      Math.round(row.revenue),
+      Math.round(row.total),
+      row.count,
+      row.issued,
+      row.pending,
+      Math.round(row.margin),
+      `${row.marginRate.toFixed(1)}%`,
+      `${row.costCoverageRate.toFixed(1)}%`,
+      row.avgSaleWp.toFixed(1),
+      row.avgCostWp.toFixed(1),
+    ])
+  }
+  rows.push(
+    [],
+    ["이익률 변동 브리지"],
+    ["요인", "p.p.", "영향금액", "근거"],
+    ...bridgeRows.map((row) => [
+      row.label,
+      row.pp.toFixed(2),
+      Math.round(row.valueKrw),
+      row.detail,
+    ]),
+    [],
+    ["대체원가 품목"],
+    ["품번", "제조사", "미연결매출", "대체원가/Wp", "보정원가", "잠정이익률", "사유"],
+    ...alternativeRows
+      .slice(0, 20)
+      .map((row) => [
+        row.item.product_code,
+        row.item.manufacturer_name,
+        Math.round(row.missingRevenue),
+        row.altCostWp.toFixed(1),
+        Math.round(row.altCostKrw),
+        `${row.adjustedMarginRate.toFixed(1)}%`,
+        row.reasonLabel ?? "",
+      ]),
+  )
+  return rows
+}
+
 export default function SalesAnalysisPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
   const [period, setPeriod] = useState<PeriodFilter>("all")
@@ -465,6 +663,8 @@ export default function SalesAnalysisPage() {
   const [partners, setPartners] = useState<Partner[]>([])
   // D-064 PR 30: 원가 기준 토글 — 기본 fifo (가장 정확). cost_details 만 있는 환경은 landed 로 폴백.
   const [costBasis, setCostBasis] = useState<CostBasis>("fifo")
+  const [alternativeCostBasis, setAlternativeCostBasis] =
+    useState<AlternativeCostBasis>("manufacturer_avg")
   const [marginFilter, setMarginFilter] = useState<MarginFilter>("all")
   const [activeReconciliation, setActiveReconciliation] =
     useState<ReconciliationKey>("missing_cost")
@@ -606,6 +806,11 @@ export default function SalesAnalysisPage() {
       map.set(productKey(product.product_code, product.spec_wp), product)
     return map
   }, [products])
+  const productById = useMemo(() => {
+    const map = new Map<string, Product>()
+    for (const product of products) map.set(product.product_id, product)
+    return map
+  }, [products])
 
   const filteredSales = useMemo(() => {
     return state.sales.filter((item) => {
@@ -701,6 +906,11 @@ export default function SalesAnalysisPage() {
     (margin.summary.total_revenue_krw > 0
       ? round2((costCoveredRevenue / margin.summary.total_revenue_krw) * 100)
       : 0)
+  const marginByProductKey = useMemo(() => {
+    const map = new Map<string, MarginItem>()
+    for (const item of margin.items) map.set(marginItemKey(item), item)
+    return map
+  }, [margin.items])
   const shownMarginItems = useMemo(() => {
     if (marginFilter === "missing_cost") {
       return margin.items.filter((item) => item.avg_cost_wp == null || item.total_cost_krw == null)
@@ -789,6 +999,243 @@ export default function SalesAnalysisPage() {
     }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue)
   }, [missingCostDetailRows])
+  const costProfiles = useMemo(() => {
+    const byManufacturer = new Map<string, { cost: number; wp: number }>()
+    let portfolioCost = 0
+    let portfolioWp = 0
+    for (const item of margin.items) {
+      if (item.avg_cost_wp == null || item.total_cost_krw == null) continue
+      const wp = item.total_sold_qty * item.spec_wp
+      if (wp <= 0) continue
+      const cost = item.avg_cost_wp * wp
+      portfolioCost += cost
+      portfolioWp += wp
+      const key = item.manufacturer_name || "제조사 없음"
+      const prev = byManufacturer.get(key) ?? { cost: 0, wp: 0 }
+      prev.cost += cost
+      prev.wp += wp
+      byManufacturer.set(key, prev)
+    }
+    return {
+      portfolioAvgCostWp: safeDivide(portfolioCost, portfolioWp),
+      manufacturerAvgCostWp: new Map(
+        Array.from(byManufacturer.entries()).map(([key, value]) => [
+          key,
+          safeDivide(value.cost, value.wp),
+        ]),
+      ),
+    }
+  }, [margin.items])
+  const alternativeMarginRows = useMemo<AlternativeMarginRow[]>(() => {
+    const reasonByKey = new Map(
+      missingCostDetailRows.map((row) => [marginItemKey(row.item), row.reason.label]),
+    )
+    const targetMarginRate = Math.max(8, margin.summary.overall_margin_rate || 0)
+    return margin.items
+      .map((item) => {
+        const missingRevenue =
+          item.cost_missing_revenue_krw ??
+          (item.total_cost_krw == null ? item.total_revenue_krw : 0)
+        const missingRatio = safeDivide(missingRevenue, item.total_revenue_krw)
+        const missingWp = item.total_sold_qty * item.spec_wp * missingRatio
+        const manufacturerAvg =
+          costProfiles.manufacturerAvgCostWp.get(item.manufacturer_name || "제조사 없음") ?? 0
+        const portfolioAvg = costProfiles.portfolioAvgCostWp
+        const targetMarginCost = Math.max(0, item.avg_sale_price_wp * (1 - targetMarginRate / 100))
+        const fallbackCost = manufacturerAvg || portfolioAvg || targetMarginCost
+        const altCostWp =
+          alternativeCostBasis === "manufacturer_avg"
+            ? manufacturerAvg || fallbackCost
+            : alternativeCostBasis === "portfolio_avg"
+              ? portfolioAvg || fallbackCost
+              : targetMarginCost || fallbackCost
+        const altCostKrw = missingWp * altCostWp
+        const adjustedCost = (item.total_cost_krw ?? 0) + altCostKrw
+        const adjustedMargin = item.total_revenue_krw - adjustedCost
+        return {
+          item,
+          missingRevenue,
+          missingWp,
+          altCostWp: round2(altCostWp),
+          altCostKrw: round2(altCostKrw),
+          altCostLabel: alternativeCostLabels[alternativeCostBasis],
+          adjustedCost: round2(adjustedCost),
+          adjustedMargin: round2(adjustedMargin),
+          adjustedMarginRate: pct(adjustedMargin, item.total_revenue_krw),
+          reasonLabel: reasonByKey.get(marginItemKey(item)),
+        }
+      })
+      .filter((row) => row.missingRevenue > 0 && row.missingWp > 0)
+      .sort((a, b) => b.missingRevenue - a.missingRevenue)
+  }, [
+    alternativeCostBasis,
+    costProfiles.manufacturerAvgCostWp,
+    costProfiles.portfolioAvgCostWp,
+    margin.items,
+    margin.summary.overall_margin_rate,
+    missingCostDetailRows,
+  ])
+  const alternativeMarginSummary = useMemo<AlternativeMarginSummary>(() => {
+    const estimatedCost = alternativeMarginRows.reduce((sum, row) => sum + row.altCostKrw, 0)
+    const adjustedCost =
+      margin.items.reduce((sum, item) => sum + (item.total_cost_krw ?? 0), 0) + estimatedCost
+    const adjustedMargin = margin.summary.total_revenue_krw - adjustedCost
+    return {
+      adjustedMargin: round2(adjustedMargin),
+      adjustedMarginRate: pct(adjustedMargin, margin.summary.total_revenue_krw),
+      estimatedCost: round2(estimatedCost),
+      estimatedRows: alternativeMarginRows.length,
+      adjustedCost: round2(adjustedCost),
+    }
+  }, [alternativeMarginRows, margin.items, margin.summary.total_revenue_krw])
+  const alternativeMarginByKey = useMemo(() => {
+    const map = new Map<string, AlternativeMarginRow>()
+    for (const row of alternativeMarginRows) map.set(marginItemKey(row.item), row)
+    return map
+  }, [alternativeMarginRows])
+  const monthlyManagementRows = useMemo<MonthlyManagementRow[]>(() => {
+    const map = new Map<
+      string,
+      MonthlyManagementRow & { mixWeightedRate: number; costWpWeighted: number }
+    >()
+    for (const sale of filteredSales) {
+      const product = sale.product_id ? productById.get(sale.product_id) : undefined
+      const key = saleProductKey(sale, product)
+      const item = marginByProductKey.get(key)
+      const alternative = alternativeMarginByKey.get(key)
+      const month = toMonth(saleListItemDate(sale) ?? undefined)
+      const revenue = saleSupplyAmount(sale)
+      const qty = saleQuantity(sale)
+      const specWp = sale.spec_wp ?? product?.spec_wp ?? item?.spec_wp ?? 0
+      const qtyWp = qty * specWp
+      const costWp = item?.avg_cost_wp ?? alternative?.altCostWp ?? 0
+      const estimatedCost =
+        qtyWp > 0 && costWp > 0
+          ? qtyWp * costWp
+          : item?.margin_rate != null
+            ? revenue * (1 - item.margin_rate / 100)
+            : 0
+      const estimatedMargin = revenue - estimatedCost
+      const costCovered = item?.avg_cost_wp != null || item?.total_cost_krw != null
+      const prev =
+        map.get(month) ??
+        ({
+          month,
+          revenue: 0,
+          total: 0,
+          count: 0,
+          issued: 0,
+          pending: 0,
+          qtyWp: 0,
+          cost: 0,
+          margin: 0,
+          marginRate: 0,
+          avgSaleWp: 0,
+          avgCostWp: 0,
+          costCoveredRevenue: 0,
+          costMissingRevenue: 0,
+          costCoverageRate: 0,
+          mixRate: 0,
+          mixWeightedRate: 0,
+          costWpWeighted: 0,
+        } satisfies MonthlyManagementRow & { mixWeightedRate: number; costWpWeighted: number })
+      prev.revenue += revenue
+      prev.total += saleTotalAmount(sale)
+      prev.count += 1
+      prev.issued += saleIssueDate(sale) ? 1 : 0
+      prev.pending += saleIssueDate(sale) ? 0 : 1
+      prev.qtyWp += qtyWp
+      prev.cost += estimatedCost
+      prev.margin += estimatedMargin
+      prev.costCoveredRevenue += costCovered ? revenue : 0
+      prev.costMissingRevenue += costCovered ? 0 : revenue
+      prev.mixWeightedRate += pct(estimatedMargin, revenue) * revenue
+      prev.costWpWeighted += costWp * qtyWp
+      map.set(month, prev)
+    }
+    return Array.from(map.values())
+      .map((row) => ({
+        month: row.month,
+        revenue: round2(row.revenue),
+        total: round2(row.total),
+        count: row.count,
+        issued: row.issued,
+        pending: row.pending,
+        qtyWp: round2(row.qtyWp),
+        cost: round2(row.cost),
+        margin: round2(row.margin),
+        marginRate: pct(row.margin, row.revenue),
+        avgSaleWp: round2(safeDivide(row.revenue, row.qtyWp)),
+        avgCostWp: round2(safeDivide(row.costWpWeighted, row.qtyWp)),
+        costCoveredRevenue: round2(row.costCoveredRevenue),
+        costMissingRevenue: round2(row.costMissingRevenue),
+        costCoverageRate: pct(row.costCoveredRevenue, row.revenue),
+        mixRate: round2(safeDivide(row.mixWeightedRate, row.revenue)),
+      }))
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .slice(-12)
+  }, [alternativeMarginByKey, filteredSales, marginByProductKey, productById])
+  const marginBridge = useMemo(() => {
+    const rows = monthlyManagementRows.filter((row) => row.revenue > 0)
+    const prev = rows.at(-2)
+    const curr = rows.at(-1)
+    if (!prev || !curr) {
+      return {
+        prev: null as MonthlyManagementRow | null,
+        curr: null as MonthlyManagementRow | null,
+        deltaRate: 0,
+        rows: [] as BridgeRow[],
+      }
+    }
+    const pricePp = safeDivide((curr.avgSaleWp - prev.avgSaleWp) * curr.qtyWp, curr.revenue) * 100
+    const costPp = safeDivide((prev.avgCostWp - curr.avgCostWp) * curr.qtyWp, curr.revenue) * 100
+    const mixPp = curr.mixRate - prev.mixRate
+    const coveragePp = curr.costCoverageRate - prev.costCoverageRate
+    const deltaRate = curr.marginRate - prev.marginRate
+    const bridgeRows: BridgeRow[] = [
+      {
+        key: "price",
+        label: "판매가 효과",
+        pp: round2(pricePp),
+        valueKrw: round2((pricePp / 100) * curr.revenue),
+        detail: `${prev.avgSaleWp.toFixed(1)} → ${curr.avgSaleWp.toFixed(1)}원/Wp`,
+        level: pricePp >= 0 ? "good" : "risk",
+      },
+      {
+        key: "cost",
+        label: "원가 효과",
+        pp: round2(costPp),
+        valueKrw: round2((costPp / 100) * curr.revenue),
+        detail: `${prev.avgCostWp.toFixed(1)} → ${curr.avgCostWp.toFixed(1)}원/Wp`,
+        level: costPp >= 0 ? "good" : "risk",
+      },
+      {
+        key: "mix",
+        label: "제품 믹스",
+        pp: round2(mixPp),
+        valueKrw: round2((mixPp / 100) * curr.revenue),
+        detail: `${prev.mixRate.toFixed(1)}% → ${curr.mixRate.toFixed(1)}%`,
+        level: mixPp >= 0 ? "good" : "watch",
+      },
+      {
+        key: "coverage",
+        label: "원가 연결률",
+        pp: round2(coveragePp),
+        valueKrw: round2((coveragePp / 100) * curr.revenue),
+        detail: `${prev.costCoverageRate.toFixed(1)}% → ${curr.costCoverageRate.toFixed(1)}%`,
+        level: coveragePp >= 0 ? "good" : "watch",
+      },
+      {
+        key: "total",
+        label: "총 이익률 변동",
+        pp: round2(deltaRate),
+        valueKrw: round2(curr.margin - prev.margin),
+        detail: `${prev.marginRate.toFixed(1)}% → ${curr.marginRate.toFixed(1)}%`,
+        level: deltaRate >= 0 ? "good" : "risk",
+      },
+    ]
+    return { prev, curr, deltaRate: round2(deltaRate), rows: bridgeRows }
+  }, [monthlyManagementRows])
   const engineDeltaCandidates = useMemo<EngineDeltaCandidate[]>(() => {
     return filteredSales
       .map((sale) => {
@@ -1073,6 +1520,15 @@ export default function SalesAnalysisPage() {
     }),
     { sales: 0, outstanding: 0 },
   )
+  const reportPeriodLabel =
+    dateRange.dateFrom || dateRange.dateTo
+      ? `${dateRange.dateFrom ?? "처음"}~${dateRange.dateTo ?? "현재"}`
+      : "전체기간"
+  const alternativeCostOptions = [
+    { key: "manufacturer_avg", label: "제조사 평균" },
+    { key: "portfolio_avg", label: "전체 평균" },
+    { key: "target_margin", label: "목표마진" },
+  ]
 
   return (
     <div className="sf-page">
@@ -1082,9 +1538,36 @@ export default function SalesAnalysisPage() {
             title="매출/이익 분석"
             sub="판매, 세금계산서, 수금, B/L 원가 연결"
             right={
-              <button type="button" className="btn xs" onClick={load}>
-                새로고침
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn xs"
+                  onClick={() =>
+                    downloadCsv(
+                      `sales-management-${safeFilePart(reportPeriodLabel)}.csv`,
+                      buildMonthlyReportRows({
+                        periodLabel: reportPeriodLabel,
+                        costBasis,
+                        alternativeCostLabel: alternativeCostLabels[alternativeCostBasis],
+                        monthlyRows: monthlyManagementRows,
+                        bridgeRows: marginBridge.rows,
+                        alternativeRows: alternativeMarginRows,
+                        salesSummary,
+                        margin,
+                        customers,
+                        costCoverageRate,
+                        costMissingRevenue,
+                        adjustedSummary: alternativeMarginSummary,
+                      }),
+                    )
+                  }
+                >
+                  경영 리포트
+                </button>
+                <button type="button" className="btn xs" onClick={load}>
+                  새로고침
+                </button>
+              </div>
             }
             padded
           >
@@ -1200,9 +1683,25 @@ export default function SalesAnalysisPage() {
                 formatter: (n: number) => n.toFixed(1),
                 u: "%",
                 sub: `원가 연결률 ${costCoverageRate.toFixed(0)}%`,
-                tone: margin.summary.overall_margin_rate >= 8 ? ("pos" as const) : ("warn" as const),
+                tone:
+                  margin.summary.overall_margin_rate >= 8 ? ("pos" as const) : ("warn" as const),
                 spark: flatSpark(margin.summary.overall_margin_rate),
                 metricId: "sales_analysis.margin_rate",
+              },
+              {
+                key: "sales_analysis.adjusted_margin_rate",
+                lbl: "잠정 이익률",
+                v: alternativeMarginSummary.adjustedMarginRate.toFixed(1),
+                numericValue: alternativeMarginSummary.adjustedMarginRate,
+                formatter: (n: number) => n.toFixed(1),
+                u: "%",
+                sub: `${alternativeCostLabels[alternativeCostBasis]} · ${formatKRW(alternativeMarginSummary.estimatedCost)}`,
+                tone:
+                  alternativeMarginSummary.adjustedMarginRate >= 8
+                    ? ("pos" as const)
+                    : ("warn" as const),
+                spark: flatSpark(alternativeMarginSummary.adjustedMarginRate),
+                metricId: "sales_analysis.adjusted_margin_rate",
               },
               {
                 lbl: "미수금",
@@ -1211,7 +1710,10 @@ export default function SalesAnalysisPage() {
                 formatter: (n: number) => (n / 100000000).toFixed(2),
                 u: "억",
                 sub: `수금 ${formatKRW(customers.summary.total_collected_krw)}`,
-                tone: customers.summary.total_outstanding_krw > 0 ? ("warn" as const) : ("pos" as const),
+                tone:
+                  customers.summary.total_outstanding_krw > 0
+                    ? ("warn" as const)
+                    : ("pos" as const),
                 metricId: "receipts.remaining",
               },
               {
@@ -1335,6 +1837,156 @@ export default function SalesAnalysisPage() {
                         className="py-8 text-center text-xs text-muted-foreground"
                       >
                         우선 대응할 거래처 위험이 없습니다
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardB>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <CardB
+              title="이익률 변동 브리지"
+              sub={
+                marginBridge.prev && marginBridge.curr
+                  ? `${marginBridge.prev.month} → ${marginBridge.curr.month}`
+                  : "월별 비교"
+              }
+            >
+              {marginBridge.prev && marginBridge.curr ? (
+                <>
+                  <div className="grid grid-cols-3 gap-3 border-b border-[var(--line)] px-4 py-3">
+                    <div>
+                      <div className="mono text-[10.5px] text-[var(--ink-3)]">이전월</div>
+                      <div className="mt-1 text-sm font-semibold text-[var(--ink)]">
+                        {marginBridge.prev.marginRate.toFixed(1)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mono text-[10.5px] text-[var(--ink-3)]">최근월</div>
+                      <div className="mt-1 text-sm font-semibold text-[var(--ink)]">
+                        {marginBridge.curr.marginRate.toFixed(1)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mono text-[10.5px] text-[var(--ink-3)]">변동</div>
+                      <div
+                        className={`mt-1 text-sm font-semibold ${marginBridge.deltaRate >= 0 ? "text-[var(--pos)]" : "text-[var(--neg)]"}`}
+                      >
+                        {marginBridge.deltaRate >= 0 ? "+" : ""}
+                        {marginBridge.deltaRate.toFixed(1)}p
+                      </div>
+                    </div>
+                  </div>
+                  <Table className="sf-motion-table">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>요인</TableHead>
+                        <TableHead className="text-right">p.p.</TableHead>
+                        <TableHead className="text-right">금액효과</TableHead>
+                        <TableHead className="text-right">근거</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {marginBridge.rows.map((row) => (
+                        <TableRow key={row.key}>
+                          <TableCell className="text-xs">
+                            <span className={`sf-status-pill ${levelTone(row.level)}`}>
+                              {row.label}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-medium">
+                            {row.pp >= 0 ? "+" : ""}
+                            {row.pp.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            {formatKRW(row.valueKrw)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {row.detail}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </>
+              ) : (
+                <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+                  비교 가능한 월별 이익 데이터가 부족합니다
+                </div>
+              )}
+            </CardB>
+
+            <CardB
+              title="대체원가 기준 마진"
+              sub="원가 미연결 잠정 보정"
+              right={
+                <FilterChips
+                  options={alternativeCostOptions}
+                  value={alternativeCostBasis}
+                  onChange={(value) => setAlternativeCostBasis(value as AlternativeCostBasis)}
+                />
+              }
+            >
+              <div className="grid grid-cols-3 gap-3 border-b border-[var(--line)] px-4 py-3">
+                <div>
+                  <div className="mono text-[10.5px] text-[var(--ink-3)]">잠정 이익</div>
+                  <div className="mt-1 text-sm font-semibold text-[var(--ink)]">
+                    {formatKRW(alternativeMarginSummary.adjustedMargin)}
+                  </div>
+                </div>
+                <div>
+                  <div className="mono text-[10.5px] text-[var(--ink-3)]">잠정률</div>
+                  <div className="mt-1 text-sm font-semibold text-[var(--ink)]">
+                    {alternativeMarginSummary.adjustedMarginRate.toFixed(1)}%
+                  </div>
+                </div>
+                <div>
+                  <div className="mono text-[10.5px] text-[var(--ink-3)]">보정원가</div>
+                  <div className="mt-1 text-sm font-semibold text-[var(--ink)]">
+                    {formatKRW(alternativeMarginSummary.estimatedCost)}
+                  </div>
+                </div>
+              </div>
+              <Table className="sf-motion-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>품목</TableHead>
+                    <TableHead>기준</TableHead>
+                    <TableHead className="text-right">미연결</TableHead>
+                    <TableHead className="text-right">대체원가</TableHead>
+                    <TableHead className="text-right">잠정률</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {alternativeMarginRows.slice(0, 5).map((row) => (
+                    <TableRow key={`${row.item.product_code}-${row.item.spec_wp}`}>
+                      <TableCell className="text-xs">
+                        <div className="font-medium">{row.item.product_code}</div>
+                        <div className="text-muted-foreground">
+                          {row.reasonLabel ?? row.item.manufacturer_name}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs">{row.altCostLabel}</TableCell>
+                      <TableCell className="text-right text-xs">
+                        {formatKRW(row.missingRevenue)}
+                      </TableCell>
+                      <TableCell className="text-right text-xs">
+                        {formatNumber(row.altCostWp)}원/Wp
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-medium">
+                        {row.adjustedMarginRate.toFixed(1)}%
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {alternativeMarginRows.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="py-8 text-center text-xs text-muted-foreground"
+                      >
+                        대체원가로 보정할 원가 미연결 품목이 없습니다
                       </TableCell>
                     </TableRow>
                   )}
