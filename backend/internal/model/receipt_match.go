@@ -1,6 +1,9 @@
 package model
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 // ReceiptMatch — 수금 매칭 정보를 담는 구조체
 // 비유: "수금-출고 매칭 대장" — 어떤 수금이 어떤 출고에 얼마만큼 매칭되었는지 기록
@@ -62,6 +65,44 @@ type ReceiptMatchBulkResponse struct {
 	BalanceAmount      float64        `json:"balance_amount"`
 	BalanceDisposition string         `json:"balance_disposition,omitempty"`
 	BalanceNote        string         `json:"balance_note,omitempty"`
+}
+
+// CompleteReceiptMatchRequest — 출고/판매 화면에서 미수 잔액을 한 번에 완납 처리하는 요청.
+type CompleteReceiptMatchRequest struct {
+	OutboundID  *string `json:"outbound_id,omitempty"`
+	SaleID      *string `json:"sale_id,omitempty"`
+	ReceiptDate string  `json:"receipt_date,omitempty"`
+	BankAccount *string `json:"bank_account,omitempty"`
+	Memo        *string `json:"memo,omitempty"`
+}
+
+// CompleteReceiptMatchResponse — 생성된 수금 전표와 매칭 결과.
+type CompleteReceiptMatchResponse struct {
+	Receipt           Receipt      `json:"receipt"`
+	Match             ReceiptMatch `json:"match"`
+	MatchedAmount     float64      `json:"matched_amount"`
+	OutstandingBefore float64      `json:"outstanding_before"`
+}
+
+// Validate — 원클릭 수금 완료 요청 검증.
+func (req *CompleteReceiptMatchRequest) Validate() string {
+	hasOutbound := req.OutboundID != nil && strings.TrimSpace(*req.OutboundID) != ""
+	hasSale := req.SaleID != nil && strings.TrimSpace(*req.SaleID) != ""
+	if !hasOutbound && !hasSale {
+		return "outbound_id 또는 sale_id 중 하나는 필수 항목입니다"
+	}
+	if hasOutbound && hasSale {
+		return "outbound_id와 sale_id는 동시에 지정할 수 없습니다"
+	}
+	if strings.TrimSpace(req.ReceiptDate) != "" {
+		if _, err := time.Parse("2006-01-02", strings.TrimSpace(req.ReceiptDate)); err != nil {
+			return "receipt_date는 YYYY-MM-DD 형식이어야 합니다"
+		}
+	}
+	if req.Memo != nil && len(strings.TrimSpace(*req.Memo)) > 500 {
+		return "memo는 500자 이하여야 합니다"
+	}
+	return ""
 }
 
 // Validate — 일괄 매칭 요청 검증

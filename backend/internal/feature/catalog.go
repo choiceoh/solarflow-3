@@ -312,7 +312,8 @@ var Catalog = map[FeatureID]Feature{
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{
 			"/api/v1/receipt-matches/", "/api/v1/receipt-matches/{id}",
-			"/api/v1/receipt-matches/bulk", "/api/v1/receipt-matches/auto", "/api/v1/receipt-matches/ai-suggest",
+			"/api/v1/receipt-matches/bulk", "/api/v1/receipt-matches/complete",
+			"/api/v1/receipt-matches/auto", "/api/v1/receipt-matches/ai-suggest",
 		},
 	},
 	IDTxPO: {

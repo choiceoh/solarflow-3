@@ -699,6 +699,7 @@ func (h *ReceiptMatchHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Get("/", h.List)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Post("/bulk", h.BulkCreate)
+		r.With(g.Write).Post("/complete", h.Complete)
 		r.Post("/ai-suggest", h.AISuggest)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 		r.With(g.Write).Post("/auto", h.AutoMatch)

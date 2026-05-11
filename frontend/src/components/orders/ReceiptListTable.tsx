@@ -92,7 +92,7 @@ function ReceiptListTable({ items, hidden, pinning, onPinningChange, onStartMatc
       onPinningChange={onPinningChange}
       items={items}
       getRowKey={(r) => r.receipt_id}
-      emptyMessage="등록된 수금이 없습니다"
+      emptyMessage="표시할 미수 항목이 없습니다"
       pageSize={50}
     />
   );

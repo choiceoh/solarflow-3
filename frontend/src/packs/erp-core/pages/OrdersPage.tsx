@@ -52,6 +52,7 @@ import {
   type OrderStatus,
   type ManagementCategory,
   type Receipt,
+  type CompleteReceiptMatchResponse,
 } from "@/types/orders"
 import {
   OUTBOUND_STATUS_LABEL,
@@ -126,7 +127,8 @@ const SALES_TAB_OPTIONS = [
 const SALES_TABS = new Set(SALES_TAB_OPTIONS.map((tab) => tab.key))
 type OrderWorkQueue = "" | "delivery_soon" | "no_site"
 type OutboundWorkQueue = "" | "sale_unregistered"
-type ReceiptMatchFilter = "" | "matched" | "partial" | "unmatched"
+type ReceiptMatchFilter = "open" | "partial" | "unmatched"
+type ReceiptMatchStatus = "matched" | "partial" | "unmatched"
 type SaleErpClosedFilter = "" | "true" | "false"
 type SaleBulkActionMode = "invoice" | "erp_close"
 const BULK_SALE_PREVIEW_PAGE_SIZE = 1000
@@ -169,7 +171,7 @@ function getOrderWorkQueue(value: string | null): OrderWorkQueue {
   return value === "delivery_soon" || value === "no_site" ? value : ""
 }
 
-function getReceiptMatchFilter(receipt: Receipt): Exclude<ReceiptMatchFilter, ""> {
+function getReceiptMatchFilter(receipt: Receipt): ReceiptMatchStatus {
   const matched = receipt.matched_total ?? 0
   if (matched >= receipt.amount) return "matched"
   if (matched > 0) return "partial"
@@ -207,6 +209,13 @@ function todayLocalDate() {
   const now = new Date()
   const tzOffsetMs = now.getTimezoneOffset() * 60_000
   return new Date(now.getTime() - tzOffsetMs).toISOString().slice(0, 10)
+}
+
+function getSaleOutstandingAmount(item: SaleListItem) {
+  if (item.outstanding_amount != null) return Math.max(0, item.outstanding_amount)
+  const total = item.sale.total_amount ?? item.total_amount ?? 0
+  const collected = item.collected_amount ?? 0
+  return Math.max(0, total - collected)
 }
 
 function getSaleBulkActionMode(invoiceFilter: string, erpClosedFilter: SaleErpClosedFilter): SaleBulkActionMode {
@@ -540,6 +549,7 @@ export default function OrdersPage() {
   const [bulkInvoiceErpClose, setBulkInvoiceErpClose] = useState(false)
   const [bulkInvoiceSaving, setBulkInvoiceSaving] = useState(false)
   const [bulkInvoiceError, setBulkInvoiceError] = useState("")
+  const [receiptCompletingSaleId, setReceiptCompletingSaleId] = useState<string | null>(null)
   const autoSelectedSaleQueueKey = useRef("")
   const [salePageIndex, setSalePageIndex] = useState(0)
   const [salePageSize, setSalePageSize] = useState(50)
@@ -635,7 +645,7 @@ export default function OrdersPage() {
   // 탭 4: 수금
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState("")
   const [receiptDateRange, setReceiptDateRange] = useState<DateRangeValue>(null)
-  const [receiptMatchFilter, setReceiptMatchFilter] = useState<ReceiptMatchFilter>("")
+  const [receiptMatchFilter, setReceiptMatchFilter] = useState<ReceiptMatchFilter>("open")
   const [orderActionError, setOrderActionError] = useState("")
   const [orderSourceHints, setOrderSourceHints] = useState<Record<string, FulfillmentSource>>({})
 
@@ -716,12 +726,21 @@ export default function OrdersPage() {
     await Promise.all([reloadOrderDash(), reloadOrderList()])
   }
   // C-1 receipts — KPI/sparkline 은 dashboard, 표/매칭 패널은 useReceiptList(필요시 후속 페이지네이션).
-  const { data: receipts, loading: receiptsLoading } = useReceiptList(receiptFilters)
-  const { dashboard: receiptDash } = useReceiptDashboard(receiptFilters)
+  const {
+    data: receipts,
+    loading: receiptsLoading,
+    reload: reloadReceiptList,
+  } = useReceiptList(receiptFilters)
+  const { dashboard: receiptDash, reload: reloadReceiptDash } = useReceiptDashboard(receiptFilters)
   const visibleReceipts = useMemo(() => {
-    if (!receiptMatchFilter) return receipts
+    if (receiptMatchFilter === "open") {
+      return receipts.filter((receipt) => getReceiptMatchFilter(receipt) !== "matched")
+    }
     return receipts.filter((receipt) => getReceiptMatchFilter(receipt) === receiptMatchFilter)
   }, [receipts, receiptMatchFilter])
+  const reloadReceipts = async () => {
+    await Promise.all([reloadReceiptList(), reloadReceiptDash()])
+  }
 
   // visibleOrders 는 표 렌더링 한정 — server-side work_queue 가 적용된 현재 페이지.
   const visibleOrders = orders
@@ -834,6 +853,7 @@ export default function OrdersPage() {
   const receiptTotal = receiptDash?.totals.amount_sum ?? 0
   const receiptRemaining = receiptDash?.totals.remaining_sum ?? 0
   const receiptCount = receiptDash?.totals.count ?? receipts.length
+  const openReceiptCount = visibleReceipts.length
   const receiptPartialMatchCount = receiptDash?.totals.partial_match_count ?? 0
   const receiptRecoveryRate = receiptDash?.totals.recovery_rate ?? 0
   const customersCount = orderDash?.totals.active_customers_count ?? 0
@@ -1128,6 +1148,32 @@ export default function OrdersPage() {
     }
   }
 
+  const handleCompleteSaleReceipt = async (item: SaleListItem) => {
+    const outstanding = getSaleOutstandingAmount(item)
+    if (outstanding <= 0) {
+      notify.info("이미 수금 완료된 매출입니다")
+      return
+    }
+    setReceiptCompletingSaleId(item.sale_id)
+    try {
+      const payload: Record<string, unknown> = {
+        sale_id: item.sale_id,
+        receipt_date: todayLocalDate(),
+        memo: "출고/판매 화면 수금완료",
+      }
+      await fetchWithAuth<CompleteReceiptMatchResponse>("/api/v1/receipt-matches/complete", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+      notify.success(`수금 ${Math.round(outstanding).toLocaleString("ko-KR")}원을 완료 처리했습니다`)
+      await Promise.all([reloadSales(), reloadReceipts()])
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : "수금 완료 처리에 실패했습니다")
+    } finally {
+      setReceiptCompletingSaleId(null)
+    }
+  }
+
   const pageTitle =
     activeTab === "outbound"
       ? "출고 / 판매"
@@ -1144,7 +1190,7 @@ export default function OrdersPage() {
       : activeTab === "sales"
         ? `${salesTotalCount}건 · ${fmtEok(saleTotal)}억`
         : activeTab === "receipts"
-          ? `${receiptCount}건 · 미정산 ${fmtEok(receiptRemaining)}억`
+          ? `${openReceiptCount}건 · 미정산 ${fmtEok(receiptRemaining)}억`
           : activeTab === "matching"
             ? "입금과 매출채권 자동 추천"
             : `${ordersTotalCount}건 · ${fmtSalesMw(ordersKw)} MW`
@@ -1648,11 +1694,11 @@ export default function OrdersPage() {
               {
                 label: "매칭",
                 value: receiptMatchFilter,
-                onChange: (value) => setReceiptMatchFilter(value as ReceiptMatchFilter),
+                onChange: (value) => setReceiptMatchFilter(value === "" ? "open" : (value as ReceiptMatchFilter)),
                 options: [
+                  { value: "open", label: "미수 전체" },
                   { value: "unmatched", label: "미매칭" },
                   { value: "partial", label: "부분 매칭" },
-                  { value: "matched", label: "완전 매칭" },
                 ],
               },
             ]}
@@ -1943,6 +1989,8 @@ export default function OrdersPage() {
                           setBulkInvoiceErpClose(saleBulkActionMode === "erp_close" || !!item.sale.erp_closed)
                           setBulkInvoiceError("")
                         }}
+                        onCompleteReceipt={handleCompleteSaleReceipt}
+                        completingReceiptSaleId={receiptCompletingSaleId}
                         serverMode={{
                           pageIndex: salePageIndex,
                           pageSize: salePageSize,

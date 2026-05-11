@@ -5,14 +5,43 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | Excel Import Hub 샘플팩 기반 실데이터 리허설, 가격예측 백테스트/견적 기록 운영 DB 적용 확인 + AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
+| 다음 작업 | Excel Import Hub 샘플팩 기반 실데이터 리허설, 출고/판매 원클릭 수금완료 운영 샘플 검증, 가격예측 백테스트/견적 기록 운영 DB 적용 확인 + AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적) |
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-11 세션 — 출고/판매 원클릭 수금완료 (D-20260511-180114)
+
+### 완료
+- `POST /api/v1/receipt-matches/complete` 추가
+  - `sale_id` 또는 `outbound_id` 기준으로 매출 총액과 기존 매칭액을 서버에서 재계산
+  - 미수 잔액만큼 수금 전표와 매칭 전표를 생성
+  - 이미 완납된 매출, 대상 중복 지정, 잘못된 날짜 형식은 거부
+- 판매 목록에 수금 상태/미수 금액과 [수금완료] 버튼 추가
+  - 버튼 한 번으로 오늘 날짜 수금 전표 + 매칭 생성
+  - 처리 후 판매/수금 목록과 KPI를 재조회
+- 수금 관리 탭 기본 목록을 미수/부분매칭 항목 중심으로 변경
+  - 완전 매칭 전표는 기본 목록에서 제외
+  - 필터는 미수 전체 / 미매칭 / 부분 매칭으로 정리
+- dev mock API도 원클릭 수금 완료와 판매별 수금 상태를 반영
+- 설계 정본과 D-20260511-180114 결정 기록 동기화
+
+### 검증
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공
+- `cd backend && go test ./internal/model ./internal/router ./internal/feature ./internal/handler` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5151 nodes / 8389 edges / 415 communities
 
 ---
 
@@ -31,6 +60,9 @@
 - `cd frontend && npm run test` 성공 — 98 tests, 기존 AllocationForm/POListTable React `act(...)` 경고 출력
 - `git diff --check` 성공
 - `graphify update .` 성공 — 5113 nodes / 8289 edges / 410 communities
+
+---
+
 ## 2026-05-11 세션 — 가격예측 AI 관측값 표 표시 복구
 
 ### 완료
