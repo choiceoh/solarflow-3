@@ -1515,6 +1515,7 @@
   - `go test ./internal/handler -run 'TestBuildBenchmark|TestSummarizeHomepage|TestSearchResultDedupe|TestValidateBenchmarkCatalogPolicy|TestHashEvidence|TestPickComparablePrice|TestFormatSanityWarnings'` 로 검색 플랜 확장과 dedupe를 고정한다.
 - **날짜**: 2026-05-11
 
+<<<<<<< codex/timestamp-decision-ids
 ## D-20260511-171426: 결정 식별자는 순번 대신 초 단위 타임스탬프를 사용한다
 
 - **결정**: 새 설계 판단은 더 이상 `D-165` 같은 순번으로 발급하지 않는다. 신규 결정 ID는 한국시간 기준 `D-YYYYMMDD-HHMMSS` 형식으로 기록한다.
@@ -1525,3 +1526,37 @@
   - 도메인 인덱스의 「관련 결정」 링크도 새 ID를 그대로 사용한다.
   - 같은 초에 정말로 두 결정이 생기면 뒤 결정은 현재 초를 다시 읽어 새 ID를 발급한다.
 - **날짜**: 2026-05-11 17:14:26 KST
+=======
+## D-165: 품번은 거래 SKU로 유지하고 모듈 제품군/변종 분류를 별도 축으로 둔다
+
+- **결정**: `products.product_id/product_code`는 PO, L/C, B/L, 재고, 출고, 매출, 원가에 물리는 거래 SKU로 유지한다. 같은 생산 라인·외형 규격이지만 출력 검사값만 달라 품번이 갈라지는 경우, 또는 동일 출력이지만 BOM·인증·라벨·포장 차이로 품번이 갈라지는 경우는 `product_family_code`, `product_variant_kind`, `bom_revision`, `substitution_group_code`로 별도 분류한다.
+- **필드 기준**:
+  - `product_family_code`: 같은 제조사·시리즈·생산 라인·외형 규격을 묶는 상위 제품군 코드.
+  - `product_variant_kind`: 품번 분리 사유. `output_bin`, `bom_variant`, `cert_variant`, `label_variant`, `packaging_variant`, `mixed`, `other` 중 하나.
+  - `bom_revision`: 동일 출력·동일 제품군이지만 BOM 차이로 품번이 갈라질 때의 내부 revision.
+  - `substitution_group_code`: 영업/출고 검토에서 사람이 같은 대체 후보로 묶는 수동 코드. 자동 출고 대체나 회계 합산 근거가 아니다.
+- **운영 기준**:
+  - 출력만 다른 635W/640W 같은 품목은 같은 `product_family_code`에 두고 `product_variant_kind='output_bin'`으로 표시한다.
+  - 동일 출력이지만 BOM만 다른 품목은 같은 `product_family_code`에 두고 `product_variant_kind='bom_variant'`와 `bom_revision`을 기록한다.
+  - `product_aliases`는 외부 표기, 오타, 레거시 코드 흡수용으로 유지한다. 정상적으로 존재하는 서로 다른 SKU를 canonical 하나로 합치는 데 쓰지 않는다.
+  - 수주 충당, 재고, 원가, 회계 확정 계산은 계속 `product_id` 기준이다. 제품군은 목록 검색, 대체 후보 검토, 가격/매출/재고 보조 분석 축으로만 사용한다.
+- **이유**: 품번을 합치면 Wp 계산, 단가/Wp, 원가, FIFO, 매출 분석이 틀어진다. 반대로 품번만 보면 같은 규격·라인의 출력 binning 제품이나 BOM 변종을 사람이 매번 머릿속으로 묶어야 한다. 거래 SKU와 제품군 분류를 분리하면 계산 정확성과 운영 탐색성을 동시에 지킬 수 있다.
+- **검증**:
+  - Go 모델 Validate에서 제품군 문자열 길이와 `product_variant_kind` 허용값을 차단한다.
+  - Excel Import Hub 품번 양식은 제품군/변종 필드를 업로드할 수 있어야 한다.
+- **날짜**: 2026-05-11
+
+## D-166: 운영 migration 은 적용 이력·DB 오브젝트·PostgREST 노출까지 확인한다
+
+- **결정**: 운영 배포에서 migration 적용 후 `scripts/verify_migration.ts` 로 반영 상태를 확인한다. 확인은 `schema_migrations` 적용 이력, DB column/constraint/index 존재 여부, PostgREST schema cache 노출 여부를 순서대로 본다. 실패하면 Go 재시작을 보류한다.
+- **운영 기준**:
+  - `scripts/apply_migrations.ts` 는 기존처럼 SQL 적용과 `NOTIFY pgrst, 'reload schema'` 를 담당한다.
+  - `scripts/cron-deploy.sh` 는 migration 변경 감지 시 적용 후 변경된 파일마다 `verify_migration.ts` 를 실행한다.
+  - `091_price_benchmark_review_status.sql` 은 built-in preset 으로 `price_benchmarks.review_status`, CHECK constraint, review_status index, PostgREST column select 를 확인한다.
+  - 새 migration 은 필요 시 `--column`, `--constraint`, `--index`, `--postgrest` 옵션으로 검증 대상을 명시한다.
+- **이유**: migration 파일이 main 에 있어도 운영 DB 반영, PostgREST schema cache 갱신, Go/supabase-go 저장 경로가 동시에 맞지 않으면 PGRST204 → Go 500 으로 이어진다. 적용과 확인을 분리해 기록하면 “적용됨”과 “운영 API가 새 컬럼을 볼 수 있음”을 구분할 수 있다.
+- **검증**:
+  - `bun scripts/verify_migration.ts --help` 로 CLI 사용법과 옵션 파싱을 확인한다.
+  - `bash -n scripts/cron-deploy.sh` 로 배포 스크립트 문법을 확인한다.
+- **날짜**: 2026-05-11
+>>>>>>> main

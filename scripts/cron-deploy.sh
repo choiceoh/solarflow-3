@@ -6,13 +6,13 @@
 #   1) git pull --ff-only origin main
 #   2) HEAD 차이 없으면 즉시 종료
 #   3) 차이 있으면 변경된 파일을 분류:
-#      backend/migrations/*.sql        → apply_migrations.ts 호출 (Bun.SQL, 헤더 게이트)
+#      backend/migrations/*.sql        → apply_migrations.ts 호출 후 verify_migration.ts 확인
 #      backend/(non-migration)         → Go 빌드 + solarflow-go 재시작
 #      engine/(src|Cargo.{toml,lock})  → Rust 빌드 + solarflow-engine 재시작
 #      frontend/*                      → 무시 (Cloudflare Pages 자동 배포)
 #      그 외 (docs/harness 등)         → 무시
-#   4) 마이그레이션은 `-- @auto-apply: yes` 헤더 있는 파일만 자동 적용.
-#      미게이트 파일은 SKIP + 경고. 마이그레이션 SQL 실패 시 Go 재시작 생략 (DB 정합 우선).
+#   4) 마이그레이션은 apply_migrations.ts 정책으로 자동/skip 결정.
+#      SQL 실패 또는 반영 확인 실패 시 Go 재시작 생략 (DB 정합 우선).
 #   5) 빌드 실패 시 재시작 생략 — 기존 서비스 유지
 #   6) [자동 롤백] 재시작 후 health(/health) 실패 시 이전 바이너리(.prev)로 복원하고
 #      다시 재시작. Go·Rust 모두 적용. .prev는 빌드 직전 백업으로 갱신됨.
@@ -49,6 +49,7 @@ LOCK=/tmp/solarflow-cron-deploy.lock
 GO_DIR="$REPO/backend"
 ENGINE_DIR="$REPO/engine"
 APPLY_MIG_TS="$REPO/scripts/apply_migrations.ts"
+VERIFY_MIG_TS="$REPO/scripts/verify_migration.ts"
 BUN_BIN="$HOME/.bun/bin/bun"                  # Bun 1.2+ — Bun.SQL 로 PostgreSQL 직결
 
 # 동시 실행 방지 (이전 실행이 빌드 중이면 skip)
@@ -144,6 +145,26 @@ if [[ $has_migration -eq 1 ]]; then
     echo "[$(date -Iseconds)] apply_migrations.ts 실행 (bun)"
     if "$BUN_BIN" "$APPLY_MIG_TS"; then
       echo "[$(date -Iseconds)] 마이그레이션 적용 완료"
+      if [[ -f "$VERIFY_MIG_TS" ]]; then
+        verify_ok=1
+        echo "[$(date -Iseconds)] 마이그레이션 반영 확인 실행"
+        for m in "${migrations[@]}"; do
+          name="$(basename "$m")"
+          if "$BUN_BIN" "$VERIFY_MIG_TS" "$name"; then
+            echo "[$(date -Iseconds)]   ✓ $name 반영 확인 완료"
+          else
+            rc=$?
+            echo "[$(date -Iseconds)]   ❌ $name 반영 확인 실패 (exit=$rc)"
+            verify_ok=0
+          fi
+        done
+        if [[ $verify_ok -ne 1 ]]; then
+          echo "[$(date -Iseconds)] ❌ 마이그레이션 반영 확인 실패 — Go 재시작 보류"
+          mig_ok=0
+        fi
+      else
+        echo "[$(date -Iseconds)] ⚠️  verify_migration.ts 없음 — 반영 확인 생략"
+      fi
     else
       rc=$?
       echo "[$(date -Iseconds)] ❌ apply_migrations.ts 실패 (exit=$rc) — Go 재시작 보류"
