@@ -2,7 +2,7 @@
 // 비유: 발주서 한 장 — 헤더(법인·제조사·계약) + 라인(품번·수량·단가)을 한 화면에서 받는다.
 // 라인 추가/삭제로 N건을 한 PO에 묶는다. 등록 시 헤더+라인을 한 번에 POST하여 부분 저장을 막는다.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { Copy, Loader2, Plus, Trash2 } from 'lucide-react';
 import {
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { fetchWithAuth } from '@/lib/api';
 import { notify } from '@/lib/notify';
+import { parsePOQuickInput, type POQuickInputLine, type POQuickInputResult } from '@/lib/poQuickInput';
 import { useAppStore } from '@/stores/appStore';
 import { CONTRACT_TYPES_ACTIVE } from '@/types/procurement';
 import type { ContractType, PurchaseOrder } from '@/types/procurement';
@@ -117,14 +118,6 @@ function isBlankLine(line: DraftLine): boolean {
   return !line.product_id && !line.quantity && !line.unit_price_usd_wp && !line.memo;
 }
 
-function normalizeToken(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, '');
-}
-
-function parseNumberToken(value: string): number {
-  return Number(value.replace(/,/g, '').trim());
-}
-
 export default function POCreateDialog({
   open,
   onClose,
@@ -218,60 +211,66 @@ export default function POCreateDialog({
     setLines((prev) => (prev.length === 1 ? prev : prev.filter((l) => l.key !== key)));
   }
 
-  function productFromQuickText(rawProduct: string): ProductLite | null {
-    const q = normalizeToken(rawProduct);
-    if (!q) return null;
-    return products.find((p) => {
-      const code = normalizeToken(p.product_code);
-      const name = normalizeToken(p.product_name);
-      const spec = p.spec_wp ? normalizeToken(String(p.spec_wp)) : '';
-      return q === p.product_id ||
-        (!!code && (q.includes(code) || code.includes(q))) ||
-        (!!name && q.includes(name)) ||
-        (!!spec && q.includes(spec));
-    }) ?? null;
+  function draftLineFromQuick(line: POQuickInputLine): DraftLine {
+    return {
+      ...newLine(),
+      product_id: line.product_id,
+      quantity: String(line.quantity),
+      unit_price_usd_wp: String(line.unit_price_usd_wp),
+      item_type: line.item_type,
+      payment_type: line.payment_type,
+      memo: line.memo,
+    };
   }
 
-  function applyQuickInput() {
-    const rows = quickInput.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
-    if (rows.length === 0) return;
-    const parsed: DraftLine[] = [];
-    const errors: string[] = [];
-    for (const [idx, row] of rows.entries()) {
-      const tabCols = row.split(/\t/).map((c) => c.trim()).filter(Boolean);
-      const commaCols = row.split(',').map((c) => c.trim()).filter(Boolean);
-      const cols = tabCols.length >= 3 ? tabCols : commaCols.length === 3 ? commaCols : [];
-      const parsedByTail = cols.length >= 3
-        ? { productText: cols.slice(0, -2).join(' '), quantityText: cols[cols.length - 2], unitPriceText: cols[cols.length - 1] }
-        : (() => {
-            const match = row.match(/^(.*?)\s+([0-9][0-9,]*)\s+([0-9]*\.?[0-9]+)$/);
-            return match ? { productText: match[1], quantityText: match[2], unitPriceText: match[3] } : null;
-          })();
-      if (!parsedByTail) {
-        errors.push(`${idx + 1}행`);
-        continue;
-      }
-      const unitPriceUsdWp = parseNumberToken(parsedByTail.unitPriceText);
-      const quantity = parseNumberToken(parsedByTail.quantityText);
-      const product = productFromQuickText(parsedByTail.productText);
-      if (!product || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPriceUsdWp) || unitPriceUsdWp <= 0) {
-        errors.push(`${idx + 1}행`);
-        continue;
-      }
-      parsed.push({
-        ...newLine(),
-        product_id: product.product_id,
-        quantity: String(quantity),
-        unit_price_usd_wp: String(unitPriceUsdWp),
-      });
+  function quickInputErrorMessage(result: POQuickInputResult): string {
+    return result.errors
+      .slice(0, 5)
+      .map((err) => `${err.row}행 ${err.message}`)
+      .join(', ');
+  }
+
+  function appendQuickLines(result: POQuickInputResult, source: 'paste' | 'button') {
+    const parsed = result.lines.map(draftLineFromQuick);
+    if (result.errors.length > 0) {
+      notify.error(`빠른 입력 확인 필요: ${quickInputErrorMessage(result)}`);
+      return false;
     }
-    if (errors.length > 0) {
-      notify.error(`빠른 입력 확인 필요: ${errors.slice(0, 5).join(', ')}`);
-      return;
+    if (parsed.length === 0) {
+      if (source === 'button') notify.error('반영할 라인이 없습니다');
+      return false;
     }
     setLines((prev) => (prev.length === 1 && isBlankLine(prev[0]) ? parsed : [...prev, ...parsed]));
     setQuickInput('');
     notify.success(`${parsed.length}개 라인을 반영했습니다`);
+    return true;
+  }
+
+  function applyQuickInput() {
+    if (!quickInput.trim()) return;
+    appendQuickLines(parsePOQuickInput(quickInput, products), 'button');
+  }
+
+  function handleQuickPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const text = event.clipboardData.getData('text');
+    if (!text.trim()) return;
+    const result = parsePOQuickInput(text, products);
+    if (result.lines.length > 0 && result.errors.length === 0) {
+      event.preventDefault();
+      appendQuickLines(result, 'paste');
+      return;
+    }
+    const looksLikeQuickInput = text.includes('\t') || text.split(/\r?\n/).filter((r) => r.trim()).length > 1;
+    if (looksLikeQuickInput && result.errors.length > 0) {
+      notify.error(`자동 반영 보류: ${quickInputErrorMessage(result)}`);
+    }
+  }
+
+  function handleQuickKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      applyQuickInput();
+    }
   }
 
   // 등록 전 검증 — 메시지로만 막고, 인라인 표시는 1차 범위 외.
@@ -415,6 +414,8 @@ export default function POCreateDialog({
             <Textarea
               value={quickInput}
               onChange={(e) => setQuickInput(e.target.value)}
+              onPaste={handleQuickPaste}
+              onKeyDown={handleQuickKeyDown}
               placeholder="품번	수량	USD/Wp"
               rows={2}
               className="min-h-[56px] text-[12px]"

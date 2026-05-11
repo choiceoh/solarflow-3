@@ -5,13 +5,13 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | 가격예측 채택 상태 운영 반영 확인, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률 운영 검증, study 학습 페이지 1차 UI |
+| 다음 작업 | 가격예측 채택 상태 운영 반영 확인, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-161 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우) |
+| DECISIONS | D-001~D-162 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -102,6 +102,27 @@
 - `cd frontend && npm run test` 실패 — 현재 환경에 `bun` 런타임이 없어 `bun: not found`로 테스트 실행 전 종료
 - `git diff --check` 성공
 - `graphify update .` 성공
+
+---
+
+## 2026-05-11 세션 — PO 자동 빠른 입력 보강 (D-162)
+
+### 완료
+- PO 신규/변경계약 다이얼로그 빠른 입력 파서를 순수 로직으로 분리
+- 엑셀/메모장 붙여넣기 시 오류가 없으면 자동으로 라인 반영
+  - 헤더 행 자동 건너뛰기
+  - 탭/쉼표/공백 기반 `품번 수량 USD/Wp` 파싱
+  - 본품/스페어, 유상/무상, 메모 선택 컬럼 자동 반영
+- 품번 후보가 여러 개이거나 수량·단가가 잘못된 경우 자동 반영하지 않고 입력값 보존
+- D-162 결정 기록과 설계 정본 동기화
+
+### 검증
+- `cd frontend && bun test src/lib/poQuickInput.test.ts` 성공
+- `cd frontend && bun run build` 성공
+- `cd frontend && bun run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `cd frontend && bun run test` 성공 — 11 files / 98 tests (기존 act warning 출력)
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5103 nodes / 8293 edges / 415 communities (`graph.html`은 노드 수 초과로 생략)
 
 ---
 
