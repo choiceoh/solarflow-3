@@ -319,6 +319,7 @@ export interface SaleListParams {
   start?: string;
   end?: string;
   invoice_status?: string;
+  receipt_status?: string;
   erp_closed?: 'true' | 'false';
   q?: string;
   sort?: string;
@@ -347,6 +348,7 @@ export function useSaleList(params: SaleListParams): SaleListResult {
     params.start ?? '',
     params.end ?? '',
     params.invoice_status ?? '',
+    params.receipt_status ?? '',
     params.erp_closed ?? '',
     params.q ?? '',
     params.sort ?? '',
@@ -363,6 +365,7 @@ export function useSaleList(params: SaleListParams): SaleListResult {
       if (params.start) search.set('start', params.start);
       if (params.end) search.set('end', params.end);
       if (params.invoice_status) search.set('invoice_status', params.invoice_status);
+      if (params.receipt_status) search.set('receipt_status', params.receipt_status);
       if (params.erp_closed) search.set('erp_closed', params.erp_closed);
       if (params.q) search.set('q', params.q);
       if (params.sort) search.set('sort', params.sort);
@@ -432,6 +435,7 @@ export interface SaleDashboardFilters {
   start?: string
   end?: string
   invoice_status?: string
+  receipt_status?: string
   erp_closed?: 'true' | 'false'
   q?: string
 }
@@ -446,6 +450,7 @@ export function useSaleDashboard(filters: SaleDashboardFilters = {}) {
     filters.start ?? '',
     filters.end ?? '',
     filters.invoice_status ?? '',
+    filters.receipt_status ?? '',
     filters.erp_closed ?? '',
     filters.q ?? '',
   ]
@@ -458,6 +463,7 @@ export function useSaleDashboard(filters: SaleDashboardFilters = {}) {
       if (filters.start) params.set('start', filters.start)
       if (filters.end) params.set('end', filters.end)
       if (filters.invoice_status) params.set('invoice_status', filters.invoice_status)
+      if (filters.receipt_status) params.set('receipt_status', filters.receipt_status)
       if (filters.erp_closed) params.set('erp_closed', filters.erp_closed)
       if (filters.q) params.set('q', filters.q)
       return fetchWithAuth<SaleDashboard>(`/api/v1/sales/dashboard?${params}`)
@@ -532,6 +538,7 @@ export function useSaleSummary(params: Omit<SaleListParams, 'pageIndex' | 'pageS
     params.start ?? '',
     params.end ?? '',
     params.invoice_status ?? '',
+    params.receipt_status ?? '',
     params.erp_closed ?? '',
     params.q ?? '',
   ];
@@ -544,6 +551,7 @@ export function useSaleSummary(params: Omit<SaleListParams, 'pageIndex' | 'pageS
       if (params.start) search.set('start', params.start);
       if (params.end) search.set('end', params.end);
       if (params.invoice_status) search.set('invoice_status', params.invoice_status);
+      if (params.receipt_status) search.set('receipt_status', params.receipt_status);
       if (params.erp_closed) search.set('erp_closed', params.erp_closed);
       if (params.q) search.set('q', params.q);
       return fetchWithAuth<SaleSummary>(`/api/v1/sales/summary?${search}`);

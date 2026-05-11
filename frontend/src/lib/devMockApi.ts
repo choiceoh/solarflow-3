@@ -516,6 +516,23 @@ function filterRows<T extends CompanyScoped>(rows: T[], url: URL, body: MockRow)
   }));
 }
 
+function saleRowsForUrl(url: URL, body: MockRow) {
+  const invoiceStatus = queryValue(url, body, 'invoice_status');
+  const erpClosed = queryValue(url, body, 'erp_closed');
+  const receiptStatus = queryValue(url, body, 'receipt_status');
+  return filterRows(saleListRows(), url, body).filter((row) => {
+    if (invoiceStatus === 'issued' && !row.tax_invoice_date) return false;
+    if (invoiceStatus === 'pending' && row.tax_invoice_date) return false;
+    if (erpClosed === 'true' && row.sale.erp_closed !== true) return false;
+    if (erpClosed === 'false' && row.sale.erp_closed === true) return false;
+    if (receiptStatus === 'open') return row.receipt_status === 'unpaid' || row.receipt_status === 'partial';
+    if (receiptStatus === 'unpaid' || receiptStatus === 'partial' || receiptStatus === 'paid') {
+      return row.receipt_status === receiptStatus;
+    }
+    return true;
+  });
+}
+
 function inventoryResponse() {
   const items = productStocks.map((stock) => {
     const product = products.find((item) => item.product_id === stock.product_id)!;
@@ -1212,6 +1229,9 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
   if (url.pathname.startsWith('/api/v1/inventory/allocations/')) {
     return collectionRoute<T>(url, body, allocations, 'alloc_id', 'inventory/allocations');
   }
+  if (url.pathname === '/api/v1/sales') {
+    return clone(saleRowsForUrl(url, body) as T);
+  }
 
   const routes: Record<string, { rows: MockRow[]; idKey: string; collection: string }> = {
     '/api/v1/companies': { rows: companies, idKey: 'company_id', collection: 'companies' },
@@ -1230,7 +1250,6 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     '/api/v1/inventory/allocations': { rows: allocations, idKey: 'alloc_id', collection: 'inventory/allocations' },
     '/api/v1/orders': { rows: orders, idKey: 'order_id', collection: 'orders' },
     '/api/v1/outbounds': { rows: outbounds.map((outbound) => ({ ...outbound, sale: sales.find((sale) => sale.outbound_id === outbound.outbound_id) })), idKey: 'outbound_id', collection: 'outbounds' },
-    '/api/v1/sales': { rows: saleListRows(), idKey: 'sale_id', collection: 'sales' },
     '/api/v1/receipts': { rows: receipts, idKey: 'receipt_id', collection: 'receipts' },
     '/api/v1/receipt-matches': { rows: receiptMatches, idKey: 'match_id', collection: 'receipt-matches' },
     '/api/v1/declarations': { rows: declarations, idKey: 'declaration_id', collection: 'declarations' },

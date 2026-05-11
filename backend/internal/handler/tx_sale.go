@@ -288,6 +288,17 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 		query = query.Is("tax_invoice_date", "null")
 	}
 
+	if receiptStatus := r.URL.Query().Get("receipt_status"); receiptStatus != "" {
+		ids, err := h.saleIDsByReceiptStatus(receiptStatus)
+		if err != nil {
+			return query, false, fmt.Errorf("수금 상태 필터 실패: %w", err)
+		}
+		if len(ids) == 0 {
+			return query, false, nil
+		}
+		query = query.In("sale_id", ids)
+	}
+
 	// company_id: outbound_id IN (...) OR order_id IN (...)
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
 		outIDs, ordIDs, err := h.idsByCompany(compID)
@@ -322,6 +333,84 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 	return query, true, nil
 }
 
+type saleReceiptStatusRow struct {
+	SaleID      string   `json:"sale_id"`
+	OutboundID  *string  `json:"outbound_id"`
+	TotalAmount *float64 `json:"total_amount"`
+}
+
+func saleReceiptStatusMatches(filter string, totalAmount float64, collectedAmount float64) bool {
+	if totalAmount <= receiptMatchAmountEpsilon {
+		return false
+	}
+	outstandingAmount := totalAmount - collectedAmount
+	if outstandingAmount < 0 {
+		outstandingAmount = 0
+	}
+	switch filter {
+	case "open":
+		return outstandingAmount > receiptMatchAmountEpsilon
+	case "unpaid":
+		return outstandingAmount > receiptMatchAmountEpsilon && collectedAmount <= receiptMatchAmountEpsilon
+	case "partial":
+		return outstandingAmount > receiptMatchAmountEpsilon && collectedAmount > receiptMatchAmountEpsilon
+	case "paid":
+		return outstandingAmount <= receiptMatchAmountEpsilon
+	default:
+		return false
+	}
+}
+
+func (h *SaleHandler) saleIDsByReceiptStatus(filter string) ([]string, error) {
+	switch filter {
+	case "open", "unpaid", "partial", "paid":
+	default:
+		return nil, nil
+	}
+
+	var sales []saleReceiptStatusRow
+	if data, err := fetchAllFromTable(h.DB, "sales", "sale_id,outbound_id,total_amount"); err != nil {
+		return nil, err
+	} else if err := json.Unmarshal(data, &sales); err != nil {
+		return nil, err
+	}
+
+	var receiptMatches []receiptMatchTargetAmountRow
+	if data, err := fetchAllFromTable(h.DB, "receipt_matches", "outbound_id,sale_id,matched_amount"); err != nil {
+		return nil, err
+	} else if err := json.Unmarshal(data, &receiptMatches); err != nil {
+		return nil, err
+	}
+
+	collectedBySaleID := make(map[string]float64)
+	collectedByOutboundID := make(map[string]float64)
+	for _, match := range receiptMatches {
+		if match.SaleID != nil && *match.SaleID != "" {
+			collectedBySaleID[*match.SaleID] += match.MatchedAmount
+			continue
+		}
+		if match.OutboundID != nil && *match.OutboundID != "" {
+			collectedByOutboundID[*match.OutboundID] += match.MatchedAmount
+		}
+	}
+
+	ids := make([]string, 0, len(sales))
+	for _, sale := range sales {
+		totalAmount := 0.0
+		if sale.TotalAmount != nil {
+			totalAmount = *sale.TotalAmount
+		}
+		collectedAmount := collectedBySaleID[sale.SaleID]
+		if sale.OutboundID != nil && *sale.OutboundID != "" {
+			collectedAmount += collectedByOutboundID[*sale.OutboundID]
+		}
+		if saleReceiptStatusMatches(filter, totalAmount, collectedAmount) {
+			ids = append(ids, sale.SaleID)
+		}
+	}
+	return ids, nil
+}
+
 func parseSaleSort(r *http.Request) (column string, ascending bool) {
 	column = "tax_invoice_date"
 	ascending = false
@@ -341,6 +430,7 @@ func parseSaleSort(r *http.Request) (column string, ascending bool) {
 //   - limit/offset (기본 100, 최대 1000), sort/order (화이트리스트), q (거래처 검색)
 //   - company_id/customer_id/outbound_id/order_id/erp_closed/status: 등치 필터
 //   - month: tax_invoice_date prefix 매칭, invoice_status: issued/pending
+//   - receipt_status: open/unpaid/partial/paid
 //
 // 응답 헤더 X-Total-Count.
 func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
