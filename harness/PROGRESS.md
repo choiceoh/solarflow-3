@@ -16,6 +16,21 @@
 
 ---
 
+## 2026-05-11 세션 — KPI 표시 메뉴 위치 정리
+
+### 완료
+- 공통 KPI 표시 메뉴를 KPI 그리드 위 별도 줄에서 화면 우상단 액션 영역으로 이동
+- KPI가 있는 화면에서는 `KPI` 메뉴가 `엑셀 입력` 버튼 옆에 표시되도록 shell slot + portal 구조로 정리
+- shell slot이 없는 테스트/독립 렌더 환경에서는 기존처럼 KPI 그리드 위에 fallback 표시
+- 설계 정본과 D-163 결정 기록의 표시 위치 기준 동기화
+
+### 검증
+- `cd frontend && npm install --no-package-lock` 성공 — 로컬 의존성 설치, lockfile 미생성
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
+- `cd frontend && npm run test` 성공 — 98 tests, 기존 AllocationForm/POListTable React `act(...)` 경고 출력
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5113 nodes / 8289 edges / 410 communities
 ## 2026-05-11 세션 — 가격예측 AI 관측값 표 표시 복구
 
 ### 완료
