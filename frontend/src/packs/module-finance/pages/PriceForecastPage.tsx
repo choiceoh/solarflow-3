@@ -50,6 +50,10 @@ import type {
   PriceBenchmark,
   PriceBenchmarkAIRefreshResult,
   PriceBenchmarkRun,
+  PriceForecastScenario,
+  PriceForecastSourceQuality,
+  PriceForecastStrategyRequest,
+  PriceForecastStrategyResponse,
 } from '@/types/priceBenchmark';
 
 const SOURCE_OPTIONS = [
@@ -265,6 +269,17 @@ function formatDeltaPct(value: number | null | undefined) {
   return `${sign}${value.toFixed(1)}%`;
 }
 
+function formatPercent(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return '—';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(1)}%`;
+}
+
+function formatScenarioRange(scenario: PriceForecastScenario | null | undefined) {
+  if (!scenario || scenario.low_usd_w == null || scenario.high_usd_w == null) return '—';
+  return `${formatUnitPrice(scenario.low_usd_w, 'usd')} ~ ${formatUnitPrice(scenario.high_usd_w, 'usd')}`;
+}
+
 function directionTone(value: number | null | undefined): 'up' | 'down' | 'flat' {
   if (value == null || !Number.isFinite(value) || Math.abs(value) < 1.5) return 'flat';
   return value > 0 ? 'up' : 'down';
@@ -386,6 +401,26 @@ function runHealthLabel(status: RunSourceHealth['status']) {
   return '정상';
 }
 
+function qualityVariant(status: PriceForecastSourceQuality['status']): 'default' | 'secondary' | 'outline' | 'destructive' {
+  if (status === 'stale') return 'destructive';
+  if (status === 'watch') return 'secondary';
+  if (status === 'ok') return 'default';
+  return 'outline';
+}
+
+function qualityLabel(status: PriceForecastSourceQuality['status']) {
+  if (status === 'stale') return '보강';
+  if (status === 'watch') return '확인';
+  if (status === 'ok') return '정상';
+  return status;
+}
+
+function strategyToneClass(tone: PriceForecastStrategyResponse['tone'] | undefined) {
+  if (tone === 'positive') return 'text-emerald-700';
+  if (tone === 'warning') return 'text-amber-700';
+  return 'text-[var(--ink)]';
+}
+
 function csvCell(value: unknown): string {
   const text = value == null ? '' : String(value);
   return `"${text.replaceAll('"', '""')}"`;
@@ -395,6 +430,8 @@ export default function PriceForecastPage() {
   const [rows, setRows] = useState<PriceBenchmark[]>([]);
   const [runs, setRuns] = useState<PriceBenchmarkRun[]>([]);
   const [ourPrices, setOurPrices] = useState<OurPricesResponse | null>(null);
+  const [forecastStrategy, setForecastStrategy] = useState<PriceForecastStrategyResponse | null>(null);
+  const [strategyLoading, setStrategyLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -630,6 +667,66 @@ export default function PriceForecastPage() {
   const latestTenderForUnit = latestBenchmarkByMetric(selectedSourceRows, 'china_state_tender', unit);
   const latestFloorForUnit = latestBenchmarkByMetric(selectedSourceRows, 'cpia_cost_floor', unit);
   const ownPurchaseUSD = latestOwnPurchase(ourPrices, 'usd');
+  const strategyRequest = useMemo<PriceForecastStrategyRequest | null>(() => {
+    const observations = selectedSourceRows
+      .filter((row) => row.price_usd_w != null && Number.isFinite(Number(row.price_usd_w)) && Number(row.price_usd_w) > 0)
+      .map((row) => ({
+        source_key: row.source_key,
+        source_name: row.source_name,
+        metric_key: row.metric_key,
+        metric_label: row.metric_label,
+        value_date: row.value_date,
+        market_region: row.market_region,
+        basis: row.basis,
+        price_usd_w: row.price_usd_w ?? null,
+        price_cny_w: row.price_cny_w ?? null,
+        price_krw_w: row.price_krw_w ?? null,
+        confidence: row.confidence ?? null,
+      }));
+    if (observations.length === 0) return null;
+    return {
+      unit: 'usd',
+      observations,
+      own_purchase_usd_w: ownPurchaseUSD?.value ?? null,
+      own_purchase_date: ownPurchaseUSD?.date ?? null,
+      runs: runs.map((run) => ({
+        status: run.status,
+        started_at: run.started_at,
+        source_keys: parseRunStringArray(run.source_keys),
+        warnings: parseRunWarnings(run.warnings),
+      })),
+    };
+  }, [ownPurchaseUSD?.date, ownPurchaseUSD?.value, runs, selectedSourceRows]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!strategyRequest) {
+      setForecastStrategy(null);
+      setStrategyLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setStrategyLoading(true);
+    fetchWithAuth<PriceForecastStrategyResponse>('/api/v1/calc/price-forecast-strategy', {
+      method: 'POST',
+      body: JSON.stringify(strategyRequest),
+    })
+      .then((response) => {
+        if (!cancelled) setForecastStrategy(response);
+      })
+      .catch((err) => {
+        console.warn('[SolarFlow] 가격전망 Rust 계산 실패:', err);
+        if (!cancelled) setForecastStrategy(null);
+      })
+      .finally(() => {
+        if (!cancelled) setStrategyLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [strategyRequest]);
+
   const latestCmmUSD = latestBenchmarkByMetric(selectedSourceRows, 'cmm_fob_china_topcon_600w', 'usd');
   const latestFloorUSD = latestBenchmarkByMetric(selectedSourceRows, 'cpia_cost_floor', 'usd');
   const cmmTrendUSD = latestTwoBenchmarkValues(selectedSourceRows, 'cmm_fob_china_topcon_600w', 'usd');
@@ -643,20 +740,26 @@ export default function PriceForecastPage() {
   const cmmTrend = directionTone(cmmTrendPct);
   const oneMonthView = cmmTrend === 'up' ? '상승' : cmmTrend === 'down' ? '하락' : '보합';
   const threeMonthView = cmmVsFloorPct != null && cmmVsFloorPct < 4 ? '하방 제한' : oneMonthView;
-  const strategyLabel = (() => {
+  const fallbackStrategyLabel = (() => {
     if (!latestCmmUSD) return '관측 보강';
     if (cmmTrend === 'up' && (purchaseVsCmmPct == null || purchaseVsCmmPct <= 2)) return '즉시 협상';
     if (cmmTrend === 'down' && purchaseVsCmmPct != null && purchaseVsCmmPct > 2) return '분할 매입';
     if (cmmVsFloorPct != null && cmmVsFloorPct < 4) return '관망 제한';
     return '조건부 관망';
   })();
-  const strategyNote = (() => {
+  const fallbackStrategyNote = (() => {
     if (!latestCmmUSD) return 'CMM 관측값이 들어오면 판단 정확도가 올라갑니다';
-    if (strategyLabel === '즉시 협상') return '상승 흐름 대비 현재 계약가를 빠르게 잠그는 쪽이 유리합니다';
-    if (strategyLabel === '분할 매입') return '시장가 대비 계약가가 높아 단가 확인 후 나눠 잡는 편이 낫습니다';
-    if (strategyLabel === '관망 제한') return '원가 floor와 가까워 추가 하락 여지가 제한적입니다';
+    if (fallbackStrategyLabel === '즉시 협상') return '상승 흐름 대비 현재 계약가를 빠르게 잠그는 쪽이 유리합니다';
+    if (fallbackStrategyLabel === '분할 매입') return '시장가 대비 계약가가 높아 단가 확인 후 나눠 잡는 편이 낫습니다';
+    if (fallbackStrategyLabel === '관망 제한') return '원가 floor와 가까워 추가 하락 여지가 제한적입니다';
     return '추가 입찰가와 forward 확인 후 계약 시점을 정하는 편이 안정적입니다';
   })();
+  const strategyDisplayLabel = forecastStrategy?.action_label ?? fallbackStrategyLabel;
+  const strategyDisplayNote = forecastStrategy?.note ?? fallbackStrategyNote;
+  const strategyOneMonthView = forecastStrategy?.one_month_view ?? oneMonthView;
+  const strategyThreeMonthView = forecastStrategy?.three_month_view ?? threeMonthView;
+  const strategySixMonthView = forecastStrategy?.six_month_view ?? '—';
+  const strategyBasis = forecastStrategy?.basis.slice(0, 4) ?? [];
 
   const runLatest = runs[0] ?? null;
   const latestCmm = latestByMetric.get('cmm_fob_china_topcon_600w');
@@ -1054,12 +1157,99 @@ export default function PriceForecastPage() {
             <div className="mb-2 flex items-center gap-2">
               <TrendingUp className="h-3.5 w-3.5 text-[var(--ink-3)]" />
               <div className="sf-eyebrow">예측 · 전략</div>
+              <Badge variant={forecastStrategy ? 'default' : 'outline'} className="ml-auto text-[10px]">
+                {strategyLoading ? 'Rust 계산중' : forecastStrategy ? 'Rust' : '화면 계산'}
+              </Badge>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-lg font-semibold">{strategyLabel}</span>
-              <span className="text-xs text-muted-foreground">1개월 {oneMonthView} · 3개월 {threeMonthView}</span>
+              <span className={`text-lg font-semibold ${strategyToneClass(forecastStrategy?.tone)}`}>{strategyDisplayLabel}</span>
+              <span className="text-xs text-muted-foreground">
+                1개월 {strategyOneMonthView} · 3개월 {strategyThreeMonthView} · 6개월 {strategySixMonthView}
+              </span>
             </div>
-            <div className="mt-1 text-[11px] text-muted-foreground">{strategyNote}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">{strategyDisplayNote}</div>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {strategyBasis.length > 0 ? strategyBasis.map((item) => (
+                <Badge key={item} variant="outline" className="text-[10px]">{item}</Badge>
+              )) : (
+                <Badge variant="outline" className="text-[10px]">근거 대기</Badge>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+          <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <div className="sf-eyebrow">Rust 전망 시나리오</div>
+                <div className="text-[11px] text-muted-foreground">USD/W 기준 · 1/3/6개월 범위</div>
+              </div>
+              <Badge variant="outline" className="text-[10px]">
+                신뢰 {formatConfidence(forecastStrategy?.confidence_score)}
+              </Badge>
+            </div>
+            <div className="mb-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+              <span>CMM 추세 {formatPercent(forecastStrategy?.market.cmm_trend_pct)}</span>
+              <span>구매가 대비 {formatPercent(forecastStrategy?.market.purchase_vs_cmm_pct)}</span>
+              <span>Floor gap {formatPercent(forecastStrategy?.market.cmm_vs_floor_pct)}</span>
+            </div>
+            <div className="divide-y divide-[var(--line)]">
+              {(forecastStrategy?.scenarios ?? []).map((scenario) => (
+                <div key={scenario.key} className="grid gap-2 py-2 text-xs md:grid-cols-[72px_minmax(0,1fr)_minmax(120px,0.6fr)] md:items-center">
+                  <div className="font-semibold text-[var(--ink)]">{scenario.label}</div>
+                  <div>
+                    <div className="font-semibold tabular-nums">{formatScenarioRange(scenario)}</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      Base {formatUnitPrice(scenario.base_usd_w, 'usd')}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {scenario.drivers.slice(0, 2).map((driver) => (
+                      <Badge key={driver} variant="outline" className="text-[10px]">{driver}</Badge>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {!forecastStrategy ? (
+                <div className="py-5 text-center text-sm text-muted-foreground">
+                  {strategyLoading ? 'Rust 계산 결과를 불러오는 중입니다' : '전망 계산에 필요한 관측값을 기다립니다'}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <div className="sf-eyebrow">데이터 품질</div>
+                <div className="text-[11px] text-muted-foreground">최근성·신뢰도·수집 경고 점수</div>
+              </div>
+              <Badge variant="outline" className="text-[10px]">
+                {(forecastStrategy?.source_quality.length ?? 0).toLocaleString('ko-KR')} sources
+              </Badge>
+            </div>
+            <div className="space-y-2">
+              {(forecastStrategy?.source_quality ?? []).slice(0, 6).map((item) => (
+                <div key={item.source_key} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-[var(--line)] pb-2 text-xs last:border-b-0 last:pb-0">
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold text-[var(--ink)]">{item.source_name}</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      {item.latest_date ? formatDate(item.latest_date) : '최근일 없음'} · {item.observation_count}건 · {item.note}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold tabular-nums">{Math.round(item.score)}</span>
+                    <Badge variant={qualityVariant(item.status)} className="text-[10px]">{qualityLabel(item.status)}</Badge>
+                  </div>
+                </div>
+              ))}
+              {!forecastStrategy ? (
+                <div className="py-5 text-center text-sm text-muted-foreground">
+                  품질 점수 계산 대기
+                </div>
+              ) : null}
+            </div>
           </div>
         </section>
 

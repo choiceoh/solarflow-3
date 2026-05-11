@@ -10,8 +10,8 @@
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
-| Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-158 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭) |
+| Rust 테스트 | cargo test PASS |
+| DECISIONS | D-001~D-159 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -39,6 +39,27 @@
 - `cd frontend && npm run build` 성공
 - `cd frontend && npm run lint` 종료코드 0 — 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
 - `git diff --check` 성공
+- `graphify update .` 성공
+
+---
+
+## 2026-05-11 세션 — 가격예측 Rust 전략 산출 + 데이터 품질 카드 (D-159)
+
+### 완료
+- Rust 계산엔진에 `/api/calc/price-forecast-strategy` 추가
+  - CMM/forward/중국 입찰/CPIA floor/우리 최근 구매가를 USD/W 기준으로 조합
+  - action, 1/3/6개월 low/base/high 시나리오, source 품질 점수, CMM trend/floor gap/구매가 대비율 반환
+- Go `CalcProxyHandler`와 feature catalog/matrix/router snapshot에 `calc.price_forecast_strategy` 추가
+- `/price-forecast` 화면에 Rust 전략 badge, 전망 시나리오, 데이터 품질 카드 추가
+- dev mock price benchmark에 forward/floor 샘플과 전략 응답 추가
+- 설계문서/DECISIONS/module 문서에 AI 수집과 Rust 계산 정본 분리 기준 기록
+
+### 검증
+- `cd engine && cargo test` 성공
+- `cd engine && cargo build --release` 성공 — 기존 dead code warning 출력
+- `cd backend && go test ./...` 성공
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 성공(exit 0) — 기존 excelValidation optional-chain 경고, ProcurementPage hook dependency 경고, bun-test suppression 경고만 출력
 - `graphify update .` 성공
 
 ---
@@ -1833,7 +1854,7 @@ launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.solarflow.engine.plist
 cd ~/solarflow-3/frontend && npm run build
 ```
 
-### Rust API 엔드포인트 (16개)
+### Rust API 엔드포인트 (18개)
 - /health, /health/ready
 - /api/calc/inventory (재고 집계)
 - /api/calc/landed-cost (Landed Cost)
@@ -1844,7 +1865,9 @@ cd ~/solarflow-3/frontend && npm run build
 - /api/calc/margin-analysis (마진 분석)
 - /api/calc/customer-analysis (거래처 분석)
 - /api/calc/price-trend (단가 추이)
+- /api/calc/price-forecast-strategy (가격예측 전략)
 - /api/calc/supply-forecast (수급 전망)
+- /api/calc/order-fulfillment-risk (수주 충당 위험도)
 - /api/calc/outstanding-list (미수금 목록)
 - /api/calc/receipt-match-suggest (수금 매칭 추천)
 - /api/calc/search (자연어 검색)
@@ -1885,7 +1908,7 @@ cd ~/solarflow-3/frontend && npm run build
 ### Phase 4: 프론트엔드 + 연동 + 배포 (완료)
 | 작업 | 감리 점수 | 비고 |
 |------|----------|------|
-| Step 20: 인증 + CORS + CalcProxy | ✅ 완료 | CORS, 프록시 16개, users/me, 로그인 UI |
+| Step 20: 인증 + CORS + CalcProxy | ✅ 완료 | CORS, 프록시 18개, users/me, 로그인 UI |
 | Step 21: 레이아웃 + 마스터 CRUD 6개 | ✅ 완료 | AppLayout, Sidebar(역할별), DataTable, 6개 마스터 페이지+폼 |
 | Step 22: 재고 화면 + 수급 전망 | ✅ 완료 | 3탭(재고/미착품/수급전망), 요약카드, 장기재고Badge, insufficient경고 |
 | Step 23: 입고 관리 (B/L+라인) | ✅ 완료 | 목록/상세/생성/수정, 상태6단계, 입고유형4종, 라인아이템CRUD |

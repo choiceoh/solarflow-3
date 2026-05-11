@@ -788,6 +788,60 @@ function orderFulfillmentRiskResponse(body: MockRow) {
   };
 }
 
+function latestMockPrice(observations: MockRow[], metricKey: string): number | null {
+  const matches = observations
+    .filter((row) => row.metric_key === metricKey && typeof row.price_usd_w === 'number' && Number.isFinite(row.price_usd_w))
+    .sort((a, b) => String(a.value_date ?? '').localeCompare(String(b.value_date ?? '')));
+  const latest = matches[matches.length - 1];
+  return typeof latest?.price_usd_w === 'number' ? latest.price_usd_w : null;
+}
+
+function priceForecastStrategyResponse(body: MockRow): MockRow {
+  const observations = Array.isArray(body.observations) ? body.observations.filter((row): row is MockRow => Boolean(row)) : priceBenchmarks();
+  const cmm = latestMockPrice(observations, 'cmm_fob_china_topcon_600w') ?? 0.093;
+  const tender = latestMockPrice(observations, 'china_state_tender') ?? 0.118;
+  const floor = latestMockPrice(observations, 'cpia_cost_floor') ?? 0.087;
+  const forward = latestMockPrice(observations, 'forward_q1') ?? 0.094;
+  const low = Math.max(floor * 1.005, forward * 0.965);
+  const high = forward * 1.045;
+  return {
+    action_key: 'short_wait',
+    action_label: '짧은 관망',
+    tone: 'neutral',
+    confidence_score: 0.83,
+    one_month_view: '보합',
+    three_month_view: cmm - floor < 0.006 ? '하방 제한' : '보합',
+    six_month_view: '보합',
+    note: '원가 floor와 가까워 추가 하락 여지가 제한적입니다.',
+    basis: ['CMM FOB China', 'Forward curve', '중국 국영 입찰', 'CPIA 원가 floor'],
+    market: {
+      latest_cmm_usd_w: cmm,
+      latest_floor_usd_w: floor,
+      latest_tender_usd_w: tender,
+      cmm_trend_pct: -1.08,
+      purchase_vs_cmm_pct: 1.6,
+      cmm_vs_floor_pct: Number((((cmm - floor) / cmm) * 100).toFixed(2)),
+    },
+    scenarios: [
+      { key: '1m', label: '1개월', horizon_months: 1, low_usd_w: Number(low.toFixed(4)), base_usd_w: forward, high_usd_w: Number(high.toFixed(4)), drivers: ['CMM/현물 기준', 'Forward 반영', 'CPIA floor 하방 제한'] },
+      { key: '3m', label: '3개월', horizon_months: 3, low_usd_w: Number((low * 0.995).toFixed(4)), base_usd_w: Number(((forward + tender) / 2).toFixed(4)), high_usd_w: Number((high * 1.01).toFixed(4)), drivers: ['Forward 반영', '중국 입찰가 보정'] },
+      { key: '6m', label: '6개월', horizon_months: 6, low_usd_w: Number((low * 0.99).toFixed(4)), base_usd_w: Number(((forward + cmm) / 2).toFixed(4)), high_usd_w: Number((high * 1.02).toFixed(4)), drivers: ['Forward 반영', '현물 보조지표'] },
+    ],
+    source_quality: SOURCE_KEYS.map((key, index) => ({
+      source_key: key,
+      source_name: key === 'china_tender' ? '중국 국영 대량 입찰' : key === 'cpia_floor' ? 'CPIA' : key.toUpperCase(),
+      score: Math.max(58, 91 - index * 5),
+      status: index < 3 ? 'ok' : 'watch',
+      latest_date: '2026-04-15',
+      observation_count: key === 'opis' ? 18 : 3,
+      avg_confidence: key === 'opis' ? 0.82 : 0.72,
+      warning_count: 0,
+      note: index < 3 ? '정상' : '표본 추가 필요',
+    })),
+    calculated_at: nowIso,
+  };
+}
+
 function calcRoute<T>(url: URL, body: MockRow): T {
   switch (url.pathname) {
     case '/api/v1/calc/inventory':
@@ -802,6 +856,8 @@ function calcRoute<T>(url: URL, body: MockRow): T {
       return clone({ alerts: lcs.map((lc) => ({ lc_id: lc.lc_id, lc_number: lc.lc_number, po_number: lc.po_number, bank_name: lc.bank_name, amount_usd: lc.amount_usd, maturity_date: lc.maturity_date, days_remaining: lc.lc_id === 'lc-260405' ? 3 : 41, status: lc.status })) } as T);
     case '/api/v1/calc/price-trend':
       return clone(priceTrendResponse() as T);
+    case '/api/v1/calc/price-forecast-strategy':
+      return clone(priceForecastStrategyResponse(body) as T);
     case '/api/v1/calc/supply-forecast':
       return clone(supplyForecastResponse() as T);
     case '/api/v1/calc/inventory-turnover':
@@ -1073,14 +1129,14 @@ function priceHistories(): MockRow[] {
 
 function priceBenchmarks(): MockRow[] {
   const base = [
-    ['2025-11-15', 0.104, 0.132, 0.129],
-    ['2025-12-15', 0.101, 0.130, 0.126],
-    ['2026-01-15', 0.098, 0.128, 0.123],
-    ['2026-02-15', 0.096, 0.126, 0.121],
-    ['2026-03-15', 0.094, 0.124, 0.119],
-    ['2026-04-15', 0.093, 0.123, 0.118],
+    ['2025-11-15', 0.104, 0.132, 0.129, 0.105, 0.106, 0.092],
+    ['2025-12-15', 0.101, 0.130, 0.126, 0.102, 0.103, 0.091],
+    ['2026-01-15', 0.098, 0.128, 0.123, 0.099, 0.100, 0.090],
+    ['2026-02-15', 0.096, 0.126, 0.121, 0.097, 0.098, 0.089],
+    ['2026-03-15', 0.094, 0.124, 0.119, 0.095, 0.096, 0.088],
+    ['2026-04-15', 0.093, 0.123, 0.118, 0.094, 0.095, 0.087],
   ] as const;
-  return base.flatMap(([date, cmm, ddpEu, tender], index) => [
+  return base.flatMap(([date, cmm, ddpEu, tender, forwardQ1, forwardQ2, floor], index) => [
     {
       benchmark_id: `pb-opis-cmm-${index}`,
       run_id: 'pbr-mock-1',
@@ -1104,6 +1160,46 @@ function priceBenchmarks(): MockRow[] {
       updated_at: nowIso,
     },
     {
+      benchmark_id: `pb-opis-forward-q1-${index}`,
+      run_id: 'pbr-mock-1',
+      source_key: 'opis',
+      source_name: 'OPIS Solar Weekly',
+      metric_key: 'forward_q1',
+      metric_label: 'Forward Q+1',
+      value_date: date,
+      period_label: 'quarterly',
+      quarter_label: 'Q+1',
+      market_region: 'fob_china',
+      basis: 'forward',
+      currency: 'USD',
+      price_usd_w: forwardQ1,
+      confidence: 0.78,
+      source_url: 'https://www.opisnet.com/product/solar-weekly/',
+      raw_excerpt: 'Dev mock forward Q+1',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+    {
+      benchmark_id: `pb-opis-forward-q2-${index}`,
+      run_id: 'pbr-mock-1',
+      source_key: 'opis',
+      source_name: 'OPIS Solar Weekly',
+      metric_key: 'forward_q2',
+      metric_label: 'Forward Q+2',
+      value_date: date,
+      period_label: 'quarterly',
+      quarter_label: 'Q+2',
+      market_region: 'fob_china',
+      basis: 'forward',
+      currency: 'USD',
+      price_usd_w: forwardQ2,
+      confidence: 0.76,
+      source_url: 'https://www.opisnet.com/product/solar-weekly/',
+      raw_excerpt: 'Dev mock forward Q+2',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+    {
       benchmark_id: `pb-opis-ddp-eu-${index}`,
       run_id: 'pbr-mock-1',
       source_key: 'opis',
@@ -1121,6 +1217,25 @@ function priceBenchmarks(): MockRow[] {
       confidence: 0.78,
       source_url: 'https://www.opisnet.com/product/solar-weekly/',
       raw_excerpt: 'Dev mock DDP Europe observation',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+    {
+      benchmark_id: `pb-cpia-floor-${index}`,
+      run_id: 'pbr-mock-1',
+      source_key: 'cpia_floor',
+      source_name: 'CPIA',
+      metric_key: 'cpia_cost_floor',
+      metric_label: 'CPIA industry cost floor',
+      value_date: date,
+      period_label: 'monthly',
+      market_region: 'china_domestic',
+      basis: 'floor',
+      currency: 'USD',
+      price_usd_w: floor,
+      confidence: 0.70,
+      source_url: 'https://www.chinapv.org.cn/',
+      raw_excerpt: 'Dev mock CPIA cost floor',
       created_at: nowIso,
       updated_at: nowIso,
     },

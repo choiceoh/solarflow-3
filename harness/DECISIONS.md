@@ -1422,3 +1422,18 @@
   - `ReceiptMatchBulkRequest.Validate`는 잔액 처리 enum과 메모 길이를 검증한다.
   - AI sanitizer 테스트는 부분 후보를 보존하고 remaining 초과 후보를 버리는 동작을 고정한다.
 - **날짜**: 2026-05-11
+
+## D-159: 가격예측 구매 전략은 AI 예측이 아니라 Rust 계산엔진 산출값을 정본으로 삼는다
+
+- **결정**: `/price-forecast`의 구매 전략과 1/3/6개월 전망 시나리오는 신규 Rust endpoint `/api/calc/price-forecast-strategy`가 산출한다. Go는 `/api/v1/calc/price-forecast-strategy` 프록시와 feature gate만 담당하고, 프론트엔드는 외부 관측값·우리 최근 구매가·AI 수집 run 경고를 요청 본문으로 전달해 Rust 응답을 표시한다.
+- **이유**: 가격전망은 설명 가능성과 재현성이 중요하다. AI는 공개 근거 수집에는 유용하지만, 구매 의사결정 액션을 직접 생성하면 근거·회귀 테스트·테넌트 통제가 약해진다. CMM/forward/중국 입찰/CPIA floor/우리 구매가를 조합하는 계산은 Go+Rust 분리 원칙상 Rust 계산엔진에 두는 편이 맞다.
+- **운영 기준**:
+  - 입력 source는 D-151 이후 허용된 `opis / infolink / trendforce / pvinsights / china_tender / cpia_floor`만 사용한다. Tier-1 ASP는 전략 계산에도 넣지 않는다.
+  - USD/W를 canonical 단위로 삼고, 화면의 CNY/KRW 단위 선택은 차트 표시용으로 제한한다.
+  - Rust 응답은 action, 1/3/6개월 low/base/high 범위, 근거 목록, source 품질 점수, CMM trend/floor gap/우리 구매가 대비율을 포함한다.
+  - source 품질 점수는 최근성, confidence, 표본 수, run warning을 함께 반영한다. 낮은 점수는 계약 차단이 아니라 원문 근거 확인 신호다.
+- **검증**:
+  - Rust unit test로 상승장 즉시 협상과 floor 하방 제한을 고정한다.
+  - Go feature catalog/matrix/router snapshot으로 module 계열 gate를 고정한다.
+  - 프론트엔드 build로 Rust 응답 타입과 가격예측 화면 렌더를 확인한다.
+- **날짜**: 2026-05-11

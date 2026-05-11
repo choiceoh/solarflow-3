@@ -140,6 +140,7 @@
 | `calc.margin_analysis` | 마진 분석 | M | global |
 | `calc.customer_analysis` | 거래처 분석 | ★ | global |
 | `calc.price_trend` | 단가 추이 | M | global |
+| `calc.price_forecast_strategy` | 가격예측 전략 | M | global |
 | `calc.supply_forecast` | 수급 전망 | ★ | global |
 | `calc.order_fulfillment_risk` | 수주 충당 위험도 | ★ | global |
 | `calc.outstanding_list` | 미수금 리스트 | ★ | global |
