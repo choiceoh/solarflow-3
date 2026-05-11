@@ -10,12 +10,45 @@
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
+| Rust 테스트 | 75개 PASS |
+| DECISIONS | D-001~D-159 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 모듈 제품군/변종 분류) |
 | Rust 테스트 | cargo test PASS |
 | DECISIONS | D-001~D-164 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력, D-163 KPI 활성 항목 설정, D-164 가격예측 다중 검색 플랜) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
 
+## 2026-05-11 세션 — 모듈 제품군/변종 분류 정식화 (D-159)
+
+### 완료
+- 품번 마스터에 제품군/변종 분류 필드 정식 추가
+  - `product_family_code`: 같은 생산 라인·외형 규격을 묶는 상위 제품군
+  - `product_variant_kind`: 출력 binning, BOM 차이, 인증/라벨/포장 차이 등 품번 분리 사유
+  - `bom_revision`: 동일 출력·동일 제품군의 BOM 차이 추적
+  - `substitution_group_code`: 영업/출고 대체 후보 수동 묶음
+- 품번 마스터 등록/수정 화면과 목록에 제품군 정보를 노출
+- Excel Import Hub 품번 양식/통합 마스터 양식에 제품군/변종 필드 추가
+- Go 모델 검증에 제품군 문자열 길이와 `product_variant_kind` allowlist 추가
+- 설계 정본과 D-159 결정 기록 동기화
+
+### 운영 기준
+- 품번은 거래 SKU로 유지하고 PO/B/L/재고/원가/매출 계산은 계속 `product_id` 기준으로 처리한다.
+- 제품군은 검색, 대체 후보 검토, 가격/재고/매출 보조 분석 축으로만 사용한다.
+- `product_aliases`는 오타/외부표기 흡수용이며 정상 SKU 변종을 합치는 용도로 쓰지 않는다.
+
+### 검증
+- `cd backend && go test ./internal/model` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건 유지
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5013 nodes / 8109 edges / 406 communities
+
+### 알려진 제한
+- 현재 WSL 실행 환경에 로컬 PostgreSQL/PostgREST/launchctl 이 없어 `psql -d solarflow -f backend/migrations/091_module_product_family_fields.sql`, PostgREST 캐시 갱신, `backend/scripts/check_schema.sh`는 운영 DB에 적용하지 못했다.
+- 현재 실행 환경에 `bun` 명령이 없어 `npm test -- --run src/lib/excelValidation.test.ts`는 시작하지 못했다.
 ## 2026-05-11 세션 — 가격예측 AI 수집률 보강 (D-164)
 
 ### 완료
