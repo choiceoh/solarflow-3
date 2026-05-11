@@ -1494,7 +1494,8 @@
   - 화면/탭별 scope를 분리한다. 예: `inventory`, `orders.sales`, `procurement.po`, `sales-analysis`.
   - KPI key는 명시 `key` 또는 `metricId`를 우선 사용하고, 중복 metricId가 있으면 라벨 기준으로 분리한다.
   - 최소 1개 KPI는 항상 남긴다. 모든 KPI가 꺼져 화면의 상태판 기능이 사라지는 것을 막는다.
-  - 표시 메뉴는 KPI 그리드 바로 위 공통 컴포넌트로 제공하고, 변경 즉시 `/api/v1/users/me/preferences`에 저장한다.
+  - 표시 메뉴는 화면 우상단 액션 영역의 엑셀 입력 버튼 옆에 배치한다. 공통 shell 슬롯이 없는 렌더링 환경에서는 KPI 그리드 위에 fallback 표시한다.
+  - 변경 즉시 `/api/v1/users/me/preferences`에 저장한다.
 - **이유**: 경영/운영/회계 사용자가 같은 화면에서도 보는 우선순위가 다르다. 그러나 KPI 정의를 사용자별로 바꾸면 설계 정본과 분석 의미가 흔들리므로, 시스템 KPI 목록은 유지하고 개인별 활성 항목만 조절하는 방식이 가장 작고 안전하다.
 - **검증**:
   - `npm run build`로 TypeScript와 Vite 번들을 확인한다.
@@ -1515,7 +1516,6 @@
   - `go test ./internal/handler -run 'TestBuildBenchmark|TestSummarizeHomepage|TestSearchResultDedupe|TestValidateBenchmarkCatalogPolicy|TestHashEvidence|TestPickComparablePrice|TestFormatSanityWarnings'` 로 검색 플랜 확장과 dedupe를 고정한다.
 - **날짜**: 2026-05-11
 
-<<<<<<< codex/timestamp-decision-ids
 ## D-20260511-171426: 결정 식별자는 순번 대신 초 단위 타임스탬프를 사용한다
 
 - **결정**: 새 설계 판단은 더 이상 `D-165` 같은 순번으로 발급하지 않는다. 신규 결정 ID는 한국시간 기준 `D-YYYYMMDD-HHMMSS` 형식으로 기록한다.
@@ -1526,7 +1526,7 @@
   - 도메인 인덱스의 「관련 결정」 링크도 새 ID를 그대로 사용한다.
   - 같은 초에 정말로 두 결정이 생기면 뒤 결정은 현재 초를 다시 읽어 새 ID를 발급한다.
 - **날짜**: 2026-05-11 17:14:26 KST
-=======
+
 ## D-165: 품번은 거래 SKU로 유지하고 모듈 제품군/변종 분류를 별도 축으로 둔다
 
 - **결정**: `products.product_id/product_code`는 PO, L/C, B/L, 재고, 출고, 매출, 원가에 물리는 거래 SKU로 유지한다. 같은 생산 라인·외형 규격이지만 출력 검사값만 달라 품번이 갈라지는 경우, 또는 동일 출력이지만 BOM·인증·라벨·포장 차이로 품번이 갈라지는 경우는 `product_family_code`, `product_variant_kind`, `bom_revision`, `substitution_group_code`로 별도 분류한다.
@@ -1559,4 +1559,3 @@
   - `bun scripts/verify_migration.ts --help` 로 CLI 사용법과 옵션 파싱을 확인한다.
   - `bash -n scripts/cron-deploy.sh` 로 배포 스크립트 문법을 확인한다.
 - **날짜**: 2026-05-11
->>>>>>> main

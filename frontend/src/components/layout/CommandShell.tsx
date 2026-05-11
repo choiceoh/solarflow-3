@@ -312,6 +312,7 @@ export default function CommandShell() {
               totalCount={alertState.totalCount}
               criticalCount={alertState.criticalCount}
             />
+            <div id="sf-kpi-actions-slot" style={{ display: 'contents' }} />
             {canAccessMenu(r, 'import_hub') && (
               <Link
                 to="/import"

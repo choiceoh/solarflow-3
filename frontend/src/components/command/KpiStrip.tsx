@@ -1,4 +1,5 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import {
   kpiMetricKey,
@@ -21,28 +22,43 @@ export function KpiStrip<T extends KpiMetricLike>({
   children,
 }: KpiStripProps<T>) {
   const visibility = useKpiVisibility(scopeId, metrics);
+  const [actionsTarget, setActionsTarget] = useState<HTMLElement | null>(() => (
+    typeof document === 'undefined' ? null : document.getElementById('sf-kpi-actions-slot')
+  ));
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    setActionsTarget(document.getElementById('sf-kpi-actions-slot'));
+  }, []);
+
+  const visibilityMenu = visibility.configurable ? (
+    <KpiVisibilityMenu
+      options={visibility.options}
+      hidden={visibility.hidden}
+      onToggle={visibility.setMetricVisible}
+      onReset={visibility.reset}
+      saving={visibility.saving}
+    />
+  ) : null;
 
   return (
-    <div className="sf-kpi-strip">
-      {visibility.configurable ? (
-        <div className="sf-kpi-strip-toolbar">
-          <KpiVisibilityMenu
-            options={visibility.options}
-            hidden={visibility.hidden}
-            onToggle={visibility.setMetricVisible}
-            onReset={visibility.reset}
-            saving={visibility.saving}
-          />
+    <>
+      {actionsTarget && visibilityMenu ? createPortal(visibilityMenu, actionsTarget) : null}
+      <div className="sf-kpi-strip">
+        {!actionsTarget && visibilityMenu ? (
+          <div className="sf-kpi-strip-toolbar">
+            {visibilityMenu}
+          </div>
+        ) : null}
+        <div className={cn('sf-command-kpis', gridClassName)}>
+          {visibility.visibleMetrics.map((metric) => (
+            <Fragment key={kpiMetricKey(metric, visibility.options)}>
+              {children(metric)}
+            </Fragment>
+          ))}
         </div>
-      ) : null}
-      <div className={cn('sf-command-kpis', gridClassName)}>
-        {visibility.visibleMetrics.map((metric) => (
-          <Fragment key={kpiMetricKey(metric, visibility.options)}>
-            {children(metric)}
-          </Fragment>
-        ))}
       </div>
-    </div>
+    </>
   );
 }
 
