@@ -39,7 +39,7 @@ interface Props {
   onCompleteReceipt?: (item: SaleListItem) => void
   completingReceiptSaleId?: string | null
   globalFilter?: string
-  // 다중 선택 — 미발행 매출만 선택 가능하도록 selectableRow가 false면 체크박스 비활성
+  // 다중 선택 — 현재 업무 큐에서 처리 가능한 행만 선택 가능
   selectedIds?: Set<string>
   onSelectedIdsChange?: (next: Set<string>) => void
   isRowSelectable?: (item: SaleListItem) => boolean

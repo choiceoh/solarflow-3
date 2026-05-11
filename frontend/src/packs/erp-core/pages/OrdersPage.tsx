@@ -130,7 +130,8 @@ type OutboundWorkQueue = "" | "sale_unregistered"
 type ReceiptMatchFilter = "open" | "partial" | "unmatched"
 type ReceiptMatchStatus = "matched" | "partial" | "unmatched"
 type SaleErpClosedFilter = "" | "true" | "false"
-type SaleBulkActionMode = "invoice" | "erp_close"
+type SaleReceiptFilter = "" | "open" | "unpaid" | "partial" | "paid"
+type SaleBulkActionMode = "invoice" | "erp_close" | "receipt_complete"
 const BULK_SALE_PREVIEW_PAGE_SIZE = 1000
 const BULK_SALE_PREVIEW_MAX_PAGES = 500
 const BULK_SALE_CREATE_BATCH_SIZE = 8
@@ -218,11 +219,23 @@ function getSaleOutstandingAmount(item: SaleListItem) {
   return Math.max(0, total - collected)
 }
 
-function getSaleBulkActionMode(invoiceFilter: string, erpClosedFilter: SaleErpClosedFilter): SaleBulkActionMode {
+function isReceiptQueueFilter(receiptFilter: SaleReceiptFilter) {
+  return receiptFilter === "open" || receiptFilter === "unpaid" || receiptFilter === "partial"
+}
+
+function getSaleBulkActionMode(
+  invoiceFilter: string,
+  erpClosedFilter: SaleErpClosedFilter,
+  receiptFilter: SaleReceiptFilter,
+): SaleBulkActionMode {
+  if (isReceiptQueueFilter(receiptFilter)) return "receipt_complete"
   return invoiceFilter === "issued" && erpClosedFilter === "false" ? "erp_close" : "invoice"
 }
 
 function isSaleSelectableForBulk(item: SaleListItem, mode: SaleBulkActionMode) {
+  if (mode === "receipt_complete") {
+    return getSaleOutstandingAmount(item) > 0 && item.sale.status !== "cancelled" && item.status !== "cancelled"
+  }
   if (mode === "erp_close") return !!item.sale.tax_invoice_date && !item.sale.erp_closed
   return !item.sale.tax_invoice_date
 }
@@ -543,12 +556,15 @@ export default function OrdersPage() {
   const [saleDateRange, setSaleDateRange] = useState<DateRangeValue>(null)
   const [saleInvoiceFilter, setSaleInvoiceFilter] = useState("")
   const [saleErpClosedFilter, setSaleErpClosedFilter] = useState<SaleErpClosedFilter>("")
+  const [saleReceiptFilter, setSaleReceiptFilter] = useState<SaleReceiptFilter>("")
   const [selectedSaleIds, setSelectedSaleIds] = useState<Set<string>>(new Set())
   const [bulkInvoiceDate, setBulkInvoiceDate] = useState(todayLocalDate)
   const [bulkInvoiceEmail, setBulkInvoiceEmail] = useState("")
   const [bulkInvoiceErpClose, setBulkInvoiceErpClose] = useState(false)
   const [bulkInvoiceSaving, setBulkInvoiceSaving] = useState(false)
   const [bulkInvoiceError, setBulkInvoiceError] = useState("")
+  const [bulkReceiptSaving, setBulkReceiptSaving] = useState(false)
+  const [bulkReceiptError, setBulkReceiptError] = useState("")
   const [receiptCompletingSaleId, setReceiptCompletingSaleId] = useState<string | null>(null)
   const autoSelectedSaleQueueKey = useRef("")
   const [salePageIndex, setSalePageIndex] = useState(0)
@@ -557,7 +573,7 @@ export default function OrdersPage() {
     setSalePageIndex(0)
     setSelectedSaleIds(new Set())
   })
-  const salePageResetKey = `${saleCustomerFilter}|${saleDateRange?.start ?? ""}|${saleDateRange?.end ?? ""}|${saleInvoiceFilter}|${saleErpClosedFilter}`
+  const salePageResetKey = `${saleCustomerFilter}|${saleDateRange?.start ?? ""}|${saleDateRange?.end ?? ""}|${saleInvoiceFilter}|${saleErpClosedFilter}|${saleReceiptFilter}`
   useEffect(() => {
     void salePageResetKey
     setSalePageIndex(0)
@@ -571,6 +587,7 @@ export default function OrdersPage() {
     start: saleDateRange?.start || undefined,
     end: saleDateRange?.end || undefined,
     invoice_status: saleInvoiceFilter || undefined,
+    receipt_status: saleReceiptFilter || undefined,
     erp_closed: saleErpClosedFilter || undefined,
   }
   const {
@@ -597,19 +614,27 @@ export default function OrdersPage() {
     invoice_status: "issued",
     erp_closed: "false",
   })
+  const { summary: receiptOpenSaleSummary } = useSaleSummary({
+    customer_id: saleCustomerFilter || undefined,
+    start: saleDateRange?.start || undefined,
+    end: saleDateRange?.end || undefined,
+    receipt_status: "open",
+  })
   const saleLoading = saleDashLoading || saleListLoading
-  const saleBulkActionMode = getSaleBulkActionMode(saleInvoiceFilter, saleErpClosedFilter)
+  const saleBulkActionMode = getSaleBulkActionMode(saleInvoiceFilter, saleErpClosedFilter, saleReceiptFilter)
   const reloadSales = async () => {
     await Promise.all([reloadSaleDash(), reloadSaleList()])
   }
 
   useEffect(() => {
-    const queueMode =
-      saleInvoiceFilter === "pending"
-        ? "invoice"
-        : saleBulkActionMode === "erp_close"
-          ? "erp_close"
-          : ""
+    const queueMode: SaleBulkActionMode | "" =
+      saleBulkActionMode === "receipt_complete"
+        ? "receipt_complete"
+        : saleInvoiceFilter === "pending"
+          ? "invoice"
+          : saleBulkActionMode === "erp_close"
+            ? "erp_close"
+            : ""
     if (activeTab !== "sales" || saleLoading || !queueMode) {
       return
     }
@@ -622,6 +647,10 @@ export default function OrdersPage() {
     const selectable = sales.filter((sale) => isSaleSelectableForBulk(sale, queueMode))
     setSelectedSaleIds(new Set(selectable.map((sale) => sale.sale_id)))
     setBulkInvoiceError("")
+    setBulkReceiptError("")
+    if (queueMode === "receipt_complete") {
+      return
+    }
     if (queueMode === "erp_close") {
       setBulkInvoiceDate(selectable[0]?.sale.tax_invoice_date ?? todayLocalDate())
       setBulkInvoiceEmail("")
@@ -907,6 +936,19 @@ export default function OrdersPage() {
   }, [outboundDash])
   const invoicePending = saleDash?.totals.invoice_pending_count ?? 0
   const erpOpenCount = erpOpenSaleSummary?.total ?? 0
+  const receiptOpenSaleCount = receiptOpenSaleSummary?.total ?? 0
+  const selectedSales = useMemo(
+    () => sales.filter((sale) => selectedSaleIds.has(sale.sale_id)),
+    [sales, selectedSaleIds],
+  )
+  const selectedReceiptSales = useMemo(
+    () => selectedSales.filter((sale) => isSaleSelectableForBulk(sale, "receipt_complete")),
+    [selectedSales],
+  )
+  const selectedReceiptAmount = selectedReceiptSales.reduce(
+    (sum, sale) => sum + getSaleOutstandingAmount(sale),
+    0,
+  )
 
   if (!selectedCompanyId) {
     return (
@@ -1059,6 +1101,7 @@ export default function OrdersPage() {
     autoSelectedSaleQueueKey.current = ""
     setSaleInvoiceFilter("pending")
     setSaleErpClosedFilter("")
+    setSaleReceiptFilter("")
     setSelectedSaleIds(new Set())
     setBulkInvoiceDate(todayLocalDate())
     setBulkInvoiceErpClose(false)
@@ -1069,9 +1112,20 @@ export default function OrdersPage() {
     autoSelectedSaleQueueKey.current = ""
     setSaleInvoiceFilter("issued")
     setSaleErpClosedFilter("false")
+    setSaleReceiptFilter("")
     setSelectedSaleIds(new Set())
     setBulkInvoiceDate(todayLocalDate())
     setBulkInvoiceErpClose(true)
+    navigate("/orders?tab=sales", { replace: true })
+  }
+
+  const openReceiptOpenQueue = () => {
+    autoSelectedSaleQueueKey.current = ""
+    setSaleInvoiceFilter("")
+    setSaleErpClosedFilter("")
+    setSaleReceiptFilter("open")
+    setSelectedSaleIds(new Set())
+    setBulkReceiptError("")
     navigate("/orders?tab=sales", { replace: true })
   }
 
@@ -1148,6 +1202,51 @@ export default function OrdersPage() {
     }
   }
 
+  const completeSaleReceipt = (item: SaleListItem) => {
+    const payload: Record<string, unknown> = {
+      sale_id: item.sale_id,
+      receipt_date: todayLocalDate(),
+      memo: "출고/판매 화면 수금완료",
+    }
+    return fetchWithAuth<CompleteReceiptMatchResponse>("/api/v1/receipt-matches/complete", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  const handleBulkCompleteSaleReceipts = async () => {
+    const targets = selectedReceiptSales
+    if (targets.length === 0 || bulkReceiptSaving) return
+
+    setBulkReceiptSaving(true)
+    setBulkReceiptError("")
+    try {
+      const results = await Promise.allSettled(targets.map((sale) => completeSaleReceipt(sale)))
+      const successCount = results.filter((result) => result.status === "fulfilled").length
+      const failures = results.filter(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      )
+      const failedCount = failures.length
+      const firstFailure = failures[0] ? ` · ${formatError(failures[0].reason)}` : ""
+
+      if (failedCount > 0) {
+        const message = `수금 ${successCount}건 완료, ${failedCount}건 실패${firstFailure}`
+        setBulkReceiptError(message)
+        if (successCount === 0) {
+          notify.error(message)
+          return
+        }
+        notify.warning(message)
+      } else {
+        notify.success(`수금 ${successCount}건을 완료 처리했습니다`)
+        setSelectedSaleIds(new Set())
+      }
+      await Promise.all([reloadSales(), reloadReceipts()])
+    } finally {
+      setBulkReceiptSaving(false)
+    }
+  }
+
   const handleCompleteSaleReceipt = async (item: SaleListItem) => {
     const outstanding = getSaleOutstandingAmount(item)
     if (outstanding <= 0) {
@@ -1156,15 +1255,7 @@ export default function OrdersPage() {
     }
     setReceiptCompletingSaleId(item.sale_id)
     try {
-      const payload: Record<string, unknown> = {
-        sale_id: item.sale_id,
-        receipt_date: todayLocalDate(),
-        memo: "출고/판매 화면 수금완료",
-      }
-      await fetchWithAuth<CompleteReceiptMatchResponse>("/api/v1/receipt-matches/complete", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      })
+      await completeSaleReceipt(item)
       notify.success(`수금 ${Math.round(outstanding).toLocaleString("ko-KR")}원을 완료 처리했습니다`)
       await Promise.all([reloadSales(), reloadReceipts()])
     } catch (err) {
@@ -1466,7 +1557,7 @@ export default function OrdersPage() {
               ]
 
   const workQueueRail = (
-    <RailBlock title="처리 대기" count={`${saleUnregisteredCount + invoicePending + erpOpenCount}건`}>
+    <RailBlock title="처리 대기" count={`${saleUnregisteredCount + invoicePending + erpOpenCount + receiptOpenSaleCount}건`}>
       <div className="space-y-1.5">
         <button
           type="button"
@@ -1491,6 +1582,14 @@ export default function OrdersPage() {
         >
           <span className="text-[var(--ink-2)]">ERP 미마감</span>
           <span className="mono font-semibold text-[var(--warn)]">{erpOpenCount}</span>
+        </button>
+        <button
+          type="button"
+          onClick={openReceiptOpenQueue}
+          className="flex w-full items-center justify-between rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 text-left text-[11.5px] transition hover:border-[var(--ink-3)]"
+        >
+          <span className="text-[var(--ink-2)]">수금 미완료</span>
+          <span className="mono font-semibold text-[var(--warn)]">{receiptOpenSaleCount}</span>
         </button>
       </div>
     </RailBlock>
@@ -1645,7 +1744,10 @@ export default function OrdersPage() {
               {
                 label: "계산서",
                 value: saleInvoiceFilter,
-                onChange: setSaleInvoiceFilter,
+                onChange: (value) => {
+                  setSaleInvoiceFilter(value)
+                  if (value) setSaleReceiptFilter("")
+                },
                 options: [
                   { value: "issued", label: "발행" },
                   { value: "pending", label: "미발행" },
@@ -1654,10 +1756,30 @@ export default function OrdersPage() {
               {
                 label: "ERP",
                 value: saleErpClosedFilter,
-                onChange: (value) => setSaleErpClosedFilter(value as SaleErpClosedFilter),
+                onChange: (value) => {
+                  setSaleErpClosedFilter(value as SaleErpClosedFilter)
+                  if (value) setSaleReceiptFilter("")
+                },
                 options: [
                   { value: "false", label: "미마감" },
                   { value: "true", label: "마감" },
+                ],
+              },
+              {
+                label: "수금",
+                value: saleReceiptFilter,
+                onChange: (value) => {
+                  setSaleReceiptFilter(value as SaleReceiptFilter)
+                  if (value) {
+                    setSaleInvoiceFilter("")
+                    setSaleErpClosedFilter("")
+                  }
+                },
+                options: [
+                  { value: "open", label: "미완료" },
+                  { value: "unpaid", label: "미수" },
+                  { value: "partial", label: "부분" },
+                  { value: "paid", label: "완료" },
                 ],
               },
             ]}
@@ -1916,7 +2038,46 @@ export default function OrdersPage() {
                             : undefined
                         }
                       />
-                      {selectedSaleIds.size > 0 && (
+                      {selectedSaleIds.size > 0 && saleBulkActionMode === "receipt_complete" && (
+                        <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
+                          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto] lg:items-center">
+                            <div>
+                              <div className="text-sm font-semibold text-[var(--ink)]">선택 수금완료</div>
+                              <div className="mt-1 text-xs text-[var(--ink-2)]">
+                                오늘 날짜로 수금 전표와 매칭을 자동 생성
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 text-right text-xs">
+                              <div>
+                                <div className="text-[var(--ink-3)]">대상</div>
+                                <div className="mono font-semibold">{selectedReceiptSales.length}건</div>
+                              </div>
+                              <div>
+                                <div className="text-[var(--ink-3)]">미수 합계</div>
+                                <div className="mono font-semibold">{formatNumber(selectedReceiptAmount)}</div>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-8 gap-1.5"
+                              disabled={bulkReceiptSaving || selectedReceiptSales.length === 0}
+                              onClick={handleBulkCompleteSaleReceipts}
+                            >
+                              {bulkReceiptSaving ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              )}
+                              {`수금 ${selectedReceiptSales.length}건 완료`}
+                            </Button>
+                          </div>
+                          {bulkReceiptError && (
+                            <div className="mt-2 text-xs text-destructive">{bulkReceiptError}</div>
+                          )}
+                        </div>
+                      )}
+                      {selectedSaleIds.size > 0 && saleBulkActionMode !== "receipt_complete" && (
                         <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
                           <div
                             className={
@@ -1983,11 +2144,13 @@ export default function OrdersPage() {
                         onSelectedIdsChange={setSelectedSaleIds}
                         isRowSelectable={(item) => isSaleSelectableForBulk(item, saleBulkActionMode)}
                         onInvoice={(item) => {
+                          setSaleReceiptFilter("")
                           setSelectedSaleIds(new Set([item.sale_id]))
                           setBulkInvoiceDate(item.sale.tax_invoice_date ?? todayLocalDate())
                           setBulkInvoiceEmail(item.sale.tax_invoice_email ?? "")
                           setBulkInvoiceErpClose(saleBulkActionMode === "erp_close" || !!item.sale.erp_closed)
                           setBulkInvoiceError("")
+                          setBulkReceiptError("")
                         }}
                         onCompleteReceipt={handleCompleteSaleReceipt}
                         completingReceiptSaleId={receiptCompletingSaleId}

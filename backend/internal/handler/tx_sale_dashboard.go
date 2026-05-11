@@ -75,7 +75,7 @@ type SaleDashBreakdownRow struct {
 }
 
 // Dashboard — GET /api/v1/sales/dashboard.
-// applySaleFilters 와 동일한 쿼리 파라미터 (customer_id, month, start, end, invoice_status, q, company_id).
+// applySaleFilters 와 동일한 쿼리 파라미터 (customer_id, month, start, end, invoice_status, receipt_status, q, company_id).
 // 페이지·정렬은 무시.
 //
 // 우선 sales_dashboard() RPC (migration 073) 호출 — DB-side GROUP BY 1 round-trip.
@@ -105,7 +105,7 @@ func (h *SaleHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 // PostgREST RPC 호출은 codebase 기존 패턴 (From("rpc/"+name).Insert(body)) 사용.
 func (h *SaleHandler) tryRPCSalesDashboard(r *http.Request) ([]byte, bool) {
 	q := r.URL.Query()
-	if q.Get("erp_closed") != "" {
+	if q.Get("erp_closed") != "" || q.Get("receipt_status") != "" {
 		return nil, false
 	}
 	args := map[string]any{}

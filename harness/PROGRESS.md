@@ -5,13 +5,13 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | Excel Import Hub 샘플팩 기반 실데이터 리허설, 출고/판매 원클릭 수금완료 운영 샘플 검증, 가격예측 백테스트/견적 기록 운영 DB 적용 확인 + AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
+| 다음 작업 | Excel Import Hub 샘플팩 기반 실데이터 리허설, 출고/판매 수금 미완료 큐 운영 샘플 검증, 가격예측 백테스트/견적 기록 운영 DB 적용 확인 + AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-080/D-081/D-132~D-138 번호 공백 유지) |
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-20260511-184355 판매 수금 미완료 큐, D-080/D-081/D-132~D-138 번호 공백 유지) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -28,6 +28,26 @@
 - `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
 - `git diff --check` 성공
 - `graphify update .` 성공 — 5233 nodes / 8637 edges / 410 communities (`graph.html`은 노드 수 초과로 생략)
+
+---
+
+## 2026-05-11 세션 — 판매 수금 미완료 큐 자동화 (D-20260511-184355)
+
+### 완료
+- 판매 목록 API에 `receipt_status=open/unpaid/partial/paid` 필터 추가
+  - sales 총액과 receipt_matches 매칭액을 서버가 재합산해 미수/부분/완납 상태를 판정
+  - dashboard/summary/list 모두 같은 필터 로직을 공유
+- 판매 화면 처리 대기에 `수금 미완료` 큐 추가
+  - 큐 클릭 시 수금 미완료 필터로 이동
+  - 현재 페이지의 수금 완료 가능 행 자동 선택
+  - 선택 건수와 미수 합계를 보여주고 [선택 수금완료]로 일괄 완료
+- 계산서/ERP 큐와 수금 큐가 섞이지 않도록 큐 전환 시 다른 업무 필터를 자동 해제
+- dev mock API도 `receipt_status` 필터와 원클릭 수금완료 흐름 반영
+- 설계 정본과 D-20260511-184355 결정 기록 동기화
+
+### 검증
+- `gofmt` 성공
+- 서버/운영 빌드 확인은 사용자 지시로 실행하지 않음
 
 ---
 
