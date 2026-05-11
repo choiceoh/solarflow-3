@@ -15,6 +15,15 @@ import { CONTRACT_TYPES_ACTIVE } from '@/types/procurement';
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_PATTERN = /^\d{4}-\d{2}$/;
 const MIG_NUMBER_PATTERN = /^MIG-(PO|LC|TT|BL)-\d{8}-\d{3}$/;
+const PRODUCT_VARIANT_KIND_LABEL: Record<string, string> = {
+  output_bin: '출력 binning',
+  bom_variant: 'BOM 차이',
+  cert_variant: '인증 차이',
+  label_variant: '라벨 차이',
+  packaging_variant: '포장 차이',
+  mixed: '복합',
+  other: '기타',
+};
 
 function buildNormalizer(
   labels: Record<string, string>,
@@ -73,6 +82,7 @@ const NORMALIZED_VALUES: Record<string, Record<string, string>> = {
   },
   // 마스터 — 제조사 국내/해외. 코드값 자체가 한글.
   domestic_foreign: { 국내: '국내', 해외: '해외' },
+  product_variant_kind: buildNormalizer(PRODUCT_VARIANT_KIND_LABEL),
 };
 
 // 허용값 맵 (감리 규칙: map 방식, if-else 나열 금지)

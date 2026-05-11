@@ -56,6 +56,26 @@ describe('validateRows', () => {
     expect(validated.errors).toContainEqual({ field: '입금액(원)', message: '숫자여야 합니다' });
   });
 
+  it('품번 제품군 분리 사유 한글값을 서버 코드값으로 정규화한다', () => {
+    const [validated] = validateRows([
+      row({
+        product_code: 'JKM-640-BOM-A',
+        product_name: 'Tiger Neo 640W BOM A',
+        manufacturer_name: '진코솔라',
+        spec_wp: 640,
+        wattage_kw: 0.64,
+        module_width_mm: 1134,
+        module_height_mm: 2465,
+        product_family_code: 'JKM-N-78HL4-BDV-S',
+        product_variant_kind: 'BOM 차이',
+        bom_revision: 'BOM-A',
+      }),
+    ], 'product', masterData);
+
+    expect(validated.valid).toBe(true);
+    expect(validated.data.product_variant_kind).toBe('bom_variant');
+  });
+
   it('PO 이관번호와 날짜 역전을 미리보기에서 분리한다', () => {
     const [validated] = validateRows([
       row({

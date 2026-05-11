@@ -165,6 +165,8 @@ function useProductConfig(): MasterSectionConfig<Product> {
       { key: 'manufacturer_name', label: '제조사', sortable: true,
         render: (r) => r.manufacturers?.name_kr ?? r.manufacturer_name ?? '—' },
       { key: 'product_name', label: '품명', sortable: true },
+      { key: 'product_family_code', label: '제품군', sortable: true,
+        render: (r) => r.product_family_code || '—' },
       { key: 'spec_wp', label: '규격(Wp)', sortable: true, render: (r) => formatWp(r.spec_wp) },
       { key: 'module_width_mm', label: '크기(mm)', sortable: true,
         render: (r) => formatSize(r.module_width_mm, r.module_height_mm) },
@@ -174,6 +176,9 @@ function useProductConfig(): MasterSectionConfig<Product> {
     searchPredicate: (row, q) =>
       row.product_code.toLowerCase().includes(q) ||
       row.product_name.toLowerCase().includes(q) ||
+      (row.product_family_code ?? '').toLowerCase().includes(q) ||
+      (row.substitution_group_code ?? '').toLowerCase().includes(q) ||
+      (row.bom_revision ?? '').toLowerCase().includes(q) ||
       (row.manufacturer_name ?? row.manufacturers?.name_kr ?? '').toLowerCase().includes(q),
     newPath: '/data/products/new',
     editPath: (r) => `/data/products/${r.product_id}/edit`,

@@ -1,11 +1,15 @@
 package model
 
-import "unicode/utf8"
+import (
+	"strconv"
+	"unicode/utf8"
+)
 
 // Product — 품번(모듈 규격) 정보를 담는 구조체
 // 비유: "모듈 규격 카탈로그 카드" — JKM635, TSM-720 같은 모듈의 상세 사양
 // D-056: DB 컬럼은 NULL 허용으로 완화됐지만 Go 모델은 호환성 유지를 위해 값 타입 유지.
-//        NULL 행은 JSON unmarshal 시 0/"" 으로 들어옴(자동 등록 행은 변환기가 추론값을 채워 INSERT 함).
+//
+//	NULL 행은 JSON unmarshal 시 0/"" 으로 들어옴(자동 등록 행은 변환기가 추론값을 채워 INSERT 함).
 type Product struct {
 	ProductID      string   `json:"product_id"`
 	ProductCode    string   `json:"product_code"`
@@ -20,28 +24,33 @@ type Product struct {
 	WaferPlatform  *string  `json:"wafer_platform"`
 	CellConfig     *string  `json:"cell_config"`
 	SeriesName     *string  `json:"series_name"`
+	// D-165: 품번보다 상위의 모듈 제품군/변종 분류.
+	ProductFamilyCode     *string `json:"product_family_code,omitempty"`
+	ProductVariantKind    *string `json:"product_variant_kind,omitempty"`
+	BomRevision           *string `json:"bom_revision,omitempty"`
+	SubstitutionGroupCode *string `json:"substitution_group_code,omitempty"`
 	// 066: 모듈 효율(%) — 예: 22.50
 	ModuleEfficiency *float64 `json:"module_efficiency,omitempty"`
 	// 066: 모듈 셀 종류 — PERC / TOPCON / BC
-	ModuleType     *string  `json:"module_type,omitempty"`
+	ModuleType *string `json:"module_type,omitempty"`
 	// 066: 모듈 등급 — 한국 탄소인증제 등급(1/2/3)
-	ModuleGrade    *string  `json:"module_grade,omitempty"`
-	IsActive       bool     `json:"is_active"`
-	Memo           *string  `json:"memo"`
+	ModuleGrade *string `json:"module_grade,omitempty"`
+	IsActive    bool    `json:"is_active"`
+	Memo        *string `json:"memo"`
 	// D-063: ERP 시스템 내부 품번 코드 (예: M-JK0635-01). 우리 product_code (모델명) 와 별개.
-	ErpCode        *string  `json:"erp_code,omitempty"`
+	ErpCode *string `json:"erp_code,omitempty"`
 	// D-064: ERP 자료에서 동기화. SolarFlow 계산 결과와 다를 수 있어 정합성 비교에 활용.
-	SafetyStock    *int     `json:"safety_stock,omitempty"`
-	AvailableStock *int     `json:"available_stock,omitempty"`
+	SafetyStock    *int `json:"safety_stock,omitempty"`
+	AvailableStock *int `json:"available_stock,omitempty"`
 	// D-134 (PR6.5): SKU 분류 + 인버터 전용 필드. 마이그 084 적용 후 사용 가능.
 	// 마이그 미적용 환경에서도 NULL 호환 — pointer + omitempty.
-	ProductKind   *string  `json:"product_kind,omitempty"`    // 'module' | 'inverter' | 'package'
-	RatedPowerKW  *float64 `json:"rated_power_kw,omitempty"`  // 인버터 정격 출력
-	MaxInputKW    *float64 `json:"max_input_kw,omitempty"`    // 인버터 최대 입력
-	MPPTChannels  *int     `json:"mppt_channels,omitempty"`   // 인버터 MPPT 채널 수
-	VoltageMinV   *int     `json:"voltage_min_v,omitempty"`   // 인버터 MPPT 전압 하한
-	VoltageMaxV   *int     `json:"voltage_max_v,omitempty"`   // 인버터 MPPT 전압 상한
-	Phase         *string  `json:"phase,omitempty"`           // '1P' | '3P' (인버터)
+	ProductKind  *string  `json:"product_kind,omitempty"`   // 'module' | 'inverter' | 'package'
+	RatedPowerKW *float64 `json:"rated_power_kw,omitempty"` // 인버터 정격 출력
+	MaxInputKW   *float64 `json:"max_input_kw,omitempty"`   // 인버터 최대 입력
+	MPPTChannels *int     `json:"mppt_channels,omitempty"`  // 인버터 MPPT 채널 수
+	VoltageMinV  *int     `json:"voltage_min_v,omitempty"`  // 인버터 MPPT 전압 하한
+	VoltageMaxV  *int     `json:"voltage_max_v,omitempty"`  // 인버터 MPPT 전압 상한
+	Phase        *string  `json:"phase,omitempty"`          // '1P' | '3P' (인버터)
 }
 
 // ProductWithManufacturer — 제조사 정보를 포함한 품번 조회 결과
@@ -62,22 +71,26 @@ type ManufacturerSummary struct {
 // CreateProductRequest — 품번 등록 시 클라이언트가 보내는 데이터
 // 비유: "모듈 규격 등록 신청서" — 필수 사양을 빠짐없이 기재해야 접수
 type CreateProductRequest struct {
-	ProductCode    string   `json:"product_code"`
-	ProductName    string   `json:"product_name"`
-	ManufacturerID string   `json:"manufacturer_id"`
-	SpecWP         int      `json:"spec_wp"`
-	WattageKW      float64  `json:"wattage_kw"`
-	ModuleWidthMM  int      `json:"module_width_mm"`
-	ModuleHeightMM int      `json:"module_height_mm"`
-	ModuleDepthMM  *int     `json:"module_depth_mm"`
-	WeightKG       *float64 `json:"weight_kg"`
-	WaferPlatform  *string  `json:"wafer_platform"`
-	CellConfig     *string  `json:"cell_config"`
-	SeriesName     *string  `json:"series_name"`
-	ModuleEfficiency *float64 `json:"module_efficiency,omitempty"`
-	ModuleType     *string  `json:"module_type,omitempty"`
-	ModuleGrade    *string  `json:"module_grade,omitempty"`
-	Memo           *string  `json:"memo"`
+	ProductCode           string   `json:"product_code"`
+	ProductName           string   `json:"product_name"`
+	ManufacturerID        string   `json:"manufacturer_id"`
+	SpecWP                int      `json:"spec_wp"`
+	WattageKW             float64  `json:"wattage_kw"`
+	ModuleWidthMM         int      `json:"module_width_mm"`
+	ModuleHeightMM        int      `json:"module_height_mm"`
+	ModuleDepthMM         *int     `json:"module_depth_mm"`
+	WeightKG              *float64 `json:"weight_kg"`
+	WaferPlatform         *string  `json:"wafer_platform"`
+	CellConfig            *string  `json:"cell_config"`
+	SeriesName            *string  `json:"series_name"`
+	ProductFamilyCode     *string  `json:"product_family_code,omitempty"`
+	ProductVariantKind    *string  `json:"product_variant_kind,omitempty"`
+	BomRevision           *string  `json:"bom_revision,omitempty"`
+	SubstitutionGroupCode *string  `json:"substitution_group_code,omitempty"`
+	ModuleEfficiency      *float64 `json:"module_efficiency,omitempty"`
+	ModuleType            *string  `json:"module_type,omitempty"`
+	ModuleGrade           *string  `json:"module_grade,omitempty"`
+	Memo                  *string  `json:"memo"`
 }
 
 // Validate — 품번 등록 요청의 입력값을 검증
@@ -110,6 +123,9 @@ func (req *CreateProductRequest) Validate() string {
 	if req.ModuleHeightMM <= 0 {
 		return "module_height_mm는 양수여야 합니다"
 	}
+	if msg := validateProductFamilyFields(req.ProductFamilyCode, req.ProductVariantKind, req.BomRevision, req.SubstitutionGroupCode); msg != "" {
+		return msg
+	}
 	if req.ModuleEfficiency != nil && (*req.ModuleEfficiency <= 0 || *req.ModuleEfficiency > 100) {
 		return "module_efficiency는 0보다 크고 100 이하여야 합니다"
 	}
@@ -133,22 +149,26 @@ func (req *CreateProductRequest) Validate() string {
 // UpdateProductRequest — 품번 수정 시 클라이언트가 보내는 데이터
 // 비유: "모듈 규격 변경 신청서" — 바꾸고 싶은 사양만 적어서 제출
 type UpdateProductRequest struct {
-	ProductCode    *string  `json:"product_code,omitempty"`
-	ProductName    *string  `json:"product_name,omitempty"`
-	ManufacturerID *string  `json:"manufacturer_id,omitempty"`
-	SpecWP         *int     `json:"spec_wp,omitempty"`
-	WattageKW      *float64 `json:"wattage_kw,omitempty"`
-	ModuleWidthMM  *int     `json:"module_width_mm,omitempty"`
-	ModuleHeightMM *int     `json:"module_height_mm,omitempty"`
-	ModuleDepthMM  *int     `json:"module_depth_mm,omitempty"`
-	WeightKG       *float64 `json:"weight_kg,omitempty"`
-	WaferPlatform  *string  `json:"wafer_platform,omitempty"`
-	CellConfig     *string  `json:"cell_config,omitempty"`
-	SeriesName     *string  `json:"series_name,omitempty"`
-	ModuleEfficiency *float64 `json:"module_efficiency,omitempty"`
-	ModuleType     *string  `json:"module_type,omitempty"`
-	ModuleGrade    *string  `json:"module_grade,omitempty"`
-	Memo           *string  `json:"memo,omitempty"`
+	ProductCode           *string  `json:"product_code,omitempty"`
+	ProductName           *string  `json:"product_name,omitempty"`
+	ManufacturerID        *string  `json:"manufacturer_id,omitempty"`
+	SpecWP                *int     `json:"spec_wp,omitempty"`
+	WattageKW             *float64 `json:"wattage_kw,omitempty"`
+	ModuleWidthMM         *int     `json:"module_width_mm,omitempty"`
+	ModuleHeightMM        *int     `json:"module_height_mm,omitempty"`
+	ModuleDepthMM         *int     `json:"module_depth_mm,omitempty"`
+	WeightKG              *float64 `json:"weight_kg,omitempty"`
+	WaferPlatform         *string  `json:"wafer_platform,omitempty"`
+	CellConfig            *string  `json:"cell_config,omitempty"`
+	SeriesName            *string  `json:"series_name,omitempty"`
+	ProductFamilyCode     *string  `json:"product_family_code,omitempty"`
+	ProductVariantKind    *string  `json:"product_variant_kind,omitempty"`
+	BomRevision           *string  `json:"bom_revision,omitempty"`
+	SubstitutionGroupCode *string  `json:"substitution_group_code,omitempty"`
+	ModuleEfficiency      *float64 `json:"module_efficiency,omitempty"`
+	ModuleType            *string  `json:"module_type,omitempty"`
+	ModuleGrade           *string  `json:"module_grade,omitempty"`
+	Memo                  *string  `json:"memo,omitempty"`
 }
 
 // Validate — 품번 수정 요청의 입력값을 검증
@@ -185,6 +205,9 @@ func (req *UpdateProductRequest) Validate() string {
 	if req.ModuleHeightMM != nil && *req.ModuleHeightMM <= 0 {
 		return "module_height_mm는 양수여야 합니다"
 	}
+	if msg := validateProductFamilyFields(req.ProductFamilyCode, req.ProductVariantKind, req.BomRevision, req.SubstitutionGroupCode); msg != "" {
+		return msg
+	}
 	if req.ModuleEfficiency != nil && (*req.ModuleEfficiency <= 0 || *req.ModuleEfficiency > 100) {
 		return "module_efficiency는 0보다 크고 100 이하여야 합니다"
 	}
@@ -201,6 +224,42 @@ func (req *UpdateProductRequest) Validate() string {
 		default:
 			return "module_grade는 1, 2, 3, NA 중 하나여야 합니다"
 		}
+	}
+	return ""
+}
+
+var validProductVariantKind = map[string]bool{
+	"output_bin":        true,
+	"bom_variant":       true,
+	"cert_variant":      true,
+	"label_variant":     true,
+	"packaging_variant": true,
+	"mixed":             true,
+	"other":             true,
+}
+
+func validateOptionalProductText(fieldName string, value *string, maxRunes int) string {
+	if value == nil || *value == "" {
+		return ""
+	}
+	if utf8.RuneCountInString(*value) > maxRunes {
+		return fieldName + "는 " + strconv.Itoa(maxRunes) + "자를 초과할 수 없습니다"
+	}
+	return ""
+}
+
+func validateProductFamilyFields(productFamilyCode, productVariantKind, bomRevision, substitutionGroupCode *string) string {
+	if msg := validateOptionalProductText("product_family_code", productFamilyCode, 80); msg != "" {
+		return msg
+	}
+	if msg := validateOptionalProductText("bom_revision", bomRevision, 50); msg != "" {
+		return msg
+	}
+	if msg := validateOptionalProductText("substitution_group_code", substitutionGroupCode, 80); msg != "" {
+		return msg
+	}
+	if productVariantKind != nil && *productVariantKind != "" && !validProductVariantKind[*productVariantKind] {
+		return "product_variant_kind는 output_bin, bom_variant, cert_variant, label_variant, packaging_variant, mixed, other 중 하나여야 합니다"
 	}
 	return ""
 }

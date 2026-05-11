@@ -49,7 +49,15 @@ export interface DeclarationImportPreview {
 export interface MasterDataForExcel {
   companies: { company_id: string; company_code: string; company_name: string }[];
   manufacturers: { manufacturer_id: string; name_kr: string }[];
-  products: { product_id: string; product_code: string; product_name: string; spec_wp?: number; wattage_kw?: number }[];
+  products: {
+    product_id: string;
+    product_code: string;
+    product_name: string;
+    spec_wp?: number;
+    wattage_kw?: number;
+    product_family_code?: string;
+    substitution_group_code?: string;
+  }[];
   partners: { partner_id: string; partner_name: string; partner_type: string }[];
   warehouses: { warehouse_id: string; warehouse_code: string; warehouse_name: string }[];
   outbounds?: { outbound_id: string; outbound_date: string; product_id: string; quantity: number; site_name?: string }[];
@@ -118,6 +126,10 @@ export const PRODUCT_FIELDS: FieldDef[] = [
   { key: 'wafer_platform', label: '웨이퍼 플랫폼', required: false, type: 'string' },
   { key: 'cell_config', label: '셀 구성', required: false, type: 'string' },
   { key: 'series_name', label: '시리즈명', required: false, type: 'string' },
+  { key: 'product_family_code', label: '제품군코드', required: false, type: 'string' },
+  { key: 'product_variant_kind', label: '품번분리사유', required: false, type: 'string' },
+  { key: 'bom_revision', label: 'BOM Rev', required: false, type: 'string' },
+  { key: 'substitution_group_code', label: '대체그룹코드', required: false, type: 'string' },
   { key: 'memo', label: '메모', required: false, type: 'string' },
 ];
 
