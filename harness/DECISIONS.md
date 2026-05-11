@@ -3,6 +3,13 @@
 모든 주요 설계 판단의 "왜?"를 기록합니다.
 새 대화창에서 "왜 이렇게 했지?"라는 질문이 나오면 이 문서를 참조합니다.
 
+## 결정 ID 규칙
+
+- 기존 `D-001`~`D-164`는 과거 링크 보존을 위해 그대로 둔다.
+- 새 결정은 순번을 발급하지 않고 한국시간 기준 초 단위 타임스탬프를 붙인다.
+- 형식: `D-YYYYMMDD-HHMMSS` (예: `D-20260511-171426`)
+- 같은 주제를 여러 작업자가 동시에 판단해도 문서 끝의 "다음 번호"를 함께 수정하지 않기 위해 이 형식을 사용한다.
+
 ## D-001: Go+Rust 아키텍처 분리
 - **결정**: Go(프론트+API) + Rust(계산엔진)
 - **이유**: Go는 변경이 잦은 UI/API에 적합, Rust는 복잡한 계산(Landed Cost, 재고집계)에 안정적
@@ -760,7 +767,7 @@
     SQL fragment 직접 입력은 금지(admin이 SQL 못 씀 + injection 위험). 새 연산자 필요 시 카탈로그 측에 명시 추가.
   - **카탈로그 정본 위치**: `backend/internal/feature/catalog.go`가 코드 측 정본. 각 entry는 `{ ID, Name, Description, DefaultTenants, DefaultDataScope }`. `harness/FEATURE-WIRING-MATRIX.md`는 사람이 읽는 인덱스로 카탈로그를 그대로 미러링한다(자동 검증 대상).
   - **DB 배선 테이블**: `tenant_features (tenant text, feature_id text, enabled bool, ...)`, `tenant_data_scopes (tenant, feature_id, row_filter jsonb, column_mask jsonb, ...)`. 카탈로그 default는 코드에 있고, DB 행이 있으면 그 행이 default를 override 한다(per-tenant override).
-  - **fail-closed 정책**: `RequireFeature(id)`는 (1) catalog에 id가 없으면 500(설정 오류), (2) tenant ∈ resolved enabled set이 아니면 403. **이번 PR에서는 호환을 위해 catalog default가 곧 enabled set이고 DB 테이블은 빈 상태로 둔다(=현재 동작 그대로)**. 모든 라우트의 마이그레이션이 끝나고 회귀 테스트가 통과한 뒤 fail-closed 스위치(빈 카탈로그 = 0 tenants)는 별도 D-NNN으로 결정한다.
+  - **fail-closed 정책**: `RequireFeature(id)`는 (1) catalog에 id가 없으면 500(설정 오류), (2) tenant ∈ resolved enabled set이 아니면 403. **이번 PR에서는 호환을 위해 catalog default가 곧 enabled set이고 DB 테이블은 빈 상태로 둔다(=현재 동작 그대로)**. 모든 라우트의 마이그레이션이 끝나고 회귀 테스트가 통과한 뒤 fail-closed 스위치(빈 카탈로그 = 0 tenants)는 별도 `D-YYYYMMDD-HHMMSS` 결정으로 기록한다.
   - **강제 메커니즘 (다층)**:
     1. **카탈로그가 단일 소스** — `RequireFeature("foo")`의 인자는 `feature.IDXxx` 상수만 허용 (자유 문자열 금지). 미정의 ID는 컴파일 에러는 아니지만 startup 시 패닉.
     2. **`feature_coverage_test.go`** — chi 라우터를 walk하면서 모든 비공개 라우트가 정확히 하나의 feature_id에 매핑됨을 검증. 라우트 추가 시 카탈로그 미갱신이면 테스트 실패.
@@ -810,7 +817,7 @@
     - **Phase 0** — staging 띄우고 enforcement OFF. 모든 응답이 prod 와 byte-identical 이어야 함(하네스 정확성 검증).
     - **Phase 1** — 1개 feature 만 staging 에 enforcement ON (D-116 BARO incoming 부터, 이미 sanitized 형태). 운영 트래픽 1주치 리플레이 → unexpected diff 0건이면 prod ON.
     - **Phase 2** — feature 별로 1주에 1~2개씩 ON. 추가마다 영향받는 frontend 타입/계산 함수 사전 점검.
-    - **Phase 3** — 전수 ON 후 fail-closed 스위치(카탈로그 미정의 = 0 tenants) 활성. 별도 D-NNN 으로 결정.
+    - **Phase 3** — 전수 ON 후 fail-closed 스위치(카탈로그 미정의 = 0 tenants) 활성. 별도 `D-YYYYMMDD-HHMMSS` 결정으로 기록.
   - **로그 보강(필수 선행)** — outer RequestLog 가 inner auth 의 context 를 못 보던 한계를 mutable `Observability` 홀더(pointer in context) 로 해결. auth 가 `SetUserContext` 호출 시 같이 채우고, RequestLog 가 핸들러 종료 후 읽어 한 행에 모두 출력. SHA256 응답 해시는 `statusCapturer.Write` 에서 청크 단위 누적.
   - **column_mask 정책 — null 채우기**: 마스크된 컬럼은 응답에서 *제거* 하지 않고 **null 로 둔다**. JSON shape 보존 → frontend 빌드 깨짐 방지. frontend 타입 nullable 화는 별도 사전 PR.
   - **mask 가능 컬럼 화이트리스트** — 카탈로그에 명시 안 한 컬럼은 마스크 적용 불가(외래키 실수 mask 방지). startup 시 검증.
@@ -922,7 +929,7 @@
     - 오늘 답변할 후속 — 카드 클릭 → `/baro/cockpit?partner_id=X`
     - 한도/연체 위험 거래처 — 카드 클릭 → cockpit
     - 신규 입고 안내 — `/baro/incoming` 진입 + PR3.5 자동 콜백 추천 placeholder
-  - **PR3.5 분리** (별도 D-NNN, 신규 backend 필요):
+  - **PR3.5 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정, 신규 backend 필요):
     - 자동 콜백 추천: 신규 입고 SKU × 직전 12개월 본인 거래처 매입 이력 매칭 → "이 입고를 알려야 할 거래처 N곳" + 1-click 일괄 발송
     - 본인 담당 거래처 필터: `partners.owner_user_id = me` 와 credit_board RPC 응답 join (현재는 owner 미반영, 모든 위험 거래처 노출)
     - 견적 회신 대기 카운트 (D-126 PR2.5 의 `baro_quotes` 테이블 도입 후)
@@ -949,7 +956,7 @@
   - **부분 실패 허용**: sales 조회 실패 시 partner-only 응답 (모두 inactive) 으로 fallback — 보드 전체가 흰 배경으로 죽지 않음.
   - **재활성화 큐 강조**: `at_risk` 세그먼트는 별도 알림 배너로 노출 — 한동안 미주문이지만 매출 이력 큰 곳 = 콜백 1순위.
   - **frontend**: `/baro/rfm` 페이지. 6 세그먼트 탭 + 정렬(매출/최근성/빈도) + 표. 행 클릭 → cockpit. 사이드바 「현황」 그룹.
-- **PR4.5 분리** (별도 D-NNN):
+- **PR4.5 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정):
   - 동적 분위수(quartile) 기반 분류 — 거래처 분포에 따라 임계값 자동 조정 (현재는 1000억 매출 컨텍스트 하드코딩).
   - 본인 담당 거래처 필터 — `partners.owner_user_id = me` (현재 전체 노출).
   - 자동 재활성화 액션 — `at_risk` 거래처 대상 1-click 카톡/SMS (PR3.5 발송 채널 통합 후).
@@ -976,7 +983,7 @@
   - **응답 마스킹**: cost / margin 필드 0 — 매출액(`total_amount`)과 건수만. 마진은 PR5.5 에서 `baro_purchase_history` 평균 매입원가 통합 후 도입.
   - **frontend 페이지**: `/baro/sales-summary` (RoleGuard `admin/operator/executive`). 6/12/24개월 토글. CSS 막대 차트(recharts 미사용 — 번들 크기 ↓). Top 거래처 행 클릭 → cockpit.
   - **사이드바**: 「현황」 그룹에 "매출 요약" 추가.
-- **PR5.5 분리** (별도 D-NNN):
+- **PR5.5 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정):
   - **마진 표시** (`gross_margin_pct`, `gross_margin_krw`): `baro_purchase_history` 평균 매입원가와 매출 결합. 단순 평균이 아닌 BR 법인 한정 + sale 시점 기준 가까운 매입가 매칭 로직 필요.
   - **한도 초과 출고 차단 hold flag**: 출고/수주 생성 시 `outstanding_krw + amount > credit_limit_krw` 또는 `oldest_unpaid_days >= 60` 면 hold 플래그 + 결재 강제. backend 변경 큼 (outbound/order 핸들러 수정 + DB 컬럼 추가 가능).
   - **SKU 별 매출**: 현 sales 테이블에 product_id 직접 컬럼 없음. outbound → bl_line join 필요해 Phase 2 분리.
@@ -997,7 +1004,7 @@
   - **용량 매칭 계산기**: 모듈 수량 × spec_wp 입력 → 총 kW 계산 → 오버사이징 1.0~1.3 비율 안에 들어오는 인버터 추천 카드.
   - **검색·필터**: 제조사/모델 검색 + 용도(주거/상업/발전소) 필터.
   - **사이드바**: 「판매」 그룹에 "인버터 가이드" (BARO 전용).
-- **PR6.5 분리** (별도 D-NNN, 신규 backend 필요):
+- **PR6.5 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정, 신규 backend 필요):
   - **products.product_kind 컬럼**: `module` / `inverter` / `package` 분류 마이그레이션. 기존 행은 모두 `module` 로 backfill.
   - **인버터 SKU 정식 등록**: `product_kind='inverter'` + `rated_power_kw`/`mppt_channels`/`max_input_voltage` 등 인버터 전용 nullable 컬럼. 마스터 CRUD UI.
   - **패키지 SKU**: 모듈+인버터 자주 나가는 조합 1-row SKU. `baro_packages` 테이블 또는 product_kind=`package` + 구성품 child rows.
@@ -1019,7 +1026,7 @@
   - **메시지 3종**: `상차 완료` / `출발` / `도착 예정` — `buildMessage(stage, form)` 함수가 빈 필드는 자동 생략하면서 자연스러운 한국어 메시지 조립.
   - **클립보드 복사**: `navigator.clipboard.writeText` + 2초 "복사됨" 피드백.
   - **사이드바**: 「판매」 그룹에 "출하 알림" (BARO 전용).
-- **PR7.5 분리** (별도 D-NNN, 외부 API 키 + 모바일 흐름 + 신규 backend 필요):
+- **PR7.5 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정, 외부 API 키 + 모바일 흐름 + 신규 backend 필요):
   - **카톡 자동 발송**: KakaoTalk Notification Talk API 통합 (사업자 전용, 키 발급 필요). 템플릿 등록 + 친구 동의 + 발송 로그.
   - **SMS fallback**: Aligo / Solapi (카톡 미설치/미수신 시).
   - **배차 보드 연동**: `/baro/dispatch` 의 dispatch_route 한 행 선택 → form 자동 prefill.
@@ -1045,7 +1052,7 @@
   - 영업이 출고 시 "A존-3랙-Bin12 에서 30장" 위치 추적 (PR8.5 자동 피킹 리스트 후)
   - 입고 시 패널 적재 위치 배정 (PR8.6 receiving log 후)
   - 재고실사 cycle counting 시 위치 단위 점검 (PR8.7)
-- **PR8.5/PR8.6/PR8.7 분리** (별도 D-NNN, 마이그 동반):
+- **PR8.5/PR8.6/PR8.7 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정, 마이그 동반):
   - PR8.5 — `inventory_allocations.location_id` 추가 + 자동 피킹 리스트 (출고 1건당 위치별 수량). BARO 특화.
   - PR8.6 — `bl_line_receiving_log` (module 측) + `intercompany_receiving_log` (BARO 측) 입고 검수 + 수량 차이 추적.
   - PR8.7 — `cycle_counts` 정기 실사 + 정확도 추적.
@@ -1079,7 +1086,7 @@
   - 창고 작업자 모바일/태블릿에서 본인 큐(`?mine=true`) 열기 → status='in_progress' 토글 → 라인별 picked 체크
   - 차이 발생 시 quantity_picked 입력 + variance_note (실재고 부족 / 파손 / 위치 오류) → 영업·회계 알림
 - **snapshot 컬럼 정책**: product_code/name/spec_wp/location_code 모두 picking 시점 보존 — products 마스터 / warehouse_locations 변경에도 명세 원본 불변. 인쇄 라벨에 사용.
-- **PR8.5b 분리** (별도 D-NNN, outbound 핸들러 변경):
+- **PR8.5b 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정, outbound 핸들러 변경):
   - 출고 생성 시 자동 피킹 명세 생성 — outbound→bl_line→inventory_allocation join 으로 위치 추출 + POST /picking-lists 자동 호출.
   - 명시적 enforcement 까지 가는 게 큰 작업이라 분리. PR8.5 단계는 수동 POST 만 안전 동작.
 - **D-154 반영**: 출고 생성 시 피킹 명세 자동 생성과 기존 출고 보정 endpoint 를 구현했다. 위치는 `inventory_movements.location_code` 최신 잔량을 우선 사용하고, `inventory_allocations.location_id` 를 fallback 으로 사용한다.
@@ -1287,7 +1294,7 @@
 - **운영 기준**:
   - 기존 DB에 남아 있을 수 있는 과거 `tier1_asp` 관측값은 이번 결정만으로 삭제하지 않는다. 단, UI 기본 source 목록에서 제외되어 표시되지 않고, 신규 수동/AI 저장은 서버 whitelist 에서 차단한다.
   - `source_key=tier1_asp`, `metric_key=manufacturer_asp`, `market_region=manufacturer`, `basis=asp` 는 신규 저장 정책에서 허용하지 않는다.
-  - 향후 제조사 IR 기반 데이터를 다시 쓰려면 별도 D-NNN으로 제품군/지역/기간 보정 기준과 수동 검증 workflow 를 먼저 정의한다.
+  - 향후 제조사 IR 기반 데이터를 다시 쓰려면 별도 `D-YYYYMMDD-HHMMSS` 결정으로 제품군/지역/기간 보정 기준과 수동 검증 workflow 를 먼저 정의한다.
 - **검증**:
   - `TestValidateBenchmarkCatalogPolicy` 에서 Tier-1 ASP 차단을 검증한다.
   - 프론트엔드 build 로 source 목록 제거와 타입 일치를 확인한다.
@@ -1508,6 +1515,18 @@
   - `go test ./internal/handler -run 'TestBuildBenchmark|TestSummarizeHomepage|TestSearchResultDedupe|TestValidateBenchmarkCatalogPolicy|TestHashEvidence|TestPickComparablePrice|TestFormatSanityWarnings'` 로 검색 플랜 확장과 dedupe를 고정한다.
 - **날짜**: 2026-05-11
 
+<<<<<<< codex/timestamp-decision-ids
+## D-20260511-171426: 결정 식별자는 순번 대신 초 단위 타임스탬프를 사용한다
+
+- **결정**: 새 설계 판단은 더 이상 `D-165` 같은 순번으로 발급하지 않는다. 신규 결정 ID는 한국시간 기준 `D-YYYYMMDD-HHMMSS` 형식으로 기록한다.
+- **이유**: 여러 작업자가 `DECISIONS.md` 끝에 다음 순번을 동시에 추가하면 같은 결정 식별자에서 반복 충돌이 난다. 초 단위 타임스탬프를 사용하면 문서 끝의 단일 카운터를 공유하지 않아도 되어 병렬 작업 충돌이 줄어든다.
+- **운영 기준**:
+  - 기존 `D-001`~`D-164`는 이미 코드, 문서, 링크에서 참조되므로 변경하지 않는다.
+  - 새 결정 제목은 `## D-YYYYMMDD-HHMMSS: 제목` 형식으로 작성한다.
+  - 도메인 인덱스의 「관련 결정」 링크도 새 ID를 그대로 사용한다.
+  - 같은 초에 정말로 두 결정이 생기면 뒤 결정은 현재 초를 다시 읽어 새 ID를 발급한다.
+- **날짜**: 2026-05-11 17:14:26 KST
+=======
 ## D-165: 품번은 거래 SKU로 유지하고 모듈 제품군/변종 분류를 별도 축으로 둔다
 
 - **결정**: `products.product_id/product_code`는 PO, L/C, B/L, 재고, 출고, 매출, 원가에 물리는 거래 SKU로 유지한다. 같은 생산 라인·외형 규격이지만 출력 검사값만 달라 품번이 갈라지는 경우, 또는 동일 출력이지만 BOM·인증·라벨·포장 차이로 품번이 갈라지는 경우는 `product_family_code`, `product_variant_kind`, `bom_revision`, `substitution_group_code`로 별도 분류한다.
@@ -1540,3 +1559,4 @@
   - `bun scripts/verify_migration.ts --help` 로 CLI 사용법과 옵션 파싱을 확인한다.
   - `bash -n scripts/cron-deploy.sh` 로 배포 스크립트 문법을 확인한다.
 - **날짜**: 2026-05-11
+>>>>>>> main

@@ -11,11 +11,26 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
+<<<<<<< codex/timestamp-decision-ids
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-080/D-081/D-132~D-138 번호 공백 유지) |
+=======
 | DECISIONS | D-001~D-166 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력, D-163 KPI 활성 항목 설정, D-164 가격예측 다중 검색 플랜, D-165 모듈 제품군/변종 분류, D-166 migration 반영 확인) |
+>>>>>>> main
 | launchd | 5개 서비스 자동 시작 |
 
 ---
 
+<<<<<<< codex/timestamp-decision-ids
+## 2026-05-11 세션 — 결정 ID 초 단위 타임스탬프 전환 (D-20260511-171426)
+
+### 완료
+- 새 설계 판단 ID 규칙을 기존 순번형 ID에서 `D-YYYYMMDD-HHMMSS` 형식으로 전환
+- 기존 `D-001`~`D-164` 링크는 보존하고, 앞으로 추가되는 결정에만 새 형식을 적용하도록 명시
+- RULES, FEATURE-WIRING-MATRIX, NEW-TENANT-GUIDE, 도메인별 인덱스 체크리스트, CLAUDE 안내 문구 동기화
+
+### 검증
+- 신규 결정 절차에 순번 강제 문구가 남지 않았는지 검색으로 확인
+=======
 ## 2026-05-11 세션 — 운영 DB migration 반영 확인 플로우 (D-166)
 
 ### 완료
@@ -73,6 +88,7 @@
 ### 알려진 제한
 - 현재 WSL 실행 환경에 로컬 PostgreSQL/PostgREST/launchctl 이 없어 `psql -d solarflow -f backend/migrations/091_module_product_family_fields.sql`, PostgREST 캐시 갱신, `backend/scripts/check_schema.sh`는 운영 DB에 적용하지 못했다.
 - 현재 실행 환경에 `bun` 명령이 없어 `npm test -- --run src/lib/excelValidation.test.ts`는 시작하지 못했다.
+>>>>>>> main
 
 ---
 
