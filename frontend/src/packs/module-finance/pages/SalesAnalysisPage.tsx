@@ -20,8 +20,9 @@ import { fetchAllPaginated, fetchWithAuth } from "@/lib/api"
 import { formatKRW, formatNumber, moduleLabel } from "@/lib/utils"
 import type { SaleListItem } from "@/types/outbound"
 import type { CustomerAnalysis, CustomerItem } from "@/types/analysis"
-import type { Partner } from "@/types/masters"
+import type { Partner, Product } from "@/types/masters"
 import { CardB, FilterChips, RailBlock, TileB } from "@/components/command/MockupPrimitives"
+import { KpiStrip } from "@/components/command/KpiStrip"
 import { flatSpark, monthlyTrend } from "@/templates/sparkUtils"
 
 interface MarginItem {
@@ -70,11 +71,97 @@ interface PageState {
 type PeriodFilter = "all" | "last3" | "year" | "custom"
 type MarginFilter = "all" | "missing_cost" | "low_margin" | "negative_margin"
 type ReconciliationLevel = "good" | "watch" | "risk"
+type ReconciliationKey = "engine_delta" | "pending_invoice" | "missing_cost" | "outstanding"
+type MissingCostReasonKey =
+  | "fifo_missing"
+  | "landed_missing"
+  | "cif_missing"
+  | "product_master_missing"
+  | "sale_link_missing"
+  | "cost_finalization_pending"
 // D-064 PR 30: 마진 분석 원가 기준 토글.
 // fifo: ERP fifo_matches (PR 26) 직접 사용 — 가장 정확. 매칭된 출고만 cover.
 // landed: 면장 + 부대비용 합산 (관세/부가세 포함 확정원가 추정).
 // cif: 면장 CIF 만 (관세 전).
 type CostBasis = "fifo" | "landed" | "cif"
+
+interface MissingCostReason {
+  key: MissingCostReasonKey
+  label: string
+  detail: string
+  actionLabel: string
+  tone: ReconciliationLevel
+}
+
+interface MissingCostDetailRow {
+  item: MarginItem
+  missingRevenue: number
+  reason: MissingCostReason
+  product?: Product
+  relatedSales: SaleListItem[]
+  actionHref: string
+}
+
+interface EngineDeltaCandidate {
+  sale: SaleListItem
+  reason: string
+  amount: number
+  actionHref: string
+}
+
+interface ReconciliationRow {
+  key: ReconciliationKey
+  name: string
+  value: string
+  sub: string
+  level: ReconciliationLevel
+  count: number
+}
+
+const missingCostReasonCatalog: Record<MissingCostReasonKey, MissingCostReason> = {
+  fifo_missing: {
+    key: "fifo_missing",
+    label: "FIFO 매칭 없음",
+    detail: "출고는 있으나 FIFO 원가 매칭 결과가 아직 붙지 않았습니다.",
+    actionLabel: "B/L 원가 확인",
+    tone: "risk",
+  },
+  landed_missing: {
+    key: "landed_missing",
+    label: "Landed 원가 미확정",
+    detail: "면장·부대비용 합산 원가가 아직 확정되지 않았습니다.",
+    actionLabel: "면장/원가 확인",
+    tone: "watch",
+  },
+  cif_missing: {
+    key: "cif_missing",
+    label: "CIF 기준원가 미확정",
+    detail: "CIF 단가 기준의 원가 라인이 아직 연결되지 않았습니다.",
+    actionLabel: "면장/원가 확인",
+    tone: "watch",
+  },
+  product_master_missing: {
+    key: "product_master_missing",
+    label: "품목 마스터 불일치",
+    detail: "매출 품번·규격이 제품 마스터와 맞지 않아 원가 후보를 좁히기 어렵습니다.",
+    actionLabel: "품목 마스터 정리",
+    tone: "risk",
+  },
+  sale_link_missing: {
+    key: "sale_link_missing",
+    label: "출고 연결 누락",
+    detail: "매출 전표와 출고 행의 연결이 약해 원가 역추적 기준이 부족합니다.",
+    actionLabel: "매출/출고 확인",
+    tone: "risk",
+  },
+  cost_finalization_pending: {
+    key: "cost_finalization_pending",
+    label: "원가 확정 대기",
+    detail: "품목과 출고는 확인되지만 현재 기준 원가가 아직 계산 결과로 확정되지 않았습니다.",
+    actionLabel: "원가 재계산",
+    tone: "watch",
+  },
+}
 
 function saleListItemDate(item: SaleListItem) {
   return item.outbound_date ?? item.order_date ?? null
@@ -281,6 +368,93 @@ function levelTone(level: ReconciliationLevel): string {
   return "sf-tone-neg"
 }
 
+function saleSupplyAmount(item: SaleListItem): number {
+  return item.sale.supply_amount ?? item.supply_amount ?? 0
+}
+
+function saleTotalAmount(item: SaleListItem): number {
+  return item.sale.total_amount ?? item.total_amount ?? saleSupplyAmount(item)
+}
+
+function saleIssueDate(item: SaleListItem): string | undefined {
+  return item.sale.tax_invoice_date ?? item.tax_invoice_date
+}
+
+function saleStatus(item: SaleListItem): string | undefined {
+  return item.sale.status ?? item.status
+}
+
+function productKey(productCode?: string | null, specWp?: number | null): string {
+  return `${(productCode ?? "").trim().toUpperCase()}|${specWp ?? 0}`
+}
+
+function compactDate(date?: string | null): string {
+  return date ? date.slice(0, 10) : "날짜 없음"
+}
+
+function salesActionHref(sale: SaleListItem): string {
+  const params = new URLSearchParams()
+  if (sale.order_id) params.set("order_id", sale.order_id)
+  if (sale.outbound_id) params.set("outbound_id", sale.outbound_id)
+  if (sale.sale_id) params.set("sale_id", sale.sale_id)
+  const query = params.toString()
+  return query ? `/orders?${query}` : "/orders"
+}
+
+function customerActionHref(customerId?: string): string {
+  if (!customerId) return "/orders"
+  return `/orders?customer_id=${encodeURIComponent(customerId)}`
+}
+
+function missingCostActionHref(
+  reason: MissingCostReason,
+  product: Product | undefined,
+  relatedSales: SaleListItem[],
+  item: MarginItem,
+): string {
+  if (reason.key === "product_master_missing") {
+    const params = new URLSearchParams()
+    if (item.product_code) params.set("product_code", item.product_code)
+    const query = params.toString()
+    return query ? `/data/products/new?${query}` : "/data/products/new"
+  }
+  if (reason.key === "sale_link_missing") {
+    return relatedSales[0] ? salesActionHref(relatedSales[0]) : "/orders"
+  }
+  if (reason.key === "fifo_missing") {
+    const params = new URLSearchParams({ tab: "bl" })
+    if (product?.product_id) params.set("product_id", product.product_id)
+    if (relatedSales[0]?.outbound_id) params.set("outbound_id", relatedSales[0].outbound_id)
+    return `/procurement?${params.toString()}`
+  }
+  return "/customs"
+}
+
+function matchesMarginItem(item: MarginItem, sale: SaleListItem, product?: Product): boolean {
+  if (product?.product_id && sale.product_id === product.product_id) return true
+  if (!sale.product_code) return false
+  return productKey(sale.product_code, sale.spec_wp) === productKey(item.product_code, item.spec_wp)
+}
+
+function classifyMissingCostReason(
+  item: MarginItem,
+  product: Product | undefined,
+  relatedSales: SaleListItem[],
+  costBasis: CostBasis,
+): MissingCostReason {
+  if (!item.product_code || !product) return missingCostReasonCatalog.product_master_missing
+  if (relatedSales.length === 0 || relatedSales.every((sale) => !sale.outbound_id)) {
+    return missingCostReasonCatalog.sale_link_missing
+  }
+  if (relatedSales.some((sale) => saleStatus(sale) === "cancelled")) {
+    return missingCostReasonCatalog.sale_link_missing
+  }
+  if (costBasis === "fifo") return missingCostReasonCatalog.fifo_missing
+  if (costBasis === "landed") return missingCostReasonCatalog.landed_missing
+  if (costBasis === "cif") return missingCostReasonCatalog.cif_missing
+  return missingCostReasonCatalog.cost_finalization_pending
+}
+
 export default function SalesAnalysisPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
   const [period, setPeriod] = useState<PeriodFilter>("all")
@@ -292,11 +466,14 @@ export default function SalesAnalysisPage() {
   // D-064 PR 30: 원가 기준 토글 — 기본 fifo (가장 정확). cost_details 만 있는 환경은 landed 로 폴백.
   const [costBasis, setCostBasis] = useState<CostBasis>("fifo")
   const [marginFilter, setMarginFilter] = useState<MarginFilter>("all")
+  const [activeReconciliation, setActiveReconciliation] =
+    useState<ReconciliationKey>("missing_cost")
   const [causeRowsParent] = useAutoAnimate<HTMLTableSectionElement>()
   const [customerRiskParent] = useAutoAnimate<HTMLTableSectionElement>()
   const [manufacturerRowsParent] = useAutoAnimate<HTMLTableSectionElement>()
   const [customerRowsParent] = useAutoAnimate<HTMLTableSectionElement>()
   const [marginRowsParent] = useAutoAnimate<HTMLTableSectionElement>()
+  const [reconciliationDetailParent] = useAutoAnimate<HTMLDivElement>()
   const manufacturers = useAppStore((s) => s.manufacturers)
   const products = useAppStore((s) => s.products)
   const loadManufacturers = useAppStore((s) => s.loadManufacturers)
@@ -423,6 +600,12 @@ export default function SalesAnalysisPage() {
     for (const product of products) map.set(product.product_id, product.manufacturer_id)
     return map
   }, [products])
+  const productByCodeSpec = useMemo(() => {
+    const map = new Map<string, Product>()
+    for (const product of products)
+      map.set(productKey(product.product_code, product.spec_wp), product)
+    return map
+  }, [products])
 
   const filteredSales = useMemo(() => {
     return state.sales.filter((item) => {
@@ -451,9 +634,9 @@ export default function SalesAnalysisPage() {
     for (const item of filteredSales) {
       const month = toMonth(item.outbound_date ?? item.order_date)
       const prev = map.get(month) ?? { month, revenue: 0, vat: 0, total: 0, count: 0 }
-      prev.revenue += item.sale.supply_amount ?? 0
+      prev.revenue += saleSupplyAmount(item)
       prev.vat += item.sale.vat_amount ?? 0
-      prev.total += item.sale.total_amount ?? 0
+      prev.total += saleTotalAmount(item)
       prev.count += 1
       map.set(month, prev)
     }
@@ -463,9 +646,9 @@ export default function SalesAnalysisPage() {
   }, [filteredSales])
 
   const salesSummary = useMemo(() => {
-    const supply = filteredSales.reduce((sum, item) => sum + (item.sale.supply_amount ?? 0), 0)
-    const total = filteredSales.reduce((sum, item) => sum + (item.sale.total_amount ?? 0), 0)
-    const issued = filteredSales.filter((item) => item.sale.tax_invoice_date).length
+    const supply = filteredSales.reduce((sum, item) => sum + saleSupplyAmount(item), 0)
+    const total = filteredSales.reduce((sum, item) => sum + saleTotalAmount(item), 0)
+    const issued = filteredSales.filter((item) => saleIssueDate(item)).length
     return {
       supply,
       total,
@@ -478,7 +661,7 @@ export default function SalesAnalysisPage() {
 
   // KPI sparkline — 최근 8개월 실제 매출/세금 흐름.
   const supplySpark = useMemo(
-    () => monthlyTrend(filteredSales, saleListItemDate, (i) => i.sale.supply_amount ?? 0),
+    () => monthlyTrend(filteredSales, saleListItemDate, saleSupplyAmount),
     [filteredSales],
   )
   const issueRateSpark = useMemo(() => {
@@ -486,7 +669,7 @@ export default function SalesAnalysisPage() {
     // 동일 items 위에서 conditional getValue 로 계산 — 부분집합으로 분리하면 길이가 어긋남.
     const totalByMonth = monthlyTrend(filteredSales, saleListItemDate, () => 1)
     const issuedByMonth = monthlyTrend(filteredSales, saleListItemDate, (i) =>
-      i.sale.tax_invoice_date ? 1 : 0,
+      saleIssueDate(i) ? 1 : 0,
     )
     return totalByMonth.map((t, i) => (t > 0 ? Math.round((issuedByMonth[i]! / t) * 100) : 0))
   }, [filteredSales])
@@ -550,11 +733,11 @@ export default function SalesAnalysisPage() {
     }
   }, [shownMarginItems])
   const pendingInvoiceSales = useMemo(
-    () => filteredSales.filter((item) => !item.sale.tax_invoice_date),
+    () => filteredSales.filter((item) => !saleIssueDate(item)),
     [filteredSales],
   )
   const pendingInvoiceRevenue = useMemo(
-    () => pendingInvoiceSales.reduce((sum, item) => sum + (item.sale.supply_amount ?? 0), 0),
+    () => pendingInvoiceSales.reduce((sum, item) => sum + saleSupplyAmount(item), 0),
     [pendingInvoiceSales],
   )
   const missingCostRows = useMemo(() => {
@@ -569,6 +752,73 @@ export default function SalesAnalysisPage() {
       .sort((a, b) => b.missingRevenue - a.missingRevenue)
       .slice(0, 5)
   }, [margin.items])
+  const missingCostDetailRows = useMemo<MissingCostDetailRow[]>(() => {
+    return margin.items
+      .map((item) => {
+        const missingRevenue =
+          item.cost_missing_revenue_krw ??
+          (item.total_cost_krw == null ? item.total_revenue_krw : 0)
+        const product = productByCodeSpec.get(productKey(item.product_code, item.spec_wp))
+        const relatedSales = filteredSales
+          .filter((sale) => matchesMarginItem(item, sale, product))
+          .sort((a, b) => saleSupplyAmount(b) - saleSupplyAmount(a))
+        const reason = classifyMissingCostReason(item, product, relatedSales, costBasis)
+        return {
+          item,
+          missingRevenue,
+          reason,
+          product,
+          relatedSales,
+          actionHref: missingCostActionHref(reason, product, relatedSales, item),
+        }
+      })
+      .filter((row) => row.missingRevenue > 0)
+      .sort((a, b) => b.missingRevenue - a.missingRevenue)
+      .slice(0, 8)
+  }, [costBasis, filteredSales, margin.items, productByCodeSpec])
+  const missingCostReasonSummary = useMemo(() => {
+    const map = new Map<
+      MissingCostReasonKey,
+      { reason: MissingCostReason; revenue: number; count: number }
+    >()
+    for (const row of missingCostDetailRows) {
+      const prev = map.get(row.reason.key) ?? { reason: row.reason, revenue: 0, count: 0 }
+      prev.revenue += row.missingRevenue
+      prev.count += 1
+      map.set(row.reason.key, prev)
+    }
+    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue)
+  }, [missingCostDetailRows])
+  const engineDeltaCandidates = useMemo<EngineDeltaCandidate[]>(() => {
+    return filteredSales
+      .map((sale) => {
+        const reasons: string[] = []
+        if (!sale.outbound_id) reasons.push("출고 연결 없음")
+        if (sale.outbound_status && sale.outbound_status !== "active") {
+          reasons.push(`출고 ${sale.outbound_status}`)
+        }
+        if (!sale.product_id && !sale.product_code) reasons.push("품목 연결 없음")
+        if (saleStatus(sale) === "cancelled") reasons.push("취소 전표")
+        if (saleSupplyAmount(sale) <= 0) reasons.push("공급가 0")
+        return {
+          sale,
+          reason: reasons[0] ?? "집계 범위 확인",
+          amount: saleSupplyAmount(sale),
+          actionHref: salesActionHref(sale),
+        }
+      })
+      .filter((row) => row.reason !== "집계 범위 확인")
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 6)
+  }, [filteredSales])
+  const topSalesForDeltaReview = useMemo(
+    () =>
+      filteredSales
+        .slice()
+        .sort((a, b) => saleSupplyAmount(b) - saleSupplyAmount(a))
+        .slice(0, 6),
+    [filteredSales],
+  )
   const marginDragRows = useMemo(() => {
     const portfolioRate = margin.summary.overall_margin_rate
     return margin.items
@@ -674,64 +924,64 @@ export default function SalesAnalysisPage() {
       customers.summary.total_outstanding_krw,
       customers.summary.total_sales_krw,
     )
-    return [
+    const rows: ReconciliationRow[] = [
       {
+        key: "engine_delta",
         name: "매출원장 ↔ 이익엔진",
         value: formatKRW(engineDelta),
         sub: `${engineDeltaRate.toFixed(2)}% 차이`,
-        level:
-          engineDeltaRate < 0.1
-            ? ("good" as const)
-            : engineDeltaRate < 1
-              ? ("watch" as const)
-              : ("risk" as const),
+        count: engineDeltaCandidates.length,
+        level: engineDeltaRate < 0.1 ? "good" : engineDeltaRate < 1 ? "watch" : "risk",
       },
       {
+        key: "pending_invoice",
         name: "세금계산서 미발행",
         value: `${pendingInvoiceSales.length.toLocaleString("ko-KR")}건`,
         sub: formatKRW(pendingInvoiceRevenue),
-        level: pendingInvoiceRevenue === 0 ? ("good" as const) : ("watch" as const),
+        count: pendingInvoiceSales.length,
+        level: pendingInvoiceRevenue === 0 ? "good" : "watch",
       },
       {
+        key: "missing_cost",
         name: "원가 미연결",
         value: formatKRW(costMissingRevenue),
         sub: `${missingCostRate.toFixed(1)}%`,
-        level:
-          missingCostRate === 0
-            ? ("good" as const)
-            : missingCostRate < 5
-              ? ("watch" as const)
-              : ("risk" as const),
+        count: missingCostDetailRows.length,
+        level: missingCostRate === 0 ? "good" : missingCostRate < 5 ? "watch" : "risk",
       },
       {
+        key: "outstanding",
         name: "수금 미회수",
         value: formatKRW(customers.summary.total_outstanding_krw),
         sub: `${outstandingRate.toFixed(1)}%`,
-        level:
-          outstandingRate === 0
-            ? ("good" as const)
-            : outstandingRate < 15
-              ? ("watch" as const)
-              : ("risk" as const),
+        count: customerRiskRows.length,
+        level: outstandingRate === 0 ? "good" : outstandingRate < 15 ? "watch" : "risk",
       },
     ]
+    return rows
   }, [
     costMissingRevenue,
+    customerRiskRows.length,
     customers.summary.total_outstanding_krw,
     customers.summary.total_sales_krw,
+    engineDeltaCandidates.length,
     margin.summary.total_revenue_krw,
+    missingCostDetailRows.length,
     pendingInvoiceRevenue,
     pendingInvoiceSales.length,
     salesSummary.supply,
   ])
+  const engineDeltaAmount = moneyDelta(salesSummary.supply, margin.summary.total_revenue_krw)
+  const activeReconciliationRow =
+    reconciliationRows.find((row) => row.key === activeReconciliation) ?? reconciliationRows[0]
   const actionQueue = useMemo(() => {
     const actions: { title: string; value: string; detail: string }[] = []
-    const topMissing = missingCostRows[0]
+    const topMissing = missingCostDetailRows[0] ?? missingCostRows[0]
     if (topMissing) {
       actions.push({
         title: "원가 연결",
         value: formatKRW(topMissing.missingRevenue),
-        detail: `${topMissing.item.product_code} 원가부터 연결`,
+        detail: `${topMissing.item.product_code} · ${"reason" in topMissing ? topMissing.reason.label : "원가부터 연결"}`,
       })
     }
     const topDrag = marginDragRows[0]
@@ -764,6 +1014,7 @@ export default function SalesAnalysisPage() {
   }, [
     customerRiskRows,
     marginDragRows,
+    missingCostDetailRows,
     missingCostRows,
     pendingInvoiceRevenue,
     pendingInvoiceSales.length,
@@ -916,71 +1167,91 @@ export default function SalesAnalysisPage() {
 
           {/* NumberTween formatter — '억' 단위 (krw 원본을 억으로 나눠 .toFixed(2)). */}
           {/* 모든 KPI 가 동일 패턴이라 inline closure 로 처리. */}
-          <div className="sf-command-kpis">
-            <TileB
-              lbl="공급가 매출"
-              v={(salesSummary.supply / 100000000).toFixed(2)}
-              numericValue={salesSummary.supply}
-              formatter={(n) => (n / 100000000).toFixed(2)}
-              u="억"
-              sub={`${formatNumber(salesSummary.count)}건`}
-              tone="solar"
-              spark={supplySpark}
-              metricId="sales_analysis.supply_amount"
-            />
-            <TileB
-              lbl="계산 이익"
-              v={(margin.summary.total_margin_krw / 100000000).toFixed(2)}
-              numericValue={margin.summary.total_margin_krw}
-              formatter={(n) => (n / 100000000).toFixed(2)}
-              u="억"
-              sub={`${formatKRW(costCoveredRevenue)} 기준`}
-              tone={margin.summary.total_margin_krw >= 0 ? "pos" : "neg"}
-              spark={flatSpark(Math.abs(margin.summary.total_margin_krw))}
-              metricId="sales_analysis.margin_rate"
-            />
-            <TileB
-              lbl="이익률"
-              v={margin.summary.overall_margin_rate.toFixed(1)}
-              numericValue={margin.summary.overall_margin_rate}
-              formatter={(n) => n.toFixed(1)}
-              u="%"
-              sub={`원가 연결률 ${costCoverageRate.toFixed(0)}%`}
-              tone={margin.summary.overall_margin_rate >= 8 ? "pos" : "warn"}
-              spark={flatSpark(margin.summary.overall_margin_rate)}
-              metricId="sales_analysis.margin_rate"
-            />
-            <TileB
-              lbl="미수금"
-              v={(customers.summary.total_outstanding_krw / 100000000).toFixed(2)}
-              numericValue={customers.summary.total_outstanding_krw}
-              formatter={(n) => (n / 100000000).toFixed(2)}
-              u="억"
-              sub={`수금 ${formatKRW(customers.summary.total_collected_krw)}`}
-              tone={customers.summary.total_outstanding_krw > 0 ? "warn" : "pos"}
-              metricId="receipts.remaining"
-            />
-            <TileB
-              lbl="계산서 미발행"
-              v={String(salesSummary.pending)}
-              numericValue={salesSummary.pending}
-              formatter={(n) => String(Math.round(n))}
-              u="건"
-              sub={`${formatNumber(salesSummary.issued)}건 발행 · ${salesSummary.issueRate}%`}
-              tone={salesSummary.pending > 0 ? "warn" : "info"}
-              spark={issueRateSpark}
-              metricId="sales_analysis.issue_rate"
-            />
-            <TileB
-              lbl="원가 미연결"
-              v={(costMissingRevenue / 100000000).toFixed(2)}
-              numericValue={costMissingRevenue}
-              formatter={(n) => (n / 100000000).toFixed(2)}
-              u="억"
-              sub={`${formatNumber(costMissingItemCount)}개 품목`}
-              tone={costMissingRevenue > 0 ? "warn" : "pos"}
-            />
-          </div>
+          <KpiStrip
+            scopeId="sales-analysis"
+            metrics={[
+              {
+                lbl: "공급가 매출",
+                v: (salesSummary.supply / 100000000).toFixed(2),
+                numericValue: salesSummary.supply,
+                formatter: (n: number) => (n / 100000000).toFixed(2),
+                u: "억",
+                sub: `${formatNumber(salesSummary.count)}건`,
+                tone: "solar" as const,
+                spark: supplySpark,
+                metricId: "sales_analysis.supply_amount",
+              },
+              {
+                key: "sales_analysis.margin_profit",
+                lbl: "계산 이익",
+                v: (margin.summary.total_margin_krw / 100000000).toFixed(2),
+                numericValue: margin.summary.total_margin_krw,
+                formatter: (n: number) => (n / 100000000).toFixed(2),
+                u: "억",
+                sub: `${formatKRW(costCoveredRevenue)} 기준`,
+                tone: margin.summary.total_margin_krw >= 0 ? ("pos" as const) : ("neg" as const),
+                spark: flatSpark(Math.abs(margin.summary.total_margin_krw)),
+                metricId: "sales_analysis.margin_rate",
+              },
+              {
+                lbl: "이익률",
+                v: margin.summary.overall_margin_rate.toFixed(1),
+                numericValue: margin.summary.overall_margin_rate,
+                formatter: (n: number) => n.toFixed(1),
+                u: "%",
+                sub: `원가 연결률 ${costCoverageRate.toFixed(0)}%`,
+                tone: margin.summary.overall_margin_rate >= 8 ? ("pos" as const) : ("warn" as const),
+                spark: flatSpark(margin.summary.overall_margin_rate),
+                metricId: "sales_analysis.margin_rate",
+              },
+              {
+                lbl: "미수금",
+                v: (customers.summary.total_outstanding_krw / 100000000).toFixed(2),
+                numericValue: customers.summary.total_outstanding_krw,
+                formatter: (n: number) => (n / 100000000).toFixed(2),
+                u: "억",
+                sub: `수금 ${formatKRW(customers.summary.total_collected_krw)}`,
+                tone: customers.summary.total_outstanding_krw > 0 ? ("warn" as const) : ("pos" as const),
+                metricId: "receipts.remaining",
+              },
+              {
+                lbl: "계산서 미발행",
+                v: String(salesSummary.pending),
+                numericValue: salesSummary.pending,
+                formatter: (n: number) => String(Math.round(n)),
+                u: "건",
+                sub: `${formatNumber(salesSummary.issued)}건 발행 · ${salesSummary.issueRate}%`,
+                tone: salesSummary.pending > 0 ? ("warn" as const) : ("info" as const),
+                spark: issueRateSpark,
+                metricId: "sales_analysis.issue_rate",
+              },
+              {
+                key: "sales_analysis.cost_missing",
+                lbl: "원가 미연결",
+                v: (costMissingRevenue / 100000000).toFixed(2),
+                numericValue: costMissingRevenue,
+                formatter: (n: number) => (n / 100000000).toFixed(2),
+                u: "억",
+                sub: `${formatNumber(costMissingItemCount)}개 품목`,
+                tone: costMissingRevenue > 0 ? ("warn" as const) : ("pos" as const),
+              },
+            ]}
+          >
+            {(metric) => (
+              <TileB
+                key={metric.lbl}
+                lbl={metric.lbl}
+                v={metric.v}
+                numericValue={metric.numericValue}
+                formatter={metric.formatter}
+                u={metric.u}
+                sub={metric.sub}
+                tone={metric.tone}
+                spark={metric.spark}
+                metricId={metric.metricId}
+              />
+            )}
+          </KpiStrip>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
             <CardB title="이익 원인 분해" sub="저마진 · 원가 공백 우선순위">
@@ -1116,24 +1387,265 @@ export default function SalesAnalysisPage() {
               </Table>
             </CardB>
 
-            <CardB title="원장 대사 체크" sub="매출 · 세금계산서 · 원가 · 수금">
+            <CardB title="원장 대사 체크" sub="클릭하면 후보 행까지 드릴다운">
               <div className="divide-y divide-[var(--line)]">
-                {reconciliationRows.map((row) => (
-                  <div key={row.name} className="flex items-center justify-between gap-3 px-4 py-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-xs font-medium text-[var(--ink)]">
-                        {row.name}
+                {reconciliationRows.map((row) => {
+                  const active = row.key === activeReconciliation
+                  return (
+                    <button
+                      type="button"
+                      key={row.key}
+                      className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition ${active ? "bg-[var(--bg-2)]" : "hover:bg-[var(--bg-2)]"}`}
+                      aria-pressed={active}
+                      onClick={() => setActiveReconciliation(row.key)}
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-medium text-[var(--ink)]">
+                          {row.name}
+                        </div>
+                        <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">{row.sub}</div>
                       </div>
-                      <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">{row.sub}</div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {row.count > 0 ? (
+                          <span className="mono text-[10.5px] text-[var(--ink-3)]">
+                            {row.count.toLocaleString("ko-KR")}건
+                          </span>
+                        ) : null}
+                        <span className="mono text-xs font-semibold">{row.value}</span>
+                        <span className={`sf-status-pill ${levelTone(row.level)}`}>
+                          {row.level === "good" ? "정상" : row.level === "watch" ? "주의" : "위험"}
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div ref={reconciliationDetailParent} className="border-t border-[var(--line)] p-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-semibold text-[var(--ink)]">
+                      {activeReconciliationRow?.name ?? "대사 상세"}
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="mono text-xs font-semibold">{row.value}</span>
-                      <span className={`sf-status-pill ${levelTone(row.level)}`}>
-                        {row.level === "good" ? "정상" : row.level === "watch" ? "주의" : "위험"}
-                      </span>
+                    <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">
+                      {activeReconciliationRow?.sub ?? "확인할 항목이 없습니다"}
                     </div>
                   </div>
-                ))}
+                  {activeReconciliationRow ? (
+                    <span className={`sf-status-pill ${levelTone(activeReconciliationRow.level)}`}>
+                      {activeReconciliationRow.level === "good"
+                        ? "정상"
+                        : activeReconciliationRow.level === "watch"
+                          ? "주의"
+                          : "위험"}
+                    </span>
+                  ) : null}
+                </div>
+
+                {activeReconciliation === "engine_delta" && (
+                  <div className="space-y-2">
+                    {engineDeltaAmount === 0 ? (
+                      <div className="rounded-md border border-[var(--line)] px-3 py-4 text-center text-xs text-muted-foreground">
+                        매출원장 공급가와 이익엔진 매출이 일치합니다
+                      </div>
+                    ) : engineDeltaCandidates.length > 0 ? (
+                      engineDeltaCandidates.map((row) => (
+                        <div
+                          key={row.sale.sale_id}
+                          className="rounded-md border border-[var(--line)] px-3 py-2"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-xs font-medium text-[var(--ink)]">
+                                {row.sale.customer_name ?? "거래처 없음"} ·{" "}
+                                {row.sale.product_code ?? row.sale.product_name ?? "품목 없음"}
+                              </div>
+                              <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">
+                                {compactDate(saleListItemDate(row.sale))} · {row.reason}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="mono text-xs font-semibold">
+                                {formatKRW(row.amount)}
+                              </span>
+                              <a href={row.actionHref} className="btn xs">
+                                열기
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      topSalesForDeltaReview.map((sale) => (
+                        <div
+                          key={sale.sale_id}
+                          className="rounded-md border border-[var(--line)] px-3 py-2"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-xs font-medium text-[var(--ink)]">
+                                {sale.customer_name ?? "거래처 없음"} ·{" "}
+                                {sale.product_code ?? sale.product_name ?? "품목 없음"}
+                              </div>
+                              <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">
+                                직접 후보 없음 · 상위 매출 범위 확인
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="mono text-xs font-semibold">
+                                {formatKRW(saleSupplyAmount(sale))}
+                              </span>
+                              <a href={salesActionHref(sale)} className="btn xs">
+                                열기
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {activeReconciliation === "pending_invoice" && (
+                  <div className="space-y-2">
+                    {pendingInvoiceSales.slice(0, 6).map((sale) => (
+                      <div
+                        key={sale.sale_id}
+                        className="rounded-md border border-[var(--line)] px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-medium text-[var(--ink)]">
+                              {sale.customer_name ?? "거래처 없음"} ·{" "}
+                              {sale.product_code ?? sale.product_name ?? "품목 없음"}
+                            </div>
+                            <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">
+                              {compactDate(saleListItemDate(sale))} · 세금계산서 미발행
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="mono text-xs font-semibold">
+                              {formatKRW(saleSupplyAmount(sale))}
+                            </span>
+                            <a href={salesActionHref(sale)} className="btn xs">
+                              열기
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {pendingInvoiceSales.length === 0 && (
+                      <div className="rounded-md border border-[var(--line)] px-3 py-4 text-center text-xs text-muted-foreground">
+                        미발행 계산서가 없습니다
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeReconciliation === "missing_cost" && (
+                  <div className="space-y-3">
+                    {missingCostReasonSummary.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {missingCostReasonSummary.map((row) => (
+                          <div
+                            key={row.reason.key}
+                            className="rounded-md border border-[var(--line)] px-3 py-2"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`sf-status-pill ${levelTone(row.reason.tone)}`}>
+                                {row.reason.label}
+                              </span>
+                              <span className="mono text-xs font-semibold">
+                                {formatKRW(row.revenue)}
+                              </span>
+                            </div>
+                            <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">
+                              {row.count.toLocaleString("ko-KR")}개 품목
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div className="space-y-2">
+                      {missingCostDetailRows.map((row) => (
+                        <div
+                          key={`${row.item.product_code}-${row.item.spec_wp}-${row.reason.key}`}
+                          className="rounded-md border border-[var(--line)] px-3 py-2"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="truncate text-xs font-medium text-[var(--ink)]">
+                                  {row.item.product_code} ·{" "}
+                                  {moduleLabel(row.item.manufacturer_name, row.item.spec_wp)}
+                                </span>
+                                <span className={`sf-status-pill ${levelTone(row.reason.tone)}`}>
+                                  {row.reason.label}
+                                </span>
+                              </div>
+                              <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">
+                                {row.reason.detail} · 매출{" "}
+                                {row.relatedSales.length.toLocaleString("ko-KR")}건
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="mono text-xs font-semibold">
+                                {formatKRW(row.missingRevenue)}
+                              </span>
+                              <a href={row.actionHref} className="btn xs">
+                                {row.reason.actionLabel}
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {missingCostDetailRows.length === 0 && (
+                        <div className="rounded-md border border-[var(--line)] px-3 py-4 text-center text-xs text-muted-foreground">
+                          원가 미연결 품목이 없습니다
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activeReconciliation === "outstanding" && (
+                  <div className="space-y-2">
+                    {customerRiskRows.map(({ item, signal }) => (
+                      <div
+                        key={item.customer_id}
+                        className="rounded-md border border-[var(--line)] px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-medium text-[var(--ink)]">
+                              {item.customer_name}
+                            </div>
+                            <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">
+                              {signal} · 최장 {item.oldest_outstanding_days}일 ·{" "}
+                              {item.avg_margin_rate != null
+                                ? `이익률 ${item.avg_margin_rate.toFixed(1)}%`
+                                : "이익률 없음"}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="mono text-xs font-semibold">
+                              {formatKRW(item.outstanding_krw)}
+                            </span>
+                            <a href={customerActionHref(item.customer_id)} className="btn xs">
+                              열기
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {customerRiskRows.length === 0 && (
+                      <div className="rounded-md border border-[var(--line)] px-3 py-4 text-center text-xs text-muted-foreground">
+                        미회수 위험 거래처가 없습니다
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardB>
           </div>

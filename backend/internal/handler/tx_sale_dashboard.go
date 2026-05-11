@@ -19,8 +19,8 @@ import (
 // 본 핸들러: List 와 동일한 필터 + 청크 누적 + enrichSales(outbound_date 채움) → 메모리 집계 → ~수 KB 응답.
 
 const (
-	saleDashboardChunkSize  = 1000
-	saleDashboardMaxChunks  = 50
+	saleDashboardChunkSize   = 1000
+	saleDashboardMaxChunks   = 50
 	saleDashboardTrendMonths = 24
 	saleDashboardTopN        = 10
 )
@@ -32,22 +32,22 @@ const (
 // pending_trend24: tax_invoice_date 가 비어있는 매출만 outbound_date 로 binning — SalesInvoicePendingInsight 화면용.
 // by_*_top10: count, sale_amount_sum, invoice_pending_count, avg_unit_price_wp(≥3 priced 일 때만 0 아님), share.
 type SaleDashboard struct {
-	Totals              SaleDashTotals        `json:"totals"`
-	Trend24             []SaleDashTrendPoint  `json:"trend24"`
-	PendingTrend24      []SaleDashTrendPoint  `json:"pending_trend24"`
+	Totals              SaleDashTotals         `json:"totals"`
+	Trend24             []SaleDashTrendPoint   `json:"trend24"`
+	PendingTrend24      []SaleDashTrendPoint   `json:"pending_trend24"`
 	ByCustomerTop10     []SaleDashBreakdownRow `json:"by_customer_top10"`
 	ByManufacturerTop10 []SaleDashBreakdownRow `json:"by_manufacturer_top10"`
 }
 
 type SaleDashTotals struct {
 	Count               int     `json:"count"`
-	SaleAmountSum       float64 `json:"sale_amount_sum"`        // sum(total_amount)
-	SupplyAmountSum     float64 `json:"supply_amount_sum"`      // sum(supply_amount)
-	VatAmountSum        float64 `json:"vat_amount_sum"`         // sum(vat_amount)
-	InvoiceIssuedCount  int     `json:"invoice_issued_count"`   // tax_invoice_date 있는 건수
-	InvoicePendingCount int     `json:"invoice_pending_count"`  // tax_invoice_date 없는 건수
-	CustomersCount      int     `json:"customers_count"`        // distinct customer_id
-	AvgUnitPriceWp      float64 `json:"avg_unit_price_wp"`      // 평균 unit_price_wp (원/Wp)
+	SaleAmountSum       float64 `json:"sale_amount_sum"`       // sum(total_amount)
+	SupplyAmountSum     float64 `json:"supply_amount_sum"`     // sum(supply_amount)
+	VatAmountSum        float64 `json:"vat_amount_sum"`        // sum(vat_amount)
+	InvoiceIssuedCount  int     `json:"invoice_issued_count"`  // tax_invoice_date 있는 건수
+	InvoicePendingCount int     `json:"invoice_pending_count"` // tax_invoice_date 없는 건수
+	CustomersCount      int     `json:"customers_count"`       // distinct customer_id
+	AvgUnitPriceWp      float64 `json:"avg_unit_price_wp"`     // 평균 unit_price_wp (원/Wp)
 }
 
 // SaleDashTrendPoint — 월별 시계열 한 점.
@@ -105,6 +105,9 @@ func (h *SaleHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 // PostgREST RPC 호출은 codebase 기존 패턴 (From("rpc/"+name).Insert(body)) 사용.
 func (h *SaleHandler) tryRPCSalesDashboard(r *http.Request) ([]byte, bool) {
 	q := r.URL.Query()
+	if q.Get("erp_closed") != "" {
+		return nil, false
+	}
 	args := map[string]any{}
 	if v := q.Get("company_id"); v != "" && v != "all" {
 		args["p_company_id"] = v
@@ -286,7 +289,7 @@ func computeSaleDashTrend24(items []model.SaleListItem) []SaleDashTrendPoint {
 	labels := make([]string, saleDashboardTrendMonths)
 	idx := make(map[string]int, saleDashboardTrendMonths)
 	for i := 0; i < saleDashboardTrendMonths; i++ {
-		t := now.AddDate(0, -(saleDashboardTrendMonths-1-i), 0)
+		t := now.AddDate(0, -(saleDashboardTrendMonths - 1 - i), 0)
 		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 		labels[i] = key
 		idx[key] = i
@@ -347,7 +350,7 @@ func computeSaleDashPendingTrend24(items []model.SaleListItem) []SaleDashTrendPo
 	labels := make([]string, saleDashboardTrendMonths)
 	idx := make(map[string]int, saleDashboardTrendMonths)
 	for i := 0; i < saleDashboardTrendMonths; i++ {
-		t := now.AddDate(0, -(saleDashboardTrendMonths-1-i), 0)
+		t := now.AddDate(0, -(saleDashboardTrendMonths - 1 - i), 0)
 		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 		labels[i] = key
 		idx[key] = i

@@ -119,6 +119,11 @@ func (h *CalcProxyHandler) PriceTrend(w http.ResponseWriter, r *http.Request) {
 	h.proxyPost(w, r, "price-trend")
 }
 
+// PriceForecastStrategy — 가격예측 구매전략 프록시
+func (h *CalcProxyHandler) PriceForecastStrategy(w http.ResponseWriter, r *http.Request) {
+	h.proxyPost(w, r, "price-forecast-strategy")
+}
+
 // SupplyForecast — 수급 전망 프록시
 func (h *CalcProxyHandler) SupplyForecast(w http.ResponseWriter, r *http.Request) {
 	h.proxyPost(w, r, "supply-forecast")

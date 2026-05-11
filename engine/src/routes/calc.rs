@@ -10,6 +10,7 @@ use crate::calc::inventory::calculate_inventory;
 use crate::calc::landed_cost::{calculate_landed_cost, compare_exchange_rates};
 use crate::calc::lc_schedule::{calculate_lc_fees, calculate_limit_timeline, get_maturity_alerts};
 use crate::calc::margin::{calculate_margin, analyze_customers, calculate_price_trend};
+use crate::calc::price_forecast::calculate_price_forecast_strategy;
 use crate::calc::forecast::calculate_forecast;
 use crate::calc::order_risk::calculate_order_fulfillment_risk;
 use crate::calc::receipt_match::{get_outstanding_list, suggest_receipt_match};
@@ -19,6 +20,7 @@ use crate::model::inventory::InventoryRequest;
 use crate::model::landed_cost::{ExchangeCompareRequest, LandedCostRequest};
 use crate::model::lc_schedule::{LcFeeRequest, LcLimitTimelineRequest, LcMaturityAlertRequest};
 use crate::model::margin::{MarginAnalysisRequest, CustomerAnalysisRequest, PriceTrendRequest};
+use crate::model::price_forecast::PriceForecastStrategyRequest;
 use crate::model::forecast::SupplyForecastRequest;
 use crate::model::order_risk::OrderFulfillmentRiskRequest;
 use crate::model::receipt_match::{OutstandingListRequest, ReceiptMatchSuggestRequest};
@@ -171,6 +173,18 @@ pub async fn price_trend_handler(State(pool): State<PgPool>, Json(req): Json<Pri
         Ok(r) => (StatusCode::OK, Json(serde_json::to_value(r).unwrap_or(json!({"error": "직렬화 실패"})))),
         Err(e) => { tracing::error!("단가 추이 실패: {}", e); (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("단가 추이 실패: {}", e)}))) }
     }
+}
+
+/// POST /api/calc/price-forecast-strategy — 가격예측 구매전략 핸들러
+pub async fn price_forecast_strategy_handler(Json(req): Json<PriceForecastStrategyRequest>) -> (StatusCode, Json<Value>) {
+    if req.observations.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "observations는 필수입니다"})));
+    }
+    if !req.observations.iter().any(|row| row.price_usd_w.is_some_and(|price| price.is_finite() && price > 0.0)) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "price_usd_w 관측값이 필요합니다"})));
+    }
+    let response = calculate_price_forecast_strategy(&req, chrono::Utc::now());
+    (StatusCode::OK, Json(serde_json::to_value(response).unwrap_or(json!({"error": "직렬화 실패"}))))
 }
 
 /// POST /api/calc/supply-forecast — 월별 수급 전망 핸들러

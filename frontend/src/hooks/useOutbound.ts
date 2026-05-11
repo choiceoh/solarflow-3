@@ -36,6 +36,7 @@ export interface OutboundListParams {
   status?: string;
   usage_category?: string;
   manufacturer_id?: string;
+  work_queue?: 'sale_unregistered';
   q?: string;
   start?: string;
   end?: string;
@@ -67,6 +68,7 @@ export function useOutboundList(params: OutboundListParams): OutboundListResult 
     params.status ?? '',
     params.usage_category ?? '',
     params.manufacturer_id ?? '',
+    params.work_queue ?? '',
     params.q ?? '',
     params.start ?? '',
     params.end ?? '',
@@ -84,6 +86,7 @@ export function useOutboundList(params: OutboundListParams): OutboundListResult 
       if (params.status) search.set('status', params.status);
       if (params.usage_category) search.set('usage_category', params.usage_category);
       if (params.manufacturer_id) search.set('manufacturer_id', params.manufacturer_id);
+      if (params.work_queue) search.set('work_queue', params.work_queue);
       if (params.q) search.set('q', params.q);
       if (params.start) search.set('start', params.start);
       if (params.end) search.set('end', params.end);
@@ -171,6 +174,7 @@ export interface OutboundDashboardFilters {
   status?: string
   usage_category?: string
   manufacturer_id?: string
+  work_queue?: 'sale_unregistered'
   q?: string
   start?: string
   end?: string
@@ -187,6 +191,7 @@ export function useOutboundDashboard(filters: OutboundDashboardFilters = {}) {
     filters.status ?? '',
     filters.usage_category ?? '',
     filters.manufacturer_id ?? '',
+    filters.work_queue ?? '',
     filters.q ?? '',
     filters.start ?? '',
     filters.end ?? '',
@@ -201,6 +206,7 @@ export function useOutboundDashboard(filters: OutboundDashboardFilters = {}) {
       if (filters.status) params.set('status', filters.status)
       if (filters.usage_category) params.set('usage_category', filters.usage_category)
       if (filters.manufacturer_id) params.set('manufacturer_id', filters.manufacturer_id)
+      if (filters.work_queue) params.set('work_queue', filters.work_queue)
       if (filters.q) params.set('q', filters.q)
       if (filters.start) params.set('start', filters.start)
       if (filters.end) params.set('end', filters.end)
@@ -260,6 +266,7 @@ export function useOutboundSummary(params: Omit<OutboundListParams, 'pageIndex' 
     params.status ?? '',
     params.usage_category ?? '',
     params.manufacturer_id ?? '',
+    params.work_queue ?? '',
     params.q ?? '',
     params.start ?? '',
     params.end ?? '',
@@ -271,6 +278,7 @@ export function useOutboundSummary(params: Omit<OutboundListParams, 'pageIndex' 
       if (params.status) search.set('status', params.status);
       if (params.usage_category) search.set('usage_category', params.usage_category);
       if (params.manufacturer_id) search.set('manufacturer_id', params.manufacturer_id);
+      if (params.work_queue) search.set('work_queue', params.work_queue);
       if (params.q) search.set('q', params.q);
       if (params.start) search.set('start', params.start);
       if (params.end) search.set('end', params.end);
@@ -311,6 +319,7 @@ export interface SaleListParams {
   start?: string;
   end?: string;
   invoice_status?: string;
+  erp_closed?: 'true' | 'false';
   q?: string;
   sort?: string;
   order?: 'asc' | 'desc';
@@ -338,6 +347,7 @@ export function useSaleList(params: SaleListParams): SaleListResult {
     params.start ?? '',
     params.end ?? '',
     params.invoice_status ?? '',
+    params.erp_closed ?? '',
     params.q ?? '',
     params.sort ?? '',
     params.order ?? '',
@@ -353,6 +363,7 @@ export function useSaleList(params: SaleListParams): SaleListResult {
       if (params.start) search.set('start', params.start);
       if (params.end) search.set('end', params.end);
       if (params.invoice_status) search.set('invoice_status', params.invoice_status);
+      if (params.erp_closed) search.set('erp_closed', params.erp_closed);
       if (params.q) search.set('q', params.q);
       if (params.sort) search.set('sort', params.sort);
       if (params.order) search.set('order', params.order);
@@ -421,6 +432,7 @@ export interface SaleDashboardFilters {
   start?: string
   end?: string
   invoice_status?: string
+  erp_closed?: 'true' | 'false'
   q?: string
 }
 
@@ -434,6 +446,7 @@ export function useSaleDashboard(filters: SaleDashboardFilters = {}) {
     filters.start ?? '',
     filters.end ?? '',
     filters.invoice_status ?? '',
+    filters.erp_closed ?? '',
     filters.q ?? '',
   ]
   const q = useQuery<SaleDashboard, Error>({
@@ -445,6 +458,7 @@ export function useSaleDashboard(filters: SaleDashboardFilters = {}) {
       if (filters.start) params.set('start', filters.start)
       if (filters.end) params.set('end', filters.end)
       if (filters.invoice_status) params.set('invoice_status', filters.invoice_status)
+      if (filters.erp_closed) params.set('erp_closed', filters.erp_closed)
       if (filters.q) params.set('q', filters.q)
       return fetchWithAuth<SaleDashboard>(`/api/v1/sales/dashboard?${params}`)
     },
@@ -518,6 +532,7 @@ export function useSaleSummary(params: Omit<SaleListParams, 'pageIndex' | 'pageS
     params.start ?? '',
     params.end ?? '',
     params.invoice_status ?? '',
+    params.erp_closed ?? '',
     params.q ?? '',
   ];
   const q = useQuery<SaleSummary, Error>({
@@ -529,6 +544,7 @@ export function useSaleSummary(params: Omit<SaleListParams, 'pageIndex' | 'pageS
       if (params.start) search.set('start', params.start);
       if (params.end) search.set('end', params.end);
       if (params.invoice_status) search.set('invoice_status', params.invoice_status);
+      if (params.erp_closed) search.set('erp_closed', params.erp_closed);
       if (params.q) search.set('q', params.q);
       return fetchWithAuth<SaleSummary>(`/api/v1/sales/summary?${search}`);
     },

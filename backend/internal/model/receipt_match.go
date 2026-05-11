@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 // ReceiptMatch — 수금 매칭 정보를 담는 구조체
 // 비유: "수금-출고 매칭 대장" — 어떤 수금이 어떤 출고에 얼마만큼 매칭되었는지 기록
 type ReceiptMatch struct {
@@ -48,8 +50,18 @@ type ReceiptMatchBulkItem struct {
 // ReceiptMatchBulkRequest — 여러 미수금을 한 번에 확정하는 요청
 // 비유: 수금 전표 하나에 여러 출고/매출을 한 묶음으로 스테이플러 찍는 것.
 type ReceiptMatchBulkRequest struct {
-	ReceiptID string                 `json:"receipt_id"`
-	Matches   []ReceiptMatchBulkItem `json:"matches"`
+	ReceiptID          string                 `json:"receipt_id"`
+	Matches            []ReceiptMatchBulkItem `json:"matches"`
+	BalanceDisposition string                 `json:"balance_disposition,omitempty"`
+	BalanceNote        string                 `json:"balance_note,omitempty"`
+}
+
+// ReceiptMatchBulkResponse — 일괄 매칭 결과와 남은 입금 잔액 처리 선택.
+type ReceiptMatchBulkResponse struct {
+	Matches            []ReceiptMatch `json:"matches"`
+	BalanceAmount      float64        `json:"balance_amount"`
+	BalanceDisposition string         `json:"balance_disposition,omitempty"`
+	BalanceNote        string         `json:"balance_note,omitempty"`
 }
 
 // Validate — 일괄 매칭 요청 검증
@@ -71,7 +83,23 @@ func (req *ReceiptMatchBulkRequest) Validate() string {
 			return "matched_amount는 양수여야 합니다"
 		}
 	}
+	if req.BalanceDisposition != "" && !ValidReceiptBalanceDisposition(req.BalanceDisposition) {
+		return "balance_disposition은 advance, next_settlement, refund_review 중 하나여야 합니다"
+	}
+	if len(strings.TrimSpace(req.BalanceNote)) > 500 {
+		return "balance_note는 500자 이하여야 합니다"
+	}
 	return ""
+}
+
+// ValidReceiptBalanceDisposition — 남은 입금 잔액 처리 방법 검증.
+func ValidReceiptBalanceDisposition(value string) bool {
+	switch value {
+	case "advance", "next_settlement", "refund_review":
+		return true
+	default:
+		return false
+	}
 }
 
 // ToCreateRequests — bulk item 을 기존 INSERT 페이로드로 변환
@@ -114,6 +142,7 @@ type ReceiptMatchAICandidate struct {
 	ProductName       string  `json:"product_name"`
 	OutstandingAmount float64 `json:"outstanding_amount"`
 	MatchAmount       float64 `json:"match_amount"`
+	IsPartial         bool    `json:"is_partial"`
 	Confidence        float64 `json:"confidence"`
 	Reason            string  `json:"reason"`
 }

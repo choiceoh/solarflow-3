@@ -15,6 +15,10 @@ function textValue(value: unknown): string {
   return String(value ?? '').trim();
 }
 
+function countWarningRows(rows: ParsedRow[]): number {
+  return rows.filter((r) => r.valid && (r.warnings?.length ?? 0) > 0).length;
+}
+
 function buildCompanyPayload(row: Record<string, unknown>) {
   const businessNumber = textValue(row.business_number);
   return {
@@ -61,9 +65,9 @@ export function useExcel(type: TemplateType) {
     if (type === 'sale') {
       fetches.push(fetchWithAuth<ActiveRow[]>('/api/v1/outbounds?status=active'));
     }
-    // LC 양식: 은행 + 발주번호 코드표 필요. PO 양식: 발주번호 자동 노출은 안 하지만 구조 일관성 유지.
-    const needsBanks = type === 'lc';
-    const needsPos = type === 'lc';
+    // LC/T/T 양식: 은행 + 발주번호 코드표 필요.
+    const needsBanks = type === 'lc' || type === 'tt';
+    const needsPos = type === 'lc' || type === 'tt';
     if (needsBanks) fetches.push(fetchWithAuth<ActiveRow[]>('/api/v1/banks').catch(() => [] as ActiveRow[]));
     if (needsPos) fetches.push(fetchWithAuth<ActiveRow[]>('/api/v1/pos').catch(() => [] as ActiveRow[]));
     Promise.all(fetches).then((results) => {
@@ -132,6 +136,7 @@ export function useExcel(type: TemplateType) {
           totalRows: validated.length,
           validRows: validated.filter((r) => r.valid).length,
           errorRows: validated.filter((r) => !r.valid).length,
+          warningRows: countWarningRows(validated),
           rows: validated,
         });
       }
@@ -161,6 +166,7 @@ export function useExcel(type: TemplateType) {
         totalRows: validated.length,
         validRows: validated.filter((r) => r.valid).length,
         errorRows: validated.filter((r) => !r.valid).length,
+        warningRows: countWarningRows(validated),
         rows: validated,
       });
     } catch (e) {
@@ -249,6 +255,7 @@ export function useExcel(type: TemplateType) {
         type === 'receipt' ? 'receipts' :
         type === 'purchase_order' ? 'purchase-orders' :
         type === 'lc' ? 'lcs' :
+        type === 'tt' ? 'tts' :
         type;
       const result = await fetchWithAuth<ImportResult>(`/api/v1/import/${endpoint}`, {
         method: 'POST',

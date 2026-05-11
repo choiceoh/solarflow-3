@@ -21,15 +21,18 @@ export interface UserProfile {
 // 표시 단위 — 개인 설정 (PersonalSettingsPage > 표시 단위 섹션)
 export type AmountUnit = 'auto' | 'won' | 'thousand' | 'manwon' | 'million' | 'eok';
 export type CapacityUnit = 'auto' | 'kw' | 'mw';
+export type KpiHiddenByScope = Record<string, string[]>;
 
 export interface UserPreferences {
   amount_unit: AmountUnit;
   capacity_unit: CapacityUnit;
   show_ea: boolean;
+  kpi_hidden: KpiHiddenByScope;
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
   amount_unit: 'auto',
   capacity_unit: 'auto',
   show_ea: true,
+  kpi_hidden: {},
 };

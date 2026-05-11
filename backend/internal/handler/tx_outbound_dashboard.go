@@ -29,8 +29,8 @@ import (
 // dashboardChunkSize / dashboardMaxChunks — Supabase Cloud db-max-rows=1000 가드를
 // 따라 청크당 1000 행. 5만 행까지 안전 (50 청크 × 1000).
 const (
-	dashboardChunkSize = 1000
-	dashboardMaxChunks = 50
+	dashboardChunkSize   = 1000
+	dashboardMaxChunks   = 50
 	dashboardTrendMonths = 24
 	dashboardTopN        = 10
 )
@@ -41,17 +41,18 @@ const (
 //   - period=lifetime (기본) — 필터 적용된 전체
 //   - period=prev_month — 직전 달만 (OutboundKwInsight 용)
 //   - period=year — 올해(YYYY-) 만 (OutboundKwYearInsight 용)
+//
 // trend24 / weekly12 / yoy3y / totals 는 period 와 무관하게 항상 전체 기준.
 type OutboundDashboard struct {
-	Totals              OutboundDashTotals          `json:"totals"`
-	Trend24             []OutboundTrendPoint        `json:"trend24"`
-	Weekly12            []OutboundDashWeeklyPoint   `json:"weekly12"`
-	YoY3Y               OutboundDashYoY3Y           `json:"yoy3y"`
-	Period              string                      `json:"period"`
-	ByUsage             []OutboundBreakdownRow      `json:"by_usage"`
-	ByManufacturerTop10 []OutboundBreakdownRow      `json:"by_manufacturer_top10"`
-	ByCustomerTop10     []OutboundBreakdownRow      `json:"by_customer_top10"`
-	SaleConversion      OutboundDashSaleConversion  `json:"sale_conversion"`
+	Totals              OutboundDashTotals         `json:"totals"`
+	Trend24             []OutboundTrendPoint       `json:"trend24"`
+	Weekly12            []OutboundDashWeeklyPoint  `json:"weekly12"`
+	YoY3Y               OutboundDashYoY3Y          `json:"yoy3y"`
+	Period              string                     `json:"period"`
+	ByUsage             []OutboundBreakdownRow     `json:"by_usage"`
+	ByManufacturerTop10 []OutboundBreakdownRow     `json:"by_manufacturer_top10"`
+	ByCustomerTop10     []OutboundBreakdownRow     `json:"by_customer_top10"`
+	SaleConversion      OutboundDashSaleConversion `json:"sale_conversion"`
 }
 
 // OutboundDashWeeklyPoint — 최근 12 주 (월요일 시작) 한 점. OrdersPage 우측 레일 "주간 출고" 막대.
@@ -169,8 +170,8 @@ func normalizePeriod(raw string) string {
 // tryRPCOutboundsDashboard — outbounds_dashboard() RPC 호출.
 func (h *OutboundHandler) tryRPCOutboundsDashboard(r *http.Request) ([]byte, bool) {
 	q := r.URL.Query()
-	// 용량(kW) 필터는 현재 RPC 시그니처(migration 076)가 모르므로 fallback Go 경로 사용.
-	if q.Get("min_kw") != "" || q.Get("max_kw") != "" {
+	// 용량(kW)·업무 큐 필터는 현재 RPC 시그니처(migration 076)가 모르므로 fallback Go 경로 사용.
+	if q.Get("min_kw") != "" || q.Get("max_kw") != "" || q.Get("work_queue") != "" {
 		return nil, false
 	}
 	args := map[string]any{}
@@ -436,7 +437,7 @@ func computeDashTrend24(outbounds []model.Outbound) []OutboundTrendPoint {
 	labels := make([]string, dashboardTrendMonths)
 	idx := make(map[string]int, dashboardTrendMonths)
 	for i := 0; i < dashboardTrendMonths; i++ {
-		t := now.AddDate(0, -(dashboardTrendMonths-1-i), 0)
+		t := now.AddDate(0, -(dashboardTrendMonths - 1 - i), 0)
 		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 		labels[i] = key
 		idx[key] = i
@@ -552,7 +553,7 @@ func computeDashSaleConversion(outbounds []model.Outbound) OutboundDashSaleConve
 	labels := make([]string, dashboardTrendMonths)
 	idx := make(map[string]int, dashboardTrendMonths)
 	for i := 0; i < dashboardTrendMonths; i++ {
-		t := now.AddDate(0, -(dashboardTrendMonths-1-i), 0)
+		t := now.AddDate(0, -(dashboardTrendMonths - 1 - i), 0)
 		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 		labels[i] = key
 		idx[key] = i

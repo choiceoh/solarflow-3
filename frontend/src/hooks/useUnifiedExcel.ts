@@ -23,6 +23,10 @@ function numValue(value: unknown): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
+function countWarningRows(rows: ParsedRow[]): number {
+  return rows.filter((r) => r.valid && (r.warnings?.length ?? 0) > 0).length;
+}
+
 function buildCompanyPayload(row: Record<string, unknown>) {
   const businessNumber = textValue(row.business_number);
   return {
@@ -147,6 +151,7 @@ function endpointForType(type: TemplateType): string {
     case 'receipt': return 'receipts';
     case 'purchase_order': return 'purchase-orders';
     case 'lc': return 'lcs';
+    case 'tt': return 'tts';
     default: return type;
   }
 }
@@ -238,6 +243,18 @@ function augmentMasterWithSection(
             partner_id: tmpId(r),
             partner_name: textValue(r.data.partner_name),
             partner_type: textValue(r.data.partner_type),
+          })),
+        ],
+      };
+    case 'purchase_order':
+      return {
+        ...master,
+        purchaseOrders: [
+          ...(master.purchaseOrders ?? []),
+          ...validRows.map((r) => ({
+            po_id: tmpId(r),
+            po_number: textValue(r.data.po_number),
+            contract_date: textValue(r.data.contract_date),
           })),
         ],
       };
@@ -537,6 +554,7 @@ export function useUnifiedExcel() {
               rows: validatedRows,
               validRows: validatedRows.filter((r) => r.valid).length,
               errorRows: validatedRows.filter((r) => !r.valid).length,
+              warningRows: countWarningRows(validatedRows),
             },
           };
         }
@@ -581,6 +599,28 @@ export function useUnifiedExcel() {
     setError(null);
   }, []);
 
+  const downloadErrors = useCallback(async () => {
+    if (!preview) return;
+    const { downloadErrorRows } = await import('@/lib/excelTemplates');
+    const {
+      FIELDS_MAP, DECLARATION_FIELDS, DECLARATION_COST_FIELDS,
+    } = await import('@/types/excel');
+    for (const section of preview.sections) {
+      if (!section.present || section.parseError) continue;
+      if (section.declPreview) {
+        const errorDecls = section.declPreview.declarations.filter((r) => !r.valid);
+        const errorCosts = section.declPreview.costs.filter((r) => !r.valid);
+        if (errorDecls.length > 0) await downloadErrorRows(errorDecls, DECLARATION_FIELDS, '면장등록_에러');
+        if (errorCosts.length > 0) await downloadErrorRows(errorCosts, DECLARATION_COST_FIELDS, '원가등록_에러');
+      } else if (section.preview) {
+        const errorRows = section.preview.rows.filter((r) => !r.valid);
+        if (errorRows.length > 0) {
+          await downloadErrorRows(errorRows, FIELDS_MAP[section.type], `${section.label}_에러`);
+        }
+      }
+    }
+  }, [preview]);
+
   const clearSubmitResult = useCallback(() => {
     setSubmitResult(null);
   }, []);
@@ -593,6 +633,7 @@ export function useUnifiedExcel() {
     submitResult,
     uploadFile,
     submitAll,
+    downloadErrors,
     clearPreview,
     clearSubmitResult,
   };

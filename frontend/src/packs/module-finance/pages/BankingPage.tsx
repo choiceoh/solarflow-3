@@ -22,6 +22,7 @@ import {
   Sparkline,
   TileB,
 } from "@/components/command/MockupPrimitives"
+import { KpiStrip } from "@/components/command/KpiStrip"
 import { flatSpark } from "@/templates/sparkUtils"
 
 const BANKING_TAB_OPTIONS = [
@@ -138,52 +139,70 @@ export default function BankingPage() {
     <div className="sf-page">
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
-          <div className="sf-command-kpis">
-            <TileB
-              lbl="총 한도"
-              v={fmtUsdM(totalLimit)}
-              numericValue={totalLimit}
-              formatter={fmtUsdM}
-              u="M$"
-              sub={`${allLimitRows.length}개 은행`}
-              tone="ink"
-              spark={flatSpark(totalLimit / 1_000_000)}
-              metricId="banking.total_limit"
-            />
-            <TileB
-              lbl="사용중"
-              v={fmtUsdM(totalUsed)}
-              numericValue={totalUsed}
-              formatter={fmtUsdM}
-              u="M$"
-              sub={`${totalUsageRate.toFixed(1)}% · 활성 L/C`}
-              tone="warn"
-              spark={flatSpark(totalUsed / 1_000_000)}
-              metricId="banking.used"
-            />
-            <TileB
-              lbl="가용"
-              v={fmtUsdM(totalAvail)}
-              numericValue={totalAvail}
-              formatter={fmtUsdM}
-              u="M$"
-              sub="추가 개설 가능"
-              tone="solar"
-              spark={flatSpark(totalAvail / 1_000_000)}
-              metricId="banking.available"
-            />
-            <TileB
-              lbl="만기 알림"
-              v={String(alertRows.length)}
-              numericValue={alertRows.length}
-              formatter={(n) => String(Math.round(n))}
-              u="건"
-              sub="30일 이내"
-              tone={alertRows.length > 0 ? "info" : "pos"}
-              spark={flatSpark(alertRows.length)}
-              metricId="banking.maturity_alert"
-            />
-          </div>
+          <KpiStrip
+            scopeId={`banking.${activeTab}`}
+            metrics={[
+              {
+                lbl: "총 한도",
+                v: fmtUsdM(totalLimit),
+                numericValue: totalLimit,
+                formatter: fmtUsdM,
+                u: "M$",
+                sub: `${allLimitRows.length}개 은행`,
+                tone: "ink" as const,
+                spark: flatSpark(totalLimit / 1_000_000),
+                metricId: "banking.total_limit",
+              },
+              {
+                lbl: "사용중",
+                v: fmtUsdM(totalUsed),
+                numericValue: totalUsed,
+                formatter: fmtUsdM,
+                u: "M$",
+                sub: `${totalUsageRate.toFixed(1)}% · 활성 L/C`,
+                tone: "warn" as const,
+                spark: flatSpark(totalUsed / 1_000_000),
+                metricId: "banking.used",
+              },
+              {
+                lbl: "가용",
+                v: fmtUsdM(totalAvail),
+                numericValue: totalAvail,
+                formatter: fmtUsdM,
+                u: "M$",
+                sub: "추가 개설 가능",
+                tone: "solar" as const,
+                spark: flatSpark(totalAvail / 1_000_000),
+                metricId: "banking.available",
+              },
+              {
+                lbl: "만기 알림",
+                v: String(alertRows.length),
+                numericValue: alertRows.length,
+                formatter: (n: number) => String(Math.round(n)),
+                u: "건",
+                sub: "30일 이내",
+                tone: alertRows.length > 0 ? ("info" as const) : ("pos" as const),
+                spark: flatSpark(alertRows.length),
+                metricId: "banking.maturity_alert",
+              },
+            ]}
+          >
+            {(metric) => (
+              <TileB
+                key={metric.lbl}
+                lbl={metric.lbl}
+                v={metric.v}
+                numericValue={metric.numericValue}
+                formatter={metric.formatter}
+                u={metric.u}
+                sub={metric.sub}
+                tone={metric.tone}
+                spark={metric.spark}
+                metricId={metric.metricId}
+              />
+            )}
+          </KpiStrip>
 
           <CommandTopLine title={pageTitle} sub={pageSub} right={bankingCardControls} />
 

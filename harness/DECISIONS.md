@@ -1359,3 +1359,151 @@
   - `go test ./internal/feature ./internal/router ./internal/handler` 로 feature catalog, route snapshot, handler compile 경로를 확인한다.
   - frontend 는 `bun run build` 로 WMS 화면 타입과 번들 생성을 확인한다.
 - **날짜**: 2026-05-08
+
+## D-155: 운영 거래 생성 정본은 Excel Import Hub의 PO/LC/T/T 양식이다
+
+- **결정**: 실데이터 이관과 운영 거래 생성은 Import Hub의 통합 거래 양식에서 PO → LC → T/T → 입고 흐름으로 처리한다. 웹 다이얼로그는 조회·보정·상세 편집 보조 수단으로 둔다.
+- **양식 기준**:
+  - PO: 발주번호, 법인코드, 제조사, 계약유형, 계약일, Incoterms, 통화, 결제조건, 계약기간, 품번, 수량, USD/Wp 단가, 본품/스페어, 유상/무상, 메모.
+  - LC: L/C No., 발주번호(참조), 법인코드, 은행명, 개설일, 금액(USD), 목표 MW, 유산스, 만기일, 메모.
+  - T/T: 발주번호(참조), 법인코드, 송금일, 송금액(USD), 환율, 은행명, 상태, 목적, 메모.
+- **서버 검증 기준**:
+  - 없는 제조사/품번/은행은 등록하지 않는다.
+  - LC/T/T는 같은 법인의 기존 PO가 있어야 등록한다.
+  - 금액·수량·환율·단가는 양수만 허용한다.
+  - PO 번호와 L/C No. 중복은 업로드 전에 차단한다.
+  - 계약기간·LC 만기 등 시작일이 종료일보다 늦은 행은 오류로 차단한다.
+- **MIG 번호 정책**: 과거 자료에 실제 번호가 없으면 `MIG-{종류}-YYYYMMDD-001` 형식의 추적키를 사용한다. 현재 고정 종류는 `PO`, `LC`, `TT`, `BL`.
+- **미리보기 기준**: 정상/경고/오류를 분리한다. MIG 번호처럼 등록 가능한 이관 표식은 경고로 남기고, FK 없음·음수·중복·날짜 역전은 오류로 차단한다. 오류행은 엑셀로 내려받아 재작업할 수 있어야 한다.
+- **날짜**: 2026-05-11
+
+## D-156: 매출 분석 대사 체크는 원인 행까지 드릴다운한다
+
+- **결정**: `/sales-analysis`의 원장 대사 체크는 단순 상태 요약이 아니라 클릭형 드릴다운 보드로 운영한다. 매출원장↔이익엔진 차이, 세금계산서 미발행, 원가 미연결, 수금 미회수 각각에서 후보 행과 조치 링크를 바로 보여준다.
+- **원가 미연결 사유 분류**:
+  - 현재 화면이 가진 `margin-analysis`, `sales`, 제품 마스터 자료만으로 1차 분류한다.
+  - `FIFO 매칭 없음`, `Landed 원가 미확정`, `CIF 기준원가 미확정`, `품목 마스터 불일치`, `출고 연결 누락`, `원가 확정 대기`를 표준 사유로 둔다.
+  - 기준원가 토글이 `fifo`면 출고-FIFO 매칭 누락을 우선 표시하고, `landed`/`cif`면 면장 원가 확정 누락을 우선 표시한다.
+- **운영 기준**:
+  - 대사 요약 행에는 상태, 금액/건수, 후보 건수를 같이 표시한다.
+  - 원가 미연결 상세는 사유별 매출 규모를 먼저 묶고, 품목별 행에는 사유, 매출 건수, 미연결 금액, 조치 화면 링크를 둔다.
+  - 원장 차이는 직접 의심 가능한 행(출고 누락, 취소 전표, 품목 연결 없음 등)을 먼저 보여주고, 직접 후보가 없으면 상위 매출 행을 검토 대상으로 보여준다.
+  - 세금계산서 미발행과 수금 미회수는 거래처/출고 확인 화면으로 이어지는 운영 링크를 둔다.
+- **이유**: D-150에서 매출 분석의 깊이를 KPI 요약에서 원인 분해까지 넓혔지만, 운영자가 바로 다음 확인 행으로 내려가는 경로는 부족했다. 대사 차이와 원가 미연결은 “어떤 숫자가 문제인가”보다 “어느 행부터 처리할 것인가”가 더 중요하므로 같은 화면에서 후보와 조치까지 연결한다.
+- **검증**:
+  - frontend build 로 타입과 번들 생성을 확인한다.
+  - lint 는 기존 ProcurementPage hook dependency 경고와 bun-test 타입 suppression 경고 외 신규 오류가 없어야 한다.
+
+- **날짜**: 2026-05-11
+
+## D-157: PO 상세는 변경계약·라인 진행률·감사 diff를 한 화면에서 처리한다
+
+- **결정**: `/procurement` PO 상세에 변경계약 작성 버튼, 라인별 진행률, PO 감사 diff 탭을 추가한다. PO 직접입력은 유지하되 신규 등록 다이얼로그는 기존 라인 복사와 붙여넣기 기반 빠른 입력을 지원한다.
+- **구현 기준**:
+  - 변경계약 작성은 기존 `purchase_orders.parent_po_id` 체인을 사용한다. 원계약의 제조사·조건·라인을 기본값으로 복사하고, 새 PO번호는 기존 번호 없는 데이터 정책에 따라 비워둘 수 있다.
+  - 라인별 진행률은 `lc_line_items.po_line_id`와 `bl_line_items.po_line_id`를 우선 사용해 계약량/LC/선적/입고/잔여를 표시한다. 과거 데이터처럼 라인 ID가 비어 있으면 같은 PO 안에서 품번이 단일 라인일 때만 product_id로 보정한다.
+  - 감사 diff는 기존 `audit_logs`의 `old_data/new_data`를 사용하고, `updated_at/created_at/po_id/company_id` 같은 메타 필드는 제외한다.
+  - 새 DB 테이블이나 계산엔진 API는 만들지 않는다. PO당 라인·LC·B/L 수가 작다는 D-061 패턴을 유지한다.
+- **이유**: PO는 건수가 많지 않아 직접입력이 유효하지만, 변경계약·부분 LC·분할선적·필드 수정 이력이 한 화면에서 끊기면 운영자가 계약의 현재 상태를 재구성해야 한다. 기존 체인/라인/audit 데이터를 UI에서 모아 보여주는 것이 최소 변경으로 실무 안전성을 높인다.
+- **날짜**: 2026-05-11
+
+## D-158: 수금 부분 매칭은 금액 입력과 잔액 처리 선택을 같은 확정 흐름에 둔다
+
+- **결정**: 수금 매칭 화면은 선택한 미수금 행마다 `matched_amount`를 직접 입력할 수 있게 한다. 자동 추천과 AI 검토 후보도 후보 금액을 그대로 입력칸에 반영하고, 최종 장부 반영은 기존 `POST /api/v1/receipt-matches/bulk` 확정 버튼을 통해서만 수행한다.
+- **잔액 처리**:
+  - 입금 가능액보다 매칭 합계가 작으면 확정 전에 `advance`, `next_settlement`, `refund_review` 중 하나를 선택해야 한다.
+  - bulk API는 잔액이 있는데 `balance_disposition`이 없으면 400을 반환한다. 잔액 처리 선택은 이번 단계에서 확정 응답 메타데이터로 반환하며, 별도 선수금 원장 테이블은 만들지 않는다.
+  - 입금 가능액 초과 또는 미수금 초과 금액은 프론트와 Go 검증에서 모두 막는다.
+- **AI 기준**:
+  - D-148의 "부분 매칭 UX 전까지 AI 부분 후보 제외" 조건은 이번 UX 추가로 해제한다.
+  - AI 후보는 `0 < match_amount <= outstanding_amount`이고 후보 합계가 receipt remaining을 넘지 않을 때만 채택한다. 서버는 부분 후보 여부를 `is_partial`로 계산해 응답한다.
+- **이유**: 실무 입금은 여러 건 전액 일치보다 일부 상환, 계약금, 잔금 일부 지급이 자주 섞인다. 행 선택만으로 전액 매칭하면 수금 잔액과 미수금이 동시에 왜곡될 수 있으므로, 금액과 잔액 처리 의사를 한 화면에서 명시하게 한다.
+- **검증**:
+  - `ReceiptMatchBulkRequest.Validate`는 잔액 처리 enum과 메모 길이를 검증한다.
+  - AI sanitizer 테스트는 부분 후보를 보존하고 remaining 초과 후보를 버리는 동작을 고정한다.
+
+- **날짜**: 2026-05-11
+
+## D-159: 가격예측 구매 전략은 AI 예측이 아니라 Rust 계산엔진 산출값을 정본으로 삼는다
+
+- **결정**: `/price-forecast`의 구매 전략과 1/3/6개월 전망 시나리오는 신규 Rust endpoint `/api/calc/price-forecast-strategy`가 산출한다. Go는 `/api/v1/calc/price-forecast-strategy` 프록시와 feature gate만 담당하고, 프론트엔드는 외부 관측값·우리 최근 구매가·AI 수집 run 경고를 요청 본문으로 전달해 Rust 응답을 표시한다.
+- **이유**: 가격전망은 설명 가능성과 재현성이 중요하다. AI는 공개 근거 수집에는 유용하지만, 구매 의사결정 액션을 직접 생성하면 근거·회귀 테스트·테넌트 통제가 약해진다. CMM/forward/중국 입찰/CPIA floor/우리 구매가를 조합하는 계산은 Go+Rust 분리 원칙상 Rust 계산엔진에 두는 편이 맞다.
+- **운영 기준**:
+  - 입력 source는 D-151 이후 허용된 `opis / infolink / trendforce / pvinsights / china_tender / cpia_floor`만 사용한다. Tier-1 ASP는 전략 계산에도 넣지 않는다.
+  - USD/W를 canonical 단위로 삼고, 화면의 CNY/KRW 단위 선택은 차트 표시용으로 제한한다.
+  - Rust 응답은 action, 1/3/6개월 low/base/high 범위, 근거 목록, source 품질 점수, CMM trend/floor gap/우리 구매가 대비율을 포함한다.
+  - source 품질 점수는 최근성, confidence, 표본 수, run warning을 함께 반영한다. 낮은 점수는 계약 차단이 아니라 원문 근거 확인 신호다.
+- **검증**:
+  - Rust unit test로 상승장 즉시 협상과 floor 하방 제한을 고정한다.
+  - Go feature catalog/matrix/router snapshot으로 module 계열 gate를 고정한다.
+  - 프론트엔드 build로 Rust 응답 타입과 가격예측 화면 렌더를 확인한다.
+- **날짜**: 2026-05-11
+
+## D-160: 수주 충당 위험도는 상세 근거와 납기/ETA 적기성을 함께 반환한다
+
+- **결정**: D-147의 `/api/v1/calc/order-fulfillment-risk` 응답을 확장해 수주 상세에서 충당 근거 패널을 표시한다. 응답에는 배정 순번, 배정 전/후 가용량, 부족량, 현재고/미착품 풀 구성, 납기일, 예상 가용일, ETA 상태와 사유를 포함한다.
+- **납기/ETA 기준**:
+  - `fulfillment_source='stock'` 수주는 실재고 기준이므로 ETA 확인 대상이 아니다.
+  - `fulfillment_source='incoming'` 수주는 B/L 미착 물량을 ETA 순서로, B/L 없는 opened L/C 잔여 물량을 ETA 미확정 물량으로 배정한다.
+  - 미착 물량은 충분하지만 예상 가용일이 `delivery_due`보다 늦거나, 납기일이 없거나, ETA 없는 L/C/B/L 물량이 충당에 쓰이면 `확인 필요`로 표시한다.
+  - 물량 자체가 부족하면 기존처럼 `부족`을 우선 표시한다.
+- **이유**: 목록 배지만으로는 운영자가 왜 부족/확인 필요인지 설명하기 어렵다. 같은 Rust 계산 결과에서 풀 구성과 납기 적기성을 함께 내려야 영업·물류가 상세 화면에서 즉시 조치 판단을 할 수 있다.
+- **검증**:
+  - Rust 단위 테스트로 ETA 지연, 납기 내, 납기 누락, ETA 순차 배정을 고정한다.
+  - frontend build 로 상세 근거 패널 타입과 렌더링 경로를 확인한다.
+- **날짜**: 2026-05-11
+
+## D-161: 가격예측 관측값은 삭제 전에 후보/채택/제외 검토 상태를 거친다
+
+- **결정**: `price_benchmarks`에 `review_status`를 추가하고 기본값을 `candidate`로 둔다. 운영자는 `/price-forecast`에서 관측값을 `accepted`(구매 판단 기준선 채택), `rejected`(기본 차트·판단에서 제외), `candidate`(재검토 후보)로 전환할 수 있다. 서버는 `PATCH /api/v1/price-benchmarks/{id}/review-status`로 상태만 갱신한다.
+- **이유**: D-143의 선택 삭제는 신뢰도 낮은 관측값을 즉시 정리할 수 있게 했지만, 실무에서는 “아직 애매함”, “이번 협상 기준으로 채택”, “차트에서는 빼되 나중에 감사 확인”이 분리되어야 한다. AI 수집 로그는 보존하면서 관측값 자체를 남겨두면 재수집 품질 점검과 구매 판단 근거가 동시에 남는다.
+- **운영 기준**:
+  - AI/수동 신규 관측값은 `candidate`로 시작한다.
+  - 기본 화면은 `candidate` + `accepted`만 보여주고, `rejected`는 필터로 확인한다.
+  - 삭제는 중복·오염 데이터가 확정된 경우에만 사용한다. 삭제해도 `price_benchmark_runs` 감사 로그는 보존한다.
+  - `review_status` 허용값은 DB CHECK와 Go validation에서 `candidate/accepted/rejected`로 fail-closed 한다.
+- **검증**:
+  - `go test ./internal/model ./internal/router ./internal/feature` 로 상태 validation, route snapshot, feature catalog 일치를 확인한다.
+  - `go test ./internal/handler` 로 핸들러 compile 경로를 확인한다.
+  - `bun run lock:check`, `bun install --frozen-lockfile`, `bun run build` 로 프론트 타입/빌드와 의존성 lock 검증을 확인한다.
+- **날짜**: 2026-05-11
+
+## D-162: PO 라인 빠른 입력은 오류·모호성이 없을 때 자동 반영한다
+
+- **결정**: PO 신규/변경계약 다이얼로그의 빠른 입력은 붙여넣기 순간 자동 파싱한다. 품번·수량·USD/Wp가 모두 유효하고 품번 후보가 1개로 확정되면 사용자가 별도 버튼을 누르지 않아도 라인을 반영한다.
+- **자동화 기준**:
+  - 엑셀 헤더 행은 자동으로 건너뛴다.
+  - 탭/쉼표/공백 기반 `품번 수량 USD/Wp` 입력을 모두 허용한다.
+  - 선택 컬럼으로 본품/스페어, 유상/무상, 메모가 있으면 라인에 함께 반영한다.
+  - 품번 후보가 여러 개이거나 수량·단가가 양수가 아니면 자동 반영하지 않고, 입력 내용을 남겨 사용자가 수정하게 한다.
+- **이유**: 사용자는 작은 PO를 직접입력하되, 반복 라인 입력은 엑셀에서 복사해 붙여넣는 경우가 많다. 오류가 없을 때는 자동으로 최대한 처리하고, 애매한 데이터만 사람이 확인하게 하는 것이 실무 속도와 데이터 안전성의 균형점이다.
+- **날짜**: 2026-05-11
+
+## D-163: KPI 활성 항목은 사용자 preferences에 화면별 숨김 목록으로 저장한다
+
+- **결정**: KPI 타일 표시 여부를 사용자가 직접 조정할 수 있게 한다. 저장 위치는 기존 `user_profiles.preferences` JSONB이며, 신규 키 `kpi_hidden`에 `{ 화면scope: [숨김 KPI key...] }` 형태로 보관한다.
+- **구현 기준**:
+  - 별도 DB 테이블이나 system_settings를 만들지 않는다. KPI 배열 자체는 코드/설계 정본이므로 사용자 설정은 "활성/비활성 표시"만 담당한다.
+  - 화면/탭별 scope를 분리한다. 예: `inventory`, `orders.sales`, `procurement.po`, `sales-analysis`.
+  - KPI key는 명시 `key` 또는 `metricId`를 우선 사용하고, 중복 metricId가 있으면 라벨 기준으로 분리한다.
+  - 최소 1개 KPI는 항상 남긴다. 모든 KPI가 꺼져 화면의 상태판 기능이 사라지는 것을 막는다.
+  - 표시 메뉴는 KPI 그리드 바로 위 공통 컴포넌트로 제공하고, 변경 즉시 `/api/v1/users/me/preferences`에 저장한다.
+- **이유**: 경영/운영/회계 사용자가 같은 화면에서도 보는 우선순위가 다르다. 그러나 KPI 정의를 사용자별로 바꾸면 설계 정본과 분석 의미가 흔들리므로, 시스템 KPI 목록은 유지하고 개인별 활성 항목만 조절하는 방식이 가장 작고 안전하다.
+- **검증**:
+  - `npm run build`로 TypeScript와 Vite 번들을 확인한다.
+  - 저장 payload는 기존 사용자 preferences API를 사용하므로 신규 라우트/마이그레이션은 없다.
+- **날짜**: 2026-05-11
+
+## D-164: 가격예측 AI 수집은 source별 다중 검색 플랜으로 evidence 후보를 넓힌다
+
+- **결정**: `/api/v1/price-benchmarks/ai-refresh`는 source별 기본 검색어 1회에 의존하지 않고, 기본 검색어 + 결측 metric별 검색어 + source별 대체 검색어 + 완화된 기간 필터를 순서대로 실행한다. 검색 결과는 URL/title 기준으로 중복 제거하고, source당 상위 결과 일부는 Serper scrape로 본문을 보강한 뒤 LLM 추출에 넘긴다.
+- **이유**: 외부 시세지는 유료 페이지, 주간/일간 발행 주기, 중국어 뉴스 제목, 사이트 개편 때문에 같은 source라도 한 검색어로는 evidence가 낮게 잡힌다. 저장 정책을 완화하면 오염 데이터가 들어오므로, 저장 allowlist는 유지하고 검색 후보 폭만 넓히는 것이 맞다.
+- **운영 기준**:
+  - 저장 가능 source/metric/market_region/basis/currency allowlist는 D-146/D-151 그대로 fail-closed 한다.
+  - OPIS, InfoLink, TrendForce, PVinsights, 중국 입찰, CPIA는 영어·중국어 대체 검색어를 source 정의에 포함한다.
+  - `day→week`, `week→month`, `month→year` 순서의 기간 완화 검색을 fallback으로 둔다.
+  - 검색 결과 snippet만으로 가격 숫자가 부족할 수 있으므로 source당 상위 URL 일부를 scrape evidence로 교체한다.
+  - 같은 URL은 evidence에 한 번만 넣고, source당 검색 evidence 상한을 둬 LLM 입력 폭주를 막는다.
+- **검증**:
+  - `go test ./internal/handler -run 'TestBuildBenchmark|TestSummarizeHomepage|TestSearchResultDedupe|TestValidateBenchmarkCatalogPolicy|TestHashEvidence|TestPickComparablePrice|TestFormatSanityWarnings'` 로 검색 플랜 확장과 dedupe를 고정한다.
+- **날짜**: 2026-05-11

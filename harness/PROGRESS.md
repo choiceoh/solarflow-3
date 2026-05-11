@@ -1,18 +1,319 @@
 # SolarFlow 진행 상황
 
-## 현재 상태 요약 (최종 업데이트: 2026-05-08)
+## 현재 상태 요약 (최종 업데이트: 2026-05-11)
 
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | study 학습 페이지 1차 UI + 진도/과제 도메인 설계, WMS 위치 배정 초기 데이터 보정 + 실사 차이 보정 결재 흐름, Excel Import Hub 운영 입력 전환 마무리 |
+| 다음 작업 | 가격예측 AI 수집 운영 재실행으로 source별 evidence 증가 확인, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
-| Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-154 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축) |
+| Rust 테스트 | cargo test PASS |
+| DECISIONS | D-001~D-164 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력, D-163 KPI 활성 항목 설정, D-164 가격예측 다중 검색 플랜) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-11 세션 — 가격예측 AI 수집률 보강 (D-164)
+
+### 완료
+- 가격예측 AI 수집의 Serper 검색을 source당 단일 검색어에서 다중 검색 플랜으로 확장
+  - 기본 검색어 + 결측 metric별 검색어 + source별 영어/중국어 대체 검색어 + 기간 완화 fallback 적용
+  - OPIS, InfoLink, TrendForce, PVinsights, 중국 입찰, CPIA source별 대체 검색어 추가
+  - 검색 결과 상위 URL 일부는 Serper scrape 본문으로 교체해 snippet 한계를 보강
+  - 검색 결과는 URL/title 기준으로 dedupe 하고 source당 evidence 상한을 둬 LLM 입력 폭주 방지
+  - 저장 allowlist와 중국·유럽 제한, Tier-1 ASP 제외 정책은 그대로 유지
+- 설계 정본과 D-164 결정 기록 동기화
+
+### 검증
+- `cd backend && go test ./internal/handler -run 'TestBuildBenchmark|TestSummarizeHomepage|TestSearchResultDedupe|TestValidateBenchmarkCatalogPolicy|TestHashEvidence|TestPickComparablePrice|TestFormatSanityWarnings'` 성공
+- `cd backend && go test ./internal/model -run PriceBenchmark` 성공
+
+### 알려진 제한
+- 실제 수집률 증가는 운영 환경의 `SERPER_API_KEY`, source 사이트 응답, 유료 리포트 접근 가능 여부에 좌우된다. 운영에서 AI 수집을 다시 실행해 run evidence/diagnostics를 확인해야 한다.
+
+---
+
+## 2026-05-11 세션 — 가격예측 신뢰도/채택 플로우 + CI lock 안정화
+
+### 완료
+- 가격예측 관측값 검토 상태 추가
+  - `price_benchmarks.review_status` 마이그레이션 추가 (`candidate` / `accepted` / `rejected`)
+  - 기본값은 `candidate`, DB CHECK + Go validation 으로 허용값 고정
+  - `PATCH /api/v1/price-benchmarks/{id}/review-status` 추가
+  - feature catalog / route snapshot 동기화
+- `/price-forecast` 화면 보강
+  - 채택 상태 필터 추가 (`검토 대상`, `후보`, `채택`, `제외`, `전체`)
+  - 기본 화면은 `rejected`를 제외하고 `candidate + accepted`를 표시
+  - 표에서 행별 `채택` / `제외` / `후보` 전환 지원
+  - 선택 행 일괄 `채택` / `제외` 지원
+  - 삭제는 기존처럼 실제 제거용으로 유지
+- dev mock API 보강
+  - 목업 관측값에 review_status 추가
+  - PATCH 상태 변경을 세션 중 기억하도록 처리
+- CI/의존성 lock 안정화
+  - `frontend`에 `lock:check` 스크립트 추가
+  - CI frontend job에서 `bun install --lockfile-only` 후 `bun.lock` diff 를 빌드 전에 검사
+  - vite/tsc incremental cache key에 `package.json + bun.lock` 모두 반영
+- 설계 정본 / D-161 결정 기록 동기화
+
+### 검증
+- `cd backend && go test ./internal/router -run TestRouteSnapshot -update` 성공
+- `cd backend && go test ./internal/model ./internal/router ./internal/feature` 성공
+- `cd backend && go test ./internal/handler` 성공
+- `cd backend && go test ./...` 성공
+- `cd frontend && npx --yes bun@1.3.13 run lock:check` 성공
+- `cd frontend && npx --yes bun@1.3.13 install --frozen-lockfile` 성공
+- `cd frontend && npx --yes bun@1.3.13 run build` 성공
+- `cd frontend && npx --yes bun@1.3.13 run test` 성공 — 기존 AllocationForm/POListTable React `act(...)` 경고 출력
+- `git diff --check` 성공
+- `graphify update .` 성공
+
+### 알려진 제한
+- 이 worktree 환경에서는 로컬 PostgreSQL socket 이 없어 `psql -d solarflow -f backend/migrations/091_price_benchmark_review_status.sql` 적용이 실패했다. 운영/로컬 DB 적용 시 migration 적용 후 PostgREST schema cache reload 와 `backend/scripts/check_schema.sh` 확인이 필요하다.
+- `backend/scripts/check_schema.sh` 는 현재 연결 환경에서 기준 테이블들이 없다고 보고해 실패했다. 실제 운영 DB에 migration 적용 후 재실행해야 한다.
+
+---
+
+## 2026-05-11 세션 — 출고/판매 자동 준비 보강
+
+### 완료
+- 출고 상세에서 판매/AS 출고인데 매출이 없으면 매출 생성 폼을 자동으로 펼침
+- 매출 생성 폼에서 거래처 담당 이메일이 있으면 계산서 이메일을 자동 채움
+- 계산서 미발행 큐 진입 시 현재 페이지의 미발행 매출을 자동 선택하고, 오늘 날짜와 공통 이메일을 일괄 처리 기본값으로 준비
+- ERP 미마감 큐는 계산서 발행 완료 + ERP 미마감 건만 보여주고 자동 선택해 바로 마감 처리 가능하게 보강
+- ERP 미마감 필터가 과거 이관 데이터의 `erp_closed IS NULL`도 미마감으로 포함하도록 서버 필터 보강
+
+### 검증
+- `cd backend && go test ./internal/handler` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `cd frontend && npm run build` 성공
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5010 nodes / 8116 edges / 411 communities
+
+---
+
+## 2026-05-11 세션 — 수주 상세 충당 근거 + 납기/ETA 위험도 (D-160)
+
+### 완료
+- Rust 계산엔진 `POST /api/calc/order-fulfillment-risk` 응답 확장
+  - 기존 `충당 가능/부족/확인 필요` 판정은 유지하면서 배정 순번, 배정 전/후 가용량, 부족량, 현재고/미착품 풀 구성 근거를 추가
+  - `fulfillment_source=incoming` 수주는 B/L ETA 순서로 미착품을 배정하고, B/L 없는 opened L/C 잔여량은 ETA 미확정 물량으로 취급
+  - 미착품 물량은 충분해도 ETA가 납기보다 늦거나, 납기일이 없거나, ETA 없는 물량이 충당에 쓰이면 `확인 필요`로 승격
+  - 물량 부족은 기존처럼 `부족`을 우선 표시
+- 수주 상세 화면에 `충당 근거` 패널 추가
+  - 충당 배지, 충당소스, 배정 순번, 잔량, 필요 용량, 배정 전/후 가용량, 부족량 표시
+  - 납기일, 예상 가용일, ETA 상태, 지연일, 판정 사유 표시
+  - 실재고 수주는 입고완료/활성출고/기존예약, 미착품 수주는 B/L 미착/L/C 잔여/기존예약 근거 표시
+- dev mock API도 확장 응답 구조 반영
+- D-160 결정 기록 및 설계 정본 동기화
+
+### 검증
+- `cd engine && cargo build` 성공 — 기존 dead_code warning 유지
+- `cd engine && cargo test` 성공 — 전체 테스트 통과 + doc-test ignored 1건
+- `cd engine && cargo test order_risk` 성공 — 최신 main 재반영 후 위험도 단위 테스트 통과
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 ProcurementPage hook dependency warning 4건 + bun-test suppression warning 1건
+- `cd frontend && npm run test` 실패 — 현재 환경에 `bun` 런타임이 없어 `bun: not found`로 테스트 실행 전 종료
+- `git diff --check` 성공
+- `graphify update .` 성공
+
+---
+
+## 2026-05-11 세션 — PO 자동 빠른 입력 보강 (D-162)
+
+### 완료
+- PO 신규/변경계약 다이얼로그 빠른 입력 파서를 순수 로직으로 분리
+- 엑셀/메모장 붙여넣기 시 오류가 없으면 자동으로 라인 반영
+  - 헤더 행 자동 건너뛰기
+  - 탭/쉼표/공백 기반 `품번 수량 USD/Wp` 파싱
+  - 본품/스페어, 유상/무상, 메모 선택 컬럼 자동 반영
+- 품번 후보가 여러 개이거나 수량·단가가 잘못된 경우 자동 반영하지 않고 입력값 보존
+- D-162 결정 기록과 설계 정본 동기화
+
+### 검증
+- `cd frontend && bun test src/lib/poQuickInput.test.ts` 성공
+- `cd frontend && bun run build` 성공
+- `cd frontend && bun run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `cd frontend && bun run test` 성공 — 11 files / 98 tests (기존 act warning 출력)
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5103 nodes / 8293 edges / 415 communities (`graph.html`은 노드 수 초과로 생략)
+
+---
+
+## 2026-05-11 세션 — KPI 활성 항목 사용자 설정
+
+### 완료
+- KPI 타일 표시 여부를 사용자별로 설정 가능하게 공통화
+  - `user_profiles.preferences.kpi_hidden`에 화면/탭 scope별 숨김 KPI key 저장
+  - KPI 그리드 상단에 공통 `KPI` 설정 메뉴 추가
+  - 최소 1개 KPI는 항상 표시되도록 보호
+- 주요 KPI 화면에 연결
+  - 재고, 구매/입고, 수주/출고/판매/수금, 은행/LC, 통관/부대비용, 매출 분석, 구매 이력
+  - MasterConsole 기반 가격예측, 결재안, 엑셀 입력, 자료실, 관리자 설정, 공사 현장
+- 설계 정본과 D-163 결정 기록 동기화
+
+### 검증
+- `cd frontend && npm install --no-package-lock` 성공 — 로컬 의존성 설치, lockfile 미생성
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5112 nodes / 8288 edges / 413 communities
+
+### 알려진 제한
+- 이 워크트리에는 `bun` 실행 파일이 없어 `bun run test`는 실행하지 못함. 빌드는 `npm run build`로 검증.
+
+---
+
+## 2026-05-11 세션 — 출고/판매 처리 큐 + 매출/계산서 작업 단축
+
+### 완료
+- 출고/판매 화면 우측에 처리 대기 큐 추가
+  - 매출 미등록: 출고됐지만 매출 전표가 없는 판매/AS 출고
+  - 계산서 미발행: 매출은 있으나 계산서일이 없는 건
+  - ERP 미마감: ERP 마감 플래그가 닫히지 않은 매출
+- 출고 목록/대시보드에 `work_queue=sale_unregistered` 서버 필터 추가
+- 판매 목록/대시보드/요약에 ERP 마감 필터 연결
+- 출고 상세에서 출고 기준 매출 생성 폼 추가
+  - 거래처, Wp단가, 계산서일, 계산서 이메일을 입력해 매출 생성
+  - 계산서일 입력 시 연결 출고의 계산서 발행 상태도 함께 갱신
+- 판매 목록에서 미발행 매출 다중 선택 후 계산서일/이메일/ERP 마감 일괄 처리
+  - 연결 출고가 있으면 계산서 발행 상태를 함께 동기화
+
+### 검증
+- `cd backend && go test ./internal/handler` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
+- `git diff --check` 성공
+- `graphify update .` 성공
+
+---
+
+## 2026-05-11 세션 — 가격예측 Rust 전략 산출 + 데이터 품질 카드 (D-159)
+
+### 완료
+- Rust 계산엔진에 `/api/calc/price-forecast-strategy` 추가
+  - CMM/forward/중국 입찰/CPIA floor/우리 최근 구매가를 USD/W 기준으로 조합
+  - action, 1/3/6개월 low/base/high 시나리오, source 품질 점수, CMM trend/floor gap/구매가 대비율 반환
+- Go `CalcProxyHandler`와 feature catalog/matrix/router snapshot에 `calc.price_forecast_strategy` 추가
+- `/price-forecast` 화면에 Rust 전략 badge, 전망 시나리오, 데이터 품질 카드 추가
+- dev mock price benchmark에 forward/floor 샘플과 전략 응답 추가
+- 설계문서/DECISIONS/module 문서에 AI 수집과 Rust 계산 정본 분리 기준 기록
+
+### 검증
+- `cd engine && cargo test` 성공
+- `cd engine && cargo build --release` 성공 — 기존 dead code warning 출력
+- `cd backend && go test ./...` 성공
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 성공(exit 0) — 기존 excelValidation optional-chain 경고, ProcurementPage hook dependency 경고, bun-test suppression 경고만 출력
+- `graphify update .` 성공
+
+---
+
+## 2026-05-11 세션 — Excel Import Hub PO/LC/T/T 완성 (D-155)
+
+### 완료
+- Import Hub 거래 양식에 T/T 송금 시트를 추가하고 통합 거래 양식을 11개 시트로 확장
+  - T/T 필드: 발주번호(참조), 법인코드, 송금일, 송금액(USD), 환율, 은행명, 상태, 목적, 메모
+  - PO 필드에 통화 컬럼을 추가하고 LC 대상 기준을 목표 MW로 정리
+- 서버 Import 검증 보강
+  - PO: 제조사/품번 FK, 수량/단가 양수, 기존 PO 번호 중복, 계약기간 날짜 역전, MIG-PO 번호 형식 검증
+  - LC: PO 없음, 은행 없음, 금액 양수, L/C No. 파일 내/DB 중복, 개설일>만기일, MIG-LC 번호 형식 검증
+  - T/T: PO 없음, 은행 없음, 송금액/환율 양수, 송금일 형식, 상태(planned/completed·예정/완료) 검증
+- Import 미리보기 UX 보강
+  - 정상/경고/오류 필터를 분리하고, 경고 행은 별도 색상과 tooltip으로 표시
+  - 통합 업로드 다이얼로그에도 오류행 다운로드 버튼 추가
+  - MIG 번호는 형식이 맞으면 경고로 표시하고 형식이 틀리면 오류로 차단
+- MIG 번호 정책 고정 (D-155)
+  - `MIG-PO-YYYYMMDD-001`, `MIG-LC-YYYYMMDD-001`, `MIG-BL-YYYYMMDD-001`에 T/T용 `MIG-TT-YYYYMMDD-001` 패턴을 추가
+
+### 검증
+- `cd backend && go test ./internal/handler` 성공
+- `cd frontend && npm test -- --run src/lib/excelValidation.test.ts` 성공
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `graphify update .` 성공
+
+### 알려진 제한
+- PO 통화 컬럼은 운영 양식/검증 기준으로 먼저 고정했으며, 현재 PO 저장은 기존 라인 금액 USD/Wp 계산 흐름을 유지한다.
+
+---
+
+## 2026-05-11 세션 — 매출 분석 대사 드릴다운 + 원가 미연결 사유 분류 (D-156)
+
+### 완료
+- `/sales-analysis` 원장 대사 체크를 클릭형 드릴다운 보드로 전환
+  - 매출원장↔이익엔진 차이, 세금계산서 미발행, 원가 미연결, 수금 미회수를 각각 선택해 후보 행 확인 가능
+  - 직접 의심 가능한 원장 차이 후보가 없으면 상위 매출 행을 검토 대상으로 표시
+- 원가 미연결 사유 분류 추가
+  - FIFO 매칭 없음, Landed 원가 미확정, CIF 기준원가 미확정, 품목 마스터 불일치, 출고 연결 누락, 원가 확정 대기로 분류
+  - 사유별 미연결 매출 규모와 품목별 조치 링크를 같은 패널에 표시
+- 계산서 미발행/수금 미회수 상세에도 거래처·출고 확인 링크를 연결
+- D-156 결정 기록 추가
+
+### 검증
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `cd frontend && npm test` 실패 — 현재 작업 환경에 `bun` 실행 파일이 없어 테스트 스크립트가 시작되지 않음
+- `git diff --check` 성공
+- `graphify update .` 성공
+
+---
+
+## 2026-05-11 세션 — PO 상세 운영 보강 (D-157)
+
+### 완료
+- PO 상세 헤더에 `변경계약 작성` 버튼 추가
+  - 현재 PO를 `parent_po_id`로 연결한 새 PO 초안 생성
+  - 원계약 제조사·조건·라인을 기본값으로 복사하고 PO번호는 비워둠
+- PO 신규/변경계약 다이얼로그 라인 입력 개선
+  - 기존 라인 복사 버튼 추가
+  - 품번/수량/USD/Wp 붙여넣기 기반 빠른 입력 반영
+- PO 입고현황에 라인별 진행률 추가
+  - 라인별 계약량, LC개설량, 선적량, 입고량, 잔여량, 입고율 표시
+  - `po_line_id` 우선, 과거 데이터는 품번이 단일 라인일 때만 보정
+- PO 상세 `변경이력` 탭 추가
+  - `audit_logs`의 `old_data/new_data`를 한국어 필드 diff로 표시
+- 설계 정본과 D-157 결정 기록 동기화
+
+### 검증
+- `cd frontend && bun run build` 성공
+- `cd frontend && bun run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `cd frontend && bun run test` 성공 — 10 files / 93 tests (기존 act warning 출력)
+- `git diff --check` 성공
+- `graphify update .` 성공 — 4994 nodes / 8090 edges / 408 communities
+
+---
+
+## 2026-05-11 세션 — 수금 부분 매칭 + 잔액 처리 흐름
+
+### 완료
+- 수금 매칭 화면에서 선택한 미수금 행마다 `매칭금액`을 직접 입력 가능
+- 자동 추천/AI 검토 후보의 금액을 행별 입력칸에 반영
+- 선택 합계가 입금 가능액보다 작을 때 선수금 이월 / 다음 정산 이월 / 환불·정산 검토 중 하나를 선택하는 전용 흐름 추가
+- bulk 매칭 API에 `balance_disposition`, `balance_note` 메타데이터를 추가하고, 잔액이 남는데 처리 선택이 없으면 400 처리
+- AI 수금 검토 sanitizer가 안전한 부분 후보(`0 < match_amount <= outstanding_amount`)를 허용하고 `is_partial`을 응답
+- 설계 정본과 D-158 결정 기록 동기화
+
+### 검증
+- `cd backend && go test ./internal/model ./internal/handler` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건 유지
+- `git diff --check` 성공
+- `graphify update .` 성공
+
+### 알려진 제한
+- 현재 실행 환경에 `bun` 명령이 없어 `bun run build/test`는 직접 실행하지 못했고, 프론트 검증은 동일 소스의 `npm run build`/`npm run lint`로 수행.
 
 ---
 
@@ -1707,7 +2008,7 @@ launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.solarflow.engine.plist
 cd ~/solarflow-3/frontend && npm run build
 ```
 
-### Rust API 엔드포인트 (16개)
+### Rust API 엔드포인트 (18개)
 - /health, /health/ready
 - /api/calc/inventory (재고 집계)
 - /api/calc/landed-cost (Landed Cost)
@@ -1718,7 +2019,9 @@ cd ~/solarflow-3/frontend && npm run build
 - /api/calc/margin-analysis (마진 분석)
 - /api/calc/customer-analysis (거래처 분석)
 - /api/calc/price-trend (단가 추이)
+- /api/calc/price-forecast-strategy (가격예측 전략)
 - /api/calc/supply-forecast (수급 전망)
+- /api/calc/order-fulfillment-risk (수주 충당 위험도)
 - /api/calc/outstanding-list (미수금 목록)
 - /api/calc/receipt-match-suggest (수금 매칭 추천)
 - /api/calc/search (자연어 검색)
@@ -1759,7 +2062,7 @@ cd ~/solarflow-3/frontend && npm run build
 ### Phase 4: 프론트엔드 + 연동 + 배포 (완료)
 | 작업 | 감리 점수 | 비고 |
 |------|----------|------|
-| Step 20: 인증 + CORS + CalcProxy | ✅ 완료 | CORS, 프록시 16개, users/me, 로그인 UI |
+| Step 20: 인증 + CORS + CalcProxy | ✅ 완료 | CORS, 프록시 18개, users/me, 로그인 UI |
 | Step 21: 레이아웃 + 마스터 CRUD 6개 | ✅ 완료 | AppLayout, Sidebar(역할별), DataTable, 6개 마스터 페이지+폼 |
 | Step 22: 재고 화면 + 수급 전망 | ✅ 완료 | 3탭(재고/미착품/수급전망), 요약카드, 장기재고Badge, insufficient경고 |
 | Step 23: 입고 관리 (B/L+라인) | ✅ 완료 | 목록/상세/생성/수정, 상태6단계, 입고유형4종, 라인아이템CRUD |
