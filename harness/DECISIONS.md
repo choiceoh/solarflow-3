@@ -1487,7 +1487,8 @@
   - 화면/탭별 scope를 분리한다. 예: `inventory`, `orders.sales`, `procurement.po`, `sales-analysis`.
   - KPI key는 명시 `key` 또는 `metricId`를 우선 사용하고, 중복 metricId가 있으면 라벨 기준으로 분리한다.
   - 최소 1개 KPI는 항상 남긴다. 모든 KPI가 꺼져 화면의 상태판 기능이 사라지는 것을 막는다.
-  - 표시 메뉴는 KPI 그리드 바로 위 공통 컴포넌트로 제공하고, 변경 즉시 `/api/v1/users/me/preferences`에 저장한다.
+  - 표시 메뉴는 화면 우상단 액션 영역의 엑셀 입력 버튼 옆에 배치한다. 공통 shell 슬롯이 없는 렌더링 환경에서는 KPI 그리드 위에 fallback 표시한다.
+  - 변경 즉시 `/api/v1/users/me/preferences`에 저장한다.
 - **이유**: 경영/운영/회계 사용자가 같은 화면에서도 보는 우선순위가 다르다. 그러나 KPI 정의를 사용자별로 바꾸면 설계 정본과 분석 의미가 흔들리므로, 시스템 KPI 목록은 유지하고 개인별 활성 항목만 조절하는 방식이 가장 작고 안전하다.
 - **검증**:
   - `npm run build`로 TypeScript와 Vite 번들을 확인한다.
