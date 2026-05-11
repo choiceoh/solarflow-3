@@ -14,6 +14,16 @@ import { EXPENSE_TYPE_LABEL } from '@/types/customs';
 import { RECEIPT_METHOD_LABEL, MANAGEMENT_CATEGORY_LABEL, FULFILLMENT_SOURCE_LABEL } from '@/types/orders';
 import { CONTRACT_TYPES_ACTIVE, TT_STATUS_LABEL } from '@/types/procurement';
 
+const PRODUCT_VARIANT_KIND_LABEL: Record<string, string> = {
+  output_bin: '출력 binning',
+  bom_variant: 'BOM 차이',
+  cert_variant: '인증 차이',
+  label_variant: '라벨 차이',
+  packaging_variant: '포장 차이',
+  mixed: '복합',
+  other: '기타',
+};
+
 // ExcelJS 워크시트의 최소 인터페이스 (셀/컬럼 setter)
 interface WritableCell {
   value: unknown;
@@ -121,6 +131,10 @@ const FIELD_HELP: Record<string, string> = {
   company_code: '법인 등록 시에는 새 고유 코드를 입력하고, 운영 데이터에서는 코드표의 법인코드를 선택하세요.',
   business_number: '사업자번호는 선택 입력입니다.',
   manufacturer_name: '코드표의 제조사명을 선택하세요.',
+  product_family_code: '같은 생산 라인과 외형 규격을 묶는 제품군 코드를 입력하세요.',
+  product_variant_kind: '같은 제품군 안에서 품번이 갈라진 이유를 선택하세요.',
+  bom_revision: 'BOM 차이로 품번이 갈라질 때 revision 값을 입력하세요.',
+  substitution_group_code: '대체 검토 후보를 수동으로 묶는 코드를 입력하세요.',
   currency: 'USD 또는 KRW만 사용합니다.',
   exchange_rate: 'KRW 입고는 비워둘 수 있습니다. USD 입고는 적용 환율을 숫자로 입력하세요.',
   product_code: '코드표의 품번코드를 선택하세요.',
@@ -376,6 +390,10 @@ const DATA_WIDTH_OVERRIDE: Record<string, number> = {
   status: 12,
   // 은행명 (조흥은행, 한국씨티은행 등)
   bank_name: 18,
+  product_family_code: 24,
+  product_variant_kind: 18,
+  bom_revision: 14,
+  substitution_group_code: 24,
   // 이름·문자열
   company_name: 22,
   manufacturer_name: 22,
@@ -771,6 +789,10 @@ function exampleValue(field: FieldDef, masterData: MasterDataForExcel, type?: Te
     wafer_platform: 'M10',
     cell_config: '108셀',
     series_name: 'Tiger Pro',
+    product_family_code: 'JKM-N-78HL4-BDV-S',
+    product_variant_kind: '출력 binning',
+    bom_revision: 'BOM-A',
+    substitution_group_code: 'JKM-78HL4-BDV',
     // 마스터 — 창고
     warehouse_name: '예시 창고',
     warehouse_type: '항구',
@@ -945,10 +967,11 @@ export async function generateUnifiedMasterTemplate(
   saveAs(blob, `SolarFlow_통합마스터양식_${today}.xlsx`);
 }
 
-// 마스터 양식 코드표 — 마스터 시트끼리만 참조하는 5개 코드 컬럼.
+// 마스터 양식 코드표 — 마스터 시트끼리만 참조하는 코드 컬럼.
 interface UnifiedMasterCodeRefs {
   company: CodeColumnRef;
   manufacturer: CodeColumnRef;
+  productVariantKind: CodeColumnRef;
   partnerType: CodeColumnRef;
   warehouseType: CodeColumnRef;
   domesticForeign: CodeColumnRef;
@@ -970,6 +993,11 @@ function addUnifiedMasterCodeSheet(
   col = company.nextCol;
   const manufacturer = writeCodeColumn(codeSheet, col, '제조사', mfgNames);
   col = manufacturer.nextCol;
+  const productVariantKind = writeCodeColumn(
+    codeSheet, col, '품번분리사유',
+    Object.values(PRODUCT_VARIANT_KIND_LABEL), Object.keys(PRODUCT_VARIANT_KIND_LABEL),
+  );
+  col = productVariantKind.nextCol;
   const partnerType = writeCodeColumn(
     codeSheet, col, '거래처유형',
     ['공급사', '고객사', '공급+고객'], ['supplier', 'customer', 'both'],
@@ -984,7 +1012,7 @@ function addUnifiedMasterCodeSheet(
   col = domesticForeign.nextCol;
 
   finishCodeSheet(codeSheet, col - 1);
-  return { company, manufacturer, partnerType, warehouseType, domesticForeign };
+  return { company, manufacturer, productVariantKind, partnerType, warehouseType, domesticForeign };
 }
 
 async function addUnifiedMasterDataSheet(
@@ -1008,8 +1036,9 @@ async function addUnifiedMasterDataSheet(
       setDropdownFromRef(dataSheet, 'F', codeRef, refs.domesticForeign, true);
       break;
     case 'product':
-      // C = 제조사명
+      // C = 제조사명, N = 품번분리사유
       setDropdownFromRef(dataSheet, 'C', codeRef, refs.manufacturer, true);
+      setDropdownFromRef(dataSheet, 'N', codeRef, refs.productVariantKind);
       break;
     case 'warehouse':
       // C = 창고유형
@@ -1066,7 +1095,7 @@ function addUnifiedCodeSheet(
   const mfgNames = masterData.manufacturers.map((m) => m.name_kr);
   const productCodes = masterData.products.map((p) => p.product_code);
   const productDescriptions = masterData.products.map((p) =>
-    [p.product_name, p.spec_wp ? `${p.spec_wp}Wp` : undefined].filter(Boolean).join(' / '),
+    [p.product_name, p.spec_wp ? `${p.spec_wp}Wp` : undefined, p.product_family_code].filter(Boolean).join(' / '),
   );
   const customerPartners = masterData.partners
     .filter((p) => p.partner_type === 'customer' || p.partner_type === 'both');
@@ -1282,7 +1311,7 @@ async function addTemplateSheets(
   const mfgNames = masterData.manufacturers.map((m) => m.name_kr);
   const productCodes = masterData.products.map((p) => p.product_code);
   const productDescriptions = masterData.products.map((p) =>
-    [p.product_name, p.spec_wp ? `${p.spec_wp}Wp` : undefined].filter(Boolean).join(' / '),
+    [p.product_name, p.spec_wp ? `${p.spec_wp}Wp` : undefined, p.product_family_code].filter(Boolean).join(' / '),
   );
   const customerPartners = masterData.partners
     .filter((p) => p.partner_type === 'customer' || p.partner_type === 'both');
@@ -1345,6 +1374,18 @@ async function addTemplateSheets(
     // 코드표 + 드롭다운 설정
     let col = 1;
     switch (type) {
+      case 'product': {
+        const cMfg = writeCodeColumn(codeSheet, col, '제조사', mfgNames);
+        col = cMfg.nextCol;
+        const cVariant = writeCodeColumn(
+          codeSheet, col, '품번분리사유',
+          Object.values(PRODUCT_VARIANT_KIND_LABEL), Object.keys(PRODUCT_VARIANT_KIND_LABEL),
+        );
+        col = cVariant.nextCol;
+        setDropdownFromRef(dataSheet, 'C', codeRef, cMfg, true);
+        setDropdownFromRef(dataSheet, 'N', codeRef, cVariant);
+        break;
+      }
       case 'inbound': {
         const cType = writeCodeColumn(codeSheet, col, '입고유형', inboundTypes, inboundTypeCodes);
         col = cType.nextCol;

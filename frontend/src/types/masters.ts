@@ -35,6 +35,10 @@ export interface Product {
   wafer_platform?: string;
   cell_config?: string;
   series_name?: string;
+  product_family_code?: string;
+  product_variant_kind?: 'output_bin' | 'bom_variant' | 'cert_variant' | 'label_variant' | 'packaging_variant' | 'mixed' | 'other';
+  bom_revision?: string;
+  substitution_group_code?: string;
   module_efficiency?: number;        // 모듈 효율 (%)
   module_type?: 'PERC' | 'TOPCON' | 'BC';
   module_grade?: '1' | '2' | '3' | 'NA';  // 모듈 등급 — 한국 탄소인증제 (1/2/3/NA)

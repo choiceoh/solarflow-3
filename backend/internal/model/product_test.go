@@ -125,6 +125,34 @@ func TestProductValidate_Success(t *testing.T) {
 	}
 }
 
+// TestProductValidate_ProductFamilyFields — 제품군/변종 분류 필드의 정상 입력 확인
+func TestProductValidate_ProductFamilyFields(t *testing.T) {
+	req := validProductRequest()
+	req.ProductFamilyCode = testStringPtr("JKM-N-78HL4-BDV-S")
+	req.ProductVariantKind = testStringPtr("output_bin")
+	req.BomRevision = testStringPtr("BOM-A")
+	req.SubstitutionGroupCode = testStringPtr("JKM-78HL4-BDV")
+
+	msg := req.Validate()
+	if msg != "" {
+		t.Fatalf("제품군 분류 정상 데이터에서 에러가 반환되면 안 됩니다, got: %s", msg)
+	}
+}
+
+// TestProductValidate_InvalidVariantKind — 허용되지 않은 품번 분리 사유 차단 확인
+func TestProductValidate_InvalidVariantKind(t *testing.T) {
+	req := validProductRequest()
+	req.ProductVariantKind = testStringPtr("random")
+
+	msg := req.Validate()
+	if msg == "" {
+		t.Fatal("허용되지 않은 ProductVariantKind에 대해 에러가 반환되어야 합니다")
+	}
+	if !strings.Contains(msg, "product_variant_kind") {
+		t.Fatalf("에러 메시지에 'product_variant_kind'가 포함되어야 합니다, got: %s", msg)
+	}
+}
+
 // validProductRequest — 테스트용 정상 데이터 생성 헬퍼
 func validProductRequest() CreateProductRequest {
 	return CreateProductRequest{
@@ -136,4 +164,8 @@ func validProductRequest() CreateProductRequest {
 		ModuleWidthMM:  1134,
 		ModuleHeightMM: 2465,
 	}
+}
+
+func testStringPtr(v string) *string {
+	return &v
 }
