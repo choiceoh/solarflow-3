@@ -18,7 +18,7 @@ import {
 const UNIFIED_SECTION_ORDER: TemplateType[] = [
   'company', 'manufacturer', 'product', 'warehouse', 'bank', 'partner',
   'order', 'outbound', 'sale', 'receipt',
-  'purchase_order', 'lc',
+  'purchase_order', 'lc', 'tt',
   'inbound', 'declaration', 'expense',
 ];
 

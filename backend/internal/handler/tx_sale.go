@@ -40,6 +40,33 @@ type SaleHandler struct {
 	DB *supa.Client
 }
 
+type saleERPClosedRefRow struct {
+	SaleID    string `json:"sale_id"`
+	ERPClosed *bool  `json:"erp_closed"`
+}
+
+// erpOpenSaleIDs — 과거 이관 데이터의 NULL 과 명시 false 를 모두 ERP 미마감으로 본다.
+// 비유: 도장이 안 찍힌 전표는 빈칸이든 "미마감" 표시든 같은 미처리함에 넣는다.
+func (h *SaleHandler) erpOpenSaleIDs() ([]string, error) {
+	data, err := fetchAllFromTable(h.DB, "sales", "sale_id,erp_closed")
+	if err != nil {
+		return nil, err
+	}
+	var rows []saleERPClosedRefRow
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.SaleID == "" || (row.ERPClosed != nil && *row.ERPClosed) {
+			continue
+		}
+		ids = append(ids, row.SaleID)
+	}
+	return ids, nil
+}
+
 // NewSaleHandler — SaleHandler 생성자
 func NewSaleHandler(db *supa.Client) *SaleHandler {
 	return &SaleHandler{DB: db}
@@ -217,7 +244,21 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 		query = query.Eq("customer_id", custID)
 	}
 	if erpClosed := r.URL.Query().Get("erp_closed"); erpClosed != "" {
-		query = query.Eq("erp_closed", erpClosed)
+		switch erpClosed {
+		case "true":
+			query = query.Eq("erp_closed", "true")
+		case "false":
+			ids, err := h.erpOpenSaleIDs()
+			if err != nil {
+				return query, false, fmt.Errorf("ERP 미마감 매출 조회 실패: %w", err)
+			}
+			if len(ids) == 0 {
+				return query, false, nil
+			}
+			query = query.In("sale_id", ids)
+		default:
+			return query, false, nil
+		}
 	}
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)

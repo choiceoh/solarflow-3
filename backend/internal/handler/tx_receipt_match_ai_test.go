@@ -17,7 +17,7 @@ func TestParseReceiptMatchAIResponseExtractsJSONFence(t *testing.T) {
 	}
 }
 
-func TestSanitizeReceiptMatchAIResponseRejectsOverAndPartial(t *testing.T) {
+func TestSanitizeReceiptMatchAIResponseAcceptsBoundedPartial(t *testing.T) {
 	receipt := model.Receipt{ReceiptID: "r1", Amount: 100, MatchedTotal: 0}
 	outstanding := []model.OutstandingItemResp{
 		{OutboundID: "o1", ProductName: "A", OutstandingAmount: 60},
@@ -28,16 +28,16 @@ func TestSanitizeReceiptMatchAIResponseRejectsOverAndPartial(t *testing.T) {
 		Summary: "candidate",
 		Candidates: []receiptMatchAIRawCandidate{
 			{OutboundID: "o1", MatchAmount: 60, Confidence: 0.9, Reason: "ok"},
-			{OutboundID: "o2", MatchAmount: 40, Confidence: 0.8, Reason: "partial should drop"},
-			{OutboundID: "o3", MatchAmount: 40, Confidence: 2.0, Reason: "ok but would fit after drop"},
+			{OutboundID: "o2", MatchAmount: 40, Confidence: 0.8, Reason: "partial ok"},
+			{OutboundID: "o3", MatchAmount: 40, Confidence: 2.0, Reason: "over remaining should drop"},
 		},
 	}
 	got := sanitizeReceiptMatchAIResponse(receipt, "mock", "m", raw, outstanding)
 	if len(got.Candidates) != 2 {
 		t.Fatalf("expected 2 accepted candidates, got %#v", got.Candidates)
 	}
-	if got.Candidates[1].Confidence != 1 {
-		t.Fatalf("confidence should be clamped to 1, got %v", got.Candidates[1].Confidence)
+	if !got.Candidates[1].IsPartial || got.Candidates[1].MatchAmount != 40 {
+		t.Fatalf("partial candidate should be preserved, got %#v", got.Candidates[1])
 	}
 	if got.TotalSuggested != 100 || got.Difference != 0 {
 		t.Fatalf("unexpected totals: total=%v diff=%v", got.TotalSuggested, got.Difference)

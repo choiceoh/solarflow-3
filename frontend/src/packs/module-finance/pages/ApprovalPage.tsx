@@ -48,6 +48,7 @@ export default function ApprovalPage() {
       description="수입대금, 부대비용, 세금계산서, 운송비 결재 문안을 실제 업무 데이터에서 생성합니다."
       tableTitle={selectedType ? '데이터 선택 · 미리보기' : '결재 유형 선택'}
       tableSub={selectedType ? `${editedText.length.toLocaleString()}자 편집 중` : '6개 표준 유형'}
+      kpiScope="approval"
       actions={
         selectedType ? (
           <Button variant="ghost" size="sm" onClick={handleBack}>

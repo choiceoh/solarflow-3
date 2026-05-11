@@ -1,3 +1,5 @@
+export type PriceBenchmarkReviewStatus = 'candidate' | 'accepted' | 'rejected'
+
 export interface PriceBenchmark {
   benchmark_id: string
   run_id?: string | null
@@ -19,6 +21,7 @@ export interface PriceBenchmark {
   project_segment?: string | null
   technology?: string | null
   confidence?: number | null
+  review_status?: PriceBenchmarkReviewStatus | null
   source_url?: string | null
   raw_excerpt?: string | null
   notes?: string | null
@@ -50,4 +53,80 @@ export interface PriceBenchmarkAIRefreshResult {
   skipped_count: number
   warnings: string[]
   items: PriceBenchmark[]
+}
+
+export interface PriceForecastStrategyObservation {
+  source_key: string
+  source_name: string
+  metric_key: string
+  metric_label: string
+  value_date: string
+  market_region: string
+  basis: string
+  price_usd_w?: number | null
+  price_cny_w?: number | null
+  price_krw_w?: number | null
+  confidence?: number | null
+}
+
+export interface PriceForecastStrategyRunInput {
+  status: PriceBenchmarkRun['status']
+  started_at?: string | null
+  source_keys: string[]
+  warnings: string[]
+}
+
+export interface PriceForecastStrategyRequest {
+  unit: 'usd'
+  observations: PriceForecastStrategyObservation[]
+  own_purchase_usd_w?: number | null
+  own_purchase_date?: string | null
+  runs: PriceForecastStrategyRunInput[]
+}
+
+export interface PriceForecastMarketSnapshot {
+  latest_cmm_usd_w?: number | null
+  latest_floor_usd_w?: number | null
+  latest_tender_usd_w?: number | null
+  cmm_trend_pct?: number | null
+  purchase_vs_cmm_pct?: number | null
+  cmm_vs_floor_pct?: number | null
+}
+
+export interface PriceForecastScenario {
+  key: string
+  label: string
+  horizon_months: number
+  low_usd_w?: number | null
+  base_usd_w?: number | null
+  high_usd_w?: number | null
+  drivers: string[]
+}
+
+export interface PriceForecastSourceQuality {
+  source_key: string
+  source_name: string
+  score: number
+  status: 'ok' | 'watch' | 'stale' | string
+  latest_date?: string | null
+  observation_count: number
+  avg_confidence?: number | null
+  warning_count: number
+  note: string
+}
+
+export interface PriceForecastStrategyResponse {
+  action_key: string
+  action_label: string
+  tone: 'positive' | 'warning' | 'neutral' | string
+  confidence_score: number
+  one_month_view: string
+  three_month_view: string
+  six_month_view: string
+  note: string
+  basis: string[]
+  market: PriceForecastMarketSnapshot
+  scenarios: PriceForecastScenario[]
+  source_quality: PriceForecastSourceQuality[]
+  calculated_at: string
 }

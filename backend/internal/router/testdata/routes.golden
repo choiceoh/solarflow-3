@@ -208,6 +208,7 @@ PATCH   /api/v1/partners/{id}
 PATCH   /api/v1/partners/{id}/status
 PATCH   /api/v1/picking-lists/{id}
 PATCH   /api/v1/picking-lists/{id}/items/{item_id}
+PATCH   /api/v1/price-benchmarks/{id}/review-status
 PATCH   /api/v1/products/{id}/status
 PATCH   /api/v1/receiving-logs/{id}
 PATCH   /api/v1/study/domains/{id}
@@ -246,6 +247,7 @@ POST    /api/v1/calc/lc-maturity-alert
 POST    /api/v1/calc/margin-analysis
 POST    /api/v1/calc/order-fulfillment-risk
 POST    /api/v1/calc/outstanding-list
+POST    /api/v1/calc/price-forecast-strategy
 POST    /api/v1/calc/price-trend
 POST    /api/v1/calc/receipt-match-suggest
 POST    /api/v1/calc/search
@@ -272,6 +274,7 @@ POST    /api/v1/import/outbound
 POST    /api/v1/import/purchase-orders
 POST    /api/v1/import/receipts
 POST    /api/v1/import/sales
+POST    /api/v1/import/tts
 POST    /api/v1/intercompany-requests/
 POST    /api/v1/inventory/allocations/
 POST    /api/v1/lcs/

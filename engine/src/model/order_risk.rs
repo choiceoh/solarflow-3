@@ -1,6 +1,6 @@
 /// 수주 충당 위험도 요청/응답 모델
 /// 비유: "수주 잔량을 어느 창고/미착품 묶음에서 채울 수 있는지 보는 점검표"
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -25,12 +25,29 @@ pub struct OrderFulfillmentRiskItem {
     pub product_id: Uuid,
     pub fulfillment_source: String,
     pub risk: String,
+    pub allocation_rank: usize,
     pub remaining_qty: i32,
     pub need_kw: f64,
     pub available_before_kw: f64,
     pub available_after_kw: f64,
     pub shortage_kw: f64,
+    pub delivery_due: Option<NaiveDate>,
+    pub expected_available_date: Option<NaiveDate>,
+    pub eta_status: String,
+    pub eta_days_late: Option<i64>,
+    pub eta_reason: String,
+    pub breakdown: OrderFulfillmentRiskBreakdown,
     pub reason: String,
+}
+
+#[derive(Debug, Default, Serialize, Clone, Copy)]
+pub struct OrderFulfillmentRiskBreakdown {
+    pub inbound_completed_kw: f64,
+    pub outbound_active_kw: f64,
+    pub stock_allocated_kw: f64,
+    pub bl_incoming_kw: f64,
+    pub lc_incoming_kw: f64,
+    pub incoming_allocated_kw: f64,
 }
 
 #[derive(Debug, Default, Serialize)]

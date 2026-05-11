@@ -11,7 +11,9 @@ package handler
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
+	"time"
 
 	"solarflow-backend/internal/model"
 )
@@ -423,6 +425,74 @@ var lcUsanceTypeAliases = map[string]string{
 	"":                 "",
 }
 
+var allowedTTStatusesForImport = map[string]bool{
+	"planned":   true,
+	"completed": true,
+}
+
+var ttStatusAliases = map[string]string{
+	"planned":   "planned",
+	"completed": "completed",
+	"예정":        "planned",
+	"완료":        "completed",
+}
+
+var migrationNumberPattern = regexp.MustCompile(`^MIG-(PO|LC|TT|BL)-\d{8}-\d{3}$`)
+
+const importDateLayout = "2006-01-02"
+
+func validateDateField(rowNum int, row map[string]interface{}, field string) *model.ImportError {
+	raw := getString(row, field)
+	if raw == "" {
+		return nil
+	}
+	if _, err := time.Parse(importDateLayout, raw); err != nil {
+		return &model.ImportError{
+			Row: rowNum, Field: field,
+			Message: fmt.Sprintf("%s는 YYYY-MM-DD 형식의 유효한 날짜여야 합니다", field),
+		}
+	}
+	return nil
+}
+
+func validateDateOrder(rowNum int, row map[string]interface{}, startField, endField string) *model.ImportError {
+	startRaw := getString(row, startField)
+	endRaw := getString(row, endField)
+	if startRaw == "" || endRaw == "" {
+		return nil
+	}
+	start, err := time.Parse(importDateLayout, startRaw)
+	if err != nil {
+		return nil
+	}
+	end, err := time.Parse(importDateLayout, endRaw)
+	if err != nil {
+		return nil
+	}
+	if start.After(end) {
+		return &model.ImportError{
+			Row: rowNum, Field: startField + "/" + endField,
+			Message: fmt.Sprintf("%s는 %s보다 늦을 수 없습니다", startField, endField),
+		}
+	}
+	return nil
+}
+
+func validateMigrationNumber(rowNum int, field, value, kind string) *model.ImportError {
+	v := strings.TrimSpace(value)
+	if v == "" || !strings.HasPrefix(strings.ToUpper(v), "MIG-") {
+		return nil
+	}
+	matches := migrationNumberPattern.FindStringSubmatch(v)
+	if len(matches) != 2 || matches[1] != kind {
+		return &model.ImportError{
+			Row: rowNum, Field: field,
+			Message: fmt.Sprintf("%s 이관 번호는 MIG-%s-YYYYMMDD-001 형식이어야 합니다", field, kind),
+		}
+	}
+	return nil
+}
+
 // poImportGroup — 같은 po_number 자연키로 묶인 PO Import 행 그룹.
 // FirstRow의 헤더 정보(법인·제조사·계약유형·계약일·인코텀즈·결제조건)가 그룹 전체에 적용.
 type poImportGroup struct {
@@ -450,7 +520,7 @@ func groupPORowsByPONumber(rows []map[string]interface{}) (
 
 		errs := validateRequired(rowNum, row, []string{
 			"po_number", "company_code", "manufacturer_name",
-			"contract_type", "contract_date",
+			"contract_type", "contract_date", "currency",
 			"product_code", "quantity", "unit_price_usd_wp",
 			"item_type", "payment_type",
 		})
@@ -478,6 +548,7 @@ func groupPORowsByPONumber(rows []map[string]interface{}) (
 			val, field string
 			allowed    map[string]bool
 		}{
+			{getString(row, "currency"), "currency", allowedCurrencies},
 			{getString(row, "item_type"), "item_type", allowedItemTypes},
 			{getString(row, "payment_type"), "payment_type", allowedPaymentTypes},
 		} {
@@ -490,6 +561,25 @@ func groupPORowsByPONumber(rows []map[string]interface{}) (
 			continue
 		}
 
+		dateFailed := false
+		for _, f := range []string{"contract_date", "contract_period_start", "contract_period_end"} {
+			if e := validateDateField(rowNum, row, f); e != nil {
+				errors = append(errors, *e)
+				dateFailed = true
+			}
+		}
+		if e := validateDateOrder(rowNum, row, "contract_period_start", "contract_period_end"); e != nil {
+			errors = append(errors, *e)
+			dateFailed = true
+		}
+		if e := validateMigrationNumber(rowNum, "po_number", getString(row, "po_number"), "PO"); e != nil {
+			errors = append(errors, *e)
+			dateFailed = true
+		}
+		if dateFailed {
+			continue
+		}
+
 		poNum := getString(row, "po_number")
 		if _, exists := groups[poNum]; !exists {
 			groups[poNum] = &poImportGroup{PONumber: poNum, FirstRow: row, FirstIdx: rowNum}
@@ -499,7 +589,7 @@ func groupPORowsByPONumber(rows []map[string]interface{}) (
 			// 같은 PO 안에서 헤더 일관성 — 다르면 경고하고 첫 행 값 채택.
 			for _, f := range []string{
 				"company_code", "manufacturer_name", "contract_type", "contract_date",
-				"incoterms", "payment_terms", "contract_period_start", "contract_period_end",
+				"incoterms", "currency", "payment_terms", "contract_period_start", "contract_period_end",
 			} {
 				firstVal := getString(first, f)
 				curVal := getString(row, f)
@@ -572,6 +662,17 @@ func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID 
 			Row: rowNum, Field: "amount_usd", Message: "amount_usd는 양수여야 합니다",
 		}}
 	}
+	for _, f := range []string{"open_date", "maturity_date"} {
+		if e := validateDateField(rowNum, row, f); e != nil {
+			return model.CreateLCRequest{}, []model.ImportError{*e}
+		}
+	}
+	if e := validateDateOrder(rowNum, row, "open_date", "maturity_date"); e != nil {
+		return model.CreateLCRequest{}, []model.ImportError{*e}
+	}
+	if e := validateMigrationNumber(rowNum, "lc_number", getString(row, "lc_number"), "LC"); e != nil {
+		return model.CreateLCRequest{}, []model.ImportError{*e}
+	}
 
 	// usance_type — 라벨/코드 양쪽 받기. 빈 값이면 nil 유지.
 	var usanceType *string
@@ -602,6 +703,7 @@ func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID 
 		OpenDate:     getStringPtr(row, "open_date"),
 		AmountUSD:    amountUsd,
 		TargetQty:    getIntPtr(row, "target_qty"),
+		TargetMW:     getFloatPtr(row, "target_mw"),
 		UsanceDays:   getIntPtr(row, "usance_days"),
 		UsanceType:   usanceType,
 		MaturityDate: getStringPtr(row, "maturity_date"),
@@ -610,6 +712,59 @@ func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID 
 	}
 	if msg := req.Validate(); msg != "" {
 		return req, []model.ImportError{{Row: rowNum, Field: "lc", Message: msg}}
+	}
+	return req, nil
+}
+
+// parseTTRow — T/T 행을 CreateTTRequest로 변환. po_id는 호출 측이 해석.
+func parseTTRow(rowNum int, row map[string]interface{}, poID string) (model.CreateTTRequest, []model.ImportError) {
+	if e := validateDateField(rowNum, row, "remit_date"); e != nil {
+		return model.CreateTTRequest{}, []model.ImportError{*e}
+	}
+	amountUsd, aErr := requireFloat(rowNum, row, "amount_usd")
+	if aErr != nil {
+		return model.CreateTTRequest{}, []model.ImportError{*aErr}
+	}
+	if amountUsd <= 0 {
+		return model.CreateTTRequest{}, []model.ImportError{{
+			Row: rowNum, Field: "amount_usd", Message: "amount_usd는 양수여야 합니다",
+		}}
+	}
+	exchangeRate, exErr := requireFloat(rowNum, row, "exchange_rate")
+	if exErr != nil {
+		return model.CreateTTRequest{}, []model.ImportError{*exErr}
+	}
+	if exchangeRate <= 0 {
+		return model.CreateTTRequest{}, []model.ImportError{{
+			Row: rowNum, Field: "exchange_rate", Message: "exchange_rate는 양수여야 합니다",
+		}}
+	}
+
+	status := getString(row, "status")
+	if alias, ok := ttStatusAliases[status]; ok {
+		status = alias
+	}
+	if !allowedTTStatusesForImport[status] {
+		return model.CreateTTRequest{}, []model.ImportError{{
+			Row: rowNum, Field: "status",
+			Message: "status는 planned/completed 또는 예정/완료 중 하나여야 합니다",
+		}}
+	}
+
+	amountKrw := amountUsd * exchangeRate
+	req := model.CreateTTRequest{
+		POID:         poID,
+		RemitDate:    getStringPtr(row, "remit_date"),
+		AmountUSD:    amountUsd,
+		AmountKRW:    &amountKrw,
+		ExchangeRate: &exchangeRate,
+		Purpose:      getStringPtr(row, "purpose"),
+		Status:       status,
+		BankName:     getStringPtr(row, "bank_name"),
+		Memo:         getStringPtr(row, "memo"),
+	}
+	if msg := req.Validate(); msg != "" {
+		return req, []model.ImportError{{Row: rowNum, Field: "tt", Message: msg}}
 	}
 	return req, nil
 }

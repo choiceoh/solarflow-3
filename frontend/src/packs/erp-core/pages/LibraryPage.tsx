@@ -232,6 +232,7 @@ export default function LibraryPage() {
       description="운영 매뉴얼, 안내문, 양식 파일을 제목·내용·첨부파일로 등록합니다."
       tableTitle="등록 자료"
       tableSub={`${posts.length.toLocaleString('ko-KR')}건`}
+      kpiScope="library"
       actions={(
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}

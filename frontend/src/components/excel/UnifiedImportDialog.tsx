@@ -3,7 +3,7 @@
 // 부분 실패 허용: 섹션 단위로 직렬 등록, 실패 섹션은 결과창에서 안내.
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, MinusCircle, Upload, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, MinusCircle, Upload, X } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -19,25 +19,29 @@ interface Props {
   preview: UnifiedImportPreview | null;
   loading?: boolean;
   onClose: () => void;
+  onDownloadErrors?: () => void;
   onSubmit: () => void;
 }
 
-type FilterMode = 'all' | 'valid' | 'error';
+type FilterMode = 'all' | 'valid' | 'warning' | 'error';
 
 interface SectionSummary {
   total: number;
   valid: number;
+  warning: number;
   error: number;
 }
 
 function summarize(section: UnifiedSection): SectionSummary {
-  if (!section.present || section.parseError) return { total: 0, valid: 0, error: 0 };
+  if (!section.present || section.parseError) return { total: 0, valid: 0, warning: 0, error: 0 };
   if (section.declPreview) {
     const d = section.declPreview.declarations;
     const c = section.declPreview.costs;
     return {
       total: d.length + c.length,
       valid: d.filter((r) => r.valid).length + c.filter((r) => r.valid).length,
+      warning: d.filter((r) => r.valid && (r.warnings?.length ?? 0) > 0).length
+        + c.filter((r) => r.valid && (r.warnings?.length ?? 0) > 0).length,
       error: d.filter((r) => !r.valid).length + c.filter((r) => !r.valid).length,
     };
   }
@@ -45,22 +49,23 @@ function summarize(section: UnifiedSection): SectionSummary {
     return {
       total: section.preview.totalRows,
       valid: section.preview.validRows,
+      warning: section.preview.warningRows ?? section.preview.rows.filter((r) => r.valid && (r.warnings?.length ?? 0) > 0).length,
       error: section.preview.errorRows,
     };
   }
-  return { total: 0, valid: 0, error: 0 };
+  return { total: 0, valid: 0, warning: 0, error: 0 };
 }
 
 function sectionTone(section: UnifiedSection, sum: SectionSummary): 'pos' | 'warn' | 'neg' | 'mute' {
   if (!section.present) return 'mute';
   if (section.parseError) return 'neg';
-  if (sum.error > 0) return 'warn';
+  if (sum.error > 0 || sum.warning > 0) return 'warn';
   if (sum.valid > 0) return 'pos';
   return 'mute';
 }
 
 export default function UnifiedImportDialog({
-  preview, loading, onClose, onSubmit,
+  preview, loading, onClose, onDownloadErrors, onSubmit,
 }: Props) {
   const [activeTab, setActiveTab] = useState<string>('');
   const [filter, setFilter] = useState<FilterMode>('all');
@@ -75,10 +80,11 @@ export default function UnifiedImportDialog({
           total: acc.total + sum.total,
           valid: acc.valid + sum.valid,
           error: acc.error + sum.error,
+          warning: acc.warning + sum.warning,
           presentCount: acc.presentCount + (s.present ? 1 : 0),
         };
       },
-      { total: 0, valid: 0, error: 0, presentCount: 0 },
+      { total: 0, valid: 0, warning: 0, error: 0, presentCount: 0 },
     );
   }, [sections]);
 
@@ -105,7 +111,7 @@ export default function UnifiedImportDialog({
               통합 양식 업로드 미리보기
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
-              {preview.fileName} · {sections.length}섹션 중 {totals.presentCount}개 시트 · 전체 {totals.total}건 (유효 {totals.valid} / 에러 {totals.error})
+              {preview.fileName} · {sections.length}섹션 중 {totals.presentCount}개 시트 · 전체 {totals.total}건 (정상 {totals.valid - totals.warning} / 경고 {totals.warning} / 에러 {totals.error})
             </p>
           </DialogHeader>
 
@@ -146,6 +152,11 @@ export default function UnifiedImportDialog({
           </Tabs>
 
           <DialogFooter>
+            {totals.error > 0 && onDownloadErrors && (
+              <Button variant="outline" size="sm" onClick={onDownloadErrors}>
+                <Download className="mr-1.5 h-4 w-4" />에러만 다운로드
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={onClose}>
               <X className="mr-1.5 h-4 w-4" />취소
             </Button>
@@ -236,6 +247,7 @@ function SectionPanel({ section, filter, onFilter }: PanelProps) {
       <div className="flex flex-col gap-2 overflow-hidden">
         <SectionMeta
           valid={declValid + costValid}
+          warning={summarize(section).warning}
           total={section.declPreview.declarations.length + section.declPreview.costs.length}
           filter={filter}
           onFilter={onFilter}
@@ -275,6 +287,7 @@ function SectionPanel({ section, filter, onFilter }: PanelProps) {
       <div className="flex flex-col gap-2 overflow-hidden">
         <SectionMeta
           valid={section.preview.validRows}
+          warning={section.preview.warningRows ?? section.preview.rows.filter((r) => r.valid && (r.warnings?.length ?? 0) > 0).length}
           total={section.preview.totalRows}
           filter={filter}
           onFilter={onFilter}
@@ -295,24 +308,29 @@ function SectionPanel({ section, filter, onFilter }: PanelProps) {
 
 interface MetaProps {
   valid: number;
+  warning: number;
   total: number;
   filter: FilterMode;
   onFilter: (m: FilterMode) => void;
 }
 
-function SectionMeta({ valid, total, filter, onFilter }: MetaProps) {
+function SectionMeta({ valid, warning, total, filter, onFilter }: MetaProps) {
   const error = total - valid;
+  const normal = valid - warning;
   return (
     <div className="flex items-center gap-2 text-xs">
       <CheckCircle2 className="sf-text-pos h-3.5 w-3.5" />
       <span className="font-medium">{total}건</span>
-      <span className="text-muted-foreground">유효</span>
-      <span className="sf-text-pos">{valid}</span>
+      <span className="text-muted-foreground">정상</span>
+      <span className="sf-text-pos">{normal}</span>
+      <span className="text-muted-foreground">경고</span>
+      <span className="text-amber-600">{warning}</span>
       <span className="text-muted-foreground">에러</span>
       <span className="sf-text-neg">{error}</span>
       <div className="ml-auto flex gap-1">
         <FilterChip current={filter} mode="all" label="전체" onClick={onFilter} />
-        <FilterChip current={filter} mode="valid" label="유효" onClick={onFilter} />
+        <FilterChip current={filter} mode="valid" label="정상" onClick={onFilter} />
+        <FilterChip current={filter} mode="warning" label="경고" onClick={onFilter} />
         <FilterChip current={filter} mode="error" label="에러" onClick={onFilter} />
       </div>
     </div>

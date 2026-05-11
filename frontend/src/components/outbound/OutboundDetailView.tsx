@@ -1,7 +1,11 @@
-import { useState } from 'react';
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DateInput } from '@/components/ui/date-input';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { PartnerCombobox } from '@/components/common/PartnerCombobox';
 import { formatDate, formatNumber, formatKw } from '@/lib/utils';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -17,6 +21,7 @@ import { useOutboundDetail } from '@/hooks/useOutbound';
 import { fetchWithAuth } from '@/lib/api';
 import { notify } from '@/lib/notify';
 import { USAGE_CATEGORY_LABEL } from '@/types/outbound';
+import type { Partner } from '@/types/masters';
 
 interface Props {
   outboundId: string;
@@ -27,6 +32,46 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
   const { data: ob, loading, reload } = useOutboundDetail(outboundId);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [saleFormOpen, setSaleFormOpen] = useState(false);
+  const [autoOpenedSaleFormFor, setAutoOpenedSaleFormFor] = useState('');
+  const [saleCustomerId, setSaleCustomerId] = useState('');
+  const [saleUnitPriceWp, setSaleUnitPriceWp] = useState('');
+  const [saleTaxInvoiceDate, setSaleTaxInvoiceDate] = useState('');
+  const [saleTaxInvoiceEmail, setSaleTaxInvoiceEmail] = useState('');
+  const [saleTaxInvoiceEmailTouched, setSaleTaxInvoiceEmailTouched] = useState(false);
+  const [saleCreateError, setSaleCreateError] = useState('');
+  const [saleCreating, setSaleCreating] = useState(false);
+
+  useEffect(() => {
+    fetchWithAuth<Partner[]>('/api/v1/partners')
+      .then((list) => setPartners(list.filter((p) => p.is_active && (p.partner_type === 'customer' || p.partner_type === 'both'))))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!ob) return;
+    setSaleCustomerId(ob.customer_id ?? '');
+    setSaleUnitPriceWp(ob.unit_price_wp != null ? String(ob.unit_price_wp) : '');
+    setSaleTaxInvoiceDate(ob.sale?.tax_invoice_date ?? '');
+    setSaleTaxInvoiceEmail(ob.sale?.tax_invoice_email ?? '');
+    setSaleTaxInvoiceEmailTouched(false);
+    setSaleCreateError('');
+  }, [ob]);
+
+  useEffect(() => {
+    if (!ob || ob.sale || ob.status === 'cancelled') return;
+    if (ob.usage_category !== 'sale' && ob.usage_category !== 'sale_spare') return;
+    if (autoOpenedSaleFormFor === ob.outbound_id) return;
+    setSaleFormOpen(true);
+    setAutoOpenedSaleFormFor(ob.outbound_id);
+  }, [ob, autoOpenedSaleFormFor]);
+
+  useEffect(() => {
+    if (saleTaxInvoiceEmailTouched || saleTaxInvoiceEmail.trim() || !saleCustomerId) return;
+    const email = partners.find((partner) => partner.partner_id === saleCustomerId)?.contact_email?.trim();
+    if (email) setSaleTaxInvoiceEmail(email);
+  }, [partners, saleCustomerId, saleTaxInvoiceEmail, saleTaxInvoiceEmailTouched]);
 
   if (loading || !ob) return <LoadingSpinner />;
 
@@ -65,6 +110,59 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
     });
     notify.success('수정되었습니다');
     reload();
+  };
+
+  const createSaleFromOutbound = async () => {
+    const price = Number(saleUnitPriceWp);
+    if (!saleCustomerId) {
+      setSaleCreateError('거래처를 선택해주세요');
+      return;
+    }
+    if (!Number.isFinite(price) || price <= 0) {
+      setSaleCreateError('Wp단가는 양수로 입력해주세요');
+      return;
+    }
+
+    const invoiceDate = saleTaxInvoiceDate.trim();
+    const invoiceEmail = saleTaxInvoiceEmail.trim();
+    setSaleCreating(true);
+    setSaleCreateError('');
+    try {
+      await fetchWithAuth('/api/v1/sales', {
+        method: 'POST',
+        body: JSON.stringify({
+          outbound_id: ob.outbound_id,
+          order_id: ob.order_id,
+          customer_id: saleCustomerId,
+          quantity: ob.quantity,
+          capacity_kw: ob.capacity_kw,
+          unit_price_wp: price,
+          tax_invoice_date: invoiceDate || undefined,
+          tax_invoice_email: invoiceEmail || undefined,
+          erp_closed: false,
+        }),
+      });
+      if (invoiceDate) {
+        await fetchWithAuth(`/api/v1/outbounds/${ob.outbound_id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ tax_invoice_issued: true }),
+        });
+      }
+      notify.success('매출을 생성했습니다');
+      setSaleFormOpen(false);
+      reload();
+    } catch (err) {
+      setSaleCreateError(err instanceof Error ? err.message : '매출 생성에 실패했습니다');
+    } finally {
+      setSaleCreating(false);
+    }
+  };
+
+  const handleSaleCustomerChange = (customerId: string) => {
+    setSaleCustomerId(customerId);
+    if (saleTaxInvoiceEmailTouched) return;
+    const email = partners.find((partner) => partner.partner_id === customerId)?.contact_email?.trim() ?? '';
+    setSaleTaxInvoiceEmail(email);
   };
 
   const usageOptions = (Object.entries(USAGE_CATEGORY_LABEL) as [string, string][])
@@ -280,10 +378,73 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
           </DetailFieldGrid>
         </DetailSection>
       ) : (
-        <DetailSection title="매출 정보">
-          <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
-            등록된 매출 정보가 없습니다
-          </div>
+        <DetailSection
+          title="매출 정보"
+          actions={!isCancelled && (
+            <Button type="button" size="sm" className="h-8 gap-1.5" onClick={() => setSaleFormOpen((open) => !open)}>
+              <Plus className="h-3.5 w-3.5" />
+              매출 생성
+            </Button>
+          )}
+        >
+          {saleFormOpen ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 lg:grid-cols-4">
+                <div className="lg:col-span-2">
+                  <Label className="mb-1.5 text-xs">거래처</Label>
+                  <PartnerCombobox
+                    partners={partners}
+                    value={saleCustomerId}
+                    onChange={handleSaleCustomerChange}
+                    placeholder="거래처 선택"
+                    error={!saleCustomerId && !!saleCreateError}
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1.5 text-xs">Wp단가</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={saleUnitPriceWp}
+                    onChange={(event) => setSaleUnitPriceWp(event.target.value)}
+                    placeholder="원/Wp"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1.5 text-xs">계산서일</Label>
+                  <DateInput value={saleTaxInvoiceDate} onChange={setSaleTaxInvoiceDate} />
+                </div>
+                <div className="lg:col-span-2">
+                  <Label className="mb-1.5 text-xs">계산서 이메일</Label>
+                  <Input
+                    value={saleTaxInvoiceEmail}
+                    onChange={(event) => {
+                      setSaleTaxInvoiceEmailTouched(true);
+                      setSaleTaxInvoiceEmail(event.target.value);
+                    }}
+                    placeholder="선택 입력"
+                  />
+                </div>
+                <DetailField label="수량" value={formatNumber(ob.quantity)} />
+                <DetailField label="용량" value={formatKw(ob.capacity_kw)} />
+              </div>
+              {saleCreateError && <div className="text-xs text-destructive">{saleCreateError}</div>}
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setSaleFormOpen(false)}>
+                  취소
+                </Button>
+                <Button type="button" size="sm" className="gap-1.5" disabled={saleCreating} onClick={createSaleFromOutbound}>
+                  {saleCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                  생성
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+              등록된 매출 정보가 없습니다
+            </div>
+          )}
         </DetailSection>
       )}
 
