@@ -740,7 +740,7 @@ PO 화면에서 바로 표시:
 | review_status | VARCHAR | ✅ | candidate / accepted / rejected |
 | source_url / raw_excerpt | TEXT | | 근거 URL과 짧은 원문 근거 |
 
-수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. 요청은 실행 로그를 만든 뒤 `running` 상태로 즉시 응답하고, 서버 백그라운드 작업이 완료/부분완료/실패 상태를 run에 기록한다. AI는 evidence에 명시된 가격 중 중국·유럽 대상 가격만 저장하며, 유료 로그인 한계와 미국·기타 지역 제외 사유는 run warning으로 남긴다(D-124, D-146, D-151).
+수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. 요청은 실행 로그를 만든 뒤 `running` 상태로 즉시 응답하고, 서버 백그라운드 작업이 완료/부분완료/실패 상태를 run에 기록한다. 서버는 source별 홈페이지 직접 조회와 Serper 검색을 함께 사용하되, 기본 검색어 1회에 의존하지 않고 결측 metric별 검색어, source별 대체 검색어, 완화된 기간 필터를 순차 적용해 evidence 후보를 넓힌다. 검색 결과 상위 URL은 Serper scrape로 본문 evidence를 보강한다. AI는 evidence에 명시된 가격 중 중국·유럽 대상 가격만 저장하며, 유료 로그인 한계와 미국·기타 지역 제외 사유는 run warning으로 남긴다(D-124, D-146, D-151, D-164).
 개별 관측값은 기본 `candidate` 로 저장하고, 운영자가 `/api/v1/price-benchmarks/{id}/review-status` 로 `accepted` 또는 `rejected` 처리한다. 제외된 관측값은 기본 차트·판단에서 빠지지만 감사 확인을 위해 목록 필터에서 다시 볼 수 있다. 잘못 수집된 중복/오염 데이터는 `/api/v1/price-benchmarks/{id}` 삭제로 제거하되, 수집 실행 로그는 보존한다(D-143, D-161).
 
 구매 전략과 1/3/6개월 전망 시나리오는 `/api/v1/calc/price-forecast-strategy`가 Rust 계산엔진에서 산출한다. 프론트엔드는 외부 관측값, 우리 최근 구매가, 수집 run 경고를 요청 본문으로 보내고, Rust는 CMM/forward/중국 입찰/CPIA floor를 USD/W 기준으로 조합해 action, 전망 범위, source 품질 점수를 반환한다. AI는 관측값 수집 보조로만 사용하고 최종 전망 판단은 설명 가능한 Rust 계산 결과를 정본으로 삼는다(D-159).
