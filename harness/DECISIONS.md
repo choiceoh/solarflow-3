@@ -1494,7 +1494,19 @@
   - 저장 payload는 기존 사용자 preferences API를 사용하므로 신규 라우트/마이그레이션은 없다.
 - **날짜**: 2026-05-11
 
-## D-164: 가격예측 AI 수집은 source별 다중 검색 플랜으로 evidence 후보를 넓힌다
+## D-164: 운영 migration 은 적용 이력·DB 오브젝트·PostgREST 노출까지 확인한다
+
+- **결정**: 운영 배포에서 migration 적용 후 `scripts/verify_migration.ts` 로 반영 상태를 확인한다. 확인은 `schema_migrations` 적용 이력, DB column/constraint/index 존재 여부, PostgREST schema cache 노출 여부를 순서대로 본다. 실패하면 Go 재시작을 보류한다.
+- **운영 기준**:
+  - `scripts/apply_migrations.ts` 는 기존처럼 SQL 적용과 `NOTIFY pgrst, 'reload schema'` 를 담당한다.
+  - `scripts/cron-deploy.sh` 는 migration 변경 감지 시 적용 후 변경된 파일마다 `verify_migration.ts` 를 실행한다.
+  - `091_price_benchmark_review_status.sql` 은 built-in preset 으로 `price_benchmarks.review_status`, CHECK constraint, review_status index, PostgREST column select 를 확인한다.
+  - 새 migration 은 필요 시 `--column`, `--constraint`, `--index`, `--postgrest` 옵션으로 검증 대상을 명시한다.
+- **이유**: migration 파일이 main 에 있어도 운영 DB 반영, PostgREST schema cache 갱신, Go/supabase-go 저장 경로가 동시에 맞지 않으면 PGRST204 → Go 500 으로 이어진다. 적용과 확인을 분리해 기록하면 “적용됨”과 “운영 API가 새 컬럼을 볼 수 있음”을 구분할 수 있다.
+- **검증**:
+  - `bun scripts/verify_migration.ts --help` 로 CLI 사용법과 옵션 파싱을 확인한다.
+  - `bash -n scripts/cron-deploy.sh` 로 배포 스크립트 문법을 확인한다.
+## D-170: 가격예측 AI 수집은 source별 다중 검색 플랜으로 evidence 후보를 넓힌다
 
 - **결정**: `/api/v1/price-benchmarks/ai-refresh`는 source별 기본 검색어 1회에 의존하지 않고, 기본 검색어 + 결측 metric별 검색어 + source별 대체 검색어 + 완화된 기간 필터를 순서대로 실행한다. 검색 결과는 URL/title 기준으로 중복 제거하고, source당 상위 결과 일부는 Serper scrape로 본문을 보강한 뒤 LLM 추출에 넘긴다.
 - **이유**: 외부 시세지는 유료 페이지, 주간/일간 발행 주기, 중국어 뉴스 제목, 사이트 개편 때문에 같은 source라도 한 검색어로는 evidence가 낮게 잡힌다. 저장 정책을 완화하면 오염 데이터가 들어오므로, 저장 allowlist는 유지하고 검색 후보 폭만 넓히는 것이 맞다.
