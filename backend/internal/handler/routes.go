@@ -279,6 +279,7 @@ func (h *CalcProxyHandler) RegisterRoutes(root chi.Router, g middleware.Gates, a
 		r.With(g.Feature(feature.IDCalcMarginAnalysis)).Post("/margin-analysis", h.MarginAnalysis)
 		r.With(g.Feature(feature.IDCalcCustomerAnalysis)).Post("/customer-analysis", h.CustomerAnalysis)
 		r.With(g.Feature(feature.IDCalcPriceTrend)).Post("/price-trend", h.PriceTrend)
+		r.With(g.Feature(feature.IDCalcPriceForecastStrategy)).Post("/price-forecast-strategy", h.PriceForecastStrategy)
 		r.With(g.Feature(feature.IDCalcSupplyForecast)).Post("/supply-forecast", h.SupplyForecast)
 		r.With(g.Feature(feature.IDCalcOrderFulfillmentRisk)).Post("/order-fulfillment-risk", h.OrderFulfillmentRisk)
 		r.With(g.Feature(feature.IDCalcOutstandingList)).Post("/outstanding-list", h.OutstandingList)

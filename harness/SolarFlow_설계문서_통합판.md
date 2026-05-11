@@ -39,7 +39,7 @@
 ### 1.4 테넌트 구성 (D-108, D-119)
 - 탑솔라(주) + 디원 + 화신이엔지 + 바로(주)와 `cable` 분기를 **단일 DB · 단일 코드베이스**로 운영한다.
 - **URL 분기**: module 사용자는 `module.topworks.ltd`/`solarflow3.com`(또는 Tailscale/localhost), cable 사용자는 `cable.topworks.ltd`, 바로 사용자는 `baro.topworks.ltd`, 학습 사용자는 `study.topworks.ltd`로 접속한다. 같은 `dist/`를 네 호스트에서 서빙하고, 프론트가 `window.location.hostname`을 보고 사이드바/메뉴 분기를 결정한다.
-- **테넌트 스코프**: `user_profiles.tenant_scope`(`topsolar`/`cable`/`baro`/`study`)을 사용자별로 못박는다. 백엔드는 `RequireTenantScope` 미들웨어로 **수입원가/면장/LC/T/T/한도 변경/단가 이력/부대비용/landed-cost·lc-fee·lc-limit-timeline·lc-maturity-alert·exchange-compare·margin-analysis·price-trend** 응답을 module 계열(`topsolar` + `cable`) 사용자에게만 허용하고, 바로 토큰으로 호출되면 403을 반환한다. `study`는 신입 교육 전용 테넌트로 ERP 운영 API를 상속하지 않고 `/api/v1/study/*` 학습 도메인과 `/api/v1/users/me*`만 허용한다. 그 외 공유 엔드포인트(가용재고/PO/B/L/출고/수주/매출/수금/마스터)는 ERP 운영 테넌트(`topsolar`/`cable`/`baro`)에서만 공유한다.
+- **테넌트 스코프**: `user_profiles.tenant_scope`(`topsolar`/`cable`/`baro`/`study`)을 사용자별로 못박는다. 백엔드는 `RequireTenantScope` 미들웨어로 **수입원가/면장/LC/T/T/한도 변경/단가 이력/부대비용/landed-cost·lc-fee·lc-limit-timeline·lc-maturity-alert·exchange-compare·margin-analysis·price-trend·price-forecast-strategy** 응답을 module 계열(`topsolar` + `cable`) 사용자에게만 허용하고, 바로 토큰으로 호출되면 403을 반환한다. `study`는 신입 교육 전용 테넌트로 ERP 운영 API를 상속하지 않고 `/api/v1/study/*` 학습 도메인과 `/api/v1/users/me*`만 허용한다. 그 외 공유 엔드포인트(가용재고/PO/B/L/출고/수주/매출/수금/마스터)는 ERP 운영 테넌트(`topsolar`/`cable`/`baro`)에서만 공유한다.
 - **cable 분기**: `cable.topworks.ltd`는 `module.topworks.ltd`의 기능 표면을 포크한 별도 테넌트다. 사이드바 탭 설정은 `sidebar_tabs.cable`로 독립 저장한다.
 - **study 분기**: `study.topworks.ltd`는 신입사원 학습용 교육 테넌트다. 첫 단계는 화면보다 `study_learning_domains` / `study_learning_plans` / `study_learning_plan_steps` 계약을 먼저 고정하고, 이후 학습 페이지와 진도/과제 기능을 붙인다.
 - **격리 범위**: 격리는 "바로가 module 계열의 수입원가/금융정보를 못 보게" 하는 1단계 블록이다. 같은 그룹 계열사이므로 거래/재고 행 단위 격리는 추가하지 않는다.
@@ -97,7 +97,7 @@ PostgreSQL (운영: 로컬 PostgreSQL + PostgREST, 인증: Supabase Auth)
 - DB 연결: `SUPABASE_DB_URL` 환경변수로 PostgreSQL 직접 연결, sqlx 풀 5개
 - 인증: 불필요 (Go가 게이트웨이, Rust는 내부 전용)
 
-### Rust API 엔드포인트 (16개)
+### Rust API 엔드포인트 (18개)
 | 엔드포인트 | 기능 |
 |-----------|------|
 | /health | 서버 생존 확인 |
@@ -111,7 +111,9 @@ PostgreSQL (운영: 로컬 PostgreSQL + PostgREST, 인증: Supabase Auth)
 | /api/calc/margin-analysis | 마진/이익률 분석 |
 | /api/calc/customer-analysis | 거래처 분석 |
 | /api/calc/price-trend | 단가 추이 |
+| /api/calc/price-forecast-strategy | 가격예측 전략 |
 | /api/calc/supply-forecast | 월별 수급 전망 |
+| /api/calc/order-fulfillment-risk | 수주 충당 위험도 |
 | /api/calc/outstanding-list | 미수금 목록 |
 | /api/calc/receipt-match-suggest | 수금 매칭 추천 |
 | /api/calc/search | 자연어 검색 |
@@ -733,6 +735,8 @@ PO 화면에서 바로 표시:
 
 수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. 요청은 실행 로그를 만든 뒤 `running` 상태로 즉시 응답하고, 서버 백그라운드 작업이 완료/부분완료/실패 상태를 run에 기록한다. AI는 evidence에 명시된 가격 중 중국·유럽 대상 가격만 저장하며, 유료 로그인 한계와 미국·기타 지역 제외 사유는 run warning으로 남긴다(D-124, D-146, D-151).
 신뢰도가 낮거나 근거가 약한 개별 관측값은 `/api/v1/price-benchmarks/{id}` 삭제로 차트와 목록에서 제거하되, 수집 실행 로그는 감사 기록으로 보존한다(D-143).
+
+구매 전략과 1/3/6개월 전망 시나리오는 `/api/v1/calc/price-forecast-strategy`가 Rust 계산엔진에서 산출한다. 프론트엔드는 외부 관측값, 우리 최근 구매가, 수집 run 경고를 요청 본문으로 보내고, Rust는 CMM/forward/중국 입찰/CPIA floor를 USD/W 기준으로 조합해 action, 전망 범위, source 품질 점수를 반환한다. AI는 관측값 수집 보조로만 사용하고 최종 전망 판단은 설명 가능한 Rust 계산 결과를 정본으로 삼는다(D-159).
 
 #### 운영 수요 계획 (module_demand_forecasts)
 수주/출고 전 단계의 공사 예정 또는 유통 보정 수요를 월별·규격별로 수동 입력한다.
