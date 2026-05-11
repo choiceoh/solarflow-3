@@ -36,7 +36,7 @@
 1. `backend/internal/feature/catalog.go` 의 `Catalog` 갱신 (entry 추가 또는 Paths 수정)
 2. `harness/FEATURE-WIRING-MATRIX.md` 의 표 갱신 (같은 ID 행 추가/수정)
 3. 라우트 정의에서 `r.Use(g.Feature(feature.IDXxx))` 적용
-4. 새 테넌트 분리이거나 격리 범위가 달라지면 `harness/DECISIONS.md` 에 D-NNN 추가
+4. 새 테넌트 분리이거나 격리 범위가 달라지면 `harness/DECISIONS.md` 에 `D-YYYYMMDD-HHMMSS` 형식의 결정 ID 추가
 5. `go test ./internal/feature ./internal/middleware ./internal/router` 통과
 
 (1)~(2) 중 하나만 반영하면 `TestMatrixConsistency` 가 잡고,
@@ -138,7 +138,9 @@
 
 ### 하네스 축적 규칙
 - 매 TASK 완료 시 PROGRESS.md를 업데이트할 것 (완료 항목 이동, 다음 작업 갱신)
-- 새로운 설계 판단이 있으면 DECISIONS.md에 추가할 것 (판단 번호 순차 부여)
+- 새로운 설계 판단이 있으면 DECISIONS.md에 추가할 것
+- 신규 결정 ID는 순번이 아니라 한국시간 기준 초 단위 타임스탬프 `D-YYYYMMDD-HHMMSS`를 사용한다. 예: `D-20260511-171426`
+- 기존 `D-001`~`D-164` 결정 ID는 과거 링크 보존을 위해 변경하지 않는다.
 - 이 두 파일 업데이트는 코드 커밋과 함께 포함할 것 (별도 커밋 아님)
 
 ### 즉시 수정 원칙
@@ -165,8 +167,8 @@
 
 ### 도메인별 인덱스 동기화 규칙
 - 한쪽 테넌트 한정 기능(예: `tenants: ['baro']`, `tenants: ['topsolar', 'cable']`, `topsolarOnly`/`baroOnly` 미들웨어)을 추가·삭제·이동하면 **반드시** `harness/{module,cable,baro}.md`의 해당 섹션을 같은 PR에서 갱신할 것.
-  - 활성 메뉴, `*Only` 미들웨어 적용 라우트 표, 「관련 결정」 D-NNN 링크 — 셋 중 영향 받는 곳을 갱신.
-- 새 결정은 DECISIONS.md(정본)에 D-NNN으로 추가하고, 테넌트 한정이면 그 도메인 파일의 「관련 결정」에 1줄 색인만 추가. 결정 본문 복제 금지(SoT는 DECISIONS).
+  - 활성 메뉴, `*Only` 미들웨어 적용 라우트 표, 「관련 결정」 링크 — 셋 중 영향 받는 곳을 갱신.
+- 새 결정은 DECISIONS.md(정본)에 `D-YYYYMMDD-HHMMSS` 형식으로 추가하고, 테넌트 한정이면 그 도메인 파일의 「관련 결정」에 1줄 색인만 추가. 결정 본문 복제 금지(SoT는 DECISIONS).
 - 이 규칙을 지키지 않으면 도메인 파일이 곧 거짓이 되어, 새 사람이 들어왔을 때 어떤 사이트에 어떤 기능이 있는지 잘못 인식한다(CRM처럼 양쪽에 박는 실수의 재발 방지).
 
 ## 모듈 품질 체크리스트 (모든 CRUD 화면 공통)

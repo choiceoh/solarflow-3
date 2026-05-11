@@ -5,13 +5,13 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | 가격예측 채택 상태 운영 반영 확인, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
+| 다음 작업 | 가격예측 AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-163 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력, D-163 KPI 활성 항목 설정) |
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-080/D-081/D-132~D-138 번호 공백 유지) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -31,6 +31,138 @@
 - `cd frontend && npm run test` 성공 — 98 tests, 기존 AllocationForm/POListTable React `act(...)` 경고 출력
 - `git diff --check` 성공
 - `graphify update .` 성공 — 5113 nodes / 8289 edges / 410 communities
+## 2026-05-11 세션 — 가격예측 AI 관측값 표 표시 복구
+
+### 완료
+- `/price-forecast` 하단 `AI 수집 관측값` 표가 접히는 문제 수정
+  - 가상 스크롤 컨테이너의 `contain: strict`를 `contain: content`로 완화
+  - 높이가 고정되지 않은 컨테이너에서 브라우저가 표 내용을 크기 계산에서 제외해 항목이 안 보일 수 있던 조건 제거
+
+### 검증
+- `cd frontend && npx --yes bun@1.3.13 install --frozen-lockfile` 성공
+- `cd frontend && npx --yes bun@1.3.13 run build` 성공
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5168 nodes / 8470 edges / 411 communities (`graph.html`은 노드 수 초과로 생략)
+
+### 알려진 제한
+- Playwright 화면 확인은 현재 환경에 Chromium 실행 라이브러리 `libnspr4`가 없어 브라우저 시작 전 실패했다.
+
+---
+
+## 2026-05-11 세션 — 결정 ID 초 단위 타임스탬프 전환 (D-20260511-171426)
+
+### 완료
+- 새 설계 판단 ID 규칙을 기존 순번형 ID에서 `D-YYYYMMDD-HHMMSS` 형식으로 전환
+- 기존 `D-001`~`D-164` 링크는 보존하고, 앞으로 추가되는 결정에만 새 형식을 적용하도록 명시
+- RULES, FEATURE-WIRING-MATRIX, NEW-TENANT-GUIDE, 도메인별 인덱스 체크리스트, CLAUDE 안내 문구 동기화
+
+### 검증
+- 신규 결정 절차에 순번 강제 문구가 남지 않았는지 검색으로 확인
+
+---
+
+## 2026-05-11 세션 — 운영 DB migration 반영 확인 플로우 (D-166)
+
+### 완료
+- `scripts/verify_migration.ts` 추가
+  - `public.schema_migrations` 적용 이력 확인
+  - DB column / constraint / index 존재 여부 확인
+  - PostgREST schema cache reload 후 REST select 노출 확인
+  - `091_price_benchmark_review_status.sql` built-in preset 추가
+- `scripts/cron-deploy.sh`에 migration 적용 직후 반영 확인 단계 연결
+  - 확인 실패 시 Go 재시작 보류
+  - 변경된 migration 파일별로 적용 이력 확인
+- `scripts/README.md`, `harness/PRODUCTION.md`, `harness/module.md` 운영 문서 동기화
+- D-166 결정 기록 추가
+
+### 검증
+- `bun scripts/verify_migration.ts --help` 성공
+- `bun build scripts/verify_migration.ts --target=bun --outfile=/tmp/verify_migration.js` 성공
+- `bash -n scripts/cron-deploy.sh` 성공
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5157 nodes / 8459 edges / 412 communities
+
+### 알려진 제한
+- 현재 worktree 에서는 운영 DB 환경변수를 사용하지 않아 실제 DB/PostgREST 확인은 실행하지 않았다. 운영 서버에서는 `backend/.env` 또는 환경변수의 `SUPABASE_DB_URL`, `SUPABASE_URL`, `SUPABASE_KEY` 기준으로 실행된다.
+
+---
+
+## 2026-05-11 세션 — 모듈 제품군/변종 분류 정식화 (D-165)
+
+### 완료
+- 품번 마스터에 제품군/변종 분류 필드 정식 추가
+  - `product_family_code`: 같은 생산 라인·외형 규격을 묶는 상위 제품군
+  - `product_variant_kind`: 출력 binning, BOM 차이, 인증/라벨/포장 차이 등 품번 분리 사유
+  - `bom_revision`: 동일 출력·동일 제품군의 BOM 차이 추적
+  - `substitution_group_code`: 영업/출고 대체 후보 수동 묶음
+- 품번 마스터 등록/수정 화면과 목록에 제품군 정보를 노출
+- Excel Import Hub 품번 양식/통합 마스터 양식에 제품군/변종 필드 추가
+- Go 모델 검증에 제품군 문자열 길이와 `product_variant_kind` allowlist 추가
+- 설계 정본과 D-165 결정 기록 동기화
+
+### 운영 기준
+- 품번은 거래 SKU로 유지하고 PO/B/L/재고/원가/매출 계산은 계속 `product_id` 기준으로 처리한다.
+- 제품군은 검색, 대체 후보 검토, 가격/재고/매출 보조 분석 축으로만 사용한다.
+- `product_aliases`는 오타/외부표기 흡수용이며 정상 SKU 변종을 합치는 용도로 쓰지 않는다.
+
+### 검증
+- `cd backend && go test ./internal/model` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건 유지
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5013 nodes / 8109 edges / 406 communities
+
+### 알려진 제한
+- 현재 WSL 실행 환경에 로컬 PostgreSQL/PostgREST/launchctl 이 없어 `psql -d solarflow -f backend/migrations/091_module_product_family_fields.sql`, PostgREST 캐시 갱신, `backend/scripts/check_schema.sh`는 운영 DB에 적용하지 못했다.
+- 현재 실행 환경에 `bun` 명령이 없어 `npm test -- --run src/lib/excelValidation.test.ts`는 시작하지 못했다.
+
+---
+
+## 2026-05-11 세션 — 가격예측 AI 수집률 보강 (D-164)
+
+### 완료
+- 가격예측 AI 수집의 Serper 검색을 source당 단일 검색어에서 다중 검색 플랜으로 확장
+  - 기본 검색어 + 결측 metric별 검색어 + source별 영어/중국어 대체 검색어 + 기간 완화 fallback 적용
+  - OPIS, InfoLink, TrendForce, PVinsights, 중국 입찰, CPIA source별 대체 검색어 추가
+  - 검색 결과 상위 URL 일부는 Serper scrape 본문으로 교체해 snippet 한계를 보강
+  - 검색 결과는 URL/title 기준으로 dedupe 하고 source당 evidence 상한을 둬 LLM 입력 폭주 방지
+  - 저장 allowlist와 중국·유럽 제한, Tier-1 ASP 제외 정책은 그대로 유지
+- 설계 정본과 D-164 결정 기록 동기화
+
+### 검증
+- `cd backend && go test ./internal/handler -run 'TestBuildBenchmark|TestSummarizeHomepage|TestSearchResultDedupe|TestValidateBenchmarkCatalogPolicy|TestHashEvidence|TestPickComparablePrice|TestFormatSanityWarnings'` 성공
+- `cd backend && go test ./internal/model -run PriceBenchmark` 성공
+
+### 알려진 제한
+- 실제 수집률 증가는 운영 환경의 `SERPER_API_KEY`, source 사이트 응답, 유료 리포트 접근 가능 여부에 좌우된다. 운영에서 AI 수집을 다시 실행해 run evidence/diagnostics를 확인해야 한다.
+
+---
+
+## 2026-05-11 세션 — 매출 미등록 큐 일괄 자동 생성
+
+### 완료
+- 매출 미등록 출고 큐에 `매출 자동 생성 미리보기` 패널 추가
+- 현재 필터 조건 전체를 1000건 단위로 다시 확인해 생성 가능/제외 건수를 집계
+- 자동 생성 제외 사유 표시
+  - 이미 매출 있음, 정상 출고 아님, 판매 용도 아님, 거래처 없음, Wp단가 없음, 수량 없음, 규격 없음
+- 출고 목록에 `자동매출` 상태 컬럼 추가
+  - 생성 가능 건은 `생성 가능`, 제외 건은 `제외`와 사유를 표시
+- 생성 가능 출고를 8건씩 묶어 `/api/v1/sales`로 일괄 생성
+  - 일부 실패가 있어도 성공 가능한 건은 계속 처리
+  - 실패 요약은 토스트와 패널에 표시
+- 생성 성공 후 출고/매출 데이터를 새로고침하고 `계산서 미발행` 큐로 자동 이동
+
+### 검증
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `cd frontend && npm run build` 성공
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5111 nodes / 8309 edges / 411 communities (`graph.html`은 노드 수 초과로 생략)
 
 ---
 

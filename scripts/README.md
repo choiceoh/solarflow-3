@@ -62,6 +62,30 @@ RUN_GRAPHIFY=1 ./scripts/verify_changed.sh
 
 Go/Rust 스크립트는 macOS의 `codesign`과 `launchctl`이 있으면 자동으로 코드서명과 서비스 재반영까지 수행합니다.
 
+## 운영 DB 마이그레이션 확인
+
+```bash
+bun scripts/verify_migration.ts 091_price_benchmark_review_status.sql
+```
+
+확인 항목:
+- `public.schema_migrations` 적용 이력
+- 지정한 DB column / constraint / index 존재 여부
+- PostgREST schema cache 노출 여부 (`/rest/v1/<table>?select=<column>`)
+
+`091_price_benchmark_review_status.sql`은 기본 preset으로 `price_benchmarks.review_status`,
+CHECK constraint, index, PostgREST 노출까지 확인합니다. 다른 마이그레이션은 필요한 항목을 직접 지정합니다.
+
+```bash
+bun scripts/verify_migration.ts 092_xxx.sql \
+  --column price_benchmarks.foo \
+  --constraint price_benchmarks.price_benchmarks_foo_check \
+  --index idx_price_benchmarks_foo \
+  --postgrest price_benchmarks.foo
+```
+
+운영 `cron-deploy.sh`는 마이그레이션 적용 직후 이 스크립트를 실행하고, 반영 확인 실패 시 Go 재시작을 보류합니다.
+
 ## OCR sidecar 준비
 
 ```bash

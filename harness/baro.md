@@ -110,6 +110,6 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 1. **D-120 의무**: `backend/internal/feature/catalog.go` 에 entry 추가 (`DefaultTenants: feature.TenantSetBaroOnly`) + `harness/FEATURE-WIRING-MATRIX.md` 행 추가 + 라우트에 `r.Use(g.Feature(feature.IDXxx))` 적용 (셋 다 같은 PR에서). `baroOnly` legacy 가드 신규 사용 금지.
 2. 사이드바(`CommandShell.tsx`) 메뉴에 `tenants: ['baro']` 명시
 3. 거래처 상세 등 공유 화면에서 BARO 전용 UI는 `isBaroMode()`로 가드
-4. **DECISIONS.md에 D-NNN 추가** + 본 문서 「관련 결정」 섹션에 링크 1줄 추가
+4. **DECISIONS.md에 `D-YYYYMMDD-HHMMSS` 형식의 결정 ID 추가** + 본 문서 「관련 결정」 섹션에 링크 1줄 추가
 5. 파일/엔드포인트가 추가됐으면 「BARO 전용 백엔드 엔드포인트」 표 갱신
 6. **D-112 사이드바 탭 분류** — admin이 「전체」 탭만 두지 않은 경우, 신규 메뉴는 사이트 설정 > 사이드바 탭에서 어느 탭에 노출할지 분류 (안 하면 「전체」 탭에서만 노출)

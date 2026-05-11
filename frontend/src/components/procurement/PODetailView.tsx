@@ -26,11 +26,7 @@ import StatusPill from "@/components/common/StatusPill"
 import LCLineEditDialog from "./LCLineEditDialog"
 import { parseDeposit } from "./depositStatus"
 import { fetchWithAuth } from "@/lib/api"
-import {
-  diffAuditFieldItems,
-  sanitizeAuditLogs,
-  type SafeAuditLog,
-} from "@/lib/purchaseHistory"
+import { diffAuditFieldItems, sanitizeAuditLogs, type SafeAuditLog } from "@/lib/purchaseHistory"
 import { usePOLines, useLCList, useTTList } from "@/hooks/useProcurement"
 import type { BLShipment, BLLineItem } from "@/types/inbound"
 import {
@@ -55,6 +51,14 @@ interface Props {
   onBack: () => void
   onReload: () => void
   onVariantCreated?: (po: PurchaseOrder) => void
+  onCreateLC?: (initial: {
+    poId: string
+    poLineId?: string
+    targetQty?: number
+    amountUsd?: number
+  }) => void
+  onOpenBLTab?: (po: PurchaseOrder, line?: POLineItem) => void
+  onSelectBL?: (blId: string) => void
   allPos?: PurchaseOrder[]
 }
 
@@ -383,6 +387,9 @@ export default function PODetailView({
   onBack,
   onReload,
   onVariantCreated,
+  onCreateLC,
+  onOpenBLTab,
+  onSelectBL,
   allPos = [],
 }: Props) {
   // 로컬 PO 미러 — 저장 후 서버 fresh로 갱신 (parent prop은 stale일 수 있음)
@@ -447,29 +454,32 @@ export default function PODetailView({
 
   const isCancelled = po.status === "cancelled"
 
-  const changeInitialValues = useMemo<POCreateInitialValues>(() => ({
-    po_number: "",
-    company_id: po.company_id,
-    manufacturer_id: po.manufacturer_id,
-    contract_type: po.contract_type,
-    contract_date: new Date().toISOString().slice(0, 10),
-    incoterms: po.incoterms,
-    payment_terms: po.payment_terms,
-    contract_period_start: po.contract_period_start,
-    contract_period_end: po.contract_period_end,
-    parent_po_id: po.po_id,
-    memo: `변경계약: 원계약 ${po.po_number || po.po_id.slice(0, 8)}`,
-    lines: lines.map((line) => ({
-      product_id: line.product_id,
-      quantity: line.quantity,
-      unit_price_usd: line.unit_price_usd,
-      unit_price_usd_wp: line.unit_price_usd_wp,
-      spec_wp: line.spec_wp ?? line.products?.spec_wp,
-      item_type: line.item_type,
-      payment_type: line.payment_type,
-      memo: line.memo,
-    })),
-  }), [po, lines])
+  const changeInitialValues = useMemo<POCreateInitialValues>(
+    () => ({
+      po_number: "",
+      company_id: po.company_id,
+      manufacturer_id: po.manufacturer_id,
+      contract_type: po.contract_type,
+      contract_date: new Date().toISOString().slice(0, 10),
+      incoterms: po.incoterms,
+      payment_terms: po.payment_terms,
+      contract_period_start: po.contract_period_start,
+      contract_period_end: po.contract_period_end,
+      parent_po_id: po.po_id,
+      memo: `변경계약: 원계약 ${po.po_number || po.po_id.slice(0, 8)}`,
+      lines: lines.map((line) => ({
+        product_id: line.product_id,
+        quantity: line.quantity,
+        unit_price_usd: line.unit_price_usd,
+        unit_price_usd_wp: line.unit_price_usd_wp,
+        spec_wp: line.spec_wp ?? line.products?.spec_wp,
+        item_type: line.item_type,
+        payment_type: line.payment_type,
+        memo: line.memo,
+      })),
+    }),
+    [po, lines],
+  )
 
   // 단일 필드 편집 — UpdatePurchaseOrderRequest 가 모든 필드 optional. PUT /api/v1/pos/{id}.
   const savePOField = async (key: string, value: unknown) => {
@@ -937,7 +947,13 @@ export default function PODetailView({
           </div>
         </TabsContent>
         <TabsContent value="inbound">
-          <POInboundProgress poId={po.po_id} poLines={lines} />
+          <POInboundProgress
+            poId={po.po_id}
+            poLines={lines}
+            onCreateLC={(initial) => onCreateLC?.({ poId: po.po_id, ...initial })}
+            onOpenBLTab={(line) => onOpenBLTab?.(po, line)}
+            onSelectBL={onSelectBL}
+          />
         </TabsContent>
         <TabsContent value="audit">
           <POAuditDiffPanel poId={po.po_id} />
