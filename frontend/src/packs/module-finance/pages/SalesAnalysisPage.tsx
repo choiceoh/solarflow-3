@@ -2516,13 +2516,13 @@ export default function SalesAnalysisPage() {
         </section>
 
         <aside className="sf-procurement-rail card">
-          <RailBlock title="이익 신뢰도" count={`${costCoverageRate.toFixed(0)}%`}>
+          <RailBlock title="이익 신뢰도" count="원가 연결률">
             <div className="bignum text-[30px] text-[var(--solar-3)]">
-              {margin.summary.overall_margin_rate.toFixed(1)}
+              {costCoverageRate.toFixed(0)}
               <span className="mono text-sm text-[var(--ink-3)]">%</span>
             </div>
             <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">
-              계산 이익 {formatKRW(margin.summary.total_margin_krw)} · 미연결{" "}
+              원가 연결 {formatKRW(costCoveredRevenue)} · 미연결{" "}
               {formatKRW(costMissingRevenue)}
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded bg-[var(--bg-2)]">
@@ -2530,6 +2530,17 @@ export default function SalesAnalysisPage() {
                 className="h-full bg-[var(--solar-2)]"
                 style={{ width: `${Math.min(100, costCoverageRate)}%` }}
               />
+            </div>
+            <div className="mt-3 rounded-md border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2">
+              <div className="flex items-center justify-between gap-2 text-[11.5px]">
+                <span className="font-medium text-[var(--ink-2)]">계산 이익률</span>
+                <span className="mono font-semibold text-[var(--ink)]">
+                  {margin.summary.overall_margin_rate.toFixed(1)}%
+                </span>
+              </div>
+              <div className="mono mt-1 text-[10.5px] text-[var(--ink-3)]">
+                계산 이익 {formatKRW(margin.summary.total_margin_krw)}
+              </div>
             </div>
           </RailBlock>
           <RailBlock title="우선 조치" count={`${actionQueue.length}`}>
