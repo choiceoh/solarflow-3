@@ -5,14 +5,34 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | 가격예측 채택 상태 운영 반영 확인, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
+| 다음 작업 | 가격예측 AI 수집 운영 재실행으로 source별 evidence 증가 확인, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-163 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력, D-163 KPI 활성 항목 설정) |
+| DECISIONS | D-001~D-164 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력, D-163 KPI 활성 항목 설정, D-164 가격예측 다중 검색 플랜) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-11 세션 — 가격예측 AI 수집률 보강 (D-164)
+
+### 완료
+- 가격예측 AI 수집의 Serper 검색을 source당 단일 검색어에서 다중 검색 플랜으로 확장
+  - 기본 검색어 + 결측 metric별 검색어 + source별 영어/중국어 대체 검색어 + 기간 완화 fallback 적용
+  - OPIS, InfoLink, TrendForce, PVinsights, 중국 입찰, CPIA source별 대체 검색어 추가
+  - 검색 결과 상위 URL 일부는 Serper scrape 본문으로 교체해 snippet 한계를 보강
+  - 검색 결과는 URL/title 기준으로 dedupe 하고 source당 evidence 상한을 둬 LLM 입력 폭주 방지
+  - 저장 allowlist와 중국·유럽 제한, Tier-1 ASP 제외 정책은 그대로 유지
+- 설계 정본과 D-164 결정 기록 동기화
+
+### 검증
+- `cd backend && go test ./internal/handler -run 'TestBuildBenchmark|TestSummarizeHomepage|TestSearchResultDedupe|TestValidateBenchmarkCatalogPolicy|TestHashEvidence|TestPickComparablePrice|TestFormatSanityWarnings'` 성공
+- `cd backend && go test ./internal/model -run PriceBenchmark` 성공
+
+### 알려진 제한
+- 실제 수집률 증가는 운영 환경의 `SERPER_API_KEY`, source 사이트 응답, 유료 리포트 접근 가능 여부에 좌우된다. 운영에서 AI 수집을 다시 실행해 run evidence/diagnostics를 확인해야 한다.
 
 ---
 

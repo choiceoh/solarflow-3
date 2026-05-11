@@ -1493,3 +1493,17 @@
   - `npm run build`로 TypeScript와 Vite 번들을 확인한다.
   - 저장 payload는 기존 사용자 preferences API를 사용하므로 신규 라우트/마이그레이션은 없다.
 - **날짜**: 2026-05-11
+
+## D-164: 가격예측 AI 수집은 source별 다중 검색 플랜으로 evidence 후보를 넓힌다
+
+- **결정**: `/api/v1/price-benchmarks/ai-refresh`는 source별 기본 검색어 1회에 의존하지 않고, 기본 검색어 + 결측 metric별 검색어 + source별 대체 검색어 + 완화된 기간 필터를 순서대로 실행한다. 검색 결과는 URL/title 기준으로 중복 제거하고, source당 상위 결과 일부는 Serper scrape로 본문을 보강한 뒤 LLM 추출에 넘긴다.
+- **이유**: 외부 시세지는 유료 페이지, 주간/일간 발행 주기, 중국어 뉴스 제목, 사이트 개편 때문에 같은 source라도 한 검색어로는 evidence가 낮게 잡힌다. 저장 정책을 완화하면 오염 데이터가 들어오므로, 저장 allowlist는 유지하고 검색 후보 폭만 넓히는 것이 맞다.
+- **운영 기준**:
+  - 저장 가능 source/metric/market_region/basis/currency allowlist는 D-146/D-151 그대로 fail-closed 한다.
+  - OPIS, InfoLink, TrendForce, PVinsights, 중국 입찰, CPIA는 영어·중국어 대체 검색어를 source 정의에 포함한다.
+  - `day→week`, `week→month`, `month→year` 순서의 기간 완화 검색을 fallback으로 둔다.
+  - 검색 결과 snippet만으로 가격 숫자가 부족할 수 있으므로 source당 상위 URL 일부를 scrape evidence로 교체한다.
+  - 같은 URL은 evidence에 한 번만 넣고, source당 검색 evidence 상한을 둬 LLM 입력 폭주를 막는다.
+- **검증**:
+  - `go test ./internal/handler -run 'TestBuildBenchmark|TestSummarizeHomepage|TestSearchResultDedupe|TestValidateBenchmarkCatalogPolicy|TestHashEvidence|TestPickComparablePrice|TestFormatSanityWarnings'` 로 검색 플랜 확장과 dedupe를 고정한다.
+- **날짜**: 2026-05-11
