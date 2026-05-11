@@ -16,6 +16,33 @@
 
 ---
 
+## 2026-05-11 세션 — 출고/판매 처리 큐 + 매출/계산서 작업 단축
+
+### 완료
+- 출고/판매 화면 우측에 처리 대기 큐 추가
+  - 매출 미등록: 출고됐지만 매출 전표가 없는 판매/AS 출고
+  - 계산서 미발행: 매출은 있으나 계산서일이 없는 건
+  - ERP 미마감: ERP 마감 플래그가 닫히지 않은 매출
+- 출고 목록/대시보드에 `work_queue=sale_unregistered` 서버 필터 추가
+- 판매 목록/대시보드/요약에 ERP 마감 필터 연결
+- 출고 상세에서 출고 기준 매출 생성 폼 추가
+  - 거래처, Wp단가, 계산서일, 계산서 이메일을 입력해 매출 생성
+  - 계산서일 입력 시 연결 출고의 계산서 발행 상태도 함께 갱신
+- 판매 목록에서 미발행 매출 다중 선택 후 계산서일/이메일/ERP 마감 일괄 처리
+  - 연결 출고가 있으면 계산서 발행 상태를 함께 동기화
+
+### 검증
+- `cd backend && go test ./internal/handler` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd frontend && npm run build` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
+- `git diff --check` 성공
+- `graphify update .` 성공
+
+---
+
 ## 2026-05-11 세션 — Excel Import Hub PO/LC/T/T 완성 (D-155)
 
 ### 완료
