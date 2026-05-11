@@ -8,11 +8,11 @@ import (
 // TestParseReceiptRow — 수금 행 파싱: 양수·필수·페이로드 빌드 검증.
 func TestParseReceiptRow(t *testing.T) {
 	cases := []struct {
-		name           string
-		row            map[string]interface{}
-		customerID     string
-		wantErrField   string // "" = 통과
-		wantBankAcct   string // 통과 시 검증
+		name         string
+		row          map[string]interface{}
+		customerID   string
+		wantErrField string // "" = 통과
+		wantBankAcct string // 통과 시 검증
 	}{
 		{
 			name:         "정상",
@@ -204,11 +204,11 @@ func TestParseOrderRow(t *testing.T) {
 		}
 	}
 	cases := []struct {
-		name             string
-		mutate           func(map[string]interface{})
-		wantErrField     string
-		wantCapacityKW   float64
-		wantUnitPriceWp  float64
+		name            string
+		mutate          func(map[string]interface{})
+		wantErrField    string
+		wantCapacityKW  float64
+		wantUnitPriceWp float64
 	}{
 		{name: "정상", mutate: nil, wantErrField: "", wantCapacityKW: 5, wantUnitPriceWp: 0.5},
 		{
@@ -273,29 +273,29 @@ func TestParseSaleRow(t *testing.T) {
 		wantVat          float64
 	}{
 		{
-			name:         "정상 — 자동 계산 (10장 × 500Wp × 100원/Wp)",
-			row:          map[string]interface{}{"unit_price_wp": 100.0},
-			quantity:     10, specWP: 500,
+			name:     "정상 — 자동 계산 (10장 × 500Wp × 100원/Wp)",
+			row:      map[string]interface{}{"unit_price_wp": 100.0},
+			quantity: 10, specWP: 500,
 			wantErrField: "",
 			wantSupply:   500000, // 100 × 500 × 10
 			wantVat:      50000,  // 10%
 		},
 		{
-			name:         "unit_price_wp 0",
-			row:          map[string]interface{}{"unit_price_wp": 0.0},
-			quantity:     10, specWP: 500,
+			name:     "unit_price_wp 0",
+			row:      map[string]interface{}{"unit_price_wp": 0.0},
+			quantity: 10, specWP: 500,
 			wantErrField: "unit_price_wp",
 		},
 		{
-			name:         "unit_price_wp 음수",
-			row:          map[string]interface{}{"unit_price_wp": -1.0},
-			quantity:     10, specWP: 500,
+			name:     "unit_price_wp 음수",
+			row:      map[string]interface{}{"unit_price_wp": -1.0},
+			quantity: 10, specWP: 500,
 			wantErrField: "unit_price_wp",
 		},
 		{
-			name:         "unit_price_wp 형식 오류",
-			row:          map[string]interface{}{"unit_price_wp": "abc"},
-			quantity:     10, specWP: 500,
+			name:     "unit_price_wp 형식 오류",
+			row:      map[string]interface{}{"unit_price_wp": "abc"},
+			quantity: 10, specWP: 500,
 			wantErrField: "unit_price_wp",
 		},
 	}
@@ -558,19 +558,19 @@ func TestGroupPORowsByPONumber_Happy(t *testing.T) {
 	rows := []map[string]interface{}{
 		{
 			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
-			"contract_type": "spot", "contract_date": "2026-05-01",
+			"contract_type": "spot", "contract_date": "2026-05-01", "currency": "USD",
 			"product_code": "M580", "quantity": 100, "unit_price_usd_wp": 0.09,
 			"item_type": "main", "payment_type": "paid",
 		},
 		{
 			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
-			"contract_type": "spot", "contract_date": "2026-05-01",
+			"contract_type": "spot", "contract_date": "2026-05-01", "currency": "USD",
 			"product_code": "M600", "quantity": 50, "unit_price_usd_wp": 0.10,
 			"item_type": "spare", "payment_type": "free",
 		},
 		{
 			"po_number": "PO-2", "company_code": "TS", "manufacturer_name": "TWS",
-			"contract_type": "frame", "contract_date": "2026-05-02",
+			"contract_type": "frame", "contract_date": "2026-05-02", "currency": "USD",
 			"product_code": "M580", "quantity": 200, "unit_price_usd_wp": 0.085,
 			"item_type": "main", "payment_type": "paid",
 		},
@@ -598,7 +598,7 @@ func TestGroupPORowsByPONumber_ContractTypeAlias(t *testing.T) {
 	rows := []map[string]interface{}{
 		{
 			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
-			"contract_type": "스팟", "contract_date": "2026-05-01",
+			"contract_type": "스팟", "contract_date": "2026-05-01", "currency": "USD",
 			"product_code": "M580", "quantity": 100, "unit_price_usd_wp": 0.09,
 			"item_type": "main", "payment_type": "paid",
 		},
@@ -617,15 +617,15 @@ func TestGroupPORowsByPONumber_HeaderInconsistencyWarning(t *testing.T) {
 	rows := []map[string]interface{}{
 		{
 			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
-			"contract_type": "spot", "contract_date": "2026-05-01",
-			"incoterms": "FOB",
+			"contract_type": "spot", "contract_date": "2026-05-01", "currency": "USD",
+			"incoterms":    "FOB",
 			"product_code": "M580", "quantity": 100, "unit_price_usd_wp": 0.09,
 			"item_type": "main", "payment_type": "paid",
 		},
 		{
 			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
-			"contract_type": "spot", "contract_date": "2026-05-01",
-			"incoterms": "CIF", // 첫 행과 다름
+			"contract_type": "spot", "contract_date": "2026-05-01", "currency": "USD",
+			"incoterms":    "CIF", // 첫 행과 다름
 			"product_code": "M600", "quantity": 50, "unit_price_usd_wp": 0.10,
 			"item_type": "main", "payment_type": "paid",
 		},
@@ -653,7 +653,7 @@ func TestGroupPORowsByPONumber_RejectsLegacyContractType(t *testing.T) {
 	rows := []map[string]interface{}{
 		{
 			"po_number": "PO-1", "company_code": "TS", "manufacturer_name": "JKO",
-			"contract_type": "annual", "contract_date": "2026-05-01",
+			"contract_type": "annual", "contract_date": "2026-05-01", "currency": "USD",
 			"product_code": "M580", "quantity": 100, "unit_price_usd_wp": 0.09,
 			"item_type": "main", "payment_type": "paid",
 		},
@@ -673,10 +673,10 @@ func TestGroupPORowsByPONumber_MissingRequired(t *testing.T) {
 		{}, // 모든 필수 누락
 	}
 	_, _, errs, _ := groupPORowsByPONumber(rows)
-	// 필수 10개 (po_number, company_code, manufacturer_name, contract_type, contract_date,
+	// 필수 11개 (po_number, company_code, manufacturer_name, contract_type, contract_date, currency,
 	//          product_code, quantity, unit_price_usd_wp, item_type, payment_type)
-	if len(errs) < 10 {
-		t.Errorf("최소 10건 에러 기대, 실제=%d", len(errs))
+	if len(errs) < 11 {
+		t.Errorf("최소 11건 에러 기대, 실제=%d", len(errs))
 	}
 }
 
@@ -744,14 +744,14 @@ func TestParsePOLineRow_RejectsNonPositive(t *testing.T) {
 // TestParseLCRow_Happy — 정상 입력 + status 'pending' 기본값.
 func TestParseLCRow_Happy(t *testing.T) {
 	row := map[string]interface{}{
-		"lc_number":  "M0123",
-		"open_date":  "2026-05-04",
-		"amount_usd": 250000.0,
-		"target_qty": 2500,
-		"usance_days": 90,
-		"usance_type": "BANKER'S USANCE",
+		"lc_number":     "M0123",
+		"open_date":     "2026-05-04",
+		"amount_usd":    250000.0,
+		"target_mw":     1.35,
+		"usance_days":   90,
+		"usance_type":   "BANKER'S USANCE",
 		"maturity_date": "2026-08-02",
-		"memo": "테스트",
+		"memo":          "테스트",
 	}
 	req, errs := parseLCRow(7, row, "po-1", "bank-1", "co-1")
 	if len(errs) > 0 {
@@ -762,6 +762,9 @@ func TestParseLCRow_Happy(t *testing.T) {
 	}
 	if req.AmountUSD != 250000 {
 		t.Errorf("AmountUSD 250000 기대, 실제=%v", req.AmountUSD)
+	}
+	if req.TargetMW == nil || *req.TargetMW != 1.35 {
+		t.Errorf("TargetMW 1.35 기대, 실제=%v", req.TargetMW)
 	}
 	if req.UsanceType == nil || *req.UsanceType != "buyers" {
 		t.Errorf("UsanceType 'buyers' 정규화 기대, 실제=%v", req.UsanceType)
@@ -850,5 +853,72 @@ func TestParseLCRow_RejectsNonPositiveAmount(t *testing.T) {
 				t.Errorf("amount_usd 에러 기대, 실제=%s", errs[0].Field)
 			}
 		})
+	}
+}
+
+func TestGroupPORowsByPONumber_RejectsDateReverseAndBadMIG(t *testing.T) {
+	base := map[string]interface{}{
+		"po_number": "MIG-LC-20260507-001", "company_code": "TS", "manufacturer_name": "JKO",
+		"contract_type": "spot", "contract_date": "2026-05-01", "currency": "USD",
+		"contract_period_start": "2026-12-31", "contract_period_end": "2026-05-01",
+		"product_code": "M580", "quantity": 100, "unit_price_usd_wp": 0.09,
+		"item_type": "main", "payment_type": "paid",
+	}
+	_, _, errs, _ := groupPORowsByPONumber([]map[string]interface{}{base})
+	hasDateOrder := false
+	hasMIG := false
+	for _, e := range errs {
+		if e.Field == "contract_period_start/contract_period_end" {
+			hasDateOrder = true
+		}
+		if e.Field == "po_number" {
+			hasMIG = true
+		}
+	}
+	if !hasDateOrder || !hasMIG {
+		t.Fatalf("날짜 역전 + MIG 형식 에러 기대, 실제=%v", errs)
+	}
+}
+
+func TestParseLCRow_RejectsDateReverseAndBadMIG(t *testing.T) {
+	row := map[string]interface{}{
+		"lc_number":     "MIG-PO-20260507-001",
+		"open_date":     "2026-08-02",
+		"maturity_date": "2026-05-04",
+		"amount_usd":    250000.0,
+	}
+	_, errs := parseLCRow(7, row, "po", "bank", "co")
+	if len(errs) == 0 {
+		t.Fatal("날짜 역전 또는 MIG 형식 에러 기대")
+	}
+	if errs[0].Field != "open_date/maturity_date" {
+		t.Errorf("날짜 역전 에러 우선 기대, 실제=%v", errs)
+	}
+}
+
+func TestParseTTRow_HappyAndRejectsInvalid(t *testing.T) {
+	row := map[string]interface{}{
+		"remit_date": "2026-05-07", "amount_usd": 1000.0,
+		"exchange_rate": 1350.0, "status": "완료", "bank_name": "국민은행",
+		"purpose": "계약금",
+	}
+	req, errs := parseTTRow(7, row, "po-1")
+	if len(errs) > 0 {
+		t.Fatalf("통과 기대, 에러=%v", errs)
+	}
+	if req.POID != "po-1" || req.Status != "completed" {
+		t.Errorf("PO/상태 매핑 실패: %+v", req)
+	}
+	if req.AmountKRW == nil || *req.AmountKRW != 1350000 {
+		t.Errorf("AmountKRW 자동 계산 기대=1350000 실제=%v", req.AmountKRW)
+	}
+
+	bad := map[string]interface{}{
+		"remit_date": "2026-05-07", "amount_usd": -1.0,
+		"exchange_rate": 1350.0, "status": "진행중",
+	}
+	_, errs = parseTTRow(7, bad, "po-1")
+	if len(errs) == 0 || errs[0].Field != "amount_usd" {
+		t.Fatalf("amount_usd 음수 에러 기대, 실제=%v", errs)
 	}
 }

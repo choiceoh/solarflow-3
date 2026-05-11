@@ -401,7 +401,7 @@ func (h *ExportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.With(g.AdminOnly).Get("/export/all", h.FullDataDump)
 }
 
-// ImportHandler — 엑셀 일괄 등록 9종 (모두 write).
+// ImportHandler — 엑셀 일괄 등록 10종 (모두 write).
 func (h *ImportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/import", func(r chi.Router) {
 		r.Use(g.Write)
@@ -414,6 +414,7 @@ func (h *ImportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Post("/receipts", h.Receipts)
 		r.Post("/purchase-orders", h.PurchaseOrders)
 		r.Post("/lcs", h.LCs)
+		r.Post("/tts", h.TTs)
 	})
 }
 

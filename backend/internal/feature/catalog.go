@@ -631,12 +631,13 @@ var Catalog = map[FeatureID]Feature{
 
 	// ===== io.* =====
 	IDIOImport: {
-		ID: IDIOImport, Name: "엑셀 일괄 등록", Description: "9종 import write",
+		ID: IDIOImport, Name: "엑셀 일괄 등록", Description: "10종 import write",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{
 			"/api/v1/import/inbound", "/api/v1/import/outbound", "/api/v1/import/sales",
 			"/api/v1/import/declarations", "/api/v1/import/expenses", "/api/v1/import/orders",
 			"/api/v1/import/receipts", "/api/v1/import/purchase-orders", "/api/v1/import/lcs",
+			"/api/v1/import/tts",
 		},
 	},
 	IDIOExportAmaranth: {

@@ -1,18 +1,46 @@
 # SolarFlow 진행 상황
 
-## 현재 상태 요약 (최종 업데이트: 2026-05-08)
+## 현재 상태 요약 (최종 업데이트: 2026-05-11)
 
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | study 학습 페이지 1차 UI + 진도/과제 도메인 설계, WMS 위치 배정 초기 데이터 보정 + 실사 차이 보정 결재 흐름, Excel Import Hub 운영 입력 전환 마무리 |
+| 다음 작업 | Excel Import Hub 실데이터 샘플 리허설, study 학습 페이지 1차 UI + 진도/과제 도메인 설계, WMS 위치 배정 초기 데이터 보정 + 실사 차이 보정 결재 흐름 |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-154 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축) |
+| DECISIONS | D-001~D-155 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-11 세션 — Excel Import Hub PO/LC/T/T 완성 (D-155)
+
+### 완료
+- Import Hub 거래 양식에 T/T 송금 시트를 추가하고 통합 거래 양식을 11개 시트로 확장
+  - T/T 필드: 발주번호(참조), 법인코드, 송금일, 송금액(USD), 환율, 은행명, 상태, 목적, 메모
+  - PO 필드에 통화 컬럼을 추가하고 LC 대상 기준을 목표 MW로 정리
+- 서버 Import 검증 보강
+  - PO: 제조사/품번 FK, 수량/단가 양수, 기존 PO 번호 중복, 계약기간 날짜 역전, MIG-PO 번호 형식 검증
+  - LC: PO 없음, 은행 없음, 금액 양수, L/C No. 파일 내/DB 중복, 개설일>만기일, MIG-LC 번호 형식 검증
+  - T/T: PO 없음, 은행 없음, 송금액/환율 양수, 송금일 형식, 상태(planned/completed·예정/완료) 검증
+- Import 미리보기 UX 보강
+  - 정상/경고/오류 필터를 분리하고, 경고 행은 별도 색상과 tooltip으로 표시
+  - 통합 업로드 다이얼로그에도 오류행 다운로드 버튼 추가
+  - MIG 번호는 형식이 맞으면 경고로 표시하고 형식이 틀리면 오류로 차단
+- MIG 번호 정책 고정 (D-155)
+  - `MIG-PO-YYYYMMDD-001`, `MIG-LC-YYYYMMDD-001`, `MIG-BL-YYYYMMDD-001`에 T/T용 `MIG-TT-YYYYMMDD-001` 패턴을 추가
+
+### 검증
+- `cd backend && go test ./internal/handler` 성공
+- `cd frontend && npm test -- --run src/lib/excelValidation.test.ts` 성공
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `graphify update .` 성공
+
+### 알려진 제한
+- PO 통화 컬럼은 운영 양식/검증 기준으로 먼저 고정했으며, 현재 PO 저장은 기존 라인 금액 USD/Wp 계산 흐름을 유지한다.
 
 ---
 
