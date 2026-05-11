@@ -5,22 +5,17 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | 가격예측 AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, Excel Import Hub 실데이터 샘플 리허설, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
+| 다음 작업 | Excel Import Hub 샘플팩 기반 실데이터 리허설, 가격예측 AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-<<<<<<< codex/timestamp-decision-ids
-| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-080/D-081/D-132~D-138 번호 공백 유지) |
-=======
-| DECISIONS | D-001~D-166 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA, D-161 가격예측 채택 플로우, D-162 PO 자동 빠른 입력, D-163 KPI 활성 항목 설정, D-164 가격예측 다중 검색 플랜, D-165 모듈 제품군/변종 분류, D-166 migration 반영 확인) |
->>>>>>> main
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-175240 Import Hub 운영 리허설 안전장치) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
 
-<<<<<<< codex/timestamp-decision-ids
 ## 2026-05-11 세션 — 결정 ID 초 단위 타임스탬프 전환 (D-20260511-171426)
 
 ### 완료
@@ -30,8 +25,35 @@
 
 ### 검증
 - 신규 결정 절차에 순번 강제 문구가 남지 않았는지 검색으로 확인
-=======
-## 2026-05-11 세션 — 운영 DB migration 반영 확인 플로우 (D-166)
+
+---
+
+## 2026-05-11 세션 — Excel Import Hub 운영 리허설 안전장치 (D-20260511-175240)
+
+### 완료
+- Excel 양식 버전 고정
+  - 다운로드되는 단일/통합/마스터/리허설 양식에 숨김 메타 시트 `_SolarFlowMeta` 추가
+  - 업로드 파서가 `template_version`, `template_kind`, `template_types`를 확인하고 오래된 양식·다른 종류 양식은 미리보기 전에 차단
+- 마스터 alias 후보 제안
+  - 제조사/품번/은행/법인/거래처/창고가 없을 때 단순 오류가 아니라 유사 마스터 후보를 오류 메시지에 함께 표시
+  - 자동 매핑은 하지 않고 운영자가 alias 등록 또는 원본 보정을 선택하도록 유지
+- 리허설용 샘플팩 추가
+  - Import Hub 상단에 `리허설 샘플팩` 다운로드 버튼 추가
+  - PO/LC/T/T 정상행, MIG 경고행, 오류행을 섞어 미리보기·오류 다운로드·확정 전 요약을 바로 검증 가능
+- 등록 전 영향 요약 강화
+  - 통합 업로드 미리보기 상단에 등록 예정 건수, PO/LC/T/T 영향, 경고/오류 건수를 요약 표시
+  - LC 금액/MW, T/T USD/KRW 규모를 확정 등록 전에 확인 가능
+
+### 검증
+- `cd frontend && npx --yes bun@1.3.13 test src/lib/excelValidation.test.ts` 성공 — 7 tests
+- `cd frontend && npx --yes bun@1.3.13 run build` 성공 — plugin timing warning 출력
+
+### 알려진 제한
+- 양식 버전 검증은 프론트 업로드 파서 단계에서 수행한다. API는 기존처럼 검증된 행 JSON을 받으므로 파일 메타 자체를 서버에 저장하지 않는다.
+
+---
+
+## 2026-05-11 세션 — 운영 DB migration 반영 확인 플로우 (D-20260511-174700)
 
 ### 완료
 - `scripts/verify_migration.ts` 추가
@@ -43,7 +65,7 @@
   - 확인 실패 시 Go 재시작 보류
   - 변경된 migration 파일별로 적용 이력 확인
 - `scripts/README.md`, `harness/PRODUCTION.md`, `harness/module.md` 운영 문서 동기화
-- D-166 결정 기록 추가
+- D-20260511-174700 결정 기록 추가
 
 ### 검증
 - `bun scripts/verify_migration.ts --help` 성공
@@ -57,7 +79,7 @@
 
 ---
 
-## 2026-05-11 세션 — 모듈 제품군/변종 분류 정식화 (D-165)
+## 2026-05-11 세션 — 모듈 제품군/변종 분류 정식화 (D-20260511-174500)
 
 ### 완료
 - 품번 마스터에 제품군/변종 분류 필드 정식 추가
@@ -68,7 +90,7 @@
 - 품번 마스터 등록/수정 화면과 목록에 제품군 정보를 노출
 - Excel Import Hub 품번 양식/통합 마스터 양식에 제품군/변종 필드 추가
 - Go 모델 검증에 제품군 문자열 길이와 `product_variant_kind` allowlist 추가
-- 설계 정본과 D-165 결정 기록 동기화
+- 설계 정본과 D-20260511-174500 결정 기록 동기화
 
 ### 운영 기준
 - 품번은 거래 SKU로 유지하고 PO/B/L/재고/원가/매출 계산은 계속 `product_id` 기준으로 처리한다.
@@ -88,7 +110,6 @@
 ### 알려진 제한
 - 현재 WSL 실행 환경에 로컬 PostgreSQL/PostgREST/launchctl 이 없어 `psql -d solarflow -f backend/migrations/091_module_product_family_fields.sql`, PostgREST 캐시 갱신, `backend/scripts/check_schema.sh`는 운영 DB에 적용하지 못했다.
 - 현재 실행 환경에 `bun` 명령이 없어 `npm test -- --run src/lib/excelValidation.test.ts`는 시작하지 못했다.
->>>>>>> main
 
 ---
 

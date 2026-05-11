@@ -32,6 +32,13 @@ interface SectionSummary {
   error: number;
 }
 
+interface ImpactItem {
+  label: string;
+  value: string;
+  sub: string;
+  tone: 'pos' | 'warn' | 'info' | 'ink';
+}
+
 function summarize(section: UnifiedSection): SectionSummary {
   if (!section.present || section.parseError) return { total: 0, valid: 0, warning: 0, error: 0 };
   if (section.declPreview) {
@@ -62,6 +69,83 @@ function sectionTone(section: UnifiedSection, sum: SectionSummary): 'pos' | 'war
   if (sum.error > 0 || sum.warning > 0) return 'warn';
   if (sum.valid > 0) return 'pos';
   return 'mute';
+}
+
+function numberValue(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function validRows(section?: UnifiedSection) {
+  return section?.preview?.rows.filter((row) => row.valid) ?? [];
+}
+
+function formatCount(value: number): string {
+  return value.toLocaleString('ko-KR');
+}
+
+function formatUsd(value: number): string {
+  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `$${(value / 1000).toFixed(0)}k`;
+  return `$${Math.round(value).toLocaleString('ko-KR')}`;
+}
+
+function formatKrw(value: number): string {
+  if (value >= 100000000) return `${(value / 100000000).toFixed(1)}억`;
+  if (value >= 10000) return `${Math.round(value / 10000).toLocaleString('ko-KR')}만`;
+  return Math.round(value).toLocaleString('ko-KR');
+}
+
+function buildImpactItems(sections: UnifiedSection[], totals: SectionSummary): ImpactItem[] {
+  const sectionByType = new Map(sections.map((section) => [section.type, section]));
+  const poRows = validRows(sectionByType.get('purchase_order'));
+  const lcRows = validRows(sectionByType.get('lc'));
+  const ttRows = validRows(sectionByType.get('tt'));
+  const masterRows = ['company', 'manufacturer', 'product', 'warehouse', 'bank', 'partner']
+    .reduce((sum, type) => sum + validRows(sectionByType.get(type as UnifiedSection['type'])).length, 0);
+
+  const poNumbers = new Set(poRows.map((row) => String(row.data.po_number ?? '').trim()).filter(Boolean));
+  const poQty = poRows.reduce((sum, row) => sum + numberValue(row.data.quantity), 0);
+  const lcUsd = lcRows.reduce((sum, row) => sum + numberValue(row.data.amount_usd), 0);
+  const lcMw = lcRows.reduce((sum, row) => sum + numberValue(row.data.target_mw), 0);
+  const ttUsd = ttRows.reduce((sum, row) => sum + numberValue(row.data.amount_usd), 0);
+  const ttKrw = ttRows.reduce(
+    (sum, row) => sum + numberValue(row.data.amount_usd) * numberValue(row.data.exchange_rate),
+    0,
+  );
+
+  return [
+    {
+      label: '등록 예정',
+      value: `${formatCount(totals.valid)}건`,
+      sub: masterRows > 0 ? `마스터 ${formatCount(masterRows)}건 포함` : '유효행 기준',
+      tone: 'pos',
+    },
+    {
+      label: 'PO 영향',
+      value: `${formatCount(poNumbers.size)}건`,
+      sub: `라인 ${formatCount(poRows.length)} · 수량 ${formatCount(poQty)}`,
+      tone: poRows.length > 0 ? 'info' : 'ink',
+    },
+    {
+      label: 'LC 영향',
+      value: `${formatCount(lcRows.length)}건`,
+      sub: `${formatUsd(lcUsd)} · ${lcMw.toFixed(2)}MW`,
+      tone: lcRows.length > 0 ? 'info' : 'ink',
+    },
+    {
+      label: 'T/T 영향',
+      value: `${formatCount(ttRows.length)}건`,
+      sub: `${formatUsd(ttUsd)} · ${formatKrw(ttKrw)}원`,
+      tone: ttRows.length > 0 ? 'info' : 'ink',
+    },
+    {
+      label: '검토 필요',
+      value: `${formatCount(totals.warning + totals.error)}건`,
+      sub: `경고 ${formatCount(totals.warning)} · 에러 ${formatCount(totals.error)}`,
+      tone: totals.error > 0 || totals.warning > 0 ? 'warn' : 'pos',
+    },
+  ];
 }
 
 export default function UnifiedImportDialog({
@@ -114,6 +198,8 @@ export default function UnifiedImportDialog({
               {preview.fileName} · {sections.length}섹션 중 {totals.presentCount}개 시트 · 전체 {totals.total}건 (정상 {totals.valid - totals.warning} / 경고 {totals.warning} / 에러 {totals.error})
             </p>
           </DialogHeader>
+
+          <ImpactSummary items={buildImpactItems(sections, totals)} />
 
           <Tabs value={currentTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
             <TabsList className="flex flex-wrap gap-1 bg-transparent justify-start h-auto p-0">
@@ -189,6 +275,30 @@ export default function UnifiedImportDialog({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function ImpactSummary({ items }: { items: ImpactItem[] }) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="rounded-md border bg-[var(--surface)] px-3 py-2"
+          style={{
+            borderColor:
+              item.tone === 'pos' ? 'var(--sf-pos)'
+              : item.tone === 'warn' ? 'var(--sf-warn)'
+              : item.tone === 'info' ? 'var(--sf-info)'
+              : 'var(--sf-line-2)',
+          }}
+        >
+          <div className="text-[11px] font-medium text-muted-foreground">{item.label}</div>
+          <div className="mt-1 text-[15px] font-semibold text-[var(--ink)]">{item.value}</div>
+          <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{item.sub}</div>
+        </div>
+      ))}
+    </div>
   );
 }
 

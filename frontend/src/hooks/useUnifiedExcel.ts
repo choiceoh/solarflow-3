@@ -637,7 +637,7 @@ export function useUnifiedExcel() {
       } else if (section.preview) {
         const errorRows = section.preview.rows.filter((r) => !r.valid);
         if (errorRows.length > 0) {
-          await downloadErrorRows(errorRows, FIELDS_MAP[section.type], `${section.label}_에러`);
+          await downloadErrorRows(errorRows, FIELDS_MAP[section.type], `${section.label}_에러`, section.type);
         }
       }
     }

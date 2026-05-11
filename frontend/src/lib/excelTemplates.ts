@@ -13,6 +13,10 @@ import { INBOUND_TYPE_LABEL, USAGE_CATEGORIES } from '@/types/inbound';
 import { EXPENSE_TYPE_LABEL } from '@/types/customs';
 import { RECEIPT_METHOD_LABEL, MANAGEMENT_CATEGORY_LABEL, FULFILLMENT_SOURCE_LABEL } from '@/types/orders';
 import { CONTRACT_TYPES_ACTIVE, TT_STATUS_LABEL } from '@/types/procurement';
+import {
+  EXCEL_TEMPLATE_META_SHEET, EXCEL_TEMPLATE_VERSION,
+  type ExcelTemplateKind,
+} from '@/lib/excelTemplateMeta';
 
 const PRODUCT_VARIANT_KIND_LABEL: Record<string, string> = {
   output_bin: '출력 binning',
@@ -51,6 +55,7 @@ interface SheetWritable {
   views?: unknown[];
   autoFilter?: unknown;
   properties?: { tabColor?: { argb?: string } };
+  state?: 'visible' | 'hidden' | 'veryHidden';
   getCell(addr: string | number, col?: number): WritableCell;
   getColumn(idx: number): WritableColumn;
   getRow(row: number): WritableRow;
@@ -203,6 +208,24 @@ function setWorkbookMeta(workbook: WorkbookWritable) {
   const now = new Date();
   workbook.created = now;
   workbook.modified = now;
+}
+
+function addMetaSheet(workbook: WorkbookWritable, kind: ExcelTemplateKind, types: TemplateType[]) {
+  const sheet = workbook.addWorksheet(EXCEL_TEMPLATE_META_SHEET);
+  sheet.state = 'veryHidden';
+  sheet.getColumn(1).width = 20;
+  sheet.getColumn(2).width = 48;
+  const rows: Array<[string, string]> = [
+    ['key', 'value'],
+    ['template_version', EXCEL_TEMPLATE_VERSION],
+    ['template_kind', kind],
+    ['template_types', types.join(',')],
+    ['generated_at', new Date().toISOString()],
+  ];
+  rows.forEach((row, idx) => {
+    writeGuideRow(sheet, idx + 1, row);
+  });
+  sheet.getRow(1).font = { bold: true };
 }
 
 function columnLetter(index: number): string {
@@ -905,6 +928,7 @@ export async function generateTemplate(
   const workbook = new ExcelJS.Workbook();
   const label = TEMPLATE_LABEL[type];
   setWorkbookMeta(workbook);
+  addMetaSheet(workbook, 'single', [type]);
   // 안내·예시·코드표는 잠그지 않는다 — 헤더 이름 매칭(excelParser.ts)으로 업로드가 견고해서
   // 사용자가 자유롭게 수정해도 무방. 잠금은 데이터 시트 헤더 행에만 남긴다.
   addGuideSheet(workbook, [type]);
@@ -925,6 +949,7 @@ export async function generateUnifiedTemplate(
 
   const workbook = new ExcelJS.Workbook();
   setWorkbookMeta(workbook);
+  addMetaSheet(workbook, 'unified_transaction', UNIFIED_TRANSACTION_ORDER);
   // 안내·예시·코드표는 잠그지 않는다 — 헤더 이름 매칭으로 업로드가 견고하므로
   // 사용자가 메모를 적거나 코드표를 확장해도 무방.
   addGuideSheet(workbook, UNIFIED_TRANSACTION_ORDER);
@@ -953,6 +978,7 @@ export async function generateUnifiedMasterTemplate(
 
   const workbook = new ExcelJS.Workbook();
   setWorkbookMeta(workbook);
+  addMetaSheet(workbook, 'unified_master', UNIFIED_MASTER_ORDER);
   addGuideSheet(workbook, UNIFIED_MASTER_ORDER);
   addExampleSheet(workbook, UNIFIED_MASTER_ORDER, masterData);
   const codeSheetName = '코드표';
@@ -965,6 +991,192 @@ export async function generateUnifiedMasterTemplate(
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   saveAs(blob, `SolarFlow_통합마스터양식_${today}.xlsx`);
+}
+
+function firstOrFallback<T>(items: T[], pick: (item: T) => string | undefined, fallback: string): string {
+  return items.map(pick).find((v) => v && v.trim() !== '') ?? fallback;
+}
+
+function sampleContext(masterData: MasterDataForExcel) {
+  return {
+    company: firstOrFallback(masterData.companies, (c) => c.company_code, 'TS'),
+    manufacturer: firstOrFallback(masterData.manufacturers, (m) => m.name_kr, '진코솔라'),
+    product: firstOrFallback(masterData.products, (p) => p.product_code, 'JKM-590'),
+    bank: firstOrFallback(masterData.banks ?? [], (b) => b.bank_name, '국민은행'),
+  };
+}
+
+function writeSampleRows(
+  sheet: SheetWritable,
+  fields: FieldDef[],
+  rows: Array<Record<string, unknown>>,
+) {
+  rows.forEach((row, rowIdx) => {
+    fields.forEach((field, colIdx) => {
+      const cell = sheet.getCell(rowIdx + 2, colIdx + 1);
+      cell.value = row[field.key] ?? '';
+      cell.numFmt = columnFormat(field);
+      cell.alignment = {
+        vertical: 'middle',
+        wrapText: false,
+        horizontal: columnHorizontalAlign(field),
+      };
+    });
+  });
+}
+
+export async function generateImportRehearsalSamplePack(
+  masterData: MasterDataForExcel,
+): Promise<void> {
+  const ExcelJS = await import('exceljs');
+  const { saveAs } = await import('file-saver');
+
+  const types: TemplateType[] = ['purchase_order', 'lc', 'tt'];
+  const workbook = new ExcelJS.Workbook();
+  setWorkbookMeta(workbook);
+  addMetaSheet(workbook, 'rehearsal_sample', types);
+  addGuideSheet(workbook, types);
+  const codeSheetName = '코드표';
+  const refs = addUnifiedCodeSheet(workbook, codeSheetName, masterData);
+  const ctx = sampleContext(masterData);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayKey = today.replace(/-/g, '');
+  const poOk = `SAMPLE-PO-${todayKey}-001`;
+  const poMig = `MIG-PO-${todayKey}-002`;
+
+  const poSheet = await addUnifiedDataSheet(workbook, 'purchase_order', refs, codeSheetName, masterData);
+  if (poSheet) {
+    writeSampleRows(poSheet, PURCHASE_ORDER_FIELDS, [
+      {
+        po_number: poOk,
+        company_code: ctx.company,
+        manufacturer_name: ctx.manufacturer,
+        contract_type: '스팟',
+        contract_date: today,
+        incoterms: 'FOB',
+        currency: 'USD',
+        payment_terms: '계약금 10%, 잔금 90%',
+        product_code: ctx.product,
+        quantity: 100,
+        unit_price_usd_wp: 0.09,
+        item_type: '본품',
+        payment_type: '유상',
+        line_memo: '정상 등록 예시',
+        memo: '리허설 정상 PO',
+      },
+      {
+        po_number: poMig,
+        company_code: ctx.company,
+        manufacturer_name: ctx.manufacturer,
+        contract_type: '스팟',
+        contract_date: today,
+        incoterms: 'FOB',
+        currency: 'USD',
+        payment_terms: '이관 자료',
+        product_code: ctx.product,
+        quantity: 50,
+        unit_price_usd_wp: 0.088,
+        item_type: '본품',
+        payment_type: '유상',
+        line_memo: 'MIG 경고 예시',
+        memo: '이관 번호는 경고로만 표시',
+      },
+      {
+        po_number: `SAMPLE-PO-${todayKey}-ERR`,
+        company_code: ctx.company,
+        manufacturer_name: '없는제조사',
+        contract_type: '스팟',
+        contract_date: today,
+        incoterms: 'FOB',
+        currency: 'USD',
+        contract_period_start: '2026-12-31',
+        contract_period_end: '2026-05-01',
+        product_code: 'NO-PRODUCT',
+        quantity: -10,
+        unit_price_usd_wp: 0,
+        item_type: '본품',
+        payment_type: '유상',
+        line_memo: '오류행 예시',
+        memo: '없는 마스터, 음수, 날짜 역전',
+      },
+    ]);
+  }
+
+  const lcSheet = await addUnifiedDataSheet(workbook, 'lc', refs, codeSheetName, masterData);
+  if (lcSheet) {
+    writeSampleRows(lcSheet, LC_FIELDS, [
+      {
+        lc_number: `SAMPLE-LC-${todayKey}-001`,
+        po_number: poOk,
+        company_code: ctx.company,
+        bank_name: ctx.bank,
+        open_date: today,
+        amount_usd: 50000,
+        target_mw: 0.5,
+        usance_days: 90,
+        usance_type: "BANKER'S USANCE",
+        maturity_date: '2026-08-11',
+        memo: '정상 LC 예시',
+      },
+      {
+        lc_number: `MIG-LC-${todayKey}-001`,
+        po_number: poMig,
+        company_code: ctx.company,
+        bank_name: ctx.bank,
+        open_date: today,
+        amount_usd: 20000,
+        target_mw: 0.2,
+        usance_days: 90,
+        usance_type: "BANKER'S USANCE",
+        maturity_date: '2026-08-11',
+        memo: 'MIG 경고 예시',
+      },
+      {
+        lc_number: `SAMPLE-LC-${todayKey}-ERR`,
+        po_number: '없는PO',
+        company_code: ctx.company,
+        bank_name: '없는은행',
+        open_date: '2026-09-01',
+        amount_usd: -100,
+        target_mw: 0,
+        usance_days: 90,
+        maturity_date: '2026-08-01',
+        memo: '오류행 예시',
+      },
+    ]);
+  }
+
+  const ttSheet = await addUnifiedDataSheet(workbook, 'tt', refs, codeSheetName, masterData);
+  if (ttSheet) {
+    writeSampleRows(ttSheet, TT_FIELDS, [
+      {
+        po_number: poOk,
+        company_code: ctx.company,
+        remit_date: today,
+        amount_usd: 5000,
+        exchange_rate: 1350,
+        bank_name: ctx.bank,
+        status: '완료',
+        purpose: '계약금',
+        memo: '정상 T/T 예시',
+      },
+      {
+        po_number: '없는PO',
+        company_code: ctx.company,
+        remit_date: today,
+        amount_usd: -100,
+        exchange_rate: 0,
+        bank_name: '없는은행',
+        status: '완료',
+        purpose: '오류 예시',
+        memo: '없는 PO, 없는 은행, 금액/환율 오류',
+      },
+    ]);
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  saveAs(blob, `SolarFlow_ImportHub_리허설샘플팩_${todayKey}.xlsx`);
 }
 
 // 마스터 양식 코드표 — 마스터 시트끼리만 참조하는 코드 컬럼.
@@ -1202,7 +1414,7 @@ async function addUnifiedDataSheet(
   refs: UnifiedCodeRefs,
   codeSheetName: string,
   masterData: MasterDataForExcel,
-): Promise<void> {
+): Promise<SheetWritable | null> {
   const codeRef = `'${codeSheetName}'`;
   const label = TEMPLATE_LABEL[type];
 
@@ -1210,7 +1422,7 @@ async function addUnifiedDataSheet(
     const dataSheet = workbook.addWorksheet('법인등록');
     styleHeaders(dataSheet, COMPANY_FIELDS, { masterData, type: 'company' });
     await protectSheet(dataSheet);
-    return;
+    return dataSheet;
   }
 
   if (type === 'declaration') {
@@ -1222,7 +1434,7 @@ async function addUnifiedDataSheet(
     setDropdownFromRef(costSheet, 'B', codeRef, refs.product, true);
     await protectSheet(declSheet);
     await protectSheet(costSheet);
-    return;
+    return declSheet;
   }
 
   const fields = getFieldsForType(type);
@@ -1294,6 +1506,7 @@ async function addUnifiedDataSheet(
       break;
   }
   await protectSheet(dataSheet);
+  return dataSheet;
 }
 
 async function addTemplateSheets(
@@ -1592,12 +1805,15 @@ export async function downloadErrorRows(
   rows: import('@/types/excel').ParsedRow[],
   fields: FieldDef[],
   label: string,
+  type?: TemplateType,
 ): Promise<void> {
   const ExcelJS = await import('exceljs');
   const { saveAs } = await import('file-saver');
 
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet('에러 데이터');
+  setWorkbookMeta(workbook);
+  if (type) addMetaSheet(workbook, 'single', [type]);
+  const sheet = workbook.addWorksheet(type ? `${TEMPLATE_LABEL[type]}등록` : '에러 데이터');
 
   // 헤더 + 에러사유 열
   const headers = fields.map((f) => f.label);

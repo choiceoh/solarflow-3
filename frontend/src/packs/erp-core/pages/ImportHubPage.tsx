@@ -50,6 +50,7 @@ export default function ImportHubPage() {
   const isAdmin = role === 'admin';
   const [downloading, setDownloading] = useState(false);
   const [downloadingMaster, setDownloadingMaster] = useState(false);
+  const [downloadingSample, setDownloadingSample] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   // 통합 업로드 — 한 파일로 모든 섹션 동시 처리. PO/LC 코드표(은행·발주번호)도 이 훅이 채운다.
@@ -83,6 +84,19 @@ export default function ImportHubPage() {
       notify.error(error instanceof Error ? error.message : '통합 마스터 양식 다운로드 실패');
     } finally {
       setDownloadingMaster(false);
+    }
+  }, [masterData]);
+
+  const handleSamplePackDownload = useCallback(async () => {
+    if (!masterData) return;
+    setDownloadingSample(true);
+    try {
+      const { generateImportRehearsalSamplePack } = await import('@/lib/excelTemplates');
+      await generateImportRehearsalSamplePack(masterData);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : '리허설 샘플팩 다운로드 실패');
+    } finally {
+      setDownloadingSample(false);
     }
   }, [masterData]);
 
@@ -142,6 +156,18 @@ export default function ImportHubPage() {
           >
             {downloading || loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             통합 양식 다운로드
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            disabled={!masterData || loading || downloadingSample}
+            onClick={handleSamplePackDownload}
+            title="PO/LC/T/T 정상·경고·오류 행이 섞인 리허설용 파일"
+          >
+            {downloadingSample ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+            리허설 샘플팩
           </Button>
           <Button
             type="button"

@@ -191,7 +191,7 @@ export function useExcel(type: TemplateType) {
     } else if (preview) {
       const { downloadErrorRows } = await import('@/lib/excelTemplates');
       const { FIELDS_MAP, TEMPLATE_LABEL } = await import('@/types/excel');
-      await downloadErrorRows(preview.rows, FIELDS_MAP[type], `${TEMPLATE_LABEL[type]}_에러`);
+      await downloadErrorRows(preview.rows, FIELDS_MAP[type], `${TEMPLATE_LABEL[type]}_에러`, type);
     }
   }, [type, preview, declPreview]);
 
