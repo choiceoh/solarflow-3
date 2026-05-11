@@ -727,17 +727,17 @@ PO 화면에서 바로 표시:
 
 #### 가격예측 벤치마크 (module 계열 전용)
 
-외부 시세지·입찰·원가 floor를 같은 시계열로 저장해 구매 협상 기준선으로 사용한다. 수집 대상 시장은 중국·유럽으로 제한한다. 미국·기타 지역 가격은 가격대가 달라 전체 예측 기준선을 왜곡하므로 저장하지 않는다(D-146). Tier-1 제조사 ASP는 D-151에 따라 수집·표시·저장 대상에서 제외한다.
+외부 시세지·입찰·원가 floor와 우리 미체결 공급사 견적을 같은 시계열로 저장해 구매 협상 기준선으로 사용한다. 수집 대상 시장은 중국·유럽으로 제한한다. 미국·기타 지역 가격은 가격대가 달라 전체 예측 기준선을 왜곡하므로 저장하지 않는다(D-146). Tier-1 제조사 ASP는 D-151에 따라 수집·표시·저장 대상에서 제외한다.
 
 | 필드 | 타입 | 필수 | 설명 |
 |------|------|------|------|
 | benchmark_id | UUID | ✅ | PK |
 | run_id | UUID | | AI 수집 실행 로그 |
-| source_key | VARCHAR | ✅ | opis / infolink / trendforce / pvinsights / china_tender / cpia_floor |
-| metric_key | VARCHAR | ✅ | CMM, forward Q+1~Q+4, DDP Europe, centralized/distributed, 입찰, floor 등 |
+| source_key | VARCHAR | ✅ | opis / infolink / trendforce / pvinsights / china_tender / cpia_floor / our_quote |
+| metric_key | VARCHAR | ✅ | CMM, forward Q+1~Q+4, DDP Europe, centralized/distributed, 입찰, floor, supplier_quote 등 |
 | value_date | DATE | ✅ | 관측일 |
 | market_region | VARCHAR | ✅ | fob_china / ddp_europe / china_domestic / china_export |
-| basis | VARCHAR | ✅ | spot / forward / ddp / tender / floor |
+| basis | VARCHAR | ✅ | spot / forward / ddp / tender / floor / quote |
 | price_usd_w | DECIMAL | | USD/W 가격 |
 | price_cny_w | DECIMAL | | CNY/W 가격 |
 | price_krw_w | DECIMAL | | KRW/W 가격 |
@@ -746,10 +746,10 @@ PO 화면에서 바로 표시:
 | review_status | VARCHAR | ✅ | candidate / accepted / rejected |
 | source_url / raw_excerpt | TEXT | | 근거 URL과 짧은 원문 근거 |
 
-수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. 요청은 실행 로그를 만든 뒤 `running` 상태로 즉시 응답하고, 서버 백그라운드 작업이 완료/부분완료/실패 상태를 run에 기록한다. 서버는 source별 홈페이지 직접 조회와 Serper 검색을 함께 사용하되, 기본 검색어 1회에 의존하지 않고 결측 metric별 검색어, source별 대체 검색어, 완화된 기간 필터를 순차 적용해 evidence 후보를 넓힌다. 검색 결과 상위 URL은 Serper scrape로 본문 evidence를 보강한다. AI는 evidence에 명시된 가격 중 중국·유럽 대상 가격만 저장하며, 유료 로그인 한계와 미국·기타 지역 제외 사유는 run warning으로 남긴다(D-124, D-146, D-151, D-164).
+외부 시세 수집은 `/api/v1/price-benchmarks/ai-refresh` 버튼형 실행으로만 수행한다. 요청은 실행 로그를 만든 뒤 `running` 상태로 즉시 응답하고, 서버 백그라운드 작업이 완료/부분완료/실패 상태를 run에 기록한다. 서버는 source별 홈페이지 직접 조회와 Serper 검색을 함께 사용하되, 기본 검색어 1회에 의존하지 않고 결측 metric별 검색어, source별 대체 검색어, 완화된 기간 필터를 순차 적용해 evidence 후보를 넓힌다. 검색 결과 상위 URL은 Serper scrape로 본문 evidence를 보강한다. AI는 evidence에 명시된 가격 중 중국·유럽 대상 가격만 저장하며, 유료 로그인 한계와 미국·기타 지역 제외 사유는 run warning으로 남긴다(D-124, D-146, D-151, D-164). `our_quote`는 AI가 만들지 않고 사용자가 입력한 미체결 공급사 견적만 저장한다. 같은 날짜 여러 공급사 견적을 보존하기 위해 `source_name`을 중복 기준에 포함한다(D-20260511-175509).
 개별 관측값은 기본 `candidate` 로 저장하고, 운영자가 `/api/v1/price-benchmarks/{id}/review-status` 로 `accepted` 또는 `rejected` 처리한다. 제외된 관측값은 기본 차트·판단에서 빠지지만 감사 확인을 위해 목록 필터에서 다시 볼 수 있다. 잘못 수집된 중복/오염 데이터는 `/api/v1/price-benchmarks/{id}` 삭제로 제거하되, 수집 실행 로그는 보존한다(D-143, D-161).
 
-구매 전략과 1/3/6개월 전망 시나리오는 `/api/v1/calc/price-forecast-strategy`가 Rust 계산엔진에서 산출한다. 프론트엔드는 외부 관측값, 우리 최근 구매가, 수집 run 경고를 요청 본문으로 보내고, Rust는 CMM/forward/중국 입찰/CPIA floor를 USD/W 기준으로 조합해 action, 전망 범위, source 품질 점수를 반환한다. AI는 관측값 수집 보조로만 사용하고 최종 전망 판단은 설명 가능한 Rust 계산 결과를 정본으로 삼는다(D-159).
+구매 전략과 1/3/6개월 전망 시나리오는 `/api/v1/calc/price-forecast-strategy`가 Rust 계산엔진에서 산출한다. 프론트엔드는 외부 관측값, 우리 최근 구매가, 우리 최근 미체결 견적, 수집 run 경고를 요청 본문으로 보내고, Rust는 CMM/forward/중국 입찰/CPIA floor를 USD/W 기준으로 조합해 action, 전망 범위, source 품질 점수, 1개월 백테스트, median 기반 이상치 제외 결과를 반환한다. AI는 관측값 수집 보조로만 사용하고 최종 전망 판단은 설명 가능한 Rust 계산 결과를 정본으로 삼는다(D-159, D-20260511-175509).
 
 #### 운영 수요 계획 (module_demand_forecasts)
 수주/출고 전 단계의 공사 예정 또는 유통 보정 수요를 월별·규격별로 수동 입력한다.

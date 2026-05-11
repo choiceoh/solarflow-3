@@ -5,14 +5,13 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | Excel Import Hub 샘플팩 기반 실데이터 리허설, 가격예측 AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
+| 다음 작업 | Excel Import Hub 샘플팩 기반 실데이터 리허설, 가격예측 백테스트/견적 기록 운영 DB 적용 확인 + AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-175240 Import Hub 운영 리허설 안전장치) |
-| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-080/D-081/D-132~D-138 번호 공백 유지) |
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -62,6 +61,40 @@
 
 ---
 
+## 2026-05-11 세션 — 가격예측 백테스트 + 이상치 제거 + 미체결 견적 기록 (D-20260511-175509)
+
+### 완료
+- Rust 가격예측 전략 응답에 1개월 백테스트 요약 추가
+  - 과거 CMM/forward/floor 관측값으로 1개월 전 전망 대비 실제 CMM 방향 적중률과 평균 오차를 계산
+  - source별 score_delta를 source 품질 점수에 반영
+- Rust 계산 전에 median 기반 이상치 제외 추가
+  - 같은 날짜·같은 지표·같은 지역/조건에서 source 하나가 median 대비 크게 벗어나면 전략 계산에서 제외
+  - 제외 내역을 `outliers`로 반환하고 source 품질 카드에 이상치 수를 표시
+- 미체결 공급사 견적 기록 추가
+  - `/price-forecast`에서 공급사, 견적일, USD/W, 지역/조건, 기술, 메모 입력
+  - `price_benchmarks`에 `source_key=our_quote`, `metric_key=supplier_quote`, `basis=quote`로 저장
+  - 같은 날짜 여러 공급사 견적을 보존하도록 중복 인덱스에 `source_name` 포함
+- 화면 보강
+  - 최근 견적과 CMM 대비율 표시
+  - Rust 전망 카드에 백테스트 표본/방향 적중/평균 오차 표시
+  - 데이터 품질 카드에 이상치 수와 백테스트 보정 표시
+- 설계 정본 / D-20260511-175509 결정 기록 동기화
+
+### 검증
+- `cd engine && cargo test` 성공 — 기존 dead code warning 출력
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 성공(exit 0) — 기존 excelValidation/ProcurementPage/bun-test 경고 6건 유지
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5186 nodes / 8536 edges / 414 communities
+
+### 알려진 제한
+- 운영 DB 적용 시 `backend/migrations/092_price_benchmark_supplier_quotes.sql` 적용 후 PostgREST schema cache reload 와 `backend/scripts/check_schema.sh` 확인 필요
+
+---
+
 ## 2026-05-11 세션 — Excel Import Hub 운영 리허설 안전장치 (D-20260511-175240)
 
 ### 완료
@@ -88,7 +121,6 @@
 ---
 
 ## 2026-05-11 세션 — 운영 DB migration 반영 확인 플로우 (D-20260511-174700)
-## 2026-05-11 세션 — 운영 DB migration 반영 확인 플로우 (D-166)
 
 ### 완료
 - `scripts/verify_migration.ts` 추가

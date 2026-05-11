@@ -6,6 +6,7 @@ type CompanyScoped = MockRow & { company_id?: string };
 const nowIso = '2026-05-01T00:00:00.000Z';
 const deletedPriceBenchmarkIds = new Set<string>();
 const priceBenchmarkReviewStatuses = new Map<string, string>();
+const createdPriceBenchmarks: MockRow[] = [];
 
 const companies = [
   { company_id: 'company-topsolar', company_name: '탑솔라', company_code: 'TOP', business_number: '123-81-45678', is_active: true },
@@ -851,6 +852,7 @@ function priceForecastStrategyResponse(body: MockRow): MockRow {
   const tender = latestMockPrice(observations, 'china_state_tender') ?? 0.118;
   const floor = latestMockPrice(observations, 'cpia_cost_floor') ?? 0.087;
   const forward = latestMockPrice(observations, 'forward_q1') ?? 0.094;
+  const quote = latestMockPrice(observations, 'supplier_quote') ?? 0.0945;
   const low = Math.max(floor * 1.005, forward * 0.965);
   const high = forward * 1.045;
   return {
@@ -867,8 +869,10 @@ function priceForecastStrategyResponse(body: MockRow): MockRow {
       latest_cmm_usd_w: cmm,
       latest_floor_usd_w: floor,
       latest_tender_usd_w: tender,
+      latest_quote_usd_w: quote,
       cmm_trend_pct: -1.08,
       purchase_vs_cmm_pct: 1.6,
+      quote_vs_cmm_pct: Number((((quote - cmm) / cmm) * 100).toFixed(2)),
       cmm_vs_floor_pct: Number((((cmm - floor) / cmm) * 100).toFixed(2)),
     },
     scenarios: [
@@ -876,15 +880,29 @@ function priceForecastStrategyResponse(body: MockRow): MockRow {
       { key: '3m', label: '3개월', horizon_months: 3, low_usd_w: Number((low * 0.995).toFixed(4)), base_usd_w: Number(((forward + tender) / 2).toFixed(4)), high_usd_w: Number((high * 1.01).toFixed(4)), drivers: ['Forward 반영', '중국 입찰가 보정'] },
       { key: '6m', label: '6개월', horizon_months: 6, low_usd_w: Number((low * 0.99).toFixed(4)), base_usd_w: Number(((forward + cmm) / 2).toFixed(4)), high_usd_w: Number((high * 1.02).toFixed(4)), drivers: ['Forward 반영', '현물 보조지표'] },
     ],
-    source_quality: SOURCE_KEYS.map((key, index) => ({
+    backtest: {
+      sample_count: 5,
+      direction_hit_rate: 0.8,
+      mean_abs_error_pct: 1.3,
+      mean_bias_pct: -0.4,
+      note: '최근 1개월 방향성 검증이 양호합니다',
+      source_adjustments: [
+        { source_key: 'opis', source_name: 'OPIS Solar Weekly', sample_count: 18, direction_hit_rate: 0.8, mean_abs_error_pct: 1.3, score_delta: 3 },
+        { source_key: 'our_quote', source_name: '우리 견적', sample_count: 1, direction_hit_rate: 0.8, mean_abs_error_pct: 1.3, score_delta: 0 },
+      ],
+    },
+    outliers: [],
+    source_quality: [...SOURCE_KEYS, 'our_quote'].map((key, index) => ({
       source_key: key,
-      source_name: key === 'china_tender' ? '중국 국영 대량 입찰' : key === 'cpia_floor' ? 'CPIA' : key.toUpperCase(),
+      source_name: key === 'china_tender' ? '중국 국영 대량 입찰' : key === 'cpia_floor' ? 'CPIA' : key === 'our_quote' ? '우리 견적' : key.toUpperCase(),
       score: Math.max(58, 91 - index * 5),
       status: index < 3 ? 'ok' : 'watch',
       latest_date: '2026-04-15',
       observation_count: key === 'opis' ? 18 : 3,
       avg_confidence: key === 'opis' ? 0.82 : 0.72,
       warning_count: 0,
+      outlier_count: 0,
+      backtest_score_delta: key === 'opis' ? 3 : 0,
       note: index < 3 ? '정상' : '표본 추가 필요',
     })),
     calculated_at: nowIso,
@@ -986,6 +1004,20 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
       warnings: [],
       items: item ? [item] : [],
     } as T);
+  }
+
+  if (url.pathname === '/api/v1/price-benchmarks' && method === 'POST') {
+    const row = {
+      ...body,
+      benchmark_id: `pb-quote-${Date.now()}`,
+      run_id: null,
+      review_status: 'candidate',
+      created_by: 'dev-mock-user',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    createdPriceBenchmarks.unshift(row);
+    return clone(row as T);
   }
 
   if (url.pathname.startsWith('/api/v1/price-benchmarks/') && url.pathname.endsWith('/review-status') && method === 'PATCH') {
@@ -1195,7 +1227,7 @@ function priceBenchmarks(): MockRow[] {
     ['2026-03-15', 0.094, 0.124, 0.119, 0.095, 0.096, 0.088],
     ['2026-04-15', 0.093, 0.123, 0.118, 0.094, 0.095, 0.087],
   ] as const;
-  return base.flatMap(([date, cmm, ddpEu, tender, forwardQ1, forwardQ2, floor], index) => [
+  const marketRows = base.flatMap(([date, cmm, ddpEu, tender, forwardQ1, forwardQ2, floor], index) => [
     {
       benchmark_id: `pb-opis-cmm-${index}`,
       run_id: 'pbr-mock-1',
@@ -1321,12 +1353,36 @@ function priceBenchmarks(): MockRow[] {
       created_at: nowIso,
       updated_at: nowIso,
     },
-  ])
-    .map((row) => ({
+  ]);
+  const quoteRows = [
+    {
+      benchmark_id: 'pb-our-quote-0',
+      run_id: null,
+      source_key: 'our_quote',
+      source_name: '진코솔라 견적',
+      metric_key: 'supplier_quote',
+      metric_label: '공급사 미체결 견적',
+      value_date: '2026-04-26',
+      period_label: 'quote',
+      market_region: 'fob_china',
+      basis: 'quote',
+      currency: 'USD',
+      price_usd_w: 0.0945,
+      technology: 'TOPCon >=600W',
+      confidence: 0.86,
+      review_status: 'candidate',
+      raw_excerpt: 'Dev mock supplier quote',
+      notes: '계약 미진행 견적',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+  ];
+  return [...createdPriceBenchmarks, ...quoteRows, ...marketRows]
+    .map((row: MockRow) => ({
       ...row,
       review_status: priceBenchmarkReviewStatuses.get(String(row.benchmark_id)) ?? row.review_status ?? 'candidate',
     }))
-    .filter((row) => !deletedPriceBenchmarkIds.has(String(row.benchmark_id)));
+    .filter((row: MockRow) => !deletedPriceBenchmarkIds.has(String(row.benchmark_id)));
 }
 
 function priceBenchmarkRuns(): MockRow[] {

@@ -89,7 +89,7 @@
 | `tx.expense` | 부대비용 | M | global |
 | `tx.lc` | L/C 신용장 (+ lines) | M | global |
 | `tx.lc_limit` | LC 한도 변경 이력 | M | global |
-| `tx.price_benchmark` | 가격예측 벤치마크 | M | global |
+| `tx.price_benchmark` | 가격예측 벤치마크·견적 | M | global |
 | `tx.price_history` | 수입 단가 이력 | M | global |
 | `tx.tt` | T/T 계약금 | M | global |
 | `tx.approval` | 결재안 빌더 (frontend-only) | M | global | PR-8 (D-145 후속) — backend 라우트 없이 sidebar 가시성만 |

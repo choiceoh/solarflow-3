@@ -230,6 +230,20 @@ func TestValidateBenchmarkCatalogPolicy(t *testing.T) {
 	if msg := validateBenchmarkCatalogPolicy(usDDP); msg == "" {
 		t.Fatal("US DDP should be rejected")
 	}
+
+	quote := base
+	quote.SourceKey = "our_quote"
+	quote.MetricKey = "supplier_quote"
+	quote.Basis = "quote"
+	if msg := validateBenchmarkCatalogPolicy(quote); msg != "" {
+		t.Fatalf("our quote should be accepted: %s", msg)
+	}
+
+	badQuoteMetric := quote
+	badQuoteMetric.MetricKey = "cmm_fob_china_topcon_600w"
+	if msg := validateBenchmarkCatalogPolicy(badQuoteMetric); msg == "" {
+		t.Fatal("our quote with external metric should be rejected")
+	}
 }
 
 func hasMissingFocus(items []benchmarkMissingFocus, sourceKey, metricKey string) bool {

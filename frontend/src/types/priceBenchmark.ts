@@ -81,6 +81,8 @@ export interface PriceForecastStrategyRequest {
   observations: PriceForecastStrategyObservation[]
   own_purchase_usd_w?: number | null
   own_purchase_date?: string | null
+  own_quote_usd_w?: number | null
+  own_quote_date?: string | null
   runs: PriceForecastStrategyRunInput[]
 }
 
@@ -88,8 +90,10 @@ export interface PriceForecastMarketSnapshot {
   latest_cmm_usd_w?: number | null
   latest_floor_usd_w?: number | null
   latest_tender_usd_w?: number | null
+  latest_quote_usd_w?: number | null
   cmm_trend_pct?: number | null
   purchase_vs_cmm_pct?: number | null
+  quote_vs_cmm_pct?: number | null
   cmm_vs_floor_pct?: number | null
 }
 
@@ -103,6 +107,35 @@ export interface PriceForecastScenario {
   drivers: string[]
 }
 
+export interface PriceForecastBacktestSummary {
+  sample_count: number
+  direction_hit_rate?: number | null
+  mean_abs_error_pct?: number | null
+  mean_bias_pct?: number | null
+  note: string
+  source_adjustments: PriceForecastSourceAdjustment[]
+}
+
+export interface PriceForecastSourceAdjustment {
+  source_key: string
+  source_name: string
+  sample_count: number
+  direction_hit_rate?: number | null
+  mean_abs_error_pct?: number | null
+  score_delta: number
+}
+
+export interface PriceForecastOutlier {
+  source_key: string
+  source_name: string
+  metric_key: string
+  metric_label: string
+  value_date: string
+  price_usd_w: number
+  median_usd_w: number
+  deviation_pct: number
+}
+
 export interface PriceForecastSourceQuality {
   source_key: string
   source_name: string
@@ -112,6 +145,8 @@ export interface PriceForecastSourceQuality {
   observation_count: number
   avg_confidence?: number | null
   warning_count: number
+  outlier_count: number
+  backtest_score_delta: number
   note: string
 }
 
@@ -127,6 +162,8 @@ export interface PriceForecastStrategyResponse {
   basis: string[]
   market: PriceForecastMarketSnapshot
   scenarios: PriceForecastScenario[]
+  backtest: PriceForecastBacktestSummary
+  outliers: PriceForecastOutlier[]
   source_quality: PriceForecastSourceQuality[]
   calculated_at: string
 }
