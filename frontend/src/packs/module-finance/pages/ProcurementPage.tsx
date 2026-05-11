@@ -161,9 +161,11 @@ export default function ProcurementPage() {
   const [poPage, setPoPage] = useState(1)
   const [poPageSize, setPoPageSize] = useState(100)
   // server sort — backend default (contract_date desc) 와 동일하게 시작.
-  const poSort = useServerSort('contract_date', 'desc', () => setPoPage(1))
+  const poSort = useServerSort("contract_date", "desc", () => setPoPage(1))
   // 필터 변경 시 page 1 로 리셋.
-  useEffect(() => { setPoPage(1) }, [poStatusFilter, poMfgFilter, poTypeFilter, poRiskFilter, poDateRange])
+  useEffect(() => {
+    setPoPage(1)
+  }, [poStatusFilter, poMfgFilter, poTypeFilter, poRiskFilter, poDateRange])
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null)
   // R1-1: 사이드바 "발주/결제" 클릭 시 슬라이드 패널 닫기
   useEffect(() => {
@@ -185,7 +187,13 @@ export default function ProcurementPage() {
   }, [location.search, poList])
   // 서버 페이지네이션 — 모든 필터 (status/mfg/contract_type/date_range) 가 server query.
   // 활성 탭만 fetch (lazy).
-  const { items: pos, total: poTotal, loading: poLoading, error: poError, reload: reloadPO } = usePOListPaged({
+  const {
+    items: pos,
+    total: poTotal,
+    loading: poLoading,
+    error: poError,
+    reload: reloadPO,
+  } = usePOListPaged({
     status: poStatusFilter || undefined,
     manufacturer_id: poMfgFilter || undefined,
     contract_type: poTypeFilter || undefined,
@@ -196,7 +204,7 @@ export default function ProcurementPage() {
     order: poSort.queryParams.order,
     page: poPage,
     pageSize: poPageSize,
-    enabled: activeTab === 'po',
+    enabled: activeTab === "po",
   })
   const { data: poSummary } = usePOSummary({
     status: poStatusFilter || undefined,
@@ -212,9 +220,17 @@ export default function ProcurementPage() {
   const [lcDateRange, setLcDateRange] = useState<DateRangeValue>(null)
   const [lcPage, setLcPage] = useState(1)
   const [lcPageSize, setLcPageSize] = useState(100)
-  const lcSort = useServerSort('open_date', 'desc', () => setLcPage(1))
-  useEffect(() => { setLcPage(1) }, [lcStatusFilter, lcBankFilter, lcMfgFilter, lcDateRange])
-  const { items: lcs, total: lcTotal, loading: lcLoading, error: lcError, reload: reloadLC } = useLCListPaged({
+  const lcSort = useServerSort("open_date", "desc", () => setLcPage(1))
+  useEffect(() => {
+    setLcPage(1)
+  }, [lcStatusFilter, lcBankFilter, lcMfgFilter, lcDateRange])
+  const {
+    items: lcs,
+    total: lcTotal,
+    loading: lcLoading,
+    error: lcError,
+    reload: reloadLC,
+  } = useLCListPaged({
     status: lcStatusFilter || undefined,
     bank_id: lcBankFilter || undefined,
     manufacturer_id: lcMfgFilter || undefined,
@@ -224,7 +240,7 @@ export default function ProcurementPage() {
     order: lcSort.queryParams.order,
     page: lcPage,
     pageSize: lcPageSize,
-    enabled: activeTab === 'lc',
+    enabled: activeTab === "lc",
   })
   const { data: lcSummary } = useLCSummary({
     status: lcStatusFilter || undefined,
@@ -237,15 +253,21 @@ export default function ProcurementPage() {
   const [ttDateRange, setTtDateRange] = useState<DateRangeValue>(null)
   const [ttPage, setTtPage] = useState(1)
   const [ttPageSize, setTtPageSize] = useState(100)
-  useEffect(() => { setTtPage(1) }, [ttStatusFilter, ttPoFilter, ttDateRange])
-  const { items: tts, total: ttTotal, loading: ttLoading } = useTTListPaged({
+  useEffect(() => {
+    setTtPage(1)
+  }, [ttStatusFilter, ttPoFilter, ttDateRange])
+  const {
+    items: tts,
+    total: ttTotal,
+    loading: ttLoading,
+  } = useTTListPaged({
     status: ttStatusFilter || undefined,
     po_id: ttPoFilter || undefined,
     remit_date_from: ttDateRange?.start,
     remit_date_to: ttDateRange?.end,
     page: ttPage,
     pageSize: ttPageSize,
-    enabled: activeTab === 'tt',
+    enabled: activeTab === "tt",
   })
   const { data: ttSummary } = useTTSummary({
     status: ttStatusFilter || undefined,
@@ -268,9 +290,16 @@ export default function ProcurementPage() {
   const [blsVersion, setBlsVersion] = useState(0)
   const [blPage, setBlPage] = useState(1)
   const [blPageSize, setBlPageSize] = useState(100)
-  const blSort = useServerSort('eta', 'desc', () => setBlPage(1))
-  useEffect(() => { setBlPage(1) }, [blTypeFilter, blStatusFilter, blMfgFilter, blDateRange])
-  const { items: bls, total: blTotal, loading: blLoading, reload: reloadBL } = useBLListPaged({
+  const blSort = useServerSort("eta", "desc", () => setBlPage(1))
+  useEffect(() => {
+    setBlPage(1)
+  }, [blTypeFilter, blStatusFilter, blMfgFilter, blDateRange])
+  const {
+    items: bls,
+    total: blTotal,
+    loading: blLoading,
+    reload: reloadBL,
+  } = useBLListPaged({
     inbound_type: blTypeFilter || undefined,
     status: blStatusFilter || undefined,
     manufacturer_id: blMfgFilter || undefined,
@@ -280,7 +309,7 @@ export default function ProcurementPage() {
     order: blSort.queryParams.order,
     page: blPage,
     pageSize: blPageSize,
-    enabled: activeTab === 'bl',
+    enabled: activeTab === "bl",
   })
   const { data: blSummary } = useBLSummary({
     inbound_type: blTypeFilter || undefined,
@@ -293,6 +322,12 @@ export default function ProcurementPage() {
   // PO/LC 신규 등록 다이얼로그.
   const [poCreateOpen, setPoCreateOpen] = useState(false)
   const [lcCreateOpen, setLcCreateOpen] = useState(false)
+  const [lcCreateInitial, setLcCreateInitial] = useState<{
+    poId?: string
+    poLineId?: string
+    targetQty?: number
+    amountUsd?: number
+  } | null>(null)
 
   // 우측 슬라이드 패널 — 드래그 리사이즈
   const [panelWidth, setPanelWidth] = useState(900)
@@ -502,6 +537,11 @@ export default function ProcurementPage() {
     navigate(tab === "po" ? "/procurement" : `/procurement?tab=${tab}`, { replace: true })
   }
 
+  const openLCCreate = (initial?: typeof lcCreateInitial) => {
+    setLcCreateInitial(initial ?? null)
+    setLcCreateOpen(true)
+  }
+
   const handleSettleLC = async (
     lc: import("@/types/procurement").LCRecord,
     repaymentDate: string,
@@ -548,12 +588,16 @@ export default function ProcurementPage() {
   )
   const poSpark = monthlyCount(poRows, (p) => p.contract_date)
 
-  const fmtCount = (n: number) => String(Math.round(n));
-  const lcBanksCount = lcSummary?.bank_count ?? new Set(lcRows.map((lc) => lc.bank_id)).size;
-  const blImportCount = blSummary?.import_count ?? blRows.filter((bl) => bl.inbound_type === "import").length;
-  const ttPlannedCount = ttSummary?.planned_count ?? tts.filter((tt) => tt.status === "planned").length;
-  const ttPoCount = ttSummary?.po_count ?? new Set(tts.map((tt) => tt.po_id)).size;
-  const contractTypesCount = Object.keys(poSummary?.by_contract_type ?? {}).length || new Set(poRows.map((po) => po.contract_type)).size;
+  const fmtCount = (n: number) => String(Math.round(n))
+  const lcBanksCount = lcSummary?.bank_count ?? new Set(lcRows.map((lc) => lc.bank_id)).size
+  const blImportCount =
+    blSummary?.import_count ?? blRows.filter((bl) => bl.inbound_type === "import").length
+  const ttPlannedCount =
+    ttSummary?.planned_count ?? tts.filter((tt) => tt.status === "planned").length
+  const ttPoCount = ttSummary?.po_count ?? new Set(tts.map((tt) => tt.po_id)).size
+  const contractTypesCount =
+    Object.keys(poSummary?.by_contract_type ?? {}).length ||
+    new Set(poRows.map((po) => po.contract_type)).size
   const metrics: ProcurementMetric[] =
     activeTab === "lc"
       ? [
@@ -843,7 +887,7 @@ export default function ProcurementPage() {
               },
             ]}
           />
-          <Button size="xs" onClick={() => setLcCreateOpen(true)}>
+          <Button size="xs" onClick={() => openLCCreate()}>
             <Plus className="mr-1 h-3 w-3" />
             LC 신규 등록
           </Button>
@@ -966,7 +1010,10 @@ export default function ProcurementPage() {
                         pageSize={poPageSize}
                         total={poTotal}
                         onPageChange={setPoPage}
-                        onPageSizeChange={(s) => { setPoPageSize(s); setPoPage(1) }}
+                        onPageSizeChange={(s) => {
+                          setPoPageSize(s)
+                          setPoPage(1)
+                        }}
                       />
                     </>
                   )}
@@ -1000,7 +1047,10 @@ export default function ProcurementPage() {
                         pageSize={lcPageSize}
                         total={lcTotal}
                         onPageChange={setLcPage}
-                        onPageSizeChange={(s) => { setLcPageSize(s); setLcPage(1) }}
+                        onPageSizeChange={(s) => {
+                          setLcPageSize(s)
+                          setLcPage(1)
+                        }}
                       />
                     </>
                   )}
@@ -1069,7 +1119,9 @@ export default function ProcurementPage() {
                         ]}
                       />
                     </div>
-                    {ttLoading ? <LoadingSpinner /> : (
+                    {ttLoading ? (
+                      <LoadingSpinner />
+                    ) : (
                       <>
                         <TTListTable items={tts} focusTTId={focusTTId} />
                         <PaginationBar
@@ -1077,7 +1129,10 @@ export default function ProcurementPage() {
                           pageSize={ttPageSize}
                           total={ttTotal}
                           onPageChange={setTtPage}
-                          onPageSizeChange={(s) => { setTtPageSize(s); setTtPage(1) }}
+                          onPageSizeChange={(s) => {
+                            setTtPageSize(s)
+                            setTtPage(1)
+                          }}
                         />
                       </>
                     )}
@@ -1101,7 +1156,10 @@ export default function ProcurementPage() {
                         pageSize={blPageSize}
                         total={blTotal}
                         onPageChange={setBlPage}
-                        onPageSizeChange={(s) => { setBlPageSize(s); setBlPage(1) }}
+                        onPageSizeChange={(s) => {
+                          setBlPageSize(s)
+                          setBlPage(1)
+                        }}
                       />
                     </>
                   )}
@@ -1188,13 +1246,7 @@ export default function ProcurementPage() {
               <RailBlock title="JKO · 12주 단가" last>
                 {jkoTrend ? (
                   <>
-                    <Sparkline
-                      data={jkoTrend.data}
-                      w={220}
-                      h={42}
-                      color="var(--solar-2)"
-                      area
-                    />
+                    <Sparkline data={jkoTrend.data} w={220} h={42} color="var(--solar-2)" area />
                     <div className="mono mt-2 flex justify-between text-[10.5px] text-[var(--ink-3)]">
                       <span>
                         현재{" "}
@@ -1212,9 +1264,7 @@ export default function ProcurementPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="text-xs text-[var(--ink-3)]">
-                    JKO 12주 단가 데이터 없음
-                  </div>
+                  <div className="text-xs text-[var(--ink-3)]">JKO 12주 단가 데이터 없음</div>
                 )}
               </RailBlock>
             </>
@@ -1465,6 +1515,16 @@ export default function ProcurementPage() {
                 reloadPoList()
                 setLcAggVersion((v) => v + 1)
               }}
+              onCreateLC={(initial) => openLCCreate(initial)}
+              onOpenBLTab={(po) => {
+                setSelectedPO(null)
+                setBlMfgFilter(po.manufacturer_id)
+                setBlStatusFilter("")
+                setBlPage(1)
+                setActiveTab("bl")
+                navigate("/procurement?tab=bl", { replace: true })
+              }}
+              onSelectBL={setSelectedBL}
               allPos={pos}
             />
           )}
@@ -1481,10 +1541,17 @@ export default function ProcurementPage() {
       />
       <LCCreateDialog
         open={lcCreateOpen}
-        onClose={() => setLcCreateOpen(false)}
+        initialPoId={lcCreateInitial?.poId}
+        initialTargetQty={lcCreateInitial?.targetQty}
+        initialAmountUsd={lcCreateInitial?.amountUsd}
+        onClose={() => {
+          setLcCreateOpen(false)
+          setLcCreateInitial(null)
+        }}
         onCreated={() => {
           reloadLC()
           setLcAggVersion((v) => v + 1)
+          setLcCreateInitial(null)
         }}
       />
     </div>
