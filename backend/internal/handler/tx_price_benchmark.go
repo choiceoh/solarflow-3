@@ -94,6 +94,7 @@ const (
 
 var allowedBenchmarkSources = map[string]bool{
 	"opis": true, "infolink": true, "trendforce": true, "pvinsights": true, "china_tender": true, "cpia_floor": true,
+	"our_quote": true,
 }
 
 var allowedBenchmarkMetrics = map[string]bool{
@@ -110,10 +111,11 @@ var allowedBenchmarkMetrics = map[string]bool{
 	"china_export":              true,
 	"china_state_tender":        true,
 	"cpia_cost_floor":           true,
+	"supplier_quote":            true,
 }
 
 var allowedBenchmarkBasis = map[string]bool{
-	"fob": true, "ddp": true, "spot": true, "forward": true, "tender": true, "floor": true,
+	"fob": true, "ddp": true, "spot": true, "forward": true, "tender": true, "floor": true, "quote": true,
 }
 
 var allowedBenchmarkCurrencies = map[string]bool{
@@ -330,7 +332,7 @@ func (h *PriceBenchmarkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, _, err := h.DB.From("price_benchmarks").
-		Upsert(req, "source_key,metric_key,value_date,market_region,basis,currency", "", "").
+		Upsert(req, "source_key,source_name,metric_key,value_date,market_region,basis,currency", "", "").
 		Execute()
 	if err != nil {
 		log.Printf("[가격 벤치마크 등록 실패] %v", err)
@@ -1293,6 +1295,12 @@ func validateBenchmarkCatalogPolicy(point model.CreatePriceBenchmarkRequest) str
 	if point.SourceKey == "infolink" && (point.MetricKey == "cell" || point.MetricKey == "wafer") {
 		return "InfoLink cell/wafer 지표는 수집 대상이 아닙니다"
 	}
+	if point.SourceKey == "our_quote" && point.MetricKey != "supplier_quote" {
+		return "our_quote source는 supplier_quote 지표만 허용됩니다"
+	}
+	if point.MetricKey == "supplier_quote" && point.SourceKey != "our_quote" {
+		return "supplier_quote 지표는 our_quote source에서만 허용됩니다"
+	}
 	return ""
 }
 
@@ -1312,6 +1320,11 @@ func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, po
 		}
 		if !model.IsPriceBenchmarkMarketRegionAllowed(point.MarketRegion) {
 			log.Printf("[가격 벤치마크 AI point skip] market_region=%s 는 중국/유럽 수집 대상이 아님", point.MarketRegion)
+			skipped++
+			continue
+		}
+		if point.SourceKey == "our_quote" {
+			log.Printf("[가격 벤치마크 AI point skip] our_quote 는 수동 입력 전용")
 			skipped++
 			continue
 		}
@@ -1337,7 +1350,7 @@ func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, po
 			continue
 		}
 		data, _, err := h.DB.From("price_benchmarks").
-			Upsert(point, "source_key,metric_key,value_date,market_region,basis,currency", "", "").
+			Upsert(point, "source_key,source_name,metric_key,value_date,market_region,basis,currency", "", "").
 			Execute()
 		if err != nil {
 			log.Printf("[가격 벤치마크 AI point insert 실패] %v", err)

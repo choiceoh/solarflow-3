@@ -1514,6 +1514,25 @@
   - 같은 URL은 evidence에 한 번만 넣고, source당 검색 evidence 상한을 둬 LLM 입력 폭주를 막는다.
 - **검증**:
   - `go test ./internal/handler -run 'TestBuildBenchmark|TestSummarizeHomepage|TestSearchResultDedupe|TestValidateBenchmarkCatalogPolicy|TestHashEvidence|TestPickComparablePrice|TestFormatSanityWarnings'` 로 검색 플랜 확장과 dedupe를 고정한다.
+  - `go test ./internal/model -run PriceBenchmark` 로 가격 벤치마크 모델 정책을 확인한다.
+- **날짜**: 2026-05-11
+
+## D-20260511-175509: 가격예측은 백테스트·이상치 제거·미체결 견적을 같은 판단 흐름에 둔다
+
+- **결정**: `/api/v1/calc/price-forecast-strategy` 응답에 1개월 백테스트 요약과 median 기반 이상치 제외 결과를 포함한다. 같은 날짜·같은 지표에서 source 하나만 median 대비 크게 벗어나면 Rust 계산엔진이 전략 계산 전에 제외하고, 제외 내역과 source 품질 점수 보정을 함께 반환한다.
+- **미체결 견적**:
+  - 구매로 이어지지 않은 공급사 견적은 `price_benchmarks`에 `source_key='our_quote'`, `metric_key='supplier_quote'`, `basis='quote'`로 저장한다.
+  - `our_quote`는 AI 수집 대상이 아니며 사용자가 화면에서 직접 입력한 견적만 허용한다.
+  - 같은 날짜 여러 공급사 견적을 보존하기 위해 `ux_price_benchmarks_point` 중복 기준에 `source_name`을 포함한다.
+- **이유**: 실제 구매계약가만 남기면 시장이 제시한 가격 신호 중 “비싸서 사지 않은 견적”, “협상 전 최초 제안가”가 사라진다. 가격예측은 체결가보다 더 넓은 의사결정 기록이 필요하고, 동시에 이상치와 과거 방향성 검증이 있어야 계산 결과를 구매 판단에 사용할 수 있다.
+- **운영 기준**:
+  - 백테스트는 과거 CMM/forward/floor 관측값으로 1개월 전 전망과 실제 CMM 방향·오차를 비교한다.
+  - 방향성 적중률은 정확한 가격 맞히기보다 우선한다. source 품질 점수는 수집 경고, 최근성, confidence, 표본 수, 이상치, 백테스트 보정을 함께 반영한다.
+  - 미체결 견적은 차트와 전략 보조 근거로 표시하되, 외부 시장 기준선(CMM/forward/floor)을 대체하지 않는다.
+- **검증**:
+  - Rust unit test로 median 이상치 제외와 1개월 백테스트 표본 생성을 고정한다.
+  - Go 정책 테스트로 `our_quote/supplier_quote` 허용과 외부 metric 혼입 차단을 고정한다.
+  - 프론트엔드 build로 견적 입력 폼, 백테스트 표시, 이상치 표시 타입을 확인한다.
 - **날짜**: 2026-05-11
 
 ## D-20260511-171426: 결정 식별자는 순번 대신 초 단위 타임스탬프를 사용한다

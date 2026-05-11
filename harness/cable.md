@@ -30,7 +30,7 @@ module과 **동일하게 노출**:
 - L/C 한도 (`/banking`)
 - 매출 분석 (`/sales-analysis`)
 - 구매 이력 (`/purchase-history`)
-- 가격예측 (`/price-forecast`) — 중국·유럽 가격 벤치마크만 표시
+- 가격예측 (`/price-forecast`) — 중국·유럽 가격 벤치마크와 미체결 공급사 견적 표시
 - 엑셀 입력 (`/import`), 마스터 (`/data`), AI 도우미 (`/assistant`), 설정 (`/settings`), 결재안 (`/approval`)
 
 **노출되지 않는 것** (BARO 전용):
