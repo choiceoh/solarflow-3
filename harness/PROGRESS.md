@@ -11,7 +11,7 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-159 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략) |
+| DECISIONS | D-001~D-160 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강, D-158 수금 부분 매칭, D-159 가격예측 Rust 전략, D-160 충당 근거+납기/ETA) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -34,6 +34,33 @@
 - `cd frontend && npm run build` 성공
 - `git diff --check` 성공
 - `graphify update .` 성공 — 5010 nodes / 8116 edges / 411 communities
+
+---
+
+## 2026-05-11 세션 — 수주 상세 충당 근거 + 납기/ETA 위험도 (D-160)
+
+### 완료
+- Rust 계산엔진 `POST /api/calc/order-fulfillment-risk` 응답 확장
+  - 기존 `충당 가능/부족/확인 필요` 판정은 유지하면서 배정 순번, 배정 전/후 가용량, 부족량, 현재고/미착품 풀 구성 근거를 추가
+  - `fulfillment_source=incoming` 수주는 B/L ETA 순서로 미착품을 배정하고, B/L 없는 opened L/C 잔여량은 ETA 미확정 물량으로 취급
+  - 미착품 물량은 충분해도 ETA가 납기보다 늦거나, 납기일이 없거나, ETA 없는 물량이 충당에 쓰이면 `확인 필요`로 승격
+  - 물량 부족은 기존처럼 `부족`을 우선 표시
+- 수주 상세 화면에 `충당 근거` 패널 추가
+  - 충당 배지, 충당소스, 배정 순번, 잔량, 필요 용량, 배정 전/후 가용량, 부족량 표시
+  - 납기일, 예상 가용일, ETA 상태, 지연일, 판정 사유 표시
+  - 실재고 수주는 입고완료/활성출고/기존예약, 미착품 수주는 B/L 미착/L/C 잔여/기존예약 근거 표시
+- dev mock API도 확장 응답 구조 반영
+- D-160 결정 기록 및 설계 정본 동기화
+
+### 검증
+- `cd engine && cargo build` 성공 — 기존 dead_code warning 유지
+- `cd engine && cargo test` 성공 — 전체 테스트 통과 + doc-test ignored 1건
+- `cd engine && cargo test order_risk` 성공 — 최신 main 재반영 후 위험도 단위 테스트 통과
+- `cd frontend && npm run build` 성공 — plugin timing warning 출력
+- `cd frontend && npm run lint` 종료코드 0 — 기존 ProcurementPage hook dependency warning 4건 + bun-test suppression warning 1건
+- `cd frontend && npm run test` 실패 — 현재 환경에 `bun` 런타임이 없어 `bun: not found`로 테스트 실행 전 종료
+- `git diff --check` 성공
+- `graphify update .` 성공
 
 ---
 

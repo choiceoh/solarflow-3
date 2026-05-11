@@ -12,6 +12,14 @@ export type ManagementCategory =
   | "other"
 export type FulfillmentSource = "stock" | "incoming"
 export type OrderFulfillmentRisk = "available" | "shortage" | "check"
+export type OrderFulfillmentEtaStatus =
+  | "ready"
+  | "on_time"
+  | "late"
+  | "unknown_eta"
+  | "missing_due"
+  | "shortage"
+  | "not_applicable"
 
 export interface Order {
   order_id: string
@@ -56,12 +64,28 @@ export interface OrderFulfillmentRiskItem {
   product_id: string
   fulfillment_source: FulfillmentSource | string
   risk: OrderFulfillmentRisk
+  allocation_rank?: number
   remaining_qty: number
   need_kw: number
   available_before_kw: number
   available_after_kw: number
   shortage_kw: number
+  delivery_due?: string | null
+  expected_available_date?: string | null
+  eta_status?: OrderFulfillmentEtaStatus | string
+  eta_days_late?: number | null
+  eta_reason?: string
+  breakdown?: OrderFulfillmentRiskBreakdown
   reason: string
+}
+
+export interface OrderFulfillmentRiskBreakdown {
+  inbound_completed_kw: number
+  outbound_active_kw: number
+  stock_allocated_kw: number
+  bl_incoming_kw: number
+  lc_incoming_kw: number
+  incoming_allocated_kw: number
 }
 
 export interface OrderFulfillmentRiskResponse {
@@ -198,4 +222,24 @@ export const ORDER_FULFILLMENT_RISK_COLOR: Record<OrderFulfillmentRisk, string> 
   available: "sf-tone-pos",
   shortage: "sf-tone-neg",
   check: "sf-tone-muted",
+}
+
+export const ORDER_FULFILLMENT_ETA_STATUS_LABEL: Record<OrderFulfillmentEtaStatus, string> = {
+  ready: "실재고 즉시",
+  on_time: "납기 내",
+  late: "ETA 지연",
+  unknown_eta: "ETA 확인",
+  missing_due: "납기 확인",
+  shortage: "물량 부족",
+  not_applicable: "대상 아님",
+}
+
+export const ORDER_FULFILLMENT_ETA_STATUS_COLOR: Record<OrderFulfillmentEtaStatus, string> = {
+  ready: "sf-tone-pos",
+  on_time: "sf-tone-pos",
+  late: "sf-tone-warn",
+  unknown_eta: "sf-tone-warn",
+  missing_due: "sf-tone-muted",
+  shortage: "sf-tone-neg",
+  not_applicable: "sf-tone-muted",
 }

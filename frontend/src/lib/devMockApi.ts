@@ -755,25 +755,73 @@ function orderFulfillmentRiskResponse(body: MockRow) {
     .filter((order) => (order.status === 'received' || order.status === 'partial') && (requested.size === 0 || requested.has(order.order_id)))
     .map((order, index) => {
       const needKw = order.remaining_qty * (order.wattage_kw ?? 0);
-      const risk = index % 5 === 1 ? 'shortage' : index % 7 === 2 ? 'check' : 'available';
+      const isIncoming = order.fulfillment_source === 'incoming';
+      const expectedAvailableDate = isIncoming
+        ? (index % 7 === 2 ? undefined : index % 5 === 1 ? '2026-06-18' : order.delivery_due ?? '2026-06-01')
+        : undefined;
+      const etaLate = Boolean(order.delivery_due && expectedAvailableDate && expectedAvailableDate > order.delivery_due);
+      const etaStatus = !isIncoming
+        ? 'ready'
+        : index % 5 === 1
+          ? 'shortage'
+          : !order.delivery_due
+            ? 'missing_due'
+            : !expectedAvailableDate
+              ? 'unknown_eta'
+              : etaLate
+                ? 'late'
+                : 'on_time';
+      const risk = index % 5 === 1
+        ? 'shortage'
+        : etaStatus === 'late' || etaStatus === 'missing_due' || etaStatus === 'unknown_eta'
+          ? 'check'
+          : 'available';
       const availableBefore = risk === 'shortage' ? Math.max(0, needKw - 120) : needKw + 300;
       const shortage = risk === 'shortage' ? Math.max(0, needKw - availableBefore) : 0;
+      const etaDaysLate = etaLate && order.delivery_due && expectedAvailableDate
+        ? Math.max(1, Math.round((Date.parse(expectedAvailableDate) - Date.parse(order.delivery_due)) / 86400000))
+        : null;
+      const etaReason = etaStatus === 'late'
+        ? `미착품 예상 가용일 ${expectedAvailableDate}이 납기 ${order.delivery_due}보다 ${etaDaysLate}일 늦습니다`
+        : etaStatus === 'unknown_eta'
+          ? '잔량 일부가 ETA 없는 L/C 또는 B/L에서 충당되어 납기 확인이 필요합니다'
+          : etaStatus === 'missing_due'
+            ? '납기일이 없어 미착품 ETA 적기 여부를 확인할 수 없습니다'
+            : etaStatus === 'on_time'
+              ? `미착품 예상 가용일 ${expectedAvailableDate}이 납기 ${order.delivery_due} 이내입니다`
+              : etaStatus === 'shortage'
+                ? '미착품 물량 부족으로 납기 적기 여부보다 충당 부족을 먼저 확인해야 합니다'
+                : '실재고 충당 수주는 ETA 확인 대상이 아닙니다';
       return {
         order_id: order.order_id,
         company_id: order.company_id,
         product_id: order.product_id,
         fulfillment_source: order.fulfillment_source,
         risk,
+        allocation_rank: index + 1,
         remaining_qty: order.remaining_qty,
         need_kw: needKw,
         available_before_kw: availableBefore,
         available_after_kw: Math.max(0, availableBefore - needKw),
         shortage_kw: shortage,
+        delivery_due: order.delivery_due,
+        expected_available_date: expectedAvailableDate ?? null,
+        eta_status: etaStatus,
+        eta_days_late: etaDaysLate,
+        eta_reason: etaReason,
+        breakdown: {
+          inbound_completed_kw: isIncoming ? 0 : availableBefore + 450,
+          outbound_active_kw: isIncoming ? 0 : 120,
+          stock_allocated_kw: isIncoming ? 0 : 30,
+          bl_incoming_kw: isIncoming ? availableBefore + 180 : 0,
+          lc_incoming_kw: isIncoming ? 240 : 0,
+          incoming_allocated_kw: isIncoming ? 120 : 0,
+        },
         reason: risk === 'available'
           ? '선택한 충당 소스로 수주 잔량을 충당할 수 있습니다'
           : risk === 'shortage'
             ? `선택한 충당 소스가 ${shortage.toFixed(1)} kW 부족합니다`
-            : '잔량, 품번, 충당 소스 정보를 확인하세요',
+            : etaReason,
       };
     });
   return {

@@ -1,5 +1,5 @@
 import StatusPill from "@/components/common/StatusPill"
-import { formatKw } from "@/lib/utils"
+import { formatDate, formatKw } from "@/lib/utils"
 import {
   ORDER_FULFILLMENT_RISK_COLOR,
   ORDER_FULFILLMENT_RISK_LABEL,
@@ -16,6 +16,8 @@ export default function OrderFulfillmentRiskBadge({ risk }: { risk?: OrderFulfil
     `필요 ${formatKw(risk.need_kw)}`,
     `배정 전 ${formatKw(risk.available_before_kw)}`,
     risk.shortage_kw > 0 ? `부족 ${formatKw(risk.shortage_kw)}` : null,
+    risk.expected_available_date ? `예상 가용 ${formatDate(risk.expected_available_date)}` : null,
+    risk.eta_reason,
   ]
     .filter(Boolean)
     .join(" · ")
