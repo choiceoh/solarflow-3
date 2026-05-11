@@ -4,7 +4,7 @@ import { fetchWithAuth } from '@/lib/api';
 import SkeletonRows from '@/components/common/SkeletonRows';
 import ProgressMiniBar from '@/components/common/ProgressMiniBar';
 import type { BLShipment, BLLineItem } from '@/types/inbound';
-import type { LCRecord, POLineItem } from '@/types/procurement';
+import type { LCLineItem, LCRecord, POLineItem } from '@/types/procurement';
 
 interface Props {
   poId: string;
@@ -16,11 +16,13 @@ export default function POInboundProgress({ poId, poLines }: Props) {
   const [bls, setBls] = useState<BLShipment[]>([]);
   const [blLinesByBl, setBlLinesByBl] = useState<Record<string, BLLineItem[]>>({});
   const [lcs, setLcs] = useState<LCRecord[]>([]);
+  const [lcLinesByLc, setLcLinesByLc] = useState<Record<string, LCLineItem[]>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      setLoading(true);
       try {
         // B/L 목록 + LC 목록 동시 조회
         const [blList, lcList] = await Promise.all([
@@ -31,21 +33,37 @@ export default function POInboundProgress({ poId, poLines }: Props) {
         setBls(blList);
         setLcs(lcList);
 
-        // 각 B/L의 라인아이템 조회하여 수량 합산
-        const lineMap: Record<string, BLLineItem[]> = {};
-        await Promise.all(
-          blList.map(async (bl) => {
-            try {
-              const lines = await fetchWithAuth<BLLineItem[]>(`/api/v1/bls/${bl.bl_id}/lines`);
-              lineMap[bl.bl_id] = lines;
-            } catch {
-              lineMap[bl.bl_id] = [];
-            }
-          })
-        );
+        // 각 B/L/LC의 라인아이템 조회하여 수량 합산
+        const [lineMap, lcLineMap] = await Promise.all([
+          (async () => {
+            const map: Record<string, BLLineItem[]> = {};
+            await Promise.all(blList.map(async (bl) => {
+              try {
+                const lines = await fetchWithAuth<BLLineItem[]>(`/api/v1/bls/${bl.bl_id}/lines`);
+                map[bl.bl_id] = lines;
+              } catch {
+                map[bl.bl_id] = [];
+              }
+            }));
+            return map;
+          })(),
+          (async () => {
+            const map: Record<string, LCLineItem[]> = {};
+            await Promise.all(lcList.map(async (lc) => {
+              try {
+                const lines = await fetchWithAuth<LCLineItem[]>(`/api/v1/lcs/${lc.lc_id}/lines`);
+                map[lc.lc_id] = lines;
+              } catch {
+                map[lc.lc_id] = [];
+              }
+            }));
+            return map;
+          })(),
+        ]);
         if (!cancelled) setBlLinesByBl(lineMap);
+        if (!cancelled) setLcLinesByLc(lcLineMap);
       } catch {
-        if (!cancelled) { setBls([]); setLcs([]); }
+        if (!cancelled) { setBls([]); setLcs([]); setBlLinesByBl({}); setLcLinesByLc({}); }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -83,6 +101,59 @@ export default function POInboundProgress({ poId, poLines }: Props) {
     progressPct >= 80 ? 'var(--sf-pos)' :
     progressPct >= 50 ? 'var(--sf-warn)' :
     'var(--sf-neg)';
+
+  const poLineIdsByProduct = new Map<string, string[]>();
+  for (const line of poLines) {
+    const ids = poLineIdsByProduct.get(line.product_id) ?? [];
+    ids.push(line.po_line_id);
+    poLineIdsByProduct.set(line.product_id, ids);
+  }
+  const resolveLineKey = (poLineId: string | undefined, productId: string): string | null => {
+    if (poLineId) return poLineId;
+    const ids = poLineIdsByProduct.get(productId);
+    return ids?.length === 1 ? ids[0] : null;
+  };
+  const lcQtyByLine = new Map<string, number>();
+  for (const lcLine of Object.values(lcLinesByLc).flat()) {
+    const key = resolveLineKey(lcLine.po_line_id, lcLine.product_id);
+    if (!key) continue;
+    lcQtyByLine.set(key, (lcQtyByLine.get(key) ?? 0) + lcLine.quantity);
+  }
+  const shippedQtyByLine = new Map<string, number>();
+  const completedQtyByLine = new Map<string, number>();
+  const shipStatuses = new Set(['shipping', 'arrived', 'customs', 'completed', 'erp_done']);
+  const completedStatuses = new Set(['completed', 'erp_done']);
+  for (const bl of bls) {
+    for (const blLine of blLinesByBl[bl.bl_id] ?? []) {
+      const key = resolveLineKey(blLine.po_line_id, blLine.product_id);
+      if (!key) continue;
+      if (shipStatuses.has(bl.status)) {
+        shippedQtyByLine.set(key, (shippedQtyByLine.get(key) ?? 0) + blLine.quantity);
+      }
+      if (completedStatuses.has(bl.status)) {
+        completedQtyByLine.set(key, (completedQtyByLine.get(key) ?? 0) + blLine.quantity);
+      }
+    }
+  }
+  const lineRows = poLines.map((line) => {
+    const lcLineQty = lcQtyByLine.get(line.po_line_id) ?? 0;
+    const shippedLineQty = shippedQtyByLine.get(line.po_line_id) ?? 0;
+    const completedLineQty = completedQtyByLine.get(line.po_line_id) ?? 0;
+    const specWp = line.products?.spec_wp ?? line.spec_wp;
+    const pct = line.quantity > 0 ? Math.min((completedLineQty / line.quantity) * 100, 100) : 0;
+    return {
+      line,
+      label: [
+        line.product_code ?? line.products?.product_code,
+        specWp ? `${specWp}Wp` : '',
+      ].filter(Boolean).join(' · ') || line.product_name || line.products?.product_name || '—',
+      lcQty: lcLineQty,
+      shippedQty: shippedLineQty,
+      completedQty: completedLineQty,
+      remainQty: Math.max(0, line.quantity - completedLineQty),
+      pct,
+    };
+  });
 
   const stats = [
     { label: '계약량',   value: contractQty },
@@ -124,6 +195,48 @@ export default function POInboundProgress({ poId, poLines }: Props) {
         </div>
         <ProgressMiniBar percent={progressPct} colorClassName={barColor} className="h-2.5 w-full" barClassName="transition-all" />
       </div>
+
+      {lineRows.length > 0 && (
+        <div className="overflow-hidden rounded-md border">
+          <div className="border-b bg-muted/30 px-3 py-2 text-xs font-semibold">라인별 진행률</div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-xs">
+              <thead className="bg-muted/20 text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">품목</th>
+                  <th className="px-3 py-2 text-right font-medium">계약</th>
+                  <th className="px-3 py-2 text-right font-medium">LC</th>
+                  <th className="px-3 py-2 text-right font-medium">선적</th>
+                  <th className="px-3 py-2 text-right font-medium">입고</th>
+                  <th className="px-3 py-2 text-right font-medium">잔여</th>
+                  <th className="px-3 py-2 text-left font-medium">입고율</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {lineRows.map((row) => (
+                  <tr key={row.line.po_line_id}>
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{row.label}</div>
+                      <div className="text-[10px] text-muted-foreground">{row.line.product_name ?? row.line.products?.product_name ?? ''}</div>
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">{formatNumber(row.line.quantity)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatNumber(row.lcQty)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatNumber(row.shippedQty)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-green-700">{formatNumber(row.completedQty)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatNumber(row.remainQty)}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <ProgressMiniBar percent={row.pct} colorClassName={row.pct >= 80 ? 'bg-green-500' : row.pct >= 50 ? 'bg-yellow-500' : 'bg-red-500'} className="h-1.5 w-24" />
+                        <span className="font-mono text-[11px]">{row.pct.toFixed(0)}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

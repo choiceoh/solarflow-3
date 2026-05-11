@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react"
-import { ArrowLeft, CheckCircle2, ListPlus, Trash2 } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { ArrowLeft, CheckCircle2, FileSignature, ListPlus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { cn, formatDate, shortMfgName } from "@/lib/utils"
@@ -18,6 +18,7 @@ import { useColumnPinning } from "@/lib/columnPinning"
 import ConfirmDialog from "@/components/common/ConfirmDialog"
 import LinkedMemoWidget from "@/components/memo/LinkedMemoWidget"
 import POInboundProgress from "./POInboundProgress"
+import POCreateDialog, { type POCreateInitialValues } from "./POCreateDialog"
 import AttachmentWidget from "@/components/common/AttachmentWidget"
 import GroupedMiniTable, { type GroupedMiniTableColumn } from "@/components/common/GroupedMiniTable"
 import ProgressMiniBar from "@/components/common/ProgressMiniBar"
@@ -25,6 +26,11 @@ import StatusPill from "@/components/common/StatusPill"
 import LCLineEditDialog from "./LCLineEditDialog"
 import { parseDeposit } from "./depositStatus"
 import { fetchWithAuth } from "@/lib/api"
+import {
+  diffAuditFieldItems,
+  sanitizeAuditLogs,
+  type SafeAuditLog,
+} from "@/lib/purchaseHistory"
 import { usePOLines, useLCList, useTTList } from "@/hooks/useProcurement"
 import type { BLShipment, BLLineItem } from "@/types/inbound"
 import {
@@ -48,7 +54,125 @@ interface Props {
   po: PurchaseOrder
   onBack: () => void
   onReload: () => void
+  onVariantCreated?: (po: PurchaseOrder) => void
   allPos?: PurchaseOrder[]
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+}
+
+const AUDIT_ACTION_LABEL: Record<string, string> = {
+  create: "생성",
+  update: "수정",
+  delete: "취소",
+}
+
+const AUDIT_ACTION_CLASS: Record<string, string> = {
+  create: "bg-emerald-100 text-emerald-700",
+  update: "bg-blue-100 text-blue-700",
+  delete: "bg-red-100 text-red-700",
+}
+
+function POAuditDiffPanel({ poId }: { poId: string }) {
+  const [logs, setLogs] = useState<SafeAuditLog[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError("")
+    fetchWithAuth<unknown>(
+      `/api/v1/audit-logs?entity_type=purchase_orders&entity_id=${encodeURIComponent(poId)}&limit=50`,
+    )
+      .then((data) => {
+        if (cancelled) return
+        setLogs(sanitizeAuditLogs(data))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : "감사 로그 조회에 실패했습니다")
+        setLogs([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [poId])
+
+  if (loading) return <LoadingSpinner />
+  if (error) return <div className="rounded-md border p-4 text-sm text-destructive">{error}</div>
+  if (logs.length === 0) {
+    return (
+      <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
+        변경 이력이 없습니다
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {logs.map((log) => {
+        const diffs = diffAuditFieldItems(log.old_data, log.new_data)
+        const actionLabel = AUDIT_ACTION_LABEL[log.action] ?? log.action
+        const actionClass = AUDIT_ACTION_CLASS[log.action] ?? "bg-gray-100 text-gray-700"
+        return (
+          <div key={log.audit_id} className="rounded-md border p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${actionClass}`}>
+                {actionLabel}
+              </span>
+              <span className="text-xs font-medium">{formatDateTime(log.created_at)}</span>
+              <span className="text-xs text-muted-foreground">
+                {log.user_email ?? log.user_id ?? "시스템"}
+              </span>
+              {log.note ? (
+                <span className="text-[10px] text-muted-foreground">{log.note}</span>
+              ) : null}
+            </div>
+            {diffs.length > 0 ? (
+              <div className="mt-3 overflow-hidden rounded border">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/30 text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">필드</th>
+                      <th className="px-3 py-2 text-left font-medium">이전</th>
+                      <th className="px-3 py-2 text-left font-medium">변경 후</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {diffs.map((diff) => (
+                      <tr key={`${log.audit_id}-${diff.field}`}>
+                        <td className="px-3 py-2 font-medium">{diff.label}</td>
+                        <td className="px-3 py-2 font-mono text-muted-foreground">{diff.before}</td>
+                        <td className="px-3 py-2 font-mono">{diff.after}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {log.action === "create" ? "최초 생성 기록입니다" : "표시할 필드 변경이 없습니다"}
+              </p>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 function LCSubTable({
@@ -254,7 +378,13 @@ function TTSubTable({ items, poLines }: { items: TTRemittance[]; poLines: POLine
   )
 }
 
-export default function PODetailView({ po: initialPo, onBack, onReload, allPos = [] }: Props) {
+export default function PODetailView({
+  po: initialPo,
+  onBack,
+  onReload,
+  onVariantCreated,
+  allPos = [],
+}: Props) {
   // 로컬 PO 미러 — 저장 후 서버 fresh로 갱신 (parent prop은 stale일 수 있음)
   const [po, setPo] = useState<PurchaseOrder>(initialPo)
   // 부모 selectedPO 변경 시(다른 PO 선택 등) 동기화
@@ -263,6 +393,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
   }, [initialPo])
 
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [changeOpen, setChangeOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState("")
   const { data: lines, loading: linesLoading } = usePOLines(po.po_id)
@@ -315,6 +446,30 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
   }, [po.po_id])
 
   const isCancelled = po.status === "cancelled"
+
+  const changeInitialValues = useMemo<POCreateInitialValues>(() => ({
+    po_number: "",
+    company_id: po.company_id,
+    manufacturer_id: po.manufacturer_id,
+    contract_type: po.contract_type,
+    contract_date: new Date().toISOString().slice(0, 10),
+    incoterms: po.incoterms,
+    payment_terms: po.payment_terms,
+    contract_period_start: po.contract_period_start,
+    contract_period_end: po.contract_period_end,
+    parent_po_id: po.po_id,
+    memo: `변경계약: 원계약 ${po.po_number || po.po_id.slice(0, 8)}`,
+    lines: lines.map((line) => ({
+      product_id: line.product_id,
+      quantity: line.quantity,
+      unit_price_usd: line.unit_price_usd,
+      unit_price_usd_wp: line.unit_price_usd_wp,
+      spec_wp: line.spec_wp ?? line.products?.spec_wp,
+      item_type: line.item_type,
+      payment_type: line.payment_type,
+      memo: line.memo,
+    })),
+  }), [po, lines])
 
   // 단일 필드 편집 — UpdatePurchaseOrderRequest 가 모든 필드 optional. PUT /api/v1/pos/{id}.
   const savePOField = async (key: string, value: unknown) => {
@@ -375,6 +530,18 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setChangeOpen(true)}
+            disabled={linesLoading}
+            title="현재 PO를 원계약으로 연결해 변경계약을 작성"
+          >
+            <FileSignature className="mr-1 h-3.5 w-3.5" />
+            변경계약 작성
+          </Button>
+        )}
+        {po.status !== "cancelled" && (
+          <Button
+            variant="outline"
+            size="sm"
             className="text-destructive hover:text-destructive"
             onClick={() => {
               setDeleteError("")
@@ -395,6 +562,7 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
           <TabsTrigger value="deposit">계약금 현황</TabsTrigger>
           <TabsTrigger value="lc">LC현황</TabsTrigger>
           <TabsTrigger value="inbound">입고현황</TabsTrigger>
+          <TabsTrigger value="audit">변경이력</TabsTrigger>
         </TabsList>
 
         <TabsContent value="summary">
@@ -771,6 +939,9 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
         <TabsContent value="inbound">
           <POInboundProgress poId={po.po_id} poLines={lines} />
         </TabsContent>
+        <TabsContent value="audit">
+          <POAuditDiffPanel poId={po.po_id} />
+        </TabsContent>
       </Tabs>
 
       <LinkedMemoWidget linkedTable="purchase_orders" linkedId={po.po_id} />
@@ -796,6 +967,21 @@ export default function PODetailView({ po: initialPo, onBack, onReload, allPos =
         onClose={() => setLineEditLC(null)}
         onSaved={() => {
           reloadLcs()
+        }}
+      />
+      <POCreateDialog
+        open={changeOpen}
+        onClose={() => setChangeOpen(false)}
+        title="변경계약 작성"
+        initialValues={changeInitialValues}
+        onCreated={(created) => {
+          setChangeOpen(false)
+          onReload()
+          onVariantCreated?.({
+            ...created,
+            company_name: po.company_name,
+            manufacturer_name: po.manufacturer_name,
+          })
         }}
       />
     </div>

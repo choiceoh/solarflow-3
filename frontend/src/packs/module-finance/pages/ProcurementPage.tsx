@@ -1458,6 +1458,12 @@ export default function ProcurementPage() {
                 reloadPoList()
                 setLcAggVersion((v) => v + 1)
               }}
+              onVariantCreated={(created) => {
+                setSelectedPO(created)
+                reloadPO()
+                reloadPoList()
+                setLcAggVersion((v) => v + 1)
+              }}
               allPos={pos}
             />
           )}
