@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Copy, Loader2, Plus, Trash2 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -40,10 +40,38 @@ interface DraftLine {
   memo: string;
 }
 
+export interface POCreateInitialLine {
+  product_id: string;
+  quantity?: number;
+  unit_price_usd?: number;
+  unit_price_usd_wp?: number;
+  spec_wp?: number;
+  item_type?: 'main' | 'spare';
+  payment_type?: 'paid' | 'free';
+  memo?: string;
+}
+
+export interface POCreateInitialValues {
+  po_number?: string;
+  company_id?: string;
+  manufacturer_id?: string;
+  contract_type?: ContractType;
+  contract_date?: string;
+  incoterms?: string;
+  payment_terms?: string;
+  contract_period_start?: string;
+  contract_period_end?: string;
+  memo?: string;
+  parent_po_id?: string;
+  lines?: POCreateInitialLine[];
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
   onCreated: (po: PurchaseOrder) => void;
+  initialValues?: POCreateInitialValues | null;
+  title?: string;
 }
 
 function newLine(): DraftLine {
@@ -58,11 +86,57 @@ function newLine(): DraftLine {
   };
 }
 
-export default function POCreateDialog({ open, onClose, onCreated }: Props) {
+function numberInputValue(value: number | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '';
+  return String(value);
+}
+
+function lineUnitPriceWp(line: POCreateInitialLine): string {
+  if (line.unit_price_usd_wp != null && Number.isFinite(line.unit_price_usd_wp)) {
+    return String(line.unit_price_usd_wp);
+  }
+  if (line.unit_price_usd != null && line.spec_wp && line.spec_wp > 0) {
+    return String(line.unit_price_usd / line.spec_wp);
+  }
+  return '';
+}
+
+function fromInitialLine(line: POCreateInitialLine): DraftLine {
+  return {
+    key: crypto.randomUUID(),
+    product_id: line.product_id,
+    quantity: numberInputValue(line.quantity),
+    unit_price_usd_wp: lineUnitPriceWp(line),
+    item_type: line.item_type ?? 'main',
+    payment_type: line.payment_type ?? 'paid',
+    memo: line.memo ?? '',
+  };
+}
+
+function isBlankLine(line: DraftLine): boolean {
+  return !line.product_id && !line.quantity && !line.unit_price_usd_wp && !line.memo;
+}
+
+function normalizeToken(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, '');
+}
+
+function parseNumberToken(value: string): number {
+  return Number(value.replace(/,/g, '').trim());
+}
+
+export default function POCreateDialog({
+  open,
+  onClose,
+  onCreated,
+  initialValues,
+  title = '발주(PO) 신규 등록',
+}: Props) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [products, setProducts] = useState<ProductLite[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [quickInput, setQuickInput] = useState('');
   // 라인 추가/삭제 시 자식 mount/unmount 자동 애니메이션 (smooth list reorder).
   const [linesParent] = useAutoAnimate<HTMLDivElement>();
 
@@ -82,17 +156,21 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
   // 다이얼로그를 새로 열 때마다 초기 상태로.
   useEffect(() => {
     if (!open) return;
-    setPoNumber('');
-    setManufacturerId('');
-    setContractType('spot');
-    setContractDate(new Date().toISOString().slice(0, 10));
-    setIncoterms('');
-    setPaymentTerms('');
-    setPeriodStart('');
-    setPeriodEnd('');
-    setMemo('');
-    setLines([newLine()]);
-  }, [open]);
+    setPoNumber(initialValues?.po_number ?? '');
+    setManufacturerId(initialValues?.manufacturer_id ?? '');
+    setContractType(initialValues?.contract_type ?? 'spot');
+    setContractDate(initialValues?.contract_date ?? new Date().toISOString().slice(0, 10));
+    setIncoterms(initialValues?.incoterms ?? '');
+    setPaymentTerms(initialValues?.payment_terms ?? '');
+    setPeriodStart(initialValues?.contract_period_start ?? '');
+    setPeriodEnd(initialValues?.contract_period_end ?? '');
+    setMemo(initialValues?.memo ?? '');
+    setQuickInput('');
+    const initialLines = initialValues?.lines?.length
+      ? initialValues.lines.map(fromInitialLine)
+      : [newLine()];
+    setLines(initialLines);
+  }, [open, initialValues]);
 
   useEffect(() => {
     if (!open) return;
@@ -127,13 +205,79 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   }
 
+  function duplicateLine(key: string) {
+    setLines((prev) => {
+      const idx = prev.findIndex((l) => l.key === key);
+      if (idx < 0) return prev;
+      const copy = { ...prev[idx], key: crypto.randomUUID() };
+      return [...prev.slice(0, idx + 1), copy, ...prev.slice(idx + 1)];
+    });
+  }
+
   function removeLine(key: string) {
     setLines((prev) => (prev.length === 1 ? prev : prev.filter((l) => l.key !== key)));
   }
 
+  function productFromQuickText(rawProduct: string): ProductLite | null {
+    const q = normalizeToken(rawProduct);
+    if (!q) return null;
+    return products.find((p) => {
+      const code = normalizeToken(p.product_code);
+      const name = normalizeToken(p.product_name);
+      const spec = p.spec_wp ? normalizeToken(String(p.spec_wp)) : '';
+      return q === p.product_id ||
+        (!!code && (q.includes(code) || code.includes(q))) ||
+        (!!name && q.includes(name)) ||
+        (!!spec && q.includes(spec));
+    }) ?? null;
+  }
+
+  function applyQuickInput() {
+    const rows = quickInput.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
+    if (rows.length === 0) return;
+    const parsed: DraftLine[] = [];
+    const errors: string[] = [];
+    for (const [idx, row] of rows.entries()) {
+      const tabCols = row.split(/\t/).map((c) => c.trim()).filter(Boolean);
+      const commaCols = row.split(',').map((c) => c.trim()).filter(Boolean);
+      const cols = tabCols.length >= 3 ? tabCols : commaCols.length === 3 ? commaCols : [];
+      const parsedByTail = cols.length >= 3
+        ? { productText: cols.slice(0, -2).join(' '), quantityText: cols[cols.length - 2], unitPriceText: cols[cols.length - 1] }
+        : (() => {
+            const match = row.match(/^(.*?)\s+([0-9][0-9,]*)\s+([0-9]*\.?[0-9]+)$/);
+            return match ? { productText: match[1], quantityText: match[2], unitPriceText: match[3] } : null;
+          })();
+      if (!parsedByTail) {
+        errors.push(`${idx + 1}행`);
+        continue;
+      }
+      const unitPriceUsdWp = parseNumberToken(parsedByTail.unitPriceText);
+      const quantity = parseNumberToken(parsedByTail.quantityText);
+      const product = productFromQuickText(parsedByTail.productText);
+      if (!product || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPriceUsdWp) || unitPriceUsdWp <= 0) {
+        errors.push(`${idx + 1}행`);
+        continue;
+      }
+      parsed.push({
+        ...newLine(),
+        product_id: product.product_id,
+        quantity: String(quantity),
+        unit_price_usd_wp: String(unitPriceUsdWp),
+      });
+    }
+    if (errors.length > 0) {
+      notify.error(`빠른 입력 확인 필요: ${errors.slice(0, 5).join(', ')}`);
+      return;
+    }
+    setLines((prev) => (prev.length === 1 && isBlankLine(prev[0]) ? parsed : [...prev, ...parsed]));
+    setQuickInput('');
+    notify.success(`${parsed.length}개 라인을 반영했습니다`);
+  }
+
   // 등록 전 검증 — 메시지로만 막고, 인라인 표시는 1차 범위 외.
   function validate(): string | null {
-    if (!selectedCompanyId) return '좌측 상단에서 법인을 먼저 선택해주세요';
+    const companyId = initialValues?.company_id || selectedCompanyId;
+    if (!companyId || companyId === 'all') return '좌측 상단에서 법인을 먼저 선택해주세요';
     if (!manufacturerId) return '제조사를 선택해주세요';
     if (!contractDate) return '계약일을 입력해주세요';
     if (contractType === 'frame' && (!periodStart || !periodEnd)) {
@@ -156,9 +300,10 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
     if (err) { notify.error(err); return; }
     setSubmitting(true);
     try {
+      const companyId = initialValues?.company_id || selectedCompanyId;
       const headerPayload = {
         po_number: poNumber.trim() || undefined,
-        company_id: selectedCompanyId,
+        company_id: companyId,
         manufacturer_id: manufacturerId,
         contract_type: contractType,
         contract_date: contractDate,
@@ -167,6 +312,7 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
         contract_period_start: contractType === 'frame' ? periodStart : undefined,
         contract_period_end: contractType === 'frame' ? periodEnd : undefined,
         memo: memo.trim() || undefined,
+        parent_po_id: initialValues?.parent_po_id || undefined,
         status: 'draft' as const,
         line_items: lines.map((l) => {
           const product = productById.get(l.product_id);
@@ -206,7 +352,7 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="sm:max-w-3xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>발주(PO) 신규 등록</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <p className="text-xs text-muted-foreground">
             헤더 정보를 한 번 입력하고 라인을 N개 추가하세요. 같은 PO 안에서 본품/스페어, 유상/무상을 라인별로 구분합니다.
           </p>
@@ -257,23 +403,46 @@ export default function POCreateDialog({ open, onClose, onCreated }: Props) {
           <section className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="text-[13px] font-semibold">라인 ({lines.length}건 · 총 {totals.qty.toLocaleString()}매 · {totals.mw.toFixed(3)} MW)</div>
-              <Button type="button" size="xs" variant="outline" onClick={() => setLines((prev) => [...prev, newLine()])}>
-                <Plus className="mr-1 h-3 w-3" />라인 추가
-              </Button>
+              <div className="flex items-center gap-1.5">
+                <Button type="button" size="xs" variant="outline" onClick={applyQuickInput} disabled={!quickInput.trim()}>
+                  빠른 입력 반영
+                </Button>
+                <Button type="button" size="xs" variant="outline" onClick={() => setLines((prev) => [...prev, newLine()])}>
+                  <Plus className="mr-1 h-3 w-3" />라인 추가
+                </Button>
+              </div>
             </div>
+            <Textarea
+              value={quickInput}
+              onChange={(e) => setQuickInput(e.target.value)}
+              placeholder="품번	수량	USD/Wp"
+              rows={2}
+              className="min-h-[56px] text-[12px]"
+            />
             <div ref={linesParent} className="space-y-2">
               {lines.map((line, idx) => (
                 <div key={line.key} className="rounded-md border border-[var(--line)] p-2.5">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-[11px] font-semibold text-muted-foreground">라인 {idx + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeLine(line.key)}
-                      disabled={lines.length === 1}
-                      className="text-muted-foreground hover:text-destructive disabled:opacity-40"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => duplicateLine(line.key)}
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        title="라인 복사"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeLine(line.key)}
+                        disabled={lines.length === 1}
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive disabled:opacity-40"
+                        title="라인 삭제"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-6 gap-2">
                     <div className="col-span-2">

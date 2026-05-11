@@ -5,13 +5,13 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | Excel Import Hub 실데이터 샘플 리허설, study 학습 페이지 1차 UI + 진도/과제 도메인 설계, WMS 위치 배정 초기 데이터 보정 + 실사 차이 보정 결재 흐름 |
+| 다음 작업 | Excel Import Hub 실데이터 샘플 리허설 + PO 변경계약/라인 진행률 운영 검증 + study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | 75개 PASS |
-| DECISIONS | D-001~D-156 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운) |
+| DECISIONS | D-001~D-157 (D-080/D-081/D-132~D-138 번호 공백, D-145 테넌트 모듈화, D-146 가격예측 지역 제한, D-147 수주 충당 위험도, D-148 수금 매칭 AI 검토, D-149 PO 원자 저장, D-150 매출 분석 깊이 확장, D-151 Tier-1 ASP 제외, D-152 구매이력 감사 렌즈, D-153 study 학습 테넌트, D-154 WMS 자동화 축, D-155 Excel Import Hub PO/LC/T/T, D-156 매출 분석 대사 드릴다운, D-157 PO 상세 운영 보강) |
 | launchd | 5개 서비스 자동 시작 |
 
 ---
@@ -62,6 +62,31 @@
 - `cd frontend && npm test` 실패 — 현재 작업 환경에 `bun` 실행 파일이 없어 테스트 스크립트가 시작되지 않음
 - `git diff --check` 성공
 - `graphify update .` 성공
+
+---
+
+## 2026-05-11 세션 — PO 상세 운영 보강 (D-157)
+
+### 완료
+- PO 상세 헤더에 `변경계약 작성` 버튼 추가
+  - 현재 PO를 `parent_po_id`로 연결한 새 PO 초안 생성
+  - 원계약 제조사·조건·라인을 기본값으로 복사하고 PO번호는 비워둠
+- PO 신규/변경계약 다이얼로그 라인 입력 개선
+  - 기존 라인 복사 버튼 추가
+  - 품번/수량/USD/Wp 붙여넣기 기반 빠른 입력 반영
+- PO 입고현황에 라인별 진행률 추가
+  - 라인별 계약량, LC개설량, 선적량, 입고량, 잔여량, 입고율 표시
+  - `po_line_id` 우선, 과거 데이터는 품번이 단일 라인일 때만 보정
+- PO 상세 `변경이력` 탭 추가
+  - `audit_logs`의 `old_data/new_data`를 한국어 필드 diff로 표시
+- 설계 정본과 D-157 결정 기록 동기화
+
+### 검증
+- `cd frontend && bun run build` 성공
+- `cd frontend && bun run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `cd frontend && bun run test` 성공 — 10 files / 93 tests (기존 act warning 출력)
+- `git diff --check` 성공
+- `graphify update .` 성공 — 4994 nodes / 8090 edges / 408 communities
 
 ---
 
