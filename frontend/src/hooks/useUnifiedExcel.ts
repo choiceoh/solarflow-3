@@ -12,6 +12,23 @@ import type {
 } from '@/types/excel';
 import type { Company, Manufacturer, Partner, Product, Warehouse, Bank } from '@/types/masters';
 
+const PRODUCT_VARIANT_KIND_MAP: Record<string, string> = {
+  output_bin: 'output_bin',
+  '출력 binning': 'output_bin',
+  bom_variant: 'bom_variant',
+  'BOM 차이': 'bom_variant',
+  cert_variant: 'cert_variant',
+  '인증 차이': 'cert_variant',
+  label_variant: 'label_variant',
+  '라벨 차이': 'label_variant',
+  packaging_variant: 'packaging_variant',
+  '포장 차이': 'packaging_variant',
+  mixed: 'mixed',
+  복합: 'mixed',
+  other: 'other',
+  기타: 'other',
+};
+
 function textValue(value: unknown): string {
   return String(value ?? '').trim();
 }
@@ -60,6 +77,7 @@ function buildProductPayload(row: Record<string, unknown>, manufacturerId: strin
     const v = textValue(row[key]);
     return v ? { [key]: v } : {};
   };
+  const variantKind = textValue(row.product_variant_kind);
   return {
     product_code: textValue(row.product_code),
     product_name: textValue(row.product_name),
@@ -73,6 +91,10 @@ function buildProductPayload(row: Record<string, unknown>, manufacturerId: strin
     ...optionalStr('wafer_platform'),
     ...optionalStr('cell_config'),
     ...optionalStr('series_name'),
+    ...optionalStr('product_family_code'),
+    ...(variantKind ? { product_variant_kind: PRODUCT_VARIANT_KIND_MAP[variantKind] ?? variantKind } : {}),
+    ...optionalStr('bom_revision'),
+    ...optionalStr('substitution_group_code'),
     ...optionalStr('memo'),
   };
 }

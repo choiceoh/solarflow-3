@@ -15,6 +15,16 @@ function Txt({ text, placeholder = '선택' }: { text: string; placeholder?: str
   return <span className={`flex flex-1 text-left truncate ${text ? '' : 'text-muted-foreground'}`} data-slot="select-value">{text || placeholder}</span>;
 }
 
+const PRODUCT_VARIANT_LABEL: Record<string, string> = {
+  output_bin: '출력 binning',
+  bom_variant: 'BOM 차이',
+  cert_variant: '인증 차이',
+  label_variant: '라벨 차이',
+  packaging_variant: '포장 차이',
+  mixed: '복합',
+  other: '기타',
+};
+
 const schema = z.object({
   product_code: z.string().min(1, '품번코드는 필수입니다'),
   product_name: z.string().min(1, '품명은 필수입니다'),
@@ -28,6 +38,10 @@ const schema = z.object({
   wafer_platform: z.string().optional(),
   cell_config: z.string().optional(),
   series_name: z.string().optional(),
+  product_family_code: z.string().max(80, '80자 이하여야 합니다').optional(),
+  product_variant_kind: z.enum(['output_bin', 'bom_variant', 'cert_variant', 'label_variant', 'packaging_variant', 'mixed', 'other']).optional().or(z.literal('')),
+  bom_revision: z.string().max(50, '50자 이하여야 합니다').optional(),
+  substitution_group_code: z.string().max(80, '80자 이하여야 합니다').optional(),
   module_efficiency: z.coerce.number().positive('양수만 가능합니다').max(100, '100 이하여야 합니다').optional().or(z.literal('')),
   module_type: z.enum(['PERC', 'TOPCON', 'BC']).optional().or(z.literal('')),
   module_grade: z.enum(['1', '2', '3', 'NA']).optional().or(z.literal('')),
@@ -50,6 +64,10 @@ function buildDefaults(editData?: Product | null): ProductFormData {
       wafer_platform: editData.wafer_platform ?? '',
       cell_config: editData.cell_config ?? '',
       series_name: editData.series_name ?? '',
+      product_family_code: editData.product_family_code ?? '',
+      product_variant_kind: editData.product_variant_kind ?? '',
+      bom_revision: editData.bom_revision ?? '',
+      substitution_group_code: editData.substitution_group_code ?? '',
       module_efficiency: editData.module_efficiency ?? '',
       module_type: editData.module_type ?? '',
       module_grade: editData.module_grade ?? '',
@@ -62,6 +80,7 @@ function buildDefaults(editData?: Product | null): ProductFormData {
     module_width_mm: '' as unknown as number, module_height_mm: '' as unknown as number,
     module_depth_mm: '', weight_kg: '',
     wafer_platform: '', cell_config: '', series_name: '',
+    product_family_code: '', product_variant_kind: '', bom_revision: '', substitution_group_code: '',
     module_efficiency: '', module_type: '', module_grade: '',
     memo: '',
   };
@@ -71,6 +90,10 @@ function stripEmpty(data: ProductFormData): Record<string, unknown> {
   const payload: Record<string, unknown> = { ...data };
   if (data.module_depth_mm === '' || data.module_depth_mm === undefined) delete payload.module_depth_mm;
   if (data.weight_kg === '' || data.weight_kg === undefined) delete payload.weight_kg;
+  if (data.product_family_code === '' || data.product_family_code === undefined) delete payload.product_family_code;
+  if (data.product_variant_kind === '' || data.product_variant_kind === undefined) delete payload.product_variant_kind;
+  if (data.bom_revision === '' || data.bom_revision === undefined) delete payload.bom_revision;
+  if (data.substitution_group_code === '' || data.substitution_group_code === undefined) delete payload.substitution_group_code;
   if (data.module_efficiency === '' || data.module_efficiency === undefined) delete payload.module_efficiency;
   if (data.module_type === '' || data.module_type === undefined) delete payload.module_type;
   if (data.module_grade === '' || data.module_grade === undefined) delete payload.module_grade;
@@ -173,6 +196,33 @@ function ProductFields({ register, errors, watch, setValue, manufacturers }: Fie
       <FormField label="시리즈명">
         <Input {...register('series_name')} />
       </FormField>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="제품군 코드" error={errors.product_family_code?.message}>
+          <Input placeholder="예: JKM-N-78HL4-BDV-S" {...register('product_family_code')} />
+        </FormField>
+        <FormField label="대체그룹" error={errors.substitution_group_code?.message}>
+          <Input placeholder="예: JKM-78HL4-BDV" {...register('substitution_group_code')} />
+        </FormField>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="분리 사유" error={errors.product_variant_kind?.message}>
+          <Select
+            value={watch('product_variant_kind') ?? ''}
+            onValueChange={(v) => setValue('product_variant_kind', (v as ProductFormData['product_variant_kind']) ?? '')}
+          >
+            {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
+            <SelectTrigger><Txt text={PRODUCT_VARIANT_LABEL[watch('product_variant_kind') ?? ''] ?? ''} /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(PRODUCT_VARIANT_LABEL).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormField>
+        <FormField label="BOM Rev" error={errors.bom_revision?.message}>
+          <Input placeholder="예: BOM-A" {...register('bom_revision')} />
+        </FormField>
+      </div>
       <FormField label="메모">
         <Textarea {...register('memo')} rows={2} />
       </FormField>
