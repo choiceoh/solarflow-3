@@ -16,6 +16,27 @@
 
 ---
 
+## 2026-05-11 세션 — 출고/판매 자동 준비 보강
+
+### 완료
+- 출고 상세에서 판매/AS 출고인데 매출이 없으면 매출 생성 폼을 자동으로 펼침
+- 매출 생성 폼에서 거래처 담당 이메일이 있으면 계산서 이메일을 자동 채움
+- 계산서 미발행 큐 진입 시 현재 페이지의 미발행 매출을 자동 선택하고, 오늘 날짜와 공통 이메일을 일괄 처리 기본값으로 준비
+- ERP 미마감 큐는 계산서 발행 완료 + ERP 미마감 건만 보여주고 자동 선택해 바로 마감 처리 가능하게 보강
+- ERP 미마감 필터가 과거 이관 데이터의 `erp_closed IS NULL`도 미마감으로 포함하도록 서버 필터 보강
+
+### 검증
+- `cd backend && go test ./internal/handler` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `cd frontend && npm run build` 성공
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5010 nodes / 8116 edges / 411 communities
+
+---
+
 ## 2026-05-11 세션 — 출고/판매 처리 큐 + 매출/계산서 작업 단축
 
 ### 완료
