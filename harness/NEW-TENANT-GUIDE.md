@@ -177,7 +177,7 @@ export type PackID = 'erp-core' | 'module-finance' | 'baro-domain' | 'gx10';
 | `harness/<id>.md` 신설 | 도메인별 인덱스 (운영 컨텍스트, 활성 메뉴, 관련 결정, 운영 메모) — 기존 [module.md](module.md) / [baro.md](baro.md) / [cable.md](cable.md) 양식 |
 | `harness/PROGRESS.md` 헤더 | 프론트엔드 줄에 운영 도메인 목록 갱신 |
 | `harness/CLAUDE.md` (이 worktree) | "도메인별 인덱스" 섹션에 한 줄 추가 |
-| `harness/DECISIONS.md` | 격리 강도가 기존과 다르거나 새 데이터 스코프 정책이라면 D-NNN 추가 |
+| `harness/DECISIONS.md` | 격리 강도가 기존과 다르거나 새 데이터 스코프 정책이라면 `D-YYYYMMDD-HHMMSS` 형식의 결정 ID 추가 |
 
 ---
 

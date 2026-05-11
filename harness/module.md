@@ -118,6 +118,6 @@ BARO와 **공유**:
 2. `MODULE_TENANTS = {topsolar, cable}` 적용 = 카탈로그 entry 의 `DefaultTenants: feature.TenantSetModule` (D-119 패턴)
 3. 사이드바(`CommandShell.tsx`) 메뉴에 `tenants: ['topsolar', 'cable']` 명시하거나 `MODULE_TENANTS`를 재사용
 4. 공유 화면에서 탑솔라 전용 UI는 `!isBaroMode()` 또는 tenant 체크로 가드
-5. **DECISIONS.md에 D-NNN 추가** + 본 문서 「관련 결정」 섹션에 링크 1줄 추가
-6. **D-108 격리 목록을 늘리는 변경이라면 D-108을 갱신할지 별도 D-NNN을 둘지 명시** — D-108은 "이 목록이 격리 범위의 전부"라고 못박았으므로 추가 확장은 결정 기록 필수
+5. **DECISIONS.md에 `D-YYYYMMDD-HHMMSS` 형식의 결정 ID 추가** + 본 문서 「관련 결정」 섹션에 링크 1줄 추가
+6. **D-108 격리 목록을 늘리는 변경이라면 D-108을 갱신할지 별도 `D-YYYYMMDD-HHMMSS` 결정을 둘지 명시** — D-108은 "이 목록이 격리 범위의 전부"라고 못박았으므로 추가 확장은 결정 기록 필수
 7. **D-112 사이드바 탭 분류** — admin이 「전체」 탭만 두지 않은 경우, 신규 메뉴는 사이트 설정 > 사이드바 탭에서 어느 탭에 노출할지 분류 (안 하면 「전체」 탭에서만 노출)

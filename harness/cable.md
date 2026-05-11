@@ -81,5 +81,5 @@ module과 **동일하게 노출**:
 1. **D-120 의무**: `backend/internal/feature/catalog.go` entry + `harness/FEATURE-WIRING-MATRIX.md` 행 + 라우트 `r.Use(g.Feature(feature.IDXxx))` (셋 다 같은 PR).
 2. module 과 같은 표면이면 카탈로그 entry 의 `DefaultTenants: feature.TenantSetModule` 사용. cable 만 독립이면 새 사전 정의 집합(예: `TenantSetCableOnly`)을 catalog.go 에 추가하거나 인라인 `[]string{"cable"}`.
 3. 사이드바 메뉴 `tenants` 도 카탈로그 default 와 일치시킨다.
-4. DECISIONS.md에 D-NNN 추가 + 본 문서 「관련 결정」 섹션에 링크 1줄 추가
+4. DECISIONS.md에 `D-YYYYMMDD-HHMMSS` 형식의 결정 ID 추가 + 본 문서 「관련 결정」 섹션에 링크 1줄 추가
 5. 사이드바 탭을 쓰는 운영 환경이면 사이트 설정의 `sidebar_tabs.cable` 분류도 확인
