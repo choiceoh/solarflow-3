@@ -25,7 +25,11 @@ interface Props {
   onSubmit: () => void;
 }
 
-type FilterMode = 'all' | 'valid' | 'error';
+type FilterMode = 'all' | 'valid' | 'warning' | 'error';
+
+function warningRows(rows: { valid: boolean; warnings?: unknown[] }[]): number {
+  return rows.filter((r) => r.valid && (r.warnings?.length ?? 0) > 0).length;
+}
 
 export default function ImportPreviewDialog({
   type, preview, declPreview, loading, onClose, onDownloadErrors, onSubmit,
@@ -41,9 +45,13 @@ export default function ImportPreviewDialog({
   if (type === 'declaration' && declPreview) {
     const declValid = declPreview.declarations.filter((r) => r.valid).length;
     const declError = declPreview.declarations.filter((r) => !r.valid).length;
+    const declWarning = warningRows(declPreview.declarations);
     const costValid = declPreview.costs.filter((r) => r.valid).length;
     const costError = declPreview.costs.filter((r) => !r.valid).length;
+    const costWarning = warningRows(declPreview.costs);
     const totalError = declError + costError;
+    const totalWarning = declWarning + costWarning;
+    const totalNormal = declValid + costValid - totalWarning;
 
     return (
       <>
@@ -61,7 +69,9 @@ export default function ImportPreviewDialog({
               <FilterButton mode="all" current={filter} onClick={setFilter}
                 label={`전체 ${declPreview.declarations.length + declPreview.costs.length}건`} />
               <FilterButton mode="valid" current={filter} onClick={setFilter}
-                label={`유효 ${declValid + costValid}건`} className="text-green-700" />
+                label={`정상 ${totalNormal}건`} className="text-green-700" />
+              <FilterButton mode="warning" current={filter} onClick={setFilter}
+                label={`경고 ${totalWarning}건`} className="text-amber-700" />
               <FilterButton mode="error" current={filter} onClick={setFilter}
                 label={`에러 ${totalError}건`} className="text-red-700" />
             </div>
@@ -124,6 +134,8 @@ export default function ImportPreviewDialog({
   // 일반 양식
   if (!preview) return null;
   const fields = FIELDS_MAP[type];
+  const previewWarning = preview.warningRows ?? warningRows(preview.rows);
+  const previewNormal = preview.validRows - previewWarning;
 
   return (
     <>
@@ -141,7 +153,9 @@ export default function ImportPreviewDialog({
             <FilterButton mode="all" current={filter} onClick={setFilter}
               label={`전체 ${preview.totalRows}건`} />
             <FilterButton mode="valid" current={filter} onClick={setFilter}
-              label={`유효 ${preview.validRows}건`} className="text-green-700" />
+              label={`정상 ${previewNormal}건`} className="text-green-700" />
+            <FilterButton mode="warning" current={filter} onClick={setFilter}
+              label={`경고 ${previewWarning}건`} className="text-amber-700" />
             <FilterButton mode="error" current={filter} onClick={setFilter}
               label={`에러 ${preview.errorRows}건`} className="text-red-700" />
           </div>

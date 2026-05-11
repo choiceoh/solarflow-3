@@ -272,6 +272,7 @@ POST    /api/v1/import/outbound
 POST    /api/v1/import/purchase-orders
 POST    /api/v1/import/receipts
 POST    /api/v1/import/sales
+POST    /api/v1/import/tts
 POST    /api/v1/intercompany-requests/
 POST    /api/v1/inventory/allocations/
 POST    /api/v1/lcs/
