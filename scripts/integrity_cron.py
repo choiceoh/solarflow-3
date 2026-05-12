@@ -207,6 +207,16 @@ def main():
 
     c.commit()
 
+    # v_db_anomalies 일별 snapshot 기록 — D-20260512-171222 룰 6 (정합성 진척 추적).
+    # 매일 1회면 충분하지만 호출이 idempotent (같은 날짜는 UPSERT) 이므로 매 cron 마다 호출해도 OK.
+    try:
+        cur.execute("SELECT snapshot_db_anomalies()")
+        c.commit()
+    except Exception as e:
+        # 함수 존재 안 하는 환경 (105 마이그 미적용) 도 graceful 처리
+        c.rollback()
+        print(f"  [warn] snapshot_db_anomalies() skip: {e}", file=sys.stderr)
+
     # 알림 발송
     if issues and not args.dry_run:
         post_alert(issues)
