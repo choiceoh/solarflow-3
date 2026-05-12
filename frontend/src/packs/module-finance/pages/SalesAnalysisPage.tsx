@@ -683,6 +683,7 @@ export default function SalesAnalysisPage() {
   const [alternativeCostBasis, setAlternativeCostBasis] =
     useState<AlternativeCostBasis>("manufacturer_avg")
   const [marginFilter, setMarginFilter] = useState<MarginFilter>("all")
+  const [productSearch, setProductSearch] = useState("")
   const [activeReconciliation, setActiveReconciliation] =
     useState<ReconciliationKey>("missing_cost")
   const [causeRowsParent] = useAutoAnimate<HTMLTableSectionElement>()
@@ -929,17 +930,39 @@ export default function SalesAnalysisPage() {
     return map
   }, [margin.items])
   const shownMarginItems = useMemo(() => {
+    let items = margin.items
     if (marginFilter === "missing_cost") {
-      return margin.items.filter((item) => item.avg_cost_wp == null || item.total_cost_krw == null)
+      items = items.filter((item) => item.avg_cost_wp == null || item.total_cost_krw == null)
+    } else if (marginFilter === "low_margin") {
+      items = items.filter((item) => item.margin_rate != null && item.margin_rate < 8)
+    } else if (marginFilter === "negative_margin") {
+      items = items.filter((item) => item.margin_rate != null && item.margin_rate < 0)
     }
-    if (marginFilter === "low_margin") {
-      return margin.items.filter((item) => item.margin_rate != null && item.margin_rate < 8)
+    const q = productSearch.trim().toLowerCase()
+    if (q) {
+      items = items.filter((item) => {
+        const costCovered = item.avg_cost_wp != null && item.total_cost_krw != null
+        const haystack = [
+          item.manufacturer_name,
+          item.product_code,
+          item.product_name,
+          moduleLabel(item.manufacturer_name, item.spec_wp),
+          costCovered ? "원가 연결" : "원가 없음",
+          formatNumber(item.total_sold_qty),
+          formatNumber(item.avg_sale_price_wp),
+          item.avg_cost_wp != null ? formatNumber(item.avg_cost_wp) : "",
+          item.margin_wp != null ? formatNumber(item.margin_wp) : "",
+          item.margin_rate != null ? `${item.margin_rate.toFixed(1)}%` : "",
+          formatKRW(item.total_revenue_krw),
+          item.total_margin_krw != null ? formatKRW(item.total_margin_krw) : "",
+        ]
+          .join(" ")
+          .toLowerCase()
+        return haystack.includes(q)
+      })
     }
-    if (marginFilter === "negative_margin") {
-      return margin.items.filter((item) => item.margin_rate != null && item.margin_rate < 0)
-    }
-    return margin.items
-  }, [margin.items, marginFilter])
+    return items
+  }, [margin.items, marginFilter, productSearch])
   const shownMarginCoveredCount = shownMarginItems.filter((item) => item.avg_cost_wp != null).length
   const shownMarginTotals = useMemo(() => {
     const totalRevenue = shownMarginItems.reduce((sum, item) => sum + item.total_revenue_krw, 0)
@@ -1092,6 +1115,25 @@ export default function SalesAnalysisPage() {
     margin.summary.overall_margin_rate,
     missingCostDetailRows,
   ])
+  const shownAlternativeMarginRows = useMemo(() => {
+    const q = productSearch.trim().toLowerCase()
+    if (!q) return alternativeMarginRows
+    return alternativeMarginRows.filter((row) => {
+      const haystack = [
+        row.item.product_code,
+        row.item.product_name,
+        row.item.manufacturer_name,
+        row.reasonLabel ?? "",
+        row.altCostLabel,
+        formatKRW(row.missingRevenue),
+        `${formatNumber(row.altCostWp)}원/Wp`,
+        `${row.adjustedMarginRate.toFixed(1)}%`,
+      ]
+        .join(" ")
+        .toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [alternativeMarginRows, productSearch])
   const alternativeMarginSummary = useMemo<AlternativeMarginSummary>(() => {
     const estimatedCost = alternativeMarginRows.reduce((sum, row) => sum + row.altCostKrw, 0)
     const adjustedCost =
@@ -2039,11 +2081,20 @@ export default function SalesAnalysisPage() {
                 title="대체원가 기준 마진"
                 sub="원가 미연결 잠정 보정"
                 right={
-                  <FilterChips
-                    options={alternativeCostOptions}
-                    value={alternativeCostBasis}
-                    onChange={(value) => setAlternativeCostBasis(value as AlternativeCostBasis)}
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="search"
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      placeholder="테이블 검색"
+                      className="h-8 w-44 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-2 text-xs"
+                    />
+                    <FilterChips
+                      options={alternativeCostOptions}
+                      value={alternativeCostBasis}
+                      onChange={(value) => setAlternativeCostBasis(value as AlternativeCostBasis)}
+                    />
+                  </div>
                 }
               >
                 <div className="grid grid-cols-3 gap-3 border-b border-[var(--line)] px-4 py-3">
@@ -2077,7 +2128,7 @@ export default function SalesAnalysisPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {alternativeMarginRows.slice(0, 5).map((row) => (
+                    {shownAlternativeMarginRows.slice(0, 5).map((row) => (
                       <TableRow key={`${row.item.product_code}-${row.item.spec_wp}`}>
                         <TableCell className="text-xs">
                           <div className="font-medium">{row.item.product_code}</div>
@@ -2097,7 +2148,7 @@ export default function SalesAnalysisPage() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {alternativeMarginRows.length === 0 && (
+                    {shownAlternativeMarginRows.length === 0 && (
                       <TableRow>
                         <TableCell
                           colSpan={5}
@@ -2645,11 +2696,20 @@ export default function SalesAnalysisPage() {
               title="품목별 이익 분석"
               sub="판매가 · 원가 · 이익/Wp"
               right={
-                <FilterChips
-                  options={marginFilterOptions}
-                  value={marginFilter}
-                  onChange={(value) => setMarginFilter(value as MarginFilter)}
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="search"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    placeholder="테이블 검색"
+                    className="h-8 w-44 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-2 text-xs"
+                  />
+                  <FilterChips
+                    options={marginFilterOptions}
+                    value={marginFilter}
+                    onChange={(value) => setMarginFilter(value as MarginFilter)}
+                  />
+                </div>
               }
             >
               <Table className="sf-motion-table">
