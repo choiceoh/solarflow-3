@@ -106,6 +106,7 @@ describe('NAV_GROUPS — 매핑 무결성', () => {
     expect(paths).not.toContain('/group-trade/baro-inbox');
     expect(paths).not.toContain('/banking');
     expect(paths).not.toContain('/sales-analysis');
+    expect(paths).not.toContain('/outbound-analysis');
     expect(paths).not.toContain('/purchase-history');
     expect(paths).not.toContain('/price-forecast');
     expect(paths).not.toContain('/import');

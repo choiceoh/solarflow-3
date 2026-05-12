@@ -11,6 +11,7 @@ import {
   History,
   Inbox,
   Landmark,
+  PackageSearch,
   Ship,
   TrendingUp,
 } from 'lucide-react';
@@ -30,6 +31,7 @@ export const MODULE_FINANCE_PACK: Pack = {
     { key: 'baro-inbox', label: '그룹 요청', abbr: '그룹', path: '/group-trade/baro-inbox', icon: Inbox, menu: 'baro_inbox', group: '구매', feature: 'intercompany.request.inbox', tenants: MODULE_TENANTS },
     { key: 'banking', label: 'L/C 한도', abbr: '한도', path: '/banking', icon: Landmark, menu: 'banking', group: '현황', feature: 'master.bank', tenants: MODULE_TENANTS },
     { key: 'analysis', label: '매출 분석', abbr: '분석', path: '/sales-analysis', icon: BarChart3, menu: 'customs', group: '현황', feature: 'calc.margin_analysis', tenants: MODULE_TENANTS },
+    { key: 'outbound-analysis', label: '출고 분석', abbr: '출고', path: '/outbound-analysis', icon: PackageSearch, menu: 'customs', group: '현황', feature: 'calc.margin_analysis', tenants: MODULE_TENANTS },
     { key: 'purchase-history', label: '구매 이력', abbr: '이력', path: '/purchase-history', icon: History, menu: 'purchase_history', group: '현황', feature: 'tx.price_history', tenants: MODULE_TENANTS },
     { key: 'price-forecast', label: '가격예측', abbr: '가격', path: '/price-forecast', icon: TrendingUp, menu: 'price_forecast', group: '현황', feature: 'tx.price_benchmark', tenants: MODULE_TENANTS },
     // PR-8: 카탈로그 등재 (tx.approval, FrontendOnly) + module 계열 tenant 가드.
