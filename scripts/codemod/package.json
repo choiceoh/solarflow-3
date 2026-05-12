@@ -1,0 +1,19 @@
+{
+  "name": "@solarflow/codemod",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "description": "AGENT-BUILDER-VISION codemod 인프라 — registry.yaml / manifest YAML 정본을 코드/JSON 생성물로 변환.",
+  "scripts": {
+    "gen-registry": "node gen-registry.mjs",
+    "build-hook-index": "node build-hook-index.mjs",
+    "build-all": "node gen-registry.mjs && node build-hook-index.mjs",
+    "verify": "node gen-registry.mjs && node build-hook-index.mjs && git -C ../../ diff --exit-code -- backend/internal/tenant/registry.go .claude/hooks/domains.json"
+  },
+  "dependencies": {
+    "yaml": "^2.6.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

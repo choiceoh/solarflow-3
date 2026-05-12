@@ -1,80 +1,187 @@
 {
-  "_comment_1": "Generated index: path → domain → blast_radius / verify_scripts.",
-  "_comment_2": "v1 (이 PR): 수동 작성. PO 1개만 full manifest, 나머지는 fallback glob.",
-  "_comment_3": "v2 (PR-A): scripts/codemod/build-hook-index.ts 가 harness/registry.yaml + harness/domains/*.yaml 에서 자동 생성.",
-  "_comment_4": "직접 편집 가능하지만 PR-A 이후엔 generated 파일이 됨 — 그땐 manifest YAML 만 편집.",
+  "_generated_by": "scripts/codemod/build-hook-index.mjs from harness/registry.yaml + harness/domains/*.yaml. DO NOT EDIT — re-run codemod after editing source.",
+  "_comment_for_special_paths": "special_paths 와 path_to_domain_fallback 은 codemod 안 데이터 (PR-C 후 줄어듦). manifest 작성된 도메인은 위 domains 섹션에서 자동.",
   "schema_version": 1,
-
   "domains": {
     "po": {
       "display_name": "발주 (Purchase Order)",
       "feature_id": "tx.po",
-      "tenants": ["topsolar", "cable"],
-      "tables": ["purchase_orders", "po_line_items"],
-      "depends_on": ["products", "inventory", "lc", "tt"],
+      "pack": "module-finance",
+      "tenants": [
+        "cable",
+        "topsolar"
+      ],
+      "tables": [
+        "purchase_orders",
+        "po_line_items"
+      ],
+      "depends_on": [
+        "products",
+        "inventory",
+        "lc",
+        "tt"
+      ],
       "paths": [
         "backend/internal/model/po.go",
         "backend/internal/model/po_line.go",
         "backend/internal/handler/tx_po.go",
         "backend/internal/handler/tx_po_line.go",
         "backend/internal/handler/tx_po_dashboard.go",
-        "backend/internal/handler/tx_po_test.go",
-        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx"
+        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx",
+        "backend/internal/handler/tx_po_test.go"
       ],
       "blast_radius": [
-        "PO model 필드 추가/삭제 → handler.go Validation + frontend ProcurementPage form 타입 + migration (check_schema.sh 가 잡음)",
-        "po_line_items 컬럼 변경 → backend/scripts/check_schema.sh 통과 + scripts/backfill_order_prices.py 영향 + PostgREST 스키마 캐시 갱신 (CLAUDE.md '필수 절차' 4단계)",
-        "PO 라우트 추가 → backend/internal/feature/catalog.go 의 IDTxPO entry Paths 갱신 (matrix_consistency_test 가 잡음)",
-        "contract_type 허용 값 변경 → model.validContractTypes + frontend select option 동시 수정"
+        "PO model 필드 추가/삭제 — backend/internal/handler/tx_po.go (Validation 흐름) / frontend/src/packs/module-finance/pages/ProcurementPage.tsx (form 타입) / backend/migrations/ (마이그 필수) / PostgREST 스키마 캐시 갱신 (CLAUDE.md '필수 절차' 4단계)",
+        "po_line_items 컬럼 추가/삭제 — backend/scripts/check_schema.sh 통과 / scripts/backfill_order_prices.py (라인 가격 backfill 영향) / scripts/verify_residual_4.py (잔여수량 정합성)",
+        "PO 라우트 추가 (path/method 새로 등장) — backend/internal/feature/catalog.go 의 IDTxPO entry Paths 갱신 필수 / matrix_consistency_test 가 누락 잡음 / harness/FEATURE-WIRING-MATRIX.md 표 동시 갱신",
+        "contract_type 허용 값 변경 — backend/internal/model/po.go 의 validContractTypes 맵 / frontend ProcurementPage 검색 필터의 select option",
+        "PO 상태 (status) 전이 규칙 변경 — tx_po.go 의 status update endpoint (PUT /:id/status) / 프론트 status badge 색상 매핑 (Tremor 컴포넌트)"
       ],
       "verify_scripts": [
         "scripts/verify_changed.sh",
-        "backend/scripts/check_schema.sh"
+        "backend/scripts/check_schema.sh",
+        "cd backend && go test ./internal/handler -run TestPO",
+        "cd backend && go test ./internal/feature ./internal/router"
       ],
-      "decisions": ["D-061", "D-086", "D-087"]
+      "decisions": [
+        "D-061",
+        "D-086",
+        "D-087"
+      ]
     }
   },
-
   "path_to_domain_fallback": [
-    { "glob": "backend/internal/model/bl*.go",            "domain_id": "bl" },
-    { "glob": "backend/internal/handler/tx_bl*.go",       "domain_id": "bl" },
-    { "glob": "backend/internal/model/lc*.go",            "domain_id": "lc" },
-    { "glob": "backend/internal/handler/tx_lc*.go",       "domain_id": "lc" },
-    { "glob": "backend/internal/model/tt*.go",            "domain_id": "tt" },
-    { "glob": "backend/internal/handler/tx_tt*.go",       "domain_id": "tt" },
-    { "glob": "backend/internal/model/product*.go",       "domain_id": "products" },
-    { "glob": "backend/internal/model/inventory_*.go",    "domain_id": "inventory" },
-    { "glob": "backend/internal/model/price_*.go",        "domain_id": "price_benchmark" },
-    { "glob": "backend/internal/model/declaration*.go",   "domain_id": "declaration" },
-    { "glob": "backend/internal/handler/tx_declaration*.go", "domain_id": "declaration" },
-    { "glob": "backend/internal/model/order*.go",         "domain_id": "order" },
-    { "glob": "backend/internal/handler/tx_order*.go",    "domain_id": "order" },
-    { "glob": "backend/internal/model/sale*.go",          "domain_id": "sale" },
-    { "glob": "backend/internal/handler/tx_sale*.go",     "domain_id": "sale" },
-    { "glob": "backend/internal/model/receipt*.go",       "domain_id": "receipt" },
-    { "glob": "backend/internal/handler/tx_receipt*.go",  "domain_id": "receipt" },
-    { "glob": "backend/internal/model/outbound*.go",      "domain_id": "outbound" },
-    { "glob": "backend/internal/model/picking_*.go",      "domain_id": "outbound" },
-    { "glob": "backend/internal/handler/tx_outbound*.go", "domain_id": "outbound" },
-    { "glob": "backend/internal/model/baro_*.go",         "domain_id": "baro" },
-    { "glob": "backend/internal/handler/baro_*.go",       "domain_id": "baro" },
-    { "glob": "backend/internal/model/intercompany_*.go", "domain_id": "intercompany" },
-    { "glob": "backend/internal/handler/tx_intercompany_*.go", "domain_id": "intercompany" },
-    { "glob": "backend/internal/model/cost_*.go",         "domain_id": "cost_detail" },
-    { "glob": "backend/internal/handler/tx_cost_*.go",    "domain_id": "cost_detail" },
-    { "glob": "backend/internal/tenant/*.go",             "domain_id": "_tenant_registry" },
-    { "glob": "backend/internal/feature/catalog.go",      "domain_id": "_feature_catalog" },
-    { "glob": "frontend/src/packs/**/nav.ts",             "domain_id": "_pack_assembly" },
-    { "glob": "harness/registry.yaml",                    "domain_id": "_registry" },
-    { "glob": "harness/domains/*.yaml",                   "domain_id": "_domain_manifest" }
+    {
+      "glob": "backend/internal/model/bl*.go",
+      "domain_id": "bl"
+    },
+    {
+      "glob": "backend/internal/handler/tx_bl*.go",
+      "domain_id": "bl"
+    },
+    {
+      "glob": "backend/internal/model/lc*.go",
+      "domain_id": "lc"
+    },
+    {
+      "glob": "backend/internal/handler/tx_lc*.go",
+      "domain_id": "lc"
+    },
+    {
+      "glob": "backend/internal/model/tt*.go",
+      "domain_id": "tt"
+    },
+    {
+      "glob": "backend/internal/handler/tx_tt*.go",
+      "domain_id": "tt"
+    },
+    {
+      "glob": "backend/internal/model/product*.go",
+      "domain_id": "products"
+    },
+    {
+      "glob": "backend/internal/model/inventory_*.go",
+      "domain_id": "inventory"
+    },
+    {
+      "glob": "backend/internal/model/price_*.go",
+      "domain_id": "price_benchmark"
+    },
+    {
+      "glob": "backend/internal/model/declaration*.go",
+      "domain_id": "declaration"
+    },
+    {
+      "glob": "backend/internal/handler/tx_declaration*.go",
+      "domain_id": "declaration"
+    },
+    {
+      "glob": "backend/internal/model/order*.go",
+      "domain_id": "order"
+    },
+    {
+      "glob": "backend/internal/handler/tx_order*.go",
+      "domain_id": "order"
+    },
+    {
+      "glob": "backend/internal/model/sale*.go",
+      "domain_id": "sale"
+    },
+    {
+      "glob": "backend/internal/handler/tx_sale*.go",
+      "domain_id": "sale"
+    },
+    {
+      "glob": "backend/internal/model/receipt*.go",
+      "domain_id": "receipt"
+    },
+    {
+      "glob": "backend/internal/handler/tx_receipt*.go",
+      "domain_id": "receipt"
+    },
+    {
+      "glob": "backend/internal/model/outbound*.go",
+      "domain_id": "outbound"
+    },
+    {
+      "glob": "backend/internal/model/picking_*.go",
+      "domain_id": "outbound"
+    },
+    {
+      "glob": "backend/internal/handler/tx_outbound*.go",
+      "domain_id": "outbound"
+    },
+    {
+      "glob": "backend/internal/model/baro_*.go",
+      "domain_id": "baro"
+    },
+    {
+      "glob": "backend/internal/handler/baro_*.go",
+      "domain_id": "baro"
+    },
+    {
+      "glob": "backend/internal/model/intercompany_*.go",
+      "domain_id": "intercompany"
+    },
+    {
+      "glob": "backend/internal/handler/tx_intercompany_*.go",
+      "domain_id": "intercompany"
+    },
+    {
+      "glob": "backend/internal/model/cost_*.go",
+      "domain_id": "cost_detail"
+    },
+    {
+      "glob": "backend/internal/handler/tx_cost_*.go",
+      "domain_id": "cost_detail"
+    },
+    {
+      "glob": "backend/internal/tenant/*.go",
+      "domain_id": "_tenant_registry"
+    },
+    {
+      "glob": "backend/internal/feature/catalog.go",
+      "domain_id": "_feature_catalog"
+    },
+    {
+      "glob": "frontend/src/packs/**/nav.ts",
+      "domain_id": "_pack_assembly"
+    },
+    {
+      "glob": "harness/registry.yaml",
+      "domain_id": "_registry"
+    },
+    {
+      "glob": "harness/domains/*.yaml",
+      "domain_id": "_domain_manifest"
+    }
   ],
-
   "special_paths": {
     "_tenant_registry": {
       "display_name": "테넌트 정본 (D-145)",
       "blast_radius": [
         "registry.go 변경 → DB CHECK 제약 마이그 필수 (user_profiles.tenant_scope, tenant_features.tenant, tenant_data_scopes.tenant)",
-        "새 테넌트 추가 → harness/NEW-TENANT-GUIDE.md 의 7단계 전체",
+        "새 테넌트 추가 → harness/NEW-TENANT-GUIDE.md 의 7단계 전체. registry.yaml 정본 갱신 + gen-registry codemod 실행",
         "TenantSet* 가 catalog.go 에서 init 시 파생되므로 *컴파일 시점* 평가에 주의"
       ]
     },
@@ -96,22 +203,30 @@
     "_registry": {
       "display_name": "harness/registry.yaml (단일 정본)",
       "blast_radius": [
-        "tenants 변경 → backend/internal/tenant/registry.go 동기화 (PR-A 의 gen-registry codemod 도입 전까지 수동)",
-        "domains 추가 → harness/domains/<id>.yaml manifest 신설 + .claude/hooks/domains.json 갱신"
+        "tenants 변경 → cd scripts/codemod && node gen-registry.mjs 실행 (registry.go 자동 동기화)",
+        "domains 추가 → harness/domains/<id>.yaml manifest 신설 + build-hook-index 자동 재생성"
       ]
     },
     "_domain_manifest": {
       "display_name": "도메인 manifest (harness/domains/*.yaml)",
       "blast_radius": [
-        "manifest 변경 → .claude/hooks/domains.json 재생성 (PR-A 의 build-hook-index codemod)",
-        "paths/tables/blast_radius 가 실 코드와 어긋나면 hooks 가 잘못 안내함 — schema_version 호환 유지"
+        "manifest 변경 → cd scripts/codemod && node build-hook-index.mjs (.claude/hooks/domains.json 재생성)",
+        "paths/tables/blast_radius 가 실 코드와 어긋나면 hooks 가 잘못 안내 — schema_version 호환 유지"
       ]
     }
   },
-
   "global_hints": {
-    "*.sql": ["마이그 추가 시: psql 적용 + PostgREST 스키마 캐시 갱신 + check_schema.sh 통과 (CLAUDE.md '필수 절차' 4단계)"],
-    "backend/migrations/*.sql": ["@auto-apply 헤더 + tenant CHECK 제약 영향 검토"],
-    "harness/registry.yaml": ["registry → backend tenant.go + frontend packs/index.ts + feature catalog TenantSet* 동기화 필수 (PR-A 의 codemod 도입 전까지 수동 3곳)"]
+    "*.sql": [
+      "마이그 추가 시: psql 적용 + PostgREST 스키마 캐시 갱신 + check_schema.sh 통과 (CLAUDE.md '필수 절차' 4단계)"
+    ],
+    "backend/migrations/*.sql": [
+      "@auto-apply 헤더 + tenant CHECK 제약 영향 검토"
+    ],
+    "harness/registry.yaml": [
+      "registry.yaml → registry.go 동기화는 scripts/codemod/gen-registry.mjs 가 처리. 손으로 두 곳 편집 X"
+    ],
+    "harness/domains/*.yaml": [
+      "manifest 갱신 후 scripts/codemod/build-hook-index.mjs 실행해 .claude/hooks/domains.json 재생성"
+    ]
   }
 }
