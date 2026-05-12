@@ -141,6 +141,59 @@ export function extractText(message: UIMessage): string {
     .join('');
 }
 
+// 사용자 메시지 안의 첨부 블록 한 개.
+// AssistantPage 의 buildOCRBlock/formatSheetMetaBlock 가 `[첨부파일 표|OCR|문서] <파일명>` 으로 시작하는
+// 텍스트 블록을 생성해 user content 에 그대로 박는다. 백엔드/LLM 은 이 평문을 그대로 받지만,
+// UI 표시 단에선 칩으로 접어 사용자 눈에 안 띄게 한다.
+export type AttachmentKind = '표' | 'OCR' | '문서';
+
+export interface ParsedAttachment {
+  kind: AttachmentKind;
+  filename: string;
+  body: string; // 헤더 라인 제외한 본문 (펼쳤을 때 보여줄 원문)
+  raw: string;  // 헤더 포함 원본 블록 — 편집 후 재전송 시 다시 붙이기 위함
+}
+
+export interface SplitUserContent {
+  text: string;
+  attachments: ParsedAttachment[];
+}
+
+const ATTACHMENT_MARKER_RE = /(^|\n\n)\[첨부파일 (표|OCR|문서)\] /;
+const ATTACHMENT_HEAD_RE = /^\[첨부파일 (표|OCR|문서)\] (.+)$/;
+
+// splitUserContent — user 메시지 평문에서 사용자가 직접 입력한 텍스트와 첨부 블록을 분리.
+// 첨부가 없으면 attachments 는 빈 배열, text 는 입력 그대로.
+export function splitUserContent(content: string): SplitUserContent {
+  const m = content.match(ATTACHMENT_MARKER_RE);
+  if (!m || m.index === undefined) {
+    return { text: content, attachments: [] };
+  }
+  const sep = m[1]; // '' 또는 '\n\n'
+  const startOfFirstBlock = m.index + sep.length;
+  const text = content.slice(0, m.index).replace(/\n+$/, '');
+  const rest = content.slice(startOfFirstBlock);
+  // 다음 첨부 블록 헤더가 줄 두 개 띄어 등장하는 곳에서 분리.
+  const rawBlocks = rest.split(/\n\n(?=\[첨부파일 (?:표|OCR|문서)\] )/);
+  const attachments: ParsedAttachment[] = [];
+  for (const raw of rawBlocks) {
+    const nl = raw.indexOf('\n');
+    const headerLine = nl < 0 ? raw : raw.slice(0, nl);
+    const body = nl < 0 ? '' : raw.slice(nl + 1);
+    const h = headerLine.match(ATTACHMENT_HEAD_RE);
+    if (!h) continue;
+    attachments.push({ kind: h[1] as AttachmentKind, filename: h[2], body, raw });
+  }
+  return { text, attachments };
+}
+
+// joinUserContent — splitUserContent 의 역. 편집 후 재전송 시 사용자 새 텍스트와 원래 첨부 블록을 다시 합친다.
+export function joinUserContent(text: string, attachments: ParsedAttachment[]): string {
+  if (attachments.length === 0) return text;
+  const blocks = attachments.map((a) => a.raw).join('\n\n');
+  return text ? `${text}\n\n${blocks}` : blocks;
+}
+
 // summarizeInput — 도구 input 객체를 ToolChip 표시용 짧은 문자열로 요약.
 // 빈/없음 → "()". 객체면 키-값 1~2개를 "k=v" 형태로. v 가 길면 truncate.
 export function summarizeInput(input: unknown): string {
