@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -45,6 +46,7 @@ func init() {
 			// PR 091: 개별 row 수준 이상치 검사 (v_db_anomalies + anomaly_ignores).
 			r.With(g.AdminOnly).Get("/admin/db-anomalies", h.Anomalies)
 			r.With(g.AdminOnly).Get("/admin/db-anomalies/ignores", h.ListIgnores)
+			r.With(g.AdminOnly).Get("/admin/db-anomalies/snapshots", h.Snapshots)
 			r.With(g.AdminOnly).Post("/admin/db-anomalies/ignore", h.IgnoreAnomaly)
 			r.With(g.AdminOnly).Delete("/admin/db-anomalies/ignore/{ignoreID}", h.UnignoreAnomaly)
 		},
@@ -226,6 +228,64 @@ func (h *DBIntegrityHandler) Anomalies(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, AnomalyResponse{
 		Anomalies:   rows,
 		Summary:     summary,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// AnomalySnapshotRow — list_db_anomaly_snapshots() RPC 의 한 행 (룰별·일별 카운트).
+type AnomalySnapshotRow struct {
+	RuleName   string `json:"rule_name"`
+	Severity   string `json:"severity"`
+	Category   string `json:"category"`
+	TakenDate  string `json:"taken_date"` // YYYY-MM-DD (KST)
+	Count      int    `json:"count"`
+}
+
+// AnomalySnapshotsResponse — GET /admin/db-anomalies/snapshots 응답.
+type AnomalySnapshotsResponse struct {
+	Snapshots   []AnomalySnapshotRow `json:"snapshots"`
+	Days        int                  `json:"days"`
+	GeneratedAt string               `json:"generated_at"`
+}
+
+// Snapshots — GET /admin/db-anomalies/snapshots?days=30 — db_anomaly_snapshots 일별 시계열.
+// 운영 cron 이 매일 캡처한 룰별 카운트를 그대로 반환. /admin/db-integrity 페이지의
+// 추세 그래프 (룰별 line chart) 용. 룰 추가 시 별도 wiring 불필요 (105 마이그 자동 캡처).
+func (h *DBIntegrityHandler) Snapshots(w http.ResponseWriter, r *http.Request) {
+	days := 30
+	if v := r.URL.Query().Get("days"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 365 {
+			days = n
+		}
+	}
+
+	payload, err := json.Marshal(map[string]int{"p_days": days})
+	if err != nil {
+		response.RespondError(w, http.StatusInternalServerError, "요청 직렬화 실패")
+		return
+	}
+	respBody := h.DB.Rpc("list_db_anomaly_snapshots", "", payload)
+	if respBody == "" {
+		log.Printf("[이상치] list_db_anomaly_snapshots RPC 빈 응답")
+		response.RespondError(w, http.StatusInternalServerError, "snapshot 조회 실패")
+		return
+	}
+	if msg := postgRESTErrorMessage(respBody); msg != "" {
+		log.Printf("[이상치] snapshot RPC 에러: %s", respBody)
+		response.RespondError(w, http.StatusInternalServerError, "snapshot 조회 실패: "+msg)
+		return
+	}
+
+	var rows []AnomalySnapshotRow
+	if err := json.Unmarshal([]byte(respBody), &rows); err != nil {
+		log.Printf("[이상치] snapshot 디코딩 실패: %v body=%s", err, respBody)
+		response.RespondError(w, http.StatusInternalServerError, "응답 처리 실패")
+		return
+	}
+
+	response.RespondJSON(w, http.StatusOK, AnomalySnapshotsResponse{
+		Snapshots:   rows,
+		Days:        days,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 	})
 }
