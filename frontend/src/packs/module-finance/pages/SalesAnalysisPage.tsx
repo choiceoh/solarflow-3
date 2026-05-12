@@ -1236,7 +1236,12 @@ export default function SalesAnalysisPage() {
   const customerKwMap = useMemo(() => {
     const map = new Map<string, number>()
     for (const sale of filteredSales) {
-      const kw = sale.capacity_kw ?? 0
+      // sale.capacity_kw 가 NULL 인 경우 (마이그 108 백필 이전 임포트 잔재 +
+      // products.spec_wp NULL product 1건) quantity × spec_wp / 1000 으로 보강.
+      // 누락 시 customer 평균단가가 분모 deflate 로 부풀려지는 회귀 방지.
+      const kw =
+        sale.capacity_kw ??
+        (sale.quantity && sale.spec_wp ? (sale.quantity * sale.spec_wp) / 1000 : 0)
       if (!kw || !sale.customer_id) continue
       map.set(sale.customer_id, (map.get(sale.customer_id) ?? 0) + kw)
     }
