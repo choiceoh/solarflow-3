@@ -18,6 +18,7 @@ import (
 	"solarflow-backend/internal/domains/declaration"
 	"solarflow-backend/internal/domains/lc"
 	"solarflow-backend/internal/domains/order"
+	"solarflow-backend/internal/domains/outbound"
 	"solarflow-backend/internal/domains/po"
 	"solarflow-backend/internal/domains/sale"
 	"solarflow-backend/internal/domains/tt"
@@ -107,14 +108,14 @@ func parseExpenseRow(rowNum int, row map[string]interface{}, companyID string, b
 // usage_category·group_trade 허용값은 호출 측이 검증.
 // D-055: 워크플로우 체크박스 4개(tx_statement_ready/inspection_request_sent/approval_requested/tax_invoice_issued)
 // + source_payload(JSONB) 도 함께 흘려보낸다.
-func parseOutboundRow(rowNum int, row map[string]interface{}, companyID, productID, warehouseID string, wattageKW float64, orderID, targetCompanyID *string) (model.CreateOutboundRequest, []model.ImportError) {
+func parseOutboundRow(rowNum int, row map[string]interface{}, companyID, productID, warehouseID string, wattageKW float64, orderID, targetCompanyID *string) (outbound.CreateOutboundRequest, []model.ImportError) {
 	qty, qErr := requireInt(rowNum, row, "quantity")
 	if qErr != nil {
-		return model.CreateOutboundRequest{}, []model.ImportError{*qErr}
+		return outbound.CreateOutboundRequest{}, []model.ImportError{*qErr}
 	}
 	capacityKW := float64(qty) * wattageKW
 
-	req := model.CreateOutboundRequest{
+	req := outbound.CreateOutboundRequest{
 		OutboundDate:          getString(row, "outbound_date"),
 		CompanyID:             companyID,
 		ProductID:             productID,

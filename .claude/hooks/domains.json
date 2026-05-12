@@ -313,6 +313,49 @@
         "backend/scripts/check_schema.sh"
       ],
       "decisions": []
+    },
+    "outbound": {
+      "display_name": "출고 + WMS (Outbound)",
+      "feature_id": "tx.outbound",
+      "pack": "erp-core",
+      "tenants": [
+        "baro",
+        "cable",
+        "topsolar"
+      ],
+      "tables": [],
+      "depends_on": [],
+      "paths": [
+        "backend/internal/domains/outbound/"
+      ],
+      "blast_radius": [
+        "outbound model 변경 — backend/internal/domains/outbound/handler.go Validation"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh"
+      ],
+      "decisions": []
+    },
+    "intercompany": {
+      "display_name": "그룹내 매입 요청 (Intercompany)",
+      "feature_id": "intercompany.request",
+      "pack": "erp-core",
+      "tenants": [
+        "cable",
+        "topsolar"
+      ],
+      "tables": [],
+      "depends_on": [],
+      "paths": [
+        "backend/internal/domains/intercompany/"
+      ],
+      "blast_radius": [
+        "intercompany model 변경 — backend/internal/domains/intercompany/handler.go Validation"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh"
+      ],
+      "decisions": []
     }
   },
   "path_to_domain_fallback": [

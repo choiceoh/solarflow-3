@@ -1,4 +1,4 @@
-package handler
+package intercompany
 
 import (
 	"encoding/json"
@@ -13,7 +13,6 @@ import (
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -81,7 +80,7 @@ func (h *IntercompanyRequestHandler) Mine(w http.ResponseWriter, r *http.Request
 		response.RespondError(w, http.StatusInternalServerError, "매입 요청 조회에 실패했습니다")
 		return
 	}
-	var rows []model.IntercompanyRequest
+	var rows []IntercompanyRequest
 	if err := json.Unmarshal(data, &rows); err != nil {
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
 		return
@@ -110,7 +109,7 @@ func (h *IntercompanyRequestHandler) Inbox(w http.ResponseWriter, r *http.Reques
 		response.RespondError(w, http.StatusInternalServerError, "매입 요청 inbox 조회에 실패했습니다")
 		return
 	}
-	var rows []model.IntercompanyRequest
+	var rows []IntercompanyRequest
 	if err := json.Unmarshal(data, &rows); err != nil {
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
 		return
@@ -121,7 +120,7 @@ func (h *IntercompanyRequestHandler) Inbox(w http.ResponseWriter, r *http.Reques
 
 // Create — POST /api/v1/intercompany-requests — BARO 사용자: 매입 요청 등록
 func (h *IntercompanyRequestHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateIntercompanyRequestRequest
+	var req CreateIntercompanyRequestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return
@@ -157,7 +156,7 @@ func (h *IntercompanyRequestHandler) Create(w http.ResponseWriter, r *http.Reque
 		response.RespondError(w, http.StatusInternalServerError, "매입 요청 등록에 실패했습니다")
 		return
 	}
-	var created []model.IntercompanyRequest
+	var created []IntercompanyRequest
 	if err := json.Unmarshal(data, &created); err != nil || len(created) == 0 {
 		response.RespondError(w, http.StatusInternalServerError, "매입 요청 등록 결과를 확인할 수 없습니다")
 		return
@@ -222,7 +221,7 @@ func (h *IntercompanyRequestHandler) Reject(w http.ResponseWriter, r *http.Reque
 // pending 상태에서만 가능. status='shipped'로 전환.
 func (h *IntercompanyRequestHandler) Fulfill(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var body model.FulfillIntercompanyRequestRequest
+	var body FulfillIntercompanyRequestRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return
@@ -337,7 +336,7 @@ func (h *IntercompanyRequestHandler) statusGuard(w http.ResponseWriter, _ *http.
 }
 
 // enrich — 응답에 product/company 표시명을 보강
-func (h *IntercompanyRequestHandler) enrich(rows []model.IntercompanyRequest) {
+func (h *IntercompanyRequestHandler) enrich(rows []IntercompanyRequest) {
 	if len(rows) == 0 {
 		return
 	}

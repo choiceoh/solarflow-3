@@ -1,4 +1,4 @@
-package handler
+package outbound
 
 import (
 	"encoding/json"
@@ -10,7 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/supabase-community/postgrest-go"
 
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
 
@@ -19,7 +18,7 @@ const (
 	wmsCycleSeedLimit  = 5000
 )
 
-type wmsProductSnapshot struct {
+type WmsProductSnapshot struct {
 	ProductID   string   `json:"product_id"`
 	ProductCode *string  `json:"product_code"`
 	ProductName *string  `json:"product_name"`
@@ -56,7 +55,7 @@ type wmsPickingListRow struct {
 	PickingListID string `json:"picking_list_id"`
 }
 
-type wmsIntercompanyRequestRow struct {
+type WmsIntercompanyRequestRow struct {
 	RequestID  string  `json:"request_id"`
 	ProductID  string  `json:"product_id"`
 	Quantity   int     `json:"quantity"`
@@ -73,7 +72,7 @@ type wmsPickingPlanItem struct {
 	QuantityPlanned int
 }
 
-func specWPFromProduct(p wmsProductSnapshot) *int {
+func specWPFromProduct(p WmsProductSnapshot) *int {
 	if p.SpecWP == nil {
 		return nil
 	}
@@ -81,7 +80,7 @@ func specWPFromProduct(p wmsProductSnapshot) *int {
 	return &spec
 }
 
-func (h *OutboundHandler) ensurePickingListForOutbound(ob model.Outbound) error {
+func (h *OutboundHandler) ensurePickingListForOutbound(ob Outbound) error {
 	if ob.Status != "active" || ob.OutboundID == "" || ob.WarehouseID == "" || ob.ProductID == "" || ob.Quantity <= 0 {
 		return nil
 	}
@@ -113,7 +112,7 @@ func (h *OutboundHandler) ensurePickingListForOutbound(ob model.Outbound) error 
 		return err
 	}
 	if len(plan) == 0 {
-		product, _ := h.productSnapshot(ob.ProductID)
+		product, _ := h.ProductSnapshot(ob.ProductID)
 		plan = []wmsPickingPlanItem{{
 			ProductID:       ob.ProductID,
 			ProductCode:     product.ProductCode,
@@ -149,7 +148,7 @@ func (h *OutboundHandler) ensurePickingListForOutbound(ob model.Outbound) error 
 		if err != nil {
 			return fmt.Errorf("피킹 명세 헤더 자동 생성 실패: %w", err)
 		}
-		var created []model.PickingList
+		var created []PickingList
 		if err := json.Unmarshal(hdrData, &created); err != nil || len(created) == 0 {
 			return fmt.Errorf("피킹 명세 헤더 응답 처리 실패")
 		}
@@ -200,8 +199,8 @@ func (h *OutboundHandler) pickingListHasItems(pickingListID string) (bool, error
 	return count > 0, nil
 }
 
-func (h *OutboundHandler) buildPickingPlan(ob model.Outbound) ([]wmsPickingPlanItem, error) {
-	product, err := h.productSnapshot(ob.ProductID)
+func (h *OutboundHandler) buildPickingPlan(ob Outbound) ([]wmsPickingPlanItem, error) {
+	product, err := h.ProductSnapshot(ob.ProductID)
 	if err != nil {
 		return nil, err
 	}
@@ -221,20 +220,20 @@ func (h *OutboundHandler) buildPickingPlan(ob model.Outbound) ([]wmsPickingPlanI
 	return nil, nil
 }
 
-func (h *OutboundHandler) productSnapshot(productID string) (wmsProductSnapshot, error) {
+func (h *OutboundHandler) ProductSnapshot(productID string) (WmsProductSnapshot, error) {
 	data, _, err := h.DB.From("products").
 		Select("product_id, product_code, product_name, spec_wp", "exact", false).
 		Eq("product_id", productID).
 		Execute()
 	if err != nil {
-		return wmsProductSnapshot{}, err
+		return WmsProductSnapshot{}, err
 	}
-	var rows []wmsProductSnapshot
+	var rows []WmsProductSnapshot
 	if err := json.Unmarshal(data, &rows); err != nil {
-		return wmsProductSnapshot{}, err
+		return WmsProductSnapshot{}, err
 	}
 	if len(rows) == 0 {
-		return wmsProductSnapshot{ProductID: productID}, nil
+		return WmsProductSnapshot{ProductID: productID}, nil
 	}
 	return rows[0], nil
 }
@@ -261,7 +260,7 @@ func (h *OutboundHandler) locationMaps(warehouseID string) (map[string]wmsLocati
 	return byCode, byID
 }
 
-func (h *OutboundHandler) planFromInventoryMovements(ob model.Outbound, product wmsProductSnapshot, locationByCode map[string]wmsLocationSnapshot) ([]wmsPickingPlanItem, error) {
+func (h *OutboundHandler) planFromInventoryMovements(ob Outbound, product WmsProductSnapshot, locationByCode map[string]wmsLocationSnapshot) ([]wmsPickingPlanItem, error) {
 	data, _, err := h.DB.From("inventory_movements").
 		Select("product_id, location_code, ending_qty, movement_date", "exact", false).
 		Eq("warehouse_id", ob.WarehouseID).
@@ -324,7 +323,7 @@ func (h *OutboundHandler) planFromInventoryMovements(ob model.Outbound, product 
 	return items, nil
 }
 
-func (h *OutboundHandler) planFromAllocations(ob model.Outbound, product wmsProductSnapshot, locationByID map[string]wmsLocationSnapshot) ([]wmsPickingPlanItem, error) {
+func (h *OutboundHandler) planFromAllocations(ob Outbound, product WmsProductSnapshot, locationByID map[string]wmsLocationSnapshot) ([]wmsPickingPlanItem, error) {
 	query := h.DB.From("inventory_allocations").
 		Select("alloc_id, product_id, quantity, status, source_type, location_id, outbound_id, order_id", "exact", false).
 		Eq("company_id", ob.CompanyID).
@@ -390,7 +389,7 @@ func (h *OutboundHandler) planFromAllocations(ob model.Outbound, product wmsProd
 func (h *PickingListHandler) CreateFromOutbound(w http.ResponseWriter, r *http.Request) {
 	outboundID := chi.URLParam(r, "outbound_id")
 	outboundH := NewOutboundHandler(h.DB)
-	ob, err := outboundH.fetchOutboundByID(outboundID)
+	ob, err := outboundH.FetchOutboundByID(outboundID)
 	if err != nil {
 		if err == errOutboundNotFound {
 			response.RespondError(w, http.StatusNotFound, "출고를 찾을 수 없습니다")
@@ -414,7 +413,7 @@ func (h *PickingListHandler) CreateFromOutbound(w http.ResponseWriter, r *http.R
 		response.RespondJSON(w, http.StatusCreated, map[string]string{"status": "created"})
 		return
 	}
-	var rows []model.PickingList
+	var rows []PickingList
 	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
 		response.RespondJSON(w, http.StatusCreated, map[string]string{"status": "created"})
 		return
@@ -674,8 +673,8 @@ func (h *CycleCountHandler) seedRowsFromAllocations(cycleCountID string, locatio
 	return out, nil
 }
 
-func (h *CycleCountHandler) productSnapshots(productIDs []string) map[string]wmsProductSnapshot {
-	result := map[string]wmsProductSnapshot{}
+func (h *CycleCountHandler) productSnapshots(productIDs []string) map[string]WmsProductSnapshot {
+	result := map[string]WmsProductSnapshot{}
 	if len(productIDs) == 0 {
 		return result
 	}
@@ -686,7 +685,7 @@ func (h *CycleCountHandler) productSnapshots(productIDs []string) map[string]wms
 	if err != nil {
 		return result
 	}
-	var rows []wmsProductSnapshot
+	var rows []WmsProductSnapshot
 	if err := json.Unmarshal(data, &rows); err != nil {
 		return result
 	}
@@ -696,7 +695,7 @@ func (h *CycleCountHandler) productSnapshots(productIDs []string) map[string]wms
 	return result
 }
 
-func productSnapshotOrID(products map[string]wmsProductSnapshot, productID string) wmsProductSnapshot {
+func productSnapshotOrID(products map[string]WmsProductSnapshot, productID string) WmsProductSnapshot {
 	product := products[productID]
 	if product.ProductID == "" {
 		product.ProductID = productID
@@ -704,7 +703,7 @@ func productSnapshotOrID(products map[string]wmsProductSnapshot, productID strin
 	return product
 }
 
-func cycleSeedRow(cycleCountID string, loc wmsLocationSnapshot, product wmsProductSnapshot, expectedQty int) map[string]any {
+func cycleSeedRow(cycleCountID string, loc wmsLocationSnapshot, product WmsProductSnapshot, expectedQty int) map[string]any {
 	row := map[string]any{
 		"cycle_count_id":         cycleCountID,
 		"location_id":            loc.LocationID,
@@ -784,71 +783,4 @@ func (h *ReceivingLogHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func (h *IntercompanyRequestHandler) ensureReceivingLogForIntercompanyRequest(requestID, receiverUserID string) error {
-	data, _, err := h.DB.From("intercompany_requests").
-		Select("request_id, product_id, quantity, outbound_id", "exact", false).
-		Eq("request_id", requestID).
-		Execute()
-	if err != nil {
-		return err
-	}
-	var requests []wmsIntercompanyRequestRow
-	if err := json.Unmarshal(data, &requests); err != nil {
-		return err
-	}
-	if len(requests) == 0 || requests[0].Quantity <= 0 || requests[0].OutboundID == nil || *requests[0].OutboundID == "" {
-		return nil
-	}
-
-	outbound, err := NewOutboundHandler(h.DB).fetchOutboundByID(*requests[0].OutboundID)
-	if err != nil {
-		return err
-	}
-	if outbound.WarehouseID == "" {
-		return nil
-	}
-
-	_, count, err := h.DB.From("receiving_logs").
-		Select("receiving_id", "exact", true).
-		Eq("source_type", "intercompany").
-		Eq("intercompany_request_id", requestID).
-		Range(0, 0, "").
-		Execute()
-	if err != nil {
-		return err
-	}
-	if count > 0 {
-		return nil
-	}
-
-	product, _ := NewOutboundHandler(h.DB).productSnapshot(requests[0].ProductID)
-	insert := intercompanyReceivingLogInsert(requests[0], outbound.WarehouseID, product, receiverUserID)
-	if _, _, err := h.DB.From("receiving_logs").Insert(insert, false, "", "", "").Execute(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func intercompanyReceivingLogInsert(row wmsIntercompanyRequestRow, warehouseID string, product wmsProductSnapshot, receiverUserID string) map[string]any {
-	insert := map[string]any{
-		"source_type":             "intercompany",
-		"intercompany_request_id": row.RequestID,
-		"warehouse_id":            warehouseID,
-		"product_id":              row.ProductID,
-		"quantity_expected":       row.Quantity,
-		"quantity_received":       row.Quantity,
-		"notes":                   "자동 생성: 그룹내 매입 입고확인 시 검수 로그 생성",
-	}
-	if receiverUserID != "" {
-		insert["receiver_user_id"] = receiverUserID
-	}
-	if product.ProductCode != nil {
-		insert["product_code_snapshot"] = *product.ProductCode
-	}
-	if product.ProductName != nil {
-		insert["product_name_snapshot"] = *product.ProductName
-	}
-	return insert
 }

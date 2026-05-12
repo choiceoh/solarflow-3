@@ -1,4 +1,4 @@
-package model
+package intercompany
 
 // IntercompanyRequest — BARO Phase 2: 그룹내 매입 요청
 // 비유: "발주 메모" — 바로(주)가 탑솔라에 "이 모듈 N장 보내주세요"를 한 줄로 적어 보내는 것
@@ -23,8 +23,8 @@ type IntercompanyRequest struct {
 	UpdatedAt          *string `json:"updated_at,omitempty"`
 
 	// 표시용 보강
-	ProductCode  *string `json:"product_code,omitempty"`
-	ProductName  *string `json:"product_name,omitempty"`
+	ProductCode   *string `json:"product_code,omitempty"`
+	ProductName   *string `json:"product_name,omitempty"`
 	RequesterName *string `json:"requester_company_name,omitempty"`
 	TargetName    *string `json:"target_company_name,omitempty"`
 }

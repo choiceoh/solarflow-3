@@ -1,6 +1,7 @@
-package handler
+package intercompany
 
 import (
+	"solarflow-backend/internal/domains/outbound"
 	"strings"
 	"testing"
 )
@@ -55,12 +56,12 @@ func TestValidateIntercompanyTransition(t *testing.T) {
 func TestIntercompanyReceivingLogInsert(t *testing.T) {
 	code := "TSM-580"
 	name := "Vertex N"
-	row := wmsIntercompanyRequestRow{
+	row := outbound.WmsIntercompanyRequestRow{
 		RequestID: "req-1",
 		ProductID: "prod-1",
 		Quantity:  12,
 	}
-	insert := intercompanyReceivingLogInsert(row, "wh-1", wmsProductSnapshot{
+	insert := intercompanyReceivingLogInsert(row, "wh-1", outbound.WmsProductSnapshot{
 		ProductCode: &code,
 		ProductName: &name,
 	}, "user-1")

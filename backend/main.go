@@ -17,9 +17,11 @@ import (
 	_ "solarflow-backend/internal/domains/bl" // self-mounting init() — D-20260512-090000
 	_ "solarflow-backend/internal/domains/cost_detail" // self-mounting init()
 	_ "solarflow-backend/internal/domains/declaration" // self-mounting init()
+	_ "solarflow-backend/internal/domains/intercompany" // self-mounting init()
 	_ "solarflow-backend/internal/domains/inventory" // self-mounting init()
 	_ "solarflow-backend/internal/domains/lc" // self-mounting init() — D-20260512-090000
 	_ "solarflow-backend/internal/domains/order" // self-mounting init()
+	_ "solarflow-backend/internal/domains/outbound" // self-mounting init()
 	_ "solarflow-backend/internal/domains/po" // self-mounting init() — D-20260512-090000
 	_ "solarflow-backend/internal/domains/product" // self-mounting init()
 	_ "solarflow-backend/internal/domains/sale" // self-mounting init()

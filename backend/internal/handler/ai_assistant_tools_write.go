@@ -16,6 +16,7 @@ import (
 
 	"solarflow-backend/internal/domains/declaration"
 	"solarflow-backend/internal/domains/order"
+	"solarflow-backend/internal/domains/outbound"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
 )
@@ -466,7 +467,7 @@ func toolCreateOutbound() assistantTool {
 			if err := json.Unmarshal(input, &args); err != nil {
 				return "", fmt.Errorf("입력 파싱 실패: %w", err)
 			}
-			req := model.CreateOutboundRequest{
+			req := outbound.CreateOutboundRequest{
 				OutboundDate:    args.OutboundDate,
 				CompanyID:       args.CompanyID,
 				ProductID:       args.ProductID,
@@ -624,7 +625,7 @@ func toolDeleteOrder() assistantTool {
 
 type updateOutboundToolInput struct {
 	OutboundID string `json:"outbound_id"`
-	model.UpdateOutboundRequest
+	outbound.UpdateOutboundRequest
 }
 
 func toolUpdateOutbound() assistantTool {

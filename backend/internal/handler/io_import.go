@@ -18,6 +18,7 @@ import (
 	"solarflow-backend/internal/domains/declaration"
 	"solarflow-backend/internal/domains/lc"
 	"solarflow-backend/internal/domains/order"
+	"solarflow-backend/internal/domains/outbound"
 	"solarflow-backend/internal/domains/po"
 	"solarflow-backend/internal/domains/sale"
 	"solarflow-backend/internal/engine"
@@ -585,7 +586,7 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 	var importErrors []model.ImportError
 	imported := 0
 	importedIDs := make([]string, 0, len(req.Rows))
-	outboundH := NewOutboundHandler(h.DB, h.Engine)
+	outboundH := outbound.NewOutboundHandler(h.DB, h.Engine)
 
 	for i, row := range req.Rows {
 		rowNum := i + 2
@@ -663,7 +664,7 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		createdOutbound, _, errMsg, err := outboundH.createOutboundCore(outReq)
+		createdOutbound, _, errMsg, err := outboundH.CreateOutboundCore(outReq)
 		if err != nil {
 			log.Printf("[출고 Import INSERT 실패] row=%d, err=%v", rowNum, err)
 			if errMsg == "" {

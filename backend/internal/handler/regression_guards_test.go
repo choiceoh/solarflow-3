@@ -127,7 +127,7 @@ func TestNoMagicNumberInRange(t *testing.T) {
 // 회귀 패턴: target_company_name 은 응답 enrich 필드라 outbounds 컬럼이 아님.
 // ============================================================
 func TestOutboundSearchDoesNotUseEnrichedOnlyColumn(t *testing.T) {
-	body, err := os.ReadFile("tx_outbound.go")
+	body, err := os.ReadFile("../domains/outbound/handler.go")
 	if err != nil {
 		t.Fatalf("read tx_outbound.go: %v", err)
 	}
@@ -147,10 +147,10 @@ func TestOutboundImportUsesTransactionalCreateCore(t *testing.T) {
 	}
 	content := string(body)
 	if strings.Contains(content, "Insert(outReq") {
-		t.Fatal("출고 Import 에서 outReq 직접 Insert 금지: createOutboundCore(outReq) 를 사용해야 합니다")
+		t.Fatal("출고 Import 에서 outReq 직접 Insert 금지: CreateOutboundCore(outReq) 를 사용해야 합니다")
 	}
-	if !strings.Contains(content, "createOutboundCore(outReq)") {
-		t.Fatal("출고 Import 는 createOutboundCore(outReq) 를 호출해야 합니다")
+	if !strings.Contains(content, "CreateOutboundCore(outReq)") {
+		t.Fatal("출고 Import 는 CreateOutboundCore(outReq) 를 호출해야 합니다")
 	}
 }
 

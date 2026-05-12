@@ -1,4 +1,4 @@
-package handler
+package outbound
 
 import (
 	"encoding/json"
@@ -12,7 +12,6 @@ import (
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -53,8 +52,8 @@ func init() {
 
 // PickingListWithItems — 응답 합본.
 type PickingListWithItems struct {
-	model.PickingList
-	Items []model.PickingListItem `json:"items"`
+	PickingList
+	Items []PickingListItem `json:"items"`
 }
 
 // List — GET /api/v1/picking-lists?status=pending&warehouse_id=&mine=true
@@ -81,7 +80,7 @@ func (h *PickingListHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "피킹 명세 목록 조회 실패")
 		return
 	}
-	var rows []model.PickingList
+	var rows []PickingList
 	if err := json.Unmarshal(data, &rows); err != nil {
 		response.RespondError(w, http.StatusInternalServerError, "응답 처리 실패")
 		return
@@ -100,7 +99,7 @@ func (h *PickingListHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "조회 실패")
 		return
 	}
-	var hdrs []model.PickingList
+	var hdrs []PickingList
 	if err := json.Unmarshal(hdrData, &hdrs); err != nil || len(hdrs) == 0 {
 		response.RespondError(w, http.StatusNotFound, "피킹 명세를 찾을 수 없습니다")
 		return
@@ -110,17 +109,17 @@ func (h *PickingListHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		Eq("picking_list_id", id).
 		Order("line_no", &postgrest.OrderOpts{Ascending: true}).
 		Execute()
-	var items []model.PickingListItem
+	var items []PickingListItem
 	_ = json.Unmarshal(itemsData, &items)
 	if items == nil {
-		items = []model.PickingListItem{}
+		items = []PickingListItem{}
 	}
 	response.RespondJSON(w, http.StatusOK, PickingListWithItems{PickingList: hdrs[0], Items: items})
 }
 
 // Create — POST /api/v1/picking-lists
 func (h *PickingListHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreatePickingListRequest
+	var req CreatePickingListRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return
@@ -162,7 +161,7 @@ func (h *PickingListHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "피킹 명세 등록 실패 (마이그 086 미적용?)")
 		return
 	}
-	var created []model.PickingList
+	var created []PickingList
 	if err := json.Unmarshal(hdrData, &created); err != nil || len(created) == 0 {
 		response.RespondError(w, http.StatusInternalServerError, "응답 처리 실패")
 		return
@@ -210,7 +209,7 @@ func (h *PickingListHandler) Create(w http.ResponseWriter, r *http.Request) {
 // UpdateHeader — PATCH /api/v1/picking-lists/{id}
 func (h *PickingListHandler) UpdateHeader(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var req model.UpdatePickingListRequest
+	var req UpdatePickingListRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return
@@ -257,7 +256,7 @@ func (h *PickingListHandler) UpdateHeader(w http.ResponseWriter, r *http.Request
 // 작업자가 라인 picked 토글 + picked_qty + 차이 사유 입력. picked_at 자동 기록.
 func (h *PickingListHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	itemID := chi.URLParam(r, "item_id")
-	var req model.UpdatePickingListItemRequest
+	var req UpdatePickingListItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return

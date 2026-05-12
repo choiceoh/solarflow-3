@@ -1,0 +1,27 @@
+schema_version: 1
+
+id: intercompany
+display_name: "그룹내 매입 요청 (Intercompany)"
+
+pack: erp-core
+feature_id: intercompany.request
+visible_to: module
+
+paths:
+  backend:
+    - backend/internal/domains/intercompany/
+
+tables: []
+depends_on: []
+external_users: []
+
+blast_radius:
+  - description: "intercompany model 변경"
+    must_check:
+      - "backend/internal/domains/intercompany/handler.go Validation"
+
+verify_scripts:
+  - command: scripts/verify_changed.sh
+    when: always
+
+owners: [choiceoh]

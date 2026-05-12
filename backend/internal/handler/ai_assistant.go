@@ -16,6 +16,7 @@ import (
 	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/domains/declaration"
 	"solarflow-backend/internal/domains/order"
+	"solarflow-backend/internal/domains/outbound"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
@@ -33,9 +34,9 @@ import (
 type AssistantHandler struct {
 	httpClient *http.Client
 	db         *supa.Client
-	ocrH       *OCRHandler          // nil 허용 — alias 비활성
-	matchH     *ReceiptMatchHandler // nil 허용 — alias 비활성
-	outboundH  *OutboundHandler     // nil 허용 — ConfirmProposal/create_outbound는 outboundH 미주입 시 503
+	ocrH       *OCRHandler               // nil 허용 — alias 비활성
+	matchH     *ReceiptMatchHandler      // nil 허용 — alias 비활성
+	outboundH  *outbound.OutboundHandler // nil 허용 — ConfirmProposal/create_outbound는 outboundH 미주입 시 503
 }
 
 // NewAssistantHandler — 기본 생성자 (public/auth 공통). alias 라우트가 필요한 경우 WithAlias로 의존성을 주입한다.
@@ -62,7 +63,7 @@ func (h *AssistantHandler) WithAttachmentPool(pool *pgxpool.Pool) *AssistantHand
 //  1. AuthAuthed:    /assistant/* — alias (ocr/match) + writers (outbound) + attachment pool 주입된 풀 인스턴스
 //  2. AuthPublicAPI: /assistant/chat — alias 없음, 비로그인 bare LLM 패스스루 (도구는 user_id 부재로 자동 비활성)
 //
-// alias/writer 핸들러도 Mount 클로저가 직접 만든다 (모두 stateless: OCRHandler/ReceiptMatchHandler/OutboundHandler).
+// alias/writer 핸들러도 Mount 클로저가 직접 만든다 (모두 stateless: OCRHandler/ReceiptMatchHandler/outbound.OutboundHandler).
 // d.Pool 은 nil 일 수 있음 (SUPABASE_DB_URL 미설정 환경). WithAttachmentPool 는 nil 도 무해히 처리한다.
 // IDAIAssistant 게이트가 모든 /assistant/* 라우트와 그 alias 에 catalog.Paths 로 등재돼 있어
 // feature_coverage_test 가 검증.
@@ -73,7 +74,7 @@ func init() {
 		Mount: func(d *mount.Deps, r chi.Router) {
 			ocrH := NewOCRHandler(d.OCR, d.Pool)
 			matchH := NewReceiptMatchHandler(d.DB, d.Engine)
-			outboundH := NewOutboundHandler(d.DB, d.Engine)
+			outboundH := outbound.NewOutboundHandler(d.DB, d.Engine)
 			h := NewAssistantHandler(d.DB).WithAlias(ocrH, matchH).WithWriters(outboundH).WithAttachmentPool(d.Pool)
 			g := d.Gates
 			r.Route("/assistant", func(r chi.Router) {
@@ -119,7 +120,7 @@ func (h *AssistantHandler) WithAlias(ocrH *OCRHandler, matchH *ReceiptMatchHandl
 // WithWriters — ConfirmProposal에서 위임할 도메인 핸들러를 주입한다.
 // 일반 등록 핸들러와 동일한 트랜잭션·검증·진행률 재계산을 거치게 하기 위함.
 // 인증 라우트에서 RegisterRoutes 호출 직전에 한 번 호출.
-func (h *AssistantHandler) WithWriters(outboundH *OutboundHandler) *AssistantHandler {
+func (h *AssistantHandler) WithWriters(outboundH *outbound.OutboundHandler) *AssistantHandler {
 	h.outboundH = outboundH
 	return h
 }
@@ -450,7 +451,7 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 			response.RespondError(w, http.StatusInternalServerError, "제안 페이로드 파싱 실패")
 			return
 		}
-		req := model.CreateOutboundRequest{
+		req := outbound.CreateOutboundRequest{
 			OutboundDate:    args.OutboundDate,
 			CompanyID:       args.CompanyID,
 			ProductID:       args.ProductID,
@@ -469,7 +470,7 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 			Memo:            args.Memo,
 			BLID:            args.BLID,
 		}
-		created, code, msg, err := h.outboundH.createOutboundCore(req)
+		created, code, msg, err := h.outboundH.CreateOutboundCore(req)
 		if err != nil {
 			log.Printf("[assistant write/confirm] outbounds insert 실패 id=%s code=%d err=%v", id, code, err)
 			response.RespondError(w, code, msg)

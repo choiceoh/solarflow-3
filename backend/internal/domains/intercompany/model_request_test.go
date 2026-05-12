@@ -1,4 +1,4 @@
-package model
+package intercompany
 
 import (
 	"strings"
