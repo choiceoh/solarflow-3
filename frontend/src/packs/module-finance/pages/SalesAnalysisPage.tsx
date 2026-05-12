@@ -672,6 +672,12 @@ export default function SalesAnalysisPage() {
         (!item.product_id || productManufacturerMap.get(item.product_id) !== manufacturerFilter)
       )
         return false
+      // 매출 분석은 외부 판매(sale/sale_spare) 만 대상. 공사사용/유지관리/폐기 등 자체사용
+      // 출고에 매여 있는 sale 행(supply_amount=0)이 들어오면 월별 이익 추정에서 0매출 vs
+      // 양수원가가 매월 큰 음수를 만들어 적자처럼 보임 (2026-05-12). usage_category 누락
+      // (구버전 백엔드 호환) 일 때는 통과시켜 회귀 안전.
+      if (item.usage_category && item.usage_category !== 'sale' && item.usage_category !== 'sale_spare')
+        return false
       return true
     })
   }, [

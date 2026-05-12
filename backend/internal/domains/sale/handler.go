@@ -397,15 +397,16 @@ type saleOrderRow struct {
 }
 
 type saleOutboundRow struct {
-	OutboundID   string   `json:"outbound_id"`
-	OutboundDate string   `json:"outbound_date"`
-	CompanyID    string   `json:"company_id"`
-	ProductID    string   `json:"product_id"`
-	Quantity     int      `json:"quantity"`
-	CapacityKw   *float64 `json:"capacity_kw"`
-	SiteName     *string  `json:"site_name"`
-	OrderID      *string  `json:"order_id"`
-	Status       string   `json:"status"`
+	OutboundID    string   `json:"outbound_id"`
+	OutboundDate  string   `json:"outbound_date"`
+	CompanyID     string   `json:"company_id"`
+	ProductID     string   `json:"product_id"`
+	Quantity      int      `json:"quantity"`
+	CapacityKw    *float64 `json:"capacity_kw"`
+	SiteName      *string  `json:"site_name"`
+	OrderID       *string  `json:"order_id"`
+	Status        string   `json:"status"`
+	UsageCategory string   `json:"usage_category"`
 }
 
 type saleProductRow struct {
@@ -452,7 +453,7 @@ func (h *SaleHandler) enrichSales(rows []saleViewRow) []SaleListItem {
 	} else {
 		log.Printf("[매출 enrich] orders 조회 실패 — 수주 정보 비표시: %v", err)
 	}
-	if data, err := handlerutil.FetchAllFromTable(h.DB, "outbounds", "outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status"); err == nil {
+	if data, err := handlerutil.FetchAllFromTable(h.DB, "outbounds", "outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status, usage_category"); err == nil {
 		if err := json.Unmarshal(data, &outbounds); err != nil {
 			log.Printf("[매출 enrich] outbounds 디코딩 실패 — 출고 정보 비표시: %v", err)
 		}
@@ -553,6 +554,10 @@ func (h *SaleHandler) enrichSales(rows []saleViewRow) []SaleListItem {
 				item.CompanyID = &ob.CompanyID
 				item.SiteName = ob.SiteName
 				productID = &ob.ProductID
+				if ob.UsageCategory != "" {
+					uc := ob.UsageCategory
+					item.UsageCategory = &uc
+				}
 				if item.Quantity == 0 {
 					item.Quantity = ob.Quantity
 				}

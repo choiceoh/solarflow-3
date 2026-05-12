@@ -59,7 +59,10 @@ type SaleListItem struct {
 	ReceiptStatus     string   `json:"receipt_status,omitempty"`
 	TaxInvoiceDate    *string  `json:"tax_invoice_date,omitempty"`
 	Status            string   `json:"status"`
-	Sale              Sale     `json:"sale"`
+	// UsageCategory — 연결된 outbound 의 usage_category (sale/sale_spare/construction/...).
+	// 매출분석 화면이 외부 판매(sale/sale_spare) 만 집계하기 위해 노출.
+	UsageCategory *string `json:"usage_category,omitempty"`
+	Sale          Sale    `json:"sale"`
 }
 
 // CreateSaleRequest — 판매 등록 시 클라이언트가 보내는 데이터

@@ -120,6 +120,8 @@ export interface SaleListItem {
   receipt_status?: SaleReceiptStatus
   tax_invoice_date?: string
   status?: SaleStatus
+  // 연결된 출고 usage_category. 매출분석에서 외부 판매(sale/sale_spare) 만 골라내는 데 사용.
+  usage_category?: string
   sale: Sale
 }
 
