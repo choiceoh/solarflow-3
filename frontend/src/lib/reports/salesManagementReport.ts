@@ -23,7 +23,6 @@ export interface SalesReportInput {
   alternativeCostLabel: string
   salesSummary: {
     supply: number
-    total: number
     count: number
     issued: number
     pending: number
@@ -45,7 +44,6 @@ export interface SalesReportInput {
   monthly: Array<{
     month: string
     revenue: number
-    total: number
     count: number
     issued: number
     pending: number
@@ -112,7 +110,6 @@ interface TemplateData {
   alternativeCostLabel: string
   summary: {
     supply: string
-    total: string
     count: string
     issued: string
     pending: string
@@ -140,7 +137,6 @@ function buildTemplateData(input: SalesReportInput): TemplateData {
     alternativeCostLabel: input.alternativeCostLabel,
     summary: {
       supply: fmtKrw(input.salesSummary.supply),
-      total: fmtKrw(input.salesSummary.total),
       count: `${fmtInt(input.salesSummary.count)}건`,
       issued: fmtInt(input.salesSummary.issued),
       pending: fmtInt(input.salesSummary.pending),
@@ -156,7 +152,6 @@ function buildTemplateData(input: SalesReportInput): TemplateData {
     monthly: input.monthly.map((row) => ({
       month: row.month,
       revenue: fmtKrw(row.revenue),
-      total: fmtKrw(row.total),
       count: fmtInt(row.count),
       issued: fmtInt(row.issued),
       pending: fmtInt(row.pending),

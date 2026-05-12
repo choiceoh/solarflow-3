@@ -571,8 +571,8 @@ pub async fn analyze_customers(
         });
     }
 
-    let overall_margin_rate = if sum_revenue_covered > 0.0 {
-        (sum_margin / sum_revenue_covered * 10000.0).round() / 100.0
+    let overall_margin_rate = if sum_sales > 0.0 {
+        (sum_margin / sum_sales * 10000.0).round() / 100.0
     } else {
         0.0
     };

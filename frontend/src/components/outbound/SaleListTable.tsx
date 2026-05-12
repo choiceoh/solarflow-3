@@ -11,13 +11,12 @@ export const SALE_TABLE_ID = "sale-list"
 const SALE_SERVER_SORTABLE_COLUMNS = new Set([
   "tax_invoice_date",
   "supply_amount",
-  "total_amount",
   "unit_price_wp",
   "status",
 ])
 
-function saleTotalAmount(item: SaleListItem) {
-  return item.sale.total_amount ?? item.total_amount ?? 0
+function saleSupplyAmount(item: SaleListItem) {
+  return item.sale.supply_amount ?? item.supply_amount ?? 0
 }
 
 function saleCollectedAmount(item: SaleListItem) {
@@ -27,7 +26,7 @@ function saleCollectedAmount(item: SaleListItem) {
 function saleOutstandingAmount(item: SaleListItem) {
   const fromServer = item.outstanding_amount
   if (fromServer != null) return Math.max(0, fromServer)
-  return Math.max(0, saleTotalAmount(item) - saleCollectedAmount(item))
+  return Math.max(0, saleSupplyAmount(item) - saleCollectedAmount(item))
 }
 
 interface Props {
@@ -233,28 +232,7 @@ function buildColumns({
       cell: (item) => (item.sale.supply_amount ? formatNumber(item.sale.supply_amount) : "—"),
       sortAccessor: (item) => item.sale.supply_amount ?? 0,
     },
-    {
-      key: "vat_amount",
-      label: "부가세",
-      hideable: true,
-      align: "right",
-      className: "tabular-nums",
-      cell: (item) => (item.sale.vat_amount ? formatNumber(item.sale.vat_amount) : "—"),
-      sortAccessor: (item) => item.sale.vat_amount ?? 0,
-    },
-    {
-      key: "total_amount",
-      label: "합계",
-      hideable: true,
-      align: "right",
-      className: "tabular-nums font-semibold",
-      cell: (item) => (
-        <span style={{ color: "var(--sf-ink)" }}>
-          {item.sale.total_amount ? formatNumber(item.sale.total_amount) : "—"}
-        </span>
-      ),
-      sortAccessor: (item) => item.sale.total_amount ?? 0,
-    },
+    // 부가세·합계 컬럼 제거 (VAT 운영 일괄 제거 정책). 공급가 = 매출 기준 단일.
     {
       key: "receipt_status",
       label: "수금",
@@ -262,7 +240,7 @@ function buildColumns({
       cell: (item) => {
         const outstanding = saleOutstandingAmount(item)
         const collected = saleCollectedAmount(item)
-        if (outstanding <= 0 && saleTotalAmount(item) > 0) {
+        if (outstanding <= 0 && saleSupplyAmount(item) > 0) {
           return <span className="sf-pill pos">수금완료</span>
         }
         if (collected > 0) {

@@ -385,16 +385,8 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
               onSave={saveSaleField}
             />
             <DetailField
-              label="공급가"
+              label="매출액 (공급가)"
               value={ob.sale.supply_amount ? `${formatNumber(ob.sale.supply_amount)}원` : undefined}
-            />
-            <DetailField
-              label="부가세"
-              value={ob.sale.vat_amount ? `${formatNumber(ob.sale.vat_amount)}원` : undefined}
-            />
-            <DetailField
-              label="합계"
-              value={ob.sale.total_amount ? `${formatNumber(ob.sale.total_amount)}원` : undefined}
             />
             <DetailField
               label="ERP 마감"

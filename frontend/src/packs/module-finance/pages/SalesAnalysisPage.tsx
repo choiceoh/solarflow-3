@@ -153,7 +153,6 @@ interface AlternativeMarginSummary {
 interface MonthlyManagementRow {
   month: string
   revenue: number
-  total: number
   count: number
   issued: number
   pending: number
@@ -325,10 +324,6 @@ function levelTone(level: ReconciliationLevel): string {
 
 function saleSupplyAmount(item: SaleListItem): number {
   return item.sale.supply_amount ?? item.supply_amount ?? 0
-}
-
-function saleTotalAmount(item: SaleListItem): number {
-  return item.sale.total_amount ?? item.total_amount ?? saleSupplyAmount(item)
 }
 
 function saleIssueDate(item: SaleListItem): string | undefined {
@@ -609,16 +604,11 @@ export default function SalesAnalysisPage() {
   ])
 
   const monthly = useMemo(() => {
-    const map = new Map<
-      string,
-      { month: string; revenue: number; vat: number; total: number; count: number }
-    >()
+    const map = new Map<string, { month: string; revenue: number; count: number }>()
     for (const item of filteredSales) {
       const month = toMonth(item.outbound_date ?? item.order_date)
-      const prev = map.get(month) ?? { month, revenue: 0, vat: 0, total: 0, count: 0 }
+      const prev = map.get(month) ?? { month, revenue: 0, count: 0 }
       prev.revenue += saleSupplyAmount(item)
-      prev.vat += item.sale.vat_amount ?? 0
-      prev.total += saleTotalAmount(item)
       prev.count += 1
       map.set(month, prev)
     }
@@ -629,11 +619,9 @@ export default function SalesAnalysisPage() {
 
   const salesSummary = useMemo(() => {
     const supply = filteredSales.reduce((sum, item) => sum + saleSupplyAmount(item), 0)
-    const total = filteredSales.reduce((sum, item) => sum + saleTotalAmount(item), 0)
     const issued = filteredSales.filter((item) => saleIssueDate(item)).length
     return {
       supply,
-      total,
       count: filteredSales.length,
       issued,
       pending: filteredSales.length - issued,
@@ -940,7 +928,6 @@ export default function SalesAnalysisPage() {
         ({
           month,
           revenue: 0,
-          total: 0,
           count: 0,
           issued: 0,
           pending: 0,
@@ -958,7 +945,6 @@ export default function SalesAnalysisPage() {
           costWpWeighted: 0,
         } satisfies MonthlyManagementRow & { mixWeightedRate: number; costWpWeighted: number })
       prev.revenue += revenue
-      prev.total += saleTotalAmount(sale)
       prev.count += 1
       prev.issued += saleIssueDate(sale) ? 1 : 0
       prev.pending += saleIssueDate(sale) ? 0 : 1
@@ -975,7 +961,6 @@ export default function SalesAnalysisPage() {
       .map((row) => ({
         month: row.month,
         revenue: round2(row.revenue),
-        total: round2(row.total),
         count: row.count,
         issued: row.issued,
         pending: row.pending,
@@ -1597,17 +1582,6 @@ export default function SalesAnalysisPage() {
                     u: "억",
                     sub: `${formatNumber(costMissingItemCount)}개 품목`,
                     tone: costMissingRevenue > 0 ? ("warn" as const) : ("pos" as const),
-                  },
-                  {
-                    key: "sales_analysis.total_revenue",
-                    lbl: "총 매출",
-                    v: (salesSummary.total / 100000000).toFixed(2),
-                    numericValue: salesSummary.total,
-                    formatter: (n: number) => (n / 100000000).toFixed(2),
-                    u: "억",
-                    sub: "부가세 포함",
-                    tone: "ink" as const,
-                    spark: flatSpark(salesSummary.total / 100000000),
                   },
                   {
                     key: "sales_analysis.issue_rate",

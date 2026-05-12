@@ -262,8 +262,8 @@ export async function renderSalesManagementPptx(input: SalesReportInput): Promis
       [
         { text: '원가 미연결 매출', options: { bold: true, fill: { color: COLOR.headBg } } },
         { text: fmtKrw(input.costMissingRevenue), options: { align: 'right' } },
-        { text: '부가세 포함 매출', options: { bold: true, fill: { color: COLOR.headBg } } },
-        { text: fmtKrw(input.salesSummary.total), options: { align: 'right' } },
+        { text: '매출 합계 (공급가)', options: { bold: true, fill: { color: COLOR.headBg } } },
+        { text: fmtKrw(input.salesSummary.supply), options: { align: 'right' } },
       ],
     ],
     {
@@ -384,7 +384,6 @@ export async function renderSalesManagementPptx(input: SalesReportInput): Promis
   const monthlyHeader = [
     { text: '월', options: { bold: true, fill: { color: COLOR.headBg } } },
     { text: '공급가', options: { bold: true, fill: { color: COLOR.headBg }, align: 'right' as const } },
-    { text: '부가세포함', options: { bold: true, fill: { color: COLOR.headBg }, align: 'right' as const } },
     { text: '매출건수', options: { bold: true, fill: { color: COLOR.headBg }, align: 'right' as const } },
     { text: '발행', options: { bold: true, fill: { color: COLOR.headBg }, align: 'right' as const } },
     { text: '미발행', options: { bold: true, fill: { color: COLOR.headBg }, align: 'right' as const } },
@@ -397,7 +396,6 @@ export async function renderSalesManagementPptx(input: SalesReportInput): Promis
   const monthlyRows = input.monthly.map((row) => [
     { text: row.month },
     { text: fmtKrwShort(row.revenue), options: { align: 'right' as const } },
-    { text: fmtKrwShort(row.total), options: { align: 'right' as const } },
     { text: fmtInt(row.count), options: { align: 'right' as const } },
     { text: fmtInt(row.issued), options: { align: 'right' as const } },
     { text: fmtInt(row.pending), options: { align: 'right' as const } },
