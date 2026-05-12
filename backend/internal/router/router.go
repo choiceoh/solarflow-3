@@ -70,6 +70,7 @@ func buildMountDeps(a *app.App, authMW func(http.Handler) http.Handler) *mount.D
 		DB:          a.DB,
 		Engine:      a.Eng,
 		OCR:         a.OCR,
+		Pool:        a.Pool,
 		WiringStore: a.WiringStore,
 		Resolver:    a.Gates.FeatureGate.Resolver(),
 		Gates:       a.Gates,

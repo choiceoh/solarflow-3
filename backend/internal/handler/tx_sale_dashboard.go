@@ -173,12 +173,12 @@ func (h *SaleHandler) tryRPCSalesDashboard(r *http.Request) ([]byte, bool) {
 	return nil, false
 }
 
-// fetchAllForSaleDashboard — 필터 적용 후 1000 행 청크로 sales 전체를 끌어온다.
-func (h *SaleHandler) fetchAllForSaleDashboard(r *http.Request) ([]model.Sale, error) {
-	cols := "sale_id,outbound_id,order_id,customer_id,quantity,capacity_kw,unit_price_wp,unit_price_ea,supply_amount,vat_amount,total_amount,tax_invoice_date,tax_invoice_email,erp_closed,erp_closed_date,status,memo,erp_sales_no,erp_line_no,currency,created_at,updated_at"
-	all := make([]model.Sale, 0, saleDashboardChunkSize)
+// fetchAllForSaleDashboard — 필터 적용 후 1000 행 청크로 sales_with_meta 뷰 전체를 끌어온다.
+func (h *SaleHandler) fetchAllForSaleDashboard(r *http.Request) ([]saleViewRow, error) {
+	cols := "sale_id,outbound_id,order_id,customer_id,quantity,capacity_kw,unit_price_wp,unit_price_ea,supply_amount,vat_amount,total_amount,tax_invoice_date,tax_invoice_email,erp_closed,erp_closed_date,status,memo,erp_sales_no,erp_line_no,currency,created_at,updated_at,collected_amount,outstanding_amount,receipt_status,business_date"
+	all := make([]saleViewRow, 0, saleDashboardChunkSize)
 	for chunk := 0; chunk < saleDashboardMaxChunks; chunk++ {
-		q := h.DB.From("sales").Select(cols, "exact", false)
+		q := h.DB.From(salesWithMetaView).Select(cols, "exact", false)
 		q, ok, err := h.applySaleFilters(r, q)
 		if err != nil {
 			return nil, fmt.Errorf("필터 처리 실패: %w", err)
@@ -193,7 +193,7 @@ func (h *SaleHandler) fetchAllForSaleDashboard(r *http.Request) ([]model.Sale, e
 		if err != nil {
 			return nil, fmt.Errorf("sales 청크 #%d 조회 실패: %w", chunk, err)
 		}
-		var batch []model.Sale
+		var batch []saleViewRow
 		if err := json.Unmarshal(data, &batch); err != nil {
 			return nil, fmt.Errorf("sales 청크 #%d 디코딩 실패: %w", chunk, err)
 		}

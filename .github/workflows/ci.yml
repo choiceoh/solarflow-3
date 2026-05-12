@@ -83,10 +83,13 @@ jobs:
 
   # 백엔드 (Go) — 운영은 cron-deploy.sh가 머지 후 빌드하므로 PR 단계에서 막아야
   # 운영 빌드 실패 = 사용자 발견 시점이 cron 다음 회차로 늦춰짐.
+  # spark4tb self-hosted runner: arch 패리티(aarch64=운영 gx10 과 동일) + 영구 캐시.
+  # ubuntu-latest 38s → spark4tb 예상 10-15s. spark4tb offline 시 timeout 으로 fail.
   backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ARM64, spark4tb]
+    timeout-minutes: 10
     defaults: { run: { working-directory: backend } }
     steps:
       - uses: actions/checkout@v4
@@ -100,10 +103,10 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('backend/go.sum') }}-${{ hashFiles('backend/**/*.go') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-go-${{ hashFiles('backend/go.sum') }}-${{ hashFiles('backend/**/*.go') }}
           restore-keys: |
-            ${{ runner.os }}-go-${{ hashFiles('backend/go.sum') }}-
-            ${{ runner.os }}-go-
+            ${{ runner.os }}-${{ runner.arch }}-go-${{ hashFiles('backend/go.sum') }}-
+            ${{ runner.os }}-${{ runner.arch }}-go-
       # go test -vet=all ./... 이 vet 과 비-test 패키지 컴파일을 모두 커버. go build 는 main 의 link 검증.
       # 둘은 독립이라 병렬 실행. frontend job 의 tsc/vite 병렬 패턴과 동일.
       - name: Test + build (parallel)
@@ -138,3 +141,28 @@ jobs:
       # 컴파일이 2-3배 느림. nextest 는 cargo test 대비 병렬성이 좋아 30-60% 빠름.
       # 운영 산출물 검증은 위 cargo build --release 가 담당. 도큐테스트 없음.
       - run: cargo nextest run
+
+  # 단일 required check 게이트 — frontend/backend/engine 은 path-filter 로 skip
+  # 가능하므로 그것들을 각각 required 로 두면 무관한 PR 이 영원히 대기한다.
+  # 이 잡 하나만 required 로 등록하고 안에서 모든 잡 결과를 집계한다.
+  # skip(="skipped") 은 통과로 인정, failure/cancelled 만 fail.
+  ci-summary:
+    needs: [changes, frontend, backend, engine]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate job results
+        shell: bash
+        run: |
+          changes='${{ needs.changes.result }}'
+          frontend='${{ needs.frontend.result }}'
+          backend='${{ needs.backend.result }}'
+          engine='${{ needs.engine.result }}'
+          printf 'changes=%s\nfrontend=%s\nbackend=%s\nengine=%s\n' \
+            "$changes" "$frontend" "$backend" "$engine"
+          for r in "$changes" "$frontend" "$backend" "$engine"; do
+            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
+              echo "::error::A required CI job failed or was cancelled"
+              exit 1
+            fi
+          done

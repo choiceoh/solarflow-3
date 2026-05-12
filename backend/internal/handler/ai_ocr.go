@@ -9,8 +9,10 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/ocr"
@@ -37,23 +39,27 @@ var allowedOCRMIMETypes = map[string]bool{
 
 // OCRHandler — 업무 서류 이미지/PDF에서 원문 텍스트를 추출
 // 비유: 종이 서류를 바로 장부에 쓰지 않고, 먼저 판독 원문으로 펼쳐두는 접수창구
+//
+// Pool — AI 첨부 시트(xlsx/csv) 임시 저장용 pgx 풀. nil 이면 시트 첨부는 503.
 type OCRHandler struct {
 	Client *ocr.Client
+	Pool   *pgxpool.Pool
 }
 
-func NewOCRHandler(client *ocr.Client) *OCRHandler {
-	return &OCRHandler{Client: client}
+func NewOCRHandler(client *ocr.Client, pool *pgxpool.Pool) *OCRHandler {
+	return &OCRHandler{Client: client, Pool: pool}
 }
 
 // init — D-20260512-090000 feature self-mounting.
 // /ocr/* standalone 라우트 — write 그룹. AssistantHandler 가 /assistant/ocr/* alias 로 위임하는
-// 인스턴스는 AssistantHandler 의 Mount 클로저가 별도 생성한다 (둘 다 d.OCR 만 보유, stateless).
+// 인스턴스는 AssistantHandler 의 Mount 클로저가 별도 생성한다 (둘 다 d.OCR + d.Pool 만 보유,
+// stateless). Pool 은 시트 첨부(xlsx/csv) 임시 저장용 — nil 이면 시트 첨부 자체가 503.
 func init() {
 	mount.Register(mount.Spec{
 		ID:   feature.IDAIOCR,
 		Auth: mount.AuthAuthed,
 		Mount: func(d *mount.Deps, r chi.Router) {
-			h := NewOCRHandler(d.OCR)
+			h := NewOCRHandler(d.OCR, d.Pool)
 			g := d.Gates
 			r.Route("/ocr", func(r chi.Router) {
 				r.Use(g.Write)
@@ -133,16 +139,29 @@ func (h *OCRHandler) Extract(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// 엑셀/CSV 는 OCR sidecar 거치지 않고 Go 측에서 시트를 텍스트로 풀어낸다.
+		// 엑셀/CSV 는 시트를 직접 LLM 컨텍스트에 박지 않고 DB 임시 영역에 저장.
+		// 응답에는 메타(sheet_id, 행수·열수, 헤더, 샘플 5행) 만 담아 LLM 이 도구로 조회하도록.
 		if isSpreadsheetMIME(mimeType) {
-			sheet, err := extractSpreadsheet(data, mimeType, result.Filename)
+			if h.Pool == nil {
+				result.Error = "AI 첨부 시트 저장소가 비활성 상태입니다 (서버 설정 누락). 관리자에게 문의해주세요"
+				out.Results = append(out.Results, result)
+				continue
+			}
+			userID := middleware.GetUserID(r.Context())
+			if userID == "" {
+				result.Error = "시트 첨부에는 로그인이 필요합니다"
+				out.Results = append(out.Results, result)
+				continue
+			}
+			sheets, err := saveSpreadsheetSheets(r.Context(), h.Pool, userID, data, mimeType, result.Filename)
 			if err != nil {
-				log.Printf("[스프레드시트 파싱 실패] file=%s err=%v", result.Filename, err)
+				log.Printf("[스프레드시트 저장 실패] file=%s err=%v", result.Filename, err)
 				result.Error = err.Error()
 				out.Results = append(out.Results, result)
 				continue
 			}
-			out.Results = append(out.Results, sheet)
+			// 한 파일 안 여러 시트 → 여러 OCRResult 항목으로 펼쳐서 응답.
+			out.Results = append(out.Results, sheets...)
 			continue
 		}
 

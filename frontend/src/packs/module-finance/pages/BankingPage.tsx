@@ -102,6 +102,12 @@ export default function BankingPage() {
   const totalUsageRate = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0
   const allLimitRows = visibleGroups.flatMap((g) => g.rows)
   const alertRows = maturityData?.alerts ?? []
+  const companyCount = visibleGroups.length
+  const limitChangesCount = limitChanges.length
+  const maturitySumUsd = alertRows.reduce((sum, alert) => sum + (alert.amount_usd ?? 0), 0)
+  const tightLimitCount = allLimitRows.filter(
+    (r) => r.lc_limit_usd > 0 && r.used / r.lc_limit_usd >= 0.8,
+  ).length
   const pageTitle =
     activeTab === "maturity"
       ? "L/C 만기 알림"
@@ -185,6 +191,66 @@ export default function BankingPage() {
                 tone: alertRows.length > 0 ? ("info" as const) : ("pos" as const),
                 spark: flatSpark(alertRows.length),
                 metricId: "banking.maturity_alert",
+              },
+              {
+                lbl: "사용률",
+                v: totalUsageRate.toFixed(1),
+                numericValue: totalUsageRate,
+                formatter: (n: number) => n.toFixed(1),
+                u: "%",
+                sub: "한도 대비",
+                tone:
+                  totalUsageRate >= 80
+                    ? ("warn" as const)
+                    : totalUsageRate >= 60
+                      ? ("info" as const)
+                      : ("pos" as const),
+                spark: flatSpark(totalUsageRate),
+                metricId: "banking.usage_rate",
+              },
+              {
+                lbl: "임박 한도",
+                v: String(tightLimitCount),
+                numericValue: tightLimitCount,
+                formatter: (n: number) => String(Math.round(n)),
+                u: "곳",
+                sub: "사용률 80% 이상",
+                tone: tightLimitCount > 0 ? ("warn" as const) : ("pos" as const),
+                spark: flatSpark(tightLimitCount),
+                metricId: "banking.tight_limit",
+              },
+              {
+                lbl: "만기 금액",
+                v: fmtUsdM(maturitySumUsd),
+                numericValue: maturitySumUsd,
+                formatter: fmtUsdM,
+                u: "M$",
+                sub: "30일 이내 합계",
+                tone: maturitySumUsd > 0 ? ("info" as const) : ("ink" as const),
+                spark: flatSpark(maturitySumUsd / 1_000_000),
+                metricId: "banking.maturity_amount",
+              },
+              {
+                lbl: "관리 법인",
+                v: String(companyCount),
+                numericValue: companyCount,
+                formatter: (n: number) => String(Math.round(n)),
+                u: "곳",
+                sub: "한도 보유 법인",
+                tone: "ink" as const,
+                spark: flatSpark(companyCount),
+                metricId: "banking.company_count",
+              },
+              {
+                lbl: "변경 이력",
+                v: String(limitChangesCount),
+                numericValue: limitChangesCount,
+                formatter: (n: number) => String(Math.round(n)),
+                u: "건",
+                sub: "한도 변경 기록",
+                tone: "ink" as const,
+                spark: flatSpark(limitChangesCount),
+                metricId: "banking.limit_changes",
               },
             ]}
           >

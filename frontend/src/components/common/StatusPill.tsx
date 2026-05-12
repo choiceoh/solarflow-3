@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { AnimatePresence, motion } from "motion/react"
 import { cn } from "@/lib/utils"
 
 export type StatusPillTone = "neutral" | "info" | "positive" | "warning" | "negative" | "solar"
@@ -31,12 +32,24 @@ export default function StatusPill({
   className,
   title,
 }: StatusPillProps) {
+  // 라벨이 바뀔 때 fade+slide 로 부드럽게 교체. 같은 라벨이면 애니메이션 트리거 안 함.
+  const animKey = typeof label === "string" || typeof label === "number" ? String(label) : "label"
   return (
     <span
       title={title}
       className={cn("sf-status-pill", colorClassName ?? TONE_CLASS[tone], className)}
     >
-      {label}
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={animKey}
+          initial={{ opacity: 0, y: -3 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 3, position: "absolute" }}
+          transition={{ duration: 0.16, ease: [0.2, 0.8, 0.2, 1] }}
+        >
+          {label}
+        </motion.span>
+      </AnimatePresence>
     </span>
   )
 }

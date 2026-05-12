@@ -158,19 +158,37 @@ func (h *OrderHandler) applyOrderFilters(r *http.Request, query *postgrest.Filte
 	// work_queue — OrdersPage 알림 딥링크용 사전정의 작업 큐.
 	//   delivery_soon: 납기 임박(받음/분할 중 잔량 > 0, 납기일 오늘 ~ +7일).
 	//   no_site:       현장 미지정(site_name 비어있음 + 미완료/미취소).
+	//
+	// 회귀 가드:
+	//   1) status 컬럼 — 사용자 ?status=X 가 위에서 .Eq("status", X) 로 적용된 상태인데,
+	//      여기서 .In("status", [received, partial]) 를 부르면 같은 컬럼 덮어쓰기로
+	//      사용자 필터가 사라진다. 사용자 status 가 set 이고 허용 셋에 안 들면 결과 없음.
+	//   2) Or 조건 — no_site 의 site_name OR 조건과 아래 q 검색의 OR 조건이 모두 같은
+	//      params["or"] 키를 쓰므로 마지막 호출만 살아남는다. orClauses 로 모아서
+	//      말미에 1개면 .Or(), 2개 이상이면 and(or(...),or(...)) 로 결합한다.
+	userStatus := r.URL.Query().Get("status")
+	var orClauses []string
 	if wq := r.URL.Query().Get("work_queue"); wq != "" {
 		now := time.Now()
 		today := now.Format("2006-01-02")
 		switch wq {
 		case "delivery_soon":
 			soon := now.AddDate(0, 0, 7).Format("2006-01-02")
-			query = query.In("status", []string{"received", "partial"}).
-				Gt("remaining_qty", "0").
+			if userStatus == "" {
+				query = query.In("status", []string{"received", "partial"})
+			} else if userStatus != "received" && userStatus != "partial" {
+				return query, false, nil
+			}
+			query = query.Gt("remaining_qty", "0").
 				Gte("delivery_due", today).
 				Lte("delivery_due", soon)
 		case "no_site":
-			query = query.In("status", []string{"received", "partial"}).
-				Or("site_name.is.null,site_name.eq.", "")
+			if userStatus == "" {
+				query = query.In("status", []string{"received", "partial"})
+			} else if userStatus != "received" && userStatus != "partial" {
+				return query, false, nil
+			}
+			orClauses = append(orClauses, "site_name.is.null,site_name.eq.")
 		}
 	}
 
@@ -190,7 +208,20 @@ func (h *OrderHandler) applyOrderFilters(r *http.Request, query *postgrest.Filte
 		if ids, err := h.idsByName("products", "product_id", "product_name", q); err == nil && len(ids) > 0 {
 			clauses = append(clauses, fmt.Sprintf("product_id.in.(%s)", strings.Join(ids, ",")))
 		}
-		query = query.Or(strings.Join(clauses, ","), "")
+		orClauses = append(orClauses, strings.Join(clauses, ","))
+	}
+
+	switch len(orClauses) {
+	case 0:
+		// no Or filter
+	case 1:
+		query = query.Or(orClauses[0], "")
+	default:
+		andParts := make([]string, 0, len(orClauses))
+		for _, oc := range orClauses {
+			andParts = append(andParts, fmt.Sprintf("or(%s)", oc))
+		}
+		query = query.And(strings.Join(andParts, ","), "")
 	}
 
 	return query, true, nil
@@ -277,6 +308,10 @@ func (h *OrderHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	if _, count, err := totalQ.Range(0, 0, "").Execute(); err == nil {
 		summary.Total = count
 	}
+	// 회귀 가드 (tx_outbound 와 동일): postgrest-go .Eq() 는 같은 컬럼 두 번 호출 시 덮어쓰기.
+	// applyOrderFilters 가 사용자 status 를 이미 적용한 경우 여기서 다시 .Eq("status", st.key) 를
+	// 부르면 사용자 필터가 사라져서 다른 status 의 전역 카운트가 채워진다.
+	userStatus := r.URL.Query().Get("status")
 	for _, st := range []struct {
 		key    string
 		target *int64
@@ -286,12 +321,17 @@ func (h *OrderHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		{"completed", &summary.CompletedCount},
 		{"cancelled", &summary.CancelledCount},
 	} {
+		if userStatus != "" && userStatus != st.key {
+			continue
+		}
 		q := h.DB.From("orders").Select("order_id", "exact", true)
 		q, ok2, err := h.applyOrderFilters(r, q)
 		if err != nil || !ok2 {
 			continue
 		}
-		q = q.Eq("status", st.key)
+		if userStatus == "" {
+			q = q.Eq("status", st.key)
+		}
 		if _, c, err := q.Range(0, 0, "").Execute(); err == nil {
 			*st.target = c
 		}

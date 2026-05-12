@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
@@ -30,6 +31,7 @@ func NewDBIntegrityHandler(db *supa.Client) *DBIntegrityHandler {
 }
 
 // init — D-20260512-090000 feature self-mounting.
+// main merge: /admin/db-anomalies/ignores (ListIgnores) 신규 라우트 통합.
 func init() {
 	mount.Register(mount.Spec{
 		ID:   feature.IDSysDBIntegrity,
@@ -41,6 +43,7 @@ func init() {
 			r.With(g.AdminOnly).Post("/admin/db-integrity/refresh", h.Refresh)
 			// PR 091: 개별 row 수준 이상치 검사 (v_db_anomalies + anomaly_ignores).
 			r.With(g.AdminOnly).Get("/admin/db-anomalies", h.Anomalies)
+			r.With(g.AdminOnly).Get("/admin/db-anomalies/ignores", h.ListIgnores)
 			r.With(g.AdminOnly).Post("/admin/db-anomalies/ignore", h.IgnoreAnomaly)
 			r.With(g.AdminOnly).Delete("/admin/db-anomalies/ignore/{ignoreID}", h.UnignoreAnomaly)
 		},
@@ -78,7 +81,7 @@ type IntegritySummary struct {
 // 갱신은 Refresh 가 별도 (POST /admin/db-integrity/refresh).
 func (h *DBIntegrityHandler) Run(w http.ResponseWriter, r *http.Request) {
 	data, _, err := h.DB.From("mv_integrity_check").Select("*", "exact", false).
-		Range(0, 999, "").Execute()
+		Range(0, PostgRESTMaxRows-1, "").Execute()
 	if err != nil {
 		log.Printf("[정합성] mv_integrity_check 조회 실패: %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "정합성 view 조회 실패")
@@ -246,4 +249,42 @@ func (h *DBIntegrityHandler) UnignoreAnomaly(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	response.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// IgnoreEntry — anomaly_ignores 한 행 (UI 해제 목록용).
+type IgnoreEntry struct {
+	IgnoreID  int64  `json:"ignore_id"`
+	TableName string `json:"table_name"`
+	RowPK     string `json:"row_pk"`
+	RuleName  string `json:"rule_name"`
+	Reason    string `json:"reason,omitempty"`
+	IgnoredBy string `json:"ignored_by,omitempty"`
+	IgnoredAt string `json:"ignored_at"`
+}
+
+type IgnoreListResponse struct {
+	Ignores []IgnoreEntry `json:"ignores"`
+	Total   int           `json:"total"`
+}
+
+// ListIgnores — GET /admin/db-anomalies/ignores — 무시 등록된 row 목록.
+// 운영자가 "정상" 으로 잘못 표시했을 때 해제할 수 있게 노출.
+func (h *DBIntegrityHandler) ListIgnores(w http.ResponseWriter, r *http.Request) {
+	data, _, err := h.DB.From("anomaly_ignores").
+		Select("ignore_id,table_name,row_pk,rule_name,reason,ignored_by,ignored_at", "exact", false).
+		Order("ignored_at", &postgrest.OrderOpts{Ascending: false}).
+		Range(0, PostgRESTMaxRows-1, "").
+		Execute()
+	if err != nil {
+		log.Printf("[이상치] ignore 목록 조회 실패: %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "무시 목록 조회 실패")
+		return
+	}
+	var rows []IgnoreEntry
+	if err := json.Unmarshal(data, &rows); err != nil {
+		log.Printf("[이상치] ignore 목록 디코딩 실패: %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 처리 실패")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, IgnoreListResponse{Ignores: rows, Total: len(rows)})
 }

@@ -833,6 +833,12 @@ func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
 
 	// status 별 카운트는 List 와 동일 필터 + status 추가로 재조회.
 	// status 가 이미 query string 에 있으면 그 값으로 고정되어 다른 status 카운트는 0 으로 떨어짐 (의도).
+	//
+	// 회귀 가드: postgrest-go .Eq() 는 params map 이라 같은 컬럼 두 번 호출 시 덮어쓰기 된다.
+	// applyOutboundFilters 가 사용자 status 를 이미 적용했으면 여기서 다시 .Eq("status", ...) 를
+	// 부르면 덮어써져서 다른 status 의 전역 카운트가 채워진다. user_status 가 set 일 때는 그 값에
+	// 일치하는 버킷만 채우고 나머지는 0 으로 둔다 (= 위 주석의 "의도").
+	userStatus := r.URL.Query().Get("status")
 	for _, st := range []struct {
 		key    string
 		target *int64
@@ -841,13 +847,17 @@ func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		{"cancel_pending", &summary.CancelPendingCount},
 		{"cancelled", &summary.CancelledCount},
 	} {
+		if userStatus != "" && userStatus != st.key {
+			continue
+		}
 		q := h.DB.From("outbounds").Select("outbound_id", "exact", true)
 		q, ok2, err := h.applyOutboundFilters(r, q)
 		if err != nil || !ok2 {
 			continue
 		}
-		// 사용자가 status 필터를 이미 걸었다면 그쪽이 우선 — Eq 추가는 더 좁히는 효과만.
-		q = q.Eq("status", st.key)
+		if userStatus == "" {
+			q = q.Eq("status", st.key)
+		}
 		if _, c, err := q.Range(0, 0, "").Execute(); err == nil {
 			*st.target = c
 		}

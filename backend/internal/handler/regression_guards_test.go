@@ -108,8 +108,10 @@ func TestEnrichFunctionsUseHelper(t *testing.T) {
 //
 // ============================================================
 func TestNoMagicNumberInRange(t *testing.T) {
-	// .Range(N, M) 에서 M = 999 또는 1000 같은 magic number 검출 (cap 의도면 상수 써야)
-	pat := regexp.MustCompile(`\.Range\(\s*\d+\s*,\s*(999|1000|9999|99999)\s*,`)
+	// .Range(N, M) 에서 M = 999 또는 1000 같은 magic number 검출 (cap 의도면 상수 써야).
+	// 이전 regex 는 `.Range(` 가 한 줄 안에 있어야 매칭됐는데 long-chain 빌더는 `.\n\tRange(` 처럼
+	// 줄바꿈이 들어간다. \. 대신 [.\s] 로 공백/개행도 허용.
+	pat := regexp.MustCompile(`[.\s]Range\(\s*\d+\s*,\s*(999|1000|9999|99999)\s*,`)
 
 	scanHandlerFiles(t, func(f, content string) {
 		for _, m := range pat.FindAllStringSubmatch(content, -1) {
@@ -150,4 +152,27 @@ func TestOutboundImportUsesTransactionalCreateCore(t *testing.T) {
 	if !strings.Contains(content, "createOutboundCore(outReq)") {
 		t.Fatal("출고 Import 는 createOutboundCore(outReq) 를 호출해야 합니다")
 	}
+}
+
+// ============================================================
+// G7. Summary 핸들러의 status 별 카운트 루프는 사용자 status 가드를 가져야 한다.
+// 회귀 패턴: applyXFilters 가 사용자 ?status=X 를 .Eq("status", X) 로 이미 적용했는데
+//   루프 안에서 q.Eq("status", st.key) 를 다시 부르면 postgrest-go params map 덮어쓰기로
+//   사용자 필터가 사라져 다른 status 의 전역 카운트가 채워진다 (PR #700 후속).
+// 가드: `.Eq("status", st.key)` 가 나오는 파일은 같은 파일 안에 `userStatus :=` 사전
+//   검사가 있어야 한다 (사용자 status 와 일치하지 않는 버킷은 skip 하는 패턴).
+// ============================================================
+func TestSummaryStatusLoopHasUserStatusGuard(t *testing.T) {
+	suspectPattern := regexp.MustCompile(`\.Eq\("status",\s*st\.key`)
+	scanHandlerFiles(t, func(f, content string) {
+		if !suspectPattern.MatchString(content) {
+			return
+		}
+		if !strings.Contains(content, `userStatus := r.URL.Query().Get("status")`) {
+			lineNo := findLineNo(content, ".Eq(\"status\", st.key")
+			t.Errorf("PR #700 후속 회귀: %s:%d Summary status 루프가 userStatus 가드 없이 .Eq(\"status\", st.key) 호출. "+
+				"applyXFilters 가 사용자 status 를 이미 적용한 경우 덮어쓰기 발생.",
+				f, lineNo)
+		}
+	})
 }

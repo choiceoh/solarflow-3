@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react"
 import {
   flexRender,
   getCoreRowModel,
@@ -14,7 +22,18 @@ import {
   type PaginationState,
   type VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
+import {
+  autoUpdate,
+  flip,
+  FloatingPortal,
+  offset,
+  shift,
+  size,
+  useFloating,
+} from "@floating-ui/react"
+import { useAutoAnimate } from "@formkit/auto-animate/react"
+import { AnimatePresence, motion } from "motion/react"
+import { ArrowDown, ArrowUp, ArrowUpDown, EyeOff, Pin, PinOff, RotateCcw } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -41,7 +60,8 @@ import { useColumnWidths, type ColumnSizingState } from "@/lib/columnWidths"
 import { useColumnSort, type SortingState } from "@/lib/columnSort"
 import type { ColumnPinningState as SfColumnPinningState } from "@/lib/columnPinning"
 import { useColumnOrder, resolveOrder } from "@/lib/columnOrder"
-import { useColumnReorderMode } from "@/lib/columnReorderMode"
+
+const DRAG_THRESHOLD_PX = 5
 
 export interface ColumnDef<T> extends ColumnVisibilityMeta {
   cell: (item: T) => ReactNode
@@ -119,6 +139,8 @@ export interface MetaTableProps<T> {
   pinning?: SfColumnPinningState
   /** 고정 상태 변경 콜백 — TanStack 의 onColumnPinningChange 시그니처. */
   onPinningChange?: (next: SfColumnPinningState) => void
+  /** 숨김 컬럼 변경 — 헤더 우클릭 메뉴에서 "열 숨기기"용. 미지정 시 메뉴에 항목 미노출. */
+  onHiddenChange?: (next: Set<string>) => void
   /** 페이지당 행 수 기본값. 미지정 시 페이지네이션 비활성. */
   pageSize?: number
   /** 페이지 크기 선택지. 기본 [25, 50, 100]. */
@@ -200,6 +222,7 @@ export function MetaTable<T>({
   onFilteredRowCountChange,
   pinning,
   onPinningChange,
+  onHiddenChange,
   pageSize,
   pageSizeOptions,
   serverMode,
@@ -219,12 +242,59 @@ export function MetaTable<T>({
   const widths = useColumnWidths(tableId ?? "")
   const sortPersist = useColumnSort(tableId ?? "")
   const orderPersist = useColumnOrder(tableId ?? "")
-  const reorderMode = useColumnReorderMode(tableId ?? "")
   const persistEnabled = !!tableId
   const pinningEnabled = !!pinning
 
-  // 헤더 드래그 임시 상태 — 드롭 대상 표시용
-  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  // ─── 포인터 기반 헤더 리오더 상태 ────────────────────────────────────────
+  // 같은 헤더에서 짧은 클릭=정렬, 임계값 초과 드래그=리오더 로 분기.
+  // HTML5 D&D 대신 PointerEvent 로 처리해 고스트 분리감과 모드 토글을 모두 제거.
+  const [dragState, setDragState] = useState<{
+    columnId: string
+    startX: number
+    pointerX: number
+    pointerY: number
+    active: boolean
+    rect: { left: number; top: number; width: number; height: number }
+    label: string
+  } | null>(null)
+  const headerRefs = useRef<Map<string, HTMLElement>>(new Map())
+  // 드래그 직후 click 이벤트(정렬 토글) 가 발화되는 것을 막기 위한 단발 플래그.
+  const justDraggedRef = useRef(false)
+
+  // ─── 헤더 우클릭 컨텍스트 메뉴 상태 ──────────────────────────────────────
+  const [ctxMenu, setCtxMenu] = useState<{ columnId: string; x: number; y: number } | null>(null)
+  // floating-ui — 커서 위치 기준 virtual reference. 화면 가장자리에서 자동 flip + shift.
+  const { refs: ctxRefs, floatingStyles: ctxFloatingStyles } = useFloating({
+    placement: "bottom-start",
+    middleware: [
+      offset(2),
+      flip({ padding: 8 }),
+      shift({ padding: 8 }),
+      size({
+        padding: 8,
+        apply({ availableHeight, elements }) {
+          elements.floating.style.maxHeight = `${Math.max(120, availableHeight)}px`
+        },
+      }),
+    ],
+    whileElementsMounted: autoUpdate,
+  })
+  useEffect(() => {
+    if (!ctxMenu) return
+    ctxRefs.setPositionReference({
+      getBoundingClientRect: () => ({
+        x: ctxMenu.x,
+        y: ctxMenu.y,
+        width: 0,
+        height: 0,
+        top: ctxMenu.y,
+        left: ctxMenu.x,
+        right: ctxMenu.x,
+        bottom: ctxMenu.y,
+      }),
+    })
+  }, [ctxMenu, ctxRefs])
+
   const [localSorting, setLocalSorting] = useState<SortingState>(() =>
     defaultSort ? [{ id: defaultSort.key, desc: defaultSort.direction === "desc" }] : [],
   )
@@ -420,6 +490,148 @@ export function MetaTable<T>({
     onFilteredRowCountChange?.(filteredRowCount)
   }, [filteredRowCount, onFilteredRowCountChange])
 
+  // ─── 포인터 기반 헤더 리오더 — 임계값 5px 이전엔 클릭(정렬), 이후엔 드래그.
+  // 드롭 위치 계산: 커서 X 가 어느 컬럼 중심을 지났는지 기준으로 삽입 인덱스 결정.
+  const commitReorder = useCallback(
+    (sourceId: string, pointerX: number) => {
+      if (!persistEnabled) return
+      const refs = headerRefs.current
+      const entries: Array<{ id: string; left: number; right: number; mid: number }> = []
+      refs.forEach((el, id) => {
+        if (id === sourceId) return
+        const r = el.getBoundingClientRect()
+        entries.push({ id, left: r.left, right: r.right, mid: (r.left + r.right) / 2 })
+      })
+      if (entries.length === 0) return
+      entries.sort((a, b) => a.left - b.left)
+      // 어떤 컬럼의 좌/우 절반에 떨어졌는지 찾는다.
+      let targetId: string | null = null
+      let insertBefore = true
+      for (const e of entries) {
+        if (pointerX < e.mid) {
+          targetId = e.id
+          insertBefore = true
+          break
+        }
+        if (pointerX < e.right) {
+          targetId = e.id
+          insertBefore = false
+          break
+        }
+      }
+      if (!targetId) {
+        targetId = entries[entries.length - 1].id
+        insertBefore = false
+      }
+      if (targetId === sourceId) return
+      orderPersist.setOrder(() => {
+        const current = resolvedOrder.length ? resolvedOrder : defaultIds
+        const without = current.filter((x) => x !== sourceId)
+        const idx = without.indexOf(targetId!)
+        if (idx === -1) return [...without, sourceId]
+        const insertIdx = insertBefore ? idx : idx + 1
+        return [...without.slice(0, insertIdx), sourceId, ...without.slice(insertIdx)]
+      })
+    },
+    [persistEnabled, orderPersist, resolvedOrder, defaultIds],
+  )
+
+  // 드롭 인디케이터 위치 — 드래그 active 동안 현재 커서 위치 기준 삽입 갭의 left/top/height.
+  const dropIndicator = useMemo(() => {
+    if (!dragState?.active) return null
+    const refs = headerRefs.current
+    const entries: Array<{
+      id: string
+      left: number
+      right: number
+      mid: number
+      top: number
+      height: number
+    }> = []
+    refs.forEach((el, id) => {
+      if (id === dragState.columnId) return
+      const r = el.getBoundingClientRect()
+      entries.push({
+        id,
+        left: r.left,
+        right: r.right,
+        mid: (r.left + r.right) / 2,
+        top: r.top,
+        height: r.height,
+      })
+    })
+    if (entries.length === 0) return null
+    entries.sort((a, b) => a.left - b.left)
+    const px = dragState.pointerX
+    for (const e of entries) {
+      if (px < e.mid) return { x: e.left, top: e.top, height: e.height }
+      if (px < e.right) return { x: e.right, top: e.top, height: e.height }
+    }
+    const last = entries[entries.length - 1]
+    return { x: last.right, top: last.top, height: last.height }
+  }, [dragState])
+
+  useEffect(() => {
+    if (!dragState) return
+    const onMove = (ev: PointerEvent) => {
+      setDragState((prev) => {
+        if (!prev) return null
+        const active = prev.active || Math.abs(ev.clientX - prev.startX) > DRAG_THRESHOLD_PX
+        return { ...prev, pointerX: ev.clientX, pointerY: ev.clientY, active }
+      })
+    }
+    const onUp = (ev: PointerEvent) => {
+      setDragState((prev) => {
+        if (!prev) return null
+        if (prev.active) {
+          commitReorder(prev.columnId, ev.clientX)
+          justDraggedRef.current = true
+          // 같은 tick 의 click 만 막고 다음부턴 정상 동작
+          window.setTimeout(() => {
+            justDraggedRef.current = false
+          }, 0)
+        }
+        return null
+      })
+    }
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") setDragState(null)
+    }
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+    window.addEventListener("pointercancel", onUp)
+    window.addEventListener("keydown", onKey)
+    return () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onUp)
+      window.removeEventListener("keydown", onKey)
+    }
+  }, [dragState, commitReorder])
+
+  // 컨텍스트 메뉴 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!ctxMenu) return
+    const close = () => setCtxMenu(null)
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") setCtxMenu(null)
+    }
+    window.addEventListener("mousedown", close)
+    window.addEventListener("scroll", close, true)
+    window.addEventListener("keydown", onKey)
+    return () => {
+      window.removeEventListener("mousedown", close)
+      window.removeEventListener("scroll", close, true)
+      window.removeEventListener("keydown", onKey)
+    }
+  }, [ctxMenu])
+
+  // 행 추가/삭제/순서 변경 시 자동 슬라이드 — 필터/정렬/페이지네이션 전환을 부드럽게.
+  const [bodyRef] = useAutoAnimate<HTMLTableSectionElement>({
+    duration: 180,
+    easing: "ease-out",
+  })
+
   // server 모드는 한 페이지가 비어도 totalRowCount > 0 이면 데이터 있는 상태 — 페이지 컨트롤 보존이 필요.
   const isEmpty = isServerMode ? filteredRowCount === 0 : items.length === 0
   if (isEmpty) {
@@ -432,30 +644,34 @@ export function MetaTable<T>({
     )
   }
 
-  // 헤더 드래그 핸들러
-  const onHeaderDragStart = (e: React.DragEvent, columnId: string) => {
-    e.dataTransfer.effectAllowed = "move"
-    e.dataTransfer.setData("text/sf-col", columnId)
-  }
-  const onHeaderDragOver = (e: React.DragEvent, columnId: string) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = "move"
-    if (dragOverId !== columnId) setDragOverId(columnId)
-  }
-  const onHeaderDragLeave = () => setDragOverId(null)
-  const onHeaderDrop = (e: React.DragEvent, targetId: string) => {
-    e.preventDefault()
-    setDragOverId(null)
-    const sourceId = e.dataTransfer.getData("text/sf-col")
-    if (!sourceId || sourceId === targetId) return
-    if (!persistEnabled) return
-    orderPersist.setOrder(() => {
-      const current = resolvedOrder.length ? resolvedOrder : defaultIds
-      const without = current.filter((x) => x !== sourceId)
-      const idx = without.indexOf(targetId)
-      if (idx === -1) return [...without, sourceId]
-      return [...without.slice(0, idx), sourceId, ...without.slice(idx)]
+  const onHeaderPointerDown = (
+    e: React.PointerEvent,
+    columnId: string,
+    label: string,
+    reorderable: boolean,
+  ) => {
+    // 좌클릭만, 리사이저 영역은 제외
+    if (e.button !== 0) return
+    const target = e.target as HTMLElement
+    if (target.closest(".sf-col-resizer")) return
+    if (!persistEnabled || !reorderable) return
+    const el = headerRefs.current.get(columnId)
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    setDragState({
+      columnId,
+      startX: e.clientX,
+      pointerX: e.clientX,
+      pointerY: e.clientY,
+      active: false,
+      rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+      label,
     })
+  }
+
+  const onHeaderContextMenu = (e: React.MouseEvent, columnId: string) => {
+    e.preventDefault()
+    setCtxMenu({ columnId, x: e.clientX, y: e.clientY })
   }
 
   const sizeOptions = pageSizeOptions ?? DEFAULT_PAGE_SIZE_OPTIONS
@@ -496,20 +712,28 @@ export function MetaTable<T>({
                 const sorted = header.column.getIsSorted()
                 const SortIcon =
                   sorted === "asc" ? ArrowUp : sorted === "desc" ? ArrowDown : ArrowUpDown
-                const reorderable = persistEnabled && meta?.reorderable !== false
-                // 폭 조정 핸들과 충돌 방지 — 토글 ON 동안만 헤더 draggable.
-                const dragActive = reorderable && reorderMode.enabled
+                const reorderable =
+                  persistEnabled && meta?.reorderable !== false && !meta?.headerCell
                 const pinSide = header.column.getIsPinned() as "left" | "right" | false
                 const pinnedStyle = getPinnedStyle(header.column, "header")
+                const isDragging = dragState?.active && dragState.columnId === header.id
+                const labelText =
+                  typeof header.column.columnDef.header === "string"
+                    ? (header.column.columnDef.header as string)
+                    : header.id
                 return (
                   <TableHead
                     key={header.id}
+                    ref={(el) => {
+                      if (el) headerRefs.current.set(header.id, el)
+                      else headerRefs.current.delete(header.id)
+                    }}
                     className={cn(
                       "relative",
                       alignClass(meta?.align),
                       meta?.headerClassName,
-                      dragOverId === header.id && "sf-col-drop-target",
-                      dragActive && "sf-col-reorder-active",
+                      reorderable && "sf-col-grab",
+                      isDragging && "sf-col-dragging",
                       pinSide === "left" && "sf-col-pinned-left",
                       pinSide === "right" && "sf-col-pinned-right",
                     )}
@@ -520,18 +744,26 @@ export function MetaTable<T>({
                     data-align={meta?.align ?? "left"}
                     data-pinned={pinSide || undefined}
                     data-sorted={sorted || undefined}
-                    draggable={dragActive}
-                    onDragStart={dragActive ? (e) => onHeaderDragStart(e, header.id) : undefined}
-                    onDragOver={dragActive ? (e) => onHeaderDragOver(e, header.id) : undefined}
-                    onDragLeave={dragActive ? onHeaderDragLeave : undefined}
-                    onDrop={dragActive ? (e) => onHeaderDrop(e, header.id) : undefined}
+                    onPointerDown={
+                      reorderable
+                        ? (e) => onHeaderPointerDown(e, header.id, labelText, reorderable)
+                        : undefined
+                    }
+                    onContextMenu={(e) => onHeaderContextMenu(e, header.id)}
                   >
                     {meta?.headerCell ? (
                       meta.headerCell()
                     ) : canSort ? (
                       <button
                         type="button"
-                        onClick={header.column.getToggleSortingHandler()}
+                        onClick={(e) => {
+                          if (justDraggedRef.current) {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            return
+                          }
+                          header.column.getToggleSortingHandler()?.(e)
+                        }}
                         className={cn(
                           "sf-meta-table-sort",
                           sorted ? "text-foreground font-semibold" : "text-muted-foreground",
@@ -550,13 +782,20 @@ export function MetaTable<T>({
                       <span
                         onMouseDown={header.getResizeHandler()}
                         onTouchStart={header.getResizeHandler()}
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation()
+                          header.column.resetSize()
+                        }}
+                        draggable={false}
                         className={cn(
                           "sf-col-resizer",
                           header.column.getIsResizing() && "sf-col-resizer-active",
                         )}
                         role="separator"
                         aria-orientation="vertical"
+                        title="드래그: 폭 조정 · 더블클릭: 기본값"
                       />
                     )}
                   </TableHead>
@@ -565,7 +804,7 @@ export function MetaTable<T>({
             </TableRow>
           ))}
         </TableHeader>
-        <TableBody>
+        <TableBody ref={bodyRef}>
           {table.getRowModel().rows.map((row) => (
             <TableRow
               key={row.id}
@@ -730,6 +969,217 @@ export function MetaTable<T>({
           )}
         </div>
       )}
+      <AnimatePresence>
+        {dragState?.active && (
+          <motion.div
+            key="drag-preview"
+            className="sf-col-drag-preview"
+            style={{
+              left: dragState.pointerX - (dragState.startX - dragState.rect.left),
+              top: dragState.rect.top,
+              width: dragState.rect.width,
+              height: dragState.rect.height,
+            }}
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 0.92, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.92 }}
+            transition={{ type: "spring", stiffness: 520, damping: 38, mass: 0.6 }}
+          >
+            <span className="sf-col-drag-preview-label">{dragState.label}</span>
+          </motion.div>
+        )}
+        {dragState?.active && dropIndicator && (
+          <motion.div
+            key="drop-indicator"
+            className="sf-col-drop-indicator"
+            style={{ top: dropIndicator.top, height: dropIndicator.height }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, left: dropIndicator.x }}
+            exit={{ opacity: 0 }}
+            transition={{
+              left: { type: "spring", stiffness: 600, damping: 40 },
+              opacity: { duration: 0.12 },
+            }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {ctxMenu &&
+          (() => {
+            const col = columns.find((c) => c.key === ctxMenu.columnId)
+            if (!col) return null
+            const tsCol = table.getColumn(ctxMenu.columnId)
+            const sorted = tsCol?.getIsSorted()
+            const pinned = tsCol?.getIsPinned() as "left" | "right" | false | undefined
+            const canSort = !!tsCol?.getCanSort()
+            const canResize = !!tsCol?.getCanResize()
+            const canHide = col.hideable === true && !!onHiddenChange
+            const canPin = pinningEnabled && tsCol?.getCanPin()
+            const items: ReactNode[] = []
+            if (canSort) {
+              items.push(
+                <button
+                  key="sort-asc"
+                  type="button"
+                  className="sf-col-ctx-item"
+                  onClick={() => {
+                    tsCol?.toggleSorting(false)
+                    setCtxMenu(null)
+                  }}
+                >
+                  <ArrowUp className="h-3 w-3" />
+                  오름차순 정렬{sorted === "asc" ? " ✓" : ""}
+                </button>,
+                <button
+                  key="sort-desc"
+                  type="button"
+                  className="sf-col-ctx-item"
+                  onClick={() => {
+                    tsCol?.toggleSorting(true)
+                    setCtxMenu(null)
+                  }}
+                >
+                  <ArrowDown className="h-3 w-3" />
+                  내림차순 정렬{sorted === "desc" ? " ✓" : ""}
+                </button>,
+              )
+              if (sorted) {
+                items.push(
+                  <button
+                    key="sort-clear"
+                    type="button"
+                    className="sf-col-ctx-item"
+                    onClick={() => {
+                      tsCol?.clearSorting()
+                      setCtxMenu(null)
+                    }}
+                  >
+                    <ArrowUpDown className="h-3 w-3" />
+                    정렬 해제
+                  </button>,
+                )
+              }
+            }
+            if (canPin) {
+              if (items.length > 0) items.push(<div key="sep-pin" className="sf-col-ctx-sep" />)
+              if (pinned === "left") {
+                items.push(
+                  <button
+                    key="unpin"
+                    type="button"
+                    className="sf-col-ctx-item"
+                    onClick={() => {
+                      tsCol?.pin(false)
+                      setCtxMenu(null)
+                    }}
+                  >
+                    <PinOff className="h-3 w-3" />
+                    왼쪽 고정 해제
+                  </button>,
+                )
+              } else {
+                items.push(
+                  <button
+                    key="pin-left"
+                    type="button"
+                    className="sf-col-ctx-item"
+                    onClick={() => {
+                      tsCol?.pin("left")
+                      setCtxMenu(null)
+                    }}
+                  >
+                    <Pin className="h-3 w-3 -rotate-90" />
+                    왼쪽 고정
+                  </button>,
+                )
+              }
+              if (pinned === "right") {
+                items.push(
+                  <button
+                    key="unpin-r"
+                    type="button"
+                    className="sf-col-ctx-item"
+                    onClick={() => {
+                      tsCol?.pin(false)
+                      setCtxMenu(null)
+                    }}
+                  >
+                    <PinOff className="h-3 w-3" />
+                    오른쪽 고정 해제
+                  </button>,
+                )
+              } else {
+                items.push(
+                  <button
+                    key="pin-right"
+                    type="button"
+                    className="sf-col-ctx-item"
+                    onClick={() => {
+                      tsCol?.pin("right")
+                      setCtxMenu(null)
+                    }}
+                  >
+                    <Pin className="h-3 w-3 rotate-90" />
+                    오른쪽 고정
+                  </button>,
+                )
+              }
+            }
+            if (canResize) {
+              if (items.length > 0) items.push(<div key="sep-w" className="sf-col-ctx-sep" />)
+              items.push(
+                <button
+                  key="reset-width"
+                  type="button"
+                  className="sf-col-ctx-item"
+                  onClick={() => {
+                    tsCol?.resetSize()
+                    setCtxMenu(null)
+                  }}
+                >
+                  <RotateCcw className="h-3 w-3" />폭 기본값
+                </button>,
+              )
+            }
+            if (canHide) {
+              if (items.length > 0) items.push(<div key="sep-h" className="sf-col-ctx-sep" />)
+              items.push(
+                <button
+                  key="hide"
+                  type="button"
+                  className="sf-col-ctx-item sf-col-ctx-danger"
+                  onClick={() => {
+                    const next = new Set(hidden)
+                    next.add(ctxMenu.columnId)
+                    onHiddenChange?.(next)
+                    setCtxMenu(null)
+                  }}
+                >
+                  <EyeOff className="h-3 w-3" />열 숨기기
+                </button>,
+              )
+            }
+            if (items.length === 0) return null
+            return (
+              <FloatingPortal>
+                <motion.div
+                  key="ctx-menu"
+                  ref={ctxRefs.setFloating}
+                  style={ctxFloatingStyles}
+                  className="sf-col-ctx-menu"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  role="menu"
+                  initial={{ opacity: 0, scale: 0.94, y: -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.94, y: -4 }}
+                  transition={{ duration: 0.11, ease: [0.2, 0.8, 0.2, 1] }}
+                >
+                  {items}
+                </motion.div>
+              </FloatingPortal>
+            )
+          })()}
+      </AnimatePresence>
     </div>
   )
 }

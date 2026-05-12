@@ -26,6 +26,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/engine"
@@ -53,6 +54,7 @@ type Deps struct {
 	DB          *supa.Client
 	Engine      *engine.EngineClient // nil 허용 — HasEngine() 으로 분기
 	OCR         *ocr.Client
+	Pool        *pgxpool.Pool // nil 허용 — AI 첨부 시트 동적 jsonb 쿼리 전용 pgx 풀
 	WiringStore feature.WiringStore
 	Resolver    *feature.Resolver
 	Gates       middleware.Gates

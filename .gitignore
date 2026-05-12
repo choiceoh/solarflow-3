@@ -9,7 +9,12 @@ backend/.venv-ocr/
 *.log
 .DS_Store
 insert_*.sql
-.claude/
+# .claude/ — 내부 항목별 ignore (디렉토리 자체는 살려야 화이트리스트 동작)
+.claude/*
+# AGENT-BUILDER-VISION 가드레일 훅은 프로젝트 정본 (PR-A/B 의 codemod 가 위에 동작)
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/**
 rpa/amaranth-uploader/.profile/
 rpa/amaranth-uploader/.profile-headless-test/
 rpa/amaranth-uploader/artifacts/
