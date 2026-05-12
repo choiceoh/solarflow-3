@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"reflect"
 	"sort"
 	"testing"
@@ -63,6 +64,47 @@ func TestIntersectSaleIDLists(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("기대=%v 실제=%v", want, got)
+			}
+		})
+	}
+}
+
+func TestChunkSaleIDs(t *testing.T) {
+	ids := make([]string, 0, 250)
+	for i := 0; i < 250; i++ {
+		ids = append(ids, fmt.Sprintf("id-%d", i))
+	}
+
+	cases := []struct {
+		name     string
+		ids      []string
+		size     int
+		wantLens []int
+	}{
+		{"빈 입력", nil, 100, nil},
+		{"size 0", ids, 0, nil},
+		{"size 음수", ids, -1, nil},
+		{"분할 없음 (size 이하)", ids[:50], 200, []int{50}},
+		{"정확히 나뉨", ids[:200], 100, []int{100, 100}},
+		{"나머지 있음", ids, 200, []int{200, 50}},
+		{"전체보다 큰 size", ids[:10], 200, []int{10}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := chunkSaleIDs(c.ids, c.size)
+			if len(got) != len(c.wantLens) {
+				t.Fatalf("청크 개수 기대=%d 실제=%d", len(c.wantLens), len(got))
+			}
+			total := 0
+			for i, chunk := range got {
+				if len(chunk) != c.wantLens[i] {
+					t.Fatalf("청크 %d 크기 기대=%d 실제=%d", i, c.wantLens[i], len(chunk))
+				}
+				total += len(chunk)
+			}
+			if c.size > 0 && total != len(c.ids) {
+				t.Fatalf("합계 기대=%d 실제=%d (입력 누락)", len(c.ids), total)
 			}
 		})
 	}
