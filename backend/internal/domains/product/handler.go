@@ -1,4 +1,4 @@
-package handler
+package product
 
 import (
 	"encoding/json"
@@ -71,7 +71,7 @@ func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var products []model.ProductWithManufacturer
+	var products []ProductWithManufacturer
 	if err := json.Unmarshal(data, &products); err != nil {
 		log.Printf("[품번 목록 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -96,7 +96,7 @@ func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var products []model.ProductWithManufacturer
+	var products []ProductWithManufacturer
 	if err := json.Unmarshal(data, &products); err != nil {
 		log.Printf("[품번 상세 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -114,7 +114,7 @@ func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Create — POST /api/v1/products — 품번 등록
 // 비유: 새 모듈 규격 카드를 만들어 카탈로그에 추가하는 것
 func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateProductRequest
+	var req CreateProductRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[품번 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -136,7 +136,7 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var created []model.Product
+	var created []Product
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[품번 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -156,7 +156,7 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req model.UpdateProductRequest
+	var req UpdateProductRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[품번 수정 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -179,7 +179,7 @@ func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.Product
+	var updated []Product
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[품번 수정 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")

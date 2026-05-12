@@ -1,4 +1,4 @@
-package handler
+package inventory
 
 import (
 	"encoding/json"
@@ -11,7 +11,6 @@ import (
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -71,7 +70,7 @@ func (h *InventoryAllocationHandler) List(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var items []model.InventoryAllocation
+	var items []InventoryAllocation
 	if err := json.Unmarshal(data, &items); err != nil {
 		log.Printf("[배정 목록 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -95,7 +94,7 @@ func (h *InventoryAllocationHandler) GetByID(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var items []model.InventoryAllocation
+	var items []InventoryAllocation
 	if err := json.Unmarshal(data, &items); err != nil {
 		log.Printf("[배정 상세 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -111,7 +110,7 @@ func (h *InventoryAllocationHandler) GetByID(w http.ResponseWriter, r *http.Requ
 
 // Create — POST /api/v1/inventory/allocations
 func (h *InventoryAllocationHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateInventoryAllocationRequest
+	var req CreateInventoryAllocationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return
@@ -134,7 +133,7 @@ func (h *InventoryAllocationHandler) Create(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var created []model.InventoryAllocation
+	var created []InventoryAllocation
 	if err := json.Unmarshal(data, &created); err != nil || len(created) == 0 {
 		// 삽입 자체는 성공했으나 응답 파싱 불가 시 성공으로 처리
 		log.Printf("[배정 등록 응답 파싱 주의] data=%s err=%v", string(data), err)
@@ -150,7 +149,7 @@ func (h *InventoryAllocationHandler) Create(w http.ResponseWriter, r *http.Reque
 func (h *InventoryAllocationHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req model.UpdateInventoryAllocationRequest
+	var req UpdateInventoryAllocationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return
@@ -170,7 +169,7 @@ func (h *InventoryAllocationHandler) Update(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var updated []model.InventoryAllocation
+	var updated []InventoryAllocation
 	if err := json.Unmarshal(data, &updated); err != nil || len(updated) == 0 {
 		response.RespondError(w, http.StatusNotFound, "수정할 배정을 찾을 수 없습니다")
 		return

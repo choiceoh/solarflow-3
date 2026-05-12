@@ -1,4 +1,4 @@
-package model
+package baro
 
 import "time"
 
@@ -29,17 +29,17 @@ type BaroQuote struct {
 
 // BaroQuoteLine — 견적 라인 1건.
 type BaroQuoteLine struct {
-	LineID        string  `json:"line_id"`
-	QuoteID       string  `json:"quote_id"`
-	LineNo        int     `json:"line_no"`
-	ProductID     *string `json:"product_id,omitempty"`
-	ProductCode   *string `json:"product_code,omitempty"`
-	ProductName   *string `json:"product_name,omitempty"`
-	SpecWp        *int    `json:"spec_wp,omitempty"`
-	Quantity      int     `json:"quantity"`
-	UnitPriceKrw  float64 `json:"unit_price_krw"`
-	LineTotalKrw  float64 `json:"line_total_krw"` // GENERATED 컬럼
-	Notes         *string `json:"notes,omitempty"`
+	LineID       string  `json:"line_id"`
+	QuoteID      string  `json:"quote_id"`
+	LineNo       int     `json:"line_no"`
+	ProductID    *string `json:"product_id,omitempty"`
+	ProductCode  *string `json:"product_code,omitempty"`
+	ProductName  *string `json:"product_name,omitempty"`
+	SpecWp       *int    `json:"spec_wp,omitempty"`
+	Quantity     int     `json:"quantity"`
+	UnitPriceKrw float64 `json:"unit_price_krw"`
+	LineTotalKrw float64 `json:"line_total_krw"` // GENERATED 컬럼
+	Notes        *string `json:"notes,omitempty"`
 }
 
 // CreateBaroQuoteRequest — 견적 생성 요청 (헤더 + 라인 묶음 한 번에).

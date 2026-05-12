@@ -1,4 +1,4 @@
-package handler
+package baro
 
 import (
 	"encoding/json"
@@ -11,7 +11,6 @@ import (
 
 	"solarflow-backend/internal/domains/bl"
 	"solarflow-backend/internal/feature"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -110,7 +109,7 @@ func (h *BaroIncomingHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(shipments) == 0 {
-		response.RespondJSON(w, http.StatusOK, []model.BaroIncomingItem{})
+		response.RespondJSON(w, http.StatusOK, []BaroIncomingItem{})
 		return
 	}
 
@@ -141,7 +140,7 @@ func (h *BaroIncomingHandler) List(w http.ResponseWriter, r *http.Request) {
 	manufacturerNames := h.baroIncomingManufacturerNames()
 	warehouseNames := h.baroIncomingWarehouseNames()
 
-	items := make([]model.BaroIncomingItem, 0, len(lines))
+	items := make([]BaroIncomingItem, 0, len(lines))
 	for _, line := range lines {
 		ship, ok := shipByID[line.BLID]
 		if !ok {
@@ -153,7 +152,7 @@ func (h *BaroIncomingHandler) List(w http.ResponseWriter, r *http.Request) {
 			manufacturerID = *ship.ManufacturerID
 			manufacturerName = stringPtrFromMap(manufacturerNames, manufacturerID)
 		}
-		item := model.BaroIncomingItem{
+		item := BaroIncomingItem{
 			ID:                 line.BLLineID,
 			BLID:               ship.BLID,
 			BLNumber:           ship.BLNumber,

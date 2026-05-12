@@ -1,4 +1,4 @@
-package model
+package baro
 
 // BaroIncomingItem — BARO 영업용 입고예정 한 줄
 // 비유: 선적 서류에서 가격표를 떼고 "언제, 어떤 모듈이 몇 장 들어오는지"만 남긴 안내 카드

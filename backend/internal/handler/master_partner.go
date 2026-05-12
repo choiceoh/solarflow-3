@@ -9,6 +9,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/domains/baro"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
@@ -35,7 +36,7 @@ func init() {
 		Auth: mount.AuthAuthed,
 		Mount: func(d *mount.Deps, r chi.Router) {
 			h := NewPartnerHandler(d.DB)
-			activityH := NewPartnerActivityHandler(d.DB)
+			activityH := baro.NewPartnerActivityHandler(d.DB)
 			g := d.Gates
 			r.Route("/partners", func(r chi.Router) {
 				r.Get("/", h.List)

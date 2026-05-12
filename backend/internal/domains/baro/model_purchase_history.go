@@ -1,4 +1,4 @@
-package model
+package baro
 
 // BaroPurchaseHistoryItem — BARO 자체 매입 원가/구매이력 한 줄
 type BaroPurchaseHistoryItem struct {

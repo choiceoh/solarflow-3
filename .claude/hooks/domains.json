@@ -248,6 +248,71 @@
         "backend/scripts/check_schema.sh"
       ],
       "decisions": []
+    },
+    "inventory": {
+      "display_name": "재고 할당 (Inventory Allocation)",
+      "feature_id": "tx.inventory_allocation",
+      "pack": "erp-core",
+      "tenants": [
+        "baro",
+        "cable",
+        "topsolar"
+      ],
+      "tables": [],
+      "depends_on": [],
+      "paths": [
+        "backend/internal/domains/inventory/"
+      ],
+      "blast_radius": [
+        "inventory model 필드 변경 — backend/internal/domains/inventory/handler.go Validation / backend/migrations/ + check_schema.sh"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh"
+      ],
+      "decisions": []
+    },
+    "baro": {
+      "display_name": "바로 도메인 (영업/CRM/배송)",
+      "feature_id": "baro.domain",
+      "pack": "baro-domain",
+      "tenants": [],
+      "tables": [],
+      "depends_on": [],
+      "paths": [
+        "backend/internal/domains/baro/"
+      ],
+      "blast_radius": [
+        "baro model 필드 변경 — backend/internal/domains/baro/handler.go Validation / backend/migrations/ + check_schema.sh"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh"
+      ],
+      "decisions": []
+    },
+    "product": {
+      "display_name": "제품 마스터 (Product)",
+      "feature_id": "master.product",
+      "pack": "erp-core",
+      "tenants": [
+        "baro",
+        "cable",
+        "topsolar"
+      ],
+      "tables": [],
+      "depends_on": [],
+      "paths": [
+        "backend/internal/domains/product/"
+      ],
+      "blast_radius": [
+        "product model 필드 변경 — backend/internal/domains/product/handler.go Validation / backend/migrations/ + check_schema.sh"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh"
+      ],
+      "decisions": []
     }
   },
   "path_to_domain_fallback": [
