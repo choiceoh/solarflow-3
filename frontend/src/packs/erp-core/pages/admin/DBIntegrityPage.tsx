@@ -1,11 +1,63 @@
-import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Sparkles, RefreshCw, Database, Bot } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Sparkles,
+  RefreshCw,
+  Database,
+  Bot,
+  EyeOff,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { fetchWithAuth, streamFetchWithAuth } from '@/lib/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 
-// D-064 PR 37: 운영자 전용 DB 정합성 검증 + 로컬 AI 분석.
-// /api/v1/admin/db-integrity 응답 구조 (admin_db_integrity.go).
+// D-064 PR 37/38/39 + PR 091.
+// - 집계 검증 (v_integrity_check / mv_integrity_check): 위반 건수 카운트.
+// - 개별 이상치 (v_db_anomalies + anomaly_ignores): 어떤 row 가 의심인지 노출.
+
+const SEVERITY_LABEL: Record<string, string> = { high: '치명', med: '주의', low: '참고' };
+const SEVERITY_BADGE: Record<string, string> = {
+  high: 'bg-red-100 text-red-700',
+  med: 'bg-amber-100 text-amber-700',
+  low: 'bg-slate-100 text-slate-600',
+};
+
+export default function DBIntegrityPage() {
+  return (
+    <div className="space-y-4 p-4">
+      <header>
+        <h1 className="flex items-center gap-2 text-base font-semibold">
+          <Database className="h-4 w-4" />
+          DB 정합성
+        </h1>
+        <p className="text-xs text-muted-foreground">
+          운영 데이터의 회귀/손실/정합성을 자동 검증. 결과를 로컬 AI 가 해석.
+        </p>
+      </header>
+
+      <Tabs defaultValue="aggregate">
+        <TabsList variant="line">
+          <TabsTrigger value="aggregate">집계 검증</TabsTrigger>
+          <TabsTrigger value="row-level">개별 이상치</TabsTrigger>
+        </TabsList>
+        <TabsContent value="aggregate" className="mt-4">
+          <AggregateIntegrityView />
+        </TabsContent>
+        <TabsContent value="row-level" className="mt-4">
+          <RowLevelAnomaliesView />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// ============================================================
+// 집계 검증 (PR 37/38/39) — 기존 로직
+// ============================================================
 
 interface IntegrityCheck {
   category: string;
@@ -31,20 +83,7 @@ interface IntegrityResponse {
   generated_at: string;
 }
 
-const SEVERITY_LABEL: Record<string, string> = { high: '치명', med: '주의', low: '참고' };
-const SEVERITY_BADGE: Record<string, string> = {
-  high: 'bg-red-100 text-red-700',
-  med: 'bg-amber-100 text-amber-700',
-  low: 'bg-slate-100 text-slate-600',
-};
-const STATUS_ICON = (status: string) =>
-  status === 'fail' ? (
-    <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
-  ) : (
-    <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-  );
-
-export default function DBIntegrityPage() {
+function AggregateIntegrityView() {
   const [data, setData] = useState<IntegrityResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +143,6 @@ export default function DBIntegrityPage() {
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
         for (const line of lines) {
-          // `0:"foo"` 형식의 텍스트 청크만 발췌
           const m = line.match(/^0:"((?:\\.|[^"\\])*)"/);
           if (m) {
             collected += m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
@@ -122,9 +160,7 @@ export default function DBIntegrityPage() {
   if (loading && !data) return <LoadingSpinner />;
   if (error) {
     return (
-      <div className="p-6">
-        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
-      </div>
+      <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
     );
   }
   if (!data) return null;
@@ -133,18 +169,12 @@ export default function DBIntegrityPage() {
   const { summary } = data;
 
   return (
-    <div className="space-y-4 p-4">
-      {/* 헤더 + 요약 */}
+    <div className="space-y-4">
+      {/* 헤더 + 재검증 버튼 */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-base font-semibold">
-            <Database className="h-4 w-4" />
-            DB 정합성
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            운영 데이터의 회귀/손실/정합성을 자동 검증. 결과를 로컬 AI 가 해석.
-          </p>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          v_integrity_check 50+ 검증 통합 view → mv_integrity_check 캐시.
+        </p>
         <Button size="sm" variant="outline" onClick={load} disabled={loading}>
           <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           재검증
@@ -222,7 +252,13 @@ function SummaryCard({ label, value, total, tone }: { label: string; value: numb
 function CheckRow({ c }: { c: IntegrityCheck }) {
   return (
     <div className={`flex items-start gap-3 px-3 py-2 ${c.status === 'fail' ? 'bg-red-50/40' : ''}`}>
-      <div className="mt-0.5">{STATUS_ICON(c.status)}</div>
+      <div className="mt-0.5">
+        {c.status === 'fail' ? (
+          <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
+        ) : (
+          <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+        )}
+      </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{c.name}</span>
@@ -285,4 +321,438 @@ ${
 
 위반이 0건이면 단순히 "모든 검증 통과 — 데이터 정합성 양호" 라고만 답하라.
 500자 이내, 한국어, 운영자 보고서 톤.`;
+}
+
+// ============================================================
+// 개별 이상치 (PR 091) — row 단위 SQL 룰 + 무시 목록
+// ============================================================
+
+interface AnomalyRow {
+  rule_name: string;
+  severity: 'high' | 'med' | 'low';
+  category: string;
+  table_name: string;
+  row_pk: string;
+  row_label: string;
+  description: string;
+  detail: Record<string, unknown> | null;
+}
+
+interface AnomalyResponse {
+  anomalies: AnomalyRow[];
+  summary: { high: number; med: number; low: number; total: number };
+  generated_at: string;
+}
+
+function RowLevelAnomaliesView() {
+  const [data, setData] = useState<AnomalyResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetchWithAuth<AnomalyResponse>('/api/v1/admin/db-anomalies');
+      setData(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '이상치 조회 실패');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const ignoreRow = async (a: AnomalyRow) => {
+    const key = anomalyKey(a);
+    setBusyKey(key);
+    try {
+      await fetchWithAuth('/api/v1/admin/db-anomalies/ignore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          table_name: a.table_name,
+          row_pk: a.row_pk,
+          rule_name: a.rule_name,
+        }),
+      });
+      // 즉시 목록에서 제거 (다음 조회까지 기다리지 않음)
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              anomalies: prev.anomalies.filter((x) => anomalyKey(x) !== key),
+              summary: recountSummary(prev.anomalies.filter((x) => anomalyKey(x) !== key)),
+            }
+          : prev,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '무시 등록 실패');
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  if (loading && !data) return <LoadingSpinner />;
+  if (error && !data) {
+    return <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>;
+  }
+  if (!data) return null;
+
+  const grouped = groupAnomaliesByCategory(data.anomalies);
+
+  return (
+    <div className="space-y-4">
+      {/* 헤더 + 재검사 */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          v_db_anomalies — 개별 row 단위 이상치. 판매가 0, 단가 누락, 산식 mismatch 등.
+          "정상" 으로 표시한 row 는 다음 조회부터 자동 제외됩니다.
+        </p>
+        <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+          <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          재검사
+        </Button>
+      </div>
+
+      {error && (
+        <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>
+      )}
+
+      {/* 요약 */}
+      <div className="grid grid-cols-4 gap-2">
+        <SummaryCard label="치명" value={data.summary.high} total={data.summary.high} tone="red" />
+        <SummaryCard label="주의" value={data.summary.med} total={data.summary.med} tone="amber" />
+        <SummaryCard label="참고" value={data.summary.low} total={data.summary.low} tone="slate" />
+        <SummaryCard
+          label="전체"
+          value={data.summary.total}
+          total={data.summary.total}
+          tone={data.summary.high > 0 ? 'red' : data.summary.total > 0 ? 'amber' : 'green'}
+        />
+      </div>
+
+      {data.anomalies.length === 0 ? (
+        <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+          <CheckCircle2 className="h-4 w-4" />
+          개별 이상치 없음 — 모든 row 정상.
+        </div>
+      ) : (
+        Array.from(grouped.entries()).map(([category, items]) => (
+          <AnomalyCategoryBlock
+            key={category}
+            category={category}
+            items={items}
+            busyKey={busyKey}
+            onIgnore={ignoreRow}
+          />
+        ))
+      )}
+
+      <IgnoreListSection onUnignore={load} />
+
+      <div className="text-right text-[11px] text-muted-foreground">
+        검사 시각: {new Date(data.generated_at).toLocaleString('ko-KR')}
+      </div>
+    </div>
+  );
+}
+
+interface IgnoreEntry {
+  ignore_id: number;
+  table_name: string;
+  row_pk: string;
+  rule_name: string;
+  reason?: string;
+  ignored_by?: string;
+  ignored_at: string;
+}
+
+interface IgnoreListResponse {
+  ignores: IgnoreEntry[];
+  total: number;
+}
+
+// "정상" 으로 잘못 표시한 row 를 해제할 수 있는 섹션.
+// 기본 접힘 — count 만 헤더에 노출. 펼쳐야 목록 로드 (불필요한 호출 방지).
+function IgnoreListSection({ onUnignore }: { onUnignore: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<IgnoreListResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyID, setBusyID] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetchWithAuth<IgnoreListResponse>('/api/v1/admin/db-anomalies/ignores');
+      setData(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '무시 목록 조회 실패');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open && !data) void load();
+  }, [open, data, load]);
+
+  const unignore = async (entry: IgnoreEntry) => {
+    setBusyID(entry.ignore_id);
+    try {
+      await fetchWithAuth(`/api/v1/admin/db-anomalies/ignore/${entry.ignore_id}`, {
+        method: 'DELETE',
+      });
+      setData((prev) =>
+        prev
+          ? {
+              ignores: prev.ignores.filter((i) => i.ignore_id !== entry.ignore_id),
+              total: prev.total - 1,
+            }
+          : prev,
+      );
+      onUnignore();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '해제 실패');
+    } finally {
+      setBusyID(null);
+    }
+  };
+
+  const count = data?.total ?? 0;
+
+  return (
+    <div className="rounded-md border">
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted/40"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        )}
+        <span className="font-semibold">무시 목록</span>
+        {data && (
+          <span className="text-muted-foreground">· {count}건</span>
+        )}
+        <span className="ml-auto text-[10px] text-muted-foreground">
+          "정상" 처리한 row — 해제하면 다음 검사부터 다시 검출됩니다
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t">
+          {loading && !data ? (
+            <div className="p-3 text-xs text-muted-foreground">로딩 중…</div>
+          ) : error ? (
+            <div className="p-3 text-xs text-red-700">{error}</div>
+          ) : !data || data.ignores.length === 0 ? (
+            <div className="p-3 text-xs text-muted-foreground">무시 목록이 비어 있습니다.</div>
+          ) : (
+            <div className="divide-y">
+              {data.ignores.map((e) => (
+                <div key={e.ignore_id} className="flex items-start gap-3 px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs">{e.rule_name}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {e.table_name} / {e.row_pk.slice(0, 8)}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      등록: {new Date(e.ignored_at).toLocaleString('ko-KR')}
+                      {e.reason && ` · ${e.reason}`}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busyID === e.ignore_id}
+                    onClick={() => unignore(e)}
+                    title="무시 해제 — 다음 검사부터 다시 표시"
+                  >
+                    {busyID === e.ignore_id ? '...' : '해제'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnomalyCategoryBlock({
+  category,
+  items,
+  busyKey,
+  onIgnore,
+}: {
+  category: string;
+  items: AnomalyRow[];
+  busyKey: string | null;
+  onIgnore: (a: AnomalyRow) => void;
+}) {
+  // 같은 rule_name 끼리 묶어서 한 번에 펼침/접기.
+  const byRule = useMemo(() => groupAnomaliesByRule(items), [items]);
+  return (
+    <div className="rounded-md border">
+      <div className="border-b bg-muted/30 px-3 py-2 text-xs font-semibold">{category}</div>
+      <div className="divide-y">
+        {Array.from(byRule.entries()).map(([ruleName, rows]) => (
+          <AnomalyRuleBlock
+            key={ruleName}
+            ruleName={ruleName}
+            rows={rows}
+            busyKey={busyKey}
+            onIgnore={onIgnore}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AnomalyRuleBlock({
+  ruleName,
+  rows,
+  busyKey,
+  onIgnore,
+}: {
+  ruleName: string;
+  rows: AnomalyRow[];
+  busyKey: string | null;
+  onIgnore: (a: AnomalyRow) => void;
+}) {
+  const [open, setOpen] = useState(rows.length <= 5);
+  const first = rows[0];
+  return (
+    <div>
+      <button
+        type="button"
+        className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted/40"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <div className="mt-0.5">
+          {open ? (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs">{ruleName}</span>
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${SEVERITY_BADGE[first.severity]}`}>
+              {SEVERITY_LABEL[first.severity]}
+            </span>
+            <span className="text-[11px] text-muted-foreground">· {rows.length}건</span>
+          </div>
+          <div className="text-[11px] text-muted-foreground">{first.description}</div>
+        </div>
+      </button>
+      {open && (
+        <div className="divide-y border-t bg-slate-50/40">
+          {rows.map((a) => (
+            <AnomalyRowItem
+              key={anomalyKey(a)}
+              a={a}
+              busy={busyKey === anomalyKey(a)}
+              onIgnore={onIgnore}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnomalyRowItem({
+  a,
+  busy,
+  onIgnore,
+}: {
+  a: AnomalyRow;
+  busy: boolean;
+  onIgnore: (a: AnomalyRow) => void;
+}) {
+  return (
+    <div className="flex items-start gap-3 px-3 py-2 pl-8">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{a.row_label}</span>
+          <span className="font-mono text-[10px] text-muted-foreground">
+            {a.table_name} / {a.row_pk.slice(0, 8)}
+          </span>
+        </div>
+        {a.detail && Object.keys(a.detail).length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[11px] text-slate-600">
+            {Object.entries(a.detail).map(([k, v]) => (
+              <span key={k}>
+                <span className="text-muted-foreground">{k}:</span> {formatDetailValue(v)}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={busy}
+        onClick={() => onIgnore(a)}
+        title="이 row 를 무시 목록에 추가 — 다음 검사부터 표시 안 함"
+      >
+        <EyeOff className="mr-1 h-3.5 w-3.5" />
+        {busy ? '...' : '정상'}
+      </Button>
+    </div>
+  );
+}
+
+function anomalyKey(a: AnomalyRow): string {
+  return `${a.table_name}|${a.row_pk}|${a.rule_name}`;
+}
+
+function groupAnomaliesByCategory(rows: AnomalyRow[]): Map<string, AnomalyRow[]> {
+  const map = new Map<string, AnomalyRow[]>();
+  for (const a of rows) {
+    if (!map.has(a.category)) map.set(a.category, []);
+    map.get(a.category)!.push(a);
+  }
+  return map;
+}
+
+function groupAnomaliesByRule(rows: AnomalyRow[]): Map<string, AnomalyRow[]> {
+  const map = new Map<string, AnomalyRow[]>();
+  for (const a of rows) {
+    if (!map.has(a.rule_name)) map.set(a.rule_name, []);
+    map.get(a.rule_name)!.push(a);
+  }
+  return map;
+}
+
+function recountSummary(rows: AnomalyRow[]): AnomalyResponse['summary'] {
+  const s = { high: 0, med: 0, low: 0, total: rows.length };
+  for (const a of rows) {
+    if (a.severity === 'high') s.high++;
+    else if (a.severity === 'med') s.med++;
+    else if (a.severity === 'low') s.low++;
+  }
+  return s;
+}
+
+function formatDetailValue(v: unknown): string {
+  if (v === null || v === undefined) return '∅';
+  if (typeof v === 'number') return v.toLocaleString('ko-KR');
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  return String(v);
 }
