@@ -102,6 +102,11 @@ import { CustomsUnlinkedExpenseInsight } from './metrics/CustomsUnlinkedExpenseI
 import { CustomsCapacityInsight } from './metrics/CustomsCapacityInsight'
 import { CustomsVatInsight } from './metrics/CustomsVatInsight'
 import { CustomsAvgPerDeclInsight } from './metrics/CustomsAvgPerDeclInsight'
+import { BankingUsageRateInsight } from './metrics/BankingUsageRateInsight'
+import { BankingTightLimitInsight } from './metrics/BankingTightLimitInsight'
+import { BankingMaturityAmountInsight } from './metrics/BankingMaturityAmountInsight'
+import { BankingCompanyCountInsight } from './metrics/BankingCompanyCountInsight'
+import { BankingLimitChangesInsight } from './metrics/BankingLimitChangesInsight'
 
 export interface InsightEntry {
   // KPI 타일이 보낼 식별자 (예: 'outbound.count') — URL 에 그대로 들어감.
@@ -619,6 +624,33 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'customs.avg_per_decl',
     shortLabel: '면장당 평균',
     render: () => <CustomsAvgPerDeclInsight />,
+  },
+
+  // Banking 확장
+  'banking.usage_rate': {
+    id: 'banking.usage_rate',
+    shortLabel: '한도 사용률',
+    render: () => <BankingUsageRateInsight />,
+  },
+  'banking.tight_limit': {
+    id: 'banking.tight_limit',
+    shortLabel: '임박 한도',
+    render: () => <BankingTightLimitInsight />,
+  },
+  'banking.maturity_amount': {
+    id: 'banking.maturity_amount',
+    shortLabel: '만기 30일 금액',
+    render: () => <BankingMaturityAmountInsight />,
+  },
+  'banking.company_count': {
+    id: 'banking.company_count',
+    shortLabel: '관리 법인',
+    render: () => <BankingCompanyCountInsight />,
+  },
+  'banking.limit_changes': {
+    id: 'banking.limit_changes',
+    shortLabel: '한도 변경 이력',
+    render: () => <BankingLimitChangesInsight />,
   },
 }
 
