@@ -1,0 +1,17 @@
+{
+  "_comment": "JSDoc 타입 체크용 (.mjs 의 @typedef/@param). IDE 가 타입 추론 + checkJs 로 lint. 빌드 산출물 없음 (noEmit).",
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": ["**/*.mjs", "**/*.ts", "**/*.json"],
+  "exclude": ["node_modules"]
+}
