@@ -10,7 +10,7 @@ import { formatKRW, formatNumber, formatDate } from '@/lib/utils';
 import { notify } from '@/lib/notify';
 import type { Declaration, DeclarationCost, LandedCostResult } from '@/types/customs';
 import type { BLLineItem, BLShipment } from '@/types/inbound';
-import BLExpensesTab from './BLExpensesTab';
+import BLExpensesTab from './expenses-tab';
 
 interface Props {
   bl: BLShipment;
