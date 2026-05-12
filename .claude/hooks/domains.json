@@ -22,20 +22,17 @@
         "tt"
       ],
       "paths": [
-        "backend/internal/model/po.go",
-        "backend/internal/model/po_line.go",
-        "backend/internal/handler/tx_po.go",
-        "backend/internal/handler/tx_po_line.go",
-        "backend/internal/handler/tx_po_dashboard.go",
+        "backend/internal/domains/po/",
         "frontend/src/packs/module-finance/pages/ProcurementPage.tsx",
-        "backend/internal/handler/tx_po_test.go"
+        "backend/internal/domains/po/handler_test.go"
       ],
       "blast_radius": [
-        "PO model 필드 추가/삭제 — backend/internal/handler/tx_po.go (Validation 흐름) / frontend/src/packs/module-finance/pages/ProcurementPage.tsx (form 타입) / backend/migrations/ (마이그 필수) / PostgREST 스키마 캐시 갱신 (CLAUDE.md '필수 절차' 4단계)",
+        "PO model 필드 추가/삭제 — backend/internal/domains/po/handler.go (Validation 흐름) / frontend/src/packs/module-finance/pages/ProcurementPage.tsx (form 타입) / backend/migrations/ (마이그 필수) / PostgREST 스키마 캐시 갱신 (CLAUDE.md '필수 절차' 4단계)",
         "po_line_items 컬럼 추가/삭제 — backend/scripts/check_schema.sh 통과 / scripts/backfill_order_prices.py (라인 가격 backfill 영향) / scripts/verify_residual_4.py (잔여수량 정합성)",
         "PO 라우트 추가 (path/method 새로 등장) — backend/internal/feature/catalog.go 의 IDTxPO entry Paths 갱신 필수 / matrix_consistency_test 가 누락 잡음 / harness/FEATURE-WIRING-MATRIX.md 표 동시 갱신",
-        "contract_type 허용 값 변경 — backend/internal/model/po.go 의 validContractTypes 맵 / frontend ProcurementPage 검색 필터의 select option",
-        "PO 상태 (status) 전이 규칙 변경 — tx_po.go 의 status update endpoint (PUT /:id/status) / 프론트 status badge 색상 매핑 (Tremor 컴포넌트)"
+        "contract_type 허용 값 변경 — backend/internal/domains/po/model.go 의 validContractTypes 맵 / frontend ProcurementPage 검색 필터의 select option",
+        "PO 상태 (status) 전이 규칙 변경 — backend/internal/domains/po/handler.go 의 status update endpoint (PUT /:id/status) / 프론트 status badge 색상 매핑 (Tremor 컴포넌트)",
+        "PO 외부에서 PO type 사용 (예: io_import) — import \"solarflow-backend/internal/domains/po\" 추가 + po.PurchaseOrder 식 prefix 사용 / PO 가 cross-domain 의존: lc/tt (PODetail 임베드) 와 products (POLine.Products)"
       ],
       "verify_scripts": [
         "scripts/verify_changed.sh",

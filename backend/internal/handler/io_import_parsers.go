@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"solarflow-backend/internal/domains/po"
 	"time"
 
 	"solarflow-backend/internal/model"
@@ -612,22 +614,22 @@ func groupPORowsByPONumber(rows []map[string]interface{}) (
 // parsePOLineRow — PO 라인 행을 CreatePOLineRequest로 변환.
 // USD/Wp 단가를 받아 USD per panel(unit_price_usd) + total_amount_usd 자동 계산.
 // productID·wattageKW는 호출 측이 미리 해석.
-func parsePOLineRow(rowNum int, row map[string]interface{}, productID string, wattageKW float64) (model.CreatePOLineRequest, []model.ImportError) {
+func parsePOLineRow(rowNum int, row map[string]interface{}, productID string, wattageKW float64) (po.CreatePOLineRequest, []model.ImportError) {
 	qty, qErr := requireInt(rowNum, row, "quantity")
 	if qErr != nil {
-		return model.CreatePOLineRequest{}, []model.ImportError{*qErr}
+		return po.CreatePOLineRequest{}, []model.ImportError{*qErr}
 	}
 	if qty <= 0 {
-		return model.CreatePOLineRequest{}, []model.ImportError{{
+		return po.CreatePOLineRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "quantity", Message: "quantity는 양수여야 합니다",
 		}}
 	}
 	unitPriceWp, upErr := requireFloat(rowNum, row, "unit_price_usd_wp")
 	if upErr != nil {
-		return model.CreatePOLineRequest{}, []model.ImportError{*upErr}
+		return po.CreatePOLineRequest{}, []model.ImportError{*upErr}
 	}
 	if unitPriceWp <= 0 {
-		return model.CreatePOLineRequest{}, []model.ImportError{{
+		return po.CreatePOLineRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "unit_price_usd_wp", Message: "unit_price_usd_wp는 양수여야 합니다",
 		}}
 	}
@@ -638,7 +640,7 @@ func parsePOLineRow(rowNum int, row map[string]interface{}, productID string, wa
 
 	itemType := getString(row, "item_type")
 	paymentType := getString(row, "payment_type")
-	req := model.CreatePOLineRequest{
+	req := po.CreatePOLineRequest{
 		ProductID:      productID,
 		Quantity:       qty,
 		UnitPriceUSD:   &unitPriceUsd,

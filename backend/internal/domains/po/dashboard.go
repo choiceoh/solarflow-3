@@ -1,4 +1,4 @@
-package handler
+package po
 
 import (
 	"encoding/json"
@@ -8,7 +8,6 @@ import (
 	"sort"
 	"time"
 
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
 
@@ -132,8 +131,8 @@ func normalizePOScope(raw string) string {
 	return "lifetime"
 }
 
-func (h *POHandler) fetchAllForPODashboard(r *http.Request) ([]model.PurchaseOrder, error) {
-	all := make([]model.PurchaseOrder, 0, poDashChunkSize)
+func (h *POHandler) fetchAllForPODashboard(r *http.Request) ([]PurchaseOrder, error) {
+	all := make([]PurchaseOrder, 0, poDashChunkSize)
 	for chunk := 0; chunk < poDashMaxChunks; chunk++ {
 		q := h.DB.From("purchase_orders_ext").Select("*", "exact", false)
 		q = h.applyPOFilters(r, q)
@@ -144,7 +143,7 @@ func (h *POHandler) fetchAllForPODashboard(r *http.Request) ([]model.PurchaseOrd
 		if err != nil {
 			return nil, fmt.Errorf("pos 청크 #%d 조회 실패: %w", chunk, err)
 		}
-		var batch []model.PurchaseOrder
+		var batch []PurchaseOrder
 		if err := json.Unmarshal(data, &batch); err != nil {
 			return nil, fmt.Errorf("pos 청크 #%d 디코딩 실패: %w", chunk, err)
 		}
@@ -156,7 +155,7 @@ func (h *POHandler) fetchAllForPODashboard(r *http.Request) ([]model.PurchaseOrd
 	return all, nil
 }
 
-func computePODashboard(pos []model.PurchaseOrder, scope string) *PODashboard {
+func computePODashboard(pos []PurchaseOrder, scope string) *PODashboard {
 	d := &PODashboard{
 		StatusScope:         scope,
 		Trend24:             make([]PODashTrendPoint, 0, poDashTrendMonths),
@@ -174,10 +173,10 @@ func computePODashboard(pos []model.PurchaseOrder, scope string) *PODashboard {
 	return d
 }
 
-func filterPOsByScope(pos []model.PurchaseOrder, scope string) []model.PurchaseOrder {
+func filterPOsByScope(pos []PurchaseOrder, scope string) []PurchaseOrder {
 	switch scope {
 	case "active":
-		out := make([]model.PurchaseOrder, 0, len(pos))
+		out := make([]PurchaseOrder, 0, len(pos))
 		for _, p := range pos {
 			if p.Status != "completed" && p.Status != "cancelled" {
 				out = append(out, p)
@@ -185,7 +184,7 @@ func filterPOsByScope(pos []model.PurchaseOrder, scope string) []model.PurchaseO
 		}
 		return out
 	case "shipping":
-		out := make([]model.PurchaseOrder, 0, len(pos))
+		out := make([]PurchaseOrder, 0, len(pos))
 		for _, p := range pos {
 			if p.Status == "shipping" || p.Status == "in_progress" {
 				out = append(out, p)
@@ -196,7 +195,7 @@ func filterPOsByScope(pos []model.PurchaseOrder, scope string) []model.PurchaseO
 	return pos
 }
 
-func computePODashTotals(pos []model.PurchaseOrder) PODashTotals {
+func computePODashTotals(pos []PurchaseOrder) PODashTotals {
 	t := PODashTotals{Count: len(pos)}
 	contractTypes := make(map[string]struct{}, 4)
 	for _, p := range pos {
@@ -227,7 +226,7 @@ func computePODashTotals(pos []model.PurchaseOrder) PODashTotals {
 	return t
 }
 
-func computePODashTrend24(pos []model.PurchaseOrder) []PODashTrendPoint {
+func computePODashTrend24(pos []PurchaseOrder) []PODashTrendPoint {
 	now := time.Now()
 	labels := make([]string, poDashTrendMonths)
 	idx := make(map[string]int, poDashTrendMonths)
@@ -299,7 +298,7 @@ var poContractTypeLabels = map[string]string{
 	"frame": "프레임",
 }
 
-func computePODashBreakdown(pos []model.PurchaseOrder, dim poDashDim, top int) []PODashBreakdownRow {
+func computePODashBreakdown(pos []PurchaseOrder, dim poDashDim, top int) []PODashBreakdownRow {
 	type acc struct {
 		label string
 		count int

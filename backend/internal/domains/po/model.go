@@ -1,4 +1,8 @@
-package model
+package po
+
+import (
+	"solarflow-backend/internal/model"
+)
 
 // PurchaseOrder — 발주/계약 정보를 담는 구조체
 // 비유: "발주 계약서" — 어느 법인이, 어느 제조사에, 어떤 조건으로 계약했는지 기록
@@ -28,8 +32,8 @@ type PurchaseOrder struct {
 // 비유: 계약서에 법인 도장과 제조사 명함이 함께 붙어 있는 것
 type POWithRelations struct {
 	PurchaseOrder
-	Companies     *CompanySummary      `json:"companies"`
-	Manufacturers *ManufacturerSummary `json:"manufacturers"`
+	Companies     *model.CompanySummary      `json:"companies"`
+	Manufacturers *model.ManufacturerSummary `json:"manufacturers"`
 }
 
 // PODetail — PO 상세 조회 시 라인아이템, LC, TT를 포함한 전체 결과

@@ -13,6 +13,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/domains/po"
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
@@ -1173,7 +1174,7 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 		}
 
 		poNumPtr := poNum
-		poReq := model.CreatePurchaseOrderRequest{
+		poReq := po.CreatePurchaseOrderRequest{
 			PONumber:            &poNumPtr,
 			CompanyID:           companyID,
 			ManufacturerID:      mfgID,
@@ -1193,7 +1194,7 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 		}
 
 		lineOK := true
-		lineReqs := make([]model.CreatePOLineRequest, 0, len(grp.LineRows))
+		lineReqs := make([]po.CreatePOLineRequest, 0, len(grp.LineRows))
 		for j, lineRow := range grp.LineRows {
 			lineRowNum := grp.LineIdxes[j]
 
@@ -1212,7 +1213,7 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			if nestedMsg := validateNestedPOLines([]model.CreatePOLineRequest{lineReq}); nestedMsg != "" {
+			if nestedMsg := po.ValidateNestedPOLines([]po.CreatePOLineRequest{lineReq}); nestedMsg != "" {
 				importErrors = append(importErrors, model.ImportError{Row: lineRowNum, Field: "po_line_items", Message: nestedMsg})
 				lineOK = false
 				continue
@@ -1224,8 +1225,8 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		createdPOData, err := dbrpc.Call(r.Context(), "sf_create_purchase_order_with_lines", model.CreatePurchaseOrderWithLinesRPCRequest{
-			PO:    model.NewPurchaseOrderInsert(poReq),
+		createdPOData, err := dbrpc.Call(r.Context(), "sf_create_purchase_order_with_lines", po.CreatePurchaseOrderWithLinesRPCRequest{
+			PO:    po.NewPurchaseOrderInsert(poReq),
 			Lines: lineReqs,
 		})
 		if err != nil {
@@ -1233,7 +1234,7 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "purchase_order", Message: "PO 등록 실패: " + err.Error()})
 			continue
 		}
-		var createdPO model.PurchaseOrder
+		var createdPO po.PurchaseOrder
 		if err := json.Unmarshal(createdPOData, &createdPO); err != nil || createdPO.POID == "" {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "purchase_order", Message: "PO 등록 결과 확인 실패"})
 			continue
