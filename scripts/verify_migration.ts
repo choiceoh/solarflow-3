@@ -312,14 +312,32 @@ async function verifyApplied(sql: SQL, filename: string): Promise<boolean> {
     FROM public.schema_migrations
     WHERE filename = ${filename}
   `) as Array<{ applied_at: Date | string }>
-  if (rows.length === 0) {
-    fail(`${filename} 적용 이력이 없습니다`)
-    console.log('   조치: 운영 서버에서 bun scripts/apply_migrations.ts 실행 후 재확인')
-    return false
+  if (rows.length > 0) {
+    ok(`${filename} 적용 이력 확인 (${String(rows[0].applied_at)})`)
+    return true
   }
 
-  ok(`${filename} 적용 이력 확인 (${String(rows[0].applied_at)})`)
-  return true
+  // 적용 이력 없음 — @auto-apply: no 헤더 파일은 운영자 책임 영역이므로 cron 영향 차단.
+  // apply_migrations.ts 와 동일 정책으로 verify 도 skip → mig_ok=1 유지하여 Go 빌드 보류
+  // 안 됨. 운영자가 매뉴얼 적용 안 하면 schema_migrations row 가 안 생기지만 cron 은
+  // 막지 않음 (대신 매 회차 로그에 ⏭️  로 보임). 정책 미스매치로 인한 영구 cron 실패
+  // 사이클 차단 (2026-05-12 095_drop_onboarding_zombie_schema 사고 참조).
+  try {
+    const content = await readFile(join(MIG_DIR, filename), 'utf-8')
+    // apply_migrations.ts 의 HEADER_NO_RE / 첫 10줄 스캔과 동일 정책 유지.
+    const headerLines = content.split('\n').slice(0, 10).join('\n')
+    if (/^\s*--\s*@auto-apply:\s*no\b/im.test(headerLines)) {
+      console.log(`⏭️  ${filename} — @auto-apply: no, 매뉴얼 적용 대기 중 (cron verify skip)`)
+      console.log(`   조치: ssh ${process.env.GX10_USER ?? 'choiceoh'}@<gx10> → psql -f backend/migrations/${filename}`)
+      return true
+    }
+  } catch {
+    // 파일 읽기 실패는 무시 — 아래 기존 fail path 로 떨어짐.
+  }
+
+  fail(`${filename} 적용 이력이 없습니다`)
+  console.log('   조치: 운영 서버에서 bun scripts/apply_migrations.ts 실행 후 재확인')
+  return false
 }
 
 async function verifyColumn(sql: SQL, item: ColumnExpectation): Promise<boolean> {
