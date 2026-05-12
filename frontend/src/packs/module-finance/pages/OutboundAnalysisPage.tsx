@@ -146,82 +146,71 @@ export default function OutboundAnalysisPage() {
     <div className="sf-page">
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
-          <CardB
-            title="출고 흐름 분석"
-            sub="공사현장·리파워링·유지관리 포함 전 출고를 합산"
-            right={
-              <div className="flex items-center gap-2">
-                {isFetching && (
-                  <span className="mono text-[10px] text-muted-foreground">갱신 중…</span>
-                )}
-                <button type="button" className="btn xs" onClick={() => reload()}>
-                  새로고침
-                </button>
-              </div>
-            }
-            padded
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <FilterChips
-                options={periodOptions}
-                value={period}
-                onChange={(value) => setPeriod(value as PeriodFilter)}
-              />
-              {period === "custom" && (
-                <>
-                  <DateInput
-                    value={customFrom}
-                    onChange={setCustomFrom}
-                    className="h-8 w-36 text-xs"
-                    placeholder="시작일"
-                  />
-                  <DateInput
-                    value={customTo}
-                    onChange={setCustomTo}
-                    className="h-8 w-36 text-xs"
-                    placeholder="종료일"
-                  />
-                </>
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterChips
+              options={periodOptions}
+              value={period}
+              onChange={(value) => setPeriod(value as PeriodFilter)}
+            />
+            {period === "custom" && (
+              <>
+                <DateInput
+                  value={customFrom}
+                  onChange={setCustomFrom}
+                  className="h-8 w-36 text-xs"
+                  placeholder="시작일"
+                />
+                <DateInput
+                  value={customTo}
+                  onChange={setCustomTo}
+                  className="h-8 w-36 text-xs"
+                  placeholder="종료일"
+                />
+              </>
+            )}
+            <Select
+              value={usageFilter || "all"}
+              onValueChange={(v) => setUsageFilter(v === "all" ? "" : (v as UsageCategory))}
+            >
+              <SelectTrigger className="h-8 w-40 text-xs">
+                <span className="truncate">
+                  {usageFilter ? USAGE_CATEGORY_LABEL[usageFilter] : "전체 용도"}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 용도</SelectItem>
+                {(Object.keys(USAGE_CATEGORY_LABEL) as UsageCategory[]).map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {USAGE_CATEGORY_LABEL[key]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={manufacturerFilter || "all"}
+              onValueChange={(v) => setManufacturerFilter(v === "all" ? "" : (v ?? ""))}
+            >
+              <SelectTrigger className="h-8 w-40 text-xs">
+                <span className="truncate">{manufacturerLabel}</span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 제조사</SelectItem>
+                {manufacturers.map((m) => (
+                  <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>
+                    {m.short_name || m.name_kr}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="ml-auto flex items-center gap-2">
+              {isFetching && (
+                <span className="mono text-[10px] text-muted-foreground">갱신 중…</span>
               )}
-              <Select
-                value={usageFilter || "all"}
-                onValueChange={(v) => setUsageFilter(v === "all" ? "" : (v as UsageCategory))}
-              >
-                <SelectTrigger className="h-8 w-40 text-xs">
-                  <span className="truncate">
-                    {usageFilter ? USAGE_CATEGORY_LABEL[usageFilter] : "전체 용도"}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 용도</SelectItem>
-                  {(Object.keys(USAGE_CATEGORY_LABEL) as UsageCategory[]).map((key) => (
-                    <SelectItem key={key} value={key}>
-                      {USAGE_CATEGORY_LABEL[key]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={manufacturerFilter || "all"}
-                onValueChange={(v) => setManufacturerFilter(v === "all" ? "" : (v ?? ""))}
-              >
-                <SelectTrigger className="h-8 w-40 text-xs">
-                  <span className="truncate">{manufacturerLabel}</span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 제조사</SelectItem>
-                  {manufacturers.map((m) => (
-                    <SelectItem key={m.manufacturer_id} value={m.manufacturer_id}>
-                      {m.short_name || m.name_kr}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <div className="ml-auto text-[10px] text-muted-foreground">
-                필터는 by_usage / by_manufacturer / by_customer 에 적용. trend24 는 항상 전체.
-              </div>
+              <button type="button" className="btn xs" onClick={() => reload()}>
+                새로고침
+              </button>
             </div>
-          </CardB>
+          </div>
 
           {error && (
             <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -413,7 +402,7 @@ export default function OutboundAnalysisPage() {
           )}
 
           {activeTab === "usage" && (
-            <CardB title="용도별 출고" sub="usage_category 분포 + 매출등록률">
+            <CardB title="분포" sub="건수 · MW · 매출등록률">
               <Table className="sf-motion-table">
                 <TableHeader>
                   <TableRow>

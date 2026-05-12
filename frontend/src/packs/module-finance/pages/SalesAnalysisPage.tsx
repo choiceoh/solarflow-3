@@ -1596,27 +1596,7 @@ export default function SalesAnalysisPage() {
     <div className="sf-page">
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
-          <CardB
-            title="매출/이익 분석"
-            sub="판매, 세금계산서, 수금, B/L 원가 연결"
-            right={
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="btn xs"
-                  onClick={() =>
-                    downloadSalesManagementPptx(buildReportInput(), `${reportFileBase}.pptx`)
-                  }
-                >
-                  경영 리포트 (PPT)
-                </button>
-                <button type="button" className="btn xs" onClick={load}>
-                  새로고침
-                </button>
-              </div>
-            }
-            padded
-          >
+          <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <FilterChips
                 options={periodOptions}
@@ -1649,16 +1629,6 @@ export default function SalesAnalysisPage() {
                   allLabel="전체 거래처"
                 />
               </div>
-              {/* D-064 PR 30: 원가 기준 토글 — fifo 정합치 / landed 추정 / cif 추정 */}
-              <FilterChips
-                options={[
-                  { key: "fifo", label: "FIFO 정합" },
-                  { key: "landed", label: "Landed" },
-                  { key: "cif", label: "CIF" },
-                ]}
-                value={costBasis}
-                onChange={(value) => setCostBasis(value as CostBasis)}
-              />
               <Select
                 value={manufacturerFilter || "all"}
                 onValueChange={(v) => setManufacturerFilter(v === "all" ? "" : (v ?? ""))}
@@ -1675,11 +1645,34 @@ export default function SalesAnalysisPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <div className="ml-auto text-[10px] text-muted-foreground">
-                제조사 필터는 매출 집계와 품목별 이익에 적용됩니다.
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn xs"
+                  onClick={() =>
+                    downloadSalesManagementPptx(buildReportInput(), `${reportFileBase}.pptx`)
+                  }
+                >
+                  경영 리포트 (PPT)
+                </button>
+                <button type="button" className="btn xs" onClick={load}>
+                  새로고침
+                </button>
               </div>
             </div>
-          </CardB>
+            {/* D-064 PR 30: 원가 기준 토글 — fifo 정합치 / landed 추정 / cif 추정 */}
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterChips
+                options={[
+                  { key: "fifo", label: "FIFO 정합" },
+                  { key: "landed", label: "Landed" },
+                  { key: "cif", label: "CIF" },
+                ]}
+                value={costBasis}
+                onChange={(value) => setCostBasis(value as CostBasis)}
+              />
+            </div>
+          </div>
 
           {state.error && (
             <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -2134,7 +2127,7 @@ export default function SalesAnalysisPage() {
           {activeAnalysisTab === "manufacturer" && (
             <div className="grid grid-cols-1 gap-4">
               <CardB
-                title="제조사별 기여도"
+                title="기여도"
                 sub="매출 비중 · 이익률 · 원가 공백"
                 right={
                   <ColumnVisibilityMenu
