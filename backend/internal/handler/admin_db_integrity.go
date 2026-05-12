@@ -131,6 +131,31 @@ func (h *DBIntegrityHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 // PR 091: 개별 row 수준 이상치 (v_db_anomalies)
 // ============================================================
 
+// postgRESTErrorMessage — supabase-go 의 Rpc/Execute 는 HTTP 상태와 무관하게 body 를
+// 그대로 string 으로 반환한다. PostgREST 에러는
+//   {"code":"57014","message":"canceling statement due to statement timeout",...}
+// 형태의 객체로 오므로, 배열로 unmarshal 시도하기 전에 에러 객체인지 먼저 판별해
+// 사용자에게 의미 있는 메시지를 노출한다.
+func postgRESTErrorMessage(body string) string {
+	if len(body) == 0 || body[0] != '{' {
+		return ""
+	}
+	var e struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(body), &e); err != nil {
+		return ""
+	}
+	if e.Code == "" && e.Message == "" {
+		return ""
+	}
+	if e.Message != "" {
+		return e.Message
+	}
+	return e.Code
+}
+
 // AnomalyRow — list_db_anomalies() RPC 의 한 행.
 type AnomalyRow struct {
 	RuleName    string          `json:"rule_name"`
@@ -158,11 +183,21 @@ type AnomalySummary struct {
 
 // Anomalies — GET /admin/db-anomalies — list_db_anomalies() RPC 호출.
 // 무시 목록(anomaly_ignores) 자동 제외, severity 순으로 정렬됨.
+//
+// count 인자는 빈 문자열로 둔다. RPC 결과는 페이지네이션이 없어 count 가 의미 없고,
+// "exact" 를 넘기면 PostgREST 가 함수 호출을 count() 윈도우로 다시 감싸 같은 함수가
+// 두 번 실행돼 statement_timeout (~15s) 에 걸린다 — 14.5초 후 57014 → 핸들러 디코딩 실패.
 func (h *DBIntegrityHandler) Anomalies(w http.ResponseWriter, r *http.Request) {
-	respBody := h.DB.Rpc("list_db_anomalies", "exact", nil)
+	respBody := h.DB.Rpc("list_db_anomalies", "", nil)
 	if respBody == "" {
 		log.Printf("[이상치] list_db_anomalies RPC 빈 응답")
 		response.RespondError(w, http.StatusInternalServerError, "이상치 조회 실패")
+		return
+	}
+
+	if msg := postgRESTErrorMessage(respBody); msg != "" {
+		log.Printf("[이상치] PostgREST 에러 응답: %s", respBody)
+		response.RespondError(w, http.StatusInternalServerError, "이상치 조회 실패: "+msg)
 		return
 	}
 
