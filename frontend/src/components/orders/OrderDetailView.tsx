@@ -506,9 +506,7 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
             />
             <DetailField label="장당단가" value={formatMaybeNumber(sale.unit_price_ea, "원/장")} />
             <DetailField label="Wp단가" value={formatMaybeNumber(sale.unit_price_wp, "원/Wp")} />
-            <DetailField label="공급가" value={formatMaybeNumber(sale.supply_amount, "원")} />
-            <DetailField label="부가세" value={formatMaybeNumber(sale.vat_amount, "원")} />
-            <DetailField label="합계" value={formatMaybeNumber(sale.total_amount, "원")} />
+            <DetailField label="매출액 (공급가)" value={formatMaybeNumber(sale.supply_amount, "원")} />
             <DetailField
               label="계산서 발행일"
               value={sale.tax_invoice_date ? formatDate(sale.tax_invoice_date) : undefined}

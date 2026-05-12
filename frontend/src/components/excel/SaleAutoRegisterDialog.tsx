@@ -38,8 +38,6 @@ interface SaleSeed {
   rawCustomer: string;
   unitPriceWp: number | null;
   supplyAmount: number | null;
-  vatAmount: number | null;
-  totalAmount: number | null;
   match?: PartnerMatchResult;
 }
 
@@ -303,8 +301,6 @@ function buildSeeds(
       rawCustomer,
       unitPriceWp: numOrNull(sp['unit_price_wp']),
       supplyAmount: numOrNull(sp['supply_amount']),
-      vatAmount: numOrNull(sp['vat_amount']),
-      totalAmount: numOrNull(sp['total_amount']),
       match: findPartnerMatch(rawCustomer, partners, aliases),
     };
     seeds.push(seed);

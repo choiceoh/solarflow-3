@@ -38,7 +38,6 @@ import { PurchaseVariantsInsight } from './metrics/PurchaseVariantsInsight'
 import { PurchasePriceChangesInsight } from './metrics/PurchasePriceChangesInsight'
 import { PurchaseRecentEventsInsight } from './metrics/PurchaseRecentEventsInsight'
 import { SalesAnalysisSupplyInsight } from './metrics/SalesAnalysisSupplyInsight'
-import { SalesAnalysisTotalInsight } from './metrics/SalesAnalysisTotalInsight'
 import { SalesAnalysisIssueRateInsight } from './metrics/SalesAnalysisIssueRateInsight'
 import { SalesAnalysisMarginRateInsight } from './metrics/SalesAnalysisMarginRateInsight'
 import { ProcurementPoActiveInsight } from './metrics/ProcurementPoActiveInsight'
@@ -72,7 +71,6 @@ import { OutboundCancelPendingInsight } from './metrics/OutboundCancelPendingIns
 import { OutboundCancelledInsight } from './metrics/OutboundCancelledInsight'
 import { OutboundSaleUnregisteredInsight } from './metrics/OutboundSaleUnregisteredInsight'
 import { SalesSupplyInsight } from './metrics/SalesSupplyInsight'
-import { SalesVatInsight } from './metrics/SalesVatInsight'
 import { SalesInvoiceIssuedInsight } from './metrics/SalesInvoiceIssuedInsight'
 import { SalesErpOpenInsight } from './metrics/SalesErpOpenInsight'
 import { ReceiptsCountInsight } from './metrics/ReceiptsCountInsight'
@@ -284,11 +282,6 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     shortLabel: '공급가 매출',
     render: () => <SalesAnalysisSupplyInsight />,
   },
-  'sales_analysis.total_amount': {
-    id: 'sales_analysis.total_amount',
-    shortLabel: '부가세 포함',
-    render: () => <SalesAnalysisTotalInsight />,
-  },
   'sales_analysis.issue_rate': {
     id: 'sales_analysis.issue_rate',
     shortLabel: '계산서 발행률',
@@ -467,11 +460,6 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'sales.supply',
     shortLabel: '매출 공급가',
     render: () => <SalesSupplyInsight />,
-  },
-  'sales.vat': {
-    id: 'sales.vat',
-    shortLabel: '매출 부가세',
-    render: () => <SalesVatInsight />,
   },
   'sales.invoice_issued': {
     id: 'sales.invoice_issued',

@@ -255,9 +255,9 @@ function todayLocalDate() {
 
 function getSaleOutstandingAmount(item: SaleListItem) {
   if (item.outstanding_amount != null) return Math.max(0, item.outstanding_amount)
-  const total = item.sale.total_amount ?? item.total_amount ?? 0
+  const supply = item.sale.supply_amount ?? item.supply_amount ?? 0
   const collected = item.collected_amount ?? 0
-  return Math.max(0, total - collected)
+  return Math.max(0, supply - collected)
 }
 
 function isReceiptQueueFilter(receiptFilter: SaleReceiptFilter) {
@@ -366,7 +366,7 @@ function saleReasonCounts(items: SaleListItem[], mode: SaleBulkActionMode) {
 }
 
 function saleBulkTotalAmount(items: SaleListItem[]) {
-  return items.reduce((sum, item) => sum + (item.sale.total_amount ?? item.total_amount ?? 0), 0)
+  return items.reduce((sum, item) => sum + (item.sale.supply_amount ?? item.supply_amount ?? 0), 0)
 }
 
 function saleBulkOutstandingAmount(items: SaleListItem[]) {
@@ -1768,16 +1768,6 @@ export default function OrdersPage() {
               metricId: "sales.supply",
             },
             {
-              lbl: "부가세",
-              v: fmtEok(saleDash?.totals.vat_amount_sum ?? 0),
-              numericValue: saleDash?.totals.vat_amount_sum ?? 0,
-              formatter: fmtEok,
-              u: "억",
-              sub: "총 부가세 합",
-              tone: "info",
-              metricId: "sales.vat",
-            },
-            {
               lbl: "계산서 발행",
               v: String(saleDash?.totals.invoice_issued_count ?? 0),
               numericValue: saleDash?.totals.invoice_issued_count ?? 0,
@@ -2540,8 +2530,6 @@ export default function OrdersPage() {
                           saleDash
                             ? {
                                 totalSupply: saleDash.totals.supply_amount_sum,
-                                totalVat: saleDash.totals.vat_amount_sum,
-                                totalAmount: saleDash.totals.sale_amount_sum,
                                 count: saleDash.totals.count,
                                 issuedCount: saleDash.totals.invoice_issued_count,
                               }
