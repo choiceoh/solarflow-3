@@ -16,13 +16,26 @@ type OCRLine struct {
 	Box   OCRBox  `json:"box"`
 }
 
-// OCRResult — 파일 1건의 OCR 처리 결과
+// OCRResult — 파일 1건의 OCR 처리 결과.
+// xlsx/csv 의 경우 RawText/Lines 는 비고, Sheet 필드에 DB 저장본 메타와 샘플 5행이 담긴다.
 type OCRResult struct {
 	Filename string     `json:"filename"`
 	RawText  string     `json:"raw_text,omitempty"`
 	Lines    []OCRLine  `json:"lines,omitempty"`
 	Error    string     `json:"error,omitempty"`
 	Fields   *OCRFields `json:"fields,omitempty"`
+	Sheet    *SheetMeta `json:"sheet,omitempty"`
+}
+
+// SheetMeta — xlsx/csv 가 DB 임시 영역에 저장됐을 때 응답에 함께 실어 보내는 메타.
+// LLM 은 sheet_id 와 헤더·미리보기 5행만 보고, 전체 데이터는 query_attached_sheet 도구로 조회.
+type SheetMeta struct {
+	SheetID     string     `json:"sheet_id"`
+	SheetName   string     `json:"sheet_name"`
+	RowCount    int        `json:"row_count"`
+	ColCount    int        `json:"col_count"`
+	Headers     []string   `json:"headers"`
+	PreviewRows [][]string `json:"preview_rows,omitempty"`
 }
 
 // OCRExtractResponse — 여러 파일 OCR 응답

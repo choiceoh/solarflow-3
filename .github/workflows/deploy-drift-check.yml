@@ -1,0 +1,122 @@
+name: gx10 deploy drift check
+
+# 운영 박스(gx10) HEAD 가 origin/main 에서 N 커밋 이상 뒤쳐지면 issue 자동 생성.
+# 메모리상 사고 (80 커밋 드리프트) 재발 방지 — webhook 누락 + cron-deploy 충돌이
+# 영구화되는 패턴을 조기 감지.
+#
+# 동작:
+#   1) spark4tb runner 에서 ssh gx10 → 현재 HEAD 조회
+#   2) origin/main HEAD 조회
+#   3) `git rev-list HEAD..origin/main` 으로 드리프트 카운트
+#   4) 임계 초과 시 GitHub issue 생성 (라벨 ops, drift)
+#
+# 사전 설정 (한 번만):
+#   - Repo secret `GX10_SSH_HOST` (예: gx10-f96e 또는 Tailscale MagicDNS 이름)
+#   - spark4tb 의 choiceoh 계정 SSH key 가 gx10 의 ~/.ssh/authorized_keys 에 등록돼 있어야 함
+#     (DR 워치독으로 이미 설정돼 있을 가능성 큼 — 안 되면 `ssh-copy-id choiceoh@<gx10>` 1회)
+#   - Repo 에 라벨 `ops`, `drift` 존재 (`gh label create ops --color FF6B35`,
+#     `gh label create drift --color FFAA00`). 없으면 workflow 가 라벨 인자만 빼고 진행.
+
+on:
+  schedule:
+    - cron: '15 */3 * * *'  # 매 3 시간 (HH:15) — webhook 평소 ~1s, cron-deploy backup 10m. 3h 면 충분.
+  workflow_dispatch:        # 수동 확인용
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: [self-hosted, ARM64, spark4tb]
+    timeout-minutes: 5
+    env:
+      GX10_HOST: ${{ secrets.GX10_SSH_HOST }}
+      GX10_USER: choiceoh
+      GX10_REPO: /home/choiceoh/공개/solarflow-3
+      DRIFT_THRESHOLD: 5   # N 커밋 초과 시 알림. webhook 잠깐 누락 (1-2 커밋) 은 무시.
+    steps:
+      - name: Guard — secret 필요
+        if: env.GX10_HOST == ''
+        run: |
+          echo "::error::repo secret GX10_SSH_HOST 미설정 — 워크플로 비활성 상태"
+          exit 1
+
+      - name: Resolve origin/main HEAD
+        id: origin
+        run: |
+          sha=$(git ls-remote https://github.com/${{ github.repository }}.git refs/heads/main | cut -f1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "origin/main: $sha"
+
+      - name: Resolve gx10 HEAD + drift count
+        id: gx10
+        run: |
+          set -uo pipefail
+          ssh_cmd="ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 ${GX10_USER}@${GX10_HOST}"
+          gx10_sha=$($ssh_cmd "cd '$GX10_REPO' && git rev-parse HEAD" 2>&1) || {
+            echo "::warning::gx10 ssh 실패 — 박스 다운 가능 / Tailscale 재연결 대기"
+            echo "$gx10_sha"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          echo "gx10 HEAD: $gx10_sha"
+          echo "sha=$gx10_sha" >> "$GITHUB_OUTPUT"
+
+          drift=$($ssh_cmd "cd '$GX10_REPO' && git fetch --quiet origin main && git rev-list --count HEAD..origin/main" 2>/dev/null || echo "?")
+          echo "drift: $drift commits"
+          echo "count=$drift" >> "$GITHUB_OUTPUT"
+
+      - name: Open issue on drift
+        if: steps.gx10.outputs.skip != '1' && steps.gx10.outputs.count != '?' && steps.gx10.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COUNT: ${{ steps.gx10.outputs.count }}
+          GX10_SHA: ${{ steps.gx10.outputs.sha }}
+          ORIGIN_SHA: ${{ steps.origin.outputs.sha }}
+        run: |
+          if [[ $COUNT -le $DRIFT_THRESHOLD ]]; then
+            echo "drift $COUNT <= threshold $DRIFT_THRESHOLD — 정상 (webhook lag 범위)"
+            exit 0
+          fi
+
+          # 동일 제목 issue 가 이미 열려있으면 코멘트만 (issue 폭증 방지)
+          title="gx10 deploy drift: $COUNT commits behind origin/main"
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' || echo "")
+
+          body=$(cat <<EOF
+          **gx10 HEAD**: \`$GX10_SHA\`
+          **origin/main**: \`$ORIGIN_SHA\`
+          **Drift**: $COUNT commits
+
+          ## 가능 원인
+          - webhook 누락 + cron-deploy 가 git pull 충돌로 멈춤 (운영 박스에서 직접 커밋·체크아웃 흔적)
+          - cloudflared 터널 다운 → webhook unreachable + cron-deploy 도 ssh 안 들어가 있어 silent
+
+          ## 1차 확인
+          \`\`\`
+          ssh ${GX10_USER}@${GX10_HOST}
+          cd $GX10_REPO
+          git status        # detached / 다른 브랜치 / dirty 인지
+          tail -50 .sync.log  # cron-deploy 마지막 메시지
+          systemctl --user status solarflow-webhook.service
+          \`\`\`
+
+          ## 복구
+          \`\`\`
+          git stash                              # 로컬 변경 보존
+          git checkout main && git pull --ff-only origin main
+          ./scripts/cron-deploy.sh               # 수동 1회 실행으로 빌드/재시작 갱신
+          \`\`\`
+          (자동 생성 — 매 3시간 deploy-drift-check.yml)
+          EOF
+          )
+
+          if [[ -n "$existing" ]]; then
+            echo "기존 issue #$existing 에 코멘트 추가"
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" \
+              --label ops --label drift 2>/dev/null \
+              || gh issue create --title "$title" --body "$body"
+          fi

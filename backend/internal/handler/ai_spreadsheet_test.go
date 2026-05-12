@@ -8,43 +8,46 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-func TestExtractCSV(t *testing.T) {
+func TestParseCSVSplitsHeaderAndRows(t *testing.T) {
 	csvData := "코드,수량,단가\nM-001,10,1200\nM-002,5,1450\n"
-	got, err := extractCSV([]byte(csvData))
+	headers, rows, err := parseCSV([]byte(csvData))
 	if err != nil {
-		t.Fatalf("extractCSV() error = %v", err)
+		t.Fatalf("parseCSV() error = %v", err)
 	}
-	want := "코드 | 수량 | 단가\nM-001 | 10 | 1200\nM-002 | 5 | 1450"
-	if got != want {
-		t.Fatalf("extractCSV() = %q, want %q", got, want)
+	if got, want := strings.Join(headers, "|"), "코드|수량|단가"; got != want {
+		t.Fatalf("headers = %q, want %q", got, want)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+	if got, want := strings.Join(rows[0], "|"), "M-001|10|1200"; got != want {
+		t.Fatalf("row[0] = %q, want %q", got, want)
 	}
 }
 
-func TestExtractCSVHandlesRaggedRows(t *testing.T) {
+func TestParseCSVHandlesRaggedRows(t *testing.T) {
 	csvData := "a,b,c\n1,2\n3,4,5,6\n"
-	got, err := extractCSV([]byte(csvData))
+	headers, rows, err := parseCSV([]byte(csvData))
 	if err != nil {
-		t.Fatalf("extractCSV() error = %v", err)
+		t.Fatalf("parseCSV() error = %v", err)
 	}
-	if !strings.Contains(got, "1 | 2") || !strings.Contains(got, "3 | 4 | 5 | 6") {
-		t.Fatalf("extractCSV() ragged-row output = %q", got)
+	if len(headers) != 3 {
+		t.Fatalf("headers len = %d, want 3", len(headers))
+	}
+	if len(rows[0]) != 2 || len(rows[1]) != 4 {
+		t.Fatalf("ragged row preservation: %v", rows)
 	}
 }
 
-func TestExtractXLSXMultipleSheets(t *testing.T) {
+func TestParseXLSXSheetsMultiple(t *testing.T) {
 	f := excelize.NewFile()
 	defer f.Close()
-	// 기본 시트 Sheet1
 	_ = f.SetCellValue("Sheet1", "A1", "이름")
 	_ = f.SetCellValue("Sheet1", "B1", "수량")
 	_ = f.SetCellValue("Sheet1", "A2", "모듈A")
 	_ = f.SetCellValue("Sheet1", "B2", 100)
 
-	idx, err := f.NewSheet("재고")
-	if err != nil {
-		t.Fatalf("NewSheet: %v", err)
-	}
-	_ = idx
+	_, _ = f.NewSheet("재고")
 	_ = f.SetCellValue("재고", "A1", "창고")
 	_ = f.SetCellValue("재고", "B1", "위치")
 	_ = f.SetCellValue("재고", "A2", "본사")
@@ -55,28 +58,33 @@ func TestExtractXLSXMultipleSheets(t *testing.T) {
 		t.Fatalf("Write: %v", err)
 	}
 
-	got, err := extractXLSX(buf.Bytes())
+	sheets, err := parseXLSXSheets(buf.Bytes())
 	if err != nil {
-		t.Fatalf("extractXLSX() error = %v", err)
+		t.Fatalf("parseXLSXSheets() error = %v", err)
 	}
-	if !strings.Contains(got, "[시트: Sheet1]") {
-		t.Fatalf("missing Sheet1 header in %q", got)
+	if len(sheets) != 2 {
+		t.Fatalf("sheet count = %d, want 2", len(sheets))
 	}
-	if !strings.Contains(got, "[시트: 재고]") {
-		t.Fatalf("missing 재고 sheet header in %q", got)
+	if got := strings.Join(sheets[0].headers, "|"); got != "이름|수량" {
+		t.Fatalf("Sheet1 headers = %q", got)
 	}
-	if !strings.Contains(got, "이름 | 수량") || !strings.Contains(got, "모듈A | 100") {
-		t.Fatalf("missing Sheet1 rows in %q", got)
+	if got := strings.Join(sheets[0].rows[0], "|"); got != "모듈A|100" {
+		t.Fatalf("Sheet1 row[0] = %q", got)
 	}
-	if !strings.Contains(got, "창고 | 위치") || !strings.Contains(got, "본사 | 1열") {
-		t.Fatalf("missing 재고 rows in %q", got)
+	if got := strings.Join(sheets[1].headers, "|"); got != "창고|위치" {
+		t.Fatalf("재고 headers = %q", got)
 	}
 }
 
-func TestExtractSpreadsheetRejectsUnknownMIME(t *testing.T) {
-	_, err := extractSpreadsheet([]byte("plain"), "text/plain", "memo.txt")
-	if err == nil {
-		t.Fatal("extractSpreadsheet() error = nil, want error")
+func TestTrimTrailingEmptyHandlesEdgeCases(t *testing.T) {
+	if got := trimTrailingEmpty([]string{"a", "b", "", ""}); strings.Join(got, "|") != "a|b" {
+		t.Fatalf("trim mid = %v", got)
+	}
+	if got := trimTrailingEmpty([]string{"", ""}); len(got) != 0 {
+		t.Fatalf("trim all empty = %v", got)
+	}
+	if got := trimTrailingEmpty([]string{"a"}); strings.Join(got, "|") != "a" {
+		t.Fatalf("trim single = %v", got)
 	}
 }
 

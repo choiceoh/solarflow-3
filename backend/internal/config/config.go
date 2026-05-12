@@ -18,6 +18,11 @@ type Config struct {
 	// SupabaseAnonKey — Supabase Auth password grant 등 anon 으로 호출해야 하는 경로용.
 	// verifyCurrentPassword 같은 곳이 직접 os.Getenv 로 읽지만 호환을 위해 보존.
 	SupabaseAnonKey string
+	// DatabaseURL — pgx 직접 연결용 PostgreSQL DSN (Rust 엔진의 SUPABASE_DB_URL 과 같은 변수 재사용).
+	// AI 어시스턴트 첨부 시트 임시 저장(ai_attachment_sheets)처럼 PostgREST 로 풀기 어려운
+	// 동적 jsonb 쿼리(다중 AND 필터·집계·전체 컬럼 검색)에만 사용.
+	// 빈 값이면 시트 첨부는 503 — 다른 라우트는 정상 동작.
+	DatabaseURL string
 }
 
 // Load는 환경변수에서 설정을 읽어옴
@@ -48,5 +53,6 @@ func Load() *Config {
 		SupabaseURL:     supabaseURL,
 		SupabaseKey:     supabaseKey,
 		SupabaseAnonKey: anonKey,
+		DatabaseURL:     os.Getenv("SUPABASE_DB_URL"),
 	}
 }

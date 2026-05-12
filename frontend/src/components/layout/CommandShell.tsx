@@ -15,9 +15,10 @@ import { useMenuVisibility } from "@/hooks/useMenuVisibility"
 import { usePermission } from "@/hooks/usePermission"
 import { useSidebarTabs } from "@/hooks/useSidebarTabs"
 import { useUserPersona } from "@/hooks/useUserPersona"
+import { useScrollRestoration } from "@/hooks/useScrollRestoration"
 import { useAppStore } from "@/stores/appStore"
 import type { AlertItem } from "@/types/alerts"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 const SIDEBAR_COLLAPSED_KEY = "sf.sidebar.collapsed"
 function readCollapsedFromStorage(): boolean {
@@ -146,6 +147,10 @@ export default function CommandShell() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(readCollapsedFromStorage)
 
+  // 메인 페이지 스크롤 복원 — 목록 → 상세 → 뒤로가기 시 같은 위치로 돌아오게 한다.
+  const mainScrollRef = useRef<HTMLElement>(null)
+  useScrollRestoration(mainScrollRef)
+
   useEffect(() => {
     if (currentTenant !== "study") loadCompanies()
   }, [currentTenant, loadCompanies])
@@ -164,18 +169,31 @@ export default function CommandShell() {
 
   const selectedCompany = companies.find((c) => c.company_id === selectedCompanyId)
   const userInitial = (user?.name || user?.email || "S").trim().slice(0, 1).toUpperCase()
-  const navCounts = useMemo(
-    () => ({
-      inventory: sumAlertCounts(alertState.alerts, ["longterm_warning", "longterm_critical"]),
-      lc: sumAlertCounts(alertState.alerts, ["lc_maturity", "lc_shortage"]),
-      bl: sumAlertCounts(alertState.alerts, ["eta_soon"]),
-      orders: sumAlertCounts(alertState.alerts, ["delivery_soon", "no_site"]),
-      outbound: sumAlertCounts(alertState.alerts, ["no_invoice"]),
-      receipts: sumAlertCounts(alertState.alerts, ["overdue_warning", "overdue_critical"]),
-      banking: sumAlertCounts(alertState.alerts, ["lc_maturity", "lc_shortage"]),
-    }),
-    [alertState.alerts],
-  )
+  // 사이드바 nav 항목에 표시할 카운트 (펼침 모드에서 라벨 옆 배지).
+  // key 는 nav item 의 `key` 와 일치해야 한다 — packs/<id>/nav.ts 의 navItems 참조.
+  // 새 메뉴에 카운트를 붙이려면 여기에 키를 추가하고 sumAlertCounts() 로 합산하거나
+  // 별도 fetch 결과를 주입하면 된다.
+  const navCounts = useMemo<Record<string, number>>(() => {
+    const longterm = sumAlertCounts(alertState.alerts, ["longterm_warning", "longterm_critical"])
+    const lc = sumAlertCounts(alertState.alerts, ["lc_maturity", "lc_shortage"])
+    const bl = sumAlertCounts(alertState.alerts, ["eta_soon"])
+    const orders = sumAlertCounts(alertState.alerts, ["delivery_soon", "no_site"])
+    const outbound = sumAlertCounts(alertState.alerts, ["no_invoice"])
+    const receipts = sumAlertCounts(alertState.alerts, ["overdue_warning", "overdue_critical"])
+    return {
+      inventory: longterm,
+      lc,
+      bl,
+      orders,
+      outbound,
+      receipts,
+      banking: lc,
+      // P/O 발주 메인 메뉴는 LC/BL 알림 합산 — 사이드바를 접고 있을 때 "구매 흐름에
+      // 처리할 게 있다" 를 한눈에 보여준다. 펼침 모드의 LC/BL 형제 항목과 의미가 겹치지만
+      // 의도된 중복 (parent 가 child 합을 비추는 일반적인 nav 패턴).
+      po: lc + bl,
+    }
+  }, [alertState.alerts])
 
   return (
     <div className="sf-shell" data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}>
@@ -264,7 +282,7 @@ export default function CommandShell() {
                 {visibleItems.map((item) => {
                   const Icon = item.icon
                   const active = isItemActive(item.path, pathname, search)
-                  const count = navCounts[item.key as keyof typeof navCounts] ?? item.count
+                  const count = navCounts[item.key] ?? item.count
                   return (
                     <NavLink
                       key={item.key}
@@ -343,7 +361,7 @@ export default function CommandShell() {
           </div>
         </header>
 
-        <main className="sf-page-scroll">
+        <main ref={mainScrollRef} className="sf-page-scroll">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={pathname}

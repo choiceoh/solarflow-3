@@ -11,18 +11,32 @@ interface Props {
   error?: boolean;
   placeholder?: string;
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
+  /**
+   * canonical product_id → 외부/사내 별명 코드 목록.
+   * 거래처 표기/오타로 검색해도 정식 품번을 찾을 수 있게 keyword 인덱스에 함께 포함.
+   */
+  aliases?: Map<string, string[]>;
 }
 
 function productLabel(p: Product): string {
   return `${moduleLabel(p.manufacturers ?? p.manufacturer_name, p.spec_wp)} | ${p.product_code} | ${p.product_name}`;
 }
 
-function productKeywords(p: Product): string {
+function productKeywords(p: Product, aliases?: Map<string, string[]>): string {
   const mfg = p.manufacturers
     ? [p.manufacturers.name_kr, p.manufacturers.short_name, p.manufacturers.name_en].filter(Boolean).join(' ')
     : (p.manufacturer_name ?? '');
   const mfgShort = shortMfgName(mfg);
-  return `${p.product_code} ${p.product_name} ${mfg} ${mfgShort} ${p.spec_wp}Wp`.toLowerCase();
+  const aliasText = aliases?.get(p.product_id)?.join(' ') ?? '';
+  return `${p.product_code} ${p.product_name} ${mfg} ${mfgShort} ${p.spec_wp}Wp ${aliasText}`.toLowerCase();
+}
+
+function matchedAlias(p: Product, query: string, aliases?: Map<string, string[]>): string | undefined {
+  const list = aliases?.get(p.product_id);
+  if (!list || list.length === 0) return undefined;
+  const q = query.trim().toLowerCase();
+  if (!q) return undefined;
+  return list.find((a) => a.toLowerCase().includes(q));
 }
 
 export function ProductCombobox({
@@ -32,6 +46,7 @@ export function ProductCombobox({
   error,
   placeholder = '품번 검색…',
   triggerRef,
+  aliases,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -44,8 +59,8 @@ export function ProductCombobox({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return products;
-    return products.filter((p) => productKeywords(p).includes(q));
-  }, [products, search]);
+    return products.filter((p) => productKeywords(p, aliases).includes(q));
+  }, [products, search, aliases]);
 
   // 가상 스크롤 — 1000+ 제품에서도 부드럽게. 키보드 nav 와 호환되도록
   // activeIndex 변경 시 scrollToIndex 로 viewport 안 보장.
@@ -160,7 +175,7 @@ export function ProductCombobox({
                 setSearch(e.target.value);
                 setActiveIndex(0);
               }}
-              placeholder="품번/품명/제조사/규격 검색"
+              placeholder={aliases ? '품번/품명/제조사/규격/별명 검색' : '품번/품명/제조사/규격 검색'}
               className="flex-1 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
             />
           </div>
@@ -172,6 +187,7 @@ export function ProductCombobox({
                 {virtualizer.getVirtualItems().map((vRow) => {
                   const p = filtered[vRow.index];
                   if (!p) return null;
+                  const aliasHit = matchedAlias(p, search, aliases);
                   return (
                     <button
                       key={vRow.key}
@@ -189,6 +205,11 @@ export function ProductCombobox({
                         {value === p.product_id && <CheckIcon className="size-3.5" />}
                       </span>
                       <span className="flex-1 truncate">{productLabel(p)}</span>
+                      {aliasHit ? (
+                        <span className="shrink-0 rounded-sm bg-amber-500/15 px-1 py-px text-[10px] text-amber-600 dark:text-amber-400">
+                          별명: {aliasHit}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
