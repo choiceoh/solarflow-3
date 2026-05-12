@@ -138,3 +138,28 @@ jobs:
       # 컴파일이 2-3배 느림. nextest 는 cargo test 대비 병렬성이 좋아 30-60% 빠름.
       # 운영 산출물 검증은 위 cargo build --release 가 담당. 도큐테스트 없음.
       - run: cargo nextest run
+
+  # 단일 required check 게이트 — frontend/backend/engine 은 path-filter 로 skip
+  # 가능하므로 그것들을 각각 required 로 두면 무관한 PR 이 영원히 대기한다.
+  # 이 잡 하나만 required 로 등록하고 안에서 모든 잡 결과를 집계한다.
+  # skip(="skipped") 은 통과로 인정, failure/cancelled 만 fail.
+  ci-summary:
+    needs: [changes, frontend, backend, engine]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate job results
+        shell: bash
+        run: |
+          changes='${{ needs.changes.result }}'
+          frontend='${{ needs.frontend.result }}'
+          backend='${{ needs.backend.result }}'
+          engine='${{ needs.engine.result }}'
+          printf 'changes=%s\nfrontend=%s\nbackend=%s\nengine=%s\n' \
+            "$changes" "$frontend" "$backend" "$engine"
+          for r in "$changes" "$frontend" "$backend" "$engine"; do
+            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
+              echo "::error::A required CI job failed or was cancelled"
+              exit 1
+            fi
+          done
