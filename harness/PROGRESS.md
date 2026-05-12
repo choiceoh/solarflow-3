@@ -11,8 +11,29 @@
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-20260511-184355 판매 수금 미완료 큐, D-20260512-101906 필터 전체 수금완료, D-080/D-081/D-132~D-138 번호 공백 유지) |
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-20260511-184355 판매 수금 미완료 큐, D-20260512-101906 필터 전체 수금완료, D-20260512-132713 매출 분석 탭 세분화, D-080/D-081/D-132~D-138 번호 공백 유지) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-12 세션 — 매출 분석 탭 세분화 (D-20260512-132713)
+
+### 완료
+- `/sales-analysis` 공통 필터 아래에 분석 관점 탭 추가
+  - 요약: KPI, 이익 원인 분해, 거래처 위험 우선순위
+  - 매출이익: 월별 매출, 이익률 브리지, 대체원가 기준 마진, 품목별 이익
+  - 제조사별: 제조사별 기여도
+  - 거래처별: 거래처별 청구/미수
+  - 미수·수금: 미수 위험 거래처, 수금/미수/계산서 미발행 후보
+  - 대사: 기존 원장 대사 체크와 후보 행 드릴다운
+- 계산 API와 Rust 엔진 계약은 변경하지 않고 프론트 화면 배치만 세분화
+- 설계 정본과 D-20260512-132713 결정 기록 동기화
+
+### 검증
+- `cd frontend && npx --yes bun@1.3.13 install --frozen-lockfile` 성공
+- `cd frontend && npx --yes bun@1.3.13 run build` 성공 — plugin timing warning 출력
+- `cd frontend && npx --yes bun@1.3.13 run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + AssistantPage forEach return 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `graphify update .` 성공 — 5463 nodes / 8935 edges / 428 communities (`graph.html`은 노드 수 초과로 생략)
 
 ---
 
