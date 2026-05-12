@@ -137,7 +137,11 @@ pub async fn calculate_margin(
         SELECT o.product_id, p.product_code, p.product_name, p.spec_wp,
                p.module_width_mm, p.module_height_mm, m.name_kr as manufacturer_name,
                SUM(o.quantity)::bigint as total_qty,
-               SUM(o.capacity_kw)::float8 as total_kw,
+               -- 분모는 products.spec_wp 기준으로 직접 계산. outbounds.capacity_kw 에는
+               -- 자동 등록 product(wattage_kw NULL) + 마이그 098/099/100 split 행 등에서
+               -- NULL 이 섞여 들어가 SUM 결과가 ~1/4 까지 deflate 되는 케이스 확인 (예:
+               -- 론지 247행 중 144행 NULL → 평균단가 4배 부풀림, 2026-05-12).
+               SUM(o.quantity::float8 * COALESCE(p.spec_wp, 0)::float8) / 1000.0 as total_kw,
                SUM(s.supply_amount)::float8 as total_revenue,
                COUNT(s.sale_id)::bigint as sale_count,
                CASE WHEN SUM(o.quantity * p.spec_wp) > 0
