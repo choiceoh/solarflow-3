@@ -27,6 +27,8 @@ var allowedOCRMIMETypes = map[string]bool{
 	"image/gif":       true,
 	mimeXLSX:          true,
 	mimeCSV:           true,
+	mimeDOCX:          true,
+	mimeTXT:           true,
 }
 
 // OCRHandler — 업무 서류 이미지/PDF에서 원문 텍스트를 추출
@@ -121,6 +123,19 @@ func (h *OCRHandler) Extract(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// 워드(docx)/텍스트(txt) 도 Go 측에서 본문만 뽑아 동일 응답 모델에 담는다.
+		if isDocumentMIME(mimeType) {
+			doc, err := extractDocument(data, mimeType, result.Filename)
+			if err != nil {
+				log.Printf("[문서 파싱 실패] file=%s err=%v", result.Filename, err)
+				result.Error = err.Error()
+				out.Results = append(out.Results, result)
+				continue
+			}
+			out.Results = append(out.Results, doc)
+			continue
+		}
+
 		lines, err := h.Client.RecognizeBytes(r.Context(), data, mimeType, result.Filename)
 		if err != nil {
 			log.Printf("[OCR 추출 실패] file=%s err=%v", result.Filename, err)
@@ -192,10 +207,13 @@ func readOCRUpload(file io.ReadCloser, contentType string, filename string) ([]b
 
 	mimeType := normalizeOCRMIME(contentType, filename, data)
 	if !allowedOCRMIMETypes[mimeType] {
-		if mimeType == mimeXLS {
+		switch mimeType {
+		case mimeXLS:
 			return nil, "", fmt.Errorf("구버전 .xls 는 지원하지 않습니다. .xlsx 로 저장 후 다시 올려주세요")
+		case mimeDOC:
+			return nil, "", fmt.Errorf("구버전 .doc 는 지원하지 않습니다. .docx 로 저장 후 다시 올려주세요")
 		}
-		return nil, "", fmt.Errorf("현재 PDF, JPG, PNG, WEBP, GIF, XLSX, CSV 파일만 처리합니다")
+		return nil, "", fmt.Errorf("현재 PDF, JPG, PNG, WEBP, GIF, XLSX, CSV, DOCX, TXT 파일만 처리합니다")
 	}
 	return data, mimeType, nil
 }
@@ -210,10 +228,13 @@ func normalizeOCRMIME(contentType string, filename string, data []byte) string {
 			mimeType = extType
 		}
 	}
-	// 엑셀/CSV 매직바이트는 application/zip · text/plain 으로 판정돼 화이트리스트에 못 닿는다.
-	// 확장자가 명시적이면 그 신호를 우선한다.
-	if extType := mimeTypeByExt(filename); extType == mimeXLSX || extType == mimeCSV || extType == mimeXLS {
-		return extType
+	// 엑셀·DOCX 매직바이트는 application/zip 으로, CSV·TXT 는 text/plain 으로 판정돼
+	// 화이트리스트 mime 에 못 닿는다. 확장자가 명시적이면 그 신호를 우선한다.
+	if extType := mimeTypeByExt(filename); extType != "" {
+		switch extType {
+		case mimeXLSX, mimeCSV, mimeXLS, mimeDOCX, mimeDOC, mimeTXT:
+			return extType
+		}
 	}
 	return mimeType
 }
@@ -236,6 +257,12 @@ func mimeTypeByExt(filename string) string {
 		return mimeXLS // 의도적으로 화이트리스트엔 없는 mime — readOCRUpload 가 친절한 안내로 거절
 	case ".csv":
 		return mimeCSV
+	case ".docx":
+		return mimeDOCX
+	case ".doc":
+		return mimeDOC // 마찬가지로 친절한 안내로 거절되는 경로
+	case ".txt":
+		return mimeTXT
 	default:
 		return ""
 	}
