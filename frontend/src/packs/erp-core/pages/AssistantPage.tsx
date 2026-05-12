@@ -27,8 +27,11 @@ import {
   extractText,
   summarizeInput,
   summarizeOutput,
+  splitUserContent,
+  joinUserContent,
   type ProposalState,
   type ProposalStatus,
+  type ParsedAttachment,
 } from '@/lib/assistantMessages';
 
 interface SessionSummary {
@@ -1094,6 +1097,40 @@ interface BubbleProps {
   onRegenerate?: () => void;
 }
 
+// 메시지 거품 안의 첨부 칩 — 사용자 메시지의 [첨부파일 ...] 블록 한 개를 압축 표시.
+// 기본은 파일명 + 종류 아이콘만. 클릭하면 OCR/시트 원문이 펼쳐져 사용자가 LLM 이 받은 내용을 검증 가능.
+// 본문이 길어도 사용자 뷰를 오염시키지 않도록 펼친 영역에 최대 높이 + 스크롤 적용.
+// (입력창 측 첨부 미리보기 칩은 위쪽 `AttachmentChip` — 전송 전 File 객체를 다루므로 별개)
+function MessageAttachmentChip({ attachment }: { attachment: ParsedAttachment }) {
+  const [open, setOpen] = useState(false);
+  const kindLabel =
+    attachment.kind === '표' ? '표' : attachment.kind === '문서' ? '문서' : 'OCR';
+  const icon = attachment.kind === '표' ? <FileText className="h-3 w-3" aria-hidden /> : <Paperclip className="h-3 w-3" aria-hidden />;
+  return (
+    <div className="flex max-w-full flex-col items-stretch">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background/60 px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+        title={open ? '접기' : `${kindLabel} 본문 펼치기`}
+        aria-expanded={open}
+      >
+        {icon}
+        <span className="truncate font-medium">{attachment.filename}</span>
+        <span className="shrink-0 rounded bg-muted px-1 text-[10px] uppercase tracking-wide text-muted-foreground/80">
+          {kindLabel}
+        </span>
+        {open ? <ChevronUp className="h-3 w-3" aria-hidden /> : <ChevronDown className="h-3 w-3" aria-hidden />}
+      </button>
+      {open && (
+        <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {attachment.body || '(빈 본문)'}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function Bubble({
   role,
   content,
@@ -1106,16 +1143,23 @@ function Bubble({
 }: BubbleProps) {
   const isUser = role === 'user';
   const [copied, setCopied] = useState(false);
-  const [editText, setEditText] = useState(content);
 
-  // 편집 모드 진입할 때마다 textarea 를 현재 content 로 동기화.
+  // 사용자 메시지에 박힌 [첨부파일 ...] 블록을 표시 단에서만 분리. wire/백엔드 포맷은 무손실 유지.
+  const split = useMemo(() => (isUser ? splitUserContent(content) : null), [isUser, content]);
+  const userText = split?.text ?? content;
+  const attachments = split?.attachments ?? [];
+
+  const [editText, setEditText] = useState(userText);
+
+  // 편집 모드 진입할 때마다 textarea 를 현재 사용자 입력분으로 동기화 (첨부 블록은 textarea 에 노출 안 함).
   useEffect(() => {
-    if (isEditing) setEditText(content);
-  }, [isEditing, content]);
+    if (isEditing) setEditText(userText);
+  }, [isEditing, userText]);
 
   const onCopy = async () => {
     try {
-      await navigator.clipboard.writeText(content);
+      // 사용자가 직접 입력한 부분만 복사 — OCR/시트 본문은 칩에서 개별 복사하도록 분리.
+      await navigator.clipboard.writeText(isUser ? userText : content);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -1125,11 +1169,13 @@ function Bubble({
 
   const submitEdit = () => {
     const next = editText.trim();
-    if (!next || next === content.trim()) {
+    if (!next || next === userText.trim()) {
       onCancelEdit?.();
       return;
     }
-    onSubmitEdit?.(next);
+    // 편집 후 재전송 시 원래 첨부 블록을 그대로 다시 붙여 LLM 컨텍스트 유지.
+    const rejoined = isUser ? joinUserContent(next, attachments) : next;
+    onSubmitEdit?.(rejoined);
   };
 
   const onEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1170,10 +1216,24 @@ function Bubble({
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
               onKeyDown={onEditKeyDown}
-              rows={Math.min(8, Math.max(2, content.split('\n').length + 1))}
+              rows={Math.min(8, Math.max(2, userText.split('\n').length + 1))}
               className="w-full resize-none bg-background text-base leading-relaxed md:text-base"
               autoFocus
             />
+            {attachments.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {attachments.map((a, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 rounded-full border bg-background/60 px-2 py-0.5 text-xs text-muted-foreground"
+                    title="편집 후에도 첨부는 그대로 다시 전송됨"
+                  >
+                    <Paperclip className="h-3 w-3" aria-hidden />
+                    <span className="max-w-[16ch] truncate">{a.filename}</span>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="mt-2 flex items-center justify-end gap-2 text-xs">
               <span className="mr-auto text-muted-foreground/70">⌘+Enter 저장 · Esc 취소</span>
               <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={onCancelEdit}>
@@ -1185,27 +1245,38 @@ function Bubble({
             </div>
           </div>
         ) : (
-          <div
-            className={cn(
-              'rounded-2xl px-4 py-3 text-base leading-relaxed transition-opacity',
-              isUser
-                ? 'whitespace-pre-wrap rounded-tr-sm bg-[var(--sf-solar)]/10'
-                : 'rounded-tl-sm bg-background',
-              isStreaming && 'sf-stream-fade',
-            )}
-          >
-            {isUser ? content : <MessageMarkdown content={content} />}
-            {isStreaming && (
-              <span
-                className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse bg-foreground/60"
-                aria-hidden
-              />
-            )}
+          (userText.trim() || attachments.length === 0) && (
+            <div
+              className={cn(
+                'rounded-2xl px-4 py-3 text-base leading-relaxed transition-opacity',
+                isUser
+                  ? 'whitespace-pre-wrap rounded-tr-sm bg-[var(--sf-solar)]/10'
+                  : 'rounded-tl-sm bg-background',
+                isStreaming && 'sf-stream-fade',
+              )}
+            >
+              {isUser ? userText : <MessageMarkdown content={content} />}
+              {isStreaming && (
+                <span
+                  className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse bg-foreground/60"
+                  aria-hidden
+                />
+              )}
+            </div>
+          )
+        )}
+
+        {/* 첨부 칩 — 사용자가 올린 파일을 본문 텍스트 대신 압축 표시. 클릭 시 OCR/시트 원문 펼침. */}
+        {!isEditing && attachments.length > 0 && (
+          <div className={cn('flex flex-wrap gap-1.5', isUser ? 'justify-end' : 'justify-start')}>
+            {attachments.map((a, i) => (
+              <MessageAttachmentChip key={i} attachment={a} />
+            ))}
           </div>
         )}
 
         {/* 호버 액션 줄: 복사 / (사용자) 편집 / (마지막 어시스턴트) 재생성 */}
-        {!isEditing && content.trim() && (
+        {!isEditing && (content.trim() || attachments.length > 0) && (
           <div
             className={cn(
               'flex h-6 items-center gap-1 text-xs text-muted-foreground/70 opacity-0 transition-opacity group-hover/bubble:opacity-100 focus-within:opacity-100',
