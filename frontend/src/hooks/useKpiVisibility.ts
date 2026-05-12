@@ -66,75 +66,108 @@ export function kpiMetricKey(metric: KpiMetricLike, options: KpiVisibilityOption
   return directIds.find((id) => optionIds.has(id)) ?? labelOf(metric);
 }
 
-export function useKpiVisibility<T extends KpiMetricLike>(scopeId: string | undefined, metrics: T[]) {
+export const DEFAULT_VISIBLE_KPI_COUNT = 4;
+
+export interface UseKpiVisibilityOptions {
+  defaultVisibleCount?: number;
+}
+
+export function useKpiVisibility<T extends KpiMetricLike>(
+  scopeId: string | undefined,
+  metrics: T[],
+  options?: UseKpiVisibilityOptions,
+) {
+  const defaultVisibleCount = options?.defaultVisibleCount ?? DEFAULT_VISIBLE_KPI_COUNT;
   const prefs = usePreferencesStore((s) => s.prefs);
   const setPrefs = usePreferencesStore((s) => s.setPrefs);
   const [saving, setSaving] = useState(false);
 
-  const options = useMemo(() => resolveKpiOptions(metrics), [metrics]);
-  const optionIds = useMemo(() => new Set(options.map((option) => option.id)), [options]);
+  const kpiOptions = useMemo(() => resolveKpiOptions(metrics), [metrics]);
+  const optionIds = useMemo(() => new Set(kpiOptions.map((option) => option.id)), [kpiOptions]);
+
+  // 사용자가 한 번도 설정하지 않은 섹션은 첫 N개만 노출. 페이지가 metrics 를 늘려도 기본 레이아웃 유지.
+  const defaultHidden = useMemo(() => {
+    if (kpiOptions.length <= defaultVisibleCount) return new Set<string>();
+    return new Set(kpiOptions.slice(defaultVisibleCount).map((option) => option.id));
+  }, [kpiOptions, defaultVisibleCount]);
+
+  const rawUserPref = scopeId ? prefs.kpi_hidden?.[scopeId] : undefined;
+  const hasUserPref = Array.isArray(rawUserPref);
+
   const hidden = useMemo(() => {
     if (!scopeId) return new Set<string>();
-    return normalizeHidden(prefs.kpi_hidden?.[scopeId], optionIds);
-  }, [optionIds, prefs.kpi_hidden, scopeId]);
+    return hasUserPref ? normalizeHidden(rawUserPref, optionIds) : defaultHidden;
+  }, [scopeId, hasUserPref, rawUserPref, optionIds, defaultHidden]);
 
   const visibleMetrics = useMemo(() => {
-    if (!scopeId || options.length === 0) return metrics;
-    return metrics.filter((metric) => !hidden.has(kpiMetricKey(metric, options)));
-  }, [hidden, metrics, options, scopeId]);
+    if (!scopeId || kpiOptions.length === 0) return metrics;
+    return metrics.filter((metric) => !hidden.has(kpiMetricKey(metric, kpiOptions)));
+  }, [hidden, metrics, kpiOptions, scopeId]);
 
-  const persistHidden = useCallback(async (nextHidden: Set<string>) => {
-    if (!scopeId) return;
+  const persistHidden = useCallback(
+    async (nextHidden: Set<string> | null) => {
+      if (!scopeId) return;
 
-    const cleanedHidden = [...nextHidden].filter((id) => optionIds.has(id));
-    const nextHiddenByScope = { ...(prefs.kpi_hidden ?? {}) };
-    if (cleanedHidden.length > 0) nextHiddenByScope[scopeId] = cleanedHidden;
-    else delete nextHiddenByScope[scopeId];
-
-    const nextPrefs: UserPreferences = { ...prefs, kpi_hidden: nextHiddenByScope };
-    const prevPrefs = prefs;
-    setPrefs(nextPrefs);
-    setSaving(true);
-    try {
-      await fetchWithAuth('/api/v1/users/me/preferences', {
-        method: 'PUT',
-        body: JSON.stringify({ preferences: nextPrefs }),
-      });
-    } catch (err) {
-      setPrefs(prevPrefs);
-      notify.error(err instanceof Error ? err.message : 'KPI 설정 저장에 실패했습니다');
-    } finally {
-      setSaving(false);
-    }
-  }, [optionIds, prefs, scopeId, setPrefs]);
-
-  const setMetricVisible = useCallback((id: string, visible: boolean) => {
-    if (!scopeId) return;
-    const nextHidden = new Set(hidden);
-    if (visible) {
-      nextHidden.delete(id);
-    } else {
-      if (options.length - nextHidden.size <= 1) {
-        notify.warning('KPI는 최소 1개 이상 표시해야 합니다');
-        return;
+      const nextHiddenByScope = { ...(prefs.kpi_hidden ?? {}) };
+      if (nextHidden === null) {
+        // null = 기본 상태로 복귀 (key 제거 → defaultHidden 적용)
+        delete nextHiddenByScope[scopeId];
+      } else {
+        const cleanedHidden = [...nextHidden].filter((id) => optionIds.has(id));
+        nextHiddenByScope[scopeId] = cleanedHidden;
       }
-      nextHidden.add(id);
-    }
-    void persistHidden(nextHidden);
-  }, [hidden, options.length, persistHidden, scopeId]);
+
+      const nextPrefs: UserPreferences = { ...prefs, kpi_hidden: nextHiddenByScope };
+      const prevPrefs = prefs;
+      setPrefs(nextPrefs);
+      setSaving(true);
+      try {
+        await fetchWithAuth('/api/v1/users/me/preferences', {
+          method: 'PUT',
+          body: JSON.stringify({ preferences: nextPrefs }),
+        });
+      } catch (err) {
+        setPrefs(prevPrefs);
+        notify.error(err instanceof Error ? err.message : 'KPI 설정 저장에 실패했습니다');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [optionIds, prefs, scopeId, setPrefs],
+  );
+
+  const setMetricVisible = useCallback(
+    (id: string, visible: boolean) => {
+      if (!scopeId) return;
+      const nextHidden = new Set(hidden);
+      if (visible) {
+        nextHidden.delete(id);
+      } else {
+        if (kpiOptions.length - nextHidden.size <= 1) {
+          notify.warning('KPI는 최소 1개 이상 표시해야 합니다');
+          return;
+        }
+        nextHidden.add(id);
+      }
+      void persistHidden(nextHidden);
+    },
+    [hidden, kpiOptions.length, persistHidden, scopeId],
+  );
 
   const reset = useCallback(() => {
     if (!scopeId) return;
-    void persistHidden(new Set());
+    void persistHidden(null);
   }, [persistHidden, scopeId]);
 
   return {
-    options,
+    options: kpiOptions,
     hidden,
     visibleMetrics,
     setMetricVisible,
     reset,
     saving,
-    configurable: !!scopeId && options.length > 1,
+    isDefault: !hasUserPref,
+    defaultVisibleCount,
+    configurable: !!scopeId && kpiOptions.length > 1,
   };
 }

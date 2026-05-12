@@ -1737,6 +1737,83 @@ export default function SalesAnalysisPage() {
                 sub: `${formatNumber(costMissingItemCount)}개 품목`,
                 tone: costMissingRevenue > 0 ? ("warn" as const) : ("pos" as const),
               },
+              {
+                key: "sales_analysis.total_revenue",
+                lbl: "총 매출",
+                v: (salesSummary.total / 100000000).toFixed(2),
+                numericValue: salesSummary.total,
+                formatter: (n: number) => (n / 100000000).toFixed(2),
+                u: "억",
+                sub: "부가세 포함",
+                tone: "ink" as const,
+                spark: flatSpark(salesSummary.total / 100000000),
+              },
+              {
+                key: "sales_analysis.issue_rate",
+                lbl: "발행률",
+                v: salesSummary.issueRate.toFixed(0),
+                numericValue: salesSummary.issueRate,
+                formatter: (n: number) => n.toFixed(0),
+                u: "%",
+                sub: "계산서 발행 비율",
+                tone:
+                  salesSummary.issueRate >= 95
+                    ? ("pos" as const)
+                    : salesSummary.issueRate >= 70
+                      ? ("info" as const)
+                      : ("warn" as const),
+                spark: issueRateSpark,
+              },
+              {
+                key: "sales_analysis.sold_kw",
+                lbl: "판매 용량",
+                v: formatNumber(margin.summary.total_sold_kw),
+                numericValue: margin.summary.total_sold_kw,
+                formatter: (n: number) => formatNumber(n),
+                u: "kW",
+                sub: "원가 매칭 가능 분",
+                tone: "info" as const,
+                spark: flatSpark(margin.summary.total_sold_kw),
+              },
+              {
+                key: "sales_analysis.collected",
+                lbl: "수금 완료",
+                v: (customers.summary.total_collected_krw / 100000000).toFixed(2),
+                numericValue: customers.summary.total_collected_krw,
+                formatter: (n: number) => (n / 100000000).toFixed(2),
+                u: "억",
+                sub:
+                  customers.summary.total_sales_krw > 0
+                    ? `회수율 ${(
+                        (customers.summary.total_collected_krw / customers.summary.total_sales_krw) *
+                        100
+                      ).toFixed(0)}%`
+                    : "수금 데이터 없음",
+                tone: "pos" as const,
+                spark: flatSpark(customers.summary.total_collected_krw / 100000000),
+              },
+              {
+                key: "sales_analysis.customers",
+                lbl: "거래처",
+                v: String(customers.items.length),
+                numericValue: customers.items.length,
+                formatter: (n: number) => String(Math.round(n)),
+                u: "곳",
+                sub: "필터 기준 활성",
+                tone: "ink" as const,
+                spark: flatSpark(customers.items.length),
+              },
+              {
+                key: "sales_analysis.total_cost",
+                lbl: "총 원가",
+                v: (margin.summary.total_cost_krw / 100000000).toFixed(2),
+                numericValue: margin.summary.total_cost_krw,
+                formatter: (n: number) => (n / 100000000).toFixed(2),
+                u: "억",
+                sub: "원가 연결 분만",
+                tone: "ink" as const,
+                spark: flatSpark(margin.summary.total_cost_krw / 100000000),
+              },
             ]}
           >
             {(metric) => (
