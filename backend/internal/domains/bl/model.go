@@ -1,6 +1,10 @@
-package model
+package bl
 
-import "unicode/utf8"
+import (
+	"unicode/utf8"
+
+	"solarflow-backend/internal/model"
+)
 
 // BLShipment — B/L(입고/선적) 정보를 담는 구조체
 // 비유: "선적 서류" — 어떤 화물이, 어디서 어디로, 언제 도착하는지 기록
@@ -41,7 +45,7 @@ type BLShipment struct {
 // 비유: 선적 서류에 법인 도장, 제조사 명함, 창고 안내가 함께 붙어 있는 것
 type BLWithRelations struct {
 	BLShipment
-	Companies     *CompanySummary        `json:"companies"`
+	Companies     *model.CompanySummary        `json:"companies"`
 	Manufacturers *BLManufacturerSummary `json:"manufacturers"`
 	Warehouses    *BLWarehouseSummary    `json:"warehouses"`
 }
@@ -69,7 +73,7 @@ type BLDetail struct {
 // BLDetailBase — B/L 상세 조회 시 본문 (제조사 상세 포함)
 type BLDetailBase struct {
 	BLShipment
-	Companies     *CompanySummary              `json:"companies"`
+	Companies     *model.CompanySummary              `json:"companies"`
 	Manufacturers *BLManufacturerDetailSummary `json:"manufacturers"`
 	Warehouses    *BLWarehouseDetailSummary    `json:"warehouses"`
 }

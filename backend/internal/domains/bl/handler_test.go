@@ -1,10 +1,9 @@
-package handler
+package bl
 
 import (
 	"math"
 	"testing"
 
-	"solarflow-backend/internal/model"
 )
 
 func floatPtr(value float64) *float64 {
@@ -19,28 +18,28 @@ func assertFloatNear(t *testing.T, label string, got, want float64) {
 }
 
 func TestComputeBLListAggregates(t *testing.T) {
-	lines := []model.BLLineWithProduct{
+	lines := []BLLineWithProduct{
 		{
-			BLLineItem: model.BLLineItem{
+			BLLineItem: BLLineItem{
 				BLID:             "bl-a",
 				CapacityKW:       5456,
 				InvoiceAmountUSD: floatPtr(632896),
 			},
-			Products: &model.ProductSummaryForBLLine{
+			Products: &ProductSummaryForBLLine{
 				ProductCode: "TP-620",
 				ProductName: "TopSolar 620W",
 				SpecWP:      620,
 			},
 		},
 		{
-			BLLineItem: model.BLLineItem{
+			BLLineItem: BLLineItem{
 				BLID:             "bl-a",
 				CapacityKW:       100,
 				InvoiceAmountUSD: floatPtr(1000),
 			},
 		},
 		{
-			BLLineItem: model.BLLineItem{
+			BLLineItem: BLLineItem{
 				BLID:       "bl-b",
 				CapacityKW: 250,
 			},
@@ -88,7 +87,7 @@ func TestAttachBLListAggregates(t *testing.T) {
 			FirstSpecWP:      intPtr(620),
 		},
 	}
-	shipments := []model.BLShipment{
+	shipments := []BLShipment{
 		{BLID: "bl-a"},
 		{BLID: "bl-empty"},
 	}

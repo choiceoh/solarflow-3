@@ -9,6 +9,7 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/domains/bl"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
@@ -61,7 +62,7 @@ type baroIncomingLineRow struct {
 	ProductID  string                         `json:"product_id"`
 	Quantity   int                            `json:"quantity"`
 	CapacityKW float64                        `json:"capacity_kw"`
-	Products   *model.ProductSummaryForBLLine `json:"products"`
+	Products   *bl.ProductSummaryForBLLine `json:"products"`
 }
 
 type baroIncomingCompanyRow struct {
