@@ -16,6 +16,8 @@ interface KpiVisibilityMenuProps {
   onToggle: (id: string, visible: boolean) => void;
   onReset: () => void;
   saving?: boolean;
+  isDefault?: boolean;
+  defaultVisibleCount?: number;
 }
 
 export function KpiVisibilityMenu({
@@ -24,9 +26,15 @@ export function KpiVisibilityMenu({
   onToggle,
   onReset,
   saving,
+  isDefault,
+  defaultVisibleCount,
 }: KpiVisibilityMenuProps) {
   if (options.length <= 1) return null;
   const visibleCount = options.length - hidden.size;
+  const resetLabel =
+    defaultVisibleCount != null && options.length > defaultVisibleCount
+      ? `기본 ${defaultVisibleCount}개로`
+      : '기본 표시';
 
   return (
     <DropdownMenu>
@@ -53,10 +61,10 @@ export function KpiVisibilityMenu({
         <DropdownMenuItem
           onClick={onReset}
           onSelect={(event) => event.preventDefault()}
-          disabled={hidden.size === 0}
+          disabled={isDefault}
         >
           <RotateCcw className="mr-2 h-3 w-3" />
-          전체 표시
+          {resetLabel}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

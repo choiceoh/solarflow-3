@@ -100,7 +100,11 @@ export default function CustomsPage() {
     decl.cost_unit_price_wp != null || decl.cif_krw != null
   )).length
   const totalCapacityWp = declarations.reduce((sum, decl) => sum + (decl.capacity_kw ?? 0) * 1000, 0)
+  const totalCapacityKw = totalCapacityWp / 1000
   const avgExpensePerWp = totalCapacityWp > 0 ? expenseTotal / totalCapacityWp : 0
+  const unlinkedExpenseCount = Math.max(0, expenseCount - linkedExpenseCount)
+  const uncostedDeclarationCount = Math.max(0, declarations.length - costedDeclarationCount)
+  const avgExpensePerDecl = declarations.length > 0 ? expenseTotal / declarations.length : 0
   // KPI sparkline — Expense.month 기반 월별 집계 (없는 항목은 무시 → 평행선 대체).
   const declSpark = monthlyCount(declarations, (decl) => decl.declaration_date ?? null)
   const expenseDate = (e: (typeof expenses)[number]) => e.month ?? null
@@ -259,6 +263,61 @@ export default function CustomsPage() {
                 tone: "ink" as const,
                 spark: flatSpark(avgExpensePerWp),
                 metricId: "customs.avg_expense",
+              },
+              {
+                lbl: "원가 미산정",
+                v: String(uncostedDeclarationCount),
+                numericValue: uncostedDeclarationCount,
+                formatter: (n: number) => String(Math.round(n)),
+                u: "건",
+                sub: "면장 원가 미입력",
+                tone: uncostedDeclarationCount > 0 ? ("warn" as const) : ("pos" as const),
+                spark: flatSpark(uncostedDeclarationCount),
+                metricId: "customs.uncosted",
+              },
+              {
+                lbl: "B/L 미연결",
+                v: String(unlinkedExpenseCount),
+                numericValue: unlinkedExpenseCount,
+                formatter: (n: number) => String(Math.round(n)),
+                u: "건",
+                sub: "비용 매칭 필요",
+                tone: unlinkedExpenseCount > 0 ? ("warn" as const) : ("pos" as const),
+                spark: flatSpark(unlinkedExpenseCount),
+                metricId: "customs.unlinked_expense",
+              },
+              {
+                lbl: "수입 용량",
+                v: totalCapacityKw.toLocaleString("ko-KR", { maximumFractionDigits: 0 }),
+                numericValue: totalCapacityKw,
+                formatter: (n: number) => n.toLocaleString("ko-KR", { maximumFractionDigits: 0 }),
+                u: "kW",
+                sub: "면장 합계 용량",
+                tone: "info" as const,
+                spark: flatSpark(totalCapacityKw),
+                metricId: "customs.capacity",
+              },
+              {
+                lbl: "VAT 합계",
+                v: fmtEok(expenseVat),
+                numericValue: expenseVat,
+                formatter: fmtEok,
+                u: "억",
+                sub: "면장 비용 부가세",
+                tone: "ink" as const,
+                spark: flatSpark(expenseVat),
+                metricId: "customs.vat",
+              },
+              {
+                lbl: "면장당 평균",
+                v: fmtEok(avgExpensePerDecl),
+                numericValue: avgExpensePerDecl,
+                formatter: fmtEok,
+                u: "억",
+                sub: "1건당 부대비용",
+                tone: "ink" as const,
+                spark: flatSpark(avgExpensePerDecl),
+                metricId: "customs.avg_per_decl",
               },
             ]}
             scopeId={`customs.${activeTab}`}

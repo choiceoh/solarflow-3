@@ -1171,6 +1171,41 @@ export default function PriceForecastPage() {
           sub: runLatest ? `${formatDate(runLatest.started_at)} · ${runLatest.inserted_count}건` : '수집 로그 없음',
           tone: runLatest?.status === 'failed' ? 'warn' : 'pos',
         },
+        {
+          label: '관측 합계',
+          value: filteredRows.length.toLocaleString('ko-KR'),
+          unit: '점',
+          sub: '필터 기준',
+          tone: 'ink',
+        },
+        {
+          label: '채택',
+          value: reviewCounts.accepted.toLocaleString('ko-KR'),
+          unit: '건',
+          sub: '리뷰 완료',
+          tone: 'pos',
+        },
+        {
+          label: '검토 대기',
+          value: reviewCounts.candidate.toLocaleString('ko-KR'),
+          unit: '건',
+          sub: '판단 필요',
+          tone: reviewCounts.candidate > 0 ? 'warn' : 'pos',
+        },
+        {
+          label: '제외',
+          value: reviewCounts.rejected.toLocaleString('ko-KR'),
+          unit: '건',
+          sub: '신뢰도 낮음',
+          tone: 'ink',
+        },
+        {
+          label: '구매 vs CMM',
+          value: purchaseVsCmmPct != null ? `${purchaseVsCmmPct >= 0 ? '+' : ''}${purchaseVsCmmPct.toFixed(1)}` : '—',
+          unit: '%',
+          sub: '우리 매입 / CMM 격차',
+          tone: purchaseVsCmmPct != null && purchaseVsCmmPct <= 0 ? 'pos' : 'warn',
+        },
       ]}
       toolbar={(
         <div className="flex flex-wrap items-center gap-2">
