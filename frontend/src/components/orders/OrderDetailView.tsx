@@ -221,6 +221,10 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
   const shippedQty = safeNumber(order.shipped_qty) ?? 0
   const totalShipped = outboundRows.reduce((sum, ob) => sum + (safeNumber(ob.quantity) ?? 0), 0)
   const remaining = Math.max(orderQty - Math.max(shippedQty, totalShipped), 0)
+  const unitPriceEa =
+    order.unit_price_ea ??
+    (order.unit_price_wp != null && order.spec_wp ? order.unit_price_wp * order.spec_wp : null)
+  const expectedAmount = unitPriceEa != null ? unitPriceEa * order.quantity : null
   const moduleText =
     order.manufacturer_name || order.spec_wp
       ? moduleLabel(order.manufacturer_name, order.spec_wp)
@@ -381,6 +385,14 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
             editType="number"
             disabled={isCancelled}
             onSave={saveOrderField}
+          />
+          <DetailField
+            label="예상금액"
+            value={
+              expectedAmount != null
+                ? formatMaybeNumber(expectedAmount, "원 (VAT 별도)")
+                : undefined
+            }
           />
         </DetailFieldGrid>
       </DetailSection>

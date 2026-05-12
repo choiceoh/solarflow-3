@@ -43,8 +43,13 @@ interface SessionDetail extends SessionSummary {
 }
 
 const SESSION_TITLE_MAX = 30;
-const OCR_ACCEPT = 'application/pdf,image/jpeg,image/png,image/webp,image/gif';
-const OCR_MAX_BYTES = 20 * 1024 * 1024;
+const OCR_ACCEPT =
+  'application/pdf,image/jpeg,image/png,image/webp,image/gif,' +
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,.xlsx,.csv,' +
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,.docx,.txt';
+const OCR_MAX_BYTES = 30 * 1024 * 1024;
+const SPREADSHEET_EXT_RE = /\.(xlsx|csv)$/i;
+const DOCUMENT_EXT_RE = /\.(docx|txt)$/i;
 
 const PROPOSAL_KIND_LABEL: Record<string, string> = {
   create_note: '메모 작성',
@@ -79,10 +84,40 @@ interface OCRExtractResponse {
   results: OCRResult[];
 }
 
+// 일부 브라우저/OS 는 클립보드 페이스트나 xlsx/csv 에서 File.type 을 비우는 경우가 있어
+// 확장자 신호로 보강한다. 백엔드 normalizeOCRMIME 가 같은 폴백을 한 번 더 적용.
+function inferMimeByName(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  switch (ext) {
+    case 'png':
+    case 'webp':
+    case 'gif':
+      return `image/${ext}`;
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'pdf':
+      return 'application/pdf';
+    case 'xlsx':
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'csv':
+      return 'text/csv';
+    case 'docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'txt':
+      return 'text/plain';
+    default:
+      return '';
+  }
+}
+
 function buildOCRBlock(results: OCRResult[]): string {
   const blocks: string[] = [];
   for (const r of results) {
-    const head = `[첨부파일 OCR] ${r.filename}`;
+    const isSheet = SPREADSHEET_EXT_RE.test(r.filename);
+    const isDoc = DOCUMENT_EXT_RE.test(r.filename);
+    const label = isSheet ? '[첨부파일 표]' : isDoc ? '[첨부파일 문서]' : '[첨부파일 OCR]';
+    const head = `${label} ${r.filename}`;
     if (r.error) {
       blocks.push(`${head}\n오류: ${r.error}`);
       continue;
@@ -413,20 +448,27 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, status]);
 
-  const ACCEPTED_MIMES = useMemo(() => new Set(OCR_ACCEPT.split(',').map((s) => s.trim())), []);
+  const ACCEPTED_MIMES = useMemo(
+    () => new Set(OCR_ACCEPT.split(',').map((s) => s.trim()).filter((s) => !s.startsWith('.'))),
+    [],
+  );
 
   // 공통 파일 처리 — 클릭/드롭/붙여넣기 모두 통과. 타입·크기 검증 + 토스트.
   const addFiles = (files: File[]) => {
     const valid: File[] = [];
     for (const f of files) {
       if (f.size > OCR_MAX_BYTES) {
-        notify.error(`${f.name}: 20MB 초과로 첨부 불가`);
+        notify.error(`${f.name}: 30MB 초과로 첨부 불가`);
         continue;
       }
-      // MIME 타입 미지정(예: 일부 클립보드 페이스트) 은 image 로 시작하면 허용.
-      const mime = f.type || (f.name.match(/\.(png|jpe?g|webp|gif|pdf)$/i) ? `image/${f.name.split('.').pop()?.toLowerCase()}` : '');
-      if (mime && !ACCEPTED_MIMES.has(mime) && !mime.startsWith('image/')) {
-        notify.error(`${f.name}: 지원하지 않는 형식 (PDF/이미지만 가능)`);
+      // MIME 타입 미지정(클립보드 페이스트, 일부 브라우저의 xlsx/csv/docx) 은 확장자로 폴백.
+      const mime = f.type || inferMimeByName(f.name);
+      const okByExt =
+        SPREADSHEET_EXT_RE.test(f.name) ||
+        DOCUMENT_EXT_RE.test(f.name) ||
+        /\.(png|jpe?g|webp|gif|pdf)$/i.test(f.name);
+      if (mime && !ACCEPTED_MIMES.has(mime) && !mime.startsWith('image/') && !okByExt) {
+        notify.error(`${f.name}: 지원하지 않는 형식 (PDF·이미지·엑셀·CSV·워드·텍스트만 가능)`);
         continue;
       }
       valid.push(f);
@@ -637,7 +679,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           <div className="pointer-events-none absolute inset-2 z-50 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--sf-solar)] bg-[var(--sf-solar)]/10 backdrop-blur-sm">
             <Paperclip className="h-10 w-10 text-[var(--sf-solar)]" />
             <div className="text-base font-semibold text-foreground">파일을 놓아주세요</div>
-            <div className="text-sm text-muted-foreground">PDF / 이미지 (최대 20MB)</div>
+            <div className="text-sm text-muted-foreground">PDF · 이미지 · 엑셀 · CSV · 워드 · 텍스트 (최대 30MB)</div>
           </div>
         )}
         {!embedded && (
@@ -772,7 +814,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={busy}
-              title="파일 첨부 (PDF/이미지, OCR 추출)"
+              title="파일 첨부 (PDF·이미지 OCR, 엑셀·CSV 표, 워드·TXT 문서 추출)"
               className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
             >
               {ocrBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
@@ -1483,7 +1525,7 @@ function ChipEmpty({ chips, onPick }: { chips: ChipDef[]; onPick: (text: string)
         ))}
       </div>
       <div className="text-xs text-muted-foreground/70">
-        클릭하면 입력창에 채워집니다 · PDF/이미지 첨부 시 OCR 자동 인식
+        클릭하면 입력창에 채워집니다 · PDF·이미지는 OCR, 엑셀·CSV는 표, 워드·텍스트는 문서 자동 추출
       </div>
     </div>
   );

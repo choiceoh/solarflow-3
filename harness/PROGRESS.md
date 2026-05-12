@@ -5,14 +5,31 @@
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | Excel Import Hub 샘플팩 기반 실데이터 리허설, 출고/판매 수금 미완료 큐 운영 샘플 검증, 가격예측 백테스트/견적 기록 운영 DB 적용 확인 + AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
+| 다음 작업 | Excel Import Hub 샘플팩 기반 실데이터 리허설, 출고/판매 수금 미완료 큐 필터 전체 처리 운영 샘플 검증, 가격예측 백테스트/견적 기록 운영 DB 적용 확인 + AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-20260511-184355 판매 수금 미완료 큐, D-080/D-081/D-132~D-138 번호 공백 유지) |
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-20260511-184355 판매 수금 미완료 큐, D-20260512-101906 필터 전체 수금완료, D-080/D-081/D-132~D-138 번호 공백 유지) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-12 세션 — 필터 결과 전체 수금완료 (D-20260512-101906)
+
+### 완료
+- 판매 화면 수금 미완료 큐의 일괄 처리 영역을 `현재 목록`과 `필터 전체`로 분리
+  - 현재 목록: 현재 페이지에서 자동 선택된 미수 행만 수금완료
+  - 필터 전체: 현재 거래처/기간/수금 상태 필터 결과 전체를 페이지 단위로 불러와 수금완료
+- 필터 전체 처리도 기존 원클릭 수금완료 API를 건별로 사용
+  - 대량 요청은 작은 batch 로 나눠 처리
+  - 성공/실패 건수를 분리해 안내
+  - 처리 후 판매/수금 목록과 KPI 재조회
+- 설계 정본과 D-20260512-101906 결정 기록 동기화
+
+### 검증
+- 서버/운영 빌드 확인은 사용자 지시로 실행하지 않음
 
 ---
 
@@ -77,6 +94,29 @@
 - `cd frontend && npm run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
 - `git diff --check` 성공
 - `graphify update .` 성공 — 5151 nodes / 8389 edges / 415 communities
+
+---
+
+## 2026-05-11 세션 — 가격 벤치마크 관측값 채택 실패 진단
+
+### 완료
+- `/price-forecast` 관측값 `채택/제외/후보` 변경 실패의 1차 원인을 `price_benchmarks.review_status` 운영 DB 반영 또는 PostgREST schema cache 미반영으로 좁힘
+- `PATCH /api/v1/price-benchmarks/{id}/review-status` 에서 PostgREST `PGRST204`/schema cache 오류를 감지하면 적용해야 할 migration 파일을 명시한 503 메시지를 반환하도록 보강
+- `backend/scripts/check_schema.sh` 가 `CreatePriceBenchmarkRequest` 와 `UpdatePriceBenchmarkReviewStatusRequest` ↔ `price_benchmarks` 컬럼 동기화도 검사하도록 확장
+- schema cache 오류 감지 회귀 테스트 추가
+
+### 검증
+- `cd backend && go test ./internal/handler -run 'PriceBenchmark|Benchmark'` 성공
+- `cd backend && go test ./internal/model -run PriceBenchmark` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `bash -n backend/scripts/check_schema.sh` 성공
+- `git diff --check` 성공
+
+### 알려진 제한
+- 이 worktree 환경에는 로컬 PostgreSQL/PostgREST와 `backend/.env`가 없어 운영 DB의 `091_price_benchmark_review_status.sql` 적용 여부와 PostgREST schema cache 노출 여부는 직접 확인하지 못했다.
+- `cd backend && ./scripts/check_schema.sh` 는 현재 연결 환경에서 기준 테이블이 없어 실패했다. 운영 DB에서는 `bun scripts/verify_migration.ts 091_price_benchmark_review_status.sql` 또는 migration 적용 후 재실행해야 한다.
 
 ---
 
