@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useAutoAnimate } from "@formkit/auto-animate/react"
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
 import {
   Table,
   TableBody,
@@ -978,6 +988,16 @@ export default function SalesAnalysisPage() {
       .sort((a, b) => a.month.localeCompare(b.month))
       .slice(-12)
   }, [alternativeMarginByKey, filteredSales, marginByProductKey, productById])
+
+  const monthlyRevenueProfit = useMemo(() => {
+    const marginByMonth = new Map<string, number>()
+    for (const row of monthlyManagementRows) marginByMonth.set(row.month, row.margin)
+    return monthly.map((row) => ({
+      ...row,
+      margin: marginByMonth.get(row.month) ?? 0,
+    }))
+  }, [monthly, monthlyManagementRows])
+
   const marginBridge = useMemo(() => {
     const rows = monthlyManagementRows.filter((row) => row.revenue > 0)
     const prev = rows.at(-2)
@@ -2233,21 +2253,24 @@ export default function SalesAnalysisPage() {
 
           {activeAnalysisTab === "profit" && (
             <div className="grid grid-cols-1 gap-4">
-              <CardB title="월별 매출" sub="공급가 기준" padded>
-                {monthly.length === 0 ? (
+              <CardB title="월별 매출·이익" sub="공급가 기준 (이익=추정)" padded>
+                {monthlyRevenueProfit.length === 0 ? (
                   <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
                     매출 데이터가 없습니다
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={monthly}>
+                    <ComposedChart data={monthlyRevenueProfit}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis
                         tick={{ fontSize: 10 }}
                         tickFormatter={(v: number) => `${Math.round(v / 100000000)}억`}
                       />
-                      <Tooltip formatter={(value) => [formatKRW(Number(value)), "공급가"]} />
+                      <Tooltip
+                        formatter={(value, name) => [formatKRW(Number(value)), String(name)]}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Bar
                         dataKey="revenue"
                         fill="#2563eb"
@@ -2256,7 +2279,19 @@ export default function SalesAnalysisPage() {
                         animationDuration={360}
                         animationEasing="ease-out"
                       />
-                    </BarChart>
+                      <Line
+                        type="monotone"
+                        dataKey="margin"
+                        stroke="#16a34a"
+                        strokeWidth={2}
+                        name="이익"
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 4 }}
+                        isAnimationActive
+                        animationDuration={360}
+                        animationEasing="ease-out"
+                      />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 )}
               </CardB>
