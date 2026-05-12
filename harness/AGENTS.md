@@ -4,7 +4,7 @@
 ## 시공자 (Builder)
 - **하는 일**: TASK 파일 기준으로 코드 작성, 빌드/vet 실행, 체크리스트 보고
 - **하지 않는 일**: 설계 방향 임의 변경 (Go만으로 충분하다고 Rust 제거 금지)
-- **TASK 작성**: 시공자가 초안 작성 → 감리자 검토 → 승인 후 작업
+- **TASK 작성**: `harness/TASK_TEMPLATE.md` 기준으로 시공자가 초안 작성 → 감리자 검토 → Alex 승인 후 작업
 - **보고 양식**: CHECKLIST_TEMPLATE.md 따를 것
 - **코드 제출**: 전체 코드(cat) + 빌드 결과 + 체크리스트
 
@@ -43,3 +43,4 @@
 3. harness/AGENTS.md (역할)
 4. harness/SolarFlow_설계문서_통합판.md (설계 정본)
 5. harness/DECISIONS.md (판단 기록)
+6. 할당된 TASK 파일 (`harness/TASK_TEMPLATE.md` 기준인지 확인)

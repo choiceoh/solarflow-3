@@ -1795,3 +1795,18 @@
 - **검증**: `SELECT COUNT(*) FROM v_db_anomalies` = 0, `partners.normalized_name` 152/152 채움.
 - **운영 영향**: 매출분석 거래처별 이익률 = 전체 요약 (분모 통일 + cost-basis 정상화), `/admin/db-integrity` 0건. 다음 임포터 작성 시 6-key 매칭 + norm_company 사용 강제.
 - **날짜**: 2026-05-12 17:12:22 KST
+
+## D-20260512-165815: 작업 흐름 정본은 현재 운영 토폴로지와 TASK preflight를 기준으로 한다
+
+- **결정**: AGENTS/CLAUDE/RULES/PROGRESS의 작업 안내는 현재 운영 토폴로지인 Linux `gx10-f96e` + systemd user 서비스 + Supabase hosted PostgreSQL/PostgREST + Cloudflare Pages를 기준으로 정리한다. macOS `launchctl`/`codesign` 절차는 과거 또는 로컬 macOS 운영 절차로만 남기고 현재 운영 서버 절차로 쓰지 않는다.
+- **운영 기준**:
+  - 새 TASK는 `harness/TASK_TEMPLATE.md` 기준으로 작성한다. 영향 범위, DB migration, feature catalog/matrix, tenant index, 운영 검증, acceptance 기준을 작업 시작 전에 명시한다.
+  - 새 worktree나 새 TASK 시작 시 `scripts/setup_worktree.sh`로 의존성·graphify 준비를 시도하고, 변경 범위 검증은 `scripts/verify_changed.sh`를 우선 사용한다.
+  - 배포 직후 운영 확인은 `scripts/prod-logs.sh postdeploy [window]`를 기본 진입점으로 삼는다. 이 명령은 sync 로그, 4개 systemd 서비스 상태, Go/Rust health, 최근 5xx, DB/PostgREST 오류, 서비스 재시작 이력을 읽기 전용으로 조회한다.
+  - GUI 메타 편집기 product 라인은 D-121에 따라 재개하지 않는다. 새 ERP 도메인은 일반 React 도메인 화면으로 구현하고, 잔존 `MetaDetail`은 기존 BL 상세 사용처 보수에 한정한다.
+- **이유**: 문서마다 macOS launchd, 로컬 PostgREST, Caddy 정적 서빙, GUI 메타 편집기 기준이 섞여 있으면 시공자·감리자·새 에이전트가 서로 다른 운영 절차를 따르게 된다. 작업 전 preflight와 배포 후 확인을 템플릿/스크립트로 고정하면 schema drift, feature wiring 누락, 운영 확인 누락을 줄일 수 있다.
+- **검증**:
+  - `bash -n scripts/prod-logs.sh`
+  - `git diff --check`
+  - `graphify update .` 시도
+- **날짜**: 2026-05-12 16:58:15 KST

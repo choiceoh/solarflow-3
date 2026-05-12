@@ -44,6 +44,17 @@ RUN_GRAPHIFY=1 ./scripts/verify_all.sh
 현재 코드베이스에는 기존 RULES lint 부채가 남아 있어 기본 실행에서는 advisory로 표시합니다.
 신규 작업에서 규칙 위반을 차단해야 할 때는 `STRICT_RULES=1`을 사용합니다.
 
+## 작업 시작 preflight
+
+새 worktree나 새 TASK를 시작할 때는 아래 순서로 맞춘다.
+
+```bash
+./scripts/setup_worktree.sh
+./scripts/verify_changed.sh
+```
+
+TASK 작성은 `harness/TASK_TEMPLATE.md`를 기준으로 한다. 특히 DB migration, feature catalog/matrix, tenant index, 운영 검증 항목을 먼저 표시해야 작업 중 누락을 줄일 수 있다.
+
 ## 변경 파일 기준 선택 검증
 
 ```bash
@@ -104,6 +115,17 @@ bun scripts/verify_migration.ts 092_xxx.sql \
 
 운영 `cron-deploy.sh`는 마이그레이션 적용 직후 이 스크립트를 실행하고, 반영 확인 실패 시 Go 재시작을 보류합니다.
 
+## 배포 후 운영 확인
+
+운영 배포 직후에는 한 번에 sync 로그, 서비스 상태, Go/Rust health, 최근 5xx, DB/PostgREST 오류를 확인한다.
+
+```bash
+./scripts/prod-logs.sh postdeploy
+./scripts/prod-logs.sh postdeploy 2h
+```
+
+`postdeploy`는 운영 서버를 수정하지 않고 읽기만 한다. 더 좁혀야 할 때만 `errors`, `db`, `http5xx`, `slow`, `raw`를 사용한다.
+
 ## OCR sidecar 준비
 
 ```bash
@@ -113,7 +135,7 @@ bun scripts/verify_migration.ts 092_xxx.sql \
 PaddleOCR/RapidOCR Python 런타임을 `backend/.venv-ocr`에 설치하고 sidecar 모델 로드를 확인합니다.
 Go 서버는 기본적으로 이 venv와 `backend/internal/ocr/sidecar-src/rapidocr_main.py`를 자동 탐색합니다.
 
-운영 서비스의 작업 디렉터리가 다르면 launchd 환경변수에 아래 값을 지정하세요.
+운영 서비스의 작업 디렉터리가 다르면 systemd user 서비스 환경변수에 아래 값을 지정하세요.
 
 ```bash
 OCR_PYTHON_BIN=/absolute/path/to/backend/.venv-ocr/bin/python

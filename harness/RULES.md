@@ -1,27 +1,24 @@
 # SolarFlow 3.0 — 개발 규칙 (모든 작업에 적용)
 
-## ⚡ 듀얼 product 관점 (헌법 #0)
+## ⚡ Product 관점 (헌법 #0)
 
-이 프로젝트는 **두 개의 product 를 동시에 개발**한다 — 어느 한쪽이 다른 한쪽의 부속이 아님:
+이 프로젝트의 현재 제품은 **SolarFlow ERP 시스템** 하나다.
 
-1. **ERP 시스템** — 무역/재고/회계 등 SolarFlow 그 자체 (도메인 product)
-2. **GUI 메타 편집기** — Webflow/Figma/Builder.io 부류의 화면 편집 도구 (인프라 product)
-   - `frontend/src/templates/{MetaForm,MetaDetail,ListScreen}.tsx` (런타임)
-   - `frontend/src/pages/UIConfigEditor/*` (편집기)
-   - `frontend/src/templates/registry.tsx` (코드 등록소)
+D-121에서 GUI 메타 편집기·v2 페이지 라인은 폐기했다. `/ui-config-editor`, `MetaForm`, `ListScreen`, `TabbedListScreen`, v2 페이지를 되살리지 않는다. 남은 `frontend/src/templates/MetaDetail.tsx`와 `frontend/src/templates/registry.tsx`는 BL 상세 화면 안에서 일부 표시 섹션을 그리는 잔존 컴포넌트이며, 새 ERP 도메인을 메타 화면으로 구현하는 근거가 아니다.
 
 ### 판단 기준
-- **반쪽 GUI 금지** — 새 메타 인프라 기능을 추가했는데 편집기에 픽커가 없으면 미완성. 한 PR 안에서 인프라 + 편집기 픽커 둘 다 들어가야 함.
-- **runtime mimicry** — 편집기 UX 는 실제 화면과 닮게 (WYSIWYG). tabs 편집기 = 진짜 탭 네비, sections = 진짜 sections grid.
-- **discoverable by GUI alone** — admin 이 docs 안 봐도 알 수 있어야 함. registry key (cellRendererId, permissionGuardId, asyncRefine.ruleId 등) 는 무조건 combobox / dropdown 으로 노출. 자유 텍스트 금지.
-- **product polish 기준** — "내부 도구라 대충" 절대 금지. 편집기 작업도 ERP 도메인과 동등한 코드 리뷰 / UX / 검증 통과해야 commit.
-- **우선순위 동등** — "도메인 작업 빨라야 하니 편집기는 나중에" 절대 금지. 새 메타 기능 추가 → 편집기 픽커 → 도메인 적용 순서.
+- **ERP 운영 화면 우선** — 새 도메인/화면은 일반 React 도메인 페이지로 구현한다.
+- **Excel Import Hub 중심** — 운영 데이터 생성은 기본적으로 엑셀 입력·서버 검증·검토 후 등록 흐름을 따른다.
+- **웹 화면 역할** — 조회, 분석, 검색, 상태 전환, 연결 지정, 첨부, 수금 매칭처럼 기존 데이터의 진행 상태와 관계를 정리하는 작업에 집중한다.
+- **새 테넌트 추가** — `harness/NEW-TENANT-GUIDE.md`의 registry + pack + feature wiring 절차를 따른다.
+- **잔존 메타 컴포넌트 확장 금지** — BL 상세 표시처럼 이미 남아 있는 사용처 보수는 허용하지만, GUI 편집기 product 라인을 재개하지 않는다.
 
 ## 아키텍처 원칙
-- Go: 프론트엔드 (화면 UI, HTTP 처리, 자주 변경되는 부분)
+- React: 화면 UI, 필터/검색/정렬, 엑셀 미리보기, 사용자 상호작용
+- Go: API 게이트웨이, 인증/권한, CRUD, 엑셀 Import/Export, Rust 프록시
 - Rust: 백엔드 계산엔진 (원가, 환율, 재고집계, 마진, LC만기 등)
 - Go↔Rust: REST API 게이트웨이로 통신
-- DB: 로컬 PostgreSQL + PostgREST, 인증은 Supabase Auth 사용
+- DB: 운영은 Supabase hosted PostgreSQL + hosted PostgREST, 인증은 Supabase Auth 사용
 - 이 구조를 임의로 변경하지 않음
 
 ## ⚙ 테넌트 격리 = feature 카탈로그 (헌법 — D-120)
@@ -132,6 +129,9 @@
 - nullable 필드는 포인터 타입(*string, *int, *float64) 사용.
 
 ### 작업 흐름 규칙
+- 작업 시작 전 `harness/PROGRESS.md` → `harness/RULES.md` → `harness/AGENTS.md` → 설계 정본 → `harness/DECISIONS.md` → TASK 순서로 현재 위치와 범위를 확인한다.
+- 새 worktree에서는 `scripts/setup_worktree.sh`로 의존성·graphify 인덱스 준비를 먼저 시도한다. `graphify`가 없으면 건너뛰되 보고에 남긴다.
+- TASK는 `harness/TASK_TEMPLATE.md` 기준으로 작성한다. 영향 도메인, DB migration 여부, feature catalog/matrix 여부, 운영 검증 방법, acceptance 기준이 빠진 TASK는 보완 후 시작한다.
 - 커밋은 작업 단위별로 (한 번에 몰아서 하지 않음).
 - 새 핸들러는 가장 복잡한 것 먼저 검증, 나머지는 패턴 신뢰.
 - TASK는 시공자가 작성 → 감리자 검토 → 승인 후 작업 시작.
@@ -154,16 +154,17 @@
 - 그 외 컴포넌트(레이아웃, 카드, 색상, 간격, 폰트, 배지, 버튼 등)에서는 절대 분기하지 않는다.
 - 가드: `frontend/src/lib/tenantScope.test.ts`의 "tenantScope 사용처 가드"가 새 사용처를 차단. 정당한 사유로 추가하려면 ALLOWLIST를 늘리고 PR 리뷰에서 합의.
 
-### 신규 도메인 추가 절차 (D-110 RegisterRoutes 패턴)
+### 신규 도메인 추가 절차 (D-20260512-090000 mount registry 패턴)
 백엔드에 새 도메인(예: `/api/v1/foo`)을 추가할 때 다음 순서를 그대로 따른다:
-1. **핸들러 파일**: `backend/internal/handler/{prefix}_foo.go`에 `FooHandler` 구조체와 `NewFooHandler(db *supa.Client) *FooHandler` 생성자, 그리고 메서드(`List`, `GetByID`, `Create` 등)를 작성한다. **prefix는 영역별로 강제** — `master_`(마스터 CRUD), `tx_`(트랜잭션), `baro_`(바로 전용), `sys_`(시스템·관리), `ai_`(AI/OCR), `io_`(import/export). 패키지는 단일 `handler`를 유지하므로 import 경로는 변하지 않음.
-2. **RegisterRoutes 메서드**: `backend/internal/handler/routes.go`의 알파벳 자리에 `func (h *FooHandler) RegisterRoutes(r chi.Router, g middleware.Gates)`를 추가한다. 가드는 `r.With(g.Write)`, `r.Use(g.TopsolarOnly)` 형태로 직접 적용한다.
-3. **router.go 1줄 추가**: `backend/internal/router/router.go`의 알파벳 자리에 `handler.NewFooHandler(a.DB).RegisterRoutes(r, a.Gates)` 1줄을 추가한다.
-4. **golden 갱신**: `cd backend && go test ./internal/router -run TestRouteSnapshot -update`로 `testdata/routes.golden`을 갱신한다. (이 명령은 라우트 추가/변경 시 항상 실행 — 잊으면 CI에서 깨짐)
-5. **테넌트 한정 라우트면**: D-108/D-109/D-119 동기화 규칙에 따라 `harness/{module,cable,baro}.md`의 라우트 표를 같은 PR에서 갱신한다.
-6. **검증**: `go build ./... && go vet ./... && go test ./...` 모두 통과. 모델 필드를 추가했다면 위 "Go 모델 필드 변경 시 필수 절차"(CLAUDE.md)도 함께 수행.
+1. **핸들러 파일**: `backend/internal/handler/{prefix}_foo.go`에 `FooHandler` 구조체와 `NewFooHandler(...) *FooHandler` 생성자, 그리고 메서드(`List`, `GetByID`, `Create` 등)를 작성한다. **prefix는 영역별로 강제** — `master_`(마스터 CRUD), `tx_`(트랜잭션), `baro_`(바로 전용), `sys_`(시스템·관리), `ai_`(AI/OCR), `io_`(import/export), `wms_`(창고 실행). 패키지는 단일 `handler`를 유지하므로 import 경로는 변하지 않음.
+2. **자기 등록**: 같은 파일의 `func init()`에서 `mount.Register(mount.Spec{ID: feature.IDXxx, Auth: mount.AuthAuthed, Mount: func(d *mount.Deps, r chi.Router) { ... }})`를 호출한다. `/api/v1/public/*`는 `mount.AuthPublicAPI`, 루트/특수 토큰 라우트는 `mount.AuthRoot`를 사용한다.
+3. **라우트와 가드 소유**: 라우트 트리는 `Mount` 함수 안에서 핸들러가 직접 소유한다. 신규 라우트는 `r.Use(d.Gates.Feature(feature.IDXxx))` 또는 동등한 feature gate를 적용하고, 쓰기 작업은 필요한 위치에 `r.With(d.Gates.Write)`를 함께 적용한다.
+4. **중앙 집계 수정 금지**: 신규 핸들러 때문에 `backend/internal/router/router.go`에 `NewFooHandler(...).RegisterRoutes(...)`를 추가하거나 중앙 routes 파일을 만들지 않는다. `router.New`는 `mount.MountAuthed/MountPublicAPI/MountRoot`만 호출한다.
+5. **feature/문서 동기화**: D-120 동기화 규칙에 따라 `backend/internal/feature/catalog.go`, `harness/FEATURE-WIRING-MATRIX.md`, 필요한 `harness/{module,cable,baro,study}.md` 색인을 같은 PR에서 갱신한다.
+6. **golden 갱신**: 라우트가 추가/변경되면 `cd backend && go test ./internal/router -run TestRouteSnapshot -update`로 `testdata/routes.golden`을 갱신한다.
+7. **검증**: `go test ./internal/mount ./internal/router`, `go build ./...`, `go vet ./...`, 필요한 도메인 테스트를 모두 통과한다. 모델 필드를 추가했다면 위 "Go 모델 필드 변경 시 필수 절차"(CLAUDE.md)도 함께 수행.
 
-⚠️ **router.go에 직접 `r.Route("/foo", ...)` 등록 금지** — 반드시 핸들러의 RegisterRoutes 메서드로 캡슐화한다. PR 충돌·가드 누락의 주된 원인이었음(D-110 도입 배경).
+⚠️ **router.go에 직접 `r.Route("/foo", ...)` 등록 금지** — 반드시 핸들러 파일의 `mount.Register`로 자기 등록한다. 중앙 집계는 PR 충돌·가드 누락의 주된 원인이었고, D-20260512-090000에서 폐기됐다.
 
 ### 도메인별 인덱스 동기화 규칙
 - 한쪽 테넌트 한정 기능(예: `tenants: ['baro']`, `tenants: ['topsolar', 'cable']`, `topsolarOnly`/`baroOnly` 미들웨어)을 추가·삭제·이동하면 **반드시** `harness/{module,cable,baro}.md`의 해당 섹션을 같은 PR에서 갱신할 것.
