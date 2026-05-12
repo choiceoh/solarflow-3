@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
+import { motion } from "motion/react"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -262,7 +263,12 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
   const statusBadge = <StatusPill label={statusLabel} colorClassName={statusColor} />
 
   return (
-    <div className="space-y-4">
+    <motion.div
+      className="space-y-4"
+      initial={{ opacity: 0, x: 16 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
+    >
       <div className="sf-detail-header">
         <button
           type="button"
@@ -572,6 +578,6 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
       )}
 
       <LinkedMemoWidget linkedTable="orders" linkedId={orderId} />
-    </div>
+    </motion.div>
   )
 }

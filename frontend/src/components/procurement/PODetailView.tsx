@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
+import { motion } from "motion/react"
 import { ArrowLeft, CheckCircle2, FileSignature, ListPlus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -512,7 +513,12 @@ export default function PODetailView({
   }
 
   return (
-    <div className="space-y-4">
+    <motion.div
+      className="space-y-4"
+      initial={{ opacity: 0, x: 16 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
+    >
       <div className="sf-detail-header">
         <button
           type="button"
@@ -1000,6 +1006,6 @@ export default function PODetailView({
           })
         }}
       />
-    </div>
+    </motion.div>
   )
 }

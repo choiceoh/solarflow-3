@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Columns, Pin, PinOff } from "lucide-react"
+import { Columns, Pin, PinOff } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { ColumnVisibilityMeta } from "@/lib/columnVisibility"
 import type { ColumnPinningState } from "@/lib/columnPinning"
-import { useColumnReorderMode } from "@/lib/columnReorderMode"
 
 export interface ColumnVisibilityMenuProps {
   columns: ColumnVisibilityMeta[]
@@ -21,7 +20,7 @@ export interface ColumnVisibilityMenuProps {
   pinLeft?: (columnId: string) => void
   pinRight?: (columnId: string) => void
   unpin?: (columnId: string) => void
-  /** MetaTable 의 tableId — 지정 시 "컬럼 순서 변경" 토글 노출. */
+  /** MetaTable 의 tableId — 호환용 필드. 현재 메뉴 동작에는 영향 없음(헤더 드래그/우클릭으로 순서·고정 처리). */
   tableId?: string
 }
 
@@ -33,12 +32,10 @@ export function ColumnVisibilityMenu({
   pinLeft,
   pinRight,
   unpin,
-  tableId,
 }: ColumnVisibilityMenuProps) {
   const hideable = columns.filter((c) => c.hideable)
   const pinningEnabled = !!(pinning && pinLeft && pinRight && unpin)
-  const reorderMode = useColumnReorderMode(tableId ?? "")
-  if (hideable.length === 0 && !pinningEnabled && !tableId) return null
+  if (hideable.length === 0 && !pinningEnabled) return null
 
   const isPinnedLeft = (key: string) => pinning?.left.includes(key) ?? false
   const isPinnedRight = (key: string) => pinning?.right.includes(key) ?? false
@@ -50,19 +47,6 @@ export function ColumnVisibilityMenu({
         <span>컬럼</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
-        {tableId && (
-          <>
-            <DropdownMenuCheckboxItem
-              checked={reorderMode.enabled}
-              onCheckedChange={(checked) => reorderMode.setEnabled(!!checked)}
-              onSelect={(e) => e.preventDefault()}
-            >
-              <ArrowLeftRight className="mr-2 h-3 w-3" />
-              컬럼 순서 변경
-            </DropdownMenuCheckboxItem>
-            {(hideable.length > 0 || pinningEnabled) && <DropdownMenuSeparator />}
-          </>
-        )}
         {hideable.length > 0 && (
           <>
             <DropdownMenuLabel>컬럼 표시</DropdownMenuLabel>
