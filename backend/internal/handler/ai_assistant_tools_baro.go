@@ -233,8 +233,7 @@ func toolBaroIncoming() assistantTool {
 			limit := clampLimit(args.Limit, 30, 100)
 			// sanitized 컬럼만 select — 금액·환율·원가는 의도적으로 빠져 있음.
 			q := db.From("bl_shipments").
-				Select("bl_id,bl_number,company_id,manufacturer_id,inbound_type,etd,eta,actual_arrival,port,warehouse_id,status", "exact", false).
-				Eq("is_sandbox", "false")
+				Select("bl_id,bl_number,company_id,manufacturer_id,inbound_type,etd,eta,actual_arrival,port,warehouse_id,status", "exact", false)
 			if status := strings.TrimSpace(args.Status); status != "" {
 				q = q.Eq("status", status)
 			} else {

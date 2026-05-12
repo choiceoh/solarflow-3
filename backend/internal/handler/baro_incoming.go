@@ -66,9 +66,6 @@ func (h *BaroIncomingHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("bl_shipments").
 		Select("bl_id, bl_number, company_id, manufacturer_id, inbound_type, etd, eta, actual_arrival, port, warehouse_id, status", "exact", false)
 
-	if r.URL.Query().Get("include_sandbox") != "true" {
-		query = query.Eq("is_sandbox", "false")
-	}
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
 	} else if r.URL.Query().Get("scope") != "all" {
