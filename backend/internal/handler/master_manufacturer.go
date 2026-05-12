@@ -10,7 +10,9 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -23,6 +25,30 @@ type ManufacturerHandler struct {
 // NewManufacturerHandler — ManufacturerHandler 생성자
 func NewManufacturerHandler(db *supa.Client) *ManufacturerHandler {
 	return &ManufacturerHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDMasterManufacturer,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewManufacturerHandler(d.DB)
+			g := d.Gates
+			r.Route("/manufacturers", func(r chi.Router) {
+				r.Get("/", h.List)
+				// /{id} 보다 먼저 — chi 가 usage-counts 를 ID로 잡지 않도록 정적 경로 우선
+				r.Get("/usage-counts", h.UsageCounts)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				// 메타 GUI inline 편집 진입점 — UpdateManufacturerRequest 의 모든 필드가 optional.
+				r.With(g.Write).Patch("/{id}", h.Update)
+				r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/manufacturers — 제조사 목록 조회
@@ -175,7 +201,9 @@ func (h *ManufacturerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "제조사 삭제에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "deleted"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "deleted"})
 }
 
 // ToggleStatus — PATCH /api/v1/manufacturers/{id}/status — 제조사 활성/비활성
@@ -197,7 +225,9 @@ func (h *ManufacturerHandler) ToggleStatus(w http.ResponseWriter, r *http.Reques
 		response.RespondError(w, http.StatusInternalServerError, "제조사 상태 변경에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "ok"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "ok"})
 }
 
 // UsageCounts — GET /api/v1/manufacturers/usage-counts — 제조사별 참조 건수 집계

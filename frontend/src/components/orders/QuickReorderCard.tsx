@@ -90,7 +90,7 @@ export default function QuickReorderCard({ partnerId, partnerName, onCloned }: P
             <li key={o.order_id} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <span className="text-xs text-muted-foreground tabular-nums">{o.order_date}</span>
-                <span className="truncate">
+                <span className="truncate text-[13px]">
                   {o.product_code ?? o.product_id.slice(0, 8)}
                   {o.product_name ? ` · ${o.product_name}` : ''}
                 </span>

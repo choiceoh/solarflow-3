@@ -7,10 +7,13 @@ import (
 	"sort"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -37,12 +40,28 @@ func NewBaroCallbackRecommendHandler(db *supa.Client) *BaroCallbackRecommendHand
 	return &BaroCallbackRecommendHandler{DB: db}
 }
 
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroCallbackRecommend,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroCallbackRecommendHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/callback-recommend", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroCallbackRecommend))
+				r.Get("/", h.Get)
+			})
+		},
+	})
+}
+
 // CallbackRecommendResponse — /baro/callback-recommend 응답.
 type CallbackRecommendResponse struct {
-	IncomingCount  int                          `json:"incoming_count"`
-	IncomingSKUs   []CallbackIncomingSKU        `json:"incoming_skus"`
-	ByOwner        []CallbackOwnerGroup         `json:"by_owner"`
-	TotalCustomers int                          `json:"total_customers"`
+	IncomingCount  int                   `json:"incoming_count"`
+	IncomingSKUs   []CallbackIncomingSKU `json:"incoming_skus"`
+	ByOwner        []CallbackOwnerGroup  `json:"by_owner"`
+	TotalCustomers int                   `json:"total_customers"`
 }
 
 type CallbackIncomingSKU struct {
@@ -53,7 +72,7 @@ type CallbackIncomingSKU struct {
 }
 
 type CallbackOwnerGroup struct {
-	OwnerUserID *string                    `json:"owner_user_id"`
+	OwnerUserID *string                     `json:"owner_user_id"`
 	Customers   []CallbackCustomerCandidate `json:"customers"`
 }
 

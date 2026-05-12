@@ -9,7 +9,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -21,6 +24,24 @@ type ModuleDemandForecastHandler struct {
 
 func NewModuleDemandForecastHandler(db *supa.Client) *ModuleDemandForecastHandler {
 	return &ModuleDemandForecastHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxModuleDemandForecast,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewModuleDemandForecastHandler(d.DB)
+			g := d.Gates
+			r.Route("/module-demand-forecasts", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/module-demand-forecasts
@@ -40,7 +61,7 @@ func (h *ModuleDemandForecastHandler) List(w http.ResponseWriter, r *http.Reques
 		q = q.Lte("demand_month", to)
 	}
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := q.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[모듈 수요 forecast 목록 실패] %v", err)
@@ -82,7 +103,9 @@ func (h *ModuleDemandForecastHandler) Create(w http.ResponseWriter, r *http.Requ
 
 	var created []model.ModuleDemandForecast
 	if err := json.Unmarshal(data, &created); err != nil || len(created) == 0 {
-		response.RespondJSON(w, http.StatusCreated, struct{ Status string `json:"status"` }{Status: "created"})
+		response.RespondJSON(w, http.StatusCreated, struct {
+			Status string `json:"status"`
+		}{Status: "created"})
 		return
 	}
 	response.RespondJSON(w, http.StatusCreated, created[0])
@@ -134,5 +157,7 @@ func (h *ModuleDemandForecastHandler) Delete(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "deleted"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "deleted"})
 }

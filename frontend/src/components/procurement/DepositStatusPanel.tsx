@@ -117,15 +117,23 @@ function TTRow({ idx, tt }: { idx: number; tt: TTRemittance }) {
 /* ─────────────────────────────────────────────
    Props
    ───────────────────────────────────────────── */
+export interface DepositCreateTrigger {
+  po_id: string
+  amount_usd: number
+  purpose: string
+}
+
 export interface DepositStatusPanelProps {
   pos: PurchaseOrder[] // 전체 PO 목록 (completed 포함)
   tts: TTRemittance[] // 전체 T/T 목록
+  /** 행의 "잔여 등록" 버튼 클릭 — 부모가 TTCreateDialog 를 prefill 로 띄운다. */
+  onCreateTT?: (initial: DepositCreateTrigger) => void
 }
 
 /* ─────────────────────────────────────────────
    메인 컴포넌트
    ───────────────────────────────────────────── */
-export default function DepositStatusPanel({ pos, tts }: DepositStatusPanelProps) {
+export default function DepositStatusPanel({ pos, tts, onCreateTT }: DepositStatusPanelProps) {
   const companies = useAppStore((s) => s.companies)
   const companyMap = Object.fromEntries(companies.map((c) => [c.company_id, c.company_name]))
 
@@ -377,12 +385,28 @@ export default function DepositStatusPanel({ pos, tts }: DepositStatusPanelProps
                       )}
                     </td>
 
-                    <td className="p-3 text-center align-top">
-                      {isDone && (
+                    <td className="p-3 text-center align-top" onClick={(e) => e.stopPropagation()}>
+                      {isDone ? (
                         <span className="text-[10px] bg-green-50 text-green-700 rounded px-1.5 py-0.5">
                           납부완료
                         </span>
-                      )}
+                      ) : onCreateTT && remainUsd > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextInstallment = doneTTs.length + plannedTTs.length + 1
+                            onCreateTT({
+                              po_id: po.po_id,
+                              amount_usd: Math.round(remainUsd * 100) / 100,
+                              purpose: `계약금 ${nextInstallment}차`,
+                            })
+                          }}
+                          className="rounded border border-[var(--line)] bg-background px-2 py-0.5 text-[10px] font-medium hover:border-[var(--ink-3)] hover:bg-muted"
+                          title="잔여 송금 등록"
+                        >
+                          잔여 등록
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
 

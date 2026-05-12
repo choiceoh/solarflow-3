@@ -11,8 +11,10 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -24,6 +26,39 @@ type IntercompanyRequestHandler struct {
 
 func NewIntercompanyRequestHandler(db *supa.Client) *IntercompanyRequestHandler {
 	return &IntercompanyRequestHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// 같은 핸들러가 BARO 측 + module 측 두 feature 액션을 같은 /intercompany-requests prefix
+// 아래에 등록한다. chi 는 같은 prefix 에 대한 r.Route 두 번 호출을 panic 처리하므로
+// Spec 을 2개로 분리하되 각 Spec 은 직접 full path 로 등록한다 (Route 블록 미사용).
+// catalog.Paths 가 두 feature 모두 자기 라우트를 적고 있어 coverage_test 가 양쪽을 검증한다.
+func init() {
+	// BARO 측 액션 — IDIntercompanyRequestBaro
+	mount.Register(mount.Spec{
+		ID:   feature.IDIntercompanyRequestBaro,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewIntercompanyRequestHandler(d.DB)
+			g := d.Gates
+			r.With(g.Feature(feature.IDIntercompanyRequestBaro)).Get("/intercompany-requests/mine", h.Mine)
+			r.With(g.Feature(feature.IDIntercompanyRequestBaro), g.Write).Post("/intercompany-requests/", h.Create)
+			r.With(g.Feature(feature.IDIntercompanyRequestBaro), g.Write).Patch("/intercompany-requests/{id}/cancel", h.Cancel)
+			r.With(g.Feature(feature.IDIntercompanyRequestBaro), g.Write).Patch("/intercompany-requests/{id}/receive", h.Receive)
+		},
+	})
+	// module 측 액션 — IDIntercompanyRequestInbox
+	mount.Register(mount.Spec{
+		ID:   feature.IDIntercompanyRequestInbox,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewIntercompanyRequestHandler(d.DB)
+			g := d.Gates
+			r.With(g.Feature(feature.IDIntercompanyRequestInbox)).Get("/intercompany-requests/inbox", h.Inbox)
+			r.With(g.Feature(feature.IDIntercompanyRequestInbox), g.Write).Patch("/intercompany-requests/{id}/reject", h.Reject)
+			r.With(g.Feature(feature.IDIntercompanyRequestInbox), g.Write).Patch("/intercompany-requests/{id}/fulfill", h.Fulfill)
+		},
+	})
 }
 
 // Mine — GET /api/v1/intercompany-requests/mine — BARO 사용자: 내 요청 목록

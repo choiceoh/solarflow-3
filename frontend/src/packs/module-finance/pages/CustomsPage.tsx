@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { useAppStore } from "@/stores/appStore"
 import { useDeclarationList, useExpenseList, useExpenseSummary } from "@/hooks/useCustoms"
@@ -18,6 +17,11 @@ import { ColumnVisibilityMenu } from "@/components/common/ColumnVisibilityMenu"
 import { useColumnVisibility } from "@/lib/columnVisibility"
 import { useColumnPinning } from "@/lib/columnPinning"
 import ExchangeComparePanel from "@/components/customs/ExchangeComparePanel"
+import DeclarationCreateDialog from "@/components/customs/DeclarationCreateDialog"
+import ExpenseCreateDialog from "@/components/customs/ExpenseCreateDialog"
+import DeclarationCostManager from "@/components/customs/DeclarationCostManager"
+import { Button } from "@/components/ui/button"
+import type { Declaration } from "@/types/customs"
 import { EXPENSE_TYPE_LABEL, type ExpenseType } from "@/types/customs"
 import type { BLShipment } from "@/types/inbound"
 import ExcelToolbar from "@/components/excel/ExcelToolbar"
@@ -41,7 +45,6 @@ function fmtEok(value: number) {
 
 export default function CustomsPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
-  const navigate = useNavigate()
 
   // 탭 1: 면장, 탭 2: 부대비용
   const [declBlFilter, setDeclBlFilter] = useState("")
@@ -53,6 +56,12 @@ export default function CustomsPage() {
   // 마스터
   const [bls, setBls] = useState<BLShipment[]>([])
 
+  // 단건 등록 다이얼로그 (PR #357 reversal)
+  const [declCreateOpen, setDeclCreateOpen] = useState(false)
+  const [expCreateOpen, setExpCreateOpen] = useState(false)
+  const [costManagerOpen, setCostManagerOpen] = useState(false)
+  const [costManagerDecl, setCostManagerDecl] = useState<Declaration | null>(null)
+
   const expFilters: { bl_id?: string; expense_type?: string; start?: string; end?: string } = {}
   if (expBlFilter) expFilters.bl_id = expBlFilter
   if (expTypeFilter) expFilters.expense_type = expTypeFilter
@@ -63,8 +72,9 @@ export default function CustomsPage() {
   const declFilters: { bl_id?: string } = {}
   if (declBlFilter) declFilters.bl_id = declBlFilter
 
-  const { data: declarations, loading: declLoading } = useDeclarationList(declFilters)
-  const { data: expenses, loading: expLoading } = useExpenseList(expFilters)
+  const { data: declarations, loading: declLoading, reload: reloadDeclarations } =
+    useDeclarationList(declFilters)
+  const { data: expenses, loading: expLoading, reload: reloadExpenses } = useExpenseList(expFilters)
   const { data: expenseSummary } = useExpenseSummary(expFilters)
   const { data: blSummary } = useBLSummary()
   const declColVis = useColumnVisibility(DECLARATION_TABLE_ID, DECLARATION_COLUMN_META)
@@ -163,6 +173,19 @@ export default function CustomsPage() {
             unpin={declColPin.unpin}
           />
           <ExcelToolbar type="declaration" />
+          <Button size="xs" onClick={() => setDeclCreateOpen(true)}>
+            면장 신규 등록
+          </Button>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => {
+              setCostManagerDecl(null)
+              setCostManagerOpen(true)
+            }}
+          >
+            원가 관리
+          </Button>
         </>
       ) : activeTab === "expenses" ? (
         <>
@@ -201,6 +224,9 @@ export default function CustomsPage() {
             unpin={expenseColPin.unpin}
           />
           <ExcelToolbar type="expense" />
+          <Button size="xs" onClick={() => setExpCreateOpen(true)}>
+            부대비용 신규 등록
+          </Button>
         </>
       ) : null}
       <div style={{ flex: 1 }} />
@@ -354,7 +380,10 @@ export default function CustomsPage() {
                       hidden={declColVis.hidden}
                       pinning={declColPin.pinning}
                       onPinningChange={declColPin.setPinning}
-                      onSelect={(decl) => navigate(`/procurement?tab=bl&bl_id=${decl.bl_id}`)}
+                      onSelect={(decl) => {
+                        setCostManagerDecl(decl)
+                        setCostManagerOpen(true)
+                      }}
                     />
                   )}
                 </TabsContent>
@@ -427,6 +456,32 @@ export default function CustomsPage() {
           </RailBlock>
         </aside>
       </div>
+
+      <DeclarationCreateDialog
+        open={declCreateOpen}
+        onClose={() => setDeclCreateOpen(false)}
+        presetBLId={declBlFilter || undefined}
+        onCreated={() => {
+          reloadDeclarations()
+        }}
+      />
+      <ExpenseCreateDialog
+        open={expCreateOpen}
+        onClose={() => setExpCreateOpen(false)}
+        presetBLId={expBlFilter || undefined}
+        onCreated={() => {
+          reloadExpenses()
+        }}
+      />
+      <DeclarationCostManager
+        open={costManagerOpen}
+        onClose={() => {
+          setCostManagerOpen(false)
+          setCostManagerDecl(null)
+        }}
+        initialDeclaration={costManagerDecl}
+        declarations={declarations}
+      />
     </>
   )
 }

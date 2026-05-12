@@ -9,11 +9,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/domains/bl"
+	"solarflow-backend/internal/domains/lc"
+	"solarflow-backend/internal/domains/po"
 	"solarflow-backend/internal/engine"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -26,14 +33,6 @@ var allowedInboundTypes = map[string]bool{
 var allowedUsageCategories = map[string]bool{
 	"sale": true, "sale_spare": true, "construction": true, "construction_damage": true,
 	"maintenance": true, "disposal": true, "transfer": true, "adjustment": true, "other": true,
-}
-
-var allowedItemTypes = map[string]bool{
-	"main": true, "spare": true,
-}
-
-var allowedPaymentTypes = map[string]bool{
-	"paid": true, "free": true,
 }
 
 var allowedExpenseTypes = map[string]bool{
@@ -97,6 +96,32 @@ func NewImportHandler(db *supa.Client, engineClient ...*engine.EngineClient) *Im
 		ec = engineClient[0]
 	}
 	return &ImportHandler{DB: db, Engine: ec}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// 엑셀 일괄 등록 10종 — 모두 write 게이트. IDIOImport catalog 등재.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDIOImport,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewImportHandler(d.DB, d.Engine)
+			g := d.Gates
+			r.Route("/import", func(r chi.Router) {
+				r.Use(g.Write)
+				r.Post("/inbound", h.Inbound)
+				r.Post("/outbound", h.Outbound)
+				r.Post("/sales", h.Sales)
+				r.Post("/declarations", h.Declarations)
+				r.Post("/expenses", h.Expenses)
+				r.Post("/orders", h.Orders)
+				r.Post("/receipts", h.Receipts)
+				r.Post("/purchase-orders", h.PurchaseOrders)
+				r.Post("/lcs", h.LCs)
+				r.Post("/tts", h.TTs)
+			})
+		},
+	})
 }
 
 // --- 공통 헬퍼 ---
@@ -423,7 +448,7 @@ func (h *ImportHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// bl_shipments INSERT
-		blReq := model.CreateBLRequest{
+		blReq := bl.CreateBLRequest{
 			BLNumber:       blNum,
 			CompanyID:      companyID,
 			ManufacturerID: mfgID,
@@ -455,7 +480,7 @@ func (h *ImportHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		var createdBLs []model.BLShipment
+		var createdBLs []bl.BLShipment
 		if err := json.Unmarshal(blData, &createdBLs); err != nil || len(createdBLs) == 0 {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "bl_shipments", Message: "B/L 등록 결과 확인 실패"})
 			continue
@@ -483,7 +508,7 @@ func (h *ImportHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 			}
 			capacityKW := float64(qty) * wattageKW
 
-			lineReq := model.CreateBLLineRequest{
+			lineReq := bl.CreateBLLineRequest{
 				BLID:             blID,
 				ProductID:        productID,
 				Quantity:         qty,
@@ -644,7 +669,7 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "outbound", Message: errMsg})
 			continue
 		}
-		writeAuditLog(h.DB, r, "outbounds", createdOutbound.OutboundID, "create", nil, auditRawFromValue(createdOutbound), "excel_import")
+		audit.WriteLog(h.DB, r, "outbounds", createdOutbound.OutboundID, "create", nil, audit.RawFromValue(createdOutbound), "excel_import")
 		// D-057: 매출 자동 등록 후속 처리를 위해 등록된 outbound_id 수집.
 		importedIDs = append(importedIDs, createdOutbound.OutboundID)
 
@@ -770,7 +795,7 @@ func (h *ImportHandler) Sales(w http.ResponseWriter, r *http.Request) {
 		}
 		var createdSales []model.Sale
 		if json.Unmarshal(saleData, &createdSales) == nil && len(createdSales) > 0 {
-			writeAuditLog(h.DB, r, "sales", createdSales[0].SaleID, "create", nil, auditRawFromValue(createdSales[0]), "excel_import")
+			audit.WriteLog(h.DB, r, "sales", createdSales[0].SaleID, "create", nil, audit.RawFromValue(createdSales[0]), "excel_import")
 		}
 
 		imported++
@@ -1144,7 +1169,7 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 		}
 
 		poNumPtr := poNum
-		poReq := model.CreatePurchaseOrderRequest{
+		poReq := po.CreatePurchaseOrderRequest{
 			PONumber:            &poNumPtr,
 			CompanyID:           companyID,
 			ManufacturerID:      mfgID,
@@ -1164,7 +1189,7 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 		}
 
 		lineOK := true
-		lineReqs := make([]model.CreatePOLineRequest, 0, len(grp.LineRows))
+		lineReqs := make([]po.CreatePOLineRequest, 0, len(grp.LineRows))
 		for j, lineRow := range grp.LineRows {
 			lineRowNum := grp.LineIdxes[j]
 
@@ -1183,7 +1208,7 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			if nestedMsg := validateNestedPOLines([]model.CreatePOLineRequest{lineReq}); nestedMsg != "" {
+			if nestedMsg := po.ValidateNestedPOLines([]po.CreatePOLineRequest{lineReq}); nestedMsg != "" {
 				importErrors = append(importErrors, model.ImportError{Row: lineRowNum, Field: "po_line_items", Message: nestedMsg})
 				lineOK = false
 				continue
@@ -1195,8 +1220,8 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		createdPOData, err := dbrpc.Call(r.Context(), "sf_create_purchase_order_with_lines", model.CreatePurchaseOrderWithLinesRPCRequest{
-			PO:    model.NewPurchaseOrderInsert(poReq),
+		createdPOData, err := dbrpc.Call(r.Context(), "sf_create_purchase_order_with_lines", po.CreatePurchaseOrderWithLinesRPCRequest{
+			PO:    po.NewPurchaseOrderInsert(poReq),
 			Lines: lineReqs,
 		})
 		if err != nil {
@@ -1204,7 +1229,7 @@ func (h *ImportHandler) PurchaseOrders(w http.ResponseWriter, r *http.Request) {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "purchase_order", Message: "PO 등록 실패: " + err.Error()})
 			continue
 		}
-		var createdPO model.PurchaseOrder
+		var createdPO po.PurchaseOrder
 		if err := json.Unmarshal(createdPOData, &createdPO); err != nil || createdPO.POID == "" {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "purchase_order", Message: "PO 등록 결과 확인 실패"})
 			continue
@@ -1327,7 +1352,7 @@ func (h *ImportHandler) LCs(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		insertPayload := model.NewLCRecordInsert(lcReq)
+		insertPayload := lc.NewLCRecordInsert(lcReq)
 		_, _, err = h.DB.From("lc_records").
 			Insert(insertPayload, false, "", "", "").
 			Execute()

@@ -1,0 +1,129 @@
+# PO (Purchase Order) — 도메인 manifest 시범
+#
+# 본 파일은 AGENT-BUILDER-VISION 의 "manifest 정본" 시범 1개.
+# PR-C 부터 모든 도메인이 같은 형식의 manifest 를 갖는다.
+# scripts/codemod/build-hook-index.ts (PR-A) 가 본 YAML 들을 .claude/hooks/domains.json 으로 컴파일.
+#
+# 형식 명세: harness/domains/README.md
+
+schema_version: 1
+
+id: po
+display_name: "발주 (Purchase Order)"
+
+# === Pack / Feature / Tenant 배선 ===
+pack: module-finance
+feature_id: tx.po           # backend/internal/feature/catalog.go 의 IDTxPO
+visible_to: module          # registry.yaml 의 group, 또는 [tenant_id, ...]
+
+# === 코드 위치 ===
+# PR-B 완료 — backend 는 colocation. frontend 는 ProcurementPage 통합 페이지라 PR-B 범위 외 (PR-D 또는 별 PR).
+paths:
+  backend:
+    - backend/internal/domains/po/   # colocation 완료 (PR-B). model.go + handler.go + dashboard.go + util.go + audit.go + rpc.go + test
+  frontend:
+    - frontend/src/packs/module-finance/pages/ProcurementPage.tsx   # 통합 wrapper (PR-D2: 컴포넌트만 분리, page 자체는 유지)
+    - frontend/src/domains/po/   # PR-B 범위 외 — PO/LC/BL 통합 페이지
+  migrations:
+    # purchase_orders + po_line_items 관련 마이그
+    - backend/migrations/008_po_widen_columns.sql
+    - backend/migrations/010_po_contract_type_frame.sql
+    - backend/migrations/014_po_parent_po_id.sql
+    - backend/migrations/016_po_line_item_type.sql
+    - backend/migrations/024_po_ext_first_spec_wp.sql
+  tests:
+    - backend/internal/domains/po/handler_test.go
+
+# === DB ===
+tables:
+  - purchase_orders
+  - po_line_items
+views:
+  - purchase_orders_ext     # poSortable 의 정렬 허용 컬럼 정본
+
+# === 의존 도메인 ===
+# Cross-domain import / 참조 명시. blast_radius 자동 계산 입력 (PR-A 의 codemod).
+depends_on:
+  - products      # PO 라인이 product_id 참조
+  - inventory     # PO 입고 시 inventory_allocations 영향
+  - lc            # PODetail 의 LCRecords 임베드
+  - tt            # PODetail 의 TTRemittances 임베드
+
+# === Blast Radius — "이 도메인 건드릴 때 같이 봐야 할 곳" ===
+# 형식: description 1줄 + must_check 리스트.
+# 에이전트가 변경 직전 (pre-edit hook) 에 system 컨텍스트로 받음.
+blast_radius:
+  - description: "PO model 필드 추가/삭제"
+    must_check:
+      - "backend/internal/domains/po/handler.go (Validation 흐름)"
+      - "frontend/src/domains/po/ (form 타입)"
+      - "backend/migrations/ (마이그 필수)"
+      - "PostgREST 스키마 캐시 갱신 (CLAUDE.md '필수 절차' 4단계)"
+
+  - description: "po_line_items 컬럼 추가/삭제"
+    must_check:
+      - "backend/scripts/check_schema.sh 통과"
+      - "scripts/backfill_order_prices.py (라인 가격 backfill 영향)"
+      - "scripts/verify_residual_4.py (잔여수량 정합성)"
+
+  - description: "PO 라우트 추가 (path/method 새로 등장)"
+    must_check:
+      - "backend/internal/feature/catalog.go 의 IDTxPO entry Paths 갱신 필수"
+      - "matrix_consistency_test 가 누락 잡음"
+      - "harness/FEATURE-WIRING-MATRIX.md 표 동시 갱신"
+
+  - description: "contract_type 허용 값 변경"
+    must_check:
+      - "backend/internal/domains/po/model.go 의 validContractTypes 맵"
+      - "frontend ProcurementPage 검색 필터의 select option"
+
+  - description: "PO 상태 (status) 전이 규칙 변경"
+    must_check:
+      - "backend/internal/domains/po/handler.go 의 status update endpoint (PUT /:id/status)"
+      - "프론트 status badge 색상 매핑 (Tremor 컴포넌트)"
+
+  - description: "PO 외부에서 PO type 사용 (예: io_import)"
+    must_check:
+      - "import \"solarflow-backend/internal/domains/po\" 추가 + po.PurchaseOrder 식 prefix 사용"
+      - "PO 가 cross-domain 의존: lc/tt (PODetail 임베드) 와 products (POLine.Products)"
+
+# === 자동 실행 검증 ===
+# PostToolUse hook 이 권장 (v1) / 실행 (v2).
+# when: always | model_or_migration_changed | handler_changed | frontend_changed | route_changed
+verify_scripts:
+  - command: scripts/verify_changed.sh
+    when: always
+  - command: backend/scripts/check_schema.sh
+    when: model_or_migration_changed
+  - command: "cd backend && go test ./internal/handler -run TestPO"
+    when: handler_changed
+  - command: "cd backend && go test ./internal/feature ./internal/router"
+    when: route_changed
+
+# === API 라우트 ===
+# feature catalog 의 IDTxPO entry Paths 와 동기화 필수.
+# matrix_consistency_test 가 chi 트리 ↔ 본 목록 일치를 검증 (PR-A 부터 본 manifest 도 검증 대상).
+api_routes:
+  - GET    /api/v1/purchase-orders
+  - POST   /api/v1/purchase-orders
+  - PUT    /api/v1/purchase-orders/:id
+  - DELETE /api/v1/purchase-orders/:id
+  - GET    /api/v1/purchase-orders/:id
+  - GET    /api/v1/purchase-orders/:id/lines
+  - POST   /api/v1/purchase-orders/:id/lines
+  - PUT    /api/v1/po-lines/:id
+  - DELETE /api/v1/po-lines/:id
+
+# === Backfill / Maintenance 스크립트 ===
+maintenance_scripts:
+  - script: scripts/backfill_order_prices.py
+    purpose: "PO 라인 단가 backfill (D-087 currency 자동채움 후속)"
+  - script: scripts/verify_residual_4.py
+    purpose: "PO 라인 잔여수량 정합성 검증"
+
+# === Owners / 의사결정 기록 ===
+owners: [choiceoh]
+decisions:
+  - D-061   # PO 입고현황 = 프론트 소규모 합산
+  - D-086   # contract_type spot/frame 2종 단순화
+  - D-087   # currency 자동채움

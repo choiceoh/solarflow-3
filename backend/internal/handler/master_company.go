@@ -9,7 +9,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -24,10 +27,32 @@ func NewCompanyHandler(db *supa.Client) *CompanyHandler {
 	return &CompanyHandler{DB: db}
 }
 
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDMasterCompany,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewCompanyHandler(d.DB)
+			g := d.Gates
+			r.Route("/companies", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				// 메타 GUI inline 편집 진입점 — UpdateCompanyRequest 가 pointer + omitempty
+				r.With(g.Write).Patch("/{id}", h.Update)
+				r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
+}
+
 // List — GET /api/v1/companies — 법인 목록 조회
 // 비유: 법인 관리실에서 전체 명함첩을 꺼내 보여주는 것
 func (h *CompanyHandler) List(w http.ResponseWriter, r *http.Request) {
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := h.DB.From("companies").
 		Select("*", "exact", false).
 		Range(offset, offset+limit-1, "").
@@ -175,7 +200,9 @@ func (h *CompanyHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "법인 삭제에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "deleted"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "deleted"})
 }
 
 // ToggleStatus — PATCH /api/v1/companies/{id}/status — 법인 활성/비활성 토글

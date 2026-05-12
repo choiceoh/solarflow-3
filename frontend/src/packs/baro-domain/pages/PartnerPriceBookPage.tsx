@@ -9,12 +9,14 @@ import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { PartnerCombobox } from '@/components/common/PartnerCombobox';
+import { ProductCombobox } from '@/components/common/ProductCombobox';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import DataTable, { type Column } from '@/components/common/DataTable';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { fetchWithAuth } from '@/lib/api';
 import type { PartnerPrice } from '@/types/baro';
 import type { Partner, Product, Manufacturer } from '@/types/masters';
+import type { ProductAlias } from '@/types/aliases';
 
 // react-hook-form + zod
 const priceSchema = z.object({
@@ -36,6 +38,9 @@ export default function PartnerPriceBookPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  // canonical product_id → 별명 코드 목록. ProductCombobox 검색 인덱스에 합쳐
+  // 거래처 표기/오타로도 정식 품번을 찾게 한다.
+  const [aliasMap, setAliasMap] = useState<Map<string, string[]>>(() => new Map());
   const [filterPartnerId, setFilterPartnerId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -65,18 +70,26 @@ export default function PartnerPriceBookPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [pr, partnerList, productList, manufacturerList] = await Promise.all([
+      const [pr, partnerList, productList, manufacturerList, aliasList] = await Promise.all([
         fetchWithAuth<PartnerPrice[]>(
           `/api/v1/partner-prices${filterPartnerId ? `?partner_id=${filterPartnerId}` : ''}`,
         ),
         fetchWithAuth<Partner[]>('/api/v1/partners'),
         fetchWithAuth<Product[]>('/api/v1/products'),
         fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers'),
+        fetchWithAuth<ProductAlias[]>('/api/v1/product-aliases').catch(() => [] as ProductAlias[]),
       ]);
       setPrices(pr);
       setPartners(partnerList);
       setProducts(productList);
       setManufacturers(manufacturerList);
+      const am = new Map<string, string[]>();
+      for (const a of aliasList) {
+        const list = am.get(a.canonical_product_id);
+        if (list) list.push(a.alias_code);
+        else am.set(a.canonical_product_id, [a.alias_code]);
+      }
+      setAliasMap(am);
     } catch (e) {
       console.error('[거래처 단가표 로드 실패]', e);
     } finally {
@@ -128,7 +141,7 @@ export default function PartnerPriceBookPage() {
         const info = productInfoById.get(row.product_id);
         return info ? (
           <span className="flex flex-col">
-            <span className="font-medium">{info.code}</span>
+            <span className="font-medium text-[13px]">{info.code}</span>
             <span className="text-xs text-muted-foreground truncate">{info.mfg} · {info.name}</span>
           </span>
         ) : <span>{row.product_id.slice(0, 8)}</span>;
@@ -277,28 +290,14 @@ export default function PartnerPriceBookPage() {
             </div>
             <div>
               <Label className="text-xs">품번</Label>
-              <Select
+              <ProductCombobox
+                products={products.filter((p) => p.is_active)}
                 value={watchedProductId}
-                onValueChange={(v) => setValue('product_id', (v as string | null) ?? '', { shouldValidate: true, shouldDirty: true })}
-              >
-                <SelectTrigger className="h-9 w-full text-sm" aria-invalid={!!errors.product_id}>
-                  <span className="flex-1 text-left truncate">
-                    {watchedProductId
-                      ? (productInfoById.get(watchedProductId)?.code ?? '선택')
-                      : '품번 선택'}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {products.filter((p) => p.is_active).map((p) => {
-                    const info = productInfoById.get(p.product_id);
-                    return (
-                      <SelectItem key={p.product_id} value={p.product_id}>
-                        {info ? `${info.code} (${info.mfg})` : p.product_code}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setValue('product_id', v, { shouldValidate: true, shouldDirty: true })}
+                aliases={aliasMap}
+                error={!!errors.product_id}
+                placeholder="품번 선택"
+              />
               {errors.product_id && <p className="text-xs text-destructive">{errors.product_id.message}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">

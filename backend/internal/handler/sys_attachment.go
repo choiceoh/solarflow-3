@@ -21,8 +21,10 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -79,6 +81,35 @@ type AttachmentHandler struct {
 
 func NewAttachmentHandler(db *supa.Client) *AttachmentHandler {
 	return &AttachmentHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// 두 Spec 으로 분할:
+//  1. AuthRoot:   /api/v1/attachments/{id}/file — 짧은 만료 토큰 PDF 열람 (무인증, 토큰 가드)
+//  2. AuthAuthed: /attachments/* — 일반 CRUD
+func init() {
+	mount.Register(mount.Spec{
+		Auth: mount.AuthRoot,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewAttachmentHandler(d.DB)
+			r.Get("/api/v1/attachments/{id}/file", h.ServeSigned)
+		},
+	})
+	mount.Register(mount.Spec{
+		ID:   feature.IDSysAttachment,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewAttachmentHandler(d.DB)
+			g := d.Gates
+			r.Route("/attachments", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.Get("/{id}/access", h.Access)
+				r.Get("/{id}/download", h.Download)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 type attachmentAccessResponse struct {

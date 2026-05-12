@@ -13,7 +13,10 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -43,6 +46,43 @@ type OrderHandler struct {
 // NewOrderHandler — OrderHandler 생성자
 func NewOrderHandler(db *supa.Client) *OrderHandler {
 	return &OrderHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// 같은 핸들러가 /orders + /baro/orders 두 prefix 를 갖는다. /baro/orders 의 IDBaroOrders
+// 게이트는 별도 Spec 으로 분리해 feature 단위 등록을 유지한다 (BARO 빠른 재발주).
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxOrder,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewOrderHandler(d.DB)
+			g := d.Gates
+			r.Route("/orders", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.Get("/summary", h.Summary)
+				// 대시보드 집계 — KPI / trend24 / unit_price ma15 / breakdown. 정적 경로라 /{id} 보다 먼저.
+				r.Get("/dashboard", h.Dashboard)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroOrders,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewOrderHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/orders", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroOrders))
+				r.Get("/recent", h.RecentByPartner)
+				r.With(g.Write).Post("/{id}/clone", h.Clone)
+			})
+		},
+	})
 }
 
 // idsByName — partners/products 이름 ilike 매칭으로 id 후보 끌어와 주문 q 검색에 사용.
@@ -221,7 +261,7 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 	sortCol, asc := parseOrderSort(r)
 	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
-	limit, offset := parseLimitOffset(r, orderDefaultLimit, orderMaxLimit)
+	limit, offset := handlerutil.ParseLimitOffset(r, orderDefaultLimit, orderMaxLimit)
 	query = query.Range(offset, offset+limit-1, "")
 
 	data, count, err := query.Execute()
@@ -245,11 +285,11 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // OrderSummary — 수주 KPI 카드 응답.
 type OrderSummary struct {
-	Total           int64 `json:"total"`
-	ReceivedCount   int64 `json:"received_count"`
-	PartialCount    int64 `json:"partial_count"`
-	CompletedCount  int64 `json:"completed_count"`
-	CancelledCount  int64 `json:"cancelled_count"`
+	Total          int64 `json:"total"`
+	ReceivedCount  int64 `json:"received_count"`
+	PartialCount   int64 `json:"partial_count"`
+	CompletedCount int64 `json:"completed_count"`
+	CancelledCount int64 `json:"cancelled_count"`
 }
 
 // Summary — GET /api/v1/orders/summary — 수주 status 별 카운트 집계.

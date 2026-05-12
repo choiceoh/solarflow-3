@@ -138,6 +138,77 @@ export type PackID = 'erp-core' | 'module-finance' | 'baro-domain' | 'gx10';
 
 `tenants: ['gx10']` 인라인은 fallback 으로만 사용 (catalog 미정의 임시 페이지).
 
+### 2-4. 새 backend 핸들러 추가 (D-20260512-090000)
+
+도메인-전용 라우트가 필요하면 backend 에 새 핸들러를 추가한다. **수정 파일은 2개** — handler 파일 + catalog. (이전 4개: handler / routes.go / router.go / catalog. routes.go·router.go 는 mount 레지스트리가 흡수.)
+
+**절차**:
+
+1. **핸들러 파일 추가**: `backend/internal/handler/<prefix>_<name>.go`.
+   - prefix 컨벤션: `master_`, `tx_`, `baro_`, `sys_`, `ai_`, `io_`, `wms_`, `<tenant>_`.
+   - struct + `NewXxxHandler(...)` 생성자 + 메서드.
+2. **같은 파일에 `func init()` 추가** — mount 레지스트리에 self-register.
+
+   ```go
+   // 같은 파일 내 임의 위치 (보통 New 생성자 바로 아래).
+   func init() {
+       mount.Register(mount.Spec{
+           ID:   feature.IDGX10Some,    // catalog 에 정의된 FeatureID 상수
+           Auth: mount.AuthAuthed,       // 대부분. /api/v1/* (auth + StudyTenantFence)
+           Mount: func(d *mount.Deps, r chi.Router) {
+               h := NewGX10SomeHandler(d.DB)
+               g := d.Gates
+               r.Route("/gx10/some", func(r chi.Router) {
+                   r.Use(g.Feature(feature.IDGX10Some))
+                   r.Get("/", h.List)
+                   r.With(g.Write).Post("/", h.Create)
+               })
+           },
+       })
+   }
+   ```
+
+   **Auth 모드**:
+   - `AuthAuthed` (99%): `/api/v1/*` — auth + StudyTenantFence 적용
+   - `AuthPublicAPI`: `/api/v1/public/*` — 인증 미적용 (KPI/환율류, unrestrictedAllowlist 등재 필요)
+   - `AuthRoot`: 라우터 루트 직접 — 자체 토큰/조건부 가드 (예: 짧은 만료 PDF, 드라이버 PWA, CalcProxy)
+
+3. **`feature/catalog.go` 에 FeatureID 상수 + Catalog entry 추가**:
+   ```go
+   const IDGX10Some FeatureID = "gx10.some"
+
+   IDGX10Some: {
+       ID: IDGX10Some, Name: "GX10 무언가", Description: "...",
+       DefaultTenants: []string{string(tenant.IDGX10)},
+       DefaultScope:   DataScopeTenantOwned,
+       Paths: []string{"/api/v1/gx10/some/"},
+   },
+   ```
+
+4. **`harness/FEATURE-WIRING-MATRIX.md` 행 추가** (`TestMatrixConsistency` 가 강제).
+
+5. **검증**:
+   ```bash
+   cd backend
+   go build ./... && go vet ./...
+   go test ./internal/mount ./internal/router ./internal/feature
+   # snapshot 갱신:
+   go test ./internal/router -run TestRouteSnapshot -update
+   ```
+
+**검증되는 4-way 정합** (전부 자동 PR 차단):
+- `TestRouteSnapshot` — chi 트리 변경 감지
+- `TestFeatureCoverage` — chi 트리 ↔ Catalog.Paths
+- `TestCatalogPathsAreReal` — Catalog.Paths ↔ chi 트리
+- `TestMountSpecsHaveCatalogEntry` — mount.Spec.ID ↔ Catalog 키
+- `TestMatrixConsistency` — Catalog ↔ FEATURE-WIRING-MATRIX.md
+
+**특수 패턴 (예외)**:
+- 같은 핸들러가 두 prefix 를 가지면 (예: Order = `/orders` + `/baro/orders`) → Spec 2개 등록.
+- 자식 핸들러 (예: BLLine, POLine) → 부모 Mount 클로저가 자식 인스턴스도 생성.
+- AssistantHandler 같은 alias 의존성 → Mount 안에서 OCR/Match/Outbound 인스턴스 자체 생성. stateless 핸들러는 인스턴스 중복 무해.
+- 무가드 라우트 (auth 없는 헬스체크·드라이버 PWA·KPI) → Spec.ID 비워두고 `unrestrictedAllowlist` 에 등재.
+
 ---
 
 ## 3. Admin UI 활성화
@@ -215,6 +286,8 @@ npm run lint
 4. catalog entry 의 `FrontendOnly` 표시 누락 → `TestCatalog_PathsNonEmpty` 실패 (frontend-only 인데 Paths 비어 있음)
 5. `packs/types.ts` 의 PackID union 갱신 누락 → TS 타입 에러
 6. CORS 누락 → 운영 환경에서 401 / network error
+7. **새 핸들러 추가 시** `func init()` 의 `mount.Register` 누락 → 라우트가 마운트되지 않아 404 (D-20260512-090000 — routes.go 는 더 이상 없음)
+8. 새 핸들러 의 `Spec.ID` 가 카탈로그 키와 다르면 → `TestMountSpecsHaveCatalogEntry` 실패
 
 ---
 

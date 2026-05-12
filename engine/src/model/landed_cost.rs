@@ -59,6 +59,7 @@ pub struct LandedCostItem {
 #[derive(Debug, Deserialize)]
 pub struct ExchangeCompareRequest {
     pub company_id: Option<Uuid>,
+    pub company_ids: Option<Vec<Uuid>>,
     pub product_id: Option<Uuid>,
     pub manufacturer_id: Option<Uuid>,
 }

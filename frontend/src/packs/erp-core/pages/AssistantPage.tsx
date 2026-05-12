@@ -27,8 +27,11 @@ import {
   extractText,
   summarizeInput,
   summarizeOutput,
+  splitUserContent,
+  joinUserContent,
   type ProposalState,
   type ProposalStatus,
+  type ParsedAttachment,
 } from '@/lib/assistantMessages';
 
 interface SessionSummary {
@@ -73,12 +76,21 @@ const PROPOSAL_KIND_LABEL: Record<string, string> = {
 interface OCRLineLite {
   text: string;
 }
+interface SheetMetaLite {
+  sheet_id: string;
+  sheet_name: string;
+  row_count: number;
+  col_count: number;
+  headers: string[];
+  preview_rows?: string[][];
+}
 interface OCRResult {
   filename: string;
   raw_text?: string;
   lines?: OCRLineLite[];
   error?: string;
   fields?: { document_type?: string; customs_declaration?: Record<string, unknown> };
+  sheet?: SheetMetaLite;
 }
 interface OCRExtractResponse {
   results: OCRResult[];
@@ -114,22 +126,57 @@ function inferMimeByName(name: string): string {
 function buildOCRBlock(results: OCRResult[]): string {
   const blocks: string[] = [];
   for (const r of results) {
-    const isSheet = SPREADSHEET_EXT_RE.test(r.filename);
+    // 시트 메타가 있으면 표 블록을 메타 + 미리보기 5행으로 구성 (DB 임시 저장 방식).
+    if (r.sheet) {
+      blocks.push(formatSheetMetaBlock(r.filename, r.sheet, r.error));
+      continue;
+    }
     const isDoc = DOCUMENT_EXT_RE.test(r.filename);
-    const label = isSheet ? '[첨부파일 표]' : isDoc ? '[첨부파일 문서]' : '[첨부파일 OCR]';
+    const label = isDoc ? '[첨부파일 문서]' : '[첨부파일 OCR]';
     const head = `${label} ${r.filename}`;
     if (r.error) {
       blocks.push(`${head}\n오류: ${r.error}`);
       continue;
     }
     const text = (r.raw_text ?? '').trim();
-    let body = text || '(텍스트 추출 결과 없음)';
+    const rawBody = text || '(텍스트 추출 결과 없음)';
     if (r.fields?.customs_declaration) {
-      body += `\n\n[면장 자동 인식 후보]\n${JSON.stringify(r.fields.customs_declaration, null, 2)}`;
+      const structured = JSON.stringify(r.fields.customs_declaration, null, 2);
+      blocks.push(
+        `${head}\n[면장 자동 인식 후보 — 우선 신뢰]\n${structured}\n\n[원문 OCR — 후보에 없는 값 보완용]\n${rawBody}`,
+      );
+    } else {
+      blocks.push(`${head}\n${rawBody}`);
     }
-    blocks.push(`${head}\n${body}`);
   }
   return blocks.join('\n\n');
+}
+
+// 표 메타 블록 — LLM 한테 시트 전체가 아닌 sheet_id 와 미리보기만 보여주고,
+// 분석·집계·검색은 query_attached_sheet 도구로 풀라고 명시.
+function formatSheetMetaBlock(filename: string, s: SheetMetaLite, error?: string): string {
+  const head = `[첨부파일 표] ${filename}`;
+  if (error) return `${head}\n오류: ${error}`;
+  const lines = [
+    head,
+    `[시트: ${s.sheet_name}] sheet_id=${s.sheet_id}, 총 ${s.row_count}행 × ${s.col_count}열`,
+  ];
+  if (s.headers.length > 0) {
+    lines.push(`헤더: ${s.headers.join(' | ')}`);
+  } else {
+    lines.push('헤더: (시트에 헤더 행이 없는 듯 — 첫 행도 데이터일 수 있음)');
+  }
+  const preview = s.preview_rows ?? [];
+  if (preview.length > 0) {
+    lines.push(`미리보기 처음 ${preview.length}행:`);
+    preview.forEach((row, i) => lines.push(`${i + 1}: ${row.join(' | ')}`));
+    if (s.row_count > preview.length) {
+      lines.push(`(전체 ${s.row_count}행 중 ${preview.length}행만 표시 — 더 필요하면 query_attached_sheet 도구 호출)`);
+    }
+  } else {
+    lines.push('(데이터 행 없음)');
+  }
+  return lines.join('\n');
 }
 
 // 세션 → markdown 변환. 사용자/AI 메시지를 헤더 + 본문 형태로 직렬화.
@@ -339,7 +386,6 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
   );
   const [input, setInput] = useState(initialInput ?? '');
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [parseAsCustoms, setParseAsCustoms] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -540,7 +586,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
   const runOCR = async (files: File[]): Promise<OCRResult[]> => {
     const fd = new FormData();
     for (const f of files) fd.append('images', f);
-    if (parseAsCustoms) fd.append('document_type', 'customs_declaration');
+    // document_type 미지정 — 서버가 OCR 결과의 면장 키워드 + 신고번호 시그널로 자동 판단.
     const res = await fetchWithAuth<OCRExtractResponse>('/api/v1/assistant/ocr/extract', {
       method: 'POST',
       body: fd,
@@ -769,16 +815,6 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
                 onRemove={() => removeAttachment(i)}
               />
             ))}
-            <label className="flex cursor-pointer select-none items-center gap-1 px-2 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={parseAsCustoms}
-                onChange={(e) => setParseAsCustoms(e.target.checked)}
-                className="h-3 w-3"
-                disabled={busy}
-              />
-              면장 자동 인식
-            </label>
           </div>
         )}
 
@@ -1054,6 +1090,40 @@ interface BubbleProps {
   onRegenerate?: () => void;
 }
 
+// 메시지 거품 안의 첨부 칩 — 사용자 메시지의 [첨부파일 ...] 블록 한 개를 압축 표시.
+// 기본은 파일명 + 종류 아이콘만. 클릭하면 OCR/시트 원문이 펼쳐져 사용자가 LLM 이 받은 내용을 검증 가능.
+// 본문이 길어도 사용자 뷰를 오염시키지 않도록 펼친 영역에 최대 높이 + 스크롤 적용.
+// (입력창 측 첨부 미리보기 칩은 위쪽 `AttachmentChip` — 전송 전 File 객체를 다루므로 별개)
+function MessageAttachmentChip({ attachment }: { attachment: ParsedAttachment }) {
+  const [open, setOpen] = useState(false);
+  const kindLabel =
+    attachment.kind === '표' ? '표' : attachment.kind === '문서' ? '문서' : 'OCR';
+  const icon = attachment.kind === '표' ? <FileText className="h-3 w-3" aria-hidden /> : <Paperclip className="h-3 w-3" aria-hidden />;
+  return (
+    <div className="flex max-w-full flex-col items-stretch">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background/60 px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+        title={open ? '접기' : `${kindLabel} 본문 펼치기`}
+        aria-expanded={open}
+      >
+        {icon}
+        <span className="truncate font-medium">{attachment.filename}</span>
+        <span className="shrink-0 rounded bg-muted px-1 text-[10px] uppercase tracking-wide text-muted-foreground/80">
+          {kindLabel}
+        </span>
+        {open ? <ChevronUp className="h-3 w-3" aria-hidden /> : <ChevronDown className="h-3 w-3" aria-hidden />}
+      </button>
+      {open && (
+        <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {attachment.body || '(빈 본문)'}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function Bubble({
   role,
   content,
@@ -1066,16 +1136,23 @@ function Bubble({
 }: BubbleProps) {
   const isUser = role === 'user';
   const [copied, setCopied] = useState(false);
-  const [editText, setEditText] = useState(content);
 
-  // 편집 모드 진입할 때마다 textarea 를 현재 content 로 동기화.
+  // 사용자 메시지에 박힌 [첨부파일 ...] 블록을 표시 단에서만 분리. wire/백엔드 포맷은 무손실 유지.
+  const split = useMemo(() => (isUser ? splitUserContent(content) : null), [isUser, content]);
+  const userText = split?.text ?? content;
+  const attachments = split?.attachments ?? [];
+
+  const [editText, setEditText] = useState(userText);
+
+  // 편집 모드 진입할 때마다 textarea 를 현재 사용자 입력분으로 동기화 (첨부 블록은 textarea 에 노출 안 함).
   useEffect(() => {
-    if (isEditing) setEditText(content);
-  }, [isEditing, content]);
+    if (isEditing) setEditText(userText);
+  }, [isEditing, userText]);
 
   const onCopy = async () => {
     try {
-      await navigator.clipboard.writeText(content);
+      // 사용자가 직접 입력한 부분만 복사 — OCR/시트 본문은 칩에서 개별 복사하도록 분리.
+      await navigator.clipboard.writeText(isUser ? userText : content);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -1085,11 +1162,13 @@ function Bubble({
 
   const submitEdit = () => {
     const next = editText.trim();
-    if (!next || next === content.trim()) {
+    if (!next || next === userText.trim()) {
       onCancelEdit?.();
       return;
     }
-    onSubmitEdit?.(next);
+    // 편집 후 재전송 시 원래 첨부 블록을 그대로 다시 붙여 LLM 컨텍스트 유지.
+    const rejoined = isUser ? joinUserContent(next, attachments) : next;
+    onSubmitEdit?.(rejoined);
   };
 
   const onEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1130,10 +1209,24 @@ function Bubble({
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
               onKeyDown={onEditKeyDown}
-              rows={Math.min(8, Math.max(2, content.split('\n').length + 1))}
+              rows={Math.min(8, Math.max(2, userText.split('\n').length + 1))}
               className="w-full resize-none bg-background text-base leading-relaxed md:text-base"
               autoFocus
             />
+            {attachments.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {attachments.map((a, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 rounded-full border bg-background/60 px-2 py-0.5 text-xs text-muted-foreground"
+                    title="편집 후에도 첨부는 그대로 다시 전송됨"
+                  >
+                    <Paperclip className="h-3 w-3" aria-hidden />
+                    <span className="max-w-[16ch] truncate">{a.filename}</span>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="mt-2 flex items-center justify-end gap-2 text-xs">
               <span className="mr-auto text-muted-foreground/70">⌘+Enter 저장 · Esc 취소</span>
               <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={onCancelEdit}>
@@ -1145,27 +1238,38 @@ function Bubble({
             </div>
           </div>
         ) : (
-          <div
-            className={cn(
-              'rounded-2xl px-4 py-3 text-base leading-relaxed transition-opacity',
-              isUser
-                ? 'whitespace-pre-wrap rounded-tr-sm bg-[var(--sf-solar)]/10'
-                : 'rounded-tl-sm bg-background',
-              isStreaming && 'sf-stream-fade',
-            )}
-          >
-            {isUser ? content : <MessageMarkdown content={content} />}
-            {isStreaming && (
-              <span
-                className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse bg-foreground/60"
-                aria-hidden
-              />
-            )}
+          (userText.trim() || attachments.length === 0) && (
+            <div
+              className={cn(
+                'rounded-2xl px-4 py-3 text-base leading-relaxed transition-opacity',
+                isUser
+                  ? 'whitespace-pre-wrap rounded-tr-sm bg-[var(--sf-solar)]/10'
+                  : 'rounded-tl-sm bg-background',
+                isStreaming && 'sf-stream-fade',
+              )}
+            >
+              {isUser ? userText : <MessageMarkdown content={content} />}
+              {isStreaming && (
+                <span
+                  className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse bg-foreground/60"
+                  aria-hidden
+                />
+              )}
+            </div>
+          )
+        )}
+
+        {/* 첨부 칩 — 사용자가 올린 파일을 본문 텍스트 대신 압축 표시. 클릭 시 OCR/시트 원문 펼침. */}
+        {!isEditing && attachments.length > 0 && (
+          <div className={cn('flex flex-wrap gap-1.5', isUser ? 'justify-end' : 'justify-start')}>
+            {attachments.map((a, i) => (
+              <MessageAttachmentChip key={i} attachment={a} />
+            ))}
           </div>
         )}
 
         {/* 호버 액션 줄: 복사 / (사용자) 편집 / (마지막 어시스턴트) 재생성 */}
-        {!isEditing && content.trim() && (
+        {!isEditing && (content.trim() || attachments.length > 0) && (
           <div
             className={cn(
               'flex h-6 items-center gap-1 text-xs text-muted-foreground/70 opacity-0 transition-opacity group-hover/bubble:opacity-100 focus-within:opacity-100',

@@ -9,7 +9,9 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -22,6 +24,31 @@ type WarehouseHandler struct {
 // NewWarehouseHandler — WarehouseHandler 생성자
 func NewWarehouseHandler(db *supa.Client) *WarehouseHandler {
 	return &WarehouseHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDMasterWarehouse,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewWarehouseHandler(d.DB)
+			g := d.Gates
+			r.Route("/warehouses", func(r chi.Router) {
+				r.Get("/", h.List)
+				// /{id} 보다 먼저 — 정적 경로 우선
+				r.Get("/usage-counts", h.UsageCounts)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				// 메타 GUI inline 편집 진입점 — UpdateWarehouseRequest 의 모든 필드가 optional
+				// (포인터 + omitempty) 이라 부분 업데이트로 동작.
+				r.With(g.Write).Patch("/{id}", h.Update)
+				r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/warehouses — 창고 목록 조회
@@ -178,7 +205,9 @@ func (h *WarehouseHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "창고 삭제에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "deleted"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "deleted"})
 }
 
 // ToggleStatus — PATCH /api/v1/warehouses/{id}/status — 창고 활성/비활성
@@ -199,7 +228,9 @@ func (h *WarehouseHandler) ToggleStatus(w http.ResponseWriter, r *http.Request) 
 		response.RespondError(w, http.StatusInternalServerError, "창고 상태 변경에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "ok"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "ok"})
 }
 
 // UsageCounts — GET /api/v1/warehouses/usage-counts — 창고별 참조 건수 집계

@@ -219,10 +219,10 @@ func TestValidateRequired(t *testing.T) {
 // 회귀 위험: 타입 단정 실패를 zero value로 흘리면 VAT 0원 같은 무성 손상 발생.
 func TestAssertFloat(t *testing.T) {
 	cases := []struct {
-		name    string
-		input   interface{}
-		want    float64
-		wantOK  bool
+		name   string
+		input  interface{}
+		want   float64
+		wantOK bool
 	}{
 		{"float64", 12.5, 12.5, true},
 		{"float32", float32(7.25), 7.25, true},

@@ -61,7 +61,7 @@ func TestValidAuditIdentifier_RejectsHostileInput(t *testing.T) {
 		"' OR 1=1",               // SQL/PostgREST 인젝션
 		"path/traversal",         // 슬래시
 		"a.b",                    // 점 (PostgREST 관계 문법)
-		"퍼센트%",                  // 멀티바이트
+		"퍼센트%",                   // 멀티바이트
 		string(make([]byte, 65)), // 64자 초과 (NUL bytes — 길이만 검사)
 	}
 	for _, in := range cases {

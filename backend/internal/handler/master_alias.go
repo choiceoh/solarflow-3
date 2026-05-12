@@ -8,8 +8,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
-	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -23,22 +24,46 @@ func NewAliasHandler(db *supa.Client) *AliasHandler {
 	return &AliasHandler{DB: db}
 }
 
-// RegisterRoutes — 6개 endpoint 등록 (company / product / partner aliases).
-//   GET/POST /api/v1/company-aliases
-//   GET/POST /api/v1/product-aliases
-//   GET/POST /api/v1/partner-aliases  (D-057)
-func (h *AliasHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
-	r.Route("/company-aliases", func(r chi.Router) {
-		r.Get("/", h.ListCompanyAliases)
-		r.With(g.Write).Post("/", h.CreateCompanyAlias)
+// init — D-20260512-090000 feature self-mounting.
+// 한 핸들러가 3개 FeatureID (company/product/partner alias) 를 각각 다른 URL prefix 로
+// 노출하므로 Spec 을 셋으로 분할한다. 각 Mount 클로저는 stateless AliasHandler 인스턴스를
+// 그 자리에서 만든다 (DB 만 들고 있어 인스턴스 중복은 비용 0).
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDMasterCompanyAlias,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewAliasHandler(d.DB)
+			g := d.Gates
+			r.Route("/company-aliases", func(r chi.Router) {
+				r.Get("/", h.ListCompanyAliases)
+				r.With(g.Write).Post("/", h.CreateCompanyAlias)
+			})
+		},
 	})
-	r.Route("/product-aliases", func(r chi.Router) {
-		r.Get("/", h.ListProductAliases)
-		r.With(g.Write).Post("/", h.CreateProductAlias)
+	mount.Register(mount.Spec{
+		ID:   feature.IDMasterProductAlias,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewAliasHandler(d.DB)
+			g := d.Gates
+			r.Route("/product-aliases", func(r chi.Router) {
+				r.Get("/", h.ListProductAliases)
+				r.With(g.Write).Post("/", h.CreateProductAlias)
+			})
+		},
 	})
-	r.Route("/partner-aliases", func(r chi.Router) {
-		r.Get("/", h.ListPartnerAliases)
-		r.With(g.Write).Post("/", h.CreatePartnerAlias)
+	mount.Register(mount.Spec{
+		ID:   feature.IDMasterPartnerAlias,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewAliasHandler(d.DB)
+			g := d.Gates
+			r.Route("/partner-aliases", func(r chi.Router) {
+				r.Get("/", h.ListPartnerAliases)
+				r.With(g.Write).Post("/", h.CreatePartnerAlias)
+			})
+		},
 	})
 }
 

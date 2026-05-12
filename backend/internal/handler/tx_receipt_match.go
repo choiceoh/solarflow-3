@@ -13,7 +13,10 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/engine"
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -36,6 +39,30 @@ func NewReceiptMatchHandler(db *supa.Client, engineClient ...*engine.EngineClien
 	return &ReceiptMatchHandler{DB: db, Engine: ec}
 }
 
+// init — D-20260512-090000 feature self-mounting.
+// Mount 클로저가 ReceiptMatchHandler 인스턴스를 자체 생성한다. AssistantHandler 의
+// WithAlias (Phase 6) 도 별도 인스턴스를 만들 예정 — stateless 라 인스턴스 중복 무해.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxReceiptMatch,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewReceiptMatchHandler(d.DB, d.Engine)
+			g := d.Gates
+			r.Route("/receipt-matches", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDTxReceiptMatch))
+				r.Get("/", h.List)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Post("/bulk", h.BulkCreate)
+				r.With(g.Write).Post("/complete", h.Complete)
+				r.Post("/ai-suggest", h.AISuggest)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+				r.With(g.Write).Post("/auto", h.AutoMatch)
+			})
+		},
+	})
+}
+
 // List — GET /api/v1/receipt-matches — 수금 매칭 목록 조회
 // 비유: 매칭 대장에서 전체 매칭 내역을 꺼내 보여주는 것
 func (h *ReceiptMatchHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +74,7 @@ func (h *ReceiptMatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("receipt_id", recID)
 	}
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[수금 매칭 목록 조회 실패] %v", err)

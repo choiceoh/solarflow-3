@@ -14,11 +14,13 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/go-chi/chi/v5"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 	"solarflow-backend/internal/tenant"
+
+	"github.com/go-chi/chi/v5"
 
 	supa "github.com/supabase-community/supabase-go"
 )
@@ -65,6 +67,35 @@ func NewUserHandler(db *supa.Client, resolver *feature.Resolver) *UserHandler {
 		resolver = feature.NewResolver(nil)
 	}
 	return &UserHandler{DB: db, Resolver: resolver}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// /users/me 는 모든 인증 사용자, /users (관리) 는 AdminOnly.
+// Mount 클로저가 d.Resolver 를 넘긴다 — Resolver 가 nil 이면 NewUserHandler 가 catalog 기본만
+// 쓰는 fallback resolver 를 만든다.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDSysUser,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewUserHandler(d.DB, d.Resolver)
+			g := d.Gates
+			r.Get("/users/me", h.GetMe)
+			r.Put("/users/me", h.UpdateMyProfile)
+			r.Put("/users/me/password", h.ChangeMyPassword)
+			r.Put("/users/me/persona", h.UpdateMyPersona) // D-112: 사이드바 탭 즉시 저장
+			r.Put("/users/me/preferences", h.UpdateMyPreferences)
+			r.Route("/users", func(r chi.Router) {
+				r.Use(g.AdminOnly)
+				r.Get("/", h.ListUsers)
+				r.Post("/", h.CreateUser)
+				r.Put("/{id}", h.UpdateProfile)
+				r.Put("/{id}/role", h.UpdateRole)
+				r.Put("/{id}/active", h.UpdateActive)
+				r.Put("/{id}/password", h.ResetPassword)
+			})
+		},
+	})
 }
 
 // GetMe — 현재 로그인한 사용자의 프로필 조회

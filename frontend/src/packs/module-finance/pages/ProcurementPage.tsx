@@ -18,12 +18,14 @@ import { fetchWithAuth } from "@/lib/api"
 import LoadingSpinner from "@/components/common/LoadingSpinner"
 import SkeletonRows from "@/components/common/SkeletonRows"
 import EmptyState from "@/components/common/EmptyState"
-import POListTable from "@/components/procurement/POListTable"
-import PODetailView from "@/components/procurement/PODetailView"
-import POCreateDialog from "@/components/procurement/POCreateDialog"
-import LCCreateDialog from "@/components/procurement/LCCreateDialog"
-import LCListTable from "@/components/procurement/LCListTable"
-import TTListTable from "@/components/procurement/TTListTable"
+import POListTable from "@/domains/po/list-table"
+import PODetailView from "@/domains/po/detail-view"
+import POCreateDialog from "@/domains/po/create-dialog"
+import LCCreateDialog from "@/domains/lc/create-dialog"
+import BLCreateDialog from "@/domains/bl/create-dialog"
+import TTCreateDialog, { type TTCreateInitialValues } from "@/domains/tt/create-dialog"
+import LCListTable from "@/domains/lc/list-table"
+import TTListTable from "@/domains/tt/list-table"
 import DepositStatusPanel from "@/components/procurement/DepositStatusPanel"
 import ExcelToolbar from "@/components/excel/ExcelToolbar"
 import {
@@ -39,8 +41,8 @@ import { useBLListPaged, useBLSummary } from "@/hooks/useInbound"
 import PaginationBar from "@/components/common/PaginationBar"
 import { useServerSort } from "@/hooks/useServerSort"
 import { useFxTimeseries } from "@/hooks/usePublicFx"
-import BLListTable from "@/components/inbound/BLListTable"
-import BLDetailView from "@/components/inbound/BLDetailView"
+import BLListTable from "@/domains/bl/list-table"
+import BLDetailView from "@/domains/bl/detail-view"
 import {
   INBOUND_TYPE_LABEL,
   BL_STATUS_LABEL,
@@ -260,6 +262,7 @@ export default function ProcurementPage() {
     items: tts,
     total: ttTotal,
     loading: ttLoading,
+    reload: reloadTT,
   } = useTTListPaged({
     status: ttStatusFilter || undefined,
     po_id: ttPoFilter || undefined,
@@ -322,6 +325,9 @@ export default function ProcurementPage() {
   // PO/LC 신규 등록 다이얼로그.
   const [poCreateOpen, setPoCreateOpen] = useState(false)
   const [lcCreateOpen, setLcCreateOpen] = useState(false)
+  const [blCreateOpen, setBlCreateOpen] = useState(false)
+  const [ttCreateOpen, setTtCreateOpen] = useState(false)
+  const [ttCreateInitial, setTtCreateInitial] = useState<TTCreateInitialValues | null>(null)
   const [lcCreateInitial, setLcCreateInitial] = useState<{
     poId?: string
     poLineId?: string
@@ -1089,6 +1095,9 @@ export default function ProcurementPage() {
               setBlsVersion((v) => v + 1)
             }}
           />
+          <Button size="xs" onClick={() => setBlCreateOpen(true)}>
+            BL 신규 등록
+          </Button>
         </>
       )}
       <div style={{ flex: 1 }} />
@@ -1238,6 +1247,15 @@ export default function ProcurementPage() {
                           : poList
                       }
                       tts={tts}
+                      onCreateTT={(init) => {
+                        setTtCreateInitial({
+                          po_id: init.po_id,
+                          amount_usd: init.amount_usd,
+                          purpose: init.purpose,
+                          status: "completed",
+                        })
+                        setTtCreateOpen(true)
+                      }}
                     />
                   </div>
 
@@ -1273,6 +1291,15 @@ export default function ProcurementPage() {
                           },
                         ]}
                       />
+                      <Button
+                        size="xs"
+                        onClick={() => {
+                          setTtCreateInitial(ttPoFilter ? { po_id: ttPoFilter } : null)
+                          setTtCreateOpen(true)
+                        }}
+                      >
+                        T/T 신규 등록
+                      </Button>
                     </div>
                     {ttLoading ? (
                       <LoadingSpinner />
@@ -1707,6 +1734,27 @@ export default function ProcurementPage() {
           reloadLC()
           setLcAggVersion((v) => v + 1)
           setLcCreateInitial(null)
+        }}
+      />
+      <BLCreateDialog
+        open={blCreateOpen}
+        initialManufacturerId={blMfgFilter || undefined}
+        onClose={() => setBlCreateOpen(false)}
+        onCreated={() => {
+          reloadBL()
+          setBlsVersion((v) => v + 1)
+        }}
+      />
+      <TTCreateDialog
+        open={ttCreateOpen}
+        initialValues={ttCreateInitial}
+        onClose={() => {
+          setTtCreateOpen(false)
+          setTtCreateInitial(null)
+        }}
+        onCreated={() => {
+          reloadTT()
+          setTtCreateInitial(null)
         }}
       />
     </div>

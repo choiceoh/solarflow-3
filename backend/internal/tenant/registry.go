@@ -31,10 +31,12 @@ type ID string
 
 // 사전 정의 ID — 모든 다른 패키지는 이 상수만 사용한다.
 const (
+	// AUTOGEN BEGIN: tenant_ids — gen-registry.mjs 가 harness/registry.yaml 에서 생성. 손으로 편집 금지.
 	IDTopsolar ID = "topsolar"
 	IDCable    ID = "cable"
 	IDBaro     ID = "baro"
 	IDStudy    ID = "study"
+	// AUTOGEN END: tenant_ids
 )
 
 // Group — 여러 테넌트를 묶은 논리 그룹.
@@ -68,8 +70,10 @@ type Tenant struct {
 }
 
 // defaultRegistry — 패키지 전역 정본. 변경 시 같은 PR 에서 테스트/문서 동기화.
+// tenants slice 안의 element 들은 codemod 가 생성 — scripts/codemod/gen-registry.mjs.
 var defaultRegistry = &Registry{
 	tenants: []Tenant{
+		// AUTOGEN BEGIN: tenants — gen-registry.mjs 가 harness/registry.yaml 에서 생성. 손으로 편집 금지.
 		{
 			ID:           IDTopsolar,
 			DisplayName:  "탑솔라(주)",
@@ -95,6 +99,7 @@ var defaultRegistry = &Registry{
 			HostPatterns: []string{`^study\.`, `^study-`},
 			Groups:       []Group{GroupStudy},
 		},
+		// AUTOGEN END: tenants
 	},
 }
 

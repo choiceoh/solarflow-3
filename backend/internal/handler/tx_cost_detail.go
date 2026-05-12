@@ -9,7 +9,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -26,6 +29,26 @@ func NewCostDetailHandler(db *supa.Client) *CostDetailHandler {
 	return &CostDetailHandler{DB: db}
 }
 
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxCostDetail,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewCostDetailHandler(d.DB)
+			g := d.Gates
+			r.Route("/cost-details", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDTxCostDetail))
+				r.Get("/", h.List)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
+}
+
 // List — GET /api/v1/cost-details — 원가 명세 목록 조회
 // 비유: 특정 면장에 연결된 원가 계산서를 모두 꺼내 보여주는 것
 func (h *CostDetailHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +60,7 @@ func (h *CostDetailHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("declaration_id", declID)
 	}
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[원가 명세 목록 조회 실패] %v", err)

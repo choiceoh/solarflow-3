@@ -10,7 +10,9 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -28,15 +30,24 @@ func NewDBIntegrityHandler(db *supa.Client) *DBIntegrityHandler {
 	return &DBIntegrityHandler{DB: db}
 }
 
-func (h *DBIntegrityHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
-	r.With(g.AdminOnly).Get("/admin/db-integrity", h.Run)
-	r.With(g.AdminOnly).Post("/admin/db-integrity/refresh", h.Refresh)
-
-	// PR 091: 개별 row 수준 이상치 검사 (v_db_anomalies + anomaly_ignores).
-	r.With(g.AdminOnly).Get("/admin/db-anomalies", h.Anomalies)
-	r.With(g.AdminOnly).Get("/admin/db-anomalies/ignores", h.ListIgnores)
-	r.With(g.AdminOnly).Post("/admin/db-anomalies/ignore", h.IgnoreAnomaly)
-	r.With(g.AdminOnly).Delete("/admin/db-anomalies/ignore/{ignoreID}", h.UnignoreAnomaly)
+// init — D-20260512-090000 feature self-mounting.
+// main merge: /admin/db-anomalies/ignores (ListIgnores) 신규 라우트 통합.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDSysDBIntegrity,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewDBIntegrityHandler(d.DB)
+			g := d.Gates
+			r.With(g.AdminOnly).Get("/admin/db-integrity", h.Run)
+			r.With(g.AdminOnly).Post("/admin/db-integrity/refresh", h.Refresh)
+			// PR 091: 개별 row 수준 이상치 검사 (v_db_anomalies + anomaly_ignores).
+			r.With(g.AdminOnly).Get("/admin/db-anomalies", h.Anomalies)
+			r.With(g.AdminOnly).Get("/admin/db-anomalies/ignores", h.ListIgnores)
+			r.With(g.AdminOnly).Post("/admin/db-anomalies/ignore", h.IgnoreAnomaly)
+			r.With(g.AdminOnly).Delete("/admin/db-anomalies/ignore/{ignoreID}", h.UnignoreAnomaly)
+		},
+	})
 }
 
 // IntegrityCheck — view v_integrity_check 의 한 행.
@@ -70,7 +81,7 @@ type IntegritySummary struct {
 // 갱신은 Refresh 가 별도 (POST /admin/db-integrity/refresh).
 func (h *DBIntegrityHandler) Run(w http.ResponseWriter, r *http.Request) {
 	data, _, err := h.DB.From("mv_integrity_check").Select("*", "exact", false).
-		Range(0, 999, "").Execute()
+		Range(0, PostgRESTMaxRows-1, "").Execute()
 	if err != nil {
 		log.Printf("[정합성] mv_integrity_check 조회 실패: %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "정합성 view 조회 실패")
@@ -133,9 +144,9 @@ type AnomalyRow struct {
 }
 
 type AnomalyResponse struct {
-	Anomalies   []AnomalyRow     `json:"anomalies"`
-	Summary     AnomalySummary   `json:"summary"`
-	GeneratedAt string           `json:"generated_at"`
+	Anomalies   []AnomalyRow   `json:"anomalies"`
+	Summary     AnomalySummary `json:"summary"`
+	GeneratedAt string         `json:"generated_at"`
 }
 
 type AnomalySummary struct {
@@ -262,7 +273,7 @@ func (h *DBIntegrityHandler) ListIgnores(w http.ResponseWriter, r *http.Request)
 	data, _, err := h.DB.From("anomaly_ignores").
 		Select("ignore_id,table_name,row_pk,rule_name,reason,ignored_by,ignored_at", "exact", false).
 		Order("ignored_at", &postgrest.OrderOpts{Ascending: false}).
-		Range(0, 999, "").
+		Range(0, PostgRESTMaxRows-1, "").
 		Execute()
 	if err != nil {
 		log.Printf("[이상치] ignore 목록 조회 실패: %v", err)

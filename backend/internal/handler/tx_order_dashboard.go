@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
@@ -19,14 +20,14 @@ import (
 // 본 핸들러: applyOrderFilters 동일 + 청크 누적 fetch + enrichOrders 재사용 + 메모리 집계.
 
 const (
-	orderDashboardChunkSize     = 1000
-	orderDashboardMaxChunks     = 50
-	orderDashboardTrendMonths   = 24
-	orderDashboardTopN          = 10
-	orderDashboardMa15Days      = 180 // 15일 이동평균 sparkline 표시 일수
-	orderDashboardMa15Window    = 15
-	orderDashboardRecent30Days  = 30
-	orderDashboardDeliveryDays  = 7 // delivery_due 도래까지 N 일 이내 = "delivery_soon"
+	orderDashboardChunkSize    = 1000
+	orderDashboardMaxChunks    = 50
+	orderDashboardTrendMonths  = 24
+	orderDashboardTopN         = 10
+	orderDashboardMa15Days     = 180 // 15일 이동평균 sparkline 표시 일수
+	orderDashboardMa15Window   = 15
+	orderDashboardRecent30Days = 30
+	orderDashboardDeliveryDays = 7 // delivery_due 도래까지 N 일 이내 = "delivery_soon"
 )
 
 // OrderDashboard — /api/v1/orders/dashboard 응답.
@@ -35,12 +36,13 @@ const (
 //   - status_scope=lifetime (기본) — 필터 적용된 전체
 //   - status_scope=active — !completed && !cancelled (OrdersActiveInsight)
 //   - status_scope=partial — status='partial' (OrdersPartialInsight)
+//
 // totals / trend24 / unit_price_ma15_180 는 status_scope 와 무관하게 항상 전체.
 type OrderDashboard struct {
-	Totals              OrderDashTotals        `json:"totals"`
-	Trend24             []OrderDashTrendPoint  `json:"trend24"`
-	UnitPriceMa15_180   []float64              `json:"unit_price_ma15_180"`
-	StatusScope         string                 `json:"status_scope"`
+	Totals              OrderDashTotals         `json:"totals"`
+	Trend24             []OrderDashTrendPoint   `json:"trend24"`
+	UnitPriceMa15_180   []float64               `json:"unit_price_ma15_180"`
+	StatusScope         string                  `json:"status_scope"`
 	ByStatus            []OrderDashBreakdownRow `json:"by_status"`
 	ByCustomerTop10     []OrderDashBreakdownRow `json:"by_customer_top10"`
 	ByManufacturerTop10 []OrderDashBreakdownRow `json:"by_manufacturer_top10"`
@@ -49,19 +51,19 @@ type OrderDashboard struct {
 
 type OrderDashTotals struct {
 	Count                  int     `json:"count"`
-	ActiveCount            int     `json:"active_count"`             // !completed && !cancelled
+	ActiveCount            int     `json:"active_count"` // !completed && !cancelled
 	ReceivedCount          int     `json:"received_count"`
 	PartialCount           int     `json:"partial_count"`
 	CompletedCount         int     `json:"completed_count"`
 	CancelledCount         int     `json:"cancelled_count"`
-	KwSum                  float64 `json:"kw_sum"`                   // active 만
-	CustomersCount         int     `json:"customers_count"`          // distinct (전체)
-	ActiveCustomersCount   int     `json:"active_customers_count"`   // distinct of active
+	KwSum                  float64 `json:"kw_sum"`                 // active 만
+	CustomersCount         int     `json:"customers_count"`        // distinct (전체)
+	ActiveCustomersCount   int     `json:"active_customers_count"` // distinct of active
 	AvgUnitPriceWp         float64 `json:"avg_unit_price_wp"`
 	Recent30AvgUnitPriceWp float64 `json:"recent_30_avg_unit_price_wp"`
 	Recent30Count          int     `json:"recent_30_count"`
-	DeliverySoonCount      int     `json:"delivery_soon_count"`      // received|partial + delivery_due ≤ N 일 + remaining > 0
-	NoSiteCount            int     `json:"no_site_count"`            // active + site_name 비어있음
+	DeliverySoonCount      int     `json:"delivery_soon_count"` // received|partial + delivery_due ≤ N 일 + remaining > 0
+	NoSiteCount            int     `json:"no_site_count"`       // active + site_name 비어있음
 }
 
 // OrderDashTrendPoint — 월별 시계열 한 점. order_date 기반 binning.
@@ -334,7 +336,7 @@ func computeOrderDashTrend24(orders []model.Order) []OrderDashTrendPoint {
 	labels := make([]string, orderDashboardTrendMonths)
 	idx := make(map[string]int, orderDashboardTrendMonths)
 	for i := 0; i < orderDashboardTrendMonths; i++ {
-		t := now.AddDate(0, -(orderDashboardTrendMonths-1-i), 0)
+		t := now.AddDate(0, -(orderDashboardTrendMonths - 1 - i), 0)
 		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 		labels[i] = key
 		idx[key] = i
@@ -350,7 +352,7 @@ func computeOrderDashTrend24(orders []model.Order) []OrderDashTrendPoint {
 		customers[i] = make(map[string]struct{}, 4)
 	}
 	for _, o := range orders {
-		m := monthOf(o.OrderDate)
+		m := handlerutil.MonthOf(o.OrderDate)
 		if m == "" {
 			continue
 		}
@@ -458,12 +460,12 @@ var orderStatusLabels = map[string]string{
 }
 
 var orderCategoryLabels = map[string]string{
-	"sale":          "판매",
-	"sale_spare":    "판매(스페어)",
-	"construction":  "공사",
-	"adjustment":    "재고조정",
-	"transfer":      "창고이동",
-	"other":         "기타",
+	"sale":         "판매",
+	"sale_spare":   "판매(스페어)",
+	"construction": "공사",
+	"adjustment":   "재고조정",
+	"transfer":     "창고이동",
+	"other":        "기타",
 }
 
 func computeOrderDashBreakdown(orders []model.Order, dim orderDashDim, top int) []OrderDashBreakdownRow {
@@ -492,9 +494,9 @@ func computeOrderDashBreakdown(orders []model.Order, dim orderDashDim, top int) 
 			} else {
 				key = o.CustomerID
 			}
-			label = strPtrOr(o.CustomerName, "미지정")
+			label = handlerutil.StrPtrOr(o.CustomerName, "미지정")
 		case orderDimManufacturer:
-			label = strPtrOr(o.ManufacturerName, "미지정")
+			label = handlerutil.StrPtrOr(o.ManufacturerName, "미지정")
 			key = label // manufacturer_id 가 Order 모델에 없어 name 을 키로 사용 (기존 insights 와 동일).
 			if o.ManufacturerName == nil || *o.ManufacturerName == "" {
 				key = "__unset__"

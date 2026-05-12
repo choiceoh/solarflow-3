@@ -43,6 +43,7 @@ interface Props {
   selectedIds?: Set<string>
   onSelectedIdsChange?: (next: Set<string>) => void
   isRowSelectable?: (item: SaleListItem) => boolean
+  getRowBlockReason?: (item: SaleListItem) => string | null
   /** 서버사이드 페이지네이션·정렬 — 지정 시 클라이언트 pageSize 무시. */
   serverMode?: MetaTableServerMode
 }
@@ -54,6 +55,7 @@ function buildColumns({
   selectedIds,
   onSelectedIdsChange,
   isRowSelectable,
+  getRowBlockReason,
   visibleItems,
 }: {
   onInvoice?: (item: SaleListItem) => void
@@ -62,6 +64,7 @@ function buildColumns({
   selectedIds?: Set<string>
   onSelectedIdsChange?: (next: Set<string>) => void
   isRowSelectable?: (item: SaleListItem) => boolean
+  getRowBlockReason?: (item: SaleListItem) => string | null
   visibleItems?: SaleListItem[]
 }): ColumnDef<SaleListItem>[] {
   const selectionEnabled = !!onSelectedIdsChange
@@ -103,8 +106,15 @@ function buildColumns({
         />
       ),
       cell: (item) => {
-        const selectable = !isRowSelectable || isRowSelectable(item)
-        if (!selectable) return null
+        const blockReason = getRowBlockReason?.(item) ?? null
+        const selectable = !blockReason && (!isRowSelectable || isRowSelectable(item))
+        if (!selectable) {
+          return (
+            <span className="sf-pill ghost cursor-help" title={blockReason ?? "선택할 수 없는 행입니다"}>
+              제외
+            </span>
+          )
+        }
         const checked = selectedIds?.has(item.sale_id) ?? false
         return (
           <input
@@ -163,6 +173,7 @@ function buildColumns({
       key: "product_name",
       label: "품명",
       hideable: true,
+      className: "text-[13px]",
       cell: (item) => item.product_name ?? "—",
       sortAccessor: (item) => item.product_name ?? "",
       globalFilterText: (item) => item.product_name ?? "",
@@ -369,6 +380,7 @@ function SaleListTable({
   selectedIds,
   onSelectedIdsChange,
   isRowSelectable,
+  getRowBlockReason,
   serverMode,
 }: Props) {
   const resolvedServerMode = serverMode
@@ -385,6 +397,7 @@ function SaleListTable({
         selectedIds,
         onSelectedIdsChange,
         isRowSelectable,
+        getRowBlockReason,
         visibleItems: items,
       })}
       hidden={hidden}

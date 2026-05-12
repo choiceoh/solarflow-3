@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { ProductCombobox } from '@/components/common/ProductCombobox';
 import DataTable, { type Column } from '@/components/common/DataTable';
 import { fetchWithAuth } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
@@ -21,6 +22,7 @@ import type {
 } from '@/types/intercompany';
 import { INTERCOMPANY_STATUS_LABEL } from '@/types/intercompany';
 import type { Product, Manufacturer } from '@/types/masters';
+import type { ProductAlias } from '@/types/aliases';
 
 const statusVariant: Record<IntercompanyStatus, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   pending: 'secondary',
@@ -62,6 +64,8 @@ export default function GroupPurchaseRequestPage() {
   const [rows, setRows] = useState<IntercompanyRequest[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  // canonical product_id → 별명 코드 목록. 거래처/외부 표기로도 정식 품번을 찾게 한다.
+  const [aliasMap, setAliasMap] = useState<Map<string, string[]>>(() => new Map());
   const [statusFilter, setStatusFilter] = useState<IntercompanyStatus | ''>('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -84,13 +88,21 @@ export default function GroupPurchaseRequestPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [productList, manufacturerList] = await Promise.all([
+        const [productList, manufacturerList, aliasList] = await Promise.all([
           fetchWithAuth<Product[]>('/api/v1/products'),
           fetchWithAuth<Manufacturer[]>('/api/v1/manufacturers'),
+          fetchWithAuth<ProductAlias[]>('/api/v1/product-aliases').catch(() => [] as ProductAlias[]),
         ]);
         if (!cancelled) {
           setProducts(productList);
           setManufacturers(manufacturerList);
+          const am = new Map<string, string[]>();
+          for (const a of aliasList) {
+            const list = am.get(a.canonical_product_id);
+            if (list) list.push(a.alias_code);
+            else am.set(a.canonical_product_id, [a.alias_code]);
+          }
+          setAliasMap(am);
         }
       } catch (e) {
         console.error('[마스터 로드 실패]', e);
@@ -205,7 +217,7 @@ export default function GroupPurchaseRequestPage() {
         const info = productInfoById.get(row.product_id);
         return info ? (
           <span className="flex flex-col">
-            <span className="font-medium">{info.code}</span>
+            <span className="font-medium text-[13px]">{info.code}</span>
             <span className="text-xs text-muted-foreground">{info.mfg} · {info.name}</span>
           </span>
         ) : <span>{row.product_id.slice(0, 8)}</span>;
@@ -309,26 +321,14 @@ export default function GroupPurchaseRequestPage() {
             </div>
             <div>
               <Label className="text-xs">품번</Label>
-              <Select
+              <ProductCombobox
+                products={products.filter((p) => p.is_active)}
                 value={watchedProductId || ''}
-                onValueChange={(v) => setValue('product_id', (v as string | null) ?? '', { shouldValidate: true, shouldDirty: true })}
-              >
-                <SelectTrigger className="h-9 w-full text-sm" aria-invalid={!!errors.product_id}>
-                  <span className="flex-1 text-left truncate">
-                    {watchedProductId ? (productInfoById.get(watchedProductId)?.code ?? '선택') : '품번 선택'}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {products.filter((p) => p.is_active).map((p) => {
-                    const info = productInfoById.get(p.product_id);
-                    return (
-                      <SelectItem key={p.product_id} value={p.product_id}>
-                        {info ? `${info.code} (${info.mfg})` : p.product_code}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setValue('product_id', v, { shouldValidate: true, shouldDirty: true })}
+                aliases={aliasMap}
+                error={!!errors.product_id}
+                placeholder="품번 선택"
+              />
               {errors.product_id && <p className="text-xs text-destructive">{errors.product_id.message}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">

@@ -1,0 +1,342 @@
+{
+  "_generated_by": "scripts/codemod/build-hook-index.mjs from harness/registry.yaml + harness/domains/*.yaml. DO NOT EDIT — re-run codemod after editing source.",
+  "_comment_for_special_paths": "special_paths 와 path_to_domain_fallback 은 codemod 안 데이터 (PR-C 후 줄어듦). manifest 작성된 도메인은 위 domains 섹션에서 자동.",
+  "schema_version": 1,
+  "domains": {
+    "po": {
+      "display_name": "발주 (Purchase Order)",
+      "feature_id": "tx.po",
+      "pack": "module-finance",
+      "tenants": [
+        "cable",
+        "topsolar"
+      ],
+      "tables": [
+        "purchase_orders",
+        "po_line_items"
+      ],
+      "depends_on": [
+        "products",
+        "inventory",
+        "lc",
+        "tt"
+      ],
+      "paths": [
+        "backend/internal/domains/po/",
+        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx",
+        "frontend/src/domains/po/",
+        "backend/internal/domains/po/handler_test.go"
+      ],
+      "blast_radius": [
+        "PO model 필드 추가/삭제 — backend/internal/domains/po/handler.go (Validation 흐름) / frontend/src/domains/po/ (form 타입) / backend/migrations/ (마이그 필수) / PostgREST 스키마 캐시 갱신 (CLAUDE.md '필수 절차' 4단계)",
+        "po_line_items 컬럼 추가/삭제 — backend/scripts/check_schema.sh 통과 / scripts/backfill_order_prices.py (라인 가격 backfill 영향) / scripts/verify_residual_4.py (잔여수량 정합성)",
+        "PO 라우트 추가 (path/method 새로 등장) — backend/internal/feature/catalog.go 의 IDTxPO entry Paths 갱신 필수 / matrix_consistency_test 가 누락 잡음 / harness/FEATURE-WIRING-MATRIX.md 표 동시 갱신",
+        "contract_type 허용 값 변경 — backend/internal/domains/po/model.go 의 validContractTypes 맵 / frontend ProcurementPage 검색 필터의 select option",
+        "PO 상태 (status) 전이 규칙 변경 — backend/internal/domains/po/handler.go 의 status update endpoint (PUT /:id/status) / 프론트 status badge 색상 매핑 (Tremor 컴포넌트)",
+        "PO 외부에서 PO type 사용 (예: io_import) — import \"solarflow-backend/internal/domains/po\" 추가 + po.PurchaseOrder 식 prefix 사용 / PO 가 cross-domain 의존: lc/tt (PODetail 임베드) 와 products (POLine.Products)"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh",
+        "cd backend && go test ./internal/handler -run TestPO",
+        "cd backend && go test ./internal/feature ./internal/router"
+      ],
+      "decisions": [
+        "D-061",
+        "D-086",
+        "D-087"
+      ]
+    },
+    "bl": {
+      "display_name": "선적 (Bill of Lading)",
+      "feature_id": "tx.bl",
+      "pack": "module-finance",
+      "tenants": [
+        "cable",
+        "topsolar"
+      ],
+      "tables": [
+        "bl_shipments",
+        "bl_line_items",
+        "receiving_logs"
+      ],
+      "depends_on": [
+        "products",
+        "po",
+        "inventory"
+      ],
+      "paths": [
+        "backend/internal/domains/bl/",
+        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx",
+        "frontend/src/domains/bl/",
+        "backend/internal/domains/bl/handler_test.go"
+      ],
+      "blast_radius": [
+        "BL 입고완료 status 전이 (ensureReceivingLogsForBL 호출) — backend/internal/domains/bl/wms.go (receiving_logs 자동 생성 로직) / outbound 도메인의 inventory 영향 (BL 입고 → 가용재고 증가) / warehouse_id NULL 케이스 처리 — receiving_logs 미생성",
+        "BL 라인 item_type/payment_type 허용 값 변경 — backend/internal/domains/bl/model_line.go 의 validItemTypes/validPaymentTypes/validUsageCategories / backend/internal/model/lc_line.go 의 LC 측 dup (PR-D 에서 internal/validation 으로 분리 검토)",
+        "BL model 필드 추가/삭제 — backend/internal/domains/bl/handler.go (Validation 흐름) / frontend/src/domains/bl/ (BL 탭 form) / backend/migrations/ + check_schema.sh / PostgREST 스키마 캐시 갱신",
+        "BL 외부 사용 (io_import, baro_incoming 등) — import \"solarflow-backend/internal/domains/bl\" + bl.X prefix / wms_automation.go 는 BL method 안 가짐 — Go cross-package method 불허",
+        "PO ↔ BL 라인 연결 (D-087) 변경 — BLLineItem.POLineID 의 UUID 검증 (uuidRe) / PO 라인 product_id 와 BL 라인 product_id 일치성"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh",
+        "cd backend && go test ./internal/domains/bl/...",
+        "cd backend && go test ./internal/handler"
+      ],
+      "decisions": [
+        "D-087"
+      ]
+    },
+    "lc": {
+      "display_name": "신용장 (L/C)",
+      "feature_id": "tx.lc",
+      "pack": "module-finance",
+      "tenants": [
+        "cable",
+        "topsolar"
+      ],
+      "tables": [
+        "lc_records",
+        "lc_line_items",
+        "lc_schedules"
+      ],
+      "depends_on": [
+        "po",
+        "products",
+        "bl"
+      ],
+      "paths": [
+        "backend/internal/domains/lc/",
+        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx",
+        "frontend/src/domains/lc/"
+      ],
+      "blast_radius": [
+        "LC model 필드 추가/삭제 — backend/internal/domains/lc/handler.go (Validation 흐름) / frontend/src/domains/lc/ (LC 탭 form) / backend/migrations/ + check_schema.sh",
+        "LC 라인 item_type/payment_type 허용 값 변경 — backend/internal/domains/lc/model_line.go 의 validItemTypes/validPaymentTypes / backend/internal/domains/bl/model_line.go 의 BL 측 dup (PR-D 에서 internal/validation 분리)",
+        "LC 라인이 PO 라인 연결 (POLineID) — uuidRe 매칭 (LC POLineID UUID 형식 검증) / po.ProductSummaryForPOLine 의존 — po 도메인 변경 시 import 영향",
+        "LC 외부 사용 (io_import_parsers) — import \"solarflow-backend/internal/domains/lc\" + lc.X prefix"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh",
+        "cd backend && go test ./internal/domains/lc/...",
+        "cd backend && go test ./internal/handler"
+      ],
+      "decisions": [
+        "D-087"
+      ]
+    },
+    "tt": {
+      "display_name": "송금 (T/T)",
+      "feature_id": "tx.tt",
+      "pack": "module-finance",
+      "tenants": [
+        "cable",
+        "topsolar"
+      ],
+      "tables": [
+        "tt_remittances"
+      ],
+      "depends_on": [
+        "po"
+      ],
+      "paths": [
+        "backend/internal/domains/tt/",
+        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx",
+        "frontend/src/domains/tt/"
+      ],
+      "blast_radius": [
+        "TT model 필드 추가/삭제 — backend/internal/domains/tt/handler.go (Validation 흐름) / frontend/src/domains/tt/ (TT 탭 form) / backend/migrations/ + check_schema.sh",
+        "TT 상태 (status) 전이 변경 — backend/internal/domains/tt/model.go 의 validTTStatuses / 프론트 status 표시 컴포넌트",
+        "TT 외부 사용 (io_import_parsers) — import \"solarflow-backend/internal/domains/tt\" + tt.X prefix"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh",
+        "cd backend && go test ./internal/domains/tt/...",
+        "cd backend && go test ./internal/handler"
+      ],
+      "decisions": []
+    }
+  },
+  "path_to_domain_fallback": [
+    {
+      "glob": "backend/internal/model/bl*.go",
+      "domain_id": "bl"
+    },
+    {
+      "glob": "backend/internal/handler/tx_bl*.go",
+      "domain_id": "bl"
+    },
+    {
+      "glob": "backend/internal/model/lc*.go",
+      "domain_id": "lc"
+    },
+    {
+      "glob": "backend/internal/handler/tx_lc*.go",
+      "domain_id": "lc"
+    },
+    {
+      "glob": "backend/internal/model/tt*.go",
+      "domain_id": "tt"
+    },
+    {
+      "glob": "backend/internal/handler/tx_tt*.go",
+      "domain_id": "tt"
+    },
+    {
+      "glob": "backend/internal/model/product*.go",
+      "domain_id": "products"
+    },
+    {
+      "glob": "backend/internal/model/inventory_*.go",
+      "domain_id": "inventory"
+    },
+    {
+      "glob": "backend/internal/model/price_*.go",
+      "domain_id": "price_benchmark"
+    },
+    {
+      "glob": "backend/internal/model/declaration*.go",
+      "domain_id": "declaration"
+    },
+    {
+      "glob": "backend/internal/handler/tx_declaration*.go",
+      "domain_id": "declaration"
+    },
+    {
+      "glob": "backend/internal/model/order*.go",
+      "domain_id": "order"
+    },
+    {
+      "glob": "backend/internal/handler/tx_order*.go",
+      "domain_id": "order"
+    },
+    {
+      "glob": "backend/internal/model/sale*.go",
+      "domain_id": "sale"
+    },
+    {
+      "glob": "backend/internal/handler/tx_sale*.go",
+      "domain_id": "sale"
+    },
+    {
+      "glob": "backend/internal/model/receipt*.go",
+      "domain_id": "receipt"
+    },
+    {
+      "glob": "backend/internal/handler/tx_receipt*.go",
+      "domain_id": "receipt"
+    },
+    {
+      "glob": "backend/internal/model/outbound*.go",
+      "domain_id": "outbound"
+    },
+    {
+      "glob": "backend/internal/model/picking_*.go",
+      "domain_id": "outbound"
+    },
+    {
+      "glob": "backend/internal/handler/tx_outbound*.go",
+      "domain_id": "outbound"
+    },
+    {
+      "glob": "backend/internal/model/baro_*.go",
+      "domain_id": "baro"
+    },
+    {
+      "glob": "backend/internal/handler/baro_*.go",
+      "domain_id": "baro"
+    },
+    {
+      "glob": "backend/internal/model/intercompany_*.go",
+      "domain_id": "intercompany"
+    },
+    {
+      "glob": "backend/internal/handler/tx_intercompany_*.go",
+      "domain_id": "intercompany"
+    },
+    {
+      "glob": "backend/internal/model/cost_*.go",
+      "domain_id": "cost_detail"
+    },
+    {
+      "glob": "backend/internal/handler/tx_cost_*.go",
+      "domain_id": "cost_detail"
+    },
+    {
+      "glob": "backend/internal/tenant/*.go",
+      "domain_id": "_tenant_registry"
+    },
+    {
+      "glob": "backend/internal/feature/catalog.go",
+      "domain_id": "_feature_catalog"
+    },
+    {
+      "glob": "frontend/src/packs/**/nav.ts",
+      "domain_id": "_pack_assembly"
+    },
+    {
+      "glob": "harness/registry.yaml",
+      "domain_id": "_registry"
+    },
+    {
+      "glob": "harness/domains/*.yaml",
+      "domain_id": "_domain_manifest"
+    }
+  ],
+  "special_paths": {
+    "_tenant_registry": {
+      "display_name": "테넌트 정본 (D-145)",
+      "blast_radius": [
+        "registry.go 변경 → DB CHECK 제약 마이그 필수 (user_profiles.tenant_scope, tenant_features.tenant, tenant_data_scopes.tenant)",
+        "새 테넌트 추가 → harness/NEW-TENANT-GUIDE.md 의 7단계 전체. registry.yaml 정본 갱신 + gen-registry codemod 실행",
+        "TenantSet* 가 catalog.go 에서 init 시 파생되므로 *컴파일 시점* 평가에 주의"
+      ]
+    },
+    "_feature_catalog": {
+      "display_name": "Feature 카탈로그 (D-120)",
+      "blast_radius": [
+        "Feature 추가/Path 변경 → coverage_test 와 matrix_consistency_test 가 chi 트리 ↔ catalog 일치 검증",
+        "harness/FEATURE-WIRING-MATRIX.md 표 동시 갱신 필수"
+      ]
+    },
+    "_pack_assembly": {
+      "display_name": "Pack 어셈블리 (nav.ts)",
+      "blast_radius": [
+        "nav item 추가 → feature 가 backend catalog 에 등록돼 있어야 함 (또는 FrontendOnly: true)",
+        "tenants 필드 직접 array 리터럴 금지 — MODULE_TENANTS / ALL_TENANTS / BARO_TENANTS 같은 헬퍼 사용",
+        "key 충돌 시 buildNavGroups 가 첫 등록 우선 (테스트가 잡음)"
+      ]
+    },
+    "_registry": {
+      "display_name": "harness/registry.yaml (단일 정본)",
+      "blast_radius": [
+        "tenants 변경 → cd scripts/codemod && node gen-registry.mjs 실행 (registry.go 자동 동기화)",
+        "domains 추가 → harness/domains/<id>.yaml manifest 신설 + build-hook-index 자동 재생성"
+      ]
+    },
+    "_domain_manifest": {
+      "display_name": "도메인 manifest (harness/domains/*.yaml)",
+      "blast_radius": [
+        "manifest 변경 → cd scripts/codemod && node build-hook-index.mjs (.claude/hooks/domains.json 재생성)",
+        "paths/tables/blast_radius 가 실 코드와 어긋나면 hooks 가 잘못 안내 — schema_version 호환 유지"
+      ]
+    }
+  },
+  "global_hints": {
+    "*.sql": [
+      "마이그 추가 시: psql 적용 + PostgREST 스키마 캐시 갱신 + check_schema.sh 통과 (CLAUDE.md '필수 절차' 4단계)"
+    ],
+    "backend/migrations/*.sql": [
+      "@auto-apply 헤더 + tenant CHECK 제약 영향 검토"
+    ],
+    "harness/registry.yaml": [
+      "registry.yaml → registry.go 동기화는 scripts/codemod/gen-registry.mjs 가 처리. 손으로 두 곳 편집 X"
+    ],
+    "harness/domains/*.yaml": [
+      "manifest 갱신 후 scripts/codemod/build-hook-index.mjs 실행해 .claude/hooks/domains.json 재생성"
+    ]
+  }
+}

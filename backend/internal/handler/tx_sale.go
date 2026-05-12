@@ -13,7 +13,11 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/audit"
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -56,6 +60,28 @@ type SaleHandler struct {
 // NewSaleHandler — SaleHandler 생성자
 func NewSaleHandler(db *supa.Client) *SaleHandler {
 	return &SaleHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxSale,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewSaleHandler(d.DB)
+			g := d.Gates
+			r.Route("/sales", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.Get("/summary", h.Summary)
+				// 대시보드 집계 — KPI / trend24 / by_customer_top10. 정적 경로라 /{id} 보다 먼저.
+				r.Get("/dashboard", h.Dashboard)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 type saleStatusUpdate struct {
@@ -270,7 +296,7 @@ func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
 	sortCol, asc := parseSaleSort(r)
 	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
-	limit, offset := parseLimitOffset(r, saleDefaultLimit, saleMaxLimit)
+	limit, offset := handlerutil.ParseLimitOffset(r, saleDefaultLimit, saleMaxLimit)
 	query = query.Range(offset, offset+limit-1, "")
 
 	data, count, err := query.Execute()
@@ -727,7 +753,7 @@ func (h *SaleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeAuditLog(h.DB, r, "sales", created[0].SaleID, "create", nil, auditRawFromValue(created[0]), "")
+	audit.WriteLog(h.DB, r, "sales", created[0].SaleID, "create", nil, audit.RawFromValue(created[0]), "")
 	response.RespondJSON(w, http.StatusCreated, created[0])
 }
 
@@ -825,7 +851,7 @@ func (h *SaleHandler) calculateSaleUpdate(id string, req *model.UpdateSaleReques
 func (h *SaleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "sales", "sale_id", id)
+	oldSnapshot, _, oldErr := audit.Snapshot(h.DB, "sales", "sale_id", id)
 	if oldErr != nil {
 		log.Printf("[판매 수정 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
@@ -865,7 +891,7 @@ func (h *SaleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditEntityByRouteID(h.DB, r, "sales", "sale_id", "update", oldSnapshot, auditRawFromValue(updated[0]), "")
+	audit.EntityByRouteID(h.DB, r, "sales", "sale_id", "update", oldSnapshot, audit.RawFromValue(updated[0]), "")
 	response.RespondJSON(w, http.StatusOK, updated[0])
 }
 
@@ -873,7 +899,7 @@ func (h *SaleHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *SaleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "sales", "sale_id", id)
+	oldSnapshot, _, oldErr := audit.Snapshot(h.DB, "sales", "sale_id", id)
 	if oldErr != nil {
 		log.Printf("[판매 취소 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
@@ -899,7 +925,7 @@ func (h *SaleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditEntityByRouteID(h.DB, r, "sales", "sale_id", "delete", oldSnapshot, auditRawFromValue(updated[0]), "soft_cancel")
+	audit.EntityByRouteID(h.DB, r, "sales", "sale_id", "delete", oldSnapshot, audit.RawFromValue(updated[0]), "soft_cancel")
 	response.RespondJSON(w, http.StatusOK, struct {
 		Status string `json:"status"`
 	}{Status: "cancelled"})

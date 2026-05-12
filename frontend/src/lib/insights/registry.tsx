@@ -83,6 +83,37 @@ import { OrdersCompletedInsight } from './metrics/OrdersCompletedInsight'
 import { OrdersCancelledInsight } from './metrics/OrdersCancelledInsight'
 import { OrdersAvgUnitPriceWpInsight } from './metrics/OrdersAvgUnitPriceWpInsight'
 import { OrdersShortageInsight } from './metrics/OrdersShortageInsight'
+import { ProcurementLcSettledInsight } from './metrics/ProcurementLcSettledInsight'
+import { ProcurementLcAvgAmountInsight } from './metrics/ProcurementLcAvgAmountInsight'
+import { ProcurementLcProgressInsight } from './metrics/ProcurementLcProgressInsight'
+import { ProcurementBlArrivedInsight } from './metrics/ProcurementBlArrivedInsight'
+import { ProcurementBlScheduledInsight } from './metrics/ProcurementBlScheduledInsight'
+import { ProcurementBlCompletedInsight } from './metrics/ProcurementBlCompletedInsight'
+import { ProcurementBlErpDoneInsight } from './metrics/ProcurementBlErpDoneInsight'
+import { ProcurementTtCompletedCountInsight } from './metrics/ProcurementTtCompletedCountInsight'
+import { ProcurementTtAvgAmountInsight } from './metrics/ProcurementTtAvgAmountInsight'
+import { ProcurementTtOrphanInsight } from './metrics/ProcurementTtOrphanInsight'
+import { ProcurementPoAvgMwInsight } from './metrics/ProcurementPoAvgMwInsight'
+import { ProcurementPoChangedInsight } from './metrics/ProcurementPoChangedInsight'
+import { ProcurementPoTotalInsight } from './metrics/ProcurementPoTotalInsight'
+import { ProcurementPoShippingRatioInsight } from './metrics/ProcurementPoShippingRatioInsight'
+import { CustomsUncostedInsight } from './metrics/CustomsUncostedInsight'
+import { CustomsUnlinkedExpenseInsight } from './metrics/CustomsUnlinkedExpenseInsight'
+import { CustomsCapacityInsight } from './metrics/CustomsCapacityInsight'
+import { CustomsVatInsight } from './metrics/CustomsVatInsight'
+import { CustomsAvgPerDeclInsight } from './metrics/CustomsAvgPerDeclInsight'
+import { BankingUsageRateInsight } from './metrics/BankingUsageRateInsight'
+import { BankingTightLimitInsight } from './metrics/BankingTightLimitInsight'
+import { BankingMaturityAmountInsight } from './metrics/BankingMaturityAmountInsight'
+import { BankingCompanyCountInsight } from './metrics/BankingCompanyCountInsight'
+import { BankingLimitChangesInsight } from './metrics/BankingLimitChangesInsight'
+import { PurchaseLcEventsInsight } from './metrics/PurchaseLcEventsInsight'
+import { PurchaseBlEventsInsight } from './metrics/PurchaseBlEventsInsight'
+import { PurchaseTtEventsInsight } from './metrics/PurchaseTtEventsInsight'
+import { PurchaseAuditLogsInsight } from './metrics/PurchaseAuditLogsInsight'
+import { PurchaseActiveMfgInsight } from './metrics/PurchaseActiveMfgInsight'
+import { PurchaseAvgChainPosInsight } from './metrics/PurchaseAvgChainPosInsight'
+import { PurchaseTotalPosInsight } from './metrics/PurchaseTotalPosInsight'
 
 export interface InsightEntry {
   // KPI 타일이 보낼 식별자 (예: 'outbound.count') — URL 에 그대로 들어감.
@@ -495,6 +526,175 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'orders.shortage',
     shortLabel: '충당 부족',
     render: () => <OrdersShortageInsight />,
+  },
+
+  // Procurement LC 확장
+  'procurement.lc_settled': {
+    id: 'procurement.lc_settled',
+    shortLabel: 'L/C 결제 완료',
+    render: () => <ProcurementLcSettledInsight />,
+  },
+  'procurement.lc_avg_amount': {
+    id: 'procurement.lc_avg_amount',
+    shortLabel: 'L/C 평균 개설액',
+    render: () => <ProcurementLcAvgAmountInsight />,
+  },
+  'procurement.lc_progress': {
+    id: 'procurement.lc_progress',
+    shortLabel: 'L/C 진행률',
+    render: () => <ProcurementLcProgressInsight />,
+  },
+
+  // Procurement BL 확장
+  'procurement.bl_arrived': {
+    id: 'procurement.bl_arrived',
+    shortLabel: 'B/L 입항',
+    render: () => <ProcurementBlArrivedInsight />,
+  },
+  'procurement.bl_scheduled': {
+    id: 'procurement.bl_scheduled',
+    shortLabel: 'B/L 입고 예정',
+    render: () => <ProcurementBlScheduledInsight />,
+  },
+  'procurement.bl_completed': {
+    id: 'procurement.bl_completed',
+    shortLabel: 'B/L 입고 완료',
+    render: () => <ProcurementBlCompletedInsight />,
+  },
+  'procurement.bl_erp_done': {
+    id: 'procurement.bl_erp_done',
+    shortLabel: 'B/L ERP 마감',
+    render: () => <ProcurementBlErpDoneInsight />,
+  },
+
+  // Procurement TT 확장
+  'procurement.tt_completed_count': {
+    id: 'procurement.tt_completed_count',
+    shortLabel: 'T/T 완료 건수',
+    render: () => <ProcurementTtCompletedCountInsight />,
+  },
+  'procurement.tt_avg_amount': {
+    id: 'procurement.tt_avg_amount',
+    shortLabel: 'T/T 평균 송금',
+    render: () => <ProcurementTtAvgAmountInsight />,
+  },
+  'procurement.tt_orphan': {
+    id: 'procurement.tt_orphan',
+    shortLabel: 'T/T PO 미연결',
+    render: () => <ProcurementTtOrphanInsight />,
+  },
+
+  // Procurement PO 확장
+  'procurement.po_avg_mw': {
+    id: 'procurement.po_avg_mw',
+    shortLabel: 'PO 평균 용량',
+    render: () => <ProcurementPoAvgMwInsight />,
+  },
+  'procurement.po_changed': {
+    id: 'procurement.po_changed',
+    shortLabel: '변경계약 PO',
+    render: () => <ProcurementPoChangedInsight />,
+  },
+  'procurement.po_total': {
+    id: 'procurement.po_total',
+    shortLabel: 'PO 전체',
+    render: () => <ProcurementPoTotalInsight />,
+  },
+  'procurement.po_shipping_ratio': {
+    id: 'procurement.po_shipping_ratio',
+    shortLabel: 'PO 운송중 비중',
+    render: () => <ProcurementPoShippingRatioInsight />,
+  },
+
+  // Customs 확장
+  'customs.uncosted': {
+    id: 'customs.uncosted',
+    shortLabel: '원가 미산정',
+    render: () => <CustomsUncostedInsight />,
+  },
+  'customs.unlinked_expense': {
+    id: 'customs.unlinked_expense',
+    shortLabel: 'B/L 미연결 비용',
+    render: () => <CustomsUnlinkedExpenseInsight />,
+  },
+  'customs.capacity': {
+    id: 'customs.capacity',
+    shortLabel: '수입 용량',
+    render: () => <CustomsCapacityInsight />,
+  },
+  'customs.vat': {
+    id: 'customs.vat',
+    shortLabel: '부대비용 VAT',
+    render: () => <CustomsVatInsight />,
+  },
+  'customs.avg_per_decl': {
+    id: 'customs.avg_per_decl',
+    shortLabel: '면장당 평균',
+    render: () => <CustomsAvgPerDeclInsight />,
+  },
+
+  // Banking 확장
+  'banking.usage_rate': {
+    id: 'banking.usage_rate',
+    shortLabel: '한도 사용률',
+    render: () => <BankingUsageRateInsight />,
+  },
+  'banking.tight_limit': {
+    id: 'banking.tight_limit',
+    shortLabel: '임박 한도',
+    render: () => <BankingTightLimitInsight />,
+  },
+  'banking.maturity_amount': {
+    id: 'banking.maturity_amount',
+    shortLabel: '만기 30일 금액',
+    render: () => <BankingMaturityAmountInsight />,
+  },
+  'banking.company_count': {
+    id: 'banking.company_count',
+    shortLabel: '관리 법인',
+    render: () => <BankingCompanyCountInsight />,
+  },
+  'banking.limit_changes': {
+    id: 'banking.limit_changes',
+    shortLabel: '한도 변경 이력',
+    render: () => <BankingLimitChangesInsight />,
+  },
+
+  // Purchase History 확장
+  'purchase.lc_events': {
+    id: 'purchase.lc_events',
+    shortLabel: 'L/C 이벤트',
+    render: () => <PurchaseLcEventsInsight />,
+  },
+  'purchase.bl_events': {
+    id: 'purchase.bl_events',
+    shortLabel: 'B/L 이벤트',
+    render: () => <PurchaseBlEventsInsight />,
+  },
+  'purchase.tt_events': {
+    id: 'purchase.tt_events',
+    shortLabel: 'T/T 이벤트',
+    render: () => <PurchaseTtEventsInsight />,
+  },
+  'purchase.audit_logs': {
+    id: 'purchase.audit_logs',
+    shortLabel: '감사 로그',
+    render: () => <PurchaseAuditLogsInsight />,
+  },
+  'purchase.active_mfg': {
+    id: 'purchase.active_mfg',
+    shortLabel: '활성 제조사',
+    render: () => <PurchaseActiveMfgInsight />,
+  },
+  'purchase.avg_chain_pos': {
+    id: 'purchase.avg_chain_pos',
+    shortLabel: '체인당 PO 평균',
+    render: () => <PurchaseAvgChainPosInsight />,
+  },
+  'purchase.total_pos': {
+    id: 'purchase.total_pos',
+    shortLabel: '전체 PO',
+    render: () => <PurchaseTotalPosInsight />,
   },
 }
 

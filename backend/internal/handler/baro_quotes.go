@@ -11,8 +11,10 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -24,6 +26,7 @@ import (
 // 외부 API 통합 (PR2.5c — KakaoTalk Notification Talk + Aligo SMS) 은 환경변수 기반 stub:
 //   - KAKAO_NOTIFY_API_KEY 미설정 → channel='kakao' send 시 501 + 안내
 //   - ALIGO_API_KEY 미설정 → channel='sms' send 시 501 + 안내
+//
 // 본 PR 에서는 channel='manual' (수동 복사) 만 안전하게 동작.
 type BaroQuotesHandler struct {
 	DB *supa.Client
@@ -31,6 +34,27 @@ type BaroQuotesHandler struct {
 
 func NewBaroQuotesHandler(db *supa.Client) *BaroQuotesHandler {
 	return &BaroQuotesHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroQuote,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroQuotesHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/quotes", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroQuote))
+				r.Get("/", h.List)
+				r.With(g.Write).Post("/", h.Create)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+				r.With(g.Write).Post("/{id}/send", h.Send)
+			})
+		},
+	})
 }
 
 // QuoteWithLines — 견적 1건 응답 (헤더 + 라인 묶음).
@@ -281,10 +305,10 @@ func (h *BaroQuotesHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.RespondJSON(w, http.StatusOK, map[string]any{
-		"status":       "sent",
-		"channel":      req.Channel,
-		"sent_to":      req.SentTo,
-		"sent_at":      now,
-		"note":         "channel='manual' 인 경우 영업이 직접 카톡에 붙여넣기 후 본 endpoint 호출",
+		"status":  "sent",
+		"channel": req.Channel,
+		"sent_to": req.SentTo,
+		"sent_at": now,
+		"note":    "channel='manual' 인 경우 영업이 직접 카톡에 붙여넣기 후 본 endpoint 호출",
 	})
 }

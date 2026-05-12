@@ -71,7 +71,7 @@ type bulkUpdateOutboundInput struct {
 
 func toolBulkUpdateOutbound() assistantTool {
 	return assistantTool{
-		name: "bulk_update_outbound",
+		name:        "bulk_update_outbound",
 		description: "출고(outbounds) 일괄 수정 — 여러 건을 한 번의 제안으로 묶음. 사용자는 카드에서 [저장] 한 번 누르면 전부 row-by-row 적용 (실패한 행만 보고). 각 항목은 outbound_id 필수 + 변경할 필드. 최대 200건 — 초과 시 분할 호출. summary 는 한 줄 요약(예: '출고 152건 site_address 채움'). 외부 시트 fetch_url 결과로 빈 칸 채울 때 사용.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",
@@ -138,7 +138,7 @@ type bulkUpdateOrderInput struct {
 
 func toolBulkUpdateOrder() assistantTool {
 	return assistantTool{
-		name: "bulk_update_order",
+		name:        "bulk_update_order",
 		description: "수주(orders) 일괄 수정 — 여러 건을 한 번의 제안으로 묶음. 사용자는 카드에서 [저장] 한 번 누르면 전부 row-by-row 적용. 각 항목은 order_id 필수 + 변경할 필드. 최대 200건. summary 는 한 줄 요약(예: '수주 87건 unit_price_wp 입력'). 외부 시트의 단가 정보로 ERP 빈 칸 채울 때 사용.",
 		inputSchema: json.RawMessage(`{
 			"type":"object",

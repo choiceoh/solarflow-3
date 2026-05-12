@@ -5,10 +5,14 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/domains/bl"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -20,6 +24,22 @@ type BaroIncomingHandler struct {
 
 func NewBaroIncomingHandler(db *supa.Client) *BaroIncomingHandler {
 	return &BaroIncomingHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroIncoming,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroIncomingHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/incoming", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroIncoming))
+				r.Get("/", h.List)
+			})
+		},
+	})
 }
 
 type baroIncomingShipmentRow struct {
@@ -37,12 +57,12 @@ type baroIncomingShipmentRow struct {
 }
 
 type baroIncomingLineRow struct {
-	BLLineID   string                         `json:"bl_line_id"`
-	BLID       string                         `json:"bl_id"`
-	ProductID  string                         `json:"product_id"`
-	Quantity   int                            `json:"quantity"`
-	CapacityKW float64                        `json:"capacity_kw"`
-	Products   *model.ProductSummaryForBLLine `json:"products"`
+	BLLineID   string                      `json:"bl_line_id"`
+	BLID       string                      `json:"bl_id"`
+	ProductID  string                      `json:"product_id"`
+	Quantity   int                         `json:"quantity"`
+	CapacityKW float64                     `json:"capacity_kw"`
+	Products   *bl.ProductSummaryForBLLine `json:"products"`
 }
 
 type baroIncomingCompanyRow struct {
@@ -66,9 +86,6 @@ func (h *BaroIncomingHandler) List(w http.ResponseWriter, r *http.Request) {
 	query := h.DB.From("bl_shipments").
 		Select("bl_id, bl_number, company_id, manufacturer_id, inbound_type, etd, eta, actual_arrival, port, warehouse_id, status", "exact", false)
 
-	if r.URL.Query().Get("include_sandbox") != "true" {
-		query = query.Eq("is_sandbox", "false")
-	}
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
 	} else if r.URL.Query().Get("scope") != "all" {

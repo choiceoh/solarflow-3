@@ -5,6 +5,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use crate::calc::resolve_company_ids;
 use crate::model::margin::*;
 
 // === 공개 단위 함수 (테스트용) ===
@@ -127,7 +128,7 @@ pub async fn calculate_margin(
     pool: &PgPool,
     req: &MarginAnalysisRequest,
 ) -> Result<MarginAnalysisResponse, sqlx::Error> {
-    let company_id = req.company_id.unwrap();
+    let company_ids = resolve_company_ids(req.company_ids.as_deref(), req.company_id);
     let date_from: Option<NaiveDate> = req.date_from.as_ref().and_then(|s| s.parse().ok());
     let date_to: Option<NaiveDate> = req.date_to.as_ref().and_then(|s| s.parse().ok());
 
@@ -146,8 +147,11 @@ pub async fn calculate_margin(
         JOIN outbounds o ON s.outbound_id = o.outbound_id
         JOIN products p ON o.product_id = p.product_id
         JOIN manufacturers m ON p.manufacturer_id = m.manufacturer_id
-        WHERE o.company_id = $1 AND o.status = 'active'
+        WHERE o.company_id = ANY($1::uuid[]) AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          -- 매출 분석 = 상품판매(+무상 스페어) 만. 공사사용/유지관리/폐기 등 자체 사용분은
+          -- 매출이 아닌 자체 비용이므로 마진 분석 대상이 아님.
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($2::uuid IS NULL OR p.manufacturer_id = $2)
           AND ($3::uuid IS NULL OR o.product_id = $3)
           AND ($4::uuid IS NULL OR s.customer_id = $4)
@@ -158,7 +162,7 @@ pub async fn calculate_margin(
         ORDER BY m.name_kr, p.module_width_mm, p.module_height_mm, p.spec_wp
         "#,
     )
-    .bind(company_id)
+    .bind(&company_ids)
     .bind(req.manufacturer_id)
     .bind(req.product_id)
     .bind(req.customer_id)
@@ -170,9 +174,9 @@ pub async fn calculate_margin(
     // 원가 조회 (cost_basis에 따라)
     // D-064 PR 30: 'fifo' — ERP fifo_matches (PR 26) 직접 사용. 가장 정확.
     let cost_map = match req.cost_basis.as_str() {
-        "fifo" => fetch_cost_avg_fifo(pool, company_id, req.product_id).await?,
-        "landed" => fetch_cost_avg(pool, company_id, req.product_id, "landed").await?,
-        _ => fetch_cost_avg(pool, company_id, req.product_id, "cif").await?,
+        "fifo" => fetch_cost_avg_fifo(pool, &company_ids, req.product_id).await?,
+        "landed" => fetch_cost_avg(pool, &company_ids, req.product_id, "landed").await?,
+        _ => fetch_cost_avg(pool, &company_ids, req.product_id, "cif").await?,
     };
 
     let mut items: Vec<MarginItem> = Vec::new();
@@ -271,7 +275,7 @@ pub async fn analyze_customers(
     pool: &PgPool,
     req: &CustomerAnalysisRequest,
 ) -> Result<CustomerAnalysisResponse, sqlx::Error> {
-    let company_id = req.company_id.unwrap();
+    let company_ids = resolve_company_ids(req.company_ids.as_deref(), req.company_id);
     let date_from: Option<NaiveDate> = req.date_from.as_ref().and_then(|s| s.parse().ok());
     let date_to: Option<NaiveDate> = req.date_to.as_ref().and_then(|s| s.parse().ok());
 
@@ -281,36 +285,70 @@ pub async fn analyze_customers(
         FROM sales s
         JOIN partners ptr ON s.customer_id = ptr.partner_id
         JOIN outbounds o ON s.outbound_id = o.outbound_id
-        WHERE o.company_id = $1 AND o.status = 'active'
+        WHERE o.company_id = ANY($1::uuid[]) AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          -- 거래처 분석 = 외부 판매 (상품판매+스페어) 만. 자체 EPC(공사사용) 등은 매출 아님.
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($2::uuid IS NULL OR s.customer_id = $2)
           AND ($3::date IS NULL OR o.outbound_date >= $3)
           AND ($4::date IS NULL OR o.outbound_date <= $4)
         GROUP BY s.customer_id, ptr.partner_name
         "#,
     )
-    .bind(company_id)
+    .bind(&company_ids)
     .bind(req.customer_id)
     .bind(date_from)
     .bind(date_to)
     .fetch_all(pool)
     .await?;
 
+    // receipt_matches 는 두 가지 경로로 sale 에 연결된다:
+    //   1) 매뉴얼 매칭: rm.outbound_id 채움 (rm.sale_id NULL)
+    //   2) 출고/판매 화면 bulk 수금완료: rm.sale_id 채움 (rm.outbound_id NULL)
+    // 단일 JOIN 의 OR 조건은 planner 가 인덱스를 선택할 수 없어 1초+ slow query 가 됨
+    // (2026-05-12 운영 로그 sqlx slow_threshold 위반). 두 경로를 CTE 의 UNION ALL 로 분리하면
+    // (sale_id) / (outbound_id) 인덱스를 각각 활용해 동등 의미를 빠르게 계산할 수 있다.
     let collected_rows = sqlx::query_as::<_, CustomerCollectedRow>(
         r#"
-        SELECT s.customer_id, COALESCE(SUM(rm.matched_amount), 0)::float8 as total_collected
-        FROM sales s
-        JOIN outbounds o ON s.outbound_id = o.outbound_id
-        JOIN receipt_matches rm ON rm.outbound_id = o.outbound_id
-        WHERE o.company_id = $1 AND o.status = 'active'
-          AND COALESCE(s.status, 'active') <> 'cancelled'
-          AND ($2::uuid IS NULL OR s.customer_id = $2)
-          AND ($3::date IS NULL OR o.outbound_date >= $3)
-          AND ($4::date IS NULL OR o.outbound_date <= $4)
-        GROUP BY s.customer_id
+        WITH scoped_sales AS (
+            SELECT s.sale_id, s.outbound_id, s.customer_id
+            FROM sales s
+            JOIN outbounds o ON s.outbound_id = o.outbound_id
+            WHERE o.company_id = ANY($1::uuid[]) AND o.status = 'active'
+              AND COALESCE(s.status, 'active') <> 'cancelled'
+              AND o.usage_category IN ('sale', 'sale_spare')
+              AND ($2::uuid IS NULL OR s.customer_id = $2)
+              AND ($3::date IS NULL OR o.outbound_date >= $3)
+              AND ($4::date IS NULL OR o.outbound_date <= $4)
+        ),
+        direct_matches AS (
+            SELECT ss.sale_id, SUM(rm.matched_amount)::float8 AS amt
+            FROM scoped_sales ss
+            JOIN receipt_matches rm ON rm.sale_id = ss.sale_id
+            GROUP BY ss.sale_id
+        ),
+        outbound_matches AS (
+            SELECT ss.sale_id, SUM(rm.matched_amount)::float8 AS amt
+            FROM scoped_sales ss
+            JOIN receipt_matches rm
+              ON rm.outbound_id = ss.outbound_id AND rm.sale_id IS NULL
+            GROUP BY ss.sale_id
+        ),
+        per_sale AS (
+            SELECT sale_id, SUM(amt) AS amt FROM (
+                SELECT * FROM direct_matches
+                UNION ALL
+                SELECT * FROM outbound_matches
+            ) u
+            GROUP BY sale_id
+        )
+        SELECT ss.customer_id, SUM(per_sale.amt)::float8 AS total_collected
+        FROM scoped_sales ss
+        JOIN per_sale ON per_sale.sale_id = ss.sale_id
+        GROUP BY ss.customer_id
         "#,
     )
-    .bind(company_id)
+    .bind(&company_ids)
     .bind(req.customer_id)
     .bind(date_from)
     .bind(date_to)
@@ -322,20 +360,51 @@ pub async fn analyze_customers(
         .map(|r| (r.customer_id, r.total_collected.unwrap_or(0.0)))
         .collect();
 
+    // 미수금 판정: total_amount > 누적 수금액 → sale_id 단위 1행.
+    // 원본은 correlated subquery + OR 로 planner 가 nested loop seq scan 으로 떨어졌음
+    // (운영 elapsed=1.28s). CTE 로 sale_id 별 수금 합계를 한 번 계산해 LEFT JOIN.
     let outstanding_rows = sqlx::query_as::<_, OutstandingRow>(
         r#"
-        SELECT s.customer_id,
-               (CURRENT_DATE - o.outbound_date)::int as days_elapsed
-        FROM sales s JOIN outbounds o ON s.outbound_id = o.outbound_id
-        WHERE o.company_id = $1 AND o.status = 'active'
-          AND COALESCE(s.status, 'active') <> 'cancelled'
-          AND ($2::uuid IS NULL OR s.customer_id = $2)
-          AND ($3::date IS NULL OR o.outbound_date >= $3)
-          AND ($4::date IS NULL OR o.outbound_date <= $4)
-          AND s.total_amount > COALESCE((SELECT SUM(rm3.matched_amount) FROM receipt_matches rm3 WHERE rm3.outbound_id = o.outbound_id), 0)
+        WITH scoped_sales AS (
+            SELECT s.sale_id, s.outbound_id, s.customer_id, s.total_amount, o.outbound_date
+            FROM sales s
+            JOIN outbounds o ON s.outbound_id = o.outbound_id
+            WHERE o.company_id = ANY($1::uuid[]) AND o.status = 'active'
+              AND COALESCE(s.status, 'active') <> 'cancelled'
+              AND o.usage_category IN ('sale', 'sale_spare')
+              AND ($2::uuid IS NULL OR s.customer_id = $2)
+              AND ($3::date IS NULL OR o.outbound_date >= $3)
+              AND ($4::date IS NULL OR o.outbound_date <= $4)
+        ),
+        direct_matches AS (
+            SELECT ss.sale_id, SUM(rm.matched_amount)::float8 AS amt
+            FROM scoped_sales ss
+            JOIN receipt_matches rm ON rm.sale_id = ss.sale_id
+            GROUP BY ss.sale_id
+        ),
+        outbound_matches AS (
+            SELECT ss.sale_id, SUM(rm.matched_amount)::float8 AS amt
+            FROM scoped_sales ss
+            JOIN receipt_matches rm
+              ON rm.outbound_id = ss.outbound_id AND rm.sale_id IS NULL
+            GROUP BY ss.sale_id
+        ),
+        per_sale AS (
+            SELECT sale_id, SUM(amt)::float8 AS collected FROM (
+                SELECT * FROM direct_matches
+                UNION ALL
+                SELECT * FROM outbound_matches
+            ) u
+            GROUP BY sale_id
+        )
+        SELECT ss.customer_id,
+               (CURRENT_DATE - ss.outbound_date)::int AS days_elapsed
+        FROM scoped_sales ss
+        LEFT JOIN per_sale ON per_sale.sale_id = ss.sale_id
+        WHERE ss.total_amount > COALESCE(per_sale.collected, 0)
         "#,
     )
-    .bind(company_id).bind(req.customer_id).bind(date_from).bind(date_to)
+    .bind(&company_ids).bind(req.customer_id).bind(date_from).bind(date_to)
     .fetch_all(pool).await?;
 
     // 거래처별 미수금 집계
@@ -347,8 +416,8 @@ pub async fn analyze_customers(
     }
 
     let deposit_rows = sqlx::query_as::<_, CustomerDepositRow>(
-        "SELECT ord.customer_id, AVG(ord.deposit_rate)::float8 as avg_deposit_rate FROM orders ord WHERE ord.company_id = $1 AND ord.deposit_rate IS NOT NULL GROUP BY ord.customer_id"
-    ).bind(company_id).fetch_all(pool).await?;
+        "SELECT ord.customer_id, AVG(ord.deposit_rate)::float8 as avg_deposit_rate FROM orders ord WHERE ord.company_id = ANY($1::uuid[]) AND ord.deposit_rate IS NOT NULL GROUP BY ord.customer_id"
+    ).bind(&company_ids).fetch_all(pool).await?;
     let deposit_map: HashMap<Uuid, f64> = deposit_rows
         .into_iter()
         .filter_map(|r| r.avg_deposit_rate.map(|d| (r.customer_id, round2(d))))
@@ -365,8 +434,9 @@ pub async fn analyze_customers(
             SELECT fm.outbound_id, SUM(fm.cost_amount)::float8 AS cost_covered
             FROM fifo_matches fm
             JOIN outbounds o ON fm.outbound_id = o.outbound_id
-            WHERE o.company_id = $1
+            WHERE o.company_id = ANY($1::uuid[])
               AND fm.cost_amount IS NOT NULL
+              AND fm.usage_category_raw IN ('상품판매', '상품판매(스페어)')
             GROUP BY fm.outbound_id
         )
         SELECT s.customer_id,
@@ -375,8 +445,9 @@ pub async fn analyze_customers(
         FROM sales s
         JOIN outbounds o ON s.outbound_id = o.outbound_id
         LEFT JOIN fifo_cost fc ON fc.outbound_id = o.outbound_id
-        WHERE o.company_id = $1 AND o.status = 'active'
+        WHERE o.company_id = ANY($1::uuid[]) AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($2::uuid IS NULL OR s.customer_id = $2)
           AND ($3::date IS NULL OR o.outbound_date >= $3)
           AND ($4::date IS NULL OR o.outbound_date <= $4)
@@ -395,7 +466,7 @@ pub async fn analyze_customers(
                    SUM({cost_col} * cd.quantity)::float8 / NULLIF(SUM(cd.quantity), 0) AS avg_wp_krw
             FROM cost_details cd
             JOIN import_declarations decl ON cd.declaration_id = decl.declaration_id
-            WHERE decl.company_id = $1 AND {cost_col} IS NOT NULL
+            WHERE decl.company_id = ANY($1::uuid[]) AND {cost_col} IS NOT NULL
             GROUP BY cd.product_id
         ),
         bl_cost AS (
@@ -407,7 +478,7 @@ pub async fn analyze_customers(
             FROM bl_line_items bli
             JOIN bl_shipments bl ON bli.bl_id = bl.bl_id
             WHERE bl.status IN ('completed', 'erp_done')
-              AND bl.company_id = $1
+              AND bl.company_id = ANY($1::uuid[])
               AND (bli.unit_price_usd_wp IS NOT NULL OR bli.unit_price_krw_wp IS NOT NULL)
             GROUP BY bli.product_id
         ),
@@ -426,8 +497,9 @@ pub async fn analyze_customers(
         JOIN outbounds o ON s.outbound_id = o.outbound_id
         JOIN products p ON o.product_id = p.product_id
         LEFT JOIN cost_avg ca ON ca.product_id = o.product_id
-        WHERE o.company_id = $1 AND o.status = 'active'
+        WHERE o.company_id = ANY($1::uuid[]) AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($2::uuid IS NULL OR s.customer_id = $2)
           AND ($3::date IS NULL OR o.outbound_date >= $3)
           AND ($4::date IS NULL OR o.outbound_date <= $4)
@@ -436,7 +508,7 @@ pub async fn analyze_customers(
         )
     };
     let margin_rows = sqlx::query_as::<_, CustomerCostAggRow>(&margin_sql)
-        .bind(company_id)
+        .bind(&company_ids)
         .bind(req.customer_id)
         .bind(date_from)
         .bind(date_to)
@@ -564,6 +636,7 @@ pub async fn calculate_price_trend(
         JOIN products p ON o.product_id = p.product_id
         WHERE o.company_id = $2 AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
           AND ($4::uuid IS NULL OR o.product_id = $4)
         GROUP BY o.product_id, period
@@ -630,9 +703,11 @@ pub async fn calculate_price_trend(
 /// allocated_qty × spec_wp 로 분모, cost_amount 합으로 분자.
 async fn fetch_cost_avg_fifo(
     pool: &PgPool,
-    company_id: Uuid,
+    company_ids: &[Uuid],
     product_id: Option<Uuid>,
 ) -> Result<HashMap<Uuid, f64>, sqlx::Error> {
+    // 매출 분석용 원가 = 상품판매(+스페어) 매칭만. usage_category_raw 가 ERP 한글 (상품판매/공사사용/유지관리/잔여재고 등) 로 들어옴.
+    // 공사사용(자체 EPC) cost 가 매출 매칭에 합산되면 매출 < 원가 → -38% 음수 마진 사고 (2026-05-12).
     let sql = r#"
     SELECT fm.product_id,
            CASE WHEN SUM(fm.allocated_qty * p.spec_wp) > 0
@@ -643,12 +718,13 @@ async fn fetch_cost_avg_fifo(
     LEFT JOIN outbounds o ON fm.outbound_id = o.outbound_id
     WHERE fm.allocated_qty IS NOT NULL AND fm.allocated_qty > 0
       AND fm.cost_amount IS NOT NULL
+      AND fm.usage_category_raw IN ('상품판매', '상품판매(스페어)')
       AND ($2::uuid IS NULL OR fm.product_id = $2)
-      AND ($1::uuid IS NULL OR o.company_id IS NULL OR o.company_id = $1)
+      AND (o.company_id IS NULL OR o.company_id = ANY($1::uuid[]))
     GROUP BY fm.product_id
     "#;
     let rows = sqlx::query_as::<_, CostAvgRow>(sql)
-        .bind(company_id)
+        .bind(company_ids)
         .bind(product_id)
         .fetch_all(pool)
         .await?;
@@ -660,7 +736,7 @@ async fn fetch_cost_avg_fifo(
 
 async fn fetch_cost_avg(
     pool: &PgPool,
-    company_id: Uuid,
+    company_ids: &[Uuid],
     product_id: Option<Uuid>,
     basis: &str,
 ) -> Result<HashMap<Uuid, f64>, sqlx::Error> {
@@ -680,7 +756,7 @@ async fn fetch_cost_avg(
                    ELSE NULL END AS avg_wp
           FROM cost_details cd
           JOIN import_declarations decl ON cd.declaration_id = decl.declaration_id
-          WHERE decl.company_id = $1
+          WHERE decl.company_id = ANY($1::uuid[])
             AND ($2::uuid IS NULL OR cd.product_id = $2)
             AND {col} IS NOT NULL
           GROUP BY cd.product_id
@@ -699,7 +775,7 @@ async fn fetch_cost_avg(
           FROM bl_line_items bli
           JOIN bl_shipments bl ON bli.bl_id = bl.bl_id
           WHERE bl.status IN ('completed', 'erp_done')
-            AND bl.company_id = $1
+            AND bl.company_id = ANY($1::uuid[])
             AND ($2::uuid IS NULL OR bli.product_id = $2)
             AND (bli.unit_price_usd_wp IS NOT NULL OR bli.unit_price_krw_wp IS NOT NULL)
           GROUP BY bli.product_id
@@ -711,7 +787,7 @@ async fn fetch_cost_avg(
         "#
     );
     let rows = sqlx::query_as::<_, CostAvgRow>(&sql)
-        .bind(company_id)
+        .bind(company_ids)
         .bind(product_id)
         .fetch_all(pool)
         .await?;

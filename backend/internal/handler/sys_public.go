@@ -18,6 +18,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/engine"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -73,6 +74,25 @@ func NewPublicHandler(db *supa.Client, engineClient *engine.EngineClient) *Publi
 	h.refreshLoginStatsAsync()
 	h.startLoginInventorySnapshotWorker()
 	return h
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// /api/v1/public/* 그룹의 KPI/환율/시세 6개 라우트. 무인증 (unrestrictedAllowlist 등재).
+// PublicHandler 가 무겁다 (생성자가 백그라운드 ECOS/메탈/로그인 통계 워커를 띄움) —
+// Mount 가 router.New 시점에 1회 호출되므로 인스턴스도 1개만 만들어진다.
+func init() {
+	mount.Register(mount.Spec{
+		Auth: mount.AuthPublicAPI,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewPublicHandler(d.DB, d.Engine)
+			r.Get("/login-stats", h.LoginStats)
+			r.Get("/fx/{pair}", h.FXSpot)
+			r.Get("/fx/{pair}/timeseries", h.FXTimeseries)
+			r.Get("/metals/{symbol}", h.MetalPrice)
+			r.Get("/polysilicon", h.Polysilicon)
+			r.Get("/scfi", h.SCFI)
+		},
+	})
 }
 
 func commoditiesFilePath() string {

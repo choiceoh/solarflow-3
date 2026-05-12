@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -7,6 +8,7 @@ import {
   Database,
   Bot,
   EyeOff,
+  ExternalLink,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
@@ -676,6 +678,24 @@ function AnomalyRuleBlock({
   );
 }
 
+// row 의 listing/detail 페이지로 가는 링크. 매핑이 없으면 null (clickable 안 됨).
+// focus_* 파라미터는 해당 페이지가 처리 안 해도 안전 — URL 만 깨끗하게 유지될 뿐.
+function anomalyDetailHref(a: AnomalyRow): string | null {
+  switch (a.table_name) {
+    case 'sales':
+      return `/orders?tab=sales&focus_sale_id=${encodeURIComponent(a.row_pk)}`;
+    case 'outbounds':
+      return `/orders?tab=outbound&focus_outbound_id=${encodeURIComponent(a.row_pk)}`;
+    case 'products':
+      return `/data/products/${encodeURIComponent(a.row_pk)}/edit`;
+    case 'import_declarations':
+      return `/customs?focus_declaration_id=${encodeURIComponent(a.row_pk)}`;
+    default:
+      // inbounds, fifo_matches 는 명확한 단일 listing 페이지가 없어 일단 미연결.
+      return null;
+  }
+}
+
 function AnomalyRowItem({
   a,
   busy,
@@ -685,11 +705,23 @@ function AnomalyRowItem({
   busy: boolean;
   onIgnore: (a: AnomalyRow) => void;
 }) {
+  const href = anomalyDetailHref(a);
   return (
     <div className="flex items-start gap-3 px-3 py-2 pl-8">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{a.row_label}</span>
+          {href ? (
+            <Link
+              to={href}
+              className="text-sm font-medium text-blue-700 hover:underline inline-flex items-center gap-1"
+              title="세부 페이지로 이동"
+            >
+              {a.row_label}
+              <ExternalLink className="h-3 w-3 opacity-60" />
+            </Link>
+          ) : (
+            <span className="text-sm font-medium">{a.row_label}</span>
+          )}
           <span className="font-mono text-[10px] text-muted-foreground">
             {a.table_name} / {a.row_pk.slice(0, 8)}
           </span>

@@ -10,8 +10,10 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -23,6 +25,26 @@ type PartnerActivityHandler struct {
 
 func NewPartnerActivityHandler(db *supa.Client) *PartnerActivityHandler {
 	return &PartnerActivityHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// /partner-activities (POST/PATCH) + /me/open-followups (GET) 두 트리. /me 트리는
+// 다른 핸들러(UserHandler.GetMe) 의 prefix 와 겹치지 않게 direct path 로 등록.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDCRMPartnerActivity,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewPartnerActivityHandler(d.DB)
+			g := d.Gates
+			r.Route("/partner-activities", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDCRMPartnerActivity))
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Patch("/{id}/followup", h.ToggleFollowup)
+			})
+			r.With(g.Feature(feature.IDCRMPartnerActivity)).Get("/me/open-followups", h.MyOpenFollowups)
+		},
+	})
 }
 
 // ListByPartner — GET /api/v1/partners/{id}/activities

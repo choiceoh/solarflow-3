@@ -13,6 +13,11 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"solarflow-backend/internal/domains/lc"
+	"solarflow-backend/internal/domains/po"
+	"solarflow-backend/internal/domains/tt"
+	"solarflow-backend/internal/validation"
 	"time"
 
 	"solarflow-backend/internal/model"
@@ -357,8 +362,8 @@ func groupInboundRowsByBL(rows []map[string]interface{}) (
 			allowed    map[string]bool
 		}{
 			{getString(row, "inbound_type"), "inbound_type", allowedInboundTypes},
-			{getString(row, "item_type"), "item_type", allowedItemTypes},
-			{getString(row, "payment_type"), "payment_type", allowedPaymentTypes},
+			{getString(row, "item_type"), "item_type", validation.ItemTypes},
+			{getString(row, "payment_type"), "payment_type", validation.PaymentTypes},
 			{getString(row, "usage_category"), "usage_category", allowedUsageCategories},
 		} {
 			if e := validateAllowedValues(rowNum, av.val, av.field, av.allowed); e != nil {
@@ -549,8 +554,8 @@ func groupPORowsByPONumber(rows []map[string]interface{}) (
 			allowed    map[string]bool
 		}{
 			{getString(row, "currency"), "currency", allowedCurrencies},
-			{getString(row, "item_type"), "item_type", allowedItemTypes},
-			{getString(row, "payment_type"), "payment_type", allowedPaymentTypes},
+			{getString(row, "item_type"), "item_type", validation.ItemTypes},
+			{getString(row, "payment_type"), "payment_type", validation.PaymentTypes},
 		} {
 			if e := validateAllowedValues(rowNum, av.val, av.field, av.allowed); e != nil {
 				errors = append(errors, *e)
@@ -612,22 +617,22 @@ func groupPORowsByPONumber(rows []map[string]interface{}) (
 // parsePOLineRow — PO 라인 행을 CreatePOLineRequest로 변환.
 // USD/Wp 단가를 받아 USD per panel(unit_price_usd) + total_amount_usd 자동 계산.
 // productID·wattageKW는 호출 측이 미리 해석.
-func parsePOLineRow(rowNum int, row map[string]interface{}, productID string, wattageKW float64) (model.CreatePOLineRequest, []model.ImportError) {
+func parsePOLineRow(rowNum int, row map[string]interface{}, productID string, wattageKW float64) (po.CreatePOLineRequest, []model.ImportError) {
 	qty, qErr := requireInt(rowNum, row, "quantity")
 	if qErr != nil {
-		return model.CreatePOLineRequest{}, []model.ImportError{*qErr}
+		return po.CreatePOLineRequest{}, []model.ImportError{*qErr}
 	}
 	if qty <= 0 {
-		return model.CreatePOLineRequest{}, []model.ImportError{{
+		return po.CreatePOLineRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "quantity", Message: "quantity는 양수여야 합니다",
 		}}
 	}
 	unitPriceWp, upErr := requireFloat(rowNum, row, "unit_price_usd_wp")
 	if upErr != nil {
-		return model.CreatePOLineRequest{}, []model.ImportError{*upErr}
+		return po.CreatePOLineRequest{}, []model.ImportError{*upErr}
 	}
 	if unitPriceWp <= 0 {
-		return model.CreatePOLineRequest{}, []model.ImportError{{
+		return po.CreatePOLineRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "unit_price_usd_wp", Message: "unit_price_usd_wp는 양수여야 합니다",
 		}}
 	}
@@ -638,7 +643,7 @@ func parsePOLineRow(rowNum int, row map[string]interface{}, productID string, wa
 
 	itemType := getString(row, "item_type")
 	paymentType := getString(row, "payment_type")
-	req := model.CreatePOLineRequest{
+	req := po.CreatePOLineRequest{
 		ProductID:      productID,
 		Quantity:       qty,
 		UnitPriceUSD:   &unitPriceUsd,
@@ -652,26 +657,26 @@ func parsePOLineRow(rowNum int, row map[string]interface{}, productID string, wa
 }
 
 // parseLCRow — LC 행을 CreateLCRequest로 변환. po_id/bank_id/companyID는 호출 측이 해석.
-func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID string) (model.CreateLCRequest, []model.ImportError) {
+func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID string) (lc.CreateLCRequest, []model.ImportError) {
 	amountUsd, aErr := requireFloat(rowNum, row, "amount_usd")
 	if aErr != nil {
-		return model.CreateLCRequest{}, []model.ImportError{*aErr}
+		return lc.CreateLCRequest{}, []model.ImportError{*aErr}
 	}
 	if amountUsd <= 0 {
-		return model.CreateLCRequest{}, []model.ImportError{{
+		return lc.CreateLCRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "amount_usd", Message: "amount_usd는 양수여야 합니다",
 		}}
 	}
 	for _, f := range []string{"open_date", "maturity_date"} {
 		if e := validateDateField(rowNum, row, f); e != nil {
-			return model.CreateLCRequest{}, []model.ImportError{*e}
+			return lc.CreateLCRequest{}, []model.ImportError{*e}
 		}
 	}
 	if e := validateDateOrder(rowNum, row, "open_date", "maturity_date"); e != nil {
-		return model.CreateLCRequest{}, []model.ImportError{*e}
+		return lc.CreateLCRequest{}, []model.ImportError{*e}
 	}
 	if e := validateMigrationNumber(rowNum, "lc_number", getString(row, "lc_number"), "LC"); e != nil {
-		return model.CreateLCRequest{}, []model.ImportError{*e}
+		return lc.CreateLCRequest{}, []model.ImportError{*e}
 	}
 
 	// usance_type — 라벨/코드 양쪽 받기. 빈 값이면 nil 유지.
@@ -688,14 +693,14 @@ func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID 
 			}
 		} else {
 			// 알 수 없는 값은 검증 실패로.
-			return model.CreateLCRequest{}, []model.ImportError{{
+			return lc.CreateLCRequest{}, []model.ImportError{{
 				Row: rowNum, Field: "usance_type",
 				Message: "usance_type은 BANKER'S USANCE / SHIPPER'S USANCE / AT SIGHT 중 하나여야 합니다",
 			}}
 		}
 	}
 
-	req := model.CreateLCRequest{
+	req := lc.CreateLCRequest{
 		POID:         poID,
 		LCNumber:     getStringPtr(row, "lc_number"),
 		BankID:       bankID,
@@ -717,25 +722,25 @@ func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID 
 }
 
 // parseTTRow — T/T 행을 CreateTTRequest로 변환. po_id는 호출 측이 해석.
-func parseTTRow(rowNum int, row map[string]interface{}, poID string) (model.CreateTTRequest, []model.ImportError) {
+func parseTTRow(rowNum int, row map[string]interface{}, poID string) (tt.CreateTTRequest, []model.ImportError) {
 	if e := validateDateField(rowNum, row, "remit_date"); e != nil {
-		return model.CreateTTRequest{}, []model.ImportError{*e}
+		return tt.CreateTTRequest{}, []model.ImportError{*e}
 	}
 	amountUsd, aErr := requireFloat(rowNum, row, "amount_usd")
 	if aErr != nil {
-		return model.CreateTTRequest{}, []model.ImportError{*aErr}
+		return tt.CreateTTRequest{}, []model.ImportError{*aErr}
 	}
 	if amountUsd <= 0 {
-		return model.CreateTTRequest{}, []model.ImportError{{
+		return tt.CreateTTRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "amount_usd", Message: "amount_usd는 양수여야 합니다",
 		}}
 	}
 	exchangeRate, exErr := requireFloat(rowNum, row, "exchange_rate")
 	if exErr != nil {
-		return model.CreateTTRequest{}, []model.ImportError{*exErr}
+		return tt.CreateTTRequest{}, []model.ImportError{*exErr}
 	}
 	if exchangeRate <= 0 {
-		return model.CreateTTRequest{}, []model.ImportError{{
+		return tt.CreateTTRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "exchange_rate", Message: "exchange_rate는 양수여야 합니다",
 		}}
 	}
@@ -745,14 +750,14 @@ func parseTTRow(rowNum int, row map[string]interface{}, poID string) (model.Crea
 		status = alias
 	}
 	if !allowedTTStatusesForImport[status] {
-		return model.CreateTTRequest{}, []model.ImportError{{
+		return tt.CreateTTRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "status",
 			Message: "status는 planned/completed 또는 예정/완료 중 하나여야 합니다",
 		}}
 	}
 
 	amountKrw := amountUsd * exchangeRate
-	req := model.CreateTTRequest{
+	req := tt.CreateTTRequest{
 		POID:         poID,
 		RemitDate:    getStringPtr(row, "remit_date"),
 		AmountUSD:    amountUsd,

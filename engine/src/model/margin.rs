@@ -8,6 +8,7 @@ use uuid::Uuid;
 #[derive(Debug, Deserialize)]
 pub struct MarginAnalysisRequest {
     pub company_id: Option<Uuid>,
+    pub company_ids: Option<Vec<Uuid>>,
     pub manufacturer_id: Option<Uuid>,
     pub customer_id: Option<Uuid>,
     pub product_id: Option<Uuid>,
@@ -75,6 +76,7 @@ pub struct MarginSummary {
 #[derive(Debug, Deserialize)]
 pub struct CustomerAnalysisRequest {
     pub company_id: Option<Uuid>,
+    pub company_ids: Option<Vec<Uuid>>,
     pub customer_id: Option<Uuid>,
     pub date_from: Option<String>,
     pub date_to: Option<String>,

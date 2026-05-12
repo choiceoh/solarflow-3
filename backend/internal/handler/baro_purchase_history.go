@@ -8,10 +8,15 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -22,6 +27,24 @@ type BaroPurchaseHistoryHandler struct {
 
 func NewBaroPurchaseHistoryHandler(db *supa.Client) *BaroPurchaseHistoryHandler {
 	return &BaroPurchaseHistoryHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// RoleMiddleware 로 manager 차단을 라우트마다 직접 건다 (D-122 직원·임원만 원가 조회).
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroPurchaseHistory,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroPurchaseHistoryHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/purchase-history", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroPurchaseHistory))
+				r.With(middleware.RoleMiddleware("admin", "operator", "executive")).Get("/summary", h.Summary)
+				r.With(middleware.RoleMiddleware("admin", "operator", "executive")).Get("/", h.List)
+			})
+		},
+	})
 }
 
 type baroPurchaseCompanyRow struct {
@@ -272,7 +295,7 @@ func baroPurchaseCostFilterMatches(line baroPurchaseLineRow, ship baroPurchaseSh
 
 func (h *BaroPurchaseHistoryHandler) baroPurchaseSummaryLines(blIDs []string) ([]baroPurchaseLineRow, error) {
 	lines := []baroPurchaseLineRow{}
-	for _, batch := range stringBatches(uniqueNonEmpty(blIDs), 200) {
+	for _, batch := range handlerutil.StringBatches(handlerutil.UniqueNonEmpty(blIDs), 200) {
 		data, _, err := h.DB.From("bl_line_items").
 			Select("bl_line_id, bl_id, product_id, quantity, capacity_kw, item_type, payment_type, invoice_amount_usd, unit_price_usd_wp, unit_price_krw_wp, usage_category", "exact", false).
 			In("bl_id", batch).
@@ -299,7 +322,7 @@ func (h *BaroPurchaseHistoryHandler) Summary(w http.ResponseWriter, r *http.Requ
 		})
 		return
 	}
-	shipments, shipmentCount, err := fetchAllSummaryRows[baroPurchaseShipmentRow](func() *postgrest.FilterBuilder {
+	shipments, shipmentCount, err := handlerutil.FetchAllSummaryRows[baroPurchaseShipmentRow](func() *postgrest.FilterBuilder {
 		return h.baroPurchaseShipmentQuery(baroCompany.CompanyID, r).
 			Order("actual_arrival", &postgrest.OrderOpts{Ascending: false})
 	})
@@ -351,8 +374,8 @@ func (h *BaroPurchaseHistoryHandler) Summary(w http.ResponseWriter, r *http.Requ
 		summary.Total++
 		summary.TotalQuantity += int64(line.Quantity)
 		summary.TotalCapacityKW += line.CapacityKW
-		incrementCount(byInboundType, ship.InboundType)
-		incrementCount(byStatus, ship.Status)
+		handlerutil.IncrementCount(byInboundType, ship.InboundType)
+		handlerutil.IncrementCount(byStatus, ship.Status)
 		if line.UnitPriceKRWWp != nil && line.CapacityKW > 0 {
 			weightedKRW += *line.UnitPriceKRWWp * line.CapacityKW
 			weightedKRWCapacity += line.CapacityKW

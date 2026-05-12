@@ -10,7 +10,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -23,6 +26,27 @@ type ReceiptHandler struct {
 // NewReceiptHandler — ReceiptHandler 생성자
 func NewReceiptHandler(db *supa.Client) *ReceiptHandler {
 	return &ReceiptHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxReceipt,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewReceiptHandler(d.DB)
+			g := d.Gates
+			r.Route("/receipts", func(r chi.Router) {
+				r.Get("/", h.List)
+				// 대시보드 집계 — KPI / trend24 / by_customer / by_match_status. 정적 경로라 /{id} 보다 먼저.
+				r.Get("/dashboard", h.Dashboard)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/receipts — 수금 목록 조회
@@ -44,7 +68,7 @@ func (h *ReceiptHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Gte("receipt_date", month+"-01").Lt("receipt_date", nextMonthString(month))
 	}
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[수금 목록 조회 실패] %v", err)

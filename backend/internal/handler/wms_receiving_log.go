@@ -10,7 +10,9 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -26,27 +28,47 @@ func NewReceivingLogHandler(db *supa.Client) *ReceivingLogHandler {
 	return &ReceivingLogHandler{DB: db}
 }
 
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxReceivingLog,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewReceivingLogHandler(d.DB)
+			g := d.Gates
+			r.Route("/receiving-logs", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDTxReceivingLog))
+				r.Get("/", h.List)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Patch("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
+}
+
 // ReceivingLog — 입고 검수 1건.
 type ReceivingLog struct {
-	ReceivingID            string     `json:"receiving_id"`
-	SourceType             string     `json:"source_type"`
-	BLLineID               *string    `json:"bl_line_id,omitempty"`
-	IntercompanyRequestID  *string    `json:"intercompany_request_id,omitempty"`
-	WarehouseID            string     `json:"warehouse_id"`
-	ProductID              *string    `json:"product_id,omitempty"`
-	ProductCodeSnapshot    *string    `json:"product_code_snapshot,omitempty"`
-	ProductNameSnapshot    *string    `json:"product_name_snapshot,omitempty"`
-	QuantityExpected       int        `json:"quantity_expected"`
-	QuantityReceived       int        `json:"quantity_received"`
-	QuantityVariance       int        `json:"quantity_variance"` // GENERATED
-	LocationID             *string    `json:"location_id,omitempty"`
-	LocationCodeSnapshot   *string    `json:"location_code_snapshot,omitempty"`
-	ReceiverUserID         *string    `json:"receiver_user_id,omitempty"`
-	ReceivedAt             *time.Time `json:"received_at,omitempty"`
-	VarianceReason         *string    `json:"variance_reason,omitempty"`
-	VarianceNote           *string    `json:"variance_note,omitempty"`
-	PhotoAttachmentIDs     []string   `json:"photo_attachment_ids,omitempty"`
-	Notes                  *string    `json:"notes,omitempty"`
+	ReceivingID           string     `json:"receiving_id"`
+	SourceType            string     `json:"source_type"`
+	BLLineID              *string    `json:"bl_line_id,omitempty"`
+	IntercompanyRequestID *string    `json:"intercompany_request_id,omitempty"`
+	WarehouseID           string     `json:"warehouse_id"`
+	ProductID             *string    `json:"product_id,omitempty"`
+	ProductCodeSnapshot   *string    `json:"product_code_snapshot,omitempty"`
+	ProductNameSnapshot   *string    `json:"product_name_snapshot,omitempty"`
+	QuantityExpected      int        `json:"quantity_expected"`
+	QuantityReceived      int        `json:"quantity_received"`
+	QuantityVariance      int        `json:"quantity_variance"` // GENERATED
+	LocationID            *string    `json:"location_id,omitempty"`
+	LocationCodeSnapshot  *string    `json:"location_code_snapshot,omitempty"`
+	ReceiverUserID        *string    `json:"receiver_user_id,omitempty"`
+	ReceivedAt            *time.Time `json:"received_at,omitempty"`
+	VarianceReason        *string    `json:"variance_reason,omitempty"`
+	VarianceNote          *string    `json:"variance_note,omitempty"`
+	PhotoAttachmentIDs    []string   `json:"photo_attachment_ids,omitempty"`
+	Notes                 *string    `json:"notes,omitempty"`
 }
 
 // CreateReceivingLogRequest — 등록 요청.

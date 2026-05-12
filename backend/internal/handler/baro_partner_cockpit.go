@@ -12,7 +12,9 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -39,6 +41,22 @@ func NewBaroPartnerCockpitHandler(db *supa.Client) *BaroPartnerCockpitHandler {
 	return &BaroPartnerCockpitHandler{DB: db}
 }
 
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroPartnerCockpit,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroPartnerCockpitHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/partner-cockpit", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroPartnerCockpit))
+				r.Get("/{partner_id}", h.Get)
+			})
+		},
+	})
+}
+
 // CockpitResponse — /api/v1/baro/partner-cockpit/{partner_id} 응답.
 //
 // 클라이언트는 빠진 패널을 null/빈 배열로 받아도 부분 렌더링이 가능해야 한다
@@ -50,8 +68,8 @@ type CockpitResponse struct {
 	RecentSales      []CockpitRecentSale     `json:"recent_sales"`
 	OpenFollowups    []model.PartnerActivity `json:"open_followups"`
 	RecentActivities []model.PartnerActivity `json:"recent_activities"`
-	QuoteReadySKUs   []CockpitQuoteReadyRow  `json:"quote_ready_skus"`  // PR2 에서 채움
-	IncomingMatches  []CockpitIncomingMatch  `json:"incoming_matches"`  // 후속 PR 에서 채움
+	QuoteReadySKUs   []CockpitQuoteReadyRow  `json:"quote_ready_skus"` // PR2 에서 채움
+	IncomingMatches  []CockpitIncomingMatch  `json:"incoming_matches"` // 후속 PR 에서 채움
 }
 
 // CockpitCreditPanel — 신용/한도 요약 (baro_credit_board RPC 의 한 행).

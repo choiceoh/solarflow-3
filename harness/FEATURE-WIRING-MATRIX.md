@@ -52,6 +52,7 @@
 | feature_id | 이름 | Default | 데이터 스코프 |
 |---|---|---|---|
 | `master.bank` | 은행 마스터 | ★ | global |
+| `master.bank_account` | 은행 계좌 마스터 (수금/지급 계좌, D-PR730) | ★ | global |
 | `master.company` | 법인 마스터 | ★ | global |
 | `master.company_alias` | 법인 별칭 | ★ | global |
 | `master.manufacturer` | 제조사 마스터 | ★ | global |

@@ -1,18 +1,96 @@
 # SolarFlow 진행 상황
 
-## 현재 상태 요약 (최종 업데이트: 2026-05-11)
+## 현재 상태 요약 (최종 업데이트: 2026-05-12)
 
 | 항목 | 상태 |
 |------|------|
 | 현재 Phase | **실데이터 이관 + 운영 기능 보강 진행 중** |
-| 다음 작업 | Excel Import Hub 샘플팩 기반 실데이터 리허설, 출고/판매 수금 미완료 큐 필터 전체 처리 운영 샘플 검증, 가격예측 백테스트/견적 기록 운영 DB 적용 확인 + AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
+| 다음 작업 | Excel Import Hub 운영 파일로 셀 보정/OCR 흐름 실사용 검증, 출고/판매 수금 미완료 큐 필터 전체 처리 운영 샘플 검증, 가격예측 백테스트/견적 기록 운영 DB 적용 확인 + AI 수집 운영 재실행 + 채택 상태 Rust 전략 반영, PO 변경계약/라인 진행률/자동 빠른 입력 운영 검증, study 학습 페이지 1차 UI |
 | 인프라 | Mac mini (Go+Rust+PostgREST+Caddy+PostgreSQL) + Supabase Auth(인증만) + Tailscale(외부접속) |
 | 프론트엔드 | Caddy 정적 서빙 (dist/) — localhost:5173, Tailscale 100.123.70.19:5173, 운영 Cloudflare Pages module/cable/baro |
 | DB | 로컬 PostgreSQL + PostgREST (D-075, D-076) |
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
-| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-20260511-184355 판매 수금 미완료 큐, D-20260512-101906 필터 전체 수금완료, D-080/D-081/D-132~D-138 번호 공백 유지) |
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-20260511-184355 판매 수금 미완료 큐, D-20260512-101906 필터 전체 수금완료, D-20260512-112516 Import Hub 입력자 편의 개선, D-20260512-132713 매출 분석 탭 세분화, D-20260512-143605 입력·일괄처리 후속액션/사전검토, D-080/D-081/D-132~D-138 번호 공백 유지) |
 | launchd | 5개 서비스 자동 시작 |
+
+---
+
+## 2026-05-12 세션 — 입력·일괄처리 사용성 개선 (D-20260512-143605)
+
+### 완료
+- 통합 등록 결과 다이얼로그에 성공 섹션 기준 다음 행동 버튼 추가
+  - 출고 → 매출 미등록 큐
+  - 매출 → 계산서 미발행 / 수금 미완료 큐
+  - 수금 → 수금매칭
+  - PO/LC/T/T → 구매 계약
+  - 입고/면장/부대비용 → B/L 또는 면장/원가 화면
+- 통합 업로드 에러/경고 목록에 해결 안내 추가
+  - 필수값 누락, 마스터 미등록/alias, 양수, 날짜, 중복, 허용값 오류별 보정 힌트 표시
+- 판매 일괄 처리 실행 전 사전검토 다이얼로그 추가
+  - 매출 자동 생성, 계산서 일괄 처리, ERP 마감, 현재 목록/필터 전체 수금완료
+  - 대상 건수, 금액 합계, 처리일, 제외 건수와 사유를 확인 후 실행
+- 판매 표의 일괄 처리 선택 칸에서 처리 불가 행을 `제외`로 표시하고 tooltip에 사유 노출
+- 설계 정본과 D-20260512-143605 결정 기록 동기화
+
+### 검증
+- `cd frontend && npx --yes bun@1.3.13 install --frozen-lockfile` 성공
+- `cd frontend && npx --yes bun@1.3.13 run build` 성공 — plugin timing warning 출력
+- `cd frontend && npx --yes bun@1.3.13 run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + AssistantPage forEach return 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5578 nodes / 9228 edges / 429 communities (`graph.html`은 노드 수 초과로 생략)
+
+---
+
+## 2026-05-12 세션 — 매출 분석 탭 세분화 (D-20260512-132713)
+
+### 완료
+- `/sales-analysis` 공통 필터 아래에 분석 관점 탭 추가
+  - 요약: KPI, 이익 원인 분해, 거래처 위험 우선순위
+  - 매출이익: 월별 매출, 이익률 브리지, 대체원가 기준 마진, 품목별 이익
+  - 제조사별: 제조사별 기여도
+  - 거래처별: 거래처별 청구/미수
+  - 미수·수금: 미수 위험 거래처, 수금/미수/계산서 미발행 후보
+  - 대사: 기존 원장 대사 체크와 후보 행 드릴다운
+- 계산 API와 Rust 엔진 계약은 변경하지 않고 프론트 화면 배치만 세분화
+- 설계 정본과 D-20260512-132713 결정 기록 동기화
+
+### 검증
+- `cd frontend && npx --yes bun@1.3.13 install --frozen-lockfile` 성공
+- `cd frontend && npx --yes bun@1.3.13 run build` 성공 — plugin timing warning 출력
+- `cd frontend && npx --yes bun@1.3.13 run lint` 종료코드 0 — 기존 excelValidation optional-chain 경고 1건 + AssistantPage forEach return 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `graphify update .` 성공 — 5463 nodes / 8935 edges / 428 communities (`graph.html`은 노드 수 초과로 생략)
+
+---
+
+## 2026-05-12 세션 — Import Hub 입력자 편의 개선 (D-20260512-112516)
+
+### 완료
+- 통합 업로드 미리보기에서 `셀 수정` 모드를 추가
+  - 오류/경고 셀을 화면에서 바로 수정
+  - 수정 즉시 PO/LC/T/T/원가 선언/부대비용 검증 재실행
+  - 원본 엑셀 파일은 덮어쓰지 않고 확정 전 preview 데이터만 변경
+- 수정 셀의 전후 값을 추적하고 미리보기 하단에 최근 수정 요약 표시
+- 현재 preview 데이터를 다시 업로드 가능한 보정본 엑셀로 다운로드
+  - `_SolarFlowMeta`, 작성안내, 통합코드표, 업무별 입력 시트 포함
+  - `검토요약` 시트에 수정내역과 남은 오류/경고 기록
+- Import Hub에 최근 업로드 이력 패널 추가
+  - 미리보기/등록 결과, 오류/경고 건수, 등록 건수를 브라우저 localStorage에 요약 보관
+  - 필요 시 이력 비우기 가능
+- Import Hub 상단에 처리 대기 통합 카드 추가
+  - 업로드 검토, 매출 미등록, 계산서 미발행, ERP 미마감, 수금 미완료
+  - 각 카드는 Orders 화면의 해당 필터로 이동
+- Import Hub에 `문서 OCR` 탭 추가
+  - 일반 문서 원문 확인/복사
+  - 수입필증/면장 구조화 후보 표시
+  - 사용자 확인 전 자동 DB 저장 없음
+- 설계 정본과 D-20260512-112516 결정 기록 동기화
+
+### 검증
+- `cd frontend && npx --yes bun@1.3.13 run build` 성공
+- `cd frontend && npx --yes bun@1.3.13 run lint` 성공 — 기존 excelValidation optional-chain 경고 1건 + 기존 AssistantPage forEach 경고 1건 + 기존 ProcurementPage hook dependency 경고 4건 + 기존 bun-test 타입 suppression 경고 1건
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5544 nodes / 9233 edges / 422 communities (`graph.html`은 노드 수 초과로 생략)
 
 ---
 

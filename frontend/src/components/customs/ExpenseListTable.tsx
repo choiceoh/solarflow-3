@@ -16,7 +16,7 @@ interface Props {
 
 function buildColumns(): ColumnDef<Expense>[] {
   return [
-    { key: 'bl_or_month', label: 'B/L / 월', className: 'text-xs', cell: (e) => e.bl_number || e.bl_id?.slice(0, 8) || e.month || '—', sortAccessor: (e) => e.bl_number || e.month || '' },
+    { key: 'bl_or_month', label: 'B/L / 월', className: 'text-[13px]', cell: (e) => e.bl_number || e.bl_id?.slice(0, 8) || e.month || '—', sortAccessor: (e) => e.bl_number || e.month || '' },
     { key: 'expense_type', label: '비용유형', hideable: true, className: 'text-xs', cell: (e) => EXPENSE_TYPE_LABEL[e.expense_type as ExpenseType] || e.expense_type, sortAccessor: (e) => EXPENSE_TYPE_LABEL[e.expense_type as ExpenseType] || e.expense_type },
     { key: 'vendor', label: '거래처', hideable: true, className: 'text-xs', cell: (e) => e.vendor || '—', sortAccessor: (e) => e.vendor || '' },
     {

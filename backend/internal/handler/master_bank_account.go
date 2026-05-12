@@ -9,7 +9,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -23,6 +26,27 @@ type BankAccountHandler struct {
 // NewBankAccountHandler — BankAccountHandler 생성자
 func NewBankAccountHandler(db *supa.Client) *BankAccountHandler {
 	return &BankAccountHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDMasterBankAccount,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBankAccountHandler(d.DB)
+			g := d.Gates
+			r.Route("/bank-accounts", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Patch("/{id}", h.Update)
+				r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/bank-accounts — 계좌 목록 (법인 정보 포함)
@@ -40,7 +64,7 @@ func (h *BankAccountHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("is_active", "true")
 	}
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[계좌 목록 조회 실패] %v", err)

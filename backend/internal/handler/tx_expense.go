@@ -10,7 +10,10 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -23,6 +26,29 @@ type ExpenseHandler struct {
 // NewExpenseHandler — ExpenseHandler 생성자
 func NewExpenseHandler(db *supa.Client) *ExpenseHandler {
 	return &ExpenseHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxExpense,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewExpenseHandler(d.DB)
+			g := d.Gates
+			r.Route("/expenses", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDTxExpense))
+				r.Get("/", h.List)
+				r.Get("/summary", h.Summary)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+			// CustomsPage 4개 insight (TypeCount/AvgExpense/BlLinked/ExpenseTotal) 의 client-side 집계 대체.
+			r.With(g.Feature(feature.IDTxExpense)).Get("/customs/dashboard", h.CustomsDashboard)
+		},
+	})
 }
 
 func (h *ExpenseHandler) applyExpenseFilters(r *http.Request, query *postgrest.FilterBuilder) *postgrest.FilterBuilder {
@@ -66,7 +92,7 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 		Select("*", "exact", false)
 	query = h.applyExpenseFilters(r, query)
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[부대비용 목록 조회 실패] %v", err)
@@ -96,20 +122,20 @@ type expenseSummaryRow struct {
 }
 
 type ExpenseSummary struct {
-	Total              int64               `json:"total"`
-	TotalAmount        float64             `json:"total_amount"`
-	VatAmount          float64             `json:"vat_amount"`
-	LinkedCount        int64               `json:"linked_count"`
-	TypeCount          int64               `json:"type_count"`
-	AverageAmount      float64             `json:"average_amount"`
-	ByTypeAmount       map[string]float64  `json:"by_type_amount"`
-	MonthlyAmount      []summaryMonthPoint `json:"monthly_amount"`
-	MonthlyLinkedCount []summaryMonthPoint `json:"monthly_linked_count"`
+	Total              int64                           `json:"total"`
+	TotalAmount        float64                         `json:"total_amount"`
+	VatAmount          float64                         `json:"vat_amount"`
+	LinkedCount        int64                           `json:"linked_count"`
+	TypeCount          int64                           `json:"type_count"`
+	AverageAmount      float64                         `json:"average_amount"`
+	ByTypeAmount       map[string]float64              `json:"by_type_amount"`
+	MonthlyAmount      []handlerutil.SummaryMonthPoint `json:"monthly_amount"`
+	MonthlyLinkedCount []handlerutil.SummaryMonthPoint `json:"monthly_linked_count"`
 }
 
 // Summary — GET /api/v1/expenses/summary — 부대비용 KPI 카드용 전체 집계.
 func (h *ExpenseHandler) Summary(w http.ResponseWriter, r *http.Request) {
-	rows, total, err := fetchAllSummaryRows[expenseSummaryRow](func() *postgrest.FilterBuilder {
+	rows, total, err := handlerutil.FetchAllSummaryRows[expenseSummaryRow](func() *postgrest.FilterBuilder {
 		q := h.DB.From("incidental_expenses").
 			Select("expense_id,bl_id,month,expense_type,amount,vat,total", "exact", false)
 		return h.applyExpenseFilters(r, q)
@@ -150,9 +176,9 @@ func (h *ExpenseHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	if summary.Total > 0 {
 		summary.AverageAmount = summary.TotalAmount / float64(summary.Total)
 	}
-	summary.TypeCount = distinctCount(typesSeen)
-	summary.MonthlyAmount = recentMonthAmounts(monthlyAmount, 6)
-	summary.MonthlyLinkedCount = recentMonthCounts(monthlyLinked, 6)
+	summary.TypeCount = handlerutil.DistinctCount(typesSeen)
+	summary.MonthlyAmount = handlerutil.RecentMonthAmounts(monthlyAmount, 6)
+	summary.MonthlyLinkedCount = handlerutil.RecentMonthCounts(monthlyLinked, 6)
 	response.RespondJSON(w, http.StatusOK, summary)
 }
 

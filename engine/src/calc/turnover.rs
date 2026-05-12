@@ -13,6 +13,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use crate::calc::resolve_company_ids;
 use crate::model::turnover::{
     TurnoverByManufacturer, TurnoverByProduct, TurnoverBySpecWp, TurnoverMatrixCell,
     TurnoverRequest, TurnoverResponse, TurnoverTotal,
@@ -41,15 +42,15 @@ pub async fn calculate_turnover(
     pool: &PgPool,
     req: &TurnoverRequest,
 ) -> Result<TurnoverResponse, sqlx::Error> {
-    let company_id = req.company_id.unwrap();
+    let company_ids = resolve_company_ids(req.company_ids.as_deref(), req.company_id);
     // 최소 30일
     let days = req.days.max(30);
 
-    let products = fetch_products(pool, company_id).await?;
-    let inventory = fetch_current_inventory_kw(pool, company_id).await?;
-    let inventory_ea = fetch_current_inventory_ea(pool, company_id).await?;
-    let outbound = fetch_outbound_window(pool, company_id, days).await?;
-    let outbound_ea = fetch_outbound_ea_window(pool, company_id, days).await?;
+    let products = fetch_products(pool, &company_ids).await?;
+    let inventory = fetch_current_inventory_kw(pool, &company_ids).await?;
+    let inventory_ea = fetch_current_inventory_ea(pool, &company_ids).await?;
+    let outbound = fetch_outbound_window(pool, &company_ids, days).await?;
+    let outbound_ea = fetch_outbound_ea_window(pool, &company_ids, days).await?;
 
     // 연환산 배수
     let annualize = 365.0_f64 / (days as f64);
@@ -222,7 +223,7 @@ pub async fn calculate_turnover(
 
 // === SQL 쿼리 ===
 
-async fn fetch_products(pool: &PgPool, company_id: Uuid) -> Result<Vec<ProductInfo>, sqlx::Error> {
+async fn fetch_products(pool: &PgPool, company_ids: &[Uuid]) -> Result<Vec<ProductInfo>, sqlx::Error> {
     sqlx::query_as::<_, ProductInfo>(
         r#"
         SELECT DISTINCT p.product_id, p.product_code, p.product_name,
@@ -236,16 +237,16 @@ async fn fetch_products(pool: &PgPool, company_id: Uuid) -> Result<Vec<ProductIn
             EXISTS (
               SELECT 1 FROM bl_line_items bli
               JOIN bl_shipments bl ON bli.bl_id = bl.bl_id
-              WHERE bli.product_id = p.product_id AND bl.company_id = $1
+              WHERE bli.product_id = p.product_id AND bl.company_id = ANY($1::uuid[])
             )
             OR EXISTS (
               SELECT 1 FROM outbounds o
-              WHERE o.product_id = p.product_id AND o.company_id = $1
+              WHERE o.product_id = p.product_id AND o.company_id = ANY($1::uuid[])
             )
           )
         "#,
     )
-    .bind(company_id)
+    .bind(company_ids)
     .fetch_all(pool)
     .await
 }
@@ -253,7 +254,7 @@ async fn fetch_products(pool: &PgPool, company_id: Uuid) -> Result<Vec<ProductIn
 /// 현재 물리재고 (kW) = 입고(completed/erp_done) - 출고(active)
 async fn fetch_current_inventory_kw(
     pool: &PgPool,
-    company_id: Uuid,
+    company_ids: &[Uuid],
 ) -> Result<HashMap<Uuid, f64>, sqlx::Error> {
     let rows = sqlx::query_as::<_, KwRow>(
         r#"
@@ -262,14 +263,14 @@ async fn fetch_current_inventory_kw(
           FROM bl_line_items bli
           JOIN bl_shipments bl ON bli.bl_id = bl.bl_id
           WHERE bl.status IN ('completed', 'erp_done')
-            AND bl.company_id = $1
+            AND bl.company_id = ANY($1::uuid[])
           GROUP BY bli.product_id
         ),
         outbound AS (
           SELECT o.product_id, COALESCE(SUM(o.capacity_kw), 0)::float8 AS kw
           FROM outbounds o
           WHERE o.status = 'active'
-            AND o.company_id = $1
+            AND o.company_id = ANY($1::uuid[])
           GROUP BY o.product_id
         )
         SELECT
@@ -279,7 +280,7 @@ async fn fetch_current_inventory_kw(
         FULL OUTER JOIN outbound o ON i.product_id = o.product_id
         "#,
     )
-    .bind(company_id)
+    .bind(company_ids)
     .fetch_all(pool)
     .await?;
 
@@ -289,7 +290,7 @@ async fn fetch_current_inventory_kw(
 /// 현재 재고 EA = 입고 quantity - 출고 quantity
 async fn fetch_current_inventory_ea(
     pool: &PgPool,
-    company_id: Uuid,
+    company_ids: &[Uuid],
 ) -> Result<HashMap<Uuid, i64>, sqlx::Error> {
     #[derive(sqlx::FromRow)]
     struct EaRow {
@@ -303,14 +304,14 @@ async fn fetch_current_inventory_ea(
           FROM bl_line_items bli
           JOIN bl_shipments bl ON bli.bl_id = bl.bl_id
           WHERE bl.status IN ('completed', 'erp_done')
-            AND bl.company_id = $1
+            AND bl.company_id = ANY($1::uuid[])
           GROUP BY bli.product_id
         ),
         outbound AS (
           SELECT o.product_id, COALESCE(SUM(o.quantity), 0)::bigint AS ea
           FROM outbounds o
           WHERE o.status = 'active'
-            AND o.company_id = $1
+            AND o.company_id = ANY($1::uuid[])
           GROUP BY o.product_id
         )
         SELECT
@@ -320,7 +321,7 @@ async fn fetch_current_inventory_ea(
         FULL OUTER JOIN outbound o ON i.product_id = o.product_id
         "#,
     )
-    .bind(company_id)
+    .bind(company_ids)
     .fetch_all(pool)
     .await?;
 
@@ -330,7 +331,7 @@ async fn fetch_current_inventory_ea(
 /// 최근 N일 출고 합계 (kW)
 async fn fetch_outbound_window(
     pool: &PgPool,
-    company_id: Uuid,
+    company_ids: &[Uuid],
     days: i32,
 ) -> Result<HashMap<Uuid, f64>, sqlx::Error> {
     let rows = sqlx::query_as::<_, KwRow>(
@@ -338,12 +339,12 @@ async fn fetch_outbound_window(
         SELECT o.product_id, COALESCE(SUM(o.capacity_kw), 0)::float8 AS kw
         FROM outbounds o
         WHERE o.status = 'active'
-          AND o.company_id = $1
+          AND o.company_id = ANY($1::uuid[])
           AND o.outbound_date >= (CURRENT_DATE - ($2::int) * INTERVAL '1 day')
         GROUP BY o.product_id
         "#,
     )
-    .bind(company_id)
+    .bind(company_ids)
     .bind(days)
     .fetch_all(pool)
     .await?;
@@ -354,7 +355,7 @@ async fn fetch_outbound_window(
 /// 최근 N일 출고 EA
 async fn fetch_outbound_ea_window(
     pool: &PgPool,
-    company_id: Uuid,
+    company_ids: &[Uuid],
     days: i32,
 ) -> Result<HashMap<Uuid, i64>, sqlx::Error> {
     #[derive(sqlx::FromRow)]
@@ -367,12 +368,12 @@ async fn fetch_outbound_ea_window(
         SELECT o.product_id, COALESCE(SUM(o.quantity), 0)::bigint AS ea
         FROM outbounds o
         WHERE o.status = 'active'
-          AND o.company_id = $1
+          AND o.company_id = ANY($1::uuid[])
           AND o.outbound_date >= (CURRENT_DATE - ($2::int) * INTERVAL '1 day')
         GROUP BY o.product_id
         "#,
     )
-    .bind(company_id)
+    .bind(company_ids)
     .bind(days)
     .fetch_all(pool)
     .await?;

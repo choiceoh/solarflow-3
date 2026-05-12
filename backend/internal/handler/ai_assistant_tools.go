@@ -81,6 +81,8 @@ func assistantToolCatalog() []assistantTool {
 		toolWebSearch(),
 		toolWebScrape(), // PR 46: Serper scrape — 외부 페이지 본문 markdown 추출
 		toolFetchURL(),
+		// AI 첨부 시트 임시 영역 — 첨부된 xlsx/csv 시트를 mode 별로 조회
+		toolQueryAttachedSheet(),
 	}
 	proposes := []assistantTool{
 		// 쓰기 — 메모

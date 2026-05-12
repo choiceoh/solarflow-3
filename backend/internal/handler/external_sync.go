@@ -29,8 +29,9 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 	"github.com/xuri/excelize/v2"
 
-	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -46,17 +47,26 @@ func NewExternalSyncHandler(db *supa.Client) *ExternalSyncHandler {
 	}
 }
 
-func (h *ExternalSyncHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
-	r.Route("/external-sync-sources", func(r chi.Router) {
-		r.Get("/", h.List)
-		r.With(g.Write).Post("/", h.Create)
-		r.With(g.Write).Patch("/{id}", h.Update)
-		r.With(g.Write).Delete("/{id}", h.Delete)
-		r.With(g.Write).Post("/{id}/run", h.RunManually)
-	})
-	r.Route("/external-format", func(r chi.Router) {
-		// 프론트 변환 다이얼로그가 호출 — 공개 시트를 xlsx 바이너리로 stream proxy.
-		r.Get("/google-sheet", h.FetchGoogleSheet)
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDSysExternalSync,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewExternalSyncHandler(d.DB)
+			g := d.Gates
+			r.Route("/external-sync-sources", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Patch("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+				r.With(g.Write).Post("/{id}/run", h.RunManually)
+			})
+			r.Route("/external-format", func(r chi.Router) {
+				// 프론트 변환 다이얼로그가 호출 — 공개 시트를 xlsx 바이너리로 stream proxy.
+				r.Get("/google-sheet", h.FetchGoogleSheet)
+			})
+		},
 	})
 }
 
@@ -295,10 +305,10 @@ func (h *ExternalSyncHandler) recordError(syncID, msg string) {
 func (h *ExternalSyncHandler) recordSuccess(syncID string, imported, skipped int) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, _, _ = h.DB.From("external_sync_sources").Update(map[string]interface{}{
-		"last_synced_at":      now,
-		"last_sync_count":     imported,
-		"last_skipped_count":  skipped,
-		"last_error":          nil,
+		"last_synced_at":     now,
+		"last_sync_count":    imported,
+		"last_skipped_count": skipped,
+		"last_error":         nil,
 	}, "", "").Eq("sync_id", syncID).Execute()
 }
 
@@ -347,15 +357,14 @@ func inferProductMeta(code string, mfgIndex map[string]string) (string, int) {
 	return "", 0
 }
 
-
 // D-059 PR 12: 자유 형식 날짜 보정.
 // 수동 모드(JS topsolarOutbound.ts) 와 동일 정책 — 섹션 마커 `탑솔라 (1월)` + 같은 섹션의
 // 정상 datetime 행에서 연도를 캐시해서 자유 표기 (예: `1/12 오후착`) → ISO 변환.
 // 시간 표기(`오후착`, `오전`, `9시착`)는 source_payload.date_raw 에 보존.
 type sectionDateContext struct {
-	sellerKey     string
-	monthNum      int
-	inferredYear  int
+	sellerKey    string
+	monthNum     int
+	inferredYear int
 }
 
 var freeDatePattern = regexp.MustCompile(`^(\d{1,2})/(\d{1,2})`)
@@ -487,7 +496,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 	skipped := 0
 	currentSection := ""
 	var currentDateCtx *sectionDateContext
-	skipBy := map[string]int{}  // D-059 PR 12: SKIP 사유별 카운트
+	skipBy := map[string]int{} // D-059 PR 12: SKIP 사유별 카운트
 	bump := func(k string) { skipBy[k]++; skipped++ }
 	for idx, row := range rows {
 		excelRowNum := idx + 1
@@ -563,28 +572,28 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 		_ = dateRaw
 
 		sourcePayload := map[string]interface{}{
-			"source":           "google_sheet",
-			"spreadsheet_id":   src.SpreadsheetID,
-			"sheet_gid":        src.SheetGid,
-			"sheet_row_index":  excelRowNum,
-			"section":          currentSection,
-			"date_raw":         dateRaw,
-			"customer_name":    safeCellByKey(row, colMap, "customer"),
-			"site_name":        safeCellByKey(row, colMap, "site_name"),
-			"site_address":     safeCellByKey(row, colMap, "site_address"),
-			"order_number":     safeCellByKey(row, colMap, "order_number"),
-			"unit_price_wp":    parseTopsolarNumber(safeCellByKey(row, colMap, "unit_price")),
-			"supply_amount":    parseTopsolarNumber(safeCellByKey(row, colMap, "supply_amount")),
-			"vat_amount":       parseTopsolarNumber(safeCellByKey(row, colMap, "vat_amount")),
-			"total_amount":     parseTopsolarNumber(safeCellByKey(row, colMap, "total_amount")),
+			"source":          "google_sheet",
+			"spreadsheet_id":  src.SpreadsheetID,
+			"sheet_gid":       src.SheetGid,
+			"sheet_row_index": excelRowNum,
+			"section":         currentSection,
+			"date_raw":        dateRaw,
+			"customer_name":   safeCellByKey(row, colMap, "customer"),
+			"site_name":       safeCellByKey(row, colMap, "site_name"),
+			"site_address":    safeCellByKey(row, colMap, "site_address"),
+			"order_number":    safeCellByKey(row, colMap, "order_number"),
+			"unit_price_wp":   parseTopsolarNumber(safeCellByKey(row, colMap, "unit_price")),
+			"supply_amount":   parseTopsolarNumber(safeCellByKey(row, colMap, "supply_amount")),
+			"vat_amount":      parseTopsolarNumber(safeCellByKey(row, colMap, "vat_amount")),
+			"total_amount":    parseTopsolarNumber(safeCellByKey(row, colMap, "total_amount")),
 			// PR 15 추가 컬럼 (새 시트만 채워짐)
-			"note":                     safeCellByKey(row, colMap, "note"),
-			"site_contact":             safeCellByKey(row, colMap, "site_contact"),
-			"delivery_history":         safeCellByKey(row, colMap, "delivery_history"),
-			"fd_ready":                 safeCellByKey(row, colMap, "fd_ready"),
-			"ks_cert_ready":            safeCellByKey(row, colMap, "ks_cert_ready"),
-			"power_license":            safeCellByKey(row, colMap, "power_license"),
-			"delivered":                safeCellByKey(row, colMap, "delivered"),
+			"note":                    safeCellByKey(row, colMap, "note"),
+			"site_contact":            safeCellByKey(row, colMap, "site_contact"),
+			"delivery_history":        safeCellByKey(row, colMap, "delivery_history"),
+			"fd_ready":                safeCellByKey(row, colMap, "fd_ready"),
+			"ks_cert_ready":           safeCellByKey(row, colMap, "ks_cert_ready"),
+			"power_license":           safeCellByKey(row, colMap, "power_license"),
+			"delivered":               safeCellByKey(row, colMap, "delivered"),
 			"power_license_delivered": safeCellByKey(row, colMap, "power_license_delivered"),
 		}
 
@@ -635,18 +644,18 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 			}
 		}
 		req := model.CreateOutboundRequest{
-			OutboundDate:   dateISO,
-			CompanyID:      companyID,
-			ProductID:      productID,
-			Quantity:       qty,
-			CapacityKw:     capacityKW,
-			WarehouseID:    warehouseID,
-			UsageCategory:  "sale",
-			Status:         "active",
-			OrderID:        orderIDPtr,
-			SiteName:       optStr(safeCell(row, 3)),
-			SiteAddress:    optStr(safeCell(row, 4)),
-			SourcePayload:  sourcePayload,
+			OutboundDate:  dateISO,
+			CompanyID:     companyID,
+			ProductID:     productID,
+			Quantity:      qty,
+			CapacityKw:    capacityKW,
+			WarehouseID:   warehouseID,
+			UsageCategory: "sale",
+			Status:        "active",
+			OrderID:       orderIDPtr,
+			SiteName:      optStr(safeCell(row, 3)),
+			SiteAddress:   optStr(safeCell(row, 4)),
+			SourcePayload: sourcePayload,
 		}
 
 		_, _, err = h.DB.From("outbounds").Insert(req, false, "", "", "").Execute()
@@ -666,7 +675,6 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 	}
 	return imported, skipped, nil
 }
-
 
 // D-059 PR 11
 func (h *ExternalSyncHandler) fetchManufacturerIndex() (map[string]string, error) {
@@ -744,7 +752,6 @@ func (h *ExternalSyncHandler) autoRegisterProduct(rawCode string, mfgIndex map[s
 	log.Printf("[external sync] product 자동 등록: %s (mfg=%v, wattage=%dW)", rawCode, mfgID != "", wattageW)
 	return rows[0].ProductID, nil
 }
-
 
 // D-059 PR 12: 신규 product 등록 + 추론한 wattage 반환 (capacity_kw 자동 계산용)
 func (h *ExternalSyncHandler) autoRegisterProductWithWattage(rawCode string, mfgIndex map[string]string) (string, float64, error) {
@@ -825,7 +832,6 @@ func (h *ExternalSyncHandler) autoRegisterCompany(rawName string) (string, error
 	return rows[0].CompanyID, nil
 }
 
-
 // D-059 PR 14: 수주(orders) 마스터 인덱스 — order_number 정규화 키 → order_id
 func (h *ExternalSyncHandler) fetchOrdersByNumber() (map[string]string, error) {
 	data, _, err := h.DB.From("orders").Select("order_id,order_number", "exact", false).Execute()
@@ -905,7 +911,8 @@ func (h *ExternalSyncHandler) autoRegisterPartner(rawName string) (string, error
 }
 
 // D-059 PR 14: 수주 자동 등록
-//   defaults — receipt_method=purchase_order, management_category=sale, fulfillment_source=stock
+//
+//	defaults — receipt_method=purchase_order, management_category=sale, fulfillment_source=stock
 func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customerID, productID string, qty int, unitPriceWp float64, capacityKW *float64, orderDate string, siteName, siteAddress *string) (string, error) {
 	body := map[string]interface{}{
 		"order_number":        orderNumber,
@@ -941,7 +948,6 @@ func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customer
 	return rows[0].OrderID, nil
 }
 
-
 // D-059 PR 15: 헤더 이름 기반 동적 컬럼 매핑.
 // 두 번째 탑솔라 시트는 "입고일자"·"기타사항"·"발주번호" 같이 라벨이 다르거나 추가됨.
 // 라벨 alias 사전으로 표준 키(date/gubun/customer/...)로 변환.
@@ -964,49 +970,49 @@ func normalizeHeaderLabel(s string) string {
 // label → 표준 키 (alias 통합)
 var headerAliases = map[string]string{
 	// 핵심 컬럼
-	normalizeHeaderLabel("구분"):           "gubun",
-	normalizeHeaderLabel("납품일자"):       "date",
-	normalizeHeaderLabel("입고일자"):       "date",
-	normalizeHeaderLabel("출고일자"):       "date",
-	normalizeHeaderLabel("업체명"):         "customer",
-	normalizeHeaderLabel("거래처"):         "customer",
-	normalizeHeaderLabel("발전소명"):       "site_name",
-	normalizeHeaderLabel("현장명"):         "site_name",
-	normalizeHeaderLabel("주소"):           "site_address",
-	normalizeHeaderLabel("주 소"):          "site_address",
-	normalizeHeaderLabel("발주번호"):       "order_number",
-	normalizeHeaderLabel("수주번호"):       "order_number",
-	normalizeHeaderLabel("PO"):             "order_number",
-	normalizeHeaderLabel("모델명"):         "product_code",
-	normalizeHeaderLabel("모듈명"):         "product_code",
-	normalizeHeaderLabel("품번"):           "product_code",
-	normalizeHeaderLabel("수량"):           "quantity",
-	normalizeHeaderLabel("수량(EA)"):       "quantity",
-	normalizeHeaderLabel("수량EA"):         "quantity",
-	normalizeHeaderLabel("용량"):           "capacity",
-	normalizeHeaderLabel("용량(kW)"):       "capacity",
-	normalizeHeaderLabel("용량kW"):         "capacity",
-	normalizeHeaderLabel("출고잔량"):       "remarks",
-	normalizeHeaderLabel("잔량/스페어"):    "remarks",
-	normalizeHeaderLabel("잔량스페어"):     "remarks",
+	normalizeHeaderLabel("구분"):     "gubun",
+	normalizeHeaderLabel("납품일자"):   "date",
+	normalizeHeaderLabel("입고일자"):   "date",
+	normalizeHeaderLabel("출고일자"):   "date",
+	normalizeHeaderLabel("업체명"):    "customer",
+	normalizeHeaderLabel("거래처"):    "customer",
+	normalizeHeaderLabel("발전소명"):   "site_name",
+	normalizeHeaderLabel("현장명"):    "site_name",
+	normalizeHeaderLabel("주소"):     "site_address",
+	normalizeHeaderLabel("주 소"):    "site_address",
+	normalizeHeaderLabel("발주번호"):   "order_number",
+	normalizeHeaderLabel("수주번호"):   "order_number",
+	normalizeHeaderLabel("PO"):     "order_number",
+	normalizeHeaderLabel("모델명"):    "product_code",
+	normalizeHeaderLabel("모듈명"):    "product_code",
+	normalizeHeaderLabel("품번"):     "product_code",
+	normalizeHeaderLabel("수량"):     "quantity",
+	normalizeHeaderLabel("수량(EA)"): "quantity",
+	normalizeHeaderLabel("수량EA"):   "quantity",
+	normalizeHeaderLabel("용량"):     "capacity",
+	normalizeHeaderLabel("용량(kW)"): "capacity",
+	normalizeHeaderLabel("용량kW"):   "capacity",
+	normalizeHeaderLabel("출고잔량"):   "remarks",
+	normalizeHeaderLabel("잔량/스페어"): "remarks",
+	normalizeHeaderLabel("잔량스페어"):  "remarks",
 	// 매출 보조
-	normalizeHeaderLabel("단가"):           "unit_price",
-	normalizeHeaderLabel("공급가액"):       "supply_amount",
-	normalizeHeaderLabel("세액"):           "vat_amount",
-	normalizeHeaderLabel("합계"):           "total_amount",
+	normalizeHeaderLabel("단가"):   "unit_price",
+	normalizeHeaderLabel("공급가액"): "supply_amount",
+	normalizeHeaderLabel("세액"):   "vat_amount",
+	normalizeHeaderLabel("합계"):   "total_amount",
 	// 워크플로우 (기존 시트)
-	normalizeHeaderLabel("거래명세서"):     "tx_statement_ready",
+	normalizeHeaderLabel("거래명세서"):   "tx_statement_ready",
 	normalizeHeaderLabel("인수검수요청서"): "inspection_request_sent",
-	normalizeHeaderLabel("결재요청"):       "approval_requested",
-	normalizeHeaderLabel("계산서발행"):     "tax_invoice_issued",
+	normalizeHeaderLabel("결재요청"):    "approval_requested",
+	normalizeHeaderLabel("계산서발행"):   "tax_invoice_issued",
 	// 추가 메타 (새 시트) — source_payload 보존
-	normalizeHeaderLabel("기타사항"):              "note",
-	normalizeHeaderLabel("현장담당자"):            "site_contact",
+	normalizeHeaderLabel("기타사항"):          "note",
+	normalizeHeaderLabel("현장담당자"):         "site_contact",
 	normalizeHeaderLabel("납기 변경 히스토리"):    "delivery_history",
-	normalizeHeaderLabel("FD 여부"):                "fd_ready",
-	normalizeHeaderLabel("KS인증서 여부"):         "ks_cert_ready",
-	normalizeHeaderLabel("발전사업허가증"):        "power_license",
-	normalizeHeaderLabel("전달여부"):              "delivered",
+	normalizeHeaderLabel("FD 여부"):         "fd_ready",
+	normalizeHeaderLabel("KS인증서 여부"):      "ks_cert_ready",
+	normalizeHeaderLabel("발전사업허가증"):       "power_license",
+	normalizeHeaderLabel("전달여부"):          "delivered",
 	normalizeHeaderLabel("발전사업허가증 전달 여부"): "power_license_delivered",
 }
 
@@ -1121,7 +1127,6 @@ func normalizeCorp(s string) string {
 	return normalizeCode(s)
 }
 
-
 // 자동 모드 단순화: ISO 날짜 (YYYY-MM-DD) 또는 한국 표기 ("2026. 1. 3" / "2026-01-03") 만 인식.
 // 자유 형식 ("1/12 오후착") 은 SKIP (수동 모드에서 보정).
 func parseTopsolarDate(s string) string {
@@ -1204,11 +1209,10 @@ func (h *ExternalSyncHandler) fetchCompaniesByCode() (map[string]string, error) 
 	return out, nil
 }
 
-
 // D-059 PR 12: product_code → (product_id, wattage_kw) 인덱스. capacity_kw 자동 계산용.
 type productMeta struct {
-	ID         string
-	WattageKW  float64
+	ID        string
+	WattageKW float64
 }
 
 func (h *ExternalSyncHandler) fetchProductsLookup() (map[string]productMeta, error) {
@@ -1217,9 +1221,9 @@ func (h *ExternalSyncHandler) fetchProductsLookup() (map[string]productMeta, err
 		return nil, err
 	}
 	var rows []struct {
-		ProductID  string   `json:"product_id"`
-		ProductCode string  `json:"product_code"`
-		WattageKW  *float64 `json:"wattage_kw"`
+		ProductID   string   `json:"product_id"`
+		ProductCode string   `json:"product_code"`
+		WattageKW   *float64 `json:"wattage_kw"`
 	}
 	if err := json.Unmarshal(data, &rows); err != nil {
 		return nil, err

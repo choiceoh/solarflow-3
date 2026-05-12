@@ -22,8 +22,8 @@ const fmtNum = (v: number | undefined, digits = 0) =>
 const fmtRate = (v: number | undefined) => (v == null ? '—' : `${(v * (v < 1 ? 100 : 1)).toFixed(1)}%`);
 
 const columns: ColumnDef<Declaration>[] = [
-  { key: 'declaration_number', label: '면장번호', className: 'font-medium', cell: (d) => d.declaration_number, sortAccessor: (d) => d.declaration_number },
-  { key: 'bl_number', label: 'B/L번호', hideable: true, cell: (d) => d.bl_number || d.bl_id.slice(0, 8), sortAccessor: (d) => d.bl_number || d.bl_id },
+  { key: 'declaration_number', label: '면장번호', className: 'font-medium text-[13px]', cell: (d) => d.declaration_number, sortAccessor: (d) => d.declaration_number },
+  { key: 'bl_number', label: 'B/L번호', hideable: true, className: 'text-[13px]', cell: (d) => d.bl_number || d.bl_id.slice(0, 8), sortAccessor: (d) => d.bl_number || d.bl_id },
   { key: 'supplier_name_kr', label: '공급사', hideable: true, cell: (d) => d.supplier_name_kr || '—', sortAccessor: (d) => d.supplier_name_kr || '' },
   { key: 'company_name', label: '법인', hideable: true, cell: (d) => d.company_name || '—', sortAccessor: (d) => d.company_name || '' },
   { key: 'declaration_date', label: '신고일', hideable: true, cell: (d) => formatDate(d.declaration_date), sortAccessor: (d) => d.declaration_date ?? '' },
@@ -47,7 +47,7 @@ const columns: ColumnDef<Declaration>[] = [
   { key: 'lc_no', label: 'L/C No.', hideable: true, hiddenByDefault: true, cell: (d) => d.lc_no || '—', sortAccessor: (d) => d.lc_no || '' },
   { key: 'invoice_no', label: 'Invoice No.', hideable: true, hiddenByDefault: true, cell: (d) => d.invoice_no || '—', sortAccessor: (d) => d.invoice_no || '' },
   { key: 'po_number', label: '발주PO', hideable: true, hiddenByDefault: true, cell: (d) => d.po_number || '—', sortAccessor: (d) => d.po_number || '' },
-  { key: 'erp_inbound_no', label: 'ERP 입고번호', hideable: true, hiddenByDefault: true, cell: (d) => d.erp_inbound_no || '—', sortAccessor: (d) => d.erp_inbound_no || '' },
+  { key: 'erp_inbound_no', label: 'ERP 입고번호', hideable: true, hiddenByDefault: true, className: 'text-[13px]', cell: (d) => d.erp_inbound_no || '—', sortAccessor: (d) => d.erp_inbound_no || '' },
   { key: 'capacity_kw', label: '용량 (kW)', hideable: true, hiddenByDefault: true, cell: (d) => d.capacity_kw != null ? fmtNum(d.capacity_kw, 2) : '—', sortAccessor: (d) => d.capacity_kw ?? -1 },
 ];
 

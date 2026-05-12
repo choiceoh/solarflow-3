@@ -1,6 +1,7 @@
 DELETE  /api/v1/admin/db-anomalies/ignore/{ignoreID}
 DELETE  /api/v1/assistant/sessions/{id}
 DELETE  /api/v1/attachments/{id}
+DELETE  /api/v1/bank-accounts/{id}
 DELETE  /api/v1/banks/{id}
 DELETE  /api/v1/baro/dispatch-routes/{id}
 DELETE  /api/v1/baro/quotes/{id}
@@ -50,6 +51,8 @@ GET     /api/v1/attachments/{id}/access
 GET     /api/v1/attachments/{id}/download
 GET     /api/v1/attachments/{id}/file
 GET     /api/v1/audit-logs/
+GET     /api/v1/bank-accounts/
+GET     /api/v1/bank-accounts/{id}
 GET     /api/v1/banking/dashboard
 GET     /api/v1/banks/
 GET     /api/v1/banks/{id}
@@ -190,6 +193,8 @@ GET     /api/v1/warehouses/usage-counts
 GET     /api/v1/warehouses/{id}
 GET     /health
 PATCH   /api/v1/assistant/sessions/{id}
+PATCH   /api/v1/bank-accounts/{id}
+PATCH   /api/v1/bank-accounts/{id}/status
 PATCH   /api/v1/banks/{id}
 PATCH   /api/v1/banks/{id}/status
 PATCH   /api/v1/companies/{id}
@@ -230,6 +235,7 @@ POST    /api/v1/assistant/proposals/{id}/reject
 POST    /api/v1/assistant/sessions
 POST    /api/v1/assistant/sessions/{id}/summarize-title
 POST    /api/v1/attachments/
+POST    /api/v1/bank-accounts/
 POST    /api/v1/banks/
 POST    /api/v1/baro/dispatch-routes/
 POST    /api/v1/baro/dispatch-routes/unassign
@@ -320,6 +326,7 @@ POST    /api/v1/users/
 POST    /api/v1/warehouse-locations/
 POST    /api/v1/warehouses/
 PUT     /api/v1/admin/feature-wiring/{tenantID}/{featureID}
+PUT     /api/v1/bank-accounts/{id}
 PUT     /api/v1/banks/{id}
 PUT     /api/v1/baro/dispatch-routes/{id}
 PUT     /api/v1/baro/quotes/{id}

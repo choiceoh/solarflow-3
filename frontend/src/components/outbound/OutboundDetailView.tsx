@@ -260,9 +260,9 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
 
       <DetailSection title="제품 · 수량 · 창고">
         <DetailFieldGrid cols={4}>
-          <DetailField label="품번" value={ob.product_code} />
+          <DetailField label="품번"><span className="text-[13px]">{ob.product_code ?? '—'}</span></DetailField>
           <DetailField label="제조사" value={ob.manufacturer_name} />
-          <DetailField label="품명" value={ob.product_name} span={2} />
+          <DetailField label="품명" span={2}><span className="text-[13px]">{ob.product_name ?? '—'}</span></DetailField>
           <DetailField label="규격" value={ob.spec_wp ? `${ob.spec_wp}Wp` : undefined} />
           <EditableDetailField
             label="수량"
@@ -323,7 +323,7 @@ export default function OutboundDetailView({ outboundId, onBack }: Props) {
                 key={item.outbound_bl_item_id}
                 className="flex items-center gap-3 rounded border bg-blue-50 px-3 py-2 text-xs text-blue-800"
               >
-                <span className="font-mono font-medium">
+                <span className="font-mono font-medium text-[13px]">
                   {item.bl_number ?? item.bl_id.slice(0, 8)}
                 </span>
                 <span className="text-blue-500">·</span>
