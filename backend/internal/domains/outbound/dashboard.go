@@ -217,8 +217,9 @@ func (h *OutboundHandler) tryRPCOutboundsDashboard(r *http.Request) ([]byte, boo
 // PostgREST db-max-rows=1000 가드를 우회하는 offset 누적 패턴 (프론트 fetchAllOutbounds 와 동일 전략).
 func (h *OutboundHandler) fetchAllForDashboard(r *http.Request) ([]Outbound, error) {
 	all := make([]Outbound, 0, dashboardChunkSize)
+	baseTable := outboundsBaseTable(r)
 	for chunk := 0; chunk < dashboardMaxChunks; chunk++ {
-		q := h.DB.From("outbounds").Select(outboundListColumns, "exact", false)
+		q := h.DB.From(baseTable).Select(outboundListColumns, "exact", false)
 		q, ok, err := h.applyOutboundFilters(r, q)
 		if err != nil {
 			return nil, fmt.Errorf("필터 처리 실패: %w", err)

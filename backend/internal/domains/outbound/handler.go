@@ -246,34 +246,14 @@ type outboundPartnerRow struct {
 	PartnerName string `json:"partner_name"`
 }
 
-type outboundSaleRefRow struct {
-	OutboundID *string `json:"outbound_id"`
-	Status     string  `json:"status"`
-}
-
-func (h *OutboundHandler) activeSaleOutboundIDs() ([]string, error) {
-	data, err := handlerutil.FetchAllFromTable(h.DB, "sales", "outbound_id,status")
-	if err != nil {
-		return nil, err
+// outboundsBaseTable — work_queue 에 따라 PostgREST 가 쿼리할 베이스 테이블/뷰 이름을 고른다.
+// sale_unregistered 는 마이그 110 의 outbounds_sale_unregistered 뷰로 위임해
+// "수천 UUID NOT IN" URL 폭주를 DB-side 로 푼다. 그 외엔 그대로 outbounds.
+func outboundsBaseTable(r *http.Request) string {
+	if r.URL.Query().Get("work_queue") == "sale_unregistered" {
+		return "outbounds_sale_unregistered"
 	}
-	var rows []outboundSaleRefRow
-	if err := json.Unmarshal(data, &rows); err != nil {
-		return nil, err
-	}
-
-	seen := make(map[string]struct{}, len(rows))
-	ids := make([]string, 0, len(rows))
-	for _, row := range rows {
-		if row.OutboundID == nil || *row.OutboundID == "" || row.Status == "cancelled" {
-			continue
-		}
-		if _, exists := seen[*row.OutboundID]; exists {
-			continue
-		}
-		seen[*row.OutboundID] = struct{}{}
-		ids = append(ids, *row.OutboundID)
-	}
-	return ids, nil
+	return "outbounds"
 }
 
 func (h *OutboundHandler) fetchOutboundRecord(id string) (Outbound, bool, error) {
@@ -625,23 +605,17 @@ func (h *OutboundHandler) applyOutboundSearch(query *postgrest.FilterBuilder, q 
 	return query.Or(strings.Join(clauses, ","), ""), true, nil
 }
 
-// applyOutboundWorkQueue — 출고 이후 다음 처리 대기열을 DB 필터로 좁힌다.
-// 비유: "출고 전표함"에서 아직 매출 전표가 붙지 않은 상품판매 건만 따로 꺼내는 작업.
+// applyOutboundWorkQueue — work_queue 별 추가 필터.
+// sale_unregistered 의 본체(상품판매 + 매출 미연결)는 outboundsBaseTable 가 가리키는
+// outbounds_sale_unregistered 뷰가 DB-side 로 처리한다 (마이그 110). 여기서는 status
+// 기본값(active) 만 핸들러 단에 남겨 사용자 status override 를 보존.
 func (h *OutboundHandler) applyOutboundWorkQueue(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
 	switch r.URL.Query().Get("work_queue") {
 	case "":
 		return query, true, nil
 	case "sale_unregistered":
-		query = query.In("usage_category", []string{"sale", "sale_spare"})
 		if r.URL.Query().Get("status") == "" {
 			query = query.Eq("status", "active")
-		}
-		linkedIDs, err := h.activeSaleOutboundIDs()
-		if err != nil {
-			return query, false, fmt.Errorf("매출 연결 출고 조회 실패: %w", err)
-		}
-		if len(linkedIDs) > 0 {
-			query = query.Not("outbound_id", "in", "("+strings.Join(linkedIDs, ",")+")")
 		}
 		return query, true, nil
 	default:
@@ -730,7 +704,7 @@ func (h *OutboundHandler) applyOutboundFilters(r *http.Request, query *postgrest
 //
 // 응답 헤더 X-Total-Count 로 필터 후 전체 건수 노출.
 func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("outbounds").Select("*", "exact", false)
+	query := h.DB.From(outboundsBaseTable(r)).Select("*", "exact", false)
 	query, ok, err := h.applyOutboundFilters(r, query)
 	if err != nil {
 		log.Printf("[출고 목록 필터 처리 실패] %v", err)
@@ -794,7 +768,8 @@ type OutboundSummary struct {
 // 페이지 사이즈에 무관하게 전체에 대한 카운트/합계를 돌려준다.
 func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	// 출고 카운트 — head=true 로 본문 없이 X-Total-Count 만 받는다 (전체).
-	totalQ := h.DB.From("outbounds").Select("outbound_id", "exact", true)
+	baseTable := outboundsBaseTable(r)
+	totalQ := h.DB.From(baseTable).Select("outbound_id", "exact", true)
 	totalQ, ok, err := h.applyOutboundFilters(r, totalQ)
 	if err != nil {
 		log.Printf("[출고 요약 필터 처리 실패] %v", err)
@@ -834,7 +809,7 @@ func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		if userStatus != "" && userStatus != st.key {
 			continue
 		}
-		q := h.DB.From("outbounds").Select("outbound_id", "exact", true)
+		q := h.DB.From(baseTable).Select("outbound_id", "exact", true)
 		q, ok2, err := h.applyOutboundFilters(r, q)
 		if err != nil || !ok2 {
 			continue
@@ -858,7 +833,7 @@ func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	//   - tax_invoice_date 가 채워진 sale 이 하나라도 있으면 → 발행 (제외)
 	// 과거에는 sale row 개수를 그대로 셌어서 (a) 매출 없는 출고를 누락하고 (b) 한 출고에 sale 이 여러 건이면
 	// 중복 카운트하는 두 가지 결함이 있었음. 알림(useAlerts) 가 이 값을 그대로 사용하므로 정의가 일치해야 함.
-	idQ := h.DB.From("outbounds").Select("outbound_id", "exact", false)
+	idQ := h.DB.From(baseTable).Select("outbound_id", "exact", false)
 	idQ, ok3, err := h.applyOutboundFilters(r, idQ)
 	if err == nil && ok3 {
 		if data, _, err := idQ.Execute(); err == nil {
