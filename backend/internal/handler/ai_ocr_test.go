@@ -151,6 +151,44 @@ func TestBuildOCRResultAddsCustomsFields(t *testing.T) {
 	}
 }
 
+// documentType 비어 있어도 면장 키워드 + 신고번호 보이면 자동으로 fields 채워야 한다.
+func TestBuildOCRResultAutoDetectsCustomsByKeyword(t *testing.T) {
+	got := buildOCRResult("scan.pdf", []ocr.Result{
+		{Text: "수입신고번호 81500-26-0150024", Score: 0.98},
+		{Text: "광양세관", Score: 0.95},
+		{Text: "적용환율 USD 1,422.60", Score: 0.95},
+	}, "")
+	if got.Fields == nil || got.Fields.CustomsDeclaration == nil {
+		t.Fatal("Fields.CustomsDeclaration = nil — 자동 판단 실패")
+	}
+	if got.Fields.DocumentType != "customs_declaration" {
+		t.Fatalf("DocumentType = %q, want customs_declaration", got.Fields.DocumentType)
+	}
+}
+
+// 면장 키워드 없는 일반 PDF — fields 비어야 한다.
+func TestBuildOCRResultSkipsCustomsForNonCustomsPDF(t *testing.T) {
+	got := buildOCRResult("invoice.pdf", []ocr.Result{
+		{Text: "COMMERCIAL INVOICE", Score: 0.98},
+		{Text: "Invoice No. INV-2026-001", Score: 0.95},
+		{Text: "Total: USD 12,345.00", Score: 0.95},
+	}, "")
+	if got.Fields != nil {
+		t.Fatalf("Fields = %+v, want nil — 면장 키워드 없는데 잘못 분류됨", got.Fields)
+	}
+}
+
+// 면장 키워드는 있지만 신고번호가 못 잡힌 경우 — fields 비어야 한다 (false positive 차단).
+func TestBuildOCRResultSkipsCustomsWhenNoDeclarationNumber(t *testing.T) {
+	got := buildOCRResult("scan.pdf", []ocr.Result{
+		{Text: "세관 신고 안내문", Score: 0.98},
+		{Text: "이 서류는 면장 발급 절차를 설명합니다", Score: 0.95},
+	}, "")
+	if got.Fields != nil {
+		t.Fatalf("Fields = %+v, want nil — 신고번호 없는데 잘못 분류됨", got.Fields)
+	}
+}
+
 func TestOCRHealthReportsNotConfigured(t *testing.T) {
 	h := NewOCRHandler(ocr.New(""), nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ocr/health", nil).WithContext(context.Background())
