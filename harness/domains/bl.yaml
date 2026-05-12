@@ -19,7 +19,8 @@ paths:
   backend:
     - backend/internal/domains/bl/   # colocation 완료 (PR-C). model + handler + dashboard + util + wms + handler_test
   frontend:
-    - frontend/src/packs/module-finance/pages/ProcurementPage.tsx   # 통합 페이지 — 분리 시 PR-D
+    - frontend/src/packs/module-finance/pages/ProcurementPage.tsx   # 통합 wrapper (PR-D2: 컴포넌트만 분리, page 자체는 유지)
+    - frontend/src/domains/bl/   # 통합 페이지 — 분리 시 PR-D
   migrations:
     # bl_shipments + bl_line_items + receiving_logs 관련 마이그
     - backend/migrations/007_*bl*.sql
@@ -65,7 +66,7 @@ blast_radius:
   - description: "BL model 필드 추가/삭제"
     must_check:
       - "backend/internal/domains/bl/handler.go (Validation 흐름)"
-      - "frontend/src/packs/module-finance/pages/ProcurementPage.tsx (BL 탭 form)"
+      - "frontend/src/domains/bl/ (BL 탭 form)"
       - "backend/migrations/ + check_schema.sh"
       - "PostgREST 스키마 캐시 갱신"
 
