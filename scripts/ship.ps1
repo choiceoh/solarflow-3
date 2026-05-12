@@ -25,13 +25,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# Windows PowerShell 5.1 의 기본 콘솔 인코딩이 CP949 라 한글 출력이 깨진다.
-# ship.cmd 에서 chcp 65001 도 하지만, 직접 .ps1 호출 경우도 커버.
+# Windows PowerShell 5.1 은 BOM 없는 UTF-8 을 ANSI (CP949) 로 읽어 source 문자열이
+# 깨지므로 user-facing Write-Host 는 영문만 사용 (코멘트는 영향 없음).
+# Output encoding 도 보강 — 자식 프로세스 stdout 처리 안전망.
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 $branch = (git symbolic-ref --short HEAD).Trim()
 if (-not $branch -or $branch -eq 'main') {
-    Write-Host "[X] HEAD 가 작업 브랜치가 아님 (현재: $branch)" -ForegroundColor Red
+    Write-Host "[X] HEAD is not on a feature branch (current: $branch)" -ForegroundColor Red
     exit 1
 }
 
@@ -50,11 +51,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "[3/3] gh pr merge --auto --merge" -ForegroundColor Cyan
 & gh pr merge --auto --merge
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "[!] auto-merge 활성화 실패 — PR 은 만들어졌으니 수동 확인" -ForegroundColor Yellow
+    Write-Host "[!] auto-merge enable failed - PR is open, verify manually" -ForegroundColor Yellow
     Write-Host "    $prUrl"
     exit $LASTEXITCODE
 }
 
 Write-Host ""
 Write-Host "[OK] $prUrl" -ForegroundColor Green
-Write-Host "CI green 시 자동 머지 + 브랜치 자동 삭제 (delete_branch_on_merge=true)"
+Write-Host "Auto-merge enabled. Will merge when CI passes; branch auto-deleted (delete_branch_on_merge=true)."
