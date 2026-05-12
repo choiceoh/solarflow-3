@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { testBl, testBlLine, testLc, testPo, testPoLine, testTt } from '@/test/fixtures';
 import { callsFor, clearFetchWithAuthMock, mockFetchWithAuth, resetAppStore, seedCompanyStore } from '@/test/mockApi';
-import POListTable from './POListTable';
+import POListTable from './list-table';
 
 mock.module('@/lib/api', () => ({
   fetchWithAuth: mock(() => {}),
