@@ -24,6 +24,9 @@ export interface BLDashboard {
     import_count: number
     shipping_count: number
     customs_count: number
+    // bl_line_items.capacity_kw 합계. InventoryPage '흐름' 탭의 월별 입고 시계열.
+    // 마이그 107 + dashboard.go computeBLDashTrend24 으로 채워짐.
+    kw_sum: number
   }[]
   status_scope: BLScope
   by_status: BLDashboardBreakdownRow[]

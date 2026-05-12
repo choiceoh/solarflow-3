@@ -16,6 +16,20 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAppStore } from '@/stores/appStore';
 import { useInventory } from '@/hooks/useInventory';
 import { useForecast } from '@/hooks/useForecast';
+import { useBLDashboard, type BLDashboard } from '@/hooks/useInbound';
+import { useOutboundDashboard, type OutboundDashboard } from '@/hooks/useOutbound';
+import { useOrderDashboard, type OrderDashboard } from '@/hooks/useOrders';
+import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { fetchWithAuth } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import { detectCapacityUnit, formatKwUnitOnly, formatKwValueOnly, shortMfgName } from '@/lib/utils';
@@ -45,8 +59,8 @@ function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
-type InventoryTab = 'avail' | 'physical' | 'incoming' | 'forecast';
-const INVENTORY_TABS = new Set<string>(['avail', 'physical', 'incoming', 'forecast']);
+type InventoryTab = 'avail' | 'physical' | 'incoming' | 'forecast' | 'flow';
+const INVENTORY_TABS = new Set<string>(['avail', 'physical', 'incoming', 'forecast', 'flow']);
 type ForecastScope = 'current' | 'all';
 type LongTermFilter = '' | 'warning' | 'critical';
 
@@ -370,6 +384,14 @@ export default function InventoryPage() {
   const invOpts = mfgFilter ? { manufacturerId: mfgFilter } : {};
   const { data: rawInv, loading: invLoading, error: invError, reload: reloadInv } = useInventory(invOpts);
   const { data: fcData, loading: fcLoading, error: fcError } = useForecast(invOpts);
+  // '흐름' 탭 — manufacturer 필터를 dashboard 3종에 전달. trend24 (BL/Outbound) 와 totals (Order) 만 사용.
+  const flowDashFilters = useMemo(
+    () => (mfgFilter ? { manufacturer_id: mfgFilter } : {}),
+    [mfgFilter],
+  );
+  const { dashboard: blDash } = useBLDashboard(flowDashFilters);
+  const { dashboard: outboundDash } = useOutboundDashboard(flowDashFilters);
+  const { dashboard: orderDash } = useOrderDashboard({});
 
   // 제조사 선택 시 해당 제조사 재고의 규격(Wp) 목록 추출
   const availableWps = useMemo(() => {
@@ -595,6 +617,7 @@ export default function InventoryPage() {
           { key: 'physical', label: '실재고', count: invData?.items.length ?? 0 },
           { key: 'incoming', label: '미착', count: incomingRailItems.length },
           { key: 'forecast', label: '수급 전망' },
+          { key: 'flow', label: '흐름' },
         ]}
       />
     </div>
@@ -603,11 +626,13 @@ export default function InventoryPage() {
     activeTab === 'physical' ? '품목별 실재고' :
     activeTab === 'incoming' ? '품목별 미착품 / 배정 현황' :
     activeTab === 'forecast' ? '수급 전망' :
+    activeTab === 'flow' ? '입출고 흐름' :
     '재고 현황';
   const inventorySub =
     activeTab === 'physical' ? '창고 보유 물리 재고' :
     activeTab === 'incoming' ? 'L/C · B/L 예정분' :
     activeTab === 'forecast' ? `표시 ${forecastProducts.length.toLocaleString('ko-KR')}건 · 현재 관련 ${activeForecastProductCount.toLocaleString('ko-KR')}건` :
+    activeTab === 'flow' ? '24개월 입고·출고·재고잔량' :
     '제조사 × 품번 · 단위 MW';
   const inventoryMetrics = [
     {
@@ -881,6 +906,15 @@ export default function InventoryPage() {
             </div>
           )}
         </TabsContent>
+
+        <TabsContent value="flow">
+          <FlowTab
+            blDash={blDash}
+            outboundDash={outboundDash}
+            orderDash={orderDash}
+            stockAvailableKwRaw={stockAvailableKwRaw}
+          />
+        </TabsContent>
       </Tabs>
       </div>
 
@@ -1061,6 +1095,156 @@ export default function InventoryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// FlowTab — 24개월 입출고 흐름 + 재고 walking back.
+// 재고잔량(t) = current_stock + Σoutbound(t+1..now) − Σinbound(t+1..now)
+// 수주잔량은 historical 재구성이 불가능 (Order 에 completed_at 없음) — 현재 시점 active+partial 만 표시.
+function FlowTab({
+  blDash,
+  outboundDash,
+  orderDash,
+  stockAvailableKwRaw,
+}: {
+  blDash: BLDashboard | null;
+  outboundDash: OutboundDashboard | null;
+  orderDash: OrderDashboard | null;
+  stockAvailableKwRaw: number;
+}) {
+  const chartData = useMemo(() => {
+    if (!blDash || !outboundDash) return [];
+    // 두 trend24 모두 동일 24개월 윈도우를 서버에서 생성 — month 키로 align.
+    const outboundByMonth = new Map(
+      outboundDash.trend24.map((p) => [p.month, p.kw_sum]),
+    );
+    const rows = blDash.trend24.map((p) => ({
+      month: p.month,
+      inbound: p.kw_sum / 1000, // kW → MW
+      outbound: (outboundByMonth.get(p.month) ?? 0) / 1000,
+    }));
+    // current_stock 을 anchor 로 거꾸로 walking.
+    // stock(t) = stock(t+1) + outbound(t+1) − inbound(t+1)
+    const inventoryMw: number[] = new Array(rows.length).fill(0);
+    inventoryMw[rows.length - 1] = stockAvailableKwRaw / 1000;
+    for (let i = rows.length - 2; i >= 0; i--) {
+      inventoryMw[i] = inventoryMw[i + 1] + rows[i + 1].outbound - rows[i + 1].inbound;
+    }
+    return rows.map((r, i) => ({
+      ...r,
+      inventory: Math.max(0, inventoryMw[i]),
+      monthLabel: r.month.slice(2), // YY-MM
+    }));
+  }, [blDash, outboundDash, stockAvailableKwRaw]);
+
+  const prevMonthInbound = chartData.length >= 2 ? chartData[chartData.length - 2].inbound : 0;
+  const prevMonthOutbound = chartData.length >= 2 ? chartData[chartData.length - 2].outbound : 0;
+  const currentInventoryMw = stockAvailableKwRaw / 1000;
+  const orderBacklogCount =
+    (orderDash?.totals.active_count ?? 0) + (orderDash?.totals.partial_count ?? 0);
+
+  const tiles: { label: string; value: string; sub: string; tone: string }[] = [
+    {
+      label: '재고잔량',
+      value: currentInventoryMw.toFixed(2),
+      sub: 'MW · 현재 시점',
+      tone: 'var(--solar-2)',
+    },
+    {
+      label: '수주잔량',
+      value: orderBacklogCount.toLocaleString('ko-KR'),
+      sub: `건 · active ${orderDash?.totals.active_count ?? 0} / partial ${orderDash?.totals.partial_count ?? 0}`,
+      tone: 'var(--info)',
+    },
+    {
+      label: '직전월 입고',
+      value: prevMonthInbound.toFixed(2),
+      sub: 'MW',
+      tone: 'var(--pos)',
+    },
+    {
+      label: '직전월 출고',
+      value: prevMonthOutbound.toFixed(2),
+      sub: 'MW',
+      tone: 'var(--warn)',
+    },
+  ];
+
+  if (!blDash || !outboundDash) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {tiles.map((tile) => (
+          <div
+            key={tile.label}
+            className="rounded-md border bg-background p-3"
+            style={{ borderLeftColor: tile.tone, borderLeftWidth: 3 }}
+          >
+            <div className="text-[11px] text-muted-foreground">{tile.label}</div>
+            <div className="mt-1 flex items-baseline gap-1">
+              <span className="text-xl font-semibold tabular-nums">{tile.value}</span>
+              <span className="text-[10px] text-muted-foreground">{tile.sub}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-md border bg-background p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold">24개월 입출고 흐름</div>
+            <div className="text-[10.5px] text-muted-foreground">
+              입고·출고 bar (MW) + 재고잔량 line (현재 시점 anchor 로 walking back)
+            </div>
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            ※ 재고 walking 은 trend24 의 입출고 누적 차감. 창고이동·재고조정 등은 미반영
+          </div>
+        </div>
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 10, right: 12, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
+              <XAxis dataKey="monthLabel" tick={{ fontSize: 10 }} />
+              <YAxis
+                yAxisId="flow"
+                orientation="left"
+                tick={{ fontSize: 10 }}
+                width={40}
+                label={{
+                  value: 'MW',
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { fontSize: 10, fill: 'var(--ink-3)' },
+                }}
+              />
+              <Tooltip
+                formatter={(value, name) => [`${Number(value).toFixed(2)} MW`, name]}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar yAxisId="flow" dataKey="inbound" name="월별 입고" fill="var(--pos)" />
+              <Bar yAxisId="flow" dataKey="outbound" name="월별 출고" fill="var(--warn)" />
+              <Line
+                yAxisId="flow"
+                type="monotone"
+                dataKey="inventory"
+                name="재고잔량"
+                stroke="var(--solar-2)"
+                strokeWidth={2}
+                dot={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
     </div>
   );
 }

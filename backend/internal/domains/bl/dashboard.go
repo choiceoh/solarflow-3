@@ -44,12 +44,14 @@ type BLDashTotals struct {
 }
 
 // BLDashTrendPoint — actual_arrival > eta > etd 우선순위 binning. Insight 별 spark 위해 모든 카운트 포함.
+// KwSum 은 해당 월의 BL line item capacity_kw 합계 — InventoryPage '흐름' 탭의 월별 입고 시계열 source.
 type BLDashTrendPoint struct {
-	Month         string `json:"month"`
-	Count         int    `json:"count"`
-	ImportCount   int    `json:"import_count"`
-	ShippingCount int    `json:"shipping_count"`
-	CustomsCount  int    `json:"customs_count"`
+	Month         string  `json:"month"`
+	Count         int     `json:"count"`
+	ImportCount   int     `json:"import_count"`
+	ShippingCount int     `json:"shipping_count"`
+	CustomsCount  int     `json:"customs_count"`
+	KwSum         float64 `json:"kw_sum"`
 }
 
 type BLDashBreakdownRow struct {
@@ -60,6 +62,7 @@ type BLDashBreakdownRow struct {
 }
 
 // blDashRow — BL join 결과 평탄화 (manufacturers 추가).
+// BLLineItems 는 capacity_kw 만 — kw_sum 집계용. PostgREST 임베디드 select 로 받음.
 type blDashRow struct {
 	BLID           string  `json:"bl_id"`
 	ManufacturerID string  `json:"manufacturer_id"`
@@ -74,6 +77,9 @@ type blDashRow struct {
 	Manufacturers  *struct {
 		NameKR string `json:"name_kr"`
 	} `json:"manufacturers"`
+	BLLineItems []struct {
+		CapacityKw float64 `json:"capacity_kw"`
+	} `json:"bl_line_items"`
 }
 
 // blBinDate — actual_arrival > eta > etd 우선순위.
@@ -95,6 +101,14 @@ func (r blDashRow) manufacturerName() string {
 		return r.Manufacturers.NameKR
 	}
 	return ""
+}
+
+func (r blDashRow) kwSum() float64 {
+	var sum float64
+	for _, li := range r.BLLineItems {
+		sum += li.CapacityKw
+	}
+	return sum
 }
 
 // Dashboard — GET /api/v1/bls/dashboard.
@@ -166,7 +180,7 @@ func normalizeBLScope(raw string) string {
 func (h *BLHandler) fetchAllForBLDashboard(r *http.Request) ([]blDashRow, error) {
 	all := make([]blDashRow, 0, blDashChunkSize)
 	for chunk := 0; chunk < blDashMaxChunks; chunk++ {
-		q := h.DB.From("bl_shipments").Select("*, manufacturers(name_kr)", "exact", false)
+		q := h.DB.From("bl_shipments").Select("*, manufacturers(name_kr), bl_line_items(capacity_kw)", "exact", false)
 		q = h.applyBLFilters(r, q)
 		offset := chunk * blDashChunkSize
 		q = q.Range(offset, offset+blDashChunkSize-1, "")
@@ -284,6 +298,7 @@ func computeBLDashTrend24(rows []blDashRow) []BLDashTrendPoint {
 			continue
 		}
 		out[i].Count++
+		out[i].KwSum += r.kwSum()
 		if r.InboundType == "import" {
 			out[i].ImportCount++
 		}
