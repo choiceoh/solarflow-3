@@ -22,7 +22,8 @@ paths:
   backend:
     - backend/internal/domains/po/   # colocation 완료 (PR-B). model.go + handler.go + dashboard.go + util.go + audit.go + rpc.go + test
   frontend:
-    - frontend/src/packs/module-finance/pages/ProcurementPage.tsx   # PR-B 범위 외 — PO/LC/BL 통합 페이지
+    - frontend/src/packs/module-finance/pages/ProcurementPage.tsx   # 통합 wrapper (PR-D2: 컴포넌트만 분리, page 자체는 유지)
+    - frontend/src/domains/po/   # PR-B 범위 외 — PO/LC/BL 통합 페이지
   migrations:
     # purchase_orders + po_line_items 관련 마이그
     - backend/migrations/008_po_widen_columns.sql
@@ -55,7 +56,7 @@ blast_radius:
   - description: "PO model 필드 추가/삭제"
     must_check:
       - "backend/internal/domains/po/handler.go (Validation 흐름)"
-      - "frontend/src/packs/module-finance/pages/ProcurementPage.tsx (form 타입)"
+      - "frontend/src/domains/po/ (form 타입)"
       - "backend/migrations/ (마이그 필수)"
       - "PostgREST 스키마 캐시 갱신 (CLAUDE.md '필수 절차' 4단계)"
 

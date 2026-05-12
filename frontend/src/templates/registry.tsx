@@ -13,7 +13,7 @@ import { INBOUND_TYPE_LABEL } from '@/types/inbound';
 import type { BLShipment, BLStatus } from '@/types/inbound';
 import type { CellRenderer, DetailComponent, ContentBlock, ActionHandler } from './types';
 import MetaDetail from './MetaDetail';
-import BLDetailView from '@/components/inbound/BLDetailView';
+import BLDetailView from '@/domains/bl/detail-view';
 import OutboundDetailView from '@/components/outbound/OutboundDetailView';
 import blShipmentDetailConfig from '@/config/details/bl_shipment';
 

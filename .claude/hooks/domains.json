@@ -24,10 +24,11 @@
       "paths": [
         "backend/internal/domains/po/",
         "frontend/src/packs/module-finance/pages/ProcurementPage.tsx",
+        "frontend/src/domains/po/",
         "backend/internal/domains/po/handler_test.go"
       ],
       "blast_radius": [
-        "PO model 필드 추가/삭제 — backend/internal/domains/po/handler.go (Validation 흐름) / frontend/src/packs/module-finance/pages/ProcurementPage.tsx (form 타입) / backend/migrations/ (마이그 필수) / PostgREST 스키마 캐시 갱신 (CLAUDE.md '필수 절차' 4단계)",
+        "PO model 필드 추가/삭제 — backend/internal/domains/po/handler.go (Validation 흐름) / frontend/src/domains/po/ (form 타입) / backend/migrations/ (마이그 필수) / PostgREST 스키마 캐시 갱신 (CLAUDE.md '필수 절차' 4단계)",
         "po_line_items 컬럼 추가/삭제 — backend/scripts/check_schema.sh 통과 / scripts/backfill_order_prices.py (라인 가격 backfill 영향) / scripts/verify_residual_4.py (잔여수량 정합성)",
         "PO 라우트 추가 (path/method 새로 등장) — backend/internal/feature/catalog.go 의 IDTxPO entry Paths 갱신 필수 / matrix_consistency_test 가 누락 잡음 / harness/FEATURE-WIRING-MATRIX.md 표 동시 갱신",
         "contract_type 허용 값 변경 — backend/internal/domains/po/model.go 의 validContractTypes 맵 / frontend ProcurementPage 검색 필터의 select option",
@@ -67,12 +68,13 @@
       "paths": [
         "backend/internal/domains/bl/",
         "frontend/src/packs/module-finance/pages/ProcurementPage.tsx",
+        "frontend/src/domains/bl/",
         "backend/internal/domains/bl/handler_test.go"
       ],
       "blast_radius": [
         "BL 입고완료 status 전이 (ensureReceivingLogsForBL 호출) — backend/internal/domains/bl/wms.go (receiving_logs 자동 생성 로직) / outbound 도메인의 inventory 영향 (BL 입고 → 가용재고 증가) / warehouse_id NULL 케이스 처리 — receiving_logs 미생성",
         "BL 라인 item_type/payment_type 허용 값 변경 — backend/internal/domains/bl/model_line.go 의 validItemTypes/validPaymentTypes/validUsageCategories / backend/internal/model/lc_line.go 의 LC 측 dup (PR-D 에서 internal/validation 으로 분리 검토)",
-        "BL model 필드 추가/삭제 — backend/internal/domains/bl/handler.go (Validation 흐름) / frontend/src/packs/module-finance/pages/ProcurementPage.tsx (BL 탭 form) / backend/migrations/ + check_schema.sh / PostgREST 스키마 캐시 갱신",
+        "BL model 필드 추가/삭제 — backend/internal/domains/bl/handler.go (Validation 흐름) / frontend/src/domains/bl/ (BL 탭 form) / backend/migrations/ + check_schema.sh / PostgREST 스키마 캐시 갱신",
         "BL 외부 사용 (io_import, baro_incoming 등) — import \"solarflow-backend/internal/domains/bl\" + bl.X prefix / wms_automation.go 는 BL method 안 가짐 — Go cross-package method 불허",
         "PO ↔ BL 라인 연결 (D-087) 변경 — BLLineItem.POLineID 의 UUID 검증 (uuidRe) / PO 라인 product_id 와 BL 라인 product_id 일치성"
       ],
@@ -106,10 +108,11 @@
       ],
       "paths": [
         "backend/internal/domains/lc/",
-        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx"
+        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx",
+        "frontend/src/domains/lc/"
       ],
       "blast_radius": [
-        "LC model 필드 추가/삭제 — backend/internal/domains/lc/handler.go (Validation 흐름) / frontend/src/packs/module-finance/pages/ProcurementPage.tsx (LC 탭 form) / backend/migrations/ + check_schema.sh",
+        "LC model 필드 추가/삭제 — backend/internal/domains/lc/handler.go (Validation 흐름) / frontend/src/domains/lc/ (LC 탭 form) / backend/migrations/ + check_schema.sh",
         "LC 라인 item_type/payment_type 허용 값 변경 — backend/internal/domains/lc/model_line.go 의 validItemTypes/validPaymentTypes / backend/internal/domains/bl/model_line.go 의 BL 측 dup (PR-D 에서 internal/validation 분리)",
         "LC 라인이 PO 라인 연결 (POLineID) — uuidRe 매칭 (LC POLineID UUID 형식 검증) / po.ProductSummaryForPOLine 의존 — po 도메인 변경 시 import 영향",
         "LC 외부 사용 (io_import_parsers) — import \"solarflow-backend/internal/domains/lc\" + lc.X prefix"
@@ -140,10 +143,11 @@
       ],
       "paths": [
         "backend/internal/domains/tt/",
-        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx"
+        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx",
+        "frontend/src/domains/tt/"
       ],
       "blast_radius": [
-        "TT model 필드 추가/삭제 — backend/internal/domains/tt/handler.go (Validation 흐름) / frontend/src/packs/module-finance/pages/ProcurementPage.tsx (TT 탭 form) / backend/migrations/ + check_schema.sh",
+        "TT model 필드 추가/삭제 — backend/internal/domains/tt/handler.go (Validation 흐름) / frontend/src/domains/tt/ (TT 탭 form) / backend/migrations/ + check_schema.sh",
         "TT 상태 (status) 전이 변경 — backend/internal/domains/tt/model.go 의 validTTStatuses / 프론트 status 표시 컴포넌트",
         "TT 외부 사용 (io_import_parsers) — import \"solarflow-backend/internal/domains/tt\" + tt.X prefix"
       ],

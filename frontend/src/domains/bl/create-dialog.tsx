@@ -25,8 +25,8 @@ import {
 } from "@/components/ui/select"
 import FormField from "@/components/common/FormField"
 import { ProductCombobox } from "@/components/common/ProductCombobox"
-import BLOcrWidget, { type BLOcrApplyArgs } from "@/components/inbound/BLOcrWidget"
-import BLPaymentTermsWidget from "@/components/inbound/BLPaymentTermsWidget"
+import BLOcrWidget, { type BLOcrApplyArgs } from "@/domains/bl/ocr-widget"
+import BLPaymentTermsWidget from "@/domains/bl/payment-terms-widget"
 import { fetchWithAuth } from "@/lib/api"
 import {
   findProductForOCRLine,

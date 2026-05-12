@@ -19,7 +19,8 @@ paths:
   backend:
     - backend/internal/domains/lc/   # colocation 완료 — model + model_line + model_schedule_response + handler + dashboard + util + audit
   frontend:
-    - frontend/src/packs/module-finance/pages/ProcurementPage.tsx   # 통합 페이지 — PR-D 에서 분리
+    - frontend/src/packs/module-finance/pages/ProcurementPage.tsx   # 통합 wrapper (PR-D2: 컴포넌트만 분리, page 자체는 유지)
+    - frontend/src/domains/lc/   # 통합 페이지 — PR-D 에서 분리
   migrations:
     - backend/migrations/00[7-9]_*lc*.sql
     - backend/migrations/01[0-9]_*lc*.sql
@@ -46,7 +47,7 @@ blast_radius:
   - description: "LC model 필드 추가/삭제"
     must_check:
       - "backend/internal/domains/lc/handler.go (Validation 흐름)"
-      - "frontend/src/packs/module-finance/pages/ProcurementPage.tsx (LC 탭 form)"
+      - "frontend/src/domains/lc/ (LC 탭 form)"
       - "backend/migrations/ + check_schema.sh"
 
   - description: "LC 라인 item_type/payment_type 허용 값 변경"
