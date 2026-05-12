@@ -17,23 +17,21 @@ feature_id: tx.po           # backend/internal/feature/catalog.go 의 IDTxPO
 visible_to: module          # registry.yaml 의 group, 또는 [tenant_id, ...]
 
 # === 코드 위치 ===
-# T+0 (현재) = 흩어진 상태. PR-B 에서 backend/internal/domains/po/ + frontend/src/domains/po/ 로 colocation 마이그.
+# PR-B 완료 — backend 는 colocation. frontend 는 ProcurementPage 통합 페이지라 PR-B 범위 외 (PR-D 또는 별 PR).
 paths:
   backend:
-    - backend/internal/model/po.go
-    - backend/internal/model/po_line.go
-    - backend/internal/handler/tx_po.go
-    - backend/internal/handler/tx_po_line.go
-    - backend/internal/handler/tx_po_dashboard.go
+    - backend/internal/domains/po/   # colocation 완료 (PR-B). model.go + handler.go + dashboard.go + util.go + audit.go + rpc.go + test
   frontend:
-    - frontend/src/packs/module-finance/pages/ProcurementPage.tsx
-    # PR-B 후: frontend/src/domains/po/page.tsx, form.tsx, api.ts
+    - frontend/src/packs/module-finance/pages/ProcurementPage.tsx   # PR-B 범위 외 — PO/LC/BL 통합 페이지
   migrations:
-    # purchase_orders + po_line_items 관련 마이그 (번호 정합성은 PR-A 의 schema check 가 검증)
-    - backend/migrations/005_*.sql
-    - backend/migrations/0??_*po*.sql
+    # purchase_orders + po_line_items 관련 마이그
+    - backend/migrations/008_po_widen_columns.sql
+    - backend/migrations/010_po_contract_type_frame.sql
+    - backend/migrations/014_po_parent_po_id.sql
+    - backend/migrations/016_po_line_item_type.sql
+    - backend/migrations/024_po_ext_first_spec_wp.sql
   tests:
-    - backend/internal/handler/tx_po_test.go
+    - backend/internal/domains/po/handler_test.go
 
 # === DB ===
 tables:
@@ -56,7 +54,7 @@ depends_on:
 blast_radius:
   - description: "PO model 필드 추가/삭제"
     must_check:
-      - "backend/internal/handler/tx_po.go (Validation 흐름)"
+      - "backend/internal/domains/po/handler.go (Validation 흐름)"
       - "frontend/src/packs/module-finance/pages/ProcurementPage.tsx (form 타입)"
       - "backend/migrations/ (마이그 필수)"
       - "PostgREST 스키마 캐시 갱신 (CLAUDE.md '필수 절차' 4단계)"
@@ -75,13 +73,18 @@ blast_radius:
 
   - description: "contract_type 허용 값 변경"
     must_check:
-      - "backend/internal/model/po.go 의 validContractTypes 맵"
+      - "backend/internal/domains/po/model.go 의 validContractTypes 맵"
       - "frontend ProcurementPage 검색 필터의 select option"
 
   - description: "PO 상태 (status) 전이 규칙 변경"
     must_check:
-      - "tx_po.go 의 status update endpoint (PUT /:id/status)"
+      - "backend/internal/domains/po/handler.go 의 status update endpoint (PUT /:id/status)"
       - "프론트 status badge 색상 매핑 (Tremor 컴포넌트)"
+
+  - description: "PO 외부에서 PO type 사용 (예: io_import)"
+    must_check:
+      - "import \"solarflow-backend/internal/domains/po\" 추가 + po.PurchaseOrder 식 prefix 사용"
+      - "PO 가 cross-domain 의존: lc/tt (PODetail 임베드) 와 products (POLine.Products)"
 
 # === 자동 실행 검증 ===
 # PostToolUse hook 이 권장 (v1) / 실행 (v2).

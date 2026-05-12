@@ -1,4 +1,4 @@
-package handler
+package po
 
 import (
 	"encoding/json"
@@ -172,7 +172,7 @@ func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var orders []model.PurchaseOrder
+	var orders []PurchaseOrder
 	if err := json.Unmarshal(data, &orders); err != nil {
 		log.Printf("[발주 목록 디코딩 실패] %v / raw=%s", err, string(data))
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -263,7 +263,7 @@ func (h *POHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var orders []model.PurchaseOrder
+	var orders []PurchaseOrder
 	if err := json.Unmarshal(poData, &orders); err != nil {
 		log.Printf("[발주 상세 디코딩 실패] %v / raw=%s", err, string(poData))
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -286,7 +286,7 @@ func (h *POHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var lines []model.POLineWithProduct
+	var lines []POLineWithProduct
 	if err := json.Unmarshal(lineData, &lines); err != nil {
 		log.Printf("[발주 라인아이템 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "라인아이템 데이터 처리에 실패했습니다")
@@ -304,7 +304,7 @@ func (h *POHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var lcs []model.LCRecordSummary
+	var lcs []LCRecordSummary
 	if err := json.Unmarshal(lcData, &lcs); err != nil {
 		log.Printf("[발주 LC 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "LC 데이터 처리에 실패했습니다")
@@ -322,7 +322,7 @@ func (h *POHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var tts []model.TTSummary
+	var tts []TTSummary
 	if err := json.Unmarshal(ttData, &tts); err != nil {
 		log.Printf("[발주 TT 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "TT 데이터 처리에 실패했습니다")
@@ -331,10 +331,10 @@ func (h *POHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	// 비유: 계약서 + 품목 + LC + TT를 한 묶음으로 포장 (평탄 본문)
 	detail := struct {
-		model.PurchaseOrder
-		LineItems     []model.POLineWithProduct `json:"line_items"`
-		LCRecords     []model.LCRecordSummary   `json:"lc_records"`
-		TTRemittances []model.TTSummary         `json:"tt_remittances"`
+		PurchaseOrder
+		LineItems     []POLineWithProduct `json:"line_items"`
+		LCRecords     []LCRecordSummary   `json:"lc_records"`
+		TTRemittances []TTSummary         `json:"tt_remittances"`
 	}{
 		PurchaseOrder: orders[0],
 		LineItems:     lines,
@@ -348,7 +348,7 @@ func (h *POHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Create — POST /api/v1/pos — 발주 등록
 // 비유: 새 계약서를 작성하여 관리실에 보관하는 것
 func (h *POHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreatePurchaseOrderRequest
+	var req CreatePurchaseOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[발주 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -360,14 +360,14 @@ func (h *POHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
-	if msg := validateNestedPOLines(req.LineItems); msg != "" {
+	if msg := ValidateNestedPOLines(req.LineItems); msg != "" {
 		response.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
 
 	// 비유: 계약서 본문과 품목 명세표를 같은 봉투에 넣어 DB 함수로 접수한다.
-	data, err := dbrpc.Call(r.Context(), "sf_create_purchase_order_with_lines", model.CreatePurchaseOrderWithLinesRPCRequest{
-		PO:    model.NewPurchaseOrderInsert(req),
+	data, err := dbrpc.Call(r.Context(), "sf_create_purchase_order_with_lines", CreatePurchaseOrderWithLinesRPCRequest{
+		PO:    NewPurchaseOrderInsert(req),
 		Lines: req.LineItems,
 	})
 	if err != nil {
@@ -376,7 +376,7 @@ func (h *POHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var created model.PurchaseOrder
+	var created PurchaseOrder
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[발주 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -389,13 +389,13 @@ func (h *POHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeAuditLog(h.DB, r, "purchase_orders", created.POID, "create", nil, auditRawFromValue(struct {
-		PO    model.PurchaseOrder         `json:"po"`
-		Lines []model.CreatePOLineRequest `json:"lines,omitempty"`
+		PO    PurchaseOrder         `json:"po"`
+		Lines []CreatePOLineRequest `json:"lines,omitempty"`
 	}{PO: created, Lines: req.LineItems}), "")
 	response.RespondJSON(w, http.StatusCreated, created)
 }
 
-func validateNestedPOLines(lines []model.CreatePOLineRequest) string {
+func ValidateNestedPOLines(lines []CreatePOLineRequest) string {
 	for i, line := range lines {
 		n := i + 1
 		if line.ProductID == "" {
@@ -428,7 +428,7 @@ func validateNestedPOLines(lines []model.CreatePOLineRequest) string {
 func (h *POHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req model.UpdatePurchaseOrderRequest
+	var req UpdatePurchaseOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[발주 수정 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -478,7 +478,7 @@ func (h *POHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.PurchaseOrder
+	var updated []PurchaseOrder
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[발주 수정 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -513,7 +513,7 @@ func shouldAutoInsertPriceHistory(reqStatus *string, prevStatus string) bool {
 
 // F8: PO status가 contracted로 전환될 때 각 발주품목의 단가이력 자동 등록
 // 비유: 계약이 확정되면 단가 변동 장부에 자동으로 기록
-func (h *POHandler) autoInsertPriceHistory(poID string, po model.PurchaseOrder) {
+func (h *POHandler) autoInsertPriceHistory(poID string, po PurchaseOrder) {
 	// 발주품목 조회
 	linesData, _, err := h.DB.From("po_line_items").
 		Select("*, products(spec_wp)", "exact", false).
