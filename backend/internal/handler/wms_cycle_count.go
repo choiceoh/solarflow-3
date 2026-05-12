@@ -109,6 +109,46 @@ func (h *CycleCountHandler) List(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, rows)
 }
 
+// Summary — GET /api/v1/cycle-counts/summary
+//
+// 사이드바 메뉴 카운트 / 운영 KPI 용 status 별 집계.
+// 응답: { pending_count, in_progress_count, open_count }.
+//
+// picking_lists 와 동일한 모양 — 두 endpoint 가 한 hook 에서 같이 호출되며 형식이 같으면 매핑이 단순해진다.
+func (h *CycleCountHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	type row struct {
+		Status string `json:"status"`
+	}
+	data, _, err := h.DB.From("cycle_counts").
+		Select("status", "exact", false).
+		In("status", []string{"pending", "in_progress"}).
+		Execute()
+	if err != nil {
+		log.Printf("[cycle count summary 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "재고실사 카운트 조회 실패")
+		return
+	}
+	var rows []row
+	if err := json.Unmarshal(data, &rows); err != nil {
+		response.RespondError(w, http.StatusInternalServerError, "응답 처리 실패")
+		return
+	}
+	pending, inProgress := 0, 0
+	for _, r := range rows {
+		switch r.Status {
+		case "pending":
+			pending++
+		case "in_progress":
+			inProgress++
+		}
+	}
+	response.RespondJSON(w, http.StatusOK, map[string]int{
+		"pending_count":     pending,
+		"in_progress_count": inProgress,
+		"open_count":        pending + inProgress,
+	})
+}
+
 // GetByID — GET /api/v1/cycle-counts/{id} (헤더 + 라인)
 func (h *CycleCountHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")

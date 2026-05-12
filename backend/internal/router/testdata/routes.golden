@@ -80,6 +80,7 @@ GET     /api/v1/cost-details/
 GET     /api/v1/cost-details/{id}
 GET     /api/v1/customs/dashboard
 GET     /api/v1/cycle-counts/
+GET     /api/v1/cycle-counts/summary
 GET     /api/v1/cycle-counts/{id}
 GET     /api/v1/declarations/
 GET     /api/v1/declarations/{id}
@@ -134,6 +135,7 @@ GET     /api/v1/partners/usage-counts
 GET     /api/v1/partners/{id}
 GET     /api/v1/partners/{id}/activities
 GET     /api/v1/picking-lists/
+GET     /api/v1/picking-lists/summary
 GET     /api/v1/picking-lists/{id}
 GET     /api/v1/pos/
 GET     /api/v1/pos/dashboard

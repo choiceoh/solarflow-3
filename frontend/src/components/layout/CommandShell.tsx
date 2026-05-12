@@ -21,6 +21,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useSidebarTabs } from '@/hooks/useSidebarTabs';
 import { useUserPersona } from '@/hooks/useUserPersona';
 import { useScrollRestoration } from '@/hooks/useScrollRestoration';
+import { useWmsCounts } from '@/hooks/useWmsCounts';
 import { useAppStore } from '@/stores/appStore';
 import type { AlertItem } from '@/types/alerts';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -144,6 +145,8 @@ export default function CommandShell() {
   const { selectedCompanyId, setCompanyId } = useAppStore();
   const meta = routeMeta(pathname, search);
   const alertState = useAlerts(selectedCompanyId);
+  // WMS 메뉴 카운트 — 회사 선택과 무관하게 픽업/실사 작업 큐 (운영자 단위라 법인 분리 X).
+  const wmsCounts = useWmsCounts(currentTenant !== 'study');
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(readCollapsedFromStorage);
 
@@ -188,8 +191,12 @@ export default function CommandShell() {
       // 처리할 게 있다" 를 한눈에 보여준다. 펼침 모드의 LC/BL 형제 항목과 의미가 겹치지만
       // 의도된 중복 (parent 가 child 합을 비추는 일반적인 nav 패턴).
       po: lc + bl,
+      // WMS 운영 메뉴 — pending + in_progress 합 (작업자가 처리해야 할 것).
+      // alerts 와 별도 source (useWmsCounts) 에서 옴 — alerts 는 법인 단위, WMS 는 운영자 단위라.
+      'wms-picking': wmsCounts.pickingPending,
+      'wms-cycle-count': wmsCounts.cyclePending,
     };
-  }, [alertState.alerts]);
+  }, [alertState.alerts, wmsCounts.pickingPending, wmsCounts.cyclePending]);
 
   return (
     <div className="sf-shell" data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}>

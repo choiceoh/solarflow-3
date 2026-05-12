@@ -213,6 +213,7 @@ func (h *CycleCountHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/cycle-counts", func(r chi.Router) {
 		r.Use(g.Feature(feature.IDTxCycleCount))
 		r.Get("/", h.List)
+		r.Get("/summary", h.Summary)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Patch("/{id}", h.UpdateHeader)
@@ -240,6 +241,7 @@ func (h *PickingListHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/picking-lists", func(r chi.Router) {
 		r.Use(g.Feature(feature.IDTxPickingList))
 		r.Get("/", h.List)
+		r.Get("/summary", h.Summary)
 		r.Get("/{id}", h.GetByID)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Post("/from-outbound/{outbound_id}", h.CreateFromOutbound)

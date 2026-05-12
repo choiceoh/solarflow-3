@@ -276,6 +276,48 @@ func (h *PickingListHandler) UpdateItem(w http.ResponseWriter, r *http.Request) 
 	response.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// Summary — GET /api/v1/picking-lists/summary
+//
+// 사이드바 메뉴 카운트 / 운영 KPI 용 status 별 집계.
+// 응답: { pending_count, in_progress_count, open_count } — open_count = pending + in_progress.
+//
+// 단순 list 후 client 가 세는 대신 별도 endpoint 로 분리한 이유:
+//   - list 는 최근 200 건 limit + 라인 묶음용이라 카운트 용도로 부정확
+//   - 사이드바가 5분마다 호출하는 hot path 라 가벼운 SELECT 가 좋음
+func (h *PickingListHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	type row struct {
+		Status string `json:"status"`
+	}
+	data, _, err := h.DB.From("picking_lists").
+		Select("status", "exact", false).
+		In("status", []string{"pending", "in_progress"}).
+		Execute()
+	if err != nil {
+		log.Printf("[picking summary 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "피킹 카운트 조회 실패")
+		return
+	}
+	var rows []row
+	if err := json.Unmarshal(data, &rows); err != nil {
+		response.RespondError(w, http.StatusInternalServerError, "응답 처리 실패")
+		return
+	}
+	pending, inProgress := 0, 0
+	for _, r := range rows {
+		switch r.Status {
+		case "pending":
+			pending++
+		case "in_progress":
+			inProgress++
+		}
+	}
+	response.RespondJSON(w, http.StatusOK, map[string]int{
+		"pending_count":     pending,
+		"in_progress_count": inProgress,
+		"open_count":        pending + inProgress,
+	})
+}
+
 // Delete — DELETE /api/v1/picking-lists/{id} (cancelled 처리 권장 — soft)
 func (h *PickingListHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
