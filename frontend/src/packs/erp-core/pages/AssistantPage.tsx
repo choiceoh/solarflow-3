@@ -136,11 +136,15 @@ function buildOCRBlock(results: OCRResult[]): string {
       continue;
     }
     const text = (r.raw_text ?? '').trim();
-    let body = text || '(텍스트 추출 결과 없음)';
+    const rawBody = text || '(텍스트 추출 결과 없음)';
     if (r.fields?.customs_declaration) {
-      body += `\n\n[면장 자동 인식 후보]\n${JSON.stringify(r.fields.customs_declaration, null, 2)}`;
+      const structured = JSON.stringify(r.fields.customs_declaration, null, 2);
+      blocks.push(
+        `${head}\n[면장 자동 인식 후보 — 우선 신뢰]\n${structured}\n\n[원문 OCR — 후보에 없는 값 보완용]\n${rawBody}`,
+      );
+    } else {
+      blocks.push(`${head}\n${rawBody}`);
     }
-    blocks.push(`${head}\n${body}`);
   }
   return blocks.join('\n\n');
 }
@@ -379,7 +383,6 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
   );
   const [input, setInput] = useState(initialInput ?? '');
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [parseAsCustoms, setParseAsCustoms] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -580,7 +583,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
   const runOCR = async (files: File[]): Promise<OCRResult[]> => {
     const fd = new FormData();
     for (const f of files) fd.append('images', f);
-    if (parseAsCustoms) fd.append('document_type', 'customs_declaration');
+    // document_type 미지정 — 서버가 OCR 결과의 면장 키워드 + 신고번호 시그널로 자동 판단.
     const res = await fetchWithAuth<OCRExtractResponse>('/api/v1/assistant/ocr/extract', {
       method: 'POST',
       body: fd,
@@ -809,16 +812,6 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
                 onRemove={() => removeAttachment(i)}
               />
             ))}
-            <label className="flex cursor-pointer select-none items-center gap-1 px-2 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={parseAsCustoms}
-                onChange={(e) => setParseAsCustoms(e.target.checked)}
-                className="h-3 w-3"
-                disabled={busy}
-              />
-              면장 자동 인식
-            </label>
           </div>
         )}
 

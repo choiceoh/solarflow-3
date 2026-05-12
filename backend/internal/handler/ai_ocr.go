@@ -215,16 +215,34 @@ func buildOCRResult(filename string, lines []ocr.Result, documentType string) mo
 		})
 	}
 	result.RawText = strings.Join(raw, "\n")
-	if documentType == "customs_declaration" {
+	// 면장 정형 추출 — documentType 가 명시되면 무조건 시도, 비어 있으면 자동 판단.
+	// 자동 판단은 false positive (인보이스/패킹리스트가 면장으로 잘못 라벨링되는 경우) 를
+	// 막기 위해 DeclarationNumber 가 잡힌 경우에만 fields 를 채운다 — 면장 고유 시그널.
+	forceCustoms := documentType == "customs_declaration"
+	if forceCustoms || looksLikeCustomsDeclaration(result.RawText) {
 		fields := ocrparse.ParseCustomsDeclaration(filename, result.Lines)
-		if fields != nil {
+		if fields != nil && (forceCustoms || fields.DeclarationNumber != nil) {
 			result.Fields = &model.OCRFields{
-				DocumentType:       documentType,
+				DocumentType:       "customs_declaration",
 				CustomsDeclaration: fields,
 			}
 		}
 	}
 	return result
+}
+
+// looksLikeCustomsDeclaration — 면장 prefilter. 키워드가 보일 때만 정형 파서를 시도해
+// 일반 PDF 에 헛수고 + false positive 를 줄인다.
+// 비유: 서류 더미에서 "수입신고" 도장이 찍힌 것만 면장 트레이로 분류.
+func looksLikeCustomsDeclaration(rawText string) bool {
+	lower := strings.ToLower(rawText)
+	keywords := []string{"수입신고", "신고번호", "면장", "세관", "관세청", "uni-pass", "unipass"}
+	for _, kw := range keywords {
+		if strings.Contains(lower, strings.ToLower(kw)) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeOCRDocumentType(value string) string {
