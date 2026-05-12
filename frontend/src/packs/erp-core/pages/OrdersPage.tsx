@@ -562,6 +562,7 @@ export default function OrdersPage() {
   const [orderCategoryFilter, setOrderCategoryFilter] = useState("")
   const [orderDateRange, setOrderDateRange] = useState<DateRangeValue>(null)
   const [orderKwRange, setOrderKwRange] = useState<KwRangeValue>(null)
+  const [orderSearch, setOrderSearch] = useState("")
   const _loc = useLocation()
   const navigate = useNavigate()
   const initialQueueParamsRef = useRef<URLSearchParams | null>(null)
@@ -896,6 +897,7 @@ export default function OrdersPage() {
     customer_id?: string
     management_category?: string
     work_queue?: "delivery_soon" | "no_site"
+    q?: string
     start?: string
     end?: string
     min_kw?: number
@@ -905,6 +907,8 @@ export default function OrdersPage() {
   if (orderCustomerFilter) orderFilters.customer_id = orderCustomerFilter
   if (orderCategoryFilter) orderFilters.management_category = orderCategoryFilter
   if (orderWorkQueue) orderFilters.work_queue = orderWorkQueue
+  const orderSearchTrimmed = orderSearch.trim()
+  if (orderSearchTrimmed) orderFilters.q = orderSearchTrimmed
   if (orderDateRange) {
     orderFilters.start = orderDateRange.start
     orderFilters.end = orderDateRange.end
@@ -917,7 +921,7 @@ export default function OrdersPage() {
   const [orderPageIndex, setOrderPageIndex] = useState(0)
   const [orderPageSize, setOrderPageSize] = useState(50)
   const orderSort = useServerSort("order_date", "desc", () => setOrderPageIndex(0))
-  const orderPageResetKey = `${orderStatusFilter}|${orderCustomerFilter}|${orderCategoryFilter}|${orderWorkQueue}|${orderDateRange?.start ?? ""}|${orderDateRange?.end ?? ""}|${orderKwRange?.min ?? ""}|${orderKwRange?.max ?? ""}`
+  const orderPageResetKey = `${orderStatusFilter}|${orderCustomerFilter}|${orderCategoryFilter}|${orderWorkQueue}|${orderSearchTrimmed}|${orderDateRange?.start ?? ""}|${orderDateRange?.end ?? ""}|${orderKwRange?.min ?? ""}|${orderKwRange?.max ?? ""}`
   useEffect(() => {
     void orderPageResetKey
     setOrderPageIndex(0)
@@ -2093,6 +2097,13 @@ export default function OrdersPage() {
     >
       {activeTab === "orders" && (
         <>
+          <input
+            type="search"
+            value={orderSearch}
+            onChange={(e) => setOrderSearch(e.target.value)}
+            placeholder="테이블 검색"
+            className="h-8 w-44 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-2 text-xs"
+          />
           <FilterButton
             items={[
               {
