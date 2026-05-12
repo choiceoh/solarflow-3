@@ -70,6 +70,21 @@ pub struct PriceForecastMarketSnapshot {
     pub purchase_vs_cmm_pct: Option<f64>,
     pub quote_vs_cmm_pct: Option<f64>,
     pub cmm_vs_floor_pct: Option<f64>,
+    pub segments: Vec<PriceForecastSegmentSnapshot>,
+}
+
+// 시장 분류(인코텀즈+지역) 별 최신 관측값과 CMM-등가 환산.
+// 우리 구매 기준(CIF Korea + 유산스 90D) 은 별도 필드로 노출되며 여기 segments 에는 안 들어간다.
+#[derive(Debug, Clone, Serialize)]
+pub struct PriceForecastSegmentSnapshot {
+    pub segment_key: String,
+    pub segment_label: String,
+    pub market_region: String,
+    pub latest_usd_w: Option<f64>,
+    pub latest_value_date: Option<String>,
+    pub cmm_offset_usd_w: f64,
+    pub cmm_equiv_usd_w: Option<f64>,
+    pub sample_count: i32,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -176,8 +176,8 @@ interface QuoteFormState {
   supplier: string;
   valueDate: string;
   priceUsdW: string;
-  marketRegion: 'fob_china' | 'china_export' | 'ddp_europe';
-  basis: 'quote' | 'fob' | 'ddp';
+  marketRegion: 'fob_china' | 'china_export' | 'cif_europe' | 'ddp_europe';
+  basis: 'quote' | 'fob' | 'cif' | 'ddp';
   technology: string;
   notes: string;
 }
@@ -1444,6 +1444,7 @@ export default function PriceForecastPage() {
                 <SelectContent>
                   <SelectItem value="fob_china">FOB China</SelectItem>
                   <SelectItem value="china_export">China Export</SelectItem>
+                  <SelectItem value="cif_europe">CIF Europe</SelectItem>
                   <SelectItem value="ddp_europe">DDP Europe</SelectItem>
                 </SelectContent>
               </Select>
@@ -1457,6 +1458,7 @@ export default function PriceForecastPage() {
                 <SelectContent>
                   <SelectItem value="quote">Quote</SelectItem>
                   <SelectItem value="fob">FOB</SelectItem>
+                  <SelectItem value="cif">CIF</SelectItem>
                   <SelectItem value="ddp">DDP</SelectItem>
                 </SelectContent>
               </Select>

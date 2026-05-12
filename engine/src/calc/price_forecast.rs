@@ -5,9 +5,40 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use crate::model::price_forecast::{
     PriceForecastBacktestSummary, PriceForecastMarketSnapshot, PriceForecastObservation,
     PriceForecastOutlier, PriceForecastRunInput, PriceForecastScenario,
-    PriceForecastSourceAdjustment, PriceForecastSourceQuality, PriceForecastStrategyRequest,
-    PriceForecastStrategyResponse,
+    PriceForecastSegmentSnapshot, PriceForecastSourceAdjustment, PriceForecastSourceQuality,
+    PriceForecastStrategyRequest, PriceForecastStrategyResponse,
 };
+
+// 시장 분류별 CMM(FOB China spot) 등가 보정치 (USD/W).
+// 양수면 해당 분류 가격이 FOB China 보다 그만큼 높다는 의미 → CMM 등가 = price - offset.
+// 우리 구매(own_purchase) 는 한국 CIF + 뱅커스 유산스 90일 표준이라 운임·보험(0.0025) + 유산스(0.0005) ≈ 0.0030.
+const OWN_PURCHASE_CMM_OFFSET_USD_W: f64 = 0.0030;
+
+// 시장 분류 (region 기준).
+// `cif_europe` 는 한국 CIF 시장 데이터가 없어 유럽 CIF 를 프록시로 활용 — 운임·보험 0.0025.
+// `china_domestic` 은 인코텀즈 없는 별도 시장 — 보정 미정(0), 데이터로 학습.
+// `ddp_europe` 는 관세·통관 포함 — 보정 미정(0), 데이터로 학습.
+fn segment_offset_usd_w(region: &str) -> Option<f64> {
+    match region {
+        "fob_china" => Some(0.0),
+        "china_domestic" => Some(0.0),
+        "china_export" => Some(0.0),
+        "cif_europe" => Some(0.0025),
+        "ddp_europe" => Some(0.0),
+        _ => None,
+    }
+}
+
+fn segment_label(region: &str) -> &'static str {
+    match region {
+        "fob_china" => "FOB China (CMM 기준)",
+        "china_domestic" => "중국 내수",
+        "china_export" => "중국 수출",
+        "cif_europe" => "유럽 CIF (한국 CIF 프록시)",
+        "ddp_europe" => "유럽 DDP",
+        _ => "기타",
+    }
+}
 
 struct SourceAggregate {
     source_name: String,
@@ -54,14 +85,19 @@ pub fn calculate_price_forecast_strategy(
         .or(tender);
 
     let cmm_trend_pct = trend_pct(&observations, "cmm_fob_china_topcon_600w");
+    // own_purchase 는 한국 CIF + 뱅커스 유산스 90일 표준이라 CMM(FOB China spot) 보다 운임·보험·유산스
+    // 만큼 비싸다. 시장 우열을 보려면 우리 구매가에서 OWN_PURCHASE_CMM_OFFSET_USD_W 만큼 빼서
+    // CMM 등가로 환산한 뒤 비교한다. own_quote 도 동일 결제·운송 조건 가정.
     let purchase_vs_cmm_pct = match (valid_price(req.own_purchase_usd_w), cmm) {
-        (Some(purchase), Some(cmm_price)) => Some(((purchase - cmm_price) / cmm_price) * 100.0),
+        (Some(purchase), Some(cmm_price)) => Some(
+            ((purchase - OWN_PURCHASE_CMM_OFFSET_USD_W - cmm_price) / cmm_price) * 100.0,
+        ),
         _ => None,
     };
     let quote_vs_cmm_pct = match (quote, cmm) {
-        (Some(quote_price), Some(cmm_price)) => {
-            Some(((quote_price - cmm_price) / cmm_price) * 100.0)
-        }
+        (Some(quote_price), Some(cmm_price)) => Some(
+            ((quote_price - OWN_PURCHASE_CMM_OFFSET_USD_W - cmm_price) / cmm_price) * 100.0,
+        ),
         _ => None,
     };
     let cmm_vs_floor_pct = match (cmm, floor) {
@@ -105,6 +141,8 @@ pub fn calculate_price_forecast_strategy(
         0.98,
     );
 
+    let segments = build_segments(&observations);
+
     PriceForecastStrategyResponse {
         action_key,
         action_label,
@@ -124,6 +162,7 @@ pub fn calculate_price_forecast_strategy(
             purchase_vs_cmm_pct: purchase_vs_cmm_pct.map(round2),
             quote_vs_cmm_pct: quote_vs_cmm_pct.map(round2),
             cmm_vs_floor_pct: cmm_vs_floor_pct.map(round2),
+            segments,
         },
         scenarios,
         backtest,
@@ -232,7 +271,7 @@ fn calculate_backtest(
             tender,
             floor,
             trend,
-            latest_price_for(&as_of, &["forward_q1"]),
+            latest_price_for_region(&as_of, &["forward_q1"], Some("fob_china")),
         );
         let Some(predicted) = scenario.base_usd_w else {
             continue;
@@ -293,10 +332,11 @@ fn build_scenarios(
     floor: Option<f64>,
     trend_pct: Option<f64>,
 ) -> Vec<PriceForecastScenario> {
-    let forward_q1 = latest_price_for(observations, &["forward_q1"]);
-    let forward_q2 = latest_price_for(observations, &["forward_q2"]);
-    let forward_q3 = latest_price_for(observations, &["forward_q3"]);
-    let forward_q4 = latest_price_for(observations, &["forward_q4"]);
+    // forward 가격은 CMM(FOB China spot) 기준 시계열만 사용 — cif_europe/ddp_europe forward 는 별도 segment 트랙으로 노출되고 시나리오 계산에는 섞지 않는다.
+    let forward_q1 = latest_price_for_region(observations, &["forward_q1"], Some("fob_china"));
+    let forward_q2 = latest_price_for_region(observations, &["forward_q2"], Some("fob_china"));
+    let forward_q3 = latest_price_for_region(observations, &["forward_q3"], Some("fob_china"));
+    let forward_q4 = latest_price_for_region(observations, &["forward_q4"], Some("fob_china"));
     let forward_3m = average_prices(&[forward_q2, forward_q3]);
     let forward_6m = average_prices(&[forward_q3, forward_q4]);
 
@@ -658,6 +698,18 @@ fn build_basis(
     if floor.is_some() {
         basis.push("CPIA 원가 floor".to_string());
     }
+    if observations
+        .iter()
+        .any(|row| row.market_region == "cif_europe" && valid_price(row.price_usd_w).is_some())
+    {
+        basis.push("유럽 CIF (한국 CIF 프록시)".to_string());
+    }
+    if observations
+        .iter()
+        .any(|row| row.market_region == "ddp_europe" && valid_price(row.price_usd_w).is_some())
+    {
+        basis.push("유럽 DDP".to_string());
+    }
     if quote.is_some()
         || observations
             .iter()
@@ -695,9 +747,18 @@ fn latest_price_for(
     observations: &[PriceForecastObservation],
     metric_keys: &[&str],
 ) -> Option<f64> {
+    latest_price_for_region(observations, metric_keys, None)
+}
+
+fn latest_price_for_region(
+    observations: &[PriceForecastObservation],
+    metric_keys: &[&str],
+    region: Option<&str>,
+) -> Option<f64> {
     observations
         .iter()
         .filter(|row| metric_keys.contains(&row.metric_key.as_str()))
+        .filter(|row| region.is_none_or(|r| row.market_region == r))
         .filter_map(|row| {
             valid_price(row.price_usd_w).map(|price| (row.value_date.as_str(), price))
         })
@@ -793,6 +854,50 @@ fn direction_bucket(next: f64, current: f64) -> &'static str {
     }
 }
 
+fn build_segments(observations: &[PriceForecastObservation]) -> Vec<PriceForecastSegmentSnapshot> {
+    let mut by_region: HashMap<String, Vec<&PriceForecastObservation>> = HashMap::new();
+    for row in observations {
+        if valid_price(row.price_usd_w).is_none() {
+            continue;
+        }
+        if segment_offset_usd_w(&row.market_region).is_none() {
+            continue;
+        }
+        by_region
+            .entry(row.market_region.clone())
+            .or_default()
+            .push(row);
+    }
+
+    let mut segments = Vec::new();
+    for (region, rows) in by_region {
+        let offset = segment_offset_usd_w(&region).unwrap_or(0.0);
+        let latest = rows
+            .iter()
+            .filter_map(|row| {
+                valid_price(row.price_usd_w).map(|price| (row.value_date.clone(), price))
+            })
+            .max_by(|a, b| a.0.cmp(&b.0));
+        let (latest_date, latest_price) = match latest {
+            Some((d, p)) => (Some(d), Some(p)),
+            None => (None, None),
+        };
+        let cmm_equiv = latest_price.map(|price| price - offset);
+        segments.push(PriceForecastSegmentSnapshot {
+            segment_key: region.clone(),
+            segment_label: segment_label(&region).to_string(),
+            market_region: region,
+            latest_usd_w: latest_price.map(round4),
+            latest_value_date: latest_date,
+            cmm_offset_usd_w: round4(offset),
+            cmm_equiv_usd_w: cmm_equiv.map(round4),
+            sample_count: rows.len() as i32,
+        });
+    }
+    segments.sort_by(|a, b| a.segment_key.cmp(&b.segment_key));
+    segments
+}
+
 fn outlier_group_key(row: &PriceForecastObservation) -> String {
     [
         row.value_date.as_str(),
@@ -878,6 +983,30 @@ mod tests {
             value_date: value_date.to_string(),
             market_region: "fob_china".to_string(),
             basis: "spot".to_string(),
+            price_usd_w: Some(price),
+            price_cny_w: None,
+            price_krw_w: None,
+            confidence: Some(0.9),
+        }
+    }
+
+    fn observation_with_region(
+        source_key: &str,
+        source_name: &str,
+        metric_key: &str,
+        value_date: &str,
+        price: f64,
+        market_region: &str,
+        basis: &str,
+    ) -> PriceForecastObservation {
+        PriceForecastObservation {
+            source_key: source_key.to_string(),
+            source_name: source_name.to_string(),
+            metric_key: metric_key.to_string(),
+            metric_label: metric_key.to_string(),
+            value_date: value_date.to_string(),
+            market_region: market_region.to_string(),
+            basis: basis.to_string(),
             price_usd_w: Some(price),
             price_cny_w: None,
             price_krw_w: None,
@@ -989,6 +1118,136 @@ mod tests {
         assert_eq!(response.outliers.len(), 1);
         assert_eq!(response.outliers[0].source_key, "trendforce");
         assert_ne!(response.market.latest_cmm_usd_w, Some(0.121));
+    }
+
+    #[test]
+    fn segment_snapshot_separates_cif_europe_with_offset() {
+        let now = DateTime::parse_from_rfc3339("2026-05-11T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let req = PriceForecastStrategyRequest {
+            unit: Some("usd".to_string()),
+            observations: vec![
+                observation_with_source(
+                    "opis",
+                    "OPIS",
+                    "cmm_fob_china_topcon_600w",
+                    "2026-05-01",
+                    0.089,
+                ),
+                observation_with_region(
+                    "pvinsights",
+                    "PVInsights",
+                    "module_distributed",
+                    "2026-05-01",
+                    0.092,
+                    "cif_europe",
+                    "cif",
+                ),
+                observation_with_region(
+                    "cpia_floor",
+                    "CPIA",
+                    "china_domestic",
+                    "2026-05-01",
+                    0.083,
+                    "china_domestic",
+                    "spot",
+                ),
+            ],
+            own_purchase_usd_w: None,
+            own_purchase_date: None,
+            own_quote_usd_w: None,
+            own_quote_date: None,
+            runs: Vec::new(),
+        };
+
+        let response = calculate_price_forecast_strategy(&req, now);
+        let segments = &response.market.segments;
+
+        assert_eq!(segments.len(), 3);
+        let europe = segments
+            .iter()
+            .find(|s| s.segment_key == "cif_europe")
+            .expect("cif_europe segment");
+        assert_eq!(europe.latest_usd_w, Some(0.092));
+        assert!((europe.cmm_offset_usd_w - 0.0025).abs() < 1e-6);
+        assert_eq!(europe.cmm_equiv_usd_w, Some(0.0895));
+        let china = segments
+            .iter()
+            .find(|s| s.segment_key == "fob_china")
+            .expect("fob_china segment");
+        assert!((china.cmm_offset_usd_w).abs() < 1e-6);
+        assert_eq!(china.cmm_equiv_usd_w, Some(0.089));
+    }
+
+    #[test]
+    fn purchase_vs_cmm_subtracts_korea_cif_usance90_offset() {
+        let now = DateTime::parse_from_rfc3339("2026-05-11T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        // 우리 구매가 = CMM + 0.0030 정확히 (운임·보험·유산스 90D 표준 보정치).
+        // 보정 후 purchase_vs_cmm_pct 는 0% 근처여야 한다 — 시장 대비 정상 매입가.
+        let req = PriceForecastStrategyRequest {
+            unit: Some("usd".to_string()),
+            observations: vec![
+                observation("cmm_fob_china_topcon_600w", "2026-04-01", 0.087),
+                observation("cmm_fob_china_topcon_600w", "2026-05-01", 0.090),
+            ],
+            own_purchase_usd_w: Some(0.093),
+            own_purchase_date: Some("2026-05-01".to_string()),
+            own_quote_usd_w: None,
+            own_quote_date: None,
+            runs: Vec::new(),
+        };
+
+        let response = calculate_price_forecast_strategy(&req, now);
+        let pct = response
+            .market
+            .purchase_vs_cmm_pct
+            .expect("purchase_vs_cmm_pct");
+        assert!(
+            pct.abs() < 0.5,
+            "보정 후 purchase_vs_cmm_pct 가 0 근처여야 함 (got {pct})"
+        );
+    }
+
+    #[test]
+    fn forward_scenario_ignores_non_china_forward() {
+        let now = DateTime::parse_from_rfc3339("2026-05-11T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        // forward_q1 이 cif_europe 으로만 들어온 경우, 시나리오 base 계산은 fob_china forward 가 없는
+        // 것으로 처리돼야 한다 — region 이 섞이면 안 됨.
+        let req = PriceForecastStrategyRequest {
+            unit: Some("usd".to_string()),
+            observations: vec![
+                observation("cmm_fob_china_topcon_600w", "2026-04-01", 0.085),
+                observation("cmm_fob_china_topcon_600w", "2026-05-01", 0.089),
+                observation_with_region(
+                    "trendforce",
+                    "TrendForce",
+                    "forward_q1",
+                    "2026-05-01",
+                    0.120,
+                    "cif_europe",
+                    "forward",
+                ),
+            ],
+            own_purchase_usd_w: None,
+            own_purchase_date: None,
+            own_quote_usd_w: None,
+            own_quote_date: None,
+            runs: Vec::new(),
+        };
+
+        let response = calculate_price_forecast_strategy(&req, now);
+        let one_month = response.scenarios.first().expect("1m scenario");
+        // 0.120 이 base 에 섞이면 base 가 0.10 근처가 됐을 텐데, fob_china 만 쓰면 trend 만으로 0.09 근처
+        let base = one_month.base_usd_w.expect("base price");
+        assert!(
+            base < 0.10,
+            "cif_europe forward 가 fob_china 시나리오에 섞이면 안 됨 (got {base})"
+        );
     }
 
     #[test]

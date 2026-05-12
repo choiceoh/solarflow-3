@@ -86,6 +86,17 @@ export interface PriceForecastStrategyRequest {
   runs: PriceForecastStrategyRunInput[]
 }
 
+export interface PriceForecastSegmentSnapshot {
+  segment_key: string
+  segment_label: string
+  market_region: string
+  latest_usd_w?: number | null
+  latest_value_date?: string | null
+  cmm_offset_usd_w: number
+  cmm_equiv_usd_w?: number | null
+  sample_count: number
+}
+
 export interface PriceForecastMarketSnapshot {
   latest_cmm_usd_w?: number | null
   latest_floor_usd_w?: number | null
@@ -95,6 +106,7 @@ export interface PriceForecastMarketSnapshot {
   purchase_vs_cmm_pct?: number | null
   quote_vs_cmm_pct?: number | null
   cmm_vs_floor_pct?: number | null
+  segments: PriceForecastSegmentSnapshot[]
 }
 
 export interface PriceForecastScenario {

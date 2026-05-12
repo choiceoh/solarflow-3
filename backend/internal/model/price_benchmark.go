@@ -23,6 +23,7 @@ var priceBenchmarkAllowedMarketRegions = []string{
 	"fob_china",
 	"china_domestic",
 	"china_export",
+	"cif_europe",
 	"ddp_europe",
 }
 
@@ -30,6 +31,7 @@ var priceBenchmarkAllowedMarketRegionSet = map[string]bool{
 	"fob_china":      true,
 	"china_domestic": true,
 	"china_export":   true,
+	"cif_europe":     true,
 	"ddp_europe":     true,
 }
 
@@ -199,7 +201,7 @@ func (req *CreatePriceBenchmarkRequest) Validate() string {
 		return "market_region은 필수 항목입니다"
 	}
 	if !IsPriceBenchmarkMarketRegionAllowed(req.MarketRegion) {
-		return "market_region은 중국/유럽 가격(fob_china, china_domestic, china_export, ddp_europe)만 허용됩니다"
+		return "market_region은 중국/유럽 가격(fob_china, china_domestic, china_export, cif_europe, ddp_europe)만 허용됩니다"
 	}
 	if req.Basis == "" {
 		return "basis는 필수 항목입니다"

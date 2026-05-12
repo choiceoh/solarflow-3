@@ -916,6 +916,28 @@ function priceForecastStrategyResponse(body: MockRow): MockRow {
       purchase_vs_cmm_pct: 1.6,
       quote_vs_cmm_pct: Number((((quote - cmm) / cmm) * 100).toFixed(2)),
       cmm_vs_floor_pct: Number((((cmm - floor) / cmm) * 100).toFixed(2)),
+      segments: [
+        {
+          segment_key: 'fob_china',
+          segment_label: 'FOB China (CMM 기준)',
+          market_region: 'fob_china',
+          latest_usd_w: cmm,
+          latest_value_date: '2026-05-01',
+          cmm_offset_usd_w: 0,
+          cmm_equiv_usd_w: cmm,
+          sample_count: 8,
+        },
+        {
+          segment_key: 'cif_europe',
+          segment_label: '유럽 CIF (한국 CIF 프록시)',
+          market_region: 'cif_europe',
+          latest_usd_w: Number((cmm + 0.0025).toFixed(4)),
+          latest_value_date: '2026-05-01',
+          cmm_offset_usd_w: 0.0025,
+          cmm_equiv_usd_w: cmm,
+          sample_count: 3,
+        },
+      ],
     },
     scenarios: [
       { key: '1m', label: '1개월', horizon_months: 1, low_usd_w: Number(low.toFixed(4)), base_usd_w: forward, high_usd_w: Number(high.toFixed(4)), drivers: ['CMM/현물 기준', 'Forward 반영', 'CPIA floor 하방 제한'] },
