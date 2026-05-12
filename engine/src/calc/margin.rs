@@ -148,6 +148,9 @@ pub async fn calculate_margin(
         JOIN manufacturers m ON p.manufacturer_id = m.manufacturer_id
         WHERE o.company_id = $1 AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          -- 매출 분석 = 상품판매(+무상 스페어) 만. 공사사용/유지관리/폐기 등 자체 사용분은
+          -- 매출이 아닌 자체 비용이므로 마진 분석 대상이 아님.
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($2::uuid IS NULL OR p.manufacturer_id = $2)
           AND ($3::uuid IS NULL OR o.product_id = $3)
           AND ($4::uuid IS NULL OR s.customer_id = $4)
@@ -283,6 +286,8 @@ pub async fn analyze_customers(
         JOIN outbounds o ON s.outbound_id = o.outbound_id
         WHERE o.company_id = $1 AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          -- 거래처 분석 = 외부 판매 (상품판매+스페어) 만. 자체 EPC(공사사용) 등은 매출 아님.
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($2::uuid IS NULL OR s.customer_id = $2)
           AND ($3::date IS NULL OR o.outbound_date >= $3)
           AND ($4::date IS NULL OR o.outbound_date <= $4)
@@ -312,6 +317,7 @@ pub async fn analyze_customers(
           OR (rm.sale_id IS NULL AND rm.outbound_id = o.outbound_id)
         WHERE o.company_id = $1 AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($2::uuid IS NULL OR s.customer_id = $2)
           AND ($3::date IS NULL OR o.outbound_date >= $3)
           AND ($4::date IS NULL OR o.outbound_date <= $4)
@@ -337,6 +343,7 @@ pub async fn analyze_customers(
         FROM sales s JOIN outbounds o ON s.outbound_id = o.outbound_id
         WHERE o.company_id = $1 AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($2::uuid IS NULL OR s.customer_id = $2)
           AND ($3::date IS NULL OR o.outbound_date >= $3)
           AND ($4::date IS NULL OR o.outbound_date <= $4)
@@ -379,6 +386,7 @@ pub async fn analyze_customers(
             JOIN outbounds o ON fm.outbound_id = o.outbound_id
             WHERE o.company_id = $1
               AND fm.cost_amount IS NOT NULL
+              AND fm.usage_category_raw IN ('상품판매', '상품판매(스페어)')
             GROUP BY fm.outbound_id
         )
         SELECT s.customer_id,
@@ -389,6 +397,7 @@ pub async fn analyze_customers(
         LEFT JOIN fifo_cost fc ON fc.outbound_id = o.outbound_id
         WHERE o.company_id = $1 AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($2::uuid IS NULL OR s.customer_id = $2)
           AND ($3::date IS NULL OR o.outbound_date >= $3)
           AND ($4::date IS NULL OR o.outbound_date <= $4)
@@ -440,6 +449,7 @@ pub async fn analyze_customers(
         LEFT JOIN cost_avg ca ON ca.product_id = o.product_id
         WHERE o.company_id = $1 AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($2::uuid IS NULL OR s.customer_id = $2)
           AND ($3::date IS NULL OR o.outbound_date >= $3)
           AND ($4::date IS NULL OR o.outbound_date <= $4)
@@ -576,6 +586,7 @@ pub async fn calculate_price_trend(
         JOIN products p ON o.product_id = p.product_id
         WHERE o.company_id = $2 AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
+          AND o.usage_category IN ('sale', 'sale_spare')
           AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
           AND ($4::uuid IS NULL OR o.product_id = $4)
         GROUP BY o.product_id, period
@@ -645,6 +656,8 @@ async fn fetch_cost_avg_fifo(
     company_id: Uuid,
     product_id: Option<Uuid>,
 ) -> Result<HashMap<Uuid, f64>, sqlx::Error> {
+    // 매출 분석용 원가 = 상품판매(+스페어) 매칭만. usage_category_raw 가 ERP 한글 (상품판매/공사사용/유지관리/잔여재고 등) 로 들어옴.
+    // 공사사용(자체 EPC) cost 가 매출 매칭에 합산되면 매출 < 원가 → -38% 음수 마진 사고 (2026-05-12).
     let sql = r#"
     SELECT fm.product_id,
            CASE WHEN SUM(fm.allocated_qty * p.spec_wp) > 0
@@ -655,6 +668,7 @@ async fn fetch_cost_avg_fifo(
     LEFT JOIN outbounds o ON fm.outbound_id = o.outbound_id
     WHERE fm.allocated_qty IS NOT NULL AND fm.allocated_qty > 0
       AND fm.cost_amount IS NOT NULL
+      AND fm.usage_category_raw IN ('상품판매', '상품판매(스페어)')
       AND ($2::uuid IS NULL OR fm.product_id = $2)
       AND ($1::uuid IS NULL OR o.company_id IS NULL OR o.company_id = $1)
     GROUP BY fm.product_id
