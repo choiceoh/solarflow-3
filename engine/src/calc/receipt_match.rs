@@ -133,10 +133,14 @@ pub async fn get_outstanding_list(pool: &PgPool, req: &OutstandingListRequest) -
         JOIN outbounds o ON s.outbound_id = o.outbound_id
         JOIN products p ON o.product_id = p.product_id
         JOIN partners ptr ON s.customer_id = ptr.partner_id
-        LEFT JOIN (
-            SELECT rm.outbound_id, SUM(rm.matched_amount) as total_matched
-            FROM receipt_matches rm GROUP BY rm.outbound_id
-        ) matched ON matched.outbound_id = o.outbound_id
+        LEFT JOIN LATERAL (
+            -- receipt_matches 는 sale_id 또는 outbound_id 둘 중 하나로 sale 에 연결.
+            -- bulk 수금완료(D-064) 는 sale_id, 매뉴얼 매칭은 outbound_id 쓴다.
+            SELECT SUM(rm.matched_amount) as total_matched
+            FROM receipt_matches rm
+            WHERE (rm.sale_id IS NOT NULL AND rm.sale_id = s.sale_id)
+               OR (rm.sale_id IS NULL AND rm.outbound_id = o.outbound_id)
+        ) matched ON TRUE
         WHERE o.company_id = $1 AND s.customer_id = $2 AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
           AND s.total_amount > COALESCE(matched.total_matched, 0)
