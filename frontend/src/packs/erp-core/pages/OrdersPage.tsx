@@ -141,6 +141,7 @@ type SaleBulkBlockReason =
   | "계산서 미발행"
   | "이미 ERP 마감"
   | "계산서 발행됨"
+type OperatorQueueId = "sale_unregistered" | "invoice_pending" | "erp_open" | "receipt_open"
 const BULK_SALE_PREVIEW_PAGE_SIZE = 1000
 const BULK_SALE_PREVIEW_MAX_PAGES = 500
 const BULK_SALE_CREATE_BATCH_SIZE = 8
@@ -190,6 +191,78 @@ interface BulkReceiptSaleFilters {
   erpClosed?: SaleErpClosedFilter
   sort?: string
   order?: "asc" | "desc"
+}
+
+interface OperatorQueueItem {
+  id: OperatorQueueId
+  label: string
+  count: number
+  description: string
+  actionLabel: string
+  active: boolean
+  onOpen: () => void
+}
+
+function OperatorQueuePanel({
+  items,
+  activeItem,
+}: {
+  items: OperatorQueueItem[]
+  activeItem?: OperatorQueueItem
+}) {
+  const total = items.reduce((sum, item) => sum + item.count, 0)
+  return (
+    <section className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
+      <div className="grid gap-3 xl:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.3fr)] xl:items-center">
+        <div>
+          <div className="text-sm font-semibold text-[var(--ink)]">처리 큐</div>
+          <div className="mt-1 text-xs text-[var(--ink-3)]">
+            {activeItem
+              ? `${activeItem.label} ${formatNumber(activeItem.count)}건 처리 중`
+              : `대기 ${formatNumber(total)}건 · 입력자는 여기서 시작`}
+          </div>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={item.onOpen}
+              className="min-h-[74px] rounded-md border px-3 py-2 text-left transition hover:border-[var(--ink-3)]"
+              style={{
+                borderColor: item.active ? "var(--solar-3)" : "var(--line)",
+                background: item.active ? "var(--solar-tint)" : "var(--bg-2)",
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] font-semibold text-[var(--ink)]">{item.label}</span>
+                <span className="mono text-base font-semibold text-[var(--warn)]">
+                  {formatNumber(item.count)}
+                </span>
+              </div>
+              <div className="mt-1 text-[11px] leading-4 text-[var(--ink-3)]">{item.description}</div>
+              <div className="mt-2 text-[11px] font-semibold text-[var(--solar-3)]">
+                {item.active ? "현재 큐" : item.actionLabel}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+      {activeItem && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2">
+          <div>
+            <div className="text-xs font-semibold text-[var(--ink)]">{activeItem.label} 작업 모드</div>
+            <div className="mt-0.5 text-[11px] text-[var(--ink-3)]">
+              대상 목록과 실행 버튼을 아래에서 바로 확인합니다.
+            </div>
+          </div>
+          <Button type="button" size="sm" className="h-8" onClick={activeItem.onOpen}>
+            목록 새로 맞추기
+          </Button>
+        </div>
+      )}
+    </section>
+  )
 }
 
 function getOrderWorkQueue(value: string | null): OrderWorkQueue {
@@ -1641,6 +1714,55 @@ export default function OrdersPage() {
     .map((p) => (p.eligible_count > 0 ? Math.round((p.linked_count / p.eligible_count) * 100) : 0))
   const saleConversionTone: SalesMetric["tone"] =
     saleConversionRate >= 90 ? "pos" : saleConversionRate >= 60 ? "info" : "warn"
+  const activeOperatorQueue: OperatorQueueId | "" =
+    activeTab === "outbound" && obWorkQueueFilter === "sale_unregistered"
+      ? "sale_unregistered"
+      : activeTab === "sales" && saleInvoiceFilter === "pending"
+        ? "invoice_pending"
+        : activeTab === "sales" && saleInvoiceFilter === "issued" && saleErpClosedFilter === "false"
+          ? "erp_open"
+          : activeTab === "sales" && saleReceiptFilter === "open"
+            ? "receipt_open"
+            : ""
+  const operatorQueueItems: OperatorQueueItem[] = [
+    {
+      id: "sale_unregistered",
+      label: "매출 미등록",
+      count: saleUnregisteredCount,
+      description: "출고 완료건을 매출로 생성",
+      actionLabel: "출고 큐 열기",
+      active: activeOperatorQueue === "sale_unregistered",
+      onOpen: openOutboundSaleQueue,
+    },
+    {
+      id: "invoice_pending",
+      label: "계산서 미발행",
+      count: invoicePending,
+      description: "계산서일과 이메일 확인",
+      actionLabel: "계산서 큐 열기",
+      active: activeOperatorQueue === "invoice_pending",
+      onOpen: openInvoicePendingQueue,
+    },
+    {
+      id: "erp_open",
+      label: "ERP 미마감",
+      count: erpOpenCount,
+      description: "발행 완료건 ERP 마감",
+      actionLabel: "ERP 큐 열기",
+      active: activeOperatorQueue === "erp_open",
+      onOpen: openErpOpenQueue,
+    },
+    {
+      id: "receipt_open",
+      label: "수금 미완료",
+      count: receiptOpenSaleCount,
+      description: "미수 잔액 수금완료 처리",
+      actionLabel: "수금 큐 열기",
+      active: activeOperatorQueue === "receipt_open",
+      onOpen: openReceiptOpenQueue,
+    },
+  ]
+  const activeOperatorQueueItem = operatorQueueItems.find((item) => item.active)
 
   // NumberTween 용 formatter 헬퍼 — 정수 카운트 / 1자리 소수 / 억원 표시.
   const fmtCount = (n: number) => String(Math.round(n))
@@ -2073,45 +2195,6 @@ export default function OrdersPage() {
                 },
               ]
 
-  const workQueueRail = (
-    <RailBlock title="처리 대기" count={`${saleUnregisteredCount + invoicePending + erpOpenCount + receiptOpenSaleCount}건`}>
-      <div className="space-y-1.5">
-        <button
-          type="button"
-          onClick={openOutboundSaleQueue}
-          className="flex w-full items-center justify-between rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 text-left text-[11.5px] transition hover:border-[var(--ink-3)]"
-        >
-          <span className="text-[var(--ink-2)]">매출 미등록</span>
-          <span className="mono font-semibold text-[var(--warn)]">{saleUnregisteredCount}</span>
-        </button>
-        <button
-          type="button"
-          onClick={openInvoicePendingQueue}
-          className="flex w-full items-center justify-between rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 text-left text-[11.5px] transition hover:border-[var(--ink-3)]"
-        >
-          <span className="text-[var(--ink-2)]">계산서 미발행</span>
-          <span className="mono font-semibold text-[var(--warn)]">{invoicePending}</span>
-        </button>
-        <button
-          type="button"
-          onClick={openErpOpenQueue}
-          className="flex w-full items-center justify-between rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 text-left text-[11.5px] transition hover:border-[var(--ink-3)]"
-        >
-          <span className="text-[var(--ink-2)]">ERP 미마감</span>
-          <span className="mono font-semibold text-[var(--warn)]">{erpOpenCount}</span>
-        </button>
-        <button
-          type="button"
-          onClick={openReceiptOpenQueue}
-          className="flex w-full items-center justify-between rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 text-left text-[11.5px] transition hover:border-[var(--ink-3)]"
-        >
-          <span className="text-[var(--ink-2)]">수금 미완료</span>
-          <span className="mono font-semibold text-[var(--warn)]">{receiptOpenSaleCount}</span>
-        </button>
-      </div>
-    </RailBlock>
-  )
-
   const ordersCardControls = (
     <div
       className="sf-card-controls"
@@ -2401,23 +2484,27 @@ export default function OrdersPage() {
     <div className="sf-page sf-sales-page">
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
-          <KpiStrip metrics={metrics} scopeId={`orders.${activeTab}`}>
-            {(metric) => (
-              <TileB
-                key={metric.lbl}
-                lbl={metric.lbl}
-                v={metric.v}
-                numericValue={metric.numericValue}
-                formatter={metric.formatter}
-                u={metric.u}
-                sub={metric.sub}
-                tone={metric.tone}
-                delta={metric.delta}
-                spark={metric.spark ?? flatSparkFromValue(metric.v)}
-                metricId={metric.metricId}
-              />
-            )}
-          </KpiStrip>
+          <OperatorQueuePanel items={operatorQueueItems} activeItem={activeOperatorQueueItem} />
+
+          {!activeOperatorQueueItem && (
+            <KpiStrip metrics={metrics} scopeId={`orders.${activeTab}`}>
+              {(metric) => (
+                <TileB
+                  key={metric.lbl}
+                  lbl={metric.lbl}
+                  v={metric.v}
+                  numericValue={metric.numericValue}
+                  formatter={metric.formatter}
+                  u={metric.u}
+                  sub={metric.sub}
+                  tone={metric.tone}
+                  delta={metric.delta}
+                  spark={metric.spark ?? flatSparkFromValue(metric.v)}
+                  metricId={metric.metricId}
+                />
+              )}
+            </KpiStrip>
+          )}
 
           <CommandTopLine title={pageTitle} sub={pageSub} right={ordersCardControls} />
 
@@ -2841,7 +2928,6 @@ export default function OrdersPage() {
 
           {activeTab === "outbound" && (
             <>
-              {workQueueRail}
               <RailBlock title="출고 상태" count={`${outboundsTotalCount} rows`}>
                 <BreakdownRows
                   items={(["active", "cancel_pending", "cancelled"] as OutboundStatus[]).map(
@@ -2894,7 +2980,6 @@ export default function OrdersPage() {
 
           {(activeTab === "sales" || activeTab === "receipts" || activeTab === "matching") && (
             <>
-              {workQueueRail}
               <RailBlock title="채권 요약" count={`${receiptCount} receipts`}>
                 <div className="bignum text-[26px] text-[var(--solar-3)]">
                   {fmtEok(receiptRemaining)}{" "}

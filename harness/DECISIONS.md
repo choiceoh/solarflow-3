@@ -1757,6 +1757,24 @@
   - `graphify update .`
 - **날짜**: 2026-05-12 17:21:18 KST
 
+## D-20260512-181412: Orders 화면은 처리 큐를 입력자 작업 시작점으로 둔다
+
+- **결정**: `/orders` 본문 상단에 매출 미등록, 계산서 미발행, ERP 미마감, 수금 미완료 처리 큐 패널을 둔다.
+  - 각 큐는 기존 필터/탭 전환 함수를 그대로 호출하며 새 API를 만들지 않는다.
+  - 큐가 선택된 동안 KPI 스트립은 접고, 대상 목록과 기존 일괄 실행 패널이 먼저 보이게 한다.
+  - 우측 레일의 처리 대기 버튼은 본문 큐와 중복되므로 제거하고, 우측은 상태/채권 요약 보조 정보로 유지한다.
+- **이유**: 조회자에게는 KPI가 첫 화면 신호지만, 입력자는 “무엇을 처리해야 하는지”와 “어떤 버튼을 눌러야 하는지”가 먼저 보여야 한다. 처리 큐를 본문 시작점으로 올리면 Import Hub에서 넘어온 사용자가 같은 작업 맥락을 유지한 채 목록과 실행 패널로 이어질 수 있다.
+- **운영 기준**:
+  - 큐 패널은 화면 이동과 필터 세팅만 수행한다. 장부 변경은 기존 일괄 처리 버튼과 서버 검증 경로에서만 발생한다.
+  - 큐가 아닌 일반 조회 상태에서는 기존 KPI 스트립을 유지한다.
+  - 조회자용 분석 화면(`/sales-analysis`, `/insights`)에는 이 처리 큐 패턴을 강제하지 않는다.
+- **검증**:
+  - `cd frontend && npx --yes bun@1.3.13 run build`
+  - `cd frontend && npx --yes bun@1.3.13 run lint`
+  - `git diff --check`
+  - `graphify update .`
+- **날짜**: 2026-05-12 18:14:12 KST
+
 ## D-20260512-200000: AGENT-BUILDER-VISION — AI 에이전트 친화 ERP 빌더 (colocation + manifest + codemod)
 
 - **결정**: D-145 의 horizontal tenant pack 위에 **vertical 도메인 colocation** 추가. backend/frontend 모두 `internal/domains/<id>/` + `src/domains/<id>/` 디렉토리로 자기완결. `harness/registry.yaml` + `harness/domains/<id>.yaml` manifest 가 단일 정본. 사람이 편집하는 정본은 YAML 만, 코드/JSON 은 codemod 생성.

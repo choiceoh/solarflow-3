@@ -12,8 +12,27 @@
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
 | AGENT-BUILDER-VISION | 8/15 도메인 colocation (53%), backend dup 0, codemod 4종, 가드레일 v2 STRICT |
-| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-20260511-184355 판매 수금 미완료 큐, D-20260512-101906 필터 전체 수금완료, D-20260512-112516 Import Hub 입력자 편의 개선, D-20260512-132713 매출 분석 탭 세분화, D-20260512-143605 입력·일괄처리 후속액션/사전검토, D-20260512-165815 작업 흐름 정본화, D-20260512-172118 조회자/입력자 UX 표면 분리, D-080/D-081/D-132~D-138 번호 공백 유지) |
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-20260511-184355 판매 수금 미완료 큐, D-20260512-101906 필터 전체 수금완료, D-20260512-112516 Import Hub 입력자 편의 개선, D-20260512-132713 매출 분석 탭 세분화, D-20260512-143605 입력·일괄처리 후속액션/사전검토, D-20260512-165815 작업 흐름 정본화, D-20260512-172118 조회자/입력자 UX 표면 분리, D-20260512-181412 Orders 처리 큐 우선, D-080/D-081/D-132~D-138 번호 공백 유지) |
 | 운영 서비스 | 4개 systemd --user 서비스 자동 시작 |
+
+---
+
+## 2026-05-12 세션 — Orders 처리 큐 입력자 모드 (D-20260512-181412)
+
+### 완료
+- `/orders` 본문 상단에 처리 큐 패널 추가
+  - 매출 미등록, 계산서 미발행, ERP 미마감, 수금 미완료 큐를 작업 시작점으로 노출
+  - 각 큐는 기존 탭/필터 전환 함수를 그대로 사용
+- 큐 선택 상태에서는 KPI 스트립을 접고 대상 목록과 기존 일괄 실행 패널이 먼저 보이게 변경
+- 우측 레일의 처리 대기 버튼 중복 노출 제거
+  - 우측 레일은 출고 상태, 채권 요약, 계산서 상태 등 보조 정보 역할로 유지
+- 설계 정본과 D-20260512-181412 결정 기록 동기화
+
+### 검증
+- `cd frontend && npx --yes bun@1.3.13 run build` 성공 — plugin timing warning 출력
+- `cd frontend && npx --yes bun@1.3.13 run lint` 종료코드 0 — 기존 DeclarationCostManager hook dependency 경고 1건 + payment-terms-widget hook dependency 경고 1건 + excelValidation optional-chain 경고 1건 + AssistantPage forEach return 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `git diff --check` 성공
+- `graphify update .` 1차는 기존 그래프보다 노드 수가 줄어 보호 중단, force 갱신 성공 — 5722 nodes / 9450 edges / 451 communities (`graph.html`은 노드 수 초과로 생략)
 
 ---
 
