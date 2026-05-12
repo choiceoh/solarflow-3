@@ -2124,7 +2124,7 @@ export default function OrdersPage() {
             value={orderSearch}
             onChange={(e) => setOrderSearch(e.target.value)}
             placeholder="테이블 검색"
-            className="h-8 w-44 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-2 text-xs"
+            className="h-8 w-44 shrink-0 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
           />
           <FilterButton
             items={[
@@ -2196,7 +2196,7 @@ export default function OrdersPage() {
             value={obSearch}
             onChange={(e) => setObSearch(e.target.value)}
             placeholder="테이블 검색"
-            className="h-8 w-44 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-2 text-xs"
+            className="h-8 w-44 shrink-0 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
           />
           <FilterButton
             items={[
@@ -2265,7 +2265,7 @@ export default function OrdersPage() {
             value={saleSearch}
             onChange={(e) => setSaleSearch(e.target.value)}
             placeholder="테이블 검색"
-            className="h-8 w-44 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-2 text-xs"
+            className="h-8 w-44 shrink-0 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
           />
           <div className="w-36">
             <PartnerCombobox
@@ -2348,7 +2348,7 @@ export default function OrdersPage() {
             value={receiptSearch}
             onChange={(e) => setReceiptSearch(e.target.value)}
             placeholder="테이블 검색"
-            className="h-8 w-44 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-2 text-xs"
+            className="h-8 w-44 shrink-0 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
           />
           <FilterButton
             items={[
