@@ -107,6 +107,13 @@ import { BankingTightLimitInsight } from './metrics/BankingTightLimitInsight'
 import { BankingMaturityAmountInsight } from './metrics/BankingMaturityAmountInsight'
 import { BankingCompanyCountInsight } from './metrics/BankingCompanyCountInsight'
 import { BankingLimitChangesInsight } from './metrics/BankingLimitChangesInsight'
+import { PurchaseLcEventsInsight } from './metrics/PurchaseLcEventsInsight'
+import { PurchaseBlEventsInsight } from './metrics/PurchaseBlEventsInsight'
+import { PurchaseTtEventsInsight } from './metrics/PurchaseTtEventsInsight'
+import { PurchaseAuditLogsInsight } from './metrics/PurchaseAuditLogsInsight'
+import { PurchaseActiveMfgInsight } from './metrics/PurchaseActiveMfgInsight'
+import { PurchaseAvgChainPosInsight } from './metrics/PurchaseAvgChainPosInsight'
+import { PurchaseTotalPosInsight } from './metrics/PurchaseTotalPosInsight'
 
 export interface InsightEntry {
   // KPI 타일이 보낼 식별자 (예: 'outbound.count') — URL 에 그대로 들어감.
@@ -651,6 +658,43 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'banking.limit_changes',
     shortLabel: '한도 변경 이력',
     render: () => <BankingLimitChangesInsight />,
+  },
+
+  // Purchase History 확장
+  'purchase.lc_events': {
+    id: 'purchase.lc_events',
+    shortLabel: 'L/C 이벤트',
+    render: () => <PurchaseLcEventsInsight />,
+  },
+  'purchase.bl_events': {
+    id: 'purchase.bl_events',
+    shortLabel: 'B/L 이벤트',
+    render: () => <PurchaseBlEventsInsight />,
+  },
+  'purchase.tt_events': {
+    id: 'purchase.tt_events',
+    shortLabel: 'T/T 이벤트',
+    render: () => <PurchaseTtEventsInsight />,
+  },
+  'purchase.audit_logs': {
+    id: 'purchase.audit_logs',
+    shortLabel: '감사 로그',
+    render: () => <PurchaseAuditLogsInsight />,
+  },
+  'purchase.active_mfg': {
+    id: 'purchase.active_mfg',
+    shortLabel: '활성 제조사',
+    render: () => <PurchaseActiveMfgInsight />,
+  },
+  'purchase.avg_chain_pos': {
+    id: 'purchase.avg_chain_pos',
+    shortLabel: '체인당 PO 평균',
+    render: () => <PurchaseAvgChainPosInsight />,
+  },
+  'purchase.total_pos': {
+    id: 'purchase.total_pos',
+    shortLabel: '전체 PO',
+    render: () => <PurchaseTotalPosInsight />,
   },
 }
 
