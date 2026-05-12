@@ -2,6 +2,7 @@
 // Header (뒤로가기 + 제목) → 24개월 트렌드 라인차트 → 차원별 breakdown 그리드.
 
 import { Link } from "react-router-dom"
+import { motion } from "motion/react"
 import {
   CartesianGrid,
   Line,
@@ -69,7 +70,12 @@ export default function InsightShell({
   const formatNumber = (v: number) => (formatTrend ? formatTrend(v) : v.toLocaleString())
 
   return (
-    <div className="sf-page">
+    <motion.div
+      className="sf-page"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.24, ease: [0.2, 0.8, 0.2, 1] }}
+    >
       <div className="sf-page-header">
         <div>
           <div className="sf-eyebrow flex items-center gap-2">
@@ -125,7 +131,7 @@ export default function InsightShell({
           ) : null}
         </div>
       )}
-    </div>
+    </motion.div>
   )
 }
 
