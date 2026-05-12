@@ -33,6 +33,57 @@
 - frontend/ — React + Vite + TypeScript + Tailwind (Caddy 정적 서빙, dist/)
 - harness/ — 하네스 파일 (규칙, 설계, 판단 기록)
 
+## 운영 서버 SSH 접근 (에러 로그 조회)
+
+운영 서버 `gx10-f96e` 는 **Tailscale SSH** 로 항상 접근 가능하다. 코드를 추측으로 디버깅하기 전에 **먼저 실제 운영 로그를 확인할 것**.
+
+```
+SSH:        ssh choiceoh@100.105.145.6
+Hostname:   gx10-f96e (Ubuntu 24.04, ARM64)
+Repo path:  /home/choiceoh/공개/solarflow-3   (경로에 한글 포함 — 쿼팅 주의)
+서비스:     solarflow-go / solarflow-engine / cloudflared-solarflow / solarflow-webhook (systemd --user)
+로그 백엔드: 전부 journald (`journalctl --user -u <unit>`)
+DB:         Supabase pooler (aws-1-ap-northeast-2). 로컬 PG 로그 없음 — DB 에러는 solarflow-go 저널에 그대로 묻힌다.
+```
+
+**먼저 헬퍼 스크립트를 써라** — [`scripts/prod-logs.sh`](scripts/prod-logs.sh) 가 가장 흔한 조회를 한 줄로 제공한다:
+
+```bash
+scripts/prod-logs.sh errors            # 최근 30분간 ERROR/WARN (4개 유닛 통합)
+scripts/prod-logs.sh errors 2h         # 시간 윈도우 지정 (30m, 2h, '1 day ago' 형식)
+scripts/prod-logs.sh http5xx 1h        # Go 5xx 응답만
+scripts/prod-logs.sh slow 1h           # Rust sqlx slow statement WARN
+scripts/prod-logs.sh db 1h             # Supabase/PostgREST 에러 (PGRST204, column does not exist, 등)
+scripts/prod-logs.sh tail go           # 실시간 follow (go|engine|cloudflared|webhook)
+scripts/prod-logs.sh status            # 4개 유닛 systemctl status
+scripts/prod-logs.sh sync              # cron-deploy .sync.log 마지막 200줄
+scripts/prod-logs.sh raw -u solarflow-go.service --since '15min ago' --no-pager
+```
+
+원시 ssh 가 필요할 때 (1회성, 헬퍼로 안 잡히는 패턴):
+
+```bash
+# 특정 request_id 로 전체 흐름 추적
+ssh choiceoh@100.105.145.6 "journalctl --user --since '1h ago' --no-pager \
+  -u solarflow-go.service -u solarflow-engine.service | grep '<request_id>'"
+
+# 특정 엔드포인트의 500 만 골라보기
+ssh choiceoh@100.105.145.6 "journalctl --user --since '6h ago' --no-pager -u solarflow-go.service \
+  | grep -E 'path=/api/v1/sales/summary.*status=500'"
+
+# 서비스 재시작 이력 (Restart= 회수 추적)
+ssh choiceoh@100.105.145.6 "journalctl --user -u solarflow-go.service --since today --no-pager \
+  | grep -E 'Started|Stopped|Failed|Main process exited'"
+```
+
+**에러 트리아지 흐름**:
+1. `prod-logs.sh errors` 로 최근 윈도우 스캔 → 빈도 높은 패턴 식별
+2. 그 패턴이 DB 류면 `prod-logs.sh db` 와 `slow` 를 같이 봐서 스키마 드리프트(`PGRST204` / `column ... does not exist`) 인지 쿼리 지연인지 분리
+3. 특정 요청을 깊이 볼 때만 `request_id` grep 으로 좁힌다 — Go 로그의 `request_id=<uuid>` 가 동일 요청의 모든 stage 를 묶는다
+4. 스키마 드리프트가 확인되면 CLAUDE.md 의 "Go 모델 필드 변경 시 필수 절차" 절을 다시 읽고 마이그레이션부터 작성
+
+⚠️ 운영 박스에서 **임의로 서비스를 재시작하거나 파일을 고치지 말 것**. 진단(읽기)만 SSH 로 하고, 수정은 PR + cron-deploy(또는 webhook) 경유로 반영한다. 운영 직접 수정은 git pull 충돌을 영구화한다 (메모리: gx10 cron-deploy 80커밋 드리프트 사례).
+
 ## 핵심 원칙
 1. 설계문서 통합판이 유일한 정본. 임의 변경 금지.
 2. Go+Rust 분리: 한 행 사칙연산=Go, 여러 테이블 조합=Rust.
