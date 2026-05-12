@@ -97,6 +97,11 @@ import { ProcurementPoAvgMwInsight } from './metrics/ProcurementPoAvgMwInsight'
 import { ProcurementPoChangedInsight } from './metrics/ProcurementPoChangedInsight'
 import { ProcurementPoTotalInsight } from './metrics/ProcurementPoTotalInsight'
 import { ProcurementPoShippingRatioInsight } from './metrics/ProcurementPoShippingRatioInsight'
+import { CustomsUncostedInsight } from './metrics/CustomsUncostedInsight'
+import { CustomsUnlinkedExpenseInsight } from './metrics/CustomsUnlinkedExpenseInsight'
+import { CustomsCapacityInsight } from './metrics/CustomsCapacityInsight'
+import { CustomsVatInsight } from './metrics/CustomsVatInsight'
+import { CustomsAvgPerDeclInsight } from './metrics/CustomsAvgPerDeclInsight'
 
 export interface InsightEntry {
   // KPI 타일이 보낼 식별자 (예: 'outbound.count') — URL 에 그대로 들어감.
@@ -587,6 +592,33 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'procurement.po_shipping_ratio',
     shortLabel: 'PO 운송중 비중',
     render: () => <ProcurementPoShippingRatioInsight />,
+  },
+
+  // Customs 확장
+  'customs.uncosted': {
+    id: 'customs.uncosted',
+    shortLabel: '원가 미산정',
+    render: () => <CustomsUncostedInsight />,
+  },
+  'customs.unlinked_expense': {
+    id: 'customs.unlinked_expense',
+    shortLabel: 'B/L 미연결 비용',
+    render: () => <CustomsUnlinkedExpenseInsight />,
+  },
+  'customs.capacity': {
+    id: 'customs.capacity',
+    shortLabel: '수입 용량',
+    render: () => <CustomsCapacityInsight />,
+  },
+  'customs.vat': {
+    id: 'customs.vat',
+    shortLabel: '부대비용 VAT',
+    render: () => <CustomsVatInsight />,
+  },
+  'customs.avg_per_decl': {
+    id: 'customs.avg_per_decl',
+    shortLabel: '면장당 평균',
+    render: () => <CustomsAvgPerDeclInsight />,
   },
 }
 
