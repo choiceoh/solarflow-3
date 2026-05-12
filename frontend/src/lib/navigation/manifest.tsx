@@ -44,6 +44,8 @@ const WarehouseNewPage = lazy(() => import('@/packs/erp-core/pages/data/Warehous
 const WarehouseEditPage = lazy(() => import('@/packs/erp-core/pages/data/WarehouseEditPage'));
 const BankNewPage = lazy(() => import('@/packs/erp-core/pages/data/BankNewPage'));
 const BankEditPage = lazy(() => import('@/packs/erp-core/pages/data/BankEditPage'));
+const BankAccountNewPage = lazy(() => import('@/packs/erp-core/pages/data/BankAccountNewPage'));
+const BankAccountEditPage = lazy(() => import('@/packs/erp-core/pages/data/BankAccountEditPage'));
 
 const ProcurementPage = lazy(() => import('@/packs/module-finance/pages/ProcurementPage'));
 const CustomsPage = lazy(() => import('@/packs/module-finance/pages/CustomsPage'));
@@ -140,6 +142,8 @@ export const ROUTES: RouteSpec[] = [
   { path: '/data/warehouses/:id/edit', element: WarehouseEditPage, roles: ['admin', 'operator'] },
   { path: '/data/banks/new', element: BankNewPage, roles: ['admin', 'operator'] },
   { path: '/data/banks/:id/edit', element: BankEditPage, roles: ['admin', 'operator'] },
+  { path: '/data/bank-accounts/new', element: BankAccountNewPage, roles: ['admin', 'operator'] },
+  { path: '/data/bank-accounts/:id/edit', element: BankAccountEditPage, roles: ['admin', 'operator'] },
   { path: '/masters/construction-sites', element: ConstructionSitesPage },
   { path: '/procurement', element: ProcurementPage },
   {

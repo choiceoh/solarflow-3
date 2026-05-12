@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { FilterChips } from '@/components/command/MockupPrimitives';
 import MasterSection, { type MasterSectionConfig } from '@/components/data/MasterSection';
-import type { Manufacturer, Product, Partner, Warehouse, Bank } from '@/types/masters';
+import type { Manufacturer, Product, Partner, Warehouse, Bank, BankAccount } from '@/types/masters';
 import { formatWp, formatSize, formatUSD, formatDate, formatPercent } from '@/lib/utils';
 
 type DataKind =
@@ -14,6 +14,7 @@ type DataKind =
   | 'partners'
   | 'warehouses'
   | 'banks'
+  | 'bank-accounts'
   | 'construction-sites';
 
 const KINDS: { key: DataKind; label: string }[] = [
@@ -22,6 +23,7 @@ const KINDS: { key: DataKind; label: string }[] = [
   { key: 'partners',           label: '거래처'   },
   { key: 'warehouses',         label: '창고'     },
   { key: 'banks',              label: '은행'     },
+  { key: 'bank-accounts',      label: '은행계좌' },
   { key: 'construction-sites', label: '공사현장' },
 ];
 
@@ -72,7 +74,7 @@ export default function DataPage() {
     <MasterConsole
       eyebrow="MASTER"
       title="마스터"
-      description="제조사·품번·거래처·창고·은행·공사현장 기준정보를 조회하고 연결 상태를 정리합니다. 법인은 엑셀 입력에서 등록합니다."
+      description="제조사·품번·거래처·창고·은행·은행계좌·공사현장 기준정보를 조회하고 연결 상태를 정리합니다. 법인은 엑셀 입력에서 등록합니다."
       tableTitle={activeMeta.label}
       tableSub="기준정보"
       metrics={[]}
@@ -95,13 +97,15 @@ function KindSection({ kind }: { kind: DataKind }) {
   const partnerConfig = usePartnerConfig();
   const warehouseConfig = useWarehouseConfig();
   const bankConfig = useBankConfig();
+  const bankAccountConfig = useBankAccountConfig();
 
   switch (kind) {
-    case 'manufacturers': return <MasterSection config={manufacturerConfig} />;
-    case 'products':      return <MasterSection config={productConfig} />;
-    case 'partners':      return <MasterSection config={partnerConfig} />;
-    case 'warehouses':    return <MasterSection config={warehouseConfig} />;
-    case 'banks':         return <MasterSection config={bankConfig} />;
+    case 'manufacturers':  return <MasterSection config={manufacturerConfig} />;
+    case 'products':       return <MasterSection config={productConfig} />;
+    case 'partners':       return <MasterSection config={partnerConfig} />;
+    case 'warehouses':     return <MasterSection config={warehouseConfig} />;
+    case 'banks':          return <MasterSection config={bankConfig} />;
+    case 'bank-accounts':  return <MasterSection config={bankAccountConfig} />;
     case 'construction-sites':
       return <ConstructionSitesPending />;
   }
@@ -316,5 +320,42 @@ function useBankConfig(): MasterSectionConfig<Bank> {
       (row.companies?.company_name ?? row.company_name ?? '').toLowerCase().includes(q),
     newPath: '/data/banks/new',
     editPath: (r) => `/data/banks/${r.bank_id}/edit`,
+  }), []);
+}
+
+function useBankAccountConfig(): MasterSectionConfig<BankAccount> {
+  return useMemo(() => ({
+    typeLabel: '은행계좌',
+    endpoint: '/api/v1/bank-accounts',
+    getId: (r) => r.account_id,
+    getLabel: (r) => `${r.bank_name} ${r.account_number}`,
+    columns: [
+      { key: 'bank_name', label: '은행', sortable: true,
+        render: (r) => (
+          <span>
+            {r.bank_name}{r.branch_name ? ` ${r.branch_name}` : ''}
+            {r.is_default && <span className="ml-1.5 text-[10px] bg-blue-100 text-blue-700 rounded px-1">기본</span>}
+            {!r.is_active && <span className="ml-1.5 text-[10px] bg-gray-100 text-gray-500 rounded px-1">비활성</span>}
+          </span>
+        ) },
+      { key: 'company_name', label: '법인', sortable: true,
+        render: (r) => r.companies?.company_name ?? r.company_name ?? '—' },
+      { key: 'account_number', label: '계좌번호', sortable: true,
+        render: (r) => <span className="font-mono text-sm">{r.account_number}</span> },
+      { key: 'account_holder', label: '예금주', sortable: true },
+      { key: 'currency', label: '통화', sortable: true,
+        render: (r) => <span className="font-mono text-xs">{r.currency}</span> },
+      { key: 'swift_code', label: 'SWIFT',
+        render: (r) => r.swift_code ? <span className="font-mono text-xs">{r.swift_code}</span> : <span className="text-muted-foreground">—</span> },
+    ] as Column<BankAccount>[],
+    hasStatusToggle: true,
+    searchPlaceholder: '은행, 계좌번호, 예금주 검색',
+    searchPredicate: (row, q) =>
+      row.bank_name.toLowerCase().includes(q) ||
+      row.account_number.toLowerCase().includes(q) ||
+      row.account_holder.toLowerCase().includes(q) ||
+      (row.companies?.company_name ?? row.company_name ?? '').toLowerCase().includes(q),
+    newPath: '/data/bank-accounts/new',
+    editPath: (r) => `/data/bank-accounts/${r.account_id}/edit`,
   }), []);
 }

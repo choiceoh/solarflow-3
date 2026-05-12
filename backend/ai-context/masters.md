@@ -15,9 +15,30 @@
 - **결제조건은 고객/양방향에만 노출**. 공급사 결제조건은 P/O·L/C 단위로 따로 관리하므로 거래처에는 두지 않습니다.
 - **활성 토글**: 비활성 거래처는 신규 등록 화면에서 안 보이지만 검색 필터에서 "비활성 포함" 으로 다시 보이게 할 수 있습니다.
 
-## 은행 (`/masters/banks-v2`)
+## 은행 (`/data?kind=banks`)
 
-L/C 개설은행·수금계좌의 마스터. 은행코드는 표준 코드 (KEB하나 = 081 등) 권장. L/C 한도와 만기는 여기가 아니라 *L/C 화면* 에서 관리.
+L/C 한도·수수료율 카드. 한 회사가 한 은행에서 받은 LC 개설 한도와 승인기한, 개설/인수 수수료율을 관리. **실제 계좌번호는 여기 아니라 "은행 계좌" 마스터** 에 둔다 (분리 이유: 한도 카드 1장에 외화/원화 계좌가 여러 개 붙는 경우가 흔해서).
+
+## 은행 계좌 (`/data?kind=bank-accounts`)
+
+회사별 수금/지급 계좌 마스터. 계좌번호·예금주·통화(KRW/USD/EUR/CNY/JPY)·SWIFT 코드까지 담는다.
+
+- 통화별로 row 를 따로 둔다 — "신한은행 + USD 외화통장" 과 "신한은행 + KRW 보통" 은 별개 row.
+- `is_default` = 회사+통화 조합당 기본 계좌 (수금 등록 시 자동 선택 후보).
+- `bank_id` FK 는 NULL 허용 — banks(LC 한도) 카드와 연결하려는 경우만 채운다. LC 와 무관한 일반 수금 계좌는 비워 둘 수 있다.
+
+### 자동 등록 (수금 입력 시)
+
+수금(receipts) 등록·import 시 `bank_account` 자유 입력 문자열이 들어오면 백엔드가 마스터에 매칭/자동 등록한다 (`backend/internal/handler/bank_account_autoreg.go`).
+
+- 트리거 진입점: `POST /api/v1/receipts` (body 의 `company_id` 필수), `POST /api/v1/import/receipts` (body 에 `company_id` 같이 전송)
+- 파싱 규칙: 첫 비-숫자 토큰 = `bank_name`, 4자리 이상 숫자+하이픈 시퀀스 = `account_number`. 둘 다 추출돼야 등록 (예: "신한 110-000-000000" ✓, "신한은행" ✗, "110-000-000000" ✗)
+- dedup 키: `(company_id, normalized account_number)` — 하이픈/공백 제거한 숫자만 비교. 같은 계좌 다른 표기도 한 row 로 수렴.
+- 자동 등록 row 기본값: `account_holder=회사명`, `currency='KRW'`, `is_default=false`, `memo='자동 등록 (수금 입력)'` — 마스터 목록에서 자동 등록건은 메모로 식별 가능.
+- 파싱 실패 시: 자동 등록 스킵하고 `receipts.bank_account` 문자열만 보존 (`bank_account_id` 는 NULL). 사용자가 마스터에서 직접 정리.
+- 자동 등록 실패는 receipts 등록 자체를 막지 않는다 — silent fallback (raw 문자열 보존).
+
+`receipts.company_id` 는 자동 등록 키로 사용. 옛 row (`company_id` NULL) 는 자동 등록 흐름에서 제외된다.
 
 ## 창고 (`/masters/warehouses-v2`)
 

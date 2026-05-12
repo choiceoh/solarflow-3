@@ -32,8 +32,11 @@ type ImportWarning struct {
 
 // ImportRowsRequest — 일반 Import 요청 (행 배열)
 // 비유: "일괄 등록 신청서" — 여러 행을 한 번에 등록
+// CompanyID 는 옵션: receipts import 처럼 row 별 company 컬럼이 없는 경우
+// 클라이언트의 selectedCompanyId 를 import 단위로 전달하는 용도.
 type ImportRowsRequest struct {
-	Rows []map[string]interface{} `json:"rows"`
+	Rows      []map[string]interface{} `json:"rows"`
+	CompanyID *string                  `json:"company_id,omitempty"`
 }
 
 // DeclarationImportRequest — 면장+원가 통합 Import 요청 (지적 2 반영)

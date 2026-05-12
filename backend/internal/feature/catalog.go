@@ -89,6 +89,7 @@ type Feature struct {
 const (
 	// ---- master.* (all tenants) ----
 	IDMasterBank              FeatureID = "master.bank"
+	IDMasterBankAccount       FeatureID = "master.bank_account"
 	IDMasterCompany           FeatureID = "master.company"
 	IDMasterCompanyAlias      FeatureID = "master.company_alias"
 	IDMasterManufacturer      FeatureID = "master.manufacturer"
@@ -210,6 +211,15 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/banks/{id}/status",
 			// BankingPage 4 insight 통합 dashboard — banks + lc_records + limit_changes 합본.
 			"/api/v1/banking/dashboard",
+		},
+	},
+	IDMasterBankAccount: {
+		ID: IDMasterBankAccount, Name: "은행 계좌 마스터",
+		Description:    "회사별 수금/지급 계좌 마스터 — banks(LC 한도) 와는 별개",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{
+			"/api/v1/bank-accounts/", "/api/v1/bank-accounts/{id}",
+			"/api/v1/bank-accounts/{id}/status",
 		},
 	},
 	IDMasterCompany: {

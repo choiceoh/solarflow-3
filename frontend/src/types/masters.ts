@@ -104,3 +104,23 @@ export interface Bank {
   memo?: string;
   is_active: boolean;
 }
+
+// 은행 계좌 마스터 — 회사별 수금/지급 계좌. Bank(LC 한도) 와는 별개.
+export interface BankAccount {
+  account_id: string;
+  company_id: string;
+  company_name?: string;
+  companies?: { company_name: string; company_code: string };
+  bank_id?: string | null;       // banks(LC 한도) FK — NULL 허용
+  bank_name: string;
+  branch_name?: string | null;
+  account_number: string;
+  account_holder: string;        // 예금주
+  currency: string;              // ISO 4217 (KRW/USD/EUR/CNY/JPY)
+  swift_code?: string | null;
+  memo?: string | null;
+  is_default: boolean;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}

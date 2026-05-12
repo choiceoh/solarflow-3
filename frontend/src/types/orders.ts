@@ -101,11 +101,13 @@ export interface OrderFulfillmentRiskResponse {
 
 export interface Receipt {
   receipt_id: string
+  company_id?: string           // 수금을 받은 우리 회사 — 자동 bank_accounts 등록 키
   customer_id: string
   customer_name?: string
   receipt_date: string
   amount: number
-  bank_account?: string
+  bank_account?: string         // 자유 입력 (엑셀 import 호환)
+  bank_account_id?: string      // bank_accounts 마스터 FK (자동 매칭/등록 결과)
   memo?: string
   matched_total?: number
   remaining?: number
