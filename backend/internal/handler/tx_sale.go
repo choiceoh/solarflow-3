@@ -20,6 +20,11 @@ import (
 const (
 	saleDefaultLimit = 100
 	saleMaxLimit     = 1000
+	// saleSummaryChunkSize — receipt_status 필터가 만든 sale_id IN(...) 목록을
+	// PostgREST URL 에 한꺼번에 실으면 Supabase 앞단 Cloudflare 가
+	// HTTP 400 "Bad Request"(URL too long) 로 거절한다 (실측: 700+ UUID 부터).
+	// 헤더/타 필터 여유 두고 200 으로 청크.
+	saleSummaryChunkSize = 200
 )
 
 // saleSortable — 정렬 화이트리스트. sales 테이블 컬럼만 허용.
@@ -540,6 +545,13 @@ type SaleSummary struct {
 
 // Summary — GET /api/v1/sales/summary — 매출 KPI 집계 (List 와 동일 필터).
 func (h *SaleHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	// receipt_status 필터는 sale_id 수천 개를 URL 에 싣게 만들어 Cloudflare 가
+	// URI Too Long 으로 차단한다. saleSummaryChunkSize 단위로 분할해 합산.
+	if receiptStatus := r.URL.Query().Get("receipt_status"); receiptStatus != "" {
+		h.summaryByReceiptStatus(w, r, receiptStatus)
+		return
+	}
+
 	query := h.DB.From("sales").Select("supply_amount, tax_invoice_date", "exact", false)
 	query, ok, err := h.applySaleFilters(r, query)
 	if err != nil {
@@ -552,14 +564,117 @@ func (h *SaleHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 한 번에 모두 받아 클라이언트(이 핸들러) 에서 합산. 매출 데이터는 보통 매출 단위가 출고 단위와 비슷해
-	// 최대 수만건 수준으로 충분히 메모리 처리 가능.
-	// 큰 운영규모로 가면 SQL aggregate(view 또는 RPC) 로 교체 권장.
-	data, count, err := query.Range(0, saleMaxLimit-1, "").Execute()
+	summary, err := h.executeSummary(query)
 	if err != nil {
 		log.Printf("[판매 요약 조회 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "판매 요약 조회에 실패했습니다")
 		return
+	}
+	response.RespondJSON(w, http.StatusOK, summary)
+}
+
+func (h *SaleHandler) summaryByReceiptStatus(w http.ResponseWriter, r *http.Request, status string) {
+	// receipt_status / erp_closed=false / month·start·end 는 모두 sale_id 후보 리스트를
+	// 만든다. applySaleFilters 가 한 번만 .In("sale_id", …) 을 부르도록 설계됐으므로,
+	// 청크의 .In() 이 그 호출을 덮어쓰지 않도록 세 필터를 모두 수집해 직접 교집합한 뒤
+	// 요청에서 제거하고 청크 단위로 다시 .In() 한다.
+	var candidates [][]string
+
+	receiptIDs, err := h.saleIDsByReceiptStatus(status)
+	if err != nil {
+		log.Printf("[판매 요약 수금 필터 실패] %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "판매 요약 수금 필터에 실패했습니다")
+		return
+	}
+	if len(receiptIDs) == 0 {
+		response.RespondJSON(w, http.StatusOK, SaleSummary{})
+		return
+	}
+	candidates = append(candidates, receiptIDs)
+
+	if r.URL.Query().Get("erp_closed") == "false" {
+		ids, err := h.erpOpenSaleIDs()
+		if err != nil {
+			log.Printf("[판매 요약 ERP 필터 실패] %v", err)
+			response.RespondError(w, http.StatusInternalServerError, "판매 요약 ERP 필터에 실패했습니다")
+			return
+		}
+		if len(ids) == 0 {
+			response.RespondJSON(w, http.StatusOK, SaleSummary{})
+			return
+		}
+		candidates = append(candidates, ids)
+	}
+
+	month := r.URL.Query().Get("month")
+	startDate := r.URL.Query().Get("start")
+	endDate := r.URL.Query().Get("end")
+	if month != "" || startDate != "" || endDate != "" {
+		ids, err := h.saleIDsByBusinessDate(month, startDate, endDate)
+		if err != nil {
+			log.Printf("[판매 요약 기준일 필터 실패] %v", err)
+			response.RespondError(w, http.StatusInternalServerError, "판매 요약 기준일 필터에 실패했습니다")
+			return
+		}
+		if len(ids) == 0 {
+			response.RespondJSON(w, http.StatusOK, SaleSummary{})
+			return
+		}
+		candidates = append(candidates, ids)
+	}
+
+	intersected := intersectSaleIDLists(candidates)
+	if len(intersected) == 0 {
+		response.RespondJSON(w, http.StatusOK, SaleSummary{})
+		return
+	}
+
+	// id-producing 필터는 모두 직접 처리했으므로 applySaleFilters 가 .In("sale_id", …) 을
+	// 다시 부르지 않도록 stripped 요청에서 제거.
+	stripped := *r
+	strippedURL := *r.URL
+	q := strippedURL.Query()
+	q.Del("receipt_status")
+	if q.Get("erp_closed") == "false" {
+		q.Del("erp_closed")
+	}
+	q.Del("month")
+	q.Del("start")
+	q.Del("end")
+	strippedURL.RawQuery = q.Encode()
+	stripped.URL = &strippedURL
+
+	summary := SaleSummary{}
+	for _, chunk := range chunkSaleIDs(intersected, saleSummaryChunkSize) {
+		query := h.DB.From("sales").Select("supply_amount, tax_invoice_date", "exact", false)
+		query, ok, err := h.applySaleFilters(&stripped, query)
+		if err != nil {
+			log.Printf("[판매 요약 필터 처리 실패] %v", err)
+			response.RespondError(w, http.StatusInternalServerError, "판매 요약 필터 처리에 실패했습니다")
+			return
+		}
+		if !ok {
+			continue
+		}
+		query = query.In("sale_id", chunk)
+
+		partial, err := h.executeSummary(query)
+		if err != nil {
+			log.Printf("[판매 요약 조회 실패] %v", err)
+			response.RespondError(w, http.StatusInternalServerError, "판매 요약 조회에 실패했습니다")
+			return
+		}
+		summary.Total += partial.Total
+		summary.SaleAmountSum += partial.SaleAmountSum
+		summary.InvoicePendingCount += partial.InvoicePendingCount
+	}
+	response.RespondJSON(w, http.StatusOK, summary)
+}
+
+func (h *SaleHandler) executeSummary(query *postgrest.FilterBuilder) (SaleSummary, error) {
+	data, count, err := query.Range(0, saleMaxLimit-1, "").Execute()
+	if err != nil {
+		return SaleSummary{}, err
 	}
 
 	var rows []struct {
@@ -567,9 +682,7 @@ func (h *SaleHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		TaxInvoiceDate *string  `json:"tax_invoice_date"`
 	}
 	if err := json.Unmarshal(data, &rows); err != nil {
-		log.Printf("[판매 요약 디코딩 실패] %v", err)
-		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
-		return
+		return SaleSummary{}, fmt.Errorf("디코딩: %w", err)
 	}
 	summary := SaleSummary{Total: count}
 	for _, row := range rows {
@@ -580,7 +693,22 @@ func (h *SaleHandler) Summary(w http.ResponseWriter, r *http.Request) {
 			summary.InvoicePendingCount++
 		}
 	}
-	response.RespondJSON(w, http.StatusOK, summary)
+	return summary, nil
+}
+
+func chunkSaleIDs(ids []string, size int) [][]string {
+	if size <= 0 || len(ids) == 0 {
+		return nil
+	}
+	chunks := make([][]string, 0, (len(ids)+size-1)/size)
+	for start := 0; start < len(ids); start += size {
+		end := start + size
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunks = append(chunks, ids[start:end])
+	}
+	return chunks
 }
 
 type saleOrderRow struct {
