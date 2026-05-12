@@ -288,6 +288,7 @@ func (h *ReceiptMatchHandler) Complete(w http.ResponseWriter, r *http.Request) {
 		memo = &defaultMemo
 	}
 	receiptReq := model.CreateReceiptRequest{
+		CompanyID:   target.CompanyID,
 		CustomerID:  target.CustomerID,
 		ReceiptDate: receiptDate,
 		Amount:      outstanding,
@@ -600,6 +601,7 @@ type receiptMatchTargetAmountRow struct {
 
 type receiptCompleteTarget struct {
 	CustomerID    string
+	CompanyID     *string
 	TotalAmount   float64
 	MatchedAmount float64
 	MatchRequest  model.CreateReceiptMatchRequest
@@ -608,9 +610,14 @@ type receiptCompleteTarget struct {
 type receiptMatchSaleRow struct {
 	SaleID      string   `json:"sale_id"`
 	OutboundID  *string  `json:"outbound_id"`
+	OrderID     *string  `json:"order_id"`
 	CustomerID  string   `json:"customer_id"`
 	TotalAmount *float64 `json:"total_amount"`
 	Status      string   `json:"status"`
+}
+
+type receiptMatchCompanyRow struct {
+	CompanyID *string `json:"company_id"`
 }
 
 func (h *ReceiptMatchHandler) validateReceiptMatchBatch(receiptID string, reqs []model.CreateReceiptMatchRequest) (receiptMatchValidationResult, int, string) {
@@ -747,8 +754,17 @@ func (h *ReceiptMatchHandler) completeReceiptTarget(req model.CompleteReceiptMat
 	if customerID == "" {
 		return target, http.StatusNotFound, "매출 거래처를 확인할 수 없습니다"
 	}
+	companyID, err := h.companyIDForReceiptCompletion(rows, extraOutboundIDs)
+	if err != nil {
+		log.Printf("[수금 완료] 회사 식별 실패 err=%v", err)
+		return target, http.StatusInternalServerError, "수금 회사 정보를 확인하는 데 실패했습니다"
+	}
+	if companyID == nil {
+		return target, http.StatusBadRequest, "수금 완료 처리할 매출의 회사 정보를 찾을 수 없습니다"
+	}
 
 	target.CustomerID = customerID
+	target.CompanyID = companyID
 	target.TotalAmount = total
 	target.MatchedAmount = matched
 	return target, 0, ""
@@ -822,7 +838,7 @@ func (h *ReceiptMatchHandler) targetSaleAndMatchedAmount(key string) (float64, f
 
 func (h *ReceiptMatchHandler) salesByField(field, value string) ([]receiptMatchSaleRow, error) {
 	data, _, err := h.DB.From("sales").
-		Select("sale_id, outbound_id, customer_id, total_amount, status", "exact", false).
+		Select("sale_id, outbound_id, order_id, customer_id, total_amount, status", "exact", false).
 		Eq(field, value).
 		Execute()
 	if err != nil {
@@ -862,9 +878,7 @@ func (h *ReceiptMatchHandler) sumMatchesForTargets(outboundIDs map[string]bool, 
 	if len(outboundIDs) == 0 && len(saleIDs) == 0 {
 		return 0, nil
 	}
-	data, _, err := h.DB.From("receipt_matches").
-		Select("outbound_id, sale_id, matched_amount", "exact", false).
-		Execute()
+	data, err := handlerutil.FetchAllFromTable(h.DB, "receipt_matches", "outbound_id, sale_id, matched_amount")
 	if err != nil {
 		return 0, err
 	}
@@ -883,6 +897,78 @@ func (h *ReceiptMatchHandler) sumMatchesForTargets(outboundIDs map[string]bool, 
 		}
 	}
 	return total, nil
+}
+
+func (h *ReceiptMatchHandler) companyIDForReceiptCompletion(rows []receiptMatchSaleRow, extraOutboundIDs []string) (*string, error) {
+	outboundIDs := make([]string, 0, len(extraOutboundIDs)+len(rows))
+	orderIDs := make([]string, 0, len(rows))
+	seenOutbound := map[string]bool{}
+	seenOrder := map[string]bool{}
+	for _, outboundID := range extraOutboundIDs {
+		if outboundID != "" && !seenOutbound[outboundID] {
+			seenOutbound[outboundID] = true
+			outboundIDs = append(outboundIDs, outboundID)
+		}
+	}
+	for _, row := range rows {
+		if row.OutboundID != nil && *row.OutboundID != "" && !seenOutbound[*row.OutboundID] {
+			seenOutbound[*row.OutboundID] = true
+			outboundIDs = append(outboundIDs, *row.OutboundID)
+		}
+		if row.OrderID != nil && *row.OrderID != "" && !seenOrder[*row.OrderID] {
+			seenOrder[*row.OrderID] = true
+			orderIDs = append(orderIDs, *row.OrderID)
+		}
+	}
+
+	companies := map[string]bool{}
+	if len(outboundIDs) > 0 {
+		data, _, err := h.DB.From("outbounds").
+			Select("company_id", "exact", false).
+			In("outbound_id", outboundIDs).
+			Execute()
+		if err != nil {
+			return nil, err
+		}
+		var rows []receiptMatchCompanyRow
+		if err := json.Unmarshal(data, &rows); err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			if row.CompanyID != nil && *row.CompanyID != "" {
+				companies[*row.CompanyID] = true
+			}
+		}
+	}
+	if len(orderIDs) > 0 {
+		data, _, err := h.DB.From("orders").
+			Select("company_id", "exact", false).
+			In("order_id", orderIDs).
+			Execute()
+		if err != nil {
+			return nil, err
+		}
+		var rows []receiptMatchCompanyRow
+		if err := json.Unmarshal(data, &rows); err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			if row.CompanyID != nil && *row.CompanyID != "" {
+				companies[*row.CompanyID] = true
+			}
+		}
+	}
+	if len(companies) == 0 {
+		return nil, nil
+	}
+	if len(companies) > 1 {
+		return nil, fmt.Errorf("수금 완료 대상이 여러 회사에 걸쳐 있습니다")
+	}
+	for companyID := range companies {
+		id := companyID
+		return &id, nil
+	}
+	return nil, nil
 }
 
 // 미매칭 수금 (matched_total < amount) 만 반환. enrichReceipts와 동일 로직 일부 재사용.

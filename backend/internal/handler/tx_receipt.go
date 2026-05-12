@@ -59,6 +59,9 @@ func (h *ReceiptHandler) List(w http.ResponseWriter, r *http.Request) {
 	if custID := r.URL.Query().Get("customer_id"); custID != "" {
 		query = query.Eq("customer_id", custID)
 	}
+	if companyID := r.URL.Query().Get("company_id"); companyID != "" && companyID != "all" {
+		query = query.Eq("company_id", companyID)
+	}
 	// ?start=YYYY-MM-DD&end=YYYY-MM-DD — 날짜 범위 (포함). start 와 end 가 함께 지정되면 month 보다 우선.
 	start := r.URL.Query().Get("start")
 	end := r.URL.Query().Get("end")
@@ -148,7 +151,7 @@ func (h *ReceiptHandler) enrichReceipts(receipts []model.Receipt) {
 	}
 
 	var matches []receiptMatchSumRow
-	if data, _, err := h.DB.From("receipt_matches").Select("receipt_id, matched_amount", "exact", false).Execute(); err == nil {
+	if data, err := handlerutil.FetchAllFromTable(h.DB, "receipt_matches", "receipt_id, matched_amount"); err == nil {
 		if err := json.Unmarshal(data, &matches); err != nil {
 			log.Printf("[수금 enrich] receipt_matches 디코딩 실패 — 매칭 합계 0으로 표시: %v", err)
 		}
