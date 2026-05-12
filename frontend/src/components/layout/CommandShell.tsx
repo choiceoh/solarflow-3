@@ -6,6 +6,7 @@ export { listAllMenusForTenant, listWipMenus } from "@/lib/navigation/manifest"
 import { detectTenantScope } from "@/lib/tenantScope"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import AlertBell from "@/components/layout/AlertBell"
+import QuickRegister from "@/components/layout/QuickRegister"
 import FloatingMwEaCalculator from "@/components/common/FloatingMwEaCalculator"
 import { FloatingAssistantButton } from "@/components/assistant/FloatingAssistantButton"
 import { canAccessMenu, type Role } from "@/config/permissions"
@@ -358,6 +359,7 @@ export default function CommandShell() {
                 엑셀 입력
               </Link>
             )}
+            <QuickRegister userId={user?.user_id} role={r} />
           </div>
         </header>
 
