@@ -16,16 +16,6 @@ interface LCDemandSnapshot {
 
 const EMPTY_SNAPSHOT: LCDemandSnapshot = { pos: [], poTotals: {}, tts: [], lcs: [], timeline: null };
 
-function mergeTimeline(rs: LCLimitTimeline[]): LCLimitTimeline {
-  const projMap = new Map<string, number>();
-  for (const r of rs) for (const p of r.monthly_projection || []) projMap.set(p.month, (projMap.get(p.month) || 0) + p.projected_available);
-  return {
-    bank_summaries: rs.flatMap((r) => r.bank_summaries || []),
-    timeline_events: rs.flatMap((r) => r.timeline_events || []),
-    monthly_projection: Array.from(projMap.entries()).map(([month, projected_available]) => ({ month, projected_available })),
-  };
-}
-
 // LC 수요 예측 — D-061 패턴: 프론트에서 Go API 조합
 export function useLCDemand() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
@@ -56,7 +46,7 @@ export function useLCDemand() {
       let timeline: LCLimitTimeline | null = null;
       try {
         timeline = await fetchCalc<LCLimitTimeline>(
-          selectedCompanyId!, '/api/v1/calc/lc-limit-timeline', { months_ahead: 3 }, mergeTimeline,
+          selectedCompanyId!, '/api/v1/calc/lc-limit-timeline', { months_ahead: 3 },
         );
       } catch { /* timeline 실패 시 null */ }
 
