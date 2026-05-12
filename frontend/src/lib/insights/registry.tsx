@@ -61,6 +61,12 @@ import { InventoryTotalSecuredInsight } from './metrics/InventoryTotalSecuredIns
 import { InventoryPhysicalInsight } from './metrics/InventoryPhysicalInsight'
 import { InventoryIncomingInsight } from './metrics/InventoryIncomingInsight'
 import { InventoryAllocationsInsight } from './metrics/InventoryAllocationsInsight'
+import { InventorySalePendingInsight } from './metrics/InventorySalePendingInsight'
+import { InventoryHoldInsight } from './metrics/InventoryHoldInsight'
+import { InventoryProductCountInsight } from './metrics/InventoryProductCountInsight'
+import { InventoryIncomingShareInsight } from './metrics/InventoryIncomingShareInsight'
+import { InventoryInsufficientInsight } from './metrics/InventoryInsufficientInsight'
+import { InventoryLongTermInsight } from './metrics/InventoryLongTermInsight'
 
 export interface InsightEntry {
   // KPI 타일이 보낼 식별자 (예: 'outbound.count') — URL 에 그대로 들어감.
@@ -355,6 +361,36 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'inventory.allocations',
     shortLabel: '예약 차감',
     render: () => <InventoryAllocationsInsight />,
+  },
+  'inventory.sale_pending': {
+    id: 'inventory.sale_pending',
+    shortLabel: '판매 예약',
+    render: () => <InventorySalePendingInsight />,
+  },
+  'inventory.hold': {
+    id: 'inventory.hold',
+    shortLabel: '보류',
+    render: () => <InventoryHoldInsight />,
+  },
+  'inventory.product_count': {
+    id: 'inventory.product_count',
+    shortLabel: '활성 품목',
+    render: () => <InventoryProductCountInsight />,
+  },
+  'inventory.incoming_share': {
+    id: 'inventory.incoming_share',
+    shortLabel: '미착 비중',
+    render: () => <InventoryIncomingShareInsight />,
+  },
+  'inventory.insufficient': {
+    id: 'inventory.insufficient',
+    shortLabel: '부족 예상',
+    render: () => <InventoryInsufficientInsight />,
+  },
+  'inventory.long_term': {
+    id: 'inventory.long_term',
+    shortLabel: '장기재고',
+    render: () => <InventoryLongTermInsight />,
   },
 }
 

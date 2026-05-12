@@ -790,11 +790,23 @@ export default function PurchaseHistoryPage() {
   }
 
   const fmtCount = (n: number) => String(Math.round(n));
+  const activeMfgCount = new Set(chains.map((c) => c.manufacturer_id).filter(Boolean)).size;
+  const avgChainPoCount = chains.length > 0
+    ? chains.reduce((sum, c) => sum + c.pos.length, 0) / chains.length
+    : 0;
+  const totalPoCount = chains.reduce((sum, c) => sum + c.pos.length, 0);
   const metrics = [
     { lbl: '계약 체인', v: String(chains.length), numericValue: chains.length, formatter: fmtCount, u: '건', sub: `${chainsWithVariants}건은 변경계약 포함`, tone: 'solar' as const, spark: monthlyCount(chains, (c) => c.head.contract_date), metricId: 'purchase.chains' },
     { lbl: '변경계약', v: String(variantCount), numericValue: variantCount, formatter: fmtCount, u: '건', sub: '체인 내 추가 PO', tone: 'warn' as const, spark: monthlyCount(chains.flatMap((c) => c.pos.slice(1)), (p) => p.contract_date), metricId: 'purchase.variants' },
     { lbl: '단가 변동', v: String(phs.length), numericValue: phs.length, formatter: fmtCount, u: '건', sub: '제조사별 USD/Wp', tone: 'info' as const, spark: monthlyCount(phs, (p) => p.change_date), metricId: 'purchase.price_changes' },
     { lbl: '최근 이벤트', v: String(events.length), numericValue: events.length, formatter: fmtCount, u: '건', sub: selectedChain ? '선택 체인 기준' : '전체 회사 최근', tone: 'ink' as const, spark: monthlyCount(events, (e) => e.date), metricId: 'purchase.recent_events' },
+    { lbl: 'L/C 이벤트', v: String(lcs.length), numericValue: lcs.length, formatter: fmtCount, u: '건', sub: '개설·결제 추적', tone: 'info' as const, spark: monthlyCount(lcs, (lc) => lc.open_date), metricId: 'purchase.lc_events' },
+    { lbl: 'B/L 이벤트', v: String(bls.length), numericValue: bls.length, formatter: fmtCount, u: '건', sub: '선적·입항·통관', tone: 'info' as const, spark: monthlyCount(bls, (b) => b.actual_arrival ?? b.eta ?? b.etd ?? null), metricId: 'purchase.bl_events' },
+    { lbl: 'T/T 이벤트', v: String(tts.length), numericValue: tts.length, formatter: fmtCount, u: '건', sub: '계약금·잔금 송금', tone: 'info' as const, spark: monthlyCount(tts, (t) => t.remit_date), metricId: 'purchase.tt_events' },
+    { lbl: '감사 로그', v: String(audits.length), numericValue: audits.length, formatter: fmtCount, u: '건', sub: '최근 1년 / 1000건 한도', tone: audits.length > 100 ? ('warn' as const) : ('ink' as const), metricId: 'purchase.audit_logs' },
+    { lbl: '활성 제조사', v: String(activeMfgCount), numericValue: activeMfgCount, formatter: fmtCount, u: '곳', sub: '체인 보유 공급사', tone: 'ink' as const, metricId: 'purchase.active_mfg' },
+    { lbl: '평균 체인', v: avgChainPoCount.toFixed(2), numericValue: avgChainPoCount, formatter: (n: number) => n.toFixed(2), u: 'PO', sub: '체인당 PO 수', tone: 'ink' as const, metricId: 'purchase.avg_chain_pos' },
+    { lbl: '전체 PO', v: String(totalPoCount), numericValue: totalPoCount, formatter: fmtCount, u: '건', sub: '체인 + 변경계약', tone: 'ink' as const, metricId: 'purchase.total_pos' },
   ];
 
   return (
