@@ -149,7 +149,7 @@ export default function CostCreateDialog({
     (parseSignedInt(incidentalCost) ?? 0)
   const landedWpKrw = capacityWp > 0 ? landedTotalKrw / capacityWp : 0
 
-  function validate(): boolean {
+  function validate(): Record<string, string> {
     const next: Record<string, string> = {}
     if (!productId) next.product = "품번을 선택해주세요"
     if (!Number.isFinite(qty) || qty <= 0) next.quantity = "수량은 0보다 커야 합니다"
@@ -158,11 +158,16 @@ export default function CostCreateDialog({
     if (!cifTotalKrwDisplay || cifTotalKrw === 0) next.cifTotal = "CIF 총원화는 필수"
     if (!specWp) next.product = "품번에 spec_wp 가 없습니다"
     setErrors(next)
-    return Object.keys(next).length === 0
+    return next
   }
 
   async function handleSubmit() {
-    if (!validate()) return
+    const result = validate()
+    if (Object.keys(result).length > 0) {
+      const first = Object.values(result)[0]
+      if (first) notify.error(first)
+      return
+    }
     setSubmitting(true)
     try {
       const fobUsd = Number(fobUnitUsd) || undefined

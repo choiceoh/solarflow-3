@@ -181,7 +181,9 @@ export default function OrderCreateDialog({
     onClose()
   }
 
-  function validate(): boolean {
+  // validate 는 errors 객체를 그대로 반환 — setErrors 가 batch 되어
+  // handleSubmit 에서 state 를 곧장 읽으면 stale 값이 잡힌다. 직접 반환받아 사용.
+  function validate(): Record<string, string> {
     const next: Record<string, string> = {}
     if (!selectedCompanyId || selectedCompanyId === "all") {
       next.company = "좌측 상단에서 법인을 먼저 선택해주세요"
@@ -204,12 +206,13 @@ export default function OrderCreateDialog({
       }
     }
     setErrors(next)
-    return Object.keys(next).length === 0
+    return next
   }
 
   async function handleSubmit() {
-    if (!validate()) {
-      const first = Object.values(errors)[0]
+    const result = validate()
+    if (Object.keys(result).length > 0) {
+      const first = Object.values(result)[0]
       if (first) notify.error(first)
       return
     }

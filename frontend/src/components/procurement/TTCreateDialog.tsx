@@ -164,7 +164,7 @@ export default function TTCreateDialog({
     onClose()
   }
 
-  function validate(): boolean {
+  function validate(): Record<string, string> {
     const next: Record<string, string> = {}
     if (!selectedCompanyId || selectedCompanyId === "all") {
       next.company = "좌측 상단에서 법인을 먼저 선택해주세요"
@@ -181,11 +181,16 @@ export default function TTCreateDialog({
       if (k == null) next.amountKrw = "KRW 금액은 0보다 커야 합니다"
     }
     setErrors(next)
-    return Object.keys(next).length === 0
+    return next
   }
 
   async function handleSubmit() {
-    if (!validate()) return
+    const result = validate()
+    if (Object.keys(result).length > 0) {
+      const first = Object.values(result)[0]
+      if (first) notify.error(first)
+      return
+    }
     const usd = Number(amountUsd)
     const rate = exchangeRate ? Number(exchangeRate) : undefined
     const krw = parseIntKR(amountKrwDisplay) ?? undefined
