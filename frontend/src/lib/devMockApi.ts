@@ -5,6 +5,8 @@ type CompanyScoped = MockRow & { company_id?: string };
 
 const nowIso = '2026-05-01T00:00:00.000Z';
 const deletedPriceBenchmarkIds = new Set<string>();
+const priceBenchmarkReviewStatuses = new Map<string, string>();
+const createdPriceBenchmarks: MockRow[] = [];
 
 const companies = [
   { company_id: 'company-topsolar', company_name: '탑솔라', company_code: 'TOP', business_number: '123-81-45678', is_active: true },
@@ -209,11 +211,36 @@ const sales = [
   { sale_id: 'sale-2604-017-1', outbound_id: 'ob-2604-017-1', order_id: 'ord-2604-017', customer_id: 'ptn-hanbit', customer_name: '한빛에너지', quantity: 2200, capacity_kw: 1276, unit_price_wp: 398, unit_price_ea: 230840, supply_amount: 507848000, vat_amount: 50784800, total_amount: 558632800, status: 'active' },
 ];
 
-const saleListItems = sales.map((sale) => {
-  const outbound = outbounds.find((item) => item.outbound_id === sale.outbound_id);
-  const order = orders.find((item) => item.order_id === sale.order_id);
-  return { ...sale, outbound_date: outbound?.outbound_date, order_date: order?.order_date, order_number: order?.order_number, company_id: outbound?.company_id, product_id: outbound?.product_id, product_name: outbound?.product_name, product_code: outbound?.product_code, spec_wp: outbound?.spec_wp, site_name: outbound?.site_name, sale };
-});
+function saleListRows() {
+  return sales.map((sale) => {
+    const outbound = outbounds.find((item) => item.outbound_id === sale.outbound_id);
+    const order = orders.find((item) => item.order_id === sale.order_id);
+    const collected = receiptMatches.reduce((sum, match) => {
+      if (match.sale_id === sale.sale_id) return sum + Number(match.matched_amount ?? 0);
+      if (!match.sale_id && match.outbound_id === sale.outbound_id) return sum + Number(match.matched_amount ?? 0);
+      return sum;
+    }, 0);
+    const total = Number(sale.total_amount ?? 0);
+    const outstanding = Math.max(0, total - collected);
+    const receiptStatus = total <= 0 ? 'unknown' : outstanding <= 0 ? 'paid' : collected > 0 ? 'partial' : 'unpaid';
+    return {
+      ...sale,
+      outbound_date: outbound?.outbound_date,
+      order_date: order?.order_date,
+      order_number: order?.order_number,
+      company_id: outbound?.company_id,
+      product_id: outbound?.product_id,
+      product_name: outbound?.product_name,
+      product_code: outbound?.product_code,
+      spec_wp: outbound?.spec_wp,
+      site_name: outbound?.site_name,
+      collected_amount: collected,
+      outstanding_amount: outstanding,
+      receipt_status: receiptStatus,
+      sale,
+    };
+  });
+}
 
 const receipts = [
   { receipt_id: 'rcp-2604-018', customer_id: 'ptn-solarnet', customer_name: '솔라넷(주)', receipt_date: '2026-04-30', amount: 106656000, bank_account: '하나 123-456', memo: '목업 수금', matched_total: 106656000, remaining: 0 },
@@ -489,6 +516,23 @@ function filterRows<T extends CompanyScoped>(rows: T[], url: URL, body: MockRow)
   }));
 }
 
+function saleRowsForUrl(url: URL, body: MockRow) {
+  const invoiceStatus = queryValue(url, body, 'invoice_status');
+  const erpClosed = queryValue(url, body, 'erp_closed');
+  const receiptStatus = queryValue(url, body, 'receipt_status');
+  return filterRows(saleListRows(), url, body).filter((row) => {
+    if (invoiceStatus === 'issued' && !row.tax_invoice_date) return false;
+    if (invoiceStatus === 'pending' && row.tax_invoice_date) return false;
+    if (erpClosed === 'true' && row.sale.erp_closed !== true) return false;
+    if (erpClosed === 'false' && row.sale.erp_closed === true) return false;
+    if (receiptStatus === 'open') return row.receipt_status === 'unpaid' || row.receipt_status === 'partial';
+    if (receiptStatus === 'unpaid' || receiptStatus === 'partial' || receiptStatus === 'paid') {
+      return row.receipt_status === receiptStatus;
+    }
+    return true;
+  });
+}
+
 function inventoryResponse() {
   const items = productStocks.map((stock) => {
     const product = products.find((item) => item.product_id === stock.product_id)!;
@@ -651,7 +695,7 @@ function turnoverResponse() {
 function marginAnalysisResponse(body: MockRow = {}) {
   const customerId = typeof body.customer_id === 'string' ? body.customer_id : '';
   const manufacturerId = typeof body.manufacturer_id === 'string' ? body.manufacturer_id : '';
-  const rows = saleListItems.filter((item) => {
+  const rows = saleListRows().filter((item) => {
     if (customerId && item.customer_id !== customerId) return false;
     if (manufacturerId) {
       const product = products.find((p) => p.product_id === item.product_id);
@@ -755,25 +799,73 @@ function orderFulfillmentRiskResponse(body: MockRow) {
     .filter((order) => (order.status === 'received' || order.status === 'partial') && (requested.size === 0 || requested.has(order.order_id)))
     .map((order, index) => {
       const needKw = order.remaining_qty * (order.wattage_kw ?? 0);
-      const risk = index % 5 === 1 ? 'shortage' : index % 7 === 2 ? 'check' : 'available';
+      const isIncoming = order.fulfillment_source === 'incoming';
+      const expectedAvailableDate = isIncoming
+        ? (index % 7 === 2 ? undefined : index % 5 === 1 ? '2026-06-18' : order.delivery_due ?? '2026-06-01')
+        : undefined;
+      const etaLate = Boolean(order.delivery_due && expectedAvailableDate && expectedAvailableDate > order.delivery_due);
+      const etaStatus = !isIncoming
+        ? 'ready'
+        : index % 5 === 1
+          ? 'shortage'
+          : !order.delivery_due
+            ? 'missing_due'
+            : !expectedAvailableDate
+              ? 'unknown_eta'
+              : etaLate
+                ? 'late'
+                : 'on_time';
+      const risk = index % 5 === 1
+        ? 'shortage'
+        : etaStatus === 'late' || etaStatus === 'missing_due' || etaStatus === 'unknown_eta'
+          ? 'check'
+          : 'available';
       const availableBefore = risk === 'shortage' ? Math.max(0, needKw - 120) : needKw + 300;
       const shortage = risk === 'shortage' ? Math.max(0, needKw - availableBefore) : 0;
+      const etaDaysLate = etaLate && order.delivery_due && expectedAvailableDate
+        ? Math.max(1, Math.round((Date.parse(expectedAvailableDate) - Date.parse(order.delivery_due)) / 86400000))
+        : null;
+      const etaReason = etaStatus === 'late'
+        ? `미착품 예상 가용일 ${expectedAvailableDate}이 납기 ${order.delivery_due}보다 ${etaDaysLate}일 늦습니다`
+        : etaStatus === 'unknown_eta'
+          ? '잔량 일부가 ETA 없는 L/C 또는 B/L에서 충당되어 납기 확인이 필요합니다'
+          : etaStatus === 'missing_due'
+            ? '납기일이 없어 미착품 ETA 적기 여부를 확인할 수 없습니다'
+            : etaStatus === 'on_time'
+              ? `미착품 예상 가용일 ${expectedAvailableDate}이 납기 ${order.delivery_due} 이내입니다`
+              : etaStatus === 'shortage'
+                ? '미착품 물량 부족으로 납기 적기 여부보다 충당 부족을 먼저 확인해야 합니다'
+                : '실재고 충당 수주는 ETA 확인 대상이 아닙니다';
       return {
         order_id: order.order_id,
         company_id: order.company_id,
         product_id: order.product_id,
         fulfillment_source: order.fulfillment_source,
         risk,
+        allocation_rank: index + 1,
         remaining_qty: order.remaining_qty,
         need_kw: needKw,
         available_before_kw: availableBefore,
         available_after_kw: Math.max(0, availableBefore - needKw),
         shortage_kw: shortage,
+        delivery_due: order.delivery_due,
+        expected_available_date: expectedAvailableDate ?? null,
+        eta_status: etaStatus,
+        eta_days_late: etaDaysLate,
+        eta_reason: etaReason,
+        breakdown: {
+          inbound_completed_kw: isIncoming ? 0 : availableBefore + 450,
+          outbound_active_kw: isIncoming ? 0 : 120,
+          stock_allocated_kw: isIncoming ? 0 : 30,
+          bl_incoming_kw: isIncoming ? availableBefore + 180 : 0,
+          lc_incoming_kw: isIncoming ? 240 : 0,
+          incoming_allocated_kw: isIncoming ? 120 : 0,
+        },
         reason: risk === 'available'
           ? '선택한 충당 소스로 수주 잔량을 충당할 수 있습니다'
           : risk === 'shortage'
             ? `선택한 충당 소스가 ${shortage.toFixed(1)} kW 부족합니다`
-            : '잔량, 품번, 충당 소스 정보를 확인하세요',
+            : etaReason,
       };
     });
   return {
@@ -784,6 +876,77 @@ function orderFulfillmentRiskResponse(body: MockRow) {
       shortage_count: items.filter((item) => item.risk === 'shortage').length,
       check_count: items.filter((item) => item.risk === 'check').length,
     },
+    calculated_at: nowIso,
+  };
+}
+
+function latestMockPrice(observations: MockRow[], metricKey: string): number | null {
+  const matches = observations
+    .filter((row) => row.metric_key === metricKey && typeof row.price_usd_w === 'number' && Number.isFinite(row.price_usd_w))
+    .sort((a, b) => String(a.value_date ?? '').localeCompare(String(b.value_date ?? '')));
+  const latest = matches[matches.length - 1];
+  return typeof latest?.price_usd_w === 'number' ? latest.price_usd_w : null;
+}
+
+function priceForecastStrategyResponse(body: MockRow): MockRow {
+  const observations = Array.isArray(body.observations) ? body.observations.filter((row): row is MockRow => Boolean(row)) : priceBenchmarks();
+  const cmm = latestMockPrice(observations, 'cmm_fob_china_topcon_600w') ?? 0.093;
+  const tender = latestMockPrice(observations, 'china_state_tender') ?? 0.118;
+  const floor = latestMockPrice(observations, 'cpia_cost_floor') ?? 0.087;
+  const forward = latestMockPrice(observations, 'forward_q1') ?? 0.094;
+  const quote = latestMockPrice(observations, 'supplier_quote') ?? 0.0945;
+  const low = Math.max(floor * 1.005, forward * 0.965);
+  const high = forward * 1.045;
+  return {
+    action_key: 'short_wait',
+    action_label: '짧은 관망',
+    tone: 'neutral',
+    confidence_score: 0.83,
+    one_month_view: '보합',
+    three_month_view: cmm - floor < 0.006 ? '하방 제한' : '보합',
+    six_month_view: '보합',
+    note: '원가 floor와 가까워 추가 하락 여지가 제한적입니다.',
+    basis: ['CMM FOB China', 'Forward curve', '중국 국영 입찰', 'CPIA 원가 floor'],
+    market: {
+      latest_cmm_usd_w: cmm,
+      latest_floor_usd_w: floor,
+      latest_tender_usd_w: tender,
+      latest_quote_usd_w: quote,
+      cmm_trend_pct: -1.08,
+      purchase_vs_cmm_pct: 1.6,
+      quote_vs_cmm_pct: Number((((quote - cmm) / cmm) * 100).toFixed(2)),
+      cmm_vs_floor_pct: Number((((cmm - floor) / cmm) * 100).toFixed(2)),
+    },
+    scenarios: [
+      { key: '1m', label: '1개월', horizon_months: 1, low_usd_w: Number(low.toFixed(4)), base_usd_w: forward, high_usd_w: Number(high.toFixed(4)), drivers: ['CMM/현물 기준', 'Forward 반영', 'CPIA floor 하방 제한'] },
+      { key: '3m', label: '3개월', horizon_months: 3, low_usd_w: Number((low * 0.995).toFixed(4)), base_usd_w: Number(((forward + tender) / 2).toFixed(4)), high_usd_w: Number((high * 1.01).toFixed(4)), drivers: ['Forward 반영', '중국 입찰가 보정'] },
+      { key: '6m', label: '6개월', horizon_months: 6, low_usd_w: Number((low * 0.99).toFixed(4)), base_usd_w: Number(((forward + cmm) / 2).toFixed(4)), high_usd_w: Number((high * 1.02).toFixed(4)), drivers: ['Forward 반영', '현물 보조지표'] },
+    ],
+    backtest: {
+      sample_count: 5,
+      direction_hit_rate: 0.8,
+      mean_abs_error_pct: 1.3,
+      mean_bias_pct: -0.4,
+      note: '최근 1개월 방향성 검증이 양호합니다',
+      source_adjustments: [
+        { source_key: 'opis', source_name: 'OPIS Solar Weekly', sample_count: 18, direction_hit_rate: 0.8, mean_abs_error_pct: 1.3, score_delta: 3 },
+        { source_key: 'our_quote', source_name: '우리 견적', sample_count: 1, direction_hit_rate: 0.8, mean_abs_error_pct: 1.3, score_delta: 0 },
+      ],
+    },
+    outliers: [],
+    source_quality: [...SOURCE_KEYS, 'our_quote'].map((key, index) => ({
+      source_key: key,
+      source_name: key === 'china_tender' ? '중국 국영 대량 입찰' : key === 'cpia_floor' ? 'CPIA' : key === 'our_quote' ? '우리 견적' : key.toUpperCase(),
+      score: Math.max(58, 91 - index * 5),
+      status: index < 3 ? 'ok' : 'watch',
+      latest_date: '2026-04-15',
+      observation_count: key === 'opis' ? 18 : 3,
+      avg_confidence: key === 'opis' ? 0.82 : 0.72,
+      warning_count: 0,
+      outlier_count: 0,
+      backtest_score_delta: key === 'opis' ? 3 : 0,
+      note: index < 3 ? '정상' : '표본 추가 필요',
+    })),
     calculated_at: nowIso,
   };
 }
@@ -802,6 +965,8 @@ function calcRoute<T>(url: URL, body: MockRow): T {
       return clone({ alerts: lcs.map((lc) => ({ lc_id: lc.lc_id, lc_number: lc.lc_number, po_number: lc.po_number, bank_name: lc.bank_name, amount_usd: lc.amount_usd, maturity_date: lc.maturity_date, days_remaining: lc.lc_id === 'lc-260405' ? 3 : 41, status: lc.status })) } as T);
     case '/api/v1/calc/price-trend':
       return clone(priceTrendResponse() as T);
+    case '/api/v1/calc/price-forecast-strategy':
+      return clone(priceForecastStrategyResponse(body) as T);
     case '/api/v1/calc/supply-forecast':
       return clone(supplyForecastResponse() as T);
     case '/api/v1/calc/inventory-turnover':
@@ -883,15 +1048,85 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     } as T);
   }
 
+  if (url.pathname === '/api/v1/price-benchmarks' && method === 'POST') {
+    const row = {
+      ...body,
+      benchmark_id: `pb-quote-${Date.now()}`,
+      run_id: null,
+      review_status: 'candidate',
+      created_by: 'dev-mock-user',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    createdPriceBenchmarks.unshift(row);
+    return clone(row as T);
+  }
+
+  if (url.pathname === '/api/v1/receipt-matches/complete' && method === 'POST') {
+    const sale = sales.find((item) =>
+      (body.sale_id && item.sale_id === body.sale_id) ||
+      (body.outbound_id && item.outbound_id === body.outbound_id)
+    );
+    if (!sale) throw new Error('목업 매출을 찾을 수 없습니다');
+    const item = saleListRows().find((row) => row.sale_id === sale.sale_id);
+    const outstanding = Math.max(0, Number(item?.outstanding_amount ?? sale.total_amount ?? 0));
+    if (outstanding <= 0) throw new Error('이미 수금 완료된 매출입니다');
+    const receipt = {
+      receipt_id: `mock-receipt-${Date.now()}`,
+      customer_id: sale.customer_id,
+      customer_name: sale.customer_name,
+      receipt_date: String(body.receipt_date ?? new Date().toISOString().slice(0, 10)),
+      amount: outstanding,
+      bank_account: typeof body.bank_account === 'string' ? body.bank_account : undefined,
+      memo: typeof body.memo === 'string' ? body.memo : '출고/판매 화면 수금완료',
+      matched_total: outstanding,
+      remaining: 0,
+    };
+    const match = {
+      match_id: `mock-match-${Date.now()}`,
+      receipt_id: receipt.receipt_id,
+      outbound_id: sale.outbound_id,
+      sale_id: sale.sale_id,
+      matched_amount: outstanding,
+      outbound_date: item?.outbound_date,
+      site_name: item?.site_name,
+      product_name: item?.product_name,
+    };
+    receipts.push(receipt as (typeof receipts)[number]);
+    receiptMatches.push(match as (typeof receiptMatches)[number]);
+    return clone({
+      receipt,
+      match,
+      matched_amount: outstanding,
+      outstanding_before: outstanding,
+    } as T);
+  }
+
+  if (url.pathname.startsWith('/api/v1/price-benchmarks/') && url.pathname.endsWith('/review-status') && method === 'PATCH') {
+    const id = endpointId(url.pathname, 'price-benchmarks');
+    const status = typeof body.review_status === 'string' ? body.review_status : '';
+    if (!id || !['candidate', 'accepted', 'rejected'].includes(status)) {
+      throw new Error('목업 가격 벤치마크 검토 상태를 변경할 수 없습니다');
+    }
+    priceBenchmarkReviewStatuses.set(id, status);
+    return clone({ status: 'ok' } as T);
+  }
+
   if (url.pathname === '/api/v1/receipt-matches/bulk' && method === 'POST') {
     const rows = Array.isArray(body.matches) ? body.matches : [];
-    return clone(rows.map((row, index) => ({
+    const matches = rows.map((row, index) => ({
       match_id: `mock-match-${Date.now()}-${index}`,
       receipt_id: body.receipt_id,
       outbound_id: row.outbound_id,
       sale_id: row.sale_id,
       matched_amount: row.matched_amount,
-    })) as T);
+    }));
+    return clone({
+      matches,
+      balance_amount: 0,
+      balance_disposition: body.balance_disposition,
+      balance_note: body.balance_note,
+    } as T);
   }
 
   if (url.pathname === '/api/v1/receipt-matches/ai-suggest' && method === 'POST') {
@@ -907,6 +1142,7 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
         product_name: 'JAS-DH580 PERC bifacial',
         outstanding_amount: 558632800,
         match_amount: 558632800,
+        is_partial: false,
         confidence: 0.86,
         reason: '같은 거래처의 장기 미수금이며 단독 후보로 남아 있습니다.',
       }],
@@ -993,6 +1229,9 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
   if (url.pathname.startsWith('/api/v1/inventory/allocations/')) {
     return collectionRoute<T>(url, body, allocations, 'alloc_id', 'inventory/allocations');
   }
+  if (url.pathname === '/api/v1/sales') {
+    return clone(saleRowsForUrl(url, body) as T);
+  }
 
   const routes: Record<string, { rows: MockRow[]; idKey: string; collection: string }> = {
     '/api/v1/companies': { rows: companies, idKey: 'company_id', collection: 'companies' },
@@ -1011,7 +1250,6 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
     '/api/v1/inventory/allocations': { rows: allocations, idKey: 'alloc_id', collection: 'inventory/allocations' },
     '/api/v1/orders': { rows: orders, idKey: 'order_id', collection: 'orders' },
     '/api/v1/outbounds': { rows: outbounds.map((outbound) => ({ ...outbound, sale: sales.find((sale) => sale.outbound_id === outbound.outbound_id) })), idKey: 'outbound_id', collection: 'outbounds' },
-    '/api/v1/sales': { rows: saleListItems, idKey: 'sale_id', collection: 'sales' },
     '/api/v1/receipts': { rows: receipts, idKey: 'receipt_id', collection: 'receipts' },
     '/api/v1/receipt-matches': { rows: receiptMatches, idKey: 'match_id', collection: 'receipt-matches' },
     '/api/v1/declarations': { rows: declarations, idKey: 'declaration_id', collection: 'declarations' },
@@ -1066,14 +1304,14 @@ function priceHistories(): MockRow[] {
 
 function priceBenchmarks(): MockRow[] {
   const base = [
-    ['2025-11-15', 0.104, 0.132, 0.129],
-    ['2025-12-15', 0.101, 0.130, 0.126],
-    ['2026-01-15', 0.098, 0.128, 0.123],
-    ['2026-02-15', 0.096, 0.126, 0.121],
-    ['2026-03-15', 0.094, 0.124, 0.119],
-    ['2026-04-15', 0.093, 0.123, 0.118],
+    ['2025-11-15', 0.104, 0.132, 0.129, 0.105, 0.106, 0.092],
+    ['2025-12-15', 0.101, 0.130, 0.126, 0.102, 0.103, 0.091],
+    ['2026-01-15', 0.098, 0.128, 0.123, 0.099, 0.100, 0.090],
+    ['2026-02-15', 0.096, 0.126, 0.121, 0.097, 0.098, 0.089],
+    ['2026-03-15', 0.094, 0.124, 0.119, 0.095, 0.096, 0.088],
+    ['2026-04-15', 0.093, 0.123, 0.118, 0.094, 0.095, 0.087],
   ] as const;
-  return base.flatMap(([date, cmm, ddpEu, tender], index) => [
+  const marketRows = base.flatMap(([date, cmm, ddpEu, tender, forwardQ1, forwardQ2, floor], index) => [
     {
       benchmark_id: `pb-opis-cmm-${index}`,
       run_id: 'pbr-mock-1',
@@ -1091,8 +1329,49 @@ function priceBenchmarks(): MockRow[] {
       cargo_max_mw: 25,
       technology: 'TOPCon >=600W',
       confidence: 0.82,
+      review_status: index >= 4 ? 'accepted' : 'candidate',
       source_url: 'https://www.opisnet.com/product/solar-weekly/',
       raw_excerpt: 'Dev mock CMM observation',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+    {
+      benchmark_id: `pb-opis-forward-q1-${index}`,
+      run_id: 'pbr-mock-1',
+      source_key: 'opis',
+      source_name: 'OPIS Solar Weekly',
+      metric_key: 'forward_q1',
+      metric_label: 'Forward Q+1',
+      value_date: date,
+      period_label: 'quarterly',
+      quarter_label: 'Q+1',
+      market_region: 'fob_china',
+      basis: 'forward',
+      currency: 'USD',
+      price_usd_w: forwardQ1,
+      confidence: 0.78,
+      source_url: 'https://www.opisnet.com/product/solar-weekly/',
+      raw_excerpt: 'Dev mock forward Q+1',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+    {
+      benchmark_id: `pb-opis-forward-q2-${index}`,
+      run_id: 'pbr-mock-1',
+      source_key: 'opis',
+      source_name: 'OPIS Solar Weekly',
+      metric_key: 'forward_q2',
+      metric_label: 'Forward Q+2',
+      value_date: date,
+      period_label: 'quarterly',
+      quarter_label: 'Q+2',
+      market_region: 'fob_china',
+      basis: 'forward',
+      currency: 'USD',
+      price_usd_w: forwardQ2,
+      confidence: 0.76,
+      source_url: 'https://www.opisnet.com/product/solar-weekly/',
+      raw_excerpt: 'Dev mock forward Q+2',
       created_at: nowIso,
       updated_at: nowIso,
     },
@@ -1112,8 +1391,28 @@ function priceBenchmarks(): MockRow[] {
       cargo_min_mw: 5,
       cargo_max_mw: 25,
       confidence: 0.78,
+      review_status: 'candidate',
       source_url: 'https://www.opisnet.com/product/solar-weekly/',
       raw_excerpt: 'Dev mock DDP Europe observation',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+    {
+      benchmark_id: `pb-cpia-floor-${index}`,
+      run_id: 'pbr-mock-1',
+      source_key: 'cpia_floor',
+      source_name: 'CPIA',
+      metric_key: 'cpia_cost_floor',
+      metric_label: 'CPIA industry cost floor',
+      value_date: date,
+      period_label: 'monthly',
+      market_region: 'china_domestic',
+      basis: 'floor',
+      currency: 'USD',
+      price_usd_w: floor,
+      confidence: 0.70,
+      source_url: 'https://www.chinapv.org.cn/',
+      raw_excerpt: 'Dev mock CPIA cost floor',
       created_at: nowIso,
       updated_at: nowIso,
     },
@@ -1132,12 +1431,42 @@ function priceBenchmarks(): MockRow[] {
       price_usd_w: tender,
       project_segment: 'centralized',
       confidence: 0.72,
+      review_status: index === 0 ? 'rejected' : 'candidate',
       source_url: 'https://guangfu.bjx.com.cn/',
       raw_excerpt: 'Dev mock centralized procurement result',
       created_at: nowIso,
       updated_at: nowIso,
     },
-  ]).filter((row) => !deletedPriceBenchmarkIds.has(String(row.benchmark_id)));
+  ]);
+  const quoteRows = [
+    {
+      benchmark_id: 'pb-our-quote-0',
+      run_id: null,
+      source_key: 'our_quote',
+      source_name: '진코솔라 견적',
+      metric_key: 'supplier_quote',
+      metric_label: '공급사 미체결 견적',
+      value_date: '2026-04-26',
+      period_label: 'quote',
+      market_region: 'fob_china',
+      basis: 'quote',
+      currency: 'USD',
+      price_usd_w: 0.0945,
+      technology: 'TOPCon >=600W',
+      confidence: 0.86,
+      review_status: 'candidate',
+      raw_excerpt: 'Dev mock supplier quote',
+      notes: '계약 미진행 견적',
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+  ];
+  return [...createdPriceBenchmarks, ...quoteRows, ...marketRows]
+    .map((row: MockRow) => ({
+      ...row,
+      review_status: priceBenchmarkReviewStatuses.get(String(row.benchmark_id)) ?? row.review_status ?? 'candidate',
+    }))
+    .filter((row: MockRow) => !deletedPriceBenchmarkIds.has(String(row.benchmark_id)));
 }
 
 function priceBenchmarkRuns(): MockRow[] {

@@ -11,6 +11,11 @@ import type {
 import {
   FIELDS_MAP, DECLARATION_FIELDS, DECLARATION_COST_FIELDS, TEMPLATE_LABEL,
 } from '@/types/excel';
+import {
+  EXCEL_TEMPLATE_META_SHEET,
+  assertExcelTemplateMeta,
+  type ExcelTemplateMeta,
+} from '@/lib/excelTemplateMeta';
 
 // 통합 업로드 — 마스터 → 거래 의존 순서. 같은 파일에 마스터/거래 시트가 섞여 있어도
 // 마스터가 먼저 등록돼야 거래의 FK 검증/매핑이 풀린다. 마스터끼리도 의존 순서:
@@ -18,7 +23,7 @@ import {
 const UNIFIED_SECTION_ORDER: TemplateType[] = [
   'company', 'manufacturer', 'product', 'warehouse', 'bank', 'partner',
   'order', 'outbound', 'sale', 'receipt',
-  'purchase_order', 'lc',
+  'purchase_order', 'lc', 'tt',
   'inbound', 'declaration', 'expense',
 ];
 
@@ -59,6 +64,32 @@ function cellToString(cell: unknown): string {
 interface SheetCell { value: unknown }
 interface SheetRow { getCell(col: number): SheetCell }
 interface SheetLike { rowCount: number; getRow(r: number): SheetRow }
+interface WorkbookLike {
+  getWorksheet(name: string): SheetLike | undefined;
+}
+
+function readTemplateMeta(workbook: WorkbookLike): ExcelTemplateMeta | null {
+  const sheet = workbook.getWorksheet(EXCEL_TEMPLATE_META_SHEET);
+  if (!sheet) return null;
+  const values = new Map<string, string>();
+  for (let r = 1; r <= Math.min(sheet.rowCount, 20); r++) {
+    const key = cellToString(sheet.getRow(r).getCell(1).value).trim();
+    const value = cellToString(sheet.getRow(r).getCell(2).value).trim();
+    if (key) values.set(key, value);
+  }
+  const version = values.get('template_version') ?? '';
+  const kind = values.get('template_kind') ?? '';
+  const types = (values.get('template_types') ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean) as TemplateType[];
+  return {
+    version,
+    kind: kind as ExcelTemplateMeta['kind'],
+    types,
+    generatedAt: values.get('generated_at'),
+  };
+}
 
 // 헤더 행에서 "라벨 → 컬럼인덱스" 맵 생성.
 // 라벨 끝의 `*` (필수 표시)와 양 끝 공백을 제거해 정규화한다.
@@ -143,6 +174,7 @@ export async function parseExcelFile(
   const ExcelJS = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(await file.arrayBuffer());
+  assertExcelTemplateMeta(readTemplateMeta(workbook), ['single'], [type]);
 
   // 면장: 2시트 파싱 (지적 2 반영)
   if (type === 'declaration') {
@@ -188,6 +220,10 @@ export async function parseUnifiedExcelFile(file: File): Promise<UnifiedImportPr
   const ExcelJS = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(await file.arrayBuffer());
+  assertExcelTemplateMeta(
+    readTemplateMeta(workbook),
+    ['unified_transaction', 'unified_master', 'rehearsal_sample'],
+  );
 
   const sections: UnifiedSection[] = UNIFIED_SECTION_ORDER.map((type) => {
     const label = TEMPLATE_LABEL[type];

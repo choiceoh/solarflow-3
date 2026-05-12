@@ -174,6 +174,25 @@ function buildColumns({
       sortAccessor: (o) => o.unit_price_wp ?? 0,
     },
     {
+      key: "expected_amount",
+      label: "예상금액",
+      hideable: true,
+      align: "right",
+      className: "tabular-nums font-mono",
+      cell: (o) => {
+        const ea =
+          o.unit_price_ea ??
+          (o.unit_price_wp != null && o.spec_wp ? o.unit_price_wp * o.spec_wp : null)
+        return ea != null ? formatNumber(ea * o.quantity) : "—"
+      },
+      sortAccessor: (o) => {
+        const ea =
+          o.unit_price_ea ??
+          (o.unit_price_wp != null && o.spec_wp ? o.unit_price_wp * o.spec_wp : 0)
+        return ea * o.quantity
+      },
+    },
+    {
       key: "delivery_due",
       label: "납기",
       hideable: true,

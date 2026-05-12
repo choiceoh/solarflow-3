@@ -268,6 +268,7 @@ func TestGuardMatrix(t *testing.T) {
 		{"POST", "/api/v1/import/inbound", g(guardSet{write: true})},
 		{"POST", "/api/v1/ocr/extract", g(guardSet{write: true})},
 		{"POST", "/api/v1/receipt-matches/auto", g(guardSet{write: true})},
+		{"POST", "/api/v1/receipt-matches/complete", g(guardSet{write: true})},
 	}
 
 	for _, c := range matrix {

@@ -20,15 +20,21 @@ import {
   EditableDetailField,
 } from "@/components/common/detail"
 import FulfillmentSourceBadge from "./FulfillmentSourceBadge"
+import OrderFulfillmentRiskBadge from "./OrderFulfillmentRiskBadge"
 import LinkedMemoWidget from "@/components/memo/LinkedMemoWidget"
-import { useOrderDetail, useOrderOutbounds } from "@/hooks/useOrders"
+import { useOrderDetail, useOrderFulfillmentRisk, useOrderOutbounds } from "@/hooks/useOrders"
 import { fetchWithAuth } from "@/lib/api"
 import { notify } from "@/lib/notify"
 import {
+  FULFILLMENT_SOURCE_LABEL,
+  ORDER_FULFILLMENT_ETA_STATUS_COLOR,
+  ORDER_FULFILLMENT_ETA_STATUS_LABEL,
   ORDER_STATUS_LABEL,
   ORDER_STATUS_COLOR,
   RECEIPT_METHOD_LABEL,
   MANAGEMENT_CATEGORY_LABEL,
+  type OrderFulfillmentEtaStatus,
+  type OrderFulfillmentRiskItem,
 } from "@/types/orders"
 import {
   OUTBOUND_STATUS_LABEL,
@@ -58,9 +64,126 @@ function formatMaybeKw(value: unknown): string | undefined {
   return n === undefined ? undefined : formatKw(n)
 }
 
+function formatMaybeDate(value: unknown): string | undefined {
+  return typeof value === "string" && value ? formatDate(value) : undefined
+}
+
+function isKnownEtaStatus(value: string | undefined): value is OrderFulfillmentEtaStatus {
+  return Boolean(value && value in ORDER_FULFILLMENT_ETA_STATUS_LABEL)
+}
+
+function etaStatusBadge(status: string | undefined) {
+  if (!status) return null
+  const known = isKnownEtaStatus(status)
+  return (
+    <StatusPill
+      label={known ? ORDER_FULFILLMENT_ETA_STATUS_LABEL[status] : status}
+      colorClassName={known ? ORDER_FULFILLMENT_ETA_STATUS_COLOR[status] : "sf-tone-muted"}
+    />
+  )
+}
+
+function FulfillmentEvidencePanel({
+  risk,
+  loading,
+  orderDeliveryDue,
+}: {
+  risk?: OrderFulfillmentRiskItem
+  loading: boolean
+  orderDeliveryDue?: string
+}) {
+  if (loading) {
+    return (
+      <DetailSection title="충당 근거">
+        <LoadingSpinner />
+      </DetailSection>
+    )
+  }
+
+  if (!risk) {
+    return (
+      <DetailSection title="충당 근거">
+        <div className="py-5 text-center text-sm text-muted-foreground">
+          진행 중 수주 잔량이 없습니다
+        </div>
+      </DetailSection>
+    )
+  }
+
+  const source = risk.fulfillment_source
+  const sourceLabel =
+    source === "stock" || source === "incoming" ? FULFILLMENT_SOURCE_LABEL[source] : source || "—"
+  const breakdown = risk.breakdown
+  const isIncoming = source === "incoming"
+  const deliveryDue = risk.delivery_due ?? orderDeliveryDue
+
+  return (
+    <DetailSection title="충당 근거" badges={<OrderFulfillmentRiskBadge risk={risk} />}>
+      <DetailFieldGrid cols={4}>
+        <DetailField label="충당소스" value={sourceLabel} />
+        <DetailField
+          label="배정 순번"
+          value={risk.allocation_rank ? `${formatNumber(risk.allocation_rank)}번째` : undefined}
+        />
+        <DetailField label="잔량" value={`${formatNumber(risk.remaining_qty)}장`} />
+        <DetailField label="필요 용량" value={formatKw(risk.need_kw)} />
+        <DetailField label="배정 전 가용" value={formatKw(risk.available_before_kw)} />
+        <DetailField label="배정 후 가용" value={formatKw(risk.available_after_kw)} />
+        <DetailField
+          label="부족"
+          value={risk.shortage_kw > 0 ? formatKw(risk.shortage_kw) : "없음"}
+          className={risk.shortage_kw > 0 ? "text-destructive" : undefined}
+        />
+        <DetailField label="ETA 상태">{etaStatusBadge(risk.eta_status) ?? "—"}</DetailField>
+        <DetailField label="납기일" value={formatMaybeDate(deliveryDue)} />
+        <DetailField label="예상 가용일" value={formatMaybeDate(risk.expected_available_date)} />
+        <DetailField
+          label="지연"
+          value={risk.eta_days_late ? `${formatNumber(risk.eta_days_late)}일` : "없음"}
+        />
+        <DetailField label="판정" value={risk.reason} />
+      </DetailFieldGrid>
+
+      <div className="border-t pt-3">
+        <p className="mb-3 text-xs font-medium text-muted-foreground">{sourceLabel} 풀 구성</p>
+        <DetailFieldGrid cols={3}>
+          {isIncoming ? (
+            <>
+              <DetailField label="B/L 미착" value={formatMaybeKw(breakdown?.bl_incoming_kw)} />
+              <DetailField label="L/C 잔여" value={formatMaybeKw(breakdown?.lc_incoming_kw)} />
+              <DetailField
+                label="기존 예약"
+                value={formatMaybeKw(breakdown?.incoming_allocated_kw)}
+              />
+            </>
+          ) : (
+            <>
+              <DetailField
+                label="입고완료"
+                value={formatMaybeKw(breakdown?.inbound_completed_kw)}
+              />
+              <DetailField label="활성 출고" value={formatMaybeKw(breakdown?.outbound_active_kw)} />
+              <DetailField label="기존 예약" value={formatMaybeKw(breakdown?.stock_allocated_kw)} />
+            </>
+          )}
+        </DetailFieldGrid>
+      </div>
+
+      {risk.eta_reason ? (
+        <p className="border-t pt-3 text-xs text-muted-foreground">{risk.eta_reason}</p>
+      ) : null}
+    </DetailSection>
+  )
+}
+
 export default function OrderDetailView({ orderId, onBack }: Props) {
   const { data: order, loading, reload } = useOrderDetail(orderId)
   const { data: outbounds, loading: obLoading } = useOrderOutbounds(orderId)
+  const {
+    items: fulfillmentRiskItems,
+    loading: fulfillmentRiskLoading,
+    reload: reloadFulfillmentRisk,
+  } = useOrderFulfillmentRisk(orderId ? [orderId] : [])
   const [sales, setSales] = useState<Sale[]>([])
 
   const loadSales = useCallback(async () => {
@@ -90,6 +213,7 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
   }
 
   const orderKey = order.order_id || orderId
+  const fulfillmentRisk = fulfillmentRiskItems.find((item) => item.order_id === orderKey)
   const shortOrderId = orderKey.slice(0, 8)
   const outboundRows = Array.isArray(outbounds) ? outbounds : []
   const salesRows = Array.isArray(sales) ? sales : []
@@ -97,6 +221,10 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
   const shippedQty = safeNumber(order.shipped_qty) ?? 0
   const totalShipped = outboundRows.reduce((sum, ob) => sum + (safeNumber(ob.quantity) ?? 0), 0)
   const remaining = Math.max(orderQty - Math.max(shippedQty, totalShipped), 0)
+  const unitPriceEa =
+    order.unit_price_ea ??
+    (order.unit_price_wp != null && order.spec_wp ? order.unit_price_wp * order.spec_wp : null)
+  const expectedAmount = unitPriceEa != null ? unitPriceEa * order.quantity : null
   const moduleText =
     order.manufacturer_name || order.spec_wp
       ? moduleLabel(order.manufacturer_name, order.spec_wp)
@@ -120,7 +248,8 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
       body: JSON.stringify({ [key]: value }),
     })
     notify.success("수정되었습니다")
-    reload()
+    await reload()
+    await reloadFulfillmentRisk()
   }
 
   const receiptOptions = (Object.entries(RECEIPT_METHOD_LABEL) as [string, string][]).map(
@@ -257,8 +386,22 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
             disabled={isCancelled}
             onSave={saveOrderField}
           />
+          <DetailField
+            label="예상금액"
+            value={
+              expectedAmount != null
+                ? formatMaybeNumber(expectedAmount, "원 (VAT 별도)")
+                : undefined
+            }
+          />
         </DetailFieldGrid>
       </DetailSection>
+
+      <FulfillmentEvidencePanel
+        risk={fulfillmentRisk}
+        loading={fulfillmentRiskLoading}
+        orderDeliveryDue={order.delivery_due}
+      />
 
       <DetailSection title="현장">
         <DetailFieldGrid cols={4}>

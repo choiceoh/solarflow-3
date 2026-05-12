@@ -128,7 +128,7 @@ export default function PersonalSettingsPage() {
   }
 
   function handlePrefsReset() {
-    setDraftPrefs(DEFAULT_PREFERENCES);
+    setDraftPrefs((prev) => ({ ...DEFAULT_PREFERENCES, kpi_hidden: prev.kpi_hidden }));
     setPrefsError('');
     setPrefsSuccess('');
   }

@@ -18,6 +18,10 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useOutstandingList, useMatchSuggest, useMatchHistory, useAIMatchSuggest } from '@/hooks/useMatching';
 import { useReceiptList } from '@/hooks/useReceipts';
 import { notify } from '@/lib/notify';
+import {
+  RECEIPT_BALANCE_DISPOSITION_LABEL,
+  type ReceiptBalanceDisposition,
+} from '@/types/orders';
 
 // 비유: 수금 매칭은 퍼즐. 입금액(큰 조각)을 미수금(작은 조각들)에 맞추는 작업.
 export default function ReceiptMatchingPanel() {
@@ -39,6 +43,9 @@ export default function ReceiptMatchingPanel() {
   // Step 2: 미수금 목록
   const { data: outstandingItems, loading: outstandingLoading, load: loadOutstanding } = useOutstandingList();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [matchAmounts, setMatchAmounts] = useState<Record<string, number>>({});
+  const [balanceDisposition, setBalanceDisposition] = useState<ReceiptBalanceDisposition>('advance');
+  const [balanceNote, setBalanceNote] = useState('');
 
   // 자동 추천
   const { suggestion, loading: suggestLoading, suggest, clear: clearSuggestion } = useMatchSuggest();
@@ -64,6 +71,9 @@ export default function ReceiptMatchingPanel() {
     if (receipts.some((r) => r.receipt_id === receiptId)) {
       setSelectedReceiptId(receiptId);
       setSelectedIds(new Set());
+      setMatchAmounts({});
+      setBalanceDisposition('advance');
+      setBalanceNote('');
       clearSuggestion();
       clearAISuggestion();
       setSuccessMsg(null);
@@ -82,30 +92,69 @@ export default function ReceiptMatchingPanel() {
   const handleReceiptChange = (v: string | null) => {
     setSelectedReceiptId(v || null);
     setSelectedIds(new Set());
+    setMatchAmounts({});
+    setBalanceDisposition('advance');
+    setBalanceNote('');
     clearSuggestion();
     clearAISuggestion();
     setSuccessMsg(null);
   };
 
-  // 선택 합계 계산
-  const selectedTotal = useMemo(() => {
-    return outstandingItems
-      .filter((item) => selectedIds.has(item.outbound_id))
-      .reduce((sum, item) => sum + item.outstanding_amount, 0);
-  }, [outstandingItems, selectedIds]);
-
   const receiptAmount = selectedReceipt?.amount ?? 0;
   const receiptMatchedTotal = selectedReceipt?.matched_total ?? 0;
   const receiptAvailableAmount = Math.max(0, receiptAmount - receiptMatchedTotal);
+  const selectedItems = useMemo(
+    () => outstandingItems.filter((item) => selectedIds.has(item.outbound_id)),
+    [outstandingItems, selectedIds]
+  );
+
+  const selectedTotal = useMemo(() => {
+    return selectedItems.reduce((sum, item) => sum + (matchAmounts[item.outbound_id] ?? 0), 0);
+  }, [matchAmounts, selectedItems]);
+
   const diff = receiptAvailableAmount - selectedTotal;
+  const amountIssue = useMemo(() => {
+    const invalid = selectedItems.find((item) => {
+      const amount = matchAmounts[item.outbound_id] ?? 0;
+      return amount <= 0 || amount > item.outstanding_amount;
+    });
+    if (!invalid) return null;
+    const amount = matchAmounts[invalid.outbound_id] ?? 0;
+    if (amount <= 0) return '매칭금액을 입력해주세요';
+    return '매칭금액은 미수금보다 클 수 없습니다';
+  }, [matchAmounts, selectedItems]);
+  const canConfirm = selectedIds.size > 0 && !amountIssue && diff >= 0;
 
   const handleToggle = (outboundId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(outboundId)) next.delete(outboundId);
-      else next.add(outboundId);
-      return next;
-    });
+    const item = outstandingItems.find((row) => row.outbound_id === outboundId);
+    if (!item) return;
+    const wasSelected = selectedIds.has(outboundId);
+    if (wasSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(outboundId);
+        return next;
+      });
+      setMatchAmounts((prev) => {
+        const next = { ...prev };
+        delete next[outboundId];
+        return next;
+      });
+      return;
+    }
+
+    const remainingForNewRow = receiptAvailableAmount - selectedTotal;
+    const defaultAmount = Math.min(
+      item.outstanding_amount,
+      remainingForNewRow > 0 ? remainingForNewRow : item.outstanding_amount
+    );
+    setSelectedIds((prev) => new Set(prev).add(outboundId));
+    setMatchAmounts((prev) => ({ ...prev, [outboundId]: defaultAmount }));
+  };
+
+  const handleAmountChange = (outboundId: string, amount: number) => {
+    const nextAmount = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+    setMatchAmounts((prev) => ({ ...prev, [outboundId]: nextAmount }));
   };
 
   // 자동 추천 버튼
@@ -123,19 +172,39 @@ export default function ReceiptMatchingPanel() {
   // (훅 시그니처를 바꾸지 않는 한 effect 동기화가 가장 안전)
   useEffect(() => {
     if (suggestion?.suggestions) {
-      const ids = new Set(suggestion.suggestions.map((s) => s.outbound_id));
+      const ids = new Set<string>();
+      const amounts: Record<string, number> = {};
+      for (const item of suggestion.suggestions) {
+        const outstanding = outstandingItems.find((row) => row.outbound_id === item.outbound_id);
+        if (!outstanding) continue;
+        ids.add(item.outbound_id);
+        amounts[item.outbound_id] = Math.min(item.amount, outstanding.outstanding_amount);
+      }
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIds(ids);
+      setMatchAmounts(amounts);
+      setBalanceDisposition('advance');
+      setBalanceNote('');
     }
-  }, [suggestion]);
+  }, [outstandingItems, suggestion]);
 
   useEffect(() => {
     if (aiSuggestion?.candidates) {
-      const ids = new Set(aiSuggestion.candidates.map((s) => s.outbound_id));
+      const ids = new Set<string>();
+      const amounts: Record<string, number> = {};
+      for (const item of aiSuggestion.candidates) {
+        const outstanding = outstandingItems.find((row) => row.outbound_id === item.outbound_id);
+        if (!outstanding) continue;
+        ids.add(item.outbound_id);
+        amounts[item.outbound_id] = Math.min(item.match_amount, outstanding.outstanding_amount);
+      }
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIds(ids);
+      setMatchAmounts(amounts);
+      setBalanceDisposition('advance');
+      setBalanceNote('');
     }
-  }, [aiSuggestion]);
+  }, [aiSuggestion, outstandingItems]);
 
   useEffect(() => {
     if (aiSuggestError) notify.error(aiSuggestError);
@@ -143,18 +212,24 @@ export default function ReceiptMatchingPanel() {
 
   // 매칭 확정
   const handleConfirmMatch = async () => {
-    if (!selectedReceiptId || selectedIds.size === 0) return;
+    if (!selectedReceiptId || selectedIds.size === 0 || !canConfirm) return;
     setConfirmLoading(true);
     try {
-      const selected = outstandingItems.filter((item) => selectedIds.has(item.outbound_id));
+      const selected = selectedItems.map((item) => ({
+        ...item,
+        matchAmount: matchAmounts[item.outbound_id] ?? 0,
+      }));
+      const remainingBalance = Math.max(0, receiptAvailableAmount - selectedTotal);
       await fetchWithAuth('/api/v1/receipt-matches/bulk', {
         method: 'POST',
         body: JSON.stringify({
           receipt_id: selectedReceiptId,
           matches: selected.map((item) => ({
             outbound_id: item.outbound_id,
-            matched_amount: item.outstanding_amount,
+            matched_amount: item.matchAmount,
           })),
+          balance_disposition: remainingBalance > 0 ? balanceDisposition : undefined,
+          balance_note: remainingBalance > 0 && balanceNote.trim() ? balanceNote.trim() : undefined,
         }),
       });
       setSuccessMsg(`${selected.length}건 매칭 완료 (${formatNumber(selectedTotal)}원)`);
@@ -163,6 +238,9 @@ export default function ReceiptMatchingPanel() {
       if (selectedReceipt) loadOutstanding(selectedReceipt.customer_id);
       loadHistory();
       setSelectedIds(new Set());
+      setMatchAmounts({});
+      setBalanceDisposition('advance');
+      setBalanceNote('');
       clearSuggestion();
       clearAISuggestion();
     } catch (e) {
@@ -175,6 +253,10 @@ export default function ReceiptMatchingPanel() {
   if (!selectedCompanyId) {
     return <div className="text-center py-8 text-sm text-muted-foreground">법인을 선택해주세요</div>;
   }
+
+  const confirmDescription = diff > 0
+    ? `${selectedIds.size}건 매칭 (${formatNumber(selectedTotal)}원)을 확정합니다.\n차액 ${formatNumber(diff)}원 처리: ${RECEIPT_BALANCE_DISPOSITION_LABEL[balanceDisposition]}`
+    : `${selectedIds.size}건 매칭 (${formatNumber(selectedTotal)}원)을 확정합니다.`;
 
   return (
     <div className="space-y-4">
@@ -240,12 +322,22 @@ export default function ReceiptMatchingPanel() {
                 <OutstandingTable
                   items={outstandingItems}
                   selectedIds={selectedIds}
+                  matchAmounts={matchAmounts}
                   onToggle={handleToggle}
+                  onAmountChange={handleAmountChange}
                 />
               )}
 
               {selectedIds.size > 0 && (
-                <MatchDifferenceDisplay availableAmount={receiptAvailableAmount} selectedTotal={selectedTotal} />
+                <MatchDifferenceDisplay
+                  availableAmount={receiptAvailableAmount}
+                  selectedTotal={selectedTotal}
+                  balanceDisposition={balanceDisposition}
+                  balanceNote={balanceNote}
+                  amountIssue={amountIssue}
+                  onBalanceDispositionChange={setBalanceDisposition}
+                  onBalanceNoteChange={setBalanceNote}
+                />
               )}
             </CardContent>
           </Card>
@@ -255,12 +347,15 @@ export default function ReceiptMatchingPanel() {
             <div className="flex items-center justify-end gap-2">
               <Button
                 onClick={() => setConfirmOpen(true)}
-                disabled={diff < 0 || selectedIds.size === 0}
+                disabled={!canConfirm}
               >
                 <Check className="mr-1 h-4 w-4" />
                 매칭 확정 ({selectedIds.size}건)
               </Button>
-              {diff < 0 && (
+              {amountIssue && (
+                <p className="text-xs text-destructive">{amountIssue}</p>
+              )}
+              {diff < 0 && !amountIssue && (
                 <p className="text-xs text-destructive">선택 합계가 입금액을 초과합니다</p>
               )}
             </div>
@@ -286,11 +381,7 @@ export default function ReceiptMatchingPanel() {
             open={confirmOpen}
             onOpenChange={setConfirmOpen}
             title="매칭 확정"
-            description={
-              diff > 0
-                ? `${selectedIds.size}건 매칭 (${formatNumber(selectedTotal)}원)을 확정합니다. 선수금 ${formatNumber(diff)}원은 다음 정산으로 이월됩니다.`
-                : `${selectedIds.size}건 매칭 (${formatNumber(selectedTotal)}원)을 확정합니다.`
-            }
+            description={confirmDescription}
             onConfirm={handleConfirmMatch}
             loading={confirmLoading}
           />

@@ -37,6 +37,7 @@ const IMPORT_GROUPS: Array<{
     items: [
       { type: 'purchase_order', label: '발주(PO)', sub: '발주번호 · 제조사 · 계약유형 · 라인별 단가' },
       { type: 'lc', label: '신용장(LC)', sub: 'L/C No. · 발주참조 · 은행 · 유산스 · 만기' },
+      { type: 'tt', label: 'T/T 송금', sub: '발주참조 · 송금일 · 금액 · 환율 · 상태' },
       { type: 'inbound', label: '입고', sub: 'B/L · 품번 · 수량 · 창고 · 원가 기초' },
       { type: 'declaration', label: '면장/원가', sub: '면장번호 · B/L · 원가 라인' },
       { type: 'expense', label: '부대비용', sub: 'B/L 또는 월 · 비용 유형 · 금액' },
@@ -49,6 +50,7 @@ export default function ImportHubPage() {
   const isAdmin = role === 'admin';
   const [downloading, setDownloading] = useState(false);
   const [downloadingMaster, setDownloadingMaster] = useState(false);
+  const [downloadingSample, setDownloadingSample] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   // 통합 업로드 — 한 파일로 모든 섹션 동시 처리. PO/LC 코드표(은행·발주번호)도 이 훅이 채운다.
@@ -85,6 +87,19 @@ export default function ImportHubPage() {
     }
   }, [masterData]);
 
+  const handleSamplePackDownload = useCallback(async () => {
+    if (!masterData) return;
+    setDownloadingSample(true);
+    try {
+      const { generateImportRehearsalSamplePack } = await import('@/lib/excelTemplates');
+      await generateImportRehearsalSamplePack(masterData);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : '리허설 샘플팩 다운로드 실패');
+    } finally {
+      setDownloadingSample(false);
+    }
+  }, [masterData]);
+
   const handleExportAll = useCallback(async () => {
     setExporting(true);
     try {
@@ -117,6 +132,7 @@ export default function ImportHubPage() {
       description="운영 데이터 생성은 엑셀 양식 업로드로 처리합니다."
       tableTitle="입력 양식"
       tableSub="통합 양식 + 업무별 검증 업로드"
+      kpiScope="import-hub"
       actions={(
         <div className="flex items-center gap-2">
           <Button
@@ -140,6 +156,18 @@ export default function ImportHubPage() {
           >
             {downloading || loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             통합 양식 다운로드
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            disabled={!masterData || loading || downloadingSample}
+            onClick={handleSamplePackDownload}
+            title="PO/LC/T/T 정상·경고·오류 행이 섞인 리허설용 파일"
+          >
+            {downloadingSample ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+            리허설 샘플팩
           </Button>
           <Button
             type="button"
@@ -181,9 +209,9 @@ export default function ImportHubPage() {
         </div>
       )}
       metrics={[
-        { label: '통합 양식', value: '1', unit: '파일', sub: '10개 시트', tone: 'solar', spark: [1, 2, 3, 5, 8, 10] },
-        { label: '업무 양식', value: '10', unit: '종', sub: '업로드 검증', tone: 'info' },
-        { label: '웹 입력', value: 'PO/LC', unit: '신규', sub: '다이얼로그 등록', tone: 'pos' },
+        { label: '통합 양식', value: '1', unit: '파일', sub: '11개 시트', tone: 'solar', spark: [1, 2, 3, 5, 8, 11] },
+        { label: '업무 양식', value: '11', unit: '종', sub: '업로드 검증', tone: 'info' },
+        { label: '운영 입력', value: 'Excel', unit: '정본', sub: 'PO/LC/T/T 생성', tone: 'pos' },
         { label: '연결 보정', value: '매칭', sub: '관계·상태 관리', tone: 'ink' },
       ]}
     >
@@ -235,6 +263,7 @@ export default function ImportHubPage() {
         preview={unified.preview}
         loading={unified.loading}
         onClose={unified.clearPreview}
+        onDownloadErrors={unified.downloadErrors}
         onSubmit={unified.submitAll}
       />
 

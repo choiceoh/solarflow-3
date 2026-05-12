@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
@@ -139,7 +141,7 @@ func (h *ReceiptMatchHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if status, msg := h.validateReceiptMatchBatch(req.ReceiptID, []model.CreateReceiptMatchRequest{req}); msg != "" {
+	if _, status, msg := h.validateReceiptMatchBatch(req.ReceiptID, []model.CreateReceiptMatchRequest{req}); msg != "" {
 		response.RespondError(w, status, msg)
 		return
 	}
@@ -183,8 +185,14 @@ func (h *ReceiptMatchHandler) BulkCreate(w http.ResponseWriter, r *http.Request)
 	}
 
 	payloads := req.ToCreateRequests()
-	if status, msg := h.validateReceiptMatchBatch(req.ReceiptID, payloads); msg != "" {
+	validation, status, msg := h.validateReceiptMatchBatch(req.ReceiptID, payloads)
+	if msg != "" {
 		response.RespondError(w, status, msg)
+		return
+	}
+	balanceAmount := receiptMatchBalanceAmount(validation)
+	if balanceAmount > 0 && req.BalanceDisposition == "" {
+		response.RespondError(w, http.StatusBadRequest, "차액 처리 방법을 선택해주세요")
 		return
 	}
 
@@ -204,7 +212,124 @@ func (h *ReceiptMatchHandler) BulkCreate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	h.enrichReceiptMatches(created)
-	response.RespondJSON(w, http.StatusCreated, created)
+	result := model.ReceiptMatchBulkResponse{
+		Matches:            created,
+		BalanceAmount:      balanceAmount,
+		BalanceDisposition: req.BalanceDisposition,
+		BalanceNote:        req.BalanceNote,
+	}
+	if balanceAmount <= 0 {
+		result.BalanceDisposition = ""
+		result.BalanceNote = ""
+	}
+	response.RespondJSON(w, http.StatusCreated, result)
+}
+
+// Complete — POST /api/v1/receipt-matches/complete — 출고/판매 미수 잔액을 한 번에 수금 완료.
+// 비유: 판매 행에서 "수금 완료" 도장을 누르면, 잔액만큼 입금 전표와 매칭 전표를 함께 만든다.
+func (h *ReceiptMatchHandler) Complete(w http.ResponseWriter, r *http.Request) {
+	var req model.CompleteReceiptMatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[수금 완료 요청 파싱 실패] %v", err)
+		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
+		return
+	}
+	if msg := req.Validate(); msg != "" {
+		response.RespondError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	target, status, msg := h.completeReceiptTarget(req)
+	if msg != "" {
+		response.RespondError(w, status, msg)
+		return
+	}
+
+	outstanding := target.TotalAmount - target.MatchedAmount
+	if outstanding <= receiptMatchAmountEpsilon {
+		response.RespondError(w, http.StatusBadRequest, "이미 수금 완료된 매출입니다")
+		return
+	}
+
+	receiptDate := strings.TrimSpace(req.ReceiptDate)
+	if receiptDate == "" {
+		receiptDate = time.Now().Format("2006-01-02")
+	}
+	memo := receiptMatchStringPtr(req.Memo)
+	if memo == nil {
+		defaultMemo := "출고/판매 화면 수금완료"
+		memo = &defaultMemo
+	}
+	receiptReq := model.CreateReceiptRequest{
+		CustomerID:  target.CustomerID,
+		ReceiptDate: receiptDate,
+		Amount:      outstanding,
+		BankAccount: receiptMatchStringPtr(req.BankAccount),
+		Memo:        memo,
+	}
+	if msg := receiptReq.Validate(); msg != "" {
+		response.RespondError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	receiptData, _, err := h.DB.From("receipts").
+		Insert(receiptReq, false, "", "", "").
+		Execute()
+	if err != nil {
+		log.Printf("[수금 완료] 수금 전표 생성 실패 customer_id=%s err=%v", target.CustomerID, err)
+		response.RespondError(w, http.StatusInternalServerError, "수금 전표 생성에 실패했습니다")
+		return
+	}
+	var receipts []model.Receipt
+	if err := json.Unmarshal(receiptData, &receipts); err != nil {
+		log.Printf("[수금 완료] 수금 전표 생성 결과 디코딩 실패: %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
+		return
+	}
+	if len(receipts) == 0 || receipts[0].ReceiptID == "" {
+		response.RespondError(w, http.StatusInternalServerError, "수금 전표 생성 결과를 확인할 수 없습니다")
+		return
+	}
+	receipt := receipts[0]
+
+	matchReq := target.MatchRequest
+	matchReq.ReceiptID = receipt.ReceiptID
+	matchReq.MatchedAmount = outstanding
+	if _, status, msg := h.validateReceiptMatchBatch(receipt.ReceiptID, []model.CreateReceiptMatchRequest{matchReq}); msg != "" {
+		h.deleteReceiptBestEffort(receipt.ReceiptID)
+		response.RespondError(w, status, msg)
+		return
+	}
+
+	matchData, _, err := h.DB.From("receipt_matches").
+		Insert(matchReq, false, "", "", "").
+		Execute()
+	if err != nil {
+		h.deleteReceiptBestEffort(receipt.ReceiptID)
+		log.Printf("[수금 완료] 수금 매칭 생성 실패 receipt_id=%s err=%v", receipt.ReceiptID, err)
+		response.RespondError(w, http.StatusInternalServerError, "수금 매칭 생성에 실패했습니다")
+		return
+	}
+	var matches []model.ReceiptMatch
+	if err := json.Unmarshal(matchData, &matches); err != nil {
+		log.Printf("[수금 완료] 수금 매칭 생성 결과 디코딩 실패: %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
+		return
+	}
+	if len(matches) == 0 {
+		response.RespondError(w, http.StatusInternalServerError, "수금 매칭 생성 결과를 확인할 수 없습니다")
+		return
+	}
+
+	receipt.MatchedTotal = outstanding
+	receipt.Remaining = 0
+	h.enrichReceiptMatches(matches)
+	response.RespondJSON(w, http.StatusCreated, model.CompleteReceiptMatchResponse{
+		Receipt:           receipt,
+		Match:             matches[0],
+		MatchedAmount:     outstanding,
+		OutstandingBefore: outstanding,
+	})
 }
 
 // Delete — DELETE /api/v1/receipt-matches/{id} — 수금 매칭 삭제
@@ -378,7 +503,7 @@ func (h *ReceiptMatchHandler) AutoMatch(w http.ResponseWriter, r *http.Request) 
 						MatchedAmount: it.MatchAmount,
 					})
 				}
-				if status, msg := h.validateReceiptMatchBatch(rec.ReceiptID, payloads); msg != "" {
+				if _, status, msg := h.validateReceiptMatchBatch(rec.ReceiptID, payloads); msg != "" {
 					log.Printf("[auto-match] receipt_id=%s 검증 실패 status=%d msg=%s", rec.ReceiptID, status, msg)
 					out.NoCandidate++
 					continue
@@ -430,6 +555,12 @@ type receiptAmountRow struct {
 	Amount    float64 `json:"amount"`
 }
 
+type receiptMatchValidationResult struct {
+	ReceiptAmount float64
+	Existing      float64
+	Requested     float64
+}
+
 type receiptMatchAmountOnlyRow struct {
 	MatchedAmount float64 `json:"matched_amount"`
 }
@@ -440,62 +571,82 @@ type receiptMatchTargetAmountRow struct {
 	MatchedAmount float64 `json:"matched_amount"`
 }
 
+type receiptCompleteTarget struct {
+	CustomerID    string
+	TotalAmount   float64
+	MatchedAmount float64
+	MatchRequest  model.CreateReceiptMatchRequest
+}
+
 type receiptMatchSaleRow struct {
 	SaleID      string   `json:"sale_id"`
 	OutboundID  *string  `json:"outbound_id"`
+	CustomerID  string   `json:"customer_id"`
 	TotalAmount *float64 `json:"total_amount"`
 	Status      string   `json:"status"`
 }
 
-func (h *ReceiptMatchHandler) validateReceiptMatchBatch(receiptID string, reqs []model.CreateReceiptMatchRequest) (int, string) {
+func (h *ReceiptMatchHandler) validateReceiptMatchBatch(receiptID string, reqs []model.CreateReceiptMatchRequest) (receiptMatchValidationResult, int, string) {
+	result := receiptMatchValidationResult{}
 	amount, found, err := h.fetchReceiptAmount(receiptID)
 	if err != nil {
 		log.Printf("[수금 매칭 검증] receipt 조회 실패 receipt_id=%s err=%v", receiptID, err)
-		return http.StatusInternalServerError, "수금 정보 확인에 실패했습니다"
+		return result, http.StatusInternalServerError, "수금 정보 확인에 실패했습니다"
 	}
 	if !found {
-		return http.StatusNotFound, "수금을 찾을 수 없습니다"
+		return result, http.StatusNotFound, "수금을 찾을 수 없습니다"
 	}
+	result.ReceiptAmount = amount
 
 	existing, err := h.sumMatchesByField("receipt_id", receiptID)
 	if err != nil {
 		log.Printf("[수금 매칭 검증] 기존 매칭 합계 조회 실패 receipt_id=%s err=%v", receiptID, err)
-		return http.StatusInternalServerError, "기존 매칭 금액 확인에 실패했습니다"
+		return result, http.StatusInternalServerError, "기존 매칭 금액 확인에 실패했습니다"
 	}
+	result.Existing = existing
 
 	requested := 0.0
 	targetRequests := map[string]float64{}
 	for _, req := range reqs {
 		if req.ReceiptID != receiptID {
-			return http.StatusBadRequest, "모든 매칭의 receipt_id가 같아야 합니다"
+			return result, http.StatusBadRequest, "모든 매칭의 receipt_id가 같아야 합니다"
 		}
 		requested += req.MatchedAmount
 		key := receiptMatchTargetKey(req)
 		if key == "" {
-			return http.StatusBadRequest, "outbound_id 또는 sale_id 중 하나는 필수 항목입니다"
+			return result, http.StatusBadRequest, "outbound_id 또는 sale_id 중 하나는 필수 항목입니다"
 		}
 		targetRequests[key] += req.MatchedAmount
 	}
+	result.Requested = requested
 
 	if existing+requested > amount+receiptMatchAmountEpsilon {
-		return http.StatusBadRequest, fmt.Sprintf("매칭 합계가 입금액을 초과합니다 (입금액 %.0f원, 기존 %.0f원, 추가 %.0f원)", amount, existing, requested)
+		return result, http.StatusBadRequest, fmt.Sprintf("매칭 합계가 입금액을 초과합니다 (입금액 %.0f원, 기존 %.0f원, 추가 %.0f원)", amount, existing, requested)
 	}
 
 	for key, addAmount := range targetRequests {
 		total, matched, err := h.targetSaleAndMatchedAmount(key)
 		if err != nil {
 			log.Printf("[수금 매칭 검증] 대상 매출 확인 실패 target=%s err=%v", key, err)
-			return http.StatusInternalServerError, "매칭 대상 매출 확인에 실패했습니다"
+			return result, http.StatusInternalServerError, "매칭 대상 매출 확인에 실패했습니다"
 		}
 		if total <= 0 {
-			return http.StatusNotFound, "매칭할 매출을 찾을 수 없습니다"
+			return result, http.StatusNotFound, "매칭할 매출을 찾을 수 없습니다"
 		}
 		if matched+addAmount > total+receiptMatchAmountEpsilon {
-			return http.StatusBadRequest, fmt.Sprintf("매칭 금액이 매출 미수금을 초과합니다 (매출액 %.0f원, 기존 %.0f원, 추가 %.0f원)", total, matched, addAmount)
+			return result, http.StatusBadRequest, fmt.Sprintf("매칭 금액이 매출 미수금을 초과합니다 (매출액 %.0f원, 기존 %.0f원, 추가 %.0f원)", total, matched, addAmount)
 		}
 	}
 
-	return 0, ""
+	return result, 0, ""
+}
+
+func receiptMatchBalanceAmount(result receiptMatchValidationResult) float64 {
+	balance := result.ReceiptAmount - result.Existing - result.Requested
+	if balance <= receiptMatchAmountEpsilon {
+		return 0
+	}
+	return balance
 }
 
 func receiptMatchTargetKey(req model.CreateReceiptMatchRequest) string {
@@ -506,6 +657,83 @@ func receiptMatchTargetKey(req model.CreateReceiptMatchRequest) string {
 		return "outbound:" + *req.OutboundID
 	}
 	return ""
+}
+
+func receiptMatchStringPtr(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+func (h *ReceiptMatchHandler) completeReceiptTarget(req model.CompleteReceiptMatchRequest) (receiptCompleteTarget, int, string) {
+	target := receiptCompleteTarget{}
+	var (
+		rows             []receiptMatchSaleRow
+		extraOutboundIDs []string
+		err              error
+	)
+
+	if saleID := receiptMatchStringPtr(req.SaleID); saleID != nil {
+		rows, err = h.salesByField("sale_id", *saleID)
+		target.MatchRequest.SaleID = saleID
+	} else if outboundID := receiptMatchStringPtr(req.OutboundID); outboundID != nil {
+		rows, err = h.salesByField("outbound_id", *outboundID)
+		extraOutboundIDs = []string{*outboundID}
+		target.MatchRequest.OutboundID = outboundID
+	}
+	if err != nil {
+		log.Printf("[수금 완료] 매출 대상 조회 실패 err=%v", err)
+		return target, http.StatusInternalServerError, "매출 대상 확인에 실패했습니다"
+	}
+
+	total, matched, err := h.saleTotalAndMatchedAmount(rows, extraOutboundIDs)
+	if err != nil {
+		log.Printf("[수금 완료] 매출/수금 합계 조회 실패 err=%v", err)
+		return target, http.StatusInternalServerError, "매출 미수금 확인에 실패했습니다"
+	}
+	if total <= 0 {
+		return target, http.StatusNotFound, "수금 완료 처리할 매출을 찾을 수 없습니다"
+	}
+
+	customerID := ""
+	for _, row := range rows {
+		if row.Status == "cancelled" || row.TotalAmount == nil || *row.TotalAmount <= 0 {
+			continue
+		}
+		rowCustomerID := strings.TrimSpace(row.CustomerID)
+		if rowCustomerID == "" {
+			continue
+		}
+		if customerID == "" {
+			customerID = rowCustomerID
+			continue
+		}
+		if customerID != rowCustomerID {
+			return target, http.StatusBadRequest, "하나의 수금 완료 처리에는 같은 거래처 매출만 포함할 수 있습니다"
+		}
+	}
+	if customerID == "" {
+		return target, http.StatusNotFound, "매출 거래처를 확인할 수 없습니다"
+	}
+
+	target.CustomerID = customerID
+	target.TotalAmount = total
+	target.MatchedAmount = matched
+	return target, 0, ""
+}
+
+func (h *ReceiptMatchHandler) deleteReceiptBestEffort(receiptID string) {
+	if receiptID == "" {
+		return
+	}
+	if _, _, err := h.DB.From("receipts").Delete("", "").Eq("receipt_id", receiptID).Execute(); err != nil {
+		log.Printf("[수금 완료] 수금 전표 cleanup 실패 receipt_id=%s err=%v", receiptID, err)
+	}
 }
 
 func (h *ReceiptMatchHandler) fetchReceiptAmount(receiptID string) (float64, bool, error) {
@@ -567,7 +795,7 @@ func (h *ReceiptMatchHandler) targetSaleAndMatchedAmount(key string) (float64, f
 
 func (h *ReceiptMatchHandler) salesByField(field, value string) ([]receiptMatchSaleRow, error) {
 	data, _, err := h.DB.From("sales").
-		Select("sale_id, outbound_id, total_amount, status", "exact", false).
+		Select("sale_id, outbound_id, customer_id, total_amount, status", "exact", false).
 		Eq(field, value).
 		Execute()
 	if err != nil {

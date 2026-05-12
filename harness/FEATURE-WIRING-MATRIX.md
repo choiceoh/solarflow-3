@@ -25,7 +25,7 @@
    - `Paths` 에 chi 라우트 패턴 정확히 기재(coverage_test 가 검증)
 2. **본 매트릭스 갱신** — 아래 표에 같은 행 추가/수정
 3. **라우트 적용** — `r.Use(g.Feature(feature.IDXxx))`
-4. **DECISIONS 결정 추가** — 새 테넌트 분리이거나 기존 격리 범위가 바뀌면 D-NNN 추가
+4. **DECISIONS 결정 추가** — 새 테넌트 분리이거나 기존 격리 범위가 바뀌면 `D-YYYYMMDD-HHMMSS` 형식의 결정 ID 추가
 5. **검증 통과** — `go test ./internal/feature ./internal/middleware ./internal/router/...`
 
 (1)~(3) 중 하나라도 빠지면 `feature_coverage_test.go` 또는 `matrix_consistency_test.go` 가 잡는다.
@@ -89,7 +89,7 @@
 | `tx.expense` | 부대비용 | M | global |
 | `tx.lc` | L/C 신용장 (+ lines) | M | global |
 | `tx.lc_limit` | LC 한도 변경 이력 | M | global |
-| `tx.price_benchmark` | 가격예측 벤치마크 | M | global |
+| `tx.price_benchmark` | 가격예측 벤치마크·견적 | M | global |
 | `tx.price_history` | 수입 단가 이력 | M | global |
 | `tx.tt` | T/T 계약금 | M | global |
 | `tx.approval` | 결재안 빌더 (frontend-only) | M | global | PR-8 (D-145 후속) — backend 라우트 없이 sidebar 가시성만 |
@@ -140,6 +140,7 @@
 | `calc.margin_analysis` | 마진 분석 | M | global |
 | `calc.customer_analysis` | 거래처 분석 | ★ | global |
 | `calc.price_trend` | 단가 추이 | M | global |
+| `calc.price_forecast_strategy` | 가격예측 전략 | M | global |
 | `calc.supply_forecast` | 수급 전망 | ★ | global |
 | `calc.order_fulfillment_risk` | 수주 충당 위험도 | ★ | global |
 | `calc.outstanding_list` | 미수금 리스트 | ★ | global |

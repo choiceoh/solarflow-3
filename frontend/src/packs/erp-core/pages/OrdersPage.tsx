@@ -1,4 +1,4 @@
-import { Component, useState, useEffect, useMemo, type ReactNode } from "react"
+import { Component, useState, useEffect, useMemo, useRef, type ReactNode } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
@@ -11,10 +11,15 @@ import {
   useOutboundDashboard,
   useSaleList,
   useSaleDashboard,
+  useSaleSummary,
 } from "@/hooks/useOutbound"
 import { useServerSort } from "@/hooks/useServerSort"
-import { fetchWithAuth } from "@/lib/api"
+import { CheckCircle2, Loader2 } from "lucide-react"
+import { fetchWithAuth, fetchWithAuthMeta } from "@/lib/api"
 import { confirmDialog } from "@/lib/dialogs"
+import { companyParams } from "@/lib/companyUtils"
+import { formatError, notify } from "@/lib/notify"
+import { formatKw, formatNumber } from "@/lib/utils"
 import SkeletonRows from "@/components/common/SkeletonRows"
 import OrderListTable, {
   ORDER_TABLE_ID,
@@ -30,6 +35,7 @@ import AutoMatchSection from "@/components/orders/AutoMatchSection"
 import OutboundListTable, {
   OUTBOUND_TABLE_ID,
   OUTBOUND_COLUMN_META,
+  type OutboundAutomationStatus,
 } from "@/components/outbound/OutboundListTable"
 import { ColumnVisibilityMenu } from "@/components/common/ColumnVisibilityMenu"
 import { useColumnVisibility } from "@/lib/columnVisibility"
@@ -46,15 +52,21 @@ import {
   type OrderStatus,
   type ManagementCategory,
   type Receipt,
+  type CompleteReceiptMatchResponse,
 } from "@/types/orders"
 import {
   OUTBOUND_STATUS_LABEL,
   USAGE_CATEGORY_LABEL,
+  type Outbound,
+  type SaleListItem,
   type OutboundStatus,
   type UsageCategory,
 } from "@/types/outbound"
 import type { Partner, Manufacturer } from "@/types/masters"
 import type { InventoryResponse } from "@/types/inventory"
+import { DateInput } from "@/components/ui/date-input"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import ExcelToolbar from "@/components/excel/ExcelToolbar"
 import {
   CardB,
@@ -68,6 +80,7 @@ import {
   type KwRangeValue,
 } from "@/components/command/MockupPrimitives"
 import { BreakdownRows } from "@/components/command/BreakdownRows"
+import { KpiStrip } from "@/components/command/KpiStrip"
 import { flatSparkFromValue } from "@/templates/sparkUtils"
 
 class OrderDetailErrorBoundary extends Component<
@@ -113,13 +126,67 @@ const SALES_TAB_OPTIONS = [
 ]
 const SALES_TABS = new Set(SALES_TAB_OPTIONS.map((tab) => tab.key))
 type OrderWorkQueue = "" | "delivery_soon" | "no_site"
-type ReceiptMatchFilter = "" | "matched" | "partial" | "unmatched"
+type OutboundWorkQueue = "" | "sale_unregistered"
+type ReceiptMatchFilter = "open" | "partial" | "unmatched"
+type ReceiptMatchStatus = "matched" | "partial" | "unmatched"
+type SaleErpClosedFilter = "" | "true" | "false"
+type SaleReceiptFilter = "" | "open" | "unpaid" | "partial" | "paid"
+type SaleBulkActionMode = "invoice" | "erp_close" | "receipt_complete"
+const BULK_SALE_PREVIEW_PAGE_SIZE = 1000
+const BULK_SALE_PREVIEW_MAX_PAGES = 500
+const BULK_SALE_CREATE_BATCH_SIZE = 8
+const BULK_RECEIPT_COMPLETE_PAGE_SIZE = 1000
+const BULK_RECEIPT_COMPLETE_MAX_PAGES = 500
+const BULK_RECEIPT_COMPLETE_BATCH_SIZE = 8
+
+type BulkSaleBlockReason =
+  | "이미 매출 있음"
+  | "정상 출고 아님"
+  | "판매 용도 아님"
+  | "거래처 없음"
+  | "Wp단가 없음"
+  | "수량 없음"
+  | "규격 없음"
+
+interface BulkSaleCreatePlan {
+  ready: Outbound[]
+  blocked: Array<{ outbound: Outbound; reason: BulkSaleBlockReason }>
+  reasonCounts: Array<{ reason: BulkSaleBlockReason; count: number }>
+  quantity: number
+  capacityKw: number
+  supplyAmount: number
+  vatAmount: number
+  totalAmount: number
+}
+
+interface BulkSalePreviewFilters {
+  status?: string
+  usageCategory?: string
+  manufacturerId?: string
+  start?: string
+  end?: string
+  minKw?: number
+  maxKw?: number
+  sort?: string
+  order?: "asc" | "desc"
+}
+
+interface BulkReceiptSaleFilters {
+  customerId?: string
+  start?: string
+  end?: string
+  invoiceStatus?: string
+  receiptStatus?: SaleReceiptFilter
+  erpClosed?: SaleErpClosedFilter
+  sort?: string
+  order?: "asc" | "desc"
+}
 
 function getOrderWorkQueue(value: string | null): OrderWorkQueue {
   return value === "delivery_soon" || value === "no_site" ? value : ""
 }
 
-function getReceiptMatchFilter(receipt: Receipt): Exclude<ReceiptMatchFilter, ""> {
+function getReceiptMatchFilter(receipt: Receipt): ReceiptMatchStatus {
   const matched = receipt.matched_total ?? 0
   if (matched >= receipt.amount) return "matched"
   if (matched > 0) return "partial"
@@ -151,6 +218,234 @@ function fmtSalesMw(kw: number) {
 function fmtEok(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "0.00"
   return (value / 100_000_000).toFixed(value >= 10_000_000_000 ? 1 : 2)
+}
+
+function todayLocalDate() {
+  const now = new Date()
+  const tzOffsetMs = now.getTimezoneOffset() * 60_000
+  return new Date(now.getTime() - tzOffsetMs).toISOString().slice(0, 10)
+}
+
+function getSaleOutstandingAmount(item: SaleListItem) {
+  if (item.outstanding_amount != null) return Math.max(0, item.outstanding_amount)
+  const total = item.sale.total_amount ?? item.total_amount ?? 0
+  const collected = item.collected_amount ?? 0
+  return Math.max(0, total - collected)
+}
+
+function isReceiptQueueFilter(receiptFilter: SaleReceiptFilter) {
+  return receiptFilter === "open" || receiptFilter === "unpaid" || receiptFilter === "partial"
+}
+
+function getSaleBulkActionMode(
+  invoiceFilter: string,
+  erpClosedFilter: SaleErpClosedFilter,
+  receiptFilter: SaleReceiptFilter,
+): SaleBulkActionMode {
+  if (isReceiptQueueFilter(receiptFilter)) return "receipt_complete"
+  return invoiceFilter === "issued" && erpClosedFilter === "false" ? "erp_close" : "invoice"
+}
+
+function isSaleSelectableForBulk(item: SaleListItem, mode: SaleBulkActionMode) {
+  if (mode === "receipt_complete") {
+    return getSaleOutstandingAmount(item) > 0 && item.sale.status !== "cancelled" && item.status !== "cancelled"
+  }
+  if (mode === "erp_close") return !!item.sale.tax_invoice_date && !item.sale.erp_closed
+  return !item.sale.tax_invoice_date
+}
+
+function sharedInvoiceEmail(items: SaleListItem[]) {
+  const emails = Array.from(
+    new Set(
+      items
+        .map((item) => item.sale.tax_invoice_email?.trim())
+        .filter((email): email is string => !!email),
+    ),
+  )
+  return emails.length === 1 ? emails[0] : ""
+}
+
+function getBulkSaleBlockReason(ob: Outbound): BulkSaleBlockReason | null {
+  if (ob.sale) return "이미 매출 있음"
+  if (ob.status !== "active") return "정상 출고 아님"
+  if (ob.usage_category !== "sale" && ob.usage_category !== "sale_spare") return "판매 용도 아님"
+  if (!ob.customer_id) return "거래처 없음"
+  if (!Number.isFinite(ob.unit_price_wp ?? 0) || (ob.unit_price_wp ?? 0) <= 0) return "Wp단가 없음"
+  if (!Number.isFinite(ob.quantity) || ob.quantity <= 0) return "수량 없음"
+  if (!Number.isFinite(ob.spec_wp ?? 0) || (ob.spec_wp ?? 0) <= 0) return "규격 없음"
+  return null
+}
+
+function estimateSaleAmount(ob: Outbound) {
+  const unitPriceEa = Math.round((ob.unit_price_wp ?? 0) * (ob.spec_wp ?? 0))
+  const supplyAmount = Math.round(unitPriceEa * ob.quantity)
+  const vatAmount = Math.round(supplyAmount * 0.1)
+  return { supplyAmount, vatAmount, totalAmount: supplyAmount + vatAmount }
+}
+
+function buildBulkSaleCreatePlan(items: Outbound[]): BulkSaleCreatePlan {
+  const ready: Outbound[] = []
+  const blocked: BulkSaleCreatePlan["blocked"] = []
+  const reasonMap = new Map<BulkSaleBlockReason, number>()
+  let quantity = 0
+  let capacityKw = 0
+  let supplyAmount = 0
+  let vatAmount = 0
+  let totalAmount = 0
+
+  for (const outbound of items) {
+    const reason = getBulkSaleBlockReason(outbound)
+    if (reason) {
+      blocked.push({ outbound, reason })
+      reasonMap.set(reason, (reasonMap.get(reason) ?? 0) + 1)
+      continue
+    }
+    ready.push(outbound)
+    quantity += outbound.quantity
+    capacityKw += outbound.capacity_kw ?? 0
+    const estimate = estimateSaleAmount(outbound)
+    supplyAmount += estimate.supplyAmount
+    vatAmount += estimate.vatAmount
+    totalAmount += estimate.totalAmount
+  }
+
+  const reasonCounts = Array.from(reasonMap.entries()).map(([reason, count]) => ({ reason, count }))
+  return { ready, blocked, reasonCounts, quantity, capacityKw, supplyAmount, vatAmount, totalAmount }
+}
+
+function getOutboundAutomationStatus(ob: Outbound): OutboundAutomationStatus {
+  const reason = getBulkSaleBlockReason(ob)
+  if (!reason) return { label: "생성 가능", tone: "pos" }
+  return { label: "제외", reason, tone: reason === "이미 매출 있음" ? "ghost" : "warn" }
+}
+
+function buildBulkSalePreviewQuery(companyId: string | null, filters: BulkSalePreviewFilters) {
+  const params = companyParams(companyId)
+  params.set("work_queue", "sale_unregistered")
+  if (filters.status) params.set("status", filters.status)
+  if (filters.usageCategory) params.set("usage_category", filters.usageCategory)
+  if (filters.manufacturerId) params.set("manufacturer_id", filters.manufacturerId)
+  if (filters.start) params.set("start", filters.start)
+  if (filters.end) params.set("end", filters.end)
+  if (filters.minKw !== undefined) params.set("min_kw", String(filters.minKw))
+  if (filters.maxKw !== undefined) params.set("max_kw", String(filters.maxKw))
+  if (filters.sort) params.set("sort", filters.sort)
+  if (filters.order) params.set("order", filters.order)
+  return params
+}
+
+async function fetchBulkSalePreviewOutbounds(
+  companyId: string | null,
+  filters: BulkSalePreviewFilters,
+): Promise<Outbound[]> {
+  const fetchPage = (offset: number) => {
+    const params = buildBulkSalePreviewQuery(companyId, filters)
+    params.set("limit", String(BULK_SALE_PREVIEW_PAGE_SIZE))
+    params.set("offset", String(offset))
+    return fetchWithAuthMeta<Outbound[]>(`/api/v1/outbounds?${params}`)
+  }
+
+  const first = await fetchPage(0)
+  const items = [...first.data]
+  const total = first.totalCount
+  if (total !== null && items.length >= total) return items
+
+  for (let page = 1; page < BULK_SALE_PREVIEW_MAX_PAGES; page += 1) {
+    const offset = page * BULK_SALE_PREVIEW_PAGE_SIZE
+    if (total !== null && offset >= total) break
+    const next = await fetchPage(offset)
+    items.push(...next.data)
+    if (next.data.length < BULK_SALE_PREVIEW_PAGE_SIZE) break
+    if (next.totalCount !== null && items.length >= next.totalCount) break
+  }
+  return items
+}
+
+async function createSalesInBatches(targets: Outbound[]) {
+  const results: PromiseSettledResult<unknown>[] = []
+  for (let i = 0; i < targets.length; i += BULK_SALE_CREATE_BATCH_SIZE) {
+    const batch = targets.slice(i, i + BULK_SALE_CREATE_BATCH_SIZE)
+    const settled = await Promise.allSettled(
+      batch.map((ob) =>
+        fetchWithAuth("/api/v1/sales", {
+          method: "POST",
+          body: JSON.stringify({
+            outbound_id: ob.outbound_id,
+            order_id: ob.order_id,
+            customer_id: ob.customer_id,
+            quantity: ob.quantity,
+            capacity_kw: ob.capacity_kw,
+            unit_price_wp: ob.unit_price_wp,
+            erp_closed: false,
+          }),
+        }),
+      ),
+    )
+    results.push(...settled)
+  }
+  return results
+}
+
+function buildBulkReceiptSaleQuery(companyId: string | null, filters: BulkReceiptSaleFilters) {
+  const params = companyParams(companyId)
+  if (filters.customerId) params.set("customer_id", filters.customerId)
+  if (filters.start) params.set("start", filters.start)
+  if (filters.end) params.set("end", filters.end)
+  if (filters.invoiceStatus) params.set("invoice_status", filters.invoiceStatus)
+  if (filters.receiptStatus) params.set("receipt_status", filters.receiptStatus)
+  if (filters.erpClosed) params.set("erp_closed", filters.erpClosed)
+  if (filters.sort) params.set("sort", filters.sort)
+  if (filters.order) params.set("order", filters.order)
+  return params
+}
+
+async function fetchBulkReceiptSales(
+  companyId: string | null,
+  filters: BulkReceiptSaleFilters,
+): Promise<SaleListItem[]> {
+  const fetchPage = (offset: number) => {
+    const params = buildBulkReceiptSaleQuery(companyId, filters)
+    params.set("limit", String(BULK_RECEIPT_COMPLETE_PAGE_SIZE))
+    params.set("offset", String(offset))
+    return fetchWithAuthMeta<SaleListItem[]>(`/api/v1/sales?${params}`)
+  }
+
+  const first = await fetchPage(0)
+  const items = [...first.data]
+  const total = first.totalCount
+  if (total !== null && items.length >= total) return items
+
+  for (let page = 1; page < BULK_RECEIPT_COMPLETE_MAX_PAGES; page += 1) {
+    const offset = page * BULK_RECEIPT_COMPLETE_PAGE_SIZE
+    if (total !== null && offset >= total) break
+    const next = await fetchPage(offset)
+    items.push(...next.data)
+    if (next.data.length < BULK_RECEIPT_COMPLETE_PAGE_SIZE) break
+    if (next.totalCount !== null && items.length >= next.totalCount) break
+  }
+  return items
+}
+
+function completeReceiptForSale(item: SaleListItem) {
+  const payload: Record<string, unknown> = {
+    sale_id: item.sale_id,
+    receipt_date: todayLocalDate(),
+    memo: "출고/판매 화면 수금완료",
+  }
+  return fetchWithAuth<CompleteReceiptMatchResponse>("/api/v1/receipt-matches/complete", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+async function completeSaleReceiptsInBatches(targets: SaleListItem[]) {
+  const results: PromiseSettledResult<CompleteReceiptMatchResponse>[] = []
+  for (let i = 0; i < targets.length; i += BULK_RECEIPT_COMPLETE_BATCH_SIZE) {
+    const batch = targets.slice(i, i + BULK_RECEIPT_COMPLETE_BATCH_SIZE)
+    const settled = await Promise.allSettled(batch.map((sale) => completeReceiptForSale(sale)))
+    results.push(...settled)
+  }
+  return results
 }
 
 export default function OrdersPage() {
@@ -202,6 +497,12 @@ export default function OrdersPage() {
   const [obMfgFilter, setObMfgFilter] = useState("")
   const [obDateRange, setObDateRange] = useState<DateRangeValue>(null)
   const [obKwRange, setObKwRange] = useState<KwRangeValue>(null)
+  const [obWorkQueueFilter, setObWorkQueueFilter] = useState<OutboundWorkQueue>("")
+  const [bulkSalePreviewItems, setBulkSalePreviewItems] = useState<Outbound[]>([])
+  const [bulkSalePreviewLoading, setBulkSalePreviewLoading] = useState(false)
+  const [bulkSalePreviewError, setBulkSalePreviewError] = useState("")
+  const [bulkSaleCreating, setBulkSaleCreating] = useState(false)
+  const [bulkSaleCreateError, setBulkSaleCreateError] = useState("")
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null)
   const outboundColVis = useColumnVisibility(OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META)
   const outboundColPin = useColumnPinning(OUTBOUND_TABLE_ID)
@@ -217,7 +518,7 @@ export default function OrdersPage() {
   const [obPageIndex, setObPageIndex] = useState(0)
   const [obPageSize, setObPageSize] = useState(50)
   const obSort = useServerSort("outbound_date", "desc", () => setObPageIndex(0))
-  const obPageResetKey = `${obStatusFilter}|${obUsageFilter}|${obMfgFilter}|${obDateRange?.start ?? ""}|${obDateRange?.end ?? ""}|${obKwRange?.min ?? ""}|${obKwRange?.max ?? ""}`
+  const obPageResetKey = `${obStatusFilter}|${obUsageFilter}|${obMfgFilter}|${obWorkQueueFilter}|${obDateRange?.start ?? ""}|${obDateRange?.end ?? ""}|${obKwRange?.min ?? ""}|${obKwRange?.max ?? ""}`
   useEffect(() => {
     void obPageResetKey
     setObPageIndex(0)
@@ -231,6 +532,7 @@ export default function OrdersPage() {
     status: obStatusFilter || undefined,
     usage_category: obUsageFilter || undefined,
     manufacturer_id: obMfgFilter || undefined,
+    work_queue: obWorkQueueFilter || undefined,
     start: obDateRange?.start || undefined,
     end: obDateRange?.end || undefined,
     min_kw: obKwRange?.min ?? undefined,
@@ -246,6 +548,7 @@ export default function OrdersPage() {
     status: obStatusFilter || undefined,
     usage_category: obUsageFilter || undefined,
     manufacturer_id: obMfgFilter || undefined,
+    work_queue: obWorkQueueFilter || undefined,
     start: obDateRange?.start || undefined,
     end: obDateRange?.end || undefined,
     min_kw: obKwRange?.min ?? undefined,
@@ -257,6 +560,69 @@ export default function OrdersPage() {
   })
 
   const obLoading = obDashLoading || obListLoading
+  const bulkSalePreviewFilters = useMemo<BulkSalePreviewFilters>(
+    () => ({
+      status: obStatusFilter || undefined,
+      usageCategory: obUsageFilter || undefined,
+      manufacturerId: obMfgFilter || undefined,
+      start: obDateRange?.start || undefined,
+      end: obDateRange?.end || undefined,
+      minKw: obKwRange?.min ?? undefined,
+      maxKw: obKwRange?.max ?? undefined,
+      sort: obSort.queryParams.sort,
+      order: obSort.queryParams.order,
+    }),
+    [
+      obStatusFilter,
+      obUsageFilter,
+      obMfgFilter,
+      obDateRange?.start,
+      obDateRange?.end,
+      obKwRange?.min,
+      obKwRange?.max,
+      obSort.queryParams.sort,
+      obSort.queryParams.order,
+    ],
+  )
+  const showBulkSaleCreatePanel =
+    activeTab === "outbound" && obWorkQueueFilter === "sale_unregistered" && !selectedOutbound
+  const bulkSaleCreatePlan = useMemo(
+    () => buildBulkSaleCreatePlan(bulkSalePreviewItems),
+    [bulkSalePreviewItems],
+  )
+  useEffect(() => {
+    let cancelled = false
+    if (!showBulkSaleCreatePanel || !selectedCompanyId) {
+      setBulkSalePreviewItems([])
+      setBulkSalePreviewLoading(false)
+      setBulkSalePreviewError("")
+      setBulkSaleCreateError("")
+      return () => {
+        cancelled = true
+      }
+    }
+
+    setBulkSalePreviewLoading(true)
+    setBulkSalePreviewError("")
+    setBulkSaleCreateError("")
+    fetchBulkSalePreviewOutbounds(selectedCompanyId, bulkSalePreviewFilters)
+      .then((items) => {
+        if (!cancelled) setBulkSalePreviewItems(items)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setBulkSalePreviewItems([])
+        setBulkSalePreviewError(formatError(error))
+      })
+      .finally(() => {
+        if (!cancelled) setBulkSalePreviewLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [bulkSalePreviewFilters, selectedCompanyId, showBulkSaleCreatePanel])
+
   const reloadOutbounds = async () => {
     await Promise.all([reloadOutboundDash(), reloadOutboundList()])
   }
@@ -265,13 +631,29 @@ export default function OrdersPage() {
   const [saleCustomerFilter, setSaleCustomerFilter] = useState("")
   const [saleDateRange, setSaleDateRange] = useState<DateRangeValue>(null)
   const [saleInvoiceFilter, setSaleInvoiceFilter] = useState("")
+  const [saleErpClosedFilter, setSaleErpClosedFilter] = useState<SaleErpClosedFilter>("")
+  const [saleReceiptFilter, setSaleReceiptFilter] = useState<SaleReceiptFilter>("")
+  const [selectedSaleIds, setSelectedSaleIds] = useState<Set<string>>(new Set())
+  const [bulkInvoiceDate, setBulkInvoiceDate] = useState(todayLocalDate)
+  const [bulkInvoiceEmail, setBulkInvoiceEmail] = useState("")
+  const [bulkInvoiceErpClose, setBulkInvoiceErpClose] = useState(false)
+  const [bulkInvoiceSaving, setBulkInvoiceSaving] = useState(false)
+  const [bulkInvoiceError, setBulkInvoiceError] = useState("")
+  const [bulkReceiptSaving, setBulkReceiptSaving] = useState(false)
+  const [bulkReceiptError, setBulkReceiptError] = useState("")
+  const [receiptCompletingSaleId, setReceiptCompletingSaleId] = useState<string | null>(null)
+  const autoSelectedSaleQueueKey = useRef("")
   const [salePageIndex, setSalePageIndex] = useState(0)
   const [salePageSize, setSalePageSize] = useState(50)
-  const saleSort = useServerSort("tax_invoice_date", "desc", () => setSalePageIndex(0))
-  const salePageResetKey = `${saleCustomerFilter}|${saleDateRange?.start ?? ""}|${saleDateRange?.end ?? ""}|${saleInvoiceFilter}`
+  const saleSort = useServerSort("tax_invoice_date", "desc", () => {
+    setSalePageIndex(0)
+    setSelectedSaleIds(new Set())
+  })
+  const salePageResetKey = `${saleCustomerFilter}|${saleDateRange?.start ?? ""}|${saleDateRange?.end ?? ""}|${saleInvoiceFilter}|${saleErpClosedFilter}|${saleReceiptFilter}`
   useEffect(() => {
     void salePageResetKey
     setSalePageIndex(0)
+    setSelectedSaleIds(new Set())
   }, [salePageResetKey])
 
   // C-1 sales — useSaleListAll 제거. KPI/sparkline/right-rail/SaleSummaryCards 는 useSaleDashboard,
@@ -281,6 +663,8 @@ export default function OrdersPage() {
     start: saleDateRange?.start || undefined,
     end: saleDateRange?.end || undefined,
     invoice_status: saleInvoiceFilter || undefined,
+    receipt_status: saleReceiptFilter || undefined,
+    erp_closed: saleErpClosedFilter || undefined,
   }
   const {
     dashboard: saleDash,
@@ -299,15 +683,74 @@ export default function OrdersPage() {
     pageIndex: salePageIndex,
     pageSize: salePageSize,
   })
+  const { summary: erpOpenSaleSummary } = useSaleSummary({
+    customer_id: saleCustomerFilter || undefined,
+    start: saleDateRange?.start || undefined,
+    end: saleDateRange?.end || undefined,
+    invoice_status: "issued",
+    erp_closed: "false",
+  })
+  const { summary: receiptOpenSaleSummary } = useSaleSummary({
+    customer_id: saleCustomerFilter || undefined,
+    start: saleDateRange?.start || undefined,
+    end: saleDateRange?.end || undefined,
+    receipt_status: "open",
+  })
   const saleLoading = saleDashLoading || saleListLoading
+  const saleBulkActionMode = getSaleBulkActionMode(saleInvoiceFilter, saleErpClosedFilter, saleReceiptFilter)
   const reloadSales = async () => {
     await Promise.all([reloadSaleDash(), reloadSaleList()])
   }
 
+  useEffect(() => {
+    const queueMode: SaleBulkActionMode | "" =
+      saleBulkActionMode === "receipt_complete"
+        ? "receipt_complete"
+        : saleInvoiceFilter === "pending"
+          ? "invoice"
+          : saleBulkActionMode === "erp_close"
+            ? "erp_close"
+            : ""
+    if (activeTab !== "sales" || saleLoading || !queueMode) {
+      return
+    }
+
+    const visibleKey = sales.map((sale) => sale.sale_id).join(",")
+    const nextKey = `${queueMode}|${salePageIndex}|${salePageSize}|${salesTotal}|${visibleKey}`
+    if (autoSelectedSaleQueueKey.current === nextKey) return
+    autoSelectedSaleQueueKey.current = nextKey
+
+    const selectable = sales.filter((sale) => isSaleSelectableForBulk(sale, queueMode))
+    setSelectedSaleIds(new Set(selectable.map((sale) => sale.sale_id)))
+    setBulkInvoiceError("")
+    setBulkReceiptError("")
+    if (queueMode === "receipt_complete") {
+      return
+    }
+    if (queueMode === "erp_close") {
+      setBulkInvoiceDate(selectable[0]?.sale.tax_invoice_date ?? todayLocalDate())
+      setBulkInvoiceEmail("")
+      setBulkInvoiceErpClose(true)
+    } else {
+      setBulkInvoiceDate(todayLocalDate())
+      setBulkInvoiceEmail(sharedInvoiceEmail(selectable))
+      setBulkInvoiceErpClose(false)
+    }
+  }, [
+    activeTab,
+    saleBulkActionMode,
+    saleInvoiceFilter,
+    saleLoading,
+    salePageIndex,
+    salePageSize,
+    sales,
+    salesTotal,
+  ])
+
   // 탭 4: 수금
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState("")
   const [receiptDateRange, setReceiptDateRange] = useState<DateRangeValue>(null)
-  const [receiptMatchFilter, setReceiptMatchFilter] = useState<ReceiptMatchFilter>("")
+  const [receiptMatchFilter, setReceiptMatchFilter] = useState<ReceiptMatchFilter>("open")
   const [orderActionError, setOrderActionError] = useState("")
   const [orderSourceHints, setOrderSourceHints] = useState<Record<string, FulfillmentSource>>({})
 
@@ -388,12 +831,21 @@ export default function OrdersPage() {
     await Promise.all([reloadOrderDash(), reloadOrderList()])
   }
   // C-1 receipts — KPI/sparkline 은 dashboard, 표/매칭 패널은 useReceiptList(필요시 후속 페이지네이션).
-  const { data: receipts, loading: receiptsLoading } = useReceiptList(receiptFilters)
-  const { dashboard: receiptDash } = useReceiptDashboard(receiptFilters)
+  const {
+    data: receipts,
+    loading: receiptsLoading,
+    reload: reloadReceiptList,
+  } = useReceiptList(receiptFilters)
+  const { dashboard: receiptDash, reload: reloadReceiptDash } = useReceiptDashboard(receiptFilters)
   const visibleReceipts = useMemo(() => {
-    if (!receiptMatchFilter) return receipts
+    if (receiptMatchFilter === "open") {
+      return receipts.filter((receipt) => getReceiptMatchFilter(receipt) !== "matched")
+    }
     return receipts.filter((receipt) => getReceiptMatchFilter(receipt) === receiptMatchFilter)
   }, [receipts, receiptMatchFilter])
+  const reloadReceipts = async () => {
+    await Promise.all([reloadReceiptList(), reloadReceiptDash()])
+  }
 
   // visibleOrders 는 표 렌더링 한정 — server-side work_queue 가 적용된 현재 페이지.
   const visibleOrders = orders
@@ -506,6 +958,7 @@ export default function OrdersPage() {
   const receiptTotal = receiptDash?.totals.amount_sum ?? 0
   const receiptRemaining = receiptDash?.totals.remaining_sum ?? 0
   const receiptCount = receiptDash?.totals.count ?? receipts.length
+  const openReceiptCount = visibleReceipts.length
   const receiptPartialMatchCount = receiptDash?.totals.partial_match_count ?? 0
   const receiptRecoveryRate = receiptDash?.totals.recovery_rate ?? 0
   const customersCount = orderDash?.totals.active_customers_count ?? 0
@@ -558,6 +1011,20 @@ export default function OrdersPage() {
     return { buckets, weekStarts, total, max }
   }, [outboundDash])
   const invoicePending = saleDash?.totals.invoice_pending_count ?? 0
+  const erpOpenCount = erpOpenSaleSummary?.total ?? 0
+  const receiptOpenSaleCount = receiptOpenSaleSummary?.total ?? 0
+  const selectedSales = useMemo(
+    () => sales.filter((sale) => selectedSaleIds.has(sale.sale_id)),
+    [sales, selectedSaleIds],
+  )
+  const selectedReceiptSales = useMemo(
+    () => selectedSales.filter((sale) => isSaleSelectableForBulk(sale, "receipt_complete")),
+    [selectedSales],
+  )
+  const selectedReceiptAmount = selectedReceiptSales.reduce(
+    (sum, sale) => sum + getSaleOutstandingAmount(sale),
+    0,
+  )
 
   if (!selectedCompanyId) {
     return (
@@ -657,6 +1124,263 @@ export default function OrdersPage() {
     navigate(`/orders?tab=matching&receipt_id=${receipt.receipt_id}`)
   }
 
+  const handleOutboundQueueChange = (value: string) => {
+    const next = value === "sale_unregistered" ? "sale_unregistered" : ""
+    setObWorkQueueFilter(next)
+    if (next) {
+      setObStatusFilter("active")
+      setObUsageFilter("")
+    }
+  }
+
+  const openOutboundSaleQueue = () => {
+    setSelectedOutbound(null)
+    handleOutboundQueueChange("sale_unregistered")
+    navigate("/orders?tab=outbound", { replace: true })
+  }
+
+  const handleBulkCreateSales = async () => {
+    const targets = bulkSaleCreatePlan.ready
+    if (targets.length === 0 || bulkSaleCreating || bulkSalePreviewLoading || bulkSalePreviewError) return
+
+    setBulkSaleCreating(true)
+    setBulkSaleCreateError("")
+    try {
+      const results = await createSalesInBatches(targets)
+      const successCount = results.filter((result) => result.status === "fulfilled").length
+      const failures = results.filter(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      )
+      const failedCount = failures.length
+      const firstFailure = failures[0] ? ` · ${formatError(failures[0].reason)}` : ""
+
+      if (failedCount > 0) {
+        const message = `매출 ${successCount}건 생성, ${failedCount}건 실패${firstFailure}`
+        setBulkSaleCreateError(message)
+        if (successCount === 0) {
+          notify.error(message)
+          return
+        }
+        notify.warning(message)
+      } else {
+        notify.success(`매출 ${successCount}건을 생성했습니다`)
+      }
+
+      await Promise.all([reloadOutbounds(), reloadSales()])
+      openInvoicePendingQueue()
+    } finally {
+      setBulkSaleCreating(false)
+    }
+  }
+
+  const openInvoicePendingQueue = () => {
+    autoSelectedSaleQueueKey.current = ""
+    setSaleInvoiceFilter("pending")
+    setSaleErpClosedFilter("")
+    setSaleReceiptFilter("")
+    setSelectedSaleIds(new Set())
+    setBulkInvoiceDate(todayLocalDate())
+    setBulkInvoiceErpClose(false)
+    navigate("/orders?tab=sales", { replace: true })
+  }
+
+  const openErpOpenQueue = () => {
+    autoSelectedSaleQueueKey.current = ""
+    setSaleInvoiceFilter("issued")
+    setSaleErpClosedFilter("false")
+    setSaleReceiptFilter("")
+    setSelectedSaleIds(new Set())
+    setBulkInvoiceDate(todayLocalDate())
+    setBulkInvoiceErpClose(true)
+    navigate("/orders?tab=sales", { replace: true })
+  }
+
+  const openReceiptOpenQueue = () => {
+    autoSelectedSaleQueueKey.current = ""
+    setSaleInvoiceFilter("")
+    setSaleErpClosedFilter("")
+    setSaleReceiptFilter("open")
+    setSelectedSaleIds(new Set())
+    setBulkReceiptError("")
+    navigate("/orders?tab=sales", { replace: true })
+  }
+
+  const handleBulkInvoice = async () => {
+    if (selectedSaleIds.size === 0) return
+    const date = bulkInvoiceDate.trim()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setBulkInvoiceError("계산서일을 YYYY-MM-DD 형식으로 입력해주세요.")
+      return
+    }
+
+    const selectedRows = sales.filter((sale) => selectedSaleIds.has(sale.sale_id))
+    if (saleBulkActionMode === "erp_close") {
+      setBulkInvoiceSaving(true)
+      setBulkInvoiceError("")
+      try {
+        await Promise.all(
+          Array.from(selectedSaleIds).map((saleId) =>
+            fetchWithAuth(`/api/v1/sales/${saleId}`, {
+              method: "PUT",
+              body: JSON.stringify({ erp_closed: true, erp_closed_date: date }),
+            }),
+          ),
+        )
+        notify.success(`ERP ${selectedSaleIds.size}건을 마감했습니다`)
+        setSelectedSaleIds(new Set())
+        await reloadSales()
+      } catch (err) {
+        setBulkInvoiceError(err instanceof Error ? err.message : "ERP 마감 처리에 실패했습니다")
+      } finally {
+        setBulkInvoiceSaving(false)
+      }
+      return
+    }
+
+    const email = bulkInvoiceEmail.trim()
+    const salePayload: Record<string, unknown> = { tax_invoice_date: date }
+    if (email) salePayload.tax_invoice_email = email
+    if (bulkInvoiceErpClose) {
+      salePayload.erp_closed = true
+      salePayload.erp_closed_date = date
+    }
+
+    setBulkInvoiceSaving(true)
+    setBulkInvoiceError("")
+    try {
+      await Promise.all(
+        Array.from(selectedSaleIds).map((saleId) =>
+          fetchWithAuth(`/api/v1/sales/${saleId}`, {
+            method: "PUT",
+            body: JSON.stringify(salePayload),
+          }),
+        ),
+      )
+      await Promise.all(
+        selectedRows
+          .map((sale) => sale.outbound_id)
+          .filter((id): id is string => !!id)
+          .map((outboundId) =>
+            fetchWithAuth(`/api/v1/outbounds/${outboundId}`, {
+              method: "PUT",
+              body: JSON.stringify({ tax_invoice_issued: true }),
+            }),
+          ),
+      )
+      notify.success(`계산서 ${selectedSaleIds.size}건을 처리했습니다`)
+      setSelectedSaleIds(new Set())
+      setBulkInvoiceErpClose(false)
+      await Promise.all([reloadSales(), reloadOutbounds()])
+    } catch (err) {
+      setBulkInvoiceError(err instanceof Error ? err.message : "계산서 일괄 처리에 실패했습니다")
+    } finally {
+      setBulkInvoiceSaving(false)
+    }
+  }
+
+  const handleBulkCompleteSaleReceipts = async () => {
+    const targets = selectedReceiptSales
+    if (targets.length === 0 || bulkReceiptSaving) return
+
+    setBulkReceiptSaving(true)
+    setBulkReceiptError("")
+    try {
+      const results = await completeSaleReceiptsInBatches(targets)
+      const successCount = results.filter((result) => result.status === "fulfilled").length
+      const failures = results.filter(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      )
+      const failedCount = failures.length
+      const firstFailure = failures[0] ? ` · ${formatError(failures[0].reason)}` : ""
+
+      if (failedCount > 0) {
+        const message = `수금 ${successCount}건 완료, ${failedCount}건 실패${firstFailure}`
+        setBulkReceiptError(message)
+        if (successCount === 0) {
+          notify.error(message)
+          return
+        }
+        notify.warning(message)
+      } else {
+        notify.success(`수금 ${successCount}건을 완료 처리했습니다`)
+        setSelectedSaleIds(new Set())
+      }
+      await Promise.all([reloadSales(), reloadReceipts()])
+    } finally {
+      setBulkReceiptSaving(false)
+    }
+  }
+
+  const handleBulkCompleteFilteredSaleReceipts = async () => {
+    if (!selectedCompanyId || bulkReceiptSaving || !isReceiptQueueFilter(saleReceiptFilter)) return
+
+    setBulkReceiptSaving(true)
+    setBulkReceiptError("")
+    try {
+      const filteredSales = await fetchBulkReceiptSales(selectedCompanyId, {
+        customerId: saleCustomerFilter || undefined,
+        start: saleDateRange?.start || undefined,
+        end: saleDateRange?.end || undefined,
+        invoiceStatus: saleInvoiceFilter || undefined,
+        receiptStatus: saleReceiptFilter,
+        erpClosed: saleErpClosedFilter || undefined,
+        sort: saleSort.queryParams.sort,
+        order: saleSort.queryParams.order,
+      })
+      const targets = filteredSales.filter((sale) => isSaleSelectableForBulk(sale, "receipt_complete"))
+      if (targets.length === 0) {
+        notify.info("필터 결과에 수금 완료할 미수 매출이 없습니다")
+        return
+      }
+
+      const results = await completeSaleReceiptsInBatches(targets)
+      const successCount = results.filter((result) => result.status === "fulfilled").length
+      const failures = results.filter(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      )
+      const failedCount = failures.length
+      const firstFailure = failures[0] ? ` · ${formatError(failures[0].reason)}` : ""
+
+      if (failedCount > 0) {
+        const message = `필터 결과 수금 ${successCount}건 완료, ${failedCount}건 실패${firstFailure}`
+        setBulkReceiptError(message)
+        if (successCount === 0) {
+          notify.error(message)
+          return
+        }
+        notify.warning(message)
+      } else {
+        notify.success(`필터 결과 ${successCount}건을 수금완료 처리했습니다`)
+        setSelectedSaleIds(new Set())
+      }
+      await Promise.all([reloadSales(), reloadReceipts()])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "필터 결과 수금완료 처리에 실패했습니다"
+      setBulkReceiptError(message)
+      notify.error(message)
+    } finally {
+      setBulkReceiptSaving(false)
+    }
+  }
+
+  const handleCompleteSaleReceipt = async (item: SaleListItem) => {
+    const outstanding = getSaleOutstandingAmount(item)
+    if (outstanding <= 0) {
+      notify.info("이미 수금 완료된 매출입니다")
+      return
+    }
+    setReceiptCompletingSaleId(item.sale_id)
+    try {
+      await completeReceiptForSale(item)
+      notify.success(`수금 ${Math.round(outstanding).toLocaleString("ko-KR")}원을 완료 처리했습니다`)
+      await Promise.all([reloadSales(), reloadReceipts()])
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : "수금 완료 처리에 실패했습니다")
+    } finally {
+      setReceiptCompletingSaleId(null)
+    }
+  }
+
   const pageTitle =
     activeTab === "outbound"
       ? "출고 / 판매"
@@ -673,7 +1397,7 @@ export default function OrdersPage() {
       : activeTab === "sales"
         ? `${salesTotalCount}건 · ${fmtEok(saleTotal)}억`
         : activeTab === "receipts"
-          ? `${receiptCount}건 · 미정산 ${fmtEok(receiptRemaining)}억`
+          ? `${openReceiptCount}건 · 미정산 ${fmtEok(receiptRemaining)}억`
           : activeTab === "matching"
             ? "입금과 매출채권 자동 추천"
             : `${ordersTotalCount}건 · ${fmtSalesMw(ordersKw)} MW`
@@ -694,6 +1418,7 @@ export default function OrdersPage() {
   const saleConvServer = outboundDash?.sale_conversion
   const saleEligibleCount = saleConvServer?.eligible_count ?? 0
   const saleLinkedCount = saleConvServer?.linked_count ?? 0
+  const saleUnregisteredCount = Math.max(0, saleEligibleCount - saleLinkedCount)
   const saleConversionDenom = saleEligibleCount || (outboundDash?.totals.count ?? 0)
   const saleConversionRate =
     saleConversionDenom > 0 ? Math.round((saleLinkedCount / saleConversionDenom) * 1000) / 10 : 0
@@ -947,6 +1672,45 @@ export default function OrdersPage() {
                 },
               ]
 
+  const workQueueRail = (
+    <RailBlock title="처리 대기" count={`${saleUnregisteredCount + invoicePending + erpOpenCount + receiptOpenSaleCount}건`}>
+      <div className="space-y-1.5">
+        <button
+          type="button"
+          onClick={openOutboundSaleQueue}
+          className="flex w-full items-center justify-between rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 text-left text-[11.5px] transition hover:border-[var(--ink-3)]"
+        >
+          <span className="text-[var(--ink-2)]">매출 미등록</span>
+          <span className="mono font-semibold text-[var(--warn)]">{saleUnregisteredCount}</span>
+        </button>
+        <button
+          type="button"
+          onClick={openInvoicePendingQueue}
+          className="flex w-full items-center justify-between rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 text-left text-[11.5px] transition hover:border-[var(--ink-3)]"
+        >
+          <span className="text-[var(--ink-2)]">계산서 미발행</span>
+          <span className="mono font-semibold text-[var(--warn)]">{invoicePending}</span>
+        </button>
+        <button
+          type="button"
+          onClick={openErpOpenQueue}
+          className="flex w-full items-center justify-between rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 text-left text-[11.5px] transition hover:border-[var(--ink-3)]"
+        >
+          <span className="text-[var(--ink-2)]">ERP 미마감</span>
+          <span className="mono font-semibold text-[var(--warn)]">{erpOpenCount}</span>
+        </button>
+        <button
+          type="button"
+          onClick={openReceiptOpenQueue}
+          className="flex w-full items-center justify-between rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 text-left text-[11.5px] transition hover:border-[var(--ink-3)]"
+        >
+          <span className="text-[var(--ink-2)]">수금 미완료</span>
+          <span className="mono font-semibold text-[var(--warn)]">{receiptOpenSaleCount}</span>
+        </button>
+      </div>
+    </RailBlock>
+  )
+
   const ordersCardControls = (
     <div
       className="sf-card-controls"
@@ -1039,6 +1803,12 @@ export default function OrdersPage() {
                 ),
               },
               {
+                label: "업무",
+                value: obWorkQueueFilter,
+                onChange: handleOutboundQueueChange,
+                options: [{ value: "sale_unregistered", label: "매출 미등록" }],
+              },
+              {
                 label: "용도",
                 value: obUsageFilter,
                 onChange: setObUsageFilter,
@@ -1090,10 +1860,42 @@ export default function OrdersPage() {
               {
                 label: "계산서",
                 value: saleInvoiceFilter,
-                onChange: setSaleInvoiceFilter,
+                onChange: (value) => {
+                  setSaleInvoiceFilter(value)
+                  if (value) setSaleReceiptFilter("")
+                },
                 options: [
                   { value: "issued", label: "발행" },
                   { value: "pending", label: "미발행" },
+                ],
+              },
+              {
+                label: "ERP",
+                value: saleErpClosedFilter,
+                onChange: (value) => {
+                  setSaleErpClosedFilter(value as SaleErpClosedFilter)
+                  if (value) setSaleReceiptFilter("")
+                },
+                options: [
+                  { value: "false", label: "미마감" },
+                  { value: "true", label: "마감" },
+                ],
+              },
+              {
+                label: "수금",
+                value: saleReceiptFilter,
+                onChange: (value) => {
+                  setSaleReceiptFilter(value as SaleReceiptFilter)
+                  if (value) {
+                    setSaleInvoiceFilter("")
+                    setSaleErpClosedFilter("")
+                  }
+                },
+                options: [
+                  { value: "open", label: "미완료" },
+                  { value: "unpaid", label: "미수" },
+                  { value: "partial", label: "부분" },
+                  { value: "paid", label: "완료" },
                 ],
               },
             ]}
@@ -1130,11 +1932,11 @@ export default function OrdersPage() {
               {
                 label: "매칭",
                 value: receiptMatchFilter,
-                onChange: (value) => setReceiptMatchFilter(value as ReceiptMatchFilter),
+                onChange: (value) => setReceiptMatchFilter(value === "" ? "open" : (value as ReceiptMatchFilter)),
                 options: [
+                  { value: "open", label: "미수 전체" },
                   { value: "unmatched", label: "미매칭" },
                   { value: "partial", label: "부분 매칭" },
-                  { value: "matched", label: "완전 매칭" },
                 ],
               },
             ]}
@@ -1161,8 +1963,8 @@ export default function OrdersPage() {
     <div className="sf-page sf-sales-page">
       <div className="sf-procurement-layout">
         <section className="sf-procurement-main">
-          <div className="sf-command-kpis">
-            {metrics.map((metric) => (
+          <KpiStrip metrics={metrics} scopeId={`orders.${activeTab}`}>
+            {(metric) => (
               <TileB
                 key={metric.lbl}
                 lbl={metric.lbl}
@@ -1176,8 +1978,8 @@ export default function OrdersPage() {
                 spark={metric.spark ?? flatSparkFromValue(metric.v)}
                 metricId={metric.metricId}
               />
-            ))}
-          </div>
+            )}
+          </KpiStrip>
 
           <CommandTopLine title={pageTitle} sub={pageSub} right={ordersCardControls} />
 
@@ -1231,6 +2033,80 @@ export default function OrdersPage() {
                     />
                   ) : (
                     <>
+                      {showBulkSaleCreatePanel && (
+                        <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
+                          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto] lg:items-center">
+                            <div>
+                              <div className="text-sm font-semibold text-[var(--ink)]">매출 자동 생성 미리보기</div>
+                              <div className="mt-1 text-xs text-[var(--ink-2)]">
+                                {bulkSalePreviewLoading
+                                  ? `조건 전체 대상 확인 중 · ${outboundsTotal}건`
+                                  : `조건 전체 생성 예정 ${bulkSaleCreatePlan.ready.length}건 · 제외 ${bulkSaleCreatePlan.blocked.length}건 · 처리 후 계산서 미발행으로 이동`}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-4 gap-3 text-right text-xs">
+                              <div>
+                                <div className="text-[var(--ink-3)]">수량</div>
+                                <div className="mono font-semibold">
+                                  {bulkSalePreviewLoading ? "—" : formatNumber(bulkSaleCreatePlan.quantity)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[var(--ink-3)]">용량</div>
+                                <div className="mono font-semibold">
+                                  {bulkSalePreviewLoading ? "—" : formatKw(bulkSaleCreatePlan.capacityKw)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[var(--ink-3)]">공급가</div>
+                                <div className="mono font-semibold">
+                                  {bulkSalePreviewLoading ? "—" : formatNumber(bulkSaleCreatePlan.supplyAmount)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[var(--ink-3)]">합계</div>
+                                <div className="mono font-semibold">
+                                  {bulkSalePreviewLoading ? "—" : formatNumber(bulkSaleCreatePlan.totalAmount)}
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-8 gap-1.5"
+                              disabled={
+                                bulkSalePreviewLoading ||
+                                !!bulkSalePreviewError ||
+                                bulkSaleCreating ||
+                                bulkSaleCreatePlan.ready.length === 0
+                              }
+                              onClick={handleBulkCreateSales}
+                            >
+                              {bulkSaleCreating || bulkSalePreviewLoading ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              )}
+                              {bulkSalePreviewLoading ? "대상 확인 중" : `매출 ${bulkSaleCreatePlan.ready.length}건 생성`}
+                            </Button>
+                          </div>
+                          {!bulkSalePreviewLoading && bulkSaleCreatePlan.reasonCounts.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {bulkSaleCreatePlan.reasonCounts.map((item) => (
+                                <span key={item.reason} className="sf-pill warn">
+                                  {item.reason} {item.count}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {bulkSalePreviewError && (
+                            <div className="mt-2 text-xs text-destructive">{bulkSalePreviewError}</div>
+                          )}
+                          {bulkSaleCreateError && (
+                            <div className="mt-2 text-xs text-destructive">{bulkSaleCreateError}</div>
+                          )}
+                        </div>
+                      )}
                       {obLoading && outbounds.length === 0 ? (
                         <SkeletonRows rows={8} />
                       ) : (
@@ -1240,6 +2116,7 @@ export default function OrdersPage() {
                           pinning={outboundColPin.pinning}
                           onPinningChange={outboundColPin.setPinning}
                           onSelect={(ob) => setSelectedOutbound(ob.outbound_id)}
+                          automationStatus={showBulkSaleCreatePanel ? getOutboundAutomationStatus : undefined}
                           serverMode={{
                             pageIndex: obPageIndex,
                             pageSize: obPageSize,
@@ -1277,11 +2154,143 @@ export default function OrdersPage() {
                             : undefined
                         }
                       />
+                      {saleBulkActionMode === "receipt_complete" && (selectedSaleIds.size > 0 || salesTotal > 0) && (
+                        <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
+                          <div className="grid gap-3 xl:grid-cols-[minmax(220px,1fr)_auto_auto] xl:items-center">
+                            <div>
+                              <div className="text-sm font-semibold text-[var(--ink)]">일괄 수금완료</div>
+                              <div className="mt-1 text-xs text-[var(--ink-2)]">
+                                현재 목록 또는 필터 결과 전체를 오늘 날짜로 자동 수금 처리
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-3 text-right text-xs">
+                              <div>
+                                <div className="text-[var(--ink-3)]">현재 목록</div>
+                                <div className="mono font-semibold">{selectedReceiptSales.length}건</div>
+                              </div>
+                              <div>
+                                <div className="text-[var(--ink-3)]">필터 결과</div>
+                                <div className="mono font-semibold">{formatNumber(salesTotal)}건</div>
+                              </div>
+                              <div>
+                                <div className="text-[var(--ink-3)]">목록 미수</div>
+                                <div className="mono font-semibold">{formatNumber(selectedReceiptAmount)}</div>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5"
+                                disabled={bulkReceiptSaving || selectedReceiptSales.length === 0}
+                                onClick={handleBulkCompleteSaleReceipts}
+                              >
+                                {bulkReceiptSaving ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                )}
+                                {`현재 목록 ${selectedReceiptSales.length}건`}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-8 gap-1.5"
+                                disabled={bulkReceiptSaving || salesTotal === 0}
+                                onClick={handleBulkCompleteFilteredSaleReceipts}
+                              >
+                                {bulkReceiptSaving ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                )}
+                                {`필터 전체 ${formatNumber(salesTotal)}건`}
+                              </Button>
+                            </div>
+                          </div>
+                          {bulkReceiptError && (
+                            <div className="mt-2 text-xs text-destructive">{bulkReceiptError}</div>
+                          )}
+                        </div>
+                      )}
+                      {selectedSaleIds.size > 0 && saleBulkActionMode !== "receipt_complete" && (
+                        <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
+                          <div
+                            className={
+                              saleBulkActionMode === "erp_close"
+                                ? "grid gap-3 lg:grid-cols-[160px_auto] lg:items-end"
+                                : "grid gap-3 lg:grid-cols-[160px_minmax(180px,1fr)_160px_auto] lg:items-end"
+                            }
+                          >
+                            <div>
+                              <Label className="mb-1.5 text-xs">
+                                {saleBulkActionMode === "erp_close" ? "ERP 마감일" : "계산서일"}
+                              </Label>
+                              <DateInput value={bulkInvoiceDate} onChange={setBulkInvoiceDate} />
+                            </div>
+                            {saleBulkActionMode === "invoice" && (
+                              <>
+                                <div>
+                                  <Label className="mb-1.5 text-xs">계산서 이메일</Label>
+                                  <Input
+                                    value={bulkInvoiceEmail}
+                                    onChange={(event) => setBulkInvoiceEmail(event.target.value)}
+                                    placeholder="선택 입력"
+                                  />
+                                </div>
+                                <label className="flex h-8 items-center gap-2 text-xs text-[var(--ink-2)]">
+                                  <input
+                                    type="checkbox"
+                                    checked={bulkInvoiceErpClose}
+                                    onChange={(event) => setBulkInvoiceErpClose(event.target.checked)}
+                                    className="size-3.5"
+                                  />
+                                  ERP까지 마감
+                                </label>
+                              </>
+                            )}
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-8 gap-1.5"
+                              disabled={bulkInvoiceSaving}
+                              onClick={handleBulkInvoice}
+                            >
+                              {bulkInvoiceSaving ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              )}
+                              {saleBulkActionMode === "erp_close"
+                                ? `ERP ${selectedSaleIds.size}건 마감`
+                                : `선택 ${selectedSaleIds.size}건 처리`}
+                            </Button>
+                          </div>
+                          {bulkInvoiceError && (
+                            <div className="mt-2 text-xs text-destructive">{bulkInvoiceError}</div>
+                          )}
+                        </div>
+                      )}
                       <SaleListTable
                         items={sales}
                         hidden={saleColVis.hidden}
                         pinning={saleColPin.pinning}
                         onPinningChange={saleColPin.setPinning}
+                        selectedIds={selectedSaleIds}
+                        onSelectedIdsChange={setSelectedSaleIds}
+                        isRowSelectable={(item) => isSaleSelectableForBulk(item, saleBulkActionMode)}
+                        onInvoice={(item) => {
+                          setSaleReceiptFilter("")
+                          setSelectedSaleIds(new Set([item.sale_id]))
+                          setBulkInvoiceDate(item.sale.tax_invoice_date ?? todayLocalDate())
+                          setBulkInvoiceEmail(item.sale.tax_invoice_email ?? "")
+                          setBulkInvoiceErpClose(saleBulkActionMode === "erp_close" || !!item.sale.erp_closed)
+                          setBulkInvoiceError("")
+                          setBulkReceiptError("")
+                        }}
+                        onCompleteReceipt={handleCompleteSaleReceipt}
+                        completingReceiptSaleId={receiptCompletingSaleId}
                         serverMode={{
                           pageIndex: salePageIndex,
                           pageSize: salePageSize,
@@ -1291,6 +2300,7 @@ export default function OrdersPage() {
                           onPageChange: ({ pageIndex: nextIdx, pageSize: nextSize }) => {
                             setSalePageIndex(nextIdx)
                             setSalePageSize(nextSize)
+                            setSelectedSaleIds(new Set())
                           },
                         }}
                       />
@@ -1394,6 +2404,7 @@ export default function OrdersPage() {
 
           {activeTab === "outbound" && (
             <>
+              {workQueueRail}
               <RailBlock title="출고 상태" count={`${outboundsTotalCount} rows`}>
                 <BreakdownRows
                   items={(["active", "cancel_pending", "cancelled"] as OutboundStatus[]).map(
@@ -1446,6 +2457,7 @@ export default function OrdersPage() {
 
           {(activeTab === "sales" || activeTab === "receipts" || activeTab === "matching") && (
             <>
+              {workQueueRail}
               <RailBlock title="채권 요약" count={`${receiptCount} receipts`}>
                 <div className="bignum text-[26px] text-[var(--solar-3)]">
                   {fmtEok(receiptRemaining)}{" "}

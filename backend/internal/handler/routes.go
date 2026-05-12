@@ -279,6 +279,7 @@ func (h *CalcProxyHandler) RegisterRoutes(root chi.Router, g middleware.Gates, a
 		r.With(g.Feature(feature.IDCalcMarginAnalysis)).Post("/margin-analysis", h.MarginAnalysis)
 		r.With(g.Feature(feature.IDCalcCustomerAnalysis)).Post("/customer-analysis", h.CustomerAnalysis)
 		r.With(g.Feature(feature.IDCalcPriceTrend)).Post("/price-trend", h.PriceTrend)
+		r.With(g.Feature(feature.IDCalcPriceForecastStrategy)).Post("/price-forecast-strategy", h.PriceForecastStrategy)
 		r.With(g.Feature(feature.IDCalcSupplyForecast)).Post("/supply-forecast", h.SupplyForecast)
 		r.With(g.Feature(feature.IDCalcOrderFulfillmentRisk)).Post("/order-fulfillment-risk", h.OrderFulfillmentRisk)
 		r.With(g.Feature(feature.IDCalcOutstandingList)).Post("/outstanding-list", h.OutstandingList)
@@ -401,7 +402,7 @@ func (h *ExportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.With(g.AdminOnly).Get("/export/all", h.FullDataDump)
 }
 
-// ImportHandler — 엑셀 일괄 등록 9종 (모두 write).
+// ImportHandler — 엑셀 일괄 등록 10종 (모두 write).
 func (h *ImportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Route("/import", func(r chi.Router) {
 		r.Use(g.Write)
@@ -414,6 +415,7 @@ func (h *ImportHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Post("/receipts", h.Receipts)
 		r.Post("/purchase-orders", h.PurchaseOrders)
 		r.Post("/lcs", h.LCs)
+		r.Post("/tts", h.TTs)
 	})
 }
 
@@ -648,6 +650,7 @@ func (h *PriceBenchmarkHandler) RegisterRoutes(r chi.Router, g middleware.Gates)
 		r.Get("/our-prices", h.OurPrices)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Post("/ai-refresh", h.AIRefresh)
+		r.With(g.Write).Patch("/{id}/review-status", h.UpdateReviewStatus)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 	})
 }
@@ -696,6 +699,7 @@ func (h *ReceiptMatchHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 		r.Get("/", h.List)
 		r.With(g.Write).Post("/", h.Create)
 		r.With(g.Write).Post("/bulk", h.BulkCreate)
+		r.With(g.Write).Post("/complete", h.Complete)
 		r.Post("/ai-suggest", h.AISuggest)
 		r.With(g.Write).Delete("/{id}", h.Delete)
 		r.With(g.Write).Post("/auto", h.AutoMatch)

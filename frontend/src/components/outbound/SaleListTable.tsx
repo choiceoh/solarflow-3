@@ -1,6 +1,8 @@
 import { memo } from "react"
+import { CheckCircle2, Loader2 } from "lucide-react"
 import MetaTable, { type ColumnDef, type MetaTableServerMode } from "@/components/common/MetaTable"
 import { formatDate, formatNumber, cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import type { SaleListItem } from "@/types/outbound"
 import type { ColumnVisibilityMeta } from "@/lib/columnVisibility"
 import type { ColumnPinningState } from "@/lib/columnPinning"
@@ -14,14 +16,30 @@ const SALE_SERVER_SORTABLE_COLUMNS = new Set([
   "status",
 ])
 
+function saleTotalAmount(item: SaleListItem) {
+  return item.sale.total_amount ?? item.total_amount ?? 0
+}
+
+function saleCollectedAmount(item: SaleListItem) {
+  return item.collected_amount ?? 0
+}
+
+function saleOutstandingAmount(item: SaleListItem) {
+  const fromServer = item.outstanding_amount
+  if (fromServer != null) return Math.max(0, fromServer)
+  return Math.max(0, saleTotalAmount(item) - saleCollectedAmount(item))
+}
+
 interface Props {
   items: SaleListItem[]
   hidden: Set<string>
   pinning?: ColumnPinningState
   onPinningChange?: (next: ColumnPinningState) => void
   onInvoice?: (item: SaleListItem) => void
+  onCompleteReceipt?: (item: SaleListItem) => void
+  completingReceiptSaleId?: string | null
   globalFilter?: string
-  // 다중 선택 — 미발행 매출만 선택 가능하도록 selectableRow가 false면 체크박스 비활성
+  // 다중 선택 — 현재 업무 큐에서 처리 가능한 행만 선택 가능
   selectedIds?: Set<string>
   onSelectedIdsChange?: (next: Set<string>) => void
   isRowSelectable?: (item: SaleListItem) => boolean
@@ -31,12 +49,16 @@ interface Props {
 
 function buildColumns({
   onInvoice,
+  onCompleteReceipt,
+  completingReceiptSaleId,
   selectedIds,
   onSelectedIdsChange,
   isRowSelectable,
   visibleItems,
 }: {
   onInvoice?: (item: SaleListItem) => void
+  onCompleteReceipt?: (item: SaleListItem) => void
+  completingReceiptSaleId?: string | null
   selectedIds?: Set<string>
   onSelectedIdsChange?: (next: Set<string>) => void
   isRowSelectable?: (item: SaleListItem) => boolean
@@ -223,6 +245,23 @@ function buildColumns({
       sortAccessor: (item) => item.sale.total_amount ?? 0,
     },
     {
+      key: "receipt_status",
+      label: "수금",
+      hideable: true,
+      cell: (item) => {
+        const outstanding = saleOutstandingAmount(item)
+        const collected = saleCollectedAmount(item)
+        if (outstanding <= 0 && saleTotalAmount(item) > 0) {
+          return <span className="sf-pill pos">수금완료</span>
+        }
+        if (collected > 0) {
+          return <span className="sf-pill warn">미수 {formatNumber(outstanding)}</span>
+        }
+        return <span className="sf-pill ghost">미수 {formatNumber(outstanding)}</span>
+      },
+      sortAccessor: (item) => saleOutstandingAmount(item),
+    },
+    {
       key: "tax_invoice_date",
       label: "계산서일",
       hideable: true,
@@ -270,6 +309,47 @@ function buildColumns({
       sortAccessor: (item) => (item.sale.erp_closed ? 1 : 0),
     },
   )
+  if (onCompleteReceipt) {
+    cols.push({
+      key: "receipt_action",
+      label: "수금처리",
+      hideable: true,
+      align: "right",
+      resizable: false,
+      reorderable: false,
+      pinnable: false,
+      defaultWidth: 108,
+      minWidth: 96,
+      maxWidth: 130,
+      cell: (item) => {
+        const outstanding = saleOutstandingAmount(item)
+        const paid = outstanding <= 0 || item.sale.status === "cancelled" || item.status === "cancelled"
+        const loading = completingReceiptSaleId === item.sale_id
+        return (
+          <Button
+            type="button"
+            variant={paid ? "ghost" : "outline"}
+            size="sm"
+            className="h-7 gap-1.5 whitespace-nowrap px-2"
+            disabled={paid || loading}
+            onClick={(event) => {
+              event.stopPropagation()
+              onCompleteReceipt(item)
+            }}
+            title={paid ? "이미 수금 완료" : "미수 잔액을 수금 완료 처리"}
+          >
+            {loading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            )}
+            {paid ? "완료" : "수금완료"}
+          </Button>
+        )
+      },
+      sortAccessor: (item) => saleOutstandingAmount(item),
+    })
+  }
   return cols
 }
 
@@ -283,6 +363,8 @@ function SaleListTable({
   pinning,
   onPinningChange,
   onInvoice,
+  onCompleteReceipt,
+  completingReceiptSaleId,
   globalFilter,
   selectedIds,
   onSelectedIdsChange,
@@ -298,6 +380,8 @@ function SaleListTable({
       tableId={SALE_TABLE_ID}
       columns={buildColumns({
         onInvoice,
+        onCompleteReceipt,
+        completingReceiptSaleId,
         selectedIds,
         onSelectedIdsChange,
         isRowSelectable,

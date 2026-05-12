@@ -51,9 +51,10 @@ type benchmarkSource struct {
 	Homepage          string
 	HomepageFallbacks []string
 	Query             string
-	Endpoint          string // PR 46: search|news|scholar (기본 search)
-	TimeWindow        string // PR 46: day|week|month|year (기본 "")
-	Site              string // PR 46: site: 연산자 (선택)
+	QueryVariants     []string // 비유: 첫 그물에 안 잡힌 자료를 다른 말투의 그물로 한 번 더 찾는다.
+	Endpoint          string   // PR 46: search|news|scholar (기본 search)
+	TimeWindow        string   // PR 46: day|week|month|year (기본 "")
+	Site              string   // PR 46: site: 연산자 (선택)
 }
 
 // homepageURLs — Homepage + HomepageFallbacks 를 시도 순서대로 반환 (빈 문자열 제거).
@@ -72,20 +73,28 @@ func (s benchmarkSource) homepageURLs() []string {
 
 var benchmarkSources = []benchmarkSource{
 	// 주간 발행 시세지 — tbs:qdr:w 로 최근 1주 결과만 (오래된 캐시 페이지 제외).
-	{Key: "opis", Name: "OPIS Solar Weekly", Homepage: "https://www.opisnet.com/product/solar-weekly/", HomepageFallbacks: []string{"https://www.opisnet.com/product-category/renewables/", "https://www.opisnet.com/"}, Query: "OPIS Solar Weekly Chinese Module Marker CMM FOB China TOPCon 600W forward curve DDP Europe", Endpoint: "search", TimeWindow: "week"},
+	{Key: "opis", Name: "OPIS Solar Weekly", Homepage: "https://www.opisnet.com/product/solar-weekly/", HomepageFallbacks: []string{"https://www.opisnet.com/product-category/renewables/", "https://www.opisnet.com/"}, Query: "OPIS Solar Weekly Chinese Module Marker CMM FOB China TOPCon 600W forward curve DDP Europe", QueryVariants: []string{"OPIS CMM FOB China module price DDP Europe forward curve", "OPIS solar module price assessment China TOPCon Europe DDP", "Chinese Module Marker CMM TOPCon 600W OPIS latest"}, Endpoint: "search", TimeWindow: "week"},
 	// InfoLink — module/polysilicon 만 사용. cell, wafer 는 정확도 이슈로 제외.
-	{Key: "infolink", Name: "InfoLink Consulting", Homepage: "https://www.infolink-group.com/energy-article/solar-topic-price", HomepageFallbacks: []string{"https://www.infolink-group.com/solar/", "https://www.infolink-group.com/"}, Query: "InfoLink Consulting weekly solar module polysilicon price China centralized distributed project module price", Endpoint: "search", TimeWindow: "week"},
-	{Key: "trendforce", Name: "TrendForce EnergyTrend", Homepage: "https://www.energytrend.com/pricequotes.html", HomepageFallbacks: []string{"https://www.energytrend.com/solar/", "https://www.energytrend.com/"}, Query: "TrendForce EnergyTrend weekly solar module price China export Europe price monthly tender analysis", Endpoint: "search", TimeWindow: "week"},
+	{Key: "infolink", Name: "InfoLink Consulting", Homepage: "https://www.infolink-group.com/energy-article/solar-topic-price", HomepageFallbacks: []string{"https://www.infolink-group.com/solar/", "https://www.infolink-group.com/"}, Query: "InfoLink Consulting weekly solar module polysilicon price China centralized distributed project module price", QueryVariants: []string{"InfoLink solar module price trend China centralized distributed polysilicon", "InfoLink 光伏 组件 价格 集中式 分布式 多晶硅", "InfoLink PV spot price module China project market"}, Endpoint: "search", TimeWindow: "week"},
+	{Key: "trendforce", Name: "TrendForce EnergyTrend", Homepage: "https://www.energytrend.com/pricequotes.html", HomepageFallbacks: []string{"https://www.energytrend.com/solar/", "https://www.energytrend.com/"}, Query: "TrendForce EnergyTrend weekly solar module price China export Europe price monthly tender analysis", QueryVariants: []string{"EnergyTrend solar module price quote China export TrendForce", "TrendForce PV module price China domestic export Europe", "集邦新能源 EnergyTrend 光伏 组件 价格 中国 出口"}, Endpoint: "search", TimeWindow: "week"},
 	// 일간 발행 — tbs:qdr:d.
-	{Key: "pvinsights", Name: "PVinsights", Homepage: "https://pvinsights.com/", Query: "PVinsights daily solar module price China Europe module price", Endpoint: "search", TimeWindow: "day"},
+	{Key: "pvinsights", Name: "PVinsights", Homepage: "https://pvinsights.com/", Query: "PVinsights daily solar module price China Europe module price", QueryVariants: []string{"PVinsights PV module price list China Europe", "PVinsights solar PV price module spot USD per watt", "PVinsights module price trend China Europe"}, Endpoint: "search", TimeWindow: "day"},
 	// 중국 입찰 뉴스 — /news 엔드포인트 + 1개월. 입찰 결과는 뉴스성이 강함.
-	{Key: "china_tender", Name: "중국 국영 대량 입찰", Homepage: "https://guangfu.bjx.com.cn/", HomepageFallbacks: []string{"https://news.bjx.com.cn/zt/guangfu/"}, Query: "北极星 太阳能 光伏 组件 集采 中标 价格 华能 华电 国家能源 国家电投 中国电建 TOPCon", Endpoint: "news", TimeWindow: "month"},
+	{Key: "china_tender", Name: "중국 국영 대량 입찰", Homepage: "https://guangfu.bjx.com.cn/", HomepageFallbacks: []string{"https://news.bjx.com.cn/zt/guangfu/"}, Query: "北极星 太阳能 光伏 组件 集采 中标 价格 华能 华电 国家能源 国家电投 中国电建 TOPCon", QueryVariants: []string{"央企 光伏组件 集采 中标 单价 TOPCon 华能 华电 国家能源", "中国电建 光伏组件 集采 中标价格 N型 TOPCon", "光伏组件 开标 价格 集采 国企 央企 TOPCon"}, Endpoint: "news", TimeWindow: "month"},
 	// CPIA 정책·가이던스 — 발표 빈도가 낮으므로 1개월.
-	{Key: "cpia_floor", Name: "CPIA 최저원가 가이던스", Homepage: "https://www.chinapv.org.cn/", Query: "中国光伏行业协会 CPIA 光伏组件 最低成本 价格 指引", Endpoint: "search", TimeWindow: "month"},
+	{Key: "cpia_floor", Name: "CPIA 최저원가 가이던스", Homepage: "https://www.chinapv.org.cn/", Query: "中国光伏行业协会 CPIA 光伏组件 最低成本 价格 指引", QueryVariants: []string{"CPIA module cost floor price China photovoltaic industry association", "中国光伏行业协会 组件 成本 价格 下限 指引", "CPIA 光伏组件 成本 价格 倡议 指导价"}, Endpoint: "search", TimeWindow: "month"},
 }
+
+const (
+	benchmarkMaxSearchQueriesPerSource  = 8
+	benchmarkSearchResultsPerQuery      = 4
+	benchmarkMaxSearchEvidencePerSource = 14
+	benchmarkSearchScrapeLimitPerSource = 3
+)
 
 var allowedBenchmarkSources = map[string]bool{
 	"opis": true, "infolink": true, "trendforce": true, "pvinsights": true, "china_tender": true, "cpia_floor": true,
+	"our_quote": true,
 }
 
 var allowedBenchmarkMetrics = map[string]bool{
@@ -102,10 +111,11 @@ var allowedBenchmarkMetrics = map[string]bool{
 	"china_export":              true,
 	"china_state_tender":        true,
 	"cpia_cost_floor":           true,
+	"supplier_quote":            true,
 }
 
 var allowedBenchmarkBasis = map[string]bool{
-	"fob": true, "ddp": true, "spot": true, "forward": true, "tender": true, "floor": true,
+	"fob": true, "ddp": true, "spot": true, "forward": true, "tender": true, "floor": true, "quote": true,
 }
 
 var allowedBenchmarkCurrencies = map[string]bool{
@@ -322,7 +332,7 @@ func (h *PriceBenchmarkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, _, err := h.DB.From("price_benchmarks").
-		Upsert(req, "source_key,metric_key,value_date,market_region,basis,currency", "", "").
+		Upsert(req, "source_key,source_name,metric_key,value_date,market_region,basis,currency", "", "").
 		Execute()
 	if err != nil {
 		log.Printf("[가격 벤치마크 등록 실패] %v", err)
@@ -356,6 +366,52 @@ func (h *PriceBenchmarkHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.RespondJSON(w, http.StatusOK, model.StatusResponse{Status: "deleted"})
+}
+
+// UpdateReviewStatus — PATCH /api/v1/price-benchmarks/{id}/review-status
+// 비유: 가격 점을 후보/채택/제외 칸으로 옮겨 차트 기준선을 다듬는다.
+func (h *PriceBenchmarkHandler) UpdateReviewStatus(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.RespondError(w, http.StatusBadRequest, "benchmark_id가 누락됐습니다")
+		return
+	}
+	var req model.UpdatePriceBenchmarkReviewStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
+		return
+	}
+	req.Normalize()
+	if msg := req.Validate(); msg != "" {
+		response.RespondError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	_, _, err := h.DB.From("price_benchmarks").
+		Update(map[string]string{"review_status": req.ReviewStatus}, "", "").
+		Eq("benchmark_id", id).
+		Execute()
+	if err != nil {
+		log.Printf("[가격 벤치마크 검토 상태 변경 실패] id=%s status=%s err=%v", id, req.ReviewStatus, err)
+		if isPriceBenchmarkReviewStatusSchemaError(err) {
+			response.RespondError(w, http.StatusServiceUnavailable, "가격 벤치마크 검토 상태 DB 반영이 아직 완료되지 않았습니다. 091_price_benchmark_review_status.sql 적용과 PostgREST 스키마 캐시 갱신 후 다시 시도하세요")
+			return
+		}
+		response.RespondError(w, http.StatusInternalServerError, "가격 벤치마크 검토 상태 변경에 실패했습니다")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, model.StatusResponse{Status: "ok"})
+}
+
+func isPriceBenchmarkReviewStatusSchemaError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "PGRST204") ||
+		(strings.Contains(msg, "schema cache") &&
+			strings.Contains(msg, "price_benchmarks") &&
+			strings.Contains(msg, "review_status"))
 }
 
 // AIRefresh — POST /api/v1/price-benchmarks/ai-refresh
@@ -823,29 +879,81 @@ func (h *PriceBenchmarkHandler) collectBenchmarkEvidence(ctx context.Context, so
 		if serperKey == "" {
 			continue
 		}
-		// PR 46: source 별 endpoint/tbs/site 분기.
-		// 결측 슬롯이 있으면 source query 에 missing focus 힌트를 붙여 없는 지표를 먼저 찾는다.
-		searchSrc := benchmarkSourceWithMissingFocus(src, existing)
-		results, err := h.searchSerperForSource(ctx, serperKey, searchSrc, 6)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("%s 웹 검색 실패: %v", src.Name, err))
-			continue
-		}
-		for _, result := range results {
-			evidence = append(evidence, benchmarkEvidenceItem{
-				SourceKey:  src.Key,
-				SourceName: src.Name,
-				Title:      result.Title,
-				URL:        result.URL,
-				Content:    truncate(result.Content, 900), // PR 44: vLLM 응답 시간 단축 위해 축소
-			})
-		}
+		searchEvidence, searchWarnings := h.collectSerperSearchEvidence(ctx, serperKey, src, existing)
+		evidence = append(evidence, searchEvidence...)
+		warnings = append(warnings, searchWarnings...)
 	}
 
 	if len(evidence) == 0 {
 		warnings = append(warnings, "수집 증거 텍스트가 없습니다. 유료 리포트 로그인/검색 키 설정을 확인하세요")
 	}
 	return evidence, warnings
+}
+
+func (h *PriceBenchmarkHandler) collectSerperSearchEvidence(ctx context.Context, apiKey string, src benchmarkSource, existing benchmarkExistingContext) ([]benchmarkEvidenceItem, []string) {
+	plans := buildBenchmarkSearchPlans(src, existing)
+	var evidence []benchmarkEvidenceItem
+	var warnings []string
+	seen := map[string]bool{}
+	scraped := 0
+	for _, plan := range plans {
+		results, err := h.searchSerperForSource(ctx, apiKey, plan, benchmarkSearchResultsPerQuery)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("%s 웹 검색 실패(%s): %v", src.Name, benchmarkSearchPlanLabel(plan), err))
+			continue
+		}
+		for _, result := range results {
+			key := searchResultDedupeKey(result)
+			if key == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			item := benchmarkEvidenceItem{
+				SourceKey:  src.Key,
+				SourceName: src.Name,
+				Title:      result.Title,
+				URL:        result.URL,
+				Content:    truncate(result.Content, 900), // PR 44: vLLM 응답 시간 단축 위해 축소
+			}
+			if scraped < benchmarkSearchScrapeLimitPerSource {
+				if scrapedItem, err := h.fetchSearchResultEvidenceViaSerperScrape(ctx, apiKey, src, result); err == nil {
+					item = scrapedItem
+					scraped++
+				}
+			}
+			evidence = append(evidence, item)
+			if len(evidence) >= benchmarkMaxSearchEvidencePerSource {
+				return evidence, warnings
+			}
+		}
+	}
+	if len(evidence) == 0 && len(plans) > 0 {
+		warnings = append(warnings, fmt.Sprintf("%s 웹 검색 결과 0건 (검색어 %d개 시도)", src.Name, len(plans)))
+	}
+	return evidence, warnings
+}
+
+func (h *PriceBenchmarkHandler) fetchSearchResultEvidenceViaSerperScrape(ctx context.Context, apiKey string, src benchmarkSource, result webSearchResultItem) (benchmarkEvidenceItem, error) {
+	target := strings.TrimSpace(result.URL)
+	if target == "" {
+		return benchmarkEvidenceItem{}, fmt.Errorf("검색 결과 URL 없음")
+	}
+	u, err := url.Parse(target)
+	if err != nil {
+		return benchmarkEvidenceItem{}, err
+	}
+	if err := guardFetchURL(u); err != nil {
+		return benchmarkEvidenceItem{}, err
+	}
+	variant := src
+	variant.Homepage = target
+	item, err := h.fetchHomepageViaSerperScrape(ctx, apiKey, variant)
+	if err != nil {
+		return benchmarkEvidenceItem{}, err
+	}
+	item.Title = firstNonEmpty(result.Title, item.Title) + " (search scrape)"
+	item.URL = target
+	return item, nil
 }
 
 // homepageAttempt — 한 번의 fetch 시도 결과. 모두 실패했을 때 warning 한 줄로 요약하기 위한 재료.
@@ -1202,6 +1310,12 @@ func validateBenchmarkCatalogPolicy(point model.CreatePriceBenchmarkRequest) str
 	if point.SourceKey == "infolink" && (point.MetricKey == "cell" || point.MetricKey == "wafer") {
 		return "InfoLink cell/wafer 지표는 수집 대상이 아닙니다"
 	}
+	if point.SourceKey == "our_quote" && point.MetricKey != "supplier_quote" {
+		return "our_quote source는 supplier_quote 지표만 허용됩니다"
+	}
+	if point.MetricKey == "supplier_quote" && point.SourceKey != "our_quote" {
+		return "supplier_quote 지표는 our_quote source에서만 허용됩니다"
+	}
 	return ""
 }
 
@@ -1221,6 +1335,11 @@ func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, po
 		}
 		if !model.IsPriceBenchmarkMarketRegionAllowed(point.MarketRegion) {
 			log.Printf("[가격 벤치마크 AI point skip] market_region=%s 는 중국/유럽 수집 대상이 아님", point.MarketRegion)
+			skipped++
+			continue
+		}
+		if point.SourceKey == "our_quote" {
+			log.Printf("[가격 벤치마크 AI point skip] our_quote 는 수동 입력 전용")
 			skipped++
 			continue
 		}
@@ -1246,7 +1365,7 @@ func (h *PriceBenchmarkHandler) insertAIBenchmarkPoints(runID, userID string, po
 			continue
 		}
 		data, _, err := h.DB.From("price_benchmarks").
-			Upsert(point, "source_key,metric_key,value_date,market_region,basis,currency", "", "").
+			Upsert(point, "source_key,source_name,metric_key,value_date,market_region,basis,currency", "", "").
 			Execute()
 		if err != nil {
 			log.Printf("[가격 벤치마크 AI point insert 실패] %v", err)
@@ -1369,6 +1488,58 @@ func benchmarkSourceByKey(sourceKey string) benchmarkSource {
 	return benchmarkSource{}
 }
 
+func buildBenchmarkSearchPlans(src benchmarkSource, existing benchmarkExistingContext) []benchmarkSource {
+	plans := make([]benchmarkSource, 0, benchmarkMaxSearchQueriesPerSource)
+	seen := map[string]bool{}
+	addPlan := func(plan benchmarkSource) {
+		if len(plans) >= benchmarkMaxSearchQueriesPerSource {
+			return
+		}
+		plan.Query = strings.TrimSpace(plan.Query)
+		if plan.Query == "" {
+			return
+		}
+		key := strings.Join([]string{
+			strings.ToLower(plan.Endpoint),
+			strings.ToLower(plan.TimeWindow),
+			strings.ToLower(plan.Site),
+			strings.ToLower(plan.Query),
+		}, "\x1f")
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		plans = append(plans, plan)
+	}
+
+	primary := benchmarkSourceWithMissingFocus(src, existing)
+	addPlan(primary)
+	for _, missing := range existing.missingBySource[src.Key] {
+		plan := src
+		plan.Query = strings.TrimSpace(src.Name + " " + missing.SearchHint)
+		if latest := existing.latestBySource[src.Key]; latest != "" {
+			plan.Query += " latest updated after " + latest
+		} else {
+			plan.Query += " latest current price"
+		}
+		addPlan(plan)
+	}
+	for _, variant := range src.QueryVariants {
+		plan := src
+		plan.Query = variant
+		if latest := existing.latestBySource[src.Key]; latest != "" {
+			plan.Query += " latest updated after " + latest
+		}
+		addPlan(plan)
+	}
+	if relaxed := relaxedBenchmarkTimeWindow(src.TimeWindow); relaxed != "" && relaxed != src.TimeWindow {
+		plan := primary
+		plan.TimeWindow = relaxed
+		addPlan(plan)
+	}
+	return plans
+}
+
 func benchmarkSourceWithMissingFocus(src benchmarkSource, existing benchmarkExistingContext) benchmarkSource {
 	missing := existing.missingBySource[src.Key]
 	if len(missing) == 0 {
@@ -1388,6 +1559,39 @@ func benchmarkSourceWithMissingFocus(src benchmarkSource, existing benchmarkExis
 		src.Query += " latest current price"
 	}
 	return src
+}
+
+func relaxedBenchmarkTimeWindow(primary string) string {
+	switch strings.ToLower(strings.TrimSpace(primary)) {
+	case "day", "d":
+		return "week"
+	case "week", "w":
+		return "month"
+	case "month", "m":
+		return "year"
+	default:
+		return ""
+	}
+}
+
+func benchmarkSearchPlanLabel(plan benchmarkSource) string {
+	endpoint := plan.Endpoint
+	if endpoint == "" {
+		endpoint = "search"
+	}
+	window := plan.TimeWindow
+	if window == "" {
+		window = "all"
+	}
+	return endpoint + "/" + window
+}
+
+func searchResultDedupeKey(result webSearchResultItem) string {
+	if u := strings.TrimSpace(result.URL); u != "" {
+		return u
+	}
+	key := strings.ToLower(strings.TrimSpace(result.Title + "|" + result.Content))
+	return key
 }
 
 func benchmarkObservationKey(sourceKey, metricKey, valueDate, marketRegion, basis, currency string) string {

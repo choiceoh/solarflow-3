@@ -3,6 +3,13 @@
 모든 주요 설계 판단의 "왜?"를 기록합니다.
 새 대화창에서 "왜 이렇게 했지?"라는 질문이 나오면 이 문서를 참조합니다.
 
+## 결정 ID 규칙
+
+- 기존 `D-001`~`D-164`는 과거 링크 보존을 위해 그대로 둔다.
+- 새 결정은 순번을 발급하지 않고 한국시간 기준 초 단위 타임스탬프를 붙인다.
+- 형식: `D-YYYYMMDD-HHMMSS` (예: `D-20260511-171426`)
+- 같은 주제를 여러 작업자가 동시에 판단해도 문서 끝의 "다음 번호"를 함께 수정하지 않기 위해 이 형식을 사용한다.
+
 ## D-001: Go+Rust 아키텍처 분리
 - **결정**: Go(프론트+API) + Rust(계산엔진)
 - **이유**: Go는 변경이 잦은 UI/API에 적합, Rust는 복잡한 계산(Landed Cost, 재고집계)에 안정적
@@ -760,7 +767,7 @@
     SQL fragment 직접 입력은 금지(admin이 SQL 못 씀 + injection 위험). 새 연산자 필요 시 카탈로그 측에 명시 추가.
   - **카탈로그 정본 위치**: `backend/internal/feature/catalog.go`가 코드 측 정본. 각 entry는 `{ ID, Name, Description, DefaultTenants, DefaultDataScope }`. `harness/FEATURE-WIRING-MATRIX.md`는 사람이 읽는 인덱스로 카탈로그를 그대로 미러링한다(자동 검증 대상).
   - **DB 배선 테이블**: `tenant_features (tenant text, feature_id text, enabled bool, ...)`, `tenant_data_scopes (tenant, feature_id, row_filter jsonb, column_mask jsonb, ...)`. 카탈로그 default는 코드에 있고, DB 행이 있으면 그 행이 default를 override 한다(per-tenant override).
-  - **fail-closed 정책**: `RequireFeature(id)`는 (1) catalog에 id가 없으면 500(설정 오류), (2) tenant ∈ resolved enabled set이 아니면 403. **이번 PR에서는 호환을 위해 catalog default가 곧 enabled set이고 DB 테이블은 빈 상태로 둔다(=현재 동작 그대로)**. 모든 라우트의 마이그레이션이 끝나고 회귀 테스트가 통과한 뒤 fail-closed 스위치(빈 카탈로그 = 0 tenants)는 별도 D-NNN으로 결정한다.
+  - **fail-closed 정책**: `RequireFeature(id)`는 (1) catalog에 id가 없으면 500(설정 오류), (2) tenant ∈ resolved enabled set이 아니면 403. **이번 PR에서는 호환을 위해 catalog default가 곧 enabled set이고 DB 테이블은 빈 상태로 둔다(=현재 동작 그대로)**. 모든 라우트의 마이그레이션이 끝나고 회귀 테스트가 통과한 뒤 fail-closed 스위치(빈 카탈로그 = 0 tenants)는 별도 `D-YYYYMMDD-HHMMSS` 결정으로 기록한다.
   - **강제 메커니즘 (다층)**:
     1. **카탈로그가 단일 소스** — `RequireFeature("foo")`의 인자는 `feature.IDXxx` 상수만 허용 (자유 문자열 금지). 미정의 ID는 컴파일 에러는 아니지만 startup 시 패닉.
     2. **`feature_coverage_test.go`** — chi 라우터를 walk하면서 모든 비공개 라우트가 정확히 하나의 feature_id에 매핑됨을 검증. 라우트 추가 시 카탈로그 미갱신이면 테스트 실패.
@@ -810,7 +817,7 @@
     - **Phase 0** — staging 띄우고 enforcement OFF. 모든 응답이 prod 와 byte-identical 이어야 함(하네스 정확성 검증).
     - **Phase 1** — 1개 feature 만 staging 에 enforcement ON (D-116 BARO incoming 부터, 이미 sanitized 형태). 운영 트래픽 1주치 리플레이 → unexpected diff 0건이면 prod ON.
     - **Phase 2** — feature 별로 1주에 1~2개씩 ON. 추가마다 영향받는 frontend 타입/계산 함수 사전 점검.
-    - **Phase 3** — 전수 ON 후 fail-closed 스위치(카탈로그 미정의 = 0 tenants) 활성. 별도 D-NNN 으로 결정.
+    - **Phase 3** — 전수 ON 후 fail-closed 스위치(카탈로그 미정의 = 0 tenants) 활성. 별도 `D-YYYYMMDD-HHMMSS` 결정으로 기록.
   - **로그 보강(필수 선행)** — outer RequestLog 가 inner auth 의 context 를 못 보던 한계를 mutable `Observability` 홀더(pointer in context) 로 해결. auth 가 `SetUserContext` 호출 시 같이 채우고, RequestLog 가 핸들러 종료 후 읽어 한 행에 모두 출력. SHA256 응답 해시는 `statusCapturer.Write` 에서 청크 단위 누적.
   - **column_mask 정책 — null 채우기**: 마스크된 컬럼은 응답에서 *제거* 하지 않고 **null 로 둔다**. JSON shape 보존 → frontend 빌드 깨짐 방지. frontend 타입 nullable 화는 별도 사전 PR.
   - **mask 가능 컬럼 화이트리스트** — 카탈로그에 명시 안 한 컬럼은 마스크 적용 불가(외래키 실수 mask 방지). startup 시 검증.
@@ -922,7 +929,7 @@
     - 오늘 답변할 후속 — 카드 클릭 → `/baro/cockpit?partner_id=X`
     - 한도/연체 위험 거래처 — 카드 클릭 → cockpit
     - 신규 입고 안내 — `/baro/incoming` 진입 + PR3.5 자동 콜백 추천 placeholder
-  - **PR3.5 분리** (별도 D-NNN, 신규 backend 필요):
+  - **PR3.5 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정, 신규 backend 필요):
     - 자동 콜백 추천: 신규 입고 SKU × 직전 12개월 본인 거래처 매입 이력 매칭 → "이 입고를 알려야 할 거래처 N곳" + 1-click 일괄 발송
     - 본인 담당 거래처 필터: `partners.owner_user_id = me` 와 credit_board RPC 응답 join (현재는 owner 미반영, 모든 위험 거래처 노출)
     - 견적 회신 대기 카운트 (D-126 PR2.5 의 `baro_quotes` 테이블 도입 후)
@@ -949,7 +956,7 @@
   - **부분 실패 허용**: sales 조회 실패 시 partner-only 응답 (모두 inactive) 으로 fallback — 보드 전체가 흰 배경으로 죽지 않음.
   - **재활성화 큐 강조**: `at_risk` 세그먼트는 별도 알림 배너로 노출 — 한동안 미주문이지만 매출 이력 큰 곳 = 콜백 1순위.
   - **frontend**: `/baro/rfm` 페이지. 6 세그먼트 탭 + 정렬(매출/최근성/빈도) + 표. 행 클릭 → cockpit. 사이드바 「현황」 그룹.
-- **PR4.5 분리** (별도 D-NNN):
+- **PR4.5 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정):
   - 동적 분위수(quartile) 기반 분류 — 거래처 분포에 따라 임계값 자동 조정 (현재는 1000억 매출 컨텍스트 하드코딩).
   - 본인 담당 거래처 필터 — `partners.owner_user_id = me` (현재 전체 노출).
   - 자동 재활성화 액션 — `at_risk` 거래처 대상 1-click 카톡/SMS (PR3.5 발송 채널 통합 후).
@@ -976,7 +983,7 @@
   - **응답 마스킹**: cost / margin 필드 0 — 매출액(`total_amount`)과 건수만. 마진은 PR5.5 에서 `baro_purchase_history` 평균 매입원가 통합 후 도입.
   - **frontend 페이지**: `/baro/sales-summary` (RoleGuard `admin/operator/executive`). 6/12/24개월 토글. CSS 막대 차트(recharts 미사용 — 번들 크기 ↓). Top 거래처 행 클릭 → cockpit.
   - **사이드바**: 「현황」 그룹에 "매출 요약" 추가.
-- **PR5.5 분리** (별도 D-NNN):
+- **PR5.5 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정):
   - **마진 표시** (`gross_margin_pct`, `gross_margin_krw`): `baro_purchase_history` 평균 매입원가와 매출 결합. 단순 평균이 아닌 BR 법인 한정 + sale 시점 기준 가까운 매입가 매칭 로직 필요.
   - **한도 초과 출고 차단 hold flag**: 출고/수주 생성 시 `outstanding_krw + amount > credit_limit_krw` 또는 `oldest_unpaid_days >= 60` 면 hold 플래그 + 결재 강제. backend 변경 큼 (outbound/order 핸들러 수정 + DB 컬럼 추가 가능).
   - **SKU 별 매출**: 현 sales 테이블에 product_id 직접 컬럼 없음. outbound → bl_line join 필요해 Phase 2 분리.
@@ -997,7 +1004,7 @@
   - **용량 매칭 계산기**: 모듈 수량 × spec_wp 입력 → 총 kW 계산 → 오버사이징 1.0~1.3 비율 안에 들어오는 인버터 추천 카드.
   - **검색·필터**: 제조사/모델 검색 + 용도(주거/상업/발전소) 필터.
   - **사이드바**: 「판매」 그룹에 "인버터 가이드" (BARO 전용).
-- **PR6.5 분리** (별도 D-NNN, 신규 backend 필요):
+- **PR6.5 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정, 신규 backend 필요):
   - **products.product_kind 컬럼**: `module` / `inverter` / `package` 분류 마이그레이션. 기존 행은 모두 `module` 로 backfill.
   - **인버터 SKU 정식 등록**: `product_kind='inverter'` + `rated_power_kw`/`mppt_channels`/`max_input_voltage` 등 인버터 전용 nullable 컬럼. 마스터 CRUD UI.
   - **패키지 SKU**: 모듈+인버터 자주 나가는 조합 1-row SKU. `baro_packages` 테이블 또는 product_kind=`package` + 구성품 child rows.
@@ -1019,7 +1026,7 @@
   - **메시지 3종**: `상차 완료` / `출발` / `도착 예정` — `buildMessage(stage, form)` 함수가 빈 필드는 자동 생략하면서 자연스러운 한국어 메시지 조립.
   - **클립보드 복사**: `navigator.clipboard.writeText` + 2초 "복사됨" 피드백.
   - **사이드바**: 「판매」 그룹에 "출하 알림" (BARO 전용).
-- **PR7.5 분리** (별도 D-NNN, 외부 API 키 + 모바일 흐름 + 신규 backend 필요):
+- **PR7.5 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정, 외부 API 키 + 모바일 흐름 + 신규 backend 필요):
   - **카톡 자동 발송**: KakaoTalk Notification Talk API 통합 (사업자 전용, 키 발급 필요). 템플릿 등록 + 친구 동의 + 발송 로그.
   - **SMS fallback**: Aligo / Solapi (카톡 미설치/미수신 시).
   - **배차 보드 연동**: `/baro/dispatch` 의 dispatch_route 한 행 선택 → form 자동 prefill.
@@ -1045,7 +1052,7 @@
   - 영업이 출고 시 "A존-3랙-Bin12 에서 30장" 위치 추적 (PR8.5 자동 피킹 리스트 후)
   - 입고 시 패널 적재 위치 배정 (PR8.6 receiving log 후)
   - 재고실사 cycle counting 시 위치 단위 점검 (PR8.7)
-- **PR8.5/PR8.6/PR8.7 분리** (별도 D-NNN, 마이그 동반):
+- **PR8.5/PR8.6/PR8.7 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정, 마이그 동반):
   - PR8.5 — `inventory_allocations.location_id` 추가 + 자동 피킹 리스트 (출고 1건당 위치별 수량). BARO 특화.
   - PR8.6 — `bl_line_receiving_log` (module 측) + `intercompany_receiving_log` (BARO 측) 입고 검수 + 수량 차이 추적.
   - PR8.7 — `cycle_counts` 정기 실사 + 정확도 추적.
@@ -1079,7 +1086,7 @@
   - 창고 작업자 모바일/태블릿에서 본인 큐(`?mine=true`) 열기 → status='in_progress' 토글 → 라인별 picked 체크
   - 차이 발생 시 quantity_picked 입력 + variance_note (실재고 부족 / 파손 / 위치 오류) → 영업·회계 알림
 - **snapshot 컬럼 정책**: product_code/name/spec_wp/location_code 모두 picking 시점 보존 — products 마스터 / warehouse_locations 변경에도 명세 원본 불변. 인쇄 라벨에 사용.
-- **PR8.5b 분리** (별도 D-NNN, outbound 핸들러 변경):
+- **PR8.5b 분리** (별도 `D-YYYYMMDD-HHMMSS` 결정, outbound 핸들러 변경):
   - 출고 생성 시 자동 피킹 명세 생성 — outbound→bl_line→inventory_allocation join 으로 위치 추출 + POST /picking-lists 자동 호출.
   - 명시적 enforcement 까지 가는 게 큰 작업이라 분리. PR8.5 단계는 수동 POST 만 안전 동작.
 - **D-154 반영**: 출고 생성 시 피킹 명세 자동 생성과 기존 출고 보정 endpoint 를 구현했다. 위치는 `inventory_movements.location_code` 최신 잔량을 우선 사용하고, `inventory_allocations.location_id` 를 fallback 으로 사용한다.
@@ -1287,7 +1294,7 @@
 - **운영 기준**:
   - 기존 DB에 남아 있을 수 있는 과거 `tier1_asp` 관측값은 이번 결정만으로 삭제하지 않는다. 단, UI 기본 source 목록에서 제외되어 표시되지 않고, 신규 수동/AI 저장은 서버 whitelist 에서 차단한다.
   - `source_key=tier1_asp`, `metric_key=manufacturer_asp`, `market_region=manufacturer`, `basis=asp` 는 신규 저장 정책에서 허용하지 않는다.
-  - 향후 제조사 IR 기반 데이터를 다시 쓰려면 별도 D-NNN으로 제품군/지역/기간 보정 기준과 수동 검증 workflow 를 먼저 정의한다.
+  - 향후 제조사 IR 기반 데이터를 다시 쓰려면 별도 `D-YYYYMMDD-HHMMSS` 결정으로 제품군/지역/기간 보정 기준과 수동 검증 workflow 를 먼저 정의한다.
 - **검증**:
   - `TestValidateBenchmarkCatalogPolicy` 에서 Tier-1 ASP 차단을 검증한다.
   - 프론트엔드 build 로 source 목록 제거와 타입 일치를 확인한다.
@@ -1359,3 +1366,295 @@
   - `go test ./internal/feature ./internal/router ./internal/handler` 로 feature catalog, route snapshot, handler compile 경로를 확인한다.
   - frontend 는 `bun run build` 로 WMS 화면 타입과 번들 생성을 확인한다.
 - **날짜**: 2026-05-08
+
+## D-155: 운영 거래 생성 정본은 Excel Import Hub의 PO/LC/T/T 양식이다
+
+- **결정**: 실데이터 이관과 운영 거래 생성은 Import Hub의 통합 거래 양식에서 PO → LC → T/T → 입고 흐름으로 처리한다. 웹 다이얼로그는 조회·보정·상세 편집 보조 수단으로 둔다.
+- **양식 기준**:
+  - PO: 발주번호, 법인코드, 제조사, 계약유형, 계약일, Incoterms, 통화, 결제조건, 계약기간, 품번, 수량, USD/Wp 단가, 본품/스페어, 유상/무상, 메모.
+  - LC: L/C No., 발주번호(참조), 법인코드, 은행명, 개설일, 금액(USD), 목표 MW, 유산스, 만기일, 메모.
+  - T/T: 발주번호(참조), 법인코드, 송금일, 송금액(USD), 환율, 은행명, 상태, 목적, 메모.
+- **서버 검증 기준**:
+  - 없는 제조사/품번/은행은 등록하지 않는다.
+  - LC/T/T는 같은 법인의 기존 PO가 있어야 등록한다.
+  - 금액·수량·환율·단가는 양수만 허용한다.
+  - PO 번호와 L/C No. 중복은 업로드 전에 차단한다.
+  - 계약기간·LC 만기 등 시작일이 종료일보다 늦은 행은 오류로 차단한다.
+- **MIG 번호 정책**: 과거 자료에 실제 번호가 없으면 `MIG-{종류}-YYYYMMDD-001` 형식의 추적키를 사용한다. 현재 고정 종류는 `PO`, `LC`, `TT`, `BL`.
+- **미리보기 기준**: 정상/경고/오류를 분리한다. MIG 번호처럼 등록 가능한 이관 표식은 경고로 남기고, FK 없음·음수·중복·날짜 역전은 오류로 차단한다. 오류행은 엑셀로 내려받아 재작업할 수 있어야 한다.
+- **날짜**: 2026-05-11
+
+## D-156: 매출 분석 대사 체크는 원인 행까지 드릴다운한다
+
+- **결정**: `/sales-analysis`의 원장 대사 체크는 단순 상태 요약이 아니라 클릭형 드릴다운 보드로 운영한다. 매출원장↔이익엔진 차이, 세금계산서 미발행, 원가 미연결, 수금 미회수 각각에서 후보 행과 조치 링크를 바로 보여준다.
+- **원가 미연결 사유 분류**:
+  - 현재 화면이 가진 `margin-analysis`, `sales`, 제품 마스터 자료만으로 1차 분류한다.
+  - `FIFO 매칭 없음`, `Landed 원가 미확정`, `CIF 기준원가 미확정`, `품목 마스터 불일치`, `출고 연결 누락`, `원가 확정 대기`를 표준 사유로 둔다.
+  - 기준원가 토글이 `fifo`면 출고-FIFO 매칭 누락을 우선 표시하고, `landed`/`cif`면 면장 원가 확정 누락을 우선 표시한다.
+- **운영 기준**:
+  - 대사 요약 행에는 상태, 금액/건수, 후보 건수를 같이 표시한다.
+  - 원가 미연결 상세는 사유별 매출 규모를 먼저 묶고, 품목별 행에는 사유, 매출 건수, 미연결 금액, 조치 화면 링크를 둔다.
+  - 원장 차이는 직접 의심 가능한 행(출고 누락, 취소 전표, 품목 연결 없음 등)을 먼저 보여주고, 직접 후보가 없으면 상위 매출 행을 검토 대상으로 보여준다.
+  - 세금계산서 미발행과 수금 미회수는 거래처/출고 확인 화면으로 이어지는 운영 링크를 둔다.
+- **이유**: D-150에서 매출 분석의 깊이를 KPI 요약에서 원인 분해까지 넓혔지만, 운영자가 바로 다음 확인 행으로 내려가는 경로는 부족했다. 대사 차이와 원가 미연결은 “어떤 숫자가 문제인가”보다 “어느 행부터 처리할 것인가”가 더 중요하므로 같은 화면에서 후보와 조치까지 연결한다.
+- **검증**:
+  - frontend build 로 타입과 번들 생성을 확인한다.
+  - lint 는 기존 ProcurementPage hook dependency 경고와 bun-test 타입 suppression 경고 외 신규 오류가 없어야 한다.
+
+- **날짜**: 2026-05-11
+
+## D-157: PO 상세는 변경계약·라인 진행률·감사 diff를 한 화면에서 처리한다
+
+- **결정**: `/procurement` PO 상세에 변경계약 작성 버튼, 라인별 진행률, PO 감사 diff 탭을 추가한다. PO 직접입력은 유지하되 신규 등록 다이얼로그는 기존 라인 복사와 붙여넣기 기반 빠른 입력을 지원한다.
+- **구현 기준**:
+  - 변경계약 작성은 기존 `purchase_orders.parent_po_id` 체인을 사용한다. 원계약의 제조사·조건·라인을 기본값으로 복사하고, 새 PO번호는 기존 번호 없는 데이터 정책에 따라 비워둘 수 있다.
+  - 라인별 진행률은 `lc_line_items.po_line_id`와 `bl_line_items.po_line_id`를 우선 사용해 계약량/LC/선적/입고/잔여를 표시한다. 과거 데이터처럼 라인 ID가 비어 있으면 같은 PO 안에서 품번이 단일 라인일 때만 product_id로 보정한다.
+  - 감사 diff는 기존 `audit_logs`의 `old_data/new_data`를 사용하고, `updated_at/created_at/po_id/company_id` 같은 메타 필드는 제외한다.
+  - 새 DB 테이블이나 계산엔진 API는 만들지 않는다. PO당 라인·LC·B/L 수가 작다는 D-061 패턴을 유지한다.
+- **이유**: PO는 건수가 많지 않아 직접입력이 유효하지만, 변경계약·부분 LC·분할선적·필드 수정 이력이 한 화면에서 끊기면 운영자가 계약의 현재 상태를 재구성해야 한다. 기존 체인/라인/audit 데이터를 UI에서 모아 보여주는 것이 최소 변경으로 실무 안전성을 높인다.
+- **날짜**: 2026-05-11
+
+## D-158: 수금 부분 매칭은 금액 입력과 잔액 처리 선택을 같은 확정 흐름에 둔다
+
+- **결정**: 수금 매칭 화면은 선택한 미수금 행마다 `matched_amount`를 직접 입력할 수 있게 한다. 자동 추천과 AI 검토 후보도 후보 금액을 그대로 입력칸에 반영하고, 최종 장부 반영은 기존 `POST /api/v1/receipt-matches/bulk` 확정 버튼을 통해서만 수행한다.
+- **잔액 처리**:
+  - 입금 가능액보다 매칭 합계가 작으면 확정 전에 `advance`, `next_settlement`, `refund_review` 중 하나를 선택해야 한다.
+  - bulk API는 잔액이 있는데 `balance_disposition`이 없으면 400을 반환한다. 잔액 처리 선택은 이번 단계에서 확정 응답 메타데이터로 반환하며, 별도 선수금 원장 테이블은 만들지 않는다.
+  - 입금 가능액 초과 또는 미수금 초과 금액은 프론트와 Go 검증에서 모두 막는다.
+- **AI 기준**:
+  - D-148의 "부분 매칭 UX 전까지 AI 부분 후보 제외" 조건은 이번 UX 추가로 해제한다.
+  - AI 후보는 `0 < match_amount <= outstanding_amount`이고 후보 합계가 receipt remaining을 넘지 않을 때만 채택한다. 서버는 부분 후보 여부를 `is_partial`로 계산해 응답한다.
+- **이유**: 실무 입금은 여러 건 전액 일치보다 일부 상환, 계약금, 잔금 일부 지급이 자주 섞인다. 행 선택만으로 전액 매칭하면 수금 잔액과 미수금이 동시에 왜곡될 수 있으므로, 금액과 잔액 처리 의사를 한 화면에서 명시하게 한다.
+- **검증**:
+  - `ReceiptMatchBulkRequest.Validate`는 잔액 처리 enum과 메모 길이를 검증한다.
+  - AI sanitizer 테스트는 부분 후보를 보존하고 remaining 초과 후보를 버리는 동작을 고정한다.
+
+- **날짜**: 2026-05-11
+
+## D-159: 가격예측 구매 전략은 AI 예측이 아니라 Rust 계산엔진 산출값을 정본으로 삼는다
+
+- **결정**: `/price-forecast`의 구매 전략과 1/3/6개월 전망 시나리오는 신규 Rust endpoint `/api/calc/price-forecast-strategy`가 산출한다. Go는 `/api/v1/calc/price-forecast-strategy` 프록시와 feature gate만 담당하고, 프론트엔드는 외부 관측값·우리 최근 구매가·AI 수집 run 경고를 요청 본문으로 전달해 Rust 응답을 표시한다.
+- **이유**: 가격전망은 설명 가능성과 재현성이 중요하다. AI는 공개 근거 수집에는 유용하지만, 구매 의사결정 액션을 직접 생성하면 근거·회귀 테스트·테넌트 통제가 약해진다. CMM/forward/중국 입찰/CPIA floor/우리 구매가를 조합하는 계산은 Go+Rust 분리 원칙상 Rust 계산엔진에 두는 편이 맞다.
+- **운영 기준**:
+  - 입력 source는 D-151 이후 허용된 `opis / infolink / trendforce / pvinsights / china_tender / cpia_floor`만 사용한다. Tier-1 ASP는 전략 계산에도 넣지 않는다.
+  - USD/W를 canonical 단위로 삼고, 화면의 CNY/KRW 단위 선택은 차트 표시용으로 제한한다.
+  - Rust 응답은 action, 1/3/6개월 low/base/high 범위, 근거 목록, source 품질 점수, CMM trend/floor gap/우리 구매가 대비율을 포함한다.
+  - source 품질 점수는 최근성, confidence, 표본 수, run warning을 함께 반영한다. 낮은 점수는 계약 차단이 아니라 원문 근거 확인 신호다.
+- **검증**:
+  - Rust unit test로 상승장 즉시 협상과 floor 하방 제한을 고정한다.
+  - Go feature catalog/matrix/router snapshot으로 module 계열 gate를 고정한다.
+  - 프론트엔드 build로 Rust 응답 타입과 가격예측 화면 렌더를 확인한다.
+- **날짜**: 2026-05-11
+
+## D-160: 수주 충당 위험도는 상세 근거와 납기/ETA 적기성을 함께 반환한다
+
+- **결정**: D-147의 `/api/v1/calc/order-fulfillment-risk` 응답을 확장해 수주 상세에서 충당 근거 패널을 표시한다. 응답에는 배정 순번, 배정 전/후 가용량, 부족량, 현재고/미착품 풀 구성, 납기일, 예상 가용일, ETA 상태와 사유를 포함한다.
+- **납기/ETA 기준**:
+  - `fulfillment_source='stock'` 수주는 실재고 기준이므로 ETA 확인 대상이 아니다.
+  - `fulfillment_source='incoming'` 수주는 B/L 미착 물량을 ETA 순서로, B/L 없는 opened L/C 잔여 물량을 ETA 미확정 물량으로 배정한다.
+  - 미착 물량은 충분하지만 예상 가용일이 `delivery_due`보다 늦거나, 납기일이 없거나, ETA 없는 L/C/B/L 물량이 충당에 쓰이면 `확인 필요`로 표시한다.
+  - 물량 자체가 부족하면 기존처럼 `부족`을 우선 표시한다.
+- **이유**: 목록 배지만으로는 운영자가 왜 부족/확인 필요인지 설명하기 어렵다. 같은 Rust 계산 결과에서 풀 구성과 납기 적기성을 함께 내려야 영업·물류가 상세 화면에서 즉시 조치 판단을 할 수 있다.
+- **검증**:
+  - Rust 단위 테스트로 ETA 지연, 납기 내, 납기 누락, ETA 순차 배정을 고정한다.
+  - frontend build 로 상세 근거 패널 타입과 렌더링 경로를 확인한다.
+- **날짜**: 2026-05-11
+
+## D-161: 가격예측 관측값은 삭제 전에 후보/채택/제외 검토 상태를 거친다
+
+- **결정**: `price_benchmarks`에 `review_status`를 추가하고 기본값을 `candidate`로 둔다. 운영자는 `/price-forecast`에서 관측값을 `accepted`(구매 판단 기준선 채택), `rejected`(기본 차트·판단에서 제외), `candidate`(재검토 후보)로 전환할 수 있다. 서버는 `PATCH /api/v1/price-benchmarks/{id}/review-status`로 상태만 갱신한다.
+- **이유**: D-143의 선택 삭제는 신뢰도 낮은 관측값을 즉시 정리할 수 있게 했지만, 실무에서는 “아직 애매함”, “이번 협상 기준으로 채택”, “차트에서는 빼되 나중에 감사 확인”이 분리되어야 한다. AI 수집 로그는 보존하면서 관측값 자체를 남겨두면 재수집 품질 점검과 구매 판단 근거가 동시에 남는다.
+- **운영 기준**:
+  - AI/수동 신규 관측값은 `candidate`로 시작한다.
+  - 기본 화면은 `candidate` + `accepted`만 보여주고, `rejected`는 필터로 확인한다.
+  - 삭제는 중복·오염 데이터가 확정된 경우에만 사용한다. 삭제해도 `price_benchmark_runs` 감사 로그는 보존한다.
+  - `review_status` 허용값은 DB CHECK와 Go validation에서 `candidate/accepted/rejected`로 fail-closed 한다.
+- **검증**:
+  - `go test ./internal/model ./internal/router ./internal/feature` 로 상태 validation, route snapshot, feature catalog 일치를 확인한다.
+  - `go test ./internal/handler` 로 핸들러 compile 경로를 확인한다.
+  - `bun run lock:check`, `bun install --frozen-lockfile`, `bun run build` 로 프론트 타입/빌드와 의존성 lock 검증을 확인한다.
+- **날짜**: 2026-05-11
+
+## D-162: PO 라인 빠른 입력은 오류·모호성이 없을 때 자동 반영한다
+
+- **결정**: PO 신규/변경계약 다이얼로그의 빠른 입력은 붙여넣기 순간 자동 파싱한다. 품번·수량·USD/Wp가 모두 유효하고 품번 후보가 1개로 확정되면 사용자가 별도 버튼을 누르지 않아도 라인을 반영한다.
+- **자동화 기준**:
+  - 엑셀 헤더 행은 자동으로 건너뛴다.
+  - 탭/쉼표/공백 기반 `품번 수량 USD/Wp` 입력을 모두 허용한다.
+  - 선택 컬럼으로 본품/스페어, 유상/무상, 메모가 있으면 라인에 함께 반영한다.
+  - 품번 후보가 여러 개이거나 수량·단가가 양수가 아니면 자동 반영하지 않고, 입력 내용을 남겨 사용자가 수정하게 한다.
+- **이유**: 사용자는 작은 PO를 직접입력하되, 반복 라인 입력은 엑셀에서 복사해 붙여넣는 경우가 많다. 오류가 없을 때는 자동으로 최대한 처리하고, 애매한 데이터만 사람이 확인하게 하는 것이 실무 속도와 데이터 안전성의 균형점이다.
+- **날짜**: 2026-05-11
+
+## D-163: KPI 활성 항목은 사용자 preferences에 화면별 숨김 목록으로 저장한다
+
+- **결정**: KPI 타일 표시 여부를 사용자가 직접 조정할 수 있게 한다. 저장 위치는 기존 `user_profiles.preferences` JSONB이며, 신규 키 `kpi_hidden`에 `{ 화면scope: [숨김 KPI key...] }` 형태로 보관한다.
+- **구현 기준**:
+  - 별도 DB 테이블이나 system_settings를 만들지 않는다. KPI 배열 자체는 코드/설계 정본이므로 사용자 설정은 "활성/비활성 표시"만 담당한다.
+  - 화면/탭별 scope를 분리한다. 예: `inventory`, `orders.sales`, `procurement.po`, `sales-analysis`.
+  - KPI key는 명시 `key` 또는 `metricId`를 우선 사용하고, 중복 metricId가 있으면 라벨 기준으로 분리한다.
+  - 최소 1개 KPI는 항상 남긴다. 모든 KPI가 꺼져 화면의 상태판 기능이 사라지는 것을 막는다.
+  - 표시 메뉴는 화면 우상단 액션 영역의 엑셀 입력 버튼 옆에 배치한다. 공통 shell 슬롯이 없는 렌더링 환경에서는 KPI 그리드 위에 fallback 표시한다.
+  - 변경 즉시 `/api/v1/users/me/preferences`에 저장한다.
+- **이유**: 경영/운영/회계 사용자가 같은 화면에서도 보는 우선순위가 다르다. 그러나 KPI 정의를 사용자별로 바꾸면 설계 정본과 분석 의미가 흔들리므로, 시스템 KPI 목록은 유지하고 개인별 활성 항목만 조절하는 방식이 가장 작고 안전하다.
+- **검증**:
+  - `npm run build`로 TypeScript와 Vite 번들을 확인한다.
+  - 저장 payload는 기존 사용자 preferences API를 사용하므로 신규 라우트/마이그레이션은 없다.
+- **날짜**: 2026-05-11
+
+## D-164: 가격예측 AI 수집은 source별 다중 검색 플랜으로 evidence 후보를 넓힌다
+
+- **결정**: `/api/v1/price-benchmarks/ai-refresh`는 source별 기본 검색어 1회에 의존하지 않고, 기본 검색어 + 결측 metric별 검색어 + source별 대체 검색어 + 완화된 기간 필터를 순서대로 실행한다. 검색 결과는 URL/title 기준으로 중복 제거하고, source당 상위 결과 일부는 Serper scrape로 본문을 보강한 뒤 LLM 추출에 넘긴다.
+- **이유**: 외부 시세지는 유료 페이지, 주간/일간 발행 주기, 중국어 뉴스 제목, 사이트 개편 때문에 같은 source라도 한 검색어로는 evidence가 낮게 잡힌다. 저장 정책을 완화하면 오염 데이터가 들어오므로, 저장 allowlist는 유지하고 검색 후보 폭만 넓히는 것이 맞다.
+- **운영 기준**:
+  - 저장 가능 source/metric/market_region/basis/currency allowlist는 D-146/D-151 그대로 fail-closed 한다.
+  - OPIS, InfoLink, TrendForce, PVinsights, 중국 입찰, CPIA는 영어·중국어 대체 검색어를 source 정의에 포함한다.
+  - `day→week`, `week→month`, `month→year` 순서의 기간 완화 검색을 fallback으로 둔다.
+  - 검색 결과 snippet만으로 가격 숫자가 부족할 수 있으므로 source당 상위 URL 일부를 scrape evidence로 교체한다.
+  - 같은 URL은 evidence에 한 번만 넣고, source당 검색 evidence 상한을 둬 LLM 입력 폭주를 막는다.
+- **검증**:
+  - `go test ./internal/handler -run 'TestBuildBenchmark|TestSummarizeHomepage|TestSearchResultDedupe|TestValidateBenchmarkCatalogPolicy|TestHashEvidence|TestPickComparablePrice|TestFormatSanityWarnings'` 로 검색 플랜 확장과 dedupe를 고정한다.
+  - `go test ./internal/model -run PriceBenchmark` 로 가격 벤치마크 모델 정책을 확인한다.
+- **날짜**: 2026-05-11
+
+## D-20260511-175509: 가격예측은 백테스트·이상치 제거·미체결 견적을 같은 판단 흐름에 둔다
+
+- **결정**: `/api/v1/calc/price-forecast-strategy` 응답에 1개월 백테스트 요약과 median 기반 이상치 제외 결과를 포함한다. 같은 날짜·같은 지표에서 source 하나만 median 대비 크게 벗어나면 Rust 계산엔진이 전략 계산 전에 제외하고, 제외 내역과 source 품질 점수 보정을 함께 반환한다.
+- **미체결 견적**:
+  - 구매로 이어지지 않은 공급사 견적은 `price_benchmarks`에 `source_key='our_quote'`, `metric_key='supplier_quote'`, `basis='quote'`로 저장한다.
+  - `our_quote`는 AI 수집 대상이 아니며 사용자가 화면에서 직접 입력한 견적만 허용한다.
+  - 같은 날짜 여러 공급사 견적을 보존하기 위해 `ux_price_benchmarks_point` 중복 기준에 `source_name`을 포함한다.
+- **이유**: 실제 구매계약가만 남기면 시장이 제시한 가격 신호 중 “비싸서 사지 않은 견적”, “협상 전 최초 제안가”가 사라진다. 가격예측은 체결가보다 더 넓은 의사결정 기록이 필요하고, 동시에 이상치와 과거 방향성 검증이 있어야 계산 결과를 구매 판단에 사용할 수 있다.
+- **운영 기준**:
+  - 백테스트는 과거 CMM/forward/floor 관측값으로 1개월 전 전망과 실제 CMM 방향·오차를 비교한다.
+  - 방향성 적중률은 정확한 가격 맞히기보다 우선한다. source 품질 점수는 수집 경고, 최근성, confidence, 표본 수, 이상치, 백테스트 보정을 함께 반영한다.
+  - 미체결 견적은 차트와 전략 보조 근거로 표시하되, 외부 시장 기준선(CMM/forward/floor)을 대체하지 않는다.
+- **검증**:
+  - Rust unit test로 median 이상치 제외와 1개월 백테스트 표본 생성을 고정한다.
+  - Go 정책 테스트로 `our_quote/supplier_quote` 허용과 외부 metric 혼입 차단을 고정한다.
+  - 프론트엔드 build로 견적 입력 폼, 백테스트 표시, 이상치 표시 타입을 확인한다.
+- **날짜**: 2026-05-11
+
+## D-20260511-171426: 결정 식별자는 순번 대신 초 단위 타임스탬프를 사용한다
+
+- **결정**: 새 설계 판단은 더 이상 `D-165` 같은 순번으로 발급하지 않는다. 신규 결정 ID는 한국시간 기준 `D-YYYYMMDD-HHMMSS` 형식으로 기록한다.
+- **이유**: 여러 작업자가 `DECISIONS.md` 끝에 다음 순번을 동시에 추가하면 같은 결정 식별자에서 반복 충돌이 난다. 초 단위 타임스탬프를 사용하면 문서 끝의 단일 카운터를 공유하지 않아도 되어 병렬 작업 충돌이 줄어든다.
+- **운영 기준**:
+  - 기존 `D-001`~`D-164`는 이미 코드, 문서, 링크에서 참조되므로 변경하지 않는다.
+  - 새 결정 제목은 `## D-YYYYMMDD-HHMMSS: 제목` 형식으로 작성한다.
+  - 도메인 인덱스의 「관련 결정」 링크도 새 ID를 그대로 사용한다.
+  - 같은 초에 정말로 두 결정이 생기면 뒤 결정은 현재 초를 다시 읽어 새 ID를 발급한다.
+- **날짜**: 2026-05-11 17:14:26 KST
+
+## D-20260511-174500: 품번은 거래 SKU로 유지하고 모듈 제품군/변종 분류를 별도 축으로 둔다
+
+- **결정**: `products.product_id/product_code`는 PO, L/C, B/L, 재고, 출고, 매출, 원가에 물리는 거래 SKU로 유지한다. 같은 생산 라인·외형 규격이지만 출력 검사값만 달라 품번이 갈라지는 경우, 또는 동일 출력이지만 BOM·인증·라벨·포장 차이로 품번이 갈라지는 경우는 `product_family_code`, `product_variant_kind`, `bom_revision`, `substitution_group_code`로 별도 분류한다.
+- **필드 기준**:
+  - `product_family_code`: 같은 제조사·시리즈·생산 라인·외형 규격을 묶는 상위 제품군 코드.
+  - `product_variant_kind`: 품번 분리 사유. `output_bin`, `bom_variant`, `cert_variant`, `label_variant`, `packaging_variant`, `mixed`, `other` 중 하나.
+  - `bom_revision`: 동일 출력·동일 제품군이지만 BOM 차이로 품번이 갈라질 때의 내부 revision.
+  - `substitution_group_code`: 영업/출고 검토에서 사람이 같은 대체 후보로 묶는 수동 코드. 자동 출고 대체나 회계 합산 근거가 아니다.
+- **운영 기준**:
+  - 출력만 다른 635W/640W 같은 품목은 같은 `product_family_code`에 두고 `product_variant_kind='output_bin'`으로 표시한다.
+  - 동일 출력이지만 BOM만 다른 품목은 같은 `product_family_code`에 두고 `product_variant_kind='bom_variant'`와 `bom_revision`을 기록한다.
+  - `product_aliases`는 외부 표기, 오타, 레거시 코드 흡수용으로 유지한다. 정상적으로 존재하는 서로 다른 SKU를 canonical 하나로 합치는 데 쓰지 않는다.
+  - 수주 충당, 재고, 원가, 회계 확정 계산은 계속 `product_id` 기준이다. 제품군은 목록 검색, 대체 후보 검토, 가격/매출/재고 보조 분석 축으로만 사용한다.
+- **이유**: 품번을 합치면 Wp 계산, 단가/Wp, 원가, FIFO, 매출 분석이 틀어진다. 반대로 품번만 보면 같은 규격·라인의 출력 binning 제품이나 BOM 변종을 사람이 매번 머릿속으로 묶어야 한다. 거래 SKU와 제품군 분류를 분리하면 계산 정확성과 운영 탐색성을 동시에 지킬 수 있다.
+- **검증**:
+  - Go 모델 Validate에서 제품군 문자열 길이와 `product_variant_kind` 허용값을 차단한다.
+  - Excel Import Hub 품번 양식은 제품군/변종 필드를 업로드할 수 있어야 한다.
+- **날짜**: 2026-05-11
+
+## D-20260511-174700: 운영 migration 은 적용 이력·DB 오브젝트·PostgREST 노출까지 확인한다
+
+- **결정**: 운영 배포에서 migration 적용 후 `scripts/verify_migration.ts` 로 반영 상태를 확인한다. 확인은 `schema_migrations` 적용 이력, DB column/constraint/index 존재 여부, PostgREST schema cache 노출 여부를 순서대로 본다. 실패하면 Go 재시작을 보류한다.
+- **운영 기준**:
+  - `scripts/apply_migrations.ts` 는 기존처럼 SQL 적용과 `NOTIFY pgrst, 'reload schema'` 를 담당한다.
+  - `scripts/cron-deploy.sh` 는 migration 변경 감지 시 적용 후 변경된 파일마다 `verify_migration.ts` 를 실행한다.
+  - `091_price_benchmark_review_status.sql` 은 built-in preset 으로 `price_benchmarks.review_status`, CHECK constraint, review_status index, PostgREST column select 를 확인한다.
+  - 새 migration 은 필요 시 `--column`, `--constraint`, `--index`, `--postgrest` 옵션으로 검증 대상을 명시한다.
+- **이유**: migration 파일이 main 에 있어도 운영 DB 반영, PostgREST schema cache 갱신, Go/supabase-go 저장 경로가 동시에 맞지 않으면 PGRST204 → Go 500 으로 이어진다. 적용과 확인을 분리해 기록하면 “적용됨”과 “운영 API가 새 컬럼을 볼 수 있음”을 구분할 수 있다.
+- **검증**:
+  - `bun scripts/verify_migration.ts --help` 로 CLI 사용법과 옵션 파싱을 확인한다.
+  - `bash -n scripts/cron-deploy.sh` 로 배포 스크립트 문법을 확인한다.
+- **날짜**: 2026-05-11
+
+## D-20260511-174821: 매출 분석은 전월 브리지·대체원가·월간 리포트를 같은 기준으로 산출한다
+
+- **결정**: `/sales-analysis`는 기존 실제 원가 기준 마진과 별도로, 원가 미연결 품목에 대체원가를 적용한 잠정 마진을 계산한다. 이 잠정 마진 기준으로 전월 대비 이익률 변동 브리지와 월간 경영 리포트 CSV를 산출한다.
+- **대체원가 기준**:
+  - `제조사 평균`: 같은 제조사의 원가 연결 품목 평균 원가/Wp를 우선 사용한다.
+  - `전체 평균`: 전체 원가 연결 품목 평균 원가/Wp를 사용한다.
+  - `목표마진 역산`: 현재 포트폴리오 이익률과 8% 하한 중 높은 값을 목표마진으로 보고 판매가에서 원가를 역산한다.
+  - 제조사 평균을 구할 수 없으면 전체 평균, 목표마진 역산 순서로 fallback 한다.
+- **브리지 기준**:
+  - 월별 판매 행을 품번·규격 기준으로 마진 품목에 연결하고, 실제 원가가 있으면 실제 원가/Wp, 없으면 대체원가/Wp를 적용한다.
+  - 최근월과 이전월을 비교해 판매가 효과, 원가 효과, 제품 믹스, 원가 연결률, 총 이익률 변동을 표시한다.
+  - 브리지는 결산 원장이 아니라 운영 판단용 설명 레이어다. 원천 정본은 Rust `margin-analysis`의 실제 원가 계산 결과로 유지한다.
+- **리포트 기준**:
+  - 화면 필터 범위의 월별 공급가, 부가세 포함 매출, 매출 건수, 계산서 발행/미발행, 잠정 이익, 잠정 이익률, 원가 연결률을 CSV로 내보낸다.
+  - 리포트에는 브리지 요인과 대체원가 상위 품목도 포함한다.
+- **이유**: D-156으로 문제 행을 찾을 수 있게 되었지만, 경영 보고에는 “이번 달 이익률이 왜 바뀌었는가”와 “원가가 아직 없어도 잠정 손익은 얼마인가”가 필요하다. 실제 원가와 잠정 원가를 분리해 표시하면 결산 신뢰도와 의사결정 속도를 함께 확보할 수 있다.
+- **검증**:
+  - frontend build 로 타입과 번들 생성을 확인한다.
+  - lint 는 기존 excelValidation optional-chain 경고, ProcurementPage hook dependency 경고, bun-test 타입 suppression 경고 외 신규 오류가 없어야 한다.
+- **날짜**: 2026-05-11 17:48:21 KST
+
+## D-20260511-175240: Excel Import Hub 리허설은 버전 고정·후보 제안·영향 요약을 함께 갖춘다
+
+- **결정**: Import Hub 양식에는 숨김 메타 시트 `_SolarFlowMeta`를 포함하고, 업로드 파서는 지원 버전과 양식 종류를 확인한 뒤 미리보기를 시작한다. 운영 리허설용 샘플팩은 PO/LC/T/T 정상·경고·오류 행을 섞은 공식 샘플로 제공한다.
+- **양식 버전 기준**:
+  - 현재 지원 버전은 `2026-05-11.1`이다.
+  - 메타에는 `template_version`, `template_kind`, `template_types`, `generated_at`을 기록한다.
+  - 단일 양식은 `single`, 통합 거래 양식은 `unified_transaction`, 통합 마스터 양식은 `unified_master`, 리허설 샘플팩은 `rehearsal_sample`로 구분한다.
+- **마스터 후보 기준**:
+  - 존재하지 않는 제조사/품번/은행/법인/거래처/창고는 등록 차단 오류로 유지한다.
+  - 다만 미리보기 오류 메시지에는 유사 마스터명을 최대 3개까지 `alias 후보`로 표시한다.
+  - 후보는 자동 확정하지 않는다. 운영자가 원본 오타를 고치거나 alias 사전에 등록해야 한다.
+- **등록 전 영향 요약 기준**:
+  - 통합 업로드 미리보기는 유효행 수뿐 아니라 PO 건수/라인/수량, LC 금액/MW, T/T USD/KRW, 경고/오류 건수를 먼저 보여준다.
+  - 경고 행은 등록 가능하지만, 영향 요약에서 `검토 필요`에 포함해 확정 전 확인 대상으로 둔다.
+- **이유**: 실데이터 이관은 한 번에 끝나지 않고 반복 리허설을 거친다. 오래된 양식, 마스터 오타, 영향 규모 미확인이 섞이면 사용자는 같은 파일을 여러 번 고치며 신뢰를 잃는다. 버전 고정과 후보 제안, 샘플팩, 영향 요약을 함께 두면 반복 업로드의 실패 원인이 더 빨리 드러난다.
+- **날짜**: 2026-05-11 17:52:40 KST
+
+## D-20260511-180114: 출고/판매의 수금완료는 미수 잔액 전표와 매칭을 자동 생성한다
+
+- **결정**: 수금 관리는 기본적으로 완전 매칭된 입금 전표를 숨기고, 미매칭/부분매칭처럼 처리해야 할 항목만 보여준다. 판매 목록에는 수금 상태와 미수 금액을 표시하고, [수금완료] 버튼을 누르면 `POST /api/v1/receipt-matches/complete`가 해당 매출의 미수 잔액만큼 수금 전표와 매칭 전표를 생성한다.
+- **운영 기준**:
+  - 대상은 `sale_id` 또는 `outbound_id` 중 하나만 받는다. 두 값을 동시에 보내면 거부한다.
+  - 매출 총액, 기존 수금 매칭액, 거래처는 서버가 sales/receipt_matches 기준으로 다시 계산한다.
+  - 이미 완납된 매출 또는 매출 총액을 초과하는 요청은 거부한다.
+  - 부분 매칭/선수금/환불 검토처럼 판단이 필요한 흐름은 기존 수금 매칭 화면에 남긴다.
+- **이유**: 대부분의 정상 판매는 출고/계산서 확인 후 완납 처리만 하면 되므로, 매번 수금 전표를 등록하고 미수 목록에서 금액을 다시 입력하는 흐름은 과하다. 예외 처리 화면은 유지하되, 정상 완납은 판매 행에서 끝내는 편이 실무 속도와 데이터 일관성에 맞다.
+- **검증**:
+  - Go 모델 테스트로 원클릭 수금 완료 요청의 대상/날짜 validation을 고정한다.
+  - router snapshot/feature catalog로 신규 라우트 노출을 고정한다.
+  - frontend build로 판매 목록 버튼, 수금 기본 필터, dev mock API 타입 경로를 확인한다.
+- **날짜**: 2026-05-11 18:01:14 KST
+
+## D-20260511-184355: 판매 화면 수금 미완료 큐는 자동 선택과 일괄 완료를 제공한다
+
+- **결정**: 판매 목록에 `receipt_status=open/unpaid/partial/paid` 필터를 추가한다. `수금 미완료` 업무 큐는 `open` 필터를 열고 현재 페이지에서 수금 완료 가능한 행을 자동 선택한다. 사용자는 [선택 수금완료] 한 번으로 선택된 매출들의 미수 잔액만큼 수금 전표와 매칭 전표를 일괄 생성한다.
+- **운영 기준**:
+  - 필터 계산은 서버가 sales.total_amount 와 receipt_matches.matched_amount 를 다시 합산해 판단한다.
+  - `open`은 미수 또는 부분 수금 상태를 포함하고, `paid`는 완납만 포함한다.
+  - 일괄 완료도 기존 `POST /api/v1/receipt-matches/complete` 검증 경로를 건별로 사용해 과매칭/이미 완납/취소 매출을 서버에서 다시 차단한다.
+  - 계산서 발행/ERP 마감 큐와 수금 큐는 서로 다른 작업 의도이므로 한쪽 큐를 열면 다른 큐 필터는 비운다.
+- **이유**: 실무자는 “오늘 받을 돈 처리”를 거래처별로 훑는 것보다, 미수 건만 자동으로 모아 선택 합계와 건수를 확인한 뒤 한 번에 끝내는 흐름이 빠르다. 장부 변경은 기존 서버 검증을 재사용해 편의성과 안전성을 함께 유지한다.
+- **검증**:
+  - 서버/운영 빌드 확인은 이번 요청에서 실행하지 않는다.
+  - 코드 포맷과 graphify 갱신으로 변경 구조만 동기화한다.
+- **날짜**: 2026-05-11 18:43:55 KST
+
+## D-20260512-101906: 수금 미완료 큐는 현재 목록과 필터 전체 일괄 완료를 분리한다
+
+- **결정**: 판매 화면의 수금 미완료 큐에는 [현재 목록] 수금완료와 [필터 전체] 수금완료 버튼을 함께 둔다. [현재 목록]은 화면에 보이는 자동 선택 행만 처리하고, [필터 전체]는 현재 거래처/기간/수금 상태 필터 결과 전체를 서버에서 페이지 단위로 불러와 처리한다.
+- **운영 기준**:
+  - 필터 전체 처리도 각 매출을 기존 `POST /api/v1/receipt-matches/complete` 검증 경로로 확정한다.
+  - 대량 처리 시 한 번에 모든 요청을 보내지 않고 작은 batch 로 나눠 장부 API 부하와 부분 실패 영향을 줄인다.
+  - 성공/실패 건수를 분리해 표시하고, 일부 실패 시 성공 건은 유지한 뒤 목록과 수금 KPI를 다시 조회한다.
+- **이유**: 실무자는 필터를 걸어 “이번 거래처/이번 기간 미수 전체”를 만들고 한 번에 정리하고 싶어 한다. 현재 페이지 자동 선택만 있으면 페이지 이동을 반복해야 하므로, 화면에 보이는 목록 처리와 필터 결과 전체 처리를 명확히 나누는 편이 빠르고 안전하다.
+- **검증**:
+  - 서버/운영 빌드 확인은 사용자 지시에 따라 실행하지 않는다.
+  - graphify 갱신으로 변경 구조를 동기화한다.
+- **날짜**: 2026-05-12 10:19:06 KST

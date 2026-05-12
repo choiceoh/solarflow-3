@@ -14,6 +14,16 @@ import { CONTRACT_TYPES_ACTIVE } from '@/types/procurement';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_PATTERN = /^\d{4}-\d{2}$/;
+const MIG_NUMBER_PATTERN = /^MIG-(PO|LC|TT|BL)-\d{8}-\d{3}$/;
+const PRODUCT_VARIANT_KIND_LABEL: Record<string, string> = {
+  output_bin: '출력 binning',
+  bom_variant: 'BOM 차이',
+  cert_variant: '인증 차이',
+  label_variant: '라벨 차이',
+  packaging_variant: '포장 차이',
+  mixed: '복합',
+  other: '기타',
+};
 
 function buildNormalizer(
   labels: Record<string, string>,
@@ -59,6 +69,7 @@ const NORMALIZED_VALUES: Record<string, Record<string, string>> = {
       [t.label, t.value],
     ]),
   ),
+  status: { planned: 'planned', completed: 'completed', 예정: 'planned', 완료: 'completed' },
   // 마스터 — 거래처 유형. PartnerForm 의 PARTNER_TYPE_LABEL 기준.
   partner_type: {
     supplier: 'supplier', customer: 'customer', both: 'both',
@@ -71,6 +82,7 @@ const NORMALIZED_VALUES: Record<string, Record<string, string>> = {
   },
   // 마스터 — 제조사 국내/해외. 코드값 자체가 한글.
   domestic_foreign: { 국내: '국내', 해외: '해외' },
+  product_variant_kind: buildNormalizer(PRODUCT_VARIANT_KIND_LABEL),
 };
 
 // 허용값 맵 (감리 규칙: map 방식, if-else 나열 금지)
@@ -115,7 +127,7 @@ const POSITIVE_FIELDS: Record<string, boolean> = {
   vat: true, customs_fee: true, incidental_cost: true, deposit_rate: true,
   spare_qty: true,
   // PO/LC 추가
-  amount_usd: true, target_qty: true, usance_days: true,
+  amount_usd: true, target_qty: true, target_mw: true, usance_days: true,
   // 마스터 추가 — 품번 스펙·치수와 은행 한도, 제조사 표시순위
   spec_wp: true, wattage_kw: true,
   module_width_mm: true, module_height_mm: true, module_depth_mm: true, weight_kg: true,
@@ -140,8 +152,101 @@ function buildCodeSet(master: MasterDataForExcel, key: keyof MasterDataForExcel)
     addIfString(item.warehouse_code);
     addIfString(item.warehouse_name);
     addIfString(item.bank_name);
+    addIfString(item.po_number);
   }
   return set;
+}
+
+function normalizeMatchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/주식회사|\(주\)|㈜|co\.?|ltd\.?|inc\.?|solar|솔라/g, '')
+    .replace(/[^a-z0-9가-힣]/g, '')
+    .trim();
+}
+
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  const cur = Array.from({ length: b.length + 1 }, () => 0);
+  for (let i = 1; i <= a.length; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(
+        cur[j - 1] + 1,
+        prev[j] + 1,
+        prev[j - 1] + cost,
+      );
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = cur[j];
+  }
+  return prev[b.length];
+}
+
+function masterCandidateValues(master: MasterDataForExcel, key: keyof MasterDataForExcel): string[] {
+  const items = (master[key] ?? []) as Array<Record<string, unknown>>;
+  const values: string[] = [];
+  const add = (v: unknown) => {
+    if (typeof v === 'string' && v.trim() !== '') values.push(v.trim());
+  };
+  for (const item of items) {
+    if (key === 'companies') {
+      add(item.company_code);
+      add(item.company_name);
+    } else if (key === 'manufacturers') {
+      add(item.name_kr);
+    } else if (key === 'products') {
+      add(item.product_code);
+      add(item.product_name);
+    } else if (key === 'partners') {
+      add(item.partner_name);
+    } else if (key === 'warehouses') {
+      add(item.warehouse_code);
+      add(item.warehouse_name);
+    } else if (key === 'banks') {
+      add(item.bank_name);
+    }
+  }
+  return Array.from(new Set(values));
+}
+
+function suggestMasterCandidates(
+  value: string,
+  candidates: string[],
+  limit = 3,
+): string[] {
+  const needle = normalizeMatchText(value);
+  if (needle.length < 2) return [];
+  return candidates
+    .map((candidate) => {
+      const normalized = normalizeMatchText(candidate);
+      if (normalized.length < 2) return { candidate, score: 0 };
+      if (normalized === needle) return { candidate, score: 1 };
+      if (normalized.includes(needle) || needle.includes(normalized)) {
+        return { candidate, score: 0.92 };
+      }
+      const dist = editDistance(needle, normalized);
+      const score = 1 - dist / Math.max(needle.length, normalized.length);
+      return { candidate, score };
+    })
+    .filter((item) => item.score >= 0.55)
+    .sort((a, b) => b.score - a.score || a.candidate.localeCompare(b.candidate, 'ko'))
+    .slice(0, limit)
+    .map((item) => item.candidate);
+}
+
+function missingMasterMessage(
+  label: string,
+  value: string,
+  master: MasterDataForExcel,
+  masterKey: keyof MasterDataForExcel,
+): string {
+  const candidates = suggestMasterCandidates(value, masterCandidateValues(master, masterKey));
+  if (candidates.length === 0) return `존재하지 않는 ${label}입니다`;
+  return `존재하지 않는 ${label}입니다. alias 후보: ${candidates.join(', ')}`;
 }
 
 // 단일 행 검증
@@ -175,7 +280,10 @@ function validateRow(
           field.key === 'product_code' ? '품번' :
           field.key === 'warehouse_code' ? '창고' :
           field.key === 'bank_name' ? '은행' : '법인';
-        errors.push({ field: field.label, message: `존재하지 않는 ${label}입니다` });
+        errors.push({
+          field: field.label,
+          message: missingMasterMessage(label, strVal, master, masterKey),
+        });
       }
     }
 
@@ -249,7 +357,186 @@ function validateRow(
     ...row,
     valid: errors.length === 0,
     errors,
+    warnings: row.warnings ?? [],
   };
+}
+
+function fieldLabel(fields: FieldDef[], key: string): string {
+  return fields.find((f) => f.key === key)?.label ?? key;
+}
+
+function applyRowIssues(
+  row: ParsedRow,
+  errors: RowError[] = [],
+  warnings: RowError[] = [],
+): ParsedRow {
+  const nextErrors = [...row.errors, ...errors];
+  const nextWarnings = [...(row.warnings ?? []), ...warnings];
+  return {
+    ...row,
+    valid: nextErrors.length === 0,
+    errors: nextErrors,
+    warnings: nextWarnings,
+  };
+}
+
+function parseStrictDate(value: unknown): Date | null {
+  const s = String(value ?? '').trim();
+  if (!DATE_PATTERN.test(s)) return null;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  if (d.toISOString().slice(0, 10) !== s) return null;
+  return d;
+}
+
+function applyDateOrderCheck(
+  rows: ParsedRow[],
+  fields: FieldDef[],
+  startKey: string,
+  endKey: string,
+): ParsedRow[] {
+  const startLabel = fieldLabel(fields, startKey);
+  const endLabel = fieldLabel(fields, endKey);
+  return rows.map((row) => {
+    const start = parseStrictDate(row.data[startKey]);
+    const end = parseStrictDate(row.data[endKey]);
+    if (!start || !end || start <= end) return row;
+    return applyRowIssues(row, [{
+      field: `${startLabel}/${endLabel}`,
+      message: `${startLabel}은 ${endLabel}보다 늦을 수 없습니다`,
+    }]);
+  });
+}
+
+function applyMigrationNumberCheck(
+  rows: ParsedRow[],
+  fields: FieldDef[],
+  key: string,
+  kind: 'PO' | 'LC' | 'TT' | 'BL',
+): ParsedRow[] {
+  const label = fieldLabel(fields, key);
+  return rows.map((row) => {
+    const value = String(row.data[key] ?? '').trim();
+    if (!value || !value.toUpperCase().startsWith('MIG-')) return row;
+    const match = value.match(MIG_NUMBER_PATTERN);
+    if (!match || match[1] !== kind) {
+      return applyRowIssues(row, [{
+        field: label,
+        message: `${label} 이관 번호는 MIG-${kind}-YYYYMMDD-001 형식이어야 합니다`,
+      }]);
+    }
+    return applyRowIssues(row, [], [{
+      field: label,
+      message: `이관용 ${kind} 번호입니다`,
+    }]);
+  });
+}
+
+function purchaseOrderNumbers(master: MasterDataForExcel): Set<string> {
+  return new Set(
+    (master.purchaseOrders ?? [])
+      .map((p) => p.po_number ?? p.po_id.slice(0, 8))
+      .filter(Boolean),
+  );
+}
+
+function applyPONumberFKCheck(rows: ParsedRow[], fields: FieldDef[], master: MasterDataForExcel): ParsedRow[] {
+  const existing = purchaseOrderNumbers(master);
+  const label = fieldLabel(fields, 'po_number');
+  return rows.map((row) => {
+    const poNumber = String(row.data.po_number ?? '').trim();
+    if (!poNumber || existing.has(poNumber)) return row;
+    return applyRowIssues(row, [{
+      field: label,
+      message: '존재하지 않는 발주번호입니다',
+    }]);
+  });
+}
+
+function applyExistingPONumberCheck(rows: ParsedRow[], fields: FieldDef[], master: MasterDataForExcel): ParsedRow[] {
+  const existing = purchaseOrderNumbers(master);
+  const label = fieldLabel(fields, 'po_number');
+  return rows.map((row) => {
+    const poNumber = String(row.data.po_number ?? '').trim();
+    if (!poNumber || !existing.has(poNumber)) return row;
+    return applyRowIssues(row, [{
+      field: label,
+      message: '이미 등록된 발주번호입니다',
+    }]);
+  });
+}
+
+function applyLCNumberDupCheck(rows: ParsedRow[], fields: FieldDef[]): ParsedRow[] {
+  const label = fieldLabel(fields, 'lc_number');
+  const seen = new Map<string, number>();
+  return rows.map((row) => {
+    const lcNumber = String(row.data.lc_number ?? '').trim();
+    if (!lcNumber) return row;
+    const first = seen.get(lcNumber);
+    if (first) {
+      return applyRowIssues(row, [{
+        field: label,
+        message: `${first}행과 중복된 L/C No.입니다`,
+      }]);
+    }
+    seen.set(lcNumber, row.rowNumber);
+    return row;
+  });
+}
+
+function applyPOHeaderWarnings(rows: ParsedRow[], fields: FieldDef[]): ParsedRow[] {
+  const headerKeys = [
+    'company_code', 'manufacturer_name', 'contract_type', 'contract_date',
+    'incoterms', 'currency', 'payment_terms', 'contract_period_start', 'contract_period_end',
+  ];
+  const firstByPO = new Map<string, ParsedRow>();
+  return rows.map((row) => {
+    const poNumber = String(row.data.po_number ?? '').trim();
+    if (!poNumber) return row;
+    const first = firstByPO.get(poNumber);
+    if (!first) {
+      firstByPO.set(poNumber, row);
+      return row;
+    }
+    const warnings: RowError[] = [];
+    for (const key of headerKeys) {
+      const firstVal = String(first.data[key] ?? '').trim();
+      const curVal = String(row.data[key] ?? '').trim();
+      if (firstVal && curVal && firstVal !== curVal) {
+        warnings.push({
+          field: fieldLabel(fields, key),
+          message: `${first.rowNumber}행의 PO 헤더 값이 등록에 사용됩니다`,
+        });
+      }
+    }
+    return warnings.length > 0 ? applyRowIssues(row, [], warnings) : row;
+  });
+}
+
+function applyOperationalChecks(
+  rows: ParsedRow[],
+  type: TemplateType,
+  master: MasterDataForExcel,
+): ParsedRow[] {
+  const fields = FIELDS_MAP[type];
+  if (type === 'purchase_order') {
+    let checked = applyMigrationNumberCheck(rows, fields, 'po_number', 'PO');
+    checked = applyDateOrderCheck(checked, fields, 'contract_period_start', 'contract_period_end');
+    checked = applyExistingPONumberCheck(checked, fields, master);
+    checked = applyPOHeaderWarnings(checked, fields);
+    return checked;
+  }
+  if (type === 'lc') {
+    let checked = applyMigrationNumberCheck(rows, fields, 'lc_number', 'LC');
+    checked = applyDateOrderCheck(checked, fields, 'open_date', 'maturity_date');
+    checked = applyPONumberFKCheck(checked, fields, master);
+    checked = applyLCNumberDupCheck(checked, fields);
+    return checked;
+  }
+  if (type === 'tt') {
+    return applyPONumberFKCheck(rows, fields, master);
+  }
+  return rows;
 }
 
 // 마스터 단일키 중복 검증 설정 — 파일 내 / 마스터 기존값 중복 모두 차단.
@@ -341,7 +628,11 @@ export function validateRows(
   fieldOverride?: FieldDef[],
 ): ParsedRow[] {
   const fields = fieldOverride ?? FIELDS_MAP[type];
-  const checked = rows.map((row) => validateRow(row, fields, master, type));
+  const checked = applyOperationalChecks(
+    rows.map((row) => validateRow(row, fields, master, type)),
+    type,
+    master,
+  );
 
   if (type === 'bank') return applyBankDupCheck(checked, master);
 

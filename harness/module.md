@@ -31,7 +31,7 @@ BARO와 **공유**:
 - 바로 매입요청 inbox (`/group-trade/baro-inbox`) — BARO가 보낸 그룹내 매입 요청 처리
 - L/C 한도 (`/banking`) — 은행별 한도/만기
 - 매출 분석 (`/sales-analysis`) — 마진·이익률 (원가 기반)
-- 가격예측 (`/price-forecast`) — 중국·유럽 외부 시세·forward·중국 입찰·CPIA floor 벤치마크
+- 가격예측 (`/price-forecast`) — 중국·유럽 외부 시세·forward·중국 입찰·CPIA floor·미체결 공급사 견적 벤치마크
 - 결재안 (`/approval`) — D-173 PR #173로 BARO에서는 제거되어 탑솔라 전용
 
 **노출되지 않는 것** (BARO 전용 — D-108로 차단):
@@ -80,6 +80,8 @@ BARO와 **공유**:
 - [D-145](DECISIONS.md#d-145) — 테넌트 모듈화 5 PR 시리즈. 새 도메인 추가 비용을 코드 1줄 + 마이그 1개 + admin UI 토글로 압축 (`internal/tenant/registry.go` 단일 정본, frontend `packs/` 분리, admin 매트릭스 화면).
 - [D-146](DECISIONS.md#d-146) — 가격예측 수집 시장은 중국·유럽으로 제한한다.
 - [D-151](DECISIONS.md#d-151) — Tier-1 ASP는 가격예측 수집·표시·저장 대상에서 제거한다.
+- [D-159](DECISIONS.md#d-159) — 가격예측 구매 전략과 1/3/6개월 시나리오는 Rust 계산엔진이 산출한다.
+- [D-20260511-175509](DECISIONS.md#d-20260511-175509) — 가격예측은 백테스트·이상치 제거·미체결 공급사 견적을 같은 판단 흐름에 둔다.
 
 **WMS (모든 테넌트 공유)**
 - [D-139](DECISIONS.md#d-139) — 창고 내 위치(Bin) 마스터. Zone > Aisle > Rack > Bin 4단계.
@@ -99,14 +101,14 @@ BARO와 **공유**:
 | `/api/v1/lcs/*`, `/api/v1/tts/*` | L/C, T/T 계약금 |
 | `/api/v1/expenses/*` | 부대비용 |
 | `/api/v1/price-histories/*` | 단가 이력 |
-| `/api/v1/price-benchmarks/*` | 가격예측 외부 벤치마크 + AI 수집 로그 |
+| `/api/v1/price-benchmarks/*` | 가격예측 외부 벤치마크 + 미체결 견적 + AI 수집 로그 |
 | `/api/v1/limit-changes/*` | LC 한도 변동 |
 | `/api/v1/export/amaranth/*` | 아마란스 RPA 연동 |
-| Rust calc 프록시 | landed-cost, exchange-compare, lc-fee, lc-limit-timeline, lc-maturity-alert, margin-analysis, price-trend |
+| Rust calc 프록시 | landed-cost, exchange-compare, lc-fee, lc-limit-timeline, lc-maturity-alert, margin-analysis, price-trend, price-forecast-strategy |
 
 ## 운영 메모
 
-- **자동 배포**: main에 push되면 webhook(`api.topworks.ltd/__webhook/deploy`) → cron-deploy.sh가 Go/Rust 재빌드 + `apply_migrations.ts` (Bun.SQL) 로 마이그레이션 자동 적용 (안전 추정 기본 / 위험 키워드 또는 `-- @auto-apply: no` 헤더 시 SKIP — 자세한 정책은 PRODUCTION.md) + Cloudflare Pages가 프론트 자동 배포.
+- **자동 배포**: main에 push되면 webhook(`api.topworks.ltd/__webhook/deploy`) → cron-deploy.sh가 Go/Rust 재빌드 + `apply_migrations.ts` (Bun.SQL) 로 마이그레이션 자동 적용 + `verify_migration.ts` 로 적용 이력/DB 오브젝트/PostgREST 캐시 노출 확인 (안전 추정 기본 / 위험 키워드 또는 `-- @auto-apply: no` 헤더 시 SKIP — 자세한 정책은 PRODUCTION.md) + Cloudflare Pages가 프론트 자동 배포.
 - **사이드바 「구매」 그룹 비중**: 수입 흐름(PO→LC→BL→면장)이 핵심 메뉴라 「구매」가 가장 무거움.
 - **외부 RPA 의존**: 아마란스 매출 업로드 등 일부 흐름은 외부 시스템(아마란스) 양식과 동기화돼 있어 변경 시 RPA 워커도 같이 검토 필요.
 
@@ -117,6 +119,6 @@ BARO와 **공유**:
 2. `MODULE_TENANTS = {topsolar, cable}` 적용 = 카탈로그 entry 의 `DefaultTenants: feature.TenantSetModule` (D-119 패턴)
 3. 사이드바(`CommandShell.tsx`) 메뉴에 `tenants: ['topsolar', 'cable']` 명시하거나 `MODULE_TENANTS`를 재사용
 4. 공유 화면에서 탑솔라 전용 UI는 `!isBaroMode()` 또는 tenant 체크로 가드
-5. **DECISIONS.md에 D-NNN 추가** + 본 문서 「관련 결정」 섹션에 링크 1줄 추가
-6. **D-108 격리 목록을 늘리는 변경이라면 D-108을 갱신할지 별도 D-NNN을 둘지 명시** — D-108은 "이 목록이 격리 범위의 전부"라고 못박았으므로 추가 확장은 결정 기록 필수
+5. **DECISIONS.md에 `D-YYYYMMDD-HHMMSS` 형식의 결정 ID 추가** + 본 문서 「관련 결정」 섹션에 링크 1줄 추가
+6. **D-108 격리 목록을 늘리는 변경이라면 D-108을 갱신할지 별도 `D-YYYYMMDD-HHMMSS` 결정을 둘지 명시** — D-108은 "이 목록이 격리 범위의 전부"라고 못박았으므로 추가 확장은 결정 기록 필수
 7. **D-112 사이드바 탭 분류** — admin이 「전체」 탭만 두지 않은 경우, 신규 메뉴는 사이트 설정 > 사이드바 탭에서 어느 탭에 노출할지 분류 (안 하면 「전체」 탭에서만 노출)

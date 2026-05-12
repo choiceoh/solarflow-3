@@ -214,6 +214,36 @@ type outboundPartnerRow struct {
 	PartnerName string `json:"partner_name"`
 }
 
+type outboundSaleRefRow struct {
+	OutboundID *string `json:"outbound_id"`
+	Status     string  `json:"status"`
+}
+
+func (h *OutboundHandler) activeSaleOutboundIDs() ([]string, error) {
+	data, err := fetchAllFromTable(h.DB, "sales", "outbound_id,status")
+	if err != nil {
+		return nil, err
+	}
+	var rows []outboundSaleRefRow
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{}, len(rows))
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.OutboundID == nil || *row.OutboundID == "" || row.Status == "cancelled" {
+			continue
+		}
+		if _, exists := seen[*row.OutboundID]; exists {
+			continue
+		}
+		seen[*row.OutboundID] = struct{}{}
+		ids = append(ids, *row.OutboundID)
+	}
+	return ids, nil
+}
+
 func (h *OutboundHandler) fetchOutboundRecord(id string) (model.Outbound, bool, error) {
 	data, _, err := h.DB.From("outbounds").
 		Select("*", "exact", false).
@@ -582,6 +612,30 @@ func (h *OutboundHandler) applyOutboundSearch(query *postgrest.FilterBuilder, q 
 	return query.Or(strings.Join(clauses, ","), ""), true, nil
 }
 
+// applyOutboundWorkQueue — 출고 이후 다음 처리 대기열을 DB 필터로 좁힌다.
+// 비유: "출고 전표함"에서 아직 매출 전표가 붙지 않은 상품판매 건만 따로 꺼내는 작업.
+func (h *OutboundHandler) applyOutboundWorkQueue(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
+	switch r.URL.Query().Get("work_queue") {
+	case "":
+		return query, true, nil
+	case "sale_unregistered":
+		query = query.In("usage_category", []string{"sale", "sale_spare"})
+		if r.URL.Query().Get("status") == "" {
+			query = query.Eq("status", "active")
+		}
+		linkedIDs, err := h.activeSaleOutboundIDs()
+		if err != nil {
+			return query, false, fmt.Errorf("매출 연결 출고 조회 실패: %w", err)
+		}
+		if len(linkedIDs) > 0 {
+			query = query.Not("outbound_id", "in", "("+strings.Join(linkedIDs, ",")+")")
+		}
+		return query, true, nil
+	default:
+		return query, false, nil
+	}
+}
+
 // applyOutboundFilters — List 와 Summary 가 공유하는 필터 로직.
 // q/manufacturer_id 처리에 추가 DB 호출이 발생할 수 있어 (success bool, err) 시그니처로 빈 결과를 신호한다.
 func (h *OutboundHandler) applyOutboundFilters(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
@@ -617,6 +671,16 @@ func (h *OutboundHandler) applyOutboundFilters(r *http.Request, query *postgrest
 		if _, err := strconv.ParseFloat(maxKw, 64); err == nil {
 			query = query.Lte("capacity_kw", maxKw)
 		}
+	}
+
+	var ok bool
+	var err error
+	query, ok, err = h.applyOutboundWorkQueue(r, query)
+	if err != nil {
+		return query, false, err
+	}
+	if !ok {
+		return query, false, nil
 	}
 
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {

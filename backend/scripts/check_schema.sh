@@ -73,6 +73,10 @@ check_struct "po_line_items" "$MODELS_DIR/po_line.go"  "UpdatePOLineRequest"
 check_struct "purchase_orders" "$MODELS_DIR/po.go" "CreatePurchaseOrderRequest"
 check_struct "purchase_orders" "$MODELS_DIR/po.go" "UpdatePurchaseOrderRequest"
 
+# products
+check_struct "products" "$MODELS_DIR/product.go" "CreateProductRequest"
+check_struct "products" "$MODELS_DIR/product.go" "UpdateProductRequest"
+
 # lc_records
 check_struct "lc_records" "$MODELS_DIR/lc.go" "CreateLCRequest" "^(line_items)$"
 check_struct "lc_records" "$MODELS_DIR/lc.go" "UpdateLCRequest" "^(line_items)$"
@@ -91,6 +95,12 @@ fi
 if [[ -f "$MODELS_DIR/inventory_allocation.go" ]]; then
   check_struct "inventory_allocations" "$MODELS_DIR/inventory_allocation.go" "CreateInventoryAllocationRequest"
   check_struct "inventory_allocations" "$MODELS_DIR/inventory_allocation.go" "UpdateInventoryAllocationRequest"
+fi
+
+# price_benchmarks
+if [[ -f "$MODELS_DIR/price_benchmark.go" ]]; then
+  check_struct "price_benchmarks" "$MODELS_DIR/price_benchmark.go" "CreatePriceBenchmarkRequest"
+  check_struct "price_benchmarks" "$MODELS_DIR/price_benchmark.go" "UpdatePriceBenchmarkReviewStatusRequest"
 fi
 
 echo ""

@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react';
 import { CardB, CommandTopLine, RailBlock, TileB } from './MockupPrimitives';
+import { KpiStrip } from './KpiStrip';
 
 export interface MasterConsoleMetric {
   label: string;
+  key?: string;
+  metricId?: string;
   value: string;
   /** NumberTween 보간을 위한 raw 숫자 값. formatter 와 함께 주어지면 카운트업. */
   numericValue?: number;
@@ -22,6 +25,7 @@ interface MasterConsoleProps {
   tableSub?: string;
   actions?: ReactNode;
   metrics: MasterConsoleMetric[];
+  kpiScope?: string;
   toolbar?: ReactNode;
   rail?: ReactNode;
   children: ReactNode;
@@ -35,6 +39,7 @@ export function MasterConsole({
   tableSub,
   actions,
   metrics,
+  kpiScope,
   toolbar,
   rail,
   children,
@@ -56,8 +61,8 @@ export function MasterConsole({
         style={hasRail ? undefined : { gridTemplateColumns: 'minmax(0, 1fr)' }}
       >
         <section className="sf-procurement-main">
-          <div className="sf-command-kpis">
-            {metrics.map((metric) => (
+          <KpiStrip metrics={metrics} scopeId={kpiScope}>
+            {(metric) => (
               <TileB
                 key={metric.label}
                 lbl={metric.label}
@@ -69,9 +74,10 @@ export function MasterConsole({
                 tone={metric.tone}
                 delta={metric.delta}
                 spark={metric.spark}
+                metricId={metric.metricId}
               />
-            ))}
-          </div>
+            )}
+          </KpiStrip>
 
           <CommandTopLine title={tableTitle} sub={tableSub} right={toolbar} />
 

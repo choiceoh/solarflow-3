@@ -40,6 +40,33 @@ type SaleHandler struct {
 	DB *supa.Client
 }
 
+type saleERPClosedRefRow struct {
+	SaleID    string `json:"sale_id"`
+	ERPClosed *bool  `json:"erp_closed"`
+}
+
+// erpOpenSaleIDs — 과거 이관 데이터의 NULL 과 명시 false 를 모두 ERP 미마감으로 본다.
+// 비유: 도장이 안 찍힌 전표는 빈칸이든 "미마감" 표시든 같은 미처리함에 넣는다.
+func (h *SaleHandler) erpOpenSaleIDs() ([]string, error) {
+	data, err := fetchAllFromTable(h.DB, "sales", "sale_id,erp_closed")
+	if err != nil {
+		return nil, err
+	}
+	var rows []saleERPClosedRefRow
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.SaleID == "" || (row.ERPClosed != nil && *row.ERPClosed) {
+			continue
+		}
+		ids = append(ids, row.SaleID)
+	}
+	return ids, nil
+}
+
 // NewSaleHandler — SaleHandler 생성자
 func NewSaleHandler(db *supa.Client) *SaleHandler {
 	return &SaleHandler{DB: db}
@@ -188,12 +215,16 @@ func (h *SaleHandler) saleIDsByBusinessDate(month, start, end string) ([]string,
 
 	ids := make([]string, 0, len(sales))
 	for _, sale := range sales {
+		// 폴백 체인: tax_invoice_date → outbound_date → order_date.
+		// outbound_id 가 dangling 이면 outboundDateByID 가 "" 를 반환하므로 order_id 폴백을 시도해야 한다.
 		dateValue := ""
 		if sale.TaxInvoiceDate != nil && *sale.TaxInvoiceDate != "" {
 			dateValue = *sale.TaxInvoiceDate
-		} else if sale.OutboundID != nil {
+		}
+		if dateValue == "" && sale.OutboundID != nil && *sale.OutboundID != "" {
 			dateValue = outboundDateByID[*sale.OutboundID]
-		} else if sale.OrderID != nil {
+		}
+		if dateValue == "" && sale.OrderID != nil && *sale.OrderID != "" {
 			dateValue = orderDateByID[*sale.OrderID]
 		}
 		if saleBusinessDateMatches(dateValue, month, start, end) {
@@ -201,6 +232,47 @@ func (h *SaleHandler) saleIDsByBusinessDate(month, start, end string) ([]string,
 		}
 	}
 	return ids, nil
+}
+
+// intersectSaleIDLists — 후보 sale_id 리스트들의 교집합을 구한다.
+// applySaleFilters 에서 erp/날짜/수금 등 여러 후보 컬럼이 모두 sale_id 를 좁히는데,
+// postgrest-go .In() 은 params map 이라 같은 컬럼 두 번 호출 시 덮어써진다 (한 필터만 살아남음).
+// 따라서 후보 리스트들을 Go 에서 교집합 처리한 뒤 마지막에 한 번만 .In() 호출한다.
+func intersectSaleIDLists(lists [][]string) []string {
+	if len(lists) == 0 {
+		return nil
+	}
+	// 가장 작은 리스트를 기준으로 멤버십 맵 생성 후 교집합 — O(N×M).
+	smallestIdx := 0
+	for i, list := range lists {
+		if len(list) < len(lists[smallestIdx]) {
+			smallestIdx = i
+		}
+	}
+	base := make(map[string]struct{}, len(lists[smallestIdx]))
+	for _, id := range lists[smallestIdx] {
+		base[id] = struct{}{}
+	}
+	for i, list := range lists {
+		if i == smallestIdx {
+			continue
+		}
+		next := make(map[string]struct{}, len(base))
+		for _, id := range list {
+			if _, ok := base[id]; ok {
+				next[id] = struct{}{}
+			}
+		}
+		base = next
+		if len(base) == 0 {
+			return nil
+		}
+	}
+	result := make([]string, 0, len(base))
+	for id := range base {
+		result = append(result, id)
+	}
+	return result
 }
 
 // applySaleFilters — List/Summary 가 공유하는 필터 로직.
@@ -216,8 +288,27 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 	if custID := r.URL.Query().Get("customer_id"); custID != "" {
 		query = query.Eq("customer_id", custID)
 	}
+	// sale_id 후보 리스트들 — erp/날짜/수금 필터가 모두 sale_id 컬럼을 좁히는데
+	// postgrest-go .In() 은 params map 이라 같은 컬럼을 두 번 부르면 덮어쓰여 한 필터만 살아남는다.
+	// 모두 모은 뒤 교집합으로 한 번만 .In("sale_id", …) 호출한다.
+	var saleIDCandidates [][]string
+
 	if erpClosed := r.URL.Query().Get("erp_closed"); erpClosed != "" {
-		query = query.Eq("erp_closed", erpClosed)
+		switch erpClosed {
+		case "true":
+			query = query.Eq("erp_closed", "true")
+		case "false":
+			ids, err := h.erpOpenSaleIDs()
+			if err != nil {
+				return query, false, fmt.Errorf("ERP 미마감 매출 조회 실패: %w", err)
+			}
+			if len(ids) == 0 {
+				return query, false, nil
+			}
+			saleIDCandidates = append(saleIDCandidates, ids)
+		default:
+			return query, false, nil
+		}
 	}
 	if status := r.URL.Query().Get("status"); status != "" {
 		query = query.Eq("status", status)
@@ -236,7 +327,7 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 		if len(ids) == 0 {
 			return query, false, nil
 		}
-		query = query.In("sale_id", ids)
+		saleIDCandidates = append(saleIDCandidates, ids)
 	}
 
 	// invoice_status: tax_invoice_date IS NULL / NOT NULL
@@ -245,6 +336,25 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 		query = query.Not("tax_invoice_date", "is", "null")
 	case "pending":
 		query = query.Is("tax_invoice_date", "null")
+	}
+
+	if receiptStatus := r.URL.Query().Get("receipt_status"); receiptStatus != "" {
+		ids, err := h.saleIDsByReceiptStatus(receiptStatus)
+		if err != nil {
+			return query, false, fmt.Errorf("수금 상태 필터 실패: %w", err)
+		}
+		if len(ids) == 0 {
+			return query, false, nil
+		}
+		saleIDCandidates = append(saleIDCandidates, ids)
+	}
+
+	if len(saleIDCandidates) > 0 {
+		intersected := intersectSaleIDLists(saleIDCandidates)
+		if len(intersected) == 0 {
+			return query, false, nil
+		}
+		query = query.In("sale_id", intersected)
 	}
 
 	// company_id: outbound_id IN (...) OR order_id IN (...)
@@ -281,6 +391,84 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 	return query, true, nil
 }
 
+type saleReceiptStatusRow struct {
+	SaleID      string   `json:"sale_id"`
+	OutboundID  *string  `json:"outbound_id"`
+	TotalAmount *float64 `json:"total_amount"`
+}
+
+func saleReceiptStatusMatches(filter string, totalAmount float64, collectedAmount float64) bool {
+	if totalAmount <= receiptMatchAmountEpsilon {
+		return false
+	}
+	outstandingAmount := totalAmount - collectedAmount
+	if outstandingAmount < 0 {
+		outstandingAmount = 0
+	}
+	switch filter {
+	case "open":
+		return outstandingAmount > receiptMatchAmountEpsilon
+	case "unpaid":
+		return outstandingAmount > receiptMatchAmountEpsilon && collectedAmount <= receiptMatchAmountEpsilon
+	case "partial":
+		return outstandingAmount > receiptMatchAmountEpsilon && collectedAmount > receiptMatchAmountEpsilon
+	case "paid":
+		return outstandingAmount <= receiptMatchAmountEpsilon
+	default:
+		return false
+	}
+}
+
+func (h *SaleHandler) saleIDsByReceiptStatus(filter string) ([]string, error) {
+	switch filter {
+	case "open", "unpaid", "partial", "paid":
+	default:
+		return nil, nil
+	}
+
+	var sales []saleReceiptStatusRow
+	if data, err := fetchAllFromTable(h.DB, "sales", "sale_id,outbound_id,total_amount"); err != nil {
+		return nil, err
+	} else if err := json.Unmarshal(data, &sales); err != nil {
+		return nil, err
+	}
+
+	var receiptMatches []receiptMatchTargetAmountRow
+	if data, err := fetchAllFromTable(h.DB, "receipt_matches", "outbound_id,sale_id,matched_amount"); err != nil {
+		return nil, err
+	} else if err := json.Unmarshal(data, &receiptMatches); err != nil {
+		return nil, err
+	}
+
+	collectedBySaleID := make(map[string]float64)
+	collectedByOutboundID := make(map[string]float64)
+	for _, match := range receiptMatches {
+		if match.SaleID != nil && *match.SaleID != "" {
+			collectedBySaleID[*match.SaleID] += match.MatchedAmount
+			continue
+		}
+		if match.OutboundID != nil && *match.OutboundID != "" {
+			collectedByOutboundID[*match.OutboundID] += match.MatchedAmount
+		}
+	}
+
+	ids := make([]string, 0, len(sales))
+	for _, sale := range sales {
+		totalAmount := 0.0
+		if sale.TotalAmount != nil {
+			totalAmount = *sale.TotalAmount
+		}
+		collectedAmount := collectedBySaleID[sale.SaleID]
+		if sale.OutboundID != nil && *sale.OutboundID != "" {
+			collectedAmount += collectedByOutboundID[*sale.OutboundID]
+		}
+		if saleReceiptStatusMatches(filter, totalAmount, collectedAmount) {
+			ids = append(ids, sale.SaleID)
+		}
+	}
+	return ids, nil
+}
+
 func parseSaleSort(r *http.Request) (column string, ascending bool) {
 	column = "tax_invoice_date"
 	ascending = false
@@ -300,6 +488,7 @@ func parseSaleSort(r *http.Request) (column string, ascending bool) {
 //   - limit/offset (기본 100, 최대 1000), sort/order (화이트리스트), q (거래처 검색)
 //   - company_id/customer_id/outbound_id/order_id/erp_closed/status: 등치 필터
 //   - month: tax_invoice_date prefix 매칭, invoice_status: issued/pending
+//   - receipt_status: open/unpaid/partial/paid
 //
 // 응답 헤더 X-Total-Count.
 func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -450,6 +639,7 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	var outbounds []saleOutboundRow
 	var products []saleProductRow
 	var partners []salePartnerRow
+	var receiptMatches []receiptMatchTargetAmountRow
 
 	// 5 enrich 테이블 모두 fetchAllFromTable 헬퍼로 청크 페이지네이션 (D-064 PR 36).
 	// PostgREST db-max-rows=1000 cap 으로 단일 Range 호출 시 첫 1000행만 응답 →
@@ -490,6 +680,13 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	} else {
 		log.Printf("[매출 enrich] partners 조회 실패 — 거래처명 비표시: %v", err)
 	}
+	if data, err := fetchAllFromTable(h.DB, "receipt_matches", "outbound_id, sale_id, matched_amount"); err == nil {
+		if err := json.Unmarshal(data, &receiptMatches); err != nil {
+			log.Printf("[매출 enrich] receipt_matches 디코딩 실패 — 수금상태 미표시: %v", err)
+		}
+	} else {
+		log.Printf("[매출 enrich] receipt_matches 조회 실패 — 수금상태 미표시: %v", err)
+	}
 
 	orderMap := make(map[string]saleOrderRow, len(orders))
 	for _, o := range orders {
@@ -511,24 +708,58 @@ func (h *SaleHandler) enrichSales(sales []model.Sale) []model.SaleListItem {
 	for _, p := range partners {
 		partnerMap[p.PartnerID] = p
 	}
+	collectedBySaleID := make(map[string]float64)
+	collectedByOutboundID := make(map[string]float64)
+	for _, match := range receiptMatches {
+		if match.SaleID != nil && *match.SaleID != "" {
+			collectedBySaleID[*match.SaleID] += match.MatchedAmount
+			continue
+		}
+		if match.OutboundID != nil && *match.OutboundID != "" {
+			collectedByOutboundID[*match.OutboundID] += match.MatchedAmount
+		}
+	}
 
 	items := make([]model.SaleListItem, 0, len(sales))
 	for _, sale := range sales {
+		collectedAmount := collectedBySaleID[sale.SaleID]
+		if sale.OutboundID != nil && *sale.OutboundID != "" {
+			collectedAmount += collectedByOutboundID[*sale.OutboundID]
+		}
+		outstandingAmount := 0.0
+		receiptStatus := "unknown"
+		if sale.TotalAmount != nil && *sale.TotalAmount > 0 {
+			outstandingAmount = *sale.TotalAmount - collectedAmount
+			if outstandingAmount < 0 {
+				outstandingAmount = 0
+			}
+			switch {
+			case outstandingAmount <= receiptMatchAmountEpsilon:
+				receiptStatus = "paid"
+			case collectedAmount > receiptMatchAmountEpsilon:
+				receiptStatus = "partial"
+			default:
+				receiptStatus = "unpaid"
+			}
+		}
 		item := model.SaleListItem{
-			SaleID:         sale.SaleID,
-			OutboundID:     sale.OutboundID,
-			OrderID:        sale.OrderID,
-			CustomerID:     sale.CustomerID,
-			Quantity:       0,
-			CapacityKw:     sale.CapacityKw,
-			UnitPriceWp:    sale.UnitPriceWp,
-			UnitPriceEa:    sale.UnitPriceEa,
-			SupplyAmount:   sale.SupplyAmount,
-			VatAmount:      sale.VatAmount,
-			TotalAmount:    sale.TotalAmount,
-			TaxInvoiceDate: sale.TaxInvoiceDate,
-			Status:         sale.Status,
-			Sale:           sale,
+			SaleID:            sale.SaleID,
+			OutboundID:        sale.OutboundID,
+			OrderID:           sale.OrderID,
+			CustomerID:        sale.CustomerID,
+			Quantity:          0,
+			CapacityKw:        sale.CapacityKw,
+			UnitPriceWp:       sale.UnitPriceWp,
+			UnitPriceEa:       sale.UnitPriceEa,
+			SupplyAmount:      sale.SupplyAmount,
+			VatAmount:         sale.VatAmount,
+			TotalAmount:       sale.TotalAmount,
+			CollectedAmount:   collectedAmount,
+			OutstandingAmount: outstandingAmount,
+			ReceiptStatus:     receiptStatus,
+			TaxInvoiceDate:    sale.TaxInvoiceDate,
+			Status:            sale.Status,
+			Sale:              sale,
 		}
 		if sale.Quantity != nil {
 			item.Quantity = *sale.Quantity

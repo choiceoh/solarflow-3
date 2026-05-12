@@ -15,7 +15,8 @@ export type TemplateType =
   | 'order'
   | 'receipt'
   | 'purchase_order'
-  | 'lc';
+  | 'lc'
+  | 'tt';
 
 export interface RowError {
   field: string;
@@ -27,6 +28,7 @@ export interface ParsedRow {
   data: Record<string, unknown>;
   valid: boolean;
   errors: RowError[];
+  warnings?: RowError[];
 }
 
 export interface ImportPreview {
@@ -34,6 +36,7 @@ export interface ImportPreview {
   totalRows: number;
   validRows: number;
   errorRows: number;
+  warningRows?: number;
   rows: ParsedRow[];
 }
 
@@ -46,14 +49,22 @@ export interface DeclarationImportPreview {
 export interface MasterDataForExcel {
   companies: { company_id: string; company_code: string; company_name: string }[];
   manufacturers: { manufacturer_id: string; name_kr: string }[];
-  products: { product_id: string; product_code: string; product_name: string; spec_wp?: number; wattage_kw?: number }[];
+  products: {
+    product_id: string;
+    product_code: string;
+    product_name: string;
+    spec_wp?: number;
+    wattage_kw?: number;
+    product_family_code?: string;
+    substitution_group_code?: string;
+  }[];
   partners: { partner_id: string; partner_name: string; partner_type: string }[];
   warehouses: { warehouse_id: string; warehouse_code: string; warehouse_name: string }[];
   outbounds?: { outbound_id: string; outbound_date: string; product_id: string; quantity: number; site_name?: string }[];
   // 발주(PO)·신용장(LC) 양식의 거래처(제조사 외)·은행 코드표용 — 각 법인별로 등록된 은행 한도.
   banks?: { bank_id: string; bank_name: string; company_id: string }[];
   // LC.po_number 드롭다운에서 사용할 PO 식별자 — 자연키(po_number)가 비면 첫 8자 id.
-  purchaseOrders?: { po_id: string; po_number?: string; manufacturer_name?: string; contract_date?: string }[];
+  purchaseOrders?: { po_id: string; po_number?: string; company_id?: string; manufacturer_name?: string; contract_date?: string }[];
 }
 
 // 양식별 한글 이름
@@ -73,6 +84,7 @@ export const TEMPLATE_LABEL: Record<TemplateType, string> = {
   receipt: '수금',
   purchase_order: '발주',
   lc: '신용장',
+  tt: 'T/T 송금',
 };
 
 // 양식별 필드 정의
@@ -114,6 +126,10 @@ export const PRODUCT_FIELDS: FieldDef[] = [
   { key: 'wafer_platform', label: '웨이퍼 플랫폼', required: false, type: 'string' },
   { key: 'cell_config', label: '셀 구성', required: false, type: 'string' },
   { key: 'series_name', label: '시리즈명', required: false, type: 'string' },
+  { key: 'product_family_code', label: '제품군코드', required: false, type: 'string' },
+  { key: 'product_variant_kind', label: '품번분리사유', required: false, type: 'string' },
+  { key: 'bom_revision', label: 'BOM Rev', required: false, type: 'string' },
+  { key: 'substitution_group_code', label: '대체그룹코드', required: false, type: 'string' },
   { key: 'memo', label: '메모', required: false, type: 'string' },
 ];
 
@@ -300,6 +316,7 @@ export const PURCHASE_ORDER_FIELDS: FieldDef[] = [
   { key: 'contract_type', label: '계약유형', required: true, type: 'string' },
   { key: 'contract_date', label: '계약일', required: true, type: 'date' },
   { key: 'incoterms', label: '인코텀즈', required: false, type: 'string' },
+  { key: 'currency', label: '통화', required: true, type: 'string' },
   { key: 'payment_terms', label: '결제조건', required: false, type: 'string' },
   { key: 'contract_period_start', label: '계약시작일', required: false, type: 'date' },
   { key: 'contract_period_end', label: '계약종료일', required: false, type: 'date' },
@@ -321,10 +338,23 @@ export const LC_FIELDS: FieldDef[] = [
   { key: 'bank_name', label: '은행명', required: true, type: 'string' },
   { key: 'open_date', label: '개설일', required: false, type: 'date' },
   { key: 'amount_usd', label: 'L/C금액(USD)', required: true, type: 'number' },
-  { key: 'target_qty', label: '대상수량', required: false, type: 'number' },
+  { key: 'target_mw', label: '목표 MW', required: false, type: 'number' },
   { key: 'usance_days', label: '유산스(일)', required: false, type: 'number' },
   { key: 'usance_type', label: '유산스유형', required: false, type: 'string' },
   { key: 'maturity_date', label: '만기일', required: false, type: 'date' },
+  { key: 'memo', label: '메모', required: false, type: 'string' },
+];
+
+// T/T 송금 필드 — PO 자연키로 연결하고 송금액(USD)·환율로 KRW 금액을 서버에서 계산한다.
+export const TT_FIELDS: FieldDef[] = [
+  { key: 'po_number', label: '발주번호(참조)', required: true, type: 'string' },
+  { key: 'company_code', label: '법인코드', required: true, type: 'string' },
+  { key: 'remit_date', label: '송금일', required: true, type: 'date' },
+  { key: 'amount_usd', label: '송금액(USD)', required: true, type: 'number' },
+  { key: 'exchange_rate', label: '환율', required: true, type: 'number' },
+  { key: 'bank_name', label: '은행명', required: true, type: 'string' },
+  { key: 'status', label: '상태', required: true, type: 'string' },
+  { key: 'purpose', label: '목적', required: false, type: 'string' },
   { key: 'memo', label: '메모', required: false, type: 'string' },
 ];
 
@@ -400,4 +430,5 @@ export const FIELDS_MAP: Record<TemplateType, FieldDef[]> = {
   receipt: RECEIPT_FIELDS,
   purchase_order: PURCHASE_ORDER_FIELDS,
   lc: LC_FIELDS,
+  tt: TT_FIELDS,
 };

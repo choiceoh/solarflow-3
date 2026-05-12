@@ -31,6 +31,7 @@ import {
   type DateRangeValue,
 } from "@/components/command/MockupPrimitives"
 import { BreakdownRows } from "@/components/command/BreakdownRows"
+import { KpiStrip } from "@/components/command/KpiStrip"
 import { flatSpark, monthlyTrend, monthlyCount } from "@/templates/sparkUtils"
 
 function fmtEok(value: number) {
@@ -215,49 +216,69 @@ export default function CustomsPage() {
     <>
       <div className="sf-command-surface sf-customs-shell">
         <section className="sf-customs-main">
-          <div className="sf-command-kpis sf-customs-kpis">
-            <TileB
-              lbl="면장"
-              v={String(declarations.length)}
-              u="건"
-              sub={`원가 ${costedDeclarationCount}건`}
-              tone="solar"
-              spark={declSpark}
-            />
-            <TileB
-              lbl="부대비용"
-              v={fmtEok(expenseTotal)}
-              numericValue={expenseTotal}
-              formatter={fmtEok}
-              u="억"
-              sub={`${expenseCount}건 · VAT ${fmtEok(expenseVat)}억`}
-              tone="ink"
-              spark={totalSpark}
-              metricId="customs.expense_total"
-            />
-            <TileB
-              lbl="B/L 연결"
-              v={String(linkedExpenseCount)}
-              numericValue={linkedExpenseCount}
-              formatter={(n) => String(Math.round(n))}
-              u="건"
-              sub={`전체 ${blSummary?.total ?? bls.length}개 B/L`}
-              tone="info"
-              spark={linkedSpark}
-              metricId="customs.bl_linked"
-            />
-            <TileB
-              lbl="평균 비용"
-              v={avgExpensePerWp.toFixed(2)}
-              numericValue={avgExpensePerWp}
-              formatter={(n) => n.toFixed(2)}
-              u="원/Wp"
-              sub="Wp당 평균"
-              tone="ink"
-              spark={flatSpark(avgExpensePerWp)}
-              metricId="customs.avg_expense"
-            />
-          </div>
+          <KpiStrip
+            metrics={[
+              {
+                key: "customs.declaration_count",
+                lbl: "면장",
+                v: String(declarations.length),
+                u: "건",
+                sub: `원가 ${costedDeclarationCount}건`,
+                tone: "solar" as const,
+                spark: declSpark,
+              },
+              {
+                lbl: "부대비용",
+                v: fmtEok(expenseTotal),
+                numericValue: expenseTotal,
+                formatter: fmtEok,
+                u: "억",
+                sub: `${expenseCount}건 · VAT ${fmtEok(expenseVat)}억`,
+                tone: "ink" as const,
+                spark: totalSpark,
+                metricId: "customs.expense_total",
+              },
+              {
+                lbl: "B/L 연결",
+                v: String(linkedExpenseCount),
+                numericValue: linkedExpenseCount,
+                formatter: (n: number) => String(Math.round(n)),
+                u: "건",
+                sub: `전체 ${blSummary?.total ?? bls.length}개 B/L`,
+                tone: "info" as const,
+                spark: linkedSpark,
+                metricId: "customs.bl_linked",
+              },
+              {
+                lbl: "평균 비용",
+                v: avgExpensePerWp.toFixed(2),
+                numericValue: avgExpensePerWp,
+                formatter: (n: number) => n.toFixed(2),
+                u: "원/Wp",
+                sub: "Wp당 평균",
+                tone: "ink" as const,
+                spark: flatSpark(avgExpensePerWp),
+                metricId: "customs.avg_expense",
+              },
+            ]}
+            scopeId={`customs.${activeTab}`}
+            gridClassName="sf-customs-kpis"
+          >
+            {(metric) => (
+              <TileB
+                key={metric.lbl}
+                lbl={metric.lbl}
+                v={metric.v}
+                numericValue={metric.numericValue}
+                formatter={metric.formatter}
+                u={metric.u}
+                sub={metric.sub}
+                tone={metric.tone}
+                spark={metric.spark}
+                metricId={metric.metricId}
+              />
+            )}
+          </KpiStrip>
 
           <CommandTopLine title={pageTitle} sub={pageSub} right={customsCardControls} />
 

@@ -138,6 +138,57 @@ func TestSummarizeHomepageFailureMixedStatus(t *testing.T) {
 	}
 }
 
+func TestBuildBenchmarkSearchPlansExpandsMissingAndVariants(t *testing.T) {
+	src := benchmarkSource{
+		Key:           "opis",
+		Name:          "OPIS Solar Weekly",
+		Query:         "base query",
+		QueryVariants: []string{"variant query", "base query"},
+		Endpoint:      "search",
+		TimeWindow:    "week",
+	}
+	ctx := benchmarkExistingContext{
+		latestBySource: map[string]string{"opis": "2026-05-01"},
+		missingBySource: map[string][]benchmarkMissingFocus{
+			"opis": {
+				{SearchHint: "DDP Europe module price"},
+				{SearchHint: "Forward Q+1 module price"},
+			},
+		},
+	}
+
+	plans := buildBenchmarkSearchPlans(src, ctx)
+	if len(plans) < 4 {
+		t.Fatalf("기본+결측+대체 검색 플랜이 필요합니다, got=%d %#v", len(plans), plans)
+	}
+	if !containsPlanQuery(plans, "missing metrics focus") {
+		t.Fatalf("결측 지표를 붙인 기본 검색어가 없습니다: %#v", plans)
+	}
+	if !containsPlanQuery(plans, "DDP Europe module price") {
+		t.Fatalf("결측 지표별 검색어가 없습니다: %#v", plans)
+	}
+	if !containsPlanQuery(plans, "variant query latest updated after 2026-05-01") {
+		t.Fatalf("대체 검색어가 최신 기준과 함께 들어가야 합니다: %#v", plans)
+	}
+	if !containsPlanWindow(plans, "month") {
+		t.Fatalf("주간 검색 실패에 대비한 월간 fallback 이 필요합니다: %#v", plans)
+	}
+	if len(plans) > benchmarkMaxSearchQueriesPerSource {
+		t.Fatalf("검색 플랜 상한 초과: got=%d max=%d", len(plans), benchmarkMaxSearchQueriesPerSource)
+	}
+}
+
+func TestSearchResultDedupeKey(t *testing.T) {
+	withURL := webSearchResultItem{URL: "https://example.test/a", Title: "A", Content: "first"}
+	if got := searchResultDedupeKey(withURL); got != "https://example.test/a" {
+		t.Fatalf("URL 이 있으면 URL 기준 dedupe 여야 합니다, got=%q", got)
+	}
+	noURL := webSearchResultItem{Title: "Same", Content: "Snippet"}
+	if got := searchResultDedupeKey(noURL); got != "same|snippet" {
+		t.Fatalf("URL 이 없으면 title/content 기준 dedupe 여야 합니다, got=%q", got)
+	}
+}
+
 func TestValidateBenchmarkCatalogPolicy(t *testing.T) {
 	base := model.CreatePriceBenchmarkRequest{
 		SourceKey:    "opis",
@@ -179,11 +230,53 @@ func TestValidateBenchmarkCatalogPolicy(t *testing.T) {
 	if msg := validateBenchmarkCatalogPolicy(usDDP); msg == "" {
 		t.Fatal("US DDP should be rejected")
 	}
+
+	quote := base
+	quote.SourceKey = "our_quote"
+	quote.MetricKey = "supplier_quote"
+	quote.Basis = "quote"
+	if msg := validateBenchmarkCatalogPolicy(quote); msg != "" {
+		t.Fatalf("our quote should be accepted: %s", msg)
+	}
+
+	badQuoteMetric := quote
+	badQuoteMetric.MetricKey = "cmm_fob_china_topcon_600w"
+	if msg := validateBenchmarkCatalogPolicy(badQuoteMetric); msg == "" {
+		t.Fatal("our quote with external metric should be rejected")
+	}
+}
+
+func TestIsPriceBenchmarkReviewStatusSchemaError(t *testing.T) {
+	err := errors.New(`{"code":"PGRST204","message":"Could not find the 'review_status' column of 'price_benchmarks' in the schema cache"}`)
+	if !isPriceBenchmarkReviewStatusSchemaError(err) {
+		t.Fatal("PGRST204 schema cache error should be detected")
+	}
+	if isPriceBenchmarkReviewStatusSchemaError(errors.New("network timeout")) {
+		t.Fatal("unrelated errors should not be treated as schema cache errors")
+	}
 }
 
 func hasMissingFocus(items []benchmarkMissingFocus, sourceKey, metricKey string) bool {
 	for _, item := range items {
 		if item.SourceKey == sourceKey && item.MetricKey == metricKey {
+			return true
+		}
+	}
+	return false
+}
+
+func containsPlanQuery(plans []benchmarkSource, want string) bool {
+	for _, plan := range plans {
+		if strings.Contains(plan.Query, want) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsPlanWindow(plans []benchmarkSource, want string) bool {
+	for _, plan := range plans {
+		if plan.TimeWindow == want {
 			return true
 		}
 	}
