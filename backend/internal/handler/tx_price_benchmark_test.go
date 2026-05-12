@@ -246,6 +246,16 @@ func TestValidateBenchmarkCatalogPolicy(t *testing.T) {
 	}
 }
 
+func TestIsPriceBenchmarkReviewStatusSchemaError(t *testing.T) {
+	err := errors.New(`{"code":"PGRST204","message":"Could not find the 'review_status' column of 'price_benchmarks' in the schema cache"}`)
+	if !isPriceBenchmarkReviewStatusSchemaError(err) {
+		t.Fatal("PGRST204 schema cache error should be detected")
+	}
+	if isPriceBenchmarkReviewStatusSchemaError(errors.New("network timeout")) {
+		t.Fatal("unrelated errors should not be treated as schema cache errors")
+	}
+}
+
 func hasMissingFocus(items []benchmarkMissingFocus, sourceKey, metricKey string) bool {
 	for _, item := range items {
 		if item.SourceKey == sourceKey && item.MetricKey == metricKey {

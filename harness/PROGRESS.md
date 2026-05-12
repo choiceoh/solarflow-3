@@ -80,6 +80,29 @@
 
 ---
 
+## 2026-05-11 세션 — 가격 벤치마크 관측값 채택 실패 진단
+
+### 완료
+- `/price-forecast` 관측값 `채택/제외/후보` 변경 실패의 1차 원인을 `price_benchmarks.review_status` 운영 DB 반영 또는 PostgREST schema cache 미반영으로 좁힘
+- `PATCH /api/v1/price-benchmarks/{id}/review-status` 에서 PostgREST `PGRST204`/schema cache 오류를 감지하면 적용해야 할 migration 파일을 명시한 503 메시지를 반환하도록 보강
+- `backend/scripts/check_schema.sh` 가 `CreatePriceBenchmarkRequest` 와 `UpdatePriceBenchmarkReviewStatusRequest` ↔ `price_benchmarks` 컬럼 동기화도 검사하도록 확장
+- schema cache 오류 감지 회귀 테스트 추가
+
+### 검증
+- `cd backend && go test ./internal/handler -run 'PriceBenchmark|Benchmark'` 성공
+- `cd backend && go test ./internal/model -run PriceBenchmark` 성공
+- `cd backend && go test ./...` 성공
+- `cd backend && go vet ./...` 성공
+- `cd backend && go build ./...` 성공
+- `bash -n backend/scripts/check_schema.sh` 성공
+- `git diff --check` 성공
+
+### 알려진 제한
+- 이 worktree 환경에는 로컬 PostgreSQL/PostgREST와 `backend/.env`가 없어 운영 DB의 `091_price_benchmark_review_status.sql` 적용 여부와 PostgREST schema cache 노출 여부는 직접 확인하지 못했다.
+- `cd backend && ./scripts/check_schema.sh` 는 현재 연결 환경에서 기준 테이블이 없어 실패했다. 운영 DB에서는 `bun scripts/verify_migration.ts 091_price_benchmark_review_status.sql` 또는 migration 적용 후 재실행해야 한다.
+
+---
+
 ## 2026-05-11 세션 — KPI 표시 메뉴 위치 정리
 
 ### 완료
