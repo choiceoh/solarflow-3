@@ -1,5 +1,7 @@
 package model
 
+import "solarflow-backend/internal/domains/sale"
+
 // OutboundBLItem — 출고-BL 연결 항목 (분할선적 지원)
 type OutboundBLItem struct {
 	OutboundBLItemID string  `json:"outbound_bl_item_id"`
@@ -18,37 +20,37 @@ type OutboundBLItemInput struct {
 // Outbound — 출고 정보를 담는 구조체
 // 비유: "출고 전표" — 어떤 품번을, 어디서, 몇 장, 어떤 용도로 출고했는지 기록
 type Outbound struct {
-	OutboundID        string           `json:"outbound_id"`
-	OutboundDate      string           `json:"outbound_date"`
-	CompanyID         string           `json:"company_id"`
-	CompanyName       *string          `json:"company_name,omitempty"`
-	ProductID         string           `json:"product_id"`
-	ProductName       *string          `json:"product_name,omitempty"`
-	ProductCode       *string          `json:"product_code,omitempty"`
-	ManufacturerID    *string          `json:"manufacturer_id,omitempty"`
-	ManufacturerName  *string          `json:"manufacturer_name,omitempty"`
-	SpecWp            *float64         `json:"spec_wp,omitempty"`
-	WattageKw         *float64         `json:"wattage_kw,omitempty"`
-	Quantity          int              `json:"quantity"`
-	CapacityKw        *float64         `json:"capacity_kw"`
-	WarehouseID       string           `json:"warehouse_id"`
-	WarehouseName     *string          `json:"warehouse_name,omitempty"`
-	UsageCategory     string           `json:"usage_category"`
-	OrderID           *string          `json:"order_id"`
-	OrderNumber       *string          `json:"order_number,omitempty"`
-	CustomerID        *string          `json:"customer_id,omitempty"`
-	CustomerName      *string          `json:"customer_name,omitempty"`
-	UnitPriceWp       *float64         `json:"unit_price_wp,omitempty"`
-	SiteName          *string          `json:"site_name"`
-	SiteAddress       *string          `json:"site_address"`
-	SpareQty          *int             `json:"spare_qty"`
-	GroupTrade        *bool            `json:"group_trade"`
-	TargetCompanyID   *string          `json:"target_company_id"`
-	TargetCompanyName *string          `json:"target_company_name,omitempty"`
-	ErpOutboundNo     *string          `json:"erp_outbound_no"`
-	Status            string           `json:"status"`
-	Memo              *string          `json:"memo"`
-	BLID              *string          `json:"bl_id"`
+	OutboundID        string   `json:"outbound_id"`
+	OutboundDate      string   `json:"outbound_date"`
+	CompanyID         string   `json:"company_id"`
+	CompanyName       *string  `json:"company_name,omitempty"`
+	ProductID         string   `json:"product_id"`
+	ProductName       *string  `json:"product_name,omitempty"`
+	ProductCode       *string  `json:"product_code,omitempty"`
+	ManufacturerID    *string  `json:"manufacturer_id,omitempty"`
+	ManufacturerName  *string  `json:"manufacturer_name,omitempty"`
+	SpecWp            *float64 `json:"spec_wp,omitempty"`
+	WattageKw         *float64 `json:"wattage_kw,omitempty"`
+	Quantity          int      `json:"quantity"`
+	CapacityKw        *float64 `json:"capacity_kw"`
+	WarehouseID       string   `json:"warehouse_id"`
+	WarehouseName     *string  `json:"warehouse_name,omitempty"`
+	UsageCategory     string   `json:"usage_category"`
+	OrderID           *string  `json:"order_id"`
+	OrderNumber       *string  `json:"order_number,omitempty"`
+	CustomerID        *string  `json:"customer_id,omitempty"`
+	CustomerName      *string  `json:"customer_name,omitempty"`
+	UnitPriceWp       *float64 `json:"unit_price_wp,omitempty"`
+	SiteName          *string  `json:"site_name"`
+	SiteAddress       *string  `json:"site_address"`
+	SpareQty          *int     `json:"spare_qty"`
+	GroupTrade        *bool    `json:"group_trade"`
+	TargetCompanyID   *string  `json:"target_company_id"`
+	TargetCompanyName *string  `json:"target_company_name,omitempty"`
+	ErpOutboundNo     *string  `json:"erp_outbound_no"`
+	Status            string   `json:"status"`
+	Memo              *string  `json:"memo"`
+	BLID              *string  `json:"bl_id"`
 	// 워크플로우 상태 — 탑솔라 그룹 양식 체크박스 4개 매핑 (D-055)
 	TxStatementReady      bool `json:"tx_statement_ready"`
 	InspectionRequestSent bool `json:"inspection_request_sent"`
@@ -57,7 +59,7 @@ type Outbound struct {
 	// 외부 양식 변환 시 원본 행 보존 — 정보 손실 0 안전망 (D-055)
 	SourcePayload map[string]interface{} `json:"source_payload,omitempty"`
 	BLItems       []OutboundBLItem       `json:"bl_items,omitempty"`
-	Sale          *Sale                  `json:"sale,omitempty"`
+	Sale          *sale.Sale             `json:"sale,omitempty"`
 }
 
 // 허용되는 출고 usage_category 값 (ERP 관리구분 기반 재설계)
@@ -84,23 +86,23 @@ var validOutboundStatuses = map[string]bool{
 // CreateOutboundRequest — 출고 등록 시 클라이언트가 보내는 데이터
 // 비유: "출고 등록 신청서" — 출고일, 법인, 품번, 수량, 창고, 용도를 필수 기재
 type CreateOutboundRequest struct {
-	OutboundDate    string                `json:"outbound_date"`
-	CompanyID       string                `json:"company_id"`
-	ProductID       string                `json:"product_id"`
-	Quantity        int                   `json:"quantity"`
-	CapacityKw      *float64              `json:"capacity_kw"`
-	WarehouseID     string                `json:"warehouse_id"`
-	UsageCategory   string                `json:"usage_category"`
-	OrderID         *string               `json:"order_id"`
-	SiteName        *string               `json:"site_name"`
-	SiteAddress     *string               `json:"site_address"`
-	SpareQty        *int                  `json:"spare_qty"`
-	GroupTrade      *bool                 `json:"group_trade"`
-	TargetCompanyID *string               `json:"target_company_id"`
-	ErpOutboundNo   *string               `json:"erp_outbound_no"`
-	Status          string                `json:"status"`
-	Memo            *string               `json:"memo"`
-	BLID            *string               `json:"bl_id,omitempty"`
+	OutboundDate    string   `json:"outbound_date"`
+	CompanyID       string   `json:"company_id"`
+	ProductID       string   `json:"product_id"`
+	Quantity        int      `json:"quantity"`
+	CapacityKw      *float64 `json:"capacity_kw"`
+	WarehouseID     string   `json:"warehouse_id"`
+	UsageCategory   string   `json:"usage_category"`
+	OrderID         *string  `json:"order_id"`
+	SiteName        *string  `json:"site_name"`
+	SiteAddress     *string  `json:"site_address"`
+	SpareQty        *int     `json:"spare_qty"`
+	GroupTrade      *bool    `json:"group_trade"`
+	TargetCompanyID *string  `json:"target_company_id"`
+	ErpOutboundNo   *string  `json:"erp_outbound_no"`
+	Status          string   `json:"status"`
+	Memo            *string  `json:"memo"`
+	BLID            *string  `json:"bl_id,omitempty"`
 	// 워크플로우 상태 (D-055) — 탑솔라 그룹 체크박스 4개. 미지정 시 false.
 	TxStatementReady      *bool `json:"tx_statement_ready,omitempty"`
 	InspectionRequestSent *bool `json:"inspection_request_sent,omitempty"`
@@ -152,23 +154,23 @@ func (req *CreateOutboundRequest) Validate() string {
 // UpdateOutboundRequest — 출고 수정 시 클라이언트가 보내는 데이터
 // 비유: "출고 전표 변경 신청서" — 바꾸고 싶은 항목만 적어서 제출
 type UpdateOutboundRequest struct {
-	OutboundDate    *string               `json:"outbound_date,omitempty"`
-	CompanyID       *string               `json:"company_id,omitempty"`
-	ProductID       *string               `json:"product_id,omitempty"`
-	Quantity        *int                  `json:"quantity,omitempty"`
-	CapacityKw      *float64              `json:"capacity_kw,omitempty"`
-	WarehouseID     *string               `json:"warehouse_id,omitempty"`
-	UsageCategory   *string               `json:"usage_category,omitempty"`
-	OrderID         *string               `json:"order_id,omitempty"`
-	SiteName        *string               `json:"site_name,omitempty"`
-	SiteAddress     *string               `json:"site_address,omitempty"`
-	SpareQty        *int                  `json:"spare_qty,omitempty"`
-	GroupTrade      *bool                 `json:"group_trade,omitempty"`
-	TargetCompanyID *string               `json:"target_company_id,omitempty"`
-	ErpOutboundNo   *string               `json:"erp_outbound_no,omitempty"`
-	Status          *string               `json:"status,omitempty"`
-	Memo            *string               `json:"memo,omitempty"`
-	BLID            *string               `json:"bl_id,omitempty"`
+	OutboundDate    *string  `json:"outbound_date,omitempty"`
+	CompanyID       *string  `json:"company_id,omitempty"`
+	ProductID       *string  `json:"product_id,omitempty"`
+	Quantity        *int     `json:"quantity,omitempty"`
+	CapacityKw      *float64 `json:"capacity_kw,omitempty"`
+	WarehouseID     *string  `json:"warehouse_id,omitempty"`
+	UsageCategory   *string  `json:"usage_category,omitempty"`
+	OrderID         *string  `json:"order_id,omitempty"`
+	SiteName        *string  `json:"site_name,omitempty"`
+	SiteAddress     *string  `json:"site_address,omitempty"`
+	SpareQty        *int     `json:"spare_qty,omitempty"`
+	GroupTrade      *bool    `json:"group_trade,omitempty"`
+	TargetCompanyID *string  `json:"target_company_id,omitempty"`
+	ErpOutboundNo   *string  `json:"erp_outbound_no,omitempty"`
+	Status          *string  `json:"status,omitempty"`
+	Memo            *string  `json:"memo,omitempty"`
+	BLID            *string  `json:"bl_id,omitempty"`
 	// 워크플로우 상태 (D-055)
 	TxStatementReady      *bool                  `json:"tx_statement_ready,omitempty"`
 	InspectionRequestSent *bool                  `json:"inspection_request_sent,omitempty"`

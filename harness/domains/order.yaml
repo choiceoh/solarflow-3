@@ -1,0 +1,35 @@
+schema_version: 1
+
+id: order
+display_name: "수주 (Order)"
+
+pack: erp-core
+feature_id: tx.order
+visible_to: all
+
+paths:
+  backend:
+    - backend/internal/domains/order/
+  migrations:
+    - backend/migrations/0[0-9]?_*order*.sql
+
+tables: []
+depends_on: []
+external_users: []
+
+blast_radius:
+  - description: "order model 필드 변경"
+    must_check:
+      - "backend/internal/domains/order/handler.go Validation"
+      - "backend/migrations/ + check_schema.sh"
+
+verify_scripts:
+  - command: scripts/verify_changed.sh
+    when: always
+  - command: backend/scripts/check_schema.sh
+    when: model_or_migration_changed
+
+api_routes: []
+
+owners: [choiceoh]
+decisions: []

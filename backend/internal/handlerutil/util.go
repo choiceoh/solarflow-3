@@ -4,9 +4,9 @@
 // PR-B/C 의 4 도메인 (po/bl/lc/tt) 의 util.go 안 dup. 본 패키지로 통합.
 //
 // 출처:
-//  - backend/internal/handler/tx_summary_helpers.go
-//  - backend/internal/handler/tx_outbound.go (parseLimitOffset)
-//  - backend/internal/handler/tx_outbound_dashboard.go (monthOf, strPtrOr)
+//   - backend/internal/handler/tx_summary_helpers.go
+//   - backend/internal/handler/tx_outbound.go (parseLimitOffset)
+//   - backend/internal/handler/tx_outbound_dashboard.go (monthOf, strPtrOr)
 //
 // 도메인/handler 어디서든 import 후 handlerutil.X 식으로 호출.
 package handlerutil

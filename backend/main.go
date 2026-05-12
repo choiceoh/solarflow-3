@@ -14,8 +14,12 @@ import (
 	"solarflow-backend/internal/app"
 	"solarflow-backend/internal/config"
 	_ "solarflow-backend/internal/domains/bl" // self-mounting init() — D-20260512-090000
+	_ "solarflow-backend/internal/domains/cost_detail" // self-mounting init()
+	_ "solarflow-backend/internal/domains/declaration" // self-mounting init()
 	_ "solarflow-backend/internal/domains/lc" // self-mounting init() — D-20260512-090000
+	_ "solarflow-backend/internal/domains/order" // self-mounting init()
 	_ "solarflow-backend/internal/domains/po" // self-mounting init() — D-20260512-090000
+	_ "solarflow-backend/internal/domains/sale" // self-mounting init()
 	_ "solarflow-backend/internal/domains/tt" // self-mounting init() — D-20260512-090000
 	"solarflow-backend/internal/handler"
 	"solarflow-backend/internal/logger"

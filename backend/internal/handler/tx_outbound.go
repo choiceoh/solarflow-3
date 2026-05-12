@@ -15,6 +15,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/audit"
+	"solarflow-backend/internal/domains/sale"
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
@@ -252,7 +253,7 @@ type outboundSaleRefRow struct {
 }
 
 func (h *OutboundHandler) activeSaleOutboundIDs() ([]string, error) {
-	data, err := fetchAllFromTable(h.DB, "sales", "outbound_id,status")
+	data, err := handlerutil.FetchAllFromTable(h.DB, "sales", "outbound_id,status")
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +382,7 @@ func (h *OutboundHandler) enrichOutbounds(outbounds []model.Outbound) ([]model.O
 	var companies []outboundCompanyRow
 	var orders []outboundOrderRow
 	var partners []outboundPartnerRow
-	var sales []model.Sale
+	var sales []sale.Sale
 
 	if data, _, err := h.DB.From("products").Select("product_id, product_name, product_code, spec_wp, wattage_kw, manufacturer_id", "exact", false).Execute(); err != nil {
 		return nil, fmt.Errorf("products 조회 실패: %w", err)
@@ -444,7 +445,7 @@ func (h *OutboundHandler) enrichOutbounds(outbounds []model.Outbound) ([]model.O
 	for _, p := range partners {
 		partnerMap[p.PartnerID] = p
 	}
-	saleMap := make(map[string]model.Sale, len(sales))
+	saleMap := make(map[string]sale.Sale, len(sales))
 	for _, s := range sales {
 		if s.OutboundID != nil && *s.OutboundID != "" {
 			sale := s
@@ -1092,7 +1093,7 @@ func (h *OutboundHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[출고 취소 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
 
-	var linkedSales []model.Sale
+	var linkedSales []sale.Sale
 	if saleData, _, err := h.DB.From("sales").Select("*", "exact", false).Eq("outbound_id", id).Execute(); err == nil {
 		if err := json.Unmarshal(saleData, &linkedSales); err != nil {
 			log.Printf("[출고 취소 전 매출 스냅샷 디코딩 실패] outbound_id=%s err=%v", id, err)

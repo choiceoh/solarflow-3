@@ -14,6 +14,8 @@ import (
 	"github.com/google/uuid"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/domains/declaration"
+	"solarflow-backend/internal/domains/order"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
 )
@@ -387,7 +389,7 @@ func toolCreateOrder() assistantTool {
 		}`),
 		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },
 		execute: func(ctx context.Context, _ *supa.Client, input json.RawMessage) (string, error) {
-			var args model.CreateOrderRequest
+			var args order.CreateOrderRequest
 			if err := json.Unmarshal(input, &args); err != nil {
 				return "", fmt.Errorf("입력 파싱 실패: %w", err)
 			}
@@ -543,7 +545,7 @@ func toolCreateReceipt() assistantTool {
 
 type updateOrderToolInput struct {
 	OrderID string `json:"order_id"`
-	model.UpdateOrderRequest
+	order.UpdateOrderRequest
 }
 
 func toolUpdateOrder() assistantTool {
@@ -726,7 +728,7 @@ func toolCreateDeclaration() assistantTool {
 			return roleIn(ctx, "admin", "operator") && tenantIs(ctx, middleware.TenantScopeTopsolar)
 		},
 		execute: func(ctx context.Context, _ *supa.Client, input json.RawMessage) (string, error) {
-			var args model.CreateDeclarationRequest
+			var args declaration.CreateDeclarationRequest
 			if err := json.Unmarshal(input, &args); err != nil {
 				return "", fmt.Errorf("입력 파싱 실패: %w", err)
 			}

@@ -1,4 +1,4 @@
-package handler
+package sale
 
 // 매출(sales) 핸들러 단위 테스트.
 //

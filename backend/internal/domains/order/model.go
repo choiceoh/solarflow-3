@@ -1,4 +1,4 @@
-package model
+package order
 
 // 허용되는 receipt_method 값
 var validReceiptMethods = map[string]bool{

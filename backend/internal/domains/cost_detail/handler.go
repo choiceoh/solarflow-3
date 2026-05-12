@@ -1,4 +1,4 @@
-package handler
+package cost_detail
 
 import (
 	"encoding/json"
@@ -11,7 +11,6 @@ import (
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -68,7 +67,7 @@ func (h *CostDetailHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var costs []model.CostDetail
+	var costs []CostDetail
 	if err := json.Unmarshal(data, &costs); err != nil {
 		log.Printf("[원가 명세 목록 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -94,7 +93,7 @@ func (h *CostDetailHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var costs []model.CostDetail
+	var costs []CostDetail
 	if err := json.Unmarshal(data, &costs); err != nil {
 		log.Printf("[원가 명세 상세 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -112,7 +111,7 @@ func (h *CostDetailHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Create — POST /api/v1/cost-details — 원가 명세 등록
 // 비유: 새 원가 계산서를 작성하여 관리실에 보관하는 것
 func (h *CostDetailHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateCostDetailRequest
+	var req CreateCostDetailRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[원가 명세 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -133,7 +132,7 @@ func (h *CostDetailHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var created []model.CostDetail
+	var created []CostDetail
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[원가 명세 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -153,7 +152,7 @@ func (h *CostDetailHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *CostDetailHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req model.UpdateCostDetailRequest
+	var req UpdateCostDetailRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[원가 명세 수정 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -175,7 +174,7 @@ func (h *CostDetailHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.CostDetail
+	var updated []CostDetail
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[원가 명세 수정 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")

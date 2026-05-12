@@ -1,4 +1,4 @@
-package handler
+package declaration
 
 import (
 	"encoding/json"
@@ -11,7 +11,6 @@ import (
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 	"solarflow-backend/internal/rpcutil"
@@ -76,7 +75,7 @@ func (h *DeclarationHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var declarations []model.ImportDeclaration
+	var declarations []ImportDeclaration
 	if err := json.Unmarshal(data, &declarations); err != nil {
 		log.Printf("[면장 목록 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -102,7 +101,7 @@ func (h *DeclarationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var declarations []model.ImportDeclaration
+	var declarations []ImportDeclaration
 	if err := json.Unmarshal(data, &declarations); err != nil {
 		log.Printf("[면장 상세 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -120,7 +119,7 @@ func (h *DeclarationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Create — POST /api/v1/declarations — 면장 등록
 // 비유: 새 수입신고 면장을 작성하여 서류함에 보관하는 것
 func (h *DeclarationHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateDeclarationRequest
+	var req CreateDeclarationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[면장 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -141,7 +140,7 @@ func (h *DeclarationHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var created []model.ImportDeclaration
+	var created []ImportDeclaration
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[면장 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -161,7 +160,7 @@ func (h *DeclarationHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *DeclarationHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req model.UpdateDeclarationRequest
+	var req UpdateDeclarationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[면장 수정 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -183,7 +182,7 @@ func (h *DeclarationHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.ImportDeclaration
+	var updated []ImportDeclaration
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[면장 수정 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")

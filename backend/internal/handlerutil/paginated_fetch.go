@@ -1,4 +1,4 @@
-package handler
+package handlerutil
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 
 // PostgRESTMaxRows — Supabase Cloud 의 db-max-rows=1000 cap.
 // 단일 Range 호출은 첫 1000행만 응답하므로, 1000행 초과 테이블은
-// 반드시 fetchAllFromTable 헬퍼로 청크 페이지네이션해야 한다.
+// 반드시 FetchAllFromTable 헬퍼로 청크 페이지네이션해야 한다.
 //
 // 회귀 이력 (D-064 PR 36):
 //   - 2026-05-05  fix: enrichSales 페이지네이션으로 PostgREST 1000건 제한 우회
@@ -18,7 +18,7 @@ import (
 //   - 2026-05-06  PR 36: 5 enrich 테이블 모두 공통 헬퍼로 통합 + 회귀 방지
 const PostgRESTMaxRows = 1000
 
-// fetchAllFromTable — Supabase Cloud db-max-rows=1000 cap 우회.
+// FetchAllFromTable — Supabase Cloud db-max-rows=1000 cap 우회.
 // 1000건씩 청크로 나눠 모든 행을 수집해 단일 JSON 배열로 반환.
 //
 // 가드:
@@ -26,7 +26,7 @@ const PostgRESTMaxRows = 1000
 //   - 첫 페이지 실패는 에러 반환, 이후 실패는 부분 결과 반환
 //
 // 비유: "큰 책장에서 책을 1000권씩 카트로 옮기기" — 한 번에 다 못 들어 여러 번 왕복.
-func fetchAllFromTable(db *supa.Client, table, columns string) ([]byte, error) {
+func FetchAllFromTable(db *supa.Client, table, columns string) ([]byte, error) {
 	const pageSize = PostgRESTMaxRows
 	const maxPages = 50
 
@@ -38,14 +38,14 @@ func fetchAllFromTable(db *supa.Client, table, columns string) ([]byte, error) {
 			Range(offset, offset+pageSize-1, "").Execute()
 		if err != nil {
 			if page == 0 {
-				return nil, fmt.Errorf("fetchAllFromTable %s page=0: %w", table, err)
+				return nil, fmt.Errorf("FetchAllFromTable %s page=0: %w", table, err)
 			}
 			break // 부분 결과 반환
 		}
 		var batch []json.RawMessage
 		if err := json.Unmarshal(data, &batch); err != nil {
 			if page == 0 {
-				return nil, fmt.Errorf("fetchAllFromTable %s page=0 unmarshal: %w", table, err)
+				return nil, fmt.Errorf("FetchAllFromTable %s page=0 unmarshal: %w", table, err)
 			}
 			break
 		}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/response"
 )
 
@@ -133,7 +134,7 @@ func (h *PriceBenchmarkHandler) fetchPurchaseAvg(from string) ([]purchaseAvgRow,
 // fetchSalesAvg — sales 월별 평균 unit_price_wp (KRW/Wp).
 // 1000행 cap — 우리 sales 가 2000+ 라 청크 페이지네이션 필요.
 func (h *PriceBenchmarkHandler) fetchSalesAvg(from string) ([]salesAvgRow, error) {
-	data, err := fetchAllFromTable(h.DB, "sales", "tax_invoice_date,unit_price_wp,status")
+	data, err := handlerutil.FetchAllFromTable(h.DB, "sales", "tax_invoice_date,unit_price_wp,status")
 	if err != nil {
 		return nil, err
 	}

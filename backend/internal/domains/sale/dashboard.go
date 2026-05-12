@@ -1,4 +1,4 @@
-package handler
+package sale
 
 import (
 	"encoding/json"
@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"solarflow-backend/internal/handlerutil"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
 
@@ -206,7 +205,7 @@ func (h *SaleHandler) fetchAllForSaleDashboard(r *http.Request) ([]saleViewRow, 
 	return all, nil
 }
 
-func computeSaleDashboard(items []model.SaleListItem) *SaleDashboard {
+func computeSaleDashboard(items []SaleListItem) *SaleDashboard {
 	d := &SaleDashboard{
 		Trend24:             make([]SaleDashTrendPoint, 0, saleDashboardTrendMonths),
 		PendingTrend24:      make([]SaleDashTrendPoint, 0, saleDashboardTrendMonths),
@@ -221,7 +220,7 @@ func computeSaleDashboard(items []model.SaleListItem) *SaleDashboard {
 	return d
 }
 
-func computeSaleDashTotals(items []model.SaleListItem) SaleDashTotals {
+func computeSaleDashTotals(items []SaleListItem) SaleDashTotals {
 	t := SaleDashTotals{Count: len(items)}
 	customers := make(map[string]struct{}, 32)
 	unitPriceSum := 0.0
@@ -264,7 +263,7 @@ func computeSaleDashTotals(items []model.SaleListItem) SaleDashTotals {
 
 // saleUnitPriceWp — SaleListItem.UnitPriceWp 우선, 없으면 unit_price_ea/spec_wp 로 derive.
 // 프론트와 동일한 fallback 로직 (OrdersPage avg 계산식).
-func saleUnitPriceWp(s model.SaleListItem) float64 {
+func saleUnitPriceWp(s SaleListItem) float64 {
 	if s.UnitPriceWp > 0 {
 		return s.UnitPriceWp
 	}
@@ -275,7 +274,7 @@ func saleUnitPriceWp(s model.SaleListItem) float64 {
 }
 
 // saleDateForBin — 월별 binning 용. tax_invoice_date 우선, 없으면 outbound_date.
-func saleDateForBin(s model.SaleListItem) string {
+func saleDateForBin(s SaleListItem) string {
 	if s.TaxInvoiceDate != nil && *s.TaxInvoiceDate != "" {
 		return *s.TaxInvoiceDate
 	}
@@ -285,7 +284,7 @@ func saleDateForBin(s model.SaleListItem) string {
 	return ""
 }
 
-func computeSaleDashTrend24(items []model.SaleListItem) []SaleDashTrendPoint {
+func computeSaleDashTrend24(items []SaleListItem) []SaleDashTrendPoint {
 	now := time.Now()
 	labels := make([]string, saleDashboardTrendMonths)
 	idx := make(map[string]int, saleDashboardTrendMonths)
@@ -346,7 +345,7 @@ func computeSaleDashTrend24(items []model.SaleListItem) []SaleDashTrendPoint {
 
 // computeSaleDashPendingTrend24 — tax_invoice_date 가 비어있는 매출만 outbound_date 로 binning.
 // SalesInvoicePendingInsight 화면용 (outboundDate 기반 누적).
-func computeSaleDashPendingTrend24(items []model.SaleListItem) []SaleDashTrendPoint {
+func computeSaleDashPendingTrend24(items []SaleListItem) []SaleDashTrendPoint {
 	now := time.Now()
 	labels := make([]string, saleDashboardTrendMonths)
 	idx := make(map[string]int, saleDashboardTrendMonths)
@@ -396,7 +395,7 @@ const (
 
 // computeSaleDashBreakdown — customer 또는 manufacturer 차원으로 분해. avg_unit_price_wp 는 priced(>0) ≥ 3 일 때만.
 // sale_amount_sum 내림차순 정렬 (top N 의미).
-func computeSaleDashBreakdown(items []model.SaleListItem, dim saleBreakdownDim, top int) []SaleDashBreakdownRow {
+func computeSaleDashBreakdown(items []SaleListItem, dim saleBreakdownDim, top int) []SaleDashBreakdownRow {
 	type acc struct {
 		label    string
 		count    int

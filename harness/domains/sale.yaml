@@ -1,0 +1,35 @@
+schema_version: 1
+
+id: sale
+display_name: "매출 (Sale)"
+
+pack: erp-core
+feature_id: tx.sale
+visible_to: all
+
+paths:
+  backend:
+    - backend/internal/domains/sale/
+  migrations:
+    - backend/migrations/0[0-9]?_*sale*.sql
+
+tables: []
+depends_on: []
+external_users: []
+
+blast_radius:
+  - description: "sale model 필드 변경"
+    must_check:
+      - "backend/internal/domains/sale/handler.go Validation"
+      - "backend/migrations/ + check_schema.sh"
+
+verify_scripts:
+  - command: scripts/verify_changed.sh
+    when: always
+  - command: backend/scripts/check_schema.sh
+    when: model_or_migration_changed
+
+api_routes: []
+
+owners: [choiceoh]
+decisions: []
