@@ -14,6 +14,7 @@
 #   scripts/prod-logs.sh http5xx           # 5xx 응답만
 #   scripts/prod-logs.sh status            # 4개 유닛 status
 #   scripts/prod-logs.sh sync              # cron-deploy .sync.log tail
+#   scripts/prod-logs.sh postdeploy        # 배포 직후 sync/status/health/최근 오류 한 번에 확인
 #
 # 모든 명령은 ssh 1회 호출로 실행되고 stdout 으로 결과만 돌려준다.
 
@@ -38,31 +39,39 @@ run_remote() {
   ssh -o ConnectTimeout=10 "$SSH_TARGET" "bash -lc $(printf '%q' "$1")"
 }
 
+since_expr() {
+  local value="${1:-30m}"
+  case "$value" in
+    *ago|today|yesterday|20[0-9][0-9]-*) printf '%s' "$value" ;;
+    *) printf '%s ago' "$value" ;;
+  esac
+}
+
 cmd="${1:-errors}"
 shift || true
 
 case "$cmd" in
   errors)
-    since="${1:-30m}"
+    since="$(since_expr "${1:-30m}")"
     # Go: slog level=ERROR | Rust tracing ERROR | cloudflared ERR
-    run_remote "journalctl --user --since '${since} ago' --no-pager \
+    run_remote "journalctl --user --since '${since}' --no-pager \
       -u solarflow-go.service -u solarflow-engine.service -u cloudflared-solarflow.service -u solarflow-webhook.service \
       | grep -E 'level=ERROR|level=WARN| ERROR | WARN | ERR ' | tail -200"
     ;;
   http5xx)
-    since="${1:-1h}"
-    run_remote "journalctl --user --since '${since} ago' --no-pager -u solarflow-go.service \
+    since="$(since_expr "${1:-1h}")"
+    run_remote "journalctl --user --since '${since}' --no-pager -u solarflow-go.service \
       | grep -E 'status=5[0-9]{2}' | tail -200"
     ;;
   slow)
-    since="${1:-1h}"
-    run_remote "journalctl --user --since '${since} ago' --no-pager -u solarflow-engine.service \
+    since="$(since_expr "${1:-1h}")"
+    run_remote "journalctl --user --since '${since}' --no-pager -u solarflow-engine.service \
       | grep -E 'slow statement|slow_acquire' | tail -100"
     ;;
   db)
-    since="${1:-1h}"
+    since="$(since_expr "${1:-1h}")"
     # Supabase/PostgREST 에러는 모두 Go 로그에 묻혀 들어온다 (PGRST, SQLSTATE, pq:, error parsing error response 등)
-    run_remote "journalctl --user --since '${since} ago' --no-pager -u solarflow-go.service \
+    run_remote "journalctl --user --since '${since}' --no-pager -u solarflow-go.service \
       | grep -iE 'pgrst|sqlstate|pq:|error parsing error response|column .* does not exist|relation .* does not exist|null value in column|duplicate key' | tail -200"
     ;;
   tail)
@@ -76,6 +85,47 @@ case "$cmd" in
     ;;
   sync)
     run_remote "tail -n 200 '${REMOTE_REPO}/.sync.log'"
+    ;;
+  postdeploy)
+    since="$(since_expr "${1:-30m}")"
+    run_remote "
+      set +e
+
+      echo '== cron-deploy sync tail =='
+      tail -n 120 '${REMOTE_REPO}/.sync.log'
+
+      echo
+      echo '== service status =='
+      systemctl --user status --no-pager \
+        solarflow-go.service solarflow-engine.service cloudflared-solarflow.service solarflow-webhook.service \
+        | sed -n '1,120p'
+
+      echo
+      echo '== local health =='
+      printf 'go     /health:       '
+      curl -sS -o /dev/null -w '%{http_code}\n' http://localhost:8080/health || true
+      printf 'engine /health:       '
+      curl -sS -o /dev/null -w '%{http_code}\n' http://localhost:8081/health || true
+      printf 'engine /health/ready: '
+      curl -sS -o /dev/null -w '%{http_code}\n' http://localhost:8081/health/ready || true
+
+      echo
+      echo '== recent 5xx =='
+      journalctl --user --since '${since}' --no-pager -u solarflow-go.service \
+        | grep -E 'status=5[0-9]{2}' | tail -80 || true
+
+      echo
+      echo '== recent DB/PostgREST errors =='
+      journalctl --user --since '${since}' --no-pager -u solarflow-go.service \
+        | grep -iE 'pgrst|sqlstate|pq:|error parsing error response|column .* does not exist|relation .* does not exist|null value in column|duplicate key' \
+        | tail -80 || true
+
+      echo
+      echo '== recent service restarts/failures =='
+      journalctl --user --since '${since}' --no-pager \
+        -u solarflow-go.service -u solarflow-engine.service -u cloudflared-solarflow.service -u solarflow-webhook.service \
+        | grep -E 'Started|Stopped|Failed|Main process exited|Reloaded|Deactivated|Consumed' | tail -120 || true
+    "
     ;;
   raw)
     # 임의 journalctl 인자 전달: scripts/prod-logs.sh raw -u solarflow-go.service -n 50 --no-pager
