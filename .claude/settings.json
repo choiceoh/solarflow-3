@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "AGENT-BUILDER-VISION v1 가드레일. PreToolUse/PostToolUse 가 .claude/hooks/domains.json 을 lookup 해서 도메인별 blast_radius / verify_scripts 알림. v1 은 advisory (exit 0). PR-B 부터 STRICT. Node 18+ ESM 으로 작성 (bun PATH 없는 환경 호환).",
+  "_comment": "AGENT-BUILDER-VISION 가드레일 v2. PreToolUse/PostToolUse 가 .claude/hooks/domains.json lookup 후 도메인별 blast_radius / verify_scripts 안내. 기본 advisory (exit 0 + stdout JSON). STRICT_RULES=1 env 시 post-edit 가 verify_scripts 실 실행 + 실패 시 후속 도구 차단 (decision:block). Exec form (args) — cwd 무관 + Windows .cmd shim 회피.",
   "hooks": {
     "PreToolUse": [
       {
@@ -8,7 +8,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/pre-edit.mjs"
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-edit.mjs"]
           }
         ]
       }
@@ -19,7 +20,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/post-edit.mjs"
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/post-edit.mjs"]
           }
         ]
       }
