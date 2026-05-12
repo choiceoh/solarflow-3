@@ -4,7 +4,7 @@
 
 이 프로젝트는 **ERP 시스템** (무역/재고/회계 등 SolarFlow 그 자체) 한 product 다.
 
-> **이력**: 초기에는 "GUI 메타 편집기" 가 두 번째 product 로 같이 개발됐으나 **D-120 결정으로 제거됐다.** `templates/MetaForm`, `pages/UIConfigEditor`, v2 페이지 모두 삭제됐고, 잔존물은 `frontend/src/templates/MetaDetail.tsx` + `templates/registry.tsx` 뿐 — BLDetailView 한 곳만 사용하는 평범한 detail 컴포넌트로 강등됐다. 새 도메인 추가 시 GUI 로 form/detail 화면을 정의하는 메커니즘은 없으므로 정상적인 React 페이지로 구현한다.
+> **이력**: 초기에는 "GUI 메타 편집기" 가 두 번째 product 로 같이 개발됐으나 **D-121 결정으로 제거됐다.** `templates/MetaForm`, `pages/UIConfigEditor`, v2 페이지 모두 삭제됐고, 잔존물은 `frontend/src/templates/MetaDetail.tsx` + `templates/registry.tsx` 뿐 — BLDetailView 한 곳만 사용하는 평범한 detail 컴포넌트로 강등됐다. 새 도메인 추가 시 GUI 로 form/detail 화면을 정의하는 메커니즘은 없으므로 정상적인 React 페이지로 구현한다.
 >
 > **새 도메인 추가 절차**는 [D-145](harness/DECISIONS.md#d-145) 의 "테넌트 모듈화" 패턴을 따른다 — `tenant.Registry` 객체 1개 + `packs/<id>/{nav.ts, pages/}` 디렉토리 + DB CHECK 마이그 + admin 매트릭스 (`/settings/feature-wiring`) 토글. **단계별 절차**는 [harness/NEW-TENANT-GUIDE.md](harness/NEW-TENANT-GUIDE.md) 참조.
 
@@ -15,7 +15,7 @@
 3. harness/AGENTS.md — 역할 정의 (시공자/감리자/Alex)
 4. harness/SolarFlow_설계문서_통합판.md — 유일한 설계 정본
 5. harness/DECISIONS.md — 설계 판단 기록 (왜 이렇게 했는지)
-6. 할당된 TASK 파일
+6. 할당된 TASK 파일 — 새 TASK는 `harness/TASK_TEMPLATE.md` 기준
 
 ## 도메인별 인덱스 (테넌트 한정 작업 시)
 변경 작업이 한쪽 사이트에만 적용된다면 해당 도메인 인덱스부터 보세요 — 활성 메뉴, 관련 결정(`D-YYYYMMDD-HHMMSS` 또는 기존 순번형 ID), `*Only` 미들웨어 적용 라우트가 한 페이지에 정리돼 있습니다.
@@ -28,9 +28,9 @@
 **새 도메인 추가가 필요할 때**: [harness/NEW-TENANT-GUIDE.md](harness/NEW-TENANT-GUIDE.md) — registry 1줄 + 마이그 1개 + `packs/<id>/` + admin UI 토글의 단계별 가이드.
 
 ## 프로젝트 구조
-- backend/ — Go API 게이트웨이 (chi v5, 포트 8080, launchd `com.solarflow.go`)
-- engine/ — Rust 계산엔진 (Axum 0.8.x, 포트 8081, launchd `com.solarflow.engine`)
-- frontend/ — React + Vite + TypeScript + Tailwind (Caddy 정적 서빙, dist/)
+- backend/ — Go API 게이트웨이 (chi v5, 운영 포트 8080, systemd user `solarflow-go.service`)
+- engine/ — Rust 계산엔진 (Axum 0.8.x, 운영 포트 8081, systemd user `solarflow-engine.service`)
+- frontend/ — React + Vite + TypeScript + Tailwind (운영은 Cloudflare Pages 자동 배포)
 - harness/ — 하네스 파일 (규칙, 설계, 판단 기록)
 
 ## 운영 서버 SSH 접근 (에러 로그 조회)
@@ -99,11 +99,13 @@ ssh choiceoh@100.105.145.6 "journalctl --user -u solarflow-go.service --since to
 # backend/migrations/NNN_설명.sql 예시:
 #   ALTER TABLE po_line_items ADD COLUMN IF NOT EXISTS item_type text;
 
-# 2. 마이그레이션 적용
-psql -d solarflow -f backend/migrations/NNN_설명.sql
+# 2. 마이그레이션 적용/검증
+# 운영 Linux: main push 후 cron-deploy가 apply_migrations.ts + verify_migration.ts 실행
+# 로컬/수동 검증: bun scripts/verify_migration.ts NNN_설명.sql
 
-# 3. PostgREST 스키마 캐시 갱신 (빠뜨리면 기존 캐시로 여전히 500)
-launchctl stop com.solarflow.postgrest && launchctl start com.solarflow.postgrest
+# 3. PostgREST 스키마 캐시 갱신
+# 운영 Linux/Supabase hosted: NOTIFY pgrst, 'reload schema' (apply_migrations.ts가 자동 발송)
+# macOS 과거 로컬 PostgREST: launchctl stop/start 절차는 macOS 섹션 참고
 
 # 4. 동기화 검증 (모두 ✅ 나와야 커밋)
 cd backend && ./scripts/check_schema.sh
@@ -133,16 +135,16 @@ launchctl bootout gui/501 ~/Library/LaunchAgents/com.solarflow.go.plist 2>/dev/n
 - `go test`, `cargo test`, `npm run build`는 검증일 뿐이고, 실제 반영은 위 3단계
 
 ## DB 연결
-- 운영 DB: 로컬 PostgreSQL + PostgREST (Go는 supabase-go/PostgREST 경유)
+- 운영 DB: Supabase hosted PostgreSQL + hosted PostgREST (Go는 Supabase REST/Auth 경유)
 - 인증: Supabase Auth/JWKS만 사용
 - Rust DB 연결: `SUPABASE_DB_URL` 환경변수로 PostgreSQL 직접 연결, sqlx 풀 5개
 - Supabase 프로젝트: aalxpmfnsjzmhsfkuxnp.supabase.co
 
 ## graphify
 
-This project has a graphify knowledge graph at graphify-out/.
+이 프로젝트는 가능한 경우 `graphify-out/` 지식 그래프를 사용한다. 새 worktree에는 없을 수 있으므로 `scripts/setup_worktree.sh`가 생성하거나, `graphify` 명령이 없으면 건너뛴다.
 
 Rules:
-- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure when it exists
 - If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
 - After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)

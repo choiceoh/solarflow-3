@@ -1,5 +1,12 @@
 # SolarFlow 3.0 — Codex 작업 안내
 
+## 제품 관점
+이 프로젝트의 현재 제품은 **SolarFlow ERP 시스템** 하나다.
+
+초기에는 GUI 메타 편집기를 두 번째 제품처럼 다뤘지만, D-121에서 `/ui-config-editor`, MetaForm/ListScreen, v2 페이지 라인을 폐기했다. 남은 `frontend/src/templates/MetaDetail.tsx`와 `frontend/src/templates/registry.tsx`는 BL 상세 화면이 일부 섹션을 그리는 데 쓰는 잔존 컴포넌트다.
+
+새 도메인이나 화면을 추가할 때는 메타 GUI를 되살리지 말고 일반 React 도메인 화면으로 구현한다. 새 테넌트는 `harness/NEW-TENANT-GUIDE.md`의 registry + pack + feature wiring 절차를 따른다.
+
 ## 읽기 순서
 이 프로젝트에서 작업하기 전에 아래 순서로 읽으세요:
 1. harness/PROGRESS.md — 현재 위치 확인 (이것만 읽으면 지금 어디인지 파악)
@@ -7,13 +14,14 @@
 3. harness/AGENTS.md — 역할 정의 (시공자/감리자/Alex)
 4. harness/SolarFlow_설계문서_통합판.md — 유일한 설계 정본
 5. harness/DECISIONS.md — 설계 판단 기록 (왜 이렇게 했는지)
-6. 할당된 TASK 파일
+6. 할당된 TASK 파일 — 새 TASK는 `harness/TASK_TEMPLATE.md` 기준
 
 ## 프로젝트 구조
-- backend/ — Go API 게이트웨이 (chi v5, 포트 8080, launchd `com.solarflow.go`)
-- engine/ — Rust 계산엔진 (Axum 0.8.x, 포트 8081, launchd `com.solarflow.engine`)
-- frontend/ — React + Vite + TypeScript + Tailwind (Caddy 정적 서빙, dist/)
+- backend/ — Go API 게이트웨이 (chi v5, 운영 포트 8080, systemd user `solarflow-go.service`)
+- engine/ — Rust 계산엔진 (Axum 0.8.x, 운영 포트 8081, systemd user `solarflow-engine.service`)
+- frontend/ — React + Vite + TypeScript + Tailwind (운영은 Cloudflare Pages 자동 배포)
 - harness/ — 하네스 파일 (규칙, 설계, 판단 기록)
+- scripts/ — 검증, 운영 로그 조회, 자동 배포 보조 스크립트
 
 ## 운영 서버 SSH 접근 (에러 로그 조회)
 
@@ -73,11 +81,13 @@ ssh choiceoh@100.105.145.6 "journalctl --user -u solarflow-go.service --since to
 # backend/migrations/NNN_설명.sql 예시:
 #   ALTER TABLE po_line_items ADD COLUMN IF NOT EXISTS item_type text;
 
-# 2. 마이그레이션 적용
-psql -d solarflow -f backend/migrations/NNN_설명.sql
+# 2. 마이그레이션 적용/검증
+# 운영 Linux: main push 후 cron-deploy가 apply_migrations.ts + verify_migration.ts 실행
+# 로컬/수동 검증: bun scripts/verify_migration.ts NNN_설명.sql
 
-# 3. PostgREST 스키마 캐시 갱신 (빠뜨리면 기존 캐시로 여전히 500)
-launchctl stop com.solarflow.postgrest && launchctl start com.solarflow.postgrest
+# 3. PostgREST 스키마 캐시 갱신
+# 운영 Linux/Supabase hosted: NOTIFY pgrst, 'reload schema' (apply_migrations.ts가 자동 발송)
+# macOS 과거 로컬 PostgREST: launchctl stop/start 절차는 CLAUDE.md의 macOS 섹션 참고
 
 # 4. 동기화 검증 (모두 ✅ 나와야 커밋)
 cd backend && ./scripts/check_schema.sh
@@ -85,32 +95,23 @@ cd backend && ./scripts/check_schema.sh
 
 이 절차를 빠뜨리면: PostgREST PGRST204 → Go 500 → 프론트엔드 저장 실패 (단가/수량 유실처럼 보임)
 
-## Go 백엔드 변경 시 필수 절차
-⚠️ macOS 26.4+ 코드 서명 필수 — 서명 없는 바이너리는 launchd가 즉시 SIGKILL
+## 플랫폼별 운영 절차
 
-Go 소스 수정 후 반드시 아래 3단계를 순서대로 실행:
-```bash
-cd ~/solarflow-3/backend && go build -o solarflow-go .
-codesign -f -s - solarflow-go
-launchctl bootout gui/501 ~/Library/LaunchAgents/com.solarflow.go.plist 2>/dev/null || true && launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.solarflow.go.plist
-```
-- `stop/start`는 코드 서명 문제 해결 불가 → 반드시 `bootout/bootstrap` 사용
-- Rust 엔진 변경 시: `cd ~/solarflow-3/engine && cargo build --release && codesign -f -s - target/release/solarflow-engine && launchctl bootout gui/501 ~/Library/LaunchAgents/com.solarflow.engine.plist 2>/dev/null || true && launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.solarflow.engine.plist`
-- 모든 서비스 라벨: `com.solarflow.go`, `com.solarflow.engine`, `com.solarflow.postgrest`, `com.solarflow.caddy`
-- 프론트엔드 운영 반영은 `cd ~/solarflow-3/frontend && npm run build` 후 Caddy가 `dist/`를 서빙
-- `go test`, `cargo test`, `npm run build`는 검증일 뿐이고, 실제 반영은 위 3단계
+- **Linux 현재 운영 서버**: `harness/PRODUCTION.md`를 정본으로 따른다. systemd user 서비스와 Cloudflare Pages 자동 배포가 현재 운영 방식이다.
+- **macOS 과거/로컬 운영**: launchd와 codesign 절차가 필요할 수 있다. 이 절차는 현재 운영 서버에는 적용하지 않는다.
+- **Windows/WSL 개발**: `harness/WINDOWS.md`를 따른다. launchd/codesign은 무관하다.
 
 ## DB 연결
-- 운영 DB: 로컬 PostgreSQL + PostgREST (Go는 supabase-go/PostgREST 경유)
+- 운영 DB: Supabase hosted PostgreSQL + hosted PostgREST (Go는 Supabase REST/Auth 경유)
 - 인증: Supabase Auth/JWKS만 사용
 - Rust DB 연결: `SUPABASE_DB_URL` 환경변수로 PostgreSQL 직접 연결, sqlx 풀 5개
 - Supabase 프로젝트: aalxpmfnsjzmhsfkuxnp.supabase.co
 
 ## graphify
 
-This project has a graphify knowledge graph at graphify-out/.
+이 프로젝트는 가능한 경우 `graphify-out/` 지식 그래프를 사용한다. 새 worktree에는 없을 수 있으므로 `scripts/setup_worktree.sh`가 생성하거나, `graphify` 명령이 없으면 건너뛴다.
 
 Rules:
-- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure when it exists
 - If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
 - After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
