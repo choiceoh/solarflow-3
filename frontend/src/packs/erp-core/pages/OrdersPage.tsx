@@ -26,6 +26,8 @@ import OrderListTable, {
   ORDER_COLUMN_META,
 } from "@/components/orders/OrderListTable"
 import OrderDetailView from "@/components/orders/OrderDetailView"
+import OrderCreateDialog from "@/components/orders/OrderCreateDialog"
+import ReceiptCreateDialog from "@/components/orders/ReceiptCreateDialog"
 import ReceiptListTable, {
   RECEIPT_TABLE_ID,
   RECEIPT_COLUMN_META,
@@ -784,6 +786,10 @@ export default function OrdersPage() {
   const [receiptMatchFilter, setReceiptMatchFilter] = useState<ReceiptMatchFilter>("open")
   const [orderActionError, setOrderActionError] = useState("")
   const [orderSourceHints, setOrderSourceHints] = useState<Record<string, FulfillmentSource>>({})
+
+  // 단건 등록 다이얼로그 — 수주/수금 (PR #357 reversal)
+  const [orderCreateOpen, setOrderCreateOpen] = useState(false)
+  const [receiptCreateOpen, setReceiptCreateOpen] = useState(false)
 
   // 마스터 데이터
   const [partners, setPartners] = useState<Partner[]>([])
@@ -2004,6 +2010,9 @@ export default function OrdersPage() {
             unpin={orderColPin.unpin}
           />
           <ExcelToolbar type="order" />
+          <Button size="xs" onClick={() => setOrderCreateOpen(true)}>
+            수주 신규 등록
+          </Button>
         </>
       )}
       {activeTab === "outbound" && !selectedOutbound && (
@@ -2180,6 +2189,9 @@ export default function OrdersPage() {
             unpin={receiptColPin.unpin}
           />
           <ExcelToolbar type="receipt" />
+          <Button size="xs" onClick={() => setReceiptCreateOpen(true)}>
+            수금 신규 등록
+          </Button>
         </>
       )}
       <div style={{ flex: 1 }} />
@@ -2745,6 +2757,21 @@ export default function OrdersPage() {
           )}
         </aside>
       </div>
+
+      <OrderCreateDialog
+        open={orderCreateOpen}
+        onClose={() => setOrderCreateOpen(false)}
+        onCreated={() => {
+          reloadOrders()
+        }}
+      />
+      <ReceiptCreateDialog
+        open={receiptCreateOpen}
+        onClose={() => setReceiptCreateOpen(false)}
+        onCreated={() => {
+          reloadReceipts()
+        }}
+      />
     </div>
   )
 }
