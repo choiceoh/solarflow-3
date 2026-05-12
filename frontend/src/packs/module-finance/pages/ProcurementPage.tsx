@@ -23,6 +23,7 @@ import PODetailView from "@/components/procurement/PODetailView"
 import POCreateDialog from "@/components/procurement/POCreateDialog"
 import LCCreateDialog from "@/components/procurement/LCCreateDialog"
 import BLCreateDialog from "@/components/inbound/BLCreateDialog"
+import TTCreateDialog, { type TTCreateInitialValues } from "@/components/procurement/TTCreateDialog"
 import LCListTable from "@/components/procurement/LCListTable"
 import TTListTable from "@/components/procurement/TTListTable"
 import DepositStatusPanel from "@/components/procurement/DepositStatusPanel"
@@ -261,6 +262,7 @@ export default function ProcurementPage() {
     items: tts,
     total: ttTotal,
     loading: ttLoading,
+    reload: reloadTT,
   } = useTTListPaged({
     status: ttStatusFilter || undefined,
     po_id: ttPoFilter || undefined,
@@ -324,6 +326,8 @@ export default function ProcurementPage() {
   const [poCreateOpen, setPoCreateOpen] = useState(false)
   const [lcCreateOpen, setLcCreateOpen] = useState(false)
   const [blCreateOpen, setBlCreateOpen] = useState(false)
+  const [ttCreateOpen, setTtCreateOpen] = useState(false)
+  const [ttCreateInitial, setTtCreateInitial] = useState<TTCreateInitialValues | null>(null)
   const [lcCreateInitial, setLcCreateInitial] = useState<{
     poId?: string
     poLineId?: string
@@ -1243,6 +1247,15 @@ export default function ProcurementPage() {
                           : poList
                       }
                       tts={tts}
+                      onCreateTT={(init) => {
+                        setTtCreateInitial({
+                          po_id: init.po_id,
+                          amount_usd: init.amount_usd,
+                          purpose: init.purpose,
+                          status: "completed",
+                        })
+                        setTtCreateOpen(true)
+                      }}
                     />
                   </div>
 
@@ -1278,6 +1291,15 @@ export default function ProcurementPage() {
                           },
                         ]}
                       />
+                      <Button
+                        size="xs"
+                        onClick={() => {
+                          setTtCreateInitial(ttPoFilter ? { po_id: ttPoFilter } : null)
+                          setTtCreateOpen(true)
+                        }}
+                      >
+                        T/T 신규 등록
+                      </Button>
                     </div>
                     {ttLoading ? (
                       <LoadingSpinner />
@@ -1721,6 +1743,18 @@ export default function ProcurementPage() {
         onCreated={() => {
           reloadBL()
           setBlsVersion((v) => v + 1)
+        }}
+      />
+      <TTCreateDialog
+        open={ttCreateOpen}
+        initialValues={ttCreateInitial}
+        onClose={() => {
+          setTtCreateOpen(false)
+          setTtCreateInitial(null)
+        }}
+        onCreated={() => {
+          reloadTT()
+          setTtCreateInitial(null)
         }}
       />
     </div>
