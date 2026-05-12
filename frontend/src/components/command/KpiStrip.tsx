@@ -38,6 +38,8 @@ export function KpiStrip<T extends KpiMetricLike>({
       onToggle={visibility.setMetricVisible}
       onReset={visibility.reset}
       saving={visibility.saving}
+      isDefault={visibility.isDefault}
+      defaultVisibleCount={visibility.defaultVisibleCount}
     />
   ) : null;
 

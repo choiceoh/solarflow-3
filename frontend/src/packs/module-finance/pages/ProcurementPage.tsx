@@ -590,6 +590,17 @@ export default function ProcurementPage() {
 
   const fmtCount = (n: number) => String(Math.round(n))
   const lcBanksCount = lcSummary?.bank_count ?? new Set(lcRows.map((lc) => lc.bank_id)).size
+  const lcSettledCount = lcSummary?.by_status?.settled ?? lcRows.filter((lc) => lc.status === "settled").length
+  const lcAmountAvgUsd = lcTotalCount > 0 ? lcTotalUsd / lcTotalCount : 0
+  const lcProgressRate = lcTotalCount > 0 ? (lcOpenedCount / lcTotalCount) * 100 : 0
+  const blCompletedCount = blSummary?.completed_count ?? blRows.filter((bl) => bl.status === "completed").length
+  const blErpDoneCount = blSummary?.erp_done_count ?? blRows.filter((bl) => bl.status === "erp_done").length
+  const blArrivedCount = blSummary?.arrived_count ?? blRows.filter((bl) => bl.status === "arrived").length
+  const blScheduledCount = blSummary?.scheduled_count ?? blRows.filter((bl) => bl.status === "scheduled").length
+  const ttCompletedCount = ttSummary?.completed_count ?? tts.filter((t) => t.status === "completed").length
+  const ttAvgAmountUsd = ttTotalCount > 0 ? ttCompletedUsd / ttTotalCount : 0
+  const poChangedCount = poRows.filter((p) => (p.parent_po_id ?? null) != null).length
+  const poAvgMw = poTotalCount > 0 ? poTotalMw / poTotalCount : 0
   const blImportCount =
     blSummary?.import_count ?? blRows.filter((bl) => bl.inbound_type === "import").length
   const ttPlannedCount =
@@ -642,6 +653,36 @@ export default function ProcurementPage() {
             sub: "한도 사용처",
             tone: "ink" as const,
             metricId: "procurement.lc_banks",
+          },
+          {
+            lbl: "결제 완료",
+            v: String(lcSettledCount),
+            numericValue: lcSettledCount,
+            formatter: fmtCount,
+            u: "건",
+            sub: "settled",
+            tone: "pos" as const,
+            metricId: "procurement.lc_settled",
+          },
+          {
+            lbl: "평균 개설액",
+            v: fmtUsdM(lcAmountAvgUsd),
+            numericValue: lcAmountAvgUsd,
+            formatter: fmtUsdM,
+            u: "M$",
+            sub: "필터 기준",
+            tone: "ink" as const,
+            metricId: "procurement.lc_avg_amount",
+          },
+          {
+            lbl: "진행률",
+            v: lcProgressRate.toFixed(1),
+            numericValue: lcProgressRate,
+            formatter: (n: number) => n.toFixed(1),
+            u: "%",
+            sub: "opened / total",
+            tone: "info" as const,
+            metricId: "procurement.lc_progress",
           },
         ]
       : activeTab === "bl"
@@ -699,6 +740,46 @@ export default function ProcurementPage() {
               ),
               metricId: "procurement.bl_import",
             },
+            {
+              lbl: "입항",
+              v: String(blArrivedCount),
+              numericValue: blArrivedCount,
+              formatter: fmtCount,
+              u: "건",
+              sub: "통관 대기",
+              tone: "info" as const,
+              metricId: "procurement.bl_arrived",
+            },
+            {
+              lbl: "입고 예정",
+              v: String(blScheduledCount),
+              numericValue: blScheduledCount,
+              formatter: fmtCount,
+              u: "건",
+              sub: "ETD 등록 전 포함",
+              tone: "ink" as const,
+              metricId: "procurement.bl_scheduled",
+            },
+            {
+              lbl: "입고 완료",
+              v: String(blCompletedCount),
+              numericValue: blCompletedCount,
+              formatter: fmtCount,
+              u: "건",
+              sub: "재고 반영",
+              tone: "pos" as const,
+              metricId: "procurement.bl_completed",
+            },
+            {
+              lbl: "ERP 마감",
+              v: String(blErpDoneCount),
+              numericValue: blErpDoneCount,
+              formatter: fmtCount,
+              u: "건",
+              sub: "회계 처리 완료",
+              tone: "pos" as const,
+              metricId: "procurement.bl_erp_done",
+            },
           ]
         : activeTab === "tt"
           ? [
@@ -748,6 +829,36 @@ export default function ProcurementPage() {
                 tone: "ink" as const,
                 metricId: "procurement.tt_po_linked",
               },
+              {
+                lbl: "완료 건수",
+                v: String(ttCompletedCount),
+                numericValue: ttCompletedCount,
+                formatter: fmtCount,
+                u: "건",
+                sub: "송금 처리",
+                tone: "pos" as const,
+                metricId: "procurement.tt_completed_count",
+              },
+              {
+                lbl: "평균 송금",
+                v: fmtUsdM(ttAvgAmountUsd),
+                numericValue: ttAvgAmountUsd,
+                formatter: fmtUsdM,
+                u: "M$",
+                sub: "건당 평균",
+                tone: "ink" as const,
+                metricId: "procurement.tt_avg_amount",
+              },
+              {
+                lbl: "PO 미연결",
+                v: String(Math.max(0, ttTotalCount - ttPoCount)),
+                numericValue: Math.max(0, ttTotalCount - ttPoCount),
+                formatter: fmtCount,
+                u: "건",
+                sub: "할당 검토",
+                tone: ttTotalCount > ttPoCount ? ("warn" as const) : ("pos" as const),
+                metricId: "procurement.tt_orphan",
+              },
             ]
           : [
               {
@@ -795,6 +906,50 @@ export default function ProcurementPage() {
                 sub: "spot/frame 관리",
                 tone: "pos" as const,
                 metricId: "procurement.contract_types",
+              },
+              {
+                lbl: "평균 PO 용량",
+                v: fmtMw(poAvgMw),
+                numericValue: poAvgMw,
+                formatter: fmtMw,
+                u: "MW",
+                sub: "건당 평균",
+                tone: "ink" as const,
+                metricId: "procurement.po_avg_mw",
+              },
+              {
+                lbl: "변경계약",
+                v: String(poChangedCount),
+                numericValue: poChangedCount,
+                formatter: fmtCount,
+                u: "건",
+                sub: "parent 보유",
+                tone: poChangedCount > 0 ? ("warn" as const) : ("ink" as const),
+                metricId: "procurement.po_changed",
+              },
+              {
+                lbl: "PO 전체",
+                v: String(poTotalCount),
+                numericValue: poTotalCount,
+                formatter: fmtCount,
+                u: "건",
+                sub: "필터 기준 전체",
+                tone: "ink" as const,
+                metricId: "procurement.po_total",
+              },
+              {
+                lbl: "운송중 비중",
+                v:
+                  poTotalCount > 0
+                    ? ((poShippingCount / poTotalCount) * 100).toFixed(1)
+                    : "0.0",
+                numericValue:
+                  poTotalCount > 0 ? (poShippingCount / poTotalCount) * 100 : 0,
+                formatter: (n: number) => n.toFixed(1),
+                u: "%",
+                sub: "이동 중인 PO",
+                tone: "info" as const,
+                metricId: "procurement.po_shipping_ratio",
               },
             ]
 

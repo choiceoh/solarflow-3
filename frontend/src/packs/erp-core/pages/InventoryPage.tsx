@@ -546,6 +546,20 @@ export default function InventoryPage() {
   const stockAvailable = { value: formatKwValueOnly(stockAvailableKwRaw, stockAvailableUnit), unit: formatKwUnitOnly(stockAvailableUnit) };
   const incomingAvailable = { value: formatKwValueOnly(incomingAvailableKwRaw, incomingAvailableUnit), unit: formatKwUnitOnly(incomingAvailableUnit) };
   const pendingKw = { value: formatKwValueOnly(pendingKwRaw, pendingUnit), unit: formatKwUnitOnly(pendingUnit) };
+  const holdKwRaw = allocationStats.holdKw;
+  const salePendingKwRaw = allocationStats.salePendingKw;
+  const holdUnit = detectCapacityUnit(holdKwRaw);
+  const salePendingUnit = detectCapacityUnit(salePendingKwRaw);
+  const holdKw = { value: formatKwValueOnly(holdKwRaw, holdUnit), unit: formatKwUnitOnly(holdUnit) };
+  const salePendingKw = { value: formatKwValueOnly(salePendingKwRaw, salePendingUnit), unit: formatKwUnitOnly(salePendingUnit) };
+  const incomingShareRaw = totalSecuredKwRaw > 0 ? (incomingAvailableKwRaw / totalSecuredKwRaw) * 100 : 0;
+  const productCountTotal = inventoryStats?.productCount ?? 0;
+  const insufficientProductCount = (fcData?.products ?? []).filter(
+    (p) => p.months.some((m) => m.insufficient) || p.unscheduled.sale_kw > 0 || p.unscheduled.construction_kw > 0,
+  ).length;
+  const longTermProductCount = (invData?.items ?? []).filter(
+    (item) => (item.long_term_status === 'warning' || item.long_term_status === 'critical') && item.available_kw > 0,
+  ).length;
   const inventoryCardControls = (
     <div className="sf-card-controls" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
       <FilterButton items={[
@@ -639,6 +653,72 @@ export default function InventoryPage() {
       tone: 'warn' as const,
       spark: flatSpark(pendingKwRaw),
       metricId: 'inventory.allocations',
+    },
+    {
+      lbl: '판매 예약',
+      v: salePendingKw.value,
+      numericValue: salePendingKwRaw,
+      formatter: (n: number) => formatKwValueOnly(n, salePendingUnit),
+      u: salePendingKw.unit,
+      sub: `${allocationStats.salePendingCount.toLocaleString('ko-KR')}건`,
+      tone: 'info' as const,
+      spark: flatSpark(salePendingKwRaw),
+      metricId: 'inventory.sale_pending',
+    },
+    {
+      lbl: '보류',
+      v: holdKw.value,
+      numericValue: holdKwRaw,
+      formatter: (n: number) => formatKwValueOnly(n, holdUnit),
+      u: holdKw.unit,
+      sub: `${allocationStats.holdCount.toLocaleString('ko-KR')}건 · 사용 검토`,
+      tone: 'ink' as const,
+      spark: flatSpark(holdKwRaw),
+      metricId: 'inventory.hold',
+    },
+    {
+      lbl: '활성 품목',
+      v: productCountTotal.toLocaleString('ko-KR'),
+      numericValue: productCountTotal,
+      formatter: (n: number) => n.toLocaleString('ko-KR'),
+      u: '개',
+      sub: '가용 보유 SKU',
+      tone: 'ink' as const,
+      spark: flatSpark(productCountTotal),
+      metricId: 'inventory.product_count',
+    },
+    {
+      lbl: '미착 비중',
+      v: incomingShareRaw.toFixed(1),
+      numericValue: incomingShareRaw,
+      formatter: (n: number) => n.toFixed(1),
+      u: '%',
+      sub: '가용 중 미착 비율',
+      tone: 'info' as const,
+      spark: flatSpark(incomingShareRaw),
+      metricId: 'inventory.incoming_share',
+    },
+    {
+      lbl: '부족 예상 품목',
+      v: insufficientProductCount.toLocaleString('ko-KR'),
+      numericValue: insufficientProductCount,
+      formatter: (n: number) => n.toLocaleString('ko-KR'),
+      u: '개',
+      sub: '6개월 내 음수 / 미예정',
+      tone: insufficientProductCount > 0 ? ('warn' as const) : ('pos' as const),
+      spark: flatSpark(insufficientProductCount),
+      metricId: 'inventory.insufficient',
+    },
+    {
+      lbl: '장기재고 품목',
+      v: longTermProductCount.toLocaleString('ko-KR'),
+      numericValue: longTermProductCount,
+      formatter: (n: number) => n.toLocaleString('ko-KR'),
+      u: '개',
+      sub: '180일+ 보유',
+      tone: longTermProductCount > 0 ? ('warn' as const) : ('pos' as const),
+      spark: flatSpark(longTermProductCount),
+      metricId: 'inventory.long_term',
     },
   ];
 
