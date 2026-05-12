@@ -33,6 +33,8 @@ import type { CustomerAnalysis } from "@/types/analysis"
 import type { Partner, Product } from "@/types/masters"
 import { CardB, FilterChips, RailBlock, TileB } from "@/components/command/MockupPrimitives"
 import { KpiStrip } from "@/components/command/KpiStrip"
+import { ColumnVisibilityMenu } from "@/components/common/ColumnVisibilityMenu"
+import { useColumnVisibility, type ColumnVisibilityMeta } from "@/lib/columnVisibility"
 import { flatSpark, monthlyTrend } from "@/templates/sparkUtils"
 import { downloadSalesManagementReport } from "@/lib/reports/salesManagementReport"
 import { downloadSalesManagementPptx } from "@/lib/reports/salesManagementPptx"
@@ -435,6 +437,74 @@ function safeFilePart(value: string | undefined): string {
   return (value || "all").replace(/[^\w가-힣.-]+/g, "_").slice(0, 48)
 }
 
+const customerMarginColumns: ColumnVisibilityMeta[] = [
+  { key: "name", label: "거래처", hideable: false },
+  { key: "sales", label: "매출액", hideable: true },
+  { key: "share", label: "비중", hideable: true },
+  { key: "margin_rate", label: "이익률", hideable: true },
+  { key: "margin", label: "이익액", hideable: true },
+  { key: "kw", label: "출고(MW)", hideable: true },
+  { key: "count", label: "거래건수", hideable: true, hiddenByDefault: true },
+  { key: "outstanding", label: "미수액", hideable: true, hiddenByDefault: true },
+  { key: "outstanding_rate", label: "미수율", hideable: true, hiddenByDefault: true },
+  { key: "pay_days", label: "평균회수일", hideable: true, hiddenByDefault: true },
+  { key: "deposit_rate", label: "평균 입금률", hideable: true, hiddenByDefault: true },
+  { key: "unit_price", label: "평균 단가(₩/W)", hideable: true, hiddenByDefault: true },
+]
+
+const manufacturerColumns: ColumnVisibilityMeta[] = [
+  { key: "name", label: "제조사", hideable: false },
+  { key: "revenue", label: "매출", hideable: true },
+  { key: "share", label: "비중", hideable: true },
+  { key: "margin_rate", label: "이익률", hideable: true },
+  { key: "missing_rate", label: "원가공백", hideable: true },
+  { key: "kw", label: "출고(MW)", hideable: true },
+  { key: "qty", label: "매출수량", hideable: true, hiddenByDefault: true },
+  { key: "cost", label: "매출원가", hideable: true, hiddenByDefault: true },
+  { key: "margin", label: "이익액", hideable: true, hiddenByDefault: true },
+  { key: "count", label: "거래건수", hideable: true, hiddenByDefault: true },
+  { key: "unit_price", label: "평균 단가(₩/W)", hideable: true, hiddenByDefault: true },
+]
+
+const billingColumns: ColumnVisibilityMeta[] = [
+  { key: "name", label: "거래처", hideable: false },
+  { key: "sales", label: "청구액", hideable: true },
+  { key: "outstanding", label: "미수액", hideable: true },
+  { key: "outstanding_rate", label: "미수율", hideable: true },
+  { key: "collected", label: "회수액", hideable: true, hiddenByDefault: true },
+  { key: "count", label: "거래건수", hideable: true, hiddenByDefault: true },
+  { key: "outstanding_count", label: "미수건수", hideable: true, hiddenByDefault: true },
+  { key: "oldest_days", label: "최고연체일", hideable: true, hiddenByDefault: true },
+]
+
+const receivableColumns: ColumnVisibilityMeta[] = [
+  { key: "name", label: "거래처", hideable: false },
+  { key: "signal", label: "신호", hideable: true },
+  { key: "outstanding", label: "미수액", hideable: true },
+  { key: "margin_rate", label: "이익률", hideable: true },
+  { key: "oldest_days", label: "최장 연체일", hideable: true },
+  { key: "sales", label: "매출액", hideable: true, hiddenByDefault: true },
+  { key: "outstanding_rate", label: "미수율", hideable: true, hiddenByDefault: true },
+  { key: "outstanding_count", label: "미수건수", hideable: true, hiddenByDefault: true },
+  { key: "pay_days", label: "평균회수일", hideable: true, hiddenByDefault: true },
+  { key: "deposit_rate", label: "평균 입금률", hideable: true, hiddenByDefault: true },
+]
+
+const productMarginColumns: ColumnVisibilityMeta[] = [
+  { key: "module", label: "모듈", hideable: false },
+  { key: "product", label: "품번/품명", hideable: true },
+  { key: "qty", label: "수량", hideable: true },
+  { key: "sale_price", label: "판매가", hideable: true },
+  { key: "cost_state", label: "원가상태", hideable: true },
+  { key: "cost", label: "원가", hideable: true },
+  { key: "margin_wp", label: "이익/Wp", hideable: true },
+  { key: "margin_rate", label: "이익률", hideable: true },
+  { key: "revenue", label: "매출", hideable: true },
+  { key: "margin", label: "이익", hideable: true },
+  { key: "kw", label: "출고(MW)", hideable: true, hiddenByDefault: true },
+  { key: "sale_count", label: "거래건수", hideable: true, hiddenByDefault: true },
+]
+
 export default function SalesAnalysisPage() {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId)
   const [activeAnalysisTab, setActiveAnalysisTab] = useState<SalesAnalysisTab>("summary")
@@ -734,6 +804,8 @@ export default function SalesAnalysisPage() {
     const totalMargin = coveredRevenue - totalCost
     return {
       qty: shownMarginItems.reduce((sum, item) => sum + item.total_sold_qty, 0),
+      kw: shownMarginItems.reduce((sum, item) => sum + item.total_sold_kw, 0),
+      saleCount: shownMarginItems.reduce((sum, item) => sum + item.sale_count, 0),
       revenue: totalRevenue,
       margin: totalMargin,
       rate: coveredRevenue > 0 ? round2((totalMargin / coveredRevenue) * 100) : 0,
@@ -1118,6 +1190,7 @@ export default function SalesAnalysisPage() {
         cost: number
         margin: number
         kw: number
+        qty: number
         saleCount: number
       }
     >()
@@ -1131,6 +1204,7 @@ export default function SalesAnalysisPage() {
         cost: 0,
         margin: 0,
         kw: 0,
+        qty: 0,
         saleCount: 0,
       }
       const coveredRevenue =
@@ -1146,6 +1220,7 @@ export default function SalesAnalysisPage() {
         cost: prev.cost + cost,
         margin: prev.margin + (coveredRevenue - cost),
         kw: prev.kw + item.total_sold_kw,
+        qty: prev.qty + item.total_sold_qty,
         saleCount: prev.saleCount + item.sale_count,
       })
     }
@@ -1159,6 +1234,43 @@ export default function SalesAnalysisPage() {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 6)
   }, [margin.items, margin.summary.total_revenue_krw])
+  const customerKwMap = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const sale of filteredSales) {
+      const kw = sale.capacity_kw ?? 0
+      if (!kw || !sale.customer_id) continue
+      map.set(sale.customer_id, (map.get(sale.customer_id) ?? 0) + kw)
+    }
+    return map
+  }, [filteredSales])
+  const customerCountMap = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const sale of filteredSales) {
+      if (!sale.customer_id) continue
+      map.set(sale.customer_id, (map.get(sale.customer_id) ?? 0) + 1)
+    }
+    return map
+  }, [filteredSales])
+  const { hidden: hiddenCustomerCols, setHidden: setHiddenCustomerCols } = useColumnVisibility(
+    "sales-analysis.customer-margin",
+    customerMarginColumns,
+  )
+  const { hidden: hiddenManufacturerCols, setHidden: setHiddenManufacturerCols } =
+    useColumnVisibility("sales-analysis.manufacturer", manufacturerColumns)
+  const { hidden: hiddenBillingCols, setHidden: setHiddenBillingCols } = useColumnVisibility(
+    "sales-analysis.billing",
+    billingColumns,
+  )
+  const { hidden: hiddenReceivableCols, setHidden: setHiddenReceivableCols } = useColumnVisibility(
+    "sales-analysis.receivable",
+    receivableColumns,
+  )
+  const { hidden: hiddenProductMarginCols, setHidden: setHiddenProductMarginCols } =
+    useColumnVisibility("sales-analysis.product-margin", productMarginColumns)
+  const sortedCustomers = useMemo(
+    () => [...customers.items].sort((a, b) => b.total_sales_krw - a.total_sales_krw),
+    [customers.items],
+  )
   const customerRiskRows = useMemo(() => {
     return customers.items
       .map((item) => {
@@ -1334,20 +1446,93 @@ export default function SalesAnalysisPage() {
     { key: "low_margin", label: "저마진" },
     { key: "negative_margin", label: "적자" },
   ]
-  const topCustomer = customers.items[0]
-  const shownCustomers = customers.items.slice(0, 8)
-  const shownCustomerTotals = shownCustomers.reduce(
-    (acc, item) => {
-      const margin =
-        item.avg_margin_rate != null ? (item.total_sales_krw * item.avg_margin_rate) / 100 : 0
-      return {
-        sales: acc.sales + item.total_sales_krw,
-        outstanding: acc.outstanding + item.outstanding_krw,
-        margin: acc.margin + margin,
-      }
+  const topCustomer = sortedCustomers[0]
+  const shownCustomers = sortedCustomers.slice(0, 8)
+  const restCustomers = sortedCustomers.slice(8)
+  const accumulateCustomer = (
+    acc: {
+      sales: number
+      outstanding: number
+      collected: number
+      margin: number
+      kw: number
+      count: number
+      outstandingCount: number
+      oldestDays: number
+      payDaysW: number
+      payDaysS: number
+      depW: number
+      depS: number
     },
-    { sales: 0, outstanding: 0, margin: 0 },
-  )
+    item: (typeof customers.items)[number],
+  ) => {
+    const margin =
+      item.avg_margin_rate != null ? (item.total_sales_krw * item.avg_margin_rate) / 100 : 0
+    return {
+      sales: acc.sales + item.total_sales_krw,
+      outstanding: acc.outstanding + item.outstanding_krw,
+      collected: acc.collected + item.total_collected_krw,
+      margin: acc.margin + margin,
+      kw: acc.kw + (customerKwMap.get(item.customer_id) ?? 0),
+      count: acc.count + (customerCountMap.get(item.customer_id) ?? 0),
+      outstandingCount: acc.outstandingCount + item.outstanding_count,
+      oldestDays: Math.max(acc.oldestDays, item.oldest_outstanding_days),
+      payDaysW:
+        acc.payDaysW +
+        (item.avg_payment_days != null ? item.avg_payment_days * item.total_sales_krw : 0),
+      payDaysS: acc.payDaysS + (item.avg_payment_days != null ? item.total_sales_krw : 0),
+      depW:
+        acc.depW +
+        (item.avg_deposit_rate != null ? item.avg_deposit_rate * item.total_sales_krw : 0),
+      depS: acc.depS + (item.avg_deposit_rate != null ? item.total_sales_krw : 0),
+    }
+  }
+  const zeroCustomerTotals = {
+    sales: 0,
+    outstanding: 0,
+    collected: 0,
+    margin: 0,
+    kw: 0,
+    count: 0,
+    outstandingCount: 0,
+    oldestDays: 0,
+    payDaysW: 0,
+    payDaysS: 0,
+    depW: 0,
+    depS: 0,
+  }
+  const shownCustomerTotals = shownCustomers.reduce(accumulateCustomer, zeroCustomerTotals)
+  const restCustomerTotals = restCustomers.reduce(accumulateCustomer, zeroCustomerTotals)
+  const showCustomerCol = (key: string) => !hiddenCustomerCols.has(key)
+  const visibleCustomerColCount = customerMarginColumns.filter((c) => showCustomerCol(c.key)).length
+  const showManufacturerCol = (key: string) => !hiddenManufacturerCols.has(key)
+  const visibleManufacturerColCount = manufacturerColumns.filter((c) =>
+    showManufacturerCol(c.key),
+  ).length
+  const showBillingCol = (key: string) => !hiddenBillingCols.has(key)
+  const visibleBillingColCount = billingColumns.filter((c) => showBillingCol(c.key)).length
+  const showReceivableCol = (key: string) => !hiddenReceivableCols.has(key)
+  const visibleReceivableColCount = receivableColumns.filter((c) =>
+    showReceivableCol(c.key),
+  ).length
+  const showProductMarginCol = (key: string) => !hiddenProductMarginCols.has(key)
+  const visibleProductMarginColCount = productMarginColumns.filter((c) =>
+    showProductMarginCol(c.key),
+  ).length
+  const allCustomerTotals = {
+    sales: shownCustomerTotals.sales + restCustomerTotals.sales,
+    outstanding: shownCustomerTotals.outstanding + restCustomerTotals.outstanding,
+    collected: shownCustomerTotals.collected + restCustomerTotals.collected,
+    margin: shownCustomerTotals.margin + restCustomerTotals.margin,
+    kw: shownCustomerTotals.kw + restCustomerTotals.kw,
+    count: shownCustomerTotals.count + restCustomerTotals.count,
+    outstandingCount: shownCustomerTotals.outstandingCount + restCustomerTotals.outstandingCount,
+    oldestDays: Math.max(shownCustomerTotals.oldestDays, restCustomerTotals.oldestDays),
+    payDaysW: shownCustomerTotals.payDaysW + restCustomerTotals.payDaysW,
+    payDaysS: shownCustomerTotals.payDaysS + restCustomerTotals.payDaysS,
+    depW: shownCustomerTotals.depW + restCustomerTotals.depW,
+    depS: shownCustomerTotals.depS + restCustomerTotals.depS,
+  }
   const reportPeriodLabel =
     dateRange.dateFrom || dateRange.dateTo
       ? `${dateRange.dateFrom ?? "처음"}~${dateRange.dateTo ?? "현재"}`
@@ -1940,41 +2125,120 @@ export default function SalesAnalysisPage() {
 
           {activeAnalysisTab === "manufacturer" && (
             <div className="grid grid-cols-1 gap-4">
-              <CardB title="제조사별 기여도" sub="매출 비중 · 이익률 · 원가 공백">
+              <CardB
+                title="제조사별 기여도"
+                sub="매출 비중 · 이익률 · 원가 공백"
+                right={
+                  <ColumnVisibilityMenu
+                    columns={manufacturerColumns}
+                    hidden={hiddenManufacturerCols}
+                    setHidden={setHiddenManufacturerCols}
+                  />
+                }
+              >
                 <Table className="sf-motion-table">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>제조사</TableHead>
-                      <TableHead className="text-right">매출</TableHead>
-                      <TableHead className="text-right">비중</TableHead>
-                      <TableHead className="text-right">이익률</TableHead>
-                      <TableHead className="text-right">원가공백</TableHead>
-                      <TableHead className="text-right">출고</TableHead>
+                      {showManufacturerCol("name") && <TableHead>제조사</TableHead>}
+                      {showManufacturerCol("revenue") && (
+                        <TableHead className="text-right">매출</TableHead>
+                      )}
+                      {showManufacturerCol("share") && (
+                        <TableHead className="text-right">비중</TableHead>
+                      )}
+                      {showManufacturerCol("margin_rate") && (
+                        <TableHead className="text-right">이익률</TableHead>
+                      )}
+                      {showManufacturerCol("missing_rate") && (
+                        <TableHead className="text-right">원가공백</TableHead>
+                      )}
+                      {showManufacturerCol("kw") && (
+                        <TableHead className="text-right">출고(MW)</TableHead>
+                      )}
+                      {showManufacturerCol("qty") && (
+                        <TableHead className="text-right">매출수량</TableHead>
+                      )}
+                      {showManufacturerCol("cost") && (
+                        <TableHead className="text-right">매출원가</TableHead>
+                      )}
+                      {showManufacturerCol("margin") && (
+                        <TableHead className="text-right">이익액</TableHead>
+                      )}
+                      {showManufacturerCol("count") && (
+                        <TableHead className="text-right">거래건수</TableHead>
+                      )}
+                      {showManufacturerCol("unit_price") && (
+                        <TableHead className="text-right">평균 단가</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody ref={manufacturerRowsParent}>
-                    {manufacturerDeepRows.map((row) => (
-                      <TableRow key={row.manufacturer}>
-                        <TableCell className="text-xs font-medium">{row.manufacturer}</TableCell>
-                        <TableCell className="text-right text-xs">
-                          {formatKRW(row.revenue)}
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          {row.revenueShare.toFixed(1)}%
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-medium">
-                          {row.marginRate != null ? `${row.marginRate.toFixed(1)}%` : "—"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          {row.missingRate.toFixed(1)}%
-                        </TableCell>
-                        <TableCell className="text-right text-xs">{row.kw.toFixed(1)}kW</TableCell>
-                      </TableRow>
-                    ))}
+                    {manufacturerDeepRows.map((row) => {
+                      const unitPriceWp = row.kw > 0 ? row.revenue / (row.kw * 1000) : null
+                      return (
+                        <TableRow key={row.manufacturer}>
+                          {showManufacturerCol("name") && (
+                            <TableCell className="text-xs font-medium">
+                              {row.manufacturer}
+                            </TableCell>
+                          )}
+                          {showManufacturerCol("revenue") && (
+                            <TableCell className="text-right text-xs">
+                              {formatKRW(row.revenue)}
+                            </TableCell>
+                          )}
+                          {showManufacturerCol("share") && (
+                            <TableCell className="text-right text-xs">
+                              {row.revenueShare.toFixed(1)}%
+                            </TableCell>
+                          )}
+                          {showManufacturerCol("margin_rate") && (
+                            <TableCell className="text-right text-xs font-medium">
+                              {row.marginRate != null ? `${row.marginRate.toFixed(1)}%` : "—"}
+                            </TableCell>
+                          )}
+                          {showManufacturerCol("missing_rate") && (
+                            <TableCell className="text-right text-xs">
+                              {row.missingRate.toFixed(1)}%
+                            </TableCell>
+                          )}
+                          {showManufacturerCol("kw") && (
+                            <TableCell className="text-right text-xs">
+                              {(row.kw / 1000).toFixed(1)}MW
+                            </TableCell>
+                          )}
+                          {showManufacturerCol("qty") && (
+                            <TableCell className="text-right text-xs">
+                              {formatNumber(row.qty)}
+                            </TableCell>
+                          )}
+                          {showManufacturerCol("cost") && (
+                            <TableCell className="text-right text-xs">
+                              {formatKRW(row.cost)}
+                            </TableCell>
+                          )}
+                          {showManufacturerCol("margin") && (
+                            <TableCell className="text-right text-xs">
+                              {formatKRW(row.margin)}
+                            </TableCell>
+                          )}
+                          {showManufacturerCol("count") && (
+                            <TableCell className="text-right text-xs">
+                              {row.saleCount.toLocaleString("ko-KR")}
+                            </TableCell>
+                          )}
+                          {showManufacturerCol("unit_price") && (
+                            <TableCell className="text-right text-xs">
+                              {unitPriceWp != null ? `${unitPriceWp.toFixed(0)}원` : "—"}
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      )
+                    })}
                     {manufacturerDeepRows.length === 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={6}
+                          colSpan={visibleManufacturerColCount}
                           className="py-8 text-center text-xs text-muted-foreground"
                         >
                           제조사별 분석 데이터가 없습니다
@@ -2300,15 +2564,55 @@ export default function SalesAnalysisPage() {
 
           {activeAnalysisTab === "customer" && (
             <div className="grid grid-cols-1 gap-4">
-              <CardB title="거래처별 매출·이익" sub="상위 8개 거래처" padded>
+              <CardB
+                title="거래처별 매출·이익"
+                sub="상위 8개 거래처 + 기타"
+                padded
+                right={
+                  <ColumnVisibilityMenu
+                    columns={customerMarginColumns}
+                    hidden={hiddenCustomerCols}
+                    setHidden={setHiddenCustomerCols}
+                  />
+                }
+              >
                 <Table className="sf-motion-table">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>거래처</TableHead>
-                      <TableHead className="text-right">매출액</TableHead>
-                      <TableHead className="text-right">비중</TableHead>
-                      <TableHead className="text-right">이익률</TableHead>
-                      <TableHead className="text-right">이익액</TableHead>
+                      {showCustomerCol("name") && <TableHead>거래처</TableHead>}
+                      {showCustomerCol("sales") && (
+                        <TableHead className="text-right">매출액</TableHead>
+                      )}
+                      {showCustomerCol("share") && (
+                        <TableHead className="text-right">비중</TableHead>
+                      )}
+                      {showCustomerCol("margin_rate") && (
+                        <TableHead className="text-right">이익률</TableHead>
+                      )}
+                      {showCustomerCol("margin") && (
+                        <TableHead className="text-right">이익액</TableHead>
+                      )}
+                      {showCustomerCol("kw") && (
+                        <TableHead className="text-right">출고(MW)</TableHead>
+                      )}
+                      {showCustomerCol("count") && (
+                        <TableHead className="text-right">거래건수</TableHead>
+                      )}
+                      {showCustomerCol("outstanding") && (
+                        <TableHead className="text-right">미수액</TableHead>
+                      )}
+                      {showCustomerCol("outstanding_rate") && (
+                        <TableHead className="text-right">미수율</TableHead>
+                      )}
+                      {showCustomerCol("pay_days") && (
+                        <TableHead className="text-right">평균회수일</TableHead>
+                      )}
+                      {showCustomerCol("deposit_rate") && (
+                        <TableHead className="text-right">평균 입금률</TableHead>
+                      )}
+                      {showCustomerCol("unit_price") && (
+                        <TableHead className="text-right">평균 단가</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody ref={customerRowsParent}>
@@ -2321,32 +2625,164 @@ export default function SalesAnalysisPage() {
                         item.avg_margin_rate != null
                           ? (item.total_sales_krw * item.avg_margin_rate) / 100
                           : null
+                      const kw = customerKwMap.get(item.customer_id) ?? 0
+                      const count = customerCountMap.get(item.customer_id) ?? 0
+                      const outstandingRate =
+                        item.total_sales_krw > 0
+                          ? (item.outstanding_krw / item.total_sales_krw) * 100
+                          : null
+                      const unitPriceWp = kw > 0 ? item.total_sales_krw / (kw * 1000) : null
                       return (
                         <TableRow key={item.customer_id}>
-                          <TableCell className="text-xs font-medium">
-                            {item.customer_name}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {formatKRW(item.total_sales_krw)}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {share.toFixed(1)}%
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {item.avg_margin_rate != null
-                              ? `${item.avg_margin_rate.toFixed(1)}%`
-                              : "—"}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {marginAmount != null ? formatKRW(marginAmount) : "—"}
-                          </TableCell>
+                          {showCustomerCol("name") && (
+                            <TableCell className="text-xs font-medium">
+                              {item.customer_name}
+                            </TableCell>
+                          )}
+                          {showCustomerCol("sales") && (
+                            <TableCell className="text-right text-xs">
+                              {formatKRW(item.total_sales_krw)}
+                            </TableCell>
+                          )}
+                          {showCustomerCol("share") && (
+                            <TableCell className="text-right text-xs">
+                              {share.toFixed(1)}%
+                            </TableCell>
+                          )}
+                          {showCustomerCol("margin_rate") && (
+                            <TableCell className="text-right text-xs">
+                              {item.avg_margin_rate != null
+                                ? `${item.avg_margin_rate.toFixed(1)}%`
+                                : "—"}
+                            </TableCell>
+                          )}
+                          {showCustomerCol("margin") && (
+                            <TableCell className="text-right text-xs">
+                              {marginAmount != null ? formatKRW(marginAmount) : "—"}
+                            </TableCell>
+                          )}
+                          {showCustomerCol("kw") && (
+                            <TableCell className="text-right text-xs">
+                              {(kw / 1000).toFixed(1)}MW
+                            </TableCell>
+                          )}
+                          {showCustomerCol("count") && (
+                            <TableCell className="text-right text-xs">
+                              {count.toLocaleString("ko-KR")}
+                            </TableCell>
+                          )}
+                          {showCustomerCol("outstanding") && (
+                            <TableCell className="text-right text-xs">
+                              {formatKRW(item.outstanding_krw)}
+                            </TableCell>
+                          )}
+                          {showCustomerCol("outstanding_rate") && (
+                            <TableCell className="text-right text-xs">
+                              {outstandingRate != null ? `${outstandingRate.toFixed(1)}%` : "—"}
+                            </TableCell>
+                          )}
+                          {showCustomerCol("pay_days") && (
+                            <TableCell className="text-right text-xs">
+                              {item.avg_payment_days != null
+                                ? `${item.avg_payment_days.toFixed(0)}일`
+                                : "—"}
+                            </TableCell>
+                          )}
+                          {showCustomerCol("deposit_rate") && (
+                            <TableCell className="text-right text-xs">
+                              {item.avg_deposit_rate != null
+                                ? `${item.avg_deposit_rate.toFixed(1)}%`
+                                : "—"}
+                            </TableCell>
+                          )}
+                          {showCustomerCol("unit_price") && (
+                            <TableCell className="text-right text-xs">
+                              {unitPriceWp != null ? `${unitPriceWp.toFixed(0)}원` : "—"}
+                            </TableCell>
+                          )}
                         </TableRow>
                       )
                     })}
+                    {restCustomers.length > 0 && (
+                      <TableRow key="__rest__">
+                        {showCustomerCol("name") && (
+                          <TableCell className="text-xs font-medium text-muted-foreground">
+                            기타 ({restCustomers.length}개)
+                          </TableCell>
+                        )}
+                        {showCustomerCol("sales") && (
+                          <TableCell className="text-right text-xs">
+                            {formatKRW(restCustomerTotals.sales)}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("share") && (
+                          <TableCell className="text-right text-xs">
+                            {customers.summary.total_sales_krw > 0
+                              ? `${((restCustomerTotals.sales / customers.summary.total_sales_krw) * 100).toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("margin_rate") && (
+                          <TableCell className="text-right text-xs">
+                            {restCustomerTotals.sales > 0
+                              ? `${((restCustomerTotals.margin / restCustomerTotals.sales) * 100).toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("margin") && (
+                          <TableCell className="text-right text-xs">
+                            {formatKRW(restCustomerTotals.margin)}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("kw") && (
+                          <TableCell className="text-right text-xs">
+                            {(restCustomerTotals.kw / 1000).toFixed(1)}MW
+                          </TableCell>
+                        )}
+                        {showCustomerCol("count") && (
+                          <TableCell className="text-right text-xs">
+                            {restCustomerTotals.count.toLocaleString("ko-KR")}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("outstanding") && (
+                          <TableCell className="text-right text-xs">
+                            {formatKRW(restCustomerTotals.outstanding)}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("outstanding_rate") && (
+                          <TableCell className="text-right text-xs">
+                            {restCustomerTotals.sales > 0
+                              ? `${((restCustomerTotals.outstanding / restCustomerTotals.sales) * 100).toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("pay_days") && (
+                          <TableCell className="text-right text-xs">
+                            {restCustomerTotals.payDaysS > 0
+                              ? `${(restCustomerTotals.payDaysW / restCustomerTotals.payDaysS).toFixed(0)}일`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("deposit_rate") && (
+                          <TableCell className="text-right text-xs">
+                            {restCustomerTotals.depS > 0
+                              ? `${(restCustomerTotals.depW / restCustomerTotals.depS).toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("unit_price") && (
+                          <TableCell className="text-right text-xs">
+                            {restCustomerTotals.kw > 0
+                              ? `${(restCustomerTotals.sales / (restCustomerTotals.kw * 1000)).toFixed(0)}원`
+                              : "—"}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    )}
                     {customers.items.length === 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={5}
+                          colSpan={visibleCustomerColCount}
                           className="py-8 text-center text-xs text-muted-foreground"
                         >
                           거래처 분석 데이터가 없습니다
@@ -2357,23 +2793,76 @@ export default function SalesAnalysisPage() {
                   {shownCustomers.length > 0 && (
                     <TableFooter>
                       <TableRow>
-                        <TableCell className="text-xs font-medium">합계</TableCell>
-                        <TableCell className="text-right text-xs font-medium">
-                          {formatKRW(shownCustomerTotals.sales)}
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">
-                          {customers.summary.total_sales_krw > 0
-                            ? `${((shownCustomerTotals.sales / customers.summary.total_sales_krw) * 100).toFixed(1)}%`
-                            : "—"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">
-                          {shownCustomerTotals.sales > 0
-                            ? `${((shownCustomerTotals.margin / shownCustomerTotals.sales) * 100).toFixed(1)}%`
-                            : "—"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-medium">
-                          {formatKRW(shownCustomerTotals.margin)}
-                        </TableCell>
+                        {showCustomerCol("name") && (
+                          <TableCell className="text-xs font-medium">합계</TableCell>
+                        )}
+                        {showCustomerCol("sales") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {formatKRW(allCustomerTotals.sales)}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("share") && (
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {customers.summary.total_sales_krw > 0
+                              ? `${((allCustomerTotals.sales / customers.summary.total_sales_krw) * 100).toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("margin_rate") && (
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {allCustomerTotals.sales > 0
+                              ? `${((allCustomerTotals.margin / allCustomerTotals.sales) * 100).toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("margin") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {formatKRW(allCustomerTotals.margin)}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("kw") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {(allCustomerTotals.kw / 1000).toFixed(1)}MW
+                          </TableCell>
+                        )}
+                        {showCustomerCol("count") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {allCustomerTotals.count.toLocaleString("ko-KR")}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("outstanding") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {formatKRW(allCustomerTotals.outstanding)}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("outstanding_rate") && (
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {allCustomerTotals.sales > 0
+                              ? `${((allCustomerTotals.outstanding / allCustomerTotals.sales) * 100).toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("pay_days") && (
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {allCustomerTotals.payDaysS > 0
+                              ? `${(allCustomerTotals.payDaysW / allCustomerTotals.payDaysS).toFixed(0)}일`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("deposit_rate") && (
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {allCustomerTotals.depS > 0
+                              ? `${(allCustomerTotals.depW / allCustomerTotals.depS).toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showCustomerCol("unit_price") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {allCustomerTotals.kw > 0
+                              ? `${(allCustomerTotals.sales / (allCustomerTotals.kw * 1000)).toFixed(0)}원`
+                              : "—"}
+                          </TableCell>
+                        )}
                       </TableRow>
                     </TableFooter>
                   )}
@@ -2384,14 +2873,43 @@ export default function SalesAnalysisPage() {
 
           {activeAnalysisTab === "billing" && (
             <div className="grid grid-cols-1 gap-4">
-              <CardB title="거래처별 청구/미수" sub="상위 8개 거래처" padded>
+              <CardB
+                title="거래처별 청구/미수"
+                sub="상위 8개 거래처 + 기타"
+                padded
+                right={
+                  <ColumnVisibilityMenu
+                    columns={billingColumns}
+                    hidden={hiddenBillingCols}
+                    setHidden={setHiddenBillingCols}
+                  />
+                }
+              >
                 <Table className="sf-motion-table">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>거래처</TableHead>
-                      <TableHead className="text-right">청구액</TableHead>
-                      <TableHead className="text-right">미수</TableHead>
-                      <TableHead className="text-right">미수율</TableHead>
+                      {showBillingCol("name") && <TableHead>거래처</TableHead>}
+                      {showBillingCol("sales") && (
+                        <TableHead className="text-right">청구액</TableHead>
+                      )}
+                      {showBillingCol("outstanding") && (
+                        <TableHead className="text-right">미수액</TableHead>
+                      )}
+                      {showBillingCol("outstanding_rate") && (
+                        <TableHead className="text-right">미수율</TableHead>
+                      )}
+                      {showBillingCol("collected") && (
+                        <TableHead className="text-right">회수액</TableHead>
+                      )}
+                      {showBillingCol("count") && (
+                        <TableHead className="text-right">거래건수</TableHead>
+                      )}
+                      {showBillingCol("outstanding_count") && (
+                        <TableHead className="text-right">미수건수</TableHead>
+                      )}
+                      {showBillingCol("oldest_days") && (
+                        <TableHead className="text-right">최고연체일</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2399,28 +2917,107 @@ export default function SalesAnalysisPage() {
                       const outstandingRate =
                         item.total_sales_krw > 0
                           ? (item.outstanding_krw / item.total_sales_krw) * 100
-                          : 0
+                          : null
+                      const count = customerCountMap.get(item.customer_id) ?? 0
                       return (
                         <TableRow key={item.customer_id}>
-                          <TableCell className="text-xs font-medium">
-                            {item.customer_name}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {formatKRW(item.total_sales_krw)}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {formatKRW(item.outstanding_krw)}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {item.total_sales_krw > 0 ? `${outstandingRate.toFixed(1)}%` : "—"}
-                          </TableCell>
+                          {showBillingCol("name") && (
+                            <TableCell className="text-xs font-medium">
+                              {item.customer_name}
+                            </TableCell>
+                          )}
+                          {showBillingCol("sales") && (
+                            <TableCell className="text-right text-xs">
+                              {formatKRW(item.total_sales_krw)}
+                            </TableCell>
+                          )}
+                          {showBillingCol("outstanding") && (
+                            <TableCell className="text-right text-xs">
+                              {formatKRW(item.outstanding_krw)}
+                            </TableCell>
+                          )}
+                          {showBillingCol("outstanding_rate") && (
+                            <TableCell className="text-right text-xs">
+                              {outstandingRate != null ? `${outstandingRate.toFixed(1)}%` : "—"}
+                            </TableCell>
+                          )}
+                          {showBillingCol("collected") && (
+                            <TableCell className="text-right text-xs">
+                              {formatKRW(item.total_collected_krw)}
+                            </TableCell>
+                          )}
+                          {showBillingCol("count") && (
+                            <TableCell className="text-right text-xs">
+                              {count.toLocaleString("ko-KR")}
+                            </TableCell>
+                          )}
+                          {showBillingCol("outstanding_count") && (
+                            <TableCell className="text-right text-xs">
+                              {item.outstanding_count.toLocaleString("ko-KR")}
+                            </TableCell>
+                          )}
+                          {showBillingCol("oldest_days") && (
+                            <TableCell className="text-right text-xs">
+                              {item.oldest_outstanding_days > 0
+                                ? `${item.oldest_outstanding_days}일`
+                                : "—"}
+                            </TableCell>
+                          )}
                         </TableRow>
                       )
                     })}
+                    {restCustomers.length > 0 && (
+                      <TableRow key="__rest__">
+                        {showBillingCol("name") && (
+                          <TableCell className="text-xs font-medium text-muted-foreground">
+                            기타 ({restCustomers.length}개)
+                          </TableCell>
+                        )}
+                        {showBillingCol("sales") && (
+                          <TableCell className="text-right text-xs">
+                            {formatKRW(restCustomerTotals.sales)}
+                          </TableCell>
+                        )}
+                        {showBillingCol("outstanding") && (
+                          <TableCell className="text-right text-xs">
+                            {formatKRW(restCustomerTotals.outstanding)}
+                          </TableCell>
+                        )}
+                        {showBillingCol("outstanding_rate") && (
+                          <TableCell className="text-right text-xs">
+                            {restCustomerTotals.sales > 0
+                              ? `${((restCustomerTotals.outstanding / restCustomerTotals.sales) * 100).toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showBillingCol("collected") && (
+                          <TableCell className="text-right text-xs">
+                            {formatKRW(restCustomerTotals.collected)}
+                          </TableCell>
+                        )}
+                        {showBillingCol("count") && (
+                          <TableCell className="text-right text-xs">
+                            {restCustomerTotals.count.toLocaleString("ko-KR")}
+                          </TableCell>
+                        )}
+                        {showBillingCol("outstanding_count") && (
+                          <TableCell className="text-right text-xs">
+                            {restCustomerTotals.outstandingCount.toLocaleString("ko-KR")}
+                          </TableCell>
+                        )}
+                        {showBillingCol("oldest_days") && (
+                          <TableCell className="text-right text-xs">
+                            {restCustomerTotals.oldestDays > 0
+                              ? `${restCustomerTotals.oldestDays}일`
+                              : "—"}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    )}
                     {customers.items.length === 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={4}
+                          colSpan={visibleBillingColCount}
                           className="py-8 text-center text-xs text-muted-foreground"
                         >
                           청구/미수 데이터가 없습니다
@@ -2431,18 +3028,48 @@ export default function SalesAnalysisPage() {
                   {shownCustomers.length > 0 && (
                     <TableFooter>
                       <TableRow>
-                        <TableCell className="text-xs font-medium">합계</TableCell>
-                        <TableCell className="text-right text-xs font-medium">
-                          {formatKRW(shownCustomerTotals.sales)}
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-medium">
-                          {formatKRW(shownCustomerTotals.outstanding)}
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">
-                          {shownCustomerTotals.sales > 0
-                            ? `${((shownCustomerTotals.outstanding / shownCustomerTotals.sales) * 100).toFixed(1)}%`
-                            : "—"}
-                        </TableCell>
+                        {showBillingCol("name") && (
+                          <TableCell className="text-xs font-medium">합계</TableCell>
+                        )}
+                        {showBillingCol("sales") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {formatKRW(allCustomerTotals.sales)}
+                          </TableCell>
+                        )}
+                        {showBillingCol("outstanding") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {formatKRW(allCustomerTotals.outstanding)}
+                          </TableCell>
+                        )}
+                        {showBillingCol("outstanding_rate") && (
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {allCustomerTotals.sales > 0
+                              ? `${((allCustomerTotals.outstanding / allCustomerTotals.sales) * 100).toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showBillingCol("collected") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {formatKRW(allCustomerTotals.collected)}
+                          </TableCell>
+                        )}
+                        {showBillingCol("count") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {allCustomerTotals.count.toLocaleString("ko-KR")}
+                          </TableCell>
+                        )}
+                        {showBillingCol("outstanding_count") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {allCustomerTotals.outstandingCount.toLocaleString("ko-KR")}
+                          </TableCell>
+                        )}
+                        {showBillingCol("oldest_days") && (
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {allCustomerTotals.oldestDays > 0
+                              ? `${allCustomerTotals.oldestDays}일`
+                              : "—"}
+                          </TableCell>
+                        )}
                       </TableRow>
                     </TableFooter>
                   )}
@@ -2453,45 +3080,123 @@ export default function SalesAnalysisPage() {
 
           {activeAnalysisTab === "receivable" && (
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-              <CardB title="미수 거래처" sub="연체일 · 미수액 · 회수 우선순위">
+              <CardB
+                title="미수 거래처"
+                sub="연체일 · 미수액 · 회수 우선순위"
+                right={
+                  <ColumnVisibilityMenu
+                    columns={receivableColumns}
+                    hidden={hiddenReceivableCols}
+                    setHidden={setHiddenReceivableCols}
+                  />
+                }
+              >
                 <Table className="sf-motion-table">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>거래처</TableHead>
-                      <TableHead>신호</TableHead>
-                      <TableHead className="text-right">미수</TableHead>
-                      <TableHead className="text-right">이익률</TableHead>
-                      <TableHead className="text-right">최장</TableHead>
+                      {showReceivableCol("name") && <TableHead>거래처</TableHead>}
+                      {showReceivableCol("signal") && <TableHead>신호</TableHead>}
+                      {showReceivableCol("outstanding") && (
+                        <TableHead className="text-right">미수액</TableHead>
+                      )}
+                      {showReceivableCol("margin_rate") && (
+                        <TableHead className="text-right">이익률</TableHead>
+                      )}
+                      {showReceivableCol("oldest_days") && (
+                        <TableHead className="text-right">최장 연체일</TableHead>
+                      )}
+                      {showReceivableCol("sales") && (
+                        <TableHead className="text-right">매출액</TableHead>
+                      )}
+                      {showReceivableCol("outstanding_rate") && (
+                        <TableHead className="text-right">미수율</TableHead>
+                      )}
+                      {showReceivableCol("outstanding_count") && (
+                        <TableHead className="text-right">미수건수</TableHead>
+                      )}
+                      {showReceivableCol("pay_days") && (
+                        <TableHead className="text-right">평균회수일</TableHead>
+                      )}
+                      {showReceivableCol("deposit_rate") && (
+                        <TableHead className="text-right">평균 입금률</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {customerRiskRows.map(({ item, signal }) => (
-                      <TableRow key={item.customer_id}>
-                        <TableCell className="text-xs font-medium">{item.customer_name}</TableCell>
-                        <TableCell className="text-xs">
-                          <span
-                            className={`sf-status-pill ${signal === "연체" ? "sf-tone-neg" : signal === "정상" ? "sf-tone-pos" : "sf-tone-warn"}`}
-                          >
-                            {signal}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-medium">
-                          {formatKRW(item.outstanding_krw)}
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          {item.avg_margin_rate != null
-                            ? `${item.avg_margin_rate.toFixed(1)}%`
-                            : "—"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          {item.oldest_outstanding_days}일
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {customerRiskRows.map(({ item, signal }) => {
+                      const outstandingRate =
+                        item.total_sales_krw > 0
+                          ? (item.outstanding_krw / item.total_sales_krw) * 100
+                          : null
+                      return (
+                        <TableRow key={item.customer_id}>
+                          {showReceivableCol("name") && (
+                            <TableCell className="text-xs font-medium">
+                              {item.customer_name}
+                            </TableCell>
+                          )}
+                          {showReceivableCol("signal") && (
+                            <TableCell className="text-xs">
+                              <span
+                                className={`sf-status-pill ${signal === "연체" ? "sf-tone-neg" : signal === "정상" ? "sf-tone-pos" : "sf-tone-warn"}`}
+                              >
+                                {signal}
+                              </span>
+                            </TableCell>
+                          )}
+                          {showReceivableCol("outstanding") && (
+                            <TableCell className="text-right text-xs font-medium">
+                              {formatKRW(item.outstanding_krw)}
+                            </TableCell>
+                          )}
+                          {showReceivableCol("margin_rate") && (
+                            <TableCell className="text-right text-xs">
+                              {item.avg_margin_rate != null
+                                ? `${item.avg_margin_rate.toFixed(1)}%`
+                                : "—"}
+                            </TableCell>
+                          )}
+                          {showReceivableCol("oldest_days") && (
+                            <TableCell className="text-right text-xs">
+                              {item.oldest_outstanding_days}일
+                            </TableCell>
+                          )}
+                          {showReceivableCol("sales") && (
+                            <TableCell className="text-right text-xs">
+                              {formatKRW(item.total_sales_krw)}
+                            </TableCell>
+                          )}
+                          {showReceivableCol("outstanding_rate") && (
+                            <TableCell className="text-right text-xs">
+                              {outstandingRate != null ? `${outstandingRate.toFixed(1)}%` : "—"}
+                            </TableCell>
+                          )}
+                          {showReceivableCol("outstanding_count") && (
+                            <TableCell className="text-right text-xs">
+                              {item.outstanding_count.toLocaleString("ko-KR")}
+                            </TableCell>
+                          )}
+                          {showReceivableCol("pay_days") && (
+                            <TableCell className="text-right text-xs">
+                              {item.avg_payment_days != null
+                                ? `${item.avg_payment_days.toFixed(0)}일`
+                                : "—"}
+                            </TableCell>
+                          )}
+                          {showReceivableCol("deposit_rate") && (
+                            <TableCell className="text-right text-xs">
+                              {item.avg_deposit_rate != null
+                                ? `${item.avg_deposit_rate.toFixed(1)}%`
+                                : "—"}
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      )
+                    })}
                     {customerRiskRows.length === 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={5}
+                          colSpan={visibleReceivableColCount}
                           className="py-8 text-center text-xs text-muted-foreground"
                         >
                           미수 위험 거래처가 없습니다
@@ -2577,22 +3282,47 @@ export default function SalesAnalysisPage() {
                     value={marginFilter}
                     onChange={(value) => setMarginFilter(value as MarginFilter)}
                   />
+                  <ColumnVisibilityMenu
+                    columns={productMarginColumns}
+                    hidden={hiddenProductMarginCols}
+                    setHidden={setHiddenProductMarginCols}
+                  />
                 </div>
               }
             >
               <Table className="sf-motion-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>모듈</TableHead>
-                    <TableHead>품번 / 품명</TableHead>
-                    <TableHead className="text-right">수량</TableHead>
-                    <TableHead className="text-right">판매가</TableHead>
-                    <TableHead>원가상태</TableHead>
-                    <TableHead className="text-right">원가</TableHead>
-                    <TableHead className="text-right">이익/Wp</TableHead>
-                    <TableHead className="text-right">이익률</TableHead>
-                    <TableHead className="text-right">매출</TableHead>
-                    <TableHead className="text-right">이익</TableHead>
+                    {showProductMarginCol("module") && <TableHead>모듈</TableHead>}
+                    {showProductMarginCol("product") && <TableHead>품번 / 품명</TableHead>}
+                    {showProductMarginCol("qty") && (
+                      <TableHead className="text-right">수량</TableHead>
+                    )}
+                    {showProductMarginCol("sale_price") && (
+                      <TableHead className="text-right">판매가</TableHead>
+                    )}
+                    {showProductMarginCol("cost_state") && <TableHead>원가상태</TableHead>}
+                    {showProductMarginCol("cost") && (
+                      <TableHead className="text-right">원가</TableHead>
+                    )}
+                    {showProductMarginCol("margin_wp") && (
+                      <TableHead className="text-right">이익/Wp</TableHead>
+                    )}
+                    {showProductMarginCol("margin_rate") && (
+                      <TableHead className="text-right">이익률</TableHead>
+                    )}
+                    {showProductMarginCol("revenue") && (
+                      <TableHead className="text-right">매출</TableHead>
+                    )}
+                    {showProductMarginCol("margin") && (
+                      <TableHead className="text-right">이익</TableHead>
+                    )}
+                    {showProductMarginCol("kw") && (
+                      <TableHead className="text-right">출고(MW)</TableHead>
+                    )}
+                    {showProductMarginCol("sale_count") && (
+                      <TableHead className="text-right">거래건수</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody ref={marginRowsParent}>
@@ -2603,48 +3333,80 @@ export default function SalesAnalysisPage() {
                         key={`${item.manufacturer_name}-${item.product_code}-${item.spec_wp}`}
                         className={!costCovered ? "bg-yellow-50/40" : undefined}
                       >
-                        <TableCell className="text-xs font-medium">
-                          {moduleLabel(item.manufacturer_name, item.spec_wp)}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <div className="font-medium">{item.product_code}</div>
-                          <div className="text-muted-foreground">{item.product_name}</div>
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          {formatNumber(item.total_sold_qty)}
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          {formatNumber(item.avg_sale_price_wp)}원
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {costCovered ? (
-                            <span className="sf-status-pill sf-tone-pos">원가 연결</span>
-                          ) : (
-                            <span className="sf-status-pill sf-tone-warn">원가 없음</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          {item.avg_cost_wp != null ? `${formatNumber(item.avg_cost_wp)}원` : "—"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          {item.margin_wp != null ? `${formatNumber(item.margin_wp)}원` : "—"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-medium">
-                          {item.margin_rate != null ? `${item.margin_rate.toFixed(1)}%` : "—"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          {formatKRW(item.total_revenue_krw)}
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-medium">
-                          {item.total_margin_krw != null ? formatKRW(item.total_margin_krw) : "—"}
-                        </TableCell>
+                        {showProductMarginCol("module") && (
+                          <TableCell className="text-xs font-medium">
+                            {moduleLabel(item.manufacturer_name, item.spec_wp)}
+                          </TableCell>
+                        )}
+                        {showProductMarginCol("product") && (
+                          <TableCell className="text-xs">
+                            <div className="font-medium">{item.product_code}</div>
+                            <div className="text-muted-foreground">{item.product_name}</div>
+                          </TableCell>
+                        )}
+                        {showProductMarginCol("qty") && (
+                          <TableCell className="text-right text-xs">
+                            {formatNumber(item.total_sold_qty)}
+                          </TableCell>
+                        )}
+                        {showProductMarginCol("sale_price") && (
+                          <TableCell className="text-right text-xs">
+                            {formatNumber(item.avg_sale_price_wp)}원
+                          </TableCell>
+                        )}
+                        {showProductMarginCol("cost_state") && (
+                          <TableCell className="text-xs">
+                            {costCovered ? (
+                              <span className="sf-status-pill sf-tone-pos">원가 연결</span>
+                            ) : (
+                              <span className="sf-status-pill sf-tone-warn">원가 없음</span>
+                            )}
+                          </TableCell>
+                        )}
+                        {showProductMarginCol("cost") && (
+                          <TableCell className="text-right text-xs">
+                            {item.avg_cost_wp != null ? `${formatNumber(item.avg_cost_wp)}원` : "—"}
+                          </TableCell>
+                        )}
+                        {showProductMarginCol("margin_wp") && (
+                          <TableCell className="text-right text-xs">
+                            {item.margin_wp != null ? `${formatNumber(item.margin_wp)}원` : "—"}
+                          </TableCell>
+                        )}
+                        {showProductMarginCol("margin_rate") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {item.margin_rate != null ? `${item.margin_rate.toFixed(1)}%` : "—"}
+                          </TableCell>
+                        )}
+                        {showProductMarginCol("revenue") && (
+                          <TableCell className="text-right text-xs">
+                            {formatKRW(item.total_revenue_krw)}
+                          </TableCell>
+                        )}
+                        {showProductMarginCol("margin") && (
+                          <TableCell className="text-right text-xs font-medium">
+                            {item.total_margin_krw != null
+                              ? formatKRW(item.total_margin_krw)
+                              : "—"}
+                          </TableCell>
+                        )}
+                        {showProductMarginCol("kw") && (
+                          <TableCell className="text-right text-xs">
+                            {(item.total_sold_kw / 1000).toFixed(1)}MW
+                          </TableCell>
+                        )}
+                        {showProductMarginCol("sale_count") && (
+                          <TableCell className="text-right text-xs">
+                            {item.sale_count.toLocaleString("ko-KR")}
+                          </TableCell>
+                        )}
                       </TableRow>
                     )
                   })}
                   {shownMarginItems.length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={10}
+                        colSpan={visibleProductMarginColCount}
                         className="py-8 text-center text-xs text-muted-foreground"
                       >
                         이익 분석 데이터가 없습니다
@@ -2655,28 +3417,52 @@ export default function SalesAnalysisPage() {
                 {shownMarginItems.length > 0 && (
                   <TableFooter>
                     <TableRow>
-                      <TableCell className="text-xs font-medium">합계</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {shownMarginItems.length.toLocaleString("ko-KR")}건
-                      </TableCell>
-                      <TableCell className="text-right text-xs font-medium">
-                        {formatNumber(shownMarginTotals.qty)}
-                      </TableCell>
-                      <TableCell />
-                      <TableCell className="text-xs text-muted-foreground">
-                        원가 연결 {shownMarginCoveredCount.toLocaleString("ko-KR")}건
-                      </TableCell>
-                      <TableCell />
-                      <TableCell />
-                      <TableCell className="text-right text-xs font-medium">
-                        {shownMarginTotals.rate.toFixed(1)}%
-                      </TableCell>
-                      <TableCell className="text-right text-xs font-medium">
-                        {formatKRW(shownMarginTotals.revenue)}
-                      </TableCell>
-                      <TableCell className="text-right text-xs font-medium">
-                        {formatKRW(shownMarginTotals.margin)}
-                      </TableCell>
+                      {showProductMarginCol("module") && (
+                        <TableCell className="text-xs font-medium">합계</TableCell>
+                      )}
+                      {showProductMarginCol("product") && (
+                        <TableCell className="text-xs text-muted-foreground">
+                          {shownMarginItems.length.toLocaleString("ko-KR")}건
+                        </TableCell>
+                      )}
+                      {showProductMarginCol("qty") && (
+                        <TableCell className="text-right text-xs font-medium">
+                          {formatNumber(shownMarginTotals.qty)}
+                        </TableCell>
+                      )}
+                      {showProductMarginCol("sale_price") && <TableCell />}
+                      {showProductMarginCol("cost_state") && (
+                        <TableCell className="text-xs text-muted-foreground">
+                          원가 연결 {shownMarginCoveredCount.toLocaleString("ko-KR")}건
+                        </TableCell>
+                      )}
+                      {showProductMarginCol("cost") && <TableCell />}
+                      {showProductMarginCol("margin_wp") && <TableCell />}
+                      {showProductMarginCol("margin_rate") && (
+                        <TableCell className="text-right text-xs font-medium">
+                          {shownMarginTotals.rate.toFixed(1)}%
+                        </TableCell>
+                      )}
+                      {showProductMarginCol("revenue") && (
+                        <TableCell className="text-right text-xs font-medium">
+                          {formatKRW(shownMarginTotals.revenue)}
+                        </TableCell>
+                      )}
+                      {showProductMarginCol("margin") && (
+                        <TableCell className="text-right text-xs font-medium">
+                          {formatKRW(shownMarginTotals.margin)}
+                        </TableCell>
+                      )}
+                      {showProductMarginCol("kw") && (
+                        <TableCell className="text-right text-xs font-medium">
+                          {(shownMarginTotals.kw / 1000).toFixed(1)}MW
+                        </TableCell>
+                      )}
+                      {showProductMarginCol("sale_count") && (
+                        <TableCell className="text-right text-xs font-medium">
+                          {shownMarginTotals.saleCount.toLocaleString("ko-KR")}
+                        </TableCell>
+                      )}
                     </TableRow>
                   </TableFooter>
                 )}
@@ -2729,7 +3515,7 @@ export default function SalesAnalysisPage() {
             </div>
           </RailBlock>
           <RailBlock title="상위 거래처" count="매출">
-            {customers.items.slice(0, 5).map((item, index) => (
+            {sortedCustomers.slice(0, 5).map((item, index) => (
               <div
                 key={item.customer_id}
                 className={`py-2 ${index ? "border-t border-[var(--line)]" : ""}`}
