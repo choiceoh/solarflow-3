@@ -1738,6 +1738,25 @@
   - `graphify update .`
 - **날짜**: 2026-05-12 14:36:05 KST
 
+## D-20260512-172118: 조회자용 UX와 입력자용 UX는 같은 데이터 위에서 표면을 분리한다
+
+- **결정**: SolarFlow는 역할별로 앱을 포크하지 않고, 같은 데이터·API·컴포넌트 위에서 조회자용 화면과 입력자용 화면의 우선순위를 분리한다.
+  - 조회자용 화면은 KPI, 분석, 추세, 위험 신호를 먼저 보여주는 보고·판단 표면으로 둔다.
+  - 입력자용 화면은 처리 큐, 엑셀 업로드, 검증 오류, 셀 보정, 일괄 처리 전 확인을 먼저 보여주는 작업 표면으로 둔다.
+  - `/import`는 입력자용 작업대로 정리한다. 통합 양식 다운로드/업로드를 1순위로 두고, 업무별 양식은 보조 영역으로 접는다.
+  - 통합 업로드 미리보기는 업로드 파일에 존재하는 시트만 탭으로 보여주고, 오류·경고가 있으면 해당 필터를 먼저 열어 입력자가 바로 고칠 행을 찾게 한다.
+- **이유**: 보기 좋은 화면은 KPI와 카드가 많을수록 설득력이 생기지만, 실제 입력자는 반복 작업 중 선택지가 늘어날수록 속도와 확신이 떨어진다. 따라서 조회·분석 화면의 풍부함은 유지하되, 입력 화면에서는 정본 경로와 다음 실행만 강하게 보여줘야 한다.
+- **운영 기준**:
+  - 역할 분리는 권한 포크가 아니라 화면 우선순위와 밀도 차이다.
+  - 데이터 생성 정본은 계속 Excel Import Hub이며, 새 웹 직접입력 경로를 늘리지 않는다.
+  - 조회자용 화면에서 쓰는 KPI/차트는 입력자용 흐름에 꼭 필요할 때만 배치한다.
+- **검증**:
+  - `cd frontend && npx --yes bun@1.3.13 run build`
+  - `cd frontend && npx --yes bun@1.3.13 run lint`
+  - `git diff --check`
+  - `graphify update .`
+- **날짜**: 2026-05-12 17:21:18 KST
+
 ## D-20260512-200000: AGENT-BUILDER-VISION — AI 에이전트 친화 ERP 빌더 (colocation + manifest + codemod)
 
 - **결정**: D-145 의 horizontal tenant pack 위에 **vertical 도메인 colocation** 추가. backend/frontend 모두 `internal/domains/<id>/` + `src/domains/<id>/` 디렉토리로 자기완결. `harness/registry.yaml` + `harness/domains/<id>.yaml` manifest 가 단일 정본. 사람이 편집하는 정본은 YAML 만, 코드/JSON 은 codemod 생성.
