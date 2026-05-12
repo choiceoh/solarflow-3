@@ -25,7 +25,16 @@ import {
 } from "@/components/ui/select"
 import FormField from "@/components/common/FormField"
 import { ProductCombobox } from "@/components/common/ProductCombobox"
+import BLOcrWidget, { type BLOcrApplyArgs } from "@/components/inbound/BLOcrWidget"
+import BLPaymentTermsWidget from "@/components/inbound/BLPaymentTermsWidget"
 import { fetchWithAuth } from "@/lib/api"
+import {
+  findProductForOCRLine,
+  normalizeOCRDate,
+  normalizeOCRDecimal,
+  normalizeOCRIdentifier,
+  parseOCRNumber,
+} from "@/lib/blOcr"
 import { confirmDialog } from "@/lib/dialogs"
 import { notify } from "@/lib/notify"
 import { useAppStore } from "@/stores/appStore"
@@ -137,7 +146,11 @@ export default function BLCreateDialog({
   const [warehouseId, setWarehouseId] = useState("")
   const [invoiceNumber, setInvoiceNumber] = useState("")
   const [exchangeRate, setExchangeRate] = useState("")
+  const [paymentTerms, setPaymentTerms] = useState("")
   const [memo, setMemo] = useState("")
+
+  // OCR
+  const [ocrSummary, setOcrSummary] = useState("")
 
   const [lines, setLines] = useState<DraftLine[]>(() => [newLine()])
 
@@ -161,7 +174,9 @@ export default function BLCreateDialog({
     setWarehouseId("")
     setInvoiceNumber("")
     setExchangeRate("")
+    setPaymentTerms("")
     setMemo("")
+    setOcrSummary("")
     setLines([newLine()])
     setHeaderErrors({})
     setLineErrors(new Map())
@@ -233,6 +248,65 @@ export default function BLCreateDialog({
       const template = [...prev].reverse().find((l) => !isBlankLine(l)) ?? prev[prev.length - 1]
       return [...prev, newLineFrom(template)]
     })
+  }
+
+  // OCR apply — 면장 OCR 결과를 header/line 상태에 흡수.
+  // 비유: OCR 위젯이 "면장 한 장을 다 읽었어요" 하고 들고 온 거 → 사용자가 review 다이얼로그에서
+  // 후보 선택 + 품번 override 까지 마친 결과 = 우리 폼이 그대로 받아쓰기만 하면 됨.
+  async function applyOcr(args: BLOcrApplyArgs) {
+    markDirty()
+    const { fields, productOverrides, productSource } = args
+
+    // 헤더 매핑
+    if (fields.bl_number?.value) setBlNumber(normalizeOCRIdentifier(fields.bl_number.value))
+    if (fields.invoice_number?.value)
+      setInvoiceNumber(normalizeOCRIdentifier(fields.invoice_number.value))
+    if (fields.exchange_rate?.value) {
+      const r = normalizeOCRDecimal(fields.exchange_rate.value)
+      if (r) setExchangeRate(r)
+    }
+    if (fields.port?.value) setPort(fields.port.value.trim())
+    if (fields.forwarder?.value) setForwarder(fields.forwarder.value.trim())
+    if (fields.arrival_date?.value) {
+      const d = normalizeOCRDate(fields.arrival_date.value)
+      if (d) setActualArrival(d)
+    }
+
+    // 라인 매핑 — productOverrides 우선, 없으면 findProductForOCRLine 으로 fuzzy 매칭
+    const ocrLines = fields.line_items ?? []
+    if (ocrLines.length > 0) {
+      const newLines: DraftLine[] = ocrLines.map((ocrLine, idx) => {
+        const overrideId = productOverrides[idx]
+        const product = overrideId
+          ? productSource.find((p) => p.product_id === overrideId)
+          : findProductForOCRLine(ocrLine, productSource)
+        const qty = parseOCRNumber(ocrLine.quantity?.value)
+        const isFree = ocrLine.payment_type?.value === "free"
+        return {
+          key: crypto.randomUUID(),
+          product_id: product?.product_id ?? "",
+          quantity: qty != null && qty > 0 ? String(qty) : "",
+          item_type: "main",
+          payment_type: isFree ? "free" : "paid",
+          usage_category: "sale",
+          memo: "",
+        }
+      })
+      setLines(newLines.length > 0 ? newLines : [newLine()])
+    }
+
+    // 매핑 요약 — 위젯이 표시
+    const headerHits = [
+      fields.bl_number?.value && "BL번호",
+      fields.invoice_number?.value && "인보이스",
+      fields.exchange_rate?.value && "환율",
+      fields.port?.value && "입항지",
+      fields.forwarder?.value && "포워더",
+      fields.arrival_date?.value && "입항일",
+    ].filter(Boolean) as string[]
+    setOcrSummary(
+      `헤더 ${headerHits.length}개 + 라인 ${ocrLines.length}건 반영${headerHits.length ? ` (${headerHits.join(", ")})` : ""}`,
+    )
   }
 
   function removeLine(key: string) {
@@ -338,6 +412,7 @@ export default function BLCreateDialog({
         warehouse_id: warehouseId || undefined,
         invoice_number: invoiceNumber.trim() || undefined,
         exchange_rate: exchangeRate ? Number(exchangeRate) : undefined,
+        payment_terms: paymentTerms.trim() || undefined,
         memo: memo.trim() || undefined,
       }
       const created = await fetchWithAuth<BLShipment>("/api/v1/bls", {
@@ -394,12 +469,19 @@ export default function BLCreateDialog({
         <DialogHeader>
           <DialogTitle>BL(입고) 신규 등록</DialogTitle>
           <p className="text-xs text-muted-foreground">
-            BL 헤더 + 라인 N개를 한 화면에서 등록합니다. OCR 자동매칭과 결제조건 위젯은 보조기능
-            PR 로 부착 예정.
+            BL 헤더 + 라인 N개를 한 화면에서 등록합니다. 면장 PDF 가 있으면 OCR 위젯으로 자동
+            채울 수 있어요.
           </p>
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* OCR — 면장 자동 매칭 */}
+          <BLOcrWidget
+            onApply={applyOcr}
+            summaryFromApply={ocrSummary}
+            manufacturers={manufacturers}
+          />
+
           <section className="grid grid-cols-2 gap-3">
             <FormField size="dense" label="BL 번호" required error={headerErrors.blNumber}>
               <Input
@@ -585,6 +667,33 @@ export default function BLCreateDialog({
               />
             </FormField>
           </section>
+
+          {/* 결제조건 — import/domestic 에서만 위젯, 그 외엔 일반 입력 */}
+          {inboundType === "import" || inboundType === "domestic" ? (
+            <section className="rounded-md border border-[var(--line)] p-3">
+              <div className="mb-2 text-[13px] font-semibold">결제조건</div>
+              <BLPaymentTermsWidget
+                inboundType={inboundType}
+                totalAmount={0}
+                initialValue={paymentTerms}
+                onChange={(v) => {
+                  markDirty()
+                  setPaymentTerms(v)
+                }}
+              />
+            </section>
+          ) : (
+            <FormField size="dense" label="결제조건">
+              <Input
+                value={paymentTerms}
+                onChange={(e) => {
+                  markDirty()
+                  setPaymentTerms(e.target.value)
+                }}
+                placeholder="예: T/T 30% + 잔금 BL+30일"
+              />
+            </FormField>
+          )}
 
           <section className="space-y-2">
             <div className="flex items-center justify-between">
