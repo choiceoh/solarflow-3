@@ -83,6 +83,20 @@ import { OrdersCompletedInsight } from './metrics/OrdersCompletedInsight'
 import { OrdersCancelledInsight } from './metrics/OrdersCancelledInsight'
 import { OrdersAvgUnitPriceWpInsight } from './metrics/OrdersAvgUnitPriceWpInsight'
 import { OrdersShortageInsight } from './metrics/OrdersShortageInsight'
+import { ProcurementLcSettledInsight } from './metrics/ProcurementLcSettledInsight'
+import { ProcurementLcAvgAmountInsight } from './metrics/ProcurementLcAvgAmountInsight'
+import { ProcurementLcProgressInsight } from './metrics/ProcurementLcProgressInsight'
+import { ProcurementBlArrivedInsight } from './metrics/ProcurementBlArrivedInsight'
+import { ProcurementBlScheduledInsight } from './metrics/ProcurementBlScheduledInsight'
+import { ProcurementBlCompletedInsight } from './metrics/ProcurementBlCompletedInsight'
+import { ProcurementBlErpDoneInsight } from './metrics/ProcurementBlErpDoneInsight'
+import { ProcurementTtCompletedCountInsight } from './metrics/ProcurementTtCompletedCountInsight'
+import { ProcurementTtAvgAmountInsight } from './metrics/ProcurementTtAvgAmountInsight'
+import { ProcurementTtOrphanInsight } from './metrics/ProcurementTtOrphanInsight'
+import { ProcurementPoAvgMwInsight } from './metrics/ProcurementPoAvgMwInsight'
+import { ProcurementPoChangedInsight } from './metrics/ProcurementPoChangedInsight'
+import { ProcurementPoTotalInsight } from './metrics/ProcurementPoTotalInsight'
+import { ProcurementPoShippingRatioInsight } from './metrics/ProcurementPoShippingRatioInsight'
 
 export interface InsightEntry {
   // KPI 타일이 보낼 식별자 (예: 'outbound.count') — URL 에 그대로 들어감.
@@ -495,6 +509,84 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'orders.shortage',
     shortLabel: '충당 부족',
     render: () => <OrdersShortageInsight />,
+  },
+
+  // Procurement LC 확장
+  'procurement.lc_settled': {
+    id: 'procurement.lc_settled',
+    shortLabel: 'L/C 결제 완료',
+    render: () => <ProcurementLcSettledInsight />,
+  },
+  'procurement.lc_avg_amount': {
+    id: 'procurement.lc_avg_amount',
+    shortLabel: 'L/C 평균 개설액',
+    render: () => <ProcurementLcAvgAmountInsight />,
+  },
+  'procurement.lc_progress': {
+    id: 'procurement.lc_progress',
+    shortLabel: 'L/C 진행률',
+    render: () => <ProcurementLcProgressInsight />,
+  },
+
+  // Procurement BL 확장
+  'procurement.bl_arrived': {
+    id: 'procurement.bl_arrived',
+    shortLabel: 'B/L 입항',
+    render: () => <ProcurementBlArrivedInsight />,
+  },
+  'procurement.bl_scheduled': {
+    id: 'procurement.bl_scheduled',
+    shortLabel: 'B/L 입고 예정',
+    render: () => <ProcurementBlScheduledInsight />,
+  },
+  'procurement.bl_completed': {
+    id: 'procurement.bl_completed',
+    shortLabel: 'B/L 입고 완료',
+    render: () => <ProcurementBlCompletedInsight />,
+  },
+  'procurement.bl_erp_done': {
+    id: 'procurement.bl_erp_done',
+    shortLabel: 'B/L ERP 마감',
+    render: () => <ProcurementBlErpDoneInsight />,
+  },
+
+  // Procurement TT 확장
+  'procurement.tt_completed_count': {
+    id: 'procurement.tt_completed_count',
+    shortLabel: 'T/T 완료 건수',
+    render: () => <ProcurementTtCompletedCountInsight />,
+  },
+  'procurement.tt_avg_amount': {
+    id: 'procurement.tt_avg_amount',
+    shortLabel: 'T/T 평균 송금',
+    render: () => <ProcurementTtAvgAmountInsight />,
+  },
+  'procurement.tt_orphan': {
+    id: 'procurement.tt_orphan',
+    shortLabel: 'T/T PO 미연결',
+    render: () => <ProcurementTtOrphanInsight />,
+  },
+
+  // Procurement PO 확장
+  'procurement.po_avg_mw': {
+    id: 'procurement.po_avg_mw',
+    shortLabel: 'PO 평균 용량',
+    render: () => <ProcurementPoAvgMwInsight />,
+  },
+  'procurement.po_changed': {
+    id: 'procurement.po_changed',
+    shortLabel: '변경계약 PO',
+    render: () => <ProcurementPoChangedInsight />,
+  },
+  'procurement.po_total': {
+    id: 'procurement.po_total',
+    shortLabel: 'PO 전체',
+    render: () => <ProcurementPoTotalInsight />,
+  },
+  'procurement.po_shipping_ratio': {
+    id: 'procurement.po_shipping_ratio',
+    shortLabel: 'PO 운송중 비중',
+    render: () => <ProcurementPoShippingRatioInsight />,
   },
 }
 
