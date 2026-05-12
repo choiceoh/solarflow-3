@@ -1,9 +1,5 @@
 package po
 
-import (
-	"solarflow-backend/internal/model"
-)
-
 // POLineItem — 발주 라인아이템(품목 명세) 구조체
 // 비유: "발주 품목 명세서" — 계약서에 붙는 개별 품목(규격, 수량, 단가) 정보
 type POLineItem struct {
@@ -23,7 +19,7 @@ type POLineItem struct {
 // 비유: 품목 명세서에 품번 카탈로그 카드가 함께 붙어 있는 것
 type POLineWithProduct struct {
 	POLineItem
-	Products *model.ProductSummaryForPOLine `json:"products"`
+	Products *ProductSummaryForPOLine `json:"products"`
 }
 
 // CreatePOLineRequest — 라인아이템 등록 시 클라이언트가 보내는 데이터
@@ -78,4 +74,14 @@ func (req *UpdatePOLineRequest) Validate() string {
 		return "quantity는 양수여야 합니다"
 	}
 	return ""
+}
+
+// ProductSummaryForPOLine — PO 라인아이템 조회 시 함께 반환되는 품번 요약 정보.
+// PR-C2 에서 model 패키지에서 PO 도메인으로 이동 (LC 가 colocation 됐으니 cycle 없음).
+type ProductSummaryForPOLine struct {
+	ProductCode    string `json:"product_code"`
+	ProductName    string `json:"product_name"`
+	SpecWP         int    `json:"spec_wp"`
+	ModuleWidthMM  int    `json:"module_width_mm"`
+	ModuleHeightMM int    `json:"module_height_mm"`
 }

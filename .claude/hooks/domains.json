@@ -85,6 +85,75 @@
       "decisions": [
         "D-087"
       ]
+    },
+    "lc": {
+      "display_name": "신용장 (L/C)",
+      "feature_id": "tx.lc",
+      "pack": "module-finance",
+      "tenants": [
+        "cable",
+        "topsolar"
+      ],
+      "tables": [
+        "lc_records",
+        "lc_line_items",
+        "lc_schedules"
+      ],
+      "depends_on": [
+        "po",
+        "products",
+        "bl"
+      ],
+      "paths": [
+        "backend/internal/domains/lc/",
+        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx"
+      ],
+      "blast_radius": [
+        "LC model 필드 추가/삭제 — backend/internal/domains/lc/handler.go (Validation 흐름) / frontend/src/packs/module-finance/pages/ProcurementPage.tsx (LC 탭 form) / backend/migrations/ + check_schema.sh",
+        "LC 라인 item_type/payment_type 허용 값 변경 — backend/internal/domains/lc/model_line.go 의 validItemTypes/validPaymentTypes / backend/internal/domains/bl/model_line.go 의 BL 측 dup (PR-D 에서 internal/validation 분리)",
+        "LC 라인이 PO 라인 연결 (POLineID) — uuidRe 매칭 (LC POLineID UUID 형식 검증) / po.ProductSummaryForPOLine 의존 — po 도메인 변경 시 import 영향",
+        "LC 외부 사용 (io_import_parsers) — import \"solarflow-backend/internal/domains/lc\" + lc.X prefix"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh",
+        "cd backend && go test ./internal/domains/lc/...",
+        "cd backend && go test ./internal/handler"
+      ],
+      "decisions": [
+        "D-087"
+      ]
+    },
+    "tt": {
+      "display_name": "송금 (T/T)",
+      "feature_id": "tx.tt",
+      "pack": "module-finance",
+      "tenants": [
+        "cable",
+        "topsolar"
+      ],
+      "tables": [
+        "tt_remittances"
+      ],
+      "depends_on": [
+        "po"
+      ],
+      "paths": [
+        "backend/internal/domains/tt/",
+        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx"
+      ],
+      "blast_radius": [
+        "TT model 필드 추가/삭제 — backend/internal/domains/tt/handler.go (Validation 흐름) / frontend/src/packs/module-finance/pages/ProcurementPage.tsx (TT 탭 form) / backend/migrations/ + check_schema.sh",
+        "TT 상태 (status) 전이 변경 — backend/internal/domains/tt/model.go 의 validTTStatuses / 프론트 status 표시 컴포넌트",
+        "TT 외부 사용 (io_import_parsers) — import \"solarflow-backend/internal/domains/tt\" + tt.X prefix"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh",
+        "cd backend && go test ./internal/domains/tt/...",
+        "cd backend && go test ./internal/handler"
+      ],
+      "decisions": []
     }
   },
   "path_to_domain_fallback": [

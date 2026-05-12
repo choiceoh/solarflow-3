@@ -1,4 +1,4 @@
-package handler
+package tt
 
 import (
 	"encoding/json"
@@ -13,7 +13,6 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -158,7 +157,7 @@ func (h *TTHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		w.Header().Set("X-Total-Count", "0")
-		response.RespondJSON(w, http.StatusOK, []model.TTWithRelations{})
+		response.RespondJSON(w, http.StatusOK, []TTWithRelations{})
 		return
 	}
 
@@ -173,7 +172,7 @@ func (h *TTHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var remittances []model.TTWithRelations
+	var remittances []TTWithRelations
 	if err := json.Unmarshal(data, &remittances); err != nil {
 		log.Printf("[TT 목록 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -274,7 +273,7 @@ func (h *TTHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var remittances []model.TTWithRelations
+	var remittances []TTWithRelations
 	if err := json.Unmarshal(data, &remittances); err != nil {
 		log.Printf("[TT 상세 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -292,7 +291,7 @@ func (h *TTHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Create — POST /api/v1/tts — TT 등록
 // 비유: 새 송금 전표를 작성하여 관리실에 보관하는 것
 func (h *TTHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateTTRequest
+	var req CreateTTRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[TT 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -314,7 +313,7 @@ func (h *TTHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var created []model.TTRemittance
+	var created []TTRemittance
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[TT 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -334,7 +333,7 @@ func (h *TTHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *TTHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req model.UpdateTTRequest
+	var req UpdateTTRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[TT 수정 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -357,7 +356,7 @@ func (h *TTHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.TTRemittance
+	var updated []TTRemittance
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[TT 수정 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")

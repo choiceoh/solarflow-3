@@ -1,6 +1,10 @@
-package model
+package lc
 
-import "regexp"
+import (
+	"regexp"
+
+	"solarflow-backend/internal/domains/po"
+)
 
 // LC 라인아이템 유효성 검증 spec. PR-C 시점 BL (domains/bl/model_line.go) 의
 // 동일 spec 과 dup — PR-D 에서 공통 lib (예: internal/validation) 분리 검토.
@@ -36,7 +40,7 @@ type LCLineItem struct {
 // 비유: LC 품목 명세표에 품번 카탈로그 카드가 함께 붙어 있는 것
 type LCLineWithProduct struct {
 	LCLineItem
-	Products *ProductSummaryForPOLine `json:"products"`
+	Products *po.ProductSummaryForPOLine `json:"products"`
 }
 
 // CreateLCLineRequest — LC 라인아이템 등록 요청

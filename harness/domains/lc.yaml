@@ -1,0 +1,87 @@
+# LC (Letter of Credit) — 도메인 manifest
+#
+# PR-C2 의 LC 이주. PR-B trade-off (ProductSummaryForPOLine model 잔류) 도 함께 정리.
+# 형식 명세: harness/domains/README.md
+
+schema_version: 1
+
+id: lc
+display_name: "신용장 (L/C)"
+
+# === Pack / Feature / Tenant 배선 ===
+pack: module-finance
+feature_id: tx.lc
+visible_to: module
+
+# === 코드 위치 ===
+# PR-C2 완료 — backend colocation. frontend 는 ProcurementPage 통합 페이지.
+paths:
+  backend:
+    - backend/internal/domains/lc/   # colocation 완료 — model + model_line + model_schedule_response + handler + dashboard + util + audit
+  frontend:
+    - frontend/src/packs/module-finance/pages/ProcurementPage.tsx   # 통합 페이지 — PR-D 에서 분리
+  migrations:
+    - backend/migrations/00[7-9]_*lc*.sql
+    - backend/migrations/01[0-9]_*lc*.sql
+    - backend/migrations/0[2-9]_*lc*.sql
+
+# === DB ===
+tables:
+  - lc_records
+  - lc_line_items
+  - lc_schedules
+
+# === 의존 도메인 ===
+depends_on:
+  - po            # LCLine.POLineID, PR-B trade-off 의 ProductSummaryForPOLine 도 이제 po 에서 import
+  - products      # LCLine.ProductID
+  - bl            # BL 라인이 LC 라인 연결 (D-087 역방향)
+
+# === 외부 사용자 ===
+external_users:
+  - backend/internal/handler/io_import_parsers.go   # parseLCRow
+
+# === Blast Radius ===
+blast_radius:
+  - description: "LC model 필드 추가/삭제"
+    must_check:
+      - "backend/internal/domains/lc/handler.go (Validation 흐름)"
+      - "frontend/src/packs/module-finance/pages/ProcurementPage.tsx (LC 탭 form)"
+      - "backend/migrations/ + check_schema.sh"
+
+  - description: "LC 라인 item_type/payment_type 허용 값 변경"
+    must_check:
+      - "backend/internal/domains/lc/model_line.go 의 validItemTypes/validPaymentTypes"
+      - "backend/internal/domains/bl/model_line.go 의 BL 측 dup (PR-D 에서 internal/validation 분리)"
+
+  - description: "LC 라인이 PO 라인 연결 (POLineID)"
+    must_check:
+      - "uuidRe 매칭 (LC POLineID UUID 형식 검증)"
+      - "po.ProductSummaryForPOLine 의존 — po 도메인 변경 시 import 영향"
+
+  - description: "LC 외부 사용 (io_import_parsers)"
+    must_check:
+      - "import \"solarflow-backend/internal/domains/lc\" + lc.X prefix"
+
+# === 자동 실행 검증 ===
+verify_scripts:
+  - command: scripts/verify_changed.sh
+    when: always
+  - command: backend/scripts/check_schema.sh
+    when: model_or_migration_changed
+  - command: "cd backend && go test ./internal/domains/lc/..."
+    when: handler_changed
+  - command: "cd backend && go test ./internal/handler"
+    when: route_changed
+
+# === API 라우트 ===
+api_routes:
+  - GET    /api/v1/lcs
+  - POST   /api/v1/lcs
+  - PUT    /api/v1/lcs/:id
+  - DELETE /api/v1/lcs/:id
+  - GET    /api/v1/lcs/:id
+
+owners: [choiceoh]
+decisions:
+  - D-087   # PO ↔ LC ↔ BL 라인 연결

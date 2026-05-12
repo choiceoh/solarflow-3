@@ -14,7 +14,9 @@ import (
 	"regexp"
 	"strings"
 
+	"solarflow-backend/internal/domains/lc"
 	"solarflow-backend/internal/domains/po"
+	"solarflow-backend/internal/domains/tt"
 	"time"
 
 	"solarflow-backend/internal/model"
@@ -654,26 +656,26 @@ func parsePOLineRow(rowNum int, row map[string]interface{}, productID string, wa
 }
 
 // parseLCRow — LC 행을 CreateLCRequest로 변환. po_id/bank_id/companyID는 호출 측이 해석.
-func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID string) (model.CreateLCRequest, []model.ImportError) {
+func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID string) (lc.CreateLCRequest, []model.ImportError) {
 	amountUsd, aErr := requireFloat(rowNum, row, "amount_usd")
 	if aErr != nil {
-		return model.CreateLCRequest{}, []model.ImportError{*aErr}
+		return lc.CreateLCRequest{}, []model.ImportError{*aErr}
 	}
 	if amountUsd <= 0 {
-		return model.CreateLCRequest{}, []model.ImportError{{
+		return lc.CreateLCRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "amount_usd", Message: "amount_usd는 양수여야 합니다",
 		}}
 	}
 	for _, f := range []string{"open_date", "maturity_date"} {
 		if e := validateDateField(rowNum, row, f); e != nil {
-			return model.CreateLCRequest{}, []model.ImportError{*e}
+			return lc.CreateLCRequest{}, []model.ImportError{*e}
 		}
 	}
 	if e := validateDateOrder(rowNum, row, "open_date", "maturity_date"); e != nil {
-		return model.CreateLCRequest{}, []model.ImportError{*e}
+		return lc.CreateLCRequest{}, []model.ImportError{*e}
 	}
 	if e := validateMigrationNumber(rowNum, "lc_number", getString(row, "lc_number"), "LC"); e != nil {
-		return model.CreateLCRequest{}, []model.ImportError{*e}
+		return lc.CreateLCRequest{}, []model.ImportError{*e}
 	}
 
 	// usance_type — 라벨/코드 양쪽 받기. 빈 값이면 nil 유지.
@@ -690,14 +692,14 @@ func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID 
 			}
 		} else {
 			// 알 수 없는 값은 검증 실패로.
-			return model.CreateLCRequest{}, []model.ImportError{{
+			return lc.CreateLCRequest{}, []model.ImportError{{
 				Row: rowNum, Field: "usance_type",
 				Message: "usance_type은 BANKER'S USANCE / SHIPPER'S USANCE / AT SIGHT 중 하나여야 합니다",
 			}}
 		}
 	}
 
-	req := model.CreateLCRequest{
+	req := lc.CreateLCRequest{
 		POID:         poID,
 		LCNumber:     getStringPtr(row, "lc_number"),
 		BankID:       bankID,
@@ -719,25 +721,25 @@ func parseLCRow(rowNum int, row map[string]interface{}, poID, bankID, companyID 
 }
 
 // parseTTRow — T/T 행을 CreateTTRequest로 변환. po_id는 호출 측이 해석.
-func parseTTRow(rowNum int, row map[string]interface{}, poID string) (model.CreateTTRequest, []model.ImportError) {
+func parseTTRow(rowNum int, row map[string]interface{}, poID string) (tt.CreateTTRequest, []model.ImportError) {
 	if e := validateDateField(rowNum, row, "remit_date"); e != nil {
-		return model.CreateTTRequest{}, []model.ImportError{*e}
+		return tt.CreateTTRequest{}, []model.ImportError{*e}
 	}
 	amountUsd, aErr := requireFloat(rowNum, row, "amount_usd")
 	if aErr != nil {
-		return model.CreateTTRequest{}, []model.ImportError{*aErr}
+		return tt.CreateTTRequest{}, []model.ImportError{*aErr}
 	}
 	if amountUsd <= 0 {
-		return model.CreateTTRequest{}, []model.ImportError{{
+		return tt.CreateTTRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "amount_usd", Message: "amount_usd는 양수여야 합니다",
 		}}
 	}
 	exchangeRate, exErr := requireFloat(rowNum, row, "exchange_rate")
 	if exErr != nil {
-		return model.CreateTTRequest{}, []model.ImportError{*exErr}
+		return tt.CreateTTRequest{}, []model.ImportError{*exErr}
 	}
 	if exchangeRate <= 0 {
-		return model.CreateTTRequest{}, []model.ImportError{{
+		return tt.CreateTTRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "exchange_rate", Message: "exchange_rate는 양수여야 합니다",
 		}}
 	}
@@ -747,14 +749,14 @@ func parseTTRow(rowNum int, row map[string]interface{}, poID string) (model.Crea
 		status = alias
 	}
 	if !allowedTTStatusesForImport[status] {
-		return model.CreateTTRequest{}, []model.ImportError{{
+		return tt.CreateTTRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "status",
 			Message: "status는 planned/completed 또는 예정/완료 중 하나여야 합니다",
 		}}
 	}
 
 	amountKrw := amountUsd * exchangeRate
-	req := model.CreateTTRequest{
+	req := tt.CreateTTRequest{
 		POID:         poID,
 		RemitDate:    getStringPtr(row, "remit_date"),
 		AmountUSD:    amountUsd,

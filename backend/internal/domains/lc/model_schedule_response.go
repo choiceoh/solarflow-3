@@ -1,4 +1,4 @@
-package model
+package lc
 
 // LcFeeResponse — LC 수수료 계산 응답
 type LcFeeResponse struct {
