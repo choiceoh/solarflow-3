@@ -14,11 +14,14 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
+	"solarflow-backend/internal/rpcutil"
 )
 
 // outboundDefaultLimit / outboundMaxLimit — Supabase Cloud PostgREST 가 강제하는
@@ -550,25 +553,6 @@ func (h *OutboundHandler) idsBySearch(table, idColumn string, columns []string, 
 	return ids, nil
 }
 
-// parseLimitOffset — ?limit, ?offset 파싱 + 클램프.
-func parseLimitOffset(r *http.Request, defaultLimit, maxLimit int) (limit, offset int) {
-	limit = defaultLimit
-	if raw := r.URL.Query().Get("limit"); raw != "" {
-		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
-			limit = v
-		}
-	}
-	if limit > maxLimit {
-		limit = maxLimit
-	}
-	if raw := r.URL.Query().Get("offset"); raw != "" {
-		if v, err := strconv.Atoi(raw); err == nil && v >= 0 {
-			offset = v
-		}
-	}
-	return limit, offset
-}
-
 // parseSort — ?sort=<column>&?order=<asc|desc> 파싱. 화이트리스트 검증.
 // 기본값은 outbound_date desc (운영자가 가장 최근 출고를 먼저 보길 기대).
 func parseOutboundSort(r *http.Request) (column string, ascending bool) {
@@ -762,7 +746,7 @@ func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 	sortCol, asc := parseOutboundSort(r)
 	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
-	limit, offset := parseLimitOffset(r, outboundDefaultLimit, outboundMaxLimit)
+	limit, offset := handlerutil.ParseLimitOffset(r, outboundDefaultLimit, outboundMaxLimit)
 	query = query.Range(offset, offset+limit-1, "")
 
 	data, count, err := query.Execute()
@@ -948,7 +932,7 @@ func (h *OutboundHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, code, msg)
 		return
 	}
-	writeAuditLog(h.DB, r, "outbounds", created.OutboundID, "create", nil, auditRawFromValue(created), "")
+	audit.WriteLog(h.DB, r, "outbounds", created.OutboundID, "create", nil, audit.RawFromValue(created), "")
 	response.RespondJSON(w, code, created)
 }
 
@@ -977,7 +961,7 @@ func (h *OutboundHandler) createOutboundCore(req model.CreateOutboundRequest) (m
 	}
 
 	outboundID := uuid.NewString()
-	if err := callRPC(h.DB, "sf_create_outbound", createOutboundRPCRequest{
+	if err := rpcutil.CallRPC(h.DB, "sf_create_outbound", createOutboundRPCRequest{
 		OutboundID: outboundID,
 		Outbound:   req,
 		BLItems:    blItemsParam,
@@ -1012,7 +996,7 @@ func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "outbounds", "outbound_id", id)
+	oldSnapshot, _, oldErr := audit.Snapshot(h.DB, "outbounds", "outbound_id", id)
 	if oldErr != nil {
 		log.Printf("[출고 수정 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
@@ -1071,13 +1055,13 @@ func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 		blItemsParam = &blItems
 	}
 
-	if err := callRPC(h.DB, "sf_update_outbound", updateOutboundRPCRequest{
+	if err := rpcutil.CallRPC(h.DB, "sf_update_outbound", updateOutboundRPCRequest{
 		OutboundID: id,
 		Outbound:   req,
 		BLItems:    blItemsParam,
 	}); err != nil {
 		log.Printf("[출고 트랜잭션 수정 실패] outbound_id=%s err=%v", id, err)
-		if isRPCNotFound(err) {
+		if rpcutil.IsRPCNotFound(err) {
 			response.RespondError(w, http.StatusNotFound, "출고를 찾을 수 없습니다")
 			return
 		}
@@ -1095,7 +1079,7 @@ func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "출고 수정 결과를 확인할 수 없습니다")
 		return
 	}
-	auditEntityByRouteID(h.DB, r, "outbounds", "outbound_id", "update", oldSnapshot, auditRawFromValue(updated), "")
+	audit.EntityByRouteID(h.DB, r, "outbounds", "outbound_id", "update", oldSnapshot, audit.RawFromValue(updated), "")
 	response.RespondJSON(w, http.StatusOK, updated)
 }
 
@@ -1103,7 +1087,7 @@ func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *OutboundHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "outbounds", "outbound_id", id)
+	oldSnapshot, _, oldErr := audit.Snapshot(h.DB, "outbounds", "outbound_id", id)
 	if oldErr != nil {
 		log.Printf("[출고 취소 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
@@ -1117,9 +1101,9 @@ func (h *OutboundHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[출고 취소 전 매출 스냅샷 조회 실패] outbound_id=%s err=%v", id, err)
 	}
 
-	if err := callRPC(h.DB, "sf_delete_outbound", deleteOutboundRPCRequest{OutboundID: id}); err != nil {
+	if err := rpcutil.CallRPC(h.DB, "sf_delete_outbound", deleteOutboundRPCRequest{OutboundID: id}); err != nil {
 		log.Printf("[출고 트랜잭션 취소 실패] id=%s, err=%v", id, err)
-		if isRPCNotFound(err) {
+		if rpcutil.IsRPCNotFound(err) {
 			response.RespondError(w, http.StatusNotFound, "출고를 찾을 수 없습니다")
 			return
 		}
@@ -1127,11 +1111,11 @@ func (h *OutboundHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newSnapshot, _, snapErr := auditSnapshot(h.DB, "outbounds", "outbound_id", id)
+	newSnapshot, _, snapErr := audit.Snapshot(h.DB, "outbounds", "outbound_id", id)
 	if snapErr != nil {
 		log.Printf("[출고 취소 후 감사 스냅샷 조회 실패] id=%s err=%v", id, snapErr)
 	}
-	auditEntityByRouteID(h.DB, r, "outbounds", "outbound_id", "delete", oldSnapshot, newSnapshot, "soft_cancel")
+	audit.EntityByRouteID(h.DB, r, "outbounds", "outbound_id", "delete", oldSnapshot, newSnapshot, "soft_cancel")
 
 	for _, sale := range linkedSales {
 		action := "update"
@@ -1140,14 +1124,14 @@ func (h *OutboundHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			action = "delete"
 			note = "outbound_soft_cancel"
 		}
-		after, found, afterErr := auditSnapshot(h.DB, "sales", "sale_id", sale.SaleID)
+		after, found, afterErr := audit.Snapshot(h.DB, "sales", "sale_id", sale.SaleID)
 		if afterErr != nil {
 			log.Printf("[출고 취소 후 매출 감사 스냅샷 조회 실패] sale_id=%s err=%v", sale.SaleID, afterErr)
 		}
 		if !found {
 			after = nil
 		}
-		writeAuditLog(h.DB, r, "sales", sale.SaleID, action, auditRawFromValue(sale), after, note)
+		audit.WriteLog(h.DB, r, "sales", sale.SaleID, action, audit.RawFromValue(sale), after, note)
 	}
 
 	response.RespondJSON(w, http.StatusOK, struct {

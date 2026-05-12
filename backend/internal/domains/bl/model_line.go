@@ -1,26 +1,23 @@
 package bl
 
-import "regexp"
-
-// UUID v4/일반 UUID 형식 검증 (소문자/대문자 허용)
-var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+import "solarflow-backend/internal/validation"
 
 // BLLineItem — B/L 라인아이템(화물 명세) 구조체
 // 비유: "화물 명세서" — 선적 서류에 붙는 개별 품목(규격, 수량, 단가, 용도) 정보
 type BLLineItem struct {
-	BLLineID        string   `json:"bl_line_id"`
-	BLID            string   `json:"bl_id"`
-	ProductID       string   `json:"product_id"`
-	POLineID        *string  `json:"po_line_id,omitempty" db:"po_line_id"` // D-087: PO 발주품목과 연결 (nullable)
-	Quantity        int      `json:"quantity"`
-	CapacityKW      float64  `json:"capacity_kw"`
-	ItemType        string   `json:"item_type"`
-	PaymentType     string   `json:"payment_type"`
+	BLLineID         string   `json:"bl_line_id"`
+	BLID             string   `json:"bl_id"`
+	ProductID        string   `json:"product_id"`
+	POLineID         *string  `json:"po_line_id,omitempty" db:"po_line_id"` // D-087: PO 발주품목과 연결 (nullable)
+	Quantity         int      `json:"quantity"`
+	CapacityKW       float64  `json:"capacity_kw"`
+	ItemType         string   `json:"item_type"`
+	PaymentType      string   `json:"payment_type"`
 	InvoiceAmountUSD *float64 `json:"invoice_amount_usd"`
-	UnitPriceUSDWp  *float64 `json:"unit_price_usd_wp"`
-	UnitPriceKRWWp  *float64 `json:"unit_price_krw_wp"`
-	UsageCategory   string   `json:"usage_category"`
-	Memo            *string  `json:"memo"`
+	UnitPriceUSDWp   *float64 `json:"unit_price_usd_wp"`
+	UnitPriceKRWWp   *float64 `json:"unit_price_krw_wp"`
+	UsageCategory    string   `json:"usage_category"`
+	Memo             *string  `json:"memo"`
 }
 
 // BLLineWithProduct — 품번 정보를 포함한 B/L 라인아이템 조회 결과
@@ -37,18 +34,6 @@ type ProductSummaryForBLLine struct {
 	SpecWP         int    `json:"spec_wp"`
 	ModuleWidthMM  int    `json:"module_width_mm"`
 	ModuleHeightMM int    `json:"module_height_mm"`
-}
-
-// 허용되는 item_type 값
-var validItemTypes = map[string]bool{
-	"main":  true,
-	"spare": true,
-}
-
-// 허용되는 payment_type 값
-var validPaymentTypes = map[string]bool{
-	"paid": true,
-	"free": true,
 }
 
 // 허용되는 usage_category 값
@@ -100,13 +85,13 @@ func (req *CreateBLLineRequest) Validate() string {
 	if req.ItemType == "" {
 		return "item_type은 필수 항목입니다"
 	}
-	if !validItemTypes[req.ItemType] {
+	if !validation.ItemTypes[req.ItemType] {
 		return "item_type은 \"main\", \"spare\" 중 하나여야 합니다"
 	}
 	if req.PaymentType == "" {
 		return "payment_type은 필수 항목입니다"
 	}
-	if !validPaymentTypes[req.PaymentType] {
+	if !validation.PaymentTypes[req.PaymentType] {
 		return "payment_type은 \"paid\", \"free\" 중 하나여야 합니다"
 	}
 	if req.UsageCategory == "" {
@@ -124,7 +109,7 @@ func (req *CreateBLLineRequest) Validate() string {
 	if req.UnitPriceKRWWp != nil && *req.UnitPriceKRWWp <= 0 {
 		return "unit_price_krw_wp는 양수여야 합니다"
 	}
-	if req.POLineID != nil && *req.POLineID != "" && !uuidRe.MatchString(*req.POLineID) {
+	if req.POLineID != nil && *req.POLineID != "" && !validation.UUIDRe.MatchString(*req.POLineID) {
 		return "po_line_id는 UUID 형식이어야 합니다"
 	}
 	return ""
@@ -158,10 +143,10 @@ func (req *UpdateBLLineRequest) Validate() string {
 	if req.CapacityKW != nil && *req.CapacityKW <= 0 {
 		return "capacity_kw는 양수여야 합니다"
 	}
-	if req.ItemType != nil && !validItemTypes[*req.ItemType] {
+	if req.ItemType != nil && !validation.ItemTypes[*req.ItemType] {
 		return "item_type은 \"main\", \"spare\" 중 하나여야 합니다"
 	}
-	if req.PaymentType != nil && !validPaymentTypes[*req.PaymentType] {
+	if req.PaymentType != nil && !validation.PaymentTypes[*req.PaymentType] {
 		return "payment_type은 \"paid\", \"free\" 중 하나여야 합니다"
 	}
 	if req.UsageCategory != nil && !validUsageCategories[*req.UsageCategory] {
@@ -176,7 +161,7 @@ func (req *UpdateBLLineRequest) Validate() string {
 	if req.UnitPriceKRWWp != nil && *req.UnitPriceKRWWp <= 0 {
 		return "unit_price_krw_wp는 양수여야 합니다"
 	}
-	if req.POLineID != nil && *req.POLineID != "" && !uuidRe.MatchString(*req.POLineID) {
+	if req.POLineID != nil && *req.POLineID != "" && !validation.UUIDRe.MatchString(*req.POLineID) {
 		return "po_line_id는 UUID 형식이어야 합니다"
 	}
 	return ""

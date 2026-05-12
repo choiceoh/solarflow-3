@@ -57,11 +57,11 @@ type baroIncomingShipmentRow struct {
 }
 
 type baroIncomingLineRow struct {
-	BLLineID   string                         `json:"bl_line_id"`
-	BLID       string                         `json:"bl_id"`
-	ProductID  string                         `json:"product_id"`
-	Quantity   int                            `json:"quantity"`
-	CapacityKW float64                        `json:"capacity_kw"`
+	BLLineID   string                      `json:"bl_line_id"`
+	BLID       string                      `json:"bl_id"`
+	ProductID  string                      `json:"product_id"`
+	Quantity   int                         `json:"quantity"`
+	CapacityKW float64                     `json:"capacity_kw"`
 	Products   *bl.ProductSummaryForBLLine `json:"products"`
 }
 

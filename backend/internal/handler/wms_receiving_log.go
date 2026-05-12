@@ -50,25 +50,25 @@ func init() {
 
 // ReceivingLog — 입고 검수 1건.
 type ReceivingLog struct {
-	ReceivingID            string     `json:"receiving_id"`
-	SourceType             string     `json:"source_type"`
-	BLLineID               *string    `json:"bl_line_id,omitempty"`
-	IntercompanyRequestID  *string    `json:"intercompany_request_id,omitempty"`
-	WarehouseID            string     `json:"warehouse_id"`
-	ProductID              *string    `json:"product_id,omitempty"`
-	ProductCodeSnapshot    *string    `json:"product_code_snapshot,omitempty"`
-	ProductNameSnapshot    *string    `json:"product_name_snapshot,omitempty"`
-	QuantityExpected       int        `json:"quantity_expected"`
-	QuantityReceived       int        `json:"quantity_received"`
-	QuantityVariance       int        `json:"quantity_variance"` // GENERATED
-	LocationID             *string    `json:"location_id,omitempty"`
-	LocationCodeSnapshot   *string    `json:"location_code_snapshot,omitempty"`
-	ReceiverUserID         *string    `json:"receiver_user_id,omitempty"`
-	ReceivedAt             *time.Time `json:"received_at,omitempty"`
-	VarianceReason         *string    `json:"variance_reason,omitempty"`
-	VarianceNote           *string    `json:"variance_note,omitempty"`
-	PhotoAttachmentIDs     []string   `json:"photo_attachment_ids,omitempty"`
-	Notes                  *string    `json:"notes,omitempty"`
+	ReceivingID           string     `json:"receiving_id"`
+	SourceType            string     `json:"source_type"`
+	BLLineID              *string    `json:"bl_line_id,omitempty"`
+	IntercompanyRequestID *string    `json:"intercompany_request_id,omitempty"`
+	WarehouseID           string     `json:"warehouse_id"`
+	ProductID             *string    `json:"product_id,omitempty"`
+	ProductCodeSnapshot   *string    `json:"product_code_snapshot,omitempty"`
+	ProductNameSnapshot   *string    `json:"product_name_snapshot,omitempty"`
+	QuantityExpected      int        `json:"quantity_expected"`
+	QuantityReceived      int        `json:"quantity_received"`
+	QuantityVariance      int        `json:"quantity_variance"` // GENERATED
+	LocationID            *string    `json:"location_id,omitempty"`
+	LocationCodeSnapshot  *string    `json:"location_code_snapshot,omitempty"`
+	ReceiverUserID        *string    `json:"receiver_user_id,omitempty"`
+	ReceivedAt            *time.Time `json:"received_at,omitempty"`
+	VarianceReason        *string    `json:"variance_reason,omitempty"`
+	VarianceNote          *string    `json:"variance_note,omitempty"`
+	PhotoAttachmentIDs    []string   `json:"photo_attachment_ids,omitempty"`
+	Notes                 *string    `json:"notes,omitempty"`
 }
 
 // CreateReceivingLogRequest — 등록 요청.

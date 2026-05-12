@@ -201,7 +201,9 @@ func (h *ManufacturerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "제조사 삭제에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "deleted"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "deleted"})
 }
 
 // ToggleStatus — PATCH /api/v1/manufacturers/{id}/status — 제조사 활성/비활성
@@ -223,7 +225,9 @@ func (h *ManufacturerHandler) ToggleStatus(w http.ResponseWriter, r *http.Reques
 		response.RespondError(w, http.StatusInternalServerError, "제조사 상태 변경에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "ok"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "ok"})
 }
 
 // UsageCounts — GET /api/v1/manufacturers/usage-counts — 제조사별 참조 건수 집계

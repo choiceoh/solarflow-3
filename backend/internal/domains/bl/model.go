@@ -45,7 +45,7 @@ type BLShipment struct {
 // 비유: 선적 서류에 법인 도장, 제조사 명함, 창고 안내가 함께 붙어 있는 것
 type BLWithRelations struct {
 	BLShipment
-	Companies     *model.CompanySummary        `json:"companies"`
+	Companies     *model.CompanySummary  `json:"companies"`
 	Manufacturers *BLManufacturerSummary `json:"manufacturers"`
 	Warehouses    *BLWarehouseSummary    `json:"warehouses"`
 }
@@ -73,7 +73,7 @@ type BLDetail struct {
 // BLDetailBase — B/L 상세 조회 시 본문 (제조사 상세 포함)
 type BLDetailBase struct {
 	BLShipment
-	Companies     *model.CompanySummary              `json:"companies"`
+	Companies     *model.CompanySummary        `json:"companies"`
 	Manufacturers *BLManufacturerDetailSummary `json:"manufacturers"`
 	Warehouses    *BLWarehouseDetailSummary    `json:"warehouses"`
 }

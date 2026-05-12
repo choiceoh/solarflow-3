@@ -14,6 +14,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
@@ -260,7 +261,7 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 	sortCol, asc := parseOrderSort(r)
 	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
-	limit, offset := parseLimitOffset(r, orderDefaultLimit, orderMaxLimit)
+	limit, offset := handlerutil.ParseLimitOffset(r, orderDefaultLimit, orderMaxLimit)
 	query = query.Range(offset, offset+limit-1, "")
 
 	data, count, err := query.Execute()
@@ -284,11 +285,11 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // OrderSummary — 수주 KPI 카드 응답.
 type OrderSummary struct {
-	Total           int64 `json:"total"`
-	ReceivedCount   int64 `json:"received_count"`
-	PartialCount    int64 `json:"partial_count"`
-	CompletedCount  int64 `json:"completed_count"`
-	CancelledCount  int64 `json:"cancelled_count"`
+	Total          int64 `json:"total"`
+	ReceivedCount  int64 `json:"received_count"`
+	PartialCount   int64 `json:"partial_count"`
+	CompletedCount int64 `json:"completed_count"`
+	CancelledCount int64 `json:"cancelled_count"`
 }
 
 // Summary — GET /api/v1/orders/summary — 수주 status 별 카운트 집계.

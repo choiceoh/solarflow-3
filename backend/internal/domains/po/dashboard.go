@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/response"
 )
 
@@ -18,43 +19,43 @@ import (
 // 이후: useFooDashboard → /api/v1/pos/dashboard (~수 KB)
 
 const (
-	poDashChunkSize    = 1000
-	poDashMaxChunks    = 50
-	poDashTrendMonths  = 24
-	poDashTopN         = 10
+	poDashChunkSize   = 1000
+	poDashMaxChunks   = 50
+	poDashTrendMonths = 24
+	poDashTopN        = 10
 )
 
 // POScope: lifetime|active|shipping. breakdowns 만 좁힘. trend24/totals 는 항상 전체 기준.
 //   - active   = !completed && !cancelled
 //   - shipping = status in (shipping, in_progress)
 type PODashboard struct {
-	Totals              PODashTotals          `json:"totals"`
-	Trend24             []PODashTrendPoint    `json:"trend24"`
-	StatusScope         string                `json:"status_scope"`
-	ByStatus            []PODashBreakdownRow  `json:"by_status"`
-	ByContractType      []PODashBreakdownRow  `json:"by_contract_type"`
-	ByManufacturerTop10 []PODashBreakdownRow  `json:"by_manufacturer_top10"`
+	Totals              PODashTotals         `json:"totals"`
+	Trend24             []PODashTrendPoint   `json:"trend24"`
+	StatusScope         string               `json:"status_scope"`
+	ByStatus            []PODashBreakdownRow `json:"by_status"`
+	ByContractType      []PODashBreakdownRow `json:"by_contract_type"`
+	ByManufacturerTop10 []PODashBreakdownRow `json:"by_manufacturer_top10"`
 }
 
 type PODashTotals struct {
-	Count                int     `json:"count"`
-	ActiveCount          int     `json:"active_count"`           // !completed && !cancelled
-	ShippingCount        int     `json:"shipping_count"`         // shipping | in_progress
-	CompletedCount       int     `json:"completed_count"`
-	CancelledCount       int     `json:"cancelled_count"`
-	TotalMw              float64 `json:"total_mw"`               // sum total_mw (전체)
-	ActiveMw             float64 `json:"active_mw"`              // active 만
-	ContractTypesCount   int     `json:"contract_types_count"`   // distinct contract_type
+	Count              int     `json:"count"`
+	ActiveCount        int     `json:"active_count"`   // !completed && !cancelled
+	ShippingCount      int     `json:"shipping_count"` // shipping | in_progress
+	CompletedCount     int     `json:"completed_count"`
+	CancelledCount     int     `json:"cancelled_count"`
+	TotalMw            float64 `json:"total_mw"`             // sum total_mw (전체)
+	ActiveMw           float64 `json:"active_mw"`            // active 만
+	ContractTypesCount int     `json:"contract_types_count"` // distinct contract_type
 }
 
 // PODashTrendPoint — contract_date 기반 월별 binning. distinct_contract_types 는 ContractTypes 화면 sparkline 용.
 type PODashTrendPoint struct {
-	Month                  string  `json:"month"`
-	Count                  int     `json:"count"`
-	ActiveCount            int     `json:"active_count"`
-	ShippingCount          int     `json:"shipping_count"`
-	TotalMw                float64 `json:"total_mw"`
-	DistinctContractTypes  int     `json:"distinct_contract_types"`
+	Month                 string  `json:"month"`
+	Count                 int     `json:"count"`
+	ActiveCount           int     `json:"active_count"`
+	ShippingCount         int     `json:"shipping_count"`
+	TotalMw               float64 `json:"total_mw"`
+	DistinctContractTypes int     `json:"distinct_contract_types"`
 }
 
 type PODashBreakdownRow struct {
@@ -231,7 +232,7 @@ func computePODashTrend24(pos []PurchaseOrder) []PODashTrendPoint {
 	labels := make([]string, poDashTrendMonths)
 	idx := make(map[string]int, poDashTrendMonths)
 	for i := 0; i < poDashTrendMonths; i++ {
-		t := now.AddDate(0, -(poDashTrendMonths-1-i), 0)
+		t := now.AddDate(0, -(poDashTrendMonths - 1 - i), 0)
 		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 		labels[i] = key
 		idx[key] = i
@@ -249,7 +250,7 @@ func computePODashTrend24(pos []PurchaseOrder) []PODashTrendPoint {
 		if p.ContractDate != nil {
 			date = *p.ContractDate
 		}
-		m := monthOf(date)
+		m := handlerutil.MonthOf(date)
 		if m == "" {
 			continue
 		}
@@ -329,7 +330,7 @@ func computePODashBreakdown(pos []PurchaseOrder, dim poDashDim, top int) []PODas
 			} else {
 				key = p.ManufacturerID
 			}
-			label = strPtrOr(p.ManufacturerName, "미지정")
+			label = handlerutil.StrPtrOr(p.ManufacturerName, "미지정")
 		}
 		a, ok := m[key]
 		if !ok {

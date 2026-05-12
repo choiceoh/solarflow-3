@@ -13,6 +13,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -236,7 +237,7 @@ func (h *BLHandler) List(w http.ResponseWriter, r *http.Request) {
 	sortCol, asc := parseBLSort(r)
 	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
-	limit, offset := parseLimitOffset(r, blDefaultLimit, blMaxLimit)
+	limit, offset := handlerutil.ParseLimitOffset(r, blDefaultLimit, blMaxLimit)
 	query = query.Range(offset, offset+limit-1, "")
 
 	data, count, err := query.Execute()
@@ -415,8 +416,8 @@ func (h *BLHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	// 비유: 선적 서류 + 화물 명세를 한 묶음으로 포장 (평탄 본문 + 라인)
 	detail := struct {
 		BLShipment
-		PONumber  *string                   `json:"po_number"`
-		LCNumber  *string                   `json:"lc_number"`
+		PONumber  *string             `json:"po_number"`
+		LCNumber  *string             `json:"lc_number"`
 		LineItems []BLLineWithProduct `json:"line_items"`
 	}{
 		BLShipment: shipments[0],

@@ -1,24 +1,9 @@
 package lc
 
 import (
-	"regexp"
-
 	"solarflow-backend/internal/domains/po"
+	"solarflow-backend/internal/validation"
 )
-
-// LC 라인아이템 유효성 검증 spec. PR-C 시점 BL (domains/bl/model_line.go) 의
-// 동일 spec 과 dup — PR-D 에서 공통 lib (예: internal/validation) 분리 검토.
-var validItemTypes = map[string]bool{
-	"main":  true,
-	"spare": true,
-}
-
-var validPaymentTypes = map[string]bool{
-	"paid": true,
-	"free": true,
-}
-
-var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // LCLineItem — LC 라인아이템 구조체
 // 비유: LC 서류에 붙는 품목별 명세표 — 어떤 PO 품목을 몇 장 개설했는지 기록
@@ -72,16 +57,16 @@ func (req *CreateLCLineRequest) Validate() string {
 	if req.ItemType == "" {
 		req.ItemType = "main"
 	}
-	if !validItemTypes[req.ItemType] {
+	if !validation.ItemTypes[req.ItemType] {
 		return "LC 품목 item_type은 \"main\", \"spare\" 중 하나여야 합니다"
 	}
 	if req.PaymentType == "" {
 		req.PaymentType = "paid"
 	}
-	if !validPaymentTypes[req.PaymentType] {
+	if !validation.PaymentTypes[req.PaymentType] {
 		return "LC 품목 payment_type은 \"paid\", \"free\" 중 하나여야 합니다"
 	}
-	if req.POLineID != nil && *req.POLineID != "" && !uuidRe.MatchString(*req.POLineID) {
+	if req.POLineID != nil && *req.POLineID != "" && !validation.UUIDRe.MatchString(*req.POLineID) {
 		return "LC 품목 po_line_id는 UUID 형식이어야 합니다"
 	}
 	if req.AmountUSD != nil && *req.AmountUSD < 0 {

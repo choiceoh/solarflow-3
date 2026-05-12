@@ -21,7 +21,8 @@ import (
 // 한 요청 = 한 SSE. 도구 호출 루프(read 도구 즉시 실행 / propose 도구 stash) 가 한 SSE 안에서 다단계로 진행.
 //
 // F1 fallback: 첫 청크(=헤더) 송출 전까지만 fallback provider 로 재시도.
-//   첫 청크 emit 후 실패 시 SSE 안에서 error 청크로 종료.
+//
+//	첫 청크 emit 후 실패 시 SSE 안에서 error 청크로 종료.
 func (h *AssistantHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 	var req assistantRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

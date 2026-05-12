@@ -46,7 +46,7 @@ type solarKnowledgeGraph struct {
 	Edges []solarKnowledgeEdge
 
 	nodeByID    map[string]*solarKnowledgeNode
-	nodeByLabel map[string]string              // lower(label) → id
+	nodeByLabel map[string]string               // lower(label) → id
 	adjacency   map[string][]solarKnowledgeEdge // 양방향
 }
 

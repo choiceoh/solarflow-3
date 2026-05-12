@@ -852,4 +852,3 @@ func intercompanyReceivingLogInsert(row wmsIntercompanyRequestRow, warehouseID s
 	}
 	return insert
 }
-

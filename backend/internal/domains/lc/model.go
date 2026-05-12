@@ -32,9 +32,9 @@ type LCRecord struct {
 // 비유: LC 서류에 은행 명함, 법인 도장, PO번호가 함께 붙어 있는 것
 type LCWithRelations struct {
 	LCRecord
-	Banks          *LCBankSummary  `json:"banks"`
+	Banks          *LCBankSummary        `json:"banks"`
 	Companies      *model.CompanySummary `json:"companies"`
-	PurchaseOrders *LCPOSummary    `json:"purchase_orders"`
+	PurchaseOrders *LCPOSummary          `json:"purchase_orders"`
 }
 
 // LCBankSummary — LC 목록 조회 시 은행 요약 정보
@@ -52,9 +52,9 @@ type LCPOSummary struct {
 // 비유: LC 서류를 펼쳐서 은행 한도, 수수료율까지 모두 보여주는 것
 type LCDetail struct {
 	LCRecord
-	Banks          *LCBankDetail   `json:"banks"`
+	Banks          *LCBankDetail         `json:"banks"`
 	Companies      *model.CompanySummary `json:"companies"`
-	PurchaseOrders *LCPOSummary    `json:"purchase_orders"`
+	PurchaseOrders *LCPOSummary          `json:"purchase_orders"`
 }
 
 // LCBankDetail — LC 상세 조회 시 은행 상세 정보 (수수료율 포함)

@@ -51,37 +51,37 @@ func init() {
 }
 
 type CycleCount struct {
-	CycleCountID       string     `json:"cycle_count_id"`
-	WarehouseID        string     `json:"warehouse_id"`
-	ScheduledDate      string     `json:"scheduled_date"`
-	Status             string     `json:"status"`
-	StartedAt          *time.Time `json:"started_at,omitempty"`
-	CompletedAt        *time.Time `json:"completed_at,omitempty"`
-	TotalLocations     *int       `json:"total_locations,omitempty"`
-	MatchedLocations   *int       `json:"matched_locations,omitempty"`
-	VarianceLocations  *int       `json:"variance_locations,omitempty"`
-	AccuracyPct        *float64   `json:"accuracy_pct,omitempty"`
-	CreatedBy          *string    `json:"created_by,omitempty"`
-	CreatedAt          *time.Time `json:"created_at,omitempty"`
-	Notes              *string    `json:"notes,omitempty"`
+	CycleCountID      string     `json:"cycle_count_id"`
+	WarehouseID       string     `json:"warehouse_id"`
+	ScheduledDate     string     `json:"scheduled_date"`
+	Status            string     `json:"status"`
+	StartedAt         *time.Time `json:"started_at,omitempty"`
+	CompletedAt       *time.Time `json:"completed_at,omitempty"`
+	TotalLocations    *int       `json:"total_locations,omitempty"`
+	MatchedLocations  *int       `json:"matched_locations,omitempty"`
+	VarianceLocations *int       `json:"variance_locations,omitempty"`
+	AccuracyPct       *float64   `json:"accuracy_pct,omitempty"`
+	CreatedBy         *string    `json:"created_by,omitempty"`
+	CreatedAt         *time.Time `json:"created_at,omitempty"`
+	Notes             *string    `json:"notes,omitempty"`
 }
 
 type CycleCountItem struct {
-	ItemID                string     `json:"item_id"`
-	CycleCountID          string     `json:"cycle_count_id"`
-	LocationID            *string    `json:"location_id,omitempty"`
-	LocationCodeSnapshot  *string    `json:"location_code_snapshot,omitempty"`
-	ProductID             *string    `json:"product_id,omitempty"`
-	ProductCodeSnapshot   *string    `json:"product_code_snapshot,omitempty"`
-	ProductNameSnapshot   *string    `json:"product_name_snapshot,omitempty"`
-	ExpectedQty           int        `json:"expected_qty"`
-	CountedQty            *int       `json:"counted_qty,omitempty"`
-	VarianceQty           int        `json:"variance_qty"` // GENERATED
-	VarianceReason        *string    `json:"variance_reason,omitempty"`
-	VarianceNote          *string    `json:"variance_note,omitempty"`
-	CountedBy             *string    `json:"counted_by,omitempty"`
-	CountedAt             *time.Time `json:"counted_at,omitempty"`
-	PhotoAttachmentIDs    []string   `json:"photo_attachment_ids,omitempty"`
+	ItemID               string     `json:"item_id"`
+	CycleCountID         string     `json:"cycle_count_id"`
+	LocationID           *string    `json:"location_id,omitempty"`
+	LocationCodeSnapshot *string    `json:"location_code_snapshot,omitempty"`
+	ProductID            *string    `json:"product_id,omitempty"`
+	ProductCodeSnapshot  *string    `json:"product_code_snapshot,omitempty"`
+	ProductNameSnapshot  *string    `json:"product_name_snapshot,omitempty"`
+	ExpectedQty          int        `json:"expected_qty"`
+	CountedQty           *int       `json:"counted_qty,omitempty"`
+	VarianceQty          int        `json:"variance_qty"` // GENERATED
+	VarianceReason       *string    `json:"variance_reason,omitempty"`
+	VarianceNote         *string    `json:"variance_note,omitempty"`
+	CountedBy            *string    `json:"counted_by,omitempty"`
+	CountedAt            *time.Time `json:"counted_at,omitempty"`
+	PhotoAttachmentIDs   []string   `json:"photo_attachment_ids,omitempty"`
 }
 
 type CreateCycleCountRequest struct {
@@ -101,10 +101,10 @@ func (req *CreateCycleCountRequest) Validate() string {
 }
 
 type UpdateCycleCountItemRequest struct {
-	CountedQty           *int     `json:"counted_qty,omitempty"`
-	VarianceReason       *string  `json:"variance_reason,omitempty"`
-	VarianceNote         *string  `json:"variance_note,omitempty"`
-	PhotoAttachmentIDs   []string `json:"photo_attachment_ids,omitempty"`
+	CountedQty         *int     `json:"counted_qty,omitempty"`
+	VarianceReason     *string  `json:"variance_reason,omitempty"`
+	VarianceNote       *string  `json:"variance_note,omitempty"`
+	PhotoAttachmentIDs []string `json:"photo_attachment_ids,omitempty"`
 }
 
 // List — GET /api/v1/cycle-counts?status=&warehouse_id=

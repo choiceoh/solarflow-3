@@ -13,8 +13,10 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/dbrpc"
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -141,7 +143,7 @@ func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
 	sortCol, asc := parseLCSort(r)
 	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[LC 목록 조회 실패] %v", err)
@@ -187,13 +189,13 @@ type lcSummaryRow struct {
 }
 
 type LCSummary struct {
-	Total             int64               `json:"total"`
-	OpenedCount       int64               `json:"opened_count"`
-	MaturitySoonCount int64               `json:"maturity_soon_count"`
-	AmountUSD         float64             `json:"amount_usd"`
-	BankCount         int64               `json:"bank_count"`
-	ByStatus          map[string]int64    `json:"by_status"`
-	MonthlyAmount     []summaryMonthPoint `json:"monthly_amount"`
+	Total             int64                           `json:"total"`
+	OpenedCount       int64                           `json:"opened_count"`
+	MaturitySoonCount int64                           `json:"maturity_soon_count"`
+	AmountUSD         float64                         `json:"amount_usd"`
+	BankCount         int64                           `json:"bank_count"`
+	ByStatus          map[string]int64                `json:"by_status"`
+	MonthlyAmount     []handlerutil.SummaryMonthPoint `json:"monthly_amount"`
 }
 
 func lcDueWithin(date *string, days int) bool {
@@ -212,7 +214,7 @@ func lcDueWithin(date *string, days int) bool {
 
 // Summary — GET /api/v1/lcs/summary — LC KPI 카드용 전체 집계.
 func (h *LCHandler) Summary(w http.ResponseWriter, r *http.Request) {
-	rows, total, err := fetchAllSummaryRows[lcSummaryRow](func() *postgrest.FilterBuilder {
+	rows, total, err := handlerutil.FetchAllSummaryRows[lcSummaryRow](func() *postgrest.FilterBuilder {
 		q := h.DB.From("lc_records").
 			Select("lc_id,bank_id,status,open_date,amount_usd,maturity_date,purchase_orders(manufacturer_id)", "exact", false)
 		return h.applyLCFilters(r, q)
@@ -242,7 +244,7 @@ func (h *LCHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		summary.Total = int64(len(rows))
 	}
 	for _, row := range rows {
-		incrementCount(byStatus, row.Status)
+		handlerutil.IncrementCount(byStatus, row.Status)
 		if row.Status == "opened" || row.Status == "docs_received" {
 			summary.OpenedCount++
 		}
@@ -253,12 +255,12 @@ func (h *LCHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		if row.BankID != "" {
 			banks[row.BankID] = struct{}{}
 		}
-		if month := dateMonth(row.OpenDate); month != "" {
+		if month := handlerutil.DateMonth(row.OpenDate); month != "" {
 			monthlyAmount[month] += row.AmountUSD
 		}
 	}
-	summary.BankCount = distinctCount(banks)
-	summary.MonthlyAmount = recentMonthAmounts(monthlyAmount, 6)
+	summary.BankCount = handlerutil.DistinctCount(banks)
+	summary.MonthlyAmount = handlerutil.RecentMonthAmounts(monthlyAmount, 6)
 	response.RespondJSON(w, http.StatusOK, summary)
 }
 
@@ -362,7 +364,7 @@ func (h *LCHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeAuditLog(h.DB, r, "lc_records", created.LCID, "create", nil, auditRawFromValue(created), "")
+	audit.WriteLog(h.DB, r, "lc_records", created.LCID, "create", nil, audit.RawFromValue(created), "")
 	response.RespondJSON(w, http.StatusCreated, created)
 }
 
@@ -384,7 +386,7 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "lc_records", "lc_id", id)
+	oldSnapshot, _, oldErr := audit.Snapshot(h.DB, "lc_records", "lc_id", id)
 	if oldErr != nil {
 		log.Printf("[LC 수정 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
@@ -413,7 +415,7 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 			response.RespondError(w, http.StatusNotFound, "수정할 LC를 찾을 수 없습니다")
 			return
 		}
-		auditEntityByRouteID(h.DB, r, "lc_records", "lc_id", "update", oldSnapshot, auditRawFromValue(updated), "")
+		audit.EntityByRouteID(h.DB, r, "lc_records", "lc_id", "update", oldSnapshot, audit.RawFromValue(updated), "")
 		response.RespondJSON(w, http.StatusOK, updated)
 		return
 	}
@@ -440,7 +442,7 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditEntityByRouteID(h.DB, r, "lc_records", "lc_id", "update", oldSnapshot, auditRawFromValue(updated[0]), "")
+	audit.EntityByRouteID(h.DB, r, "lc_records", "lc_id", "update", oldSnapshot, audit.RawFromValue(updated[0]), "")
 	response.RespondJSON(w, http.StatusOK, updated[0])
 }
 
@@ -448,7 +450,7 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *LCHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "lc_records", "lc_id", id)
+	oldSnapshot, _, oldErr := audit.Snapshot(h.DB, "lc_records", "lc_id", id)
 	if oldErr != nil {
 		log.Printf("[LC 취소 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
@@ -474,7 +476,7 @@ func (h *LCHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditEntityByRouteID(h.DB, r, "lc_records", "lc_id", "delete", oldSnapshot, auditRawFromValue(updated[0]), "soft_cancel")
+	audit.EntityByRouteID(h.DB, r, "lc_records", "lc_id", "delete", oldSnapshot, audit.RawFromValue(updated[0]), "soft_cancel")
 	response.RespondJSON(w, http.StatusOK, struct {
 		Status string `json:"status"`
 	}{Status: "cancelled"})

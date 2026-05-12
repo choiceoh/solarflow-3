@@ -85,8 +85,8 @@ func NewAttachmentHandler(db *supa.Client) *AttachmentHandler {
 
 // init — D-20260512-090000 feature self-mounting.
 // 두 Spec 으로 분할:
-//   1) AuthRoot:   /api/v1/attachments/{id}/file — 짧은 만료 토큰 PDF 열람 (무인증, 토큰 가드)
-//   2) AuthAuthed: /attachments/* — 일반 CRUD
+//  1. AuthRoot:   /api/v1/attachments/{id}/file — 짧은 만료 토큰 PDF 열람 (무인증, 토큰 가드)
+//  2. AuthAuthed: /attachments/* — 일반 CRUD
 func init() {
 	mount.Register(mount.Spec{
 		Auth: mount.AuthRoot,

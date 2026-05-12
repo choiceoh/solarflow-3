@@ -14,9 +14,9 @@ import (
 // 첫 1000 행만 응답한다. 이로 인해 SaleListItem.outbound_date 다수가 NULL 되어
 // SalesAnalysisPage 가 "매출 날짜 없음" 을 표시하는 회귀가 두 번 발생.
 //
-//   2026-05-05  처음 fix (fetchAllFromTable 헬퍼)
-//   2026-05-06  perf 변경 중 회귀 — 단일 Range 로 복귀
-//   2026-05-06  PR 35/36 재 fix + 본 가드
+//	2026-05-05  처음 fix (fetchAllFromTable 헬퍼)
+//	2026-05-06  perf 변경 중 회귀 — 단일 Range 로 복귀
+//	2026-05-06  PR 35/36 재 fix + 본 가드
 //
 // 이 테스트는 internal/handler 패키지의 어떤 .go 파일에서도 Range(0, 1000) 이상의
 // 단일 호출을 검출해 회귀를 빌드 타임에 차단한다. 청크 페이지네이션 헬퍼

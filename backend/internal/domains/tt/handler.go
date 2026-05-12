@@ -13,6 +13,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -70,7 +71,7 @@ func init() {
 }
 
 func (h *TTHandler) poIDsForTTCompany(companyID string) ([]string, error) {
-	rows, _, err := fetchAllSummaryRows[struct {
+	rows, _, err := handlerutil.FetchAllSummaryRows[struct {
 		POID string `json:"po_id"`
 	}](func() *postgrest.FilterBuilder {
 		return h.DB.From("purchase_orders").
@@ -164,7 +165,7 @@ func (h *TTHandler) List(w http.ResponseWriter, r *http.Request) {
 	sortCol, asc := parseTTSort(r)
 	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[TT 목록 조회 실패] %v", err)
@@ -192,20 +193,20 @@ type ttSummaryRow struct {
 }
 
 type TTSummaryBoard struct {
-	Total              int64               `json:"total"`
-	CompletedCount     int64               `json:"completed_count"`
-	PlannedCount       int64               `json:"planned_count"`
-	CompletedAmountUSD float64             `json:"completed_amount_usd"`
-	POCount            int64               `json:"po_count"`
-	ByStatus           map[string]int64    `json:"by_status"`
-	MonthlyAmount      []summaryMonthPoint `json:"monthly_amount"`
+	Total              int64                           `json:"total"`
+	CompletedCount     int64                           `json:"completed_count"`
+	PlannedCount       int64                           `json:"planned_count"`
+	CompletedAmountUSD float64                         `json:"completed_amount_usd"`
+	POCount            int64                           `json:"po_count"`
+	ByStatus           map[string]int64                `json:"by_status"`
+	MonthlyAmount      []handlerutil.SummaryMonthPoint `json:"monthly_amount"`
 }
 
 // Summary — GET /api/v1/tts/summary — T/T KPI 카드용 전체 집계.
 func (h *TTHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	var applyErr error
 	empty := false
-	rows, total, err := fetchAllSummaryRows[ttSummaryRow](func() *postgrest.FilterBuilder {
+	rows, total, err := handlerutil.FetchAllSummaryRows[ttSummaryRow](func() *postgrest.FilterBuilder {
 		q := h.DB.From("tt_remittances").
 			Select("tt_id,po_id,remit_date,amount_usd,status", "exact", false)
 		q, ok, err := h.applyTTFilters(r, q)
@@ -238,7 +239,7 @@ func (h *TTHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		summary.Total = int64(len(rows))
 	}
 	for _, row := range rows {
-		incrementCount(byStatus, row.Status)
+		handlerutil.IncrementCount(byStatus, row.Status)
 		if row.Status == "completed" {
 			summary.CompletedCount++
 			summary.CompletedAmountUSD += row.AmountUSD
@@ -249,12 +250,12 @@ func (h *TTHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		if row.POID != "" {
 			poIDs[row.POID] = struct{}{}
 		}
-		if month := dateMonth(row.RemitDate); month != "" && row.Status == "completed" {
+		if month := handlerutil.DateMonth(row.RemitDate); month != "" && row.Status == "completed" {
 			monthlyAmount[month] += row.AmountUSD
 		}
 	}
-	summary.POCount = distinctCount(poIDs)
-	summary.MonthlyAmount = recentMonthAmounts(monthlyAmount, 6)
+	summary.POCount = handlerutil.DistinctCount(poIDs)
+	summary.MonthlyAmount = handlerutil.RecentMonthAmounts(monthlyAmount, 6)
 	response.RespondJSON(w, http.StatusOK, summary)
 }
 

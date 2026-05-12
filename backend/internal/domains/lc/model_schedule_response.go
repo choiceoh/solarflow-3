@@ -10,21 +10,21 @@ type LcFeeResponse struct {
 
 // LcFeeItem — LC 수수료 라인아이템
 type LcFeeItem struct {
-	LCID            string              `json:"lc_id"`
-	LCNumber        *string             `json:"lc_number"`
-	PONumber        *string             `json:"po_number"`
-	BankName        string              `json:"bank_name"`
-	CompanyName     string              `json:"company_name"`
-	AmountUSD       float64             `json:"amount_usd"`
-	OpenDate        *string             `json:"open_date"`
-	UsanceDays      int                 `json:"usance_days"`
-	MaturityDate    *string             `json:"maturity_date"`
-	DaysToMaturity  int64               `json:"days_to_maturity"`
-	Status          string              `json:"status"`
-	ExchangeRate    float64             `json:"exchange_rate"`
-	OpeningFee      LcFeeDetail         `json:"opening_fee"`
-	AcceptanceFee   LcAcceptanceFeeDetail `json:"acceptance_fee"`
-	TotalFeeKRW     float64             `json:"total_fee_krw"`
+	LCID           string                `json:"lc_id"`
+	LCNumber       *string               `json:"lc_number"`
+	PONumber       *string               `json:"po_number"`
+	BankName       string                `json:"bank_name"`
+	CompanyName    string                `json:"company_name"`
+	AmountUSD      float64               `json:"amount_usd"`
+	OpenDate       *string               `json:"open_date"`
+	UsanceDays     int                   `json:"usance_days"`
+	MaturityDate   *string               `json:"maturity_date"`
+	DaysToMaturity int64                 `json:"days_to_maturity"`
+	Status         string                `json:"status"`
+	ExchangeRate   float64               `json:"exchange_rate"`
+	OpeningFee     LcFeeDetail           `json:"opening_fee"`
+	AcceptanceFee  LcAcceptanceFeeDetail `json:"acceptance_fee"`
+	TotalFeeKRW    float64               `json:"total_fee_krw"`
 }
 
 // LcFeeDetail — 수수료 상세
@@ -51,9 +51,9 @@ type LcFeeSummary struct {
 
 // LcLimitTimelineResponse — 한도 복원 타임라인 응답
 type LcLimitTimelineResponse struct {
-	Banks        []BankTimeline   `json:"banks"`
-	TotalSummary TimelineSummary  `json:"total_summary"`
-	CalculatedAt string           `json:"calculated_at"`
+	Banks        []BankTimeline  `json:"banks"`
+	TotalSummary TimelineSummary `json:"total_summary"`
+	CalculatedAt string          `json:"calculated_at"`
 }
 
 // BankTimeline — 은행별 한도 타임라인
@@ -70,11 +70,11 @@ type BankTimeline struct {
 
 // RestorationEvent — 한도 복원 이벤트
 type RestorationEvent struct {
-	Date                  string  `json:"date"`
-	LCNumber              *string `json:"lc_number"`
-	AmountUSD             float64 `json:"amount_usd"`
+	Date                   string  `json:"date"`
+	LCNumber               *string `json:"lc_number"`
+	AmountUSD              float64 `json:"amount_usd"`
 	CumulativeAvailableUSD float64 `json:"cumulative_available_usd"`
-	PONumber              *string `json:"po_number"`
+	PONumber               *string `json:"po_number"`
 }
 
 // TimelineSummary — 전체 합계

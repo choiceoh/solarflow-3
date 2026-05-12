@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/response"
 )
 
@@ -23,14 +24,14 @@ const (
 
 // TTScope: lifetime|completed|planned. breakdowns 만 좁힘. trend24/totals 는 항상 전체.
 type TTDashboard struct {
-	Totals              TTDashTotals          `json:"totals"`
-	Trend24             []TTDashTrendPoint    `json:"trend24"`
-	StatusScope         string                `json:"status_scope"`
-	ByStatus            []TTDashBreakdownRow  `json:"by_status"`
-	ByManufacturerTop10 []TTDashBreakdownRow  `json:"by_manufacturer_top10"`
-	ByBankTop10         []TTDashBreakdownRow  `json:"by_bank_top10"`
-	ByPurposeTop10      []TTDashBreakdownRow  `json:"by_purpose_top10"`
-	ByPoTop10           []TTDashBreakdownRow  `json:"by_po_top10"`
+	Totals              TTDashTotals         `json:"totals"`
+	Trend24             []TTDashTrendPoint   `json:"trend24"`
+	StatusScope         string               `json:"status_scope"`
+	ByStatus            []TTDashBreakdownRow `json:"by_status"`
+	ByManufacturerTop10 []TTDashBreakdownRow `json:"by_manufacturer_top10"`
+	ByBankTop10         []TTDashBreakdownRow `json:"by_bank_top10"`
+	ByPurposeTop10      []TTDashBreakdownRow `json:"by_purpose_top10"`
+	ByPoTop10           []TTDashBreakdownRow `json:"by_po_top10"`
 }
 
 type TTDashTotals struct {
@@ -55,22 +56,22 @@ type TTDashTrendPoint struct {
 }
 
 type TTDashBreakdownRow struct {
-	Key            string  `json:"key"`
-	Label          string  `json:"label"`
-	Count          int     `json:"count"`
-	AmountUSDSum   float64 `json:"amount_usd_sum"`
-	Share          float64 `json:"share"` // count 기준 0..1
+	Key          string  `json:"key"`
+	Label        string  `json:"label"`
+	Count        int     `json:"count"`
+	AmountUSDSum float64 `json:"amount_usd_sum"`
+	Share        float64 `json:"share"` // count 기준 0..1
 }
 
 // ttDashRow — TT join 결과 평탄화. List 와 동일 select 사용.
 type ttDashRow struct {
-	TTID      string   `json:"tt_id"`
-	POID      string   `json:"po_id"`
-	RemitDate *string  `json:"remit_date"`
-	AmountUSD float64  `json:"amount_usd"`
-	Purpose   *string  `json:"purpose"`
-	Status    string   `json:"status"`
-	BankName  *string  `json:"bank_name"`
+	TTID           string  `json:"tt_id"`
+	POID           string  `json:"po_id"`
+	RemitDate      *string `json:"remit_date"`
+	AmountUSD      float64 `json:"amount_usd"`
+	Purpose        *string `json:"purpose"`
+	Status         string  `json:"status"`
+	BankName       *string `json:"bank_name"`
 	PurchaseOrders *struct {
 		PONumber      *string `json:"po_number"`
 		Manufacturers *struct {
@@ -262,7 +263,7 @@ func computeTTDashTrend24(rows []ttDashRow) []TTDashTrendPoint {
 	labels := make([]string, ttDashTrendMonths)
 	idx := make(map[string]int, ttDashTrendMonths)
 	for i := 0; i < ttDashTrendMonths; i++ {
-		t := now.AddDate(0, -(ttDashTrendMonths-1-i), 0)
+		t := now.AddDate(0, -(ttDashTrendMonths - 1 - i), 0)
 		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 		labels[i] = key
 		idx[key] = i
@@ -280,7 +281,7 @@ func computeTTDashTrend24(rows []ttDashRow) []TTDashTrendPoint {
 		if r.RemitDate != nil {
 			date = *r.RemitDate
 		}
-		m := monthOf(date)
+		m := handlerutil.MonthOf(date)
 		if m == "" {
 			continue
 		}

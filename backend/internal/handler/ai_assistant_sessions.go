@@ -281,4 +281,3 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 	}
 	response.RespondJSON(w, http.StatusOK, map[string]string{"message": "삭제 완료"})
 }
-

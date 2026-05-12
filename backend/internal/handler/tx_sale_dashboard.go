@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
@@ -306,7 +307,7 @@ func computeSaleDashTrend24(items []model.SaleListItem) []SaleDashTrendPoint {
 		customers[i] = make(map[string]struct{}, 4)
 	}
 	for _, s := range items {
-		m := monthOf(saleDateForBin(s))
+		m := handlerutil.MonthOf(saleDateForBin(s))
 		if m == "" {
 			continue
 		}
@@ -372,7 +373,7 @@ func computeSaleDashPendingTrend24(items []model.SaleListItem) []SaleDashTrendPo
 		} else if s.OrderDate != nil && *s.OrderDate != "" {
 			date = *s.OrderDate
 		}
-		m := monthOf(date)
+		m := handlerutil.MonthOf(date)
 		if m == "" {
 			continue
 		}
@@ -414,14 +415,14 @@ func computeSaleDashBreakdown(items []model.SaleListItem, dim saleBreakdownDim, 
 			if key == "" {
 				key = "__unset__"
 			}
-			label = strPtrOr(s.CustomerName, "미지정")
+			label = handlerutil.StrPtrOr(s.CustomerName, "미지정")
 		case saleDimManufacturer:
 			if s.ManufacturerID != nil && *s.ManufacturerID != "" {
 				key = *s.ManufacturerID
 			} else {
 				key = "__unset__"
 			}
-			label = strPtrOr(s.ManufacturerName, "미지정")
+			label = handlerutil.StrPtrOr(s.ManufacturerName, "미지정")
 		}
 		a, ok := m[key]
 		if !ok {

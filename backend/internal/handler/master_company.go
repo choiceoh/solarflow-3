@@ -10,6 +10,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
@@ -51,7 +52,7 @@ func init() {
 // List — GET /api/v1/companies — 법인 목록 조회
 // 비유: 법인 관리실에서 전체 명함첩을 꺼내 보여주는 것
 func (h *CompanyHandler) List(w http.ResponseWriter, r *http.Request) {
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := h.DB.From("companies").
 		Select("*", "exact", false).
 		Range(offset, offset+limit-1, "").
@@ -199,7 +200,9 @@ func (h *CompanyHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "법인 삭제에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "deleted"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "deleted"})
 }
 
 // ToggleStatus — PATCH /api/v1/companies/{id}/status — 법인 활성/비활성 토글
