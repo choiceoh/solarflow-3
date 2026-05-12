@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/config"
@@ -16,13 +17,17 @@ import (
 	"solarflow-backend/internal/ocr"
 )
 
-// App — 단일 의존성 컨테이너. nil 가능 의존성은 Eng 하나만이며 HasEngine으로 분기한다.
+// App — 단일 의존성 컨테이너. nil 가능 의존성은 Eng·Pool 이며 HasEngine/HasPool 로 분기한다.
 type App struct {
 	DB    *supa.Client
 	Eng   *engine.EngineClient // nil 허용 — Rust 엔진 미사용 환경
 	OCR   *ocr.Client
 	Cfg   *config.Config
 	Gates middleware.Gates
+	// Pool — pgx PostgreSQL 직접 연결 풀. SUPABASE_DB_URL 미설정 시 nil.
+	// AI 어시스턴트 첨부 시트(ai_attachment_sheets/_rows) 동적 jsonb 쿼리 전용.
+	// 다른 라우트는 *supa.Client (PostgREST) 그대로 사용 — 두 갈래 분리 의도.
+	Pool *pgxpool.Pool
 	// WiringStore — D-120 feature override 영속화 (PR-9). 운영에서는 SupabaseWiringStore.
 	// nil 이면 PUT 핸들러가 503 으로 막힘.
 	WiringStore feature.WiringStore
@@ -53,6 +58,21 @@ func New(cfg *config.Config) (*App, error) {
 		log.Println("ℹ️  ENGINE_URL 미설정 — Rust 엔진 미사용")
 	}
 
+	// pgx pool — AI 어시스턴트 첨부 시트 임시 영역 전용. URL 미설정이면 nil 로 두고
+	// 시트 첨부 라우트만 503 처리 (다른 라우트는 영향 없음).
+	var pool *pgxpool.Pool
+	if cfg.DatabaseURL != "" {
+		p, perr := pgxpool.New(context.Background(), cfg.DatabaseURL)
+		if perr != nil {
+			log.Printf("⚠️  SUPABASE_DB_URL 풀 초기화 실패 — 시트 첨부 비활성: %v", perr)
+		} else {
+			pool = p
+			log.Println("✅ pgx 풀 초기화 성공 (AI 첨부 시트 영역)")
+		}
+	} else {
+		log.Println("ℹ️  SUPABASE_DB_URL 미설정 — AI 시트 첨부 비활성")
+	}
+
 	// PR-9: WiringStore (PR-5b 의 인라인 DB 호출을 인터페이스 뒤로) 인스턴스 생성.
 	wiringStore := feature.NewSupabaseWiringStore(db)
 
@@ -71,6 +91,7 @@ func New(cfg *config.Config) (*App, error) {
 		OCR:         ocr.NewFromEnv(),
 		Cfg:         cfg,
 		Gates:       middleware.NewGatesWithResolver(resolver),
+		Pool:        pool,
 		WiringStore: wiringStore,
 	}, nil
 }
@@ -95,3 +116,6 @@ func loadFeatureOverrides(store feature.WiringStore, resolver *feature.Resolver)
 
 // HasEngine — Rust 계산 엔진 사용 가능 여부 (calc/engine 라우트 mount 분기에 사용)
 func (a *App) HasEngine() bool { return a.Eng != nil }
+
+// HasPool — AI 첨부 시트 임시 영역(pgx 풀) 사용 가능 여부.
+func (a *App) HasPool() bool { return a.Pool != nil }
