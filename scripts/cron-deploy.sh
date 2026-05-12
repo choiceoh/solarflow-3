@@ -44,6 +44,11 @@ USER_UID=$(id -u)
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$USER_UID}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
 
+# webhook(systemd user 유닛) 환경엔 인터랙티브 셸의 PATH 가 없어 `cargo`/`go` 가 안 잡힌다.
+# 그래서 engine 변경분이 들어와도 "cargo: 명령어를 찾을 수 없음" → "Rust 빌드 실패" 로 침묵 종료,
+# 운영 바이너리만 stale 로 남는 사고가 반복됐다 (2026-05 sales-analysis 사고). cargo/go bin 을 PATH 에 강제로 합친다.
+export PATH="$HOME/.cargo/bin:/usr/local/go/bin:/usr/lib/go-1.22/bin:$PATH"
+
 REPO=/home/choiceoh/공개/solarflow-3
 LOCK=/tmp/solarflow-cron-deploy.lock
 GO_DIR="$REPO/backend"
