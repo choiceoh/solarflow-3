@@ -1,6 +1,10 @@
-package model
+package lc
 
-import "unicode/utf8"
+import (
+	"unicode/utf8"
+
+	"solarflow-backend/internal/model"
+)
 
 // LCRecord — LC(신용장) 정보를 담는 구조체
 // 비유: "LC 개설 서류" — 어느 은행에서, 얼마에, 언제 개설했는지 기록
@@ -29,7 +33,7 @@ type LCRecord struct {
 type LCWithRelations struct {
 	LCRecord
 	Banks          *LCBankSummary  `json:"banks"`
-	Companies      *CompanySummary `json:"companies"`
+	Companies      *model.CompanySummary `json:"companies"`
 	PurchaseOrders *LCPOSummary    `json:"purchase_orders"`
 }
 
@@ -49,7 +53,7 @@ type LCPOSummary struct {
 type LCDetail struct {
 	LCRecord
 	Banks          *LCBankDetail   `json:"banks"`
-	Companies      *CompanySummary `json:"companies"`
+	Companies      *model.CompanySummary `json:"companies"`
 	PurchaseOrders *LCPOSummary    `json:"purchase_orders"`
 }
 

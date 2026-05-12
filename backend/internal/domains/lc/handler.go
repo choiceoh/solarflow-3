@@ -1,4 +1,4 @@
-package handler
+package lc
 
 import (
 	"encoding/json"
@@ -15,7 +15,6 @@ import (
 
 	"solarflow-backend/internal/dbrpc"
 	"solarflow-backend/internal/feature"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -150,7 +149,7 @@ func (h *LCHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var records []model.LCWithRelations
+	var records []LCWithRelations
 	if err := json.Unmarshal(data, &records); err != nil {
 		log.Printf("[LC 목록 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -278,7 +277,7 @@ func (h *LCHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var records []model.LCDetail
+	var records []LCDetail
 	if err := json.Unmarshal(data, &records); err != nil {
 		log.Printf("[LC 상세 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -308,7 +307,7 @@ func (h *LCHandler) ListLines(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, lines)
 }
 
-func (h *LCHandler) fetchLines(lcID string) ([]model.LCLineWithProduct, error) {
+func (h *LCHandler) fetchLines(lcID string) ([]LCLineWithProduct, error) {
 	data, _, err := h.DB.From("lc_line_items").
 		Select("*, products(product_code, product_name, spec_wp, module_width_mm, module_height_mm)", "exact", false).
 		Eq("lc_id", lcID).
@@ -317,7 +316,7 @@ func (h *LCHandler) fetchLines(lcID string) ([]model.LCLineWithProduct, error) {
 		return nil, err
 	}
 
-	var lines []model.LCLineWithProduct
+	var lines []LCLineWithProduct
 	if err := json.Unmarshal(data, &lines); err != nil {
 		return nil, err
 	}
@@ -327,7 +326,7 @@ func (h *LCHandler) fetchLines(lcID string) ([]model.LCLineWithProduct, error) {
 // Create — POST /api/v1/lcs — LC 등록
 // 비유: 새 LC 개설 서류를 작성하여 서류함에 보관하는 것
 func (h *LCHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateLCRequest
+	var req CreateLCRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[LC 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -341,8 +340,8 @@ func (h *LCHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 비유: LC 본문과 품목 명세표를 같은 봉투에 넣어 DB 함수로 접수한다.
-	data, err := dbrpc.Call(r.Context(), "sf_create_lc_with_lines", model.CreateLCWithLinesRPCRequest{
-		LC:    model.NewLCRecordInsert(req),
+	data, err := dbrpc.Call(r.Context(), "sf_create_lc_with_lines", CreateLCWithLinesRPCRequest{
+		LC:    NewLCRecordInsert(req),
 		Lines: req.LineItems,
 	})
 	if err != nil {
@@ -351,7 +350,7 @@ func (h *LCHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var created model.LCRecord
+	var created LCRecord
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[LC 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -372,7 +371,7 @@ func (h *LCHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req model.UpdateLCRequest
+	var req UpdateLCRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[LC 수정 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -392,9 +391,9 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if req.LineItems != nil {
 		// 비유: LC 본문 수정과 품목 명세표 교체를 한 번에 접수해 중간 실패를 막는다.
-		data, err := dbrpc.Call(r.Context(), "sf_update_lc_with_lines", model.UpdateLCWithLinesRPCRequest{
+		data, err := dbrpc.Call(r.Context(), "sf_update_lc_with_lines", UpdateLCWithLinesRPCRequest{
 			LCID:         id,
-			LC:           model.NewLCRecordUpdate(req),
+			LC:           NewLCRecordUpdate(req),
 			Lines:        req.LineItems,
 			ReplaceLines: true,
 		})
@@ -404,7 +403,7 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var updated model.LCRecord
+		var updated LCRecord
 		if err := json.Unmarshal(data, &updated); err != nil {
 			log.Printf("[LC 수정 결과 디코딩 실패] %v", err)
 			response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -420,7 +419,7 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, _, err := h.DB.From("lc_records").
-		Update(model.NewLCRecordUpdate(req), "", "").
+		Update(NewLCRecordUpdate(req), "", "").
 		Eq("lc_id", id).
 		Execute()
 	if err != nil {
@@ -429,7 +428,7 @@ func (h *LCHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.LCRecord
+	var updated []LCRecord
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[LC 수정 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -464,7 +463,7 @@ func (h *LCHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.LCRecord
+	var updated []LCRecord
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[LC 취소 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")

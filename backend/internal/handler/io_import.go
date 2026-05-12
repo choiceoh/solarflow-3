@@ -14,6 +14,7 @@ import (
 
 	"solarflow-backend/internal/dbrpc"
 	"solarflow-backend/internal/domains/bl"
+	"solarflow-backend/internal/domains/lc"
 	"solarflow-backend/internal/domains/po"
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/feature"
@@ -1358,7 +1359,7 @@ func (h *ImportHandler) LCs(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		insertPayload := model.NewLCRecordInsert(lcReq)
+		insertPayload := lc.NewLCRecordInsert(lcReq)
 		_, _, err = h.DB.From("lc_records").
 			Insert(insertPayload, false, "", "", "").
 			Execute()

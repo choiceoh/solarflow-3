@@ -99,9 +99,21 @@ domains:
     pack: module-finance
     manifest: harness/domains/bl.yaml
 
-  # PR-C2/PR-D 대상 (현재 코드에 존재, manifest 미작성):
-  # - id: lc                      # 신용장
-  # - id: tt                      # 송금
+  - id: lc
+    display_name: "신용장 (L/C)"
+    visible_to: module
+    feature_id: tx.lc
+    pack: module-finance
+    manifest: harness/domains/lc.yaml
+
+  - id: tt
+    display_name: "송금 (T/T)"
+    visible_to: module
+    feature_id: tx.tt
+    pack: module-finance
+    manifest: harness/domains/tt.yaml
+
+  # PR-D 대상 (현재 코드에 존재, manifest 미작성):
   # - id: declaration             # 면장/통관
   # - id: products                # 제품 마스터
   # - id: inventory               # 재고 / inventory_allocations

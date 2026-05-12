@@ -1,4 +1,4 @@
-package model
+package tt
 
 import "unicode/utf8"
 
