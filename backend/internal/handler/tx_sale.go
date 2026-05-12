@@ -215,12 +215,16 @@ func (h *SaleHandler) saleIDsByBusinessDate(month, start, end string) ([]string,
 
 	ids := make([]string, 0, len(sales))
 	for _, sale := range sales {
+		// 폴백 체인: tax_invoice_date → outbound_date → order_date.
+		// outbound_id 가 dangling 이면 outboundDateByID 가 "" 를 반환하므로 order_id 폴백을 시도해야 한다.
 		dateValue := ""
 		if sale.TaxInvoiceDate != nil && *sale.TaxInvoiceDate != "" {
 			dateValue = *sale.TaxInvoiceDate
-		} else if sale.OutboundID != nil {
+		}
+		if dateValue == "" && sale.OutboundID != nil && *sale.OutboundID != "" {
 			dateValue = outboundDateByID[*sale.OutboundID]
-		} else if sale.OrderID != nil {
+		}
+		if dateValue == "" && sale.OrderID != nil && *sale.OrderID != "" {
 			dateValue = orderDateByID[*sale.OrderID]
 		}
 		if saleBusinessDateMatches(dateValue, month, start, end) {
@@ -228,6 +232,47 @@ func (h *SaleHandler) saleIDsByBusinessDate(month, start, end string) ([]string,
 		}
 	}
 	return ids, nil
+}
+
+// intersectSaleIDLists — 후보 sale_id 리스트들의 교집합을 구한다.
+// applySaleFilters 에서 erp/날짜/수금 등 여러 후보 컬럼이 모두 sale_id 를 좁히는데,
+// postgrest-go .In() 은 params map 이라 같은 컬럼 두 번 호출 시 덮어써진다 (한 필터만 살아남음).
+// 따라서 후보 리스트들을 Go 에서 교집합 처리한 뒤 마지막에 한 번만 .In() 호출한다.
+func intersectSaleIDLists(lists [][]string) []string {
+	if len(lists) == 0 {
+		return nil
+	}
+	// 가장 작은 리스트를 기준으로 멤버십 맵 생성 후 교집합 — O(N×M).
+	smallestIdx := 0
+	for i, list := range lists {
+		if len(list) < len(lists[smallestIdx]) {
+			smallestIdx = i
+		}
+	}
+	base := make(map[string]struct{}, len(lists[smallestIdx]))
+	for _, id := range lists[smallestIdx] {
+		base[id] = struct{}{}
+	}
+	for i, list := range lists {
+		if i == smallestIdx {
+			continue
+		}
+		next := make(map[string]struct{}, len(base))
+		for _, id := range list {
+			if _, ok := base[id]; ok {
+				next[id] = struct{}{}
+			}
+		}
+		base = next
+		if len(base) == 0 {
+			return nil
+		}
+	}
+	result := make([]string, 0, len(base))
+	for id := range base {
+		result = append(result, id)
+	}
+	return result
 }
 
 // applySaleFilters — List/Summary 가 공유하는 필터 로직.
@@ -243,6 +288,11 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 	if custID := r.URL.Query().Get("customer_id"); custID != "" {
 		query = query.Eq("customer_id", custID)
 	}
+	// sale_id 후보 리스트들 — erp/날짜/수금 필터가 모두 sale_id 컬럼을 좁히는데
+	// postgrest-go .In() 은 params map 이라 같은 컬럼을 두 번 부르면 덮어쓰여 한 필터만 살아남는다.
+	// 모두 모은 뒤 교집합으로 한 번만 .In("sale_id", …) 호출한다.
+	var saleIDCandidates [][]string
+
 	if erpClosed := r.URL.Query().Get("erp_closed"); erpClosed != "" {
 		switch erpClosed {
 		case "true":
@@ -255,7 +305,7 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 			if len(ids) == 0 {
 				return query, false, nil
 			}
-			query = query.In("sale_id", ids)
+			saleIDCandidates = append(saleIDCandidates, ids)
 		default:
 			return query, false, nil
 		}
@@ -277,7 +327,7 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 		if len(ids) == 0 {
 			return query, false, nil
 		}
-		query = query.In("sale_id", ids)
+		saleIDCandidates = append(saleIDCandidates, ids)
 	}
 
 	// invoice_status: tax_invoice_date IS NULL / NOT NULL
@@ -296,7 +346,15 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 		if len(ids) == 0 {
 			return query, false, nil
 		}
-		query = query.In("sale_id", ids)
+		saleIDCandidates = append(saleIDCandidates, ids)
+	}
+
+	if len(saleIDCandidates) > 0 {
+		intersected := intersectSaleIDLists(saleIDCandidates)
+		if len(intersected) == 0 {
+			return query, false, nil
+		}
+		query = query.In("sale_id", intersected)
 	}
 
 	// company_id: outbound_id IN (...) OR order_id IN (...)
