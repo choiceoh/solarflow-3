@@ -22,6 +22,7 @@ import POListTable from "@/components/procurement/POListTable"
 import PODetailView from "@/components/procurement/PODetailView"
 import POCreateDialog from "@/components/procurement/POCreateDialog"
 import LCCreateDialog from "@/components/procurement/LCCreateDialog"
+import BLCreateDialog from "@/components/inbound/BLCreateDialog"
 import LCListTable from "@/components/procurement/LCListTable"
 import TTListTable from "@/components/procurement/TTListTable"
 import DepositStatusPanel from "@/components/procurement/DepositStatusPanel"
@@ -322,6 +323,7 @@ export default function ProcurementPage() {
   // PO/LC 신규 등록 다이얼로그.
   const [poCreateOpen, setPoCreateOpen] = useState(false)
   const [lcCreateOpen, setLcCreateOpen] = useState(false)
+  const [blCreateOpen, setBlCreateOpen] = useState(false)
   const [lcCreateInitial, setLcCreateInitial] = useState<{
     poId?: string
     poLineId?: string
@@ -1089,6 +1091,9 @@ export default function ProcurementPage() {
               setBlsVersion((v) => v + 1)
             }}
           />
+          <Button size="xs" onClick={() => setBlCreateOpen(true)}>
+            BL 신규 등록
+          </Button>
         </>
       )}
       <div style={{ flex: 1 }} />
@@ -1707,6 +1712,15 @@ export default function ProcurementPage() {
           reloadLC()
           setLcAggVersion((v) => v + 1)
           setLcCreateInitial(null)
+        }}
+      />
+      <BLCreateDialog
+        open={blCreateOpen}
+        initialManufacturerId={blMfgFilter || undefined}
+        onClose={() => setBlCreateOpen(false)}
+        onCreated={() => {
+          reloadBL()
+          setBlsVersion((v) => v + 1)
         }}
       />
     </div>
