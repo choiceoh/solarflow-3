@@ -74,6 +74,7 @@ function routeMeta(pathname: string, search: string) {
     if (tab === "physical") return { title: "실재고", breadcrumb: "재고 / 창고 보유 현재고" }
     if (tab === "incoming") return { title: "미착품", breadcrumb: "재고 / L/C · B/L 예정분" }
     if (tab === "forecast") return { title: "수급 전망", breadcrumb: "재고 / 6개월 흐름" }
+    if (tab === "flow") return { title: "입출고 흐름", breadcrumb: "재고 / 24개월 입고·출고·재고잔량" }
   }
   if (pathname === "/procurement") {
     const tab = params.get("tab")
