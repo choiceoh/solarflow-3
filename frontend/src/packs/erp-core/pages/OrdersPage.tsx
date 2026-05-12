@@ -172,6 +172,7 @@ interface BulkSalePreviewFilters {
   status?: string
   usageCategory?: string
   manufacturerId?: string
+  q?: string
   start?: string
   end?: string
   minKw?: number
@@ -430,6 +431,7 @@ function buildBulkSalePreviewQuery(companyId: string | null, filters: BulkSalePr
   if (filters.status) params.set("status", filters.status)
   if (filters.usageCategory) params.set("usage_category", filters.usageCategory)
   if (filters.manufacturerId) params.set("manufacturer_id", filters.manufacturerId)
+  if (filters.q) params.set("q", filters.q)
   if (filters.start) params.set("start", filters.start)
   if (filters.end) params.set("end", filters.end)
   if (filters.minKw !== undefined) params.set("min_kw", String(filters.minKw))
@@ -608,6 +610,7 @@ export default function OrdersPage() {
   const [obMfgFilter, setObMfgFilter] = useState("")
   const [obDateRange, setObDateRange] = useState<DateRangeValue>(null)
   const [obKwRange, setObKwRange] = useState<KwRangeValue>(null)
+  const [obSearch, setObSearch] = useState("")
   const [obWorkQueueFilter, setObWorkQueueFilter] = useState<OutboundWorkQueue>(() =>
     getOutboundWorkQueue(initialQueueParams.get("queue")),
   )
@@ -631,7 +634,8 @@ export default function OrdersPage() {
   const [obPageIndex, setObPageIndex] = useState(0)
   const [obPageSize, setObPageSize] = useState(50)
   const obSort = useServerSort("outbound_date", "desc", () => setObPageIndex(0))
-  const obPageResetKey = `${obStatusFilter}|${obUsageFilter}|${obMfgFilter}|${obWorkQueueFilter}|${obDateRange?.start ?? ""}|${obDateRange?.end ?? ""}|${obKwRange?.min ?? ""}|${obKwRange?.max ?? ""}`
+  const obSearchTrimmed = obSearch.trim()
+  const obPageResetKey = `${obStatusFilter}|${obUsageFilter}|${obMfgFilter}|${obWorkQueueFilter}|${obSearchTrimmed}|${obDateRange?.start ?? ""}|${obDateRange?.end ?? ""}|${obKwRange?.min ?? ""}|${obKwRange?.max ?? ""}`
   useEffect(() => {
     void obPageResetKey
     setObPageIndex(0)
@@ -646,6 +650,7 @@ export default function OrdersPage() {
     usage_category: obUsageFilter || undefined,
     manufacturer_id: obMfgFilter || undefined,
     work_queue: obWorkQueueFilter || undefined,
+    q: obSearchTrimmed || undefined,
     start: obDateRange?.start || undefined,
     end: obDateRange?.end || undefined,
     min_kw: obKwRange?.min ?? undefined,
@@ -662,6 +667,7 @@ export default function OrdersPage() {
     usage_category: obUsageFilter || undefined,
     manufacturer_id: obMfgFilter || undefined,
     work_queue: obWorkQueueFilter || undefined,
+    q: obSearchTrimmed || undefined,
     start: obDateRange?.start || undefined,
     end: obDateRange?.end || undefined,
     min_kw: obKwRange?.min ?? undefined,
@@ -678,6 +684,7 @@ export default function OrdersPage() {
       status: obStatusFilter || undefined,
       usageCategory: obUsageFilter || undefined,
       manufacturerId: obMfgFilter || undefined,
+      q: obSearchTrimmed || undefined,
       start: obDateRange?.start || undefined,
       end: obDateRange?.end || undefined,
       minKw: obKwRange?.min ?? undefined,
@@ -689,6 +696,7 @@ export default function OrdersPage() {
       obStatusFilter,
       obUsageFilter,
       obMfgFilter,
+      obSearchTrimmed,
       obDateRange?.start,
       obDateRange?.end,
       obKwRange?.min,
@@ -743,6 +751,7 @@ export default function OrdersPage() {
   // 탭 3: 판매
   const [saleCustomerFilter, setSaleCustomerFilter] = useState("")
   const [saleDateRange, setSaleDateRange] = useState<DateRangeValue>(null)
+  const [saleSearch, setSaleSearch] = useState("")
   const [saleInvoiceFilter, setSaleInvoiceFilter] = useState<"" | "issued" | "pending">(() =>
     getSaleInvoiceQueue(initialQueueParams.get("invoice")),
   )
@@ -768,7 +777,8 @@ export default function OrdersPage() {
     setSalePageIndex(0)
     setSelectedSaleIds(new Set())
   })
-  const salePageResetKey = `${saleCustomerFilter}|${saleDateRange?.start ?? ""}|${saleDateRange?.end ?? ""}|${saleInvoiceFilter}|${saleErpClosedFilter}|${saleReceiptFilter}`
+  const saleSearchTrimmed = saleSearch.trim()
+  const salePageResetKey = `${saleCustomerFilter}|${saleDateRange?.start ?? ""}|${saleDateRange?.end ?? ""}|${saleInvoiceFilter}|${saleErpClosedFilter}|${saleReceiptFilter}|${saleSearchTrimmed}`
   useEffect(() => {
     void salePageResetKey
     setSalePageIndex(0)
@@ -784,6 +794,7 @@ export default function OrdersPage() {
     invoice_status: saleInvoiceFilter || undefined,
     receipt_status: saleReceiptFilter || undefined,
     erp_closed: saleErpClosedFilter || undefined,
+    q: saleSearchTrimmed || undefined,
   }
   const {
     dashboard: saleDash,
@@ -870,6 +881,7 @@ export default function OrdersPage() {
   const [receiptCustomerFilter, setReceiptCustomerFilter] = useState("")
   const [receiptDateRange, setReceiptDateRange] = useState<DateRangeValue>(null)
   const [receiptMatchFilter, setReceiptMatchFilter] = useState<ReceiptMatchFilter>("open")
+  const [receiptSearch, setReceiptSearch] = useState("")
   const [orderActionError, setOrderActionError] = useState("")
   const [orderSourceHints, setOrderSourceHints] = useState<Record<string, FulfillmentSource>>({})
 
@@ -965,11 +977,21 @@ export default function OrdersPage() {
   } = useReceiptList(receiptFilters)
   const { dashboard: receiptDash, reload: reloadReceiptDash } = useReceiptDashboard(receiptFilters)
   const visibleReceipts = useMemo(() => {
-    if (receiptMatchFilter === "open") {
-      return receipts.filter((receipt) => getReceiptMatchFilter(receipt) !== "matched")
-    }
-    return receipts.filter((receipt) => getReceiptMatchFilter(receipt) === receiptMatchFilter)
-  }, [receipts, receiptMatchFilter])
+    const matchFiltered = receiptMatchFilter === "open"
+      ? receipts.filter((receipt) => getReceiptMatchFilter(receipt) !== "matched")
+      : receipts.filter((receipt) => getReceiptMatchFilter(receipt) === receiptMatchFilter)
+    const query = receiptSearch.trim().toLowerCase()
+    if (!query) return matchFiltered
+    return matchFiltered.filter((receipt) => {
+      const haystack = [
+        receipt.customer_name ?? "",
+        receipt.bank_account ?? "",
+        receipt.memo ?? "",
+        receipt.receipt_date ?? "",
+      ].join(" ").toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [receipts, receiptMatchFilter, receiptSearch])
   const reloadReceipts = async () => {
     await Promise.all([reloadReceiptList(), reloadReceiptDash()])
   }
@@ -2169,6 +2191,13 @@ export default function OrdersPage() {
       )}
       {activeTab === "outbound" && !selectedOutbound && (
         <>
+          <input
+            type="search"
+            value={obSearch}
+            onChange={(e) => setObSearch(e.target.value)}
+            placeholder="테이블 검색"
+            className="h-8 w-44 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-2 text-xs"
+          />
           <FilterButton
             items={[
               {
@@ -2231,6 +2260,13 @@ export default function OrdersPage() {
       )}
       {activeTab === "sales" && (
         <>
+          <input
+            type="search"
+            value={saleSearch}
+            onChange={(e) => setSaleSearch(e.target.value)}
+            placeholder="테이블 검색"
+            className="h-8 w-44 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-2 text-xs"
+          />
           <div className="w-36">
             <PartnerCombobox
               partners={partners}
@@ -2307,6 +2343,13 @@ export default function OrdersPage() {
       )}
       {activeTab === "receipts" && (
         <>
+          <input
+            type="search"
+            value={receiptSearch}
+            onChange={(e) => setReceiptSearch(e.target.value)}
+            placeholder="테이블 검색"
+            className="h-8 w-44 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-2 text-xs"
+          />
           <FilterButton
             items={[
               {
