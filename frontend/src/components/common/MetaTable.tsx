@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react"
+import { createPortal } from "react-dom"
 import {
   flexRender,
   getCoreRowModel,
@@ -256,6 +257,7 @@ export function MetaTable<T>({
     active: boolean
     rect: { left: number; top: number; width: number; height: number }
     label: string
+    align: "left" | "right" | "center"
   } | null>(null)
   const headerRefs = useRef<Map<string, HTMLElement>>(new Map())
   // 드래그 직후 click 이벤트(정렬 토글) 가 발화되는 것을 막기 위한 단발 플래그.
@@ -649,6 +651,7 @@ export function MetaTable<T>({
     columnId: string,
     label: string,
     reorderable: boolean,
+    align: "left" | "right" | "center",
   ) => {
     // 좌클릭만, 리사이저 영역은 제외
     if (e.button !== 0) return
@@ -666,6 +669,7 @@ export function MetaTable<T>({
       active: false,
       rect: { left: r.left, top: r.top, width: r.width, height: r.height },
       label,
+      align,
     })
   }
 
@@ -746,7 +750,14 @@ export function MetaTable<T>({
                     data-sorted={sorted || undefined}
                     onPointerDown={
                       reorderable
-                        ? (e) => onHeaderPointerDown(e, header.id, labelText, reorderable)
+                        ? (e) =>
+                            onHeaderPointerDown(
+                              e,
+                              header.id,
+                              labelText,
+                              reorderable,
+                              meta?.align ?? "left",
+                            )
                         : undefined
                     }
                     onContextMenu={(e) => onHeaderContextMenu(e, header.id)}
@@ -969,40 +980,50 @@ export function MetaTable<T>({
           )}
         </div>
       )}
-      <AnimatePresence>
-        {dragState?.active && (
-          <motion.div
-            key="drag-preview"
-            className="sf-col-drag-preview"
-            style={{
-              left: dragState.pointerX - (dragState.startX - dragState.rect.left),
-              top: dragState.rect.top,
-              width: dragState.rect.width,
-              height: dragState.rect.height,
-            }}
-            initial={{ opacity: 0, scale: 0.92 }}
-            animate={{ opacity: 0.92, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.92 }}
-            transition={{ type: "spring", stiffness: 520, damping: 38, mass: 0.6 }}
-          >
-            <span className="sf-col-drag-preview-label">{dragState.label}</span>
-          </motion.div>
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {dragState?.active && (
+              <motion.div
+                key="drag-preview"
+                className="sf-col-drag-preview"
+                style={{
+                  left: dragState.pointerX - (dragState.startX - dragState.rect.left),
+                  top: dragState.rect.top,
+                  width: dragState.rect.width,
+                  height: dragState.rect.height,
+                  justifyContent:
+                    dragState.align === "right"
+                      ? "flex-end"
+                      : dragState.align === "center"
+                        ? "center"
+                        : "flex-start",
+                }}
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 0.92, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.92 }}
+                transition={{ type: "spring", stiffness: 520, damping: 38, mass: 0.6 }}
+              >
+                <span className="sf-col-drag-preview-label">{dragState.label}</span>
+              </motion.div>
+            )}
+            {dragState?.active && dropIndicator && (
+              <motion.div
+                key="drop-indicator"
+                className="sf-col-drop-indicator"
+                style={{ top: dropIndicator.top, height: dropIndicator.height }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1, left: dropIndicator.x }}
+                exit={{ opacity: 0 }}
+                transition={{
+                  left: { type: "spring", stiffness: 600, damping: 40 },
+                  opacity: { duration: 0.12 },
+                }}
+              />
+            )}
+          </AnimatePresence>,
+          document.body,
         )}
-        {dragState?.active && dropIndicator && (
-          <motion.div
-            key="drop-indicator"
-            className="sf-col-drop-indicator"
-            style={{ top: dropIndicator.top, height: dropIndicator.height }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1, left: dropIndicator.x }}
-            exit={{ opacity: 0 }}
-            transition={{
-              left: { type: "spring", stiffness: 600, damping: 40 },
-              opacity: { duration: 0.12 },
-            }}
-          />
-        )}
-      </AnimatePresence>
       <AnimatePresence>
         {ctxMenu &&
           (() => {
