@@ -75,6 +75,7 @@ type SalesAnalysisTab =
   | "profit"
   | "manufacturer"
   | "customer"
+  | "billing"
   | "receivable"
   | "reconciliation"
 type ReconciliationLevel = "good" | "watch" | "risk"
@@ -186,7 +187,8 @@ const salesAnalysisTabOptions = [
   { key: "profit", label: "매출이익" },
   { key: "manufacturer", label: "제조사별" },
   { key: "customer", label: "거래처별" },
-  { key: "receivable", label: "미수·수금" },
+  { key: "billing", label: "청구/미수" },
+  { key: "receivable", label: "수금" },
   { key: "reconciliation", label: "대사" },
 ]
 
@@ -1573,11 +1575,16 @@ export default function SalesAnalysisPage() {
   const topCustomer = customers.items[0]
   const shownCustomers = customers.items.slice(0, 8)
   const shownCustomerTotals = shownCustomers.reduce(
-    (acc, item) => ({
-      sales: acc.sales + item.total_sales_krw,
-      outstanding: acc.outstanding + item.outstanding_krw,
-    }),
-    { sales: 0, outstanding: 0 },
+    (acc, item) => {
+      const margin =
+        item.avg_margin_rate != null ? (item.total_sales_krw * item.avg_margin_rate) / 100 : 0
+      return {
+        sales: acc.sales + item.total_sales_krw,
+        outstanding: acc.outstanding + item.outstanding_krw,
+        margin: acc.margin + margin,
+      }
+    },
+    { sales: 0, outstanding: 0, margin: 0 },
   )
   const reportPeriodLabel =
     dateRange.dateFrom || dateRange.dateTo
@@ -2515,6 +2522,90 @@ export default function SalesAnalysisPage() {
 
           {activeAnalysisTab === "customer" && (
             <div className="grid grid-cols-1 gap-4">
+              <CardB title="거래처별 매출·이익" sub="상위 8개 거래처" padded>
+                <Table className="sf-motion-table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>거래처</TableHead>
+                      <TableHead className="text-right">매출액</TableHead>
+                      <TableHead className="text-right">비중</TableHead>
+                      <TableHead className="text-right">이익률</TableHead>
+                      <TableHead className="text-right">이익액</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody ref={customerRowsParent}>
+                    {shownCustomers.map((item) => {
+                      const share =
+                        customers.summary.total_sales_krw > 0
+                          ? (item.total_sales_krw / customers.summary.total_sales_krw) * 100
+                          : 0
+                      const marginAmount =
+                        item.avg_margin_rate != null
+                          ? (item.total_sales_krw * item.avg_margin_rate) / 100
+                          : null
+                      return (
+                        <TableRow key={item.customer_id}>
+                          <TableCell className="text-xs font-medium">
+                            {item.customer_name}
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            {formatKRW(item.total_sales_krw)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            {share.toFixed(1)}%
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            {item.avg_margin_rate != null
+                              ? `${item.avg_margin_rate.toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            {marginAmount != null ? formatKRW(marginAmount) : "—"}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                    {customers.items.length === 0 && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="py-8 text-center text-xs text-muted-foreground"
+                        >
+                          거래처 분석 데이터가 없습니다
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                  {shownCustomers.length > 0 && (
+                    <TableFooter>
+                      <TableRow>
+                        <TableCell className="text-xs font-medium">합계</TableCell>
+                        <TableCell className="text-right text-xs font-medium">
+                          {formatKRW(shownCustomerTotals.sales)}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">
+                          {customers.summary.total_sales_krw > 0
+                            ? `${((shownCustomerTotals.sales / customers.summary.total_sales_krw) * 100).toFixed(1)}%`
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">
+                          {shownCustomerTotals.sales > 0
+                            ? `${((shownCustomerTotals.margin / shownCustomerTotals.sales) * 100).toFixed(1)}%`
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right text-xs font-medium">
+                          {formatKRW(shownCustomerTotals.margin)}
+                        </TableCell>
+                      </TableRow>
+                    </TableFooter>
+                  )}
+                </Table>
+              </CardB>
+            </div>
+          )}
+
+          {activeAnalysisTab === "billing" && (
+            <div className="grid grid-cols-1 gap-4">
               <CardB title="거래처별 청구/미수" sub="상위 8개 거래처" padded>
                 <Table className="sf-motion-table">
                   <TableHeader>
@@ -2522,33 +2613,39 @@ export default function SalesAnalysisPage() {
                       <TableHead>거래처</TableHead>
                       <TableHead className="text-right">청구액</TableHead>
                       <TableHead className="text-right">미수</TableHead>
-                      <TableHead className="text-right">이익률</TableHead>
+                      <TableHead className="text-right">미수율</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody ref={customerRowsParent}>
-                    {shownCustomers.map((item) => (
-                      <TableRow key={item.customer_id}>
-                        <TableCell className="text-xs font-medium">{item.customer_name}</TableCell>
-                        <TableCell className="text-right text-xs">
-                          {formatKRW(item.total_sales_krw)}
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          {formatKRW(item.outstanding_krw)}
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          {item.avg_margin_rate != null
-                            ? `${item.avg_margin_rate.toFixed(1)}%`
-                            : "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                  <TableBody>
+                    {shownCustomers.map((item) => {
+                      const outstandingRate =
+                        item.total_sales_krw > 0
+                          ? (item.outstanding_krw / item.total_sales_krw) * 100
+                          : 0
+                      return (
+                        <TableRow key={item.customer_id}>
+                          <TableCell className="text-xs font-medium">
+                            {item.customer_name}
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            {formatKRW(item.total_sales_krw)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            {formatKRW(item.outstanding_krw)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            {item.total_sales_krw > 0 ? `${outstandingRate.toFixed(1)}%` : "—"}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                     {customers.items.length === 0 && (
                       <TableRow>
                         <TableCell
                           colSpan={4}
                           className="py-8 text-center text-xs text-muted-foreground"
                         >
-                          거래처 분석 데이터가 없습니다
+                          청구/미수 데이터가 없습니다
                         </TableCell>
                       </TableRow>
                     )}
@@ -2564,7 +2661,9 @@ export default function SalesAnalysisPage() {
                           {formatKRW(shownCustomerTotals.outstanding)}
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground">
-                          {shownCustomers.length.toLocaleString("ko-KR")}건
+                          {shownCustomerTotals.sales > 0
+                            ? `${((shownCustomerTotals.outstanding / shownCustomerTotals.sales) * 100).toFixed(1)}%`
+                            : "—"}
                         </TableCell>
                       </TableRow>
                     </TableFooter>
