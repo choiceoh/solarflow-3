@@ -126,7 +126,15 @@ async function main() {
     lines.push(`  $ ${s}`)
   }
   lines.push('  (v1 advisory — 실 실행은 PR-B 의 STRICT 단계부터)')
-  console.error(lines.join('\n'))
+  // Claude Code spec: exit 0 + stdout JSON {hookSpecificOutput.additionalContext}
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PostToolUse',
+        additionalContext: lines.join('\n'),
+      },
+    }),
+  )
   process.exit(0)
 }
 

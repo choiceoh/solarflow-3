@@ -10,15 +10,20 @@
 
 1. **PreToolUse (Edit|Write|MultiEdit)** → `pre-edit.mjs`
    - 변경 대상 path 의 도메인 식별 (`domains.json` lookup)
-   - 해당 도메인의 `blast_radius` + `depends_on` 를 **stderr** 로 출력
-   - Claude Code 가 stderr 를 system 컨텍스트로 인지 → 에이전트가 *변경 직전* 인지
+   - 해당 도메인의 `blast_radius` + `depends_on` 를 **stdout JSON** 으로 출력:
+     ```json
+     {"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"..."}}
+     ```
+   - Claude Code 가 `additionalContext` 를 system 컨텍스트로 주입 → 에이전트가 *변경 직전* 인지
 
 2. **PostToolUse (Edit|Write|MultiEdit)** → `post-edit.mjs`
    - 변경 path 의 도메인 식별
-   - 해당 도메인의 `verify_scripts` 권장 명령을 stderr 로 출력
+   - 해당 도메인의 `verify_scripts` 권장 명령을 stdout JSON `additionalContext` 로 출력
    - v1 은 *알림만*. PR-B 부터 STRICT_RULES=1 로 실 실행 + 실패 시 차단.
 
-**런타임**: Node 18+ ESM. zero dependency. bun 도 동일 파일 실행 가능 (bun .mjs 도 지원).
+**스펙 출처**: https://code.claude.com/docs/en/hooks — exit 0 + stdout JSON 이 Claude 컨텍스트 주입 정식 채널. stderr 는 transcript 모드(Ctrl+R)에서만 사용자에게 보임.
+
+**런타임**: Node 18+ ESM. zero dependency. settings.json 이 exec form (`command: "node"`, `args: [...]`) 사용 — cwd 무관, Windows 의 `.cmd` shim 회피.
 
 ---
 
@@ -57,15 +62,12 @@ echo '{"tool_name":"Edit","tool_input":{"file_path":"backend/internal/model/po.g
   | node .claude/hooks/pre-edit.mjs
 ```
 
-기대 출력 (stderr):
+기대 출력 (stdout, JSON 1줄):
+```json
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"\n[domain] po — 발주 (Purchase Order)\n  feature: tx.po\n  의존 도메인: products, inventory, lc, tt\n  같이 봐야 할 곳:\n  - PO model 필드 추가/삭제 → handler.go Validation ...\n  ..."}}
 ```
-[domain] po — 발주 (Purchase Order)
-  feature: tx.po
-  의존 도메인: products, inventory, lc, tt
-  같이 봐야 할 곳:
-  - PO model 필드 추가/삭제 → handler.go Validation + frontend ProcurementPage form 타입 + ...
-  ...
-```
+
+`additionalContext` 안의 텍스트가 Claude 다음 턴 시스템 컨텍스트로 주입된다.
 
 ---
 
@@ -87,9 +89,9 @@ echo '{"tool_name":"Edit","tool_input":{"file_path":"backend/internal/model/po.g
 
 | 단계 | 데이터 정본 | Pre 출력 | Post 동작 | 도메인 커버리지 |
 |---|---|---|---|---|
-| **v1 (이 PR)** | `domains.json` 수동 | stderr advisory | 명령 출력만 | PO 1개 full + glob fallback |
-| **v2 (PR-A)** | `domains.json` codemod 생성 | stderr advisory | 명령 출력만 | 모든 도메인 |
-| **v3 (PR-B)** | `domains.json` codemod 생성 | system context injection | 실 실행 + 실패 시 차단 | 모든 도메인 + manifest 정밀 매칭 |
+| **v1 (이 PR)** | `domains.json` 수동 | stdout JSON `additionalContext` | 명령 출력만 | PO 1개 full + glob fallback |
+| **v2 (PR-A)** | `domains.json` codemod 생성 | stdout JSON `additionalContext` | 명령 출력만 | 모든 도메인 |
+| **v3 (PR-B)** | `domains.json` codemod 생성 | system context injection | 실 실행 + 실패 시 차단 (`exit 2`) | 모든 도메인 + manifest 정밀 매칭 |
 
 각 단계가 *되돌릴 수 있는 크기*. 단계 사이 평가 → 다음 PR.
 

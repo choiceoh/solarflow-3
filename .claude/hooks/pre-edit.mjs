@@ -184,7 +184,16 @@ async function main() {
   }
 
   if (lines.length > 0) {
-    console.error(lines.join('\n'))
+    // Claude Code spec: exit 0 + stdout JSON {hookSpecificOutput.additionalContext}
+    // 이게 Claude 컨텍스트로 주입되는 정식 채널. stderr 는 transcript(Ctrl+R) 만 보임.
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          additionalContext: lines.join('\n'),
+        },
+      }),
+    )
   }
   process.exit(0)
 }
