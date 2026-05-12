@@ -12,7 +12,7 @@
 | Go 테스트 | 240+ PASS (router snapshot 2건 + guard matrix 50 + pure function 62 sub-case) |
 | Rust 테스트 | cargo test PASS |
 | AGENT-BUILDER-VISION | 8/15 도메인 colocation (53%), backend dup 0, codemod 4종, 가드레일 v2 STRICT |
-| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-20260511-184355 판매 수금 미완료 큐, D-20260512-101906 필터 전체 수금완료, D-20260512-112516 Import Hub 입력자 편의 개선, D-20260512-132713 매출 분석 탭 세분화, D-20260512-143605 입력·일괄처리 후속액션/사전검토, D-20260512-165815 작업 흐름 정본화, D-080/D-081/D-132~D-138 번호 공백 유지) |
+| DECISIONS | D-001~D-164 기존 순번 보존 + 신규 결정은 `D-YYYYMMDD-HHMMSS` 초 단위 타임스탬프 사용 (D-20260511-171426 결정 ID 전환, D-20260511-174500 모듈 제품군/변종 분류, D-20260511-174700 migration 반영 확인, D-20260511-174821 매출 분석 브리지/리포트/대체원가, D-20260511-175240 Import Hub 운영 리허설 안전장치, D-20260511-175509 가격예측 백테스트+견적, D-20260511-180114 출고/판매 원클릭 수금완료, D-20260511-184355 판매 수금 미완료 큐, D-20260512-101906 필터 전체 수금완료, D-20260512-112516 Import Hub 입력자 편의 개선, D-20260512-132713 매출 분석 탭 세분화, D-20260512-143605 입력·일괄처리 후속액션/사전검토, D-20260512-165815 작업 흐름 정본화, D-20260512-172118 조회자/입력자 UX 표면 분리, D-080/D-081/D-132~D-138 번호 공백 유지) |
 | 운영 서비스 | 4개 systemd --user 서비스 자동 시작 |
 
 ---
@@ -36,6 +36,30 @@
   - backend/engine/frontend 변경 없음으로 각 검증 skip
 - `git diff --check` 성공
 - `graphify update .` 성공 — 5751 nodes / 9503 edges / 450 communities (`graph.html`은 노드 수 초과로 생략)
+
+---
+
+## 2026-05-12 세션 — 조회자/입력자 UX 표면 분리 1차 (D-20260512-172118)
+
+### 완료
+- 조회자용 화면과 입력자용 화면을 같은 데이터/API 위에서 표면 우선순위만 분리하는 원칙을 설계 정본과 결정 기록에 추가
+- `/import` 표준 탭을 `입력 작업대`로 재정리
+  - 통합 양식 다운로드/업로드를 본문 상단 1순위 액션으로 이동
+  - 마스터 양식/샘플팩은 보조 액션으로 낮춤
+  - 업무별 개별 양식은 접힌 보조 영역으로 이동
+  - 헤더 액션에는 관리자 전체 내보내기만 남겨 입력 CTA 혼잡 제거
+- 통합 업로드 미리보기 다이얼로그 정리
+  - 파일에 없는 시트 탭은 숨기고 존재하는 시트만 우선 표시
+  - 오류/경고가 있으면 해당 필터를 먼저 열어 보정 대상 행을 바로 보여줌
+  - 영향 요약을 판매/수금, 구매/결제, 입고/원가 단위로 재그룹화
+  - 셀 수정/보정본/에러 다운로드 도구와 등록/취소 액션의 버튼 계층 분리
+
+### 검증
+- `cd frontend && npx --yes bun@1.3.13 install --frozen-lockfile` 성공
+- `cd frontend && npx --yes bun@1.3.13 run build` 성공 — plugin timing warning 출력
+- `cd frontend && npx --yes bun@1.3.13 run lint` 종료코드 0 — 기존 DeclarationCostManager hook dependency 경고 1건 + payment-terms-widget hook dependency 경고 1건 + excelValidation optional-chain 경고 1건 + AssistantPage forEach return 경고 1건 + ProcurementPage hook dependency 경고 4건 + bun-test 타입 suppression 경고 1건
+- `git diff --check` 성공
+- `graphify update .` 성공 — 5751 nodes / 9503 edges / 453 communities (`graph.html`은 노드 수 초과로 생략)
 
 ---
 

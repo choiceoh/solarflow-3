@@ -110,51 +110,74 @@ function buildImpactItems(sections: UnifiedSection[], totals: SectionSummary): I
   const poRows = validRows(sectionByType.get('purchase_order'));
   const lcRows = validRows(sectionByType.get('lc'));
   const ttRows = validRows(sectionByType.get('tt'));
+  const inboundRows = validRows(sectionByType.get('inbound'));
+  const expenseRows = validRows(sectionByType.get('expense'));
+  const orderRows = validRows(sectionByType.get('order'));
+  const outboundRows = validRows(sectionByType.get('outbound'));
+  const saleRows = validRows(sectionByType.get('sale'));
+  const receiptRows = validRows(sectionByType.get('receipt'));
   const masterRows = ['company', 'manufacturer', 'product', 'warehouse', 'bank', 'partner']
     .reduce((sum, type) => sum + validRows(sectionByType.get(type as UnifiedSection['type'])).length, 0);
 
+  const declarationSection = sectionByType.get('declaration');
+  const declarationValid = declarationSection?.declPreview
+    ? declarationSection.declPreview.declarations.filter((row) => row.valid).length
+      + declarationSection.declPreview.costs.filter((row) => row.valid).length
+    : 0;
+  const purchaseCount = poRows.length + lcRows.length + ttRows.length;
+  const inboundCount = inboundRows.length + declarationValid + expenseRows.length;
+  const salesCount = orderRows.length + outboundRows.length + saleRows.length + receiptRows.length;
   const poNumbers = new Set(poRows.map((row) => String(row.data.po_number ?? '').trim()).filter(Boolean));
-  const poQty = poRows.reduce((sum, row) => sum + numberValue(row.data.quantity), 0);
   const lcUsd = lcRows.reduce((sum, row) => sum + numberValue(row.data.amount_usd), 0);
-  const lcMw = lcRows.reduce((sum, row) => sum + numberValue(row.data.target_mw), 0);
-  const ttUsd = ttRows.reduce((sum, row) => sum + numberValue(row.data.amount_usd), 0);
   const ttKrw = ttRows.reduce(
     (sum, row) => sum + numberValue(row.data.amount_usd) * numberValue(row.data.exchange_rate),
     0,
   );
 
-  return [
+  const items: ImpactItem[] = [
     {
       label: '등록 예정',
       value: `${formatCount(totals.valid)}건`,
       sub: masterRows > 0 ? `마스터 ${formatCount(masterRows)}건 포함` : '유효행 기준',
       tone: 'pos',
     },
-    {
-      label: 'PO 영향',
-      value: `${formatCount(poNumbers.size)}건`,
-      sub: `라인 ${formatCount(poRows.length)} · 수량 ${formatCount(poQty)}`,
-      tone: poRows.length > 0 ? 'info' : 'ink',
-    },
-    {
-      label: 'LC 영향',
-      value: `${formatCount(lcRows.length)}건`,
-      sub: `${formatUsd(lcUsd)} · ${lcMw.toFixed(2)}MW`,
-      tone: lcRows.length > 0 ? 'info' : 'ink',
-    },
-    {
-      label: 'T/T 영향',
-      value: `${formatCount(ttRows.length)}건`,
-      sub: `${formatUsd(ttUsd)} · ${formatKrw(ttKrw)}원`,
-      tone: ttRows.length > 0 ? 'info' : 'ink',
-    },
-    {
-      label: '검토 필요',
-      value: `${formatCount(totals.warning + totals.error)}건`,
-      sub: `경고 ${formatCount(totals.warning)} · 에러 ${formatCount(totals.error)}`,
-      tone: totals.error > 0 || totals.warning > 0 ? 'warn' : 'pos',
-    },
   ];
+
+  if (salesCount > 0) {
+    items.push({
+      label: '판매/수금',
+      value: `${formatCount(salesCount)}건`,
+      sub: `수주 ${formatCount(orderRows.length)} · 출고 ${formatCount(outboundRows.length)} · 매출 ${formatCount(saleRows.length)} · 수금 ${formatCount(receiptRows.length)}`,
+      tone: 'info',
+    });
+  }
+
+  if (purchaseCount > 0) {
+    items.push({
+      label: '구매/결제',
+      value: `${formatCount(purchaseCount)}건`,
+      sub: `PO ${formatCount(poNumbers.size)}건/${formatCount(poRows.length)}라인 · LC ${formatUsd(lcUsd)} · T/T ${formatKrw(ttKrw)}원`,
+      tone: 'info',
+    });
+  }
+
+  if (inboundCount > 0) {
+    items.push({
+      label: '입고/원가',
+      value: `${formatCount(inboundCount)}건`,
+      sub: `입고 ${formatCount(inboundRows.length)} · 면장/원가 ${formatCount(declarationValid)} · 부대비용 ${formatCount(expenseRows.length)}`,
+      tone: 'info',
+    });
+  }
+
+  items.push({
+    label: '검토 필요',
+    value: `${formatCount(totals.warning + totals.error)}건`,
+    sub: `경고 ${formatCount(totals.warning)} · 에러 ${formatCount(totals.error)}`,
+    tone: totals.error > 0 || totals.warning > 0 ? 'warn' : 'pos',
+  });
+
+  return items;
 }
 
 export default function UnifiedImportDialog({
@@ -181,17 +204,40 @@ export default function UnifiedImportDialog({
       { total: 0, valid: 0, warning: 0, error: 0, presentCount: 0 },
     );
   }, [sections]);
+  const visibleSections = useMemo(() => {
+    const present = sections.filter((s) => s.present);
+    return present.length > 0 ? present : sections;
+  }, [sections]);
+  const hiddenAbsentCount = sections.length - visibleSections.length;
 
   // 처음 열릴 때 첫 번째 present + valid > 0 섹션, 없으면 첫 present, 없으면 첫 섹션
   const defaultTab = useMemo(() => {
-    if (sections.length === 0) return '';
-    const firstWithData = sections.find((s) => s.present && summarize(s).total > 0);
+    if (visibleSections.length === 0) return '';
+    const firstWithData = visibleSections.find((s) => s.present && summarize(s).total > 0);
     if (firstWithData) return firstWithData.type;
-    const firstPresent = sections.find((s) => s.present);
-    return (firstPresent ?? sections[0]).type;
-  }, [sections]);
+    const firstPresent = visibleSections.find((s) => s.present);
+    return (firstPresent ?? visibleSections[0]).type;
+  }, [visibleSections]);
 
-  const currentTab = activeTab || defaultTab;
+  const currentTab = visibleSections.some((s) => s.type === activeTab) ? activeTab : defaultTab;
+  const previewResetKey = useMemo(() => {
+    if (!preview) return '';
+    const sectionShape = sections.map((s) => `${s.type}:${s.present ? summarize(s).total : 0}:${s.parseError ? 'parse' : ''}`).join('|');
+    return `${preview.fileName}:${sectionShape}`;
+  }, [preview, sections]);
+  const lastPreviewResetKey = useRef('');
+
+  useEffect(() => {
+    if (!previewResetKey) {
+      lastPreviewResetKey.current = '';
+      return;
+    }
+    if (lastPreviewResetKey.current === previewResetKey) return;
+    lastPreviewResetKey.current = previewResetKey;
+    setActiveTab(defaultTab);
+    setFilter(totals.error > 0 ? 'error' : totals.warning > 0 ? 'warning' : 'all');
+    setEditing(false);
+  }, [previewResetKey, defaultTab, totals.error, totals.warning]);
 
   if (!preview) return null;
 
@@ -213,7 +259,7 @@ export default function UnifiedImportDialog({
 
           <Tabs value={currentTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
             <TabsList className="flex flex-wrap gap-1 bg-transparent justify-start h-auto p-0">
-              {sections.map((s) => {
+              {visibleSections.map((s) => {
                 const sum = summarize(s);
                 const tone = sectionTone(s, sum);
                 return (
@@ -238,9 +284,14 @@ export default function UnifiedImportDialog({
                   </TabsTrigger>
                 );
               })}
+              {hiddenAbsentCount > 0 && (
+                <div className="flex items-center px-2 text-[11px] text-muted-foreground">
+                  빈 시트 {hiddenAbsentCount}개 숨김
+                </div>
+              )}
             </TabsList>
 
-            {sections.map((s) => (
+            {visibleSections.map((s) => (
               <TabsContent key={s.type} value={s.type} className="flex-1 overflow-hidden mt-3 flex flex-col">
                 <SectionPanel
                   section={s}
@@ -253,39 +304,45 @@ export default function UnifiedImportDialog({
             ))}
           </Tabs>
 
-          <DialogFooter>
-            {onCellChange && (
-              <Button
-                variant={editing ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setEditing((prev) => !prev)}
-              >
-                <Pencil className="mr-1.5 h-4 w-4" />셀 수정
-              </Button>
-            )}
-            {onDownloadCorrected && (
-              <Button variant="outline" size="sm" onClick={onDownloadCorrected}>
-                <Download className="mr-1.5 h-4 w-4" />보정본 다운로드
-              </Button>
-            )}
-            {totals.error > 0 && onDownloadErrors && (
-              <Button variant="outline" size="sm" onClick={onDownloadErrors}>
-                <Download className="mr-1.5 h-4 w-4" />에러만 다운로드
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={onClose}>
-              <X className="mr-1.5 h-4 w-4" />취소
-            </Button>
-            <Button
-              size="sm"
-              disabled={totals.valid === 0 || loading}
-              onClick={() => setConfirmOpen(true)}
-            >
-              <Upload className="mr-1.5 h-4 w-4" />
-              {loading ? '등록 중...' : `전체 등록 (유효 ${totals.valid}건)`}
-            </Button>
-          </DialogFooter>
           <EditSummary edits={edits} />
+          <DialogFooter className="block">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap gap-1.5">
+                {onCellChange && (
+                  <Button
+                    variant={editing ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setEditing((prev) => !prev)}
+                  >
+                    <Pencil className="mr-1.5 h-4 w-4" />셀 수정
+                  </Button>
+                )}
+                {onDownloadCorrected && (
+                  <Button variant="outline" size="sm" onClick={onDownloadCorrected}>
+                    <Download className="mr-1.5 h-4 w-4" />보정본
+                  </Button>
+                )}
+                {totals.error > 0 && onDownloadErrors && (
+                  <Button variant="outline" size="sm" onClick={onDownloadErrors}>
+                    <Download className="mr-1.5 h-4 w-4" />에러만
+                  </Button>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={onClose}>
+                  <X className="mr-1.5 h-4 w-4" />취소
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={totals.valid === 0 || loading}
+                  onClick={() => setConfirmOpen(true)}
+                >
+                  <Upload className="mr-1.5 h-4 w-4" />
+                  {loading ? '등록 중...' : `등록 ${formatCount(totals.valid)}건`}
+                </Button>
+              </div>
+            </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

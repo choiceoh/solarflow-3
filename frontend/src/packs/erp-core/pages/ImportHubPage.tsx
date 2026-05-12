@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Database, Download, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
+import { ChevronDown, Database, Download, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
@@ -62,6 +62,8 @@ export default function ImportHubPage() {
   const unifiedDisabled = !unified.masterData || unified.loading;
   const masterData = unified.masterData;
   const loading = unified.loading;
+  const reviewCount = unified.history.filter((item) => item.status === 'preview' && (item.errorRows + item.warningRows) > 0).length;
+  const latestHistory = unified.history[0];
 
   const handleUnifiedDownload = useCallback(async () => {
     if (!masterData) return;
@@ -134,56 +136,55 @@ export default function ImportHubPage() {
       title="엑셀 입력"
       description="운영 데이터 생성은 엑셀 양식 업로드로 처리합니다."
       tableTitle="입력 양식"
-      tableSub="통합 양식 + 업무별 검증 업로드"
+      tableSub="입력자 작업대"
       kpiScope="import-hub"
-      actions={(
+      actions={isAdmin ? (
         <div className="flex items-center gap-2">
           <Button
             type="button"
             size="sm"
             variant="outline"
             className="h-8 gap-1.5"
-            disabled={!masterData || loading || downloadingMaster}
-            onClick={handleUnifiedMasterDownload}
-            title="법인·제조사·품번·창고·은행·거래처 6종 시트가 한 파일로"
+            disabled={exporting}
+            onClick={handleExportAll}
+            title="관리자 전용 — 모든 컬렉션의 거래 데이터를 한 파일로 내보냅니다"
           >
-            {downloadingMaster ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            통합 마스터 다운로드
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Database className="h-3.5 w-3.5" />}
+            전체 데이터 내보내기
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 gap-1.5"
-            disabled={!masterData || loading || downloading}
-            onClick={handleUnifiedDownload}
-          >
-            {downloading || loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            통합 양식 다운로드
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 gap-1.5"
-            disabled={!masterData || loading || downloadingSample}
-            onClick={handleSamplePackDownload}
-            title="PO/LC/T/T 정상·경고·오류 행이 섞인 리허설용 파일"
-          >
-            {downloadingSample ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
-            리허설 샘플팩
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 gap-1.5"
-            disabled={unifiedDisabled}
-            onClick={() => unifiedInputRef.current?.click()}
-            title="통합 양식 한 파일로 모든 섹션을 한 번에 업로드합니다"
-          >
-            {unified.loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            통합 양식 업로드
-          </Button>
+        </div>
+      ) : undefined}
+      metrics={[
+        { label: '검토 필요', value: String(reviewCount), unit: '건', sub: '업로드 오류·경고', tone: reviewCount > 0 ? 'warn' : 'pos' },
+        { label: '최근 등록', value: String(latestHistory?.importedRows ?? 0), unit: '건', sub: latestHistory?.fileName ?? '이력 없음', tone: 'info' },
+        { label: '통합 양식', value: '11', unit: '시트', sub: '운영 입력 정본', tone: 'solar' },
+        { label: '업무별', value: '보조', sub: '예외 보정용', tone: 'ink' },
+      ]}
+    >
+      <Tabs defaultValue="standard">
+        <TabsList variant="line">
+          <TabsTrigger value="standard">입력 작업대</TabsTrigger>
+          <TabsTrigger value="external">외부 양식 변환</TabsTrigger>
+          <TabsTrigger value="ocr">문서 OCR</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="standard" className="mt-6 space-y-6">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+            <PrimaryImportPanel
+              loading={loading}
+              downloading={downloading}
+              downloadingMaster={downloadingMaster}
+              downloadingSample={downloadingSample}
+              disabled={unifiedDisabled}
+              masterReady={!!masterData}
+              onDownloadUnified={handleUnifiedDownload}
+              onDownloadMaster={handleUnifiedMasterDownload}
+              onDownloadSample={handleSamplePackDownload}
+              onUploadClick={() => unifiedInputRef.current?.click()}
+            />
+            <ImportHistoryPanel items={unified.history} onClear={unified.clearHistory} />
+          </div>
+
           <input
             ref={unifiedInputRef}
             type="file"
@@ -195,69 +196,44 @@ export default function ImportHubPage() {
               e.target.value = '';
             }}
           />
-          {isAdmin && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1.5"
-              disabled={exporting}
-              onClick={handleExportAll}
-              title="관리자 전용 — 모든 컬렉션의 거래 데이터를 한 파일로 내보냅니다"
-            >
-              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Database className="h-3.5 w-3.5" />}
-              전체 데이터 내보내기
-            </Button>
-          )}
-        </div>
-      )}
-      metrics={[
-        { label: '통합 양식', value: '1', unit: '파일', sub: '11개 시트', tone: 'solar', spark: [1, 2, 3, 5, 8, 11] },
-        { label: '업무 양식', value: '11', unit: '종', sub: '업로드 검증', tone: 'info' },
-        { label: '운영 입력', value: 'Excel', unit: '정본', sub: 'PO/LC/T/T 생성', tone: 'pos' },
-        { label: '연결 보정', value: '매칭', sub: '관계·상태 관리', tone: 'ink' },
-      ]}
-    >
-      <div className="mb-6 space-y-3">
-        <ImportWorkQueuePanel history={unified.history} />
-      </div>
 
-      <Tabs defaultValue="standard">
-        <TabsList variant="line">
-          <TabsTrigger value="standard">표준 양식</TabsTrigger>
-          <TabsTrigger value="external">외부 양식 변환</TabsTrigger>
-          <TabsTrigger value="ocr">문서 OCR</TabsTrigger>
-        </TabsList>
+          <ImportWorkQueuePanel history={unified.history} />
 
-        <TabsContent value="standard" className="mt-8">
-          <div className="mb-6">
-            <ImportHistoryPanel items={unified.history} onClear={unified.clearHistory} />
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-2 items-start">
-            {IMPORT_GROUPS.map((group) => (
-              <section key={group.title} className="space-y-3">
-                <div className="eyebrow pt-1">{group.title}</div>
-                <div className="grid gap-2">
-                  {group.items.map((item) => (
-                    <div
-                      key={item.type}
-                      className="flex min-h-[68px] items-center gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2"
-                    >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--line)] bg-[var(--bg-2)]">
-                        <FileSpreadsheet className="h-4 w-4 text-[var(--ink-3)]" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[13px] font-semibold text-[var(--ink)]">{item.label}</div>
-                        <div className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{item.sub}</div>
-                      </div>
-                      <ExcelToolbar type={item.type} />
+          <details className="group rounded-md border border-[var(--line)] bg-[var(--surface)]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2">
+              <div>
+                <div className="text-sm font-semibold text-[var(--ink)]">업무별 양식</div>
+                <div className="mt-0.5 text-[11px] text-[var(--ink-3)]">통합 양식 대신 개별 업무 파일을 다룰 때 사용</div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-[var(--ink-3)] transition group-open:rotate-180" />
+            </summary>
+            <div className="border-t border-[var(--line)] p-3">
+              <div className="grid gap-6 xl:grid-cols-2 items-start">
+                {IMPORT_GROUPS.map((group) => (
+                  <section key={group.title} className="space-y-3">
+                    <div className="eyebrow pt-1">{group.title}</div>
+                    <div className="grid gap-2">
+                      {group.items.map((item) => (
+                        <div
+                          key={item.type}
+                          className="flex min-h-[68px] items-center gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2"
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--line)] bg-[var(--bg-2)]">
+                            <FileSpreadsheet className="h-4 w-4 text-[var(--ink-3)]" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[13px] font-semibold text-[var(--ink)]">{item.label}</div>
+                            <div className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{item.sub}</div>
+                          </div>
+                          <ExcelToolbar type={item.type} />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
+                  </section>
+                ))}
+              </div>
+            </div>
+          </details>
         </TabsContent>
 
         <TabsContent value="external" className="mt-8">
@@ -291,5 +267,97 @@ export default function ImportHubPage() {
         onClose={unified.clearSubmitResult}
       />
     </MasterConsole>
+  );
+}
+
+interface PrimaryImportPanelProps {
+  loading: boolean;
+  downloading: boolean;
+  downloadingMaster: boolean;
+  downloadingSample: boolean;
+  disabled: boolean;
+  masterReady: boolean;
+  onDownloadUnified: () => void;
+  onDownloadMaster: () => void;
+  onDownloadSample: () => void;
+  onUploadClick: () => void;
+}
+
+function PrimaryImportPanel({
+  loading,
+  downloading,
+  downloadingMaster,
+  downloadingSample,
+  disabled,
+  masterReady,
+  onDownloadUnified,
+  onDownloadMaster,
+  onDownloadSample,
+  onUploadClick,
+}: PrimaryImportPanelProps) {
+  return (
+    <section className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet className="h-4 w-4 text-[var(--solar-3)]" />
+            <div className="text-sm font-semibold text-[var(--ink)]">통합 입력</div>
+          </div>
+          <div className="mt-1 text-xs leading-5 text-[var(--ink-3)]">
+            PO·LC·T/T·입고·매출·수금을 한 파일에서 검증합니다.
+          </div>
+        </div>
+        <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 gap-1.5"
+            disabled={!masterReady || loading || downloading}
+            onClick={onDownloadUnified}
+          >
+            {downloading || loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            양식 다운로드
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            disabled={disabled}
+            onClick={onUploadClick}
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            업로드
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 justify-start gap-1.5"
+          disabled={!masterReady || loading || downloadingMaster}
+          onClick={onDownloadMaster}
+          title="법인·제조사·품번·창고·은행·거래처 6종 시트가 한 파일로"
+        >
+          {downloadingMaster ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          마스터 양식
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 justify-start gap-1.5"
+          disabled={!masterReady || loading || downloadingSample}
+          onClick={onDownloadSample}
+          title="PO/LC/T/T 정상·경고·오류 행이 섞인 리허설용 파일"
+        >
+          {downloadingSample ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+          샘플팩
+        </Button>
+      </div>
+    </section>
   );
 }
