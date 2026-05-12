@@ -254,8 +254,23 @@ export default function BLCreateDialog({
   // 비유: OCR 위젯이 "면장 한 장을 다 읽었어요" 하고 들고 온 거 → 사용자가 review 다이얼로그에서
   // 후보 선택 + 품번 override 까지 마친 결과 = 우리 폼이 그대로 받아쓰기만 하면 됨.
   async function applyOcr(args: BLOcrApplyArgs) {
-    markDirty()
     const { fields, productOverrides, productSource } = args
+    const ocrLines = fields.line_items ?? []
+
+    // 사용자가 이미 라인을 채워뒀으면 OCR 라인이 덮어쓰기 전에 의도 확인 —
+    // 빈 라인만 있으면 묻지 않고 그냥 교체.
+    const hasUserLines = lines.some((l) => !isBlankLine(l))
+    if (hasUserLines && ocrLines.length > 0) {
+      const ok = await confirmDialog({
+        title: "기존 라인을 OCR 결과로 덮어쓸까요?",
+        description: `이미 입력된 라인 ${lines.filter((l) => !isBlankLine(l)).length}건이 있습니다. OCR ${ocrLines.length}건으로 교체됩니다.`,
+        confirmLabel: "교체",
+        variant: "destructive",
+      })
+      if (!ok) return
+    }
+
+    markDirty()
 
     // 헤더 매핑
     if (fields.bl_number?.value) setBlNumber(normalizeOCRIdentifier(fields.bl_number.value))
@@ -273,7 +288,6 @@ export default function BLCreateDialog({
     }
 
     // 라인 매핑 — productOverrides 우선, 없으면 findProductForOCRLine 으로 fuzzy 매칭
-    const ocrLines = fields.line_items ?? []
     if (ocrLines.length > 0) {
       const newLines: DraftLine[] = ocrLines.map((ocrLine, idx) => {
         const overrideId = productOverrides[idx]
@@ -427,10 +441,10 @@ export default function BLCreateDialog({
         const qty = Number(l.quantity)
         const capacityKw = specWp > 0 ? (specWp * qty) / 1000 : 0
         try {
+          // bl_id 는 URL path 가 권위 — handler 가 path param 으로 덮어쓴다.
           await fetchWithAuth<BLLineItem>(`/api/v1/bls/${created.bl_id}/lines`, {
             method: "POST",
             body: JSON.stringify({
-              bl_id: created.bl_id,
               product_id: l.product_id,
               quantity: qty,
               capacity_kw: capacityKw,

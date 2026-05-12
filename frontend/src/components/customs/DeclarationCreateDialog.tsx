@@ -115,7 +115,7 @@ export default function DeclarationCreateDialog({
     onClose()
   }
 
-  function validate(): boolean {
+  function validate(): Record<string, string> {
     const next: Record<string, string> = {}
     if (!selectedCompanyId || selectedCompanyId === "all") {
       next.company = "좌측 상단에서 법인을 먼저 선택해주세요"
@@ -124,11 +124,16 @@ export default function DeclarationCreateDialog({
     if (!blId) next.bl = "BL 을 선택해주세요"
     if (!declarationDate) next.declarationDate = "면장일자를 입력해주세요"
     setErrors(next)
-    return Object.keys(next).length === 0
+    return next
   }
 
   async function handleSubmit() {
-    if (!validate()) return
+    const result = validate()
+    if (Object.keys(result).length > 0) {
+      const first = Object.values(result)[0]
+      if (first) notify.error(first)
+      return
+    }
     setSubmitting(true)
     try {
       const created = await fetchWithAuth<Declaration>("/api/v1/declarations", {

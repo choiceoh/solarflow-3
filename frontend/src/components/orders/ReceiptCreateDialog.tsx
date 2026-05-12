@@ -110,7 +110,7 @@ export default function ReceiptCreateDialog({
     return Number.isFinite(n) && n > 0 ? n : null
   }
 
-  function validate(): boolean {
+  function validate(): Record<string, string> {
     const next: Record<string, string> = {}
     if (!selectedCompanyId || selectedCompanyId === "all") {
       next.company = "좌측 상단에서 법인을 먼저 선택해주세요"
@@ -120,12 +120,13 @@ export default function ReceiptCreateDialog({
     const amount = parseAmount()
     if (amount == null) next.amount = "입금액은 0보다 커야 합니다"
     setErrors(next)
-    return Object.keys(next).length === 0
+    return next
   }
 
   async function handleSubmit() {
-    if (!validate()) {
-      const first = Object.values(errors)[0]
+    const result = validate()
+    if (Object.keys(result).length > 0) {
+      const first = Object.values(result)[0]
       if (first) notify.error(first)
       return
     }
@@ -133,10 +134,11 @@ export default function ReceiptCreateDialog({
     if (amount == null) return
     setSubmitting(true)
     try {
+      // 백엔드 receipts 는 company-agnostic (model.CreateReceiptRequest 에 company_id 없음).
+      // 멀티테넌트 스코프는 customer_id 의 partner.company_id 가 암묵적으로 결정.
       const created = await fetchWithAuth<Receipt>("/api/v1/receipts", {
         method: "POST",
         body: JSON.stringify({
-          company_id: selectedCompanyId,
           customer_id: customerId,
           receipt_date: receiptDate,
           amount,

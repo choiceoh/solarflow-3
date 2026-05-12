@@ -4,7 +4,8 @@
 // detail 전체를 부활시키지 않고 "원가" 부분만 별도 다이얼로그로 처리한다.
 
 import { useEffect, useMemo, useState } from "react"
-import { Loader2 } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { ExternalLink, Loader2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -42,6 +43,7 @@ export default function DeclarationCostManager({
   initialDeclaration,
   declarations,
 }: Props) {
+  const navigate = useNavigate()
   const [declarationId, setDeclarationId] = useState<string>(
     initialDeclaration?.declaration_id ?? "",
   )
@@ -111,6 +113,41 @@ export default function DeclarationCostManager({
 
             {declaration ? (
               <>
+                <section className="rounded-md border border-[var(--line)] bg-muted/10 p-3 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <div>
+                      <span className="text-muted-foreground">면장 </span>
+                      <span className="mono font-semibold">{declaration.declaration_number}</span>
+                    </div>
+                    {declaration.bl_number ? (
+                      <div>
+                        <span className="text-muted-foreground">BL </span>
+                        <span className="mono">{declaration.bl_number}</span>
+                      </div>
+                    ) : null}
+                    {declaration.declaration_date ? (
+                      <div>
+                        <span className="text-muted-foreground">일자 </span>
+                        <span className="mono">{declaration.declaration_date.slice(0, 10)}</span>
+                      </div>
+                    ) : null}
+                    {declaration.bl_id ? (
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        className="ml-auto h-6 px-2 text-[10px]"
+                        onClick={() => {
+                          onClose()
+                          navigate(`/procurement?tab=bl&bl_id=${declaration.bl_id}`)
+                        }}
+                      >
+                        <ExternalLink className="mr-1 h-3 w-3" />
+                        BL 보기
+                      </Button>
+                    ) : null}
+                  </div>
+                </section>
+
                 <section className="rounded-md border border-[var(--line)] p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <div className="text-[13px] font-semibold">

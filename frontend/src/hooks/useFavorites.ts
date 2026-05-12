@@ -7,14 +7,20 @@ export function useFavorites(userId: string | undefined) {
   const [favorites, setFavorites] = useState<ActionId[]>(DEFAULT_FAVORITES);
 
   useEffect(() => {
-    if (!userId) return;
+    // 사용자 전환(A→B) 시 A 의 즐겨찾기가 stale 로 잔존하는 누출 방지 —
+    // userId 가 바뀌면 DEFAULT 로 먼저 리셋하고, localStorage 가 있을 때만 덮어쓴다.
+    if (!userId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFavorites(DEFAULT_FAVORITES);
+      return;
+    }
     try {
       const raw = localStorage.getItem(STORAGE_KEY(userId));
-      // 외부 저장소(localStorage)에서 즐겨찾기 복원 — 사용자 변경 시 초기화 필요
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (raw) setFavorites(JSON.parse(raw));
+      setFavorites(raw ? JSON.parse(raw) : DEFAULT_FAVORITES);
     } catch {
-      // localStorage 읽기 실패 시 기본값 유지
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFavorites(DEFAULT_FAVORITES);
     }
   }, [userId]);
 
