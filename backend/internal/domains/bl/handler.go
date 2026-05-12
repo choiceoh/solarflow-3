@@ -1,4 +1,4 @@
-package handler
+package bl
 
 import (
 	"encoding/json"
@@ -13,7 +13,6 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -148,7 +147,7 @@ type blListAggregate struct {
 	FirstSpecWP      *int
 }
 
-func computeBLListAggregates(lines []model.BLLineWithProduct) map[string]blListAggregate {
+func computeBLListAggregates(lines []BLLineWithProduct) map[string]blListAggregate {
 	aggregates := make(map[string]blListAggregate)
 	for _, line := range lines {
 		agg := aggregates[line.BLID]
@@ -176,7 +175,7 @@ func computeBLListAggregates(lines []model.BLLineWithProduct) map[string]blListA
 	return aggregates
 }
 
-func attachBLListAggregates(shipments []model.BLShipment, aggregates map[string]blListAggregate) []model.BLShipment {
+func attachBLListAggregates(shipments []BLShipment, aggregates map[string]blListAggregate) []BLShipment {
 	for i := range shipments {
 		agg, ok := aggregates[shipments[i].BLID]
 		if !ok {
@@ -192,7 +191,7 @@ func attachBLListAggregates(shipments []model.BLShipment, aggregates map[string]
 	return shipments
 }
 
-func (h *BLHandler) loadBLListAggregates(shipments []model.BLShipment) (map[string]blListAggregate, error) {
+func (h *BLHandler) loadBLListAggregates(shipments []BLShipment) (map[string]blListAggregate, error) {
 	if len(shipments) == 0 {
 		return map[string]blListAggregate{}, nil
 	}
@@ -222,7 +221,7 @@ func (h *BLHandler) loadBLListAggregates(shipments []model.BLShipment) (map[stri
 		return nil, err
 	}
 
-	var lines []model.BLLineWithProduct
+	var lines []BLLineWithProduct
 	if err := json.Unmarshal(lineData, &lines); err != nil {
 		return nil, err
 	}
@@ -247,7 +246,7 @@ func (h *BLHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var shipments []model.BLShipment
+	var shipments []BLShipment
 	if err := json.Unmarshal(data, &shipments); err != nil {
 		log.Printf("[B/L 목록 디코딩 실패] %v / raw=%s", err, string(data))
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -348,7 +347,7 @@ func (h *BLHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var shipments []model.BLShipment
+	var shipments []BLShipment
 	if err := json.Unmarshal(blData, &shipments); err != nil {
 		log.Printf("[B/L 상세 디코딩 실패] %v / raw=%s", err, string(blData))
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -406,7 +405,7 @@ func (h *BLHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var lines []model.BLLineWithProduct
+	var lines []BLLineWithProduct
 	if err := json.Unmarshal(lineData, &lines); err != nil {
 		log.Printf("[B/L 라인아이템 디코딩 실패] %v / raw=%s", err, string(lineData))
 		response.RespondError(w, http.StatusInternalServerError, "라인아이템 데이터 처리에 실패했습니다")
@@ -415,10 +414,10 @@ func (h *BLHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	// 비유: 선적 서류 + 화물 명세를 한 묶음으로 포장 (평탄 본문 + 라인)
 	detail := struct {
-		model.BLShipment
+		BLShipment
 		PONumber  *string                   `json:"po_number"`
 		LCNumber  *string                   `json:"lc_number"`
-		LineItems []model.BLLineWithProduct `json:"line_items"`
+		LineItems []BLLineWithProduct `json:"line_items"`
 	}{
 		BLShipment: shipments[0],
 		PONumber:   poNumber,
@@ -432,7 +431,7 @@ func (h *BLHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Create — POST /api/v1/bls — B/L 등록
 // 비유: 새 선적 서류를 작성하여 관리실에 보관하는 것
 func (h *BLHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateBLRequest
+	var req CreateBLRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[B/L 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -454,7 +453,7 @@ func (h *BLHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var created []model.BLShipment
+	var created []BLShipment
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[B/L 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -552,7 +551,7 @@ func (h *BLHandler) syncPOStatus(poID string) {
 func (h *BLHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req model.UpdateBLRequest
+	var req UpdateBLRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[B/L 수정 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -602,7 +601,7 @@ func (h *BLHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.BLShipment
+	var updated []BLShipment
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[B/L 수정 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")

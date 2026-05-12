@@ -1,4 +1,4 @@
-package handler
+package bl
 
 import (
 	"encoding/json"
@@ -8,7 +8,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
 
@@ -38,7 +37,7 @@ func (h *BLLineHandler) ListByBL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var lines []model.BLLineWithProduct
+	var lines []BLLineWithProduct
 	if err := json.Unmarshal(data, &lines); err != nil {
 		log.Printf("[B/L 라인아이템 목록 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -53,7 +52,7 @@ func (h *BLLineHandler) ListByBL(w http.ResponseWriter, r *http.Request) {
 func (h *BLLineHandler) Create(w http.ResponseWriter, r *http.Request) {
 	blID := chi.URLParam(r, "blId")
 
-	var req model.CreateBLLineRequest
+	var req CreateBLLineRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[B/L 라인아이템 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -102,7 +101,7 @@ func (h *BLLineHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var created []model.BLLineItem
+	var created []BLLineItem
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[B/L 라인아이템 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -122,7 +121,7 @@ func (h *BLLineHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *BLLineHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req model.UpdateBLLineRequest
+	var req UpdateBLLineRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[B/L 라인아이템 수정 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -145,7 +144,7 @@ func (h *BLLineHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.BLLineItem
+	var updated []BLLineItem
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[B/L 라인아이템 수정 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")

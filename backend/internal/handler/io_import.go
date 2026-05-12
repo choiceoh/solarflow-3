@@ -13,6 +13,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/domains/bl"
 	"solarflow-backend/internal/domains/po"
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/feature"
@@ -453,7 +454,7 @@ func (h *ImportHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// bl_shipments INSERT
-		blReq := model.CreateBLRequest{
+		blReq := bl.CreateBLRequest{
 			BLNumber:       blNum,
 			CompanyID:      companyID,
 			ManufacturerID: mfgID,
@@ -485,7 +486,7 @@ func (h *ImportHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		var createdBLs []model.BLShipment
+		var createdBLs []bl.BLShipment
 		if err := json.Unmarshal(blData, &createdBLs); err != nil || len(createdBLs) == 0 {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "bl_shipments", Message: "B/L 등록 결과 확인 실패"})
 			continue
@@ -513,7 +514,7 @@ func (h *ImportHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 			}
 			capacityKW := float64(qty) * wattageKW
 
-			lineReq := model.CreateBLLineRequest{
+			lineReq := bl.CreateBLLineRequest{
 				BLID:             blID,
 				ProductID:        productID,
 				Quantity:         qty,

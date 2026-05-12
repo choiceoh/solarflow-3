@@ -1,5 +1,21 @@
 package model
 
+import "regexp"
+
+// LC 라인아이템 유효성 검증 spec. PR-C 시점 BL (domains/bl/model_line.go) 의
+// 동일 spec 과 dup — PR-D 에서 공통 lib (예: internal/validation) 분리 검토.
+var validItemTypes = map[string]bool{
+	"main":  true,
+	"spare": true,
+}
+
+var validPaymentTypes = map[string]bool{
+	"paid": true,
+	"free": true,
+}
+
+var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
 // LCLineItem — LC 라인아이템 구조체
 // 비유: LC 서류에 붙는 품목별 명세표 — 어떤 PO 품목을 몇 장 개설했는지 기록
 type LCLineItem struct {

@@ -1,0 +1,113 @@
+# BL (Bill of Lading) — 도메인 manifest
+#
+# PR-C 의 첫 도메인 이주. PR-B 의 PO 패턴을 codemod (migrate-domain.mjs) 로 자동화.
+# 형식 명세: harness/domains/README.md
+
+schema_version: 1
+
+id: bl
+display_name: "선적 (Bill of Lading)"
+
+# === Pack / Feature / Tenant 배선 ===
+pack: module-finance
+feature_id: tx.bl           # backend/internal/feature/catalog.go 의 IDTxBL
+visible_to: module
+
+# === 코드 위치 ===
+# PR-C 완료 — backend 는 colocation. frontend 는 ProcurementPage 통합 페이지라 PR-D 또는 별 PR.
+paths:
+  backend:
+    - backend/internal/domains/bl/   # colocation 완료 (PR-C). model + handler + dashboard + util + wms + handler_test
+  frontend:
+    - frontend/src/packs/module-finance/pages/ProcurementPage.tsx   # 통합 페이지 — 분리 시 PR-D
+  migrations:
+    # bl_shipments + bl_line_items + receiving_logs 관련 마이그
+    - backend/migrations/007_*bl*.sql
+    - backend/migrations/00[8-9]_*bl*.sql
+    - backend/migrations/0[1-9]?_*bl*.sql
+  tests:
+    - backend/internal/domains/bl/handler_test.go
+
+# === DB ===
+tables:
+  - bl_shipments
+  - bl_line_items
+  - receiving_logs           # BL 입고완료 시 ensureReceivingLogsForBL 가 자동 생성 (cross-domain side effect)
+
+# === 의존 도메인 ===
+# BL 라인이 PO 라인 연결 (D-087), product/inventory 참조.
+depends_on:
+  - products      # BLLineItem.ProductID
+  - po            # BLLineItem.POLineID (D-087)
+  - inventory     # WarehouseID
+
+# === 외부 사용자 (cross-domain import) ===
+# BL type 을 import 하는 handler 패키지 파일들 — PR-D 의 handlerutil 분리 시 정리 검토.
+external_users:
+  - backend/internal/handler/io_import.go        # BL 일괄 import (Excel)
+  - backend/internal/handler/io_import_parsers.go # parseBLLineRow
+  - backend/internal/handler/baro_incoming.go    # ProductSummaryForBLLine 임베드
+  - backend/internal/handler/wms_automation.go   # BL 의 ensureReceivingLogsForBL method 는 PR-C 에서 bl/wms.go 로 이동됨
+
+# === Blast Radius ===
+blast_radius:
+  - description: "BL 입고완료 status 전이 (ensureReceivingLogsForBL 호출)"
+    must_check:
+      - "backend/internal/domains/bl/wms.go (receiving_logs 자동 생성 로직)"
+      - "outbound 도메인의 inventory 영향 (BL 입고 → 가용재고 증가)"
+      - "warehouse_id NULL 케이스 처리 — receiving_logs 미생성"
+
+  - description: "BL 라인 item_type/payment_type 허용 값 변경"
+    must_check:
+      - "backend/internal/domains/bl/model_line.go 의 validItemTypes/validPaymentTypes/validUsageCategories"
+      - "backend/internal/model/lc_line.go 의 LC 측 dup (PR-D 에서 internal/validation 으로 분리 검토)"
+
+  - description: "BL model 필드 추가/삭제"
+    must_check:
+      - "backend/internal/domains/bl/handler.go (Validation 흐름)"
+      - "frontend/src/packs/module-finance/pages/ProcurementPage.tsx (BL 탭 form)"
+      - "backend/migrations/ + check_schema.sh"
+      - "PostgREST 스키마 캐시 갱신"
+
+  - description: "BL 외부 사용 (io_import, baro_incoming 등)"
+    must_check:
+      - "import \"solarflow-backend/internal/domains/bl\" + bl.X prefix"
+      - "wms_automation.go 는 BL method 안 가짐 — Go cross-package method 불허"
+
+  - description: "PO ↔ BL 라인 연결 (D-087) 변경"
+    must_check:
+      - "BLLineItem.POLineID 의 UUID 검증 (uuidRe)"
+      - "PO 라인 product_id 와 BL 라인 product_id 일치성"
+
+# === 자동 실행 검증 ===
+verify_scripts:
+  - command: scripts/verify_changed.sh
+    when: always
+  - command: backend/scripts/check_schema.sh
+    when: model_or_migration_changed
+  - command: "cd backend && go test ./internal/domains/bl/..."
+    when: handler_changed
+  - command: "cd backend && go test ./internal/handler"
+    when: route_changed   # cross-domain wire (io_import 등) 검증
+
+# === API 라우트 ===
+api_routes:
+  - GET    /api/v1/bls
+  - POST   /api/v1/bls
+  - PUT    /api/v1/bls/:id
+  - DELETE /api/v1/bls/:id
+  - GET    /api/v1/bls/:id
+  - GET    /api/v1/bls/:id/lines
+  - POST   /api/v1/bls/:id/lines
+  - PUT    /api/v1/bl-lines/:id
+  - DELETE /api/v1/bl-lines/:id
+
+# === Backfill / Maintenance ===
+maintenance_scripts:
+  - script: scripts/backfill_erp_inbound.py
+    purpose: "BL 입고 데이터 backfill (운영 이전 데이터 복원)"
+
+# === Owners / 의사결정 기록 ===
+owners: [choiceoh]
+decisions:
+  - D-087   # PO ↔ BL 라인 연결 (BLLineItem.POLineID)

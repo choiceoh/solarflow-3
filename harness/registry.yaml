@@ -92,8 +92,14 @@ domains:
     pack: module-finance
     manifest: harness/domains/po.yaml
 
-  # PR-C 대상 (현재 코드에 존재, manifest 미작성):
-  # - id: bl                      # 선적 (B/L)
+  - id: bl
+    display_name: "선적 (Bill of Lading)"
+    visible_to: module
+    feature_id: tx.bl
+    pack: module-finance
+    manifest: harness/domains/bl.yaml
+
+  # PR-C2/PR-D 대상 (현재 코드에 존재, manifest 미작성):
   # - id: lc                      # 신용장
   # - id: tt                      # 송금
   # - id: declaration             # 면장/통관

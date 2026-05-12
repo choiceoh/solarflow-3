@@ -45,6 +45,46 @@
         "D-086",
         "D-087"
       ]
+    },
+    "bl": {
+      "display_name": "선적 (Bill of Lading)",
+      "feature_id": "tx.bl",
+      "pack": "module-finance",
+      "tenants": [
+        "cable",
+        "topsolar"
+      ],
+      "tables": [
+        "bl_shipments",
+        "bl_line_items",
+        "receiving_logs"
+      ],
+      "depends_on": [
+        "products",
+        "po",
+        "inventory"
+      ],
+      "paths": [
+        "backend/internal/domains/bl/",
+        "frontend/src/packs/module-finance/pages/ProcurementPage.tsx",
+        "backend/internal/domains/bl/handler_test.go"
+      ],
+      "blast_radius": [
+        "BL 입고완료 status 전이 (ensureReceivingLogsForBL 호출) — backend/internal/domains/bl/wms.go (receiving_logs 자동 생성 로직) / outbound 도메인의 inventory 영향 (BL 입고 → 가용재고 증가) / warehouse_id NULL 케이스 처리 — receiving_logs 미생성",
+        "BL 라인 item_type/payment_type 허용 값 변경 — backend/internal/domains/bl/model_line.go 의 validItemTypes/validPaymentTypes/validUsageCategories / backend/internal/model/lc_line.go 의 LC 측 dup (PR-D 에서 internal/validation 으로 분리 검토)",
+        "BL model 필드 추가/삭제 — backend/internal/domains/bl/handler.go (Validation 흐름) / frontend/src/packs/module-finance/pages/ProcurementPage.tsx (BL 탭 form) / backend/migrations/ + check_schema.sh / PostgREST 스키마 캐시 갱신",
+        "BL 외부 사용 (io_import, baro_incoming 등) — import \"solarflow-backend/internal/domains/bl\" + bl.X prefix / wms_automation.go 는 BL method 안 가짐 — Go cross-package method 불허",
+        "PO ↔ BL 라인 연결 (D-087) 변경 — BLLineItem.POLineID 의 UUID 검증 (uuidRe) / PO 라인 product_id 와 BL 라인 product_id 일치성"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh",
+        "cd backend && go test ./internal/domains/bl/...",
+        "cd backend && go test ./internal/handler"
+      ],
+      "decisions": [
+        "D-087"
+      ]
     }
   },
   "path_to_domain_fallback": [
