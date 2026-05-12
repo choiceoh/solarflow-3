@@ -188,3 +188,69 @@
 - TASK에 명시되지 않은 파일 변경, 설계 변경, 구조 변경은 반드시 사전에 Alex에게 보고하고 승인을 받아야 한다.
 - "이것도 같이 하면 좋을 것 같아서 했습니다"는 금지.
 - 예외: 빌드 에러 수정, import 추가 등 TASK 수행에 필수적인 최소 변경은 허용하되 보고할 것.
+
+## DB 정합성 / 데이터 마이그레이션 룰 (D-20260512 fifo over-allocation 정리에서 축적)
+
+### 1. ERP 임포터 매칭 키 강제 (6-key)
+ERP 원본 데이터 (출고·매출·매입 등) 를 outbound/sale 등 운영 테이블에 매칭할 때, **반드시 다음 6개 키 전체로 매칭**한다 (어느 하나 결여 시 신규 행 생성 또는 staged 보류):
+1. `corporation` (탑솔라/디원/화신 등) — 같은 erp_no 가 법인 간 재사용됨
+2. `erp_outbound_no` (또는 erp_sales_no)
+3. `outbound_date` (또는 거래 일자)
+4. `product_id`
+5. `quantity` = ERP 행 quantity
+6. `norm_company(customer_name)` — `partners.normalized_name` 과 비교 (104)
+
+⚠️ **(erp_no, customer_name) 만으로 매칭하면 안 됨** — 같은 IS no 가 같은 날 같은 회사 안에서 다른 quantity 로 재사용되는 ERP 패턴이 실제 운영 데이터에 존재 (513건 over-allocation 사고의 근원).
+
+### 2. customer/supplier 매칭은 normalized_name 사용 (D-20260512 — partners 정규화)
+- `partners.normalized_name` (104 마이그레이션) 은 GENERATED ALWAYS AS STORED 컬럼이므로 항상 최신
+- 모든 거래처 매칭 SQL · 임포터 · OCR 거래처 추정 · fifo 매칭은 `partner_name` 이 아니라 `normalized_name` 으로 비교
+- 같은 이유로 `norm_company(text)` IMMUTABLE 함수가 표준 — 새 코드에서 자체 정규화 금지
+
+### 3. 데이터 마이그레이션은 audit-first
+운영 DB 의 INSERT/UPDATE/DELETE 를 수행하는 마이그레이션 (`backend/migrations/NNN_*.sql`) 은 **반드시 mutate 전에 audit 테이블을 생성**하고 변경 대상의 (old, new) 또는 (deleted) 스냅샷을 보존한다:
+
+```sql
+CREATE TABLE IF NOT EXISTS _xxx_audit_YYYYMMDD (
+  audit_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- 변경 대상 식별자 + old/new 값
+  ...
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+WITH affected AS (...),
+audit AS (INSERT INTO _xxx_audit_YYYYMMDD (...) SELECT ... FROM affected RETURNING ...)
+UPDATE target_table SET ... FROM audit WHERE ...;
+```
+
+audit 테이블은 운영 DB UPDATE 의 유일한 ROLLBACK 수단. 정리 작업 끝나면 별도 PR 에서 DROP.
+
+### 4. 마이그 파일 transaction 관리
+`backend/migrations/*.sql` 파일에 `BEGIN; ... COMMIT;` 을 두는 것이 원칙이지만, **외부 dry-run (`\set AUTOCOMMIT off` + `\i file.sql` + `ROLLBACK`) 을 무효화**한다는 점 주의.
+
+dry-run 이 필요한 경우:
+- 마이그 파일 안에서 mutate 직전에 `RAISE NOTICE` 로 영향 행 수 출력
+- 또는 별도 dry-run 분기 (`DEBUG=1` 환경변수) 노출
+- 또는 마이그 파일에는 BEGIN/COMMIT 두지 않고 호출자가 트랜잭션 관리
+
+이 룰을 어기면 098 사고 (의도한 dry-run 이 실제 적용으로 변경) 재발.
+
+### 5. cron-deploy idempotency
+`-- @auto-apply: yes` directive 가 있는 마이그는 cron-deploy 가 자동 실행하므로 **이미 운영에 적용된 상태에서 재실행해도 결과 동일** 해야 한다 (idempotent):
+
+- `CREATE TABLE IF NOT EXISTS`
+- `INSERT ... ON CONFLICT (key) DO NOTHING` 또는 `DO UPDATE`
+- `UPDATE target FROM audit` (audit 에 이미 들어간 행은 update 가 no-op)
+- 외부 상태 변경 전 `EXISTS` / `NOT EXISTS` 가드
+
+CI 에서 마이그를 **두 번 적용 후 결과 동일** 한지 자동 테스트 (TODO: `scripts/check_migration_idempotency.sh` 추가 예정).
+
+### 6. 정합성 진척 추적 (105)
+`v_db_anomalies` 에 새 룰을 추가하면 자동으로 `db_anomaly_snapshots` 일별 시계열에 잡힌다. 운영 cron 에서 매일 1회 `SELECT snapshot_db_anomalies()` 호출 권장 (Tailscale SSH 로 systemd timer 또는 supabase pg_cron).
+
+`/admin/db-integrity` 페이지에 룰별 진척 그래프를 추가하면 정합성 작업의 가시화 완성 (TODO).
+
+### 7. 운영 DB 우선 검증, PR 두 번째
+빠른 디버깅을 위해 운영 DB 에 psql 직접 적용 → 결과 확인 → 마이그 파일 작성 → PR → cron-deploy 가 재적용 흐름이 빠르지만, **재적용이 idempotent 가 아니면 운영 데이터 오염**. 룰 5 와 짝.
+
+운영 직접 적용 시 반드시 audit 테이블 먼저 (룰 3), 마이그 파일도 동일 SQL 로 작성 (cron-deploy 재실행 안전성).

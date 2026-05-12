@@ -1769,3 +1769,29 @@
 - **검증**: 매 PR 마다 go build/vet/test 통과 + codemod idempotent + hook advisory→STRICT 4 케이스.
 - **운영 영향**: backend dup 1622줄 삭제. 8 도메인 *manifest 1번 read* 로 blast_radius/depends_on/verify_scripts 모두 파악. 새 도메인 추가 7단계 → 1 명령.
 - **날짜**: 2026-05-12 20:00:00 KST
+
+## D-20260512-171222: DB 정합성 작업 7개 룰 — fifo over-allocation 513건 정리 사고에서 추출
+
+- **결정**: 이번 세션의 fifo over-allocation 513 → 0 정리 (PR #774 / #776 / #781), VAT 일괄 제거 (#773), customer 정규화 마이그 (097-105) 에서 얻은 7개 룰을 `harness/RULES.md` 의 "DB 정합성 / 데이터 마이그레이션 룰" 섹션으로 정식화.
+- **이유**: 임포터 (erp_no, customer_name) 2-key 매칭의 한계가 513건 over-allocation, 매출분석 거래처별 -43% 이익률 같은 *증상은 한참 뒤*, *원인은 데이터 임포트 시점* 패턴의 사고를 만들었다. 룰화하지 않으면 다음 임포터에서 재발.
+- **7개 룰** (요약 — 본문은 RULES.md):
+  1. ERP 임포터 매칭은 6-key 강제 (corp + erp_no + date + product + qty + norm_customer)
+  2. customer/supplier 매칭은 `partners.normalized_name` (104 마이그) — `norm_company()` 함수가 표준
+  3. 데이터 마이그레이션 audit-first (`_xxx_audit_YYYYMMDD` 테이블 먼저, mutate 두 번째)
+  4. 마이그 파일 transaction 관리 — 자체 `BEGIN/COMMIT` 두면 외부 dry-run 불가, 098 사고 재발 방지
+  5. cron-deploy idempotency — `IF NOT EXISTS` / `ON CONFLICT DO NOTHING` / audit 가드 필수
+  6. 정합성 진척 추적 — `db_anomaly_snapshots` (105) 일별 시계열, cron `snapshot_db_anomalies()` 매일 1회
+  7. 운영 DB 직접 적용 시 마이그 파일도 동일 SQL 로 작성 (cron-deploy 재실행 안전성)
+- **신설 인프라**:
+  - 마이그 104 `partners.normalized_name` (GENERATED ALWAYS AS STORED) + UNIQUE index
+  - 마이그 105 `db_anomaly_snapshots` 테이블 + `snapshot_db_anomalies()` RPC
+  - `norm_company(text)` IMMUTABLE 함수 (인라인 사용 금지, 표준 함수만 사용)
+- **관련 작업 추적** (이 세션):
+  - PR #773: VAT 일괄 제거 + margin 분모 통일 (sum_revenue_covered → sum_sales)
+  - PR #774: fifo strict 5-key sibling 정리 (513 → 100)
+  - PR #776: fifo 패턴별 A/B/A2/중복 정리 (100 → 8, ~800만원 매출 복원)
+  - PR #781: fifo 잔존 8건 정리 (norm_customer + 수동 1건, 8 → 0)
+  - 본 PR: partners 정규화 + anomaly snapshot + 룰 정식화
+- **검증**: `SELECT COUNT(*) FROM v_db_anomalies` = 0, `partners.normalized_name` 152/152 채움.
+- **운영 영향**: 매출분석 거래처별 이익률 = 전체 요약 (분모 통일 + cost-basis 정상화), `/admin/db-integrity` 0건. 다음 임포터 작성 시 6-key 매칭 + norm_company 사용 강제.
+- **날짜**: 2026-05-12 17:12:22 KST
