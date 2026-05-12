@@ -1737,3 +1737,35 @@
   - `git diff --check`
   - `graphify update .`
 - **날짜**: 2026-05-12 14:36:05 KST
+
+## D-20260512-200000: AGENT-BUILDER-VISION — AI 에이전트 친화 ERP 빌더 (colocation + manifest + codemod)
+
+- **결정**: D-145 의 horizontal tenant pack 위에 **vertical 도메인 colocation** 추가. backend/frontend 모두 `internal/domains/<id>/` + `src/domains/<id>/` 디렉토리로 자기완결. `harness/registry.yaml` + `harness/domains/<id>.yaml` manifest 가 단일 정본. 사람이 편집하는 정본은 YAML 만, 코드/JSON 은 codemod 생성.
+- **이유**: 사용자 호소 3개 ("하나 고치면 하나 틀어진다 / 어디서 바꿀지 모르겠다 / 기존 개선 자동 적용 안 됨") 의 시스템 차원 답. AI 에이전트는 *불일관성* 에 약함 — 모든 도메인이 *같은 모양* 이면 한 도메인을 보면 나머지를 안다. D-120 (메타-편집기) 의 *추상화로 줄이기* 와 정반대 — *일관성으로 늘리기*.
+- **신설 인프라**:
+  - `harness/AGENT-BUILDER-VISION.md` — 비전 1페이지
+  - `harness/registry.yaml` — 단일 정본 YAML (테넌트/그룹/Pack/도메인 매트릭스)
+  - `harness/domains/<id>.yaml` — 도메인 manifest (paths, blast_radius, verify_scripts, depends_on, api_routes)
+  - `scripts/codemod/` — Node 22+ ESM, zero-dep (yaml only)
+    - `gen-registry.mjs` — registry.yaml → backend/internal/tenant/registry.go (AUTOGEN 마커 사이)
+    - `build-hook-index.mjs` — registry + manifests → .claude/hooks/domains.json
+    - `migrate-domain.mjs` — 도메인 colocation 자동 이주 (file 발견 + git mv + package + prefix)
+    - `new-domain.mjs` — 새 도메인 scaffold (1 명령 → 5 file + manifest + registry + main.go blank import)
+  - `.claude/settings.json` + `.claude/hooks/{pre-edit,post-edit}.mjs` — 가드레일 (v1 advisory + v2 STRICT)
+  - `backend/internal/{handlerutil,audit,validation,rpcutil}/` — 공통 패키지 (PR-D1 dup 53 → 0)
+- **관련 PR (이 세션)**:
+  - #731 비전 + 가드레일 v1 + PO manifest 시범 (PR-B0)
+  - #740 codemod 인프라 — gen-registry + build-hook-index (PR-A)
+  - #745 PO colocation 시범 (PR-B)
+  - #750 BL + migrate-domain codemod (PR-C)
+  - #754 LC + TT + ProductSummaryForPOLine 정리 (PR-C2)
+  - #757 backend dup 53 → 0 (PR-D1: handlerutil + audit + validation + rpcutil)
+  - #759 new-domain scaffold CLI (PR-D3)
+  - #760 frontend 19 컴포넌트 → domains/<id>/ (PR-D2)
+  - #768 STRICT 가드레일 v2 (CI 환경 자동 enforcement)
+  - #775 cost_detail + declaration + order + sale (PR-C3a)
+- **진행률**: 도메인 colocation 8/15 (53%) — po/bl/lc/tt/cost_detail/declaration/order/sale.
+- **남은 도메인** (PR-C3 잔여): receipt + price_benchmark (AI 결합), outbound + intercompany (wms_automation 분할), baro_* + master_product + inventory_allocation (naming 비표준).
+- **검증**: 매 PR 마다 go build/vet/test 통과 + codemod idempotent + hook advisory→STRICT 4 케이스.
+- **운영 영향**: backend dup 1622줄 삭제. 8 도메인 *manifest 1번 read* 로 blast_radius/depends_on/verify_scripts 모두 파악. 새 도메인 추가 7단계 → 1 명령.
+- **날짜**: 2026-05-12 20:00:00 KST
