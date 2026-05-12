@@ -255,6 +255,10 @@ func (h *BLHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	if _, c, err := q.Range(0, 0, "").Execute(); err == nil {
 		summary.Total = c
 	}
+	// 회귀 가드 (tx_outbound/tx_order 와 동일): postgrest-go .Eq() 는 같은 컬럼 두 번 호출 시 덮어쓰기.
+	// applyBLFilters 가 사용자 status 를 이미 적용한 경우 여기서 다시 .Eq("status", st.key) 를
+	// 부르면 사용자 필터가 사라져서 다른 status 의 전역 카운트가 채워진다.
+	userStatus := r.URL.Query().Get("status")
 	for _, st := range []struct {
 		key    string
 		target *int64
@@ -268,8 +272,14 @@ func (h *BLHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		{"cleared", &summary.ClearedCount},
 		{"cancelled", &summary.CancelledCount},
 	} {
+		if userStatus != "" && userStatus != st.key {
+			continue
+		}
 		sub := h.DB.From("bl_shipments").Select("bl_id", "exact", true)
-		sub = h.applyBLFilters(r, sub).Eq("status", st.key)
+		sub = h.applyBLFilters(r, sub)
+		if userStatus == "" {
+			sub = sub.Eq("status", st.key)
+		}
 		if _, c, err := sub.Range(0, 0, "").Execute(); err == nil {
 			*st.target = c
 		}
