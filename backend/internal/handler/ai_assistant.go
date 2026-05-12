@@ -13,8 +13,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -50,6 +52,56 @@ func NewAssistantHandler(db *supa.Client) *AssistantHandler {
 func (h *AssistantHandler) WithAttachmentPool(pool *pgxpool.Pool) *AssistantHandler {
 	setAttachmentPool(pool)
 	return h
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// 두 Spec 으로 분할:
+//   1) AuthAuthed:    /assistant/* — alias (ocr/match) + writers (outbound) + attachment pool 주입된 풀 인스턴스
+//   2) AuthPublicAPI: /assistant/chat — alias 없음, 비로그인 bare LLM 패스스루 (도구는 user_id 부재로 자동 비활성)
+//
+// alias/writer 핸들러도 Mount 클로저가 직접 만든다 (모두 stateless: OCRHandler/ReceiptMatchHandler/OutboundHandler).
+// d.Pool 은 nil 일 수 있음 (SUPABASE_DB_URL 미설정 환경). WithAttachmentPool 는 nil 도 무해히 처리한다.
+// IDAIAssistant 게이트가 모든 /assistant/* 라우트와 그 alias 에 catalog.Paths 로 등재돼 있어
+// feature_coverage_test 가 검증.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDAIAssistant,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			ocrH := NewOCRHandler(d.OCR, d.Pool)
+			matchH := NewReceiptMatchHandler(d.DB, d.Engine)
+			outboundH := NewOutboundHandler(d.DB, d.Engine)
+			h := NewAssistantHandler(d.DB).WithAlias(ocrH, matchH).WithWriters(outboundH).WithAttachmentPool(d.Pool)
+			g := d.Gates
+			r.Route("/assistant", func(r chi.Router) {
+				r.Post("/chat", h.ChatStream)
+				r.Post("/proposals/{id}/confirm", h.ConfirmProposal)
+				r.Post("/proposals/{id}/reject", h.RejectProposal)
+				// 대화 세션 영구 저장소 — 우측상단 세션목록이 사용
+				r.Get("/sessions", h.ListSessions)
+				r.With(g.Write).Post("/sessions", h.CreateSession)
+				r.Get("/sessions/{id}", h.GetSession)
+				r.With(g.Write).Patch("/sessions/{id}", h.UpdateSession)
+				r.With(g.Write).Delete("/sessions/{id}", h.DeleteSession)
+				// 첫 턴 직후 fallback 모델로 제목 자동 요약 (실패 시 슬라이스 fallback)
+				r.With(g.Write).Post("/sessions/{id}/summarize-title", h.SummarizeTitle)
+				// alias of /api/v1/ocr/* — AI 통합 입구로도 노출
+				r.Get("/ocr/health", ocrH.Health)
+				r.Post("/ocr/extract", ocrH.Extract)
+				// alias of /api/v1/receipt-matches/auto — AI 통합 입구로도 노출
+				r.With(g.Write).Post("/match/receipts/auto", matchH.AutoMatch)
+			})
+		},
+	})
+	// 무인증 LLM chat 패스스루 — unrestrictedAllowlist 에 /api/v1/public/assistant/chat 등재.
+	// ID 비워둠 (무가드 라우트).
+	mount.Register(mount.Spec{
+		Auth: mount.AuthPublicAPI,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewAssistantHandler(d.DB)
+			r.Post("/assistant/chat", h.ChatStream)
+		},
+	})
 }
 
 // WithAlias — /assistant/ocr/*, /assistant/match/receipts/auto alias 라우트에 위임할 핸들러를 주입한다.

@@ -10,7 +10,9 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -24,6 +26,28 @@ type CycleCountHandler struct {
 
 func NewCycleCountHandler(db *supa.Client) *CycleCountHandler {
 	return &CycleCountHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxCycleCount,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewCycleCountHandler(d.DB)
+			g := d.Gates
+			r.Route("/cycle-counts", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDTxCycleCount))
+				r.Get("/", h.List)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Patch("/{id}", h.UpdateHeader)
+				r.With(g.Write).Post("/{id}/seed", h.SeedItems)
+				r.With(g.Write).Post("/{id}/complete", h.Complete)
+				r.With(g.Write).Patch("/{id}/items/{item_id}", h.UpdateItem)
+			})
+		},
+	})
 }
 
 type CycleCount struct {

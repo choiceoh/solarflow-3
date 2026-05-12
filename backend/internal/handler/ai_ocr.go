@@ -8,10 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/ocr"
 	"solarflow-backend/internal/ocrparse"
 	"solarflow-backend/internal/response"
@@ -45,6 +48,26 @@ type OCRHandler struct {
 
 func NewOCRHandler(client *ocr.Client, pool *pgxpool.Pool) *OCRHandler {
 	return &OCRHandler{Client: client, Pool: pool}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// /ocr/* standalone 라우트 — write 그룹. AssistantHandler 가 /assistant/ocr/* alias 로 위임하는
+// 인스턴스는 AssistantHandler 의 Mount 클로저가 별도 생성한다 (둘 다 d.OCR + d.Pool 만 보유,
+// stateless). Pool 은 시트 첨부(xlsx/csv) 임시 저장용 — nil 이면 시트 첨부 자체가 503.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDAIOCR,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewOCRHandler(d.OCR, d.Pool)
+			g := d.Gates
+			r.Route("/ocr", func(r chi.Router) {
+				r.Use(g.Write)
+				r.Get("/health", h.Health)
+				r.Post("/extract", h.Extract)
+			})
+		},
+	})
 }
 
 // Health — GET /api/v1/ocr/health — OCR sidecar 설정/준비 상태 확인

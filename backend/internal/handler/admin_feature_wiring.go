@@ -11,6 +11,7 @@ import (
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 	"solarflow-backend/internal/tenant"
 )
@@ -199,10 +200,20 @@ func (h *AdminFeatureWiringHandler) SetEnabled(w http.ResponseWriter, r *http.Re
 }
 
 // RegisterRoutes — /api/v1/admin/feature-wiring 등록 (admin 전용).
-func (h *AdminFeatureWiringHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
-	r.Route("/admin/feature-wiring", func(r chi.Router) {
-		r.Use(g.AdminOnly)
-		r.Get("/", h.GetMatrix)
-		r.Put("/{tenantID}/{featureID}", h.SetEnabled)
+// init — D-20260512-090000 feature self-mounting.
+// AdminOnly 만 적용, feature gate 없음 (admin 자기 자신을 토글 매트릭스에서 보는 화면 —
+// unrestrictedAllowlist 에 등재). Spec.ID 비워둠.
+func init() {
+	mount.Register(mount.Spec{
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewAdminFeatureWiringHandler(d.WiringStore, d.Resolver)
+			g := d.Gates
+			r.Route("/admin/feature-wiring", func(r chi.Router) {
+				r.Use(g.AdminOnly)
+				r.Get("/", h.GetMatrix)
+				r.Put("/{tenantID}/{featureID}", h.SetEnabled)
+			})
+		},
 	})
 }

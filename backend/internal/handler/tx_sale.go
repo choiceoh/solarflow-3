@@ -13,7 +13,9 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -56,6 +58,28 @@ type SaleHandler struct {
 // NewSaleHandler — SaleHandler 생성자
 func NewSaleHandler(db *supa.Client) *SaleHandler {
 	return &SaleHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxSale,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewSaleHandler(d.DB)
+			g := d.Gates
+			r.Route("/sales", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.Get("/summary", h.Summary)
+				// 대시보드 집계 — KPI / trend24 / by_customer_top10. 정적 경로라 /{id} 보다 먼저.
+				r.Get("/dashboard", h.Dashboard)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 type saleStatusUpdate struct {

@@ -9,7 +9,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -21,6 +23,28 @@ type ConstructionSiteHandler struct {
 
 func NewConstructionSiteHandler(db *supa.Client) *ConstructionSiteHandler {
 	return &ConstructionSiteHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDMasterConstructionSite,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewConstructionSiteHandler(d.DB)
+			g := d.Gates
+			r.Route("/construction-sites", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				// 메타 GUI inline 편집 진입점 — UpdateConstructionSiteRequest 가 pointer + omitempty
+				r.With(g.Write).Patch("/{id}", h.Update)
+				r.With(g.Write).Patch("/{id}/status", h.ToggleActive)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/construction-sites

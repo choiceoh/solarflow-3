@@ -8,10 +8,14 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -22,6 +26,24 @@ type BaroPurchaseHistoryHandler struct {
 
 func NewBaroPurchaseHistoryHandler(db *supa.Client) *BaroPurchaseHistoryHandler {
 	return &BaroPurchaseHistoryHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// RoleMiddleware 로 manager 차단을 라우트마다 직접 건다 (D-122 직원·임원만 원가 조회).
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroPurchaseHistory,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroPurchaseHistoryHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/purchase-history", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroPurchaseHistory))
+				r.With(middleware.RoleMiddleware("admin", "operator", "executive")).Get("/summary", h.Summary)
+				r.With(middleware.RoleMiddleware("admin", "operator", "executive")).Get("/", h.List)
+			})
+		},
+	})
 }
 
 type baroPurchaseCompanyRow struct {

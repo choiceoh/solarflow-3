@@ -12,7 +12,9 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -44,6 +46,28 @@ type TTHandler struct {
 // NewTTHandler — TTHandler 생성자
 func NewTTHandler(db *supa.Client) *TTHandler {
 	return &TTHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxTT,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewTTHandler(d.DB)
+			g := d.Gates
+			r.Route("/tts", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDTxTT))
+				r.Get("/", h.List)
+				r.Get("/summary", h.Summary)
+				r.Get("/dashboard", h.Dashboard)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 func (h *TTHandler) poIDsForTTCompany(companyID string) ([]string, error) {

@@ -10,8 +10,10 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -25,6 +27,28 @@ type PickingListHandler struct {
 
 func NewPickingListHandler(db *supa.Client) *PickingListHandler {
 	return &PickingListHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxPickingList,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewPickingListHandler(d.DB)
+			g := d.Gates
+			r.Route("/picking-lists", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDTxPickingList))
+				r.Get("/", h.List)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Post("/from-outbound/{outbound_id}", h.CreateFromOutbound)
+				r.With(g.Write).Patch("/{id}", h.UpdateHeader)
+				r.With(g.Write).Patch("/{id}/items/{item_id}", h.UpdateItem)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // PickingListWithItems — 응답 합본.

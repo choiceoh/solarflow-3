@@ -11,8 +11,10 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -31,6 +33,27 @@ type BaroQuotesHandler struct {
 
 func NewBaroQuotesHandler(db *supa.Client) *BaroQuotesHandler {
 	return &BaroQuotesHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroQuote,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroQuotesHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/quotes", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroQuote))
+				r.Get("/", h.List)
+				r.With(g.Write).Post("/", h.Create)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+				r.With(g.Write).Post("/{id}/send", h.Send)
+			})
+		},
+	})
 }
 
 // QuoteWithLines — 견적 1건 응답 (헤더 + 라인 묶음).

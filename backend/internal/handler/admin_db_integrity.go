@@ -10,7 +10,9 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -28,15 +30,24 @@ func NewDBIntegrityHandler(db *supa.Client) *DBIntegrityHandler {
 	return &DBIntegrityHandler{DB: db}
 }
 
-func (h *DBIntegrityHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
-	r.With(g.AdminOnly).Get("/admin/db-integrity", h.Run)
-	r.With(g.AdminOnly).Post("/admin/db-integrity/refresh", h.Refresh)
-
-	// PR 091: 개별 row 수준 이상치 검사 (v_db_anomalies + anomaly_ignores).
-	r.With(g.AdminOnly).Get("/admin/db-anomalies", h.Anomalies)
-	r.With(g.AdminOnly).Get("/admin/db-anomalies/ignores", h.ListIgnores)
-	r.With(g.AdminOnly).Post("/admin/db-anomalies/ignore", h.IgnoreAnomaly)
-	r.With(g.AdminOnly).Delete("/admin/db-anomalies/ignore/{ignoreID}", h.UnignoreAnomaly)
+// init — D-20260512-090000 feature self-mounting.
+// main merge: /admin/db-anomalies/ignores (ListIgnores) 신규 라우트 통합.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDSysDBIntegrity,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewDBIntegrityHandler(d.DB)
+			g := d.Gates
+			r.With(g.AdminOnly).Get("/admin/db-integrity", h.Run)
+			r.With(g.AdminOnly).Post("/admin/db-integrity/refresh", h.Refresh)
+			// PR 091: 개별 row 수준 이상치 검사 (v_db_anomalies + anomaly_ignores).
+			r.With(g.AdminOnly).Get("/admin/db-anomalies", h.Anomalies)
+			r.With(g.AdminOnly).Get("/admin/db-anomalies/ignores", h.ListIgnores)
+			r.With(g.AdminOnly).Post("/admin/db-anomalies/ignore", h.IgnoreAnomaly)
+			r.With(g.AdminOnly).Delete("/admin/db-anomalies/ignore/{ignoreID}", h.UnignoreAnomaly)
+		},
+	})
 }
 
 // IntegrityCheck — view v_integrity_check 의 한 행.

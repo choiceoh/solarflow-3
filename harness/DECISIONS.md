@@ -1658,3 +1658,27 @@
   - 서버/운영 빌드 확인은 사용자 지시에 따라 실행하지 않는다.
   - graphify 갱신으로 변경 구조를 동기화한다.
 - **날짜**: 2026-05-12 10:19:06 KST
+
+## D-20260512-090000: 핸들러 라우트 등록은 mount 레지스트리에서 init() 으로 자기소개한다
+
+- **결정**: D-110 (D-RegisterRoutes 빅뱅) 의 *중앙 집계* 부분을 폐기한다. `internal/handler/routes.go` 에 알파벳 순으로 모은 `(h *XxxHandler) RegisterRoutes(...)` 메서드와 `internal/router/router.go` 의 알파벳 호출 리스트 — 즉 핸들러 하나 추가에 *두 파일을 같이 수정* 해야 하는 구조 — 를 새 `internal/mount` 레지스트리로 대체한다. 각 핸들러는 자기 파일의 `func init()` 에서 `mount.Register(mount.Spec{...})` 1회로 자기 FeatureID·라우트 트리·인증 그룹을 선언하고, `router.New` 는 `mount.MountAuthed(deps, r)` 1줄로 walk 한다.
+- **유지되는 원칙 (D-110 의 spirit)**:
+  - 핸들러가 자기 URL·가드를 직접 소유한다 (`r.With(g.Write).Post(...)` 패턴 그대로).
+  - `package handler` 단일 유지 — 패키지 분리는 본 결정 범위 밖.
+  - feature 카탈로그(D-120) 가 정본. `feature_coverage_test` 가 chi 트리 ↔ `Catalog.Paths` 일치를 계속 강제.
+- **이유**:
+  - D-110 의 알파벳 정렬은 PR 충돌을 *완화* 했지만 제거하지 못했다. 한 핸들러 추가에 (1) 핸들러 파일 (2) routes.go (3) router.go 3곳 동시 수정이라 알파벳 자리 인접 PR 끼리는 여전히 충돌.
+  - 라우트의 *어디서 어떻게 마운트되는지* 를 알려면 routes.go + router.go 두 파일을 번갈아 봐야 함. AI 에이전트·신규 합류자 모두에게 마찰.
+  - `init()` 자기등록은 Go `database/sql` 드라이버·`image/png` 디코더 등에서 검증된 패턴이고, 패키지 import 시점에 등록이 끝나므로 `router.New` 시점에 모든 Spec 이 모여 있음이 컴파일러 차원에서 보장된다.
+- **운영 기준**:
+  - `mount.Spec.ID` 는 `feature.FeatureID` 1:1 매핑. 중복 등록은 `Register` 가 panic 으로 fail-fast.
+  - `mount.Spec.Auth` 3 모드: `AuthRoot` (`/health` 류), `AuthPublicAPI` (`/api/v1/public/*`), `AuthAuthed` (`/api/v1/*` 기본).
+  - 의존성은 `mount.Deps` plain struct 로 전달 — interface 가 아니다 (interface 였다면 `app.App` 의 필드 이름이 메서드와 충돌해서 새 어휘를 발명해야 했고, 호출 사이트 65개에 churn 이 번짐).
+  - 마이그레이션은 *점진적* 으로 진행한다. routes.go 의 알파벳 자리를 한 번에 비우지 않고 핸들러를 도메인별 batch (master / baro / tx / wms / ai / sys / io) 로 옮긴다. 중간 상태에서도 routes.go 호출 + mount.MountAuthed walk 가 공존 가능.
+  - 모든 핸들러 이전이 끝나면 routes.go 의 알파벳 리스트와 router.go 의 호출 리스트는 모두 제거되고 D-110 의 *중앙 집계* 가 자연 소멸한다.
+- **파일럿**: `BankHandler` (master.bank). PR 본문에 변경된 라우트 0개·달라진 가드 0개를 `feature_coverage_test`·`TestRouteSnapshot`·`TestGuardMatrix` 통과로 증빙.
+- **검증**:
+  - `go build ./...` + `go vet ./...` 통과.
+  - `go test ./internal/mount` (Register 중복·nil Mount·그룹 분리·HasEngine 4 케이스).
+  - `go test ./internal/router` (snapshot / feature coverage / guard matrix / module family gate 전부 통과 — chi 트리 무변경 증명).
+- **날짜**: 2026-05-12 09:00:00 KST

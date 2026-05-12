@@ -4,7 +4,11 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"solarflow-backend/internal/engine"
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -18,6 +22,51 @@ type CalcProxyHandler struct {
 // NewCalcProxyHandler — CalcProxyHandler 생성자
 func NewCalcProxyHandler(ec *engine.EngineClient) *CalcProxyHandler {
 	return &CalcProxyHandler{Engine: ec}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// CalcProxy 는 /api/v1/calc, /api/v1/engine 를 main /api/v1 그룹과 *별도* 트리로 마운트한다
+// (StudyTenantFence 미적용 + 자체 authMW). 그래서 AuthRoot Spec 으로 등록하고 Mount 클로저가
+// 직접 r.Route + r.Use(d.AuthMW) 를 수행한다. d.HasEngine() 가 false 면 라우트 자체를
+// mount 하지 않아 NoEngine snapshot 테스트와 호환.
+//
+// catalog.Paths 가 calc.*/engine.* feature 별로 등재돼 coverage_test 가 검증한다.
+func init() {
+	mount.Register(mount.Spec{
+		Auth: mount.AuthRoot,
+		Mount: func(d *mount.Deps, root chi.Router) {
+			if !d.HasEngine() {
+				return
+			}
+			h := NewCalcProxyHandler(d.Engine)
+			g := d.Gates
+			authMW := d.AuthMW
+			root.Route("/api/v1/calc", func(r chi.Router) {
+				r.Use(authMW)
+				r.With(g.Feature(feature.IDCalcInventory)).Post("/inventory", h.Inventory)
+				r.With(g.Feature(feature.IDCalcLandedCost)).Post("/landed-cost", h.LandedCost)
+				r.With(g.Feature(feature.IDCalcExchangeCompare)).Post("/exchange-compare", h.ExchangeCompare)
+				r.With(g.Feature(feature.IDCalcLCFee)).Post("/lc-fee", h.LcFee)
+				r.With(g.Feature(feature.IDCalcLCLimitTimeline)).Post("/lc-limit-timeline", h.LcLimitTimeline)
+				r.With(g.Feature(feature.IDCalcLCMaturityAlert)).Post("/lc-maturity-alert", h.LcMaturityAlert)
+				r.With(g.Feature(feature.IDCalcMarginAnalysis)).Post("/margin-analysis", h.MarginAnalysis)
+				r.With(g.Feature(feature.IDCalcCustomerAnalysis)).Post("/customer-analysis", h.CustomerAnalysis)
+				r.With(g.Feature(feature.IDCalcPriceTrend)).Post("/price-trend", h.PriceTrend)
+				r.With(g.Feature(feature.IDCalcPriceForecastStrategy)).Post("/price-forecast-strategy", h.PriceForecastStrategy)
+				r.With(g.Feature(feature.IDCalcSupplyForecast)).Post("/supply-forecast", h.SupplyForecast)
+				r.With(g.Feature(feature.IDCalcOrderFulfillmentRisk)).Post("/order-fulfillment-risk", h.OrderFulfillmentRisk)
+				r.With(g.Feature(feature.IDCalcOutstandingList)).Post("/outstanding-list", h.OutstandingList)
+				r.With(g.Feature(feature.IDCalcReceiptMatchSugges)).Post("/receipt-match-suggest", h.ReceiptMatchSuggest)
+				r.With(g.Feature(feature.IDCalcSearch)).Post("/search", h.Search)
+				r.With(g.Feature(feature.IDCalcInventoryTurnover)).Post("/inventory-turnover", h.InventoryTurnover)
+			})
+			root.Route("/api/v1/engine", func(r chi.Router) {
+				r.Use(authMW)
+				r.With(g.Feature(feature.IDEngineHealth)).Get("/health", h.EngineHealth)
+				r.With(g.Feature(feature.IDEngineHealth)).Get("/ready", h.EngineReady)
+			})
+		},
+	})
 }
 
 // EngineUnavailableResponse — Rust 엔진 다운 시 503 응답 구조체

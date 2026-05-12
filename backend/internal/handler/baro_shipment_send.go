@@ -12,7 +12,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -30,6 +32,34 @@ type BaroShipmentSendHandler struct {
 
 func NewBaroShipmentSendHandler(db *supa.Client) *BaroShipmentSendHandler {
 	return &BaroShipmentSendHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// 두 Spec 으로 분할:
+//   1) AuthAuthed: /baro/shipment-notices — 출하 알림 발송 (IDBaroShipmentNotice)
+//   2) AuthRoot:   /api/v1/baro/driver/{token} — 드라이버 PWA 토큰 access (인증 미적용,
+//      unrestrictedAllowlist 에 등재된 public 라우트, FeatureID 없음)
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroShipmentNotice,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroShipmentSendHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/shipment-notices", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroShipmentNotice))
+				r.With(g.Write).Post("/", h.Send)
+			})
+		},
+	})
+	mount.Register(mount.Spec{
+		// 무가드 라우트 — ID 비워둠. router 의 unrestrictedAllowlist 에 등재돼 있다.
+		Auth: mount.AuthRoot,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroShipmentSendHandler(d.DB)
+			r.Get("/api/v1/baro/driver/{token}", h.GetByDriverToken)
+		},
+	})
 }
 
 type ShipmentSendRequest struct {

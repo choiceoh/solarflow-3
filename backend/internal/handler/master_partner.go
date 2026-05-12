@@ -9,7 +9,9 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -22,6 +24,35 @@ type PartnerHandler struct {
 // NewPartnerHandler — PartnerHandler 생성자
 func NewPartnerHandler(db *supa.Client) *PartnerHandler {
 	return &PartnerHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// /partners/{id}/activities 는 PartnerActivityHandler.ListByPartner 위임 — 같은 패키지 안이라
+// Mount 클로저가 stateless PartnerActivityHandler 인스턴스를 그 자리에서 만든다 (D-109 BARO alias).
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDMasterPartner,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewPartnerHandler(d.DB)
+			activityH := NewPartnerActivityHandler(d.DB)
+			g := d.Gates
+			r.Route("/partners", func(r chi.Router) {
+				r.Get("/", h.List)
+				// /{id} 보다 먼저 — 정적 경로 우선
+				r.Get("/usage-counts", h.UsageCounts)
+				r.Get("/{id}", h.GetByID)
+				// CRM 활동 로그는 BARO 전용 alias — 다른 테넌트 토큰은 403 (D-109)
+				r.With(g.Feature(feature.IDCRMPartnerActivity)).Get("/{id}/activities", activityH.ListByPartner)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				// 메타 GUI inline 편집 진입점 — UpdatePartnerRequest 의 모든 필드가 optional.
+				r.With(g.Write).Patch("/{id}", h.Update)
+				r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/partners — 거래처 목록 조회

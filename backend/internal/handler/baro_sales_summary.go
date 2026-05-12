@@ -8,9 +8,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -27,6 +30,22 @@ type BaroSalesSummaryHandler struct {
 
 func NewBaroSalesSummaryHandler(db *supa.Client) *BaroSalesSummaryHandler {
 	return &BaroSalesSummaryHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroSalesSummary,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroSalesSummaryHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/sales-summary", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroSalesSummary))
+				r.Get("/", h.Get)
+			})
+		},
+	})
 }
 
 // SalesSummaryResponse — 응답 합본.

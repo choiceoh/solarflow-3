@@ -15,7 +15,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -25,6 +27,22 @@ type SystemSettingsHandler struct {
 
 func NewSystemSettingsHandler(db *supa.Client) *SystemSettingsHandler {
 	return &SystemSettingsHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDSysSystemSettings,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewSystemSettingsHandler(d.DB)
+			g := d.Gates
+			r.Route("/system-settings", func(r chi.Router) {
+				r.Get("/{key}", h.Get)
+				r.With(g.AdminOnly).Put("/{key}", h.Upsert)
+			})
+		},
+	})
 }
 
 type systemSettingRow struct {

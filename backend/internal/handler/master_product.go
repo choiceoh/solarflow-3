@@ -9,7 +9,9 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -22,6 +24,28 @@ type ProductHandler struct {
 // NewProductHandler — ProductHandler 생성자
 func NewProductHandler(db *supa.Client) *ProductHandler {
 	return &ProductHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDMasterProduct,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewProductHandler(d.DB)
+			g := d.Gates
+			r.Route("/products", func(r chi.Router) {
+				r.Get("/", h.List)
+				// /{id} 보다 먼저 — 정적 경로 우선
+				r.Get("/usage-counts", h.UsageCounts)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/products — 품번 목록 조회 (제조사 정보 포함)

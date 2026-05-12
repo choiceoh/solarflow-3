@@ -9,7 +9,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -24,6 +26,26 @@ type CostDetailHandler struct {
 // NewCostDetailHandler — CostDetailHandler 생성자
 func NewCostDetailHandler(db *supa.Client) *CostDetailHandler {
 	return &CostDetailHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxCostDetail,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewCostDetailHandler(d.DB)
+			g := d.Gates
+			r.Route("/cost-details", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDTxCostDetail))
+				r.Get("/", h.List)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/cost-details — 원가 명세 목록 조회

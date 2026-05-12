@@ -9,8 +9,10 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 	"solarflow-backend/internal/tenant"
 )
@@ -37,6 +39,43 @@ type studyStatusResponse struct {
 
 func NewStudyLearningHandler(db *supa.Client) *StudyLearningHandler {
 	return &StudyLearningHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDStudyLearning,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewStudyLearningHandler(d.DB)
+			g := d.Gates
+			r.Route("/study", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDStudyLearning))
+				r.Route("/domains", func(r chi.Router) {
+					r.Get("/", h.ListDomains)
+					r.With(g.Write).Post("/", h.CreateDomain)
+					r.Get("/{id}", h.GetDomain)
+					r.With(g.Write).Put("/{id}", h.UpdateDomain)
+					r.With(g.Write).Patch("/{id}", h.UpdateDomain)
+					r.With(g.Write).Delete("/{id}", h.DeleteDomain)
+				})
+				r.Route("/plans", func(r chi.Router) {
+					r.Get("/", h.ListPlans)
+					r.With(g.Write).Post("/", h.CreatePlan)
+					r.Get("/{id}", h.GetPlan)
+					r.With(g.Write).Put("/{id}", h.UpdatePlan)
+					r.With(g.Write).Patch("/{id}", h.UpdatePlan)
+					r.With(g.Write).Delete("/{id}", h.DeletePlan)
+					r.Route("/{id}/steps", func(r chi.Router) {
+						r.With(g.Write).Post("/", h.CreateStep)
+						r.With(g.Write).Put("/{step_id}", h.UpdateStep)
+						r.With(g.Write).Patch("/{step_id}", h.UpdateStep)
+						r.With(g.Write).Delete("/{step_id}", h.DeleteStep)
+					})
+				})
+			})
+		},
+	})
 }
 
 // ListDomains — GET /api/v1/study/domains?status=active

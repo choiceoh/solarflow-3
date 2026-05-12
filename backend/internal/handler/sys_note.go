@@ -9,8 +9,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -23,6 +25,24 @@ type NoteHandler struct {
 // NewNoteHandler — NoteHandler 생성자
 func NewNoteHandler(db *supa.Client) *NoteHandler {
 	return &NoteHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDSysNote,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewNoteHandler(d.DB)
+			g := d.Gates
+			r.Route("/notes", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/notes — 본인 메모 목록 조회

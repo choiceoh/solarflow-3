@@ -12,7 +12,9 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -40,6 +42,38 @@ type BLHandler struct {
 // NewBLHandler — BLHandler 생성자
 func NewBLHandler(db *supa.Client) *BLHandler {
 	return &BLHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// BL 은 자식 BLLineHandler 가 /bls/{blId}/lines 서브트리를 마운트하는 부모-자식 패턴.
+// Mount 클로저 안에서 부모/자식 인스턴스를 함께 생성한다 (둘 다 stateless, DB 만 보유).
+// /{blId}/lines 의 모든 라우트는 BL 트리 안이라 IDTxBL 게이트만 적용 (Catalog.Paths 는
+// /api/v1/bls/* 한 묶음으로 등재돼 있다 — coverage_test 가 검증).
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxBL,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBLHandler(d.DB)
+			lineH := NewBLLineHandler(d.DB)
+			g := d.Gates
+			r.Route("/bls", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.Get("/summary", h.Summary)
+				r.Get("/dashboard", h.Dashboard)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+				r.Route("/{blId}/lines", func(r chi.Router) {
+					r.Get("/", lineH.ListByBL)
+					r.With(g.Write).Post("/", lineH.Create)
+					r.With(g.Write).Put("/{id}", lineH.Update)
+					r.With(g.Write).Delete("/{id}", lineH.Delete)
+				})
+			})
+		},
+	})
 }
 
 func sanitizeBLSearchTerm(q string) string {

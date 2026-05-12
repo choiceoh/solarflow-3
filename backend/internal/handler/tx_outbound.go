@@ -15,7 +15,9 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/engine"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -81,6 +83,33 @@ func NewOutboundHandler(db *supa.Client, engineClient ...*engine.EngineClient) *
 		ec = engineClient[0]
 	}
 	return &OutboundHandler{DB: db, Engine: ec}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// Mount 클로저가 OutboundHandler 인스턴스를 자체 생성한다. AssistantHandler 의 WithWriters
+// alias (Phase 6) 도 별도 인스턴스를 만들 예정 — 핸들러가 stateless 라 인스턴스 중복 무해.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxOutbound,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewOutboundHandler(d.DB, d.Engine)
+			g := d.Gates
+			r.Route("/outbounds", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.Get("/summary", h.Summary)
+				// 대시보드 집계 — KPI / trend24 / breakdown / sale conversion 한 번에.
+				// 정적 경로라 /{id} 보다 먼저 등록.
+				r.Get("/dashboard", h.Dashboard)
+				r.Get("/{id}", h.GetByID)
+				// D-064 PR 29: ERP FIFO 매칭(입고 LOT ↔ 출고) 라인 + 합계
+				r.Get("/{id}/fifo-matches", h.FifoMatches)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 func (h *OutboundHandler) fetchOutboundByID(id string) (model.Outbound, error) {

@@ -4,9 +4,12 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -18,6 +21,22 @@ type CreditBoardHandler struct {
 
 func NewCreditBoardHandler(db *supa.Client) *CreditBoardHandler {
 	return &CreditBoardHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroCreditBoard,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewCreditBoardHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/credit-board", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroCreditBoard))
+				r.Get("/", h.List)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/baro/credit-board
