@@ -186,6 +186,24 @@ function getOrderWorkQueue(value: string | null): OrderWorkQueue {
   return value === "delivery_soon" || value === "no_site" ? value : ""
 }
 
+function getOutboundWorkQueue(value: string | null): OutboundWorkQueue {
+  return value === "sale_unregistered" ? value : ""
+}
+
+function getSaleInvoiceQueue(value: string | null): "" | "issued" | "pending" {
+  return value === "issued" || value === "pending" ? value : ""
+}
+
+function getSaleErpClosedQueue(value: string | null): SaleErpClosedFilter {
+  return value === "true" || value === "false" ? value : ""
+}
+
+function getSaleReceiptQueue(value: string | null): SaleReceiptFilter {
+  return value === "open" || value === "unpaid" || value === "partial" || value === "paid"
+    ? value
+    : ""
+}
+
 function getReceiptMatchFilter(receipt: Receipt): ReceiptMatchStatus {
   const matched = receipt.matched_total ?? 0
   if (matched >= receipt.amount) return "matched"
@@ -459,6 +477,11 @@ export default function OrdersPage() {
   const [orderKwRange, setOrderKwRange] = useState<KwRangeValue>(null)
   const _loc = useLocation()
   const navigate = useNavigate()
+  const initialQueueParamsRef = useRef<URLSearchParams | null>(null)
+  if (initialQueueParamsRef.current === null) {
+    initialQueueParamsRef.current = new URLSearchParams(_loc.search)
+  }
+  const initialQueueParams = initialQueueParamsRef.current
   const [orderWorkQueue, setOrderWorkQueue] = useState<OrderWorkQueue>(() =>
     getOrderWorkQueue(new URLSearchParams(_loc.search).get("alert")),
   )
@@ -497,7 +520,9 @@ export default function OrdersPage() {
   const [obMfgFilter, setObMfgFilter] = useState("")
   const [obDateRange, setObDateRange] = useState<DateRangeValue>(null)
   const [obKwRange, setObKwRange] = useState<KwRangeValue>(null)
-  const [obWorkQueueFilter, setObWorkQueueFilter] = useState<OutboundWorkQueue>("")
+  const [obWorkQueueFilter, setObWorkQueueFilter] = useState<OutboundWorkQueue>(() =>
+    getOutboundWorkQueue(initialQueueParams.get("queue")),
+  )
   const [bulkSalePreviewItems, setBulkSalePreviewItems] = useState<Outbound[]>([])
   const [bulkSalePreviewLoading, setBulkSalePreviewLoading] = useState(false)
   const [bulkSalePreviewError, setBulkSalePreviewError] = useState("")
@@ -630,9 +655,15 @@ export default function OrdersPage() {
   // 탭 3: 판매
   const [saleCustomerFilter, setSaleCustomerFilter] = useState("")
   const [saleDateRange, setSaleDateRange] = useState<DateRangeValue>(null)
-  const [saleInvoiceFilter, setSaleInvoiceFilter] = useState("")
-  const [saleErpClosedFilter, setSaleErpClosedFilter] = useState<SaleErpClosedFilter>("")
-  const [saleReceiptFilter, setSaleReceiptFilter] = useState<SaleReceiptFilter>("")
+  const [saleInvoiceFilter, setSaleInvoiceFilter] = useState<"" | "issued" | "pending">(() =>
+    getSaleInvoiceQueue(initialQueueParams.get("invoice")),
+  )
+  const [saleErpClosedFilter, setSaleErpClosedFilter] = useState<SaleErpClosedFilter>(() =>
+    getSaleErpClosedQueue(initialQueueParams.get("erp")),
+  )
+  const [saleReceiptFilter, setSaleReceiptFilter] = useState<SaleReceiptFilter>(() =>
+    getSaleReceiptQueue(initialQueueParams.get("receipt")),
+  )
   const [selectedSaleIds, setSelectedSaleIds] = useState<Set<string>>(new Set())
   const [bulkInvoiceDate, setBulkInvoiceDate] = useState(todayLocalDate)
   const [bulkInvoiceEmail, setBulkInvoiceEmail] = useState("")
@@ -2058,7 +2089,7 @@ export default function OrdersPage() {
                 label: "계산서",
                 value: saleInvoiceFilter,
                 onChange: (value) => {
-                  setSaleInvoiceFilter(value)
+                  setSaleInvoiceFilter(getSaleInvoiceQueue(value))
                   if (value) setSaleReceiptFilter("")
                 },
                 options: [

@@ -2,7 +2,10 @@
 // 비유: 양식 공장 — 각 업무별 빈 양식지를 만들어 드롭다운까지 미리 설정
 // ExcelJS는 반드시 dynamic import (지적 1 반영)
 
-import type { TemplateType, MasterDataForExcel, FieldDef } from '@/types/excel';
+import type {
+  TemplateType, MasterDataForExcel, FieldDef,
+  ParsedRow, UnifiedImportCellEdit, UnifiedImportPreview,
+} from '@/types/excel';
 import {
   TEMPLATE_LABEL, COMPANY_FIELDS, INBOUND_FIELDS, OUTBOUND_FIELDS, SALE_FIELDS,
   DECLARATION_FIELDS, DECLARATION_COST_FIELDS, EXPENSE_FIELDS,
@@ -56,6 +59,8 @@ interface SheetWritable {
   autoFilter?: unknown;
   properties?: { tabColor?: { argb?: string } };
   state?: 'visible' | 'hidden' | 'veryHidden';
+  rowCount?: number;
+  addRow(values: unknown[]): WritableRow;
   getCell(addr: string | number, col?: number): WritableCell;
   getColumn(idx: number): WritableColumn;
   getRow(row: number): WritableRow;
@@ -66,6 +71,7 @@ interface WorkbookWritable {
   created?: Date;
   modified?: Date;
   addWorksheet(name: string, options?: unknown): SheetWritable;
+  getWorksheet?(name: string): SheetWritable | undefined;
 }
 
 // 통합 마스터 — 셋업 단계. 의존 순서: 법인 → 제조사 → 품번(제조사 참조) / 법인 → 은행(법인 참조).
@@ -1798,6 +1804,193 @@ function getFieldsForType(type: TemplateType): FieldDef[] {
     case 'lc': return LC_FIELDS;
     case 'tt': return TT_FIELDS;
   }
+}
+
+function previewSectionTypes(preview: UnifiedImportPreview): TemplateType[] {
+  return preview.sections
+    .filter((section) => section.present && !section.parseError)
+    .map((section) => section.type);
+}
+
+function inferUnifiedTemplateKind(types: TemplateType[]): ExcelTemplateKind {
+  if (types.length > 0 && types.every((type) => UNIFIED_MASTER_ORDER.includes(type))) {
+    return 'unified_master';
+  }
+  if (types.length > 0 && types.every((type) => UNIFIED_TRANSACTION_ORDER.includes(type))) {
+    return 'unified_transaction';
+  }
+  return 'rehearsal_sample';
+}
+
+function writeParsedRows(sheet: SheetWritable, fields: FieldDef[], rows: ParsedRow[]) {
+  rows.forEach((row) => {
+    sheet.addRow(fields.map((field) => row.data[field.key] ?? ''));
+  });
+}
+
+function sectionSheetName(type: TemplateType, target?: UnifiedImportCellEdit['target']) {
+  if (target === 'declarations') return '면장등록';
+  if (target === 'costs') return '원가등록';
+  if (type === 'company') return '법인등록';
+  return `${TEMPLATE_LABEL[type]}등록`;
+}
+
+interface CorrectionIssueEntry {
+  sheet: string;
+  rowNumber: number | string;
+  severity: '오류' | '경고';
+  field: string;
+  message: string;
+}
+
+function rowIssueEntries(preview: UnifiedImportPreview): CorrectionIssueEntry[] {
+  return preview.sections.flatMap<CorrectionIssueEntry>((section): CorrectionIssueEntry[] => {
+    if (!section.present || section.parseError) {
+      return section.parseError
+        ? [{
+          sheet: sectionSheetName(section.type),
+          rowNumber: '',
+          severity: '오류',
+          field: '시트',
+          message: section.parseError,
+        }]
+        : [];
+    }
+
+    const rows = section.declPreview
+      ? [
+        ...section.declPreview.declarations.map((row) => ({ row, sheet: '면장등록' })),
+        ...section.declPreview.costs.map((row) => ({ row, sheet: '원가등록' })),
+      ]
+      : (section.preview?.rows ?? []).map((row) => ({ row, sheet: sectionSheetName(section.type) }));
+
+    return rows.flatMap(({ row, sheet }) => [
+      ...row.errors.map((issue) => ({
+        sheet,
+        rowNumber: row.rowNumber,
+        severity: '오류' as const,
+        field: issue.field,
+        message: issue.message,
+      })),
+      ...(row.warnings ?? []).map((issue) => ({
+        sheet,
+        rowNumber: row.rowNumber,
+        severity: '경고' as const,
+        field: issue.field,
+        message: issue.message,
+      })),
+    ]);
+  });
+}
+
+function addCorrectionSummarySheet(
+  workbook: WorkbookWritable,
+  preview: UnifiedImportPreview,
+  edits: UnifiedImportCellEdit[],
+) {
+  const sheet = workbook.addWorksheet('검토요약');
+  setTabColor(sheet, 'FFF59E0B');
+  sheet.views = [{ state: 'frozen', ySplit: 4 }];
+  sheet.getColumn(1).width = 18;
+  sheet.getColumn(2).width = 18;
+  sheet.getColumn(3).width = 12;
+  sheet.getColumn(4).width = 18;
+  sheet.getColumn(5).width = 28;
+  sheet.getColumn(6).width = 28;
+  sheet.getColumn(7).width = 24;
+
+  const issues = rowIssueEntries(preview);
+  const errorCount = issues.filter((issue) => issue.severity === '오류').length;
+  const warningCount = issues.filter((issue) => issue.severity === '경고').length;
+
+  writeGuideRow(sheet, 1, ['SolarFlow 보정본 검토 요약', '', '', '', '', '', '']);
+  sheet.getCell('A1').font = { bold: true, size: 15 };
+  writeGuideRow(sheet, 2, ['원본 파일', preview.fileName, '수정 셀', edits.length, '오류', errorCount, '경고']);
+  sheet.getCell(2, 7).value = warningCount;
+  writeGuideRow(sheet, 4, ['수정내역', '시트', '행', '필드', '수정 전', '수정 후', '수정시각']);
+  sheet.getRow(4).font = { bold: true };
+  sheet.getRow(4).fill = GUIDE_SUBHEADER_FILL;
+
+  let row = 5;
+  if (edits.length === 0) {
+    writeGuideRow(sheet, row, ['수정된 셀이 없습니다', '', '', '', '', '', '']);
+    row += 2;
+  } else {
+    edits.forEach((edit) => {
+      writeGuideRow(sheet, row, [
+        TEMPLATE_LABEL[edit.sectionType],
+        sectionSheetName(edit.sectionType, edit.target),
+        edit.rowNumber,
+        edit.fieldLabel,
+        edit.beforeValue ?? '',
+        edit.afterValue ?? '',
+        edit.updatedAt,
+      ]);
+      row += 1;
+    });
+    row += 1;
+  }
+
+  writeGuideRow(sheet, row, ['남은 검증 이슈', '시트', '행', '필드', '구분', '내용', '']);
+  sheet.getRow(row).font = { bold: true };
+  sheet.getRow(row).fill = GUIDE_SUBHEADER_FILL;
+  row += 1;
+
+  if (issues.length === 0) {
+    writeGuideRow(sheet, row, ['남은 오류/경고가 없습니다', '', '', '', '', '', '']);
+    return;
+  }
+
+  issues.forEach((issue) => {
+    writeGuideRow(sheet, row, [
+      '',
+      issue.sheet,
+      issue.rowNumber,
+      issue.field,
+      issue.severity,
+      issue.message,
+      '',
+    ]);
+    row += 1;
+  });
+}
+
+export async function downloadCorrectedUnifiedWorkbook(
+  preview: UnifiedImportPreview,
+  edits: UnifiedImportCellEdit[],
+  masterData: MasterDataForExcel,
+): Promise<void> {
+  const ExcelJS = await import('exceljs');
+  const { saveAs } = await import('file-saver');
+
+  const types = previewSectionTypes(preview);
+  const workbook = new ExcelJS.Workbook() as unknown as WorkbookWritable;
+  setWorkbookMeta(workbook);
+  addMetaSheet(workbook, inferUnifiedTemplateKind(types), types);
+  addGuideSheet(workbook, types);
+  addCorrectionSummarySheet(workbook, preview, edits);
+  const codeSheetName = '통합코드표';
+  const refs = addUnifiedCodeSheet(workbook, codeSheetName, masterData);
+
+  for (const section of preview.sections) {
+    if (!section.present || section.parseError) continue;
+    await addUnifiedDataSheet(workbook, section.type, refs, codeSheetName, masterData);
+    if (section.declPreview) {
+      const declSheet = workbook.getWorksheet?.('면장등록');
+      const costSheet = workbook.getWorksheet?.('원가등록');
+      if (declSheet) writeParsedRows(declSheet, DECLARATION_FIELDS, section.declPreview.declarations);
+      if (costSheet) writeParsedRows(costSheet, DECLARATION_COST_FIELDS, section.declPreview.costs);
+    } else if (section.preview) {
+      const dataSheet = workbook.getWorksheet?.(sectionSheetName(section.type));
+      if (dataSheet) writeParsedRows(dataSheet, getFieldsForType(section.type), section.preview.rows);
+    }
+  }
+
+  const buffer = await (workbook as unknown as { xlsx: { writeBuffer(): Promise<ArrayBuffer> } }).xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const baseName = preview.fileName.replace(/\.[^.]+$/, '').slice(0, 80) || '통합업로드';
+  saveAs(blob, `SolarFlow_${baseName}_보정본_${today}.xlsx`);
 }
 
 // 에러 행만 다운로드
