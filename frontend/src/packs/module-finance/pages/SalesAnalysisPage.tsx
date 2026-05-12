@@ -24,6 +24,8 @@ import type { Partner, Product } from "@/types/masters"
 import { CardB, FilterChips, RailBlock, TileB } from "@/components/command/MockupPrimitives"
 import { KpiStrip } from "@/components/command/KpiStrip"
 import { flatSpark, monthlyTrend } from "@/templates/sparkUtils"
+import { downloadSalesManagementReport } from "@/lib/reports/salesManagementReport"
+import { downloadSalesManagementPptx } from "@/lib/reports/salesManagementPptx"
 
 interface MarginItem {
   manufacturer_name: string
@@ -545,130 +547,8 @@ function safeDivide(numerator: number, denominator: number): number {
   return denominator > 0 ? numerator / denominator : 0
 }
 
-function csvCell(value: string | number | null | undefined): string {
-  const raw = value == null ? "" : String(value)
-  return `"${raw.replace(/"/g, '""')}"`
-}
-
 function safeFilePart(value: string | undefined): string {
   return (value || "all").replace(/[^\w가-힣.-]+/g, "_").slice(0, 48)
-}
-
-function downloadCsv(filename: string, rows: (string | number | null | undefined)[][]) {
-  if (typeof document === "undefined" || rows.length === 0) return
-  const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n")
-  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
-
-function buildMonthlyReportRows({
-  periodLabel,
-  costBasis,
-  alternativeCostLabel,
-  monthlyRows,
-  bridgeRows,
-  alternativeRows,
-  salesSummary,
-  margin,
-  customers,
-  costCoverageRate,
-  costMissingRevenue,
-  adjustedSummary,
-}: {
-  periodLabel: string
-  costBasis: CostBasis
-  alternativeCostLabel: string
-  monthlyRows: MonthlyManagementRow[]
-  bridgeRows: BridgeRow[]
-  alternativeRows: AlternativeMarginRow[]
-  salesSummary: { supply: number; total: number; count: number; issued: number; pending: number }
-  margin: MarginAnalysis
-  customers: CustomerAnalysis
-  costCoverageRate: number
-  costMissingRevenue: number
-  adjustedSummary: AlternativeMarginSummary
-}): (string | number | null | undefined)[][] {
-  const rows: (string | number | null | undefined)[][] = [
-    ["월간 경영 리포트"],
-    ["기간", periodLabel],
-    ["원가 기준", costBasis.toUpperCase()],
-    ["대체원가 기준", alternativeCostLabel],
-    [],
-    ["요약"],
-    ["공급가 매출", salesSummary.supply],
-    ["부가세 포함 매출", salesSummary.total],
-    ["계산 이익", margin.summary.total_margin_krw],
-    ["계산 이익률", `${margin.summary.overall_margin_rate.toFixed(1)}%`],
-    ["잠정 이익", Math.round(adjustedSummary.adjustedMargin)],
-    ["잠정 이익률", `${adjustedSummary.adjustedMarginRate.toFixed(1)}%`],
-    ["원가 연결률", `${costCoverageRate.toFixed(1)}%`],
-    ["원가 미연결 매출", costMissingRevenue],
-    ["계산서 미발행", salesSummary.pending],
-    ["미수금", customers.summary.total_outstanding_krw],
-    [],
-    ["월별 매출/이익/이익률"],
-    [
-      "월",
-      "공급가",
-      "부가세포함",
-      "매출건수",
-      "발행건수",
-      "미발행건수",
-      "잠정이익",
-      "잠정이익률",
-      "원가연결률",
-      "평균판매가/Wp",
-      "평균원가/Wp",
-    ],
-  ]
-  for (const row of monthlyRows) {
-    rows.push([
-      row.month,
-      Math.round(row.revenue),
-      Math.round(row.total),
-      row.count,
-      row.issued,
-      row.pending,
-      Math.round(row.margin),
-      `${row.marginRate.toFixed(1)}%`,
-      `${row.costCoverageRate.toFixed(1)}%`,
-      row.avgSaleWp.toFixed(1),
-      row.avgCostWp.toFixed(1),
-    ])
-  }
-  rows.push(
-    [],
-    ["이익률 변동 브리지"],
-    ["요인", "p.p.", "영향금액", "근거"],
-    ...bridgeRows.map((row) => [
-      row.label,
-      row.pp.toFixed(2),
-      Math.round(row.valueKrw),
-      row.detail,
-    ]),
-    [],
-    ["대체원가 품목"],
-    ["품번", "제조사", "미연결매출", "대체원가/Wp", "보정원가", "잠정이익률", "사유"],
-    ...alternativeRows
-      .slice(0, 20)
-      .map((row) => [
-        row.item.product_code,
-        row.item.manufacturer_name,
-        Math.round(row.missingRevenue),
-        row.altCostWp.toFixed(1),
-        Math.round(row.altCostKrw),
-        `${row.adjustedMarginRate.toFixed(1)}%`,
-        row.reasonLabel ?? "",
-      ]),
-  )
-  return rows
 }
 
 export default function SalesAnalysisPage() {
@@ -1590,6 +1470,38 @@ export default function SalesAnalysisPage() {
     dateRange.dateFrom || dateRange.dateTo
       ? `${dateRange.dateFrom ?? "처음"}~${dateRange.dateTo ?? "현재"}`
       : "전체기간"
+  const buildReportInput = () => ({
+    periodLabel: reportPeriodLabel,
+    costBasis,
+    alternativeCostLabel: alternativeCostLabels[alternativeCostBasis],
+    salesSummary,
+    margin: {
+      calculatedKrw: margin.summary.total_margin_krw,
+      calculatedRate: margin.summary.overall_margin_rate,
+    },
+    adjusted: {
+      margin: alternativeMarginSummary.adjustedMargin,
+      marginRate: alternativeMarginSummary.adjustedMarginRate,
+    },
+    costCoverageRate,
+    costMissingRevenue,
+    customers: {
+      outstandingKrw: customers.summary.total_outstanding_krw,
+      outstandingCount: customers.items.filter((c) => c.outstanding_krw > 0).length,
+    },
+    monthly: monthlyManagementRows,
+    bridge: marginBridge.rows,
+    alternativeRows: alternativeMarginRows.map((row) => ({
+      productCode: row.item.product_code,
+      manufacturerName: row.item.manufacturer_name,
+      missingRevenue: row.missingRevenue,
+      altCostWp: row.altCostWp,
+      altCostKrw: row.altCostKrw,
+      adjustedMarginRate: row.adjustedMarginRate,
+      reason: row.reasonLabel,
+    })),
+  })
+  const reportFileBase = `sales-management-${safeFilePart(reportPeriodLabel)}`
   const alternativeCostOptions = [
     { key: "manufacturer_avg", label: "제조사 평균" },
     { key: "portfolio_avg", label: "전체 평균" },
@@ -1609,26 +1521,19 @@ export default function SalesAnalysisPage() {
                   type="button"
                   className="btn xs"
                   onClick={() =>
-                    downloadCsv(
-                      `sales-management-${safeFilePart(reportPeriodLabel)}.csv`,
-                      buildMonthlyReportRows({
-                        periodLabel: reportPeriodLabel,
-                        costBasis,
-                        alternativeCostLabel: alternativeCostLabels[alternativeCostBasis],
-                        monthlyRows: monthlyManagementRows,
-                        bridgeRows: marginBridge.rows,
-                        alternativeRows: alternativeMarginRows,
-                        salesSummary,
-                        margin,
-                        customers,
-                        costCoverageRate,
-                        costMissingRevenue,
-                        adjustedSummary: alternativeMarginSummary,
-                      }),
-                    )
+                    downloadSalesManagementReport(buildReportInput(), `${reportFileBase}.docx`)
                   }
                 >
-                  경영 리포트
+                  경영 리포트 (Word)
+                </button>
+                <button
+                  type="button"
+                  className="btn xs"
+                  onClick={() =>
+                    downloadSalesManagementPptx(buildReportInput(), `${reportFileBase}.pptx`)
+                  }
+                >
+                  경영 리포트 (PPT)
                 </button>
                 <button type="button" className="btn xs" onClick={load}>
                   새로고침
