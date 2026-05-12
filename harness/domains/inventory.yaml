@@ -1,0 +1,31 @@
+schema_version: 1
+
+id: inventory
+display_name: "재고 할당 (Inventory Allocation)"
+
+pack: erp-core
+feature_id: tx.inventory_allocation
+visible_to: all
+
+paths:
+  backend:
+    - backend/internal/domains/inventory/
+
+tables: []
+depends_on: []
+external_users: []
+
+blast_radius:
+  - description: "inventory model 필드 변경"
+    must_check:
+      - "backend/internal/domains/inventory/handler.go Validation"
+      - "backend/migrations/ + check_schema.sh"
+
+verify_scripts:
+  - command: scripts/verify_changed.sh
+    when: always
+  - command: backend/scripts/check_schema.sh
+    when: model_or_migration_changed
+
+owners: [choiceoh]
+decisions: []

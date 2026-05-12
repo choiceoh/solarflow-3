@@ -1,4 +1,4 @@
-package model
+package inventory
 
 // InventoryAllocation — 가용재고 배정 (판매예정/공사예정)
 // B/L 입고 전 또는 현재고를 특정 용도로 미리 배정하여 가용재고를 관리

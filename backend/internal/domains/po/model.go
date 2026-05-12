@@ -1,6 +1,7 @@
 package po
 
 import (
+	"solarflow-backend/internal/domains/product"
 	"solarflow-backend/internal/model"
 )
 
@@ -32,8 +33,8 @@ type PurchaseOrder struct {
 // 비유: 계약서에 법인 도장과 제조사 명함이 함께 붙어 있는 것
 type POWithRelations struct {
 	PurchaseOrder
-	Companies     *model.CompanySummary      `json:"companies"`
-	Manufacturers *model.ManufacturerSummary `json:"manufacturers"`
+	Companies     *model.CompanySummary        `json:"companies"`
+	Manufacturers *product.ManufacturerSummary `json:"manufacturers"`
 }
 
 // PODetail — PO 상세 조회 시 라인아이템, LC, TT를 포함한 전체 결과

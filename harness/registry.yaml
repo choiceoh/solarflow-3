@@ -141,6 +141,27 @@ domains:
     pack: erp-core
     manifest: harness/domains/sale.yaml
 
+  - id: inventory
+    display_name: "재고 할당 (Inventory)"
+    visible_to: all
+    feature_id: tx.inventory_allocation
+    pack: erp-core
+    manifest: harness/domains/inventory.yaml
+
+  - id: baro
+    display_name: "바로 도메인"
+    visible_to: baro
+    feature_id: baro.domain
+    pack: baro-domain
+    manifest: harness/domains/baro.yaml
+
+  - id: product
+    display_name: "제품 마스터"
+    visible_to: all
+    feature_id: master.product
+    pack: erp-core
+    manifest: harness/domains/product.yaml
+
   # PR-D 대상 (현재 코드에 존재, manifest 미작성):
   # - id: declaration             # 면장/통관
   # - id: products                # 제품 마스터

@@ -1,4 +1,4 @@
-package handler
+package baro
 
 import (
 	"encoding/json"
@@ -13,7 +13,6 @@ import (
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -59,8 +58,8 @@ func init() {
 
 // QuoteWithLines — 견적 1건 응답 (헤더 + 라인 묶음).
 type QuoteWithLines struct {
-	model.BaroQuote
-	Lines []model.BaroQuoteLine `json:"lines"`
+	BaroQuote
+	Lines []BaroQuoteLine `json:"lines"`
 }
 
 // List — GET /api/v1/baro/quotes?partner_id=&status=
@@ -87,7 +86,7 @@ func (h *BaroQuotesHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "견적 목록 조회 실패")
 		return
 	}
-	var rows []model.BaroQuote
+	var rows []BaroQuote
 	if err := json.Unmarshal(data, &rows); err != nil {
 		response.RespondError(w, http.StatusInternalServerError, "응답 처리 실패")
 		return
@@ -106,7 +105,7 @@ func (h *BaroQuotesHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "견적 조회 실패")
 		return
 	}
-	var hdrs []model.BaroQuote
+	var hdrs []BaroQuote
 	if err := json.Unmarshal(hdrData, &hdrs); err != nil || len(hdrs) == 0 {
 		response.RespondError(w, http.StatusNotFound, "견적을 찾을 수 없습니다")
 		return
@@ -116,10 +115,10 @@ func (h *BaroQuotesHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		Eq("quote_id", id).
 		Order("line_no", &postgrest.OrderOpts{Ascending: true}).
 		Execute()
-	var lines []model.BaroQuoteLine
+	var lines []BaroQuoteLine
 	_ = json.Unmarshal(linesData, &lines)
 	if lines == nil {
-		lines = []model.BaroQuoteLine{}
+		lines = []BaroQuoteLine{}
 	}
 	response.RespondJSON(w, http.StatusOK, QuoteWithLines{BaroQuote: hdrs[0], Lines: lines})
 }
@@ -127,7 +126,7 @@ func (h *BaroQuotesHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Create — POST /api/v1/baro/quotes
 // 헤더 + 라인 한 번에 저장. 합계 자동 계산.
 func (h *BaroQuotesHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateBaroQuoteRequest
+	var req CreateBaroQuoteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return
@@ -163,7 +162,7 @@ func (h *BaroQuotesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "견적 등록에 실패했습니다 (마이그 084 적용 필요?)")
 		return
 	}
-	var created []model.BaroQuote
+	var created []BaroQuote
 	if err := json.Unmarshal(hdrData, &created); err != nil || len(created) == 0 {
 		response.RespondError(w, http.StatusInternalServerError, "응답 처리 실패")
 		return
@@ -201,7 +200,7 @@ func (h *BaroQuotesHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Update — PUT /api/v1/baro/quotes/{id} (헤더만)
 func (h *BaroQuotesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var req model.UpdateBaroQuoteRequest
+	var req UpdateBaroQuoteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return
@@ -255,7 +254,7 @@ func (h *BaroQuotesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // channel='email' : SMTP / SendGrid 통합 — 미구현, 501.
 func (h *BaroQuotesHandler) Send(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var req model.QuoteSendRequest
+	var req QuoteSendRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return

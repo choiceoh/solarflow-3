@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/domains/inventory"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
@@ -114,23 +115,23 @@ func (h *ConstructionSiteHandler) GetByID(w http.ResponseWriter, r *http.Request
 		log.Printf("[현장 배정 이력 조회 실패] site_id=%s, %v", id, err)
 		// 이력 조회 실패 시에도 현장 정보는 반환 (부분 응답)
 		response.RespondJSON(w, http.StatusOK, struct {
-			Site        model.ConstructionSite      `json:"site"`
-			Allocations []model.InventoryAllocation `json:"allocations"`
+			Site        model.ConstructionSite          `json:"site"`
+			Allocations []inventory.InventoryAllocation `json:"allocations"`
 		}{
 			Site:        sites[0],
-			Allocations: []model.InventoryAllocation{},
+			Allocations: []inventory.InventoryAllocation{},
 		})
 		return
 	}
 
-	var allocs []model.InventoryAllocation
+	var allocs []inventory.InventoryAllocation
 	if err := json.Unmarshal(allocData, &allocs); err != nil {
-		allocs = []model.InventoryAllocation{}
+		allocs = []inventory.InventoryAllocation{}
 	}
 
 	response.RespondJSON(w, http.StatusOK, struct {
-		Site        model.ConstructionSite      `json:"site"`
-		Allocations []model.InventoryAllocation `json:"allocations"`
+		Site        model.ConstructionSite          `json:"site"`
+		Allocations []inventory.InventoryAllocation `json:"allocations"`
 	}{
 		Site:        sites[0],
 		Allocations: allocs,

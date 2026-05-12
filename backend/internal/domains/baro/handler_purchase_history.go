@@ -1,4 +1,4 @@
-package handler
+package baro
 
 import (
 	"encoding/json"
@@ -15,7 +15,6 @@ import (
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/middleware"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -134,7 +133,7 @@ func (h *BaroPurchaseHistoryHandler) baroPurchaseShipmentQuery(companyID string,
 func (h *BaroPurchaseHistoryHandler) List(w http.ResponseWriter, r *http.Request) {
 	baroCompany, ok := h.baroPurchaseCompany()
 	if !ok {
-		response.RespondJSON(w, http.StatusOK, []model.BaroPurchaseHistoryItem{})
+		response.RespondJSON(w, http.StatusOK, []BaroPurchaseHistoryItem{})
 		return
 	}
 
@@ -157,7 +156,7 @@ func (h *BaroPurchaseHistoryHandler) List(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if len(shipments) == 0 {
-		response.RespondJSON(w, http.StatusOK, []model.BaroPurchaseHistoryItem{})
+		response.RespondJSON(w, http.StatusOK, []BaroPurchaseHistoryItem{})
 		return
 	}
 
@@ -192,7 +191,7 @@ func (h *BaroPurchaseHistoryHandler) List(w http.ResponseWriter, r *http.Request
 	companyNames := h.baroPurchaseCompanyNames()
 	manufacturerNames := h.baroPurchaseManufacturerNames()
 	warehouseNames := h.baroPurchaseWarehouseNames()
-	items := make([]model.BaroPurchaseHistoryItem, 0, len(lines))
+	items := make([]BaroPurchaseHistoryItem, 0, len(lines))
 	companyName := baroCompany.CompanyName
 
 	for _, line := range lines {
@@ -209,7 +208,7 @@ func (h *BaroPurchaseHistoryHandler) List(w http.ResponseWriter, r *http.Request
 				sourceName = name
 			}
 		}
-		item := model.BaroPurchaseHistoryItem{
+		item := BaroPurchaseHistoryItem{
 			ID:                   line.BLLineID,
 			BLID:                 ship.BLID,
 			BLNumber:             ship.BLNumber,

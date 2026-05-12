@@ -30,6 +30,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"solarflow-backend/internal/domains/order"
+	"solarflow-backend/internal/domains/product"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
@@ -746,7 +747,7 @@ func (h *ExternalSyncHandler) autoRegisterProduct(rawCode string, mfgIndex map[s
 	if err != nil {
 		return "", err
 	}
-	var rows []model.Product
+	var rows []product.Product
 	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
 		return "", fmt.Errorf("등록 결과 확인 실패")
 	}
@@ -783,7 +784,7 @@ func (h *ExternalSyncHandler) autoRegisterProductWithWattage(rawCode string, mfg
 	if err != nil {
 		return "", 0, err
 	}
-	var rows []model.Product
+	var rows []product.Product
 	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
 		return "", 0, fmt.Errorf("등록 결과 확인 실패")
 	}
@@ -1268,7 +1269,7 @@ func (h *ExternalSyncHandler) fetchProductsByCode() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var rows []model.Product
+	var rows []product.Product
 	if err := json.Unmarshal(data, &rows); err != nil {
 		return nil, err
 	}
