@@ -393,10 +393,25 @@ func (h *PriceBenchmarkHandler) UpdateReviewStatus(w http.ResponseWriter, r *htt
 		Execute()
 	if err != nil {
 		log.Printf("[가격 벤치마크 검토 상태 변경 실패] id=%s status=%s err=%v", id, req.ReviewStatus, err)
+		if isPriceBenchmarkReviewStatusSchemaError(err) {
+			response.RespondError(w, http.StatusServiceUnavailable, "가격 벤치마크 검토 상태 DB 반영이 아직 완료되지 않았습니다. 091_price_benchmark_review_status.sql 적용과 PostgREST 스키마 캐시 갱신 후 다시 시도하세요")
+			return
+		}
 		response.RespondError(w, http.StatusInternalServerError, "가격 벤치마크 검토 상태 변경에 실패했습니다")
 		return
 	}
 	response.RespondJSON(w, http.StatusOK, model.StatusResponse{Status: "ok"})
+}
+
+func isPriceBenchmarkReviewStatusSchemaError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "PGRST204") ||
+		(strings.Contains(msg, "schema cache") &&
+			strings.Contains(msg, "price_benchmarks") &&
+			strings.Contains(msg, "review_status"))
 }
 
 // AIRefresh — POST /api/v1/price-benchmarks/ai-refresh

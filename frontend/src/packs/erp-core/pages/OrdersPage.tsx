@@ -135,6 +135,9 @@ type SaleBulkActionMode = "invoice" | "erp_close" | "receipt_complete"
 const BULK_SALE_PREVIEW_PAGE_SIZE = 1000
 const BULK_SALE_PREVIEW_MAX_PAGES = 500
 const BULK_SALE_CREATE_BATCH_SIZE = 8
+const BULK_RECEIPT_COMPLETE_PAGE_SIZE = 1000
+const BULK_RECEIPT_COMPLETE_MAX_PAGES = 500
+const BULK_RECEIPT_COMPLETE_BATCH_SIZE = 8
 
 type BulkSaleBlockReason =
   | "이미 매출 있음"
@@ -164,6 +167,17 @@ interface BulkSalePreviewFilters {
   end?: string
   minKw?: number
   maxKw?: number
+  sort?: string
+  order?: "asc" | "desc"
+}
+
+interface BulkReceiptSaleFilters {
+  customerId?: string
+  start?: string
+  end?: string
+  invoiceStatus?: string
+  receiptStatus?: SaleReceiptFilter
+  erpClosed?: SaleErpClosedFilter
   sort?: string
   order?: "asc" | "desc"
 }
@@ -367,6 +381,68 @@ async function createSalesInBatches(targets: Outbound[]) {
         }),
       ),
     )
+    results.push(...settled)
+  }
+  return results
+}
+
+function buildBulkReceiptSaleQuery(companyId: string | null, filters: BulkReceiptSaleFilters) {
+  const params = companyParams(companyId)
+  if (filters.customerId) params.set("customer_id", filters.customerId)
+  if (filters.start) params.set("start", filters.start)
+  if (filters.end) params.set("end", filters.end)
+  if (filters.invoiceStatus) params.set("invoice_status", filters.invoiceStatus)
+  if (filters.receiptStatus) params.set("receipt_status", filters.receiptStatus)
+  if (filters.erpClosed) params.set("erp_closed", filters.erpClosed)
+  if (filters.sort) params.set("sort", filters.sort)
+  if (filters.order) params.set("order", filters.order)
+  return params
+}
+
+async function fetchBulkReceiptSales(
+  companyId: string | null,
+  filters: BulkReceiptSaleFilters,
+): Promise<SaleListItem[]> {
+  const fetchPage = (offset: number) => {
+    const params = buildBulkReceiptSaleQuery(companyId, filters)
+    params.set("limit", String(BULK_RECEIPT_COMPLETE_PAGE_SIZE))
+    params.set("offset", String(offset))
+    return fetchWithAuthMeta<SaleListItem[]>(`/api/v1/sales?${params}`)
+  }
+
+  const first = await fetchPage(0)
+  const items = [...first.data]
+  const total = first.totalCount
+  if (total !== null && items.length >= total) return items
+
+  for (let page = 1; page < BULK_RECEIPT_COMPLETE_MAX_PAGES; page += 1) {
+    const offset = page * BULK_RECEIPT_COMPLETE_PAGE_SIZE
+    if (total !== null && offset >= total) break
+    const next = await fetchPage(offset)
+    items.push(...next.data)
+    if (next.data.length < BULK_RECEIPT_COMPLETE_PAGE_SIZE) break
+    if (next.totalCount !== null && items.length >= next.totalCount) break
+  }
+  return items
+}
+
+function completeReceiptForSale(item: SaleListItem) {
+  const payload: Record<string, unknown> = {
+    sale_id: item.sale_id,
+    receipt_date: todayLocalDate(),
+    memo: "출고/판매 화면 수금완료",
+  }
+  return fetchWithAuth<CompleteReceiptMatchResponse>("/api/v1/receipt-matches/complete", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+async function completeSaleReceiptsInBatches(targets: SaleListItem[]) {
+  const results: PromiseSettledResult<CompleteReceiptMatchResponse>[] = []
+  for (let i = 0; i < targets.length; i += BULK_RECEIPT_COMPLETE_BATCH_SIZE) {
+    const batch = targets.slice(i, i + BULK_RECEIPT_COMPLETE_BATCH_SIZE)
+    const settled = await Promise.allSettled(batch.map((sale) => completeReceiptForSale(sale)))
     results.push(...settled)
   }
   return results
@@ -1202,18 +1278,6 @@ export default function OrdersPage() {
     }
   }
 
-  const completeSaleReceipt = (item: SaleListItem) => {
-    const payload: Record<string, unknown> = {
-      sale_id: item.sale_id,
-      receipt_date: todayLocalDate(),
-      memo: "출고/판매 화면 수금완료",
-    }
-    return fetchWithAuth<CompleteReceiptMatchResponse>("/api/v1/receipt-matches/complete", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    })
-  }
-
   const handleBulkCompleteSaleReceipts = async () => {
     const targets = selectedReceiptSales
     if (targets.length === 0 || bulkReceiptSaving) return
@@ -1221,7 +1285,7 @@ export default function OrdersPage() {
     setBulkReceiptSaving(true)
     setBulkReceiptError("")
     try {
-      const results = await Promise.allSettled(targets.map((sale) => completeSaleReceipt(sale)))
+      const results = await completeSaleReceiptsInBatches(targets)
       const successCount = results.filter((result) => result.status === "fulfilled").length
       const failures = results.filter(
         (result): result is PromiseRejectedResult => result.status === "rejected",
@@ -1247,6 +1311,58 @@ export default function OrdersPage() {
     }
   }
 
+  const handleBulkCompleteFilteredSaleReceipts = async () => {
+    if (!selectedCompanyId || bulkReceiptSaving || !isReceiptQueueFilter(saleReceiptFilter)) return
+
+    setBulkReceiptSaving(true)
+    setBulkReceiptError("")
+    try {
+      const filteredSales = await fetchBulkReceiptSales(selectedCompanyId, {
+        customerId: saleCustomerFilter || undefined,
+        start: saleDateRange?.start || undefined,
+        end: saleDateRange?.end || undefined,
+        invoiceStatus: saleInvoiceFilter || undefined,
+        receiptStatus: saleReceiptFilter,
+        erpClosed: saleErpClosedFilter || undefined,
+        sort: saleSort.queryParams.sort,
+        order: saleSort.queryParams.order,
+      })
+      const targets = filteredSales.filter((sale) => isSaleSelectableForBulk(sale, "receipt_complete"))
+      if (targets.length === 0) {
+        notify.info("필터 결과에 수금 완료할 미수 매출이 없습니다")
+        return
+      }
+
+      const results = await completeSaleReceiptsInBatches(targets)
+      const successCount = results.filter((result) => result.status === "fulfilled").length
+      const failures = results.filter(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      )
+      const failedCount = failures.length
+      const firstFailure = failures[0] ? ` · ${formatError(failures[0].reason)}` : ""
+
+      if (failedCount > 0) {
+        const message = `필터 결과 수금 ${successCount}건 완료, ${failedCount}건 실패${firstFailure}`
+        setBulkReceiptError(message)
+        if (successCount === 0) {
+          notify.error(message)
+          return
+        }
+        notify.warning(message)
+      } else {
+        notify.success(`필터 결과 ${successCount}건을 수금완료 처리했습니다`)
+        setSelectedSaleIds(new Set())
+      }
+      await Promise.all([reloadSales(), reloadReceipts()])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "필터 결과 수금완료 처리에 실패했습니다"
+      setBulkReceiptError(message)
+      notify.error(message)
+    } finally {
+      setBulkReceiptSaving(false)
+    }
+  }
+
   const handleCompleteSaleReceipt = async (item: SaleListItem) => {
     const outstanding = getSaleOutstandingAmount(item)
     if (outstanding <= 0) {
@@ -1255,7 +1371,7 @@ export default function OrdersPage() {
     }
     setReceiptCompletingSaleId(item.sale_id)
     try {
-      await completeSaleReceipt(item)
+      await completeReceiptForSale(item)
       notify.success(`수금 ${Math.round(outstanding).toLocaleString("ko-KR")}원을 완료 처리했습니다`)
       await Promise.all([reloadSales(), reloadReceipts()])
     } catch (err) {
@@ -2038,39 +2154,60 @@ export default function OrdersPage() {
                             : undefined
                         }
                       />
-                      {selectedSaleIds.size > 0 && saleBulkActionMode === "receipt_complete" && (
+                      {saleBulkActionMode === "receipt_complete" && (selectedSaleIds.size > 0 || salesTotal > 0) && (
                         <div className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
-                          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto] lg:items-center">
+                          <div className="grid gap-3 xl:grid-cols-[minmax(220px,1fr)_auto_auto] xl:items-center">
                             <div>
-                              <div className="text-sm font-semibold text-[var(--ink)]">선택 수금완료</div>
+                              <div className="text-sm font-semibold text-[var(--ink)]">일괄 수금완료</div>
                               <div className="mt-1 text-xs text-[var(--ink-2)]">
-                                오늘 날짜로 수금 전표와 매칭을 자동 생성
+                                현재 목록 또는 필터 결과 전체를 오늘 날짜로 자동 수금 처리
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3 text-right text-xs">
+                            <div className="grid grid-cols-3 gap-3 text-right text-xs">
                               <div>
-                                <div className="text-[var(--ink-3)]">대상</div>
+                                <div className="text-[var(--ink-3)]">현재 목록</div>
                                 <div className="mono font-semibold">{selectedReceiptSales.length}건</div>
                               </div>
                               <div>
-                                <div className="text-[var(--ink-3)]">미수 합계</div>
+                                <div className="text-[var(--ink-3)]">필터 결과</div>
+                                <div className="mono font-semibold">{formatNumber(salesTotal)}건</div>
+                              </div>
+                              <div>
+                                <div className="text-[var(--ink-3)]">목록 미수</div>
                                 <div className="mono font-semibold">{formatNumber(selectedReceiptAmount)}</div>
                               </div>
                             </div>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="h-8 gap-1.5"
-                              disabled={bulkReceiptSaving || selectedReceiptSales.length === 0}
-                              onClick={handleBulkCompleteSaleReceipts}
-                            >
-                              {bulkReceiptSaving ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                              )}
-                              {`수금 ${selectedReceiptSales.length}건 완료`}
-                            </Button>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5"
+                                disabled={bulkReceiptSaving || selectedReceiptSales.length === 0}
+                                onClick={handleBulkCompleteSaleReceipts}
+                              >
+                                {bulkReceiptSaving ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                )}
+                                {`현재 목록 ${selectedReceiptSales.length}건`}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-8 gap-1.5"
+                                disabled={bulkReceiptSaving || salesTotal === 0}
+                                onClick={handleBulkCompleteFilteredSaleReceipts}
+                              >
+                                {bulkReceiptSaving ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                )}
+                                {`필터 전체 ${formatNumber(salesTotal)}건`}
+                              </Button>
+                            </div>
                           </div>
                           {bulkReceiptError && (
                             <div className="mt-2 text-xs text-destructive">{bulkReceiptError}</div>
