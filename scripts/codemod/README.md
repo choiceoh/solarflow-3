@@ -86,13 +86,44 @@ var defaultRegistry = &Registry{
 
 ---
 
+### migrate-domain — 한 도메인을 `backend/internal/domains/<id>/` 으로 자동 이주 (PR-C)
+
+기존 도메인 (model + handler 분산) → colocation 디렉토리.
+
+```bash
+node scripts/codemod/migrate-domain.mjs --id=warehouse
+# → 6 파일 git mv + 자기 패키지 type prefix 일괄 제거
+```
+
+수동 후처리 (도메인별 다름): cross-package model prefix, utility dup (handlerutil/audit), cross-domain wire, main.go blank import, manifest 작성.
+
+### new-domain — 새 도메인 scaffold (PR-D3)
+
+NEW-TENANT-GUIDE.md 의 7단계 (산문) 를 1 명령으로 압축.
+
+```bash
+node scripts/codemod/new-domain.mjs \
+  --id=warehouse \
+  --display-name="창고 관리" \
+  --pack=erp-core \
+  --feature-id=tx.warehouse \
+  --visible-to=all
+```
+
+생성:
+- `backend/internal/domains/<id>/{model,handler,dashboard,handler_test}.go` (skeleton)
+- `harness/domains/<id>.yaml` (manifest 템플릿)
+- `harness/registry.yaml` 의 `domains:` 에 entry 추가
+- `backend/main.go` 의 blank import 추가 (알파벳 순)
+
+수동 후속: `backend/internal/feature/catalog.go` 의 `IDTx<Id>` 추가, model 필드, handler 라우트, migration, manifest 채우기.
+
+---
+
 ## 추가 codemod 자리 (미래)
 
-- `add-audit-columns.mjs` (PR-D) — 모든 도메인 model 에 `created_by/updated_by` 일괄 추가
-- `migrate-domain.mjs` (PR-B/C) — 한 도메인을 `backend/internal/domains/<id>/` 으로 이주 (ts-morph + go/ast 사용)
-- `rename-handler-prefix.mjs` (PR-B 후속) — `tx_*.go` → `domains/<id>/handler.go`
-
-ts-morph 와 go/ast 의존성은 *실제 사용 PR* 에서 추가 (premature dep 회피). PR-A 는 yaml 1개만.
+- `add-audit-columns.mjs` — 모든 도메인 model 에 `created_by/updated_by` 일괄 추가
+- `rename-handler-prefix.mjs` — handler 패키지의 남은 `tx_*.go` → 도메인 이주 후 정리
 
 ---
 
