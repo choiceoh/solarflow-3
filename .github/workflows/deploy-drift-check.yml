@@ -1,19 +1,24 @@
 name: gx10 deploy drift check
 
-# 운영 박스(gx10) HEAD 가 origin/main 에서 N 커밋 이상 뒤쳐지면 issue 자동 생성.
-# 메모리상 사고 (80 커밋 드리프트) 재발 방지 — webhook 누락 + cron-deploy 충돌이
-# 영구화되는 패턴을 조기 감지.
+# 운영 박스(gx10) 상태를 매 3 시간 검사 — 세 가지 사고 패턴 자동 감지:
+#   (1) 소스 드리프트: gx10 HEAD 가 origin/main 보다 N 커밋 뒤쳐짐 (5 초과 시 알림)
+#   (2) 바이너리 stale: 소스는 동기화됐지만 backend/engine 바이너리 mtime 이
+#       마지막 관련 커밋보다 오래됨 (30 분 grace) — 2026-05-12 cargo PATH 사고
+#       (515 억 잘못 표시) 같은 패턴 차단.
+#   (3) 빌드 실패 로그: `.sync.log` 의 마지막 6 시간 안에 `빌드 실패` /
+#       `command not found` 라인 — silent failure 즉시 노출.
 #
 # 동작:
-#   1) spark4tb runner 에서 ssh gx10 → 현재 HEAD 조회
-#   2) origin/main HEAD 조회
-#   3) `git rev-list HEAD..origin/main` 으로 드리프트 카운트
-#   4) 임계 초과 시 GitHub issue 생성 (라벨 ops, drift)
+#   1) spark4tb runner 에서 ssh gx10 → state (HEAD, 커밋/바이너리 timestamp,
+#      .sync.log 마지막 실패 라인) 한 번에 수집
+#   2) 세 검사 각각 issue 자동 생성 (라벨 ops, drift). 동일 제목 open issue 가
+#      있으면 코멘트로 갱신 (issue 폭증 방지).
 #
 # 사전 설정 (한 번만):
 #   - Repo secret `GX10_SSH_HOST` (예: gx10-f96e 또는 Tailscale MagicDNS 이름)
 #   - spark4tb 의 choiceoh 계정 SSH key 가 gx10 의 ~/.ssh/authorized_keys 에 등록돼 있어야 함
 #     (DR 워치독으로 이미 설정돼 있을 가능성 큼 — 안 되면 `ssh-copy-id choiceoh@<gx10>` 1회)
+#   - spark4tb 에 `gh` CLI 설치 (issue 생성에 필요)
 #   - Repo 에 라벨 `ops`, `drift` 존재 (`gh label create ops --color FF6B35`,
 #     `gh label create drift --color FFAA00`). 없으면 workflow 가 라벨 인자만 빼고 진행.
 
@@ -49,29 +54,52 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "origin/main: $sha"
 
-      - name: Resolve gx10 HEAD + drift count
+      - name: Gather gx10 state (HEAD · drift · binary mtime · 실패 로그)
         id: gx10
         run: |
           set -uo pipefail
+
+          # 원격에서 한 번에 수집 (SSH 왕복 최소화). cron-deploy.sh 의 빌드 트리거
+          # 분류와 같은 path-spec 사용 (migrations·scripts·sql·setup·docs 제외).
+          remote_script='
+          cd "$1" || exit 1
+          git fetch --quiet origin main 2>/dev/null || true
+          printf "HEAD=%s\n" "$(git rev-parse HEAD)"
+          printf "DRIFT=%s\n" "$(git rev-list --count HEAD..origin/main 2>/dev/null || echo 0)"
+          printf "BACKEND_COMMIT=%s\n" "$(git log -1 --format=%ct -- backend/ ":!backend/migrations" ":!backend/scripts" ":!backend/sql" ":!backend/setup_*" ":!backend/STATUS.md" ":!backend/Dockerfile" ":!backend/fly.toml" ":!backend/.env*" ":!backend/tasks" 2>/dev/null)"
+          printf "ENGINE_COMMIT=%s\n" "$(git log -1 --format=%ct -- engine/src engine/Cargo.toml engine/Cargo.lock 2>/dev/null)"
+          printf "BACKEND_BIN=%s\n" "$(stat -c %Y backend/solarflow-go 2>/dev/null || echo 0)"
+          printf "ENGINE_BIN=%s\n" "$(stat -c %Y engine/target/release/solarflow-engine 2>/dev/null || echo 0)"
+          # .sync.log 마지막 300 줄에서 가장 최근 실패 라인 1 개. cron-deploy.sh 가
+          # ISO-8601 [timestamp] prefix 로 모든 메시지 기록.
+          printf "LAST_FAIL=%s\n" "$(tail -300 .sync.log 2>/dev/null | grep -E "(Go|Rust|마이그레이션) .{0,30}실패|command not found|health 실패|systemctl restart 실패" | tail -1)"
+          '
           ssh_cmd="ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 ${GX10_USER}@${GX10_HOST}"
-          gx10_sha=$($ssh_cmd "cd '$GX10_REPO' && git rev-parse HEAD" 2>&1) || {
+          state=$($ssh_cmd "bash -s '$GX10_REPO'" <<< "$remote_script" 2>&1) || {
             echo "::warning::gx10 ssh 실패 — 박스 다운 가능 / Tailscale 재연결 대기"
-            echo "$gx10_sha"
+            echo "$state"
             echo "skip=1" >> "$GITHUB_OUTPUT"
             exit 0
           }
-          echo "gx10 HEAD: $gx10_sha"
-          echo "sha=$gx10_sha" >> "$GITHUB_OUTPUT"
+          echo "$state"
 
-          drift=$($ssh_cmd "cd '$GX10_REPO' && git fetch --quiet origin main && git rev-list --count HEAD..origin/main" 2>/dev/null || echo "?")
-          echo "drift: $drift commits"
-          echo "count=$drift" >> "$GITHUB_OUTPUT"
+          # Parse 후 GITHUB_OUTPUT 으로 (각 검사 단계의 input)
+          get() { awk -F= -v k="$1" '$1==k {sub(/^[A-Z_]+=/, ""); print; exit}' <<< "$state"; }
+          {
+            echo "sha=$(get HEAD)"
+            echo "drift=$(get DRIFT)"
+            echo "backend_commit=$(get BACKEND_COMMIT)"
+            echo "engine_commit=$(get ENGINE_COMMIT)"
+            echo "backend_bin=$(get BACKEND_BIN)"
+            echo "engine_bin=$(get ENGINE_BIN)"
+            echo "last_fail=$(get LAST_FAIL)"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Open issue on drift
-        if: steps.gx10.outputs.skip != '1' && steps.gx10.outputs.count != '?' && steps.gx10.outputs.count != '0'
+      - name: Check (1) source drift
+        if: steps.gx10.outputs.skip != '1' && steps.gx10.outputs.drift != '' && steps.gx10.outputs.drift != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COUNT: ${{ steps.gx10.outputs.count }}
+          COUNT: ${{ steps.gx10.outputs.drift }}
           GX10_SHA: ${{ steps.gx10.outputs.sha }}
           ORIGIN_SHA: ${{ steps.origin.outputs.sha }}
         run: |
@@ -80,9 +108,9 @@ jobs:
             exit 0
           fi
 
-          # 동일 제목 issue 가 이미 열려있으면 코멘트만 (issue 폭증 방지)
+          # 제목 prefix 로 검색 — 커밋 수 바뀌어도 같은 issue 에 코멘트 누적.
           title="gx10 deploy drift: $COUNT commits behind origin/main"
-          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' || echo "")
+          existing=$(gh issue list --state open --search 'gx10 deploy drift: in:title' --json number --jq '.[0].number' || echo "")
 
           body=$(cat <<EOF
           **gx10 HEAD**: \`$GX10_SHA\`
@@ -118,5 +146,134 @@ jobs:
           else
             gh issue create --title "$title" --body "$body" \
               --label ops --label drift 2>/dev/null \
+              || gh issue create --title "$title" --body "$body"
+          fi
+
+      - name: Check (2) binary stale (backend·engine)
+        if: steps.gx10.outputs.skip != '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_COMMIT: ${{ steps.gx10.outputs.backend_commit }}
+          ENGINE_COMMIT: ${{ steps.gx10.outputs.engine_commit }}
+          BACKEND_BIN: ${{ steps.gx10.outputs.backend_bin }}
+          ENGINE_BIN: ${{ steps.gx10.outputs.engine_bin }}
+          # 30 분 grace = cron 주기 10m + Rust cold build worst-case ~10m + 여유 10m
+          BIN_STALE_GRACE_S: 1800
+        run: |
+          check_stale() {
+            local comp=$1 commit=$2 bin=$3 path=$4
+            [[ -z "$commit" || "$commit" == "0" ]] && return 0
+            [[ -z "$bin" ]] && bin=0
+            local lag=$(( commit - bin ))
+            if (( lag <= BIN_STALE_GRACE_S )); then
+              echo "$comp OK (commit $commit, bin $bin, lag $((lag/60))m)"
+              return 0
+            fi
+
+            local commit_iso bin_iso lag_min
+            commit_iso=$(date -u -d "@$commit" +%Y-%m-%dT%H:%M:%SZ)
+            if [[ "$bin" == "0" ]]; then bin_iso="MISSING"; else bin_iso=$(date -u -d "@$bin" +%Y-%m-%dT%H:%M:%SZ); fi
+            lag_min=$(( lag / 60 ))
+
+            local title="gx10 binary stale: $comp"
+            local existing
+            existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' || echo "")
+
+            local body
+            body=$(cat <<EOF
+          **Component**: \`$comp\`
+          **Binary**: \`$path\`
+          **Last commit (관련 path)**: \`$commit_iso\`
+          **Binary mtime**: \`$bin_iso\`
+          **Lag**: ${lag_min} 분 (grace $((BIN_STALE_GRACE_S/60)) 분 초과)
+
+          ## 가능 원인
+          - cron-deploy.sh 빌드 단계 침묵 실패 (cargo/go PATH 누락 · 디스크 · 권한)
+          - 빌드는 성공했지만 systemctl restart 실패로 새 바이너리 미반영
+          - 운영 admin 이 binary 만 별도 빌드/이동 (commit 시점과 mtime 불일치)
+
+          ## 1차 확인
+          \`\`\`
+          ssh ${GX10_USER}@${GX10_HOST}
+          journalctl --user -u solarflow-webhook.service -n 200 | grep -iE "빌드|cargo|go build|command not found"
+          ls -la $GX10_REPO/$path
+          tail -100 $GX10_REPO/.sync.log
+          \`\`\`
+
+          ## 강제 재빌드
+          \`\`\`
+          cd $GX10_REPO && ./scripts/cron-deploy.sh
+          \`\`\`
+          (자동 생성 — deploy-drift-check.yml)
+          EOF
+          )
+            if [[ -n "$existing" ]]; then
+              echo "기존 issue #$existing 에 코멘트 추가"
+              gh issue comment "$existing" --body "$body"
+            else
+              gh issue create --title "$title" --body "$body" --label ops --label drift 2>/dev/null \
+                || gh issue create --title "$title" --body "$body"
+            fi
+            echo "::warning::$comp 바이너리 stale (${lag_min} 분)"
+          }
+          check_stale "backend (Go)" "$BACKEND_COMMIT" "$BACKEND_BIN" "backend/solarflow-go"
+          check_stale "engine (Rust)" "$ENGINE_COMMIT" "$ENGINE_BIN" "engine/target/release/solarflow-engine"
+
+      - name: Check (3) recent build failure in .sync.log
+        if: steps.gx10.outputs.skip != '1' && steps.gx10.outputs.last_fail != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LAST_FAIL: ${{ steps.gx10.outputs.last_fail }}
+          FAIL_RECENCY_H: 6   # 6h 안 발생만 알림. 오래된 stale 로그는 무시.
+        run: |
+          # ISO-8601 timestamp 추출 (cron-deploy.sh 의 `[YYYY-MM-DDTHH:MM:SS±HH:MM]` 포맷)
+          ts_str=$(echo "$LAST_FAIL" | grep -oE '\[[0-9]{4}-[0-9-]+T[0-9:+-]+\]' | head -1 | tr -d '[]')
+          if [[ -z "$ts_str" ]]; then
+            echo "타임스탬프 파싱 실패 — line: $LAST_FAIL"
+            exit 0
+          fi
+          fail_unix=$(date -d "$ts_str" +%s 2>/dev/null || echo 0)
+          now_unix=$(date +%s)
+          age_h=$(( (now_unix - fail_unix) / 3600 ))
+          if (( fail_unix == 0 )); then
+            echo "fail_unix parse 실패 — skip"
+            exit 0
+          fi
+          if (( age_h > FAIL_RECENCY_H )); then
+            echo "마지막 실패 ${age_h}h 이전 — stale, skip"
+            exit 0
+          fi
+
+          title="gx10 cron-deploy 빌드 실패 감지"
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' || echo "")
+          body=$(cat <<EOF
+          \`.sync.log\` 의 최근 ${FAIL_RECENCY_H} 시간 안에 빌드 실패 라인 발견.
+
+          **최근 실패 라인** (\`tail -300 .sync.log | grep ... | tail -1\`):
+          \`\`\`
+          $LAST_FAIL
+          \`\`\`
+
+          **발생 시각**: \`$ts_str\` (${age_h} 시간 전)
+
+          ## 1차 확인
+          \`\`\`
+          ssh ${GX10_USER}@${GX10_HOST}
+          tail -100 $GX10_REPO/.sync.log
+          journalctl --user -u solarflow-webhook -n 200
+          \`\`\`
+
+          ## 가능 원인
+          - cargo / go / bun 등 빌드 도구가 webhook PATH 에 없음 (systemd Environment= 누락)
+          - 빌드 실패 자체 (컴파일 에러) — main 머지 전 CI 가 잡았어야 함
+          - 디스크 부족 / 권한 / 락 (\`flock\` busy)
+          (자동 생성 — deploy-drift-check.yml)
+          EOF
+          )
+          if [[ -n "$existing" ]]; then
+            echo "기존 issue #$existing 에 코멘트 추가"
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" --label ops --label drift 2>/dev/null \
               || gh issue create --title "$title" --body "$body"
           fi
