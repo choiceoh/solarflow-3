@@ -49,6 +49,40 @@ func TestReadOCRUploadRejectsUnsupportedData(t *testing.T) {
 	}
 }
 
+func TestReadOCRUploadAcceptsXLSX(t *testing.T) {
+	// xlsx 는 zip 매직바이트 — 확장자 신호로 mime 이 보강돼야 통과.
+	zipHeader := []byte{'P', 'K', 0x03, 0x04, 0x00}
+	_, mimeType, err := readOCRUpload(io.NopCloser(bytes.NewReader(zipHeader)), "", "stock.xlsx")
+	if err != nil {
+		t.Fatalf("readOCRUpload() error = %v", err)
+	}
+	if mimeType != mimeXLSX {
+		t.Fatalf("mimeType = %q, want %q", mimeType, mimeXLSX)
+	}
+}
+
+func TestReadOCRUploadAcceptsCSV(t *testing.T) {
+	_, mimeType, err := readOCRUpload(io.NopCloser(strings.NewReader("a,b\n1,2\n")), "text/csv", "rows.csv")
+	if err != nil {
+		t.Fatalf("readOCRUpload() error = %v", err)
+	}
+	if mimeType != mimeCSV {
+		t.Fatalf("mimeType = %q, want %q", mimeType, mimeCSV)
+	}
+}
+
+func TestReadOCRUploadRejectsXLSWithFriendlyMessage(t *testing.T) {
+	// OLE2 매직바이트 (xls)
+	oleHeader := []byte{0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1}
+	_, _, err := readOCRUpload(io.NopCloser(bytes.NewReader(oleHeader)), "", "old.xls")
+	if err == nil {
+		t.Fatal("readOCRUpload() error = nil, want xls rejection")
+	}
+	if !strings.Contains(err.Error(), ".xlsx") {
+		t.Fatalf("error = %q, want xlsx conversion guidance", err.Error())
+	}
+}
+
 func TestBuildOCRResultJoinsRawTextAndKeepsBoxes(t *testing.T) {
 	got := buildOCRResult("spec.png", []ocr.Result{
 		{Text: "  SolarFlow  ", Score: 0.98, X0: 1, Y0: 2, X1: 30, Y1: 12},
