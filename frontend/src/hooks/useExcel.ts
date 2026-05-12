@@ -242,7 +242,13 @@ export function useExcel(type: TemplateType) {
           return;
         }
         const validRows = preview.rows.filter((r) => r.valid).map((r) => r.data);
-        body = { rows: validRows };
+        // 수금 import 는 자유 입력 bank_account 를 마스터 자동 등록하기 위해
+        // 현재 선택된 회사 ID 를 같이 보낸다. 백엔드가 row 별로 company_id 를 채워주고
+        // bank_account 문자열이 있으면 bank_accounts 마스터에 매칭/자동 등록.
+        const selectedCompanyId = useAppStore.getState().selectedCompanyId;
+        body = type === 'receipt' && selectedCompanyId
+          ? { rows: validRows, company_id: selectedCompanyId }
+          : { rows: validRows };
       } else {
         return;
       }

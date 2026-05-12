@@ -171,6 +171,14 @@ func (h *ReceiptHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 자유 입력 bank_account 가 있고 마스터 FK 는 비어 있으면, 회사+계좌 파싱으로
+	// 마스터에 매칭/자동 등록 후 FK 를 채운다. 파싱 실패 / DB 오류 시는 raw 만 보존.
+	if req.BankAccountID == nil && req.BankAccount != nil && req.CompanyID != nil {
+		if id := ensureBankAccountForCompany(h.DB, *req.CompanyID, *req.BankAccount); id != nil {
+			req.BankAccountID = id
+		}
+	}
+
 	data, _, err := h.DB.From("receipts").
 		Insert(req, false, "", "", "").
 		Execute()

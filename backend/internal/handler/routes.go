@@ -100,6 +100,20 @@ func (h *BankHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.Get("/banking/dashboard", h.BankingDashboard)
 }
 
+// BankAccountHandler — 은행 계좌 마스터 CRUD (수금/지급 계좌).
+// BankHandler(LC 한도 카드) 와는 별개의 마스터.
+func (h *BankAccountHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
+	r.Route("/bank-accounts", func(r chi.Router) {
+		r.Get("/", h.List)
+		r.Get("/{id}", h.GetByID)
+		r.With(g.Write).Post("/", h.Create)
+		r.With(g.Write).Put("/{id}", h.Update)
+		r.With(g.Write).Patch("/{id}", h.Update)
+		r.With(g.Write).Patch("/{id}/status", h.ToggleStatus)
+		r.With(g.Write).Delete("/{id}", h.Delete)
+	})
+}
+
 // BaroCallbackRecommendHandler — D-133 자동 콜백 추천 엔진 (BARO 전용, PR3.5).
 // owner 별 활성 거래처(30일+ 미주문) + 입고예정 SKU 컨텍스트 합본.
 func (h *BaroCallbackRecommendHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {

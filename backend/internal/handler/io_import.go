@@ -1466,6 +1466,12 @@ func (h *ImportHandler) Receipts(w http.ResponseWriter, r *http.Request) {
 	var importErrors []model.ImportError
 	imported := 0
 
+	// import 단위 회사 — body.company_id 가 있으면 모든 row 에 적용. 없으면 자동 등록 스킵.
+	companyID := ""
+	if req.CompanyID != nil {
+		companyID = *req.CompanyID
+	}
+
 	for i, row := range req.Rows {
 		rowNum := i + 2
 
@@ -1486,6 +1492,17 @@ func (h *ImportHandler) Receipts(w http.ResponseWriter, r *http.Request) {
 		if len(parseErrs) > 0 {
 			importErrors = append(importErrors, parseErrs...)
 			continue
+		}
+
+		// import 단위 회사 ID 를 row 에 주입 + 자유 입력 bank_account 자동 등록.
+		if companyID != "" {
+			cid := companyID
+			receiptReq.CompanyID = &cid
+			if receiptReq.BankAccount != nil {
+				if accID := ensureBankAccountForCompany(h.DB, companyID, *receiptReq.BankAccount); accID != nil {
+					receiptReq.BankAccountID = accID
+				}
+			}
 		}
 
 		_, _, err = h.DB.From("receipts").
