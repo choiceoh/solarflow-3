@@ -138,7 +138,7 @@ export default function ExpenseCreateDialog({
     return amount + vat
   }, [amountDisplay, vatDisplay])
 
-  function validate(): boolean {
+  function validate(): Record<string, string> {
     const next: Record<string, string> = {}
     if (!selectedCompanyId || selectedCompanyId === "all") {
       next.company = "좌측 상단에서 법인을 먼저 선택해주세요"
@@ -149,11 +149,16 @@ export default function ExpenseCreateDialog({
     const amount = parseIntKR(amountDisplay)
     if (amount == null) next.amount = "금액은 0보다 커야 합니다"
     setErrors(next)
-    return Object.keys(next).length === 0
+    return next
   }
 
   async function handleSubmit() {
-    if (!validate()) return
+    const result = validate()
+    if (Object.keys(result).length > 0) {
+      const first = Object.values(result)[0]
+      if (first) notify.error(first)
+      return
+    }
     const amount = parseIntKR(amountDisplay)
     if (amount == null) return
     const vat = parseIntKR(vatDisplay) ?? 0

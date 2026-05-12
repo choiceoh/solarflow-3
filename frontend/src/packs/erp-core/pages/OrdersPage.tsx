@@ -27,6 +27,7 @@ import OrderListTable, {
 } from "@/components/orders/OrderListTable"
 import OrderDetailView from "@/components/orders/OrderDetailView"
 import OrderCreateDialog from "@/components/orders/OrderCreateDialog"
+import OutboundCreateDialog from "@/components/outbound/OutboundCreateDialog"
 import ReceiptCreateDialog from "@/components/orders/ReceiptCreateDialog"
 import ReceiptListTable, {
   RECEIPT_TABLE_ID,
@@ -787,8 +788,9 @@ export default function OrdersPage() {
   const [orderActionError, setOrderActionError] = useState("")
   const [orderSourceHints, setOrderSourceHints] = useState<Record<string, FulfillmentSource>>({})
 
-  // 단건 등록 다이얼로그 — 수주/수금 (PR #357 reversal)
+  // 단건 등록 다이얼로그 — 수주/출고/수금 (PR #357 reversal)
   const [orderCreateOpen, setOrderCreateOpen] = useState(false)
+  const [outboundCreateOpen, setOutboundCreateOpen] = useState(false)
   const [receiptCreateOpen, setReceiptCreateOpen] = useState(false)
 
   // 마스터 데이터
@@ -2072,6 +2074,9 @@ export default function OrdersPage() {
             unpin={outboundColPin.unpin}
           />
           <ExcelToolbar type="outbound" />
+          <Button size="xs" onClick={() => setOutboundCreateOpen(true)}>
+            출고 신규 등록
+          </Button>
         </>
       )}
       {activeTab === "sales" && (
@@ -2763,6 +2768,13 @@ export default function OrdersPage() {
         onClose={() => setOrderCreateOpen(false)}
         onCreated={() => {
           reloadOrders()
+        }}
+      />
+      <OutboundCreateDialog
+        open={outboundCreateOpen}
+        onClose={() => setOutboundCreateOpen(false)}
+        onCreated={() => {
+          reloadOutbounds()
         }}
       />
       <ReceiptCreateDialog
