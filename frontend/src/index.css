@@ -2274,13 +2274,11 @@ a:focus-visible,
 }
 
 .sf-meta-table-text {
-  display: -webkit-box;
+  display: block;
   max-width: 100%;
+  white-space: nowrap;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
 }
 
 .sf-meta-table-sort {

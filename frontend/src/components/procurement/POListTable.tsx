@@ -752,7 +752,7 @@ function POListTable({
                                                   <span className="text-[10px] font-normal text-muted-foreground mr-1.5">
                                                     B/L {seq}
                                                   </span>
-                                                  <span className="underline underline-offset-2">
+                                                  <span className="underline underline-offset-2 text-[13px]">
                                                     {b.bl_number || "—"}
                                                   </span>
                                                   <span className="ml-1.5 text-[10px] text-muted-foreground font-normal font-sans">

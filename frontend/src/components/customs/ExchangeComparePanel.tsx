@@ -62,7 +62,7 @@ export default function ExchangeComparePanel() {
                 return (
                   <TableRow key={`${item.declaration_number}-${item.product_name}-${index}`}>
                     <TableCell className="text-xs">
-                      <div className="font-medium">{item.declaration_number}</div>
+                      <div className="font-medium text-[13px]">{item.declaration_number}</div>
                       <div className="sf-mono text-[10px] text-[var(--ink-3)]">{item.declaration_date}</div>
                     </TableCell>
                     <TableCell className="text-xs">

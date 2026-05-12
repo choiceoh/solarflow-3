@@ -217,7 +217,7 @@ export default function GroupPurchaseRequestPage() {
         const info = productInfoById.get(row.product_id);
         return info ? (
           <span className="flex flex-col">
-            <span className="font-medium text-xs">{info.code}</span>
+            <span className="font-medium text-[13px]">{info.code}</span>
             <span className="text-xs text-muted-foreground">{info.mfg} · {info.name}</span>
           </span>
         ) : <span>{row.product_id.slice(0, 8)}</span>;

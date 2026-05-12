@@ -162,13 +162,13 @@ export default function BLCustomsCostTab({ bl, lines }: Props) {
                 <div key={decl.declaration_id} className="rounded-md border p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="font-mono text-sm font-semibold">{decl.declaration_number}</p>
+                      <p className="font-mono text-[13px] font-semibold">{decl.declaration_number}</p>
                       <p className="text-[11px] text-muted-foreground">
                         {formatDate(decl.declaration_date)} · {decl.customs_office ?? '세관 미지정'}
                       </p>
                     </div>
                     <div className="text-right text-[11px] text-muted-foreground">
-                      <p>B/L {decl.bl_number ?? bl.bl_number}</p>
+                      <p>B/L <span className="text-[13px]">{decl.bl_number ?? bl.bl_number}</span></p>
                       <p>{decl.port ?? bl.port ?? '항구 미지정'}</p>
                     </div>
                   </div>
@@ -274,7 +274,7 @@ export default function BLCustomsCostTab({ bl, lines }: Props) {
                     <TableRow key={item.cost_id}>
                       <TableCell className="text-xs">
                         <div className="font-medium">{item.product_name ?? productNames.get(item.product_id) ?? shortId(item.product_id)}</div>
-                        <div className="font-mono text-[10px] text-muted-foreground">{item.declaration_number}</div>
+                        <div className="font-mono text-[13px] text-muted-foreground">{item.declaration_number}</div>
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs">{fmtWonWp(item.cif_wp_krw)}</TableCell>
                       <TableCell className="text-right font-mono text-xs">

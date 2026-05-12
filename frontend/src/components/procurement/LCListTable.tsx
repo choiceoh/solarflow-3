@@ -433,7 +433,7 @@ function LCListTable({ items, onSettle, onSelectBL, blsVersion, focusLCId, sortF
                                     className="border-t border-blue-100 hover:bg-blue-100/50 cursor-pointer"
                                     onClick={(e) => { e.stopPropagation(); onSelectBL?.(bl.bl_id); }}
                                   >
-                                    <td className="py-1.5 font-mono font-medium">{bl.bl_number}</td>
+                                    <td className="py-1.5 font-mono font-medium text-[13px]">{bl.bl_number}</td>
                                     <td className="py-1.5 text-muted-foreground">{INBOUND_TYPE_LABEL[bl.inbound_type] ?? bl.inbound_type}</td>
                                     <td className="py-1.5">
                                       <div className="text-[10px] font-medium">{mLabel}</div>

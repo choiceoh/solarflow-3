@@ -103,7 +103,7 @@ function renderRow(m: FifoMatch) {
   return (
     <tr key={m.match_id} className="hover:bg-muted/40">
       <td className="px-2 py-1.5">{m.inbound_date ? formatDate(m.inbound_date) : "—"}</td>
-      <td className="px-2 py-1.5 font-mono">
+      <td className="px-2 py-1.5 font-mono text-[13px]">
         {m.erp_inbound_no ?? "—"}
         {m.erp_inbound_line_no != null ? (
           <span className="text-muted-foreground"> / {m.erp_inbound_line_no}</span>

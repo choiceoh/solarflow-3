@@ -275,7 +275,7 @@ export default function BaroPurchaseHistoryPage() {
       label: "근거",
       sortable: true,
       render: (row) => (
-        <span className="flex min-w-[180px] flex-col text-xs">
+        <span className="flex min-w-[180px] flex-col text-[13px]">
           <span className="font-medium">{row.bl_number}</span>
           <span className="text-muted-foreground">
             {row.po_number ?? "PO 미연결"} · {row.payment_terms ?? row.incoterms ?? "조건 미지정"}
