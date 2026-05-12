@@ -1,4 +1,4 @@
-package handler
+package sale
 
 import (
 	"encoding/json"
@@ -16,7 +16,6 @@ import (
 	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -29,10 +28,10 @@ const (
 	salesWithMetaView = "sales_with_meta"
 )
 
-// saleViewRow — sales_with_meta 한 행. enrichSales 가 model.Sale 부분만 가공하되
+// saleViewRow — sales_with_meta 한 행. enrichSales 가 Sale 부분만 가공하되
 // 수금 메타 (collected/outstanding/receipt_status) 는 뷰가 계산한 값을 그대로 사용.
 type saleViewRow struct {
-	model.Sale
+	Sale
 	CollectedAmount   *float64 `json:"collected_amount,omitempty"`
 	OutstandingAmount *float64 `json:"outstanding_amount,omitempty"`
 	ReceiptStatus     *string  `json:"receipt_status,omitempty"`
@@ -289,7 +288,7 @@ func (h *SaleHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		w.Header().Set("X-Total-Count", "0")
-		response.RespondJSON(w, http.StatusOK, []model.SaleListItem{})
+		response.RespondJSON(w, http.StatusOK, []SaleListItem{})
 		return
 	}
 
@@ -329,10 +328,10 @@ type SaleSummary struct {
 // Summary — GET /api/v1/sales/summary — 매출 KPI 집계 (List 와 동일 필터).
 // 094 마이그(sales_with_meta) 후 모든 필터가 서버측 술어 — chunked .In() 회피책 제거.
 // 단, PostgREST 의 db-max-rows=1000 cap 때문에 매칭이 1000 행 초과면 단일 Range 호출로는
-// supply_amount 합 / invoice_pending 카운트가 잘리므로, fetchAllFromTable 와 같은
+// supply_amount 합 / invoice_pending 카운트가 잘리므로, handlerutil.FetchAllFromTable 와 같은
 // 페이지네이션 패턴으로 모든 페이지를 누적 집계 (count 헤더는 첫 페이지 값을 신뢰).
 func (h *SaleHandler) Summary(w http.ResponseWriter, r *http.Request) {
-	const pageSize = PostgRESTMaxRows
+	const pageSize = handlerutil.PostgRESTMaxRows
 	const maxPages = 50
 
 	summary := SaleSummary{}
@@ -436,31 +435,31 @@ type saleCalcSource struct {
 
 func ptrString(v string) *string { return &v }
 
-func (h *SaleHandler) enrichSales(rows []saleViewRow) []model.SaleListItem {
+func (h *SaleHandler) enrichSales(rows []saleViewRow) []SaleListItem {
 	var orders []saleOrderRow
 	var outbounds []saleOutboundRow
 	var products []saleProductRow
 	var partners []salePartnerRow
 
-	// 4 enrich 테이블 모두 fetchAllFromTable 헬퍼로 청크 페이지네이션 (D-064 PR 36).
+	// 4 enrich 테이블 모두 handlerutil.FetchAllFromTable 헬퍼로 청크 페이지네이션 (D-064 PR 36).
 	// PostgREST db-max-rows=1000 cap 으로 단일 Range 호출 시 첫 1000행만 응답 →
 	// 1000 초과 테이블 (예: outbounds 2,229) 의 enrich 누락. 회귀 방지 위해 통일.
 	// 수금 메타(collected/outstanding/receipt_status) 는 sales_with_meta 뷰가 이미 계산 — 별도 fetch 불필요.
-	if data, err := fetchAllFromTable(h.DB, "orders", "order_id, order_number, order_date, company_id, customer_id, product_id, quantity, capacity_kw, site_name"); err == nil {
+	if data, err := handlerutil.FetchAllFromTable(h.DB, "orders", "order_id, order_number, order_date, company_id, customer_id, product_id, quantity, capacity_kw, site_name"); err == nil {
 		if err := json.Unmarshal(data, &orders); err != nil {
 			log.Printf("[매출 enrich] orders 디코딩 실패 — 수주 정보 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] orders 조회 실패 — 수주 정보 비표시: %v", err)
 	}
-	if data, err := fetchAllFromTable(h.DB, "outbounds", "outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status"); err == nil {
+	if data, err := handlerutil.FetchAllFromTable(h.DB, "outbounds", "outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, site_name, order_id, status"); err == nil {
 		if err := json.Unmarshal(data, &outbounds); err != nil {
 			log.Printf("[매출 enrich] outbounds 디코딩 실패 — 출고 정보 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] outbounds 조회 실패 — 출고 정보 비표시: %v", err)
 	}
-	if data, err := fetchAllFromTable(h.DB, "products", "product_id, product_name, product_code, spec_wp, manufacturer_id"); err == nil {
+	if data, err := handlerutil.FetchAllFromTable(h.DB, "products", "product_id, product_name, product_code, spec_wp, manufacturer_id"); err == nil {
 		if err := json.Unmarshal(data, &products); err != nil {
 			log.Printf("[매출 enrich] products 디코딩 실패 — 품목명/스펙 비표시: %v", err)
 		}
@@ -468,14 +467,14 @@ func (h *SaleHandler) enrichSales(rows []saleViewRow) []model.SaleListItem {
 		log.Printf("[매출 enrich] products 조회 실패 — 품목명/스펙 비표시: %v", err)
 	}
 	var manufacturers []saleManufacturerRow
-	if data, err := fetchAllFromTable(h.DB, "manufacturers", "manufacturer_id, name_kr, short_name"); err == nil {
+	if data, err := handlerutil.FetchAllFromTable(h.DB, "manufacturers", "manufacturer_id, name_kr, short_name"); err == nil {
 		if err := json.Unmarshal(data, &manufacturers); err != nil {
 			log.Printf("[매출 enrich] manufacturers 디코딩 실패 — 제조사명 비표시: %v", err)
 		}
 	} else {
 		log.Printf("[매출 enrich] manufacturers 조회 실패 — 제조사명 비표시: %v", err)
 	}
-	if data, err := fetchAllFromTable(h.DB, "partners", "partner_id, partner_name"); err == nil {
+	if data, err := handlerutil.FetchAllFromTable(h.DB, "partners", "partner_id, partner_name"); err == nil {
 		if err := json.Unmarshal(data, &partners); err != nil {
 			log.Printf("[매출 enrich] partners 디코딩 실패 — 거래처명 비표시: %v", err)
 		}
@@ -504,7 +503,7 @@ func (h *SaleHandler) enrichSales(rows []saleViewRow) []model.SaleListItem {
 		partnerMap[p.PartnerID] = p
 	}
 
-	items := make([]model.SaleListItem, 0, len(rows))
+	items := make([]SaleListItem, 0, len(rows))
 	for _, row := range rows {
 		sale := row.Sale
 		collectedAmount := 0.0
@@ -519,7 +518,7 @@ func (h *SaleHandler) enrichSales(rows []saleViewRow) []model.SaleListItem {
 		if row.ReceiptStatus != nil && *row.ReceiptStatus != "" {
 			receiptStatus = *row.ReceiptStatus
 		}
-		item := model.SaleListItem{
+		item := SaleListItem{
 			SaleID:            sale.SaleID,
 			OutboundID:        sale.OutboundID,
 			OrderID:           sale.OrderID,
@@ -700,7 +699,7 @@ func (h *SaleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var sales []model.Sale
+	var sales []Sale
 	if err := json.Unmarshal(data, &sales); err != nil {
 		log.Printf("[판매 상세 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -718,7 +717,7 @@ func (h *SaleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Create — POST /api/v1/sales — 판매 등록
 // 비유: 새 판매 전표를 작성하여 전표함에 보관하는 것
 func (h *SaleHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateSaleRequest
+	var req CreateSaleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[판매 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -741,7 +740,7 @@ func (h *SaleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var created []model.Sale
+	var created []Sale
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[판매 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -757,7 +756,7 @@ func (h *SaleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusCreated, created[0])
 }
 
-func (h *SaleHandler) fillSaleDefaults(req *model.CreateSaleRequest) {
+func (h *SaleHandler) fillSaleDefaults(req *CreateSaleRequest) {
 	if req.Quantity != nil && req.CapacityKw != nil {
 		return
 	}
@@ -771,7 +770,7 @@ func (h *SaleHandler) fillSaleDefaults(req *model.CreateSaleRequest) {
 	}
 }
 
-func (h *SaleHandler) calculateSaleAmounts(req *model.CreateSaleRequest) {
+func (h *SaleHandler) calculateSaleAmounts(req *CreateSaleRequest) {
 	if req.Quantity == nil || *req.Quantity <= 0 {
 		return
 	}
@@ -786,26 +785,26 @@ func (h *SaleHandler) calculateSaleAmounts(req *model.CreateSaleRequest) {
 	req.UnitPriceEa, req.SupplyAmount, req.VatAmount, req.TotalAmount = applySaleAmounts(*req.Quantity, req.UnitPriceWp, specWp)
 }
 
-func (h *SaleHandler) fetchSale(id string) (model.Sale, bool) {
+func (h *SaleHandler) fetchSale(id string) (Sale, bool) {
 	data, _, err := h.DB.From("sales").
 		Select("*", "exact", false).
 		Eq("sale_id", id).
 		Execute()
 	if err != nil {
-		return model.Sale{}, false
+		return Sale{}, false
 	}
-	var sales []model.Sale
+	var sales []Sale
 	if err := json.Unmarshal(data, &sales); err != nil {
 		log.Printf("[매출 fetchSale] 디코딩 실패 sale_id=%s err=%v — 재계산 생략", id, err)
-		return model.Sale{}, false
+		return Sale{}, false
 	}
 	if len(sales) == 0 {
-		return model.Sale{}, false
+		return Sale{}, false
 	}
 	return sales[0], true
 }
 
-func (h *SaleHandler) calculateSaleUpdate(id string, req *model.UpdateSaleRequest) {
+func (h *SaleHandler) calculateSaleUpdate(id string, req *UpdateSaleRequest) {
 	current, ok := h.fetchSale(id)
 	if !ok {
 		return
@@ -856,7 +855,7 @@ func (h *SaleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[판매 수정 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
 
-	var req model.UpdateSaleRequest
+	var req UpdateSaleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[판매 수정 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -879,7 +878,7 @@ func (h *SaleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.Sale
+	var updated []Sale
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[판매 수정 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -914,7 +913,7 @@ func (h *SaleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.Sale
+	var updated []Sale
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[판매 취소 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")

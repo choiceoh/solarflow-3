@@ -11,6 +11,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
@@ -81,7 +82,7 @@ type IntegritySummary struct {
 // 갱신은 Refresh 가 별도 (POST /admin/db-integrity/refresh).
 func (h *DBIntegrityHandler) Run(w http.ResponseWriter, r *http.Request) {
 	data, _, err := h.DB.From("mv_integrity_check").Select("*", "exact", false).
-		Range(0, PostgRESTMaxRows-1, "").Execute()
+		Range(0, handlerutil.PostgRESTMaxRows-1, "").Execute()
 	if err != nil {
 		log.Printf("[정합성] mv_integrity_check 조회 실패: %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "정합성 view 조회 실패")
@@ -273,7 +274,7 @@ func (h *DBIntegrityHandler) ListIgnores(w http.ResponseWriter, r *http.Request)
 	data, _, err := h.DB.From("anomaly_ignores").
 		Select("ignore_id,table_name,row_pk,rule_name,reason,ignored_by,ignored_at", "exact", false).
 		Order("ignored_at", &postgrest.OrderOpts{Ascending: false}).
-		Range(0, PostgRESTMaxRows-1, "").
+		Range(0, handlerutil.PostgRESTMaxRows-1, "").
 		Execute()
 	if err != nil {
 		log.Printf("[이상치] ignore 목록 조회 실패: %v", err)

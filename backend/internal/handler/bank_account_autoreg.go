@@ -192,4 +192,3 @@ func lookupCompanyName(db *supa.Client, companyID string) string {
 	}
 	return rows[0].CompanyName
 }
-

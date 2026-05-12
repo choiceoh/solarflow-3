@@ -15,8 +15,11 @@ import (
 	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/dbrpc"
 	"solarflow-backend/internal/domains/bl"
+	"solarflow-backend/internal/domains/declaration"
 	"solarflow-backend/internal/domains/lc"
+	"solarflow-backend/internal/domains/order"
 	"solarflow-backend/internal/domains/po"
+	"solarflow-backend/internal/domains/sale"
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
@@ -793,7 +796,7 @@ func (h *ImportHandler) Sales(w http.ResponseWriter, r *http.Request) {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "sale", Message: "매출 등록 실패"})
 			continue
 		}
-		var createdSales []model.Sale
+		var createdSales []sale.Sale
 		if json.Unmarshal(saleData, &createdSales) == nil && len(createdSales) > 0 {
 			audit.WriteLog(h.DB, r, "sales", createdSales[0].SaleID, "create", nil, audit.RawFromValue(createdSales[0]), "excel_import")
 		}
@@ -881,7 +884,7 @@ func (h *ImportHandler) Declarations(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		var created []model.ImportDeclaration
+		var created []declaration.ImportDeclaration
 		if err := json.Unmarshal(declData, &created); err != nil || len(created) == 0 {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "declaration", Message: "면장 등록 결과 확인 실패"})
 			continue
@@ -1085,7 +1088,7 @@ func (h *ImportHandler) Orders(w http.ResponseWriter, r *http.Request) {
 
 		// shipped_qty, remaining_qty는 CreateOrderRequest에 없으므로 별도 구조체 사용
 		type orderInsert struct {
-			model.CreateOrderRequest
+			order.CreateOrderRequest
 			ShippedQty   int `json:"shipped_qty"`
 			RemainingQty int `json:"remaining_qty"`
 		}

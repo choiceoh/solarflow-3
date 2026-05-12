@@ -1,4 +1,4 @@
-package handler
+package order
 
 import (
 	"encoding/json"
@@ -15,7 +15,6 @@ import (
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -254,7 +253,7 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		w.Header().Set("X-Total-Count", "0")
-		response.RespondJSON(w, http.StatusOK, []model.Order{})
+		response.RespondJSON(w, http.StatusOK, []Order{})
 		return
 	}
 
@@ -271,7 +270,7 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var orders []model.Order
+	var orders []Order
 	if err := json.Unmarshal(data, &orders); err != nil {
 		log.Printf("[수주 목록 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -355,7 +354,7 @@ func (h *OrderHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var orders []model.Order
+	var orders []Order
 	if err := json.Unmarshal(data, &orders); err != nil {
 		log.Printf("[수주 상세 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -396,7 +395,7 @@ type orderManufacturerSummary struct {
 	ShortName      *string `json:"short_name"`
 }
 
-func (h *OrderHandler) enrichOrders(orders []model.Order) {
+func (h *OrderHandler) enrichOrders(orders []Order) {
 	if len(orders) == 0 {
 		return
 	}
@@ -522,7 +521,7 @@ func (h *OrderHandler) enrichOrders(orders []model.Order) {
 // Create — POST /api/v1/orders — 수주 등록
 // 비유: 새 주문서를 작성하여 관리실에 보관하는 것
 func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateOrderRequest
+	var req CreateOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[수주 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -552,7 +551,7 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var created []model.Order
+	var created []Order
 	if err := json.Unmarshal(data, &created); err != nil {
 		log.Printf("[수주 등록 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -572,7 +571,7 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req model.UpdateOrderRequest
+	var req UpdateOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[수주 수정 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -594,7 +593,7 @@ func (h *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated []model.Order
+	var updated []Order
 	if err := json.Unmarshal(data, &updated); err != nil {
 		log.Printf("[수주 수정 결과 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -637,7 +636,7 @@ func (h *OrderHandler) RecentByPartner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var orders []model.Order
+	var orders []Order
 	if err := json.Unmarshal(data, &orders); err != nil {
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
 		return
@@ -679,7 +678,7 @@ func (h *OrderHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "원본 수주 조회에 실패했습니다")
 		return
 	}
-	var src []model.Order
+	var src []Order
 	if err := json.Unmarshal(data, &src); err != nil || len(src) == 0 {
 		response.RespondError(w, http.StatusNotFound, "원본 수주를 찾을 수 없습니다")
 		return
@@ -711,7 +710,7 @@ func (h *OrderHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		memo = &s
 	}
 
-	req := model.CreateOrderRequest{
+	req := CreateOrderRequest{
 		CompanyID:          o.CompanyID,
 		CustomerID:         o.CustomerID,
 		OrderDate:          newOrderDate,
@@ -754,7 +753,7 @@ func (h *OrderHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "복제 수주 등록에 실패했습니다")
 		return
 	}
-	var out []model.Order
+	var out []Order
 	if err := json.Unmarshal(created, &out); err != nil || len(out) == 0 {
 		response.RespondError(w, http.StatusInternalServerError, "복제 결과를 확인할 수 없습니다")
 		return

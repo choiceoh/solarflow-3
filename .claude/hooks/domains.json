@@ -158,6 +158,96 @@
         "cd backend && go test ./internal/handler"
       ],
       "decisions": []
+    },
+    "cost_detail": {
+      "display_name": "원가 (D-065)",
+      "feature_id": "tx.cost_detail",
+      "pack": "erp-core",
+      "tenants": [
+        "cable",
+        "topsolar"
+      ],
+      "tables": [],
+      "depends_on": [],
+      "paths": [
+        "backend/internal/domains/cost_detail/"
+      ],
+      "blast_radius": [
+        "cost_detail model 필드 변경 — backend/internal/domains/cost_detail/handler.go Validation / backend/migrations/ + check_schema.sh"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh"
+      ],
+      "decisions": []
+    },
+    "declaration": {
+      "display_name": "면장 (Declaration)",
+      "feature_id": "tx.declaration",
+      "pack": "erp-core",
+      "tenants": [
+        "cable",
+        "topsolar"
+      ],
+      "tables": [],
+      "depends_on": [],
+      "paths": [
+        "backend/internal/domains/declaration/"
+      ],
+      "blast_radius": [
+        "declaration model 필드 변경 — backend/internal/domains/declaration/handler.go Validation / backend/migrations/ + check_schema.sh"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh"
+      ],
+      "decisions": []
+    },
+    "order": {
+      "display_name": "수주 (Order)",
+      "feature_id": "tx.order",
+      "pack": "erp-core",
+      "tenants": [
+        "baro",
+        "cable",
+        "topsolar"
+      ],
+      "tables": [],
+      "depends_on": [],
+      "paths": [
+        "backend/internal/domains/order/"
+      ],
+      "blast_radius": [
+        "order model 필드 변경 — backend/internal/domains/order/handler.go Validation / backend/migrations/ + check_schema.sh"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh"
+      ],
+      "decisions": []
+    },
+    "sale": {
+      "display_name": "매출 (Sale)",
+      "feature_id": "tx.sale",
+      "pack": "erp-core",
+      "tenants": [
+        "baro",
+        "cable",
+        "topsolar"
+      ],
+      "tables": [],
+      "depends_on": [],
+      "paths": [
+        "backend/internal/domains/sale/"
+      ],
+      "blast_radius": [
+        "sale model 필드 변경 — backend/internal/domains/sale/handler.go Validation / backend/migrations/ + check_schema.sh"
+      ],
+      "verify_scripts": [
+        "scripts/verify_changed.sh",
+        "backend/scripts/check_schema.sh"
+      ],
+      "decisions": []
     }
   },
   "path_to_domain_fallback": [

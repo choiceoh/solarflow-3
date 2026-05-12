@@ -14,6 +14,8 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/audit"
+	"solarflow-backend/internal/domains/declaration"
+	"solarflow-backend/internal/domains/order"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
@@ -419,7 +421,7 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "data": json.RawMessage(data)})
 
 	case "create_order":
-		var args model.CreateOrderRequest
+		var args order.CreateOrderRequest
 		if err := json.Unmarshal(p.Payload, &args); err != nil {
 			response.RespondError(w, http.StatusInternalServerError, "제안 페이로드 파싱 실패")
 			return
@@ -566,7 +568,7 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "deleted": args.OutboundID})
 
 	case "create_declaration":
-		var args model.CreateDeclarationRequest
+		var args declaration.CreateDeclarationRequest
 		if err := json.Unmarshal(p.Payload, &args); err != nil {
 			response.RespondError(w, http.StatusInternalServerError, "제안 페이로드 파싱 실패")
 			return

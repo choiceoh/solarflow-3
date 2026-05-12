@@ -1,4 +1,4 @@
-package handler
+package handlerutil
 
 import (
 	"os"
@@ -14,13 +14,13 @@ import (
 // 첫 1000 행만 응답한다. 이로 인해 SaleListItem.outbound_date 다수가 NULL 되어
 // SalesAnalysisPage 가 "매출 날짜 없음" 을 표시하는 회귀가 두 번 발생.
 //
-//	2026-05-05  처음 fix (fetchAllFromTable 헬퍼)
+//	2026-05-05  처음 fix (FetchAllFromTable 헬퍼)
 //	2026-05-06  perf 변경 중 회귀 — 단일 Range 로 복귀
 //	2026-05-06  PR 35/36 재 fix + 본 가드
 //
 // 이 테스트는 internal/handler 패키지의 어떤 .go 파일에서도 Range(0, 1000) 이상의
 // 단일 호출을 검출해 회귀를 빌드 타임에 차단한다. 청크 페이지네이션 헬퍼
-// fetchAllFromTable 을 사용하거나 적절한 limit/offset 처리를 사용해야 한다.
+// FetchAllFromTable 을 사용하거나 적절한 limit/offset 처리를 사용해야 한다.
 func TestNoLargeRangeRegression(t *testing.T) {
 	// Range(0, N) 패턴에서 N >= 1000 검출.
 	re := regexp.MustCompile(`Range\(\s*0\s*,\s*(\d+)\s*,`)
@@ -61,7 +61,7 @@ func TestNoLargeRangeRegression(t *testing.T) {
 
 	if len(offenders) > 0 {
 		t.Errorf("D-064 PR 36 회귀: 단일 Range 로 PostgREST 1000건 cap 우회 시도 검출.\n"+
-			"fetchAllFromTable 헬퍼를 사용하거나 적절한 페이지네이션 사용:\n  %s",
+			"FetchAllFromTable 헬퍼를 사용하거나 적절한 페이지네이션 사용:\n  %s",
 			strings.Join(offenders, "\n  "))
 	}
 }

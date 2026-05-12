@@ -92,7 +92,7 @@ func TestEnrichFunctionsUseHelper(t *testing.T) {
 					if lineNo == 0 {
 						lineNo = findLineNo(content[start:], mRange[0])
 					}
-					t.Errorf("D-064 PR 37 G3 회귀: %s 의 enrich 함수에서 단일 Range(0, %s) 사용. fetchAllFromTable 헬퍼 사용 필수.",
+					t.Errorf("D-064 PR 37 G3 회귀: %s 의 enrich 함수에서 단일 Range(0, %s) 사용. handlerutil.FetchAllFromTable 헬퍼 사용 필수.",
 						f, mRange[1])
 				}
 			}
@@ -104,7 +104,7 @@ func TestEnrichFunctionsUseHelper(t *testing.T) {
 // G4. Range(0, 999) (정확히 999 개) 차단 — off-by-one 의도 인지 검증
 // 회귀 패턴: 실수로 999 적었는데 1000행 cap 으로 정상 동작하는 것처럼 보이지만
 //
-//	실제로는 990 개만 응답되어 누락. 명시적 cap 의도면 PostgRESTMaxRows 상수 사용.
+//	실제로는 990 개만 응답되어 누락. 명시적 cap 의도면 handlerutil.handlerutil.PostgRESTMaxRows 상수 사용.
 //
 // ============================================================
 func TestNoMagicNumberInRange(t *testing.T) {
@@ -116,7 +116,7 @@ func TestNoMagicNumberInRange(t *testing.T) {
 	scanHandlerFiles(t, func(f, content string) {
 		for _, m := range pat.FindAllStringSubmatch(content, -1) {
 			lineNo := findLineNo(content, m[0])
-			t.Errorf("D-064 PR 37 G4: %s:%d Range 에 magic number %s. PostgRESTMaxRows 상수 또는 명시적 청크 페이지 사용.",
+			t.Errorf("D-064 PR 37 G4: %s:%d Range 에 magic number %s. handlerutil.handlerutil.PostgRESTMaxRows 상수 또는 명시적 청크 페이지 사용.",
 				f, lineNo, m[1])
 		}
 	})

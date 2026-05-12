@@ -29,6 +29,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 	"github.com/xuri/excelize/v2"
 
+	"solarflow-backend/internal/domains/order"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
@@ -940,7 +941,7 @@ func (h *ExternalSyncHandler) autoRegisterOrder(orderNumber, companyID, customer
 	if err != nil {
 		return "", err
 	}
-	var rows []model.Order
+	var rows []order.Order
 	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
 		return "", fmt.Errorf("등록 결과 확인 실패")
 	}

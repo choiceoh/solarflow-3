@@ -1,4 +1,4 @@
-package handler
+package order
 
 import (
 	"encoding/json"
@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"solarflow-backend/internal/handlerutil"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
 
@@ -171,8 +170,8 @@ func normalizeOrderScope(raw string) string {
 }
 
 // fetchAllForOrderDashboard — 필터 적용 후 1000 행 청크로 orders 전체를 끌어온다.
-func (h *OrderHandler) fetchAllForOrderDashboard(r *http.Request) ([]model.Order, error) {
-	all := make([]model.Order, 0, orderDashboardChunkSize)
+func (h *OrderHandler) fetchAllForOrderDashboard(r *http.Request) ([]Order, error) {
+	all := make([]Order, 0, orderDashboardChunkSize)
 	for chunk := 0; chunk < orderDashboardMaxChunks; chunk++ {
 		q := h.DB.From("orders").Select("*", "exact", false)
 		q, ok, err := h.applyOrderFilters(r, q)
@@ -189,7 +188,7 @@ func (h *OrderHandler) fetchAllForOrderDashboard(r *http.Request) ([]model.Order
 		if err != nil {
 			return nil, fmt.Errorf("orders 청크 #%d 조회 실패: %w", chunk, err)
 		}
-		var batch []model.Order
+		var batch []Order
 		if err := json.Unmarshal(data, &batch); err != nil {
 			return nil, fmt.Errorf("orders 청크 #%d 디코딩 실패: %w", chunk, err)
 		}
@@ -201,7 +200,7 @@ func (h *OrderHandler) fetchAllForOrderDashboard(r *http.Request) ([]model.Order
 	return all, nil
 }
 
-func computeOrderDashboard(orders []model.Order, scope string) *OrderDashboard {
+func computeOrderDashboard(orders []Order, scope string) *OrderDashboard {
 	d := &OrderDashboard{
 		StatusScope:         scope,
 		Trend24:             make([]OrderDashTrendPoint, 0, orderDashboardTrendMonths),
@@ -222,10 +221,10 @@ func computeOrderDashboard(orders []model.Order, scope string) *OrderDashboard {
 	return d
 }
 
-func filterOrdersByScope(orders []model.Order, scope string) []model.Order {
+func filterOrdersByScope(orders []Order, scope string) []Order {
 	switch scope {
 	case "active":
-		out := make([]model.Order, 0, len(orders))
+		out := make([]Order, 0, len(orders))
 		for _, o := range orders {
 			if o.Status != "completed" && o.Status != "cancelled" {
 				out = append(out, o)
@@ -233,7 +232,7 @@ func filterOrdersByScope(orders []model.Order, scope string) []model.Order {
 		}
 		return out
 	case "partial":
-		out := make([]model.Order, 0, len(orders))
+		out := make([]Order, 0, len(orders))
 		for _, o := range orders {
 			if o.Status == "partial" {
 				out = append(out, o)
@@ -244,7 +243,7 @@ func filterOrdersByScope(orders []model.Order, scope string) []model.Order {
 	return orders
 }
 
-func orderUnitPriceWp(o model.Order) float64 {
+func orderUnitPriceWp(o Order) float64 {
 	if o.UnitPriceWp > 0 {
 		return o.UnitPriceWp
 	}
@@ -254,7 +253,7 @@ func orderUnitPriceWp(o model.Order) float64 {
 	return 0
 }
 
-func computeOrderDashTotals(orders []model.Order) OrderDashTotals {
+func computeOrderDashTotals(orders []Order) OrderDashTotals {
 	t := OrderDashTotals{Count: len(orders)}
 	customers := make(map[string]struct{}, 32)
 	activeCustomers := make(map[string]struct{}, 32)
@@ -331,7 +330,7 @@ func computeOrderDashTotals(orders []model.Order) OrderDashTotals {
 	return t
 }
 
-func computeOrderDashTrend24(orders []model.Order) []OrderDashTrendPoint {
+func computeOrderDashTrend24(orders []Order) []OrderDashTrendPoint {
 	now := time.Now()
 	labels := make([]string, orderDashboardTrendMonths)
 	idx := make(map[string]int, orderDashboardTrendMonths)
@@ -388,7 +387,7 @@ func computeOrderDashTrend24(orders []model.Order) []OrderDashTrendPoint {
 // computeOrderDashUnitPriceMa15 — 직전 N일(orderDashboardMa15Days, 기본 180일) 의 일별 평균 unit_price_wp 에
 // 15일 슬라이딩 평균을 적용한 sparkline. 결과 길이 = orderDashboardMa15Days.
 // 데이터 없는 날은 단가 기여 없음 (그날 분모도 0). 슬라이딩 윈도우는 누적 분자/분모로 계산해 노이즈 안정화.
-func computeOrderDashUnitPriceMa15(orders []model.Order) []float64 {
+func computeOrderDashUnitPriceMa15(orders []Order) []float64 {
 	const totalDays = orderDashboardMa15Days
 	const window = orderDashboardMa15Window
 	bufLen := totalDays + window - 1
@@ -468,7 +467,7 @@ var orderCategoryLabels = map[string]string{
 	"other":        "기타",
 }
 
-func computeOrderDashBreakdown(orders []model.Order, dim orderDashDim, top int) []OrderDashBreakdownRow {
+func computeOrderDashBreakdown(orders []Order, dim orderDashDim, top int) []OrderDashBreakdownRow {
 	type acc struct {
 		label    string
 		count    int

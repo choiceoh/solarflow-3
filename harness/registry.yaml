@@ -113,6 +113,34 @@ domains:
     pack: module-finance
     manifest: harness/domains/tt.yaml
 
+  - id: cost_detail
+    display_name: "원가 (D-065)"
+    visible_to: module
+    feature_id: tx.cost_detail
+    pack: erp-core
+    manifest: harness/domains/cost_detail.yaml
+
+  - id: declaration
+    display_name: "면장 (Declaration)"
+    visible_to: module
+    feature_id: tx.declaration
+    pack: erp-core
+    manifest: harness/domains/declaration.yaml
+
+  - id: order
+    display_name: "수주 (Order)"
+    visible_to: all
+    feature_id: tx.order
+    pack: erp-core
+    manifest: harness/domains/order.yaml
+
+  - id: sale
+    display_name: "매출 (Sale)"
+    visible_to: all
+    feature_id: tx.sale
+    pack: erp-core
+    manifest: harness/domains/sale.yaml
+
   # PR-D 대상 (현재 코드에 존재, manifest 미작성):
   # - id: declaration             # 면장/통관
   # - id: products                # 제품 마스터

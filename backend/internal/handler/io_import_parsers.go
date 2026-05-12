@@ -14,8 +14,12 @@ import (
 	"regexp"
 	"strings"
 
+	"solarflow-backend/internal/domains/cost_detail"
+	"solarflow-backend/internal/domains/declaration"
 	"solarflow-backend/internal/domains/lc"
+	"solarflow-backend/internal/domains/order"
 	"solarflow-backend/internal/domains/po"
+	"solarflow-backend/internal/domains/sale"
 	"solarflow-backend/internal/domains/tt"
 	"solarflow-backend/internal/validation"
 	"time"
@@ -144,7 +148,7 @@ func parseOutboundRow(rowNum int, row map[string]interface{}, companyID, product
 //	companyID, customerID, productID, wattageKW
 //
 // receipt_method/management_category/fulfillment_source 허용값 + quantity·unit_price_wp 양수 검증 포함.
-func parseOrderRow(rowNum int, row map[string]interface{}, companyID, customerID, productID string, wattageKW float64) (model.CreateOrderRequest, []model.ImportError) {
+func parseOrderRow(rowNum int, row map[string]interface{}, companyID, customerID, productID string, wattageKW float64) (order.CreateOrderRequest, []model.ImportError) {
 	for _, av := range []struct {
 		val, field string
 		allowed    map[string]bool
@@ -154,18 +158,18 @@ func parseOrderRow(rowNum int, row map[string]interface{}, companyID, customerID
 		{getString(row, "fulfillment_source"), "fulfillment_source", allowedFulfillmentSources},
 	} {
 		if e := validateAllowedValues(rowNum, av.val, av.field, av.allowed); e != nil {
-			return model.CreateOrderRequest{}, []model.ImportError{*e}
+			return order.CreateOrderRequest{}, []model.ImportError{*e}
 		}
 	}
 
 	qty, qErr := requireInt(rowNum, row, "quantity")
 	if qErr != nil {
-		return model.CreateOrderRequest{}, []model.ImportError{*qErr}
+		return order.CreateOrderRequest{}, []model.ImportError{*qErr}
 	}
 	capacityKW := float64(qty) * wattageKW
 	unitPriceWp, upErr := requireFloat(rowNum, row, "unit_price_wp")
 	if upErr != nil {
-		return model.CreateOrderRequest{}, []model.ImportError{*upErr}
+		return order.CreateOrderRequest{}, []model.ImportError{*upErr}
 	}
 
 	// 장당 단가 자동 계산 — wp × spec_wp. wattageKW(kW) → spec_wp = wattageKW × 1000.
@@ -175,7 +179,7 @@ func parseOrderRow(rowNum int, row map[string]interface{}, companyID, customerID
 		unitPriceEaPtr = &ea
 	}
 
-	req := model.CreateOrderRequest{
+	req := order.CreateOrderRequest{
 		OrderNumber:        getStringPtr(row, "order_number"),
 		CompanyID:          companyID,
 		CustomerID:         customerID,
@@ -207,13 +211,13 @@ func parseOrderRow(rowNum int, row map[string]interface{}, companyID, customerID
 
 // parseSaleRow — 매출 행 파싱. 호출 측이 outbound 조회로 quantity·spec_wp를 미리 추출해 전달.
 // EA 단가·VAT·합계 자동 계산. customerID도 호출 측이 FK 해석.
-func parseSaleRow(rowNum int, row map[string]interface{}, outboundID, customerID string, outboundQuantity, specWP float64) (model.CreateSaleRequest, []model.ImportError) {
+func parseSaleRow(rowNum int, row map[string]interface{}, outboundID, customerID string, outboundQuantity, specWP float64) (sale.CreateSaleRequest, []model.ImportError) {
 	unitPriceWp, upErr := requireFloat(rowNum, row, "unit_price_wp")
 	if upErr != nil {
-		return model.CreateSaleRequest{}, []model.ImportError{*upErr}
+		return sale.CreateSaleRequest{}, []model.ImportError{*upErr}
 	}
 	if unitPriceWp <= 0 {
-		return model.CreateSaleRequest{}, []model.ImportError{{
+		return sale.CreateSaleRequest{}, []model.ImportError{{
 			Row: rowNum, Field: "unit_price_wp", Message: "unit_price_wp는 양수여야 합니다",
 		}}
 	}
@@ -225,7 +229,7 @@ func parseSaleRow(rowNum int, row map[string]interface{}, outboundID, customerID
 	totalAmount := supplyAmount + vatAmount
 
 	invoiceQty := int(outboundQuantity)
-	req := model.CreateSaleRequest{
+	req := sale.CreateSaleRequest{
 		OutboundID:      &outboundID,
 		CustomerID:      customerID,
 		Quantity:        &invoiceQty,
@@ -247,8 +251,8 @@ func parseSaleRow(rowNum int, row map[string]interface{}, outboundID, customerID
 }
 
 // parseDeclarationRow — 면장 행 파싱. blID·companyID는 호출 측 FK 해석.
-func parseDeclarationRow(rowNum int, row map[string]interface{}, blID, companyID string) (model.CreateDeclarationRequest, []model.ImportError) {
-	req := model.CreateDeclarationRequest{
+func parseDeclarationRow(rowNum int, row map[string]interface{}, blID, companyID string) (declaration.CreateDeclarationRequest, []model.ImportError) {
+	req := declaration.CreateDeclarationRequest{
 		DeclarationNumber: getString(row, "declaration_number"),
 		BLID:              blID,
 		CompanyID:         companyID,
@@ -268,19 +272,19 @@ func parseDeclarationRow(rowNum int, row map[string]interface{}, blID, companyID
 
 // parseDeclarationCostRow — 면장 원가 행 파싱. declID·productID·wattageKW는 호출 측 미리 해석.
 // quantity·exchange_rate·cif_total_krw 검증 + cif_wp_krw 자동 계산.
-func parseDeclarationCostRow(rowNum int, row map[string]interface{}, declID, productID string, wattageKW float64) (model.CreateCostDetailRequest, []model.ImportError) {
+func parseDeclarationCostRow(rowNum int, row map[string]interface{}, declID, productID string, wattageKW float64) (cost_detail.CreateCostDetailRequest, []model.ImportError) {
 	qty, qErr := requireInt(rowNum, row, "quantity")
 	if qErr != nil {
-		return model.CreateCostDetailRequest{}, []model.ImportError{*qErr}
+		return cost_detail.CreateCostDetailRequest{}, []model.ImportError{*qErr}
 	}
 	capacityKW := float64(qty) * wattageKW
 	exchangeRate, exErr := requireFloat(rowNum, row, "exchange_rate")
 	if exErr != nil {
-		return model.CreateCostDetailRequest{}, []model.ImportError{*exErr}
+		return cost_detail.CreateCostDetailRequest{}, []model.ImportError{*exErr}
 	}
 	cifTotalKrw, cifErr := requireFloat(rowNum, row, "cif_total_krw")
 	if cifErr != nil {
-		return model.CreateCostDetailRequest{}, []model.ImportError{*cifErr}
+		return cost_detail.CreateCostDetailRequest{}, []model.ImportError{*cifErr}
 	}
 
 	// cif_wp_krw 자동: cif_total_krw / (qty * spec_wp * 1000) — capacityKW가 0이면 0
@@ -289,7 +293,7 @@ func parseDeclarationCostRow(rowNum int, row map[string]interface{}, declID, pro
 		cifWpKrw = cifTotalKrw / (capacityKW * 1000)
 	}
 
-	req := model.CreateCostDetailRequest{
+	req := cost_detail.CreateCostDetailRequest{
 		DeclarationID:  declID,
 		ProductID:      productID,
 		Quantity:       qty,
