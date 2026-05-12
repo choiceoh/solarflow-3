@@ -108,8 +108,10 @@ func TestEnrichFunctionsUseHelper(t *testing.T) {
 //
 // ============================================================
 func TestNoMagicNumberInRange(t *testing.T) {
-	// .Range(N, M) 에서 M = 999 또는 1000 같은 magic number 검출 (cap 의도면 상수 써야)
-	pat := regexp.MustCompile(`\.Range\(\s*\d+\s*,\s*(999|1000|9999|99999)\s*,`)
+	// .Range(N, M) 에서 M = 999 또는 1000 같은 magic number 검출 (cap 의도면 상수 써야).
+	// 이전 regex 는 `.Range(` 가 한 줄 안에 있어야 매칭됐는데 long-chain 빌더는 `.\n\tRange(` 처럼
+	// 줄바꿈이 들어간다. \. 대신 [.\s] 로 공백/개행도 허용.
+	pat := regexp.MustCompile(`[.\s]Range\(\s*\d+\s*,\s*(999|1000|9999|99999)\s*,`)
 
 	scanHandlerFiles(t, func(f, content string) {
 		for _, m := range pat.FindAllStringSubmatch(content, -1) {
