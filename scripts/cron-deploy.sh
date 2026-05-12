@@ -117,7 +117,37 @@ fi
 
 AFTER=$(git rev-parse HEAD)
 
-# 변경 없음 → 조용히 종료 (로그 노이즈 방지)
+# 마이그레이션 catchup — pull 성공한 모든 회차에 apply_migrations.ts 호출.
+#
+# 왜 BEFORE==AFTER 게이트보다 앞에 있나:
+#   이전 cron 회차의 pull 이 충돌(예: bun.lock 로컬 변경)으로 실패해 마이그레이션 파일이
+#   잔존한 채로 다음 회차에 누군가 수동으로 git 상태를 복구하면, 그 이후 pull 들은
+#   모두 BEFORE==AFTER ("이미 업데이트") 가 되어 apply_migrations 가 영원히 호출되지
+#   않는다. 결과: schema_migrations 와 backend/migrations/*.sql 사이 누적 드리프트.
+#   2026-05-12 사고: 11:10 KST pull 실패 → 9개 마이그가 영원히 SKIP, baro 등 깨짐.
+#
+# apply_migrations.ts 는 schema_migrations 추적 테이블로 idempotent — 이미 적용된
+# 파일은 즉시 skip 하므로 매 회차 호출 비용은 DB 1 query (수백 ms).
+#
+# 아래 분기 (has_migration=1) 는 이번 pull 로 들어온 마이그를 다시 verify_migration.ts
+# 로 확인 + GitHub Deployments 기록을 위해 그대로 둔다 — apply 자체는 catchup 에서
+# 이미 끝난 상태라 idempotent skip 으로 통과한다.
+mig_ok=1
+if [[ -x "$BUN_BIN" && -f "$APPLY_MIG_TS" ]]; then
+  if [[ -f "$REPO/backend/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$REPO/backend/.env"
+    set +a
+  fi
+  if ! "$BUN_BIN" "$APPLY_MIG_TS"; then
+    rc=$?
+    echo "[$(date -Iseconds)] ❌ apply_migrations.ts 실패 (catchup, exit=$rc) — Go 재시작 보류"
+    mig_ok=0
+  fi
+fi
+
+# 변경 없음 → 마이그 catchup 만 하고 조용히 종료 (로그 노이즈 방지)
 if [[ "$BEFORE" == "$AFTER" ]]; then
   exit 0
 fi
@@ -154,8 +184,8 @@ while IFS= read -r f; do
   esac
 done <<< "$CHANGED"
 
-# 마이그레이션 자동 적용 (Go 빌드보다 먼저 — 새 코드가 새 스키마를 가정하므로)
-mig_ok=1   # 1=성공/skip, 0=실패
+# 마이그레이션 verify + GitHub Deployments 기록 (apply 자체는 위 catchup 에서 이미 호출됨).
+# mig_ok 는 catchup 결과 그대로 유지 — 여기서 reset 하면 catchup 실패가 묻힌다.
 db_dep_id=""
 if [[ $has_migration -eq 1 ]]; then
   echo "[$(date -Iseconds)] 마이그레이션 변경 감지:"
@@ -164,7 +194,7 @@ if [[ $has_migration -eq 1 ]]; then
   done
   # 배포 기록 시작
   db_dep_id=$(gh_deployment_create "production-db" "$AFTER")
-  # backend/.env 의 SUPABASE_DB_URL 을 환경에 주입
+  # backend/.env 의 SUPABASE_DB_URL 을 환경에 주입 (catchup 에서 이미 했지만 safety)
   if [[ -f "$REPO/backend/.env" ]]; then
     set -a
     # shellcheck disable=SC1091
@@ -173,7 +203,7 @@ if [[ $has_migration -eq 1 ]]; then
   fi
 
   if [[ -x "$BUN_BIN" && -f "$APPLY_MIG_TS" ]]; then
-    echo "[$(date -Iseconds)] apply_migrations.ts 실행 (bun)"
+    echo "[$(date -Iseconds)] apply_migrations.ts 재실행 (이번 pull 마이그 확정용 — catchup idempotent skip)"
     if "$BUN_BIN" "$APPLY_MIG_TS"; then
       echo "[$(date -Iseconds)] 마이그레이션 적용 완료"
       if [[ -f "$VERIFY_MIG_TS" ]]; then
