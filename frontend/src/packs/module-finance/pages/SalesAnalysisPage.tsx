@@ -36,7 +36,6 @@ import { KpiStrip } from "@/components/command/KpiStrip"
 import { ColumnVisibilityMenu } from "@/components/common/ColumnVisibilityMenu"
 import { useColumnVisibility, type ColumnVisibilityMeta } from "@/lib/columnVisibility"
 import { flatSpark, monthlyTrend } from "@/templates/sparkUtils"
-import { downloadSalesManagementReport } from "@/lib/reports/salesManagementReport"
 import { downloadSalesManagementPptx } from "@/lib/reports/salesManagementPptx"
 
 interface MarginItem {
@@ -1567,6 +1566,24 @@ export default function SalesAnalysisPage() {
       adjustedMarginRate: row.adjustedMarginRate,
       reason: row.reasonLabel,
     })),
+    manufacturerBreakdown: manufacturerDeepRows.map((row) => ({
+      name: row.manufacturer,
+      revenue: row.revenue,
+      revenueShare: row.revenueShare,
+      marginRate: row.marginRate,
+      missingRate: row.missingRate,
+    })),
+    customerBreakdown: customers.items
+      .slice()
+      .sort((a, b) => b.total_sales_krw - a.total_sales_krw)
+      .slice(0, 10)
+      .map((c) => ({
+        name: c.customer_name,
+        sales: c.total_sales_krw,
+        outstandingKrw: c.outstanding_krw,
+        marginRate: c.avg_margin_rate ?? null,
+        status: c.status,
+      })),
   })
   const reportFileBase = `sales-management-${safeFilePart(reportPeriodLabel)}`
   const alternativeCostOptions = [
@@ -1584,15 +1601,6 @@ export default function SalesAnalysisPage() {
             sub="판매, 세금계산서, 수금, B/L 원가 연결"
             right={
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="btn xs"
-                  onClick={() =>
-                    downloadSalesManagementReport(buildReportInput(), `${reportFileBase}.docx`)
-                  }
-                >
-                  경영 리포트 (Word)
-                </button>
                 <button
                   type="button"
                   className="btn xs"
