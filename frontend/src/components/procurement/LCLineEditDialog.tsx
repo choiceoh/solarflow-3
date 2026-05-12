@@ -3,7 +3,7 @@
 // PO 라인 목록을 보여주고, 사용자가 각 PO 라인에서 인수할 수량을 입력한다.
 // 빈 행(모두 0/없음)은 제외하고 PUT /api/v1/lcs/{id}로 line_items 교체.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { fetchWithAuth } from '@/lib/api';
+import { confirmDialog } from '@/lib/dialogs';
 import { notify } from '@/lib/notify';
 import type { LCRecord, POLineItem } from '@/types/procurement';
 
@@ -57,11 +58,20 @@ export default function LCLineEditDialog({ open, lc, onClose, onSaved }: Props) 
   const [memo, setMemo] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // 라인별 에러 (poLineId → message[]) 와 헤더 에러를 한 번에 모아 라인 셀 옆 인라인으로 표시.
+  const [rowErrors, setRowErrors] = useState<Map<string, string[]>>(() => new Map());
+  // 사용자가 폼을 만진 적 있는지 — 닫기 시 confirmDialog 발동.
+  const dirtyRef = useRef(false);
+  const markDirty = () => {
+    dirtyRef.current = true;
+  };
 
   useEffect(() => {
     if (!open || !lc) return;
     let cancelled = false;
     setLoading(true);
+    setRowErrors(new Map());
+    dirtyRef.current = false;
     Promise.all([
       fetchWithAuth<POLineItem[]>(`/api/v1/pos/${lc.po_id}/lines`),
       fetchWithAuth<LCLineFromServer[]>(`/api/v1/lcs/${lc.lc_id}/lines`).catch(() => [] as LCLineFromServer[]),
@@ -107,7 +117,40 @@ export default function LCLineEditDialog({ open, lc, onClose, onSaved }: Props) 
   // 다른 LC가 이미 인수한 수량을 표시하기 위해 sibling LC들의 라인을 합산하는 건 1차 범위 외.
   // (PO.line.quantity - 현재 LC가 가진 qty) 만 안전 상한으로 사용.
   function updateQty(poLineId: string, qty: string) {
+    markDirty();
     setRows((prev) => prev.map((r) => (r.poLine.po_line_id === poLineId ? { ...r, qty } : r)));
+    // 사용자가 만지면 그 라인 에러는 즉시 해제.
+    setRowErrors((prev) => {
+      if (!prev.has(poLineId)) return prev;
+      const next = new Map(prev);
+      next.delete(poLineId);
+      return next;
+    });
+  }
+
+  // 미저장 변경이 있는데 새로고침/탭 닫기 시 브라우저 confirm.
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: BeforeUnloadEvent) {
+      if (!dirtyRef.current) return;
+      e.preventDefault();
+      e.returnValue = '';
+    }
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [open]);
+
+  async function attemptClose() {
+    if (dirtyRef.current) {
+      const ok = await confirmDialog({
+        title: '저장하지 않은 변경 내용',
+        description: 'LC 라인 입력을 저장하지 않고 닫으시겠어요?',
+        confirmLabel: '닫기',
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    }
+    onClose();
   }
 
   const totals = useMemo(() => {
@@ -131,21 +174,52 @@ export default function LCLineEditDialog({ open, lc, onClose, onSaved }: Props) 
     return `LC 헤더 금액 ${lc.amount_usd.toLocaleString()} USD와 라인 합계 ${totals.amountUsd.toLocaleString()} USD가 ${pct.toFixed(1)}% 차이 (라인 단가는 PO 단가 기준 자동계산)`;
   }, [lc, totals]);
 
-  function validate(): string | null {
-    if (!lc) return 'LC가 선택되지 않았습니다';
-    const filled = rows.filter((r) => Number(r.qty) > 0);
-    if (filled.length === 0) return '인수 수량을 1개 이상 입력해주세요';
+  interface ValidationResult {
+    headerErrors: string[];
+    rowErrors: Map<string, string[]>;
+    summary: string[];
+  }
+
+  function validate(): ValidationResult {
+    const headerErrors: string[] = [];
+    const rowMap = new Map<string, string[]>();
+    const summary: string[] = [];
+    function pushRow(r: DraftRow, msg: string) {
+      const key = r.poLine.po_line_id;
+      const list = rowMap.get(key);
+      if (list) list.push(msg);
+      else rowMap.set(key, [msg]);
+      summary.push(`${r.productCode}: ${msg}`);
+    }
+    if (!lc) {
+      headerErrors.push('LC가 선택되지 않았습니다');
+      summary.push('LC가 선택되지 않았습니다');
+    }
+    const filled = rows.filter((r) => r.qty.trim() !== '' && Number(r.qty) !== 0);
+    if (filled.length === 0) {
+      headerErrors.push('인수 수량을 1개 이상 입력해주세요');
+      summary.push('인수 수량을 1개 이상 입력해주세요');
+    }
+    // 첫 에러에서 멈추지 않고 모든 라인을 검사 — 사용자가 한 번에 다 고칠 수 있게.
     for (const r of filled) {
       const q = Number(r.qty);
-      if (!Number.isInteger(q) || q <= 0) return `${r.productCode} 라인 수량은 양의 정수여야 합니다`;
-      if (q > r.poLineQty) return `${r.productCode} 라인 수량(${q})이 PO 라인 보유분(${r.poLineQty})을 초과합니다`;
+      if (!Number.isFinite(q) || q <= 0) pushRow(r, '수량은 0보다 커야 합니다');
+      else if (!Number.isInteger(q)) pushRow(r, '수량은 정수여야 합니다');
+      else if (q > r.poLineQty) pushRow(r, `PO 라인 보유분(${r.poLineQty})을 초과합니다`);
     }
-    return null;
+    return { headerErrors, rowErrors: rowMap, summary };
   }
 
   async function handleSubmit() {
-    const err = validate();
-    if (err) { notify.error(err); return; }
+    const result = validate();
+    if (result.headerErrors.length > 0 || result.rowErrors.size > 0) {
+      setRowErrors(result.rowErrors);
+      const head = result.summary.slice(0, 5).join(' · ');
+      const tail = result.summary.length > 5 ? ` 외 ${result.summary.length - 5}건` : '';
+      notify.error(`확인이 필요한 항목 ${result.summary.length}건: ${head}${tail}`);
+      return;
+    }
+    setRowErrors(new Map());
     if (!lc) return;
     setSubmitting(true);
     try {
@@ -189,13 +263,35 @@ export default function LCLineEditDialog({ open, lc, onClose, onSaved }: Props) 
 
   if (!lc) return null;
 
+  function focusNextQty(currentPoLineId: string) {
+    // Enter 누르면 다음 라인의 인수 수량 input 으로 포커스 이동 — 키보드만으로 빠르게 채우기.
+    const idx = rows.findIndex((r) => r.poLine.po_line_id === currentPoLineId);
+    const next = rows[idx + 1];
+    if (!next) return;
+    const el = document.querySelector<HTMLInputElement>(
+      `input[data-lc-qty-row="${next.poLine.po_line_id}"]`,
+    );
+    if (el) {
+      el.focus();
+      el.select();
+    }
+  }
+
+  function handleQtyKeyDown(e: KeyboardEvent<HTMLInputElement>, poLineId: string) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      focusNextQty(poLineId);
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) void attemptClose(); }}>
       <DialogContent className="sm:max-w-4xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>L/C {lc.lc_number ?? lc.lc_id.slice(0, 8)} 라인 편집</DialogTitle>
           <p className="text-xs text-muted-foreground">
             이 LC가 PO의 어떤 품목을 몇 매 인수할지 입력하세요. 빈 행은 저장에서 제외됩니다. 저장 시 기존 라인은 모두 새 라인으로 대체됩니다.
+            수량 셀에서 Enter 를 누르면 다음 라인으로 이동합니다.
           </p>
         </DialogHeader>
 
@@ -228,8 +324,12 @@ export default function LCLineEditDialog({ open, lc, onClose, onSaved }: Props) 
                     const valid = Number.isFinite(q) && q > 0;
                     const overflow = valid && q > r.poLineQty;
                     const amount = valid ? q * r.poUnitPriceUsdWp * r.specWp : 0;
+                    const errs = rowErrors.get(r.poLine.po_line_id) ?? [];
                     return (
-                      <tr key={r.poLine.po_line_id} className="border-t">
+                      <tr
+                        key={r.poLine.po_line_id}
+                        className={errs.length > 0 ? 'border-t bg-destructive/5' : 'border-t'}
+                      >
                         <td className="p-2">
                           <div className="font-medium">{r.productCode}</div>
                           {r.productName && <div className="text-[11px] text-muted-foreground">{r.productName} · {r.specWp}Wp</div>}
@@ -245,9 +345,19 @@ export default function LCLineEditDialog({ open, lc, onClose, onSaved }: Props) 
                             max={r.poLineQty}
                             value={r.qty}
                             onChange={(e) => updateQty(r.poLine.po_line_id, e.target.value)}
+                            onKeyDown={(e) => handleQtyKeyDown(e, r.poLine.po_line_id)}
                             placeholder="0"
-                            className={overflow ? 'border-destructive text-destructive' : ''}
+                            data-lc-qty-row={r.poLine.po_line_id}
+                            aria-invalid={errs.length > 0 || overflow}
+                            className={overflow || errs.length > 0 ? 'border-destructive text-destructive' : ''}
                           />
+                          {errs.length > 0 && (
+                            <ul className="mt-1 space-y-0.5 text-[10px] text-destructive">
+                              {errs.map((m, i) => (
+                                <li key={i}>· {m}</li>
+                              ))}
+                            </ul>
+                          )}
                         </td>
                         <td className="p-2 text-right font-mono tabular-nums">
                           {valid ? amount.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}
@@ -276,7 +386,15 @@ export default function LCLineEditDialog({ open, lc, onClose, onSaved }: Props) 
 
             <div>
               <label className="mb-1 block text-[12px] font-medium">메모 (전체)</label>
-              <Textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={2} placeholder="LC 메모 (선택)" />
+              <Textarea
+                value={memo}
+                onChange={(e) => {
+                  markDirty();
+                  setMemo(e.target.value);
+                }}
+                rows={2}
+                placeholder="LC 메모 (선택)"
+              />
             </div>
 
             {existingLines.length > 0 && (
@@ -288,7 +406,7 @@ export default function LCLineEditDialog({ open, lc, onClose, onSaved }: Props) 
         )}
 
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onClose} disabled={submitting}>취소</Button>
+          <Button variant="outline" size="sm" onClick={attemptClose} disabled={submitting}>취소</Button>
           <Button size="sm" onClick={handleSubmit} disabled={submitting || loading || poLines.length === 0}>
             {submitting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
             {submitting ? '저장 중...' : '라인 저장'}
