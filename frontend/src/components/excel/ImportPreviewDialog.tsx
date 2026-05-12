@@ -1,19 +1,20 @@
 // 엑셀 업로드 미리보기 다이얼로그 (Step 29B: 확정 등록 활성화)
 // 면장 타입: 탭 2개 (면장/원가) — 지적 2 반영
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileSpreadsheet, Download, X, Upload } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { ImportPreview, DeclarationImportPreview, TemplateType } from '@/types/excel';
+import type { ImportPreview, DeclarationImportPreview, ParsedRow, FieldDef, TemplateType } from '@/types/excel';
 import {
   FIELDS_MAP, TEMPLATE_LABEL,
   DECLARATION_FIELDS, DECLARATION_COST_FIELDS,
 } from '@/types/excel';
-import ImportPreviewTable from './ImportPreviewTable';
+import ImportPreviewTable, { type ImportPreviewTableHandle } from './ImportPreviewTable';
+import ImportPreviewErrorList from './ImportPreviewErrorList';
 
 interface Props {
   type: TemplateType;
@@ -85,11 +86,11 @@ export default function ImportPreviewDialog({
                   원가 ({declPreview.costs.length}건)
                 </TabsTrigger>
               </TabsList>
-              <TabsContent value="declarations" className="flex-1 overflow-auto mt-2">
-                <ImportPreviewTable rows={declPreview.declarations} fields={DECLARATION_FIELDS} filter={filter} />
+              <TabsContent value="declarations" className="flex-1 overflow-hidden mt-2">
+                <PreviewWithErrorList rows={declPreview.declarations} fields={DECLARATION_FIELDS} filter={filter} />
               </TabsContent>
-              <TabsContent value="costs" className="flex-1 overflow-auto mt-2">
-                <ImportPreviewTable rows={declPreview.costs} fields={DECLARATION_COST_FIELDS} filter={filter} />
+              <TabsContent value="costs" className="flex-1 overflow-hidden mt-2">
+                <PreviewWithErrorList rows={declPreview.costs} fields={DECLARATION_COST_FIELDS} filter={filter} />
               </TabsContent>
             </Tabs>
 
@@ -160,8 +161,8 @@ export default function ImportPreviewDialog({
               label={`에러 ${preview.errorRows}건`} className="text-red-700" />
           </div>
 
-          <div className="flex-1 overflow-auto">
-            <ImportPreviewTable rows={preview.rows} fields={fields} filter={filter} />
+          <div className="flex-1 overflow-hidden">
+            <PreviewWithErrorList rows={preview.rows} fields={fields} filter={filter} />
           </div>
 
           <DialogFooter>
@@ -199,6 +200,42 @@ export default function ImportPreviewDialog({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/**
+ * 단일 양식 미리보기 — 표 + 우측 에러/경고 사이드 패널.
+ * 사이드 항목 클릭 → 표가 그 행으로 scrollIntoView + 1.5초 노란 글로우.
+ */
+function PreviewWithErrorList({
+  rows, fields, filter,
+}: { rows: ParsedRow[]; fields: FieldDef[]; filter: FilterMode }) {
+  const tableRef = useRef<ImportPreviewTableHandle>(null);
+  const [activeRow, setActiveRow] = useState<number | null>(null);
+  useEffect(() => {
+    if (activeRow == null) return;
+    const t = window.setTimeout(() => setActiveRow(null), 1500);
+    return () => window.clearTimeout(t);
+  }, [activeRow]);
+
+  function jump(rowNumber: number) {
+    setActiveRow(rowNumber);
+    tableRef.current?.scrollToRow(rowNumber);
+  }
+
+  return (
+    <div className="flex h-full gap-2 overflow-hidden">
+      <div className="flex-1 overflow-auto">
+        <ImportPreviewTable
+          ref={tableRef}
+          rows={rows}
+          fields={fields}
+          filter={filter}
+          highlightedRow={activeRow}
+        />
+      </div>
+      <ImportPreviewErrorList rows={rows} onJump={jump} activeRow={activeRow} />
+    </div>
   );
 }
 
