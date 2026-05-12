@@ -30,6 +30,11 @@ func NewDBIntegrityHandler(db *supa.Client) *DBIntegrityHandler {
 func (h *DBIntegrityHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
 	r.With(g.AdminOnly).Get("/admin/db-integrity", h.Run)
 	r.With(g.AdminOnly).Post("/admin/db-integrity/refresh", h.Refresh)
+
+	// PR 091: 개별 row 수준 이상치 검사 (v_db_anomalies + anomaly_ignores).
+	r.With(g.AdminOnly).Get("/admin/db-anomalies", h.Anomalies)
+	r.With(g.AdminOnly).Post("/admin/db-anomalies/ignore", h.IgnoreAnomaly)
+	r.With(g.AdminOnly).Delete("/admin/db-anomalies/ignore/{ignoreID}", h.UnignoreAnomaly)
 }
 
 // IntegrityCheck — view v_integrity_check 의 한 행.
@@ -107,4 +112,128 @@ func (h *DBIntegrityHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[정합성] refresh RPC 응답 length=%d", len(respBody))
 	// 갱신 후 새 결과 즉시 반환 (Run 과 동일 흐름)
 	h.Run(w, r)
+}
+
+// ============================================================
+// PR 091: 개별 row 수준 이상치 (v_db_anomalies)
+// ============================================================
+
+// AnomalyRow — list_db_anomalies() RPC 의 한 행.
+type AnomalyRow struct {
+	RuleName    string          `json:"rule_name"`
+	Severity    string          `json:"severity"` // 'high' | 'med' | 'low'
+	Category    string          `json:"category"`
+	TableName   string          `json:"table_name"`
+	RowPK       string          `json:"row_pk"`
+	RowLabel    string          `json:"row_label"`
+	Description string          `json:"description"`
+	Detail      json.RawMessage `json:"detail"`
+}
+
+type AnomalyResponse struct {
+	Anomalies   []AnomalyRow     `json:"anomalies"`
+	Summary     AnomalySummary   `json:"summary"`
+	GeneratedAt string           `json:"generated_at"`
+}
+
+type AnomalySummary struct {
+	High  int `json:"high"`
+	Med   int `json:"med"`
+	Low   int `json:"low"`
+	Total int `json:"total"`
+}
+
+// Anomalies — GET /admin/db-anomalies — list_db_anomalies() RPC 호출.
+// 무시 목록(anomaly_ignores) 자동 제외, severity 순으로 정렬됨.
+func (h *DBIntegrityHandler) Anomalies(w http.ResponseWriter, r *http.Request) {
+	respBody := h.DB.Rpc("list_db_anomalies", "exact", nil)
+	if respBody == "" {
+		log.Printf("[이상치] list_db_anomalies RPC 빈 응답")
+		response.RespondError(w, http.StatusInternalServerError, "이상치 조회 실패")
+		return
+	}
+
+	var rows []AnomalyRow
+	if err := json.Unmarshal([]byte(respBody), &rows); err != nil {
+		log.Printf("[이상치] RPC 응답 디코딩 실패: %v body=%s", err, respBody)
+		response.RespondError(w, http.StatusInternalServerError, "응답 처리 실패")
+		return
+	}
+
+	summary := AnomalySummary{Total: len(rows)}
+	for _, a := range rows {
+		switch a.Severity {
+		case "high":
+			summary.High++
+		case "med":
+			summary.Med++
+		case "low":
+			summary.Low++
+		}
+	}
+
+	response.RespondJSON(w, http.StatusOK, AnomalyResponse{
+		Anomalies:   rows,
+		Summary:     summary,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// IgnoreAnomalyRequest — POST /admin/db-anomalies/ignore body.
+type IgnoreAnomalyRequest struct {
+	TableName string `json:"table_name"`
+	RowPK     string `json:"row_pk"`
+	RuleName  string `json:"rule_name"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+// IgnoreAnomaly — 운영자가 "정상" 으로 표시한 row 를 anomaly_ignores 에 등록.
+// 다음 조회부터 v_db_anomalies 에서 자동 제외 (false positive 알람 피로증 방지).
+func (h *DBIntegrityHandler) IgnoreAnomaly(w http.ResponseWriter, r *http.Request) {
+	var req IgnoreAnomalyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.RespondError(w, http.StatusBadRequest, "요청 본문 파싱 실패")
+		return
+	}
+	if req.TableName == "" || req.RowPK == "" || req.RuleName == "" {
+		response.RespondError(w, http.StatusBadRequest, "table_name, row_pk, rule_name 필수")
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	payload := map[string]any{
+		"table_name": req.TableName,
+		"row_pk":     req.RowPK,
+		"rule_name":  req.RuleName,
+	}
+	if req.Reason != "" {
+		payload["reason"] = req.Reason
+	}
+	if userID != "" {
+		payload["ignored_by"] = userID
+	}
+
+	_, _, err := h.DB.From("anomaly_ignores").Insert(payload, false, "", "", "").Execute()
+	if err != nil {
+		log.Printf("[이상치] ignore 등록 실패: %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "무시 등록 실패")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// UnignoreAnomaly — DELETE /admin/db-anomalies/ignore/{ignoreID} — 무시 해제.
+func (h *DBIntegrityHandler) UnignoreAnomaly(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "ignoreID")
+	if id == "" {
+		response.RespondError(w, http.StatusBadRequest, "ignoreID 누락")
+		return
+	}
+	_, _, err := h.DB.From("anomaly_ignores").Delete("", "").Eq("ignore_id", id).Execute()
+	if err != nil {
+		log.Printf("[이상치] ignore 삭제 실패 id=%s: %v", id, err)
+		response.RespondError(w, http.StatusInternalServerError, "무시 해제 실패")
+		return
+	}
+	response.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

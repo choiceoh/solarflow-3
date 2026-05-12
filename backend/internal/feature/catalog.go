@@ -660,9 +660,15 @@ var Catalog = map[FeatureID]Feature{
 		Paths: []string{"/api/v1/export/all"},
 	},
 	IDSysDBIntegrity: {
-		ID: IDSysDBIntegrity, Name: "DB 정합성", Description: "운영자 전용 DB 정합성 검증 (D-064 PR 37/38/39)",
+		ID: IDSysDBIntegrity, Name: "DB 정합성", Description: "운영자 전용 DB 정합성 검증 (D-064 PR 37/38/39 + PR 091 row-level)",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
-		Paths: []string{"/api/v1/admin/db-integrity", "/api/v1/admin/db-integrity/refresh"},
+		Paths: []string{
+			"/api/v1/admin/db-integrity",
+			"/api/v1/admin/db-integrity/refresh",
+			"/api/v1/admin/db-anomalies",
+			"/api/v1/admin/db-anomalies/ignore",
+			"/api/v1/admin/db-anomalies/ignore/{ignoreID}",
+		},
 	},
 
 	// ===== ai.* =====
