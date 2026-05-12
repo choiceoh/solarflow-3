@@ -67,6 +67,22 @@ import { InventoryProductCountInsight } from './metrics/InventoryProductCountIns
 import { InventoryIncomingShareInsight } from './metrics/InventoryIncomingShareInsight'
 import { InventoryInsufficientInsight } from './metrics/InventoryInsufficientInsight'
 import { InventoryLongTermInsight } from './metrics/InventoryLongTermInsight'
+import { OutboundActiveInsight } from './metrics/OutboundActiveInsight'
+import { OutboundCancelPendingInsight } from './metrics/OutboundCancelPendingInsight'
+import { OutboundCancelledInsight } from './metrics/OutboundCancelledInsight'
+import { OutboundSaleUnregisteredInsight } from './metrics/OutboundSaleUnregisteredInsight'
+import { SalesSupplyInsight } from './metrics/SalesSupplyInsight'
+import { SalesVatInsight } from './metrics/SalesVatInsight'
+import { SalesInvoiceIssuedInsight } from './metrics/SalesInvoiceIssuedInsight'
+import { SalesErpOpenInsight } from './metrics/SalesErpOpenInsight'
+import { ReceiptsCountInsight } from './metrics/ReceiptsCountInsight'
+import { ReceiptsOpenSaleInsight } from './metrics/ReceiptsOpenSaleInsight'
+import { ReceiptsAvgAmountInsight } from './metrics/ReceiptsAvgAmountInsight'
+import { OrdersReceivedInsight } from './metrics/OrdersReceivedInsight'
+import { OrdersCompletedInsight } from './metrics/OrdersCompletedInsight'
+import { OrdersCancelledInsight } from './metrics/OrdersCancelledInsight'
+import { OrdersAvgUnitPriceWpInsight } from './metrics/OrdersAvgUnitPriceWpInsight'
+import { OrdersShortageInsight } from './metrics/OrdersShortageInsight'
 
 export interface InsightEntry {
   // KPI 타일이 보낼 식별자 (예: 'outbound.count') — URL 에 그대로 들어감.
@@ -391,6 +407,94 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
     id: 'inventory.long_term',
     shortLabel: '장기재고',
     render: () => <InventoryLongTermInsight />,
+  },
+
+  // Outbound 확장
+  'outbound.active': {
+    id: 'outbound.active',
+    shortLabel: '활성 출고',
+    render: () => <OutboundActiveInsight />,
+  },
+  'outbound.cancel_pending': {
+    id: 'outbound.cancel_pending',
+    shortLabel: '취소 대기',
+    render: () => <OutboundCancelPendingInsight />,
+  },
+  'outbound.cancelled': {
+    id: 'outbound.cancelled',
+    shortLabel: '취소 완료',
+    render: () => <OutboundCancelledInsight />,
+  },
+  'outbound.sale_unregistered': {
+    id: 'outbound.sale_unregistered',
+    shortLabel: '매출 미등록',
+    render: () => <OutboundSaleUnregisteredInsight />,
+  },
+
+  // Sales 확장
+  'sales.supply': {
+    id: 'sales.supply',
+    shortLabel: '매출 공급가',
+    render: () => <SalesSupplyInsight />,
+  },
+  'sales.vat': {
+    id: 'sales.vat',
+    shortLabel: '매출 부가세',
+    render: () => <SalesVatInsight />,
+  },
+  'sales.invoice_issued': {
+    id: 'sales.invoice_issued',
+    shortLabel: '계산서 발행',
+    render: () => <SalesInvoiceIssuedInsight />,
+  },
+  'sales.erp_open': {
+    id: 'sales.erp_open',
+    shortLabel: 'ERP 미마감',
+    render: () => <SalesErpOpenInsight />,
+  },
+
+  // Receipts 확장
+  'receipts.count': {
+    id: 'receipts.count',
+    shortLabel: '입금 건수',
+    render: () => <ReceiptsCountInsight />,
+  },
+  'receipts.open_sale': {
+    id: 'receipts.open_sale',
+    shortLabel: '수금 미완료',
+    render: () => <ReceiptsOpenSaleInsight />,
+  },
+  'receipts.avg_amount': {
+    id: 'receipts.avg_amount',
+    shortLabel: '평균 입금',
+    render: () => <ReceiptsAvgAmountInsight />,
+  },
+
+  // Orders 확장
+  'orders.received': {
+    id: 'orders.received',
+    shortLabel: '신규 접수',
+    render: () => <OrdersReceivedInsight />,
+  },
+  'orders.completed': {
+    id: 'orders.completed',
+    shortLabel: '완료 수주',
+    render: () => <OrdersCompletedInsight />,
+  },
+  'orders.cancelled': {
+    id: 'orders.cancelled',
+    shortLabel: '취소 수주',
+    render: () => <OrdersCancelledInsight />,
+  },
+  'orders.avg_unit_price_wp': {
+    id: 'orders.avg_unit_price_wp',
+    shortLabel: '전체 평단',
+    render: () => <OrdersAvgUnitPriceWpInsight />,
+  },
+  'orders.shortage': {
+    id: 'orders.shortage',
+    shortLabel: '충당 부족',
+    render: () => <OrdersShortageInsight />,
   },
 }
 
