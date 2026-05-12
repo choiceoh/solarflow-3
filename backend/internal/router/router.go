@@ -37,7 +37,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 
 	// 인스턴스 생성 — alias·중첩 라우트가 공유하는 핸들러는 미리 만든다.
 	attachH := handler.NewAttachmentHandler(a.DB)
-	ocrH := handler.NewOCRHandler(a.OCR)
+	ocrH := handler.NewOCRHandler(a.OCR, a.Pool)
 	matchH := handler.NewReceiptMatchHandler(a.DB, a.Eng)
 	publicH := handler.NewPublicHandler(a.DB, a.Eng)
 	// AssistantHandler.ConfirmProposal/case "create_outbound"가 위임하므로 단일 인스턴스 공유.
@@ -64,7 +64,7 @@ func NewWithAuth(a *app.App, authMW func(http.Handler) http.Handler) http.Handle
 		r.Use(middleware.StudyTenantFence)
 
 		handler.NewAdminFeatureWiringHandler(a.WiringStore, a.Gates.FeatureGate.Resolver()).RegisterRoutes(r, a.Gates)
-		handler.NewAssistantHandler(a.DB).WithAlias(ocrH, matchH).WithWriters(outboundH).RegisterRoutes(r, a.Gates)
+		handler.NewAssistantHandler(a.DB).WithAlias(ocrH, matchH).WithWriters(outboundH).WithAttachmentPool(a.Pool).RegisterRoutes(r, a.Gates)
 		attachH.RegisterRoutes(r, a.Gates)
 		handler.NewAuditLogHandler(a.DB).RegisterRoutes(r, a.Gates)
 		handler.NewBankHandler(a.DB).RegisterRoutes(r, a.Gates)

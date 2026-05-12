@@ -73,12 +73,21 @@ const PROPOSAL_KIND_LABEL: Record<string, string> = {
 interface OCRLineLite {
   text: string;
 }
+interface SheetMetaLite {
+  sheet_id: string;
+  sheet_name: string;
+  row_count: number;
+  col_count: number;
+  headers: string[];
+  preview_rows?: string[][];
+}
 interface OCRResult {
   filename: string;
   raw_text?: string;
   lines?: OCRLineLite[];
   error?: string;
   fields?: { document_type?: string; customs_declaration?: Record<string, unknown> };
+  sheet?: SheetMetaLite;
 }
 interface OCRExtractResponse {
   results: OCRResult[];
@@ -114,9 +123,13 @@ function inferMimeByName(name: string): string {
 function buildOCRBlock(results: OCRResult[]): string {
   const blocks: string[] = [];
   for (const r of results) {
-    const isSheet = SPREADSHEET_EXT_RE.test(r.filename);
+    // 시트 메타가 있으면 표 블록을 메타 + 미리보기 5행으로 구성 (DB 임시 저장 방식).
+    if (r.sheet) {
+      blocks.push(formatSheetMetaBlock(r.filename, r.sheet, r.error));
+      continue;
+    }
     const isDoc = DOCUMENT_EXT_RE.test(r.filename);
-    const label = isSheet ? '[첨부파일 표]' : isDoc ? '[첨부파일 문서]' : '[첨부파일 OCR]';
+    const label = isDoc ? '[첨부파일 문서]' : '[첨부파일 OCR]';
     const head = `${label} ${r.filename}`;
     if (r.error) {
       blocks.push(`${head}\n오류: ${r.error}`);
@@ -130,6 +143,33 @@ function buildOCRBlock(results: OCRResult[]): string {
     blocks.push(`${head}\n${body}`);
   }
   return blocks.join('\n\n');
+}
+
+// 표 메타 블록 — LLM 한테 시트 전체가 아닌 sheet_id 와 미리보기만 보여주고,
+// 분석·집계·검색은 query_attached_sheet 도구로 풀라고 명시.
+function formatSheetMetaBlock(filename: string, s: SheetMetaLite, error?: string): string {
+  const head = `[첨부파일 표] ${filename}`;
+  if (error) return `${head}\n오류: ${error}`;
+  const lines = [
+    head,
+    `[시트: ${s.sheet_name}] sheet_id=${s.sheet_id}, 총 ${s.row_count}행 × ${s.col_count}열`,
+  ];
+  if (s.headers.length > 0) {
+    lines.push(`헤더: ${s.headers.join(' | ')}`);
+  } else {
+    lines.push('헤더: (시트에 헤더 행이 없는 듯 — 첫 행도 데이터일 수 있음)');
+  }
+  const preview = s.preview_rows ?? [];
+  if (preview.length > 0) {
+    lines.push(`미리보기 처음 ${preview.length}행:`);
+    preview.forEach((row, i) => lines.push(`${i + 1}: ${row.join(' | ')}`));
+    if (s.row_count > preview.length) {
+      lines.push(`(전체 ${s.row_count}행 중 ${preview.length}행만 표시 — 더 필요하면 query_attached_sheet 도구 호출)`);
+    }
+  } else {
+    lines.push('(데이터 행 없음)');
+  }
+  return lines.join('\n');
 }
 
 // 세션 → markdown 변환. 사용자/AI 메시지를 헤더 + 본문 형태로 직렬화.

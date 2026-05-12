@@ -152,7 +152,7 @@ func TestBuildOCRResultAddsCustomsFields(t *testing.T) {
 }
 
 func TestOCRHealthReportsNotConfigured(t *testing.T) {
-	h := NewOCRHandler(ocr.New(""))
+	h := NewOCRHandler(ocr.New(""), nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ocr/health", nil).WithContext(context.Background())
 	rec := httptest.NewRecorder()
 

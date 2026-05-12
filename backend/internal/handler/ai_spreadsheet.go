@@ -2,21 +2,16 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
-	"strings"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/xuri/excelize/v2"
 
 	"solarflow-backend/internal/model"
-)
-
-// 추출 텍스트가 LLM 컨텍스트를 넘기지 않도록 한 단계 더 잘라두는 안전망.
-// 업로드 파일 한도와는 별개 — 작은 xlsx 도 풀면 텍스트가 수십 배로 늘어날 수 있다.
-const (
-	maxSpreadsheetSheetChars = 8 << 20  // 시트당 8MB
-	maxSpreadsheetFileChars  = 16 << 20 // 파일당 16MB
 )
 
 const (
@@ -33,107 +28,122 @@ func isSpreadsheetMIME(mime string) bool {
 	return false
 }
 
-// extractSpreadsheet — xlsx/csv 를 시트별 텍스트로 풀어 OCRResult 에 담는다.
-// LLM 한테 "원본 표" 임을 알 수 있도록 시트 헤더(`[시트: 이름]`) + 파이프 구분 행으로 직렬화.
-// OCR 결과와 동일한 RawText 슬롯에 채워 프론트 합성 흐름을 그대로 재사용한다.
-func extractSpreadsheet(data []byte, mime, filename string) (model.OCRResult, error) {
-	result := model.OCRResult{Filename: filename}
-	var (
-		raw string
-		err error
-	)
+// saveSpreadsheetSheets — 업로드된 xlsx/csv 를 시트 단위로 DB 에 저장하고,
+// 각 시트의 메타+미리보기를 담은 OCRResult 슬라이스를 반환한다.
+// 한 파일에 여러 시트가 있으면 시트마다 별도 OCRResult 항목으로 응답된다.
+// 시트당 5만행 cap 초과 시 그 시트만 Error 가 채워지고 다른 시트는 정상 저장.
+func saveSpreadsheetSheets(ctx context.Context, pool *pgxpool.Pool, userID string, data []byte, mime, filename string) ([]model.OCRResult, error) {
 	switch mime {
 	case mimeCSV:
-		raw, err = extractCSV(data)
+		headers, rows, err := parseCSV(data)
+		if err != nil {
+			return nil, err
+		}
+		return []model.OCRResult{saveOneSheet(ctx, pool, userID, filename, "CSV", headers, rows)}, nil
+
 	case mimeXLSX:
-		raw, err = extractXLSX(data)
-	default:
-		return result, fmt.Errorf("스프레드시트 형식을 인식할 수 없습니다")
+		sheets, err := parseXLSXSheets(data)
+		if err != nil {
+			return nil, err
+		}
+		if len(sheets) == 0 {
+			return []model.OCRResult{{Filename: filename, Error: "엑셀에서 시트를 찾지 못했습니다"}}, nil
+		}
+		out := make([]model.OCRResult, 0, len(sheets))
+		for _, s := range sheets {
+			out = append(out, saveOneSheet(ctx, pool, userID, filename, s.name, s.headers, s.rows))
+		}
+		return out, nil
 	}
-	if err != nil {
-		return result, err
-	}
-	result.RawText = raw
-	return result, nil
+	return nil, fmt.Errorf("스프레드시트 형식을 인식할 수 없습니다")
 }
 
-func extractCSV(data []byte) (string, error) {
+// saveOneSheet — DB 저장 시도. 행 cap 초과·DB 오류 시 result.Error 만 채워 반환.
+func saveOneSheet(ctx context.Context, pool *pgxpool.Pool, userID, filename, sheetName string, headers []string, rows [][]string) model.OCRResult {
+	meta, err := SaveAttachmentSheet(ctx, pool, userID, filename, sheetName, headers, rows)
+	if err != nil {
+		if errors.Is(err, ErrAttachmentTooLarge) || err == ErrAttachmentTooLarge {
+			return model.OCRResult{Filename: filename, Error: err.Error()}
+		}
+		return model.OCRResult{Filename: filename, Error: fmt.Sprintf("시트 저장 실패: %v", err)}
+	}
+	return model.OCRResult{
+		Filename: filename,
+		Sheet: &model.SheetMeta{
+			SheetID:     meta.SheetID,
+			SheetName:   meta.SheetName,
+			RowCount:    meta.RowCount,
+			ColCount:    meta.ColCount,
+			Headers:     meta.Headers,
+			PreviewRows: meta.PreviewRows,
+		},
+	}
+}
+
+type parsedSheet struct {
+	name    string
+	headers []string
+	rows    [][]string
+}
+
+// parseXLSXSheets — 모든 시트의 (헤더, 데이터행) 을 추출.
+// 첫 행을 헤더로 가정. 빈 시트는 헤더만 빈 슬라이스로 반환.
+func parseXLSXSheets(data []byte) ([]parsedSheet, error) {
+	f, err := excelize.OpenReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("XLSX 열기: %w", err)
+	}
+	defer f.Close()
+
+	var out []parsedSheet
+	for _, name := range f.GetSheetList() {
+		rows, err := f.GetRows(name)
+		if err != nil {
+			return nil, fmt.Errorf("시트 %q 읽기: %w", name, err)
+		}
+		headers, body := splitHeaderAndRows(rows)
+		out = append(out, parsedSheet{name: name, headers: headers, rows: body})
+	}
+	return out, nil
+}
+
+// parseCSV — 첫 행을 헤더로, 나머지를 데이터 행으로 분리.
+func parseCSV(data []byte) ([]string, [][]string, error) {
 	r := csv.NewReader(bytes.NewReader(data))
-	r.FieldsPerRecord = -1 // 행마다 컬럼 수가 달라도 통과
+	r.FieldsPerRecord = -1
 	r.LazyQuotes = true
 
-	var b strings.Builder
-	skipped := 0
+	var all [][]string
 	for {
-		record, err := r.Read()
+		rec, err := r.Read()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return "", fmt.Errorf("CSV 파싱: %w", err)
+			return nil, nil, fmt.Errorf("CSV 파싱: %w", err)
 		}
-		if b.Len() >= maxSpreadsheetSheetChars {
-			skipped++
-			continue
-		}
-		b.WriteString(strings.Join(record, " | "))
-		b.WriteByte('\n')
+		all = append(all, rec)
 	}
-	if skipped > 0 {
-		fmt.Fprintf(&b, "(이후 %d행은 용량 한도로 생략됨)\n", skipped)
-	}
-	return strings.TrimRight(b.String(), "\n"), nil
+	headers, body := splitHeaderAndRows(all)
+	return headers, body, nil
 }
 
-func extractXLSX(data []byte) (string, error) {
-	f, err := excelize.OpenReader(bytes.NewReader(data))
-	if err != nil {
-		return "", fmt.Errorf("XLSX 파싱: %w", err)
+func splitHeaderAndRows(rows [][]string) ([]string, [][]string) {
+	if len(rows) == 0 {
+		return []string{}, [][]string{}
 	}
-	defer f.Close()
-
-	var out strings.Builder
-	sheets := f.GetSheetList()
-	for si, sheet := range sheets {
-		if out.Len() >= maxSpreadsheetFileChars {
-			fmt.Fprintf(&out, "\n(이후 %d개 시트는 용량 한도로 생략됨)", len(sheets)-si)
-			break
-		}
-		if si > 0 {
-			out.WriteString("\n\n")
-		}
-		fmt.Fprintf(&out, "[시트: %s]\n", sheet)
-
-		rows, err := f.GetRows(sheet)
-		if err != nil {
-			fmt.Fprintf(&out, "(시트 읽기 실패: %v)\n", err)
-			continue
-		}
-		writeSheetRows(&out, rows)
+	headers := trimTrailingEmpty(rows[0])
+	body := make([][]string, 0, len(rows)-1)
+	for _, r := range rows[1:] {
+		body = append(body, trimTrailingEmpty(r))
 	}
-	return strings.TrimRight(out.String(), "\n"), nil
+	return headers, body
 }
 
-func writeSheetRows(out *strings.Builder, rows [][]string) {
-	sheetStart := out.Len()
-	skipped := 0
-	for _, row := range rows {
-		if out.Len()-sheetStart >= maxSpreadsheetSheetChars || out.Len() >= maxSpreadsheetFileChars {
-			skipped++
-			continue
-		}
-		// trailing 빈 셀 제거 — excelize 는 시트 최대 컬럼까지 채워서 반환.
-		for len(row) > 0 && strings.TrimSpace(row[len(row)-1]) == "" {
-			row = row[:len(row)-1]
-		}
-		if len(row) == 0 {
-			out.WriteByte('\n')
-			continue
-		}
-		out.WriteString(strings.Join(row, " | "))
-		out.WriteByte('\n')
+func trimTrailingEmpty(row []string) []string {
+	out := append([]string(nil), row...)
+	for len(out) > 0 && out[len(out)-1] == "" {
+		out = out[:len(out)-1]
 	}
-	if skipped > 0 {
-		fmt.Fprintf(out, "(이후 %d행은 용량 한도로 생략됨)\n", skipped)
-	}
+	return out
 }
