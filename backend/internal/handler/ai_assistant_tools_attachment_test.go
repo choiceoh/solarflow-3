@@ -24,9 +24,9 @@ func TestColumnIndexCaseAndSpaceInsensitive(t *testing.T) {
 
 func TestMarshalToolPayloadShape(t *testing.T) {
 	out := marshalToolPayload(map[string]any{
-		"sheet_id":   "abc",
+		"sheet_id":    "abc",
 		"shown_count": 3,
-		"hint":       "",
+		"hint":        "",
 	})
 	var got map[string]any
 	if err := json.Unmarshal([]byte(out), &got); err != nil {

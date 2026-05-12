@@ -22,6 +22,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 	"github.com/xuri/excelize/v2"
 
+	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
@@ -700,7 +701,7 @@ func buildAmaranthInboundWorkbook(bls []blShipmentForExport, lines []inboundLine
 				seqStr,                          // AB 발주순번
 				blNumber,                        // AC 수입선적번호
 				seqStr,                          // AD 수입선적순번
-				"", "", "", "", // AE~AH 입고의뢰/입고검사 번호·순번
+				"", "", "", "",                  // AE~AH 입고의뢰/입고검사 번호·순번
 			}
 
 			for ci, val := range cells {
@@ -1331,7 +1332,7 @@ func (h *ExportHandler) CreateOutboundUploadJob(w http.ResponseWriter, r *http.R
 		FileSHA256:     fileHash,
 		RowCount:       rowCount,
 		CreatedBy:      &userID,
-		CreatedByEmail: ptrIfNotEmpty(email),
+		CreatedByEmail: audit.PtrIfNotEmpty(email),
 	}
 
 	data, _, err := h.DB.From("amaranth_upload_jobs").

@@ -157,10 +157,14 @@ func TestOutboundImportUsesTransactionalCreateCore(t *testing.T) {
 // ============================================================
 // G7. Summary 핸들러의 status 별 카운트 루프는 사용자 status 가드를 가져야 한다.
 // 회귀 패턴: applyXFilters 가 사용자 ?status=X 를 .Eq("status", X) 로 이미 적용했는데
-//   루프 안에서 q.Eq("status", st.key) 를 다시 부르면 postgrest-go params map 덮어쓰기로
-//   사용자 필터가 사라져 다른 status 의 전역 카운트가 채워진다 (PR #700 후속).
+//
+//	루프 안에서 q.Eq("status", st.key) 를 다시 부르면 postgrest-go params map 덮어쓰기로
+//	사용자 필터가 사라져 다른 status 의 전역 카운트가 채워진다 (PR #700 후속).
+//
 // 가드: `.Eq("status", st.key)` 가 나오는 파일은 같은 파일 안에 `userStatus :=` 사전
-//   검사가 있어야 한다 (사용자 status 와 일치하지 않는 버킷은 skip 하는 패턴).
+//
+//	검사가 있어야 한다 (사용자 status 와 일치하지 않는 버킷은 skip 하는 패턴).
+//
 // ============================================================
 func TestSummaryStatusLoopHasUserStatusGuard(t *testing.T) {
 	suspectPattern := regexp.MustCompile(`\.Eq\("status",\s*st\.key`)

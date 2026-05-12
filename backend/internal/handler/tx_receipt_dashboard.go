@@ -10,6 +10,7 @@ import (
 
 	postgrest "github.com/supabase-community/postgrest-go"
 
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
@@ -30,22 +31,22 @@ const (
 
 // ReceiptDashboard — /api/v1/receipts/dashboard 응답.
 type ReceiptDashboard struct {
-	Totals          ReceiptDashTotals       `json:"totals"`
-	Trend24         []ReceiptDashTrendPoint `json:"trend24"`
+	Totals          ReceiptDashTotals         `json:"totals"`
+	Trend24         []ReceiptDashTrendPoint   `json:"trend24"`
 	ByCustomerTop10 []ReceiptDashBreakdownRow `json:"by_customer_top10"`
 	ByMatchStatus   []ReceiptDashBreakdownRow `json:"by_match_status"`
 }
 
 type ReceiptDashTotals struct {
 	Count             int     `json:"count"`
-	AmountSum         float64 `json:"amount_sum"`         // sum(amount)
-	MatchedSum        float64 `json:"matched_sum"`        // sum(amount - remaining), 음수 클램프
-	RemainingSum      float64 `json:"remaining_sum"`      // sum(remaining)
-	MatchedCount      int     `json:"matched_count"`      // 완전 매칭 (matched > 0 & remaining == 0)
+	AmountSum         float64 `json:"amount_sum"`          // sum(amount)
+	MatchedSum        float64 `json:"matched_sum"`         // sum(amount - remaining), 음수 클램프
+	RemainingSum      float64 `json:"remaining_sum"`       // sum(remaining)
+	MatchedCount      int     `json:"matched_count"`       // 완전 매칭 (matched > 0 & remaining == 0)
 	PartialMatchCount int     `json:"partial_match_count"` // matched > 0 & remaining > 0
-	UnmatchedCount    int     `json:"unmatched_count"`    // matched == 0
+	UnmatchedCount    int     `json:"unmatched_count"`     // matched == 0
 	CustomersCount    int     `json:"customers_count"`
-	RecoveryRate      float64 `json:"recovery_rate"`      // matched_sum / amount_sum * 100
+	RecoveryRate      float64 `json:"recovery_rate"` // matched_sum / amount_sum * 100
 }
 
 // ReceiptDashTrendPoint — 월별 시계열. receipt_date 기반 binning.
@@ -242,7 +243,7 @@ func computeReceiptDashTrend24(receipts []model.Receipt) []ReceiptDashTrendPoint
 	labels := make([]string, receiptDashTrendMonths)
 	idx := make(map[string]int, receiptDashTrendMonths)
 	for i := 0; i < receiptDashTrendMonths; i++ {
-		t := now.AddDate(0, -(receiptDashTrendMonths-1-i), 0)
+		t := now.AddDate(0, -(receiptDashTrendMonths - 1 - i), 0)
 		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 		labels[i] = key
 		idx[key] = i
@@ -252,7 +253,7 @@ func computeReceiptDashTrend24(receipts []model.Receipt) []ReceiptDashTrendPoint
 		out[i] = ReceiptDashTrendPoint{Month: m}
 	}
 	for _, rc := range receipts {
-		m := monthOf(rc.ReceiptDate)
+		m := handlerutil.MonthOf(rc.ReceiptDate)
 		if m == "" {
 			continue
 		}
@@ -292,7 +293,7 @@ func computeReceiptDashByCustomer(receipts []model.Receipt, top int) []ReceiptDa
 		if key == "" {
 			key = "__unset__"
 		}
-		label := strPtrOr(rc.CustomerName, "미지정")
+		label := handlerutil.StrPtrOr(rc.CustomerName, "미지정")
 		a, ok := m[key]
 		if !ok {
 			a = &acc{label: label}

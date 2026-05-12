@@ -214,7 +214,9 @@ func (h *PartnerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "거래처 삭제에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "deleted"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "deleted"})
 }
 
 // ToggleStatus — PATCH /api/v1/partners/{id}/status — 거래처 활성/비활성
@@ -235,7 +237,9 @@ func (h *PartnerHandler) ToggleStatus(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "거래처 상태 변경에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "ok"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "ok"})
 }
 
 // UsageCounts — GET /api/v1/partners/usage-counts — 거래처별 참조 건수 집계

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/response"
 )
 
@@ -15,31 +16,31 @@ import (
 // client-side aggregation 을 서버에서 한 번에. C-1 procurement 4/4 (마지막).
 
 const (
-	blDashChunkSize    = 1000
-	blDashMaxChunks    = 50
-	blDashTrendMonths  = 24
-	blDashTopN         = 10
+	blDashChunkSize   = 1000
+	blDashMaxChunks   = 50
+	blDashTrendMonths = 24
+	blDashTopN        = 10
 )
 
 // BLScope: lifetime|import|shipping|customs. breakdowns 만 좁힘. trend24/totals 는 항상 전체.
 type BLDashboard struct {
-	Totals              BLDashTotals          `json:"totals"`
-	Trend24             []BLDashTrendPoint    `json:"trend24"`
-	StatusScope         string                `json:"status_scope"`
-	ByStatus            []BLDashBreakdownRow  `json:"by_status"`
-	ByInboundType       []BLDashBreakdownRow  `json:"by_inbound_type"`
-	ByManufacturerTop10 []BLDashBreakdownRow  `json:"by_manufacturer_top10"`
-	ByPortTop10         []BLDashBreakdownRow  `json:"by_port_top10"`
-	ByForwarderTop10    []BLDashBreakdownRow  `json:"by_forwarder_top10"`
+	Totals              BLDashTotals         `json:"totals"`
+	Trend24             []BLDashTrendPoint   `json:"trend24"`
+	StatusScope         string               `json:"status_scope"`
+	ByStatus            []BLDashBreakdownRow `json:"by_status"`
+	ByInboundType       []BLDashBreakdownRow `json:"by_inbound_type"`
+	ByManufacturerTop10 []BLDashBreakdownRow `json:"by_manufacturer_top10"`
+	ByPortTop10         []BLDashBreakdownRow `json:"by_port_top10"`
+	ByForwarderTop10    []BLDashBreakdownRow `json:"by_forwarder_top10"`
 }
 
 type BLDashTotals struct {
 	Count          int     `json:"count"`
-	ImportCount    int     `json:"import_count"`     // inbound_type=import
-	ShippingCount  int     `json:"shipping_count"`   // status in (shipping, arrived)
-	CustomsCount   int     `json:"customs_count"`    // status=customs
-	CompletedCount int     `json:"completed_count"`  // status=completed
-	CIFAmountKRW   float64 `json:"cif_amount_krw"`   // sum cif_amount_krw
+	ImportCount    int     `json:"import_count"`    // inbound_type=import
+	ShippingCount  int     `json:"shipping_count"`  // status in (shipping, arrived)
+	CustomsCount   int     `json:"customs_count"`   // status=customs
+	CompletedCount int     `json:"completed_count"` // status=completed
+	CIFAmountKRW   float64 `json:"cif_amount_krw"`  // sum cif_amount_krw
 }
 
 // BLDashTrendPoint — actual_arrival > eta > etd 우선순위 binning. Insight 별 spark 위해 모든 카운트 포함.
@@ -60,16 +61,16 @@ type BLDashBreakdownRow struct {
 
 // blDashRow — BL join 결과 평탄화 (manufacturers 추가).
 type blDashRow struct {
-	BLID           string   `json:"bl_id"`
-	ManufacturerID string   `json:"manufacturer_id"`
-	InboundType    string   `json:"inbound_type"`
-	ETD            *string  `json:"etd"`
-	ETA            *string  `json:"eta"`
-	ActualArrival  *string  `json:"actual_arrival"`
-	Port           *string  `json:"port"`
-	Forwarder      *string  `json:"forwarder"`
-	Status         string   `json:"status"`
-	CIFAmountKRW   *int64   `json:"cif_amount_krw,omitempty"`
+	BLID           string  `json:"bl_id"`
+	ManufacturerID string  `json:"manufacturer_id"`
+	InboundType    string  `json:"inbound_type"`
+	ETD            *string `json:"etd"`
+	ETA            *string `json:"eta"`
+	ActualArrival  *string `json:"actual_arrival"`
+	Port           *string `json:"port"`
+	Forwarder      *string `json:"forwarder"`
+	Status         string  `json:"status"`
+	CIFAmountKRW   *int64  `json:"cif_amount_krw,omitempty"`
 	Manufacturers  *struct {
 		NameKR string `json:"name_kr"`
 	} `json:"manufacturers"`
@@ -264,7 +265,7 @@ func computeBLDashTrend24(rows []blDashRow) []BLDashTrendPoint {
 	labels := make([]string, blDashTrendMonths)
 	idx := make(map[string]int, blDashTrendMonths)
 	for i := 0; i < blDashTrendMonths; i++ {
-		t := now.AddDate(0, -(blDashTrendMonths-1-i), 0)
+		t := now.AddDate(0, -(blDashTrendMonths - 1 - i), 0)
 		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 		labels[i] = key
 		idx[key] = i
@@ -274,7 +275,7 @@ func computeBLDashTrend24(rows []blDashRow) []BLDashTrendPoint {
 		out[i] = BLDashTrendPoint{Month: m}
 	}
 	for _, r := range rows {
-		m := monthOf(r.binDate())
+		m := handlerutil.MonthOf(r.binDate())
 		if m == "" {
 			continue
 		}
@@ -316,10 +317,10 @@ var blStatusLabels = map[string]string{
 }
 
 var blInboundTypeLabels = map[string]string{
-	"import":           "해외직수입",
-	"domestic":         "국내",
-	"intercompany":     "그룹내거래",
-	"transfer":         "창고이동",
+	"import":       "해외직수입",
+	"domestic":     "국내",
+	"intercompany": "그룹내거래",
+	"transfer":     "창고이동",
 }
 
 func computeBLDashBreakdown(rows []blDashRow, dim blDashDim, top int) []BLDashBreakdownRow {

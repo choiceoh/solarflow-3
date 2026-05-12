@@ -13,6 +13,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
@@ -294,7 +295,7 @@ func baroPurchaseCostFilterMatches(line baroPurchaseLineRow, ship baroPurchaseSh
 
 func (h *BaroPurchaseHistoryHandler) baroPurchaseSummaryLines(blIDs []string) ([]baroPurchaseLineRow, error) {
 	lines := []baroPurchaseLineRow{}
-	for _, batch := range stringBatches(uniqueNonEmpty(blIDs), 200) {
+	for _, batch := range handlerutil.StringBatches(handlerutil.UniqueNonEmpty(blIDs), 200) {
 		data, _, err := h.DB.From("bl_line_items").
 			Select("bl_line_id, bl_id, product_id, quantity, capacity_kw, item_type, payment_type, invoice_amount_usd, unit_price_usd_wp, unit_price_krw_wp, usage_category", "exact", false).
 			In("bl_id", batch).
@@ -321,7 +322,7 @@ func (h *BaroPurchaseHistoryHandler) Summary(w http.ResponseWriter, r *http.Requ
 		})
 		return
 	}
-	shipments, shipmentCount, err := fetchAllSummaryRows[baroPurchaseShipmentRow](func() *postgrest.FilterBuilder {
+	shipments, shipmentCount, err := handlerutil.FetchAllSummaryRows[baroPurchaseShipmentRow](func() *postgrest.FilterBuilder {
 		return h.baroPurchaseShipmentQuery(baroCompany.CompanyID, r).
 			Order("actual_arrival", &postgrest.OrderOpts{Ascending: false})
 	})
@@ -373,8 +374,8 @@ func (h *BaroPurchaseHistoryHandler) Summary(w http.ResponseWriter, r *http.Requ
 		summary.Total++
 		summary.TotalQuantity += int64(line.Quantity)
 		summary.TotalCapacityKW += line.CapacityKW
-		incrementCount(byInboundType, ship.InboundType)
-		incrementCount(byStatus, ship.Status)
+		handlerutil.IncrementCount(byInboundType, ship.InboundType)
+		handlerutil.IncrementCount(byStatus, ship.Status)
 		if line.UnitPriceKRWWp != nil && line.CapacityKW > 0 {
 			weightedKRW += *line.UnitPriceKRWWp * line.CapacityKW
 			weightedKRWCapacity += line.CapacityKW

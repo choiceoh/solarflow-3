@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/dbrpc"
 	"solarflow-backend/internal/domains/bl"
 	"solarflow-backend/internal/domains/lc"
@@ -32,14 +33,6 @@ var allowedInboundTypes = map[string]bool{
 var allowedUsageCategories = map[string]bool{
 	"sale": true, "sale_spare": true, "construction": true, "construction_damage": true,
 	"maintenance": true, "disposal": true, "transfer": true, "adjustment": true, "other": true,
-}
-
-var allowedItemTypes = map[string]bool{
-	"main": true, "spare": true,
-}
-
-var allowedPaymentTypes = map[string]bool{
-	"paid": true, "free": true,
 }
 
 var allowedExpenseTypes = map[string]bool{
@@ -676,7 +669,7 @@ func (h *ImportHandler) Outbound(w http.ResponseWriter, r *http.Request) {
 			importErrors = append(importErrors, model.ImportError{Row: rowNum, Field: "outbound", Message: errMsg})
 			continue
 		}
-		writeAuditLog(h.DB, r, "outbounds", createdOutbound.OutboundID, "create", nil, auditRawFromValue(createdOutbound), "excel_import")
+		audit.WriteLog(h.DB, r, "outbounds", createdOutbound.OutboundID, "create", nil, audit.RawFromValue(createdOutbound), "excel_import")
 		// D-057: 매출 자동 등록 후속 처리를 위해 등록된 outbound_id 수집.
 		importedIDs = append(importedIDs, createdOutbound.OutboundID)
 
@@ -802,7 +795,7 @@ func (h *ImportHandler) Sales(w http.ResponseWriter, r *http.Request) {
 		}
 		var createdSales []model.Sale
 		if json.Unmarshal(saleData, &createdSales) == nil && len(createdSales) > 0 {
-			writeAuditLog(h.DB, r, "sales", createdSales[0].SaleID, "create", nil, auditRawFromValue(createdSales[0]), "excel_import")
+			audit.WriteLog(h.DB, r, "sales", createdSales[0].SaleID, "create", nil, audit.RawFromValue(createdSales[0]), "excel_import")
 		}
 
 		imported++

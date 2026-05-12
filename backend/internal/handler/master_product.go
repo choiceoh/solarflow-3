@@ -207,7 +207,9 @@ func (h *ProductHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "품번 삭제에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "deleted"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "deleted"})
 }
 
 // ToggleStatus — PATCH /api/v1/products/{id}/status — 품번 활성/비활성
@@ -229,7 +231,9 @@ func (h *ProductHandler) ToggleStatus(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "품번 상태 변경에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "ok"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "ok"})
 }
 
 // UsageCounts — GET /api/v1/products/usage-counts — 품번별 참조 건수 집계

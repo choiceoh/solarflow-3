@@ -55,15 +55,15 @@ func init() {
 
 // RFMRow — 한 거래처의 RFM 집계 + 세그먼트 분류 결과.
 type RFMRow struct {
-	PartnerID         string   `json:"partner_id"`
-	PartnerName       string   `json:"partner_name"`
-	PartnerType       string   `json:"partner_type"`
-	OwnerUserID       *string  `json:"owner_user_id"`
-	LastSaleDate      *string  `json:"last_sale_date"`
-	DaysSinceLastSale *int     `json:"days_since_last_sale"`
-	SaleCount12mo     int      `json:"sale_count_12mo"`
-	SaleAmount12moKrw float64  `json:"sale_amount_12mo_krw"`
-	Segment           string   `json:"segment"` // champion / loyal / new / at_risk / lost / inactive
+	PartnerID         string  `json:"partner_id"`
+	PartnerName       string  `json:"partner_name"`
+	PartnerType       string  `json:"partner_type"`
+	OwnerUserID       *string `json:"owner_user_id"`
+	LastSaleDate      *string `json:"last_sale_date"`
+	DaysSinceLastSale *int    `json:"days_since_last_sale"`
+	SaleCount12mo     int     `json:"sale_count_12mo"`
+	SaleAmount12moKrw float64 `json:"sale_amount_12mo_krw"`
+	Segment           string  `json:"segment"` // champion / loyal / new / at_risk / lost / inactive
 }
 
 // Get — GET /api/v1/baro/rfm

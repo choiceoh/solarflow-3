@@ -114,8 +114,8 @@ func (h *ConstructionSiteHandler) GetByID(w http.ResponseWriter, r *http.Request
 		log.Printf("[현장 배정 이력 조회 실패] site_id=%s, %v", id, err)
 		// 이력 조회 실패 시에도 현장 정보는 반환 (부분 응답)
 		response.RespondJSON(w, http.StatusOK, struct {
-			Site        model.ConstructionSite          `json:"site"`
-			Allocations []model.InventoryAllocation     `json:"allocations"`
+			Site        model.ConstructionSite      `json:"site"`
+			Allocations []model.InventoryAllocation `json:"allocations"`
 		}{
 			Site:        sites[0],
 			Allocations: []model.InventoryAllocation{},
@@ -129,8 +129,8 @@ func (h *ConstructionSiteHandler) GetByID(w http.ResponseWriter, r *http.Request
 	}
 
 	response.RespondJSON(w, http.StatusOK, struct {
-		Site        model.ConstructionSite          `json:"site"`
-		Allocations []model.InventoryAllocation     `json:"allocations"`
+		Site        model.ConstructionSite      `json:"site"`
+		Allocations []model.InventoryAllocation `json:"allocations"`
 	}{
 		Site:        sites[0],
 		Allocations: allocs,
@@ -161,7 +161,9 @@ func (h *ConstructionSiteHandler) Create(w http.ResponseWriter, r *http.Request)
 	var created []model.ConstructionSite
 	if err := json.Unmarshal(data, &created); err != nil || len(created) == 0 {
 		log.Printf("[현장 등록 응답 파싱 주의] data=%s err=%v", string(data), err)
-		response.RespondJSON(w, http.StatusCreated, struct{ Status string `json:"status"` }{Status: "created"})
+		response.RespondJSON(w, http.StatusCreated, struct {
+			Status string `json:"status"`
+		}{Status: "created"})
 		return
 	}
 	response.RespondJSON(w, http.StatusCreated, created[0])
@@ -212,7 +214,9 @@ func (h *ConstructionSiteHandler) Delete(w http.ResponseWriter, r *http.Request)
 		response.RespondError(w, http.StatusInternalServerError, "현장 삭제에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "deleted"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "deleted"})
 }
 
 // ToggleActive — PATCH /api/v1/construction-sites/{id}/status
@@ -238,5 +242,7 @@ func (h *ConstructionSiteHandler) ToggleActive(w http.ResponseWriter, r *http.Re
 		response.RespondError(w, http.StatusInternalServerError, "현장 상태 변경에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "ok"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "ok"})
 }

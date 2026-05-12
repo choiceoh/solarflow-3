@@ -11,6 +11,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
@@ -67,7 +68,7 @@ func (h *ReceiptHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Gte("receipt_date", month+"-01").Lt("receipt_date", nextMonthString(month))
 	}
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[수금 목록 조회 실패] %v", err)

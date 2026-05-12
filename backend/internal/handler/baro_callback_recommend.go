@@ -58,10 +58,10 @@ func init() {
 
 // CallbackRecommendResponse — /baro/callback-recommend 응답.
 type CallbackRecommendResponse struct {
-	IncomingCount  int                          `json:"incoming_count"`
-	IncomingSKUs   []CallbackIncomingSKU        `json:"incoming_skus"`
-	ByOwner        []CallbackOwnerGroup         `json:"by_owner"`
-	TotalCustomers int                          `json:"total_customers"`
+	IncomingCount  int                   `json:"incoming_count"`
+	IncomingSKUs   []CallbackIncomingSKU `json:"incoming_skus"`
+	ByOwner        []CallbackOwnerGroup  `json:"by_owner"`
+	TotalCustomers int                   `json:"total_customers"`
 }
 
 type CallbackIncomingSKU struct {
@@ -72,7 +72,7 @@ type CallbackIncomingSKU struct {
 }
 
 type CallbackOwnerGroup struct {
-	OwnerUserID *string                    `json:"owner_user_id"`
+	OwnerUserID *string                     `json:"owner_user_id"`
 	Customers   []CallbackCustomerCandidate `json:"customers"`
 }
 

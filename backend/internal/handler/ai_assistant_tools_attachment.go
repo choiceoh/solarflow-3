@@ -68,15 +68,15 @@ func toolQueryAttachedSheet() assistantTool {
 
 // queryAttachedSheetInput — 도구 인자 — LLM 이 호출할 때 들고 오는 모든 필드.
 type queryAttachedSheetInput struct {
-	SheetID    string             `json:"sheet_id"`
-	Mode       string             `json:"mode"`
-	Limit      int                `json:"limit,omitempty"`
-	RowStart   int                `json:"row_start,omitempty"`
-	RowEnd     int                `json:"row_end,omitempty"`
-	Conditions []filterCondition  `json:"conditions,omitempty"`
-	Column     string             `json:"column,omitempty"`
-	Op         string             `json:"op,omitempty"`
-	Q          string             `json:"q,omitempty"`
+	SheetID    string            `json:"sheet_id"`
+	Mode       string            `json:"mode"`
+	Limit      int               `json:"limit,omitempty"`
+	RowStart   int               `json:"row_start,omitempty"`
+	RowEnd     int               `json:"row_end,omitempty"`
+	Conditions []filterCondition `json:"conditions,omitempty"`
+	Column     string            `json:"column,omitempty"`
+	Op         string            `json:"op,omitempty"`
+	Q          string            `json:"q,omitempty"`
 }
 
 type filterCondition struct {
@@ -329,14 +329,14 @@ func rowsPayload(filename, sheetName string, headers []string, totalRows, totalC
 		hint = fmt.Sprintf("결과가 최대 %d행에서 잘렸습니다. 더 좁은 조건으로 다시 조회하세요.", maxQueryResultRows)
 	}
 	return map[string]any{
-		"filename":     filename,
-		"sheet_name":   sheetName,
-		"headers":      headers,
-		"total_rows":   totalRows,
-		"total_cols":   totalCols,
-		"shown_count":  len(rows),
-		"rows":         items,
-		"hint":         hint,
+		"filename":    filename,
+		"sheet_name":  sheetName,
+		"headers":     headers,
+		"total_rows":  totalRows,
+		"total_cols":  totalCols,
+		"shown_count": len(rows),
+		"rows":        items,
+		"hint":        hint,
 	}
 }
 
@@ -369,4 +369,3 @@ func marshalToolPayload(payload any) string {
 	}
 	return string(b)
 }
-

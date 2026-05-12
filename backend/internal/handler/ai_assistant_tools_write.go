@@ -20,7 +20,7 @@ import (
 
 func toolCreateNote() assistantTool {
 	return assistantTool{
-		name: "create_note",
+		name:        "create_note",
 		description: "메모(note)를 작성합니다. 즉시 저장되지 않고 '제안'이 생성되며, 사용자가 UI 카드에서 [저장]을 눌러야 실제 DB에 들어갑니다. [거부] 시 폐기. 호출 후에는 사용자에게 작성 의도를 한 번 더 확인받으세요. linked_table에는 purchase_orders / bl_shipments / outbounds / orders / declarations 만 사용 가능.",
 		inputSchema: json.RawMessage(`{
 			"type": "object",
@@ -92,7 +92,7 @@ func toolCreateNote() assistantTool {
 
 func toolCreatePartner() assistantTool {
 	return assistantTool{
-		name: "create_partner",
+		name:        "create_partner",
 		description: "거래처(partners) 신규 등록. 즉시 저장되지 않고 '제안'이 생성되며, 사용자가 UI 카드에서 [저장]을 눌러야 실제 DB에 들어갑니다. partner_type은 customer / supplier 등.",
 		inputSchema: json.RawMessage(`{
 			"type": "object",

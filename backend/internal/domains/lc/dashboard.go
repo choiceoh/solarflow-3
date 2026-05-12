@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/response"
 )
 
@@ -26,25 +27,25 @@ const (
 //   - active        = !cancelled
 //   - maturity_soon = maturity_date 가 오늘 ± 30일 이내, !settled, !repaid
 type LCDashboard struct {
-	Totals         LCDashTotals          `json:"totals"`
-	Trend24        []LCDashTrendPoint    `json:"trend24"`
-	StatusScope    string                `json:"status_scope"`
-	ByStatus       []LCDashBreakdownRow  `json:"by_status"`
-	ByBankTop10    []LCDashBreakdownRow  `json:"by_bank_top10"`
-	ByUrgency      []LCDashBreakdownRow  `json:"by_urgency"` // maturity_soon 만 의미. lifetime/active 면 빈 배열.
+	Totals      LCDashTotals         `json:"totals"`
+	Trend24     []LCDashTrendPoint   `json:"trend24"`
+	StatusScope string               `json:"status_scope"`
+	ByStatus    []LCDashBreakdownRow `json:"by_status"`
+	ByBankTop10 []LCDashBreakdownRow `json:"by_bank_top10"`
+	ByUrgency   []LCDashBreakdownRow `json:"by_urgency"` // maturity_soon 만 의미. lifetime/active 면 빈 배열.
 }
 
 type LCDashTotals struct {
-	Count            int     `json:"count"`
-	ActiveCount      int     `json:"active_count"`        // !cancelled
-	OpenedCount      int     `json:"opened_count"`
-	SettledCount     int     `json:"settled_count"`
-	CancelledCount   int     `json:"cancelled_count"`
-	TotalAmountUSD   float64 `json:"total_amount_usd"`
-	ActiveAmountUSD  float64 `json:"active_amount_usd"`
-	BanksCount       int     `json:"banks_count"`         // distinct bank
-	MaturitySoonCount int    `json:"maturity_soon_count"` // 30일 이내 미정산
-	OverdueCount     int     `json:"overdue_count"`       // 이미 만기 지났는데 미정산
+	Count             int     `json:"count"`
+	ActiveCount       int     `json:"active_count"` // !cancelled
+	OpenedCount       int     `json:"opened_count"`
+	SettledCount      int     `json:"settled_count"`
+	CancelledCount    int     `json:"cancelled_count"`
+	TotalAmountUSD    float64 `json:"total_amount_usd"`
+	ActiveAmountUSD   float64 `json:"active_amount_usd"`
+	BanksCount        int     `json:"banks_count"`         // distinct bank
+	MaturitySoonCount int     `json:"maturity_soon_count"` // 30일 이내 미정산
+	OverdueCount      int     `json:"overdue_count"`       // 이미 만기 지났는데 미정산
 }
 
 // LCDashTrendPoint — open_date 기반 월별. distinct_banks 는 LC Banks 화면 sparkline 용.
@@ -66,13 +67,13 @@ type LCDashBreakdownRow struct {
 
 // lcDashRow — LC join 결과 평탄화.
 type lcDashRow struct {
-	LCID         string   `json:"lc_id"`
-	BankID       string   `json:"bank_id"`
-	OpenDate     *string  `json:"open_date"`
-	MaturityDate *string  `json:"maturity_date"`
-	AmountUSD    float64  `json:"amount_usd"`
-	Status       string   `json:"status"`
-	Repaid       bool     `json:"repaid"`
+	LCID         string  `json:"lc_id"`
+	BankID       string  `json:"bank_id"`
+	OpenDate     *string `json:"open_date"`
+	MaturityDate *string `json:"maturity_date"`
+	AmountUSD    float64 `json:"amount_usd"`
+	Status       string  `json:"status"`
+	Repaid       bool    `json:"repaid"`
 	Banks        *struct {
 		BankName string `json:"bank_name"`
 	} `json:"banks"`
@@ -278,7 +279,7 @@ func computeLCDashTrend24(rows []lcDashRow) []LCDashTrendPoint {
 	labels := make([]string, lcDashTrendMonths)
 	idx := make(map[string]int, lcDashTrendMonths)
 	for i := 0; i < lcDashTrendMonths; i++ {
-		t := now.AddDate(0, -(lcDashTrendMonths-1-i), 0)
+		t := now.AddDate(0, -(lcDashTrendMonths - 1 - i), 0)
 		key := fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))
 		labels[i] = key
 		idx[key] = i
@@ -296,7 +297,7 @@ func computeLCDashTrend24(rows []lcDashRow) []LCDashTrendPoint {
 		if r.OpenDate != nil {
 			date = *r.OpenDate
 		}
-		m := monthOf(date)
+		m := handlerutil.MonthOf(date)
 		if m == "" {
 			continue
 		}

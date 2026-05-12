@@ -144,9 +144,9 @@ type AnomalyRow struct {
 }
 
 type AnomalyResponse struct {
-	Anomalies   []AnomalyRow     `json:"anomalies"`
-	Summary     AnomalySummary   `json:"summary"`
-	GeneratedAt string           `json:"generated_at"`
+	Anomalies   []AnomalyRow   `json:"anomalies"`
+	Summary     AnomalySummary `json:"summary"`
+	GeneratedAt string         `json:"generated_at"`
 }
 
 type AnomalySummary struct {

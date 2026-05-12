@@ -10,6 +10,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
@@ -67,7 +68,7 @@ func (h *BankHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("company_id", compID)
 	}
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[은행 목록 조회 실패] %v", err)
@@ -216,7 +217,9 @@ func (h *BankHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "deleted"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "deleted"})
 }
 
 // ToggleStatus — PATCH /api/v1/banks/{id}/status — 은행 활성/비활성
@@ -237,5 +240,7 @@ func (h *BankHandler) ToggleStatus(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusInternalServerError, "은행 상태 변경에 실패했습니다")
 		return
 	}
-	response.RespondJSON(w, http.StatusOK, struct{ Status string `json:"status"` }{Status: "ok"})
+	response.RespondJSON(w, http.StatusOK, struct {
+		Status string `json:"status"`
+	}{Status: "ok"})
 }

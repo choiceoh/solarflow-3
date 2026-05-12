@@ -68,8 +68,8 @@ type CockpitResponse struct {
 	RecentSales      []CockpitRecentSale     `json:"recent_sales"`
 	OpenFollowups    []model.PartnerActivity `json:"open_followups"`
 	RecentActivities []model.PartnerActivity `json:"recent_activities"`
-	QuoteReadySKUs   []CockpitQuoteReadyRow  `json:"quote_ready_skus"`  // PR2 에서 채움
-	IncomingMatches  []CockpitIncomingMatch  `json:"incoming_matches"`  // 후속 PR 에서 채움
+	QuoteReadySKUs   []CockpitQuoteReadyRow  `json:"quote_ready_skus"` // PR2 에서 채움
+	IncomingMatches  []CockpitIncomingMatch  `json:"incoming_matches"` // 후속 PR 에서 채움
 }
 
 // CockpitCreditPanel — 신용/한도 요약 (baro_credit_board RPC 의 한 행).

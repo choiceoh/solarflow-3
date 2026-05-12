@@ -17,6 +17,7 @@ import (
 	"solarflow-backend/internal/domains/lc"
 	"solarflow-backend/internal/domains/po"
 	"solarflow-backend/internal/domains/tt"
+	"solarflow-backend/internal/validation"
 	"time"
 
 	"solarflow-backend/internal/model"
@@ -361,8 +362,8 @@ func groupInboundRowsByBL(rows []map[string]interface{}) (
 			allowed    map[string]bool
 		}{
 			{getString(row, "inbound_type"), "inbound_type", allowedInboundTypes},
-			{getString(row, "item_type"), "item_type", allowedItemTypes},
-			{getString(row, "payment_type"), "payment_type", allowedPaymentTypes},
+			{getString(row, "item_type"), "item_type", validation.ItemTypes},
+			{getString(row, "payment_type"), "payment_type", validation.PaymentTypes},
 			{getString(row, "usage_category"), "usage_category", allowedUsageCategories},
 		} {
 			if e := validateAllowedValues(rowNum, av.val, av.field, av.allowed); e != nil {
@@ -553,8 +554,8 @@ func groupPORowsByPONumber(rows []map[string]interface{}) (
 			allowed    map[string]bool
 		}{
 			{getString(row, "currency"), "currency", allowedCurrencies},
-			{getString(row, "item_type"), "item_type", allowedItemTypes},
-			{getString(row, "payment_type"), "payment_type", allowedPaymentTypes},
+			{getString(row, "item_type"), "item_type", validation.ItemTypes},
+			{getString(row, "payment_type"), "payment_type", validation.PaymentTypes},
 		} {
 			if e := validateAllowedValues(rowNum, av.val, av.field, av.allowed); e != nil {
 				errors = append(errors, *e)

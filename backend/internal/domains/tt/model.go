@@ -26,7 +26,7 @@ type TTWithRelations struct {
 
 // TTPOSummary — TT 조회 시 PO 요약 정보 (제조사 포함)
 type TTPOSummary struct {
-	PONumber      *string              `json:"po_number"`
+	PONumber      *string                `json:"po_number"`
 	Manufacturers *TTManufacturerSummary `json:"manufacturers"`
 }
 

@@ -221,9 +221,9 @@ func TestLookupDocs_PathMatching(t *testing.T) {
 		wantErr bool   // true 면 빈 문자열 기대
 	}{
 		{"/outbound", "출고", false},
-		{"/orders/123", "출고", false},          // /orders prefix
-		{"/inventory", "출고", false},           // 재고 → outbound.md
-		{"/sales-analysis", "출고", false},      // → outbound.md
+		{"/orders/123", "출고", false},     // /orders prefix
+		{"/inventory", "출고", false},      // 재고 → outbound.md
+		{"/sales-analysis", "출고", false}, // → outbound.md
 		{"/inbound", "B/L 입고", false},
 		{"/bls/AAA", "B/L 입고", false},
 		{"/customs", "B/L 입고", false},
@@ -238,8 +238,8 @@ func TestLookupDocs_PathMatching(t *testing.T) {
 		{"/baro/incoming", "그룹내 거래", false},
 		{"/baro/dispatch", "배차·채권", false},
 		{"/baro/credit-board", "배차·채권", false},
-		{"/baro/credit-board/123", "배차·채권", false},                  // 더 깊은 path 도 prefix 매칭
-		{"/baro/unknown-screen", "바로(주) 화면 — 개요", false},          // fallback 은 개요
+		{"/baro/credit-board/123", "배차·채권", false},       // 더 깊은 path 도 prefix 매칭
+		{"/baro/unknown-screen", "바로(주) 화면 — 개요", false}, // fallback 은 개요
 		{"/baro", "바로(주) 화면 — 개요", false},
 		{"/group-trade/baro-inbox", "그룹내 거래", false},
 		{"/masters/partners-v2", "마스터", false},

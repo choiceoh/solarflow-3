@@ -3,7 +3,6 @@ package bl
 import (
 	"math"
 	"testing"
-
 )
 
 func floatPtr(value float64) *float64 {

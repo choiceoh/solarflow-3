@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
@@ -56,8 +57,8 @@ func (h *AssistantHandler) WithAttachmentPool(pool *pgxpool.Pool) *AssistantHand
 
 // init — D-20260512-090000 feature self-mounting.
 // 두 Spec 으로 분할:
-//   1) AuthAuthed:    /assistant/* — alias (ocr/match) + writers (outbound) + attachment pool 주입된 풀 인스턴스
-//   2) AuthPublicAPI: /assistant/chat — alias 없음, 비로그인 bare LLM 패스스루 (도구는 user_id 부재로 자동 비활성)
+//  1. AuthAuthed:    /assistant/* — alias (ocr/match) + writers (outbound) + attachment pool 주입된 풀 인스턴스
+//  2. AuthPublicAPI: /assistant/chat — alias 없음, 비로그인 bare LLM 패스스루 (도구는 user_id 부재로 자동 비활성)
 //
 // alias/writer 핸들러도 Mount 클로저가 직접 만든다 (모두 stateless: OCRHandler/ReceiptMatchHandler/OutboundHandler).
 // d.Pool 은 nil 일 수 있음 (SUPABASE_DB_URL 미설정 환경). WithAttachmentPool 는 nil 도 무해히 처리한다.
@@ -156,10 +157,10 @@ type assistantMessagePart struct {
 // system 프롬프트는 서버가 JWT context로 구성하므로 클라이언트에서 받지 않는다 (변조 방지).
 // 단 page_context 는 *어떤 화면을 보고 있는지* 만 알리는 용도라 서버가 합성에 통합한다.
 type assistantRequest struct {
-	Messages    []assistantMessage   `json:"messages"`
-	Model       string               `json:"model,omitempty"`
-	Provider    string               `json:"provider,omitempty"`
-	MaxTokens   int                  `json:"max_tokens,omitempty"`
+	Messages    []assistantMessage    `json:"messages"`
+	Model       string                `json:"model,omitempty"`
+	Provider    string                `json:"provider,omitempty"`
+	MaxTokens   int                   `json:"max_tokens,omitempty"`
 	PageContext *assistantPageContext `json:"page_context,omitempty"`
 }
 
@@ -181,9 +182,9 @@ type assistantPageContext struct {
 // FieldConfig.description / .aiHint / MetaForm·MetaDetail.description / .aiHint 등을
 // AI 가 읽기 좋게 평탄화. ui_configs override 가 있으면 그것 기준, 없으면 빈 채로 둠.
 type assistantMetaHints struct {
-	Title       string              `json:"title,omitempty"`
-	Description string              `json:"description,omitempty"`
-	AIHint      string              `json:"ai_hint,omitempty"`
+	Title       string               `json:"title,omitempty"`
+	Description string               `json:"description,omitempty"`
+	AIHint      string               `json:"ai_hint,omitempty"`
 	Fields      []assistantFieldHint `json:"fields,omitempty"`
 }
 
@@ -472,7 +473,7 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 			response.RespondError(w, code, msg)
 			return
 		}
-		writeAuditLog(h.db, r, "outbounds", created.OutboundID, "create", nil, auditRawFromValue(created), "assistant_proposal")
+		audit.WriteLog(h.db, r, "outbounds", created.OutboundID, "create", nil, audit.RawFromValue(created), "assistant_proposal")
 		log.Printf("[assistant write/confirm] role=%s user=%s kind=%s id=%s ok outbound_id=%s", role, userID, p.Kind, id, created.OutboundID)
 		response.RespondJSON(w, http.StatusOK, map[string]any{"ok": true, "kind": p.Kind, "data": created})
 

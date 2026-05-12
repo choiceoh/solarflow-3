@@ -22,6 +22,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
@@ -270,7 +271,7 @@ func (h *PriceBenchmarkHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Lte("value_date", to)
 	}
 
-	limit, offset := parseLimitOffset(r, 500, 3000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 500, 3000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[가격 벤치마크 목록 조회 실패] %v", err)
@@ -316,7 +317,7 @@ func (h *PriceBenchmarkHandler) GetRun(w http.ResponseWriter, r *http.Request) {
 
 // ListRuns — GET /api/v1/price-benchmarks/runs
 func (h *PriceBenchmarkHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
-	limit, offset := parseLimitOffset(r, 20, 100)
+	limit, offset := handlerutil.ParseLimitOffset(r, 20, 100)
 	data, _, err := h.DB.From("price_benchmark_runs").
 		Select("*", "exact", false).
 		Order("started_at", &postgrest.OrderOpts{Ascending: false}).

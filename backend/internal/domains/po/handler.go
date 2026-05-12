@@ -12,11 +12,15 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/dbrpc"
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
+	"solarflow-backend/internal/rpcutil"
+	"solarflow-backend/internal/validation"
 )
 
 // poSortable — server-side 정렬 허용 컬럼 (BL 패턴과 동일).
@@ -164,7 +168,7 @@ func (h *POHandler) List(w http.ResponseWriter, r *http.Request) {
 	sortCol, asc := parsePOSort(r)
 	query = query.Order(sortCol, &postgrest.OrderOpts{Ascending: asc})
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[발주 목록 조회 실패] %v", err)
@@ -192,19 +196,19 @@ type poSummaryRow struct {
 }
 
 type POSummary struct {
-	Total          int64               `json:"total"`
-	ActiveCount    int64               `json:"active_count"`
-	ShippingCount  int64               `json:"shipping_count"`
-	TotalMW        float64             `json:"total_mw"`
-	ByStatus       map[string]int64    `json:"by_status"`
-	ByContractType map[string]int64    `json:"by_contract_type"`
-	MonthlyCount   []summaryMonthPoint `json:"monthly_count"`
+	Total          int64                           `json:"total"`
+	ActiveCount    int64                           `json:"active_count"`
+	ShippingCount  int64                           `json:"shipping_count"`
+	TotalMW        float64                         `json:"total_mw"`
+	ByStatus       map[string]int64                `json:"by_status"`
+	ByContractType map[string]int64                `json:"by_contract_type"`
+	MonthlyCount   []handlerutil.SummaryMonthPoint `json:"monthly_count"`
 }
 
 // Summary — GET /api/v1/pos/summary — P/O KPI 카드용 전체 집계.
 // 비유: 계약서 원본을 전부 들고 오지 않고, 총권수·상태·MW 숫자만 계산해 주는 회계표.
 func (h *POHandler) Summary(w http.ResponseWriter, r *http.Request) {
-	rows, total, err := fetchAllSummaryRows[poSummaryRow](func() *postgrest.FilterBuilder {
+	rows, total, err := handlerutil.FetchAllSummaryRows[poSummaryRow](func() *postgrest.FilterBuilder {
 		q := h.DB.From("purchase_orders_ext").
 			Select("po_id,status,contract_type,contract_date,total_mw", "exact", false)
 		return h.applyPOFilters(r, q)
@@ -227,8 +231,8 @@ func (h *POHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		summary.Total = int64(len(rows))
 	}
 	for _, row := range rows {
-		incrementCount(byStatus, row.Status)
-		incrementCount(byContractType, row.ContractType)
+		handlerutil.IncrementCount(byStatus, row.Status)
+		handlerutil.IncrementCount(byContractType, row.ContractType)
 		if row.Status != "completed" && row.Status != "cancelled" {
 			summary.ActiveCount++
 		}
@@ -238,11 +242,11 @@ func (h *POHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		if row.TotalMW != nil {
 			summary.TotalMW += *row.TotalMW
 		}
-		if month := dateMonth(row.ContractDate); month != "" {
+		if month := handlerutil.DateMonth(row.ContractDate); month != "" {
 			monthly[month]++
 		}
 	}
-	summary.MonthlyCount = recentMonthCounts(monthly, 6)
+	summary.MonthlyCount = handlerutil.RecentMonthCounts(monthly, 6)
 	response.RespondJSON(w, http.StatusOK, summary)
 }
 
@@ -388,7 +392,7 @@ func (h *POHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeAuditLog(h.DB, r, "purchase_orders", created.POID, "create", nil, auditRawFromValue(struct {
+	audit.WriteLog(h.DB, r, "purchase_orders", created.POID, "create", nil, audit.RawFromValue(struct {
 		PO    PurchaseOrder         `json:"po"`
 		Lines []CreatePOLineRequest `json:"lines,omitempty"`
 	}{PO: created, Lines: req.LineItems}), "")
@@ -413,10 +417,10 @@ func ValidateNestedPOLines(lines []CreatePOLineRequest) string {
 		if line.TotalAmountUSD != nil && *line.TotalAmountUSD <= 0 {
 			return strconv.Itoa(n) + "번 라인의 total_amount_usd는 양수여야 합니다"
 		}
-		if line.ItemType != nil && !allowedItemTypes[*line.ItemType] {
+		if line.ItemType != nil && !validation.ItemTypes[*line.ItemType] {
 			return strconv.Itoa(n) + "번 라인의 item_type은 main/spare 중 하나여야 합니다"
 		}
-		if line.PaymentType != nil && !allowedPaymentTypes[*line.PaymentType] {
+		if line.PaymentType != nil && !validation.PaymentTypes[*line.PaymentType] {
 			return strconv.Itoa(n) + "번 라인의 payment_type은 paid/free 중 하나여야 합니다"
 		}
 	}
@@ -441,7 +445,7 @@ func (h *POHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "purchase_orders", "po_id", id)
+	oldSnapshot, _, oldErr := audit.Snapshot(h.DB, "purchase_orders", "po_id", id)
 	if oldErr != nil {
 		log.Printf("[발주 수정 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
@@ -497,7 +501,7 @@ func (h *POHandler) Update(w http.ResponseWriter, r *http.Request) {
 		h.autoInsertPriceHistory(id, updated[0])
 	}
 
-	auditEntityByRouteID(h.DB, r, "purchase_orders", "po_id", "update", oldSnapshot, auditRawFromValue(updated[0]), "")
+	audit.EntityByRouteID(h.DB, r, "purchase_orders", "po_id", "update", oldSnapshot, audit.RawFromValue(updated[0]), "")
 	response.RespondJSON(w, http.StatusOK, updated[0])
 }
 
@@ -616,14 +620,14 @@ func priceHistoryUSDWp(unitPriceUSD, unitPriceUSDWp, specWP *float64) (float64, 
 func (h *POHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	oldSnapshot, _, oldErr := auditSnapshot(h.DB, "purchase_orders", "po_id", id)
+	oldSnapshot, _, oldErr := audit.Snapshot(h.DB, "purchase_orders", "po_id", id)
 	if oldErr != nil {
 		log.Printf("[발주 취소 전 감사 스냅샷 조회 실패] id=%s err=%v", id, oldErr)
 	}
 
-	if err := callRPC(h.DB, "sf_delete_purchase_order", deletePurchaseOrderRPCRequest{POID: id}); err != nil {
+	if err := rpcutil.CallRPC(h.DB, "sf_delete_purchase_order", deletePurchaseOrderRPCRequest{POID: id}); err != nil {
 		log.Printf("[발주 트랜잭션 취소 실패] id=%s, err=%v", id, err)
-		if isRPCNotFound(err) {
+		if rpcutil.IsRPCNotFound(err) {
 			response.RespondError(w, http.StatusNotFound, "발주를 찾을 수 없습니다")
 			return
 		}
@@ -631,11 +635,11 @@ func (h *POHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newSnapshot, _, snapErr := auditSnapshot(h.DB, "purchase_orders", "po_id", id)
+	newSnapshot, _, snapErr := audit.Snapshot(h.DB, "purchase_orders", "po_id", id)
 	if snapErr != nil {
 		log.Printf("[발주 취소 후 감사 스냅샷 조회 실패] id=%s err=%v", id, snapErr)
 	}
-	auditEntityByRouteID(h.DB, r, "purchase_orders", "po_id", "delete", oldSnapshot, newSnapshot, "soft_cancel")
+	audit.EntityByRouteID(h.DB, r, "purchase_orders", "po_id", "delete", oldSnapshot, newSnapshot, "soft_cancel")
 	response.RespondJSON(w, http.StatusOK, struct {
 		Status string `json:"status"`
 	}{Status: "cancelled"})

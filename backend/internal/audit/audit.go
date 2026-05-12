@@ -1,12 +1,10 @@
-// po/audit.go — audit log helper 임시 복사본 (PR-B trade-off).
+// Package audit — 감사 로그 (audit_logs) 기록 helper.
 //
-// PR-D 에서 backend/internal/audit (또는 handlerutil) 패키지로 분리 후 본 파일 제거.
-// 출처: backend/internal/handler/sys_audit_log.go
+// PR-D1 에서 분리: 이전엔 backend/internal/handler/sys_audit_log.go 안 정의 +
+// PR-B/C2 의 po/lc 의 audit.go 안 dup. 본 패키지로 통합.
 //
-// 본 파일의 함수/타입은 *PO 도메인 한정 dup* — handler 패키지 안 정의를 그대로 복사.
-// middleware 패키지 import — cycle 없음 (middleware 는 도메인 무관).
-
-package po
+// middleware 패키지 의존 — middleware 가 audit 의존 X (cycle 없음).
+package audit
 
 import (
 	"encoding/json"
@@ -19,7 +17,8 @@ import (
 	"solarflow-backend/internal/middleware"
 )
 
-type auditLogInsert struct {
+// LogInsert — audit_logs 테이블 insert 페이로드 형식.
+type LogInsert struct {
 	EntityType    string           `json:"entity_type"`
 	EntityID      string           `json:"entity_id"`
 	Action        string           `json:"action"`
@@ -32,14 +31,16 @@ type auditLogInsert struct {
 	Note          *string          `json:"note,omitempty"`
 }
 
-func ptrIfNotEmpty(value string) *string {
+// PtrIfNotEmpty — empty string → nil, else &value.
+func PtrIfNotEmpty(value string) *string {
 	if value == "" {
 		return nil
 	}
 	return &value
 }
 
-func auditSnapshot(db *supa.Client, table string, idColumn string, id string) (*json.RawMessage, bool, error) {
+// Snapshot — table 의 row (id 로 조회) 를 json.RawMessage 로 dump. 변경 전/후 비교용.
+func Snapshot(db *supa.Client, table string, idColumn string, id string) (*json.RawMessage, bool, error) {
 	data, _, err := db.From(table).
 		Select("*", "exact", false).
 		Eq(idColumn, id).
@@ -58,7 +59,8 @@ func auditSnapshot(db *supa.Client, table string, idColumn string, id string) (*
 	return &row, true, nil
 }
 
-func auditRawFromValue(value interface{}) *json.RawMessage {
+// RawFromValue — Go value → *json.RawMessage 변환.
+func RawFromValue(value interface{}) *json.RawMessage {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return nil
@@ -67,27 +69,29 @@ func auditRawFromValue(value interface{}) *json.RawMessage {
 	return &raw
 }
 
-func writeAuditLog(db *supa.Client, r *http.Request, entityType string, entityID string, action string, oldData *json.RawMessage, newData *json.RawMessage, note string) {
+// WriteLog — audit_logs 에 한 행 insert. 실패 시 log only (요청 자체 차단 X).
+func WriteLog(db *supa.Client, r *http.Request, entityType string, entityID string, action string, oldData *json.RawMessage, newData *json.RawMessage, note string) {
 	if db == nil || r == nil || entityType == "" || entityID == "" || action == "" {
 		return
 	}
-	row := auditLogInsert{
+	row := LogInsert{
 		EntityType:    entityType,
 		EntityID:      entityID,
 		Action:        action,
-		UserID:        ptrIfNotEmpty(middleware.GetUserID(r.Context())),
-		UserEmail:     ptrIfNotEmpty(middleware.GetUserEmail(r.Context())),
+		UserID:        PtrIfNotEmpty(middleware.GetUserID(r.Context())),
+		UserEmail:     PtrIfNotEmpty(middleware.GetUserEmail(r.Context())),
 		RequestMethod: r.Method,
 		RequestPath:   r.URL.Path,
 		OldData:       oldData,
 		NewData:       newData,
-		Note:          ptrIfNotEmpty(note),
+		Note:          PtrIfNotEmpty(note),
 	}
 	if _, _, err := db.From("audit_logs").Insert(row, false, "", "", "minimal").Execute(); err != nil {
 		log.Printf("[감사 로그 기록 실패] entity=%s id=%s action=%s err=%v", entityType, entityID, action, err)
 	}
 }
 
-func auditEntityByRouteID(db *supa.Client, r *http.Request, table string, idColumn string, action string, oldData *json.RawMessage, newData *json.RawMessage, note string) {
-	writeAuditLog(db, r, table, chi.URLParam(r, "id"), action, oldData, newData, note)
+// EntityByRouteID — chi.URLParam(r, "id") 를 entity ID 로 사용하는 WriteLog 래퍼.
+func EntityByRouteID(db *supa.Client, r *http.Request, table string, idColumn string, action string, oldData *json.RawMessage, newData *json.RawMessage, note string) {
+	WriteLog(db, r, table, chi.URLParam(r, "id"), action, oldData, newData, note)
 }

@@ -97,8 +97,8 @@ func (h *AssistantHandler) streamAnthropic(
 		}
 
 		var ev struct {
-			Type  string `json:"type"`
-			Index int    `json:"index"`
+			Type         string `json:"type"`
+			Index        int    `json:"index"`
 			ContentBlock struct {
 				Type  string          `json:"type"`
 				ID    string          `json:"id"`

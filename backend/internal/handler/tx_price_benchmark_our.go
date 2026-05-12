@@ -15,15 +15,17 @@ import (
 // 월별 가중평균 응답 (D-064 PR 42).
 //
 // 응답:
-//   {
-//     "purchases": [{month, count, avg_usd_wp, avg_krw_wp}],
-//     "sales":     [{month, count, avg_krw_wp}]
-//   }
+//
+//	{
+//	  "purchases": [{month, count, avg_usd_wp, avg_krw_wp}],
+//	  "sales":     [{month, count, avg_krw_wp}]
+//	}
 //
 // 데이터 출처:
-//   purchases — import_declarations.contract_unit_price_usd_wp (월 평균, USD/Wp)
-//                + cost_unit_price_wp (월 평균, KRW/Wp)
-//   sales     — sales.unit_price_wp (월 평균, KRW/Wp, status<>'cancelled')
+//
+//	purchases — import_declarations.contract_unit_price_usd_wp (월 평균, USD/Wp)
+//	             + cost_unit_price_wp (월 평균, KRW/Wp)
+//	sales     — sales.unit_price_wp (월 평균, KRW/Wp, status<>'cancelled')
 func (h *PriceBenchmarkHandler) OurPrices(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	if from == "" {
@@ -50,10 +52,10 @@ func (h *PriceBenchmarkHandler) OurPrices(w http.ResponseWriter, r *http.Request
 }
 
 type purchaseAvgRow struct {
-	Month     string  `json:"month"`
-	Count     int     `json:"count"`
-	AvgUSDWp  float64 `json:"avg_usd_wp"`
-	AvgKRWWp  float64 `json:"avg_krw_wp"`
+	Month    string  `json:"month"`
+	Count    int     `json:"count"`
+	AvgUSDWp float64 `json:"avg_usd_wp"`
+	AvgKRWWp float64 `json:"avg_krw_wp"`
 }
 
 type salesAvgRow struct {
@@ -73,9 +75,9 @@ func (h *PriceBenchmarkHandler) fetchPurchaseAvg(from string) ([]purchaseAvgRow,
 		return nil, err
 	}
 	var rows []struct {
-		DeclarationDate           string   `json:"declaration_date"`
-		ContractUnitPriceUSDWp    *float64 `json:"contract_unit_price_usd_wp"`
-		CostUnitPriceWp           *float64 `json:"cost_unit_price_wp"`
+		DeclarationDate        string   `json:"declaration_date"`
+		ContractUnitPriceUSDWp *float64 `json:"contract_unit_price_usd_wp"`
+		CostUnitPriceWp        *float64 `json:"cost_unit_price_wp"`
 	}
 	if err := json.Unmarshal(data, &rows); err != nil {
 		return nil, err

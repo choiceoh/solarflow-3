@@ -20,9 +20,12 @@ import (
 //
 // PR-5a: GetMatrix (read-only) — resolver default + in-memory override 반영.
 // PR-5b: SetEnabled (PUT) — DB 에 (tenant, feature) override 저장 + audit 행 + resolver
-//        in-memory 캐시 갱신. 운영 startup 시 DB 에서 한 번 로드해 둔다 (app 패키지).
+//
+//	in-memory 캐시 갱신. 운영 startup 시 DB 에서 한 번 로드해 둔다 (app 패키지).
+//
 // PR-9 : DB 호출을 feature.WiringStore 인터페이스 뒤로 분리 — handler 의 비즈니스
-//        로직(검증/audit/응답) 을 supa.Client 없이 단위 테스트 가능.
+//
+//	로직(검증/audit/응답) 을 supa.Client 없이 단위 테스트 가능.
 type AdminFeatureWiringHandler struct {
 	Store    feature.WiringStore
 	Resolver *feature.Resolver

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
@@ -447,7 +448,7 @@ func computeDashTrend24(outbounds []model.Outbound) []OutboundTrendPoint {
 		out[i] = OutboundTrendPoint{Month: m}
 	}
 	for _, o := range outbounds {
-		m := monthOf(o.OutboundDate)
+		m := handlerutil.MonthOf(o.OutboundDate)
 		if m == "" {
 			continue
 		}
@@ -491,14 +492,14 @@ func computeDashBreakdown(outbounds []model.Outbound, dim breakdownDim) []Outbou
 			} else {
 				key = "__unset__"
 			}
-			label = strPtrOr(o.ManufacturerName, "미지정")
+			label = handlerutil.StrPtrOr(o.ManufacturerName, "미지정")
 		case dimCustomer:
 			if o.CustomerID != nil && *o.CustomerID != "" {
 				key = *o.CustomerID
 			} else {
 				key = "__unset__"
 			}
-			label = strPtrOr(o.CustomerName, "미지정")
+			label = handlerutil.StrPtrOr(o.CustomerName, "미지정")
 		}
 		a, ok := m[key]
 		if !ok {
@@ -576,7 +577,7 @@ func computeDashSaleConversion(outbounds []model.Outbound) OutboundDashSaleConve
 		if linked {
 			out.LinkedCount++
 		}
-		m := monthOf(o.OutboundDate)
+		m := handlerutil.MonthOf(o.OutboundDate)
 		if m != "" {
 			if i, ok := idx[m]; ok {
 				monthly[i].EligibleCount++
@@ -645,47 +646,20 @@ func convRows(m map[string]*convAcc, top int) []OutboundSaleConvBreakdownRow {
 
 func mfgKeyLabel(o model.Outbound) (string, string) {
 	if o.ManufacturerID != nil && *o.ManufacturerID != "" {
-		return *o.ManufacturerID, strPtrOr(o.ManufacturerName, "미지정")
+		return *o.ManufacturerID, handlerutil.StrPtrOr(o.ManufacturerName, "미지정")
 	}
-	return "__unset__", strPtrOr(o.ManufacturerName, "미지정")
+	return "__unset__", handlerutil.StrPtrOr(o.ManufacturerName, "미지정")
 }
 
 func custKeyLabel(o model.Outbound) (string, string) {
 	if o.CustomerID != nil && *o.CustomerID != "" {
-		return *o.CustomerID, strPtrOr(o.CustomerName, "미지정")
+		return *o.CustomerID, handlerutil.StrPtrOr(o.CustomerName, "미지정")
 	}
-	return "__unset__", strPtrOr(o.CustomerName, "미지정")
+	return "__unset__", handlerutil.StrPtrOr(o.CustomerName, "미지정")
 }
 
 func isSaleEligible(usage string) bool {
 	return usage == "sale" || usage == "sale_spare"
-}
-
-// monthOf — 'YYYY-MM-DD' 또는 'YYYY-MM' 등에서 'YYYY-MM' 만 추출. 비유효시 빈 문자열.
-func monthOf(date string) string {
-	if len(date) < 7 {
-		return ""
-	}
-	m := date[:7]
-	if len(m) != 7 || m[4] != '-' {
-		return ""
-	}
-	for i, c := range m {
-		if i == 4 {
-			continue
-		}
-		if c < '0' || c > '9' {
-			return ""
-		}
-	}
-	return m
-}
-
-func strPtrOr(p *string, fallback string) string {
-	if p == nil || *p == "" {
-		return fallback
-	}
-	return *p
 }
 
 // usageLabel — UsageCategory 한국어 라벨. 프론트 USAGE_CATEGORY_LABEL 과 동일.

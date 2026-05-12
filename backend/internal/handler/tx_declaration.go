@@ -10,9 +10,11 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
+	"solarflow-backend/internal/rpcutil"
 )
 
 // DeclarationHandler — 수입신고(면장) 관련 API를 처리하는 핸들러
@@ -66,7 +68,7 @@ func (h *DeclarationHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Eq("company_id", compID)
 	}
 
-	limit, offset := parseLimitOffset(r, 100, 1000)
+	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
 	data, count, err := query.Range(offset, offset+limit-1, "").Execute()
 	if err != nil {
 		log.Printf("[면장 목록 조회 실패] %v", err)
@@ -201,9 +203,9 @@ func (h *DeclarationHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *DeclarationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	if err := callRPC(h.DB, "sf_delete_declaration", deleteDeclarationRPCRequest{DeclarationID: id}); err != nil {
+	if err := rpcutil.CallRPC(h.DB, "sf_delete_declaration", deleteDeclarationRPCRequest{DeclarationID: id}); err != nil {
 		log.Printf("[면장 트랜잭션 삭제 실패] id=%s, err=%v", id, err)
-		if isRPCNotFound(err) {
+		if rpcutil.IsRPCNotFound(err) {
 			response.RespondError(w, http.StatusNotFound, "면장을 찾을 수 없습니다")
 			return
 		}

@@ -36,9 +36,9 @@ func NewBaroShipmentSendHandler(db *supa.Client) *BaroShipmentSendHandler {
 
 // init — D-20260512-090000 feature self-mounting.
 // 두 Spec 으로 분할:
-//   1) AuthAuthed: /baro/shipment-notices — 출하 알림 발송 (IDBaroShipmentNotice)
-//   2) AuthRoot:   /api/v1/baro/driver/{token} — 드라이버 PWA 토큰 access (인증 미적용,
-//      unrestrictedAllowlist 에 등재된 public 라우트, FeatureID 없음)
+//  1. AuthAuthed: /baro/shipment-notices — 출하 알림 발송 (IDBaroShipmentNotice)
+//  2. AuthRoot:   /api/v1/baro/driver/{token} — 드라이버 PWA 토큰 access (인증 미적용,
+//     unrestrictedAllowlist 에 등재된 public 라우트, FeatureID 없음)
 func init() {
 	mount.Register(mount.Spec{
 		ID:   feature.IDBaroShipmentNotice,
@@ -66,8 +66,8 @@ type ShipmentSendRequest struct {
 	PartnerID        string  `json:"partner_id"`
 	OutboundID       *string `json:"outbound_id,omitempty"`
 	DispatchRouteID  *string `json:"dispatch_route_id,omitempty"`
-	Stage            string  `json:"stage"`             // loading | departure | arrival | delivered
-	Channel          string  `json:"channel"`           // kakao | sms | manual_copy
+	Stage            string  `json:"stage"`   // loading | departure | arrival | delivered
+	Channel          string  `json:"channel"` // kakao | sms | manual_copy
 	RecipientPhone   *string `json:"recipient_phone,omitempty"`
 	RecipientName    *string `json:"recipient_name,omitempty"`
 	MessageBody      string  `json:"message_body"`
