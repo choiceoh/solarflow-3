@@ -63,6 +63,10 @@ pub struct LcFeeSummary {
 }
 
 // === 한도 복원 타임라인 ===
+//
+// 응답 모양은 프론트 `types/banking.ts` 의 `LCLimitTimeline` 과 정확히 일치하도록 정렬.
+// 과거에는 엔진이 `banks` + `total_summary` 를 보냈는데 프론트는 `bank_summaries` /
+// `timeline_events` / `monthly_projection` 만 참조해서 항상 undefined 로 떨어졌었다.
 
 #[derive(Debug, Deserialize)]
 pub struct LcLimitTimelineRequest {
@@ -76,45 +80,33 @@ fn default_months() -> i32 { 6 }
 
 #[derive(Debug, Serialize)]
 pub struct LcLimitTimelineResponse {
-    pub banks: Vec<BankTimeline>,
-    pub total_summary: TimelineSummary,
+    pub bank_summaries: Vec<BankSummary>,
+    pub timeline_events: Vec<TimelineEvent>,
+    pub monthly_projection: Vec<MonthlyProjection>,
     pub calculated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct BankTimeline {
-    pub bank_id: Uuid,
+pub struct BankSummary {
     pub bank_name: String,
-    pub company_name: String,
-    pub lc_limit_usd: f64,
-    pub current_used_usd: f64,
-    pub current_available_usd: f64,
+    pub limit: f64,
+    pub used: f64,
+    pub available: f64,
     pub usage_rate: f64,
-    pub restoration_events: Vec<RestorationEvent>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct RestorationEvent {
+pub struct TimelineEvent {
     pub date: String,
-    pub lc_number: Option<String>,
-    pub amount_usd: f64,
-    pub cumulative_available_usd: f64,
-    pub po_number: Option<String>,
+    pub bank_name: String,
+    pub amount: f64,
+    pub description: String,
 }
 
 #[derive(Debug, Serialize)]
-pub struct TimelineSummary {
-    pub total_limit_usd: f64,
-    pub total_used_usd: f64,
-    pub total_available_usd: f64,
-    pub total_usage_rate: f64,
-    pub projected_available: Vec<ProjectedAvailable>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ProjectedAvailable {
+pub struct MonthlyProjection {
     pub month: String,
-    pub available_usd: f64,
+    pub projected_available: f64,
 }
 
 // === 만기 알림 ===

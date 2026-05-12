@@ -63,7 +63,6 @@ struct ExchangeRateRow { exchange_rate: f64 }
 struct BankRow {
     bank_id: Uuid,
     bank_name: String,
-    company_name: String,
     lc_limit_usd: f64,
     used_usd: f64,
 }
@@ -181,15 +180,13 @@ pub async fn calculate_limit_timeline(pool: &PgPool, req: &LcLimitTimelineReques
     let bank_rows = sqlx::query_as::<_, BankRow>(
         r#"
         SELECT b.bank_id, b.bank_name, b.lc_limit_usd::float8 as lc_limit_usd,
-               c.company_name,
                COALESCE(SUM(CASE WHEN lc.status IN ('opened', 'docs_received')
                            THEN lc.amount_usd ELSE 0 END), 0)::float8 as used_usd
         FROM banks b
-        JOIN companies c ON b.company_id = c.company_id
         LEFT JOIN lc_records lc ON lc.bank_id = b.bank_id
         WHERE b.is_active = true
           AND b.company_id = ANY($1::uuid[])
-        GROUP BY b.bank_id, b.bank_name, b.lc_limit_usd, c.company_name
+        GROUP BY b.bank_id, b.bank_name, b.lc_limit_usd
         "#,
     )
     .bind(&company_ids)
@@ -214,74 +211,86 @@ pub async fn calculate_limit_timeline(pool: &PgPool, req: &LcLimitTimelineReques
     .fetch_all(pool)
     .await?;
 
-    // 은행별 이벤트 그룹화
-    let mut event_map: HashMap<Uuid, Vec<&EventRow>> = HashMap::new();
-    for e in &events {
-        event_map.entry(e.bank_id).or_default().push(e);
-    }
+    // bank_id → bank_name 룩업 (timeline_events 의 bank_name 채우기 용)
+    let bank_name_by_id: HashMap<Uuid, String> = bank_rows
+        .iter()
+        .map(|b| (b.bank_id, b.bank_name.clone()))
+        .collect();
 
-    let today = Utc::now().date_naive();
-    let mut banks: Vec<BankTimeline> = Vec::new();
-
-    for br in &bank_rows {
-        let available = (br.lc_limit_usd - br.used_usd).max(0.0);
-        let usage_rate = if br.lc_limit_usd > 0.0 { (br.used_usd / br.lc_limit_usd * 1000.0).round() / 10.0 } else { 0.0 };
-
-        let mut cum_available = available;
-        let mut rest_events: Vec<RestorationEvent> = Vec::new();
-
-        if let Some(evts) = event_map.get(&br.bank_id) {
-            for e in evts {
-                cum_available += e.amount_usd;
-                rest_events.push(RestorationEvent {
-                    date: e.maturity_date.map(|d| d.to_string()).unwrap_or_default(),
-                    lc_number: e.lc_number.clone(),
-                    amount_usd: e.amount_usd,
-                    cumulative_available_usd: (cum_available * 100.0).round() / 100.0,
-                    po_number: e.po_number.clone(),
-                });
+    // bank_summaries: 은행 한도 현재 사용량 스냅샷
+    let bank_summaries: Vec<BankSummary> = bank_rows
+        .iter()
+        .map(|br| {
+            let available = (br.lc_limit_usd - br.used_usd).max(0.0);
+            let usage_rate = if br.lc_limit_usd > 0.0 {
+                (br.used_usd / br.lc_limit_usd * 1000.0).round() / 10.0
+            } else {
+                0.0
+            };
+            BankSummary {
+                bank_name: br.bank_name.clone(),
+                limit: br.lc_limit_usd,
+                used: br.used_usd,
+                available: (available * 100.0).round() / 100.0,
+                usage_rate,
             }
-        }
+        })
+        .collect();
 
-        banks.push(BankTimeline {
-            bank_id: br.bank_id, bank_name: br.bank_name.clone(),
-            company_name: br.company_name.clone(),
-            lc_limit_usd: br.lc_limit_usd,
-            current_used_usd: br.used_usd,
-            current_available_usd: (available * 100.0).round() / 100.0,
-            usage_rate,
-            restoration_events: rest_events,
-        });
-    }
+    // timeline_events: 모든 은행의 만기(=한도 복원) 이벤트 평탄화
+    // amount 부호: 만기 → 한도가 amount 만큼 복원되므로 양수
+    let timeline_events: Vec<TimelineEvent> = events
+        .iter()
+        .map(|e| {
+            let bank_name = bank_name_by_id
+                .get(&e.bank_id)
+                .cloned()
+                .unwrap_or_default();
+            let description = match (&e.lc_number, &e.po_number) {
+                (Some(lc), _) => format!("{lc} 만기"),
+                (None, Some(po)) => format!("PO {po} LC 만기"),
+                _ => "LC 만기".to_string(),
+            };
+            TimelineEvent {
+                date: e.maturity_date.map(|d| d.to_string()).unwrap_or_default(),
+                bank_name,
+                amount: e.amount_usd,
+                description,
+            }
+        })
+        .collect();
 
-    // 월별 projected_available
-    let total_limit: f64 = banks.iter().map(|b| b.lc_limit_usd).sum();
-    let total_used: f64 = banks.iter().map(|b| b.current_used_usd).sum();
+    // monthly_projection: 월별 누적 가용한도 예측
+    let today = Utc::now().date_naive();
+    let total_limit: f64 = bank_summaries.iter().map(|b| b.limit).sum();
+    let total_used: f64 = bank_summaries.iter().map(|b| b.used).sum();
     let total_available = (total_limit - total_used).max(0.0);
-    let total_usage = if total_limit > 0.0 { (total_used / total_limit * 1000.0).round() / 10.0 } else { 0.0 };
 
-    let mut projected: Vec<ProjectedAvailable> = Vec::new();
+    let mut monthly_projection: Vec<MonthlyProjection> = Vec::new();
     let mut cum = total_available;
     for m in 0..months {
         let target = add_months(today, m);
         let month_str = format!("{:04}-{:02}", target.year(), target.month());
-        let month_restoration: f64 = events.iter()
-            .filter(|e| e.maturity_date.map(|d| format!("{:04}-{:02}", d.year(), d.month()) == month_str).unwrap_or(false))
+        let month_restoration: f64 = events
+            .iter()
+            .filter(|e| {
+                e.maturity_date
+                    .map(|d| format!("{:04}-{:02}", d.year(), d.month()) == month_str)
+                    .unwrap_or(false)
+            })
             .map(|e| e.amount_usd)
             .sum();
         cum += month_restoration;
-        projected.push(ProjectedAvailable { month: month_str, available_usd: (cum * 100.0).round() / 100.0 });
+        monthly_projection.push(MonthlyProjection {
+            month: month_str,
+            projected_available: (cum * 100.0).round() / 100.0,
+        });
     }
 
     Ok(LcLimitTimelineResponse {
-        banks,
-        total_summary: TimelineSummary {
-            total_limit_usd: total_limit,
-            total_used_usd: total_used,
-            total_available_usd: (total_available * 100.0).round() / 100.0,
-            total_usage_rate: total_usage,
-            projected_available: projected,
-        },
+        bank_summaries,
+        timeline_events,
+        monthly_projection,
         calculated_at: Utc::now(),
     })
 }
