@@ -163,6 +163,7 @@ function buildColumns({
       key: "product_name",
       label: "품명",
       hideable: true,
+      className: "text-xs",
       cell: (item) => item.product_name ?? "—",
       sortAccessor: (item) => item.product_name ?? "",
       globalFilterText: (item) => item.product_name ?? "",

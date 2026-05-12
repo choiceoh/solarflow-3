@@ -78,6 +78,7 @@ function buildColumns({
       key: "product_name",
       label: "품명",
       hideable: true,
+      className: "text-xs",
       cell: (o) => o.product_name ?? "—",
       sortAccessor: (o) => o.product_name ?? "",
     },
