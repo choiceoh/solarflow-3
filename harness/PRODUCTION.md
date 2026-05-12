@@ -256,12 +256,22 @@ systemctl --user status solarflow-{go,engine}.service cloudflared-solarflow.serv
 systemctl --user show solarflow-go.service -p RestartUSec -p StartLimitIntervalUSec -p StartLimitBurst --no-pager
 journalctl --disk-usage
 
-# 로그 (실시간)
+# 로그 (실시간 — 박스 안에서)
 journalctl --user -u solarflow-go.service -f
 journalctl --user -u solarflow-engine.service -f
 
+# 로그 (원격에서 — Tailscale SSH 경유, 추천)
+# 아래는 어디서든 동작하는 헬퍼. CLAUDE.md / AGENTS.md 의 "운영 서버 SSH 접근" 참조.
+scripts/prod-logs.sh errors            # 최근 30분 ERROR/WARN (4개 유닛 통합)
+scripts/prod-logs.sh http5xx 1h        # Go 5xx 만
+scripts/prod-logs.sh slow 1h           # Rust sqlx slow statement
+scripts/prod-logs.sh db 1h             # Supabase/PostgREST 에러 (PGRST204, column does not exist 등)
+scripts/prod-logs.sh tail go|engine|cloudflared|webhook
+scripts/prod-logs.sh status
+
 # 동기화 상태 (cron 결과)
-tail -f /home/choiceoh/공개/solarflow-3/.sync.log
+tail -f /home/choiceoh/공개/solarflow-3/.sync.log    # 박스 안에서
+scripts/prod-logs.sh sync                            # 원격에서
 
 # 외부 API 검증
 curl -s http://localhost:8080/api/v1/public/fx/usdkrw      # USD/KRW 라이브

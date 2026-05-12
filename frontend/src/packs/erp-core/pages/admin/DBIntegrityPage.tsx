@@ -453,9 +453,140 @@ function RowLevelAnomaliesView() {
         ))
       )}
 
+      <IgnoreListSection onUnignore={load} />
+
       <div className="text-right text-[11px] text-muted-foreground">
         검사 시각: {new Date(data.generated_at).toLocaleString('ko-KR')}
       </div>
+    </div>
+  );
+}
+
+interface IgnoreEntry {
+  ignore_id: number;
+  table_name: string;
+  row_pk: string;
+  rule_name: string;
+  reason?: string;
+  ignored_by?: string;
+  ignored_at: string;
+}
+
+interface IgnoreListResponse {
+  ignores: IgnoreEntry[];
+  total: number;
+}
+
+// "정상" 으로 잘못 표시한 row 를 해제할 수 있는 섹션.
+// 기본 접힘 — count 만 헤더에 노출. 펼쳐야 목록 로드 (불필요한 호출 방지).
+function IgnoreListSection({ onUnignore }: { onUnignore: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<IgnoreListResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyID, setBusyID] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetchWithAuth<IgnoreListResponse>('/api/v1/admin/db-anomalies/ignores');
+      setData(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '무시 목록 조회 실패');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open && !data) void load();
+  }, [open, data, load]);
+
+  const unignore = async (entry: IgnoreEntry) => {
+    setBusyID(entry.ignore_id);
+    try {
+      await fetchWithAuth(`/api/v1/admin/db-anomalies/ignore/${entry.ignore_id}`, {
+        method: 'DELETE',
+      });
+      setData((prev) =>
+        prev
+          ? {
+              ignores: prev.ignores.filter((i) => i.ignore_id !== entry.ignore_id),
+              total: prev.total - 1,
+            }
+          : prev,
+      );
+      onUnignore();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '해제 실패');
+    } finally {
+      setBusyID(null);
+    }
+  };
+
+  const count = data?.total ?? 0;
+
+  return (
+    <div className="rounded-md border">
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted/40"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        )}
+        <span className="font-semibold">무시 목록</span>
+        {data && (
+          <span className="text-muted-foreground">· {count}건</span>
+        )}
+        <span className="ml-auto text-[10px] text-muted-foreground">
+          "정상" 처리한 row — 해제하면 다음 검사부터 다시 검출됩니다
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t">
+          {loading && !data ? (
+            <div className="p-3 text-xs text-muted-foreground">로딩 중…</div>
+          ) : error ? (
+            <div className="p-3 text-xs text-red-700">{error}</div>
+          ) : !data || data.ignores.length === 0 ? (
+            <div className="p-3 text-xs text-muted-foreground">무시 목록이 비어 있습니다.</div>
+          ) : (
+            <div className="divide-y">
+              {data.ignores.map((e) => (
+                <div key={e.ignore_id} className="flex items-start gap-3 px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs">{e.rule_name}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {e.table_name} / {e.row_pk.slice(0, 8)}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      등록: {new Date(e.ignored_at).toLocaleString('ko-KR')}
+                      {e.reason && ` · ${e.reason}`}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busyID === e.ignore_id}
+                    onClick={() => unignore(e)}
+                    title="무시 해제 — 다음 검사부터 다시 표시"
+                  >
+                    {busyID === e.ignore_id ? '...' : '해제'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
