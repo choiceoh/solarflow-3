@@ -5,7 +5,7 @@
 // 사이드 리스트를 클릭하면 표가 그 행으로 scrollIntoView + 잠깐 노란 글로우.
 
 import { useMemo } from 'react';
-import { AlertTriangle, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ParsedRow } from '@/types/excel';
 
@@ -22,16 +22,29 @@ interface Issue {
   severity: 'error' | 'warning';
   field: string;
   message: string;
+  hint: string;
 }
 
 function collectIssues(rows: ParsedRow[]): Issue[] {
   const issues: Issue[] = [];
   for (const row of rows) {
     for (const e of row.errors) {
-      issues.push({ rowNumber: row.rowNumber, severity: 'error', field: e.field, message: e.message });
+      issues.push({
+        rowNumber: row.rowNumber,
+        severity: 'error',
+        field: e.field,
+        message: e.message,
+        hint: getIssueHint(e.field, e.message),
+      });
     }
     for (const w of row.warnings ?? []) {
-      issues.push({ rowNumber: row.rowNumber, severity: 'warning', field: w.field, message: w.message });
+      issues.push({
+        rowNumber: row.rowNumber,
+        severity: 'warning',
+        field: w.field,
+        message: w.message,
+        hint: getIssueHint(w.field, w.message),
+      });
     }
   }
   // 에러 먼저, 그 다음 경고. 같은 등급 안에서는 행 번호 오름차순.
@@ -39,6 +52,44 @@ function collectIssues(rows: ParsedRow[]): Issue[] {
     if (a.severity !== b.severity) return a.severity === 'error' ? -1 : 1;
     return a.rowNumber - b.rowNumber;
   });
+}
+
+function getIssueHint(field: string, message: string): string {
+  const text = `${field} ${message}`.toLowerCase();
+  const isMasterField = [
+    '제조사',
+    '품번',
+    '은행',
+    '법인',
+    '거래처',
+    '창고',
+    'warehouse',
+    'bank',
+    'partner',
+    'product',
+    'manufacturer',
+    'company',
+  ].some((word) => text.includes(word.toLowerCase()));
+
+  if (isMasterField && /(없|존재|찾|unknown|not found|alias)/i.test(message)) {
+    return '마스터 이름·코드를 확인하고, 반복 오타면 alias/마스터를 정리한 뒤 다시 검증하세요.';
+  }
+  if (/(필수|비어|누락|required|empty)/i.test(message)) {
+    return '셀 수정 모드에서 값을 채우거나 원본 엑셀의 필수 칸을 보정하세요.';
+  }
+  if (/(양수|0보다|음수|금액|수량|단가|환율|positive)/i.test(message)) {
+    return '수량·금액·단가·환율은 0보다 큰 숫자로 입력해야 합니다.';
+  }
+  if (/(날짜|date|yyyy|형식)/i.test(message)) {
+    return '날짜는 YYYY-MM-DD 형식으로 맞추고 시작일/종료일 순서를 확인하세요.';
+  }
+  if (/(중복|duplicate|이미)/i.test(message)) {
+    return '번호가 이미 등록됐는지 확인하고, 이관 번호라면 MIG 추적키를 분리하세요.';
+  }
+  if (/(허용|유효|enum|allowed|invalid)/i.test(message)) {
+    return '통합코드표의 허용값을 그대로 사용하세요.';
+  }
+  return '셀 수정 후 재검증하고, 원인이 반복되면 원본 파일 또는 마스터 기준값을 확인하세요.';
 }
 
 export default function ImportPreviewErrorList({ rows, onJump, activeRow }: Props) {
@@ -68,7 +119,7 @@ export default function ImportPreviewErrorList({ rows, onJump, activeRow }: Prop
           ) : null}
         </div>
         <div className="mt-0.5 text-[10px] text-muted-foreground">
-          항목을 클릭하면 표의 해당 행으로 이동합니다.
+          클릭하면 해당 행으로 이동하고, 아래 안내대로 보정합니다.
         </div>
       </div>
       <ul className="flex-1 divide-y overflow-auto">
@@ -100,6 +151,10 @@ export default function ImportPreviewErrorList({ rows, onJump, activeRow }: Prop
                   {issue.field}
                 </span>
                 <span className="text-muted-foreground">: {issue.message}</span>
+                <span className="mt-1 flex items-start gap-1 text-[10px] leading-4 text-muted-foreground">
+                  <ArrowRight className="mt-0.5 h-2.5 w-2.5 shrink-0" />
+                  <span>{issue.hint}</span>
+                </span>
               </span>
             </button>
           </li>
