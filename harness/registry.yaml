@@ -1,0 +1,128 @@
+# SolarFlow ERP — registry.yaml (단일 정본)
+#
+# 정본 위치. 다음이 이 파일에서 *파생*된다:
+#   - backend/internal/tenant/registry.go (defaultRegistry.tenants)
+#   - frontend/src/packs/index.ts (ALL_PACKS)
+#   - backend/internal/feature/catalog.go (TenantSet*)
+#
+# 파생 도구: scripts/codemod/gen-registry.ts (PR-A 에서 정식화)
+# 현재 (T+0): 위 3개 코드 파일과 수동 동기화. 어긋남 검증 테스트는 PR-A 에서 추가.
+#
+# 자매: harness/AGENT-BUILDER-VISION.md, harness/NEW-TENANT-GUIDE.md, harness/domains/
+
+schema_version: 1
+
+# === 테넌트 정의 ===
+# 한 사이트 = 한 테넌트. 호스트네임 정규식으로 분기 (대소문자 무시).
+# is_default: true 인 테넌트가 정확히 1개 — 어느 패턴에도 안 걸리면 이 테넌트로 fallback.
+tenants:
+  - id: topsolar
+    display_name: "탑솔라(주)"
+    host_patterns:
+      - "^module\\."
+      - "^module-"
+      - "^solarflow3\\."
+      - "^localhost$"
+      - "^127\\.0\\.0\\.1$"
+    groups: [all, module]
+    is_default: true
+
+  - id: cable
+    display_name: "케이블 테넌트"
+    host_patterns:
+      - "^cable\\."
+      - "^cable-"
+    groups: [all, module]
+
+  - id: baro
+    display_name: "바로(주)"
+    host_patterns:
+      - "^baro\\."
+      - "^baro-"
+    groups: [all]
+
+  - id: study
+    display_name: "TopWorks Study"
+    host_patterns:
+      - "^study\\."
+      - "^study-"
+    groups: [study]
+
+# === 그룹 정의 ===
+# 카탈로그가 DefaultTenants 를 array 리터럴 대신 그룹 참조로 사용.
+# tenant.IDsInGroupAsStrings(GroupX) 로 파생.
+groups:
+  - id: all
+    description: "ERP 운영 테넌트 공통 (마스터, 가용재고, 수주/출고/수금 등)"
+  - id: module
+    description: "module 계열 (D-119) = topsolar + cable. 수입/금융/원가 표면"
+  - id: study
+    description: "신입 교육 전용. ERP 운영 표면 상속 X"
+
+# === Pack 정의 ===
+# Pack 은 *어셈블리* (sidebar/nav 묶음). 실제 페이지 코드는 도메인 소유 (PR-B 부터).
+# frontend/src/packs/<id>/nav.ts 가 이 파일의 packs 와 1:1.
+packs:
+  - id: erp-core
+    label: "ERP 코어"
+    description: "마스터 + 수주/출고/수금 + 공통 대시보드"
+  - id: module-finance
+    label: "수입 / 금융 (module 계열)"
+    description: "P/O · L/C · B/L · 면장 · 원가 · 한도 · 매출분석"
+  - id: baro-domain
+    label: "바로 도메인"
+    description: "영업 / CRM / 배송 (baro 전용)"
+  - id: study-domain
+    label: "신입 교육"
+    description: "비-ERP, 학습 포털"
+
+# === 도메인 정의 (PR-B 부터 채움) ===
+#
+# 각 도메인의 상세 (paths, blast_radius, verify_scripts, depends_on) 는
+# harness/domains/<id>.yaml 의 manifest 참조.
+#
+# 본 섹션은 도메인의 *식별* + Pack/Feature/Tenant 배선만.
+#
+# 이 PR (T+0): PO 1개만 시범. PR-C 부터 나머지 14개 도메인 일괄 추가.
+domains:
+  - id: po
+    display_name: "발주 (Purchase Order)"
+    visible_to: module      # group 또는 명시적 [tenant_id, ...]
+    feature_id: tx.po
+    pack: module-finance
+    manifest: harness/domains/po.yaml
+
+  # PR-C 대상 (현재 코드에 존재, manifest 미작성):
+  # - id: bl                      # 선적 (B/L)
+  # - id: lc                      # 신용장
+  # - id: tt                      # 송금
+  # - id: declaration             # 면장/통관
+  # - id: products                # 제품 마스터
+  # - id: inventory               # 재고 / inventory_allocations
+  # - id: price_benchmark         # 가격 벤치마크
+  # - id: order                   # 수주
+  # - id: sale                    # 매출
+  # - id: receipt                 # 수금
+  # - id: outbound                # 출고 + FIFO
+  # - id: cost_detail             # 원가 (D-065)
+  # - id: baro_incoming           # 바로 인바운드
+  # - id: baro_quote              # 바로 견적
+  # - id: intercompany            # 그룹내 매입/요청 (D-096)
+
+# === 파생 코드 매핑 (PR-A 의 gen-registry codemod 입력) ===
+#
+# 본 YAML 의 어느 섹션이 어느 코드 파일을 생성하는지.
+# codemod 가 들어오기 전 (T+0) 까지는 *문서*. 사람이 손으로 동기화.
+derived_artifacts:
+  - source_section: tenants
+    target: backend/internal/tenant/registry.go
+    note: "defaultRegistry.tenants 리터럴 갱신. ID 상수도 추가 (IDFoo 같은 형태)."
+  - source_section: tenants
+    target: backend/internal/feature/catalog.go
+    note: "TenantSet* 변수가 tenant.IDsInGroupAsStrings 호출로 자동 파생 — 그룹 변경 시만 영향"
+  - source_section: packs
+    target: frontend/src/packs/index.ts
+    note: "ALL_PACKS array. types.ts 의 PackID union 도 동시 갱신"
+  - source_section: tenants
+    target: "backend/migrations/NNN_<id>_tenant.sql"
+    note: "user_profiles.tenant_scope / tenant_features.tenant / tenant_data_scopes.tenant CHECK 제약 갱신"
