@@ -150,7 +150,7 @@ function ProductCombobox({ items, value, onChange, priceMap }: ProductComboboxPr
           !selected && "text-muted-foreground",
         )}
       >
-        <span className="flex-1 text-left truncate">
+        <span className="flex-1 text-left truncate text-xs">
           {selected
             ? `${moduleLabel(selected.manufacturer_name, selected.spec_wp)} | ${selected.product_name}`
             : "품목 검색 (제조사·규격·품명)"}
@@ -198,7 +198,7 @@ function ProductCombobox({ items, value, onChange, priceMap }: ProductComboboxPr
                       {value === it.product_id && <Check className="size-3.5" />}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm truncate">
+                      <div className="text-xs truncate">
                         {moduleLabel(it.manufacturer_name, it.spec_wp)} · {it.product_name}
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-0.5">

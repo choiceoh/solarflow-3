@@ -56,7 +56,7 @@ function ProductForecastBlock({
           className="flex min-w-0 items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-          <span className="truncate">
+          <span className="truncate text-xs">
             {product.manufacturer_name} — {product.product_name} ({formatWp(product.spec_wp)}, {product.module_width_mm}x{product.module_height_mm}mm)
           </span>
         </button>

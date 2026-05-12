@@ -157,7 +157,7 @@ export function ProductCombobox({
           !selected && 'text-muted-foreground',
         )}
       >
-        <span className="flex-1 text-left truncate">{selected ? productLabel(selected) : placeholder}</span>
+        <span className="flex-1 text-left truncate text-xs">{selected ? productLabel(selected) : placeholder}</span>
         <ChevronDownIcon className="size-4 text-muted-foreground shrink-0 pointer-events-none" />
       </button>
 
@@ -204,7 +204,7 @@ export function ProductCombobox({
                       <span className="size-3.5 shrink-0 flex items-center justify-center">
                         {value === p.product_id && <CheckIcon className="size-3.5" />}
                       </span>
-                      <span className="flex-1 truncate">{productLabel(p)}</span>
+                      <span className="flex-1 truncate text-xs">{productLabel(p)}</span>
                       {aliasHit ? (
                         <span className="shrink-0 rounded-sm bg-amber-500/15 px-1 py-px text-[10px] text-amber-600 dark:text-amber-400">
                           별명: {aliasHit}
