@@ -330,7 +330,13 @@ async fn search_outstanding(pool: &PgPool, company_id: Uuid, pq: &ParsedQuery) -
                   COUNT(*)::bigint as outstanding_count,
                   MAX(CURRENT_DATE - o.outbound_date)::int as max_days
            FROM sales s JOIN outbounds o ON s.outbound_id=o.outbound_id JOIN partners ptr ON s.customer_id=ptr.partner_id
-           LEFT JOIN (SELECT rm.outbound_id, SUM(rm.matched_amount) as total_matched FROM receipt_matches rm GROUP BY rm.outbound_id) matched ON matched.outbound_id=o.outbound_id
+           -- receipt_matches: sale_id 우선, 없으면 outbound_id 로 fallback (D-064 bulk 경로 호환)
+           LEFT JOIN LATERAL (
+             SELECT SUM(rm.matched_amount) as total_matched
+             FROM receipt_matches rm
+             WHERE (rm.sale_id IS NOT NULL AND rm.sale_id = s.sale_id)
+                OR (rm.sale_id IS NULL AND rm.outbound_id = o.outbound_id)
+           ) matched ON TRUE
            WHERE o.company_id=$1 AND o.status='active' AND COALESCE(s.status,'active') <> 'cancelled' AND s.total_amount > COALESCE(matched.total_matched,0) AND (CURRENT_DATE-o.outbound_date)>=$2
            GROUP BY ptr.partner_id, ptr.partner_name HAVING SUM(s.total_amount-COALESCE(matched.total_matched,0))>0
            ORDER BY outstanding_total DESC"#

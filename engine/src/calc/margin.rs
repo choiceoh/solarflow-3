@@ -296,12 +296,20 @@ pub async fn analyze_customers(
     .fetch_all(pool)
     .await?;
 
+    // receipt_matches 는 두 가지 경로로 sale 에 연결된다:
+    //   1) 매뉴얼 매칭: rm.outbound_id 채움 (rm.sale_id NULL)
+    //   2) 출고/판매 화면 bulk 수금완료: rm.sale_id 채움 (rm.outbound_id NULL)
+    // 단일 join 조건으로는 두 경로를 모두 회사·sale 범위로 한정해 합산할 수 없으므로,
+    // sale_id 우선 → 없으면 outbound_id 로 fallback. 두 경로가 동시에 매칭되면
+    // sale_id 가 더 좁은 범위라 그대로 사용 (outbound 내 다른 sale 에 중복 가산 방지).
     let collected_rows = sqlx::query_as::<_, CustomerCollectedRow>(
         r#"
         SELECT s.customer_id, COALESCE(SUM(rm.matched_amount), 0)::float8 as total_collected
         FROM sales s
         JOIN outbounds o ON s.outbound_id = o.outbound_id
-        JOIN receipt_matches rm ON rm.outbound_id = o.outbound_id
+        JOIN receipt_matches rm ON
+          (rm.sale_id IS NOT NULL AND rm.sale_id = s.sale_id)
+          OR (rm.sale_id IS NULL AND rm.outbound_id = o.outbound_id)
         WHERE o.company_id = $1 AND o.status = 'active'
           AND COALESCE(s.status, 'active') <> 'cancelled'
           AND ($2::uuid IS NULL OR s.customer_id = $2)
@@ -332,7 +340,11 @@ pub async fn analyze_customers(
           AND ($2::uuid IS NULL OR s.customer_id = $2)
           AND ($3::date IS NULL OR o.outbound_date >= $3)
           AND ($4::date IS NULL OR o.outbound_date <= $4)
-          AND s.total_amount > COALESCE((SELECT SUM(rm3.matched_amount) FROM receipt_matches rm3 WHERE rm3.outbound_id = o.outbound_id), 0)
+          AND s.total_amount > COALESCE((
+            SELECT SUM(rm3.matched_amount) FROM receipt_matches rm3
+            WHERE (rm3.sale_id IS NOT NULL AND rm3.sale_id = s.sale_id)
+               OR (rm3.sale_id IS NULL AND rm3.outbound_id = o.outbound_id)
+          ), 0)
         "#,
     )
     .bind(company_id).bind(req.customer_id).bind(date_from).bind(date_to)
