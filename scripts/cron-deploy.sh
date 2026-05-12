@@ -56,6 +56,29 @@ ENGINE_DIR="$REPO/engine"
 APPLY_MIG_TS="$REPO/scripts/apply_migrations.ts"
 VERIFY_MIG_TS="$REPO/scripts/verify_migration.ts"
 BUN_BIN="$HOME/.bun/bin/bun"                  # Bun 1.2+ — Bun.SQL 로 PostgreSQL 직결
+GITHUB_REPO="choiceoh/solarflow"              # GitHub Deployments API 기록 대상
+
+# ── GitHub Deployments API helpers ──────────────────────────────────────────
+# 결정적 배포 기록 — github.com/$GITHUB_REPO/deployments 에 누적. 운영 박스 사고
+# 가시성 강화 (이전엔 .sync.log + journalctl 만 있어 사람-주기 확인 필요).
+# best-effort: 호출 실패가 cron-deploy 자체를 절대 막지 않는다 (|| true · 2>/dev/null).
+# gh 는 시스템에 깔린 인증 사용 (gh auth status 로 확인).
+gh_deployment_create() {
+  local env=$1 ref=$2
+  jq -nc --arg ref "$ref" --arg env "$env" '{
+    ref: $ref, environment: $env, required_contexts: [],
+    auto_merge: false, production_environment: true
+  }' | gh api -X POST "repos/$GITHUB_REPO/deployments" --input - --jq .id 2>/dev/null || echo ""
+}
+
+gh_deployment_status() {
+  local dep_id=$1 state=$2 desc=$3
+  [[ -z "$dep_id" ]] && return 0
+  jq -nc --arg s "$state" --arg d "$desc" '{state:$s, description:$d, auto_inactive:true}' \
+    | gh api -X POST "repos/$GITHUB_REPO/deployments/$dep_id/statuses" --input - >/dev/null 2>&1 \
+    || true
+}
+# ─────────────────────────────────────────────────────────────────────────────
 
 # 동시 실행 방지 (이전 실행이 빌드 중이면 skip)
 exec 9>"$LOCK"
@@ -133,11 +156,14 @@ done <<< "$CHANGED"
 
 # 마이그레이션 자동 적용 (Go 빌드보다 먼저 — 새 코드가 새 스키마를 가정하므로)
 mig_ok=1   # 1=성공/skip, 0=실패
+db_dep_id=""
 if [[ $has_migration -eq 1 ]]; then
   echo "[$(date -Iseconds)] 마이그레이션 변경 감지:"
   for m in "${migrations[@]}"; do
     echo "    $m"
   done
+  # 배포 기록 시작
+  db_dep_id=$(gh_deployment_create "production-db" "$AFTER")
   # backend/.env 의 SUPABASE_DB_URL 을 환경에 주입
   if [[ -f "$REPO/backend/.env" ]]; then
     set -a
@@ -178,6 +204,14 @@ if [[ $has_migration -eq 1 ]]; then
   else
     echo "[$(date -Iseconds)] ❌ bun 미설치 또는 apply_migrations.ts 누락 — 수동 적용 필요"
     mig_ok=0
+  fi
+
+  # 배포 결과 기록 (적용된 파일 목록을 description 으로)
+  mig_list=$(IFS=, ; echo "${migrations[*]##*/}")
+  if [[ $mig_ok -eq 1 ]]; then
+    gh_deployment_status "$db_dep_id" "success" "Applied: $mig_list"
+  else
+    gh_deployment_status "$db_dep_id" "failure" "Migration failed: $mig_list"
   fi
 fi
 
@@ -251,6 +285,7 @@ GO_BIN_PREV="$GO_DIR/solarflow-go.prev"
 GO_BIN_NEW="$GO_DIR/solarflow-go.new"
 if [[ $need_go -eq 1 && $mig_ok -eq 1 ]]; then
   echo "[$(date -Iseconds)] Go 빌드 시작 (-> solarflow-go.new)"
+  go_dep_id=$(gh_deployment_create "production-backend" "$AFTER")
   # GOARM64=v9.0,lse,crypto: Grace ARM (Neoverse V2) 의 ARMv9 baseline + LSE atomic + crypto.
   # Go 의 GOARM64 는 ,lse 와 ,crypto 만 토큰으로 받는다 (sve2 같은 런타임 feature 는 불가) —
   # v9.0,sve2 로 적으면 Go 1.26+ 가 invalid 로 거부해 빌드 실패.
@@ -262,10 +297,15 @@ if [[ $need_go -eq 1 && $mig_ok -eq 1 ]]; then
     mv -f "$GO_BIN_NEW" "$GO_BIN"
     # reload(SIGHUP) → tableflip zero-downtime 인계가 정상 경로.
     # ExecReload 미정의 / 새 바이너리 결함 등 비정상 상황은 restart_with_rollback 으로 폴백.
-    reload_or_restart solarflow-go.service "$GO_BIN" "$GO_BIN_PREV" http://localhost:8080/health
+    if reload_or_restart solarflow-go.service "$GO_BIN" "$GO_BIN_PREV" http://localhost:8080/health; then
+      gh_deployment_status "$go_dep_id" "success" "Go ${AFTER:0:7} deployed + health OK"
+    else
+      gh_deployment_status "$go_dep_id" "failure" "Go build OK but restart/health failed"
+    fi
   else
     echo "[$(date -Iseconds)] Go 빌드 실패 — 기존 서비스 유지"
     rm -f "$GO_BIN_NEW"
+    gh_deployment_status "$go_dep_id" "failure" "Go build failed (${AFTER:0:7})"
   fi
 elif [[ $need_go -eq 1 && $mig_ok -eq 0 ]]; then
   echo "[$(date -Iseconds)] Go 변경분 빌드 보류 — 마이그레이션 실패 해결 후 다음 회차에 재시도"
@@ -280,13 +320,19 @@ ENGINE_BIN="$ENGINE_DIR/target/release/solarflow-engine"
 ENGINE_BIN_PREV="$ENGINE_DIR/target/release/solarflow-engine.prev"
 if [[ $need_engine -eq 1 ]]; then
   echo "[$(date -Iseconds)] Rust 빌드 시작 (release)"
+  rust_dep_id=$(gh_deployment_create "production-engine" "$AFTER")
   # 빌드 직전 백업 (현재 운영 중 바이너리)
   [[ -f "$ENGINE_BIN" ]] && cp -f "$ENGINE_BIN" "$ENGINE_BIN_PREV"
   if (cd "$ENGINE_DIR" && cargo build --release 2>&1); then
-    restart_with_rollback solarflow-engine.service "$ENGINE_BIN" "$ENGINE_BIN_PREV" http://localhost:8081/health
+    if restart_with_rollback solarflow-engine.service "$ENGINE_BIN" "$ENGINE_BIN_PREV" http://localhost:8081/health; then
+      gh_deployment_status "$rust_dep_id" "success" "Rust ${AFTER:0:7} deployed + health OK"
+    else
+      gh_deployment_status "$rust_dep_id" "failure" "Rust build OK but restart/health failed"
+    fi
   else
     echo "[$(date -Iseconds)] Rust 빌드 실패 — 기존 서비스 유지"
     # 빌드 실패 시 .prev는 그대로 둔다 (다음 빌드 시 다시 갱신됨)
+    gh_deployment_status "$rust_dep_id" "failure" "Rust build failed (${AFTER:0:7})"
   fi
 fi
 

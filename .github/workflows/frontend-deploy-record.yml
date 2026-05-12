@@ -1,0 +1,47 @@
+name: frontend deploy record
+
+# Cloudflare Pages 가 frontend/** 변경 시 자동 빌드/배포하지만 그 사실이 GitHub
+# Deployments timeline 에 안 들어와서 "지금 무엇이 어디 배포돼있나" 통합 뷰가
+# 비어 있다. 이 워크플로는 frontend 변경이 main 에 들어간 시점을 production-frontend
+# deployment 로 기록 (실제 배포는 CF Pages 가 비동기 처리 — 본 기록은 의도 표시).
+#
+# CF Pages 의 build/deploy 가 완료됐는지는 별개로 https://dash.cloudflare.com 에서 확인.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create + finalize deployment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          dep_id=$(jq -nc --arg ref "$GITHUB_SHA" '{
+            ref: $ref,
+            environment: "production-frontend",
+            required_contexts: [],
+            auto_merge: false,
+            production_environment: true,
+            description: "frontend push to main — CF Pages will auto-build"
+          }' | gh api -X POST "repos/$GITHUB_REPOSITORY/deployments" --input - --jq .id)
+          echo "deployment id: $dep_id"
+
+          # success 로 마킹 — "main 에 frontend 변경이 들어갔다" 자체를 기록.
+          # CF Pages 실제 build 상태는 dashboard 에서 별도 확인.
+          jq -nc --arg sha "${GITHUB_SHA:0:7}" '{
+            state: "success",
+            description: ("Pushed to main (" + $sha + "). CF Pages auto-build triggered."),
+            auto_inactive: true,
+            log_url: "https://dash.cloudflare.com/?to=/:account/pages"
+          }' | gh api -X POST "repos/$GITHUB_REPOSITORY/deployments/$dep_id/statuses" --input - >/dev/null
+          echo "status: success"
