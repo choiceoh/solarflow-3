@@ -1401,9 +1401,10 @@ a:focus-visible,
   border-radius: 0;
 }
 
-/* MetaTable 컬럼 리사이저 — TableHead 우측 모서리에 절대 배치되는 5px 드래그 영역.
+/* MetaTable 컬럼 리사이저 — TableHead 우측 모서리의 드래그 영역.
+   시각적 폭은 5px 이지만 ::before 로 ±3px 의 hit zone 을 더해 픽셀 사냥을 피함.
    기본 상태에서는 보이지 않다가 hover 시 옅은 솔라 라인이 살짝 비치고,
-   드래그 중에는 진한 솔라로 강조. */
+   드래그 중에는 진한 솔라로 강조. 더블클릭 시 컬럼 폭이 기본값으로 리셋된다. */
 .sf-col-resizer {
   position: absolute;
   top: 0;
@@ -1413,9 +1414,14 @@ a:focus-visible,
   cursor: col-resize;
   user-select: none;
   touch-action: none;
-  z-index: 1;
+  z-index: 2;
   background: transparent;
   transition: background var(--sf-dur-fast) var(--sf-ease-out);
+}
+.sf-col-resizer::before {
+  content: "";
+  position: absolute;
+  inset: 0 -3px;
 }
 .sf-col-resizer:hover {
   background: rgb(245 184 0 / 0.35);
@@ -1437,19 +1443,88 @@ a:focus-visible,
     -10px 0 14px -14px rgb(60 40 10 / 0.32);
 }
 
-/* 헤더 드래그 드롭 대상 — 옅은 솔라 좌측 라인으로 삽입 위치 표시 */
-.sf-col-drop-target {
-  box-shadow: inset 2px 0 0 0 var(--sf-solar);
+/* 헤더 그랩 — 리사이저(우측 5px) 를 제외한 헤더 본문은 grab 커서.
+   짧은 클릭=정렬, 5px 이상 드래그=리오더 로 분기. */
+.sf-col-grab {
+  cursor: grab;
+}
+.sf-col-grab:active {
+  cursor: grabbing;
+}
+.sf-col-dragging {
+  opacity: 0.4;
 }
 
-/* 컬럼 순서 변경 모드 — "컬럼 순서 변경" 토글이 켜진 동안 헤더가 grab 커서로 바뀌어
-   드래그 가능함을 시각적으로 표시. 평상시엔 폭 조정 우선이라 모드 OFF. */
-.sf-col-reorder-active {
-  cursor: grab;
-  background: rgb(245 184 0 / 0.06);
+/* 드래그 중 커서를 따라다니는 헤더 고스트 — position:fixed 로 테이블 좌표 위에 떠 있음. */
+.sf-col-drag-preview {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  background: var(--surface, #fff);
+  border: 1px solid var(--sf-line-2, rgb(0 0 0 / 0.12));
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink, #222);
+  opacity: 0.92;
 }
-.sf-col-reorder-active:active {
-  cursor: grabbing;
+.sf-col-drag-preview-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 삽입 갭 인디케이터 — 두 헤더 사이 세로 솔라 선 */
+.sf-col-drop-indicator {
+  position: fixed;
+  z-index: 59;
+  width: 2px;
+  background: var(--sf-solar);
+  box-shadow: 0 0 0 1px rgb(245 184 0 / 0.35);
+  pointer-events: none;
+  transform: translateX(-1px);
+}
+
+/* 헤더 우클릭 컨텍스트 메뉴 — floating-ui 가 position/top/left/transform 을 inline 으로 주입.
+   여기선 시각/형태만 정의. */
+.sf-col-ctx-menu {
+  z-index: 70;
+  min-width: 168px;
+  background: var(--popover, #fff);
+  border: 1px solid var(--sf-line-2, rgb(0 0 0 / 0.12));
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+  padding: 4px;
+  font-size: 12px;
+  color: var(--ink, #222);
+  overflow-y: auto;
+  transform-origin: top left;
+}
+.sf-col-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 4px;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+.sf-col-ctx-item:hover {
+  background: var(--muted, rgb(0 0 0 / 0.05));
+}
+.sf-col-ctx-danger {
+  color: var(--destructive, #b54141);
+}
+.sf-col-ctx-sep {
+  height: 1px;
+  background: var(--sf-line-2, rgb(0 0 0 / 0.08));
+  margin: 4px 2px;
 }
 
 /* 테이블 헤더 컬럼 사이 구분선 — 셀 풀하이트 border 대신 가운데 정렬된 짧은 1px 라인.
