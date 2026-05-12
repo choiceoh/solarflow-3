@@ -1,5 +1,9 @@
 # ship.ps1 — push + PR + auto-merge 흐름을 한 명령으로.
-# 사용법: 작업 브랜치에서 .\scripts\ship.ps1 [-Title <제목>]
+#
+# 사용법 (두 가지):
+#   - 권장: .\scripts\ship.cmd [-Title "제목"]
+#       (ExecutionPolicy 우회 래퍼 — PowerShell 기본 정책 Restricted 인 머신에서도 동작)
+#   - 직접: powershell -ExecutionPolicy Bypass -File .\scripts\ship.ps1 [-Title "제목"]
 #
 # 동작:
 #   1) 현재 브랜치 git push -u origin
@@ -21,6 +25,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 의 기본 콘솔 인코딩이 CP949 라 한글 출력이 깨진다.
+# ship.cmd 에서 chcp 65001 도 하지만, 직접 .ps1 호출 경우도 커버.
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 $branch = (git symbolic-ref --short HEAD).Trim()
 if (-not $branch -or $branch -eq 'main') {
