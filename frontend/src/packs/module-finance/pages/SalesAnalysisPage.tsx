@@ -2081,20 +2081,11 @@ export default function SalesAnalysisPage() {
                 title="대체원가 기준 마진"
                 sub="원가 미연결 잠정 보정"
                 right={
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="search"
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                      placeholder="테이블 검색"
-                      className="h-8 w-44 rounded-md border border-[var(--line)] bg-[var(--bg-1)] px-2 text-xs"
-                    />
-                    <FilterChips
-                      options={alternativeCostOptions}
-                      value={alternativeCostBasis}
-                      onChange={(value) => setAlternativeCostBasis(value as AlternativeCostBasis)}
-                    />
-                  </div>
+                  <FilterChips
+                    options={alternativeCostOptions}
+                    value={alternativeCostBasis}
+                    onChange={(value) => setAlternativeCostBasis(value as AlternativeCostBasis)}
+                  />
                 }
               >
                 <div className="grid grid-cols-3 gap-3 border-b border-[var(--line)] px-4 py-3">
