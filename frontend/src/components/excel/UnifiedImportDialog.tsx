@@ -2,7 +2,7 @@
 // 비유: 통합 접수창 — 모든 섹션을 탭으로 펼쳐 보여주고 한 번에 등록한다.
 // 부분 실패 허용: 섹션 단위로 직렬 등록, 실패 섹션은 결과창에서 안내.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, MinusCircle, Upload, X } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -13,7 +13,8 @@ import {
   FIELDS_MAP, DECLARATION_FIELDS, DECLARATION_COST_FIELDS,
 } from '@/types/excel';
 import type { UnifiedImportPreview, UnifiedSection } from '@/types/excel';
-import ImportPreviewTable from './ImportPreviewTable';
+import ImportPreviewTable, { type ImportPreviewTableHandle } from './ImportPreviewTable';
+import ImportPreviewErrorList from './ImportPreviewErrorList';
 
 interface Props {
   preview: UnifiedImportPreview | null;
@@ -349,71 +350,178 @@ function SectionPanel({ section, filter, onFilter }: PanelProps) {
   }
 
   if (section.declPreview) {
-    const declValid = section.declPreview.declarations.filter((r) => r.valid).length;
-    const declError = section.declPreview.declarations.filter((r) => !r.valid).length;
-    const costValid = section.declPreview.costs.filter((r) => r.valid).length;
-    const costError = section.declPreview.costs.filter((r) => !r.valid).length;
     return (
-      <div className="flex flex-col gap-2 overflow-hidden">
-        <SectionMeta
-          valid={declValid + costValid}
-          warning={summarize(section).warning}
-          total={section.declPreview.declarations.length + section.declPreview.costs.length}
-          filter={filter}
-          onFilter={onFilter}
-        />
-        <Tabs defaultValue="declarations" className="flex-1 overflow-hidden flex flex-col">
-          <TabsList>
-            <TabsTrigger value="declarations">
-              면장 ({declValid}/{section.declPreview.declarations.length})
-              {declError > 0 && <span className="sf-text-neg"> · 에러 {declError}</span>}
-            </TabsTrigger>
-            <TabsTrigger value="costs">
-              원가 ({costValid}/{section.declPreview.costs.length})
-              {costError > 0 && <span className="sf-text-neg"> · 에러 {costError}</span>}
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="declarations" className="flex-1 overflow-auto mt-2">
-            <ImportPreviewTable
-              rows={section.declPreview.declarations}
-              fields={DECLARATION_FIELDS}
-              filter={filter}
-            />
-          </TabsContent>
-          <TabsContent value="costs" className="flex-1 overflow-auto mt-2">
-            <ImportPreviewTable
-              rows={section.declPreview.costs}
-              fields={DECLARATION_COST_FIELDS}
-              filter={filter}
-            />
-          </TabsContent>
-        </Tabs>
-      </div>
+      <DeclarationPanel
+        section={section}
+        filter={filter}
+        onFilter={onFilter}
+      />
     );
   }
 
   if (section.preview) {
     return (
-      <div className="flex flex-col gap-2 overflow-hidden">
-        <SectionMeta
-          valid={section.preview.validRows}
-          warning={section.preview.warningRows ?? section.preview.rows.filter((r) => r.valid && (r.warnings?.length ?? 0) > 0).length}
-          total={section.preview.totalRows}
-          filter={filter}
-          onFilter={onFilter}
-        />
-        <div className="flex-1 overflow-auto">
-          <ImportPreviewTable
-            rows={section.preview.rows}
-            fields={FIELDS_MAP[section.type]}
-            filter={filter}
-          />
-        </div>
-      </div>
+      <SimpleSectionPanel
+        section={section}
+        filter={filter}
+        onFilter={onFilter}
+      />
     );
   }
 
   return null;
+}
+
+/**
+ * 단일 표 섹션 — 좌측 표 + 우측 에러/경고 사이드 패널.
+ * 패널 항목 클릭 → 표가 그 행으로 scrollIntoView + 잠깐 노란 글로우.
+ */
+function SimpleSectionPanel({
+  section,
+  filter,
+  onFilter,
+}: {
+  section: UnifiedSection;
+  filter: FilterMode;
+  onFilter: (m: FilterMode) => void;
+}) {
+  const tableRef = useRef<ImportPreviewTableHandle>(null);
+  const [activeRow, setActiveRow] = useState<number | null>(null);
+  // 강조는 잠깐 — 1.5초 후 자동 해제. 다음 클릭이 들어오면 타이머 재설정.
+  useEffect(() => {
+    if (activeRow == null) return;
+    const t = window.setTimeout(() => setActiveRow(null), 1500);
+    return () => window.clearTimeout(t);
+  }, [activeRow]);
+
+  function jump(rowNumber: number) {
+    setActiveRow(rowNumber);
+    tableRef.current?.scrollToRow(rowNumber);
+  }
+
+  if (!section.preview) return null;
+
+  return (
+    <div className="flex flex-col gap-2 overflow-hidden">
+      <SectionMeta
+        valid={section.preview.validRows}
+        warning={section.preview.warningRows ?? section.preview.rows.filter((r) => r.valid && (r.warnings?.length ?? 0) > 0).length}
+        total={section.preview.totalRows}
+        filter={filter}
+        onFilter={onFilter}
+      />
+      <div className="flex flex-1 gap-2 overflow-hidden">
+        <div className="flex-1 overflow-auto">
+          <ImportPreviewTable
+            ref={tableRef}
+            rows={section.preview.rows}
+            fields={FIELDS_MAP[section.type]}
+            filter={filter}
+            highlightedRow={activeRow}
+          />
+        </div>
+        <ImportPreviewErrorList
+          rows={section.preview.rows}
+          onJump={jump}
+          activeRow={activeRow}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 면장 섹션 — declarations / costs 탭 각각이 자기 표 + 사이드 에러 패널.
+ */
+function DeclarationPanel({
+  section,
+  filter,
+  onFilter,
+}: {
+  section: UnifiedSection;
+  filter: FilterMode;
+  onFilter: (m: FilterMode) => void;
+}) {
+  if (!section.declPreview) return null;
+  const declValid = section.declPreview.declarations.filter((r) => r.valid).length;
+  const declError = section.declPreview.declarations.filter((r) => !r.valid).length;
+  const costValid = section.declPreview.costs.filter((r) => r.valid).length;
+  const costError = section.declPreview.costs.filter((r) => !r.valid).length;
+  return (
+    <div className="flex flex-col gap-2 overflow-hidden">
+      <SectionMeta
+        valid={declValid + costValid}
+        warning={summarize(section).warning}
+        total={section.declPreview.declarations.length + section.declPreview.costs.length}
+        filter={filter}
+        onFilter={onFilter}
+      />
+      <Tabs defaultValue="declarations" className="flex-1 overflow-hidden flex flex-col">
+        <TabsList>
+          <TabsTrigger value="declarations">
+            면장 ({declValid}/{section.declPreview.declarations.length})
+            {declError > 0 && <span className="sf-text-neg"> · 에러 {declError}</span>}
+          </TabsTrigger>
+          <TabsTrigger value="costs">
+            원가 ({costValid}/{section.declPreview.costs.length})
+            {costError > 0 && <span className="sf-text-neg"> · 에러 {costError}</span>}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="declarations" className="flex-1 overflow-hidden mt-2">
+          <DeclarationSubPanel
+            rows={section.declPreview.declarations}
+            fields={DECLARATION_FIELDS}
+            filter={filter}
+          />
+        </TabsContent>
+        <TabsContent value="costs" className="flex-1 overflow-hidden mt-2">
+          <DeclarationSubPanel
+            rows={section.declPreview.costs}
+            fields={DECLARATION_COST_FIELDS}
+            filter={filter}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function DeclarationSubPanel({
+  rows,
+  fields,
+  filter,
+}: {
+  rows: import('@/types/excel').ParsedRow[];
+  fields: import('@/types/excel').FieldDef[];
+  filter: FilterMode;
+}) {
+  const tableRef = useRef<ImportPreviewTableHandle>(null);
+  const [activeRow, setActiveRow] = useState<number | null>(null);
+  useEffect(() => {
+    if (activeRow == null) return;
+    const t = window.setTimeout(() => setActiveRow(null), 1500);
+    return () => window.clearTimeout(t);
+  }, [activeRow]);
+
+  function jump(rowNumber: number) {
+    setActiveRow(rowNumber);
+    tableRef.current?.scrollToRow(rowNumber);
+  }
+
+  return (
+    <div className="flex h-full gap-2 overflow-hidden">
+      <div className="flex-1 overflow-auto">
+        <ImportPreviewTable
+          ref={tableRef}
+          rows={rows}
+          fields={fields}
+          filter={filter}
+          highlightedRow={activeRow}
+        />
+      </div>
+      <ImportPreviewErrorList rows={rows} onJump={jump} activeRow={activeRow} />
+    </div>
+  );
 }
 
 interface MetaProps {

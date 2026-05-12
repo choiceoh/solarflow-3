@@ -1,3 +1,4 @@
+import { forwardRef, useImperativeHandle, useRef } from 'react';
 import type { ParsedRow, FieldDef, RowError } from '@/types/excel';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -7,9 +8,22 @@ interface Props {
   rows: ParsedRow[];
   fields: FieldDef[];
   filter: 'all' | 'valid' | 'warning' | 'error';
+  /** 사이드 패널에서 에러를 클릭했을 때 점프할 행. 잠깐 노란 글로우 → 사라짐. */
+  highlightedRow?: number | null;
 }
 
-export default function ImportPreviewTable({ rows, fields, filter }: Props) {
+/**
+ * 부모(다이얼로그)에서 사이드 패널 → 표 행으로 점프하기 위한 imperative API.
+ * 행 번호로 scrollIntoView + focus 임시 효과.
+ */
+export interface ImportPreviewTableHandle {
+  scrollToRow: (rowNumber: number) => void;
+}
+
+const ImportPreviewTable = forwardRef<ImportPreviewTableHandle, Props>(function ImportPreviewTable(
+  { rows, fields, filter, highlightedRow },
+  ref,
+) {
   const filtered = rows.filter((r) => {
     const hasWarnings = r.valid && (r.warnings?.length ?? 0) > 0;
     if (filter === 'valid') return r.valid && !hasWarnings;
@@ -17,6 +31,19 @@ export default function ImportPreviewTable({ rows, fields, filter }: Props) {
     if (filter === 'error') return !r.valid;
     return true;
   });
+
+  // 행 번호별 <tr> ref. 부모가 scrollToRow 를 호출하면 같은 키의 element 로 scrollIntoView.
+  const rowRefs = useRef<Map<number, HTMLTableRowElement | null>>(new Map());
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollToRow(rowNumber: number) {
+        const el = rowRefs.current.get(rowNumber);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      },
+    }),
+    [],
+  );
 
   if (filtered.length === 0) {
     return <p className="sf-text-ink-3 py-4 text-center text-sm">표시할 데이터가 없습니다</p>;
@@ -48,6 +75,11 @@ export default function ImportPreviewTable({ rows, fields, filter }: Props) {
               key={row.rowNumber}
               row={row}
               fields={fields}
+              isHighlighted={highlightedRow === row.rowNumber}
+              registerRef={(el) => {
+                if (el) rowRefs.current.set(row.rowNumber, el);
+                else rowRefs.current.delete(row.rowNumber);
+              }}
               getErrorForField={getErrorForField}
               getWarningForField={getWarningForField}
             />
@@ -56,13 +88,17 @@ export default function ImportPreviewTable({ rows, fields, filter }: Props) {
       </table>
     </div>
   );
-}
+});
+
+export default ImportPreviewTable;
 
 function PreviewRow({
-  row, fields, getErrorForField, getWarningForField,
+  row, fields, getErrorForField, getWarningForField, isHighlighted, registerRef,
 }: {
   row: ParsedRow;
   fields: FieldDef[];
+  isHighlighted: boolean;
+  registerRef: (el: HTMLTableRowElement | null) => void;
   getErrorForField: (row: ParsedRow, fieldLabel: string) => RowError | undefined;
   getWarningForField: (row: ParsedRow, fieldLabel: string) => RowError | undefined;
 }) {
@@ -71,10 +107,14 @@ function PreviewRow({
 
   return (
     <tr
+      ref={registerRef}
       className={cn(
-        'border-t',
+        'border-t transition-colors',
         !row.valid && 'bg-red-50',
         hasWarnings && 'bg-amber-50',
+        // 사이드 패널에서 에러를 클릭하면 잠깐 노란 ring 으로 점프 위치 표시.
+        // highlightedRow 가 null 로 되돌아가면 트랜지션으로 자연스럽게 사라짐.
+        isHighlighted && 'ring-2 ring-amber-400 ring-inset bg-amber-100',
       )}
     >
       <td className="sf-mono sf-text-ink-3 px-2 py-1 tabular-nums">{row.rowNumber}</td>
