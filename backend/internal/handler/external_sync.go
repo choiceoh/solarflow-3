@@ -30,6 +30,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"solarflow-backend/internal/domains/order"
+	"solarflow-backend/internal/domains/outbound"
 	"solarflow-backend/internal/domains/product"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
@@ -645,7 +646,7 @@ func (h *ExternalSyncHandler) processTopsolarOutbound(src model.ExternalSyncSour
 				}
 			}
 		}
-		req := model.CreateOutboundRequest{
+		req := outbound.CreateOutboundRequest{
 			OutboundDate:  dateISO,
 			CompanyID:     companyID,
 			ProductID:     productID,

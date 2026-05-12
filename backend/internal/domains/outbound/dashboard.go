@@ -1,4 +1,4 @@
-package handler
+package outbound
 
 import (
 	"encoding/json"
@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"solarflow-backend/internal/handlerutil"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
 
@@ -216,8 +215,8 @@ func (h *OutboundHandler) tryRPCOutboundsDashboard(r *http.Request) ([]byte, boo
 
 // fetchAllForDashboard — 필터 적용 후 1000 행 청크로 outbounds 전체를 끌어온다.
 // PostgREST db-max-rows=1000 가드를 우회하는 offset 누적 패턴 (프론트 fetchAllOutbounds 와 동일 전략).
-func (h *OutboundHandler) fetchAllForDashboard(r *http.Request) ([]model.Outbound, error) {
-	all := make([]model.Outbound, 0, dashboardChunkSize)
+func (h *OutboundHandler) fetchAllForDashboard(r *http.Request) ([]Outbound, error) {
+	all := make([]Outbound, 0, dashboardChunkSize)
 	for chunk := 0; chunk < dashboardMaxChunks; chunk++ {
 		q := h.DB.From("outbounds").Select(outboundListColumns, "exact", false)
 		q, ok, err := h.applyOutboundFilters(r, q)
@@ -234,7 +233,7 @@ func (h *OutboundHandler) fetchAllForDashboard(r *http.Request) ([]model.Outboun
 		if err != nil {
 			return nil, fmt.Errorf("outbounds 청크 #%d 조회 실패: %w", chunk, err)
 		}
-		var batch []model.Outbound
+		var batch []Outbound
 		if err := json.Unmarshal(data, &batch); err != nil {
 			return nil, fmt.Errorf("outbounds 청크 #%d 디코딩 실패: %w", chunk, err)
 		}
@@ -250,7 +249,7 @@ func (h *OutboundHandler) fetchAllForDashboard(r *http.Request) ([]model.Outboun
 // period 가 lifetime 이면 입력 그대로, prev_month/year 면 해당 기간의 outbounds 만 breakdown 에 사용.
 // totals, trend24, sale_conversion 은 항상 전체 기준.
 // 입력 슬라이스를 변경하지 않는다.
-func computeOutboundDashboard(outbounds []model.Outbound, period string) *OutboundDashboard {
+func computeOutboundDashboard(outbounds []Outbound, period string) *OutboundDashboard {
 	d := &OutboundDashboard{
 		Period:              period,
 		Trend24:             make([]OutboundTrendPoint, 0, dashboardTrendMonths),
@@ -274,7 +273,7 @@ func computeOutboundDashboard(outbounds []model.Outbound, period string) *Outbou
 
 // computeDashWeekly12 — 현재 주(월요일 시작) 포함 직전 12주의 count + kw 합.
 // 인덱스 0 이 가장 과거, 11 이 이번 주.
-func computeDashWeekly12(outbounds []model.Outbound) []OutboundDashWeeklyPoint {
+func computeDashWeekly12(outbounds []Outbound) []OutboundDashWeeklyPoint {
 	const weeks = 12
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -319,7 +318,7 @@ func computeDashWeekly12(outbounds []model.Outbound) []OutboundDashWeeklyPoint {
 
 // computeDashYoY3Y — 올해 1월~현재월(같은날까지) 의 월별 kW 를 (2년전, 1년전, 올해) 3 트랙으로.
 // last_year_same 은 작년 같은 기간(1월 1일 ~ (현재월,현재일)) 누계, yoy_pct 분모.
-func computeDashYoY3Y(outbounds []model.Outbound) OutboundDashYoY3Y {
+func computeDashYoY3Y(outbounds []Outbound) OutboundDashYoY3Y {
 	now := time.Now()
 	currYear := now.Year()
 	currMonth := int(now.Month())
@@ -381,7 +380,7 @@ func computeDashYoY3Y(outbounds []model.Outbound) OutboundDashYoY3Y {
 }
 
 // filterByPeriod — period 별로 outbounds 를 필터링한다. lifetime 은 그대로 반환.
-func filterByPeriod(outbounds []model.Outbound, period string) []model.Outbound {
+func filterByPeriod(outbounds []Outbound, period string) []Outbound {
 	if period == "lifetime" {
 		return outbounds
 	}
@@ -396,7 +395,7 @@ func filterByPeriod(outbounds []model.Outbound, period string) []model.Outbound 
 	default:
 		return outbounds
 	}
-	out := make([]model.Outbound, 0, len(outbounds))
+	out := make([]Outbound, 0, len(outbounds))
 	for _, o := range outbounds {
 		if len(o.OutboundDate) >= len(prefix) && o.OutboundDate[:len(prefix)] == prefix {
 			out = append(out, o)
@@ -405,7 +404,7 @@ func filterByPeriod(outbounds []model.Outbound, period string) []model.Outbound 
 	return out
 }
 
-func computeDashTotals(outbounds []model.Outbound) OutboundDashTotals {
+func computeDashTotals(outbounds []Outbound) OutboundDashTotals {
 	t := OutboundDashTotals{Count: len(outbounds)}
 	for _, o := range outbounds {
 		if o.CapacityKw != nil {
@@ -433,7 +432,7 @@ func computeDashTotals(outbounds []model.Outbound) OutboundDashTotals {
 
 // computeDashTrend24 — 현재 시각 기준 직전 24개월 (현재월 포함) 의 월별 count + kw 합계.
 // 데이터가 없는 월도 포함 — 프론트가 길이 24의 배열을 전제로 그래프를 그리기 때문.
-func computeDashTrend24(outbounds []model.Outbound) []OutboundTrendPoint {
+func computeDashTrend24(outbounds []Outbound) []OutboundTrendPoint {
 	now := time.Now()
 	labels := make([]string, dashboardTrendMonths)
 	idx := make(map[string]int, dashboardTrendMonths)
@@ -472,7 +471,7 @@ const (
 	dimCustomer
 )
 
-func computeDashBreakdown(outbounds []model.Outbound, dim breakdownDim) []OutboundBreakdownRow {
+func computeDashBreakdown(outbounds []Outbound, dim breakdownDim) []OutboundBreakdownRow {
 	type acc struct {
 		label string
 		count int
@@ -544,7 +543,7 @@ func topN(rows []OutboundBreakdownRow, n int) []OutboundBreakdownRow {
 
 // computeDashSaleConversion — usage_category in (sale, sale_spare) 인 출고 중 sales 레코드 연결된 비율.
 // monthly 는 24개월 윈도우. 차원별 분해는 by_usage / by_manufacturer_top10 / by_customer_top10.
-func computeDashSaleConversion(outbounds []model.Outbound) OutboundDashSaleConversion {
+func computeDashSaleConversion(outbounds []Outbound) OutboundDashSaleConversion {
 	out := OutboundDashSaleConversion{
 		ByUsage:             []OutboundSaleConvBreakdownRow{},
 		ByManufacturerTop10: []OutboundSaleConvBreakdownRow{},
@@ -644,14 +643,14 @@ func convRows(m map[string]*convAcc, top int) []OutboundSaleConvBreakdownRow {
 	return rows
 }
 
-func mfgKeyLabel(o model.Outbound) (string, string) {
+func mfgKeyLabel(o Outbound) (string, string) {
 	if o.ManufacturerID != nil && *o.ManufacturerID != "" {
 		return *o.ManufacturerID, handlerutil.StrPtrOr(o.ManufacturerName, "미지정")
 	}
 	return "__unset__", handlerutil.StrPtrOr(o.ManufacturerName, "미지정")
 }
 
-func custKeyLabel(o model.Outbound) (string, string) {
+func custKeyLabel(o Outbound) (string, string) {
 	if o.CustomerID != nil && *o.CustomerID != "" {
 		return *o.CustomerID, handlerutil.StrPtrOr(o.CustomerName, "미지정")
 	}

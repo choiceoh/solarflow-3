@@ -1,0 +1,27 @@
+schema_version: 1
+
+id: outbound
+display_name: "출고 + WMS (Outbound)"
+
+pack: erp-core
+feature_id: tx.outbound
+visible_to: all
+
+paths:
+  backend:
+    - backend/internal/domains/outbound/
+
+tables: []
+depends_on: []
+external_users: []
+
+blast_radius:
+  - description: "outbound model 변경"
+    must_check:
+      - "backend/internal/domains/outbound/handler.go Validation"
+
+verify_scripts:
+  - command: scripts/verify_changed.sh
+    when: always
+
+owners: [choiceoh]

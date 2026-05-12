@@ -134,7 +134,9 @@ func (h *DBIntegrityHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 // postgRESTErrorMessage — supabase-go 의 Rpc/Execute 는 HTTP 상태와 무관하게 body 를
 // 그대로 string 으로 반환한다. PostgREST 에러는
-//   {"code":"57014","message":"canceling statement due to statement timeout",...}
+//
+//	{"code":"57014","message":"canceling statement due to statement timeout",...}
+//
 // 형태의 객체로 오므로, 배열로 unmarshal 시도하기 전에 에러 객체인지 먼저 판별해
 // 사용자에게 의미 있는 메시지를 노출한다.
 func postgRESTErrorMessage(body string) string {

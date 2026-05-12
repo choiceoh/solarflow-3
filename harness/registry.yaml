@@ -162,6 +162,20 @@ domains:
     pack: erp-core
     manifest: harness/domains/product.yaml
 
+  - id: outbound
+    display_name: "출고 + WMS"
+    visible_to: all
+    feature_id: tx.outbound
+    pack: erp-core
+    manifest: harness/domains/outbound.yaml
+
+  - id: intercompany
+    display_name: "그룹내 매입 요청"
+    visible_to: module
+    feature_id: intercompany.request
+    pack: module-finance
+    manifest: harness/domains/intercompany.yaml
+
   # PR-D 대상 (현재 코드에 존재, manifest 미작성):
   # - id: declaration             # 면장/통관
   # - id: products                # 제품 마스터

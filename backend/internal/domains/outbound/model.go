@@ -1,4 +1,4 @@
-package model
+package outbound
 
 import "solarflow-backend/internal/domains/sale"
 

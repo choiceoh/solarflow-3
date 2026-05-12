@@ -1,4 +1,4 @@
-package handler
+package outbound
 
 import (
 	"encoding/json"
@@ -19,7 +19,6 @@ import (
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
-	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 	"solarflow-backend/internal/rpcutil"
@@ -33,7 +32,7 @@ const (
 )
 
 // outboundListColumns — List 응답에 포함할 outbounds 컬럼 화이트리스트.
-// source_payload (외부 양식 원본 jsonb, 행당 KB 단위) 제외 — 상세 화면(GetByID/fetchOutboundByID) 에서는 그대로 * 사용.
+// source_payload (외부 양식 원본 jsonb, 행당 KB 단위) 제외 — 상세 화면(GetByID/FetchOutboundByID) 에서는 그대로 * 사용.
 // bl_id 는 outbound_bl_items 테이블로 이관(021) 되어 outbounds 에 컬럼이 없으므로 빼야 PostgREST 42703 회피.
 const outboundListColumns = "outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, " +
 	"warehouse_id, usage_category, order_id, site_name, site_address, spare_qty, " +
@@ -65,15 +64,15 @@ type OutboundHandler struct {
 }
 
 type createOutboundRPCRequest struct {
-	OutboundID string                       `json:"p_outbound_id"`
-	Outbound   model.CreateOutboundRequest  `json:"p_outbound"`
-	BLItems    *[]model.OutboundBLItemInput `json:"p_bl_items,omitempty"`
+	OutboundID string                 `json:"p_outbound_id"`
+	Outbound   CreateOutboundRequest  `json:"p_outbound"`
+	BLItems    *[]OutboundBLItemInput `json:"p_bl_items,omitempty"`
 }
 
 type updateOutboundRPCRequest struct {
-	OutboundID string                       `json:"p_outbound_id"`
-	Outbound   model.UpdateOutboundRequest  `json:"p_outbound"`
-	BLItems    *[]model.OutboundBLItemInput `json:"p_bl_items,omitempty"`
+	OutboundID string                 `json:"p_outbound_id"`
+	Outbound   UpdateOutboundRequest  `json:"p_outbound"`
+	BLItems    *[]OutboundBLItemInput `json:"p_bl_items,omitempty"`
 }
 
 type deleteOutboundRPCRequest struct {
@@ -116,26 +115,26 @@ func init() {
 	})
 }
 
-func (h *OutboundHandler) fetchOutboundByID(id string) (model.Outbound, error) {
+func (h *OutboundHandler) FetchOutboundByID(id string) (Outbound, error) {
 	data, _, err := h.DB.From("outbounds").
 		Select("*", "exact", false).
 		Eq("outbound_id", id).
 		Execute()
 	if err != nil {
-		return model.Outbound{}, err
+		return Outbound{}, err
 	}
 
-	var outbounds []model.Outbound
+	var outbounds []Outbound
 	if err := json.Unmarshal(data, &outbounds); err != nil {
-		return model.Outbound{}, err
+		return Outbound{}, err
 	}
 	if len(outbounds) == 0 {
-		return model.Outbound{}, errOutboundNotFound
+		return Outbound{}, errOutboundNotFound
 	}
 
 	enriched, err := h.enrichOutbounds(outbounds)
 	if err != nil {
-		return model.Outbound{}, err
+		return Outbound{}, err
 	}
 	ob := enriched[0]
 	ob.BLItems = h.fetchBLItems(id)
@@ -165,7 +164,7 @@ func (h *OutboundHandler) fetchBLNumberMap() map[string]string {
 	return result
 }
 
-func withBLNumbers(items []model.OutboundBLItem, blNumbers map[string]string) []model.OutboundBLItem {
+func withBLNumbers(items []OutboundBLItem, blNumbers map[string]string) []OutboundBLItem {
 	for i := range items {
 		if number, ok := blNumbers[items[i].BLID]; ok {
 			blNumber := number
@@ -176,7 +175,7 @@ func withBLNumbers(items []model.OutboundBLItem, blNumbers map[string]string) []
 }
 
 // fetchBLItems — outbound_bl_items 조회 헬퍼
-func (h *OutboundHandler) fetchBLItems(outboundID string) []model.OutboundBLItem {
+func (h *OutboundHandler) fetchBLItems(outboundID string) []OutboundBLItem {
 	data, _, err := h.DB.From("outbound_bl_items").
 		Select("*", "exact", false).
 		Eq("outbound_id", outboundID).
@@ -184,26 +183,26 @@ func (h *OutboundHandler) fetchBLItems(outboundID string) []model.OutboundBLItem
 	if err != nil {
 		return nil
 	}
-	var items []model.OutboundBLItem
+	var items []OutboundBLItem
 	if err := json.Unmarshal(data, &items); err != nil {
 		return nil
 	}
 	return withBLNumbers(items, h.fetchBLNumberMap())
 }
 
-func (h *OutboundHandler) fetchBLItemsByOutbound() map[string][]model.OutboundBLItem {
+func (h *OutboundHandler) fetchBLItemsByOutbound() map[string][]OutboundBLItem {
 	data, _, err := h.DB.From("outbound_bl_items").
 		Select("*", "exact", false).
 		Execute()
 	if err != nil {
-		return map[string][]model.OutboundBLItem{}
+		return map[string][]OutboundBLItem{}
 	}
-	var items []model.OutboundBLItem
+	var items []OutboundBLItem
 	if err := json.Unmarshal(data, &items); err != nil {
-		return map[string][]model.OutboundBLItem{}
+		return map[string][]OutboundBLItem{}
 	}
 	items = withBLNumbers(items, h.fetchBLNumberMap())
-	result := make(map[string][]model.OutboundBLItem)
+	result := make(map[string][]OutboundBLItem)
 	for _, item := range items {
 		result[item.OutboundID] = append(result[item.OutboundID], item)
 	}
@@ -277,21 +276,21 @@ func (h *OutboundHandler) activeSaleOutboundIDs() ([]string, error) {
 	return ids, nil
 }
 
-func (h *OutboundHandler) fetchOutboundRecord(id string) (model.Outbound, bool, error) {
+func (h *OutboundHandler) fetchOutboundRecord(id string) (Outbound, bool, error) {
 	data, _, err := h.DB.From("outbounds").
 		Select("*", "exact", false).
 		Eq("outbound_id", id).
 		Execute()
 	if err != nil {
-		return model.Outbound{}, false, err
+		return Outbound{}, false, err
 	}
 
-	var rows []model.Outbound
+	var rows []Outbound
 	if err := json.Unmarshal(data, &rows); err != nil {
-		return model.Outbound{}, false, err
+		return Outbound{}, false, err
 	}
 	if len(rows) == 0 {
-		return model.Outbound{}, false, nil
+		return Outbound{}, false, nil
 	}
 	return rows[0], true, nil
 }
@@ -373,7 +372,7 @@ func (h *OutboundHandler) ensureOutboundStockAvailable(companyID, productID stri
 	return 0, "", nil
 }
 
-func (h *OutboundHandler) enrichOutbounds(outbounds []model.Outbound) ([]model.Outbound, error) {
+func (h *OutboundHandler) enrichOutbounds(outbounds []Outbound) ([]Outbound, error) {
 	if len(outbounds) == 0 {
 		return outbounds, nil
 	}
@@ -740,7 +739,7 @@ func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		w.Header().Set("X-Total-Count", "0")
-		response.RespondJSON(w, http.StatusOK, []model.Outbound{})
+		response.RespondJSON(w, http.StatusOK, []Outbound{})
 		return
 	}
 
@@ -757,7 +756,7 @@ func (h *OutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var outbounds []model.Outbound
+	var outbounds []Outbound
 	if err := json.Unmarshal(data, &outbounds); err != nil {
 		log.Printf("[출고 목록 디코딩 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "응답 데이터 처리에 실패했습니다")
@@ -905,7 +904,7 @@ func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
 func (h *OutboundHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	ob, err := h.fetchOutboundByID(id)
+	ob, err := h.FetchOutboundByID(id)
 	if err != nil {
 		log.Printf("[출고 상세 조회 실패] id=%s err=%v", id, err)
 		if errors.Is(err, errOutboundNotFound) {
@@ -921,14 +920,14 @@ func (h *OutboundHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 // Create — POST /api/v1/outbounds — 출고 등록
 func (h *OutboundHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateOutboundRequest
+	var req CreateOutboundRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[출고 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return
 	}
 
-	created, code, msg, err := h.createOutboundCore(req)
+	created, code, msg, err := h.CreateOutboundCore(req)
 	if err != nil {
 		response.RespondError(w, code, msg)
 		return
@@ -937,26 +936,26 @@ func (h *OutboundHandler) Create(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, code, created)
 }
 
-// createOutboundCore — Create 핸들러와 AI 도우미 ConfirmProposal이 공유하는 핵심 로직.
+// CreateOutboundCore — Create 핸들러와 AI 도우미 ConfirmProposal이 공유하는 핵심 로직.
 // status 기본값/검증/재고 체크/트랜잭션 RPC/결과 조회까지 수행한다.
 // audit log 기록은 호출 측에서 (요청 컨텍스트가 필요하므로).
 // 반환: (생성된 출고, HTTP status code, 사용자용 메시지, error). err==nil이면 code는 201.
-func (h *OutboundHandler) createOutboundCore(req model.CreateOutboundRequest) (model.Outbound, int, string, error) {
+func (h *OutboundHandler) CreateOutboundCore(req CreateOutboundRequest) (Outbound, int, string, error) {
 	if req.Status == "" {
 		req.Status = "active"
 	}
 	if msg := req.Validate(); msg != "" {
-		return model.Outbound{}, http.StatusBadRequest, msg, fmt.Errorf("validate: %s", msg)
+		return Outbound{}, http.StatusBadRequest, msg, fmt.Errorf("validate: %s", msg)
 	}
 
 	if status, msg, err := h.ensureOutboundStockAvailable(req.CompanyID, req.ProductID, req.Quantity, req.CapacityKw, req.Status, 0); err != nil {
 		log.Printf("[출고 등록 재고 검증 실패] company_id=%s product_id=%s err=%v", req.CompanyID, req.ProductID, err)
-		return model.Outbound{}, status, msg, err
+		return Outbound{}, status, msg, err
 	}
 
 	blItems := req.BLItems
 	req.BLItems = nil
-	var blItemsParam *[]model.OutboundBLItemInput
+	var blItemsParam *[]OutboundBLItemInput
 	if blItems != nil {
 		blItemsParam = &blItems
 	}
@@ -968,13 +967,13 @@ func (h *OutboundHandler) createOutboundCore(req model.CreateOutboundRequest) (m
 		BLItems:    blItemsParam,
 	}); err != nil {
 		log.Printf("[출고 트랜잭션 등록 실패] outbound_id=%s err=%v", outboundID, err)
-		return model.Outbound{}, http.StatusInternalServerError, "출고 등록에 실패했습니다", err
+		return Outbound{}, http.StatusInternalServerError, "출고 등록에 실패했습니다", err
 	}
 
-	created, err := h.fetchOutboundByID(outboundID)
+	created, err := h.FetchOutboundByID(outboundID)
 	if err != nil {
 		log.Printf("[출고 등록 결과 조회 실패] outbound_id=%s err=%v", outboundID, err)
-		return model.Outbound{}, http.StatusInternalServerError, "출고 등록 결과를 확인할 수 없습니다", err
+		return Outbound{}, http.StatusInternalServerError, "출고 등록 결과를 확인할 수 없습니다", err
 	}
 	if err := h.ensurePickingListForOutbound(created); err != nil {
 		log.Printf("[WMS 피킹 자동 생성 실패] outbound_id=%s err=%v", outboundID, err)
@@ -986,7 +985,7 @@ func (h *OutboundHandler) createOutboundCore(req model.CreateOutboundRequest) (m
 func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req model.UpdateOutboundRequest
+	var req UpdateOutboundRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[출고 수정 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
@@ -1051,7 +1050,7 @@ func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// BLItems 추출 후 nil 처리
 	blItems := req.BLItems
 	req.BLItems = nil
-	var blItemsParam *[]model.OutboundBLItemInput
+	var blItemsParam *[]OutboundBLItemInput
 	if blItems != nil {
 		blItemsParam = &blItems
 	}
@@ -1070,7 +1069,7 @@ func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := h.fetchOutboundByID(id)
+	updated, err := h.FetchOutboundByID(id)
 	if err != nil {
 		log.Printf("[출고 수정 결과 조회 실패] outbound_id=%s err=%v", id, err)
 		if errors.Is(err, errOutboundNotFound) {
