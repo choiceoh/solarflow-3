@@ -97,6 +97,12 @@ if [[ -f "$MODELS_DIR/inventory_allocation.go" ]]; then
   check_struct "inventory_allocations" "$MODELS_DIR/inventory_allocation.go" "UpdateInventoryAllocationRequest"
 fi
 
+# price_benchmarks
+if [[ -f "$MODELS_DIR/price_benchmark.go" ]]; then
+  check_struct "price_benchmarks" "$MODELS_DIR/price_benchmark.go" "CreatePriceBenchmarkRequest"
+  check_struct "price_benchmarks" "$MODELS_DIR/price_benchmark.go" "UpdatePriceBenchmarkReviewStatusRequest"
+fi
+
 echo ""
 if [[ $FAIL -eq 1 ]]; then
   echo "💥 불일치 발견 — 아래 절차를 따르세요:"
