@@ -59,34 +59,13 @@ interface LegacyCustomerAnalysis {
   total_outstanding: number;
 }
 
-function mergeMaturity(rs: LCMaturityAlert[]): LCMaturityAlert {
-  return { alerts: rs.flatMap((r) => r.alerts || []) };
-}
-function mergeTimeline(rs: LCLimitTimeline[]): LCLimitTimeline {
-  const projMap = new Map<string, number>();
-  for (const r of rs) for (const p of r.monthly_projection || []) projMap.set(p.month, (projMap.get(p.month) || 0) + p.projected_available);
-  return {
-    bank_summaries: rs.flatMap((r) => r.bank_summaries || []),
-    timeline_events: rs.flatMap((r) => r.timeline_events || []),
-    monthly_projection: Array.from(projMap.entries()).map(([month, projected_available]) => ({ month, projected_available })),
-  };
-}
-function mergeCustomer(rs: CustomerAnalysis[]): CustomerAnalysis {
-  return {
-    items: rs.flatMap(customerRows),
-    summary: {
-      total_outstanding_krw: rs.reduce((s, r) => s + (r.summary?.total_outstanding_krw ?? r.total_outstanding ?? 0), 0),
-    },
-  };
-}
-
 const FIVE_MIN = 5 * 60 * 1000;
 
 async function loadAlerts(companyId: string): Promise<AlertItem[]> {
   const results = await Promise.allSettled([
-    fetchCalc<LCMaturityAlert>(companyId, '/api/v1/calc/lc-maturity-alert', { days_ahead: 7 }, mergeMaturity),
-    fetchCalc<LCLimitTimeline>(companyId, '/api/v1/calc/lc-limit-timeline', { months_ahead: 3 }, mergeTimeline),
-    fetchCalc<CustomerAnalysis | LegacyCustomerAnalysis>(companyId, '/api/v1/calc/customer-analysis', {}, (rs) => mergeCustomer(rs as CustomerAnalysis[])),
+    fetchCalc<LCMaturityAlert>(companyId, '/api/v1/calc/lc-maturity-alert', { days_ahead: 7 }),
+    fetchCalc<LCLimitTimeline>(companyId, '/api/v1/calc/lc-limit-timeline', { months_ahead: 3 }),
+    fetchCalc<CustomerAnalysis | LegacyCustomerAnalysis>(companyId, '/api/v1/calc/customer-analysis', {}),
     fetchCalc<InventoryResponse>(companyId, '/api/v1/calc/inventory', {}),
     fetchAllPaginated<BLShipment>('/api/v1/bls', companyId ? `company_id=${companyId}` : ''),
     fetchAllPaginated<Order>('/api/v1/orders', companyId ? `company_id=${companyId}` : ''),

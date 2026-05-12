@@ -19,7 +19,7 @@ import { companyQueryUrl, fetchCalc } from "@/lib/companyUtils"
 import { fetchAllPaginated, fetchWithAuth } from "@/lib/api"
 import { formatKRW, formatNumber, moduleLabel } from "@/lib/utils"
 import type { SaleListItem } from "@/types/outbound"
-import type { CustomerAnalysis, CustomerItem } from "@/types/analysis"
+import type { CustomerAnalysis } from "@/types/analysis"
 import type { Partner, Product } from "@/types/masters"
 import { CardB, FilterChips, RailBlock, TileB } from "@/components/command/MockupPrimitives"
 import { KpiStrip } from "@/components/command/KpiStrip"
@@ -273,127 +273,6 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-function mergeMargin(results: MarginAnalysis[]): MarginAnalysis {
-  const map = new Map<string, MarginItem>()
-  for (const result of results) {
-    for (const item of result.items || []) {
-      const key = `${item.manufacturer_name}|${item.product_code}|${item.spec_wp}`
-      const prev = map.get(key)
-      if (!prev) {
-        map.set(key, { ...item })
-        continue
-      }
-      const totalQty = prev.total_sold_qty + item.total_sold_qty
-      const totalRevenue = prev.total_revenue_krw + item.total_revenue_krw
-      const totalCost = (prev.total_cost_krw ?? 0) + (item.total_cost_krw ?? 0)
-      const prevCoveredRevenue =
-        prev.cost_covered_revenue_krw ?? (prev.total_cost_krw != null ? prev.total_revenue_krw : 0)
-      const itemCoveredRevenue =
-        item.cost_covered_revenue_krw ?? (item.total_cost_krw != null ? item.total_revenue_krw : 0)
-      const costCoveredRevenue = prevCoveredRevenue + itemCoveredRevenue
-      const costMissingRevenue = Math.max(0, totalRevenue - costCoveredRevenue)
-      const hasCost = costCoveredRevenue > 0
-      const totalMargin = hasCost ? costCoveredRevenue - totalCost : null
-      const totalWp = totalQty * item.spec_wp
-      map.set(key, {
-        ...prev,
-        total_sold_qty: totalQty,
-        total_sold_kw: prev.total_sold_kw + item.total_sold_kw,
-        avg_sale_price_wp: totalWp > 0 ? round2(totalRevenue / totalWp) : 0,
-        avg_cost_wp: hasCost && totalWp > 0 ? round2(totalCost / totalWp) : null,
-        margin_wp:
-          hasCost && totalWp > 0 ? round2((costCoveredRevenue - totalCost) / totalWp) : null,
-        margin_rate:
-          costCoveredRevenue > 0 && hasCost
-            ? round2(((costCoveredRevenue - totalCost) / costCoveredRevenue) * 100)
-            : null,
-        total_revenue_krw: totalRevenue,
-        total_cost_krw: hasCost ? totalCost : null,
-        total_margin_krw: totalMargin,
-        cost_covered_revenue_krw: round2(costCoveredRevenue),
-        cost_missing_revenue_krw: round2(costMissingRevenue),
-        sale_count: prev.sale_count + item.sale_count,
-      })
-    }
-  }
-  const items = Array.from(map.values()).sort((a, b) => b.total_revenue_krw - a.total_revenue_krw)
-  const totalRevenue = items.reduce((sum, item) => sum + item.total_revenue_krw, 0)
-  const totalCost = items.reduce((sum, item) => sum + (item.total_cost_krw ?? 0), 0)
-  const costCoveredRevenue = items.reduce(
-    (sum, item) =>
-      sum +
-      (item.cost_covered_revenue_krw ?? (item.total_cost_krw != null ? item.total_revenue_krw : 0)),
-    0,
-  )
-  const costMissingRevenue = items.reduce(
-    (sum, item) =>
-      sum +
-      (item.cost_missing_revenue_krw ?? (item.total_cost_krw == null ? item.total_revenue_krw : 0)),
-    0,
-  )
-  const totalMargin = costCoveredRevenue - totalCost
-  return {
-    items,
-    summary: {
-      total_sold_kw: round2(items.reduce((sum, item) => sum + item.total_sold_kw, 0)),
-      total_revenue_krw: round2(totalRevenue),
-      total_cost_krw: round2(totalCost),
-      total_margin_krw: round2(totalMargin),
-      overall_margin_rate:
-        costCoveredRevenue > 0 ? round2((totalMargin / costCoveredRevenue) * 100) : 0,
-      cost_covered_revenue_krw: round2(costCoveredRevenue),
-      cost_missing_revenue_krw: round2(costMissingRevenue),
-      cost_coverage_rate: totalRevenue > 0 ? round2((costCoveredRevenue / totalRevenue) * 100) : 0,
-      cost_basis: results[0]?.summary.cost_basis ?? "landed",
-    },
-  }
-}
-
-function mergeCustomers(results: CustomerAnalysis[]): CustomerAnalysis {
-  const map = new Map<string, CustomerItem>()
-  for (const result of results) {
-    for (const item of result.items || []) {
-      const prev = map.get(item.customer_id)
-      if (!prev) {
-        map.set(item.customer_id, { ...item })
-        continue
-      }
-      map.set(item.customer_id, {
-        ...prev,
-        total_sales_krw: prev.total_sales_krw + item.total_sales_krw,
-        total_collected_krw: prev.total_collected_krw + item.total_collected_krw,
-        outstanding_krw: prev.outstanding_krw + item.outstanding_krw,
-        outstanding_count: prev.outstanding_count + item.outstanding_count,
-        oldest_outstanding_days: Math.max(
-          prev.oldest_outstanding_days,
-          item.oldest_outstanding_days,
-        ),
-        total_margin_krw: (prev.total_margin_krw ?? 0) + (item.total_margin_krw ?? 0),
-        avg_margin_rate: null,
-      })
-    }
-  }
-  const items = Array.from(map.values()).sort((a, b) => b.total_sales_krw - a.total_sales_krw)
-  const totalSales = items.reduce((sum, item) => sum + item.total_sales_krw, 0)
-  const totalMargin = items.reduce((sum, item) => sum + (item.total_margin_krw ?? 0), 0)
-  return {
-    items: items.map((item) => ({
-      ...item,
-      avg_margin_rate:
-        item.total_sales_krw > 0 && item.total_margin_krw != null
-          ? round2((item.total_margin_krw / item.total_sales_krw) * 100)
-          : item.avg_margin_rate,
-    })),
-    summary: {
-      total_sales_krw: totalSales,
-      total_collected_krw: items.reduce((sum, item) => sum + item.total_collected_krw, 0),
-      total_outstanding_krw: items.reduce((sum, item) => sum + item.outstanding_krw, 0),
-      total_margin_krw: totalMargin,
-      overall_margin_rate: totalSales > 0 ? round2((totalMargin / totalSales) * 100) : 0,
-    },
-  }
-}
-
 function toMonth(date?: string): string {
   return date ? date.slice(0, 7) : "날짜 없음"
 }
@@ -641,7 +520,6 @@ export default function SalesAnalysisPage() {
             ...(manufacturerFilter ? { manufacturer_id: manufacturerFilter } : {}),
             ...(customerFilter ? { customer_id: customerFilter } : {}),
           },
-          mergeMargin,
         )
           .then((data) => ({ data, warning: null as string | null }))
           .catch(() => ({
@@ -655,7 +533,6 @@ export default function SalesAnalysisPage() {
             ...calcFilterBody,
             ...(customerFilter ? { customer_id: customerFilter } : {}),
           },
-          mergeCustomers,
         )
           .then((data) => ({ data, warning: null as string | null }))
           .catch(() => ({

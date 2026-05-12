@@ -242,7 +242,7 @@ pub async fn compare_exchange_rates(
     pool: &PgPool,
     req: &ExchangeCompareRequest,
 ) -> Result<ExchangeCompareResponse, sqlx::Error> {
-    let company_id = req.company_id.unwrap();
+    let company_ids = crate::calc::resolve_company_ids(req.company_ids.as_deref(), req.company_id);
 
     let rows = sqlx::query_as::<_, ExchangeRow>(
         r#"
@@ -257,13 +257,13 @@ pub async fn compare_exchange_rates(
         JOIN import_declarations id ON cd.declaration_id = id.declaration_id
         JOIN products p ON cd.product_id = p.product_id
         JOIN manufacturers m ON p.manufacturer_id = m.manufacturer_id
-        WHERE id.company_id = $1
+        WHERE id.company_id = ANY($1::uuid[])
           AND ($2::uuid IS NULL OR cd.product_id = $2)
           AND ($3::uuid IS NULL OR p.manufacturer_id = $3)
         ORDER BY id.declaration_date DESC
         "#,
     )
-    .bind(company_id)
+    .bind(&company_ids)
     .bind(req.product_id)
     .bind(req.manufacturer_id)
     .fetch_all(pool)

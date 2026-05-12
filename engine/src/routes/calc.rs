@@ -90,10 +90,11 @@ pub async fn exchange_compare_handler(
     State(pool): State<PgPool>,
     Json(req): Json<ExchangeCompareRequest>,
 ) -> (StatusCode, Json<Value>) {
-    if req.company_id.is_none() {
+    let has_ids = req.company_ids.as_ref().is_some_and(|v| !v.is_empty());
+    if req.company_id.is_none() && !has_ids {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({"error": "company_id는 필수 항목입니다"})),
+            Json(json!({"error": "company_id 또는 company_ids 중 하나는 필수입니다"})),
         );
     }
 
@@ -131,6 +132,10 @@ pub async fn lc_limit_timeline_handler(
     State(pool): State<PgPool>,
     Json(req): Json<LcLimitTimelineRequest>,
 ) -> (StatusCode, Json<Value>) {
+    let has_ids = req.company_ids.as_ref().is_some_and(|v| !v.is_empty());
+    if req.company_id.is_none() && !has_ids {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "company_id 또는 company_ids 중 하나는 필수입니다"})));
+    }
     match calculate_limit_timeline(&pool, &req).await {
         Ok(r) => (StatusCode::OK, Json(serde_json::to_value(r).unwrap_or(json!({"error": "직렬화 실패"})))),
         Err(e) => { tracing::error!("한도 복원 타임라인 실패: {}", e); (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("한도 복원 타임라인 실패: {}", e)}))) }
@@ -142,6 +147,10 @@ pub async fn lc_maturity_alert_handler(
     State(pool): State<PgPool>,
     Json(req): Json<LcMaturityAlertRequest>,
 ) -> (StatusCode, Json<Value>) {
+    let has_ids = req.company_ids.as_ref().is_some_and(|v| !v.is_empty());
+    if req.company_id.is_none() && !has_ids {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "company_id 또는 company_ids 중 하나는 필수입니다"})));
+    }
     match get_maturity_alerts(&pool, &req).await {
         Ok(r) => (StatusCode::OK, Json(serde_json::to_value(r).unwrap_or(json!({"error": "직렬화 실패"})))),
         Err(e) => { tracing::error!("만기 알림 실패: {}", e); (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("만기 알림 실패: {}", e)}))) }
@@ -150,7 +159,10 @@ pub async fn lc_maturity_alert_handler(
 
 /// POST /api/calc/margin-analysis — 마진 분석 핸들러
 pub async fn margin_analysis_handler(State(pool): State<PgPool>, Json(req): Json<MarginAnalysisRequest>) -> (StatusCode, Json<Value>) {
-    if req.company_id.is_none() { return (StatusCode::BAD_REQUEST, Json(json!({"error": "company_id는 필수 항목입니다"}))); }
+    let has_ids = req.company_ids.as_ref().is_some_and(|v| !v.is_empty());
+    if req.company_id.is_none() && !has_ids {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "company_id 또는 company_ids 중 하나는 필수입니다"})));
+    }
     match calculate_margin(&pool, &req).await {
         Ok(r) => (StatusCode::OK, Json(serde_json::to_value(r).unwrap_or(json!({"error": "직렬화 실패"})))),
         Err(e) => { tracing::error!("마진 분석 실패: {}", e); (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("마진 분석 실패: {}", e)}))) }
@@ -159,7 +171,10 @@ pub async fn margin_analysis_handler(State(pool): State<PgPool>, Json(req): Json
 
 /// POST /api/calc/customer-analysis — 거래처 분석 핸들러
 pub async fn customer_analysis_handler(State(pool): State<PgPool>, Json(req): Json<CustomerAnalysisRequest>) -> (StatusCode, Json<Value>) {
-    if req.company_id.is_none() { return (StatusCode::BAD_REQUEST, Json(json!({"error": "company_id는 필수 항목입니다"}))); }
+    let has_ids = req.company_ids.as_ref().is_some_and(|v| !v.is_empty());
+    if req.company_id.is_none() && !has_ids {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "company_id 또는 company_ids 중 하나는 필수입니다"})));
+    }
     match analyze_customers(&pool, &req).await {
         Ok(r) => (StatusCode::OK, Json(serde_json::to_value(r).unwrap_or(json!({"error": "직렬화 실패"})))),
         Err(e) => { tracing::error!("거래처 분석 실패: {}", e); (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("거래처 분석 실패: {}", e)}))) }
@@ -238,8 +253,9 @@ pub async fn inventory_turnover_handler(
     State(pool): State<PgPool>,
     Json(req): Json<TurnoverRequest>,
 ) -> (StatusCode, Json<Value>) {
-    if req.company_id.is_none() {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "company_id는 필수 항목입니다"})));
+    let has_ids = req.company_ids.as_ref().is_some_and(|v| !v.is_empty());
+    if req.company_id.is_none() && !has_ids {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "company_id 또는 company_ids 중 하나는 필수입니다"})));
     }
     match calculate_turnover(&pool, &req).await {
         Ok(r) => (StatusCode::OK, Json(serde_json::to_value(r).unwrap_or(json!({"error": "직렬화 실패"})))),

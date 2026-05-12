@@ -6,6 +6,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use crate::calc::resolve_company_ids;
 use crate::model::lc_schedule::*;
 
 // === 수수료 계산 공개 함수 ===
@@ -174,6 +175,7 @@ pub async fn calculate_lc_fees(pool: &PgPool, req: &LcFeeRequest) -> Result<LcFe
 // === API 2: 한도 복원 타임라인 ===
 
 pub async fn calculate_limit_timeline(pool: &PgPool, req: &LcLimitTimelineRequest) -> Result<LcLimitTimelineResponse, sqlx::Error> {
+    let company_ids = resolve_company_ids(req.company_ids.as_deref(), req.company_id);
     let months = req.months_ahead;
 
     let bank_rows = sqlx::query_as::<_, BankRow>(
@@ -186,11 +188,11 @@ pub async fn calculate_limit_timeline(pool: &PgPool, req: &LcLimitTimelineReques
         JOIN companies c ON b.company_id = c.company_id
         LEFT JOIN lc_records lc ON lc.bank_id = b.bank_id
         WHERE b.is_active = true
-          AND ($1::uuid IS NULL OR b.company_id = $1)
+          AND b.company_id = ANY($1::uuid[])
         GROUP BY b.bank_id, b.bank_name, b.lc_limit_usd, c.company_name
         "#,
     )
-    .bind(req.company_id)
+    .bind(&company_ids)
     .fetch_all(pool)
     .await?;
 
@@ -203,12 +205,12 @@ pub async fn calculate_limit_timeline(pool: &PgPool, req: &LcLimitTimelineReques
         WHERE lc.status IN ('opened', 'docs_received')
           AND lc.maturity_date > CURRENT_DATE
           AND lc.maturity_date <= CURRENT_DATE + INTERVAL '1 month' * $1
-          AND ($2::uuid IS NULL OR lc.company_id = $2)
+          AND lc.company_id = ANY($2::uuid[])
         ORDER BY lc.maturity_date ASC
         "#,
     )
     .bind(months)
-    .bind(req.company_id)
+    .bind(&company_ids)
     .fetch_all(pool)
     .await?;
 
@@ -287,6 +289,7 @@ pub async fn calculate_limit_timeline(pool: &PgPool, req: &LcLimitTimelineReques
 // === API 3: 만기 알림 ===
 
 pub async fn get_maturity_alerts(pool: &PgPool, req: &LcMaturityAlertRequest) -> Result<LcMaturityAlertResponse, sqlx::Error> {
+    let company_ids = resolve_company_ids(req.company_ids.as_deref(), req.company_id);
     let days = req.days_ahead;
     let today = Utc::now().date_naive();
 
@@ -300,12 +303,12 @@ pub async fn get_maturity_alerts(pool: &PgPool, req: &LcMaturityAlertRequest) ->
         LEFT JOIN purchase_orders po ON lc.po_id = po.po_id
         WHERE lc.status IN ('opened', 'docs_received')
           AND lc.maturity_date BETWEEN CURRENT_DATE AND CURRENT_DATE + $1 * INTERVAL '1 day'
-          AND ($2::uuid IS NULL OR lc.company_id = $2)
+          AND lc.company_id = ANY($2::uuid[])
         ORDER BY lc.maturity_date ASC
         "#,
     )
     .bind(days)
-    .bind(req.company_id)
+    .bind(&company_ids)
     .fetch_all(pool)
     .await?;
 

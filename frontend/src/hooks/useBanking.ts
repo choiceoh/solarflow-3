@@ -136,31 +136,17 @@ export function useLimitChangeList() {
   );
 }
 
-function mergeTimeline(rs: LCLimitTimeline[]): LCLimitTimeline {
-  const projMap = new Map<string, number>();
-  for (const r of rs) for (const p of r.monthly_projection || []) projMap.set(p.month, (projMap.get(p.month) || 0) + p.projected_available);
-  return {
-    bank_summaries: rs.flatMap((r) => r.bank_summaries || []),
-    timeline_events: rs.flatMap((r) => r.timeline_events || []),
-    monthly_projection: Array.from(projMap.entries()).map(([month, projected_available]) => ({ month, projected_available })),
-  };
-}
-
 // Rust: LC 한도 타임라인
 export function useLCLimitTimeline(monthsAhead: number = 3) {
   const selectedCompanyId = useAppStore((s) => s.selectedCompanyId);
   const q = useDetailQuery<LCLimitTimeline>(
     ['lc-limit-timeline', selectedCompanyId, monthsAhead],
     () => fetchCalc<LCLimitTimeline>(
-      selectedCompanyId!, '/api/v1/calc/lc-limit-timeline', { months_ahead: monthsAhead }, mergeTimeline,
+      selectedCompanyId!, '/api/v1/calc/lc-limit-timeline', { months_ahead: monthsAhead },
     ),
     { enabled: !!selectedCompanyId },
   );
   return { data: q.data, loading: q.loading, error: q.error, reload: q.reload };
-}
-
-function mergeMaturity(rs: LCMaturityAlert[]): LCMaturityAlert {
-  return { alerts: rs.flatMap((r) => r.alerts || []) };
 }
 
 // Rust: LC 만기 알림
@@ -169,7 +155,7 @@ export function useLCMaturityAlert(daysAhead: number = 30) {
   const q = useDetailQuery<LCMaturityAlert>(
     ['lc-maturity-alert', selectedCompanyId, daysAhead],
     () => fetchCalc<LCMaturityAlert>(
-      selectedCompanyId!, '/api/v1/calc/lc-maturity-alert', { days_ahead: daysAhead }, mergeMaturity,
+      selectedCompanyId!, '/api/v1/calc/lc-maturity-alert', { days_ahead: daysAhead },
     ),
     { enabled: !!selectedCompanyId },
   );

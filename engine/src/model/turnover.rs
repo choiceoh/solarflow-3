@@ -10,6 +10,7 @@ use uuid::Uuid;
 #[derive(Debug, Deserialize)]
 pub struct TurnoverRequest {
     pub company_id: Option<Uuid>,
+    pub company_ids: Option<Vec<Uuid>>,
     #[serde(default = "default_days")]
     pub days: i32,
 }
