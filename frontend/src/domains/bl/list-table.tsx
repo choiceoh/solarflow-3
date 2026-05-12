@@ -3,7 +3,7 @@ import { AlertTriangle, CalendarClock } from 'lucide-react';
 import { formatDate, moduleLabel } from '@/lib/utils';
 import EmptyState from '@/components/common/EmptyState';
 import SortableTH from '@/components/common/SortableTH';
-import InboundStatusBadge from './InboundStatusBadge';
+import InboundStatusBadge from '@/components/inbound/InboundStatusBadge';
 import { INBOUND_TYPE_LABEL, type BLShipment } from '@/types/inbound';
 import type { Manufacturer } from '@/types/masters';
 import { fetchWithAuth } from '@/lib/api';
