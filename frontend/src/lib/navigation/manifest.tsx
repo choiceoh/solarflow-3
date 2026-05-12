@@ -50,6 +50,7 @@ const BankAccountEditPage = lazy(() => import('@/packs/erp-core/pages/data/BankA
 const ProcurementPage = lazy(() => import('@/packs/module-finance/pages/ProcurementPage'));
 const CustomsPage = lazy(() => import('@/packs/module-finance/pages/CustomsPage'));
 const SalesAnalysisPage = lazy(() => import('@/packs/module-finance/pages/SalesAnalysisPage'));
+const OutboundAnalysisPage = lazy(() => import('@/packs/module-finance/pages/OutboundAnalysisPage'));
 const BankingPage = lazy(() => import('@/packs/module-finance/pages/BankingPage'));
 const PriceForecastPage = lazy(() => import('@/packs/module-finance/pages/PriceForecastPage'));
 const PurchaseHistoryPage = lazy(() => import('@/packs/module-finance/pages/PurchaseHistoryPage'));
@@ -155,6 +156,7 @@ export const ROUTES: RouteSpec[] = [
   { path: '/orders', element: OrdersPage },
   { path: '/customs', element: CustomsPage },
   { path: '/sales-analysis', element: SalesAnalysisPage },
+  { path: '/outbound-analysis', element: OutboundAnalysisPage },
   { path: '/banking', element: BankingPage },
   { path: '/insights/:metric', element: InsightsPage },
   { path: '/baro/price-book', element: PartnerPriceBookPage, roles: ['admin', 'operator'] },

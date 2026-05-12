@@ -39,6 +39,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   "/orders": { title: "수주 관리", breadcrumb: "판매 / 수주 및 수금" },
   "/banking": { title: "L/C 한도", breadcrumb: "현황 / 은행 한도" },
   "/sales-analysis": { title: "매출 분석", breadcrumb: "현황 / 매출과 이익" },
+  "/outbound-analysis": { title: "출고 분석", breadcrumb: "현황 / 출고 흐름 (현장 포함)" },
   "/price-forecast": { title: "가격예측", breadcrumb: "현황 / 외부 가격 벤치마크" },
   "/crm/inbox": { title: "내 미처리 문의", breadcrumb: "판매 / 후속 답변 대기" },
   "/import": { title: "엑셀 입력", breadcrumb: "도구 / 일괄 가져오기" },
