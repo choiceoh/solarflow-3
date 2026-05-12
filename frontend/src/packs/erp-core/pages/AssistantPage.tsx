@@ -45,9 +45,11 @@ interface SessionDetail extends SessionSummary {
 const SESSION_TITLE_MAX = 30;
 const OCR_ACCEPT =
   'application/pdf,image/jpeg,image/png,image/webp,image/gif,' +
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,.xlsx,.csv';
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,.xlsx,.csv,' +
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,.docx,.txt';
 const OCR_MAX_BYTES = 30 * 1024 * 1024;
 const SPREADSHEET_EXT_RE = /\.(xlsx|csv)$/i;
+const DOCUMENT_EXT_RE = /\.(docx|txt)$/i;
 
 const PROPOSAL_KIND_LABEL: Record<string, string> = {
   create_note: '메모 작성',
@@ -100,6 +102,10 @@ function inferMimeByName(name: string): string {
       return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     case 'csv':
       return 'text/csv';
+    case 'docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'txt':
+      return 'text/plain';
     default:
       return '';
   }
@@ -109,7 +115,9 @@ function buildOCRBlock(results: OCRResult[]): string {
   const blocks: string[] = [];
   for (const r of results) {
     const isSheet = SPREADSHEET_EXT_RE.test(r.filename);
-    const head = `${isSheet ? '[첨부파일 표]' : '[첨부파일 OCR]'} ${r.filename}`;
+    const isDoc = DOCUMENT_EXT_RE.test(r.filename);
+    const label = isSheet ? '[첨부파일 표]' : isDoc ? '[첨부파일 문서]' : '[첨부파일 OCR]';
+    const head = `${label} ${r.filename}`;
     if (r.error) {
       blocks.push(`${head}\n오류: ${r.error}`);
       continue;
@@ -453,11 +461,14 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
         notify.error(`${f.name}: 30MB 초과로 첨부 불가`);
         continue;
       }
-      // MIME 타입 미지정(클립보드 페이스트, 일부 브라우저의 xlsx/csv) 은 확장자로 폴백.
+      // MIME 타입 미지정(클립보드 페이스트, 일부 브라우저의 xlsx/csv/docx) 은 확장자로 폴백.
       const mime = f.type || inferMimeByName(f.name);
-      const okByExt = SPREADSHEET_EXT_RE.test(f.name) || /\.(png|jpe?g|webp|gif|pdf)$/i.test(f.name);
+      const okByExt =
+        SPREADSHEET_EXT_RE.test(f.name) ||
+        DOCUMENT_EXT_RE.test(f.name) ||
+        /\.(png|jpe?g|webp|gif|pdf)$/i.test(f.name);
       if (mime && !ACCEPTED_MIMES.has(mime) && !mime.startsWith('image/') && !okByExt) {
-        notify.error(`${f.name}: 지원하지 않는 형식 (PDF·이미지·엑셀·CSV만 가능)`);
+        notify.error(`${f.name}: 지원하지 않는 형식 (PDF·이미지·엑셀·CSV·워드·텍스트만 가능)`);
         continue;
       }
       valid.push(f);
@@ -668,7 +679,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
           <div className="pointer-events-none absolute inset-2 z-50 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--sf-solar)] bg-[var(--sf-solar)]/10 backdrop-blur-sm">
             <Paperclip className="h-10 w-10 text-[var(--sf-solar)]" />
             <div className="text-base font-semibold text-foreground">파일을 놓아주세요</div>
-            <div className="text-sm text-muted-foreground">PDF · 이미지 · 엑셀 · CSV (최대 30MB)</div>
+            <div className="text-sm text-muted-foreground">PDF · 이미지 · 엑셀 · CSV · 워드 · 텍스트 (최대 30MB)</div>
           </div>
         )}
         {!embedded && (
@@ -803,7 +814,7 @@ export function ChatBox({ initialMessages, sessionId, sessionsEnabled, onSession
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={busy}
-              title="파일 첨부 (PDF·이미지 OCR, 엑셀·CSV 표 추출)"
+              title="파일 첨부 (PDF·이미지 OCR, 엑셀·CSV 표, 워드·TXT 문서 추출)"
               className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
             >
               {ocrBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
@@ -1514,7 +1525,7 @@ function ChipEmpty({ chips, onPick }: { chips: ChipDef[]; onPick: (text: string)
         ))}
       </div>
       <div className="text-xs text-muted-foreground/70">
-        클릭하면 입력창에 채워집니다 · PDF·이미지는 OCR, 엑셀·CSV는 표 자동 추출
+        클릭하면 입력창에 채워집니다 · PDF·이미지는 OCR, 엑셀·CSV는 표, 워드·텍스트는 문서 자동 추출
       </div>
     </div>
   );
