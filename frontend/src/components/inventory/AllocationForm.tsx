@@ -150,7 +150,7 @@ function ProductCombobox({ items, value, onChange, priceMap }: ProductComboboxPr
           !selected && "text-muted-foreground",
         )}
       >
-        <span className="flex-1 text-left truncate text-xs">
+        <span className="flex-1 text-left truncate text-[13px]">
           {selected
             ? `${moduleLabel(selected.manufacturer_name, selected.spec_wp)} | ${selected.product_name}`
             : "품목 검색 (제조사·규격·품명)"}
@@ -198,7 +198,7 @@ function ProductCombobox({ items, value, onChange, priceMap }: ProductComboboxPr
                       {value === it.product_id && <Check className="size-3.5" />}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs truncate">
+                      <div className="text-[13px] truncate">
                         {moduleLabel(it.manufacturer_name, it.spec_wp)} · {it.product_name}
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -1179,13 +1179,13 @@ export default function AllocationForm({
                         <SelectItem key={b.bl_id} value={b.bl_id}>
                           <span
                             className={cn(
-                              "text-xs font-medium mr-1.5",
+                              "text-[13px] font-medium mr-1.5",
                               isCompleted ? "text-green-600" : "text-blue-600",
                             )}
                           >
                             [{stKo}]
                           </span>
-                          {modLabel} | {b.bl_number} | {dateLabel}
+                          <span className="text-[13px]">{modLabel} | {b.bl_number} | {dateLabel}</span>
                           {blUsdPriceMap.has(b.bl_id) && (
                             <span className="ml-1.5 text-[10px] text-muted-foreground">
                               ${blUsdPriceMap.get(b.bl_id)!.toFixed(4)}/Wp

@@ -224,7 +224,7 @@ export function OrderCombobox({
                   <span className="size-3.5 shrink-0 flex items-center justify-center">
                     {value === o.order_id && <CheckIcon className="size-3.5" />}
                   </span>
-                  <span className="flex-1 truncate text-xs">{orderOptionLabel(o)}</span>
+                  <span className="flex-1 truncate text-[13px]">{orderOptionLabel(o)}</span>
                 </button>
               ))
             )}

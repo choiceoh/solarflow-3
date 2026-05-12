@@ -345,9 +345,9 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
       <DetailSection title="제품 · 수량">
         <DetailFieldGrid cols={4}>
           <DetailField label="제조사/규격" value={moduleText} span={2} />
-          <DetailField label="품번"><span className="text-xs">{order.product_code ?? '—'}</span></DetailField>
+          <DetailField label="품번"><span className="text-[13px]">{order.product_code ?? '—'}</span></DetailField>
           <DetailField label="규격" value={order.spec_wp ? `${order.spec_wp}Wp` : undefined} />
-          <DetailField label="품명" span={4}><span className="text-xs">{order.product_name ?? '—'}</span></DetailField>
+          <DetailField label="품명" span={4}><span className="text-[13px]">{order.product_name ?? '—'}</span></DetailField>
           <EditableDetailField
             label="수량"
             value={order.quantity}

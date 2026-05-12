@@ -645,7 +645,7 @@ export default function PODetailView({
                         .join(" ")
                       const isFree = l.payment_type === "free"
                       return (
-                        <p key={l.po_line_id} className="text-xs flex items-center gap-1.5">
+                        <p key={l.po_line_id} className="text-[13px] flex items-center gap-1.5">
                           {parts || "—"} ×{" "}
                           <span className="font-mono">{formatNumber(l.quantity)}EA</span>
                           {isFree && <span className="sf-status-pill sf-tone-pos">무상</span>}

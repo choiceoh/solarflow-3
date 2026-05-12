@@ -184,7 +184,7 @@ export default function IncomingBoardPage() {
       render: (row) => (
         <span className="flex flex-col text-xs">
           <span>{row.warehouse_name ?? row.port ?? '—'}</span>
-          <span className="text-muted-foreground">{row.company_name ?? '—'} · {row.bl_number}</span>
+          <span className="text-muted-foreground">{row.company_name ?? '—'} · <span className="text-[13px]">{row.bl_number}</span></span>
         </span>
       ),
     },

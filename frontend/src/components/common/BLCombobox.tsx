@@ -148,7 +148,7 @@ export function BLCombobox({
           !selected && 'text-muted-foreground',
         )}
       >
-        <span className="flex-1 text-left truncate">
+        <span className="flex-1 text-left truncate text-[13px]">
           {selected
             ? `${moduleOf(selected)} | ${selected.bl_number} | ${blDate(selected)} | ${statusLabel(selected.inbound_type, selected.status)}`
             : placeholder}
@@ -211,7 +211,7 @@ export function BLCombobox({
                     <span className="size-3.5 shrink-0 flex items-center justify-center">
                       {value === b.bl_id && <CheckIcon className="size-3.5" />}
                     </span>
-                    <span className="flex-1 truncate">
+                    <span className="flex-1 truncate text-[13px]">
                       <span className={`font-medium mr-1.5 ${isCompleted ? 'text-green-600' : 'text-blue-600'}`}>
                         [{stKo}]
                       </span>

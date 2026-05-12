@@ -130,7 +130,7 @@ export default function BaroRequestInboxPage() {
       label: '품번',
       render: (row) => (
         <span className="flex flex-col">
-          <span className="font-medium text-xs">{row.product_code ?? row.product_id.slice(0, 8)}</span>
+          <span className="font-medium text-[13px]">{row.product_code ?? row.product_id.slice(0, 8)}</span>
           {row.product_name && <span className="text-xs text-muted-foreground">{row.product_name}</span>}
         </span>
       ),

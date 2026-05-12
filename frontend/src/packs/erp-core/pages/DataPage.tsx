@@ -162,11 +162,11 @@ function useProductConfig(): MasterSectionConfig<Product> {
     getLabel: (r) => `${r.product_code} ${r.product_name}`,
     columns: [
       { key: 'product_code', label: '품번코드', sortable: true,
-        render: (r) => <span className="text-xs">{r.product_code}</span> },
+        render: (r) => <span className="text-[13px]">{r.product_code}</span> },
       { key: 'manufacturer_name', label: '제조사', sortable: true,
         render: (r) => r.manufacturers?.name_kr ?? r.manufacturer_name ?? '—' },
       { key: 'product_name', label: '품명', sortable: true,
-        render: (r) => <span className="text-xs">{r.product_name}</span> },
+        render: (r) => <span className="text-[13px]">{r.product_name}</span> },
       { key: 'product_family_code', label: '제품군', sortable: true,
         render: (r) => r.product_family_code || '—' },
       { key: 'spec_wp', label: '규격(Wp)', sortable: true, render: (r) => formatWp(r.spec_wp) },
