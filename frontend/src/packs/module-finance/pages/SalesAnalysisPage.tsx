@@ -2477,7 +2477,7 @@ export default function SalesAnalysisPage() {
 
           {activeAnalysisTab === "profit" && (
             <div className="grid grid-cols-1 gap-4">
-              <CardB title="월별 매출" sub="공급가 · 부가세 포함" padded>
+              <CardB title="월별 매출" sub="공급가 기준" padded>
                 {monthly.length === 0 ? (
                   <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
                     매출 데이터가 없습니다
@@ -2491,24 +2491,11 @@ export default function SalesAnalysisPage() {
                         tick={{ fontSize: 10 }}
                         tickFormatter={(v: number) => `${Math.round(v / 100000000)}억`}
                       />
-                      <Tooltip
-                        formatter={(value, name) => [
-                          formatKRW(Number(value)),
-                          name === "revenue" ? "공급가" : "부가세 포함",
-                        ]}
-                      />
+                      <Tooltip formatter={(value) => [formatKRW(Number(value)), "공급가"]} />
                       <Bar
                         dataKey="revenue"
                         fill="#2563eb"
                         name="공급가"
-                        isAnimationActive
-                        animationDuration={360}
-                        animationEasing="ease-out"
-                      />
-                      <Bar
-                        dataKey="total"
-                        fill="#16a34a"
-                        name="부가세 포함"
                         isAnimationActive
                         animationDuration={360}
                         animationEasing="ease-out"
