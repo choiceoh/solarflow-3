@@ -10,6 +10,8 @@ interface Props {
   filter: 'all' | 'valid' | 'warning' | 'error';
   /** 사이드 패널에서 에러를 클릭했을 때 점프할 행. 잠깐 노란 글로우 → 사라짐. */
   highlightedRow?: number | null;
+  editable?: boolean;
+  onCellChange?: (rowNumber: number, fieldKey: string, value: string) => void;
 }
 
 /**
@@ -21,7 +23,7 @@ export interface ImportPreviewTableHandle {
 }
 
 const ImportPreviewTable = forwardRef<ImportPreviewTableHandle, Props>(function ImportPreviewTable(
-  { rows, fields, filter, highlightedRow },
+  { rows, fields, filter, highlightedRow, editable, onCellChange },
   ref,
 ) {
   const filtered = rows.filter((r) => {
@@ -82,6 +84,8 @@ const ImportPreviewTable = forwardRef<ImportPreviewTableHandle, Props>(function 
               }}
               getErrorForField={getErrorForField}
               getWarningForField={getWarningForField}
+              editable={editable}
+              onCellChange={onCellChange}
             />
           ))}
         </tbody>
@@ -93,7 +97,7 @@ const ImportPreviewTable = forwardRef<ImportPreviewTableHandle, Props>(function 
 export default ImportPreviewTable;
 
 function PreviewRow({
-  row, fields, getErrorForField, getWarningForField, isHighlighted, registerRef,
+  row, fields, getErrorForField, getWarningForField, isHighlighted, registerRef, editable, onCellChange,
 }: {
   row: ParsedRow;
   fields: FieldDef[];
@@ -101,6 +105,8 @@ function PreviewRow({
   registerRef: (el: HTMLTableRowElement | null) => void;
   getErrorForField: (row: ParsedRow, fieldLabel: string) => RowError | undefined;
   getWarningForField: (row: ParsedRow, fieldLabel: string) => RowError | undefined;
+  editable?: boolean;
+  onCellChange?: (rowNumber: number, fieldKey: string, value: string) => void;
 }) {
   const warningText = (row.warnings ?? []).map((e) => `${e.field}: ${e.message}`).join('\n');
   const hasWarnings = row.valid && warningText !== '';
@@ -123,6 +129,34 @@ function PreviewRow({
         const warn = getWarningForField(row, f.label);
         const val = row.data[f.key];
         const display = val === null || val === undefined ? '' : String(val);
+        if (editable && onCellChange) {
+          const issue = err?.message ?? warn?.message;
+          return (
+            <td
+              key={f.key}
+              className={cn(
+                'px-2 py-1 whitespace-nowrap max-w-[170px]',
+                err && 'bg-red-50',
+                warn && !err && 'bg-amber-50',
+              )}
+            >
+              <input
+                aria-label={`${row.rowNumber}행 ${f.label}`}
+                value={display}
+                title={issue}
+                onChange={(event) => onCellChange(row.rowNumber, f.key, event.target.value)}
+                className={cn(
+                  'h-7 w-full min-w-[90px] rounded border bg-white px-1.5 text-xs outline-none focus:ring-1',
+                  err
+                    ? 'border-red-300 text-red-700 focus:ring-red-300'
+                    : warn
+                      ? 'border-amber-300 text-amber-800 focus:ring-amber-300'
+                      : 'border-transparent focus:border-[var(--sf-solar-2)] focus:ring-[var(--sf-solar-2)]',
+                )}
+              />
+            </td>
+          );
+        }
         return (
           <td
             key={f.key}

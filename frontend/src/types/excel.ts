@@ -398,6 +398,24 @@ export interface UnifiedImportPreview {
   sections: UnifiedSection[];
 }
 
+export type UnifiedImportCellTarget = 'rows' | 'declarations' | 'costs';
+
+export interface UnifiedImportCellChange {
+  sectionType: TemplateType;
+  target: UnifiedImportCellTarget;
+  rowNumber: number;
+  fieldKey: string;
+  value: unknown;
+}
+
+export interface UnifiedImportCellEdit extends UnifiedImportCellChange {
+  id: string;
+  fieldLabel: string;
+  beforeValue: unknown;
+  afterValue: unknown;
+  updatedAt: string;
+}
+
 // 섹션별 등록 결과 — 부분 실패 정책: 한 섹션이 실패해도 다음 섹션은 계속 시도.
 export type UnifiedSubmitStatus = 'success' | 'failed' | 'skipped';
 

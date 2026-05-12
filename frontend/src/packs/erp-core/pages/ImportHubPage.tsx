@@ -3,7 +3,10 @@ import { Database, Download, FileSpreadsheet, Loader2, Upload } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ExcelToolbar from '@/components/excel/ExcelToolbar';
+import DocumentOcrWorkbench from '@/components/excel/DocumentOcrWorkbench';
 import ExternalFormatCard from '@/components/excel/ExternalFormatCard';
+import ImportHistoryPanel from '@/components/excel/ImportHistoryPanel';
+import ImportWorkQueuePanel from '@/components/excel/ImportWorkQueuePanel';
 import UnifiedImportDialog from '@/components/excel/UnifiedImportDialog';
 import UnifiedImportResultDialog from '@/components/excel/UnifiedImportResultDialog';
 import { MasterConsole } from '@/components/command/MasterConsole';
@@ -215,13 +218,22 @@ export default function ImportHubPage() {
         { label: '연결 보정', value: '매칭', sub: '관계·상태 관리', tone: 'ink' },
       ]}
     >
+      <div className="mb-6 space-y-3">
+        <ImportWorkQueuePanel history={unified.history} />
+      </div>
+
       <Tabs defaultValue="standard">
         <TabsList variant="line">
           <TabsTrigger value="standard">표준 양식</TabsTrigger>
           <TabsTrigger value="external">외부 양식 변환</TabsTrigger>
+          <TabsTrigger value="ocr">문서 OCR</TabsTrigger>
         </TabsList>
 
         <TabsContent value="standard" className="mt-8">
+          <div className="mb-6">
+            <ImportHistoryPanel items={unified.history} onClear={unified.clearHistory} />
+          </div>
+
           <div className="grid gap-6 xl:grid-cols-2 items-start">
             {IMPORT_GROUPS.map((group) => (
               <section key={group.title} className="space-y-3">
@@ -257,6 +269,10 @@ export default function ImportHubPage() {
             </div>
           </section>
         </TabsContent>
+
+        <TabsContent value="ocr" className="mt-8">
+          <DocumentOcrWorkbench />
+        </TabsContent>
       </Tabs>
 
       <UnifiedImportDialog
@@ -264,6 +280,9 @@ export default function ImportHubPage() {
         loading={unified.loading}
         onClose={unified.clearPreview}
         onDownloadErrors={unified.downloadErrors}
+        onDownloadCorrected={unified.downloadCorrectedWorkbook}
+        onCellChange={unified.updatePreviewCell}
+        edits={unified.cellEdits}
         onSubmit={unified.submitAll}
       />
 

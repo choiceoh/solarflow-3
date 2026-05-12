@@ -8,9 +8,20 @@ import { useAppStore } from '@/stores/appStore';
 import type {
   TemplateType, MasterDataForExcel, ImportResult,
   UnifiedImportPreview, UnifiedSection, ParsedRow,
-  UnifiedSubmitOutcome, UnifiedSubmitResult,
+  UnifiedSubmitOutcome, UnifiedSubmitResult, UnifiedImportCellChange, UnifiedImportCellEdit,
 } from '@/types/excel';
+import { FIELDS_MAP, DECLARATION_FIELDS, DECLARATION_COST_FIELDS } from '@/types/excel';
 import type { Company, Manufacturer, Partner, Product, Warehouse, Bank } from '@/types/masters';
+import { validateRows, validateDeclaration } from '@/lib/excelValidation';
+import {
+  buildPreviewHistoryEntry,
+  buildSubmitHistoryEntry,
+  clearImportHistory,
+  loadImportHistory,
+  prependImportHistory,
+  saveImportHistory,
+  type ImportHistoryEntry,
+} from '@/lib/importHistory';
 
 const PRODUCT_VARIANT_KIND_MAP: Record<string, string> = {
   output_bin: 'output_bin',
@@ -285,6 +296,139 @@ function augmentMasterWithSection(
   }
 }
 
+function resetRows(rows: ParsedRow[]): ParsedRow[] {
+  return rows.map((row) => ({
+    ...row,
+    data: { ...row.data },
+    valid: true,
+    errors: [],
+    warnings: [],
+  }));
+}
+
+function revalidateUnifiedSections(
+  sections: UnifiedSection[],
+  masterData: MasterDataForExcel,
+): UnifiedSection[] {
+  let workingMaster = masterData;
+  return sections.map((section): UnifiedSection => {
+    if (!section.present || section.parseError) return section;
+
+    if (section.type === 'declaration' && section.declPreview) {
+      const v = validateDeclaration(
+        resetRows(section.declPreview.declarations),
+        resetRows(section.declPreview.costs),
+        workingMaster,
+      );
+      return {
+        ...section,
+        declPreview: {
+          ...section.declPreview,
+          declarations: v.declarations,
+          costs: v.costs,
+        },
+      };
+    }
+
+    if (section.preview) {
+      const validatedRows = validateRows(resetRows(section.preview.rows), section.type, workingMaster);
+      workingMaster = augmentMasterWithSection(workingMaster, section.type, validatedRows);
+      return {
+        ...section,
+        preview: {
+          ...section.preview,
+          rows: validatedRows,
+          validRows: validatedRows.filter((r) => r.valid).length,
+          errorRows: validatedRows.filter((r) => !r.valid).length,
+          warningRows: countWarningRows(validatedRows),
+        },
+      };
+    }
+    return section;
+  });
+}
+
+function updateRowsCell(
+  rows: ParsedRow[],
+  rowNumber: number,
+  fieldKey: string,
+  value: unknown,
+): ParsedRow[] {
+  return rows.map((row) => {
+    if (row.rowNumber !== rowNumber) return row;
+    return {
+      ...row,
+      data: {
+        ...row.data,
+        [fieldKey]: value,
+      },
+    };
+  });
+}
+
+function cellEditId(change: UnifiedImportCellChange) {
+  return `${change.sectionType}:${change.target}:${change.rowNumber}:${change.fieldKey}`;
+}
+
+function normalizeCellValue(value: unknown) {
+  if (value === null || value === undefined) return '';
+  return String(value);
+}
+
+function sameCellValue(a: unknown, b: unknown) {
+  return normalizeCellValue(a) === normalizeCellValue(b);
+}
+
+function findCellContext(
+  preview: UnifiedImportPreview,
+  change: UnifiedImportCellChange,
+  edits: UnifiedImportCellEdit[],
+) {
+  const section = preview.sections.find((item) => item.type === change.sectionType);
+  if (!section) return null;
+  const fields = change.target === 'declarations'
+    ? DECLARATION_FIELDS
+    : change.target === 'costs'
+      ? DECLARATION_COST_FIELDS
+      : FIELDS_MAP[change.sectionType];
+  const field = fields.find((item) => item.key === change.fieldKey);
+  if (!field) return null;
+  const rows = change.target === 'declarations'
+    ? section.declPreview?.declarations
+    : change.target === 'costs'
+      ? section.declPreview?.costs
+      : section.preview?.rows;
+  const row = rows?.find((item) => item.rowNumber === change.rowNumber);
+  if (!row) return null;
+  const existing = edits.find((item) => item.id === cellEditId(change));
+  return {
+    fieldLabel: field.label,
+    beforeValue: existing?.beforeValue ?? row.data[change.fieldKey],
+  };
+}
+
+function upsertCellEdit(
+  edits: UnifiedImportCellEdit[],
+  change: UnifiedImportCellChange,
+  fieldLabel: string,
+  beforeValue: unknown,
+): UnifiedImportCellEdit[] {
+  const id = cellEditId(change);
+  if (sameCellValue(beforeValue, change.value)) {
+    return edits.filter((item) => item.id !== id);
+  }
+  const nextEdit: UnifiedImportCellEdit = {
+    ...change,
+    id,
+    fieldLabel,
+    beforeValue,
+    afterValue: change.value,
+    updatedAt: new Date().toISOString(),
+  };
+  const replaced = edits.filter((item) => item.id !== id);
+  return [nextEdit, ...replaced];
+}
+
 // 마스터 행별 POST 헬퍼 — 한 줄 실패해도 다음 줄은 계속 시도.
 async function submitMasterRows<TPayload, TResponse>(opts: {
   rows: ParsedRow[];
@@ -495,7 +639,17 @@ export function useUnifiedExcel() {
   const [preview, setPreview] = useState<UnifiedImportPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitResult, setSubmitResult] = useState<UnifiedSubmitResult | null>(null);
+  const [history, setHistory] = useState<ImportHistoryEntry[]>(() => loadImportHistory());
+  const [cellEdits, setCellEdits] = useState<UnifiedImportCellEdit[]>([]);
   const companies = useAppStore((s) => s.companies);
+
+  const recordHistory = useCallback((entry: ImportHistoryEntry) => {
+    setHistory((prev) => {
+      const next = prependImportHistory(prev, entry);
+      saveImportHistory(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -541,55 +695,83 @@ export function useUnifiedExcel() {
     setError(null);
     setPreview(null);
     setSubmitResult(null);
+    setCellEdits([]);
     try {
       const { parseUnifiedExcelFile } = await import('@/lib/excelParser');
-      const { validateRows, validateDeclaration } = await import('@/lib/excelValidation');
       const parsed = await parseUnifiedExcelFile(file);
-
-      let workingMaster = masterData;
-      const validated = parsed.sections.map((section): UnifiedSection => {
-        if (!section.present || section.parseError) return section;
-
-        if (section.type === 'declaration' && section.declPreview) {
-          const v = validateDeclaration(
-            section.declPreview.declarations,
-            section.declPreview.costs,
-            workingMaster,
-          );
-          return {
-            ...section,
-            declPreview: {
-              ...section.declPreview,
-              declarations: v.declarations,
-              costs: v.costs,
-            },
-          };
-        }
-
-        if (section.preview) {
-          const validatedRows = validateRows(section.preview.rows, section.type, workingMaster);
-          workingMaster = augmentMasterWithSection(workingMaster, section.type, validatedRows);
-          return {
-            ...section,
-            preview: {
-              ...section.preview,
-              rows: validatedRows,
-              validRows: validatedRows.filter((r) => r.valid).length,
-              errorRows: validatedRows.filter((r) => !r.valid).length,
-              warningRows: countWarningRows(validatedRows),
-            },
-          };
-        }
-        return section;
-      });
-
-      setPreview({ ...parsed, sections: validated });
+      const nextPreview = { ...parsed, sections: revalidateUnifiedSections(parsed.sections, masterData) };
+      setPreview(nextPreview);
+      recordHistory(buildPreviewHistoryEntry(nextPreview));
     } catch (e) {
       setError(e instanceof Error ? e.message : '파일 파싱 실패');
     } finally {
       setLoading(false);
     }
-  }, [masterData]);
+  }, [masterData, recordHistory]);
+
+  const updatePreviewCell = useCallback((change: UnifiedImportCellChange) => {
+    if (!masterData) return;
+    setPreview((current) => {
+      if (!current) return current;
+      const context = findCellContext(current, change, cellEdits);
+      if (!context) return current;
+      setCellEdits((prev) => upsertCellEdit(prev, change, context.fieldLabel, context.beforeValue));
+      const editedSections = current.sections.map((section): UnifiedSection => {
+        if (section.type !== change.sectionType) return section;
+
+        if (change.target === 'rows' && section.preview) {
+          return {
+            ...section,
+            preview: {
+              ...section.preview,
+              rows: updateRowsCell(
+                section.preview.rows,
+                change.rowNumber,
+                change.fieldKey,
+                change.value,
+              ),
+            },
+          };
+        }
+
+        if (section.declPreview && change.target === 'declarations') {
+          return {
+            ...section,
+            declPreview: {
+              ...section.declPreview,
+              declarations: updateRowsCell(
+                section.declPreview.declarations,
+                change.rowNumber,
+                change.fieldKey,
+                change.value,
+              ),
+            },
+          };
+        }
+
+        if (section.declPreview && change.target === 'costs') {
+          return {
+            ...section,
+            declPreview: {
+              ...section.declPreview,
+              costs: updateRowsCell(
+                section.declPreview.costs,
+                change.rowNumber,
+                change.fieldKey,
+                change.value,
+              ),
+            },
+          };
+        }
+
+        return section;
+      });
+      return {
+        ...current,
+        sections: revalidateUnifiedSections(editedSections, masterData),
+      };
+    });
+  }, [cellEdits, masterData]);
 
   // 전체 등록 — 섹션 직렬 처리, 부분 실패 허용.
   // sessionMasters 가 마스터 → 거래 의존 매핑(자연키→id)을 한 회기 동안 누적한다.
@@ -607,18 +789,22 @@ export function useUnifiedExcel() {
         if (outcome.status === 'success') submittedMasterTypes.add(section.type);
       }
       invalidateMasterCaches(Array.from(submittedMasterTypes));
-      setSubmitResult({ outcomes });
+      const result = { outcomes };
+      setSubmitResult(result);
+      recordHistory(buildSubmitHistoryEntry(preview.fileName, result));
       setPreview(null);
+      setCellEdits([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : '등록 실패');
     } finally {
       setLoading(false);
     }
-  }, [preview, masterData]);
+  }, [preview, masterData, recordHistory]);
 
   const clearPreview = useCallback(() => {
     setPreview(null);
     setError(null);
+    setCellEdits([]);
   }, []);
 
   const downloadErrors = useCallback(async () => {
@@ -643,8 +829,19 @@ export function useUnifiedExcel() {
     }
   }, [preview]);
 
+  const downloadCorrectedWorkbook = useCallback(async () => {
+    if (!preview || !masterData) return;
+    const { downloadCorrectedUnifiedWorkbook } = await import('@/lib/excelTemplates');
+    await downloadCorrectedUnifiedWorkbook(preview, cellEdits, masterData);
+  }, [preview, cellEdits, masterData]);
+
   const clearSubmitResult = useCallback(() => {
     setSubmitResult(null);
+  }, []);
+
+  const clearHistory = useCallback(() => {
+    clearImportHistory();
+    setHistory([]);
   }, []);
 
   return {
@@ -653,10 +850,15 @@ export function useUnifiedExcel() {
     error,
     preview,
     submitResult,
+    history,
+    cellEdits,
     uploadFile,
+    updatePreviewCell,
     submitAll,
     downloadErrors,
+    downloadCorrectedWorkbook,
     clearPreview,
     clearSubmitResult,
+    clearHistory,
   };
 }

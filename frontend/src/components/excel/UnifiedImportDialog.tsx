@@ -3,7 +3,7 @@
 // 부분 실패 허용: 섹션 단위로 직렬 등록, 실패 섹션은 결과창에서 안내.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, MinusCircle, Upload, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, MinusCircle, Pencil, Upload, X } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -12,7 +12,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   FIELDS_MAP, DECLARATION_FIELDS, DECLARATION_COST_FIELDS,
 } from '@/types/excel';
-import type { UnifiedImportPreview, UnifiedSection } from '@/types/excel';
+import type {
+  UnifiedImportCellChange,
+  UnifiedImportCellEdit,
+  UnifiedImportPreview,
+  UnifiedSection,
+} from '@/types/excel';
 import ImportPreviewTable, { type ImportPreviewTableHandle } from './ImportPreviewTable';
 import ImportPreviewErrorList from './ImportPreviewErrorList';
 
@@ -21,6 +26,9 @@ interface Props {
   loading?: boolean;
   onClose: () => void;
   onDownloadErrors?: () => void;
+  onDownloadCorrected?: () => void;
+  onCellChange?: (change: UnifiedImportCellChange) => void;
+  edits?: UnifiedImportCellEdit[];
   onSubmit: () => void;
 }
 
@@ -150,10 +158,11 @@ function buildImpactItems(sections: UnifiedSection[], totals: SectionSummary): I
 }
 
 export default function UnifiedImportDialog({
-  preview, loading, onClose, onDownloadErrors, onSubmit,
+  preview, loading, onClose, onDownloadErrors, onDownloadCorrected, onCellChange, edits = [], onSubmit,
 }: Props) {
   const [activeTab, setActiveTab] = useState<string>('');
   const [filter, setFilter] = useState<FilterMode>('all');
+  const [editing, setEditing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const sections = preview?.sections ?? [];
@@ -233,12 +242,32 @@ export default function UnifiedImportDialog({
 
             {sections.map((s) => (
               <TabsContent key={s.type} value={s.type} className="flex-1 overflow-hidden mt-3 flex flex-col">
-                <SectionPanel section={s} filter={filter} onFilter={setFilter} />
+                <SectionPanel
+                  section={s}
+                  filter={filter}
+                  editing={editing}
+                  onFilter={setFilter}
+                  onCellChange={onCellChange}
+                />
               </TabsContent>
             ))}
           </Tabs>
 
           <DialogFooter>
+            {onCellChange && (
+              <Button
+                variant={editing ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setEditing((prev) => !prev)}
+              >
+                <Pencil className="mr-1.5 h-4 w-4" />셀 수정
+              </Button>
+            )}
+            {onDownloadCorrected && (
+              <Button variant="outline" size="sm" onClick={onDownloadCorrected}>
+                <Download className="mr-1.5 h-4 w-4" />보정본 다운로드
+              </Button>
+            )}
             {totals.error > 0 && onDownloadErrors && (
               <Button variant="outline" size="sm" onClick={onDownloadErrors}>
                 <Download className="mr-1.5 h-4 w-4" />에러만 다운로드
@@ -256,6 +285,7 @@ export default function UnifiedImportDialog({
               {loading ? '등록 중...' : `전체 등록 (유효 ${totals.valid}건)`}
             </Button>
           </DialogFooter>
+          <EditSummary edits={edits} />
         </DialogContent>
       </Dialog>
 
@@ -276,6 +306,35 @@ export default function UnifiedImportDialog({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function formatEditValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return '(빈 값)';
+  return String(value);
+}
+
+function EditSummary({ edits }: { edits: UnifiedImportCellEdit[] }) {
+  if (edits.length === 0) return null;
+  return (
+    <div className="rounded-md border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-[var(--ink)]">수정 {edits.length}칸</span>
+        <span className="text-[11px] text-[var(--ink-3)]">보정본 다운로드 시 수정내역 시트에 포함됩니다</span>
+      </div>
+      <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+        {edits.slice(0, 6).map((edit) => (
+          <div key={edit.id} className="min-w-[220px] rounded border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5">
+            <div className="truncate text-[11px] font-medium text-[var(--ink-3)]">
+              {edit.rowNumber}행 · {edit.fieldLabel}
+            </div>
+            <div className="mt-0.5 truncate text-xs text-[var(--ink)]">
+              {formatEditValue(edit.beforeValue)} → {formatEditValue(edit.afterValue)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -321,10 +380,12 @@ function SectionDot({ tone }: { tone: 'pos' | 'warn' | 'neg' | 'mute' }) {
 interface PanelProps {
   section: UnifiedSection;
   filter: FilterMode;
+  editing: boolean;
   onFilter: (m: FilterMode) => void;
+  onCellChange?: (change: UnifiedImportCellChange) => void;
 }
 
-function SectionPanel({ section, filter, onFilter }: PanelProps) {
+function SectionPanel({ section, filter, editing, onFilter, onCellChange }: PanelProps) {
   if (!section.present) {
     return (
       <div className="rounded-md border border-dashed p-6 text-center">
@@ -354,7 +415,9 @@ function SectionPanel({ section, filter, onFilter }: PanelProps) {
       <DeclarationPanel
         section={section}
         filter={filter}
+        editing={editing}
         onFilter={onFilter}
+        onCellChange={onCellChange}
       />
     );
   }
@@ -364,7 +427,9 @@ function SectionPanel({ section, filter, onFilter }: PanelProps) {
       <SimpleSectionPanel
         section={section}
         filter={filter}
+        editing={editing}
         onFilter={onFilter}
+        onCellChange={onCellChange}
       />
     );
   }
@@ -379,11 +444,15 @@ function SectionPanel({ section, filter, onFilter }: PanelProps) {
 function SimpleSectionPanel({
   section,
   filter,
+  editing,
   onFilter,
+  onCellChange,
 }: {
   section: UnifiedSection;
   filter: FilterMode;
+  editing: boolean;
   onFilter: (m: FilterMode) => void;
+  onCellChange?: (change: UnifiedImportCellChange) => void;
 }) {
   const tableRef = useRef<ImportPreviewTableHandle>(null);
   const [activeRow, setActiveRow] = useState<number | null>(null);
@@ -418,6 +487,14 @@ function SimpleSectionPanel({
             fields={FIELDS_MAP[section.type]}
             filter={filter}
             highlightedRow={activeRow}
+            editable={editing}
+            onCellChange={(rowNumber, fieldKey, value) => onCellChange?.({
+              sectionType: section.type,
+              target: 'rows',
+              rowNumber,
+              fieldKey,
+              value,
+            })}
           />
         </div>
         <ImportPreviewErrorList
@@ -436,11 +513,15 @@ function SimpleSectionPanel({
 function DeclarationPanel({
   section,
   filter,
+  editing,
   onFilter,
+  onCellChange,
 }: {
   section: UnifiedSection;
   filter: FilterMode;
+  editing: boolean;
   onFilter: (m: FilterMode) => void;
+  onCellChange?: (change: UnifiedImportCellChange) => void;
 }) {
   if (!section.declPreview) return null;
   const declValid = section.declPreview.declarations.filter((r) => r.valid).length;
@@ -472,6 +553,14 @@ function DeclarationPanel({
             rows={section.declPreview.declarations}
             fields={DECLARATION_FIELDS}
             filter={filter}
+            editable={editing}
+            onCellChange={(rowNumber, fieldKey, value) => onCellChange?.({
+              sectionType: section.type,
+              target: 'declarations',
+              rowNumber,
+              fieldKey,
+              value,
+            })}
           />
         </TabsContent>
         <TabsContent value="costs" className="flex-1 overflow-hidden mt-2">
@@ -479,6 +568,14 @@ function DeclarationPanel({
             rows={section.declPreview.costs}
             fields={DECLARATION_COST_FIELDS}
             filter={filter}
+            editable={editing}
+            onCellChange={(rowNumber, fieldKey, value) => onCellChange?.({
+              sectionType: section.type,
+              target: 'costs',
+              rowNumber,
+              fieldKey,
+              value,
+            })}
           />
         </TabsContent>
       </Tabs>
@@ -490,10 +587,14 @@ function DeclarationSubPanel({
   rows,
   fields,
   filter,
+  editable,
+  onCellChange,
 }: {
   rows: import('@/types/excel').ParsedRow[];
   fields: import('@/types/excel').FieldDef[];
   filter: FilterMode;
+  editable?: boolean;
+  onCellChange?: (rowNumber: number, fieldKey: string, value: string) => void;
 }) {
   const tableRef = useRef<ImportPreviewTableHandle>(null);
   const [activeRow, setActiveRow] = useState<number | null>(null);
@@ -517,6 +618,8 @@ function DeclarationSubPanel({
           fields={fields}
           filter={filter}
           highlightedRow={activeRow}
+          editable={editable}
+          onCellChange={onCellChange}
         />
       </div>
       <ImportPreviewErrorList rows={rows} onJump={jump} activeRow={activeRow} />
