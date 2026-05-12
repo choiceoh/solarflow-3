@@ -18,6 +18,9 @@ import { ColumnVisibilityMenu } from "@/components/common/ColumnVisibilityMenu"
 import { useColumnVisibility } from "@/lib/columnVisibility"
 import { useColumnPinning } from "@/lib/columnPinning"
 import ExchangeComparePanel from "@/components/customs/ExchangeComparePanel"
+import DeclarationCreateDialog from "@/components/customs/DeclarationCreateDialog"
+import ExpenseCreateDialog from "@/components/customs/ExpenseCreateDialog"
+import { Button } from "@/components/ui/button"
 import { EXPENSE_TYPE_LABEL, type ExpenseType } from "@/types/customs"
 import type { BLShipment } from "@/types/inbound"
 import ExcelToolbar from "@/components/excel/ExcelToolbar"
@@ -53,6 +56,10 @@ export default function CustomsPage() {
   // 마스터
   const [bls, setBls] = useState<BLShipment[]>([])
 
+  // 단건 등록 다이얼로그 (PR #357 reversal)
+  const [declCreateOpen, setDeclCreateOpen] = useState(false)
+  const [expCreateOpen, setExpCreateOpen] = useState(false)
+
   const expFilters: { bl_id?: string; expense_type?: string; start?: string; end?: string } = {}
   if (expBlFilter) expFilters.bl_id = expBlFilter
   if (expTypeFilter) expFilters.expense_type = expTypeFilter
@@ -63,8 +70,9 @@ export default function CustomsPage() {
   const declFilters: { bl_id?: string } = {}
   if (declBlFilter) declFilters.bl_id = declBlFilter
 
-  const { data: declarations, loading: declLoading } = useDeclarationList(declFilters)
-  const { data: expenses, loading: expLoading } = useExpenseList(expFilters)
+  const { data: declarations, loading: declLoading, reload: reloadDeclarations } =
+    useDeclarationList(declFilters)
+  const { data: expenses, loading: expLoading, reload: reloadExpenses } = useExpenseList(expFilters)
   const { data: expenseSummary } = useExpenseSummary(expFilters)
   const { data: blSummary } = useBLSummary()
   const declColVis = useColumnVisibility(DECLARATION_TABLE_ID, DECLARATION_COLUMN_META)
@@ -163,6 +171,9 @@ export default function CustomsPage() {
             unpin={declColPin.unpin}
           />
           <ExcelToolbar type="declaration" />
+          <Button size="xs" onClick={() => setDeclCreateOpen(true)}>
+            면장 신규 등록
+          </Button>
         </>
       ) : activeTab === "expenses" ? (
         <>
@@ -201,6 +212,9 @@ export default function CustomsPage() {
             unpin={expenseColPin.unpin}
           />
           <ExcelToolbar type="expense" />
+          <Button size="xs" onClick={() => setExpCreateOpen(true)}>
+            부대비용 신규 등록
+          </Button>
         </>
       ) : null}
       <div style={{ flex: 1 }} />
@@ -427,6 +441,23 @@ export default function CustomsPage() {
           </RailBlock>
         </aside>
       </div>
+
+      <DeclarationCreateDialog
+        open={declCreateOpen}
+        onClose={() => setDeclCreateOpen(false)}
+        presetBLId={declBlFilter || undefined}
+        onCreated={() => {
+          reloadDeclarations()
+        }}
+      />
+      <ExpenseCreateDialog
+        open={expCreateOpen}
+        onClose={() => setExpCreateOpen(false)}
+        presetBLId={expBlFilter || undefined}
+        onCreated={() => {
+          reloadExpenses()
+        }}
+      />
     </>
   )
 }
