@@ -57,11 +57,16 @@ strategy AS (
    )
 ),
 audit AS (
+  -- audit 테이블은 match_id 에 UNIQUE 제약이 없으므로 (PK=audit_id)
+  -- 102 와 동일하게 WHERE NOT EXISTS 로 dedup — 재실행 안전성 확보.
   INSERT INTO _fifo_empty_sibling_audit_20260512
     (match_id, old_outbound_id, new_outbound_id, strategy, allocated_qty)
-  SELECT match_id, bad_ob, new_ob, '1:1 qty + norm_customer', allocated_qty
-  FROM strategy WHERE rn = 1
-  ON CONFLICT (match_id) DO NOTHING
+  SELECT s.match_id, s.bad_ob, s.new_ob, '1:1 qty + norm_customer', s.allocated_qty
+  FROM strategy s
+  WHERE s.rn = 1
+    AND NOT EXISTS (
+      SELECT 1 FROM _fifo_empty_sibling_audit_20260512 a WHERE a.match_id = s.match_id
+    )
   RETURNING match_id, new_outbound_id
 )
 UPDATE fifo_matches fm
@@ -92,7 +97,9 @@ manual_audit AS (
   -- 1) 두 outbound 가 둘 다 존재해야 함 (cron-deploy 재실행 안전성)
   WHERE EXISTS (SELECT 1 FROM outbounds WHERE outbound_id=manual_fix.new_ob)
     AND EXISTS (SELECT 1 FROM fifo_matches WHERE match_id=manual_fix.match_id AND outbound_id=manual_fix.old_ob)
-  ON CONFLICT (match_id) DO NOTHING
+    AND NOT EXISTS (
+      SELECT 1 FROM _fifo_empty_sibling_audit_20260512 a WHERE a.match_id = manual_fix.match_id
+    )
   RETURNING match_id, new_outbound_id
 )
 UPDATE fifo_matches fm
