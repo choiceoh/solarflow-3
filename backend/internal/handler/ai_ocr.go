@@ -8,7 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/ocr"
 	"solarflow-backend/internal/ocrparse"
 	"solarflow-backend/internal/response"
@@ -39,6 +43,25 @@ type OCRHandler struct {
 
 func NewOCRHandler(client *ocr.Client) *OCRHandler {
 	return &OCRHandler{Client: client}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// /ocr/* standalone 라우트 — write 그룹. AssistantHandler 가 /assistant/ocr/* alias 로 위임하는
+// 인스턴스는 AssistantHandler 의 Mount 클로저가 별도 생성한다 (둘 다 d.OCR 만 보유, stateless).
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDAIOCR,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewOCRHandler(d.OCR)
+			g := d.Gates
+			r.Route("/ocr", func(r chi.Router) {
+				r.Use(g.Write)
+				r.Get("/health", h.Health)
+				r.Post("/extract", h.Extract)
+			})
+		},
+	})
 }
 
 // Health — GET /api/v1/ocr/health — OCR sidecar 설정/준비 상태 확인

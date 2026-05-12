@@ -9,7 +9,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -26,6 +28,26 @@ type deleteDeclarationRPCRequest struct {
 // NewDeclarationHandler — DeclarationHandler 생성자
 func NewDeclarationHandler(db *supa.Client) *DeclarationHandler {
 	return &DeclarationHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxDeclaration,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewDeclarationHandler(d.DB)
+			g := d.Gates
+			r.Route("/declarations", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDTxDeclaration))
+				r.Get("/", h.List)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/declarations — 면장 목록 조회

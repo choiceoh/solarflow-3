@@ -9,11 +9,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
 	"solarflow-backend/internal/engine"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -97,6 +100,32 @@ func NewImportHandler(db *supa.Client, engineClient ...*engine.EngineClient) *Im
 		ec = engineClient[0]
 	}
 	return &ImportHandler{DB: db, Engine: ec}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// 엑셀 일괄 등록 10종 — 모두 write 게이트. IDIOImport catalog 등재.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDIOImport,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewImportHandler(d.DB, d.Engine)
+			g := d.Gates
+			r.Route("/import", func(r chi.Router) {
+				r.Use(g.Write)
+				r.Post("/inbound", h.Inbound)
+				r.Post("/outbound", h.Outbound)
+				r.Post("/sales", h.Sales)
+				r.Post("/declarations", h.Declarations)
+				r.Post("/expenses", h.Expenses)
+				r.Post("/orders", h.Orders)
+				r.Post("/receipts", h.Receipts)
+				r.Post("/purchase-orders", h.PurchaseOrders)
+				r.Post("/lcs", h.LCs)
+				r.Post("/tts", h.TTs)
+			})
+		},
+	})
 }
 
 // --- 공통 헬퍼 ---

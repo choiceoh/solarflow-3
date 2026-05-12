@@ -12,8 +12,10 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -83,6 +85,22 @@ type AuditLogHandler struct {
 
 func NewAuditLogHandler(db *supa.Client) *AuditLogHandler {
 	return &AuditLogHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// routes.go 의 원래 메서드 시그니처가 `g middleware.Gates` 를 `_` 로 받아 사용하지 않았지만,
+// 본 init() 에서도 동일하게 g 미사용 — read-only audit 라우트라 가드 불필요.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDSysAuditLog,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewAuditLogHandler(d.DB)
+			r.Route("/audit-logs", func(r chi.Router) {
+				r.Get("/", h.List)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/audit-logs

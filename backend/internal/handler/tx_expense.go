@@ -10,7 +10,9 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -23,6 +25,29 @@ type ExpenseHandler struct {
 // NewExpenseHandler — ExpenseHandler 생성자
 func NewExpenseHandler(db *supa.Client) *ExpenseHandler {
 	return &ExpenseHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxExpense,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewExpenseHandler(d.DB)
+			g := d.Gates
+			r.Route("/expenses", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDTxExpense))
+				r.Get("/", h.List)
+				r.Get("/summary", h.Summary)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+			// CustomsPage 4개 insight (TypeCount/AvgExpense/BlLinked/ExpenseTotal) 의 client-side 집계 대체.
+			r.With(g.Feature(feature.IDTxExpense)).Get("/customs/dashboard", h.CustomsDashboard)
+		},
+	})
 }
 
 func (h *ExpenseHandler) applyExpenseFilters(r *http.Request, query *postgrest.FilterBuilder) *postgrest.FilterBuilder {

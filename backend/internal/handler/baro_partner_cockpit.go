@@ -12,7 +12,9 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -37,6 +39,22 @@ type BaroPartnerCockpitHandler struct {
 // NewBaroPartnerCockpitHandler — 의존성 주입.
 func NewBaroPartnerCockpitHandler(db *supa.Client) *BaroPartnerCockpitHandler {
 	return &BaroPartnerCockpitHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroPartnerCockpit,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroPartnerCockpitHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/partner-cockpit", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroPartnerCockpit))
+				r.Get("/{partner_id}", h.Get)
+			})
+		},
+	})
 }
 
 // CockpitResponse — /api/v1/baro/partner-cockpit/{partner_id} 응답.

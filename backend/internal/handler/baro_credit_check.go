@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -28,6 +31,22 @@ type BaroCreditCheckHandler struct {
 
 func NewBaroCreditCheckHandler(db *supa.Client) *BaroCreditCheckHandler {
 	return &BaroCreditCheckHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroCreditCheck,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroCreditCheckHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/credit-check", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroCreditCheck))
+				r.Get("/", h.Get)
+			})
+		},
+	})
 }
 
 type CreditCheckResponse struct {

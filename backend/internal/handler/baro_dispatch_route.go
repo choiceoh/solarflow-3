@@ -9,8 +9,10 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -22,6 +24,29 @@ type DispatchRouteHandler struct {
 
 func NewDispatchRouteHandler(db *supa.Client) *DispatchRouteHandler {
 	return &DispatchRouteHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroDispatch,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewDispatchRouteHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/dispatch-routes", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroDispatch))
+				r.Get("/", h.List)
+				r.Get("/{id}", h.GetByID)
+				r.Get("/{id}/outbounds", h.Outbounds)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+				r.With(g.Write).Post("/{id}/assign", h.AssignOutbound)
+				r.With(g.Write).Post("/unassign", h.UnassignOutbound)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/baro/dispatch-routes?from=YYYY-MM-DD&to=YYYY-MM-DD&status=...

@@ -22,8 +22,10 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 	"github.com/xuri/excelize/v2"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -42,6 +44,34 @@ type ExportHandler struct {
 // NewExportHandler — ExportHandler 생성자
 func NewExportHandler(db *supa.Client) *ExportHandler {
 	return &ExportHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// /export/amaranth/* 의 amaranth feature gate + /export/all 의 admin-only 통합 덤프.
+// 양쪽 path 가 모두 IDIOExportAmaranth catalog.Paths 에 등재돼 있어 coverage_test 통과.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDIOExportAmaranth,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewExportHandler(d.DB)
+			g := d.Gates
+			r.Route("/export/amaranth", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDIOExportAmaranth))
+				r.Get("/inbound", h.AmaranthInbound)
+				r.Get("/outbound", h.AmaranthOutbound)
+				r.Get("/sales", h.AmaranthSalesClosing)
+				r.Get("/rpa-package", h.DownloadRPAPackage)
+				r.Get("/jobs", h.ListUploadJobs)
+				r.Get("/jobs/{id}/download", h.DownloadUploadJobFile)
+				r.With(g.Write).Post("/outbound/jobs", h.CreateOutboundUploadJob)
+				r.With(g.Write).Post("/jobs/{id}/claim", h.ClaimUploadJob)
+				r.With(g.Write).Put("/jobs/{id}/status", h.UpdateUploadJobStatus)
+			})
+			// 전체 컬렉션 통합 덤프 — admin 전용, 데이터 스코프는 핸들러 내부에서 tenant_company 기준 처리.
+			r.With(g.AdminOnly).Get("/export/all", h.FullDataDump)
+		},
+	})
 }
 
 // AmaranthSalesClosing — GET /api/v1/export/amaranth/sales

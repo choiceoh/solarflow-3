@@ -10,7 +10,9 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -23,6 +25,27 @@ type PartnerPriceBookHandler struct {
 // NewPartnerPriceBookHandler — 생성자
 func NewPartnerPriceBookHandler(db *supa.Client) *PartnerPriceBookHandler {
 	return &PartnerPriceBookHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroPriceBook,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewPartnerPriceBookHandler(d.DB)
+			g := d.Gates
+			r.Route("/partner-prices", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroPriceBook))
+				r.Get("/", h.List)
+				r.Get("/lookup", h.Lookup)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/partner-prices?partner_id=&product_id= — 단가 목록 조회

@@ -21,8 +21,10 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -38,6 +40,30 @@ func NewPriceBenchmarkHandler(db *supa.Client) *PriceBenchmarkHandler {
 		DB:         db,
 		httpClient: &http.Client{Timeout: 20 * time.Second},
 	}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxPriceBenchmark,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewPriceBenchmarkHandler(d.DB)
+			g := d.Gates
+			r.Route("/price-benchmarks", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDTxPriceBenchmark))
+				r.Get("/", h.List)
+				r.Get("/runs", h.ListRuns)
+				r.Get("/runs/{id}", h.GetRun) // PR 43: 비동기 ai-refresh 폴링
+				// PR 42: 우리 구매가 + 평균 판매가 시계열 — 가격예측 차트에 추가 시리즈로 표시
+				r.Get("/our-prices", h.OurPrices)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Post("/ai-refresh", h.AIRefresh)
+				r.With(g.Write).Patch("/{id}/review-status", h.UpdateReviewStatus)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // benchmarkSource — PR 46: Endpoint/TimeWindow/Site 추가하여 source 별로 검색 분기.

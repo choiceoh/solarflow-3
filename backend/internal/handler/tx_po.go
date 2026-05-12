@@ -13,7 +13,9 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -55,6 +57,37 @@ type poStatusUpdate struct {
 // NewPOHandler — POHandler 생성자
 func NewPOHandler(db *supa.Client) *POHandler {
 	return &POHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+// PO 는 자식 POLineHandler 가 /pos/{poId}/lines 서브트리를 마운트하는 부모-자식 패턴.
+// (BL 과 동일한 구조 — tx_bl.go 의 init() 주석 참조.)
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDTxPO,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewPOHandler(d.DB)
+			lineH := NewPOLineHandler(d.DB)
+			g := d.Gates
+			r.Route("/pos", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.Get("/summary", h.Summary)
+				// 대시보드 집계 — KPI/trend24/by_status/by_contract_type/by_manufacturer. /{id} 보다 먼저.
+				r.Get("/dashboard", h.Dashboard)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+				r.Route("/{poId}/lines", func(r chi.Router) {
+					r.Get("/", lineH.ListByPO)
+					r.With(g.Write).Post("/", lineH.Create)
+					r.With(g.Write).Put("/{id}", lineH.Update)
+					r.With(g.Write).Delete("/{id}", lineH.Delete)
+				})
+			})
+		},
+	})
 }
 
 func (h *POHandler) applyPOFilters(r *http.Request, query *postgrest.FilterBuilder) *postgrest.FilterBuilder {

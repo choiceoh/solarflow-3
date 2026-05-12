@@ -29,8 +29,9 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 	"github.com/xuri/excelize/v2"
 
-	"solarflow-backend/internal/middleware"
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -46,17 +47,26 @@ func NewExternalSyncHandler(db *supa.Client) *ExternalSyncHandler {
 	}
 }
 
-func (h *ExternalSyncHandler) RegisterRoutes(r chi.Router, g middleware.Gates) {
-	r.Route("/external-sync-sources", func(r chi.Router) {
-		r.Get("/", h.List)
-		r.With(g.Write).Post("/", h.Create)
-		r.With(g.Write).Patch("/{id}", h.Update)
-		r.With(g.Write).Delete("/{id}", h.Delete)
-		r.With(g.Write).Post("/{id}/run", h.RunManually)
-	})
-	r.Route("/external-format", func(r chi.Router) {
-		// 프론트 변환 다이얼로그가 호출 — 공개 시트를 xlsx 바이너리로 stream proxy.
-		r.Get("/google-sheet", h.FetchGoogleSheet)
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDSysExternalSync,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewExternalSyncHandler(d.DB)
+			g := d.Gates
+			r.Route("/external-sync-sources", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Patch("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+				r.With(g.Write).Post("/{id}/run", h.RunManually)
+			})
+			r.Route("/external-format", func(r chi.Router) {
+				// 프론트 변환 다이얼로그가 호출 — 공개 시트를 xlsx 바이너리로 stream proxy.
+				r.Get("/google-sheet", h.FetchGoogleSheet)
+			})
+		},
 	})
 }
 

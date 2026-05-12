@@ -5,10 +5,13 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -20,6 +23,22 @@ type BaroIncomingHandler struct {
 
 func NewBaroIncomingHandler(db *supa.Client) *BaroIncomingHandler {
 	return &BaroIncomingHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroIncoming,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroIncomingHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/incoming", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroIncoming))
+				r.Get("/", h.List)
+			})
+		},
+	})
 }
 
 type baroIncomingShipmentRow struct {

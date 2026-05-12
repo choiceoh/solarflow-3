@@ -17,6 +17,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -26,6 +28,24 @@ type UIConfigHandler struct {
 
 func NewUIConfigHandler(db *supa.Client) *UIConfigHandler {
 	return &UIConfigHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDSysUIConfig,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewUIConfigHandler(d.DB)
+			g := d.Gates
+			r.Route("/ui-configs", func(r chi.Router) {
+				r.Get("/", h.List)
+				r.Get("/{scope}/{config_id}", h.GetByScopeID)
+				r.With(g.AdminOnly).Put("/{scope}/{config_id}", h.Upsert)
+				r.With(g.AdminOnly).Delete("/{scope}/{config_id}", h.Delete)
+			})
+		},
+	})
 }
 
 // validScope — DB CHECK 제약과 동일

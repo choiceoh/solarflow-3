@@ -9,7 +9,9 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -23,6 +25,27 @@ type WarehouseLocationHandler struct {
 
 func NewWarehouseLocationHandler(db *supa.Client) *WarehouseLocationHandler {
 	return &WarehouseLocationHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDMasterWarehouseLocation,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewWarehouseLocationHandler(d.DB)
+			g := d.Gates
+			r.Route("/warehouse-locations", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDMasterWarehouseLocation))
+				r.Get("/", h.List)
+				r.Get("/{id}", h.GetByID)
+				r.With(g.Write).Post("/", h.Create)
+				r.With(g.Write).Put("/{id}", h.Update)
+				r.With(g.Write).Patch("/{id}", h.Update)
+				r.With(g.Write).Delete("/{id}", h.Delete)
+			})
+		},
+	})
 }
 
 // List — GET /api/v1/warehouse-locations?warehouse_id=&active_only=true

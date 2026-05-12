@@ -7,10 +7,13 @@ import (
 	"sort"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
 
@@ -32,6 +35,22 @@ type BaroRFMHandler struct {
 
 func NewBaroRFMHandler(db *supa.Client) *BaroRFMHandler {
 	return &BaroRFMHandler{DB: db}
+}
+
+// init — D-20260512-090000 feature self-mounting.
+func init() {
+	mount.Register(mount.Spec{
+		ID:   feature.IDBaroRFM,
+		Auth: mount.AuthAuthed,
+		Mount: func(d *mount.Deps, r chi.Router) {
+			h := NewBaroRFMHandler(d.DB)
+			g := d.Gates
+			r.Route("/baro/rfm", func(r chi.Router) {
+				r.Use(g.Feature(feature.IDBaroRFM))
+				r.Get("/", h.Get)
+			})
+		},
+	})
 }
 
 // RFMRow — 한 거래처의 RFM 집계 + 세그먼트 분류 결과.
