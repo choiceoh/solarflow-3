@@ -87,40 +87,6 @@ type saleStatusUpdate struct {
 	Status string `json:"status"`
 }
 
-// idsByCompany — sales 가 직접 company_id 가 없으므로 outbound/order 양쪽에서 ID 후보를 끌어온다.
-// (outbound_id IN ... OR order_id IN ...) 으로 회사별 매출만 필터하는 데 사용.
-func (h *SaleHandler) idsByCompany(companyID string) (outboundIDs []string, orderIDs []string, err error) {
-	if data, _, e := h.DB.From("outbounds").Select("outbound_id", "exact", false).Eq("company_id", companyID).Execute(); e == nil {
-		var rows []struct {
-			OutboundID string `json:"outbound_id"`
-		}
-		if jerr := json.Unmarshal(data, &rows); jerr == nil {
-			outboundIDs = make([]string, 0, len(rows))
-			for _, row := range rows {
-				outboundIDs = append(outboundIDs, row.OutboundID)
-			}
-		}
-	} else {
-		err = fmt.Errorf("outbounds 회사 필터 실패: %w", e)
-		return
-	}
-	if data, _, e := h.DB.From("orders").Select("order_id", "exact", false).Eq("company_id", companyID).Execute(); e == nil {
-		var rows []struct {
-			OrderID string `json:"order_id"`
-		}
-		if jerr := json.Unmarshal(data, &rows); jerr == nil {
-			orderIDs = make([]string, 0, len(rows))
-			for _, row := range rows {
-				orderIDs = append(orderIDs, row.OrderID)
-			}
-		}
-	} else {
-		err = fmt.Errorf("orders 회사 필터 실패: %w", e)
-		return
-	}
-	return
-}
-
 // customerIDsByQ — 거래처 이름으로 partner_id 후보 끌어옴. q 검색 시 customer_id IN 으로 결합.
 func (h *SaleHandler) customerIDsByQ(q string) ([]string, error) {
 	data, _, err := h.DB.From("partners").
@@ -221,23 +187,14 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 		return query, false, nil
 	}
 
-	// company_id: sales 직접 컬럼 아님 → outbound/order 양쪽에서 회사 매칭. 결과 0이면 즉시 빈.
+	// company_id: sales 직접 컬럼 아님 → sales_with_meta 의 outbound_company_id /
+	// order_company_id (마이그 111) 로 server-side 매칭. 과거 idsByCompany 경로는
+	// 대형 테넌트에서 UUID 수천 개를 URL 로 합쳐 Cloudflare 400 Bad Request 를 받았다.
 	if compID := q.Get("company_id"); compID != "" && compID != "all" {
-		outIDs, ordIDs, err := h.idsByCompany(compID)
-		if err != nil {
-			return query, false, err
-		}
-		if len(outIDs) == 0 && len(ordIDs) == 0 {
-			return query, false, nil
-		}
-		clauses := []string{}
-		if len(outIDs) > 0 {
-			clauses = append(clauses, fmt.Sprintf("outbound_id.in.(%s)", strings.Join(outIDs, ",")))
-		}
-		if len(ordIDs) > 0 {
-			clauses = append(clauses, fmt.Sprintf("order_id.in.(%s)", strings.Join(ordIDs, ",")))
-		}
-		query = query.Or(strings.Join(clauses, ","), "")
+		query = query.Or(
+			fmt.Sprintf("outbound_company_id.eq.%s,order_company_id.eq.%s", compID, compID),
+			"",
+		)
 	}
 
 	// q: 거래처 이름 매칭으로 customer_id IN (...). 매칭 0건이면 빈 결과 즉시 반환.
