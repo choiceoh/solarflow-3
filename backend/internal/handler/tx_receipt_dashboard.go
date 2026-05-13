@@ -138,8 +138,10 @@ func (h *ReceiptHandler) tryRPCReceiptsDashboard(r *http.Request) ([]byte, bool)
 }
 
 // applyReceiptFilters — List 의 인라인 필터를 재사용 가능한 형태로 추출.
-// company_id 는 receipts 테이블에 직접 컬럼이 없을 가능성 — List 도 적용 안하므로 여기서도 무시.
 func applyReceiptFilters(r *http.Request, q *postgrest.FilterBuilder) *postgrest.FilterBuilder {
+	if companyID := r.URL.Query().Get("company_id"); companyID != "" && companyID != "all" {
+		q = q.Eq("company_id", companyID)
+	}
 	if custID := r.URL.Query().Get("customer_id"); custID != "" {
 		q = q.Eq("customer_id", custID)
 	}

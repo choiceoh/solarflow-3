@@ -165,7 +165,51 @@ func TestOutboundImportUsesTransactionalCreateCore(t *testing.T) {
 }
 
 // ============================================================
-// G7. Summary 핸들러의 status 별 카운트 루프는 사용자 status 가드를 가져야 한다.
+// G7. 수금 완료/매칭 검증은 receipt_matches 1000행 cap 에 걸리면 안 된다.
+// 회귀 패턴: sumMatchesForTargets 가 receipt_matches 를 단일 Execute 로 전수 조회하면
+// PostgREST db-max-rows cap 때문에 기존 매칭 합계가 과소 계산되어 과매칭을 허용한다.
+// ============================================================
+func TestReceiptTargetMatchSumUsesPaginatedFetch(t *testing.T) {
+	body, err := os.ReadFile("tx_receipt_match.go")
+	if err != nil {
+		t.Fatalf("read tx_receipt_match.go: %v", err)
+	}
+	content := string(body)
+	start := strings.Index(content, "func (h *ReceiptMatchHandler) sumMatchesForTargets")
+	if start < 0 {
+		t.Fatal("sumMatchesForTargets 함수를 찾을 수 없습니다")
+	}
+	rest := content[start:]
+	end := strings.Index(rest, "\nfunc ")
+	if end < 0 {
+		end = len(rest)
+	}
+	fn := rest[:end]
+	if !strings.Contains(fn, `handlerutil.FetchAllFromTable(h.DB, "receipt_matches", "outbound_id, sale_id, matched_amount")`) {
+		t.Fatal("sumMatchesForTargets 는 receipt_matches 전체 합산 시 handlerutil.FetchAllFromTable 을 사용해야 합니다")
+	}
+}
+
+// ============================================================
+// G8. receipts_dashboard 회사 필터는 fail-open/empty 가 아니라 receipts.company_id 를 사용한다.
+// 회귀 패턴: 074/104 의 `(p_company_id IS NULL)` 조건은 회사 선택 시 대시보드가 항상 0이 된다.
+// ============================================================
+func TestReceiptsDashboardRPCUsesReceiptCompanyID(t *testing.T) {
+	body, err := os.ReadFile("../../migrations/111_receipts_company_dashboard_fix.sql")
+	if err != nil {
+		t.Fatalf("read migration 111: %v", err)
+	}
+	content := string(body)
+	if !strings.Contains(content, "(p_company_id IS NULL OR r.company_id = p_company_id)") {
+		t.Fatal("receipts_dashboard 는 p_company_id 를 r.company_id 에 적용해야 합니다")
+	}
+	if strings.Contains(content, "(p_company_id IS NULL)  -- receipts.company_id") {
+		t.Fatal("receipts_dashboard 에 회사 필터 빈 집계 회귀 조건이 남아 있습니다")
+	}
+}
+
+// ============================================================
+// G9. Summary 핸들러의 status 별 카운트 루프는 사용자 status 가드를 가져야 한다.
 // 회귀 패턴: applyXFilters 가 사용자 ?status=X 를 .Eq("status", X) 로 이미 적용했는데
 //
 //	루프 안에서 q.Eq("status", st.key) 를 다시 부르면 postgrest-go params map 덮어쓰기로
