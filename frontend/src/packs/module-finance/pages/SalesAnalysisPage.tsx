@@ -28,6 +28,7 @@ import { useAppStore } from "@/stores/appStore"
 import { companyQueryUrl, fetchCalc } from "@/lib/companyUtils"
 import { fetchAllPaginated, fetchWithAuth } from "@/lib/api"
 import { formatKRW, formatNumber, moduleLabel } from "@/lib/utils"
+import { isExternalSale } from "@/lib/saleCategory"
 import type { SaleListItem } from "@/types/outbound"
 import type { CustomerAnalysis } from "@/types/analysis"
 import type { Partner, Product } from "@/types/masters"
@@ -586,28 +587,20 @@ export default function SalesAnalysisPage() {
       const salesQuery = salesQueryParts.join("&")
       const [sales, marginResult, customerResult] = await Promise.all([
         fetchAllPaginated<SaleListItem>("/api/v1/sales", salesQuery),
-        fetchCalc<MarginAnalysis>(
-          selectedCompanyId,
-          "/api/v1/calc/margin-analysis",
-          {
-            ...calcFilterBody,
-            ...(manufacturerFilter ? { manufacturer_id: manufacturerFilter } : {}),
-            ...(customerFilter ? { customer_id: customerFilter } : {}),
-          },
-        )
+        fetchCalc<MarginAnalysis>(selectedCompanyId, "/api/v1/calc/margin-analysis", {
+          ...calcFilterBody,
+          ...(manufacturerFilter ? { manufacturer_id: manufacturerFilter } : {}),
+          ...(customerFilter ? { customer_id: customerFilter } : {}),
+        })
           .then((data) => ({ data, warning: null as string | null }))
           .catch(() => ({
             data: emptyMargin,
             warning: "이익 계산 엔진 응답을 받지 못했습니다. 매출 집계만 표시합니다.",
           })),
-        fetchCalc<CustomerAnalysis>(
-          selectedCompanyId,
-          "/api/v1/calc/customer-analysis",
-          {
-            ...calcFilterBody,
-            ...(customerFilter ? { customer_id: customerFilter } : {}),
-          },
-        )
+        fetchCalc<CustomerAnalysis>(selectedCompanyId, "/api/v1/calc/customer-analysis", {
+          ...calcFilterBody,
+          ...(customerFilter ? { customer_id: customerFilter } : {}),
+        })
           .then((data) => ({ data, warning: null as string | null }))
           .catch(() => ({
             data: emptyCustomers,
@@ -672,12 +665,14 @@ export default function SalesAnalysisPage() {
         (!item.product_id || productManufacturerMap.get(item.product_id) !== manufacturerFilter)
       )
         return false
-      // 매출 분석은 외부 판매(sale/sale_spare) 만 대상. 공사사용/유지관리/폐기 등 자체사용
-      // 출고에 매여 있는 sale 행(supply_amount=0)이 들어오면 월별 이익 추정에서 0매출 vs
-      // 양수원가가 매월 큰 음수를 만들어 적자처럼 보임 (2026-05-12). usage_category 누락
-      // (구버전 백엔드 호환) 일 때는 통과시켜 회귀 안전.
-      if (item.usage_category && item.usage_category !== 'sale' && item.usage_category !== 'sale_spare')
-        return false
+      // 매출분석은 외부 판매(sale/sale_spare) 만. 비매출 출고(공사사용/유지관리/폐기 등
+      // supply_amount=0) 와 연결된 sale 이 들어오면 월별 이익 추정에서 0매출 vs 양수원가가
+      // 매월 음수를 만들어 적자처럼 보임 (2026-05-12). usage_category 가 NULL/undefined 도
+      // 제외 (whitelist) — 마이그 077 integrity_check 가 outbounds.usage_category NULL 을
+      // high severity 로 잡고 있어 실제 운영 데이터에 NULL 행이 존재한다. blacklist + truthy
+      // 가드는 그 행들을 silent 하게 통과시켜 음수 이익 버그를 회귀시킨다. 정의는
+      // lib/saleCategory 에 공유 — Sales 인사이트(Supply/IssueRate) 도 동일 술어 사용.
+      if (!isExternalSale(item)) return false
       return true
     })
   }, [
@@ -1522,9 +1517,7 @@ export default function SalesAnalysisPage() {
   const showBillingCol = (key: string) => !hiddenBillingCols.has(key)
   const visibleBillingColCount = billingColumns.filter((c) => showBillingCol(c.key)).length
   const showReceivableCol = (key: string) => !hiddenReceivableCols.has(key)
-  const visibleReceivableColCount = receivableColumns.filter((c) =>
-    showReceivableCol(c.key),
-  ).length
+  const visibleReceivableColCount = receivableColumns.filter((c) => showReceivableCol(c.key)).length
   const showProductMarginCol = (key: string) => !hiddenProductMarginCols.has(key)
   const visibleProductMarginColCount = productMarginColumns.filter((c) =>
     showProductMarginCol(c.key),
@@ -3397,9 +3390,7 @@ export default function SalesAnalysisPage() {
                         )}
                         {showProductMarginCol("margin") && (
                           <TableCell className="text-right text-xs font-medium">
-                            {item.total_margin_krw != null
-                              ? formatKRW(item.total_margin_krw)
-                              : "—"}
+                            {item.total_margin_krw != null ? formatKRW(item.total_margin_krw) : "—"}
                           </TableCell>
                         )}
                         {showProductMarginCol("kw") && (
