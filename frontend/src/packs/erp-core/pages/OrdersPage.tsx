@@ -14,7 +14,7 @@ import {
   useSaleSummary,
 } from "@/hooks/useOutbound"
 import { useServerSort } from "@/hooks/useServerSort"
-import { CheckCircle2, Loader2 } from "lucide-react"
+import { CheckCircle2, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
 import { fetchWithAuth, fetchWithAuthMeta } from "@/lib/api"
 import { confirmDialog } from "@/lib/dialogs"
 import { companyParams } from "@/lib/companyUtils"
@@ -203,6 +203,20 @@ interface OperatorQueueItem {
   onOpen: () => void
 }
 
+const QUEUE_COLLAPSED_KEY = "sf.orders.operator-queue.collapsed"
+
+function readQueueCollapsed(): boolean {
+  // 기본 접힘 — 첫 방문/저장값 없음이면 접힌 상태로 시작. localStorage 에 "0" 으로 저장돼 있을 때만 펼침.
+  if (typeof window === "undefined") return true
+  try {
+    const stored = window.localStorage.getItem(QUEUE_COLLAPSED_KEY)
+    if (stored === null) return true
+    return stored === "1"
+  } catch {
+    return true
+  }
+}
+
 function OperatorQueuePanel({
   items,
   activeItem,
@@ -211,44 +225,76 @@ function OperatorQueuePanel({
   activeItem?: OperatorQueueItem
 }) {
   const total = items.reduce((sum, item) => sum + item.count, 0)
+  const [collapsed, setCollapsed] = useState<boolean>(readQueueCollapsed)
+  // 활성 큐 (URL 필터가 큐 모드) 일 때는 강제 펼침 — 작업 맥락은 잃지 않게.
+  const effectiveCollapsed = collapsed && !activeItem
+  const toggle = () => {
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(QUEUE_COLLAPSED_KEY, next ? "1" : "0")
+      } catch {
+        /* noop */
+      }
+      return next
+    })
+  }
+
   return (
     <section className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-3">
       <div className="grid gap-3 xl:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.3fr)] xl:items-center">
-        <div>
-          <div className="text-sm font-semibold text-[var(--ink)]">처리 큐</div>
-          <div className="mt-1 text-xs text-[var(--ink-3)]">
-            {activeItem
-              ? `${activeItem.label} ${formatNumber(activeItem.count)}건 처리 중`
-              : `대기 ${formatNumber(total)}건 · 입력자는 여기서 시작`}
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="text-sm font-semibold text-[var(--ink)]">처리 큐</div>
+            <div className="mt-1 text-xs text-[var(--ink-3)]">
+              {activeItem
+                ? `${activeItem.label} ${formatNumber(activeItem.count)}건 처리 중`
+                : `대기 ${formatNumber(total)}건 · 입력자는 여기서 시작`}
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={effectiveCollapsed ? "처리 큐 펼치기" : "처리 큐 접기"}
+            title={effectiveCollapsed ? "처리 큐 펼치기" : "처리 큐 접기"}
+            className="shrink-0 rounded p-1 text-[var(--ink-3)] transition hover:bg-[var(--bg-2)] hover:text-[var(--ink)]"
+          >
+            {effectiveCollapsed ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronUp className="h-4 w-4" />
+            )}
+          </button>
         </div>
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-          {items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={item.onOpen}
-              className="min-h-[74px] rounded-md border px-3 py-2 text-left transition hover:border-[var(--ink-3)]"
-              style={{
-                borderColor: item.active ? "var(--solar-3)" : "var(--line)",
-                background: item.active ? "var(--solar-tint)" : "var(--bg-2)",
-              }}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[12px] font-semibold text-[var(--ink)]">{item.label}</span>
-                <span className="mono text-base font-semibold text-[var(--warn)]">
-                  {formatNumber(item.count)}
-                </span>
-              </div>
-              <div className="mt-1 text-[11px] leading-4 text-[var(--ink-3)]">{item.description}</div>
-              <div className="mt-2 text-[11px] font-semibold text-[var(--solar-3)]">
-                {item.active ? "현재 큐" : item.actionLabel}
-              </div>
-            </button>
-          ))}
-        </div>
+        {!effectiveCollapsed && (
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {items.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={item.onOpen}
+                className="min-h-[74px] rounded-md border px-3 py-2 text-left transition hover:border-[var(--ink-3)]"
+                style={{
+                  borderColor: item.active ? "var(--solar-3)" : "var(--line)",
+                  background: item.active ? "var(--solar-tint)" : "var(--bg-2)",
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] font-semibold text-[var(--ink)]">{item.label}</span>
+                  <span className="mono text-base font-semibold text-[var(--warn)]">
+                    {formatNumber(item.count)}
+                  </span>
+                </div>
+                <div className="mt-1 text-[11px] leading-4 text-[var(--ink-3)]">{item.description}</div>
+                <div className="mt-2 text-[11px] font-semibold text-[var(--solar-3)]">
+                  {item.active ? "현재 큐" : item.actionLabel}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      {activeItem && (
+      {!effectiveCollapsed && activeItem && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--line)] bg-[var(--bg-2)] px-3 py-2">
           <div>
             <div className="text-xs font-semibold text-[var(--ink)]">{activeItem.label} 작업 모드</div>
