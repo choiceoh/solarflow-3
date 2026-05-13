@@ -70,23 +70,12 @@ func init() {
 	})
 }
 
-func (h *TTHandler) poIDsForTTCompany(companyID string) ([]string, error) {
-	rows, _, err := handlerutil.FetchAllSummaryRows[struct {
-		POID string `json:"po_id"`
-	}](func() *postgrest.FilterBuilder {
-		return h.DB.From("purchase_orders").
-			Select("po_id", "exact", false).
-			Eq("company_id", companyID)
-	})
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(rows))
-	for _, row := range rows {
-		ids = append(ids, row.POID)
-	}
-	return ids, nil
-}
+// ttReadView — List/Summary/Dashboard 가 쿼리할 base view 이름 (마이그 114).
+// tt_remittances 는 직접 company_id 가 없어 과거엔 purchase_orders 에서 po_id 리스트를
+// 끌어와 .In("po_id", ...) 했다 — PO 가 많은 테넌트에서 URL 폭주 (PR #806 동일 패턴).
+// view 는 po_company_id 컬럼을 노출해 server-side eq 만으로 끝낸다.
+// 쓰기(Create/Update/Delete) 는 tt_remittances 테이블 직접.
+const ttReadView = "tt_remittances_with_company"
 
 func (h *TTHandler) applyTTFilters(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
 	// 비유: ?po_id=xxx — 특정 PO의 송금만 필터
@@ -94,16 +83,9 @@ func (h *TTHandler) applyTTFilters(r *http.Request, query *postgrest.FilterBuild
 		query = query.Eq("po_id", poID)
 	}
 
-	// 비유: ?company_id=xxx — TT는 PO에 묶이므로 PO 후보로 법인 범위를 좁힌다.
+	// 비유: ?company_id=xxx — view 의 po_company_id 컬럼으로 server-side 매칭.
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" && r.URL.Query().Get("po_id") == "" {
-		poIDs, err := h.poIDsForTTCompany(compID)
-		if err != nil {
-			return query, false, err
-		}
-		if len(poIDs) == 0 {
-			return query, false, nil
-		}
-		query = query.In("po_id", poIDs)
+		query = query.Eq("po_company_id", compID)
 	}
 
 	// 비유: ?status=completed — 특정 상태의 송금만 필터
@@ -146,7 +128,7 @@ func parseTTSort(r *http.Request) (column string, ascending bool) {
 // List — GET /api/v1/tts — TT 목록 조회 (PO/제조사 정보 포함)
 // 비유: 송금 관리실에서 전체 송금 전표를 꺼내 보여주는 것
 func (h *TTHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("tt_remittances").
+	query := h.DB.From(ttReadView).
 		Select("*, purchase_orders(po_number, manufacturers(name_kr))", "exact", false)
 	var ok bool
 	var err error
@@ -207,7 +189,7 @@ func (h *TTHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	var applyErr error
 	empty := false
 	rows, total, err := handlerutil.FetchAllSummaryRows[ttSummaryRow](func() *postgrest.FilterBuilder {
-		q := h.DB.From("tt_remittances").
+		q := h.DB.From(ttReadView).
 			Select("tt_id,po_id,remit_date,amount_usd,status", "exact", false)
 		q, ok, err := h.applyTTFilters(r, q)
 		if err != nil {

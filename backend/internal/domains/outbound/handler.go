@@ -29,6 +29,9 @@ import (
 const (
 	outboundDefaultLimit = 100
 	outboundMaxLimit     = 1000
+	// outboundSummaryBatchSize — Summary 의 sales.outbound_id IN 청크 크기.
+	// 36-char UUID 200 개 → 약 7.4KB URL, Cloudflare 8KB 한도 안.
+	outboundSummaryBatchSize = 200
 )
 
 // outboundListColumns — List 응답에 포함할 outbounds 컬럼 화이트리스트.
@@ -246,14 +249,22 @@ type outboundPartnerRow struct {
 	PartnerName string `json:"partner_name"`
 }
 
-// outboundsBaseTable — work_queue 에 따라 PostgREST 가 쿼리할 베이스 테이블/뷰 이름을 고른다.
-// sale_unregistered 는 마이그 110 의 outbounds_sale_unregistered 뷰로 위임해
-// "수천 UUID NOT IN" URL 폭주를 DB-side 로 푼다. 그 외엔 그대로 outbounds.
+// outboundsBaseTable — 읽기 경로(List/Summary/Dashboard) 가 쿼리할 베이스 뷰 이름.
+//
+// 마이그 112 의 outbounds_with_meta — outbounds 에 products/orders/warehouses/companies
+// 메타 컬럼(product_code/name, product_manufacturer_id, order_number, warehouse_name,
+// target_company_name/code) 을 LEFT JOIN 으로 노출. q 검색·제조사 필터를 server-side
+// 술어로 풀 수 있게 한다 (Go 측 UUID 리스트 IN URL 폭주 회피).
+//
+// sale_unregistered 는 마이그 110(112 에서 base 갱신) 의 outbounds_sale_unregistered.
+// 같은 view 기반이라 q 검색·제조사 필터가 그대로 통과한다.
+//
+// 쓰기(Create/Update/Delete) 는 outbounds 테이블 직접 (이 함수 미사용).
 func outboundsBaseTable(r *http.Request) string {
 	if r.URL.Query().Get("work_queue") == "sale_unregistered" {
 		return "outbounds_sale_unregistered"
 	}
-	return "outbounds"
+	return "outbounds_with_meta"
 }
 
 func (h *OutboundHandler) fetchOutboundRecord(id string) (Outbound, bool, error) {
@@ -483,56 +494,6 @@ func (h *OutboundHandler) enrichOutbounds(outbounds []Outbound) ([]Outbound, err
 	return outbounds, nil
 }
 
-// productIDsByManufacturer — manufacturer_id 로 products.product_id 리스트를 끌어옴.
-// outbounds.product_id IN (...) 형태로 DB-level 제조사 필터를 거는 데 사용한다.
-func (h *OutboundHandler) productIDsByManufacturer(manufacturerID string) ([]string, error) {
-	data, _, err := h.DB.From("products").
-		Select("product_id", "exact", false).
-		Eq("manufacturer_id", manufacturerID).
-		Execute()
-	if err != nil {
-		return nil, err
-	}
-	var rows []struct {
-		ProductID string `json:"product_id"`
-	}
-	if err := json.Unmarshal(data, &rows); err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(rows))
-	for _, r := range rows {
-		ids = append(ids, r.ProductID)
-	}
-	return ids, nil
-}
-
-// idsBySearch — 단일 컬럼 ilike 로 자식 테이블의 ID 후보를 끌어와 outbounds.<fk> IN (...) 에 사용.
-// q 가 빈 문자열이거나 매칭이 0건이면 빈 슬라이스 반환 (호출 측에서 OR 조건 생략).
-func (h *OutboundHandler) idsBySearch(table, idColumn string, columns []string, q string) ([]string, error) {
-	or := make([]string, 0, len(columns))
-	for _, col := range columns {
-		or = append(or, fmt.Sprintf("%s.ilike.*%s*", col, q))
-	}
-	data, _, err := h.DB.From(table).
-		Select(idColumn, "exact", false).
-		Or(strings.Join(or, ","), "").
-		Execute()
-	if err != nil {
-		return nil, err
-	}
-	var rows []map[string]any
-	if err := json.Unmarshal(data, &rows); err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(rows))
-	for _, row := range rows {
-		if v, ok := row[idColumn].(string); ok {
-			ids = append(ids, v)
-		}
-	}
-	return ids, nil
-}
-
 // parseSort — ?sort=<column>&?order=<asc|desc> 파싱. 화이트리스트 검증.
 // 기본값은 outbound_date desc (운영자가 가장 최근 출고를 먼저 보길 기대).
 func parseOutboundSort(r *http.Request) (column string, ascending bool) {
@@ -561,47 +522,21 @@ func sanitizeSearchTerm(q string) string {
 }
 
 // applyOutboundSearch — ?q 검색어를 outbound 쿼리에 적용한다.
-// outbounds 직접 컬럼(site_name, erp_outbound_no) 은 ilike OR 로,
-// 자식 테이블(products/orders/warehouses/companies) 의 컬럼은 먼저 ID 리스트를 끌어와 IN 으로 결합한다.
-// 매칭되는 컬럼이 하나도 없으면 false 를 반환하고 빈 응답을 보내야 한다.
+// outbounds_with_meta(마이그 112) 가 product_code/name, order_number, warehouse_name,
+// target_company_name/code 를 view 컬럼으로 노출하므로 모두 server-side ilike OR
+// 한 번에 처리. 과거엔 4 개 마스터 테이블에서 UUID 리스트를 따로 끌어와
+// outbounds.<fk>.in.(...) 으로 합쳤다 — 매칭이 많을 때 URL 폭주 (PR #806 동일 패턴).
 func (h *OutboundHandler) applyOutboundSearch(query *postgrest.FilterBuilder, q string) (*postgrest.FilterBuilder, bool, error) {
 	clauses := []string{
 		fmt.Sprintf("site_name.ilike.*%s*", q),
 		fmt.Sprintf("erp_outbound_no.ilike.*%s*", q),
+		fmt.Sprintf("product_code.ilike.*%s*", q),
+		fmt.Sprintf("product_name.ilike.*%s*", q),
+		fmt.Sprintf("order_number.ilike.*%s*", q),
+		fmt.Sprintf("warehouse_name.ilike.*%s*", q),
+		fmt.Sprintf("target_company_name.ilike.*%s*", q),
+		fmt.Sprintf("target_company_code.ilike.*%s*", q),
 	}
-
-	productIDs, err := h.idsBySearch("products", "product_id", []string{"product_code", "product_name"}, q)
-	if err != nil {
-		return query, false, fmt.Errorf("products 검색 실패: %w", err)
-	}
-	if len(productIDs) > 0 {
-		clauses = append(clauses, fmt.Sprintf("product_id.in.(%s)", strings.Join(productIDs, ",")))
-	}
-
-	orderIDs, err := h.idsBySearch("orders", "order_id", []string{"order_number"}, q)
-	if err != nil {
-		return query, false, fmt.Errorf("orders 검색 실패: %w", err)
-	}
-	if len(orderIDs) > 0 {
-		clauses = append(clauses, fmt.Sprintf("order_id.in.(%s)", strings.Join(orderIDs, ",")))
-	}
-
-	warehouseIDs, err := h.idsBySearch("warehouses", "warehouse_id", []string{"warehouse_name"}, q)
-	if err != nil {
-		return query, false, fmt.Errorf("warehouses 검색 실패: %w", err)
-	}
-	if len(warehouseIDs) > 0 {
-		clauses = append(clauses, fmt.Sprintf("warehouse_id.in.(%s)", strings.Join(warehouseIDs, ",")))
-	}
-
-	targetCompanyIDs, err := h.idsBySearch("companies", "company_id", []string{"company_name", "company_code"}, q)
-	if err != nil {
-		return query, false, fmt.Errorf("companies 검색 실패: %w", err)
-	}
-	if len(targetCompanyIDs) > 0 {
-		clauses = append(clauses, fmt.Sprintf("target_company_id.in.(%s)", strings.Join(targetCompanyIDs, ",")))
-	}
-
 	return query.Or(strings.Join(clauses, ","), ""), true, nil
 }
 
@@ -670,15 +605,10 @@ func (h *OutboundHandler) applyOutboundFilters(r *http.Request, query *postgrest
 		return query, false, nil
 	}
 
+	// manufacturer_id: outbounds_with_meta(마이그 112) 가 view 컬럼으로 노출.
+	// 과거엔 products.product_id IN (...) 으로 우회 — 한 제조사 product 가 많을 때 폭주 위험.
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
-		productIDs, err := h.productIDsByManufacturer(mfgID)
-		if err != nil {
-			return query, false, fmt.Errorf("manufacturer_id 처리 실패: %w", err)
-		}
-		if len(productIDs) == 0 {
-			return query, false, nil
-		}
-		query = query.In("product_id", productIDs)
+		query = query.Eq("product_manufacturer_id", mfgID)
 	}
 
 	if q := sanitizeSearchTerm(r.URL.Query().Get("q")); q != "" {
@@ -823,52 +753,59 @@ func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 매출 합계와 계산서 미발행 건수는 sales 에서 직접 집계.
-	// outbound 필터를 sales.outbound_id 로 재투영하기 위해 List 와 같은 필터로 outbound_id 후보를 끌어온 뒤
-	// sales 에서 IN 으로 거른다 — 후보가 매우 많으면(>10k) PostgREST URL 길이 한계 우려가 있으나
-	// 운영 데이터 규모상 당분간 안전.
+	// outbound 필터를 sales.outbound_id 로 재투영하기 위해 List 와 같은 필터로 outbound_id 후보를
+	// 끌어온 뒤 sales 에서 IN 으로 거른다. 한 URL 에 모든 UUID 를 넣으면 Cloudflare 한도 초과로
+	// 평문 400 → 디코딩 실패. handlerutil.StringBatches 로 분할 호출해 회피.
 	//
 	// InvoicePendingCount 는 "outbound 단위" 로 센다 (D-102 정의):
 	//   - 매출 row 자체가 없는 출고 → 미발행
 	//   - 매출이 있어도 모든 sale 의 tax_invoice_date 가 null → 미발행
 	//   - tax_invoice_date 가 채워진 sale 이 하나라도 있으면 → 발행 (제외)
-	// 과거에는 sale row 개수를 그대로 셌어서 (a) 매출 없는 출고를 누락하고 (b) 한 출고에 sale 이 여러 건이면
-	// 중복 카운트하는 두 가지 결함이 있었음. 알림(useAlerts) 가 이 값을 그대로 사용하므로 정의가 일치해야 함.
 	idQ := h.DB.From(baseTable).Select("outbound_id", "exact", false)
 	idQ, ok3, err := h.applyOutboundFilters(r, idQ)
 	if err == nil && ok3 {
-		if data, _, err := idQ.Execute(); err == nil {
-			var idRows []struct {
-				OutboundID string `json:"outbound_id"`
+		idRows, _, ferr := handlerutil.FetchAllSummaryRows[struct {
+			OutboundID string `json:"outbound_id"`
+		}](func() *postgrest.FilterBuilder {
+			q := h.DB.From(baseTable).Select("outbound_id", "exact", false)
+			q, _, _ = h.applyOutboundFilters(r, q)
+			return q
+		})
+		if ferr == nil && len(idRows) > 0 {
+			ids := make([]string, 0, len(idRows))
+			for _, row := range idRows {
+				ids = append(ids, row.OutboundID)
 			}
-			if json.Unmarshal(data, &idRows) == nil && len(idRows) > 0 {
-				ids := make([]string, 0, len(idRows))
-				for _, row := range idRows {
-					ids = append(ids, row.OutboundID)
-				}
-				if saleData, _, err := h.DB.From("sales").
+			issuedOutbounds := make(map[string]struct{})
+			// URL 한도 회피용 200/청크 (UUID 36 char → 200 × 37 ≈ 7.4KB 안전).
+			for _, batch := range handlerutil.StringBatches(ids, outboundSummaryBatchSize) {
+				saleData, _, serr := h.DB.From("sales").
 					Select("supply_amount, tax_invoice_date, outbound_id", "exact", false).
-					In("outbound_id", ids).
+					In("outbound_id", batch).
 					Neq("status", "cancelled").
-					Execute(); err == nil {
-					var sales []struct {
-						SupplyAmount   *float64 `json:"supply_amount"`
-						TaxInvoiceDate *string  `json:"tax_invoice_date"`
-						OutboundID     *string  `json:"outbound_id"`
+					Execute()
+				if serr != nil {
+					log.Printf("[출고 요약 - sales 청크 조회 실패] %v", serr)
+					break
+				}
+				var sales []struct {
+					SupplyAmount   *float64 `json:"supply_amount"`
+					TaxInvoiceDate *string  `json:"tax_invoice_date"`
+					OutboundID     *string  `json:"outbound_id"`
+				}
+				if json.Unmarshal(saleData, &sales) != nil {
+					continue
+				}
+				for _, s := range sales {
+					if s.SupplyAmount != nil {
+						summary.SaleAmountSum += *s.SupplyAmount
 					}
-					if json.Unmarshal(saleData, &sales) == nil {
-						issuedOutbounds := make(map[string]struct{})
-						for _, s := range sales {
-							if s.SupplyAmount != nil {
-								summary.SaleAmountSum += *s.SupplyAmount
-							}
-							if s.TaxInvoiceDate != nil && s.OutboundID != nil {
-								issuedOutbounds[*s.OutboundID] = struct{}{}
-							}
-						}
-						summary.InvoicePendingCount = int64(len(ids) - len(issuedOutbounds))
+					if s.TaxInvoiceDate != nil && s.OutboundID != nil {
+						issuedOutbounds[*s.OutboundID] = struct{}{}
 					}
 				}
 			}
+			summary.InvoicePendingCount = int64(len(ids) - len(issuedOutbounds))
 		}
 	}
 

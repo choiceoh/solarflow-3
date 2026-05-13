@@ -173,7 +173,7 @@ func normalizeOrderScope(raw string) string {
 func (h *OrderHandler) fetchAllForOrderDashboard(r *http.Request) ([]Order, error) {
 	all := make([]Order, 0, orderDashboardChunkSize)
 	for chunk := 0; chunk < orderDashboardMaxChunks; chunk++ {
-		q := h.DB.From("orders").Select("*", "exact", false)
+		q := h.DB.From(ordersReadView).Select("*", "exact", false)
 		q, ok, err := h.applyOrderFilters(r, q)
 		if err != nil {
 			return nil, fmt.Errorf("필터 처리 실패: %w", err)
