@@ -355,9 +355,9 @@ export default function CommandShell() {
               <Link
                 to="/import"
                 viewTransition
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 text-xs font-semibold text-[var(--ink)] transition hover:bg-[var(--bg-2)]"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 text-xs font-semibold text-[var(--ink)] transition hover:bg-[var(--bg-2)]"
               >
-                <FileSpreadsheet className="h-3.5 w-3.5 text-[var(--ink-3)]" />
+                <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-[var(--ink-3)]" />
                 엑셀 입력
               </Link>
             )}
