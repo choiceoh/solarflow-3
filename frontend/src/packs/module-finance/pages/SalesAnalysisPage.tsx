@@ -1649,6 +1649,27 @@ export default function SalesAnalysisPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {/* D-064 PR 30: 원가 기준 토글 — fifo 정합치 / landed 추정 / cif 추정 */}
+              <Select
+                value={costBasis}
+                onValueChange={(v) => setCostBasis(v as CostBasis)}
+              >
+                <SelectTrigger className="h-8 w-40 text-xs">
+                  <span className="truncate">
+                    원가기준:{" "}
+                    {costBasis === "fifo"
+                      ? "FIFO 정합"
+                      : costBasis === "landed"
+                        ? "Landed"
+                        : "CIF"}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fifo">FIFO 정합</SelectItem>
+                  <SelectItem value="landed">Landed</SelectItem>
+                  <SelectItem value="cif">CIF</SelectItem>
+                </SelectContent>
+              </Select>
               <div className="ml-auto flex items-center gap-2">
                 <button
                   type="button"
@@ -1663,18 +1684,6 @@ export default function SalesAnalysisPage() {
                   새로고침
                 </button>
               </div>
-            </div>
-            {/* D-064 PR 30: 원가 기준 토글 — fifo 정합치 / landed 추정 / cif 추정 */}
-            <div className="flex flex-wrap items-center gap-2">
-              <FilterChips
-                options={[
-                  { key: "fifo", label: "FIFO 정합" },
-                  { key: "landed", label: "Landed" },
-                  { key: "cif", label: "CIF" },
-                ]}
-                value={costBasis}
-                onChange={(value) => setCostBasis(value as CostBasis)}
-              />
             </div>
           </div>
 
