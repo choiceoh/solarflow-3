@@ -123,16 +123,26 @@ func TestNoMagicNumberInRange(t *testing.T) {
 }
 
 // ============================================================
-// G5. 출고 검색은 enrich 전용 필드를 DB 컬럼처럼 참조하지 않는다.
-// 회귀 패턴: target_company_name 은 응답 enrich 필드라 outbounds 컬럼이 아님.
+// G5. 출고 검색은 outbounds_with_meta(마이그 112) 의 view 컬럼을 직접 ilike 한다.
+// 회귀 패턴: 과거엔 companies/products/orders/warehouses 에서 UUID 리스트를 끌어와
+// outbounds.<fk>.in.(...) 으로 결합 → 매칭이 많을 때 URL 폭주 (PR #806 동일 패턴).
+// 가드: target_company_name 같은 view 컬럼이 ilike 절로 살아 있어야 한다.
+// 동시에 옛 IN 우회 헬퍼(idsBySearch) 는 다시 들어오면 안 된다.
 // ============================================================
-func TestOutboundSearchDoesNotUseEnrichedOnlyColumn(t *testing.T) {
+func TestOutboundSearchUsesViewColumns(t *testing.T) {
 	body, err := os.ReadFile("../domains/outbound/handler.go")
 	if err != nil {
-		t.Fatalf("read tx_outbound.go: %v", err)
+		t.Fatalf("read outbound/handler.go: %v", err)
 	}
-	if strings.Contains(string(body), "target_company_name.ilike") {
-		t.Fatal("출고 검색에서 target_company_name.ilike 사용 금지: companies 검색 후 target_company_id.in(...) 로 연결해야 합니다")
+	content := string(body)
+	if !strings.Contains(content, "target_company_name.ilike") {
+		t.Fatal("outbounds_with_meta 의 target_company_name 을 ilike 로 검색해야 합니다 (마이그 112)")
+	}
+	if strings.Contains(content, "idsBySearch") {
+		t.Fatal("idsBySearch 우회 경로 복귀 금지: outbounds_with_meta view 컬럼 ilike 사용")
+	}
+	if strings.Contains(content, "productIDsByManufacturer") {
+		t.Fatal("productIDsByManufacturer 복귀 금지: outbounds_with_meta.product_manufacturer_id 에 eq 사용")
 	}
 }
 

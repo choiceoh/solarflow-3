@@ -24,6 +24,7 @@ import (
 
 	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/feature"
+	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
@@ -155,21 +156,10 @@ func (h *ExportHandler) FullDataDump(w http.ResponseWriter, r *http.Request) {
 		*t.target = json.RawMessage(data)
 	}
 
-	// sales: company_id 없음 → 이 테넌트의 order_id / outbound_id 로 연결.
-	orderIDs, err := extractStringField(dump.Orders, "order_id")
-	if err != nil {
-		log.Printf("[전체 데이터 덤프] 수주 ID 추출 실패: scope=%s err=%v", scope, err)
-		response.RespondError(w, http.StatusInternalServerError, "매출 조회에 실패했습니다")
-		return
-	}
-	outboundIDs, err := extractStringField(dump.Outbounds, "outbound_id")
-	if err != nil {
-		log.Printf("[전체 데이터 덤프] 출고 ID 추출 실패: scope=%s err=%v", scope, err)
-		response.RespondError(w, http.StatusInternalServerError, "매출 조회에 실패했습니다")
-		return
-	}
-
-	salesData, err := h.fetchTenantSales(orderIDs, outboundIDs)
+	// sales: company_id 없음 → sales_with_meta(마이그 094/111) 의 outbound_company_id /
+	// order_company_id 컬럼으로 server-side OR 매칭. 과거엔 orderIDs / outboundIDs 를
+	// 본문 IN 으로 합쳐 보내 URL 폭주 (PR #806 동일 패턴).
+	salesData, err := h.fetchTenantSales(companyIDs)
 	if err != nil {
 		log.Printf("[전체 데이터 덤프] 매출 조회 실패: scope=%s err=%v", scope, err)
 		response.RespondError(w, http.StatusInternalServerError, "매출 조회에 실패했습니다")
@@ -177,8 +167,15 @@ func (h *ExportHandler) FullDataDump(w http.ResponseWriter, r *http.Request) {
 	}
 	dump.Sales = salesData
 
-	// receipts: company_id 없음 → receipt_matches.outbound_id 경유로 receipt_id 모은 뒤 조회.
-	// orphan receipt(매칭 없는 입금건)는 테넌트 식별 불가 → 누락 (D-108 분리 우선).
+	// receipts: company_id 없음 → 이 테넌트의 outbound_id 로 receipt_matches 매칭 후
+	// receipt_id 끌어와 receipts 조회. outboundIDs 가 많을 수 있어 StringBatches 청크.
+	// orphan receipt(매칭 없는 입금건) 는 테넌트 식별 불가 → 누락 (D-108 분리 우선).
+	outboundIDs, err := extractStringField(dump.Outbounds, "outbound_id")
+	if err != nil {
+		log.Printf("[전체 데이터 덤프] 출고 ID 추출 실패: scope=%s err=%v", scope, err)
+		response.RespondError(w, http.StatusInternalServerError, "수금 조회에 실패했습니다")
+		return
+	}
 	receiptsData, err := h.fetchTenantReceipts(outboundIDs)
 	if err != nil {
 		log.Printf("[전체 데이터 덤프] 수금 조회 실패: scope=%s err=%v", scope, err)
@@ -223,24 +220,24 @@ func extractStringField(raw json.RawMessage, key string) ([]string, error) {
 	return ids, nil
 }
 
-// fetchTenantSales — sales 는 order_id 또는 outbound_id 로 테넌트 연결 (migration 026 이후).
-// 두 컬럼 중 어느 한쪽이라도 이 테넌트에 속하면 포함 — PostgREST or 필터로 합집합.
-func (h *ExportHandler) fetchTenantSales(orderIDs, outboundIDs []string) (json.RawMessage, error) {
-	if len(orderIDs) == 0 && len(outboundIDs) == 0 {
+// exportInChunkSize — fetchTenantReceipts 의 IN(...) 청크 크기. UUID 36 char 기준
+// 200 × 37 ≈ 7.4KB URL — Cloudflare 8KB 한도 안.
+const exportInChunkSize = 200
+
+// fetchTenantSales — sales_with_meta(094/111) 의 outbound_company_id / order_company_id
+// 컬럼으로 server-side 매칭. UUID 왕복 없음 (PR #806 동일 처방).
+//
+// 결과 객체에는 view 가 더한 메타 컬럼(business_date, collected_amount, receipt_status 등)
+// 이 함께 들어가지만 export 덤프 consumer 입장에선 추가 필드라 무해.
+func (h *ExportHandler) fetchTenantSales(companyIDs []string) (json.RawMessage, error) {
+	if len(companyIDs) == 0 {
 		return json.RawMessage("[]"), nil
 	}
-
-	clauses := make([]string, 0, 2)
-	if len(orderIDs) > 0 {
-		clauses = append(clauses, "order_id.in.("+strings.Join(orderIDs, ",")+")")
-	}
-	if len(outboundIDs) > 0 {
-		clauses = append(clauses, "outbound_id.in.("+strings.Join(outboundIDs, ",")+")")
-	}
-
-	data, _, err := h.DB.From("sales").
+	idList := strings.Join(companyIDs, ",")
+	clause := fmt.Sprintf("outbound_company_id.in.(%s),order_company_id.in.(%s)", idList, idList)
+	data, _, err := h.DB.From("sales_with_meta").
 		Select("*", "exact", false).
-		Or(strings.Join(clauses, ","), "").
+		Or(clause, "").
 		Execute()
 	if err != nil {
 		return nil, err
@@ -252,32 +249,59 @@ func (h *ExportHandler) fetchTenantSales(orderIDs, outboundIDs []string) (json.R
 }
 
 // fetchTenantReceipts — receipts 는 company_id 가 없어 receipt_matches 경유로 우회.
-// 이 테넌트의 outbound 와 매칭된 수금만 포함; 매칭 없는 receipt(orphan)는 식별 불가로 제외.
+// 이 테넌트의 outbound 와 매칭된 수금만 포함; 매칭 없는 receipt(orphan) 는 식별 불가로 제외.
+// outboundIDs 가 수천 개일 때 한 URL .In() 으로 보내면 Cloudflare 한도 초과 → 평문 400
+// → JSON 파싱 실패. handlerutil.StringBatches 로 분할 호출 후 결과 머지.
 func (h *ExportHandler) fetchTenantReceipts(outboundIDs []string) (json.RawMessage, error) {
 	if len(outboundIDs) == 0 {
 		return json.RawMessage("[]"), nil
 	}
 
-	matchData, _, err := h.DB.From("receipt_matches").
-		Select("receipt_id", "exact", false).
-		In("outbound_id", outboundIDs).
-		Execute()
-	if err != nil {
-		return nil, err
+	receiptIDSet := make(map[string]struct{})
+	for _, batch := range handlerutil.StringBatches(outboundIDs, exportInChunkSize) {
+		matchData, _, err := h.DB.From("receipt_matches").
+			Select("receipt_id", "exact", false).
+			In("outbound_id", batch).
+			Execute()
+		if err != nil {
+			return nil, err
+		}
+		ids, err := extractStringField(matchData, "receipt_id")
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			receiptIDSet[id] = struct{}{}
+		}
 	}
-
-	receiptIDs, err := extractStringField(matchData, "receipt_id")
-	if err != nil {
-		return nil, err
-	}
-	if len(receiptIDs) == 0 {
+	if len(receiptIDSet) == 0 {
 		return json.RawMessage("[]"), nil
 	}
+	receiptIDs := make([]string, 0, len(receiptIDSet))
+	for id := range receiptIDSet {
+		receiptIDs = append(receiptIDs, id)
+	}
 
-	data, _, err := h.DB.From("receipts").
-		Select("*", "exact", false).
-		In("receipt_id", receiptIDs).
-		Execute()
+	type receiptRow = map[string]json.RawMessage
+	merged := make([]receiptRow, 0, len(receiptIDs))
+	for _, batch := range handlerutil.StringBatches(receiptIDs, exportInChunkSize) {
+		data, _, err := h.DB.From("receipts").
+			Select("*", "exact", false).
+			In("receipt_id", batch).
+			Execute()
+		if err != nil {
+			return nil, err
+		}
+		if len(data) == 0 {
+			continue
+		}
+		var rows []receiptRow
+		if err := json.Unmarshal(data, &rows); err != nil {
+			return nil, err
+		}
+		merged = append(merged, rows...)
+	}
+	data, err := json.Marshal(merged)
 	if err != nil {
 		return nil, err
 	}

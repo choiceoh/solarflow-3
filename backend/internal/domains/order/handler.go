@@ -84,28 +84,6 @@ func init() {
 	})
 }
 
-// idsByName — partners/products 이름 ilike 매칭으로 id 후보 끌어와 주문 q 검색에 사용.
-func (h *OrderHandler) idsByName(table, idCol, nameCol, q string) ([]string, error) {
-	data, _, err := h.DB.From(table).
-		Select(idCol, "exact", false).
-		Ilike(nameCol, "*"+q+"*").
-		Execute()
-	if err != nil {
-		return nil, err
-	}
-	var rows []map[string]any
-	if err := json.Unmarshal(data, &rows); err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(rows))
-	for _, row := range rows {
-		if v, ok := row[idCol].(string); ok {
-			ids = append(ids, v)
-		}
-	}
-	return ids, nil
-}
-
 func sanitizeOrderSearchTerm(q string) string {
 	q = strings.TrimSpace(q)
 	if q == "" {
@@ -193,20 +171,16 @@ func (h *OrderHandler) applyOrderFilters(r *http.Request, query *postgrest.Filte
 	}
 
 	if q := sanitizeOrderSearchTerm(r.URL.Query().Get("q")); q != "" {
+		// orders_with_meta (마이그 113) 가 customer_name / product_code / product_name 을
+		// view 컬럼으로 노출해 한 번에 server-side ilike 가능. 과거엔 partners/products 에서
+		// UUID 리스트를 끌어와 customer_id.in.(...) / product_id.in.(...) 합쳤다 — 매칭이
+		// 많을 때 URL 폭주 (PR #806 동일 패턴).
 		clauses := []string{
 			fmt.Sprintf("order_number.ilike.*%s*", q),
 			fmt.Sprintf("site_name.ilike.*%s*", q),
-		}
-		// 거래처 이름 → customer_id 후보
-		if ids, err := h.idsByName("partners", "partner_id", "partner_name", q); err == nil && len(ids) > 0 {
-			clauses = append(clauses, fmt.Sprintf("customer_id.in.(%s)", strings.Join(ids, ",")))
-		}
-		// 품번/품명 → product_id 후보
-		if ids, err := h.idsByName("products", "product_id", "product_code", q); err == nil && len(ids) > 0 {
-			clauses = append(clauses, fmt.Sprintf("product_id.in.(%s)", strings.Join(ids, ",")))
-		}
-		if ids, err := h.idsByName("products", "product_id", "product_name", q); err == nil && len(ids) > 0 {
-			clauses = append(clauses, fmt.Sprintf("product_id.in.(%s)", strings.Join(ids, ",")))
+			fmt.Sprintf("customer_name.ilike.*%s*", q),
+			fmt.Sprintf("product_code.ilike.*%s*", q),
+			fmt.Sprintf("product_name.ilike.*%s*", q),
 		}
 		orClauses = append(orClauses, strings.Join(clauses, ","))
 	}
@@ -241,10 +215,15 @@ func parseOrderSort(r *http.Request) (column string, ascending bool) {
 	return column, ascending
 }
 
+// ordersReadView — List/Summary/Dashboard 가 쿼리할 base view 이름 (마이그 113).
+// customer_name / product_code / product_name 을 view 컬럼으로 노출해 q 검색의
+// UUID 리스트 IN 우회 경로를 server-side ilike 로 대체. 쓰기는 orders 테이블 직접.
+const ordersReadView = "orders_with_meta"
+
 // List — GET /api/v1/orders — 수주 목록 조회 (서버사이드 페이지·검색·정렬).
 // q 검색 대상: order_number, site_name, 거래처(partner_name), 품번/품명(product_code/name).
 func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
-	query := h.DB.From("orders").Select("*", "exact", false)
+	query := h.DB.From(ordersReadView).Select("*", "exact", false)
 	query, ok, err := h.applyOrderFilters(r, query)
 	if err != nil {
 		log.Printf("[수주 목록 필터 처리 실패] %v", err)
@@ -293,7 +272,7 @@ type OrderSummary struct {
 
 // Summary — GET /api/v1/orders/summary — 수주 status 별 카운트 집계.
 func (h *OrderHandler) Summary(w http.ResponseWriter, r *http.Request) {
-	totalQ := h.DB.From("orders").Select("order_id", "exact", true)
+	totalQ := h.DB.From(ordersReadView).Select("order_id", "exact", true)
 	totalQ, ok, err := h.applyOrderFilters(r, totalQ)
 	if err != nil {
 		log.Printf("[수주 요약 필터 처리 실패] %v", err)
@@ -324,7 +303,7 @@ func (h *OrderHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		if userStatus != "" && userStatus != st.key {
 			continue
 		}
-		q := h.DB.From("orders").Select("order_id", "exact", true)
+		q := h.DB.From(ordersReadView).Select("order_id", "exact", true)
 		q, ok2, err := h.applyOrderFilters(r, q)
 		if err != nil || !ok2 {
 			continue

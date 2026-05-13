@@ -163,7 +163,7 @@ func normalizeTTScope(raw string) string {
 func (h *TTHandler) fetchAllForTTDashboard(r *http.Request) ([]ttDashRow, error) {
 	all := make([]ttDashRow, 0, ttDashChunkSize)
 	for chunk := 0; chunk < ttDashMaxChunks; chunk++ {
-		q := h.DB.From("tt_remittances").
+		q := h.DB.From(ttReadView).
 			Select("*, purchase_orders(po_number, manufacturers(name_kr))", "exact", false)
 		var ok bool
 		var err error
