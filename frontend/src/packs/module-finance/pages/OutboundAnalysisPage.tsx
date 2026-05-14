@@ -101,7 +101,6 @@ export default function OutboundAnalysisPage() {
     () =>
       trend24.map((p) => ({
         month: p.month.slice(2), // YY-MM
-        count: p.count,
         mw: Number(toMW(p.kw_sum).toFixed(2)),
       })),
     [trend24],
@@ -337,38 +336,20 @@ export default function OutboundAnalysisPage() {
               </KpiStrip>
 
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_0.6fr]">
-                <CardB title="24개월 출고 추이" sub="월별 건수 + MW">
+                <CardB title="24개월 출고 추이" sub="월별 MW">
                   <div className="h-64 px-3 py-2">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={trendChartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
                         <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                        <YAxis
-                          yAxisId="count"
-                          orientation="left"
-                          tick={{ fontSize: 10 }}
-                          width={32}
-                        />
-                        <YAxis
-                          yAxisId="mw"
-                          orientation="right"
-                          tick={{ fontSize: 10 }}
-                          width={32}
-                        />
-                        <Tooltip
-                          formatter={(value, name) =>
-                            name === "건수"
-                              ? [formatNumber(Number(value)), "건수"]
-                              : [`${value} MW`, "용량"]
-                          }
-                        />
-                        <Bar yAxisId="count" dataKey="count" name="건수" fill="var(--solar-2)" />
-                        <Bar yAxisId="mw" dataKey="mw" name="MW" fill="var(--info)" />
+                        <YAxis tick={{ fontSize: 10 }} width={32} />
+                        <Tooltip formatter={(value) => [`${value} MW`, "용량"]} />
+                        <Bar dataKey="mw" name="MW" fill="var(--info)" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </CardB>
-                <CardB title="전년 동기 대비" sub="누계 건수 기반">
+                <CardB title="전년 동기 대비" sub="누계 용량 기반">
                   <div className="space-y-3 px-4 py-3 text-xs">
                     <div className="flex items-baseline gap-2">
                       <span className="bignum text-[26px] text-[var(--solar-3)]">{yoyPctLabel}</span>
@@ -378,20 +359,20 @@ export default function OutboundAnalysisPage() {
                       <div className="flex justify-between">
                         <span>금년 누계</span>
                         <span className="mono">
-                          {formatNumber(
+                          {fmtMW(
                             (yoy?.current_year ?? []).reduce((a, b) => a + b, 0),
                           )}{" "}
-                          건
+                          MW
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span>전년 동기</span>
-                        <span className="mono">{formatNumber(yoy?.last_year_same ?? 0)} 건</span>
+                        <span className="mono">{fmtMW(yoy?.last_year_same ?? 0)} MW</span>
                       </div>
                       <div className="flex justify-between">
                         <span>전년 연간</span>
                         <span className="mono">
-                          {formatNumber((yoy?.last_year ?? []).reduce((a, b) => a + b, 0))} 건
+                          {fmtMW((yoy?.last_year ?? []).reduce((a, b) => a + b, 0))} MW
                         </span>
                       </div>
                     </div>

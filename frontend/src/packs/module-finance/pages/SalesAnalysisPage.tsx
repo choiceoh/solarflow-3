@@ -1062,12 +1062,17 @@ export default function SalesAnalysisPage() {
   }, [alternativeMarginByKey, filteredSales, marginByProductKey, productById])
 
   const monthlyRevenueProfit = useMemo(() => {
-    const marginByMonth = new Map<string, number>()
-    for (const row of monthlyManagementRows) marginByMonth.set(row.month, row.margin)
-    return monthly.map((row) => ({
-      ...row,
-      margin: marginByMonth.get(row.month) ?? 0,
-    }))
+    const byMonth = new Map<string, { margin: number; marginRate: number }>()
+    for (const row of monthlyManagementRows)
+      byMonth.set(row.month, { margin: row.margin, marginRate: row.marginRate })
+    return monthly.map((row) => {
+      const m = byMonth.get(row.month)
+      return {
+        ...row,
+        margin: m?.margin ?? 0,
+        marginRate: m?.marginRate ?? 0,
+      }
+    })
   }, [monthly, monthlyManagementRows])
 
   const marginBridge = useMemo(() => {
@@ -2531,7 +2536,7 @@ export default function SalesAnalysisPage() {
 
           {activeAnalysisTab === "profit" && (
             <div className="grid grid-cols-1 gap-4">
-              <CardB title="월별 매출·이익" sub="공급가 기준 (이익=추정)" padded>
+              <CardB title="월별 매출·이익률" sub="공급가 기준 (이익률=추정)" padded>
                 {monthlyRevenueProfit.length === 0 ? (
                   <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
                     매출 데이터가 없습니다
@@ -2542,14 +2547,26 @@ export default function SalesAnalysisPage() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis
+                        yAxisId="revenue"
                         tick={{ fontSize: 10 }}
                         tickFormatter={(v: number) => `${Math.round(v / 100000000)}억`}
                       />
+                      <YAxis
+                        yAxisId="rate"
+                        orientation="right"
+                        tick={{ fontSize: 10 }}
+                        tickFormatter={(v: number) => `${v.toFixed(0)}%`}
+                      />
                       <Tooltip
-                        formatter={(value, name) => [formatKRW(Number(value)), String(name)]}
+                        formatter={(value, name) =>
+                          name === "이익률"
+                            ? [`${Number(value).toFixed(1)}%`, "이익률"]
+                            : [formatKRW(Number(value)), String(name)]
+                        }
                       />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Bar
+                        yAxisId="revenue"
                         dataKey="revenue"
                         fill="#2563eb"
                         name="공급가"
@@ -2558,11 +2575,12 @@ export default function SalesAnalysisPage() {
                         animationEasing="ease-out"
                       />
                       <Line
+                        yAxisId="rate"
                         type="monotone"
-                        dataKey="margin"
+                        dataKey="marginRate"
                         stroke="#16a34a"
                         strokeWidth={2}
-                        name="이익"
+                        name="이익률"
                         dot={{ r: 3 }}
                         activeDot={{ r: 4 }}
                         isAnimationActive
