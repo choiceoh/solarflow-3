@@ -12,8 +12,16 @@
 -- 단가(unit_price_wp) 는 NOT NULL DEFAULT 0 인 numeric 컬럼이므로 스키마 변경 불필요
 -- — Go Validate() / 프론트 폼에서 construction 일 때 > 0 검증을 스킵하면 0 으로 저장 가능.
 
--- 1) NOT NULL 해제
+-- 1) NOT NULL 해제 + 'construction 일 때만 NULL 허용' CHECK 제약
 ALTER TABLE orders ALTER COLUMN customer_id DROP NOT NULL;
+
+-- DB 레벨 가드: customer_id 는 management_category='construction' 일 때만 NULL 허용.
+-- 응용에서 실수로 sale/other 에 NULL 을 넣어도 DB 가 막아 데이터 회귀 차단.
+ALTER TABLE orders
+  DROP CONSTRAINT IF EXISTS orders_customer_id_required_unless_construction;
+ALTER TABLE orders
+  ADD CONSTRAINT orders_customer_id_required_unless_construction
+  CHECK (customer_id IS NOT NULL OR management_category = 'construction');
 
 -- 2) v_integrity_check 재정의 (077 의 50+ UNION 전체 — orders.customer_id orphan 룰만 수정)
 CREATE OR REPLACE VIEW v_integrity_check AS
@@ -278,6 +286,18 @@ UNION ALL SELECT 'orders.customer_id orphan', 'FK orphan', 'med',
   (SELECT count(*) FROM orders o WHERE o.customer_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM partners p WHERE p.partner_id = o.customer_id)),
   0,
   CASE WHEN (SELECT count(*) FROM orders o WHERE o.customer_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM partners p WHERE p.partner_id = o.customer_id)) > 0
+    THEN 'fail' ELSE 'pass' END
+FROM (SELECT 1) AS dummy
+
+-- PR 115: customer_id NULL 은 management_category='construction' 일 때만 허용.
+-- DB CHECK 제약이 1차 가드. 이 룰은 CHECK 가 dropped 되거나 backfill 실수로 회귀했을 때 탐지.
+UNION ALL SELECT 'orders.customer_id NULL 인데 공사사용건 아님', 'FK orphan', 'med',
+  '관리구분=공사사용건이 아닌데 거래처가 NULL',
+  '회귀 의심 — sale/spare/repowering 등은 거래처 필수. construction 으로 잘못 분류된 케이스 확인.',
+  0,
+  (SELECT count(*) FROM orders o WHERE o.customer_id IS NULL AND o.management_category IS DISTINCT FROM 'construction'),
+  0,
+  CASE WHEN (SELECT count(*) FROM orders o WHERE o.customer_id IS NULL AND o.management_category IS DISTINCT FROM 'construction') > 0
     THEN 'fail' ELSE 'pass' END
 FROM (SELECT 1) AS dummy
 

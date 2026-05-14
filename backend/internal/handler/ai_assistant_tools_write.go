@@ -386,7 +386,20 @@ func toolCreateOrder() assistantTool {
 				"memo": {"type": "string"},
 				"bl_id": {"type": "string"}
 			},
-			"required": ["company_id", "order_date", "receipt_method", "product_id", "quantity", "status"]
+			"required": ["company_id", "order_date", "receipt_method", "product_id", "quantity", "status"],
+			"allOf": [
+				{
+					"if": {
+						"not": {
+							"properties": {"management_category": {"const": "construction"}},
+							"required": ["management_category"]
+						}
+					},
+					"then": {
+						"required": ["customer_id", "unit_price_wp"]
+					}
+				}
+			]
 		}`),
 		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },
 		execute: func(ctx context.Context, _ *supa.Client, input json.RawMessage) (string, error) {
