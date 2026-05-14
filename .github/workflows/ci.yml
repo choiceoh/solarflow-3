@@ -33,10 +33,15 @@ jobs:
             # "이 패턴에 매칭되면 true" 로 작동해, frontend 만 바뀐 PR 까지
             # backend=true 로 잡혔다 (PR #812 사례). engine 잡과 동일하게
             # 트리거 파일을 명시적으로 나열한다.
+            # assets/** 는 //go:embed 입력 (handler/assets/solar_domain_kr.md 등),
+            # testdata/** 는 go test 가 읽는 골든 픽스처 (router/testdata/routes.golden 등).
+            # 새 임베드 자원은 *반드시* assets/ 하위에 두거나 이 목록을 갱신.
             backend:
               - 'backend/**/*.go'
               - 'backend/go.mod'
               - 'backend/go.sum'
+              - 'backend/**/assets/**'
+              - 'backend/**/testdata/**'
               - '.github/workflows/ci.yml'
             engine:
               - 'engine/src/**'
