@@ -41,24 +41,41 @@ WHERE o.bl_id IS NOT NULL
 CREATE OR REPLACE FUNCTION sync_outbound_bl_id() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
-  v_out_id uuid;
+  v_old_out_id uuid;
+  v_new_out_id uuid;
   v_rep_bl uuid;
 BEGIN
-  -- 영향받는 outbound_id 결정 (INSERT/UPDATE 는 NEW, DELETE 는 OLD)
-  v_out_id := COALESCE(NEW.outbound_id, OLD.outbound_id);
+  v_old_out_id := OLD.outbound_id;
+  v_new_out_id := NEW.outbound_id;
 
-  -- 대표 BL 재계산
-  SELECT bl_id INTO v_rep_bl
-  FROM outbound_bl_items
-  WHERE outbound_id = v_out_id
-  ORDER BY quantity DESC, bl_id ASC
-  LIMIT 1;
+  -- UPDATE 로 outbound_id 가 바뀐 경우 OLD/NEW outbound 를 각각 재동기화한다.
+  -- DELETE 는 OLD 만, INSERT 는 NEW 만 유효하다.
+  IF v_old_out_id IS NOT NULL THEN
+    SELECT bl_id INTO v_rep_bl
+    FROM outbound_bl_items
+    WHERE outbound_id = v_old_out_id
+    ORDER BY quantity DESC, bl_id ASC
+    LIMIT 1;
 
-  -- outbounds.bl_id 가 다르면 갱신 (NULL ↔ uuid 케이스 포함)
-  UPDATE outbounds
-  SET bl_id = v_rep_bl, updated_at = now()
-  WHERE outbound_id = v_out_id
-    AND bl_id IS DISTINCT FROM v_rep_bl;
+    UPDATE outbounds
+    SET bl_id = v_rep_bl, updated_at = now()
+    WHERE outbound_id = v_old_out_id
+      AND bl_id IS DISTINCT FROM v_rep_bl;
+  END IF;
+
+  IF v_new_out_id IS NOT NULL
+     AND v_new_out_id IS DISTINCT FROM v_old_out_id THEN
+    SELECT bl_id INTO v_rep_bl
+    FROM outbound_bl_items
+    WHERE outbound_id = v_new_out_id
+    ORDER BY quantity DESC, bl_id ASC
+    LIMIT 1;
+
+    UPDATE outbounds
+    SET bl_id = v_rep_bl, updated_at = now()
+    WHERE outbound_id = v_new_out_id
+      AND bl_id IS DISTINCT FROM v_rep_bl;
+  END IF;
 
   RETURN COALESCE(NEW, OLD);
 END;
