@@ -557,6 +557,25 @@ func (h *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 프론트가 단일 필드만 보내는 경우 (예: unit_price_wp=0) Validate() 가 기존 order 의
+	// management_category 를 모르면 construction 분기를 못 타 양수 체크에 걸린다.
+	// → req.ManagementCategory 가 비어 있으면 DB 의 현재 값을 검증 컨텍스트에 주입.
+	if req.ManagementCategory == nil {
+		existing, _, err := h.DB.From("orders").
+			Select("management_category", "exact", false).
+			Eq("order_id", id).
+			Execute()
+		if err == nil {
+			var rows []struct {
+				ManagementCategory *string `json:"management_category"`
+			}
+			if err := json.Unmarshal(existing, &rows); err == nil && len(rows) > 0 && rows[0].ManagementCategory != nil {
+				cat := *rows[0].ManagementCategory
+				req.ManagementCategory = &cat
+			}
+		}
+	}
+
 	// 공사사용건 전환 + customer_id 비우기 의도를 Validate() 가 nil 정규화하기 전에 캡처.
 	// 그냥 두면 *string omitempty + nil 이라 JSON 에 필드가 빠져 PostgREST 가 기존 값을 유지함.
 	// → map payload 에 customer_id: nil 을 명시적으로 넣어 NULL 갱신을 강제.
