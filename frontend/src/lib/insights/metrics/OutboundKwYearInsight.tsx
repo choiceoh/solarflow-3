@@ -56,7 +56,7 @@ export function OutboundKwYearInsight() {
   return (
     <InsightShell
       title="금년 출고 용량"
-      subtitle={`${new Date().getFullYear()}년 누계 (단위 MW) · 24개월 추이 + 용도/거래처/제조사 분해`}
+      subtitle={`${new Date().getFullYear()}년 누계 (단위 MW) · 24개월 추이 + 용도/거래처/제조사 분해 · 거래처는 상품판매 출고만 집계`}
       unit="MW"
       tone="pos"
       backTo="/orders?tab=outbound"
@@ -69,7 +69,7 @@ export function OutboundKwYearInsight() {
       formatTrend={fmtMWTick}
       breakdowns={[
         { label: '용도', rows: byUsage, unit: 'MW', formatValue: fmtMW },
-        { label: '거래처 상위 10', rows: byCustomer, unit: 'MW', formatValue: fmtMW },
+        { label: '거래처 상위 10 (상품판매)', rows: byCustomer, unit: 'MW', formatValue: fmtMW },
         { label: '제조사 상위 10', rows: byManufacturer, unit: 'MW', formatValue: fmtMW },
       ]}
     />

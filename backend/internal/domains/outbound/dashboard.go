@@ -266,7 +266,8 @@ func computeOutboundDashboard(outbounds []Outbound, period string) *OutboundDash
 	scoped := filterByPeriod(outbounds, period)
 	d.ByUsage = computeDashBreakdown(scoped, dimUsage)
 	d.ByManufacturerTop10 = topN(computeDashBreakdown(scoped, dimManufacturer), dashboardTopN)
-	d.ByCustomerTop10 = topN(computeDashBreakdown(scoped, dimCustomer), dashboardTopN)
+	// 거래처는 sale/sale_spare 만: 다른 용도는 order_id 없어 customer 가 항상 '미지정'.
+	d.ByCustomerTop10 = topN(computeDashBreakdown(filterSaleEligible(scoped), dimCustomer), dashboardTopN)
 
 	d.SaleConversion = computeDashSaleConversion(outbounds)
 	return d
@@ -660,6 +661,19 @@ func custKeyLabel(o Outbound) (string, string) {
 
 func isSaleEligible(usage string) bool {
 	return usage == "sale" || usage == "sale_spare"
+}
+
+// filterSaleEligible — usage_category in (sale, sale_spare) 인 출고만 반환.
+// 거래처 분해의 입력 필터로 사용 (다른 용도는 customer_id 가 항상 NULL 이라
+// '미지정' 단일 버킷에만 쌓여 의미가 없다).
+func filterSaleEligible(outbounds []Outbound) []Outbound {
+	out := make([]Outbound, 0, len(outbounds))
+	for _, o := range outbounds {
+		if isSaleEligible(o.UsageCategory) {
+			out = append(out, o)
+		}
+	}
+	return out
 }
 
 // usageLabel — UsageCategory 한국어 라벨. 프론트 USAGE_CATEGORY_LABEL 과 동일.
