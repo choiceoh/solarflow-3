@@ -81,7 +81,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION sync_outbound_bl_id IS
+COMMENT ON FUNCTION sync_outbound_bl_id() IS
   'outbound_bl_items 변경 시 outbounds.bl_id 를 대표 BL (quantity DESC, bl_id ASC) 로 자동 동기화. M114.';
 
 -- 3) 트리거: obi 의 INSERT/UPDATE/DELETE 모두 동기화
