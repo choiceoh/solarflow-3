@@ -83,12 +83,14 @@ jobs:
 
   # 백엔드 (Go) — 운영은 cron-deploy.sh가 머지 후 빌드하므로 PR 단계에서 막아야
   # 운영 빌드 실패 = 사용자 발견 시점이 cron 다음 회차로 늦춰짐.
-  # spark4tb self-hosted runner: arch 패리티(aarch64=운영 gx10 과 동일) + 영구 캐시.
-  # ubuntu-latest 38s → spark4tb 예상 10-15s. spark4tb offline 시 timeout 으로 fail.
+  # gx10 self-hosted runner: arch 패리티(aarch64=운영 동일 박스) + 영구 캐시.
+  # 2026-05-14 spark4tb → gx10 이전 — spark4tb 가 잦은 offline 으로 backend 잡이
+  # 큐에 매달려 cancel 되는 일이 반복되어, 운영 박스 자체에 별도 runner 등록.
+  # 운영 서비스(solarflow-go/engine) 와 동거하지만 PR CI 빌드는 짧고 가벼움.
   backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
-    runs-on: [self-hosted, ARM64, spark4tb]
+    runs-on: [self-hosted, ARM64, gx10]
     timeout-minutes: 10
     defaults: { run: { working-directory: backend } }
     steps:
