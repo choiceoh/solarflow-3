@@ -50,7 +50,6 @@ type Outbound struct {
 	ErpOutboundNo     *string  `json:"erp_outbound_no"`
 	Status            string   `json:"status"`
 	Memo              *string  `json:"memo"`
-	BLID              *string  `json:"bl_id"`
 	// 워크플로우 상태 — 탑솔라 그룹 양식 체크박스 4개 매핑 (D-055)
 	TxStatementReady      bool `json:"tx_statement_ready"`
 	InspectionRequestSent bool `json:"inspection_request_sent"`
@@ -102,7 +101,6 @@ type CreateOutboundRequest struct {
 	ErpOutboundNo   *string  `json:"erp_outbound_no"`
 	Status          string   `json:"status"`
 	Memo            *string  `json:"memo"`
-	BLID            *string  `json:"bl_id,omitempty"`
 	// 워크플로우 상태 (D-055) — 탑솔라 그룹 체크박스 4개. 미지정 시 false.
 	TxStatementReady      *bool `json:"tx_statement_ready,omitempty"`
 	InspectionRequestSent *bool `json:"inspection_request_sent,omitempty"`
@@ -170,7 +168,6 @@ type UpdateOutboundRequest struct {
 	ErpOutboundNo   *string  `json:"erp_outbound_no,omitempty"`
 	Status          *string  `json:"status,omitempty"`
 	Memo            *string  `json:"memo,omitempty"`
-	BLID            *string  `json:"bl_id,omitempty"`
 	// 워크플로우 상태 (D-055)
 	TxStatementReady      *bool                  `json:"tx_statement_ready,omitempty"`
 	InspectionRequestSent *bool                  `json:"inspection_request_sent,omitempty"`

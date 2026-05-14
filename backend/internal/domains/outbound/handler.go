@@ -36,7 +36,7 @@ const (
 
 // outboundListColumns — List 응답에 포함할 outbounds 컬럼 화이트리스트.
 // source_payload (외부 양식 원본 jsonb, 행당 KB 단위) 제외 — 상세 화면(GetByID/FetchOutboundByID) 에서는 그대로 * 사용.
-// bl_id 는 outbound_bl_items 테이블로 이관(021) 되어 outbounds 에 컬럼이 없으므로 빼야 PostgREST 42703 회피.
+// outbounds.bl_id 는 M115 (2026-05-14) 에서 DROP — BL 매핑은 outbound_bl_items 가 정본.
 const outboundListColumns = "outbound_id, outbound_date, company_id, product_id, quantity, capacity_kw, " +
 	"warehouse_id, usage_category, order_id, site_name, site_address, spare_qty, " +
 	"group_trade, target_company_id, erp_outbound_no, status, memo, " +
