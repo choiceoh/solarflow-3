@@ -557,13 +557,33 @@ func (h *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 공사사용건 전환 + customer_id 비우기 의도를 Validate() 가 nil 정규화하기 전에 캡처.
+	// 그냥 두면 *string omitempty + nil 이라 JSON 에 필드가 빠져 PostgREST 가 기존 값을 유지함.
+	// → map payload 에 customer_id: nil 을 명시적으로 넣어 NULL 갱신을 강제.
+	clearCustomer := req.CustomerID != nil && *req.CustomerID == "" &&
+		req.ManagementCategory != nil && *req.ManagementCategory == "construction"
+
 	if msg := req.Validate(); msg != "" {
 		response.RespondError(w, http.StatusBadRequest, msg)
 		return
 	}
 
+	var payload any = req
+	if clearCustomer {
+		// req 를 map 으로 변환 후 customer_id 키를 명시적 null 로 덮어쓴다.
+		raw, _ := json.Marshal(req)
+		m := make(map[string]any)
+		if err := json.Unmarshal(raw, &m); err != nil {
+			log.Printf("[수주 수정 payload 변환 실패] %v", err)
+			response.RespondError(w, http.StatusInternalServerError, "요청 처리에 실패했습니다")
+			return
+		}
+		m["customer_id"] = nil
+		payload = m
+	}
+
 	data, _, err := h.DB.From("orders").
-		Update(req, "", "").
+		Update(payload, "", "").
 		Eq("order_id", id).
 		Execute()
 	if err != nil {
@@ -689,9 +709,14 @@ func (h *OrderHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		memo = &s
 	}
 
+	var customerIDPtr *string
+	if o.CustomerID != "" {
+		c := o.CustomerID
+		customerIDPtr = &c
+	}
 	req := CreateOrderRequest{
 		CompanyID:          o.CompanyID,
-		CustomerID:         o.CustomerID,
+		CustomerID:         customerIDPtr,
 		OrderDate:          newOrderDate,
 		ReceiptMethod:      o.ReceiptMethod,
 		ProductID:          o.ProductID,

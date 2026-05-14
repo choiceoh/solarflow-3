@@ -72,11 +72,13 @@ type Order struct {
 }
 
 // CreateOrderRequest — 수주 등록 시 클라이언트가 보내는 데이터
-// 비유: "수주 등록 신청서" — 법인, 고객, 주문일, 품번, 수량, 단가를 필수 기재
+// 비유: "수주 등록 신청서" — 법인, 주문일, 품번, 수량은 필수.
+// 거래처(customer_id) 와 단가(unit_price_wp) 는 일반 판매에선 필수지만,
+// management_category='construction' (공사사용건) 에선 외부 고객/판매가 아니라 선택.
 type CreateOrderRequest struct {
 	OrderNumber        *string  `json:"order_number"`
 	CompanyID          string   `json:"company_id"`
-	CustomerID         string   `json:"customer_id"`
+	CustomerID         *string  `json:"customer_id,omitempty"`
 	OrderDate          string   `json:"order_date"`
 	ReceiptMethod      string   `json:"receipt_method"`
 	ProductID          string   `json:"product_id"`
@@ -106,8 +108,16 @@ func (req *CreateOrderRequest) Validate() string {
 	if req.CompanyID == "" {
 		return "company_id는 필수 항목입니다"
 	}
-	if req.CustomerID == "" {
-		return "customer_id는 필수 항목입니다"
+	// 공사사용건(construction)은 외부 거래처/판매가 아니라 customer_id, unit_price_wp 선택.
+	// 그 외 관리구분은 종전대로 필수.
+	isConstruction := req.ManagementCategory == "construction"
+	if !isConstruction {
+		if req.CustomerID == nil || *req.CustomerID == "" {
+			return "customer_id는 필수 항목입니다"
+		}
+	} else if req.CustomerID != nil && *req.CustomerID == "" {
+		// 빈 문자열은 PostgREST 가 UUID 로 받지 못함 — nil 로 정규화
+		req.CustomerID = nil
 	}
 	if req.OrderDate == "" {
 		return "order_date는 필수 항목입니다"
@@ -124,8 +134,11 @@ func (req *CreateOrderRequest) Validate() string {
 	if req.Quantity <= 0 {
 		return "quantity는 양수여야 합니다"
 	}
-	if req.UnitPriceWp <= 0 {
+	if !isConstruction && req.UnitPriceWp <= 0 {
 		return "unit_price_wp는 양수여야 합니다"
+	}
+	if isConstruction && req.UnitPriceWp < 0 {
+		return "unit_price_wp는 음수일 수 없습니다"
 	}
 	if req.UnitPriceEa != nil && *req.UnitPriceEa <= 0 {
 		return "unit_price_ea는 양수여야 합니다"
@@ -189,8 +202,14 @@ func (req *UpdateOrderRequest) Validate() string {
 	if req.CompanyID != nil && *req.CompanyID == "" {
 		return "company_id는 빈 값으로 변경할 수 없습니다"
 	}
+	// 공사사용건으로 전환 중일 때는 customer_id 비우기 / unit_price_wp 0 을 허용한다.
+	isConstruction := req.ManagementCategory != nil && *req.ManagementCategory == "construction"
 	if req.CustomerID != nil && *req.CustomerID == "" {
-		return "customer_id는 빈 값으로 변경할 수 없습니다"
+		if !isConstruction {
+			return "customer_id는 빈 값으로 변경할 수 없습니다 (공사사용건 전환 시에만 가능)"
+		}
+		// 빈 문자열은 PostgREST 가 UUID 로 받지 못함 — nil 로 정규화해 NULL 저장
+		req.CustomerID = nil
 	}
 	if req.ReceiptMethod != nil && !validReceiptMethods[*req.ReceiptMethod] {
 		return "receipt_method는 \"purchase_order\", \"phone\", \"email\", \"other\" 중 하나여야 합니다"
@@ -201,8 +220,14 @@ func (req *UpdateOrderRequest) Validate() string {
 	if req.Quantity != nil && *req.Quantity <= 0 {
 		return "quantity는 양수여야 합니다"
 	}
-	if req.UnitPriceWp != nil && *req.UnitPriceWp <= 0 {
-		return "unit_price_wp는 양수여야 합니다"
+	if req.UnitPriceWp != nil {
+		if isConstruction {
+			if *req.UnitPriceWp < 0 {
+				return "unit_price_wp는 음수일 수 없습니다"
+			}
+		} else if *req.UnitPriceWp <= 0 {
+			return "unit_price_wp는 양수여야 합니다"
+		}
 	}
 	if req.UnitPriceEa != nil && *req.UnitPriceEa <= 0 {
 		return "unit_price_ea는 양수여야 합니다"

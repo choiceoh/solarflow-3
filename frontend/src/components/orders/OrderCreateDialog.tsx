@@ -181,6 +181,9 @@ export default function OrderCreateDialog({
     onClose()
   }
 
+  // 공사사용건(construction)은 외부 거래처/판매가 아니라 거래처·단가 선택.
+  const isConstruction = managementCategory === "construction"
+
   // validate 는 errors 객체를 그대로 반환 — setErrors 가 batch 되어
   // handleSubmit 에서 state 를 곧장 읽으면 stale 값이 잡힌다. 직접 반환받아 사용.
   function validate(): Record<string, string> {
@@ -188,13 +191,20 @@ export default function OrderCreateDialog({
     if (!selectedCompanyId || selectedCompanyId === "all") {
       next.company = "좌측 상단에서 법인을 먼저 선택해주세요"
     }
-    if (!customerId) next.customer = "거래처를 선택해주세요"
+    if (!isConstruction && !customerId) next.customer = "거래처를 선택해주세요"
     if (!orderDate) next.orderDate = "수주일을 입력해주세요"
     if (!productId) next.product = "품번을 선택해주세요"
     const q = Number(quantity)
     if (!Number.isFinite(q) || q <= 0) next.quantity = "수량은 0보다 커야 합니다"
-    const u = Number(unitPriceWp)
-    if (!Number.isFinite(u) || u <= 0) next.unitPrice = "원/Wp 단가는 0보다 커야 합니다"
+    if (isConstruction) {
+      if (unitPriceWp) {
+        const u = Number(unitPriceWp)
+        if (!Number.isFinite(u) || u < 0) next.unitPrice = "원/Wp 단가는 0 이상이어야 합니다"
+      }
+    } else {
+      const u = Number(unitPriceWp)
+      if (!Number.isFinite(u) || u <= 0) next.unitPrice = "원/Wp 단가는 0보다 커야 합니다"
+    }
     if (spareQty) {
       const s = Number(spareQty)
       if (!Number.isFinite(s) || s <= 0) next.spareQty = "스페어 수량은 양수여야 합니다"
@@ -219,16 +229,18 @@ export default function OrderCreateDialog({
     const product = products.find((p) => p.product_id === productId)
     const specWp = product?.spec_wp ?? 0
     const qty = Number(quantity)
-    const wp = Number(unitPriceWp)
+    const wp = isConstruction && !unitPriceWp ? 0 : Number(unitPriceWp)
     const capacityKw = specWp > 0 ? (specWp * qty) / 1000 : undefined
-    const unitPriceEa = specWp > 0 ? wp * specWp : undefined
+    // 공사사용건이고 단가가 0 이면 장당단가도 의미 없으므로 omit.
+    const unitPriceEa = specWp > 0 && wp > 0 ? wp * specWp : undefined
 
     setSubmitting(true)
     try {
       const payload: Record<string, unknown> = {
         order_number: orderNumber.trim() || undefined,
         company_id: selectedCompanyId,
-        customer_id: customerId,
+        // 공사사용건은 외부 거래처 없음 → omit 으로 PostgREST NULL.
+        customer_id: customerId || undefined,
         order_date: orderDate,
         receipt_method: receiptMethod,
         product_id: productId,
@@ -303,7 +315,13 @@ export default function OrderCreateDialog({
                 }}
               />
             </FormField>
-            <FormField size="dense" label="거래처" required error={errors.customer} className="col-span-2">
+            <FormField
+              size="dense"
+              label={isConstruction ? "거래처 (선택)" : "거래처"}
+              required={!isConstruction}
+              error={errors.customer}
+              className="col-span-2"
+            >
               <PartnerCombobox
                 partners={partners}
                 value={customerId}
@@ -312,7 +330,7 @@ export default function OrderCreateDialog({
                   setCustomerId(v)
                 }}
                 error={!!errors.customer}
-                placeholder="거래처 선택"
+                placeholder={isConstruction ? "공사사용건 — 비워두어도 됨" : "거래처 선택"}
               />
             </FormField>
             <FormField size="dense" label="접수방법" required>
@@ -415,7 +433,12 @@ export default function OrderCreateDialog({
                   aria-invalid={!!errors.quantity}
                 />
               </FormField>
-              <FormField size="dense" label="원/Wp 단가" required error={errors.unitPrice}>
+              <FormField
+                size="dense"
+                label={isConstruction ? "원/Wp 단가 (선택)" : "원/Wp 단가"}
+                required={!isConstruction}
+                error={errors.unitPrice}
+              >
                 <Input
                   type="number"
                   step="0.01"

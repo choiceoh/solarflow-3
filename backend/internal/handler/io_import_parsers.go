@@ -180,10 +180,15 @@ func parseOrderRow(rowNum int, row map[string]interface{}, companyID, customerID
 		unitPriceEaPtr = &ea
 	}
 
+	var customerIDPtr *string
+	if customerID != "" {
+		c := customerID
+		customerIDPtr = &c
+	}
 	req := order.CreateOrderRequest{
 		OrderNumber:        getStringPtr(row, "order_number"),
 		CompanyID:          companyID,
-		CustomerID:         customerID,
+		CustomerID:         customerIDPtr,
 		OrderDate:          getString(row, "order_date"),
 		ReceiptMethod:      getString(row, "receipt_method"),
 		ProductID:          productID,

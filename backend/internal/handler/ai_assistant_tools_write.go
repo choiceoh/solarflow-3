@@ -357,7 +357,7 @@ func toolUpdatePartner() assistantTool {
 func toolCreateOrder() assistantTool {
 	return assistantTool{
 		name:        "create_order",
-		description: "수주(orders) 신규 등록. 필수: company_id, customer_id, order_date, receipt_method, product_id, quantity, unit_price_wp, status. receipt_method∈{purchase_order,phone,email,other}, status∈{received,partial,completed,cancelled}.",
+		description: "수주(orders) 신규 등록. 필수: company_id, order_date, receipt_method, product_id, quantity, status. customer_id/unit_price_wp 는 management_category='construction'(공사사용건) 이면 선택, 그 외엔 필수. receipt_method∈{purchase_order,phone,email,other}, status∈{received,partial,completed,cancelled}.",
 		inputSchema: json.RawMessage(`{
 			"type": "object",
 			"additionalProperties": false,
@@ -386,7 +386,20 @@ func toolCreateOrder() assistantTool {
 				"memo": {"type": "string"},
 				"bl_id": {"type": "string"}
 			},
-			"required": ["company_id", "customer_id", "order_date", "receipt_method", "product_id", "quantity", "unit_price_wp", "status"]
+			"required": ["company_id", "order_date", "receipt_method", "product_id", "quantity", "status"],
+			"allOf": [
+				{
+					"if": {
+						"not": {
+							"properties": {"management_category": {"const": "construction"}},
+							"required": ["management_category"]
+						}
+					},
+					"then": {
+						"required": ["customer_id", "unit_price_wp"]
+					}
+				}
+			]
 		}`),
 		allow: func(ctx context.Context) bool { return roleIn(ctx, "admin", "operator") },
 		execute: func(ctx context.Context, _ *supa.Client, input json.RawMessage) (string, error) {
@@ -397,9 +410,13 @@ func toolCreateOrder() assistantTool {
 			if msg := args.Validate(); msg != "" {
 				return "", fmt.Errorf("검증 실패: %s", msg)
 			}
+			customerDisplay := "(공사사용)"
+			if args.CustomerID != nil && *args.CustomerID != "" {
+				customerDisplay = *args.CustomerID
+			}
 			summary := fmt.Sprintf(
 				"수주 등록: customer=%s, product=%s, qty=%d, unit_price_wp=%.2f, date=%s, status=%s",
-				args.CustomerID, args.ProductID, args.Quantity, args.UnitPriceWp, args.OrderDate, args.Status,
+				customerDisplay, args.ProductID, args.Quantity, args.UnitPriceWp, args.OrderDate, args.Status,
 			)
 			id, err := proposeWrite(ctx, "create_order", summary, args)
 			if err != nil {
