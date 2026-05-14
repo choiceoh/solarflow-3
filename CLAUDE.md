@@ -15,7 +15,8 @@
 3. harness/AGENTS.md — 역할 정의 (시공자/감리자/Alex)
 4. harness/SolarFlow_설계문서_통합판.md — 유일한 설계 정본
 5. harness/DECISIONS.md — 설계 판단 기록 (왜 이렇게 했는지)
-6. 할당된 TASK 파일 — 새 TASK는 `harness/TASK_TEMPLATE.md` 기준
+6. **harness/db-connectivity-report.md — DB 스키마/카탈로그/함정/카드/FK 매트릭스 (DB·SQL·마이그 작업 전 필독)**
+7. 할당된 TASK 파일 — 새 TASK는 `harness/TASK_TEMPLATE.md` 기준
 
 ## 도메인별 인덱스 (테넌트 한정 작업 시)
 변경 작업이 한쪽 사이트에만 적용된다면 해당 도메인 인덱스부터 보세요 — 활성 메뉴, 관련 결정(`D-YYYYMMDD-HHMMSS` 또는 기존 순번형 ID), `*Only` 미들웨어 적용 라우트가 한 페이지에 정리돼 있습니다.
@@ -139,6 +140,42 @@ launchctl bootout gui/501 ~/Library/LaunchAgents/com.solarflow.go.plist 2>/dev/n
 - 인증: Supabase Auth/JWKS만 사용
 - Rust DB 연결: `SUPABASE_DB_URL` 환경변수로 PostgreSQL 직접 연결, sqlx 풀 5개
 - Supabase 프로젝트: aalxpmfnsjzmhsfkuxnp.supabase.co
+
+## DB 작업 시 필수 참조 (모든 에이전트 적용)
+
+⚠️ **DB 관련 작업** (SQL 쿼리, 마이그레이션, 데이터 분석, 스키마 변경, FK 영향 검토)을
+시작하기 전에 **반드시** [`harness/db-connectivity-report.md`](harness/db-connectivity-report.md)
+를 참조한다.
+
+이 문서가 답을 가지고 있는 질문들:
+- 어떤 컬럼이 있나? (부록 A — 테이블 카드 35개)
+- 무엇이 무엇을 참조하나? (부록 B — FK 매트릭스 127건)
+- enum 허용값은? (§ 4 — 카테고리/status/bin_date)
+- 회사 필터는 어떻게? (§ 1 — UUID 4개 + § 6.2 corporation 한글 함정)
+- 매출/원가 어떻게 산정? (§ 2.3 원가 사슬 + § 5.3 SQL 템플릿)
+- 어떤 함정이 있나? (§ 6 — 10가지: deprecated bl_id, 다면장, 단가 0≠NULL, fifo profit 합산 등)
+- 빈 테이블/도메인은? (§ 9)
+- 마이그 어떻게 작성? (§ 12 — 멱등성 / dry-run / PR 절차)
+- 정합성 확인은? (§ 13 — 자가검증 SQL 4개)
+
+### 자기 갱신 규칙 (Living Document)
+
+본 문서는 **누적 reference** 다. 다음 변경이 있을 때 동일 PR 안에서 갱신한다:
+
+| 변경 | 갱신할 섹션 |
+|---|---|
+| 새 마이그레이션 (스키마 변경) | 부록 A 의 해당 테이블 카드 + 필요 시 § 3 / § 6 |
+| 새 RPC / function 추가 | § 7 |
+| 새 뷰 추가 | § 8 |
+| 새 enum 값 / status 변경 | § 4 |
+| 새 함정/패턴 발견 | § 6 (10가지에 추가) |
+| 새 JOIN 패턴이 반복 사용됨 | § 5 |
+| 빈 테이블이 채워짐 / 새 빈 테이블 발생 | § 9 + 부록 A 의 rows 표시 |
+| 회사 (tenant) 추가/제거 | § 1 |
+| 마이그 시리즈 진행 | § 10 |
+
+**자기 갱신을 안 하면 다음 에이전트가 stale 한 정보로 작업해 버그를 만든다.** 코드/스키마
+변경 PR 에 본 문서 갱신을 같이 묶거나, 별도 `docs:` PR 로 즉시 갱신한다.
 
 ## graphify
 
