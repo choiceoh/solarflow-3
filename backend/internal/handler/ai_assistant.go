@@ -468,7 +468,6 @@ func (h *AssistantHandler) ConfirmProposal(w http.ResponseWriter, r *http.Reques
 			ErpOutboundNo:   args.ErpOutboundNo,
 			Status:          args.Status,
 			Memo:            args.Memo,
-			BLID:            args.BLID,
 		}
 		created, code, msg, err := h.outboundH.CreateOutboundCore(req)
 		if err != nil {

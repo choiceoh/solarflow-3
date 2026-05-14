@@ -447,7 +447,7 @@ type createOutboundToolInput struct {
 	ErpOutboundNo   *string  `json:"erp_outbound_no,omitempty"`
 	Status          string   `json:"status,omitempty"`
 	Memo            *string  `json:"memo,omitempty"`
-	BLID            *string  `json:"bl_id,omitempty"`
+	// BLID 는 M115 (outbounds.bl_id DROP) 이후 outbound_bl_items 정본 — 입력 미지원.
 }
 
 func toolCreateOutbound() assistantTool {
@@ -501,7 +501,6 @@ func toolCreateOutbound() assistantTool {
 				ErpOutboundNo:   args.ErpOutboundNo,
 				Status:          args.Status,
 				Memo:            args.Memo,
-				BLID:            args.BLID,
 			}
 			if msg := req.Validate(); msg != "" {
 				return "", fmt.Errorf("검증 실패: %s", msg)
