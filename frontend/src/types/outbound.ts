@@ -54,8 +54,7 @@ export interface Outbound {
   erp_outbound_no?: string
   status: OutboundStatus
   memo?: string
-  bl_id?: string
-  bl_number?: string
+  // bl_id / bl_number 는 M115 에서 제거 — BL 매핑은 bl_items (outbound_bl_items) 가 정본.
   bl_items?: OutboundBLItem[]
   sale?: Sale
   // BARO Phase 4: 배차 묶음 FK (NULL=미배차)
