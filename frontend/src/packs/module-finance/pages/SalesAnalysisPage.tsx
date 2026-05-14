@@ -1991,7 +1991,7 @@ export default function SalesAnalysisPage() {
           )}
 
           {activeAnalysisTab === "profit" && (
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="sf-analysis-detail grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
               <CardB
                 title="이익률 변동 브리지"
                 sub={
@@ -2143,7 +2143,7 @@ export default function SalesAnalysisPage() {
           )}
 
           {activeAnalysisTab === "manufacturer" && (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="sf-analysis-detail grid grid-cols-1 gap-4">
               <CardB
                 title="기여도"
                 sub="매출 비중 · 이익률 · 원가 공백"
@@ -2271,6 +2271,7 @@ export default function SalesAnalysisPage() {
           )}
 
           {activeAnalysisTab === "reconciliation" && (
+            <div className="sf-analysis-detail">
             <CardB title="원장 대사 체크" sub="클릭하면 후보 행까지 드릴다운">
               <div className="divide-y divide-[var(--line)]">
                 {reconciliationRows.map((row) => {
@@ -2532,10 +2533,11 @@ export default function SalesAnalysisPage() {
                 )}
               </div>
             </CardB>
+            </div>
           )}
 
           {activeAnalysisTab === "profit" && (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="sf-analysis-detail grid grid-cols-1 gap-4">
               <CardB title="월별 매출·이익률" sub="공급가 기준 (이익률=추정)" padded>
                 {monthlyRevenueProfit.length === 0 ? (
                   <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
@@ -2595,7 +2597,7 @@ export default function SalesAnalysisPage() {
           )}
 
           {activeAnalysisTab === "customer" && (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="sf-analysis-detail grid grid-cols-1 gap-4">
               <CardB
                 title="거래처별 매출·이익"
                 sub="상위 8개 거래처 + 기타"
@@ -2904,7 +2906,7 @@ export default function SalesAnalysisPage() {
           )}
 
           {activeAnalysisTab === "billing" && (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="sf-analysis-detail grid grid-cols-1 gap-4">
               <CardB
                 title="거래처별 청구/미수"
                 sub="상위 8개 거래처 + 기타"
@@ -3111,7 +3113,7 @@ export default function SalesAnalysisPage() {
           )}
 
           {activeAnalysisTab === "receivable" && (
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+            <div className="sf-analysis-detail grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
               <CardB
                 title="미수 거래처"
                 sub="연체일 · 미수액 · 회수 우선순위"
@@ -3297,6 +3299,7 @@ export default function SalesAnalysisPage() {
           )}
 
           {activeAnalysisTab === "profit" && (
+            <div className="sf-analysis-detail">
             <CardB
               title="품목별 이익 분석"
               sub="판매가 · 원가 · 이익/Wp"
@@ -3498,6 +3501,7 @@ export default function SalesAnalysisPage() {
                 )}
               </Table>
             </CardB>
+            </div>
           )}
         </section>
 
