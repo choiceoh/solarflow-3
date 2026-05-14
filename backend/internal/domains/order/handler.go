@@ -689,9 +689,14 @@ func (h *OrderHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		memo = &s
 	}
 
+	var customerIDPtr *string
+	if o.CustomerID != "" {
+		c := o.CustomerID
+		customerIDPtr = &c
+	}
 	req := CreateOrderRequest{
 		CompanyID:          o.CompanyID,
-		CustomerID:         o.CustomerID,
+		CustomerID:         customerIDPtr,
 		OrderDate:          newOrderDate,
 		ReceiptMethod:      o.ReceiptMethod,
 		ProductID:          o.ProductID,
