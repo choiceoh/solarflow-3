@@ -140,8 +140,14 @@ func (req *CreateOrderRequest) Validate() string {
 	if isConstruction && req.UnitPriceWp < 0 {
 		return "unit_price_wp는 음수일 수 없습니다"
 	}
-	if req.UnitPriceEa != nil && *req.UnitPriceEa <= 0 {
-		return "unit_price_ea는 양수여야 합니다"
+	if req.UnitPriceEa != nil {
+		if isConstruction {
+			if *req.UnitPriceEa < 0 {
+				return "unit_price_ea는 음수일 수 없습니다"
+			}
+		} else if *req.UnitPriceEa <= 0 {
+			return "unit_price_ea는 양수여야 합니다"
+		}
 	}
 	if req.Status == "" {
 		return "status는 필수 항목입니다"
@@ -229,8 +235,14 @@ func (req *UpdateOrderRequest) Validate() string {
 			return "unit_price_wp는 양수여야 합니다"
 		}
 	}
-	if req.UnitPriceEa != nil && *req.UnitPriceEa <= 0 {
-		return "unit_price_ea는 양수여야 합니다"
+	if req.UnitPriceEa != nil {
+		if isConstruction {
+			if *req.UnitPriceEa < 0 {
+				return "unit_price_ea는 음수일 수 없습니다"
+			}
+		} else if *req.UnitPriceEa <= 0 {
+			return "unit_price_ea는 양수여야 합니다"
+		}
 	}
 	if req.Status != nil && !validOrderStatuses[*req.Status] {
 		return "status는 \"received\", \"partial\", \"completed\", \"cancelled\" 중 하나여야 합니다"
