@@ -40,7 +40,9 @@ WITH match_companies AS (
 resolved AS (
   SELECT
     receipt_id,
-    min(company_id) AS company_id,
+    -- uuid 타입은 내장 min/max 집계가 없으므로 text 캐스트 후 다시 uuid 로.
+    -- 이후 company_count = 1 필터로 동일값이 보장되어 어떤 대표값을 골라도 안전.
+    min(company_id::text)::uuid AS company_id,
     count(*) AS matched_paths,
     count(DISTINCT company_id) AS company_count
   FROM match_companies

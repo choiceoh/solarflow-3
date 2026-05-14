@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react"
 import { motion } from "motion/react"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Check, Pencil, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { PartnerCombobox } from "@/components/common/PartnerCombobox"
+import type { Partner } from "@/types/masters"
 import {
   Table,
   TableBody,
@@ -177,6 +179,150 @@ function FulfillmentEvidencePanel({
   )
 }
 
+// 거래처는 FK 라 EditableDetailField(select) 로 다 못 그린다 — 검색이 필요해 PartnerCombobox 인라인 편집.
+// 공사사용건이면 "거래처 비우기" 버튼을 추가해 NULL 로 갱신할 수 있도록 한다.
+function EditableCustomerField({
+  customerId,
+  customerName,
+  isConstruction,
+  disabled,
+  onSave,
+}: {
+  customerId: string | null | undefined
+  customerName: string | null | undefined
+  isConstruction: boolean
+  disabled: boolean
+  onSave: (nextValue: string | null) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<string>(customerId ?? "")
+  const [partners, setPartners] = useState<Partner[]>([])
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!editing) return
+    fetchWithAuth<Partner[]>("/api/v1/partners")
+      .then((list) =>
+        setPartners(
+          list.filter(
+            (p) =>
+              p.is_active && (p.partner_type === "customer" || p.partner_type === "both"),
+          ),
+        ),
+      )
+      .catch(() => setPartners([]))
+  }, [editing])
+
+  useEffect(() => {
+    setDraft(customerId ?? "")
+  }, [customerId])
+
+  const startEdit = () => {
+    if (disabled || saving) return
+    setEditing(true)
+  }
+  const cancel = () => {
+    setDraft(customerId ?? "")
+    setEditing(false)
+  }
+  const commit = async (nextValue: string | null) => {
+    if (saving) return
+    const current = customerId ?? null
+    if (nextValue === current) {
+      setEditing(false)
+      return
+    }
+    setSaving(true)
+    try {
+      await onSave(nextValue)
+      setEditing(false)
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : "저장에 실패했습니다")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!editing) {
+    const display = customerName ?? (customerId ? customerId.slice(0, 8) : "—")
+    if (disabled) {
+      return (
+        <DetailField label="거래처" span={2}>
+          <span className="text-sm break-words text-muted-foreground">{display}</span>
+        </DetailField>
+      )
+    }
+    return (
+      <DetailField label="거래처" span={2}>
+        <button
+          type="button"
+          onClick={startEdit}
+          className="group flex w-full items-center justify-between gap-1.5 rounded border border-dashed border-input/60 bg-background/40 px-1.5 py-1 -mx-1.5 -my-1 text-left transition-colors hover:border-input hover:bg-muted/40 focus-visible:border-input focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:outline-none"
+          title="클릭하여 편집"
+        >
+          <span className="text-sm break-words min-w-0 flex-1">{display}</span>
+          <Pencil
+            className="h-3 w-3 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-foreground"
+            aria-hidden="true"
+          />
+        </button>
+      </DetailField>
+    )
+  }
+
+  return (
+    <DetailField label="거래처" span={2}>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-start gap-1.5">
+          <div className="flex-1 min-w-0">
+            <PartnerCombobox
+              partners={partners}
+              value={draft}
+              onChange={setDraft}
+              placeholder="거래처 선택"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => commit(draft || null)}
+            disabled={saving}
+            aria-label="저장"
+            className="inline-flex h-7 w-7 items-center justify-center rounded border border-input bg-background text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+            title="저장"
+          >
+            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={cancel}
+            disabled={saving}
+            aria-label="취소"
+            className="inline-flex h-7 w-7 items-center justify-center rounded border border-input bg-background text-muted-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+            title="취소"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+        {isConstruction ? (
+          <button
+            type="button"
+            onClick={() => commit(null)}
+            disabled={saving || !customerId}
+            className="self-start text-[11px] text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            거래처 비우기 (공사사용건)
+          </button>
+        ) : null}
+        {saving ? (
+          <p className="text-[11px] text-muted-foreground" role="status" aria-live="polite">
+            저장 중...
+          </p>
+        ) : null}
+      </div>
+    </DetailField>
+  )
+}
+
 export default function OrderDetailView({ orderId, onBack }: Props) {
   const { data: order, loading, reload } = useOrderDetail(orderId)
   const { data: outbounds, loading: obLoading } = useOrderOutbounds(orderId)
@@ -302,7 +448,25 @@ export default function OrderDetailView({ orderId, onBack }: Props) {
             disabled={isCancelled}
             onSave={saveOrderField}
           />
-          <DetailField label="거래처" value={order.customer_name} span={2} />
+          <EditableCustomerField
+            customerId={order.customer_id}
+            customerName={order.customer_name}
+            isConstruction={order.management_category === "construction"}
+            disabled={isCancelled}
+            onSave={async (next) => {
+              await fetchWithAuth(`/api/v1/orders/${orderId}`, {
+                method: "PUT",
+                body: JSON.stringify(
+                  next === null
+                    ? { customer_id: "", management_category: "construction" }
+                    : { customer_id: next },
+                ),
+              })
+              notify.success("거래처가 수정되었습니다")
+              await reload()
+              await reloadFulfillmentRisk()
+            }}
+          />
           <EditableDetailField
             label="접수방법"
             value={order.receipt_method}
