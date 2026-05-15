@@ -14,6 +14,7 @@ import (
 
 	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/model"
@@ -26,13 +27,13 @@ import (
 // poSortable — server-side 정렬 허용 컬럼 (BL 패턴과 동일).
 // purchase_orders_ext 뷰의 컬럼만 허용 — 사용자가 임의 컬럼명 보내도 무시.
 var poSortable = map[string]struct{}{
-	"po_number":     {},
-	"contract_date": {},
-	"contract_type": {},
-	"status":        {},
-	"total_mw":      {},
-	"total_qty":     {},
-	"created_at":    {},
+	dbschema.PurchaseOrdersColPoNumber:     {},
+	dbschema.PurchaseOrdersColContractDate: {},
+	dbschema.PurchaseOrdersColContractType: {},
+	dbschema.PurchaseOrdersColStatus:       {},
+	dbschema.PurchaseOrdersColTotalMw:      {},
+	dbschema.PurchaseOrdersColTotalQty:     {},
+	dbschema.PurchaseOrdersColCreatedAt:    {},
 }
 
 // POHandler — 발주/계약(purchase_orders) 관련 API를 처리하는 핸들러
@@ -97,38 +98,38 @@ func init() {
 func (h *POHandler) applyPOFilters(r *http.Request, query *postgrest.FilterBuilder) *postgrest.FilterBuilder {
 	// 비유: ?company_id=xxx — 특정 법인의 계약만 필터
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
-		query = query.Eq("company_id", compID)
+		query = query.Eq(dbschema.PurchaseOrdersColCompanyId, compID)
 	}
 
 	// 비유: ?manufacturer_id=xxx — 특정 제조사의 계약만 필터
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
-		query = query.Eq("manufacturer_id", mfgID)
+		query = query.Eq(dbschema.PurchaseOrdersColManufacturerId, mfgID)
 	}
 
 	// 비유: ?status=contracted — 특정 상태의 계약만 필터
 	if status := r.URL.Query().Get("status"); status != "" {
-		query = query.Eq("status", status)
+		query = query.Eq(dbschema.PurchaseOrdersColStatus, status)
 	}
 
 	// 비유: ?contract_type=spot — 계약 유형(spot/annual_frame/half_year_frame) 필터
 	if ct := r.URL.Query().Get("contract_type"); ct != "" {
-		query = query.Eq("contract_type", ct)
+		query = query.Eq(dbschema.PurchaseOrdersColContractType, ct)
 	}
 	switch r.URL.Query().Get("quick_filter") {
 	case "active_only":
-		query = query.Not("status", "in", "(completed,cancelled)")
+		query = query.Not(dbschema.PurchaseOrdersColStatus, "in", "(completed,cancelled)")
 	case "missing_number":
-		query = query.Is("po_number", "null")
+		query = query.Is(dbschema.PurchaseOrdersColPoNumber, "null")
 	case "changed_contract":
-		query = query.Not("parent_po_id", "is", "null")
+		query = query.Not(dbschema.PurchaseOrdersColParentPoId, "is", "null")
 	}
 	// 기간 — contract_date 범위 (양끝 포함, ISO date YYYY-MM-DD).
 	// frontend ProcurementPage 의 date_range filter 서버 위임 (이전엔 page 안 client filter).
 	if from := r.URL.Query().Get("contract_date_from"); from != "" {
-		query = query.Gte("contract_date", from)
+		query = query.Gte(dbschema.PurchaseOrdersColContractDate, from)
 	}
 	if to := r.URL.Query().Get("contract_date_to"); to != "" {
-		query = query.Lte("contract_date", to)
+		query = query.Lte(dbschema.PurchaseOrdersColContractDate, to)
 	}
 	// 검색 — po_number/manufacturer_name/payment_terms/memo ilike. parent_po_id 와 같은 구조 필드는 제외.
 	if q := sanitizePOSearchTerm(r.URL.Query().Get("q")); q != "" {
@@ -144,7 +145,7 @@ func (h *POHandler) applyPOFilters(r *http.Request, query *postgrest.FilterBuild
 }
 
 func parsePOSort(r *http.Request) (column string, ascending bool) {
-	column = "contract_date"
+	column = dbschema.PurchaseOrdersColContractDate
 	ascending = false
 	if raw := r.URL.Query().Get("sort"); raw != "" {
 		if _, ok := poSortable[raw]; ok {
