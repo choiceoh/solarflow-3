@@ -102,7 +102,15 @@ export interface Database {
         row_num?: number
         data?: Json
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'ai_attachment_rows_sheet_id_fkey'
+          columns: ['sheet_id']
+          isOneToOne: false
+          referencedRelation: 'ai_attachment_sheets'
+          referencedColumns: ['sheet_id']
+        },
+      ]
     }
     ai_attachment_sheets: {
       Row: {
@@ -138,7 +146,15 @@ export interface Database {
         created_at?: string
         expires_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'ai_attachment_sheets_user_id_fkey'
+          columns: ['user_id']
+          isOneToOne: false
+          referencedRelation: 'user_profiles'
+          referencedColumns: ['user_id']
+        },
+      ]
     }
     amaranth_upload_jobs: {
       Row: {
@@ -273,7 +289,15 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'assistant_sessions_user_id_fkey'
+          columns: ['user_id']
+          isOneToOne: false
+          referencedRelation: 'user_profiles'
+          referencedColumns: ['user_id']
+        },
+      ]
     }
     audit_logs: {
       Row: {
@@ -319,7 +343,15 @@ export interface Database {
         note?: string | null
         created_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'audit_logs_user_id_fkey'
+          columns: ['user_id']
+          isOneToOne: false
+          referencedRelation: 'user_profiles'
+          referencedColumns: ['user_id']
+        },
+      ]
     }
     bank_accounts: {
       Row: {
@@ -373,7 +405,22 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'bank_accounts_bank_id_fkey'
+          columns: ['bank_id']
+          isOneToOne: false
+          referencedRelation: 'banks'
+          referencedColumns: ['bank_id']
+        },
+        {
+          foreignKeyName: 'bank_accounts_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+      ]
     }
     banks: {
       Row: {
@@ -417,7 +464,15 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'banks_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+      ]
     }
     baro_credit_holds: {
       Row: {
@@ -462,7 +517,15 @@ export interface Database {
         blocked_outbound_id?: string | null
         blocked_order_id?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'baro_credit_holds_partner_id_fkey'
+          columns: ['partner_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+      ]
     }
     baro_driver_tokens: {
       Row: {
@@ -486,7 +549,15 @@ export interface Database {
         used_at?: string | null
         driver_phone?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'baro_driver_tokens_notice_id_fkey'
+          columns: ['notice_id']
+          isOneToOne: false
+          referencedRelation: 'baro_shipment_notices'
+          referencedColumns: ['notice_id']
+        },
+      ]
     }
     baro_quote_lines: {
       Row: {
@@ -528,7 +599,22 @@ export interface Database {
         line_total_krw?: number | null
         notes?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'baro_quote_lines_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+        {
+          foreignKeyName: 'baro_quote_lines_quote_id_fkey'
+          columns: ['quote_id']
+          isOneToOne: false
+          referencedRelation: 'baro_quotes'
+          referencedColumns: ['quote_id']
+        },
+      ]
     }
     baro_quotes: {
       Row: {
@@ -591,7 +677,15 @@ export interface Database {
         estimated_cost_krw?: number | null
         estimated_margin_pct?: number | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'baro_quotes_partner_id_fkey'
+          columns: ['partner_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+      ]
     }
     baro_shipment_notices: {
       Row: {
@@ -654,7 +748,15 @@ export interface Database {
         delivery_note?: string | null
         delivered_at?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'baro_shipment_notices_partner_id_fkey'
+          columns: ['partner_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+      ]
     }
     bl_line_items: {
       Row: {
@@ -705,7 +807,22 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'bl_line_items_bl_id_fkey'
+          columns: ['bl_id']
+          isOneToOne: false
+          referencedRelation: 'bl_shipments'
+          referencedColumns: ['bl_id']
+        },
+        {
+          foreignKeyName: 'bl_line_items_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     bl_shipments: {
       Row: {
@@ -787,7 +904,43 @@ export interface Database {
         cif_amount_krw?: number | null
         lc_maturity_date?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'bl_shipments_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'bl_shipments_lc_id_fkey'
+          columns: ['lc_id']
+          isOneToOne: false
+          referencedRelation: 'lc_records'
+          referencedColumns: ['lc_id']
+        },
+        {
+          foreignKeyName: 'bl_shipments_manufacturer_id_fkey'
+          columns: ['manufacturer_id']
+          isOneToOne: false
+          referencedRelation: 'manufacturers'
+          referencedColumns: ['manufacturer_id']
+        },
+        {
+          foreignKeyName: 'bl_shipments_po_id_fkey'
+          columns: ['po_id']
+          isOneToOne: false
+          referencedRelation: 'purchase_orders'
+          referencedColumns: ['po_id']
+        },
+        {
+          foreignKeyName: 'bl_shipments_warehouse_id_fkey'
+          columns: ['warehouse_id']
+          isOneToOne: false
+          referencedRelation: 'warehouses'
+          referencedColumns: ['warehouse_id']
+        },
+      ]
     }
     companies: {
       Row: {
@@ -849,7 +1002,15 @@ export interface Database {
         created_at?: string
         created_by?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'company_aliases_canonical_company_id_fkey'
+          columns: ['canonical_company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+      ]
     }
     construction_sites: {
       Row: {
@@ -974,7 +1135,22 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'cost_details_declaration_id_fkey'
+          columns: ['declaration_id']
+          isOneToOne: false
+          referencedRelation: 'import_declarations'
+          referencedColumns: ['declaration_id']
+        },
+        {
+          foreignKeyName: 'cost_details_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     cycle_count_items: {
       Row: {
@@ -1028,7 +1204,29 @@ export interface Database {
         counted_at?: string | null
         photo_attachment_ids?: string[] | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'cycle_count_items_cycle_count_id_fkey'
+          columns: ['cycle_count_id']
+          isOneToOne: false
+          referencedRelation: 'cycle_counts'
+          referencedColumns: ['cycle_count_id']
+        },
+        {
+          foreignKeyName: 'cycle_count_items_location_id_fkey'
+          columns: ['location_id']
+          isOneToOne: false
+          referencedRelation: 'warehouse_locations'
+          referencedColumns: ['location_id']
+        },
+        {
+          foreignKeyName: 'cycle_count_items_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     cycle_counts: {
       Row: {
@@ -1076,7 +1274,15 @@ export interface Database {
         created_at?: string
         notes?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'cycle_counts_warehouse_id_fkey'
+          columns: ['warehouse_id']
+          isOneToOne: false
+          referencedRelation: 'warehouses'
+          referencedColumns: ['warehouse_id']
+        },
+      ]
     }
     db_anomaly_snapshots: {
       Row: {
@@ -1251,7 +1457,15 @@ export interface Database {
         created_by?: string | null
         default_warehouse_id?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'external_sync_sources_default_warehouse_id_fkey'
+          columns: ['default_warehouse_id']
+          isOneToOne: false
+          referencedRelation: 'warehouses'
+          referencedColumns: ['warehouse_id']
+        },
+      ]
     }
     feature_wiring_audit: {
       Row: {
@@ -1409,7 +1623,36 @@ export interface Database {
         source_payload?: Json | null
         created_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'fifo_matches_declaration_id_fkey'
+          columns: ['declaration_id']
+          isOneToOne: false
+          referencedRelation: 'import_declarations'
+          referencedColumns: ['declaration_id']
+        },
+        {
+          foreignKeyName: 'fifo_matches_inbound_id_fkey'
+          columns: ['inbound_id']
+          isOneToOne: false
+          referencedRelation: 'inbounds'
+          referencedColumns: ['inbound_id']
+        },
+        {
+          foreignKeyName: 'fifo_matches_outbound_id_fkey'
+          columns: ['outbound_id']
+          isOneToOne: false
+          referencedRelation: 'outbounds'
+          referencedColumns: ['outbound_id']
+        },
+        {
+          foreignKeyName: 'fifo_matches_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     fx_daily: {
       Row: {
@@ -1571,7 +1814,29 @@ export interface Database {
         source_payload?: Json | null
         erp_inbound_no_clean?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'import_declarations_bl_id_fkey'
+          columns: ['bl_id']
+          isOneToOne: false
+          referencedRelation: 'bl_shipments'
+          referencedColumns: ['bl_id']
+        },
+        {
+          foreignKeyName: 'import_declarations_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'import_declarations_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     inbounds: {
       Row: {
@@ -1645,7 +1910,29 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'inbounds_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+        {
+          foreignKeyName: 'inbounds_supplier_partner_id_fkey'
+          columns: ['supplier_partner_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+        {
+          foreignKeyName: 'inbounds_warehouse_id_fkey'
+          columns: ['warehouse_id']
+          isOneToOne: false
+          referencedRelation: 'warehouses'
+          referencedColumns: ['warehouse_id']
+        },
+      ]
     }
     incidental_expenses: {
       Row: {
@@ -1699,7 +1986,29 @@ export interface Database {
         vehicle_type?: string | null
         destination?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'incidental_expenses_bl_id_fkey'
+          columns: ['bl_id']
+          isOneToOne: false
+          referencedRelation: 'bl_shipments'
+          referencedColumns: ['bl_id']
+        },
+        {
+          foreignKeyName: 'incidental_expenses_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'incidental_expenses_outbound_id_fkey'
+          columns: ['outbound_id']
+          isOneToOne: false
+          referencedRelation: 'outbounds'
+          referencedColumns: ['outbound_id']
+        },
+      ]
     }
     integrity_check_runs: {
       Row: {
@@ -1732,7 +2041,15 @@ export interface Database {
         alert_reason?: string | null
         duration_ms?: number | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'integrity_check_runs_check_id_fkey'
+          columns: ['check_id']
+          isOneToOne: false
+          referencedRelation: 'integrity_checks'
+          referencedColumns: ['check_id']
+        },
+      ]
     }
     integrity_checks: {
       Row: {
@@ -1841,7 +2158,36 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'intercompany_requests_outbound_id_fkey'
+          columns: ['outbound_id']
+          isOneToOne: false
+          referencedRelation: 'outbounds'
+          referencedColumns: ['outbound_id']
+        },
+        {
+          foreignKeyName: 'intercompany_requests_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+        {
+          foreignKeyName: 'intercompany_requests_requester_company_id_fkey'
+          columns: ['requester_company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'intercompany_requests_target_company_id_fkey'
+          columns: ['target_company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+      ]
     }
     inventory_allocations: {
       Row: {
@@ -1915,7 +2261,57 @@ export interface Database {
         bl_id?: string | null
         location_id?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'inventory_allocations_bl_id_fkey'
+          columns: ['bl_id']
+          isOneToOne: false
+          referencedRelation: 'bl_shipments'
+          referencedColumns: ['bl_id']
+        },
+        {
+          foreignKeyName: 'inventory_allocations_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'inventory_allocations_location_id_fkey'
+          columns: ['location_id']
+          isOneToOne: false
+          referencedRelation: 'warehouse_locations'
+          referencedColumns: ['location_id']
+        },
+        {
+          foreignKeyName: 'inventory_allocations_order_id_fkey'
+          columns: ['order_id']
+          isOneToOne: false
+          referencedRelation: 'orders'
+          referencedColumns: ['order_id']
+        },
+        {
+          foreignKeyName: 'inventory_allocations_outbound_id_fkey'
+          columns: ['outbound_id']
+          isOneToOne: false
+          referencedRelation: 'outbounds'
+          referencedColumns: ['outbound_id']
+        },
+        {
+          foreignKeyName: 'inventory_allocations_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+        {
+          foreignKeyName: 'inventory_allocations_site_id_fkey'
+          columns: ['site_id']
+          isOneToOne: false
+          referencedRelation: 'construction_sites'
+          referencedColumns: ['site_id']
+        },
+      ]
     }
     inventory_movements: {
       Row: {
@@ -2021,7 +2417,29 @@ export interface Database {
         source_payload?: Json | null
         created_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'inventory_movements_partner_partner_id_fkey'
+          columns: ['partner_partner_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+        {
+          foreignKeyName: 'inventory_movements_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+        {
+          foreignKeyName: 'inventory_movements_warehouse_id_fkey'
+          columns: ['warehouse_id']
+          isOneToOne: false
+          referencedRelation: 'warehouses'
+          referencedColumns: ['warehouse_id']
+        },
+      ]
     }
     inventory_snapshots: {
       Row: {
@@ -2069,7 +2487,15 @@ export interface Database {
         source_payload?: Json | null
         created_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'inventory_snapshots_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     lc_line_items: {
       Row: {
@@ -2117,7 +2543,29 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'lc_line_items_lc_id_fkey'
+          columns: ['lc_id']
+          isOneToOne: false
+          referencedRelation: 'lc_records'
+          referencedColumns: ['lc_id']
+        },
+        {
+          foreignKeyName: 'lc_line_items_po_line_id_fkey'
+          columns: ['po_line_id']
+          isOneToOne: false
+          referencedRelation: 'po_line_items'
+          referencedColumns: ['po_line_id']
+        },
+        {
+          foreignKeyName: 'lc_line_items_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     lc_records: {
       Row: {
@@ -2186,7 +2634,29 @@ export interface Database {
         repayment_date?: string | null
         repaid?: boolean
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'lc_records_bank_id_fkey'
+          columns: ['bank_id']
+          isOneToOne: false
+          referencedRelation: 'banks'
+          referencedColumns: ['bank_id']
+        },
+        {
+          foreignKeyName: 'lc_records_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'lc_records_po_id_fkey'
+          columns: ['po_id']
+          isOneToOne: false
+          referencedRelation: 'purchase_orders'
+          referencedColumns: ['po_id']
+        },
+      ]
     }
     library_posts: {
       Row: {
@@ -2243,7 +2713,15 @@ export interface Database {
         reason?: string | null
         created_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'limit_changes_bank_id_fkey'
+          columns: ['bank_id']
+          isOneToOne: false
+          referencedRelation: 'banks'
+          referencedColumns: ['bank_id']
+        },
+      ]
     }
     manufacturers: {
       Row: {
@@ -2340,7 +2818,29 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'module_demand_forecasts_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'module_demand_forecasts_manufacturer_id_fkey'
+          columns: ['manufacturer_id']
+          isOneToOne: false
+          referencedRelation: 'manufacturers'
+          referencedColumns: ['manufacturer_id']
+        },
+        {
+          foreignKeyName: 'module_demand_forecasts_site_id_fkey'
+          columns: ['site_id']
+          isOneToOne: false
+          referencedRelation: 'construction_sites'
+          referencedColumns: ['site_id']
+        },
+      ]
     }
     notes: {
       Row: {
@@ -2476,7 +2976,43 @@ export interface Database {
         unit_price_ea?: number | null
         source_payload?: Json | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'orders_bl_id_fkey'
+          columns: ['bl_id']
+          isOneToOne: false
+          referencedRelation: 'bl_shipments'
+          referencedColumns: ['bl_id']
+        },
+        {
+          foreignKeyName: 'orders_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'orders_customer_id_fkey'
+          columns: ['customer_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+        {
+          foreignKeyName: 'orders_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+        {
+          foreignKeyName: 'orders_site_id_fkey'
+          columns: ['site_id']
+          isOneToOne: false
+          referencedRelation: 'construction_sites'
+          referencedColumns: ['site_id']
+        },
+      ]
     }
     outbound_bl_items: {
       Row: {
@@ -2500,7 +3036,22 @@ export interface Database {
         quantity?: number
         created_at?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'outbound_bl_items_bl_id_fkey'
+          columns: ['bl_id']
+          isOneToOne: false
+          referencedRelation: 'bl_shipments'
+          referencedColumns: ['bl_id']
+        },
+        {
+          foreignKeyName: 'outbound_bl_items_outbound_id_fkey'
+          columns: ['outbound_id']
+          isOneToOne: false
+          referencedRelation: 'outbounds'
+          referencedColumns: ['outbound_id']
+        },
+      ]
     }
     outbounds: {
       Row: {
@@ -2592,7 +3143,50 @@ export interface Database {
         tax_invoice_issued?: boolean
         source_payload?: Json | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'outbounds_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'outbounds_dispatch_route_id_fkey'
+          columns: ['dispatch_route_id']
+          isOneToOne: false
+          referencedRelation: 'dispatch_routes'
+          referencedColumns: ['route_id']
+        },
+        {
+          foreignKeyName: 'outbounds_order_id_fkey'
+          columns: ['order_id']
+          isOneToOne: false
+          referencedRelation: 'orders'
+          referencedColumns: ['order_id']
+        },
+        {
+          foreignKeyName: 'outbounds_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+        {
+          foreignKeyName: 'outbounds_target_company_id_fkey'
+          columns: ['target_company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'outbounds_warehouse_id_fkey'
+          columns: ['warehouse_id']
+          isOneToOne: false
+          referencedRelation: 'warehouses'
+          referencedColumns: ['warehouse_id']
+        },
+      ]
     }
     partner_activities: {
       Row: {
@@ -2637,7 +3231,29 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'partner_activities_author_user_id_fkey'
+          columns: ['author_user_id']
+          isOneToOne: false
+          referencedRelation: 'user_profiles'
+          referencedColumns: ['user_id']
+        },
+        {
+          foreignKeyName: 'partner_activities_follow_up_done_by_fkey'
+          columns: ['follow_up_done_by']
+          isOneToOne: false
+          referencedRelation: 'user_profiles'
+          referencedColumns: ['user_id']
+        },
+        {
+          foreignKeyName: 'partner_activities_partner_id_fkey'
+          columns: ['partner_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+      ]
     }
     partner_aliases: {
       Row: {
@@ -2668,7 +3284,15 @@ export interface Database {
         created_at?: string
         created_by?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'partner_aliases_canonical_partner_id_fkey'
+          columns: ['canonical_partner_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+      ]
     }
     partner_price_book: {
       Row: {
@@ -2717,7 +3341,22 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'partner_price_book_partner_id_fkey'
+          columns: ['partner_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+        {
+          foreignKeyName: 'partner_price_book_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     partners: {
       Row: {
@@ -2776,7 +3415,15 @@ export interface Database {
         owner_user_id?: string | null
         normalized_name?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'partners_owner_user_id_fkey'
+          columns: ['owner_user_id']
+          isOneToOne: false
+          referencedRelation: 'user_profiles'
+          referencedColumns: ['user_id']
+        },
+      ]
     }
     pdf_extractions: {
       Row: {
@@ -2819,7 +3466,22 @@ export interface Database {
         parsed?: Json
         extracted_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'pdf_extractions_bl_id_fkey'
+          columns: ['bl_id']
+          isOneToOne: false
+          referencedRelation: 'bl_shipments'
+          referencedColumns: ['bl_id']
+        },
+        {
+          foreignKeyName: 'pdf_extractions_file_id_fkey'
+          columns: ['file_id']
+          isOneToOne: false
+          referencedRelation: 'document_files'
+          referencedColumns: ['file_id']
+        },
+      ]
     }
     picking_list_items: {
       Row: {
@@ -2873,7 +3535,29 @@ export interface Database {
         picked_by?: string | null
         variance_note?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'picking_list_items_location_id_fkey'
+          columns: ['location_id']
+          isOneToOne: false
+          referencedRelation: 'warehouse_locations'
+          referencedColumns: ['location_id']
+        },
+        {
+          foreignKeyName: 'picking_list_items_picking_list_id_fkey'
+          columns: ['picking_list_id']
+          isOneToOne: false
+          referencedRelation: 'picking_lists'
+          referencedColumns: ['picking_list_id']
+        },
+        {
+          foreignKeyName: 'picking_list_items_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     picking_lists: {
       Row: {
@@ -2921,7 +3605,22 @@ export interface Database {
         completed_at?: string | null
         notes?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'picking_lists_partner_id_fkey'
+          columns: ['partner_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+        {
+          foreignKeyName: 'picking_lists_warehouse_id_fkey'
+          columns: ['warehouse_id']
+          isOneToOne: false
+          referencedRelation: 'warehouses'
+          referencedColumns: ['warehouse_id']
+        },
+      ]
     }
     po_line_items: {
       Row: {
@@ -2967,7 +3666,22 @@ export interface Database {
         payment_type?: string | null
         unit_price_usd_wp?: number | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'po_line_items_po_id_fkey'
+          columns: ['po_id']
+          isOneToOne: false
+          referencedRelation: 'purchase_orders'
+          referencedColumns: ['po_id']
+        },
+        {
+          foreignKeyName: 'po_line_items_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     price_benchmark_runs: {
       Row: {
@@ -3121,7 +3835,15 @@ export interface Database {
         updated_at?: string
         review_status?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'price_benchmarks_run_id_fkey'
+          columns: ['run_id']
+          isOneToOne: false
+          referencedRelation: 'price_benchmark_runs'
+          referencedColumns: ['run_id']
+        },
+      ]
     }
     price_histories: {
       Row: {
@@ -3166,7 +3888,36 @@ export interface Database {
         updated_at?: string
         company_id?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'price_histories_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'price_history_manufacturer_id_fkey'
+          columns: ['manufacturer_id']
+          isOneToOne: false
+          referencedRelation: 'manufacturers'
+          referencedColumns: ['manufacturer_id']
+        },
+        {
+          foreignKeyName: 'price_history_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+        {
+          foreignKeyName: 'price_history_related_po_id_fkey'
+          columns: ['related_po_id']
+          isOneToOne: false
+          referencedRelation: 'purchase_orders'
+          referencedColumns: ['po_id']
+        },
+      ]
     }
     product_aliases: {
       Row: {
@@ -3204,7 +3955,22 @@ export interface Database {
         alias_product_id?: string | null
         reason?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'product_aliases_alias_product_id_fkey'
+          columns: ['alias_product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+        {
+          foreignKeyName: 'product_aliases_canonical_product_id_fkey'
+          columns: ['canonical_product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     product_package_items: {
       Row: {
@@ -3225,7 +3991,22 @@ export interface Database {
         quantity?: number
         notes?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'product_package_items_child_product_id_fkey'
+          columns: ['child_product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+        {
+          foreignKeyName: 'product_package_items_package_id_fkey'
+          columns: ['package_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+      ]
     }
     products: {
       Row: {
@@ -3351,7 +4132,15 @@ export interface Database {
         bom_revision?: string | null
         substitution_group_code?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'products_manufacturer_id_fkey'
+          columns: ['manufacturer_id']
+          isOneToOne: false
+          referencedRelation: 'manufacturers'
+          referencedColumns: ['manufacturer_id']
+        },
+      ]
     }
     purchase_orders: {
       Row: {
@@ -3413,7 +4202,29 @@ export interface Database {
         updated_at?: string
         parent_po_id?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'purchase_orders_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'purchase_orders_manufacturer_id_fkey'
+          columns: ['manufacturer_id']
+          isOneToOne: false
+          referencedRelation: 'manufacturers'
+          referencedColumns: ['manufacturer_id']
+        },
+        {
+          foreignKeyName: 'purchase_orders_parent_po_id_fkey'
+          columns: ['parent_po_id']
+          isOneToOne: false
+          referencedRelation: 'purchase_orders'
+          referencedColumns: ['po_id']
+        },
+      ]
     }
     receipt_matches: {
       Row: {
@@ -3441,7 +4252,29 @@ export interface Database {
         created_at?: string
         sale_id?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'fk_receipt_matches_outbound'
+          columns: ['outbound_id']
+          isOneToOne: false
+          referencedRelation: 'outbounds'
+          referencedColumns: ['outbound_id']
+        },
+        {
+          foreignKeyName: 'receipt_matches_receipt_id_fkey'
+          columns: ['receipt_id']
+          isOneToOne: false
+          referencedRelation: 'receipts'
+          referencedColumns: ['receipt_id']
+        },
+        {
+          foreignKeyName: 'receipt_matches_sale_id_fkey'
+          columns: ['sale_id']
+          isOneToOne: false
+          referencedRelation: 'sales'
+          referencedColumns: ['sale_id']
+        },
+      ]
     }
     receipts: {
       Row: {
@@ -3482,7 +4315,29 @@ export interface Database {
         bank_account_id?: string | null
         company_id?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'receipts_bank_account_id_fkey'
+          columns: ['bank_account_id']
+          isOneToOne: false
+          referencedRelation: 'bank_accounts'
+          referencedColumns: ['account_id']
+        },
+        {
+          foreignKeyName: 'receipts_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+        {
+          foreignKeyName: 'receipts_customer_id_fkey'
+          columns: ['customer_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+      ]
     }
     receiving_logs: {
       Row: {
@@ -3548,7 +4403,29 @@ export interface Database {
         photo_attachment_ids?: string[] | null
         notes?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'receiving_logs_location_id_fkey'
+          columns: ['location_id']
+          isOneToOne: false
+          referencedRelation: 'warehouse_locations'
+          referencedColumns: ['location_id']
+        },
+        {
+          foreignKeyName: 'receiving_logs_product_id_fkey'
+          columns: ['product_id']
+          isOneToOne: false
+          referencedRelation: 'products'
+          referencedColumns: ['product_id']
+        },
+        {
+          foreignKeyName: 'receiving_logs_warehouse_id_fkey'
+          columns: ['warehouse_id']
+          isOneToOne: false
+          referencedRelation: 'warehouses'
+          referencedColumns: ['warehouse_id']
+        },
+      ]
     }
     sales: {
       Row: {
@@ -3635,7 +4512,29 @@ export interface Database {
         currency?: string | null
         source_payload?: Json | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'sales_customer_id_fkey'
+          columns: ['customer_id']
+          isOneToOne: false
+          referencedRelation: 'partners'
+          referencedColumns: ['partner_id']
+        },
+        {
+          foreignKeyName: 'sales_order_id_fkey'
+          columns: ['order_id']
+          isOneToOne: false
+          referencedRelation: 'orders'
+          referencedColumns: ['order_id']
+        },
+        {
+          foreignKeyName: 'sales_outbound_id_fkey'
+          columns: ['outbound_id']
+          isOneToOne: false
+          referencedRelation: 'outbounds'
+          referencedColumns: ['outbound_id']
+        },
+      ]
     }
     study_learning_domains: {
       Row: {
@@ -3722,7 +4621,22 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'study_learning_plan_steps_domain_id_fkey'
+          columns: ['domain_id']
+          isOneToOne: false
+          referencedRelation: 'study_learning_domains'
+          referencedColumns: ['domain_id']
+        },
+        {
+          foreignKeyName: 'study_learning_plan_steps_plan_id_fkey'
+          columns: ['plan_id']
+          isOneToOne: false
+          referencedRelation: 'study_learning_plans'
+          referencedColumns: ['plan_id']
+        },
+      ]
     }
     study_learning_plans: {
       Row: {
@@ -3787,7 +4701,15 @@ export interface Database {
         updated_at?: string
         updated_by?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'system_settings_updated_by_fkey'
+          columns: ['updated_by']
+          isOneToOne: false
+          referencedRelation: 'user_profiles'
+          referencedColumns: ['user_id']
+        },
+      ]
     }
     tenant_data_scopes: {
       Row: {
@@ -3899,7 +4821,15 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'tt_remittances_po_id_fkey'
+          columns: ['po_id']
+          isOneToOne: false
+          referencedRelation: 'purchase_orders'
+          referencedColumns: ['po_id']
+        },
+      ]
     }
     ui_configs: {
       Row: {
@@ -3929,7 +4859,15 @@ export interface Database {
         updated_at?: string
         updated_by?: string | null
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'ui_configs_updated_by_fkey'
+          columns: ['updated_by']
+          isOneToOne: false
+          referencedRelation: 'user_profiles'
+          referencedColumns: ['user_id']
+        },
+      ]
     }
     user_profiles: {
       Row: {
@@ -3989,7 +4927,15 @@ export interface Database {
         persona?: string | null
         preferences?: Json
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'user_profiles_company_id_fkey'
+          columns: ['company_id']
+          isOneToOne: false
+          referencedRelation: 'companies'
+          referencedColumns: ['company_id']
+        },
+      ]
     }
     warehouse_locations: {
       Row: {
@@ -4040,7 +4986,15 @@ export interface Database {
         created_at?: string
         updated_at?: string
       }
-      Relationships: []
+      Relationships: [
+        {
+          foreignKeyName: 'warehouse_locations_warehouse_id_fkey'
+          columns: ['warehouse_id']
+          isOneToOne: false
+          referencedRelation: 'warehouses'
+          referencedColumns: ['warehouse_id']
+        },
+      ]
     }
     warehouses: {
       Row: {
