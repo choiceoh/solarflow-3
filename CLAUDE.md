@@ -82,7 +82,7 @@ ssh choiceoh@100.105.145.6 "journalctl --user -u solarflow-go.service --since to
 1. `prod-logs.sh errors` 로 최근 윈도우 스캔 → 빈도 높은 패턴 식별
 2. 그 패턴이 DB 류면 `prod-logs.sh db` 와 `slow` 를 같이 봐서 스키마 드리프트(`PGRST204` / `column ... does not exist`) 인지 쿼리 지연인지 분리
 3. 특정 요청을 깊이 볼 때만 `request_id` grep 으로 좁힌다 — Go 로그의 `request_id=<uuid>` 가 동일 요청의 모든 stage 를 묶는다
-4. 스키마 드리프트가 확인되면 CLAUDE.md 의 "Go 모델 필드 변경 시 필수 절차" 절을 다시 읽고 마이그레이션부터 작성
+4. 스키마 드리프트가 확인되면 CLAUDE.md 의 "DB 스키마 변경 시 절차" 절을 다시 읽고 마이그레이션부터 작성
 
 ⚠️ 운영 박스에서 **임의로 서비스를 재시작하거나 파일을 고치지 말 것**. 진단(읽기)만 SSH 로 하고, 수정은 PR + cron-deploy(또는 webhook) 경유로 반영한다. 운영 직접 수정은 git pull 충돌을 영구화한다 (메모리: gx10 cron-deploy 80커밋 드리프트 사례).
 
@@ -93,27 +93,44 @@ ssh choiceoh@100.105.145.6 "journalctl --user -u solarflow-go.service --since to
 4. 커밋은 작업 단위별.
 5. Rust 담당 로직에 // TODO: Rust 계산엔진 연동 주석 필수.
 
-## Go 모델 필드 변경 시 필수 절차 (회귀 방지)
-⚠️ `Create*Request` / `Update*Request` 구조체에 필드를 추가/삭제하면 반드시 아래를 수행:
+## DB 스키마 변경 시 절차 (회귀 방지)
+
+⚠️ 마이그 파일 작성 → `bun scripts/apply_migrations.ts` 한 번이면 끝. codegen 까지 자동.
 
 ```bash
-# 1. 마이그레이션 파일 작성 (번호는 기존 최대+1)
-# backend/migrations/NNN_설명.sql 예시:
-#   ALTER TABLE po_line_items ADD COLUMN IF NOT EXISTS item_type text;
+# 1. backend/migrations/NNN_설명.sql 작성 (헤더 '-- @auto-apply: yes' 권장)
+#    예: ALTER TABLE po_line_items ADD COLUMN IF NOT EXISTS item_type text;
 
-# 2. 마이그레이션 적용/검증
-# 운영 Linux: main push 후 cron-deploy가 apply_migrations.ts + verify_migration.ts 실행
-# 로컬/수동 검증: bun scripts/verify_migration.ts NNN_설명.sql
+# 2. 로컬: 마이그 적용 + codegen 자동 수행 (한 명령)
+set -a && . backend/.env && set +a
+bun scripts/apply_migrations.ts
+#   → 미적용 .sql 적용 → NOTIFY pgrst → gen_db_types.ts 자동 트리거
+#   → backend/internal/dbschema/tables.gen.go + frontend/src/types/db.gen.ts 갱신
 
-# 3. PostgREST 스키마 캐시 갱신
-# 운영 Linux/Supabase hosted: NOTIFY pgrst, 'reload schema' (apply_migrations.ts가 자동 발송)
-# macOS 과거 로컬 PostgREST: launchctl stop/start 절차는 macOS 섹션 참고
-
-# 4. 동기화 검증 (모두 ✅ 나와야 커밋)
-cd backend && ./scripts/check_schema.sh
+# 3. 마이그 + 두 산출물을 같은 커밋에 포함
+git add backend/migrations/NNN_*.sql \
+        backend/internal/dbschema/tables.gen.go \
+        frontend/src/types/db.gen.ts
 ```
 
-이 절차를 빠뜨리면: PostgREST PGRST204 → Go 500 → 프론트엔드 저장 실패 (단가/수량 유실처럼 보임)
+도메인 손코딩 (선택): 새 컬럼을 클라이언트가 직접 보내야 하면
+`backend/internal/domains/<도메인>/model.go` 의 `Create*Request` / `Update*Request` 와
+`frontend/src/types/<도메인>.ts` 의 인터페이스에 필드를 추가한다. validation 로직은
+손코딩 유지가 정본 — codegen 은 *DB row 표현*만 책임진다.
+
+PostgREST select 시 컬럼 typo 차단: `dbschema.<Table>AllColumns` (Go) 또는
+`Database['public']['Tables'][T]['Row']` (TS) 를 참조하면 컴파일타임에 잡힌다.
+
+운영 반영: main push 후 cron-deploy 가 동일하게 `apply_migrations.ts` 를 실행 →
+codegen 도 함께 트리거 (`SUPABASE_DB_URL` 환경변수 동일).
+
+CI 차단: PR 단계에서 `.github/workflows/ci.yml` 의 `schema` 잡이
+`bun scripts/gen_db_types.ts --check` 로 git diff 0 여부 검증 — 마이그만 추가하고
+codegen 산출물 미커밋 시 PR 이 막힘 (repo secret `SUPABASE_DB_URL` 필요).
+
+이전 절차 (`backend/scripts/check_schema.sh`) 는 비교만 했고 macOS-only 라 정본
+생성으로 대체됨. PGRST204 → Go 500 → 프론트 저장 실패 사슬은 더 이상 동기화 누락으로
+발생하지 않음.
 
 ## 플랫폼별 운영 절차
 
