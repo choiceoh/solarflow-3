@@ -1,6 +1,11 @@
 package bl
 
-import "solarflow-backend/internal/validation"
+import (
+	"slices"
+
+	"solarflow-backend/internal/dbschema"
+	"solarflow-backend/internal/validation"
+)
 
 // BLLineItem — B/L 라인아이템(화물 명세) 구조체
 // 비유: "화물 명세서" — 선적 서류에 붙는 개별 품목(규격, 수량, 단가, 용도) 정보
@@ -36,19 +41,10 @@ type ProductSummaryForBLLine struct {
 	ModuleHeightMM int    `json:"module_height_mm"`
 }
 
-// 허용되는 usage_category 값
-var validUsageCategories = map[string]bool{
-	"sale":         true,
-	"construction": true,
-	"spare":        true,
-	"replacement":  true,
-	"repowering":   true,
-	"transfer":     true,
-	"adjustment":   true,
-	"maintenance":  true,
-	"disposal":     true,
-	"other":        true,
-}
+// 허용 값 정본: dbschema.BlLineItemsUsageCategoryValues (DB CHECK 자동 추출).
+// 비고: 이전 손코딩은 maintenance/disposal/other 까지 허용했지만 실제 DB CHECK 는 7개만
+// 받아들임 (sale/construction/spare/replacement/repowering/transfer/adjustment). 손코딩이
+// 더 관대해 validation 통과 후 DB INSERT 에서 거부되던 패턴 — 이제 일관됨.
 
 // CreateBLLineRequest — B/L 라인아이템 등록 시 클라이언트가 보내는 데이터
 // 비유: "화물 품목 추가 신청서" — 어떤 B/L에, 어떤 품번을, 몇 장, 어떤 용도로 넣을지 기재
@@ -97,8 +93,8 @@ func (req *CreateBLLineRequest) Validate() string {
 	if req.UsageCategory == "" {
 		return "usage_category는 필수 항목입니다"
 	}
-	if !validUsageCategories[req.UsageCategory] {
-		return "usage_category는 \"sale\", \"construction\", \"spare\", \"replacement\", \"repowering\", \"transfer\", \"adjustment\" 중 하나여야 합니다"
+	if !slices.Contains(dbschema.BlLineItemsUsageCategoryValues, req.UsageCategory) {
+		return "usage_category는 " + validation.FormatAllowedValues(dbschema.BlLineItemsUsageCategoryValues)
 	}
 	if req.InvoiceAmountUSD != nil && *req.InvoiceAmountUSD <= 0 {
 		return "invoice_amount_usd는 양수여야 합니다"
@@ -149,8 +145,8 @@ func (req *UpdateBLLineRequest) Validate() string {
 	if req.PaymentType != nil && !validation.PaymentTypes[*req.PaymentType] {
 		return "payment_type은 \"paid\", \"free\" 중 하나여야 합니다"
 	}
-	if req.UsageCategory != nil && !validUsageCategories[*req.UsageCategory] {
-		return "usage_category는 \"sale\", \"construction\", \"spare\", \"replacement\", \"repowering\", \"transfer\", \"adjustment\" 중 하나여야 합니다"
+	if req.UsageCategory != nil && !slices.Contains(dbschema.BlLineItemsUsageCategoryValues, *req.UsageCategory) {
+		return "usage_category는 " + validation.FormatAllowedValues(dbschema.BlLineItemsUsageCategoryValues)
 	}
 	if req.InvoiceAmountUSD != nil && *req.InvoiceAmountUSD <= 0 {
 		return "invoice_amount_usd는 양수여야 합니다"

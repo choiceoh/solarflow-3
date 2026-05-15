@@ -1,5 +1,12 @@
 package inventory
 
+import (
+	"slices"
+
+	"solarflow-backend/internal/dbschema"
+	"solarflow-backend/internal/validation"
+)
+
 // InventoryAllocation — 가용재고 배정 (판매예정/공사예정)
 // B/L 입고 전 또는 현재고를 특정 용도로 미리 배정하여 가용재고를 관리
 type InventoryAllocation struct {
@@ -30,15 +37,10 @@ type InventoryAllocation struct {
 	UpdatedAt          string   `json:"updated_at"`
 }
 
-var validAllocPurposes = map[string]bool{
-	"sale":             true,
-	"construction":     true, // 레거시 호환 유지
-	"construction_own": true, // 자체 현장
-	"construction_epc": true, // 타사 EPC 현장
-	"other":            true,
-}
-var validAllocSources = map[string]bool{"stock": true, "incoming": true}
-var validAllocStatuses = map[string]bool{"pending": true, "confirmed": true, "cancelled": true, "hold": true}
+// 허용 값 정본: inventory_allocations 테이블 CHECK 자동 추출:
+//   - purpose     → dbschema.InventoryAllocationsPurposeValues
+//   - source_type → dbschema.InventoryAllocationsSourceTypeValues
+//   - status      → dbschema.InventoryAllocationsStatusValues
 
 // CreateInventoryAllocationRequest — 배정 등록 요청
 type CreateInventoryAllocationRequest struct {
@@ -72,17 +74,17 @@ func (req *CreateInventoryAllocationRequest) Validate() string {
 	if req.Quantity <= 0 {
 		return "quantity는 양수여야 합니다"
 	}
-	if !validAllocPurposes[req.Purpose] {
-		return "purpose는 sale | construction_own | construction_epc | other 중 하나여야 합니다"
+	if !slices.Contains(dbschema.InventoryAllocationsPurposeValues, req.Purpose) {
+		return "purpose는 " + validation.FormatAllowedValues(dbschema.InventoryAllocationsPurposeValues)
 	}
 	if req.SourceType == "" {
 		req.SourceType = "stock"
 	}
-	if !validAllocSources[req.SourceType] {
-		return "source_type은 stock | incoming 중 하나여야 합니다"
+	if !slices.Contains(dbschema.InventoryAllocationsSourceTypeValues, req.SourceType) {
+		return "source_type은 " + validation.FormatAllowedValues(dbschema.InventoryAllocationsSourceTypeValues)
 	}
-	if req.Status != "" && !validAllocStatuses[req.Status] {
-		return "status는 pending | confirmed | cancelled | hold 중 하나여야 합니다"
+	if req.Status != "" && !slices.Contains(dbschema.InventoryAllocationsStatusValues, req.Status) {
+		return "status는 " + validation.FormatAllowedValues(dbschema.InventoryAllocationsStatusValues)
 	}
 	return ""
 }
@@ -106,14 +108,14 @@ type UpdateInventoryAllocationRequest struct {
 }
 
 func (req *UpdateInventoryAllocationRequest) Validate() string {
-	if req.Purpose != nil && !validAllocPurposes[*req.Purpose] {
-		return "purpose는 sale | construction | construction_own | construction_epc | other 중 하나여야 합니다"
+	if req.Purpose != nil && !slices.Contains(dbschema.InventoryAllocationsPurposeValues, *req.Purpose) {
+		return "purpose는 " + validation.FormatAllowedValues(dbschema.InventoryAllocationsPurposeValues)
 	}
-	if req.SourceType != nil && !validAllocSources[*req.SourceType] {
-		return "source_type은 stock | incoming 중 하나여야 합니다"
+	if req.SourceType != nil && !slices.Contains(dbschema.InventoryAllocationsSourceTypeValues, *req.SourceType) {
+		return "source_type은 " + validation.FormatAllowedValues(dbschema.InventoryAllocationsSourceTypeValues)
 	}
-	if req.Status != nil && !validAllocStatuses[*req.Status] {
-		return "status는 pending | confirmed | cancelled | hold 중 하나여야 합니다"
+	if req.Status != nil && !slices.Contains(dbschema.InventoryAllocationsStatusValues, *req.Status) {
+		return "status는 " + validation.FormatAllowedValues(dbschema.InventoryAllocationsStatusValues)
 	}
 	if req.Quantity != nil && *req.Quantity <= 0 {
 		return "quantity는 양수여야 합니다"

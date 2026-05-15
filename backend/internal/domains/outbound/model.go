@@ -1,6 +1,12 @@
 package outbound
 
-import "solarflow-backend/internal/domains/sale"
+import (
+	"slices"
+
+	"solarflow-backend/internal/dbschema"
+	"solarflow-backend/internal/domains/sale"
+	"solarflow-backend/internal/validation"
+)
 
 // OutboundBLItem — 출고-BL 연결 항목 (분할선적 지원)
 type OutboundBLItem struct {
@@ -61,26 +67,9 @@ type Outbound struct {
 	Sale          *sale.Sale             `json:"sale,omitempty"`
 }
 
-// 허용되는 출고 usage_category 값 (ERP 관리구분 기반 재설계)
-var validOutboundUsageCategories = map[string]bool{
-	"sale":                true,
-	"sale_spare":          true,
-	"construction":        true,
-	"construction_damage": true,
-	"repowering":          true,
-	"maintenance":         true,
-	"disposal":            true,
-	"transfer":            true,
-	"adjustment":          true,
-	"other":               true,
-}
-
-// 허용되는 출고 status 값 (3단계: 활성/취소대기/취소완료)
-var validOutboundStatuses = map[string]bool{
-	"active":         true,
-	"cancel_pending": true,
-	"cancelled":      true,
-}
+// 허용 값 정본은 dbschema 자동 생성 (outbounds 테이블 CHECK):
+//   - usage_category → dbschema.OutboundsUsageCategoryValues (10개)
+//   - status         → dbschema.OutboundsStatusValues (3개: active/cancel_pending/cancelled)
 
 // CreateOutboundRequest — 출고 등록 시 클라이언트가 보내는 데이터
 // 비유: "출고 등록 신청서" — 출고일, 법인, 품번, 수량, 창고, 용도를 필수 기재
@@ -132,12 +121,12 @@ func (req *CreateOutboundRequest) Validate() string {
 	if req.UsageCategory == "" {
 		return "usage_category는 필수 항목입니다"
 	}
-	if !validOutboundUsageCategories[req.UsageCategory] {
-		return "usage_category는 허용된 값이 아닙니다 (sale/sale_spare/construction/construction_damage/repowering/maintenance/disposal/transfer/adjustment/other)"
+	if !slices.Contains(dbschema.OutboundsUsageCategoryValues, req.UsageCategory) {
+		return "usage_category는 " + validation.FormatAllowedValues(dbschema.OutboundsUsageCategoryValues)
 	}
 	// 비유: status는 기본값 "active" — 입력 시에만 검증
-	if req.Status != "" && !validOutboundStatuses[req.Status] {
-		return "status는 \"active\", \"cancel_pending\", \"cancelled\" 중 하나여야 합니다"
+	if req.Status != "" && !slices.Contains(dbschema.OutboundsStatusValues, req.Status) {
+		return "status는 " + validation.FormatAllowedValues(dbschema.OutboundsStatusValues)
 	}
 	if req.SpareQty != nil && *req.SpareQty <= 0 {
 		return "spare_qty는 양수여야 합니다"
@@ -191,11 +180,11 @@ func (req *UpdateOutboundRequest) Validate() string {
 	if req.WarehouseID != nil && *req.WarehouseID == "" {
 		return "warehouse_id는 빈 값으로 변경할 수 없습니다"
 	}
-	if req.UsageCategory != nil && !validOutboundUsageCategories[*req.UsageCategory] {
-		return "usage_category는 허용된 값이 아닙니다 (sale/sale_spare/construction/construction_damage/repowering/maintenance/disposal/transfer/adjustment/other)"
+	if req.UsageCategory != nil && !slices.Contains(dbschema.OutboundsUsageCategoryValues, *req.UsageCategory) {
+		return "usage_category는 " + validation.FormatAllowedValues(dbschema.OutboundsUsageCategoryValues)
 	}
-	if req.Status != nil && !validOutboundStatuses[*req.Status] {
-		return "status는 \"active\", \"cancel_pending\", \"cancelled\" 중 하나여야 합니다"
+	if req.Status != nil && !slices.Contains(dbschema.OutboundsStatusValues, *req.Status) {
+		return "status는 " + validation.FormatAllowedValues(dbschema.OutboundsStatusValues)
 	}
 	if req.SpareQty != nil && *req.SpareQty <= 0 {
 		return "spare_qty는 양수여야 합니다"

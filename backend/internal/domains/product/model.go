@@ -1,8 +1,12 @@
 package product
 
 import (
+	"slices"
 	"strconv"
 	"unicode/utf8"
+
+	"solarflow-backend/internal/dbschema"
+	"solarflow-backend/internal/validation"
 )
 
 // Product — 품번(모듈 규격) 정보를 담는 구조체
@@ -228,15 +232,7 @@ func (req *UpdateProductRequest) Validate() string {
 	return ""
 }
 
-var validProductVariantKind = map[string]bool{
-	"output_bin":        true,
-	"bom_variant":       true,
-	"cert_variant":      true,
-	"label_variant":     true,
-	"packaging_variant": true,
-	"mixed":             true,
-	"other":             true,
-}
+// 허용 값 정본: dbschema.ProductsProductVariantKindValues (products.product_variant_kind CHECK 자동 추출).
 
 func validateOptionalProductText(fieldName string, value *string, maxRunes int) string {
 	if value == nil || *value == "" {
@@ -258,8 +254,8 @@ func validateProductFamilyFields(productFamilyCode, productVariantKind, bomRevis
 	if msg := validateOptionalProductText("substitution_group_code", substitutionGroupCode, 80); msg != "" {
 		return msg
 	}
-	if productVariantKind != nil && *productVariantKind != "" && !validProductVariantKind[*productVariantKind] {
-		return "product_variant_kind는 output_bin, bom_variant, cert_variant, label_variant, packaging_variant, mixed, other 중 하나여야 합니다"
+	if productVariantKind != nil && *productVariantKind != "" && !slices.Contains(dbschema.ProductsProductVariantKindValues, *productVariantKind) {
+		return "product_variant_kind는 " + validation.FormatAllowedValues(dbschema.ProductsProductVariantKindValues)
 	}
 	return ""
 }
