@@ -12,6 +12,7 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/middleware"
@@ -113,18 +114,18 @@ type baroPurchaseWarehouseRow struct {
 func (h *BaroPurchaseHistoryHandler) baroPurchaseShipmentQuery(companyID string, r *http.Request) *postgrest.FilterBuilder {
 	q := h.DB.From("bl_shipments").
 		Select("bl_id, bl_number, po_id, company_id, manufacturer_id, inbound_type, currency, exchange_rate, etd, eta, actual_arrival, port, warehouse_id, status, payment_terms, incoterms, counterpart_company_id", "exact", false).
-		Eq("company_id", companyID)
+		Eq(dbschema.BlShipmentsColCompanyId, companyID)
 	if status := r.URL.Query().Get("status"); status != "" {
-		q = q.Eq("status", status)
+		q = q.Eq(dbschema.BlShipmentsColStatus, status)
 	}
 	if inboundType := r.URL.Query().Get("inbound_type"); inboundType != "" {
-		q = q.Eq("inbound_type", inboundType)
+		q = q.Eq(dbschema.BlShipmentsColInboundType, inboundType)
 	}
 	if from := r.URL.Query().Get("from"); from != "" {
-		q = q.Gte("actual_arrival", from)
+		q = q.Gte(dbschema.BlShipmentsColActualArrival, from)
 	}
 	if to := r.URL.Query().Get("to"); to != "" {
-		q = q.Lte("actual_arrival", to)
+		q = q.Lte(dbschema.BlShipmentsColActualArrival, to)
 	}
 	return q
 }
