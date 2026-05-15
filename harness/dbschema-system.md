@@ -62,25 +62,51 @@ query.Order(dbschema.OrdersColOrderDate, &postgrest.OrderOpts{Ascending: false})
 
 존재하지 않는 컬럼 (예: `dbschema.BlShipmentsColPoXxx`) 은 컴파일 실패.
 
-### 3.2 TS — 손코딩 type 의 baseline 으로
+### 3.2 Go — CHECK enum 검증
+
+```go
+import (
+    "slices"
+    "solarflow-backend/internal/dbschema"
+    "solarflow-backend/internal/validation"
+)
+
+if !slices.Contains(dbschema.BlShipmentsStatusValues, req.Status) {
+    return "status는 " + validation.FormatAllowedValues(dbschema.BlShipmentsStatusValues)
+}
+
+// 개별 값 상수도 사용 가능 (switch 문 등)
+switch req.Status {
+case dbschema.BlShipmentsStatusScheduled:
+    // ...
+case dbschema.BlShipmentsStatusErpDone:
+    // ...
+}
+```
+
+손코딩 `validBLStatuses` map 패턴은 PR #884~#886 에서 모두 제거. 19개 valid* map → 0.
+
+### 3.3 TS — 손코딩 type 의 baseline 으로
 
 ```ts
 import type { Database } from '@/types/db.gen'
 
 type BLShipmentRow = Database['public']['Tables']['bl_shipments']['Row']
 type SalesMeta    = Database['public']['Views']['sales_with_meta']['Row']
+type BLStatus     = Database['public']['Enums']['bl_shipments_status']
+// = 'scheduled' | 'shipping' | 'arrived' | 'customs' | 'completed' | 'erp_done'
 
 // UI 측은 narrow enum + join 컬럼을 더해 확장
 export interface BLShipmentUI extends Omit<BLShipmentRow, 'status' | 'inbound_type'> {
-  status: BLStatus  // 손코딩 union (CHECK enum 추출 전까지)
-  inbound_type: InboundType
+  status: BLStatus  // 자동 narrow union (CHECK 에서 추출)
+  inbound_type: Database['public']['Enums']['bl_shipments_inbound_type']
   // join + computed
   manufacturer_name?: string
   line_count?: number
 }
 ```
 
-### 3.3 Insert / Update
+### 3.4 Insert / Update
 
 ```ts
 type BLShipmentInsert = Database['public']['Tables']['bl_shipments']['Insert']
@@ -116,12 +142,18 @@ CI 의 `schema` 잡은 PR 단계에서 `bun scripts/gen_db_types.ts --check` 를
 
 | 한계 | 영향 | 회피 / 향후 PR |
 |---|---|---|
-| **CHECK 제약 enum 미추출** | `status`, `inbound_type` 등이 DB 에서 narrow CHECK 인데 generator 는 string 으로 emit. 손코딩 `validXxxStatuses` (Go) 와 `XxxStatus` (TS) 가 정본을 중복. | 향후 PR: pg_constraint 정규식 파싱으로 narrow type 자동 생성. SQL: `CHECK ((col)::text = ANY (ARRAY['v1', ...]::text[]))` 패턴 |
 | **RPC / 함수 시그너처 미포함** | `dashboard_kpi` 등 RPC 함수의 입력/출력 타입은 손코딩 | 향후 PR: pg_proc introspection |
 | **FK 그래프 미생성** | Relationships 가 `[]` 로 emit. Supabase CLI 는 채움 | 향후 PR: pg_constraint contype='f' 분석 |
 | **numeric 정밀도** | numeric/decimal → Go `float64`, TS `number` (Supabase CLI 동일). 금액(KRW)은 도메인 모델의 `int64` 가 정본 — Row 는 참조용 | 도메인 Create/Update Request 에서 int64 사용 (현재 패턴 유지) |
-| **frontend 타입 narrowing 한계** | DB Row 가 `string` 으로 오는 enum 컬럼을 narrow union 으로 좁히려면 손 Omit 후 재선언 필요 | CHECK enum 추출이 해결책 (위 첫 행) |
+| **CHECK 복잡 패턴 미지원** | 단순 IN/ANY 만 추출 (#883). `CHECK (a > 0 AND b < 100)` 같은 OR/AND/비교 결합 무시. | 단순 패턴 안 맞으면 손코딩 fallback. 필요 시 future PR — 다만 pg_constraint AST 파싱 복잡 |
+| **TS Row 의 enum 컬럼 narrowing** | `Row['status']` 는 여전히 `string`. enum 좁히려면 `Database['public']['Enums']['<table>_<column>']` 별도 import + `Omit + &` | 향후 PR: Row 안에 enum 컬럼 자동 narrow (현재는 generator 가 둘을 분리 emit) |
 | **sale 도메인 view 의존** | sales_with_meta view (마이그 094) 가 정본. base sales 테이블엔 business_date / receipt_status 등 미존재 | 이미 view 지원 — `dbschema.SalesWithMetaCol*` 사용 |
+
+### 해결된 한계 (히스토리)
+
+| 한계 (당시 § 5 #1) | 해결 PR |
+|---|---|
+| **CHECK 제약 enum 미추출** — `validBLStatuses` 등 손코딩 중복 | [#883](https://github.com/choiceoh/solarflow/pull/883) — pg_constraint 파싱, 66개 CHECK enum 추출 → `BlShipmentsStatusValues` 슬라이스 + `Database['public']['Enums']['bl_shipments_status']` union. 도메인 sweep: [#884](https://github.com/choiceoh/solarflow/pull/884)·[#885](https://github.com/choiceoh/solarflow/pull/885)·[#886](https://github.com/choiceoh/solarflow/pull/886) (19 `valid*` map 제거) |
 
 ## 6. 자기 갱신 규칙
 
@@ -149,6 +181,11 @@ document 패턴 따른다. 다음 변경 시 본 문서도 갱신한다:
 | [#879](https://github.com/choiceoh/solarflow/pull/879) | baro 5 핸들러 dogfood |
 | [#880](https://github.com/choiceoh/solarflow/pull/880) | outbound dogfood (마지막 base-table 도메인) |
 | [#881](https://github.com/choiceoh/solarflow/pull/881) | generator view 지원 + sale dogfood (전 도메인 완료) |
+| [#882](https://github.com/choiceoh/solarflow/pull/882) | 본 문서 (`harness/dbschema-system.md`) 신설 |
+| [#883](https://github.com/choiceoh/solarflow/pull/883) | generator CHECK enum 추출 (66개) — `<Table><Col>Values` 슬라이스 + TS `Enums` 섹션 |
+| [#884](https://github.com/choiceoh/solarflow/pull/884) | BL validation map 3개 → dbschema 슬라이스 (enum dogfood 시작) |
+| [#885](https://github.com/choiceoh/solarflow/pull/885) | po/lc/tt/order validation sweep (9 maps) + 공통 `validation.FormatAllowedValues` |
+| [#886](https://github.com/choiceoh/solarflow/pull/886) | outbound/inventory/bl_line/product validation sweep (7 maps) — 전 도메인 valid* map 0 |
 
 ## 8. 트러블슈팅
 
