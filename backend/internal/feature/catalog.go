@@ -184,6 +184,7 @@ const (
 	IDSysNote           FeatureID = "sys.note"
 	IDSysSystemSettings FeatureID = "sys.system_settings"
 	IDSysUIConfig       FeatureID = "sys.ui_config"
+	IDSysUIDefaults     FeatureID = "sys.ui_defaults"
 	IDSysUser           FeatureID = "sys.user"
 	IDSysExternalSync   FeatureID = "sys.external_sync" // D-059
 	IDSysDBIntegrity    FeatureID = "sys.db_integrity"  // D-064 PR 37
@@ -746,6 +747,11 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDSysUIConfig, Name: "GUI 메타 편집기", Description: "UI 메타 정의 (admin 쓰기)",
 		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
 		Paths: []string{"/api/v1/ui-configs/", "/api/v1/ui-configs/{scope}/{config_id}"},
+	},
+	IDSysUIDefaults: {
+		ID: IDSysUIDefaults, Name: "운영자 UI 기본값", Description: "테이블 컬럼 순서·폭과 KPI 카드 기본값 (운영팀 + admin 쓰기)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		Paths: []string{"/api/v1/ui-defaults/{tenant}"},
 	},
 	IDSysUser: {
 		ID: IDSysUser, Name: "사용자", Description: "/me + admin 사용자 관리",

@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { DialogHost } from '@/lib/dialogs';
 import { useAuthStore } from '@/stores/authStore';
 import { usePreferencesStore } from '@/stores/preferencesStore';
+import { useUiDefaultsStore } from '@/stores/uiDefaultsStore';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import RoleGuard from '@/components/auth/RoleGuard';
 import AppLayout from '@/components/layout/AppLayout';
@@ -68,8 +69,10 @@ function DefaultRedirect() {
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize);
+  const userId = useAuthStore((s) => s.user?.user_id);
   const userPreferences = useAuthStore((s) => s.user?.preferences);
   const syncPreferences = usePreferencesStore((s) => s.syncFromUser);
+  const loadUiDefaults = useUiDefaultsStore((s) => s.load);
 
   useEffect(() => {
     initialize();
@@ -78,6 +81,13 @@ export default function App() {
   useEffect(() => {
     syncPreferences(userPreferences);
   }, [userPreferences, syncPreferences]);
+
+  // 로그인 직후 1회 — 호스트 테넌트의 UI 기본값을 가져와 컬럼/KPI hook 들이 참조할 수 있게.
+  // 실패해도 hook 들이 빈 default 로 동작하므로 await 불필요.
+  useEffect(() => {
+    if (!userId) return;
+    void loadUiDefaults(detectTenantScope());
+  }, [userId, loadUiDefaults]);
 
   return (
     <MobileBlock>

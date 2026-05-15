@@ -12,16 +12,25 @@ export type ColumnOrderState = string[];
 
 const COLORDER_PREFIX = 'sf.colorder.';
 
-export function loadOrder(scopeId: string): ColumnOrderState {
-  if (typeof localStorage === 'undefined') return [];
+/**
+ * scopeId 의 사용자 저장 순서를 읽는다.
+ *
+ * fallback 인자는 운영자가 사이트 단위로 설정한 default — 사용자 localStorage 가
+ * 비어 있을 때만 적용된다(개인 > 운영자 원칙). 사용자가 빈 배열로 저장한 경우는
+ * 발생하지 않으므로(컬럼 리오더는 항상 1개 이상) 빈 배열을 곧 "사용자 미설정"으로 본다.
+ */
+export function loadOrder(scopeId: string, fallback?: ColumnOrderState): ColumnOrderState {
+  if (typeof localStorage === 'undefined') return fallback ?? [];
   try {
     const raw = localStorage.getItem(COLORDER_PREFIX + scopeId);
-    if (!raw) return [];
+    if (!raw) return fallback ?? [];
     const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-    return arr.filter((s) => typeof s === 'string');
+    if (!Array.isArray(arr)) return fallback ?? [];
+    const filtered = arr.filter((s) => typeof s === 'string');
+    if (filtered.length === 0) return fallback ?? [];
+    return filtered;
   } catch {
-    return [];
+    return fallback ?? [];
   }
 }
 
@@ -57,8 +66,9 @@ export function resolveOrder(userOrder: ColumnOrderState, defaultColumnIds: stri
   return out;
 }
 
-export function useColumnOrder(scopeId: string) {
-  const [order, setOrderState] = useState<ColumnOrderState>(() => loadOrder(scopeId));
+export function useColumnOrder(scopeId: string, fallback?: ColumnOrderState) {
+  // 운영자 default 는 마운트 시 1회만 합쳐진다 — 늦게 도착하면 다음 페이지 진입부터 반영.
+  const [order, setOrderState] = useState<ColumnOrderState>(() => loadOrder(scopeId, fallback));
 
   const setOrder = useCallback((updater: ColumnOrderState | ((prev: ColumnOrderState) => ColumnOrderState)) => {
     setOrderState((prev) => {

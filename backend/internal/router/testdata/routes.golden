@@ -185,6 +185,7 @@ GET     /api/v1/tts/summary
 GET     /api/v1/tts/{id}
 GET     /api/v1/ui-configs/
 GET     /api/v1/ui-configs/{scope}/{config_id}
+GET     /api/v1/ui-defaults/{tenant}
 GET     /api/v1/users/
 GET     /api/v1/users/me
 GET     /api/v1/warehouse-locations/
@@ -361,6 +362,7 @@ PUT     /api/v1/study/plans/{id}/steps/{step_id}
 PUT     /api/v1/system-settings/{key}
 PUT     /api/v1/tts/{id}
 PUT     /api/v1/ui-configs/{scope}/{config_id}
+PUT     /api/v1/ui-defaults/{tenant}
 PUT     /api/v1/users/me
 PUT     /api/v1/users/me/password
 PUT     /api/v1/users/me/persona

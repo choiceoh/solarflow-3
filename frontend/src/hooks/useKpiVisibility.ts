@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { fetchWithAuth } from '@/lib/api';
 import { notify } from '@/lib/notify';
 import { usePreferencesStore } from '@/stores/preferencesStore';
+import { useUiDefaultsStore } from '@/stores/uiDefaultsStore';
 import type { UserPreferences } from '@/types/models';
 
 export interface KpiMetricLike {
@@ -80,16 +81,22 @@ export function useKpiVisibility<T extends KpiMetricLike>(
   const defaultVisibleCount = options?.defaultVisibleCount ?? DEFAULT_VISIBLE_KPI_COUNT;
   const prefs = usePreferencesStore((s) => s.prefs);
   const setPrefs = usePreferencesStore((s) => s.setPrefs);
+  const operatorDefaults = useUiDefaultsStore((s) => s.defaults.kpi);
   const [saving, setSaving] = useState(false);
 
   const kpiOptions = useMemo(() => resolveKpiOptions(metrics), [metrics]);
   const optionIds = useMemo(() => new Set(kpiOptions.map((option) => option.id)), [kpiOptions]);
 
-  // 사용자가 한 번도 설정하지 않은 섹션은 첫 N개만 노출. 페이지가 metrics 를 늘려도 기본 레이아웃 유지.
+  // 운영자 default 가 있으면 그게 우선. 없으면 "처음 N개만 노출" fallback.
+  // 운영자가 빈 배열로 저장하면 "전부 노출" 의도 — defaultHidden 도 빈 set 이 된다.
+  const operatorHidden = scopeId ? operatorDefaults?.[scopeId]?.hidden : undefined;
+  const hasOperatorDefault = Array.isArray(operatorHidden);
+
   const defaultHidden = useMemo(() => {
+    if (hasOperatorDefault) return normalizeHidden(operatorHidden, optionIds);
     if (kpiOptions.length <= defaultVisibleCount) return new Set<string>();
     return new Set(kpiOptions.slice(defaultVisibleCount).map((option) => option.id));
-  }, [kpiOptions, defaultVisibleCount]);
+  }, [hasOperatorDefault, operatorHidden, kpiOptions, defaultVisibleCount, optionIds]);
 
   const rawUserPref = scopeId ? prefs.kpi_hidden?.[scopeId] : undefined;
   const hasUserPref = Array.isArray(rawUserPref);

@@ -51,6 +51,7 @@ const ROUTE_LABELS: Record<string, { title: string; breadcrumb: string }> = {
   "/admin/db-integrity": { title: "DB 정합성", breadcrumb: "운영 / 데이터 정합성 검증" },
   "/settings/audit-logs": { title: "관리자 로그", breadcrumb: "시스템 / 운영 데이터 변경 기록" },
   "/settings/site": { title: "사이트 설정", breadcrumb: "시스템 / 전역 설정" },
+  "/settings/ui-defaults": { title: "UI 기본값", breadcrumb: "시스템 / 컬럼·KPI 기본값" },
   "/settings/personal": { title: "개인 설정", breadcrumb: "시스템 / 내 계정" },
   "/baro/incoming": { title: "입고예정", breadcrumb: "구매 / ETA와 공급예정" },
   "/baro/purchase-history": { title: "구매이력", breadcrumb: "구매 / 자체 매입 원가" },
