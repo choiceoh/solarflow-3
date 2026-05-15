@@ -2,22 +2,12 @@ package bl
 
 import (
 	"slices"
-	"strings"
 	"unicode/utf8"
 
 	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/validation"
 )
-
-// formatAllowedValues — DB CHECK 슬라이스를 에러 메시지의 \"a\", \"b\", \"c\" 중 하나여야 합니다 형식으로.
-// validation 메시지를 dbschema 와 항상 일치시켜 손동기화 누락을 차단.
-func formatAllowedValues(vals []string) string {
-	quoted := make([]string, len(vals))
-	for i, v := range vals {
-		quoted[i] = `"` + v + `"`
-	}
-	return strings.Join(quoted, ", ") + " 중 하나여야 합니다"
-}
 
 // BLShipment — B/L(입고/선적) 정보를 담는 구조체
 // 비유: "선적 서류" — 어떤 화물이, 어디서 어디로, 언제 도착하는지 기록
@@ -161,19 +151,19 @@ func (req *CreateBLRequest) Validate() string {
 		return "inbound_type은 필수 항목입니다"
 	}
 	if !slices.Contains(dbschema.BlShipmentsInboundTypeValues, req.InboundType) {
-		return "inbound_type은 " + formatAllowedValues(dbschema.BlShipmentsInboundTypeValues)
+		return "inbound_type은 " + validation.FormatAllowedValues(dbschema.BlShipmentsInboundTypeValues)
 	}
 	if req.Currency == "" {
 		return "currency는 필수 항목입니다"
 	}
 	if !slices.Contains(dbschema.BlShipmentsCurrencyValues, req.Currency) {
-		return "currency는 " + formatAllowedValues(dbschema.BlShipmentsCurrencyValues)
+		return "currency는 " + validation.FormatAllowedValues(dbschema.BlShipmentsCurrencyValues)
 	}
 	if req.Status == "" {
 		return "status는 필수 항목입니다"
 	}
 	if !slices.Contains(dbschema.BlShipmentsStatusValues, req.Status) {
-		return "status는 " + formatAllowedValues(dbschema.BlShipmentsStatusValues)
+		return "status는 " + validation.FormatAllowedValues(dbschema.BlShipmentsStatusValues)
 	}
 	if req.ExchangeRate != nil && *req.ExchangeRate <= 0 {
 		return "exchange_rate는 양수여야 합니다"
@@ -227,13 +217,13 @@ func (req *UpdateBLRequest) Validate() string {
 		return "manufacturer_id는 빈 값으로 변경할 수 없습니다"
 	}
 	if req.InboundType != nil && !slices.Contains(dbschema.BlShipmentsInboundTypeValues, *req.InboundType) {
-		return "inbound_type은 " + formatAllowedValues(dbschema.BlShipmentsInboundTypeValues)
+		return "inbound_type은 " + validation.FormatAllowedValues(dbschema.BlShipmentsInboundTypeValues)
 	}
 	if req.Currency != nil && !slices.Contains(dbschema.BlShipmentsCurrencyValues, *req.Currency) {
-		return "currency는 " + formatAllowedValues(dbschema.BlShipmentsCurrencyValues)
+		return "currency는 " + validation.FormatAllowedValues(dbschema.BlShipmentsCurrencyValues)
 	}
 	if req.Status != nil && !slices.Contains(dbschema.BlShipmentsStatusValues, *req.Status) {
-		return "status는 " + formatAllowedValues(dbschema.BlShipmentsStatusValues)
+		return "status는 " + validation.FormatAllowedValues(dbschema.BlShipmentsStatusValues)
 	}
 	if req.ExchangeRate != nil && *req.ExchangeRate <= 0 {
 		return "exchange_rate는 양수여야 합니다"

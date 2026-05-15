@@ -8,7 +8,27 @@
 // *3+ 곳 dup 였던 spec* 만.
 package validation
 
-import "regexp"
+import (
+	"regexp"
+	"strings"
+)
+
+// FormatAllowedValues — dbschema 가 자동 추출한 CHECK 허용값 슬라이스를 검증 에러 메시지의
+// "a", "b", "c" 중 하나여야 합니다 형식으로 직렬화. 메시지가 슬라이스에 자동 동기되어
+// DB CHECK 가 갱신되면 사용자 노출 텍스트도 따라간다 (수동 동기화 누락 차단).
+//
+// 사용:
+//   import "solarflow-backend/internal/dbschema"
+//   if !slices.Contains(dbschema.BlShipmentsStatusValues, req.Status) {
+//       return "status는 " + validation.FormatAllowedValues(dbschema.BlShipmentsStatusValues)
+//   }
+func FormatAllowedValues(vals []string) string {
+	quoted := make([]string, len(vals))
+	for i, v := range vals {
+		quoted[i] = `"` + v + `"`
+	}
+	return strings.Join(quoted, ", ") + " 중 하나여야 합니다"
+}
 
 // ItemTypes — PO/BL/LC 라인의 item_type 허용 값.
 // 종전 별칭: allowedItemTypes (po, handler), validItemTypes (bl, lc).
