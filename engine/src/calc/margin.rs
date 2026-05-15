@@ -704,7 +704,12 @@ pub async fn calculate_price_trend(
 
 /// D-064 PR 30: ERP fifo_matches 기반 품번별 가중평균 원가(₩/Wp).
 /// FIFO 매칭이 실제 입고 LOT ↔ 출고 배분 결과라 cost_details/BL 추정치보다 정확.
-/// allocated_qty × spec_wp 로 분모, cost_amount 합으로 분자.
+/// allocated_qty × spec_wp 로 분모, cost_amount + 부대비용 분배 합으로 분자.
+///
+/// ERP fifo_matches.cost_amount 에는 부대비용(incidental_expenses) 이 빠져있어,
+/// BL 단위 부대비용을 BL 전체 용량 비례로 Wp 단가화한 뒤 (landed_cost.rs 와 동일한 분배식)
+/// 매칭 행 Wp 만큼 더해 마진을 보정한다. 국내매입/기초재고 (declaration_id NULL) 는
+/// LEFT JOIN 으로 expense_per_wp 가 0 처리되어 영향 없음.
 async fn fetch_cost_avg_fifo(
     pool: &PgPool,
     company_ids: &[Uuid],
@@ -713,13 +718,37 @@ async fn fetch_cost_avg_fifo(
     // 매출 분석용 원가 = 상품판매(+스페어) 매칭만. usage_category_raw 가 ERP 한글 (상품판매/공사사용/유지관리/잔여재고 등) 로 들어옴.
     // 공사사용(자체 EPC) cost 가 매출 매칭에 합산되면 매출 < 원가 → -38% 음수 마진 사고 (2026-05-12).
     let sql = r#"
+    WITH bl_expense AS (
+      SELECT ie.bl_id, SUM(ie.amount)::float8 AS total_expense
+      FROM incidental_expenses ie
+      WHERE ie.bl_id IS NOT NULL
+      GROUP BY ie.bl_id
+    ),
+    bl_capacity AS (
+      SELECT idecl.bl_id, SUM(idecl.capacity_kw * 1000)::float8 AS total_wp
+      FROM import_declarations idecl
+      WHERE idecl.bl_id IS NOT NULL
+        AND idecl.capacity_kw IS NOT NULL
+      GROUP BY idecl.bl_id
+    ),
+    bl_expense_per_wp AS (
+      SELECT be.bl_id,
+             CASE WHEN bc.total_wp > 0 THEN be.total_expense / bc.total_wp ELSE 0 END AS expense_per_wp
+      FROM bl_expense be
+      JOIN bl_capacity bc ON bc.bl_id = be.bl_id
+    )
     SELECT fm.product_id,
            CASE WHEN SUM(fm.allocated_qty * p.spec_wp) > 0
-             THEN SUM(fm.cost_amount)::float8 / SUM(fm.allocated_qty * p.spec_wp)
+             THEN (
+               SUM(fm.cost_amount)::float8
+               + SUM(fm.allocated_qty * p.spec_wp * COALESCE(bew.expense_per_wp, 0))::float8
+             ) / SUM(fm.allocated_qty * p.spec_wp)::float8
              ELSE NULL END AS avg_wp
     FROM fifo_matches fm
     JOIN products p ON fm.product_id = p.product_id
     LEFT JOIN outbounds o ON fm.outbound_id = o.outbound_id
+    LEFT JOIN import_declarations idecl ON fm.declaration_id = idecl.declaration_id
+    LEFT JOIN bl_expense_per_wp bew ON bew.bl_id = idecl.bl_id
     WHERE fm.allocated_qty IS NOT NULL AND fm.allocated_qty > 0
       AND fm.cost_amount IS NOT NULL
       AND fm.usage_category_raw IN ('상품판매', '상품판매(스페어)')
