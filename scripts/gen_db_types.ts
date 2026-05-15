@@ -90,6 +90,19 @@ interface Relation {
   columns: Column[]
 }
 
+// CHECK 제약 enum (`col IN (...)` / `col = ANY (ARRAY[...])` 패턴).
+// table_name + column_name → 허용값 리스트.
+interface CheckEnum {
+  table: string
+  column: string
+  values: string[]
+}
+
+interface CheckConstraintRow {
+  table_name: string
+  constraint_def: string  // pg_get_constraintdef() 출력 그대로
+}
+
 // ─── 식별자 변환 ─────────────────────────────────────────────────────────────
 
 function snakeToPascal(s: string): string {
@@ -228,6 +241,82 @@ WHERE c.table_schema = 'public'
 ORDER BY rel.kind, c.table_name, c.ordinal_position
 `
 
+// pg_constraint 에서 CHECK 제약(`contype = 'c'`) 만 가져와 텍스트 정의를 정규식으로 파싱.
+// 본 시스템은 단순 enum 패턴 (`col IN (...)` / `col = ANY (ARRAY[...])`) 만 지원 — 복잡한
+// 표현식 (멀티컬럼, OR, 비교 연산자 등) 은 무시한다 (parseCheckEnum 가 null 반환).
+const CHECK_CONSTRAINTS_SQL = `
+SELECT
+  cls.relname AS table_name,
+  pg_get_constraintdef(con.oid) AS constraint_def
+FROM pg_constraint con
+JOIN pg_class cls ON cls.oid = con.conrelid
+JOIN pg_namespace nsp ON nsp.oid = cls.relnamespace
+WHERE nsp.nspname = 'public'
+  AND con.contype = 'c'
+ORDER BY cls.relname, con.conname
+`
+
+// CHECK 제약 텍스트를 파싱해 enum 형태인 경우만 추출.
+//
+// 지원하는 형식 (실제 운영 DB 에서 관찰된 패턴):
+//   1) `CHECK (((col)::text = ANY ((ARRAY['v1'::character varying, 'v2'::...])::text[])))`
+//   2) `CHECK (col = ANY (ARRAY['v1'::text, 'v2'::text]))`
+//   3) `CHECK ((col IN ('v1', 'v2', 'v3')))`
+//
+// 미지원 (null 반환):
+//   - 비교 연산자, 함수 호출, OR/AND 결합, 멀티컬럼 등
+function parseCheckEnum(constraintDef: string): { column: string; values: string[] } | null {
+  // 컬럼명 후보 + 값 리스트를 찾는다. col 부분의 ::text 캐스트는 옵션.
+  // 두 가지 패턴 모두 한 정규식으로:
+  //   1) (col)::text = ANY (ARRAY[...])
+  //   2) col = ANY (ARRAY[...])
+  //   3) col IN (...)
+  const reAny = /\(?\(?(\w+)\)?(?:::[a-z ]+)?\s*=\s*ANY\s*\(\(?ARRAY\[([^\]]+)\]/i
+  const reIn = /\(?(\w+)\)?\s+IN\s*\(([^)]+)\)/i
+
+  let col: string | null = null
+  let valuesRaw: string | null = null
+
+  const mAny = reAny.exec(constraintDef)
+  if (mAny) {
+    col = mAny[1]
+    valuesRaw = mAny[2]
+  } else {
+    const mIn = reIn.exec(constraintDef)
+    if (mIn) {
+      col = mIn[1]
+      valuesRaw = mIn[2]
+    }
+  }
+
+  if (!col || !valuesRaw) return null
+
+  // values 추출 — `'foo'::character varying` 또는 `'foo'::text` 또는 `'foo'` 모두 매칭.
+  const values: string[] = []
+  const reValue = /'([^']+)'/g
+  let m: RegExpExecArray | null
+  while ((m = reValue.exec(valuesRaw)) !== null) {
+    values.push(m[1])
+  }
+
+  if (values.length === 0) return null
+  return { column: col, values }
+}
+
+async function introspectCheckEnums(sql: SQL): Promise<CheckEnum[]> {
+  const rows = (await sql.unsafe(CHECK_CONSTRAINTS_SQL)) as CheckConstraintRow[]
+  const enums: CheckEnum[] = []
+  for (const r of rows) {
+    if (EXCLUDE_TABLES.has(r.table_name)) continue
+    const parsed = parseCheckEnum(r.constraint_def)
+    if (!parsed) continue
+    enums.push({ table: r.table_name, column: parsed.column, values: parsed.values })
+  }
+  // table + column 정렬 (안정적 출력)
+  enums.sort((a, b) => a.table.localeCompare(b.table) || a.column.localeCompare(b.column))
+  return enums
+}
+
 async function introspect(sql: SQL): Promise<Relation[]> {
   const rows = (await sql.unsafe(INTROSPECT_SQL)) as ColumnRow[]
   const byRelation = new Map<string, { kind: 'table' | 'view'; columns: Column[] }>()
@@ -264,7 +353,66 @@ async function introspect(sql: SQL): Promise<Relation[]> {
 
 // ─── Go 렌더링 ───────────────────────────────────────────────────────────────
 
-function renderGo(relations: Relation[]): string {
+// CHECK enum 의 컬럼값을 PascalCase 식별자로 변환 — Go const 이름 용.
+// 'erp_done' → 'ErpDone', 'domestic_foreign' → 'DomesticForeign' 등.
+function enumValueToIdent(v: string): string {
+  // 영숫자만 keep, 나눠서 PascalCase
+  const parts = v.replace(/[^A-Za-z0-9]+/g, '_').split('_').filter(Boolean)
+  if (parts.length === 0) return 'Empty'
+  let id = parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('')
+  if (/^[0-9]/.test(id)) id = 'V' + id
+  return id
+}
+
+function renderGoEnums(enums: CheckEnum[]): string {
+  if (enums.length === 0) return ''
+  const blocks = enums.map((e) => {
+    const tablePascal = snakeToPascal(e.table)
+    const colPascal = snakeToPascal(e.column)
+
+    // ASCII-only fallback: 한글/유니코드 등은 PascalCase 매핑이 의미 없거나 충돌하므로
+    // const 자체를 emit 하지 않고 슬라이스만 emit. 사용자는 Values 슬라이스로 검증.
+    const asciiOnly = e.values.filter((v) => /^[A-Za-z0-9_\- ]+$/.test(v))
+    const skippedNonAscii = e.values.length - asciiOnly.length
+
+    // 충돌 방지 — 동일 식별자가 두 번 나오면 인덱스 suffix.
+    const seenIdents = new Set<string>()
+    const constLines = asciiOnly.map((v) => {
+      let ident = enumValueToIdent(v)
+      let i = 2
+      while (seenIdents.has(ident)) {
+        ident = `${enumValueToIdent(v)}${i}`
+        i++
+      }
+      seenIdents.add(ident)
+      return `\t${tablePascal}${colPascal}${ident} = "${v}"`
+    })
+
+    const sliceItems = e.values.map((v) => `"${v.replace(/"/g, '\\"')}"`).join(', ')
+    const constsBlock = constLines.length > 0
+      ? [`const (`, constLines.join('\n'), `)`, ``].join('\n')
+      : ''
+    const skipNote = skippedNonAscii > 0
+      ? `// ${skippedNonAscii} 개 값은 비-ASCII (예: 한글) 이라 const 식별자 생성 생략. Values 슬라이스로만 접근.\n`
+      : ''
+
+    return [
+      `// ${tablePascal}${colPascal}* — public.${e.table}.${e.column} CHECK 허용값.`,
+      `// 손코딩 validXxx maps 대신 본 상수/슬라이스를 사용해 컴파일타임 검증.`,
+      `${skipNote}${constsBlock}`,
+      `// ${tablePascal}${colPascal}Values — DB CHECK 제약과 1:1 동기. validation 헬퍼에 쓰기 좋음.`,
+      `var ${tablePascal}${colPascal}Values = []string{${sliceItems}}`,
+      ``,
+    ].join('\n')
+  })
+  return [
+    `// ─── CHECK 제약 enum (introspection 자동 추출) ────────────────────────────────`,
+    ``,
+    blocks.join('\n'),
+  ].join('\n')
+}
+
+function renderGo(relations: Relation[], enums: CheckEnum[]): string {
   let needsJson = false
 
   const blocks = relations.map((t) => {
@@ -315,28 +463,41 @@ function renderGo(relations: Relation[]): string {
   }).join('\n')
 
   const imports = needsJson ? `import "encoding/json"\n\n` : ''
+  const enumsSection = renderGoEnums(enums)
 
   return `// Code generated by scripts/gen_db_types.ts. DO NOT EDIT.
 //
-// Source: information_schema introspection against SUPABASE_DB_URL.
+// Source: information_schema + pg_constraint introspection against SUPABASE_DB_URL.
 // Run \`bun scripts/gen_db_types.ts\` to regenerate.
 //
-// 이 패키지는 DB 스키마(테이블 + 뷰)의 컴파일타임 정본이다.
+// 이 패키지는 DB 스키마(테이블 + 뷰 + CHECK enum)의 컴파일타임 정본이다.
 //   - PostgREST select 시 컬럼명 typo 를 컴파일타임에 잡으려면
 //     dbschema.<Relation>AllColumns 또는 dbschema.<Relation>Col<Field> 상수를 사용한다.
+//   - CHECK 제약의 허용값은 dbschema.<Table><Col><Value> 상수 + <Table><Col>Values 슬라이스로
+//     접근. 도메인의 손코딩 validXxxStatuses map 을 점진적으로 대체 가능.
 //   - 도메인의 Create*Request / Update*Request 는 손코딩으로 둔다 — validation
-//     로직(필수값, 허용 enum, 길이 제한)이 그쪽에 속한다.
+//     로직(필수값, 길이 제한 등)이 그쪽에 속한다.
 //   - View 는 read-only — Insert/Update 시 베이스 테이블 상수를 쓴다.
 //   - 본 파일이 1줄이라도 변경되면 그건 *DB 스키마가 바뀐 것* — 커밋에 같이 포함한다.
 
 package dbschema
 
-${imports}${blocks}`
+${imports}${blocks}
+${enumsSection}`
 }
 
 // ─── TS 렌더링 ───────────────────────────────────────────────────────────────
 
-function renderTs(relations: Relation[]): string {
+function renderTsEnums(enums: CheckEnum[]): string {
+  if (enums.length === 0) return ''
+  return enums.map((e) => {
+    const key = `${e.table}_${e.column}`
+    const union = e.values.map((v) => `'${v.replace(/'/g, "\\'")}'`).join(' | ')
+    return `      /** public.${e.table}.${e.column} CHECK 허용값 */\n      ${key}: ${union}`
+  }).join('\n')
+}
+
+function renderTs(relations: Relation[], enums: CheckEnum[]): string {
   const tables = relations.filter((r) => r.kind === 'table')
   const views = relations.filter((r) => r.kind === 'view')
 
@@ -432,7 +593,9 @@ ${tablesSection}
 ${viewsSection}
     }
     Functions: Record<string, never>
-    Enums: Record<string, never>
+    Enums: ${enums.length === 0 ? 'Record<string, never>' : `{
+${renderTsEnums(enums)}
+    }`}
     CompositeTypes: Record<string, never>
   }
 }
@@ -483,12 +646,13 @@ async function main(): Promise<number> {
   try {
     log('introspection 시작')
     const relations = await introspect(sql)
+    const enums = await introspectCheckEnums(sql)
     const tableCount = relations.filter((r) => r.kind === 'table').length
     const viewCount = relations.filter((r) => r.kind === 'view').length
-    log(`${tableCount} 개 테이블 + ${viewCount} 개 뷰 검출`)
+    log(`${tableCount} 개 테이블 + ${viewCount} 개 뷰 + ${enums.length} 개 CHECK enum 검출`)
 
-    const goContent = renderGo(relations)
-    const tsContent = renderTs(relations)
+    const goContent = renderGo(relations, enums)
+    const tsContent = renderTs(relations, enums)
 
     if (checkMode) {
       const goOk = await fileEquals(GO_OUT, goContent)
