@@ -269,7 +269,10 @@ function renderGo(tables: Table[]): string {
       fieldLines.push(`${docLine}\t${fieldName} ${goType} \`json:"${jsonTag}"\``)
 
       const constName = `${goName}Col${fieldName}`
-      colConstLines.push(`\t${constName} ${goName}Column = "${c.name}"`)
+      // 명시적 untyped string — postgrest-go API 가 plain string 을 받으므로 그대로 통과,
+      // 타입 캐스팅 없이 query.Eq(dbschema.BlShipmentsColPoId, ...) 형식으로 호출 가능.
+      // 존재하지 않는 컬럼명 참조는 컴파일타임에 잡힘 (typo 방지).
+      colConstLines.push(`\t${constName} = "${c.name}"`)
       colNames.push(c.name)
     }
 
@@ -281,9 +284,8 @@ function renderGo(tables: Table[]): string {
       fieldLines.join('\n'),
       `}`,
       '',
-      `// ${goName}Column — public.${t.name} 의 컬럼명 (PostgREST select 시 타입 안전성).`,
-      `type ${goName}Column string`,
-      '',
+      `// ${goName}Col* — public.${t.name} 의 컬럼명 상수.`,
+      `// 사용: query.Eq(dbschema.${goName}Col${snakeToPascal(t.columns[0]?.name ?? 'X')}, value)`,
       `const (`,
       colConstLines.join('\n'),
       `)`,
