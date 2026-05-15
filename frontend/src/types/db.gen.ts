@@ -4383,7 +4383,140 @@ export interface Database {
     }
     }
     Functions: Record<string, never>
-    Enums: Record<string, never>
+    Enums: {
+      /** public.amaranth_upload_jobs.status CHECK 허용값 */
+      amaranth_upload_jobs_status: 'pending' | 'running' | 'uploaded' | 'failed' | 'manual_required' | 'cancelled'
+      /** public.audit_logs.action CHECK 허용값 */
+      audit_logs_action: 'create' | 'update' | 'delete'
+      /** public.audit_logs.entity_type CHECK 허용값 */
+      audit_logs_entity_type: 'purchase_orders' | 'lc_records' | 'outbounds' | 'sales'
+      /** public.baro_credit_holds.trigger_reason CHECK 허용값 */
+      baro_credit_holds_trigger_reason: 'over_limit' | 'aging_60d' | 'aging_90d' | 'manual'
+      /** public.baro_quotes.sent_channel CHECK 허용값 */
+      baro_quotes_sent_channel: 'kakao' | 'sms' | 'email' | 'pdf' | 'manual'
+      /** public.baro_quotes.status CHECK 허용값 */
+      baro_quotes_status: 'draft' | 'sent' | 'replied' | 'won' | 'lost' | 'expired'
+      /** public.baro_shipment_notices.channel CHECK 허용값 */
+      baro_shipment_notices_channel: 'kakao' | 'sms' | 'manual_copy'
+      /** public.baro_shipment_notices.delivery_status CHECK 허용값 */
+      baro_shipment_notices_delivery_status: 'sent' | 'delivered' | 'read' | 'failed'
+      /** public.baro_shipment_notices.stage CHECK 허용값 */
+      baro_shipment_notices_stage: 'loading' | 'departure' | 'arrival' | 'delivered'
+      /** public.bl_line_items.item_type CHECK 허용값 */
+      bl_line_items_item_type: 'main' | 'spare'
+      /** public.bl_line_items.payment_type CHECK 허용값 */
+      bl_line_items_payment_type: 'paid' | 'free'
+      /** public.bl_line_items.usage_category CHECK 허용값 */
+      bl_line_items_usage_category: 'sale' | 'construction' | 'spare' | 'replacement' | 'repowering' | 'transfer' | 'adjustment'
+      /** public.bl_shipments.currency CHECK 허용값 */
+      bl_shipments_currency: 'USD' | 'KRW'
+      /** public.bl_shipments.inbound_type CHECK 허용값 */
+      bl_shipments_inbound_type: 'import' | 'domestic' | 'domestic_foreign' | 'group'
+      /** public.bl_shipments.status CHECK 허용값 */
+      bl_shipments_status: 'scheduled' | 'shipping' | 'arrived' | 'customs' | 'completed' | 'erp_done'
+      /** public.construction_sites.site_type CHECK 허용값 */
+      construction_sites_site_type: 'own' | 'epc'
+      /** public.cycle_count_items.variance_reason CHECK 허용값 */
+      cycle_count_items_variance_reason: 'shrinkage' | 'damage' | 'wrong_location' | 'system_error' | 'other'
+      /** public.cycle_counts.status CHECK 허용값 */
+      cycle_counts_status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+      /** public.dispatch_routes.status CHECK 허용값 */
+      dispatch_routes_status: 'planned' | 'dispatched' | 'completed' | 'cancelled'
+      /** public.feature_wiring_audit.axis CHECK 허용값 */
+      feature_wiring_audit_axis: 'feature' | 'data_scope'
+      /** public.inbounds.status CHECK 허용값 */
+      inbounds_status: 'active' | 'cancelled'
+      /** public.incidental_expenses.expense_type CHECK 허용값 */
+      incidental_expenses_expense_type: 'dock_charge' | 'shuttle' | 'customs_fee' | 'transport' | 'storage' | 'handling' | 'surcharge' | 'lc_fee' | 'lc_acceptance' | 'telegraph' | 'other'
+      /** public.integrity_checks.severity CHECK 허용값 */
+      integrity_checks_severity: 'high' | 'med' | 'low'
+      /** public.integrity_checks.tolerance_type CHECK 허용값 */
+      integrity_checks_tolerance_type: 'abs' | 'pct'
+      /** public.intercompany_requests.status CHECK 허용값 */
+      intercompany_requests_status: 'pending' | 'shipped' | 'received' | 'rejected' | 'cancelled'
+      /** public.inventory_allocations.purpose CHECK 허용값 */
+      inventory_allocations_purpose: 'sale' | 'construction' | 'construction_own' | 'construction_epc' | 'other'
+      /** public.inventory_allocations.source_type CHECK 허용값 */
+      inventory_allocations_source_type: 'stock' | 'incoming'
+      /** public.inventory_allocations.status CHECK 허용값 */
+      inventory_allocations_status: 'pending' | 'confirmed' | 'cancelled' | 'hold'
+      /** public.lc_records.status CHECK 허용값 */
+      lc_records_status: 'pending' | 'opened' | 'docs_received' | 'settled' | 'cancelled'
+      /** public.lc_records.usance_type CHECK 허용값 */
+      lc_records_usance_type: 'buyers' | 'shippers'
+      /** public.manufacturers.domestic_foreign CHECK 허용값 */
+      manufacturers_domestic_foreign: '국내' | '해외'
+      /** public.module_demand_forecasts.demand_type CHECK 허용값 */
+      module_demand_forecasts_demand_type: 'construction' | 'distribution_adjustment' | 'other'
+      /** public.module_demand_forecasts.status CHECK 허용값 */
+      module_demand_forecasts_status: 'planned' | 'confirmed' | 'done' | 'cancelled'
+      /** public.orders.fulfillment_source CHECK 허용값 */
+      orders_fulfillment_source: 'stock' | 'incoming'
+      /** public.orders.management_category CHECK 허용값 */
+      orders_management_category: 'sale' | 'construction' | 'spare' | 'repowering' | 'maintenance' | 'other'
+      /** public.orders.receipt_method CHECK 허용값 */
+      orders_receipt_method: 'purchase_order' | 'phone' | 'email' | 'other'
+      /** public.orders.status CHECK 허용값 */
+      orders_status: 'received' | 'partial' | 'completed' | 'cancelled'
+      /** public.outbounds.status CHECK 허용값 */
+      outbounds_status: 'active' | 'cancel_pending' | 'cancelled'
+      /** public.outbounds.usage_category CHECK 허용값 */
+      outbounds_usage_category: 'sale' | 'sale_spare' | 'construction' | 'construction_damage' | 'repowering' | 'maintenance' | 'disposal' | 'transfer' | 'adjustment' | 'other'
+      /** public.partner_activities.kind CHECK 허용값 */
+      partner_activities_kind: 'call' | 'visit' | 'email' | 'memo'
+      /** public.partners.partner_type CHECK 허용값 */
+      partners_partner_type: 'supplier' | 'customer' | 'both'
+      /** public.pdf_extractions.parse_status CHECK 허용값 */
+      pdf_extractions_parse_status: 'success' | 'partial' | 'failed'
+      /** public.picking_lists.status CHECK 허용값 */
+      picking_lists_status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+      /** public.price_benchmark_runs.status CHECK 허용값 */
+      price_benchmark_runs_status: 'running' | 'completed' | 'partial' | 'failed'
+      /** public.price_benchmarks.market_region CHECK 허용값 */
+      price_benchmarks_market_region: 'fob_china' | 'china_domestic' | 'china_export' | 'cif_europe' | 'ddp_europe'
+      /** public.price_benchmarks.review_status CHECK 허용값 */
+      price_benchmarks_review_status: 'candidate' | 'accepted' | 'rejected'
+      /** public.products.module_grade CHECK 허용값 */
+      products_module_grade: '1' | '2' | '3' | 'NA'
+      /** public.products.module_type CHECK 허용값 */
+      products_module_type: 'PERC' | 'TOPCON' | 'BC'
+      /** public.products.product_kind CHECK 허용값 */
+      products_product_kind: 'module' | 'inverter' | 'package'
+      /** public.products.product_variant_kind CHECK 허용값 */
+      products_product_variant_kind: 'output_bin' | 'bom_variant' | 'cert_variant' | 'label_variant' | 'packaging_variant' | 'mixed' | 'other'
+      /** public.purchase_orders.contract_type CHECK 허용값 */
+      purchase_orders_contract_type: 'spot' | 'frame' | 'annual_frame' | 'half_year_frame' | 'general' | 'exclusive' | 'annual'
+      /** public.purchase_orders.status CHECK 허용값 */
+      purchase_orders_status: 'draft' | 'contracted' | 'in_progress' | 'shipping' | 'completed' | 'cancelled'
+      /** public.receiving_logs.source_type CHECK 허용값 */
+      receiving_logs_source_type: 'bl_line' | 'intercompany' | 'manual'
+      /** public.receiving_logs.variance_reason CHECK 허용값 */
+      receiving_logs_variance_reason: 'shortage' | 'overage' | 'damaged' | 'wrong_product' | 'wrong_spec' | 'other'
+      /** public.sales.status CHECK 허용값 */
+      sales_status: 'active' | 'cancelled'
+      /** public.study_learning_domains.status CHECK 허용값 */
+      study_learning_domains_status: 'draft' | 'active' | 'archived'
+      /** public.study_learning_plan_steps.assessment_kind CHECK 허용값 */
+      study_learning_plan_steps_assessment_kind: 'none' | 'quiz' | 'checklist' | 'submission' | 'manager_review'
+      /** public.study_learning_plans.status CHECK 허용값 */
+      study_learning_plans_status: 'draft' | 'active' | 'retired'
+      /** public.tenant_data_scopes.tenant CHECK 허용값 */
+      tenant_data_scopes_tenant: 'topsolar' | 'cable' | 'baro' | 'study'
+      /** public.tenant_features.tenant CHECK 허용값 */
+      tenant_features_tenant: 'topsolar' | 'cable' | 'baro' | 'study'
+      /** public.tt_remittances.status CHECK 허용값 */
+      tt_remittances_status: 'planned' | 'completed'
+      /** public.ui_configs.scope CHECK 허용값 */
+      ui_configs_scope: 'screen' | 'form' | 'detail'
+      /** public.user_profiles.role CHECK 허용값 */
+      user_profiles_role: 'admin' | 'executive' | 'operator' | 'manager' | 'viewer'
+      /** public.user_profiles.tenant_scope CHECK 허용값 */
+      user_profiles_tenant_scope: 'topsolar' | 'cable' | 'baro' | 'study'
+      /** public.warehouse_locations.location_type CHECK 허용값 */
+      warehouse_locations_location_type: 'storage' | 'staging' | 'receiving' | 'shipping' | 'damaged' | 'reserved'
+      /** public.warehouses.warehouse_type CHECK 허용값 */
+      warehouses_warehouse_type: 'port' | 'factory' | 'vendor'
+    }
     CompositeTypes: Record<string, never>
   }
 }
