@@ -288,6 +288,7 @@ export default function BankingPage() {
                         </p>
                       ) : (
                         visibleGroups.map((group) => {
+                          const hasBanks = group.rows.length > 0
                           const gLimit = group.rows.reduce((s, r) => s + r.lc_limit_usd, 0)
                           const gUsed = group.rows.reduce(
                             (s, r) => s + Math.min(r.used, r.lc_limit_usd),
@@ -308,12 +309,18 @@ export default function BankingPage() {
                               <div className="flex items-center gap-3">
                                 <h3 className="text-sm font-semibold">{group.company_name}</h3>
                                 <span className="text-xs text-muted-foreground">
-                                  한도 {formatUSD(gLimit)} | 실행 {formatUSD(gUsed)} | 잔여{" "}
-                                  {formatUSD(gAvail)}
-                                  {gLimit > 0 && (
-                                    <span className={` ml-2 font-medium ${rateColor}`}>
-                                      ({gRate.toFixed(1)}%)
-                                    </span>
+                                  {hasBanks ? (
+                                    <>
+                                      한도 {formatUSD(gLimit)} | 실행 {formatUSD(gUsed)} | 잔여{" "}
+                                      {formatUSD(gAvail)}
+                                      {gLimit > 0 && (
+                                        <span className={` ml-2 font-medium ${rateColor}`}>
+                                          ({gRate.toFixed(1)}%)
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="italic">등록된 은행 한도 없음</span>
                                   )}
                                 </span>
                               </div>
