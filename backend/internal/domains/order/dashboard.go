@@ -56,6 +56,7 @@ type OrderDashTotals struct {
 	CompletedCount         int     `json:"completed_count"`
 	CancelledCount         int     `json:"cancelled_count"`
 	KwSum                  float64 `json:"kw_sum"`                 // active 만
+	BacklogKw              float64 `json:"backlog_kw"`             // 수주잔고(잔량 용량). active + remaining_qty>0 의 비례 환산 kW 합
 	CustomersCount         int     `json:"customers_count"`        // distinct (전체)
 	ActiveCustomersCount   int     `json:"active_customers_count"` // distinct of active
 	AvgUnitPriceWp         float64 `json:"avg_unit_price_wp"`
@@ -279,10 +280,16 @@ func computeOrderDashTotals(orders []Order) OrderDashTotals {
 		isActive := o.Status != "completed" && o.Status != "cancelled"
 		if isActive {
 			t.ActiveCount++
+			effKw := 0.0
 			if o.CapacityKw != nil {
-				t.KwSum += *o.CapacityKw
+				effKw = *o.CapacityKw
 			} else if o.WattageKw != nil {
-				t.KwSum += float64(o.Quantity) * *o.WattageKw
+				effKw = float64(o.Quantity) * *o.WattageKw
+			}
+			t.KwSum += effKw
+			// backlog_kw: 활성 + remaining_qty>0 의 비례 환산 kW. eff_kw × remaining/quantity.
+			if o.RemainingQty != nil && *o.RemainingQty > 0 && o.Quantity > 0 {
+				t.BacklogKw += effKw * float64(*o.RemainingQty) / float64(o.Quantity)
 			}
 			if o.CustomerID != "" {
 				activeCustomers[o.CustomerID] = struct{}{}

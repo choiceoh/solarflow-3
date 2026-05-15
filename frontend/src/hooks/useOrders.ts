@@ -125,6 +125,7 @@ export interface OrderDashboard {
     completed_count: number
     cancelled_count: number
     kw_sum: number
+    backlog_kw: number
     customers_count: number
     active_customers_count: number
     avg_unit_price_wp: number
