@@ -117,6 +117,23 @@ interface RpcRow {
   result_text: string  // pg_get_function_result 결과
 }
 
+// 단순화된 1:1 FK — composite FK 는 동일 constraint 가 여러 column 로 나옴.
+// Supabase CLI 호환 Relationships 형태로 emit.
+interface FkRow {
+  constraint_name: string
+  source_table: string
+  source_column: string
+  target_table: string
+  target_column: string
+}
+
+interface FkRelationship {
+  foreignKeyName: string
+  columns: string[]
+  referencedRelation: string
+  referencedColumns: string[]
+}
+
 interface CheckConstraintRow {
   table_name: string
   constraint_def: string  // pg_get_constraintdef() 출력 그대로
@@ -375,6 +392,59 @@ function parseRpcArgs(argsText: string): RpcArg[] {
     })
   }
   return args
+}
+
+// FK 인트로스펙션 — 단일/복합 모두 동일 constraint_name 으로 그룹.
+// kcu.position_in_unique_constraint 가 양쪽 컬럼 페어링 유지.
+const FK_INTROSPECT_SQL = `
+SELECT
+  tc.constraint_name,
+  tc.table_name   AS source_table,
+  kcu.column_name AS source_column,
+  ccu.table_name  AS target_table,
+  ccu.column_name AS target_column
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON kcu.constraint_name = tc.constraint_name
+ AND kcu.constraint_schema = tc.constraint_schema
+JOIN information_schema.constraint_column_usage ccu
+  ON ccu.constraint_name = tc.constraint_name
+ AND ccu.constraint_schema = tc.constraint_schema
+WHERE tc.constraint_type = 'FOREIGN KEY'
+  AND tc.table_schema = 'public'
+ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position
+`
+
+async function introspectFks(sql: SQL): Promise<Map<string, FkRelationship[]>> {
+  const rows = (await sql.unsafe(FK_INTROSPECT_SQL)) as FkRow[]
+  // (source_table, constraint_name) 으로 그룹핑 (composite FK 처리).
+  const byTableAndConstraint = new Map<string, FkRelationship>()
+  for (const r of rows) {
+    if (EXCLUDE_TABLES.has(r.source_table)) continue
+    const key = `${r.source_table}::${r.constraint_name}`
+    const existing = byTableAndConstraint.get(key)
+    if (existing) {
+      existing.columns.push(r.source_column)
+      existing.referencedColumns.push(r.target_column)
+    } else {
+      byTableAndConstraint.set(key, {
+        foreignKeyName: r.constraint_name,
+        columns: [r.source_column],
+        referencedRelation: r.target_table,
+        referencedColumns: [r.target_column],
+      })
+    }
+  }
+
+  // 테이블별로 모으기
+  const byTable = new Map<string, FkRelationship[]>()
+  for (const [key, rel] of byTableAndConstraint) {
+    const sourceTable = key.split('::')[0]
+    const list = byTable.get(sourceTable) ?? []
+    list.push(rel)
+    byTable.set(sourceTable, list)
+  }
+  return byTable
 }
 
 async function introspectRpcs(sql: SQL): Promise<Rpc[]> {
@@ -643,7 +713,24 @@ function renderTsRpcs(rpcs: Rpc[]): string {
   }).join('\n')
 }
 
-function renderTs(relations: Relation[], enums: CheckEnum[], rpcs: Rpc[]): string {
+// FK relationship 의 TS 리터럴 직렬화 — Supabase CLI 형식 유지.
+function renderRelationshipsTs(rels: FkRelationship[]): string {
+  if (rels.length === 0) return '[]'
+  const lines = rels.map((r) => {
+    const cols = r.columns.map((c) => `'${c}'`).join(', ')
+    const refCols = r.referencedColumns.map((c) => `'${c}'`).join(', ')
+    return `        {
+          foreignKeyName: '${r.foreignKeyName}'
+          columns: [${cols}]
+          isOneToOne: false
+          referencedRelation: '${r.referencedRelation}'
+          referencedColumns: [${refCols}]
+        }`
+  })
+  return `[\n${lines.join(',\n')},\n      ]`
+}
+
+function renderTs(relations: Relation[], enums: CheckEnum[], rpcs: Rpc[], fks: Map<string, FkRelationship[]>): string {
   const tables = relations.filter((r) => r.kind === 'table')
   const views = relations.filter((r) => r.kind === 'view')
 
@@ -667,6 +754,7 @@ function renderTs(relations: Relation[], enums: CheckEnum[], rpcs: Rpc[]): strin
       updateFields.push(`        ${c.name}?: ${tsType}`)
     }
 
+    const tableRels = fks.get(t.name) ?? []
     return [
       `    ${t.name}: {`,
       `      Row: {`,
@@ -678,7 +766,7 @@ function renderTs(relations: Relation[], enums: CheckEnum[], rpcs: Rpc[]): strin
       `      Update: {`,
       updateFields.join('\n'),
       `      }`,
-      `      Relationships: []`,
+      `      Relationships: ${renderRelationshipsTs(tableRels)}`,
       `    }`,
     ].join('\n')
   }
@@ -796,12 +884,14 @@ async function main(): Promise<number> {
     const relations = await introspect(sql)
     const enums = await introspectCheckEnums(sql)
     const rpcs = await introspectRpcs(sql)
+    const fks = await introspectFks(sql)
     const tableCount = relations.filter((r) => r.kind === 'table').length
     const viewCount = relations.filter((r) => r.kind === 'view').length
-    log(`${tableCount} 개 테이블 + ${viewCount} 개 뷰 + ${enums.length} 개 CHECK enum + ${rpcs.length} 개 RPC 검출`)
+    const fkCount = Array.from(fks.values()).reduce((s, list) => s + list.length, 0)
+    log(`${tableCount} 개 테이블 + ${viewCount} 개 뷰 + ${enums.length} 개 CHECK enum + ${rpcs.length} 개 RPC + ${fkCount} 개 FK 검출`)
 
     const goContent = renderGo(relations, enums, rpcs)
-    const tsContent = renderTs(relations, enums, rpcs)
+    const tsContent = renderTs(relations, enums, rpcs, fks)
 
     if (checkMode) {
       const goOk = await fileEquals(GO_OUT, goContent)
