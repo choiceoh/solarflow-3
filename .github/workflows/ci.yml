@@ -120,16 +120,19 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache: false
-      - name: Cache Go modules and build
+      # gx10 self-hosted 는 영구 디스크라 ~/.cache/go-build 가 run 간 자연 보존된다.
+      # 이전 설정은 ~/.cache/go-build 까지 actions/cache 에 올렸는데, 1.97GB 까지 비대화돼
+      # 다운로드가 1.1MB/s 로 10분 타임아웃을 일으켰다 (PR #874 backend 2회 fail).
+      # 이제 ~/go/pkg/mod 만 캐시 — 모듈 다운로드 (go.sum 기반, ~200-400MB) 만 GitHub
+      # Actions cache 로 동기화하고, 빌드 산출물(go-build)은 self-hosted 로컬 디스크가 담당.
+      # 키는 go.sum 만 — .go 파일 변경마다 캐시 미스 나는 패턴 제거.
+      - name: Cache Go module downloads
         uses: actions/cache@v5
         with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-${{ runner.arch }}-go-${{ hashFiles('backend/go.sum') }}-${{ hashFiles('backend/**/*.go') }}
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-${{ runner.arch }}-gomod-${{ hashFiles('backend/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-go-${{ hashFiles('backend/go.sum') }}-
-            ${{ runner.os }}-${{ runner.arch }}-go-
+            ${{ runner.os }}-${{ runner.arch }}-gomod-
       # go test -vet=all ./... 이 vet 과 비-test 패키지 컴파일을 모두 커버. go build 는 main 의 link 검증.
       # 둘은 독립이라 병렬 실행. frontend job 의 tsc/vite 병렬 패턴과 동일.
       - name: Test + build (parallel)
