@@ -70,8 +70,16 @@ export function useBankingDashboard() {
   };
 }
 
+// 활성 법인 표시 우선순위 (TS → DW → HS). 신규 법인은 가나다 순으로 뒤에 붙음.
+const COMPANY_DISPLAY_ORDER: Record<string, number> = {
+  TS: 0,
+  DW: 1,
+  HS: 2,
+};
+
 /**
- * useAllBankLimitGroups — 모든 법인의 은행별 한도 현황을 Go API에서 직접 집계
+ * useAllBankLimitGroups — 모든 활성 법인의 은행별 한도 현황을 Go API에서 직접 집계.
+ * 은행이 0개인 활성 법인도 빈 카드로 노출 (등록 유도 목적).
  * 실행금액 = 미결제(status != settled) + 미상환(repaid != true) LC 합산
  */
 export function useAllBankLimitGroups() {
@@ -90,9 +98,11 @@ export function useAllBankLimitGroups() {
         usedByBank[l.bank_id] = (usedByBank[l.bank_id] ?? 0) + (l.amount_usd ?? 0);
       });
 
-      const companyMap = new Map((companies ?? []).map((c) => [c.company_id, c.company_name]));
+      const activeCompanies = (companies ?? []).filter((c) => c.is_active);
+      const companyMap = new Map(activeCompanies.map((c) => [c.company_id, c.company_name]));
+      const codeMap = new Map(activeCompanies.map((c) => [c.company_id, c.company_code]));
       const groupMap: Record<string, BankLimitGroup> = {};
-      (companies ?? []).forEach((c) => {
+      activeCompanies.forEach((c) => {
         groupMap[c.company_id] = { company_id: c.company_id, company_name: c.company_name, rows: [] };
       });
 
@@ -115,12 +125,20 @@ export function useAllBankLimitGroups() {
           fee_calc_method: b.fee_calc_method,
         };
         const cid = b.company_id;
+        // 비활성 법인의 은행은 그룹이 없으므로 자연스럽게 제외됨
+        if (!groupMap[cid]) return;
         const companyName = companyMap.get(cid) ?? cid;
-        if (!groupMap[cid]) groupMap[cid] = { company_id: cid, company_name: companyName, rows: [] };
+        groupMap[cid].company_name = companyName;
         groupMap[cid].rows.push(row);
       });
 
-      return Object.values(groupMap).filter((g) => g.rows.length > 0);
+      return Object.values(groupMap).sort((a, b) => {
+        const codeA = codeMap.get(a.company_id) ?? '';
+        const codeB = codeMap.get(b.company_id) ?? '';
+        const orderA = COMPANY_DISPLAY_ORDER[codeA] ?? 100 + codeA.charCodeAt(0);
+        const orderB = COMPANY_DISPLAY_ORDER[codeB] ?? 100 + codeB.charCodeAt(0);
+        return orderA - orderB;
+      });
     },
   );
   return { groups: q.data, loading: q.loading, reload: q.reload };
