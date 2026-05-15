@@ -4382,7 +4382,247 @@ export interface Database {
       Relationships: []
     }
     }
-    Functions: Record<string, never>
+    Functions: {
+      banking_dashboard: {
+        Args:         {
+          p_company_id?: string | null
+        }
+        Returns: Json
+      }
+      baro_credit_board: {
+        Args:         Record<string, never>
+        Returns: unknown[]
+      }
+      bls_dashboard: {
+        Args:         {
+          p_company_id?: string | null
+          p_manufacturer_id?: string | null
+          p_status?: string | null
+          p_inbound_type?: string | null
+          p_status_scope?: string | null
+        }
+        Returns: Json
+      }
+      customs_dashboard: {
+        Args:         {
+          p_company_id?: string | null
+        }
+        Returns: Json
+      }
+      get_user_role: {
+        Args:         Record<string, never>
+        Returns: string
+      }
+      lcs_dashboard: {
+        Args:         {
+          p_company_id?: string | null
+          p_po_id?: string | null
+          p_bank_id?: string | null
+          p_status?: string | null
+          p_status_scope?: string | null
+        }
+        Returns: Json
+      }
+      list_db_anomalies: {
+        Args:         Record<string, never>
+        Returns: unknown[]
+      }
+      list_db_anomaly_snapshots: {
+        Args:         {
+          p_days?: string | null
+        }
+        Returns: unknown[]
+      }
+      norm_company: {
+        Args:         {
+          name: string
+        }
+        Returns: string
+      }
+      orders_dashboard: {
+        Args:         {
+          p_company_id?: string | null
+          p_customer_id?: string | null
+          p_status?: string | null
+          p_management_category?: string | null
+          p_work_queue?: string | null
+          p_q?: string | null
+          p_status_scope?: string | null
+        }
+        Returns: Json
+      }
+      outbounds_dashboard: {
+        Args:         {
+          p_company_id?: string | null
+          p_status?: string | null
+          p_usage_category?: string | null
+          p_manufacturer_id?: string | null
+          p_q?: string | null
+          p_period?: string | null
+        }
+        Returns: Json
+      }
+      pos_dashboard: {
+        Args:         {
+          p_company_id?: string | null
+          p_manufacturer_id?: string | null
+          p_status?: string | null
+          p_contract_type?: string | null
+          p_status_scope?: string | null
+        }
+        Returns: Json
+      }
+      purchase_dashboard: {
+        Args:         {
+          p_company_id?: string | null
+        }
+        Returns: Json
+      }
+      receipts_dashboard: {
+        Args:         {
+          p_company_id?: string | null
+          p_customer_id?: string | null
+          p_month?: string | null
+          p_start?: string | null
+          p_end?: string | null
+        }
+        Returns: Json
+      }
+      refresh_integrity_check: {
+        Args:         Record<string, never>
+        Returns: unknown[]
+      }
+      sales_dashboard: {
+        Args:         {
+          p_company_id?: string | null
+          p_customer_id?: string | null
+          p_outbound_id?: string | null
+          p_order_id?: string | null
+          p_status?: string | null
+          p_month?: string | null
+          p_start?: string | null
+          p_end?: string | null
+          p_invoice_status?: string | null
+          p_q?: string | null
+        }
+        Returns: Json
+      }
+      sf_create_lc_with_lines: {
+        Args:         {
+          p_lc: Json
+          p_lines?: Json | null
+        }
+        Returns: Json
+      }
+      sf_create_outbound: {
+        Args:         {
+          p_outbound_id: string
+          p_outbound: Json
+          p_bl_items?: Json | null
+        }
+        Returns: undefined
+      }
+      sf_create_purchase_order_with_lines: {
+        Args:         {
+          p_po: Json
+          p_lines?: Json | null
+        }
+        Returns: Json
+      }
+      sf_delete_declaration: {
+        Args:         {
+          p_declaration_id: string
+        }
+        Returns: undefined
+      }
+      sf_delete_outbound: {
+        Args:         {
+          p_outbound_id: string
+        }
+        Returns: undefined
+      }
+      sf_delete_purchase_order: {
+        Args:         {
+          p_po_id: string
+        }
+        Returns: undefined
+      }
+      sf_insert_outbound_bl_items: {
+        Args:         {
+          p_outbound_id: string
+          p_bl_items: Json
+        }
+        Returns: undefined
+      }
+      sf_manufacturer_usage_counts: {
+        Args:         Record<string, never>
+        Returns: unknown[]
+      }
+      sf_partner_usage_counts: {
+        Args:         Record<string, never>
+        Returns: unknown[]
+      }
+      sf_product_usage_counts: {
+        Args:         Record<string, never>
+        Returns: unknown[]
+      }
+      sf_promote_bl_status: {
+        Args:         {
+          p_bl_id: string
+        }
+        Returns: undefined
+      }
+      sf_recalculate_all_available_stock: {
+        Args:         Record<string, never>
+        Returns: string
+      }
+      sf_recalculate_order_progress: {
+        Args:         {
+          p_order_id: string
+        }
+        Returns: undefined
+      }
+      sf_sync_available_stock_for_product: {
+        Args:         {
+          p_product_id: string
+        }
+        Returns: undefined
+      }
+      sf_update_lc_with_lines: {
+        Args:         {
+          p_lc_id: string
+          p_lc: Json
+          p_lines?: Json | null
+          p_replace_lines?: string | null
+        }
+        Returns: Json
+      }
+      sf_update_outbound: {
+        Args:         {
+          p_outbound_id: string
+          p_outbound: Json
+          p_bl_items?: Json | null
+        }
+        Returns: undefined
+      }
+      sf_warehouse_usage_counts: {
+        Args:         Record<string, never>
+        Returns: unknown[]
+      }
+      snapshot_db_anomalies: {
+        Args:         Record<string, never>
+        Returns: unknown[]
+      }
+      tts_dashboard: {
+        Args:         {
+          p_company_id?: string | null
+          p_status?: string | null
+          p_po_id?: string | null
+          p_status_scope?: string | null
+        }
+        Returns: Json
+      }
+    }
     Enums: {
       /** public.amaranth_upload_jobs.status CHECK 허용값 */
       amaranth_upload_jobs_status: 'pending' | 'running' | 'uploaded' | 'failed' | 'manual_required' | 'cancelled'
