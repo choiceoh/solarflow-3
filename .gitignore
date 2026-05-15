@@ -30,3 +30,7 @@ graphify-out/
 scripts/staging/staging.env
 scripts/staging/staging.env.bak.*
 backend/solarflow-backend.exe
+
+# Python bytecode
+__pycache__/
+*.pyc
