@@ -58,6 +58,13 @@ interface MarginItem {
   sale_count: number
 }
 
+interface MarginTrendPoint {
+  month: string
+  revenue_krw: number
+  cost_krw: number
+  margin_rate: number
+}
+
 interface MarginAnalysis {
   items: MarginItem[]
   summary: {
@@ -71,6 +78,7 @@ interface MarginAnalysis {
     cost_coverage_rate?: number
     cost_basis: string
   }
+  trend24?: MarginTrendPoint[]
 }
 
 interface PageState {
@@ -1755,7 +1763,10 @@ export default function SalesAnalysisPage() {
                       margin.summary.overall_margin_rate >= 8
                         ? ("pos" as const)
                         : ("warn" as const),
-                    spark: flatSpark(margin.summary.overall_margin_rate),
+                    spark:
+                      margin.trend24 && margin.trend24.length > 0
+                        ? margin.trend24.slice(-6).map((p) => p.margin_rate)
+                        : flatSpark(margin.summary.overall_margin_rate),
                     metricId: "sales_analysis.margin_rate",
                   },
                   {

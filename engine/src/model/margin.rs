@@ -25,7 +25,22 @@ fn default_cost_basis() -> String {
 pub struct MarginAnalysisResponse {
     pub items: Vec<MarginItem>,
     pub summary: MarginSummary,
+    /// 최근 24개월 월별 마진 추이 (fifo 기준 + 부대비용 반영, cost_basis 토글과 무관).
+    /// 데이터가 없는 달은 revenue/cost=0, margin_rate=0 으로 채움.
+    pub trend24: Vec<MarginTrendPoint>,
     pub calculated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MarginTrendPoint {
+    /// 'YYYY-MM' 라벨.
+    pub month: String,
+    /// 원가 매칭이 있는 매출분의 공급가 합 (KRW).
+    pub revenue_krw: f64,
+    /// fifo cost_amount + BL 부대비용 분배 (KRW).
+    pub cost_krw: f64,
+    /// (revenue - cost) / revenue × 100. 분모 0 이면 0.
+    pub margin_rate: f64,
 }
 
 #[derive(Debug, Serialize)]
