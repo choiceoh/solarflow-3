@@ -12,6 +12,7 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/mount"
@@ -24,13 +25,13 @@ const (
 )
 
 var blSortable = map[string]struct{}{
-	"bl_number":      {},
-	"etd":            {},
-	"eta":            {},
-	"actual_arrival": {},
-	"status":         {},
-	"inbound_type":   {},
-	"created_at":     {},
+	dbschema.BlShipmentsColBlNumber:      {},
+	dbschema.BlShipmentsColEtd:           {},
+	dbschema.BlShipmentsColEta:           {},
+	dbschema.BlShipmentsColActualArrival: {},
+	dbschema.BlShipmentsColStatus:        {},
+	dbschema.BlShipmentsColInboundType:   {},
+	dbschema.BlShipmentsColCreatedAt:     {},
 }
 
 // BLHandler — B/L(입고/선적) 관련 API를 처리하는 핸들러
@@ -87,29 +88,29 @@ func sanitizeBLSearchTerm(q string) string {
 
 func (h *BLHandler) applyBLFilters(r *http.Request, query *postgrest.FilterBuilder) *postgrest.FilterBuilder {
 	if poID := r.URL.Query().Get("po_id"); poID != "" {
-		query = query.Eq("po_id", poID)
+		query = query.Eq(dbschema.BlShipmentsColPoId, poID)
 	}
 	if lcID := r.URL.Query().Get("lc_id"); lcID != "" {
-		query = query.Eq("lc_id", lcID)
+		query = query.Eq(dbschema.BlShipmentsColLcId, lcID)
 	}
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
-		query = query.Eq("company_id", compID)
+		query = query.Eq(dbschema.BlShipmentsColCompanyId, compID)
 	}
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
-		query = query.Eq("manufacturer_id", mfgID)
+		query = query.Eq(dbschema.BlShipmentsColManufacturerId, mfgID)
 	}
 	if status := r.URL.Query().Get("status"); status != "" {
-		query = query.Eq("status", status)
+		query = query.Eq(dbschema.BlShipmentsColStatus, status)
 	}
 	if inboundType := r.URL.Query().Get("inbound_type"); inboundType != "" {
-		query = query.Eq("inbound_type", inboundType)
+		query = query.Eq(dbschema.BlShipmentsColInboundType, inboundType)
 	}
 	// 기간 — eta 범위 (frontend ProcurementPage BL 탭이 eta 기준 필터). actual_arrival/etd 가 별도 필요하면 추가.
 	if from := r.URL.Query().Get("eta_from"); from != "" {
-		query = query.Gte("eta", from)
+		query = query.Gte(dbschema.BlShipmentsColEta, from)
 	}
 	if to := r.URL.Query().Get("eta_to"); to != "" {
-		query = query.Lte("eta", to)
+		query = query.Lte(dbschema.BlShipmentsColEta, to)
 	}
 	if q := sanitizeBLSearchTerm(r.URL.Query().Get("q")); q != "" {
 		clauses := []string{
@@ -125,7 +126,7 @@ func (h *BLHandler) applyBLFilters(r *http.Request, query *postgrest.FilterBuild
 }
 
 func parseBLSort(r *http.Request) (column string, ascending bool) {
-	column = "eta"
+	column = dbschema.BlShipmentsColEta
 	ascending = false
 	if raw := r.URL.Query().Get("sort"); raw != "" {
 		if _, ok := blSortable[raw]; ok {
@@ -215,8 +216,8 @@ func (h *BLHandler) loadBLListAggregates(shipments []BLShipment) (map[string]blL
 
 	lineData, _, err := h.DB.From("bl_line_items").
 		Select("bl_line_id, bl_id, capacity_kw, invoice_amount_usd, products(product_code, product_name, spec_wp)", "exact", false).
-		In("bl_id", blIDs).
-		Order("bl_line_id", &postgrest.OrderOpts{Ascending: true}).
+		In(dbschema.BlLineItemsColBlId, blIDs).
+		Order(dbschema.BlLineItemsColBlLineId, &postgrest.OrderOpts{Ascending: true}).
 		Execute()
 	if err != nil {
 		return nil, err

@@ -55,6 +55,7 @@ jobs:
             schema:
               - 'backend/migrations/**'
               - 'backend/internal/dbschema/**'
+              - 'backend/scripts/check_schema.sh'
               - 'frontend/src/types/db.gen.ts'
               - 'scripts/gen_db_types.ts'
               - 'scripts/apply_migrations.ts'

@@ -29,19 +29,18 @@ type OutboundCategoryFixAudit20260512 struct {
 	AppliedAt string `json:"applied_at"`
 }
 
-// OutboundCategoryFixAudit20260512Column — public._outbound_category_fix_audit_20260512 의 컬럼명 (PostgREST select 시 타입 안전성).
-type OutboundCategoryFixAudit20260512Column string
-
+// OutboundCategoryFixAudit20260512Col* — public._outbound_category_fix_audit_20260512 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.OutboundCategoryFixAudit20260512ColOutboundId, value)
 const (
-	OutboundCategoryFixAudit20260512ColOutboundId OutboundCategoryFixAudit20260512Column = "outbound_id"
-	OutboundCategoryFixAudit20260512ColPrevCategory OutboundCategoryFixAudit20260512Column = "prev_category"
-	OutboundCategoryFixAudit20260512ColNewCategory OutboundCategoryFixAudit20260512Column = "new_category"
-	OutboundCategoryFixAudit20260512ColOutboundDate OutboundCategoryFixAudit20260512Column = "outbound_date"
-	OutboundCategoryFixAudit20260512ColErpOutboundNo OutboundCategoryFixAudit20260512Column = "erp_outbound_no"
-	OutboundCategoryFixAudit20260512ColCustomerName OutboundCategoryFixAudit20260512Column = "customer_name"
-	OutboundCategoryFixAudit20260512ColSupplyAmount OutboundCategoryFixAudit20260512Column = "supply_amount"
-	OutboundCategoryFixAudit20260512ColReason OutboundCategoryFixAudit20260512Column = "reason"
-	OutboundCategoryFixAudit20260512ColAppliedAt OutboundCategoryFixAudit20260512Column = "applied_at"
+	OutboundCategoryFixAudit20260512ColOutboundId = "outbound_id"
+	OutboundCategoryFixAudit20260512ColPrevCategory = "prev_category"
+	OutboundCategoryFixAudit20260512ColNewCategory = "new_category"
+	OutboundCategoryFixAudit20260512ColOutboundDate = "outbound_date"
+	OutboundCategoryFixAudit20260512ColErpOutboundNo = "erp_outbound_no"
+	OutboundCategoryFixAudit20260512ColCustomerName = "customer_name"
+	OutboundCategoryFixAudit20260512ColSupplyAmount = "supply_amount"
+	OutboundCategoryFixAudit20260512ColReason = "reason"
+	OutboundCategoryFixAudit20260512ColAppliedAt = "applied_at"
 )
 
 // OutboundCategoryFixAudit20260512AllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -59,16 +58,15 @@ type ReceiptsCompanyBackfillAudit20260512 struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// ReceiptsCompanyBackfillAudit20260512Column — public._receipts_company_backfill_audit_20260512 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ReceiptsCompanyBackfillAudit20260512Column string
-
+// ReceiptsCompanyBackfillAudit20260512Col* — public._receipts_company_backfill_audit_20260512 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ReceiptsCompanyBackfillAudit20260512ColAuditId, value)
 const (
-	ReceiptsCompanyBackfillAudit20260512ColAuditId ReceiptsCompanyBackfillAudit20260512Column = "audit_id"
-	ReceiptsCompanyBackfillAudit20260512ColReceiptId ReceiptsCompanyBackfillAudit20260512Column = "receipt_id"
-	ReceiptsCompanyBackfillAudit20260512ColOldCompanyId ReceiptsCompanyBackfillAudit20260512Column = "old_company_id"
-	ReceiptsCompanyBackfillAudit20260512ColNewCompanyId ReceiptsCompanyBackfillAudit20260512Column = "new_company_id"
-	ReceiptsCompanyBackfillAudit20260512ColMatchedPaths ReceiptsCompanyBackfillAudit20260512Column = "matched_paths"
-	ReceiptsCompanyBackfillAudit20260512ColCreatedAt ReceiptsCompanyBackfillAudit20260512Column = "created_at"
+	ReceiptsCompanyBackfillAudit20260512ColAuditId = "audit_id"
+	ReceiptsCompanyBackfillAudit20260512ColReceiptId = "receipt_id"
+	ReceiptsCompanyBackfillAudit20260512ColOldCompanyId = "old_company_id"
+	ReceiptsCompanyBackfillAudit20260512ColNewCompanyId = "new_company_id"
+	ReceiptsCompanyBackfillAudit20260512ColMatchedPaths = "matched_paths"
+	ReceiptsCompanyBackfillAudit20260512ColCreatedAt = "created_at"
 )
 
 // ReceiptsCompanyBackfillAudit20260512AllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -83,13 +81,12 @@ type AiAttachmentRows struct {
 	Data json.RawMessage `json:"data"`
 }
 
-// AiAttachmentRowsColumn — public.ai_attachment_rows 의 컬럼명 (PostgREST select 시 타입 안전성).
-type AiAttachmentRowsColumn string
-
+// AiAttachmentRowsCol* — public.ai_attachment_rows 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.AiAttachmentRowsColSheetId, value)
 const (
-	AiAttachmentRowsColSheetId AiAttachmentRowsColumn = "sheet_id"
-	AiAttachmentRowsColRowNum AiAttachmentRowsColumn = "row_num"
-	AiAttachmentRowsColData AiAttachmentRowsColumn = "data"
+	AiAttachmentRowsColSheetId = "sheet_id"
+	AiAttachmentRowsColRowNum = "row_num"
+	AiAttachmentRowsColData = "data"
 )
 
 // AiAttachmentRowsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -110,19 +107,18 @@ type AiAttachmentSheets struct {
 	ExpiresAt string `json:"expires_at"`
 }
 
-// AiAttachmentSheetsColumn — public.ai_attachment_sheets 의 컬럼명 (PostgREST select 시 타입 안전성).
-type AiAttachmentSheetsColumn string
-
+// AiAttachmentSheetsCol* — public.ai_attachment_sheets 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.AiAttachmentSheetsColSheetId, value)
 const (
-	AiAttachmentSheetsColSheetId AiAttachmentSheetsColumn = "sheet_id"
-	AiAttachmentSheetsColUserId AiAttachmentSheetsColumn = "user_id"
-	AiAttachmentSheetsColFilename AiAttachmentSheetsColumn = "filename"
-	AiAttachmentSheetsColSheetName AiAttachmentSheetsColumn = "sheet_name"
-	AiAttachmentSheetsColRowCount AiAttachmentSheetsColumn = "row_count"
-	AiAttachmentSheetsColColCount AiAttachmentSheetsColumn = "col_count"
-	AiAttachmentSheetsColHeaders AiAttachmentSheetsColumn = "headers"
-	AiAttachmentSheetsColCreatedAt AiAttachmentSheetsColumn = "created_at"
-	AiAttachmentSheetsColExpiresAt AiAttachmentSheetsColumn = "expires_at"
+	AiAttachmentSheetsColSheetId = "sheet_id"
+	AiAttachmentSheetsColUserId = "user_id"
+	AiAttachmentSheetsColFilename = "filename"
+	AiAttachmentSheetsColSheetName = "sheet_name"
+	AiAttachmentSheetsColRowCount = "row_count"
+	AiAttachmentSheetsColColCount = "col_count"
+	AiAttachmentSheetsColHeaders = "headers"
+	AiAttachmentSheetsColCreatedAt = "created_at"
+	AiAttachmentSheetsColExpiresAt = "expires_at"
 )
 
 // AiAttachmentSheetsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -158,32 +154,31 @@ type AmaranthUploadJobs struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// AmaranthUploadJobsColumn — public.amaranth_upload_jobs 의 컬럼명 (PostgREST select 시 타입 안전성).
-type AmaranthUploadJobsColumn string
-
+// AmaranthUploadJobsCol* — public.amaranth_upload_jobs 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.AmaranthUploadJobsColJobId, value)
 const (
-	AmaranthUploadJobsColJobId AmaranthUploadJobsColumn = "job_id"
-	AmaranthUploadJobsColJobType AmaranthUploadJobsColumn = "job_type"
-	AmaranthUploadJobsColStatus AmaranthUploadJobsColumn = "status"
-	AmaranthUploadJobsColCompanyId AmaranthUploadJobsColumn = "company_id"
-	AmaranthUploadJobsColDateFrom AmaranthUploadJobsColumn = "date_from"
-	AmaranthUploadJobsColDateTo AmaranthUploadJobsColumn = "date_to"
-	AmaranthUploadJobsColFileName AmaranthUploadJobsColumn = "file_name"
-	AmaranthUploadJobsColStoredName AmaranthUploadJobsColumn = "stored_name"
-	AmaranthUploadJobsColStoredPath AmaranthUploadJobsColumn = "stored_path"
-	AmaranthUploadJobsColContentType AmaranthUploadJobsColumn = "content_type"
-	AmaranthUploadJobsColSizeBytes AmaranthUploadJobsColumn = "size_bytes"
-	AmaranthUploadJobsColFileSha256 AmaranthUploadJobsColumn = "file_sha256"
-	AmaranthUploadJobsColRowCount AmaranthUploadJobsColumn = "row_count"
-	AmaranthUploadJobsColCreatedBy AmaranthUploadJobsColumn = "created_by"
-	AmaranthUploadJobsColCreatedByEmail AmaranthUploadJobsColumn = "created_by_email"
-	AmaranthUploadJobsColAttempts AmaranthUploadJobsColumn = "attempts"
-	AmaranthUploadJobsColUploadMessage AmaranthUploadJobsColumn = "upload_message"
-	AmaranthUploadJobsColLastError AmaranthUploadJobsColumn = "last_error"
-	AmaranthUploadJobsColRpaStartedAt AmaranthUploadJobsColumn = "rpa_started_at"
-	AmaranthUploadJobsColUploadedAt AmaranthUploadJobsColumn = "uploaded_at"
-	AmaranthUploadJobsColCreatedAt AmaranthUploadJobsColumn = "created_at"
-	AmaranthUploadJobsColUpdatedAt AmaranthUploadJobsColumn = "updated_at"
+	AmaranthUploadJobsColJobId = "job_id"
+	AmaranthUploadJobsColJobType = "job_type"
+	AmaranthUploadJobsColStatus = "status"
+	AmaranthUploadJobsColCompanyId = "company_id"
+	AmaranthUploadJobsColDateFrom = "date_from"
+	AmaranthUploadJobsColDateTo = "date_to"
+	AmaranthUploadJobsColFileName = "file_name"
+	AmaranthUploadJobsColStoredName = "stored_name"
+	AmaranthUploadJobsColStoredPath = "stored_path"
+	AmaranthUploadJobsColContentType = "content_type"
+	AmaranthUploadJobsColSizeBytes = "size_bytes"
+	AmaranthUploadJobsColFileSha256 = "file_sha256"
+	AmaranthUploadJobsColRowCount = "row_count"
+	AmaranthUploadJobsColCreatedBy = "created_by"
+	AmaranthUploadJobsColCreatedByEmail = "created_by_email"
+	AmaranthUploadJobsColAttempts = "attempts"
+	AmaranthUploadJobsColUploadMessage = "upload_message"
+	AmaranthUploadJobsColLastError = "last_error"
+	AmaranthUploadJobsColRpaStartedAt = "rpa_started_at"
+	AmaranthUploadJobsColUploadedAt = "uploaded_at"
+	AmaranthUploadJobsColCreatedAt = "created_at"
+	AmaranthUploadJobsColUpdatedAt = "updated_at"
 )
 
 // AmaranthUploadJobsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -202,17 +197,16 @@ type AnomalyIgnores struct {
 	IgnoredAt string `json:"ignored_at"`
 }
 
-// AnomalyIgnoresColumn — public.anomaly_ignores 의 컬럼명 (PostgREST select 시 타입 안전성).
-type AnomalyIgnoresColumn string
-
+// AnomalyIgnoresCol* — public.anomaly_ignores 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.AnomalyIgnoresColIgnoreId, value)
 const (
-	AnomalyIgnoresColIgnoreId AnomalyIgnoresColumn = "ignore_id"
-	AnomalyIgnoresColTableName AnomalyIgnoresColumn = "table_name"
-	AnomalyIgnoresColRowPk AnomalyIgnoresColumn = "row_pk"
-	AnomalyIgnoresColRuleName AnomalyIgnoresColumn = "rule_name"
-	AnomalyIgnoresColReason AnomalyIgnoresColumn = "reason"
-	AnomalyIgnoresColIgnoredBy AnomalyIgnoresColumn = "ignored_by"
-	AnomalyIgnoresColIgnoredAt AnomalyIgnoresColumn = "ignored_at"
+	AnomalyIgnoresColIgnoreId = "ignore_id"
+	AnomalyIgnoresColTableName = "table_name"
+	AnomalyIgnoresColRowPk = "row_pk"
+	AnomalyIgnoresColRuleName = "rule_name"
+	AnomalyIgnoresColReason = "reason"
+	AnomalyIgnoresColIgnoredBy = "ignored_by"
+	AnomalyIgnoresColIgnoredAt = "ignored_at"
 )
 
 // AnomalyIgnoresAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -231,16 +225,15 @@ type AssistantSessions struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// AssistantSessionsColumn — public.assistant_sessions 의 컬럼명 (PostgREST select 시 타입 안전성).
-type AssistantSessionsColumn string
-
+// AssistantSessionsCol* — public.assistant_sessions 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.AssistantSessionsColId, value)
 const (
-	AssistantSessionsColId AssistantSessionsColumn = "id"
-	AssistantSessionsColUserId AssistantSessionsColumn = "user_id"
-	AssistantSessionsColTitle AssistantSessionsColumn = "title"
-	AssistantSessionsColMessages AssistantSessionsColumn = "messages"
-	AssistantSessionsColCreatedAt AssistantSessionsColumn = "created_at"
-	AssistantSessionsColUpdatedAt AssistantSessionsColumn = "updated_at"
+	AssistantSessionsColId = "id"
+	AssistantSessionsColUserId = "user_id"
+	AssistantSessionsColTitle = "title"
+	AssistantSessionsColMessages = "messages"
+	AssistantSessionsColCreatedAt = "created_at"
+	AssistantSessionsColUpdatedAt = "updated_at"
 )
 
 // AssistantSessionsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -265,22 +258,21 @@ type AuditLogs struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// AuditLogsColumn — public.audit_logs 의 컬럼명 (PostgREST select 시 타입 안전성).
-type AuditLogsColumn string
-
+// AuditLogsCol* — public.audit_logs 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.AuditLogsColAuditId, value)
 const (
-	AuditLogsColAuditId AuditLogsColumn = "audit_id"
-	AuditLogsColEntityType AuditLogsColumn = "entity_type"
-	AuditLogsColEntityId AuditLogsColumn = "entity_id"
-	AuditLogsColAction AuditLogsColumn = "action"
-	AuditLogsColUserId AuditLogsColumn = "user_id"
-	AuditLogsColUserEmail AuditLogsColumn = "user_email"
-	AuditLogsColRequestMethod AuditLogsColumn = "request_method"
-	AuditLogsColRequestPath AuditLogsColumn = "request_path"
-	AuditLogsColOldData AuditLogsColumn = "old_data"
-	AuditLogsColNewData AuditLogsColumn = "new_data"
-	AuditLogsColNote AuditLogsColumn = "note"
-	AuditLogsColCreatedAt AuditLogsColumn = "created_at"
+	AuditLogsColAuditId = "audit_id"
+	AuditLogsColEntityType = "entity_type"
+	AuditLogsColEntityId = "entity_id"
+	AuditLogsColAction = "action"
+	AuditLogsColUserId = "user_id"
+	AuditLogsColUserEmail = "user_email"
+	AuditLogsColRequestMethod = "request_method"
+	AuditLogsColRequestPath = "request_path"
+	AuditLogsColOldData = "old_data"
+	AuditLogsColNewData = "new_data"
+	AuditLogsColNote = "note"
+	AuditLogsColCreatedAt = "created_at"
 )
 
 // AuditLogsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -309,24 +301,23 @@ type BankAccounts struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// BankAccountsColumn — public.bank_accounts 의 컬럼명 (PostgREST select 시 타입 안전성).
-type BankAccountsColumn string
-
+// BankAccountsCol* — public.bank_accounts 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.BankAccountsColAccountId, value)
 const (
-	BankAccountsColAccountId BankAccountsColumn = "account_id"
-	BankAccountsColCompanyId BankAccountsColumn = "company_id"
-	BankAccountsColBankId BankAccountsColumn = "bank_id"
-	BankAccountsColBankName BankAccountsColumn = "bank_name"
-	BankAccountsColBranchName BankAccountsColumn = "branch_name"
-	BankAccountsColAccountNumber BankAccountsColumn = "account_number"
-	BankAccountsColAccountHolder BankAccountsColumn = "account_holder"
-	BankAccountsColCurrency BankAccountsColumn = "currency"
-	BankAccountsColSwiftCode BankAccountsColumn = "swift_code"
-	BankAccountsColMemo BankAccountsColumn = "memo"
-	BankAccountsColIsDefault BankAccountsColumn = "is_default"
-	BankAccountsColIsActive BankAccountsColumn = "is_active"
-	BankAccountsColCreatedAt BankAccountsColumn = "created_at"
-	BankAccountsColUpdatedAt BankAccountsColumn = "updated_at"
+	BankAccountsColAccountId = "account_id"
+	BankAccountsColCompanyId = "company_id"
+	BankAccountsColBankId = "bank_id"
+	BankAccountsColBankName = "bank_name"
+	BankAccountsColBranchName = "branch_name"
+	BankAccountsColAccountNumber = "account_number"
+	BankAccountsColAccountHolder = "account_holder"
+	BankAccountsColCurrency = "currency"
+	BankAccountsColSwiftCode = "swift_code"
+	BankAccountsColMemo = "memo"
+	BankAccountsColIsDefault = "is_default"
+	BankAccountsColIsActive = "is_active"
+	BankAccountsColCreatedAt = "created_at"
+	BankAccountsColUpdatedAt = "updated_at"
 )
 
 // BankAccountsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -351,21 +342,20 @@ type Banks struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// BanksColumn — public.banks 의 컬럼명 (PostgREST select 시 타입 안전성).
-type BanksColumn string
-
+// BanksCol* — public.banks 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.BanksColBankId, value)
 const (
-	BanksColBankId BanksColumn = "bank_id"
-	BanksColCompanyId BanksColumn = "company_id"
-	BanksColBankName BanksColumn = "bank_name"
-	BanksColLcLimitUsd BanksColumn = "lc_limit_usd"
-	BanksColOpeningFeeRate BanksColumn = "opening_fee_rate"
-	BanksColAcceptanceFeeRate BanksColumn = "acceptance_fee_rate"
-	BanksColFeeCalcMethod BanksColumn = "fee_calc_method"
-	BanksColMemo BanksColumn = "memo"
-	BanksColIsActive BanksColumn = "is_active"
-	BanksColCreatedAt BanksColumn = "created_at"
-	BanksColUpdatedAt BanksColumn = "updated_at"
+	BanksColBankId = "bank_id"
+	BanksColCompanyId = "company_id"
+	BanksColBankName = "bank_name"
+	BanksColLcLimitUsd = "lc_limit_usd"
+	BanksColOpeningFeeRate = "opening_fee_rate"
+	BanksColAcceptanceFeeRate = "acceptance_fee_rate"
+	BanksColFeeCalcMethod = "fee_calc_method"
+	BanksColMemo = "memo"
+	BanksColIsActive = "is_active"
+	BanksColCreatedAt = "created_at"
+	BanksColUpdatedAt = "updated_at"
 )
 
 // BanksAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -389,22 +379,21 @@ type BaroCreditHolds struct {
 	BlockedOrderId *string `json:"blocked_order_id,omitempty"`
 }
 
-// BaroCreditHoldsColumn — public.baro_credit_holds 의 컬럼명 (PostgREST select 시 타입 안전성).
-type BaroCreditHoldsColumn string
-
+// BaroCreditHoldsCol* — public.baro_credit_holds 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.BaroCreditHoldsColHoldId, value)
 const (
-	BaroCreditHoldsColHoldId BaroCreditHoldsColumn = "hold_id"
-	BaroCreditHoldsColPartnerId BaroCreditHoldsColumn = "partner_id"
-	BaroCreditHoldsColTriggeredAt BaroCreditHoldsColumn = "triggered_at"
-	BaroCreditHoldsColTriggerReason BaroCreditHoldsColumn = "trigger_reason"
-	BaroCreditHoldsColOutstandingKrw BaroCreditHoldsColumn = "outstanding_krw"
-	BaroCreditHoldsColCreditLimitKrw BaroCreditHoldsColumn = "credit_limit_krw"
-	BaroCreditHoldsColOldestUnpaidDays BaroCreditHoldsColumn = "oldest_unpaid_days"
-	BaroCreditHoldsColReleasedAt BaroCreditHoldsColumn = "released_at"
-	BaroCreditHoldsColReleasedBy BaroCreditHoldsColumn = "released_by"
-	BaroCreditHoldsColReleaseNote BaroCreditHoldsColumn = "release_note"
-	BaroCreditHoldsColBlockedOutboundId BaroCreditHoldsColumn = "blocked_outbound_id"
-	BaroCreditHoldsColBlockedOrderId BaroCreditHoldsColumn = "blocked_order_id"
+	BaroCreditHoldsColHoldId = "hold_id"
+	BaroCreditHoldsColPartnerId = "partner_id"
+	BaroCreditHoldsColTriggeredAt = "triggered_at"
+	BaroCreditHoldsColTriggerReason = "trigger_reason"
+	BaroCreditHoldsColOutstandingKrw = "outstanding_krw"
+	BaroCreditHoldsColCreditLimitKrw = "credit_limit_krw"
+	BaroCreditHoldsColOldestUnpaidDays = "oldest_unpaid_days"
+	BaroCreditHoldsColReleasedAt = "released_at"
+	BaroCreditHoldsColReleasedBy = "released_by"
+	BaroCreditHoldsColReleaseNote = "release_note"
+	BaroCreditHoldsColBlockedOutboundId = "blocked_outbound_id"
+	BaroCreditHoldsColBlockedOrderId = "blocked_order_id"
 )
 
 // BaroCreditHoldsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -421,15 +410,14 @@ type BaroDriverTokens struct {
 	DriverPhone *string `json:"driver_phone,omitempty"`
 }
 
-// BaroDriverTokensColumn — public.baro_driver_tokens 의 컬럼명 (PostgREST select 시 타입 안전성).
-type BaroDriverTokensColumn string
-
+// BaroDriverTokensCol* — public.baro_driver_tokens 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.BaroDriverTokensColToken, value)
 const (
-	BaroDriverTokensColToken BaroDriverTokensColumn = "token"
-	BaroDriverTokensColNoticeId BaroDriverTokensColumn = "notice_id"
-	BaroDriverTokensColExpiresAt BaroDriverTokensColumn = "expires_at"
-	BaroDriverTokensColUsedAt BaroDriverTokensColumn = "used_at"
-	BaroDriverTokensColDriverPhone BaroDriverTokensColumn = "driver_phone"
+	BaroDriverTokensColToken = "token"
+	BaroDriverTokensColNoticeId = "notice_id"
+	BaroDriverTokensColExpiresAt = "expires_at"
+	BaroDriverTokensColUsedAt = "used_at"
+	BaroDriverTokensColDriverPhone = "driver_phone"
 )
 
 // BaroDriverTokensAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -452,21 +440,20 @@ type BaroQuoteLines struct {
 	Notes *string `json:"notes,omitempty"`
 }
 
-// BaroQuoteLinesColumn — public.baro_quote_lines 의 컬럼명 (PostgREST select 시 타입 안전성).
-type BaroQuoteLinesColumn string
-
+// BaroQuoteLinesCol* — public.baro_quote_lines 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.BaroQuoteLinesColLineId, value)
 const (
-	BaroQuoteLinesColLineId BaroQuoteLinesColumn = "line_id"
-	BaroQuoteLinesColQuoteId BaroQuoteLinesColumn = "quote_id"
-	BaroQuoteLinesColLineNo BaroQuoteLinesColumn = "line_no"
-	BaroQuoteLinesColProductId BaroQuoteLinesColumn = "product_id"
-	BaroQuoteLinesColProductCode BaroQuoteLinesColumn = "product_code"
-	BaroQuoteLinesColProductName BaroQuoteLinesColumn = "product_name"
-	BaroQuoteLinesColSpecWp BaroQuoteLinesColumn = "spec_wp"
-	BaroQuoteLinesColQuantity BaroQuoteLinesColumn = "quantity"
-	BaroQuoteLinesColUnitPriceKrw BaroQuoteLinesColumn = "unit_price_krw"
-	BaroQuoteLinesColLineTotalKrw BaroQuoteLinesColumn = "line_total_krw"
-	BaroQuoteLinesColNotes BaroQuoteLinesColumn = "notes"
+	BaroQuoteLinesColLineId = "line_id"
+	BaroQuoteLinesColQuoteId = "quote_id"
+	BaroQuoteLinesColLineNo = "line_no"
+	BaroQuoteLinesColProductId = "product_id"
+	BaroQuoteLinesColProductCode = "product_code"
+	BaroQuoteLinesColProductName = "product_name"
+	BaroQuoteLinesColSpecWp = "spec_wp"
+	BaroQuoteLinesColQuantity = "quantity"
+	BaroQuoteLinesColUnitPriceKrw = "unit_price_krw"
+	BaroQuoteLinesColLineTotalKrw = "line_total_krw"
+	BaroQuoteLinesColNotes = "notes"
 )
 
 // BaroQuoteLinesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -496,28 +483,27 @@ type BaroQuotes struct {
 	EstimatedMarginPct *float64 `json:"estimated_margin_pct,omitempty"`
 }
 
-// BaroQuotesColumn — public.baro_quotes 의 컬럼명 (PostgREST select 시 타입 안전성).
-type BaroQuotesColumn string
-
+// BaroQuotesCol* — public.baro_quotes 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.BaroQuotesColQuoteId, value)
 const (
-	BaroQuotesColQuoteId BaroQuotesColumn = "quote_id"
-	BaroQuotesColPartnerId BaroQuotesColumn = "partner_id"
-	BaroQuotesColCreatedBy BaroQuotesColumn = "created_by"
-	BaroQuotesColCreatedAt BaroQuotesColumn = "created_at"
-	BaroQuotesColUpdatedAt BaroQuotesColumn = "updated_at"
-	BaroQuotesColValidUntil BaroQuotesColumn = "valid_until"
-	BaroQuotesColNotes BaroQuotesColumn = "notes"
-	BaroQuotesColStatus BaroQuotesColumn = "status"
-	BaroQuotesColSentAt BaroQuotesColumn = "sent_at"
-	BaroQuotesColSentChannel BaroQuotesColumn = "sent_channel"
-	BaroQuotesColSentTo BaroQuotesColumn = "sent_to"
-	BaroQuotesColRepliedAt BaroQuotesColumn = "replied_at"
-	BaroQuotesColReplyNote BaroQuotesColumn = "reply_note"
-	BaroQuotesColSubtotalKrw BaroQuotesColumn = "subtotal_krw"
-	BaroQuotesColVatKrw BaroQuotesColumn = "vat_krw"
-	BaroQuotesColTotalKrw BaroQuotesColumn = "total_krw"
-	BaroQuotesColEstimatedCostKrw BaroQuotesColumn = "estimated_cost_krw"
-	BaroQuotesColEstimatedMarginPct BaroQuotesColumn = "estimated_margin_pct"
+	BaroQuotesColQuoteId = "quote_id"
+	BaroQuotesColPartnerId = "partner_id"
+	BaroQuotesColCreatedBy = "created_by"
+	BaroQuotesColCreatedAt = "created_at"
+	BaroQuotesColUpdatedAt = "updated_at"
+	BaroQuotesColValidUntil = "valid_until"
+	BaroQuotesColNotes = "notes"
+	BaroQuotesColStatus = "status"
+	BaroQuotesColSentAt = "sent_at"
+	BaroQuotesColSentChannel = "sent_channel"
+	BaroQuotesColSentTo = "sent_to"
+	BaroQuotesColRepliedAt = "replied_at"
+	BaroQuotesColReplyNote = "reply_note"
+	BaroQuotesColSubtotalKrw = "subtotal_krw"
+	BaroQuotesColVatKrw = "vat_krw"
+	BaroQuotesColTotalKrw = "total_krw"
+	BaroQuotesColEstimatedCostKrw = "estimated_cost_krw"
+	BaroQuotesColEstimatedMarginPct = "estimated_margin_pct"
 )
 
 // BaroQuotesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -547,28 +533,27 @@ type BaroShipmentNotices struct {
 	DeliveredAt *string `json:"delivered_at,omitempty"`
 }
 
-// BaroShipmentNoticesColumn — public.baro_shipment_notices 의 컬럼명 (PostgREST select 시 타입 안전성).
-type BaroShipmentNoticesColumn string
-
+// BaroShipmentNoticesCol* — public.baro_shipment_notices 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.BaroShipmentNoticesColNoticeId, value)
 const (
-	BaroShipmentNoticesColNoticeId BaroShipmentNoticesColumn = "notice_id"
-	BaroShipmentNoticesColPartnerId BaroShipmentNoticesColumn = "partner_id"
-	BaroShipmentNoticesColOutboundId BaroShipmentNoticesColumn = "outbound_id"
-	BaroShipmentNoticesColDispatchRouteId BaroShipmentNoticesColumn = "dispatch_route_id"
-	BaroShipmentNoticesColStage BaroShipmentNoticesColumn = "stage"
-	BaroShipmentNoticesColChannel BaroShipmentNoticesColumn = "channel"
-	BaroShipmentNoticesColRecipientPhone BaroShipmentNoticesColumn = "recipient_phone"
-	BaroShipmentNoticesColRecipientName BaroShipmentNoticesColumn = "recipient_name"
-	BaroShipmentNoticesColMessageBody BaroShipmentNoticesColumn = "message_body"
-	BaroShipmentNoticesColSentAt BaroShipmentNoticesColumn = "sent_at"
-	BaroShipmentNoticesColSentBy BaroShipmentNoticesColumn = "sent_by"
-	BaroShipmentNoticesColDeliveryStatus BaroShipmentNoticesColumn = "delivery_status"
-	BaroShipmentNoticesColDeliveryError BaroShipmentNoticesColumn = "delivery_error"
-	BaroShipmentNoticesColExternalMessageId BaroShipmentNoticesColumn = "external_message_id"
-	BaroShipmentNoticesColDriverPhotoUrl BaroShipmentNoticesColumn = "driver_photo_url"
-	BaroShipmentNoticesColDriverSignatureUrl BaroShipmentNoticesColumn = "driver_signature_url"
-	BaroShipmentNoticesColDeliveryNote BaroShipmentNoticesColumn = "delivery_note"
-	BaroShipmentNoticesColDeliveredAt BaroShipmentNoticesColumn = "delivered_at"
+	BaroShipmentNoticesColNoticeId = "notice_id"
+	BaroShipmentNoticesColPartnerId = "partner_id"
+	BaroShipmentNoticesColOutboundId = "outbound_id"
+	BaroShipmentNoticesColDispatchRouteId = "dispatch_route_id"
+	BaroShipmentNoticesColStage = "stage"
+	BaroShipmentNoticesColChannel = "channel"
+	BaroShipmentNoticesColRecipientPhone = "recipient_phone"
+	BaroShipmentNoticesColRecipientName = "recipient_name"
+	BaroShipmentNoticesColMessageBody = "message_body"
+	BaroShipmentNoticesColSentAt = "sent_at"
+	BaroShipmentNoticesColSentBy = "sent_by"
+	BaroShipmentNoticesColDeliveryStatus = "delivery_status"
+	BaroShipmentNoticesColDeliveryError = "delivery_error"
+	BaroShipmentNoticesColExternalMessageId = "external_message_id"
+	BaroShipmentNoticesColDriverPhotoUrl = "driver_photo_url"
+	BaroShipmentNoticesColDriverSignatureUrl = "driver_signature_url"
+	BaroShipmentNoticesColDeliveryNote = "delivery_note"
+	BaroShipmentNoticesColDeliveredAt = "delivered_at"
 )
 
 // BaroShipmentNoticesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -594,24 +579,23 @@ type BlLineItems struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// BlLineItemsColumn — public.bl_line_items 의 컬럼명 (PostgREST select 시 타입 안전성).
-type BlLineItemsColumn string
-
+// BlLineItemsCol* — public.bl_line_items 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.BlLineItemsColBlLineId, value)
 const (
-	BlLineItemsColBlLineId BlLineItemsColumn = "bl_line_id"
-	BlLineItemsColBlId BlLineItemsColumn = "bl_id"
-	BlLineItemsColProductId BlLineItemsColumn = "product_id"
-	BlLineItemsColQuantity BlLineItemsColumn = "quantity"
-	BlLineItemsColCapacityKw BlLineItemsColumn = "capacity_kw"
-	BlLineItemsColItemType BlLineItemsColumn = "item_type"
-	BlLineItemsColPaymentType BlLineItemsColumn = "payment_type"
-	BlLineItemsColInvoiceAmountUsd BlLineItemsColumn = "invoice_amount_usd"
-	BlLineItemsColUnitPriceUsdWp BlLineItemsColumn = "unit_price_usd_wp"
-	BlLineItemsColUnitPriceKrwWp BlLineItemsColumn = "unit_price_krw_wp"
-	BlLineItemsColUsageCategory BlLineItemsColumn = "usage_category"
-	BlLineItemsColMemo BlLineItemsColumn = "memo"
-	BlLineItemsColCreatedAt BlLineItemsColumn = "created_at"
-	BlLineItemsColUpdatedAt BlLineItemsColumn = "updated_at"
+	BlLineItemsColBlLineId = "bl_line_id"
+	BlLineItemsColBlId = "bl_id"
+	BlLineItemsColProductId = "product_id"
+	BlLineItemsColQuantity = "quantity"
+	BlLineItemsColCapacityKw = "capacity_kw"
+	BlLineItemsColItemType = "item_type"
+	BlLineItemsColPaymentType = "payment_type"
+	BlLineItemsColInvoiceAmountUsd = "invoice_amount_usd"
+	BlLineItemsColUnitPriceUsdWp = "unit_price_usd_wp"
+	BlLineItemsColUnitPriceKrwWp = "unit_price_krw_wp"
+	BlLineItemsColUsageCategory = "usage_category"
+	BlLineItemsColMemo = "memo"
+	BlLineItemsColCreatedAt = "created_at"
+	BlLineItemsColUpdatedAt = "updated_at"
 )
 
 // BlLineItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -648,34 +632,33 @@ type BlShipments struct {
 	LcMaturityDate *string `json:"lc_maturity_date,omitempty"`
 }
 
-// BlShipmentsColumn — public.bl_shipments 의 컬럼명 (PostgREST select 시 타입 안전성).
-type BlShipmentsColumn string
-
+// BlShipmentsCol* — public.bl_shipments 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.BlShipmentsColBlId, value)
 const (
-	BlShipmentsColBlId BlShipmentsColumn = "bl_id"
-	BlShipmentsColBlNumber BlShipmentsColumn = "bl_number"
-	BlShipmentsColPoId BlShipmentsColumn = "po_id"
-	BlShipmentsColLcId BlShipmentsColumn = "lc_id"
-	BlShipmentsColCompanyId BlShipmentsColumn = "company_id"
-	BlShipmentsColManufacturerId BlShipmentsColumn = "manufacturer_id"
-	BlShipmentsColInboundType BlShipmentsColumn = "inbound_type"
-	BlShipmentsColCurrency BlShipmentsColumn = "currency"
-	BlShipmentsColExchangeRate BlShipmentsColumn = "exchange_rate"
-	BlShipmentsColEtd BlShipmentsColumn = "etd"
-	BlShipmentsColEta BlShipmentsColumn = "eta"
-	BlShipmentsColActualArrival BlShipmentsColumn = "actual_arrival"
-	BlShipmentsColPort BlShipmentsColumn = "port"
-	BlShipmentsColForwarder BlShipmentsColumn = "forwarder"
-	BlShipmentsColWarehouseId BlShipmentsColumn = "warehouse_id"
-	BlShipmentsColInvoiceNumber BlShipmentsColumn = "invoice_number"
-	BlShipmentsColStatus BlShipmentsColumn = "status"
-	BlShipmentsColErpRegistered BlShipmentsColumn = "erp_registered"
-	BlShipmentsColMemo BlShipmentsColumn = "memo"
-	BlShipmentsColCreatedAt BlShipmentsColumn = "created_at"
-	BlShipmentsColUpdatedAt BlShipmentsColumn = "updated_at"
-	BlShipmentsColDeclarationNumber BlShipmentsColumn = "declaration_number"
-	BlShipmentsColCifAmountKrw BlShipmentsColumn = "cif_amount_krw"
-	BlShipmentsColLcMaturityDate BlShipmentsColumn = "lc_maturity_date"
+	BlShipmentsColBlId = "bl_id"
+	BlShipmentsColBlNumber = "bl_number"
+	BlShipmentsColPoId = "po_id"
+	BlShipmentsColLcId = "lc_id"
+	BlShipmentsColCompanyId = "company_id"
+	BlShipmentsColManufacturerId = "manufacturer_id"
+	BlShipmentsColInboundType = "inbound_type"
+	BlShipmentsColCurrency = "currency"
+	BlShipmentsColExchangeRate = "exchange_rate"
+	BlShipmentsColEtd = "etd"
+	BlShipmentsColEta = "eta"
+	BlShipmentsColActualArrival = "actual_arrival"
+	BlShipmentsColPort = "port"
+	BlShipmentsColForwarder = "forwarder"
+	BlShipmentsColWarehouseId = "warehouse_id"
+	BlShipmentsColInvoiceNumber = "invoice_number"
+	BlShipmentsColStatus = "status"
+	BlShipmentsColErpRegistered = "erp_registered"
+	BlShipmentsColMemo = "memo"
+	BlShipmentsColCreatedAt = "created_at"
+	BlShipmentsColUpdatedAt = "updated_at"
+	BlShipmentsColDeclarationNumber = "declaration_number"
+	BlShipmentsColCifAmountKrw = "cif_amount_krw"
+	BlShipmentsColLcMaturityDate = "lc_maturity_date"
 )
 
 // BlShipmentsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -695,17 +678,16 @@ type Companies struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// CompaniesColumn — public.companies 의 컬럼명 (PostgREST select 시 타입 안전성).
-type CompaniesColumn string
-
+// CompaniesCol* — public.companies 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.CompaniesColCompanyId, value)
 const (
-	CompaniesColCompanyId CompaniesColumn = "company_id"
-	CompaniesColCompanyName CompaniesColumn = "company_name"
-	CompaniesColCompanyCode CompaniesColumn = "company_code"
-	CompaniesColBusinessNumber CompaniesColumn = "business_number"
-	CompaniesColIsActive CompaniesColumn = "is_active"
-	CompaniesColCreatedAt CompaniesColumn = "created_at"
-	CompaniesColUpdatedAt CompaniesColumn = "updated_at"
+	CompaniesColCompanyId = "company_id"
+	CompaniesColCompanyName = "company_name"
+	CompaniesColCompanyCode = "company_code"
+	CompaniesColBusinessNumber = "business_number"
+	CompaniesColIsActive = "is_active"
+	CompaniesColCreatedAt = "created_at"
+	CompaniesColUpdatedAt = "updated_at"
 )
 
 // CompaniesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -725,17 +707,16 @@ type CompanyAliases struct {
 	CreatedBy *string `json:"created_by,omitempty"`
 }
 
-// CompanyAliasesColumn — public.company_aliases 의 컬럼명 (PostgREST select 시 타입 안전성).
-type CompanyAliasesColumn string
-
+// CompanyAliasesCol* — public.company_aliases 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.CompanyAliasesColAliasId, value)
 const (
-	CompanyAliasesColAliasId CompanyAliasesColumn = "alias_id"
-	CompanyAliasesColCanonicalCompanyId CompanyAliasesColumn = "canonical_company_id"
-	CompanyAliasesColAliasText CompanyAliasesColumn = "alias_text"
-	CompanyAliasesColAliasTextNormalized CompanyAliasesColumn = "alias_text_normalized"
-	CompanyAliasesColSource CompanyAliasesColumn = "source"
-	CompanyAliasesColCreatedAt CompanyAliasesColumn = "created_at"
-	CompanyAliasesColCreatedBy CompanyAliasesColumn = "created_by"
+	CompanyAliasesColAliasId = "alias_id"
+	CompanyAliasesColCanonicalCompanyId = "canonical_company_id"
+	CompanyAliasesColAliasText = "alias_text"
+	CompanyAliasesColAliasTextNormalized = "alias_text_normalized"
+	CompanyAliasesColSource = "source"
+	CompanyAliasesColCreatedAt = "created_at"
+	CompanyAliasesColCreatedBy = "created_by"
 )
 
 // CompanyAliasesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -759,22 +740,21 @@ type ConstructionSites struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// ConstructionSitesColumn — public.construction_sites 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ConstructionSitesColumn string
-
+// ConstructionSitesCol* — public.construction_sites 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ConstructionSitesColSiteId, value)
 const (
-	ConstructionSitesColSiteId ConstructionSitesColumn = "site_id"
-	ConstructionSitesColCompanyId ConstructionSitesColumn = "company_id"
-	ConstructionSitesColName ConstructionSitesColumn = "name"
-	ConstructionSitesColLocation ConstructionSitesColumn = "location"
-	ConstructionSitesColSiteType ConstructionSitesColumn = "site_type"
-	ConstructionSitesColCapacityMw ConstructionSitesColumn = "capacity_mw"
-	ConstructionSitesColStartedAt ConstructionSitesColumn = "started_at"
-	ConstructionSitesColCompletedAt ConstructionSitesColumn = "completed_at"
-	ConstructionSitesColNotes ConstructionSitesColumn = "notes"
-	ConstructionSitesColIsActive ConstructionSitesColumn = "is_active"
-	ConstructionSitesColCreatedAt ConstructionSitesColumn = "created_at"
-	ConstructionSitesColUpdatedAt ConstructionSitesColumn = "updated_at"
+	ConstructionSitesColSiteId = "site_id"
+	ConstructionSitesColCompanyId = "company_id"
+	ConstructionSitesColName = "name"
+	ConstructionSitesColLocation = "location"
+	ConstructionSitesColSiteType = "site_type"
+	ConstructionSitesColCapacityMw = "capacity_mw"
+	ConstructionSitesColStartedAt = "started_at"
+	ConstructionSitesColCompletedAt = "completed_at"
+	ConstructionSitesColNotes = "notes"
+	ConstructionSitesColIsActive = "is_active"
+	ConstructionSitesColCreatedAt = "created_at"
+	ConstructionSitesColUpdatedAt = "updated_at"
 )
 
 // ConstructionSitesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -811,33 +791,32 @@ type CostDetails struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// CostDetailsColumn — public.cost_details 의 컬럼명 (PostgREST select 시 타입 안전성).
-type CostDetailsColumn string
-
+// CostDetailsCol* — public.cost_details 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.CostDetailsColCostId, value)
 const (
-	CostDetailsColCostId CostDetailsColumn = "cost_id"
-	CostDetailsColDeclarationId CostDetailsColumn = "declaration_id"
-	CostDetailsColProductId CostDetailsColumn = "product_id"
-	CostDetailsColQuantity CostDetailsColumn = "quantity"
-	CostDetailsColCapacityKw CostDetailsColumn = "capacity_kw"
-	CostDetailsColFobUnitUsd CostDetailsColumn = "fob_unit_usd"
-	CostDetailsColFobTotalUsd CostDetailsColumn = "fob_total_usd"
-	CostDetailsColFobWpKrw CostDetailsColumn = "fob_wp_krw"
-	CostDetailsColExchangeRate CostDetailsColumn = "exchange_rate"
-	CostDetailsColCifTotalKrw CostDetailsColumn = "cif_total_krw"
-	CostDetailsColCifUnitUsd CostDetailsColumn = "cif_unit_usd"
-	CostDetailsColCifTotalUsd CostDetailsColumn = "cif_total_usd"
-	CostDetailsColCifWpKrw CostDetailsColumn = "cif_wp_krw"
-	CostDetailsColTariffRate CostDetailsColumn = "tariff_rate"
-	CostDetailsColTariffAmount CostDetailsColumn = "tariff_amount"
-	CostDetailsColVatAmount CostDetailsColumn = "vat_amount"
-	CostDetailsColCustomsFee CostDetailsColumn = "customs_fee"
-	CostDetailsColIncidentalCost CostDetailsColumn = "incidental_cost"
-	CostDetailsColLandedTotalKrw CostDetailsColumn = "landed_total_krw"
-	CostDetailsColLandedWpKrw CostDetailsColumn = "landed_wp_krw"
-	CostDetailsColMemo CostDetailsColumn = "memo"
-	CostDetailsColCreatedAt CostDetailsColumn = "created_at"
-	CostDetailsColUpdatedAt CostDetailsColumn = "updated_at"
+	CostDetailsColCostId = "cost_id"
+	CostDetailsColDeclarationId = "declaration_id"
+	CostDetailsColProductId = "product_id"
+	CostDetailsColQuantity = "quantity"
+	CostDetailsColCapacityKw = "capacity_kw"
+	CostDetailsColFobUnitUsd = "fob_unit_usd"
+	CostDetailsColFobTotalUsd = "fob_total_usd"
+	CostDetailsColFobWpKrw = "fob_wp_krw"
+	CostDetailsColExchangeRate = "exchange_rate"
+	CostDetailsColCifTotalKrw = "cif_total_krw"
+	CostDetailsColCifUnitUsd = "cif_unit_usd"
+	CostDetailsColCifTotalUsd = "cif_total_usd"
+	CostDetailsColCifWpKrw = "cif_wp_krw"
+	CostDetailsColTariffRate = "tariff_rate"
+	CostDetailsColTariffAmount = "tariff_amount"
+	CostDetailsColVatAmount = "vat_amount"
+	CostDetailsColCustomsFee = "customs_fee"
+	CostDetailsColIncidentalCost = "incidental_cost"
+	CostDetailsColLandedTotalKrw = "landed_total_krw"
+	CostDetailsColLandedWpKrw = "landed_wp_krw"
+	CostDetailsColMemo = "memo"
+	CostDetailsColCreatedAt = "created_at"
+	CostDetailsColUpdatedAt = "updated_at"
 )
 
 // CostDetailsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -864,25 +843,24 @@ type CycleCountItems struct {
 	PhotoAttachmentIds []string `json:"photo_attachment_ids,omitempty"`
 }
 
-// CycleCountItemsColumn — public.cycle_count_items 의 컬럼명 (PostgREST select 시 타입 안전성).
-type CycleCountItemsColumn string
-
+// CycleCountItemsCol* — public.cycle_count_items 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.CycleCountItemsColItemId, value)
 const (
-	CycleCountItemsColItemId CycleCountItemsColumn = "item_id"
-	CycleCountItemsColCycleCountId CycleCountItemsColumn = "cycle_count_id"
-	CycleCountItemsColLocationId CycleCountItemsColumn = "location_id"
-	CycleCountItemsColLocationCodeSnapshot CycleCountItemsColumn = "location_code_snapshot"
-	CycleCountItemsColProductId CycleCountItemsColumn = "product_id"
-	CycleCountItemsColProductCodeSnapshot CycleCountItemsColumn = "product_code_snapshot"
-	CycleCountItemsColProductNameSnapshot CycleCountItemsColumn = "product_name_snapshot"
-	CycleCountItemsColExpectedQty CycleCountItemsColumn = "expected_qty"
-	CycleCountItemsColCountedQty CycleCountItemsColumn = "counted_qty"
-	CycleCountItemsColVarianceQty CycleCountItemsColumn = "variance_qty"
-	CycleCountItemsColVarianceReason CycleCountItemsColumn = "variance_reason"
-	CycleCountItemsColVarianceNote CycleCountItemsColumn = "variance_note"
-	CycleCountItemsColCountedBy CycleCountItemsColumn = "counted_by"
-	CycleCountItemsColCountedAt CycleCountItemsColumn = "counted_at"
-	CycleCountItemsColPhotoAttachmentIds CycleCountItemsColumn = "photo_attachment_ids"
+	CycleCountItemsColItemId = "item_id"
+	CycleCountItemsColCycleCountId = "cycle_count_id"
+	CycleCountItemsColLocationId = "location_id"
+	CycleCountItemsColLocationCodeSnapshot = "location_code_snapshot"
+	CycleCountItemsColProductId = "product_id"
+	CycleCountItemsColProductCodeSnapshot = "product_code_snapshot"
+	CycleCountItemsColProductNameSnapshot = "product_name_snapshot"
+	CycleCountItemsColExpectedQty = "expected_qty"
+	CycleCountItemsColCountedQty = "counted_qty"
+	CycleCountItemsColVarianceQty = "variance_qty"
+	CycleCountItemsColVarianceReason = "variance_reason"
+	CycleCountItemsColVarianceNote = "variance_note"
+	CycleCountItemsColCountedBy = "counted_by"
+	CycleCountItemsColCountedAt = "counted_at"
+	CycleCountItemsColPhotoAttachmentIds = "photo_attachment_ids"
 )
 
 // CycleCountItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -907,23 +885,22 @@ type CycleCounts struct {
 	Notes *string `json:"notes,omitempty"`
 }
 
-// CycleCountsColumn — public.cycle_counts 의 컬럼명 (PostgREST select 시 타입 안전성).
-type CycleCountsColumn string
-
+// CycleCountsCol* — public.cycle_counts 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.CycleCountsColCycleCountId, value)
 const (
-	CycleCountsColCycleCountId CycleCountsColumn = "cycle_count_id"
-	CycleCountsColWarehouseId CycleCountsColumn = "warehouse_id"
-	CycleCountsColScheduledDate CycleCountsColumn = "scheduled_date"
-	CycleCountsColStatus CycleCountsColumn = "status"
-	CycleCountsColStartedAt CycleCountsColumn = "started_at"
-	CycleCountsColCompletedAt CycleCountsColumn = "completed_at"
-	CycleCountsColTotalLocations CycleCountsColumn = "total_locations"
-	CycleCountsColMatchedLocations CycleCountsColumn = "matched_locations"
-	CycleCountsColVarianceLocations CycleCountsColumn = "variance_locations"
-	CycleCountsColAccuracyPct CycleCountsColumn = "accuracy_pct"
-	CycleCountsColCreatedBy CycleCountsColumn = "created_by"
-	CycleCountsColCreatedAt CycleCountsColumn = "created_at"
-	CycleCountsColNotes CycleCountsColumn = "notes"
+	CycleCountsColCycleCountId = "cycle_count_id"
+	CycleCountsColWarehouseId = "warehouse_id"
+	CycleCountsColScheduledDate = "scheduled_date"
+	CycleCountsColStatus = "status"
+	CycleCountsColStartedAt = "started_at"
+	CycleCountsColCompletedAt = "completed_at"
+	CycleCountsColTotalLocations = "total_locations"
+	CycleCountsColMatchedLocations = "matched_locations"
+	CycleCountsColVarianceLocations = "variance_locations"
+	CycleCountsColAccuracyPct = "accuracy_pct"
+	CycleCountsColCreatedBy = "created_by"
+	CycleCountsColCreatedAt = "created_at"
+	CycleCountsColNotes = "notes"
 )
 
 // CycleCountsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -942,17 +919,16 @@ type DbAnomalySnapshots struct {
 	TakenDate *string `json:"taken_date,omitempty"`
 }
 
-// DbAnomalySnapshotsColumn — public.db_anomaly_snapshots 의 컬럼명 (PostgREST select 시 타입 안전성).
-type DbAnomalySnapshotsColumn string
-
+// DbAnomalySnapshotsCol* — public.db_anomaly_snapshots 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.DbAnomalySnapshotsColSnapshotId, value)
 const (
-	DbAnomalySnapshotsColSnapshotId DbAnomalySnapshotsColumn = "snapshot_id"
-	DbAnomalySnapshotsColRuleName DbAnomalySnapshotsColumn = "rule_name"
-	DbAnomalySnapshotsColSeverity DbAnomalySnapshotsColumn = "severity"
-	DbAnomalySnapshotsColCategory DbAnomalySnapshotsColumn = "category"
-	DbAnomalySnapshotsColCount DbAnomalySnapshotsColumn = "count"
-	DbAnomalySnapshotsColTakenAt DbAnomalySnapshotsColumn = "taken_at"
-	DbAnomalySnapshotsColTakenDate DbAnomalySnapshotsColumn = "taken_date"
+	DbAnomalySnapshotsColSnapshotId = "snapshot_id"
+	DbAnomalySnapshotsColRuleName = "rule_name"
+	DbAnomalySnapshotsColSeverity = "severity"
+	DbAnomalySnapshotsColCategory = "category"
+	DbAnomalySnapshotsColCount = "count"
+	DbAnomalySnapshotsColTakenAt = "taken_at"
+	DbAnomalySnapshotsColTakenDate = "taken_date"
 )
 
 // DbAnomalySnapshotsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -976,22 +952,21 @@ type DispatchRoutes struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// DispatchRoutesColumn — public.dispatch_routes 의 컬럼명 (PostgREST select 시 타입 안전성).
-type DispatchRoutesColumn string
-
+// DispatchRoutesCol* — public.dispatch_routes 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.DispatchRoutesColRouteId, value)
 const (
-	DispatchRoutesColRouteId DispatchRoutesColumn = "route_id"
-	DispatchRoutesColRouteDate DispatchRoutesColumn = "route_date"
-	DispatchRoutesColVehicleType DispatchRoutesColumn = "vehicle_type"
-	DispatchRoutesColVehiclePlate DispatchRoutesColumn = "vehicle_plate"
-	DispatchRoutesColDriverName DispatchRoutesColumn = "driver_name"
-	DispatchRoutesColDriverPhone DispatchRoutesColumn = "driver_phone"
-	DispatchRoutesColStatus DispatchRoutesColumn = "status"
-	DispatchRoutesColMemo DispatchRoutesColumn = "memo"
-	DispatchRoutesColTenantScope DispatchRoutesColumn = "tenant_scope"
-	DispatchRoutesColCreatedBy DispatchRoutesColumn = "created_by"
-	DispatchRoutesColCreatedAt DispatchRoutesColumn = "created_at"
-	DispatchRoutesColUpdatedAt DispatchRoutesColumn = "updated_at"
+	DispatchRoutesColRouteId = "route_id"
+	DispatchRoutesColRouteDate = "route_date"
+	DispatchRoutesColVehicleType = "vehicle_type"
+	DispatchRoutesColVehiclePlate = "vehicle_plate"
+	DispatchRoutesColDriverName = "driver_name"
+	DispatchRoutesColDriverPhone = "driver_phone"
+	DispatchRoutesColStatus = "status"
+	DispatchRoutesColMemo = "memo"
+	DispatchRoutesColTenantScope = "tenant_scope"
+	DispatchRoutesColCreatedBy = "created_by"
+	DispatchRoutesColCreatedAt = "created_at"
+	DispatchRoutesColUpdatedAt = "updated_at"
 )
 
 // DispatchRoutesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1014,21 +989,20 @@ type DocumentFiles struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// DocumentFilesColumn — public.document_files 의 컬럼명 (PostgREST select 시 타입 안전성).
-type DocumentFilesColumn string
-
+// DocumentFilesCol* — public.document_files 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.DocumentFilesColFileId, value)
 const (
-	DocumentFilesColFileId DocumentFilesColumn = "file_id"
-	DocumentFilesColEntityType DocumentFilesColumn = "entity_type"
-	DocumentFilesColEntityId DocumentFilesColumn = "entity_id"
-	DocumentFilesColFileType DocumentFilesColumn = "file_type"
-	DocumentFilesColOriginalName DocumentFilesColumn = "original_name"
-	DocumentFilesColStoredName DocumentFilesColumn = "stored_name"
-	DocumentFilesColStoredPath DocumentFilesColumn = "stored_path"
-	DocumentFilesColContentType DocumentFilesColumn = "content_type"
-	DocumentFilesColSizeBytes DocumentFilesColumn = "size_bytes"
-	DocumentFilesColUploadedBy DocumentFilesColumn = "uploaded_by"
-	DocumentFilesColCreatedAt DocumentFilesColumn = "created_at"
+	DocumentFilesColFileId = "file_id"
+	DocumentFilesColEntityType = "entity_type"
+	DocumentFilesColEntityId = "entity_id"
+	DocumentFilesColFileType = "file_type"
+	DocumentFilesColOriginalName = "original_name"
+	DocumentFilesColStoredName = "stored_name"
+	DocumentFilesColStoredPath = "stored_path"
+	DocumentFilesColContentType = "content_type"
+	DocumentFilesColSizeBytes = "size_bytes"
+	DocumentFilesColUploadedBy = "uploaded_by"
+	DocumentFilesColCreatedAt = "created_at"
 )
 
 // DocumentFilesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1059,25 +1033,24 @@ type ExternalSyncSources struct {
 	DefaultWarehouseId *string `json:"default_warehouse_id,omitempty"`
 }
 
-// ExternalSyncSourcesColumn — public.external_sync_sources 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ExternalSyncSourcesColumn string
-
+// ExternalSyncSourcesCol* — public.external_sync_sources 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ExternalSyncSourcesColSyncId, value)
 const (
-	ExternalSyncSourcesColSyncId ExternalSyncSourcesColumn = "sync_id"
-	ExternalSyncSourcesColName ExternalSyncSourcesColumn = "name"
-	ExternalSyncSourcesColSourceKind ExternalSyncSourcesColumn = "source_kind"
-	ExternalSyncSourcesColSpreadsheetId ExternalSyncSourcesColumn = "spreadsheet_id"
-	ExternalSyncSourcesColSheetGid ExternalSyncSourcesColumn = "sheet_gid"
-	ExternalSyncSourcesColExternalFormatId ExternalSyncSourcesColumn = "external_format_id"
-	ExternalSyncSourcesColSchedule ExternalSyncSourcesColumn = "schedule"
-	ExternalSyncSourcesColEnabled ExternalSyncSourcesColumn = "enabled"
-	ExternalSyncSourcesColLastSyncedAt ExternalSyncSourcesColumn = "last_synced_at"
-	ExternalSyncSourcesColLastSyncCount ExternalSyncSourcesColumn = "last_sync_count"
-	ExternalSyncSourcesColLastSkippedCount ExternalSyncSourcesColumn = "last_skipped_count"
-	ExternalSyncSourcesColLastError ExternalSyncSourcesColumn = "last_error"
-	ExternalSyncSourcesColCreatedAt ExternalSyncSourcesColumn = "created_at"
-	ExternalSyncSourcesColCreatedBy ExternalSyncSourcesColumn = "created_by"
-	ExternalSyncSourcesColDefaultWarehouseId ExternalSyncSourcesColumn = "default_warehouse_id"
+	ExternalSyncSourcesColSyncId = "sync_id"
+	ExternalSyncSourcesColName = "name"
+	ExternalSyncSourcesColSourceKind = "source_kind"
+	ExternalSyncSourcesColSpreadsheetId = "spreadsheet_id"
+	ExternalSyncSourcesColSheetGid = "sheet_gid"
+	ExternalSyncSourcesColExternalFormatId = "external_format_id"
+	ExternalSyncSourcesColSchedule = "schedule"
+	ExternalSyncSourcesColEnabled = "enabled"
+	ExternalSyncSourcesColLastSyncedAt = "last_synced_at"
+	ExternalSyncSourcesColLastSyncCount = "last_sync_count"
+	ExternalSyncSourcesColLastSkippedCount = "last_skipped_count"
+	ExternalSyncSourcesColLastError = "last_error"
+	ExternalSyncSourcesColCreatedAt = "created_at"
+	ExternalSyncSourcesColCreatedBy = "created_by"
+	ExternalSyncSourcesColDefaultWarehouseId = "default_warehouse_id"
 )
 
 // ExternalSyncSourcesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1098,19 +1071,18 @@ type FeatureWiringAudit struct {
 	Note *string `json:"note,omitempty"`
 }
 
-// FeatureWiringAuditColumn — public.feature_wiring_audit 의 컬럼명 (PostgREST select 시 타입 안전성).
-type FeatureWiringAuditColumn string
-
+// FeatureWiringAuditCol* — public.feature_wiring_audit 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.FeatureWiringAuditColId, value)
 const (
-	FeatureWiringAuditColId FeatureWiringAuditColumn = "id"
-	FeatureWiringAuditColOccurredAt FeatureWiringAuditColumn = "occurred_at"
-	FeatureWiringAuditColActor FeatureWiringAuditColumn = "actor"
-	FeatureWiringAuditColAxis FeatureWiringAuditColumn = "axis"
-	FeatureWiringAuditColTenant FeatureWiringAuditColumn = "tenant"
-	FeatureWiringAuditColFeatureId FeatureWiringAuditColumn = "feature_id"
-	FeatureWiringAuditColBeforeValue FeatureWiringAuditColumn = "before_value"
-	FeatureWiringAuditColAfterValue FeatureWiringAuditColumn = "after_value"
-	FeatureWiringAuditColNote FeatureWiringAuditColumn = "note"
+	FeatureWiringAuditColId = "id"
+	FeatureWiringAuditColOccurredAt = "occurred_at"
+	FeatureWiringAuditColActor = "actor"
+	FeatureWiringAuditColAxis = "axis"
+	FeatureWiringAuditColTenant = "tenant"
+	FeatureWiringAuditColFeatureId = "feature_id"
+	FeatureWiringAuditColBeforeValue = "before_value"
+	FeatureWiringAuditColAfterValue = "after_value"
+	FeatureWiringAuditColNote = "note"
 )
 
 // FeatureWiringAuditAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1161,47 +1133,46 @@ type FifoMatches struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// FifoMatchesColumn — public.fifo_matches 의 컬럼명 (PostgREST select 시 타입 안전성).
-type FifoMatchesColumn string
-
+// FifoMatchesCol* — public.fifo_matches 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.FifoMatchesColMatchId, value)
 const (
-	FifoMatchesColMatchId FifoMatchesColumn = "match_id"
-	FifoMatchesColErpInboundNo FifoMatchesColumn = "erp_inbound_no"
-	FifoMatchesColErpInboundLineNo FifoMatchesColumn = "erp_inbound_line_no"
-	FifoMatchesColInboundId FifoMatchesColumn = "inbound_id"
-	FifoMatchesColInboundDate FifoMatchesColumn = "inbound_date"
-	FifoMatchesColInboundKind FifoMatchesColumn = "inbound_kind"
-	FifoMatchesColSupplierName FifoMatchesColumn = "supplier_name"
-	FifoMatchesColErpOutboundNo FifoMatchesColumn = "erp_outbound_no"
-	FifoMatchesColOutboundId FifoMatchesColumn = "outbound_id"
-	FifoMatchesColOutboundDate FifoMatchesColumn = "outbound_date"
-	FifoMatchesColCustomerName FifoMatchesColumn = "customer_name"
-	FifoMatchesColProductId FifoMatchesColumn = "product_id"
-	FifoMatchesColLotInboundQty FifoMatchesColumn = "lot_inbound_qty"
-	FifoMatchesColOutboundQtyOrigin FifoMatchesColumn = "outbound_qty_origin"
-	FifoMatchesColAllocatedQty FifoMatchesColumn = "allocated_qty"
-	FifoMatchesColWpUnitPrice FifoMatchesColumn = "wp_unit_price"
-	FifoMatchesColEaUnitCost FifoMatchesColumn = "ea_unit_cost"
-	FifoMatchesColCostAmount FifoMatchesColumn = "cost_amount"
-	FifoMatchesColSalesUnitPriceEa FifoMatchesColumn = "sales_unit_price_ea"
-	FifoMatchesColSalesAmount FifoMatchesColumn = "sales_amount"
-	FifoMatchesColProfitAmount FifoMatchesColumn = "profit_amount"
-	FifoMatchesColProfitRatio FifoMatchesColumn = "profit_ratio"
-	FifoMatchesColUsageCategoryRaw FifoMatchesColumn = "usage_category_raw"
-	FifoMatchesColProject FifoMatchesColumn = "project"
-	FifoMatchesColProcurementType FifoMatchesColumn = "procurement_type"
-	FifoMatchesColCorporation FifoMatchesColumn = "corporation"
-	FifoMatchesColManufacturerNameKr FifoMatchesColumn = "manufacturer_name_kr"
-	FifoMatchesColManufacturerNameEn FifoMatchesColumn = "manufacturer_name_en"
-	FifoMatchesColDeclarationId FifoMatchesColumn = "declaration_id"
-	FifoMatchesColDeclarationNumber FifoMatchesColumn = "declaration_number"
-	FifoMatchesColBlNumber FifoMatchesColumn = "bl_number"
-	FifoMatchesColLcNumber FifoMatchesColumn = "lc_number"
-	FifoMatchesColCategoryNo FifoMatchesColumn = "category_no"
-	FifoMatchesColPoNumber FifoMatchesColumn = "po_number"
-	FifoMatchesColSource FifoMatchesColumn = "source"
-	FifoMatchesColSourcePayload FifoMatchesColumn = "source_payload"
-	FifoMatchesColCreatedAt FifoMatchesColumn = "created_at"
+	FifoMatchesColMatchId = "match_id"
+	FifoMatchesColErpInboundNo = "erp_inbound_no"
+	FifoMatchesColErpInboundLineNo = "erp_inbound_line_no"
+	FifoMatchesColInboundId = "inbound_id"
+	FifoMatchesColInboundDate = "inbound_date"
+	FifoMatchesColInboundKind = "inbound_kind"
+	FifoMatchesColSupplierName = "supplier_name"
+	FifoMatchesColErpOutboundNo = "erp_outbound_no"
+	FifoMatchesColOutboundId = "outbound_id"
+	FifoMatchesColOutboundDate = "outbound_date"
+	FifoMatchesColCustomerName = "customer_name"
+	FifoMatchesColProductId = "product_id"
+	FifoMatchesColLotInboundQty = "lot_inbound_qty"
+	FifoMatchesColOutboundQtyOrigin = "outbound_qty_origin"
+	FifoMatchesColAllocatedQty = "allocated_qty"
+	FifoMatchesColWpUnitPrice = "wp_unit_price"
+	FifoMatchesColEaUnitCost = "ea_unit_cost"
+	FifoMatchesColCostAmount = "cost_amount"
+	FifoMatchesColSalesUnitPriceEa = "sales_unit_price_ea"
+	FifoMatchesColSalesAmount = "sales_amount"
+	FifoMatchesColProfitAmount = "profit_amount"
+	FifoMatchesColProfitRatio = "profit_ratio"
+	FifoMatchesColUsageCategoryRaw = "usage_category_raw"
+	FifoMatchesColProject = "project"
+	FifoMatchesColProcurementType = "procurement_type"
+	FifoMatchesColCorporation = "corporation"
+	FifoMatchesColManufacturerNameKr = "manufacturer_name_kr"
+	FifoMatchesColManufacturerNameEn = "manufacturer_name_en"
+	FifoMatchesColDeclarationId = "declaration_id"
+	FifoMatchesColDeclarationNumber = "declaration_number"
+	FifoMatchesColBlNumber = "bl_number"
+	FifoMatchesColLcNumber = "lc_number"
+	FifoMatchesColCategoryNo = "category_no"
+	FifoMatchesColPoNumber = "po_number"
+	FifoMatchesColSource = "source"
+	FifoMatchesColSourcePayload = "source_payload"
+	FifoMatchesColCreatedAt = "created_at"
 )
 
 // FifoMatchesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1219,15 +1190,14 @@ type FxDaily struct {
 	FetchedAt string `json:"fetched_at"`
 }
 
-// FxDailyColumn — public.fx_daily 의 컬럼명 (PostgREST select 시 타입 안전성).
-type FxDailyColumn string
-
+// FxDailyCol* — public.fx_daily 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.FxDailyColPair, value)
 const (
-	FxDailyColPair FxDailyColumn = "pair"
-	FxDailyColDate FxDailyColumn = "date"
-	FxDailyColRate FxDailyColumn = "rate"
-	FxDailyColSource FxDailyColumn = "source"
-	FxDailyColFetchedAt FxDailyColumn = "fetched_at"
+	FxDailyColPair = "pair"
+	FxDailyColDate = "date"
+	FxDailyColRate = "rate"
+	FxDailyColSource = "source"
+	FxDailyColFetchedAt = "fetched_at"
 )
 
 // FxDailyAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1283,52 +1253,51 @@ type ImportDeclarations struct {
 	ErpInboundNoClean *string `json:"erp_inbound_no_clean,omitempty"`
 }
 
-// ImportDeclarationsColumn — public.import_declarations 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ImportDeclarationsColumn string
-
+// ImportDeclarationsCol* — public.import_declarations 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ImportDeclarationsColDeclarationId, value)
 const (
-	ImportDeclarationsColDeclarationId ImportDeclarationsColumn = "declaration_id"
-	ImportDeclarationsColDeclarationNumber ImportDeclarationsColumn = "declaration_number"
-	ImportDeclarationsColBlId ImportDeclarationsColumn = "bl_id"
-	ImportDeclarationsColCompanyId ImportDeclarationsColumn = "company_id"
-	ImportDeclarationsColDeclarationDate ImportDeclarationsColumn = "declaration_date"
-	ImportDeclarationsColArrivalDate ImportDeclarationsColumn = "arrival_date"
-	ImportDeclarationsColReleaseDate ImportDeclarationsColumn = "release_date"
-	ImportDeclarationsColHsCode ImportDeclarationsColumn = "hs_code"
-	ImportDeclarationsColCustomsOffice ImportDeclarationsColumn = "customs_office"
-	ImportDeclarationsColPort ImportDeclarationsColumn = "port"
-	ImportDeclarationsColMemo ImportDeclarationsColumn = "memo"
-	ImportDeclarationsColCreatedAt ImportDeclarationsColumn = "created_at"
-	ImportDeclarationsColUpdatedAt ImportDeclarationsColumn = "updated_at"
-	ImportDeclarationsColLcNo ImportDeclarationsColumn = "lc_no"
-	ImportDeclarationsColInvoiceNo ImportDeclarationsColumn = "invoice_no"
-	ImportDeclarationsColBlNumber ImportDeclarationsColumn = "bl_number"
-	ImportDeclarationsColSupplierNameEn ImportDeclarationsColumn = "supplier_name_en"
-	ImportDeclarationsColSupplierNameKr ImportDeclarationsColumn = "supplier_name_kr"
-	ImportDeclarationsColPoNumber ImportDeclarationsColumn = "po_number"
-	ImportDeclarationsColExchangeRate ImportDeclarationsColumn = "exchange_rate"
-	ImportDeclarationsColContractUnitPriceUsdWp ImportDeclarationsColumn = "contract_unit_price_usd_wp"
-	ImportDeclarationsColContractTotalUsd ImportDeclarationsColumn = "contract_total_usd"
-	ImportDeclarationsColContractTotalKrw ImportDeclarationsColumn = "contract_total_krw"
-	ImportDeclarationsColCifKrw ImportDeclarationsColumn = "cif_krw"
-	ImportDeclarationsColIncoterms ImportDeclarationsColumn = "incoterms"
-	ImportDeclarationsColCustomsRate ImportDeclarationsColumn = "customs_rate"
-	ImportDeclarationsColCustomsAmount ImportDeclarationsColumn = "customs_amount"
-	ImportDeclarationsColVatAmount ImportDeclarationsColumn = "vat_amount"
-	ImportDeclarationsColPaidQty ImportDeclarationsColumn = "paid_qty"
-	ImportDeclarationsColFreeQty ImportDeclarationsColumn = "free_qty"
-	ImportDeclarationsColFreeRatio ImportDeclarationsColumn = "free_ratio"
-	ImportDeclarationsColPaidCifKrw ImportDeclarationsColumn = "paid_cif_krw"
-	ImportDeclarationsColFreeCifKrw ImportDeclarationsColumn = "free_cif_krw"
-	ImportDeclarationsColCostUnitPriceWp ImportDeclarationsColumn = "cost_unit_price_wp"
-	ImportDeclarationsColCostUnitPriceEa ImportDeclarationsColumn = "cost_unit_price_ea"
-	ImportDeclarationsColProductId ImportDeclarationsColumn = "product_id"
-	ImportDeclarationsColQuantity ImportDeclarationsColumn = "quantity"
-	ImportDeclarationsColCapacityKw ImportDeclarationsColumn = "capacity_kw"
-	ImportDeclarationsColErpInboundNo ImportDeclarationsColumn = "erp_inbound_no"
-	ImportDeclarationsColDeclarationLineNo ImportDeclarationsColumn = "declaration_line_no"
-	ImportDeclarationsColSourcePayload ImportDeclarationsColumn = "source_payload"
-	ImportDeclarationsColErpInboundNoClean ImportDeclarationsColumn = "erp_inbound_no_clean"
+	ImportDeclarationsColDeclarationId = "declaration_id"
+	ImportDeclarationsColDeclarationNumber = "declaration_number"
+	ImportDeclarationsColBlId = "bl_id"
+	ImportDeclarationsColCompanyId = "company_id"
+	ImportDeclarationsColDeclarationDate = "declaration_date"
+	ImportDeclarationsColArrivalDate = "arrival_date"
+	ImportDeclarationsColReleaseDate = "release_date"
+	ImportDeclarationsColHsCode = "hs_code"
+	ImportDeclarationsColCustomsOffice = "customs_office"
+	ImportDeclarationsColPort = "port"
+	ImportDeclarationsColMemo = "memo"
+	ImportDeclarationsColCreatedAt = "created_at"
+	ImportDeclarationsColUpdatedAt = "updated_at"
+	ImportDeclarationsColLcNo = "lc_no"
+	ImportDeclarationsColInvoiceNo = "invoice_no"
+	ImportDeclarationsColBlNumber = "bl_number"
+	ImportDeclarationsColSupplierNameEn = "supplier_name_en"
+	ImportDeclarationsColSupplierNameKr = "supplier_name_kr"
+	ImportDeclarationsColPoNumber = "po_number"
+	ImportDeclarationsColExchangeRate = "exchange_rate"
+	ImportDeclarationsColContractUnitPriceUsdWp = "contract_unit_price_usd_wp"
+	ImportDeclarationsColContractTotalUsd = "contract_total_usd"
+	ImportDeclarationsColContractTotalKrw = "contract_total_krw"
+	ImportDeclarationsColCifKrw = "cif_krw"
+	ImportDeclarationsColIncoterms = "incoterms"
+	ImportDeclarationsColCustomsRate = "customs_rate"
+	ImportDeclarationsColCustomsAmount = "customs_amount"
+	ImportDeclarationsColVatAmount = "vat_amount"
+	ImportDeclarationsColPaidQty = "paid_qty"
+	ImportDeclarationsColFreeQty = "free_qty"
+	ImportDeclarationsColFreeRatio = "free_ratio"
+	ImportDeclarationsColPaidCifKrw = "paid_cif_krw"
+	ImportDeclarationsColFreeCifKrw = "free_cif_krw"
+	ImportDeclarationsColCostUnitPriceWp = "cost_unit_price_wp"
+	ImportDeclarationsColCostUnitPriceEa = "cost_unit_price_ea"
+	ImportDeclarationsColProductId = "product_id"
+	ImportDeclarationsColQuantity = "quantity"
+	ImportDeclarationsColCapacityKw = "capacity_kw"
+	ImportDeclarationsColErpInboundNo = "erp_inbound_no"
+	ImportDeclarationsColDeclarationLineNo = "declaration_line_no"
+	ImportDeclarationsColSourcePayload = "source_payload"
+	ImportDeclarationsColErpInboundNoClean = "erp_inbound_no_clean"
 )
 
 // ImportDeclarationsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1363,31 +1332,30 @@ type Inbounds struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// InboundsColumn — public.inbounds 의 컬럼명 (PostgREST select 시 타입 안전성).
-type InboundsColumn string
-
+// InboundsCol* — public.inbounds 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.InboundsColInboundId, value)
 const (
-	InboundsColInboundId InboundsColumn = "inbound_id"
-	InboundsColInboundDate InboundsColumn = "inbound_date"
-	InboundsColSupplierPartnerId InboundsColumn = "supplier_partner_id"
-	InboundsColProductId InboundsColumn = "product_id"
-	InboundsColQuantity InboundsColumn = "quantity"
-	InboundsColCapacityKw InboundsColumn = "capacity_kw"
-	InboundsColWarehouseId InboundsColumn = "warehouse_id"
-	InboundsColLocation InboundsColumn = "location"
-	InboundsColStatus InboundsColumn = "status"
-	InboundsColErpInboundNo InboundsColumn = "erp_inbound_no"
-	InboundsColErpLineNo InboundsColumn = "erp_line_no"
-	InboundsColCurrency InboundsColumn = "currency"
-	InboundsColUnitPrice InboundsColumn = "unit_price"
-	InboundsColUnitPriceWp InboundsColumn = "unit_price_wp"
-	InboundsColSupplyAmount InboundsColumn = "supply_amount"
-	InboundsColVatAmount InboundsColumn = "vat_amount"
-	InboundsColTotalAmount InboundsColumn = "total_amount"
-	InboundsColSourcePayload InboundsColumn = "source_payload"
-	InboundsColMemo InboundsColumn = "memo"
-	InboundsColCreatedAt InboundsColumn = "created_at"
-	InboundsColUpdatedAt InboundsColumn = "updated_at"
+	InboundsColInboundId = "inbound_id"
+	InboundsColInboundDate = "inbound_date"
+	InboundsColSupplierPartnerId = "supplier_partner_id"
+	InboundsColProductId = "product_id"
+	InboundsColQuantity = "quantity"
+	InboundsColCapacityKw = "capacity_kw"
+	InboundsColWarehouseId = "warehouse_id"
+	InboundsColLocation = "location"
+	InboundsColStatus = "status"
+	InboundsColErpInboundNo = "erp_inbound_no"
+	InboundsColErpLineNo = "erp_line_no"
+	InboundsColCurrency = "currency"
+	InboundsColUnitPrice = "unit_price"
+	InboundsColUnitPriceWp = "unit_price_wp"
+	InboundsColSupplyAmount = "supply_amount"
+	InboundsColVatAmount = "vat_amount"
+	InboundsColTotalAmount = "total_amount"
+	InboundsColSourcePayload = "source_payload"
+	InboundsColMemo = "memo"
+	InboundsColCreatedAt = "created_at"
+	InboundsColUpdatedAt = "updated_at"
 )
 
 // InboundsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1414,25 +1382,24 @@ type IncidentalExpenses struct {
 	Destination *string `json:"destination,omitempty"`
 }
 
-// IncidentalExpensesColumn — public.incidental_expenses 의 컬럼명 (PostgREST select 시 타입 안전성).
-type IncidentalExpensesColumn string
-
+// IncidentalExpensesCol* — public.incidental_expenses 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.IncidentalExpensesColExpenseId, value)
 const (
-	IncidentalExpensesColExpenseId IncidentalExpensesColumn = "expense_id"
-	IncidentalExpensesColBlId IncidentalExpensesColumn = "bl_id"
-	IncidentalExpensesColMonth IncidentalExpensesColumn = "month"
-	IncidentalExpensesColCompanyId IncidentalExpensesColumn = "company_id"
-	IncidentalExpensesColExpenseType IncidentalExpensesColumn = "expense_type"
-	IncidentalExpensesColAmount IncidentalExpensesColumn = "amount"
-	IncidentalExpensesColVat IncidentalExpensesColumn = "vat"
-	IncidentalExpensesColTotal IncidentalExpensesColumn = "total"
-	IncidentalExpensesColVendor IncidentalExpensesColumn = "vendor"
-	IncidentalExpensesColMemo IncidentalExpensesColumn = "memo"
-	IncidentalExpensesColCreatedAt IncidentalExpensesColumn = "created_at"
-	IncidentalExpensesColUpdatedAt IncidentalExpensesColumn = "updated_at"
-	IncidentalExpensesColOutboundId IncidentalExpensesColumn = "outbound_id"
-	IncidentalExpensesColVehicleType IncidentalExpensesColumn = "vehicle_type"
-	IncidentalExpensesColDestination IncidentalExpensesColumn = "destination"
+	IncidentalExpensesColExpenseId = "expense_id"
+	IncidentalExpensesColBlId = "bl_id"
+	IncidentalExpensesColMonth = "month"
+	IncidentalExpensesColCompanyId = "company_id"
+	IncidentalExpensesColExpenseType = "expense_type"
+	IncidentalExpensesColAmount = "amount"
+	IncidentalExpensesColVat = "vat"
+	IncidentalExpensesColTotal = "total"
+	IncidentalExpensesColVendor = "vendor"
+	IncidentalExpensesColMemo = "memo"
+	IncidentalExpensesColCreatedAt = "created_at"
+	IncidentalExpensesColUpdatedAt = "updated_at"
+	IncidentalExpensesColOutboundId = "outbound_id"
+	IncidentalExpensesColVehicleType = "vehicle_type"
+	IncidentalExpensesColDestination = "destination"
 )
 
 // IncidentalExpensesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1452,18 +1419,17 @@ type IntegrityCheckRuns struct {
 	DurationMs *int `json:"duration_ms,omitempty"`
 }
 
-// IntegrityCheckRunsColumn — public.integrity_check_runs 의 컬럼명 (PostgREST select 시 타입 안전성).
-type IntegrityCheckRunsColumn string
-
+// IntegrityCheckRunsCol* — public.integrity_check_runs 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.IntegrityCheckRunsColRunId, value)
 const (
-	IntegrityCheckRunsColRunId IntegrityCheckRunsColumn = "run_id"
-	IntegrityCheckRunsColCheckId IntegrityCheckRunsColumn = "check_id"
-	IntegrityCheckRunsColRanAt IntegrityCheckRunsColumn = "ran_at"
-	IntegrityCheckRunsColActualValue IntegrityCheckRunsColumn = "actual_value"
-	IntegrityCheckRunsColPassed IntegrityCheckRunsColumn = "passed"
-	IntegrityCheckRunsColAlerted IntegrityCheckRunsColumn = "alerted"
-	IntegrityCheckRunsColAlertReason IntegrityCheckRunsColumn = "alert_reason"
-	IntegrityCheckRunsColDurationMs IntegrityCheckRunsColumn = "duration_ms"
+	IntegrityCheckRunsColRunId = "run_id"
+	IntegrityCheckRunsColCheckId = "check_id"
+	IntegrityCheckRunsColRanAt = "ran_at"
+	IntegrityCheckRunsColActualValue = "actual_value"
+	IntegrityCheckRunsColPassed = "passed"
+	IntegrityCheckRunsColAlerted = "alerted"
+	IntegrityCheckRunsColAlertReason = "alert_reason"
+	IntegrityCheckRunsColDurationMs = "duration_ms"
 )
 
 // IntegrityCheckRunsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1487,22 +1453,21 @@ type IntegrityChecks struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// IntegrityChecksColumn — public.integrity_checks 의 컬럼명 (PostgREST select 시 타입 안전성).
-type IntegrityChecksColumn string
-
+// IntegrityChecksCol* — public.integrity_checks 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.IntegrityChecksColCheckId, value)
 const (
-	IntegrityChecksColCheckId IntegrityChecksColumn = "check_id"
-	IntegrityChecksColName IntegrityChecksColumn = "name"
-	IntegrityChecksColCategory IntegrityChecksColumn = "category"
-	IntegrityChecksColSeverity IntegrityChecksColumn = "severity"
-	IntegrityChecksColBaselineValue IntegrityChecksColumn = "baseline_value"
-	IntegrityChecksColTolerance IntegrityChecksColumn = "tolerance"
-	IntegrityChecksColToleranceType IntegrityChecksColumn = "tolerance_type"
-	IntegrityChecksColCooldownMinutes IntegrityChecksColumn = "cooldown_minutes"
-	IntegrityChecksColDescription IntegrityChecksColumn = "description"
-	IntegrityChecksColEnabled IntegrityChecksColumn = "enabled"
-	IntegrityChecksColCreatedAt IntegrityChecksColumn = "created_at"
-	IntegrityChecksColUpdatedAt IntegrityChecksColumn = "updated_at"
+	IntegrityChecksColCheckId = "check_id"
+	IntegrityChecksColName = "name"
+	IntegrityChecksColCategory = "category"
+	IntegrityChecksColSeverity = "severity"
+	IntegrityChecksColBaselineValue = "baseline_value"
+	IntegrityChecksColTolerance = "tolerance"
+	IntegrityChecksColToleranceType = "tolerance_type"
+	IntegrityChecksColCooldownMinutes = "cooldown_minutes"
+	IntegrityChecksColDescription = "description"
+	IntegrityChecksColEnabled = "enabled"
+	IntegrityChecksColCreatedAt = "created_at"
+	IntegrityChecksColUpdatedAt = "updated_at"
 )
 
 // IntegrityChecksAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1533,28 +1498,27 @@ type IntercompanyRequests struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// IntercompanyRequestsColumn — public.intercompany_requests 의 컬럼명 (PostgREST select 시 타입 안전성).
-type IntercompanyRequestsColumn string
-
+// IntercompanyRequestsCol* — public.intercompany_requests 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.IntercompanyRequestsColRequestId, value)
 const (
-	IntercompanyRequestsColRequestId IntercompanyRequestsColumn = "request_id"
-	IntercompanyRequestsColRequesterCompanyId IntercompanyRequestsColumn = "requester_company_id"
-	IntercompanyRequestsColTargetCompanyId IntercompanyRequestsColumn = "target_company_id"
-	IntercompanyRequestsColProductId IntercompanyRequestsColumn = "product_id"
-	IntercompanyRequestsColQuantity IntercompanyRequestsColumn = "quantity"
-	IntercompanyRequestsColDesiredArrivalDate IntercompanyRequestsColumn = "desired_arrival_date"
-	IntercompanyRequestsColStatus IntercompanyRequestsColumn = "status"
-	IntercompanyRequestsColNote IntercompanyRequestsColumn = "note"
-	IntercompanyRequestsColOutboundId IntercompanyRequestsColumn = "outbound_id"
-	IntercompanyRequestsColRequestedBy IntercompanyRequestsColumn = "requested_by"
-	IntercompanyRequestsColRequestedByEmail IntercompanyRequestsColumn = "requested_by_email"
-	IntercompanyRequestsColRespondedBy IntercompanyRequestsColumn = "responded_by"
-	IntercompanyRequestsColRespondedByEmail IntercompanyRequestsColumn = "responded_by_email"
-	IntercompanyRequestsColRespondedAt IntercompanyRequestsColumn = "responded_at"
-	IntercompanyRequestsColReceivedAt IntercompanyRequestsColumn = "received_at"
-	IntercompanyRequestsColCancelledAt IntercompanyRequestsColumn = "cancelled_at"
-	IntercompanyRequestsColCreatedAt IntercompanyRequestsColumn = "created_at"
-	IntercompanyRequestsColUpdatedAt IntercompanyRequestsColumn = "updated_at"
+	IntercompanyRequestsColRequestId = "request_id"
+	IntercompanyRequestsColRequesterCompanyId = "requester_company_id"
+	IntercompanyRequestsColTargetCompanyId = "target_company_id"
+	IntercompanyRequestsColProductId = "product_id"
+	IntercompanyRequestsColQuantity = "quantity"
+	IntercompanyRequestsColDesiredArrivalDate = "desired_arrival_date"
+	IntercompanyRequestsColStatus = "status"
+	IntercompanyRequestsColNote = "note"
+	IntercompanyRequestsColOutboundId = "outbound_id"
+	IntercompanyRequestsColRequestedBy = "requested_by"
+	IntercompanyRequestsColRequestedByEmail = "requested_by_email"
+	IntercompanyRequestsColRespondedBy = "responded_by"
+	IntercompanyRequestsColRespondedByEmail = "responded_by_email"
+	IntercompanyRequestsColRespondedAt = "responded_at"
+	IntercompanyRequestsColReceivedAt = "received_at"
+	IntercompanyRequestsColCancelledAt = "cancelled_at"
+	IntercompanyRequestsColCreatedAt = "created_at"
+	IntercompanyRequestsColUpdatedAt = "updated_at"
 )
 
 // IntercompanyRequestsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1589,31 +1553,30 @@ type InventoryAllocations struct {
 	LocationId *string `json:"location_id,omitempty"`
 }
 
-// InventoryAllocationsColumn — public.inventory_allocations 의 컬럼명 (PostgREST select 시 타입 안전성).
-type InventoryAllocationsColumn string
-
+// InventoryAllocationsCol* — public.inventory_allocations 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.InventoryAllocationsColAllocId, value)
 const (
-	InventoryAllocationsColAllocId InventoryAllocationsColumn = "alloc_id"
-	InventoryAllocationsColCompanyId InventoryAllocationsColumn = "company_id"
-	InventoryAllocationsColProductId InventoryAllocationsColumn = "product_id"
-	InventoryAllocationsColQuantity InventoryAllocationsColumn = "quantity"
-	InventoryAllocationsColCapacityKw InventoryAllocationsColumn = "capacity_kw"
-	InventoryAllocationsColPurpose InventoryAllocationsColumn = "purpose"
-	InventoryAllocationsColSourceType InventoryAllocationsColumn = "source_type"
-	InventoryAllocationsColCustomerName InventoryAllocationsColumn = "customer_name"
-	InventoryAllocationsColSiteName InventoryAllocationsColumn = "site_name"
-	InventoryAllocationsColNotes InventoryAllocationsColumn = "notes"
-	InventoryAllocationsColExpectedPricePerWp InventoryAllocationsColumn = "expected_price_per_wp"
-	InventoryAllocationsColFreeSpareQty InventoryAllocationsColumn = "free_spare_qty"
-	InventoryAllocationsColStatus InventoryAllocationsColumn = "status"
-	InventoryAllocationsColOutboundId InventoryAllocationsColumn = "outbound_id"
-	InventoryAllocationsColOrderId InventoryAllocationsColumn = "order_id"
-	InventoryAllocationsColCreatedAt InventoryAllocationsColumn = "created_at"
-	InventoryAllocationsColUpdatedAt InventoryAllocationsColumn = "updated_at"
-	InventoryAllocationsColGroupId InventoryAllocationsColumn = "group_id"
-	InventoryAllocationsColSiteId InventoryAllocationsColumn = "site_id"
-	InventoryAllocationsColBlId InventoryAllocationsColumn = "bl_id"
-	InventoryAllocationsColLocationId InventoryAllocationsColumn = "location_id"
+	InventoryAllocationsColAllocId = "alloc_id"
+	InventoryAllocationsColCompanyId = "company_id"
+	InventoryAllocationsColProductId = "product_id"
+	InventoryAllocationsColQuantity = "quantity"
+	InventoryAllocationsColCapacityKw = "capacity_kw"
+	InventoryAllocationsColPurpose = "purpose"
+	InventoryAllocationsColSourceType = "source_type"
+	InventoryAllocationsColCustomerName = "customer_name"
+	InventoryAllocationsColSiteName = "site_name"
+	InventoryAllocationsColNotes = "notes"
+	InventoryAllocationsColExpectedPricePerWp = "expected_price_per_wp"
+	InventoryAllocationsColFreeSpareQty = "free_spare_qty"
+	InventoryAllocationsColStatus = "status"
+	InventoryAllocationsColOutboundId = "outbound_id"
+	InventoryAllocationsColOrderId = "order_id"
+	InventoryAllocationsColCreatedAt = "created_at"
+	InventoryAllocationsColUpdatedAt = "updated_at"
+	InventoryAllocationsColGroupId = "group_id"
+	InventoryAllocationsColSiteId = "site_id"
+	InventoryAllocationsColBlId = "bl_id"
+	InventoryAllocationsColLocationId = "location_id"
 )
 
 // InventoryAllocationsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1658,42 +1621,41 @@ type InventoryMovements struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// InventoryMovementsColumn — public.inventory_movements 의 컬럼명 (PostgREST select 시 타입 안전성).
-type InventoryMovementsColumn string
-
+// InventoryMovementsCol* — public.inventory_movements 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.InventoryMovementsColMovementId, value)
 const (
-	InventoryMovementsColMovementId InventoryMovementsColumn = "movement_id"
-	InventoryMovementsColMovementDate InventoryMovementsColumn = "movement_date"
-	InventoryMovementsColProductId InventoryMovementsColumn = "product_id"
-	InventoryMovementsColWarehouseId InventoryMovementsColumn = "warehouse_id"
-	InventoryMovementsColWarehouseCode InventoryMovementsColumn = "warehouse_code"
-	InventoryMovementsColWarehouseName InventoryMovementsColumn = "warehouse_name"
-	InventoryMovementsColLocationCode InventoryMovementsColumn = "location_code"
-	InventoryMovementsColLocationName InventoryMovementsColumn = "location_name"
-	InventoryMovementsColMovementType InventoryMovementsColumn = "movement_type"
-	InventoryMovementsColMovementSubtype InventoryMovementsColumn = "movement_subtype"
-	InventoryMovementsColMovementTypeCode InventoryMovementsColumn = "movement_type_code"
-	InventoryMovementsColPartnerPartnerId InventoryMovementsColumn = "partner_partner_id"
-	InventoryMovementsColPartnerCode InventoryMovementsColumn = "partner_code"
-	InventoryMovementsColPartnerName InventoryMovementsColumn = "partner_name"
-	InventoryMovementsColBeginningQty InventoryMovementsColumn = "beginning_qty"
-	InventoryMovementsColInboundQty InventoryMovementsColumn = "inbound_qty"
-	InventoryMovementsColOutboundQty InventoryMovementsColumn = "outbound_qty"
-	InventoryMovementsColEndingQty InventoryMovementsColumn = "ending_qty"
-	InventoryMovementsColUnitFactor InventoryMovementsColumn = "unit_factor"
-	InventoryMovementsColUnit InventoryMovementsColumn = "unit"
-	InventoryMovementsColEndingQtyMgmt InventoryMovementsColumn = "ending_qty_mgmt"
-	InventoryMovementsColCategoryCode InventoryMovementsColumn = "category_code"
-	InventoryMovementsColCategoryName InventoryMovementsColumn = "category_name"
-	InventoryMovementsColCatL1Code InventoryMovementsColumn = "cat_l1_code"
-	InventoryMovementsColCatL1Name InventoryMovementsColumn = "cat_l1_name"
-	InventoryMovementsColCatL2Code InventoryMovementsColumn = "cat_l2_code"
-	InventoryMovementsColCatL2Name InventoryMovementsColumn = "cat_l2_name"
-	InventoryMovementsColCatL3Code InventoryMovementsColumn = "cat_l3_code"
-	InventoryMovementsColCatL3Name InventoryMovementsColumn = "cat_l3_name"
-	InventoryMovementsColSource InventoryMovementsColumn = "source"
-	InventoryMovementsColSourcePayload InventoryMovementsColumn = "source_payload"
-	InventoryMovementsColCreatedAt InventoryMovementsColumn = "created_at"
+	InventoryMovementsColMovementId = "movement_id"
+	InventoryMovementsColMovementDate = "movement_date"
+	InventoryMovementsColProductId = "product_id"
+	InventoryMovementsColWarehouseId = "warehouse_id"
+	InventoryMovementsColWarehouseCode = "warehouse_code"
+	InventoryMovementsColWarehouseName = "warehouse_name"
+	InventoryMovementsColLocationCode = "location_code"
+	InventoryMovementsColLocationName = "location_name"
+	InventoryMovementsColMovementType = "movement_type"
+	InventoryMovementsColMovementSubtype = "movement_subtype"
+	InventoryMovementsColMovementTypeCode = "movement_type_code"
+	InventoryMovementsColPartnerPartnerId = "partner_partner_id"
+	InventoryMovementsColPartnerCode = "partner_code"
+	InventoryMovementsColPartnerName = "partner_name"
+	InventoryMovementsColBeginningQty = "beginning_qty"
+	InventoryMovementsColInboundQty = "inbound_qty"
+	InventoryMovementsColOutboundQty = "outbound_qty"
+	InventoryMovementsColEndingQty = "ending_qty"
+	InventoryMovementsColUnitFactor = "unit_factor"
+	InventoryMovementsColUnit = "unit"
+	InventoryMovementsColEndingQtyMgmt = "ending_qty_mgmt"
+	InventoryMovementsColCategoryCode = "category_code"
+	InventoryMovementsColCategoryName = "category_name"
+	InventoryMovementsColCatL1Code = "cat_l1_code"
+	InventoryMovementsColCatL1Name = "cat_l1_name"
+	InventoryMovementsColCatL2Code = "cat_l2_code"
+	InventoryMovementsColCatL2Name = "cat_l2_name"
+	InventoryMovementsColCatL3Code = "cat_l3_code"
+	InventoryMovementsColCatL3Name = "cat_l3_name"
+	InventoryMovementsColSource = "source"
+	InventoryMovementsColSourcePayload = "source_payload"
+	InventoryMovementsColCreatedAt = "created_at"
 )
 
 // InventoryMovementsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1718,23 +1680,22 @@ type InventorySnapshots struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// InventorySnapshotsColumn — public.inventory_snapshots 의 컬럼명 (PostgREST select 시 타입 안전성).
-type InventorySnapshotsColumn string
-
+// InventorySnapshotsCol* — public.inventory_snapshots 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.InventorySnapshotsColSnapshotId, value)
 const (
-	InventorySnapshotsColSnapshotId InventorySnapshotsColumn = "snapshot_id"
-	InventorySnapshotsColSnapshotDate InventorySnapshotsColumn = "snapshot_date"
-	InventorySnapshotsColProductId InventorySnapshotsColumn = "product_id"
-	InventorySnapshotsColBeginningQty InventorySnapshotsColumn = "beginning_qty"
-	InventorySnapshotsColInboundQty InventorySnapshotsColumn = "inbound_qty"
-	InventorySnapshotsColOutboundQty InventorySnapshotsColumn = "outbound_qty"
-	InventorySnapshotsColEndingQty InventorySnapshotsColumn = "ending_qty"
-	InventorySnapshotsColSafetyQty InventorySnapshotsColumn = "safety_qty"
-	InventorySnapshotsColAvailableQty InventorySnapshotsColumn = "available_qty"
-	InventorySnapshotsColUnitFactor InventorySnapshotsColumn = "unit_factor"
-	InventorySnapshotsColSource InventorySnapshotsColumn = "source"
-	InventorySnapshotsColSourcePayload InventorySnapshotsColumn = "source_payload"
-	InventorySnapshotsColCreatedAt InventorySnapshotsColumn = "created_at"
+	InventorySnapshotsColSnapshotId = "snapshot_id"
+	InventorySnapshotsColSnapshotDate = "snapshot_date"
+	InventorySnapshotsColProductId = "product_id"
+	InventorySnapshotsColBeginningQty = "beginning_qty"
+	InventorySnapshotsColInboundQty = "inbound_qty"
+	InventorySnapshotsColOutboundQty = "outbound_qty"
+	InventorySnapshotsColEndingQty = "ending_qty"
+	InventorySnapshotsColSafetyQty = "safety_qty"
+	InventorySnapshotsColAvailableQty = "available_qty"
+	InventorySnapshotsColUnitFactor = "unit_factor"
+	InventorySnapshotsColSource = "source"
+	InventorySnapshotsColSourcePayload = "source_payload"
+	InventorySnapshotsColCreatedAt = "created_at"
 )
 
 // InventorySnapshotsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1759,23 +1720,22 @@ type LcLineItems struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// LcLineItemsColumn — public.lc_line_items 의 컬럼명 (PostgREST select 시 타입 안전성).
-type LcLineItemsColumn string
-
+// LcLineItemsCol* — public.lc_line_items 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.LcLineItemsColLcLineId, value)
 const (
-	LcLineItemsColLcLineId LcLineItemsColumn = "lc_line_id"
-	LcLineItemsColLcId LcLineItemsColumn = "lc_id"
-	LcLineItemsColPoLineId LcLineItemsColumn = "po_line_id"
-	LcLineItemsColProductId LcLineItemsColumn = "product_id"
-	LcLineItemsColQuantity LcLineItemsColumn = "quantity"
-	LcLineItemsColCapacityKw LcLineItemsColumn = "capacity_kw"
-	LcLineItemsColAmountUsd LcLineItemsColumn = "amount_usd"
-	LcLineItemsColUnitPriceUsdWp LcLineItemsColumn = "unit_price_usd_wp"
-	LcLineItemsColItemType LcLineItemsColumn = "item_type"
-	LcLineItemsColPaymentType LcLineItemsColumn = "payment_type"
-	LcLineItemsColMemo LcLineItemsColumn = "memo"
-	LcLineItemsColCreatedAt LcLineItemsColumn = "created_at"
-	LcLineItemsColUpdatedAt LcLineItemsColumn = "updated_at"
+	LcLineItemsColLcLineId = "lc_line_id"
+	LcLineItemsColLcId = "lc_id"
+	LcLineItemsColPoLineId = "po_line_id"
+	LcLineItemsColProductId = "product_id"
+	LcLineItemsColQuantity = "quantity"
+	LcLineItemsColCapacityKw = "capacity_kw"
+	LcLineItemsColAmountUsd = "amount_usd"
+	LcLineItemsColUnitPriceUsdWp = "unit_price_usd_wp"
+	LcLineItemsColItemType = "item_type"
+	LcLineItemsColPaymentType = "payment_type"
+	LcLineItemsColMemo = "memo"
+	LcLineItemsColCreatedAt = "created_at"
+	LcLineItemsColUpdatedAt = "updated_at"
 )
 
 // LcLineItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1809,29 +1769,28 @@ type LcRecords struct {
 	Repaid bool `json:"repaid"`
 }
 
-// LcRecordsColumn — public.lc_records 의 컬럼명 (PostgREST select 시 타입 안전성).
-type LcRecordsColumn string
-
+// LcRecordsCol* — public.lc_records 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.LcRecordsColLcId, value)
 const (
-	LcRecordsColLcId LcRecordsColumn = "lc_id"
-	LcRecordsColPoId LcRecordsColumn = "po_id"
-	LcRecordsColLcNumber LcRecordsColumn = "lc_number"
-	LcRecordsColBankId LcRecordsColumn = "bank_id"
-	LcRecordsColCompanyId LcRecordsColumn = "company_id"
-	LcRecordsColOpenDate LcRecordsColumn = "open_date"
-	LcRecordsColAmountUsd LcRecordsColumn = "amount_usd"
-	LcRecordsColTargetQty LcRecordsColumn = "target_qty"
-	LcRecordsColTargetMw LcRecordsColumn = "target_mw"
-	LcRecordsColUsanceDays LcRecordsColumn = "usance_days"
-	LcRecordsColUsanceType LcRecordsColumn = "usance_type"
-	LcRecordsColMaturityDate LcRecordsColumn = "maturity_date"
-	LcRecordsColSettlementDate LcRecordsColumn = "settlement_date"
-	LcRecordsColStatus LcRecordsColumn = "status"
-	LcRecordsColMemo LcRecordsColumn = "memo"
-	LcRecordsColCreatedAt LcRecordsColumn = "created_at"
-	LcRecordsColUpdatedAt LcRecordsColumn = "updated_at"
-	LcRecordsColRepaymentDate LcRecordsColumn = "repayment_date"
-	LcRecordsColRepaid LcRecordsColumn = "repaid"
+	LcRecordsColLcId = "lc_id"
+	LcRecordsColPoId = "po_id"
+	LcRecordsColLcNumber = "lc_number"
+	LcRecordsColBankId = "bank_id"
+	LcRecordsColCompanyId = "company_id"
+	LcRecordsColOpenDate = "open_date"
+	LcRecordsColAmountUsd = "amount_usd"
+	LcRecordsColTargetQty = "target_qty"
+	LcRecordsColTargetMw = "target_mw"
+	LcRecordsColUsanceDays = "usance_days"
+	LcRecordsColUsanceType = "usance_type"
+	LcRecordsColMaturityDate = "maturity_date"
+	LcRecordsColSettlementDate = "settlement_date"
+	LcRecordsColStatus = "status"
+	LcRecordsColMemo = "memo"
+	LcRecordsColCreatedAt = "created_at"
+	LcRecordsColUpdatedAt = "updated_at"
+	LcRecordsColRepaymentDate = "repayment_date"
+	LcRecordsColRepaid = "repaid"
 )
 
 // LcRecordsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1849,16 +1808,15 @@ type LibraryPosts struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// LibraryPostsColumn — public.library_posts 의 컬럼명 (PostgREST select 시 타입 안전성).
-type LibraryPostsColumn string
-
+// LibraryPostsCol* — public.library_posts 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.LibraryPostsColPostId, value)
 const (
-	LibraryPostsColPostId LibraryPostsColumn = "post_id"
-	LibraryPostsColTitle LibraryPostsColumn = "title"
-	LibraryPostsColContent LibraryPostsColumn = "content"
-	LibraryPostsColCreatedBy LibraryPostsColumn = "created_by"
-	LibraryPostsColCreatedAt LibraryPostsColumn = "created_at"
-	LibraryPostsColUpdatedAt LibraryPostsColumn = "updated_at"
+	LibraryPostsColPostId = "post_id"
+	LibraryPostsColTitle = "title"
+	LibraryPostsColContent = "content"
+	LibraryPostsColCreatedBy = "created_by"
+	LibraryPostsColCreatedAt = "created_at"
+	LibraryPostsColUpdatedAt = "updated_at"
 )
 
 // LibraryPostsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1877,17 +1835,16 @@ type LimitChanges struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// LimitChangesColumn — public.limit_changes 의 컬럼명 (PostgREST select 시 타입 안전성).
-type LimitChangesColumn string
-
+// LimitChangesCol* — public.limit_changes 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.LimitChangesColLimitChangeId, value)
 const (
-	LimitChangesColLimitChangeId LimitChangesColumn = "limit_change_id"
-	LimitChangesColBankId LimitChangesColumn = "bank_id"
-	LimitChangesColChangeDate LimitChangesColumn = "change_date"
-	LimitChangesColPreviousLimit LimitChangesColumn = "previous_limit"
-	LimitChangesColNewLimit LimitChangesColumn = "new_limit"
-	LimitChangesColReason LimitChangesColumn = "reason"
-	LimitChangesColCreatedAt LimitChangesColumn = "created_at"
+	LimitChangesColLimitChangeId = "limit_change_id"
+	LimitChangesColBankId = "bank_id"
+	LimitChangesColChangeDate = "change_date"
+	LimitChangesColPreviousLimit = "previous_limit"
+	LimitChangesColNewLimit = "new_limit"
+	LimitChangesColReason = "reason"
+	LimitChangesColCreatedAt = "created_at"
 )
 
 // LimitChangesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1911,21 +1868,20 @@ type Manufacturers struct {
 	PriorityRank int `json:"priority_rank"`
 }
 
-// ManufacturersColumn — public.manufacturers 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ManufacturersColumn string
-
+// ManufacturersCol* — public.manufacturers 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ManufacturersColManufacturerId, value)
 const (
-	ManufacturersColManufacturerId ManufacturersColumn = "manufacturer_id"
-	ManufacturersColNameKr ManufacturersColumn = "name_kr"
-	ManufacturersColNameEn ManufacturersColumn = "name_en"
-	ManufacturersColCountry ManufacturersColumn = "country"
-	ManufacturersColDomesticForeign ManufacturersColumn = "domestic_foreign"
-	ManufacturersColIsActive ManufacturersColumn = "is_active"
-	ManufacturersColCreatedAt ManufacturersColumn = "created_at"
-	ManufacturersColUpdatedAt ManufacturersColumn = "updated_at"
-	ManufacturersColShortName ManufacturersColumn = "short_name"
-	ManufacturersColTier ManufacturersColumn = "tier"
-	ManufacturersColPriorityRank ManufacturersColumn = "priority_rank"
+	ManufacturersColManufacturerId = "manufacturer_id"
+	ManufacturersColNameKr = "name_kr"
+	ManufacturersColNameEn = "name_en"
+	ManufacturersColCountry = "country"
+	ManufacturersColDomesticForeign = "domestic_foreign"
+	ManufacturersColIsActive = "is_active"
+	ManufacturersColCreatedAt = "created_at"
+	ManufacturersColUpdatedAt = "updated_at"
+	ManufacturersColShortName = "short_name"
+	ManufacturersColTier = "tier"
+	ManufacturersColPriorityRank = "priority_rank"
 )
 
 // ManufacturersAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1952,25 +1908,24 @@ type ModuleDemandForecasts struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// ModuleDemandForecastsColumn — public.module_demand_forecasts 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ModuleDemandForecastsColumn string
-
+// ModuleDemandForecastsCol* — public.module_demand_forecasts 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ModuleDemandForecastsColForecastId, value)
 const (
-	ModuleDemandForecastsColForecastId ModuleDemandForecastsColumn = "forecast_id"
-	ModuleDemandForecastsColCompanyId ModuleDemandForecastsColumn = "company_id"
-	ModuleDemandForecastsColSiteId ModuleDemandForecastsColumn = "site_id"
-	ModuleDemandForecastsColSiteName ModuleDemandForecastsColumn = "site_name"
-	ModuleDemandForecastsColDemandMonth ModuleDemandForecastsColumn = "demand_month"
-	ModuleDemandForecastsColDemandType ModuleDemandForecastsColumn = "demand_type"
-	ModuleDemandForecastsColManufacturerId ModuleDemandForecastsColumn = "manufacturer_id"
-	ModuleDemandForecastsColSpecWp ModuleDemandForecastsColumn = "spec_wp"
-	ModuleDemandForecastsColModuleWidthMm ModuleDemandForecastsColumn = "module_width_mm"
-	ModuleDemandForecastsColModuleHeightMm ModuleDemandForecastsColumn = "module_height_mm"
-	ModuleDemandForecastsColRequiredKw ModuleDemandForecastsColumn = "required_kw"
-	ModuleDemandForecastsColStatus ModuleDemandForecastsColumn = "status"
-	ModuleDemandForecastsColNotes ModuleDemandForecastsColumn = "notes"
-	ModuleDemandForecastsColCreatedAt ModuleDemandForecastsColumn = "created_at"
-	ModuleDemandForecastsColUpdatedAt ModuleDemandForecastsColumn = "updated_at"
+	ModuleDemandForecastsColForecastId = "forecast_id"
+	ModuleDemandForecastsColCompanyId = "company_id"
+	ModuleDemandForecastsColSiteId = "site_id"
+	ModuleDemandForecastsColSiteName = "site_name"
+	ModuleDemandForecastsColDemandMonth = "demand_month"
+	ModuleDemandForecastsColDemandType = "demand_type"
+	ModuleDemandForecastsColManufacturerId = "manufacturer_id"
+	ModuleDemandForecastsColSpecWp = "spec_wp"
+	ModuleDemandForecastsColModuleWidthMm = "module_width_mm"
+	ModuleDemandForecastsColModuleHeightMm = "module_height_mm"
+	ModuleDemandForecastsColRequiredKw = "required_kw"
+	ModuleDemandForecastsColStatus = "status"
+	ModuleDemandForecastsColNotes = "notes"
+	ModuleDemandForecastsColCreatedAt = "created_at"
+	ModuleDemandForecastsColUpdatedAt = "updated_at"
 )
 
 // ModuleDemandForecastsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -1989,17 +1944,16 @@ type Notes struct {
 	UpdatedAt *string `json:"updated_at,omitempty"`
 }
 
-// NotesColumn — public.notes 의 컬럼명 (PostgREST select 시 타입 안전성).
-type NotesColumn string
-
+// NotesCol* — public.notes 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.NotesColNoteId, value)
 const (
-	NotesColNoteId NotesColumn = "note_id"
-	NotesColUserId NotesColumn = "user_id"
-	NotesColContent NotesColumn = "content"
-	NotesColLinkedTable NotesColumn = "linked_table"
-	NotesColLinkedId NotesColumn = "linked_id"
-	NotesColCreatedAt NotesColumn = "created_at"
-	NotesColUpdatedAt NotesColumn = "updated_at"
+	NotesColNoteId = "note_id"
+	NotesColUserId = "user_id"
+	NotesColContent = "content"
+	NotesColLinkedTable = "linked_table"
+	NotesColLinkedId = "linked_id"
+	NotesColCreatedAt = "created_at"
+	NotesColUpdatedAt = "updated_at"
 )
 
 // NotesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2048,40 +2002,39 @@ type Orders struct {
 	SourcePayload *json.RawMessage `json:"source_payload,omitempty"`
 }
 
-// OrdersColumn — public.orders 의 컬럼명 (PostgREST select 시 타입 안전성).
-type OrdersColumn string
-
+// OrdersCol* — public.orders 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.OrdersColOrderId, value)
 const (
-	OrdersColOrderId OrdersColumn = "order_id"
-	OrdersColOrderNumber OrdersColumn = "order_number"
-	OrdersColCompanyId OrdersColumn = "company_id"
-	OrdersColCustomerId OrdersColumn = "customer_id"
-	OrdersColOrderDate OrdersColumn = "order_date"
-	OrdersColReceiptMethod OrdersColumn = "receipt_method"
-	OrdersColProductId OrdersColumn = "product_id"
-	OrdersColQuantity OrdersColumn = "quantity"
-	OrdersColCapacityKw OrdersColumn = "capacity_kw"
-	OrdersColUnitPriceWp OrdersColumn = "unit_price_wp"
-	OrdersColSiteName OrdersColumn = "site_name"
-	OrdersColSiteAddress OrdersColumn = "site_address"
-	OrdersColSiteContact OrdersColumn = "site_contact"
-	OrdersColSitePhone OrdersColumn = "site_phone"
-	OrdersColPaymentTerms OrdersColumn = "payment_terms"
-	OrdersColDepositRate OrdersColumn = "deposit_rate"
-	OrdersColDeliveryDue OrdersColumn = "delivery_due"
-	OrdersColShippedQty OrdersColumn = "shipped_qty"
-	OrdersColRemainingQty OrdersColumn = "remaining_qty"
-	OrdersColStatus OrdersColumn = "status"
-	OrdersColSpareQty OrdersColumn = "spare_qty"
-	OrdersColMemo OrdersColumn = "memo"
-	OrdersColCreatedAt OrdersColumn = "created_at"
-	OrdersColUpdatedAt OrdersColumn = "updated_at"
-	OrdersColManagementCategory OrdersColumn = "management_category"
-	OrdersColFulfillmentSource OrdersColumn = "fulfillment_source"
-	OrdersColBlId OrdersColumn = "bl_id"
-	OrdersColSiteId OrdersColumn = "site_id"
-	OrdersColUnitPriceEa OrdersColumn = "unit_price_ea"
-	OrdersColSourcePayload OrdersColumn = "source_payload"
+	OrdersColOrderId = "order_id"
+	OrdersColOrderNumber = "order_number"
+	OrdersColCompanyId = "company_id"
+	OrdersColCustomerId = "customer_id"
+	OrdersColOrderDate = "order_date"
+	OrdersColReceiptMethod = "receipt_method"
+	OrdersColProductId = "product_id"
+	OrdersColQuantity = "quantity"
+	OrdersColCapacityKw = "capacity_kw"
+	OrdersColUnitPriceWp = "unit_price_wp"
+	OrdersColSiteName = "site_name"
+	OrdersColSiteAddress = "site_address"
+	OrdersColSiteContact = "site_contact"
+	OrdersColSitePhone = "site_phone"
+	OrdersColPaymentTerms = "payment_terms"
+	OrdersColDepositRate = "deposit_rate"
+	OrdersColDeliveryDue = "delivery_due"
+	OrdersColShippedQty = "shipped_qty"
+	OrdersColRemainingQty = "remaining_qty"
+	OrdersColStatus = "status"
+	OrdersColSpareQty = "spare_qty"
+	OrdersColMemo = "memo"
+	OrdersColCreatedAt = "created_at"
+	OrdersColUpdatedAt = "updated_at"
+	OrdersColManagementCategory = "management_category"
+	OrdersColFulfillmentSource = "fulfillment_source"
+	OrdersColBlId = "bl_id"
+	OrdersColSiteId = "site_id"
+	OrdersColUnitPriceEa = "unit_price_ea"
+	OrdersColSourcePayload = "source_payload"
 )
 
 // OrdersAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2098,15 +2051,14 @@ type OutboundBlItems struct {
 	CreatedAt *string `json:"created_at,omitempty"`
 }
 
-// OutboundBlItemsColumn — public.outbound_bl_items 의 컬럼명 (PostgREST select 시 타입 안전성).
-type OutboundBlItemsColumn string
-
+// OutboundBlItemsCol* — public.outbound_bl_items 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.OutboundBlItemsColOutboundBlItemId, value)
 const (
-	OutboundBlItemsColOutboundBlItemId OutboundBlItemsColumn = "outbound_bl_item_id"
-	OutboundBlItemsColOutboundId OutboundBlItemsColumn = "outbound_id"
-	OutboundBlItemsColBlId OutboundBlItemsColumn = "bl_id"
-	OutboundBlItemsColQuantity OutboundBlItemsColumn = "quantity"
-	OutboundBlItemsColCreatedAt OutboundBlItemsColumn = "created_at"
+	OutboundBlItemsColOutboundBlItemId = "outbound_bl_item_id"
+	OutboundBlItemsColOutboundId = "outbound_id"
+	OutboundBlItemsColBlId = "bl_id"
+	OutboundBlItemsColQuantity = "quantity"
+	OutboundBlItemsColCreatedAt = "created_at"
 )
 
 // OutboundBlItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2151,35 +2103,34 @@ type Outbounds struct {
 	SourcePayload *json.RawMessage `json:"source_payload,omitempty"`
 }
 
-// OutboundsColumn — public.outbounds 의 컬럼명 (PostgREST select 시 타입 안전성).
-type OutboundsColumn string
-
+// OutboundsCol* — public.outbounds 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.OutboundsColOutboundId, value)
 const (
-	OutboundsColOutboundId OutboundsColumn = "outbound_id"
-	OutboundsColOutboundDate OutboundsColumn = "outbound_date"
-	OutboundsColCompanyId OutboundsColumn = "company_id"
-	OutboundsColProductId OutboundsColumn = "product_id"
-	OutboundsColQuantity OutboundsColumn = "quantity"
-	OutboundsColCapacityKw OutboundsColumn = "capacity_kw"
-	OutboundsColWarehouseId OutboundsColumn = "warehouse_id"
-	OutboundsColUsageCategory OutboundsColumn = "usage_category"
-	OutboundsColOrderId OutboundsColumn = "order_id"
-	OutboundsColSiteName OutboundsColumn = "site_name"
-	OutboundsColSiteAddress OutboundsColumn = "site_address"
-	OutboundsColSpareQty OutboundsColumn = "spare_qty"
-	OutboundsColGroupTrade OutboundsColumn = "group_trade"
-	OutboundsColTargetCompanyId OutboundsColumn = "target_company_id"
-	OutboundsColErpOutboundNo OutboundsColumn = "erp_outbound_no"
-	OutboundsColMemo OutboundsColumn = "memo"
-	OutboundsColCreatedAt OutboundsColumn = "created_at"
-	OutboundsColUpdatedAt OutboundsColumn = "updated_at"
-	OutboundsColStatus OutboundsColumn = "status"
-	OutboundsColDispatchRouteId OutboundsColumn = "dispatch_route_id"
-	OutboundsColTxStatementReady OutboundsColumn = "tx_statement_ready"
-	OutboundsColInspectionRequestSent OutboundsColumn = "inspection_request_sent"
-	OutboundsColApprovalRequested OutboundsColumn = "approval_requested"
-	OutboundsColTaxInvoiceIssued OutboundsColumn = "tax_invoice_issued"
-	OutboundsColSourcePayload OutboundsColumn = "source_payload"
+	OutboundsColOutboundId = "outbound_id"
+	OutboundsColOutboundDate = "outbound_date"
+	OutboundsColCompanyId = "company_id"
+	OutboundsColProductId = "product_id"
+	OutboundsColQuantity = "quantity"
+	OutboundsColCapacityKw = "capacity_kw"
+	OutboundsColWarehouseId = "warehouse_id"
+	OutboundsColUsageCategory = "usage_category"
+	OutboundsColOrderId = "order_id"
+	OutboundsColSiteName = "site_name"
+	OutboundsColSiteAddress = "site_address"
+	OutboundsColSpareQty = "spare_qty"
+	OutboundsColGroupTrade = "group_trade"
+	OutboundsColTargetCompanyId = "target_company_id"
+	OutboundsColErpOutboundNo = "erp_outbound_no"
+	OutboundsColMemo = "memo"
+	OutboundsColCreatedAt = "created_at"
+	OutboundsColUpdatedAt = "updated_at"
+	OutboundsColStatus = "status"
+	OutboundsColDispatchRouteId = "dispatch_route_id"
+	OutboundsColTxStatementReady = "tx_statement_ready"
+	OutboundsColInspectionRequestSent = "inspection_request_sent"
+	OutboundsColApprovalRequested = "approval_requested"
+	OutboundsColTaxInvoiceIssued = "tax_invoice_issued"
+	OutboundsColSourcePayload = "source_payload"
 )
 
 // OutboundsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2203,22 +2154,21 @@ type PartnerActivities struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// PartnerActivitiesColumn — public.partner_activities 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PartnerActivitiesColumn string
-
+// PartnerActivitiesCol* — public.partner_activities 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PartnerActivitiesColActivityId, value)
 const (
-	PartnerActivitiesColActivityId PartnerActivitiesColumn = "activity_id"
-	PartnerActivitiesColPartnerId PartnerActivitiesColumn = "partner_id"
-	PartnerActivitiesColAuthorUserId PartnerActivitiesColumn = "author_user_id"
-	PartnerActivitiesColKind PartnerActivitiesColumn = "kind"
-	PartnerActivitiesColBody PartnerActivitiesColumn = "body"
-	PartnerActivitiesColFollowUpRequired PartnerActivitiesColumn = "follow_up_required"
-	PartnerActivitiesColFollowUpDue PartnerActivitiesColumn = "follow_up_due"
-	PartnerActivitiesColFollowUpDone PartnerActivitiesColumn = "follow_up_done"
-	PartnerActivitiesColFollowUpDoneAt PartnerActivitiesColumn = "follow_up_done_at"
-	PartnerActivitiesColFollowUpDoneBy PartnerActivitiesColumn = "follow_up_done_by"
-	PartnerActivitiesColCreatedAt PartnerActivitiesColumn = "created_at"
-	PartnerActivitiesColUpdatedAt PartnerActivitiesColumn = "updated_at"
+	PartnerActivitiesColActivityId = "activity_id"
+	PartnerActivitiesColPartnerId = "partner_id"
+	PartnerActivitiesColAuthorUserId = "author_user_id"
+	PartnerActivitiesColKind = "kind"
+	PartnerActivitiesColBody = "body"
+	PartnerActivitiesColFollowUpRequired = "follow_up_required"
+	PartnerActivitiesColFollowUpDue = "follow_up_due"
+	PartnerActivitiesColFollowUpDone = "follow_up_done"
+	PartnerActivitiesColFollowUpDoneAt = "follow_up_done_at"
+	PartnerActivitiesColFollowUpDoneBy = "follow_up_done_by"
+	PartnerActivitiesColCreatedAt = "created_at"
+	PartnerActivitiesColUpdatedAt = "updated_at"
 )
 
 // PartnerActivitiesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2238,17 +2188,16 @@ type PartnerAliases struct {
 	CreatedBy *string `json:"created_by,omitempty"`
 }
 
-// PartnerAliasesColumn — public.partner_aliases 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PartnerAliasesColumn string
-
+// PartnerAliasesCol* — public.partner_aliases 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PartnerAliasesColAliasId, value)
 const (
-	PartnerAliasesColAliasId PartnerAliasesColumn = "alias_id"
-	PartnerAliasesColCanonicalPartnerId PartnerAliasesColumn = "canonical_partner_id"
-	PartnerAliasesColAliasText PartnerAliasesColumn = "alias_text"
-	PartnerAliasesColAliasTextNormalized PartnerAliasesColumn = "alias_text_normalized"
-	PartnerAliasesColSource PartnerAliasesColumn = "source"
-	PartnerAliasesColCreatedAt PartnerAliasesColumn = "created_at"
-	PartnerAliasesColCreatedBy PartnerAliasesColumn = "created_by"
+	PartnerAliasesColAliasId = "alias_id"
+	PartnerAliasesColCanonicalPartnerId = "canonical_partner_id"
+	PartnerAliasesColAliasText = "alias_text"
+	PartnerAliasesColAliasTextNormalized = "alias_text_normalized"
+	PartnerAliasesColSource = "source"
+	PartnerAliasesColCreatedAt = "created_at"
+	PartnerAliasesColCreatedBy = "created_by"
 )
 
 // PartnerAliasesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2276,22 +2225,21 @@ type PartnerPriceBook struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// PartnerPriceBookColumn — public.partner_price_book 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PartnerPriceBookColumn string
-
+// PartnerPriceBookCol* — public.partner_price_book 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PartnerPriceBookColPriceId, value)
 const (
-	PartnerPriceBookColPriceId PartnerPriceBookColumn = "price_id"
-	PartnerPriceBookColPartnerId PartnerPriceBookColumn = "partner_id"
-	PartnerPriceBookColProductId PartnerPriceBookColumn = "product_id"
-	PartnerPriceBookColUnitPriceWp PartnerPriceBookColumn = "unit_price_wp"
-	PartnerPriceBookColDiscountPct PartnerPriceBookColumn = "discount_pct"
-	PartnerPriceBookColEffectiveFrom PartnerPriceBookColumn = "effective_from"
-	PartnerPriceBookColEffectiveTo PartnerPriceBookColumn = "effective_to"
-	PartnerPriceBookColMemo PartnerPriceBookColumn = "memo"
-	PartnerPriceBookColTenantScope PartnerPriceBookColumn = "tenant_scope"
-	PartnerPriceBookColCreatedBy PartnerPriceBookColumn = "created_by"
-	PartnerPriceBookColCreatedAt PartnerPriceBookColumn = "created_at"
-	PartnerPriceBookColUpdatedAt PartnerPriceBookColumn = "updated_at"
+	PartnerPriceBookColPriceId = "price_id"
+	PartnerPriceBookColPartnerId = "partner_id"
+	PartnerPriceBookColProductId = "product_id"
+	PartnerPriceBookColUnitPriceWp = "unit_price_wp"
+	PartnerPriceBookColDiscountPct = "discount_pct"
+	PartnerPriceBookColEffectiveFrom = "effective_from"
+	PartnerPriceBookColEffectiveTo = "effective_to"
+	PartnerPriceBookColMemo = "memo"
+	PartnerPriceBookColTenantScope = "tenant_scope"
+	PartnerPriceBookColCreatedBy = "created_by"
+	PartnerPriceBookColCreatedAt = "created_at"
+	PartnerPriceBookColUpdatedAt = "updated_at"
 )
 
 // PartnerPriceBookAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2323,25 +2271,24 @@ type Partners struct {
 	NormalizedName *string `json:"normalized_name,omitempty"`
 }
 
-// PartnersColumn — public.partners 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PartnersColumn string
-
+// PartnersCol* — public.partners 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PartnersColPartnerId, value)
 const (
-	PartnersColPartnerId PartnersColumn = "partner_id"
-	PartnersColPartnerName PartnersColumn = "partner_name"
-	PartnersColPartnerType PartnersColumn = "partner_type"
-	PartnersColErpCode PartnersColumn = "erp_code"
-	PartnersColPaymentTerms PartnersColumn = "payment_terms"
-	PartnersColContactName PartnersColumn = "contact_name"
-	PartnersColContactPhone PartnersColumn = "contact_phone"
-	PartnersColContactEmail PartnersColumn = "contact_email"
-	PartnersColIsActive PartnersColumn = "is_active"
-	PartnersColCreatedAt PartnersColumn = "created_at"
-	PartnersColUpdatedAt PartnersColumn = "updated_at"
-	PartnersColCreditLimitKrw PartnersColumn = "credit_limit_krw"
-	PartnersColCreditPaymentDays PartnersColumn = "credit_payment_days"
-	PartnersColOwnerUserId PartnersColumn = "owner_user_id"
-	PartnersColNormalizedName PartnersColumn = "normalized_name"
+	PartnersColPartnerId = "partner_id"
+	PartnersColPartnerName = "partner_name"
+	PartnersColPartnerType = "partner_type"
+	PartnersColErpCode = "erp_code"
+	PartnersColPaymentTerms = "payment_terms"
+	PartnersColContactName = "contact_name"
+	PartnersColContactPhone = "contact_phone"
+	PartnersColContactEmail = "contact_email"
+	PartnersColIsActive = "is_active"
+	PartnersColCreatedAt = "created_at"
+	PartnersColUpdatedAt = "updated_at"
+	PartnersColCreditLimitKrw = "credit_limit_krw"
+	PartnersColCreditPaymentDays = "credit_payment_days"
+	PartnersColOwnerUserId = "owner_user_id"
+	PartnersColNormalizedName = "normalized_name"
 )
 
 // PartnersAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2367,20 +2314,19 @@ type PdfExtractions struct {
 	ExtractedAt string `json:"extracted_at"`
 }
 
-// PdfExtractionsColumn — public.pdf_extractions 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PdfExtractionsColumn string
-
+// PdfExtractionsCol* — public.pdf_extractions 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PdfExtractionsColExtractionId, value)
 const (
-	PdfExtractionsColExtractionId PdfExtractionsColumn = "extraction_id"
-	PdfExtractionsColFileId PdfExtractionsColumn = "file_id"
-	PdfExtractionsColBlId PdfExtractionsColumn = "bl_id"
-	PdfExtractionsColFileType PdfExtractionsColumn = "file_type"
-	PdfExtractionsColExtractor PdfExtractionsColumn = "extractor"
-	PdfExtractionsColParseStatus PdfExtractionsColumn = "parse_status"
-	PdfExtractionsColPageCount PdfExtractionsColumn = "page_count"
-	PdfExtractionsColRawText PdfExtractionsColumn = "raw_text"
-	PdfExtractionsColParsed PdfExtractionsColumn = "parsed"
-	PdfExtractionsColExtractedAt PdfExtractionsColumn = "extracted_at"
+	PdfExtractionsColExtractionId = "extraction_id"
+	PdfExtractionsColFileId = "file_id"
+	PdfExtractionsColBlId = "bl_id"
+	PdfExtractionsColFileType = "file_type"
+	PdfExtractionsColExtractor = "extractor"
+	PdfExtractionsColParseStatus = "parse_status"
+	PdfExtractionsColPageCount = "page_count"
+	PdfExtractionsColRawText = "raw_text"
+	PdfExtractionsColParsed = "parsed"
+	PdfExtractionsColExtractedAt = "extracted_at"
 )
 
 // PdfExtractionsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2407,25 +2353,24 @@ type PickingListItems struct {
 	VarianceNote *string `json:"variance_note,omitempty"`
 }
 
-// PickingListItemsColumn — public.picking_list_items 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PickingListItemsColumn string
-
+// PickingListItemsCol* — public.picking_list_items 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PickingListItemsColItemId, value)
 const (
-	PickingListItemsColItemId PickingListItemsColumn = "item_id"
-	PickingListItemsColPickingListId PickingListItemsColumn = "picking_list_id"
-	PickingListItemsColLineNo PickingListItemsColumn = "line_no"
-	PickingListItemsColProductId PickingListItemsColumn = "product_id"
-	PickingListItemsColProductCodeSnapshot PickingListItemsColumn = "product_code_snapshot"
-	PickingListItemsColProductNameSnapshot PickingListItemsColumn = "product_name_snapshot"
-	PickingListItemsColSpecWpSnapshot PickingListItemsColumn = "spec_wp_snapshot"
-	PickingListItemsColLocationId PickingListItemsColumn = "location_id"
-	PickingListItemsColLocationCodeSnapshot PickingListItemsColumn = "location_code_snapshot"
-	PickingListItemsColQuantityPlanned PickingListItemsColumn = "quantity_planned"
-	PickingListItemsColQuantityPicked PickingListItemsColumn = "quantity_picked"
-	PickingListItemsColIsPicked PickingListItemsColumn = "is_picked"
-	PickingListItemsColPickedAt PickingListItemsColumn = "picked_at"
-	PickingListItemsColPickedBy PickingListItemsColumn = "picked_by"
-	PickingListItemsColVarianceNote PickingListItemsColumn = "variance_note"
+	PickingListItemsColItemId = "item_id"
+	PickingListItemsColPickingListId = "picking_list_id"
+	PickingListItemsColLineNo = "line_no"
+	PickingListItemsColProductId = "product_id"
+	PickingListItemsColProductCodeSnapshot = "product_code_snapshot"
+	PickingListItemsColProductNameSnapshot = "product_name_snapshot"
+	PickingListItemsColSpecWpSnapshot = "spec_wp_snapshot"
+	PickingListItemsColLocationId = "location_id"
+	PickingListItemsColLocationCodeSnapshot = "location_code_snapshot"
+	PickingListItemsColQuantityPlanned = "quantity_planned"
+	PickingListItemsColQuantityPicked = "quantity_picked"
+	PickingListItemsColIsPicked = "is_picked"
+	PickingListItemsColPickedAt = "picked_at"
+	PickingListItemsColPickedBy = "picked_by"
+	PickingListItemsColVarianceNote = "variance_note"
 )
 
 // PickingListItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2450,23 +2395,22 @@ type PickingLists struct {
 	Notes *string `json:"notes,omitempty"`
 }
 
-// PickingListsColumn — public.picking_lists 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PickingListsColumn string
-
+// PickingListsCol* — public.picking_lists 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PickingListsColPickingListId, value)
 const (
-	PickingListsColPickingListId PickingListsColumn = "picking_list_id"
-	PickingListsColOutboundId PickingListsColumn = "outbound_id"
-	PickingListsColDispatchRouteId PickingListsColumn = "dispatch_route_id"
-	PickingListsColWarehouseId PickingListsColumn = "warehouse_id"
-	PickingListsColPartnerId PickingListsColumn = "partner_id"
-	PickingListsColPartnerNameSnapshot PickingListsColumn = "partner_name_snapshot"
-	PickingListsColStatus PickingListsColumn = "status"
-	PickingListsColPickerUserId PickingListsColumn = "picker_user_id"
-	PickingListsColCreatedAt PickingListsColumn = "created_at"
-	PickingListsColCreatedBy PickingListsColumn = "created_by"
-	PickingListsColStartedAt PickingListsColumn = "started_at"
-	PickingListsColCompletedAt PickingListsColumn = "completed_at"
-	PickingListsColNotes PickingListsColumn = "notes"
+	PickingListsColPickingListId = "picking_list_id"
+	PickingListsColOutboundId = "outbound_id"
+	PickingListsColDispatchRouteId = "dispatch_route_id"
+	PickingListsColWarehouseId = "warehouse_id"
+	PickingListsColPartnerId = "partner_id"
+	PickingListsColPartnerNameSnapshot = "partner_name_snapshot"
+	PickingListsColStatus = "status"
+	PickingListsColPickerUserId = "picker_user_id"
+	PickingListsColCreatedAt = "created_at"
+	PickingListsColCreatedBy = "created_by"
+	PickingListsColStartedAt = "started_at"
+	PickingListsColCompletedAt = "completed_at"
+	PickingListsColNotes = "notes"
 )
 
 // PickingListsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2491,22 +2435,21 @@ type PoLineItems struct {
 	UnitPriceUsdWp *float64 `json:"unit_price_usd_wp,omitempty"`
 }
 
-// PoLineItemsColumn — public.po_line_items 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PoLineItemsColumn string
-
+// PoLineItemsCol* — public.po_line_items 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PoLineItemsColPoLineId, value)
 const (
-	PoLineItemsColPoLineId PoLineItemsColumn = "po_line_id"
-	PoLineItemsColPoId PoLineItemsColumn = "po_id"
-	PoLineItemsColProductId PoLineItemsColumn = "product_id"
-	PoLineItemsColQuantity PoLineItemsColumn = "quantity"
-	PoLineItemsColUnitPriceUsd PoLineItemsColumn = "unit_price_usd"
-	PoLineItemsColTotalAmountUsd PoLineItemsColumn = "total_amount_usd"
-	PoLineItemsColMemo PoLineItemsColumn = "memo"
-	PoLineItemsColCreatedAt PoLineItemsColumn = "created_at"
-	PoLineItemsColUpdatedAt PoLineItemsColumn = "updated_at"
-	PoLineItemsColItemType PoLineItemsColumn = "item_type"
-	PoLineItemsColPaymentType PoLineItemsColumn = "payment_type"
-	PoLineItemsColUnitPriceUsdWp PoLineItemsColumn = "unit_price_usd_wp"
+	PoLineItemsColPoLineId = "po_line_id"
+	PoLineItemsColPoId = "po_id"
+	PoLineItemsColProductId = "product_id"
+	PoLineItemsColQuantity = "quantity"
+	PoLineItemsColUnitPriceUsd = "unit_price_usd"
+	PoLineItemsColTotalAmountUsd = "total_amount_usd"
+	PoLineItemsColMemo = "memo"
+	PoLineItemsColCreatedAt = "created_at"
+	PoLineItemsColUpdatedAt = "updated_at"
+	PoLineItemsColItemType = "item_type"
+	PoLineItemsColPaymentType = "payment_type"
+	PoLineItemsColUnitPriceUsdWp = "unit_price_usd_wp"
 )
 
 // PoLineItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2538,27 +2481,26 @@ type PriceBenchmarkRuns struct {
 	SanityReview *json.RawMessage `json:"sanity_review,omitempty"`
 }
 
-// PriceBenchmarkRunsColumn — public.price_benchmark_runs 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PriceBenchmarkRunsColumn string
-
+// PriceBenchmarkRunsCol* — public.price_benchmark_runs 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PriceBenchmarkRunsColRunId, value)
 const (
-	PriceBenchmarkRunsColRunId PriceBenchmarkRunsColumn = "run_id"
-	PriceBenchmarkRunsColStatus PriceBenchmarkRunsColumn = "status"
-	PriceBenchmarkRunsColProvider PriceBenchmarkRunsColumn = "provider"
-	PriceBenchmarkRunsColModel PriceBenchmarkRunsColumn = "model"
-	PriceBenchmarkRunsColSourceKeys PriceBenchmarkRunsColumn = "source_keys"
-	PriceBenchmarkRunsColRequestedBy PriceBenchmarkRunsColumn = "requested_by"
-	PriceBenchmarkRunsColStartedAt PriceBenchmarkRunsColumn = "started_at"
-	PriceBenchmarkRunsColFinishedAt PriceBenchmarkRunsColumn = "finished_at"
-	PriceBenchmarkRunsColInsertedCount PriceBenchmarkRunsColumn = "inserted_count"
-	PriceBenchmarkRunsColSkippedCount PriceBenchmarkRunsColumn = "skipped_count"
-	PriceBenchmarkRunsColErrorMessage PriceBenchmarkRunsColumn = "error_message"
-	PriceBenchmarkRunsColWarnings PriceBenchmarkRunsColumn = "warnings"
-	PriceBenchmarkRunsColEvidence PriceBenchmarkRunsColumn = "evidence"
-	PriceBenchmarkRunsColRawResponse PriceBenchmarkRunsColumn = "raw_response"
-	PriceBenchmarkRunsColEvidenceHashes PriceBenchmarkRunsColumn = "evidence_hashes"
-	PriceBenchmarkRunsColDiagnostics PriceBenchmarkRunsColumn = "diagnostics"
-	PriceBenchmarkRunsColSanityReview PriceBenchmarkRunsColumn = "sanity_review"
+	PriceBenchmarkRunsColRunId = "run_id"
+	PriceBenchmarkRunsColStatus = "status"
+	PriceBenchmarkRunsColProvider = "provider"
+	PriceBenchmarkRunsColModel = "model"
+	PriceBenchmarkRunsColSourceKeys = "source_keys"
+	PriceBenchmarkRunsColRequestedBy = "requested_by"
+	PriceBenchmarkRunsColStartedAt = "started_at"
+	PriceBenchmarkRunsColFinishedAt = "finished_at"
+	PriceBenchmarkRunsColInsertedCount = "inserted_count"
+	PriceBenchmarkRunsColSkippedCount = "skipped_count"
+	PriceBenchmarkRunsColErrorMessage = "error_message"
+	PriceBenchmarkRunsColWarnings = "warnings"
+	PriceBenchmarkRunsColEvidence = "evidence"
+	PriceBenchmarkRunsColRawResponse = "raw_response"
+	PriceBenchmarkRunsColEvidenceHashes = "evidence_hashes"
+	PriceBenchmarkRunsColDiagnostics = "diagnostics"
+	PriceBenchmarkRunsColSanityReview = "sanity_review"
 )
 
 // PriceBenchmarkRunsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2598,37 +2540,36 @@ type PriceBenchmarks struct {
 	ReviewStatus string `json:"review_status"`
 }
 
-// PriceBenchmarksColumn — public.price_benchmarks 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PriceBenchmarksColumn string
-
+// PriceBenchmarksCol* — public.price_benchmarks 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PriceBenchmarksColBenchmarkId, value)
 const (
-	PriceBenchmarksColBenchmarkId PriceBenchmarksColumn = "benchmark_id"
-	PriceBenchmarksColRunId PriceBenchmarksColumn = "run_id"
-	PriceBenchmarksColSourceKey PriceBenchmarksColumn = "source_key"
-	PriceBenchmarksColSourceName PriceBenchmarksColumn = "source_name"
-	PriceBenchmarksColMetricKey PriceBenchmarksColumn = "metric_key"
-	PriceBenchmarksColMetricLabel PriceBenchmarksColumn = "metric_label"
-	PriceBenchmarksColValueDate PriceBenchmarksColumn = "value_date"
-	PriceBenchmarksColPeriodLabel PriceBenchmarksColumn = "period_label"
-	PriceBenchmarksColMarketRegion PriceBenchmarksColumn = "market_region"
-	PriceBenchmarksColBasis PriceBenchmarksColumn = "basis"
-	PriceBenchmarksColCurrency PriceBenchmarksColumn = "currency"
-	PriceBenchmarksColPriceUsdW PriceBenchmarksColumn = "price_usd_w"
-	PriceBenchmarksColPriceCnyW PriceBenchmarksColumn = "price_cny_w"
-	PriceBenchmarksColPriceKrwW PriceBenchmarksColumn = "price_krw_w"
-	PriceBenchmarksColCargoMinMw PriceBenchmarksColumn = "cargo_min_mw"
-	PriceBenchmarksColCargoMaxMw PriceBenchmarksColumn = "cargo_max_mw"
-	PriceBenchmarksColQuarterLabel PriceBenchmarksColumn = "quarter_label"
-	PriceBenchmarksColProjectSegment PriceBenchmarksColumn = "project_segment"
-	PriceBenchmarksColTechnology PriceBenchmarksColumn = "technology"
-	PriceBenchmarksColConfidence PriceBenchmarksColumn = "confidence"
-	PriceBenchmarksColSourceUrl PriceBenchmarksColumn = "source_url"
-	PriceBenchmarksColRawExcerpt PriceBenchmarksColumn = "raw_excerpt"
-	PriceBenchmarksColNotes PriceBenchmarksColumn = "notes"
-	PriceBenchmarksColCreatedBy PriceBenchmarksColumn = "created_by"
-	PriceBenchmarksColCreatedAt PriceBenchmarksColumn = "created_at"
-	PriceBenchmarksColUpdatedAt PriceBenchmarksColumn = "updated_at"
-	PriceBenchmarksColReviewStatus PriceBenchmarksColumn = "review_status"
+	PriceBenchmarksColBenchmarkId = "benchmark_id"
+	PriceBenchmarksColRunId = "run_id"
+	PriceBenchmarksColSourceKey = "source_key"
+	PriceBenchmarksColSourceName = "source_name"
+	PriceBenchmarksColMetricKey = "metric_key"
+	PriceBenchmarksColMetricLabel = "metric_label"
+	PriceBenchmarksColValueDate = "value_date"
+	PriceBenchmarksColPeriodLabel = "period_label"
+	PriceBenchmarksColMarketRegion = "market_region"
+	PriceBenchmarksColBasis = "basis"
+	PriceBenchmarksColCurrency = "currency"
+	PriceBenchmarksColPriceUsdW = "price_usd_w"
+	PriceBenchmarksColPriceCnyW = "price_cny_w"
+	PriceBenchmarksColPriceKrwW = "price_krw_w"
+	PriceBenchmarksColCargoMinMw = "cargo_min_mw"
+	PriceBenchmarksColCargoMaxMw = "cargo_max_mw"
+	PriceBenchmarksColQuarterLabel = "quarter_label"
+	PriceBenchmarksColProjectSegment = "project_segment"
+	PriceBenchmarksColTechnology = "technology"
+	PriceBenchmarksColConfidence = "confidence"
+	PriceBenchmarksColSourceUrl = "source_url"
+	PriceBenchmarksColRawExcerpt = "raw_excerpt"
+	PriceBenchmarksColNotes = "notes"
+	PriceBenchmarksColCreatedBy = "created_by"
+	PriceBenchmarksColCreatedAt = "created_at"
+	PriceBenchmarksColUpdatedAt = "updated_at"
+	PriceBenchmarksColReviewStatus = "review_status"
 )
 
 // PriceBenchmarksAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2652,22 +2593,21 @@ type PriceHistories struct {
 	CompanyId *string `json:"company_id,omitempty"`
 }
 
-// PriceHistoriesColumn — public.price_histories 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PriceHistoriesColumn string
-
+// PriceHistoriesCol* — public.price_histories 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PriceHistoriesColPriceHistoryId, value)
 const (
-	PriceHistoriesColPriceHistoryId PriceHistoriesColumn = "price_history_id"
-	PriceHistoriesColProductId PriceHistoriesColumn = "product_id"
-	PriceHistoriesColManufacturerId PriceHistoriesColumn = "manufacturer_id"
-	PriceHistoriesColChangeDate PriceHistoriesColumn = "change_date"
-	PriceHistoriesColPreviousPrice PriceHistoriesColumn = "previous_price"
-	PriceHistoriesColNewPrice PriceHistoriesColumn = "new_price"
-	PriceHistoriesColReason PriceHistoriesColumn = "reason"
-	PriceHistoriesColRelatedPoId PriceHistoriesColumn = "related_po_id"
-	PriceHistoriesColMemo PriceHistoriesColumn = "memo"
-	PriceHistoriesColCreatedAt PriceHistoriesColumn = "created_at"
-	PriceHistoriesColUpdatedAt PriceHistoriesColumn = "updated_at"
-	PriceHistoriesColCompanyId PriceHistoriesColumn = "company_id"
+	PriceHistoriesColPriceHistoryId = "price_history_id"
+	PriceHistoriesColProductId = "product_id"
+	PriceHistoriesColManufacturerId = "manufacturer_id"
+	PriceHistoriesColChangeDate = "change_date"
+	PriceHistoriesColPreviousPrice = "previous_price"
+	PriceHistoriesColNewPrice = "new_price"
+	PriceHistoriesColReason = "reason"
+	PriceHistoriesColRelatedPoId = "related_po_id"
+	PriceHistoriesColMemo = "memo"
+	PriceHistoriesColCreatedAt = "created_at"
+	PriceHistoriesColUpdatedAt = "updated_at"
+	PriceHistoriesColCompanyId = "company_id"
 )
 
 // PriceHistoriesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2690,19 +2630,18 @@ type ProductAliases struct {
 	Reason *string `json:"reason,omitempty"`
 }
 
-// ProductAliasesColumn — public.product_aliases 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ProductAliasesColumn string
-
+// ProductAliasesCol* — public.product_aliases 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ProductAliasesColAliasId, value)
 const (
-	ProductAliasesColAliasId ProductAliasesColumn = "alias_id"
-	ProductAliasesColCanonicalProductId ProductAliasesColumn = "canonical_product_id"
-	ProductAliasesColAliasCode ProductAliasesColumn = "alias_code"
-	ProductAliasesColAliasCodeNormalized ProductAliasesColumn = "alias_code_normalized"
-	ProductAliasesColSource ProductAliasesColumn = "source"
-	ProductAliasesColCreatedAt ProductAliasesColumn = "created_at"
-	ProductAliasesColCreatedBy ProductAliasesColumn = "created_by"
-	ProductAliasesColAliasProductId ProductAliasesColumn = "alias_product_id"
-	ProductAliasesColReason ProductAliasesColumn = "reason"
+	ProductAliasesColAliasId = "alias_id"
+	ProductAliasesColCanonicalProductId = "canonical_product_id"
+	ProductAliasesColAliasCode = "alias_code"
+	ProductAliasesColAliasCodeNormalized = "alias_code_normalized"
+	ProductAliasesColSource = "source"
+	ProductAliasesColCreatedAt = "created_at"
+	ProductAliasesColCreatedBy = "created_by"
+	ProductAliasesColAliasProductId = "alias_product_id"
+	ProductAliasesColReason = "reason"
 )
 
 // ProductAliasesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2718,14 +2657,13 @@ type ProductPackageItems struct {
 	Notes *string `json:"notes,omitempty"`
 }
 
-// ProductPackageItemsColumn — public.product_package_items 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ProductPackageItemsColumn string
-
+// ProductPackageItemsCol* — public.product_package_items 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ProductPackageItemsColPackageId, value)
 const (
-	ProductPackageItemsColPackageId ProductPackageItemsColumn = "package_id"
-	ProductPackageItemsColChildProductId ProductPackageItemsColumn = "child_product_id"
-	ProductPackageItemsColQuantity ProductPackageItemsColumn = "quantity"
-	ProductPackageItemsColNotes ProductPackageItemsColumn = "notes"
+	ProductPackageItemsColPackageId = "package_id"
+	ProductPackageItemsColChildProductId = "child_product_id"
+	ProductPackageItemsColQuantity = "quantity"
+	ProductPackageItemsColNotes = "notes"
 )
 
 // ProductPackageItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2786,44 +2724,43 @@ type Products struct {
 	SubstitutionGroupCode *string `json:"substitution_group_code,omitempty"`
 }
 
-// ProductsColumn — public.products 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ProductsColumn string
-
+// ProductsCol* — public.products 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ProductsColProductId, value)
 const (
-	ProductsColProductId ProductsColumn = "product_id"
-	ProductsColProductCode ProductsColumn = "product_code"
-	ProductsColProductName ProductsColumn = "product_name"
-	ProductsColManufacturerId ProductsColumn = "manufacturer_id"
-	ProductsColSpecWp ProductsColumn = "spec_wp"
-	ProductsColWattageKw ProductsColumn = "wattage_kw"
-	ProductsColModuleWidthMm ProductsColumn = "module_width_mm"
-	ProductsColModuleHeightMm ProductsColumn = "module_height_mm"
-	ProductsColModuleDepthMm ProductsColumn = "module_depth_mm"
-	ProductsColWeightKg ProductsColumn = "weight_kg"
-	ProductsColWaferPlatform ProductsColumn = "wafer_platform"
-	ProductsColCellConfig ProductsColumn = "cell_config"
-	ProductsColSeriesName ProductsColumn = "series_name"
-	ProductsColIsActive ProductsColumn = "is_active"
-	ProductsColMemo ProductsColumn = "memo"
-	ProductsColCreatedAt ProductsColumn = "created_at"
-	ProductsColUpdatedAt ProductsColumn = "updated_at"
-	ProductsColErpCode ProductsColumn = "erp_code"
-	ProductsColSafetyStock ProductsColumn = "safety_stock"
-	ProductsColAvailableStock ProductsColumn = "available_stock"
-	ProductsColModuleEfficiency ProductsColumn = "module_efficiency"
-	ProductsColModuleType ProductsColumn = "module_type"
-	ProductsColModuleGrade ProductsColumn = "module_grade"
-	ProductsColProductFamilyCode ProductsColumn = "product_family_code"
-	ProductsColProductKind ProductsColumn = "product_kind"
-	ProductsColRatedPowerKw ProductsColumn = "rated_power_kw"
-	ProductsColMaxInputKw ProductsColumn = "max_input_kw"
-	ProductsColMpptChannels ProductsColumn = "mppt_channels"
-	ProductsColVoltageMinV ProductsColumn = "voltage_min_v"
-	ProductsColVoltageMaxV ProductsColumn = "voltage_max_v"
-	ProductsColPhase ProductsColumn = "phase"
-	ProductsColProductVariantKind ProductsColumn = "product_variant_kind"
-	ProductsColBomRevision ProductsColumn = "bom_revision"
-	ProductsColSubstitutionGroupCode ProductsColumn = "substitution_group_code"
+	ProductsColProductId = "product_id"
+	ProductsColProductCode = "product_code"
+	ProductsColProductName = "product_name"
+	ProductsColManufacturerId = "manufacturer_id"
+	ProductsColSpecWp = "spec_wp"
+	ProductsColWattageKw = "wattage_kw"
+	ProductsColModuleWidthMm = "module_width_mm"
+	ProductsColModuleHeightMm = "module_height_mm"
+	ProductsColModuleDepthMm = "module_depth_mm"
+	ProductsColWeightKg = "weight_kg"
+	ProductsColWaferPlatform = "wafer_platform"
+	ProductsColCellConfig = "cell_config"
+	ProductsColSeriesName = "series_name"
+	ProductsColIsActive = "is_active"
+	ProductsColMemo = "memo"
+	ProductsColCreatedAt = "created_at"
+	ProductsColUpdatedAt = "updated_at"
+	ProductsColErpCode = "erp_code"
+	ProductsColSafetyStock = "safety_stock"
+	ProductsColAvailableStock = "available_stock"
+	ProductsColModuleEfficiency = "module_efficiency"
+	ProductsColModuleType = "module_type"
+	ProductsColModuleGrade = "module_grade"
+	ProductsColProductFamilyCode = "product_family_code"
+	ProductsColProductKind = "product_kind"
+	ProductsColRatedPowerKw = "rated_power_kw"
+	ProductsColMaxInputKw = "max_input_kw"
+	ProductsColMpptChannels = "mppt_channels"
+	ProductsColVoltageMinV = "voltage_min_v"
+	ProductsColVoltageMaxV = "voltage_max_v"
+	ProductsColPhase = "phase"
+	ProductsColProductVariantKind = "product_variant_kind"
+	ProductsColBomRevision = "bom_revision"
+	ProductsColSubstitutionGroupCode = "substitution_group_code"
 )
 
 // ProductsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2854,27 +2791,26 @@ type PurchaseOrders struct {
 	ParentPoId *string `json:"parent_po_id,omitempty"`
 }
 
-// PurchaseOrdersColumn — public.purchase_orders 의 컬럼명 (PostgREST select 시 타입 안전성).
-type PurchaseOrdersColumn string
-
+// PurchaseOrdersCol* — public.purchase_orders 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PurchaseOrdersColPoId, value)
 const (
-	PurchaseOrdersColPoId PurchaseOrdersColumn = "po_id"
-	PurchaseOrdersColPoNumber PurchaseOrdersColumn = "po_number"
-	PurchaseOrdersColCompanyId PurchaseOrdersColumn = "company_id"
-	PurchaseOrdersColManufacturerId PurchaseOrdersColumn = "manufacturer_id"
-	PurchaseOrdersColContractType PurchaseOrdersColumn = "contract_type"
-	PurchaseOrdersColContractDate PurchaseOrdersColumn = "contract_date"
-	PurchaseOrdersColIncoterms PurchaseOrdersColumn = "incoterms"
-	PurchaseOrdersColPaymentTerms PurchaseOrdersColumn = "payment_terms"
-	PurchaseOrdersColTotalQty PurchaseOrdersColumn = "total_qty"
-	PurchaseOrdersColTotalMw PurchaseOrdersColumn = "total_mw"
-	PurchaseOrdersColContractPeriodStart PurchaseOrdersColumn = "contract_period_start"
-	PurchaseOrdersColContractPeriodEnd PurchaseOrdersColumn = "contract_period_end"
-	PurchaseOrdersColStatus PurchaseOrdersColumn = "status"
-	PurchaseOrdersColMemo PurchaseOrdersColumn = "memo"
-	PurchaseOrdersColCreatedAt PurchaseOrdersColumn = "created_at"
-	PurchaseOrdersColUpdatedAt PurchaseOrdersColumn = "updated_at"
-	PurchaseOrdersColParentPoId PurchaseOrdersColumn = "parent_po_id"
+	PurchaseOrdersColPoId = "po_id"
+	PurchaseOrdersColPoNumber = "po_number"
+	PurchaseOrdersColCompanyId = "company_id"
+	PurchaseOrdersColManufacturerId = "manufacturer_id"
+	PurchaseOrdersColContractType = "contract_type"
+	PurchaseOrdersColContractDate = "contract_date"
+	PurchaseOrdersColIncoterms = "incoterms"
+	PurchaseOrdersColPaymentTerms = "payment_terms"
+	PurchaseOrdersColTotalQty = "total_qty"
+	PurchaseOrdersColTotalMw = "total_mw"
+	PurchaseOrdersColContractPeriodStart = "contract_period_start"
+	PurchaseOrdersColContractPeriodEnd = "contract_period_end"
+	PurchaseOrdersColStatus = "status"
+	PurchaseOrdersColMemo = "memo"
+	PurchaseOrdersColCreatedAt = "created_at"
+	PurchaseOrdersColUpdatedAt = "updated_at"
+	PurchaseOrdersColParentPoId = "parent_po_id"
 )
 
 // PurchaseOrdersAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2893,16 +2829,15 @@ type ReceiptMatches struct {
 	SaleId *string `json:"sale_id,omitempty"`
 }
 
-// ReceiptMatchesColumn — public.receipt_matches 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ReceiptMatchesColumn string
-
+// ReceiptMatchesCol* — public.receipt_matches 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ReceiptMatchesColMatchId, value)
 const (
-	ReceiptMatchesColMatchId ReceiptMatchesColumn = "match_id"
-	ReceiptMatchesColReceiptId ReceiptMatchesColumn = "receipt_id"
-	ReceiptMatchesColOutboundId ReceiptMatchesColumn = "outbound_id"
-	ReceiptMatchesColMatchedAmount ReceiptMatchesColumn = "matched_amount"
-	ReceiptMatchesColCreatedAt ReceiptMatchesColumn = "created_at"
-	ReceiptMatchesColSaleId ReceiptMatchesColumn = "sale_id"
+	ReceiptMatchesColMatchId = "match_id"
+	ReceiptMatchesColReceiptId = "receipt_id"
+	ReceiptMatchesColOutboundId = "outbound_id"
+	ReceiptMatchesColMatchedAmount = "matched_amount"
+	ReceiptMatchesColCreatedAt = "created_at"
+	ReceiptMatchesColSaleId = "sale_id"
 )
 
 // ReceiptMatchesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2926,20 +2861,19 @@ type Receipts struct {
 	CompanyId *string `json:"company_id,omitempty"`
 }
 
-// ReceiptsColumn — public.receipts 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ReceiptsColumn string
-
+// ReceiptsCol* — public.receipts 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ReceiptsColReceiptId, value)
 const (
-	ReceiptsColReceiptId ReceiptsColumn = "receipt_id"
-	ReceiptsColCustomerId ReceiptsColumn = "customer_id"
-	ReceiptsColReceiptDate ReceiptsColumn = "receipt_date"
-	ReceiptsColAmount ReceiptsColumn = "amount"
-	ReceiptsColBankAccount ReceiptsColumn = "bank_account"
-	ReceiptsColMemo ReceiptsColumn = "memo"
-	ReceiptsColCreatedAt ReceiptsColumn = "created_at"
-	ReceiptsColUpdatedAt ReceiptsColumn = "updated_at"
-	ReceiptsColBankAccountId ReceiptsColumn = "bank_account_id"
-	ReceiptsColCompanyId ReceiptsColumn = "company_id"
+	ReceiptsColReceiptId = "receipt_id"
+	ReceiptsColCustomerId = "customer_id"
+	ReceiptsColReceiptDate = "receipt_date"
+	ReceiptsColAmount = "amount"
+	ReceiptsColBankAccount = "bank_account"
+	ReceiptsColMemo = "memo"
+	ReceiptsColCreatedAt = "created_at"
+	ReceiptsColUpdatedAt = "updated_at"
+	ReceiptsColBankAccountId = "bank_account_id"
+	ReceiptsColCompanyId = "company_id"
 )
 
 // ReceiptsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -2970,29 +2904,28 @@ type ReceivingLogs struct {
 	Notes *string `json:"notes,omitempty"`
 }
 
-// ReceivingLogsColumn — public.receiving_logs 의 컬럼명 (PostgREST select 시 타입 안전성).
-type ReceivingLogsColumn string
-
+// ReceivingLogsCol* — public.receiving_logs 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.ReceivingLogsColReceivingId, value)
 const (
-	ReceivingLogsColReceivingId ReceivingLogsColumn = "receiving_id"
-	ReceivingLogsColSourceType ReceivingLogsColumn = "source_type"
-	ReceivingLogsColBlLineId ReceivingLogsColumn = "bl_line_id"
-	ReceivingLogsColIntercompanyRequestId ReceivingLogsColumn = "intercompany_request_id"
-	ReceivingLogsColWarehouseId ReceivingLogsColumn = "warehouse_id"
-	ReceivingLogsColProductId ReceivingLogsColumn = "product_id"
-	ReceivingLogsColProductCodeSnapshot ReceivingLogsColumn = "product_code_snapshot"
-	ReceivingLogsColProductNameSnapshot ReceivingLogsColumn = "product_name_snapshot"
-	ReceivingLogsColQuantityExpected ReceivingLogsColumn = "quantity_expected"
-	ReceivingLogsColQuantityReceived ReceivingLogsColumn = "quantity_received"
-	ReceivingLogsColQuantityVariance ReceivingLogsColumn = "quantity_variance"
-	ReceivingLogsColLocationId ReceivingLogsColumn = "location_id"
-	ReceivingLogsColLocationCodeSnapshot ReceivingLogsColumn = "location_code_snapshot"
-	ReceivingLogsColReceiverUserId ReceivingLogsColumn = "receiver_user_id"
-	ReceivingLogsColReceivedAt ReceivingLogsColumn = "received_at"
-	ReceivingLogsColVarianceReason ReceivingLogsColumn = "variance_reason"
-	ReceivingLogsColVarianceNote ReceivingLogsColumn = "variance_note"
-	ReceivingLogsColPhotoAttachmentIds ReceivingLogsColumn = "photo_attachment_ids"
-	ReceivingLogsColNotes ReceivingLogsColumn = "notes"
+	ReceivingLogsColReceivingId = "receiving_id"
+	ReceivingLogsColSourceType = "source_type"
+	ReceivingLogsColBlLineId = "bl_line_id"
+	ReceivingLogsColIntercompanyRequestId = "intercompany_request_id"
+	ReceivingLogsColWarehouseId = "warehouse_id"
+	ReceivingLogsColProductId = "product_id"
+	ReceivingLogsColProductCodeSnapshot = "product_code_snapshot"
+	ReceivingLogsColProductNameSnapshot = "product_name_snapshot"
+	ReceivingLogsColQuantityExpected = "quantity_expected"
+	ReceivingLogsColQuantityReceived = "quantity_received"
+	ReceivingLogsColQuantityVariance = "quantity_variance"
+	ReceivingLogsColLocationId = "location_id"
+	ReceivingLogsColLocationCodeSnapshot = "location_code_snapshot"
+	ReceivingLogsColReceiverUserId = "receiver_user_id"
+	ReceivingLogsColReceivedAt = "received_at"
+	ReceivingLogsColVarianceReason = "variance_reason"
+	ReceivingLogsColVarianceNote = "variance_note"
+	ReceivingLogsColPhotoAttachmentIds = "photo_attachment_ids"
+	ReceivingLogsColNotes = "notes"
 )
 
 // ReceivingLogsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3036,33 +2969,32 @@ type Sales struct {
 	SourcePayload *json.RawMessage `json:"source_payload,omitempty"`
 }
 
-// SalesColumn — public.sales 의 컬럼명 (PostgREST select 시 타입 안전성).
-type SalesColumn string
-
+// SalesCol* — public.sales 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.SalesColSaleId, value)
 const (
-	SalesColSaleId SalesColumn = "sale_id"
-	SalesColOutboundId SalesColumn = "outbound_id"
-	SalesColCustomerId SalesColumn = "customer_id"
-	SalesColUnitPriceWp SalesColumn = "unit_price_wp"
-	SalesColUnitPriceEa SalesColumn = "unit_price_ea"
-	SalesColSupplyAmount SalesColumn = "supply_amount"
-	SalesColVatAmount SalesColumn = "vat_amount"
-	SalesColTotalAmount SalesColumn = "total_amount"
-	SalesColTaxInvoiceDate SalesColumn = "tax_invoice_date"
-	SalesColTaxInvoiceEmail SalesColumn = "tax_invoice_email"
-	SalesColErpClosed SalesColumn = "erp_closed"
-	SalesColErpClosedDate SalesColumn = "erp_closed_date"
-	SalesColMemo SalesColumn = "memo"
-	SalesColCreatedAt SalesColumn = "created_at"
-	SalesColUpdatedAt SalesColumn = "updated_at"
-	SalesColOrderId SalesColumn = "order_id"
-	SalesColQuantity SalesColumn = "quantity"
-	SalesColCapacityKw SalesColumn = "capacity_kw"
-	SalesColStatus SalesColumn = "status"
-	SalesColErpSalesNo SalesColumn = "erp_sales_no"
-	SalesColErpLineNo SalesColumn = "erp_line_no"
-	SalesColCurrency SalesColumn = "currency"
-	SalesColSourcePayload SalesColumn = "source_payload"
+	SalesColSaleId = "sale_id"
+	SalesColOutboundId = "outbound_id"
+	SalesColCustomerId = "customer_id"
+	SalesColUnitPriceWp = "unit_price_wp"
+	SalesColUnitPriceEa = "unit_price_ea"
+	SalesColSupplyAmount = "supply_amount"
+	SalesColVatAmount = "vat_amount"
+	SalesColTotalAmount = "total_amount"
+	SalesColTaxInvoiceDate = "tax_invoice_date"
+	SalesColTaxInvoiceEmail = "tax_invoice_email"
+	SalesColErpClosed = "erp_closed"
+	SalesColErpClosedDate = "erp_closed_date"
+	SalesColMemo = "memo"
+	SalesColCreatedAt = "created_at"
+	SalesColUpdatedAt = "updated_at"
+	SalesColOrderId = "order_id"
+	SalesColQuantity = "quantity"
+	SalesColCapacityKw = "capacity_kw"
+	SalesColStatus = "status"
+	SalesColErpSalesNo = "erp_sales_no"
+	SalesColErpLineNo = "erp_line_no"
+	SalesColCurrency = "currency"
+	SalesColSourcePayload = "source_payload"
 )
 
 // SalesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3085,21 +3017,20 @@ type StudyLearningDomains struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// StudyLearningDomainsColumn — public.study_learning_domains 의 컬럼명 (PostgREST select 시 타입 안전성).
-type StudyLearningDomainsColumn string
-
+// StudyLearningDomainsCol* — public.study_learning_domains 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.StudyLearningDomainsColDomainId, value)
 const (
-	StudyLearningDomainsColDomainId StudyLearningDomainsColumn = "domain_id"
-	StudyLearningDomainsColTenantScope StudyLearningDomainsColumn = "tenant_scope"
-	StudyLearningDomainsColDomainKey StudyLearningDomainsColumn = "domain_key"
-	StudyLearningDomainsColTitle StudyLearningDomainsColumn = "title"
-	StudyLearningDomainsColSummary StudyLearningDomainsColumn = "summary"
-	StudyLearningDomainsColOwnerRole StudyLearningDomainsColumn = "owner_role"
-	StudyLearningDomainsColDisplayOrder StudyLearningDomainsColumn = "display_order"
-	StudyLearningDomainsColStatus StudyLearningDomainsColumn = "status"
-	StudyLearningDomainsColCreatedBy StudyLearningDomainsColumn = "created_by"
-	StudyLearningDomainsColCreatedAt StudyLearningDomainsColumn = "created_at"
-	StudyLearningDomainsColUpdatedAt StudyLearningDomainsColumn = "updated_at"
+	StudyLearningDomainsColDomainId = "domain_id"
+	StudyLearningDomainsColTenantScope = "tenant_scope"
+	StudyLearningDomainsColDomainKey = "domain_key"
+	StudyLearningDomainsColTitle = "title"
+	StudyLearningDomainsColSummary = "summary"
+	StudyLearningDomainsColOwnerRole = "owner_role"
+	StudyLearningDomainsColDisplayOrder = "display_order"
+	StudyLearningDomainsColStatus = "status"
+	StudyLearningDomainsColCreatedBy = "created_by"
+	StudyLearningDomainsColCreatedAt = "created_at"
+	StudyLearningDomainsColUpdatedAt = "updated_at"
 )
 
 // StudyLearningDomainsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3123,22 +3054,21 @@ type StudyLearningPlanSteps struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// StudyLearningPlanStepsColumn — public.study_learning_plan_steps 의 컬럼명 (PostgREST select 시 타입 안전성).
-type StudyLearningPlanStepsColumn string
-
+// StudyLearningPlanStepsCol* — public.study_learning_plan_steps 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.StudyLearningPlanStepsColStepId, value)
 const (
-	StudyLearningPlanStepsColStepId StudyLearningPlanStepsColumn = "step_id"
-	StudyLearningPlanStepsColPlanId StudyLearningPlanStepsColumn = "plan_id"
-	StudyLearningPlanStepsColDomainId StudyLearningPlanStepsColumn = "domain_id"
-	StudyLearningPlanStepsColLineNo StudyLearningPlanStepsColumn = "line_no"
-	StudyLearningPlanStepsColTitle StudyLearningPlanStepsColumn = "title"
-	StudyLearningPlanStepsColDescription StudyLearningPlanStepsColumn = "description"
-	StudyLearningPlanStepsColExpectedMinutes StudyLearningPlanStepsColumn = "expected_minutes"
-	StudyLearningPlanStepsColRequired StudyLearningPlanStepsColumn = "required"
-	StudyLearningPlanStepsColAssessmentKind StudyLearningPlanStepsColumn = "assessment_kind"
-	StudyLearningPlanStepsColResourceUrl StudyLearningPlanStepsColumn = "resource_url"
-	StudyLearningPlanStepsColCreatedAt StudyLearningPlanStepsColumn = "created_at"
-	StudyLearningPlanStepsColUpdatedAt StudyLearningPlanStepsColumn = "updated_at"
+	StudyLearningPlanStepsColStepId = "step_id"
+	StudyLearningPlanStepsColPlanId = "plan_id"
+	StudyLearningPlanStepsColDomainId = "domain_id"
+	StudyLearningPlanStepsColLineNo = "line_no"
+	StudyLearningPlanStepsColTitle = "title"
+	StudyLearningPlanStepsColDescription = "description"
+	StudyLearningPlanStepsColExpectedMinutes = "expected_minutes"
+	StudyLearningPlanStepsColRequired = "required"
+	StudyLearningPlanStepsColAssessmentKind = "assessment_kind"
+	StudyLearningPlanStepsColResourceUrl = "resource_url"
+	StudyLearningPlanStepsColCreatedAt = "created_at"
+	StudyLearningPlanStepsColUpdatedAt = "updated_at"
 )
 
 // StudyLearningPlanStepsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3161,21 +3091,20 @@ type StudyLearningPlans struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// StudyLearningPlansColumn — public.study_learning_plans 의 컬럼명 (PostgREST select 시 타입 안전성).
-type StudyLearningPlansColumn string
-
+// StudyLearningPlansCol* — public.study_learning_plans 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.StudyLearningPlansColPlanId, value)
 const (
-	StudyLearningPlansColPlanId StudyLearningPlansColumn = "plan_id"
-	StudyLearningPlansColTenantScope StudyLearningPlansColumn = "tenant_scope"
-	StudyLearningPlansColPlanKey StudyLearningPlansColumn = "plan_key"
-	StudyLearningPlansColTitle StudyLearningPlansColumn = "title"
-	StudyLearningPlansColAudience StudyLearningPlansColumn = "audience"
-	StudyLearningPlansColObjective StudyLearningPlansColumn = "objective"
-	StudyLearningPlansColDurationDays StudyLearningPlansColumn = "duration_days"
-	StudyLearningPlansColStatus StudyLearningPlansColumn = "status"
-	StudyLearningPlansColCreatedBy StudyLearningPlansColumn = "created_by"
-	StudyLearningPlansColCreatedAt StudyLearningPlansColumn = "created_at"
-	StudyLearningPlansColUpdatedAt StudyLearningPlansColumn = "updated_at"
+	StudyLearningPlansColPlanId = "plan_id"
+	StudyLearningPlansColTenantScope = "tenant_scope"
+	StudyLearningPlansColPlanKey = "plan_key"
+	StudyLearningPlansColTitle = "title"
+	StudyLearningPlansColAudience = "audience"
+	StudyLearningPlansColObjective = "objective"
+	StudyLearningPlansColDurationDays = "duration_days"
+	StudyLearningPlansColStatus = "status"
+	StudyLearningPlansColCreatedBy = "created_by"
+	StudyLearningPlansColCreatedAt = "created_at"
+	StudyLearningPlansColUpdatedAt = "updated_at"
 )
 
 // StudyLearningPlansAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3193,14 +3122,13 @@ type SystemSettings struct {
 	UpdatedBy *string `json:"updated_by,omitempty"`
 }
 
-// SystemSettingsColumn — public.system_settings 의 컬럼명 (PostgREST select 시 타입 안전성).
-type SystemSettingsColumn string
-
+// SystemSettingsCol* — public.system_settings 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.SystemSettingsColKey, value)
 const (
-	SystemSettingsColKey SystemSettingsColumn = "key"
-	SystemSettingsColValue SystemSettingsColumn = "value"
-	SystemSettingsColUpdatedAt SystemSettingsColumn = "updated_at"
-	SystemSettingsColUpdatedBy SystemSettingsColumn = "updated_by"
+	SystemSettingsColKey = "key"
+	SystemSettingsColValue = "value"
+	SystemSettingsColUpdatedAt = "updated_at"
+	SystemSettingsColUpdatedBy = "updated_by"
 )
 
 // SystemSettingsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3222,18 +3150,17 @@ type TenantDataScopes struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// TenantDataScopesColumn — public.tenant_data_scopes 의 컬럼명 (PostgREST select 시 타입 안전성).
-type TenantDataScopesColumn string
-
+// TenantDataScopesCol* — public.tenant_data_scopes 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.TenantDataScopesColTenant, value)
 const (
-	TenantDataScopesColTenant TenantDataScopesColumn = "tenant"
-	TenantDataScopesColFeatureId TenantDataScopesColumn = "feature_id"
-	TenantDataScopesColRowFilter TenantDataScopesColumn = "row_filter"
-	TenantDataScopesColColumnMask TenantDataScopesColumn = "column_mask"
-	TenantDataScopesColNote TenantDataScopesColumn = "note"
-	TenantDataScopesColUpdatedBy TenantDataScopesColumn = "updated_by"
-	TenantDataScopesColUpdatedAt TenantDataScopesColumn = "updated_at"
-	TenantDataScopesColCreatedAt TenantDataScopesColumn = "created_at"
+	TenantDataScopesColTenant = "tenant"
+	TenantDataScopesColFeatureId = "feature_id"
+	TenantDataScopesColRowFilter = "row_filter"
+	TenantDataScopesColColumnMask = "column_mask"
+	TenantDataScopesColNote = "note"
+	TenantDataScopesColUpdatedBy = "updated_by"
+	TenantDataScopesColUpdatedAt = "updated_at"
+	TenantDataScopesColCreatedAt = "created_at"
 )
 
 // TenantDataScopesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3253,17 +3180,16 @@ type TenantFeatures struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// TenantFeaturesColumn — public.tenant_features 의 컬럼명 (PostgREST select 시 타입 안전성).
-type TenantFeaturesColumn string
-
+// TenantFeaturesCol* — public.tenant_features 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.TenantFeaturesColTenant, value)
 const (
-	TenantFeaturesColTenant TenantFeaturesColumn = "tenant"
-	TenantFeaturesColFeatureId TenantFeaturesColumn = "feature_id"
-	TenantFeaturesColEnabled TenantFeaturesColumn = "enabled"
-	TenantFeaturesColNote TenantFeaturesColumn = "note"
-	TenantFeaturesColUpdatedBy TenantFeaturesColumn = "updated_by"
-	TenantFeaturesColUpdatedAt TenantFeaturesColumn = "updated_at"
-	TenantFeaturesColCreatedAt TenantFeaturesColumn = "created_at"
+	TenantFeaturesColTenant = "tenant"
+	TenantFeaturesColFeatureId = "feature_id"
+	TenantFeaturesColEnabled = "enabled"
+	TenantFeaturesColNote = "note"
+	TenantFeaturesColUpdatedBy = "updated_by"
+	TenantFeaturesColUpdatedAt = "updated_at"
+	TenantFeaturesColCreatedAt = "created_at"
 )
 
 // TenantFeaturesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3288,22 +3214,21 @@ type TtRemittances struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// TtRemittancesColumn — public.tt_remittances 의 컬럼명 (PostgREST select 시 타입 안전성).
-type TtRemittancesColumn string
-
+// TtRemittancesCol* — public.tt_remittances 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.TtRemittancesColTtId, value)
 const (
-	TtRemittancesColTtId TtRemittancesColumn = "tt_id"
-	TtRemittancesColPoId TtRemittancesColumn = "po_id"
-	TtRemittancesColRemitDate TtRemittancesColumn = "remit_date"
-	TtRemittancesColAmountUsd TtRemittancesColumn = "amount_usd"
-	TtRemittancesColAmountKrw TtRemittancesColumn = "amount_krw"
-	TtRemittancesColExchangeRate TtRemittancesColumn = "exchange_rate"
-	TtRemittancesColPurpose TtRemittancesColumn = "purpose"
-	TtRemittancesColStatus TtRemittancesColumn = "status"
-	TtRemittancesColBankName TtRemittancesColumn = "bank_name"
-	TtRemittancesColMemo TtRemittancesColumn = "memo"
-	TtRemittancesColCreatedAt TtRemittancesColumn = "created_at"
-	TtRemittancesColUpdatedAt TtRemittancesColumn = "updated_at"
+	TtRemittancesColTtId = "tt_id"
+	TtRemittancesColPoId = "po_id"
+	TtRemittancesColRemitDate = "remit_date"
+	TtRemittancesColAmountUsd = "amount_usd"
+	TtRemittancesColAmountKrw = "amount_krw"
+	TtRemittancesColExchangeRate = "exchange_rate"
+	TtRemittancesColPurpose = "purpose"
+	TtRemittancesColStatus = "status"
+	TtRemittancesColBankName = "bank_name"
+	TtRemittancesColMemo = "memo"
+	TtRemittancesColCreatedAt = "created_at"
+	TtRemittancesColUpdatedAt = "updated_at"
 )
 
 // TtRemittancesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3324,16 +3249,15 @@ type UiConfigs struct {
 	UpdatedBy *string `json:"updated_by,omitempty"`
 }
 
-// UiConfigsColumn — public.ui_configs 의 컬럼명 (PostgREST select 시 타입 안전성).
-type UiConfigsColumn string
-
+// UiConfigsCol* — public.ui_configs 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.UiConfigsColId, value)
 const (
-	UiConfigsColId UiConfigsColumn = "id"
-	UiConfigsColScope UiConfigsColumn = "scope"
-	UiConfigsColConfigId UiConfigsColumn = "config_id"
-	UiConfigsColConfig UiConfigsColumn = "config"
-	UiConfigsColUpdatedAt UiConfigsColumn = "updated_at"
-	UiConfigsColUpdatedBy UiConfigsColumn = "updated_by"
+	UiConfigsColId = "id"
+	UiConfigsColScope = "scope"
+	UiConfigsColConfigId = "config_id"
+	UiConfigsColConfig = "config"
+	UiConfigsColUpdatedAt = "updated_at"
+	UiConfigsColUpdatedBy = "updated_by"
 )
 
 // UiConfigsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3366,25 +3290,24 @@ type UserProfiles struct {
 	Preferences json.RawMessage `json:"preferences"`
 }
 
-// UserProfilesColumn — public.user_profiles 의 컬럼명 (PostgREST select 시 타입 안전성).
-type UserProfilesColumn string
-
+// UserProfilesCol* — public.user_profiles 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.UserProfilesColUserId, value)
 const (
-	UserProfilesColUserId UserProfilesColumn = "user_id"
-	UserProfilesColEmail UserProfilesColumn = "email"
-	UserProfilesColName UserProfilesColumn = "name"
-	UserProfilesColRole UserProfilesColumn = "role"
-	UserProfilesColAllowedModules UserProfilesColumn = "allowed_modules"
-	UserProfilesColCompanyId UserProfilesColumn = "company_id"
-	UserProfilesColIsActive UserProfilesColumn = "is_active"
-	UserProfilesColCreatedAt UserProfilesColumn = "created_at"
-	UserProfilesColUpdatedAt UserProfilesColumn = "updated_at"
-	UserProfilesColDepartment UserProfilesColumn = "department"
-	UserProfilesColPhone UserProfilesColumn = "phone"
-	UserProfilesColAvatarUrl UserProfilesColumn = "avatar_url"
-	UserProfilesColTenantScope UserProfilesColumn = "tenant_scope"
-	UserProfilesColPersona UserProfilesColumn = "persona"
-	UserProfilesColPreferences UserProfilesColumn = "preferences"
+	UserProfilesColUserId = "user_id"
+	UserProfilesColEmail = "email"
+	UserProfilesColName = "name"
+	UserProfilesColRole = "role"
+	UserProfilesColAllowedModules = "allowed_modules"
+	UserProfilesColCompanyId = "company_id"
+	UserProfilesColIsActive = "is_active"
+	UserProfilesColCreatedAt = "created_at"
+	UserProfilesColUpdatedAt = "updated_at"
+	UserProfilesColDepartment = "department"
+	UserProfilesColPhone = "phone"
+	UserProfilesColAvatarUrl = "avatar_url"
+	UserProfilesColTenantScope = "tenant_scope"
+	UserProfilesColPersona = "persona"
+	UserProfilesColPreferences = "preferences"
 )
 
 // UserProfilesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3410,24 +3333,23 @@ type WarehouseLocations struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// WarehouseLocationsColumn — public.warehouse_locations 의 컬럼명 (PostgREST select 시 타입 안전성).
-type WarehouseLocationsColumn string
-
+// WarehouseLocationsCol* — public.warehouse_locations 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.WarehouseLocationsColLocationId, value)
 const (
-	WarehouseLocationsColLocationId WarehouseLocationsColumn = "location_id"
-	WarehouseLocationsColWarehouseId WarehouseLocationsColumn = "warehouse_id"
-	WarehouseLocationsColZone WarehouseLocationsColumn = "zone"
-	WarehouseLocationsColAisle WarehouseLocationsColumn = "aisle"
-	WarehouseLocationsColRack WarehouseLocationsColumn = "rack"
-	WarehouseLocationsColBin WarehouseLocationsColumn = "bin"
-	WarehouseLocationsColLocationCode WarehouseLocationsColumn = "location_code"
-	WarehouseLocationsColCapacityQty WarehouseLocationsColumn = "capacity_qty"
-	WarehouseLocationsColWeightCapacityKg WarehouseLocationsColumn = "weight_capacity_kg"
-	WarehouseLocationsColLocationType WarehouseLocationsColumn = "location_type"
-	WarehouseLocationsColNotes WarehouseLocationsColumn = "notes"
-	WarehouseLocationsColIsActive WarehouseLocationsColumn = "is_active"
-	WarehouseLocationsColCreatedAt WarehouseLocationsColumn = "created_at"
-	WarehouseLocationsColUpdatedAt WarehouseLocationsColumn = "updated_at"
+	WarehouseLocationsColLocationId = "location_id"
+	WarehouseLocationsColWarehouseId = "warehouse_id"
+	WarehouseLocationsColZone = "zone"
+	WarehouseLocationsColAisle = "aisle"
+	WarehouseLocationsColRack = "rack"
+	WarehouseLocationsColBin = "bin"
+	WarehouseLocationsColLocationCode = "location_code"
+	WarehouseLocationsColCapacityQty = "capacity_qty"
+	WarehouseLocationsColWeightCapacityKg = "weight_capacity_kg"
+	WarehouseLocationsColLocationType = "location_type"
+	WarehouseLocationsColNotes = "notes"
+	WarehouseLocationsColIsActive = "is_active"
+	WarehouseLocationsColCreatedAt = "created_at"
+	WarehouseLocationsColUpdatedAt = "updated_at"
 )
 
 // WarehouseLocationsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
@@ -3450,19 +3372,18 @@ type Warehouses struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// WarehousesColumn — public.warehouses 의 컬럼명 (PostgREST select 시 타입 안전성).
-type WarehousesColumn string
-
+// WarehousesCol* — public.warehouses 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.WarehousesColWarehouseId, value)
 const (
-	WarehousesColWarehouseId WarehousesColumn = "warehouse_id"
-	WarehousesColWarehouseCode WarehousesColumn = "warehouse_code"
-	WarehousesColWarehouseName WarehousesColumn = "warehouse_name"
-	WarehousesColWarehouseType WarehousesColumn = "warehouse_type"
-	WarehousesColLocationCode WarehousesColumn = "location_code"
-	WarehousesColLocationName WarehousesColumn = "location_name"
-	WarehousesColIsActive WarehousesColumn = "is_active"
-	WarehousesColCreatedAt WarehousesColumn = "created_at"
-	WarehousesColUpdatedAt WarehousesColumn = "updated_at"
+	WarehousesColWarehouseId = "warehouse_id"
+	WarehousesColWarehouseCode = "warehouse_code"
+	WarehousesColWarehouseName = "warehouse_name"
+	WarehousesColWarehouseType = "warehouse_type"
+	WarehousesColLocationCode = "location_code"
+	WarehousesColLocationName = "location_name"
+	WarehousesColIsActive = "is_active"
+	WarehousesColCreatedAt = "created_at"
+	WarehousesColUpdatedAt = "updated_at"
 )
 
 // WarehousesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
