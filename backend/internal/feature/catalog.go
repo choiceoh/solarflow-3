@@ -687,6 +687,7 @@ var Catalog = map[FeatureID]Feature{
 			"/api/v1/admin/db-anomalies/ignore",
 			"/api/v1/admin/db-anomalies/ignore/{ignoreID}",
 			"/api/v1/admin/db-anomalies/ignores",
+			"/api/v1/admin/db-anomalies/snapshots",
 		},
 	},
 

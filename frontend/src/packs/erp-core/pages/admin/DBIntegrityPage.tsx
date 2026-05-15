@@ -45,12 +45,16 @@ export default function DBIntegrityPage() {
         <TabsList variant="line">
           <TabsTrigger value="aggregate">집계 검증</TabsTrigger>
           <TabsTrigger value="row-level">개별 이상치</TabsTrigger>
+          <TabsTrigger value="trend">추세</TabsTrigger>
         </TabsList>
         <TabsContent value="aggregate" className="mt-4">
           <AggregateIntegrityView />
         </TabsContent>
         <TabsContent value="row-level" className="mt-4">
           <RowLevelAnomaliesView />
+        </TabsContent>
+        <TabsContent value="trend" className="mt-4">
+          <AnomalyTrendView />
         </TabsContent>
       </Tabs>
     </div>
@@ -787,4 +791,197 @@ function formatDetailValue(v: unknown): string {
   if (typeof v === 'number') return v.toLocaleString('ko-KR');
   if (typeof v === 'boolean') return v ? 'true' : 'false';
   return String(v);
+}
+
+// ============================================================
+// 추세 그래프 (PR 후속 — D-20260512-171222 룰 6)
+// ============================================================
+// 운영 cron 이 매일 캡처한 db_anomaly_snapshots 의 룰별 일별 카운트를
+// line chart 로 표시. 룰이 늘어나도 별도 wiring 불필요 — 서버 응답을 그대로
+// 룰별 series 로 변환.
+
+interface SnapshotRow {
+  rule_name: string;
+  severity: 'high' | 'med' | 'low';
+  category: string;
+  taken_date: string; // YYYY-MM-DD
+  count: number;
+}
+
+interface SnapshotsResponse {
+  snapshots: SnapshotRow[];
+  days: number;
+  generated_at: string;
+}
+
+const RULE_COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#0ea5e9', '#6366f1'];
+
+function AnomalyTrendView() {
+  const [data, setData] = useState<SnapshotRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [days, setDays] = useState(30);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetchWithAuth<SnapshotsResponse>(
+        `/api/v1/admin/db-anomalies/snapshots?days=${days}`,
+      );
+      setData(r.snapshots);
+    } catch (e) {
+      console.error(e);
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [days]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // 룰별 series + x축 날짜 통합
+  const { series, dates, rules } = useMemo(() => {
+    if (!data) return { series: {}, dates: [] as string[], rules: [] as string[] };
+    const dateSet = new Set<string>();
+    const ruleSet = new Set<string>();
+    const series: Record<string, Record<string, number>> = {};
+    for (const r of data) {
+      dateSet.add(r.taken_date);
+      ruleSet.add(r.rule_name);
+      series[r.rule_name] = series[r.rule_name] ?? {};
+      series[r.rule_name][r.taken_date] = r.count;
+    }
+    return {
+      series,
+      dates: Array.from(dateSet).sort(),
+      rules: Array.from(ruleSet).sort(),
+    };
+  }, [data]);
+
+  const chartData = useMemo(() => {
+    return dates.map((d) => {
+      const row: Record<string, string | number> = { date: d };
+      for (const r of rules) {
+        row[r] = series[r]?.[d] ?? 0;
+      }
+      return row;
+    });
+  }, [dates, rules, series]);
+
+  if (loading) return <LoadingSpinner />;
+  if (!data || data.length === 0) {
+    return (
+      <div className="rounded border border-dashed border-slate-200 p-6 text-center text-xs text-muted-foreground">
+        아직 일별 snapshot 데이터가 없습니다. 운영 cron 이 매일 자동으로 캡처합니다.
+        <br />수동 1회 호출:{' '}
+        <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">SELECT snapshot_db_anomalies()</code>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-muted-foreground">기간:</span>
+        {[7, 14, 30, 60, 90].map((d) => (
+          <Button
+            key={d}
+            size="sm"
+            variant={days === d ? 'default' : 'outline'}
+            className="h-6 px-2 text-xs"
+            onClick={() => setDays(d)}
+          >
+            {d}일
+          </Button>
+        ))}
+        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => void load()}>
+          <RefreshCw className="mr-1 h-3 w-3" />새로고침
+        </Button>
+      </div>
+
+      <AnomalyTrendChart data={chartData} rules={rules} />
+
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+        {rules.map((rule, i) => {
+          const latest = chartData.at(-1)?.[rule];
+          const previous = chartData.at(-2)?.[rule];
+          const latestN = typeof latest === 'number' ? latest : 0;
+          const prevN = typeof previous === 'number' ? previous : 0;
+          const delta = latestN - prevN;
+          return (
+            <div key={rule} className="rounded border border-slate-200 p-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: RULE_COLORS[i % RULE_COLORS.length] }}
+                />
+                <span className="font-medium">{rule}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-base font-semibold">{latestN.toLocaleString('ko-KR')}</span>
+                <span
+                  className={
+                    delta > 0
+                      ? 'text-xs text-red-600'
+                      : delta < 0
+                        ? 'text-xs text-emerald-600'
+                        : 'text-xs text-muted-foreground'
+                  }
+                >
+                  {delta > 0 ? `+${delta}` : delta < 0 ? delta : '±0'} vs 전날
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AnomalyTrendChart({ data, rules }: { data: Array<Record<string, string | number>>; rules: string[] }) {
+  // Recharts 를 lazy import 로 — 추세 탭 들어갔을 때만 번들 로드.
+  const [recharts, setRecharts] = useState<typeof import('recharts') | null>(null);
+  useEffect(() => {
+    let active = true;
+    void import('recharts').then((mod) => {
+      if (active) setRecharts(mod);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!recharts) return <div className="h-64 animate-pulse rounded bg-slate-50" />;
+
+  const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = recharts;
+
+  return (
+    <div className="rounded border border-slate-200 p-2">
+      <ResponsiveContainer width="100%" height={320}>
+        <LineChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+          <YAxis tick={{ fontSize: 10 }} />
+          <Tooltip
+            contentStyle={{ fontSize: 11, padding: '4px 8px' }}
+            labelStyle={{ fontWeight: 600 }}
+          />
+          <Legend wrapperStyle={{ fontSize: 10 }} />
+          {rules.map((rule, i) => (
+            <Line
+              key={rule}
+              type="monotone"
+              dataKey={rule}
+              stroke={RULE_COLORS[i % RULE_COLORS.length]}
+              strokeWidth={1.5}
+              dot={false}
+              isAnimationActive={false}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
 }
