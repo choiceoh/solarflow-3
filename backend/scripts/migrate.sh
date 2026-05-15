@@ -6,12 +6,12 @@
 # 단계:
 #   1. psql -f <file>  — SQL 적용
 #   2. NOTIFY pgrst, 'reload schema'  — 클라우드/로컬 PostgREST 캐시 갱신
-#   3. ./scripts/check_schema.sh  — Go 모델 vs DB 컬럼 동기화 검증
+#   3. ./scripts/check_schema.sh  — generated dbschema 산출물 ↔ DB introspection 검증
+#      (PR #855 이후 bun scripts/gen_db_types.ts --check 의 thin shim)
 #
 # 환경변수:
 #   SUPABASE_DB_URL  (backend/.env) — 필수
 #   PGPASSWORD       (선택, URL에 password 없을 때)
-#   DB_NAME          (선택, check_schema.sh 용, 기본 solarflow)
 
 set -euo pipefail
 

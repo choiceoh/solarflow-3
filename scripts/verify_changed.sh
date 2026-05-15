@@ -101,10 +101,12 @@ run_backend_checks() {
 
   if [[ "${SKIP_SCHEMA:-0}" == "1" ]]; then
     skip_step "Request struct schema check" "SKIP_SCHEMA=1"
-  elif command -v psql >/dev/null 2>&1; then
+  elif command -v bun >/dev/null 2>&1; then
+    # check_schema.sh 는 이제 bun scripts/gen_db_types.ts --check 의 thin shim.
+    # PR #855 이후 DB introspection 기반 codegen 으로 전환됨.
     run_step "Request struct schema check" bash -lc "cd '${ROOT_DIR}/backend' && ./scripts/check_schema.sh"
   else
-    skip_step "Request struct schema check" "psql command not found"
+    skip_step "Request struct schema check" "bun command not found"
   fi
 }
 
