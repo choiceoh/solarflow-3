@@ -88,6 +88,7 @@ export const testBl = {
   etd: '2026-05-01',
   eta: '2026-05-15',
   status: 'completed' as const,
+  total_mw: 0.635,
 };
 
 export const testBlLine = {
