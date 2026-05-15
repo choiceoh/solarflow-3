@@ -9,6 +9,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
@@ -56,12 +57,12 @@ func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// 비유: ?manufacturer_id=xxx — 특정 제조사 모듈만 필터
 	if mfgID := r.URL.Query().Get("manufacturer_id"); mfgID != "" {
-		query = query.Eq("manufacturer_id", mfgID)
+		query = query.Eq(dbschema.ProductsColManufacturerId, mfgID)
 	}
 
 	// 비유: ?active=true — 활성 모듈만 필터
 	if active := r.URL.Query().Get("active"); active != "" {
-		query = query.Eq("is_active", active)
+		query = query.Eq(dbschema.ProductsColIsActive, active)
 	}
 
 	data, _, err := query.Execute()

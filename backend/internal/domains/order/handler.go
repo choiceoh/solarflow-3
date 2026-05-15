@@ -13,6 +13,7 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/mount"
@@ -25,15 +26,15 @@ const (
 )
 
 var orderSortable = map[string]struct{}{
-	"order_date":          {},
-	"order_number":        {},
-	"site_name":           {},
-	"quantity":            {},
-	"capacity_kw":         {},
-	"unit_price_wp":       {},
-	"status":              {},
-	"management_category": {},
-	"created_at":          {},
+	dbschema.OrdersColOrderDate:          {},
+	dbschema.OrdersColOrderNumber:        {},
+	dbschema.OrdersColSiteName:           {},
+	dbschema.OrdersColQuantity:           {},
+	dbschema.OrdersColCapacityKw:         {},
+	dbschema.OrdersColUnitPriceWp:        {},
+	dbschema.OrdersColStatus:             {},
+	dbschema.OrdersColManagementCategory: {},
+	dbschema.OrdersColCreatedAt:          {},
 }
 
 // OrderHandler — 수주(orders) 관련 API를 처리하는 핸들러
@@ -96,40 +97,40 @@ func sanitizeOrderSearchTerm(q string) string {
 // applyOrderFilters — List/Summary 가 공유하는 필터 로직.
 func (h *OrderHandler) applyOrderFilters(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
-		query = query.Eq("company_id", compID)
+		query = query.Eq(dbschema.OrdersColCompanyId, compID)
 	}
 	if custID := r.URL.Query().Get("customer_id"); custID != "" {
-		query = query.Eq("customer_id", custID)
+		query = query.Eq(dbschema.OrdersColCustomerId, custID)
 	}
 	if status := r.URL.Query().Get("status"); status != "" {
-		query = query.Eq("status", status)
+		query = query.Eq(dbschema.OrdersColStatus, status)
 	}
 	if prodID := r.URL.Query().Get("product_id"); prodID != "" {
-		query = query.Eq("product_id", prodID)
+		query = query.Eq(dbschema.OrdersColProductId, prodID)
 	}
 	if mgmtCat := r.URL.Query().Get("management_category"); mgmtCat != "" {
-		query = query.Eq("management_category", mgmtCat)
+		query = query.Eq(dbschema.OrdersColManagementCategory, mgmtCat)
 	}
 	if source := r.URL.Query().Get("fulfillment_source"); source != "" {
-		query = query.Eq("fulfillment_source", source)
+		query = query.Eq(dbschema.OrdersColFulfillmentSource, source)
 	}
 	// 기간 필터 — order_date 기준 [start, end] inclusive.
 	if start := r.URL.Query().Get("start"); start != "" {
-		query = query.Gte("order_date", start)
+		query = query.Gte(dbschema.OrdersColOrderDate, start)
 	}
 	if end := r.URL.Query().Get("end"); end != "" {
-		query = query.Lte("order_date", end)
+		query = query.Lte(dbschema.OrdersColOrderDate, end)
 	}
 	// 용량(kW) 범위 — orders.capacity_kw 기준 [min_kw, max_kw] inclusive.
 	// 잘못된 숫자 문자열은 PostgREST 가 400 으로 거부하므로 상위 5xx 노이즈를 막기 위해 사전 검증.
 	if minKw := r.URL.Query().Get("min_kw"); minKw != "" {
 		if _, err := strconv.ParseFloat(minKw, 64); err == nil {
-			query = query.Gte("capacity_kw", minKw)
+			query = query.Gte(dbschema.OrdersColCapacityKw, minKw)
 		}
 	}
 	if maxKw := r.URL.Query().Get("max_kw"); maxKw != "" {
 		if _, err := strconv.ParseFloat(maxKw, 64); err == nil {
-			query = query.Lte("capacity_kw", maxKw)
+			query = query.Lte(dbschema.OrdersColCapacityKw, maxKw)
 		}
 	}
 
@@ -153,16 +154,16 @@ func (h *OrderHandler) applyOrderFilters(r *http.Request, query *postgrest.Filte
 		case "delivery_soon":
 			soon := now.AddDate(0, 0, 7).Format("2006-01-02")
 			if userStatus == "" {
-				query = query.In("status", []string{"received", "partial"})
+				query = query.In(dbschema.OrdersColStatus, []string{"received", "partial"})
 			} else if userStatus != "received" && userStatus != "partial" {
 				return query, false, nil
 			}
-			query = query.Gt("remaining_qty", "0").
-				Gte("delivery_due", today).
-				Lte("delivery_due", soon)
+			query = query.Gt(dbschema.OrdersColRemainingQty, "0").
+				Gte(dbschema.OrdersColDeliveryDue, today).
+				Lte(dbschema.OrdersColDeliveryDue, soon)
 		case "no_site":
 			if userStatus == "" {
-				query = query.In("status", []string{"received", "partial"})
+				query = query.In(dbschema.OrdersColStatus, []string{"received", "partial"})
 			} else if userStatus != "received" && userStatus != "partial" {
 				return query, false, nil
 			}
