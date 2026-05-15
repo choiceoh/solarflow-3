@@ -1,10 +1,23 @@
 package bl
 
 import (
+	"slices"
+	"strings"
 	"unicode/utf8"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/model"
 )
+
+// formatAllowedValues — DB CHECK 슬라이스를 에러 메시지의 \"a\", \"b\", \"c\" 중 하나여야 합니다 형식으로.
+// validation 메시지를 dbschema 와 항상 일치시켜 손동기화 누락을 차단.
+func formatAllowedValues(vals []string) string {
+	quoted := make([]string, len(vals))
+	for i, v := range vals {
+		quoted[i] = `"` + v + `"`
+	}
+	return strings.Join(quoted, ", ") + " 중 하나여야 합니다"
+}
 
 // BLShipment — B/L(입고/선적) 정보를 담는 구조체
 // 비유: "선적 서류" — 어떤 화물이, 어디서 어디로, 언제 도착하는지 기록
@@ -92,29 +105,13 @@ type BLWarehouseDetailSummary struct {
 	LocationCode  string `json:"location_code"`
 }
 
-// 허용되는 inbound_type 값
-var validInboundTypes = map[string]bool{
-	"import":           true,
-	"domestic":         true,
-	"domestic_foreign": true,
-	"group":            true,
-}
-
-// 허용되는 currency 값
-var validCurrencies = map[string]bool{
-	"USD": true,
-	"KRW": true,
-}
-
-// 허용되는 B/L status 값
-var validBLStatuses = map[string]bool{
-	"scheduled": true,
-	"shipping":  true,
-	"arrived":   true,
-	"customs":   true,
-	"completed": true,
-	"erp_done":  true,
-}
+// 허용 값 정본은 dbschema 가 자동 생성한 슬라이스:
+//   - inbound_type → dbschema.BlShipmentsInboundTypeValues
+//   - currency     → dbschema.BlShipmentsCurrencyValues
+//   - status       → dbschema.BlShipmentsStatusValues
+// 이전엔 validInboundTypes/validCurrencies/validBLStatuses map 손코딩 → DB CHECK 와 드리프트
+// 위험이 있었다. 이제 운영 DB CHECK 가 바뀌면 generator 가 슬라이스를 갱신, 검증·메시지가
+// 자동 따라감.
 
 // CreateBLRequest — B/L 등록 시 클라이언트가 보내는 데이터
 // 비유: "선적 서류 등록 신청서" — B/L번호, 법인, 제조사, 유형을 필수 기재
@@ -163,20 +160,20 @@ func (req *CreateBLRequest) Validate() string {
 	if req.InboundType == "" {
 		return "inbound_type은 필수 항목입니다"
 	}
-	if !validInboundTypes[req.InboundType] {
-		return "inbound_type은 \"import\", \"domestic\", \"domestic_foreign\", \"group\" 중 하나여야 합니다"
+	if !slices.Contains(dbschema.BlShipmentsInboundTypeValues, req.InboundType) {
+		return "inbound_type은 " + formatAllowedValues(dbschema.BlShipmentsInboundTypeValues)
 	}
 	if req.Currency == "" {
 		return "currency는 필수 항목입니다"
 	}
-	if !validCurrencies[req.Currency] {
-		return "currency는 \"USD\", \"KRW\" 중 하나여야 합니다"
+	if !slices.Contains(dbschema.BlShipmentsCurrencyValues, req.Currency) {
+		return "currency는 " + formatAllowedValues(dbschema.BlShipmentsCurrencyValues)
 	}
 	if req.Status == "" {
 		return "status는 필수 항목입니다"
 	}
-	if !validBLStatuses[req.Status] {
-		return "status는 \"scheduled\", \"shipping\", \"arrived\", \"customs\", \"completed\", \"erp_done\" 중 하나여야 합니다"
+	if !slices.Contains(dbschema.BlShipmentsStatusValues, req.Status) {
+		return "status는 " + formatAllowedValues(dbschema.BlShipmentsStatusValues)
 	}
 	if req.ExchangeRate != nil && *req.ExchangeRate <= 0 {
 		return "exchange_rate는 양수여야 합니다"
@@ -229,14 +226,14 @@ func (req *UpdateBLRequest) Validate() string {
 	if req.ManufacturerID != nil && *req.ManufacturerID == "" {
 		return "manufacturer_id는 빈 값으로 변경할 수 없습니다"
 	}
-	if req.InboundType != nil && !validInboundTypes[*req.InboundType] {
-		return "inbound_type은 \"import\", \"domestic\", \"domestic_foreign\", \"group\" 중 하나여야 합니다"
+	if req.InboundType != nil && !slices.Contains(dbschema.BlShipmentsInboundTypeValues, *req.InboundType) {
+		return "inbound_type은 " + formatAllowedValues(dbschema.BlShipmentsInboundTypeValues)
 	}
-	if req.Currency != nil && !validCurrencies[*req.Currency] {
-		return "currency는 \"USD\", \"KRW\" 중 하나여야 합니다"
+	if req.Currency != nil && !slices.Contains(dbschema.BlShipmentsCurrencyValues, *req.Currency) {
+		return "currency는 " + formatAllowedValues(dbschema.BlShipmentsCurrencyValues)
 	}
-	if req.Status != nil && !validBLStatuses[*req.Status] {
-		return "status는 \"scheduled\", \"shipping\", \"arrived\", \"customs\", \"completed\", \"erp_done\" 중 하나여야 합니다"
+	if req.Status != nil && !slices.Contains(dbschema.BlShipmentsStatusValues, *req.Status) {
+		return "status는 " + formatAllowedValues(dbschema.BlShipmentsStatusValues)
 	}
 	if req.ExchangeRate != nil && *req.ExchangeRate <= 0 {
 		return "exchange_rate는 양수여야 합니다"
