@@ -20,8 +20,8 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       engine: ${{ steps.filter.outputs.engine }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: frontend } }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.13
@@ -70,7 +70,7 @@ jobs:
       - run: bun install --frozen-lockfile
       # vite/tsc 의 incremental 산출물(.vite, .tmp/*.tsbuildinfo)을 캐시.
       - name: Cache vite + tsc incrementals
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             frontend/node_modules/.vite
@@ -103,13 +103,13 @@ jobs:
     timeout-minutes: 10
     defaults: { run: { working-directory: backend } }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
           cache: false
       - name: Cache Go modules and build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/go-build
@@ -139,7 +139,7 @@ jobs:
     timeout-minutes: 30
     defaults: { run: { working-directory: engine } }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
