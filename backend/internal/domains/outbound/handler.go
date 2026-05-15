@@ -15,6 +15,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/audit"
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/domains/sale"
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/feature"
@@ -550,7 +551,7 @@ func (h *OutboundHandler) applyOutboundWorkQueue(r *http.Request, query *postgre
 		return query, true, nil
 	case "sale_unregistered":
 		if r.URL.Query().Get("status") == "" {
-			query = query.Eq("status", "active")
+			query = query.Eq(dbschema.OutboundsColStatus, "active")
 		}
 		return query, true, nil
 	default:
@@ -562,36 +563,36 @@ func (h *OutboundHandler) applyOutboundWorkQueue(r *http.Request, query *postgre
 // q/manufacturer_id 처리에 추가 DB 호출이 발생할 수 있어 (success bool, err) 시그니처로 빈 결과를 신호한다.
 func (h *OutboundHandler) applyOutboundFilters(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
-		query = query.Eq("company_id", compID)
+		query = query.Eq(dbschema.OutboundsColCompanyId, compID)
 	}
 	if whID := r.URL.Query().Get("warehouse_id"); whID != "" {
-		query = query.Eq("warehouse_id", whID)
+		query = query.Eq(dbschema.OutboundsColWarehouseId, whID)
 	}
 	if usage := r.URL.Query().Get("usage_category"); usage != "" {
-		query = query.Eq("usage_category", usage)
+		query = query.Eq(dbschema.OutboundsColUsageCategory, usage)
 	}
 	if orderID := r.URL.Query().Get("order_id"); orderID != "" {
-		query = query.Eq("order_id", orderID)
+		query = query.Eq(dbschema.OutboundsColOrderId, orderID)
 	}
 	if status := r.URL.Query().Get("status"); status != "" {
-		query = query.Eq("status", status)
+		query = query.Eq(dbschema.OutboundsColStatus, status)
 	}
 	// 기간 필터 — outbound_date 기준 [start, end] inclusive.
 	if start := r.URL.Query().Get("start"); start != "" {
-		query = query.Gte("outbound_date", start)
+		query = query.Gte(dbschema.OutboundsColOutboundDate, start)
 	}
 	if end := r.URL.Query().Get("end"); end != "" {
-		query = query.Lte("outbound_date", end)
+		query = query.Lte(dbschema.OutboundsColOutboundDate, end)
 	}
 	// 용량(kW) 범위 — outbounds.capacity_kw 기준 [min_kw, max_kw] inclusive.
 	if minKw := r.URL.Query().Get("min_kw"); minKw != "" {
 		if _, err := strconv.ParseFloat(minKw, 64); err == nil {
-			query = query.Gte("capacity_kw", minKw)
+			query = query.Gte(dbschema.OutboundsColCapacityKw, minKw)
 		}
 	}
 	if maxKw := r.URL.Query().Get("max_kw"); maxKw != "" {
 		if _, err := strconv.ParseFloat(maxKw, 64); err == nil {
-			query = query.Lte("capacity_kw", maxKw)
+			query = query.Lte(dbschema.OutboundsColCapacityKw, maxKw)
 		}
 	}
 
@@ -745,7 +746,7 @@ func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if userStatus == "" {
-			q = q.Eq("status", st.key)
+			q = q.Eq(dbschema.OutboundsColStatus, st.key)
 		}
 		if _, c, err := q.Range(0, 0, "").Execute(); err == nil {
 			*st.target = c
@@ -1005,7 +1006,7 @@ func (h *OutboundHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var linkedSales []sale.Sale
-	if saleData, _, err := h.DB.From("sales").Select("*", "exact", false).Eq("outbound_id", id).Execute(); err == nil {
+	if saleData, _, err := h.DB.From("sales").Select("*", "exact", false).Eq(dbschema.SalesColOutboundId, id).Execute(); err == nil {
 		if err := json.Unmarshal(saleData, &linkedSales); err != nil {
 			log.Printf("[출고 취소 전 매출 스냅샷 디코딩 실패] outbound_id=%s err=%v", id, err)
 		}
