@@ -5,22 +5,30 @@ import { cn } from '@/lib/utils';
 interface TabDef {
   to: string;
   label: string;
-  adminOnly: boolean;
+  /** 'admin' = admin 만, 'operator' = admin + operator, 'all' = 인증 사용자. */
+  access: 'admin' | 'operator' | 'all';
 }
 
 const TABS: TabDef[] = [
-  { to: '/settings/site',            label: '사이트 설정',  adminOnly: true },
-  { to: '/settings/admin',           label: '관리자 설정',  adminOnly: true },
-  { to: '/settings/audit-logs',      label: '관리자 로그',  adminOnly: true },
+  { to: '/settings/site',            label: '사이트 설정',  access: 'admin' },
+  { to: '/settings/admin',           label: '관리자 설정',  access: 'admin' },
+  { to: '/settings/audit-logs',      label: '관리자 로그',  access: 'admin' },
   // PR-5a: 테넌트 × pack 활성 매트릭스 (read-only). 토글은 PR-5b 후속.
-  { to: '/settings/feature-wiring',  label: '기능 매트릭스', adminOnly: true },
-  { to: '/settings/personal',        label: '개인 설정',    adminOnly: false },
+  { to: '/settings/feature-wiring',  label: '기능 매트릭스', access: 'admin' },
+  // 운영자도 쓸 수 있는 사이트 UI 기본값.
+  { to: '/settings/ui-defaults',     label: 'UI 기본값',    access: 'operator' },
+  { to: '/settings/personal',        label: '개인 설정',    access: 'all' },
 ];
 
 export default function SettingsLayout() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
-  const visible = TABS.filter((t) => isAdmin || !t.adminOnly);
+  const isOperator = role === 'operator';
+  const visible = TABS.filter((t) => {
+    if (t.access === 'all') return true;
+    if (t.access === 'admin') return isAdmin;
+    return isAdmin || isOperator;
+  });
 
   return (
     <div className="flex flex-col">

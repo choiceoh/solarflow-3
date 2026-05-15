@@ -9,21 +9,32 @@ export type ColumnSizingState = Record<string, number>;
 
 const COLWIDTH_PREFIX = 'sf.colwidth.';
 
-export function loadColumnSizing(scopeId: string): ColumnSizingState {
-  if (typeof localStorage === 'undefined') return {};
+/**
+ * scopeId 의 사용자 저장 폭을 읽는다.
+ *
+ * fallback 은 운영자 default — 사용자 키가 비어 있을 때만 적용된다. 사용자가 일부
+ * 컬럼만 손댔다면 그 키들이 우선이고 나머지는 운영자 default 가 메운다.
+ */
+export function loadColumnSizing(scopeId: string, fallback?: ColumnSizingState): ColumnSizingState {
+  const merged: ColumnSizingState = {};
+  if (fallback) {
+    for (const [k, v] of Object.entries(fallback)) {
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) merged[k] = v;
+    }
+  }
+  if (typeof localStorage === 'undefined') return merged;
   try {
     const raw = localStorage.getItem(COLWIDTH_PREFIX + scopeId);
-    if (!raw) return {};
+    if (!raw) return merged;
     const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== 'object') return {};
-    // 숫자만 통과
-    const out: ColumnSizingState = {};
+    if (!obj || typeof obj !== 'object') return merged;
+    // 숫자만 통과 — 운영자 default 위에 사용자 값을 덮어쓴다(개인 > 운영자).
     for (const [k, v] of Object.entries(obj)) {
-      if (typeof v === 'number' && Number.isFinite(v) && v > 0) out[k] = v;
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) merged[k] = v;
     }
-    return out;
+    return merged;
   } catch {
-    return {};
+    return merged;
   }
 }
 
@@ -36,8 +47,8 @@ export function saveColumnSizing(scopeId: string, sizing: ColumnSizingState): vo
   localStorage.setItem(COLWIDTH_PREFIX + scopeId, JSON.stringify(sizing));
 }
 
-export function useColumnWidths(scopeId: string) {
-  const [sizing, setSizingState] = useState<ColumnSizingState>(() => loadColumnSizing(scopeId));
+export function useColumnWidths(scopeId: string, fallback?: ColumnSizingState) {
+  const [sizing, setSizingState] = useState<ColumnSizingState>(() => loadColumnSizing(scopeId, fallback));
 
   /**
    * TanStack Table 의 onColumnSizingChange 는 (updater: SizingState | ((prev) => SizingState)) 형태.

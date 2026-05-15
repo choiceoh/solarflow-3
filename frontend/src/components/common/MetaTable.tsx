@@ -61,6 +61,7 @@ import { useColumnWidths, type ColumnSizingState } from "@/lib/columnWidths"
 import { useColumnSort, type SortingState } from "@/lib/columnSort"
 import type { ColumnPinningState as SfColumnPinningState } from "@/lib/columnPinning"
 import { useColumnOrder, resolveOrder } from "@/lib/columnOrder"
+import { getTableDefault } from "@/stores/uiDefaultsStore"
 
 const DRAG_THRESHOLD_PX = 5
 
@@ -240,9 +241,13 @@ export function MetaTable<T>({
   // ─── 영속 hooks — tableId 없으면 빈 scope 로 비영속 동작 ──────────────────
   // 폭/정렬/순서는 MetaTable 이 보유. pinning 은 ColumnVisibilityMenu 와 공유 필요해
   // 페이지가 보유하고 prop 으로 받음.
-  const widths = useColumnWidths(tableId ?? "")
+  //
+  // 운영자 default: tableId 가 있으면 store 에서 한 번 읽어 hook fallback 으로 넘긴다.
+  // 사용자 localStorage 가 비어 있을 때만 적용된다(개인 > 운영자, hook 내부에서 강제).
+  const operatorDefault = tableId ? getTableDefault(tableId) : undefined
+  const widths = useColumnWidths(tableId ?? "", operatorDefault?.widths)
   const sortPersist = useColumnSort(tableId ?? "")
-  const orderPersist = useColumnOrder(tableId ?? "")
+  const orderPersist = useColumnOrder(tableId ?? "", operatorDefault?.order)
   const persistEnabled = !!tableId
   const pinningEnabled = !!pinning
 

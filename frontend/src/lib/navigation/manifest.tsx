@@ -66,6 +66,7 @@ const AuditLogsPage = lazy(() => import('@/packs/erp-core/pages/settings/AuditLo
 const PersonalSettingsPage = lazy(() => import('@/packs/erp-core/pages/settings/PersonalSettingsPage'));
 const SitePlaceholderPage = lazy(() => import('@/packs/erp-core/pages/settings/SitePlaceholderPage'));
 const FeatureMatrixPage = lazy(() => import('@/packs/erp-core/pages/settings/FeatureMatrixPage'));
+const OperatorUiDefaultsPage = lazy(() => import('@/packs/erp-core/pages/settings/OperatorUiDefaultsPage'));
 const PartnerPriceBookPage = lazy(() => import('@/packs/baro-domain/pages/PartnerPriceBookPage'));
 const PartnerCockpitPage = lazy(() => import('@/packs/baro-domain/pages/PartnerCockpitPage'));
 const QuoteBuilderPage = lazy(() => import('@/packs/baro-domain/pages/QuoteBuilderPage'));
@@ -192,6 +193,7 @@ export const ROUTES: RouteSpec[] = [
       { path: 'audit-logs', element: AuditLogsPage, roles: ['admin'] },
       { path: 'site', element: SitePlaceholderPage, roles: ['admin'] },
       { path: 'feature-wiring', element: FeatureMatrixPage, roles: ['admin'] },
+      { path: 'ui-defaults', element: OperatorUiDefaultsPage, roles: ['admin', 'operator'] },
       { path: 'personal', element: PersonalSettingsPage },
     ],
   },

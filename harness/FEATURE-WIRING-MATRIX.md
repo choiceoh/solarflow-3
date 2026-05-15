@@ -169,6 +169,7 @@
 | `sys.note` | 포스트잇 메모 | ★ | tenant_owned |
 | `sys.system_settings` | 사이트 전역 설정 | ★ | global |
 | `sys.ui_config` | GUI 메타 편집기 | ★ | global |
+| `sys.ui_defaults` | 운영자 UI 기본값 (테이블·KPI default) | ★ | global |
 | `sys.user` | 사용자 (/me + admin 관리) | ★ | global |
 | `sys.external_sync` | 외부 동기화 소스 (D-059) | ★ | global |
 | `sys.db_integrity` | DB 정합성 검증 + AI 분석 (D-064 PR 37) | ★ | global |
