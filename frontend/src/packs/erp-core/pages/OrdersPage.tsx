@@ -2167,6 +2167,16 @@ export default function OrdersPage() {
                   metricId: "orders.active",
                 },
                 {
+                  lbl: "수주잔고",
+                  v: fmtSalesMw(orderDash?.totals.backlog_kw ?? 0),
+                  numericValue: orderDash?.totals.backlog_kw ?? 0,
+                  formatter: fmtSalesMw,
+                  u: "MW",
+                  sub: "활성 · 미출고 잔량",
+                  tone: "info",
+                  metricId: "orders.backlog_kw",
+                },
+                {
                   lbl: "거래처",
                   v: String(customersCount),
                   numericValue: customersCount,
