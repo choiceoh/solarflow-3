@@ -43,24 +43,21 @@ RE_VESSEL_BLOCK = re.compile(
     re.IGNORECASE,
 )
 
-# Port of Loading / Discharge (라벨 + 다음 줄)
-RE_POL = re.compile(
-    r'(?:Port\s*of\s*[Ll]oading|起运港)[\s\S]{0,80}?'
-    r'([A-Z][A-Z]+\s*PORT[A-Z\s]{0,30}(?:CHINA|KOREA))',
-    re.IGNORECASE,
-)
-RE_POD = re.compile(
-    r'(?:Port\s*of\s*[Dd]ischarge|卸货港)[\s\S]{0,80}?'
-    r'([A-Z][A-Z]+\s*PORT[A-Z\s]+(?:KOREA|CHINA))',
-    re.IGNORECASE,
-)
+# Port of Loading / Discharge — 도시명 화이트리스트 (중국·한국)
+CN_CITIES = r'(?:NINGBO|SHANGHAI|SHAHGHAI|SHENZHEN|GUANGZHOU|QINGDAO|TIANJIN|XIAMEN|YANTIAN|YANTAI|DALIAN|FUZHOU|HONGKONG)'
+KR_CITIES = r'(?:KWANGYANG|GWANGYANG|KWAHGYANG|BUSAN|PUSAN|INCHEON|INCHON|PYEONGTAEK|PYUNGTAEK|PYONGTAEK|ULSAN|GUNSAN|MOKPO|YEOSU|POHANG)'
 
-# Place of delivery
-RE_DELIVERY = re.compile(
-    r'Place\s*of\s*[Dd]elivery[\s\S]{0,40}?'
-    r'([A-Z]+\s*PORT[A-Z\s]+KOREA)',
+# Loading: 중국 항구
+RE_POL = re.compile(
+    rf'({CN_CITIES})\s*(?:PORT)?(?:\s*(?:OF\s*)?CHINA)?',
     re.IGNORECASE,
 )
+# Discharge / Place of delivery: 한국 항구
+RE_POD = re.compile(
+    rf'({KR_CITIES})\s*(?:PORT)?(?:\s*(?:OF\s*)?(?:SOUTH\s*)?KOREA)?',
+    re.IGNORECASE,
+)
+RE_DELIVERY = RE_POD  # 같은 룰
 
 # Container/seal — 여러 OCR 양식
 # OBL 슬래시 형식: EAXU6107795/02162644/40'HC
@@ -117,12 +114,13 @@ RE_MODEL_OTHER = re.compile(
     r')\b'
 )
 
-# Date of issue / Laden on board
-RE_DATE = re.compile(
-    r'(?:Laden\s*on\s*board|place\s*and\s*date|date\s*of\s*issue)[\s\S]{0,50}?'
-    r'(\d{1,2}\s*[A-Z]{3}\s*\d{4}|[A-Z]{3}\.?\s*\d{1,2}\.?\s*,?\s*\d{4})',
-    re.IGNORECASE,
-)
+# Date — 다양한 형식 (라벨 무관 bare 매치, 합리적 연도 범위로 필터)
+RE_DATE_PATTERNS = [
+    re.compile(r'\b([A-Z]{3}\.?\s*\d{1,2}\.?\s*,?\s*20[2-3]\d)\b'),  # MAR.14.2025, OCT 06,2024
+    re.compile(r'\b(\d{1,2}\s+[A-Z]{3}\s+20[2-3]\d)\b'),              # 14 MAR 2025, 06 OCT 2024
+    re.compile(r'\b(20[2-3]\d[./-]\d{1,2}[./-]\d{1,2})\b'),           # 2025-03-14, 2025.03.14
+    re.compile(r'(?:ATD|ETD|ETA)[\s.:]*([A-Z]{3,5}\.?\s*\d{1,2}\.?\s*\d{2,4})', re.IGNORECASE),
+]
 
 
 def parse_ocr_bl(text):
@@ -159,16 +157,20 @@ def parse_ocr_bl(text):
         if m:
             p['model'] = m.group(1)
 
-    # Ports
+    # Ports — bare 도시명 매치 (라벨 약관 텍스트 우회)
     m = RE_POL.search(text)
     if m:
-        p['port_of_loading'] = re.sub(r'\s+', ' ', m.group(1).strip())
-    m = RE_POD.search(text)
-    if m:
-        p['port_of_discharge'] = re.sub(r'\s+', ' ', m.group(1).strip())
-    m = RE_DELIVERY.search(text)
-    if m:
-        p['place_of_delivery'] = re.sub(r'\s+', ' ', m.group(1).strip())
+        p['port_of_loading'] = m.group(1).upper().strip()
+    # POD/Delivery: 도시명 모두 수집 후 첫 매치
+    pod_matches = list(RE_POD.finditer(text))
+    if pod_matches:
+        cities = [m.group(1).upper().strip() for m in pod_matches]
+        # 가장 흔한 도시 (BL 안에 여러 번 나오는 도시 = 실제 항구)
+        from collections import Counter
+        most_common = Counter(cities).most_common(1)[0][0]
+        p['port_of_discharge'] = most_common
+        # 'place of delivery' 와 같은 항구인 경우가 대부분
+        p['place_of_delivery'] = most_common
 
     # Vessel/voyage (block)
     m = RE_VESSEL_BLOCK.search(text)
@@ -237,10 +239,12 @@ def parse_ocr_bl(text):
         except ValueError:
             pass
 
-    # Date of issue
-    m = RE_DATE.search(text)
-    if m:
-        p['date_hint'] = m.group(1).strip()
+    # Date — 4가지 패턴 시도 (bare 매치)
+    for pat in RE_DATE_PATTERNS:
+        m = pat.search(text)
+        if m:
+            p['date_hint'] = re.sub(r'\s+', ' ', m.group(1).strip())
+            break
 
     return p
 
