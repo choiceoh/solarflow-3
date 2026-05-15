@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/mount"
@@ -56,7 +57,7 @@ func (h *CostDetailHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// 비유: ?declaration_id=xxx — 특정 면장의 원가만 필터 (필수 권장)
 	if declID := r.URL.Query().Get("declaration_id"); declID != "" {
-		query = query.Eq("declaration_id", declID)
+		query = query.Eq(dbschema.CostDetailsColDeclarationId, declID)
 	}
 
 	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)

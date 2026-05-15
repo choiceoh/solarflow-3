@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/mount"
@@ -59,12 +60,12 @@ func (h *DeclarationHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// 비유: ?bl_id=xxx — 특정 B/L의 면장만 필터
 	if blID := r.URL.Query().Get("bl_id"); blID != "" {
-		query = query.Eq("bl_id", blID)
+		query = query.Eq(dbschema.ImportDeclarationsColBlId, blID)
 	}
 
 	// 비유: ?company_id=xxx — 특정 법인의 면장만 필터
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
-		query = query.Eq("company_id", compID)
+		query = query.Eq(dbschema.ImportDeclarationsColCompanyId, compID)
 	}
 
 	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
