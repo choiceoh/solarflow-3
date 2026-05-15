@@ -28,7 +28,7 @@ import { ReceiptsRecoveryRateInsight } from './metrics/ReceiptsRecoveryRateInsig
 import { CustomsExpenseTotalInsight } from './metrics/CustomsExpenseTotalInsight'
 import { CustomsBlLinkedInsight } from './metrics/CustomsBlLinkedInsight'
 import { CustomsTypeCountInsight } from './metrics/CustomsTypeCountInsight'
-import { CustomsAvgExpenseInsight } from './metrics/CustomsAvgExpenseInsight'
+import { CustomsAvgExpensePerWpInsight } from './metrics/CustomsAvgExpensePerWpInsight'
 import { BankingTotalLimitInsight } from './metrics/BankingTotalLimitInsight'
 import { BankingUsedInsight } from './metrics/BankingUsedInsight'
 import { BankingAvailableInsight } from './metrics/BankingAvailableInsight'
@@ -228,8 +228,8 @@ export const INSIGHT_REGISTRY: Record<string, InsightEntry> = {
   },
   'customs.avg_expense': {
     id: 'customs.avg_expense',
-    shortLabel: '평균 비용',
-    render: () => <CustomsAvgExpenseInsight />,
+    shortLabel: 'Wp당 평균',
+    render: () => <CustomsAvgExpensePerWpInsight />,
   },
 
   // Banking
