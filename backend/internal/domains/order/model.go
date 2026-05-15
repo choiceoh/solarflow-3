@@ -1,36 +1,17 @@
 package order
 
-// 허용되는 receipt_method 값
-var validReceiptMethods = map[string]bool{
-	"purchase_order": true,
-	"phone":          true,
-	"email":          true,
-	"other":          true,
-}
+import (
+	"slices"
 
-// 허용되는 order status 값
-var validOrderStatuses = map[string]bool{
-	"received":  true,
-	"partial":   true,
-	"completed": true,
-	"cancelled": true,
-}
+	"solarflow-backend/internal/dbschema"
+	"solarflow-backend/internal/validation"
+)
 
-// 허용되는 management_category 값
-var validManagementCategories = map[string]bool{
-	"sale":         true,
-	"construction": true,
-	"spare":        true,
-	"repowering":   true,
-	"maintenance":  true,
-	"other":        true,
-}
-
-// 허용되는 fulfillment_source 값
-var validFulfillmentSources = map[string]bool{
-	"stock":    true,
-	"incoming": true,
-}
+// 허용 값 정본은 dbschema 자동 생성 (orders 테이블 CHECK 제약):
+//   - receipt_method      → dbschema.OrdersReceiptMethodValues
+//   - status              → dbschema.OrdersStatusValues
+//   - management_category → dbschema.OrdersManagementCategoryValues
+//   - fulfillment_source  → dbschema.OrdersFulfillmentSourceValues
 
 // Order — 수주(판매 주문) 정보를 담는 구조체
 // 비유: "수주 계약서" — 어느 고객이, 어떤 품번을, 몇 장, 얼마에 주문했는지 기록
@@ -125,8 +106,8 @@ func (req *CreateOrderRequest) Validate() string {
 	if req.ReceiptMethod == "" {
 		return "receipt_method는 필수 항목입니다"
 	}
-	if !validReceiptMethods[req.ReceiptMethod] {
-		return "receipt_method는 \"purchase_order\", \"phone\", \"email\", \"other\" 중 하나여야 합니다"
+	if !slices.Contains(dbschema.OrdersReceiptMethodValues, req.ReceiptMethod) {
+		return "receipt_method는 " + validation.FormatAllowedValues(dbschema.OrdersReceiptMethodValues)
 	}
 	if req.ProductID == "" {
 		return "product_id는 필수 항목입니다"
@@ -146,16 +127,16 @@ func (req *CreateOrderRequest) Validate() string {
 	if req.Status == "" {
 		return "status는 필수 항목입니다"
 	}
-	if !validOrderStatuses[req.Status] {
-		return "status는 \"received\", \"partial\", \"completed\", \"cancelled\" 중 하나여야 합니다"
+	if !slices.Contains(dbschema.OrdersStatusValues, req.Status) {
+		return "status는 " + validation.FormatAllowedValues(dbschema.OrdersStatusValues)
 	}
 	// 비유: management_category는 기본값 "sale" — 입력 시에만 검증
-	if req.ManagementCategory != "" && !validManagementCategories[req.ManagementCategory] {
-		return "management_category는 \"sale\", \"construction\", \"spare\", \"repowering\", \"maintenance\", \"other\" 중 하나여야 합니다"
+	if req.ManagementCategory != "" && !slices.Contains(dbschema.OrdersManagementCategoryValues, req.ManagementCategory) {
+		return "management_category는 " + validation.FormatAllowedValues(dbschema.OrdersManagementCategoryValues)
 	}
 	// 비유: fulfillment_source는 기본값 "stock" — 입력 시에만 검증
-	if req.FulfillmentSource != "" && !validFulfillmentSources[req.FulfillmentSource] {
-		return "fulfillment_source는 \"stock\", \"incoming\" 중 하나여야 합니다"
+	if req.FulfillmentSource != "" && !slices.Contains(dbschema.OrdersFulfillmentSourceValues, req.FulfillmentSource) {
+		return "fulfillment_source는 " + validation.FormatAllowedValues(dbschema.OrdersFulfillmentSourceValues)
 	}
 	if req.DepositRate != nil && (*req.DepositRate < 0 || *req.DepositRate > 100) {
 		return "deposit_rate는 0~100 범위여야 합니다"
@@ -211,8 +192,8 @@ func (req *UpdateOrderRequest) Validate() string {
 		// 빈 문자열은 PostgREST 가 UUID 로 받지 못함 — nil 로 정규화해 NULL 저장
 		req.CustomerID = nil
 	}
-	if req.ReceiptMethod != nil && !validReceiptMethods[*req.ReceiptMethod] {
-		return "receipt_method는 \"purchase_order\", \"phone\", \"email\", \"other\" 중 하나여야 합니다"
+	if req.ReceiptMethod != nil && !slices.Contains(dbschema.OrdersReceiptMethodValues, *req.ReceiptMethod) {
+		return "receipt_method는 " + validation.FormatAllowedValues(dbschema.OrdersReceiptMethodValues)
 	}
 	if req.ProductID != nil && *req.ProductID == "" {
 		return "product_id는 빈 값으로 변경할 수 없습니다"
@@ -232,14 +213,14 @@ func (req *UpdateOrderRequest) Validate() string {
 	if req.UnitPriceEa != nil && *req.UnitPriceEa <= 0 {
 		return "unit_price_ea는 양수여야 합니다"
 	}
-	if req.Status != nil && !validOrderStatuses[*req.Status] {
-		return "status는 \"received\", \"partial\", \"completed\", \"cancelled\" 중 하나여야 합니다"
+	if req.Status != nil && !slices.Contains(dbschema.OrdersStatusValues, *req.Status) {
+		return "status는 " + validation.FormatAllowedValues(dbschema.OrdersStatusValues)
 	}
-	if req.ManagementCategory != nil && !validManagementCategories[*req.ManagementCategory] {
-		return "management_category는 \"sale\", \"construction\", \"spare\", \"repowering\", \"maintenance\", \"other\" 중 하나여야 합니다"
+	if req.ManagementCategory != nil && !slices.Contains(dbschema.OrdersManagementCategoryValues, *req.ManagementCategory) {
+		return "management_category는 " + validation.FormatAllowedValues(dbschema.OrdersManagementCategoryValues)
 	}
-	if req.FulfillmentSource != nil && !validFulfillmentSources[*req.FulfillmentSource] {
-		return "fulfillment_source는 \"stock\", \"incoming\" 중 하나여야 합니다"
+	if req.FulfillmentSource != nil && !slices.Contains(dbschema.OrdersFulfillmentSourceValues, *req.FulfillmentSource) {
+		return "fulfillment_source는 " + validation.FormatAllowedValues(dbschema.OrdersFulfillmentSourceValues)
 	}
 	if req.DepositRate != nil && (*req.DepositRate < 0 || *req.DepositRate > 100) {
 		return "deposit_rate는 0~100 범위여야 합니다"

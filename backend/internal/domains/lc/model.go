@@ -1,9 +1,12 @@
 package lc
 
 import (
+	"slices"
 	"unicode/utf8"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/validation"
 )
 
 // LCRecord — LC(신용장) 정보를 담는 구조체
@@ -65,20 +68,7 @@ type LCBankDetail struct {
 	AcceptanceFeeRate *float64 `json:"acceptance_fee_rate"`
 }
 
-// 허용되는 LC status 값
-var validLCStatuses = map[string]bool{
-	"pending":       true,
-	"opened":        true,
-	"docs_received": true,
-	"settled":       true,
-	"cancelled":     true,
-}
-
-// 허용되는 usance_type 값
-var validUsanceTypes = map[string]bool{
-	"buyers":   true,
-	"shippers": true,
-}
+// 허용 값 정본은 dbschema 자동 생성: lc_records.status / usance_type CHECK.
 
 // CreateLCRequest — LC 등록 시 클라이언트가 보내는 데이터
 // 비유: "LC 개설 신청서" — PO, 은행, 법인, 개설금액을 필수 기재
@@ -120,11 +110,11 @@ func (req *CreateLCRequest) Validate() string {
 	if req.Status == "" {
 		return "status는 필수 항목입니다"
 	}
-	if !validLCStatuses[req.Status] {
-		return "status는 \"pending\", \"opened\", \"docs_received\", \"settled\", \"cancelled\" 중 하나여야 합니다"
+	if !slices.Contains(dbschema.LcRecordsStatusValues, req.Status) {
+		return "status는 " + validation.FormatAllowedValues(dbschema.LcRecordsStatusValues)
 	}
-	if req.UsanceType != nil && !validUsanceTypes[*req.UsanceType] {
-		return "usance_type은 \"buyers\", \"shippers\" 중 하나여야 합니다"
+	if req.UsanceType != nil && !slices.Contains(dbschema.LcRecordsUsanceTypeValues, *req.UsanceType) {
+		return "usance_type은 " + validation.FormatAllowedValues(dbschema.LcRecordsUsanceTypeValues)
 	}
 	if req.TargetQty != nil && *req.TargetQty <= 0 {
 		return "target_qty는 양수여야 합니다"
@@ -226,11 +216,11 @@ func (req *UpdateLCRequest) Validate() string {
 	if req.AmountUSD != nil && *req.AmountUSD <= 0 {
 		return "amount_usd는 양수여야 합니다"
 	}
-	if req.Status != nil && !validLCStatuses[*req.Status] {
-		return "status는 \"pending\", \"opened\", \"docs_received\", \"settled\", \"cancelled\" 중 하나여야 합니다"
+	if req.Status != nil && !slices.Contains(dbschema.LcRecordsStatusValues, *req.Status) {
+		return "status는 " + validation.FormatAllowedValues(dbschema.LcRecordsStatusValues)
 	}
-	if req.UsanceType != nil && !validUsanceTypes[*req.UsanceType] {
-		return "usance_type은 \"buyers\", \"shippers\" 중 하나여야 합니다"
+	if req.UsanceType != nil && !slices.Contains(dbschema.LcRecordsUsanceTypeValues, *req.UsanceType) {
+		return "usance_type은 " + validation.FormatAllowedValues(dbschema.LcRecordsUsanceTypeValues)
 	}
 	if req.TargetQty != nil && *req.TargetQty <= 0 {
 		return "target_qty는 양수여야 합니다"
