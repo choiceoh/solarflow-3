@@ -4822,3 +4822,343 @@ const (
 
 // WarehousesWarehouseTypeValues — DB CHECK 제약과 1:1 동기. validation 헬퍼에 쓰기 좋음.
 var WarehousesWarehouseTypeValues = []string{"port", "factory", "vendor"}
+
+
+// ─── RPC 함수 (introspection 자동 추출) ───────────────────────────────────────
+
+// RPC 함수명 상수 — client.Rpc(dbschema.Rpc<Name>, ...) 형식으로 typo 차단.
+const (
+	RpcBankingDashboard = "banking_dashboard"
+	RpcBaroCreditBoard = "baro_credit_board"
+	RpcBlsDashboard = "bls_dashboard"
+	RpcCustomsDashboard = "customs_dashboard"
+	RpcGetUserRole = "get_user_role"
+	RpcLcsDashboard = "lcs_dashboard"
+	RpcListDbAnomalies = "list_db_anomalies"
+	RpcListDbAnomalySnapshots = "list_db_anomaly_snapshots"
+	RpcNormCompany = "norm_company"
+	RpcOrdersDashboard = "orders_dashboard"
+	RpcOutboundsDashboard = "outbounds_dashboard"
+	RpcPosDashboard = "pos_dashboard"
+	RpcPurchaseDashboard = "purchase_dashboard"
+	RpcReceiptsDashboard = "receipts_dashboard"
+	RpcRefreshIntegrityCheck = "refresh_integrity_check"
+	RpcSalesDashboard = "sales_dashboard"
+	RpcSfCreateLcWithLines = "sf_create_lc_with_lines"
+	RpcSfCreateOutbound = "sf_create_outbound"
+	RpcSfCreatePurchaseOrderWithLines = "sf_create_purchase_order_with_lines"
+	RpcSfDeleteDeclaration = "sf_delete_declaration"
+	RpcSfDeleteOutbound = "sf_delete_outbound"
+	RpcSfDeletePurchaseOrder = "sf_delete_purchase_order"
+	RpcSfInsertOutboundBlItems = "sf_insert_outbound_bl_items"
+	RpcSfManufacturerUsageCounts = "sf_manufacturer_usage_counts"
+	RpcSfPartnerUsageCounts = "sf_partner_usage_counts"
+	RpcSfProductUsageCounts = "sf_product_usage_counts"
+	RpcSfPromoteBlStatus = "sf_promote_bl_status"
+	RpcSfRecalculateAllAvailableStock = "sf_recalculate_all_available_stock"
+	RpcSfRecalculateOrderProgress = "sf_recalculate_order_progress"
+	RpcSfSyncAvailableStockForProduct = "sf_sync_available_stock_for_product"
+	RpcSfUpdateLcWithLines = "sf_update_lc_with_lines"
+	RpcSfUpdateOutbound = "sf_update_outbound"
+	RpcSfWarehouseUsageCounts = "sf_warehouse_usage_counts"
+	RpcSnapshotDbAnomalies = "snapshot_db_anomalies"
+	RpcTtsDashboard = "tts_dashboard"
+)
+
+// RpcBankingDashboardArgs — public.banking_dashboard 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcBankingDashboard, "", map[string]any{dbschema.RpcBankingDashboardArgs.PCompanyId: ...})
+var RpcBankingDashboardArgs = struct {
+	PCompanyId string
+}{
+	PCompanyId: "p_company_id",
+}
+
+// RpcBlsDashboardArgs — public.bls_dashboard 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcBlsDashboard, "", map[string]any{dbschema.RpcBlsDashboardArgs.PCompanyId: ...})
+var RpcBlsDashboardArgs = struct {
+	PCompanyId string
+	PManufacturerId string
+	PStatus string
+	PInboundType string
+	PStatusScope string
+}{
+	PCompanyId: "p_company_id",
+	PManufacturerId: "p_manufacturer_id",
+	PStatus: "p_status",
+	PInboundType: "p_inbound_type",
+	PStatusScope: "p_status_scope",
+}
+
+// RpcCustomsDashboardArgs — public.customs_dashboard 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcCustomsDashboard, "", map[string]any{dbschema.RpcCustomsDashboardArgs.PCompanyId: ...})
+var RpcCustomsDashboardArgs = struct {
+	PCompanyId string
+}{
+	PCompanyId: "p_company_id",
+}
+
+// RpcLcsDashboardArgs — public.lcs_dashboard 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcLcsDashboard, "", map[string]any{dbschema.RpcLcsDashboardArgs.PCompanyId: ...})
+var RpcLcsDashboardArgs = struct {
+	PCompanyId string
+	PPoId string
+	PBankId string
+	PStatus string
+	PStatusScope string
+}{
+	PCompanyId: "p_company_id",
+	PPoId: "p_po_id",
+	PBankId: "p_bank_id",
+	PStatus: "p_status",
+	PStatusScope: "p_status_scope",
+}
+
+// RpcListDbAnomalySnapshotsArgs — public.list_db_anomaly_snapshots 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcListDbAnomalySnapshots, "", map[string]any{dbschema.RpcListDbAnomalySnapshotsArgs.PDays: ...})
+var RpcListDbAnomalySnapshotsArgs = struct {
+	PDays string
+}{
+	PDays: "p_days",
+}
+
+// RpcNormCompanyArgs — public.norm_company 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcNormCompany, "", map[string]any{dbschema.RpcNormCompanyArgs.Name: ...})
+var RpcNormCompanyArgs = struct {
+	Name string
+}{
+	Name: "name",
+}
+
+// RpcOrdersDashboardArgs — public.orders_dashboard 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcOrdersDashboard, "", map[string]any{dbschema.RpcOrdersDashboardArgs.PCompanyId: ...})
+var RpcOrdersDashboardArgs = struct {
+	PCompanyId string
+	PCustomerId string
+	PStatus string
+	PManagementCategory string
+	PWorkQueue string
+	PQ string
+	PStatusScope string
+}{
+	PCompanyId: "p_company_id",
+	PCustomerId: "p_customer_id",
+	PStatus: "p_status",
+	PManagementCategory: "p_management_category",
+	PWorkQueue: "p_work_queue",
+	PQ: "p_q",
+	PStatusScope: "p_status_scope",
+}
+
+// RpcOutboundsDashboardArgs — public.outbounds_dashboard 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcOutboundsDashboard, "", map[string]any{dbschema.RpcOutboundsDashboardArgs.PCompanyId: ...})
+var RpcOutboundsDashboardArgs = struct {
+	PCompanyId string
+	PStatus string
+	PUsageCategory string
+	PManufacturerId string
+	PQ string
+	PPeriod string
+}{
+	PCompanyId: "p_company_id",
+	PStatus: "p_status",
+	PUsageCategory: "p_usage_category",
+	PManufacturerId: "p_manufacturer_id",
+	PQ: "p_q",
+	PPeriod: "p_period",
+}
+
+// RpcPosDashboardArgs — public.pos_dashboard 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcPosDashboard, "", map[string]any{dbschema.RpcPosDashboardArgs.PCompanyId: ...})
+var RpcPosDashboardArgs = struct {
+	PCompanyId string
+	PManufacturerId string
+	PStatus string
+	PContractType string
+	PStatusScope string
+}{
+	PCompanyId: "p_company_id",
+	PManufacturerId: "p_manufacturer_id",
+	PStatus: "p_status",
+	PContractType: "p_contract_type",
+	PStatusScope: "p_status_scope",
+}
+
+// RpcPurchaseDashboardArgs — public.purchase_dashboard 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcPurchaseDashboard, "", map[string]any{dbschema.RpcPurchaseDashboardArgs.PCompanyId: ...})
+var RpcPurchaseDashboardArgs = struct {
+	PCompanyId string
+}{
+	PCompanyId: "p_company_id",
+}
+
+// RpcReceiptsDashboardArgs — public.receipts_dashboard 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcReceiptsDashboard, "", map[string]any{dbschema.RpcReceiptsDashboardArgs.PCompanyId: ...})
+var RpcReceiptsDashboardArgs = struct {
+	PCompanyId string
+	PCustomerId string
+	PMonth string
+	PStart string
+	PEnd string
+}{
+	PCompanyId: "p_company_id",
+	PCustomerId: "p_customer_id",
+	PMonth: "p_month",
+	PStart: "p_start",
+	PEnd: "p_end",
+}
+
+// RpcSalesDashboardArgs — public.sales_dashboard 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSalesDashboard, "", map[string]any{dbschema.RpcSalesDashboardArgs.PCompanyId: ...})
+var RpcSalesDashboardArgs = struct {
+	PCompanyId string
+	PCustomerId string
+	POutboundId string
+	POrderId string
+	PStatus string
+	PMonth string
+	PStart string
+	PEnd string
+	PInvoiceStatus string
+	PQ string
+}{
+	PCompanyId: "p_company_id",
+	PCustomerId: "p_customer_id",
+	POutboundId: "p_outbound_id",
+	POrderId: "p_order_id",
+	PStatus: "p_status",
+	PMonth: "p_month",
+	PStart: "p_start",
+	PEnd: "p_end",
+	PInvoiceStatus: "p_invoice_status",
+	PQ: "p_q",
+}
+
+// RpcSfCreateLcWithLinesArgs — public.sf_create_lc_with_lines 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfCreateLcWithLines, "", map[string]any{dbschema.RpcSfCreateLcWithLinesArgs.PLc: ...})
+var RpcSfCreateLcWithLinesArgs = struct {
+	PLc string
+	PLines string
+}{
+	PLc: "p_lc",
+	PLines: "p_lines",
+}
+
+// RpcSfCreateOutboundArgs — public.sf_create_outbound 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfCreateOutbound, "", map[string]any{dbschema.RpcSfCreateOutboundArgs.POutboundId: ...})
+var RpcSfCreateOutboundArgs = struct {
+	POutboundId string
+	POutbound string
+	PBlItems string
+}{
+	POutboundId: "p_outbound_id",
+	POutbound: "p_outbound",
+	PBlItems: "p_bl_items",
+}
+
+// RpcSfCreatePurchaseOrderWithLinesArgs — public.sf_create_purchase_order_with_lines 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfCreatePurchaseOrderWithLines, "", map[string]any{dbschema.RpcSfCreatePurchaseOrderWithLinesArgs.PPo: ...})
+var RpcSfCreatePurchaseOrderWithLinesArgs = struct {
+	PPo string
+	PLines string
+}{
+	PPo: "p_po",
+	PLines: "p_lines",
+}
+
+// RpcSfDeleteDeclarationArgs — public.sf_delete_declaration 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfDeleteDeclaration, "", map[string]any{dbschema.RpcSfDeleteDeclarationArgs.PDeclarationId: ...})
+var RpcSfDeleteDeclarationArgs = struct {
+	PDeclarationId string
+}{
+	PDeclarationId: "p_declaration_id",
+}
+
+// RpcSfDeleteOutboundArgs — public.sf_delete_outbound 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfDeleteOutbound, "", map[string]any{dbschema.RpcSfDeleteOutboundArgs.POutboundId: ...})
+var RpcSfDeleteOutboundArgs = struct {
+	POutboundId string
+}{
+	POutboundId: "p_outbound_id",
+}
+
+// RpcSfDeletePurchaseOrderArgs — public.sf_delete_purchase_order 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfDeletePurchaseOrder, "", map[string]any{dbschema.RpcSfDeletePurchaseOrderArgs.PPoId: ...})
+var RpcSfDeletePurchaseOrderArgs = struct {
+	PPoId string
+}{
+	PPoId: "p_po_id",
+}
+
+// RpcSfInsertOutboundBlItemsArgs — public.sf_insert_outbound_bl_items 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfInsertOutboundBlItems, "", map[string]any{dbschema.RpcSfInsertOutboundBlItemsArgs.POutboundId: ...})
+var RpcSfInsertOutboundBlItemsArgs = struct {
+	POutboundId string
+	PBlItems string
+}{
+	POutboundId: "p_outbound_id",
+	PBlItems: "p_bl_items",
+}
+
+// RpcSfPromoteBlStatusArgs — public.sf_promote_bl_status 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfPromoteBlStatus, "", map[string]any{dbschema.RpcSfPromoteBlStatusArgs.PBlId: ...})
+var RpcSfPromoteBlStatusArgs = struct {
+	PBlId string
+}{
+	PBlId: "p_bl_id",
+}
+
+// RpcSfRecalculateOrderProgressArgs — public.sf_recalculate_order_progress 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfRecalculateOrderProgress, "", map[string]any{dbschema.RpcSfRecalculateOrderProgressArgs.POrderId: ...})
+var RpcSfRecalculateOrderProgressArgs = struct {
+	POrderId string
+}{
+	POrderId: "p_order_id",
+}
+
+// RpcSfSyncAvailableStockForProductArgs — public.sf_sync_available_stock_for_product 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfSyncAvailableStockForProduct, "", map[string]any{dbschema.RpcSfSyncAvailableStockForProductArgs.PProductId: ...})
+var RpcSfSyncAvailableStockForProductArgs = struct {
+	PProductId string
+}{
+	PProductId: "p_product_id",
+}
+
+// RpcSfUpdateLcWithLinesArgs — public.sf_update_lc_with_lines 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfUpdateLcWithLines, "", map[string]any{dbschema.RpcSfUpdateLcWithLinesArgs.PLcId: ...})
+var RpcSfUpdateLcWithLinesArgs = struct {
+	PLcId string
+	PLc string
+	PLines string
+	PReplaceLines string
+}{
+	PLcId: "p_lc_id",
+	PLc: "p_lc",
+	PLines: "p_lines",
+	PReplaceLines: "p_replace_lines",
+}
+
+// RpcSfUpdateOutboundArgs — public.sf_update_outbound 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcSfUpdateOutbound, "", map[string]any{dbschema.RpcSfUpdateOutboundArgs.POutboundId: ...})
+var RpcSfUpdateOutboundArgs = struct {
+	POutboundId string
+	POutbound string
+	PBlItems string
+}{
+	POutboundId: "p_outbound_id",
+	POutbound: "p_outbound",
+	PBlItems: "p_bl_items",
+}
+
+// RpcTtsDashboardArgs — public.tts_dashboard 함수 인자명.
+// 사용: client.Rpc(dbschema.RpcTtsDashboard, "", map[string]any{dbschema.RpcTtsDashboardArgs.PCompanyId: ...})
+var RpcTtsDashboardArgs = struct {
+	PCompanyId string
+	PStatus string
+	PPoId string
+	PStatusScope string
+}{
+	PCompanyId: "p_company_id",
+	PStatus: "p_status",
+	PPoId: "p_po_id",
+	PStatusScope: "p_status_scope",
+}
