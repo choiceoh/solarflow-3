@@ -115,3 +115,40 @@ Rules:
 - Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure when it exists
 - If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
 - After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
+
+## Cursor Cloud specific instructions
+
+### Toolchain versions
+- **Go 1.26.1** — required by `backend/go.mod`. The VM update script installs it to `/usr/local/go`.
+- **Rust stable** (≥1.85) — some transitive crates require `edition2024`. The update script runs `rustup default stable && rustup update stable`.
+- **Bun 1.3.13** — version pinned in `frontend/package.json` `packageManager` field. Installed by `scripts/setup_worktree.sh`.
+- **Node 22+** — pre-installed via nvm on Cloud Agent VMs.
+
+### Starting services
+The Go backend does **not** use `godotenv` — you must source the `.env` file manually:
+```bash
+cd backend && set -a && source .env && set +a && ./solarflow-go
+```
+The Rust engine uses `dotenvy` and reads `.env` automatically, but still needs valid `SUPABASE_DB_URL`:
+```bash
+cd engine && ./target/release/solarflow-engine
+```
+Frontend dev server (no credentials needed):
+```bash
+cd frontend && bun run dev   # serves on port 5173, proxies /api → localhost:8080
+```
+
+### Supabase credentials
+Backend and engine require Supabase secrets (`SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_DB_URL`) for any data operations. Without them the Go backend starts but returns 401 on all authenticated endpoints; the Rust engine panics at startup. The frontend can work standalone using the **dev mock login** button ("🔧 목업 데이터로 보기") on the login page, which bypasses Supabase auth entirely.
+
+### Build & test commands
+| Service | Build | Test | Lint |
+|---------|-------|------|------|
+| Frontend | `bun run build` | `bun run test` | `bun run lint` (Biome) |
+| Backend | `go build -o solarflow-go .` | `go test -vet=all ./...` | `go vet ./...` |
+| Engine | `cargo build --release` | `cargo test` | (clippy, if installed) |
+
+### Gotchas
+- `frontend/vite.config.ts` sets the dev server on port **5173** (not 5174 as some older docs mention). Update `CORS_ORIGINS` in `backend/.env` to include `http://localhost:5173` if proxying through Vite.
+- The `scripts/setup_worktree.sh` bootstrap script installs Bun and frontend deps. It is the canonical entry point (`SKIP_GRAPHIFY_SETUP=1` to skip the optional graphify step).
+- CI runs on self-hosted ARM64 runners for backend/engine (see `.github/workflows/ci.yml`). Cloud Agent VMs are x86_64, so binary artifacts are not cross-compatible with production.
