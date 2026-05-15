@@ -1,3 +1,4 @@
+-- @auto-apply: yes  -- DROP TRIGGER IF EXISTS 는 CREATE TRIGGER 직전 idempotent 패턴
 -- M145: products.available_stock 자동 동기화 트리거 + 함수
 -- 배경: inventory_snapshots 는 ERP export 1회 (25-12-31) 그대로, 자동 갱신 없음
 --       → 26-04-08 까지 누적된 inventory_movements 480건이 가용재고에 미반영
