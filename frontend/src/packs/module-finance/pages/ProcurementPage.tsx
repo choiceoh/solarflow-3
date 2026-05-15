@@ -1458,31 +1458,44 @@ export default function ProcurementPage() {
                 title="은행별 L/C"
                 count={`${new Set(lcRows.map((lc) => lc.bank_id)).size} banks`}
               >
-                {banks.slice(0, 5).map((bank) => {
-                  const bankLcs = lcRows.filter((lc) => lc.bank_id === bank.bank_id)
-                  const amount = bankLcs.reduce((sum, lc) => sum + (lc.amount_usd ?? 0), 0)
-                  if (bankLcs.length === 0) return null
-                  return (
-                    <div key={bank.bank_id} className="mb-3 last:mb-0">
-                      <div className="mb-1 flex items-baseline justify-between">
-                        <span className="text-[12px] font-semibold text-[var(--ink)]">
-                          {bank.bank_name}
-                        </span>
-                        <span className="mono text-[10.5px] text-[var(--ink-3)]">
-                          {fmtUsdM(amount)} M$
-                        </span>
+                {(() => {
+                  // LC 가 있는 은행만 추려 사용금액 내림차순 정렬 후 상위 5개.
+                  // 막대는 해당 은행 한도(lc_limit_usd) 대비 사용률 — 탭 라벨 "개설 · 한도" 와 정합.
+                  const rows = banks
+                    .map((bank) => {
+                      const bankLcs = lcRows.filter((lc) => lc.bank_id === bank.bank_id)
+                      const amount = bankLcs.reduce((s, lc) => s + (lc.amount_usd ?? 0), 0)
+                      return { bank, amount, count: bankLcs.length }
+                    })
+                    .filter((r) => r.count > 0)
+                    .sort((a, b) => b.amount - a.amount)
+                    .slice(0, 5)
+                  if (rows.length === 0) {
+                    return <div className="text-xs text-[var(--ink-3)]">표시할 L/C 가 없습니다.</div>
+                  }
+                  return rows.map(({ bank, amount }) => {
+                    const limit = bank.lc_limit_usd ?? 0
+                    const usageRate = limit > 0 ? Math.min(100, (amount / limit) * 100) : 0
+                    return (
+                      <div key={bank.bank_id} className="mb-3 last:mb-0">
+                        <div className="mb-1 flex items-baseline justify-between">
+                          <span className="text-[12px] font-semibold text-[var(--ink)]">
+                            {bank.bank_name}
+                          </span>
+                          <span className="mono text-[10.5px] text-[var(--ink-3)]">
+                            {fmtUsdM(amount)} / {limit > 0 ? `${fmtUsdM(limit)} M$` : "한도 미설정"}
+                          </span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded bg-[var(--line)]">
+                          <div
+                            className="h-full bg-[var(--solar-2)]"
+                            style={{ width: `${usageRate}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-1.5 overflow-hidden rounded bg-[var(--line)]">
-                        <div
-                          className="h-full bg-[var(--solar-2)]"
-                          style={{
-                            width: `${lcTotalUsd ? Math.min(100, (amount / lcTotalUsd) * 100) : 0}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })
+                })()}
               </RailBlock>
               <RailBlock title="만기 30일 이내" count={lcMaturitySoon.length}>
                 {lcMaturitySoon.slice(0, 5).map((lc, index) => (
