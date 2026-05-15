@@ -256,6 +256,15 @@ pub async fn calculate_margin(
     let missing_revenue = (sum_revenue - sum_cost_covered_revenue).max(0.0);
     let coverage_rate = calc_cost_coverage_rate(sum_revenue, sum_cost_covered_revenue);
 
+    let trend24 = fetch_monthly_margin_trend(
+        pool,
+        &company_ids,
+        req.manufacturer_id,
+        req.product_id,
+        req.customer_id,
+    )
+    .await?;
+
     Ok(MarginAnalysisResponse {
         items,
         summary: MarginSummary {
@@ -269,6 +278,7 @@ pub async fn calculate_margin(
             cost_coverage_rate: coverage_rate,
             cost_basis: req.cost_basis.clone(),
         },
+        trend24,
         calculated_at: Utc::now(),
     })
 }
@@ -701,6 +711,115 @@ pub async fn calculate_price_trend(
 }
 
 // === 헬퍼 ===
+
+#[derive(sqlx::FromRow)]
+struct MarginTrendRow {
+    month: String,
+    revenue: f64,
+    cost: f64,
+}
+
+/// 24개월 월별 마진 추이 — fifo + 부대비용 기준, 인사이트 라인차트 / KPI sparkline 공통 소스.
+///
+/// outbound_cost CTE 는 출고 단위로 fifo_matches.cost_amount + BL 부대비용 분배를 합산.
+/// 그 출고에 매칭된 sales.supply_amount 만 covered_revenue 에 합산하므로 summary.overall_margin_rate
+/// 와 같은 분모/분자 정의 (원가가 연결된 매출 분만 본다) 를 유지한다.
+async fn fetch_monthly_margin_trend(
+    pool: &PgPool,
+    company_ids: &[Uuid],
+    manufacturer_id: Option<Uuid>,
+    product_id: Option<Uuid>,
+    customer_id: Option<Uuid>,
+) -> Result<Vec<crate::model::margin::MarginTrendPoint>, sqlx::Error> {
+    let sql = r#"
+    WITH bl_expense AS (
+      SELECT ie.bl_id, SUM(ie.amount)::float8 AS total_expense
+      FROM incidental_expenses ie
+      WHERE ie.bl_id IS NOT NULL
+      GROUP BY ie.bl_id
+    ),
+    bl_capacity AS (
+      SELECT idecl.bl_id, SUM(idecl.capacity_kw * 1000)::float8 AS total_wp
+      FROM import_declarations idecl
+      WHERE idecl.bl_id IS NOT NULL AND idecl.capacity_kw IS NOT NULL
+      GROUP BY idecl.bl_id
+    ),
+    bl_expense_per_wp AS (
+      SELECT be.bl_id,
+             CASE WHEN bc.total_wp > 0 THEN be.total_expense / bc.total_wp ELSE 0 END AS expense_per_wp
+      FROM bl_expense be
+      JOIN bl_capacity bc ON bc.bl_id = be.bl_id
+    ),
+    outbound_cost AS (
+      SELECT fm.outbound_id,
+             SUM(fm.cost_amount + fm.allocated_qty * p.spec_wp * COALESCE(bew.expense_per_wp, 0))::float8 AS cost
+      FROM fifo_matches fm
+      JOIN products p ON fm.product_id = p.product_id
+      LEFT JOIN import_declarations idecl ON fm.declaration_id = idecl.declaration_id
+      LEFT JOIN bl_expense_per_wp bew ON bew.bl_id = idecl.bl_id
+      WHERE fm.cost_amount IS NOT NULL AND fm.allocated_qty IS NOT NULL AND fm.allocated_qty > 0
+        AND fm.usage_category_raw IN ('상품판매', '상품판매(스페어)')
+        AND fm.outbound_id IS NOT NULL
+      GROUP BY fm.outbound_id
+    ),
+    month_grid AS (
+      SELECT to_char(d::date, 'YYYY-MM') AS month
+      FROM generate_series(
+        date_trunc('month', now())::date - interval '23 months',
+        date_trunc('month', now())::date,
+        interval '1 month'
+      ) d
+    ),
+    monthly AS (
+      SELECT to_char(o.outbound_date, 'YYYY-MM') AS month,
+             COALESCE(SUM(s.supply_amount) FILTER (WHERE oc.cost IS NOT NULL), 0)::float8 AS covered_revenue,
+             COALESCE(SUM(oc.cost), 0)::float8 AS total_cost
+      FROM sales s
+      JOIN outbounds o ON s.outbound_id = o.outbound_id
+      JOIN products p ON o.product_id = p.product_id
+      LEFT JOIN outbound_cost oc ON oc.outbound_id = s.outbound_id
+      WHERE o.company_id = ANY($1::uuid[]) AND o.status = 'active'
+        AND COALESCE(s.status, 'active') <> 'cancelled'
+        AND o.usage_category IN ('sale', 'sale_spare')
+        AND o.outbound_date IS NOT NULL
+        AND ($2::uuid IS NULL OR p.manufacturer_id = $2)
+        AND ($3::uuid IS NULL OR o.product_id = $3)
+        AND ($4::uuid IS NULL OR s.customer_id = $4)
+      GROUP BY 1
+    )
+    SELECT mg.month,
+           COALESCE(m.covered_revenue, 0)::float8 AS revenue,
+           COALESCE(m.total_cost, 0)::float8 AS cost
+    FROM month_grid mg
+    LEFT JOIN monthly m ON m.month = mg.month
+    ORDER BY mg.month
+    "#;
+
+    let rows = sqlx::query_as::<_, MarginTrendRow>(sql)
+        .bind(company_ids)
+        .bind(manufacturer_id)
+        .bind(product_id)
+        .bind(customer_id)
+        .fetch_all(pool)
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let margin_rate = if r.revenue > 0.0 {
+                ((r.revenue - r.cost) / r.revenue * 10000.0).round() / 100.0
+            } else {
+                0.0
+            };
+            crate::model::margin::MarginTrendPoint {
+                month: r.month,
+                revenue_krw: round2(r.revenue),
+                cost_krw: round2(r.cost),
+                margin_rate,
+            }
+        })
+        .collect())
+}
 
 /// D-064 PR 30: ERP fifo_matches 기반 품번별 가중평균 원가(₩/Wp).
 /// FIFO 매칭이 실제 입고 LOT ↔ 출고 배분 결과라 cost_details/BL 추정치보다 정확.

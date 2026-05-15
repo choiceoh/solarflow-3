@@ -1,11 +1,10 @@
-// 이익률 (%) 드릴다운 — /api/v1/calc/margin-analysis 의 items 기반.
-// SalesAnalysisPage 의 KPI '이익률'. trend 는 margin 엔드포인트가 월별을 안 주므로 빈 배열.
-// 실제 분해는 제조사·제품별 마진율.
+// 이익률 (%) 드릴다운 — /api/v1/calc/margin-analysis 의 items + trend24 기반.
+// trend24 는 fifo 기준 + 부대비용 반영으로 엔진이 24개월 산출 (cost_basis 토글과 무관).
 
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { fetchCalc } from '@/lib/companyUtils'
-import type { BreakdownRow } from '@/lib/insights/aggregations'
+import type { BreakdownRow, TrendPoint } from '@/lib/insights/aggregations'
 import InsightShell from '@/components/insights/InsightShell'
 
 interface MarginItem {
@@ -22,6 +21,13 @@ interface MarginItem {
   sale_count: number
 }
 
+interface MarginTrendPoint {
+  month: string
+  revenue_krw: number
+  cost_krw: number
+  margin_rate: number
+}
+
 interface MarginAnalysisResponse {
   items: MarginItem[]
   summary: {
@@ -34,6 +40,7 @@ interface MarginAnalysisResponse {
     cost_coverage_rate?: number
     cost_basis: string
   }
+  trend24?: MarginTrendPoint[]
 }
 
 const fmtPct = (v: number) => v.toFixed(1)
@@ -56,6 +63,11 @@ export function SalesAnalysisMarginRateInsight() {
 
   const items = data?.items ?? []
   const totalRate = data?.summary.overall_margin_rate ?? 0
+
+  const trend: TrendPoint[] = useMemo(
+    () => (data?.trend24 ?? []).map((p) => ({ month: p.month, value: p.margin_rate })),
+    [data],
+  )
 
   // 제조사별 가중 평균 마진율 = 원가 연결 매출의 sum(margin_krw) / sum(revenue_krw) * 100.
   const byManufacturer = useMemo<BreakdownRow[]>(() => {
@@ -127,8 +139,9 @@ export function SalesAnalysisMarginRateInsight() {
       loading={loading}
       totalLabel="전체 이익률"
       totalValue={fmtPct(totalRate)}
-      trend={[]}
+      trend={trend}
       trendValueLabel="이익률"
+      formatTrend={fmtPct}
       breakdowns={[
         { label: '제조사 (높은순)', rows: byManufacturer, unit: '%', formatValue: fmtPct },
         { label: '제품 상위 10 (높은순)', rows: byProductTop, unit: '%', formatValue: fmtPct },
