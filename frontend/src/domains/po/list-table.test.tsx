@@ -57,7 +57,10 @@ describe('POListTable', () => {
     await waitFor(() => {
       expect(screen.getAllByText('0.64 MW').length).toBeGreaterThan(0);
     });
-    expect(callsFor(`/api/v1/bls?po_id=${testPo.po_id}`)).toHaveLength(1);
+    // lazy-load 가 정확히 1번만 호출됐는지 — 비동기 fetch 안정화 wait.
+    await waitFor(() => {
+      expect(callsFor(`/api/v1/bls?po_id=${testPo.po_id}`)).toHaveLength(1);
+    });
 
     fireEvent.click(screen.getByText(testBl.bl_number));
     expect(onSelectBL).toHaveBeenCalledWith(testBl.bl_id);
