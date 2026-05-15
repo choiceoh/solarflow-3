@@ -69,8 +69,14 @@ RE_CONTAINER_BL = re.compile(
     r'(\d{2}H[CQ]?)\s*([A-Z]{3,4}\d{6,7})\s*([A-Z0-9]{4,18})'
 )
 # 컨테이너 단독 (씰/ISO 없을 수도) — bare 시리얼
+# ISO 6346 표준: 4글자 owner code + 7자리 (마지막 = check digit)
+# 운영 BL/OBL 에서 본 ALL owner codes
 RE_CONTAINER_BARE = re.compile(
-    r'\b((?:SKHU|TEMU|TCNU|SEGU|CAIU|TCLU|MSDU|MSCU|MAEU|HLBU|TGHU|EAXU|FSU|TRHU|UACU|FCIU|GLDU|BMOU|TLLU|ZIMU|MRKU|HCIU)\d{6,7})\b'
+    r'\b((?:'
+    r'SKHU|TEMU|TCNU|SEGU|CAIU|TCLU|MSDU|MSCU|MAEU|HLBU|TGHU|EAXU|FSU|TRHU|UACU|FCIU|GLDU|BMOU|TLLU|ZIMU|MRKU|HCIU|'
+    r'HMMU|KOCU|CAAU|TXGU|TTNU|GAOU|QNNU|EISU|FANU|TGBU|CSNU|EITU|BSIU|DRYU|UESU|CRSU|HLXU|OOLU|OOCU|CMAU|APHU|APLU|APRU|'
+    r'SUDU|YMLU|YMMU|YMUU|HJCU|HJSU|ZCSU|EVRU|FCXU|UASU|UAFU|UESL|MGLU|MAGU|NSLU|GESU|GVCU|GCNU|WHLU|WHSU'
+    r')\d{6,7})\b'
 )
 # 슬래시-기반 다양체 ISO: 45G1, 4500, 40HC, 40'HC
 RE_CONTAINER_45 = re.compile(
@@ -78,7 +84,8 @@ RE_CONTAINER_45 = re.compile(
 )
 
 # Weight / CBM / Pallets
-RE_WEIGHT = re.compile(r'([\d,]{4,})\s*\.?\s*\d*\s*KG[Ss]?\b')
+RE_WEIGHT = re.compile(r'([\d,]{4,})\s*\.?\s*\d*\s*KG[Ss]?\b')  # 1차: 표준 boundary
+RE_WEIGHT_LOOSE = re.compile(r'([\d,]{4,})\.\d{3}KG[Ss]?')      # 2차: 'KGS1267CBM' 처럼 공백 없는 패턴
 RE_CBM = re.compile(r'([\d.,]+)\s*CBM\b')
 RE_PALLETS = re.compile(r'(\d{2,4})\s*PALLETS?\b', re.IGNORECASE)
 RE_TOTAL_PALLETS = re.compile(r'TOTAL[\s:]+(?:TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|TWENTY|THIRTY|FORTY|FIFTY|HUNDRED|AND|\s)+\((\d+)\)\s*PALLETS?', re.IGNORECASE)
@@ -91,8 +98,9 @@ RE_LC_IN_BL = re.compile(
 # 보조: 'M' 으로 시작하는 LC no 패턴
 RE_LC_BARE = re.compile(r'\b(M[A-Z0-9]{2,8}\d{2}NU\d{5,6})\b')
 
-# HS Code
-RE_HS = re.compile(r'HS\s*N[O0o]\.?\s*([\d.]{8,12})', re.IGNORECASE)
+# HS Code — 'HS NO.' 라벨 + bare HS code (solar module = 8541430000)
+RE_HS = re.compile(r'HS\s*N[O0o]\.?\s*[:.\s]*([\d.]{8,12})', re.IGNORECASE)
+RE_HS_BARE = re.compile(r'\b(85\d{2}[.\s]?\d{2}[.\s]?\d{4})\b')  # 8541.43.0000 or 8541430000
 
 # Model — OCR 노이즈 대응 (공백 누락 + O/0 혼동 + dash/tilde 혼동)
 # JKM630N-78HL4-BDV-S, JKM625N-78HL4-BDV (BDV 없는 케이스), JKM63ON (O/0)
@@ -120,6 +128,10 @@ RE_DATE_PATTERNS = [
     re.compile(r'\b(\d{1,2}\s+[A-Z]{3}\s+20[2-3]\d)\b'),              # 14 MAR 2025, 06 OCT 2024
     re.compile(r'\b(20[2-3]\d[./-]\d{1,2}[./-]\d{1,2})\b'),           # 2025-03-14, 2025.03.14
     re.compile(r'(?:ATD|ETD|ETA)[\s.:]*([A-Z]{3,5}\.?\s*\d{1,2}\.?\s*\d{2,4})', re.IGNORECASE),
+    # LC DATE OF ISSUE / DATE OF ISSUE 뒤 YYMMDD (240325 = 2024-03-25)
+    re.compile(r'(?:LC\s*)?DATE\s*[O0]F?\s*ISSUE[\s.:]*((?:24|25|26)\d{4})', re.IGNORECASE),
+    # 단독 yymmdd (24/25/26 시작 6자리 — 2024-2026 만 매치, 합리적 범위)
+    re.compile(r'(?<!\d)((?:24|25|26)(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01]))(?!\d)'),
 ]
 
 
@@ -140,10 +152,12 @@ def parse_ocr_bl(text):
     if m:
         p['lc_no'] = m.group(1)
 
-    # HS code
+    # HS code — 'HS NO.' 라벨 + bare 패턴 fallback
     m = RE_HS.search(text)
+    if not m:
+        m = RE_HS_BARE.search(text)
     if m:
-        p['hs_code'] = m.group(1).replace('.', '')
+        p['hs_code'] = m.group(1).replace('.', '').replace(' ', '')
 
     # Model — OCR 노이즈 대응 그룹 조합
     m = RE_MODEL.search(text)
@@ -223,14 +237,17 @@ def parse_ocr_bl(text):
             if 1 <= n <= 5000:
                 p['total_pallets'] = n
 
-    m = RE_WEIGHT.search(text)
-    if m:
-        try:
-            w = int(m.group(1).replace(',', '').replace('.', ''))
-            if 1000 <= w <= 5_000_000:  # 합리적 BL weight 범위
-                p['total_weight_kg'] = w
-        except ValueError:
-            pass
+    # weight: 1차 strict + 2차 loose fallback
+    for pat in (RE_WEIGHT, RE_WEIGHT_LOOSE):
+        m = pat.search(text)
+        if m:
+            try:
+                w = int(m.group(1).replace(',', '').replace('.', ''))
+                if 1000 <= w <= 5_000_000:
+                    p['total_weight_kg'] = w
+                    break
+            except ValueError:
+                pass
 
     m = RE_CBM.search(text)
     if m:
