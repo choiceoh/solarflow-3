@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
  * 컬럼 폭(픽셀) 영속 저장. localStorage 키: `sf.colwidth.{scopeId}`.
@@ -7,7 +7,7 @@ import { useCallback, useState } from 'react';
 
 export type ColumnSizingState = Record<string, number>;
 
-const COLWIDTH_PREFIX = 'sf.colwidth.';
+export const COLWIDTH_PREFIX = 'sf.colwidth.';
 
 /**
  * scopeId 의 사용자 저장 폭을 읽는다.
@@ -50,6 +50,31 @@ export function saveColumnSizing(scopeId: string, sizing: ColumnSizingState): vo
 export function useColumnWidths(scopeId: string, fallback?: ColumnSizingState) {
   const [sizing, setSizingState] = useState<ColumnSizingState>(() => loadColumnSizing(scopeId, fallback));
 
+  // 운영자 default 가 mount 후 늦게 도착하면, 사용자 키가 비어있을 때만 머지. 이미
+  // state 에 들어 있는 값(같은 컬럼)은 덮어쓰지 않는다 — 사용자 작업 중에 default 가
+  // 도착해 폭이 흔들리는 일을 막는다.
+  useEffect(() => {
+    if (!fallback || Object.keys(fallback).length === 0) return;
+    if (typeof localStorage === 'undefined') return;
+    if (localStorage.getItem(COLWIDTH_PREFIX + scopeId)) return;
+    setSizingState((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const [k, v] of Object.entries(fallback)) {
+        if (next[k] == null) {
+          next[k] = v;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [scopeId, fallback]);
+
+  const resetToFallback = useCallback(() => {
+    saveColumnSizing(scopeId, {});
+    setSizingState(fallback ? { ...fallback } : {});
+  }, [scopeId, fallback]);
+
   /**
    * TanStack Table 의 onColumnSizingChange 는 (updater: SizingState | ((prev) => SizingState)) 형태.
    * 여기서도 동일 시그니처를 받아 함수형 업데이트도 지원.
@@ -67,5 +92,5 @@ export function useColumnWidths(scopeId: string, fallback?: ColumnSizingState) {
     saveColumnSizing(scopeId, {});
   }, [scopeId]);
 
-  return { sizing, setSizing, reset };
+  return { sizing, setSizing, reset, resetToFallback };
 }

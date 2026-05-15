@@ -16,6 +16,7 @@ import POLineTable, { PO_LINE_TABLE_ID, PO_LINE_COLUMN_META } from "./line-table
 import { ColumnVisibilityMenu } from "@/components/common/ColumnVisibilityMenu"
 import { useColumnVisibility } from "@/lib/columnVisibility"
 import { useColumnPinning } from "@/lib/columnPinning"
+import { useTableDefault } from "@/stores/uiDefaultsStore"
 import ConfirmDialog from "@/components/common/ConfirmDialog"
 import LinkedMemoWidget from "@/components/memo/LinkedMemoWidget"
 import POInboundProgress from "./inbound-progress"
@@ -406,7 +407,7 @@ export default function PODetailView({
   const [deleteError, setDeleteError] = useState("")
   const { data: lines, loading: linesLoading } = usePOLines(po.po_id)
   const poLineColVis = useColumnVisibility(PO_LINE_TABLE_ID, PO_LINE_COLUMN_META)
-  const poLineColPin = useColumnPinning(PO_LINE_TABLE_ID)
+  const poLineColPin = useColumnPinning(PO_LINE_TABLE_ID, useTableDefault(PO_LINE_TABLE_ID)?.pinning)
   const { data: lcs, loading: lcsLoading, reload: reloadLcs } = useLCList({ po_id: po.po_id })
   const [lineEditLC, setLineEditLC] = useState<LCRecord | null>(null)
   const { data: tts, loading: ttsLoading } = useTTList({ po_id: po.po_id })

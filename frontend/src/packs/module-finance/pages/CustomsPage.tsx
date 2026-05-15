@@ -16,6 +16,7 @@ import ExpenseListTable, {
 import { ColumnVisibilityMenu } from "@/components/common/ColumnVisibilityMenu"
 import { useColumnVisibility } from "@/lib/columnVisibility"
 import { useColumnPinning } from "@/lib/columnPinning"
+import { useTableDefault } from "@/stores/uiDefaultsStore"
 import ExchangeComparePanel from "@/components/customs/ExchangeComparePanel"
 import DeclarationCreateDialog from "@/components/customs/DeclarationCreateDialog"
 import ExpenseCreateDialog from "@/components/customs/ExpenseCreateDialog"
@@ -78,9 +79,9 @@ export default function CustomsPage() {
   const { data: expenseSummary } = useExpenseSummary(expFilters)
   const { data: blSummary } = useBLSummary()
   const declColVis = useColumnVisibility(DECLARATION_TABLE_ID, DECLARATION_COLUMN_META)
-  const declColPin = useColumnPinning(DECLARATION_TABLE_ID)
+  const declColPin = useColumnPinning(DECLARATION_TABLE_ID, useTableDefault(DECLARATION_TABLE_ID)?.pinning)
   const expenseColVis = useColumnVisibility(EXPENSE_TABLE_ID, EXPENSE_COLUMN_META)
-  const expenseColPin = useColumnPinning(EXPENSE_TABLE_ID)
+  const expenseColPin = useColumnPinning(EXPENSE_TABLE_ID, useTableDefault(EXPENSE_TABLE_ID)?.pinning)
 
   useEffect(() => {
     if (selectedCompanyId) {

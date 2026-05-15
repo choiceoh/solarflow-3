@@ -10,6 +10,8 @@
 // 저장: 운영자 설정 페이지가 save(payload) 를 호출 → PUT /api/v1/ui-defaults/{tenant}.
 import { create } from 'zustand';
 import { fetchWithAuth } from '@/lib/api';
+import type { ColumnPinningState } from '@/lib/columnPinning';
+import type { SortingState } from '@/lib/columnSort';
 import type { TenantScope } from '@/lib/tenantScope';
 
 export interface UiTableDefault {
@@ -17,6 +19,10 @@ export interface UiTableDefault {
   order?: string[];
   /** TanStack columnSizingState 호환 — { [columnId]: number }. */
   widths?: Record<string, number>;
+  /** 정렬 default — SortingState. 비어 있으면 정렬 없음. */
+  sort?: SortingState;
+  /** 컬럼 고정 default — { left, right }. 비어 있으면 고정 없음. */
+  pinning?: ColumnPinningState;
 }
 
 export interface UiKpiDefault {
@@ -98,4 +104,12 @@ export function getTableDefault(tableId: string): UiTableDefault | undefined {
 
 export function getKpiDefault(scopeId: string): UiKpiDefault | undefined {
   return useUiDefaultsStore.getState().defaults.kpi[scopeId];
+}
+
+/**
+ * React 컴포넌트가 한 테이블의 운영자 default 를 구독하기 위한 selector.
+ * 페이지가 useColumnPinning 등에 fallback 으로 넘길 때 사용.
+ */
+export function useTableDefault(tableId: string): UiTableDefault | undefined {
+  return useUiDefaultsStore((s) => s.defaults.tables[tableId]);
 }

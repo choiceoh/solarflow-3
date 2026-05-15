@@ -6,6 +6,7 @@ import {
   useKpiVisibility,
   type KpiMetricLike,
 } from '@/hooks/useKpiVisibility';
+import { saveKpiOptions } from '@/lib/kpiOptionsCache';
 import { KpiVisibilityMenu } from './KpiVisibilityMenu';
 
 interface KpiStripProps<T extends KpiMetricLike> {
@@ -30,6 +31,13 @@ export function KpiStrip<T extends KpiMetricLike>({
     if (typeof document === 'undefined') return;
     setActionsTarget(document.getElementById('sf-kpi-actions-slot'));
   }, []);
+
+  // 운영자 UI 페이지가 metric 라벨을 보여줄 수 있게 캐시. 페이지가 한 번이라도
+  // 렌더되면 그 시점의 옵션이 localStorage 에 남는다.
+  useEffect(() => {
+    if (!scopeId || visibility.options.length === 0) return;
+    saveKpiOptions(scopeId, visibility.options);
+  }, [scopeId, visibility.options]);
 
   const visibilityMenu = visibility.configurable ? (
     <KpiVisibilityMenu

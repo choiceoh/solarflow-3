@@ -44,6 +44,7 @@ import OutboundListTable, {
 import { ColumnVisibilityMenu } from "@/components/common/ColumnVisibilityMenu"
 import { useColumnVisibility } from "@/lib/columnVisibility"
 import { useColumnPinning } from "@/lib/columnPinning"
+import { useTableDefault } from "@/stores/uiDefaultsStore"
 import OutboundDetailView from "@/components/outbound/OutboundDetailView"
 import SaleListTable, { SALE_TABLE_ID, SALE_COLUMN_META } from "@/components/outbound/SaleListTable"
 import SaleSummaryCards from "@/components/outbound/SaleSummaryCards"
@@ -754,13 +755,13 @@ export default function OrdersPage() {
   const [bulkSaleCreateError, setBulkSaleCreateError] = useState("")
   const [selectedOutbound, setSelectedOutbound] = useState<string | null>(null)
   const outboundColVis = useColumnVisibility(OUTBOUND_TABLE_ID, OUTBOUND_COLUMN_META)
-  const outboundColPin = useColumnPinning(OUTBOUND_TABLE_ID)
+  const outboundColPin = useColumnPinning(OUTBOUND_TABLE_ID, useTableDefault(OUTBOUND_TABLE_ID)?.pinning)
   const orderColVis = useColumnVisibility(ORDER_TABLE_ID, ORDER_COLUMN_META)
-  const orderColPin = useColumnPinning(ORDER_TABLE_ID)
+  const orderColPin = useColumnPinning(ORDER_TABLE_ID, useTableDefault(ORDER_TABLE_ID)?.pinning)
   const saleColVis = useColumnVisibility(SALE_TABLE_ID, SALE_COLUMN_META)
-  const saleColPin = useColumnPinning(SALE_TABLE_ID)
+  const saleColPin = useColumnPinning(SALE_TABLE_ID, useTableDefault(SALE_TABLE_ID)?.pinning)
   const receiptColVis = useColumnVisibility(RECEIPT_TABLE_ID, RECEIPT_COLUMN_META)
-  const receiptColPin = useColumnPinning(RECEIPT_TABLE_ID)
+  const receiptColPin = useColumnPinning(RECEIPT_TABLE_ID, useTableDefault(RECEIPT_TABLE_ID)?.pinning)
   // 칩 필터를 server-side 로 위임 — KPI/sparkline/rail/breakdown 은 useOutboundDashboard,
   // 표는 useOutboundList(페이지네이션) 로 받는다. 이전엔 useOutboundListAll 로 모든 outbounds 를
   // fetch (수 MB) 후 client-side filter/aggregation 했다 (D-OutboundDashboardC1).

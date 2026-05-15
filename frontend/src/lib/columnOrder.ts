@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
  * 컬럼 순서 영속 저장. localStorage 키: `sf.colorder.{scopeId}`.
@@ -10,7 +10,7 @@ import { useCallback, useState } from 'react';
 
 export type ColumnOrderState = string[];
 
-const COLORDER_PREFIX = 'sf.colorder.';
+export const COLORDER_PREFIX = 'sf.colorder.';
 
 /**
  * scopeId 의 사용자 저장 순서를 읽는다.
@@ -67,8 +67,24 @@ export function resolveOrder(userOrder: ColumnOrderState, defaultColumnIds: stri
 }
 
 export function useColumnOrder(scopeId: string, fallback?: ColumnOrderState) {
-  // 운영자 default 는 마운트 시 1회만 합쳐진다 — 늦게 도착하면 다음 페이지 진입부터 반영.
   const [order, setOrderState] = useState<ColumnOrderState>(() => loadOrder(scopeId, fallback));
+
+  // 운영자 default 가 mount 후 늦게 도착했고, 사용자가 localStorage 에 한 번도
+  // 안 만진 경우에만 1회 머지. localStorage 자체는 갱신 안 함 — 운영자가 default 를
+  // 또 바꿀 때 다음 fetch 에서 다시 흐르도록 사용자 키는 비워둔다.
+
+  useEffect(() => {
+    if (!fallback || fallback.length === 0) return;
+    if (typeof localStorage === 'undefined') return;
+    if (localStorage.getItem(COLORDER_PREFIX + scopeId)) return;
+    setOrderState((prev) => (prev.length === 0 ? fallback : prev));
+  }, [scopeId, fallback]);
+
+  /** 사용자가 한 번도 손대지 않은 빈 localStorage 로 되돌리고 state 를 운영자 default 로 채운다. */
+  const resetToFallback = useCallback(() => {
+    saveOrder(scopeId, []);
+    setOrderState(fallback ?? []);
+  }, [scopeId, fallback]);
 
   const setOrder = useCallback((updater: ColumnOrderState | ((prev: ColumnOrderState) => ColumnOrderState)) => {
     setOrderState((prev) => {
@@ -89,5 +105,5 @@ export function useColumnOrder(scopeId: string, fallback?: ColumnOrderState) {
     });
   }, [setOrder]);
 
-  return { order, setOrder, moveBefore };
+  return { order, setOrder, moveBefore, resetToFallback };
 }
