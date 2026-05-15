@@ -12,6 +12,7 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/mount"
@@ -20,12 +21,12 @@ import (
 
 // ttSortable — server-side 정렬 허용 컬럼 (BL 패턴과 동일).
 var ttSortable = map[string]struct{}{
-	"remit_date": {},
-	"amount_usd": {},
-	"status":     {},
-	"purpose":    {},
-	"bank_name":  {},
-	"created_at": {},
+	dbschema.TtRemittancesColRemitDate: {},
+	dbschema.TtRemittancesColAmountUsd: {},
+	dbschema.TtRemittancesColStatus:    {},
+	dbschema.TtRemittancesColPurpose:   {},
+	dbschema.TtRemittancesColBankName:  {},
+	dbschema.TtRemittancesColCreatedAt: {},
 }
 
 func sanitizeTTSearchTerm(q string) string {
@@ -80,24 +81,25 @@ const ttReadView = "tt_remittances_with_company"
 func (h *TTHandler) applyTTFilters(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
 	// 비유: ?po_id=xxx — 특정 PO의 송금만 필터
 	if poID := r.URL.Query().Get("po_id"); poID != "" {
-		query = query.Eq("po_id", poID)
+		query = query.Eq(dbschema.TtRemittancesColPoId, poID)
 	}
 
 	// 비유: ?company_id=xxx — view 의 po_company_id 컬럼으로 server-side 매칭.
+	// view-only 컬럼이라 dbschema 상수 없음 (generator 는 base table 만).
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" && r.URL.Query().Get("po_id") == "" {
 		query = query.Eq("po_company_id", compID)
 	}
 
 	// 비유: ?status=completed — 특정 상태의 송금만 필터
 	if status := r.URL.Query().Get("status"); status != "" {
-		query = query.Eq("status", status)
+		query = query.Eq(dbschema.TtRemittancesColStatus, status)
 	}
 	// 기간 — remit_date 범위. frontend ProcurementPage date_range 서버 위임.
 	if from := r.URL.Query().Get("remit_date_from"); from != "" {
-		query = query.Gte("remit_date", from)
+		query = query.Gte(dbschema.TtRemittancesColRemitDate, from)
 	}
 	if to := r.URL.Query().Get("remit_date_to"); to != "" {
-		query = query.Lte("remit_date", to)
+		query = query.Lte(dbschema.TtRemittancesColRemitDate, to)
 	}
 	// 검색 — purpose/bank_name/memo ilike. PO 의 join 필드는 or 절 미지원.
 	if q := sanitizeTTSearchTerm(r.URL.Query().Get("q")); q != "" {
@@ -112,7 +114,7 @@ func (h *TTHandler) applyTTFilters(r *http.Request, query *postgrest.FilterBuild
 }
 
 func parseTTSort(r *http.Request) (column string, ascending bool) {
-	column = "remit_date"
+	column = dbschema.TtRemittancesColRemitDate
 	ascending = false
 	if raw := r.URL.Query().Get("sort"); raw != "" {
 		if _, ok := ttSortable[raw]; ok {
