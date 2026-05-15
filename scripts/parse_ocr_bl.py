@@ -18,12 +18,20 @@ sys.stdout.reconfigure(encoding='utf-8')
 OUT = Path(__file__).parent / 'output'
 
 
-# B/L NO (BL 안에 박힌 자기 BL 번호)
-# 'B/L NO.' / 'B/LNo' / 'B/sNK003K...' (OCR 노이즈) 모두 매치
-RE_BL_NO = re.compile(
-    r'B\s*/\s*L\s*[Nn][o0O]\.?[\s:]*([A-Z][A-Z0-9]{8,20})|'
-    r'B/(?:s|S|L\s*N\s*o?\s*[.:]?\s*)([A-Z]{2,8}\d{6,14})',
+# B/L NO — 라벨 다음 200자 내 영문3+숫자6+ 시리얼 (회사명 등 skip)
+# 시리얼 화이트리스트: 운영에서 본 prefix (SNKO/JWSH/EASEK/SHKWA/DJSCNGB/DFS/NPSELHT/ESZX/SELYIT/SHADHG/SHADGV/SHADCF/SHACZA/HGHDC/HDMUSHAA/COHESY/PCSLJBL/PCCLBL/HASLC/JBKR/WXAE/JAHF/SHACYV/SELHTZ/TMNBKPTR/EASLINE/EASEK)
+RE_BL_NO_LABEL = re.compile(
+    r'B\s*/\s*L\s*[Nn][o0O]?\.?[\s:]{0,5}'   # 라벨
+    r'(?:[\s\S]{0,200}?)'                     # 사이 공백/회사명 skip
+    r'\b([A-Z]{3,8}\d{6,14})\b',
     re.IGNORECASE,
+)
+# bare 시리얼 (BL no whitelist prefix)
+RE_BL_NO_BARE = re.compile(
+    r'\b((?:SNKO|SNKO03[A-Z]?|JWSH|EASEK|SHKWA|DJSCNGB|DFS\d|NPSELHT|ESZX|SELYIT|'
+    r'SHAD[A-Z]{1,3}|SHAC[A-Z]{1,3}|HGHDC|HDMUSHAA|COHESY|PCSLJBL|PCCLBL|'
+    r'HASLC|JBKR|WXAE|JAHF|SHACYV|SELHTZ|TMNBKPTR|EASLINE|RSPN|TED|LS\d|'
+    r'KD\d|SNK[0O]03)[0O]*\d{6,14})\b'
 )
 
 # Vessel / Voyage (한 줄에 'OceanVessel VoyNo' 라벨 다음 데이터 줄)
@@ -54,10 +62,23 @@ RE_DELIVERY = re.compile(
     re.IGNORECASE,
 )
 
-# Container/seal (BL 형식: 40HSKHU6441250SKNGB015558 — 40H+컨테이너+씰)
-# 또는 OBL 형식: EAXU6107795/02162644/40HC
-RE_CONTAINER_OBL = re.compile(r'\b([A-Z]{3,4}\d{6,7})\s*/\s*([A-Z0-9]+)\s*/\s*(\d{2}\'?H[CQ]?)\b')
-RE_CONTAINER_BL = re.compile(r'(\d{2}H)\s*([A-Z]{3,4}\d{6,7})\s*([A-Z0-9]{6,10})')
+# Container/seal — 여러 OCR 양식
+# OBL 슬래시 형식: EAXU6107795/02162644/40'HC
+RE_CONTAINER_OBL = re.compile(
+    r'\b([A-Z]{3,4}\d{6,7})\s*/\s*([A-Z0-9]+)\s*/\s*(\d{2}\'?H[CQ]?)\b'
+)
+# BL 붙은 형식: 40HSKHU6441250SKNGB015558 또는 40HCSKHU...
+RE_CONTAINER_BL = re.compile(
+    r'(\d{2}H[CQ]?)\s*([A-Z]{3,4}\d{6,7})\s*([A-Z0-9]{4,18})'
+)
+# 컨테이너 단독 (씰/ISO 없을 수도) — bare 시리얼
+RE_CONTAINER_BARE = re.compile(
+    r'\b((?:SKHU|TEMU|TCNU|SEGU|CAIU|TCLU|MSDU|MSCU|MAEU|HLBU|TGHU|EAXU|FSU|TRHU|UACU|FCIU|GLDU|BMOU|TLLU|ZIMU|MRKU|HCIU)\d{6,7})\b'
+)
+# 슬래시-기반 다양체 ISO: 45G1, 4500, 40HC, 40'HC
+RE_CONTAINER_45 = re.compile(
+    r'\b([A-Z]{3,4}\d{6,7})\s*/\s*([A-Z0-9]+)\s*//?\s*(4[0-5]G?\d|40\'?H[CQ]?)'
+)
 
 # Weight / CBM / Pallets
 RE_WEIGHT = re.compile(r'([\d,]{4,})\s*\.?\s*\d*\s*KG[Ss]?\b')
@@ -76,12 +97,23 @@ RE_LC_BARE = re.compile(r'\b(M[A-Z0-9]{2,8}\d{2}NU\d{5,6})\b')
 # HS Code
 RE_HS = re.compile(r'HS\s*N[O0o]\.?\s*([\d.]{8,12})', re.IGNORECASE)
 
-# Model
+# Model — OCR 노이즈 대응 (공백 누락 + O/0 혼동 + dash/tilde 혼동)
+# JKM630N-78HL4-BDV-S, JKM625N-78HL4-BDV (BDV 없는 케이스), JKM63ON (O/0)
 RE_MODEL = re.compile(
-    r'\b(JKM\d{3}[A-Z]-\d{2,3}[A-Z]{2,5}-?[A-Z0-9-]*'
-    r'|JAM\d{2,3}[A-Z]\d{2}\s*[A-Z]{1,3}'
+    r'(?:TIGER\s*NE[O0]?\s*)?'           # 'TIGER NEO' 옵션 + 공백 없을 수도
+    r'(JKM\d{3}[A-Z]?)'                   # JKM630N (필수)
+    r'\s*[-~]?\s*'                        # dash 또는 tilde, 공백 없을 수도
+    r'(\d{2,3}[A-Z]+)'                    # 78HL4
+    r'(?:\s*[-~]\s*([A-Z]+))?'            # -BDV
+    r'(?:\s*[-~]\s*([A-Z]))?',            # -S
+)
+# 다른 제조사
+RE_MODEL_OTHER = re.compile(
+    r'\b(JAM\d{2,3}[A-Z]\d{2}\s*[A-Z]{1,3}'
     r'|LR\d-\d{2,3}[A-Z]{2,5}-\d{3}[A-Z]?'
     r'|RSM\d{3}-\d-\d{3}[A-Z]{2,5}'
+    r'|TSM[-\s]?NEG\d{2}[A-Z]\.\d{2}[A-Z]?'
+    r'|VERTEX\s*NEG\d{2}[A-Z]?'
     r')\b'
 )
 
@@ -96,12 +128,14 @@ RE_DATE = re.compile(
 def parse_ocr_bl(text):
     p = {}
 
-    # BL no
-    m = RE_BL_NO.search(text)
+    # BL no — 1) bare 시리얼 화이트리스트 우선, 2) 라벨 다음
+    m = RE_BL_NO_BARE.search(text)
     if m:
-        p['bl_no_in_pdf'] = (m.group(1) or m.group(2)).replace('0', 'O') if False else (m.group(1) or m.group(2))
-        # OCR O/0 흔한 패턴: 시리얼 안 'O' 는 '0' 일 가능성 (예: SNK003 → SNKO03)
-        # 단정 어려우니 추출값 그대로 보관
+        p['bl_no_in_pdf'] = m.group(1)
+    else:
+        m = RE_BL_NO_LABEL.search(text)
+        if m:
+            p['bl_no_in_pdf'] = m.group(1)
 
     # LC
     m = RE_LC_IN_BL.search(text) or RE_LC_BARE.search(text)
@@ -113,10 +147,17 @@ def parse_ocr_bl(text):
     if m:
         p['hs_code'] = m.group(1).replace('.', '')
 
-    # Model
+    # Model — OCR 노이즈 대응 그룹 조합
     m = RE_MODEL.search(text)
     if m:
-        p['model'] = m.group(1)
+        parts = [g for g in m.groups() if g]
+        # JKM630N + 78HL4 + BDV + S → JKM630N-78HL4-BDV-S
+        if len(parts) >= 2:
+            p['model'] = '-'.join(parts).replace('0', 'O') if False else '-'.join(parts)
+    if 'model' not in p:
+        m = RE_MODEL_OTHER.search(text)
+        if m:
+            p['model'] = m.group(1)
 
     # Ports
     m = RE_POL.search(text)
@@ -139,21 +180,24 @@ def parse_ocr_bl(text):
             p['vessel'] = vessel
             p['voyage'] = voy
 
-    # Containers (BL 형식 + OBL 형식 둘 다 시도)
+    # Containers — 다단계 시도
     containers = []
-    for m in RE_CONTAINER_OBL.finditer(text):
-        containers.append({
-            'container': m.group(1),
-            'seal': m.group(2),
-            'iso': m.group(3),
-        })
+    # 1. 슬래시 형식 (45G1 ISO 포함)
+    for m in RE_CONTAINER_45.finditer(text):
+        containers.append({'container': m.group(1), 'seal': m.group(2), 'iso': m.group(3)})
+    # 2. OBL 슬래시
+    if not containers:
+        for m in RE_CONTAINER_OBL.finditer(text):
+            containers.append({'container': m.group(1), 'seal': m.group(2), 'iso': m.group(3)})
+    # 3. BL 붙은 형식
     if not containers:
         for m in RE_CONTAINER_BL.finditer(text):
-            containers.append({
-                'iso': m.group(1),
-                'container': m.group(2),
-                'seal': m.group(3),
-            })
+            containers.append({'iso': m.group(1), 'container': m.group(2), 'seal': m.group(3)})
+    # 4. bare 컨테이너 시리얼 (씰/ISO 없음)
+    if not containers:
+        bare = set(RE_CONTAINER_BARE.findall(text))
+        if bare:
+            containers = [{'container': c} for c in sorted(bare)]
     if containers:
         # 중복 제거 (같은 container 번호)
         seen = set()
