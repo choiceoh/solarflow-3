@@ -20,7 +20,7 @@ import {
   type LCRecord,
   type TTRemittance,
 } from "@/types/procurement"
-import type { BLShipment, BLLineItem } from "@/types/inbound"
+import type { BLShipment } from "@/types/inbound"
 
 // ─── BL 상태 레이블 (인바운드 타입 복사 방지)
 const BL_STATUS_LABEL: Record<string, string> = {
@@ -231,28 +231,17 @@ function POListTable({
       [poId]: { loading: true, bls: [], shippingMw: 0, inboundMw: 0, blMwMap: {} },
     }))
     try {
+      // 백엔드 /api/v1/bls 응답에 이미 total_mw 가 포함되므로 BL 별 /lines 추가 호출 없이 사용.
       const blList = await fetchWithAuth<BLShipment[]>(`/api/v1/bls?po_id=${poId}`).catch(
         () => [] as BLShipment[],
       )
-      // 각 BL의 라인 capacity_kw 합계
-      const lineMap: Record<string, BLLineItem[]> = {}
-      await Promise.all(
-        (blList ?? []).map(async (bl) => {
-          try {
-            lineMap[bl.bl_id] = await fetchWithAuth<BLLineItem[]>(`/api/v1/bls/${bl.bl_id}/lines`)
-          } catch {
-            lineMap[bl.bl_id] = []
-          }
-        }),
-      )
       const shipStatuses = new Set(["shipping", "arrived", "customs", "completed", "erp_done"])
       const compStatuses = new Set(["completed", "erp_done"])
-      let shippingMw = 0,
-        inboundMw = 0
+      let shippingMw = 0
+      let inboundMw = 0
       const blMwMap: Record<string, number> = {}
       for (const bl of blList ?? []) {
-        // capacity_kw는 라인 전체 kW (EA당 아님)
-        const mw = (lineMap[bl.bl_id] ?? []).reduce((s, l) => s + (l.capacity_kw ?? 0), 0) / 1000
+        const mw = bl.total_mw ?? 0
         blMwMap[bl.bl_id] = mw
         if (shipStatuses.has(bl.status)) shippingMw += mw
         if (compStatuses.has(bl.status)) inboundMw += mw
