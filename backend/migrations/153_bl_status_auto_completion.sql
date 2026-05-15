@@ -1,3 +1,4 @@
+-- @auto-apply: yes  -- DROP TRIGGER IF EXISTS 두 번은 CREATE TRIGGER 직전 idempotent 패턴
 -- M147: bl_shipments.status 자동 전이 — 입고 완료 BL 'completed' 처리
 --
 -- 진단:

@@ -57,7 +57,6 @@ UPDATE import_declarations SET product_id = '884489d8-ed72-408c-96e6-a4ca8656ec0
 
 -- 검증
 SELECT COUNT(*) AS decls_with_product FROM import_declarations WHERE product_id IS NOT NULL;
-SELECT product_code FROM products WHERE product_id IN ('');
 
 INSERT INTO schema_migrations(filename) VALUES ('156_decl_product_id_v2.sql') ON CONFLICT DO NOTHING;
 COMMIT;

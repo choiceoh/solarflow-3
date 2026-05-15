@@ -1,3 +1,4 @@
+-- @auto-apply: yes  -- DELETE FROM 은 운영자 확인된 정확 7건 alias 제거 (PK 페어 IN-list)
 -- M146: product_aliases 정정 — 변종 모델 alias 7건 제거
 --
 -- 배경 (운영자 확인):
