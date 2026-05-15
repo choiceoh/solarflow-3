@@ -213,6 +213,22 @@ COALESCE(s.tax_invoice_date::date, o.outbound_date::date, ord.order_date::date)
 
 - `sales_dashboard` RPC ([073](backend/migrations/073_sales_dashboard_rpc.sql)) 와 SalesAnalysisPage 가 동일 로직 사용
 
+### 4.6 수주 트렌드 binning (orders_dashboard.trend24)
+
+```sql
+COALESCE(
+  (SELECT MIN(s.tax_invoice_date::date)
+     FROM sales s WHERE s.order_id = o.order_id
+       AND s.status <> 'cancelled' AND s.tax_invoice_date IS NOT NULL),
+  o.order_date::date
+)
+```
+
+- `orders_dashboard` RPC ([131](backend/migrations/131_orders_dashboard_trend_invoice_binning.sql)) 의 `trend24` 만 적용.
+  totals (recent_30 포함) / by_* breakdowns / unit_price_ma15_180 은 `order_date` 기준 유지.
+- 배경: ERP 도입(2025-12) 이전 수주는 사후 등록돼 `order_date` 가 도입 시점에 몰려 있다 → § 6.11.
+- 한 수주에 여러 매출이 매핑되면 `MIN`(첫 매출일) 사용. 매출 매핑이 없으면 `order_date` 폴백.
+
 ---
 
 ## 5. 자주 쓰는 JOIN 키
@@ -329,6 +345,16 @@ WHERE fm.outbound_date BETWEEN '2025-01-01' AND '2025-12-31'
 - group_trade=true 인 출고: `company_id` = 보낸 법인, `target_company_id` = 받는 법인
 - 그룹사 간 이전은 양쪽 모두에 outbound + inbound 생성될 수 있음 (`intercompany_requests` 참조)
 
+### 6.11 사후 등록된 수주 — orders.order_date 가 ERP 도입 시점(2025-12)에 몰림
+
+- 매출(sales) 은 2025-01 부터 백필됐으나, 그 매출과 매핑된 orders 행들의 `order_date` 는
+  대부분 2025-12 ~ 2026-03 (ERP 도입 후 일괄 작성). 예: 2025-03 매출 198건 중
+  101건이 orders 와 매핑돼 있고, 그 101 개 orders 의 `order_date` 는 2025-12 (23) /
+  2026-01 (66) / 2026-03 (12).
+- 영향: 수주 KPI 의 `trend24` / sparkline 등 `order_date` 기반 시계열은 2025-11 이전이 전부 0.
+- 대응 (마이그 131): `orders_dashboard.trend24` binning 을 § 4.6 처럼 첫 매출 발행일 폴백으로 변경.
+  `unit_price_ma15_180` 과 `totals.recent_30` 은 의도적으로 그대로 — "최근 30일에 입력된 수주" 의미 보존.
+
 ---
 
 ## 7. 핵심 RPC / 함수
@@ -341,6 +367,7 @@ WHERE fm.outbound_date BETWEEN '2025-01-01' AND '2025-12-31'
 | `sf_insert_outbound_bl_items(p_outbound_id, p_bl_items)` | M036 | obi 일괄 INSERT (내부 호출) |
 | `sf_recalculate_order_progress(order_id)` | M036 | 수주 진행률 재계산 |
 | `sales_dashboard(...)` | M073 | 매출 대시보드 1 round-trip 집계 |
+| `orders_dashboard(...)` | M075 (정정 M104, M131 trend binning) | 수주 대시보드 1 round-trip 집계 — `trend24` 만 첫 매출 발행일 폴백 |
 | `outbounds_dashboard(...)` | - | 출고 대시보드 |
 
 ---
@@ -380,8 +407,9 @@ WHERE fm.outbound_date BETWEEN '2025-01-01' AND '2025-12-31'
 | #821 | 116 | cost_details 백필 (면장 기반 100건) |
 | #822 | 117 | bl_shipments 4 컬럼 백필 (decl_no/inv/xr/arrival) |
 | #824 | 118 | outbounds.site_name 보강 (17건) |
+| 본 PR | 131 | orders_dashboard.trend24 binning → 첫 매출 발행일 폴백 |
 
-머지 순서: 마이그 번호순 (111 → 118)
+머지 순서: 마이그 번호순 (111 → 131)
 
 ---
 
