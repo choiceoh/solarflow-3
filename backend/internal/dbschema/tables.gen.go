@@ -3,18 +3,19 @@
 // Source: information_schema introspection against SUPABASE_DB_URL.
 // Run `bun scripts/gen_db_types.ts` to regenerate.
 //
-// 이 패키지는 DB 스키마의 컴파일타임 정본이다.
+// 이 패키지는 DB 스키마(테이블 + 뷰)의 컴파일타임 정본이다.
 //   - PostgREST select 시 컬럼명 typo 를 컴파일타임에 잡으려면
-//     dbschema.<Table>AllColumns 또는 dbschema.<Table>Col<Field> 상수를 사용한다.
+//     dbschema.<Relation>AllColumns 또는 dbschema.<Relation>Col<Field> 상수를 사용한다.
 //   - 도메인의 Create*Request / Update*Request 는 손코딩으로 둔다 — validation
 //     로직(필수값, 허용 enum, 길이 제한)이 그쪽에 속한다.
+//   - View 는 read-only — Insert/Update 시 베이스 테이블 상수를 쓴다.
 //   - 본 파일이 1줄이라도 변경되면 그건 *DB 스키마가 바뀐 것* — 커밋에 같이 포함한다.
 
 package dbschema
 
 import "encoding/json"
 
-// OutboundCategoryFixAudit20260512 — public._outbound_category_fix_audit_20260512 의 row 표현 (introspection 정본).
+// OutboundCategoryFixAudit20260512 — public._outbound_category_fix_audit_20260512 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type OutboundCategoryFixAudit20260512 struct {
@@ -46,7 +47,7 @@ const (
 // OutboundCategoryFixAudit20260512AllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var OutboundCategoryFixAudit20260512AllColumns = "outbound_id,prev_category,new_category,outbound_date,erp_outbound_no,customer_name,supply_amount,reason,applied_at"
 
-// ReceiptsCompanyBackfillAudit20260512 — public._receipts_company_backfill_audit_20260512 의 row 표현 (introspection 정본).
+// ReceiptsCompanyBackfillAudit20260512 — public._receipts_company_backfill_audit_20260512 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type ReceiptsCompanyBackfillAudit20260512 struct {
@@ -72,7 +73,7 @@ const (
 // ReceiptsCompanyBackfillAudit20260512AllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ReceiptsCompanyBackfillAudit20260512AllColumns = "audit_id,receipt_id,old_company_id,new_company_id,matched_paths,created_at"
 
-// AiAttachmentRows — public.ai_attachment_rows 의 row 표현 (introspection 정본).
+// AiAttachmentRows — public.ai_attachment_rows 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type AiAttachmentRows struct {
@@ -92,7 +93,7 @@ const (
 // AiAttachmentRowsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var AiAttachmentRowsAllColumns = "sheet_id,row_num,data"
 
-// AiAttachmentSheets — public.ai_attachment_sheets 의 row 표현 (introspection 정본).
+// AiAttachmentSheets — public.ai_attachment_sheets 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type AiAttachmentSheets struct {
@@ -124,7 +125,7 @@ const (
 // AiAttachmentSheetsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var AiAttachmentSheetsAllColumns = "sheet_id,user_id,filename,sheet_name,row_count,col_count,headers,created_at,expires_at"
 
-// AmaranthUploadJobs — public.amaranth_upload_jobs 의 row 표현 (introspection 정본).
+// AmaranthUploadJobs — public.amaranth_upload_jobs 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type AmaranthUploadJobs struct {
@@ -184,7 +185,7 @@ const (
 // AmaranthUploadJobsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var AmaranthUploadJobsAllColumns = "job_id,job_type,status,company_id,date_from,date_to,file_name,stored_name,stored_path,content_type,size_bytes,file_sha256,row_count,created_by,created_by_email,attempts,upload_message,last_error,rpa_started_at,uploaded_at,created_at,updated_at"
 
-// AnomalyIgnores — public.anomaly_ignores 의 row 표현 (introspection 정본).
+// AnomalyIgnores — public.anomaly_ignores 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type AnomalyIgnores struct {
@@ -212,7 +213,7 @@ const (
 // AnomalyIgnoresAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var AnomalyIgnoresAllColumns = "ignore_id,table_name,row_pk,rule_name,reason,ignored_by,ignored_at"
 
-// AssistantSessions — public.assistant_sessions 의 row 표현 (introspection 정본).
+// AssistantSessions — public.assistant_sessions 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type AssistantSessions struct {
@@ -239,7 +240,7 @@ const (
 // AssistantSessionsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var AssistantSessionsAllColumns = "id,user_id,title,messages,created_at,updated_at"
 
-// AuditLogs — public.audit_logs 의 row 표현 (introspection 정본).
+// AuditLogs — public.audit_logs 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type AuditLogs struct {
@@ -278,7 +279,7 @@ const (
 // AuditLogsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var AuditLogsAllColumns = "audit_id,entity_type,entity_id,action,user_id,user_email,request_method,request_path,old_data,new_data,note,created_at"
 
-// BankAccounts — public.bank_accounts 의 row 표현 (introspection 정본).
+// BankAccounts — public.bank_accounts 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type BankAccounts struct {
@@ -323,7 +324,7 @@ const (
 // BankAccountsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var BankAccountsAllColumns = "account_id,company_id,bank_id,bank_name,branch_name,account_number,account_holder,currency,swift_code,memo,is_default,is_active,created_at,updated_at"
 
-// Banks — public.banks 의 row 표현 (introspection 정본).
+// Banks — public.banks 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Banks struct {
@@ -361,7 +362,7 @@ const (
 // BanksAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var BanksAllColumns = "bank_id,company_id,bank_name,lc_limit_usd,opening_fee_rate,acceptance_fee_rate,fee_calc_method,memo,is_active,created_at,updated_at"
 
-// BaroCreditHolds — public.baro_credit_holds 의 row 표현 (introspection 정본).
+// BaroCreditHolds — public.baro_credit_holds 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type BaroCreditHolds struct {
@@ -399,7 +400,7 @@ const (
 // BaroCreditHoldsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var BaroCreditHoldsAllColumns = "hold_id,partner_id,triggered_at,trigger_reason,outstanding_krw,credit_limit_krw,oldest_unpaid_days,released_at,released_by,release_note,blocked_outbound_id,blocked_order_id"
 
-// BaroDriverTokens — public.baro_driver_tokens 의 row 표현 (introspection 정본).
+// BaroDriverTokens — public.baro_driver_tokens 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type BaroDriverTokens struct {
@@ -423,7 +424,7 @@ const (
 // BaroDriverTokensAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var BaroDriverTokensAllColumns = "token,notice_id,expires_at,used_at,driver_phone"
 
-// BaroQuoteLines — public.baro_quote_lines 의 row 표현 (introspection 정본).
+// BaroQuoteLines — public.baro_quote_lines 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type BaroQuoteLines struct {
@@ -459,7 +460,7 @@ const (
 // BaroQuoteLinesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var BaroQuoteLinesAllColumns = "line_id,quote_id,line_no,product_id,product_code,product_name,spec_wp,quantity,unit_price_krw,line_total_krw,notes"
 
-// BaroQuotes — public.baro_quotes 의 row 표현 (introspection 정본).
+// BaroQuotes — public.baro_quotes 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type BaroQuotes struct {
@@ -509,7 +510,7 @@ const (
 // BaroQuotesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var BaroQuotesAllColumns = "quote_id,partner_id,created_by,created_at,updated_at,valid_until,notes,status,sent_at,sent_channel,sent_to,replied_at,reply_note,subtotal_krw,vat_krw,total_krw,estimated_cost_krw,estimated_margin_pct"
 
-// BaroShipmentNotices — public.baro_shipment_notices 의 row 표현 (introspection 정본).
+// BaroShipmentNotices — public.baro_shipment_notices 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type BaroShipmentNotices struct {
@@ -559,7 +560,7 @@ const (
 // BaroShipmentNoticesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var BaroShipmentNoticesAllColumns = "notice_id,partner_id,outbound_id,dispatch_route_id,stage,channel,recipient_phone,recipient_name,message_body,sent_at,sent_by,delivery_status,delivery_error,external_message_id,driver_photo_url,driver_signature_url,delivery_note,delivered_at"
 
-// BlLineItems — public.bl_line_items 의 row 표현 (introspection 정본).
+// BlLineItems — public.bl_line_items 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type BlLineItems struct {
@@ -601,7 +602,7 @@ const (
 // BlLineItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var BlLineItemsAllColumns = "bl_line_id,bl_id,product_id,quantity,capacity_kw,item_type,payment_type,invoice_amount_usd,unit_price_usd_wp,unit_price_krw_wp,usage_category,memo,created_at,updated_at"
 
-// BlShipments — public.bl_shipments 의 row 표현 (introspection 정본).
+// BlShipments — public.bl_shipments 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type BlShipments struct {
@@ -664,7 +665,7 @@ const (
 // BlShipmentsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var BlShipmentsAllColumns = "bl_id,bl_number,po_id,lc_id,company_id,manufacturer_id,inbound_type,currency,exchange_rate,etd,eta,actual_arrival,port,forwarder,warehouse_id,invoice_number,status,erp_registered,memo,created_at,updated_at,declaration_number,cif_amount_krw,lc_maturity_date"
 
-// Companies — public.companies 의 row 표현 (introspection 정본).
+// Companies — public.companies 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Companies struct {
@@ -693,7 +694,7 @@ const (
 // CompaniesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var CompaniesAllColumns = "company_id,company_name,company_code,business_number,is_active,created_at,updated_at"
 
-// CompanyAliases — public.company_aliases 의 row 표현 (introspection 정본).
+// CompanyAliases — public.company_aliases 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type CompanyAliases struct {
@@ -722,7 +723,7 @@ const (
 // CompanyAliasesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var CompanyAliasesAllColumns = "alias_id,canonical_company_id,alias_text,alias_text_normalized,source,created_at,created_by"
 
-// ConstructionSites — public.construction_sites 의 row 표현 (introspection 정본).
+// ConstructionSites — public.construction_sites 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type ConstructionSites struct {
@@ -760,7 +761,7 @@ const (
 // ConstructionSitesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ConstructionSitesAllColumns = "site_id,company_id,name,location,site_type,capacity_mw,started_at,completed_at,notes,is_active,created_at,updated_at"
 
-// CostDetails — public.cost_details 의 row 표현 (introspection 정본).
+// CostDetails — public.cost_details 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type CostDetails struct {
@@ -822,7 +823,7 @@ const (
 // CostDetailsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var CostDetailsAllColumns = "cost_id,declaration_id,product_id,quantity,capacity_kw,fob_unit_usd,fob_total_usd,fob_wp_krw,exchange_rate,cif_total_krw,cif_unit_usd,cif_total_usd,cif_wp_krw,tariff_rate,tariff_amount,vat_amount,customs_fee,incidental_cost,landed_total_krw,landed_wp_krw,memo,created_at,updated_at"
 
-// CycleCountItems — public.cycle_count_items 의 row 표현 (introspection 정본).
+// CycleCountItems — public.cycle_count_items 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type CycleCountItems struct {
@@ -866,7 +867,7 @@ const (
 // CycleCountItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var CycleCountItemsAllColumns = "item_id,cycle_count_id,location_id,location_code_snapshot,product_id,product_code_snapshot,product_name_snapshot,expected_qty,counted_qty,variance_qty,variance_reason,variance_note,counted_by,counted_at,photo_attachment_ids"
 
-// CycleCounts — public.cycle_counts 의 row 표현 (introspection 정본).
+// CycleCounts — public.cycle_counts 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type CycleCounts struct {
@@ -906,7 +907,7 @@ const (
 // CycleCountsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var CycleCountsAllColumns = "cycle_count_id,warehouse_id,scheduled_date,status,started_at,completed_at,total_locations,matched_locations,variance_locations,accuracy_pct,created_by,created_at,notes"
 
-// DbAnomalySnapshots — public.db_anomaly_snapshots 의 row 표현 (introspection 정본).
+// DbAnomalySnapshots — public.db_anomaly_snapshots 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type DbAnomalySnapshots struct {
@@ -934,7 +935,7 @@ const (
 // DbAnomalySnapshotsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var DbAnomalySnapshotsAllColumns = "snapshot_id,rule_name,severity,category,count,taken_at,taken_date"
 
-// DispatchRoutes — public.dispatch_routes 의 row 표현 (introspection 정본).
+// DispatchRoutes — public.dispatch_routes 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type DispatchRoutes struct {
@@ -972,7 +973,7 @@ const (
 // DispatchRoutesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var DispatchRoutesAllColumns = "route_id,route_date,vehicle_type,vehicle_plate,driver_name,driver_phone,status,memo,tenant_scope,created_by,created_at,updated_at"
 
-// DocumentFiles — public.document_files 의 row 표현 (introspection 정본).
+// DocumentFiles — public.document_files 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type DocumentFiles struct {
@@ -1008,7 +1009,7 @@ const (
 // DocumentFilesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var DocumentFilesAllColumns = "file_id,entity_type,entity_id,file_type,original_name,stored_name,stored_path,content_type,size_bytes,uploaded_by,created_at"
 
-// ExternalSyncSources — public.external_sync_sources 의 row 표현 (introspection 정본).
+// ExternalSyncSources — public.external_sync_sources 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type ExternalSyncSources struct {
@@ -1056,7 +1057,7 @@ const (
 // ExternalSyncSourcesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ExternalSyncSourcesAllColumns = "sync_id,name,source_kind,spreadsheet_id,sheet_gid,external_format_id,schedule,enabled,last_synced_at,last_sync_count,last_skipped_count,last_error,created_at,created_by,default_warehouse_id"
 
-// FeatureWiringAudit — public.feature_wiring_audit 의 row 표현 (introspection 정본).
+// FeatureWiringAudit — public.feature_wiring_audit 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type FeatureWiringAudit struct {
@@ -1088,7 +1089,7 @@ const (
 // FeatureWiringAuditAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var FeatureWiringAuditAllColumns = "id,occurred_at,actor,axis,tenant,feature_id,before_value,after_value,note"
 
-// FifoMatches — public.fifo_matches 의 row 표현 (introspection 정본).
+// FifoMatches — public.fifo_matches 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type FifoMatches struct {
@@ -1178,7 +1179,7 @@ const (
 // FifoMatchesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var FifoMatchesAllColumns = "match_id,erp_inbound_no,erp_inbound_line_no,inbound_id,inbound_date,inbound_kind,supplier_name,erp_outbound_no,outbound_id,outbound_date,customer_name,product_id,lot_inbound_qty,outbound_qty_origin,allocated_qty,wp_unit_price,ea_unit_cost,cost_amount,sales_unit_price_ea,sales_amount,profit_amount,profit_ratio,usage_category_raw,project,procurement_type,corporation,manufacturer_name_kr,manufacturer_name_en,declaration_id,declaration_number,bl_number,lc_number,category_no,po_number,source,source_payload,created_at"
 
-// FxDaily — public.fx_daily 의 row 표현 (introspection 정본).
+// FxDaily — public.fx_daily 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type FxDaily struct {
@@ -1203,7 +1204,7 @@ const (
 // FxDailyAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var FxDailyAllColumns = "pair,date,rate,source,fetched_at"
 
-// ImportDeclarations — public.import_declarations 의 row 표현 (introspection 정본).
+// ImportDeclarations — public.import_declarations 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type ImportDeclarations struct {
@@ -1303,7 +1304,7 @@ const (
 // ImportDeclarationsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ImportDeclarationsAllColumns = "declaration_id,declaration_number,bl_id,company_id,declaration_date,arrival_date,release_date,hs_code,customs_office,port,memo,created_at,updated_at,lc_no,invoice_no,bl_number,supplier_name_en,supplier_name_kr,po_number,exchange_rate,contract_unit_price_usd_wp,contract_total_usd,contract_total_krw,cif_krw,incoterms,customs_rate,customs_amount,vat_amount,paid_qty,free_qty,free_ratio,paid_cif_krw,free_cif_krw,cost_unit_price_wp,cost_unit_price_ea,product_id,quantity,capacity_kw,erp_inbound_no,declaration_line_no,source_payload,erp_inbound_no_clean"
 
-// Inbounds — public.inbounds 의 row 표현 (introspection 정본).
+// Inbounds — public.inbounds 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Inbounds struct {
@@ -1361,7 +1362,7 @@ const (
 // InboundsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var InboundsAllColumns = "inbound_id,inbound_date,supplier_partner_id,product_id,quantity,capacity_kw,warehouse_id,location,status,erp_inbound_no,erp_line_no,currency,unit_price,unit_price_wp,supply_amount,vat_amount,total_amount,source_payload,memo,created_at,updated_at"
 
-// IncidentalExpenses — public.incidental_expenses 의 row 표현 (introspection 정본).
+// IncidentalExpenses — public.incidental_expenses 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type IncidentalExpenses struct {
@@ -1405,7 +1406,7 @@ const (
 // IncidentalExpensesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var IncidentalExpensesAllColumns = "expense_id,bl_id,month,company_id,expense_type,amount,vat,total,vendor,memo,created_at,updated_at,outbound_id,vehicle_type,destination"
 
-// IntegrityCheckRuns — public.integrity_check_runs 의 row 표현 (introspection 정본).
+// IntegrityCheckRuns — public.integrity_check_runs 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type IntegrityCheckRuns struct {
@@ -1435,7 +1436,7 @@ const (
 // IntegrityCheckRunsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var IntegrityCheckRunsAllColumns = "run_id,check_id,ran_at,actual_value,passed,alerted,alert_reason,duration_ms"
 
-// IntegrityChecks — public.integrity_checks 의 row 표현 (introspection 정본).
+// IntegrityChecks — public.integrity_checks 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type IntegrityChecks struct {
@@ -1473,7 +1474,7 @@ const (
 // IntegrityChecksAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var IntegrityChecksAllColumns = "check_id,name,category,severity,baseline_value,tolerance,tolerance_type,cooldown_minutes,description,enabled,created_at,updated_at"
 
-// IntercompanyRequests — public.intercompany_requests 의 row 표현 (introspection 정본).
+// IntercompanyRequests — public.intercompany_requests 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type IntercompanyRequests struct {
@@ -1524,7 +1525,7 @@ const (
 // IntercompanyRequestsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var IntercompanyRequestsAllColumns = "request_id,requester_company_id,target_company_id,product_id,quantity,desired_arrival_date,status,note,outbound_id,requested_by,requested_by_email,responded_by,responded_by_email,responded_at,received_at,cancelled_at,created_at,updated_at"
 
-// InventoryAllocations — public.inventory_allocations 의 row 표현 (introspection 정본).
+// InventoryAllocations — public.inventory_allocations 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type InventoryAllocations struct {
@@ -1582,7 +1583,7 @@ const (
 // InventoryAllocationsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var InventoryAllocationsAllColumns = "alloc_id,company_id,product_id,quantity,capacity_kw,purpose,source_type,customer_name,site_name,notes,expected_price_per_wp,free_spare_qty,status,outbound_id,order_id,created_at,updated_at,group_id,site_id,bl_id,location_id"
 
-// InventoryMovements — public.inventory_movements 의 row 표현 (introspection 정본).
+// InventoryMovements — public.inventory_movements 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type InventoryMovements struct {
@@ -1661,7 +1662,7 @@ const (
 // InventoryMovementsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var InventoryMovementsAllColumns = "movement_id,movement_date,product_id,warehouse_id,warehouse_code,warehouse_name,location_code,location_name,movement_type,movement_subtype,movement_type_code,partner_partner_id,partner_code,partner_name,beginning_qty,inbound_qty,outbound_qty,ending_qty,unit_factor,unit,ending_qty_mgmt,category_code,category_name,cat_l1_code,cat_l1_name,cat_l2_code,cat_l2_name,cat_l3_code,cat_l3_name,source,source_payload,created_at"
 
-// InventorySnapshots — public.inventory_snapshots 의 row 표현 (introspection 정본).
+// InventorySnapshots — public.inventory_snapshots 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type InventorySnapshots struct {
@@ -1701,7 +1702,7 @@ const (
 // InventorySnapshotsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var InventorySnapshotsAllColumns = "snapshot_id,snapshot_date,product_id,beginning_qty,inbound_qty,outbound_qty,ending_qty,safety_qty,available_qty,unit_factor,source,source_payload,created_at"
 
-// LcLineItems — public.lc_line_items 의 row 표현 (introspection 정본).
+// LcLineItems — public.lc_line_items 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type LcLineItems struct {
@@ -1741,7 +1742,7 @@ const (
 // LcLineItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var LcLineItemsAllColumns = "lc_line_id,lc_id,po_line_id,product_id,quantity,capacity_kw,amount_usd,unit_price_usd_wp,item_type,payment_type,memo,created_at,updated_at"
 
-// LcRecords — public.lc_records 의 row 표현 (introspection 정본).
+// LcRecords — public.lc_records 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type LcRecords struct {
@@ -1796,7 +1797,7 @@ const (
 // LcRecordsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var LcRecordsAllColumns = "lc_id,po_id,lc_number,bank_id,company_id,open_date,amount_usd,target_qty,target_mw,usance_days,usance_type,maturity_date,settlement_date,status,memo,created_at,updated_at,repayment_date,repaid"
 
-// LibraryPosts — public.library_posts 의 row 표현 (introspection 정본).
+// LibraryPosts — public.library_posts 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type LibraryPosts struct {
@@ -1822,7 +1823,7 @@ const (
 // LibraryPostsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var LibraryPostsAllColumns = "post_id,title,content,created_by,created_at,updated_at"
 
-// LimitChanges — public.limit_changes 의 row 표현 (introspection 정본).
+// LimitChanges — public.limit_changes 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type LimitChanges struct {
@@ -1850,7 +1851,7 @@ const (
 // LimitChangesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var LimitChangesAllColumns = "limit_change_id,bank_id,change_date,previous_limit,new_limit,reason,created_at"
 
-// Manufacturers — public.manufacturers 의 row 표현 (introspection 정본).
+// Manufacturers — public.manufacturers 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Manufacturers struct {
@@ -1887,7 +1888,7 @@ const (
 // ManufacturersAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ManufacturersAllColumns = "manufacturer_id,name_kr,name_en,country,domestic_foreign,is_active,created_at,updated_at,short_name,tier,priority_rank"
 
-// ModuleDemandForecasts — public.module_demand_forecasts 의 row 표현 (introspection 정본).
+// ModuleDemandForecasts — public.module_demand_forecasts 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type ModuleDemandForecasts struct {
@@ -1931,7 +1932,7 @@ const (
 // ModuleDemandForecastsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ModuleDemandForecastsAllColumns = "forecast_id,company_id,site_id,site_name,demand_month,demand_type,manufacturer_id,spec_wp,module_width_mm,module_height_mm,required_kw,status,notes,created_at,updated_at"
 
-// Notes — public.notes 의 row 표현 (introspection 정본).
+// Notes — public.notes 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Notes struct {
@@ -1959,7 +1960,7 @@ const (
 // NotesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var NotesAllColumns = "note_id,user_id,content,linked_table,linked_id,created_at,updated_at"
 
-// Orders — public.orders 의 row 표현 (introspection 정본).
+// Orders — public.orders 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Orders struct {
@@ -2040,7 +2041,7 @@ const (
 // OrdersAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var OrdersAllColumns = "order_id,order_number,company_id,customer_id,order_date,receipt_method,product_id,quantity,capacity_kw,unit_price_wp,site_name,site_address,site_contact,site_phone,payment_terms,deposit_rate,delivery_due,shipped_qty,remaining_qty,status,spare_qty,memo,created_at,updated_at,management_category,fulfillment_source,bl_id,site_id,unit_price_ea,source_payload"
 
-// OutboundBlItems — public.outbound_bl_items 의 row 표현 (introspection 정본).
+// OutboundBlItems — public.outbound_bl_items 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type OutboundBlItems struct {
@@ -2064,7 +2065,7 @@ const (
 // OutboundBlItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var OutboundBlItemsAllColumns = "outbound_bl_item_id,outbound_id,bl_id,quantity,created_at"
 
-// Outbounds — public.outbounds 의 row 표현 (introspection 정본).
+// Outbounds — public.outbounds 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Outbounds struct {
@@ -2136,7 +2137,7 @@ const (
 // OutboundsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var OutboundsAllColumns = "outbound_id,outbound_date,company_id,product_id,quantity,capacity_kw,warehouse_id,usage_category,order_id,site_name,site_address,spare_qty,group_trade,target_company_id,erp_outbound_no,memo,created_at,updated_at,status,dispatch_route_id,tx_statement_ready,inspection_request_sent,approval_requested,tax_invoice_issued,source_payload"
 
-// PartnerActivities — public.partner_activities 의 row 표현 (introspection 정본).
+// PartnerActivities — public.partner_activities 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type PartnerActivities struct {
@@ -2174,7 +2175,7 @@ const (
 // PartnerActivitiesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PartnerActivitiesAllColumns = "activity_id,partner_id,author_user_id,kind,body,follow_up_required,follow_up_due,follow_up_done,follow_up_done_at,follow_up_done_by,created_at,updated_at"
 
-// PartnerAliases — public.partner_aliases 의 row 표현 (introspection 정본).
+// PartnerAliases — public.partner_aliases 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type PartnerAliases struct {
@@ -2203,7 +2204,7 @@ const (
 // PartnerAliasesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PartnerAliasesAllColumns = "alias_id,canonical_partner_id,alias_text,alias_text_normalized,source,created_at,created_by"
 
-// PartnerPriceBook — public.partner_price_book 의 row 표현 (introspection 정본).
+// PartnerPriceBook — public.partner_price_book 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type PartnerPriceBook struct {
@@ -2245,7 +2246,7 @@ const (
 // PartnerPriceBookAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PartnerPriceBookAllColumns = "price_id,partner_id,product_id,unit_price_wp,discount_pct,effective_from,effective_to,memo,tenant_scope,created_by,created_at,updated_at"
 
-// Partners — public.partners 의 row 표현 (introspection 정본).
+// Partners — public.partners 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Partners struct {
@@ -2294,7 +2295,7 @@ const (
 // PartnersAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PartnersAllColumns = "partner_id,partner_name,partner_type,erp_code,payment_terms,contact_name,contact_phone,contact_email,is_active,created_at,updated_at,credit_limit_krw,credit_payment_days,owner_user_id,normalized_name"
 
-// PdfExtractions — public.pdf_extractions 의 row 표현 (introspection 정본).
+// PdfExtractions — public.pdf_extractions 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type PdfExtractions struct {
@@ -2332,7 +2333,7 @@ const (
 // PdfExtractionsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PdfExtractionsAllColumns = "extraction_id,file_id,bl_id,file_type,extractor,parse_status,page_count,raw_text,parsed,extracted_at"
 
-// PickingListItems — public.picking_list_items 의 row 표현 (introspection 정본).
+// PickingListItems — public.picking_list_items 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type PickingListItems struct {
@@ -2376,7 +2377,7 @@ const (
 // PickingListItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PickingListItemsAllColumns = "item_id,picking_list_id,line_no,product_id,product_code_snapshot,product_name_snapshot,spec_wp_snapshot,location_id,location_code_snapshot,quantity_planned,quantity_picked,is_picked,picked_at,picked_by,variance_note"
 
-// PickingLists — public.picking_lists 의 row 표현 (introspection 정본).
+// PickingLists — public.picking_lists 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type PickingLists struct {
@@ -2416,7 +2417,7 @@ const (
 // PickingListsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PickingListsAllColumns = "picking_list_id,outbound_id,dispatch_route_id,warehouse_id,partner_id,partner_name_snapshot,status,picker_user_id,created_at,created_by,started_at,completed_at,notes"
 
-// PoLineItems — public.po_line_items 의 row 표현 (introspection 정본).
+// PoLineItems — public.po_line_items 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type PoLineItems struct {
@@ -2455,7 +2456,7 @@ const (
 // PoLineItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PoLineItemsAllColumns = "po_line_id,po_id,product_id,quantity,unit_price_usd,total_amount_usd,memo,created_at,updated_at,item_type,payment_type,unit_price_usd_wp"
 
-// PriceBenchmarkRuns — public.price_benchmark_runs 의 row 표현 (introspection 정본).
+// PriceBenchmarkRuns — public.price_benchmark_runs 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type PriceBenchmarkRuns struct {
@@ -2506,7 +2507,7 @@ const (
 // PriceBenchmarkRunsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PriceBenchmarkRunsAllColumns = "run_id,status,provider,model,source_keys,requested_by,started_at,finished_at,inserted_count,skipped_count,error_message,warnings,evidence,raw_response,evidence_hashes,diagnostics,sanity_review"
 
-// PriceBenchmarks — public.price_benchmarks 의 row 표현 (introspection 정본).
+// PriceBenchmarks — public.price_benchmarks 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type PriceBenchmarks struct {
@@ -2575,7 +2576,7 @@ const (
 // PriceBenchmarksAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PriceBenchmarksAllColumns = "benchmark_id,run_id,source_key,source_name,metric_key,metric_label,value_date,period_label,market_region,basis,currency,price_usd_w,price_cny_w,price_krw_w,cargo_min_mw,cargo_max_mw,quarter_label,project_segment,technology,confidence,source_url,raw_excerpt,notes,created_by,created_at,updated_at,review_status"
 
-// PriceHistories — public.price_histories 의 row 표현 (introspection 정본).
+// PriceHistories — public.price_histories 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type PriceHistories struct {
@@ -2613,7 +2614,7 @@ const (
 // PriceHistoriesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PriceHistoriesAllColumns = "price_history_id,product_id,manufacturer_id,change_date,previous_price,new_price,reason,related_po_id,memo,created_at,updated_at,company_id"
 
-// ProductAliases — public.product_aliases 의 row 표현 (introspection 정본).
+// ProductAliases — public.product_aliases 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type ProductAliases struct {
@@ -2647,7 +2648,7 @@ const (
 // ProductAliasesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ProductAliasesAllColumns = "alias_id,canonical_product_id,alias_code,alias_code_normalized,source,created_at,created_by,alias_product_id,reason"
 
-// ProductPackageItems — public.product_package_items 의 row 표현 (introspection 정본).
+// ProductPackageItems — public.product_package_items 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type ProductPackageItems struct {
@@ -2669,7 +2670,7 @@ const (
 // ProductPackageItemsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ProductPackageItemsAllColumns = "package_id,child_product_id,quantity,notes"
 
-// Products — public.products 의 row 표현 (introspection 정본).
+// Products — public.products 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Products struct {
@@ -2766,7 +2767,7 @@ const (
 // ProductsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ProductsAllColumns = "product_id,product_code,product_name,manufacturer_id,spec_wp,wattage_kw,module_width_mm,module_height_mm,module_depth_mm,weight_kg,wafer_platform,cell_config,series_name,is_active,memo,created_at,updated_at,erp_code,safety_stock,available_stock,module_efficiency,module_type,module_grade,product_family_code,product_kind,rated_power_kw,max_input_kw,mppt_channels,voltage_min_v,voltage_max_v,phase,product_variant_kind,bom_revision,substitution_group_code"
 
-// PurchaseOrders — public.purchase_orders 의 row 표현 (introspection 정본).
+// PurchaseOrders — public.purchase_orders 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type PurchaseOrders struct {
@@ -2816,7 +2817,7 @@ const (
 // PurchaseOrdersAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var PurchaseOrdersAllColumns = "po_id,po_number,company_id,manufacturer_id,contract_type,contract_date,incoterms,payment_terms,total_qty,total_mw,contract_period_start,contract_period_end,status,memo,created_at,updated_at,parent_po_id"
 
-// ReceiptMatches — public.receipt_matches 의 row 표현 (introspection 정본).
+// ReceiptMatches — public.receipt_matches 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type ReceiptMatches struct {
@@ -2843,7 +2844,7 @@ const (
 // ReceiptMatchesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ReceiptMatchesAllColumns = "match_id,receipt_id,outbound_id,matched_amount,created_at,sale_id"
 
-// Receipts — public.receipts 의 row 표현 (introspection 정본).
+// Receipts — public.receipts 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Receipts struct {
@@ -2879,7 +2880,7 @@ const (
 // ReceiptsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ReceiptsAllColumns = "receipt_id,customer_id,receipt_date,amount,bank_account,memo,created_at,updated_at,bank_account_id,company_id"
 
-// ReceivingLogs — public.receiving_logs 의 row 표현 (introspection 정본).
+// ReceivingLogs — public.receiving_logs 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type ReceivingLogs struct {
@@ -2931,7 +2932,7 @@ const (
 // ReceivingLogsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var ReceivingLogsAllColumns = "receiving_id,source_type,bl_line_id,intercompany_request_id,warehouse_id,product_id,product_code_snapshot,product_name_snapshot,quantity_expected,quantity_received,quantity_variance,location_id,location_code_snapshot,receiver_user_id,received_at,variance_reason,variance_note,photo_attachment_ids,notes"
 
-// Sales — public.sales 의 row 표현 (introspection 정본).
+// Sales — public.sales 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Sales struct {
@@ -3000,7 +3001,7 @@ const (
 // SalesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var SalesAllColumns = "sale_id,outbound_id,customer_id,unit_price_wp,unit_price_ea,supply_amount,vat_amount,total_amount,tax_invoice_date,tax_invoice_email,erp_closed,erp_closed_date,memo,created_at,updated_at,order_id,quantity,capacity_kw,status,erp_sales_no,erp_line_no,currency,source_payload"
 
-// StudyLearningDomains — public.study_learning_domains 의 row 표현 (introspection 정본).
+// StudyLearningDomains — public.study_learning_domains 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type StudyLearningDomains struct {
@@ -3036,7 +3037,7 @@ const (
 // StudyLearningDomainsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var StudyLearningDomainsAllColumns = "domain_id,tenant_scope,domain_key,title,summary,owner_role,display_order,status,created_by,created_at,updated_at"
 
-// StudyLearningPlanSteps — public.study_learning_plan_steps 의 row 표현 (introspection 정본).
+// StudyLearningPlanSteps — public.study_learning_plan_steps 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type StudyLearningPlanSteps struct {
@@ -3074,7 +3075,7 @@ const (
 // StudyLearningPlanStepsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var StudyLearningPlanStepsAllColumns = "step_id,plan_id,domain_id,line_no,title,description,expected_minutes,required,assessment_kind,resource_url,created_at,updated_at"
 
-// StudyLearningPlans — public.study_learning_plans 의 row 표현 (introspection 정본).
+// StudyLearningPlans — public.study_learning_plans 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type StudyLearningPlans struct {
@@ -3110,7 +3111,7 @@ const (
 // StudyLearningPlansAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var StudyLearningPlansAllColumns = "plan_id,tenant_scope,plan_key,title,audience,objective,duration_days,status,created_by,created_at,updated_at"
 
-// SystemSettings — public.system_settings 의 row 표현 (introspection 정본).
+// SystemSettings — public.system_settings 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type SystemSettings struct {
@@ -3134,7 +3135,7 @@ const (
 // SystemSettingsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var SystemSettingsAllColumns = "key,value,updated_at,updated_by"
 
-// TenantDataScopes — public.tenant_data_scopes 의 row 표현 (introspection 정본).
+// TenantDataScopes — public.tenant_data_scopes 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type TenantDataScopes struct {
@@ -3166,7 +3167,7 @@ const (
 // TenantDataScopesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var TenantDataScopesAllColumns = "tenant,feature_id,row_filter,column_mask,note,updated_by,updated_at,created_at"
 
-// TenantFeatures — public.tenant_features 의 row 표현 (introspection 정본).
+// TenantFeatures — public.tenant_features 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type TenantFeatures struct {
@@ -3195,7 +3196,7 @@ const (
 // TenantFeaturesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var TenantFeaturesAllColumns = "tenant,feature_id,enabled,note,updated_by,updated_at,created_at"
 
-// TtRemittances — public.tt_remittances 의 row 표현 (introspection 정본).
+// TtRemittances — public.tt_remittances 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type TtRemittances struct {
@@ -3234,7 +3235,7 @@ const (
 // TtRemittancesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var TtRemittancesAllColumns = "tt_id,po_id,remit_date,amount_usd,amount_krw,exchange_rate,purpose,status,bank_name,memo,created_at,updated_at"
 
-// UiConfigs — public.ui_configs 의 row 표현 (introspection 정본).
+// UiConfigs — public.ui_configs 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type UiConfigs struct {
@@ -3263,7 +3264,7 @@ const (
 // UiConfigsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var UiConfigsAllColumns = "id,scope,config_id,config,updated_at,updated_by"
 
-// UserProfiles — public.user_profiles 의 row 표현 (introspection 정본).
+// UserProfiles — public.user_profiles 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type UserProfiles struct {
@@ -3313,7 +3314,7 @@ const (
 // UserProfilesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var UserProfilesAllColumns = "user_id,email,name,role,allowed_modules,company_id,is_active,created_at,updated_at,department,phone,avatar_url,tenant_scope,persona,preferences"
 
-// WarehouseLocations — public.warehouse_locations 의 row 표현 (introspection 정본).
+// WarehouseLocations — public.warehouse_locations 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type WarehouseLocations struct {
@@ -3355,7 +3356,7 @@ const (
 // WarehouseLocationsAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var WarehouseLocationsAllColumns = "location_id,warehouse_id,zone,aisle,rack,bin,location_code,capacity_qty,weight_capacity_kg,location_type,notes,is_active,created_at,updated_at"
 
-// Warehouses — public.warehouses 의 row 표현 (introspection 정본).
+// Warehouses — public.warehouses 의 테이블 row 표현 (introspection 정본).
 // 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,
 // Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.
 type Warehouses struct {
@@ -3388,3 +3389,640 @@ const (
 
 // WarehousesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
 var WarehousesAllColumns = "warehouse_id,warehouse_code,warehouse_name,warehouse_type,location_code,location_name,is_active,created_at,updated_at"
+
+// OrdersWithMeta — public.orders_with_meta 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type OrdersWithMeta struct {
+	OrderId *string `json:"order_id,omitempty"`
+	OrderNumber *string `json:"order_number,omitempty"`
+	CompanyId *string `json:"company_id,omitempty"`
+	CustomerId *string `json:"customer_id,omitempty"`
+	OrderDate *string `json:"order_date,omitempty"`
+	ReceiptMethod *string `json:"receipt_method,omitempty"`
+	ProductId *string `json:"product_id,omitempty"`
+	Quantity *int `json:"quantity,omitempty"`
+	CapacityKw *float64 `json:"capacity_kw,omitempty"`
+	UnitPriceWp *float64 `json:"unit_price_wp,omitempty"`
+	SiteName *string `json:"site_name,omitempty"`
+	SiteAddress *string `json:"site_address,omitempty"`
+	SiteContact *string `json:"site_contact,omitempty"`
+	SitePhone *string `json:"site_phone,omitempty"`
+	PaymentTerms *string `json:"payment_terms,omitempty"`
+	DepositRate *float64 `json:"deposit_rate,omitempty"`
+	DeliveryDue *string `json:"delivery_due,omitempty"`
+	ShippedQty *int `json:"shipped_qty,omitempty"`
+	RemainingQty *int `json:"remaining_qty,omitempty"`
+	Status *string `json:"status,omitempty"`
+	SpareQty *int `json:"spare_qty,omitempty"`
+	Memo *string `json:"memo,omitempty"`
+	CreatedAt *string `json:"created_at,omitempty"`
+	UpdatedAt *string `json:"updated_at,omitempty"`
+	ManagementCategory *string `json:"management_category,omitempty"`
+	FulfillmentSource *string `json:"fulfillment_source,omitempty"`
+	BlId *string `json:"bl_id,omitempty"`
+	SiteId *string `json:"site_id,omitempty"`
+	UnitPriceEa *float64 `json:"unit_price_ea,omitempty"`
+	SourcePayload *json.RawMessage `json:"source_payload,omitempty"`
+	CustomerName *string `json:"customer_name,omitempty"`
+	ProductCode *string `json:"product_code,omitempty"`
+	ProductName *string `json:"product_name,omitempty"`
+}
+
+// OrdersWithMetaCol* — public.orders_with_meta 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.OrdersWithMetaColOrderId, value)
+const (
+	OrdersWithMetaColOrderId = "order_id"
+	OrdersWithMetaColOrderNumber = "order_number"
+	OrdersWithMetaColCompanyId = "company_id"
+	OrdersWithMetaColCustomerId = "customer_id"
+	OrdersWithMetaColOrderDate = "order_date"
+	OrdersWithMetaColReceiptMethod = "receipt_method"
+	OrdersWithMetaColProductId = "product_id"
+	OrdersWithMetaColQuantity = "quantity"
+	OrdersWithMetaColCapacityKw = "capacity_kw"
+	OrdersWithMetaColUnitPriceWp = "unit_price_wp"
+	OrdersWithMetaColSiteName = "site_name"
+	OrdersWithMetaColSiteAddress = "site_address"
+	OrdersWithMetaColSiteContact = "site_contact"
+	OrdersWithMetaColSitePhone = "site_phone"
+	OrdersWithMetaColPaymentTerms = "payment_terms"
+	OrdersWithMetaColDepositRate = "deposit_rate"
+	OrdersWithMetaColDeliveryDue = "delivery_due"
+	OrdersWithMetaColShippedQty = "shipped_qty"
+	OrdersWithMetaColRemainingQty = "remaining_qty"
+	OrdersWithMetaColStatus = "status"
+	OrdersWithMetaColSpareQty = "spare_qty"
+	OrdersWithMetaColMemo = "memo"
+	OrdersWithMetaColCreatedAt = "created_at"
+	OrdersWithMetaColUpdatedAt = "updated_at"
+	OrdersWithMetaColManagementCategory = "management_category"
+	OrdersWithMetaColFulfillmentSource = "fulfillment_source"
+	OrdersWithMetaColBlId = "bl_id"
+	OrdersWithMetaColSiteId = "site_id"
+	OrdersWithMetaColUnitPriceEa = "unit_price_ea"
+	OrdersWithMetaColSourcePayload = "source_payload"
+	OrdersWithMetaColCustomerName = "customer_name"
+	OrdersWithMetaColProductCode = "product_code"
+	OrdersWithMetaColProductName = "product_name"
+)
+
+// OrdersWithMetaAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var OrdersWithMetaAllColumns = "order_id,order_number,company_id,customer_id,order_date,receipt_method,product_id,quantity,capacity_kw,unit_price_wp,site_name,site_address,site_contact,site_phone,payment_terms,deposit_rate,delivery_due,shipped_qty,remaining_qty,status,spare_qty,memo,created_at,updated_at,management_category,fulfillment_source,bl_id,site_id,unit_price_ea,source_payload,customer_name,product_code,product_name"
+
+// OutboundsSaleUnregistered — public.outbounds_sale_unregistered 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type OutboundsSaleUnregistered struct {
+	OutboundId *string `json:"outbound_id,omitempty"`
+	OutboundDate *string `json:"outbound_date,omitempty"`
+	CompanyId *string `json:"company_id,omitempty"`
+	ProductId *string `json:"product_id,omitempty"`
+	Quantity *int `json:"quantity,omitempty"`
+	CapacityKw *float64 `json:"capacity_kw,omitempty"`
+	WarehouseId *string `json:"warehouse_id,omitempty"`
+	UsageCategory *string `json:"usage_category,omitempty"`
+	OrderId *string `json:"order_id,omitempty"`
+	SiteName *string `json:"site_name,omitempty"`
+	SiteAddress *string `json:"site_address,omitempty"`
+	SpareQty *int `json:"spare_qty,omitempty"`
+	GroupTrade *bool `json:"group_trade,omitempty"`
+	TargetCompanyId *string `json:"target_company_id,omitempty"`
+	ErpOutboundNo *string `json:"erp_outbound_no,omitempty"`
+	Memo *string `json:"memo,omitempty"`
+	CreatedAt *string `json:"created_at,omitempty"`
+	UpdatedAt *string `json:"updated_at,omitempty"`
+	Status *string `json:"status,omitempty"`
+	DispatchRouteId *string `json:"dispatch_route_id,omitempty"`
+	TxStatementReady *bool `json:"tx_statement_ready,omitempty"`
+	InspectionRequestSent *bool `json:"inspection_request_sent,omitempty"`
+	ApprovalRequested *bool `json:"approval_requested,omitempty"`
+	TaxInvoiceIssued *bool `json:"tax_invoice_issued,omitempty"`
+	SourcePayload *json.RawMessage `json:"source_payload,omitempty"`
+	ProductCode *string `json:"product_code,omitempty"`
+	ProductName *string `json:"product_name,omitempty"`
+	ProductManufacturerId *string `json:"product_manufacturer_id,omitempty"`
+	OrderNumber *string `json:"order_number,omitempty"`
+	WarehouseName *string `json:"warehouse_name,omitempty"`
+	TargetCompanyName *string `json:"target_company_name,omitempty"`
+	TargetCompanyCode *string `json:"target_company_code,omitempty"`
+}
+
+// OutboundsSaleUnregisteredCol* — public.outbounds_sale_unregistered 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.OutboundsSaleUnregisteredColOutboundId, value)
+const (
+	OutboundsSaleUnregisteredColOutboundId = "outbound_id"
+	OutboundsSaleUnregisteredColOutboundDate = "outbound_date"
+	OutboundsSaleUnregisteredColCompanyId = "company_id"
+	OutboundsSaleUnregisteredColProductId = "product_id"
+	OutboundsSaleUnregisteredColQuantity = "quantity"
+	OutboundsSaleUnregisteredColCapacityKw = "capacity_kw"
+	OutboundsSaleUnregisteredColWarehouseId = "warehouse_id"
+	OutboundsSaleUnregisteredColUsageCategory = "usage_category"
+	OutboundsSaleUnregisteredColOrderId = "order_id"
+	OutboundsSaleUnregisteredColSiteName = "site_name"
+	OutboundsSaleUnregisteredColSiteAddress = "site_address"
+	OutboundsSaleUnregisteredColSpareQty = "spare_qty"
+	OutboundsSaleUnregisteredColGroupTrade = "group_trade"
+	OutboundsSaleUnregisteredColTargetCompanyId = "target_company_id"
+	OutboundsSaleUnregisteredColErpOutboundNo = "erp_outbound_no"
+	OutboundsSaleUnregisteredColMemo = "memo"
+	OutboundsSaleUnregisteredColCreatedAt = "created_at"
+	OutboundsSaleUnregisteredColUpdatedAt = "updated_at"
+	OutboundsSaleUnregisteredColStatus = "status"
+	OutboundsSaleUnregisteredColDispatchRouteId = "dispatch_route_id"
+	OutboundsSaleUnregisteredColTxStatementReady = "tx_statement_ready"
+	OutboundsSaleUnregisteredColInspectionRequestSent = "inspection_request_sent"
+	OutboundsSaleUnregisteredColApprovalRequested = "approval_requested"
+	OutboundsSaleUnregisteredColTaxInvoiceIssued = "tax_invoice_issued"
+	OutboundsSaleUnregisteredColSourcePayload = "source_payload"
+	OutboundsSaleUnregisteredColProductCode = "product_code"
+	OutboundsSaleUnregisteredColProductName = "product_name"
+	OutboundsSaleUnregisteredColProductManufacturerId = "product_manufacturer_id"
+	OutboundsSaleUnregisteredColOrderNumber = "order_number"
+	OutboundsSaleUnregisteredColWarehouseName = "warehouse_name"
+	OutboundsSaleUnregisteredColTargetCompanyName = "target_company_name"
+	OutboundsSaleUnregisteredColTargetCompanyCode = "target_company_code"
+)
+
+// OutboundsSaleUnregisteredAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var OutboundsSaleUnregisteredAllColumns = "outbound_id,outbound_date,company_id,product_id,quantity,capacity_kw,warehouse_id,usage_category,order_id,site_name,site_address,spare_qty,group_trade,target_company_id,erp_outbound_no,memo,created_at,updated_at,status,dispatch_route_id,tx_statement_ready,inspection_request_sent,approval_requested,tax_invoice_issued,source_payload,product_code,product_name,product_manufacturer_id,order_number,warehouse_name,target_company_name,target_company_code"
+
+// OutboundsWithMeta — public.outbounds_with_meta 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type OutboundsWithMeta struct {
+	OutboundId *string `json:"outbound_id,omitempty"`
+	OutboundDate *string `json:"outbound_date,omitempty"`
+	CompanyId *string `json:"company_id,omitempty"`
+	ProductId *string `json:"product_id,omitempty"`
+	Quantity *int `json:"quantity,omitempty"`
+	CapacityKw *float64 `json:"capacity_kw,omitempty"`
+	WarehouseId *string `json:"warehouse_id,omitempty"`
+	UsageCategory *string `json:"usage_category,omitempty"`
+	OrderId *string `json:"order_id,omitempty"`
+	SiteName *string `json:"site_name,omitempty"`
+	SiteAddress *string `json:"site_address,omitempty"`
+	SpareQty *int `json:"spare_qty,omitempty"`
+	GroupTrade *bool `json:"group_trade,omitempty"`
+	TargetCompanyId *string `json:"target_company_id,omitempty"`
+	ErpOutboundNo *string `json:"erp_outbound_no,omitempty"`
+	Memo *string `json:"memo,omitempty"`
+	CreatedAt *string `json:"created_at,omitempty"`
+	UpdatedAt *string `json:"updated_at,omitempty"`
+	Status *string `json:"status,omitempty"`
+	DispatchRouteId *string `json:"dispatch_route_id,omitempty"`
+	TxStatementReady *bool `json:"tx_statement_ready,omitempty"`
+	InspectionRequestSent *bool `json:"inspection_request_sent,omitempty"`
+	ApprovalRequested *bool `json:"approval_requested,omitempty"`
+	TaxInvoiceIssued *bool `json:"tax_invoice_issued,omitempty"`
+	SourcePayload *json.RawMessage `json:"source_payload,omitempty"`
+	ProductCode *string `json:"product_code,omitempty"`
+	ProductName *string `json:"product_name,omitempty"`
+	ProductManufacturerId *string `json:"product_manufacturer_id,omitempty"`
+	OrderNumber *string `json:"order_number,omitempty"`
+	WarehouseName *string `json:"warehouse_name,omitempty"`
+	TargetCompanyName *string `json:"target_company_name,omitempty"`
+	TargetCompanyCode *string `json:"target_company_code,omitempty"`
+}
+
+// OutboundsWithMetaCol* — public.outbounds_with_meta 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.OutboundsWithMetaColOutboundId, value)
+const (
+	OutboundsWithMetaColOutboundId = "outbound_id"
+	OutboundsWithMetaColOutboundDate = "outbound_date"
+	OutboundsWithMetaColCompanyId = "company_id"
+	OutboundsWithMetaColProductId = "product_id"
+	OutboundsWithMetaColQuantity = "quantity"
+	OutboundsWithMetaColCapacityKw = "capacity_kw"
+	OutboundsWithMetaColWarehouseId = "warehouse_id"
+	OutboundsWithMetaColUsageCategory = "usage_category"
+	OutboundsWithMetaColOrderId = "order_id"
+	OutboundsWithMetaColSiteName = "site_name"
+	OutboundsWithMetaColSiteAddress = "site_address"
+	OutboundsWithMetaColSpareQty = "spare_qty"
+	OutboundsWithMetaColGroupTrade = "group_trade"
+	OutboundsWithMetaColTargetCompanyId = "target_company_id"
+	OutboundsWithMetaColErpOutboundNo = "erp_outbound_no"
+	OutboundsWithMetaColMemo = "memo"
+	OutboundsWithMetaColCreatedAt = "created_at"
+	OutboundsWithMetaColUpdatedAt = "updated_at"
+	OutboundsWithMetaColStatus = "status"
+	OutboundsWithMetaColDispatchRouteId = "dispatch_route_id"
+	OutboundsWithMetaColTxStatementReady = "tx_statement_ready"
+	OutboundsWithMetaColInspectionRequestSent = "inspection_request_sent"
+	OutboundsWithMetaColApprovalRequested = "approval_requested"
+	OutboundsWithMetaColTaxInvoiceIssued = "tax_invoice_issued"
+	OutboundsWithMetaColSourcePayload = "source_payload"
+	OutboundsWithMetaColProductCode = "product_code"
+	OutboundsWithMetaColProductName = "product_name"
+	OutboundsWithMetaColProductManufacturerId = "product_manufacturer_id"
+	OutboundsWithMetaColOrderNumber = "order_number"
+	OutboundsWithMetaColWarehouseName = "warehouse_name"
+	OutboundsWithMetaColTargetCompanyName = "target_company_name"
+	OutboundsWithMetaColTargetCompanyCode = "target_company_code"
+)
+
+// OutboundsWithMetaAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var OutboundsWithMetaAllColumns = "outbound_id,outbound_date,company_id,product_id,quantity,capacity_kw,warehouse_id,usage_category,order_id,site_name,site_address,spare_qty,group_trade,target_company_id,erp_outbound_no,memo,created_at,updated_at,status,dispatch_route_id,tx_statement_ready,inspection_request_sent,approval_requested,tax_invoice_issued,source_payload,product_code,product_name,product_manufacturer_id,order_number,warehouse_name,target_company_name,target_company_code"
+
+// PurchaseOrdersExt — public.purchase_orders_ext 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type PurchaseOrdersExt struct {
+	PoId *string `json:"po_id,omitempty"`
+	PoNumber *string `json:"po_number,omitempty"`
+	CompanyId *string `json:"company_id,omitempty"`
+	ManufacturerId *string `json:"manufacturer_id,omitempty"`
+	ContractType *string `json:"contract_type,omitempty"`
+	ContractDate *string `json:"contract_date,omitempty"`
+	Incoterms *string `json:"incoterms,omitempty"`
+	PaymentTerms *string `json:"payment_terms,omitempty"`
+	TotalQty *int `json:"total_qty,omitempty"`
+	TotalMw *float64 `json:"total_mw,omitempty"`
+	ContractPeriodStart *string `json:"contract_period_start,omitempty"`
+	ContractPeriodEnd *string `json:"contract_period_end,omitempty"`
+	Status *string `json:"status,omitempty"`
+	Memo *string `json:"memo,omitempty"`
+	CreatedAt *string `json:"created_at,omitempty"`
+	UpdatedAt *string `json:"updated_at,omitempty"`
+	ParentPoId *string `json:"parent_po_id,omitempty"`
+	ManufacturerName *string `json:"manufacturer_name,omitempty"`
+	ManufacturerNameEn *string `json:"manufacturer_name_en,omitempty"`
+	FirstSpecWp *int `json:"first_spec_wp,omitempty"`
+	FirstProductName *string `json:"first_product_name,omitempty"`
+	FirstProductCode *string `json:"first_product_code,omitempty"`
+	LineCount *int `json:"line_count,omitempty"`
+	LineTotalUsd *float64 `json:"line_total_usd,omitempty"`
+	LineTotalWp *float64 `json:"line_total_wp,omitempty"`
+	LineExtraCount *int `json:"line_extra_count,omitempty"`
+	LcCount *int `json:"lc_count,omitempty"`
+	LcTotalUsd *float64 `json:"lc_total_usd,omitempty"`
+	LcTotalMw *float64 `json:"lc_total_mw,omitempty"`
+	TtCount *int `json:"tt_count,omitempty"`
+	TtCompletedUsd *float64 `json:"tt_completed_usd,omitempty"`
+}
+
+// PurchaseOrdersExtCol* — public.purchase_orders_ext 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.PurchaseOrdersExtColPoId, value)
+const (
+	PurchaseOrdersExtColPoId = "po_id"
+	PurchaseOrdersExtColPoNumber = "po_number"
+	PurchaseOrdersExtColCompanyId = "company_id"
+	PurchaseOrdersExtColManufacturerId = "manufacturer_id"
+	PurchaseOrdersExtColContractType = "contract_type"
+	PurchaseOrdersExtColContractDate = "contract_date"
+	PurchaseOrdersExtColIncoterms = "incoterms"
+	PurchaseOrdersExtColPaymentTerms = "payment_terms"
+	PurchaseOrdersExtColTotalQty = "total_qty"
+	PurchaseOrdersExtColTotalMw = "total_mw"
+	PurchaseOrdersExtColContractPeriodStart = "contract_period_start"
+	PurchaseOrdersExtColContractPeriodEnd = "contract_period_end"
+	PurchaseOrdersExtColStatus = "status"
+	PurchaseOrdersExtColMemo = "memo"
+	PurchaseOrdersExtColCreatedAt = "created_at"
+	PurchaseOrdersExtColUpdatedAt = "updated_at"
+	PurchaseOrdersExtColParentPoId = "parent_po_id"
+	PurchaseOrdersExtColManufacturerName = "manufacturer_name"
+	PurchaseOrdersExtColManufacturerNameEn = "manufacturer_name_en"
+	PurchaseOrdersExtColFirstSpecWp = "first_spec_wp"
+	PurchaseOrdersExtColFirstProductName = "first_product_name"
+	PurchaseOrdersExtColFirstProductCode = "first_product_code"
+	PurchaseOrdersExtColLineCount = "line_count"
+	PurchaseOrdersExtColLineTotalUsd = "line_total_usd"
+	PurchaseOrdersExtColLineTotalWp = "line_total_wp"
+	PurchaseOrdersExtColLineExtraCount = "line_extra_count"
+	PurchaseOrdersExtColLcCount = "lc_count"
+	PurchaseOrdersExtColLcTotalUsd = "lc_total_usd"
+	PurchaseOrdersExtColLcTotalMw = "lc_total_mw"
+	PurchaseOrdersExtColTtCount = "tt_count"
+	PurchaseOrdersExtColTtCompletedUsd = "tt_completed_usd"
+)
+
+// PurchaseOrdersExtAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var PurchaseOrdersExtAllColumns = "po_id,po_number,company_id,manufacturer_id,contract_type,contract_date,incoterms,payment_terms,total_qty,total_mw,contract_period_start,contract_period_end,status,memo,created_at,updated_at,parent_po_id,manufacturer_name,manufacturer_name_en,first_spec_wp,first_product_name,first_product_code,line_count,line_total_usd,line_total_wp,line_extra_count,lc_count,lc_total_usd,lc_total_mw,tt_count,tt_completed_usd"
+
+// SalesWithMeta — public.sales_with_meta 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type SalesWithMeta struct {
+	SaleId *string `json:"sale_id,omitempty"`
+	OutboundId *string `json:"outbound_id,omitempty"`
+	CustomerId *string `json:"customer_id,omitempty"`
+	UnitPriceWp *float64 `json:"unit_price_wp,omitempty"`
+	UnitPriceEa *float64 `json:"unit_price_ea,omitempty"`
+	SupplyAmount *float64 `json:"supply_amount,omitempty"`
+	VatAmount *float64 `json:"vat_amount,omitempty"`
+	TotalAmount *float64 `json:"total_amount,omitempty"`
+	TaxInvoiceDate *string `json:"tax_invoice_date,omitempty"`
+	TaxInvoiceEmail *string `json:"tax_invoice_email,omitempty"`
+	ErpClosed *bool `json:"erp_closed,omitempty"`
+	ErpClosedDate *string `json:"erp_closed_date,omitempty"`
+	Memo *string `json:"memo,omitempty"`
+	CreatedAt *string `json:"created_at,omitempty"`
+	UpdatedAt *string `json:"updated_at,omitempty"`
+	OrderId *string `json:"order_id,omitempty"`
+	Quantity *int `json:"quantity,omitempty"`
+	CapacityKw *float64 `json:"capacity_kw,omitempty"`
+	Status *string `json:"status,omitempty"`
+	ErpSalesNo *string `json:"erp_sales_no,omitempty"`
+	ErpLineNo *int `json:"erp_line_no,omitempty"`
+	Currency *string `json:"currency,omitempty"`
+	SourcePayload *json.RawMessage `json:"source_payload,omitempty"`
+	BusinessDate *string `json:"business_date,omitempty"`
+	BusinessMonth *string `json:"business_month,omitempty"`
+	CollectedAmount *float64 `json:"collected_amount,omitempty"`
+	OutstandingAmount *float64 `json:"outstanding_amount,omitempty"`
+	ReceiptStatus *string `json:"receipt_status,omitempty"`
+	OutboundCompanyId *string `json:"outbound_company_id,omitempty"`
+	OrderCompanyId *string `json:"order_company_id,omitempty"`
+}
+
+// SalesWithMetaCol* — public.sales_with_meta 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.SalesWithMetaColSaleId, value)
+const (
+	SalesWithMetaColSaleId = "sale_id"
+	SalesWithMetaColOutboundId = "outbound_id"
+	SalesWithMetaColCustomerId = "customer_id"
+	SalesWithMetaColUnitPriceWp = "unit_price_wp"
+	SalesWithMetaColUnitPriceEa = "unit_price_ea"
+	SalesWithMetaColSupplyAmount = "supply_amount"
+	SalesWithMetaColVatAmount = "vat_amount"
+	SalesWithMetaColTotalAmount = "total_amount"
+	SalesWithMetaColTaxInvoiceDate = "tax_invoice_date"
+	SalesWithMetaColTaxInvoiceEmail = "tax_invoice_email"
+	SalesWithMetaColErpClosed = "erp_closed"
+	SalesWithMetaColErpClosedDate = "erp_closed_date"
+	SalesWithMetaColMemo = "memo"
+	SalesWithMetaColCreatedAt = "created_at"
+	SalesWithMetaColUpdatedAt = "updated_at"
+	SalesWithMetaColOrderId = "order_id"
+	SalesWithMetaColQuantity = "quantity"
+	SalesWithMetaColCapacityKw = "capacity_kw"
+	SalesWithMetaColStatus = "status"
+	SalesWithMetaColErpSalesNo = "erp_sales_no"
+	SalesWithMetaColErpLineNo = "erp_line_no"
+	SalesWithMetaColCurrency = "currency"
+	SalesWithMetaColSourcePayload = "source_payload"
+	SalesWithMetaColBusinessDate = "business_date"
+	SalesWithMetaColBusinessMonth = "business_month"
+	SalesWithMetaColCollectedAmount = "collected_amount"
+	SalesWithMetaColOutstandingAmount = "outstanding_amount"
+	SalesWithMetaColReceiptStatus = "receipt_status"
+	SalesWithMetaColOutboundCompanyId = "outbound_company_id"
+	SalesWithMetaColOrderCompanyId = "order_company_id"
+)
+
+// SalesWithMetaAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var SalesWithMetaAllColumns = "sale_id,outbound_id,customer_id,unit_price_wp,unit_price_ea,supply_amount,vat_amount,total_amount,tax_invoice_date,tax_invoice_email,erp_closed,erp_closed_date,memo,created_at,updated_at,order_id,quantity,capacity_kw,status,erp_sales_no,erp_line_no,currency,source_payload,business_date,business_month,collected_amount,outstanding_amount,receipt_status,outbound_company_id,order_company_id"
+
+// TtRemittancesWithCompany — public.tt_remittances_with_company 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type TtRemittancesWithCompany struct {
+	TtId *string `json:"tt_id,omitempty"`
+	PoId *string `json:"po_id,omitempty"`
+	RemitDate *string `json:"remit_date,omitempty"`
+	AmountUsd *float64 `json:"amount_usd,omitempty"`
+	AmountKrw *float64 `json:"amount_krw,omitempty"`
+	ExchangeRate *float64 `json:"exchange_rate,omitempty"`
+	Purpose *string `json:"purpose,omitempty"`
+	Status *string `json:"status,omitempty"`
+	BankName *string `json:"bank_name,omitempty"`
+	Memo *string `json:"memo,omitempty"`
+	CreatedAt *string `json:"created_at,omitempty"`
+	UpdatedAt *string `json:"updated_at,omitempty"`
+	PoCompanyId *string `json:"po_company_id,omitempty"`
+}
+
+// TtRemittancesWithCompanyCol* — public.tt_remittances_with_company 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.TtRemittancesWithCompanyColTtId, value)
+const (
+	TtRemittancesWithCompanyColTtId = "tt_id"
+	TtRemittancesWithCompanyColPoId = "po_id"
+	TtRemittancesWithCompanyColRemitDate = "remit_date"
+	TtRemittancesWithCompanyColAmountUsd = "amount_usd"
+	TtRemittancesWithCompanyColAmountKrw = "amount_krw"
+	TtRemittancesWithCompanyColExchangeRate = "exchange_rate"
+	TtRemittancesWithCompanyColPurpose = "purpose"
+	TtRemittancesWithCompanyColStatus = "status"
+	TtRemittancesWithCompanyColBankName = "bank_name"
+	TtRemittancesWithCompanyColMemo = "memo"
+	TtRemittancesWithCompanyColCreatedAt = "created_at"
+	TtRemittancesWithCompanyColUpdatedAt = "updated_at"
+	TtRemittancesWithCompanyColPoCompanyId = "po_company_id"
+)
+
+// TtRemittancesWithCompanyAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var TtRemittancesWithCompanyAllColumns = "tt_id,po_id,remit_date,amount_usd,amount_krw,exchange_rate,purpose,status,bank_name,memo,created_at,updated_at,po_company_id"
+
+// VDbAnomalies — public.v_db_anomalies 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type VDbAnomalies struct {
+	RuleName *string `json:"rule_name,omitempty"`
+	Severity *string `json:"severity,omitempty"`
+	Category *string `json:"category,omitempty"`
+	Description *string `json:"description,omitempty"`
+	TableName *string `json:"table_name,omitempty"`
+	RowPk *string `json:"row_pk,omitempty"`
+	RowLabel *string `json:"row_label,omitempty"`
+	Detail *json.RawMessage `json:"detail,omitempty"`
+}
+
+// VDbAnomaliesCol* — public.v_db_anomalies 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.VDbAnomaliesColRuleName, value)
+const (
+	VDbAnomaliesColRuleName = "rule_name"
+	VDbAnomaliesColSeverity = "severity"
+	VDbAnomaliesColCategory = "category"
+	VDbAnomaliesColDescription = "description"
+	VDbAnomaliesColTableName = "table_name"
+	VDbAnomaliesColRowPk = "row_pk"
+	VDbAnomaliesColRowLabel = "row_label"
+	VDbAnomaliesColDetail = "detail"
+)
+
+// VDbAnomaliesAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var VDbAnomaliesAllColumns = "rule_name,severity,category,description,table_name,row_pk,row_label,detail"
+
+// VFifoOverallocation — public.v_fifo_overallocation 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type VFifoOverallocation struct {
+	OutboundId *string `json:"outbound_id,omitempty"`
+	ErpOutboundNo *string `json:"erp_outbound_no,omitempty"`
+	OutboundDate *string `json:"outbound_date,omitempty"`
+	ObQty *int `json:"ob_qty,omitempty"`
+	FifoQty *int64 `json:"fifo_qty,omitempty"`
+	ExcessQty *int64 `json:"excess_qty,omitempty"`
+	CompanyId *string `json:"company_id,omitempty"`
+	CompanyName *string `json:"company_name,omitempty"`
+	ProductId *string `json:"product_id,omitempty"`
+	ProductCode *string `json:"product_code,omitempty"`
+	UsageCategory *string `json:"usage_category,omitempty"`
+	MatchCount *int64 `json:"match_count,omitempty"`
+}
+
+// VFifoOverallocationCol* — public.v_fifo_overallocation 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.VFifoOverallocationColOutboundId, value)
+const (
+	VFifoOverallocationColOutboundId = "outbound_id"
+	VFifoOverallocationColErpOutboundNo = "erp_outbound_no"
+	VFifoOverallocationColOutboundDate = "outbound_date"
+	VFifoOverallocationColObQty = "ob_qty"
+	VFifoOverallocationColFifoQty = "fifo_qty"
+	VFifoOverallocationColExcessQty = "excess_qty"
+	VFifoOverallocationColCompanyId = "company_id"
+	VFifoOverallocationColCompanyName = "company_name"
+	VFifoOverallocationColProductId = "product_id"
+	VFifoOverallocationColProductCode = "product_code"
+	VFifoOverallocationColUsageCategory = "usage_category"
+	VFifoOverallocationColMatchCount = "match_count"
+)
+
+// VFifoOverallocationAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var VFifoOverallocationAllColumns = "outbound_id,erp_outbound_no,outbound_date,ob_qty,fifo_qty,excess_qty,company_id,company_name,product_id,product_code,usage_category,match_count"
+
+// VIntegrityCheck — public.v_integrity_check 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type VIntegrityCheck struct {
+	Name *string `json:"name,omitempty"`
+	Category *string `json:"category,omitempty"`
+	Severity *string `json:"severity,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Hint *string `json:"hint,omitempty"`
+	Baseline *float64 `json:"baseline,omitempty"`
+	Actual *float64 `json:"actual,omitempty"`
+	Tolerance *float64 `json:"tolerance,omitempty"`
+	Status *string `json:"status,omitempty"`
+}
+
+// VIntegrityCheckCol* — public.v_integrity_check 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.VIntegrityCheckColName, value)
+const (
+	VIntegrityCheckColName = "name"
+	VIntegrityCheckColCategory = "category"
+	VIntegrityCheckColSeverity = "severity"
+	VIntegrityCheckColDescription = "description"
+	VIntegrityCheckColHint = "hint"
+	VIntegrityCheckColBaseline = "baseline"
+	VIntegrityCheckColActual = "actual"
+	VIntegrityCheckColTolerance = "tolerance"
+	VIntegrityCheckColStatus = "status"
+)
+
+// VIntegrityCheckAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var VIntegrityCheckAllColumns = "name,category,severity,description,hint,baseline,actual,tolerance,status"
+
+// VLcMaturityCalendar — public.v_lc_maturity_calendar 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type VLcMaturityCalendar struct {
+	BlId *string `json:"bl_id,omitempty"`
+	BlNumber *string `json:"bl_number,omitempty"`
+	CompanyName *string `json:"company_name,omitempty"`
+	LcNumber *string `json:"lc_number,omitempty"`
+	BankName *string `json:"bank_name,omitempty"`
+	AmountUsd *float64 `json:"amount_usd,omitempty"`
+	Etd *string `json:"etd,omitempty"`
+	LcMaturityDate *string `json:"lc_maturity_date,omitempty"`
+	DaysUntilMaturity *int `json:"days_until_maturity,omitempty"`
+	LcStatus *string `json:"lc_status,omitempty"`
+}
+
+// VLcMaturityCalendarCol* — public.v_lc_maturity_calendar 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.VLcMaturityCalendarColBlId, value)
+const (
+	VLcMaturityCalendarColBlId = "bl_id"
+	VLcMaturityCalendarColBlNumber = "bl_number"
+	VLcMaturityCalendarColCompanyName = "company_name"
+	VLcMaturityCalendarColLcNumber = "lc_number"
+	VLcMaturityCalendarColBankName = "bank_name"
+	VLcMaturityCalendarColAmountUsd = "amount_usd"
+	VLcMaturityCalendarColEtd = "etd"
+	VLcMaturityCalendarColLcMaturityDate = "lc_maturity_date"
+	VLcMaturityCalendarColDaysUntilMaturity = "days_until_maturity"
+	VLcMaturityCalendarColLcStatus = "lc_status"
+)
+
+// VLcMaturityCalendarAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var VLcMaturityCalendarAllColumns = "bl_id,bl_number,company_name,lc_number,bank_name,amount_usd,etd,lc_maturity_date,days_until_maturity,lc_status"
+
+// VLcMaturityUpcoming — public.v_lc_maturity_upcoming 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type VLcMaturityUpcoming struct {
+	BlId *string `json:"bl_id,omitempty"`
+	BlNumber *string `json:"bl_number,omitempty"`
+	CompanyId *string `json:"company_id,omitempty"`
+	CompanyName *string `json:"company_name,omitempty"`
+	LcId *string `json:"lc_id,omitempty"`
+	LcNumber *string `json:"lc_number,omitempty"`
+	BankId *string `json:"bank_id,omitempty"`
+	BankName *string `json:"bank_name,omitempty"`
+	AmountUsd *float64 `json:"amount_usd,omitempty"`
+	Etd *string `json:"etd,omitempty"`
+	ActualArrival *string `json:"actual_arrival,omitempty"`
+	LcMaturityDate *string `json:"lc_maturity_date,omitempty"`
+	DaysUntilMaturity *int `json:"days_until_maturity,omitempty"`
+	MaturityBucket *string `json:"maturity_bucket,omitempty"`
+}
+
+// VLcMaturityUpcomingCol* — public.v_lc_maturity_upcoming 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.VLcMaturityUpcomingColBlId, value)
+const (
+	VLcMaturityUpcomingColBlId = "bl_id"
+	VLcMaturityUpcomingColBlNumber = "bl_number"
+	VLcMaturityUpcomingColCompanyId = "company_id"
+	VLcMaturityUpcomingColCompanyName = "company_name"
+	VLcMaturityUpcomingColLcId = "lc_id"
+	VLcMaturityUpcomingColLcNumber = "lc_number"
+	VLcMaturityUpcomingColBankId = "bank_id"
+	VLcMaturityUpcomingColBankName = "bank_name"
+	VLcMaturityUpcomingColAmountUsd = "amount_usd"
+	VLcMaturityUpcomingColEtd = "etd"
+	VLcMaturityUpcomingColActualArrival = "actual_arrival"
+	VLcMaturityUpcomingColLcMaturityDate = "lc_maturity_date"
+	VLcMaturityUpcomingColDaysUntilMaturity = "days_until_maturity"
+	VLcMaturityUpcomingColMaturityBucket = "maturity_bucket"
+)
+
+// VLcMaturityUpcomingAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var VLcMaturityUpcomingAllColumns = "bl_id,bl_number,company_id,company_name,lc_id,lc_number,bank_id,bank_name,amount_usd,etd,actual_arrival,lc_maturity_date,days_until_maturity,maturity_bucket"
+
+// VProductQtyBalance — public.v_product_qty_balance 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type VProductQtyBalance struct {
+	ProductId *string `json:"product_id,omitempty"`
+	ProductCode *string `json:"product_code,omitempty"`
+	ProductName *string `json:"product_name,omitempty"`
+	SpecWp *int `json:"spec_wp,omitempty"`
+	InitialQty *int64 `json:"initial_qty,omitempty"`
+	InboundQty *int64 `json:"inbound_qty,omitempty"`
+	OutboundQty *int64 `json:"outbound_qty,omitempty"`
+	BalanceQty *int64 `json:"balance_qty,omitempty"`
+}
+
+// VProductQtyBalanceCol* — public.v_product_qty_balance 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.VProductQtyBalanceColProductId, value)
+const (
+	VProductQtyBalanceColProductId = "product_id"
+	VProductQtyBalanceColProductCode = "product_code"
+	VProductQtyBalanceColProductName = "product_name"
+	VProductQtyBalanceColSpecWp = "spec_wp"
+	VProductQtyBalanceColInitialQty = "initial_qty"
+	VProductQtyBalanceColInboundQty = "inbound_qty"
+	VProductQtyBalanceColOutboundQty = "outbound_qty"
+	VProductQtyBalanceColBalanceQty = "balance_qty"
+)
+
+// VProductQtyBalanceAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var VProductQtyBalanceAllColumns = "product_id,product_code,product_name,spec_wp,initial_qty,inbound_qty,outbound_qty,balance_qty"
+
+// VProductsCanonical — public.v_products_canonical 의 뷰 row 표현 (introspection 정본).
+// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.
+type VProductsCanonical struct {
+	ProductId *string `json:"product_id,omitempty"`
+	CanonicalProductId *string `json:"canonical_product_id,omitempty"`
+}
+
+// VProductsCanonicalCol* — public.v_products_canonical 의 컬럼명 상수.
+// 사용: query.Eq(dbschema.VProductsCanonicalColProductId, value)
+const (
+	VProductsCanonicalColProductId = "product_id"
+	VProductsCanonicalColCanonicalProductId = "canonical_product_id"
+)
+
+// VProductsCanonicalAllColumns — REST select 시 ','로 join 된 전체 컬럼 (`*` 회피용).
+var VProductsCanonicalAllColumns = "product_id,canonical_product_id"

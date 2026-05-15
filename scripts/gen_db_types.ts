@@ -59,6 +59,7 @@ const GO_RESERVED = new Set<string>([
 
 interface ColumnRow {
   table_name: string
+  relation_kind: 'table' | 'view'
   column_name: string
   ordinal_position: number
   is_nullable: 'YES' | 'NO'
@@ -83,8 +84,9 @@ interface Column {
   comment: string | null
 }
 
-interface Table {
+interface Relation {
   name: string
+  kind: 'table' | 'view'
   columns: Column[]
 }
 
@@ -184,9 +186,19 @@ function pgToTs(col: Column): string {
 
 // ─── introspection ───────────────────────────────────────────────────────────
 
+// 테이블 + 뷰 둘 다 수집. pg_tables 와 pg_views 를 LEFT JOIN 으로 합쳐 kind 태깅.
+// view 는 information_schema.columns 에 동일 형식으로 노출돼 컬럼 정보를 그대로 재사용.
+// PK 정보는 view 에는 적용되지 않지만 information_schema.key_column_usage 가 빈 결과를
+// 돌려주므로 is_primary_key=false 로 자동 채워진다 (별도 분기 불필요).
 const INTROSPECT_SQL = `
+WITH relations AS (
+  SELECT tablename AS relname, 'table'::text AS kind FROM pg_tables WHERE schemaname = 'public'
+  UNION ALL
+  SELECT viewname AS relname,  'view'::text  AS kind FROM pg_views  WHERE schemaname = 'public'
+)
 SELECT
   c.table_name,
+  rel.kind AS relation_kind,
   c.column_name,
   c.ordinal_position,
   c.is_nullable,
@@ -211,16 +223,14 @@ SELECT
     c.ordinal_position
   ) AS column_comment
 FROM information_schema.columns c
+JOIN relations rel ON rel.relname = c.table_name
 WHERE c.table_schema = 'public'
-  AND c.table_name IN (
-    SELECT tablename FROM pg_tables WHERE schemaname = 'public'
-  )
-ORDER BY c.table_name, c.ordinal_position
+ORDER BY rel.kind, c.table_name, c.ordinal_position
 `
 
-async function introspect(sql: SQL): Promise<Table[]> {
+async function introspect(sql: SQL): Promise<Relation[]> {
   const rows = (await sql.unsafe(INTROSPECT_SQL)) as ColumnRow[]
-  const byTable = new Map<string, Column[]>()
+  const byRelation = new Map<string, { kind: 'table' | 'view'; columns: Column[] }>()
 
   for (const r of rows) {
     if (EXCLUDE_TABLES.has(r.table_name)) continue
@@ -238,22 +248,26 @@ async function introspect(sql: SQL): Promise<Table[]> {
       isPrimaryKey: r.is_primary_key,
       comment: r.column_comment,
     }
-    const list = byTable.get(r.table_name)
-    if (list) list.push(col)
-    else byTable.set(r.table_name, [col])
+    const entry = byRelation.get(r.table_name)
+    if (entry) entry.columns.push(col)
+    else byRelation.set(r.table_name, { kind: r.relation_kind, columns: [col] })
   }
 
-  return Array.from(byTable.entries())
-    .map(([name, columns]) => ({ name, columns }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  return Array.from(byRelation.entries())
+    .map(([name, { kind, columns }]) => ({ name, kind, columns }))
+    .sort((a, b) => {
+      // table 먼저, 그 안에서 이름순. view 는 뒤로 묶어 가독성 확보.
+      if (a.kind !== b.kind) return a.kind === 'table' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
 }
 
 // ─── Go 렌더링 ───────────────────────────────────────────────────────────────
 
-function renderGo(tables: Table[]): string {
+function renderGo(relations: Relation[]): string {
   let needsJson = false
 
-  const tableBlocks = tables.map((t) => {
+  const blocks = relations.map((t) => {
     const goName = snakeToPascal(t.name)
     const fieldLines: string[] = []
     const colConstLines: string[] = []
@@ -276,10 +290,14 @@ function renderGo(tables: Table[]): string {
       colNames.push(c.name)
     }
 
+    const kindLabel = t.kind === 'view' ? '뷰' : '테이블'
+    const writeNote = t.kind === 'view'
+      ? '// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.'
+      : '// 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,\n// Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.'
+
     return [
-      `// ${goName} — public.${t.name} 의 row 표현 (introspection 정본).`,
-      `// 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,`,
-      `// Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.`,
+      `// ${goName} — public.${t.name} 의 ${kindLabel} row 표현 (introspection 정본).`,
+      writeNote,
       `type ${goName} struct {`,
       fieldLines.join('\n'),
       `}`,
@@ -303,22 +321,26 @@ function renderGo(tables: Table[]): string {
 // Source: information_schema introspection against SUPABASE_DB_URL.
 // Run \`bun scripts/gen_db_types.ts\` to regenerate.
 //
-// 이 패키지는 DB 스키마의 컴파일타임 정본이다.
+// 이 패키지는 DB 스키마(테이블 + 뷰)의 컴파일타임 정본이다.
 //   - PostgREST select 시 컬럼명 typo 를 컴파일타임에 잡으려면
-//     dbschema.<Table>AllColumns 또는 dbschema.<Table>Col<Field> 상수를 사용한다.
+//     dbschema.<Relation>AllColumns 또는 dbschema.<Relation>Col<Field> 상수를 사용한다.
 //   - 도메인의 Create*Request / Update*Request 는 손코딩으로 둔다 — validation
 //     로직(필수값, 허용 enum, 길이 제한)이 그쪽에 속한다.
+//   - View 는 read-only — Insert/Update 시 베이스 테이블 상수를 쓴다.
 //   - 본 파일이 1줄이라도 변경되면 그건 *DB 스키마가 바뀐 것* — 커밋에 같이 포함한다.
 
 package dbschema
 
-${imports}${tableBlocks}`
+${imports}${blocks}`
 }
 
 // ─── TS 렌더링 ───────────────────────────────────────────────────────────────
 
-function renderTs(tables: Table[]): string {
-  const tableBlocks = tables.map((t) => {
+function renderTs(relations: Relation[]): string {
+  const tables = relations.filter((r) => r.kind === 'table')
+  const views = relations.filter((r) => r.kind === 'view')
+
+  const renderTableBlock = (t: Relation): string => {
     const rowFields: string[] = []
     const insertFields: string[] = []
     const updateFields: string[] = []
@@ -352,7 +374,32 @@ function renderTs(tables: Table[]): string {
       `      Relationships: []`,
       `    }`,
     ].join('\n')
-  }).join('\n')
+  }
+
+  // View 는 read-only — Supabase CLI 와 동일하게 Row + Relationships 만 노출 (Insert/Update 생략).
+  const renderViewBlock = (v: Relation): string => {
+    const rowFields: string[] = []
+    for (const c of v.columns) {
+      const tsType = pgToTs(c)
+      const docLine = c.comment ? `        /** ${c.comment.replace(/\n/g, ' ').trim()} */\n` : ''
+      rowFields.push(`${docLine}        ${c.name}: ${tsType}`)
+    }
+    return [
+      `    ${v.name}: {`,
+      `      Row: {`,
+      rowFields.join('\n'),
+      `      }`,
+      `      Relationships: []`,
+      `    }`,
+    ].join('\n')
+  }
+
+  const tablesSection = tables.length > 0
+    ? tables.map(renderTableBlock).join('\n')
+    : ''
+  const viewsSection = views.length > 0
+    ? views.map(renderViewBlock).join('\n')
+    : ''
 
   return `// Code generated by scripts/gen_db_types.ts. DO NOT EDIT.
 //
@@ -366,6 +413,7 @@ function renderTs(tables: Table[]): string {
 // 사용 예:
 //   import type { Database } from '@/types/db.gen'
 //   type BLShipment = Database['public']['Tables']['bl_shipments']['Row']
+//   type SalesMeta  = Database['public']['Views']['sales_with_meta_view']['Row']
 
 export type Json =
   | string
@@ -378,9 +426,11 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-${tableBlocks}
+${tablesSection}
     }
-    Views: Record<string, never>
+    Views: {
+${viewsSection}
+    }
     Functions: Record<string, never>
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
@@ -432,11 +482,13 @@ async function main(): Promise<number> {
 
   try {
     log('introspection 시작')
-    const tables = await introspect(sql)
-    log(`${tables.length} 개 테이블 검출`)
+    const relations = await introspect(sql)
+    const tableCount = relations.filter((r) => r.kind === 'table').length
+    const viewCount = relations.filter((r) => r.kind === 'view').length
+    log(`${tableCount} 개 테이블 + ${viewCount} 개 뷰 검출`)
 
-    const goContent = renderGo(tables)
-    const tsContent = renderTs(tables)
+    const goContent = renderGo(relations)
+    const tsContent = renderTs(relations)
 
     if (checkMode) {
       const goOk = await fileEquals(GO_OUT, goContent)
