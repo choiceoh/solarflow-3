@@ -9,6 +9,7 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
@@ -53,17 +54,17 @@ func init() {
 func (h *DispatchRouteHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := h.DB.From("dispatch_routes").Select("*", "exact", false)
 	if from := r.URL.Query().Get("from"); from != "" {
-		q = q.Gte("route_date", from)
+		q = q.Gte(dbschema.DispatchRoutesColRouteDate, from)
 	}
 	if to := r.URL.Query().Get("to"); to != "" {
-		q = q.Lte("route_date", to)
+		q = q.Lte(dbschema.DispatchRoutesColRouteDate, to)
 	}
 	if status := r.URL.Query().Get("status"); status != "" {
-		q = q.Eq("status", status)
+		q = q.Eq(dbschema.DispatchRoutesColStatus, status)
 	}
 	data, _, err := q.
-		Order("route_date", &postgrest.OrderOpts{Ascending: false}).
-		Order("created_at", &postgrest.OrderOpts{Ascending: false}).
+		Order(dbschema.DispatchRoutesColRouteDate, &postgrest.OrderOpts{Ascending: false}).
+		Order(dbschema.DispatchRoutesColCreatedAt, &postgrest.OrderOpts{Ascending: false}).
 		Execute()
 	if err != nil {
 		log.Printf("[BARO 배차 목록 실패] %v", err)
