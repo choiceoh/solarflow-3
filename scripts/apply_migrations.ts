@@ -166,6 +166,25 @@ async function main(): Promise<number> {
     log(
       `완료 — 적용 ${appliedCount}, SKIP ${skippedCount}, 기적용 ${applied.size}/${files.length}`,
     )
+
+    // 5. codegen — Go dbschema + TS db.gen.ts 갱신 (실 적용이 있었던 경우만)
+    //    실패해도 마이그 자체는 이미 끝났으므로 exit code 는 영향 없음.
+    //    상세 동기는 scripts/gen_db_types.ts 의 헤더 doc 참조.
+    if (ranAny) {
+      log('  codegen 실행 (scripts/gen_db_types.ts)')
+      const gen = Bun.spawn(['bun', join(REPO, 'scripts', 'gen_db_types.ts')], {
+        stdout: 'inherit',
+        stderr: 'inherit',
+        env: process.env,
+      })
+      const genCode = await gen.exited
+      if (genCode !== 0) {
+        log(
+          `⚠️  codegen 실패 (exit ${genCode}) — 수동 재실행 필요: bun scripts/gen_db_types.ts`,
+        )
+      }
+    }
+
     return 0
   } finally {
     await sql.end()
