@@ -1,115 +1,42 @@
 #!/usr/bin/env bash
-# check_schema.sh — Create/Update Request 구조체의 JSON 태그 vs 실제 DB 컬럼 불일치 탐지
-# 사용법: cd backend && ./scripts/check_schema.sh
-# 목적: "모델에는 있는데 DB에 없는 컬럼" → PGRST204 (500 에러) 사전 차단
+# check_schema.sh — Go 모델 ↔ DB 컬럼 동기화 검증 (얇은 shim).
 #
-# 핵심 원칙: Response 구조체(Join 결과 포함)는 검사 제외.
-#           DB에 직접 쓰는 Create*Request / Update*Request만 대상.
+# 본 스크립트는 PR #855/#865 의 schema codegen 시스템 도입 이후
+# scripts/gen_db_types.ts --check 의 thin wrapper 다 — 기존 호출자
+# (migrate.sh, verify_changed.sh, verify_all.sh, .claude/hooks/domains.json,
+# harness/domains/*.yaml) 호환성을 위해 진입점만 유지한다.
+#
+# 동작
+#   1. repo root 로 이동
+#   2. backend/.env 자동 source (호출자가 안 했을 경우)
+#   3. bun scripts/gen_db_types.ts --check 실행
+#      → generated 산출물 (backend/internal/dbschema/tables.gen.go,
+#        frontend/src/types/db.gen.ts) 가 운영 DB introspection 과 일치하는지 검증
+#
+# 이전 동작 (이 파일이 macOS-only psql + grep/awk 로 직접 비교하던 것) 은
+# stale 한 `internal/model/` 경로를 참조해 사실상 무력화됐다. 새 시스템은
+# DB 를 *정본으로 코드 생성* 하므로 비교가 아니라 *재생성 + diff* 다.
+#
+# 종료 코드
+#   0  통과 (또는 친절 skip — SUPABASE_DB_URL 미설정 시)
+#   1  generated 산출물과 DB introspection 불일치
+#   2  실행 환경 문제 (bun 미설치 등)
+
 set -uo pipefail
 
-DB="${DB_NAME:-solarflow}"
-MODELS_DIR="$(dirname "$0")/../internal/model"
-FAIL=0
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$REPO_ROOT"
 
-# Go 파일에서 특정 struct 블록의 json 태그만 추출
-# 인자: 파일경로, struct 이름 패턴 (awk로 해당 struct {} 블록만 스캔)
-extract_struct_tags() {
-  local file="$1"
-  local struct_name="$2"
-  awk "/^type ${struct_name} struct/,/^}/" "$file" \
-    | grep -oE 'json:"[^"]+"' \
-    | sed 's/json:"//;s/"//' \
-    | sed 's/,omitempty//' \
-    | grep -v '^-$' \
-    | grep -v '^$' \
-    | sort -u
-}
-
-# DB 컬럼과 비교
-check_struct() {
-  local table="$1"
-  local file="$2"
-  local struct_pattern="$3"   # awk 매칭용 struct 이름 (정규식 가능)
-  local ignore_regex="${4:-}"
-
-  local db_cols
-  db_cols=$(psql -d "$DB" -Atc \
-    "SELECT column_name FROM information_schema.columns WHERE table_name='$table' ORDER BY column_name;" 2>/dev/null)
-
-  if [[ -z "$db_cols" ]]; then
-    echo "⚠️  테이블 없음: $table"
-    FAIL=1; return
-  fi
-
-  local missing=()
-  while IFS= read -r col; do
-    [[ -z "$col" ]] && continue
-    if [[ -n "$ignore_regex" && "$col" =~ $ignore_regex ]]; then
-      continue
-    fi
-    if ! echo "$db_cols" | grep -qx "$col"; then
-      missing+=("$col")
-    fi
-  done < <(extract_struct_tags "$file" "$struct_pattern")
-
-  local label="${struct_pattern} → ${table}"
-  if [[ ${#missing[@]} -gt 0 ]]; then
-    echo "❌ ${label}"
-    echo "   DB에 없는 컬럼: ${missing[*]}"
-    FAIL=1
-  else
-    echo "✅ ${label}"
-  fi
-}
-
-echo "=== Create/Update Request 구조체 ↔ DB 컬럼 동기화 검사 ==="
-echo ""
-
-# po_line_items
-check_struct "po_line_items" "$MODELS_DIR/po_line.go"  "CreatePOLineRequest"
-check_struct "po_line_items" "$MODELS_DIR/po_line.go"  "UpdatePOLineRequest"
-
-# purchase_orders
-check_struct "purchase_orders" "$MODELS_DIR/po.go" "CreatePurchaseOrderRequest"
-check_struct "purchase_orders" "$MODELS_DIR/po.go" "UpdatePurchaseOrderRequest"
-
-# products
-check_struct "products" "$MODELS_DIR/product.go" "CreateProductRequest"
-check_struct "products" "$MODELS_DIR/product.go" "UpdateProductRequest"
-
-# lc_records
-check_struct "lc_records" "$MODELS_DIR/lc.go" "CreateLCRequest" "^(line_items)$"
-check_struct "lc_records" "$MODELS_DIR/lc.go" "UpdateLCRequest" "^(line_items)$"
-
-# tt_remittances
-check_struct "tt_remittances" "$MODELS_DIR/tt.go" "CreateTTRequest"
-check_struct "tt_remittances" "$MODELS_DIR/tt.go" "UpdateTTRequest"
-
-# bl_shipments (B/L 메인 테이블)
-if [[ -f "$MODELS_DIR/bl.go" ]]; then
-  check_struct "bl_shipments" "$MODELS_DIR/bl.go" "CreateBLRequest"
-  check_struct "bl_shipments" "$MODELS_DIR/bl.go" "UpdateBLRequest"
+if [[ -z "${SUPABASE_DB_URL:-}" && -f backend/.env ]]; then
+  # shellcheck disable=SC1091
+  set -a; . backend/.env; set +a
 fi
 
-# inventory_allocations
-if [[ -f "$MODELS_DIR/inventory_allocation.go" ]]; then
-  check_struct "inventory_allocations" "$MODELS_DIR/inventory_allocation.go" "CreateInventoryAllocationRequest"
-  check_struct "inventory_allocations" "$MODELS_DIR/inventory_allocation.go" "UpdateInventoryAllocationRequest"
+if ! command -v bun >/dev/null 2>&1; then
+  echo "❌ bun 미설치 — scripts/gen_db_types.ts 를 실행할 수 없음" >&2
+  echo "   설치: https://bun.com  (또는 PATH 확인: ~/.bun/bin)" >&2
+  exit 2
 fi
 
-# price_benchmarks
-if [[ -f "$MODELS_DIR/price_benchmark.go" ]]; then
-  check_struct "price_benchmarks" "$MODELS_DIR/price_benchmark.go" "CreatePriceBenchmarkRequest"
-  check_struct "price_benchmarks" "$MODELS_DIR/price_benchmark.go" "UpdatePriceBenchmarkReviewStatusRequest"
-fi
-
-echo ""
-if [[ $FAIL -eq 1 ]]; then
-  echo "💥 불일치 발견 — 아래 절차를 따르세요:"
-  echo "   1. backend/migrations/NNN_설명.sql 파일 작성"
-  echo "   2. psql -d solarflow -f backend/migrations/NNN_설명.sql"
-  echo "   3. launchctl stop com.solarflow.postgrest && launchctl start com.solarflow.postgrest"
-  exit 1
-else
-  echo "✅ 모든 Request 구조체 동기화 정상"
-fi
+exec bun scripts/gen_db_types.ts --check
