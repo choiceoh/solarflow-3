@@ -15,6 +15,7 @@ import (
 
 	"solarflow-backend/internal/audit"
 	"solarflow-backend/internal/dbrpc"
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/mount"
@@ -23,12 +24,12 @@ import (
 
 // lcSortable — server-side 정렬 허용 컬럼 (BL 패턴과 동일).
 var lcSortable = map[string]struct{}{
-	"lc_number":     {},
-	"open_date":     {},
-	"maturity_date": {},
-	"amount_usd":    {},
-	"status":        {},
-	"created_at":    {},
+	dbschema.LcRecordsColLcNumber:     {},
+	dbschema.LcRecordsColOpenDate:     {},
+	dbschema.LcRecordsColMaturityDate: {},
+	dbschema.LcRecordsColAmountUsd:    {},
+	dbschema.LcRecordsColStatus:       {},
+	dbschema.LcRecordsColCreatedAt:    {},
 }
 
 func sanitizeLCSearchTerm(q string) string {
@@ -83,29 +84,29 @@ type lcStatusUpdate struct {
 func (h *LCHandler) applyLCFilters(r *http.Request, query *postgrest.FilterBuilder) *postgrest.FilterBuilder {
 	// 비유: ?po_id=xxx — 특정 PO의 LC만 필터
 	if poID := r.URL.Query().Get("po_id"); poID != "" {
-		query = query.Eq("po_id", poID)
+		query = query.Eq(dbschema.LcRecordsColPoId, poID)
 	}
 
 	// 비유: ?bank_id=xxx — 특정 은행의 LC만 필터
 	if bankID := r.URL.Query().Get("bank_id"); bankID != "" {
-		query = query.Eq("bank_id", bankID)
+		query = query.Eq(dbschema.LcRecordsColBankId, bankID)
 	}
 
 	// 비유: ?company_id=xxx — 특정 법인의 LC만 필터
 	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
-		query = query.Eq("company_id", compID)
+		query = query.Eq(dbschema.LcRecordsColCompanyId, compID)
 	}
 
 	// 비유: ?status=opened — 특정 상태의 LC만 필터
 	if status := r.URL.Query().Get("status"); status != "" {
-		query = query.Eq("status", status)
+		query = query.Eq(dbschema.LcRecordsColStatus, status)
 	}
 	// 기간 — open_date 범위 (양끝 포함). frontend ProcurementPage date_range 서버 위임.
 	if from := r.URL.Query().Get("open_date_from"); from != "" {
-		query = query.Gte("open_date", from)
+		query = query.Gte(dbschema.LcRecordsColOpenDate, from)
 	}
 	if to := r.URL.Query().Get("open_date_to"); to != "" {
-		query = query.Lte("open_date", to)
+		query = query.Lte(dbschema.LcRecordsColOpenDate, to)
 	}
 	// 검색 — lc_number/memo ilike. bank/po 의 join 필드는 PostgREST or 절에 못 넣어 제외.
 	if q := sanitizeLCSearchTerm(r.URL.Query().Get("q")); q != "" {
@@ -119,7 +120,7 @@ func (h *LCHandler) applyLCFilters(r *http.Request, query *postgrest.FilterBuild
 }
 
 func parseLCSort(r *http.Request) (column string, ascending bool) {
-	column = "open_date"
+	column = dbschema.LcRecordsColOpenDate
 	ascending = false
 	if raw := r.URL.Query().Get("sort"); raw != "" {
 		if _, ok := lcSortable[raw]; ok {
