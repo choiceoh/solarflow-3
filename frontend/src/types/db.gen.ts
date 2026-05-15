@@ -10,6 +10,7 @@
 // 사용 예:
 //   import type { Database } from '@/types/db.gen'
 //   type BLShipment = Database['public']['Tables']['bl_shipments']['Row']
+//   type SalesMeta  = Database['public']['Views']['sales_with_meta_view']['Row']
 
 export type Json =
   | string
@@ -4080,7 +4081,307 @@ export interface Database {
       Relationships: []
     }
     }
-    Views: Record<string, never>
+    Views: {
+    orders_with_meta: {
+      Row: {
+        order_id: string | null
+        order_number: string | null
+        company_id: string | null
+        customer_id: string | null
+        order_date: string | null
+        receipt_method: string | null
+        product_id: string | null
+        quantity: number | null
+        capacity_kw: number | null
+        unit_price_wp: number | null
+        site_name: string | null
+        site_address: string | null
+        site_contact: string | null
+        site_phone: string | null
+        payment_terms: string | null
+        deposit_rate: number | null
+        delivery_due: string | null
+        shipped_qty: number | null
+        remaining_qty: number | null
+        status: string | null
+        spare_qty: number | null
+        memo: string | null
+        created_at: string | null
+        updated_at: string | null
+        management_category: string | null
+        fulfillment_source: string | null
+        bl_id: string | null
+        site_id: string | null
+        unit_price_ea: number | null
+        source_payload: Json | null
+        customer_name: string | null
+        product_code: string | null
+        product_name: string | null
+      }
+      Relationships: []
+    }
+    outbounds_sale_unregistered: {
+      Row: {
+        outbound_id: string | null
+        outbound_date: string | null
+        company_id: string | null
+        product_id: string | null
+        quantity: number | null
+        capacity_kw: number | null
+        warehouse_id: string | null
+        usage_category: string | null
+        order_id: string | null
+        site_name: string | null
+        site_address: string | null
+        spare_qty: number | null
+        group_trade: boolean | null
+        target_company_id: string | null
+        erp_outbound_no: string | null
+        memo: string | null
+        created_at: string | null
+        updated_at: string | null
+        status: string | null
+        dispatch_route_id: string | null
+        tx_statement_ready: boolean | null
+        inspection_request_sent: boolean | null
+        approval_requested: boolean | null
+        tax_invoice_issued: boolean | null
+        source_payload: Json | null
+        product_code: string | null
+        product_name: string | null
+        product_manufacturer_id: string | null
+        order_number: string | null
+        warehouse_name: string | null
+        target_company_name: string | null
+        target_company_code: string | null
+      }
+      Relationships: []
+    }
+    outbounds_with_meta: {
+      Row: {
+        outbound_id: string | null
+        outbound_date: string | null
+        company_id: string | null
+        product_id: string | null
+        quantity: number | null
+        capacity_kw: number | null
+        warehouse_id: string | null
+        usage_category: string | null
+        order_id: string | null
+        site_name: string | null
+        site_address: string | null
+        spare_qty: number | null
+        group_trade: boolean | null
+        target_company_id: string | null
+        erp_outbound_no: string | null
+        memo: string | null
+        created_at: string | null
+        updated_at: string | null
+        status: string | null
+        dispatch_route_id: string | null
+        tx_statement_ready: boolean | null
+        inspection_request_sent: boolean | null
+        approval_requested: boolean | null
+        tax_invoice_issued: boolean | null
+        source_payload: Json | null
+        product_code: string | null
+        product_name: string | null
+        product_manufacturer_id: string | null
+        order_number: string | null
+        warehouse_name: string | null
+        target_company_name: string | null
+        target_company_code: string | null
+      }
+      Relationships: []
+    }
+    purchase_orders_ext: {
+      Row: {
+        po_id: string | null
+        po_number: string | null
+        company_id: string | null
+        manufacturer_id: string | null
+        contract_type: string | null
+        contract_date: string | null
+        incoterms: string | null
+        payment_terms: string | null
+        total_qty: number | null
+        total_mw: number | null
+        contract_period_start: string | null
+        contract_period_end: string | null
+        status: string | null
+        memo: string | null
+        created_at: string | null
+        updated_at: string | null
+        parent_po_id: string | null
+        manufacturer_name: string | null
+        manufacturer_name_en: string | null
+        first_spec_wp: number | null
+        first_product_name: string | null
+        first_product_code: string | null
+        line_count: number | null
+        line_total_usd: number | null
+        line_total_wp: number | null
+        line_extra_count: number | null
+        lc_count: number | null
+        lc_total_usd: number | null
+        lc_total_mw: number | null
+        tt_count: number | null
+        tt_completed_usd: number | null
+      }
+      Relationships: []
+    }
+    sales_with_meta: {
+      Row: {
+        sale_id: string | null
+        outbound_id: string | null
+        customer_id: string | null
+        unit_price_wp: number | null
+        unit_price_ea: number | null
+        supply_amount: number | null
+        vat_amount: number | null
+        total_amount: number | null
+        tax_invoice_date: string | null
+        tax_invoice_email: string | null
+        erp_closed: boolean | null
+        erp_closed_date: string | null
+        memo: string | null
+        created_at: string | null
+        updated_at: string | null
+        order_id: string | null
+        quantity: number | null
+        capacity_kw: number | null
+        status: string | null
+        erp_sales_no: string | null
+        erp_line_no: number | null
+        currency: string | null
+        source_payload: Json | null
+        business_date: string | null
+        business_month: string | null
+        collected_amount: number | null
+        outstanding_amount: number | null
+        receipt_status: string | null
+        outbound_company_id: string | null
+        order_company_id: string | null
+      }
+      Relationships: []
+    }
+    tt_remittances_with_company: {
+      Row: {
+        tt_id: string | null
+        po_id: string | null
+        remit_date: string | null
+        amount_usd: number | null
+        amount_krw: number | null
+        exchange_rate: number | null
+        purpose: string | null
+        status: string | null
+        bank_name: string | null
+        memo: string | null
+        created_at: string | null
+        updated_at: string | null
+        po_company_id: string | null
+      }
+      Relationships: []
+    }
+    v_db_anomalies: {
+      Row: {
+        rule_name: string | null
+        severity: string | null
+        category: string | null
+        description: string | null
+        table_name: string | null
+        row_pk: string | null
+        row_label: string | null
+        detail: Json | null
+      }
+      Relationships: []
+    }
+    v_fifo_overallocation: {
+      Row: {
+        outbound_id: string | null
+        erp_outbound_no: string | null
+        outbound_date: string | null
+        ob_qty: number | null
+        fifo_qty: number | null
+        excess_qty: number | null
+        company_id: string | null
+        company_name: string | null
+        product_id: string | null
+        product_code: string | null
+        usage_category: string | null
+        match_count: number | null
+      }
+      Relationships: []
+    }
+    v_integrity_check: {
+      Row: {
+        name: string | null
+        category: string | null
+        severity: string | null
+        description: string | null
+        hint: string | null
+        baseline: number | null
+        actual: number | null
+        tolerance: number | null
+        status: string | null
+      }
+      Relationships: []
+    }
+    v_lc_maturity_calendar: {
+      Row: {
+        bl_id: string | null
+        bl_number: string | null
+        company_name: string | null
+        lc_number: string | null
+        bank_name: string | null
+        amount_usd: number | null
+        etd: string | null
+        lc_maturity_date: string | null
+        days_until_maturity: number | null
+        lc_status: string | null
+      }
+      Relationships: []
+    }
+    v_lc_maturity_upcoming: {
+      Row: {
+        bl_id: string | null
+        bl_number: string | null
+        company_id: string | null
+        company_name: string | null
+        lc_id: string | null
+        lc_number: string | null
+        bank_id: string | null
+        bank_name: string | null
+        amount_usd: number | null
+        etd: string | null
+        actual_arrival: string | null
+        lc_maturity_date: string | null
+        days_until_maturity: number | null
+        maturity_bucket: string | null
+      }
+      Relationships: []
+    }
+    v_product_qty_balance: {
+      Row: {
+        product_id: string | null
+        product_code: string | null
+        product_name: string | null
+        spec_wp: number | null
+        initial_qty: number | null
+        inbound_qty: number | null
+        outbound_qty: number | null
+        balance_qty: number | null
+      }
+      Relationships: []
+    }
+    v_products_canonical: {
+      Row: {
+        product_id: string | null
+        canonical_product_id: string | null
+      }
+      Relationships: []
+    }
+    }
     Functions: Record<string, never>
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>

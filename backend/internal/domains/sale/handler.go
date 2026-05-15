@@ -14,6 +14,7 @@ import (
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/audit"
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/mount"
@@ -131,20 +132,20 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 	q := r.URL.Query()
 
 	if v := q.Get("outbound_id"); v != "" {
-		query = query.Eq("outbound_id", v)
+		query = query.Eq(dbschema.SalesWithMetaColOutboundId, v)
 	}
 	if v := q.Get("order_id"); v != "" {
-		query = query.Eq("order_id", v)
+		query = query.Eq(dbschema.SalesWithMetaColOrderId, v)
 	}
 	if v := q.Get("customer_id"); v != "" {
-		query = query.Eq("customer_id", v)
+		query = query.Eq(dbschema.SalesWithMetaColCustomerId, v)
 	}
 
 	switch q.Get("erp_closed") {
 	case "":
 		// no-op
 	case "true":
-		query = query.Eq("erp_closed", "true")
+		query = query.Eq(dbschema.SalesWithMetaColErpClosed, "true")
 	case "false":
 		// NULL 도 미마감으로 본다 — `IS NOT TRUE` 의미.
 		query = query.Or("erp_closed.is.null,erp_closed.is.false", "")
@@ -153,26 +154,26 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 	}
 
 	if v := q.Get("status"); v != "" {
-		query = query.Eq("status", v)
+		query = query.Eq(dbschema.SalesWithMetaColStatus, v)
 	} else {
-		query = query.Neq("status", "cancelled")
+		query = query.Neq(dbschema.SalesWithMetaColStatus, "cancelled")
 	}
 
 	if v := q.Get("month"); v != "" {
-		query = query.Eq("business_month", v)
+		query = query.Eq(dbschema.SalesWithMetaColBusinessMonth, v)
 	}
 	if v := q.Get("start"); v != "" {
-		query = query.Gte("business_date", v)
+		query = query.Gte(dbschema.SalesWithMetaColBusinessDate, v)
 	}
 	if v := q.Get("end"); v != "" {
-		query = query.Lte("business_date", v)
+		query = query.Lte(dbschema.SalesWithMetaColBusinessDate, v)
 	}
 
 	switch q.Get("invoice_status") {
 	case "issued":
-		query = query.Not("tax_invoice_date", "is", "null")
+		query = query.Not(dbschema.SalesWithMetaColTaxInvoiceDate, "is", "null")
 	case "pending":
-		query = query.Is("tax_invoice_date", "null")
+		query = query.Is(dbschema.SalesWithMetaColTaxInvoiceDate, "null")
 	}
 
 	switch rs := q.Get("receipt_status"); rs {
@@ -180,9 +181,9 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 		// no-op
 	case "open":
 		// outstanding > 0 — unpaid 와 partial 의 합집합.
-		query = query.In("receipt_status", []string{"unpaid", "partial"})
+		query = query.In(dbschema.SalesWithMetaColReceiptStatus, []string{"unpaid", "partial"})
 	case "unpaid", "partial", "paid":
-		query = query.Eq("receipt_status", rs)
+		query = query.Eq(dbschema.SalesWithMetaColReceiptStatus, rs)
 	default:
 		return query, false, nil
 	}
@@ -206,7 +207,7 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 		if len(ids) == 0 {
 			return query, false, nil
 		}
-		query = query.In("customer_id", ids)
+		query = query.In(dbschema.SalesWithMetaColCustomerId, ids)
 	}
 
 	return query, true, nil
