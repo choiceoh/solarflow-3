@@ -19,7 +19,7 @@ export type PackID = 'erp-core' | 'module-finance' | 'baro-domain' | 'study-doma
  * 'home' = 라벨 없는 첫 번째 그룹 (영업 홈, 가용재고 등 진입 항목).
  * 나머지는 사이드바에 그대로 표시.
  */
-export type NavGroupKey = 'home' | '구매' | '판매' | '현황' | '도구';
+export type NavGroupKey = 'home' | '구매' | '창고/물류' | '판매' | '현황' | '도구';
 
 export interface Pack {
   id: PackID;

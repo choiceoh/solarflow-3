@@ -30,12 +30,13 @@ export const BARO_DOMAIN_PACK: Pack = {
   navItems: [
     // 홈
     { key: 'baro-home', label: '영업 홈', abbr: '홈', path: '/baro/home', icon: Home, menu: 'baro_home', group: 'home', feature: 'baro.home', tenants: ['baro'] },
-    // 구매 (BARO 측)
+    // 구매 (BARO 측 — 사오는 거래)
     { key: 'baro-purchase', label: '그룹내 매입', abbr: '매입', path: '/baro/group-purchase', icon: PackagePlus, menu: 'baro_group_purchase', group: '구매', feature: 'intercompany.request.baro', tenants: ['baro'] },
-    { key: 'baro-incoming', label: '입고예정', abbr: '입고', path: '/baro/incoming', icon: Ship, menu: 'baro_incoming', group: '구매', feature: 'baro.incoming', tenants: ['baro'] },
-    // module 직원이 등록한 출고를 가격 마스킹 후 BARO 창고팀이 같이 보는 sanitized 보드 (D-039)
-    { key: 'baro-outbound', label: '출고 보드', abbr: '출고', path: '/baro/outbound', icon: Truck, menu: 'baro_outbound', group: '구매', feature: 'baro.outbound', tenants: ['baro'] },
     { key: 'baro-purchase-history', label: '구매이력', abbr: '이력', path: '/baro/purchase-history', icon: ReceiptText, menu: 'baro_purchase_history', group: '구매', feature: 'baro.purchase_history', tenants: ['baro'] },
+    // 창고/물류 — module 측 입고예정/출고를 BARO 창고팀이 모니터링 (피킹·검수·배송 준비)
+    { key: 'baro-incoming', label: '입고예정', abbr: '입고', path: '/baro/incoming', icon: Ship, menu: 'baro_incoming', group: '창고/물류', feature: 'baro.incoming', tenants: ['baro'] },
+    // module 직원이 등록한 출고를 가격 마스킹 후 BARO 창고팀이 같이 보는 sanitized 보드 (D-039)
+    { key: 'baro-outbound', label: '출고 보드', abbr: '출고', path: '/baro/outbound', icon: Truck, menu: 'baro_outbound', group: '창고/물류', feature: 'baro.outbound', tenants: ['baro'] },
     // 판매 / CRM
     { key: 'crm-inbox', label: '내 미처리 문의', abbr: '문의', path: '/crm/inbox', icon: Inbox, menu: 'crm_inbox', group: '판매', feature: 'crm.partner_activity', tenants: ['baro'] },
     { key: 'baro-cockpit', label: '거래처 360', abbr: '360', path: '/baro/cockpit', icon: Users, menu: 'baro_cockpit', group: '판매', feature: 'baro.partner_cockpit', tenants: ['baro'] },
