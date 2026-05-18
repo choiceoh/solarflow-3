@@ -4018,7 +4018,7 @@ export interface Database {
         manufacturer_id: string | null
         /** Wp 규격 — MW 환산의 기준값 */
         spec_wp: number | null
-        /** 모듈 용량(kW). 자동 등록 행은 NULL → 출고 capacity_kw 계산 시 0이 되므로 사후 보정 필요. */
+        /** spec_wp 의 kW 환산 캐시. 입력 금지 — BEFORE 트리거가 spec_wp 기반으로 자동 채움. PR2 에서 GENERATED 컬럼으로 전환 예정. */
         wattage_kw: number | null
         /** ★ 모듈 크기(mm) = 1차 정렬키 (현장 구조물 호환) */
         module_width_mm: number | null
@@ -4458,7 +4458,7 @@ export interface Database {
         /** ERP 매출 마감 line item 순번. 같은 SC 번호의 분할 라인 구분. */
         erp_line_no: number | null
         /** 환종 (KRW/USD/...). ERP 자료에서 동기화. NULL 이면 KRW 가정. */
-        currency: string | null
+        currency: string
         /** ERP 매출 원자료 보존(D-064). 단가/외화/관리구분/프로젝트/담당자 등 zero-loss. */
         source_payload: Json | null
       }
@@ -4484,7 +4484,7 @@ export interface Database {
         status?: string
         erp_sales_no?: string | null
         erp_line_no?: number | null
-        currency?: string | null
+        currency?: string
         source_payload?: Json | null
       }
       Update: {
@@ -4509,7 +4509,7 @@ export interface Database {
         status?: string
         erp_sales_no?: string | null
         erp_line_no?: number | null
-        currency?: string | null
+        currency?: string
         source_payload?: Json | null
       }
       Relationships: [
