@@ -8,6 +8,11 @@ const deletedPriceBenchmarkIds = new Set<string>();
 const priceBenchmarkReviewStatuses = new Map<string, string>();
 const createdPriceBenchmarks: MockRow[] = [];
 
+/** POST /price-benchmarks/ai-refresh 가 등록하는 완료 run — GET 폴링용 (운영 비동기 패턴과 동형). */
+const mockAiRefreshRunsById = new Map<string, MockRow>();
+
+const SOURCE_KEYS = ['opis', 'infolink', 'trendforce', 'pvinsights', 'china_tender', 'cpia_floor'];
+
 const companies = [
   { company_id: 'company-topsolar', company_name: '탑솔라', company_code: 'TOP', business_number: '123-81-45678', is_active: true },
   { company_id: 'company-energy', company_name: '탑에너지', company_code: 'TEN', business_number: '234-82-56789', is_active: false },
@@ -1059,14 +1064,28 @@ export async function mockFetchWithAuth<T = unknown>(path: string, options?: Req
   }
 
   if (url.pathname === '/api/v1/price-benchmarks/ai-refresh' && method === 'POST') {
-    const item = priceBenchmarks()[0];
-    return clone({
-      run_id: `pbr-${Date.now()}`,
+    const runId = `pbr-${Date.now()}`;
+    const finishedAt = new Date().toISOString();
+    mockAiRefreshRunsById.set(runId, {
+      run_id: runId,
       status: 'completed',
+      provider: 'dev',
+      model: 'mock',
+      source_keys: SOURCE_KEYS,
+      requested_by: 'dev-mock-user',
+      started_at: finishedAt,
+      finished_at: finishedAt,
       inserted_count: 1,
       skipped_count: 0,
       warnings: [],
-      items: item ? [item] : [],
+    });
+    return clone({
+      run_id: runId,
+      status: 'running',
+      inserted_count: 0,
+      skipped_count: 0,
+      warnings: [],
+      items: [],
     } as T);
   }
 
@@ -1506,10 +1525,9 @@ function priceBenchmarkRuns(): MockRow[] {
       skipped_count: 0,
       warnings: [],
     },
+    ...mockAiRefreshRunsById.values(),
   ];
 }
-
-const SOURCE_KEYS = ['opis', 'infolink', 'trendforce', 'pvinsights', 'china_tender', 'cpia_floor'];
 
 function moduleDemandForecasts(): MockRow[] {
   return [

@@ -975,20 +975,17 @@ export default function PriceForecastPage() {
         body: JSON.stringify({ source_keys: Array.from(aiSources) }),
       });
 
-      // running 이면 폴링 (3초 간격, 최대 15분)
-      if (result.status === 'running' && result.run_id) {
-        notify.info('AI 수집 시작 — 진행 상황 추적 중…');
-        const pollResult = await pollAIRefreshRun(result.run_id);
-        const msg = `AI 수집 ${pollResult.inserted_count.toLocaleString('ko-KR')}건 저장`;
-        if (pollResult.status === 'completed') notify.success(msg);
-        else if (pollResult.status === 'failed') notify.error(`AI 수집 실패: ${pollResult.error_message ?? '알 수 없음'}`);
-        else notify.warning(`${msg} · ${(pollResult.warnings ?? []).slice(0, 1).join('') || '일부 확인 필요'}`);
-      } else {
-        // 옛 동기 응답 호환 (운영 backend 가 아직 옛 버전)
-        const msg = `AI 수집 ${result.inserted_count.toLocaleString('ko-KR')}건 저장`;
-        if (result.status === 'completed') notify.success(msg);
-        else notify.warning(`${msg} · ${result.warnings.slice(0, 1).join('') || '일부 확인 필요'}`);
+      // PR 43 이후 운영·목업 모두 비동기: 즉시 running + run_id, 완료는 GET /runs/{id} 폴링.
+      if (result.status !== 'running' || !result.run_id) {
+        notify.error('AI 수집을 시작할 수 없습니다. 백엔드 응답이 예상 형식이 아닙니다.');
+        return;
       }
+      notify.info('AI 수집 시작 — 진행 상황 추적 중…');
+      const pollResult = await pollAIRefreshRun(result.run_id);
+      const msg = `AI 수집 ${pollResult.inserted_count.toLocaleString('ko-KR')}건 저장`;
+      if (pollResult.status === 'completed') notify.success(msg);
+      else if (pollResult.status === 'failed') notify.error(`AI 수집 실패: ${pollResult.error_message ?? '알 수 없음'}`);
+      else notify.warning(`${msg} · ${(pollResult.warnings ?? []).slice(0, 1).join('') || '일부 확인 필요'}`);
       await load();
     } catch (err) {
       notify.error(formatError(err));
