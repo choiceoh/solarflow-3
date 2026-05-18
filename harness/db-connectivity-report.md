@@ -407,9 +407,17 @@ WHERE fm.outbound_date BETWEEN '2025-01-01' AND '2025-12-31'
 | #821 | 116 | cost_details 백필 (면장 기반 100건) |
 | #822 | 117 | bl_shipments 4 컬럼 백필 (decl_no/inv/xr/arrival) |
 | #824 | 118 | outbounds.site_name 보강 (17건) |
-| 본 PR | 131 | orders_dashboard.trend24 binning → 첫 매출 발행일 폴백 |
+| #? | 131 | orders_dashboard.trend24 binning → 첫 매출 발행일 폴백 |
+| 본 PR | 155 | 24년 PO/LC 백필 — raw 수입진행상황 2024 시트 기반 (PO 2 + LC 19, BL 1 skip) |
 
-머지 순서: 마이그 번호순 (111 → 131)
+머지 순서: 마이그 번호순 (111 → 155)
+
+**M155 상세**: raw 자료 (`수입진행상황(module)-2025년도.xlsx::2024 시트`) 에서 24년 PO 11건 / LC 24건 / BL 62건 추출 후 DB 와 차이 비교. 신규 INSERT 후보 중 메타데이터 충분한 것만 적용:
+- PO 2건: `기산태양광 1차~4차`, `CSI-TO240730` (캐나디안솔라 제조사)
+- LC 19건: 24년 LC (`M12MK24*` 하나은행 / `M04NG24*` 신한은행)
+- SKIP: `무안햇빛솔라` (제조사 미상), `M12MK2410NU00025` (amount_usd NULL), BL 1건 (기존 DB 중복)
+- 멱등 INSERT: `po_number` / `lc_number+po_id` / `bl_number` 가 unique key. memo `M155%` 로 추적 가능
+- 빌더: `scripts/gen_m155_backfill_2024.py` (raw JSON → SQL 자동 생성)
 
 ---
 
