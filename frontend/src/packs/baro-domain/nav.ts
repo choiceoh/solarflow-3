@@ -33,6 +33,8 @@ export const BARO_DOMAIN_PACK: Pack = {
     // 구매 (BARO 측)
     { key: 'baro-purchase', label: '그룹내 매입', abbr: '매입', path: '/baro/group-purchase', icon: PackagePlus, menu: 'baro_group_purchase', group: '구매', feature: 'intercompany.request.baro', tenants: ['baro'] },
     { key: 'baro-incoming', label: '입고예정', abbr: '입고', path: '/baro/incoming', icon: Ship, menu: 'baro_incoming', group: '구매', feature: 'baro.incoming', tenants: ['baro'] },
+    // module 직원이 등록한 출고를 가격 마스킹 후 BARO 창고팀이 같이 보는 sanitized 보드 (D-039)
+    { key: 'baro-outbound', label: '출고 보드', abbr: '출고', path: '/baro/outbound', icon: Truck, menu: 'baro_outbound', group: '구매', feature: 'baro.outbound', tenants: ['baro'] },
     { key: 'baro-purchase-history', label: '구매이력', abbr: '이력', path: '/baro/purchase-history', icon: ReceiptText, menu: 'baro_purchase_history', group: '구매', feature: 'baro.purchase_history', tenants: ['baro'] },
     // 판매 / CRM
     { key: 'crm-inbox', label: '내 미처리 문의', abbr: '문의', path: '/crm/inbox', icon: Inbox, menu: 'crm_inbox', group: '판매', feature: 'crm.partner_activity', tenants: ['baro'] },
