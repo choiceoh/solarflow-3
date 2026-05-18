@@ -2684,7 +2684,7 @@ type Products struct {
 	ManufacturerId *string `json:"manufacturer_id,omitempty"`
 	// Wp 규격 — MW 환산의 기준값
 	SpecWp *int `json:"spec_wp,omitempty"`
-	// 모듈 용량(kW). 자동 등록 행은 NULL → 출고 capacity_kw 계산 시 0이 되므로 사후 보정 필요.
+	// spec_wp 의 kW 환산 캐시. 입력 금지 — BEFORE 트리거가 spec_wp 기반으로 자동 채움. PR2 에서 GENERATED 컬럼으로 전환 예정.
 	WattageKw *float64 `json:"wattage_kw,omitempty"`
 	// ★ 모듈 크기(mm) = 1차 정렬키 (현장 구조물 호환)
 	ModuleWidthMm *int `json:"module_width_mm,omitempty"`
@@ -2967,7 +2967,7 @@ type Sales struct {
 	// ERP 매출 마감 line item 순번. 같은 SC 번호의 분할 라인 구분.
 	ErpLineNo *int `json:"erp_line_no,omitempty"`
 	// 환종 (KRW/USD/...). ERP 자료에서 동기화. NULL 이면 KRW 가정.
-	Currency *string `json:"currency,omitempty"`
+	Currency string `json:"currency"`
 	// ERP 매출 원자료 보존(D-064). 단가/외화/관리구분/프로젝트/담당자 등 zero-loss.
 	SourcePayload *json.RawMessage `json:"source_payload,omitempty"`
 }
