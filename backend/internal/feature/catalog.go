@@ -299,24 +299,27 @@ var Catalog = map[FeatureID]Feature{
 	},
 
 	// ===== tx.* (all tenants) =====
+	// tx.order/outbound/sale/receipt — module + baro 공유 표면이지만 BARO 는 BR 법인 행만
+	// 본다 (D-108 격리 + PR #902/#905/#906 강화). DataScope 가 tenant_company 임을 명시해
+	// 카탈로그만 봐도 격리 의도가 명확하게.
 	IDTxOrder: {
-		ID: IDTxOrder, Name: "수주", Description: "수주 CRUD",
-		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		ID: IDTxOrder, Name: "수주", Description: "수주 CRUD (BARO 는 BR 법인 행만)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeTenantCompany,
 		Paths: []string{"/api/v1/orders/", "/api/v1/orders/summary", "/api/v1/orders/dashboard", "/api/v1/orders/{id}"},
 	},
 	IDTxOutbound: {
-		ID: IDTxOutbound, Name: "출고", Description: "출고 CRUD",
-		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		ID: IDTxOutbound, Name: "출고", Description: "출고 CRUD (BARO 는 BR 법인 행만; fifo-matches 원가 마스킹)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeTenantCompany,
 		Paths: []string{"/api/v1/outbounds/", "/api/v1/outbounds/summary", "/api/v1/outbounds/dashboard", "/api/v1/outbounds/{id}", "/api/v1/outbounds/{id}/fifo-matches"},
 	},
 	IDTxSale: {
-		ID: IDTxSale, Name: "매출", Description: "매출 CRUD",
-		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		ID: IDTxSale, Name: "매출", Description: "매출 CRUD (BARO 는 BR 법인 행만)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeTenantCompany,
 		Paths: []string{"/api/v1/sales/", "/api/v1/sales/summary", "/api/v1/sales/dashboard", "/api/v1/sales/{id}"},
 	},
 	IDTxReceipt: {
-		ID: IDTxReceipt, Name: "수금", Description: "수금 CRUD",
-		DefaultTenants: TenantSetAll, DefaultScope: DataScopeGlobal,
+		ID: IDTxReceipt, Name: "수금", Description: "수금 CRUD (BARO 는 BR 법인 행만)",
+		DefaultTenants: TenantSetAll, DefaultScope: DataScopeTenantCompany,
 		Paths: []string{"/api/v1/receipts/", "/api/v1/receipts/dashboard", "/api/v1/receipts/{id}"},
 	},
 	IDTxReceiptMatch: {
