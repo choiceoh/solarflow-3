@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"solarflow-backend/internal/handlerutil"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/response"
 )
 
@@ -109,7 +110,18 @@ func (h *SaleHandler) tryRPCSalesDashboard(r *http.Request) ([]byte, bool) {
 		return nil, false
 	}
 	args := map[string]any{}
-	if v := q.Get("company_id"); v != "" && v != "all" {
+	// BARO 격리 (D-108): BARO 토큰일 때 BR 강제. 룩업 실패 시 RPC fast-path 포기 →
+	// fallback applySaleFilters 가 격리 처리.
+	if middleware.GetTenantScope(r.Context()) == middleware.TenantScopeBaro {
+		if h.BaroCompany == nil {
+			return nil, false
+		}
+		baroID, err := h.BaroCompany.Resolve()
+		if err != nil {
+			return nil, false
+		}
+		args["p_company_id"] = baroID
+	} else if v := q.Get("company_id"); v != "" && v != "all" {
 		args["p_company_id"] = v
 	}
 	if v := q.Get("customer_id"); v != "" {

@@ -88,5 +88,6 @@ func buildMountDeps(a *app.App, authMW func(http.Handler) http.Handler) *mount.D
 		Resolver:    a.Gates.FeatureGate.Resolver(),
 		Gates:       a.Gates,
 		AuthMW:      authMW,
+		BaroCompany: middleware.NewBaroCompanyResolver(a.DB),
 	}
 }

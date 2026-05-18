@@ -11,6 +11,7 @@ import (
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
@@ -19,7 +20,8 @@ import (
 // CompanyHandler — 법인(companies) 관련 API를 처리하는 핸들러
 // 비유: "법인 관리실" — 탑솔라, 디원, 화신 정보를 관리하는 방
 type CompanyHandler struct {
-	DB *supa.Client
+	DB          *supa.Client
+	BaroCompany *middleware.BaroCompanyResolver
 }
 
 // NewCompanyHandler — CompanyHandler 생성자
@@ -34,6 +36,7 @@ func init() {
 		Auth: mount.AuthAuthed,
 		Mount: func(d *mount.Deps, r chi.Router) {
 			h := NewCompanyHandler(d.DB)
+			h.BaroCompany = d.BaroCompany
 			g := d.Gates
 			r.Route("/companies", func(r chi.Router) {
 				r.Get("/", h.List)
@@ -53,8 +56,28 @@ func init() {
 // 비유: 법인 관리실에서 전체 명함첩을 꺼내 보여주는 것
 func (h *CompanyHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)
-	data, count, err := h.DB.From("companies").
-		Select("*", "exact", false).
+	query := h.DB.From("companies").
+		Select("*", "exact", false)
+
+	// BARO 격리 (D-108): BARO 토큰일 때는 회사 선택기에 BR(바로) 법인만 보이게 한다.
+	// 직접 SELECT 응답에서 module 회사들이 제외되면 프론트 드롭다운에서도 자동으로 안 보임 +
+	// 자기 화면에 module 회사가 노출되지 않음. 룩업 실패 시 빈 결과 — fail-closed.
+	if middleware.GetTenantScope(r.Context()) == middleware.TenantScopeBaro {
+		if h.BaroCompany == nil {
+			log.Printf("[BARO 회사 마스터 격리] BaroCompany resolver 미주입")
+			response.RespondJSON(w, http.StatusOK, []model.Company{})
+			return
+		}
+		baroID, err := h.BaroCompany.Resolve()
+		if err != nil {
+			log.Printf("[BARO 회사 마스터 격리] BR 법인 룩업 실패: %v", err)
+			response.RespondJSON(w, http.StatusOK, []model.Company{})
+			return
+		}
+		query = query.Eq("company_id", baroID)
+	}
+
+	data, count, err := query.
 		Range(offset, offset+limit-1, "").
 		Execute()
 	if err != nil {
