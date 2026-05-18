@@ -20,9 +20,9 @@
 | `cost_details.incidental_cost` (NOT NULL) | **47 / 100** | M130/M131 백필분, 합계 18.3억 |
 | `cost_details.customs_fee` | **0 / 100** | ❌ 전체 미백필 |
 | `incidental_expenses` | **0** | ⚠️ M130/M131 은 신규 행이 아니라 `cost_details.incidental_cost` 컬럼에 직접 update — 회계 추적성 위해선 별도 백필 필요 |
-| `purchase_orders` | **62** | 탑솔라 47 / 디원 11 / 화신 4. 41 / 62 가 LC 연결됨 |
+| `purchase_orders` | **64** | M155 후 (24년 raw 백필 +2: 기산태양광/CSI-TO240730). 25/26년 위주 62 + 24년 raw 2 |
 | `po_line_items` | **111** | |
-| `lc_records` | **49** | 탑솔라 37 / 디원 9 / 화신 3 |
+| `lc_records` | **77** | M155 후 (24년 raw +19: 하나/신한 LC). 기존 58 + raw 백필 19 |
 | `lc_line_items` | **0** | ❌ 미백필 |
 | `fifo_matches` | 3326 | |
 | `outbounds` / `sales` | 3369 / 3116 | |
@@ -524,6 +524,7 @@ B/L No / 선적 / 입항 / 포워더 → bl_shipments (이미 사용 중)
 | M118 | outbounds.site_name 17건 보강 | C + 영업 자료 |
 | M130 | cost_details.incidental_cost 부대비용 백필 | D (회계 전표) |
 | M131 | BL별 운송료/작업료 청구서 9개 정밀 보강 | J (BL별 청구서) |
+| **M155** | **24년 PO 2 + LC 19 백필 (DB 24년 PO/LC 누락분)** | **E1.2024 시트 raw 직접 파싱** |
 
 **다음 백필 후보**:
 
