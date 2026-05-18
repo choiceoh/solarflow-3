@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { MasterConsole } from '@/components/command/MasterConsole';
 import { FilterChips } from '@/components/command/MockupPrimitives';
 import MasterSection, { type MasterSectionConfig } from '@/components/data/MasterSection';
+import InlineLcLimitCell from '@/components/masters/InlineLcLimitCell';
 import type { Manufacturer, Product, Partner, Warehouse, Bank, BankAccount } from '@/types/masters';
 import { formatWp, formatSize, formatUSD, formatDate, formatPercent } from '@/lib/utils';
 
@@ -297,7 +298,8 @@ function useBankConfig(): MasterSectionConfig<Bank> {
         ) },
       { key: 'company_name', label: '법인', sortable: true,
         render: (r) => r.companies?.company_name ?? r.company_name ?? '—' },
-      { key: 'lc_limit_usd', label: '승인한도(USD)', sortable: true, render: (r) => formatUSD(r.lc_limit_usd) },
+      { key: 'lc_limit_usd', label: '승인한도(USD)', sortable: true,
+        render: (r) => <InlineLcLimitCell bankId={r.bank_id} value={r.lc_limit_usd} /> },
       { key: 'limit_approve_date', label: '승인일', render: (r) => formatDate(r.limit_approve_date ?? '') },
       { key: 'limit_expiry_date', label: '승인기한',
         render: (r) => {
