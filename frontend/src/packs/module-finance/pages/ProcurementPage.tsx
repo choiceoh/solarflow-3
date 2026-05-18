@@ -432,9 +432,7 @@ export default function ProcurementPage() {
     () =>
       lcRows.filter((lc) => {
         const d = daysUntil(lc.maturity_date)
-        return (
-          d != null && d >= 0 && d <= 30 && lc.status !== "settled" && lc.status !== "cancelled"
-        )
+        return d != null && d >= 0 && d <= 30 && !lc.repaid && lc.status !== "cancelled"
       }),
     [lcRows],
   )

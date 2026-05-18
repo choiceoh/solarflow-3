@@ -80,7 +80,8 @@ const COMPANY_DISPLAY_ORDER: Record<string, number> = {
 /**
  * useAllBankLimitGroups — 모든 활성 법인의 은행별 한도 현황을 Go API에서 직접 집계.
  * 은행이 0개인 활성 법인도 빈 카드로 노출 (등록 유도 목적).
- * 실행금액 = 미결제(status != settled) + 미상환(repaid != true) LC 합산
+ * 실행금액(= 한도 점유) = 상환 전(repaid != true) + 취소 아님(status != cancelled).
+ * settled (개설은행→공급자 결제완료) 도 우리→개설은행 상환 전까지는 한도 점유. (M155 와 동일 의미)
  */
 export function useAllBankLimitGroups() {
   const q = useListQuery<BankLimitGroup>(
@@ -92,7 +93,7 @@ export function useAllBankLimitGroups() {
         fetchWithAuth<Company[]>('/api/v1/companies').catch(() => [] as Company[]),
       ]);
 
-      const activeLcs = (lcs ?? []).filter((l) => l.status !== 'settled' && !l.repaid);
+      const activeLcs = (lcs ?? []).filter((l) => !l.repaid && l.status !== 'cancelled');
       const usedByBank: Record<string, number> = {};
       activeLcs.forEach((l) => {
         usedByBank[l.bank_id] = (usedByBank[l.bank_id] ?? 0) + (l.amount_usd ?? 0);

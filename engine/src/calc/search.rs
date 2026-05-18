@@ -276,7 +276,7 @@ async fn search_lc_maturity(pool: &PgPool, company_id: Uuid, pq: &ParsedQuery) -
 
     let rows = sqlx::query_as::<_, Row>(
         r#"SELECT lc.lc_id, lc.lc_number, lc.amount_usd::float8 as amount_usd, lc.maturity_date, b.bank_name, (lc.maturity_date - CURRENT_DATE)::int as days_remaining
-           FROM lc_records lc JOIN banks b ON lc.bank_id=b.bank_id WHERE lc.status IN ('opened','docs_received') AND lc.company_id=$1 AND TO_CHAR(lc.maturity_date,'YYYY-MM')=$2 ORDER BY lc.maturity_date ASC"#
+           FROM lc_records lc JOIN banks b ON lc.bank_id=b.bank_id WHERE COALESCE(lc.repaid, false)=false AND lc.status<>'cancelled' AND lc.company_id=$1 AND TO_CHAR(lc.maturity_date,'YYYY-MM')=$2 ORDER BY lc.maturity_date ASC"#
     ).bind(company_id).bind(&month).fetch_all(pool).await?;
 
     let results = rows.iter().map(|r| {
