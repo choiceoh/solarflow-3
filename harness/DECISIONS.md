@@ -1847,3 +1847,33 @@
   - `git diff --check`
   - `graphify update .` 시도
 - **날짜**: 2026-05-12 16:58:15 KST
+
+
+## D-20260518-053500: BARO 테넌트의 ERP 공통(/orders 출고·매출·수금·수주·가용재고) 표면을 회사 기반으로 격리한다
+
+- **결정**: 카탈로그상 `TenantSetAll` 인 ERP 공통 거래(`tx.order`, `tx.outbound`, `tx.sale`, `tx.receipt`, `tx.inventory_allocation`) 와 회사 마스터(`master.company`)는 module 토큰(`topsolar`, `cable`) 과 BARO 토큰(`baro`) 이 같은 라우트를 공유하지만 **BARO 토큰은 BR 법인(`company_code='BR'`) 행만 본다**.
+  - 클라이언트가 보낸 `company_id` 쿼리·페이로드는 BARO 토큰일 때 무시되고 BR 로 강제 교체된다 (List/Summary/Dashboard 의 필터, Create 의 payload 모두).
+  - UUID 직접 호출 우회는 GetByID/Update/Delete/Clone/fifo-matches 시작점의 `baroOwns<Resource>Or404` 헬퍼가 차단한다. module 소유 또는 존재하지 않으면 404 — 403 으로 알려주지 않고 *존재 자체를 숨긴다*.
+  - BR 법인 마스터가 누락(`ErrBaroCompanyNotRegistered`)되거나 DB 룩업이 실패하면 **빈 결과 (fail-closed)** — module 데이터가 한 행도 새지 않게.
+  - 회사 마스터(`/api/v1/companies`)도 BARO 토큰일 때 BR 한 행만 반환해 좌상단 회사 선택기 드롭다운에서 module 법인이 사라진다. 사용자가 "전체"를 누르거나 직접 호출을 시도해도 백엔드 격리로 차단.
+- **카탈로그 명시화**: `IDTxOrder/Outbound/Sale/Receipt` 의 `DefaultScope` 를 `DataScopeGlobal` 에서 `DataScopeTenantCompany` 로 변경. 카탈로그만 봐도 격리 의도가 명확. `internal/feature/baro_isolation_test.go` 의 `TestTxScopesAreTenantCompany` 가 회귀를 잡는다.
+- **module 토큰 회귀 없음**: 분기는 `GetTenantScope(ctx) == TenantScopeBaro` 일 때만 활성. topsolar/cable 토큰은 기존 동작 그대로 (4법인 회사 선택기 + company_id 쿼리 동작).
+- **BARO 가 module 출고를 보는 유일한 경로**: 별도 sanitized 보드 `/baro/outbound` (`IDBaroOutbound`, `DataScopeColumnMasked`, 가격·메모·`source_payload` 마스킹, 최근 7일 윈도우). BARO 창고팀이 module 출고로 만들어진 피킹/배송 작업을 같이 진행할 수 있도록 D-039 그룹내거래 정신을 sanitized 형태로 구현.
+- **신설/변경 파일**:
+  - `backend/internal/middleware/baro_company.go` — `BaroCompanyResolver` (process-level 캐싱 BR 룩업, `ErrBaroCompanyNotRegistered` sentinel)
+  - `backend/internal/mount/mount.go` — `Deps.BaroCompany`
+  - `backend/internal/router/router.go` — `buildMountDeps` 에서 초기화
+  - `backend/internal/domains/{outbound,sale,order,inventory}/handler.go` 와 `internal/handler/{tx_receipt*,master_company}.go` — 격리 분기 + 헬퍼
+  - `backend/internal/feature/catalog.go` — DefaultScope 명시화
+  - `backend/internal/feature/baro_isolation_test.go` — 카탈로그 회귀 방지
+- **PR 시리즈**: #902 (List/Summary/Dashboard + 회사 마스터) → #905 (CRUD UUID 우회) → #906 (orders + inventory) → 본 PR (카탈로그 + DECISIONS + 회귀 테스트).
+- **미적용** (별도 후속):
+  - WMS `picking_lists` / `receiving_logs` / `cycle_counts` — `outbound_id` 거쳐 격리해야 하는 복잡한 구조 (PostgREST inner join 또는 outbound_id IN 패턴 필요).
+  - `inventory_allocations` 의 CRUD UUID 우회.
+  - inventory snapshot/movements 등 다른 화면.
+- **이유**: D-108 격리 정본은 "module/cable/baro 가 단일 코드/단일 DB 를 URL + 미들웨어로만 격리" 였는데, 실제 운영에서는 ERP 공통 거래의 카탈로그가 `TenantSetAll + DataScopeGlobal` 이라 BARO 가 module 의 출고·매출·수금·원가매칭·계산서 발행 여부를 가격 포함 그대로 조회 가능했다. D-108 정신과 코드 사이의 격차를 닫는다.
+- **검증**:
+  - `go build ./...`
+  - `go test ./internal/router ./internal/feature ./internal/middleware ./internal/handler ./internal/domains/{outbound,sale,order,inventory}`
+  - 카탈로그 스코프 회귀 방지 자동 테스트 추가 (`TestTxScopesAreTenantCompany`).
+- **날짜**: 2026-05-18 05:35:00 KST

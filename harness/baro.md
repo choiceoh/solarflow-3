@@ -53,6 +53,7 @@ module/cable SolarFlow와 **단일 코드/단일 DB**를 공유하며 URL과 미
 ## 관련 결정 (DECISIONS.md 색인)
 
 - **[D-108](DECISIONS.md#d-108)** — 바로(주) 분리 정의: 단일 DB + URL 분기 + 코드 레벨 마스킹. **이 도메인의 헌법**.
+- **[D-20260518-053500](DECISIONS.md#d-20260518-053500)** — ERP 공통 거래(`tx.order/outbound/sale/receipt`)와 회사 마스터를 BR 법인 행으로 강제 격리. D-108 정신을 코드까지 끌고 내려옴. UUID 직접 호출 우회는 `baroOwns<Resource>Or404` 헬퍼가 404 로 차단. BARO 가 module 출고를 보는 유일한 경로는 sanitized `/baro/outbound` (`IDBaroOutbound`).
 - **[D-119](DECISIONS.md#d-119)** — `cable.topworks.ltd`는 module 계열의 별도 분기이며, BARO 전용 라우트는 cable 토큰도 차단한다.
 - **[D-109](DECISIONS.md#d-109)** — CRM(거래처 활동 로그·미처리 문의함)은 바로(주) 전용
 - **[D-039](DECISIONS.md#d-039)** — 그룹내거래(탑솔라↔바로) 양방향. 탑솔라 출고 = 바로 입고 자동 생성, 입고단가는 탑솔라 판매단가로 잠금.
