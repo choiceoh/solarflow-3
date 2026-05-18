@@ -214,7 +214,7 @@ export default function OutboundBoardPage() {
           <Truck className="h-4 w-4 text-primary" />
           <h1 className="text-base font-semibold">출고 보드</h1>
           <span className="truncate text-xs text-muted-foreground">
-            module 직원이 등록한 출고 — 가격 정보 없이 창고 작업용 정보만 표시
+            module 직원이 등록한 최근 7일 출고 — 가격 정보 없이 창고 작업용 정보만 표시
           </span>
         </div>
         <Button size="sm" variant="outline" onClick={() => void load()} disabled={loading}>

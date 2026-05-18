@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/supabase-community/postgrest-go"
@@ -12,6 +14,14 @@ import (
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
+)
+
+// baroOutboundDefaultWindowDays — BARO 가 보는 출고 기본 윈도우.
+// 창고팀 피킹/배송 작업은 최근 며칠 안에 끝나므로 옛 데이터까지 노출할 이유가 없음.
+// ?days=N (1~90) 으로 클라이언트가 늘려서 볼 수 있다.
+const (
+	baroOutboundDefaultWindowDays = 7
+	baroOutboundMaxWindowDays     = 90
 )
 
 // BaroOutboundHandler — BARO 전용 sanitized 출고 보드 API.
@@ -90,6 +100,8 @@ type baroOutboundProductSpecRow struct {
 //   - scope=all : 취소된 행도 포함. 기본은 active + cancel_pending 만.
 //   - company_id : 출고 법인(탑솔라/디원/화신) 필터.
 //   - usage_category : sale/sale_spare/construction/... 필터.
+//   - days : 출고일 윈도우 (기본 7, 최대 90). 창고 작업 관점에서 오래된 출고는
+//     의미 없으므로 기본 1주일만 노출.
 func (h *BaroOutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 	// customer_id 는 outbounds 컬럼이 아님 (sale 또는 order 를 거쳐 도달). BARO 보드는 거래처 대신
 	// site_name/site_address 를 노출 — 창고팀 피킹/배송 작업은 현장명 기준이라 충분. 거래처 join
@@ -113,6 +125,16 @@ func (h *BaroOutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 	if usage := r.URL.Query().Get("usage_category"); usage != "" && usage != "all" {
 		query = query.Eq("usage_category", usage)
 	}
+	// 기본 7일 윈도우 (창고 작업이 최근 건만 의미 있음). ?days=14 처럼 넘기면 14일까지.
+	// 1~90 범위로 클램프 — 잘못된 입력이나 무제한 조회 차단.
+	windowDays := baroOutboundDefaultWindowDays
+	if raw := r.URL.Query().Get("days"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n >= 1 && n <= baroOutboundMaxWindowDays {
+			windowDays = n
+		}
+	}
+	since := time.Now().AddDate(0, 0, -windowDays).Format("2006-01-02")
+	query = query.Gte("outbound_date", since)
 
 	rawData, _, err := query.
 		Order("outbound_date", &postgrest.OrderOpts{Ascending: false}).
