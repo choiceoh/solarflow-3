@@ -102,6 +102,24 @@ func (h *CompanyHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *CompanyHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	// BARO 격리 (D-108): BARO 토큰이 module 법인 정보(사업자번호·연락처 등)를 조회하지 못하게 차단.
+	// 자기 BR 법인 외의 ID 로 직접 호출 시 404.
+	if middleware.GetTenantScope(r.Context()) == middleware.TenantScopeBaro {
+		if h.BaroCompany == nil {
+			response.RespondError(w, http.StatusNotFound, "법인을 찾을 수 없습니다")
+			return
+		}
+		baroID, err := h.BaroCompany.Resolve()
+		if err != nil {
+			response.RespondError(w, http.StatusNotFound, "법인을 찾을 수 없습니다")
+			return
+		}
+		if id != baroID {
+			response.RespondError(w, http.StatusNotFound, "법인을 찾을 수 없습니다")
+			return
+		}
+	}
+
 	data, _, err := h.DB.From("companies").
 		Select("*", "exact", false).
 		Eq("company_id", id).

@@ -271,6 +271,73 @@ func outboundsBaseTable(r *http.Request) string {
 	return "outbounds_with_meta"
 }
 
+// baroOwnsOutboundOr404 — BARO 토큰일 때만 outbound 소유권을 검증한다 (D-108 격리 강화).
+//
+//   - module/cable/topsolar 토큰: 항상 true (검증 안 함).
+//   - BARO 토큰 + outbound.company_id == BR: true.
+//   - BARO 토큰 + BR 법인이 마스터에 없거나 룩업 실패: 404 + false.
+//   - BARO 토큰 + outbound 가 module 소유 (또는 존재하지 않음): 404 + false.
+//
+// 404 를 일관 반환 — BARO 에게 module 출고의 *존재 자체*를 숨긴다 (403 으로 알려주지 않음).
+// 호출자: GetByID / FifoMatches / Update / Delete 시작점.
+func (h *OutboundHandler) baroOwnsOutboundOr404(w http.ResponseWriter, r *http.Request, outboundID string) bool {
+	if middleware.GetTenantScope(r.Context()) != middleware.TenantScopeBaro {
+		return true
+	}
+	if h.BaroCompany == nil {
+		log.Printf("[BARO 출고 소유권 검증] BaroCompany resolver 미주입")
+		response.RespondError(w, http.StatusNotFound, "출고를 찾을 수 없습니다")
+		return false
+	}
+	baroID, err := h.BaroCompany.Resolve()
+	if err != nil {
+		log.Printf("[BARO 출고 소유권 검증] BR 법인 룩업 실패: %v", err)
+		response.RespondError(w, http.StatusNotFound, "출고를 찾을 수 없습니다")
+		return false
+	}
+	data, _, err := h.DB.From("outbounds").
+		Select(dbschema.OutboundsColCompanyId, "exact", false).
+		Eq(dbschema.OutboundsColOutboundId, outboundID).
+		Limit(1, "").
+		Execute()
+	if err != nil {
+		log.Printf("[BARO 출고 소유권 검증] DB 조회 실패: %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "소유권 검증 실패")
+		return false
+	}
+	var rows []struct {
+		CompanyID string `json:"company_id"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 || rows[0].CompanyID != baroID {
+		response.RespondError(w, http.StatusNotFound, "출고를 찾을 수 없습니다")
+		return false
+	}
+	return true
+}
+
+// baroEnforceCompanyOnCreate — BARO 토큰이 출고를 등록할 때 company_id 를 BR 로 강제.
+// 클라이언트가 module company_id 를 보내도 무시하고 BR 로 교체. BR 룩업 실패 시 false 반환
+// (호출자가 400/500 응답). module 토큰은 통과 (변경 없음).
+func (h *OutboundHandler) baroEnforceCompanyOnCreate(w http.ResponseWriter, r *http.Request, req *CreateOutboundRequest) bool {
+	if middleware.GetTenantScope(r.Context()) != middleware.TenantScopeBaro {
+		return true
+	}
+	if h.BaroCompany == nil {
+		response.RespondError(w, http.StatusServiceUnavailable, "BR 법인 마스터 확인 불가")
+		return false
+	}
+	baroID, err := h.BaroCompany.Resolve()
+	if err != nil {
+		response.RespondError(w, http.StatusServiceUnavailable, "BR 법인 마스터 확인 불가")
+		return false
+	}
+	if req.CompanyID != baroID {
+		log.Printf("[BARO 출고 생성] company_id 강제 교체 %s -> %s", req.CompanyID, baroID)
+		req.CompanyID = baroID
+	}
+	return true
+}
+
 func (h *OutboundHandler) fetchOutboundRecord(id string) (Outbound, bool, error) {
 	data, _, err := h.DB.From("outbounds").
 		Select("*", "exact", false).
@@ -834,6 +901,9 @@ func (h *OutboundHandler) Summary(w http.ResponseWriter, r *http.Request) {
 // GetByID — GET /api/v1/outbounds/{id} — 출고 상세 조회
 func (h *OutboundHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsOutboundOr404(w, r, id) {
+		return
+	}
 
 	ob, err := h.FetchOutboundByID(id)
 	if err != nil {
@@ -855,6 +925,9 @@ func (h *OutboundHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[출고 등록 요청 파싱 실패] %v", err)
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
+		return
+	}
+	if !h.baroEnforceCompanyOnCreate(w, r, &req) {
 		return
 	}
 
@@ -915,6 +988,9 @@ func (h *OutboundHandler) CreateOutboundCore(req CreateOutboundRequest) (Outboun
 // Update — PUT /api/v1/outbounds/{id} — 출고 수정
 func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsOutboundOr404(w, r, id) {
+		return
+	}
 
 	var req UpdateOutboundRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1017,6 +1093,9 @@ func (h *OutboundHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete — DELETE /api/v1/outbounds/{id} — 출고 취소 처리
 func (h *OutboundHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsOutboundOr404(w, r, id) {
+		return
+	}
 
 	oldSnapshot, _, oldErr := audit.Snapshot(h.DB, "outbounds", "outbound_id", id)
 	if oldErr != nil {

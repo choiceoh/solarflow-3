@@ -667,10 +667,117 @@ func applySaleAmounts(quantity int, unitPriceWp float64, specWp float64) (*float
 	return &unitPriceEa, &supplyAmount, &vatAmount, &totalAmount
 }
 
+// baroOwnsSaleOr404 — BARO 토큰일 때 sale 의 소유권 검증 (D-108).
+// sales 테이블에는 company_id 직접 컬럼이 없어 sales_with_meta 뷰의 outbound_company_id /
+// order_company_id (마이그 111) 를 사용. 둘 중 하나라도 BR 이면 통과.
+// module 토큰은 항상 통과 — 검증 안 함.
+func (h *SaleHandler) baroOwnsSaleOr404(w http.ResponseWriter, r *http.Request, saleID string) bool {
+	if middleware.GetTenantScope(r.Context()) != middleware.TenantScopeBaro {
+		return true
+	}
+	if h.BaroCompany == nil {
+		log.Printf("[BARO 매출 소유권 검증] BaroCompany resolver 미주입")
+		response.RespondError(w, http.StatusNotFound, "매출을 찾을 수 없습니다")
+		return false
+	}
+	baroID, err := h.BaroCompany.Resolve()
+	if err != nil {
+		log.Printf("[BARO 매출 소유권 검증] BR 법인 룩업 실패: %v", err)
+		response.RespondError(w, http.StatusNotFound, "매출을 찾을 수 없습니다")
+		return false
+	}
+	data, _, err := h.DB.From(salesWithMetaView).
+		Select("outbound_company_id, order_company_id", "exact", false).
+		Eq("sale_id", saleID).
+		Limit(1, "").
+		Execute()
+	if err != nil {
+		log.Printf("[BARO 매출 소유권 검증] DB 조회 실패: %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "소유권 검증 실패")
+		return false
+	}
+	var rows []struct {
+		OutboundCompanyID *string `json:"outbound_company_id"`
+		OrderCompanyID    *string `json:"order_company_id"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
+		response.RespondError(w, http.StatusNotFound, "매출을 찾을 수 없습니다")
+		return false
+	}
+	row := rows[0]
+	owned := (row.OutboundCompanyID != nil && *row.OutboundCompanyID == baroID) ||
+		(row.OrderCompanyID != nil && *row.OrderCompanyID == baroID)
+	if !owned {
+		response.RespondError(w, http.StatusNotFound, "매출을 찾을 수 없습니다")
+		return false
+	}
+	return true
+}
+
+// baroOwnsCreateTargetOr404 — BARO 토큰이 매출을 등록할 때 outbound_id / order_id 의 회사 검증.
+// 둘 다 module 소유면 404 (존재 자체 숨김), BR 소유이면 통과.
+func (h *SaleHandler) baroOwnsCreateTargetOr404(w http.ResponseWriter, r *http.Request, req *CreateSaleRequest) bool {
+	if middleware.GetTenantScope(r.Context()) != middleware.TenantScopeBaro {
+		return true
+	}
+	if h.BaroCompany == nil {
+		response.RespondError(w, http.StatusNotFound, "대상을 찾을 수 없습니다")
+		return false
+	}
+	baroID, err := h.BaroCompany.Resolve()
+	if err != nil {
+		response.RespondError(w, http.StatusNotFound, "대상을 찾을 수 없습니다")
+		return false
+	}
+	if req.OutboundID != nil && *req.OutboundID != "" {
+		data, _, err := h.DB.From("outbounds").
+			Select("company_id", "exact", false).
+			Eq("outbound_id", *req.OutboundID).
+			Limit(1, "").
+			Execute()
+		if err != nil {
+			response.RespondError(w, http.StatusInternalServerError, "소유권 검증 실패")
+			return false
+		}
+		var rows []struct {
+			CompanyID string `json:"company_id"`
+		}
+		if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 || rows[0].CompanyID != baroID {
+			response.RespondError(w, http.StatusNotFound, "대상 출고를 찾을 수 없습니다")
+			return false
+		}
+		return true
+	}
+	if req.OrderID != nil && *req.OrderID != "" {
+		data, _, err := h.DB.From("orders").
+			Select("company_id", "exact", false).
+			Eq("order_id", *req.OrderID).
+			Limit(1, "").
+			Execute()
+		if err != nil {
+			response.RespondError(w, http.StatusInternalServerError, "소유권 검증 실패")
+			return false
+		}
+		var rows []struct {
+			CompanyID string `json:"company_id"`
+		}
+		if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 || rows[0].CompanyID != baroID {
+			response.RespondError(w, http.StatusNotFound, "대상 수주를 찾을 수 없습니다")
+			return false
+		}
+		return true
+	}
+	// outbound_id / order_id 둘 다 없으면 Validate 가 이미 BadRequest 반환.
+	return true
+}
+
 // GetByID — GET /api/v1/sales/{id} — 판매 상세 조회
 // 비유: 특정 판매 전표를 꺼내 자세히 보는 것
 func (h *SaleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsSaleOr404(w, r, id) {
+		return
+	}
 
 	data, _, err := h.DB.From("sales").
 		Select("*", "exact", false).
@@ -709,6 +816,11 @@ func (h *SaleHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	if msg := req.Validate(); msg != "" {
 		response.RespondError(w, http.StatusBadRequest, msg)
+		return
+	}
+	// BARO 격리 (D-108): BARO 토큰이 module outbound/order 에 매출을 붙이지 못하게 차단.
+	// outbound_id 또는 order_id 가 BR 소유인지 검증; 둘 다 BR 외 회사면 404.
+	if !h.baroOwnsCreateTargetOr404(w, r, &req) {
 		return
 	}
 	h.fillSaleDefaults(&req)
@@ -832,6 +944,9 @@ func (h *SaleHandler) calculateSaleUpdate(id string, req *UpdateSaleRequest) {
 // 비유: 기존 판매 전표의 내용을 수정하는 것
 func (h *SaleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsSaleOr404(w, r, id) {
+		return
+	}
 
 	oldSnapshot, _, oldErr := audit.Snapshot(h.DB, "sales", "sale_id", id)
 	if oldErr != nil {
@@ -880,6 +995,9 @@ func (h *SaleHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete — DELETE /api/v1/sales/{id} — 판매 취소 처리
 func (h *SaleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsSaleOr404(w, r, id) {
+		return
+	}
 
 	oldSnapshot, _, oldErr := audit.Snapshot(h.DB, "sales", "sale_id", id)
 	if oldErr != nil {
